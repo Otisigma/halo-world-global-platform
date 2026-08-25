@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Report problems, request features, and follow community priorities at the HALO feedback desk.">
+  <meta name="theme-color" content="#090b0c">
+  <title>Feedback Desk — HALO World</title>
+  <link rel="manifest" href="/app.webmanifest">
+  <link rel="apple-touch-icon" href="/assets/halo-app-icon-180.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=DM+Mono:wght@300;400;500&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/halo-brand.css">
+  <link rel="stylesheet" href="/accessibility.css">
+  <link rel="stylesheet" href="/support/support.css">
+  <script src="/stats.js" defer></script>
+  <script src="/site-monitor.js" defer></script>
+  <script src="/accessibility.js" defer></script>
+  <script src="/identity.js" type="module"></script>
+  <script src="/support/support.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#feedback-main">Skip to feedback desk</a>
+  <div class="signal-grid" aria-hidden="true"></div>
+
+  <header class="desk-header">
+    <a class="desk-brand" href="/" aria-label="HALO World home">
+      <img src="/assets/halo-logo-mark.webp" alt="">
+      <span>HALO WORLD</span>
+      <small>Community feedback desk</small>
+    </a>
+    <nav aria-label="Feedback desk navigation">
+      <a href="#send">Send feedback</a>
+      <a href="#roadmap">Community signals</a>
+      <a href="#requests">My requests</a>
+    </nav>
+    <button class="account-button" id="account-button" type="button">Join / sign in</button>
+  </header>
+
+  <main id="feedback-main">
+    <section class="desk-hero" aria-labelledby="desk-title">
+      <div class="hero-index"><span>CARE SYSTEM / 01</span><span>LISTENING: OPEN</span></div>
+      <div class="hero-copy">
+        <p class="eyebrow">Trust grows when the loop closes</p>
+        <h1 id="desk-title">MAKE HALO<br><em>STRONGER.</em></h1>
+        <p>Report what broke, ask for help, or propose what belongs in the next version. Private support stays private. Public ideas become visible signals the community can support.</p>
+      </div>
+      <aside class="response-promise">
+        <span class="pulse" aria-hidden="true"></span>
+        <p>Every request receives a trackable reference and a visible status.</p>
+        <dl><div><dt>01</dt><dd>Received</dd></div><div><dt>02</dt><dd>Reviewed</dd></div><div><dt>03</dt><dd>Acted on</dd></div></dl>
+      </aside>
+    </section>
+
+    <section class="send-section" id="send" aria-labelledby="send-title">
+      <div class="section-heading">
+        <p>Direct channel</p>
+        <h2 id="send-title">Send a clear signal.</h2>
+        <p>Include what happened, what you expected, and the page involved. Do not include passwords, payment details, or private credentials.</p>
+      </div>
+
+      <div class="auth-gate" id="auth-gate">
+        <p>Sign in to send feedback and keep a private history of every request.</p>
+        <button type="button" data-open-auth>Open member access</button>
+      </div>
+
+      <form class="feedback-form" id="feedback-form" hidden>
+        <div class="category-picker" role="radiogroup" aria-label="Feedback type">
+          <label><input type="radio" name="category" value="bug" checked><span><strong>Something broke</strong><small>Report a bug or reliability issue</small></span></label>
+          <label><input type="radio" name="category" value="feature"><span><strong>Build this next</strong><small>Suggest a platform improvement</small></span></label>
+          <label><input type="radio" name="category" value="support"><span><strong>I need help</strong><small>Ask the HALO team for support</small></span></label>
+        </div>
+        <label class="field"><span>Short title</span><input name="title" maxlength="120" required placeholder="Describe the signal in one line"></label>
+        <label class="field"><span>What should we know?</span><textarea name="details" minlength="12" maxlength="4000" required placeholder="What happened? What did you expect? What would make this better?"></textarea></label>
+        <label class="field"><span>Page involved <small>optional</small></span><input name="pageUrl" type="url" maxlength="500" placeholder="https://"></label>
+        <label class="public-choice" id="public-choice" hidden><input name="public" type="checkbox"><span><strong>Share this feature idea publicly</strong><small>Its title and details appear in Community Signals so members can support it.</small></span></label>
+        <div class="form-actions"><p class="form-status" id="form-status" role="status"></p><button type="submit">Send to HALO <span>↗</span></button></div>
+      </form>
+    </section>
+
+    <section class="roadmap-section" id="roadmap" aria-labelledby="roadmap-title">
+      <div class="section-heading section-heading-dark">
+        <p>Community loop</p>
+        <h2 id="roadmap-title">Signals with momentum.</h2>
+        <p>Public feature requests are ranked by member support. Status labels show where each idea sits in the HALO roadmap.</p>
+      </div>
+      <div class="signal-list" id="public-list" aria-live="polite"><p class="loading-note">Reading community signals…</p></div>
+    </section>
+
+    <section class="requests-section" id="requests" aria-labelledby="requests-title">
+      <div class="section-heading">
+        <p>Private record</p>
+        <h2 id="requests-title">Your requests. Never lost.</h2>
+        <p>Bug reports and support conversations remain visible only to you and the HALO team.</p>
+      </div>
+      <div class="request-list" id="my-list"><p class="empty-note">Sign in to see your feedback history.</p></div>
+    </section>
+  </main>
+
+  <footer class="desk-footer"><span>HALO WORLD / COMMUNITY CARE</span><a href="/">Return to the world</a><span>DIRECT SIGNAL · VISIBLE RESPONSE</span></footer>
+
+  <dialog class="auth-dialog" id="auth-dialog">
+    <button class="dialog-close" id="dialog-close" type="button" aria-label="Close">×</button>
+    <div class="auth-copy"><p>Member access</p><h2>Keep the thread connected.</h2></div>
+    <div class="auth-tabs"><button class="is-active" type="button" data-auth-mode="login">Sign in</button><button type="button" data-auth-mode="signup">Create account</button></div>
+    <form id="auth-form">
+      <label class="field auth-name" hidden><span>Name</span><input name="name" autocomplete="name"></label>
+      <label class="field"><span>Email</span><input name="email" type="email" autocomplete="email" required></label>
+      <label class="field"><span>Password</span><input name="password" type="password" minlength="8" autocomplete="current-password" required></label>
+      <button type="submit">Continue</button>
+    </form>
+    <p class="auth-status" id="auth-status" role="status"></p>
+  </dialog>
+</body>
+</html>

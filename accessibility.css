@@ -1,0 +1,592 @@
+:root {
+  --halo-access-ink: #10130f;
+  --halo-access-paper: #f2f6e9;
+  --halo-access-acid: #c8ff36;
+  --halo-access-muted: #aab3a3;
+  --halo-access-alert: #ffb08f;
+}
+
+.halo-access-launcher,
+.halo-access-panel,
+.halo-access-dock,
+.halo-access-caption {
+  font-family: "DM Mono", "Share Tech Mono", ui-monospace, monospace;
+}
+
+.halo-access-launcher {
+  position: fixed;
+  left: 16px;
+  bottom: 16px;
+  z-index: 10020;
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 44px;
+  border: 1px solid rgba(200, 255, 54, .72);
+  border-radius: 999px;
+  background: rgba(16, 19, 15, .96);
+  color: var(--halo-access-paper);
+  padding: 9px 14px 9px 10px;
+  box-shadow: 0 14px 42px rgba(0, 0, 0, .42);
+  cursor: pointer;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  backdrop-filter: blur(14px);
+  transition: transform 160ms ease, border-color 160ms ease, background 160ms ease;
+}
+
+.halo-access-launcher:hover {
+  border-color: var(--halo-access-acid);
+  background: #181d16;
+  transform: translateY(-2px);
+}
+
+.halo-access-launcher:focus-visible,
+.halo-access-panel button:focus-visible,
+.halo-access-dock button:focus-visible {
+  outline: 3px solid var(--halo-access-paper);
+  outline-offset: 3px;
+}
+
+.halo-access-launcher svg {
+  width: 24px;
+  height: 24px;
+  flex: 0 0 auto;
+  color: var(--halo-access-acid);
+}
+
+.halo-access-panel {
+  position: fixed;
+  left: 16px;
+  bottom: 72px;
+  z-index: 10021;
+  width: min(390px, calc(100vw - 32px));
+  max-height: min(660px, calc(100vh - 92px));
+  overflow: auto;
+  border: 1px solid rgba(200, 255, 54, .46);
+  border-radius: 20px 20px 20px 5px;
+  background:
+    linear-gradient(145deg, rgba(200, 255, 54, .08), transparent 34%),
+    rgba(12, 15, 11, .98);
+  color: var(--halo-access-paper);
+  box-shadow: 0 26px 90px rgba(0, 0, 0, .64);
+  backdrop-filter: blur(20px);
+}
+
+.halo-access-panel[hidden],
+.halo-access-dock[hidden],
+.halo-access-caption[hidden] {
+  display: none;
+}
+
+.halo-access-head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px;
+  border-bottom: 1px solid rgba(255, 255, 255, .1);
+  background: rgba(14, 17, 13, .94);
+  backdrop-filter: blur(18px);
+}
+
+.halo-access-kicker {
+  display: block;
+  margin-bottom: 5px;
+  color: var(--halo-access-acid);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+}
+
+.halo-access-head strong {
+  display: block;
+  font-size: 17px;
+  letter-spacing: -.02em;
+}
+
+.halo-access-head p {
+  margin: 7px 0 0;
+  color: var(--halo-access-muted);
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 1.55;
+}
+
+.halo-access-icon-button {
+  display: inline-grid;
+  place-items: center;
+  min-width: 44px;
+  min-height: 44px;
+  border: 1px solid rgba(255, 255, 255, .14);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, .05);
+  color: var(--halo-access-paper);
+  cursor: pointer;
+}
+
+.halo-access-icon-button svg {
+  width: 19px;
+  height: 19px;
+}
+
+.halo-access-body {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+}
+
+.halo-access-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.halo-access-action,
+.halo-access-toggle {
+  min-height: 50px;
+  border: 1px solid rgba(255, 255, 255, .13);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, .045);
+  color: var(--halo-access-paper);
+  cursor: pointer;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1.25;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  transition: transform 150ms ease, border-color 150ms ease, background 150ms ease;
+}
+
+.halo-access-action:hover,
+.halo-access-toggle:hover,
+.halo-access-icon-button:hover {
+  border-color: rgba(200, 255, 54, .7);
+  background: rgba(200, 255, 54, .08);
+}
+
+.halo-access-action:active,
+.halo-access-toggle:active,
+.halo-access-icon-button:active {
+  transform: scale(.98);
+}
+
+.halo-access-action[data-primary="true"] {
+  border-color: var(--halo-access-acid);
+  background: var(--halo-access-acid);
+  color: var(--halo-access-ink);
+}
+
+.halo-access-action[disabled],
+.halo-access-dock button[disabled] {
+  cursor: not-allowed;
+  opacity: .46;
+}
+
+.halo-access-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  width: 100%;
+  padding: 0 14px;
+  text-align: left;
+}
+
+.halo-access-switch {
+  position: relative;
+  width: 38px;
+  height: 22px;
+  flex: 0 0 auto;
+  border: 1px solid rgba(255, 255, 255, .24);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .08);
+}
+
+.halo-access-switch::after {
+  content: "";
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--halo-access-muted);
+  transition: transform 180ms ease, background 180ms ease;
+}
+
+.halo-access-toggle[aria-pressed="true"] .halo-access-switch {
+  border-color: var(--halo-access-acid);
+  background: rgba(200, 255, 54, .16);
+}
+
+.halo-access-toggle[aria-pressed="true"] .halo-access-switch::after {
+  background: var(--halo-access-acid);
+  transform: translateX(16px);
+}
+
+.halo-safe-space {
+  overflow: hidden;
+  border: 1px solid rgba(143, 211, 255, .18);
+  border-radius: 16px;
+  background: linear-gradient(145deg, rgba(91, 166, 204, .1), rgba(8, 12, 17, .72));
+}
+
+.halo-safe-space-toggle {
+  border: 0;
+  border-radius: 0;
+}
+
+.halo-safe-space-toggle > span:first-child {
+  display: grid;
+  gap: 4px;
+}
+
+.halo-safe-space-toggle strong,
+.halo-safe-space-toggle small {
+  display: block;
+}
+
+.halo-safe-space-toggle strong {
+  color: #dff5ff;
+  font-size: 11px;
+  letter-spacing: .08em;
+}
+
+.halo-safe-space-toggle small {
+  color: #8fb1c1;
+  font-size: 8px;
+  font-weight: 600;
+  letter-spacing: 0;
+  line-height: 1.4;
+  text-transform: none;
+}
+
+.halo-safe-space-toggle[aria-pressed="true"] {
+  background: rgba(113, 202, 244, .11);
+}
+
+.halo-safe-space-toggle[aria-pressed="true"] .halo-access-switch {
+  border-color: #8bdcff;
+  background: rgba(139, 220, 255, .16);
+}
+
+.halo-safe-space-toggle[aria-pressed="true"] .halo-access-switch::after {
+  background: #bcecff;
+}
+
+.halo-safe-space-room {
+  display: grid;
+  gap: 12px;
+  padding: 0 12px 12px;
+}
+
+.halo-safe-space-room[hidden] {
+  display: none;
+}
+
+.halo-safe-space-note {
+  margin: 0;
+  padding: 11px 12px;
+  border-left: 2px solid #8bdcff;
+  background: rgba(139, 220, 255, .06);
+  color: #b9ced8;
+  font-size: 9px;
+  line-height: 1.55;
+}
+
+.halo-safe-space-messages {
+  display: grid;
+  gap: 9px;
+  max-height: 210px;
+  overflow-y: auto;
+  padding-right: 3px;
+}
+
+.halo-safe-space-message {
+  max-width: 92%;
+  padding: 10px 11px;
+  border: 1px solid rgba(255, 255, 255, .1);
+  border-radius: 13px 13px 13px 4px;
+  background: rgba(255, 255, 255, .045);
+}
+
+.halo-safe-space-message-visitor {
+  justify-self: end;
+  border-color: rgba(139, 220, 255, .2);
+  border-radius: 13px 13px 4px 13px;
+  background: rgba(139, 220, 255, .09);
+}
+
+.halo-safe-space-message span {
+  display: block;
+  margin-bottom: 4px;
+  color: #8bdcff;
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+
+.halo-safe-space-message p {
+  margin: 0;
+  color: #edf7fb;
+  font-size: 10px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+.halo-safe-space-suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.halo-safe-space-suggestions button {
+  border: 1px solid rgba(139, 220, 255, .3);
+  border-radius: 999px;
+  background: rgba(139, 220, 255, .07);
+  color: #c9edfd;
+  padding: 7px 9px;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 8px;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.halo-safe-space-form {
+  display: grid;
+  gap: 7px;
+}
+
+.halo-safe-space-form label {
+  color: #afc7d2;
+  font-size: 8px;
+  font-weight: 800;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+}
+
+.halo-safe-space-form textarea {
+  width: 100%;
+  min-height: 72px;
+  resize: vertical;
+  border: 1px solid rgba(139, 220, 255, .24);
+  border-radius: 12px;
+  background: rgba(1, 5, 8, .66);
+  color: #f2f8fb;
+  padding: 10px;
+  box-sizing: border-box;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.55;
+}
+
+.halo-safe-space-form textarea:focus {
+  outline: 2px solid #8bdcff;
+  outline-offset: 2px;
+}
+
+.halo-safe-space-form button {
+  min-height: 42px;
+  border: 1px solid #8bdcff;
+  border-radius: 11px;
+  background: #bcecff;
+  color: #071116;
+  cursor: pointer;
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+}
+
+.halo-safe-space-form button:disabled,
+.halo-safe-space-form textarea:disabled {
+  cursor: wait;
+  opacity: .55;
+}
+
+.halo-safe-space-status {
+  min-height: 14px;
+  margin: 0;
+  color: #91b2c1;
+  font-size: 8px;
+  line-height: 1.45;
+}
+
+.halo-access-transcript {
+  padding: 14px;
+  border: 1px solid rgba(255, 255, 255, .1);
+  border-radius: 14px;
+  background: rgba(0, 0, 0, .2);
+}
+
+.halo-access-transcript-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.halo-access-transcript-head strong {
+  font-size: 9px;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+
+.halo-access-transcript-head button {
+  border: 0;
+  background: transparent;
+  color: var(--halo-access-acid);
+  cursor: pointer;
+  font-size: 9px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.halo-access-transcript p {
+  min-height: 42px;
+  margin: 0;
+  color: #dce4d6;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.65;
+  overflow-wrap: anywhere;
+}
+
+.halo-access-status {
+  margin: 0;
+  color: var(--halo-access-muted);
+  font-size: 9px;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+.halo-access-shortcuts {
+  margin: 0;
+  color: #7f887a;
+  font-size: 8px;
+  font-weight: 500;
+  line-height: 1.55;
+}
+
+.halo-access-dock {
+  position: fixed;
+  z-index: 10022;
+  display: flex;
+  gap: 6px;
+  padding: 5px;
+  border: 1px solid rgba(200, 255, 54, .55);
+  border-radius: 13px;
+  background: rgba(13, 16, 12, .98);
+  box-shadow: 0 14px 38px rgba(0, 0, 0, .48);
+  backdrop-filter: blur(14px);
+}
+
+.halo-access-dock button {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border: 0;
+  border-radius: 9px;
+  background: rgba(255, 255, 255, .06);
+  color: var(--halo-access-paper);
+  cursor: pointer;
+}
+
+.halo-access-dock button:hover {
+  background: rgba(200, 255, 54, .14);
+  color: var(--halo-access-acid);
+}
+
+.halo-access-dock button[data-active="true"] {
+  background: var(--halo-access-acid);
+  color: var(--halo-access-ink);
+  animation: halo-access-pulse 1.35s ease-in-out infinite;
+}
+
+.halo-access-dock svg {
+  width: 20px;
+  height: 20px;
+}
+
+.halo-access-caption {
+  position: fixed;
+  left: 50%;
+  bottom: 22px;
+  z-index: 10019;
+  width: min(700px, calc(100vw - 148px));
+  padding: 13px 18px;
+  border: 1px solid rgba(200, 255, 54, .5);
+  border-radius: 14px;
+  background: rgba(10, 12, 9, .96);
+  color: var(--halo-access-paper);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, .5);
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.5;
+  text-align: center;
+  transform: translateX(-50%);
+  backdrop-filter: blur(14px);
+}
+
+.halo-access-field-active {
+  outline: 3px solid rgba(200, 255, 54, .8) !important;
+  outline-offset: 3px !important;
+}
+
+html.halo-dyslexia-mode body,
+html.halo-dyslexia-mode input,
+html.halo-dyslexia-mode textarea,
+html.halo-dyslexia-mode button,
+html.halo-dyslexia-mode select {
+  font-family: Verdana, Tahoma, sans-serif !important;
+}
+
+html.halo-dyslexia-mode body {
+  letter-spacing: .035em;
+  word-spacing: .09em;
+}
+
+html.halo-dyslexia-mode p,
+html.halo-dyslexia-mode li,
+html.halo-dyslexia-mode label,
+html.halo-dyslexia-mode input,
+html.halo-dyslexia-mode textarea {
+  line-height: 1.75 !important;
+}
+
+@keyframes halo-access-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(200, 255, 54, .08); }
+  50% { box-shadow: 0 0 0 6px rgba(200, 255, 54, .18); }
+}
+
+@media (max-width: 620px) {
+  .halo-access-launcher { left: 10px; bottom: 10px; }
+  .halo-access-panel { left: 10px; bottom: 64px; width: calc(100vw - 20px); }
+  .halo-access-caption { bottom: 64px; width: calc(100vw - 20px); font-size: 13px; }
+  .halo-access-dock { transform: scale(.94); transform-origin: top right; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .halo-access-launcher,
+  .halo-access-action,
+  .halo-access-toggle,
+  .halo-access-icon-button,
+  .halo-access-switch::after {
+    transition: none;
+  }
+
+  .halo-access-dock button[data-active="true"] { animation: none; }
+}

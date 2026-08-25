@@ -1,0 +1,17 @@
+{
+  "scripts": {
+    "test": "node scripts/stable-baseline-contracts.mjs && node scripts/site-audit.mjs && node scripts/analytics-contracts.mjs && node scripts/music-player-contracts.mjs && node scripts/music-chart-contracts.mjs && node scripts/maintenance-source-audit.mjs && node scripts/security-contracts.mjs && node scripts/public-disclosure-contracts.mjs && node scripts/community-contracts.mjs && node scripts/support-feedback-contracts.mjs && node scripts/creator-charter-contracts.mjs && node scripts/ambassador-contracts.mjs && node scripts/agent-team-contracts.mjs && node scripts/daily-email-contracts.mjs && node scripts/control-center-contracts.mjs && node scripts/maintenance-team-contracts.mjs && node scripts/radio-contracts.mjs && node scripts/radio-programming-contracts.mjs && node scripts/radio-persona-contracts.mjs && node scripts/artist-page-contracts.mjs && node scripts/artist-agent-contracts.mjs && node scripts/outreach-contracts.mjs && node scripts/partner-trust-contracts.mjs && node scripts/release-house-contracts.mjs && node scripts/finish-house-contracts.mjs && node scripts/song-catalog-contracts.mjs && node scripts/fan-campaign-contracts.mjs && node scripts/stem-vault-contracts.mjs && node scripts/stem-collector-contracts.mjs && node scripts/dj-preflight-launch-contracts.mjs && node scripts/mix-flightplan-contracts.mjs && node scripts/video-gallery-contracts.mjs && node scripts/halo-x-mixes-contracts.mjs && node scripts/visual-mix-studio-contracts.mjs && node scripts/mix-quality-review-contracts.mjs && node scripts/artist-pro-contracts.mjs && node scripts/artist-economy-contracts.mjs && node scripts/dreamweaver-show-contracts.mjs && node scripts/dreamweaver-song-lab-contracts.mjs && node scripts/youtube-source-contracts.mjs && node scripts/iam-social-contracts.mjs && node scripts/featured-release-contracts.mjs && node scripts/world-dark-contracts.mjs"
+  },
+  "dependencies": {
+    "@netlify/blobs": "^10.7.12",
+    "@netlify/identity": "^1.2.0",
+    "drizzle-orm": "^1.0.0-beta.22",
+    "openai": "^7.4.0"
+  },
+  "peerDependencies": {
+    "@netlify/database": "^1.1.0"
+  },
+  "devDependencies": {
+    "drizzle-kit": "^1.0.0-beta.22"
+  }
+}

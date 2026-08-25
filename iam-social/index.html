@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#11120f">
+  <meta name="description" content="I AM Social turns an artist's complete HALO archive into a living, reusable social material pool.">
+  <title>I AM Social — HALO</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+  <link rel="icon" href="/assets/halo-app-icon-192.png">
+  <link rel="stylesheet" href="/halo-brand.css">
+  <link rel="stylesheet" href="/accessibility.css">
+  <link rel="stylesheet" href="/iam-social/iam-social.css">
+  <script src="/stats.js" defer></script>
+  <script src="/accessibility.js" defer></script>
+  <script src="/iam-social/iam-social.js" defer></script>
+</head>
+<body>
+  <div class="ambient-orbit" aria-hidden="true"></div>
+  <header class="social-header">
+    <a class="social-brand" href="/halo.html" aria-label="HALO home">
+      <img class="halo-brand-image halo-brand-image--small" src="/assets/halo-logo-mark.webp" alt="">
+      <span><strong>HALO</strong><small>I AM / social connection 001</small></span>
+    </a>
+    <nav aria-label="I AM Social navigation">
+      <a href="/dreamweaver/">Dreamweaver</a>
+      <a href="/campaign-studio/">Campaign Studio</a>
+      <a href="/artists/">Artist rooms</a>
+    </nav>
+    <button class="new-snippet-button" id="newSnippet" type="button">New thought</button>
+  </header>
+
+  <main>
+    <section class="social-hero">
+      <div class="hero-copy">
+        <p class="eyebrow">THE ARTIST REMEMBERS EVERYTHING</p>
+        <h1>One living pool.<br><em>Every useful signal.</em></h1>
+        <p class="hero-intro">I AM Social reads the artist, the new release, the old records, the moving image, and the ideas between them. Save the strongest language once. Reuse it, learn from it, and keep the story moving.</p>
+      </div>
+      <aside class="hero-status" aria-live="polite">
+        <span>CONNECTED ARTIST</span>
+        <select id="artistSelect" aria-label="Choose artist workspace"></select>
+        <div class="pulse-line"><i></i><p id="poolStatus">Opening the material pool…</p></div>
+      </aside>
+    </section>
+
+    <section class="signal-strip" aria-label="Pool summary">
+      <article><span id="materialCount">—</span><small>source signals</small></article>
+      <article><span id="snippetCount">—</span><small>reusable snippets</small></article>
+      <article><span id="reuseCount">—</span><small>recorded reuses</small></article>
+      <p>Nothing posts automatically. The pool remembers; the artist decides.</p>
+    </section>
+
+    <section class="workspace" id="workspace" hidden>
+      <aside class="source-column">
+        <div class="section-heading">
+          <div><p>01 / MATERIAL FLOW</p><h2>Everything worth returning to.</h2></div>
+          <div class="filters" id="sourceFilters" aria-label="Filter source material"></div>
+        </div>
+        <div class="material-list" id="materialList"></div>
+      </aside>
+
+      <section class="pool-column">
+        <div class="section-heading pool-heading">
+          <div><p>02 / LIVING LANGUAGE</p><h2>The reusable social pool.</h2></div>
+          <label>View
+            <select id="statusFilter">
+              <option value="ready">Ready</option>
+              <option value="draft">Drafts</option>
+              <option value="retired">Retired</option>
+              <option value="all">Everything</option>
+            </select>
+          </label>
+        </div>
+        <div class="snippet-grid" id="snippetGrid"></div>
+      </section>
+    </section>
+
+    <section class="empty-state" id="emptyState" hidden>
+      <p>I AM / waiting for a connection</p>
+      <h2 id="emptyTitle">Sign in to open the artist memory.</h2>
+      <p id="emptyMessage">Use the HALO member entrance, then return here to connect an artist workspace.</p>
+      <a href="/private/">Open member entrance</a>
+    </section>
+  </main>
+
+  <dialog id="snippetDialog">
+    <form id="snippetForm" method="dialog">
+      <div class="dialog-heading">
+        <div><p>I AM / HOLD THIS THOUGHT</p><h2 id="dialogTitle">Add to the living pool.</h2></div>
+        <button id="closeDialog" type="button" aria-label="Close">×</button>
+      </div>
+      <input id="snippetId" type="hidden">
+      <input id="sourceKind" type="hidden" value="topic">
+      <input id="sourceId" type="hidden">
+      <input id="assetUrl" type="hidden">
+      <label>Working title<input id="snippetTitle" maxlength="160" required placeholder="The reason this still matters"></label>
+      <label>Opening hook<input id="snippetHook" maxlength="240" placeholder="Start with the line that stops the scroll."></label>
+      <label>Reusable snippet<textarea id="snippetBody" maxlength="2400" rows="7" required placeholder="Write the thought once, then shape it for every future moment."></textarea></label>
+      <div class="field-row">
+        <label>Topic<input id="snippetTopic" maxlength="100" placeholder="identity, process, release…"></label>
+        <label>Status<select id="snippetStatus"><option value="ready">Ready</option><option value="draft">Draft</option><option value="retired">Retired</option></select></label>
+      </div>
+      <button class="save-snippet" type="submit">Save to the pool</button>
+      <p class="form-message" id="formMessage" role="status"></p>
+    </form>
+  </dialog>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+</body>
+</html>

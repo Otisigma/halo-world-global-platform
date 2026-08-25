@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>HALO Finish House — From Mix to Master to Market</title>
+  <meta name="description" content="Prepare a professional mastering brief, build every licensing-ready version, and package your finished song for opportunity.">
+  <meta name="theme-color" content="#0d1513">
+  <link rel="manifest" href="/app.webmanifest">
+  <link rel="apple-touch-icon" href="/assets/halo-app-icon-180.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Manrope:wght@400;500;600;700;800&family=Playfair+Display:ital,wght@0,600;0,700;1,600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/halo-brand.css">
+  <link rel="stylesheet" href="/accessibility.css">
+  <link rel="stylesheet" href="/mobile-navigation.css">
+  <link rel="stylesheet" href="/finish-house/finish-house.css">
+  <script src="/stats.js" defer></script>
+  <script src="/site-monitor.js" defer></script>
+  <script src="/accessibility.js" defer></script>
+  <script src="/mobile-navigation.js" defer></script>
+  <script src="/identity.js" type="module"></script>
+  <script src="/finish-house/finish-house.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#workspace">Skip to Finish House</a>
+  <div class="finish-grid" aria-hidden="true"></div>
+
+  <header class="finish-header">
+    <a class="finish-wordmark" href="/">
+      <img src="/assets/halo-logo-mark.webp" alt="">
+      <span><strong>HALO</strong><small>Finish House</small></span>
+    </a>
+    <nav aria-label="Finish House navigation">
+      <a href="/release-house/">Release House</a>
+      <a href="#mastering">Mastering</a>
+      <a href="#licensing">Licensing</a>
+      <a href="/outreach.html">Outreach Desk</a>
+    </nav>
+    <button class="account-button" id="accountButton" type="button">Join / sign in</button>
+  </header>
+
+  <main>
+    <section class="finish-hero">
+      <div class="hero-copy">
+        <p class="eyebrow">The final rooms / HALO artist services</p>
+        <h1>From mix<br>to <em>master</em><br>to market.</h1>
+        <p class="hero-intro">Turn the mix you believe in into a complete professional package: mastered audio, alternate versions, verified rights, and a clear licensing handoff.</p>
+        <div class="hero-actions">
+          <a class="primary-action" href="#workspace">Finish a track</a>
+          <a class="text-action" href="/release-house/">Return to Release House <span>↗</span></a>
+        </div>
+      </div>
+      <div class="hero-meter" aria-label="Finish House stages">
+        <div class="meter-orbit"><span>01</span><strong>MIX</strong></div>
+        <div class="meter-line"></div>
+        <div class="meter-orbit active"><span>02</span><strong>MASTER</strong></div>
+        <div class="meter-line"></div>
+        <div class="meter-orbit"><span>03</span><strong>MARKET</strong></div>
+      </div>
+    </section>
+
+    <section class="promise-strip" aria-label="Finish House promises">
+      <p><span>01</span> Your master remains yours.</p>
+      <p><span>02</span> Every rights claim requires your confirmation.</p>
+      <p><span>03</span> Readiness creates opportunities—not guarantees.</p>
+    </section>
+
+    <section class="workspace" id="workspace" aria-labelledby="workspaceTitle">
+      <header class="workspace-heading">
+        <div><p class="eyebrow">Your finishing desk</p><h2 id="workspaceTitle">One track. Every final detail.</h2></div>
+        <button class="new-project-button" id="newProjectButton" type="button">+ Start another track</button>
+      </header>
+
+      <div class="workspace-shell">
+        <aside class="project-rail">
+          <p class="rail-label">Active tracks</p>
+          <div id="projectList" class="project-list"></div>
+          <div class="rail-readiness">
+            <span>Licensing readiness</span>
+            <strong id="readinessPercent">0%</strong>
+            <div><i id="readinessBar"></i></div>
+            <p id="readinessMessage">Complete the finish checklist to prepare a handoff.</p>
+          </div>
+        </aside>
+
+        <div class="finish-desk" id="finishDesk">
+          <div class="empty-state" id="emptyState">
+            <span class="empty-index">00 / START</span>
+            <h3>Bring a mix through the final door.</h3>
+            <p>Sign in, connect a Release House project, or start with a track already on your computer.</p>
+            <button class="primary-action" type="button" data-open-project>Open Finish House</button>
+          </div>
+
+          <form id="finishForm" hidden>
+            <section class="identity-band">
+              <label>Artist<input id="artistName" maxlength="120" placeholder="Artist name"></label>
+              <label>Track<input id="trackTitle" maxlength="160" placeholder="Track title"></label>
+              <label>Primary destination<select id="intendedUse"><option value="streaming">Streaming release</option><option value="radio">Radio</option><option value="club">Club / DJ</option><option value="film_tv">Film + television</option><option value="games">Games</option><option value="general">General release</option></select></label>
+              <button class="save-button" id="saveButton" type="submit">Save progress</button>
+            </section>
+
+            <section class="stage-panel" id="mastering">
+              <header class="stage-heading">
+                <div class="stage-number">01</div>
+                <div><p class="eyebrow">Mastering finish line</p><h3>Make the final playback decision.</h3><p>Describe the sound, share the approved mix, and choose every version the song needs after mastering.</p></div>
+                <label class="status-control">Status<select id="masteringStatus"><option value="brief">Building brief</option><option value="requested">Master requested</option><option value="in_progress">Master in progress</option><option value="review">Reviewing master</option><option value="approved">Master approved</option></select></label>
+              </header>
+              <div class="stage-grid">
+                <div class="form-stack">
+                  <label>Approved mix link<input id="mixUrl" type="url" maxlength="500" placeholder="Private Drive, Dropbox, or transfer link"></label>
+                  <label>Reference tracks<textarea id="referenceTracks" maxlength="1200" placeholder="What should the master feel like? Name references and the qualities—not a copy."></textarea></label>
+                  <label>Sonic direction<textarea id="sonicDirection" maxlength="1600" placeholder="Warm and open, loud club impact, intimate dynamics, clean vocal focus…"></textarea></label>
+                  <label>Mix notes for the mastering engineer<textarea id="mixNotes" maxlength="2400" placeholder="Known concerns, fades, spacing, vocal level, low-end decisions…"></textarea></label>
+                  <label>Needed by<input id="deadline" type="date"></label>
+                </div>
+                <fieldset class="deliverable-box">
+                  <legend>Master package</legend>
+                  <p>Choose versions once. Keep them attached to the track.</p>
+                  <label><input type="checkbox" name="deliverable" value="streaming_master"> Streaming master</label>
+                  <label><input type="checkbox" name="deliverable" value="high_resolution_master"> High-resolution WAV</label>
+                  <label><input type="checkbox" name="deliverable" value="instrumental"> Instrumental</label>
+                  <label><input type="checkbox" name="deliverable" value="clean"> Clean version</label>
+                  <label><input type="checkbox" name="deliverable" value="performance"> Performance version</label>
+                  <label><input type="checkbox" name="deliverable" value="acapella"> Acapella</label>
+                  <button class="stage-action" id="requestMasterButton" type="button">Mark master requested</button>
+                  <small>Finish House organises the request and package. A confirmed engineer, price, and delivery date still require human agreement.</small>
+                </fieldset>
+              </div>
+            </section>
+
+            <section class="stage-panel licensing-panel" id="licensing">
+              <header class="stage-heading">
+                <div class="stage-number">02</div>
+                <div><p class="eyebrow">Licensing launchpad</p><h3>Make the song easy to clear.</h3><p>A good song can lose an opportunity when ownership, versions, or metadata are uncertain. Confirm each item before handoff.</p></div>
+                <label class="status-control">Status<select id="licensingStatus"><option value="preparing">Preparing package</option><option value="rights_review">Rights review</option><option value="ready">Ready to pitch</option><option value="submitted">Submitted</option><option value="placed">Placed</option><option value="declined">Not selected</option></select></label>
+              </header>
+              <div class="licensing-grid">
+                <fieldset class="rights-checklist">
+                  <legend>Clearance checklist</legend>
+                  <label><input type="checkbox" name="licensingCheck" value="masterOwned"><span><strong>Master ownership</strong><small>I control the sound recording or have written permission.</small></span></label>
+                  <label><input type="checkbox" name="licensingCheck" value="publishingControlled"><span><strong>Publishing control</strong><small>The composition owners are known and reachable.</small></span></label>
+                  <label><input type="checkbox" name="licensingCheck" value="splitsConfirmed"><span><strong>Writer + producer splits</strong><small>Names, shares, publishers, and PRO details are confirmed.</small></span></label>
+                  <label><input type="checkbox" name="licensingCheck" value="samplesCleared"><span><strong>Samples cleared</strong><small>Every sample or interpolation is original, cleared, or absent.</small></span></label>
+                  <label><input type="checkbox" name="licensingCheck" value="metadataComplete"><span><strong>Metadata complete</strong><small>Title, artist, writers, contact, genre, mood, and explicit status are ready.</small></span></label>
+                  <label><input type="checkbox" name="licensingCheck" value="stemsAvailable"><span><strong>Stems available</strong><small>Dialogue-friendly stems can be delivered quickly.</small></span></label>
+                  <label><input type="checkbox" name="licensingCheck" value="instrumentalReady"><span><strong>Instrumental ready</strong><small>A matching instrumental version is exported.</small></span></label>
+                  <label><input type="checkbox" name="licensingCheck" value="cleanVersionReady"><span><strong>Clean version ready</strong><small>A broadcast-safe version exists when needed.</small></span></label>
+                </fieldset>
+                <div class="handoff-card">
+                  <p class="eyebrow">Choose the first door</p>
+                  <label>Licensing destination<select id="licensingDestination"><option value="halo_house">HALO in-house review</option><option value="disco">DISCO marketplace</option><option value="sync_library">Independent sync library</option><option value="music_supervisor">Direct music supervisor</option><option value="brand_agency">Brand / creative agency</option><option value="games">Games + interactive</option></select></label>
+                  <label>Pitch notes<textarea id="submissionNotes" maxlength="4000" placeholder="One useful paragraph: what the song feels like, where it fits, ownership status, and available versions."></textarea></label>
+                  <div class="handoff-actions">
+                    <button id="copyBriefButton" type="button">Copy licensing brief</button>
+                    <a id="partnerPortalLink" href="/outreach.html">Open HALO review</a>
+                  </div>
+                  <p class="partner-note" id="partnerNote">HALO review prepares an opportunity conversation. It does not guarantee a pitch, placement, fee, or release.</p>
+                </div>
+              </div>
+            </section>
+            <p class="save-status" id="saveStatus" role="status">Changes are ready to save.</p>
+          </form>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="finish-footer">
+    <a class="finish-wordmark" href="/"><img src="/assets/halo-logo-mark.webp" alt=""><span><strong>HALO</strong><small>Finish House</small></span></a>
+    <p>The finishing touch between a private mix and a professional opportunity.</p>
+    <div><a href="/release-house/">Release House</a><a href="/radio/">HALO Radio</a><a href="/outreach.html">Outreach Desk</a></div>
+  </footer>
+
+  <dialog class="finish-dialog" id="projectDialog">
+    <form id="projectForm">
+      <button class="dialog-close" type="button" data-close-dialog aria-label="Close">×</button>
+      <p class="eyebrow">Open the final rooms</p>
+      <h2>Choose the track.</h2>
+      <label>Connect a Release House project<select id="releaseProjectId"><option value="">Start without a release project</option></select></label>
+      <div class="dialog-divider"><span>or name it here</span></div>
+      <label>Artist<input id="newArtistName" maxlength="120" placeholder="Artist name"></label>
+      <label>Track<input id="newTrackTitle" maxlength="160" placeholder="Track title"></label>
+      <label>Primary destination<select id="newIntendedUse"><option value="streaming">Streaming release</option><option value="radio">Radio</option><option value="club">Club / DJ</option><option value="film_tv">Film + television</option><option value="games">Games</option><option value="general">General release</option></select></label>
+      <p class="dialog-message" id="projectMessage" role="status"></p>
+      <button class="primary-action" type="submit">Open Finish House</button>
+    </form>
+  </dialog>
+
+  <dialog class="finish-dialog" id="identityDialog">
+    <form id="identityForm">
+      <button class="dialog-close" type="button" data-close-dialog aria-label="Close">×</button>
+      <p class="eyebrow">Keep the masters connected</p>
+      <h2 id="identityTitle">Join HALO.</h2>
+      <p id="identityIntro">Create a membership to save private finishing briefs and reopen them on any device.</p>
+      <div class="auth-tabs"><button type="button" data-auth-mode="signup" aria-selected="true">Join</button><button type="button" data-auth-mode="login" aria-selected="false">Sign in</button></div>
+      <label id="identityNameField">Your name<input id="identityName" autocomplete="name" maxlength="64"></label>
+      <label>Email<input id="identityEmail" type="email" autocomplete="email" required></label>
+      <label>Password<input id="identityPassword" type="password" minlength="8" autocomplete="new-password" required></label>
+      <p class="dialog-message" id="identityMessage" role="status"></p>
+      <button class="primary-action" id="identitySubmit" type="submit">Join and continue</button>
+    </form>
+  </dialog>
+</body>
+</html>

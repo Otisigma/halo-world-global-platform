@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#15120d">
+  <title>HALO Artist Agent Team — A and R, management, content, and fan growth</title>
+  <meta name="description" content="Every HALO artist room can run its own agent team: an A and R read, a dated plan, drafted words, and fan growth moves, each grounded in that artist's own numbers.">
+  <meta property="og:title" content="HALO Artist Agent Team">
+  <meta property="og:description" content="A and R, management, content, and fan growth grounded in each artist's own numbers.">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="HALO Music World">
+  <meta property="og:image" content="https://halo-world-global-platform.netlify.app/assets/halo-app-icon-512.png">
+  <meta property="og:image:width" content="512">
+  <meta property="og:image:height" content="512">
+  <meta property="og:image:alt" content="HALO Music World logo">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:image" content="https://halo-world-global-platform.netlify.app/assets/halo-app-icon-512.png">
+  <meta name="twitter:image:alt" content="HALO Music World logo">
+  <meta name="robots" content="noindex, nofollow">
+  <link rel="manifest" href="/app.webmanifest">
+  <link rel="apple-touch-icon" href="/assets/halo-app-icon-180.png">
+  <link rel="icon" href="/assets/halo-app-icon-192.png" type="image/png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:opsz,wght@6..96,600;6..96,800&family=DM+Mono:wght@300;400;500&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/halo-brand.css">
+  <link rel="stylesheet" href="/release-context.css">
+  <link rel="stylesheet" href="/artist-team.css">
+  <link rel="stylesheet" href="/accessibility.css">
+  <link rel="stylesheet" href="/mobile-navigation.css">
+  <script src="/stats.js" defer></script>
+  <script src="/site-monitor.js" defer></script>
+  <script src="/accessibility.js" defer></script>
+  <script src="/mobile-navigation.js" defer></script>
+  <script type="module" src="/identity.js"></script>
+  <script src="/release-context.js" defer></script>
+  <script src="/artist-team.js" defer></script>
+</head>
+<body>
+  <div class="grain" aria-hidden="true"></div>
+
+  <header class="team-header">
+    <a class="team-brand" href="/" aria-label="HALO Music World home">
+      <img class="halo-brand-image" src="/assets/halo-logo-mark.webp" alt="">
+      <span><strong>HALO</strong><small>ARTIST AGENT TEAM</small></span>
+    </a>
+    <nav class="team-nav" aria-label="Artist destinations">
+      <a href="/artist-economy/">Artist economy</a>
+      <a href="/artists/">Artist rooms</a>
+      <a href="/music/">Music</a>
+      <a href="/radio/">Radio</a>
+      <button id="identityButton" type="button">Sign in</button>
+    </nav>
+  </header>
+
+  <main>
+    <section id="lockedView" class="locked-view">
+      <div class="lock-orbit" aria-hidden="true"><span></span></div>
+      <p class="section-label">ARTIST ROOM ACCESS</p>
+      <h1>Your own team,<br><em>reading your own numbers.</em></h1>
+      <p id="lockedMessage">Sign in with the account that owns your HALO artist room. The team reads only your room's signals, and every proposal waits for you.</p>
+      <form id="artistAuthForm" class="artist-auth-form">
+        <label>Email<input id="artistEmail" type="email" autocomplete="email" required></label>
+        <label>Password<input id="artistPassword" type="password" autocomplete="current-password" minlength="8" required></label>
+        <button id="lockedSignIn" class="primary-action" type="submit">Open artist sign in</button>
+      </form>
+      <p id="authMessage" class="auth-message" aria-live="polite"></p>
+    </section>
+
+    <section id="pickerView" class="picker-view" hidden>
+      <p class="section-label">CHOOSE A ROOM</p>
+      <h2>Which room is the team working for?</h2>
+      <ul id="roomPicker" class="room-picker"></ul>
+      <p id="pickerMessage" class="auth-message" aria-live="polite"></p>
+    </section>
+
+    <div id="teamView" hidden>
+      <section class="team-hero" aria-labelledby="pageTitle">
+        <div class="hero-copy">
+          <p class="section-label"><span></span> <span id="heroLabel">ARTIST INTELLIGENCE</span></p>
+          <h1 id="pageTitle">A team that has to<br><em>cite your numbers.</em></h1>
+          <p class="hero-intro">Four agents read this room's recorded signals. Compass removes anything the evidence does not support, then writes one short briefing. Nothing is published, sent, or spent without you.</p>
+          <div class="hero-actions">
+            <button id="runButton" class="primary-action" type="button">Run the team</button>
+            <a id="roomLink" class="ghost-action" href="/artists/">Open the artist room</a>
+          </div>
+          <p id="runMessage" class="run-message" aria-live="polite"></p>
+        </div>
+        <div class="hero-meter">
+          <svg viewBox="0 0 200 200" role="img" aria-labelledby="momentumTitle">
+            <title id="momentumTitle">Momentum score</title>
+            <circle cx="100" cy="100" r="86" class="meter-track"></circle>
+            <circle id="momentumArc" cx="100" cy="100" r="86" class="meter-arc"></circle>
+          </svg>
+          <div class="meter-value">
+            <strong id="momentumScore">—</strong>
+            <span>MOMENTUM</span>
+          </div>
+          <p id="momentumNote" class="meter-note">Calculated from follows, plays, room activity, and release recency.</p>
+        </div>
+      </section>
+
+      <section class="operating-deck" aria-labelledby="operatingDeckTitle">
+        <header class="operating-deck-intro">
+          <p class="section-label">BACKSTAGE OPERATING DECK</p>
+          <h2 id="operatingDeckTitle">One private room.<br><em>Five accountable seats.</em></h2>
+          <p>Every client team operates from that artist’s private HALO room. It reads the room’s own releases, follows, radio plays, activity, and audience signals, then returns proposals to the artist who owns the final decision.</p>
+          <dl class="operating-base">
+            <div><dt>Operating base</dt><dd>Private artist room</dd></div>
+            <div><dt>Inputs</dt><dd>Recorded HALO signals only</dd></div>
+            <div><dt>Output</dt><dd>Briefings, proposals, and drafts</dd></div>
+            <div><dt>Authority</dt><dd>Human approval required</dd></div>
+          </dl>
+        </header>
+        <div class="seat-map" aria-label="Backstage agent seats">
+          <article style="--seat-color:#d4a44f"><span>01 / A&amp;R</span><h3>Scout</h3><p>Finds the material earning attention and identifies what deserves the next push.</p></article>
+          <article style="--seat-color:#839379"><span>02 / Direction</span><h3>Steer</h3><p>Turns signals into sequence, timing, priorities, and a realistic weekly plan.</p></article>
+          <article style="--seat-color:#768c9b"><span>03 / Voice</span><h3>Echo</h3><p>Drafts page, release, social, and press language in the artist’s established voice.</p></article>
+          <article style="--seat-color:#9a5b3f"><span>04 / Audience</span><h3>Circle</h3><p>Builds the path from first listen to follow, return visit, and lasting fan connection.</p></article>
+          <article class="seat-lead" style="--seat-color:#eee6d5"><span>05 / Chief of staff</span><h3>Compass</h3><p>Challenges every recommendation, removes unsupported claims, and delivers the final briefing.</p></article>
+        </div>
+      </section>
+
+      <section class="signal-strip" aria-label="Room signals">
+        <article><span>Followers</span><strong id="signalFollowers">—</strong><small id="signalFollowersNew">&nbsp;</small></article>
+        <article><span>Radio plays / 30d</span><strong id="signalPlays">—</strong><small id="signalRooms">&nbsp;</small></article>
+        <article><span>Room views / 30d</span><strong id="signalViews">—</strong><small id="signalVisitors">&nbsp;</small></article>
+        <article><span>Published / 30d</span><strong id="signalPublished">—</strong><small id="signalLastPublished">&nbsp;</small></article>
+        <article><span>Releases</span><strong id="signalReleases">—</strong><small id="signalReleaseAge">&nbsp;</small></article>
+      </section>
+
+      <section class="briefing-panel" aria-labelledby="briefingTitle">
+        <header>
+          <p class="section-label">COMPASS BRIEFING</p>
+          <h2 id="briefingTitle">What the team concluded</h2>
+          <p id="briefingMeta" class="panel-meta">No briefing yet.</p>
+        </header>
+        <p id="briefingText" class="briefing-text">Run the team to produce the first briefing for this room.</p>
+        <div class="briefing-columns">
+          <div><h3>Working</h3><ul id="briefingWins"></ul></div>
+          <div><h3>Watch</h3><ul id="briefingConcerns"></ul></div>
+          <div><h3>Self-correction</h3><ul id="briefingReflection"></ul></div>
+        </div>
+        <p id="groundingNote" class="grounding-note"></p>
+      </section>
+
+      <section class="agents-panel" aria-labelledby="agentsTitle">
+        <header>
+          <p class="section-label">THE TEAM</p>
+          <h2 id="agentsTitle">Each agent, and what it found</h2>
+        </header>
+        <div id="agentFindings" class="agent-grid"></div>
+      </section>
+
+      <section class="actions-panel" aria-labelledby="actionsTitle">
+        <header>
+          <p class="section-label">PROPOSALS</p>
+          <h2 id="actionsTitle">Nothing happens until you approve it</h2>
+          <p class="panel-meta">Approve what you will do, dismiss what you will not, then record what actually happened. Recorded outcomes are what the team learns from.</p>
+        </header>
+        <div id="actionList" class="action-list"></div>
+      </section>
+
+      <section class="drafts-panel" aria-labelledby="draftsTitle">
+        <header>
+          <p class="section-label">DRAFTED WORDS</p>
+          <h2 id="draftsTitle">Written for you, published by you</h2>
+          <p class="panel-meta">HALO stores approved drafts. It does not post to any outside platform on your behalf, so anything marked for an outside channel is yours to copy and publish yourself.</p>
+        </header>
+        <div id="draftList" class="draft-list"></div>
+      </section>
+
+      <section class="plan-panel" aria-labelledby="planTitle">
+        <header>
+          <p class="section-label">PLAN AND USAGE</p>
+          <h2 id="planTitle">What this team costs to run</h2>
+        </header>
+        <div class="plan-grid">
+          <article><span>Plan</span><strong id="planTier">—</strong><small id="planStatus">&nbsp;</small></article>
+          <article><span>Runs left this month</span><strong id="planRuns">—</strong><small id="planAllowance">&nbsp;</small></article>
+          <article><span>Last run tokens</span><strong id="planTokens">—</strong><small id="planCalls">&nbsp;</small></article>
+          <article><span>Agents enabled</span><strong id="planAgents">—</strong><small id="planExternal">&nbsp;</small></article>
+        </div>
+        <p class="plan-note">Every run records its own token use, so the price of a plan can be set against what it actually costs rather than an estimate.</p>
+      </section>
+    </div>
+  </main>
+
+  <footer class="team-footer">
+    <a href="/">HALO World</a>
+    <span>Proposals only. Approval always yours.</span>
+    <span id="footerStamp">Artist agent teams / 2026</span>
+  </footer>
+</body>
+</html>

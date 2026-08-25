@@ -1,0 +1,280 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Dreamweaver Show — HALO</title>
+  <meta name="description" content="A cinematic artist experience created in HALO and presented through Dreamweaver.">
+  <meta name="theme-color" content="#100f0c">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="icon" href="/assets/halo-app-icon-192.png">
+  <link rel="stylesheet" href="/halo-brand.css">
+  <link rel="stylesheet" href="/accessibility.css">
+  <link rel="stylesheet" href="/dreamweaver/dreamweaver.css">
+  <script src="/stats.js" defer></script>
+  <script src="/accessibility.js" defer></script>
+  <script src="/dreamweaver/dreamweaver.js" defer></script>
+</head>
+<body>
+  <div class="paper-grain" aria-hidden="true"></div>
+  <header class="show-header">
+    <a class="show-brand" href="/halo.html" aria-label="HALO home">
+      <img class="halo-brand-image halo-brand-image--small" src="/assets/halo-logo-mark.webp" alt="">
+      <span><strong>HALO</strong><small>Dreamweaver / first edition</small></span>
+    </a>
+    <nav aria-label="Dreamweaver navigation">
+      <a href="/dreamweaver-lab/">Song Lab</a>
+      <a href="/dj-deck.html">Mix Desk</a>
+      <a href="/iam-social/">I AM Social</a>
+      <a href="/campaign-studio/">Campaign Studio</a>
+      <a href="/radio/">Radio</a>
+    </nav>
+    <div class="header-actions">
+      <button class="header-action header-action--campaign" id="makeCampaign" type="button">Make a Reel / Short</button>
+      <button class="header-action" id="shareShow" type="button">Share show</button>
+    </div>
+  </header>
+
+  <main class="show-shell" id="showShell" aria-live="polite" aria-busy="true">
+    <section class="loading-show" id="loadingShow">
+      <p>Dreamweaver / preparing this edition</p>
+      <h1>The artist’s world<br>is taking shape.</h1>
+      <div class="loading-score" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+    </section>
+
+    <section class="show-stage" id="showStage" hidden>
+      <div class="visual-stack" id="visualStack" aria-hidden="true"></div>
+      <div class="light-leak" aria-hidden="true"></div>
+      <div class="stage-scrim" aria-hidden="true"></div>
+
+      <div class="edition-mark" aria-hidden="true">
+        <span>DW</span><small>001</small>
+      </div>
+
+      <aside class="chapter-rail" aria-label="Show chapters">
+        <p>Five movements</p>
+        <div class="chapter-list" id="chapterList"></div>
+      </aside>
+
+      <article class="story-frame" id="storyFrame">
+        <div class="story-counter"><span id="chapterNumber">01</span><i></i><span>05</span></div>
+        <p class="story-kicker" id="storyKicker">An artist story in motion</p>
+        <h1 id="storyTitle">The signal begins slowly.</h1>
+        <p class="story-copy" id="storyCopy"></p>
+        <button class="story-detail-button" id="openStory" type="button">Open the story notes</button>
+      </article>
+
+      <div class="mix-caption">
+        <span>Now woven from the Mix Desk</span>
+        <strong id="mixTitle">Loading the mix…</strong>
+        <small id="mixCreator">HALO / Dreamweaver</small>
+      </div>
+
+      <section class="transport" aria-label="Show playback controls">
+        <button class="play-button" id="playButton" type="button" aria-label="Play show">
+          <svg class="play-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z"></path></svg>
+          <svg class="pause-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5h4v14H7zM14 5h4v14h-4z"></path></svg>
+        </button>
+        <div class="transport-main">
+          <div class="time-row"><span id="elapsedTime">00:00</span><span id="chapterTime">Movement 01</span><span id="durationTime">00:00</span></div>
+          <input class="show-progress" id="showProgress" type="range" min="0" max="1000" value="0" aria-label="Show progress">
+          <div class="progress-markers" id="progressMarkers" aria-hidden="true"></div>
+        </div>
+        <div class="signal-bars" id="signalBars" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i></div>
+        <button class="icon-button" id="muteButton" type="button" aria-label="Mute show">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9v6h4l5 4V5L8 9H4zm12.5 3a4.5 4.5 0 0 0-2-3.74v7.48a4.5 4.5 0 0 0 2-3.74z"></path></svg>
+        </button>
+        <button class="icon-button" id="fullScreenButton" type="button" aria-label="Enter full screen">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5"></path></svg>
+        </button>
+      </section>
+
+      <div class="mode-switcher" role="group" aria-label="Dreamweaver viewing mode">
+        <button type="button" data-mode="watch" aria-pressed="true">Watch</button>
+        <button type="button" data-mode="room" aria-pressed="false">Room</button>
+        <button type="button" data-mode="explore" aria-pressed="false">Explore</button>
+      </div>
+    </section>
+
+    <section class="empty-show" id="emptyShow" hidden>
+      <p>Dreamweaver / no playable mix found</p>
+      <h1>The room is ready.<br>The story needs a set.</h1>
+      <p id="emptyMessage">Post an audio mix from the Mix Desk, then return here to turn it into a visual journey.</p>
+      <div><a href="/dj-deck.html">Open the Mix Desk</a><button id="retryShow" type="button">Read the room again</button></div>
+    </section>
+  </main>
+
+  <section class="campaign-cutting-room" id="campaignStudio" role="dialog" aria-modal="true" aria-labelledby="campaignStudioTitle" aria-hidden="true">
+    <div class="campaign-studio-bar">
+      <div>
+        <span>DW / CAMPAIGN CUTTING ROOM</span>
+        <strong>Turn one mix moment into a complete release signal.</strong>
+      </div>
+      <button id="closeCampaign" type="button">Close studio</button>
+    </div>
+
+    <div class="campaign-studio-grid">
+      <aside class="campaign-controls">
+        <p class="campaign-step">LOAD IT / SHAPE IT / SEND IT</p>
+        <h2 id="campaignStudioTitle">One link.<br>One click.</h2>
+        <p class="campaign-intro">Paste your YouTube page. Dreamweaver quietly gathers your connected HALO gallery, shapes the collage, and prepares the complete campaign in the background.</p>
+
+        <form id="campaignForm">
+          <label class="campaign-field campaign-source-field">Your YouTube page
+            <input id="campaignYoutubeUrl" name="youtubeUrl" type="url" inputmode="url" autocomplete="url" required placeholder="https://youtube.com/@yourchannel">
+            <span class="source-assurance"><i aria-hidden="true"></i>Dreamweaver uses this as the source signal and combines it with your approved HALO media.</span>
+          </label>
+
+          <div class="one-click-map" aria-label="Dreamweaver automatic workflow">
+            <span><b>01</b> Read the link</span>
+            <span><b>02</b> Gather the gallery</span>
+            <span><b>03</b> Build the collage</span>
+          </div>
+
+          <details class="campaign-advanced" id="campaignAdvanced">
+            <summary>Fine-tune the campaign <small>Optional</small></summary>
+
+          <fieldset>
+            <legend>Clip length</legend>
+            <div class="choice-row">
+              <label><input type="radio" name="clipDuration" value="15"><span>15 sec<small>Fast hook</small></span></label>
+              <label><input type="radio" name="clipDuration" value="30" checked><span>30 sec<small>Recommended</small></span></label>
+              <label><input type="radio" name="clipDuration" value="45"><span>45 sec<small>Full build</small></span></label>
+            </div>
+          </fieldset>
+
+          <label class="campaign-field">Start inside the mix
+            <input id="clipStart" name="clipStart" type="range" min="0" max="100" value="0">
+            <span class="field-reading"><strong id="clipStartTime">00:00</strong><small id="clipEndTime">to 00:30</small></span>
+          </label>
+
+          <fieldset>
+            <legend>Dreamweaver treatment</legend>
+            <div class="template-grid">
+              <label><input type="radio" name="template" value="hook" checked><span><b>The Hook</b><small>Immediate impact</small></span></label>
+              <label><input type="radio" name="template" value="story"><span><b>The Story</b><small>Meaning first</small></span></label>
+              <label><input type="radio" name="template" value="invitation"><span><b>The Invitation</b><small>Trailer energy</small></span></label>
+            </div>
+          </fieldset>
+
+          <fieldset>
+            <legend>Creative video shape</legend>
+            <div class="template-grid visual-treatment-grid">
+              <label><input type="radio" name="visualTreatment" value="archive_reel"><span><b>Archive Reel</b><small>Rhythmic video cuts</small></span></label>
+              <label><input type="radio" name="visualTreatment" value="collage" checked><span><b>Collage</b><small>Layered fragments</small></span></label>
+              <label><input type="radio" name="visualTreatment" value="section"><span><b>One Section</b><small>Single focused scene</small></span></label>
+            </div>
+          </fieldset>
+
+          <fieldset>
+            <legend>Approved archive footage</legend>
+            <p class="footage-note">Dreamweaver uses only selected HALO video records. Uploaded footage can appear in the final film; linked videos remain visual references.</p>
+            <div class="footage-selector" id="footageSelector" aria-live="polite"></div>
+          </fieldset>
+
+          <label class="campaign-field">Campaign goal
+            <select id="campaignGoal" name="goal">
+              <option value="full_mix_starts">Start the full mix</option>
+              <option value="awareness">Introduce the artist</option>
+              <option value="release_visits">Open featured releases</option>
+              <option value="community_growth">Grow the HALO room</option>
+            </select>
+          </label>
+
+          <label class="campaign-field">Opening line <small>Optional — Gemma can write it</small>
+            <input id="campaignHeadline" name="headline" maxlength="120" placeholder="The room changes when this moment arrives.">
+          </label>
+          </details>
+
+          <button class="generate-campaign-button" id="generateCampaign" type="submit"><span>One-click Dreamweaver</span><strong>Load it. Shape it. Send it.</strong></button>
+          <p class="campaign-trust">The build continues in the background. Nothing posts without your approval.</p>
+        </form>
+      </aside>
+
+      <section class="campaign-preview-column" aria-label="Vertical clip preview">
+        <div class="preview-heading"><span>LIVE VERTICAL PREVIEW</span><strong id="previewMovement">Movement 01 / Origin</strong></div>
+        <div class="phone-frame">
+          <canvas id="campaignCanvas" width="1080" height="1920" aria-label="Dreamweaver vertical campaign preview"></canvas>
+          <div class="render-curtain" id="renderCurtain" role="status" aria-live="polite" aria-busy="false" hidden>
+            <span id="renderProgress">Preparing film…</span>
+            <small id="renderProgressDetail">Loading the selected audio and first frame.</small>
+            <i id="renderProgressMeter" role="progressbar" aria-label="Film creation progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><b id="renderProgressBar"></b></i>
+          </div>
+        </div>
+        <div class="preview-actions">
+          <button id="renderClip" type="button" disabled>Create vertical film</button>
+          <button id="downloadClip" type="button" disabled>Download film</button>
+          <button id="downloadCover" type="button">Download cover</button>
+        </div>
+        <div class="render-status" id="renderStatus" data-state="idle" role="status" aria-live="polite">
+          <span aria-hidden="true"></span>
+          <strong id="renderStatusTitle">Film not created yet</strong>
+          <small id="renderStatusDetail">Create the film first. Download unlocks only after a complete video file is ready.</small>
+        </div>
+        <p class="render-note">The package keeps building in the background. Film creation uses the selected mix passage and approved uploaded footage in real time.</p>
+      </section>
+
+      <section class="campaign-package-column" aria-live="polite">
+        <section class="campaign-build-activity" id="campaignBuildActivity" hidden>
+          <div class="build-activity-heading"><span>BACKGROUND CAMPAIGN BUILD</span><strong id="campaignBuildPercent">4%</strong></div>
+          <h2 id="campaignBuildTitle">Opening the cutting room.</h2>
+          <p id="campaignBuildDetail">The short preview stays active while Dreamweaver gathers approved material.</p>
+          <div class="build-progress" role="progressbar" aria-label="Campaign build progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="4" id="campaignBuildMeter"><i id="campaignBuildBar"></i></div>
+          <ol class="build-stages" id="campaignBuildStages">
+            <li data-build-stage="gathering">Gather approved footage</li>
+            <li data-build-stage="planning">Plan the cut</li>
+            <li data-build-stage="writing">Write platform packages</li>
+            <li data-build-stage="packaging">Assemble the campaign</li>
+          </ol>
+        </section>
+        <div class="package-empty" id="packageEmpty">
+          <span>02 / PACKAGE THE SIGNAL</span>
+          <h2>Everything arrives together.</h2>
+          <p>Receive an artist-controlled campaign package prepared for TikTok, Instagram, and YouTube, with final publishing kept in human hands.</p>
+        </div>
+        <div class="package-results" id="packageResults" hidden>
+          <div class="package-overview">
+            <span>GEMMA / CAMPAIGN READY</span>
+            <h2 id="packageTitle"></h2>
+            <p id="packageIdea"></p>
+            <div class="package-actions">
+              <button id="downloadPackage" type="button">Download full package</button>
+              <button id="reviewCampaign" type="button">Run performance review</button>
+            </div>
+          </div>
+          <div class="platform-tabs" role="tablist" aria-label="Platform packages">
+            <button type="button" data-platform-tab="tiktok" aria-selected="true">TikTok</button>
+            <button type="button" data-platform-tab="instagram" aria-selected="false">Instagram</button>
+            <button type="button" data-platform-tab="youtube" aria-selected="false">YouTube</button>
+          </div>
+          <div id="platformPackages"></div>
+          <section class="campaign-score" id="campaignScore" hidden>
+            <div><span>GEMMA MOMENTUM SCORE</span><strong id="campaignScoreValue">0</strong><small>/ 100</small></div>
+            <article><h3 id="campaignScoreGrade">Starting</h3><p id="campaignScoreSummary"></p><ul id="campaignRecommendations"></ul></article>
+          </section>
+          <div class="campaign-history" id="campaignHistory"></div>
+        </div>
+      </section>
+    </div>
+  </section>
+
+  <aside class="story-drawer" id="storyDrawer" aria-labelledby="drawerTitle" aria-hidden="true">
+    <button class="drawer-close" id="closeStory" type="button" aria-label="Close story notes">Close</button>
+    <p class="drawer-kicker" id="drawerKicker">Movement 01 / Origin</p>
+    <h2 id="drawerTitle">The signal begins slowly.</h2>
+    <p class="drawer-lead" id="drawerLead"></p>
+    <div class="drawer-grid">
+      <section><span>Dreamweaver note</span><p id="drawerNote"></p></section>
+      <section><span>Visual source</span><p id="drawerSource"></p></section>
+      <section><span>Archive status</span><p>Built from artist-controlled HALO material. Final public editions should keep image, video, music, and contributor approvals attached.</p></section>
+    </div>
+    <div class="archive-reel" id="archiveReel" aria-label="Connected artist video archive"></div>
+  </aside>
+
+  <audio id="showAudio" preload="metadata"></audio>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <footer class="proprietary-notice">Dreamweaver™ is proprietary HALO technology. Public descriptions communicate capabilities and outcomes, not confidential methods.</footer>
+</body>
+</html>

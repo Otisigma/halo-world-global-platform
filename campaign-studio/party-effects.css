@@ -1,0 +1,100 @@
+:root {
+  --party-accent: #d5ef5a;
+}
+
+.campaign-form select,
+.editor-form select {
+  width: 100%;
+  min-height: 48px;
+  border: 1px solid var(--line);
+  border-radius: 0;
+  background: #11110e;
+  color: var(--paper);
+  padding: 0 14px;
+  font: inherit;
+}
+
+.party-room-note {
+  max-width: 620px;
+  margin-top: 30px !important;
+  padding-left: 18px;
+  border-left: 3px solid var(--party-accent);
+  color: var(--paper) !important;
+  font-weight: 600;
+}
+
+.party-atmosphere {
+  position: fixed;
+  inset: 0;
+  z-index: 19;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.party-atmosphere i {
+  position: absolute;
+  left: calc((var(--i) + 1) * 3.45%);
+  top: -12vh;
+  width: 8px;
+  height: 22px;
+  background: var(--party-accent);
+  opacity: .72;
+  transform: rotate(calc(var(--i) * 29deg));
+  animation: party-fall calc(6s + (var(--i) % 7) * .7s) linear infinite;
+  animation-delay: calc(var(--i) * -.43s);
+}
+
+.party-streamers i {
+  width: 3px;
+  height: 72px;
+  border-radius: 999px;
+  background: linear-gradient(var(--party-accent), #d84d35);
+  animation-duration: calc(10s + (var(--i) % 8) * 1s);
+}
+
+.party-starlight i {
+  top: calc((var(--i) + 1) * 3.35%);
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  box-shadow: 0 0 14px 4px var(--party-accent);
+  animation: party-pulse calc(2.4s + (var(--i) % 5) * .35s) ease-in-out infinite alternate;
+}
+
+.party-none {
+  display: none;
+}
+
+body[data-party-atmosphere="sunset"] .vote-hero {
+  background: radial-gradient(circle at 20% 20%, rgba(216, 77, 53, .28), transparent 38%), linear-gradient(135deg, #2c1510, var(--ink) 68%);
+}
+
+body[data-party-atmosphere="butterfly"] .vote-hero {
+  background: radial-gradient(circle at 78% 18%, rgba(168, 85, 247, .28), transparent 34%), linear-gradient(145deg, #1f1425, var(--ink) 72%);
+}
+
+body[data-party-atmosphere="electric"] .vote-hero {
+  background: radial-gradient(circle at 60% 20%, rgba(72, 168, 255, .28), transparent 34%), linear-gradient(145deg, #091d29, var(--ink) 72%);
+}
+
+body[data-party-motion="gentle"] .party-atmosphere i {
+  animation-duration: calc(13s + (var(--i) % 7) * 1s);
+  opacity: .42;
+}
+
+body[data-party-motion="reduced"] .party-atmosphere {
+  display: none;
+}
+
+@keyframes party-fall {
+  to { transform: translate3d(calc((var(--i) - 14) * 1.2px), 120vh, 0) rotate(calc(var(--i) * 29deg + 360deg)); }
+}
+
+@keyframes party-pulse {
+  from { opacity: .15; transform: scale(.6); }
+  to { opacity: .8; transform: scale(1.35); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .party-atmosphere { display: none; }
+}

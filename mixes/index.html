@@ -1,0 +1,408 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#d85f35">
+  <meta name="description" content="Watch DJ HALO X: Inside the Mix, stream full-length HALO mixes, and collect rights-cleared Mix Editions.">
+  <meta property="og:title" content="HALO X Mixes — Inside the Mix">
+  <meta property="og:description" content="One story. One set. One weekly signal from DJ HALO X.">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="HALO Music World">
+  <meta property="og:image" content="https://halo-world-global-platform.netlify.app/assets/releases/salty.jpg">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:image" content="https://halo-world-global-platform.netlify.app/assets/releases/salty.jpg">
+  <title>HALO X Mixes — Inside the Mix</title>
+  <link rel="icon" href="/assets/halo-app-icon-192.png" type="image/png">
+  <link rel="apple-touch-icon" href="/assets/halo-app-icon-180.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:ital,wght@0,500;0,600;0,700;0,800;1,600&family=Bodoni+Moda:opsz,ital,wght@6..96,500;6..96,600;6..96,700;1,6..96,500&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/accessibility.css">
+  <link rel="stylesheet" href="/halo-brand.css">
+  <link rel="stylesheet" href="/mixes/mixes.css">
+  <script src="/stats.js" defer></script>
+  <script src="/site-monitor.js" defer></script>
+  <script src="/accessibility.js" defer></script>
+  <script type="module" src="/identity.js"></script>
+  <script src="/mixes/mixes.js" defer></script>
+</head>
+<body>
+  <div class="paper-grain" aria-hidden="true"></div>
+  <header class="site-header">
+    <a class="brand" href="/" aria-label="HALO Music World home">
+      <img class="halo-brand-image" src="/assets/halo-logo-mark.webp" alt="">
+      <span><strong>HALO X MIXES</strong><small>Own the version</small></span>
+    </a>
+    <nav aria-label="Mixes navigation">
+      <a href="#series">Watch</a>
+      <a href="#library">Stream</a>
+      <a href="#upload">Upload</a>
+      <a href="#visual-studio">Visuals</a>
+      <a href="#complete-package">Package</a>
+      <a href="#quality">Review</a>
+      <a href="#editions">Editions</a>
+      <a href="/radio/">Radio</a>
+      <a class="nav-stamp" href="/dj-deck.html">Open DJ deck</a>
+    </nav>
+  </header>
+
+  <main>
+    <section class="hero" aria-labelledby="pageTitle">
+      <div class="hero-index" aria-hidden="true"><span>HX</span><strong>001</strong></div>
+      <div class="hero-copy">
+        <p class="kicker"><span class="signal-dot"></span> DJ HALO X presents / weekly transmission</p>
+        <h1 id="pageTitle"><span>Inside</span><em>the Mix.</em></h1>
+        <p class="hero-intro">The story, pressure and decisions behind the set—then the uninterrupted version, exactly as it was meant to move.</p>
+        <div class="hero-actions">
+          <button class="primary-action" id="heroPlay" type="button" disabled>Loading latest mix</button>
+          <a class="text-action" href="#series">Watch the series <span>↘</span></a>
+        </div>
+        <div class="hero-note">
+          <span>Season one</span>
+          <strong>Road to the Worlds</strong>
+          <p>Regional rooms. Global ambition. Every episode leaves a new signal behind.</p>
+        </div>
+      </div>
+
+      <div class="hero-record" id="heroRecord" aria-live="polite">
+        <div class="record-sleeve">
+          <div class="sleeve-art">
+            <img id="featuredArtwork" src="/assets/releases/salty.jpg" alt="">
+            <div class="art-wash"></div>
+            <span class="sleeve-label">HALO X<br>MIX EDITION</span>
+            <strong class="sleeve-number">01</strong>
+          </div>
+        </div>
+        <div class="vinyl" aria-hidden="true">
+          <div class="vinyl-grooves"></div>
+          <div class="vinyl-label"><img src="/assets/halo-logo-mark.webp" alt=""></div>
+        </div>
+        <div class="record-caption">
+          <span id="featuredMeta">Long Play / loading</span>
+          <strong id="featuredTitle">Finding the latest signal…</strong>
+          <small id="featuredCreator">DJ HALO X</small>
+        </div>
+      </div>
+    </section>
+
+    <div class="ticker" aria-label="HALO X mix experience">
+      <div><span>WATCH THE STORY</span><i></i><span>STREAM THE FULL SET</span><i></i><span>OWN THE EDITION</span><i></i><span>RETURN NEXT WEEK</span><i></i></div>
+    </div>
+
+    <section class="series section-shell" id="series" aria-labelledby="seriesTitle">
+      <header class="section-heading">
+        <div><p class="section-code">01 / The series</p><h2 id="seriesTitle">ONE MIX.<br><em>ONE STORY.</em></h2></div>
+        <p>Each episode opens the room: what changed, what nearly failed, and why the final version had to sound this way.</p>
+      </header>
+      <div class="episode-stage" id="episodeStage" aria-live="polite">
+        <article class="episode-loading"><span></span><div><i></i><i></i><i></i></div></article>
+      </div>
+    </section>
+
+    <section class="library" id="library" aria-labelledby="libraryTitle">
+      <div class="library-heading section-shell">
+        <div><p class="section-code">02 / HALO Mix Cloud</p><h2 id="libraryTitle">FULL SETS.<br><em>NO SHORT CUTS.</em></h2></div>
+        <div class="library-intro">
+          <p>Long-form sessions from the HALO rooms. Press play here or let Long Play carry the queue without interruption.</p>
+          <a href="/radio/">Enter HALO Radio <span>↗</span></a>
+        </div>
+      </div>
+      <div class="mix-rail-wrap">
+        <div class="mix-rail" id="mixRail" aria-live="polite">
+          <article class="mix-skeleton"></article><article class="mix-skeleton"></article><article class="mix-skeleton"></article>
+        </div>
+      </div>
+    </section>
+
+    <section class="upload-desk section-shell" id="upload" aria-labelledby="uploadTitle">
+      <div class="upload-intro">
+        <p class="section-code">03 / The Mix Desk</p>
+        <h2 id="uploadTitle">YOUR MIX.<br><em>YOUR SALES PAGE.</em></h2>
+        <p>Upload a finished remix here, or send the recording into the HALO mixing package. Finished creator uploads keep the creator as seller. HALO-mixed projects include the mixing and mastering charge before the edition moves to rights review.</p>
+        <div class="route-ledger" aria-label="Mix routes">
+          <div><span>Finished remix</span><strong>Creator sells</strong><small>Upload the approved master and keep the edition attached to your page.</small></div>
+          <div><span>HALO mix package</span><strong>Mixing included</strong><small>Send the working mix; HALO mixing and mastering are treated as the paid service layer.</small></div>
+        </div>
+        <div class="device-upload-note" aria-label="Supported upload devices">
+          <span>Upload from</span>
+          <strong>Phone · tablet · laptop · studio computer</strong>
+          <small>One secure desk keeps the mastered mix, optional original, project notes and sales details together.</small>
+        </div>
+      </div>
+      <div class="upload-panel">
+        <div class="upload-gate" id="uploadGate">
+          <strong>Sign in to open your Mix Desk</strong>
+          <p>Your uploads stay attached to your HALO membership and creator profile.</p>
+          <label><span>Email</span><input id="mixLoginEmail" type="email" autocomplete="email" required></label>
+          <label><span>Password</span><input id="mixLoginPassword" type="password" autocomplete="current-password" required></label>
+          <button class="edition-button" id="mixLoginButton" type="button">Sign in to upload</button>
+          <small>Need a HALO account? <a href="/artists/">Create your artist room first ↗</a></small>
+          <p class="checkout-status" id="mixLoginStatus" role="status"></p>
+        </div>
+        <form class="mix-upload-form" id="mixUploadForm" hidden>
+          <div class="audio-version-upload">
+            <label class="file-drop"><span>Mastered remix or working mix</span><input id="mixFile" name="mixFile" type="file" accept=".mp3,.wav,.aac,.m4a,.mp4,.ogg,.webm,audio/mpeg,audio/wav,audio/aac,audio/mp4,audio/ogg,audio/webm" required><small>This is the version listeners hear first · maximum 128 MB</small></label>
+            <label class="file-drop file-drop-secondary"><span>Original version for A/B comparison</span><input id="originalMixFile" name="originalMixFile" type="file" accept=".mp3,.wav,.aac,.m4a,.mp4,.ogg,.webm,audio/mpeg,audio/wav,audio/aac,audio/mp4,audio/ogg,audio/webm"><small>Optional · listeners can switch at the same timestamp to hear what changed</small></label>
+          </div>
+          <div class="form-grid">
+            <label><span>Mix title</span><input name="title" maxlength="100" required></label>
+            <label><span>Original artist</span><input name="originalArtist" maxlength="100" required></label>
+            <label><span>Remixer / DJ credit</span><input name="remixerName" maxlength="100" required></label>
+            <label><span>Artwork URL</span><input name="artworkUrl" type="url" placeholder="https://…"></label>
+          </div>
+          <label><span>Edition story</span><textarea name="description" maxlength="320" rows="4" placeholder="What changed in this version, and what should listeners know?"></textarea></label>
+          <div class="creator-context">
+            <label><span>Creative intent for reviewers</span><textarea name="reviewIntent" maxlength="1000" rows="3" placeholder="What should this mix make the room feel, and which choices are deliberate?"></textarea></label>
+            <label><span>Context they may not know</span><textarea name="reviewContext" maxlength="1000" rows="3" placeholder="Genre language, source limitations, performance conditions or references that affect a fair review."></textarea></label>
+            <label><span>Moments to understand before changing</span><textarea name="protectedMoments" maxlength="1000" rows="3" placeholder="List unusual breaks, pauses, clashes or transitions that are intentional and why."></textarea></label>
+          </div>
+          <fieldset class="route-picker">
+            <legend>How is this mix being finished?</legend>
+            <label><input type="radio" name="productionRoute" value="self_mixed" checked><span><strong>I am uploading the finished remix</strong><small>I remain the creator seller after rights review.</small></span></label>
+            <label><input type="radio" name="productionRoute" value="halo_mixed"><span><strong>HALO is mixing this for me</strong><small>Mixing and mastering are included as the extra paid package layer.</small></span></label>
+          </fieldset>
+          <div class="form-grid">
+            <label><span>Release visibility</span><select name="visibility"><option value="room">Publish to the Mix Cloud</option><option value="private">Keep private for review</option></select></label>
+            <label class="sale-choice"><input name="clientSaleEnabled" type="checkbox"><span><strong>Prepare this remix for sale</strong><small>Optional · adds artwork, edition story and pricing requirements before upload.</small></span></label>
+          </div>
+          <fieldset class="product-fields" id="paidMixFields">
+            <legend>Paid edition information</legend>
+            <div class="form-grid">
+              <label><span>Edition format</span><select name="editionFormat"><option value="mp3">High-quality MP3</option><option value="wav_bundle">WAV + MP3 bundle</option></select></label>
+              <label><span>Price (USD)</span><input name="price" type="number" min="1" max="500" step="0.01" inputmode="decimal" placeholder="9.00"></label>
+            </div>
+            <small>Checkout stays locked until HALO approves the master, verifies the complete product information, confirms this price, and clears the rights.</small>
+          </fieldset>
+          <label class="rights-check"><input name="rightsAttested" type="checkbox" required><span>I confirm I own or control this recording and have permission to upload, remix and stream it. A paid download still requires HALO to confirm the applicable rights or clearances.</span></label>
+          <div class="upload-progress" id="mixUploadProgress" hidden><span></span></div>
+          <button class="edition-button" id="mixUploadButton" type="submit">Upload to the Mix Desk</button>
+          <p class="checkout-status" id="mixUploadStatus" role="status"></p>
+        </form>
+      </div>
+    </section>
+
+    <section class="visual-studio" id="visual-studio" aria-labelledby="visualStudioTitle">
+      <div class="visual-studio-heading section-shell">
+        <div>
+          <p class="section-code">04 / Dreamweaver Visual Mix Studio</p>
+          <h2 id="visualStudioTitle">THE WHOLE SET.<br><em>NOW IT MOVES.</em></h2>
+        </div>
+        <p>Turn a Mix Desk recording into a venue-ready visual treatment. Use animated branding, supplied videos, Dreamweaver scenes, or all three across the complete timeline.</p>
+      </div>
+
+      <div class="visual-studio-shell section-shell">
+        <div class="visual-console">
+          <div class="visual-screen" id="visualScreen" aria-live="polite">
+            <div class="visual-screen-media" id="visualScreenMedia"></div>
+            <div class="visual-screen-grid" aria-hidden="true"></div>
+            <div class="visual-screen-orbit" aria-hidden="true"><i></i><i></i><i></i></div>
+            <img class="visual-screen-logo" id="visualScreenLogo" alt="" hidden>
+            <div class="visual-screen-copy">
+              <span id="visualScreenTime">00:00 — 60:00</span>
+              <strong id="visualScreenTitle">Dreamweaver visual channel</strong>
+              <small id="visualScreenDirection">Sign in and choose one of your mixes to map the full visual hour.</small>
+            </div>
+            <div class="visual-screen-badge" id="visualScreenBadge">STANDBY</div>
+          </div>
+          <div class="visual-transport">
+            <div><span>Coverage</span><strong id="visualCoverage">0:00 / 0:00</strong></div>
+            <div><span>Movements</span><strong id="visualSceneCount">0 scenes</strong></div>
+            <div><span>Source videos</span><strong id="visualSourceCount">0 linked</strong></div>
+            <button id="visualRenderBrief" type="button" disabled>Prepare render brief</button>
+          </div>
+        </div>
+
+        <div class="visual-workbench">
+          <div class="visual-gate" id="visualGate">
+            <span>Dreamweaver is connected</span>
+            <strong>Sign in through the Mix Desk to build the visual edition.</strong>
+            <p>The studio uses mixes and videos already attached to your HALO membership.</p>
+          </div>
+
+          <form class="visual-form" id="visualMixForm" hidden>
+            <div class="visual-form-head">
+              <div><span>New visual project</span><strong>Build the complete treatment</strong></div>
+              <a href="/dreamweaver/">Open campaign Dreamweaver ↗</a>
+            </div>
+            <div class="form-grid">
+              <label><span>Mix recording</span><select name="mixId" id="visualMixSelect" required></select></label>
+              <label><span>Project title</span><input name="title" maxlength="140" placeholder="I Love — visual edition"></label>
+            </div>
+            <fieldset class="visual-package-picker">
+              <legend>Choose the package</legend>
+              <label class="complete-package-choice"><input type="radio" name="packageType" value="complete" checked><span><b>Complete venue package</b><small>Videos, Dreamweaver scenes, branded moments and the full production handoff.</small></span></label>
+              <label><input type="radio" name="packageType" value="logo"><span><b>Logo edition</b><small>Long-form animated branding for venues and DJ sets.</small></span></label>
+              <label><input type="radio" name="packageType" value="hybrid"><span><b>Hybrid edition</b><small>Supplied videos alternate with original Dreamweaver scenes.</small></span></label>
+              <label><input type="radio" name="packageType" value="full_visual"><span><b>Full visual edition</b><small>An original visual story across the complete mix.</small></span></label>
+            </fieldset>
+            <div class="form-grid">
+              <label><span>Brand / venue name</span><input name="brandName" maxlength="120" placeholder="HALO House London"></label>
+              <label><span>Logo image URL</span><input name="logoUrl" type="url" placeholder="https://…"></label>
+              <label><span>Visual world</span><select name="visualStyle"><option value="cinematic_archive">Cinematic archive</option><option value="nightclub_signal">Nightclub signal</option><option value="luxury_lounge">Luxury lounge</option><option value="dreamscape">Dreamscape</option><option value="artist_world">Artist world</option></select></label>
+              <div class="visual-colors"><label><span>Primary</span><input name="primaryColor" type="color" value="#d85f35"></label><label><span>Secondary</span><input name="secondaryColor" type="color" value="#d7c6a5"></label></div>
+            </div>
+            <label><span>Dreamweaver creative brief</span><textarea name="creativeBrief" maxlength="2000" rows="5" required placeholder="Describe the mood, visual language, audience, important changes in energy, and anything Dreamweaver should avoid."></textarea></label>
+            <fieldset class="visual-source-picker">
+              <legend>DJ mix test video preload</legend>
+              <div class="visual-video-options" id="visualVideoOptions"><p>Your HALO video gallery is being checked.</p></div>
+              <small>Every published video in your library starts preloaded. Uncheck anything you do not want in this test; Dreamweaver fills every remaining section.</small>
+            </fieldset>
+            <button class="edition-button" id="visualBuildButton" type="submit">Build the visual timeline</button>
+            <p class="checkout-status" id="visualStudioStatus" role="status"></p>
+          </form>
+        </div>
+      </div>
+
+      <div class="visual-projects section-shell" id="visualProjects" hidden>
+        <div class="visual-project-header">
+          <div><span>Saved treatments</span><strong id="visualProjectTitle">Visual edition</strong></div>
+          <div class="visual-project-tabs" id="visualProjectTabs"></div>
+        </div>
+        <div class="visual-timeline" id="visualTimeline" aria-label="Visual mix timeline"></div>
+        <p class="visual-timeline-note">Select a movement to inspect it on the screen. Each block remains locked to the audio time shown.</p>
+      </div>
+    </section>
+
+    <section class="complete-package section-shell" id="complete-package" aria-labelledby="completePackageTitle">
+      <header class="package-heading">
+        <div>
+          <p class="section-code">05 / The complete package</p>
+          <h2 id="completePackageTitle">ONE UPLOAD.<br><em>EVERY ROOM.</em></h2>
+        </div>
+        <div class="package-pitch">
+          <strong>The simple explanation</strong>
+          <p>HALO turns one music upload into a reviewed audio-and-visual show package that can be demonstrated, delivered to a venue, and prepared for sale without rebuilding the project for every screen.</p>
+          <a href="#upload">Start with the music upload <span aria-hidden="true">↗</span></a>
+        </div>
+      </header>
+
+      <div class="package-flow" aria-label="Complete package workflow">
+        <article><span>01</span><strong>Upload</strong><p>Mastered remix or working mix, optional original version, artwork, credits and creative intent.</p></article>
+        <article><span>02</span><strong>Build</strong><p>All selected library videos, Dreamweaver coverage and branded identity moments map across the full recording.</p></article>
+        <article><span>03</span><strong>Review</strong><p>The team compares the original and mastered audio at the same timestamp and records specific quality notes.</p></article>
+        <article><span>04</span><strong>Deliver</strong><p>A production brief, synchronized timeline, creator sales page and venue-ready playback plan stay together.</p></article>
+      </div>
+
+      <div class="device-stage">
+        <div class="device-stage-copy">
+          <span class="package-label">Designed around the whole device chain</span>
+          <h3>From the artist’s pocket to the booth’s biggest screen.</h3>
+          <p>The interface adapts to the device being used, while the package preserves the same audio versions, visual timing and project story at every handoff.</p>
+        </div>
+        <div class="device-grid">
+          <article data-device="phone"><div class="device-frame"><i></i></div><span>Phone</span><strong>Upload &amp; approve</strong><small>Capture the idea, add notes and check status anywhere.</small></article>
+          <article data-device="tablet"><div class="device-frame"><i></i></div><span>Tablet</span><strong>Review &amp; present</strong><small>Compare versions and walk a client through the package.</small></article>
+          <article data-device="laptop"><div class="device-frame"><i></i></div><span>Laptop</span><strong>Build &amp; export</strong><small>Shape the full timeline and prepare the production brief.</small></article>
+          <article data-device="booth"><div class="device-frame"><i></i><i></i></div><span>DJ booth</span><strong>Perform &amp; control</strong><small>Run the mastered mix with synchronized visual direction.</small></article>
+          <article data-device="venue"><div class="device-frame"><i></i></div><span>Venue screens</span><strong>Fill the room</strong><small>Scale the complete visual treatment across installed displays.</small></article>
+        </div>
+      </div>
+
+      <aside class="package-includes" aria-label="Complete package contents">
+        <strong>What the client receives</strong>
+        <ul>
+          <li>Mastered remix plus optional original A/B reference</li>
+          <li>Full-length visual timeline using supplied and original material</li>
+          <li>Brand-safe logo moments and venue screen direction</li>
+          <li>Quality review record with creator context preserved</li>
+          <li>Production handoff brief and creator-owned sales path</li>
+        </ul>
+      </aside>
+    </section>
+
+    <section class="quality-room section-shell" id="quality" aria-labelledby="qualityTitle">
+      <header class="quality-heading">
+        <div>
+          <p class="section-code">06 / The Quality Room</p>
+          <h2 id="qualityTitle">EVERY ANGLE.<br><em>NO GUESSWORK.</em></h2>
+        </div>
+        <div class="quality-principle">
+          <strong>A pass is not a bad score.</strong>
+        <p>If a reviewer lacks context or expertise, they abstain and explain why. Their pass is excluded from the quality score. Creator intent is read first. Blockers open a context check; they never reject a mix automatically.</p>
+        </div>
+      </header>
+      <div class="quality-status" id="qualityStatus" role="status">Sign in to see the review trail attached to your mixes.</div>
+      <div class="quality-layout">
+        <div class="quality-queue" id="qualityQueue" aria-live="polite"></div>
+        <form class="quality-review-panel" id="qualityReviewForm" hidden>
+          <div class="review-panel-head"><span>HALO review team</span><strong>Area evidence</strong></div>
+          <label><span>Mix</span><select name="cycleId" id="reviewCycleSelect"></select></label>
+          <div class="form-grid">
+            <label><span>Review area</span><select name="area" id="reviewArea"><option value="creative_intent">Creative intent</option><option value="technical_sound">Technical sound</option><option value="transitions_breaks">Transitions &amp; breaks</option><option value="audience_programming">Audience &amp; programming</option><option value="rights_credits">Rights &amp; credits</option><option value="release_readiness">Release readiness</option></select></label>
+            <label><span>Outcome</span><select name="outcome" id="reviewOutcome"><option value="scored">Score with evidence</option><option value="abstain">Pass — not enough context</option><option value="blocker">Context blocker</option></select></label>
+            <label><span>Score / 100</span><input name="score" id="reviewScore" type="number" min="1" max="100" value="75"></label>
+            <label><span>Confidence</span><select name="confidence"><option value="low">Low</option><option value="medium" selected>Medium</option><option value="high">High</option></select></label>
+          </div>
+          <label><span>Evidence heard</span><textarea name="evidence" rows="4" maxlength="2000" required placeholder="Describe what is audible. Separate taste from a technical or rights issue."></textarea></label>
+          <label><span>Useful next step</span><textarea name="recommendation" rows="3" maxlength="1200" placeholder="What should be preserved, checked or changed?"></textarea></label>
+          <fieldset class="break-editor">
+            <legend>Break-by-break observation</legend>
+            <div class="break-fields">
+              <label><span>Time</span><input id="breakTime" inputmode="numeric" placeholder="12:34"></label>
+              <label><span>Moment</span><select id="breakType"><option value="transition">Transition</option><option value="breakdown">Breakdown</option><option value="drop">Drop</option><option value="blend">Blend</option><option value="energy_shift">Energy shift</option><option value="other">Other</option></select></label>
+              <label><span>Reading</span><select id="breakSeverity"><option value="note">Note</option><option value="strength">Strength</option><option value="question">Question</option><option value="risk">Risk</option></select></label>
+            </div>
+            <label><span>What happens here?</span><textarea id="breakObservation" rows="2" maxlength="600"></textarea></label>
+            <label class="intent-check"><input id="breakIntent" type="checkbox"><span>I understand the apparent creative intent at this moment.</span></label>
+            <button class="review-secondary" id="addBreakObservation" type="button">Add timestamp note</button>
+            <ol class="break-list" id="breakList"></ol>
+          </fieldset>
+          <button class="edition-button" type="submit">Save area review</button>
+          <p class="checkout-status" id="qualityFormStatus" role="status"></p>
+          <div class="final-decision">
+            <label><span>Final review summary</span><textarea id="finalReviewSummary" rows="4" maxlength="2000" placeholder="Explain the whole-picture decision, including uncertainty and protected strengths."></textarea></label>
+            <div><button type="button" data-final-decision="approved">Approve</button><button type="button" data-final-decision="revise">Request revision</button><button type="button" data-final-decision="hold">Hold for context</button></div>
+          </div>
+        </form>
+      </div>
+    </section>
+
+    <section class="editions section-shell" id="editions" aria-labelledby="editionsTitle">
+      <div class="edition-poster">
+        <span class="poster-kicker">For the listeners who want the exact version</span>
+        <h2 id="editionsTitle">OWN THE<br><em>EDITION.</em></h2>
+        <div class="poster-mark" aria-hidden="true">X</div>
+      </div>
+      <div class="edition-copy">
+        <p class="edition-lede">A Mix Edition is more than an audio file. It is the finished set, its visual world, and the story of how it arrived.</p>
+        <div class="edition-selection" id="editionSelection" hidden></div>
+        <dl>
+          <div><dt>Listen</dt><dd>High-quality MP3 for everyday playback</dd></div>
+          <div><dt>Collect</dt><dd>Artwork, track notes and edition story</dd></div>
+          <div><dt>Go deeper</dt><dd>WAV availability for selected cleared editions</dd></div>
+        </dl>
+        <div class="edition-readiness" id="editionReadiness" hidden></div>
+        <button class="edition-button" id="editionButton" type="button">Check edition availability</button>
+        <p class="checkout-status" id="checkoutStatus" role="status"></p>
+        <small>Start with three strong remix editions, then release the next one only when the audience signal and rights review support it. Downloads are offered only where HALO has permission to distribute the complete recording; other sets remain available as authorized streams.</small>
+      </div>
+    </section>
+
+    <section class="rhythm section-shell" aria-labelledby="rhythmTitle">
+      <div class="rhythm-title"><p class="section-code">07 / The return signal</p><h2 id="rhythmTitle">SAME WORLD.<br><em>NEW REASON.</em></h2></div>
+      <ol class="week-grid">
+        <li><span>Tue</span><strong>The question</strong><p>A story fragment or audience choice opens the week.</p></li>
+        <li><span>Thu</span><strong>The episode</strong><p>Inside the Mix reveals the decisions behind the version.</p></li>
+        <li><span>Fri</span><strong>The full set</strong><p>The uninterrupted mix enters the HALO Long Play signal.</p></li>
+        <li><span>Wknd</span><strong>The room</strong><p>Listeners return to vote, respond and shape what comes next.</p></li>
+      </ol>
+    </section>
+  </main>
+
+  <aside class="player-dock" id="playerDock" aria-label="HALO X mix player" hidden>
+    <button class="dock-toggle" id="dockToggle" type="button" aria-label="Pause mix"><span></span></button>
+    <div class="dock-copy"><span>Now transmitting</span><strong id="dockTitle">HALO X Mix</strong><small id="dockCreator">DJ HALO X</small></div>
+    <div class="dock-version-switch" id="dockVersionSwitch" aria-label="Compare audio versions" hidden><button type="button" data-dock-version="original">Original</button><button class="is-active" type="button" data-dock-version="mastered">Mastered</button></div>
+    <div class="dock-progress"><span id="dockProgress"></span></div>
+    <time id="dockTime">00:00 / 00:00</time>
+    <audio id="mixAudio" preload="metadata"></audio>
+  </aside>
+
+  <footer>
+    <a class="footer-brand" href="/"><img class="halo-brand-image halo-brand-image--small" src="/assets/halo-logo-mark.webp" alt=""><span>HALO X MIXES</span></a>
+    <p>One story. One set. One signal worth returning for.</p>
+    <nav aria-label="Footer navigation"><a href="/music/">Music</a><a href="/radio/">Radio</a><a href="/halo-live.html">Live</a><a href="/dj-deck.html">DJ deck</a></nav>
+  </footer>
+</body>
+</html>

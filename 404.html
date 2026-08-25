@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex">
+  <meta name="theme-color" content="#070709">
+  <title>Signal Lost — HALO</title>
+  <meta name="description" content="Return to HALO Music World and reconnect with the music, artists, and rooms inside the platform.">
+  <meta property="og:title" content="Signal Lost — HALO">
+  <meta property="og:description" content="Return to HALO Music World and reconnect with the music, artists, and rooms inside the platform.">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="HALO Music World">
+  <meta property="og:image" content="https://halo-world-global-platform.netlify.app/assets/halo-app-icon-512.png">
+  <meta property="og:image:width" content="512">
+  <meta property="og:image:height" content="512">
+  <meta property="og:image:alt" content="HALO Music World logo">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:image" content="https://halo-world-global-platform.netlify.app/assets/halo-app-icon-512.png">
+  <meta name="twitter:image:alt" content="HALO Music World logo">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@700;800;900&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/halo-brand.css">
+  <style>
+    :root { color-scheme: dark; --ink: #070709; --paper: #f5efe2; --amber: #e6a84f; --violet: #8d6ab8; }
+    * { box-sizing: border-box; }
+    body { min-height: 100vh; margin: 0; display: grid; place-items: center; overflow: hidden; background: radial-gradient(circle at 80% 20%, rgba(141,106,184,.2), transparent 32%), linear-gradient(135deg, #070709, #111019); color: var(--paper); font-family: "Share Tech Mono", monospace; }
+    body::before { content: ""; position: fixed; inset: 0; pointer-events: none; opacity: .18; background-image: linear-gradient(rgba(230,168,79,.12) 1px, transparent 1px), linear-gradient(90deg, rgba(230,168,79,.12) 1px, transparent 1px); background-size: 32px 32px; mask-image: linear-gradient(to bottom, black, transparent 80%); }
+    main { width: min(92vw, 760px); position: relative; padding: clamp(2rem, 7vw, 5rem); border: 1px solid rgba(230,168,79,.5); background: rgba(8,8,12,.8); box-shadow: 0 36px 100px rgba(0,0,0,.45); }
+    .lost-logo { margin-bottom: 1.5rem; }
+    .code { margin: 0; color: var(--amber); letter-spacing: .28em; text-transform: uppercase; }
+    h1 { margin: .25rem 0 1rem; max-width: 8ch; font: 900 clamp(4.8rem, 17vw, 10rem)/.72 "Barlow Condensed", sans-serif; letter-spacing: -.055em; text-transform: uppercase; }
+    h1 span { display: block; color: transparent; -webkit-text-stroke: 1px var(--violet); transform: translateX(clamp(1rem, 8vw, 5rem)); }
+    .message { max-width: 48ch; color: #c8c1b6; line-height: 1.7; }
+    a { display: inline-flex; margin-top: 1.5rem; padding: .85rem 1.15rem; border: 1px solid var(--amber); color: var(--paper); text-decoration: none; text-transform: uppercase; letter-spacing: .08em; transition: transform .2s ease, background .2s ease, color .2s ease; }
+    a:hover { transform: translateY(-2px); background: var(--amber); color: var(--ink); }
+    a:focus-visible { outline: 3px solid var(--paper); outline-offset: 4px; }
+    @media (prefers-reduced-motion: reduce) { a { transition: none; } }
+  </style>
+</head>
+<body>
+  <main>
+    <img class="halo-brand-lockup lost-logo" src="/assets/halo-logo.webp" alt="HALO Music World">
+    <p class="code">Error 404 / signal path unavailable</p>
+    <h1>Signal <span>lost.</span></h1>
+    <p class="message">This room is off-air or the address has changed. Return to the main HALO world and reconnect from there.</p>
+    <a href="/">Return to HALO</a>
+  </main>
+</body>
+</html>

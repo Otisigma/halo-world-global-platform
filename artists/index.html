@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#171914">
+  <meta name="description" content="Enter an artist's HALO room for music, videos, community, press, DJ service, radio, and bookings.">
+  <title>HALO Artist Room</title>
+  <meta property="og:title" content="HALO Artist Room">
+  <meta property="og:description" content="Enter an artist's HALO room for music, videos, community, press, DJ service, radio, and bookings.">
+  <meta property="og:type" content="profile">
+  <meta property="og:site_name" content="HALO Music World">
+  <meta property="og:image" content="https://halo-world-global-platform.netlify.app/assets/halo-app-icon-512.png">
+  <meta property="og:image:width" content="512">
+  <meta property="og:image:height" content="512">
+  <meta property="og:image:alt" content="HALO Music World logo">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:image" content="https://halo-world-global-platform.netlify.app/assets/halo-app-icon-512.png">
+  <meta name="twitter:image:alt" content="HALO Music World logo">
+  <link rel="icon" href="/assets/halo-app-icon-192.png" type="image/png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Instrument+Serif:ital@0;1&family=Syne:wght@500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/accessibility.css">
+  <link rel="stylesheet" href="/halo-brand.css">
+  <link rel="stylesheet" href="/release-context.css">
+  <link rel="stylesheet" href="/artists/artists.css">
+  <script src="/identity.js" type="module"></script>
+</head>
+<body>
+  <div class="noise" aria-hidden="true"></div>
+  <header class="site-header">
+    <a class="brand" href="/" aria-label="HALO home">
+      <img class="halo-brand-image" src="/assets/halo-logo-mark.webp" alt="">
+      <span><strong>HALO</strong><small>Artist Rooms</small></span>
+    </a>
+    <nav aria-label="Artist room navigation">
+      <a href="/music/">Music</a>
+      <a href="/creators/">Creators</a>
+      <a href="/release-house/">Release House</a>
+      <a class="team-link" id="teamLink" href="/artist-team.html" hidden>Backstage team</a>
+      <button class="quiet-button" id="shareButton" type="button">Share room</button>
+      <button class="upload-button" id="uploadButton" type="button">
+        <span class="upload-plus" aria-hidden="true">+</span>
+        <span>Hyper Upload</span>
+      </button>
+    </nav>
+  </header>
+
+  <main id="artistPage" aria-live="polite">
+    <section class="page-loading" aria-label="Loading artist room">
+      <div class="loading-art"></div>
+      <div class="loading-lines"><span></span><span></span><span></span></div>
+    </section>
+  </main>
+
+  <footer>
+    <a href="/">HALO World</a>
+    <span>One artist. Every room.</span>
+    <span id="footerStamp">Artist infrastructure / 2026</span>
+  </footer>
+
+  <dialog class="studio-dialog" id="studioDialog" aria-labelledby="studioTitle">
+    <form method="dialog" class="dialog-close-form"><button type="submit" aria-label="Close Hyper Upload">Close</button></form>
+    <div class="studio-shell">
+      <aside class="studio-intro">
+        <p class="eyebrow">HALO / Artist infrastructure</p>
+        <h2 id="studioTitle">One upload.<br><em>A whole world.</em></h2>
+        <p>Give our AI scout team one public link. They research the repeat details, build the first draft, and leave every final choice with the artist.</p>
+        <ol>
+          <li><span>01</span>Own the address</li>
+          <li><span>02</span>Connect every room</li>
+          <li><span>03</span>Publish once, update anytime</li>
+        </ol>
+      </aside>
+      <form class="studio-form" id="studioForm">
+        <div class="form-heading">
+          <div><p class="eyebrow">Hyper Upload</p><h3>Build the artist room</h3></div>
+          <label class="status-switch">Page state
+            <select name="status"><option value="published">Published</option><option value="draft">Draft</option></select>
+          </label>
+        </div>
+
+        <section class="scout-panel" aria-labelledby="scoutTitle">
+          <div class="scout-copy">
+            <span class="form-index">00 / AI scout team</span>
+            <h4 id="scoutTitle">Start with one link.<br><em>Skip the repeated questions.</em></h4>
+            <p>Paste a HyperFollow, official site, music profile, release, video, press, or booking page. HyperFollow details become the verified starting point, then the room expands as official information grows.</p>
+          </div>
+          <div class="scout-controls">
+            <label>Artist or release link<input name="sourceLink" id="sourceLink" type="url" inputmode="url" placeholder="https://distrokid.com/hyperfollow/..." aria-describedby="scoutPromise"></label>
+            <button type="button" id="scoutButton"><span>Send the scouts</span><i aria-hidden="true">↗</i></button>
+            <p id="scoutPromise">Nothing publishes automatically. Verified release details replace the release block, and the AI team fills remaining empty card fields from your current draft and public sources.</p>
+            <div class="scout-status" id="scoutStatus" role="status"></div>
+            <div class="scout-sources" id="scoutSources" aria-label="Sources checked"></div>
+          </div>
+        </section>
+
+        <section class="form-section">
+          <span class="form-index">01 / Identity</span>
+          <div class="field-grid">
+            <label>Artist name<input name="artistName" required maxlength="120" autocomplete="name" placeholder="Owen Anthony"></label>
+            <label>Page handle<div class="handle-field"><span>halo.world/artists/</span><input name="slug" required maxlength="80" pattern="[a-z0-9]+(?:-[a-z0-9]+)*" placeholder="owen-anthony"></div></label>
+            <label class="wide">One-line signal<input name="tagline" maxlength="180" placeholder="What should people feel before they press play?"></label>
+            <label>Based in<input name="location" maxlength="100" placeholder="London / Dublin / Worldwide"></label>
+            <label>Room color<input name="accentColor" type="color" value="#d5ff52"></label>
+            <label class="wide">Artist story<textarea name="bio" maxlength="1600" rows="5" placeholder="The story, sound, and reason this room exists."></textarea></label>
+          </div>
+        </section>
+
+        <section class="form-section">
+          <span class="form-index">02 / Main release</span>
+          <div class="field-grid">
+            <label>Release title<input name="releaseTitle" maxlength="160" placeholder="Quicksand"></label>
+            <label>Release date<input name="releaseDate" type="date"></label>
+            <label class="wide">Listen / HyperFollow link<input name="releaseUrl" type="url" placeholder="https://distrokid.com/hyperfollow/..."></label>
+            <label class="wide">Artwork URL<input name="artworkUrl" placeholder="https://... or /assets/..." inputmode="url"></label>
+          </div>
+          <div class="catalog-preview-shell">
+            <div class="catalog-preview-heading">
+              <div><span>ALL RELEASES preview</span><strong>Review the public catalog card</strong></div>
+              <a href="/music/" target="_blank" rel="noopener">Open catalog ↗</a>
+            </div>
+            <div class="catalog-preview" id="catalogPreview" aria-live="polite"></div>
+          </div>
+        </section>
+
+        <section class="form-section">
+          <span class="form-index">03 / Visual room</span>
+          <div class="field-grid">
+            <label>Video title<input name="videoTitle" maxlength="160" placeholder="Official music video"></label>
+            <label>Video link<input name="videoUrl" type="url" placeholder="YouTube or Vimeo"></label>
+          </div>
+        </section>
+
+        <section class="form-section">
+          <span class="form-index">04 / Room doors</span>
+          <div class="field-grid">
+            <label>Community<input name="communityUrl" placeholder="/ or https://..."></label>
+            <label>DJ room<input name="djRoomUrl" placeholder="/release-kit.html?audience=dj"></label>
+            <label>Radio room<input name="radioRoomUrl" placeholder="/release-kit.html?audience=radio"></label>
+            <label>Press room<input name="pressRoomUrl" placeholder="/release-kit.html?audience=press"></label>
+            <label>Booking / contact<input name="bookingUrl" placeholder="https://..."></label>
+            <label>Featured / official link<input name="websiteUrl" placeholder="your-site.com or https://..."></label>
+          </div>
+        </section>
+
+        <div class="form-message" id="studioMessage" role="status"></div>
+        <div class="studio-actions">
+          <span>Publish free to activate your Starter team, four monthly guidance runs, and your first release campaign.</span>
+          <button type="submit" id="publishButton">Publish artist room <i aria-hidden="true">↗</i></button>
+        </div>
+      </form>
+    </div>
+  </dialog>
+
+  <dialog class="radio-send-dialog" id="radioSendDialog" aria-labelledby="radioSendTitle">
+    <form method="dialog" class="dialog-close-form"><button type="submit" aria-label="Close radio submission">Close</button></form>
+    <div class="radio-send-shell">
+      <div class="radio-send-intro">
+        <p class="eyebrow">HALO Radio / Artist fast lane</p>
+        <h2 id="radioSendTitle">SEND THE RECORD<br>TO THE STATION.</h2>
+        <p>Your artist and release details are already attached. Add the broadcast-ready audio, choose the best room, and confirm the rights.</p>
+        <ol>
+          <li><span>01</span> Linked to your artist card</li>
+          <li><span>02</span> Heard in community preview</li>
+          <li><span>03</span> Eligible for station rotation</li>
+        </ol>
+      </div>
+      <form class="radio-send-form" id="radioSendForm">
+        <div class="radio-release-lockup">
+          <img id="radioReleaseArtwork" src="/assets/halo-logo-mark.webp" alt="">
+          <div><span>Sending from this card</span><strong id="radioReleaseTitle">Current release</strong><small><b id="radioReleaseArtist">HALO artist</b> · <b id="radioReleaseStage">Release</b></small></div>
+        </div>
+        <div class="radio-field-grid radio-source-grid">
+          <label><span>Audio source</span><select name="audioVersionId" id="radioAudioVersion"><option value="">Upload a new version</option></select></label>
+          <label id="radioVersionTypeField"><span>New version type</span><select name="versionType"><option value="radio_edit">Radio edit</option><option value="master">Original master</option><option value="clean">Clean edit</option><option value="instrumental">Instrumental</option><option value="extended">Extended mix</option><option value="demo">Demo</option><option value="other">Alternate version</option></select></label>
+        </div>
+        <label class="radio-drop-zone" id="radioDropZone">
+          <input name="trackFile" type="file" accept="audio/mpeg,audio/mp4,audio/aac,audio/ogg,audio/wav,audio/flac,.mp3,.m4a,.aac,.ogg,.wav,.flac">
+          <span aria-hidden="true">↥</span>
+          <strong id="radioFileLabel">Choose the broadcast-ready audio</strong>
+          <small>The file stays linked to this promo card · 128 MB maximum</small>
+        </label>
+        <div class="radio-field-grid">
+          <label><span>Target room</span><select name="room" required><option value="club">Club Room</option><option value="chill">Chill Room</option><option value="lounge">Lounge Room</option></select></label>
+          <label><span>Genre / sub-genre</span><input name="genre" maxlength="80" placeholder="Deep house, melodic, ambient…"></label>
+          <label><span>BPM</span><input name="bpm" type="number" min="40" max="240" inputmode="numeric" placeholder="124"></label>
+          <label><span>Musical key</span><input name="key" maxlength="16" placeholder="8A / A minor"></label>
+        </div>
+        <label class="radio-note"><span>Station note</span><textarea name="description" maxlength="500" rows="3" placeholder="Give the radio team the story, mood, or best moment for this record."></textarea></label>
+        <label class="radio-rights"><input name="rightsConfirmed" type="checkbox" required><span>I control the rights and permissions required for radio review and playback.</span></label>
+        <div class="radio-upload-progress" id="radioUploadProgress" hidden><span></span></div>
+        <div class="radio-send-actions">
+          <p id="radioSendMessage" role="status">The station receives the audio and the context already loaded on this artist card.</p>
+          <button type="submit">Send to HALO Radio <i aria-hidden="true">↗</i></button>
+        </div>
+      </form>
+    </div>
+  </dialog>
+
+  <dialog class="auth-dialog" id="authDialog" aria-labelledby="authTitle">
+    <form method="dialog" class="dialog-close-form"><button type="submit" aria-label="Close sign in">Close</button></form>
+    <div class="auth-shell">
+      <p class="eyebrow">HALO identity</p>
+      <h2 id="authTitle">Own your artist room.</h2>
+      <p>Sign in to publish, update, and carry your page across HALO.</p>
+      <div class="auth-tabs" role="tablist" aria-label="Identity action">
+        <button type="button" role="tab" aria-selected="true" data-auth-mode="login">Sign in</button>
+        <button type="button" role="tab" aria-selected="false" data-auth-mode="signup">Create account</button>
+      </div>
+      <form id="authForm">
+        <label id="authNameField" hidden>Artist / display name<input id="authName" autocomplete="name" minlength="2" maxlength="64"></label>
+        <label>Email<input id="authEmail" type="email" autocomplete="email" required></label>
+        <label>Password<input id="authPassword" type="password" autocomplete="current-password" minlength="8" required></label>
+        <div class="form-message" id="authMessage" role="status"></div>
+        <button class="auth-submit" id="authSubmit" type="submit">Sign in</button>
+      </form>
+    </div>
+  </dialog>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <script src="/site-monitor.js" defer></script>
+  <script src="/stats.js" defer></script>
+  <script src="/accessibility.js" defer></script>
+  <script src="/release-context.js" defer></script>
+  <script src="/artists/artists.js" defer></script>
+</body>
+</html>

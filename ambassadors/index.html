@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#11110f">
+  <meta name="description" content="Apply, nominate, and serve through HALO's Sovereign Ambassador contribution role.">
+  <title>Sovereign Ambassadors · HALO Music World</title>
+  <meta property="og:title" content="Sovereign Ambassadors · HALO Music World">
+  <meta property="og:description" content="Apply, nominate, and serve through HALO's Sovereign Ambassador contribution role.">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="HALO Music World">
+  <meta property="og:image" content="https://halo-world-global-platform.netlify.app/assets/halo-app-icon-512.png">
+  <meta property="og:image:width" content="512">
+  <meta property="og:image:height" content="512">
+  <meta property="og:image:alt" content="HALO Music World logo">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:image" content="https://halo-world-global-platform.netlify.app/assets/halo-app-icon-512.png">
+  <meta name="twitter:image:alt" content="HALO Music World logo">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Instrument+Serif:ital@0;1&family=Syne:wght@600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/halo-brand.css">
+  <link rel="stylesheet" href="/ambassadors/ambassadors.css">
+  <script src="/stats.js" defer></script>
+  <script type="module" src="/identity.js"></script>
+  <script type="module" src="/ambassadors/ambassadors.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to the Ambassador path</a>
+  <div class="grain" aria-hidden="true"></div>
+
+  <header class="site-header">
+    <a class="wordmark" href="/" aria-label="HALO Music World home">
+      <img class="halo-brand-image" src="/assets/halo-logo-mark.webp" alt="">
+      <span>HALO <small>Music World</small></span>
+    </a>
+    <p class="header-edition">Charter 001 / Founding era</p>
+    <div class="account-actions">
+      <span id="accountName" class="account-name">Visitor</span>
+      <button id="accountButton" class="text-button" type="button">Join / Sign in</button>
+    </div>
+  </header>
+
+  <main id="main">
+    <section class="hero" aria-labelledby="hero-title">
+      <div class="hero-copy">
+        <p class="eyebrow">HALO contribution role</p>
+        <h1 id="hero-title">SOVEREIGN<br><em>AMBASSADORS</em></h1>
+        <p class="hero-intro">Recognition for people who consistently help creators move forward, protect the character of the room, and turn community care into practical action.</p>
+        <div class="hero-actions">
+          <a class="button button-primary" href="#apply">Enter the path</a>
+          <a class="button button-quiet" href="#charter">Read the charter</a>
+        </div>
+      </div>
+      <aside class="hero-register" aria-label="Ambassador register">
+        <p class="register-label">Live register</p>
+        <strong id="ambassadorCount">—</strong>
+        <span>active ambassadors</span>
+        <div class="register-line"></div>
+        <dl>
+          <div><dt>Authority</dt><dd>Service, not status</dd></div>
+          <div><dt>Selection</dt><dd>Application + human review</dd></div>
+          <div><dt>Term</dt><dd>Active while trust is upheld</dd></div>
+        </dl>
+      </aside>
+    </section>
+
+    <section id="charter" class="charter" aria-labelledby="charter-title">
+      <div class="section-heading">
+        <p class="eyebrow">The charter</p>
+        <h2 id="charter-title">THE ROLE HAS WEIGHT.<br><em>IT DOES NOT CREATE A HIERARCHY.</em></h2>
+      </div>
+      <div class="charter-grid">
+        <article><span>01</span><h3>Creators first</h3><p>Help artists retain agency, find useful resources, and reach the right people without speaking over them.</p></article>
+        <article><span>02</span><h3>Care for the room</h3><p>Welcome new members, model respectful conduct, and escalate concerns instead of improvising authority.</p></article>
+        <article><span>03</span><h3>Make work visible</h3><p>Share practical contributions honestly. The title follows service; service never exists to chase the title.</p></article>
+        <article><span>04</span><h3>Remain accountable</h3><p>Human review grants the role, records decisions, and can close a term when trust or participation changes.</p></article>
+      </div>
+    </section>
+
+    <section class="pathway" aria-labelledby="pathway-title">
+      <div class="pathway-title">
+        <p class="eyebrow">Selection path</p>
+        <h2 id="pathway-title">CONTRIBUTE.<br>BE SEEN.<br><em>SERVE.</em></h2>
+      </div>
+      <ol>
+        <li><span>01</span><div><h3>Build a pattern</h3><p>Support creators and community members consistently.</p></div></li>
+        <li><span>02</span><div><h3>Apply or be nominated</h3><p>Your own voice is always required before selection.</p></div></li>
+        <li><span>03</span><div><h3>Human council review</h3><p>Designated stewards assess evidence, intent, and fit.</p></div></li>
+        <li><span>04</span><div><h3>Receive the signal</h3><p>The role becomes visible across HALO community spaces.</p></div></li>
+      </ol>
+    </section>
+
+    <section id="apply" class="workspace" aria-labelledby="workspace-title">
+      <div class="workspace-heading">
+        <p class="eyebrow">Member workspace</p>
+        <h2 id="workspace-title">YOUR PLACE<br><em>IN THE PATH</em></h2>
+        <p>Applications are private. Nominations notify the member, but never enroll them without consent.</p>
+      </div>
+
+      <div id="memberWorkspace" class="workspace-panels" aria-live="polite">
+        <div class="panel loading-panel"><span class="loading-bar"></span><span class="loading-bar short"></span><span class="loading-block"></span></div>
+        <div class="panel loading-panel"><span class="loading-bar"></span><span class="loading-bar short"></span><span class="loading-block"></span></div>
+      </div>
+    </section>
+
+    <section class="roster" aria-labelledby="roster-title">
+      <div class="section-heading roster-heading">
+        <p class="eyebrow">Public register</p>
+        <h2 id="roster-title">THE PEOPLE<br><em>CARRYING THE SIGNAL</em></h2>
+      </div>
+      <div id="ambassadorRoster" class="roster-list"><p class="empty-copy">Loading the register…</p></div>
+    </section>
+
+    <section id="councilSection" class="council" aria-labelledby="council-title" hidden>
+      <div class="council-heading">
+        <p class="eyebrow">Restricted workspace</p>
+        <h2 id="council-title">AMBASSADOR<br><em>COUNCIL</em></h2>
+        <p>Every decision requires a signed-in steward role and leaves an audit record.</p>
+      </div>
+      <div id="councilWorkspace"></div>
+    </section>
+  </main>
+
+  <div id="notice" class="notice" role="status" aria-live="polite" hidden></div>
+
+  <dialog id="authDialog" class="auth-dialog">
+    <form id="authForm" method="dialog">
+      <button class="dialog-close" type="button" data-close-dialog aria-label="Close sign in">×</button>
+      <p class="eyebrow">HALO membership</p>
+      <h2 id="authTitle">Enter the community</h2>
+      <p id="authIntro">Sign in to apply, nominate a contributor, or review your status.</p>
+      <div class="auth-switch" role="group" aria-label="Choose account action">
+        <button type="button" data-auth-mode="login" class="active">Sign in</button>
+        <button type="button" data-auth-mode="signup">Create account</button>
+      </div>
+      <label id="nameField" hidden><span>Name</span><input id="authName" autocomplete="name" maxlength="40"></label>
+      <label><span>Email</span><input id="authEmail" type="email" autocomplete="email" required></label>
+      <label><span>Password</span><input id="authPassword" type="password" autocomplete="current-password" minlength="8" required></label>
+      <p id="authMessage" class="form-message" role="status"></p>
+      <button id="authSubmit" class="button button-primary full" type="submit">Sign in</button>
+    </form>
+  </dialog>
+
+  <footer>
+    <a href="/" aria-label="Return to HALO Music World"><img class="halo-brand-image halo-brand-image--small" src="/assets/halo-logo-mark.webp" alt=""></a>
+    <p>Sovereignty means creators keep agency. Ambassadorship means helping that principle survive contact with the real world.</p>
+    <a href="/">Return to HALO</a>
+  </footer>
+</body>
+</html>

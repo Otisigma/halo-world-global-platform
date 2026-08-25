@@ -1,0 +1,205 @@
+import { access, readFile } from "node:fs/promises";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const pages = ["halo.html", "magazine.html", "dj-deck.html", "vip_launchpad.html", "halo-live.html", "halo-x.html", "halo-relations.html", "halo-command.html", "artist-team.html", "creators/index.html", "creators/gear-guide.html", "music/index.html", "mixes/index.html", "artists/index.html"];
+const results = [];
+const netlifyConfigSource = await readFile(resolve(root, "netlify.toml"), "utf8");
+const redirectAliases = new Set([...netlifyConfigSource.matchAll(/^\s*from\s*=\s*["']([^"']+)["']/gm)].map(match => match[1]));
+
+function check(role, page, condition, message) {
+  results.push({ role, page, condition, message });
+}
+
+for (const page of pages) {
+  const source = await readFile(resolve(root, page), "utf8");
+  check("Structure Tester", page, /<html[^>]+lang=["'][^"']+["']/i.test(source), "declares a document language");
+  check("Structure Tester", page, /<meta[^>]+name=["']viewport["']/i.test(source), "declares a responsive viewport");
+  check("Navigation Tester", page, /<title>[^<]+<\/title>/i.test(source), "has a useful page title");
+  check("Runtime Watcher", page, source.includes("/site-monitor.js"), "loads the always-on QA monitor");
+  check("Telemetry Tester", page, source.includes("/stats.js"), "loads anonymous telemetry");
+  check("Accessibility Tester", page, source.includes("/accessibility.css") && source.includes("/accessibility.js"), "loads shared reading and speech tools");
+
+  for (const match of source.matchAll(/href=["']([^"'#]+)["']/gi)) {
+    const href = match[1];
+    if (href.includes("${")) continue;
+    if (/^(https?:|mailto:|tel:)/i.test(href)) continue;
+    const target = resolve(root, href.split(/[?#]/)[0].replace(/^\//, ""));
+    try {
+      await access(target);
+      check("Navigation Tester", page, true, `resolves internal link ${href}`);
+    } catch {
+      const route = `/${href.split(/[?#]/)[0].replace(/^\//, "")}`;
+      check("Navigation Tester", page, redirectAliases.has(route), `resolves internal link ${href}`);
+    }
+  }
+}
+
+const indexSource = await readFile(resolve(root, "halo.html"), "utf8");
+const deckSource = await readFile(resolve(root, "dj-deck.html"), "utf8");
+const liveSource = await readFile(resolve(root, "halo-live.html"), "utf8");
+const haloXSource = await readFile(resolve(root, "halo-x.html"), "utf8");
+const haloXScriptSource = await readFile(resolve(root, "halo-x.js"), "utf8");
+const haloXFunctionSource = await readFile(resolve(root, "netlify/functions/halo-x.mjs"), "utf8");
+const haloXMigrationSource = await readFile(resolve(root, "netlify/database/migrations/20260806210000_create-halo-x-access.sql"), "utf8");
+const relationsSource = await readFile(resolve(root, "halo-relations.html"), "utf8");
+const relationsScriptSource = await readFile(resolve(root, "halo-relations.js"), "utf8");
+const relationsFunctionSource = await readFile(resolve(root, "netlify/functions/halo-relations.mjs"), "utf8");
+const relationsEventSource = await readFile(resolve(root, "netlify/functions/relationship-event.mjs"), "utf8");
+const relationsMigrationSource = await readFile(resolve(root, "netlify/database/migrations/20260807190000_create-halo-relations.sql"), "utf8");
+const shareInviteSource = await readFile(resolve(root, "netlify/functions/share-invite.mjs"), "utf8");
+const shareInviteMigrationSource = await readFile(resolve(root, "netlify/database/migrations/20260819150000_create-tracked-share-invites.sql"), "utf8");
+const shareIdentitySource = await readFile(resolve(root, "identity.js"), "utf8");
+const creatorSource = await readFile(resolve(root, "creators/index.html"), "utf8");
+const magazineSource = await readFile(resolve(root, "magazine.html"), "utf8");
+const magazineScriptSource = await readFile(resolve(root, "magazine.js"), "utf8");
+const gearGuideSource = await readFile(resolve(root, "creators/gear-guide.html"), "utf8");
+const gearGuideScriptSource = await readFile(resolve(root, "creators/gear-guide.js"), "utf8");
+const creatorScriptSource = await readFile(resolve(root, "creators/marketplace.js"), "utf8");
+const creatorFunctionSource = await readFile(resolve(root, "netlify/functions/creator-marketplace.mjs"), "utf8");
+const creatorMigrationSource = await readFile(resolve(root, "netlify/database/migrations/20260806120000_create-creator-marketplace.sql"), "utf8");
+const aiUsageMigrationSource = await readFile(resolve(root, "netlify/database/migrations/20260806235900_harden-ai-usage.sql"), "utf8");
+const resolveTrackSource = await readFile(resolve(root, "netlify/functions/resolve-track.mjs"), "utf8");
+const releasePackFunctionSource = await readFile(resolve(root, "netlify/functions/release-pack.mjs"), "utf8");
+const releaseCatalogSource = await readFile(resolve(root, "music/index.html"), "utf8");
+const releaseCatalogScriptSource = await readFile(resolve(root, "music/music.js"), "utf8");
+const releaseCatalogFunctionSource = await readFile(resolve(root, "netlify/functions/release-catalog.mjs"), "utf8");
+const releasePackMigrationSource = await readFile(resolve(root, "netlify/database/migrations/20260807170000_create-release-selector-room.sql"), "utf8");
+const artistScriptSource = await readFile(resolve(root, "artists/artists.js"), "utf8");
+const artistFunctionSource = await readFile(resolve(root, "netlify/functions/artist-pages.mjs"), "utf8");
+const artistScoutSource = await readFile(resolve(root, "netlify/functions/artist-page-scout.mjs"), "utf8");
+const artistPageSource = await readFile(resolve(root, "artists/index.html"), "utf8");
+const artistTeamSource = await readFile(resolve(root, "artist-team.html"), "utf8");
+const artistTeamScriptSource = await readFile(resolve(root, "artist-team.js"), "utf8");
+const artistTeamLibSource = await readFile(resolve(root, "netlify/lib/artist-agents.mjs"), "utf8");
+const artistTeamFunctionSource = await readFile(resolve(root, "netlify/functions/artist-agents.mjs"), "utf8");
+const artistTeamScheduleSource = await readFile(resolve(root, "netlify/functions/artist-agent-weekly.mjs"), "utf8");
+const artistTeamMigrationSource = await readFile(resolve(root, "netlify/database/migrations/20260812160000_create-artist-agent-teams.sql"), "utf8");
+const notFoundSource = await readFile(resolve(root, "404.html"), "utf8");
+check("Creator World", "index.html", indexSource.includes('href="/creators/"') && indexSource.includes("CREATOR WORLD"), "links the main HALO experience to the isolated creator area");
+check("Artist Room", "artists/artists.js", artistScriptSource.includes("Open artist link") && artistScriptSource.includes("featured-action"), "keeps the uploaded featured link visible in the artist hero");
+check("Artist Room", "netlify/functions/artist-pages.mjs", artistFunctionSource.includes("candidate = `https://${raw}`"), "normalizes pasted bare-domain artist links to HTTPS");
+check("Artist Scout", "artists/index.html", artistPageSource.includes('id="scoutButton"') && artistScriptSource.includes("/api/artist-page-scout"), "starts an editable artist-room draft from one public link");
+check("Artist Scout", "netlify/functions/artist-page-scout.mjs", artistScoutSource.includes('model: "gpt-5.4"') && artistScoutSource.includes('{ type: "web_search" }'), "researches public sources through Netlify AI Gateway");
+check("Artist Scout Trust", "netlify/functions/artist-page-scout.mjs", artistScoutSource.includes("verifyRequestOrigin") && artistScoutSource.includes("HOURLY_REQUEST_LIMIT") && artistScoutSource.includes("never published automatically"), "protects and rate-limits review-only scout drafts");
+check("Artist Agent Team", "artist-team.html", artistTeamSource.includes('id="teamView"') && artistTeamSource.includes('id="momentumArc"') && artistTeamSource.includes('id="groundingNote"'), "gives an artist one briefing room with a momentum reading and a grounding note");
+check("Artist Agent Team", "artist-team.js", artistTeamScriptSource.includes("/api/artist-agents") && artistTeamScriptSource.includes("update_action") && artistTeamScriptSource.includes("update_draft"), "connects the artist workspace to proposals and drafts");
+check("Artist Agent Team", "netlify/lib/artist-agents.mjs", artistTeamLibSource.includes('ARTIST_AGENT_MODEL = "gpt-5.4-mini"') && artistTeamLibSource.includes("groundRecommendation") && artistTeamLibSource.includes("buildSignalIndex"), "drops any recommendation that cannot cite a recorded signal for that artist");
+check("Artist Agent Trust", "netlify/functions/artist-agents.mjs", artistTeamFunctionSource.includes("verifyRequestOrigin") && artistTeamFunctionSource.includes("owner_member_id") && artistTeamFunctionSource.includes("reserveArtistRun"), "restricts each team to its own room owner and reserves plan capacity before inference");
+check("Artist Agent Trust", "artist-team.html", artistTeamSource.includes("It does not post to any outside platform on your behalf") && artistTeamSource.includes('name="robots" content="noindex, nofollow"'), "states the publishing boundary and keeps the private workspace out of search");
+check("Artist Agent Schedule", "netlify/functions/artist-agent-weekly.mjs", artistTeamScheduleSource.includes('schedule: "15 8 * * 1"') && artistTeamScheduleSource.includes("listActiveArtistPlans"), "runs paid teams on a weekly schedule");
+check("Artist Agent Storage", "netlify/database/migrations/20260812160000_create-artist-agent-teams.sql", artistTeamMigrationSource.includes("halo_artist_agent_plans") && artistTeamMigrationSource.includes("halo_artist_agent_drafts") && artistTeamMigrationSource.includes("approved_by_member_id IS NOT NULL") && artistTeamMigrationSource.includes("input_tokens"), "persists plans, approvals, and per-run token cost in Netlify Database");
+check("Editorial Desk", "index.html", indexSource.includes('href="/magazine.html"') && indexSource.includes("HALO SIGNAL"), "links the main HALO experience to the industry publication");
+check("Editorial Desk", "magazine.html", magazineSource.includes("The briefing desk") && magazineSource.includes("White paper / Executive edition") && magazineSource.includes("Independent thinking."), "presents briefings, field reports, and visible editorial standards");
+check("Sovereignty Paper", "magazine.html", magazineSource.includes("Direct-to-fan sovereignty") && magazineSource.includes("Independence is not isolation. It is bargaining power.") && magazineSource.includes("Those who build the culture should remain its primary beneficiaries."), "publishes the artist ownership, leverage, and partnership strategy");
+check("Editorial Reader", "magazine.js", magazineScriptSource.includes("data-open-article") && magazineScriptSource.includes("halo-signal-reading-list") && magazineScriptSource.includes("window.print"), "supports full article reading, saved stories, and a printable report");
+check("Creator World", "creators/index.html", creatorSource.includes("THE WORK") && creatorSource.includes("founding catalog"), "presents the UK and Ireland founding marketplace");
+check("Creator Trust", "creators/index.html", creatorSource.includes("Conversation only") && creatorSource.includes("HOW HALO CAN EARN") && creatorSource.includes("No artist contract is created"), "makes the prototype status and proposed artist-first revenue model explicit");
+check("Creator Guidance", "creators/gear-guide.html", gearGuideSource.includes("Use what works. Upgrade with purpose.") && gearGuideSource.includes("serenahalo-21"), "offers pressure-free equipment guidance with disclosed affiliate links");
+check("Creator Guidance", "creators/gear-guide.html", gearGuideSource.includes("Release readiness") && gearGuideSource.includes('href="/release-house/"') && gearGuideSource.includes("Distributor choice remains yours"), "walks finished tracks into the distributor-neutral Release House path");
+check("Creator Guidance", "creators/gear-guide.js", gearGuideScriptSource.includes("applyFilters") && gearGuideScriptSource.includes("updateReleaseProgress"), "supports interactive gear filtering and a release checklist");
+check("Creator World", "creators/marketplace.js", creatorScriptSource.includes("/api/creator-marketplace") && creatorScriptSource.includes("toggleSavedDrop"), "loads the persistent catalog and supports saved drops");
+check("Creator World", "netlify/functions/creator-marketplace.mjs", creatorFunctionSource.includes('path: "/api/creator-marketplace"') && creatorFunctionSource.includes("verifyRequestOrigin") && creatorFunctionSource.includes("getUser"), "protects authenticated marketplace actions");
+check("Creator World", "netlify/database/migrations/20260806120000_create-creator-marketplace.sql", creatorMigrationSource.includes("marketplace_creators") && creatorMigrationSource.includes("marketplace_products") && creatorMigrationSource.includes("marketplace_interests"), "stores creators, products, and member interest");
+check("Broadcast Planner", "halo-live.html", liveSource.includes("Multistream relay") && liveSource.includes("OBS or studio encoder"), "documents the secure multi-platform signal flow");
+check("Broadcast Planner", "halo-live.html", liveSource.includes("Clear music and guest rights") && liveSource.includes("private technical rehearsal"), "includes rights and rehearsal safeguards");
+check("Broadcast Controller", "halo-live.html", liveSource.includes('id="broadcastButton"') && liveSource.includes("/api/broadcast-control"), "provides one-button multistream relay control");
+check("Fan Experience Tester", "halo-live.html", liveSource.includes("Copy fan room link") && liveSource.includes("Let fans choose the next move"), "provides a permanent fan room and participation concept");
+check("HALO X Access", "halo-x.html", haloXSource.includes("FOUNDERS CONTROL ROOM") && haloXSource.includes('id="redeemForm"') && haloXSource.includes('id="pinForm"'), "provides pass activation and one room pin per member");
+check("HALO X Access", "halo-x.js", haloXScriptSource.includes("/api/halo-x") && haloXScriptSource.includes("create_pass") && haloXScriptSource.includes("refresh_report") && haloXScriptSource.includes("applyAccessLink"), "connects access links, invitations, and daily reporting");
+check("HALO X Access", "netlify/functions/halo-x.mjs", haloXFunctionSource.includes("verifyRequestOrigin") && haloXFunctionSource.includes("generateDailyReport") && haloXFunctionSource.includes("save_room_pin"), "protects membership and owner actions");
+check("HALO X Access", "netlify/database/migrations/20260806210000_create-halo-x-access.sql", haloXMigrationSource.includes("halo_memberships") && haloXMigrationSource.includes("halo_access_passes") && haloXMigrationSource.includes("halo_room_pins") && haloXMigrationSource.includes("halo_dj_sessions"), "persists access, invitations, room pins, reports, and DJ sessions");
+check("Audio Scout", "index.html", indexSource.includes("await ctx.resume()"), "resumes Web Audio after a user gesture");
+check("Audio Scout", "dj-deck.html", deckSource.includes("startDeckAudio"), "connects deck controls to real audio");
+check("Audio Scout", "dj-deck.html", deckSource.includes("reportAudioHealth") && deckSource.includes('audio_check_failed'), "logs playback failures and verifies live deck signal");
+const monitorSource = await readFile(resolve(root, "site-monitor.js"), "utf8");
+check("Audio Scout", "site-monitor.js", monitorSource.includes("__haloAudioHealth") && monitorSource.includes('status !== "error"'), "surfaces the latest sound-check result in the QA monitor");
+check("Upload Tester", "dj-deck.html", deckSource.includes('id="driveUpload"') && deckSource.includes("decodeAudioData"), "supports direct audio uploads from Drive");
+check("Upload Tester", "index.html", indexSource.includes('webkitdirectory=""') && indexSource.includes("sourceFile: file"), "indexes audio folders without decoding every file upfront");
+check("Upload Tester", "dj-deck.html", deckSource.includes('id="folderUpload"') && deckSource.includes("audioAsset: { file"), "supports fast folder imports with on-demand decoding");
+check("Upload Tester", "dj-deck.html", deckSource.includes("requestTrackAudio") && deckSource.includes("pendingPlaybackDeck") && !deckSource.includes("startGeneratedDeck"), "requests a real audio file instead of substituting generated deck audio");
+check("Upload Tester", "index.html", indexSource.includes("singleFileInputRef.current?.click()") && !indexSource.includes("startSynthLoop"), "requests a real audio file instead of substituting generated console audio");
+check("Deck Control Tester", "dj-deck.html", deckSource.includes('id="swapDecks"') && deckSource.includes("data-delete") && deckSource.includes("data-eject"), "supports swap, delete, and eject controls");
+check("Deck Control Tester", "dj-deck.html", deckSource.includes('id="deckPackage"') && deckSource.includes('id="expandDjPackage"') && deckSource.includes('id="retractDjPackage"'), "packages the decks and mixer with complete expand and retract controls");
+check("Deck Control Tester", "dj-deck.html", deckSource.includes("setDjPackageCollapsed") && deckSource.includes("saveCollapsedPanels"), "keeps every support system independently retractable and remembers the layout");
+check("AI DJ Tester", "dj-deck.html", deckSource.includes('id="analyzeSet"') && deckSource.includes("/api/ai-dj") && deckSource.includes("recommendLocally"), "supports cloud analysis with a local fallback");
+const aiDjSource = await readFile(resolve(root, "netlify/functions/ai-dj.mjs"), "utf8");
+check("AI DJ Tester", "netlify/functions/ai-dj.mjs", aiDjSource.includes('path: "/api/ai-dj"') && aiDjSource.includes('model: "gpt-5.2"'), "exposes the structured AI DJ strategy endpoint");
+check("AI DJ Trust", "netlify/functions/ai-dj.mjs", aiDjSource.includes("getUser") && aiDjSource.includes("verifyRequestOrigin") && aiDjSource.includes("ensureMembership"), "requires verified same-origin membership for cloud AI");
+check("AI DJ Trust", "netlify/functions/ai-dj.mjs", aiDjSource.includes("HOURLY_REQUEST_LIMIT") && aiDjSource.includes("Retry-After") && aiDjSource.includes("MAX_BODY_BYTES"), "limits AI usage and oversized requests");
+check("AI DJ Trust", "netlify/database/migrations/20260806235900_harden-ai-usage.sql", aiUsageMigrationSource.includes("halo_ai_usage_events") && aiUsageMigrationSource.includes("member_id") && aiUsageMigrationSource.includes("created_at DESC"), "persists member-scoped AI usage controls");
+check("Import Safety", "netlify/functions/resolve-track.mjs", resolveTrackSource.includes("AbortSignal.timeout") && resolveTrackSource.includes("redirect: \"manual\"") && resolveTrackSource.includes("MAX_RESPONSE_BYTES"), "bounds outbound music-service requests and response sizes");
+check("Import Safety", "netlify/functions/resolve-track.mjs", resolveTrackSource.includes("Cross-origin music imports are not accepted") && resolveTrackSource.includes("nextPlatform.name !== platform.name"), "rejects cross-origin requests and untrusted redirects");
+check("Production Gate", "netlify.toml", netlifyConfigSource.includes("X-Content-Type-Options") && netlifyConfigSource.includes("Referrer-Policy") && netlifyConfigSource.includes("Permissions-Policy"), "applies baseline browser security headers");
+check("Production Gate", "netlify.toml", netlifyConfigSource.includes('for = "/api/*"') && netlifyConfigSource.includes("no-store") && netlifyConfigSource.includes("noindex, nofollow"), "prevents API caching and indexing");
+check("Production Gate", "404.html", notFoundSource.includes("Signal Lost") && notFoundSource.includes('href="/"') && notFoundSource.includes('name="robots" content="noindex"'), "provides a branded recoverable not-found experience");
+const broadcastControlSource = await readFile(resolve(root, "netlify/functions/broadcast-control.mjs"), "utf8");
+check("Broadcast Controller", "netlify/functions/broadcast-control.mjs", broadcastControlSource.includes('path: "/api/broadcast-control"') && broadcastControlSource.includes("timingSafeEqual"), "protects relay commands behind a server-side control code");
+const issueSource = await readFile(resolve(root, "netlify/functions/issues.mjs"), "utf8");
+const maintenanceSource = await readFile(resolve(root, "netlify/functions/maintenance-issues.mjs"), "utf8");
+const communitySource = await readFile(resolve(root, "netlify/functions/community.mjs"), "utf8");
+const identitySource = await readFile(resolve(root, "identity.js"), "utf8");
+const communityMigrationSource = await readFile(resolve(root, "netlify/database/migrations/20260804150000_create-halo-community.sql"), "utf8");
+const healthScoutSource = await readFile(resolve(root, "netlify/functions/health-scout.mjs"), "utf8");
+const maintenanceSweepSource = await readFile(resolve(root, "netlify/lib/maintenance-sweep.mjs"), "utf8");
+const companionSource = await readFile(resolve(root, "halo-companion.js"), "utf8");
+const companionFunctionSource = await readFile(resolve(root, "netlify/functions/halo-companion.mjs"), "utf8");
+const companionMigrationSource = await readFile(resolve(root, "netlify/database/migrations/20260806170000_create-halo-companion.sql"), "utf8");
+const journalSource = await readFile(resolve(root, "halo-journal.js"), "utf8");
+const journalFunctionSource = await readFile(resolve(root, "netlify/functions/halo-journal.mjs"), "utf8");
+const journalMigrationSource = await readFile(resolve(root, "netlify/database/migrations/20260806235000_create-halo-journal.sql"), "utf8");
+const accessibilitySource = await readFile(resolve(root, "accessibility.js"), "utf8");
+const accessibilityStyleSource = await readFile(resolve(root, "accessibility.css"), "utf8");
+check("Maintenance Scout", "netlify/functions/issues.mjs", issueSource.includes('path: "/api/issues"') && issueSource.includes("reportIssue"), "accepts persistent issue reports");
+check("Maintenance Scout", "netlify/functions/maintenance-issues.mjs", maintenanceSource.includes("maintenanceAuthorized") && maintenanceSource.includes("'healed'"), "protects the maintenance worker queue");
+check("Maintenance Scout", "netlify/functions/health-scout.mjs", healthScoutSource.includes('schedule: "*/15 * * * *"') && healthScoutSource.includes("runMaintenanceSweep") && maintenanceSweepSource.includes("resolveIssue"), "runs scheduled checks and closes recovered incidents");
+check("Maintenance Scout", "site-monitor.js", monitorSource.includes("/api/issues") && monitorSource.includes("HALO Maintenance Scout"), "reports browser findings to the maintenance queue");
+check("Companion Team", "site-monitor.js", monitorSource.includes("/halo-companion.js") && monitorSource.includes("data-halo-companion"), "loads the companion team across every monitored page");
+check("Companion Team", "halo-companion.js", companionSource.includes("Your <em>companion</em> team") && companionSource.includes("/api/halo-companion") && companionSource.includes("Journey memory on"), "provides a sitewide four-specialist guidance experience");
+check("Companion Team", "netlify/functions/halo-companion.mjs", companionFunctionSource.includes('path: "/api/halo-companion"') && companionFunctionSource.includes('model: "gpt-5.2"') && companionFunctionSource.includes("needsHumanCare"), "routes guidance through Netlify AI Gateway with human care escalation");
+check("Companion Team", "netlify/database/migrations/20260806170000_create-halo-companion.sql", companionMigrationSource.includes("halo_companion_journeys") && companionMigrationSource.includes("halo_companion_care_requests"), "remembers journeys and stores human care requests in Netlify Database");
+check("Halo Journal", "site-monitor.js", monitorSource.includes("/halo-journal.js") && monitorSource.includes("halo:journal-event"), "loads privacy-safe operational memory and forwards quality problems");
+check("Halo Journal", "halo-journal.js", journalSource.includes("never passwords") && journalSource.includes("IP addresses") && journalSource.includes("Owner-only memory active") && journalSource.includes("authorizeOwner") && journalSource.includes("/api/halo-journal"), "shows monitoring controls, notes, reflections, and timeline only after owner authorization");
+check("Halo Journal", "netlify/functions/halo-journal.mjs", journalFunctionSource.includes('path: "/api/halo-journal"') && journalFunctionSource.includes('model: "gpt-5.2"') && journalFunctionSource.includes("isOwner(user)") && journalFunctionSource.includes("PRIVATE_DETAIL_KEYS") && journalFunctionSource.includes("verifyRequestOrigin"), "restricts journal memory to the owner and removes network identifiers from stored details");
+check("Halo Journal", "netlify/database/migrations/20260806235000_create-halo-journal.sql", journalMigrationSource.includes("halo_journal_events") && journalMigrationSource.includes("halo_journal_profiles") && journalMigrationSource.includes("halo_journal_notes") && journalMigrationSource.includes("halo_journal_insights"), "persists timeline events, long-term memory, intentional notes, and advice history");
+check("Halo Journal", "netlify/functions/halo-companion.mjs", companionFunctionSource.includes("haloJournalMemory") && companionFunctionSource.includes("journalMemory") && companionFunctionSource.includes("isOwner(user)"), "shares private journal memory with the companion only for the owner");
+check("Community Builder", "index.html", indexSource.includes("Pass the Light") && indexSource.includes("CLUBHOUSE CHAT"), "turns the listening party into a persistent fan clubhouse");
+check("Community Builder", "netlify/functions/community.mjs", communitySource.includes('path: "/api/community"') && communitySource.includes("Slow mode is active"), "persists community actions with anti-spam safeguards");
+check("Community Builder", "netlify/database/migrations/20260804150000_create-halo-community.sql", communityMigrationSource.includes("community_profiles") && communityMigrationSource.includes("community_notifications"), "stores fan identity, relationships, recognition, and notifications");
+check("Community Trust", "identity.js", identitySource.includes("@netlify/identity") && identitySource.includes("handleAuthCallback"), "loads the supported Netlify Identity client and handles membership callbacks");
+check("Community Trust", "netlify/functions/community.mjs", communitySource.includes("getUser") && communitySource.includes("if (!actorId)") && communitySource.includes("verifyRequestOrigin"), "requires verified same-origin membership for community actions");
+check("Relationship Desk", "halo-relations.html", relationsSource.includes("AI RELATIONSHIP TEAM") && relationsSource.includes("Explicit contact consent recorded"), "provides consent-aware relationship profiles, follow-ups, and review drafts");
+check("Relationship Desk", "halo-relations.js", relationsScriptSource.includes("/api/halo-relations") && relationsScriptSource.includes("generate_draft") && relationsScriptSource.includes("update_member"), "connects the owner workspace to member profiles and human-reviewed drafts");
+check("Relationship Security", "netlify/functions/halo-relations.mjs", relationsFunctionSource.includes("isOwner(user)") && relationsFunctionSource.includes("verifyRequestOrigin") && relationsFunctionSource.includes("Record explicit contact consent"), "limits private context to owners and requires consent before drafting outreach");
+check("Relationship Signals", "netlify/functions/relationship-event.mjs", relationsEventSource.includes("getUser") && relationsEventSource.includes("verifyRequestOrigin") && !relationsEventSource.includes("user-agent"), "records authenticated session signals without network or device identifiers");
+check("Relationship Storage", "netlify/database/migrations/20260807190000_create-halo-relations.sql", relationsMigrationSource.includes("halo_relationship_profiles") && relationsMigrationSource.includes("halo_relationship_tasks") && relationsMigrationSource.includes("halo_relationship_drafts"), "persists consent, team memory, follow-ups, and unsent drafts in Netlify Database");
+check("Tracked Invitations", "halo-x.html", haloXSource.includes("Share HALO today") && haloXScriptSource.includes('action: "create"') && haloXScriptSource.includes("navigator.share"), "offers one-tap native sharing from the signed-in member view");
+check("Tracked Invitations", "identity.js", shareIdentitySource.includes('action, token, eventKey') && shareIdentitySource.includes('claimStoredInvite()') && shareIdentitySource.includes('recordInviteAction("opened"'), "records a privacy-conscious visit and attributes a completed account");
+check("Tracked Invitations", "netlify/functions/share-invite.mjs", shareInviteSource.includes("verifyRequestOrigin") && shareInviteSource.includes("ensureMembership") && !shareInviteSource.includes("user-agent"), "protects invite creation and avoids collecting device identifiers");
+check("Tracked Invitations", "netlify/database/migrations/20260819150000_create-tracked-share-invites.sql", shareInviteMigrationSource.includes("halo_share_invites") && shareInviteMigrationSource.includes("halo_share_invite_events") && shareInviteMigrationSource.includes("'joined'"), "persists created, shared, opened, and joined invitation events in Netlify Database");
+check("Release Selector Room", "index.html", indexSource.includes("Radio + DJ Release Room") && indexSource.includes("/api/release-pack") && indexSource.includes("Request pack"), "places the featured release into a dedicated selector workflow");
+check("Release Selector Room", "halo.html", indexSource.includes("Promote the whole page") && indexSource.includes("releaseRoomUrl") && indexSource.includes("release_room_page_shared"), "shares a deep link to the complete room with the selected release preserved");
+check("Music Catalog", "index.html", indexSource.includes('href="/music/"') && indexSource.includes("ALL MUSIC"), "links the main experience to one permanent music address");
+check("Music Catalog", "music/index.html", releaseCatalogSource.includes("Every signal.") && releaseCatalogScriptSource.includes("/api/release-catalog") && releaseCatalogScriptSource.includes("Listen now"), "presents every published release through one responsive catalog");
+check("Music Catalog", "netlify/functions/release-catalog.mjs", releaseCatalogFunctionSource.includes("halo_release_campaigns") && releaseCatalogFunctionSource.includes("status = 'published'") && releaseCatalogFunctionSource.includes('path: "/api/release-catalog"'), "serves only published release campaigns from Netlify Database");
+check("Social Release Publisher", "index.html", indexSource.includes("Social launchpad") && indexSource.includes("Post with share sheet") && indexSource.includes("socialRightsConfirmed") && indexSource.includes("https://studio.youtube.com/"), "prepares approved release media for native sharing and major social publishing destinations");
+check("Release Selector Room", "netlify/functions/release-pack.mjs", releasePackFunctionSource.includes('path: "/api/release-pack"') && releasePackFunctionSource.includes("verifyRequestOrigin") && releasePackFunctionSource.includes("ensureMembership"), "protects selector responses with verified membership and same-origin updates");
+check("Release Selector Room", "netlify/database/migrations/20260807170000_create-release-selector-room.sql", releasePackMigrationSource.includes("halo_release_selector_responses") && releasePackMigrationSource.includes("interested") && releasePackMigrationSource.includes("played"), "persists release requests and support outcomes");
+check("Return Experience", "index.html", indexSource.includes("BUILD THE WORLD AROUND YOUR MUSIC") && indexSource.includes("Return for the people"), "presents one focused platform promise and a reason to return");
+check("Accessibility Tester", "accessibility.js", accessibilitySource.includes("SpeechRecognition") && accessibilitySource.includes("SpeechSynthesisUtterance") && accessibilitySource.includes("eligibleFieldSelector"), "supports speech-to-text and text-to-speech across text fields");
+check("Accessibility Tester", "accessibility.js", accessibilitySource.includes("halo-dyslexia-mode") && accessibilitySource.includes("Live transcript"), "provides persistent reading support and visible speech captions");
+check("Accessibility Tester", "accessibility.css", accessibilityStyleSource.includes("prefers-reduced-motion") && accessibilityStyleSource.includes("focus-visible"), "respects reduced motion and visible keyboard focus");
+
+const failures = results.filter(result => !result.condition);
+const roles = [...new Set(results.map(result => result.role))];
+console.log(`HALO site audit: ${results.length - failures.length}/${results.length} checks passed across ${pages.length} pages.`);
+for (const role of roles) {
+  const roleResults = results.filter(result => result.role === role);
+  const roleFailures = roleResults.filter(result => !result.condition);
+  console.log(`${roleFailures.length ? "FAIL" : "PASS"} ${role}: ${roleResults.length - roleFailures.length}/${roleResults.length}`);
+}
+if (failures.length) {
+  failures.forEach(failure => console.error(`- ${failure.role} on ${failure.page}: ${failure.message}`));
+  process.exitCode = 1;
+}

@@ -1,0 +1,16 @@
+services:
+  gemma-relay:
+    build: .
+    restart: unless-stopped
+    environment:
+      PORT: "8787"
+      GEMMA_OPERATOR_TOKEN: "${GEMMA_OPERATOR_TOKEN}"
+      WATCHTOWER_TOKEN: "${WATCHTOWER_TOKEN}"
+      WATCHTOWER_URL: "http://updater:8080/v1/update"
+    networks:
+      - azuracast
+
+networks:
+  azuracast:
+    external: true
+    name: "${AZURACAST_DOCKER_NETWORK:-azuracast_default}"

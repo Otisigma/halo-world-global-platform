@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>HALO Outreach Desk — Getting the record to the right people</title>
+  <meta name="description" content="Owner-only outbound desk for HALO releases: qualified contacts, computed fit, grounded approaches, and a queue that only a human can send.">
+  <meta property="og:title" content="HALO Outreach Desk">
+  <meta property="og:description" content="Qualified release contacts, grounded approaches, and a human-controlled outreach queue.">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="HALO Music World">
+  <meta property="og:image" content="https://halo-world-global-platform.netlify.app/assets/halo-app-icon-512.png">
+  <meta property="og:image:width" content="512">
+  <meta property="og:image:height" content="512">
+  <meta property="og:image:alt" content="HALO Music World logo">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:image" content="https://halo-world-global-platform.netlify.app/assets/halo-app-icon-512.png">
+  <meta name="twitter:image:alt" content="HALO Music World logo">
+  <meta name="robots" content="noindex, nofollow">
+  <link rel="icon" href="/assets/halo-app-icon-192.png" type="image/png">
+  <link rel="stylesheet" href="/halo-brand.css">
+  <link rel="stylesheet" href="/release-context.css">
+  <link rel="stylesheet" href="/outreach.css">
+  <link rel="stylesheet" href="/accessibility.css">
+  <script type="module" src="/identity.js"></script>
+  <script src="/stats.js" defer></script>
+  <script src="/site-monitor.js" defer></script>
+  <script src="/release-context.js" defer></script>
+  <script src="/outreach.js" defer></script>
+  <script src="/accessibility.js" defer></script>
+</head>
+<body>
+  <div class="grain" aria-hidden="true"></div>
+
+  <header class="desk-header">
+    <a class="brand" href="/" aria-label="HALO World home">
+      <img class="halo-brand-image" src="/assets/halo-logo-mark.webp" alt="">
+      <span><strong>HALO Outreach</strong><small>Outbound desk</small></span>
+    </a>
+    <nav aria-label="HALO destinations">
+      <a href="/partner-trust.html">Partner trust</a>
+      <a href="/halo-relations.html">Relations</a>
+      <a href="/halo-x.html">Owner desk</a>
+      <a href="/">Live room</a>
+      <button id="authButton" type="button">Sign in</button>
+    </nav>
+  </header>
+
+  <main>
+    <section class="intro" aria-labelledby="pageTitle">
+      <div>
+        <p class="eyebrow">OWNER-ONLY · NOTHING SENDS ITSELF</p>
+        <h1 id="pageTitle">Get the record<br><em>to the right desk.</em></h1>
+      </div>
+      <p class="intro-copy">Qualified contacts, a fit score you can argue with before a word is drafted, and approaches grounded in this record's own facts. HALO holds no mail credentials. You send every one of these yourself.</p>
+    </section>
+
+    <section id="gateView" class="gate-card" aria-live="polite">
+      <p class="eyebrow">SECURE ENTRY</p>
+      <h2 id="gateTitle">Connecting to your HALO identity.</h2>
+      <p id="gateMessage">The outreach desk checks owner access before showing contact records.</p>
+      <button id="gateAction" class="button primary" type="button" hidden>Sign in from the owner desk</button>
+    </section>
+
+    <section id="workspaceView" hidden>
+      <div id="metricGrid" class="metric-grid" aria-label="Outreach overview"></div>
+
+      <section class="run-bar" aria-labelledby="runTitle">
+        <div>
+          <p class="eyebrow">WORK A RELEASE</p>
+          <h2 id="runTitle">Build a queue</h2>
+        </div>
+        <label class="run-field">
+          <span>Release</span>
+          <select id="releaseSelect"></select>
+        </label>
+        <button id="runButton" class="button primary" type="button">Run the desk</button>
+        <p id="runMessage" class="run-message" role="status"></p>
+      </section>
+
+      <section id="briefingPanel" class="panel briefing-panel" hidden>
+        <div class="panel-heading">
+          <div><p class="eyebrow">LAST RUN</p><h3>What the desk did</h3></div>
+          <span id="briefingCost">—</span>
+        </div>
+        <pre id="briefingBody" class="briefing-body"></pre>
+      </section>
+
+      <div class="workspace-grid">
+        <section class="queue-stage" aria-labelledby="queueTitle">
+          <div class="panel-heading queue-heading">
+            <div><p class="eyebrow">APPROVAL QUEUE</p><h2 id="queueTitle">Approaches</h2></div>
+            <label class="inline-field">
+              <span>Show</span>
+              <select id="statusFilter">
+                <option value="proposed">Awaiting approval</option>
+                <option value="approved">Approved, not sent</option>
+                <option value="sent">Sent</option>
+                <option value="archived">Archived</option>
+                <option value="all">Everything</option>
+              </select>
+            </label>
+          </div>
+          <div id="pitchList" class="pitch-list"></div>
+        </section>
+
+        <aside class="contact-rail" aria-label="Contact directory">
+          <div class="rail-heading">
+            <div><p class="eyebrow">CONTACTS</p><h2>The list</h2></div>
+            <span id="targetCount">0 contacts</span>
+          </div>
+
+          <details class="add-target">
+            <summary>Add a contact</summary>
+            <form id="targetForm" class="target-form">
+              <label><span>Name</span><input id="targetName" type="text" maxlength="160" required autocomplete="off"></label>
+              <label><span>What they do</span>
+                <select id="targetKind">
+                  <option value="radio">Radio</option>
+                  <option value="dj">DJ</option>
+                  <option value="playlist">Playlist</option>
+                  <option value="press">Press</option>
+                  <option value="label">Label</option>
+                  <option value="sync">Sync</option>
+                  <option value="promoter">Promoter</option>
+                </select>
+              </label>
+              <label><span>Organisation</span><input id="targetOrg" type="text" maxlength="160" autocomplete="off"></label>
+              <label><span>Territory</span><input id="targetTerritory" type="text" maxlength="60" placeholder="Global" autocomplete="off"></label>
+              <label><span>Genres, comma separated</span><input id="targetGenres" type="text" maxlength="240" autocomplete="off"></label>
+              <div class="field-pair">
+                <label><span>Tempo from</span><input id="targetTempoMin" type="number" min="40" max="220" inputmode="numeric"></label>
+                <label><span>Tempo to</span><input id="targetTempoMax" type="number" min="40" max="220" inputmode="numeric"></label>
+              </div>
+              <label><span>Email</span><input id="targetEmail" type="email" maxlength="200" autocomplete="off"></label>
+              <label><span>Or submission link</span><input id="targetUrl" type="url" maxlength="400" autocomplete="off"></label>
+              <label><span>Preferred channel</span>
+                <select id="targetChannel">
+                  <option value="email">Email</option>
+                  <option value="form">Submission form</option>
+                  <option value="portal">Portal</option>
+                  <option value="post">Post</option>
+                </select>
+              </label>
+              <label><span>Lawful basis</span>
+                <select id="targetBasis">
+                  <option value="public_professional_listing">Public professional listing</option>
+                  <option value="legitimate_interest">Legitimate interest</option>
+                  <option value="consent">They opted in</option>
+                </select>
+              </label>
+              <label class="required-field">
+                <span>Where did this contact come from?</span>
+                <input id="targetSource" type="text" maxlength="300" required placeholder="Met at Brighton conference, May 2026" autocomplete="off">
+              </label>
+              <label><span>Contact no more than every … days</span><input id="targetGap" type="number" min="7" max="365" value="45" inputmode="numeric"></label>
+              <label><span>Notes</span><textarea id="targetNotes" rows="2" maxlength="1200"></textarea></label>
+              <button class="button dark" type="submit">Add contact</button>
+              <p id="targetMessage" class="form-message" role="status"></p>
+            </form>
+          </details>
+
+          <div id="targetList" class="target-list"></div>
+        </aside>
+      </div>
+
+      <section class="panel conduct-panel" aria-labelledby="conductTitle">
+        <p class="eyebrow">HOW THIS DESK BEHAVES</p>
+        <h3 id="conductTitle">The rules are in the database, not in a prompt</h3>
+        <ul class="conduct-list">
+          <li>An approach cannot be stored as approved or sent without the member id of the person who approved it.</li>
+          <li>Each contact receives at most one approach per release, enforced by a unique constraint.</li>
+          <li>A contact who opts out is withdrawn from every queue immediately, and cannot be approved afterwards.</li>
+          <li>Each contact carries their own frequency cap, and the cap is re-checked at the moment of writing.</li>
+          <li>An approach that cites no real fact about the record or the contact is dropped before you see it.</li>
+          <li>HALO holds no mail credentials. Every approach here is sent by you, from your own mail.</li>
+        </ul>
+      </section>
+    </section>
+  </main>
+</body>
+</html>

@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#10181a" />
+  <meta name="robots" content="noindex, nofollow" />
+  <title>HALO Release Kit</title>
+  <meta name="description" content="Official release information, approved campaign material, and listening links from HALO Music World." />
+  <meta property="og:title" content="HALO Release Kit" />
+  <meta property="og:description" content="Official release information, approved campaign material, and listening links from HALO Music World." />
+  <meta property="og:type" content="music.song" />
+  <meta property="og:site_name" content="HALO Music World" />
+  <meta property="og:image" content="https://halo-world-global-platform.netlify.app/assets/halo-app-icon-512.png" />
+  <meta property="og:image:width" content="512" />
+  <meta property="og:image:height" content="512" />
+  <meta property="og:image:alt" content="HALO Music World logo" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:image" content="https://halo-world-global-platform.netlify.app/assets/halo-app-icon-512.png" />
+  <meta name="twitter:image:alt" content="HALO Music World logo" />
+  <link rel="stylesheet" href="/halo-brand.css" />
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Manrope:wght@400;500;600;700;800&display=swap');
+    :root { color-scheme: dark; --ink:#10181a; --paper:#e8e3d5; --signal:#d7ff5f; --muted:#91a0a0; --line:rgba(232,227,213,.16); }
+    * { box-sizing: border-box; }
+    body { margin:0; min-height:100vh; color:var(--paper); background:radial-gradient(circle at 80% 10%, rgba(215,255,95,.08), transparent 24rem), linear-gradient(135deg,#0d1416,#142024 58%,#0c1214); font-family:Manrope,sans-serif; }
+    body::before { content:""; position:fixed; inset:0; pointer-events:none; opacity:.18; background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.22'/%3E%3C/svg%3E"); }
+    a { color:inherit; }
+    .shell { width:min(1180px,calc(100% - 32px)); margin:0 auto; padding:32px 0 56px; }
+    .topline { display:flex; justify-content:space-between; align-items:center; gap:20px; padding-bottom:18px; border-bottom:1px solid var(--line); font:500 11px/1 DM Mono,monospace; letter-spacing:.18em; text-transform:uppercase; }
+    .mark { display:flex; align-items:center; gap:10px; font-weight:700; }
+    .mark img { width:36px; height:36px; }
+    .audience { color:var(--signal); }
+    .hero { display:grid; grid-template-columns:minmax(0,.82fr) minmax(0,1.18fr); gap:clamp(28px,6vw,88px); align-items:end; padding:clamp(40px,8vw,96px) 0 44px; }
+    .art { position:relative; max-width:470px; }
+    .art::after { content:""; position:absolute; inset:14px -14px -14px 14px; border:1px solid rgba(215,255,95,.45); z-index:-1; }
+    .art img { display:block; width:100%; aspect-ratio:1; object-fit:cover; background:#1b282b; filter:saturate(.86) contrast(1.04); }
+    .eyebrow { margin:0 0 18px; color:var(--signal); font:500 11px/1.4 DM Mono,monospace; letter-spacing:.2em; text-transform:uppercase; }
+    h1 { margin:0; max-width:760px; font-size:clamp(44px,8vw,104px); line-height:.86; letter-spacing:-.075em; text-wrap:balance; }
+    .artist { margin:22px 0 0; font-size:clamp(18px,2.4vw,31px); color:#bcc7c5; }
+    .pitch { max-width:690px; margin:32px 0 0; color:#b8c3c1; font-size:clamp(15px,1.6vw,19px); line-height:1.7; }
+    .actions { display:flex; flex-wrap:wrap; gap:12px; margin-top:34px; }
+    .button { display:inline-flex; align-items:center; justify-content:center; min-height:52px; padding:0 22px; border:1px solid var(--line); text-decoration:none; font:700 11px/1 DM Mono,monospace; letter-spacing:.14em; text-transform:uppercase; transition:transform .2s,border-color .2s,background .2s; }
+    .button:hover { transform:translateY(-2px); border-color:var(--signal); }
+    .button.primary { background:var(--signal); color:var(--ink); border-color:var(--signal); }
+    .grid { display:grid; grid-template-columns:1.2fr .8fr; gap:18px; }
+    .panel { border:1px solid var(--line); background:rgba(9,15,17,.54); padding:clamp(22px,3vw,36px); backdrop-filter:blur(12px); }
+    .panel h2 { margin:0 0 22px; font:500 11px/1 DM Mono,monospace; color:var(--signal); letter-spacing:.18em; text-transform:uppercase; }
+    .facts { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:1px; background:var(--line); }
+    .fact { min-height:92px; padding:18px; background:#111a1c; }
+    .fact small { display:block; color:#728080; font:500 9px/1 DM Mono,monospace; letter-spacing:.14em; text-transform:uppercase; }
+    .fact strong { display:block; margin-top:11px; font-size:15px; overflow-wrap:anywhere; }
+    .copy { color:#aeb9b7; line-height:1.75; white-space:pre-line; }
+    .versions { display:grid; gap:9px; margin:0; padding:0; list-style:none; }
+    .versions li { display:flex; gap:14px; padding:14px 0; border-bottom:1px solid var(--line); color:#bdc7c5; }
+    .versions li::before { content:"+"; color:var(--signal); font-family:DM Mono,monospace; }
+    .contact { margin-top:28px; padding-top:22px; border-top:1px solid var(--line); color:#899694; font-size:13px; line-height:1.7; }
+    .state { min-height:75vh; display:grid; place-items:center; text-align:center; color:#aeb9b7; }
+    .state strong { display:block; color:var(--paper); font-size:28px; margin-bottom:12px; }
+    @media (max-width:800px) { .hero,.grid { grid-template-columns:1fr; } .hero { align-items:start; } .art { max-width:none; } .topline { align-items:flex-start; flex-direction:column; } }
+    @media (prefers-reduced-motion:no-preference) { .hero>* ,.grid>* { animation:rise .65s both; } .hero>*:nth-child(2),.grid>*:nth-child(2) { animation-delay:.12s; } @keyframes rise { from { opacity:0; transform:translateY(18px); } } }
+  </style>
+  <script src="/stats.js" defer></script>
+</head>
+<body>
+  <main id="app" class="shell"><div class="state"><div><strong>Preparing release kit</strong>Loading the campaign signal.</div></div></main>
+  <script>
+    const params = new URLSearchParams(location.search);
+    const slug = params.get('slug') || '';
+    const requestedAudience = params.get('audience') || 'fan';
+    const audiences = new Set(['fan', 'dj', 'radio', 'press', 'preview']);
+    const audience = audiences.has(requestedAudience) ? requestedAudience : 'fan';
+    const labels = { fan:'Official release', dj:'DJ promo desk', radio:'Radio service', press:'Press room', preview:'Private preview' };
+    const escapeHtml = value => String(value ?? '').replace(/[&<>'"]/g, character => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[character]));
+    const formatDate = value => value ? new Intl.DateTimeFormat('en', { day:'numeric', month:'long', year:'numeric', timeZone:'UTC' }).format(new Date(`${value}T00:00:00Z`)) : 'To be announced';
+    const destination = (release, code = '') => `/api/release-link?slug=${encodeURIComponent(release.id)}&audience=${encodeURIComponent(audience)}${code ? `&code=${encodeURIComponent(code)}` : ''}`;
+
+    function render(data) {
+      const release = data.release;
+      const description = audience === 'press' && release.pressDescription ? release.pressDescription : release.pitch;
+      const actionLabel = { fan:'Listen now', dj:'Open DJ delivery', radio:'Open radio delivery', press:'Open press assets', preview:'Open private preview' }[audience];
+      const facts = [
+        ['Release date', formatDate(release.releaseDate)],
+        ['Genre', release.genres.join(' · ') || 'Not specified'],
+        ['BPM / key', [release.bpm, release.musicalKey].filter(Boolean).join(' · ') || 'Available on request'],
+        ['Duration', release.duration || 'Not specified'],
+        ['ISRC', release.isrc || 'Available on request'],
+        ['Version', release.contentRating === 'unspecified' ? 'Campaign demo · confirm rating' : release.contentRating]
+      ];
+      document.title = `${release.artist} — ${release.title} | HALO`;
+      const protectedPreview = audience === 'preview' && release.previewProtected;
+      document.getElementById('app').innerHTML = `
+        <header class="topline"><div class="mark"><img class="halo-brand-image halo-brand-image--small" src="/assets/halo-logo-mark.webp" alt="">HALO release network</div><div class="audience">${escapeHtml(labels[audience])}</div></header>
+        <section class="hero">
+          <div class="art"><img src="${escapeHtml(release.artwork || '/assets/releases/the-cold-is-lasting-longer.jpg')}" alt="${escapeHtml(`${release.title} cover artwork`)}"></div>
+          <div><p class="eyebrow">${escapeHtml(formatDate(release.releaseDate))} // ${escapeHtml(labels[audience])}</p><h1>${escapeHtml(release.title)}</h1><p class="artist">${escapeHtml(release.artist)}</p><p class="pitch">${escapeHtml(description || 'Release information and approved campaign material.')}</p><div class="actions">${protectedPreview ? `<button class="button primary" id="preview-action" type="button">${escapeHtml(actionLabel)}</button>` : `<a class="button primary" href="${destination(release)}">${escapeHtml(actionLabel)}</a>`}<button class="button" id="copy-link" type="button">Copy this kit</button></div></div>
+        </section>
+        <section class="grid">
+          <article class="panel"><h2>Release intelligence</h2><div class="facts">${facts.map(([label,value]) => `<div class="fact"><small>${escapeHtml(label)}</small><strong>${escapeHtml(value)}</strong></div>`).join('')}</div>${release.credits ? `<p class="copy">${escapeHtml(release.credits)}</p>` : ''}</article>
+          <aside class="panel"><h2>Available material</h2><ul class="versions">${(release.availableVersions.length ? release.availableVersions : ['Official release link', 'Artwork and release details']).map(item => `<li>${escapeHtml(item)}</li>`).join('')}</ul>${release.contactName || release.contactEmail ? `<div class="contact">Campaign contact<br><strong>${escapeHtml(release.contactName || release.artist)}</strong>${release.contactEmail ? `<br>${escapeHtml(release.contactEmail)}` : ''}</div>` : ''}</aside>
+        </section>`;
+      document.getElementById('copy-link').addEventListener('click', async event => {
+        await navigator.clipboard.writeText(location.href);
+        event.currentTarget.textContent = 'Kit link copied';
+      });
+      document.getElementById('preview-action')?.addEventListener('click', () => {
+        const code = window.prompt('Enter the private preview access code');
+        if (code) location.assign(destination(release, code));
+      });
+    }
+
+    async function start() {
+      if (!slug) throw new Error('No release campaign was selected.');
+      const response = await fetch(`/api/release-pack?slug=${encodeURIComponent(slug)}`, { headers:{ Accept:'application/json' } });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.message || 'This release kit is unavailable.');
+      render(data);
+      fetch('/api/release-link', { method:'POST', headers:{ 'Content-Type':'application/json' }, body:JSON.stringify({ releaseId:slug, audience }) }).catch(() => {});
+    }
+    start().catch(error => { document.getElementById('app').innerHTML = `<div class="state"><div><strong>Release kit unavailable</strong>${escapeHtml(error.message)}</div></div>`; });
+  </script>
+</body>
+</html>

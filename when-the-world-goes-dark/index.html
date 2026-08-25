@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#050608">
+  <meta name="description" content="Enter The Last Light Network for When The World Goes Dark by Owen Anthony. Leave one light, join the shared signal, and listen to the release.">
+  <meta property="og:title" content="When The World Goes Dark — The Last Light Network">
+  <meta property="og:description" content="Leave one persistent light before entering Owen Anthony's new release.">
+  <meta property="og:image" content="/assets/releases/when-the-world-goes-dark.jpg">
+  <meta property="og:type" content="music.song">
+  <title>When The World Goes Dark — Owen Anthony</title>
+  <link rel="icon" href="/assets/halo-app-icon.svg">
+  <link rel="stylesheet" href="/when-the-world-goes-dark/world-dark.css">
+  <script src="/when-the-world-goes-dark/world-dark.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#ritual">Skip to the signal</a>
+  <canvas class="signal-field" id="signalField" aria-hidden="true"></canvas>
+  <div class="grain" aria-hidden="true"></div>
+
+  <header class="site-header">
+    <a class="halo-mark" href="/" aria-label="HALO World home">
+      <img src="/assets/halo-logo-mark.webp" alt="">
+      <span>HALO // Transmission 0820</span>
+    </a>
+    <p class="live-state"><span></span> Signal open</p>
+  </header>
+
+  <main>
+    <section class="opening" aria-labelledby="release-title">
+      <div class="opening-copy">
+        <p class="kicker">Owen Anthony presents</p>
+        <h1 id="release-title"><span>When The World</span><strong>Goes Dark</strong></h1>
+        <p class="release-note">A release does not need another landing page. It needs a ritual people remember.</p>
+      </div>
+
+      <figure class="artifact">
+        <div class="artifact-orbit" aria-hidden="true"></div>
+        <img src="/assets/releases/when-the-world-goes-dark.jpg" alt="When The World Goes Dark cover artwork by Owen Anthony" width="2048" height="2048">
+        <figcaption>
+          <span>Released</span>
+          <strong>20 · 08 · 2026</strong>
+        </figcaption>
+      </figure>
+
+      <a class="descent" href="#ritual">
+        <span>Enter the last light network</span>
+        <i aria-hidden="true">↓</i>
+      </a>
+    </section>
+
+    <section class="ritual" id="ritual" aria-labelledby="network-title">
+      <div class="ritual-intro">
+        <p class="section-number">01 / The collective signal</p>
+        <h2 id="network-title">The Last Light Network</h2>
+        <p>Choose the word you carry into the dark. One listener. One permanent pulse. No profile, no leaderboard, no performance.</p>
+      </div>
+
+      <div class="network-console">
+        <div class="network-core" id="networkCore" aria-live="polite">
+          <p class="network-label">Lights still on</p>
+          <strong id="pulseCount">—</strong>
+          <span id="networkStatus">Listening for the world…</span>
+        </div>
+
+        <div class="signal-choices" role="group" aria-label="Choose the signal you carry">
+          <button type="button" data-signal="stay"><span>01</span><strong>Stay</strong><small>I hold the line.</small></button>
+          <button type="button" data-signal="rise"><span>02</span><strong>Rise</strong><small>I become the flare.</small></button>
+          <button type="button" data-signal="remember"><span>03</span><strong>Remember</strong><small>I keep the names.</small></button>
+          <button type="button" data-signal="return"><span>04</span><strong>Return</strong><small>I find the way back.</small></button>
+        </div>
+
+        <div class="distribution" aria-label="Current signal distribution">
+          <div><span>Stay</span><i><b id="barStay"></b></i><em id="valueStay">0</em></div>
+          <div><span>Rise</span><i><b id="barRise"></b></i><em id="valueRise">0</em></div>
+          <div><span>Remember</span><i><b id="barRemember"></b></i><em id="valueRemember">0</em></div>
+          <div><span>Return</span><i><b id="barReturn"></b></i><em id="valueReturn">0</em></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="listen" id="listen" aria-labelledby="listen-title">
+      <div class="listen-copy">
+        <p class="section-number">02 / The record</p>
+        <h2 id="listen-title">Now enter the song.</h2>
+        <p>The light you leave here remains with every listener who arrives after you. The music continues on the official release page.</p>
+        <a class="primary-action" href="https://distrokid.com/hyperfollow/owenanthony/when-the-world-goes-dark?ref=last-light-network" target="_blank" rel="noopener noreferrer">
+          <span>Stream / save the release</span><i aria-hidden="true">↗</i>
+        </a>
+      </div>
+
+      <blockquote>
+        <p>“When the world goes dark, the signal is not the thing above us. It is the thing we keep alive between us.”</p>
+        <cite>HALO transmission note</cite>
+      </blockquote>
+    </section>
+
+    <section class="campaign" aria-labelledby="campaign-title">
+      <div class="campaign-heading">
+        <p class="section-number">03 / Carry the signal</p>
+        <h2 id="campaign-title">Different doors. Same world.</h2>
+      </div>
+      <div class="campaign-grid">
+        <a href="/release-kit.html?audience=dj&slug=when-the-world-goes-dark"><span>For selectors</span><strong>DJ transmission pack</strong><i>Open room ↗</i></a>
+        <a href="/release-kit.html?audience=radio&slug=when-the-world-goes-dark"><span>For broadcasters</span><strong>Radio signal room</strong><i>Open room ↗</i></a>
+        <a href="/release-kit.html?audience=press&slug=when-the-world-goes-dark"><span>For storytellers</span><strong>Press field notes</strong><i>Open room ↗</i></a>
+        <button type="button" id="shareSignal"><span>For everyone</span><strong>Send the last light</strong><i>Share signal ↗</i></button>
+      </div>
+      <p class="share-notice" id="shareNotice" aria-live="polite"></p>
+    </section>
+  </main>
+
+  <footer>
+    <a href="/artists/owen-anthony">Owen Anthony artist room</a>
+    <p>When The World Goes Dark © 2026</p>
+    <a href="/">Return to HALO</a>
+  </footer>
+</body>
+</html>

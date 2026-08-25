@@ -1,0 +1,94 @@
+.mix-flightplan {
+  position: relative;
+  overflow: hidden;
+  margin: 18px 0;
+  border: 1px solid rgba(200, 255, 54, .34);
+  background: linear-gradient(135deg, rgba(200, 255, 54, .08), rgba(12, 15, 13, .97) 38%, rgba(72, 168, 255, .06));
+}
+
+.mix-flightplan::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(90deg, transparent 0 71px, rgba(255,255,255,.025) 72px);
+}
+
+.flightplan-head, .flightplan-body { position: relative; z-index: 1; }
+.flightplan-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 22px;
+  align-items: end;
+  padding: 28px;
+  border-bottom: 1px solid var(--line);
+}
+.flightplan-kicker { color: var(--acid); }
+.flightplan-head h2 { margin: 7px 0 8px; font: 400 clamp(28px, 4vw, 56px)/.94 "Archivo Black", sans-serif; letter-spacing: -.05em; text-transform: uppercase; }
+.flightplan-head p { max-width: 760px; margin: 0; color: #aab4aa; }
+.flightplan-progress { min-width: 180px; text-align: right; }
+.flightplan-progress strong { display: block; font: 500 34px/1 "DM Mono", monospace; color: var(--acid); }
+.flightplan-progress span { color: var(--muted); font: 500 10px/1.2 "DM Mono", monospace; letter-spacing: .12em; text-transform: uppercase; }
+.flightplan-meter { height: 5px; margin-top: 10px; overflow: hidden; background: rgba(255,255,255,.08); }
+.flightplan-meter span { display: block; width: var(--flight-progress, 20%); height: 100%; background: var(--acid); transition: transform .25s ease, width .25s ease; }
+
+.flightplan-body { display: grid; grid-template-columns: 230px minmax(0, 1fr); }
+.flightplan-nav { padding: 20px; border-right: 1px solid var(--line); }
+.flightplan-step {
+  width: 100%; display: grid; grid-template-columns: 30px 1fr; gap: 10px; align-items: center;
+  padding: 12px 10px; border: 0; border-bottom: 1px solid var(--line); background: transparent;
+  color: var(--muted); text-align: left; cursor: pointer;
+}
+.flightplan-step span { display: grid; place-items: center; width: 26px; height: 26px; border: 1px solid var(--line-strong); font: 500 10px "DM Mono", monospace; }
+.flightplan-step strong { font-size: 13px; }
+.flightplan-step[aria-selected="true"] { color: var(--paper); background: rgba(200,255,54,.07); }
+.flightplan-step[aria-selected="true"] span { border-color: var(--acid); background: var(--acid); color: var(--ink); }
+.flightplan-stage { display: none; padding: 28px; }
+.flightplan-stage.is-active { display: block; animation: flightplan-in .28s ease both; }
+@keyframes flightplan-in { from { opacity: 0; transform: translateY(8px); } }
+.flightplan-stage h3 { margin: 0 0 8px; font-size: clamp(24px, 3vw, 38px); letter-spacing: -.04em; }
+.flightplan-stage > p { margin: 0 0 22px; color: var(--muted); max-width: 780px; }
+.flightplan-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.flightplan-field { display: grid; gap: 7px; }
+.flightplan-field.wide { grid-column: 1 / -1; }
+.flightplan-field label, .flightplan-label { color: var(--muted); font: 500 10px "DM Mono", monospace; letter-spacing: .1em; text-transform: uppercase; }
+.flightplan-field input, .flightplan-field select, .flightplan-field textarea {
+  width: 100%; border: 1px solid var(--line); border-radius: 0; background: rgba(2,5,3,.6); color: var(--paper); padding: 12px 13px;
+}
+.flightplan-field textarea { min-height: 92px; resize: vertical; }
+.flightplan-actions { display: flex; flex-wrap: wrap; gap: 9px; margin-top: 20px; }
+.flightplan-button, .flightplan-link {
+  min-height: 42px; display: inline-flex; align-items: center; justify-content: center; padding: 0 15px;
+  border: 1px solid var(--line-strong); background: rgba(255,255,255,.035); color: var(--paper); text-decoration: none; cursor: pointer;
+}
+.flightplan-button.primary { border-color: var(--acid); background: var(--acid); color: var(--ink); font-weight: 700; }
+.flightplan-button:hover, .flightplan-link:hover { border-color: var(--acid); transform: translateY(-1px); }
+.flightplan-radar { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-top: 20px; }
+.radar-card { min-height: 124px; padding: 15px; border: 1px solid var(--line); background: rgba(0,0,0,.22); }
+.radar-card small { display: block; margin-bottom: 9px; color: var(--acid); font: 500 9px "DM Mono", monospace; letter-spacing: .1em; text-transform: uppercase; }
+.radar-card strong { display: block; line-height: 1.15; }
+.radar-card p { margin: 8px 0 0; color: var(--muted); font-size: 12px; }
+.radar-score { float: right; color: var(--paper); }
+.flightplan-gate { display: grid; grid-template-columns: auto 1fr; gap: 14px; align-items: center; margin-top: 18px; padding: 18px; border: 1px solid var(--line); }
+.flightplan-gate-mark { display: grid; place-items: center; width: 46px; height: 46px; border-radius: 50%; background: var(--orange); color: var(--ink); font-weight: 900; }
+.flightplan-gate.is-ready { border-color: rgba(200,255,54,.45); background: rgba(200,255,54,.06); }
+.flightplan-gate.is-ready .flightplan-gate-mark { background: var(--acid); }
+.flightplan-gate strong, .flightplan-gate span { display: block; }
+.flightplan-gate span { margin-top: 3px; color: var(--muted); font-size: 13px; }
+.flightplan-check { display: flex; gap: 10px; align-items: flex-start; margin-top: 18px; color: #cbd3cb; }
+.flightplan-check input { margin-top: 3px; accent-color: var(--acid); }
+.flightplan-status { display: block; min-height: 20px; margin-top: 13px; color: var(--muted); font: 500 11px "DM Mono", monospace; }
+
+@media (max-width: 900px) {
+  .flightplan-body { grid-template-columns: 1fr; }
+  .flightplan-nav { display: grid; grid-template-columns: repeat(5, minmax(120px, 1fr)); overflow-x: auto; border-right: 0; border-bottom: 1px solid var(--line); }
+  .flightplan-step { border-bottom: 0; border-right: 1px solid var(--line); }
+  .flightplan-radar { grid-template-columns: 1fr 1fr; }
+}
+@media (max-width: 620px) {
+  .flightplan-head { grid-template-columns: 1fr; padding: 22px; }
+  .flightplan-progress { text-align: left; }
+  .flightplan-stage { padding: 22px; }
+  .flightplan-grid, .flightplan-radar { grid-template-columns: 1fr; }
+}
+@media (prefers-reduced-motion: reduce) { .flightplan-stage.is-active { animation: none; } }

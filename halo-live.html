@@ -1,0 +1,596 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#11100d">
+  <link rel="manifest" href="/app.webmanifest">
+  <link rel="apple-touch-icon" href="/assets/halo-app-icon-180.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="HALO">
+  <meta name="description" content="HALO Live is the multi-platform broadcast command center for shows, fan participation, and future streaming channels.">
+  <title>HALO Live — Global Broadcast Command Center</title>
+  <meta property="og:title" content="HALO Live — Global Broadcast Command Center">
+  <meta property="og:description" content="The multi-platform broadcast command center for shows, fan participation, and streaming channels.">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="HALO Music World">
+  <meta property="og:image" content="https://halo-world-global-platform.netlify.app/assets/halo-app-icon-512.png">
+  <meta property="og:image:width" content="512">
+  <meta property="og:image:height" content="512">
+  <meta property="og:image:alt" content="HALO Music World logo">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:image" content="https://halo-world-global-platform.netlify.app/assets/halo-app-icon-512.png">
+  <meta name="twitter:image:alt" content="HALO Music World logo">
+  <script src="/stats.js" defer></script>
+  <script src="/site-monitor.js" defer></script>
+  <link rel="stylesheet" href="/accessibility.css">
+  <link rel="stylesheet" href="/halo-brand.css">
+  <script src="/accessibility.js" defer></script>
+  <link rel="stylesheet" href="/mobile-navigation.css">
+  <script src="/mobile-navigation.js" defer></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Antonio:wght@400;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Manrope:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --ink: #11100d;
+      --ink-deep: #080806;
+      --paper: #f1ead9;
+      --muted: #9d9789;
+      --line: rgba(241, 234, 217, .16);
+      --line-strong: rgba(241, 234, 217, .32);
+      --signal: #e8ff5a;
+      --coral: #e97655;
+      --aqua: #75c9bd;
+      --gold: #e0ae4b;
+      --panel: rgba(23, 22, 18, .92);
+      --mono: "IBM Plex Mono", monospace;
+      --display: "Antonio", sans-serif;
+      --body: "Manrope", sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+    html { color-scheme: dark; scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      min-width: 320px;
+      color: var(--paper);
+      background:
+        radial-gradient(circle at 80% -10%, rgba(232, 255, 90, .13), transparent 34rem),
+        linear-gradient(rgba(255,255,255,.018) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255,255,255,.018) 1px, transparent 1px),
+        var(--ink);
+      background-size: auto, 42px 42px, 42px 42px, auto;
+      font-family: var(--body);
+      overflow-x: hidden;
+    }
+
+    body::after {
+      content: "";
+      position: fixed;
+      inset: 0;
+      z-index: 30;
+      pointer-events: none;
+      opacity: .045;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.8'/%3E%3C/svg%3E");
+    }
+
+    a { color: inherit; text-decoration: none; }
+    button { color: inherit; font: inherit; }
+    button:focus-visible, a:focus-visible { outline: 2px solid var(--signal); outline-offset: 4px; }
+    .shell { width: min(1480px, 100%); margin: 0 auto; padding: 16px; }
+    .mono { font-family: var(--mono); }
+    .eyebrow { margin: 0; color: var(--muted); font: 600 10px/1.4 var(--mono); letter-spacing: .19em; text-transform: uppercase; }
+
+    .topbar {
+      position: sticky;
+      top: 10px;
+      z-index: 20;
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      align-items: center;
+      min-height: 66px;
+      border: 1px solid var(--line);
+      background: rgba(14, 13, 11, .88);
+      backdrop-filter: blur(18px);
+      box-shadow: 0 22px 70px rgba(0,0,0,.35);
+    }
+
+    .brand { display: flex; align-items: stretch; min-height: 64px; border-right: 1px solid var(--line); }
+    .brand-mark { width: 64px; display: grid; place-items: center; background: var(--signal); color: var(--ink); }
+    .brand-mark svg { width: 34px; }
+    .brand-copy { padding: 10px 16px; display: grid; align-content: center; }
+    .brand-copy strong { font: 700 24px/.9 var(--display); letter-spacing: -.02em; }
+    .brand-copy small { margin-top: 5px; color: var(--muted); font: 500 9px var(--mono); letter-spacing: .14em; text-transform: uppercase; }
+    .broadcast-strip { min-width: 0; display: flex; align-items: center; gap: 12px; padding: 0 20px; }
+    .broadcast-strip strong { font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .broadcast-strip span:last-child { color: var(--muted); font: 500 9px var(--mono); text-transform: uppercase; }
+    .pulse { width: 9px; height: 9px; flex: 0 0 auto; border-radius: 50%; background: var(--coral); animation: pulse 1.9s infinite; }
+    .nav-actions { display: flex; gap: 8px; padding: 0 12px; }
+    .nav-link, .button {
+      border: 1px solid var(--line);
+      background: rgba(255,255,255,.025);
+      min-height: 40px;
+      padding: 0 15px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      font: 600 10px var(--mono);
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: transform .2s ease, border-color .2s ease, background .2s ease;
+    }
+    .nav-link:hover, .button:hover { transform: translateY(-2px); border-color: var(--line-strong); background: rgba(255,255,255,.06); }
+    .button.primary { background: var(--signal); border-color: var(--signal); color: var(--ink); font-weight: 700; }
+    .button.dark { background: var(--ink-deep); }
+
+    .hero {
+      min-height: 630px;
+      display: grid;
+      grid-template-columns: minmax(0, 1.25fr) minmax(340px, .75fr);
+      border: 1px solid var(--line);
+      border-top: 0;
+      overflow: hidden;
+    }
+    .hero-copy { position: relative; padding: clamp(54px, 7vw, 104px) clamp(26px, 5vw, 76px); display: flex; flex-direction: column; justify-content: space-between; }
+    .hero-copy::before { content: "LIVE"; position: absolute; right: -1rem; bottom: -4rem; color: rgba(241,234,217,.025); font: 700 19rem/.8 var(--display); pointer-events: none; }
+    .hero h1 { position: relative; z-index: 1; max-width: 850px; margin: 18px 0 24px; font: 700 clamp(64px, 9.4vw, 150px)/.78 var(--display); letter-spacing: -.055em; text-transform: uppercase; }
+    .hero h1 span { display: block; color: var(--signal); }
+    .hero-lede { position: relative; z-index: 1; max-width: 680px; margin: 0; color: #c7c0af; font-size: clamp(15px, 1.3vw, 19px); line-height: 1.75; }
+    .hero-actions { position: relative; z-index: 1; display: flex; flex-wrap: wrap; gap: 10px; margin-top: 34px; }
+    .hero-foot { position: relative; z-index: 1; display: flex; flex-wrap: wrap; gap: 28px; margin-top: 70px; }
+    .hero-stat strong { display: block; font: 600 30px/1 var(--display); }
+    .hero-stat span { color: var(--muted); font: 500 9px var(--mono); letter-spacing: .12em; text-transform: uppercase; }
+
+    .signal-map { position: relative; padding: 24px; border-left: 1px solid var(--line); background: linear-gradient(150deg, rgba(232,255,90,.08), rgba(8,8,6,.7) 46%); display: grid; align-content: center; }
+    .orbit { position: relative; aspect-ratio: 1; max-width: 520px; width: 100%; margin: auto; display: grid; place-items: center; }
+    .orbit::before, .orbit::after { content: ""; position: absolute; border: 1px solid var(--line); border-radius: 50%; }
+    .orbit::before { inset: 8%; }
+    .orbit::after { inset: 23%; border-style: dashed; animation: rotate 30s linear infinite; }
+    .core { z-index: 2; width: 116px; aspect-ratio: 1; border-radius: 50%; display: grid; place-items: center; text-align: center; color: var(--ink); background: var(--signal); box-shadow: 0 0 0 15px rgba(232,255,90,.07); font: 700 22px/.88 var(--display); text-transform: uppercase; }
+    .platform-node { position: absolute; z-index: 3; min-width: 94px; padding: 10px 12px; border: 1px solid var(--line-strong); background: var(--ink-deep); box-shadow: 0 12px 28px rgba(0,0,0,.32); font: 600 10px var(--mono); text-align: center; text-transform: uppercase; }
+    .platform-node::before { content: ""; display: inline-block; width: 6px; height: 6px; margin-right: 7px; border-radius: 50%; background: var(--aqua); }
+    .n1 { top: 4%; left: 50%; transform: translateX(-50%); }
+    .n2 { top: 27%; right: 0; }
+    .n3 { bottom: 15%; right: 7%; }
+    .n4 { bottom: 2%; left: 33%; }
+    .n5 { bottom: 23%; left: 0; }
+    .n6 { top: 23%; left: 2%; }
+
+    .ticker { overflow: hidden; border: 1px solid var(--line); border-top: 0; background: var(--signal); color: var(--ink); }
+    .ticker-track { width: max-content; padding: 10px 0; display: flex; animation: ticker 26s linear infinite; }
+    .ticker-track span { padding: 0 28px; font: 700 10px var(--mono); letter-spacing: .13em; text-transform: uppercase; }
+    .ticker-track span::after { content: "+"; margin-left: 56px; }
+
+    .section { padding: clamp(72px, 9vw, 128px) clamp(12px, 3vw, 36px); }
+    .section-head { display: grid; grid-template-columns: minmax(0, 1fr) minmax(260px, 460px); gap: 40px; align-items: end; margin-bottom: 44px; }
+    .section-head h2 { margin: 10px 0 0; max-width: 850px; font: 700 clamp(46px, 7vw, 96px)/.85 var(--display); letter-spacing: -.045em; text-transform: uppercase; }
+    .section-head p { margin: 0; color: var(--muted); line-height: 1.7; }
+
+    .platform-grid { display: grid; grid-template-columns: repeat(12, 1fr); border-top: 1px solid var(--line); border-left: 1px solid var(--line); }
+    .platform-card { min-height: 260px; padding: 24px; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); background: var(--panel); display: flex; flex-direction: column; transition: background .25s ease, transform .25s ease; }
+    .platform-card:hover { position: relative; z-index: 2; transform: translateY(-5px); background: #201f19; }
+    .platform-card:nth-child(1), .platform-card:nth-child(2) { grid-column: span 6; }
+    .platform-card:nth-child(n+3) { grid-column: span 3; min-height: 230px; }
+    .platform-top { display: flex; justify-content: space-between; gap: 20px; align-items: start; }
+    .platform-index { color: var(--muted); font: 500 10px var(--mono); }
+    .platform-state { display: inline-flex; align-items: center; gap: 6px; color: var(--aqua); font: 600 9px var(--mono); text-transform: uppercase; }
+    .platform-state::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+    .platform-card h3 { margin: auto 0 6px; font: 600 clamp(30px, 4vw, 54px)/1 var(--display); text-transform: uppercase; }
+    .platform-card p { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.6; }
+    .platform-link { margin-top: 18px; align-self: flex-start; color: var(--signal); font: 600 10px var(--mono); letter-spacing: .08em; text-transform: uppercase; border-bottom: 1px solid currentColor; }
+    .platform-link:hover { color: var(--paper); }
+    .platform-card.future { background: transparent; border-style: dashed; }
+    .platform-card.future .platform-state { color: var(--gold); }
+
+    .architecture { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: var(--line); border: 1px solid var(--line); }
+    .flow { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(7, 1fr); align-items: center; gap: 10px; padding: clamp(28px, 4vw, 54px); background: var(--ink-deep); }
+    .flow-node { min-height: 126px; border: 1px solid var(--line); padding: 18px; display: grid; align-content: space-between; background: rgba(255,255,255,.025); }
+    .flow-node.accent { background: var(--signal); color: var(--ink); border-color: var(--signal); }
+    .flow-node b { font: 600 21px/1 var(--display); text-transform: uppercase; }
+    .flow-node small { color: inherit; opacity: .65; font: 500 9px/1.5 var(--mono); text-transform: uppercase; }
+    .arrow { text-align: center; color: var(--signal); font: 600 22px var(--mono); }
+    .architecture-copy { padding: clamp(32px, 5vw, 64px); background: var(--panel); }
+    .architecture-copy h3 { margin: 12px 0 18px; font: 600 42px/.95 var(--display); text-transform: uppercase; }
+    .architecture-copy p { color: var(--muted); line-height: 1.75; }
+    .architecture-copy ul { margin: 28px 0 0; padding: 0; list-style: none; }
+    .architecture-copy li { padding: 13px 0; border-top: 1px solid var(--line); font-size: 13px; }
+    .architecture-copy li::before { content: "//"; margin-right: 12px; color: var(--signal); font-family: var(--mono); }
+
+    .broadcast-console { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(300px, .85fr); border: 1px solid var(--line); background: var(--ink-deep); }
+    .console-main { padding: clamp(34px, 5vw, 72px); border-right: 1px solid var(--line); }
+    .console-main h2 { max-width: 850px; margin: 12px 0 18px; font: 700 clamp(52px, 8vw, 112px)/.82 var(--display); letter-spacing: -.045em; text-transform: uppercase; }
+    .console-main > p { max-width: 720px; color: var(--muted); line-height: 1.7; }
+    .console-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; margin-top: 34px; }
+    .broadcast-button { min-width: min(100%, 330px); min-height: 66px; border: 0; background: var(--signal); color: var(--ink); font: 700 15px var(--mono); letter-spacing: .08em; text-transform: uppercase; cursor: pointer; transition: transform .2s ease, filter .2s ease, background .2s ease; }
+    .broadcast-button:hover:not(:disabled) { transform: translateY(-3px); filter: brightness(1.04); }
+    .broadcast-button:disabled { cursor: wait; opacity: .62; }
+    .broadcast-button.live { background: var(--coral); }
+    .console-status { min-height: 22px; margin: 0; color: var(--muted); font: 500 11px/1.6 var(--mono); }
+    .console-status[data-state="live"] { color: var(--signal); }
+    .console-status[data-state="error"] { color: #ff9b82; }
+    .console-side { padding: clamp(28px, 4vw, 54px); background: var(--panel); }
+    .console-side h3 { margin: 12px 0 24px; font: 600 38px/.95 var(--display); text-transform: uppercase; }
+    .destination-list { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
+    .destination { display: flex; align-items: center; justify-content: space-between; gap: 20px; min-height: 54px; padding: 0 16px; border: 1px solid var(--line); background: rgba(255,255,255,.025); font-size: 13px; }
+    .destination span:last-child { color: var(--muted); font: 600 9px var(--mono); letter-spacing: .08em; text-transform: uppercase; }
+    .destination span:last-child::before { content: ""; display: inline-block; width: 7px; height: 7px; margin-right: 8px; border-radius: 50%; background: var(--muted); }
+    .destination.ready span:last-child { color: var(--aqua); }
+    .destination.ready span:last-child::before { background: var(--aqua); }
+    .destination.live span:last-child { color: var(--signal); }
+    .destination.live span:last-child::before { background: var(--signal); box-shadow: 0 0 0 5px rgba(232,255,90,.08); }
+    .configuration-note { margin: 20px 0 0; color: var(--muted); font-size: 11px; line-height: 1.65; }
+
+    .runway { display: grid; grid-template-columns: .85fr 1.15fr; border: 1px solid var(--line); background: var(--panel); }
+    .runway-intro { padding: clamp(34px, 5vw, 70px); border-right: 1px solid var(--line); background: var(--signal); color: var(--ink); }
+    .runway-intro .eyebrow { color: rgba(17,16,13,.62); }
+    .runway-intro h2 { margin: 12px 0 22px; font: 700 clamp(56px, 7vw, 104px)/.82 var(--display); letter-spacing: -.04em; text-transform: uppercase; }
+    .runway-intro p { max-width: 440px; line-height: 1.7; }
+    .checklist { padding: clamp(22px, 4vw, 54px); }
+    .check { display: grid; grid-template-columns: 48px 1fr auto; gap: 16px; align-items: center; width: 100%; padding: 18px 0; border: 0; border-bottom: 1px solid var(--line); background: transparent; text-align: left; cursor: pointer; }
+    .check-number { color: var(--muted); font: 500 10px var(--mono); }
+    .check strong { display: block; font-size: 14px; }
+    .check small { display: block; margin-top: 4px; color: var(--muted); font-size: 11px; }
+    .check-box { width: 24px; height: 24px; border: 1px solid var(--line-strong); display: grid; place-items: center; color: transparent; transition: .2s ease; }
+    .check[aria-pressed="true"] .check-box { color: var(--ink); background: var(--signal); border-color: var(--signal); }
+    .check[aria-pressed="true"] strong { text-decoration: line-through; color: var(--muted); }
+    .progress-wrap { display: flex; align-items: center; gap: 14px; margin-top: 26px; }
+    .progress { flex: 1; height: 6px; background: rgba(255,255,255,.08); overflow: hidden; }
+    .progress span { display: block; width: 0; height: 100%; background: var(--signal); transition: width .35s ease; }
+    .progress-label { min-width: 74px; color: var(--muted); font: 600 10px var(--mono); text-transform: uppercase; }
+
+    .fan-grid { display: grid; grid-template-columns: repeat(12, 1fr); gap: 14px; }
+    .fan-card { min-height: 260px; padding: 28px; border: 1px solid var(--line); background: var(--panel); display: flex; flex-direction: column; justify-content: space-between; }
+    .fan-card:nth-child(1) { grid-column: span 7; min-height: 360px; background: var(--coral); color: var(--ink); transform: rotate(-1deg); }
+    .fan-card:nth-child(2) { grid-column: span 5; }
+    .fan-card:nth-child(3), .fan-card:nth-child(4), .fan-card:nth-child(5) { grid-column: span 4; }
+    .fan-card .tag { font: 600 9px var(--mono); letter-spacing: .14em; text-transform: uppercase; opacity: .7; }
+    .fan-card h3 { max-width: 620px; margin: 40px 0 12px; font: 600 clamp(34px, 5vw, 66px)/.91 var(--display); text-transform: uppercase; }
+    .fan-card p { max-width: 520px; margin: 0; color: var(--muted); font-size: 13px; line-height: 1.7; }
+    .fan-card:first-child p { color: rgba(17,16,13,.72); }
+
+    .cta { position: relative; overflow: hidden; margin: 0 clamp(12px, 3vw, 36px) 36px; padding: clamp(54px, 8vw, 110px); border: 1px solid var(--line); background: var(--ink-deep); text-align: center; }
+    .cta::before { content: "ON AIR"; position: absolute; inset: 50% auto auto 50%; transform: translate(-50%, -50%); color: rgba(255,255,255,.025); font: 700 clamp(120px, 24vw, 340px)/.7 var(--display); white-space: nowrap; }
+    .cta > * { position: relative; z-index: 1; }
+    .cta h2 { max-width: 920px; margin: 16px auto 24px; font: 700 clamp(54px, 8vw, 112px)/.84 var(--display); letter-spacing: -.04em; text-transform: uppercase; }
+    .cta p { max-width: 700px; margin: 0 auto; color: var(--muted); line-height: 1.7; }
+    .cta-actions { margin-top: 32px; display: flex; justify-content: center; flex-wrap: wrap; gap: 10px; }
+    .copy-feedback { min-height: 20px; margin-top: 14px; color: var(--aqua); font: 500 10px var(--mono); text-transform: uppercase; }
+
+    footer { display: flex; justify-content: space-between; gap: 20px; padding: 26px 8px 12px; color: var(--muted); font: 500 9px var(--mono); letter-spacing: .1em; text-transform: uppercase; }
+    .social-links { display: flex; flex-wrap: wrap; gap: 14px; }
+    .social-links a { color: var(--paper); transition: color .2s ease; }
+    .social-links a:hover { color: var(--signal); }
+
+    .reveal { opacity: 0; transform: translateY(22px); transition: opacity .7s ease, transform .7s ease; }
+    .reveal.visible { opacity: 1; transform: none; }
+    @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(233,118,85,.5); } 70% { box-shadow: 0 0 0 10px rgba(233,118,85,0); } 100% { box-shadow: 0 0 0 0 rgba(233,118,85,0); } }
+    @keyframes rotate { to { transform: rotate(360deg); } }
+    @keyframes ticker { to { transform: translateX(-50%); } }
+
+    @media (max-width: 1050px) {
+      .topbar { grid-template-columns: auto 1fr; }
+      .nav-actions { display: none; }
+      .hero { grid-template-columns: 1fr; }
+      .signal-map { min-height: 500px; border-left: 0; border-top: 1px solid var(--line); }
+      .platform-card:nth-child(n) { grid-column: span 6; }
+      .flow { grid-template-columns: 1fr; }
+      .arrow { transform: rotate(90deg); }
+      .flow-node { min-height: 105px; }
+      .fan-card:nth-child(n) { grid-column: span 6; transform: none; }
+    }
+
+    @media (max-width: 720px) {
+      .shell { padding: 8px; }
+      .topbar { top: 5px; }
+      .brand-copy { display: none; }
+      .broadcast-strip { padding: 0 12px; }
+      .broadcast-strip span:last-child { display: none; }
+      .hero { min-height: auto; }
+      .hero-copy { min-height: 600px; }
+      .hero h1 { font-size: clamp(62px, 22vw, 100px); }
+      .signal-map { min-height: 390px; }
+      .platform-node { min-width: 78px; padding: 8px; font-size: 8px; }
+      .section-head { grid-template-columns: 1fr; }
+      .platform-card:nth-child(n) { grid-column: span 12; }
+      .architecture, .runway, .broadcast-console { grid-template-columns: 1fr; }
+      .architecture-copy, .runway-intro, .console-main { border-right: 0; border-bottom: 1px solid var(--line); }
+      .fan-card:nth-child(n) { grid-column: span 12; }
+      .check { grid-template-columns: 34px 1fr auto; }
+      .cta { margin-inline: 8px; padding-inline: 24px; }
+      footer { flex-direction: column; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      html { scroll-behavior: auto; }
+      *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+      .reveal { opacity: 1; transform: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <header class="topbar">
+      <a class="brand" href="index.html" aria-label="Return to HALO Music World">
+        <span class="brand-mark">
+          <img class="halo-brand-image" src="/assets/halo-logo-mark.webp" alt="">
+        </span>
+        <span class="brand-copy"><strong>HALO LIVE</strong><small>Global broadcast command</small></span>
+      </a>
+      <div class="broadcast-strip" aria-live="polite">
+        <span class="pulse" aria-hidden="true"></span>
+        <strong>Broadcast room ready for account connections</strong>
+        <span>One show · every screen · owned fan home</span>
+      </div>
+      <nav class="nav-actions" aria-label="Primary navigation">
+        <a class="nav-link" href="index.html">World portal</a>
+        <a class="nav-link" href="dj-deck.html">DJ deck</a>
+        <a class="nav-link" href="#launch-runway">Go-live runway</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="hero" aria-labelledby="live-title">
+        <div class="hero-copy">
+          <div>
+            <p class="eyebrow">HALO global signal / broadcast concept 01</p>
+            <h1 id="live-title">One show.<span>Every screen.</span></h1>
+            <p class="hero-lede">Produce one unforgettable HALO performance, send it through a multistream relay, and meet fans on YouTube, TikTok, Instagram, Twitch, Facebook, X, the HALO website, and every channel that comes next.</p>
+            <div class="hero-actions">
+              <a class="button primary" href="#launch-runway" data-stat-event="open_live_runway" data-stat-target="halo-live-hero">Build the broadcast</a>
+              <button class="button dark copy-link" type="button">Copy fan room link</button>
+            </div>
+          </div>
+          <div class="hero-foot" aria-label="Broadcast model summary">
+            <div class="hero-stat"><strong>01</strong><span>Master production</span></div>
+            <div class="hero-stat"><strong>07+</strong><span>Fan destinations</span></div>
+            <div class="hero-stat"><strong>∞</strong><span>Future channels</span></div>
+          </div>
+        </div>
+        <aside class="signal-map" aria-label="HALO broadcast distribution map">
+          <div class="orbit">
+            <div class="core">HALO<br>Master<br>Feed</div>
+            <span class="platform-node n1">YouTube</span>
+            <span class="platform-node n2">TikTok</span>
+            <span class="platform-node n3">Instagram</span>
+            <span class="platform-node n4">Twitch</span>
+            <span class="platform-node n5">Facebook</span>
+            <span class="platform-node n6">HALO.world</span>
+          </div>
+        </aside>
+      </section>
+
+      <div class="ticker" aria-hidden="true"><div class="ticker-track">
+        <span>Live music</span><span>Fan votes</span><span>Backstage access</span><span>Song requests</span><span>Global chat</span><span>VIP drops</span>
+        <span>Live music</span><span>Fan votes</span><span>Backstage access</span><span>Song requests</span><span>Global chat</span><span>VIP drops</span>
+      </div></div>
+
+      <section class="section reveal" aria-labelledby="destinations-title">
+        <div class="section-head">
+          <div><p class="eyebrow">Distribution board</p><h2 id="destinations-title">Meet every fan where they already are.</h2></div>
+          <p>Each destination has a different strength. HALO keeps one master show and adapts the framing, captions, calls to action, and fan interaction for every audience.</p>
+        </div>
+        <div class="platform-grid">
+          <article class="platform-card"><div class="platform-top"><span class="platform-index">CH / 01</span><span class="platform-state">Connected</span></div><h3>YouTube</h3><p>Primary long-form broadcast, replay home, premieres, and TV-friendly viewing.</p><a class="platform-link" href="https://www.youtube.com/@halo-music-world" target="_blank" rel="noopener noreferrer" data-stat-event="open_social_profile" data-stat-target="youtube_live_card">Open @halo-music-world ↗</a></article>
+          <article class="platform-card"><div class="platform-top"><span class="platform-index">CH / 02</span><span class="platform-state">Connected</span></div><h3>TikTok</h3><p>Vertical discovery feed, fast audience growth, and high-energy live moments.</p><a class="platform-link" href="https://www.tiktok.com/@halomusicworldhome" target="_blank" rel="noopener noreferrer" data-stat-event="open_social_profile" data-stat-target="tiktok_live_card">Open @halomusicworldhome ↗</a></article>
+          <article class="platform-card"><div class="platform-top"><span class="platform-index">CH / 03</span><span class="platform-state">Connect</span></div><h3>Instagram</h3><p>Community-first vertical live, artist collaborations, and Stories promotion.</p></article>
+          <article class="platform-card"><div class="platform-top"><span class="platform-index">CH / 04</span><span class="platform-state">Connect</span></div><h3>Twitch</h3><p>Long sessions, persistent chat culture, raids, and creator collaborations.</p></article>
+          <article class="platform-card"><div class="platform-top"><span class="platform-index">CH / 05</span><span class="platform-state">Connect</span></div><h3>Facebook</h3><p>Groups, local communities, event pages, and broad multi-generation reach.</p></article>
+          <article class="platform-card"><div class="platform-top"><span class="platform-index">CH / 06</span><span class="platform-state">Connect</span></div><h3>X Live</h3><p>Real-time conversation, culture commentary, and rapid event discovery.</p></article>
+          <article class="platform-card"><div class="platform-top"><span class="platform-index">CH / 07</span><span class="platform-state">Owned</span></div><h3>HALO</h3><p>The permanent fan room: schedule, links, VIP access, replays, and community calls to action.</p></article>
+          <article class="platform-card future"><div class="platform-top"><span class="platform-index">CH / NEXT</span><span class="platform-state">Expandable</span></div><h3>Future feed</h3><p>Add the next streaming destination without rebuilding the full show.</p></article>
+        </div>
+      </section>
+
+      <section class="section reveal" aria-labelledby="architecture-title">
+        <div class="section-head">
+          <div><p class="eyebrow">Broadcast architecture</p><h2 id="architecture-title">One clean signal. Distributed with purpose.</h2></div>
+          <p>HALO becomes the owned home, not another platform dependency. The social networks bring discovery; the website gives every fan one reliable place to return.</p>
+        </div>
+        <div class="architecture">
+          <div class="flow" aria-label="Recommended broadcast signal flow">
+            <div class="flow-node"><b>Cameras + DJ audio</b><small>Performance source</small></div><span class="arrow">→</span>
+            <div class="flow-node"><b>OBS or studio encoder</b><small>Scenes, mix, captions</small></div><span class="arrow">→</span>
+            <div class="flow-node accent"><b>Multistream relay</b><small>Secure platform destinations</small></div><span class="arrow">→</span>
+            <div class="flow-node"><b>Fans everywhere</b><small>Social + HALO room</small></div>
+          </div>
+          <article class="architecture-copy">
+            <p class="eyebrow">Production layer</p>
+            <h3>Build one master show</h3>
+            <p>Mix DJ audio, microphones, cameras, graphics, sponsor moments, and captions in a dedicated encoder. Keep a clean recording locally for clips and replay.</p>
+            <ul><li>Landscape master for YouTube, Twitch, Facebook, and HALO</li><li>Vertical-safe camera composition for TikTok and Instagram</li><li>Separate music, microphone, and guest audio controls</li></ul>
+          </article>
+          <article class="architecture-copy">
+            <p class="eyebrow">Distribution layer</p>
+            <h3>Relay, monitor, recover</h3>
+            <p>Connect eligible platform accounts inside a reputable multistream provider. Keep stream keys and credentials there—not in this public website—and monitor every destination during the show.</p>
+            <ul><li>Test with unlisted or private destinations first</li><li>Assign one producer to quality and one host to fans</li><li>Keep a backup internet path and local recording</li></ul>
+          </article>
+        </div>
+      </section>
+
+      <section class="section reveal" id="launch-runway" aria-labelledby="runway-title">
+        <div class="runway">
+          <div class="runway-intro">
+            <p class="eyebrow">Interactive rehearsal board</p>
+            <h2 id="runway-title">The go-live runway.</h2>
+            <p>Run this sequence before every broadcast. The checklist is intentionally reset on each visit so every show gets a fresh safety check.</p>
+          </div>
+          <div class="checklist">
+            <button class="check" type="button" aria-pressed="false"><span class="check-number">01</span><span><strong>Confirm platform access</strong><small>Live permissions, account standing, titles, thumbnails, and destinations.</small></span><span class="check-box">✓</span></button>
+            <button class="check" type="button" aria-pressed="false"><span class="check-number">02</span><span><strong>Build the show scene package</strong><small>Landscape master, vertical-safe framing, lower thirds, holding screen, and end card.</small></span><span class="check-box">✓</span></button>
+            <button class="check" type="button" aria-pressed="false"><span class="check-number">03</span><span><strong>Clear music and guest rights</strong><small>Confirm performance permissions, releases, and each platform’s current music rules.</small></span><span class="check-box">✓</span></button>
+            <button class="check" type="button" aria-pressed="false"><span class="check-number">04</span><span><strong>Run a private technical rehearsal</strong><small>Check sync, bitrate, vertical crop, captions, chat moderation, and backup internet.</small></span><span class="check-box">✓</span></button>
+            <button class="check" type="button" aria-pressed="false"><span class="check-number">05</span><span><strong>Open the HALO fan room</strong><small>Publish the universal link, schedule, platform choices, VIP offer, and replay plan.</small></span><span class="check-box">✓</span></button>
+            <button class="check" type="button" aria-pressed="false"><span class="check-number">06</span><span><strong>Start local recording, then broadcast</strong><small>Roll the backup first, verify the master feed, then release destinations one by one.</small></span><span class="check-box">✓</span></button>
+            <div class="progress-wrap"><div class="progress" aria-hidden="true"><span id="progressFill"></span></div><span class="progress-label" id="progressLabel">0 / 6 ready</span></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="section reveal" id="broadcast-console" aria-labelledby="console-title">
+        <div class="broadcast-console">
+          <div class="console-main">
+            <p class="eyebrow">Configured relay control</p>
+            <h2 id="console-title">Broadcast to every connected destination.</h2>
+            <p>Start the encoder, confirm the preview has clean picture and sound, then use one control to ask the configured multistream relay to send the production feed to each enabled channel.</p>
+            <div class="console-actions">
+              <button class="broadcast-button" id="broadcastButton" type="button" disabled>Checking relay…</button>
+              <p class="console-status" id="broadcastStatus" data-state="loading" aria-live="polite">Reading connected destinations.</p>
+            </div>
+          </div>
+          <aside class="console-side" aria-labelledby="destinations-title">
+            <p class="eyebrow">Connected relay destinations</p>
+            <h3 id="destinations-title">Every channel in one command.</h3>
+            <ul class="destination-list" id="destinationList"><li class="destination"><span>Relay</span><span>Checking</span></li></ul>
+            <p class="configuration-note" id="configurationNote">Stream keys and platform credentials remain inside the private relay—not in this page or browser.</p>
+          </aside>
+        </div>
+      </section>
+
+      <section class="section reveal" aria-labelledby="fans-title">
+        <div class="section-head">
+          <div><p class="eyebrow">Beyond the stream</p><h2 id="fans-title">Turn viewers into part of the show.</h2></div>
+          <p>The next level is not simply broadcasting to more apps. It is giving fans a reason to move between the live show, the HALO fan room, the DJ deck, VIP access, and the next event.</p>
+        </div>
+        <div class="fan-grid">
+          <article class="fan-card"><span class="tag">Signature moment / live decision</span><div><h3>Let fans choose the next move.</h3><p>Run timed votes for the next genre, camera angle, guest challenge, city shout-out, or encore. Announce the result on every feed and reveal the deeper interaction inside HALO.</p></div></article>
+          <article class="fan-card"><span class="tag">01 / Universal room</span><div><h3>One link that never changes.</h3><p>Every bio, QR code, post, and partner sends fans here. HALO then routes them to their preferred live destination.</p></div></article>
+          <article class="fan-card"><span class="tag">02 / Live crew</span><div><h3>Host every chat.</h3><p>Assign moderators by platform and bring the best comments back into the main show.</p></div></article>
+          <article class="fan-card"><span class="tag">03 / VIP layer</span><div><h3>Reward the real ones.</h3><p>Offer soundcheck access, aftershow rooms, stems, early tracks, and limited drops.</p></div></article>
+          <article class="fan-card"><span class="tag">04 / Replay engine</span><div><h3>One show becomes a week.</h3><p>Cut the local master into vertical highlights, full replays, fan reactions, and the next-show trailer.</p></div></article>
+        </div>
+      </section>
+
+      <section class="cta reveal" aria-labelledby="cta-title">
+        <p class="eyebrow">The permanent fan destination</p>
+        <h2 id="cta-title">The platforms change. The HALO room stays.</h2>
+        <p>Use this page as the broadcast plan now, then connect real account destinations, a schedule, embedded players, and fan participation as the production setup comes online.</p>
+        <div class="cta-actions"><button class="button primary copy-link" type="button">Copy this live room</button><a class="button" href="dj-deck.html">Open the DJ deck</a><a class="button" href="vip_launchpad.html">Enter VIP launchpad</a></div>
+        <div class="copy-feedback" id="copyFeedback" aria-live="polite"></div>
+      </section>
+    </main>
+
+    <footer><span>© 2026 HALO Music World Systems LLC</span><nav class="social-links" aria-label="HALO social profiles"><a href="https://www.youtube.com/@halo-music-world" target="_blank" rel="noopener noreferrer" data-stat-event="open_social_profile" data-stat-target="youtube_live_footer">YouTube ↗</a><a href="https://www.tiktok.com/@halomusicworldhome" target="_blank" rel="noopener noreferrer" data-stat-event="open_social_profile" data-stat-target="tiktok_live_footer">TikTok ↗</a></nav><span>Global signal / artist-led connected future</span></footer>
+  </div>
+
+  <script>
+    const checks = [...document.querySelectorAll('.check')];
+    const progressFill = document.getElementById('progressFill');
+    const progressLabel = document.getElementById('progressLabel');
+    const copyFeedback = document.getElementById('copyFeedback');
+    const broadcastButton = document.getElementById('broadcastButton');
+    const broadcastStatus = document.getElementById('broadcastStatus');
+    const destinationList = document.getElementById('destinationList');
+    const configurationNote = document.getElementById('configurationNote');
+    let broadcastState = 'offline';
+    let broadcastConfig = { configured: false, destinations: [], stopSupported: false };
+
+    function updateProgress() {
+      const complete = checks.filter(check => check.getAttribute('aria-pressed') === 'true').length;
+      progressFill.style.width = `${(complete / checks.length) * 100}%`;
+      progressLabel.textContent = `${complete} / ${checks.length} ready`;
+    }
+
+    checks.forEach(check => check.addEventListener('click', () => {
+      check.setAttribute('aria-pressed', check.getAttribute('aria-pressed') !== 'true' ? 'true' : 'false');
+      updateProgress();
+    }));
+
+    document.querySelectorAll('.copy-link').forEach(button => button.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(window.location.href.split('#')[0]);
+        copyFeedback.textContent = 'Live room link copied — ready to share.';
+      } catch {
+        copyFeedback.textContent = 'Copy the address from your browser to share this room.';
+      }
+    }));
+
+    function renderDestinations(state = broadcastState) {
+      destinationList.replaceChildren(...broadcastConfig.destinations.map(name => {
+        const item = document.createElement('li');
+        const label = document.createElement('span');
+        const status = document.createElement('span');
+        item.className = `destination ${state === 'live' ? 'live' : broadcastConfig.configured ? 'ready' : ''}`;
+        label.textContent = name;
+        status.textContent = state === 'live' ? 'Live' : broadcastConfig.configured ? 'Connected' : 'Setup needed';
+        item.append(label, status);
+        return item;
+      }));
+    }
+
+    function updateBroadcastControl(state, message) {
+      broadcastState = state;
+      broadcastStatus.dataset.state = state;
+      broadcastStatus.textContent = message;
+      broadcastButton.disabled = state === 'loading' || !broadcastConfig.configured || (state === 'live' && !broadcastConfig.stopSupported);
+      broadcastButton.classList.toggle('live', state === 'live');
+      broadcastButton.textContent = state === 'live' && broadcastConfig.stopSupported ? 'End broadcast everywhere' : 'Broadcast everywhere';
+      renderDestinations(state);
+    }
+
+    async function loadBroadcastConfig() {
+      try {
+        const response = await fetch('/api/broadcast-control', { headers: { Accept: 'application/json' } });
+        if (!response.ok) throw new Error('Relay configuration could not be read.');
+        broadcastConfig = await response.json();
+        if (!Array.isArray(broadcastConfig.destinations) || !broadcastConfig.destinations.length) broadcastConfig.destinations = ['YouTube', 'TikTok'];
+
+        if (broadcastConfig.configured) {
+          configurationNote.textContent = 'Stream keys and platform credentials remain inside the private relay—not in this page or browser.';
+          updateBroadcastControl('offline', `${broadcastConfig.destinations.length} destinations connected. Start the encoder, then press once.`);
+        } else {
+          configurationNote.textContent = 'An administrator must add the secure relay webhook and control code in Netlify before this button can go live.';
+          updateBroadcastControl('error', 'Relay setup is required before broadcasting.');
+        }
+      } catch (error) {
+        broadcastConfig.destinations = ['YouTube', 'TikTok'];
+        updateBroadcastControl('error', error instanceof Error ? error.message : 'Relay configuration could not be read.');
+      }
+    }
+
+    broadcastButton.addEventListener('click', async () => {
+      const action = broadcastState === 'live' && broadcastConfig.stopSupported ? 'stop' : 'start';
+      const controlCode = window.prompt(`Enter the HALO broadcast control code to ${action} every connected destination.`);
+      if (!controlCode) return;
+
+      updateBroadcastControl('loading', action === 'start' ? 'Sending the go-live command…' : 'Sending the end-broadcast command…');
+      try {
+        const response = await fetch('/api/broadcast-control', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-HALO-Control-Code': controlCode },
+          body: JSON.stringify({ action })
+        });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(result.message || 'The relay did not accept the command.');
+
+        const nextState = result.state === 'live' ? 'live' : 'offline';
+        const destinationNames = Array.isArray(result.destinations) ? result.destinations.join(', ') : 'every connected destination';
+        updateBroadcastControl(nextState, nextState === 'live' ? `Broadcast command accepted for ${destinationNames}. ${broadcastConfig.stopSupported ? 'Use the same button to end every feed.' : 'Use the relay dashboard to end the feeds.'}` : 'End-broadcast command accepted for every destination.');
+        window.haloStats?.track(action === 'start' ? 'broadcast_everywhere_started' : 'broadcast_everywhere_stopped', { destinationCount: broadcastConfig.destinations.length });
+      } catch (error) {
+        updateBroadcastControl('error', error instanceof Error ? error.message : 'The relay command failed.');
+      }
+    });
+
+    loadBroadcastConfig();
+
+    const revealObserver = 'IntersectionObserver' in window
+      ? new IntersectionObserver(entries => entries.forEach(entry => {
+          if (entry.isIntersecting) {
+            entry.target.classList.add('visible');
+            revealObserver.unobserve(entry.target);
+          }
+        }), { threshold: .12 })
+      : null;
+
+    document.querySelectorAll('.reveal').forEach(section => {
+      if (revealObserver) revealObserver.observe(section);
+      else section.classList.add('visible');
+    });
+  </script>
+</body>
+</html>

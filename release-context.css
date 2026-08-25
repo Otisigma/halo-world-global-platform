@@ -1,0 +1,50 @@
+.halo-release-context {
+  --release-context-ink: #12110f;
+  --release-context-paper: #f2ecdf;
+  --release-context-gold: #d6ad62;
+  --release-context-line: rgba(255,255,255,.13);
+  position: relative;
+  z-index: 80;
+  display: grid;
+  grid-template-columns: auto minmax(220px, .72fr) minmax(480px, 1.5fr) auto;
+  align-items: stretch;
+  min-height: 64px;
+  border-bottom: 1px solid #494036;
+  background: #181511;
+  color: var(--release-context-paper);
+  box-shadow: 0 16px 38px rgba(0,0,0,.22);
+  font-family: "DM Mono", "IBM Plex Mono", monospace;
+}
+.halo-release-context *, .halo-release-context *::before, .halo-release-context *::after { box-sizing: border-box; }
+.halo-release-context__signal { display: grid; min-width: 74px; place-items: center; align-content: center; gap: .35rem; border-right: 1px solid var(--release-context-line); color: var(--release-context-gold); }
+.halo-release-context__signal i { width: 28px; height: 3px; background: currentColor; transform: scaleX(var(--release-context-progress, 1)); transform-origin: left; }
+.halo-release-context__signal span { font-size: .55rem; letter-spacing: .08em; }
+.halo-release-context__identity { display: grid; align-content: center; gap: .38rem; min-width: 0; padding: .8rem 1rem; border-right: 1px solid var(--release-context-line); }
+.halo-release-context__identity span { color: var(--release-context-gold); font-size: .52rem; letter-spacing: .14em; text-transform: uppercase; }
+.halo-release-context__identity strong { overflow: hidden; font-family: "Manrope", "Syne", sans-serif; font-size: .76rem; letter-spacing: .02em; text-overflow: ellipsis; white-space: nowrap; }
+.halo-release-context__nav { display: grid; grid-template-columns: repeat(6, minmax(78px, 1fr)); }
+.halo-release-context__nav a { display: grid; place-items: center; min-width: 0; padding: .75rem .5rem; border-right: 1px solid var(--release-context-line); color: #a79e92; font-size: .52rem; letter-spacing: .08em; text-align: center; text-decoration: none; text-transform: uppercase; transition: background 160ms ease, color 160ms ease; }
+.halo-release-context__nav a:hover, .halo-release-context__nav a:focus-visible { background: var(--release-context-paper); color: var(--release-context-ink); outline: 0; }
+.halo-release-context__nav a[aria-current="page"] { background: #30281f; color: #fff7e8; box-shadow: inset 0 -3px 0 var(--release-context-gold); }
+.halo-release-context__controls { display: grid; grid-template-columns: 1fr 1fr; }
+.halo-release-context__controls button { min-width: 58px; border: 0; border-left: 1px solid var(--release-context-line); background: transparent; color: #81786d; font: 500 .5rem/1 monospace; letter-spacing: .08em; text-transform: uppercase; cursor: pointer; }
+.halo-release-context__controls button:hover, .halo-release-context__controls button:focus-visible { background: #2a241e; color: white; outline: 0; }
+.halo-release-context.is-collapsed { grid-template-columns: auto minmax(180px, 1fr) auto; min-height: 48px; }
+.halo-release-context.is-collapsed .halo-release-context__nav { display: none; }
+.halo-release-context.is-collapsed .halo-release-context__identity { border-right: 0; }
+@media (max-width: 980px) {
+  .halo-release-context { grid-template-columns: auto 1fr auto; }
+  .halo-release-context__nav { grid-column: 1 / -1; grid-row: 2; overflow-x: auto; grid-template-columns: repeat(6, minmax(112px, 1fr)); border-top: 1px solid var(--release-context-line); }
+  .halo-release-context__nav a { min-height: 44px; }
+  .halo-release-context.is-collapsed { grid-template-columns: auto 1fr auto; }
+}
+@media (max-width: 560px) {
+  .halo-release-context__signal { min-width: 56px; }
+  .halo-release-context__identity { padding-inline: .75rem; }
+  .halo-release-context__identity strong { font-size: .68rem; }
+  .halo-release-context__controls { grid-template-columns: 1fr; }
+  .halo-release-context__controls button:last-child { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .halo-release-context * { transition-duration: .01ms !important; }
+}

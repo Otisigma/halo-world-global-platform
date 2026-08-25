@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#11110f">
+  <title>HALO Artist Economy — Build a living around the work</title>
+  <meta name="description" content="The private HALO operating system for artist rights, income, campaigns, licensing, shows, and long-term independence.">
+  <meta name="robots" content="noindex, nofollow, noarchive">
+  <link rel="manifest" href="/app.webmanifest">
+  <link rel="apple-touch-icon" href="/assets/halo-app-icon-180.png">
+  <link rel="icon" href="/assets/halo-app-icon-192.png" type="image/png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:opsz,wght@6..96,600;6..96,800&family=DM+Mono:wght@300;400;500&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/halo-brand.css">
+  <link rel="stylesheet" href="/artist-economy/artist-economy.css">
+  <link rel="stylesheet" href="/accessibility.css">
+  <link rel="stylesheet" href="/mobile-navigation.css">
+  <script src="/stats.js" defer></script>
+  <script src="/site-monitor.js" defer></script>
+  <script src="/accessibility.js" defer></script>
+  <script src="/mobile-navigation.js" defer></script>
+  <script type="module" src="/identity.js"></script>
+  <script src="/artist-economy/artist-economy.js" defer></script>
+</head>
+<body>
+  <div class="paper-noise" aria-hidden="true"></div>
+  <header class="economy-header">
+    <a class="economy-brand" href="/" aria-label="HALO Music World home">
+      <img src="/assets/halo-logo-mark.webp" alt="">
+      <span><strong>HALO</strong><small>ARTIST ECONOMY</small></span>
+    </a>
+    <nav aria-label="Artist workspace navigation">
+      <a href="/artist-team.html">Agent team</a>
+      <a href="/release-house/">Release House</a>
+      <a href="/creator-freedom/">Creator Charter</a>
+      <a href="/artists/">Artist rooms</a>
+      <button id="identityButton" type="button">Sign in</button>
+    </nav>
+  </header>
+
+  <main>
+    <section id="lockedView" class="entry-view">
+      <div class="entry-mark" aria-hidden="true"><span>£</span><span>RIGHTS</span><span>LIVE</span><span>SYNC</span></div>
+      <p class="kicker">PRIVATE ARTIST COMPANY</p>
+      <h1>Build a living<br><em>around the work.</em></h1>
+      <p id="lockedMessage" class="entry-copy">Sign in with the account that owns your HALO artist room. Money, rights, opportunities, and plans stay scoped to that room.</p>
+      <form id="artistAuthForm" class="auth-form">
+        <label>Email<input id="artistEmail" type="email" autocomplete="email" required></label>
+        <label>Password<input id="artistPassword" type="password" autocomplete="current-password" minlength="8" required></label>
+        <button class="button button-primary" type="submit">Open Artist Economy</button>
+      </form>
+      <p id="authMessage" class="form-message" aria-live="polite"></p>
+    </section>
+
+    <section id="pickerView" class="entry-view" hidden>
+      <p class="kicker">CHOOSE THE COMPANY</p>
+      <h2>Which artist room<br><em>are we protecting?</em></h2>
+      <ul id="roomPicker" class="room-picker"></ul>
+      <p id="pickerMessage" class="form-message" aria-live="polite"></p>
+    </section>
+
+    <div id="economyView" hidden>
+      <section class="economy-hero">
+        <div class="hero-copy">
+          <p class="kicker"><span class="live-dot"></span> ARTIST LIVELIHOOD SYSTEM</p>
+          <h1 id="artistName">Artist Economy</h1>
+          <p class="hero-statement">The master, the money, the audience, the opportunities, and the future—held in one artist-controlled system.</p>
+          <div class="hero-actions">
+            <button id="editProfileButton" class="button button-primary" type="button">Set the living plan</button>
+            <a id="artistRoomLink" class="button button-quiet" href="/artists/">Open artist room</a>
+          </div>
+        </div>
+        <aside class="north-star">
+          <span>THE PERMANENT TEST</span>
+          <blockquote>Does this help the artist make a healthy, independent living?</blockquote>
+          <p id="missionNote">Ownership stays with the artist. Every recommendation remains explainable and approval-gated.</p>
+        </aside>
+      </section>
+
+      <section class="money-board" aria-labelledby="moneyBoardTitle">
+        <header class="section-heading">
+          <div><p class="kicker">01 / WHAT IS ACTUALLY YOURS</p><h2 id="moneyBoardTitle">Cash without confusion.</h2></div>
+          <span id="careerStage" class="stage-stamp">FIRST MASTER</span>
+        </header>
+        <div class="money-grid">
+          <article class="money-card money-card-main">
+            <span>AVAILABLE AFTER RECORDED OBLIGATIONS</span>
+            <strong id="availableMoney">£0</strong>
+            <p>Received income minus recorded fees, tax reserve, and collaborator obligations.</p>
+          </article>
+          <article class="money-card"><span>RECEIVED GROSS</span><strong id="receivedGross">£0</strong><small id="receivedDeductions">£0 recorded deductions</small></article>
+          <article class="money-card"><span>EXPECTED</span><strong id="expectedMoney">£0</strong><small>Not counted as spendable yet</small></article>
+          <article class="money-card"><span>LICENSING PIPELINE</span><strong id="licensingPipeline">£0</strong><small>Quoted, not guaranteed</small></article>
+          <article class="money-card"><span>LIVE PROFIT RECORDED</span><strong id="liveProfit">£0</strong><small>Income after entered show costs</small></article>
+        </div>
+        <div class="target-board">
+          <div class="target-copy"><span>MONTHLY ARTIST NET</span><strong><b id="monthlyNet">£0</b> / <b id="monthlyTarget">£0</b></strong></div>
+          <div class="target-track"><span id="targetProgress"></span></div>
+        </div>
+        <div id="allocationBoard" class="allocation-board"></div>
+      </section>
+
+      <section class="gap-board" aria-labelledby="gapTitle">
+        <header><p class="kicker">THE NEXT FOUNDATIONS</p><h2 id="gapTitle">What is missing right now?</h2></header>
+        <ol id="gapList"></ol>
+      </section>
+
+      <nav class="workspace-tabs" aria-label="Artist Economy sections">
+        <button class="is-active" type="button" data-tab="rights">Rights passport</button>
+        <button type="button" data-tab="income">Income ledger</button>
+        <button type="button" data-tab="campaigns">Campaign discipline</button>
+        <button type="button" data-tab="licensing">Licensing room</button>
+        <button type="button" data-tab="live">Shows + live</button>
+        <button id="conscienceTab" type="button" data-tab="conscience" hidden>HALO conscience</button>
+      </nav>
+
+      <section class="workspace-panel is-active" data-panel="rights">
+        <header class="panel-heading">
+          <div><p class="kicker">OWNERSHIP BEFORE OPPORTUNITY</p><h2>Rights Passport</h2><p>Record what is known, what is evidenced, and what must stop before a commercial use.</p></div>
+          <button class="button button-primary" type="button" data-open-form="work">Add a work</button>
+        </header>
+        <div id="rightsList" class="record-grid"></div>
+      </section>
+
+      <section class="workspace-panel" data-panel="income" hidden>
+        <header class="panel-heading">
+          <div><p class="kicker">GROSS IS NOT TAKE-HOME</p><h2>Income Ledger</h2><p>Record expected and received money, then separate fees, tax, and contractual obligations.</p></div>
+          <button class="button button-primary" type="button" data-open-form="income">Record income</button>
+        </header>
+        <div id="incomeList" class="record-list"></div>
+      </section>
+
+      <section class="workspace-panel" data-panel="campaigns" hidden>
+        <header class="panel-heading">
+          <div><p class="kicker">TEST BEFORE SCALE</p><h2>Campaign Discipline</h2><p>Every spend needs a meaningful outcome, a stop-loss, and a written lesson.</p></div>
+          <button class="button button-primary" type="button" data-open-form="campaign">Open a campaign test</button>
+        </header>
+        <div class="campaign-metric"><span>RECORDED COST / MEANINGFUL ACTION</span><strong id="campaignCpa">£0</strong></div>
+        <div id="campaignList" class="record-list"></div>
+      </section>
+
+      <section class="workspace-panel" data-panel="licensing" hidden>
+        <header class="panel-heading">
+          <div><p class="kicker">CLEAR. APPROVE. PITCH. FOLLOW UP.</p><h2>Licensing Room</h2><p>Track the brief, rights check, artist approval, quote, delivery, payment, and restrictions.</p></div>
+          <button class="button button-primary" type="button" data-open-form="licensing">Add opportunity</button>
+        </header>
+        <div id="licensingList" class="record-list"></div>
+      </section>
+
+      <section class="workspace-panel" data-panel="live" hidden>
+        <header class="panel-heading">
+          <div><p class="kicker">THE FEE IS NOT THE PROFIT</p><h2>Shows + Live</h2><p>See the real settlement, the real costs, and whether the room became a lasting fan relationship.</p></div>
+          <button class="button button-primary" type="button" data-open-form="live">Add a show</button>
+        </header>
+        <div id="liveList" class="record-list"></div>
+      </section>
+
+      <section class="workspace-panel conscience-panel" data-panel="conscience" hidden>
+        <header class="panel-heading">
+          <div><p class="kicker">THE SOUL OF THE PLATFORM</p><h2>HALO Conscience</h2><p>Challenge products, fees, algorithms, campaigns, and partnerships against the artist-livelihood covenant.</p></div>
+          <button class="button button-primary" type="button" data-open-form="review">Open a review</button>
+        </header>
+        <div id="conscienceList" class="record-list"></div>
+      </section>
+
+      <footer class="economy-footer">
+        <p>HALO prepares the record. The artist approves the move.</p>
+        <span>No automatic spending · No automatic licensing · No ownership transfer</span>
+      </footer>
+    </div>
+  </main>
+
+  <dialog id="recordDialog" class="record-dialog">
+    <form id="recordForm" method="dialog">
+      <header><div><p id="dialogKicker" class="kicker">ADD TO THE SYSTEM</p><h2 id="dialogTitle">New record</h2></div><button class="dialog-close" type="button" data-close-dialog aria-label="Close">×</button></header>
+      <div id="dialogFields" class="dialog-fields"></div>
+      <p id="dialogMessage" class="form-message" aria-live="polite"></p>
+      <footer><button class="button button-quiet" type="button" data-close-dialog>Cancel</button><button id="dialogSubmit" class="button button-primary" type="submit">Save record</button></footer>
+    </form>
+  </dialog>
+</body>
+</html>

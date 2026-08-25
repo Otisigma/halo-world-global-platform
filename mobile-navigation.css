@@ -1,0 +1,658 @@
+.halo-mobile-menu {
+  position: relative;
+  z-index: 10010;
+}
+
+.halo-mobile-menu > summary {
+  position: relative;
+  display: grid;
+  min-width: 190px;
+  min-height: 52px;
+  grid-template-columns: 30px 1fr auto 18px;
+  align-items: center;
+  gap: 9px;
+  padding: 6px 10px 6px 8px;
+  border: 1px solid rgba(245, 158, 11, .25);
+  border-radius: 16px;
+  background: linear-gradient(145deg, rgba(32, 25, 15, .96), rgba(12, 12, 17, .96));
+  color: #f8ead0;
+  cursor: pointer;
+  list-style: none;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .055), 0 12px 32px rgba(0, 0, 0, .25);
+  transition: border-color 180ms ease, transform 180ms ease, box-shadow 180ms ease;
+}
+
+.halo-mobile-menu > summary::-webkit-details-marker {
+  display: none;
+}
+
+.halo-mobile-menu > summary:hover,
+.halo-mobile-menu > summary:focus-visible,
+.halo-mobile-menu[open] > summary {
+  border-color: rgba(245, 158, 11, .72);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .08), 0 0 0 3px rgba(245, 158, 11, .08), 0 18px 42px rgba(0, 0, 0, .34);
+  outline: none;
+  transform: translateY(-1px);
+}
+
+.halo-mobile-menu > summary > svg {
+  width: 18px;
+  height: 18px;
+  color: #d8a852;
+  transition: transform 220ms ease;
+}
+
+.halo-mobile-menu[open] > summary > svg {
+  transform: rotate(180deg);
+}
+
+.halo-menu-orbit {
+  position: relative;
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border: 1px solid rgba(245, 158, 11, .28);
+  border-radius: 50%;
+}
+
+.halo-menu-orbit::before,
+.halo-menu-orbit::after {
+  position: absolute;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+  color: #d99a32;
+  content: "";
+}
+
+.halo-menu-orbit::before {
+  width: 12px;
+  height: 12px;
+}
+
+.halo-menu-orbit::after {
+  width: 24px;
+  height: 8px;
+  transform: rotate(-24deg);
+}
+
+.halo-menu-orbit i {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: #f6c45f;
+  box-shadow: 0 0 10px #f59e0b;
+}
+
+.halo-menu-summary-copy strong,
+.halo-menu-summary-copy small {
+  display: block;
+}
+
+.halo-menu-summary-copy small {
+  margin-bottom: 2px;
+  color: #8d887f;
+  font: 700 8px/1 "Share Tech Mono", ui-monospace, monospace;
+  letter-spacing: .17em;
+  text-transform: uppercase;
+}
+
+.halo-menu-summary-copy strong {
+  font: 800 11px/1 "Barlow Condensed", sans-serif;
+  letter-spacing: .11em;
+  text-transform: uppercase;
+}
+
+.halo-menu-count {
+  display: grid;
+  width: 25px;
+  height: 25px;
+  place-items: center;
+  border-radius: 50%;
+  background: rgba(245, 158, 11, .1);
+  color: #d9ad61;
+  font: 800 9px/1 "Share Tech Mono", ui-monospace, monospace;
+}
+
+.halo-header-signal {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-left: auto;
+  color: #77736c;
+  font: 700 8px/1 "Share Tech Mono", ui-monospace, monospace;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+}
+
+.halo-header-signal strong {
+  color: #d6a957;
+  font-size: 10px;
+}
+
+.halo-header-signal-dot,
+.halo-member-pulse {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #a3e635;
+  box-shadow: 0 0 10px rgba(163, 230, 53, .8);
+}
+
+.halo-site-actions {
+  position: absolute;
+  top: calc(100% + 12px);
+  right: 0;
+  z-index: 10020;
+  width: min(94vw, 900px);
+  padding: 18px;
+  overflow: hidden;
+  border: 1px solid rgba(245, 158, 11, .25);
+  border-radius: 24px;
+  background:
+    radial-gradient(circle at 10% 0%, rgba(245, 158, 11, .12), transparent 30%),
+    linear-gradient(145deg, rgba(17, 16, 18, .985), rgba(7, 8, 11, .99));
+  color: #f4eee3;
+  box-shadow: 0 32px 90px rgba(0, 0, 0, .72), inset 0 1px 0 rgba(255, 255, 255, .06);
+  font-family: "Share Tech Mono", ui-monospace, monospace;
+  transform-origin: top right;
+  animation: halo-menu-arrive 220ms cubic-bezier(.2, .8, .2, 1) both;
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+}
+
+.halo-site-actions::before {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: radial-gradient(rgba(255, 255, 255, .09) .65px, transparent .65px);
+  background-size: 18px 18px;
+  opacity: .18;
+  content: "";
+}
+
+.halo-menu-intro,
+.halo-menu-lanes,
+.halo-menu-console {
+  position: relative;
+  z-index: 1;
+}
+
+.halo-menu-intro {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 3px 4px 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, .08);
+}
+
+.halo-menu-kicker {
+  color: #c89137;
+  font-size: 8px;
+  letter-spacing: .2em;
+}
+
+.halo-menu-intro h2 {
+  margin: 5px 0 0;
+  color: #fff9ed;
+  font: 600 25px/.95 "Cormorant Garamond", serif;
+  letter-spacing: -.02em;
+}
+
+.halo-menu-intro p {
+  max-width: 280px;
+  margin: 0;
+  color: #8f8b84;
+  font-size: 9px;
+  line-height: 1.5;
+  text-align: right;
+  text-transform: uppercase;
+}
+
+.halo-menu-lanes {
+  display: grid;
+  grid-template-columns: .95fr 1.25fr .95fr .95fr;
+  gap: 10px;
+  padding: 14px 0;
+}
+
+.halo-menu-lane {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 6px;
+  padding: 0 5px;
+}
+
+.halo-menu-lane:not(:last-child)::after {
+  position: absolute;
+  top: 30px;
+  right: -5px;
+  bottom: 4px;
+  width: 1px;
+  background: linear-gradient(transparent, rgba(255, 255, 255, .09), transparent);
+  content: "";
+}
+
+.halo-menu-lane-title {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 24px;
+  padding: 0 6px;
+}
+
+.halo-menu-lane-title span {
+  color: #6d675e;
+  font-size: 8px;
+}
+
+.halo-menu-lane-title h3 {
+  margin: 0;
+  color: #d7aa5e;
+  font: 800 10px/1 "Barlow Condensed", sans-serif;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+}
+
+.halo-menu-lane > a,
+.halo-menu-lane > button {
+  position: relative;
+  display: grid;
+  min-height: 52px;
+  grid-template-columns: 28px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  padding: 7px 8px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, .065);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, .025);
+  color: #eee8dd;
+  cursor: pointer;
+  text-align: left;
+  text-decoration: none;
+  transition: background 170ms ease, border-color 170ms ease, transform 170ms ease;
+}
+
+.halo-menu-lane > a::after,
+.halo-menu-lane > button::after {
+  position: absolute;
+  right: 7px;
+  bottom: 5px;
+  color: transparent;
+  content: attr(data-signal);
+  font-size: 6px;
+  letter-spacing: .12em;
+  transition: color 170ms ease;
+}
+
+.halo-menu-lane > a:hover,
+.halo-menu-lane > button:hover,
+.halo-menu-lane > a:focus-visible,
+.halo-menu-lane > button:focus-visible {
+  border-color: rgba(245, 158, 11, .38);
+  background: rgba(245, 158, 11, .08);
+  outline: none;
+  transform: translateY(-2px);
+}
+
+.halo-menu-lane > a:hover::after,
+.halo-menu-lane > button:hover::after,
+.halo-menu-lane > a:focus-visible::after,
+.halo-menu-lane > button:focus-visible::after {
+  color: rgba(232, 184, 101, .55);
+}
+
+.halo-menu-icon {
+  width: 17px;
+  height: 17px;
+  color: #dca94f;
+  justify-self: center;
+}
+
+.halo-menu-lane strong,
+.halo-menu-lane small {
+  display: block;
+}
+
+.halo-menu-lane strong {
+  overflow: hidden;
+  color: #f5efe5;
+  font: 800 9px/1.1 "Barlow Condensed", sans-serif;
+  letter-spacing: .08em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.halo-menu-lane small {
+  margin-top: 4px;
+  overflow: hidden;
+  color: #77736d;
+  font-size: 7px;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.halo-member-pulse {
+  justify-self: center;
+}
+
+.halo-menu-console {
+  display: flex;
+  width: 100%;
+  min-height: 58px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px 10px 18px;
+  border: 1px solid rgba(246, 196, 95, .54);
+  border-radius: 15px;
+  background: linear-gradient(100deg, #d88b22, #f7cb70 52%, #d7922d);
+  color: #19120a;
+  cursor: pointer;
+  box-shadow: 0 14px 30px rgba(203, 126, 25, .16);
+  text-align: left;
+  transition: filter 170ms ease, transform 170ms ease;
+}
+
+.halo-menu-console:hover,
+.halo-menu-console:focus-visible {
+  filter: brightness(1.08);
+  outline: none;
+  transform: translateY(-2px);
+}
+
+.halo-menu-console small,
+.halo-menu-console strong {
+  display: block;
+}
+
+.halo-menu-console small {
+  margin-bottom: 5px;
+  font-size: 7px;
+  letter-spacing: .18em;
+  text-transform: uppercase;
+}
+
+.halo-menu-console strong {
+  font: 900 13px/1 "Barlow Condensed", sans-serif;
+  letter-spacing: .12em;
+}
+
+.halo-menu-console-icon {
+  width: 24px;
+  height: 24px;
+  transition: transform 170ms ease;
+}
+
+.halo-menu-console:hover .halo-menu-console-icon {
+  transform: translateX(4px);
+}
+
+.halo-menu-console-icon-back {
+  transform: rotate(180deg);
+}
+
+.halo-menu-console:hover .halo-menu-console-icon-back {
+  transform: rotate(180deg) translateX(4px);
+}
+
+.halo-install-card {
+  display: none;
+}
+
+@keyframes halo-menu-arrive {
+  from { opacity: 0; transform: translateY(-8px) scale(.985); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@media (max-width: 980px) {
+  .halo-header-signal {
+    display: none;
+  }
+
+  .halo-menu-lanes {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .halo-menu-lane:nth-child(2)::after {
+    display: none;
+  }
+}
+
+@media (max-width: 767px) {
+  .halo-site-header {
+    flex-wrap: nowrap !important;
+    gap: 10px !important;
+    padding: 9px 10px !important;
+  }
+
+  .halo-site-brand,
+  .halo-site-brand > div,
+  .halo-site-brand > div > div {
+    min-width: 0;
+  }
+
+  .halo-site-brand h1 {
+    max-width: 48vw;
+    overflow: hidden;
+    font-size: 12px !important;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .halo-site-tagline,
+  .halo-global-badge,
+  .halo-menu-summary-copy small,
+  .halo-menu-count {
+    display: none;
+  }
+
+  .halo-mobile-menu {
+    flex: 0 0 auto;
+    margin-left: auto;
+  }
+
+  .halo-mobile-menu > summary {
+    min-width: 0;
+    min-height: 44px;
+    grid-template-columns: 25px auto 15px;
+    gap: 7px;
+    padding: 5px 9px 5px 7px;
+    border-radius: 14px;
+  }
+
+  .halo-menu-orbit {
+    width: 25px;
+    height: 25px;
+  }
+
+  .halo-menu-orbit::after {
+    width: 20px;
+  }
+
+  .halo-menu-summary-copy strong {
+    font-size: 10px;
+  }
+
+  .halo-site-actions {
+    position: fixed;
+    top: 70px;
+    right: 10px;
+    bottom: max(10px, env(safe-area-inset-bottom));
+    left: 10px;
+    width: auto;
+    max-height: none;
+    padding: 15px;
+    overflow-y: auto;
+    border-radius: 20px;
+    transform-origin: top center;
+  }
+
+  .halo-menu-intro {
+    align-items: start;
+  }
+
+  .halo-menu-intro h2 {
+    font-size: 22px;
+  }
+
+  .halo-menu-intro p {
+    max-width: 150px;
+    font-size: 7px;
+  }
+
+  .halo-menu-lanes {
+    grid-template-columns: 1fr 1fr;
+    gap: 12px 6px;
+  }
+
+  .halo-menu-lane:nth-child(2)::after {
+    display: none;
+  }
+
+  .halo-menu-lane > a,
+  .halo-menu-lane > button {
+    min-height: 50px;
+  }
+
+  .halo-floating-action {
+    right: 10px !important;
+    width: 44px;
+    height: 44px;
+    justify-content: center;
+    padding: 0 !important;
+    transition: opacity 160ms ease, transform 160ms ease !important;
+  }
+
+  .halo-floating-equalizer { bottom: 62px !important; }
+  .halo-floating-guide { bottom: 10px !important; }
+  .halo-floating-label { display: none !important; }
+
+  body.halo-install-visible {
+    padding-bottom: calc(104px + env(safe-area-inset-bottom));
+  }
+
+  body.halo-install-visible .halo-floating-action {
+    pointer-events: none;
+    opacity: 0;
+  }
+
+  .halo-install-card {
+    position: fixed;
+    right: 10px;
+    bottom: max(10px, env(safe-area-inset-bottom));
+    left: 10px;
+    z-index: 10030;
+    display: grid;
+    grid-template-columns: 42px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 10px;
+    padding: 10px;
+    border: 1px solid rgba(239, 181, 90, .42);
+    border-radius: 18px;
+    background: rgba(13, 13, 15, .97);
+    color: #f8f3e8;
+    box-shadow: 0 22px 68px rgba(0, 0, 0, .62), inset 0 1px 0 rgba(255, 255, 255, .07);
+    font-family: "Share Tech Mono", ui-monospace, monospace;
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+  }
+
+  .halo-install-mark {
+    display: grid;
+    width: 42px;
+    height: 42px;
+    place-items: center;
+    border: 1px solid rgba(245, 158, 11, .45);
+    border-radius: 13px;
+    background: #17110a;
+    color: #f6b94f;
+  }
+
+  .halo-install-mark svg { width: 27px; height: 27px; }
+  .halo-install-copy { min-width: 0; }
+  .halo-install-copy strong, .halo-install-copy small { display: block; }
+  .halo-install-copy strong { margin-bottom: 3px; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; }
+  .halo-install-copy small { color: #aaa59b; font-size: 9px; line-height: 1.35; }
+
+  .halo-install-action {
+    min-height: 40px;
+    padding: 0 13px;
+    border: 0;
+    border-radius: 999px;
+    background: #e5a743;
+    color: #15100a;
+    cursor: pointer;
+    font: 800 9px/1 "Share Tech Mono", ui-monospace, monospace;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+  }
+
+  .halo-install-dismiss {
+    position: absolute;
+    top: -8px;
+    right: -4px;
+    display: grid;
+    width: 26px;
+    height: 26px;
+    place-items: center;
+    border: 1px solid rgba(255, 255, 255, .18);
+    border-radius: 50%;
+    background: #171719;
+    color: #c9c5bc;
+    cursor: pointer;
+    font-size: 16px;
+    line-height: 1;
+  }
+}
+
+@media (max-width: 520px) {
+  .halo-menu-intro p,
+  .halo-menu-lane small {
+    display: none;
+  }
+
+  .halo-menu-lanes {
+    grid-template-columns: 1fr;
+  }
+
+  .halo-menu-lane::after {
+    display: none;
+  }
+
+  .halo-menu-lane > a,
+  .halo-menu-lane > button {
+    min-height: 43px;
+  }
+
+  .halo-menu-console {
+    min-height: 52px;
+  }
+}
+
+@media (max-width: 380px) {
+  .halo-menu-summary-copy {
+    display: none;
+  }
+
+  .halo-mobile-menu > summary {
+    grid-template-columns: 25px 15px;
+  }
+
+  .halo-install-card { grid-template-columns: 38px minmax(0, 1fr) auto; gap: 8px; }
+  .halo-install-mark { width: 38px; height: 38px; }
+  .halo-install-action { padding: 0 10px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .halo-site-actions { animation: none; }
+  .halo-mobile-menu > summary,
+  .halo-menu-lane > a,
+  .halo-menu-lane > button,
+  .halo-menu-console,
+  .halo-floating-action { transition: none !important; }
+}

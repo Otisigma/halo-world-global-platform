@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Dreamweaver Campaign Studio — HALO</title>
+  <meta name="description" content="Turn a HALO listening-party shortlist into a fan-voted release campaign and share-ready social assets.">
+  <meta name="theme-color" content="#171713">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Syne:wght@500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/halo-brand.css">
+  <link rel="stylesheet" href="/release-context.css">
+  <link rel="stylesheet" href="/campaign-studio/campaign-studio.css">
+  <link rel="stylesheet" href="/campaign-studio/party-effects.css">
+  <script src="/stats.js" defer></script>
+  <script src="/accessibility.js" defer></script>
+  <script type="module" src="/identity.js"></script>
+  <script src="/release-context.js" defer></script>
+  <script src="/campaign-studio/campaign-studio.js" defer></script>
+</head>
+<body>
+  <div class="grain" aria-hidden="true"></div>
+  <header class="site-header">
+    <a class="brand" href="/halo.html" aria-label="HALO home">
+      <img class="halo-brand-image" src="/assets/halo-logo-mark.webp" alt="">
+      <span><strong>HALO</strong><small>Dreamweaver Studio</small></span>
+    </a>
+    <nav aria-label="Campaign Studio navigation">
+      <a href="/youtube-studio/">YouTube Sources</a>
+      <a href="/dreamweaver/">Visual Show</a>
+      <a href="/radio/">Radio</a>
+      <a href="/release-house/">Release House</a>
+      <button class="account-button" id="accountButton" type="button">Team sign in</button>
+    </nav>
+  </header>
+  <main id="app" aria-live="polite">
+    <section class="loading-stage">
+      <p class="signal-label">DREAMWEAVER / CAMPAIGN SIGNAL</p>
+      <h1>Reading the room.</h1>
+      <div class="loading-line"><span></span></div>
+    </section>
+  </main>
+  <dialog class="auth-dialog" id="authDialog">
+    <form id="authForm">
+      <button class="dialog-close" type="button" data-close-dialog aria-label="Close">×</button>
+      <p class="signal-label">TEAM ACCESS</p>
+      <h2 id="authTitle">Sign in to build.</h2>
+      <p>Campaign drafts, track selections, and voting results stay with your HALO membership.</p>
+      <div class="auth-tabs" role="tablist" aria-label="Membership action">
+        <button type="button" data-auth-mode="login" aria-selected="true">Sign in</button>
+        <button type="button" data-auth-mode="signup" aria-selected="false">Join</button>
+      </div>
+      <label id="authNameField" hidden>Your name<input id="authName" autocomplete="name" maxlength="64"></label>
+      <label>Email<input id="authEmail" type="email" autocomplete="email" required></label>
+      <label>Password<input id="authPassword" type="password" minlength="8" autocomplete="current-password" required></label>
+      <p class="form-message" id="authMessage" role="status"></p>
+      <button class="primary-button" id="authSubmit" type="submit">Sign in</button>
+    </form>
+  </dialog>
+</body>
+</html>

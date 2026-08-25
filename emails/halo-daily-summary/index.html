@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+  <body style="margin: 0; background: #070b12; color: #f4f7fb; font-family: Arial, Helvetica, sans-serif;">
+    <div style="max-width: 680px; margin: 0 auto; padding: 32px 20px;">
+      <div style="border: 1px solid #243044; border-radius: 18px; overflow: hidden; background: #0d1420;">
+        <div style="padding: 28px; background: linear-gradient(135deg, #132238, #101826);">
+          <p style="margin: 0 0 8px; color: #71e6c1; font-size: 12px; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase;">HALO owner briefing</p>
+          <h1 style="margin: 0; font-size: 30px; line-height: 1.2;">Daily summary</h1>
+          <p style="margin: 10px 0 0; color: #a9b6c9;">Activity recorded for {{reportDate}}</p>
+        </div>
+
+        <div style="padding: 28px;">
+          <h2 style="margin: 0 0 16px; font-size: 18px;">Community</h2>
+          <table role="presentation" style="width: 100%; border-collapse: collapse; color: #f4f7fb;">
+            <tr><td style="padding: 9px 0; color: #a9b6c9;">Total members</td><td style="padding: 9px 0; text-align: right; font-weight: 700;">{{totalMembers}}</td></tr>
+            <tr><td style="padding: 9px 0; color: #a9b6c9;">New members</td><td style="padding: 9px 0; text-align: right; font-weight: 700;">{{joinedToday}}</td></tr>
+            <tr><td style="padding: 9px 0; color: #a9b6c9;">Active in 24 hours</td><td style="padding: 9px 0; text-align: right; font-weight: 700;">{{active24h}}</td></tr>
+            <tr><td style="padding: 9px 0; color: #a9b6c9;">Online at report time</td><td style="padding: 9px 0; text-align: right; font-weight: 700;">{{onlineNow}}</td></tr>
+          </table>
+
+          <h2 style="margin: 28px 0 16px; font-size: 18px;">Audience</h2>
+          <table role="presentation" style="width: 100%; border-collapse: collapse; color: #f4f7fb;">
+            <tr><td style="padding: 9px 0; color: #a9b6c9;">Unique visitors</td><td style="padding: 9px 0; text-align: right; font-weight: 700;">{{uniqueVisitorsToday}}</td></tr>
+            <tr><td style="padding: 9px 0; color: #a9b6c9;">Page views</td><td style="padding: 9px 0; text-align: right; font-weight: 700;">{{pageViewsToday}}</td></tr>
+            <tr><td style="padding: 9px 0; color: #a9b6c9;">Site sessions</td><td style="padding: 9px 0; text-align: right; font-weight: 700;">{{siteSessionsToday}}</td></tr>
+          </table>
+
+          <h2 style="margin: 28px 0 16px; font-size: 18px;">Activity</h2>
+          <table role="presentation" style="width: 100%; border-collapse: collapse; color: #f4f7fb;">
+            <tr><td style="padding: 9px 0; color: #a9b6c9;">Passes redeemed</td><td style="padding: 9px 0; text-align: right; font-weight: 700;">{{passesRedeemedToday}}</td></tr>
+            <tr><td style="padding: 9px 0; color: #a9b6c9;">Room messages</td><td style="padding: 9px 0; text-align: right; font-weight: 700;">{{roomMessagesToday}}</td></tr>
+            <tr><td style="padding: 9px 0; color: #a9b6c9;">Room pins updated</td><td style="padding: 9px 0; text-align: right; font-weight: 700;">{{roomPinsUpdatedToday}}</td></tr>
+            <tr><td style="padding: 9px 0; color: #a9b6c9;">Support signals</td><td style="padding: 9px 0; text-align: right; font-weight: 700;">{{supportSignalsToday}}</td></tr>
+            <tr><td style="padding: 9px 0; color: #a9b6c9;">DJ sessions saved</td><td style="padding: 9px 0; text-align: right; font-weight: 700;">{{djSessionsSavedToday}}</td></tr>
+          </table>
+
+          <h2 style="margin: 28px 0 16px; font-size: 18px;">Artist Pro</h2>
+          <table role="presentation" style="width: 100%; border-collapse: collapse; color: #f4f7fb;">
+            <tr><td style="padding: 9px 0; color: #a9b6c9;">New leads</td><td style="padding: 9px 0; text-align: right; font-weight: 700;">{{artistProLeadsToday}}</td></tr>
+            <tr><td style="padding: 9px 0; color: #a9b6c9;">Awaiting review</td><td style="padding: 9px 0; text-align: right; font-weight: 700;">{{artistProAwaitingReview}}</td></tr>
+          </table>
+        </div>
+      </div>
+      <p style="margin: 18px 0 0; color: #718096; font-size: 12px; text-align: center;">Generated automatically by HALO every 24 hours.</p>
+    </div>
+  </body>
+</html>

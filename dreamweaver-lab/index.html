@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Dreamweaver Song Lab — HALO</title>
+  <meta name="description" content="Analyze an authorized song recording and build an original release world inside HALO Dreamweaver.">
+  <meta name="theme-color" content="#0b0c09">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="icon" href="/assets/halo-app-icon-192.png">
+  <link rel="stylesheet" href="/halo-brand.css">
+  <link rel="stylesheet" href="/accessibility.css">
+  <link rel="stylesheet" href="/dreamweaver-lab/song-lab.css">
+  <script src="/stats.js" defer></script>
+  <script type="module" src="/identity.js"></script>
+  <script src="/accessibility.js" defer></script>
+  <script src="/dreamweaver-lab/song-lab.js" defer></script>
+</head>
+<body>
+  <div class="grain" aria-hidden="true"></div>
+  <header class="lab-header">
+    <a class="lab-brand" href="/halo.html" aria-label="HALO home">
+      <img src="/assets/halo-logo-mark.webp" alt="">
+      <span><strong>HALO</strong><small>Dreamweaver / Song Lab</small></span>
+    </a>
+    <nav aria-label="Song Lab navigation">
+      <a href="/dreamweaver/">Dreamweaver Show</a>
+      <a href="/campaign-studio/">Campaign Studio</a>
+      <a href="/finish-house/">Finish House</a>
+    </nav>
+  </header>
+
+  <main>
+    <section class="lab-hero">
+      <div class="hero-copy">
+        <p class="eyebrow">PRIVATE AUDIO INTELLIGENCE / ARTIST CONTROLLED</p>
+        <h1>Load the wave.<br><em>Build the world.</em></h1>
+        <p>Dreamweaver reads the measurable shape of your recording, then creates an original visual direction, campaign language, release rollout, and cover artwork grounded in what the audio can actually prove.</p>
+      </div>
+      <aside class="hero-note">
+        <span>What it knows</span>
+        <strong>Dynamics. Energy. Tempo estimate. Tonal center. Brightness. Shape.</strong>
+        <span>What it never assumes</span>
+        <strong>Ownership. Credits. Samples. Clearances. Release history.</strong>
+      </aside>
+    </section>
+
+    <section class="lab-grid">
+      <form class="intake-panel" id="songForm">
+        <div class="panel-number">01 / SOURCE</div>
+        <h2>Bring in the recording.</h2>
+        <label class="drop-zone" id="dropZone">
+          <input id="songFile" type="file" accept="audio/wav,audio/x-wav,audio/mpeg,audio/mp4,audio/aac,audio/ogg,audio/webm,.wav,.mp3,.m4a,.aac,.ogg,.webm" required>
+          <span class="drop-mark" aria-hidden="true">DW</span>
+          <strong id="dropTitle">Choose a WAV or audio file</strong>
+          <small id="dropDetail">Drop it here · private · up to 128 MB</small>
+        </label>
+
+        <div class="field-grid">
+          <label>Song title<input id="songTitle" name="title" maxlength="140" required></label>
+          <label>Artist name<input id="artistName" name="artistName" maxlength="140"></label>
+        </div>
+        <label>Creative direction <small>Optional — describe the feeling, audience, or release goal.</small>
+          <textarea id="creativeBrief" name="creativeBrief" maxlength="1200" rows="4" placeholder="A nocturnal first single about rebuilding after a hard season…"></textarea>
+        </label>
+        <label>Lyrics or transcript <small>Optional — lyrics are never guessed from waveform measurements.</small>
+          <textarea id="lyrics" name="lyrics" maxlength="8000" rows="6" placeholder="Paste lyrics here for theme and campaign analysis…"></textarea>
+        </label>
+        <label class="rights-check"><input id="rightsAttested" type="checkbox" required><span>I own this recording or have permission to upload and analyze it. I understand Dreamweaver cannot verify ownership, credits, samples, or clearances.</span></label>
+        <button class="analyze-button" id="analyzeButton" type="submit" disabled>
+          <span>START PRIVATE ANALYSIS</span>
+          <strong>Build the Dreamweaver package</strong>
+        </button>
+        <p class="form-status" id="formStatus" role="status">Choose an audio file to begin.</p>
+      </form>
+
+      <section class="signal-panel" aria-labelledby="signalTitle">
+        <div class="panel-number">02 / SIGNAL</div>
+        <div class="signal-heading"><h2 id="signalTitle">The wave tells the first truth.</h2><span id="signalDuration">00:00</span></div>
+        <div class="wave-stage" id="waveStage">
+          <canvas id="waveCanvas" width="1200" height="420" aria-label="Audio waveform preview"></canvas>
+          <div class="wave-idle" id="waveIdle"><span>NO SIGNAL LOADED</span><i></i></div>
+        </div>
+        <audio id="audioPreview" controls hidden></audio>
+        <div class="metric-grid" id="metricGrid">
+          <article><span>Tempo</span><strong id="metricTempo">—</strong><small>estimated BPM</small></article>
+          <article><span>Tonal center</span><strong id="metricKey">—</strong><small>estimated key</small></article>
+          <article><span>Dynamics</span><strong id="metricDynamics">—</strong><small>range</small></article>
+          <article><span>Brightness</span><strong id="metricBrightness">—</strong><small>spectral center</small></article>
+          <article><span>Peak</span><strong id="metricPeak">—</strong><small>highest sample</small></article>
+          <article><span>Stereo field</span><strong id="metricWidth">—</strong><small>measured width</small></article>
+        </div>
+        <p class="signal-disclaimer">Tempo, key, mood, genre, and structure remain estimates until a person confirms them by listening.</p>
+      </section>
+    </section>
+
+    <section class="processing" id="processing" hidden aria-live="polite">
+      <div class="processing-orbit" aria-hidden="true"><i></i><i></i><i></i></div>
+      <div><p id="processingStage">READING THE SIGNAL</p><h2 id="processingTitle">Dreamweaver is building the release world.</h2><p id="processingDetail">Your original upload remains private while the measured evidence becomes a grounded creative package.</p></div>
+    </section>
+
+    <section class="results" id="results" hidden>
+      <header class="results-header">
+        <div><p class="eyebrow">03 / DREAMWEAVER PACKAGE</p><h2 id="resultTitle">The world is ready.</h2><p id="resultSummary"></p></div>
+        <button id="downloadPackage" type="button">Download creative brief</button>
+      </header>
+      <div class="result-grid">
+        <article class="cover-card">
+          <div class="cover-frame" id="coverFrame"><div class="cover-placeholder"><span>DW</span><small>ARTWORK GENERATING</small></div></div>
+          <div><span>Original cover direction</span><h3 id="visualConcept"></h3><p id="visualTypography"></p><div class="palette" id="visualPalette"></div></div>
+        </article>
+        <article class="report-card"><span>Sonic identity</span><div class="tag-list" id="moodTags"></div><h3>Genre influence, not a label</h3><ul id="genreList"></ul><h3>Likely audience</h3><p id="audienceCopy"></p></article>
+        <article class="report-card"><span>Structure + mix</span><h3>Energy map observations</h3><ul id="structureList"></ul><h3>Production checks</h3><ul id="mixList"></ul></article>
+        <article class="campaign-card"><span>Campaign signal</span><h3 id="campaignTagline"></h3><p id="releaseCopy"></p><div class="caption-stack" id="captionStack"></div></article>
+        <article class="report-card"><span>Release movement</span><h3>Rollout</h3><ol id="rolloutList"></ol><h3>Video ideas</h3><ul id="videoList"></ul></article>
+        <article class="limits-card"><span>Human review required</span><ul id="limitsList"></ul><p id="confidenceNote"></p></article>
+      </div>
+    </section>
+
+    <section class="history-section">
+      <div><p class="eyebrow">PRIVATE ARCHIVE</p><h2>Your Song Lab projects.</h2></div>
+      <div class="history-grid" id="historyGrid"><p class="history-empty">Sign in to reopen saved Dreamweaver packages.</p></div>
+    </section>
+  </main>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+</body>
+</html>

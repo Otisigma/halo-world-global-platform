@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#f2ff62">
+  <meta name="description" content="Every official HALO release in one permanent music catalog, with listening links, release details, and media kits.">
+  <meta property="og:title" content="HALO Music — Every signal. One address.">
+  <meta property="og:description" content="Listen to every official HALO release from one permanent catalog.">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="HALO Music World">
+  <meta property="og:image" content="https://halo-world-global-platform.netlify.app/assets/releases/the-cold-is-lasting-longer.jpg">
+  <meta property="og:image:width" content="1024">
+  <meta property="og:image:height" content="1024">
+  <meta property="og:image:alt" content="The Cold Is Lasting Longer release artwork">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:image" content="https://halo-world-global-platform.netlify.app/assets/releases/the-cold-is-lasting-longer.jpg">
+  <meta name="twitter:image:alt" content="The Cold Is Lasting Longer release artwork">
+  <title>HALO Music — Every Release in One Place</title>
+  <link rel="icon" href="/assets/halo-app-icon-192.png" type="image/png">
+  <link rel="apple-touch-icon" href="/assets/halo-app-icon-180.png">
+  <link rel="stylesheet" href="/accessibility.css">
+  <link rel="stylesheet" href="/halo-brand.css">
+  <link rel="stylesheet" href="/music/music.css">
+</head>
+<body>
+  <div class="grain" aria-hidden="true"></div>
+  <header class="site-header">
+    <a class="brand" href="/" aria-label="HALO home">
+      <img class="halo-brand-image" src="/assets/halo-logo-mark.webp" alt="">
+      <span><strong>HALO</strong><small>Music World</small></span>
+    </a>
+    <nav aria-label="Music catalog navigation">
+      <a href="/">World</a>
+      <a href="/dj-deck.html">DJ Deck</a>
+      <a href="/mixes/">HALO X Mixes</a>
+      <a href="/artists/">Artist Rooms</a>
+      <a href="/creators/">Creators</a>
+      <button class="share-catalog" id="shareCatalog" type="button">Share this catalog</button>
+    </nav>
+  </header>
+
+  <main>
+    <section class="masthead" aria-labelledby="catalogTitle">
+      <div class="masthead-copy">
+        <p class="kicker"><span>Permanent catalog</span><span id="releaseCount">Loading signals</span></p>
+        <h1 id="catalogTitle">Every signal.<br><em>One address.</em></h1>
+        <p class="intro">The complete HALO release line in one place. Listen, share, or open the approved campaign room for any record.</p>
+      </div>
+      <div class="catalog-code" aria-label="Permanent HALO music address">
+        <span>THE ONE LINK</span>
+        <strong id="catalogAddress">halo.world/music</strong>
+        <button id="copyCatalog" type="button">Copy address</button>
+      </div>
+    </section>
+
+    <section id="featuredRelease" class="featured-shell" aria-live="polite">
+      <div class="featured-skeleton" aria-label="Loading featured release">
+        <span></span><span></span><span></span>
+      </div>
+    </section>
+
+    <section class="chart-section" aria-labelledby="chartTitle">
+      <header class="chart-header">
+        <div>
+          <p class="section-index">02 / The living chart</p>
+          <h2 id="chartTitle">Don’t just count it.<br><em>Enter the signal.</em></h2>
+        </div>
+        <div class="chart-intro">
+          <p>HALO ranks its own published releases using recent listening clicks, release-room opens, and release momentum. This is a transparent HALO activity chart—not an industry sales chart.</p>
+          <div class="chart-window"><span class="live-dot" aria-hidden="true"></span><strong>Rolling 7 days</strong><span>Compared with the previous 7</span></div>
+        </div>
+      </header>
+
+      <div class="chart-rooms" id="chartRooms" aria-label="Choose a chart room">
+        <button type="button" data-chart-room="all" aria-pressed="true">All signal</button>
+        <button type="button" data-chart-room="hip-hop">Hip-Hop / Rap</button>
+        <button type="button" data-chart-room="rnb">R&amp;B / Soul</button>
+        <button type="button" data-chart-room="dance">House / Dance</button>
+        <button type="button" data-chart-room="gospel">Gospel / Inspirational</button>
+        <button type="button" data-chart-room="global">Afrobeats / Global</button>
+      </div>
+
+      <div class="chart-console">
+        <div class="chart-board" id="chartBoard" aria-live="polite">
+          <div class="chart-loading"><span></span><span></span><span></span></div>
+        </div>
+        <aside class="chart-stage" id="chartStage" aria-live="polite">
+          <div class="stage-empty">
+            <span class="stage-number">#</span>
+            <p>Select any chart position to open the artwork, story, movement, listening link, and available video without leaving the chart.</p>
+          </div>
+        </aside>
+      </div>
+    </section>
+
+    <section class="catalog-section" aria-labelledby="allReleasesTitle">
+      <header class="catalog-header">
+        <div>
+          <p class="section-index">03 / Full transmission</p>
+          <h2 id="allReleasesTitle">All releases</h2>
+        </div>
+        <label class="search-control">
+          <span>Search the catalog</span>
+          <input id="catalogSearch" type="search" placeholder="Title, artist, genre…" autocomplete="off">
+        </label>
+      </header>
+      <div class="genre-filter" id="genreFilter" aria-label="Filter releases by genre"></div>
+      <div class="release-grid" id="releaseGrid" aria-live="polite">
+        <article class="card-skeleton"></article>
+        <article class="card-skeleton"></article>
+        <article class="card-skeleton"></article>
+      </div>
+    </section>
+
+    <section class="dj-callout">
+      <p class="section-index">For selectors, stations and press</p>
+      <h2>Need the version behind the version?</h2>
+      <p>Each release has an audience-specific room for radio service, DJ delivery, press materials, and approved previews.</p>
+      <a href="/" data-stat-event="open_release_room" data-stat-target="music_catalog">Enter HALO World <span aria-hidden="true">↗</span></a>
+    </section>
+  </main>
+
+  <footer>
+    <span>HALO Music World</span>
+    <span>One catalog. Every release.</span>
+    <a href="/" aria-label="Return to HALO home">Return home ↗</a>
+  </footer>
+
+  <div class="toast" id="catalogToast" role="status" aria-live="polite"></div>
+  <script src="/site-monitor.js" defer></script>
+  <script src="/stats.js" defer></script>
+  <script src="/accessibility.js" defer></script>
+  <script src="/music/music.js" defer></script>
+</body>
+</html>

@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>YouTube Source Box — HALO</title>
+  <meta name="description" content="Load YouTube channels, playlists, Shorts, and videos into one private campaign source library.">
+  <meta name="theme-color" content="#f0ff4f">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Syne:wght@500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/halo-brand.css">
+  <link rel="stylesheet" href="/youtube-studio/youtube-studio.css">
+  <script type="module" src="/identity.js"></script>
+  <script src="/youtube-studio/youtube-studio.js" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <a class="wordmark" href="/halo.html"><span>HALO</span><small>Source Box / 01</small></a>
+    <nav aria-label="YouTube Source Box navigation">
+      <a href="/campaign-studio/">Campaign Studio</a>
+      <a href="/dreamweaver/">Dreamweaver</a>
+      <button type="button" id="accountButton">Team sign in</button>
+    </nav>
+  </header>
+
+  <main id="app" aria-live="polite">
+    <section class="loading-view">
+      <span>CONNECTING SOURCE LIBRARY</span>
+      <h1>Opening the box.</h1>
+    </section>
+  </main>
+
+  <dialog id="authDialog" class="auth-dialog">
+    <form id="authForm">
+      <button class="close-button" type="button" data-close aria-label="Close sign in">×</button>
+      <span class="eyebrow">PRIVATE TEAM WORKSPACE</span>
+      <h2 id="authTitle">Sign in to load sources.</h2>
+      <div class="auth-tabs" role="tablist" aria-label="Account action">
+        <button type="button" data-auth-mode="login" aria-selected="true">Sign in</button>
+        <button type="button" data-auth-mode="signup" aria-selected="false">Join</button>
+      </div>
+      <label id="nameField" hidden>Your name<input id="authName" autocomplete="name" maxlength="64"></label>
+      <label>Email<input id="authEmail" type="email" autocomplete="email" required></label>
+      <label>Password<input id="authPassword" type="password" minlength="8" autocomplete="current-password" required></label>
+      <p id="authMessage" class="form-message" role="status"></p>
+      <button class="button button-dark" id="authSubmit" type="submit">Sign in</button>
+    </form>
+  </dialog>
+</body>
+</html>

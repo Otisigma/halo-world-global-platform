@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="description" content="Owner-only HALO desk for transparent, respectful communication with music and technology platforms.">
+  <meta name="robots" content="noindex,nofollow,noarchive">
+  <title>Partner Trust Team · HALO</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=DM+Mono:wght@300;400;500&family=Newsreader:opsz,wght@6..72,300;6..72,500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/partner-trust.css">
+  <script type="module" src="/identity.js"></script>
+  <script src="/stats.js" defer></script>
+  <script src="/site-monitor.js" defer></script>
+  <script src="/partner-trust.js" defer></script>
+  <script src="/accessibility.js" defer></script>
+</head>
+<body>
+  <div class="paper-grain" aria-hidden="true"></div>
+  <header class="topbar">
+    <a class="brand" href="/halo.html" aria-label="HALO home"><span>H</span><strong>HALO</strong></a>
+    <nav aria-label="Partner desk navigation">
+      <a href="/outreach.html">Outreach desk</a>
+      <a href="/halo-command.html">Agent council</a>
+      <button id="authButton" type="button">Sign in</button>
+    </nav>
+  </header>
+
+  <main>
+    <section class="hero" aria-labelledby="pageTitle">
+      <div class="hero-index" aria-hidden="true">PT<br>01</div>
+      <div class="hero-copy">
+        <p class="eyebrow">Owner communications · Human authority</p>
+        <h1 id="pageTitle">Trust is a<br><em>working system.</em></h1>
+      </div>
+      <div class="hero-note">
+        <strong>Nothing sends itself.</strong>
+        <p>Five specialist views prepare a grounded partner brief. You review it, choose the real contact channel, and record what happened.</p>
+      </div>
+    </section>
+
+    <section id="gateView" class="gate" aria-live="polite">
+      <p class="eyebrow">Access check</p>
+      <h2 id="gateTitle">Opening the partner trust desk.</h2>
+      <p id="gateMessage">Checking owner access and loading platform records.</p>
+      <button id="gateAction" class="button ink" type="button" hidden>Sign in</button>
+    </section>
+
+    <section id="workspaceView" hidden>
+      <section class="metrics" aria-label="Partner trust metrics">
+        <div><span>Platforms</span><strong id="partnerMetric">0</strong></div>
+        <div><span>Awaiting review</span><strong id="proposedMetric">0</strong></div>
+        <div><span>Approved drafts</span><strong id="approvedMetric">0</strong></div>
+        <div><span>Human-shared</span><strong id="sharedMetric">0</strong></div>
+      </section>
+
+      <section class="team" aria-labelledby="teamTitle">
+        <div class="section-lead">
+          <p class="eyebrow">The five-seat review</p>
+          <h2 id="teamTitle">Different duties.<br>One truthful voice.</h2>
+        </div>
+        <div id="roleList" class="role-list"></div>
+      </section>
+
+      <section class="desk">
+        <aside class="partner-rail" aria-labelledby="partnerTitle">
+          <div class="rail-head">
+            <div><p class="eyebrow">Platform register</p><h2 id="partnerTitle">Who we owe clarity.</h2></div>
+            <span id="partnerCount">0 records</span>
+          </div>
+          <div id="partnerList" class="partner-list"></div>
+          <details class="add-partner">
+            <summary>Add another platform</summary>
+            <form id="partnerForm">
+              <label><span>Name</span><input id="partnerName" maxlength="160" required></label>
+              <label><span>Platform URL</span><input id="platformUrl" type="url" maxlength="500" required placeholder="https://"></label>
+              <label><span>HALO account URL</span><input id="accountUrl" type="url" maxlength="500" placeholder="https://"></label>
+              <label><span>Official contact or partner form</span><input id="contactUrl" type="url" maxlength="500" placeholder="https://"></label>
+              <label><span>Where this record came from</span><textarea id="sourceNote" rows="2" maxlength="500" required></textarea></label>
+              <label><span>How HALO intends to use it</span><textarea id="usageSummary" rows="4" maxlength="2000" required></textarea></label>
+              <label><span>Safeguards · one per line</span><textarea id="safeguards" rows="6" maxlength="4000" required></textarea></label>
+              <button class="button ink" type="submit">Add platform record</button>
+              <p id="partnerMessage" class="form-message" role="status"></p>
+            </form>
+          </details>
+        </aside>
+
+        <section class="brief-stage" aria-labelledby="briefTitle">
+          <div class="brief-composer">
+            <div>
+              <p class="eyebrow">Prepare the conversation</p>
+              <h2 id="briefTitle">Say what we are doing.<br>Show how we protect the platform.</h2>
+            </div>
+            <form id="briefForm">
+              <div class="field-row">
+                <label><span>Platform</span><select id="briefPartner"></select></label>
+                <label><span>Purpose</span><select id="briefPurpose"><option value="introduction">Responsible-use introduction</option><option value="usage_disclosure">Usage disclosure</option><option value="policy_review">Policy guidance request</option><option value="partnership">Partnership conversation</option></select></label>
+              </div>
+              <label><span>Current context for the team</span><textarea id="ownerContext" rows="3" maxlength="1200" placeholder="What changed, what we are considering, and what guidance we need."></textarea></label>
+              <button id="draftButton" class="button rust" type="submit">Ask the team to draft</button>
+              <p id="briefMessage" class="form-message" role="status"></p>
+            </form>
+          </div>
+          <div class="queue-head">
+            <div><p class="eyebrow">Owner review queue</p><h3>Prepared briefs</h3></div>
+            <label><span>Status</span><select id="statusFilter"><option value="all">All</option><option value="proposed" selected>Awaiting review</option><option value="approved">Approved</option><option value="shared">Shared</option><option value="responded">Responded</option><option value="archived">Archived</option></select></label>
+          </div>
+          <div id="briefList" class="brief-list"></div>
+        </section>
+      </section>
+
+      <section class="charter" aria-labelledby="charterTitle">
+        <p class="eyebrow">Non-negotiable charter</p>
+        <h2 id="charterTitle">Helpful intelligence.<br>No borrowed authority.</h2>
+        <div class="charter-grid">
+          <p><strong>01</strong>No automated sending, posting, submission, or scheduling.</p>
+          <p><strong>02</strong>No claim of partnership until the platform confirms it.</p>
+          <p><strong>03</strong>No scraping, limit bypass, credential sharing, or unofficial automation.</p>
+          <p><strong>04</strong>Every statement cites HALO’s recorded use and safeguards.</p>
+          <p><strong>05</strong>Every shared message and response is recorded by the owner.</p>
+        </div>
+      </section>
+    </section>
+  </main>
+</body>
+</html>

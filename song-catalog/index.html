@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#191713">
+  <title>Song Catalog | HALO</title>
+  <meta name="description" content="Manage sale masters, radio edits, instrumentals, stems, metadata, and mastering readiness in one HALO catalog.">
+  <link rel="icon" href="/assets/halo-app-icon-192.png">
+  <link rel="stylesheet" href="/accessibility.css">
+  <link rel="stylesheet" href="/halo-brand.css">
+  <link rel="stylesheet" href="/song-catalog/song-catalog.css">
+</head>
+<body>
+  <header class="catalog-header">
+    <a class="brand" href="/"><img src="/assets/halo-logo-mark.webp" alt=""><span><strong>HALO</strong><small>Song Catalog</small></span></a>
+    <nav aria-label="Catalog pathways"><a href="/release-house/">Release House</a><a href="/finish-house/">Finish House</a><a href="/radio/">Radio</a></nav>
+    <div class="header-actions"><button class="quiet-button" id="importButton" type="button">Load existing songs</button><button class="primary-button" id="addSongButton" type="button">Add a song</button></div>
+  </header>
+
+  <main>
+    <section class="catalog-hero" aria-labelledby="pageTitle">
+      <div>
+        <p class="eyebrow">One song · every useful version</p>
+        <h1 id="pageTitle">Put every master on the right track.</h1>
+        <p>Keep the sale master separate from radio, clean, instrumental, stem, extended, demo, and alternate versions. Dream Weaver checks the information every time the catalog changes.</p>
+      </div>
+      <div class="signal-card" aria-label="Catalog status">
+        <span>Dream Weaver signal</span>
+        <strong id="overallScore">—</strong>
+        <small id="overallCopy">Sign in to inspect the catalog.</small>
+      </div>
+    </section>
+
+    <section class="summary-strip" aria-label="Catalog totals">
+      <article><span>Catalog</span><strong id="songCount">0</strong><small>active songs</small></article>
+      <article><span>For sale</span><strong id="saleCount">0</strong><small>priced releases</small></article>
+      <article><span>Radio queue</span><strong id="radioCount">0</strong><small>masters to finish</small></article>
+      <article><span>Ready</span><strong id="readyCount">0</strong><small>Dream Weaver cleared</small></article>
+    </section>
+
+    <section class="catalog-shell" id="catalogShell" aria-busy="true">
+      <aside class="song-rail" aria-label="Songs">
+        <div class="rail-heading"><div><p class="eyebrow">The catalog</p><h2>All songs</h2></div><label><span class="sr-only">Search songs</span><input id="searchInput" type="search" placeholder="Search title or artist"></label></div>
+        <div class="song-list" id="songList"><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div></div>
+      </aside>
+
+      <div class="workspace" id="workspace">
+        <section class="empty-state" id="emptyState">
+          <span class="record-mark" aria-hidden="true"></span>
+          <p class="eyebrow">Catalog desk</p>
+          <h2>Load the music, then finish the facts.</h2>
+          <p>Import releases already in HALO or add a song manually. Every song starts with all standard version routes ready to fill.</p>
+          <div><button class="primary-button" data-add-song type="button">Add a song</button><button class="quiet-button" data-import type="button">Load existing songs</button></div>
+        </section>
+
+        <div id="songWorkspace" hidden>
+          <section class="song-heading">
+            <div><p class="eyebrow" id="songArtist">Artist</p><h2 id="songTitle">Song title</h2><p id="songRouteSummary">0 versions routed</p></div>
+            <div class="score-stamp"><span>DW score</span><strong id="songScore">0</strong><small id="songStatus">Needs review</small></div>
+          </section>
+
+          <div class="workspace-grid">
+            <form class="metadata-panel" id="songForm">
+              <div class="panel-heading"><div><p class="eyebrow">Master record</p><h3>Song information</h3></div><button class="primary-button" type="submit">Save + review</button></div>
+              <input id="songId" type="hidden">
+              <div class="field-grid">
+                <label><span>Artist</span><input id="artistName" required maxlength="120"></label>
+                <label><span>Song title</span><input id="title" required maxlength="160"></label>
+                <label><span>Album / project</span><input id="albumTitle" maxlength="160"></label>
+                <label><span>Primary genre</span><input id="genre" maxlength="80"></label>
+                <label><span>ISRC</span><input id="isrc" maxlength="24" placeholder="US-AAA-26-00001"></label>
+                <label><span>UPC</span><input id="upc" maxlength="24"></label>
+                <label><span>Rights</span><select id="rightsStatus"><option value="needs_review">Needs review</option><option value="cleared">Cleared</option><option value="disputed">Disputed</option></select></label>
+                <label><span>Sale status</span><select id="saleStatus"><option value="for_sale">For sale</option><option value="coming_soon">Coming soon</option><option value="not_for_sale">Not for sale</option></select></label>
+                <label><span>Sale price (USD)</span><input id="salePrice" type="number" min="0" step="0.01" placeholder="1.29"></label>
+                <label class="check-label"><input id="explicitLyrics" type="checkbox"><span>Explicit lyrics</span></label>
+                <label class="wide-field"><span>Catalog notes</span><textarea id="songNotes" maxlength="4000" placeholder="Ownership, collaborators, release plan, or anything the team needs to know."></textarea></label>
+              </div>
+            </form>
+
+            <aside class="review-panel">
+              <div class="panel-heading"><div><p class="eyebrow">Automatic check</p><h3>Dream Weaver review</h3></div><button class="text-button" id="reviewButton" type="button">Run again</button></div>
+              <p class="review-intro" id="reviewIntro">Dream Weaver checks the information and version routing after every save.</p>
+              <div class="issue-list" id="issueList"></div>
+            </aside>
+          </div>
+
+          <section class="versions-panel">
+            <div class="panel-heading"><div><p class="eyebrow">Version routing</p><h3>Every version, one clear destination</h3></div><p>Open a row to connect audio and update mastering.</p></div>
+            <div class="version-table" id="versionTable"></div>
+          </section>
+        </div>
+      </div>
+    </section>
+
+    <section class="producer-room" aria-labelledby="producerTitle">
+      <div class="producer-heading">
+        <div><p class="eyebrow">Dreamweaver production team</p><h2 id="producerTitle">Turn the strongest songs into products.</h2></div>
+        <div class="producer-actions"><span id="producerStatus">Waiting for a catalog run</span><button class="primary-button" id="runProducerButton" type="button">Build album + mix ideas</button></div>
+      </div>
+      <div class="producer-method">
+        <p>Dreamweaver works in the background, checks cleared sale masters, reads recent release-kit activity, groups compatible songs, and proposes direct-sale pricing. Nothing publishes until you approve it.</p>
+        <ol><li><span>01</span>Scan sale-ready masters</li><li><span>02</span>Rank audience signals</li><li><span>03</span>Build albums, mixes, vaults</li><li><span>04</span>Hold for approval</li></ol>
+      </div>
+      <div class="producer-grid" id="producerGrid"><div class="producer-empty"><strong>No packages yet.</strong><span>Run Dreamweaver after your songs have cleared rights, pricing, audio, and mastering.</span></div></div>
+    </section>
+
+    <section class="radio-queue" aria-labelledby="radioQueueTitle">
+      <div class="queue-heading"><div><p class="eyebrow">Broadcast lane</p><h2 id="radioQueueTitle">Radio mastering queue</h2></div><p>Only dedicated radio and clean versions appear here. The sale master stays untouched.</p></div>
+      <div class="queue-list" id="radioQueue"><p class="queue-empty">Load the catalog to see radio work.</p></div>
+    </section>
+    <p class="toast" id="statusMessage" role="status"></p>
+  </main>
+
+  <dialog id="songDialog">
+    <form id="newSongForm" class="dialog-card">
+      <button class="dialog-close" type="button" data-close aria-label="Close">×</button>
+      <p class="eyebrow">New catalog record</p><h2>Add the song once.</h2><p>HALO creates every standard version route automatically.</p>
+      <label><span>Artist</span><input id="newArtistName" required maxlength="120"></label>
+      <label><span>Song title</span><input id="newTitle" required maxlength="160"></label>
+      <label><span>Genre</span><input id="newGenre" maxlength="80"></label>
+      <label><span>Sale price (USD)</span><input id="newSalePrice" type="number" min="0" step="0.01" placeholder="1.29"></label>
+      <button class="primary-button" type="submit">Create full song record</button>
+    </form>
+  </dialog>
+
+  <dialog id="versionDialog">
+    <form id="versionForm" class="dialog-card version-dialog-card">
+      <button class="dialog-close" type="button" data-close aria-label="Close">×</button>
+      <p class="eyebrow" id="versionDestination">Destination</p><h2 id="versionHeading">Edit version</h2>
+      <input id="versionId" type="hidden"><input id="versionSongId" type="hidden"><input id="versionType" type="hidden">
+      <div class="field-grid">
+        <label><span>Version label</span><input id="versionLabel" required maxlength="100"></label>
+        <label><span>Mastering status</span><select id="masteringStatus"><option value="not_started">Not started</option><option value="queued">Queued</option><option value="in_progress">In progress</option><option value="review">Ready for review</option><option value="approved">Approved</option></select></label>
+        <section class="wide-field audio-upload-panel" aria-labelledby="audioUploadHeading">
+          <div><span class="field-label" id="audioUploadHeading">Upload this version</span><strong>Drop in the actual master.</strong><p>MP3, M4A, AAC, OGG, WebM, WAV, or FLAC · 128 MB maximum.</p></div>
+          <label class="audio-file-picker"><span>Choose audio file</span><input id="audioFile" type="file" accept="audio/*,.mp3,.m4a,.aac,.ogg,.webm,.wav,.flac"></label>
+          <button class="quiet-button" id="uploadAudioButton" type="button">Upload selected audio</button>
+          <p class="audio-upload-progress" id="audioUploadProgress" role="status">No file selected.</p>
+          <audio id="audioPreview" controls preload="metadata" hidden></audio>
+        </section>
+        <label class="wide-field"><span>External audio source link (optional)</span><input id="audioUrl" type="url" placeholder="https://secure-audio-location.example/song.wav"></label>
+        <label><span>Duration (seconds)</span><input id="durationSeconds" type="number" min="0" max="86400"></label>
+        <label><span>Target LUFS</span><input id="targetLufs" type="number" min="-30" max="-5"></label>
+        <label><span>True peak dBTP</span><input id="truePeakDbtp" type="number" min="-10" max="0" step="0.1"></label>
+        <label class="check-label"><input id="cleanLyrics" type="checkbox"><span>Clean lyrics confirmed</span></label>
+        <label class="check-label"><input id="saleEnabled" type="checkbox"><span>Available for sale</span></label>
+        <label class="wide-field"><span>Version notes</span><textarea id="versionNotes" maxlength="2000"></textarea></label>
+      </div>
+      <button class="primary-button" type="submit">Save version + review</button>
+    </form>
+  </dialog>
+
+  <script type="module" src="/identity.js"></script>
+  <script type="module" src="/song-catalog/song-catalog.js"></script>
+</body>
+</html>

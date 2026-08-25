@@ -1,0 +1,225 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#15120d">
+  <title>HALO Control Center — Private AI Operations</title>
+  <meta name="description" content="Owner-only live operations, direct AI team commands, daily reports, approvals, and outcome memory for HALO.">
+  <meta property="og:title" content="HALO Control Center — Private AI Operations">
+  <meta property="og:description" content="Owner-only live operations, AI team commands, daily reports, approvals, and outcome memory for HALO.">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="HALO Music World">
+  <meta property="og:image" content="https://halo-world-global-platform.netlify.app/assets/halo-app-icon-512.png">
+  <meta property="og:image:width" content="512">
+  <meta property="og:image:height" content="512">
+  <meta property="og:image:alt" content="HALO Music World logo">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:image" content="https://halo-world-global-platform.netlify.app/assets/halo-app-icon-512.png">
+  <meta name="twitter:image:alt" content="HALO Music World logo">
+  <link rel="manifest" href="/app.webmanifest">
+  <link rel="apple-touch-icon" href="/assets/halo-app-icon-180.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:opsz,wght@6..96,600;6..96,800&family=DM+Mono:wght@300;400;500&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/halo-brand.css">
+  <link rel="stylesheet" href="/halo-command.css">
+  <link rel="stylesheet" href="/accessibility.css">
+  <link rel="stylesheet" href="/mobile-navigation.css">
+  <script src="/stats.js" defer></script>
+  <script src="/site-monitor.js" defer></script>
+  <script src="/accessibility.js" defer></script>
+  <script src="/mobile-navigation.js" defer></script>
+  <script type="module" src="/identity.js"></script>
+  <script src="/halo-command.js" defer></script>
+</head>
+<body>
+  <div class="grain" aria-hidden="true"></div>
+  <header class="command-header">
+    <a class="command-brand" href="/" aria-label="HALO Music World home">
+      <img class="halo-brand-image" src="/assets/halo-logo-mark.webp" alt="">
+      <span><strong>HALO</strong><small>AGENT COUNCIL / OWNER SIGNAL</small></span>
+    </a>
+    <nav class="command-nav" aria-label="Owner destinations">
+      <a href="/halo-x.html">Founders room</a>
+      <a href="/halo-relations.html">Relations</a>
+      <a href="/artist-economy/">Artist economy</a>
+      <a href="/artist-team.html">Artist teams</a>
+      <a href="/dj-deck.html">DJ console</a>
+      <button id="identityButton" type="button">Sign in</button>
+    </nav>
+  </header>
+
+  <main>
+    <section id="lockedView" class="locked-view">
+      <div class="lock-orbit" aria-hidden="true"><span></span></div>
+      <p class="section-label">OWNER AUTHORITY REQUIRED</p>
+      <h1>The council speaks<br><em>only inside the room.</em></h1>
+      <p id="lockedMessage">Sign in with an owner account to read the daily report, approve proposed work, and teach the council from real outcomes.</p>
+      <form id="ownerAuthForm" class="owner-auth-form">
+        <label>Email<input id="ownerEmail" type="email" autocomplete="email" required></label>
+        <label>Password<input id="ownerPassword" type="password" autocomplete="current-password" minlength="8" required></label>
+        <button id="lockedSignIn" class="primary-action" type="submit">Open owner sign in</button>
+      </form>
+      <p id="authMessage" class="auth-message" aria-live="polite"></p>
+    </section>
+
+    <div id="commandView" hidden>
+      <section class="command-hero" aria-labelledby="pageTitle">
+        <div class="hero-copy">
+          <p class="section-label"><span></span> DAILY ORGANIZATIONAL INTELLIGENCE</p>
+          <h1 id="pageTitle">A living system<br><em>that learns from truth.</em></h1>
+          <p class="hero-intro">Five specialist agents monitor privacy-safe operating signals. Mirror challenges their assumptions, while this private room lets you direct the team, review feedback, approve work, and track outcomes.</p>
+          <div class="hero-actions">
+            <button id="runCouncilButton" class="primary-action" type="button">Run the council now</button>
+            <span id="runStatus" class="run-status" aria-live="polite">Scheduled daily at 07:30 UTC</span>
+          </div>
+        </div>
+        <div class="health-instrument" aria-label="Latest HALO health score">
+          <svg viewBox="0 0 220 220" aria-hidden="true">
+            <circle class="health-track" cx="110" cy="110" r="86"></circle>
+            <circle id="healthArc" class="health-arc" cx="110" cy="110" r="86"></circle>
+            <ellipse cx="110" cy="110" rx="104" ry="34" transform="rotate(-18 110 110)"></ellipse>
+          </svg>
+          <div class="health-reading"><strong id="healthScore">—</strong><span>ORGANIZATIONAL HEALTH</span><small id="reportConfidence">Awaiting first report</small></div>
+        </div>
+      </section>
+
+      <section class="signal-strip" aria-label="Current operating signals">
+        <article><span>VISITORS / 7D</span><strong id="metricVisitors">—</strong></article>
+        <article><span>ACTIVE MEMBERS / 7D</span><strong id="metricMembers">—</strong></article>
+        <article><span>REAL CREATORS</span><strong id="metricCreators">—</strong></article>
+        <article><span>OPEN ISSUES</span><strong id="metricIssues">—</strong></article>
+        <article><span>ROOM SIGNALS / 7D</span><strong id="metricSignals">—</strong></article>
+      </section>
+
+      <section class="control-deck" aria-labelledby="controlDeckTitle">
+        <div class="operations-radar">
+          <div class="section-heading control-heading">
+            <div><p class="section-label">LIVE OPERATIONS</p><h2 id="controlDeckTitle">Everything important, in one field of view.</h2></div>
+            <p id="controlRefresh">Connecting to the operations pulse…</p>
+          </div>
+          <div class="pulse-grid" aria-label="Control center pulse">
+            <article><span>OPEN ISSUES</span><strong id="pulseIssues">—</strong></article>
+            <article><span>ACTIVE WORK</span><strong id="pulseActions">—</strong></article>
+            <article><span>COMMANDS / 24H</span><strong id="pulseCommands">—</strong></article>
+            <article><span>FAILURES / 24H</span><strong id="pulseFailures">—</strong></article>
+          </div>
+          <div id="activityFeed" class="activity-feed" aria-live="polite">
+            <div class="empty-state">The live operations feed is loading.</div>
+          </div>
+        </div>
+
+        <div class="command-console">
+          <div class="console-header">
+            <div><p class="section-label">DIRECT THE TEAM</p><h2>Speak. Assign. Review.</h2></div>
+            <span class="console-light"><i></i> OWNER CHANNEL</span>
+          </div>
+          <div id="commandThread" class="command-thread" aria-live="polite">
+            <div class="command-empty"><strong>The council is listening.</strong><span>Send a question, instruction, or request for a measurable action.</span></div>
+          </div>
+          <form id="commandForm" class="command-form">
+            <div class="command-fields">
+              <label>Talk to
+                <select id="commandTarget" name="targetAgent">
+                  <option value="council">Full council</option>
+                  <option value="atlas">Atlas — strategy</option>
+                  <option value="pulse">Pulse — growth</option>
+                  <option value="bridge">Bridge — creators</option>
+                  <option value="hearth">Hearth — community</option>
+                  <option value="sentinel">Sentinel — operations</option>
+                  <option value="mirror">Mirror — reflection</option>
+                </select>
+              </label>
+              <label class="proposal-toggle"><input id="requestProposal" type="checkbox" checked><span>Route useful work into approval queue</span></label>
+            </div>
+            <label class="command-input-label">Owner command
+              <textarea id="commandMessage" name="message" rows="4" maxlength="3000" placeholder="Ask what is changing, assign an investigation, or request a measurable next move." required></textarea>
+            </label>
+            <div class="command-submit-row">
+              <p id="commandStatus">No external action happens without your approval.</p>
+              <button id="sendCommandButton" class="primary-action" type="submit">Send to team</button>
+            </div>
+          </form>
+        </div>
+      </section>
+
+      <section class="council-section" aria-labelledby="councilTitle">
+        <div class="section-heading">
+          <div><p class="section-label">THE COUNCIL</p><h2 id="councilTitle">Distinct eyes. Shared evidence.</h2></div>
+          <p id="reportTimestamp">No report has been generated yet.</p>
+        </div>
+        <div class="council-map">
+          <svg class="council-lines" viewBox="0 0 1000 640" preserveAspectRatio="none" aria-hidden="true">
+            <path d="M500 318 L170 130 M500 318 L820 106 M500 318 L884 430 M500 318 L500 566 M500 318 L126 456"></path>
+            <circle cx="500" cy="318" r="126"></circle>
+            <circle cx="500" cy="318" r="212"></circle>
+          </svg>
+          <article class="mirror-core">
+            <span class="agent-index">00 / SYNTHESIS</span>
+            <h3>MIRROR</h3>
+            <p id="mirrorSummary">Mirror is waiting for the first complete council run.</p>
+            <div class="mirror-status"><span id="reportStatus">NO REPORT</span><small id="reportModel">Human approval remains required</small></div>
+          </article>
+          <div id="agentFindings" class="agent-findings" aria-live="polite"></div>
+        </div>
+      </section>
+
+      <section class="report-grid">
+        <article class="briefing-panel">
+          <p class="section-label">DAILY BRIEFING</p>
+          <h2>What deserves attention now.</h2>
+          <p id="executiveSummary" class="executive-summary">The first daily report has not been generated.</p>
+          <div class="briefing-columns">
+            <div><h3>Movement</h3><ul id="winsList"><li>No recorded wins yet.</li></ul></div>
+            <div><h3>Pressure</h3><ul id="concernsList"><li>No recorded concerns yet.</li></ul></div>
+          </div>
+        </article>
+        <article class="reflection-panel">
+          <p class="section-label">SELF-REFLECTION</p>
+          <blockquote id="tomorrowQuestion">“What changed, and what evidence proved it?”</blockquote>
+          <dl>
+            <div><dt>Changed</dt><dd id="reflectionChanged">Awaiting comparison data.</dd></div>
+            <div><dt>Corrected</dt><dd id="reflectionWrong">No prior assumption has been reviewed.</dd></div>
+            <div><dt>Learning</dt><dd id="reflectionLearning">Completed outcomes become tomorrow's memory.</dd></div>
+          </dl>
+        </article>
+      </section>
+
+      <section class="maintenance-section" aria-labelledby="maintenanceTitle">
+        <div class="section-heading">
+          <div><p class="section-label">MAINTENANCE TEAM</p><h2 id="maintenanceTitle">Every page. Every connection. Every output.</h2></div>
+          <div class="maintenance-control"><button id="runMaintenanceButton" class="primary-action" type="button">Run full sweep</button><p id="maintenanceTimestamp">Waiting for the first deployed-site sweep.</p></div>
+        </div>
+        <div class="maintenance-summary" aria-live="polite">
+          <article><span>STATUS</span><strong id="sweepStatus">WAITING</strong></article>
+          <article><span>PAGES</span><strong id="sweepPages">—</strong></article>
+          <article><span>CONNECTIONS</span><strong id="sweepConnections">—</strong></article>
+          <article><span>OUTPUTS</span><strong id="sweepOutputs">—</strong></article>
+          <article><span>FAILED</span><strong id="sweepFailed">—</strong></article>
+        </div>
+        <div id="maintenanceChecks" class="maintenance-checks"><div class="empty-state">The scheduled maintenance team runs every 15 minutes after deployment.</div></div>
+      </section>
+
+      <section class="actions-section" aria-labelledby="actionsTitle">
+        <div class="section-heading">
+          <div><p class="section-label">HUMAN DECISION QUEUE</p><h2 id="actionsTitle">Nothing moves without approval.</h2></div>
+          <p>Approve, dismiss, or record the real outcome. The next council run learns from that evidence.</p>
+        </div>
+        <div id="actionQueue" class="action-queue"></div>
+      </section>
+
+      <section class="memory-section" aria-labelledby="memoryTitle">
+        <div class="memory-copy">
+          <p class="section-label">LIVING MEMORY</p>
+          <h2 id="memoryTitle">Learning means correcting the model—not pretending certainty.</h2>
+          <p>HALO stores aggregate findings, approved work, owner notes, and actual outcomes. It does not retrain model weights, inspect private messages, or grant agents authority over money, publishing, contracts, accounts, or people.</p>
+        </div>
+        <div id="memoryLedger" class="memory-ledger"></div>
+      </section>
+    </div>
+  </main>
+
+  <footer><span>© 2026 HALO MUSIC WORLD SYSTEMS LLC</span><span>PRIVATE OWNER OPERATIONS / HUMAN AUTHORITY ALWAYS</span></footer>
+</body>
+</html>

@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>HALO Release House — Finish and Release Your First Song</title>
+  <meta name="description" content="A free, beginner-first guided workspace that takes a song from raw idea to release day and beyond.">
+  <meta name="theme-color" content="#17130f">
+  <meta property="og:title" content="HALO Release House — Finish and Release Your First Song">
+  <meta property="og:description" content="A free, beginner-first guided workspace from raw song idea to release day and beyond.">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="HALO Music World">
+  <meta property="og:image" content="https://halo-world-global-platform.netlify.app/assets/halo-app-icon-512.png">
+  <meta property="og:image:width" content="512">
+  <meta property="og:image:height" content="512">
+  <meta property="og:image:alt" content="HALO Music World logo">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:image" content="https://halo-world-global-platform.netlify.app/assets/halo-app-icon-512.png">
+  <meta name="twitter:image:alt" content="HALO Music World logo">
+  <link rel="manifest" href="/app.webmanifest">
+  <link rel="apple-touch-icon" href="/assets/halo-app-icon-180.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Manrope:wght@400;500;600;700;800&family=Playfair+Display:ital,wght@0,600;0,700;1,600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/halo-brand.css">
+  <link rel="stylesheet" href="/accessibility.css">
+  <link rel="stylesheet" href="/mobile-navigation.css">
+  <link rel="stylesheet" href="/release-house/release-house.css">
+  <script src="/stats.js" defer></script>
+  <script src="/site-monitor.js" defer></script>
+  <script src="/accessibility.js" defer></script>
+  <script src="/mobile-navigation.js" defer></script>
+  <script src="/identity.js" type="module"></script>
+  <script src="/release-house/release-house.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#workspace">Skip to your release workspace</a>
+  <div class="paper-grain" aria-hidden="true"></div>
+
+  <header class="house-header">
+    <a class="house-wordmark" href="/" aria-label="Return to HALO home">
+      <img src="/assets/halo-logo-mark.webp" alt="">
+      <span><strong>HALO</strong><small>Release House</small></span>
+    </a>
+    <nav aria-label="Release House navigation">
+      <a href="#how-it-works">How it works</a>
+      <a href="#workspace">My house</a>
+      <a href="/finish-house/">Finish House</a>
+      <a href="/campaign-studio/">Fan campaign</a>
+      <a href="/creator-freedom/">Creator Charter</a>
+      <a href="/creators/gear-guide.html">Gear guide</a>
+      <a href="/artists/">Artist rooms</a>
+    </nav>
+    <button class="header-account" id="accountButton" type="button">Join / sign in</button>
+  </header>
+
+  <main>
+    <section class="house-hero" aria-labelledby="heroTitle">
+      <div class="hero-copy">
+        <p class="kicker">A free guided path for independent artists</p>
+        <h1 id="heroTitle">Bring an idea in.<br><em>Take a release out.</em></h1>
+        <p class="hero-intro">No industry language assumed. No important step hidden behind a paywall. Move room by room from your first thought to a live song—and know exactly what comes next.</p>
+        <div class="hero-actions">
+          <a class="button button-ink" href="#workspace">Enter the house</a>
+          <button class="button button-paper" id="loadSampleButton" type="button">Tour a finished example</button>
+        </div>
+        <dl class="hero-proof" aria-label="Release House commitments">
+          <div><dt>13</dt><dd>guided rooms</dd></div>
+          <div><dt>Free</dt><dd>complete core path</dd></div>
+          <div><dt>Yours</dt><dd>music, files and choices</dd></div>
+        </dl>
+      </div>
+
+      <div class="blueprint" aria-label="A floor plan showing the thirteen Release House rooms">
+        <div class="blueprint-heading"><span>Floor plan / first release</span><strong>HWG—RH01</strong></div>
+        <div class="blueprint-grid" id="heroFloorPlan"></div>
+        <div class="blueprint-note">
+          <span>Front door</span>
+          <p>You do not need finished lyrics, expensive equipment, or industry experience to begin.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="method" id="how-it-works" aria-labelledby="methodTitle">
+      <div class="section-index"><span>House rules</span><strong>01—06</strong></div>
+      <div class="method-heading">
+        <p class="kicker">One calm decision at a time</p>
+        <h2 id="methodTitle">Every room works<br><em>the same way.</em></h2>
+      </div>
+      <ol class="method-steps">
+        <li><span>01</span><strong>Learn it</strong><p>Plain language explains what this stage is and why it matters.</p></li>
+        <li><span>02</span><strong>See it</strong><p>A real example turns unfamiliar terms into something concrete.</p></li>
+        <li><span>03</span><strong>Do it</strong><p>Small prompts help you make the decisions for your own song.</p></li>
+        <li><span>04</span><strong>Check it</strong><p>A readiness gate catches missing details before they cause problems.</p></li>
+        <li><span>05</span><strong>Save it</strong><p>Your work stays organised as one reusable release record.</p></li>
+        <li><span>06</span><strong>Move on</strong><p>The next room opens with a clear task, not a wall of advice.</p></li>
+      </ol>
+    </section>
+
+    <section class="workspace-shell" id="workspace" aria-labelledby="workspaceTitle">
+      <div class="workspace-topline">
+        <div>
+          <p class="kicker">Your working release</p>
+          <h2 id="workspaceTitle">The house is open.</h2>
+        </div>
+        <div class="project-actions">
+          <label class="project-picker">Project
+            <select id="projectSelect" aria-label="Choose a release project">
+              <option value="guest">Untitled first release</option>
+            </select>
+          </label>
+          <button class="text-action" id="newProjectButton" type="button">New project</button>
+          <button class="save-action" id="saveButton" type="button">Save progress</button>
+        </div>
+      </div>
+
+      <section class="release-passport" id="releasePassport" aria-labelledby="passportTitle">
+        <div class="passport-lead">
+          <p class="kicker">One release / one world</p>
+          <div class="passport-title-row">
+            <div>
+              <h3 id="passportTitle">Your release passport</h3>
+              <p id="passportIdentity">Name the artist and track to connect every HALO room.</p>
+            </div>
+            <div class="passport-score" aria-label="Release readiness">
+              <strong id="passportScore">0%</strong>
+              <span>release ready</span>
+            </div>
+          </div>
+          <p class="passport-promise">The same release now travels with you. Build the public room, shape the fan moment, submit the right audio, prepare outreach, and return to one weekly brief.</p>
+        </div>
+        <div class="passport-next">
+          <span>Best next move</span>
+          <strong id="passportNext">Complete the first room.</strong>
+          <p id="passportReason">HALO keeps the specialist tools in sequence so the release does not become scattered work.</p>
+        </div>
+        <div class="passport-stages" id="passportStages" aria-label="Connected release destinations"></div>
+      </section>
+
+      <div class="workspace" data-loading="true">
+        <aside class="room-rail" aria-label="Release House rooms">
+          <div class="rail-progress">
+            <span>House completion</span>
+            <strong id="railPercent">0%</strong>
+            <div><i id="railProgressBar"></i></div>
+          </div>
+          <ol id="roomNavigation"></ol>
+        </aside>
+
+        <article class="room-panel" id="roomPanel" aria-live="polite">
+          <div class="room-skeleton" aria-label="Opening the Release House">
+            <span></span><span></span><span></span><span></span>
+          </div>
+        </article>
+
+        <aside class="house-brief" aria-label="Release readiness brief">
+          <div class="readiness-dial">
+            <svg viewBox="0 0 120 120" aria-hidden="true">
+              <circle cx="60" cy="60" r="52"></circle>
+              <circle id="readinessCircle" class="dial-value" cx="60" cy="60" r="52"></circle>
+            </svg>
+            <span><strong id="readinessScore">0</strong><small>ready</small></span>
+          </div>
+          <div class="brief-copy">
+            <p class="kicker">House brief</p>
+            <h3 id="briefTitle">Start at the front door.</h3>
+            <p id="briefCopy">Name the feeling and listener for this song. That decision makes every later room easier.</p>
+          </div>
+          <dl class="release-facts">
+            <div><dt>Artist</dt><dd id="briefArtist">Not set</dd></div>
+            <div><dt>Track</dt><dd id="briefTrack">Working title</dd></div>
+            <div><dt>Target</dt><dd id="briefDate">No date yet</dd></div>
+            <div><dt>Distributor</dt><dd id="briefDistributor">Not chosen</dd></div>
+          </dl>
+          <div class="next-card">
+            <span>Next useful move</span>
+            <strong id="nextMove">Describe the song in one sentence.</strong>
+          </div>
+          <button class="support-card" id="supportButton" type="button">
+            <span>Want a person beside you?</span>
+            <strong>Explore guided support</strong>
+            <small>The full self-guided path stays free.</small>
+          </button>
+        </aside>
+      </div>
+      <p class="save-status" id="saveStatus" role="status">Your browser holds this draft until you sign in and save it.</p>
+    </section>
+
+    <section class="ownership" aria-labelledby="ownershipTitle">
+      <div>
+        <p class="kicker">The front-door promise</p>
+        <h2 id="ownershipTitle">Support without<br><em>taking the keys.</em></h2>
+      </div>
+      <div class="ownership-list">
+        <article><span>01</span><h3>Your music remains yours.</h3><p>HALO does not take ownership of songs, masters, artwork, accounts, or audience relationships through this workspace.</p></article>
+        <article><span>02</span><h3>Your distributor stays your choice.</h3><p>The match room explains trade-offs. It does not require a particular service or collect distributor passwords.</p></article>
+        <article><span>03</span><h3>Help is optional.</h3><p>Human reviews and concierge support can be paid services. Completing the core path is not.</p></article>
+      </div>
+    </section>
+  </main>
+
+  <footer class="house-footer">
+    <a class="house-wordmark" href="/">
+      <img src="/assets/halo-logo-mark.webp" alt="">
+      <span><strong>HALO</strong><small>Release House</small></span>
+    </a>
+    <p>Finish the song. Protect the details. Let people hear it.</p>
+    <div><a href="/finish-house/">Finish House</a><a href="/radio/">HALO Radio</a><a href="/outreach.html">Outreach Desk</a></div>
+  </footer>
+
+  <dialog class="house-dialog" id="projectDialog">
+    <form id="projectForm">
+      <button class="dialog-close" type="button" data-close-dialog aria-label="Close">×</button>
+      <p class="kicker">Open a new door</p>
+      <h2>Start a release project.</h2>
+      <p>You only need a working name. Everything can change as the song becomes clearer.</p>
+      <label>Project name<input id="newProjectName" name="projectName" maxlength="120" required placeholder="My first release"></label>
+      <label>Artist name <span>optional</span><input id="newArtistName" name="artistName" maxlength="120" placeholder="The name listeners will see"></label>
+      <label>Working song title <span>optional</span><input id="newTrackTitle" name="trackTitle" maxlength="160" placeholder="Untitled is fine"></label>
+      <button class="button button-ink" type="submit">Open this house</button>
+      <button class="sample-link" id="sampleProjectButton" type="button">Or begin with the completed example</button>
+    </form>
+  </dialog>
+
+  <dialog class="house-dialog" id="identityDialog">
+    <form id="identityForm">
+      <button class="dialog-close" type="button" data-close-dialog aria-label="Close">×</button>
+      <p class="kicker">Keep your place</p>
+      <h2 id="identityTitle">Join HALO.</h2>
+      <p id="identityIntro">Create a free membership to save this release and return on any device.</p>
+      <div class="auth-tabs" role="tablist" aria-label="Membership action">
+        <button type="button" data-auth-mode="signup" aria-selected="true">Join</button>
+        <button type="button" data-auth-mode="login" aria-selected="false">Sign in</button>
+      </div>
+      <label id="identityNameField">Your name<input id="identityName" autocomplete="name" maxlength="64"></label>
+      <label>Email<input id="identityEmail" type="email" autocomplete="email" required></label>
+      <label>Password<input id="identityPassword" type="password" minlength="8" autocomplete="new-password" required></label>
+      <p class="form-message" id="identityMessage" role="status"></p>
+      <button class="button button-ink" id="identitySubmit" type="submit">Join and save</button>
+    </form>
+  </dialog>
+
+  <dialog class="house-dialog support-dialog" id="supportDialog">
+    <div>
+      <button class="dialog-close" type="button" data-close-dialog aria-label="Close">×</button>
+      <p class="kicker">Optional human support</p>
+      <h2>The map stays free.<br><em>A guide can join you.</em></h2>
+      <div class="support-options">
+        <article><span>Review</span><h3>One-room check</h3><p>Bring one decision—lyrics, mix readiness, artwork, metadata, or launch plan—to a specialist.</p></article>
+        <article><span>Guide</span><h3>Guided release</h3><p>Schedule milestone reviews as your song moves from production through distributor delivery.</p></article>
+        <article><span>Concierge</span><h3>Release management</h3><p>Get hands-on organisation for files, people, deadlines, submissions, and launch tasks.</p></article>
+      </div>
+      <a class="button button-ink" href="/outreach.html">Talk to the Outreach Desk</a>
+      <p class="support-note">Support sells clarity and time—not guaranteed streams, playlists, radio play, or success.</p>
+    </div>
+  </dialog>
+</body>
+</html>

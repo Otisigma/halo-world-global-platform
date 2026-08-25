@@ -1,0 +1,1003 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow, noarchive">
+  <meta name="theme-color" content="#11100e">
+  <title>HALO World — Private Access</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Instrument+Serif:ital@0;1&display=swap');
+
+    :root {
+      color-scheme: dark;
+      --ink: #f1ede4;
+      --muted: #a6a096;
+      --dim: #6d6860;
+      --paper: #11100e;
+      --panel: rgba(25, 23, 19, .84);
+      --line: rgba(241, 237, 228, .16);
+      --ember: #cfa76a;
+      --ember-soft: rgba(207, 167, 106, .14);
+      --danger: #e29c8d;
+      --success: #aac59e;
+    }
+
+    * { box-sizing: border-box; }
+
+    html { min-height: 100%; background: var(--paper); }
+
+    body {
+      min-height: 100vh;
+      margin: 0;
+      overflow-x: hidden;
+      background:
+        radial-gradient(circle at 18% 12%, rgba(207, 167, 106, .11), transparent 31rem),
+        radial-gradient(circle at 82% 88%, rgba(112, 95, 68, .1), transparent 28rem),
+        #11100e;
+      color: var(--ink);
+      font-family: "DM Mono", monospace;
+    }
+
+    body::before {
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+      pointer-events: none;
+      content: "";
+      opacity: .26;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.18'/%3E%3C/svg%3E");
+    }
+
+    button, input { font: inherit; }
+
+    button { color: inherit; }
+
+    .shell {
+      position: relative;
+      z-index: 1;
+      display: grid;
+      min-height: 100vh;
+      grid-template-columns: minmax(0, 1.25fr) minmax(22rem, .75fr);
+    }
+
+    .world {
+      --world-accent: #cfa76a;
+      --world-accent-rgb: 207, 167, 106;
+      position: relative;
+      display: flex;
+      min-height: 100vh;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: clamp(1.5rem, 4vw, 4.5rem);
+      border-right: 1px solid var(--line);
+      overflow: hidden;
+    }
+
+    .world::after {
+      position: absolute;
+      width: min(42vw, 36rem);
+      aspect-ratio: 1;
+      right: -12%;
+      bottom: 7%;
+      border: 1px solid rgba(var(--world-accent-rgb), .22);
+      border-radius: 50%;
+      box-shadow: 0 0 0 4rem rgba(var(--world-accent-rgb), .025), 0 0 0 9rem rgba(var(--world-accent-rgb), .018);
+      content: "";
+      animation: breathe 7s ease-in-out infinite;
+      transition: border-color .8s ease, box-shadow .8s ease;
+    }
+
+    .brand {
+      display: inline-flex;
+      align-items: center;
+      gap: .85rem;
+      width: fit-content;
+      letter-spacing: .16em;
+      text-transform: uppercase;
+      font-size: .69rem;
+      font-weight: 500;
+    }
+
+    .brand-mark {
+      display: grid;
+      width: 2.4rem;
+      aspect-ratio: 1;
+      place-items: center;
+      border: 1px solid var(--world-accent);
+      border-radius: 50%;
+      color: var(--world-accent);
+      transition: border-color .8s ease, color .8s ease;
+    }
+
+    .brand-mark svg { width: 1.15rem; }
+
+    .hero {
+      position: relative;
+      z-index: 1;
+      max-width: 46rem;
+      margin: 12vh 0 auto;
+    }
+
+    .eyebrow {
+      display: flex;
+      align-items: center;
+      gap: .75rem;
+      margin: 0 0 1.6rem;
+      color: var(--world-accent);
+      font-size: .65rem;
+      letter-spacing: .2em;
+      text-transform: uppercase;
+      transition: color .8s ease;
+    }
+
+    .eyebrow::before { width: 2.5rem; height: 1px; background: currentColor; content: ""; }
+
+    h1 {
+      max-width: 9ch;
+      margin: 0;
+      font-family: "Instrument Serif", Georgia, serif;
+      font-size: clamp(4rem, 9.5vw, 8.8rem);
+      font-weight: 400;
+      line-height: .82;
+      letter-spacing: -.055em;
+    }
+
+    h1 em { color: var(--world-accent); font-weight: 400; transition: color .8s ease; }
+
+    .hero-copy {
+      max-width: 33rem;
+      margin: 2.2rem 0 0 clamp(0rem, 8vw, 8rem);
+      color: var(--muted);
+      font-size: clamp(.75rem, 1.2vw, .9rem);
+      line-height: 1.8;
+    }
+
+    .world-facets {
+      width: min(33rem, calc(100% - clamp(0rem, 8vw, 8rem)));
+      min-height: 6.5rem;
+      margin: 1.8rem 0 0 clamp(0rem, 8vw, 8rem);
+      padding-top: 1rem;
+      border-top: 1px solid var(--line);
+    }
+
+    .facet-meta {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      color: var(--world-accent);
+      font-size: .55rem;
+      letter-spacing: .17em;
+      text-transform: uppercase;
+      transition: color .8s ease;
+    }
+
+    .facet-controls { display: inline-flex; gap: .45rem; }
+
+    .facet-control {
+      width: 1.2rem;
+      height: 1.2rem;
+      padding: 0;
+      border: 0;
+      background: transparent;
+      cursor: pointer;
+    }
+
+    .facet-control::before {
+      display: block;
+      width: 100%;
+      height: 1px;
+      background: var(--dim);
+      content: "";
+      transform: scaleX(.55);
+      transition: background-color .3s ease, transform .3s ease;
+    }
+
+    .facet-control:hover::before,
+    .facet-control:focus-visible::before,
+    .facet-control[aria-current="true"]::before {
+      background: var(--world-accent);
+      transform: scaleX(1);
+    }
+
+    .facet-control:focus-visible { outline: 1px solid var(--world-accent); outline-offset: .2rem; }
+
+    .facet-pause {
+      min-width: 2rem;
+      padding: 0 .2rem;
+      border: 0;
+      background: transparent;
+      color: var(--dim);
+      cursor: pointer;
+      font-size: .52rem;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      transition: color .3s ease;
+    }
+
+    .facet-pause:hover,
+    .facet-pause:focus-visible,
+    .facet-pause[aria-pressed="true"] { color: var(--world-accent); }
+
+    .facet-pause:focus-visible { outline: 1px solid var(--world-accent); outline-offset: .2rem; }
+
+    .facet-copy {
+      margin: .7rem 0 0;
+      color: var(--ink);
+      font-family: "Instrument Serif", Georgia, serif;
+      font-size: clamp(1.35rem, 2.4vw, 2rem);
+      line-height: 1.08;
+      text-wrap: balance;
+    }
+
+    .facet-copy[data-changing="true"] { animation: facet-shift .45s ease both; }
+
+    .release-feature {
+      position: relative;
+      display: grid;
+      width: min(30rem, calc(100% - clamp(0rem, 8vw, 8rem)));
+      grid-template-columns: 7.4rem minmax(0, 1fr);
+      margin: 1.6rem 0 0 clamp(0rem, 12vw, 11rem);
+      border: 1px solid rgba(207, 167, 106, .34);
+      background: linear-gradient(112deg, rgba(207, 167, 106, .13), rgba(17, 16, 14, .86) 58%);
+      color: var(--ink);
+      overflow: hidden;
+      text-decoration: none;
+      animation: rise .7s cubic-bezier(.2,.8,.2,1) .15s backwards;
+      transition: border-color .25s ease, transform .25s ease, background-color .25s ease;
+    }
+
+    .release-feature::after {
+      position: absolute;
+      width: 8rem;
+      height: 1px;
+      right: -2.3rem;
+      bottom: 1.45rem;
+      background: rgba(207, 167, 106, .28);
+      content: "";
+      transform: rotate(-42deg);
+      transform-origin: center;
+    }
+
+    .release-feature:hover {
+      border-color: rgba(207, 167, 106, .78);
+      background-color: rgba(207, 167, 106, .08);
+      transform: translateY(-.28rem) rotate(-.2deg);
+    }
+
+    .release-feature:active { transform: translateY(-.08rem); }
+
+    .release-feature:focus-visible {
+      outline: 2px solid var(--world-accent);
+      outline-offset: .3rem;
+    }
+
+    .release-art {
+      position: relative;
+      min-height: 7.4rem;
+      overflow: hidden;
+      background: #857d6f;
+    }
+
+    .release-art::after {
+      position: absolute;
+      inset: 0;
+      border: 1px solid rgba(241, 237, 228, .18);
+      content: "";
+      pointer-events: none;
+    }
+
+    .release-art img {
+      display: block;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      filter: saturate(.82) contrast(1.04);
+      transition: filter .35s ease, transform .5s cubic-bezier(.2,.8,.2,1);
+    }
+
+    .release-feature:hover .release-art img { filter: saturate(1) contrast(1.06); transform: scale(1.035); }
+
+    .release-copy {
+      position: relative;
+      z-index: 1;
+      display: grid;
+      align-content: center;
+      padding: 1rem 3.2rem 1rem 1.15rem;
+    }
+
+    .release-kicker {
+      margin: 0 0 .45rem;
+      color: var(--world-accent);
+      font-size: .51rem;
+      letter-spacing: .2em;
+      text-transform: uppercase;
+    }
+
+    .release-title {
+      margin: 0;
+      font-family: "Instrument Serif", Georgia, serif;
+      font-size: clamp(2rem, 4vw, 3rem);
+      font-weight: 400;
+      line-height: .82;
+      letter-spacing: -.035em;
+    }
+
+    .release-meta {
+      margin: .65rem 0 0;
+      color: var(--muted);
+      font-size: .56rem;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+    }
+
+    .release-action {
+      display: inline-flex;
+      align-items: center;
+      gap: .55rem;
+      margin-top: .8rem;
+      color: var(--ink);
+      font-size: .54rem;
+      letter-spacing: .14em;
+      text-transform: uppercase;
+    }
+
+    .release-action::before { width: 1.5rem; height: 1px; background: var(--world-accent); content: ""; }
+
+    .world-footer {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      align-items: flex-end;
+      gap: 2rem;
+      color: var(--dim);
+      font-size: .58rem;
+      letter-spacing: .14em;
+      line-height: 1.7;
+      text-transform: uppercase;
+    }
+
+    .coordinates { text-align: right; }
+
+    .signal-address {
+      display: grid;
+      gap: .2rem;
+      text-align: center;
+    }
+
+    .signal-address strong {
+      color: var(--world-accent);
+      font-family: "Instrument Serif", Georgia, serif;
+      font-size: clamp(1.2rem, 2vw, 1.65rem);
+      font-style: italic;
+      font-weight: 400;
+      letter-spacing: -.02em;
+      line-height: 1;
+      text-transform: none;
+      transition: color .8s ease;
+    }
+
+    .signal-address span { color: var(--ink); }
+
+    .access {
+      display: flex;
+      min-height: 100vh;
+      align-items: center;
+      padding: clamp(1.5rem, 5vw, 5rem);
+      background: rgba(13, 12, 10, .58);
+      backdrop-filter: blur(22px);
+    }
+
+    .access-card { width: 100%; max-width: 28rem; margin: auto; animation: rise .7s cubic-bezier(.2,.8,.2,1) both; }
+
+    .access-index {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 3.5rem;
+      color: var(--dim);
+      font-size: .58rem;
+      letter-spacing: .17em;
+      text-transform: uppercase;
+    }
+
+    .status-dot {
+      display: inline-block;
+      width: .42rem;
+      height: .42rem;
+      margin-right: .55rem;
+      border-radius: 50%;
+      background: var(--ember);
+      box-shadow: 0 0 0 .3rem var(--ember-soft);
+    }
+
+    .activity-signal {
+      display: grid;
+      grid-template-columns: 4.25rem minmax(0, 1fr);
+      align-items: center;
+      gap: 1rem;
+      margin: -1.5rem 0 2.6rem;
+      padding: .85rem 1rem .85rem .75rem;
+      border: 1px solid var(--line);
+      background: linear-gradient(110deg, rgba(207, 167, 106, .08), rgba(207, 167, 106, .015) 55%, transparent);
+      overflow: hidden;
+    }
+
+    .signal-orbit {
+      position: relative;
+      display: grid;
+      width: 3.5rem;
+      aspect-ratio: 1;
+      place-items: center;
+      border: 1px solid rgba(207, 167, 106, .22);
+      border-radius: 50%;
+    }
+
+    .signal-orbit::before {
+      position: absolute;
+      inset: .38rem;
+      border: 1px solid rgba(207, 167, 106, .12);
+      border-radius: inherit;
+      content: "";
+    }
+
+    .signal-runner {
+      position: absolute;
+      inset: -.2rem;
+      border-radius: 50%;
+      animation: signal-orbit 2.4s linear infinite;
+    }
+
+    .signal-runner::after {
+      position: absolute;
+      top: 0;
+      left: 50%;
+      width: .46rem;
+      aspect-ratio: 1;
+      border-radius: 50%;
+      background: var(--ember);
+      box-shadow: 0 0 .8rem rgba(207, 167, 106, .9), 0 0 0 .22rem rgba(207, 167, 106, .12);
+      content: "";
+      transform: translateX(-50%);
+    }
+
+    .signal-core {
+      width: .48rem;
+      aspect-ratio: 1;
+      border-radius: 50%;
+      background: var(--ember);
+      box-shadow: 0 0 0 .35rem var(--ember-soft);
+      animation: signal-pulse 1.8s ease-in-out infinite;
+    }
+
+    .signal-copy { min-width: 0; }
+
+    .signal-heading {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: .75rem;
+    }
+
+    .signal-heading strong {
+      color: var(--ink);
+      font-size: .62rem;
+      font-weight: 500;
+      letter-spacing: .13em;
+      text-transform: uppercase;
+    }
+
+    .signal-heading span {
+      color: var(--ember);
+      font-size: .5rem;
+      letter-spacing: .14em;
+      text-transform: uppercase;
+    }
+
+    .signal-detail {
+      margin: .35rem 0 .6rem;
+      color: var(--dim);
+      font-size: .58rem;
+      line-height: 1.5;
+    }
+
+    .signal-trace {
+      display: flex;
+      height: .75rem;
+      align-items: center;
+      gap: .18rem;
+      overflow: hidden;
+    }
+
+    .signal-trace i {
+      width: .14rem;
+      height: 28%;
+      flex: 0 0 .14rem;
+      background: var(--ember);
+      opacity: .35;
+      animation: signal-wave 1.25s ease-in-out infinite;
+      transform-origin: center;
+    }
+
+    .signal-trace i:nth-child(3n + 1) { animation-delay: -.75s; }
+    .signal-trace i:nth-child(3n + 2) { animation-delay: -.35s; }
+
+    .activity-signal[data-state="busy"] .signal-runner { animation-duration: .78s; }
+    .activity-signal[data-state="busy"] .signal-trace i { opacity: .9; animation-duration: .55s; }
+    .activity-signal[data-state="success"] { border-color: rgba(170, 197, 158, .45); }
+    .activity-signal[data-state="success"] .signal-core,
+    .activity-signal[data-state="success"] .signal-runner::after,
+    .activity-signal[data-state="success"] .signal-trace i { background: var(--success); }
+    .activity-signal[data-state="error"] { border-color: rgba(226, 156, 141, .42); }
+    .activity-signal[data-state="error"] .signal-core,
+    .activity-signal[data-state="error"] .signal-runner::after,
+    .activity-signal[data-state="error"] .signal-trace i { background: var(--danger); }
+
+    h2 {
+      margin: 0;
+      font-family: "Instrument Serif", Georgia, serif;
+      font-size: clamp(2.5rem, 5vw, 4rem);
+      font-weight: 400;
+      letter-spacing: -.035em;
+    }
+
+    .intro { margin: .8rem 0 2.4rem; color: var(--muted); font-size: .72rem; line-height: 1.7; }
+
+    .field { display: block; margin-top: 1.15rem; }
+
+    .field span {
+      display: block;
+      margin-bottom: .55rem;
+      color: var(--dim);
+      font-size: .57rem;
+      letter-spacing: .16em;
+      text-transform: uppercase;
+    }
+
+    .field input {
+      width: 100%;
+      padding: 1rem 0;
+      border: 0;
+      border-bottom: 1px solid var(--line);
+      border-radius: 0;
+      outline: 0;
+      background: transparent;
+      color: var(--ink);
+      font-size: .82rem;
+      transition: border-color .2s ease, background-color .2s ease;
+    }
+
+    .field input:focus { border-color: var(--ember); background: linear-gradient(90deg, var(--ember-soft), transparent 72%); }
+
+    .field input::placeholder { color: #565149; }
+
+    .primary {
+      display: flex;
+      width: 100%;
+      align-items: center;
+      justify-content: space-between;
+      margin-top: 2rem;
+      padding: 1rem 1.1rem;
+      border: 1px solid var(--ember);
+      background: var(--ember);
+      color: #18140e;
+      cursor: pointer;
+      font-size: .63rem;
+      font-weight: 500;
+      letter-spacing: .17em;
+      text-transform: uppercase;
+      transition: transform .2s ease, background-color .2s ease;
+    }
+
+    .primary:hover { transform: translateY(-2px); background: #dfbd85; }
+    .primary:active { transform: translateY(0); }
+    .primary:disabled { cursor: wait; opacity: .55; transform: none; }
+
+    .text-button {
+      margin-top: 1.25rem;
+      padding: .3rem 0;
+      border: 0;
+      border-bottom: 1px solid transparent;
+      background: transparent;
+      color: var(--muted);
+      cursor: pointer;
+      font-size: .6rem;
+      letter-spacing: .08em;
+    }
+
+    .text-button:hover { border-color: var(--muted); color: var(--ink); }
+
+    .message {
+      display: none;
+      margin: 1.4rem 0 0;
+      padding: .85rem 1rem;
+      border-left: 2px solid var(--ember);
+      background: var(--ember-soft);
+      color: var(--muted);
+      font-size: .65rem;
+      line-height: 1.65;
+    }
+
+    .message[data-state="error"] { display: block; border-color: var(--danger); color: #f0beb4; background: rgba(226,156,141,.09); }
+    .message[data-state="success"] { display: block; border-color: var(--success); color: #cce0c3; background: rgba(170,197,158,.08); }
+    .message[data-state="info"] { display: block; }
+
+    .fine-print {
+      margin-top: 3.25rem;
+      padding-top: 1rem;
+      border-top: 1px solid var(--line);
+      color: var(--dim);
+      font-size: .55rem;
+      line-height: 1.75;
+    }
+
+    [hidden] { display: none !important; }
+
+    @keyframes rise { from { opacity: 0; transform: translateY(1rem); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes breathe { 50% { opacity: .5; transform: scale(1.025); } }
+    @keyframes facet-shift { from { opacity: 0; transform: translateY(.45rem); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes signal-orbit { to { transform: rotate(360deg); } }
+    @keyframes signal-pulse { 50% { opacity: .45; transform: scale(.72); } }
+    @keyframes signal-wave { 50% { opacity: .9; transform: scaleY(3.4); } }
+
+    @media (max-width: 860px) {
+      .shell { grid-template-columns: 1fr; }
+      .world { min-height: 48vh; border-right: 0; border-bottom: 1px solid var(--line); }
+      .hero { margin: 8vh 0 5rem; }
+      h1 { font-size: clamp(4rem, 19vw, 7rem); }
+      .hero-copy, .world-facets, .release-feature { width: 100%; margin-left: 0; }
+      .world-footer { grid-template-columns: 1fr 1fr; }
+      .signal-address { grid-column: 1 / -1; grid-row: 1; margin-bottom: 1rem; text-align: left; }
+      .access { min-height: 52vh; }
+      .access-index { margin-bottom: 2.5rem; }
+    }
+
+    @media (max-width: 430px) {
+      .release-feature { grid-template-columns: 6.2rem minmax(0, 1fr); }
+      .release-art { min-height: 6.2rem; }
+      .release-copy { padding-right: 1rem; }
+      .release-title { font-size: 2.15rem; }
+      .release-action { margin-top: .65rem; }
+      .release-feature::after { display: none; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <section class="world" aria-labelledby="world-title">
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4"><circle cx="12" cy="12" r="8"/><path d="M4 12h16M12 4c2.3 2.2 3.5 4.9 3.5 8S14.3 17.8 12 20c-2.3-2.2-3.5-4.9-3.5-8S9.7 6.2 12 4Z"/></svg>
+        </span>
+        HALO Music World
+      </div>
+
+      <div class="hero">
+        <p class="eyebrow">Private global platform</p>
+        <h1 id="world-title">Your world stays <em>yours.</em></h1>
+        <p class="hero-copy">The HALO control room, release systems, radio network, artist tools, and private intelligence remain closed until the authorized owner signs in.</p>
+        <div class="world-facets" aria-label="HALO system highlights">
+          <div class="facet-meta">
+            <span id="facet-label">Release systems</span>
+            <span class="facet-controls" aria-label="Choose a system highlight">
+              <button class="facet-control" type="button" aria-label="Show release systems" aria-current="true"></button>
+              <button class="facet-control" type="button" aria-label="Show radio network" aria-current="false"></button>
+              <button class="facet-control" type="button" aria-label="Show artist growth" aria-current="false"></button>
+              <button class="facet-control" type="button" aria-label="Show private intelligence" aria-current="false"></button>
+              <button class="facet-control" type="button" aria-label="Show creator economy" aria-current="false"></button>
+              <button class="facet-pause" type="button" aria-label="Pause rotating highlights" aria-pressed="false">Pause</button>
+            </span>
+          </div>
+          <p class="facet-copy" id="facet-copy">Take a record from unfinished idea to a release-ready world.</p>
+        </div>
+
+        <a class="release-feature" href="https://distrokid.com/hyperfollow/owenanthony/salty?ref=release" target="_blank" rel="noopener noreferrer" aria-label="Stream or save Salty by Owen Anthony on DistroKid">
+          <span class="release-art">
+            <img src="https://distrokid.imgix.net/http%3A%2F%2Fgather.fandalism.com%2F13116989--EFDBCF70-5B21-42D1-BAD13FF8CF569F39--0--3535106--GeminiGeneratedImagelbmvhxlbmvhxlbmv.jpg?fm=jpg&amp;mark-y=568&amp;mark-x=620&amp;mark-w=180&amp;q=75&amp;w=800&amp;mark=http%3A%2F%2Fgather.fandalism.com%2Fdistrokid-sticker-sm.png&amp;s=be395b26c638be94717fdf700944a96f" alt="Salty cover artwork by Owen Anthony" width="800" height="800" fetchpriority="high" referrerpolicy="no-referrer">
+          </span>
+          <span class="release-copy">
+            <span class="release-kicker">New release / now transmitting</span>
+            <strong class="release-title">Salty</strong>
+            <span class="release-meta">Owen Anthony</span>
+            <span class="release-action">Stream + save <span aria-hidden="true">↗</span></span>
+          </span>
+        </a>
+      </div>
+
+      <div class="world-footer">
+        <span>Encrypted session<br>Owner access only</span>
+        <span class="signal-address"><strong>EVERY SIGNAL.</strong><span>One address.</span></span>
+        <span class="coordinates">HALO / GLOBAL<br>Secure channel 01</span>
+      </div>
+    </section>
+
+    <section class="access" aria-labelledby="access-title">
+      <div class="access-card">
+        <div class="access-index">
+          <span><i class="status-dot"></i>Identity online</span>
+          <span>01 / 01</span>
+        </div>
+
+        <div class="activity-signal" id="activity-signal" data-state="ready" role="status" aria-live="polite">
+          <div class="signal-orbit" aria-hidden="true">
+            <span class="signal-runner"></span>
+            <span class="signal-core"></span>
+          </div>
+          <div class="signal-copy">
+            <div class="signal-heading">
+              <strong id="signal-title">Secure channel ready</strong>
+              <span id="signal-state">Live</span>
+            </div>
+            <p class="signal-detail" id="signal-detail">Waiting for owner input. Movement shows the page is active.</p>
+            <div class="signal-trace" aria-hidden="true">
+              <i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i>
+            </div>
+          </div>
+        </div>
+
+        <div id="login-view">
+          <h2 id="access-title">Enter the world.</h2>
+          <p class="intro">Use the owner account connected to this private HALO deployment.</p>
+          <form id="login-form">
+            <label class="field">
+              <span>Email address</span>
+              <input id="email" name="email" type="email" autocomplete="username" placeholder="owner@halo.world" required>
+            </label>
+            <label class="field">
+              <span>Password</span>
+              <input id="password" name="password" type="password" autocomplete="current-password" placeholder="••••••••••••" minlength="8" required>
+            </label>
+            <button class="primary" type="submit"><span>Unlock HALO</span><span aria-hidden="true">→</span></button>
+          </form>
+          <button class="text-button" id="forgot-button" type="button">Request a password reset</button>
+        </div>
+
+        <div id="password-view" hidden>
+          <h2 id="password-title">Set your password.</h2>
+          <p class="intro" id="password-intro">Choose a private password for this owner account.</p>
+          <form id="password-form">
+            <label class="field">
+              <span>New password</span>
+              <input id="new-password" name="new-password" type="password" autocomplete="new-password" placeholder="At least 8 characters" minlength="8" required>
+            </label>
+            <label class="field">
+              <span>Confirm password</span>
+              <input id="confirm-password" name="confirm-password" type="password" autocomplete="new-password" placeholder="Repeat password" minlength="8" required>
+            </label>
+            <button class="primary" type="submit"><span>Secure account</span><span aria-hidden="true">→</span></button>
+          </form>
+        </div>
+
+        <p class="message" id="message" role="status" aria-live="polite"></p>
+        <p class="fine-print">No public registration is offered here. Access requires a confirmed Netlify Identity account with the server-controlled <strong>admin</strong> role.</p>
+      </div>
+    </section>
+  </main>
+
+  <script type="module">
+    import {
+      acceptInvite,
+      getUser,
+      handleAuthCallback,
+      login,
+      requestPasswordRecovery,
+      updateUser
+    } from "https://esm.sh/@netlify/identity@1.2.0";
+
+    const facets = [
+      { label: 'Release systems', copy: 'Take a record from unfinished idea to a release-ready world.', accent: '#cfa76a', rgb: '207, 167, 106' },
+      { label: 'Radio network', copy: 'Program the signal, prepare the room, and learn what listeners return to.', accent: '#de8068', rgb: '222, 128, 104' },
+      { label: 'Artist growth', copy: 'Turn real release evidence into focused campaigns, outreach, and next steps.', accent: '#9fbd9a', rgb: '159, 189, 154' },
+      { label: 'Private intelligence', copy: 'Keep strategy, operations, trust, and decisions inside the owner’s control room.', accent: '#b49ed6', rgb: '180, 158, 214' },
+      { label: 'Creator economy', copy: 'Connect the music to people, services, opportunities, and sustainable income.', accent: '#7fb6c9', rgb: '127, 182, 201' }
+    ];
+    const world = document.querySelector('.world');
+    const worldFacets = document.querySelector('.world-facets');
+    const facetLabel = document.querySelector('#facet-label');
+    const facetCopy = document.querySelector('#facet-copy');
+    const facetControls = [...document.querySelectorAll('.facet-control')];
+    const facetPause = document.querySelector('.facet-pause');
+    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+    let activeFacet = 0;
+    let facetTimer;
+    let rotationPaused = false;
+
+    function showFacet(index) {
+      activeFacet = index;
+      const facet = facets[index];
+      world.style.setProperty('--world-accent', facet.accent);
+      world.style.setProperty('--world-accent-rgb', facet.rgb);
+      facetLabel.textContent = facet.label;
+      facetCopy.textContent = facet.copy;
+      facetCopy.dataset.changing = 'true';
+      facetControls.forEach((control, controlIndex) => control.setAttribute('aria-current', String(controlIndex === index)));
+      window.setTimeout(() => delete facetCopy.dataset.changing, 500);
+    }
+
+    function startFacetRotation() {
+      window.clearInterval(facetTimer);
+      if (reducedMotion.matches || rotationPaused) return;
+      facetTimer = window.setInterval(() => showFacet((activeFacet + 1) % facets.length), 5200);
+    }
+
+    facetControls.forEach((control, index) => control.addEventListener('click', () => {
+      showFacet(index);
+      startFacetRotation();
+    }));
+    facetPause.addEventListener('click', () => {
+      rotationPaused = !rotationPaused;
+      facetPause.setAttribute('aria-pressed', String(rotationPaused));
+      facetPause.setAttribute('aria-label', rotationPaused ? 'Resume rotating highlights' : 'Pause rotating highlights');
+      facetPause.textContent = rotationPaused ? 'Play' : 'Pause';
+      startFacetRotation();
+    });
+    worldFacets.addEventListener('mouseenter', () => window.clearInterval(facetTimer));
+    worldFacets.addEventListener('mouseleave', startFacetRotation);
+    worldFacets.addEventListener('focusin', () => window.clearInterval(facetTimer));
+    worldFacets.addEventListener('focusout', event => {
+      if (!worldFacets.contains(event.relatedTarget)) startFacetRotation();
+    });
+    reducedMotion.addEventListener('change', startFacetRotation);
+    startFacetRotation();
+
+    const loginView = document.querySelector('#login-view');
+    const passwordView = document.querySelector('#password-view');
+    const loginForm = document.querySelector('#login-form');
+    const passwordForm = document.querySelector('#password-form');
+    const forgotButton = document.querySelector('#forgot-button');
+    const message = document.querySelector('#message');
+    const passwordIntro = document.querySelector('#password-intro');
+    const activitySignal = document.querySelector('#activity-signal');
+    const signalTitle = document.querySelector('#signal-title');
+    const signalState = document.querySelector('#signal-state');
+    const signalDetail = document.querySelector('#signal-detail');
+    let callbackMode = '';
+    let inviteToken = '';
+
+    const rolesFor = user => user?.appMetadata?.roles || user?.app_metadata?.roles || [];
+    const isOwner = user => rolesFor(user).includes('admin');
+
+    function setMessage(text, state = 'info') {
+      message.textContent = text;
+      message.dataset.state = state;
+    }
+
+    function setActivity(state, title, detail) {
+      activitySignal.dataset.state = state;
+      signalState.textContent = state === 'busy' ? 'Working' : state === 'success' ? 'Confirmed' : state === 'error' ? 'Interrupted' : 'Live';
+      signalTitle.textContent = title;
+      signalDetail.textContent = detail;
+    }
+
+    function setBusy(form, busy) {
+      const button = form.querySelector('button[type="submit"]');
+      button.disabled = busy;
+      button.setAttribute('aria-busy', String(busy));
+      if (busy) setActivity('busy', 'Secure request in progress', 'The channel is actively waiting for a response.');
+    }
+
+    function showPasswordView(mode) {
+      callbackMode = mode;
+      loginView.hidden = true;
+      passwordView.hidden = false;
+      setActivity('ready', mode === 'invite' ? 'Invitation ready' : 'Password reset ready', 'Waiting for the new password before sending the secure request.');
+      passwordIntro.textContent = mode === 'invite'
+        ? 'Accept your private invitation by choosing an account password.'
+        : 'Choose a new password to restore access to your owner account.';
+      document.querySelector('#new-password').focus();
+    }
+
+    function explainError(error) {
+      if (error?.status === 401) return 'The email or password is not valid.';
+      if (error?.status === 403) return 'This account is not allowed to enter this site.';
+      if (error?.status === 422) return 'Check the information and try again.';
+      return error?.message || 'The secure connection could not be completed.';
+    }
+
+    function enterIfAuthorized(user) {
+      if (isOwner(user)) {
+        setActivity('success', 'Identity confirmed', 'Opening the private HALO control room now.');
+        setMessage('Access confirmed. Opening HALO…', 'success');
+        window.location.replace('/');
+        return true;
+      }
+      if (user) {
+        setActivity('error', 'Owner role required', 'The account responded, but it cannot open this private room.');
+        setMessage('Your identity is confirmed, but this account does not have the admin role required for owner access.', 'error');
+      }
+      return false;
+    }
+
+    loginForm.addEventListener('submit', async event => {
+      event.preventDefault();
+      setBusy(loginForm, true);
+      setMessage('Checking the secure account…');
+      try {
+        const user = await login(loginForm.email.value.trim(), loginForm.password.value);
+        enterIfAuthorized(user);
+      } catch (error) {
+        setActivity('error', 'Sign-in interrupted', 'The request finished, but access could not be confirmed.');
+        setMessage(explainError(error), 'error');
+      } finally {
+        setBusy(loginForm, false);
+      }
+    });
+
+    forgotButton.addEventListener('click', async () => {
+      const email = loginForm.email.value.trim();
+      if (!email) {
+        loginForm.email.focus();
+        setMessage('Enter the owner email address first.', 'error');
+        return;
+      }
+      forgotButton.disabled = true;
+      setActivity('busy', 'Sending recovery request', 'The secure channel is contacting the identity service.');
+      try {
+        await requestPasswordRecovery(email);
+        setActivity('success', 'Recovery request complete', 'Check the email inbox for the secure reset link.');
+        setMessage('A password reset link has been sent if that account exists.', 'success');
+      } catch (error) {
+        setActivity('error', 'Recovery request interrupted', 'The request finished without a confirmed response.');
+        setMessage(explainError(error), 'error');
+      } finally {
+        forgotButton.disabled = false;
+      }
+    });
+
+    passwordForm.addEventListener('submit', async event => {
+      event.preventDefault();
+      const password = passwordForm['new-password'].value;
+      if (password !== passwordForm['confirm-password'].value) {
+        setMessage('The passwords do not match.', 'error');
+        return;
+      }
+      setBusy(passwordForm, true);
+      try {
+        const user = callbackMode === 'invite'
+          ? await acceptInvite(inviteToken, password)
+          : await updateUser({ password });
+        passwordForm.reset();
+        if (!enterIfAuthorized(user)) {
+          setMessage(callbackMode === 'invite'
+            ? 'Invitation accepted. Add the admin role to this user in Netlify Identity, then return here to sign in.'
+            : 'Password updated. This account still needs the admin role for owner access.', 'success');
+        }
+      } catch (error) {
+        setActivity('error', 'Password update interrupted', 'The request finished, but the new password was not confirmed.');
+        setMessage(explainError(error), 'error');
+      } finally {
+        setBusy(passwordForm, false);
+      }
+    });
+
+    async function initialize() {
+      setActivity('busy', 'Checking saved session', 'Looking for an existing secure owner session.');
+      try {
+        const callback = await handleAuthCallback();
+        if (callback?.type === 'invite') {
+          inviteToken = callback.token;
+          showPasswordView('invite');
+          return;
+        }
+        if (callback?.type === 'recovery') {
+          showPasswordView('recovery');
+          return;
+        }
+        const user = callback?.user || await getUser();
+        if (!enterIfAuthorized(user) && !user) {
+          setActivity('ready', 'Secure channel ready', 'Waiting for owner input. Movement shows the page is active.');
+        }
+      } catch (error) {
+        setActivity('error', 'Session check interrupted', 'Sign in manually to start a new secure request.');
+        setMessage(explainError(error), 'error');
+      }
+    }
+
+    initialize();
+  </script>
+</body>
+</html>

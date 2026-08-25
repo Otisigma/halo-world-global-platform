@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>HALO Relations — Human Connection Desk</title>
+  <meta name="description" content="Owner-only member activity, consent, follow-ups, notes, and AI-assisted relationship drafts for HALO World.">
+  <meta property="og:title" content="HALO Relations — Human Connection Desk">
+  <meta property="og:description" content="Member activity, consent, follow-ups, notes, and relationship drafts for HALO World.">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="HALO Music World">
+  <meta property="og:image" content="https://halo-world-global-platform.netlify.app/assets/halo-app-icon-512.png">
+  <meta property="og:image:width" content="512">
+  <meta property="og:image:height" content="512">
+  <meta property="og:image:alt" content="HALO Music World logo">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:image" content="https://halo-world-global-platform.netlify.app/assets/halo-app-icon-512.png">
+  <meta name="twitter:image:alt" content="HALO Music World logo">
+  <link rel="icon" href="/assets/halo-app-icon-192.png" type="image/png">
+  <link rel="stylesheet" href="/halo-brand.css">
+  <link rel="stylesheet" href="/halo-relations.css">
+  <link rel="stylesheet" href="/accessibility.css">
+  <script type="module" src="/identity.js"></script>
+  <script src="/stats.js" defer></script>
+  <script src="/site-monitor.js" defer></script>
+  <script src="/halo-relations.js" defer></script>
+  <script src="/accessibility.js" defer></script>
+</head>
+<body>
+  <div class="grain" aria-hidden="true"></div>
+  <header class="relations-header">
+    <a class="brand" href="/" aria-label="HALO World home"><img class="halo-brand-image" src="/assets/halo-logo-mark.webp" alt=""><span><strong>HALO Relations</strong><small>Human connection desk</small></span></a>
+    <nav aria-label="HALO destinations"><a href="/outreach.html">Outreach</a><a href="/halo-x.html">Owner desk</a><a href="/">Live room</a><button id="authButton" type="button">Sign in</button></nav>
+  </header>
+
+  <main>
+    <section class="intro" aria-labelledby="pageTitle">
+      <div><p class="eyebrow">OWNER-ONLY · PEOPLE BEFORE PIPELINES</p><h1 id="pageTitle">Know who arrived.<br><em>Remember why they matter.</em></h1></div>
+      <p class="intro-copy">A consent-aware workspace for membership signals, team memory, thoughtful follow-up, and AI-assisted drafts. Nothing sends without a person.</p>
+    </section>
+
+    <section id="gateView" class="gate-card" aria-live="polite">
+      <p class="eyebrow">SECURE ENTRY</p><h2 id="gateTitle">Connecting to your HALO identity.</h2>
+      <p id="gateMessage">The relationship desk checks owner access before showing member information.</p>
+      <button id="gateAction" class="button primary" type="button" hidden>Sign in from the owner desk</button>
+    </section>
+
+    <section id="workspaceView" hidden>
+      <div id="metricGrid" class="metric-grid" aria-label="Relationship overview"></div>
+      <div class="workspace-grid">
+        <aside class="member-rail" aria-label="Member directory">
+          <div class="rail-heading"><div><p class="eyebrow">MEMBER DIRECTORY</p><h2>Signals</h2></div><span id="memberCount">0 people</span></div>
+          <div class="filters">
+            <label><span>Search</span><input id="memberSearch" type="search" placeholder="Name, email, tag"></label>
+            <label><span>Stage</span><select id="stageFilter"><option value="all">All stages</option><option value="new">New</option><option value="welcomed">Welcomed</option><option value="engaged">Engaged</option><option value="collaborator">Collaborator</option><option value="partner">Partner</option><option value="vip">VIP</option><option value="paused">Paused</option></select></label>
+          </div>
+          <div id="memberList" class="member-list"></div>
+        </aside>
+
+        <section class="detail-stage" aria-live="polite">
+          <div id="emptyDetail" class="empty-detail"><p class="eyebrow">RELATIONSHIP TIMELINE</p><h2>Choose a person.</h2><p>Review approved context, membership activity, open follow-ups, and drafts.</p></div>
+          <div id="memberDetail" hidden>
+            <header class="person-header">
+              <div><p id="detailKicker" class="eyebrow">MEMBER</p><h2 id="detailName">HALO member</h2><p id="detailMeta" class="person-meta"></p></div>
+              <div class="signal-stamp"><span>LAST SIGNAL</span><strong id="detailLastSeen">—</strong></div>
+            </header>
+            <div class="detail-columns">
+              <div class="detail-main">
+                <section class="panel profile-panel">
+                  <div class="panel-heading"><div><p class="eyebrow">RELATIONSHIP PROFILE</p><h3>What the team knows</h3></div><span class="privacy-mark">Consent first</span></div>
+                  <form id="profileForm" class="profile-form">
+                    <label><span>Stage</span><select id="profileStage"><option value="new">New</option><option value="welcomed">Welcomed</option><option value="engaged">Engaged</option><option value="collaborator">Collaborator</option><option value="partner">Partner</option><option value="vip">VIP</option><option value="paused">Paused</option></select></label>
+                    <label><span>Preferred channel</span><select id="profileChannel"><option value="none">No outreach</option><option value="email">Email</option><option value="community">HALO community</option></select></label>
+                    <label class="consent-field"><input id="profileConsent" type="checkbox"><span><strong>Explicit contact consent recorded</strong><small>Only enable after the member has clearly agreed.</small></span></label>
+                    <label class="wide"><span>Tags</span><input id="profileTags" type="text" placeholder="creator, berlin, vinyl"></label>
+                    <label class="wide"><span>Relationship summary</span><textarea id="profileSummary" rows="4" maxlength="500" placeholder="Approved context that helps the team be useful and respectful."></textarea></label>
+                    <div class="form-footer wide"><p id="profileMessage" role="status"></p><button class="button dark" type="submit">Save profile</button></div>
+                  </form>
+                </section>
+
+                <section class="panel">
+                  <div class="panel-heading"><div><p class="eyebrow">TEAM MEMORY</p><h3>Private notes</h3></div><span id="noteCount">0 notes</span></div>
+                  <form id="noteForm" class="inline-form"><textarea id="noteBody" rows="3" maxlength="1200" placeholder="Record useful context, not sensitive assumptions."></textarea><button class="button dark" type="submit">Add note</button></form>
+                  <div id="noteList" class="timeline-list"></div>
+                </section>
+
+                <section class="panel">
+                  <div class="panel-heading"><div><p class="eyebrow">FOLLOW-UP</p><h3>Tasks</h3></div><span id="taskCount">0 open</span></div>
+                  <form id="taskForm" class="task-form"><label><span>Next step</span><input id="taskTitle" maxlength="180" placeholder="Welcome them after the next room"></label><label><span>Due</span><input id="taskDue" type="datetime-local"></label><button class="button dark" type="submit">Add task</button></form>
+                  <div id="taskList" class="timeline-list"></div>
+                </section>
+              </div>
+
+              <aside class="ai-column">
+                <section class="ai-panel">
+                  <p class="eyebrow">AI RELATIONSHIP TEAM</p><h3>Draft with context.<br>Send with judgment.</h3>
+                  <p class="ai-rule">The assistant uses only approved relationship context. It cannot send, promise, purchase, moderate, or make decisions.</p>
+                  <form id="draftForm">
+                    <label><span>Assistant</span><select id="draftRole"><option value="welcome">Welcome AI</option><option value="relationship">Relationship AI</option><option value="community">Community AI</option><option value="creator">Creator AI</option><option value="support">Support AI</option></select></label>
+                    <label><span>Purpose</span><textarea id="draftIntent" rows="4" maxlength="300" placeholder="Welcome them and ask what they want to experience in HALO."></textarea></label>
+                    <button class="button light" type="submit">Create review draft</button><p id="draftMessage" class="ai-message" role="status"></p>
+                  </form>
+                </section>
+                <section class="draft-vault"><div class="panel-heading"><div><p class="eyebrow">DRAFT VAULT</p><h3>Human review queue</h3></div></div><div id="draftList" class="draft-list"></div></section>
+                <section class="event-panel"><div class="panel-heading"><div><p class="eyebrow">ACCOUNT SIGNALS</p><h3>Sessions</h3></div></div><div id="eventList" class="event-list"></div></section>
+              </aside>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <section class="pulse-section">
+        <div class="pulse-column"><div class="panel-heading"><div><p class="eyebrow">TEAM QUEUE</p><h2>Open follow-ups</h2></div></div><div id="globalTaskList" class="pulse-list"></div></div>
+        <div class="pulse-column"><div class="panel-heading"><div><p class="eyebrow">LIVE PULSE</p><h2>Recent account signals</h2></div></div><div id="activityList" class="pulse-list"></div></div>
+      </section>
+    </section>
+  </main>
+</body>
+</html>

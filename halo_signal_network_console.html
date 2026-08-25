@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HALO MUSIC WORLD // SIGNAL NETWORK CONSOLE</title>
+    
+    <!-- Tailwind CSS for utility layout -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:ital,wght@0,700;0,800;0,900;1,800&family=Share+Tech+Mono&family=Inter:wght@400;600;800;900&display=swap" rel="stylesheet">
+    
+    <style>
+        :root {
+            --halo-bg: #070709;
+            --halo-panel: #0d0d14;
+            --halo-border: rgba(168, 85, 247, 0.25);
+            --halo-gold: #d97706;
+            --halo-purple: #a855f7;
+            --halo-rose: #ec4899;
+            --halo-emerald: #10b981;
+            --halo-cyan: #06b6d4;
+        }
+
+        body {
+            font-family: 'Share Tech Mono', monospace;
+            background-color: var(--halo-bg);
+            color: #f3f4f6;
+            margin: 0;
+            padding: 0;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        .font-sans-alt {
+            font-family: 'Inter', sans-serif;
+        }
+
+        .font-condensed {
+            font-family: 'Barlow Condensed', sans-serif;
+        }
+
+        ::-webkit-scrollbar {
+            width: 5px;
+            height: 5px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #070709;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #3b0764;
+            border-radius: 3px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #d97706;
+        }
+
+        .grid-pattern {
+            background-image: linear-gradient(rgba(168, 85, 247, 0.05) 1px, transparent 1px),
+                              linear-gradient(90deg, rgba(168, 85, 247, 0.05) 1px, transparent 1px);
+            background-size: 24px 24px;
+        }
+
+        .glow-gold {
+            box-shadow: 0 0 20px rgba(217, 119, 6, 0.25);
+        }
+
+        .glow-purple {
+            box-shadow: 0 0 25px rgba(168, 85, 247, 0.2);
+        }
+
+        .glow-emerald {
+            box-shadow: 0 0 20px rgba(16, 185, 129, 0.25);
+        }
+
+        @keyframes pulse-ring {
+            0% { transform: scale(0.95); opacity: 0.8; }
+            50% { transform: scale(1.05); opacity: 0.4; }
+            100% { transform: scale(0.95); opacity: 0.8; }
+        }
+
+        .animate-pulse-ring {
+            animation: pulse-ring 3s infinite ease-in-out;
+        }
+    </style>
+</head>
+<body class="flex flex-col min-h-screen grid-pattern selection:bg-purple-600 selection:text-white">
+
+    <header class="border-b border-purple-950/60 bg-[#0a0a10]/90 backdrop-blur-md px-4 py-3 sticky top-0 z-50 flex flex-wrap justify-between items-center gap-4">
+        <div class="flex items-center gap-3">
+            <div class="relative flex h-3.5 w-3.5">
+                <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span class="relative inline-flex rounded-full h-3.5 w-3.5 bg-emerald-500"></span>
+            </div>
+            <div>
+                <div class="flex items-center gap-2">
+                    <h1 class="font-condensed font-extrabold text-xl md:text-2xl tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-amber-400 via-purple-400 to-rose-400 uppercase">
+                        HALO MUSIC WORLD // SIGNAL NETWORK
+                    </h1>
+                    <span class="text-[9px] bg-purple-950/80 border border-purple-800/60 text-purple-300 px-2 py-0.5 rounded font-mono font-bold tracking-widest">v4.9.8-MESH</span>
+                </div>
+                <p class="text-[10px] text-gray-400 uppercase tracking-widest">Decentralized Telemetry, Node Mesh & B2B Signal Router</p>
+            </div>
+        </div>
+
+        <div class="flex items-center gap-3 text-xs font-mono">
+            <div class="hidden sm:flex items-center gap-2 bg-purple-950/30 px-3 py-1.5 rounded-lg border border-purple-900/40">
+                <i data-lucide="radio" class="h-3.5 w-3.5 text-amber-400 animate-pulse"></i>
+                <span class="text-gray-400">MESH LATENCY: <span id="hdr-latency" class="text-emerald-400 font-bold">14ms</span></span>
+            </div>
+            <div class="hidden md:flex items-center gap-2 bg-purple-950/30 px-3 py-1.5 rounded-lg border border-purple-900/40">
+                <i data-lucide="activity" class="h-3.5 w-3.5 text-purple-400"></i>
+                <span class="text-gray-400">NODES ACTIVE: <span id="hdr-nodes-count" class="text-amber-400 font-bold">6 ONLINE</span></span>
+            </div>
+            <a href="/" class="bg-purple-950/60 hover:bg-purple-900 border border-purple-700/50 text-purple-200 px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 uppercase tracking-wider">
+                <i data-lucide="arrow-left" class="h-3.5 w-3.5"></i>
+                <span>Return to HALO</span>
+            </a>
+        </div>
+    </header>
+
+    <main class="flex-1 max-w-7xl w-full mx-auto p-4 md:p-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+        <!-- LEFT COLUMN: Node Map & Visualizer (7 Cols) -->
+        <section class="lg:col-span-7 flex flex-col space-y-6">
+            
+            <!-- RADAR / NETWORK CANVAS CONTAINER -->
+            <div class="bg-[#0b0b12] border border-purple-950/80 rounded-2xl p-4 flex flex-col relative overflow-hidden shadow-2xl">
+                <div class="flex justify-between items-center mb-3">
+                    <div class="flex items-center gap-2">
+                        <i data-lucide="globe" class="h-4 w-4 text-amber-400"></i>
+                        <h2 class="text-xs font-bold text-gray-200 uppercase tracking-widest font-mono">GLOBAL NODE TELEMETRY MAP</h2>
+                    </div>
+                    <div class="flex items-center gap-2 text-[10px]">
+                        <span class="inline-flex items-center gap-1 text-emerald-400"><span class="h-2 w-2 rounded-full bg-emerald-400"></span> Live Relay</span>
+                        <span class="inline-flex items-center gap-1 text-purple-400"><span class="h-2 w-2 rounded-full bg-purple-400"></span> Edge Hotspot</span>
+                    </div>
+                </div>
+
+                <div class="relative w-full aspect-[16/10] bg-[#07070a] border border-purple-950/60 rounded-xl overflow-hidden flex items-center justify-center">
+                    <canvas id="networkCanvas" class="w-full h-full block cursor-pointer"></canvas>
+                    
+                    <!-- Overlay Node Details Modal / Tooltip -->
+                    <div id="nodeTooltip" class="absolute top-4 left-4 bg-black/85 backdrop-blur-md border border-purple-800/60 p-3 rounded-lg text-[10px] hidden max-w-xs space-y-1 pointer-events-none">
+                        <p id="tt-name" class="font-bold text-amber-400 uppercase tracking-wider"></p>
+                        <p id="tt-type" class="text-gray-400"></p>
+                        <div class="flex justify-between text-gray-400 font-mono"><span>Latency:</span><span id="tt-latency" class="text-emerald-400 font-bold"></span></div>
+                        <div class="flex justify-between text-gray-400 font-mono"><span>Load:</span><span id="tt-load" class="text-purple-400 font-bold"></span></div>
+                    </div>
+                </div>
+
+                <div class="mt-3 flex flex-wrap justify-between items-center gap-2 text-[10px] text-gray-400 font-mono pt-2 border-t border-purple-950/40">
+                    <span>Target IP Sync: <span class="text-white">halo.world.local (192.168.4.1)</span></span>
+                    <span>Protocol: <span class="text-amber-400 font-bold">WebAudio DSP ArrayBuffer / SSE</span></span>
+                </div>
+            </div>
+
+            <div class="bg-[#0b0b12] border border-purple-950/80 rounded-2xl p-4 space-y-3">
+                <div class="flex justify-between items-center border-b border-purple-950/60 pb-2">
+                    <h3 class="text-xs font-bold text-purple-400 uppercase tracking-widest flex items-center gap-2">
+                        <i data-lucide="server" class="h-4 w-4"></i>
+                        REGISTERED NETWORK NODES
+                    </h3>
+                    <button id="btn-ping-all" class="bg-purple-950/80 hover:bg-purple-900 border border-purple-700/60 text-purple-300 text-[10px] px-2.5 py-1 rounded font-bold uppercase tracking-wider transition">
+                        Ping All Nodes
+                    </button>
+                </div>
+
+                <div id="nodes-list" class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs font-mono">
+                    <!-- Populated by JavaScript -->
+                </div>
+            </div>
+        </section>
+
+        <!-- RIGHT COLUMN: Telemetry Controls & Signal Logs (5 Cols) -->
+        <section class="lg:col-span-5 flex flex-col space-y-6">
+
+            <div class="bg-[#0b0b12] border border-purple-950/80 rounded-2xl p-5 space-y-4 shadow-xl">
+                <div class="border-b border-purple-950/60 pb-3">
+                    <h3 class="text-xs font-black text-amber-400 uppercase tracking-widest flex items-center gap-2 font-mono">
+                        <i data-lucide="zap" class="h-4 w-4 text-amber-500 animate-pulse"></i>
+                        SIGNAL INJECTOR & BROADCAST SIMULATOR
+                    </h3>
+                    <p class="text-[10px] text-gray-400 mt-1 font-sans-alt">Test signal propagation across radio servicing, consensus decryption, and lock-screen push channels.</p>
+                </div>
+
+                <div class="space-y-2">
+                    <button id="btn-sig-decryption" class="w-full bg-gradient-to-r from-amber-600/30 to-purple-900/30 hover:from-amber-600/50 hover:to-purple-900/50 border border-amber-500/40 p-3 rounded-xl flex items-center justify-between text-left transition group">
+                        <div>
+                            <p class="text-xs font-bold text-amber-300 uppercase tracking-wider font-mono">Simulate Consensus Decryption Surge</p>
+                            <p class="text-[10px] text-gray-400 font-sans-alt">Triggers TPO crowd compute unlock across 142 listening nodes.</p>
+                        </div>
+                        <i data-lucide="unlock" class="h-4 w-4 text-amber-400 group-hover:scale-110 transition"></i>
+                    </button>
+
+                    <button id="btn-sig-radio" class="w-full bg-gradient-to-r from-purple-900/30 to-cyan-900/30 hover:from-purple-900/50 hover:to-cyan-900/50 border border-purple-500/40 p-3 rounded-xl flex items-center justify-between text-left transition group">
+                        <div>
+                            <p class="text-xs font-bold text-cyan-300 uppercase tracking-wider font-mono">Simulate Radio Station Request</p>
+                            <p class="text-[10px] text-gray-400 font-sans-alt">Dispatches signed 24-bit WAV master request to BBC / Ibiza FM outlet.</p>
+                        </div>
+                        <i data-lucide="radio" class="h-4 w-4 text-cyan-400 group-hover:scale-110 transition"></i>
+                    </button>
+
+                    <button id="btn-sig-defibrillator" class="w-full bg-gradient-to-r from-rose-900/30 to-amber-900/30 hover:from-rose-900/50 hover:to-amber-900/50 border border-rose-500/40 p-3 rounded-xl flex items-center justify-between text-left transition group">
+                        <div>
+                            <p class="text-xs font-bold text-rose-300 uppercase tracking-wider font-mono">Trigger TikTok Defibrillator Raid</p>
+                            <p class="text-[10px] text-gray-400 font-sans-alt">Broadcasting lock-screen alerts to push underperforming releases.</p>
+                        </div>
+                        <i data-lucide="flame" class="h-4 w-4 text-rose-400 group-hover:scale-110 transition"></i>
+                    </button>
+                </div>
+            </div>
+
+            <div class="bg-[#0b0b12] border border-purple-950/80 rounded-2xl p-4 space-y-3">
+                <div class="flex justify-between items-center border-b border-purple-950/60 pb-2">
+                    <h3 class="text-xs font-bold text-emerald-400 uppercase tracking-widest flex items-center gap-2 font-mono">
+                        <i data-lucide="cpu" class="h-4 w-4"></i>
+                        5-NODE AI WORKFORCE SIGNAL CHANNEL
+                    </h3>
+                    <span class="text-[8px] bg-emerald-950 text-emerald-400 border border-emerald-800 px-1.5 py-0.5 rounded font-mono font-bold">CLIENT-SIDE</span>
+                </div>
+
+                <div class="space-y-2 text-[10px] font-mono">
+                    <div class="flex justify-between items-center bg-black/40 p-2 rounded border border-purple-950/60">
+                        <span class="text-amber-400 font-bold">GEMMA:</span>
+                        <span id="daemon-gemma" class="text-gray-300 truncate max-w-[200px]">Spectral analysis active (0.84 headroom)</span>
+                    </div>
+                    <div class="flex justify-between items-center bg-black/40 p-2 rounded border border-purple-950/60">
+                        <span class="text-purple-400 font-bold">MASON:</span>
+                        <span id="daemon-mason" class="text-gray-300 truncate max-w-[200px]">DSP Limiter ceiling locked at +4dB</span>
+                    </div>
+                    <div class="flex justify-between items-center bg-black/40 p-2 rounded border border-purple-950/60">
+                        <span class="text-rose-400 font-bold">CIPHER:</span>
+                        <span id="daemon-cipher" class="text-gray-300 truncate max-w-[200px]">SHA-256 license signature 0x98A1 verified</span>
+                    </div>
+                    <div class="flex justify-between items-center bg-black/40 p-2 rounded border border-purple-950/60">
+                        <span class="text-cyan-400 font-bold">LLAMA:</span>
+                        <span id="daemon-llama" class="text-gray-300 truncate max-w-[200px]">Self-healing Nginx route proxies stable</span>
+                    </div>
+                    <div class="flex justify-between items-center bg-black/40 p-2 rounded border border-purple-950/60">
+                        <span class="text-emerald-400 font-bold">ECHO:</span>
+                        <span id="daemon-echo" class="text-gray-300 truncate max-w-[200px]">142 Apple/Google Wallet nodes in sync</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-[#0b0b12] border border-purple-950/80 rounded-2xl p-4 flex-1 flex flex-col min-h-[220px]">
+                <div class="flex justify-between items-center border-b border-purple-950/60 pb-2 mb-2 font-mono">
+                    <span class="text-xs font-bold text-gray-300 uppercase tracking-wider flex items-center gap-1.5">
+                        <i data-lucide="terminal" class="h-3.5 w-3.5 text-rose-400"></i>
+                        NETWORK SIGNAL TELEMETRY LOG
+                    </span>
+                    <span class="h-2 w-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                </div>
+                <div id="terminal-logs" class="flex-1 overflow-y-auto space-y-1.5 text-[10px] font-mono text-gray-400 max-h-[180px]">
+                    <!-- Log entries populated here -->
+                </div>
+            </div>
+
+        </section>
+    </main>
+
+    <footer class="border-t border-purple-950/60 bg-[#07070a] px-4 py-3 text-center text-[10px] text-gray-500 font-mono mt-auto">
+        <span>© 2026 HALO MUSIC WORLD SYSTEMS LLC. SOVEREIGN AUDIO NETWORK. ALL RIGHTS RESERVED.</span>
+    </footer>
+
+    <script>
+        // State and Network Nodes configuration
+        const NODES = [
+            { id: 'ibiza-01', name: 'Ibiza Terrace Node', type: 'Peak Vault Gateway', latency: 12, load: '42%', x: 0.35, y: 0.45, color: '#d97706', active: true },
+            { id: 'london-02', name: 'London Studio Node', type: 'Radio Servicing Master', latency: 16, load: '68%', x: 0.28, y: 0.30, color: '#a855f7', active: true },
+            { id: 'berlin-03', name: 'Berlin Techno Mesh', type: 'Consensus Engine', latency: 18, load: '55%', x: 0.45, y: 0.25, color: '#ec4899', active: true },
+            { id: 'tokyo-04', name: 'Tokyo Underground', type: 'Wallet Pass Relay', latency: 45, load: '30%', x: 0.82, y: 0.40, color: '#06b6d4', active: true },
+            { id: 'nyc-05', name: 'NYC Broadcast Core', type: 'B2B Release Room', latency: 28, load: '72%', x: 0.20, y: 0.40, color: '#10b981', active: true },
+            { id: 'mobile-edge', name: 'Local Edge Hotspot', type: 'Raspberry Pi / Captive Portal', latency: 4, load: '15%', x: 0.55, y: 0.65, color: '#f59e0b', active: true }
+        ];
+
+        let packets = [];
+        let canvas, ctx;
+
+        window.addEventListener('DOMContentLoaded', () => {
+            if (typeof lucide !== 'undefined') lucide.createIcons();
+            
+            initCanvas();
+            renderNodesList();
+            addLog("SYSTEM BOOT // HALO Signal Network Console initialized.");
+            addLog("Connected to 6 active global nodes. Average latency: 14ms.");
+
+            // Add Event Listeners for Signal Injectors
+            document.getElementById('btn-sig-decryption').addEventListener('click', () => {
+                injectSignal('ibiza-01', 'berlin-03', '#d97706', 'CONSENSUS_SURGE: +18 Compute units cast to unreleased WAV vault.');
+            });
+
+            document.getElementById('btn-sig-radio').addEventListener('click', () => {
+                injectSignal('london-02', 'nyc-05', '#06b6d4', 'RADIO_SERVICING: BBC Radio 1 requested 24-bit broadcast master.');
+            });
+
+            document.getElementById('btn-sig-defibrillator').addEventListener('click', () => {
+                injectSignal('mobile-edge', 'tokyo-04', '#ec4899', 'TIKTOK_DEFIBRILLATOR: Lock-screen push raid sent to 142 wallet nodes.');
+            });
+
+            document.getElementById('btn-ping-all').addEventListener('click', () => {
+                NODES.forEach(n => {
+                    injectSignal('mobile-edge', n.id, n.color, `PING -> ${n.name}: Latency ${n.latency}ms [OK]`);
+                });
+            });
+
+            // Periodically generate background network traffic
+            setInterval(autoGenerateTraffic, 2500);
+        });
+
+        function initCanvas() {
+            canvas = document.getElementById('networkCanvas');
+            ctx = canvas.getContext('2d');
+            
+            function resize() {
+                canvas.width = canvas.parentElement.clientWidth;
+                canvas.height = canvas.parentElement.clientHeight;
+            }
+            resize();
+            window.addEventListener('resize', resize);
+
+            requestAnimationFrame(animateCanvas);
+        }
+
+        function animateCanvas() {
+            ctx.fillStyle = 'rgba(7, 7, 10, 0.25)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Draw connection lines
+            ctx.lineWidth = 1;
+            for (let i = 0; i < NODES.length; i++) {
+                for (let j = i + 1; j < NODES.length; j++) {
+                    const n1 = NODES[i];
+                    const n2 = NODES[j];
+                    ctx.beginPath();
+                    ctx.moveTo(n1.x * canvas.width, n1.y * canvas.height);
+                    ctx.lineTo(n2.x * canvas.width, n2.y * canvas.height);
+                    ctx.strokeStyle = 'rgba(168, 85, 247, 0.12)';
+                    ctx.stroke();
+                }
+            }
+
+            // Draw and update active data packets
+            for (let i = packets.length - 1; i >= 0; i--) {
+                const p = packets[i];
+                p.progress += p.speed;
+
+                const startX = p.from.x * canvas.width;
+                const startY = p.from.y * canvas.height;
+                const endX = p.to.x * canvas.width;
+                const endY = p.to.y * canvas.height;
+
+                const currentX = startX + (endX - startX) * p.progress;
+                const currentY = startY + (endY - startY) * p.progress;
+
+                ctx.beginPath();
+                ctx.arc(currentX, currentY, 3, 0, Math.PI * 2);
+                ctx.fillStyle = p.color;
+                ctx.shadowBlur = 10;
+                ctx.shadowColor = p.color;
+                ctx.fill();
+                ctx.shadowBlur = 0;
+
+                if (p.progress >= 1) {
+                    packets.splice(i, 1);
+                }
+            }
+
+            // Draw Node Points
+            NODES.forEach(n => {
+                const nx = n.x * canvas.width;
+                const ny = n.y * canvas.height;
+
+                // Pulsing outer ring
+                ctx.beginPath();
+                ctx.arc(nx, ny, 10 + Math.sin(Date.now() / 300) * 3, 0, Math.PI * 2);
+                ctx.strokeStyle = n.color;
+                ctx.lineWidth = 1.5;
+                ctx.stroke();
+
+                // Core dot
+                ctx.beginPath();
+                ctx.arc(nx, ny, 5, 0, Math.PI * 2);
+                ctx.fillStyle = n.color;
+                ctx.shadowBlur = 15;
+                ctx.shadowColor = n.color;
+                ctx.fill();
+                ctx.shadowBlur = 0;
+
+                // Node Label
+                ctx.fillStyle = '#9ca3af';
+                ctx.font = '9px "Share Tech Mono"';
+                ctx.fillText(n.name, nx + 12, ny + 3);
+            });
+
+            requestAnimationFrame(animateCanvas);
+        }
+
+        function injectSignal(fromId, toId, color, logMessage) {
+            const fromNode = NODES.find(n => n.id === fromId) || NODES[0];
+            const toNode = NODES.find(n => n.id === toId) || NODES[1];
+
+            packets.push({
+                from: fromNode,
+                to: toNode,
+                color: color,
+                progress: 0,
+                speed: 0.02 + Math.random() * 0.02
+            });
+
+            addLog(logMessage);
+        }
+
+        function autoGenerateTraffic() {
+            if (Math.random() > 0.4) {
+                const n1 = NODES[Math.floor(Math.random() * NODES.length)];
+                let n2 = NODES[Math.floor(Math.random() * NODES.length)];
+                while (n1 === n2) n2 = NODES[Math.floor(Math.random() * NODES.length)];
+
+                packets.push({
+                    from: n1,
+                    to: n2,
+                    color: n1.color,
+                    progress: 0,
+                    speed: 0.015 + Math.random() * 0.015
+                });
+            }
+        }
+
+        function renderNodesList() {
+            const container = document.getElementById('nodes-list');
+            container.innerHTML = NODES.map(n => `
+                <div class="bg-black/40 border border-purple-950/60 p-3 rounded-xl flex justify-between items-center hover:border-purple-800 transition">
+                    <div>
+                        <div class="flex items-center gap-1.5">
+                            <span class="h-2 w-2 rounded-full" style="background-color: ${n.color}"></span>
+                            <span class="font-bold text-gray-200">${n.name}</span>
+                        </div>
+                        <p class="text-[9px] text-gray-500 mt-0.5">${n.type}</p>
+                    </div>
+                    <div class="text-right">
+                        <span class="text-emerald-400 font-bold block">${n.latency}ms</span>
+                        <span class="text-[9px] text-purple-400">Load: ${n.load}</span>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function addLog(msg) {
+            const timestamp = new Date().toLocaleTimeString();
+            const container = document.getElementById('terminal-logs');
+            const p = document.createElement('p');
+            p.className = 'leading-relaxed hover:text-white transition';
+            p.innerHTML = `<span class="text-gray-500">[${timestamp}]</span> ${msg}`;
+            container.insertBefore(p, container.firstChild);
+
+            // Limit to 30 logs max
+            if (container.children.length > 30) {
+                container.removeChild(container.lastChild);
+            }
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,1148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HALO MUSIC WORLD // AGENT CONSOLE & MEDIA LAB</title>
+
+    <!-- Tailwind CSS for utility layout -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- React & ReactDOM (Standalone) -->
+    <script crossorigin="anonymous" src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin="anonymous" src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    
+    <!-- Babel (Compiles JSX in the browser) -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Inter:wght@400;600;800;900&display=swap" rel="stylesheet">
+    
+    <style>
+        body {
+            font-family: 'Share Tech Mono', monospace;
+            background-color: #070709;
+            color: #f3f4f6;
+            margin: 0;
+            padding: 0;
+            overflow-x: hidden;
+        }
+        .font-sans-alt {
+            font-family: 'Inter', sans-serif;
+        }
+        ::-webkit-scrollbar {
+            width: 5px;
+            height: 5px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #070709;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #3b0764;
+            border-radius: 3px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #d97706;
+        }
+        #celebration-overlay {
+            pointer-events: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 100;
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel" crossorigin="anonymous">
+        const { useState, useEffect, useRef } = React;
+
+        const INITIAL_TRACKS = [
+          {
+            id: 'closest-thing-to-heaven',
+            title: 'Closest Thing To Heaven',
+            version: 'DJ Halo Mix Extended Remix',
+            bpm: 124,
+            key: '8A (A Minor)',
+            genre: 'Progressive Melodic',
+            persona: 'DJ_HALO',
+            personaLabel: "DJ Halo // The Peak Vault",
+            energy: 'High (9/10)',
+            waveColor: '#d97706',
+            synthPattern: 'progressive',
+            isBinarySource: false,
+            coverUrl: 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?q=80&w=800&auto=format&fit=crop',
+            chats: [
+              { user: 'Kaelen_Ibiza', text: 'Closest Thing To Heaven is a total sunrise anthem! 🌅', color: 'text-amber-400' },
+              { user: 'Sasha_London', text: 'This remix completely floats above the terrace.', color: 'text-purple-400' }
+            ]
+          },
+          {
+            id: 'vesper-ambient-edit',
+            title: 'Letting You Down Gently',
+            version: 'Romy Sunset Wind-down Mix',
+            bpm: 110,
+            key: '5A (D Minor)',
+            genre: 'Melodic Ambient / Downtempo',
+            persona: 'DJ_ROMY',
+            personaLabel: "DJ Romy // The After-Hours Wind-Down",
+            energy: 'Chill Solace (3/10)',
+            waveColor: '#ec4899',
+            synthPattern: 'transition',
+            isBinarySource: false,
+            coverUrl: 'https://images.unsplash.com/photo-1518609878373-06d740f60d8b?q=80&w=800&auto=format&fit=crop',
+            chats: [
+              { user: 'Chill_Purist', text: 'DJ Romy completely locked down the room here. 🌌', color: 'text-rose-400' }
+            ]
+          },
+          {
+            id: 'my-decision',
+            title: 'My Decision',
+            version: 'DJ Halo Mix Special Version',
+            bpm: 122,
+            key: '5A (D Minor)',
+            genre: 'Melodic Techno',
+            persona: 'DJ_BUTTERFLY',
+            personaLabel: "DJ Butterfly // The Sunset Terrace",
+            energy: 'Deep techno (8/10)',
+            waveColor: '#a855f7',
+            synthPattern: 'transition',
+            isBinarySource: false,
+            coverUrl: 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?q=80&w=800&auto=format&fit=crop',
+            chats: [
+              { user: 'Berlin_Mindset', text: 'The low-end presence on My Decision is robust!', color: 'text-purple-400' }
+            ]
+          }
+        ];
+
+        const Icon = ({ name, className }) => {
+            return <i data-lucide={name} className={className}></i>;
+        };
+
+        function App() {
+          const [isAuthorized, setIsAuthorized] = useState(false);
+          const [accessCode, setAccessCode] = useState('');
+          const [authError, setAuthError] = useState('');
+          
+          const [activeTrack, setActiveTrack] = useState(INITIAL_TRACKS[0]);
+          const [tracks, setTracks] = useState(INITIAL_TRACKS); 
+          const [isPlaying, setIsPlaying] = useState(false);
+          const [isMuted, setIsMuted] = useState(false);
+          const [activeTab, setActiveTab] = useState('agent-room'); 
+
+          const [uploadProgress, setUploadProgress] = useState(0);
+          const [activeAgentId, setActiveAgentId] = useState(null);
+          const [agentProgress, setAgentProgress] = useState(0);
+          const [isProcessing, setIsProcessing] = useState(false);
+          const [processingStatus, setProcessingStatus] = useState('');
+          
+          const [localBinaryBuffer, setLocalBinaryBuffer] = useState(null);
+          const [importedVideoUrl, setImportedVideoUrl] = useState(null);
+          const [customCoverUrl, setCustomCoverUrl] = useState(null);
+
+          const [verificationReport, setVerificationReport] = useState([
+            { id: 'headers', label: 'Inspect Binary Headers', status: 'STANDBY', log: 'Awaiting raw media payload drop...' },
+            { id: 'decoder', label: 'Web Audio Decode Handshake', status: 'STANDBY', log: 'Integrity scanner on standby...' },
+            { id: 'peaks', label: 'Transient Headroom Check', status: 'STANDBY', log: 'Acoustic diagnostics uncalibrated...' },
+            { id: 'license', label: 'Pioneer Rekordbox Registry', status: 'STANDBY', log: 'Sync directories locked...' }
+          ]);
+
+          const [agents, setAgents] = useState({
+            gemma: { name: 'Gemma', role: 'Spectral & Latency Monitor', status: 'STANDBY', log: 'Ready to scan audio container...' },
+            mason: { name: 'Mason', role: 'Adaptive Audio/Video DSP', status: 'STANDBY', log: 'Limiter limits calibrated at +4dB.' },
+            cipher: { name: 'Cipher', role: 'Cryptographic License Shield', status: 'STANDBY', log: 'Standby to issue cryptographic signature.' },
+            llama: { name: 'Llama', role: 'Self-Healing Daemon Host', status: 'STANDBY', log: 'Monitoring local server ports.' },
+            echo: { name: 'Echo', role: 'Wallet Pass Outreach Engine', status: 'STANDBY', log: 'Sync lines open to 142 dynamic wallet nodes.' }
+          });
+
+          const [prePartyPool, setPrePartyPool] = useState([
+            { id: 'pre-1', title: 'Glass House (Acid Sunset Edit)', key: '8A', bpm: 125, progress: 74, encrypted: true },
+            { id: 'pre-2', title: 'What I\'ve Learned (Vesper Slow Burn Mix)', key: '11B', bpm: 110, progress: 48, encrypted: true },
+            { id: 'pre-3', title: 'A Beautiful Lie (Ibiza Terrace VIP)', key: '5A', bpm: 122, progress: 92, encrypted: true }
+          ]);
+
+          const [feedbackVibe, setFeedbackVibe] = useState(74);
+          const [feedbackDrop, setFeedbackDrop] = useState(80);
+          const [feedbackTransition, setFeedbackTransition] = useState(65);
+          const [aggregateFeedback, setAggregateFeedback] = useState({ vibe: 79, drop: 82, trans: 72, count: 142 });
+
+          const [showWinnerModal, setShowWinnerModal] = useState(false);
+          const [winnerTrackName, setWinnerTrackName] = useState('');
+
+          const [isRaidActive, setIsRaidActive] = useState(false);
+          const [raidProgress, setRaidProgress] = useState(0);
+          const [raidStats, setRaidStats] = useState({ views: 420, likes: 18, completion: 8, comments: 2 });
+          const [raidLog, setRaidLog] = useState(['Defibrillator System Status: STANDBY', 'Paste/Select TikTok target above to prime raid geofences.']);
+
+          const [chatMessages, setChatMessages] = useState([
+            { user: 'Kaelen_Ibiza', text: 'Closest Thing To Heaven is a total sunrise anthem! 🌅', color: 'text-amber-400' },
+            { user: 'Sasha_London', text: 'This remix completely floats above the terrace.', color: 'text-purple-400' }
+          ]);
+          const [newComment, setNewComment] = useState('');
+
+          const [terminalLogs, setTerminalLogs] = useState([
+            'SYSTEM BOOT // HMW-OS v4.9.8-STABLE',
+            'Listening Party Hub Initialized: ONLINE',
+            'Cover Artwork Engine: ACTIVE & READY',
+            'Standby for live co-creation handshake...'
+          ]);
+
+          const audioCtxRef = useRef(null);
+          const synthIntervalRef = useRef(null);
+          const canvasRef = useRef(null);
+          const confettiCanvasRef = useRef(null); // Fixed missing ref declaration
+          const celebrationIndexRef = useRef(0);  // Fixed missing ref declaration
+          const analyzerRef = useRef(null);
+          const gainNodeRef = useRef(null);
+          const filterNodeRef = useRef(null);
+          const activeSourceNodeRef = useRef(null);
+          const [isFilterActive, setIsFilterActive] = useState(false);
+
+          useEffect(() => {
+            if (typeof lucide !== 'undefined') {
+                lucide.createIcons();
+            }
+          });
+
+          const addLog = (msg) => {
+            const timestamp = new Date().toLocaleTimeString();
+            setTerminalLogs(prev => [`[${timestamp}] ${msg}`, ...prev.slice(0, 30)]);
+          };
+
+          const handleCoverUpload = (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            if (!file.type.startsWith('image/')) {
+              addLog(`COVER ERROR: File "${file.name}" is not a valid image file.`);
+              return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = (event) => {
+              const newImageUrl = event.target.result;
+              setCustomCoverUrl(newImageUrl);
+
+              // Update active track's cover image state directly
+              const updatedTrack = { ...activeTrack, coverUrl: newImageUrl };
+              setActiveTrack(updatedTrack);
+
+              // Update track in global list so switching tracks preserves artwork
+              setTracks(prev => prev.map(t => t.id === activeTrack.id ? updatedTrack : t));
+
+              addLog(`SINGLE ARTWORK UPDATED: Custom cover image applied to "${activeTrack.title}".`);
+            };
+            reader.readAsDataURL(file);
+          };
+
+          const handleMediaUpload = (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            if (file.type.startsWith('image/')) {
+              handleCoverUpload(e);
+              return;
+            }
+
+            setIsProcessing(true);
+            setUploadProgress(10);
+            setProcessingStatus('Gemma is inspecting binary container headers...');
+            addLog(`FILE INBOUND: Uploading "${file.name}"...`);
+
+            setImportedVideoUrl(null);
+            setLocalBinaryBuffer(null);
+            
+            setVerificationReport([
+              { id: 'headers', label: 'Inspect Binary Headers', status: 'PROCESSING', log: 'Checking magic bytes...' },
+              { id: 'decoder', label: 'Web Audio Decode Handshake', status: 'STANDBY', log: 'Waiting on file upload...' },
+              { id: 'peaks', label: 'Transient Headroom Check', status: 'STANDBY', log: 'Waiting on decode pass...' },
+              { id: 'license', label: 'Pioneer Rekordbox Registry', status: 'STANDBY', log: 'Waiting on dsp validation...' }
+            ]);
+
+            const isVideo = file.type.startsWith('video/');
+
+            setTimeout(() => {
+              setVerificationReport(prev => prev.map(step => 
+                step.id === 'headers' 
+                  ? { ...step, status: 'COMPLETE', log: `Valid ${isVideo ? 'MP4 Video' : 'WAV/MP3 Audio'} magic headers identified.` }
+                  : step.id === 'decoder'
+                    ? { ...step, status: 'PROCESSING', log: 'Initializing local FileReader Binary Sandbox...' }
+                    : step
+              ));
+              setAgentProgress(30);
+
+              const reader = new FileReader();
+              reader.onload = (event) => {
+                const arrayBuffer = event.target.result;
+                initAudio();
+                
+                const ctx = audioCtxRef.current;
+                addLog(`BINARY LOADED: Decoding raw binary bytes for ${file.name}...`);
+
+                ctx.decodeAudioData(arrayBuffer, (decodedBuffer) => {
+                  setLocalBinaryBuffer(decodedBuffer);
+                  
+                  setVerificationReport(prev => prev.map(step => 
+                    step.id === 'decoder' 
+                      ? { ...step, status: 'COMPLETE', log: `Decoded successfully. Duration: ${Math.round(decodedBuffer.duration)}s.` }
+                      : step.id === 'peaks'
+                        ? { ...step, status: 'PROCESSING', log: 'Measuring RMS level limits...' }
+                        : step
+                  ));
+                  
+                  setAgentProgress(60);
+
+                  setTimeout(() => {
+                    setVerificationReport(prev => prev.map(step => 
+                      step.id === 'peaks' 
+                        ? { ...step, status: 'COMPLETE', log: 'Averages resolved at -14.2 LUFS. Ceiling locked at +4dB.' }
+                        : step.id === 'license'
+                          ? { ...step, status: 'PROCESSING', log: 'Issuing dynamic XML rekordbox cues...' }
+                          : step
+                    ));
+                    setAgentProgress(85);
+
+                    setTimeout(() => {
+                      setVerificationReport(prev => prev.map(step => 
+                        step.id === 'license' 
+                          ? { ...step, status: 'COMPLETE', log: 'Rekordbox XML database matched. 5 HotCues mapped.' }
+                          : step
+                      ));
+                      setAgentProgress(100);
+                      setUploadProgress(100);
+                      
+                      let vidUrl = null;
+                      if (isVideo) {
+                        vidUrl = URL.createObjectURL(file);
+                        setImportedVideoUrl(vidUrl);
+                      }
+
+                      runAgentPipeline(file.name, isVideo, decodedBuffer, vidUrl);
+                    }, 800);
+                  }, 800);
+
+                }, (err) => {
+                  console.error("Audio decoding failed:", err);
+                  setIsProcessing(false);
+                  addLog(`DECODER FAIL: Gemma rejected "${file.name}".`);
+                });
+              };
+
+              reader.readAsArrayBuffer(file);
+            }, 800);
+          };
+
+          const runAgentPipeline = (filename, isVideo, decodedBuffer, videoUrl) => {
+            setProcessingStatus('Handing track to Gemma for structural analysis...');
+            
+            setTimeout(() => {
+              setActiveAgentId('gemma');
+              setAgents(prev => ({ ...prev, gemma: { ...prev.gemma, status: 'PROCESSING', log: `Scanning transients of ${filename}...` } }));
+
+              setTimeout(() => {
+                setAgents(prev => ({
+                  ...prev,
+                  gemma: { ...prev.gemma, status: 'COMPLETE', log: 'BPM identified: 123. Key: 5A (D Minor).' },
+                  mason: { ...prev.mason, status: 'PROCESSING', log: 'Calibrating peak limiting arrays...' }
+                }));
+                setActiveAgentId('mason');
+
+                setTimeout(() => {
+                  setAgents(prev => ({
+                    ...prev,
+                    mason: { ...prev.mason, status: 'COMPLETE', log: 'Dynamic EQ applied.' },
+                    cipher: { ...prev.cipher, status: 'PROCESSING', log: 'Auditing SSL lines...' }
+                  }));
+                  setActiveAgentId('cipher');
+
+                  setTimeout(() => {
+                    setAgents(prev => ({
+                      ...prev,
+                      cipher: { ...prev.cipher, status: 'COMPLETE', log: 'Security hash: 0x98A1_FF4A issued.' },
+                      llama: { ...prev.llama, status: 'PROCESSING', log: 'Injecting dynamic paths...' }
+                    }));
+                    setActiveAgentId('llama');
+
+                    setTimeout(() => {
+                      setAgents(prev => ({
+                        ...prev,
+                        llama: { ...prev.llama, status: 'COMPLETE', log: 'Local routing paths mapped safely.' },
+                        echo: { ...prev.echo, status: 'PROCESSING', log: 'Generating push indicators...' }
+                      }));
+                      setActiveAgentId('echo');
+
+                      setTimeout(() => {
+                        setAgents(prev => ({
+                          ...prev,
+                          echo: { ...prev.echo, status: 'COMPLETE', log: 'Broadcast complete.' }
+                        }));
+                        setIsProcessing(false);
+                        setActiveAgentId(null);
+                        setProcessingStatus('');
+                        
+                        const cleanName = filename.replace(/\.[^/.]+$/, "");
+                        const newTrackObj = {
+                          id: `uploaded-${Date.now()}`,
+                          title: cleanName,
+                          version: isVideo ? 'Master High-Retention Video' : 'Master Audio Upload',
+                          bpm: 123,
+                          key: '5A (D Minor)',
+                          genre: isVideo ? 'Vibe Video Sync' : 'Melodic Progressive',
+                          persona: 'DJ_BUTTERFLY',
+                          personaLabel: "DJ Butterfly // The Sunset Terrace",
+                          energy: 'Dynamic Sync (7/10)',
+                          waveColor: '#a855f7',
+                          synthPattern: 'progressive',
+                          isBinarySource: true,
+                          binaryBuffer: decodedBuffer,
+                          videoUrl: videoUrl,
+                          coverUrl: customCoverUrl || 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?q=80&w=800&auto=format&fit=crop',
+                          chats: [
+                            { user: 'System', text: `Auto-analyzed and mastered by HMW Agent Workforce! 🪐`, color: 'text-emerald-400' }
+                          ]
+                        };
+
+                        setTracks(prev => [newTrackObj, ...prev]);
+                        setActiveTrack(newTrackObj);
+                        addLog(`WORKFORCE COMPLETE: "${cleanName}" injected into Halo Music World!`);
+                      }, 800);
+                    }, 800);
+                  }, 800);
+                }, 800);
+              }, 800);
+            }, 800);
+          };
+
+          const castPrePartyCompute = (id) => {
+            setPrePartyPool(prev => prev.map(item => {
+              if (item.id === id) {
+                const nextProgress = Math.min(100, item.progress + Math.floor(Math.random() * 12) + 8);
+                const newlyUnlocked = nextProgress >= 100 && item.encrypted;
+                
+                if (newlyUnlocked) {
+                  addLog(`✓ CONSENSUS COMPLETE: "${item.title}" decrypted! Preloaded into active pool.`);
+                  pushChat('Vault_AI', `Consensus locked! "${item.title}" has been successfully decrypted. 🔓`, 'text-emerald-400');
+                  
+                  setWinnerTrackName(item.title);
+                  setShowWinnerModal(true);
+                  setTimeout(() => { triggerCelebration(); }, 100);
+
+                  setTimeout(() => {
+                    const addedTrack = {
+                      id: `pre-unlocked-${item.id}`,
+                      title: item.title,
+                      version: 'Community Decrypted Master',
+                      bpm: item.bpm,
+                      key: `${item.key} (Vibe Selected)`,
+                      genre: item.bpm < 118 ? 'Melodic Downtempo' : item.bpm <= 123 ? 'Deep House' : 'Melodic Techno',
+                      persona: item.bpm < 118 ? 'DJ_ROMY' : item.bpm <= 123 ? 'DJ_BUTTERFLY' : 'DJ_HALO',
+                      personaLabel: item.bpm < 118 ? 'DJ Romy // The After-Hours Wind-Down' : item.bpm <= 123 ? 'DJ Butterfly // The Sunset Terrace' : 'DJ Halo // The Peak Vault',
+                      energy: 'Consensus Weapon (9/10)',
+                      waveColor: item.bpm < 118 ? '#ec4899' : item.bpm <= 123 ? '#a855f7' : '#d97706',
+                      synthPattern: item.bpm < 118 ? 'transition' : 'progressive',
+                      isBinarySource: false,
+                      coverUrl: 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?q=80&w=800&auto=format&fit=crop',
+                      chats: [
+                        { user: 'HMW_Bot', text: 'Decryption payload completed directly by crowd compute power! 🚀', color: 'text-emerald-400' }
+                      ]
+                    };
+                    setTracks(prev => [addedTrack, ...prev]);
+                    setActiveTrack(addedTrack);
+                  }, 1200);
+                } else {
+                  addLog(`Casting compute power to node ${id}. Decryption index: ${nextProgress}%`);
+                }
+                return { ...item, progress: nextProgress, encrypted: nextProgress < 100 };
+              }
+              return item;
+            }));
+          };
+
+          const triggerCelebration = () => {
+            const canvas = confettiCanvasRef.current;
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+
+            const type = celebrationIndexRef.current % 2;
+            celebrationIndexRef.current++;
+
+            if (type === 0) {
+              addLog("TPO CELEBRATION ACTIVE: Confetti explosion sequence triggered.");
+              runConfetti(canvas, ctx);
+            } else {
+              addLog("TPO CELEBRATION ACTIVE: Neon Vector Firework rocket bursts triggered.");
+              runFireworks(canvas, ctx);
+            }
+          };
+
+          const runConfetti = (canvas, ctx) => {
+            let particles = [];
+            const colors = ['#d97706', '#a855f7', '#ec4899', '#10b981', '#3b82f6'];
+
+            for (let i = 0; i < 200; i++) {
+              particles.push({
+                x: canvas.width / 2,
+                y: canvas.height + 50,
+                r: Math.random() * 6 + 4,
+                speedX: Math.random() * 12 - 6,
+                speedY: Math.random() * -18 - 8,
+                color: colors[Math.floor(Math.random() * colors.length)],
+                tilt: Math.random() * 10 - 5,
+                tiltAngleIncremental: Math.random() * 0.07 + 0.02,
+                tiltAngle: 0
+              });
+            }
+
+            const animateConfetti = () => {
+              ctx.clearRect(0, 0, canvas.width, canvas.height);
+              let active = false;
+
+              particles.forEach((p) => {
+                p.tiltAngle += p.tiltAngleIncremental;
+                p.y += p.speedY;
+                p.x += p.speedX;
+                p.speedY += 0.28; 
+                p.tilt = Math.sin(p.tiltAngle) * 12;
+
+                if (p.y < canvas.height && p.x > 0 && p.x < canvas.width) {
+                  active = true;
+                }
+
+                ctx.beginPath();
+                ctx.lineWidth = p.r;
+                ctx.strokeStyle = p.color;
+                ctx.moveTo(p.x + p.tilt + p.r / 2, p.y);
+                ctx.lineTo(p.x + p.tilt, p.y + p.tilt + p.r / 2);
+                ctx.stroke();
+              });
+
+              if (active) {
+                requestAnimationFrame(animateConfetti);
+              } else {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+              }
+            };
+            animateConfetti();
+          };
+
+          const runFireworks = (canvas, ctx) => {
+            let rockets = [];
+            let sparks = [];
+            const colors = ['#d97706', '#a855f7', '#ec4899', '#10b981', '#06b6d4'];
+
+            const rocketCount = Math.floor(Math.random() * 3) + 3;
+            for (let i = 0; i < rocketCount; i++) {
+              rockets.push({
+                x: (canvas.width * 0.2) + Math.random() * (canvas.width * 0.6),
+                y: canvas.height + 20,
+                targetY: (canvas.height * 0.15) + Math.random() * (canvas.height * 0.35),
+                speedY: Math.random() * -5 - 10,
+                color: colors[Math.floor(Math.random() * colors.length)],
+                size: Math.random() * 3 + 2,
+                exploded: false
+              });
+            }
+
+            const explode = (x, y, color) => {
+              const sparkCount = 80;
+              for (let i = 0; i < sparkCount; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const speed = Math.random() * 6 + 2;
+                sparks.push({
+                  x: x,
+                  y: y,
+                  vx: Math.cos(angle) * speed,
+                  vy: Math.sin(angle) * speed,
+                  color: color,
+                  alpha: 1,
+                  decay: Math.random() * 0.015 + 0.008,
+                  gravity: 0.1,
+                  friction: 0.98
+                });
+              }
+            };
+
+            const animateFireworks = () => {
+              ctx.fillStyle = 'rgba(7, 7, 9, 0.18)';
+              ctx.fillRect(0, 0, canvas.width, canvas.height);
+              let active = false;
+
+              rockets.forEach(r => {
+                if (!r.exploded) {
+                  r.y += r.speedY;
+                  if (r.y <= r.targetY) {
+                    r.exploded = true;
+                    explode(r.x, r.y, r.color);
+                  } else {
+                    active = true;
+                    ctx.beginPath();
+                    ctx.arc(r.x, r.y, r.size, 0, Math.PI * 2);
+                    ctx.fillStyle = r.color;
+                    ctx.shadowBlur = 15;
+                    ctx.shadowColor = r.color;
+                    ctx.fill();
+                    ctx.shadowBlur = 0;
+                  }
+                }
+              });
+
+              sparks.forEach(s => {
+                if (s.alpha > 0) {
+                  active = true;
+                  s.vx *= s.friction;
+                  s.vy *= s.friction;
+                  s.vy += s.gravity;
+                  s.x += s.vx;
+                  s.y += s.vy;
+                  s.alpha -= s.decay;
+
+                  ctx.beginPath();
+                  ctx.arc(s.x, s.y, 2, 0, Math.PI * 2);
+                  ctx.fillStyle = s.color;
+                  ctx.globalAlpha = s.alpha;
+                  ctx.shadowBlur = 10;
+                  ctx.shadowColor = s.color;
+                  ctx.fill();
+                  
+                  ctx.globalAlpha = 1;
+                  ctx.shadowBlur = 0;
+                }
+              });
+
+              if (active) {
+                requestAnimationFrame(animateFireworks);
+              } else {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+              }
+            };
+            animateFireworks();
+          };
+
+          const initAudio = () => {
+            try {
+              if (!audioCtxRef.current) {
+                const AudioContext = window.AudioContext || window.webkitAudioContext;
+                audioCtxRef.current = new AudioContext();
+                
+                const gainNode = audioCtxRef.current.createGain();
+                gainNode.gain.setValueAtTime(0.15, audioCtxRef.current.currentTime);
+                
+                const filterNode = audioCtxRef.current.createBiquadFilter();
+                filterNode.type = 'lowpass';
+                filterNode.frequency.setValueAtTime(20000, audioCtxRef.current.currentTime);
+
+                const analyzer = audioCtxRef.current.createAnalyser();
+                analyzer.fftSize = 64;
+                
+                gainNode.connect(filterNode);
+                filterNode.connect(analyzer);
+                analyzer.connect(audioCtxRef.current.destination);
+                
+                gainNodeRef.current = gainNode;
+                filterNodeRef.current = filterNode;
+                analyzerRef.current = analyzer;
+              }
+            } catch (err) {
+              console.warn("Web Audio API not fully initialized:", err);
+            }
+          };
+
+          const toggleMasonFilter = () => {
+            initAudio();
+            if (!filterNodeRef.current) return;
+            const ctx = audioCtxRef.current;
+            const now = ctx.currentTime;
+
+            if (!isFilterActive) {
+              setIsFilterActive(true);
+              filterNodeRef.current.frequency.exponentialRampToValueAtTime(750, now + 0.8);
+              addLog("MASON: Low-Pass corridor acoustics filter engaged at 750Hz.");
+            } else {
+              setIsFilterActive(false);
+              filterNodeRef.current.frequency.exponentialRampToValueAtTime(20000, now + 0.5);
+              addLog("MASON: Low-Pass corridor filter bypassed.");
+            }
+          };
+
+          const startHybridPlayback = (track) => {
+            initAudio();
+            const ctx = audioCtxRef.current;
+            if (ctx.state === 'suspended') ctx.resume();
+
+            stopActiveSource();
+
+            if (track.isBinarySource && track.binaryBuffer) {
+              addLog(`HYBRID ENGINE: Direct 24-bit binary memory stream active for: "${track.title}"`);
+              const source = ctx.createBufferSource();
+              source.buffer = track.binaryBuffer;
+              source.loop = true;
+              source.connect(gainNodeRef.current);
+              source.start(0);
+              activeSourceNodeRef.current = source;
+            } else {
+              startSynthLoop(track);
+            }
+          };
+
+          const stopActiveSource = () => {
+            if (activeSourceNodeRef.current) {
+              try { activeSourceNodeRef.current.stop(); } catch(e) {}
+              activeSourceNodeRef.current = null;
+            }
+            if (synthIntervalRef.current) {
+              clearInterval(synthIntervalRef.current);
+              synthIntervalRef.current = null;
+            }
+          };
+
+          const startSynthLoop = (track) => {
+            initAudio();
+            const tempo = typeof track.bpm === 'number' ? track.bpm : 125;
+            const beatInterval = (60 / tempo) * 1000;
+            let step = 0;
+
+            const playStep = () => {
+              if (!audioCtxRef.current || isMuted) return;
+              const ctx = audioCtxRef.current;
+              const now = ctx.currentTime;
+
+              if (step % 4 === 0) {
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.connect(gain);
+                gain.connect(gainNodeRef.current);
+                osc.frequency.setValueAtTime(160, now);
+                osc.frequency.exponentialRampToValueAtTime(0.01, now + 0.25);
+                gain.gain.setValueAtTime(0.7, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.24);
+                osc.start(now);
+                osc.stop(now + 0.26);
+              }
+              step = (step + 1) % 16;
+            };
+
+            playStep();
+            synthIntervalRef.current = setInterval(playStep, beatInterval / 4);
+          };
+
+          const togglePlayback = () => {
+            initAudio();
+            if (isPlaying) {
+              stopActiveSource();
+              setIsPlaying(false);
+              addLog(`Playback paused.`);
+            } else {
+              setIsPlaying(true);
+              startHybridPlayback(activeTrack);
+            }
+          };
+
+          useEffect(() => {
+            if (isPlaying) startHybridPlayback(activeTrack);
+          }, [activeTrack]);
+
+          useEffect(() => {
+            if (!canvasRef.current) return;
+            const canvas = canvasRef.current;
+            const ctx = canvas.getContext('2d');
+            let animationId;
+            let rotation = 0;
+
+            const render = () => {
+              ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+              const centerX = canvas.width / 2;
+              const centerY = canvas.height / 2;
+              const baseRadius = Math.min(centerX, centerY) * 0.45;
+
+              let waveAmplitude = 10;
+              if (isPlaying) {
+                if (analyzerRef.current) {
+                  const bufferLength = analyzerRef.current.frequencyBinCount;
+                  const dataArray = new Uint8Array(bufferLength);
+                  analyzerRef.current.getByteFrequencyData(dataArray);
+                  const sum = dataArray.reduce((a, b) => a + b, 0);
+                  waveAmplitude = sum / bufferLength;
+                } else {
+                  waveAmplitude = 30 + Math.sin(Date.now() / 150) * 15;
+                }
+              }
+
+              rotation += 0.005;
+
+              ctx.beginPath();
+              for (let i = 0; i <= 100; i++) {
+                const angle = (i / 100) * Math.PI * 2 + rotation;
+                const noise = Math.sin(angle * 10 + rotation * 6) * (waveAmplitude * 0.25);
+                const r = baseRadius + 35 + noise;
+                const x = centerX + Math.cos(angle) * r;
+                const y = centerY + Math.sin(angle) * r;
+                if (i === 0) ctx.moveTo(x, y);
+                else ctx.lineTo(x, y);
+              }
+              ctx.strokeStyle = activeTrack.waveColor || '#d97706';
+              ctx.lineWidth = 3;
+              ctx.shadowBlur = 20;
+              ctx.shadowColor = activeTrack.waveColor || '#d97706';
+              ctx.stroke();
+
+              animationId = requestAnimationFrame(render);
+            };
+
+            render();
+            return () => cancelAnimationFrame(animationId);
+          }, [isPlaying, activeTrack]);
+
+          const triggerSocialDefibrillatorRaid = () => {
+            if (isRaidActive) return;
+            setIsRaidActive(true);
+            setRaidProgress(0);
+            addLog(`INITIALIZING SOCIAL PROTOCOL RAID: Targeted TikTok Defibrillator activated.`);
+
+            const raidSteps = [
+              { p: 10, msg: '🛰️ Sending geofenced Lock-Screen Push to 120 listening party passes...', v: 412, l: 18, c: 14, co: 3 },
+              { p: 30, msg: '🚀 Tunneling 80+ immediate direct-app routing links straight to Native App...', v: 1205, l: 240, c: 42, co: 24 },
+              { p: 55, msg: '⚡ Crowd surge detected! Watching loop, replaying, commenting secret codes...', v: 4890, l: 890, c: 84, co: 98 },
+              { p: 80, msg: '🔥 Completion rates skyrocketed by 400%! Algorithm alert triggered...', v: 11200, l: 2310, c: 88, co: 290 },
+              { p: 100, msg: '🏆 Defibrillator Complete. Underperforming video pushed into public trending feeds!', v: 18450, l: 4810, c: 92, co: 582 }
+            ];
+
+            let stepIndex = 0;
+            const runRaidStep = () => {
+              if (stepIndex >= raidSteps.length) {
+                setIsRaidActive(false);
+                addLog('MISSION STATUS: Algorithmic rescue complete. TikTok has been successfully revived!');
+                return;
+              }
+              const current = raidSteps[stepIndex];
+              setRaidProgress(current.p);
+              setRaidStats({ views: current.v, likes: current.l, completion: current.c, comments: current.co });
+              setRaidLog(prev => [`[${new Date().toLocaleTimeString()}] ${current.msg}`, ...prev]);
+              
+              if (stepIndex === 1) pushChat('HMW_Raid_Bot', 'Alert received on my lock screen! Opening now... 📲', 'text-amber-400');
+              else if (stepIndex === 3) pushChat('Sasha_London', 'Secret code found flashing at 0:15! Comments are flooded! 😂', 'text-purple-400');
+
+              stepIndex++;
+              setTimeout(runRaidStep, 1000);
+            };
+            runRaidStep();
+          };
+
+          const pushChat = (user, text, color) => setChatMessages(prev => [...prev, { user, text, color }]);
+
+          const submitMessage = (e) => {
+            if (e) e.preventDefault();
+            if (!newComment.trim()) return;
+            pushChat('You (Host)', newComment, 'text-amber-400 font-extrabold');
+            addLog(`User submitted feedback to chat: "${newComment}"`);
+            setNewComment('');
+            setTimeout(() => {
+              const responsePool = ["Absolutely support that point!", "Yes! Totally agree with the Host here.", "The transitions on this unreleased project are so smooth.", "When is this landing on our Wallet VIP pool?", "Watching the visualizer pulse is hypnotic."];
+              pushChat('PassHolder_99', responsePool[Math.floor(Math.random() * responsePool.length)], 'text-gray-300');
+            }, 1200);
+          };
+
+          const submitPartyTelemetry = () => {
+            addLog('Submitting Listening Party feedback telemetry to aggregated host pool...');
+            setAggregateFeedback(prev => ({
+              vibe: Math.round(((prev.vibe * prev.count) + feedbackVibe) / (prev.count + 1)),
+              drop: Math.round(((prev.drop * prev.count) + feedbackDrop) / (prev.count + 1)),
+              trans: Math.round(((prev.trans * prev.count) + feedbackTransition) / (prev.count + 1)),
+              count: prev.count + 1
+            }));
+            addLog(`Aggregation updated. Verified live feedbacks total: ${aggregateFeedback.count + 1}`);
+            pushChat('System', `Your direct vibe feedback of [Vibe: ${feedbackVibe}%, Drop: ${feedbackDrop}%] locked in!`, 'text-purple-400');
+          };
+
+          const bypassAuth = () => {
+            setIsAuthorized(true);
+            addLog(`Authorized via Developer Portal bypass.`);
+          };
+
+          return (
+            <div className="min-h-screen bg-[#070709] text-gray-100 flex flex-col font-mono relative">
+              
+              <canvas ref={confettiCanvasRef} id="celebration-overlay"></canvas>
+
+              {/* DECIDED WINNER CELEBRATION MODAL */}
+              {showWinnerModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4">
+                  <div className="w-full max-w-md bg-[#0e0e14] border-2 border-emerald-500 rounded-2xl p-6 shadow-[0_0_50px_rgba(16,185,129,0.3)] relative text-center space-y-4">
+                    <div className="inline-flex p-3 bg-emerald-950/40 border border-emerald-500/30 rounded-full text-emerald-400">
+                      <Icon name="unlock" className="h-8 w-8 animate-bounce" />
+                    </div>
+                    <h3 className="text-xl font-black text-white uppercase tracking-widest">CONSENSUS UNLOCKED!</h3>
+                    <div className="bg-black/60 border border-purple-950 rounded-lg p-4">
+                      <p className="text-xs text-gray-400 tracking-wider">CROWNED PERFORMANCE WINNER</p>
+                      <h4 className="text-lg font-black text-amber-400 uppercase tracking-tight mt-1 font-sans-alt">{winnerTrackName}</h4>
+                    </div>
+                    <p className="text-xs text-gray-400 leading-relaxed font-sans-alt">
+                      The crowd has successfully fueled enough compute power to decrypt the unreleased WAV. This track is now injected directly into your active setlist.
+                    </p>
+                    <button onClick={() => setShowWinnerModal(false)} className="w-full py-2.5 bg-emerald-500 hover:bg-emerald-400 text-[#070709] font-black uppercase text-xs tracking-widest rounded-lg transition">
+                      ENGAGE THE SETLIST
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* HEADER HUD */}
+              <header className="border-b border-purple-950/40 bg-[#0c0c11] px-4 py-3 flex flex-wrap justify-between items-center gap-4 sticky top-0 z-40 font-sans-alt">
+                <div className="flex items-center gap-3">
+                  <div className="relative flex h-3 w-3">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-500 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-3 w-3 bg-amber-500"></span>
+                  </div>
+                  <div>
+                    <h1 className="font-extrabold tracking-widest text-transparent bg-clip-text bg-gradient-to-r from-amber-400 via-purple-400 to-rose-400 text-sm md:text-base">
+                      HALO MUSIC WORLD // AGENT CONSOLE
+                    </h1>
+                    <p className="text-[10px] text-gray-400 uppercase tracking-widest">SINGLE COVER ARTWORK & MEDIA LAB</p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-3 text-[11px] text-gray-400">
+                  <a href="signal-network.html" className="bg-amber-950/40 hover:bg-amber-900/60 border border-amber-500/50 text-amber-300 px-3 py-1.5 rounded-lg font-bold transition flex items-center gap-1.5 uppercase font-mono">
+                    <Icon name="radio" className="h-3.5 w-3.5 text-amber-400 animate-pulse" />
+                    <span>Signal Network</span>
+                  </a>
+                  {isAuthorized && (
+                    <button onClick={() => setIsAuthorized(false)} className="bg-red-950/40 hover:bg-red-900/40 border border-red-900/50 text-red-300 px-2.5 py-1 rounded text-[10px] transition">
+                      DEAUTH
+                    </button>
+                  )}
+                </div>
+              </header>
+
+              {!isAuthorized ? (
+                <div className="flex-1 flex flex-col justify-center items-center px-4 py-12">
+                  <div className="w-full max-w-md bg-[#0e0e14] border border-purple-950/80 rounded-xl p-8 shadow-2xl text-center space-y-6">
+                    <div className="inline-flex p-3 bg-purple-950/40 rounded-full border border-purple-900/50 text-amber-400">
+                      <Icon name="key" className="h-7 w-7 animate-pulse" />
+                    </div>
+                    <div>
+                      <h2 className="text-xl font-bold tracking-wider text-white">DECK INTERCEPT LOGIN</h2>
+                      <p className="text-xs text-gray-400 mt-2">Enter your passcode or bypass to access the single cover & media lab.</p>
+                    </div>
+                    <button onClick={bypassAuth} className="w-full bg-gradient-to-r from-amber-500 to-purple-600 hover:brightness-110 text-black font-extrabold uppercase py-3 rounded text-xs tracking-widest transition">
+                      INSTANT DEMO BYPASS
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 overflow-hidden">
+                  
+                  {/* LEFT PANEL: Navigation & Track List */}
+                  <section className="lg:col-span-3 border-r border-purple-950/30 bg-[#09090d] flex flex-col p-4 space-y-4">
+                    <div className="space-y-1">
+                      <span className="text-[10px] text-purple-400 font-bold tracking-widest uppercase block mb-2 px-1">SYSTEM NAVIGATION</span>
+                      <button onClick={() => setActiveTab('agent-room')} className={`w-full flex items-center justify-between px-3 py-2.5 rounded text-xs tracking-wider uppercase transition ${activeTab === 'agent-room' ? 'bg-purple-950/50 border-l-2 border-amber-400 text-white font-bold' : 'text-gray-400 hover:text-white'}`}>
+                        <span className="flex items-center gap-2"><Icon name="cpu" className="h-4 w-4 text-amber-400" />AI Workgroup</span>
+                      </button>
+                      <button onClick={() => setActiveTab('party')} className={`w-full flex items-center justify-between px-3 py-2.5 rounded text-xs tracking-wider uppercase transition ${activeTab === 'party' ? 'bg-purple-950/50 border-l-2 border-rose-400 text-white font-bold' : 'text-gray-400 hover:text-white'}`}>
+                        <span className="flex items-center gap-2"><Icon name="users" className="h-4 w-4 text-rose-400" />Live Party Session</span>
+                      </button>
+                      <button onClick={() => setActiveTab('media-upload')} className={`w-full flex items-center justify-between px-3 py-2.5 rounded text-xs tracking-wider uppercase transition ${activeTab === 'media-upload' ? 'bg-purple-950/50 border-l-2 border-emerald-400 text-white font-bold' : 'text-gray-400 hover:text-white'}`}>
+                        <span className="flex items-center gap-2"><Icon name="image" className="h-4 w-4 text-emerald-400" />Single Cover & Media Lab</span>
+                      </button>
+                      <a href="signal-network.html" className="w-full flex items-center justify-between px-3 py-2.5 rounded text-xs tracking-wider uppercase transition text-amber-400 hover:bg-amber-950/20 border border-amber-500/20 mt-2">
+                        <span className="flex items-center gap-2"><Icon name="globe" className="h-4 w-4 text-amber-400" />Global Signal Network</span>
+                        <Icon name="arrow-right" className="h-3 w-3" />
+                      </a>
+                    </div>
+
+                    {/* ACTIVE SETLIST */}
+                    <div className="flex-1 flex flex-col space-y-2 border-t border-purple-950/30 pt-4">
+                      <span className="text-[10px] text-purple-400 font-bold tracking-widest uppercase block mb-1 px-1">SETLIST & SINGLE COVERS</span>
+                      <div className="space-y-2 flex-1 overflow-y-auto max-h-[300px]">
+                        {tracks.map(t => (
+                          <div key={t.id} onClick={() => { setActiveTrack(t); addLog(`Swapped active track to: "${t.title}"`); }} className={`p-2.5 rounded border text-left cursor-pointer transition flex items-center gap-3 ${activeTrack.id === t.id ? 'bg-purple-950/40 border-purple-500 shadow-md' : 'bg-[#0b0b10] border-purple-950/40 hover:border-purple-800'}`}>
+                            <div className="w-10 h-10 rounded overflow-hidden bg-black flex-shrink-0 border border-purple-900/60 relative">
+                              <img src={t.coverUrl || 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?q=80&w=200&auto=format&fit=crop'} alt={t.title} className="w-full h-full object-cover" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className={`text-xs font-bold truncate ${activeTrack.id === t.id ? 'text-amber-400' : 'text-gray-200'}`}>{t.title}</p>
+                              <p className="text-[10px] text-gray-400 truncate">{t.version}</p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </section>
+
+                  {}
+                  <section className="lg:col-span-6 bg-[#070709] border-r border-purple-950/30 flex flex-col p-4 space-y-4 overflow-y-auto">
+                    
+                    {/* PLAYER CONTAINER WITH DYNAMIC SINGLE COVER BACKGROUND */}
+                    <div className="relative bg-[#09090e] border border-purple-950/60 rounded-2xl overflow-hidden flex flex-col justify-center items-center p-6 min-h-[320px] shadow-2xl">
+                      
+                      {activeTrack.videoUrl ? (
+                        <div className="absolute inset-0 w-full h-full z-0 bg-black">
+                          <video src={activeTrack.videoUrl} className="w-full h-full object-cover opacity-50" autoPlay loop muted playsInline />
+                          <div className="absolute inset-0 bg-gradient-to-t from-[#070709] via-black/40 to-transparent"></div>
+                        </div>
+                      ) : (
+                        <div className="absolute inset-0 w-full h-full z-0 overflow-hidden pointer-events-none">
+                          <img 
+                            src={activeTrack.coverUrl || 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?q=80&w=800&auto=format&fit=crop'} 
+                            alt={activeTrack.title} 
+                            className="w-full h-full object-cover opacity-35 scale-105 blur-[2px] transition-all duration-700" 
+                          />
+                          <div className="absolute inset-0 bg-gradient-to-t from-[#070709] via-[#070709]/60 to-black/40"></div>
+                        </div>
+                      )}
+
+                      <div className="absolute top-3 left-3 z-20 flex items-center gap-2 bg-black/70 backdrop-blur-md px-3 py-1 rounded-lg text-[10px] border border-purple-900/60" style={{ color: activeTrack.waveColor || '#d97706' }}>
+                        <Icon name="disc" className="h-3.5 w-3.5 animate-spin" /><span>{activeTrack.personaLabel}</span>
+                      </div>
+
+                      {/* CANVAS VISUALIZER LAYERED OVER ARTWORK */}
+                      <canvas ref={canvasRef} width={400} height={300} className="w-full max-w-[240px] aspect-[4/3] pointer-events-none z-20" />
+
+                      {/* CONTROL BAR */}
+                      <div className="absolute bottom-4 z-30 flex items-center gap-3 bg-black/90 backdrop-blur-md px-4 py-2.5 rounded-full border border-purple-900/80 shadow-2xl">
+                        <button onClick={togglePlayback} className={`h-9 w-9 flex items-center justify-center rounded-full transition ${isPlaying ? 'bg-purple-600 text-white' : 'bg-amber-500 text-black'}`}>
+                          {isPlaying ? <Icon name="pause" className="h-4 w-4" /> : <Icon name="play" className="h-4 w-4 ml-0.5" />}
+                        </button>
+                        <div className="text-left font-mono">
+                          <p className="text-[10px] font-bold text-gray-200 uppercase truncate max-w-[120px]">{activeTrack.title}</p>
+                          <p className="text-[9px] text-gray-400">{isPlaying ? 'Audio Engine Active' : 'Standby'}</p>
+                        </div>
+                        <button onClick={toggleMasonFilter} className={`px-3 py-1.5 rounded-full text-[9px] font-bold uppercase transition ${isFilterActive ? 'bg-rose-500/20 text-rose-400 border border-rose-500/40' : 'bg-amber-500/10 text-amber-400 border border-amber-500/30'}`}>
+                          {isFilterActive ? 'Bypass Filter' : 'Corridor Acoustics'}
+                        </button>
+                      </div>
+                    </div>
+
+                    {}
+                    {activeTab === 'agent-room' && (
+                      <div className="bg-[#0b0b11] border border-purple-950 p-4 rounded-xl space-y-3">
+                        <div className="flex justify-between items-center border-b border-purple-950/60 pb-2">
+                          <h3 className="text-xs font-black uppercase tracking-widest text-amber-400 flex items-center gap-1.5 font-mono">
+                            <Icon name="cpu" className="h-4 w-4 text-amber-500 animate-spin" />AUTONOMOUS WORKFORCE DAEMONS
+                          </h3>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-5 gap-3 font-mono">
+                          {Object.entries(agents).map(([id, item]) => (
+                            <div key={id} className="p-3 rounded-lg bg-black/40 border border-purple-950/60 space-y-2">
+                              <span className="text-[9px] bg-purple-950 text-purple-400 px-1.5 py-0.5 rounded font-bold">{id.toUpperCase()}</span>
+                              <h4 className="text-xs font-bold text-white mt-1">{item.name}</h4>
+                              <p className="text-[9px] text-gray-500 truncate">{item.role}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {activeTab === 'media-upload' && (
+                      <div className="bg-[#0b0b11] border border-purple-950 rounded-xl p-5 space-y-5">
+                        <div className="border-b border-purple-950/60 pb-3">
+                          <h3 className="text-xs font-black uppercase tracking-wider text-emerald-400 flex items-center gap-2 font-mono">
+                            <Icon name="image" className="h-4 w-4 text-emerald-400" />
+                            SINGLE COVER ARTWORK & MEDIA UPLOADER
+                          </h3>
+                          <p className="text-[10px] text-gray-400 mt-1 font-sans-alt">
+                            Upload a new single cover image (.jpg, .png, .webp) to immediately replace current track artwork, or drop raw WAV/MP3/MP4 files.
+                          </p>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          
+                          {/* 1. SINGLE COVER IMAGE UPLOADER */}
+                          <div className="border-2 border-dashed border-amber-500/40 rounded-xl p-6 text-center bg-black/40 hover:bg-amber-950/10 transition relative flex flex-col items-center justify-center space-y-2">
+                            <Icon name="image" className="h-7 w-7 text-amber-400 animate-pulse" />
+                            <p className="text-xs font-bold text-white font-sans-alt">UPLOAD NEW COVER ARTWORK</p>
+                            <p className="text-[10px] text-gray-400 font-sans-alt">Replaces active track artwork instantly.</p>
+                            <input type="file" accept="image/*" onChange={handleCoverUpload} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
+                          </div>
+
+                          {/* 2. MEDIA AUDIO/VIDEO UPLOADER */}
+                          <div className="border-2 border-dashed border-purple-900/60 rounded-xl p-6 text-center bg-black/40 hover:bg-purple-950/10 transition relative flex flex-col items-center justify-center space-y-2">
+                            <Icon name="music" className="h-7 w-7 text-purple-400 animate-pulse" />
+                            <p className="text-xs font-bold text-white font-sans-alt">UPLOAD WAV / MP3 / MP4 TRACK</p>
+                            <p className="text-[10px] text-gray-400 font-sans-alt">Runs 5 AI workforce daemons client-side.</p>
+                            <input type="file" accept="audio/*,video/*" onChange={handleMediaUpload} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
+                          </div>
+                        </div>
+
+                        {/* LIVE PREVIEW OF CURRENT COVER ARTWORK */}
+                        <div className="bg-black/50 border border-purple-950/80 p-3 rounded-xl flex items-center gap-4">
+                          <div className="w-16 h-16 rounded-lg overflow-hidden border border-amber-500/40 flex-shrink-0">
+                            <img src={activeTrack.coverUrl || 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?q=80&w=200&auto=format&fit=crop'} alt="Active Cover" className="w-full h-full object-cover" />
+                          </div>
+                          <div>
+                            <span className="text-[9px] text-amber-400 font-bold uppercase tracking-wider block">ACTIVE COVER ARTWORK PREVIEW</span>
+                            <p className="text-xs font-bold text-white mt-0.5">{activeTrack.title}</p>
+                            <p className="text-[10px] text-gray-400 mt-0.5">Artwork is synced across live player and session feeds.</p>
+                          </div>
+                        </div>
+
+                      </div>
+                    )}
+
+                    {activeTab === 'party' && (
+                      <div className="bg-[#0b0b11] border border-purple-950 p-4 rounded-xl space-y-4">
+                        <h3 className="text-xs font-bold uppercase text-amber-400 flex items-center gap-1.5 font-mono">
+                          <Icon name="lock" className="h-4 w-4 text-amber-500 animate-pulse" />TOTAL POWER OVERRIDE: CONSENSUS DECRYPTION
+                        </h3>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                          {prePartyPool.map((item) => (
+                            <div key={item.id} className="bg-black/40 border border-purple-950/60 p-3 rounded-lg space-y-2">
+                              <p className="text-xs font-bold text-white">{item.title}</p>
+                              <div className="h-1 bg-purple-950 rounded-full overflow-hidden">
+                                <div className="h-full bg-amber-500 transition-all duration-300" style={{ width: `${item.progress}%` }}></div>
+                              </div>
+                              <button onClick={() => castPrePartyCompute(item.id)} disabled={item.progress >= 100} className="w-full py-1 bg-purple-950 hover:bg-purple-900 text-purple-300 rounded text-[9px] uppercase font-bold">
+                                {item.progress >= 100 ? 'DECRYPTED' : 'FUEL COMPUTE'}
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                  </section>
+
+                  {}
+                  <section className="lg:col-span-3 border-t lg:border-t-0 border-purple-950/30 bg-[#09090d] flex flex-col p-4 space-y-4">
+                    <div className="bg-[#0b0b10] border border-purple-950 p-3 rounded-lg flex-1 flex flex-col text-[10px] font-mono">
+                      <div className="flex justify-between items-center border-b border-purple-950 pb-2 mb-2">
+                        <span className="font-bold text-rose-500 tracking-wider">HMW TERMINAL LOGS</span>
+                        <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                      </div>
+                      <div className="flex-1 overflow-y-auto space-y-1.5 text-gray-400 max-h-[380px]">
+                        {terminalLogs.map((log, i) => (
+                          <p key={i} className="leading-normal hover:text-white transition">{log}</p>
+                        ))}
+                      </div>
+                    </div>
+                  </section>
+
+                </div>
+              )}
+
+              <footer className="border-t border-purple-950/40 bg-[#07070a] px-4 py-2.5 flex justify-between items-center text-[9px] text-gray-500 font-mono mt-auto">
+                <span>© 2026 HALO MUSIC WORLD SYSTEMS LLC. ALL RIGHTS RESERVED.</span>
+                <a href="signal-network.html" className="text-amber-400 font-bold hover:underline">OPEN SIGNAL NETWORK CONSOLE →</a>
+              </footer>
+
+            </div>
+          );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>

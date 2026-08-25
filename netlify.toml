@@ -1,3 +1,25 @@
+[build]
+  publish = "public"
+
+[[redirects]]
+  from = "/"
+  to = "/hmw_agent_console.html"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/console"
+  to = "/hmw_agent_console.html"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/signal"
+  to = "/signal-network.html"
+  status = 200
+  force = true
+
+# Preserve existing redirect and header configuration
 [[redirects]]
   from = "/"
   to = "/halo.html"
@@ -177,3 +199,10 @@
   from = "/control-center/"
   to = "/halo-command.html"
   status = 200
+
+# SPA fallback - keep after specific routes
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+  force = false

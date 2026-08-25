@@ -1,5 +1,9 @@
-/ /hmw_agent_console.html 200
-/console /hmw_agent_console.html 200
-/signal /signal-network.html 200
-
-/* /index.html 200
+# Redirects have been consolidated into netlify.toml on the netlify-config-cleanup branch.
+# This file is preserved temporarily for reference. After you verify the deploy preview and
+# merge the netlify-config-cleanup PR, you can safely delete this file to avoid duplication.
+# Previous redirects (for reference):
+# / /hmw_agent_console.html 200
+# /console /hmw_agent_console.html 200
+# /signal /signal-network.html 200
+#
+# /* /index.html 200

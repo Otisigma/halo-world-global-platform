@@ -8,25 +8,6 @@
   force = true
 
 [[redirects]]
-  from = "/console"
-  to = "/hmw_agent_console.html"
-  status = 200
-  force = true
-
-[[redirects]]
-  from = "/signal"
-  to = "/signal-network.html"
-  status = 200
-  force = true
-
-# Preserve existing redirect and header configuration
-[[redirects]]
-  from = "/"
-  to = "/halo.html"
-  status = 200
-  force = true
-
-[[redirects]]
   from = "/private"
   to = "/index.html"
   status = 200

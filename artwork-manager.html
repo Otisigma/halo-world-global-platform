@@ -77,23 +77,25 @@
             }
         };
 
+        const ARTWORK_FALLBACK = '/assets/halo-app-icon-512.png';
+
         function ArtworkManager() {
             const [artworks, setArtworks] = useState([
-                { id: 1, title: 'Closest Thing To Heaven', artist: 'DJ Halo Mix', url: 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?q=80&w=400&auto=format&fit=crop', type: 'single', uploadDate: '2026-08-20' },
-                { id: 2, title: 'Letting You Down Gently', artist: 'DJ Romy', url: 'https://images.unsplash.com/photo-1518609878373-06d740f60d8b?q=80&w=400&auto=format&fit=crop', type: 'single', uploadDate: '2026-08-19' },
-                { id: 3, title: 'My Decision', artist: 'DJ Butterfly', url: 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?q=80&w=400&auto=format&fit=crop', type: 'album', uploadDate: '2026-08-18' }
+                { id: 1, title: 'Closest Thing To Heaven', artist: 'DJ Halo Mix', url: '/assets/releases/the-cold-is-lasting-longer.jpg', type: 'single', uploadDate: '2026-08-20' },
+                { id: 2, title: 'Letting You Down Gently', artist: 'DJ Romy', url: '/assets/releases/salty.jpg', type: 'single', uploadDate: '2026-08-19' },
+                { id: 3, title: 'My Decision', artist: 'DJ Butterfly', url: '/assets/releases/hit-that-beat.webp', type: 'album', uploadDate: '2026-08-18' }
             ]);
 
             const [newTitle, setNewTitle] = useState('');
             const [newArtist, setNewArtist] = useState('');
             const [newType, setNewType] = useState('single');
-            const [previewUrl, setPreviewUrl] = useState(null);
-            const [uploadProgress, setUploadProgress] = useState(0);
+            const [pendingFiles, setPendingFiles] = useState([]);
+            const [uploadQueue, setUploadQueue] = useState([]);
             const [isUploading, setIsUploading] = useState(false);
             const fileInputRef = useRef(null);
             const [logs, setLogs] = useState([
                 '[BOOT] Artwork Manager System Online',
-                '[READY] Waiting for single cover upload...'
+                '[READY] Select one or multiple cover images to upload...'
             ]);
 
             const addLog = (message) => {
@@ -102,63 +104,98 @@
             };
 
             const handleFileSelect = (e) => {
-                const file = e.target.files?.[0];
-                if (!file) return;
+                const files = Array.from(e.target.files || []);
+                if (!files.length) return;
 
-                if (!file.type.startsWith('image/')) {
-                    addLog(`❌ ERROR: File must be an image (received: ${file.type})`);
+                const imageFiles = files.filter(f => f.type.startsWith('image/'));
+                const skipped = files.length - imageFiles.length;
+                if (skipped) addLog(`⚠️ SKIPPED: ${skipped} non-image file${skipped > 1 ? 's' : ''} ignored.`);
+                if (!imageFiles.length) {
+                    addLog('❌ ERROR: No image files found in selection.');
                     return;
                 }
 
-                const reader = new FileReader();
-                reader.onload = (event) => {
-                    const url = event.target.result;
-                    setPreviewUrl(url);
-                    addLog(`✓ IMAGE LOADED: ${file.name} (${(file.size / 1024).toFixed(1)}KB)`);
-                };
-                reader.readAsDataURL(file);
+                const queue = imageFiles.map(file => ({
+                    id: `pending-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+                    file,
+                    previewUrl: null,
+                    progress: 0,
+                    status: 'pending'
+                }));
+
+                setUploadQueue(queue);
+                setPendingFiles(imageFiles);
+                addLog(`✓ SELECTED: ${imageFiles.length} image${imageFiles.length > 1 ? 's' : ''} ready for upload.`);
+
+                // Generate previews for all selected files
+                queue.forEach((item, index) => {
+                    const reader = new FileReader();
+                    reader.onload = (event) => {
+                        setUploadQueue(prev => prev.map((q, i) => i === index ? { ...q, previewUrl: event.target.result } : q));
+                    };
+                    reader.readAsDataURL(item.file);
+                });
             };
 
-            const handleUpload = () => {
-                if (!previewUrl || !newTitle || !newArtist) {
-                    addLog('❌ ERROR: Missing required fields (title, artist, image)');
+            const handleUpload = async () => {
+                if (!uploadQueue.length) {
+                    addLog('❌ ERROR: No images selected.');
+                    return;
+                }
+                if (!newArtist) {
+                    addLog('❌ ERROR: Artist / DJ name is required.');
                     return;
                 }
 
                 setIsUploading(true);
-                addLog(`🚀 UPLOADING: ${newTitle} as ${newType}...`);
+                const today = new Date().toISOString().split('T')[0];
+                const results = [];
 
-                // Simulate upload progress
-                let progress = 0;
-                const interval = setInterval(() => {
-                    progress += Math.random() * 30;
-                    if (progress >= 100) {
-                        progress = 100;
-                        clearInterval(interval);
+                for (let i = 0; i < uploadQueue.length; i += 1) {
+                    const item = uploadQueue[i];
+                    const title = uploadQueue.length === 1 && newTitle ? newTitle :
+                        item.file.name.replace(/\.[^/.]+$/, '') || item.file.name;
 
-                        const newArtwork = {
-                            id: Date.now(),
-                            title: newTitle,
-                            artist: newArtist,
-                            url: previewUrl,
-                            type: newType,
-                            uploadDate: new Date().toISOString().split('T')[0]
-                        };
+                    addLog(`🚀 UPLOADING (${i + 1}/${uploadQueue.length}): ${title}...`);
 
-                        setArtworks(prev => [newArtwork, ...prev]);
-                        addLog(`✅ COMPLETE: "${newTitle}" added to library (${newType})`);
-                        
-                        // Reset form
-                        setNewTitle('');
-                        setNewArtist('');
-                        setNewType('single');
-                        setPreviewUrl(null);
-                        setIsUploading(false);
-                        setUploadProgress(0);
-                        if (fileInputRef.current) fileInputRef.current.value = '';
-                    }
-                    setUploadProgress(progress);
-                }, 200);
+                    setUploadQueue(prev => prev.map((q, idx) => idx === i ? { ...q, status: 'uploading', progress: 0 } : q));
+
+                    // Simulate per-file upload progress
+                    await new Promise(resolve => {
+                        let progress = 0;
+                        const interval = setInterval(() => {
+                            progress = Math.min(progress + Math.random() * 35, 100);
+                            setUploadQueue(prev => prev.map((q, idx) => idx === i ? { ...q, progress } : q));
+                            if (progress >= 100) {
+                                clearInterval(interval);
+                                resolve();
+                            }
+                        }, 120);
+                    });
+
+                    results.push({
+                        id: Date.now() + i,
+                        title,
+                        artist: newArtist,
+                        url: item.previewUrl,
+                        type: newType,
+                        uploadDate: today
+                    });
+
+                    setUploadQueue(prev => prev.map((q, idx) => idx === i ? { ...q, status: 'done', progress: 100 } : q));
+                    addLog(`✅ COMPLETE: "${title}" added to library (${newType})`);
+                }
+
+                setArtworks(prev => [...results.reverse(), ...prev]);
+
+                // Reset form
+                setNewTitle('');
+                setNewArtist('');
+                setNewType('single');
+                setUploadQueue([]);
+                setPendingFiles([]);
+                setIsUploading(false);
+                if (fileInputRef.current) fileInputRef.current.value = '';
             };
 
             const deleteArtwork = (id) => {
@@ -203,37 +240,59 @@
                             <div className="bg-[#0b0b11] border border-purple-950 rounded-xl p-6 space-y-5">
                                 <h2 className="text-sm font-black uppercase tracking-widest text-amber-400 flex items-center gap-2">
                                     <Icon name="upload" className="h-4 w-4" />
-                                    Upload Single Artwork
+                                    Upload Artwork
                                 </h2>
 
-                                {/* IMAGE PREVIEW */}
-                                {previewUrl && (
-                                    <div className="w-full aspect-square rounded-lg overflow-hidden border-2 border-amber-500/50 bg-black">
-                                        <img src={previewUrl} alt="Preview" className="w-full h-full object-cover" />
-                                    </div>
-                                )}
-
-                                {/* FILE INPUT */}
+                                {/* FILE INPUT DROP ZONE */}
                                 <div 
                                     className="border-2 border-dashed border-amber-500/40 rounded-lg p-6 text-center bg-black/40 hover:bg-amber-950/10 transition cursor-pointer"
                                     onClick={() => fileInputRef.current?.click()}
                                 >
                                     <Icon name="image" className="h-8 w-8 text-amber-400 mx-auto mb-2 animate-pulse" />
-                                    <p className="text-xs font-bold text-white font-sans-alt">Click to upload cover artwork</p>
-                                    <p className="text-[10px] text-gray-400 mt-1 font-sans-alt">PNG, JPG, WebP (max 5MB)</p>
+                                    <p className="text-xs font-bold text-white font-sans-alt">Click to select artwork</p>
+                                    <p className="text-[10px] text-gray-400 mt-1 font-sans-alt">PNG, JPG, WebP · select multiple files at once</p>
                                     <input 
                                         ref={fileInputRef}
-                                        type="file" 
-                                        accept="image/*" 
+                                        type="file"
+                                        multiple
+                                        accept="image/png,image/jpeg,image/webp,image/gif,image/*"
                                         onChange={handleFileSelect}
                                         className="hidden"
                                     />
                                 </div>
 
+                                {/* SELECTED FILES PREVIEW */}
+                                {uploadQueue.length > 0 && (
+                                    <div className="space-y-2 max-h-48 overflow-y-auto">
+                                        {uploadQueue.map((item) => (
+                                            <div key={item.id} className="flex items-center gap-2 bg-black/40 border border-purple-900/40 rounded p-2">
+                                                <div className="w-10 h-10 rounded overflow-hidden flex-shrink-0 bg-black border border-purple-900/40">
+                                                    {item.previewUrl
+                                                        ? <img src={item.previewUrl} alt="" className="w-full h-full object-cover" />
+                                                        : <div className="w-full h-full flex items-center justify-center text-gray-600 text-[9px]">…</div>
+                                                    }
+                                                </div>
+                                                <div className="flex-1 min-w-0">
+                                                    <p className="text-[10px] text-white truncate font-bold">{item.file.name}</p>
+                                                    <p className="text-[9px] text-gray-500">{(item.file.size / 1024).toFixed(1)} KB</p>
+                                                    {item.status === 'uploading' && (
+                                                        <div className="mt-1 h-1 rounded-full bg-black/60 overflow-hidden">
+                                                            <div className="h-full bg-gradient-to-r from-amber-500 to-purple-600 transition-all" style={{ width: `${Math.round(item.progress)}%` }}></div>
+                                                        </div>
+                                                    )}
+                                                    {item.status === 'done' && <p className="text-[9px] text-emerald-400 font-bold">✓ Done</p>}
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+
                                 {/* FORM FIELDS */}
                                 <div className="space-y-3">
                                     <div>
-                                        <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1.5">SINGLE TITLE</label>
+                                        <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1.5">
+                                            {uploadQueue.length > 1 ? 'TITLE (optional — uses filename)' : 'SINGLE TITLE'}
+                                        </label>
                                         <input 
                                             type="text" 
                                             value={newTitle}
@@ -243,7 +302,7 @@
                                         />
                                     </div>
                                     <div>
-                                        <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1.5">ARTIST / DJ NAME</label>
+                                        <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block mb-1.5">ARTIST / DJ NAME *</label>
                                         <input 
                                             type="text" 
                                             value={newArtist}
@@ -266,45 +325,41 @@
                                     </div>
                                 </div>
 
-                                {/* PROGRESS BAR */}
-                                {isUploading && (
-                                    <div className="space-y-2">
-                                        <div className="w-full h-2 bg-black/60 rounded-full overflow-hidden border border-purple-900/60">
-                                            <div 
-                                                className="h-full bg-gradient-to-r from-amber-500 to-purple-600 transition-all duration-300"
-                                                style={{ width: `${uploadProgress}%` }}
-                                            ></div>
-                                        </div>
-                                        <p className="text-[10px] text-amber-400 text-center font-bold">{Math.round(uploadProgress)}%</p>
-                                    </div>
-                                )}
-
                                 {/* UPLOAD BUTTON */}
                                 <button 
                                     onClick={handleUpload}
-                                    disabled={isUploading || !previewUrl || !newTitle || !newArtist}
+                                    disabled={isUploading || !uploadQueue.length || !newArtist}
                                     className="w-full bg-gradient-to-r from-amber-500 to-purple-600 hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed text-black font-black uppercase py-3 rounded text-xs tracking-widest transition"
                                 >
-                                    {isUploading ? '🔄 UPLOADING...' : '✓ ADD TO LIBRARY'}
+                                    {isUploading
+                                        ? '🔄 UPLOADING...'
+                                        : uploadQueue.length > 1
+                                            ? `✓ ADD ${uploadQueue.length} TO LIBRARY`
+                                            : '✓ ADD TO LIBRARY'}
                                 </button>
                             </div>
                         </section>
 
                         {/* LIBRARY & LOGS - Right Columns */}
                         <section className="lg:col-span-2 grid grid-cols-1 lg:grid-cols-2 gap-8">
-                            
+                             
                             {/* ARTWORK LIBRARY */}
                             <div className="bg-[#0b0b11] border border-purple-950 rounded-xl p-6 space-y-4">
                                 <h2 className="text-sm font-black uppercase tracking-widest text-rose-400 flex items-center gap-2">
                                     <Icon name="music" className="h-4 w-4" />
                                     Library ({artworks.length})
                                 </h2>
-                                
+                                 
                                 <div className="space-y-3 max-h-[600px] overflow-y-auto">
                                     {artworks.map((art) => (
                                         <div key={art.id} className="bg-black/40 border border-purple-950/60 rounded-lg p-3 flex gap-3 hover:border-purple-800 transition">
                                             <div className="w-12 h-12 rounded overflow-hidden flex-shrink-0 border border-purple-900/60 bg-black">
-                                                <img src={art.url} alt={art.title} className="w-full h-full object-cover" />
+                                                <img
+                                                    src={art.url}
+                                                    alt={art.title}
+                                                    className="w-full h-full object-cover"
+                                                    onError={e => { e.currentTarget.src = ARTWORK_FALLBACK; e.currentTarget.onerror = null; }}
+                                                />
                                             </div>
                                             <div className="flex-1 min-w-0">
                                                 <p className="text-xs font-bold text-white truncate">{art.title}</p>
@@ -338,7 +393,7 @@
                                     <div className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse"></div>
                                     System Logs
                                 </h2>
-                                
+                                 
                                 <div className="bg-black/60 border border-purple-950/80 p-3 rounded-lg font-mono text-[9px] text-gray-300 space-y-1 max-h-[600px] overflow-y-auto leading-relaxed">
                                     {logs.map((log, i) => (
                                         <p key={i} className="hover:text-white transition">{log}</p>
@@ -350,7 +405,7 @@
 
                     {/* FOOTER */}
                     <footer className="mt-12 border-t border-purple-950/40 pt-6 text-center text-[10px] text-gray-500 space-y-2">
-                        <p>© 2026 HALO MUSIC WORLD - Artwork Manager v1.0</p>
+                        <p>© 2026 HALO MUSIC WORLD - Artwork Manager v1.1</p>
                         <a href="/halo.html" className="text-amber-400 hover:underline font-bold">← Return to Main Console</a>
                     </footer>
                 </div>

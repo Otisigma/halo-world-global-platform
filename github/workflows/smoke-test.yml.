@@ -1,0 +1,83 @@
+name: Smoke Test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  smoke-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run stable baseline contracts
+        run: node scripts/stable-baseline-contracts.mjs
+
+      - name: Run site audit
+        run: node scripts/site-audit.mjs
+
+      - name: Run analytics contracts
+        run: node scripts/analytics-contracts.mjs
+
+      - name: Run music player contracts
+        run: node scripts/music-player-contracts.mjs
+
+      - name: Run music chart contracts
+        run: node scripts/music-chart-contracts.mjs
+
+      - name: Verify key pages exist
+        run: |
+          for page in halo.html magazine.html dj-deck.html vip_launchpad.html halo-live.html halo-x.html halo-relations.html halo-command.html artist-team.html 404.html; do
+            if [ ! -f "$page" ]; then
+              echo "ERROR: Missing required page: $page"
+              exit 1
+            fi
+          done
+          echo "All key pages verified"
+
+      - name: Validate netlify.toml
+        run: |
+          if ! grep -q "X-Content-Type-Options" netlify.toml; then
+            echo "ERROR: Missing security headers in netlify.toml"
+            exit 1
+          fi
+          echo "netlify.toml security headers validated"
+
+      - name: Check critical scripts loaded
+        run: |
+          if ! grep -q "site-monitor.js" halo.html; then
+            echo "ERROR: halo.html missing site-monitor.js"
+            exit 1
+          fi
+          if ! grep -q "accessibility.js" halo.html; then
+            echo "ERROR: halo.html missing accessibility.js"
+            exit 1
+          fi
+          echo "Critical scripts validation passed"
+
+      - name: Validate HTML structure
+        run: |
+          for page in halo.html halo-command.html magazine.html; do
+            if ! grep -q 'lang=' "$page"; then
+              echo "ERROR: $page missing lang attribute"
+              exit 1
+            fi
+            if ! grep -q 'viewport' "$page"; then
+              echo "ERROR: $page missing viewport meta tag"
+              exit 1
+            fi
+          done
+          echo "HTML structure validation passed"

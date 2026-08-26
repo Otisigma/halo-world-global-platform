@@ -1,9 +1,10 @@
 [build]
   publish = "."
 
+# Root should go to the main public HALO page
 [[redirects]]
   from = "/"
-  to = "/hmw_agent_console.html"
+  to = "/halo.html"
   status = 200
   force = true
 
@@ -16,13 +17,6 @@
 [[redirects]]
   from = "/signal"
   to = "/signal-network.html"
-  status = 200
-  force = true
-
-# Preserve existing redirect and header configuration
-[[redirects]]
-  from = "/"
-  to = "/halo.html"
   status = 200
   force = true
 

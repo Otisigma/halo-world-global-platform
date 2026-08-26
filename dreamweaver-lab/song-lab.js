@@ -5,10 +5,11 @@
     dropZone: byId("dropZone"), dropTitle: byId("dropTitle"), dropDetail: byId("dropDetail"), analyze: byId("analyzeButton"), status: byId("formStatus"), canvas: byId("waveCanvas"), waveIdle: byId("waveIdle"),
     duration: byId("signalDuration"), audio: byId("audioPreview"), processing: byId("processing"), processingStage: byId("processingStage"), processingTitle: byId("processingTitle"), processingDetail: byId("processingDetail"),
     results: byId("results"), resultTitle: byId("resultTitle"), resultSummary: byId("resultSummary"), cover: byId("coverFrame"), visualConcept: byId("visualConcept"), visualTypography: byId("visualTypography"), visualPalette: byId("visualPalette"),
-    moods: byId("moodTags"), genres: byId("genreList"), audience: byId("audienceCopy"), structures: byId("structureList"), mixes: byId("mixList"), tagline: byId("campaignTagline"), releaseCopy: byId("releaseCopy"), captions: byId("captionStack"), rollout: byId("rolloutList"), videos: byId("videoList"), limits: byId("limitsList"), confidence: byId("confidenceNote"), history: byId("historyGrid"), download: byId("downloadPackage"), toast: byId("toast")
+    moods: byId("moodTags"), genres: byId("genreList"), audience: byId("audienceCopy"), structures: byId("structureList"), mixes: byId("mixList"), tagline: byId("campaignTagline"), releaseCopy: byId("releaseCopy"), captions: byId("captionStack"), rollout: byId("rolloutList"), videos: byId("videoList"), limits: byId("limitsList"), confidence: byId("confidenceNote"), history: byId("historyGrid"), download: byId("downloadPackage"), toast: byId("toast"),
+    artworkFile: byId("artworkFile"), artworkDropZone: byId("artworkDropZone"), artworkDropTitle: byId("artworkDropTitle"), artworkDropDetail: byId("artworkDropDetail")
   };
   const metrics = { tempo: byId("metricTempo"), key: byId("metricKey"), dynamics: byId("metricDynamics"), brightness: byId("metricBrightness"), peak: byId("metricPeak"), width: byId("metricWidth") };
-  const state = { file: null, audioBuffer: null, objectUrl: "", evidence: null, project: null, pollTimer: 0, projects: [] };
+  const state = { file: null, artworkFile: null, artworkObjectUrl: "", audioBuffer: null, objectUrl: "", evidence: null, project: null, pollTimer: 0, projects: [] };
   const noteNames = ["C", "C♯", "D", "E♭", "E", "F", "F♯", "G", "A♭", "A", "B♭", "B"];
 
   function escapeHtml(value) { return String(value ?? "").replace(/[&<>'"]/g, character => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" })[character]); }
@@ -177,6 +178,18 @@
     } catch { state.file = null; setStatus("This browser could not decode that audio file. Try a WAV, MP3, M4A, OGG, or WebM file.", true); }
   }
 
+  function loadArtworkFile(file) {
+    if (!file) return;
+    if (file.size > 20 * 1024 * 1024) { showToast("Keep the artwork under 20 MB."); return; }
+    if (!file.type.startsWith("image/")) { showToast("Choose a JPEG, PNG, or WebP image for the artwork."); return; }
+    state.artworkFile = file;
+    if (state.artworkObjectUrl) URL.revokeObjectURL(state.artworkObjectUrl);
+    state.artworkObjectUrl = URL.createObjectURL(file);
+    elements.artworkDropTitle.textContent = file.name;
+    elements.artworkDropDetail.textContent = `${(file.size / 1024 / 1024).toFixed(1)} MB · cover ready`;
+    if (elements.artworkDropZone) elements.artworkDropZone.classList.add("has-file");
+  }
+
   async function uploadFile(file) {
     const uploadId = crypto.randomUUID(); const chunkSize = 3.5 * 1024 * 1024; const chunkCount = Math.ceil(file.size / chunkSize);
     for (let index = 0; index < chunkCount; index += 1) {
@@ -254,9 +267,15 @@
   async function loadHistory() { try { const response = await fetch("/api/dreamweaver-song-lab", { credentials: "same-origin", headers: { Accept: "application/json" } }); const data = await response.json().catch(() => ({})); if (!response.ok) return; state.projects = data.projects || []; renderHistory(); } catch {} }
 
   elements.file.addEventListener("change", event => loadFile(event.target.files?.[0]));
+  if (elements.artworkFile) elements.artworkFile.addEventListener("change", event => loadArtworkFile(event.target.files?.[0]));
   ["dragenter", "dragover"].forEach(name => elements.dropZone.addEventListener(name, event => { event.preventDefault(); elements.dropZone.classList.add("dragging"); }));
   ["dragleave", "drop"].forEach(name => elements.dropZone.addEventListener(name, event => { event.preventDefault(); elements.dropZone.classList.remove("dragging"); }));
   elements.dropZone.addEventListener("drop", event => { const file = event.dataTransfer?.files?.[0]; if (file) loadFile(file); });
+  if (elements.artworkDropZone) {
+    ["dragenter", "dragover"].forEach(name => elements.artworkDropZone.addEventListener(name, event => { event.preventDefault(); elements.artworkDropZone.classList.add("dragging"); }));
+    ["dragleave", "drop"].forEach(name => elements.artworkDropZone.addEventListener(name, event => { event.preventDefault(); elements.artworkDropZone.classList.remove("dragging"); }));
+    elements.artworkDropZone.addEventListener("drop", event => { const file = event.dataTransfer?.files?.[0]; if (file) loadArtworkFile(file); });
+  }
   elements.form.addEventListener("submit", submit); elements.download.addEventListener("click", downloadProject);
   elements.captions.addEventListener("click", async event => { const button = event.target.closest("[data-caption]"); if (!button) return; try { await navigator.clipboard.writeText(button.dataset.caption); showToast("Caption copied."); } catch { showToast("Select the caption and copy it manually."); } });
   elements.history.addEventListener("click", event => { const project = state.projects.find(item => item.id === event.target.closest("[data-project-id]")?.dataset.projectId); if (project?.status === "ready") { state.project = project; showProject(project); } else if (project) { elements.processing.hidden = false; pollProject(project.id).catch(handleFailure); } });

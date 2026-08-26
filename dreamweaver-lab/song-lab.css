@@ -33,6 +33,10 @@ main { width:min(1500px,100%); margin:auto; }
 .drop-mark { width:70px; height:70px; display:grid; place-items:center; border:1px solid var(--acid); border-radius:50%; color:var(--acid); font-family:"Cormorant Garamond",serif; font-size:24px; }
 .drop-zone strong { font-family:"Cormorant Garamond",serif; font-size:25px; font-weight:500; }
 .drop-zone small { color:var(--smoke); font-size:8px; }
+.drop-zone--artwork { min-height:120px; border-color:rgba(189,155,88,.42); background:linear-gradient(135deg,rgba(189,155,88,.045),transparent); }
+.drop-zone--artwork:hover,.drop-zone--artwork.dragging { border-color:var(--gold); }
+.drop-zone--artwork .drop-mark { border-color:var(--gold); color:var(--gold); font-size:14px; width:52px; height:52px; }
+.drop-zone--artwork.has-file { border-color:var(--gold); background:linear-gradient(135deg,rgba(189,155,88,.12),transparent); }
 .field-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
 .intake-panel label:not(.drop-zone):not(.rights-check) { display:grid; gap:8px; color:var(--gold); font-size:8px; letter-spacing:.1em; text-transform:uppercase; }
 .intake-panel label small { color:var(--smoke); letter-spacing:0; text-transform:none; }

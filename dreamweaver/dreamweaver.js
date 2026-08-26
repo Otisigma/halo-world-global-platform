@@ -166,6 +166,33 @@
     sessionToken: window.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`
   };
   const escapeHtml = value => String(value ?? "").replace(/[&<>'"]/g, character => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" })[character]);
+  const firstString = (...values) => values.find(value => typeof value === "string" && value.trim()) || "";
+
+  function normalizeMix(mix = {}) {
+    return {
+      ...mix,
+      title: firstString(mix.title, mix.name) || "Untitled HALO mix",
+      audioUrl: firstString(mix.audioUrl, mix.audio_url, mix.sourceUrl),
+      source: firstString(mix.source, mix.sourceType),
+      durationSeconds: Number(mix.durationSeconds ?? mix.duration ?? 0) || 0,
+      trackCount: Number(mix.trackCount ?? mix.track_count ?? 0) || 0,
+      creator: {
+        ...mix.creator,
+        name: firstString(mix.creator?.name, mix.creatorName, mix.artistName) || "Owen Anthony"
+      }
+    };
+  }
+
+  function normalizeVideo(video = {}) {
+    return {
+      ...video,
+      title: firstString(video.title, video.name) || "HALO source",
+      thumbnailUrl: firstString(video.thumbnailUrl, video.thumbnail_url, video.posterUrl, video.poster_url),
+      sourceUrl: firstString(video.sourceUrl, video.videoUrl, video.url),
+      embedUrl: firstString(video.embedUrl, video.embed_url),
+      sourceType: firstString(video.sourceType, video.source_type) || "upload"
+    };
+  }
 
   function formatTime(seconds) {
     const safe = Math.max(0, Math.floor(Number(seconds) || 0));
@@ -946,7 +973,7 @@
       const response = await fetch("/api/videos?artistSlug=owen-anthony", { headers: { Accept: "application/json" }, credentials: "same-origin" });
       if (!response.ok) return;
       const data = await response.json();
-      state.videos = Array.isArray(data.videos) ? data.videos.slice(0, 8) : [];
+      state.videos = Array.isArray(data.videos) ? data.videos.map(normalizeVideo).slice(0, 8) : [];
       renderFootageSelector();
       renderArchive();
     } catch {}
@@ -967,10 +994,10 @@
 
   function renderArchive() {
     if (!state.videos.length) {
-      elements.archiveReel.innerHTML = `<a class="archive-card" href="/artists/owen-anthony"><img src="/assets/releases/the-cold-is-lasting-longer.jpg" alt=""><span>Enter Owen Anthony's connected artist room</span></a><a class="archive-card" href="/radio/"><img src="/assets/artists/owen-anthony-glass-house.webp" alt=""><span>Continue into the HALO radio signal</span></a>`;
+      elements.archiveReel.innerHTML = `<a class="archive-card" href="/artists/"><img src="/assets/releases/the-cold-is-lasting-longer.jpg" alt=""><span>Enter Owen Anthony's connected artist room</span></a><a class="archive-card" href="/radio/"><img src="/assets/artists/owen-anthony-glass-house.webp" alt=""><span>Continue into the HALO radio signal</span></a>`;
       return;
     }
-    elements.archiveReel.innerHTML = state.videos.map(video => `<a class="archive-card" href="${escapeHtml(video.sourceUrl || video.embedUrl || "/artists/owen-anthony")}" ${video.sourceType === "youtube" ? 'target="_blank" rel="noopener noreferrer"' : ""}><img src="${escapeHtml(video.thumbnailUrl || "/assets/halo-logo-mark.webp")}" alt=""><span>${escapeHtml(video.title)}</span></a>`).join("");
+    elements.archiveReel.innerHTML = state.videos.map(video => `<a class="archive-card" href="${escapeHtml(video.sourceUrl || video.embedUrl || "/artists/")}" ${video.sourceType === "youtube" ? 'target="_blank" rel="noopener noreferrer"' : ""}><img src="${escapeHtml(video.thumbnailUrl || "/assets/halo-logo-mark.webp")}" alt=""><span>${escapeHtml(video.title)}</span></a>`).join("");
   }
 
   function showEmpty(message) {
@@ -991,7 +1018,7 @@
       const response = await fetch("/api/mixes?limit=100", { headers: { Accept: "application/json" }, credentials: "same-origin" });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data.message || "The Mix Desk library could not be read.");
-      const playable = (data.mixes || []).filter(mix => mix.audioUrl && mix.source !== "youtube");
+      const playable = (data.mixes || []).map(normalizeMix).filter(mix => mix.audioUrl && mix.source !== "youtube");
       const mix = playable.find(item => item.id === requestedMix) || playable[0];
       if (!mix) return showEmpty("No playable audio mix is available yet. Post the existing set to the HALO room or sign in to open a private mix.");
       state.mix = mix;

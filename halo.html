@@ -1304,7 +1304,7 @@
           const [campaignDraft, setCampaignDraft] = useState(null);
           const [selectorDraft, setSelectorDraft] = useState({ selectorType: 'dj', outletName: '', notes: '' });
           const [socialCaption, setSocialCaption] = useState('');
-          const [socialMediaFile, setSocialMediaFile] = useState(null);
+          const [socialMediaFiles, setSocialMediaFiles] = useState([]);
           const [socialRightsConfirmed, setSocialRightsConfirmed] = useState(false);
           const [socialBusy, setSocialBusy] = useState(false);
           const [roomShareBusy, setRoomShareBusy] = useState(false);
@@ -1754,6 +1754,40 @@
             } : null);
           };
 
+          const normalizeRoomMix = (mix = {}) => ({
+            ...mix,
+            title: mix.title || mix.name || 'Untitled mix',
+            description: mix.description || mix.summary || '',
+            audioUrl: mix.audioUrl || mix.audio_url || mix.sourceUrl || '',
+            durationSeconds: Number(mix.durationSeconds ?? mix.duration ?? 0) || 0,
+            trackCount: Number(mix.trackCount ?? mix.track_count ?? 0) || 0,
+            playCount: Number(mix.playCount ?? mix.play_count ?? 0) || 0,
+            creator: {
+              ...mix.creator,
+              name: mix.creator?.name || mix.creatorName || mix.artistName || 'HALO',
+              avatar: mix.creator?.avatar || mix.creatorAvatar || '🎵'
+            }
+          });
+
+          const normalizeReleasePack = (data = {}) => {
+            const release = data.release || {};
+            return {
+              ...data,
+              campaigns: Array.isArray(data.campaigns) ? data.campaigns : [],
+              summary: data.summary || { kitOpens: 0, outboundClicks: 0, interested: 0, played: 0 },
+              release: {
+                ...release,
+                id: release.id || release.slug || '',
+                title: release.title || release.songTitle || release.name || 'Untitled release',
+                artist: release.artist || release.artistName || 'HALO artist',
+                artwork: release.artwork || release.artworkUrl || '/assets/releases/the-cold-is-lasting-longer.jpg',
+                duration: release.duration || release.runtime || 'Duration TBA',
+                genres: Array.isArray(release.genres) ? release.genres : [],
+                delivery: Array.isArray(release.delivery) ? release.delivery : Array.isArray(release.availableVersions) ? release.availableVersions : []
+              }
+            };
+          };
+
           const loadCommunity = async () => {
             setCommunityLoading(true);
             setCommunityError('');
@@ -1765,7 +1799,7 @@
               const [data, mixesData] = await Promise.all([response.json(), mixesResponse.json().catch(() => ({mixes: []}))]);
               if (!response.ok) throw new Error(data.message || 'The clubhouse signal could not connect.');
               applyCommunityState(data);
-              setRoomMixes(mixesResponse.ok && Array.isArray(mixesData.mixes) ? mixesData.mixes : []);
+              setRoomMixes(mixesResponse.ok && Array.isArray(mixesData.mixes) ? mixesData.mixes.map(normalizeRoomMix).filter(mix => mix.audioUrl) : []);
             } catch (error) {
               setCommunityError(error.message || 'The clubhouse signal could not connect.');
             } finally {
@@ -1848,20 +1882,22 @@
           };
 
           const applyReleasePackState = (data) => {
-            setReleasePack(data);
-            setCampaignDraft(current => current?.id === data.release.id ? current : {
-              ...data.release,
-              genresText: data.release.genres.join(', '),
-              versionsText: data.release.availableVersions.join('\n'),
-              previewExpiresAt: data.release.previewExpiresAt ? data.release.previewExpiresAt.slice(0, 16) : ''
+            const next = normalizeReleasePack(data);
+            setReleasePack(next);
+            setCampaignDraft(current => current?.id === next.release.id ? current : {
+              ...next.release,
+              genresText: next.release.genres.join(', '),
+              versionsText: (next.release.availableVersions || []).join('\n'),
+              previewExpiresAt: next.release.previewExpiresAt ? next.release.previewExpiresAt.slice(0, 16) : ''
             });
-            const fanKitUrl = `${window.location.origin}/release-kit.html?slug=${encodeURIComponent(data.release.id)}&audience=fan`;
-            setSocialCaption(current => current || `New from ${data.release.artist} — ${data.release.title}.\n\nListen now and enter the HALO release room:\n${fanKitUrl}\n\n#NewMusic #HALOMusic #DJs #Radio`);
-            if (data.response) {
+            const fanKitUrl = `${window.location.origin}/release-kit.html?slug=${encodeURIComponent(next.release.id)}&audience=fan`;
+            setSocialCaption(current => current || `New from ${next.release.artist} — ${next.release.title}.\n\nListen now and enter the HALO release room:\n${fanKitUrl}\n\n#NewMusic #HALOMusic #DJs #Radio`);
+            setSocialMediaFiles([]);
+            if (next.response) {
               setSelectorDraft({
-                selectorType: data.response.selector_type || 'dj',
-                outletName: data.response.outlet_name || '',
-                notes: data.response.notes || ''
+                selectorType: next.response.selector_type || 'dj',
+                outletName: next.response.outlet_name || '',
+                notes: next.response.notes || ''
               });
             }
           };
@@ -2062,12 +2098,12 @@
               url: campaignKitUrl('fan')
             };
             try {
-              const mediaFile = socialMediaFile || await getReleaseArtworkFile();
-              if (navigator.canShare?.({ files: [mediaFile] })) shareData.files = [mediaFile];
+              const mediaFiles = socialMediaFiles.length ? socialMediaFiles : [await getReleaseArtworkFile()];
+              if (navigator.canShare?.({ files: mediaFiles })) shareData.files = mediaFiles;
               if (navigator.share) {
                 await navigator.share(shareData);
-                setSocialNotice(shareData.files ? 'Share sheet opened with the release card, caption, and link.' : 'Share sheet opened with the release caption and link.');
-                window.haloStats?.track('release_social_share_opened', { has_media: Boolean(shareData.files) });
+                setSocialNotice(shareData.files ? `Share sheet opened with ${shareData.files.length === 1 ? 'your selected media file' : `${shareData.files.length} media files`}, caption, and link.` : 'Share sheet opened with the release caption and link.');
+                window.haloStats?.track('release_social_share_opened', { has_media: Boolean(shareData.files), media_count: shareData.files?.length || 0 });
               } else {
                 await copySocialText(`${socialCaption.trim()}\n${campaignKitUrl('fan')}`);
                 downloadReleaseArtwork();
@@ -2133,16 +2169,19 @@
           };
 
           const selectSocialMedia = (event) => {
-            const file = event.target.files?.[0] || null;
+            const files = Array.from(event.target.files || []);
             setSocialError('');
-            if (file && file.size > 250 * 1024 * 1024) {
+            if (files.some(file => file.size > 250 * 1024 * 1024)) {
               event.target.value = '';
-              setSocialMediaFile(null);
-              setSocialError('Choose a social clip or image smaller than 250 MB.');
+              setSocialMediaFiles([]);
+              setSocialError('Choose audio, image, or video files smaller than 250 MB each.');
               return;
             }
-            setSocialMediaFile(file);
-            if (file) setSocialNotice(`${file.name} is attached and ready for the share sheet.`);
+            setSocialMediaFiles(files);
+            if (files.length) {
+              const summary = files.length === 1 ? files[0].name : `${files.length} files ready (${files.slice(0, 2).map(file => file.name).join(', ')}${files.length > 2 ? ', …' : ''})`;
+              setSocialNotice(`${summary} attached and ready for the share sheet.`);
+            }
           };
 
           const toggleMixPlaylist = async (mix) => {
@@ -3025,14 +3064,17 @@
                         <a href="/creator-freedom/" data-stat-event="open_creator_charter" data-stat-target="header" data-signal="PUBLIC POLICY">
                           <Icon name="book-open" className="halo-menu-icon" /><span><strong>CREATOR FREEDOM</strong><small>White paper, seven-point charter, and public room</small></span>
                         </a>
+                        <a href="/dreamweaver-lab/" data-stat-event="open_dreamweaver_song_lab" data-stat-target="header" data-signal="AUDIO TO CAMPAIGN">
+                          <Icon name="music" className="halo-menu-icon" /><span><strong>DREAMWEAVER</strong><small>Primary load + build area for audio, artwork, and campaign prep.</small></span>
+                        </a>
+                        <a href="/dreamweaver/" data-stat-event="open_dreamweaver_show" data-stat-target="header" data-signal="VISUAL SHOW">
+                          <Icon name="sparkles" className="halo-menu-icon" /><span><strong>DREAMWEAVER SHOW</strong><small>Open the playable visual mix world.</small></span>
+                        </a>
                         <a href="/release-house/" data-stat-event="open_release_house" data-stat-target="header" data-signal="FIRST RELEASE">
                           <Icon name="disc" className="halo-menu-icon" /><span><strong>RELEASE HOUSE</strong><small>Idea to release, one guided room at a time</small></span>
                         </a>
                         <a href="/song-catalog/" data-stat-event="open_song_catalog" data-stat-target="header" data-signal="MASTERS + VERSIONS">
                           <Icon name="list-music" className="halo-menu-icon" /><span><strong>SONG CATALOG</strong><small>Sale masters, radio edits, stems, and metadata review</small></span>
-                        </a>
-                        <a href="/dreamweaver-lab/" data-stat-event="open_dreamweaver_song_lab" data-stat-target="header" data-signal="AUDIO TO CAMPAIGN">
-                          <Icon name="music" className="halo-menu-icon" /><span><strong>DREAMWEAVER SONG LAB</strong><small>Load a recording. Analyze the wave. Build the release world.</small></span>
                         </a>
                         <a href="/finish-house/" data-stat-event="open_finish_house" data-stat-target="header" data-signal="MASTER + LICENSE">
                           <Icon name="check-circle" className="halo-menu-icon" /><span><strong>FINISH HOUSE</strong><small>Mix to master to licensing-ready package</small></span>
@@ -4153,11 +4195,11 @@
                                   <div className="mt-4 grid gap-3 lg:grid-cols-[.72fr_1.28fr]">
                                     <div className="rounded-xl border border-white/10 bg-black/45 p-3">
                                       <p className="text-[8px] font-black uppercase tracking-widest text-gray-500">01 / Attach media</p>
-                                      <input id="social-media-upload" type="file" accept="video/*,image/*" onChange={selectSocialMedia} className="sr-only" />
+                                      <input id="social-media-upload" type="file" accept="audio/*,video/*,image/*" multiple onChange={selectSocialMedia} className="sr-only" />
                                       <label htmlFor="social-media-upload" className="mt-3 flex min-h-28 cursor-pointer flex-col items-center justify-center rounded-xl border border-dashed border-fuchsia-300/30 bg-fuchsia-300/[0.04] px-4 text-center transition hover:border-fuchsia-200/60 hover:bg-fuchsia-300/[0.08] focus-within:ring-2 focus-within:ring-fuchsia-300">
                                         <Icon name="check-circle" className="h-5 w-5 text-emerald-300" />
-                                        <strong className="mt-2 max-w-full truncate text-[9px] uppercase tracking-wider text-white">{socialMediaFile ? socialMediaFile.name : 'Release artwork ready'}</strong>
-                                        <span className="mt-1 text-[8px] text-gray-600">{socialMediaFile ? 'Custom media attached · tap to replace' : 'Included automatically · tap to replace with a clip'}</span>
+                                        <strong className="mt-2 max-w-full truncate text-[9px] uppercase tracking-wider text-white">{socialMediaFiles.length ? (socialMediaFiles.length === 1 ? socialMediaFiles[0].name : `${socialMediaFiles.length} media files ready`) : 'Release artwork ready'}</strong>
+                                        <span className="mt-1 text-[8px] text-gray-600">{socialMediaFiles.length ? 'Custom media attached · tap to replace' : 'Included automatically · tap to add audio, images, or a clip'}</span>
                                       </label>
                                       <a href={releasePack.release.artwork || '/assets/releases/the-cold-is-lasting-longer.jpg'} download={`${releasePack.release.artist}-${releasePack.release.title}-social-card.jpg`} className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-white/10 px-3 py-2 text-[8px] font-black uppercase tracking-widest text-gray-300 transition hover:border-white/30 hover:text-white"><Icon name="folder" className="h-3.5 w-3.5" />Download social card</a>
                                     </div>

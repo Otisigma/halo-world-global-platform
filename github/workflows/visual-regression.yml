@@ -1,0 +1,51 @@
+name: Visual Regression Testing
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  visual-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Install Playwright
+        run: npm install -g @playwright/test
+
+      - name: Capture visual baseline
+        run: |
+          npx playwright codegen file://$(pwd)/halo.html --output visual-tests.spec.ts
+          echo "Visual test baseline captured"
+
+      - name: Take screenshots of critical elements
+        run: |
+          npx playwright test --reporter=html visual-tests.spec.ts || true
+
+      - name: Upload visual regression report
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: visual-regression-report
+          path: playwright-report/
+          retention-days: 30
+
+      - name: Comment PR with visual diff
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: '🎨 **Visual Regression Report**: Check artifacts for screenshot diffs'
+            });

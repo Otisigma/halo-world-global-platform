@@ -10,13 +10,13 @@
 
 [[redirects]]
   from = "/console"
-  to = "/hmw_agent_console.html"
+  to = "/halo-command.html"
   status = 200
   force = true
 
 [[redirects]]
   from = "/signal"
-  to = "/signal-network.html"
+  to = "/halo.html"
   status = 200
   force = true
 

@@ -74,6 +74,8 @@ function serializeSong(song: typeof songs.$inferSelect, versions: Array<typeof s
     metadataScore: song.metadataScore,
     metadataIssues: Array.isArray(song.metadataIssues) ? song.metadataIssues : [],
     reviewedAt: song.reviewedAt?.toISOString() || "",
+    artworkUrl: song.artworkUrl || "",
+    artworkUploadedAt: song.artworkUploadedAt?.toISOString() || "",
     versions: versions.map(version => ({
       id: version.id,
       versionType: version.versionType,

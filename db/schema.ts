@@ -19,6 +19,8 @@ export const songs = pgTable("halo_song_catalog", {
   metadataStatus: text("metadata_status").notNull().default("needs_review"),
   metadataScore: integer("metadata_score").notNull().default(0),
   metadataIssues: jsonb("metadata_issues").notNull().default([]),
+  artworkUrl: text("artwork_url"),
+  artworkUploadedAt: timestamp("artwork_uploaded_at", { withTimezone: true }),
   reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
   status: text("status").notNull().default("active"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

@@ -56,8 +56,23 @@
 
         <div id="songWorkspace" hidden>
           <section class="song-heading">
-            <div><p class="eyebrow" id="songArtist">Artist</p><h2 id="songTitle">Song title</h2><p id="songRouteSummary">0 versions routed</p></div>
+            <div class="song-heading-art"><img class="song-heading-artwork" id="songHeadingArtwork" src="" alt="" hidden><div><p class="eyebrow" id="songArtist">Artist</p><h2 id="songTitle">Song title</h2><p id="songRouteSummary">0 versions routed</p></div></div>
             <div class="score-stamp"><span>DW score</span><strong id="songScore">0</strong><small id="songStatus">Needs review</small></div>
+          </section>
+
+          <section class="artwork-upload-panel" aria-labelledby="artworkHeading">
+            <div class="artwork-preview-area"><img class="artwork-preview" id="artworkPreview" src="" alt="Album artwork preview" hidden><div class="artwork-placeholder" id="artworkPlaceholder" aria-hidden="true"></div></div>
+            <div class="artwork-upload-body">
+              <span class="field-label" id="artworkHeading">Album artwork</span>
+              <strong>Upload cover art for this song.</strong>
+              <p>JPEG, PNG, or WebP · 20 MB maximum · 400×400 minimum.</p>
+              <label class="artwork-file-picker"><span>Choose image file</span><input id="artworkFile" type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" aria-label="Choose album artwork file"></label>
+              <div class="artwork-upload-actions">
+                <button class="quiet-button" id="uploadArtworkButton" type="button">Upload artwork</button>
+                <button class="quiet-button artwork-delete-button" id="deleteArtworkButton" type="button" hidden>Remove artwork</button>
+              </div>
+              <p class="artwork-upload-progress" id="artworkUploadProgress" role="status">No file selected.</p>
+            </div>
           </section>
 
           <div class="workspace-grid">

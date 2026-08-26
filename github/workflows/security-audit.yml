@@ -1,0 +1,60 @@
+name: Security & Dependency Audit
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: '0 3 * * 0'  # Weekly on Sunday
+
+jobs:
+  security:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Run npm audit
+        run: npm audit --audit-level=moderate
+        continue-on-error: true
+
+      - name: Check for hardcoded secrets
+        run: |
+          if grep -r "NETLIFY_AUTH_TOKEN\|API_KEY\|SECRET" --include="*.mjs" --include="*.ts" netlify/functions/ | grep -v "process.env"; then
+            echo "❌ Hardcoded secrets detected!"
+            exit 1
+          fi
+          echo "✓ No hardcoded secrets found"
+
+      - name: Validate Netlify function auth patterns
+        run: |
+          MISSING_AUTH=0
+          for file in netlify/functions/artist-*.mjs netlify/functions/ai-*.mjs netlify/functions/radio-submissions.mjs; do
+            if [ -f "$file" ]; then
+              if ! grep -q "verifyRequestOrigin\|getUser" "$file"; then
+                echo "⚠️  Missing auth in $(basename $file)"
+                MISSING_AUTH=$((MISSING_AUTH + 1))
+              fi
+            fi
+          done
+          
+          if [ $MISSING_AUTH -gt 0 ]; then
+            echo "❌ $MISSING_AUTH function(s) missing auth validation"
+            exit 1
+          fi
+          echo "✓ All critical functions have auth validation"
+
+      - name: Check CORS and security headers
+        run: |
+          if grep -q "X-Content-Type-Options\|X-Frame-Options" netlify.toml; then
+            echo "✓ Security headers configured"
+          else
+            echo "⚠️  Missing security headers in netlify.toml"
+          fi

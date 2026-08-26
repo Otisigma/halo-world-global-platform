@@ -695,13 +695,13 @@
           <p class="facet-copy" id="facet-copy">Take a record from unfinished idea to a release-ready world.</p>
         </div>
 
-        <a class="release-feature" href="https://distrokid.com/hyperfollow/owenanthony/salty?ref=release" target="_blank" rel="noopener noreferrer" aria-label="Stream or save Salty by Owen Anthony on DistroKid">
+        <a class="release-feature" href="https://distrokid.com/hyperfollow/owenanthony/blessed" target="_blank" rel="noopener noreferrer" aria-label="Stream or save Blessed by Owen Anthony on DistroKid" data-release-feature-id="blessed">
           <span class="release-art">
-            <img src="https://distrokid.imgix.net/http%3A%2F%2Fgather.fandalism.com%2F13116989--EFDBCF70-5B21-42D1-BAD13FF8CF569F39--0--3535106--GeminiGeneratedImagelbmvhxlbmvhxlbmv.jpg?fm=jpg&amp;mark-y=568&amp;mark-x=620&amp;mark-w=180&amp;q=75&amp;w=800&amp;mark=http%3A%2F%2Fgather.fandalism.com%2Fdistrokid-sticker-sm.png&amp;s=be395b26c638be94717fdf700944a96f" alt="Salty cover artwork by Owen Anthony" width="800" height="800" fetchpriority="high" referrerpolicy="no-referrer">
+            <img src="/assets/releases/blessed.jpg" alt="Blessed cover artwork by Owen Anthony" width="800" height="800" fetchpriority="high">
           </span>
           <span class="release-copy">
             <span class="release-kicker">New release / now transmitting</span>
-            <strong class="release-title">Salty</strong>
+            <strong class="release-title">Blessed</strong>
             <span class="release-meta">Owen Anthony</span>
             <span class="release-action">Stream + save <span aria-hidden="true">↗</span></span>
           </span>
@@ -843,6 +843,43 @@
     });
     reducedMotion.addEventListener('change', startFacetRotation);
     startFacetRotation();
+
+    const trackingDisabled = navigator.doNotTrack === '1' || window.doNotTrack === '1';
+    const createTrackingId = () => (window.crypto?.randomUUID ? window.crypto.randomUUID() : `${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 18)}`);
+    const storedTrackingId = (storage, key) => {
+      try {
+        const existing = storage.getItem(key);
+        if (existing) return existing;
+        const next = createTrackingId();
+        storage.setItem(key, next);
+        return next;
+      } catch {
+        return createTrackingId();
+      }
+    };
+    const trackReleaseEngagement = metadata => {
+      if (trackingDisabled) return;
+      fetch('/api/stats/events', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        keepalive: true,
+        body: JSON.stringify({
+          eventName: 'open_new_release',
+          anonymousId: storedTrackingId(window.localStorage, 'halo_anonymous_id'),
+          sessionId: storedTrackingId(window.sessionStorage, 'halo_session_id'),
+          pagePath: window.location.pathname,
+          metadata
+        })
+      }).catch(() => {});
+    };
+    const releaseFeatureCard = document.querySelector('[data-release-feature-id]');
+    releaseFeatureCard?.addEventListener('click', () => {
+      trackReleaseEngagement({
+        target: 'index_release_feature_card',
+        release_id: releaseFeatureCard.dataset.releaseFeatureId || 'blessed'
+      });
+    });
 
     const loginView = document.querySelector('#login-view');
     const passwordView = document.querySelector('#password-view');

@@ -91,7 +91,7 @@ const rooms = [
     next: "Describe the cover before designing it.",
     fields: [
       { id: "artDirection", label: "Cover direction", type: "textarea", wide: true, placeholder: "Subject, colour, mood, composition, and what should be avoided.", required: true },
-      { id: "artworkLocation", label: "Artwork file or working link", placeholder: "Where is the approved square artwork stored?" },
+      { id: "artworkLocation", label: "Artwork file or working link", placeholder: "Store approved covers as /assets/releases/<release-slug>.jpg" },
       { id: "artistBio", label: "Short artist biography", type: "textarea", wide: true, placeholder: "Who are you, what do you make, and why does this release matter now?", required: true },
       { id: "rightsConfirmed", label: "I have permission to use every visual element", type: "checkbox", required: true },
       { id: "thumbnailChecked", label: "The artwork still works when viewed very small", type: "checkbox", required: true }

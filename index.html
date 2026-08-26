@@ -845,7 +845,15 @@
     startFacetRotation();
 
     const trackingDisabled = navigator.doNotTrack === '1' || window.doNotTrack === '1';
-    const createTrackingId = () => (window.crypto?.randomUUID ? window.crypto.randomUUID() : `${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 18)}`);
+    const createTrackingId = () => {
+      if (window.crypto?.randomUUID) return window.crypto.randomUUID();
+      if (window.crypto?.getRandomValues) {
+        const buffer = new Uint32Array(4);
+        window.crypto.getRandomValues(buffer);
+        return Array.from(buffer, segment => segment.toString(16).padStart(8, '0')).join('');
+      }
+      return `${Date.now().toString(36)}_${performance.now().toString(36).replace('.', '')}`;
+    };
     const storedTrackingId = (storage, key) => {
       try {
         const existing = storage.getItem(key);
@@ -875,9 +883,10 @@
     };
     const releaseFeatureCard = document.querySelector('[data-release-feature-id]');
     releaseFeatureCard?.addEventListener('click', () => {
+      const releaseId = releaseFeatureCard?.dataset.releaseFeatureId || 'unknown-release';
       trackReleaseEngagement({
         target: 'index_release_feature_card',
-        release_id: releaseFeatureCard.dataset.releaseFeatureId
+        release_id: releaseId
       });
     });
 

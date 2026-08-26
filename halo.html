@@ -1887,7 +1887,7 @@
             setCampaignDraft(current => current?.id === next.release.id ? current : {
               ...next.release,
               genresText: next.release.genres.join(', '),
-              versionsText: (next.release.availableVersions || []).join('\n'),
+              versionsText: (next.release.delivery || []).join('\n'),
               previewExpiresAt: next.release.previewExpiresAt ? next.release.previewExpiresAt.slice(0, 16) : ''
             });
             const fanKitUrl = `${window.location.origin}/release-kit.html?slug=${encodeURIComponent(next.release.id)}&audience=fan`;
@@ -3065,7 +3065,7 @@
                           <Icon name="book-open" className="halo-menu-icon" /><span><strong>CREATOR FREEDOM</strong><small>White paper, seven-point charter, and public room</small></span>
                         </a>
                         <a href="/dreamweaver-lab/" data-stat-event="open_dreamweaver_song_lab" data-stat-target="header" data-signal="AUDIO TO CAMPAIGN">
-                          <Icon name="music" className="halo-menu-icon" /><span><strong>DREAMWEAVER</strong><small>Primary load + build area for audio, artwork, and campaign prep.</small></span>
+                          <Icon name="music" className="halo-menu-icon" /><span><strong>DREAMWEAVER</strong><small>Load audio and artwork, build the release world</small></span>
                         </a>
                         <a href="/dreamweaver/" data-stat-event="open_dreamweaver_show" data-stat-target="header" data-signal="VISUAL SHOW">
                           <Icon name="sparkles" className="halo-menu-icon" /><span><strong>DREAMWEAVER SHOW</strong><small>Open the playable visual mix world.</small></span>

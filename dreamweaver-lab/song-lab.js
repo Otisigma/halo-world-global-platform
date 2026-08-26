@@ -181,7 +181,7 @@
   function loadArtworkFile(file) {
     if (!file) return;
     if (file.size > 20 * 1024 * 1024) { showToast("Keep the artwork under 20 MB."); return; }
-    if (!file.type.startsWith("image/")) { showToast("Choose a JPEG, PNG, or WebP image for the artwork."); return; }
+    if (!file.type.startsWith("image/") || file.type === "image/gif") { showToast("Choose a JPEG, PNG, or WebP image for the artwork."); return; }
     state.artworkFile = file;
     if (state.artworkObjectUrl) URL.revokeObjectURL(state.artworkObjectUrl);
     state.artworkObjectUrl = URL.createObjectURL(file);

@@ -3,7 +3,7 @@ import { resolve } from "node:path";
 
 const root = resolve(import.meta.dirname, "..");
 const read = path => readFile(resolve(root, path), "utf8");
-const [page, client, styles, api, audioApi, artworkApi, producerApi, producerLib, schema, migration, audioMigration, artworkMigration, producerMigration, config, home, packageText] = await Promise.all([
+const [page, client, styles, api, audioApi, artworkApi, producerApi, producerLib, schema, migration, audioMigration, artworkMigration, versionArtworkMigration, producerMigration, config, home, packageText] = await Promise.all([
   read("song-catalog/index.html"),
   read("song-catalog/song-catalog.js"),
   read("song-catalog/song-catalog.css"),
@@ -16,6 +16,7 @@ const [page, client, styles, api, audioApi, artworkApi, producerApi, producerLib
   read("netlify/database/migrations/20260821035511_complete_pestilence/migration.sql"),
   read("netlify/database/migrations/20260821040411_add_song_version_audio_uploads/migration.sql"),
   read("netlify/database/migrations/20260826210000_add_song_artwork/migration.sql"),
+  read("netlify/database/migrations/20260826220000_add_version_artwork/migration.sql"),
   read("netlify/database/migrations/20260821183000_create_catalog_producer/migration.sql"),
   read("netlify.toml"),
   read("halo.html"),
@@ -52,7 +53,14 @@ const checks = [
   [api.includes("artworkUrl") && api.includes("artworkUploadedAt"), "includes artwork metadata in catalog API responses"],
   [page.includes("artworkHeading") && page.includes("artworkPreview") && page.includes("artworkFile"), "adds artwork upload zone with preview and file input to the song editor"],
   [client.includes("uploadArtwork") && client.includes("deleteArtwork") && client.includes("renderArtwork"), "implements artwork upload, delete, and preview rendering in the catalog client"],
-  [client.includes("ARTWORK_CHUNK_BYTES") && client.includes("artworkApi"), "uploads artwork in browser-safe chunks using the artwork API"]
+  [client.includes("ARTWORK_CHUNK_BYTES") && client.includes("artworkApi"), "uploads artwork in browser-safe chunks using the artwork API"],
+  [artworkApi.includes("ownedVersion") && artworkApi.includes("versionId") && artworkApi.includes("halo_song_versions"), "stores version-specific artwork with ownership checks on the version record"],
+  [versionArtworkMigration.includes('"artwork_url"') && versionArtworkMigration.includes('"artwork_uploaded_at"') && versionArtworkMigration.includes("halo_song_versions"), "migrates artwork columns onto the version table"],
+  [schema.includes("artworkBlobPrefix") && schema.includes("artworkChunkCount"), "adds artwork storage fields to the Drizzle ORM songVersions schema"],
+  [api.includes("artworkUrl") && api.includes("artworkUploadedAt") && api.includes("version.artworkUrl"), "serializes version artwork URL and timestamp in the catalog API"],
+  [page.includes("versionArtworkFile") && page.includes("versionArtworkPreview") && page.includes("versionArtworkHeading"), "adds version artwork upload zone with preview and file input to the version dialog"],
+  [client.includes("uploadVersionArtwork") && client.includes("deleteVersionArtwork") && client.includes("renderVersionArtwork"), "implements version artwork upload, delete, and preview rendering"],
+  [client.includes("version-artwork-thumb") && client.includes("version.artworkUrl||songArtwork"), "shows effective artwork thumbnail in the version table falling back to song artwork"]
 ];
 
 const failures = checks.filter(([passed]) => !passed);

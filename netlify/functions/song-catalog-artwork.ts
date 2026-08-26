@@ -61,6 +61,19 @@ async function ownedSong(db: Awaited<ReturnType<typeof getDatabase>>, ownerMembe
   return rows[0] || null;
 }
 
+async function ownedVersion(db: Awaited<ReturnType<typeof getDatabase>>, ownerMemberId: string, songId: string, versionId: string) {
+  const rows = await db.sql`
+    SELECT v.id, v.song_id, v.artwork_url, v.artwork_blob_prefix, v.artwork_chunk_count,
+           v.artwork_byte_size, v.artwork_content_type, v.artwork_filename
+    FROM halo_song_versions v
+    JOIN halo_song_catalog s ON s.id = v.song_id
+    WHERE v.id = ${versionId} AND v.song_id = ${songId}
+      AND s.owner_member_id = ${ownerMemberId} AND s.status = 'active' AND v.status = 'active'
+    LIMIT 1
+  `;
+  return rows[0] || null;
+}
+
 async function removeArtwork(prefix: string) {
   if (!prefix) return;
   const stored = await artworkStore.list({ prefix });
@@ -70,6 +83,7 @@ async function removeArtwork(prefix: string) {
 async function uploadChunk(request: Request, db: Awaited<ReturnType<typeof getDatabase>>, ownerMemberId: string) {
   const form = await request.formData();
   const songId = cleanId(form.get("songId"));
+  const versionId = cleanId(form.get("versionId") || "");
   const uploadId = cleanUploadId(form.get("uploadId"));
   const chunkIndex = Number.parseInt(String(form.get("chunkIndex") || ""), 10);
   const chunkCount = Number.parseInt(String(form.get("chunkCount") || ""), 10);
@@ -82,14 +96,21 @@ async function uploadChunk(request: Request, db: Awaited<ReturnType<typeof getDa
   if (!(chunk instanceof Blob) || !chunk.size || chunk.size > MAX_CHUNK_BYTES) return json({ message: "That artwork chunk is invalid" }, 413);
   const contentType = normalizeImageContentType(form.get("contentType") || chunk.type, filename);
   if (!contentType) return json({ message: "Upload a JPEG, PNG, or WebP image file" }, 415);
-  if (!(await ownedSong(db, ownerMemberId, songId))) return json({ message: "That song was not found" }, 404);
-  const prefix = `${ownerMemberId}/${songId}/${uploadId}/parts/`;
+  if (versionId) {
+    if (!(await ownedVersion(db, ownerMemberId, songId, versionId))) return json({ message: "That version was not found" }, 404);
+  } else {
+    if (!(await ownedSong(db, ownerMemberId, songId))) return json({ message: "That song was not found" }, 404);
+  }
+  const prefix = versionId
+    ? `${ownerMemberId}/${songId}/versions/${versionId}/${uploadId}/parts/`
+    : `${ownerMemberId}/${songId}/${uploadId}/parts/`;
   await artworkStore.set(`${prefix}${String(chunkIndex).padStart(3, "0")}`, chunk);
   return json({ message: "Artwork chunk uploaded", chunkIndex });
 }
 
 async function finalizeUpload(payload: Record<string, unknown>, db: Awaited<ReturnType<typeof getDatabase>>, ownerMemberId: string) {
   const songId = cleanId(payload.songId);
+  const versionId = cleanId(payload.versionId || "");
   const uploadId = cleanUploadId(payload.uploadId);
   const chunkCount = Number.parseInt(String(payload.chunkCount || ""), 10);
   const byteSize = Number.parseInt(String(payload.byteSize || ""), 10);
@@ -97,6 +118,28 @@ async function finalizeUpload(payload: Record<string, unknown>, db: Awaited<Retu
   const contentType = normalizeImageContentType(payload.contentType, filename);
   if (!songId || !uploadId || !contentType || !Number.isInteger(chunkCount) || chunkCount < 1 || chunkCount > MAX_CHUNKS) return json({ message: "The finished artwork details are incomplete" }, 400);
   if (!Number.isSafeInteger(byteSize) || byteSize < 1 || byteSize > MAX_UPLOAD_BYTES) return json({ message: "Artwork uploads are limited to 20 MB" }, 413);
+  if (versionId) {
+    const version = await ownedVersion(db, ownerMemberId, songId, versionId);
+    if (!version) return json({ message: "That version was not found" }, 404);
+    const prefix = `${ownerMemberId}/${songId}/versions/${versionId}/${uploadId}/parts/`;
+    const stored = await artworkStore.list({ prefix });
+    if (stored.blobs.length !== chunkCount) return json({ message: "The artwork upload is incomplete. Try it again." }, 409);
+    const artworkUrl = `/api/song-catalog/artwork?songId=${encodeURIComponent(songId)}&versionId=${encodeURIComponent(versionId)}`;
+    await db.sql`
+      UPDATE halo_song_versions
+      SET artwork_url = ${artworkUrl},
+          artwork_blob_prefix = ${prefix},
+          artwork_chunk_count = ${chunkCount},
+          artwork_content_type = ${contentType},
+          artwork_byte_size = ${byteSize},
+          artwork_filename = ${filename},
+          artwork_uploaded_at = NOW(),
+          updated_at = NOW()
+      WHERE id = ${versionId} AND song_id = ${songId}
+    `;
+    if (version.artwork_blob_prefix && version.artwork_blob_prefix !== prefix) await removeArtwork(String(version.artwork_blob_prefix)).catch(() => undefined);
+    return json({ artwork_url: artworkUrl, message: "Version artwork uploaded successfully" });
+  }
   const song = await ownedSong(db, ownerMemberId, songId);
   if (!song) return json({ message: "That song was not found" }, 404);
   const prefix = `${ownerMemberId}/${songId}/${uploadId}/parts/`;
@@ -148,24 +191,28 @@ async function readArtworkRange(song: Record<string, unknown>, range: { start: n
 }
 
 async function serveArtwork(request: Request, db: Awaited<ReturnType<typeof getDatabase>>, ownerMemberId: string) {
-  const songId = cleanId(new URL(request.url).searchParams.get("songId"));
-  const song = songId ? await ownedSong(db, ownerMemberId, songId) : null;
-  if (!song?.artwork_blob_prefix || !song.artwork_chunk_count || !song.artwork_byte_size) return json({ message: "Song artwork was not found" }, 404);
-  const byteSize = Number(song.artwork_byte_size);
+  const params = new URL(request.url).searchParams;
+  const songId = cleanId(params.get("songId"));
+  const versionId = cleanId(params.get("versionId") || "");
+  const record = songId && versionId
+    ? await ownedVersion(db, ownerMemberId, songId, versionId)
+    : songId ? await ownedSong(db, ownerMemberId, songId) : null;
+  if (!record?.artwork_blob_prefix || !record.artwork_chunk_count || !record.artwork_byte_size) return json({ message: "Song artwork was not found" }, 404);
+  const byteSize = Number(record.artwork_byte_size);
   const range = requestedByteRange(request.headers.get("range"), byteSize);
   if (range === false) return new Response(null, { status: 416, headers: { "Content-Range": `bytes */${byteSize}`, "Cache-Control": "private, no-store" } });
   const headers: Record<string, string> = {
-    "Content-Type": String(song.artwork_content_type || "application/octet-stream"),
+    "Content-Type": String(record.artwork_content_type || "application/octet-stream"),
     "Content-Length": String(range ? range.end - range.start + 1 : byteSize),
     "Accept-Ranges": "bytes",
     "Cache-Control": "private, max-age=86400",
-    "Content-Disposition": `inline; filename="${String(song.artwork_filename || "artwork").replace(/[^a-zA-Z0-9._ -]/g, "")}"`,
+    "Content-Disposition": `inline; filename="${String(record.artwork_filename || "artwork").replace(/[^a-zA-Z0-9._ -]/g, "")}"`,
   };
   if (range) headers["Content-Range"] = `bytes ${range.start}-${range.end}/${byteSize}`;
   if (request.method === "HEAD") return new Response(null, { status: range ? 206 : 200, headers });
-  if (range) return new Response(await readArtworkRange(song, range), { status: 206, headers });
-  const prefix = String(song.artwork_blob_prefix);
-  const chunkCount = Number(song.artwork_chunk_count);
+  if (range) return new Response(await readArtworkRange(record, range), { status: 206, headers });
+  const prefix = String(record.artwork_blob_prefix);
+  const chunkCount = Number(record.artwork_chunk_count);
   const image = new ReadableStream({
     async start(controller) {
       try {
@@ -185,7 +232,21 @@ async function serveArtwork(request: Request, db: Awaited<ReturnType<typeof getD
 
 async function deleteArtwork(payload: Record<string, unknown>, db: Awaited<ReturnType<typeof getDatabase>>, ownerMemberId: string) {
   const songId = cleanId(payload.songId);
+  const versionId = cleanId(payload.versionId || "");
   if (!songId) return json({ message: "A valid song ID is required" }, 400);
+  if (versionId) {
+    const version = await ownedVersion(db, ownerMemberId, songId, versionId);
+    if (!version) return json({ message: "That version was not found" }, 404);
+    await db.sql`
+      UPDATE halo_song_versions
+      SET artwork_url = NULL, artwork_blob_prefix = NULL, artwork_chunk_count = NULL,
+          artwork_content_type = NULL, artwork_byte_size = NULL, artwork_filename = NULL,
+          artwork_uploaded_at = NULL, updated_at = NOW()
+      WHERE id = ${versionId} AND song_id = ${songId}
+    `;
+    if (version.artwork_blob_prefix) await removeArtwork(String(version.artwork_blob_prefix)).catch(() => undefined);
+    return json({ message: "Version artwork removed" });
+  }
   const song = await ownedSong(db, ownerMemberId, songId);
   if (!song) return json({ message: "That song was not found" }, 404);
   await db.sql`

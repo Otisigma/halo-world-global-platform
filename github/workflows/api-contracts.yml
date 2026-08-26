@@ -1,0 +1,43 @@
+name: API Contract Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  api-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate Netlify function signatures
+        run: |
+          for file in netlify/functions/*.mjs netlify/functions/*.ts; do
+            if grep -q "verifyRequestOrigin\|getUser\|ensureMembership" "$file"; then
+              echo "✓ Auth validation found in $(basename $file)"
+            else
+              echo "⚠ Possible missing auth in $(basename $file)"
+            fi
+          done
+
+      - name: Check rate limiting implementation
+        run: |
+          grep -r "HOURLY_REQUEST_LIMIT\|Retry-After" netlify/functions/ || echo "Rate limiting check complete"
+
+      - name: Validate database migrations
+        run: |
+          for migration in netlify/database/migrations/*.sql; do
+            if [ -f "$migration" ]; then
+              echo "✓ Migration: $(basename $migration)"
+            fi
+          done

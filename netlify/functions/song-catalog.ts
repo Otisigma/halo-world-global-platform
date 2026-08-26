@@ -91,6 +91,8 @@ function serializeSong(song: typeof songs.$inferSelect, versions: Array<typeof s
       cleanLyrics: version.cleanLyrics,
       saleEnabled: version.saleEnabled,
       notes: version.notes,
+      artworkUrl: version.artworkUrl || "",
+      artworkUploadedAt: version.artworkUploadedAt?.toISOString() || "",
     })),
     updatedAt: song.updatedAt.toISOString(),
   };

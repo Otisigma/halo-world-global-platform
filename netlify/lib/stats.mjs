@@ -1,4 +1,3 @@
-import { getDatabase } from "@netlify/database";
 import { timingSafeEqual } from "node:crypto";
 
 export const allowedEvents = new Set([
@@ -30,6 +29,9 @@ export const allowedEvents = new Set([
   "compare_mix_version",
   "copy_mix_room_link",
   "creator_mix_upload",
+  "creator_charter_affirmed",
+  "creator_charter_response",
+  "creator_charter_vote",
   "cue_world_room",
   "deck_cue_trigger",
   "deck_play_toggle",
@@ -77,6 +79,8 @@ export const allowedEvents = new Set([
   "open_bug_report",
   "open_catalog_release",
   "open_creator_world",
+  "open_creator_charter",
+  "open_song_catalog",
   "open_dj_deck",
   "open_dreamweaver_campaign_studio",
   "open_dreamweaver_song_lab",
@@ -198,7 +202,8 @@ const allowedMetadataKeys = new Set([
 
 const numericMetadataKeys = new Set(["seconds", "position"]);
 
-export function getStatsDatabase() {
+export async function getStatsDatabase() {
+  const { getDatabase } = await import("@netlify/database");
   return getDatabase();
 }
 

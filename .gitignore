@@ -1,0 +1,27 @@
+# Dependencies
+node_modules/
+
+# Netlify build output
+.netlify/
+dist/
+
+# Environment configuration — copy .env.example to .env and fill in values
+.env
+.env.local
+.env.*.local
+
+# Editor directories and files
+.DS_Store
+.vscode/settings.json
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Drizzle migrations output
+drizzle/
+
+# Logs
+*.log
+npm-debug.log*

@@ -16,10 +16,10 @@ assert.match(indexPage, /<strong class="release-title">Blessed<\/strong>/);
 assert.match(indexPage, /<img src="\/assets\/releases\/blessed\.jpg" alt="Blessed cover artwork by Owen Anthony"/);
 assert.doesNotMatch(indexPage, /distrokid\.imgix\.net/);
 assert.match(indexPage, /eventName: 'open_new_release'/);
-assert.match(indexPage, /release_id: releaseFeatureCard\.dataset\.releaseFeatureId \|\| 'blessed'/);
+assert.match(indexPage, /release_id: releaseFeatureCard\.dataset\.releaseFeatureId/);
 
 assert.match(haloPage, /const NEW_RELEASE = \{[\s\S]*title: 'Blessed',[\s\S]*artwork: '\/assets\/releases\/blessed\.jpg',[\s\S]*url: 'https:\/\/distrokid\.com\/hyperfollow\/owenanthony\/blessed'/);
-assert.match(haloPage, /data-stat-target="homepage_blessed_release_card"/);
+assert.match(haloPage, /data-stat-target="homepage_new_release_card"/);
 
 assert.match(releaseHouse, /Store approved covers as \/assets\/releases\/<release-slug>\.jpg/);
 

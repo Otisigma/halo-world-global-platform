@@ -127,11 +127,11 @@
                 setPendingFiles(imageFiles);
                 addLog(`✓ SELECTED: ${imageFiles.length} image${imageFiles.length > 1 ? 's' : ''} ready for upload.`);
 
-                // Generate previews for all selected files
-                queue.forEach((item, index) => {
+                // Generate previews for all selected files — match by stable id, not position
+                queue.forEach((item) => {
                     const reader = new FileReader();
                     reader.onload = (event) => {
-                        setUploadQueue(prev => prev.map((q, i) => i === index ? { ...q, previewUrl: event.target.result } : q));
+                        setUploadQueue(prev => prev.map(q => q.id === item.id ? { ...q, previewUrl: event.target.result } : q));
                     };
                     reader.readAsDataURL(item.file);
                 });
@@ -158,14 +158,14 @@
 
                     addLog(`🚀 UPLOADING (${i + 1}/${uploadQueue.length}): ${title}...`);
 
-                    setUploadQueue(prev => prev.map((q, idx) => idx === i ? { ...q, status: 'uploading', progress: 0 } : q));
+                    setUploadQueue(prev => prev.map(q => q.id === item.id ? { ...q, status: 'uploading', progress: 0 } : q));
 
                     // Simulate per-file upload progress
                     await new Promise(resolve => {
                         let progress = 0;
                         const interval = setInterval(() => {
                             progress = Math.min(progress + Math.random() * 35, 100);
-                            setUploadQueue(prev => prev.map((q, idx) => idx === i ? { ...q, progress } : q));
+                            setUploadQueue(prev => prev.map(q => q.id === item.id ? { ...q, progress } : q));
                             if (progress >= 100) {
                                 clearInterval(interval);
                                 resolve();
@@ -174,7 +174,7 @@
                     });
 
                     results.push({
-                        id: Date.now() + i,
+                        id: `${Date.now()}-${i}-${Math.random().toString(36).slice(2, 7)}`,
                         title,
                         artist: newArtist,
                         url: item.previewUrl,
@@ -182,7 +182,7 @@
                         uploadDate: today
                     });
 
-                    setUploadQueue(prev => prev.map((q, idx) => idx === i ? { ...q, status: 'done', progress: 100 } : q));
+                    setUploadQueue(prev => prev.map(q => q.id === item.id ? { ...q, status: 'done', progress: 100 } : q));
                     addLog(`✅ COMPLETE: "${title}" added to library (${newType})`);
                 }
 

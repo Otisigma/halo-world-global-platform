@@ -55,6 +55,8 @@ function cleanVersionType(value: unknown): VersionType {
 }
 
 function serializeSong(song: typeof songs.$inferSelect, versions: Array<typeof songVersions.$inferSelect>) {
+  const songArtworkUrl = song.artworkUrl || "";
+  const songArtworkUploadedAt = song.artworkUploadedAt?.toISOString() || "";
   return {
     id: song.id,
     sourceReleaseId: song.sourceReleaseId || "",
@@ -74,24 +76,33 @@ function serializeSong(song: typeof songs.$inferSelect, versions: Array<typeof s
     metadataScore: song.metadataScore,
     metadataIssues: Array.isArray(song.metadataIssues) ? song.metadataIssues : [],
     reviewedAt: song.reviewedAt?.toISOString() || "",
-    artworkUrl: song.artworkUrl || "",
-    artworkUploadedAt: song.artworkUploadedAt?.toISOString() || "",
-    versions: versions.map(version => ({
-      id: version.id,
-      versionType: version.versionType,
-      label: version.label,
-      destination: version.destination,
-      audioUrl: version.audioUrl,
-      audioFilename: version.audioFilename,
-      audioByteSize: version.audioByteSize,
-      durationSeconds: version.durationSeconds,
-      masteringStatus: version.masteringStatus,
-      targetLufs: version.targetLufs,
-      truePeakDbtp: version.truePeakDbtpTenths / 10,
-      cleanLyrics: version.cleanLyrics,
-      saleEnabled: version.saleEnabled,
-      notes: version.notes,
-    })),
+    artworkUrl: songArtworkUrl,
+    artworkUploadedAt: songArtworkUploadedAt,
+    versions: versions.map(version => {
+      const versionArtworkUrl = version.artworkUrl || "";
+      const versionArtworkUploadedAt = version.artworkUploadedAt?.toISOString() || "";
+      return {
+        id: version.id,
+        versionType: version.versionType,
+        label: version.label,
+        destination: version.destination,
+        audioUrl: version.audioUrl,
+        audioFilename: version.audioFilename,
+        audioByteSize: version.audioByteSize,
+        durationSeconds: version.durationSeconds,
+        masteringStatus: version.masteringStatus,
+        targetLufs: version.targetLufs,
+        truePeakDbtp: version.truePeakDbtpTenths / 10,
+        artworkUrl: versionArtworkUrl || songArtworkUrl,
+        artworkUploadedAt: versionArtworkUploadedAt || songArtworkUploadedAt,
+        customArtworkUrl: versionArtworkUrl,
+        customArtworkUploadedAt: versionArtworkUploadedAt,
+        inheritsArtwork: !versionArtworkUrl && Boolean(songArtworkUrl),
+        cleanLyrics: version.cleanLyrics,
+        saleEnabled: version.saleEnabled,
+        notes: version.notes,
+      };
+    }),
     updatedAt: song.updatedAt.toISOString(),
   };
 }
@@ -128,7 +139,7 @@ async function loadProducer(nativeDb: Awaited<ReturnType<typeof getDatabase>>, o
     `,
     nativeDb.sql`
       SELECT package_track.package_id, package_track.position, package_track.engagement_score,
-        song.id AS song_id, song.artist_name, song.title
+        song.id AS song_id, song.artist_name, song.title, song.artwork_url
       FROM halo_catalog_package_tracks package_track
       JOIN halo_catalog_packages package ON package.id = package_track.package_id
       JOIN halo_song_catalog song ON song.id = package_track.song_id
@@ -139,6 +150,7 @@ async function loadProducer(nativeDb: Awaited<ReturnType<typeof getDatabase>>, o
   const tracksByPackage = new Map<string, Array<Record<string, unknown>>>();
   trackRows.forEach(row => tracksByPackage.set(row.package_id, [...(tracksByPackage.get(row.package_id) || []), {
     id: row.song_id, artistName: row.artist_name, title: row.title,
+    artworkUrl: row.artwork_url || "",
     position: Number(row.position), engagementScore: Number(row.engagement_score || 0),
   }]));
   return {

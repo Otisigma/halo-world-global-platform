@@ -148,6 +148,20 @@
       <div class="field-grid">
         <label><span>Version label</span><input id="versionLabel" required maxlength="100"></label>
         <label><span>Mastering status</span><select id="masteringStatus"><option value="not_started">Not started</option><option value="queued">Queued</option><option value="in_progress">In progress</option><option value="review">Ready for review</option><option value="approved">Approved</option></select></label>
+        <section class="wide-field artwork-upload-panel artwork-upload-panel--version" aria-labelledby="versionArtworkHeading">
+          <div class="artwork-preview-area"><img class="artwork-preview" id="versionArtworkPreview" src="" alt="Version artwork preview" hidden><div class="artwork-placeholder" id="versionArtworkPlaceholder" aria-hidden="true"></div></div>
+          <div class="artwork-upload-body">
+            <span class="field-label" id="versionArtworkHeading">Version artwork</span>
+            <strong>Upload cover art for this version or remix.</strong>
+            <p>If you leave this empty, HALO keeps showing the main song artwork wherever this version appears.</p>
+            <label class="artwork-file-picker"><span>Choose image file</span><input id="versionArtworkFile" type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" aria-label="Choose version artwork file"></label>
+            <div class="artwork-upload-actions">
+              <button class="quiet-button" id="uploadVersionArtworkButton" type="button">Upload version artwork</button>
+              <button class="quiet-button artwork-delete-button" id="deleteVersionArtworkButton" type="button" hidden>Remove version artwork</button>
+            </div>
+            <p class="artwork-upload-progress" id="versionArtworkUploadProgress" role="status">No version artwork uploaded yet.</p>
+          </div>
+        </section>
         <section class="wide-field audio-upload-panel" aria-labelledby="audioUploadHeading">
           <div><span class="field-label" id="audioUploadHeading">Upload this version</span><strong>Drop in the actual master.</strong><p>MP3, M4A, AAC, OGG, WebM, WAV, or FLAC · 128 MB maximum.</p></div>
           <label class="audio-file-picker"><span>Choose audio file</span><input id="audioFile" type="file" accept="audio/*,.mp3,.m4a,.aac,.ogg,.webm,.wav,.flac"></label>

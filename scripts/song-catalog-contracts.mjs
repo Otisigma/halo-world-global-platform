@@ -3,7 +3,7 @@ import { resolve } from "node:path";
 
 const root = resolve(import.meta.dirname, "..");
 const read = path => readFile(resolve(root, path), "utf8");
-const [page, client, styles, api, audioApi, artworkApi, producerApi, producerLib, schema, migration, audioMigration, artworkMigration, producerMigration, config, home, packageText] = await Promise.all([
+const [page, client, styles, api, audioApi, artworkApi, producerApi, producerLib, schema, migration, audioMigration, artworkMigration, versionArtworkMigration, producerMigration, config, home, packageText] = await Promise.all([
   read("song-catalog/index.html"),
   read("song-catalog/song-catalog.js"),
   read("song-catalog/song-catalog.css"),
@@ -16,6 +16,7 @@ const [page, client, styles, api, audioApi, artworkApi, producerApi, producerLib
   read("netlify/database/migrations/20260821035511_complete_pestilence/migration.sql"),
   read("netlify/database/migrations/20260821040411_add_song_version_audio_uploads/migration.sql"),
   read("netlify/database/migrations/20260826210000_add_song_artwork/migration.sql"),
+  read("netlify/database/migrations/20260826222000_add_song_version_artwork/migration.sql"),
   read("netlify/database/migrations/20260821183000_create_catalog_producer/migration.sql"),
   read("netlify.toml"),
   read("halo.html"),
@@ -26,7 +27,7 @@ const packageJson = JSON.parse(packageText);
 const checks = [
   [page.includes("One song · every useful version") && page.includes("Radio mastering queue"), "ships a unified catalog and dedicated broadcast queue"],
   [page.includes("Sale master") || client.includes("sale_master"), "keeps the customer sale master separate from other versions"],
-  [client.includes('"radio_edit","clean"') && client.includes("masteringStatus!==\"approved\""), "shows unfinished radio and clean versions in the mastering queue"],
+  [client.includes('"radio_edit", "clean"') && client.includes('masteringStatus !== "approved"'), "shows unfinished radio and clean versions in the mastering queue"],
   [api.includes("VERSION_ROUTES") && api.includes("instrumental") && api.includes("stems") && api.includes("extended"), "creates every requested version route for each song"],
   [api.includes("runDreamweaverReview") && api.includes("radio_master") && api.includes("rightsStatus"), "runs Dream Weaver metadata, rights, sale, and radio checks"],
   [api.includes("verifyRequestOrigin") && api.includes("ensureMembership") && api.includes('path: "/api/song-catalog"'), "protects catalog records with membership and origin checks"],
@@ -52,7 +53,13 @@ const checks = [
   [api.includes("artworkUrl") && api.includes("artworkUploadedAt"), "includes artwork metadata in catalog API responses"],
   [page.includes("artworkHeading") && page.includes("artworkPreview") && page.includes("artworkFile"), "adds artwork upload zone with preview and file input to the song editor"],
   [client.includes("uploadArtwork") && client.includes("deleteArtwork") && client.includes("renderArtwork"), "implements artwork upload, delete, and preview rendering in the catalog client"],
-  [client.includes("ARTWORK_CHUNK_BYTES") && client.includes("artworkApi"), "uploads artwork in browser-safe chunks using the artwork API"]
+  [client.includes("ARTWORK_CHUNK_BYTES") && client.includes("artworkApi"), "uploads artwork in browser-safe chunks using the artwork API"],
+  [versionArtworkMigration.includes('"halo_song_versions"') && versionArtworkMigration.includes('"artwork_url"') && versionArtworkMigration.includes("IF NOT EXISTS"), "migrates version artwork columns idempotently"],
+  [schema.includes("artworkBlobPrefix") && schema.includes("artworkChunkCount") && schema.includes("artworkFilename"), "tracks version-specific artwork storage details in the schema"],
+  [artworkApi.includes("versionId") && artworkApi.includes("ownedVersion") && artworkApi.includes('/api/song-catalog/artwork?versionId='), "supports version-specific artwork uploads and playback"],
+  [api.includes("customArtworkUrl") && api.includes("inheritsArtwork"), "resolves version artwork with song-level fallback metadata"],
+  [page.includes('id="versionArtworkFile"') && page.includes('id="versionArtworkPreview"') && page.includes('id="uploadVersionArtworkButton"'), "adds version artwork controls to the version editor"],
+  [client.includes("artworkMarkup") && client.includes("uploadVersionArtwork") && client.includes("deleteVersionArtwork"), "reuses shared artwork rendering while managing version artwork overrides"]
 ];
 
 const failures = checks.filter(([passed]) => !passed);

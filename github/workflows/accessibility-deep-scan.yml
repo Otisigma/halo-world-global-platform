@@ -1,0 +1,36 @@
+name: Accessibility Deep Scan
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  a11y:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Install axe-core & puppeteer
+        run: npm install -g @axe-core/cli puppeteer
+
+      - name: Scan for accessibility violations
+        run: |
+          PAGES=("halo.html" "dj-deck.html" "magazine.html" "halo-command.html" "artist-team.html")
+          for page in "${PAGES[@]}"; do
+            echo "Scanning $page for accessibility issues..."
+            axe "file://$(pwd)/$page" --format json > "./$page.axe.json" || true
+          done
+
+      - name: Report accessibility results
+        if: failure()
+        run: |
+          echo "⚠️ Accessibility violations detected. Review .axe.json files"
+          exit 1

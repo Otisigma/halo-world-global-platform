@@ -9,7 +9,10 @@ const sourceExtensions = new Set([".html", ".css", ".js", ".mjs", ".sql", ".json
 const ignoredDirectories = new Set([".git", ".netlify", "node_modules"]);
 const netlifyConfigSource = await readFile(resolve(root, "netlify.toml"), "utf8");
 const redirectAliases = new Set([...netlifyConfigSource.matchAll(/^\s*from\s*=\s*["']([^"']+)["']/gm)].map(match => match[1]));
-const redirectWildcardPrefixes = [...redirectAliases].filter(path => path.includes("*")).map(path => path.split("*")[0]);
+const redirectWildcardPrefixes = [...redirectAliases]
+  .filter(path => path.includes("*"))
+  .map(path => path.split("*")[0])
+  .filter(Boolean);
 
 async function collectFiles(directory) {
   const entries = await readdir(directory, { withFileTypes: true });

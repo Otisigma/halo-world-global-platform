@@ -1,3 +1,4 @@
-FROM nginx:1.27-alpine
+FROM alpine:3.20
 
-COPY . /usr/share/nginx/html
+WORKDIR /workspace
+COPY index.html /workspace/index.html

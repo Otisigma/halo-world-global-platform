@@ -409,6 +409,10 @@
     .mix-action:hover { border-color: var(--acid); }
     .mix-action:disabled { cursor: wait; opacity: .5; }
     .mix-release-status { grid-column: 1 / -1; min-height: 14px; color: #8f998d; font: 400 8px "DM Mono", monospace; }
+    .mix-release-progress { grid-column: 1 / -1; height: 3px; overflow: hidden; background: rgba(255,255,255,.1); margin-top: 4px; }
+    .mix-release-progress span { display: block; width: 0; height: 100%; background: var(--acid); transition: width .2s ease; }
+    .vault-upload-progress { height: 3px; overflow: hidden; background: rgba(255,255,255,.1); margin-top: 6px; }
+    .vault-upload-progress span { display: block; width: 0; height: 100%; background: var(--acid); transition: width .2s ease; }
 
     .workspace { display: grid; grid-template-columns: minmax(0, 1fr) 250px minmax(0, 1fr); gap: 12px; align-items: stretch; }
     .deck { position: relative; min-width: 0; overflow: hidden; background: linear-gradient(145deg, rgba(255,255,255,.035), transparent 32%), #111411; transition: opacity .2s, border-color .2s, transform .2s; box-shadow: inset 0 0 0 1px rgba(255,255,255,.025), 0 20px 55px rgba(0,0,0,.26); }
@@ -1104,6 +1108,7 @@
             <button class="mix-action" id="newMix" type="button">Start another mix</button>
           </div>
           <span class="mix-release-status" id="mixReleaseStatus" aria-live="polite">Your download stays available even after posting.</span>
+          <div class="upload-progress mix-release-progress" id="mixReleaseProgress" hidden><span></span></div>
         </form>
       </div>
     </section>
@@ -1456,6 +1461,7 @@
             </div>
             <label class="vault-confirm"><input name="rightsAttested" type="checkbox" required><span>I confirm HALO owns or controls these files and has permission to store, process, perform, and remix them.</span></label>
             <div class="vault-actions"><button class="vault-save" id="stemVaultSave" type="submit">Save private stem pack</button><span class="vault-status" id="stemVaultStatus" aria-live="polite">Sign in to load or save private stem packs.</span></div>
+            <div class="vault-upload-progress" id="stemVaultProgress" hidden><span></span></div>
           </form>
           <div class="stem-pack-list" id="stemPackList"><p class="vault-empty">Opening the private vault…</p></div>
         </section>
@@ -1655,6 +1661,7 @@
       dreamweaverMix: document.querySelector("#dreamweaverMix"),
       newMix: document.querySelector("#newMix"),
       mixReleaseStatus: document.querySelector("#mixReleaseStatus"),
+      mixReleaseProgress: document.querySelector("#mixReleaseProgress"),
       mixIntent: document.querySelector("#mixIntent"),
       analyzeSet: document.querySelector("#analyzeSet"),
       queueRecommendation: document.querySelector("#queueRecommendation"),
@@ -1690,6 +1697,7 @@
       stemVaultForm: document.querySelector("#stemVaultForm"),
       stemVaultSave: document.querySelector("#stemVaultSave"),
       stemVaultStatus: document.querySelector("#stemVaultStatus"),
+      stemVaultProgress: document.querySelector("#stemVaultProgress"),
       stemPackList: document.querySelector("#stemPackList"),
       collectorGoal: document.querySelector("#collectorGoal"),
       collectorTexture: document.querySelector("#collectorTexture"),
@@ -2692,8 +2700,13 @@
       if (invalidType) return setStemVaultStatus(`${invalidType.file.name} is not a supported audio file.`, true);
       stemVaultState.loading = true;
       renderStemVault();
+      const stemProgressBar = elements.stemVaultProgress.querySelector("span");
+      elements.stemVaultProgress.hidden = false;
+      stemProgressBar.style.width = "0%";
       const uploadId = crypto.randomUUID ? crypto.randomUUID() : `${Date.now().toString(16)}-0000-4000-8000-${Math.random().toString(16).slice(2, 14).padEnd(12, "0")}`;
       const chunkBytes = 4 * 1024 * 1024;
+      const totalChunks = selectedFiles.reduce((sum, item) => sum + Math.ceil(item.file.size / chunkBytes), 0);
+      let chunksCompleted = 0;
       try {
         const files = [];
         for (let fileIndex = 0; fileIndex < selectedFiles.length; fileIndex += 1) {
@@ -2711,6 +2724,8 @@
             const chunkResponse = await fetch("/api/stem-vault", { method: "POST", credentials: "same-origin", body: chunkForm });
             const chunkData = await chunkResponse.json().catch(() => ({}));
             if (!chunkResponse.ok) throw new Error(chunkData.message || `The ${stemType} upload stopped early.`);
+            chunksCompleted += 1;
+            stemProgressBar.style.width = `${(chunksCompleted / totalChunks) * 82}%`;
           }
           files.push({ stemType, filename: file.name, contentType: normalizedAudioType(file), byteSize: file.size, chunkCount, durationSeconds });
         }
@@ -2722,6 +2737,7 @@
         const response = await fetch("/api/stem-vault", { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
         const data = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(data.message || "The stem pack could not be saved.");
+        stemProgressBar.style.width = "100%";
         stemVaultState.packs.unshift(data.pack);
         elements.stemVaultForm.reset();
         elements.stemVaultForm.elements.bpm.value = "124";
@@ -2735,6 +2751,7 @@
       } finally {
         stemVaultState.loading = false;
         renderStemVault();
+        setTimeout(() => { elements.stemVaultProgress.hidden = true; stemProgressBar.style.width = "0%"; }, 1800);
       }
     }
 
@@ -4617,6 +4634,9 @@
       elements.postMix.disabled = true;
       elements.postMix.textContent = "Posting mix…";
       elements.mixReleaseStatus.textContent = "Preparing the finished master for upload…";
+      const releaseProgressBar = elements.mixReleaseProgress.querySelector("span");
+      elements.mixReleaseProgress.hidden = false;
+      releaseProgressBar.style.width = "0%";
       try {
         const chunkSize = 3.5 * 1024 * 1024;
         const chunkCount = Math.ceil(recordingState.blob.size / chunkSize);
@@ -4635,6 +4655,7 @@
           const chunkResponse = await fetch("/api/mixes", { method: "POST", body: chunkForm });
           const chunkData = await chunkResponse.json();
           if (!chunkResponse.ok) throw new Error(chunkData.message || "The mix upload stopped early.");
+          releaseProgressBar.style.width = `${(chunkIndex + 1) / chunkCount * 82}%`;
         }
         elements.mixReleaseStatus.textContent = "Publishing the mix to HALO…";
         const response = await fetch("/api/mixes", {
@@ -4656,6 +4677,7 @@
         });
         const data = await response.json();
         if (!response.ok) throw new Error(data.message || "The mix could not be posted.");
+        releaseProgressBar.style.width = "100%";
         recordingState.publishedMixId = data.id;
         elements.postMix.textContent = elements.mixVisibility.value === "room" ? "Posted to room" : "Saved privately";
         elements.playlistMix.disabled = false;
@@ -4672,6 +4694,8 @@
         elements.postMix.textContent = elements.mixVisibility.value === "room" ? "Post to room" : "Save privately";
         elements.mixReleaseStatus.textContent = error.message || "The mix could not be posted. Your download is still safe.";
         showToast("Mix not posted", elements.mixReleaseStatus.textContent);
+      } finally {
+        setTimeout(() => { elements.mixReleaseProgress.hidden = true; releaseProgressBar.style.width = "0%"; }, 1800);
       }
     }
 

@@ -464,7 +464,7 @@
     return "audio/mpeg";
   }
 
-  async function uploadAudioAsset(file, assetRole) {
+  async function uploadAudioAsset(file, assetRole, onProgress = () => {}) {
     const chunkSize = 3.5 * 1024 * 1024;
     const chunkCount = Math.ceil(file.size / chunkSize);
     if (file.size > 128 * 1024 * 1024 || chunkCount > 64) throw new Error(`Keep the ${assetRole === "original" ? "original version" : "uploaded mix"} under 128 MB.`);
@@ -482,6 +482,7 @@
       const chunkResponse = await fetch("/api/mixes", { method: "POST", body, credentials: "same-origin" });
       const chunkData = await chunkResponse.json().catch(() => ({}));
       if (!chunkResponse.ok) throw new Error(chunkData.message || "The audio upload stopped early.");
+      onProgress((chunkIndex + 1) / chunkCount);
     }
     return { uploadId, chunkCount, byteSize: file.size, contentType, durationSeconds: await audioDuration(file) };
   }
@@ -494,14 +495,20 @@
       mixUploadStatus.textContent = "Choose a mastered remix or working mix first.";
       return;
     }
+    const uploadBar = mixUploadProgress.firstElementChild;
     mixUploadButton.disabled = true;
     mixUploadProgress.hidden = false;
+    uploadBar.style.width = "0%";
     mixUploadStatus.textContent = "Preparing the upload…";
     try {
-      const masterUpload = await uploadAudioAsset(file, "master");
-      mixUploadProgress.firstElementChild.style.width = originalFile ? "48%" : "82%";
-      const originalUpload = originalFile ? await uploadAudioAsset(originalFile, "original") : null;
-      if (originalUpload) mixUploadProgress.firstElementChild.style.width = "82%";
+      const masterUpload = await uploadAudioAsset(file, "master", progress => {
+        uploadBar.style.width = `${progress * (originalFile ? 48 : 82)}%`;
+      });
+      uploadBar.style.width = originalFile ? "48%" : "82%";
+      const originalUpload = originalFile ? await uploadAudioAsset(originalFile, "original", progress => {
+        uploadBar.style.width = `${48 + progress * 34}%`;
+      }) : null;
+      if (originalUpload) uploadBar.style.width = "82%";
       const fields = Object.fromEntries(new FormData(mixUploadForm).entries());
       delete fields.mixFile;
       delete fields.originalMixFile;
@@ -531,7 +538,7 @@
       });
       const data = await publishResponse.json().catch(() => ({}));
       if (!publishResponse.ok) throw new Error(data.message || "The mix could not be posted.");
-      mixUploadProgress.firstElementChild.style.width = "100%";
+      uploadBar.style.width = "100%";
       mixUploadStatus.textContent = data.message;
       mixUploadButton.textContent = "Mix received";
       window.haloStats?.track("creator_mix_upload", { production_route: fields.productionRoute, sale_enabled: mixUploadForm.elements.clientSaleEnabled.checked });

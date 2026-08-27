@@ -49,6 +49,23 @@ function cleanUrl(value: unknown) {
   }
 }
 
+function cleanAudioUrl(value: unknown) {
+  const text = cleanText(value, 1200);
+  if (!text) return "";
+  if (/^\/api\/song-catalog\/audio\?versionId=[0-9a-f-]+$/i.test(text)) return text;
+  try {
+    const url = new URL(text);
+    if (url.protocol !== "https:" || url.username || url.password) return "";
+    if (url.pathname === "/api/song-catalog/audio") {
+      const versionId = cleanId(url.searchParams.get("versionId"));
+      return versionId ? `/api/song-catalog/audio?versionId=${versionId}` : "";
+    }
+    return url.toString();
+  } catch {
+    return "";
+  }
+}
+
 function cleanVersionType(value: unknown): VersionType {
   const type = String(value || "").trim().toLowerCase() as VersionType;
   return VERSION_ROUTES[type] ? type : "alternate";
@@ -281,7 +298,7 @@ async function saveVersion(ownerMemberId: string, payload: Record<string, unknow
   const route = VERSION_ROUTES[versionType];
   const rows = await db.update(songVersions).set({
     versionType, label: cleanText(payload.label, 100) || route.label,
-    destination: route.destination, audioUrl: cleanUrl(payload.audioUrl),
+    destination: route.destination, audioUrl: cleanAudioUrl(payload.audioUrl),
     durationSeconds: Math.max(0, Math.min(86_400, Number.parseInt(String(payload.durationSeconds || "0"), 10) || 0)),
     masteringStatus: cleanEnum(payload.masteringStatus, MASTERING_STATUSES, "not_started"),
     targetLufs: Math.max(-30, Math.min(-5, Number.parseInt(String(payload.targetLufs || route.targetLufs), 10) || route.targetLufs)),
@@ -296,10 +313,12 @@ async function saveVersion(ownerMemberId: string, payload: Record<string, unknow
 
 async function importExisting(nativeDb: Awaited<ReturnType<typeof getDatabase>>, ownerMemberId: string) {
   const releases = await nativeDb.sql`
-    SELECT id, title, artist, genres, content_rating
-    FROM halo_release_campaigns
-    WHERE owner_member_id = ${ownerMemberId} AND status <> 'archived'
-    ORDER BY updated_at DESC
+    SELECT release.id, release.title, release.artist, release.genres, release.content_rating
+    FROM halo_release_campaigns release
+    LEFT JOIN halo_artist_pages page ON page.slug = release.artist_slug
+    WHERE release.status <> 'archived'
+      AND (release.owner_member_id = ${ownerMemberId} OR page.owner_member_id = ${ownerMemberId})
+    ORDER BY release.updated_at DESC
     LIMIT 300
   `;
   let imported = 0;

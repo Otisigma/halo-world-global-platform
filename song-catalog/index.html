@@ -156,6 +156,20 @@
           <audio id="audioPreview" controls preload="metadata" hidden></audio>
         </section>
         <label class="wide-field"><span>External audio source link (optional)</span><input id="audioUrl" type="url" placeholder="https://secure-audio-location.example/song.wav"></label>
+        <section class="wide-field version-artwork-panel" aria-labelledby="versionArtworkHeading">
+          <div class="artwork-preview-area"><img class="artwork-preview" id="versionArtworkPreview" src="" alt="Version artwork preview" hidden><div class="artwork-placeholder" id="versionArtworkPlaceholder" aria-hidden="true"></div></div>
+          <div class="artwork-upload-body">
+            <span class="field-label" id="versionArtworkHeading">Version cover art (optional)</span>
+            <strong>Upload a different cover for this version or remix.</strong>
+            <p>Overrides the song cover for this version only. JPEG, PNG, or WebP · 20 MB maximum.</p>
+            <label class="artwork-file-picker"><span>Choose image file</span><input id="versionArtworkFile" type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" aria-label="Choose version artwork file"></label>
+            <div class="artwork-upload-actions">
+              <button class="quiet-button" id="uploadVersionArtworkButton" type="button">Upload version artwork</button>
+              <button class="quiet-button artwork-delete-button" id="deleteVersionArtworkButton" type="button" hidden>Remove version artwork</button>
+            </div>
+            <p class="artwork-upload-progress" id="versionArtworkProgress" role="status">No version artwork uploaded. Uses the song cover by default.</p>
+          </div>
+        </section>
         <label><span>Duration (seconds)</span><input id="durationSeconds" type="number" min="0" max="86400"></label>
         <label><span>Target LUFS</span><input id="targetLufs" type="number" min="-30" max="-5"></label>
         <label><span>True peak dBTP</span><input id="truePeakDbtp" type="number" min="-10" max="0" step="0.1"></label>

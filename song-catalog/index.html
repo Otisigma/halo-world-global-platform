@@ -72,6 +72,7 @@
                 <button class="quiet-button artwork-delete-button" id="deleteArtworkButton" type="button" hidden>Remove artwork</button>
               </div>
               <p class="artwork-upload-progress" id="artworkUploadProgress" role="status">No file selected.</p>
+              <div class="upload-progress" id="artworkUploadBar" hidden><span></span></div>
             </div>
           </section>
 
@@ -153,6 +154,7 @@
           <label class="audio-file-picker"><span>Choose audio file</span><input id="audioFile" type="file" accept="audio/*,.mp3,.m4a,.aac,.ogg,.webm,.wav,.flac"></label>
           <button class="quiet-button" id="uploadAudioButton" type="button">Upload selected audio</button>
           <p class="audio-upload-progress" id="audioUploadProgress" role="status">No file selected.</p>
+          <div class="upload-progress" id="audioUploadBar" hidden><span></span></div>
           <audio id="audioPreview" controls preload="metadata" hidden></audio>
         </section>
         <label class="wide-field"><span>External audio source link (optional)</span><input id="audioUrl" type="url" placeholder="https://secure-audio-location.example/song.wav"></label>
@@ -168,6 +170,7 @@
               <button class="quiet-button artwork-delete-button" id="deleteVersionArtworkButton" type="button" hidden>Remove version artwork</button>
             </div>
             <p class="artwork-upload-progress" id="versionArtworkProgress" role="status">No version artwork uploaded. Uses the song cover by default.</p>
+            <div class="upload-progress" id="versionArtworkBar" hidden><span></span></div>
           </div>
         </section>
         <label><span>Duration (seconds)</span><input id="durationSeconds" type="number" min="0" max="86400"></label>

@@ -68,10 +68,10 @@
               <p>JPEG, PNG, or WebP · 20 MB maximum · 400×400 minimum.</p>
               <label class="artwork-file-picker"><span>Choose image file</span><input id="artworkFile" type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" aria-label="Choose album artwork file"></label>
               <div class="artwork-upload-actions">
-                <button class="quiet-button" id="uploadArtworkButton" type="button">Upload artwork</button>
+                <button class="quiet-button upload-action-button" id="uploadArtworkButton" type="button">Upload artwork</button>
                 <button class="quiet-button artwork-delete-button" id="deleteArtworkButton" type="button" hidden>Remove artwork</button>
               </div>
-              <p class="artwork-upload-progress" id="artworkUploadProgress" role="status">No file selected.</p>
+              <p class="artwork-upload-progress upload-progress" id="artworkUploadProgress" role="status" aria-live="polite">No file selected.</p>
             </div>
           </section>
 
@@ -151,8 +151,8 @@
         <section class="wide-field audio-upload-panel" aria-labelledby="audioUploadHeading">
           <div><span class="field-label" id="audioUploadHeading">Upload this version</span><strong>Drop in the actual master.</strong><p>MP3, M4A, AAC, OGG, WebM, WAV, or FLAC · 128 MB maximum.</p></div>
           <label class="audio-file-picker"><span>Choose audio file</span><input id="audioFile" type="file" accept="audio/*,.mp3,.m4a,.aac,.ogg,.webm,.wav,.flac"></label>
-          <button class="quiet-button" id="uploadAudioButton" type="button">Upload selected audio</button>
-          <p class="audio-upload-progress" id="audioUploadProgress" role="status">No file selected.</p>
+          <button class="quiet-button upload-action-button" id="uploadAudioButton" type="button">Upload selected audio</button>
+          <p class="audio-upload-progress upload-progress" id="audioUploadProgress" role="status" aria-live="polite">No file selected.</p>
           <audio id="audioPreview" controls preload="metadata" hidden></audio>
         </section>
         <label class="wide-field"><span>External audio source link (optional)</span><input id="audioUrl" type="url" placeholder="https://secure-audio-location.example/song.wav"></label>
@@ -164,10 +164,10 @@
             <p>Overrides the song cover for this version only. JPEG, PNG, or WebP · 20 MB maximum.</p>
             <label class="artwork-file-picker"><span>Choose image file</span><input id="versionArtworkFile" type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" aria-label="Choose version artwork file"></label>
             <div class="artwork-upload-actions">
-              <button class="quiet-button" id="uploadVersionArtworkButton" type="button">Upload version artwork</button>
+              <button class="quiet-button upload-action-button" id="uploadVersionArtworkButton" type="button">Upload version artwork</button>
               <button class="quiet-button artwork-delete-button" id="deleteVersionArtworkButton" type="button" hidden>Remove version artwork</button>
             </div>
-            <p class="artwork-upload-progress" id="versionArtworkProgress" role="status">No version artwork uploaded. Uses the song cover by default.</p>
+            <p class="artwork-upload-progress upload-progress" id="versionArtworkProgress" role="status" aria-live="polite">No version artwork uploaded. Uses the song cover by default.</p>
           </div>
         </section>
         <label><span>Duration (seconds)</span><input id="durationSeconds" type="number" min="0" max="86400"></label>

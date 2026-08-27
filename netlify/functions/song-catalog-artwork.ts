@@ -3,7 +3,9 @@ import { getDatabase } from "@netlify/database";
 import { getUser, verifyRequestOrigin } from "@netlify/identity";
 import { cleanText, ensureMembership } from "../lib/halo-x.mjs";
 
-const artworkStore = getStore({ name: "halo-song-catalog-artwork", consistency: "strong" });
+function getArtworkStore() {
+  return getStore({ name: "halo-song-catalog-artwork", consistency: "strong" });
+}
 const ALLOWED_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 const MAX_CHUNK_BYTES = 4 * 1024 * 1024;
 const MAX_UPLOAD_BYTES = 20 * 1024 * 1024;
@@ -74,8 +76,8 @@ async function ownedVersion(db: Awaited<ReturnType<typeof getDatabase>>, ownerMe
 
 async function removeArtwork(prefix: string) {
   if (!prefix) return;
-  const stored = await artworkStore.list({ prefix });
-  await Promise.all(stored.blobs.map(blob => artworkStore.delete(blob.key)));
+  const stored = await getArtworkStore().list({ prefix });
+  await Promise.all(stored.blobs.map(blob => getArtworkStore().delete(blob.key)));
 }
 
 async function uploadChunk(request: Request, db: Awaited<ReturnType<typeof getDatabase>>, ownerMemberId: string) {
@@ -100,7 +102,7 @@ async function uploadChunk(request: Request, db: Awaited<ReturnType<typeof getDa
     if (!(await ownedSong(db, ownerMemberId, songId))) return json({ message: "That song was not found" }, 404);
   }
   const prefix = versionId ? `${ownerMemberId}/${songId}/${versionId}/${uploadId}/parts/` : `${ownerMemberId}/${songId}/${uploadId}/parts/`;
-  await artworkStore.set(`${prefix}${String(chunkIndex).padStart(3, "0")}`, chunk);
+  await getArtworkStore().set(`${prefix}${String(chunkIndex).padStart(3, "0")}`, chunk);
   return json({ message: "Artwork chunk uploaded", chunkIndex });
 }
 
@@ -118,7 +120,7 @@ async function finalizeUpload(payload: Record<string, unknown>, db: Awaited<Retu
     const version = await ownedVersion(db, ownerMemberId, songId, versionId);
     if (!version) return json({ message: "That version was not found" }, 404);
     const prefix = `${ownerMemberId}/${songId}/${versionId}/${uploadId}/parts/`;
-    const stored = await artworkStore.list({ prefix });
+    const stored = await getArtworkStore().list({ prefix });
     if (stored.blobs.length !== chunkCount) return json({ message: "The artwork upload is incomplete. Try it again." }, 409);
     const artworkUrl = `/api/song-catalog/artwork?songId=${encodeURIComponent(songId)}&versionId=${encodeURIComponent(versionId)}`;
     await db.sql`
@@ -139,7 +141,7 @@ async function finalizeUpload(payload: Record<string, unknown>, db: Awaited<Retu
   const song = await ownedSong(db, ownerMemberId, songId);
   if (!song) return json({ message: "That song was not found" }, 404);
   const prefix = `${ownerMemberId}/${songId}/${uploadId}/parts/`;
-  const stored = await artworkStore.list({ prefix });
+  const stored = await getArtworkStore().list({ prefix });
   if (stored.blobs.length !== chunkCount) return json({ message: "The artwork upload is incomplete. Try it again." }, 409);
   const artworkUrl = `/api/song-catalog/artwork?songId=${encodeURIComponent(songId)}`;
   await db.sql`
@@ -167,7 +169,7 @@ async function readArtworkRange(song: Record<string, unknown>, range: { start: n
   if (firstChunk >= chunkCount || lastChunk >= chunkCount) throw new Error("Artwork range is invalid");
   const chunks: Uint8Array[] = [];
   for (let index = firstChunk; index <= lastChunk; index += 1) {
-    const part = await artworkStore.get(`${prefix}${String(index).padStart(3, "0")}`, { type: "arrayBuffer" });
+    const part = await getArtworkStore().get(`${prefix}${String(index).padStart(3, "0")}`, { type: "arrayBuffer" });
     if (!part) throw new Error("Artwork chunk is missing");
     chunks.push(new Uint8Array(part));
   }
@@ -216,7 +218,7 @@ async function serveArtwork(request: Request, db: Awaited<ReturnType<typeof getD
     async start(controller) {
       try {
         for (let index = 0; index < chunkCount; index += 1) {
-          const part = await artworkStore.get(`${prefix}${String(index).padStart(3, "0")}`, { type: "arrayBuffer" });
+          const part = await getArtworkStore().get(`${prefix}${String(index).padStart(3, "0")}`, { type: "arrayBuffer" });
           if (!part) throw new Error("Artwork chunk is missing");
           controller.enqueue(new Uint8Array(part));
         }

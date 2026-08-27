@@ -3,7 +3,7 @@ import { resolve } from "node:path";
 
 const root = resolve(import.meta.dirname, "..");
 const read = path => readFile(resolve(root, path), "utf8");
-const [page, client, styles, api, audioApi, artworkApi, producerApi, producerLib, schema, migration, audioMigration, artworkMigration, versionArtworkMigration, producerMigration, config, home, packageText] = await Promise.all([
+const [page, client, styles, api, audioApi, artworkApi, producerApi, producerLib, schema, migration, audioMigration, artworkMigration, versionArtworkMigration, producerMigration, editorMigration, config, home, packageText] = await Promise.all([
   read("song-catalog/index.html"),
   read("song-catalog/song-catalog.js"),
   read("song-catalog/song-catalog.css"),
@@ -18,6 +18,7 @@ const [page, client, styles, api, audioApi, artworkApi, producerApi, producerLib
   read("netlify/database/migrations/20260826210000_add_song_artwork/migration.sql"),
   read("netlify/database/migrations/20260826220000_add_version_artwork/migration.sql"),
   read("netlify/database/migrations/20260821183000_create_catalog_producer/migration.sql"),
+  read("netlify/database/migrations/20260827070000_add_catalog_editor.sql"),
   read("netlify.toml"),
   read("halo.html"),
   read("package.json")
@@ -59,6 +60,11 @@ const checks = [
   [schema.includes("halo_song_catalog") && schema.includes("halo_song_versions") && schema.includes("halo_dreamweaver_song_reviews"), "defines the persistent catalog with Drizzle ORM"],
   [migration.includes("halo_song_catalog_owner_source_unique") && migration.includes("ON DELETE CASCADE"), "migrates version and review records with duplicate-import protection"],
   [schema.includes("audioBlobPrefix") && schema.includes("audioChunkCount") && audioMigration.includes('ADD COLUMN "audio_blob_prefix"'), "tracks uploaded audio storage and playback details in the database"],
+  [schema.includes("sortOrder") && schema.includes("catalogLayouts") && editorMigration.includes("halo_catalog_layouts"), "persists song order, version order, and each member's page layout"],
+  [api.includes('payload.action === "create_version"') && api.includes('payload.action === "archive_version"') && page.includes('id="addVersionButton"') && page.includes('id="deleteVersionButton"'), "adds and safely removes song versions from the catalog editor"],
+  [api.includes('payload.action === "archive_song"') && page.includes('id="archiveSongButton"'), "safely removes songs from the active catalog without destroying uploads"],
+  [api.includes('payload.action === "reorder_songs"') && api.includes('payload.action === "reorder_versions"') && client.includes("data-song-drag") && client.includes("data-version-drag"), "supports persistent drag and keyboard-friendly arrow ordering for songs and versions"],
+  [api.includes('payload.action === "save_layout"') && page.includes('id="editPageButton"') && client.includes("data-layout-section"), "provides a persistent page editor for rearranging catalog sections"],
   [page.includes("Dreamweaver production team") && client.includes("queue_catalog_producer") && client.includes("projectedMonthlyNetCents"), "adds an artist-approved album, mix, and vault packaging room"],
   [producerApi.includes("background: true") && producerApi.includes("runCatalogProducer"), "runs catalog packaging without blocking the browser"],
   [client.includes('if(!response.ok)throw new Error("The catalog producer could not start")'), "surfaces background producer link failures instead of silently ignoring them"],

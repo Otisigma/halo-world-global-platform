@@ -1,15 +1,16 @@
 import { randomUUID } from "node:crypto";
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, max } from "drizzle-orm";
 import { getDatabase } from "@netlify/database";
 import { getUser, verifyRequestOrigin } from "@netlify/identity";
 import { db } from "../../db/index.js";
-import { dreamweaverSongReviews, songs, songVersions } from "../../db/schema.js";
+import { catalogLayouts, dreamweaverSongReviews, songs, songVersions } from "../../db/schema.js";
 import { cleanText, ensureMembership } from "../lib/halo-x.mjs";
 
 const MAX_BODY_BYTES = 80_000;
 const RIGHTS_STATUSES = new Set(["needs_review", "cleared", "disputed"]);
 const SALE_STATUSES = new Set(["for_sale", "not_for_sale", "coming_soon"]);
 const MASTERING_STATUSES = new Set(["not_started", "queued", "in_progress", "review", "approved"]);
+const LAYOUT_SECTIONS = ["summary", "catalog", "producer", "radio"] as const;
 const VERSION_ROUTES = {
   sale_master: { label: "Sale master", destination: "storefront", targetLufs: -14, saleEnabled: true },
   radio_edit: { label: "Radio edit", destination: "radio", targetLufs: -16, saleEnabled: false },
@@ -54,6 +55,18 @@ function cleanVersionType(value: unknown): VersionType {
   return VERSION_ROUTES[type] ? type : "alternate";
 }
 
+function cleanIdList(value: unknown, maximum = 300) {
+  if (!Array.isArray(value) || value.length > maximum) return [];
+  const ids = value.map(cleanId);
+  return ids.every(Boolean) && new Set(ids).size === ids.length ? ids : [];
+}
+
+function cleanSectionOrder(value: unknown) {
+  const requested = Array.isArray(value) ? value.map(item => String(item || "").trim().toLowerCase()) : [];
+  const selected = requested.filter((item, index) => LAYOUT_SECTIONS.includes(item as typeof LAYOUT_SECTIONS[number]) && requested.indexOf(item) === index);
+  return [...selected, ...LAYOUT_SECTIONS.filter(item => !selected.includes(item))];
+}
+
 function serializeSong(song: typeof songs.$inferSelect, versions: Array<typeof songVersions.$inferSelect>) {
   return {
     id: song.id,
@@ -73,6 +86,7 @@ function serializeSong(song: typeof songs.$inferSelect, versions: Array<typeof s
     metadataStatus: song.metadataStatus,
     metadataScore: song.metadataScore,
     metadataIssues: Array.isArray(song.metadataIssues) ? song.metadataIssues : [],
+    sortOrder: song.sortOrder,
     reviewedAt: song.reviewedAt?.toISOString() || "",
     artworkUrl: song.artworkUrl || "",
     artworkUploadedAt: song.artworkUploadedAt?.toISOString() || "",
@@ -91,6 +105,7 @@ function serializeSong(song: typeof songs.$inferSelect, versions: Array<typeof s
       cleanLyrics: version.cleanLyrics,
       saleEnabled: version.saleEnabled,
       notes: version.notes,
+      sortOrder: version.sortOrder,
       artworkUrl: version.artworkUrl || "",
       artworkUploadedAt: version.artworkUploadedAt?.toISOString() || "",
     })),
@@ -101,14 +116,19 @@ function serializeSong(song: typeof songs.$inferSelect, versions: Array<typeof s
 async function loadCatalog(ownerMemberId: string) {
   const songRows = await db.select().from(songs)
     .where(and(eq(songs.ownerMemberId, ownerMemberId), eq(songs.status, "active")))
-    .orderBy(desc(songs.updatedAt));
+    .orderBy(asc(songs.sortOrder), desc(songs.updatedAt));
   const ids = songRows.map(song => song.id);
   const versionRows = ids.length
-    ? await db.select().from(songVersions).where(and(inArray(songVersions.songId, ids), eq(songVersions.status, "active"))).orderBy(desc(songVersions.updatedAt))
+    ? await db.select().from(songVersions).where(and(inArray(songVersions.songId, ids), eq(songVersions.status, "active"))).orderBy(asc(songVersions.sortOrder), desc(songVersions.updatedAt))
     : [];
   const versionsBySong = new Map<string, Array<typeof songVersions.$inferSelect>>();
   versionRows.forEach(version => versionsBySong.set(version.songId, [...(versionsBySong.get(version.songId) || []), version]));
   return songRows.map(song => serializeSong(song, versionsBySong.get(song.id) || []));
+}
+
+async function loadLayout(ownerMemberId: string) {
+  const [layout] = await db.select().from(catalogLayouts).where(eq(catalogLayouts.ownerMemberId, ownerMemberId)).limit(1);
+  return cleanSectionOrder(layout?.sectionOrder);
 }
 
 async function loadProducer(nativeDb: Awaited<ReturnType<typeof getDatabase>>, ownerMemberId: string) {
@@ -229,9 +249,9 @@ export async function runDreamweaverReview(songId: string, ownerMemberId: string
 }
 
 async function createDefaultVersions(songId: string) {
-  await db.insert(songVersions).values((Object.entries(VERSION_ROUTES) as Array<[VersionType, typeof VERSION_ROUTES[VersionType]]>).map(([versionType, route]) => ({
+  await db.insert(songVersions).values((Object.entries(VERSION_ROUTES) as Array<[VersionType, typeof VERSION_ROUTES[VersionType]]>).map(([versionType, route], sortOrder) => ({
     id: randomUUID(), songId, versionType, label: route.label, destination: route.destination,
-    targetLufs: route.targetLufs, saleEnabled: route.saleEnabled, cleanLyrics: versionType === "clean",
+    targetLufs: route.targetLufs, saleEnabled: route.saleEnabled, cleanLyrics: versionType === "clean", sortOrder,
   })));
 }
 
@@ -240,6 +260,7 @@ async function createSong(ownerMemberId: string, payload: Record<string, unknown
   const title = cleanText(payload.title, 160);
   if (!artistName || !title) return json({ message: "Add the artist and song title" }, 400);
   const id = randomUUID();
+  const [position] = await db.select({ value: max(songs.sortOrder) }).from(songs).where(and(eq(songs.ownerMemberId, ownerMemberId), eq(songs.status, "active")));
   await db.insert(songs).values({
     id, ownerMemberId, artistName, title,
     albumTitle: cleanText(payload.albumTitle, 160), genre: cleanText(payload.genre, 80),
@@ -247,7 +268,7 @@ async function createSong(ownerMemberId: string, payload: Record<string, unknown
     rightsStatus: cleanEnum(payload.rightsStatus, RIGHTS_STATUSES, "needs_review"),
     saleStatus: cleanEnum(payload.saleStatus, SALE_STATUSES, "for_sale"),
     salePriceCents: Math.max(0, Math.min(10_000_000, Number.parseInt(String(payload.salePriceCents || "0"), 10) || 0)) || null,
-    explicitLyrics: payload.explicitLyrics === true, notes: cleanText(payload.notes, 4000),
+    explicitLyrics: payload.explicitLyrics === true, notes: cleanText(payload.notes, 4000), sortOrder: Number(position?.value ?? -1) + 1,
   });
   await createDefaultVersions(id);
   await runDreamweaverReview(id, ownerMemberId);
@@ -294,6 +315,78 @@ async function saveVersion(ownerMemberId: string, payload: Record<string, unknow
   return json({ message: "Version routed and Dream Weaver reviewed the song", songId });
 }
 
+async function createVersion(ownerMemberId: string, payload: Record<string, unknown>) {
+  const songId = cleanId(payload.songId);
+  const [ownedSong] = await db.select({ id: songs.id }).from(songs).where(and(eq(songs.id, songId), eq(songs.ownerMemberId, ownerMemberId), eq(songs.status, "active"))).limit(1);
+  if (!ownedSong) return json({ message: "Choose a valid song" }, 400);
+  const versionType = cleanVersionType(payload.versionType);
+  const route = VERSION_ROUTES[versionType];
+  const [position] = await db.select({ value: max(songVersions.sortOrder) }).from(songVersions).where(and(eq(songVersions.songId, songId), eq(songVersions.status, "active")));
+  const versionId = randomUUID();
+  await db.insert(songVersions).values({
+    id: versionId, songId, versionType, label: cleanText(payload.label, 100) || route.label,
+    destination: route.destination, targetLufs: route.targetLufs, saleEnabled: route.saleEnabled,
+    cleanLyrics: versionType === "clean", sortOrder: Number(position?.value ?? -1) + 1,
+  });
+  await runDreamweaverReview(songId, ownerMemberId);
+  return json({ message: "Version added and ready for audio", songId, versionId }, 201);
+}
+
+async function archiveVersion(ownerMemberId: string, payload: Record<string, unknown>) {
+  const songId = cleanId(payload.songId);
+  const versionId = cleanId(payload.versionId);
+  const [ownedSong] = await db.select({ id: songs.id }).from(songs).where(and(eq(songs.id, songId), eq(songs.ownerMemberId, ownerMemberId), eq(songs.status, "active"))).limit(1);
+  if (!ownedSong || !versionId) return json({ message: "Choose a valid song version" }, 400);
+  const rows = await db.update(songVersions).set({ status: "archived", updatedAt: new Date() })
+    .where(and(eq(songVersions.id, versionId), eq(songVersions.songId, songId), eq(songVersions.status, "active"))).returning({ id: songVersions.id });
+  if (!rows.length) return json({ message: "That version was not found" }, 404);
+  await runDreamweaverReview(songId, ownerMemberId);
+  return json({ message: "Version removed from the active catalog", songId });
+}
+
+async function archiveSong(ownerMemberId: string, payload: Record<string, unknown>) {
+  const songId = cleanId(payload.songId);
+  if (!songId) return json({ message: "Choose a valid song" }, 400);
+  const rows = await db.update(songs).set({ status: "archived", updatedAt: new Date() })
+    .where(and(eq(songs.id, songId), eq(songs.ownerMemberId, ownerMemberId), eq(songs.status, "active"))).returning({ id: songs.id });
+  if (!rows.length) return json({ message: "That song was not found" }, 404);
+  return json({ message: "Song removed from the active catalog", songId });
+}
+
+async function reorderSongs(ownerMemberId: string, payload: Record<string, unknown>) {
+  const songIds = cleanIdList(payload.songIds);
+  if (!songIds.length) return json({ message: "Choose songs to reorder" }, 400);
+  const owned = await db.select({ id: songs.id }).from(songs).where(and(eq(songs.ownerMemberId, ownerMemberId), eq(songs.status, "active")));
+  if (owned.length !== songIds.length || owned.some(song => !songIds.includes(song.id))) return json({ message: "Refresh the catalog before reordering songs" }, 409);
+  await db.transaction(async transaction => {
+    for (const [sortOrder, songId] of songIds.entries()) await transaction.update(songs).set({ sortOrder, updatedAt: new Date() }).where(eq(songs.id, songId));
+  });
+  return json({ message: "Song order saved", songIds });
+}
+
+async function reorderVersions(ownerMemberId: string, payload: Record<string, unknown>) {
+  const songId = cleanId(payload.songId);
+  const versionIds = cleanIdList(payload.versionIds, 100);
+  if (!songId || !versionIds.length) return json({ message: "Choose versions to reorder" }, 400);
+  const [ownedSong] = await db.select({ id: songs.id }).from(songs).where(and(eq(songs.id, songId), eq(songs.ownerMemberId, ownerMemberId), eq(songs.status, "active"))).limit(1);
+  if (!ownedSong) return json({ message: "That song was not found" }, 404);
+  const owned = await db.select({ id: songVersions.id }).from(songVersions).where(and(eq(songVersions.songId, songId), eq(songVersions.status, "active")));
+  if (owned.length !== versionIds.length || owned.some(version => !versionIds.includes(version.id))) return json({ message: "Refresh the song before reordering versions" }, 409);
+  await db.transaction(async transaction => {
+    for (const [sortOrder, versionId] of versionIds.entries()) await transaction.update(songVersions).set({ sortOrder, updatedAt: new Date() }).where(eq(songVersions.id, versionId));
+  });
+  return json({ message: "Version order saved", songId, versionIds });
+}
+
+async function saveLayout(ownerMemberId: string, payload: Record<string, unknown>) {
+  const sectionOrder = cleanSectionOrder(payload.sectionOrder);
+  await db.insert(catalogLayouts).values({ ownerMemberId, sectionOrder, updatedAt: new Date() }).onConflictDoUpdate({
+    target: catalogLayouts.ownerMemberId,
+    set: { sectionOrder, updatedAt: new Date() },
+  });
+  return json({ message: "Page layout saved", layout: sectionOrder });
+}
+
 async function importExisting(nativeDb: Awaited<ReturnType<typeof getDatabase>>, ownerMemberId: string, includeLegacyReleases = false) {
   const releases = includeLegacyReleases
     ? await nativeDb.sql`
@@ -311,6 +404,8 @@ async function importExisting(nativeDb: Awaited<ReturnType<typeof getDatabase>>,
         LIMIT 300
       `;
   let imported = 0;
+  const [position] = await db.select({ value: max(songs.sortOrder) }).from(songs).where(and(eq(songs.ownerMemberId, ownerMemberId), eq(songs.status, "active")));
+  let nextSortOrder = Number(position?.value ?? -1) + 1;
   for (const release of releases) {
     const existing = await db.select({ id: songs.id }).from(songs).where(and(eq(songs.ownerMemberId, ownerMemberId), eq(songs.sourceReleaseId, release.id))).limit(1);
     if (existing.length) continue;
@@ -318,11 +413,12 @@ async function importExisting(nativeDb: Awaited<ReturnType<typeof getDatabase>>,
     await db.insert(songs).values({
       id, ownerMemberId, sourceReleaseId: release.id, artistName: release.artist, title: release.title,
       genre: Array.isArray(release.genres) ? release.genres[0] || "" : "",
-      explicitLyrics: release.content_rating === "explicit", saleStatus: "for_sale",
+      explicitLyrics: release.content_rating === "explicit", saleStatus: "for_sale", sortOrder: nextSortOrder,
     });
     await createDefaultVersions(id);
     await runDreamweaverReview(id, ownerMemberId);
     imported += 1;
+    nextSortOrder += 1;
   }
   const message = imported
     ? `${imported} existing song${imported === 1 ? "" : "s"} loaded into the catalog`
@@ -337,8 +433,8 @@ export default async function songCatalogHandler(request: Request) {
     if (!user?.id) return request.method === "GET" ? json({ authenticated: false, songs: [] }) : json({ message: "Join or sign in to manage the song catalog" }, 401);
     const membership = await ensureMembership(nativeDb, user);
     if (request.method === "GET") {
-      const [catalog, producer] = await Promise.all([loadCatalog(membership.member_id), loadProducer(nativeDb, membership.member_id)]);
-      return json({ authenticated: true, viewer: { name: membership.display_name }, songs: catalog, producer });
+      const [catalog, producer, layout] = await Promise.all([loadCatalog(membership.member_id), loadProducer(nativeDb, membership.member_id), loadLayout(membership.member_id)]);
+      return json({ authenticated: true, viewer: { name: membership.display_name }, songs: catalog, producer, layout });
     }
 
     try { verifyRequestOrigin(request); } catch { return json({ message: "Cross-origin catalog actions are not accepted" }, 403); }
@@ -348,6 +444,12 @@ export default async function songCatalogHandler(request: Request) {
     if (payload.action === "create_song") return createSong(membership.member_id, payload);
     if (payload.action === "save_song") return saveSong(membership.member_id, payload);
     if (payload.action === "save_version") return saveVersion(membership.member_id, payload);
+    if (payload.action === "create_version") return createVersion(membership.member_id, payload);
+    if (payload.action === "archive_version") return archiveVersion(membership.member_id, payload);
+    if (payload.action === "archive_song") return archiveSong(membership.member_id, payload);
+    if (payload.action === "reorder_songs") return reorderSongs(membership.member_id, payload);
+    if (payload.action === "reorder_versions") return reorderVersions(membership.member_id, payload);
+    if (payload.action === "save_layout") return saveLayout(membership.member_id, payload);
     if (payload.action === "import_existing") {
       const includeLegacyReleases = membership.tier === "founder" || membership.source === "owner";
       return importExisting(nativeDb, membership.member_id, includeLegacyReleases);

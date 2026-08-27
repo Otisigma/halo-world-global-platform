@@ -735,7 +735,9 @@
     heroRecord.classList.remove("is-playing");
     document.querySelector("#dockToggle").classList.add("is-paused");
   });
-  audio.addEventListener("timeupdate", () => {
+  let preloadEl = null;
+  let playlistTransitioning = false;
+  audio.addEventListener("timeupdate", async () => {
     const playlistOffset = state.playlist.slice(0, state.playlistIndex).reduce((total, item) => total + Number(item.playSeconds || 0), 0);
     const playlistDuration = state.playlist.length ? Number(state.activeMix?.durationSeconds || 0) : 0;
     const elapsed = playlistDuration ? playlistOffset + audio.currentTime : audio.currentTime;
@@ -743,10 +745,42 @@
     const progress = duration ? (elapsed / duration) * 100 : 0;
     document.querySelector("#dockProgress").style.width = `${progress}%`;
     document.querySelector("#dockTime").textContent = `${formatDuration(elapsed)} / ${formatDuration(duration)}`;
+    if (!state.playlist.length || state.playlistIndex >= state.playlist.length - 1) return;
+    const item = state.playlist[state.playlistIndex];
+    const playSeconds = Number(item.playSeconds || 0);
+    if (!playSeconds) return;
+    // Start preloading the next track ~20 s before the boundary so the browser
+    // has time to buffer it before we switch src.
+    const nextItem = state.playlist[state.playlistIndex + 1];
+    if (nextItem && !preloadEl && audio.currentTime >= playSeconds - 20) {
+      preloadEl = new Audio();
+      preloadEl.preload = "auto";
+      preloadEl.src = nextItem.audioUrl;
+    }
+    // Advance the playlist exactly at the playSeconds boundary (no gap).
+    // Guard prevents re-entry on subsequent timeupdate events before src changes.
+    if (!playlistTransitioning && audio.currentTime >= playSeconds) {
+      playlistTransitioning = true;
+      state.playlistIndex += 1;
+      const upcoming = state.playlist[state.playlistIndex];
+      preloadEl = null;
+      audio.src = upcoming.audioUrl;
+      await audio.play().catch(() => {});
+      playlistTransitioning = false;
+    }
+  });
+  audio.addEventListener("waiting", () => {
+    document.querySelector("#dockCreator").textContent = "Buffering…";
+  });
+  audio.addEventListener("playing", () => {
+    const mix = state.activeMix;
+    if (mix) document.querySelector("#dockCreator").textContent = mix.creator?.name || "DJ HALO X";
   });
   audio.addEventListener("ended", async () => {
+    // Fallback: no playSeconds boundary was hit (non-playlist or last item).
     if (!state.playlist.length || state.playlistIndex >= state.playlist.length - 1) return;
     state.playlistIndex += 1;
+    preloadEl = null;
     audio.src = state.playlist[state.playlistIndex].audioUrl;
     await audio.play().catch(() => {});
   });

@@ -3489,6 +3489,16 @@
       updateRangeFill(slider);
       updateDeck(deckId);
       showToast(`Loaded to deck ${deckId}`, `${track.title} by ${track.artist} is ready from ${track.platform || "your library"}.`);
+      // Pre-decode the audio buffer in the background so the first play is
+      // instantaneous and hard-cut transitions have no decode gap.
+      const asset = deckState[deckId].audioAsset;
+      if (asset?.file && !asset.buffer && !asset.promise && audioEngine.context) {
+        asset.promise = asset.file.arrayBuffer()
+          .then(buffer => audioEngine.context.decodeAudioData(buffer))
+          .then(buffer => { asset.buffer = buffer; return buffer; })
+          .catch(() => null)
+          .finally(() => { asset.promise = null; });
+      }
       window.haloStats?.track("load_track", { deck: deckId, source_type: track.platform || "library" });
     }
 
@@ -4356,13 +4366,18 @@
           deckState[incomingDeck].playing = true;
           try {
             if (plan.hardCut) {
+              // Start the incoming deck first so its buffer is decoded and the
+              // AudioBufferSourceNode is already running before we silence the
+              // outgoing deck.  Stopping outgoing *after* avoids any gap.
+              setStemState(incomingDeck, "vocals", true, true);
+              await startDeckAudio(incomingDeck);
+              setAutomatedCrossfader(targetValue);
               deckState[outgoingDeck].playing = false;
               stopDeckAudio(outgoingDeck);
               updateDeck(outgoingDeck);
-              setAutomatedCrossfader(targetValue);
-              setStemState(incomingDeck, "vocals", true, true);
+            } else {
+              await startDeckAudio(incomingDeck);
             }
-            await startDeckAudio(incomingDeck);
           } catch (error) {
             deckState[incomingDeck].playing = false;
             stopDeckAudio(incomingDeck);

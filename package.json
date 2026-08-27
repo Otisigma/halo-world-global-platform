@@ -6,12 +6,13 @@
     "@netlify/blobs": "^10.7.12",
     "@netlify/identity": "^1.2.0",
     "drizzle-orm": "^1.0.0-beta.22",
-    "openai": "^7.4.0"
+    "openai": "^7.6.0"
   },
   "peerDependencies": {
     "@netlify/database": "^1.1.0"
   },
   "devDependencies": {
+    "@netlify/database": "^1.1.0",
     "drizzle-kit": "^1.0.0-beta.22"
   }
 }

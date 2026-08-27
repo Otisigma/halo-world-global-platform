@@ -23,6 +23,21 @@ const [page, client, styles, api, audioApi, artworkApi, producerApi, producerLib
   read("package.json")
 ]);
 const packageJson = JSON.parse(packageText);
+const namedInteractiveControls = [...page.matchAll(/<(button|form|input)\b([^>]*)>/g)]
+  .map(([, tag, attributes]) => ({
+    tag,
+    id: attributes.match(/\bid="([^"]+)"/)?.[1] || "",
+    type: attributes.match(/\btype="([^"]+)"/)?.[1] || "",
+  }))
+  .filter(control => control.id && (control.tag === "button" || control.tag === "form" || control.type === "file"));
+const unboundControls = namedInteractiveControls.filter(control => !client.includes(`$("#${control.id}").addEventListener`));
+const catalogEndpoints = [
+  ["/api/song-catalog", 'path: "/api/song-catalog"', api],
+  ["/api/song-catalog/audio", 'path: "/api/song-catalog/audio"', audioApi],
+  ["/api/song-catalog/artwork", 'path: "/api/song-catalog/artwork"', artworkApi],
+  ["/api/song-catalog/producer", 'path: "/api/song-catalog/producer"', producerApi],
+];
+const disconnectedEndpoints = catalogEndpoints.filter(([endpoint, route, source]) => !client.includes(endpoint) || !source.includes(route));
 
 const checks = [
   [page.includes("One song · every useful version") && page.includes("Radio mastering queue"), "ships a unified catalog and dedicated broadcast queue"],
@@ -34,6 +49,9 @@ const checks = [
   [api.includes("halo_release_campaigns") && api.includes("import_existing"), "loads songs already present in the HALO release catalog"],
   [api.includes("owner_member_id IS NULL") && api.includes('membership.tier === "founder"'), "lets founders load legacy releases without exposing them to other members"],
   [page.includes('id="audioFile"') && client.includes("AUDIO_CHUNK_BYTES") && client.includes("finalize_upload"), "uploads full song-version audio in browser-safe chunks"],
+  [client.includes('$("#uploadAudioButton").addEventListener("click",uploadVersionAudio)'), "connects the Upload selected audio button to the audio uploader"],
+  [unboundControls.length === 0, `binds every named catalog control${unboundControls.length ? ` (missing: ${unboundControls.map(control => control.id).join(", ")})` : ""}`],
+  [disconnectedEndpoints.length === 0, `connects every catalog client endpoint to a deployed function route${disconnectedEndpoints.length ? ` (missing: ${disconnectedEndpoints.map(([endpoint]) => endpoint).join(", ")})` : ""}`],
   [client.includes("setUploadBusy") && client.includes('aria-busy') && styles.includes("uploadSweep") && page.includes("upload-action-button"), "shows a consistent accessible animation while every catalog upload is running"],
   [audioApi.includes('getStore({ name: "halo-song-catalog-audio"') && audioApi.includes("verifyRequestOrigin") && audioApi.includes("ownedVersion"), "stores private audio in Netlify Blobs with ownership and origin checks"],
   [audioApi.includes("function getAudioStore()") && !audioApi.includes("const audioStore = getStore"), "creates fresh audio Blob clients so warm functions do not reuse expired tokens"],
@@ -43,10 +61,12 @@ const checks = [
   [schema.includes("audioBlobPrefix") && schema.includes("audioChunkCount") && audioMigration.includes('ADD COLUMN "audio_blob_prefix"'), "tracks uploaded audio storage and playback details in the database"],
   [page.includes("Dreamweaver production team") && client.includes("queue_catalog_producer") && client.includes("projectedMonthlyNetCents"), "adds an artist-approved album, mix, and vault packaging room"],
   [producerApi.includes("background: true") && producerApi.includes("runCatalogProducer"), "runs catalog packaging without blocking the browser"],
+  [client.includes('if(!response.ok)throw new Error("The catalog producer could not start")'), "surfaces background producer link failures instead of silently ignoring them"],
   [producerLib.includes("halo_release_campaign_events") && producerLib.includes("engagement_then_readiness") && producerLib.includes("Complete Catalog Vault"), "uses audience signals and catalog readiness to create product proposals"],
   [schema.includes("halo_catalog_packages") && schema.includes("halo_catalog_package_tracks") && producerMigration.includes("halo_catalog_producer_jobs"), "persists producer jobs, packages, pricing, and track lists in Netlify Database"],
   [packageJson.peerDependencies?.["@netlify/database"] && !packageJson.dependencies?.["@netlify/database"], "keeps the database SDK installed without repeating preview branch provisioning"],
   [styles.includes("@media(max-width:720px)") && styles.includes("prefers-reduced-motion:reduce"), "provides a responsive catalog layout with reduced-motion support"],
+  [page.includes("song-catalog.js?v=") && page.includes("song-catalog.css?v="), "cache-busts catalog assets so control fixes reach browsers immediately"],
   [config.includes('from = "/song-catalog"') && home.includes('href="/song-catalog/"'), "makes the catalog discoverable and normalizes its route"],
   [artworkApi.includes('getStore({ name: "halo-song-catalog-artwork"') && artworkApi.includes("verifyRequestOrigin") && artworkApi.includes("ownedSong"), "stores private artwork in Netlify Blobs with ownership and origin checks"],
   [artworkApi.includes("function getArtworkStore()") && !artworkApi.includes("const artworkStore = getStore"), "creates fresh artwork Blob clients so warm functions do not reuse expired tokens"],

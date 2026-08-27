@@ -294,14 +294,22 @@ async function saveVersion(ownerMemberId: string, payload: Record<string, unknow
   return json({ message: "Version routed and Dream Weaver reviewed the song", songId });
 }
 
-async function importExisting(nativeDb: Awaited<ReturnType<typeof getDatabase>>, ownerMemberId: string) {
-  const releases = await nativeDb.sql`
-    SELECT id, title, artist, genres, content_rating
-    FROM halo_release_campaigns
-    WHERE owner_member_id = ${ownerMemberId} AND status <> 'archived'
-    ORDER BY updated_at DESC
-    LIMIT 300
-  `;
+async function importExisting(nativeDb: Awaited<ReturnType<typeof getDatabase>>, ownerMemberId: string, includeLegacyReleases = false) {
+  const releases = includeLegacyReleases
+    ? await nativeDb.sql`
+        SELECT id, title, artist, genres, content_rating
+        FROM halo_release_campaigns
+        WHERE (owner_member_id = ${ownerMemberId} OR owner_member_id IS NULL) AND status <> 'archived'
+        ORDER BY updated_at DESC
+        LIMIT 300
+      `
+    : await nativeDb.sql`
+        SELECT id, title, artist, genres, content_rating
+        FROM halo_release_campaigns
+        WHERE owner_member_id = ${ownerMemberId} AND status <> 'archived'
+        ORDER BY updated_at DESC
+        LIMIT 300
+      `;
   let imported = 0;
   for (const release of releases) {
     const existing = await db.select({ id: songs.id }).from(songs).where(and(eq(songs.ownerMemberId, ownerMemberId), eq(songs.sourceReleaseId, release.id))).limit(1);
@@ -316,7 +324,10 @@ async function importExisting(nativeDb: Awaited<ReturnType<typeof getDatabase>>,
     await runDreamweaverReview(id, ownerMemberId);
     imported += 1;
   }
-  return json({ message: imported ? `${imported} existing song${imported === 1 ? "" : "s"} loaded into the catalog` : "Every existing song is already loaded", imported });
+  const message = imported
+    ? `${imported} existing song${imported === 1 ? "" : "s"} loaded into the catalog`
+    : releases.length ? "Every existing song is already loaded" : "No HALO releases are available to load yet";
+  return json({ message, imported });
 }
 
 export default async function songCatalogHandler(request: Request) {
@@ -337,7 +348,10 @@ export default async function songCatalogHandler(request: Request) {
     if (payload.action === "create_song") return createSong(membership.member_id, payload);
     if (payload.action === "save_song") return saveSong(membership.member_id, payload);
     if (payload.action === "save_version") return saveVersion(membership.member_id, payload);
-    if (payload.action === "import_existing") return importExisting(nativeDb, membership.member_id);
+    if (payload.action === "import_existing") {
+      const includeLegacyReleases = membership.tier === "founder" || membership.source === "owner";
+      return importExisting(nativeDb, membership.member_id, includeLegacyReleases);
+    }
     if (payload.action === "queue_catalog_producer") return queueProducer(nativeDb, membership.member_id);
     if (payload.action === "set_package_status") return updatePackageStatus(nativeDb, membership.member_id, payload);
     if (payload.action === "review_song") {

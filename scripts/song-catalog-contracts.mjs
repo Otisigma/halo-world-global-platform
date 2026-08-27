@@ -32,6 +32,7 @@ const checks = [
   [api.includes("runDreamweaverReview") && api.includes("radio_master") && api.includes("rightsStatus"), "runs Dream Weaver metadata, rights, sale, and radio checks"],
   [api.includes("verifyRequestOrigin") && api.includes("ensureMembership") && api.includes('path: "/api/song-catalog"'), "protects catalog records with membership and origin checks"],
   [api.includes("halo_release_campaigns") && api.includes("import_existing"), "loads songs already present in the HALO release catalog"],
+  [api.includes("owner_member_id IS NULL") && api.includes('membership.tier === "founder"'), "lets founders load legacy releases without exposing them to other members"],
   [page.includes('id="audioFile"') && client.includes("AUDIO_CHUNK_BYTES") && client.includes("finalize_upload"), "uploads full song-version audio in browser-safe chunks"],
   [audioApi.includes('getStore({ name: "halo-song-catalog-audio"') && audioApi.includes("verifyRequestOrigin") && audioApi.includes("ownedVersion"), "stores private audio in Netlify Blobs with ownership and origin checks"],
   [audioApi.includes("requestedByteRange") && audioApi.includes('path: "/api/song-catalog/audio"'), "serves uploaded audio with private range playback"],

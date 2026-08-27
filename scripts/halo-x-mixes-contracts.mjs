@@ -48,7 +48,7 @@ const checks = [
   [deck.includes('{ id: "mixOperations", label: "Mix operations rack" }') && deck.includes('id="packageFocusMode"') && deck.includes("[elements.focusMode, elements.packageFocusMode]"), "keeps the rack collapsible and recoverable from desk-only mode on every screen size"],
   [api.includes('payload.action === "delete"') && api.includes("DELETE FROM halo_mixes") && api.includes("member_id = ${membership.member_id}"), "deletes only the owning artist's mix from the database"],
   [api.includes("deleteMix") && api.includes("audioStore.delete"), "cleans up blob audio when a mix is deleted"],
-  [script.includes("deleteMix") && script.includes('action: "delete"') && script.includes("data-delete-mix"), "exposes a delete-upload button and handler for each mix in the quality queue"],
+  [script.includes("deleteMix") && script.includes('action: "delete"') && script.includes("data-delete-mix") && script.includes("cycle.isOwner"), "exposes a delete-upload button and handler only for the artist's own mixes in the quality queue"],
   [deck.includes("removed.vaultPackId") && deck.includes("archiveStemPack(removed.vaultPackId)"), "archives a stem vault pack from the server when the artist deletes it from the DJ library"]
 ];
 

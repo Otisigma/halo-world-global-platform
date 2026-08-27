@@ -432,7 +432,7 @@ async function deleteMix(payload, db, user) {
   try {
     const { blob_key: blobPrefix } = deleted[0];
     const [masterBlobs, originalBlobs] = await Promise.all([
-      audioStore.list({ prefix: `${blobPrefix}` }),
+      audioStore.list({ prefix: blobPrefix }),
       audioStore.list({ prefix: blobPrefix.replace("/master/parts/", "/original/parts/") })
     ]);
     await Promise.all([

@@ -396,7 +396,7 @@
         <div class="quality-metrics"><span>${cycle.overallScore === null ? "No combined score" : `${cycle.overallScore}/100 advisory`}</span><span>${cycle.scoredAreaCount} scored</span><span>${cycle.abstainedAreaCount} passes excluded</span><span>${cycle.blockerCount} context blockers</span></div>
         ${reviews ? `<ul class="area-review-list">${reviews}</ul>` : ""}
         ${cycle.finalSummary ? `<p class="quality-final"><strong>Whole-picture decision:</strong> ${escapeHtml(cycle.finalSummary)}</p>` : ""}
-        <div class="quality-card-actions"><button type="button" data-review-listen="${escapeHtml(cycle.id)}">Listen</button>${state.canReview ? `<button type="button" data-select-review="${escapeHtml(cycle.id)}">Review this mix</button>` : `<button type="button" class="danger-action" data-delete-mix="${escapeHtml(cycle.mixId)}">Delete upload</button>`}</div>
+        <div class="quality-card-actions"><button type="button" data-review-listen="${escapeHtml(cycle.id)}">Listen</button>${state.canReview ? `<button type="button" data-select-review="${escapeHtml(cycle.id)}">Review this mix</button>` : ""}${cycle.isOwner ? `<button type="button" class="danger-action" data-delete-mix="${escapeHtml(cycle.mixId)}">Delete upload</button>` : ""}</div>
       </article>`;
     }).join("");
     if (state.canReview) {

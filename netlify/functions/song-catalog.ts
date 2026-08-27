@@ -313,7 +313,7 @@ async function saveVersion(ownerMemberId: string, payload: Record<string, unknow
 
 async function importExisting(nativeDb: Awaited<ReturnType<typeof getDatabase>>, ownerMemberId: string) {
   const releases = await nativeDb.sql`
-    SELECT release.id, release.title, release.artist, release.genres, release.content_rating
+    SELECT DISTINCT release.id, release.title, release.artist, release.genres, release.content_rating
     FROM halo_release_campaigns release
     LEFT JOIN halo_artist_pages page ON page.slug = release.artist_slug
     WHERE release.status <> 'archived'

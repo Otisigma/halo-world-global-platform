@@ -27,6 +27,8 @@ const checks = [
   [page.includes('id="mixUploadForm"') && page.includes('name="productionRoute"') && page.includes('name="rightsAttested"'), "provides a designated authenticated creator upload desk"],
   [page.includes('name="clientSaleEnabled" type="checkbox"') && !page.includes('name="clientSaleEnabled" type="checkbox" checked'), "keeps ordinary uploads available without forcing paid-edition requirements"],
   [script.includes('uploadSource: "creator_desk"') && script.includes("clientSaleEnabled") && script.includes("audioDuration"), "uploads creator audio with sales and production choices"],
+  [script.includes("uploadAudioAsset(file, \"master\", progress =>") && script.includes("mixUploadProgress.firstElementChild.style.width"), "keeps the DJ upload desk progress bar live while chunks upload"],
+  [script.includes("data-delete-mix") && script.includes("deleteMix(") && api.includes('payload.action === "delete"') && api.includes("DELETE FROM halo_mixes") && api.includes("member_id = ${membership.member_id}"), "allows only the owning artist to delete uploaded mixes and stored audio"],
   [script.includes('"audio/mp3": "audio/mpeg"') && script.includes('"video/mp4": "audio/mp4"') && api.includes("normalizeAudioContentType"), "normalizes browser-specific audio MIME types on both sides of the upload"],
   [script.includes("salesStatus") && script.includes("data-mix-artwork") && script.includes("renderEdition"), "keeps remix artwork visible and reflects the mastering and rights gate"],
   [api.includes("halo_mix_release_plans") && api.includes("salesPageUrl") && api.includes('uploadSource === "creator_desk"'), "creates the remix mastering brief and stable sales-page handoff automatically"],

@@ -79,6 +79,31 @@
     }
   }
 
+  async function deleteMix(mixId, title = "this mix") {
+    if (!window.confirm(`Delete “${title}” and its uploaded audio permanently?`)) return;
+    mixUploadStatus.textContent = "Deleting mix upload…";
+    try {
+      const response = await fetch("/api/mixes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify({ action: "delete", mixId })
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.message || "The mix could not be deleted.");
+      mixUploadStatus.textContent = data.message || "Mix upload deleted.";
+      if (state.activeMix?.id === mixId) {
+        audio.pause();
+        audio.removeAttribute("src");
+        state.activeMix = null;
+      }
+      await loadData();
+      await loadReviewData();
+    } catch (error) {
+      mixUploadStatus.textContent = error.message || "The mix could not be deleted.";
+    }
+  }
+
   function safeVisualUrl(value) {
     try {
       const url = new URL(value, location.origin);
@@ -282,7 +307,7 @@
         <h3>${escapeHtml(mix.title)}</h3>
         <p>${escapeHtml(mix.description || "A full-length HALO room session, left intact from first transition to final handoff.")}</p>
         ${mix.hasOriginalComparison ? `<div class="mix-version-compare"><span>Hear the difference</span><div><button type="button" data-compare-version="original" data-compare-index="${index}">Original</button><button type="button" data-compare-version="mastered" data-compare-index="${index}">Mastered remix</button></div><small>Switches at the same timestamp for a direct A/B check.</small></div>` : ""}
-        <footer><span>${escapeHtml(mix.credits?.originalArtist || mix.creator?.name || "Owen Anthony")} · ${escapeHtml(mix.credits?.remixer || "DJ HALO X")}<br>${escapeHtml(mixMeta(mix))}</span><span class="mix-card-actions">${mix.salesPageUrl ? `<a href="${escapeHtml(mix.salesPageUrl)}">Sales page</a>` : ""}<button class="mix-play" type="button" data-mix-index="${index}" aria-label="${mix.source === "youtube" ? "Watch" : "Play"} ${escapeHtml(mix.title)}"></button></span></footer>
+        <footer><span>${escapeHtml(mix.credits?.originalArtist || mix.creator?.name || "Owen Anthony")} · ${escapeHtml(mix.credits?.remixer || "DJ HALO X")}<br>${escapeHtml(mixMeta(mix))}</span><span class="mix-card-actions">${mix.salesPageUrl ? `<a href="${escapeHtml(mix.salesPageUrl)}">Sales page</a>` : ""}${mix.isOwner ? `<button class="mix-delete" type="button" data-delete-mix="${escapeHtml(mix.id)}" data-delete-title="${escapeHtml(mix.title)}">Delete</button>` : ""}<button class="mix-play" type="button" data-mix-index="${index}" aria-label="${mix.source === "youtube" ? "Watch" : "Play"} ${escapeHtml(mix.title)}"></button></span></footer>
       </article>`;
     }).join("");
     bindArtworkFallbacks(mixRail);
@@ -464,7 +489,7 @@
     return "audio/mpeg";
   }
 
-  async function uploadAudioAsset(file, assetRole) {
+  async function uploadAudioAsset(file, assetRole, onProgress = () => {}) {
     const chunkSize = 3.5 * 1024 * 1024;
     const chunkCount = Math.ceil(file.size / chunkSize);
     if (file.size > 128 * 1024 * 1024 || chunkCount > 64) throw new Error(`Keep the ${assetRole === "original" ? "original version" : "uploaded mix"} under 128 MB.`);
@@ -482,6 +507,7 @@
       const chunkResponse = await fetch("/api/mixes", { method: "POST", body, credentials: "same-origin" });
       const chunkData = await chunkResponse.json().catch(() => ({}));
       if (!chunkResponse.ok) throw new Error(chunkData.message || "The audio upload stopped early.");
+      onProgress((chunkIndex + 1) / chunkCount);
     }
     return { uploadId, chunkCount, byteSize: file.size, contentType, durationSeconds: await audioDuration(file) };
   }
@@ -498,9 +524,13 @@
     mixUploadProgress.hidden = false;
     mixUploadStatus.textContent = "Preparing the upload…";
     try {
-      const masterUpload = await uploadAudioAsset(file, "master");
-      mixUploadProgress.firstElementChild.style.width = originalFile ? "48%" : "82%";
-      const originalUpload = originalFile ? await uploadAudioAsset(originalFile, "original") : null;
+      const masterUpload = await uploadAudioAsset(file, "master", progress => {
+        const weighted = originalFile ? progress * 48 : progress * 82;
+        mixUploadProgress.firstElementChild.style.width = `${weighted}%`;
+      });
+      const originalUpload = originalFile ? await uploadAudioAsset(originalFile, "original", progress => {
+        mixUploadProgress.firstElementChild.style.width = `${48 + progress * 34}%`;
+      }) : null;
       if (originalUpload) mixUploadProgress.firstElementChild.style.width = "82%";
       const fields = Object.fromEntries(new FormData(mixUploadForm).entries());
       delete fields.mixFile;
@@ -661,6 +691,11 @@
     const compareButton = event.target.closest("[data-compare-version]");
     if (compareButton) {
       switchMixVersion(state.mixes[Number(compareButton.dataset.compareIndex)], compareButton.dataset.compareVersion);
+      return;
+    }
+    const deleteButton = event.target.closest("[data-delete-mix]");
+    if (deleteButton) {
+      deleteMix(deleteButton.dataset.deleteMix, deleteButton.dataset.deleteTitle);
       return;
     }
     const button = event.target.closest("[data-mix-index]");

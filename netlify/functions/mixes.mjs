@@ -417,6 +417,28 @@ async function finalizeMix(payload, db, user) {
   }, 201);
 }
 
+async function removeUpload(prefix) {
+  if (!prefix) return;
+  const stored = await audioStore.list({ prefix });
+  await Promise.all(stored.blobs.map(blob => audioStore.delete(blob.key)));
+}
+
+async function deleteMixUpload(payload, db, membership) {
+  const mixId = cleanText(payload.mixId, 80);
+  if (!mixId) return json({ message: "Choose a mix first" }, 400);
+  const deleted = await db.sql`
+    DELETE FROM halo_mixes
+    WHERE id = ${mixId} AND member_id = ${membership.member_id}
+    RETURNING blob_key, original_blob_key
+  `;
+  if (!deleted.length) return json({ message: "That mix was not found or does not belong to you" }, 404);
+  await Promise.all([
+    removeUpload(deleted[0].blob_key).catch(() => undefined),
+    removeUpload(deleted[0].original_blob_key).catch(() => undefined)
+  ]);
+  return json({ message: "Mix upload deleted" });
+}
+
 async function updatePlaylist(request, db, user) {
   let payload;
   try {
@@ -426,6 +448,7 @@ async function updatePlaylist(request, db, user) {
   }
   if (payload.action === "publish") return finalizeMix(payload, db, user);
   const membership = await ensureMembership(db, user);
+  if (payload.action === "delete") return deleteMixUpload(payload, db, membership);
   const mixId = cleanText(payload.mixId, 80);
   if (!mixId) return json({ message: "Choose a mix first" }, 400);
   const mixRows = await db.sql`SELECT id FROM halo_mixes WHERE id = ${mixId} AND (visibility = 'room' OR member_id = ${membership.member_id})`;

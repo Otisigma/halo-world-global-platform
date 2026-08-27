@@ -38,6 +38,7 @@
     radioSendForm: document.getElementById("radioSendForm"),
     radioSendMessage: document.getElementById("radioSendMessage"),
     radioUploadProgress: document.getElementById("radioUploadProgress"),
+    radioDeleteButton: document.getElementById("radioDeleteButton"),
     auth: document.getElementById("authDialog"),
     authForm: document.getElementById("authForm"),
     authNameField: document.getElementById("authNameField"),
@@ -465,6 +466,7 @@
       : state.releaseAudioVersions.length
         ? "Choose a linked Track Vault version or upload a new one for this exact promo card."
         : "Upload the first broadcast-ready version for this exact promo card.";
+    elements.radioDeleteButton.hidden = !state.radioSubmission?.id;
     elements.radioSend.showModal();
     acknowledgeRadioUpdate();
     versionSelect.focus();
@@ -545,6 +547,7 @@
       elements.radioSendMessage.textContent = "Save this release card once before sending its audio to radio.";
       return;
     }
+
     if (audioVersionId) {
       button.disabled = true;
       try {
@@ -568,12 +571,14 @@
       } finally {
         button.disabled = false;
       }
+
       return;
     }
     if (!file) {
       elements.radioSendMessage.textContent = "Choose a stored version or upload a broadcast-ready audio file.";
       return;
     }
+
     if (file.size > 128 * 1024 * 1024) {
       elements.radioSendMessage.textContent = "Choose an audio file smaller than 128 MB.";
       return;
@@ -640,6 +645,30 @@
     } finally {
       button.disabled = false;
       setTimeout(() => { elements.radioUploadProgress.hidden = true; progressBar.style.width = "0%"; }, 1800);
+    }
+  }
+
+  async function deleteRadioUpload() {
+    if (!state.canEdit || !state.radioSubmission?.id) return;
+    if (!window.confirm(`Delete “${state.radioSubmission.title}” from HALO Radio submissions?`)) return;
+    elements.radioDeleteButton.disabled = true;
+    try {
+      const response = await fetch("/api/radio/submissions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify({ action: "delete", trackId: state.radioSubmission.id })
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.message || "The upload could not be deleted.");
+      elements.radioSendMessage.textContent = data.message || "Upload deleted.";
+      showToast(data.message || "Upload deleted.");
+      await loadPage();
+      setTimeout(() => elements.radioSend.close(), 1000);
+    } catch (error) {
+      elements.radioSendMessage.textContent = error instanceof Error ? error.message : "The upload could not be deleted.";
+    } finally {
+      elements.radioDeleteButton.disabled = false;
     }
   }
 
@@ -922,6 +951,7 @@
   elements.studioForm.addEventListener("submit", saveArtistPage);
   elements.authForm.addEventListener("submit", submitAuth);
   elements.radioSendForm.addEventListener("submit", submitToRadio);
+  elements.radioDeleteButton.addEventListener("click", deleteRadioUpload);
   elements.radioSendForm.elements.audioVersionId.addEventListener("change", updateRadioAudioSource);
   elements.radioSendForm.elements.trackFile.addEventListener("change", event => {
     document.getElementById("radioFileLabel").textContent = event.target.files[0]?.name || "Choose the broadcast-ready audio";

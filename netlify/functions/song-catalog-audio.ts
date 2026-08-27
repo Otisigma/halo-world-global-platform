@@ -152,6 +152,25 @@ async function finalizeUpload(payload: Record<string, unknown>, db: Awaited<Retu
   return json({ message: "Audio uploaded, routed, and checked by Dream Weaver", songId, versionId, audioUrl });
 }
 
+async function deleteUpload(payload: Record<string, unknown>, db: Awaited<ReturnType<typeof getDatabase>>, ownerMemberId: string) {
+  const songId = cleanId(payload.songId);
+  const versionId = cleanId(payload.versionId);
+  if (!songId || !versionId) return json({ message: "Choose the song version audio to remove" }, 400);
+  const version = await ownedVersion(db, ownerMemberId, versionId, songId);
+  if (!version) return json({ message: "That song version was not found" }, 404);
+  const prefix = String(version.audio_blob_prefix || "");
+  if (!prefix) return json({ message: "No uploaded audio was found for this version" }, 404);
+  await db.sql`
+    UPDATE halo_song_versions
+    SET audio_url = '', audio_blob_prefix = '', audio_chunk_count = 0,
+      audio_content_type = '', audio_byte_size = 0, audio_filename = '', duration_seconds = 0, updated_at = NOW()
+    WHERE id = ${versionId}
+  `;
+  await removeUpload(prefix).catch(() => undefined);
+  await runDreamweaverReview(songId, ownerMemberId);
+  return json({ message: "Uploaded audio removed", songId, versionId });
+}
+
 async function readAudioRange(version: Record<string, unknown>, range: { start: number; end: number }) {
   const chunkCount = Number(version.audio_chunk_count || 0);
   const prefix = String(version.audio_blob_prefix || "");
@@ -220,13 +239,18 @@ async function serveAudio(request: Request, db: Awaited<ReturnType<typeof getDat
 }
 
 export default async function songCatalogAudioHandler(request: Request) {
-  if (!["GET", "HEAD", "POST"].includes(request.method)) return json({ message: "Method not allowed" }, 405, { Allow: "GET, HEAD, POST" });
+  if (!["GET", "HEAD", "POST", "DELETE"].includes(request.method)) return json({ message: "Method not allowed" }, 405, { Allow: "GET, HEAD, POST, DELETE" });
   try {
     const [db, user] = await Promise.all([getDatabase(), getUser()]);
     if (!user?.id) return json({ message: "Join or sign in to use song audio" }, 401);
     const membership = await ensureMembership(db, user);
     if (["GET", "HEAD"].includes(request.method)) return serveAudio(request, db, membership.member_id);
     try { verifyRequestOrigin(request); } catch { return json({ message: "Cross-origin audio uploads are not accepted" }, 403); }
+    if (request.method === "DELETE") {
+      const payload = await request.json().catch(() => null) as Record<string, unknown> | null;
+      if (!payload) return json({ message: "Choose a supported audio action" }, 400);
+      return deleteUpload(payload, db, membership.member_id);
+    }
     const contentType = request.headers.get("content-type") || "";
     if (contentType.includes("multipart/form-data")) return uploadChunk(request, db, membership.member_id);
     const payload = await request.json().catch(() => null) as Record<string, unknown> | null;

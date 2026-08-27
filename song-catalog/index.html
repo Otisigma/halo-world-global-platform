@@ -71,6 +71,7 @@
                 <button class="quiet-button" id="uploadArtworkButton" type="button">Upload artwork</button>
                 <button class="quiet-button artwork-delete-button" id="deleteArtworkButton" type="button" hidden>Remove artwork</button>
               </div>
+              <div class="upload-progress-track" id="artworkUploadTrack" hidden aria-hidden="true"><span class="upload-progress-fill"></span></div>
               <p class="artwork-upload-progress" id="artworkUploadProgress" role="status">No file selected.</p>
             </div>
           </section>
@@ -151,9 +152,13 @@
         <section class="wide-field audio-upload-panel" aria-labelledby="audioUploadHeading">
           <div><span class="field-label" id="audioUploadHeading">Upload this version</span><strong>Drop in the actual master.</strong><p>MP3, M4A, AAC, OGG, WebM, WAV, or FLAC · 128 MB maximum.</p></div>
           <label class="audio-file-picker"><span>Choose audio file</span><input id="audioFile" type="file" accept="audio/*,.mp3,.m4a,.aac,.ogg,.webm,.wav,.flac"></label>
+        <div class="audio-upload-actions">
           <button class="quiet-button" id="uploadAudioButton" type="button">Upload selected audio</button>
-          <p class="audio-upload-progress" id="audioUploadProgress" role="status">No file selected.</p>
-          <audio id="audioPreview" controls preload="metadata" hidden></audio>
+          <button class="quiet-button artwork-delete-button" id="deleteVersionAudioButton" type="button" hidden>Remove audio</button>
+        </div>
+        <div class="upload-progress-track" id="audioUploadTrack" hidden aria-hidden="true"><span class="upload-progress-fill"></span></div>
+        <p class="audio-upload-progress" id="audioUploadProgress" role="status">No file selected.</p>
+        <audio id="audioPreview" controls preload="metadata" hidden></audio>
         </section>
         <label class="wide-field"><span>External audio source link (optional)</span><input id="audioUrl" type="url" placeholder="https://secure-audio-location.example/song.wav"></label>
         <section class="wide-field version-artwork-panel" aria-labelledby="versionArtworkHeading">
@@ -167,6 +172,7 @@
               <button class="quiet-button" id="uploadVersionArtworkButton" type="button">Upload version artwork</button>
               <button class="quiet-button artwork-delete-button" id="deleteVersionArtworkButton" type="button" hidden>Remove version artwork</button>
             </div>
+            <div class="upload-progress-track" id="versionArtworkTrack" hidden aria-hidden="true"><span class="upload-progress-fill"></span></div>
             <p class="artwork-upload-progress" id="versionArtworkProgress" role="status">No version artwork uploaded. Uses the song cover by default.</p>
           </div>
         </section>
@@ -182,6 +188,7 @@
   </dialog>
 
   <script type="module" src="/identity.js"></script>
+  <script src="/upload-progress.js" defer></script>
   <script type="module" src="/song-catalog/song-catalog.js"></script>
 </body>
 </html>

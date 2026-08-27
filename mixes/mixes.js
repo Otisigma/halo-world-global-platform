@@ -555,7 +555,7 @@
   async function deleteMix(mixId) {
     const mix = state.mixes.find(item => item.id === mixId);
     if (!mix?.isOwner || !window.confirm(`Delete “${mix.title}” and its stored audio permanently?`)) return;
-    mixUploadStatus.textContent = "Deleting mix upload…";
+    mixUploadUi.start("Deleting mix upload…");
     const response = await fetch("/api/mixes", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -564,7 +564,7 @@
     });
     const data = await response.json().catch(() => ({}));
     if (!response.ok) {
-      mixUploadStatus.textContent = data.message || "The mix could not be deleted.";
+      mixUploadUi.fail(data.message || "The mix could not be deleted.");
       return;
     }
     if (state.activeMix?.id === mixId) {
@@ -577,7 +577,7 @@
       state.playlistIndex = 0;
     }
     if (state.selectedMix?.id === mixId) state.selectedMix = null;
-    mixUploadStatus.textContent = data.message || "Mix deleted.";
+    mixUploadUi.success(data.message || "Mix deleted.", true);
     await loadData();
   }
 

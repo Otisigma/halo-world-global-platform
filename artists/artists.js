@@ -596,7 +596,7 @@
           return body;
         },
         onProgress(percent) {
-          radioUploadUi.progress(percent * 0.82 / 100 * 100, `Transmitting audio ${Math.round(percent)}% · ${file.name}`);
+          radioUploadUi.progress(percent * 0.82, `Transmitting audio ${Math.round(percent)}% · ${file.name}`);
         }
       });
       const fields = Object.fromEntries(new FormData(form).entries());

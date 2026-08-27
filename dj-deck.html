@@ -31,7 +31,6 @@
   <link rel="stylesheet" href="/mobile-navigation.css">
   <script src="/mobile-navigation.js" defer></script>
   <script type="module" src="/identity.js"></script>
-  <script src="/upload-progress.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=DM+Mono:wght@300;400;500&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -1556,6 +1555,7 @@
 
   <div class="toast" id="toast" role="status" aria-live="polite"><strong id="toastTitle">System</strong><p id="toastMessage">Ready.</p></div>
 
+  <script src="/upload-progress.js"></script>
   <script>
     const TRACK_DNA_DEFAULTS = { danceability: 6, emotionalIntensity: 5, darkness: 5, warmth: 5, vocalDensity: 4, percussionDensity: 6, bassWeight: 6, melodicDensity: 5, atmosphere: 6, energyRole: "builder", sonicWeather: "Balanced, groove-led and open enough for a patient blend.", signatureMoment: "Protect the central hook before opening the next phrase." };
     const tracks = [
@@ -4683,10 +4683,11 @@
           window.setTimeout(() => window.location.assign(data.salesPageUrl), 700);
         }
       } catch (error) {
+        const errorMessage = error.message || "The mix could not be posted. Your download is still safe.";
         elements.postMix.disabled = false;
         elements.postMix.textContent = elements.mixVisibility.value === "room" ? "Post to room" : "Save privately";
-        mixReleaseUi.fail(error.message || "The mix could not be posted. Your download is still safe.");
-        showToast("Mix not posted", elements.mixReleaseStatus.textContent);
+        mixReleaseUi.fail(errorMessage);
+        showToast("Mix not posted", errorMessage);
       }
     }
 

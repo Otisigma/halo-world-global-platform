@@ -68,6 +68,7 @@
       const xhr=new XMLHttpRequest();
       xhr.open(method,url,true);
       if(credentials==="include")xhr.withCredentials=true;
+      if(credentials==="omit")xhr.withCredentials=false;
       Object.entries(headers).forEach(([key,value])=>{if(value!=null)xhr.setRequestHeader(key,String(value));});
       xhr.upload.onprogress=event=>{
         if(event.lengthComputable&&event.total>0)onProgress(event.loaded/event.total,event);

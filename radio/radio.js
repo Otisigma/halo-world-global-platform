@@ -2358,7 +2358,7 @@ async function submitTrack(event) {
         return body;
       },
       onProgress(percent) {
-        submissionUploadUi.progress(percent * 0.82 / 100 * 100, `Transmitting audio ${Math.round(percent)}% · ${file.name}`);
+        submissionUploadUi.progress(percent * 0.82, `Transmitting audio ${Math.round(percent)}% · ${file.name}`);
       }
     });
     const durationSeconds = await audioDuration(file);

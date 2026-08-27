@@ -19,6 +19,7 @@ export const songs = pgTable("halo_song_catalog", {
   metadataStatus: text("metadata_status").notNull().default("needs_review"),
   metadataScore: integer("metadata_score").notNull().default(0),
   metadataIssues: jsonb("metadata_issues").notNull().default([]),
+  sortOrder: integer("sort_order").notNull().default(0),
   artworkUrl: text("artwork_url"),
   artworkUploadedAt: timestamp("artwork_uploaded_at", { withTimezone: true }),
   reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
@@ -50,6 +51,7 @@ export const songVersions = pgTable("halo_song_versions", {
   cleanLyrics: boolean("clean_lyrics").notNull().default(false),
   saleEnabled: boolean("sale_enabled").notNull().default(false),
   notes: text("notes").notNull().default(""),
+  sortOrder: integer("sort_order").notNull().default(0),
   artworkUrl: text("artwork_url"),
   artworkUploadedAt: timestamp("artwork_uploaded_at", { withTimezone: true }),
   artworkBlobPrefix: text("artwork_blob_prefix"),
@@ -126,3 +128,9 @@ export const catalogPackageTracks = pgTable("halo_catalog_package_tracks", {
   uniqueIndex("halo_catalog_package_tracks_position_unique").on(table.packageId, table.position),
   uniqueIndex("halo_catalog_package_tracks_song_unique").on(table.packageId, table.songId),
 ]);
+
+export const catalogLayouts = pgTable("halo_catalog_layouts", {
+  ownerMemberId: text("owner_member_id").primaryKey(),
+  sectionOrder: jsonb("section_order").notNull().default(["summary", "catalog", "producer", "radio"]),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});

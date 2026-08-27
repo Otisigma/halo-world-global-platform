@@ -4,7 +4,9 @@ import { getUser, verifyRequestOrigin } from "@netlify/identity";
 import { cleanText, ensureMembership } from "../lib/halo-x.mjs";
 import { runDreamweaverReview } from "./song-catalog.js";
 
-const audioStore = getStore({ name: "halo-song-catalog-audio", consistency: "strong" });
+function getAudioStore() {
+  return getStore({ name: "halo-song-catalog-audio", consistency: "strong" });
+}
 const ALLOWED_TYPES = new Set(["audio/mpeg", "audio/mp4", "audio/aac", "audio/ogg", "audio/webm", "audio/wav", "audio/x-wav", "audio/flac"]);
 const MAX_CHUNK_BYTES = 4 * 1024 * 1024;
 const MAX_UPLOAD_BYTES = 128 * 1024 * 1024;
@@ -111,14 +113,14 @@ async function uploadChunk(request: Request, db: Awaited<ReturnType<typeof getDa
   if (!contentType) return json({ message: "Upload an MP3, M4A, AAC, OGG, WebM, WAV, or FLAC audio file" }, 415);
   if (!(await ownedVersion(db, ownerMemberId, versionId, songId))) return json({ message: "That song version was not found" }, 404);
   const prefix = `${ownerMemberId}/${versionId}/${uploadId}/parts/`;
-  await audioStore.set(`${prefix}${String(chunkIndex).padStart(3, "0")}`, chunk);
+  await getAudioStore().set(`${prefix}${String(chunkIndex).padStart(3, "0")}`, chunk);
   return json({ message: "Audio chunk uploaded", chunkIndex });
 }
 
 async function removeUpload(prefix: string) {
   if (!prefix) return;
-  const stored = await audioStore.list({ prefix });
-  await Promise.all(stored.blobs.map(blob => audioStore.delete(blob.key)));
+  const stored = await getAudioStore().list({ prefix });
+  await Promise.all(stored.blobs.map(blob => getAudioStore().delete(blob.key)));
 }
 
 async function finalizeUpload(payload: Record<string, unknown>, db: Awaited<ReturnType<typeof getDatabase>>, ownerMemberId: string) {
@@ -135,7 +137,7 @@ async function finalizeUpload(payload: Record<string, unknown>, db: Awaited<Retu
   const version = await ownedVersion(db, ownerMemberId, versionId, songId);
   if (!version) return json({ message: "That song version was not found" }, 404);
   const prefix = `${ownerMemberId}/${versionId}/${uploadId}/parts/`;
-  const stored = await audioStore.list({ prefix });
+  const stored = await getAudioStore().list({ prefix });
   if (stored.blobs.length !== chunkCount) return json({ message: "The audio upload is incomplete. Try it again." }, 409);
   const audioUrl = `/api/song-catalog/audio?versionId=${encodeURIComponent(versionId)}`;
   await db.sql`
@@ -155,7 +157,7 @@ async function finalizeUpload(payload: Record<string, unknown>, db: Awaited<Retu
 async function readAudioRange(version: Record<string, unknown>, range: { start: number; end: number }) {
   const chunkCount = Number(version.audio_chunk_count || 0);
   const prefix = String(version.audio_blob_prefix || "");
-  const firstPart = await audioStore.get(`${prefix}000`, { type: "arrayBuffer" });
+  const firstPart = await getAudioStore().get(`${prefix}000`, { type: "arrayBuffer" });
   if (!firstPart) throw new Error("Song audio chunk is missing");
   const chunkBytes = firstPart.byteLength;
   const firstChunk = Math.floor(range.start / chunkBytes);
@@ -163,7 +165,7 @@ async function readAudioRange(version: Record<string, unknown>, range: { start: 
   if (!chunkBytes || firstChunk >= chunkCount || lastChunk >= chunkCount) throw new Error("Song audio range is invalid");
   const chunks: Uint8Array[] = [];
   for (let index = firstChunk; index <= lastChunk; index += 1) {
-    const part = index === 0 ? firstPart : await audioStore.get(`${prefix}${String(index).padStart(3, "0")}`, { type: "arrayBuffer" });
+    const part = index === 0 ? firstPart : await getAudioStore().get(`${prefix}${String(index).padStart(3, "0")}`, { type: "arrayBuffer" });
     if (!part) throw new Error("Song audio chunk is missing");
     chunks.push(new Uint8Array(part));
   }
@@ -206,7 +208,7 @@ async function serveAudio(request: Request, db: Awaited<ReturnType<typeof getDat
     async start(controller) {
       try {
         for (let index = 0; index < chunkCount; index += 1) {
-          const part = await audioStore.get(`${prefix}${String(index).padStart(3, "0")}`, { type: "arrayBuffer" });
+          const part = await getAudioStore().get(`${prefix}${String(index).padStart(3, "0")}`, { type: "arrayBuffer" });
           if (!part) throw new Error("Song audio chunk is missing");
           controller.enqueue(new Uint8Array(part));
         }

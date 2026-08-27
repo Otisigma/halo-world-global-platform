@@ -396,7 +396,7 @@
         <div class="quality-metrics"><span>${cycle.overallScore === null ? "No combined score" : `${cycle.overallScore}/100 advisory`}</span><span>${cycle.scoredAreaCount} scored</span><span>${cycle.abstainedAreaCount} passes excluded</span><span>${cycle.blockerCount} context blockers</span></div>
         ${reviews ? `<ul class="area-review-list">${reviews}</ul>` : ""}
         ${cycle.finalSummary ? `<p class="quality-final"><strong>Whole-picture decision:</strong> ${escapeHtml(cycle.finalSummary)}</p>` : ""}
-        <div class="quality-card-actions"><button type="button" data-review-listen="${escapeHtml(cycle.id)}">Listen</button>${state.canReview ? `<button type="button" data-select-review="${escapeHtml(cycle.id)}">Review this mix</button>` : ""}</div>
+        <div class="quality-card-actions"><button type="button" data-review-listen="${escapeHtml(cycle.id)}">Listen</button>${state.canReview ? `<button type="button" data-select-review="${escapeHtml(cycle.id)}">Review this mix</button>` : `<button type="button" class="danger-action" data-delete-mix="${escapeHtml(cycle.mixId)}">Delete upload</button>`}</div>
       </article>`;
     }).join("");
     if (state.canReview) {
@@ -827,6 +827,25 @@
     state.reviewBreaks.splice(Number(button.dataset.removeBreak), 1);
     renderBreakList();
   });
+  async function deleteMix(mixId, title) {
+    if (!window.confirm(`Delete "${title}" and its uploaded audio permanently? This cannot be undone.`)) return;
+    mixUploadStatus.textContent = "Deleting mix…";
+    try {
+      const response = await fetch("/api/mixes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify({ action: "delete", mixId })
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.message || "The mix could not be deleted.");
+      mixUploadStatus.textContent = data.message || "Mix deleted.";
+      await loadReviewData();
+    } catch (error) {
+      mixUploadStatus.textContent = error.message || "The mix could not be deleted.";
+    }
+  }
+
   qualityQueue.addEventListener("click", async event => {
     const selectButton = event.target.closest("[data-select-review]");
     if (selectButton) {
@@ -836,10 +855,15 @@
       return;
     }
     const listenButton = event.target.closest("[data-review-listen]");
-    if (!listenButton) return;
-    const cycle = state.reviewCycles.find(item => item.id === listenButton.dataset.reviewListen);
-    if (!cycle) return;
-    await playMix({ id: cycle.mixId, title: cycle.title, audioUrl: cycle.audioUrl, creator: { name: cycle.creatorName } });
+    if (listenButton) {
+      const cycle = state.reviewCycles.find(item => item.id === listenButton.dataset.reviewListen);
+      if (cycle) await playMix({ id: cycle.mixId, title: cycle.title, audioUrl: cycle.audioUrl, creator: { name: cycle.creatorName } });
+      return;
+    }
+    const deleteButton = event.target.closest("[data-delete-mix]");
+    if (!deleteButton) return;
+    const cycle = state.reviewCycles.find(item => item.mixId === deleteButton.dataset.deleteMix);
+    if (cycle) await deleteMix(cycle.mixId, cycle.title);
   });
   document.querySelectorAll("[data-final-decision]").forEach(button => button.addEventListener("click", async () => {
     const summary = document.querySelector("#finalReviewSummary").value.trim();

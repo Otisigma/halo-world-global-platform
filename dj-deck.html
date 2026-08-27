@@ -3520,6 +3520,7 @@
       recommendLocally();
       showToast("Track deleted", `${removed.title} was removed from this session library. Loaded deck copies remain safe.`);
       window.haloStats?.track("delete_track", { source_type: removed.platform || "library" });
+      if (removed.vaultPackId) archiveStemPack(removed.vaultPackId).catch(() => {});
     }
 
     function toggleQueue(trackId) {

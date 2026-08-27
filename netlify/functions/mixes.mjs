@@ -417,6 +417,36 @@ async function finalizeMix(payload, db, user) {
   }, 201);
 }
 
+async function deleteMix(payload, db, user) {
+  const membership = await ensureMembership(db, user);
+  const mixId = cleanText(payload.mixId, 80);
+  if (!mixId) return json({ message: "Choose a mix to delete" }, 400);
+
+  const deleted = await db.sql`
+    DELETE FROM halo_mixes
+    WHERE id = ${mixId} AND member_id = ${membership.member_id}
+    RETURNING blob_key, chunk_count
+  `;
+  if (!deleted.length) return json({ message: "That mix was not found or does not belong to you" }, 404);
+
+  try {
+    const { blob_key: blobPrefix } = deleted[0];
+    const [masterBlobs, originalBlobs] = await Promise.all([
+      audioStore.list({ prefix: `${blobPrefix}` }),
+      audioStore.list({ prefix: blobPrefix.replace("/master/parts/", "/original/parts/") })
+    ]);
+    await Promise.all([
+      ...masterBlobs.blobs.map(blob => audioStore.delete(blob.key)),
+      ...originalBlobs.blobs.map(blob => audioStore.delete(blob.key))
+    ]);
+    const artworkKey = blobPrefix.replace("/master/parts/", "/artwork");
+    await audioStore.delete(artworkKey).catch(() => {});
+  } catch (error) {
+    console.error("HALO mix audio cleanup failed", error instanceof Error ? error.message : "unknown error");
+  }
+  return json({ message: "Mix deleted" });
+}
+
 async function updatePlaylist(request, db, user) {
   let payload;
   try {
@@ -425,6 +455,7 @@ async function updatePlaylist(request, db, user) {
     return json({ message: "Request body must be valid JSON" }, 400);
   }
   if (payload.action === "publish") return finalizeMix(payload, db, user);
+  if (payload.action === "delete") return deleteMix(payload, db, user);
   const membership = await ensureMembership(db, user);
   const mixId = cleanText(payload.mixId, 80);
   if (!mixId) return json({ message: "Choose a mix first" }, 400);

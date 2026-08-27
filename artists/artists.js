@@ -20,6 +20,7 @@
       upcomingShows: []
     }
   };
+  const uploadHelper = window.HaloUploadProgress;
 
   const elements = {
     page: document.getElementById("artistPage"),
@@ -48,6 +49,7 @@
     authSubmit: document.getElementById("authSubmit"),
     toast: document.getElementById("toast")
   };
+  const radioUploadUi = uploadHelper.createUploadUi({ panel: elements.radioSendForm, status: elements.radioSendMessage, track: elements.radioUploadProgress, fill: elements.radioUploadProgress?.querySelector("span"), idleMessage: "Choose a stored version or upload a broadcast-ready audio file." });
 
   function escapeHtml(value) {
     return String(value || "").replace(/[&<>'"]/g, character => ({
@@ -519,18 +521,7 @@
   }
 
   async function uploadRadioChunk(body) {
-    let lastError;
-    for (let attempt = 1; attempt <= 3; attempt += 1) {
-      try {
-        const response = await fetch("/api/radio/submissions", { method: "POST", credentials: "same-origin", body });
-        if (response.ok || response.status < 500) return response;
-        lastError = new Error(`Upload service returned ${response.status}`);
-      } catch (error) {
-        lastError = error;
-      }
-      if (attempt < 3) await new Promise(resolve => setTimeout(resolve, attempt * 700));
-    }
-    throw lastError || new Error("The upload connection stopped. Please try again.");
+    return uploadHelper.sendFormDataWithRetry("/api/radio/submissions", body, { retryDelays: [700, 1400] });
   }
 
   async function submitToRadio(event) {
@@ -540,13 +531,13 @@
     const file = form.elements.trackFile.files[0];
     const audioVersionId = form.elements.audioVersionId.value;
     const button = form.querySelector("button[type=submit]");
-    const progressBar = elements.radioUploadProgress.querySelector("span");
     if (!state.page.releaseId) {
       elements.radioSendMessage.textContent = "Save this release card once before sending its audio to radio.";
       return;
     }
     if (audioVersionId) {
       button.disabled = true;
+      radioUploadUi.start("Linking saved HALO audio to radio…");
       try {
         const fields = Object.fromEntries(new FormData(form).entries());
         delete fields.trackFile;
@@ -558,15 +549,16 @@
         });
         const data = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(data.message || "Track submission failed");
-        elements.radioSendMessage.textContent = `${data.message}. The submission remains linked to this promo card.`;
+        radioUploadUi.success(`${data.message}. The submission remains linked to this promo card.`, false);
         showToast(data.message || "Linked version entered HALO Radio review.");
         form.reset();
         await loadPage();
         setTimeout(() => elements.radioSend.close(), 1200);
       } catch (error) {
-        elements.radioSendMessage.textContent = error instanceof Error ? error.message : "The linked version could not be submitted.";
+        radioUploadUi.fail(error instanceof Error ? error.message : "The linked version could not be submitted.");
       } finally {
         button.disabled = false;
+        setTimeout(() => radioUploadUi.idle("Choose a stored version or upload a broadcast-ready audio file."), 1800);
       }
       return;
     }
@@ -585,27 +577,31 @@
       return;
     }
     const chunkSize = 3 * 1024 * 1024;
-    const chunkCount = Math.ceil(file.size / chunkSize);
     const uploadId = crypto.randomUUID ? crypto.randomUUID() : `radio-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-    elements.radioUploadProgress.hidden = false;
-    progressBar.style.width = "0%";
     button.disabled = true;
+    radioUploadUi.start(`Transmitting audio 0% · ${file.name}`);
     try {
-      for (let index = 0; index < chunkCount; index += 1) {
-        elements.radioSendMessage.textContent = `Transmitting audio ${index + 1} of ${chunkCount}…`;
-        const body = new FormData();
-        body.append("chunk", file.slice(index * chunkSize, Math.min(file.size, (index + 1) * chunkSize), contentType), file.name);
-        body.append("uploadId", uploadId);
-        body.append("chunkIndex", String(index));
-        body.append("chunkCount", String(chunkCount));
-        body.append("contentType", contentType);
-        const response = await uploadRadioChunk(body);
-        const data = await response.json().catch(() => ({}));
-        if (!response.ok) throw new Error(data.message || "Audio transmission failed");
-        progressBar.style.width = `${(index + 1) / chunkCount * 82}%`;
-      }
+      const { chunkCount } = await uploadHelper.uploadChunkedFile({
+        url: "/api/radio/submissions",
+        file,
+        chunkSize,
+        retryDelays: [700, 1400],
+        buildBody({ chunkIndex, chunkCount, start, end }) {
+          const body = new FormData();
+          body.append("chunk", file.slice(start, end, contentType), file.name);
+          body.append("uploadId", uploadId);
+          body.append("chunkIndex", String(chunkIndex));
+          body.append("chunkCount", String(chunkCount));
+          body.append("contentType", contentType);
+          return body;
+        },
+        onProgress(percent) {
+          radioUploadUi.progress(percent * 0.82 / 100 * 100, `Transmitting audio ${Math.round(percent)}% · ${file.name}`);
+        }
+      });
       const fields = Object.fromEntries(new FormData(form).entries());
       delete fields.trackFile;
+      radioUploadUi.progress(92, "Saving the upload to Halo Radio…");
       const response = await fetch("/api/radio/submissions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -628,18 +624,17 @@
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data.message || "Track submission failed");
-      progressBar.style.width = "100%";
-      elements.radioSendMessage.textContent = `${data.message}. Your artist card is now linked to the station desk.`;
+      radioUploadUi.success(`${data.message}. Your artist card is now linked to the station desk.`, true);
       showToast(data.message || "Track entered HALO Radio review.");
       form.reset();
       document.getElementById("radioFileLabel").textContent = "Choose the broadcast-ready audio";
       await loadPage();
       setTimeout(() => elements.radioSend.close(), 1200);
     } catch (error) {
-      elements.radioSendMessage.textContent = error instanceof Error ? error.message : "The track could not be transmitted.";
+      radioUploadUi.fail(error instanceof Error ? error.message : "The track could not be transmitted.");
     } finally {
       button.disabled = false;
-      setTimeout(() => { elements.radioUploadProgress.hidden = true; progressBar.style.width = "0%"; }, 1800);
+      setTimeout(() => radioUploadUi.idle("Choose a stored version or upload a broadcast-ready audio file."), 1800);
     }
   }
 

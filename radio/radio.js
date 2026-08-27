@@ -106,10 +106,15 @@ const nextMixButton = document.querySelector("#nextMixButton");
 const transitionSeconds = document.querySelector("#transitionSeconds");
 const transitionMode = document.querySelector("#transitionMode");
 const transitionReadout = document.querySelector("#transitionReadout");
+const uploadHelper = window.HaloUploadProgress;
 const bulkUploadForm = document.querySelector("#bulkUploadForm");
 const bulkUploadProgress = document.querySelector("#bulkUploadProgress");
 const bulkFileList = document.querySelector("#bulkFileList");
 const submissionForm = document.querySelector("#submissionForm");
+const submissionNotice = document.querySelector("#submissionNotice");
+const bulkUploadNotice = document.querySelector("#bulkUploadNotice");
+const submissionUploadUi = uploadHelper.createUploadUi({ panel: submissionForm, status: submissionNotice, track: document.querySelector("#uploadProgress"), fill: document.querySelector("#uploadProgress span"), idleMessage: "Sign in before transmitting your track." });
+const bulkUploadUi = uploadHelper.createUploadUi({ panel: bulkUploadForm, status: bulkUploadNotice, track: bulkUploadProgress, fill: bulkUploadProgress?.querySelector("span"), idleMessage: "Use the station desk to send a batch into rotation review." });
 const submissionRelease = document.querySelector("#submissionRelease");
 const submissionAudioVersion = document.querySelector("#submissionAudioVersion");
 const submissionLinkedTrack = document.querySelector("#submissionLinkedTrack");
@@ -2242,20 +2247,25 @@ function validateAudioFile(file) {
 async function uploadRadioFile(file, fields, onProgress = () => {}) {
   const contentType = validateAudioFile(file);
   const chunkSize = 3 * 1024 * 1024;
-  const chunkCount = Math.ceil(file.size / chunkSize);
   const uploadId = crypto.randomUUID ? crypto.randomUUID() : `radio-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-  for (let index = 0; index < chunkCount; index += 1) {
-    const body = new FormData();
-    body.append("chunk", file.slice(index * chunkSize, Math.min(file.size, (index + 1) * chunkSize), contentType), file.name);
-    body.append("uploadId", uploadId);
-    body.append("chunkIndex", String(index));
-    body.append("chunkCount", String(chunkCount));
-    body.append("contentType", contentType);
-    const response = await uploadRequest(body);
-    const data = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(data.message || `Audio transmission failed for ${file.name}`);
-    onProgress((index + 1) / chunkCount * 0.82);
-  }
+  const { chunkCount } = await uploadHelper.uploadChunkedFile({
+    url: "/api/radio/submissions",
+    file,
+    chunkSize,
+    retryDelays: [700, 1400],
+    buildBody({ chunkIndex, chunkCount, start, end }) {
+      const body = new FormData();
+      body.append("chunk", file.slice(start, end, contentType), file.name);
+      body.append("uploadId", uploadId);
+      body.append("chunkIndex", String(chunkIndex));
+      body.append("chunkCount", String(chunkCount));
+      body.append("contentType", contentType);
+      return body;
+    },
+    onProgress(percent) {
+      onProgress(percent * 0.82 / 100);
+    }
+  });
   const durationSeconds = await audioDuration(file);
   const payload = {
     ...fields,
@@ -2280,18 +2290,7 @@ async function uploadRadioFile(file, fields, onProgress = () => {}) {
 }
 
 async function uploadRequest(body) {
-  let lastError;
-  for (let attempt = 1; attempt <= 3; attempt += 1) {
-    try {
-      const response = await fetch("/api/radio/submissions", { method: "POST", credentials: "same-origin", body });
-      if (response.ok || response.status < 500) return response;
-      lastError = new Error(`Upload service returned ${response.status}`);
-    } catch (error) {
-      lastError = error;
-    }
-    if (attempt < 3) await new Promise(resolve => setTimeout(resolve, attempt * 700));
-  }
-  throw lastError || new Error("The upload connection stopped. Please try again.");
+  return uploadHelper.sendFormDataWithRetry("/api/radio/submissions", body, { retryDelays: [700, 1400] });
 }
 
 async function submitTrack(event) {
@@ -2300,20 +2299,17 @@ async function submitTrack(event) {
   const form = event.currentTarget;
   const file = form.elements.trackFile.files[0];
   const savedAudioVersionId = form.elements.audioVersionId.value;
-  const notice = document.querySelector("#submissionNotice");
-  const progress = document.querySelector("#uploadProgress");
-  const progressBar = progress.querySelector("span");
   if (!file && !savedAudioVersionId) {
-    notice.textContent = "Choose an audio file or reuse a saved version from a past HALO song.";
+    submissionNotice.textContent = "Choose an audio file or reuse a saved version from a past HALO song.";
     return;
   }
   if (savedAudioVersionId && !form.elements.releaseId.value) {
-    notice.textContent = "Choose the past HALO song that owns this saved audio version.";
+    submissionNotice.textContent = "Choose the past HALO song that owns this saved audio version.";
     return;
   }
   if (savedAudioVersionId) {
     form.querySelector("button[type=submit]").disabled = true;
-    notice.textContent = "Connecting the saved audio to this room…";
+    submissionUploadUi.start("Connecting the saved audio to this room…");
     try {
       const payload = Object.fromEntries(new FormData(form).entries());
       delete payload.trackFile;
@@ -2327,41 +2323,44 @@ async function submitTrack(event) {
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data.message || "Saved audio submission failed");
-      notice.textContent = data.message;
+      submissionUploadUi.success(data.message, false);
       form.reset();
       officialSourceNotice.textContent = "The official link can load the next song’s title and artist.";
       await loadTracks();
       document.querySelector("#preview").scrollIntoView({ behavior: "smooth" });
     } catch (error) {
-      notice.textContent = error instanceof Error ? error.message : "The saved audio could not be submitted.";
+      submissionUploadUi.fail(error instanceof Error ? error.message : "The saved audio could not be submitted.");
     } finally {
       form.querySelector("button[type=submit]").disabled = false;
+      setTimeout(() => submissionUploadUi.idle(state.user ? "Ready to send your track into community review." : "Sign in before transmitting your track."), 1800);
     }
     return;
   }
-  if (file.size > 128 * 1024 * 1024) { notice.textContent = "Choose an audio file smaller than 128 MB."; return; }
+  if (file.size > 128 * 1024 * 1024) { submissionNotice.textContent = "Choose an audio file smaller than 128 MB."; return; }
   const contentType = audioContentType(file);
-  if (!contentType.startsWith("audio/")) { notice.textContent = "Choose an MP3, M4A, AAC, OGG, WAV, or FLAC audio file."; return; }
-  const chunkSize = 3 * 1024 * 1024;
-  const chunkCount = Math.ceil(file.size / chunkSize);
+  if (!contentType.startsWith("audio/")) { submissionNotice.textContent = "Choose an MP3, M4A, AAC, OGG, WAV, or FLAC audio file."; return; }
   const uploadId = crypto.randomUUID ? crypto.randomUUID() : `radio-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-  progress.hidden = false;
-  progressBar.style.width = "0%";
   form.querySelector("button[type=submit]").disabled = true;
+  submissionUploadUi.start(`Transmitting audio 0% · ${file.name}`);
   try {
-    for (let index = 0; index < chunkCount; index += 1) {
-      notice.textContent = `Transmitting audio ${index + 1} of ${chunkCount}…`;
-      const body = new FormData();
-      body.append("chunk", file.slice(index * chunkSize, Math.min(file.size, (index + 1) * chunkSize), contentType), file.name);
-      body.append("uploadId", uploadId);
-      body.append("chunkIndex", String(index));
-      body.append("chunkCount", String(chunkCount));
-      body.append("contentType", contentType);
-      const response = await uploadRequest(body);
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(data.message || "Audio transmission failed");
-      progressBar.style.width = `${(index + 1) / chunkCount * 82}%`;
-    }
+    const { chunkCount } = await uploadHelper.uploadChunkedFile({
+      url: "/api/radio/submissions",
+      file,
+      chunkSize: 3 * 1024 * 1024,
+      retryDelays: [700, 1400],
+      buildBody({ chunkIndex, chunkCount, start, end }) {
+        const body = new FormData();
+        body.append("chunk", file.slice(start, end, contentType), file.name);
+        body.append("uploadId", uploadId);
+        body.append("chunkIndex", String(chunkIndex));
+        body.append("chunkCount", String(chunkCount));
+        body.append("contentType", contentType);
+        return body;
+      },
+      onProgress(percent) {
+        submissionUploadUi.progress(percent * 0.82 / 100 * 100, `Transmitting audio ${Math.round(percent)}% · ${file.name}`);
+      }
+    });
     const durationSeconds = await audioDuration(file);
     const payload = Object.fromEntries(new FormData(form).entries());
     delete payload.trackFile;
@@ -2373,21 +2372,21 @@ async function submitTrack(event) {
     payload.fileName = file.name;
     payload.durationSeconds = durationSeconds;
     payload.rightsConfirmed = form.elements.rightsConfirmed.checked;
+    submissionUploadUi.progress(92, "Saving the upload to Halo Radio…");
     const response = await fetch("/api/radio/submissions", { method: "POST", headers: { "Content-Type": "application/json" }, credentials: "same-origin", body: JSON.stringify(payload) });
     const data = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(data.message || "Track submission failed");
-    progressBar.style.width = "100%";
-    notice.textContent = data.message;
+    submissionUploadUi.success(data.message, true);
     form.reset();
     document.querySelector("#fileLabel").textContent = "Drop a track or choose a file";
     officialSourceNotice.textContent = "The official link can load the next song’s title and artist.";
     await loadTracks();
     document.querySelector("#preview").scrollIntoView({ behavior: "smooth" });
   } catch (error) {
-    notice.textContent = error instanceof Error ? error.message : "The track could not be transmitted.";
+    submissionUploadUi.fail(error instanceof Error ? error.message : "The track could not be transmitted.");
   } finally {
     form.querySelector("button[type=submit]").disabled = false;
-    setTimeout(() => { progress.hidden = true; progressBar.style.width = "0%"; }, 1800);
+    setTimeout(() => submissionUploadUi.idle(state.user ? "Ready to send your track into community review." : "Sign in before transmitting your track."), 1800);
   }
 }
 
@@ -2405,15 +2404,12 @@ async function submitBulkTracks(event) {
   if (!state.canBulkUpload) return;
   const form = event.currentTarget;
   const files = [...form.elements.trackFiles.files].slice(0, 25);
-  const notice = document.querySelector("#bulkUploadNotice");
-  const progressBar = bulkUploadProgress.querySelector("span");
   const submitButton = form.querySelector("button[type=submit]");
   if (!files.length) return;
   const statuses = files.map(() => ({ label: "Waiting", state: "ready" }));
   renderBulkFiles(files, statuses);
-  bulkUploadProgress.hidden = false;
-  progressBar.style.width = "0%";
   submitButton.disabled = true;
+  bulkUploadUi.start(`Processing 0 of ${files.length} uploads…`);
   let completed = 0;
   let failed = 0;
   try {
@@ -2421,7 +2417,7 @@ async function submitBulkTracks(event) {
       const file = files[index];
       statuses[index] = { label: "Uploading and cataloging…", state: "working" };
       renderBulkFiles(files, statuses);
-      notice.textContent = `Processing ${index + 1} of ${files.length}: ${file.name}`;
+      bulkUploadUi.progress((index / files.length) * 100, `Processing ${index + 1} of ${files.length}: ${file.name}`);
       try {
         const result = await uploadRadioFile(file, {
           ownerBulk: true,
@@ -2430,7 +2426,7 @@ async function submitBulkTracks(event) {
           artist: form.elements.artist.value.trim(),
           room: form.elements.room.value
         }, fileProgress => {
-          progressBar.style.width = `${(index + fileProgress) / files.length * 100}%`;
+          bulkUploadUi.progress((index + fileProgress) / files.length * 100, `Processing ${index + 1} of ${files.length}: ${file.name}`);
         });
         completed += 1;
         statuses[index] = { label: result.track?.analysisStatus === "fallback" ? "On station · tag fallback" : "On station · AI cataloged", state: "complete" };
@@ -2440,8 +2436,7 @@ async function submitBulkTracks(event) {
       }
       renderBulkFiles(files, statuses);
     }
-    progressBar.style.width = "100%";
-    notice.textContent = failed ? `${completed} tracks completed and ${failed} need attention.` : `${completed} tracks are cataloged and ready on Halo Radio.`;
+    bulkUploadUi[failed ? "fail" : "success"](failed ? `${completed} tracks completed and ${failed} need attention.` : `${completed} tracks are cataloged and ready on Halo Radio.`, true);
     if (!failed) {
       form.reset();
       document.querySelector("#bulkFileLabel").textContent = "Drop an album, EP, or track batch";
@@ -2450,7 +2445,7 @@ async function submitBulkTracks(event) {
     if (completed) document.querySelector("#preview").scrollIntoView({ behavior: "smooth" });
   } finally {
     submitButton.disabled = false;
-    setTimeout(() => { bulkUploadProgress.hidden = true; progressBar.style.width = "0%"; }, 2200);
+    setTimeout(() => bulkUploadUi.idle("Use the station desk to send a batch into rotation review."), 2200);
   }
 }
 

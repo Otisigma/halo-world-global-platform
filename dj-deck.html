@@ -31,6 +31,7 @@
   <link rel="stylesheet" href="/mobile-navigation.css">
   <script src="/mobile-navigation.js" defer></script>
   <script type="module" src="/identity.js"></script>
+  <script src="/upload-progress.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Archivo+Black&family=DM+Mono:wght@300;400;500&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -409,6 +410,8 @@
     .mix-action:hover { border-color: var(--acid); }
     .mix-action:disabled { cursor: wait; opacity: .5; }
     .mix-release-status { grid-column: 1 / -1; min-height: 14px; color: #8f998d; font: 400 8px "DM Mono", monospace; }
+    .upload-progress { grid-column: 1 / -1; height: 4px; overflow: hidden; background: rgba(255,255,255,.12); }
+    .upload-progress span { display: block; width: 0; height: 100%; background: linear-gradient(90deg, #71f79f, #00d1ff); transition: width .18s ease; }
 
     .workspace { display: grid; grid-template-columns: minmax(0, 1fr) 250px minmax(0, 1fr); gap: 12px; align-items: stretch; }
     .deck { position: relative; min-width: 0; overflow: hidden; background: linear-gradient(145deg, rgba(255,255,255,.035), transparent 32%), #111411; transition: opacity .2s, border-color .2s, transform .2s; box-shadow: inset 0 0 0 1px rgba(255,255,255,.025), 0 20px 55px rgba(0,0,0,.26); }
@@ -1103,6 +1106,7 @@
             <a class="mix-action" id="dreamweaverMix" href="/dreamweaver/">Build visual show</a>
             <button class="mix-action" id="newMix" type="button">Start another mix</button>
           </div>
+          <div class="upload-progress" id="mixReleaseProgress" hidden><span></span></div>
           <span class="mix-release-status" id="mixReleaseStatus" aria-live="polite">Your download stays available even after posting.</span>
         </form>
       </div>
@@ -1654,6 +1658,7 @@
       copyMixLink: document.querySelector("#copyMixLink"),
       dreamweaverMix: document.querySelector("#dreamweaverMix"),
       newMix: document.querySelector("#newMix"),
+      mixReleaseProgress: document.querySelector("#mixReleaseProgress"),
       mixReleaseStatus: document.querySelector("#mixReleaseStatus"),
       mixIntent: document.querySelector("#mixIntent"),
       analyzeSet: document.querySelector("#analyzeSet"),
@@ -1698,6 +1703,13 @@
       collectorBlueprint: document.querySelector("#collectorBlueprint"),
       collectorKitList: document.querySelector("#collectorKitList")
     };
+    const mixReleaseUi = window.HaloUploadProgress.createUploadUi({
+      panel: elements.mixReleaseForm,
+      status: elements.mixReleaseStatus,
+      track: elements.mixReleaseProgress,
+      fill: elements.mixReleaseProgress?.querySelector("span"),
+      idleMessage: "Your download stays available even after posting."
+    });
 
     let selectedImportDeck = "A";
     let pendingPlaybackDeck = null;
@@ -4616,27 +4628,30 @@
       }
       elements.postMix.disabled = true;
       elements.postMix.textContent = "Posting mix…";
-      elements.mixReleaseStatus.textContent = "Preparing the finished master for upload…";
+      mixReleaseUi.start("Preparing the finished master for upload…");
       try {
         const chunkSize = 3.5 * 1024 * 1024;
         const chunkCount = Math.ceil(recordingState.blob.size / chunkSize);
         if (chunkCount > 64) throw new Error("This recording is too large to post. Keep the download and create a shorter room edit.");
         const uploadId = crypto.randomUUID ? crypto.randomUUID() : `mix-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-        for (let chunkIndex = 0; chunkIndex < chunkCount; chunkIndex += 1) {
-          const start = chunkIndex * chunkSize;
-          const chunk = recordingState.blob.slice(start, Math.min(recordingState.blob.size, start + chunkSize), recordingState.blob.type);
-          const chunkForm = new FormData();
-          chunkForm.append("chunk", chunk, `part-${String(chunkIndex).padStart(3, "0")}`);
-          chunkForm.append("uploadId", uploadId);
-          chunkForm.append("chunkIndex", String(chunkIndex));
-          chunkForm.append("chunkCount", String(chunkCount));
-          chunkForm.append("contentType", recordingState.blob.type || "audio/webm");
-          elements.mixReleaseStatus.textContent = `Uploading mix ${chunkIndex + 1} of ${chunkCount}…`;
-          const chunkResponse = await fetch("/api/mixes", { method: "POST", body: chunkForm });
-          const chunkData = await chunkResponse.json();
-          if (!chunkResponse.ok) throw new Error(chunkData.message || "The mix upload stopped early.");
-        }
-        elements.mixReleaseStatus.textContent = "Publishing the mix to HALO…";
+        await window.HaloUploadProgress.uploadChunkedFile({
+          url: "/api/mixes",
+          file: recordingState.blob,
+          chunkSize,
+          buildBody({ chunkIndex, chunkCount, start, end }) {
+            const chunkForm = new FormData();
+            chunkForm.append("chunk", recordingState.blob.slice(start, end, recordingState.blob.type), `part-${String(chunkIndex).padStart(3, "0")}`);
+            chunkForm.append("uploadId", uploadId);
+            chunkForm.append("chunkIndex", String(chunkIndex));
+            chunkForm.append("chunkCount", String(chunkCount));
+            chunkForm.append("contentType", recordingState.blob.type || "audio/webm");
+            return chunkForm;
+          },
+          onProgress(percent) {
+            mixReleaseUi.progress(percent * 82 / 100, `Uploading mix ${Math.round(percent)}%…`);
+          }
+        });
+        mixReleaseUi.progress(92, "Publishing the mix to HALO…");
         const response = await fetch("/api/mixes", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -4660,7 +4675,7 @@
         elements.postMix.textContent = elements.mixVisibility.value === "room" ? "Posted to room" : "Saved privately";
         elements.playlistMix.disabled = false;
         elements.dreamweaverMix.href = `/dreamweaver/?mix=${encodeURIComponent(data.id)}`;
-        elements.mixReleaseStatus.textContent = data.message;
+        mixReleaseUi.success(data.message, true);
         showToast("Mix released", data.message);
         window.haloStats?.track("publish_finished_mix", { visibility: elements.mixVisibility.value, recorded_seconds: recordingState.durationSeconds });
         if (elements.mixVisibility.value === "room" && data.salesPageUrl) {
@@ -4670,7 +4685,7 @@
       } catch (error) {
         elements.postMix.disabled = false;
         elements.postMix.textContent = elements.mixVisibility.value === "room" ? "Post to room" : "Save privately";
-        elements.mixReleaseStatus.textContent = error.message || "The mix could not be posted. Your download is still safe.";
+        mixReleaseUi.fail(error.message || "The mix could not be posted. Your download is still safe.");
         showToast("Mix not posted", elements.mixReleaseStatus.textContent);
       }
     }

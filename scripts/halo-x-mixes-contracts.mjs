@@ -48,7 +48,10 @@ const checks = [
   [deck.includes('id="mixOperations"') && deck.includes("Mix upload desk") && deck.includes("Original comparison") && deck.includes("Visual mix studio") && deck.includes("Quality room") && deck.includes("Paid mix readiness") && deck.includes("Mix cloud"), "keeps the complete mix operations rack on the DJ desk"],
   [deck.includes('href="/mixes/#upload"') && deck.includes('href="/mixes/#visual-studio"') && deck.includes('href="/mixes/#quality"') && deck.includes('href="/mixes/#editions"') && deck.includes('href="/mixes/#library"'), "connects every rack operation to its Mixes workspace"],
   [deck.includes('{ id: "mixOperations", label: "Mix operations rack" }') && deck.includes('id="packageFocusMode"') && deck.includes("[elements.focusMode, elements.packageFocusMode]"), "keeps the rack collapsible and recoverable from desk-only mode on every screen size"],
-  [script.includes('data-delete-mix') && api.includes('payload.action === "delete"') && api.includes("member_id = ${membership.member_id}") && api.includes("Mix deleted"), "lets artists delete their own mix uploads with ownership enforcement"],
+  [api.includes('payload.action === "delete"') && api.includes("DELETE FROM halo_mixes") && api.includes("member_id = ${membership.member_id}") && api.includes("Mix deleted"), "deletes only the owning artist's mix from the database with ownership enforcement"],
+  [api.includes("deleteMix") && api.includes("audioStore.delete"), "cleans up blob audio when a mix is deleted"],
+  [script.includes("deleteMix") && script.includes('action: "delete"') && script.includes("data-delete-mix") && script.includes("cycle.isOwner"), "exposes a delete-upload button and handler only for the artist's own mixes in the quality queue"],
+  [deck.includes("removed.vaultPackId") && deck.includes("archiveStemPack(removed.vaultPackId)"), "archives a stem vault pack from the server when the artist deletes it from the DJ library"],
   [deck.includes('id="mixReleaseProgress"') && deck.includes("HaloUploadProgress") && uploadHelper.includes("uploadChunkedFile"), "shows live upload progress for DJ deck mix publishing"]
 ];
 

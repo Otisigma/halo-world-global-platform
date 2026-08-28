@@ -45,6 +45,7 @@ function cyclePayload(row, reviews) {
     artworkUrl: row.artwork_url || "/assets/releases/salty.jpg",
     audioUrl: `/api/mixes/audio?id=${encodeURIComponent(row.mix_id)}`,
     uploadedAt: new Date(row.mix_created_at).toISOString(),
+    isOwner: Boolean(row.is_owner),
     creatorContext: {
       intent: row.review_intent || "",
       context: row.review_context || "",
@@ -64,9 +65,10 @@ function cyclePayload(row, reviews) {
 
 async function loadCycles(db, membership, canReview) {
   const cycles = canReview
-    ? await db.sql`
+    : await db.sql`
         SELECT c.*, m.title, m.artwork_url, m.review_intent, m.review_context, m.protected_moments,
-          m.created_at AS mix_created_at, p.display_name
+          m.created_at AS mix_created_at, p.display_name,
+          (m.member_id = ${membership.member_id}) AS is_owner
         FROM halo_mix_review_cycles c
         JOIN halo_mixes m ON m.id = c.mix_id
         JOIN community_profiles p ON p.actor_id = m.actor_id
@@ -77,7 +79,7 @@ async function loadCycles(db, membership, canReview) {
       `
     : await db.sql`
         SELECT c.*, m.title, m.artwork_url, m.review_intent, m.review_context, m.protected_moments,
-          m.created_at AS mix_created_at, p.display_name
+          m.created_at AS mix_created_at, p.display_name, TRUE AS is_owner
         FROM halo_mix_review_cycles c
         JOIN halo_mixes m ON m.id = c.mix_id
         JOIN community_profiles p ON p.actor_id = m.actor_id

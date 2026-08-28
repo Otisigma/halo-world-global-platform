@@ -255,6 +255,8 @@ button { color: inherit; font: inherit; }
 .quality-card-actions { display: flex; gap: 10px; margin-top: 18px; }
 .review-secondary, .quality-card-actions button, .final-decision button { padding: 10px 13px; border: 1px solid rgba(255,255,255,.25); background: transparent; color: var(--paper); font: 600 9px/1 var(--mono); text-transform: uppercase; cursor: pointer; }
 .quality-card-actions button:first-child, .final-decision button:first-child { border-color: var(--acid); color: var(--acid); }
+.quality-card-actions .danger-action { border-color: rgba(255,77,93,.45); color: #ff4d5d; }
+.quality-card-actions .danger-action:hover { border-color: #ff4d5d; background: rgba(255,77,93,.1); }
 .quality-review-panel { display: grid; gap: 19px; padding: 26px; border: 1px solid var(--acid); background: #1e1b18; position: sticky; top: 92px; }
 .quality-review-panel[hidden] { display: none; }
 .review-panel-head { display: flex; justify-content: space-between; align-items: baseline; }

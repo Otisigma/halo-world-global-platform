@@ -52,6 +52,7 @@ const state = {
 };
 
 const roomColors = { club: "#ff4d00", chill: "#4b7cff", lounge: "#c9ff38", longplay: "#f0a6ff" };
+const CHUNK_PHASE_RATIO = 0.82;
 const versionRelationshipLabels = {
   full_version: "Full version of",
   remix: "Remix of",
@@ -2272,7 +2273,7 @@ async function uploadRadioFile(file, fields, onProgress = () => {}) {
       return body;
     },
     onProgress(percent) {
-      onProgress(percent * 0.82 / 100);
+      onProgress(percent * CHUNK_PHASE_RATIO / 100);
     }
   });
   const durationSeconds = await audioDuration(file);
@@ -2367,7 +2368,7 @@ async function submitTrack(event) {
         return body;
       },
       onProgress(percent) {
-        submissionUploadUi.progress(percent * 0.82, `Transmitting audio ${Math.round(percent)}% · ${file.name}`);
+        submissionUploadUi.progress(percent * CHUNK_PHASE_RATIO, `Transmitting audio ${Math.round(percent)}% · ${file.name}`);
       }
     });
     const durationSeconds = await audioDuration(file);
@@ -2381,7 +2382,7 @@ async function submitTrack(event) {
     payload.fileName = file.name;
     payload.durationSeconds = durationSeconds;
     payload.rightsConfirmed = form.elements.rightsConfirmed.checked;
-    submissionUploadUi.progress(92, "Saving the upload to Halo Radio…");
+    submissionUploadUi.progress(92, "Saving the upload to HALO Radio…");
     const response = await fetch("/api/radio/submissions", { method: "POST", headers: { "Content-Type": "application/json" }, credentials: "same-origin", body: JSON.stringify(payload) });
     const data = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(data.message || "Track submission failed");

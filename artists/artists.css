@@ -220,6 +220,25 @@ button, a { -webkit-tap-highlight-color: transparent; }
 }
 .featured-action:hover { background: var(--ink); color: var(--paper); transform: translateY(-2px); }
 .featured-action i { color: var(--artist-accent); font-style: normal; font-size: 18px; }
+.buy-action {
+  min-height: 61px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 32px;
+  padding: 0 18px 0 22px;
+  border: 2px solid var(--artist-accent, var(--acid, #d5ff52));
+  color: var(--ink);
+  background: transparent;
+  text-decoration: none;
+  font-family: var(--mono);
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: .12em;
+  transition: background .2s ease, color .2s ease, transform .2s ease;
+}
+.buy-action:hover { background: var(--artist-accent, var(--acid, #d5ff52)); color: var(--ink); transform: translateY(-2px); }
+.buy-action i { font-style: normal; font-size: 18px; }
 .text-action { font-family: var(--mono); font-size: 10px; text-transform: uppercase; letter-spacing: .12em; text-underline-offset: 7px; }
 .hero-art { background: var(--ink); color: var(--paper); position: relative; min-height: 720px; padding: clamp(50px, 6vw, 88px) clamp(30px, 4vw, 62px) 38px; display: flex; flex-direction: column; justify-content: center; }
 .hero-art::before { content: ""; position: absolute; inset: 0; background: radial-gradient(circle at 30% 20%, color-mix(in srgb, var(--artist-accent) 23%, transparent), transparent 38%); }
@@ -588,7 +607,7 @@ dialog::backdrop { background: rgba(12, 13, 10, .82); backdrop-filter: blur(7px)
   .hero-copy h1 { font-size: clamp(72px, 27vw, 118px); }
   .artist-tagline { font-size: 16px; }
   .hero-actions { align-items: stretch; flex-direction: column; }
-  .primary-action, .featured-action { width: 100%; }
+  .primary-action, .featured-action, .buy-action { width: 100%; }
   .hero-art { min-height: auto; padding: 70px 32px 46px; }
   .art-caption strong { font-size: 28px; }
   .radio-send-dialog { width: 100vw; max-height: none; height: 100vh; margin: 0; }

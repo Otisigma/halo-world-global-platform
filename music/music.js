@@ -121,7 +121,13 @@
 
   function rankedReleases() {
     const entries = state.releases
-      .filter(releaseMatchesRoom)
+      .filter(release => {
+        if (!release.isChartEligible) {
+          logMusicIssue("music_chart_eligibility_skipped", "Release skipped from chart: not chart-eligible", { releaseId: release.id, title: release.title, isCleanVersion: release.isCleanVersion });
+          return false;
+        }
+        return releaseMatchesRoom(release);
+      })
       .map(release => ({ release, signal: chartSignal(release) }));
     if (state.chartSort === "newest") {
       entries.sort((a, b) => new Date(b.release.releaseDate).getTime() - new Date(a.release.releaseDate).getTime());
@@ -269,20 +275,35 @@
     return `<div class="release-meta"><span>${escapeHtml(formatReleaseDate(release.releaseDate))}</span><span>${escapeHtml(genres)}</span>${technicalLine(release) ? `<span>${escapeHtml(technicalLine(release))}</span>` : ""}</div>`;
   }
 
+  function featuredBadge(release) {
+    if (release.featuredType === "week") return `<span class="featured-badge is-week">Song of the Week</span>`;
+    if (release.featuredType === "month") return `<span class="featured-badge is-month">Song of the Month</span>`;
+    return "";
+  }
+
   function releaseActions(release) {
     const listenHref = safeUrl(release.listenUrl);
     if (!listenHref) logMusicIssue("music_listen_url_missing", "Music release missing listen link", { releaseId: release.id, title: release.title });
     const listenAction = listenHref
       ? `<a class="action primary" href="${escapeHtml(listenHref)}" data-stat-event="open_catalog_release" data-stat-target="${escapeHtml(release.id)}">Listen now <span aria-hidden="true">↗</span></a>`
       : `<span class="action primary" aria-disabled="true">Listen link unavailable</span>`;
+    const buyHref = safeUrl(release.purchaseUrl || release.streamUrl);
+    const buyAction = buyHref
+      ? `<a class="action buy" href="${escapeHtml(buyHref)}" target="_blank" rel="noopener" data-stat-event="buy_release" data-stat-target="${escapeHtml(release.id)}">Buy / Stream <span aria-hidden="true">↗</span></a>`
+      : "";
+    if (!buyHref && release.isChartEligible) logMusicIssue("music_purchase_url_missing", "Music release missing buy/stream link", { releaseId: release.id, title: release.title });
     return `<div class="release-actions">
+      ${featuredBadge(release)}
       ${listenAction}
+      ${buyAction}
       <a class="action secondary" href="${escapeHtml(safeUrl(release.kitUrl))}" data-stat-event="open_release_kit" data-stat-target="${escapeHtml(release.id)}">Release room</a>
     </div>`;
   }
 
   function renderFeatured() {
-    const release = state.releases[0];
+    const release = state.releases.find(r => r.featuredType === "week")
+      || state.releases.find(r => r.featuredType === "month")
+      || state.releases[0];
     if (!release) {
       elements.featured.innerHTML = `<div class="catalog-empty"><div><strong>The next signal is being prepared.</strong><p>Published HALO releases appear here automatically.</p></div></div>`;
       return;

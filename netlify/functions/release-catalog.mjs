@@ -33,6 +33,12 @@ function serializeRelease(row) {
     contentRating: row.content_rating || "unspecified",
     pitch: row.pitch || "",
     availableVersions: Array.isArray(row.available_versions) ? row.available_versions : [],
+    isCleanVersion: Boolean(row.is_clean_version),
+    isChartEligible: Boolean(row.is_chart_eligible),
+    purchaseUrl: row.purchase_url || "",
+    streamUrl: row.stream_url || "",
+    featuredType: row.featured_type || "",
+    featuredUntil: row.featured_until ? String(row.featured_until).slice(0, 10) : "",
     chartActivity: {
       recentOpens: Number(row.recent_opens || 0),
       recentListens: Number(row.recent_listens || 0),
@@ -67,6 +73,12 @@ export default async function releaseCatalogHandler(request) {
         release.content_rating,
         release.pitch,
         release.available_versions,
+        release.is_clean_version,
+        release.is_chart_eligible,
+        release.purchase_url,
+        release.stream_url,
+        release.featured_type,
+        release.featured_until,
         COUNT(event.id) FILTER (
           WHERE event.event_type = 'kit_open'
             AND event.created_at >= NOW() - INTERVAL '7 days'

@@ -16,7 +16,7 @@
     toast: document.querySelector("#catalogToast")
   };
   const state = { releases: [], videos: [], query: "", genre: "all", sort: "newest", chartRoom: "all", chartSort: "signal", activeReleaseId: "" };
-  const fallbackArtwork = "/assets/releases/the-cold-is-lasting-longer.jpg";
+  const fallbackArtwork = window.HaloReleaseArtwork?.DEFAULT_RELEASE_ARTWORK || "/assets/halo-app-icon-512.png";
   const chartRooms = {
     all: [],
     "hip-hop": ["hip hop", "hip-hop", "rap", "drill", "grime"],
@@ -39,6 +39,17 @@
     } catch {
       return fallback;
     }
+  }
+
+  function releaseArtwork(release) {
+    return window.HaloReleaseArtwork?.resolve(release, fallbackArtwork) || {
+      src: safeUrl(release?.artwork, fallbackArtwork),
+      fallback: fallbackArtwork
+    };
+  }
+
+  function wireArtwork(root) {
+    window.HaloReleaseArtwork?.wire(root, fallbackArtwork);
   }
 
   function formatReleaseDate(value) {
@@ -138,7 +149,7 @@
     if (!video) {
       return `<div class="stage-video-empty"><span>HALO TV</span><strong>Footage lane open</strong><p>When approved footage is attached to this release, it plays here without sending listeners away from the chart.</p></div>`;
     }
-    const thumbnail = safeUrl(video.thumbnailUrl, safeUrl(release.artwork, fallbackArtwork));
+    const thumbnail = safeUrl(video.thumbnailUrl, releaseArtwork(release).src);
     return `<button class="stage-video-poster" type="button" data-play-chart-video="${escapeHtml(video.id)}">
       <img src="${escapeHtml(thumbnail)}" alt="" loading="lazy">
       <span class="video-play" aria-hidden="true">▶</span><span><small>Watch inside the chart</small><strong>${escapeHtml(video.title)}</strong></span>
@@ -147,12 +158,13 @@
 
   function renderChartStage(release, position) {
     if (!release) return;
+    const artwork = releaseArtwork(release);
     state.activeReleaseId = release.id;
     const movement = movementFor(release);
     const activity = release.chartActivity || {};
     const video = videoForRelease(release);
     elements.chartStage.innerHTML = `<article class="stage-card">
-      <div class="stage-art"><img src="${escapeHtml(safeUrl(release.artwork, fallbackArtwork))}" alt="${escapeHtml(`${release.title} cover artwork`)}"><span class="stage-rank">#${position}</span></div>
+      <div class="stage-art release-artwork-frame" data-artwork-frame><img class="release-artwork-image" src="${escapeHtml(artwork.src)}" alt="${escapeHtml(`${release.title} cover artwork`)}" data-release-artwork data-artwork-fallback="${escapeHtml(artwork.fallback)}"><span class="stage-rank">#${position}</span></div>
       <div class="stage-copy">
         <div class="stage-kicker"><span>${escapeHtml(movement.label)}</span><span>${escapeHtml(release.genres.join(" · ") || "HALO release")}</span></div>
         <h3>${escapeHtml(release.title)}</h3><p class="stage-artist">${escapeHtml(release.artist)}</p>
@@ -162,7 +174,7 @@
         ${releaseActions(release)}
       </div>
     </article>`;
-    elements.chartStage.querySelectorAll("img").forEach(image => image.addEventListener("error", event => { event.currentTarget.src = fallbackArtwork; }, { once: true }));
+    wireArtwork(elements.chartStage);
   }
 
   function renderChart() {
@@ -181,15 +193,16 @@
     elements.chartBoard.innerHTML = `<div class="chart-column-labels"><span>Position</span><span>Record</span><span>7-day motion</span></div>${releases.map((release, index) => {
       const movement = movementFor(release);
       const active = release.id === state.activeReleaseId;
+      const artwork = releaseArtwork(release);
       return `<button class="chart-row${active ? " is-active" : ""}" type="button" data-chart-release="${escapeHtml(release.id)}" aria-pressed="${active}">
         <span class="chart-position">${String(index + 1).padStart(2, "0")}</span>
-        <span class="chart-art"><img src="${escapeHtml(safeUrl(release.artwork, fallbackArtwork))}" alt="" loading="lazy"></span>
+        <span class="chart-art release-artwork-frame" data-artwork-frame><img class="release-artwork-image" src="${escapeHtml(artwork.src)}" alt="" loading="lazy" data-release-artwork data-artwork-fallback="${escapeHtml(artwork.fallback)}"></span>
         <span class="chart-track"><strong>${escapeHtml(release.title)}</strong><small>${escapeHtml(release.artist)} · ${escapeHtml(release.genres[0] || "HALO")}</small></span>
         <span class="chart-motion is-${movement.direction}"><b>${escapeHtml(movement.value)}</b><small>${escapeHtml(movement.label)}</small></span>
         <span class="chart-open" aria-hidden="true">OPEN ↗</span>
       </button>`;
     }).join("")}`;
-    elements.chartBoard.querySelectorAll("img").forEach(image => image.addEventListener("error", event => { event.currentTarget.src = fallbackArtwork; }, { once: true }));
+    wireArtwork(elements.chartBoard);
     renderChartStage(releases.find(release => release.id === state.activeReleaseId), releases.findIndex(release => release.id === state.activeReleaseId) + 1);
   }
 
@@ -262,12 +275,12 @@
       elements.featured.innerHTML = `<div class="catalog-empty"><div><strong>The next signal is being prepared.</strong><p>Published HALO releases appear here automatically.</p></div></div>`;
       return;
     }
-    const artwork = safeUrl(release.artwork, fallbackArtwork);
+    const artwork = releaseArtwork(release);
     elements.featured.innerHTML = `<article class="featured-release">
-      <div class="featured-art"><img src="${escapeHtml(artwork)}" alt="${escapeHtml(`${release.title} cover artwork`)}" width="1200" height="1200"></div>
+      <div class="featured-art release-artwork-frame" data-artwork-frame><img class="release-artwork-image" src="${escapeHtml(artwork.src)}" alt="${escapeHtml(`${release.title} cover artwork`)}" width="1200" height="1200" data-release-artwork data-artwork-fallback="${escapeHtml(artwork.fallback)}"></div>
       <div class="featured-copy"><div>${releaseMeta(release)}<h2>${escapeHtml(release.title)}</h2><p class="featured-artist">${escapeHtml(release.artist)}</p><p class="featured-pitch">${escapeHtml(release.pitch || "Open the official release signal, approved listening destination, and campaign room.")}</p></div>${releaseActions(release)}</div>
     </article>`;
-    elements.featured.querySelector("img")?.addEventListener("error", event => { event.currentTarget.src = fallbackArtwork; }, { once: true });
+    wireArtwork(elements.featured);
   }
 
   function filteredReleases() {
@@ -311,11 +324,14 @@
       });
       return;
     }
-    elements.grid.innerHTML = releases.map((release, index) => `<article class="release-card">
-      <div class="card-art"><img src="${escapeHtml(safeUrl(release.artwork, fallbackArtwork))}" alt="${escapeHtml(`${release.title} cover artwork`)}" loading="lazy" width="900" height="900"><span class="card-number">${String(index + 1).padStart(2, "0")}</span></div>
+    elements.grid.innerHTML = releases.map((release, index) => {
+      const artwork = releaseArtwork(release);
+      return `<article class="release-card">
+      <div class="card-art release-artwork-frame" data-artwork-frame><img class="release-artwork-image" src="${escapeHtml(artwork.src)}" alt="${escapeHtml(`${release.title} cover artwork`)}" loading="lazy" width="900" height="900" data-release-artwork data-artwork-fallback="${escapeHtml(artwork.fallback)}"><span class="card-number">${String(index + 1).padStart(2, "0")}</span></div>
       <div class="card-copy">${releaseMeta(release)}<h3>${escapeHtml(release.title)}</h3><p class="card-artist">${escapeHtml(release.artist)}</p>${release.pitch ? `<p class="card-pitch">${escapeHtml(release.pitch)}</p>` : ""}${releaseActions(release)}</div>
-    </article>`).join("");
-    elements.grid.querySelectorAll("img").forEach(image => image.addEventListener("error", event => { event.currentTarget.src = fallbackArtwork; }, { once: true }));
+    </article>`;
+    }).join("");
+    wireArtwork(elements.grid);
   }
 
   function renderError(message) {

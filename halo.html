@@ -28,6 +28,7 @@
     <script src="/site-monitor.js" defer></script>
     <link rel="stylesheet" href="/accessibility.css">
     <link rel="stylesheet" href="/halo-brand.css">
+    <link rel="stylesheet" href="/release-artwork.css">
     <script src="/accessibility.js" defer></script>
     <link rel="stylesheet" href="/mobile-navigation.css">
     <script src="/mobile-navigation.js" defer></script>
@@ -859,6 +860,7 @@
 <body class="selection:bg-amber-500 selection:text-black">
     <div id="root"></div>
 
+    <script src="/release-artwork.js"></script>
     <script type="text/babel" crossorigin="anonymous">
         const { useState, useEffect, useRef } = React;
 
@@ -1333,6 +1335,7 @@
           const [roomPostDraft, setRoomPostDraft] = useState({ title: '', description: '', videoUrl: '', options: ['', ''] });
           const [showEqualizer, setShowEqualizer] = useState(false);
           const [equalizer, setEqualizer] = useState({ master: 70, bass: 0, mid: 0, treble: 0 });
+          const fallbackReleaseArtwork = window.HaloReleaseArtwork?.DEFAULT_RELEASE_ARTWORK || '/assets/halo-app-icon-512.png';
 
           const audioCtxRef = useRef(null);
           const canvasRef = useRef(null);
@@ -1363,6 +1366,9 @@
               return videoId ? `https://www.youtube.com/embed/${videoId}` : '';
             } catch { return ''; }
           };
+
+          const releaseArtwork = (release) => window.HaloReleaseArtwork?.resolve(release, fallbackReleaseArtwork)
+            || { src: release?.artwork || fallbackReleaseArtwork, fallback: fallbackReleaseArtwork, source: release?.artwork ? 'legacy' : 'fallback' };
 
           const parseAndLoadYoutube = (e) => {
             if (e) e.preventDefault();
@@ -1870,6 +1876,11 @@
             }
           };
 
+          useEffect(() => {
+            if (!releasePack) return;
+            window.HaloReleaseArtwork?.wire(document.body, fallbackReleaseArtwork);
+          }, [releasePack, campaignEditorOpen]);
+
           const loadReleasePack = async (slug = '') => {
             setReleasePackLoading(true);
             setReleasePackError('');
@@ -1913,6 +1924,7 @@
           const newCampaignDraft = () => {
             setCampaignDraft({
               id: '', title: '', artist: identityUser?.name || '', releaseDate: '', duration: '', genresText: '', artwork: '',
+              importedArtwork: '', artworkOverride: '', artworkSource: 'fallback',
               officialUrl: '', djUrl: '', radioUrl: '', pressUrl: '', previewUrl: '', previewExpiresAt: '', bpm: '',
               musicalKey: '', isrc: '', contentRating: 'unspecified', pitch: '', pressDescription: '', credits: '',
               contactName: '', contactEmail: '', versionsText: '', previewAccessCode: '', clearPreviewAccessCode: false, status: 'draft'
@@ -1931,6 +1943,7 @@
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                   ...campaignDraft,
+                  artwork: campaignDraft.artworkOverride || campaignDraft.importedArtwork || campaignDraft.artwork || '',
                   status,
                   genres: campaignDraft.genresText.split(',').map(value => value.trim()).filter(Boolean),
                   availableVersions: campaignDraft.versionsText.split('\n').map(value => value.trim()).filter(Boolean),
@@ -2021,20 +2034,30 @@
           const releaseArtworkFilename = () => `${releasePack.release.artist}-${releasePack.release.title}-social-card.jpg`.replace(/[^a-z0-9.-]+/gi, '-').replace(/-+/g, '-');
 
           const getReleaseArtworkFile = async () => {
-            const response = await fetch(releasePack.release.artwork || '/assets/releases/the-cold-is-lasting-longer.jpg');
-            if (!response.ok) throw new Error('The release artwork could not be prepared.');
+            const primaryArtwork = releaseArtwork(releasePack.release);
+            const response = await fetch(primaryArtwork.src);
+            if (!response.ok) {
+              const fallbackResponse = await fetch(primaryArtwork.fallback);
+              if (!fallbackResponse.ok) throw new Error('The release artwork could not be prepared.');
+              const fallbackBlob = await fallbackResponse.blob();
+              return new File([fallbackBlob], releaseArtworkFilename(), { type: fallbackBlob.type || 'image/png' });
+            }
             const artworkBlob = await response.blob();
             return new File([artworkBlob], releaseArtworkFilename(), { type: artworkBlob.type || 'image/jpeg' });
           };
 
           const downloadReleaseArtwork = () => {
             const downloadLink = document.createElement('a');
-            downloadLink.href = releasePack.release.artwork || '/assets/releases/the-cold-is-lasting-longer.jpg';
+            downloadLink.href = releaseArtwork(releasePack.release).src;
             downloadLink.download = releaseArtworkFilename();
             document.body.appendChild(downloadLink);
             downloadLink.click();
             downloadLink.remove();
           };
+
+          const activeReleaseArtwork = releasePack
+            ? releaseArtwork(releasePack.release)
+            : { src: fallbackReleaseArtwork, fallback: fallbackReleaseArtwork, source: 'fallback' };
 
           const openSocialPlatform = async (platform, label) => {
             if (!confirmSocialRights()) return;
@@ -4082,8 +4105,14 @@
                                   <label className="text-[7px] font-black uppercase tracking-wider text-gray-500">Release title<input value={campaignDraft.title} maxLength="160" onChange={event => updateCampaignDraft('title', event.target.value)} placeholder="Hit That Beat" className="mt-2 w-full rounded-xl border border-white/10 bg-black/40 px-3 py-3 text-[10px] normal-case text-white outline-none placeholder:text-gray-700 focus:border-lime-300/50" /></label>
                                   <label className="text-[7px] font-black uppercase tracking-wider text-gray-500">Artist<input value={campaignDraft.artist} maxLength="120" onChange={event => updateCampaignDraft('artist', event.target.value)} placeholder="Owen Anthony" className="mt-2 w-full rounded-xl border border-white/10 bg-black/40 px-3 py-3 text-[10px] normal-case text-white outline-none placeholder:text-gray-700 focus:border-lime-300/50" /></label>
                                   <label className="text-[7px] font-black uppercase tracking-wider text-gray-500">Release date<input type="date" value={campaignDraft.releaseDate || ''} onChange={event => updateCampaignDraft('releaseDate', event.target.value)} className="mt-2 w-full rounded-xl border border-white/10 bg-black/40 px-3 py-3 text-[10px] normal-case text-white outline-none focus:border-lime-300/50" /></label>
-                                  <label className="text-[7px] font-black uppercase tracking-wider text-gray-500">Artwork URL<input value={campaignDraft.artwork} maxLength="1000" onChange={event => updateCampaignDraft('artwork', event.target.value)} placeholder="/assets/releases/cover.jpg" className="mt-2 w-full rounded-xl border border-white/10 bg-black/40 px-3 py-3 text-[10px] normal-case text-white outline-none placeholder:text-gray-700 focus:border-lime-300/50" /></label>
+                                  <label className="text-[7px] font-black uppercase tracking-wider text-gray-500">Imported DistroKid artwork<input value={campaignDraft.importedArtwork || ''} maxLength="1000" onChange={event => updateCampaignDraft('importedArtwork', event.target.value)} placeholder="https://distrokid.imgix.net/..." className="mt-2 w-full rounded-xl border border-white/10 bg-black/40 px-3 py-3 text-[10px] normal-case text-white outline-none placeholder:text-gray-700 focus:border-lime-300/50" /></label>
                                 </div>
+
+                                <div className="mt-3 grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
+                                  <label className="text-[7px] font-black uppercase tracking-wider text-gray-500">Manual artwork override (optional)<input value={campaignDraft.artworkOverride || ''} maxLength="1000" onChange={event => updateCampaignDraft('artworkOverride', event.target.value)} placeholder="/assets/releases/cover.jpg" className="mt-2 w-full rounded-xl border border-white/10 bg-black/40 px-3 py-3 text-[10px] normal-case text-white outline-none placeholder:text-gray-700 focus:border-lime-300/50" /></label>
+                                  <button type="button" onClick={() => updateCampaignDraft('artworkOverride', '')} className="rounded-xl border border-white/10 px-4 py-3 text-[8px] font-black uppercase tracking-widest text-gray-300 hover:border-lime-300/40 hover:text-white">Use imported image</button>
+                                </div>
+                                <p className="mt-2 text-[9px] leading-4 text-gray-500">Live artwork uses manual override → imported DistroKid artwork → HALO fallback. Re-syncing the imported image will not replace a manual override.</p>
 
                                 <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-5">{[
                                   ['officialUrl', 'Primary / HyperFollow', 'https://distrokid.com/hyperfollow/...'],
@@ -4124,11 +4153,14 @@
                               </div>}
                             </section>}
                             <section className="overflow-hidden rounded-2xl border border-white/10 bg-black/50">
-                              <img src={releasePack.release.artwork || '/assets/releases/the-cold-is-lasting-longer.jpg'} alt={`${releasePack.release.title} cover artwork`} className="aspect-square w-full object-cover" width="1024" height="1024" />
+                              <div className="release-artwork-frame" data-artwork-frame>
+                                <img src={activeReleaseArtwork.src} alt={`${releasePack.release.title} cover artwork`} className="release-artwork-image" width="1024" height="1024" data-release-artwork data-artwork-fallback={activeReleaseArtwork.fallback} />
+                              </div>
                               <div className="p-4">
                                 <p className="text-[8px] font-black uppercase tracking-[.25em] text-cyan-300">{releasePack.release.artist} // Advance signal</p>
                                 <h4 className="mt-2 text-2xl font-black leading-none text-white">{releasePack.release.title}</h4>
                                 <p className="mt-3 text-[10px] leading-5 text-gray-400">{releasePack.release.pitch}</p>
+                                <p className="mt-3 text-[8px] font-black uppercase tracking-[.22em] text-gray-500">Artwork source · {releasePack.release.artworkSource || 'fallback'}</p>
                                 <a href={`/api/release-link?slug=${encodeURIComponent(releasePack.release.id)}&audience=fan`} target="_blank" rel="noopener noreferrer" data-stat-event="open_featured_release" data-stat-target="selector_room" className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.05] px-4 py-3 text-[9px] font-black uppercase tracking-widest text-white hover:border-cyan-300/40 hover:bg-cyan-300/10">Open official release <Icon name="external-link" className="h-3.5 w-3.5" /></a>
                               </div>
                             </section>
@@ -4167,7 +4199,7 @@
                                         <strong className="mt-2 max-w-full truncate text-[9px] uppercase tracking-wider text-white">{socialMediaFile ? socialMediaFile.name : 'Release artwork ready'}</strong>
                                         <span className="mt-1 text-[8px] text-gray-600">{socialMediaFile ? 'Custom media attached · tap to replace' : 'Included automatically · tap to replace with a clip'}</span>
                                       </label>
-                                      <a href={releasePack.release.artwork || '/assets/releases/the-cold-is-lasting-longer.jpg'} download={`${releasePack.release.artist}-${releasePack.release.title}-social-card.jpg`} className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-white/10 px-3 py-2 text-[8px] font-black uppercase tracking-widest text-gray-300 transition hover:border-white/30 hover:text-white"><Icon name="folder" className="h-3.5 w-3.5" />Download social card</a>
+                                      <a href={activeReleaseArtwork.src} download={`${releasePack.release.artist}-${releasePack.release.title}-social-card.jpg`} className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-white/10 px-3 py-2 text-[8px] font-black uppercase tracking-widest text-gray-300 transition hover:border-white/30 hover:text-white"><Icon name="folder" className="h-3.5 w-3.5" />Download social card</a>
                                     </div>
 
                                     <div className="rounded-xl border border-white/10 bg-black/45 p-3">

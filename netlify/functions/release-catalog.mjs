@@ -1,4 +1,5 @@
 import { getDatabase } from "@netlify/database";
+import { resolveReleaseArtworkFields } from "../lib/release-artwork.mjs";
 
 function json(body, status = 200, headers = {}) {
   return Response.json(body, {
@@ -11,6 +12,11 @@ function json(body, status = 200, headers = {}) {
 }
 
 function serializeRelease(row) {
+  const artwork = resolveReleaseArtworkFields({
+    artworkUrl: row.artwork_url,
+    importedArtworkUrl: row.imported_artwork_url,
+    artworkOverrideUrl: row.artwork_override_url
+  });
   return {
     id: row.id,
     title: row.title,
@@ -18,7 +24,10 @@ function serializeRelease(row) {
     releaseDate: row.release_date ? String(row.release_date).slice(0, 10) : "",
     duration: row.duration || "",
     genres: Array.isArray(row.genres) ? row.genres : [],
-    artwork: row.artwork_url || "",
+    artwork: artwork.artwork,
+    importedArtwork: artwork.importedArtwork,
+    artworkOverride: artwork.artworkOverride,
+    artworkSource: artwork.artworkSource,
     bpm: row.bpm === null ? null : Number(row.bpm),
     musicalKey: row.musical_key || "",
     contentRating: row.content_rating || "unspecified",
@@ -51,6 +60,8 @@ export default async function releaseCatalogHandler(request) {
         release.duration,
         release.genres,
         release.artwork_url,
+        release.imported_artwork_url,
+        release.artwork_override_url,
         release.bpm,
         release.musical_key,
         release.content_rating,

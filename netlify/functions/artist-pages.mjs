@@ -1,6 +1,7 @@
 import { getDatabase } from "@netlify/database";
 import { getUser, verifyRequestOrigin } from "@netlify/identity";
 import { ensureMembership, isOwner } from "../lib/halo-x.mjs";
+import { resolveReleaseArtworkFields } from "../lib/release-artwork.mjs";
 
 const allowedStatuses = new Set(["draft", "published"]);
 
@@ -64,6 +65,11 @@ async function syncCatalogRelease(db, membership, artistSlug, artistName, values
   if (status !== "published" || !values.releaseTitle) return null;
   const generatedId = releaseCatalogId(artistName, values.releaseTitle);
   if (generatedId.length < 2) return null;
+  const artwork = resolveReleaseArtworkFields({
+    artworkUrl: urls.artworkUrl,
+    importedArtworkUrl: urls.artworkUrl,
+    fallbackArtwork: ""
+  });
   const existingRows = await db.sql`
     SELECT id FROM halo_release_campaigns
     WHERE owner_member_id = ${membership.member_id}
@@ -78,12 +84,12 @@ async function syncCatalogRelease(db, membership, artistSlug, artistName, values
   const artistRoomUrl = `/artists/${encodeURIComponent(artistSlug)}`;
   const rows = await db.sql`
     INSERT INTO halo_release_campaigns (
-      id, owner_member_id, artist_slug, title, artist, release_date, artwork_url, official_url,
+      id, owner_member_id, artist_slug, title, artist, release_date, artwork_url, imported_artwork_url, official_url,
       dj_url, radio_url, press_url, preview_url, pitch, press_description,
       available_versions, release_stage, visibility, status
     ) VALUES (
       ${id}, ${membership.member_id}, ${artistSlug}, ${values.releaseTitle}, ${artistName}, ${values.releaseDate},
-      ${urls.artworkUrl}, ${urls.releaseUrl}, ${urls.djRoomUrl || defaultKitUrl("dj")},
+      ${artwork.artwork}, ${artwork.importedArtwork}, ${urls.releaseUrl}, ${urls.djRoomUrl || defaultKitUrl("dj")},
       ${urls.radioRoomUrl || defaultKitUrl("radio")}, ${urls.pressRoomUrl || defaultKitUrl("press")},
       ${urls.videoUrl}, ${values.tagline || `Open ${values.releaseTitle} by ${artistName} across HALO.`},
       ${values.bio}, ${[urls.releaseUrl ? "Official listening link" : "Private HALO release", artistRoomUrl, "DJ, radio, and press rooms"]},
@@ -94,7 +100,8 @@ async function syncCatalogRelease(db, membership, artistSlug, artistName, values
       title = EXCLUDED.title,
       artist = EXCLUDED.artist,
       release_date = EXCLUDED.release_date,
-      artwork_url = EXCLUDED.artwork_url,
+      imported_artwork_url = COALESCE(NULLIF(EXCLUDED.imported_artwork_url, ''), halo_release_campaigns.imported_artwork_url),
+      artwork_url = COALESCE(NULLIF(EXCLUDED.artwork_url, ''), halo_release_campaigns.artwork_url),
       official_url = EXCLUDED.official_url,
       dj_url = EXCLUDED.dj_url,
       radio_url = EXCLUDED.radio_url,

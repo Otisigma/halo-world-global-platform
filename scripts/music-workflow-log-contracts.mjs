@@ -38,6 +38,11 @@ assert.match(musicClient, /function logMusicIssue/, "music client must define a 
 assert.match(musicClient, /halo:journal-event/, "music client must dispatch halo:journal-event for issues");
 assert.match(musicClient, /music_catalog_error/, "music client must log catalog load failures with eventType music_catalog_error");
 assert.match(musicClient, /music_listen_url_missing/, "music client must log releases with missing listen URLs");
+assert.match(musicClient, /music_chart_eligibility_skipped/, "music client must log releases skipped from the chart due to missing eligibility flag");
+assert.match(musicClient, /music_purchase_url_missing/, "music client must log releases with missing buy/stream purchase links");
+assert.match(musicClient, /isChartEligible/, "music client must gate chart entries on the isChartEligible flag");
+assert.match(musicClient, /featuredType.*week|week.*featuredType/s, "music client must surface Song of the Week when featuredType is 'week'");
+assert.match(musicClient, /featuredType.*month|month.*featuredType/s, "music client must surface Song of the Month when featuredType is 'month'");
 assert.match(musicClient, /logMusicIssue.*renderError|renderError.*logMusicIssue/s, "renderError must call logMusicIssue");
 
 // release-artwork.js — artwork failure observability

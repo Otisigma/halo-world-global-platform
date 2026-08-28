@@ -146,6 +146,7 @@ function serializePage(row, viewerCanEdit = false) {
     releaseTitle: row.release_title || "",
     releaseDate: dateOnly(row.release_date),
     releaseUrl: row.release_url || "",
+    purchaseUrl: row.purchase_url || "",
     videoTitle: row.video_title || "",
     videoUrl: row.video_url || "",
     communityUrl: row.community_url || "",

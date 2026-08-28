@@ -137,7 +137,12 @@ h1 em { color: var(--acid); font-family: var(--serif); font-weight: 400; text-tr
 }
 .action:hover { transform: translateY(-2px); }
 .action.primary { background: var(--ink); color: var(--acid); }
+.action.buy { background: transparent; border-color: var(--acid); color: var(--acid); }
+.action.buy:hover { background: var(--acid); color: var(--ink); }
 .action.secondary:hover { background: var(--acid); }
+.featured-badge { display: inline-block; padding: 4px 10px; border-radius: 2px; font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; margin-bottom: 8px; }
+.featured-badge.is-week { background: var(--acid); color: var(--ink); }
+.featured-badge.is-month { background: var(--ink); color: var(--acid); border: 1px solid var(--acid); }
 
 .featured-skeleton { min-height: 620px; display: grid; grid-template-columns: 42% 1fr; gap: 1px; background: var(--line); }
 .featured-skeleton span { background: linear-gradient(100deg, #111512 20%, #1b211c 40%, #111512 60%); background-size: 200% 100%; animation: shimmer 1.4s linear infinite; }

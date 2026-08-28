@@ -345,6 +345,7 @@
           <p class="artist-tagline">${escapeHtml(page.tagline || "Music, visuals, and every door forward.")}</p>
           <div class="hero-actions">
             ${page.releaseUrl ? `<a class="primary-action" href="${escapeHtml(page.releaseUrl)}" target="_blank" rel="noopener" data-stat-event="artist_release_open" data-stat-target="${escapeHtml(page.slug)}"><span>Play ${escapeHtml(page.releaseTitle || "latest release")}</span><i aria-hidden="true">↗</i></a>` : ""}
+            ${page.purchaseUrl && page.purchaseUrl !== page.releaseUrl ? `<a class="buy-action" href="${escapeHtml(page.purchaseUrl)}" target="_blank" rel="noopener" data-stat-event="artist_buy_stream" data-stat-target="${escapeHtml(page.slug)}"><span>Buy / Stream</span><i aria-hidden="true">↗</i></a>` : ""}
             ${featuredUrl ? `<a class="featured-action" href="${escapeHtml(featuredUrl)}"${linkAttributes(featuredUrl)} data-stat-event="artist_website_open" data-stat-target="${escapeHtml(page.slug)}"><span>${platformLabel(featuredUrl)}</span><i aria-hidden="true">↗</i></a>` : ""}
             <a class="text-action" href="#artistSignal">Follow the signal <span aria-hidden="true">↓</span></a>
           </div>

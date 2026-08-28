@@ -138,8 +138,8 @@ button { color: inherit; font: inherit; }
 .mix-card footer span { color: #8d867d; font: 500 8px/1.45 var(--mono); letter-spacing: .08em; text-transform: uppercase; }
 .mix-card-actions { display: inline-flex; align-items: center; gap: 10px; }
 .mix-card-actions a { color: inherit; font: 500 8px/1 var(--mono); letter-spacing: .1em; text-transform: uppercase; }
-.mix-delete { min-height: 30px; padding: 0 10px; border: 1px solid rgba(232, 167, 123, .65); background: transparent; color: #e8a77b; cursor: pointer; font: 600 8px/1 var(--mono); letter-spacing: .08em; text-transform: uppercase; }
-.mix-delete:hover { border-color: #f1c39f; color: #f1c39f; }
+.mix-delete { border: 1px solid rgba(255,255,255,.18); background: transparent; color: #d8ccc1; padding: 9px 12px; font: 700 8px/1 var(--mono); letter-spacing: .1em; text-transform: uppercase; cursor: pointer; }
+.mix-delete:hover { border-color: var(--rust); color: var(--rust); }
 .mix-play { display: grid; width: 44px; height: 44px; flex: 0 0 auto; padding: 0; place-items: center; border: 1px solid var(--acid); border-radius: 50%; background: transparent; color: var(--acid); cursor: pointer; }
 .mix-play::before { width: 0; height: 0; margin-left: 3px; border-top: 6px solid transparent; border-bottom: 6px solid transparent; border-left: 10px solid currentColor; content: ""; }
 .mix-skeleton { width: min(320px, 75vw); min-height: 440px; border: 1px solid rgba(255,255,255,.1); background: linear-gradient(100deg, rgba(255,255,255,.02) 30%, rgba(255,255,255,.07) 50%, rgba(255,255,255,.02) 70%); background-size: 200% 100%; animation: shimmer 1.4s linear infinite; }

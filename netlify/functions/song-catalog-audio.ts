@@ -121,6 +121,24 @@ async function removeUpload(prefix: string) {
   await Promise.all(stored.blobs.map(blob => audioStore.delete(blob.key)));
 }
 
+async function deleteUpload(payload: Record<string, unknown>, db: Awaited<ReturnType<typeof getDatabase>>, ownerMemberId: string) {
+  const songId = cleanId(payload.songId);
+  const versionId = cleanId(payload.versionId);
+  if (!songId || !versionId) return json({ message: "A valid song version is required" }, 400);
+  const version = await ownedVersion(db, ownerMemberId, versionId, songId);
+  if (!version) return json({ message: "That song version was not found" }, 404);
+  await db.sql`
+    UPDATE halo_song_versions
+    SET audio_url = NULL, audio_blob_prefix = NULL, audio_chunk_count = NULL,
+      audio_content_type = NULL, audio_byte_size = NULL, audio_filename = NULL,
+      updated_at = NOW()
+    WHERE id = ${versionId} AND song_id = ${songId}
+  `;
+  await runDreamweaverReview(songId, ownerMemberId);
+  if (version.audio_blob_prefix) await removeUpload(String(version.audio_blob_prefix)).catch(() => undefined);
+  return json({ message: "Version audio removed", songId, versionId });
+}
+
 async function finalizeUpload(payload: Record<string, unknown>, db: Awaited<ReturnType<typeof getDatabase>>, ownerMemberId: string) {
   const songId = cleanId(payload.songId);
   const versionId = cleanId(payload.versionId);
@@ -150,25 +168,6 @@ async function finalizeUpload(payload: Record<string, unknown>, db: Awaited<Retu
   await runDreamweaverReview(songId, ownerMemberId);
   if (version.audio_blob_prefix && version.audio_blob_prefix !== prefix) await removeUpload(version.audio_blob_prefix).catch(() => undefined);
   return json({ message: "Audio uploaded, routed, and checked by Dream Weaver", songId, versionId, audioUrl });
-}
-
-async function deleteUpload(payload: Record<string, unknown>, db: Awaited<ReturnType<typeof getDatabase>>, ownerMemberId: string) {
-  const songId = cleanId(payload.songId);
-  const versionId = cleanId(payload.versionId);
-  if (!songId || !versionId) return json({ message: "Choose the song version audio to remove" }, 400);
-  const version = await ownedVersion(db, ownerMemberId, versionId, songId);
-  if (!version) return json({ message: "That song version was not found" }, 404);
-  const prefix = String(version.audio_blob_prefix || "");
-  if (!prefix) return json({ message: "No uploaded audio was found for this version" }, 404);
-  await db.sql`
-    UPDATE halo_song_versions
-    SET audio_url = '', audio_blob_prefix = '', audio_chunk_count = 0,
-      audio_content_type = '', audio_byte_size = 0, audio_filename = '', duration_seconds = 0, updated_at = NOW()
-    WHERE id = ${versionId}
-  `;
-  await removeUpload(prefix).catch(() => undefined);
-  await runDreamweaverReview(songId, ownerMemberId);
-  return json({ message: "Uploaded audio removed", songId, versionId });
 }
 
 async function readAudioRange(version: Record<string, unknown>, range: { start: number; end: number }) {
@@ -248,8 +247,7 @@ export default async function songCatalogAudioHandler(request: Request) {
     try { verifyRequestOrigin(request); } catch { return json({ message: "Cross-origin audio uploads are not accepted" }, 403); }
     if (request.method === "DELETE") {
       const payload = await request.json().catch(() => null) as Record<string, unknown> | null;
-      if (!payload) return json({ message: "Choose a supported audio action" }, 400);
-      return deleteUpload(payload, db, membership.member_id);
+      return payload ? deleteUpload(payload, db, membership.member_id) : json({ message: "Choose a supported audio action" }, 400);
     }
     const contentType = request.headers.get("content-type") || "";
     if (contentType.includes("multipart/form-data")) return uploadChunk(request, db, membership.member_id);

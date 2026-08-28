@@ -159,6 +159,11 @@
         <div class="upload-progress-track" id="audioUploadTrack" hidden aria-hidden="true"><span class="upload-progress-fill"></span></div>
         <p class="audio-upload-progress" id="audioUploadProgress" role="status">No file selected.</p>
         <audio id="audioPreview" controls preload="metadata" hidden></audio>
+        <p id="audioStateLabel" class="audio-state-label" role="status" hidden></p>
+        <div class="radio-import-section">
+          <button class="quiet-button" id="importFromRadioButton" type="button">↓ Import from Radio</button>
+          <div id="radioPickerList" class="radio-picker-list" hidden role="listbox" aria-label="Your radio tracks"></div>
+        </div>
         </section>
         <label class="wide-field"><span>External audio source link (optional)</span><input id="audioUrl" type="url" placeholder="https://secure-audio-location.example/song.wav"></label>
         <section class="wide-field version-artwork-panel" aria-labelledby="versionArtworkHeading">

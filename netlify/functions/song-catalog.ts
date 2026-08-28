@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { getDatabase } from "@netlify/database";
 import { getUser, verifyRequestOrigin } from "@netlify/identity";
 import { db } from "../../db/index.js";
@@ -279,9 +279,13 @@ async function saveVersion(ownerMemberId: string, payload: Record<string, unknow
   if (!ownedSong || !versionId) return json({ message: "Choose a valid song version" }, 400);
   const versionType = cleanVersionType(payload.versionType);
   const route = VERSION_ROUTES[versionType];
+  const externalAudioUrl = cleanUrl(payload.audioUrl);
   const rows = await db.update(songVersions).set({
     versionType, label: cleanText(payload.label, 100) || route.label,
-    destination: route.destination, audioUrl: cleanUrl(payload.audioUrl),
+    destination: route.destination,
+    // Preserve managed upload URLs: only overwrite audioUrl when a valid external https URL is
+    // supplied; if the field is blank and an uploaded file exists (blob prefix set), keep existing.
+    audioUrl: sql`CASE WHEN ${externalAudioUrl} <> '' THEN ${externalAudioUrl} WHEN audio_blob_prefix <> '' THEN audio_url ELSE '' END`,
     durationSeconds: Math.max(0, Math.min(86_400, Number.parseInt(String(payload.durationSeconds || "0"), 10) || 0)),
     masteringStatus: cleanEnum(payload.masteringStatus, MASTERING_STATUSES, "not_started"),
     targetLufs: Math.max(-30, Math.min(-5, Number.parseInt(String(payload.targetLufs || route.targetLufs), 10) || route.targetLufs)),

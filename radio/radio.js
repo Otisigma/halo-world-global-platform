@@ -2373,7 +2373,7 @@ async function submitTrack(event) {
     payload.fileName = file.name;
     payload.durationSeconds = durationSeconds;
     payload.rightsConfirmed = form.elements.rightsConfirmed.checked;
-    submissionUploadUi.progress(92, "Saving the upload to Halo Radio…");
+    submissionUploadUi.progress(92, "Saving the upload to HALO Radio…");
     const response = await fetch("/api/radio/submissions", { method: "POST", headers: { "Content-Type": "application/json" }, credentials: "same-origin", body: JSON.stringify(payload) });
     const data = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(data.message || "Track submission failed");

@@ -132,6 +132,7 @@ async function deleteUpload(payload: Record<string, unknown>, db: Awaited<Return
     UPDATE halo_song_versions
     SET audio_url = NULL, audio_blob_prefix = NULL, audio_chunk_count = NULL,
       audio_content_type = NULL, audio_byte_size = NULL, audio_filename = NULL,
+      duration_seconds = 0,
       updated_at = NOW()
     WHERE id = ${versionId} AND song_id = ${songId}
   `;

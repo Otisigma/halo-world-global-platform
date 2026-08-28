@@ -39,7 +39,7 @@ assert.equal(fallback.artworkSource, "fallback");
 assert.match(releasePackApi, /imported_artwork_url/);
 assert.match(releasePackApi, /artwork_override_url/);
 assert.match(catalogApi, /artworkOverride/);
-assert.match(artistPagesApi, /halo_release_campaigns\.artwork_override_url/);
+assert.match(artistPagesApi, /imported_artwork_url = COALESCE/);
 assert.match(migration, /ADD COLUMN IF NOT EXISTS imported_artwork_url TEXT NOT NULL DEFAULT ''/);
 assert.match(migration, /ADD COLUMN IF NOT EXISTS artwork_override_url TEXT NOT NULL DEFAULT ''/);
 assert.match(musicPage, /release-artwork\.css/);

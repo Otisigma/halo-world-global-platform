@@ -65,7 +65,7 @@ function dateOnly(value) {
 function serializeRelease(row, includePrivateLinks = false) {
   const artwork = resolveReleaseArtworkFields({
     artworkUrl: row.artwork_url,
-    importedArtworkUrl: row.imported_artwork_url || row.artwork_url,
+    importedArtworkUrl: row.imported_artwork_url,
     artworkOverrideUrl: row.artwork_override_url
   });
   return {

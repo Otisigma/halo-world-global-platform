@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { getDatabase } from "@netlify/database";
 import { getUser, verifyRequestOrigin } from "@netlify/identity";
 import { cleanText, ensureMembership, isOwner } from "../lib/halo-x.mjs";
+import { resolveReleaseArtworkFields } from "../lib/release-artwork.mjs";
 
 const MAX_BODY_BYTES = 16_384;
 const sourceKinds = new Set(["profile", "release", "activity", "video", "campaign", "topic"]);
@@ -64,7 +65,7 @@ async function requireArtist(db, user, membership, artistSlug) {
 async function loadMaterials(db, artist, membership) {
   const [releaseRows, activityRows, videoRows, campaignRows] = await Promise.all([
     db.sql`
-      SELECT id, title, artist, release_date, artwork_url, official_url, pitch, press_description, updated_at
+      SELECT id, title, artist, release_date, artwork_url, imported_artwork_url, artwork_override_url, official_url, pitch, press_description, updated_at
       FROM halo_release_campaigns
       WHERE owner_member_id = ${membership.member_id} OR LOWER(artist) = LOWER(${artist.artist_name})
       ORDER BY COALESCE(release_date, created_at::date) DESC, updated_at DESC
@@ -104,16 +105,23 @@ async function loadMaterials(db, artist, membership) {
     date: artist.updated_at
   }];
 
-  releaseRows.forEach(row => materials.push({
+  releaseRows.forEach(row => {
+    const artwork = resolveReleaseArtworkFields({
+      artworkUrl: row.artwork_url,
+      importedArtworkUrl: row.imported_artwork_url,
+      artworkOverrideUrl: row.artwork_override_url
+    });
+    materials.push({
     id: row.id,
     kind: "release",
     title: row.title,
     summary: row.pitch || row.press_description || `A release by ${row.artist}.`,
     detail: row.release_date ? `Released ${new Date(row.release_date).toLocaleDateString("en-GB", { dateStyle: "medium" })}` : "Release archive",
-    assetUrl: row.artwork_url || "",
+    assetUrl: artwork.artwork,
     sourceUrl: row.official_url || "",
     date: row.release_date || row.updated_at
-  }));
+    });
+  });
   activityRows.forEach(row => materials.push({
     id: String(row.id),
     kind: "activity",

@@ -2055,6 +2055,10 @@
             downloadLink.remove();
           };
 
+          const activeReleaseArtwork = releasePack
+            ? releaseArtwork(releasePack.release)
+            : { src: fallbackReleaseArtwork, fallback: fallbackReleaseArtwork, source: 'fallback' };
+
           const openSocialPlatform = async (platform, label) => {
             if (!confirmSocialRights()) return;
             setSocialError('');
@@ -4150,7 +4154,7 @@
                             </section>}
                             <section className="overflow-hidden rounded-2xl border border-white/10 bg-black/50">
                               <div className="release-artwork-frame" data-artwork-frame>
-                                <img src={releaseArtwork(releasePack.release).src} alt={`${releasePack.release.title} cover artwork`} className="release-artwork-image" width="1024" height="1024" data-release-artwork data-artwork-fallback={releaseArtwork(releasePack.release).fallback} />
+                                <img src={activeReleaseArtwork.src} alt={`${releasePack.release.title} cover artwork`} className="release-artwork-image" width="1024" height="1024" data-release-artwork data-artwork-fallback={activeReleaseArtwork.fallback} />
                               </div>
                               <div className="p-4">
                                 <p className="text-[8px] font-black uppercase tracking-[.25em] text-cyan-300">{releasePack.release.artist} // Advance signal</p>
@@ -4195,7 +4199,7 @@
                                         <strong className="mt-2 max-w-full truncate text-[9px] uppercase tracking-wider text-white">{socialMediaFile ? socialMediaFile.name : 'Release artwork ready'}</strong>
                                         <span className="mt-1 text-[8px] text-gray-600">{socialMediaFile ? 'Custom media attached · tap to replace' : 'Included automatically · tap to replace with a clip'}</span>
                                       </label>
-                                      <a href={releaseArtwork(releasePack.release).src} download={`${releasePack.release.artist}-${releasePack.release.title}-social-card.jpg`} className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-white/10 px-3 py-2 text-[8px] font-black uppercase tracking-widest text-gray-300 transition hover:border-white/30 hover:text-white"><Icon name="folder" className="h-3.5 w-3.5" />Download social card</a>
+                                      <a href={activeReleaseArtwork.src} download={`${releasePack.release.artist}-${releasePack.release.title}-social-card.jpg`} className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-white/10 px-3 py-2 text-[8px] font-black uppercase tracking-widest text-gray-300 transition hover:border-white/30 hover:text-white"><Icon name="folder" className="h-3.5 w-3.5" />Download social card</a>
                                     </div>
 
                                     <div className="rounded-xl border border-white/10 bg-black/45 p-3">

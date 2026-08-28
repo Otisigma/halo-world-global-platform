@@ -101,13 +101,7 @@ async function syncCatalogRelease(db, membership, artistSlug, artistName, values
       artist = EXCLUDED.artist,
       release_date = EXCLUDED.release_date,
       imported_artwork_url = COALESCE(NULLIF(EXCLUDED.imported_artwork_url, ''), halo_release_campaigns.imported_artwork_url),
-      artwork_url = COALESCE(
-        NULLIF(halo_release_campaigns.artwork_override_url, ''),
-        NULLIF(EXCLUDED.imported_artwork_url, ''),
-        NULLIF(halo_release_campaigns.imported_artwork_url, ''),
-        EXCLUDED.artwork_url,
-        halo_release_campaigns.artwork_url
-      ),
+      artwork_url = COALESCE(NULLIF(EXCLUDED.artwork_url, ''), halo_release_campaigns.artwork_url),
       official_url = EXCLUDED.official_url,
       dj_url = EXCLUDED.dj_url,
       radio_url = EXCLUDED.radio_url,

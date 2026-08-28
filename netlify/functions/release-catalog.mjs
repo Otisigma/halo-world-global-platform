@@ -14,7 +14,7 @@ function json(body, status = 200, headers = {}) {
 function serializeRelease(row) {
   const artwork = resolveReleaseArtworkFields({
     artworkUrl: row.artwork_url,
-    importedArtworkUrl: row.imported_artwork_url || row.artwork_url,
+    importedArtworkUrl: row.imported_artwork_url,
     artworkOverrideUrl: row.artwork_override_url
   });
   return {

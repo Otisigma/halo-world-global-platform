@@ -107,6 +107,7 @@ const checks = [
   ["always-on browser QA monitor", files.page.includes('src="/site-monitor.js"') && files.page.includes('id="previewPlaybackStatus"')],
   ["YouTube podcast playlist", files.page.includes('id="podcast"') && files.page.includes("youtube-nocookie.com/embed/videoseries?list=PLcW5JzViKrdI")],
   ["authenticated submissions", files.submissions.includes("getUser") && files.submissions.includes("verifyRequestOrigin")],
+  ["live submission upload progress", files.page.includes('/upload-progress.js') && files.client.includes("uploadHelper.uploadChunkedFile") && files.client.includes("submissionUploadUi")],
   ["artist-card radio submissions", files.submissions.includes("Only the artist room owner can send this release to radio") && files.submissions.includes("artist_slug") && files.artistSubmissionMigration.includes("ADD COLUMN IF NOT EXISTS artist_slug")],
   ["release-card audio versions", files.submissions.includes("submitReleaseVersion") && files.submissions.includes("audio_version_id") && files.releaseAudioMigration.includes("halo_release_audio_versions") && files.releaseAudioMigration.includes("current_release_id")],
   ["track vault preservation", files.submissions.includes("release audio remains in the Track Vault") && files.submissions.includes("if (!deleted[0].audio_version_id) await cleanupTrackAudio")],

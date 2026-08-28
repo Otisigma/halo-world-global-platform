@@ -3,7 +3,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const [page, script, styles, halo, radio, deck, api, paymentLink, migration, uploadMigration, readinessMigration, reviewApi] = await Promise.all([
+const [page, script, styles, halo, radio, deck, api, paymentLink, migration, uploadMigration, readinessMigration, reviewApi, uploadHelper] = await Promise.all([
   readFile(resolve(root, "mixes/index.html"), "utf8"),
   readFile(resolve(root, "mixes/mixes.js"), "utf8"),
   readFile(resolve(root, "mixes/mixes.css"), "utf8"),
@@ -15,7 +15,8 @@ const [page, script, styles, halo, radio, deck, api, paymentLink, migration, upl
   readFile(resolve(root, "netlify/database/migrations/20260818120000_connect-mixes-to-sales.sql"), "utf8"),
   readFile(resolve(root, "netlify/database/migrations/20260818150000_create-mix-upload-desk.sql"), "utf8"),
   readFile(resolve(root, "netlify/database/migrations/20260818190000_require-paid-mix-readiness.sql"), "utf8"),
-  readFile(resolve(root, "netlify/functions/mix-reviews.mjs"), "utf8")
+  readFile(resolve(root, "netlify/functions/mix-reviews.mjs"), "utf8"),
+  readFile(resolve(root, "upload-progress.js"), "utf8")
 ]);
 
 const checks = [
@@ -29,6 +30,7 @@ const checks = [
   [script.includes('uploadSource: "creator_desk"') && script.includes("clientSaleEnabled") && script.includes("audioDuration"), "uploads creator audio with sales and production choices"],
   [script.includes('"audio/mp3": "audio/mpeg"') && script.includes('"video/mp4": "audio/mp4"') && api.includes("normalizeAudioContentType"), "normalizes browser-specific audio MIME types on both sides of the upload"],
   [script.includes("salesStatus") && script.includes("data-mix-artwork") && script.includes("renderEdition"), "keeps remix artwork visible and reflects the mastering and rights gate"],
+  [page.includes('/upload-progress.js') && script.includes("uploadHelper.uploadChunkedFile") && script.includes("mixUploadUi"), "uses the shared upload helper to show live mix upload progress"],
   [api.includes("halo_mix_release_plans") && api.includes("salesPageUrl") && api.includes('uploadSource === "creator_desk"'), "creates the remix mastering brief and stable sales-page handoff automatically"],
   [api.includes('productionRoute === "halo_mixed"') && api.includes("rightsAttested"), "separates creator-finished remixes from the HALO mixing package"],
   [paymentLink.includes("STRIPE_CREATOR_MIX_PAYMENT_LINK_URL") && paymentLink.includes("STRIPE_HALO_MIX_PAYMENT_LINK_URL") && paymentLink.includes("client_reference_id"), "routes cleared mixes to the appropriate Stripe payment link"],
@@ -46,10 +48,11 @@ const checks = [
   [deck.includes('id="mixOperations"') && deck.includes("Mix upload desk") && deck.includes("Original comparison") && deck.includes("Visual mix studio") && deck.includes("Quality room") && deck.includes("Paid mix readiness") && deck.includes("Mix cloud"), "keeps the complete mix operations rack on the DJ desk"],
   [deck.includes('href="/mixes/#upload"') && deck.includes('href="/mixes/#visual-studio"') && deck.includes('href="/mixes/#quality"') && deck.includes('href="/mixes/#editions"') && deck.includes('href="/mixes/#library"'), "connects every rack operation to its Mixes workspace"],
   [deck.includes('{ id: "mixOperations", label: "Mix operations rack" }') && deck.includes('id="packageFocusMode"') && deck.includes("[elements.focusMode, elements.packageFocusMode]"), "keeps the rack collapsible and recoverable from desk-only mode on every screen size"],
-  [api.includes('payload.action === "delete"') && api.includes("DELETE FROM halo_mixes") && api.includes("member_id = ${membership.member_id}"), "deletes only the owning artist's mix from the database"],
+  [api.includes('payload.action === "delete"') && api.includes("DELETE FROM halo_mixes") && api.includes("member_id = ${membership.member_id}") && api.includes("Mix deleted"), "deletes only the owning artist's mix from the database with ownership enforcement"],
   [api.includes("deleteMix") && api.includes("audioStore.delete"), "cleans up blob audio when a mix is deleted"],
   [script.includes("deleteMix") && script.includes('action: "delete"') && script.includes("data-delete-mix") && script.includes("cycle.isOwner"), "exposes a delete-upload button and handler only for the artist's own mixes in the quality queue"],
-  [deck.includes("removed.vaultPackId") && deck.includes("archiveStemPack(removed.vaultPackId)"), "archives a stem vault pack from the server when the artist deletes it from the DJ library"]
+  [deck.includes("removed.vaultPackId") && deck.includes("archiveStemPack(removed.vaultPackId)"), "archives a stem vault pack from the server when the artist deletes it from the DJ library"],
+  [deck.includes('id="mixReleaseProgress"') && deck.includes("HaloUploadProgress") && uploadHelper.includes("uploadChunkedFile"), "shows live upload progress for DJ deck mix publishing"]
 ];
 
 const failures = checks.filter(([condition]) => !condition);

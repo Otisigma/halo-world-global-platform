@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { getStore } from "@netlify/blobs";
 import { getDatabase } from "@netlify/database";
 import { getUser, verifyRequestOrigin } from "@netlify/identity";
@@ -5,6 +6,7 @@ import { cleanText, ensureMembership } from "../lib/halo-x.mjs";
 import { runDreamweaverReview } from "./song-catalog.js";
 
 const audioStore = getStore({ name: "halo-song-catalog-audio", consistency: "strong" });
+const radioAudioStore = getStore({ name: "halo-radio-submissions", consistency: "strong" });
 const ALLOWED_TYPES = new Set(["audio/mpeg", "audio/mp4", "audio/aac", "audio/ogg", "audio/webm", "audio/wav", "audio/x-wav", "audio/flac"]);
 const MAX_CHUNK_BYTES = 4 * 1024 * 1024;
 const MAX_UPLOAD_BYTES = 128 * 1024 * 1024;
@@ -121,6 +123,24 @@ async function removeUpload(prefix: string) {
   await Promise.all(stored.blobs.map(blob => audioStore.delete(blob.key)));
 }
 
+async function deleteUpload(payload: Record<string, unknown>, db: Awaited<ReturnType<typeof getDatabase>>, ownerMemberId: string) {
+  const songId = cleanId(payload.songId);
+  const versionId = cleanId(payload.versionId);
+  if (!songId || !versionId) return json({ message: "A valid song version is required" }, 400);
+  const version = await ownedVersion(db, ownerMemberId, versionId, songId);
+  if (!version) return json({ message: "That song version was not found" }, 404);
+  await db.sql`
+    UPDATE halo_song_versions
+    SET audio_url = NULL, audio_blob_prefix = NULL, audio_chunk_count = NULL,
+      audio_content_type = NULL, audio_byte_size = NULL, audio_filename = NULL,
+      updated_at = NOW()
+    WHERE id = ${versionId} AND song_id = ${songId}
+  `;
+  await runDreamweaverReview(songId, ownerMemberId);
+  if (version.audio_blob_prefix) await removeUpload(String(version.audio_blob_prefix)).catch(() => undefined);
+  return json({ message: "Version audio removed", songId, versionId });
+}
+
 async function finalizeUpload(payload: Record<string, unknown>, db: Awaited<ReturnType<typeof getDatabase>>, ownerMemberId: string) {
   const songId = cleanId(payload.songId);
   const versionId = cleanId(payload.versionId);
@@ -219,19 +239,98 @@ async function serveAudio(request: Request, db: Awaited<ReturnType<typeof getDat
   return new Response(audio, { headers });
 }
 
+async function listRadioTracks(db: Awaited<ReturnType<typeof getDatabase>>, ownerMemberId: string) {
+  const rows = await db.sql`
+    SELECT id, title, artist_name, duration_seconds, source_filename, byte_size
+    FROM halo_radio_tracks
+    WHERE member_id = ${ownerMemberId}
+    ORDER BY created_at DESC
+    LIMIT 100
+  `;
+  return json({
+    tracks: rows.map((row: Record<string, unknown>) => ({
+      id: row.id,
+      title: row.title || "",
+      artist: row.artist_name || "",
+      durationSeconds: Number(row.duration_seconds || 0),
+      filename: row.source_filename || "",
+      byteSize: Number(row.byte_size || 0),
+    })),
+  });
+}
+
+async function importFromRadio(payload: Record<string, unknown>, db: Awaited<ReturnType<typeof getDatabase>>, ownerMemberId: string) {
+  const songId = cleanId(payload.songId);
+  const versionId = cleanId(payload.versionId);
+  const radioTrackId = cleanText(payload.radioTrackId, 80);
+  if (!songId || !versionId || !radioTrackId) return json({ message: "Choose a valid song version and radio track" }, 400);
+
+  const version = await ownedVersion(db, ownerMemberId, versionId, songId);
+  if (!version) return json({ message: "That song version was not found" }, 404);
+
+  const trackRows = await db.sql`
+    SELECT id, blob_key, chunk_count, content_type, byte_size, duration_seconds, source_filename
+    FROM halo_radio_tracks
+    WHERE id = ${radioTrackId} AND member_id = ${ownerMemberId}
+    LIMIT 1
+  `;
+  const track = trackRows[0];
+  if (!track) return json({ message: "That radio track was not found in your library" }, 404);
+
+  const chunkCount = Number(track.chunk_count || 0);
+  const byteSize = Number(track.byte_size || 0);
+  const contentType = String(track.content_type || "audio/mpeg");
+  const filename = cleanText(track.source_filename, 180) || "radio-import";
+  const durationSeconds = Math.max(0, Math.min(86_400, Number(track.duration_seconds || 0)));
+  if (!chunkCount || !byteSize || !track.blob_key) return json({ message: "That radio track has no audio stored" }, 409);
+
+  const importId = randomUUID();
+  const newPrefix = `${ownerMemberId}/${versionId}/${importId}/parts/`;
+
+  for (let index = 0; index < chunkCount; index += 1) {
+    const radioKey = `${track.blob_key}${String(index).padStart(3, "0")}`;
+    const chunk = await radioAudioStore.get(radioKey, { type: "arrayBuffer" });
+    if (!chunk) return json({ message: `Radio audio chunk ${index} is missing — try again` }, 409);
+    await audioStore.set(`${newPrefix}${String(index).padStart(3, "0")}`, chunk);
+  }
+
+  const audioUrl = `/api/song-catalog/audio?versionId=${encodeURIComponent(versionId)}`;
+  await db.sql`
+    UPDATE halo_song_versions
+    SET audio_url = ${audioUrl}, audio_blob_prefix = ${newPrefix}, audio_chunk_count = ${chunkCount},
+      audio_content_type = ${contentType}, audio_byte_size = ${byteSize}, audio_filename = ${filename},
+      duration_seconds = CASE WHEN ${durationSeconds} > 0 THEN ${durationSeconds} ELSE duration_seconds END,
+      mastering_status = CASE WHEN version_type IN ('radio_edit', 'clean') AND mastering_status = 'not_started' THEN 'queued' ELSE mastering_status END,
+      updated_at = NOW()
+    WHERE id = ${versionId}
+  `;
+  await runDreamweaverReview(songId, ownerMemberId);
+  if (version.audio_blob_prefix && version.audio_blob_prefix !== newPrefix) {
+    removeUpload(String(version.audio_blob_prefix)).catch(() => undefined);
+  }
+  return json({ message: `"${track.title}" imported from Radio and connected to this version`, songId, versionId, audioUrl });
+}
+
 export default async function songCatalogAudioHandler(request: Request) {
-  if (!["GET", "HEAD", "POST"].includes(request.method)) return json({ message: "Method not allowed" }, 405, { Allow: "GET, HEAD, POST" });
+  if (!["GET", "HEAD", "POST", "DELETE"].includes(request.method)) return json({ message: "Method not allowed" }, 405, { Allow: "GET, HEAD, POST, DELETE" });
   try {
     const [db, user] = await Promise.all([getDatabase(), getUser()]);
     if (!user?.id) return json({ message: "Join or sign in to use song audio" }, 401);
     const membership = await ensureMembership(db, user);
     if (["GET", "HEAD"].includes(request.method)) return serveAudio(request, db, membership.member_id);
     try { verifyRequestOrigin(request); } catch { return json({ message: "Cross-origin audio uploads are not accepted" }, 403); }
+    if (request.method === "DELETE") {
+      const payload = await request.json().catch(() => null) as Record<string, unknown> | null;
+      return payload ? deleteUpload(payload, db, membership.member_id) : json({ message: "Choose a supported audio action" }, 400);
+    }
     const contentType = request.headers.get("content-type") || "";
     if (contentType.includes("multipart/form-data")) return uploadChunk(request, db, membership.member_id);
     const payload = await request.json().catch(() => null) as Record<string, unknown> | null;
-    if (!payload || payload.action !== "finalize_upload") return json({ message: "Choose a supported audio action" }, 400);
-    return finalizeUpload(payload, db, membership.member_id);
+    if (!payload) return json({ message: "Choose a supported audio action" }, 400);
+    if (payload.action === "finalize_upload") return finalizeUpload(payload, db, membership.member_id);
+    if (payload.action === "list_radio_tracks") return listRadioTracks(db, membership.member_id);
+    if (payload.action === "import_from_radio") return importFromRadio(payload, db, membership.member_id);
+    return json({ message: "Choose a supported audio action" }, 400);
   } catch (error) {
     console.error("Song catalog audio failed", error instanceof Error ? error.message : "unknown error");
     return json({ message: "Song audio is temporarily unavailable" }, 500);

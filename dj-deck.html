@@ -409,6 +409,8 @@
     .mix-action:hover { border-color: var(--acid); }
     .mix-action:disabled { cursor: wait; opacity: .5; }
     .mix-release-status { grid-column: 1 / -1; min-height: 14px; color: #8f998d; font: 400 8px "DM Mono", monospace; }
+    .upload-progress { grid-column: 1 / -1; height: 4px; overflow: hidden; background: rgba(255,255,255,.12); }
+    .upload-progress span { display: block; width: 0; height: 100%; background: linear-gradient(90deg, #71f79f, #00d1ff); transition: width .18s ease; }
 
     .workspace { display: grid; grid-template-columns: minmax(0, 1fr) 250px minmax(0, 1fr); gap: 12px; align-items: stretch; }
     .deck { position: relative; min-width: 0; overflow: hidden; background: linear-gradient(145deg, rgba(255,255,255,.035), transparent 32%), #111411; transition: opacity .2s, border-color .2s, transform .2s; box-shadow: inset 0 0 0 1px rgba(255,255,255,.025), 0 20px 55px rgba(0,0,0,.26); }
@@ -1103,6 +1105,7 @@
             <a class="mix-action" id="dreamweaverMix" href="/dreamweaver/">Build visual show</a>
             <button class="mix-action" id="newMix" type="button">Start another mix</button>
           </div>
+          <div class="upload-progress" id="mixReleaseProgress" hidden><span></span></div>
           <span class="mix-release-status" id="mixReleaseStatus" aria-live="polite">Your download stays available even after posting.</span>
         </form>
       </div>
@@ -1552,6 +1555,7 @@
 
   <div class="toast" id="toast" role="status" aria-live="polite"><strong id="toastTitle">System</strong><p id="toastMessage">Ready.</p></div>
 
+  <script src="/upload-progress.js"></script>
   <script>
     const TRACK_DNA_DEFAULTS = { danceability: 6, emotionalIntensity: 5, darkness: 5, warmth: 5, vocalDensity: 4, percussionDensity: 6, bassWeight: 6, melodicDensity: 5, atmosphere: 6, energyRole: "builder", sonicWeather: "Balanced, groove-led and open enough for a patient blend.", signatureMoment: "Protect the central hook before opening the next phrase." };
     const tracks = [
@@ -1654,6 +1658,7 @@
       copyMixLink: document.querySelector("#copyMixLink"),
       dreamweaverMix: document.querySelector("#dreamweaverMix"),
       newMix: document.querySelector("#newMix"),
+      mixReleaseProgress: document.querySelector("#mixReleaseProgress"),
       mixReleaseStatus: document.querySelector("#mixReleaseStatus"),
       mixIntent: document.querySelector("#mixIntent"),
       analyzeSet: document.querySelector("#analyzeSet"),
@@ -1698,6 +1703,13 @@
       collectorBlueprint: document.querySelector("#collectorBlueprint"),
       collectorKitList: document.querySelector("#collectorKitList")
     };
+    const mixReleaseUi = window.HaloUploadProgress.createUploadUi({
+      panel: elements.mixReleaseForm,
+      status: elements.mixReleaseStatus,
+      track: elements.mixReleaseProgress,
+      fill: elements.mixReleaseProgress?.querySelector("span"),
+      idleMessage: "Your download stays available even after posting."
+    });
 
     let selectedImportDeck = "A";
     let pendingPlaybackDeck = null;
@@ -3174,7 +3186,7 @@
       oscillator.stop(when + duration + .01);
     }
 
-    async function startDeckAudio(deckId) {
+    async function startDeckAudio(deckId, beatOffset = 0) {
       const context = await ensureAudio();
       const state = deckState[deckId];
       if (!state.audioBuffer && !state.audioAsset?.file && !state.stemAssets) {
@@ -3209,13 +3221,16 @@
         state.duration = state.audioBuffer.duration;
         elements.importStatus.textContent = `${state.title} is ready. Future plays start immediately.`;
       }
+      // Apply beat-phase offset: delay source.start() by `beatOffset` seconds so
+      // the first beat of the incoming track lands exactly on the outgoing beat grid.
+      const startAt = context.currentTime + Math.max(0, beatOffset);
       if (state.audioBuffer) {
         const source = context.createBufferSource();
         source.buffer = state.audioBuffer;
         source.loop = false;
         source.playbackRate.value = Number(state.bpm) / Number(state.originalBpm || state.bpm);
         source.connect(audioEngine.decks[deckId].input);
-        source.start(context.currentTime, 0);
+        source.start(startAt, 0);
         audioEngine.decks[deckId].source = source;
       } else if (state.stemAssets) {
         elements.importStatus.classList.remove("is-error");
@@ -3236,7 +3251,7 @@
           }
           return [stemType, asset.buffer || await asset.promise];
         }));
-        const startAt = context.currentTime + .045;
+        const startAt = context.currentTime + Math.max(.045, beatOffset);
         const channel = audioEngine.decks[deckId];
         channel.stemSources = {};
         channel.stemGains = {};
@@ -3477,6 +3492,16 @@
       updateRangeFill(slider);
       updateDeck(deckId);
       showToast(`Loaded to deck ${deckId}`, `${track.title} by ${track.artist} is ready from ${track.platform || "your library"}.`);
+      // Pre-decode the audio buffer in the background so the first play is
+      // instantaneous and hard-cut transitions have no decode gap.
+      const asset = deckState[deckId].audioAsset;
+      if (asset?.file && !asset.buffer && !asset.promise && audioEngine.context) {
+        asset.promise = asset.file.arrayBuffer()
+          .then(buffer => audioEngine.context.decodeAudioData(buffer))
+          .then(buffer => { asset.buffer = buffer; return buffer; })
+          .catch(() => null)
+          .finally(() => { asset.promise = null; });
+      }
       window.haloStats?.track("load_track", { deck: deckId, source_type: track.platform || "library" });
     }
 
@@ -4121,7 +4146,32 @@
       const recentStyles = new Set(recordingState.transitionHistory.slice(-3));
       const availableStyles = profile.styles.filter(style => !recentStyles.has(style));
       const stylePool = availableStyles.length ? availableStyles : profile.styles;
-      const style = recipe?.style || stylePool[Math.floor(performanceRandom(`style-${outgoing.id}-${incoming.id}`) * stylePool.length) % stylePool.length];
+      // Harmonic-aware style steering: prefer musically intelligent transitions for
+      // compatible keys, and protective (non-clashing) techniques for distant keys.
+      const harmonicScore = camelotCompatibility(outgoing.key, incoming.key);
+      const bpmDistance = Math.abs(Number(outgoing.bpm || 124) - Number(incoming.bpm || 124));
+      const bpmClose = bpmDistance <= 3; // within 3 BPM — beat-match is viable
+      let harmonicStyleBoost = [];
+      if (harmonicScore >= 0.9) {
+        // Same or adjacent key: standard blend and harmonic strategies work great
+        harmonicStyleBoost = ["long-blend", "vocal-handoff", "beat-match-blend", "filter-sweep"];
+      } else if (harmonicScore >= 0.6) {
+        // Somewhat compatible: drum-drop or synth bridge masks the modest clash
+        harmonicStyleBoost = ["drum-drop-bridge", "synth-bridge", "filter-sweep", "percussion-bridge"];
+      } else {
+        // Distant keys: use masking techniques — synth bridge to create new glue,
+        // loop-lock to buy time, or echo-out to fade the clash away
+        harmonicStyleBoost = ["synth-bridge", "loop-lock", "echo-out", "drum-drop-bridge"];
+      }
+      if (!bpmClose) {
+        // BPMs are far apart — remove beat-match-blend from the candidate pool so
+        // we don't attempt phase-lock when the beats can't align within the range.
+        harmonicStyleBoost = harmonicStyleBoost.filter(style => style !== "beat-match-blend");
+      }
+      // Intersect with the profile's allowed styles; fall back gracefully if none match
+      const harmonicFiltered = harmonicStyleBoost.filter(style => stylePool.includes(style));
+      const candidatePool = harmonicFiltered.length ? harmonicFiltered : stylePool;
+      const style = recipe?.style || candidatePool[Math.floor(performanceRandom(`style-${outgoing.id}-${incoming.id}`) * candidatePool.length) % candidatePool.length];
       const catalog = {
         "long-blend": { name: "Layered long blend", effectMove: "bass", bridgeElement: "incoming-groove", bars: [16, 24, 32], curve: "smooth" },
         "vocal-handoff": { name: "Vocal handoff", effectMove: "vocals", bridgeElement: "vocal-memory", bars: [16, 24, 32], curve: "early-reveal", vocalHandoff: true },
@@ -4129,7 +4179,11 @@
         "filter-sweep": { name: "Filter sweep blend", effectMove: "hats", bridgeElement: "incoming-groove", bars: [8, 16, 24], curve: "smooth", filter: true },
         "percussion-bridge": { name: "Percussion bridge", effectMove: "vocals", bridgeElement: "percussion-loop", bars: [8, 16, 24], curve: "linear", percussion: true },
         "drop-swap": { name: "Drop swap", effectMove: "bass", bridgeElement: "bass", bars: [8, 16], curve: "late-cut", dropSwap: true },
-        "clean-break": { name: "Vocal-safe clean break", effectMove: "vocals", bridgeElement: "silence", bars: [8], curve: "late-cut", hardCut: true }
+        "clean-break": { name: "Vocal-safe clean break", effectMove: "vocals", bridgeElement: "silence", bars: [8], curve: "late-cut", hardCut: true },
+        "beat-match-blend": { name: "Beat-matched blend", effectMove: "bass", bridgeElement: "incoming-groove", bars: [8, 16], curve: "smooth", beatMatch: true },
+        "drum-drop-bridge": { name: "Drum drop bridge", effectMove: "hats", bridgeElement: "drums", bars: [8, 16], curve: "linear", drumDrop: true },
+        "synth-bridge": { name: "HALO synth bridge", effectMove: "hats", bridgeElement: "atmosphere", bars: [8, 16], curve: "smooth", synthBridge: true },
+        "loop-lock": { name: "Loop-and-lock bridge", effectMove: "bass", bridgeElement: "percussion-loop", bars: [8, 16], curve: "late-cut", loopLock: true }
       };
       const base = catalog[style] || catalog["long-blend"];
       const allowedBars = base.bars.filter(value => roomProfile.breathBars.includes(value));
@@ -4214,6 +4268,123 @@
       }
     }
 
+    // ---------------------------------------------------------------------------
+    // Strategy helpers
+    // ---------------------------------------------------------------------------
+
+    // Returns the Camelot number + mode parsed from a key string like "8A".
+    function parseCamelot(key) {
+      const m = /^(\d{1,2})([AB])$/.exec(key || "");
+      return m ? { num: Number(m[1]), mode: m[2] } : null;
+    }
+
+    // Maps a Camelot number (1–12) to a root note frequency in Hz (starting at C).
+    const CAMELOT_HZ = [261.63, 277.18, 293.66, 311.13, 329.63, 349.23, 369.99, 392.00, 415.30, 440.00, 466.16, 493.88];
+    function camelotToHz(num) {
+      return CAMELOT_HZ[((Number(num) - 1) % 12 + 12) % 12];
+    }
+
+    // Play a HALO bridge synth sweep: outgoing key → neutral → incoming key.
+    // Uses the existing triggerTone infrastructure; outputs to the incoming deck's
+    // input so it blends naturally into the mix.
+    function playBridgeSynth(deckId, durationMs, fromKey, toKey) {
+      if (!audioEngine.context) return;
+      const ctx = audioEngine.context;
+      const now = ctx.currentTime;
+      const secs = Math.max(1, durationMs / 1000);
+      const fromParsed = parseCamelot(fromKey);
+      const toParsed = parseCamelot(toKey);
+      const fromHz = fromParsed ? camelotToHz(fromParsed.num) : 440;
+      const toHz = toParsed ? camelotToHz(toParsed.num) : 440;
+      const midHz = Math.sqrt(fromHz * toHz); // geometric midpoint
+      const steps = Math.ceil(secs * 4); // one step per quarter-second
+      const stepSecs = secs / steps;
+      const channel = audioEngine.decks[deckId];
+      if (!channel?.input) return;
+      for (let i = 0; i < steps; i++) {
+        const t = now + i * stepSecs;
+        // Interpolate frequency: from → mid → to using a triangle curve
+        const progress = i / (steps - 1 || 1);
+        const freq = progress < 0.5
+          ? fromHz + (midHz - fromHz) * (progress * 2)
+          : midHz + (toHz - midHz) * ((progress - 0.5) * 2);
+        const gain = 0.028 * Math.sin(Math.PI * progress); // bell-shaped volume
+        if (gain < 0.002) continue;
+        const osc = ctx.createOscillator();
+        const env = ctx.createGain();
+        osc.type = "sine";
+        osc.frequency.setValueAtTime(freq, t);
+        // Add a fifth for fullness
+        const osc5 = ctx.createOscillator();
+        osc5.type = "sine";
+        osc5.frequency.setValueAtTime(freq * 1.498, t);
+        const env5 = ctx.createGain();
+        env.gain.setValueAtTime(gain, t);
+        env.gain.exponentialRampToValueAtTime(0.001, t + stepSecs * 0.9);
+        env5.gain.setValueAtTime(gain * 0.4, t);
+        env5.gain.exponentialRampToValueAtTime(0.001, t + stepSecs * 0.9);
+        osc.connect(env);
+        env.connect(channel.input);
+        osc5.connect(env5);
+        env5.connect(channel.input);
+        osc.start(t);
+        osc.stop(t + stepSecs);
+        osc5.start(t);
+        osc5.stop(t + stepSecs);
+      }
+    }
+
+    // Compute the audio-context offset (seconds) to add to source.start() so the
+    // incoming track's first beat phase-locks with the outgoing track's current
+    // beat position.  Returns 0 if no BPM data or context is available.
+    function beatPhaseOffset(outgoingDeckId, incomingBpm) {
+      const ctx = audioEngine.context;
+      const channel = audioEngine.decks[outgoingDeckId];
+      if (!ctx || !channel.startedAt || !incomingBpm) return 0;
+      const outBpm = Number(deckState[outgoingDeckId].bpm) || incomingBpm;
+      const beatSecs = 60 / Math.max(40, outBpm);
+      const elapsed = ctx.currentTime - channel.startedAt;
+      const beatPhase = elapsed % beatSecs; // how far into the current beat we are
+      const remaining = beatSecs - beatPhase; // time until the next downbeat
+      // Snap to next beat boundary (never delay more than one beat)
+      return remaining < 0.02 ? 0 : remaining;
+    }
+
+    // Mute outgoing drums, silence incoming drums for `muteIncomingMs` ms, then
+    // restore them.  Handles both stem-based decks and filter-based simulation.
+    function dropDrumsBridge(outgoingDeck, incomingDeck, muteIncomingMs) {
+      // Drop outgoing drums immediately
+      setStemState(outgoingDeck, "hats", false, true);
+      // Incoming drums start silent
+      setStemState(incomingDeck, "hats", false, true);
+      // Restore incoming drums after muteIncomingMs
+      queuePerformanceMove(() => setStemState(incomingDeck, "hats", true, true), muteIncomingMs);
+    }
+
+    // Set up an AudioBufferSource loop on the outgoing deck's last `loopBars` bars
+    // so playback never goes silent while we wait for beat alignment.
+    // Returns the offset in seconds where the loop point is (≈ loopBars before end).
+    function loopOutgoingTail(outgoingDeckId, loopBars) {
+      const ctx = audioEngine.context;
+      const state = deckState[outgoingDeckId];
+      const channel = audioEngine.decks[outgoingDeckId];
+      if (!ctx || !state.audioBuffer || !channel.source) return 0;
+      const bpm = Math.max(40, Number(state.bpm) || 120);
+      const loopSecs = (60 / bpm) * 4 * loopBars; // loopBars bars worth of seconds
+      const duration = state.audioBuffer.duration;
+      const loopStart = Math.max(0, duration - loopSecs);
+      try {
+        channel.source.loop = true;
+        channel.source.loopStart = loopStart;
+        channel.source.loopEnd = duration;
+      } catch {
+        // source may have already ended; ignore
+      }
+      return loopSecs;
+    }
+
+    // ---------------------------------------------------------------------------
+
     function openTransitionPlan(plan, outgoingDeck, incomingDeck) {
       restoreDeckStems(outgoingDeck);
       restoreDeckStems(incomingDeck);
@@ -4232,6 +4403,25 @@
       } else if (plan.percussion) {
         setStemState(outgoingDeck, "vocals", false, true);
         playPercussionBridge(incomingDeck, plan.effectWindow + plan.transition, plan.beatSeconds);
+      } else if (plan.drumDrop) {
+        // Drop-drums bridge: keep melodic instruments; silence drums on both sides
+        // during the crossover window, let harmonic content carry the blend.
+        setStemState(outgoingDeck, "vocals", false, true);
+        dropDrumsBridge(outgoingDeck, incomingDeck, plan.transition * 0.6);
+      } else if (plan.synthBridge) {
+        // HALO synth bridge: sweeps a generated tone from outgoing key to incoming key.
+        setStemState(outgoingDeck, "hats", false, true);
+        setStemState(outgoingDeck, "bass", false, true);
+        const fromKey = deckState[outgoingDeck].key;
+        const toKey = deckState[incomingDeck].key;
+        playBridgeSynth(incomingDeck, plan.transition, fromKey, toKey);
+      } else if (plan.loopLock) {
+        // Loop-and-lock: loop the outgoing track's tail so there is never silence.
+        loopOutgoingTail(outgoingDeck, 2);
+        setStemState(outgoingDeck, "vocals", false, true);
+      } else if (plan.beatMatch) {
+        // Beat-match blend: low-pass the outgoing to roll off highs gently.
+        sweepDeckFilter(outgoingDeck, "highpass", plan.transition * 0.6);
       } else {
         setStemState(outgoingDeck, plan.effectMove, false, true);
       }
@@ -4260,6 +4450,34 @@
       }
       if (plan.dropSwap) {
         queuePerformanceMove(() => setStemState(incomingDeck, "bass", true, true), plan.transition * .72);
+      }
+      if (plan.drumDrop) {
+        // Restore outgoing drums half-way through so there is a clean drum drop moment
+        queuePerformanceMove(() => setStemState(outgoingDeck, "hats", true, true), plan.transition * 0.5);
+        queuePerformanceMove(() => setStemState(outgoingDeck, "bass", false, true), plan.transition * 0.5);
+      }
+      if (plan.beatMatch) {
+        // Open the incoming track's low-pass filter after the blend starts
+        openDeckFilter(incomingDeck, plan.transition * 0.8);
+        queuePerformanceMove(() => setStemState(incomingDeck, "bass", true, true), plan.transition * 0.4);
+      }
+      if (plan.synthBridge) {
+        // Outgoing bass stays muted through the full bridge (the synth sweep fills
+        // the low-mid space).  Bring incoming bass in at the midpoint so the
+        // new track's low end enters naturally underneath the fading synth tone.
+        queuePerformanceMove(() => {
+          setStemState(incomingDeck, "bass", true, true);
+        }, plan.transition * 0.55);
+      }
+      if (plan.loopLock) {
+        // Release loop exactly at the midpoint so the incoming track has had time
+        // to decode and beat-lock; restore outgoing drums before exit
+        queuePerformanceMove(() => {
+          const channel = audioEngine.decks[outgoingDeck];
+          if (channel.source) {
+            try { channel.source.loop = false; } catch {}
+          }
+        }, plan.transition * 0.5);
       }
       queuePerformanceMove(() => setStemState(incomingDeck, "vocals", true, true), Math.min(plan.transition, plan.vocalGap));
     }
@@ -4344,14 +4562,23 @@
           const targetValue = incomingDeck === "A" ? 0 : 100;
           deckState[incomingDeck].playing = true;
           try {
+            // Compute beat-phase offset for strategies that need phase-locked starts.
+            const offset = (plan.beatMatch || plan.loopLock)
+              ? beatPhaseOffset(outgoingDeck, deckState[incomingDeck].bpm)
+              : 0;
             if (plan.hardCut) {
+              // Start the incoming deck first so its buffer is decoded and the
+              // AudioBufferSourceNode is already running before we silence the
+              // outgoing deck.  Stopping outgoing *after* avoids any gap.
+              setStemState(incomingDeck, "vocals", true, true);
+              await startDeckAudio(incomingDeck, offset);
+              setAutomatedCrossfader(targetValue);
               deckState[outgoingDeck].playing = false;
               stopDeckAudio(outgoingDeck);
               updateDeck(outgoingDeck);
-              setAutomatedCrossfader(targetValue);
-              setStemState(incomingDeck, "vocals", true, true);
+            } else {
+              await startDeckAudio(incomingDeck, offset);
             }
-            await startDeckAudio(incomingDeck);
           } catch (error) {
             deckState[incomingDeck].playing = false;
             stopDeckAudio(incomingDeck);
@@ -4617,27 +4844,30 @@
       }
       elements.postMix.disabled = true;
       elements.postMix.textContent = "Posting mix…";
-      elements.mixReleaseStatus.textContent = "Preparing the finished master for upload…";
+      mixReleaseUi.start("Preparing the finished master for upload…");
       try {
         const chunkSize = 3.5 * 1024 * 1024;
         const chunkCount = Math.ceil(recordingState.blob.size / chunkSize);
         if (chunkCount > 64) throw new Error("This recording is too large to post. Keep the download and create a shorter room edit.");
         const uploadId = crypto.randomUUID ? crypto.randomUUID() : `mix-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-        for (let chunkIndex = 0; chunkIndex < chunkCount; chunkIndex += 1) {
-          const start = chunkIndex * chunkSize;
-          const chunk = recordingState.blob.slice(start, Math.min(recordingState.blob.size, start + chunkSize), recordingState.blob.type);
-          const chunkForm = new FormData();
-          chunkForm.append("chunk", chunk, `part-${String(chunkIndex).padStart(3, "0")}`);
-          chunkForm.append("uploadId", uploadId);
-          chunkForm.append("chunkIndex", String(chunkIndex));
-          chunkForm.append("chunkCount", String(chunkCount));
-          chunkForm.append("contentType", recordingState.blob.type || "audio/webm");
-          elements.mixReleaseStatus.textContent = `Uploading mix ${chunkIndex + 1} of ${chunkCount}…`;
-          const chunkResponse = await fetch("/api/mixes", { method: "POST", body: chunkForm });
-          const chunkData = await chunkResponse.json();
-          if (!chunkResponse.ok) throw new Error(chunkData.message || "The mix upload stopped early.");
-        }
-        elements.mixReleaseStatus.textContent = "Publishing the mix to HALO…";
+        await window.HaloUploadProgress.uploadChunkedFile({
+          url: "/api/mixes",
+          file: recordingState.blob,
+          chunkSize,
+          buildBody({ chunkIndex, chunkCount, start, end }) {
+            const chunkForm = new FormData();
+            chunkForm.append("chunk", recordingState.blob.slice(start, end, recordingState.blob.type), `part-${String(chunkIndex).padStart(3, "0")}`);
+            chunkForm.append("uploadId", uploadId);
+            chunkForm.append("chunkIndex", String(chunkIndex));
+            chunkForm.append("chunkCount", String(chunkCount));
+            chunkForm.append("contentType", recordingState.blob.type || "audio/webm");
+            return chunkForm;
+          },
+          onProgress(percent) {
+            mixReleaseUi.progress(percent * 82 / 100, `Uploading mix ${Math.round(percent)}%…`);
+          }
+        });
+        mixReleaseUi.progress(92, "Publishing the mix to HALO…");
         const response = await fetch("/api/mixes", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -4661,7 +4891,7 @@
         elements.postMix.textContent = elements.mixVisibility.value === "room" ? "Posted to room" : "Saved privately";
         elements.playlistMix.disabled = false;
         elements.dreamweaverMix.href = `/dreamweaver/?mix=${encodeURIComponent(data.id)}`;
-        elements.mixReleaseStatus.textContent = data.message;
+        mixReleaseUi.success(data.message, true);
         showToast("Mix released", data.message);
         window.haloStats?.track("publish_finished_mix", { visibility: elements.mixVisibility.value, recorded_seconds: recordingState.durationSeconds });
         if (elements.mixVisibility.value === "room" && data.salesPageUrl) {
@@ -4669,10 +4899,11 @@
           window.setTimeout(() => window.location.assign(data.salesPageUrl), 700);
         }
       } catch (error) {
+        const errorMessage = error.message || "The mix could not be posted. Your download is still safe.";
         elements.postMix.disabled = false;
         elements.postMix.textContent = elements.mixVisibility.value === "room" ? "Post to room" : "Save privately";
-        elements.mixReleaseStatus.textContent = error.message || "The mix could not be posted. Your download is still safe.";
-        showToast("Mix not posted", elements.mixReleaseStatus.textContent);
+        mixReleaseUi.fail(errorMessage);
+        showToast("Mix not posted", errorMessage);
       }
     }
 

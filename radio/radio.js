@@ -51,6 +51,7 @@ const state = {
 };
 
 const roomColors = { club: "#ff4d00", chill: "#4b7cff", lounge: "#c9ff38", longplay: "#f0a6ff" };
+const CHUNK_PHASE_RATIO = 0.82;
 const versionRelationshipLabels = {
   full_version: "Full version of",
   remix: "Remix of",
@@ -2263,7 +2264,7 @@ async function uploadRadioFile(file, fields, onProgress = () => {}) {
       return body;
     },
     onProgress(percent) {
-      onProgress(percent * 0.82 / 100);
+      onProgress(percent * CHUNK_PHASE_RATIO / 100);
     }
   });
   const durationSeconds = await audioDuration(file);
@@ -2358,7 +2359,7 @@ async function submitTrack(event) {
         return body;
       },
       onProgress(percent) {
-        submissionUploadUi.progress(percent * 0.82, `Transmitting audio ${Math.round(percent)}% · ${file.name}`);
+        submissionUploadUi.progress(percent * CHUNK_PHASE_RATIO, `Transmitting audio ${Math.round(percent)}% · ${file.name}`);
       }
     });
     const durationSeconds = await audioDuration(file);

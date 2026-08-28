@@ -127,6 +127,7 @@ async function deleteUpload(payload: Record<string, unknown>, db: Awaited<Return
   if (!songId || !versionId) return json({ message: "A valid song version is required" }, 400);
   const version = await ownedVersion(db, ownerMemberId, versionId, songId);
   if (!version) return json({ message: "That song version was not found" }, 404);
+  if (!version.audio_blob_prefix) return json({ message: "No uploaded version audio was found" }, 404);
   await db.sql`
     UPDATE halo_song_versions
     SET audio_url = NULL, audio_blob_prefix = NULL, audio_chunk_count = NULL,
@@ -135,7 +136,7 @@ async function deleteUpload(payload: Record<string, unknown>, db: Awaited<Return
     WHERE id = ${versionId} AND song_id = ${songId}
   `;
   await runDreamweaverReview(songId, ownerMemberId);
-  if (version.audio_blob_prefix) await removeUpload(String(version.audio_blob_prefix)).catch(() => undefined);
+  await removeUpload(String(version.audio_blob_prefix)).catch(() => undefined);
   return json({ message: "Version audio removed", songId, versionId });
 }
 

@@ -52,6 +52,13 @@
     window.HaloReleaseArtwork?.wire(root, fallbackArtwork);
   }
 
+  function logMusicIssue(eventType, title, details) {
+    console.warn("[HALO Music]", title, details);
+    window.dispatchEvent(new CustomEvent("halo:journal-event", {
+      detail: { eventType, category: "problem", targetName: title, details, immediate: true }
+    }));
+  }
+
   function formatReleaseDate(value) {
     if (!value) return "Date to be announced";
     const date = new Date(`${value}T00:00:00Z`);
@@ -263,8 +270,13 @@
   }
 
   function releaseActions(release) {
+    const listenHref = safeUrl(release.listenUrl);
+    if (!listenHref) logMusicIssue("music_listen_url_missing", "Music release missing listen link", { releaseId: release.id, title: release.title });
+    const listenAction = listenHref
+      ? `<a class="action primary" href="${escapeHtml(listenHref)}" data-stat-event="open_catalog_release" data-stat-target="${escapeHtml(release.id)}">Listen now <span aria-hidden="true">↗</span></a>`
+      : `<span class="action primary" aria-disabled="true">Listen link unavailable</span>`;
     return `<div class="release-actions">
-      <a class="action primary" href="${escapeHtml(safeUrl(release.listenUrl))}" data-stat-event="open_catalog_release" data-stat-target="${escapeHtml(release.id)}">Listen now <span aria-hidden="true">↗</span></a>
+      ${listenAction}
       <a class="action secondary" href="${escapeHtml(safeUrl(release.kitUrl))}" data-stat-event="open_release_kit" data-stat-target="${escapeHtml(release.id)}">Release room</a>
     </div>`;
   }
@@ -335,6 +347,7 @@
   }
 
   function renderError(message) {
+    logMusicIssue("music_catalog_error", "Music catalog load failure", { message, page: window.location.pathname });
     const markup = `<div class="catalog-empty"><div><strong>Signal interrupted.</strong><p>${escapeHtml(message)}</p><button type="button" id="retryCatalog">Try again</button></div></div>`;
     elements.featured.innerHTML = markup;
     elements.chartBoard.innerHTML = markup;

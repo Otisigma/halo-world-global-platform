@@ -42,11 +42,6 @@ function checkRecord(release, passed, category, detail) {
   return { release, passed, category, detail };
 }
 
-function categorize(checks, db) {
-  const failures = checks.filter(check => !check.passed);
-  return { all: checks, failures };
-}
-
 export async function auditMusicCatalog(db) {
   const rows = await db.sql`
     SELECT
@@ -91,8 +86,11 @@ export async function auditMusicCatalog(db) {
         `Required release "${required.title}" by ${required.artist} (${required.id}) is not published. Run the migration to add it and wire its official URL: ${required.officialUrl}`));
     } else {
       const row = rows.find(r => r.id === required.id);
-      const urlMatches = row?.official_url?.startsWith(required.officialUrl.split("?")[0]);
-      if (!urlMatches) {
+      const officialUrl = row.official_url || "";
+      if (!isValidHttpsUrl(officialUrl)) {
+        checks.push(checkRecord(required.id, false, "missing-link",
+          `Required release "${required.title}" (${required.id}) has no valid official_url. Expected: ${required.officialUrl}`));
+      } else if (!officialUrl.startsWith(required.officialUrl.split("?")[0])) {
         checks.push(checkRecord(required.id, false, "wrong-link",
           `Release "${required.title}" (${required.id}) official_url does not match the expected DistroKid link. Expected: ${required.officialUrl}`));
       } else {

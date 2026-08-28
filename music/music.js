@@ -106,13 +106,13 @@
       .filter(releaseMatchesRoom)
       .map(release => ({ release, signal: chartSignal(release) }));
     if (state.chartSort === "newest") {
-      entries.sort((a, b) => String(b.release.releaseDate).localeCompare(String(a.release.releaseDate)));
+      entries.sort((a, b) => new Date(b.release.releaseDate).getTime() - new Date(a.release.releaseDate).getTime());
     } else if (state.chartSort === "listens") {
-      entries.sort((a, b) => b.signal.recent - a.signal.recent || String(b.release.releaseDate).localeCompare(String(a.release.releaseDate)));
+      entries.sort((a, b) => b.signal.recent - a.signal.recent || new Date(b.release.releaseDate).getTime() - new Date(a.release.releaseDate).getTime());
     } else if (state.chartSort === "opens") {
-      entries.sort((a, b) => (b.release.chartActivity?.recentOpens || 0) - (a.release.chartActivity?.recentOpens || 0) || String(b.release.releaseDate).localeCompare(String(a.release.releaseDate)));
+      entries.sort((a, b) => (b.release.chartActivity?.recentOpens || 0) - (a.release.chartActivity?.recentOpens || 0) || new Date(b.release.releaseDate).getTime() - new Date(a.release.releaseDate).getTime());
     } else {
-      entries.sort((a, b) => b.signal.score - a.signal.score || String(b.release.releaseDate).localeCompare(String(a.release.releaseDate)));
+      entries.sort((a, b) => b.signal.score - a.signal.score || new Date(b.release.releaseDate).getTime() - new Date(a.release.releaseDate).getTime());
     }
     return entries.slice(0, 10).map(entry => entry.release);
   }
@@ -278,7 +278,7 @@
       return matchesGenre && (!query || haystack.includes(query));
     });
     if (state.sort === "oldest") {
-      filtered.sort((a, b) => String(a.releaseDate).localeCompare(String(b.releaseDate)));
+      filtered.sort((a, b) => new Date(a.releaseDate).getTime() - new Date(b.releaseDate).getTime());
     } else if (state.sort === "az") {
       filtered.sort((a, b) => a.title.localeCompare(b.title));
     } else if (state.sort === "za") {

@@ -1826,7 +1826,7 @@ function renderTracks() {
   } else if (state.trackSort === "az") {
     sorted.sort((a, b) => a.title.localeCompare(b.title));
   } else {
-    sorted.sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
+    sorted.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   }
   previewGrid.innerHTML = sorted.map(track => `
     <article class="preview-card" style="--card-color:${roomColors[track.room] || roomColors.club}">

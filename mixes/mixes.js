@@ -282,7 +282,7 @@
     } else if (state.mixSort === "duration") {
       sorted.sort((a, b) => (b.durationSeconds || 0) - (a.durationSeconds || 0));
     } else {
-      sorted.sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
+      sorted.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     }
     mixRail.innerHTML = sorted.map((mix, index) => {
       const initials = (mix.title || "HX").split(/\s+/).slice(0, 2).map(word => word[0]).join("");

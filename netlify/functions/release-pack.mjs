@@ -2,6 +2,7 @@ import { getDatabase } from "@netlify/database";
 import { getUser, verifyRequestOrigin } from "@netlify/identity";
 import { createHash } from "node:crypto";
 import { ensureMembership, isOwner } from "../lib/halo-x.mjs";
+import { resolveReleaseArtworkFields } from "../lib/release-artwork.mjs";
 
 const allowedStatuses = new Set(["interested", "downloaded", "played", "declined"]);
 const allowedSelectorTypes = new Set(["dj", "radio"]);
@@ -62,6 +63,11 @@ function dateOnly(value) {
 }
 
 function serializeRelease(row, includePrivateLinks = false) {
+  const artwork = resolveReleaseArtworkFields({
+    artworkUrl: row.artwork_url,
+    importedArtworkUrl: row.imported_artwork_url || row.artwork_url,
+    artworkOverrideUrl: row.artwork_override_url
+  });
   return {
     id: row.id,
     title: row.title,
@@ -69,7 +75,10 @@ function serializeRelease(row, includePrivateLinks = false) {
     releaseDate: dateOnly(row.release_date),
     duration: row.duration || "",
     genres: row.genres || [],
-    artwork: row.artwork_url || "",
+    artwork: artwork.artwork,
+    importedArtwork: artwork.importedArtwork,
+    artworkOverride: artwork.artworkOverride,
+    artworkSource: artwork.artworkSource,
     officialUrl: row.official_url || "",
     djUrl: includePrivateLinks ? row.dj_url || "" : "",
     radioUrl: includePrivateLinks ? row.radio_url || "" : "",
@@ -247,17 +256,34 @@ async function saveCampaign(request, db, user) {
   }
 
   const urls = {
-    artwork: cleanUrl(payload.artwork),
     officialUrl: cleanUrl(payload.officialUrl),
     djUrl: cleanUrl(payload.djUrl),
     radioUrl: cleanUrl(payload.radioUrl),
     pressUrl: cleanUrl(payload.pressUrl),
     previewUrl: cleanUrl(payload.previewUrl)
   };
-  const suppliedUrls = [payload.artwork, payload.officialUrl, payload.djUrl, payload.radioUrl, payload.pressUrl, payload.previewUrl];
-  if (suppliedUrls.some((value, index) => cleanText(value, 1000) && !Object.values(urls)[index])) {
+  const importedArtworkInput = payload.importedArtwork ?? payload.artwork ?? "";
+  const artworkOverrideInput = payload.artworkOverride ?? "";
+  const importedArtwork = cleanUrl(importedArtworkInput);
+  const artworkOverride = cleanUrl(artworkOverrideInput);
+  const suppliedUrls = [
+    [importedArtworkInput, importedArtwork],
+    [artworkOverrideInput, artworkOverride],
+    [payload.officialUrl, urls.officialUrl],
+    [payload.djUrl, urls.djUrl],
+    [payload.radioUrl, urls.radioUrl],
+    [payload.pressUrl, urls.pressUrl],
+    [payload.previewUrl, urls.previewUrl]
+  ];
+  if (suppliedUrls.some(([raw, cleaned]) => cleanText(raw, 1000) && !cleaned)) {
     return json({ message: "Use valid HTTP, HTTPS, or site-relative links" }, 400);
   }
+  const artwork = resolveReleaseArtworkFields({
+    artworkUrl: cleanUrl(payload.artwork),
+    importedArtworkUrl: importedArtwork,
+    artworkOverrideUrl: artworkOverride,
+    fallbackArtwork: ""
+  });
 
   const status = allowedCampaignStatuses.has(payload.status) ? payload.status : "draft";
   const contentRating = allowedRatings.has(payload.contentRating) ? payload.contentRating : "unspecified";
@@ -269,13 +295,15 @@ async function saveCampaign(request, db, user) {
   const savedRows = await db.sql`
     INSERT INTO halo_release_campaigns (
       id, owner_member_id, title, artist, release_date, duration, genres, artwork_url,
+      imported_artwork_url, artwork_override_url,
       official_url, dj_url, radio_url, press_url, preview_url, preview_expires_at,
       preview_access_code_hash,
       bpm, musical_key, isrc, content_rating, pitch, press_description, credits,
       contact_name, contact_email, available_versions, status
     ) VALUES (
       ${id}, ${membership.member_id}, ${title}, ${artist}, ${cleanDate(payload.releaseDate)},
-      ${cleanText(payload.duration, 24)}, ${cleanList(payload.genres, 10, 48)}, ${urls.artwork},
+      ${cleanText(payload.duration, 24)}, ${cleanList(payload.genres, 10, 48)}, ${artwork.artwork},
+      ${artwork.importedArtwork}, ${artwork.artworkOverride},
       ${urls.officialUrl}, ${urls.djUrl}, ${urls.radioUrl}, ${urls.pressUrl}, ${urls.previewUrl},
       ${cleanTimestamp(payload.previewExpiresAt)}, ${previewAccessCodeHash}, ${bpm}, ${cleanText(payload.musicalKey, 32)},
       ${cleanText(payload.isrc, 32).toUpperCase()}, ${contentRating}, ${cleanLongText(payload.pitch, 500)},
@@ -291,6 +319,8 @@ async function saveCampaign(request, db, user) {
       duration = EXCLUDED.duration,
       genres = EXCLUDED.genres,
       artwork_url = EXCLUDED.artwork_url,
+      imported_artwork_url = EXCLUDED.imported_artwork_url,
+      artwork_override_url = EXCLUDED.artwork_override_url,
       official_url = EXCLUDED.official_url,
       dj_url = EXCLUDED.dj_url,
       radio_url = EXCLUDED.radio_url,

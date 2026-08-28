@@ -19,6 +19,7 @@
   <meta name="twitter:image" content="https://halo-world-global-platform.netlify.app/assets/halo-app-icon-512.png" />
   <meta name="twitter:image:alt" content="HALO Music World logo" />
   <link rel="stylesheet" href="/halo-brand.css" />
+  <link rel="stylesheet" href="/release-artwork.css" />
   <style>
     @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Manrope:wght@400;500;600;700;800&display=swap');
     :root { color-scheme: dark; --ink:#10181a; --paper:#e8e3d5; --signal:#d7ff5f; --muted:#91a0a0; --line:rgba(232,227,213,.16); }
@@ -64,19 +65,23 @@
 </head>
 <body>
   <main id="app" class="shell"><div class="state"><div><strong>Preparing release kit</strong>Loading the campaign signal.</div></div></main>
+  <script src="/release-artwork.js"></script>
   <script>
     const params = new URLSearchParams(location.search);
     const slug = params.get('slug') || '';
     const requestedAudience = params.get('audience') || 'fan';
     const audiences = new Set(['fan', 'dj', 'radio', 'press', 'preview']);
     const audience = audiences.has(requestedAudience) ? requestedAudience : 'fan';
+    const fallbackArtwork = window.HaloReleaseArtwork?.DEFAULT_RELEASE_ARTWORK || '/assets/halo-app-icon-512.png';
     const labels = { fan:'Official release', dj:'DJ promo desk', radio:'Radio service', press:'Press room', preview:'Private preview' };
     const escapeHtml = value => String(value ?? '').replace(/[&<>'"]/g, character => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[character]));
     const formatDate = value => value ? new Intl.DateTimeFormat('en', { day:'numeric', month:'long', year:'numeric', timeZone:'UTC' }).format(new Date(`${value}T00:00:00Z`)) : 'To be announced';
     const destination = (release, code = '') => `/api/release-link?slug=${encodeURIComponent(release.id)}&audience=${encodeURIComponent(audience)}${code ? `&code=${encodeURIComponent(code)}` : ''}`;
+    const releaseArtwork = release => window.HaloReleaseArtwork?.resolve(release, fallbackArtwork) || { src: release.artwork || fallbackArtwork, fallback: fallbackArtwork };
 
     function render(data) {
       const release = data.release;
+      const artwork = releaseArtwork(release);
       const description = audience === 'press' && release.pressDescription ? release.pressDescription : release.pitch;
       const actionLabel = { fan:'Listen now', dj:'Open DJ delivery', radio:'Open radio delivery', press:'Open press assets', preview:'Open private preview' }[audience];
       const facts = [
@@ -92,13 +97,14 @@
       document.getElementById('app').innerHTML = `
         <header class="topline"><div class="mark"><img class="halo-brand-image halo-brand-image--small" src="/assets/halo-logo-mark.webp" alt="">HALO release network</div><div class="audience">${escapeHtml(labels[audience])}</div></header>
         <section class="hero">
-          <div class="art"><img src="${escapeHtml(release.artwork || '/assets/releases/the-cold-is-lasting-longer.jpg')}" alt="${escapeHtml(`${release.title} cover artwork`)}"></div>
+          <div class="art release-artwork-frame" data-artwork-frame><img class="release-artwork-image" src="${escapeHtml(artwork.src)}" alt="${escapeHtml(`${release.title} cover artwork`)}" data-release-artwork data-artwork-fallback="${escapeHtml(artwork.fallback)}"></div>
           <div><p class="eyebrow">${escapeHtml(formatDate(release.releaseDate))} // ${escapeHtml(labels[audience])}</p><h1>${escapeHtml(release.title)}</h1><p class="artist">${escapeHtml(release.artist)}</p><p class="pitch">${escapeHtml(description || 'Release information and approved campaign material.')}</p><div class="actions">${protectedPreview ? `<button class="button primary" id="preview-action" type="button">${escapeHtml(actionLabel)}</button>` : `<a class="button primary" href="${destination(release)}">${escapeHtml(actionLabel)}</a>`}<button class="button" id="copy-link" type="button">Copy this kit</button></div></div>
         </section>
         <section class="grid">
           <article class="panel"><h2>Release intelligence</h2><div class="facts">${facts.map(([label,value]) => `<div class="fact"><small>${escapeHtml(label)}</small><strong>${escapeHtml(value)}</strong></div>`).join('')}</div>${release.credits ? `<p class="copy">${escapeHtml(release.credits)}</p>` : ''}</article>
           <aside class="panel"><h2>Available material</h2><ul class="versions">${(release.availableVersions.length ? release.availableVersions : ['Official release link', 'Artwork and release details']).map(item => `<li>${escapeHtml(item)}</li>`).join('')}</ul>${release.contactName || release.contactEmail ? `<div class="contact">Campaign contact<br><strong>${escapeHtml(release.contactName || release.artist)}</strong>${release.contactEmail ? `<br>${escapeHtml(release.contactEmail)}` : ''}</div>` : ''}</aside>
         </section>`;
+      window.HaloReleaseArtwork?.wire(document.getElementById('app'), fallbackArtwork);
       document.getElementById('copy-link').addEventListener('click', async event => {
         await navigator.clipboard.writeText(location.href);
         event.currentTarget.textContent = 'Kit link copied';

@@ -12,6 +12,7 @@ const state = {
   canReviewTracks: false,
   managerCouncil: null,
   filter: "",
+  trackSort: "newest",
   authMode: "login",
   previewAudio: null,
   mixes: [],
@@ -1819,7 +1820,15 @@ function renderTracks() {
     previewGrid.innerHTML = `<p class="empty-state">The first creator transmission is waiting. Submit a track and open the signal.</p>`;
     return;
   }
-  previewGrid.innerHTML = state.tracks.map(track => `
+  const sorted = [...state.tracks];
+  if (state.trackSort === "votes") {
+    sorted.sort((a, b) => b.votesUp - a.votesUp || b.score - a.score);
+  } else if (state.trackSort === "az") {
+    sorted.sort((a, b) => a.title.localeCompare(b.title));
+  } else {
+    sorted.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }
+  previewGrid.innerHTML = sorted.map(track => `
     <article class="preview-card" style="--card-color:${roomColors[track.room] || roomColors.club}">
       <div class="preview-card-top"><span>${escapeHtml(track.room)} room</span><span>${escapeHtml(formatDuration(track.durationSeconds))} · ${track.playCount} plays</span></div>
       <div class="preview-card-body">
@@ -2562,6 +2571,11 @@ document.querySelectorAll("[data-filter]").forEach(button => button.addEventList
   state.filter = button.dataset.filter;
   document.querySelectorAll("[data-filter]").forEach(item => item.classList.toggle("active", item === button));
   loadTracks();
+}));
+document.querySelectorAll("[data-track-sort]").forEach(button => button.addEventListener("click", () => {
+  state.trackSort = button.dataset.trackSort;
+  document.querySelectorAll("[data-track-sort]").forEach(item => item.classList.toggle("active", item === button));
+  renderTracks();
 }));
 accountButton.addEventListener("click", async () => {
   if (!state.user) return openAuth();

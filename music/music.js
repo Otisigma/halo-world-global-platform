@@ -4,16 +4,18 @@
     grid: document.querySelector("#releaseGrid"),
     genres: document.querySelector("#genreFilter"),
     search: document.querySelector("#catalogSearch"),
+    sort: document.querySelector("#catalogSort"),
     count: document.querySelector("#releaseCount"),
     chartBoard: document.querySelector("#chartBoard"),
     chartRooms: document.querySelector("#chartRooms"),
+    chartSortButtons: document.querySelector("#chartSortButtons"),
     chartStage: document.querySelector("#chartStage"),
     address: document.querySelector("#catalogAddress"),
     copy: document.querySelector("#copyCatalog"),
     share: document.querySelector("#shareCatalog"),
     toast: document.querySelector("#catalogToast")
   };
-  const state = { releases: [], videos: [], query: "", genre: "all", chartRoom: "all", activeReleaseId: "" };
+  const state = { releases: [], videos: [], query: "", genre: "all", sort: "newest", chartRoom: "all", chartSort: "signal", activeReleaseId: "" };
   const fallbackArtwork = "/assets/releases/the-cold-is-lasting-longer.jpg";
   const chartRooms = {
     all: [],
@@ -100,12 +102,25 @@
   }
 
   function rankedReleases() {
-    return state.releases
+    const entries = state.releases
       .filter(releaseMatchesRoom)
-      .map(release => ({ release, signal: chartSignal(release) }))
-      .sort((left, right) => right.signal.score - left.signal.score || String(right.release.releaseDate).localeCompare(String(left.release.releaseDate)))
-      .slice(0, 10)
-      .map(entry => entry.release);
+      .map(release => ({ release, signal: chartSignal(release) }));
+    if (state.chartSort === "newest") {
+      entries.sort((a, b) => new Date(b.release.releaseDate).getTime() - new Date(a.release.releaseDate).getTime());
+    } else if (state.chartSort === "listens") {
+      entries.sort((a, b) => b.signal.recent - a.signal.recent || new Date(b.release.releaseDate).getTime() - new Date(a.release.releaseDate).getTime());
+    } else if (state.chartSort === "opens") {
+      entries.sort((a, b) => (b.release.chartActivity?.recentOpens || 0) - (a.release.chartActivity?.recentOpens || 0) || new Date(b.release.releaseDate).getTime() - new Date(a.release.releaseDate).getTime());
+    } else {
+      entries.sort((a, b) => b.signal.score - a.signal.score || new Date(b.release.releaseDate).getTime() - new Date(a.release.releaseDate).getTime());
+    }
+    return entries.slice(0, 10).map(entry => entry.release);
+  }
+
+  function renderChartSort() {
+    elements.chartSortButtons?.querySelectorAll("[data-chart-sort]").forEach(button => {
+      button.setAttribute("aria-pressed", String(button.dataset.chartSort === state.chartSort));
+    });
   }
 
   function videoForRelease(release) {
@@ -155,6 +170,7 @@
     elements.chartRooms.querySelectorAll("[data-chart-room]").forEach(button => {
       button.setAttribute("aria-pressed", String(button.dataset.chartRoom === state.chartRoom));
     });
+    renderChartSort();
     if (!releases.length) {
       state.activeReleaseId = "";
       elements.chartBoard.innerHTML = `<div class="chart-empty"><strong>This room is waiting for its first signal.</strong><p>Tag a published release with this room’s genre and it enters the live ranking automatically.</p></div>`;
@@ -256,11 +272,21 @@
 
   function filteredReleases() {
     const query = state.query.toLowerCase();
-    return state.releases.filter(release => {
+    const filtered = state.releases.filter(release => {
       const matchesGenre = state.genre === "all" || release.genres.some(genre => genre.toLowerCase() === state.genre);
       const haystack = [release.title, release.artist, release.pitch, ...release.genres].join(" ").toLowerCase();
       return matchesGenre && (!query || haystack.includes(query));
     });
+    if (state.sort === "oldest") {
+      filtered.sort((a, b) => new Date(a.releaseDate).getTime() - new Date(b.releaseDate).getTime());
+    } else if (state.sort === "az") {
+      filtered.sort((a, b) => a.title.localeCompare(b.title));
+    } else if (state.sort === "za") {
+      filtered.sort((a, b) => b.title.localeCompare(a.title));
+    } else if (state.sort === "artist") {
+      filtered.sort((a, b) => a.artist.localeCompare(b.artist) || a.title.localeCompare(b.title));
+    }
+    return filtered;
   }
 
   function renderGenres() {
@@ -328,6 +354,7 @@
   elements.copy.addEventListener("click", copyCatalogAddress);
   elements.share.addEventListener("click", shareCatalog);
   elements.search.addEventListener("input", event => { state.query = event.target.value.trim(); renderGrid(); });
+  elements.sort?.addEventListener("change", event => { state.sort = event.target.value; renderGrid(); });
   elements.genres.addEventListener("click", event => {
     const button = event.target.closest("[data-genre]");
     if (!button) return;
@@ -339,6 +366,13 @@
     const button = event.target.closest("[data-chart-room]");
     if (!button) return;
     state.chartRoom = button.dataset.chartRoom;
+    state.activeReleaseId = "";
+    renderChart();
+  });
+  elements.chartSortButtons?.addEventListener("click", event => {
+    const button = event.target.closest("[data-chart-sort]");
+    if (!button) return;
+    state.chartSort = button.dataset.chartSort;
     state.activeReleaseId = "";
     renderChart();
   });

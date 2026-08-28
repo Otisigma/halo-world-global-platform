@@ -1,5 +1,5 @@
 (() => {
-  const state = { mixes: [], videos: [], reviewCycles: [], canReview: false, reviewBreaks: [], selectedReviewCycleId: "", featuredMix: null, selectedMix: null, activeMix: null, activeMixVersion: "mastered", activeEpisode: 0, playlist: [], playlistIndex: 0, visualMixes: [], visualVideos: [], visualProjects: [], selectedVisualProjectId: "", selectedVisualSceneId: "" };
+  const state = { mixes: [], mixSort: "newest", videos: [], reviewCycles: [], canReview: false, reviewBreaks: [], selectedReviewCycleId: "", featuredMix: null, selectedMix: null, activeMix: null, activeMixVersion: "mastered", activeEpisode: 0, playlist: [], playlistIndex: 0, visualMixes: [], visualVideos: [], visualProjects: [], selectedVisualProjectId: "", selectedVisualSceneId: "" };
   const audio = document.querySelector("#mixAudio");
   const playerDock = document.querySelector("#playerDock");
   const heroRecord = document.querySelector("#heroRecord");
@@ -276,15 +276,23 @@
       mixRail.innerHTML = `<article class="mix-empty"><strong>The room is between sets.</strong><p>HALO Radio keeps the signal moving while the next full-length session is prepared.</p><a class="episode-link" href="/radio/">Listen to HALO Radio ↗</a></article>`;
       return;
     }
-    mixRail.innerHTML = state.mixes.map((mix, index) => {
+    const sorted = [...state.mixes];
+    if (state.mixSort === "az") {
+      sorted.sort((a, b) => (a.title || "").localeCompare(b.title || ""));
+    } else if (state.mixSort === "duration") {
+      sorted.sort((a, b) => (b.durationSeconds || 0) - (a.durationSeconds || 0));
+    } else {
+      sorted.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    }
+    mixRail.innerHTML = sorted.map((mix, index) => {
       const initials = (mix.title || "HX").split(/\s+/).slice(0, 2).map(word => word[0]).join("");
       return `<article class="mix-card">
         <div class="mix-card-index"><span>HX / ${String(index + 1).padStart(2, "0")}</span><span>${escapeHtml(mix.creator?.badge || "Long Play")}</span></div>
         <div class="mix-art"><img src="${escapeHtml(safeArtwork(mix.artworkUrl, artworkPool[index % artworkPool.length]))}" alt="${escapeHtml(`${mix.title} artwork`)}" loading="lazy" data-mix-artwork><strong>${escapeHtml(initials)}</strong></div>
         <h3>${escapeHtml(mix.title)}</h3>
         <p>${escapeHtml(mix.description || "A full-length HALO room session, left intact from first transition to final handoff.")}</p>
-        ${mix.hasOriginalComparison ? `<div class="mix-version-compare"><span>Hear the difference</span><div><button type="button" data-compare-version="original" data-compare-index="${index}">Original</button><button type="button" data-compare-version="mastered" data-compare-index="${index}">Mastered remix</button></div><small>Switches at the same timestamp for a direct A/B check.</small></div>` : ""}
-        <footer><span>${escapeHtml(mix.credits?.originalArtist || mix.creator?.name || "Owen Anthony")} · ${escapeHtml(mix.credits?.remixer || "DJ HALO X")}<br>${escapeHtml(mixMeta(mix))}</span><span class="mix-card-actions">${mix.salesPageUrl ? `<a href="${escapeHtml(mix.salesPageUrl)}">Sales page</a>` : ""}${mix.isOwner ? `<button class="mix-delete" type="button" data-delete-mix="${escapeHtml(mix.id)}" aria-label="Delete ${escapeHtml(mix.title)}">Delete</button>` : ""}<button class="mix-play" type="button" data-mix-index="${index}" aria-label="${mix.source === "youtube" ? "Watch" : "Play"} ${escapeHtml(mix.title)}"></button></span></footer>
+        ${mix.hasOriginalComparison ? `<div class="mix-version-compare"><span>Hear the difference</span><div><button type="button" data-compare-version="original" data-compare-id="${escapeHtml(mix.id)}">Original</button><button type="button" data-compare-version="mastered" data-compare-id="${escapeHtml(mix.id)}">Mastered remix</button></div><small>Switches at the same timestamp for a direct A/B check.</small></div>` : ""}
+        <footer><span>${escapeHtml(mix.credits?.originalArtist || mix.creator?.name || "Owen Anthony")} · ${escapeHtml(mix.credits?.remixer || "DJ HALO X")}<br>${escapeHtml(mixMeta(mix))}</span><span class="mix-card-actions">${mix.salesPageUrl ? `<a href="${escapeHtml(mix.salesPageUrl)}">Sales page</a>` : ""}${mix.isOwner ? `<button class="mix-delete" type="button" data-delete-mix="${escapeHtml(mix.id)}" aria-label="Delete ${escapeHtml(mix.title)}">Delete</button>` : ""}<button class="mix-play" type="button" data-mix-id="${escapeHtml(mix.id)}" aria-label="${mix.source === "youtube" ? "Watch" : "Play"} ${escapeHtml(mix.title)}"></button></span></footer>
       </article>`;
     }).join("");
     bindArtworkFallbacks(mixRail);
@@ -703,11 +711,12 @@
     }
     const compareButton = event.target.closest("[data-compare-version]");
     if (compareButton) {
-      switchMixVersion(state.mixes[Number(compareButton.dataset.compareIndex)], compareButton.dataset.compareVersion);
+      const mix = state.mixes.find(m => m.id === compareButton.dataset.compareId);
+      if (mix) switchMixVersion(mix, compareButton.dataset.compareVersion);
       return;
     }
-    const button = event.target.closest("[data-mix-index]");
-    if (button) playMix(state.mixes[Number(button.dataset.mixIndex)]);
+    const button = event.target.closest("[data-mix-id]");
+    if (button) playMix(state.mixes.find(m => m.id === button.dataset.mixId) || null);
   });
   dockVersionSwitch.addEventListener("click", event => {
     const button = event.target.closest("[data-dock-version]");
@@ -929,6 +938,11 @@
   }));
   window.addEventListener("halo-identity-ready", updateUploadAccess);
   updateUploadAccess();
+
+  document.querySelector("#mixSort")?.addEventListener("change", event => {
+    state.mixSort = event.target.value;
+    renderMixes();
+  });
 
   loadData();
 })();

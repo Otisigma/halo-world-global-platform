@@ -81,6 +81,13 @@
         <button type="button" data-chart-room="global">Afrobeats / Global</button>
       </div>
 
+      <div class="chart-sort-row" id="chartSortButtons" role="group" aria-label="Sort chart">
+        <button type="button" data-chart-sort="signal" aria-pressed="true">Signal score</button>
+        <button type="button" data-chart-sort="newest" aria-pressed="false">Newest</button>
+        <button type="button" data-chart-sort="listens" aria-pressed="false">Most listens</button>
+        <button type="button" data-chart-sort="opens" aria-pressed="false">Most opens</button>
+      </div>
+
       <div class="chart-console">
         <div class="chart-board" id="chartBoard" aria-live="polite">
           <div class="chart-loading"><span></span><span></span><span></span></div>
@@ -100,10 +107,22 @@
           <p class="section-index">03 / Full transmission</p>
           <h2 id="allReleasesTitle">All releases</h2>
         </div>
-        <label class="search-control">
-          <span>Search the catalog</span>
-          <input id="catalogSearch" type="search" placeholder="Title, artist, genre…" autocomplete="off">
-        </label>
+        <div class="catalog-controls">
+          <label class="search-control">
+            <span>Search the catalog</span>
+            <input id="catalogSearch" type="search" placeholder="Title, artist, genre…" autocomplete="off">
+          </label>
+          <label class="sort-control">
+            <span>Sort by</span>
+            <select id="catalogSort">
+              <option value="newest">Newest first</option>
+              <option value="oldest">Oldest first</option>
+              <option value="az">Title A–Z</option>
+              <option value="za">Title Z–A</option>
+              <option value="artist">Artist A–Z</option>
+            </select>
+          </label>
+        </div>
       </header>
       <div class="genre-filter" id="genreFilter" aria-label="Filter releases by genre"></div>
       <div class="release-grid" id="releaseGrid" aria-live="polite">

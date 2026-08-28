@@ -1750,7 +1750,11 @@
               avatar: data.profile.avatar,
               region: data.profile.region,
               favoriteGenres: (data.profile.favorite_genres || []).join(', '),
-              vibeStatus: data.profile.vibe_status
+              vibeStatus: data.profile.vibe_status,
+              personaName: data.profile.persona_name || '',
+              personaType: data.profile.persona_type || '',
+              personaBio: data.profile.persona_bio || '',
+              visibilityLevel: data.profile.visibility_level || 'community'
             } : null);
           };
 
@@ -2274,7 +2278,11 @@
               avatar: profileDraft.avatar,
               region: profileDraft.region,
               favoriteGenres: profileDraft.favoriteGenres.split(',').map(item => item.trim()).filter(Boolean),
-              vibeStatus: profileDraft.vibeStatus
+              vibeStatus: profileDraft.vibeStatus,
+              personaName: profileDraft.personaName || '',
+              personaType: profileDraft.personaType || '',
+              personaBio: profileDraft.personaBio || '',
+              visibilityLevel: profileDraft.visibilityLevel || 'community'
             }, 'Your fan signal is updated.');
             window.haloStats?.track('community_profile_updated');
           };
@@ -4456,6 +4464,30 @@
                                   <input aria-label="Favorite genres" value={profileDraft?.favoriteGenres || ''} onChange={event => setProfileDraft(previous => ({...previous, favoriteGenres: event.target.value}))} placeholder="Genres, comma separated" className="rounded-lg border border-white/10 bg-black/50 px-3 py-2 text-[11px] text-white focus:border-amber-400 focus:outline-none" />
                                 </div>
                                 <input aria-label="Currently vibing to" value={profileDraft?.vibeStatus || ''} onChange={event => setProfileDraft(previous => ({...previous, vibeStatus: event.target.value}))} placeholder="Currently vibing to…" className="mt-2 w-full rounded-lg border border-white/10 bg-black/50 px-3 py-2 text-[11px] text-white focus:border-rose-400 focus:outline-none" />
+                                <div className="mt-4 border-t border-white/10 pt-4">
+                                  <p className="mb-2 text-[9px] font-black uppercase tracking-widest text-purple-300">Persona</p>
+                                  <div className="grid grid-cols-[1fr_1fr] gap-2">
+                                    <input aria-label="Persona name" value={profileDraft?.personaName || ''} onChange={event => setProfileDraft(previous => ({...previous, personaName: event.target.value}))} placeholder="Persona name (optional)" maxLength="48" className="col-span-2 rounded-lg border border-white/10 bg-black/50 px-3 py-2 text-[11px] text-white focus:border-purple-400 focus:outline-none" />
+                                    <select aria-label="Persona archetype" value={profileDraft?.personaType || ''} onChange={event => setProfileDraft(previous => ({...previous, personaType: event.target.value}))} className="rounded-lg border border-white/10 bg-black/50 px-3 py-2 text-[11px] text-white focus:border-purple-400 focus:outline-none">
+                                      <option value="">Archetype…</option>
+                                      <option value="listener">Listener</option>
+                                      <option value="creator">Creator</option>
+                                      <option value="dj">DJ</option>
+                                      <option value="collector">Collector</option>
+                                      <option value="advocate">Advocate</option>
+                                      <option value="wanderer">Wanderer</option>
+                                      <option value="oracle">Oracle</option>
+                                      <option value="architect">Architect</option>
+                                    </select>
+                                    <select aria-label="Visibility level" value={profileDraft?.visibilityLevel || 'community'} onChange={event => setProfileDraft(previous => ({...previous, visibilityLevel: event.target.value}))} className="rounded-lg border border-white/10 bg-black/50 px-3 py-2 text-[11px] text-white focus:border-purple-400 focus:outline-none">
+                                      <option value="public">Public</option>
+                                      <option value="community">Community</option>
+                                      <option value="circle">Circle</option>
+                                      <option value="private">Private</option>
+                                    </select>
+                                  </div>
+                                  <textarea aria-label="Persona bio" value={profileDraft?.personaBio || ''} onChange={event => setProfileDraft(previous => ({...previous, personaBio: event.target.value}))} placeholder="A short persona description or bio… (optional)" maxLength="280" rows="3" className="mt-2 w-full rounded-lg border border-white/10 bg-black/50 px-3 py-2 text-[11px] text-white focus:border-purple-400 focus:outline-none resize-none" />
+                                </div>
                                 <button type="submit" className="mt-3 rounded-full bg-amber-300 px-4 py-2 text-[9px] font-black uppercase tracking-widest text-black transition hover:bg-amber-200">Save profile</button>
                               </form> : <div className="relative overflow-hidden rounded-2xl border border-amber-400/25 bg-black/30 p-5"><div className="absolute -right-16 -top-16 h-40 w-40 rounded-full bg-amber-300/10 blur-3xl"></div><div className="relative"><p className="text-[9px] font-black uppercase tracking-[0.26em] text-amber-300">Guest pass</p><h4 className="mt-3 text-xl font-black text-white">The room is open. Your place in it can be permanent.</h4><p className="mt-2 max-w-md text-xs leading-5 text-gray-400">Explore tonight’s people and conversation. Join free when you are ready to chat, follow, vote, and carry your recognition into the next show.</p><button type="button" onClick={() => openIdentity('signup', 'Membership protects your identity and keeps your community history between shows.')} className="mt-5 rounded-full bg-amber-300 px-5 py-2.5 text-[10px] font-black uppercase tracking-widest text-black transition hover:bg-amber-200">Claim your place</button></div></div>}
 

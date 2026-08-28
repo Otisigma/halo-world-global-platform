@@ -22,6 +22,19 @@
     return { src, source, artworkOverride, importedArtwork, fallback };
   }
 
+  function logArtworkIssue(eventType, brokenUrl, page) {
+    console.warn("[HALO Music] Release artwork issue:", eventType, brokenUrl);
+    window.dispatchEvent(new CustomEvent("halo:journal-event", {
+      detail: {
+        eventType,
+        category: "problem",
+        targetName: "Release artwork unavailable",
+        details: { url: brokenUrl, page },
+        immediate: true
+      }
+    }));
+  }
+
   function wire(root = document, fallbackArtwork = DEFAULT_RELEASE_ARTWORK) {
     root.querySelectorAll("img[data-release-artwork]").forEach(image => {
       if (image.dataset.releaseArtworkReady === "true") return;
@@ -30,12 +43,14 @@
       const fallback = safeUrl(image.dataset.artworkFallback || fallbackArtwork, DEFAULT_RELEASE_ARTWORK);
       const recover = () => {
         if (image.getAttribute("src") !== fallback) {
+          logArtworkIssue("music_artwork_error", image.getAttribute("src") || "(no src)", window.location.pathname);
           frame?.classList.add("artwork-recovered");
           frame?.classList.remove("artwork-missing");
           image.src = fallback;
           return;
         }
         frame?.classList.add("artwork-missing");
+        logArtworkIssue("music_artwork_missing", fallback, window.location.pathname);
       };
       image.addEventListener("load", () => frame?.classList.remove("artwork-missing"));
       image.addEventListener("error", recover);

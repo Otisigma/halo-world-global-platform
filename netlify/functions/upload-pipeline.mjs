@@ -37,11 +37,11 @@ function stageSortOrder(stage) {
 async function loadPipeline(db, ownerMemberId, department) {
   // Load all active songs with their pipeline stages and linked radio tracks.
   const stageSql = department === "radio"
-    ? `AND s.pipeline_stage IN ('ready_for_radio', 'approved', 'published')`
+    ? `AND s.pipeline_status IN ('ready_for_radio', 'approved', 'published')`
     : department === "sales"
-      ? `AND s.pipeline_stage IN ('ready_for_sale', 'approved', 'published')`
+      ? `AND s.pipeline_status IN ('ready_for_sale', 'approved', 'published')`
       : department === "dreamweaver"
-        ? `AND s.pipeline_stage IN ('needs_assets', 'dreamweaver_in_progress', 'ready_for_radio')`
+        ? `AND s.pipeline_status IN ('needs_assets', 'dreamweaver_in_progress', 'ready_for_radio')`
         : "";
 
   const rows = await db.sql`
@@ -52,7 +52,7 @@ async function loadPipeline(db, ownerMemberId, department) {
       s.album_title,
       s.genre,
       s.artwork_url,
-      s.pipeline_stage,
+      s.pipeline_status,
       s.pipeline_updated_at,
       s.metadata_status,
       s.metadata_score,
@@ -92,7 +92,7 @@ async function loadPipeline(db, ownerMemberId, department) {
       albumTitle: row.album_title || "",
       genre: row.genre || "",
       artworkUrl: row.artwork_url || "",
-      pipelineStage: row.pipeline_stage || "uploaded",
+      pipelineStatus: row.pipeline_status || "uploaded",
       pipelineUpdatedAt: row.pipeline_updated_at ? new Date(row.pipeline_updated_at).toISOString() : "",
       metadataStatus: row.metadata_status || "needs_review",
       metadataScore: Number(row.metadata_score || 0),
@@ -109,7 +109,7 @@ async function loadPipeline(db, ownerMemberId, department) {
 
   const items = [...itemMap.values()];
 
-  items.sort((a, b) => stageSortOrder(a.pipelineStage) - stageSortOrder(b.pipelineStage) || new Date(b.updatedAt) - new Date(a.updatedAt));
+  items.sort((a, b) => stageSortOrder(a.pipelineStatus) - stageSortOrder(b.pipelineStatus) || new Date(b.updatedAt) - new Date(a.updatedAt));
   return items;
 }
 
@@ -119,7 +119,7 @@ async function setStage(db, ownerMemberId, payload) {
   if (!songId || !stage) return json({ message: "Choose a valid song and a recognised pipeline stage" }, 400);
   const rows = await db.sql`
     UPDATE halo_song_catalog
-    SET pipeline_stage = ${stage},
+    SET pipeline_status = ${stage},
         pipeline_updated_at = NOW(),
         updated_at = NOW()
     WHERE id = ${songId}

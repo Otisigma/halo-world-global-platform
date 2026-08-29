@@ -1,24 +1,15 @@
--- Add pipeline stage tracking to the song catalog master record.
--- Each song has a single pipeline_stage that all departments share.
+-- Extend the unified upload pipeline.
+-- main already added pipeline_status and source_upload_surface via
+-- 20260829000000_unified_upload_pipeline.sql. This migration adds the
+-- pipeline_updated_at timestamp (so departments can see when a stage changed)
+-- and the master_song_id FK on halo_radio_tracks so radio submissions are
+-- provably tied to their master catalog entry.
+
 ALTER TABLE halo_song_catalog
-  ADD COLUMN IF NOT EXISTS pipeline_stage TEXT NOT NULL DEFAULT 'uploaded',
   ADD COLUMN IF NOT EXISTS pipeline_updated_at TIMESTAMPTZ DEFAULT NOW();
 
-ALTER TABLE halo_song_catalog
-  ADD CONSTRAINT halo_song_catalog_pipeline_stage_check
-  CHECK (pipeline_stage IN (
-    'uploaded',
-    'processing',
-    'needs_assets',
-    'dreamweaver_in_progress',
-    'ready_for_radio',
-    'ready_for_sale',
-    'approved',
-    'published'
-  ));
-
 CREATE INDEX IF NOT EXISTS halo_song_catalog_pipeline_stage_idx
-  ON halo_song_catalog(pipeline_stage, updated_at DESC);
+  ON halo_song_catalog(pipeline_status, updated_at DESC);
 
 -- Link radio tracks back to their master song catalog entry so the radio
 -- room and song catalog stay in sync from the same source item.

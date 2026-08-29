@@ -22,7 +22,8 @@ export const songs = pgTable("halo_song_catalog", {
   artworkUrl: text("artwork_url"),
   artworkUploadedAt: timestamp("artwork_uploaded_at", { withTimezone: true }),
   reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
-  pipelineStage: text("pipeline_stage").notNull().default("uploaded"),
+  pipelineStatus: text("pipeline_status").notNull().default("uploaded"),
+  sourceUploadSurface: text("source_upload_surface").notNull().default(""),
   pipelineUpdatedAt: timestamp("pipeline_updated_at", { withTimezone: true }),
   status: text("status").notNull().default("active"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -30,7 +31,7 @@ export const songs = pgTable("halo_song_catalog", {
 }, table => [
   index("halo_song_catalog_owner_updated_idx").on(table.ownerMemberId, table.updatedAt),
   index("halo_song_catalog_source_release_idx").on(table.sourceReleaseId),
-  index("halo_song_catalog_pipeline_stage_idx").on(table.pipelineStage, table.updatedAt),
+  index("halo_song_catalog_pipeline_stage_idx").on(table.pipelineStatus, table.updatedAt),
   uniqueIndex("halo_song_catalog_owner_source_unique").on(table.ownerMemberId, table.sourceReleaseId),
 ]);
 

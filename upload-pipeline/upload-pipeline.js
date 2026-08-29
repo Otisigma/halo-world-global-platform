@@ -103,8 +103,8 @@ function renderItem(item) {
       </div>
       <div class="pipeline-item-radio">${radioHtml}</div>
       <div class="pipeline-item-actions">
-        ${stageChip(item.pipelineStage)}
-        <button class="move-stage-button" type="button" data-song-id="${escapeHtml(item.id)}" data-song-title="${escapeHtml(item.title)}" data-current-stage="${escapeHtml(item.pipelineStage)}">Move stage</button>
+        ${stageChip(item.pipelineStatus)}
+        <button class="move-stage-button" type="button" data-song-id="${escapeHtml(item.id)}" data-song-title="${escapeHtml(item.title)}" data-current-stage="${escapeHtml(item.pipelineStatus)}">Move stage</button>
       </div>
     </article>`;
 }
@@ -149,7 +149,7 @@ async function handleStageSubmit(event) {
     elements.stageMessage.textContent = data.message;
     const item = state.items.find(i => i.id === state.activeSongId);
     if (item) {
-      item.pipelineStage = stage;
+      item.pipelineStatus = stage;
       item.pipelineUpdatedAt = new Date().toISOString();
     }
     render();

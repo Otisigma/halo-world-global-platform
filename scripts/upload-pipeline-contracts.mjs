@@ -38,25 +38,25 @@ const checks = [
   // API function
   [api.includes("PIPELINE_STAGES") && api.includes('"uploaded"') && api.includes('"dreamweaver_in_progress"') && api.includes('"ready_for_radio"') && api.includes('"published"'), "API defines the full set of valid pipeline stages"],
   [api.includes("loadPipeline") && api.includes("master_song_id") && api.includes("radio_room"), "API loads songs with linked radio tracks in a single query"],
-  [api.includes("set_stage") && api.includes("pipeline_stage") && api.includes("pipeline_updated_at"), "API persists stage transitions with a timestamp"],
+  [api.includes("set_stage") && api.includes("pipeline_status") && api.includes("pipeline_updated_at"), "API persists stage transitions with a timestamp"],
   [api.includes("link_radio_track") && api.includes("master_song_id"), "API supports linking a radio track to its master song catalog entry"],
   [api.includes("verifyRequestOrigin") && api.includes("ensureMembership") && api.includes('path: "/api/upload-pipeline"'), "API protects pipeline actions with membership and origin checks"],
   [api.includes("department") && api.includes("ready_for_radio") && api.includes("ready_for_sale") && api.includes("dreamweaver"), "API filters items by department when a department query param is given"],
 
   // Song catalog integration
   [catalogApi.includes("PIPELINE_STAGES") && catalogApi.includes("set_pipeline_stage"), "song catalog API exposes a set_pipeline_stage action"],
-  [catalogApi.includes("pipelineStage") && catalogApi.includes("pipelineUpdatedAt"), "song catalog serializes pipelineStage and pipelineUpdatedAt for each song"],
+  [catalogApi.includes("pipelineStatus") && catalogApi.includes("pipelineUpdatedAt"), "song catalog serializes pipelineStage and pipelineUpdatedAt for each song"],
 
   // Song catalog client
-  [catalogClient.includes("songPipelineStage"), "song catalog client populates the pipeline stage display element in the workspace"],
+  [catalogClient.includes("songPipelineStatus"), "song catalog client populates the pipeline stage display element in the workspace"],
 
   // Drizzle schema
-  [schema.includes("pipelineStage") && schema.includes('"pipeline_stage"'), "Drizzle schema includes the pipelineStage column on the songs table"],
+  [schema.includes("pipelineStatus") && schema.includes('"pipeline_status"'), "Drizzle schema includes the pipelineStatus column on the songs table"],
   [schema.includes("pipelineUpdatedAt") && schema.includes('"pipeline_updated_at"'), "Drizzle schema includes the pipelineUpdatedAt column on the songs table"],
-  [schema.includes("halo_song_catalog_pipeline_stage_idx"), "Drizzle schema defines an index on pipeline_stage for efficient department queries"],
+  [schema.includes("halo_song_catalog_pipeline_stage_idx"), "Drizzle schema defines an index on pipeline_status for efficient department queries"],
 
   // Migration
-  [migration.includes("pipeline_stage") && migration.includes("uploaded") && migration.includes("dreamweaver_in_progress") && migration.includes("published"), "migration adds pipeline_stage column with all valid stage values"],
+  [migration.includes("pipeline_updated_at") && migration.includes("master_song_id"), "migration adds pipeline_updated_at and master_song_id columns"],
   [migration.includes("pipeline_updated_at"), "migration adds pipeline_updated_at timestamp column"],
   [migration.includes("master_song_id") && migration.includes("halo_radio_tracks"), "migration adds master_song_id to halo_radio_tracks to link radio entries to the master song"],
   [migration.includes("halo_radio_tracks_master_song_idx"), "migration indexes master_song_id for efficient lookups"],

@@ -77,7 +77,8 @@ function serializeSong(song: typeof songs.$inferSelect, versions: Array<typeof s
     reviewedAt: song.reviewedAt?.toISOString() || "",
     artworkUrl: song.artworkUrl || "",
     artworkUploadedAt: song.artworkUploadedAt?.toISOString() || "",
-    pipelineStage: song.pipelineStage || "uploaded",
+    pipelineStatus: song.pipelineStatus || "uploaded",
+    sourceUploadSurface: song.sourceUploadSurface || "",
     pipelineUpdatedAt: song.pipelineUpdatedAt?.toISOString() || "",
     versions: versions.map(version => ({
       id: version.id,
@@ -351,7 +352,7 @@ export default async function songCatalogHandler(request: Request) {
       const songId = cleanId(payload.songId);
       const stage = cleanEnum(payload.stage, PIPELINE_STAGES, "");
       if (!songId || !stage) return json({ message: "Choose a valid song and a recognised pipeline stage" }, 400);
-      const rows = await db.update(songs).set({ pipelineStage: stage, pipelineUpdatedAt: new Date(), updatedAt: new Date() })
+      const rows = await db.update(songs).set({ pipelineStatus: stage, pipelineUpdatedAt: new Date(), updatedAt: new Date() })
         .where(and(eq(songs.id, songId), eq(songs.ownerMemberId, membership.member_id), eq(songs.status, "active"))).returning({ id: songs.id });
       if (!rows.length) return json({ message: "That song was not found" }, 404);
       return json({ message: `Song moved to ${stage.replace(/_/g, " ")}`, songId, stage });

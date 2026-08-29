@@ -1,0 +1,313 @@
+/* ====================================================================
+   Upload Pipeline — unified department view
+   ==================================================================== */
+
+/* Header */
+.pipeline-header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.75rem 1.5rem;
+  background: var(--surface-1, #1a1814);
+  border-bottom: 1px solid var(--border-1, #2e2b26);
+  flex-wrap: wrap;
+}
+
+.pipeline-header .brand {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  text-decoration: none;
+  color: inherit;
+  font-weight: 600;
+  margin-right: auto;
+}
+
+.pipeline-header .brand img {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+}
+
+.pipeline-header nav {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.dept-tab {
+  padding: 0.35rem 0.8rem;
+  border-radius: 4px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-2, #9a948c);
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.dept-tab:hover {
+  background: var(--surface-2, #222018);
+  color: var(--text-1, #e8e3db);
+}
+
+.dept-tab.is-active {
+  background: var(--accent, #c8a96e);
+  color: #111;
+  border-color: transparent;
+  font-weight: 600;
+}
+
+/* Hero */
+.pipeline-hero {
+  padding: 2rem 1.5rem 1.5rem;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 1.5rem;
+  align-items: start;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+@media (max-width: 700px) {
+  .pipeline-hero {
+    grid-template-columns: 1fr;
+  }
+}
+
+.pipeline-hero .eyebrow {
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent, #c8a96e);
+  margin-bottom: 0.4rem;
+}
+
+.pipeline-hero h1 {
+  font-size: clamp(1.4rem, 3vw, 2rem);
+  margin: 0 0 0.5rem;
+}
+
+.pipeline-hero p {
+  color: var(--text-2, #9a948c);
+  font-size: 0.9rem;
+  max-width: 54ch;
+}
+
+/* Stage legend */
+.pipeline-legend {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+  padding: 0.75rem;
+  background: var(--surface-2, #1e1c18);
+  border-radius: 8px;
+  border: 1px solid var(--border-1, #2e2b26);
+}
+
+.stage-arrow {
+  color: var(--text-3, #6b6560);
+  font-size: 0.75rem;
+}
+
+/* Board */
+.pipeline-board {
+  max-width: 1200px;
+  margin: 0 auto 2rem;
+  padding: 0 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.pipeline-loading,
+.pipeline-empty {
+  color: var(--text-2, #9a948c);
+  padding: 2rem;
+  text-align: center;
+}
+
+.pipeline-empty a {
+  color: var(--accent, #c8a96e);
+}
+
+/* Pipeline item card */
+.pipeline-item {
+  display: grid;
+  grid-template-columns: 48px 1fr auto auto;
+  gap: 0.75rem;
+  align-items: center;
+  padding: 0.75rem;
+  background: var(--surface-2, #1e1c18);
+  border: 1px solid var(--border-1, #2e2b26);
+  border-radius: 8px;
+  transition: border-color 0.15s;
+}
+
+.pipeline-item:hover {
+  border-color: var(--border-2, #403c35);
+}
+
+.pipeline-item-art {
+  width: 48px;
+  height: 48px;
+  border-radius: 4px;
+  object-fit: cover;
+  background: var(--surface-3, #252320);
+}
+
+.pipeline-item-art-placeholder {
+  width: 48px;
+  height: 48px;
+  border-radius: 4px;
+  background: var(--surface-3, #252320);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-3, #6b6560);
+  font-size: 1.2rem;
+}
+
+.pipeline-item-meta strong {
+  display: block;
+  font-size: 0.95rem;
+  margin-bottom: 0.1rem;
+}
+
+.pipeline-item-meta small {
+  color: var(--text-2, #9a948c);
+  font-size: 0.8rem;
+}
+
+.pipeline-item-radio {
+  font-size: 0.75rem;
+  color: var(--text-2, #9a948c);
+}
+
+.pipeline-item-radio .radio-linked {
+  color: var(--accent, #c8a96e);
+}
+
+/* Stage chips */
+.stage-chip {
+  display: inline-block;
+  padding: 0.2rem 0.55rem;
+  border-radius: 4px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.stage-uploaded      { background: #2a2820; color: #c8a96e; }
+.stage-processing    { background: #1e2430; color: #6da4d4; }
+.stage-needs-assets,
+.stage-needs_assets  { background: #2a1e20; color: #d46d6d; }
+.stage-dreamweaver,
+.stage-dreamweaver_in_progress { background: #1e2530; color: #6da4d4; }
+.stage-ready-radio,
+.stage-ready_for_radio  { background: #1e2a20; color: #6dc87a; }
+.stage-ready-sale,
+.stage-ready_for_sale   { background: #252a1e; color: #a8c86d; }
+.stage-approved      { background: #1e2a24; color: #6dc89a; }
+.stage-published     { background: #1c2420; color: #c8a96e; border: 1px solid #c8a96e44; }
+
+/* Move stage button */
+.move-stage-button {
+  padding: 0.35rem 0.7rem;
+  border-radius: 4px;
+  border: 1px solid var(--border-1, #2e2b26);
+  background: transparent;
+  color: var(--text-2, #9a948c);
+  font-size: 0.8rem;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.move-stage-button:hover {
+  background: var(--surface-3, #252320);
+  color: var(--text-1, #e8e3db);
+  border-color: var(--border-2, #403c35);
+}
+
+/* Dialog */
+#stageDialog {
+  border: 1px solid var(--border-1, #2e2b26);
+  border-radius: 10px;
+  background: var(--surface-1, #1a1814);
+  color: var(--text-1, #e8e3db);
+  padding: 1.5rem;
+  min-width: 300px;
+  max-width: 420px;
+}
+
+#stageDialog::backdrop {
+  background: rgba(0, 0, 0, 0.6);
+}
+
+#stageDialog h2 {
+  margin: 0 0 0.35rem;
+  font-size: 1.1rem;
+}
+
+.dialog-song-name {
+  color: var(--text-2, #9a948c);
+  font-size: 0.85rem;
+  margin: 0 0 1rem;
+}
+
+#stageDialog label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin-bottom: 1rem;
+}
+
+#stageDialog label span {
+  font-size: 0.8rem;
+  color: var(--text-2, #9a948c);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+#stageDialog select {
+  width: 100%;
+  padding: 0.45rem 0.6rem;
+  border-radius: 4px;
+  border: 1px solid var(--border-1, #2e2b26);
+  background: var(--surface-2, #1e1c18);
+  color: var(--text-1, #e8e3db);
+  font-size: 0.9rem;
+}
+
+.stage-message {
+  font-size: 0.85rem;
+  color: var(--text-2, #9a948c);
+  min-height: 1.4em;
+  margin: 0 0 0.75rem;
+}
+
+.dialog-actions {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: flex-end;
+}
+
+@media (max-width: 480px) {
+  .pipeline-item {
+    grid-template-columns: 40px 1fr;
+    grid-template-rows: auto auto;
+  }
+
+  .pipeline-item-art,
+  .pipeline-item-art-placeholder {
+    width: 40px;
+    height: 40px;
+  }
+
+  .move-stage-button {
+    grid-column: 2;
+  }
+}

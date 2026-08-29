@@ -10,6 +10,7 @@ const MAX_BODY_BYTES = 80_000;
 const RIGHTS_STATUSES = new Set(["needs_review", "cleared", "disputed"]);
 const SALE_STATUSES = new Set(["for_sale", "not_for_sale", "coming_soon"]);
 const MASTERING_STATUSES = new Set(["not_started", "queued", "in_progress", "review", "approved"]);
+const PIPELINE_STAGES = new Set(["uploaded", "processing", "needs_assets", "dreamweaver_in_progress", "ready_for_radio", "ready_for_sale", "approved", "published"]);
 const VERSION_ROUTES = {
   sale_master: { label: "Sale master", destination: "storefront", targetLufs: -14, saleEnabled: true },
   radio_edit: { label: "Radio edit", destination: "radio", targetLufs: -16, saleEnabled: false },
@@ -76,6 +77,8 @@ function serializeSong(song: typeof songs.$inferSelect, versions: Array<typeof s
     reviewedAt: song.reviewedAt?.toISOString() || "",
     artworkUrl: song.artworkUrl || "",
     artworkUploadedAt: song.artworkUploadedAt?.toISOString() || "",
+    pipelineStage: song.pipelineStage || "uploaded",
+    pipelineUpdatedAt: song.pipelineUpdatedAt?.toISOString() || "",
     versions: versions.map(version => ({
       id: version.id,
       versionType: version.versionType,
@@ -344,6 +347,15 @@ export default async function songCatalogHandler(request: Request) {
     if (payload.action === "import_existing") return importExisting(nativeDb, membership.member_id);
     if (payload.action === "queue_catalog_producer") return queueProducer(nativeDb, membership.member_id);
     if (payload.action === "set_package_status") return updatePackageStatus(nativeDb, membership.member_id, payload);
+    if (payload.action === "set_pipeline_stage") {
+      const songId = cleanId(payload.songId);
+      const stage = cleanEnum(payload.stage, PIPELINE_STAGES, "");
+      if (!songId || !stage) return json({ message: "Choose a valid song and a recognised pipeline stage" }, 400);
+      const rows = await db.update(songs).set({ pipelineStage: stage, pipelineUpdatedAt: new Date(), updatedAt: new Date() })
+        .where(and(eq(songs.id, songId), eq(songs.ownerMemberId, membership.member_id), eq(songs.status, "active"))).returning({ id: songs.id });
+      if (!rows.length) return json({ message: "That song was not found" }, 404);
+      return json({ message: `Song moved to ${stage.replace(/_/g, " ")}`, songId, stage });
+    }
     if (payload.action === "review_song") {
       const songId = cleanId(payload.songId);
       if (!songId) return json({ message: "Choose a valid song" }, 400);

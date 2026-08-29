@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#191713">
+  <title>Upload Pipeline | HALO</title>
+  <meta name="description" content="One upload, every department. Track every song from upload through Dream Weaver, radio, sales, and publishing in one unified view.">
+  <link rel="icon" href="/assets/halo-app-icon-192.png">
+  <link rel="stylesheet" href="/accessibility.css">
+  <link rel="stylesheet" href="/halo-brand.css">
+  <link rel="stylesheet" href="/upload-pipeline/upload-pipeline.css">
+</head>
+<body>
+  <header class="pipeline-header">
+    <a class="brand" href="/"><img src="/assets/halo-logo-mark.webp" alt=""><span><strong>HALO</strong><small>Upload Pipeline</small></span></a>
+    <nav aria-label="Department views">
+      <button class="dept-tab is-active" data-dept="all" type="button">All</button>
+      <button class="dept-tab" data-dept="dreamweaver" type="button">Dream Weaver</button>
+      <button class="dept-tab" data-dept="radio" type="button">Radio</button>
+      <button class="dept-tab" data-dept="sales" type="button">Sales</button>
+    </nav>
+    <a class="primary-button" href="/song-catalog/">Open Song Catalog</a>
+  </header>
+
+  <main>
+    <section class="pipeline-hero" aria-labelledby="pipelineTitle">
+      <div>
+        <p class="eyebrow">One upload · every department</p>
+        <h1 id="pipelineTitle">The unified content pipeline.</h1>
+        <p>Upload a song once from the Song Catalog or Artist Room. HALO turns it into a shared master record that every department works from — Dream Weaver, Radio, Sales, and Publishing stay continuously in sync.</p>
+      </div>
+      <div class="pipeline-legend" aria-label="Stage legend">
+        <span class="stage-chip stage-uploaded">Uploaded</span>
+        <span class="stage-arrow">→</span>
+        <span class="stage-chip stage-needs-assets">Needs Assets</span>
+        <span class="stage-arrow">→</span>
+        <span class="stage-chip stage-dreamweaver">Dream Weaver</span>
+        <span class="stage-arrow">→</span>
+        <span class="stage-chip stage-ready-radio">Ready for Radio</span>
+        <span class="stage-arrow">→</span>
+        <span class="stage-chip stage-approved">Approved</span>
+        <span class="stage-arrow">→</span>
+        <span class="stage-chip stage-published">Published</span>
+      </div>
+    </section>
+
+    <div id="pipelineShell" aria-busy="true">
+      <section class="pipeline-board" id="pipelineBoard" aria-label="Pipeline items" aria-live="polite">
+        <p class="pipeline-loading" id="pipelineLoading" role="status">Loading pipeline…</p>
+        <p class="pipeline-empty" id="pipelineEmpty" hidden>No songs in this view yet. Add a song in the <a href="/song-catalog/">Song Catalog</a> and it will appear here.</p>
+      </section>
+    </div>
+  </main>
+
+  <dialog id="stageDialog" aria-labelledby="stageDialogTitle" aria-modal="true">
+    <form id="stageForm" method="dialog">
+      <h2 id="stageDialogTitle">Move to next stage</h2>
+      <p id="stageDialogSongName" class="dialog-song-name"></p>
+      <label>
+        <span>Pipeline stage</span>
+        <select id="stageSelect" name="stage" required>
+          <option value="uploaded">Uploaded</option>
+          <option value="processing">Processing</option>
+          <option value="needs_assets">Needs Assets</option>
+          <option value="dreamweaver_in_progress">Dream Weaver In Progress</option>
+          <option value="ready_for_radio">Ready for Radio</option>
+          <option value="ready_for_sale">Ready for Sale</option>
+          <option value="approved">Approved</option>
+          <option value="published">Published</option>
+        </select>
+      </label>
+      <p id="stageMessage" class="stage-message" role="status" aria-live="polite"></p>
+      <div class="dialog-actions">
+        <button class="primary-button" type="submit" id="stageSubmitButton">Move stage</button>
+        <button class="quiet-button" type="button" id="stageCloseButton">Cancel</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script type="module" src="/identity.js"></script>
+  <script type="module" src="/upload-pipeline/upload-pipeline.js"></script>
+</body>
+</html>

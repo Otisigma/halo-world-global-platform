@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { getDatabase } from "@netlify/database";
 import { getUser, verifyRequestOrigin } from "@netlify/identity";
 import { cleanText, ensureMembership } from "../lib/halo-x.mjs";
+import { appendLedgerEntry } from "../lib/halo-ledger.mjs";
 
 // Pipeline stages in order.  Departments can only advance; they cannot regress.
 const PIPELINE_STAGES = [
@@ -145,6 +146,17 @@ async function createProject(payload, db, membership) {
   `;
 
   const row = await getOneSong(db, membership.member_id, id);
+  // Fire-and-forget ledger entry — don't block the response if it fails.
+  appendLedgerEntry(db, {
+    actorId: membership.member_id,
+    actorType: "member",
+    eventCategory: "upload_event",
+    refSongId: id,
+    summary: `Master project created: "${title}" by ${artistName}`,
+    details: { surface, genre, albumTitle, isrc, upc, versionId },
+    pipelineStage: "uploaded",
+    outcome: "success",
+  }).catch(err => console.error("Ledger create_project entry failed", err instanceof Error ? err.message : err));
   return json({ message: "Master project created", ...serializePipeline(row), versionId, isExisting: false }, 201);
 }
 
@@ -178,6 +190,17 @@ async function advancePipeline(payload, db, membership) {
   `;
 
   const row = await getOneSong(db, membership.member_id, songId);
+  // Fire-and-forget ledger entry for the pipeline stage transition.
+  appendLedgerEntry(db, {
+    actorId: membership.member_id,
+    actorType: "member",
+    eventCategory: "upload_event",
+    refSongId: songId,
+    summary: `Pipeline advanced to "${stageLabel(toStage)}"`,
+    details: { fromStage: current, toStage },
+    pipelineStage: toStage,
+    outcome: "success",
+  }).catch(err => console.error("Ledger advance_pipeline entry failed", err instanceof Error ? err.message : err));
   return json({ message: `Pipeline advanced to "${stageLabel(toStage)}"`, ...serializePipeline(row) });
 }
 

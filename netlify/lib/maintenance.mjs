@@ -1,6 +1,7 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 import { getDatabase } from "@netlify/database";
 import OpenAI from "openai";
+import { appendLedgerEntry } from "./halo-ledger.mjs";
 
 const severityLevels = new Set(["low", "medium", "high", "critical"]);
 const sources = new Set(["browser", "manual", "scheduled", "server"]);
@@ -248,6 +249,25 @@ export async function reportIssue(payload) {
   `;
 
   let storedIssue = mapIssueRow(row);
+
+  // Record the issue in Halo Ledger so it becomes part of the operational memory.
+  appendLedgerEntry(db, {
+    actorId: "system",
+    actorType: "system",
+    eventCategory: "issue_report",
+    refIssueId: storedIssue.id,
+    summary: `Issue reported: ${storedIssue.title}`,
+    details: {
+      category: storedIssue.category,
+      severity: storedIssue.severity,
+      source: storedIssue.source,
+      pagePath: storedIssue.pagePath,
+      occurrenceCount: storedIssue.occurrenceCount,
+    },
+    body: storedIssue.details || "",
+    outcome: "pending",
+  }).catch(err => console.error("Ledger issue_report entry failed", err instanceof Error ? err.message : err));
+
   if (storedIssue.dispatchStatus !== "pending") return storedIssue;
 
   let triage;

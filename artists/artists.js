@@ -632,6 +632,7 @@
       if (!response.ok) throw new Error(data.message || "Track submission failed");
       radioUploadUi.success(`${data.message}. Your artist card is now linked to the station desk.`, true);
       showToast(data.message || "Track entered HALO Radio review.");
+      fetch("/api/unified-upload", { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "create_project", title: state.page.releaseTitle || file.name.replace(/\.[^.]+$/, ""), artistName: state.page.artistName, surface: "artist_room" }) }).catch(() => undefined);
       form.reset();
       document.getElementById("radioFileLabel").textContent = "Choose the broadcast-ready audio";
       await loadPage();

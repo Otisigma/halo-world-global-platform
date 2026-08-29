@@ -76,6 +76,8 @@ function serializeSong(song: typeof songs.$inferSelect, versions: Array<typeof s
     reviewedAt: song.reviewedAt?.toISOString() || "",
     artworkUrl: song.artworkUrl || "",
     artworkUploadedAt: song.artworkUploadedAt?.toISOString() || "",
+    pipelineStatus: song.pipelineStatus || "uploaded",
+    sourceUploadSurface: song.sourceUploadSurface || "",
     versions: versions.map(version => ({
       id: version.id,
       versionType: version.versionType,

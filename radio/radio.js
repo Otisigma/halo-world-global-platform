@@ -2387,6 +2387,7 @@ async function submitTrack(event) {
     const data = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(data.message || "Track submission failed");
     submissionUploadUi.success(data.message, true);
+    fetch("/api/unified-upload", { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "create_project", title: payload.title || file.name.replace(/\.[^.]+$/, ""), artistName: payload.artist || "", surface: "radio_room" }) }).catch(() => undefined);
     form.reset();
     document.querySelector("#fileLabel").textContent = "Drop a track or choose a file";
     officialSourceNotice.textContent = "The official link can load the next song’s title and artist.";

@@ -62,7 +62,7 @@ const checks = [
   [artworkApi.includes("ownedVersion") && artworkApi.includes("versionId") && artworkApi.includes("halo_song_versions"), "supports version-specific artwork with ownership checks on the version record"],
   [versionArtworkMigration.includes('"artwork_url"') && versionArtworkMigration.includes("halo_song_versions") && versionArtworkMigration.includes("IF NOT EXISTS"), "migrates version artwork columns idempotently with IF NOT EXISTS checks"],
   [schema.includes("halo_song_versions") && schema.includes("artworkUrl") && schema.includes("artworkBlobPrefix"), "adds artwork fields to the songVersions Drizzle ORM schema"],
-  [api.includes("customArtworkUrl") && api.includes("inheritsArtwork") && api.includes("version.artworkUrl || songArtworkUrl"), "includes explicit per-version artwork inheritance and fallback metadata"],
+  [api.includes("resolvedArtworkUrl") && api.includes("customArtworkUrl") && api.includes("inheritsArtwork") && api.includes("version.artworkUrl || songArtworkUrl"), "includes explicit per-version artwork inheritance and fallback metadata"],
   [page.includes("versionArtworkFile") && page.includes("versionArtworkPreview") && page.includes("versionArtworkHeading"), "adds version artwork upload zone with preview to the version editor dialog"],
   [client.includes("uploadVersionArtwork") && client.includes("deleteVersionArtwork") && client.includes("renderVersionArtwork"), "implements version artwork upload, delete, and preview rendering"],
   [client.includes("resolvedArtwork") && client.includes("versionUsesCustomArtwork") && client.includes("version-row-artwork"), "resolves version artwork consistently with explicit inherit/custom state"],

@@ -1107,6 +1107,7 @@
           </div>
           <div class="upload-progress" id="mixReleaseProgress" hidden><span></span></div>
           <span class="mix-release-status" id="mixReleaseStatus" aria-live="polite">Your download stays available even after posting.</span>
+          <div class="upload-progress mix-release-progress" id="mixReleaseProgress" hidden><span></span></div>
         </form>
       </div>
     </section>
@@ -1459,6 +1460,7 @@
             </div>
             <label class="vault-confirm"><input name="rightsAttested" type="checkbox" required><span>I confirm HALO owns or controls these files and has permission to store, process, perform, and remix them.</span></label>
             <div class="vault-actions"><button class="vault-save" id="stemVaultSave" type="submit">Save private stem pack</button><span class="vault-status" id="stemVaultStatus" aria-live="polite">Sign in to load or save private stem packs.</span></div>
+            <div class="vault-upload-progress upload-progress" id="stemVaultProgress" hidden><span></span></div>
           </form>
           <div class="stem-pack-list" id="stemPackList"><p class="vault-empty">Opening the private vault…</p></div>
         </section>
@@ -1660,6 +1662,7 @@
       newMix: document.querySelector("#newMix"),
       mixReleaseProgress: document.querySelector("#mixReleaseProgress"),
       mixReleaseStatus: document.querySelector("#mixReleaseStatus"),
+      mixReleaseProgress: document.querySelector("#mixReleaseProgress"),
       mixIntent: document.querySelector("#mixIntent"),
       analyzeSet: document.querySelector("#analyzeSet"),
       queueRecommendation: document.querySelector("#queueRecommendation"),
@@ -1695,6 +1698,7 @@
       stemVaultForm: document.querySelector("#stemVaultForm"),
       stemVaultSave: document.querySelector("#stemVaultSave"),
       stemVaultStatus: document.querySelector("#stemVaultStatus"),
+      stemVaultProgress: document.querySelector("#stemVaultProgress"),
       stemPackList: document.querySelector("#stemPackList"),
       collectorGoal: document.querySelector("#collectorGoal"),
       collectorTexture: document.querySelector("#collectorTexture"),
@@ -1709,6 +1713,12 @@
       track: elements.mixReleaseProgress,
       fill: elements.mixReleaseProgress?.querySelector("span"),
       idleMessage: "Your download stays available even after posting."
+    });
+    const stemVaultUi = window.HaloUploadProgress.createUploadUi({
+      status: elements.stemVaultStatus,
+      track: elements.stemVaultProgress,
+      fill: elements.stemVaultProgress?.querySelector("span"),
+      idleMessage: "Sign in to load or save private stem packs."
     });
 
     let selectedImportDeck = "A";
@@ -2706,26 +2716,39 @@
       renderStemVault();
       const uploadId = crypto.randomUUID ? crypto.randomUUID() : `${Date.now().toString(16)}-0000-4000-8000-${Math.random().toString(16).slice(2, 14).padEnd(12, "0")}`;
       const chunkBytes = 4 * 1024 * 1024;
+      const totalBytes = selectedFiles.reduce((sum, item) => sum + item.file.size, 0);
+      stemVaultUi.start("Preparing stem files…");
       try {
         const files = [];
+        let bytesUploaded = 0;
         for (let fileIndex = 0; fileIndex < selectedFiles.length; fileIndex += 1) {
           const { stemType, file } = selectedFiles[fileIndex];
           const chunkCount = Math.ceil(file.size / chunkBytes);
           const durationSeconds = await audioDuration(file);
-          for (let chunkIndex = 0; chunkIndex < chunkCount; chunkIndex += 1) {
-            setStemVaultStatus(`Uploading ${stemType} · ${chunkIndex + 1}/${chunkCount} (${fileIndex + 1}/${selectedFiles.length} stems)…`);
-            const chunkForm = new FormData();
-            chunkForm.append("uploadId", uploadId);
-            chunkForm.append("stemType", stemType);
-            chunkForm.append("chunkIndex", String(chunkIndex));
-            chunkForm.append("chunkCount", String(chunkCount));
-            chunkForm.append("chunk", file.slice(chunkIndex * chunkBytes, Math.min(file.size, (chunkIndex + 1) * chunkBytes)), file.name);
-            const chunkResponse = await fetch("/api/stem-vault", { method: "POST", credentials: "same-origin", body: chunkForm });
-            const chunkData = await chunkResponse.json().catch(() => ({}));
-            if (!chunkResponse.ok) throw new Error(chunkData.message || `The ${stemType} upload stopped early.`);
-          }
+          const byteOffset = bytesUploaded;
+          await window.HaloUploadProgress.uploadChunkedFile({
+            url: "/api/stem-vault",
+            file,
+            chunkSize: chunkBytes,
+            requestOptions: { credentials: "same-origin" },
+            buildBody({ chunkIndex, chunkCount: cc, start, end }) {
+              const chunkForm = new FormData();
+              chunkForm.append("uploadId", uploadId);
+              chunkForm.append("stemType", stemType);
+              chunkForm.append("chunkIndex", String(chunkIndex));
+              chunkForm.append("chunkCount", String(cc));
+              chunkForm.append("chunk", file.slice(start, end), file.name);
+              return chunkForm;
+            },
+            onProgress(percent) {
+              const overall = ((byteOffset + percent / 100 * file.size) / totalBytes) * 82;
+              stemVaultUi.progress(overall, `Uploading ${stemType} ${Math.round(percent)}% (${fileIndex + 1}/${selectedFiles.length} stems)…`);
+            }
+          });
+          bytesUploaded += file.size;
           files.push({ stemType, filename: file.name, contentType: normalizedAudioType(file), byteSize: file.size, chunkCount, durationSeconds });
         }
+        stemVaultUi.progress(92, "Saving stem pack…");
         const payload = {
           action: "finalize", uploadId, title: form.get("title"), bpm: form.get("bpm"), key: form.get("key"),
           genre: form.get("genre"), mood: form.get("mood"), sourceProvider: "suno", sourceProjectUrl: form.get("sourceProjectUrl"),
@@ -2739,11 +2762,11 @@
         elements.stemVaultForm.elements.bpm.value = "124";
         renderStemVault();
         syncStemVaultTracks();
-        setStemVaultStatus(`${data.pack.title} is private and ready on both decks.`);
+        stemVaultUi.success(`${data.pack.title} is private and ready on both decks.`, true);
         showToast("Private stem pack ready", `${data.pack.title} can now load to Deck A or Deck B.`);
         window.haloStats?.track("stem_vault_pack_saved", { stem_count: data.pack.stems.length, source_provider: data.pack.sourceProvider });
       } catch (error) {
-        setStemVaultStatus(error.message || "The stem pack could not be saved.", true);
+        stemVaultUi.fail(error.message || "The stem pack could not be saved.");
       } finally {
         stemVaultState.loading = false;
         renderStemVault();

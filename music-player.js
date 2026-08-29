@@ -223,7 +223,13 @@
       const script = document.createElement("script");
       script.src = "https://www.youtube.com/iframe_api";
       script.id = "haloYoutubeIframeApi";
-      script.onerror = () => reject(new Error("YouTube player unavailable"));
+      script.onerror = () => {
+        console.warn("[HALO Music] YouTube player script failed to load");
+        window.dispatchEvent(new CustomEvent("halo:journal-event", {
+          detail: { eventType: "music_youtube_script_error", category: "problem", targetName: "Music YouTube player unavailable", details: { page: window.location.pathname }, immediate: true }
+        }));
+        reject(new Error("YouTube player unavailable"));
+      };
       document.head.append(script);
     });
     return youtubeReadyPromise;
@@ -256,6 +262,10 @@
       });
     } catch {
       source.textContent = "The embedded player could not load. The original source remains available below.";
+      console.warn("[HALO Music] YouTube playback failure:", media.url);
+      window.dispatchEvent(new CustomEvent("halo:journal-event", {
+        detail: { eventType: "music_youtube_error", category: "problem", targetName: "Music YouTube playback failure", details: { url: media.url, page: window.location.pathname }, immediate: true }
+      }));
     }
   }
 
@@ -268,6 +278,12 @@
     audio.src = media.url;
     audio.addEventListener("play", startedPlayback);
     audio.addEventListener("ended", completedPlayback);
+    audio.addEventListener("error", () => {
+      console.warn("[HALO Music] Audio connection failure:", media.url);
+      window.dispatchEvent(new CustomEvent("halo:journal-event", {
+        detail: { eventType: "music_audio_error", category: "problem", targetName: "Music audio connection failure", details: { url: media.url, page: window.location.pathname }, immediate: true }
+      }));
+    });
     stage.append(audio);
     active.audio = audio;
   }

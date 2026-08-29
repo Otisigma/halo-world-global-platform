@@ -1,5 +1,5 @@
 (() => {
-  const state = { mixes: [], videos: [], reviewCycles: [], canReview: false, reviewBreaks: [], selectedReviewCycleId: "", featuredMix: null, selectedMix: null, activeMix: null, activeMixVersion: "mastered", activeEpisode: 0, playlist: [], playlistIndex: 0, visualMixes: [], visualVideos: [], visualProjects: [], selectedVisualProjectId: "", selectedVisualSceneId: "" };
+  const state = { mixes: [], mixSort: "newest", videos: [], reviewCycles: [], canReview: false, reviewBreaks: [], selectedReviewCycleId: "", featuredMix: null, selectedMix: null, activeMix: null, activeMixVersion: "mastered", activeEpisode: 0, playlist: [], playlistIndex: 0, visualMixes: [], visualVideos: [], visualProjects: [], selectedVisualProjectId: "", selectedVisualSceneId: "" };
   const audio = document.querySelector("#mixAudio");
   const playerDock = document.querySelector("#playerDock");
   const heroRecord = document.querySelector("#heroRecord");
@@ -15,6 +15,8 @@
   const mixUploadButton = document.querySelector("#mixUploadButton");
   const mixUploadStatus = document.querySelector("#mixUploadStatus");
   const mixUploadProgress = document.querySelector("#mixUploadProgress");
+  const uploadHelper = window.HaloUploadProgress;
+  const mixUploadUi = uploadHelper.createUploadUi({ panel: mixUploadForm, status: mixUploadStatus, track: mixUploadProgress, fill: mixUploadProgress?.querySelector("span"), idleMessage: "" });
   const uploadGate = document.querySelector("#uploadGate");
   const mixLoginButton = document.querySelector("#mixLoginButton");
   const mixLoginEmail = document.querySelector("#mixLoginEmail");
@@ -274,15 +276,23 @@
       mixRail.innerHTML = `<article class="mix-empty"><strong>The room is between sets.</strong><p>HALO Radio keeps the signal moving while the next full-length session is prepared.</p><a class="episode-link" href="/radio/">Listen to HALO Radio ↗</a></article>`;
       return;
     }
-    mixRail.innerHTML = state.mixes.map((mix, index) => {
+    const sorted = [...state.mixes];
+    if (state.mixSort === "az") {
+      sorted.sort((a, b) => (a.title || "").localeCompare(b.title || ""));
+    } else if (state.mixSort === "duration") {
+      sorted.sort((a, b) => (b.durationSeconds || 0) - (a.durationSeconds || 0));
+    } else {
+      sorted.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    }
+    mixRail.innerHTML = sorted.map((mix, index) => {
       const initials = (mix.title || "HX").split(/\s+/).slice(0, 2).map(word => word[0]).join("");
       return `<article class="mix-card">
         <div class="mix-card-index"><span>HX / ${String(index + 1).padStart(2, "0")}</span><span>${escapeHtml(mix.creator?.badge || "Long Play")}</span></div>
         <div class="mix-art"><img src="${escapeHtml(safeArtwork(mix.artworkUrl, artworkPool[index % artworkPool.length]))}" alt="${escapeHtml(`${mix.title} artwork`)}" loading="lazy" data-mix-artwork><strong>${escapeHtml(initials)}</strong></div>
         <h3>${escapeHtml(mix.title)}</h3>
         <p>${escapeHtml(mix.description || "A full-length HALO room session, left intact from first transition to final handoff.")}</p>
-        ${mix.hasOriginalComparison ? `<div class="mix-version-compare"><span>Hear the difference</span><div><button type="button" data-compare-version="original" data-compare-index="${index}">Original</button><button type="button" data-compare-version="mastered" data-compare-index="${index}">Mastered remix</button></div><small>Switches at the same timestamp for a direct A/B check.</small></div>` : ""}
-        <footer><span>${escapeHtml(mix.credits?.originalArtist || mix.creator?.name || "Owen Anthony")} · ${escapeHtml(mix.credits?.remixer || "DJ HALO X")}<br>${escapeHtml(mixMeta(mix))}</span><span class="mix-card-actions">${mix.salesPageUrl ? `<a href="${escapeHtml(mix.salesPageUrl)}">Sales page</a>` : ""}<button class="mix-play" type="button" data-mix-index="${index}" aria-label="${mix.source === "youtube" ? "Watch" : "Play"} ${escapeHtml(mix.title)}"></button></span></footer>
+        ${mix.hasOriginalComparison ? `<div class="mix-version-compare"><span>Hear the difference</span><div><button type="button" data-compare-version="original" data-compare-id="${escapeHtml(mix.id)}">Original</button><button type="button" data-compare-version="mastered" data-compare-id="${escapeHtml(mix.id)}">Mastered remix</button></div><small>Switches at the same timestamp for a direct A/B check.</small></div>` : ""}
+        <footer><span>${escapeHtml(mix.credits?.originalArtist || mix.creator?.name || "Owen Anthony")} · ${escapeHtml(mix.credits?.remixer || "DJ HALO X")}<br>${escapeHtml(mixMeta(mix))}</span><span class="mix-card-actions">${mix.salesPageUrl ? `<a href="${escapeHtml(mix.salesPageUrl)}">Sales page</a>` : ""}${mix.isOwner ? `<button class="mix-delete" type="button" data-delete-mix="${escapeHtml(mix.id)}" aria-label="Delete ${escapeHtml(mix.title)}">Delete</button>` : ""}<button class="mix-play" type="button" data-mix-id="${escapeHtml(mix.id)}" aria-label="${mix.source === "youtube" ? "Watch" : "Play"} ${escapeHtml(mix.title)}"></button></span></footer>
       </article>`;
     }).join("");
     bindArtworkFallbacks(mixRail);
@@ -470,20 +480,25 @@
     if (file.size > 128 * 1024 * 1024 || chunkCount > 64) throw new Error(`Keep the ${assetRole === "original" ? "original version" : "uploaded mix"} under 128 MB.`);
     const uploadId = crypto.randomUUID ? crypto.randomUUID() : `mix-${Date.now()}-${Math.random().toString(36).slice(2)}`;
     const contentType = audioContentType(file);
-    for (let chunkIndex = 0; chunkIndex < chunkCount; chunkIndex += 1) {
-      const body = new FormData();
-      body.append("chunk", file.slice(chunkIndex * chunkSize, Math.min(file.size, (chunkIndex + 1) * chunkSize), contentType), file.name);
-      body.append("uploadId", uploadId);
-      body.append("assetRole", assetRole);
-      body.append("chunkIndex", String(chunkIndex));
-      body.append("chunkCount", String(chunkCount));
-      body.append("contentType", contentType);
-      mixUploadStatus.textContent = `Uploading ${assetRole === "original" ? "original" : "mastered remix"} ${chunkIndex + 1} of ${chunkCount}…`;
-      const chunkResponse = await fetch("/api/mixes", { method: "POST", body, credentials: "same-origin" });
-      const chunkData = await chunkResponse.json().catch(() => ({}));
-      if (!chunkResponse.ok) throw new Error(chunkData.message || "The audio upload stopped early.");
-      onProgress((chunkIndex + 1) / chunkCount);
-    }
+    await uploadHelper.uploadChunkedFile({
+      url: "/api/mixes",
+      file,
+      chunkSize,
+      buildBody({ chunkIndex, chunkCount, start, end }) {
+        const body = new FormData();
+        body.append("chunk", file.slice(start, end, contentType), file.name);
+        body.append("uploadId", uploadId);
+        body.append("assetRole", assetRole);
+        body.append("chunkIndex", String(chunkIndex));
+        body.append("chunkCount", String(chunkCount));
+        body.append("contentType", contentType);
+        return body;
+      },
+      onProgress(percent) {
+        onProgress(percent);
+        mixUploadStatus.textContent = `Uploading ${assetRole === "original" ? "original" : "mastered remix"} ${Math.round(percent)}%…`;
+      }
+    });
     return { uploadId, chunkCount, byteSize: file.size, contentType, durationSeconds: await audioDuration(file) };
   }
 
@@ -495,23 +510,19 @@
       mixUploadStatus.textContent = "Choose a mastered remix or working mix first.";
       return;
     }
-    const uploadBar = mixUploadProgress.firstElementChild;
     mixUploadButton.disabled = true;
-    mixUploadProgress.hidden = false;
-    uploadBar.style.width = "0%";
-    mixUploadStatus.textContent = "Preparing the upload…";
+    mixUploadUi.start("Preparing the upload…");
     try {
-      const masterUpload = await uploadAudioAsset(file, "master", progress => {
-        uploadBar.style.width = `${progress * (originalFile ? 48 : 82)}%`;
+      const masterUpload = await uploadAudioAsset(file, "master", percent => {
+        mixUploadUi.progress(percent * (originalFile ? 48 : 82) / 100, `Uploading mastered remix ${Math.round(percent)}%…`);
       });
-      uploadBar.style.width = originalFile ? "48%" : "82%";
-      const originalUpload = originalFile ? await uploadAudioAsset(originalFile, "original", progress => {
-        uploadBar.style.width = `${48 + progress * 34}%`;
+      const originalUpload = originalFile ? await uploadAudioAsset(originalFile, "original", percent => {
+        mixUploadUi.progress(48 + (percent * 34 / 100), `Uploading original comparison ${Math.round(percent)}%…`);
       }) : null;
-      if (originalUpload) uploadBar.style.width = "82%";
       const fields = Object.fromEntries(new FormData(mixUploadForm).entries());
       delete fields.mixFile;
       delete fields.originalMixFile;
+      mixUploadUi.progress(92, "Saving the mix to your HALO library…");
       const publishResponse = await fetch("/api/mixes", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -538,16 +549,44 @@
       });
       const data = await publishResponse.json().catch(() => ({}));
       if (!publishResponse.ok) throw new Error(data.message || "The mix could not be posted.");
-      uploadBar.style.width = "100%";
-      mixUploadStatus.textContent = data.message;
+      mixUploadUi.success(data.message, true);
       mixUploadButton.textContent = "Mix received";
       window.haloStats?.track("creator_mix_upload", { production_route: fields.productionRoute, sale_enabled: mixUploadForm.elements.clientSaleEnabled.checked });
       await loadData();
       await loadReviewData();
     } catch (error) {
-      mixUploadStatus.textContent = error.message || "The mix could not be uploaded.";
+      mixUploadUi.fail(error.message || "The mix could not be uploaded.");
       mixUploadButton.disabled = false;
     }
+  }
+
+  async function deleteMix(mixId) {
+    const mix = state.mixes.find(item => item.id === mixId);
+    if (!mix?.isOwner || !window.confirm(`Delete “${mix.title}” and its stored audio permanently?`)) return;
+    mixUploadUi.start("Deleting mix upload…");
+    const response = await fetch("/api/mixes", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "same-origin",
+      body: JSON.stringify({ action: "delete", mixId })
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      mixUploadUi.fail(data.message || "The mix could not be deleted.");
+      return;
+    }
+    if (state.activeMix?.id === mixId) {
+      audio.pause();
+      audio.removeAttribute("src");
+      audio.load();
+      playerDock.hidden = true;
+      state.activeMix = null;
+      state.playlist = [];
+      state.playlistIndex = 0;
+    }
+    if (state.selectedMix?.id === mixId) state.selectedMix = null;
+    mixUploadUi.success(data.message || "Mix deleted.", true);
+    await loadData();
   }
 
   function syncPaidMixFields() {
@@ -665,13 +704,19 @@
 
   heroPlay.addEventListener("click", () => playMix(state.featuredMix));
   mixRail.addEventListener("click", event => {
-    const compareButton = event.target.closest("[data-compare-version]");
-    if (compareButton) {
-      switchMixVersion(state.mixes[Number(compareButton.dataset.compareIndex)], compareButton.dataset.compareVersion);
+    const deleteButton = event.target.closest("[data-delete-mix]");
+    if (deleteButton) {
+      deleteMix(deleteButton.dataset.deleteMix);
       return;
     }
-    const button = event.target.closest("[data-mix-index]");
-    if (button) playMix(state.mixes[Number(button.dataset.mixIndex)]);
+    const compareButton = event.target.closest("[data-compare-version]");
+    if (compareButton) {
+      const mix = state.mixes.find(m => m.id === compareButton.dataset.compareId);
+      if (mix) switchMixVersion(mix, compareButton.dataset.compareVersion);
+      return;
+    }
+    const button = event.target.closest("[data-mix-id]");
+    if (button) playMix(state.mixes.find(m => m.id === button.dataset.mixId) || null);
   });
   dockVersionSwitch.addEventListener("click", event => {
     const button = event.target.closest("[data-dock-version]");
@@ -699,7 +744,9 @@
     heroRecord.classList.remove("is-playing");
     document.querySelector("#dockToggle").classList.add("is-paused");
   });
-  audio.addEventListener("timeupdate", () => {
+  let preloadEl = null;
+  let playlistTransitioning = false;
+  audio.addEventListener("timeupdate", async () => {
     const playlistOffset = state.playlist.slice(0, state.playlistIndex).reduce((total, item) => total + Number(item.playSeconds || 0), 0);
     const playlistDuration = state.playlist.length ? Number(state.activeMix?.durationSeconds || 0) : 0;
     const elapsed = playlistDuration ? playlistOffset + audio.currentTime : audio.currentTime;
@@ -707,10 +754,42 @@
     const progress = duration ? (elapsed / duration) * 100 : 0;
     document.querySelector("#dockProgress").style.width = `${progress}%`;
     document.querySelector("#dockTime").textContent = `${formatDuration(elapsed)} / ${formatDuration(duration)}`;
+    if (!state.playlist.length || state.playlistIndex >= state.playlist.length - 1) return;
+    const item = state.playlist[state.playlistIndex];
+    const playSeconds = Number(item.playSeconds || 0);
+    if (!playSeconds) return;
+    // Start preloading the next track ~20 s before the boundary so the browser
+    // has time to buffer it before we switch src.
+    const nextItem = state.playlist[state.playlistIndex + 1];
+    if (nextItem && !preloadEl && audio.currentTime >= playSeconds - 20) {
+      preloadEl = new Audio();
+      preloadEl.preload = "auto";
+      preloadEl.src = nextItem.audioUrl;
+    }
+    // Advance the playlist exactly at the playSeconds boundary (no gap).
+    // Guard prevents re-entry on subsequent timeupdate events before src changes.
+    if (!playlistTransitioning && audio.currentTime >= playSeconds) {
+      playlistTransitioning = true;
+      state.playlistIndex += 1;
+      const upcoming = state.playlist[state.playlistIndex];
+      preloadEl = null;
+      audio.src = upcoming.audioUrl;
+      await audio.play().catch(() => {});
+      playlistTransitioning = false;
+    }
+  });
+  audio.addEventListener("waiting", () => {
+    document.querySelector("#dockCreator").textContent = "Buffering…";
+  });
+  audio.addEventListener("playing", () => {
+    const mix = state.activeMix;
+    if (mix) document.querySelector("#dockCreator").textContent = mix.creator?.name || "DJ HALO X";
   });
   audio.addEventListener("ended", async () => {
+    // Fallback: no playSeconds boundary was hit (non-playlist or last item).
     if (!state.playlist.length || state.playlistIndex >= state.playlist.length - 1) return;
     state.playlistIndex += 1;
+    preloadEl = null;
     audio.src = state.playlist[state.playlistIndex].audioUrl;
     await audio.play().catch(() => {});
   });
@@ -859,6 +938,11 @@
   }));
   window.addEventListener("halo-identity-ready", updateUploadAccess);
   updateUploadAccess();
+
+  document.querySelector("#mixSort")?.addEventListener("change", event => {
+    state.mixSort = event.target.value;
+    renderMixes();
+  });
 
   loadData();
 })();

@@ -220,6 +220,25 @@ button, a { -webkit-tap-highlight-color: transparent; }
 }
 .featured-action:hover { background: var(--ink); color: var(--paper); transform: translateY(-2px); }
 .featured-action i { color: var(--artist-accent); font-style: normal; font-size: 18px; }
+.buy-action {
+  min-height: 61px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 32px;
+  padding: 0 18px 0 22px;
+  border: 2px solid var(--artist-accent, var(--acid, #d5ff52));
+  color: var(--ink);
+  background: transparent;
+  text-decoration: none;
+  font-family: var(--mono);
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: .12em;
+  transition: background .2s ease, color .2s ease, transform .2s ease;
+}
+.buy-action:hover { background: var(--artist-accent, var(--acid, #d5ff52)); color: var(--ink); transform: translateY(-2px); }
+.buy-action i { font-style: normal; font-size: 18px; }
 .text-action { font-family: var(--mono); font-size: 10px; text-transform: uppercase; letter-spacing: .12em; text-underline-offset: 7px; }
 .hero-art { background: var(--ink); color: var(--paper); position: relative; min-height: 720px; padding: clamp(50px, 6vw, 88px) clamp(30px, 4vw, 62px) 38px; display: flex; flex-direction: column; justify-content: center; }
 .hero-art::before { content: ""; position: absolute; inset: 0; background: radial-gradient(circle at 30% 20%, color-mix(in srgb, var(--artist-accent) 23%, transparent), transparent 38%); }
@@ -463,7 +482,9 @@ dialog::backdrop { background: rgba(12, 13, 10, .82); backdrop-filter: blur(7px)
 .radio-upload-progress span { display: block; width: 0; height: 100%; background: var(--artist-accent); transition: width .18s ease; }
 .radio-send-actions { display: flex; align-items: center; justify-content: space-between; gap: 22px; padding-top: 20px; border-top: 1px solid #30312c; }
 .radio-send-actions p { max-width: 350px; margin: 0; color: #878980; font-size: 10px; line-height: 1.55; }
+.radio-send-buttons { display: flex; gap: 10px; align-items: center; }
 .radio-send-actions button { min-height: 52px; border: 1px solid var(--artist-accent); background: var(--artist-accent); color: var(--ink); padding: 0 20px; font-family: var(--mono); font-size: 9px; font-weight: 700; text-transform: uppercase; cursor: pointer; }
+.radio-send-actions .radio-delete-upload { border-color: #6f3028; background: transparent; color: #d0867b; }
 .radio-send-actions button:disabled { opacity: .5; cursor: wait; }
 .radio-send-actions i { font-style: normal; margin-left: 12px; }
 .studio-shell { min-height: 100%; display: grid; grid-template-columns: minmax(300px, .62fr) minmax(0, 1.38fr); }
@@ -586,7 +607,7 @@ dialog::backdrop { background: rgba(12, 13, 10, .82); backdrop-filter: blur(7px)
   .hero-copy h1 { font-size: clamp(72px, 27vw, 118px); }
   .artist-tagline { font-size: 16px; }
   .hero-actions { align-items: stretch; flex-direction: column; }
-  .primary-action, .featured-action { width: 100%; }
+  .primary-action, .featured-action, .buy-action { width: 100%; }
   .hero-art { min-height: auto; padding: 70px 32px 46px; }
   .art-caption strong { font-size: 28px; }
   .radio-send-dialog { width: 100vw; max-height: none; height: 100vh; margin: 0; }
@@ -595,6 +616,7 @@ dialog::backdrop { background: rgba(12, 13, 10, .82); backdrop-filter: blur(7px)
   .radio-send-form { padding: 42px 20px; }
   .radio-field-grid { grid-template-columns: 1fr; }
   .radio-send-actions { align-items: stretch; flex-direction: column; }
+  .radio-send-buttons { width: 100%; flex-direction: column; }
   .radio-send-actions button { width: 100%; }
   .artist-statement { padding: 85px 22px; grid-template-columns: 1fr; gap: 38px; }
   .artist-statement > p:last-child { grid-column: auto; }

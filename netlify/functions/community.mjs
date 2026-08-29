@@ -4,6 +4,8 @@ import { createHash } from "node:crypto";
 import { ensureMembership as ensureHaloMembership } from "../lib/halo-x.mjs";
 
 const allowedActions = new Set(["profile", "message", "follow", "reaction", "support", "control", "report", "room_post", "room_vote"]);
+const allowedVisibility = new Set(["private", "circle", "community", "public"]);
+const allowedPersonaTypes = new Set(["", "listener", "creator", "dj", "collector", "advocate", "wanderer", "oracle", "architect"]);
 const allowedEmojis = new Set(["✨", "💜", "🔥", "🌊"]);
 const allowedGifts = new Set(["comet", "butterfly", "vinyl", "rose", "sunrise", "crowd-wave"]);
 const allowedControls = new Set(["block", "mute"]);
@@ -67,6 +69,7 @@ async function getCommunity(db, actorId = null) {
   const [profileRows, peopleRows, messageRows, followRows, controlRows, supportRows, roomRows, notificationRows, pinRows] = await Promise.all([
     db.sql`
       SELECT p.actor_id, p.display_name, p.avatar, p.region, p.favorite_genres, p.vibe_status,
+        p.persona_name, p.persona_type, p.persona_bio, p.visibility_level,
         CASE WHEN EXISTS (
           SELECT 1 FROM sovereign_ambassador_grants g WHERE g.actor_id = p.actor_id AND g.is_active = TRUE
         ) THEN 'Sovereign Ambassador' ELSE p.badge END AS badge,
@@ -233,6 +236,10 @@ async function handleAction(db, actorId, payload) {
     const avatar = cleanText(payload.avatar, 4);
     const region = cleanText(payload.region, 48);
     const vibeStatus = cleanText(payload.vibeStatus, 80);
+    const personaName = cleanText(payload.personaName, 48);
+    const personaType = allowedPersonaTypes.has(cleanText(payload.personaType, 24)) ? cleanText(payload.personaType, 24) : "";
+    const personaBio = cleanText(payload.personaBio, 280);
+    const visibilityLevel = allowedVisibility.has(cleanText(payload.visibilityLevel, 16)) ? cleanText(payload.visibilityLevel, 16) : "community";
     const favoriteGenres = Array.isArray(payload.favoriteGenres)
       ? payload.favoriteGenres.map(value => cleanText(value, 24)).filter(Boolean).slice(0, 4)
       : [];
@@ -241,6 +248,8 @@ async function handleAction(db, actorId, payload) {
       UPDATE community_profiles SET
         display_name = ${displayName}, avatar = ${avatar || "🌙"}, region = ${region || "Global"},
         favorite_genres = ${favoriteGenres}, vibe_status = ${vibeStatus || "Finding the frequency"},
+        persona_name = ${personaName}, persona_type = ${personaType},
+        persona_bio = ${personaBio}, visibility_level = ${visibilityLevel},
         updated_at = NOW(), last_seen_at = NOW()
       WHERE actor_id = ${actorId}
     `;

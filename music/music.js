@@ -4,17 +4,19 @@
     grid: document.querySelector("#releaseGrid"),
     genres: document.querySelector("#genreFilter"),
     search: document.querySelector("#catalogSearch"),
+    sort: document.querySelector("#catalogSort"),
     count: document.querySelector("#releaseCount"),
     chartBoard: document.querySelector("#chartBoard"),
     chartRooms: document.querySelector("#chartRooms"),
+    chartSortButtons: document.querySelector("#chartSortButtons"),
     chartStage: document.querySelector("#chartStage"),
     address: document.querySelector("#catalogAddress"),
     copy: document.querySelector("#copyCatalog"),
     share: document.querySelector("#shareCatalog"),
     toast: document.querySelector("#catalogToast")
   };
-  const state = { releases: [], videos: [], query: "", genre: "all", chartRoom: "all", activeReleaseId: "" };
-  const fallbackArtwork = "/assets/releases/the-cold-is-lasting-longer.jpg";
+  const state = { releases: [], videos: [], query: "", genre: "all", sort: "newest", chartRoom: "all", chartSort: "signal", activeReleaseId: "" };
+  const fallbackArtwork = window.HaloReleaseArtwork?.DEFAULT_RELEASE_ARTWORK || "/assets/halo-app-icon-512.png";
   const chartRooms = {
     all: [],
     "hip-hop": ["hip hop", "hip-hop", "rap", "drill", "grime"],
@@ -37,6 +39,24 @@
     } catch {
       return fallback;
     }
+  }
+
+  function releaseArtwork(release) {
+    return window.HaloReleaseArtwork?.resolve(release, fallbackArtwork) || {
+      src: safeUrl(release?.artwork, fallbackArtwork),
+      fallback: fallbackArtwork
+    };
+  }
+
+  function wireArtwork(root) {
+    window.HaloReleaseArtwork?.wire(root, fallbackArtwork);
+  }
+
+  function logMusicIssue(eventType, title, details) {
+    console.warn("[HALO Music]", title, details);
+    window.dispatchEvent(new CustomEvent("halo:journal-event", {
+      detail: { eventType, category: "problem", targetName: title, details, immediate: true }
+    }));
   }
 
   function formatReleaseDate(value) {
@@ -100,12 +120,31 @@
   }
 
   function rankedReleases() {
-    return state.releases
-      .filter(releaseMatchesRoom)
-      .map(release => ({ release, signal: chartSignal(release) }))
-      .sort((left, right) => right.signal.score - left.signal.score || String(right.release.releaseDate).localeCompare(String(left.release.releaseDate)))
-      .slice(0, 10)
-      .map(entry => entry.release);
+    const entries = state.releases
+      .filter(release => {
+        if (!release.isChartEligible) {
+          logMusicIssue("music_chart_eligibility_skipped", "Release skipped from chart: not chart-eligible", { releaseId: release.id, title: release.title, isCleanVersion: release.isCleanVersion });
+          return false;
+        }
+        return releaseMatchesRoom(release);
+      })
+      .map(release => ({ release, signal: chartSignal(release) }));
+    if (state.chartSort === "newest") {
+      entries.sort((a, b) => new Date(b.release.releaseDate).getTime() - new Date(a.release.releaseDate).getTime());
+    } else if (state.chartSort === "listens") {
+      entries.sort((a, b) => b.signal.recent - a.signal.recent || new Date(b.release.releaseDate).getTime() - new Date(a.release.releaseDate).getTime());
+    } else if (state.chartSort === "opens") {
+      entries.sort((a, b) => (b.release.chartActivity?.recentOpens || 0) - (a.release.chartActivity?.recentOpens || 0) || new Date(b.release.releaseDate).getTime() - new Date(a.release.releaseDate).getTime());
+    } else {
+      entries.sort((a, b) => b.signal.score - a.signal.score || new Date(b.release.releaseDate).getTime() - new Date(a.release.releaseDate).getTime());
+    }
+    return entries.slice(0, 10).map(entry => entry.release);
+  }
+
+  function renderChartSort() {
+    elements.chartSortButtons?.querySelectorAll("[data-chart-sort]").forEach(button => {
+      button.setAttribute("aria-pressed", String(button.dataset.chartSort === state.chartSort));
+    });
   }
 
   function videoForRelease(release) {
@@ -123,7 +162,7 @@
     if (!video) {
       return `<div class="stage-video-empty"><span>HALO TV</span><strong>Footage lane open</strong><p>When approved footage is attached to this release, it plays here without sending listeners away from the chart.</p></div>`;
     }
-    const thumbnail = safeUrl(video.thumbnailUrl, safeUrl(release.artwork, fallbackArtwork));
+    const thumbnail = safeUrl(video.thumbnailUrl, releaseArtwork(release).src);
     return `<button class="stage-video-poster" type="button" data-play-chart-video="${escapeHtml(video.id)}">
       <img src="${escapeHtml(thumbnail)}" alt="" loading="lazy">
       <span class="video-play" aria-hidden="true">▶</span><span><small>Watch inside the chart</small><strong>${escapeHtml(video.title)}</strong></span>
@@ -132,12 +171,13 @@
 
   function renderChartStage(release, position) {
     if (!release) return;
+    const artwork = releaseArtwork(release);
     state.activeReleaseId = release.id;
     const movement = movementFor(release);
     const activity = release.chartActivity || {};
     const video = videoForRelease(release);
     elements.chartStage.innerHTML = `<article class="stage-card">
-      <div class="stage-art"><img src="${escapeHtml(safeUrl(release.artwork, fallbackArtwork))}" alt="${escapeHtml(`${release.title} cover artwork`)}"><span class="stage-rank">#${position}</span></div>
+      <div class="stage-art release-artwork-frame" data-artwork-frame><img class="release-artwork-image" src="${escapeHtml(artwork.src)}" alt="${escapeHtml(`${release.title} cover artwork`)}" data-release-artwork data-artwork-fallback="${escapeHtml(artwork.fallback)}"><span class="stage-rank">#${position}</span></div>
       <div class="stage-copy">
         <div class="stage-kicker"><span>${escapeHtml(movement.label)}</span><span>${escapeHtml(release.genres.join(" · ") || "HALO release")}</span></div>
         <h3>${escapeHtml(release.title)}</h3><p class="stage-artist">${escapeHtml(release.artist)}</p>
@@ -147,7 +187,7 @@
         ${releaseActions(release)}
       </div>
     </article>`;
-    elements.chartStage.querySelectorAll("img").forEach(image => image.addEventListener("error", event => { event.currentTarget.src = fallbackArtwork; }, { once: true }));
+    wireArtwork(elements.chartStage);
   }
 
   function renderChart() {
@@ -155,6 +195,7 @@
     elements.chartRooms.querySelectorAll("[data-chart-room]").forEach(button => {
       button.setAttribute("aria-pressed", String(button.dataset.chartRoom === state.chartRoom));
     });
+    renderChartSort();
     if (!releases.length) {
       state.activeReleaseId = "";
       elements.chartBoard.innerHTML = `<div class="chart-empty"><strong>This room is waiting for its first signal.</strong><p>Tag a published release with this room’s genre and it enters the live ranking automatically.</p></div>`;
@@ -165,15 +206,16 @@
     elements.chartBoard.innerHTML = `<div class="chart-column-labels"><span>Position</span><span>Record</span><span>7-day motion</span></div>${releases.map((release, index) => {
       const movement = movementFor(release);
       const active = release.id === state.activeReleaseId;
+      const artwork = releaseArtwork(release);
       return `<button class="chart-row${active ? " is-active" : ""}" type="button" data-chart-release="${escapeHtml(release.id)}" aria-pressed="${active}">
         <span class="chart-position">${String(index + 1).padStart(2, "0")}</span>
-        <span class="chart-art"><img src="${escapeHtml(safeUrl(release.artwork, fallbackArtwork))}" alt="" loading="lazy"></span>
+        <span class="chart-art release-artwork-frame" data-artwork-frame><img class="release-artwork-image" src="${escapeHtml(artwork.src)}" alt="" loading="lazy" data-release-artwork data-artwork-fallback="${escapeHtml(artwork.fallback)}"></span>
         <span class="chart-track"><strong>${escapeHtml(release.title)}</strong><small>${escapeHtml(release.artist)} · ${escapeHtml(release.genres[0] || "HALO")}</small></span>
         <span class="chart-motion is-${movement.direction}"><b>${escapeHtml(movement.value)}</b><small>${escapeHtml(movement.label)}</small></span>
         <span class="chart-open" aria-hidden="true">OPEN ↗</span>
       </button>`;
     }).join("")}`;
-    elements.chartBoard.querySelectorAll("img").forEach(image => image.addEventListener("error", event => { event.currentTarget.src = fallbackArtwork; }, { once: true }));
+    wireArtwork(elements.chartBoard);
     renderChartStage(releases.find(release => release.id === state.activeReleaseId), releases.findIndex(release => release.id === state.activeReleaseId) + 1);
   }
 
@@ -233,34 +275,64 @@
     return `<div class="release-meta"><span>${escapeHtml(formatReleaseDate(release.releaseDate))}</span><span>${escapeHtml(genres)}</span>${technicalLine(release) ? `<span>${escapeHtml(technicalLine(release))}</span>` : ""}</div>`;
   }
 
+  function featuredBadge(release) {
+    if (release.featuredType === "week") return `<span class="featured-badge is-week">Song of the Week</span>`;
+    if (release.featuredType === "month") return `<span class="featured-badge is-month">Song of the Month</span>`;
+    return "";
+  }
+
   function releaseActions(release) {
+    const listenHref = safeUrl(release.listenUrl);
+    if (!listenHref) logMusicIssue("music_listen_url_missing", "Music release missing listen link", { releaseId: release.id, title: release.title });
+    const listenAction = listenHref
+      ? `<a class="action primary" href="${escapeHtml(listenHref)}" data-stat-event="open_catalog_release" data-stat-target="${escapeHtml(release.id)}">Listen now <span aria-hidden="true">↗</span></a>`
+      : `<span class="action primary" aria-disabled="true">Listen link unavailable</span>`;
+    const buyHref = safeUrl(release.purchaseUrl || release.streamUrl);
+    const buyAction = buyHref
+      ? `<a class="action buy" href="${escapeHtml(buyHref)}" target="_blank" rel="noopener" data-stat-event="buy_release" data-stat-target="${escapeHtml(release.id)}">Buy / Stream <span aria-hidden="true">↗</span></a>`
+      : "";
+    if (!buyHref && release.isChartEligible) logMusicIssue("music_purchase_url_missing", "Music release missing buy/stream link", { releaseId: release.id, title: release.title });
     return `<div class="release-actions">
-      <a class="action primary" href="${escapeHtml(safeUrl(release.listenUrl))}" data-stat-event="open_catalog_release" data-stat-target="${escapeHtml(release.id)}">Listen now <span aria-hidden="true">↗</span></a>
+      ${featuredBadge(release)}
+      ${listenAction}
+      ${buyAction}
       <a class="action secondary" href="${escapeHtml(safeUrl(release.kitUrl))}" data-stat-event="open_release_kit" data-stat-target="${escapeHtml(release.id)}">Release room</a>
     </div>`;
   }
 
   function renderFeatured() {
-    const release = state.releases[0];
+    const release = state.releases.find(r => r.featuredType === "week")
+      || state.releases.find(r => r.featuredType === "month")
+      || state.releases[0];
     if (!release) {
       elements.featured.innerHTML = `<div class="catalog-empty"><div><strong>The next signal is being prepared.</strong><p>Published HALO releases appear here automatically.</p></div></div>`;
       return;
     }
-    const artwork = safeUrl(release.artwork, fallbackArtwork);
+    const artwork = releaseArtwork(release);
     elements.featured.innerHTML = `<article class="featured-release">
-      <div class="featured-art"><img src="${escapeHtml(artwork)}" alt="${escapeHtml(`${release.title} cover artwork`)}" width="1200" height="1200"></div>
+      <div class="featured-art release-artwork-frame" data-artwork-frame><img class="release-artwork-image" src="${escapeHtml(artwork.src)}" alt="${escapeHtml(`${release.title} cover artwork`)}" width="1200" height="1200" data-release-artwork data-artwork-fallback="${escapeHtml(artwork.fallback)}"></div>
       <div class="featured-copy"><div>${releaseMeta(release)}<h2>${escapeHtml(release.title)}</h2><p class="featured-artist">${escapeHtml(release.artist)}</p><p class="featured-pitch">${escapeHtml(release.pitch || "Open the official release signal, approved listening destination, and campaign room.")}</p></div>${releaseActions(release)}</div>
     </article>`;
-    elements.featured.querySelector("img")?.addEventListener("error", event => { event.currentTarget.src = fallbackArtwork; }, { once: true });
+    wireArtwork(elements.featured);
   }
 
   function filteredReleases() {
     const query = state.query.toLowerCase();
-    return state.releases.filter(release => {
+    const filtered = state.releases.filter(release => {
       const matchesGenre = state.genre === "all" || release.genres.some(genre => genre.toLowerCase() === state.genre);
       const haystack = [release.title, release.artist, release.pitch, ...release.genres].join(" ").toLowerCase();
       return matchesGenre && (!query || haystack.includes(query));
     });
+    if (state.sort === "oldest") {
+      filtered.sort((a, b) => new Date(a.releaseDate).getTime() - new Date(b.releaseDate).getTime());
+    } else if (state.sort === "az") {
+      filtered.sort((a, b) => a.title.localeCompare(b.title));
+    } else if (state.sort === "za") {
+      filtered.sort((a, b) => b.title.localeCompare(a.title));
+    } else if (state.sort === "artist") {
+      filtered.sort((a, b) => a.artist.localeCompare(b.artist) || a.title.localeCompare(b.title));
+    }
+    return filtered;
   }
 
   function renderGenres() {
@@ -285,14 +357,18 @@
       });
       return;
     }
-    elements.grid.innerHTML = releases.map((release, index) => `<article class="release-card">
-      <div class="card-art"><img src="${escapeHtml(safeUrl(release.artwork, fallbackArtwork))}" alt="${escapeHtml(`${release.title} cover artwork`)}" loading="lazy" width="900" height="900"><span class="card-number">${String(index + 1).padStart(2, "0")}</span></div>
+    elements.grid.innerHTML = releases.map((release, index) => {
+      const artwork = releaseArtwork(release);
+      return `<article class="release-card">
+      <div class="card-art release-artwork-frame" data-artwork-frame><img class="release-artwork-image" src="${escapeHtml(artwork.src)}" alt="${escapeHtml(`${release.title} cover artwork`)}" loading="lazy" width="900" height="900" data-release-artwork data-artwork-fallback="${escapeHtml(artwork.fallback)}"><span class="card-number">${String(index + 1).padStart(2, "0")}</span></div>
       <div class="card-copy">${releaseMeta(release)}<h3>${escapeHtml(release.title)}</h3><p class="card-artist">${escapeHtml(release.artist)}</p>${release.pitch ? `<p class="card-pitch">${escapeHtml(release.pitch)}</p>` : ""}${releaseActions(release)}</div>
-    </article>`).join("");
-    elements.grid.querySelectorAll("img").forEach(image => image.addEventListener("error", event => { event.currentTarget.src = fallbackArtwork; }, { once: true }));
+    </article>`;
+    }).join("");
+    wireArtwork(elements.grid);
   }
 
   function renderError(message) {
+    logMusicIssue("music_catalog_error", "Music catalog load failure", { message, page: window.location.pathname });
     const markup = `<div class="catalog-empty"><div><strong>Signal interrupted.</strong><p>${escapeHtml(message)}</p><button type="button" id="retryCatalog">Try again</button></div></div>`;
     elements.featured.innerHTML = markup;
     elements.chartBoard.innerHTML = markup;
@@ -328,6 +404,7 @@
   elements.copy.addEventListener("click", copyCatalogAddress);
   elements.share.addEventListener("click", shareCatalog);
   elements.search.addEventListener("input", event => { state.query = event.target.value.trim(); renderGrid(); });
+  elements.sort?.addEventListener("change", event => { state.sort = event.target.value; renderGrid(); });
   elements.genres.addEventListener("click", event => {
     const button = event.target.closest("[data-genre]");
     if (!button) return;
@@ -339,6 +416,13 @@
     const button = event.target.closest("[data-chart-room]");
     if (!button) return;
     state.chartRoom = button.dataset.chartRoom;
+    state.activeReleaseId = "";
+    renderChart();
+  });
+  elements.chartSortButtons?.addEventListener("click", event => {
+    const button = event.target.closest("[data-chart-sort]");
+    if (!button) return;
+    state.chartSort = button.dataset.chartSort;
     state.activeReleaseId = "";
     renderChart();
   });

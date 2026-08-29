@@ -58,6 +58,7 @@
           <section class="song-heading">
             <div class="song-heading-art"><img class="song-heading-artwork" id="songHeadingArtwork" src="" alt="" hidden><div><p class="eyebrow" id="songArtist">Artist</p><h2 id="songTitle">Song title</h2><p id="songRouteSummary">0 versions routed</p></div></div>
             <div class="score-stamp"><span>DW score</span><strong id="songScore">0</strong><small id="songStatus">Needs review</small></div>
+            <div class="pipeline-stamp"><span>Pipeline</span><strong id="songPipelineStatus" class="pipeline-badge" data-stage="uploaded">Uploaded</strong><a class="quiet-link" href="/upload-pipeline/" title="Open unified pipeline view">View pipeline →</a></div>
           </section>
 
           <section class="artwork-upload-panel" aria-labelledby="artworkHeading">
@@ -71,6 +72,7 @@
                 <button class="quiet-button" id="uploadArtworkButton" type="button">Upload artwork</button>
                 <button class="quiet-button artwork-delete-button" id="deleteArtworkButton" type="button" hidden>Remove artwork</button>
               </div>
+              <div class="upload-progress-track" id="artworkUploadTrack" hidden aria-hidden="true"><span class="upload-progress-fill"></span></div>
               <p class="artwork-upload-progress" id="artworkUploadProgress" role="status">No file selected.</p>
             </div>
           </section>
@@ -84,7 +86,7 @@
                 <label><span>Song title</span><input id="title" required maxlength="160"></label>
                 <label><span>Album / project</span><input id="albumTitle" maxlength="160"></label>
                 <label><span>Primary genre</span><input id="genre" maxlength="80"></label>
-                <label><span>ISRC</span><input id="isrc" maxlength="24" placeholder="US-AAA-26-00001"></label>
+                <label><span>ISRC</span><input id="isrc" maxlength="24" value="US-AAA-26-00001" placeholder="US-AAA-26-00001"></label>
                 <label><span>UPC</span><input id="upc" maxlength="24"></label>
                 <label><span>Rights</span><select id="rightsStatus"><option value="needs_review">Needs review</option><option value="cleared">Cleared</option><option value="disputed">Disputed</option></select></label>
                 <label><span>Sale status</span><select id="saleStatus"><option value="for_sale">For sale</option><option value="coming_soon">Coming soon</option><option value="not_for_sale">Not for sale</option></select></label>
@@ -151,9 +153,18 @@
         <section class="wide-field audio-upload-panel" aria-labelledby="audioUploadHeading">
           <div><span class="field-label" id="audioUploadHeading">Upload this version</span><strong>Drop in the actual master.</strong><p>MP3, M4A, AAC, OGG, WebM, WAV, or FLAC · 128 MB maximum.</p></div>
           <label class="audio-file-picker"><span>Choose audio file</span><input id="audioFile" type="file" accept="audio/*,.mp3,.m4a,.aac,.ogg,.webm,.wav,.flac"></label>
+        <div class="audio-upload-actions">
           <button class="quiet-button" id="uploadAudioButton" type="button">Upload selected audio</button>
-          <p class="audio-upload-progress" id="audioUploadProgress" role="status">No file selected.</p>
-          <audio id="audioPreview" controls preload="metadata" hidden></audio>
+          <button class="quiet-button artwork-delete-button" id="deleteVersionAudioButton" type="button" hidden>Remove audio</button>
+        </div>
+        <div class="upload-progress-track" id="audioUploadTrack" hidden aria-hidden="true"><span class="upload-progress-fill"></span></div>
+        <p class="audio-upload-progress" id="audioUploadProgress" role="status">No file selected.</p>
+        <audio id="audioPreview" controls preload="metadata" hidden></audio>
+        <p id="audioStateLabel" class="audio-state-label" role="status" hidden></p>
+        <div class="radio-import-section">
+          <button class="quiet-button" id="importFromRadioButton" type="button">↓ Import from Radio</button>
+          <div id="radioPickerList" class="radio-picker-list" hidden role="listbox" aria-label="Your radio tracks"></div>
+        </div>
         </section>
         <section class="wide-field artwork-upload-panel" aria-labelledby="versionArtworkHeading">
           <div class="artwork-preview-area"><img class="artwork-preview" id="versionArtworkPreview" src="" alt="Version artwork preview" hidden><div class="artwork-placeholder" id="versionArtworkPlaceholder" aria-hidden="true"></div></div>
@@ -169,6 +180,21 @@
           </div>
         </section>
         <label class="wide-field"><span>External audio source link (optional)</span><input id="audioUrl" type="url" placeholder="https://secure-audio-location.example/song.wav"></label>
+        <section class="wide-field version-artwork-panel" aria-labelledby="versionArtworkHeading">
+          <div class="artwork-preview-area"><img class="artwork-preview" id="versionArtworkPreview" src="" alt="Version artwork preview" hidden><div class="artwork-placeholder" id="versionArtworkPlaceholder" aria-hidden="true"></div></div>
+          <div class="artwork-upload-body">
+            <span class="field-label" id="versionArtworkHeading">Version cover art (optional)</span>
+            <strong>Upload a different cover for this version or remix.</strong>
+            <p>Overrides the song cover for this version only. JPEG, PNG, or WebP · 20 MB maximum.</p>
+            <label class="artwork-file-picker"><span>Choose image file</span><input id="versionArtworkFile" type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp" aria-label="Choose version artwork file"></label>
+            <div class="artwork-upload-actions">
+              <button class="quiet-button" id="uploadVersionArtworkButton" type="button">Upload version artwork</button>
+              <button class="quiet-button artwork-delete-button" id="deleteVersionArtworkButton" type="button" hidden>Remove version artwork</button>
+            </div>
+            <div class="upload-progress-track" id="versionArtworkTrack" hidden aria-hidden="true"><span class="upload-progress-fill"></span></div>
+            <p class="artwork-upload-progress" id="versionArtworkProgress" role="status">No version artwork uploaded. Uses the song cover by default.</p>
+          </div>
+        </section>
         <label><span>Duration (seconds)</span><input id="durationSeconds" type="number" min="0" max="86400"></label>
         <label><span>Target LUFS</span><input id="targetLufs" type="number" min="-30" max="-5"></label>
         <label><span>True peak dBTP</span><input id="truePeakDbtp" type="number" min="-10" max="0" step="0.1"></label>
@@ -181,6 +207,7 @@
   </dialog>
 
   <script type="module" src="/identity.js"></script>
+  <script src="/upload-progress.js" defer></script>
   <script type="module" src="/song-catalog/song-catalog.js"></script>
 </body>
 </html>

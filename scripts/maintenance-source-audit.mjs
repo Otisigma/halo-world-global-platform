@@ -9,6 +9,10 @@ const sourceExtensions = new Set([".html", ".css", ".js", ".mjs", ".sql", ".json
 const ignoredDirectories = new Set([".git", ".netlify", "node_modules"]);
 const netlifyConfigSource = await readFile(resolve(root, "netlify.toml"), "utf8");
 const redirectAliases = new Set([...netlifyConfigSource.matchAll(/^\s*from\s*=\s*["']([^"']+)["']/gm)].map(match => match[1]));
+const redirectWildcardPrefixes = [...redirectAliases]
+  .filter(path => path.includes("*"))
+  .map(path => path.split("*")[0])
+  .filter(Boolean);
 
 async function collectFiles(directory) {
   const entries = await readdir(directory, { withFileTypes: true });
@@ -26,7 +30,12 @@ async function targetExists(rawTarget, sourcePath) {
   if (rawTarget.includes("${") || rawTarget.includes("{{")) return true;
   const cleanTarget = rawTarget.split(/[?#]/)[0];
   if (!cleanTarget || /^(https?:|mailto:|tel:|data:|javascript:|%23|#|\/api\/)/i.test(rawTarget)) return true;
-  if (cleanTarget.startsWith("/") && redirectAliases.has(cleanTarget)) return true;
+  if (
+    cleanTarget.startsWith("/") &&
+    (redirectAliases.has(cleanTarget) || redirectWildcardPrefixes.some(prefix => cleanTarget.startsWith(prefix)))
+  ) {
+    return true;
+  }
   const target = cleanTarget.startsWith("/") ? resolve(root, cleanTarget.slice(1)) : resolve(dirname(sourcePath), cleanTarget);
   try {
     await access(target);

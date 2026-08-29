@@ -125,6 +125,11 @@
   status = 301
 
 [[redirects]]
+  from = "/upload-pipeline"
+  to = "/upload-pipeline/"
+  status = 301
+
+[[redirects]]
   from = "/finish-house"
   to = "/finish-house/"
   status = 301

@@ -1,0 +1,325 @@
+/* Halo Ledger — platform operational memory UI */
+
+/* Layout ------------------------------------------------------------------- */
+.ledger-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem 2rem;
+  background: var(--surface-2, #111);
+  border-bottom: 1px solid var(--border, #222);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.ledger-wordmark {
+  font-family: 'Manrope', sans-serif;
+  font-weight: 800;
+  font-size: 1.25rem;
+  color: var(--accent, #a78bfa);
+  text-decoration: none;
+  letter-spacing: 0.05em;
+}
+
+.ledger-nav {
+  display: flex;
+  gap: 1.5rem;
+}
+
+.ledger-nav a {
+  font-family: 'DM Mono', monospace;
+  font-size: 0.8rem;
+  color: var(--text-muted, #888);
+  text-decoration: none;
+  transition: color 0.2s;
+}
+
+.ledger-nav a:hover,
+.ledger-nav a[aria-current="page"] {
+  color: var(--accent, #a78bfa);
+}
+
+.ledger-workspace {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 2rem 1.5rem 4rem;
+}
+
+/* Hero --------------------------------------------------------------------- */
+.ledger-hero {
+  text-align: center;
+  margin-bottom: 2.5rem;
+}
+
+.ledger-title {
+  font-family: 'Manrope', sans-serif;
+  font-size: clamp(1.8rem, 5vw, 3rem);
+  font-weight: 800;
+  color: var(--text, #f5f5f5);
+  margin: 0 0 0.5rem;
+}
+
+.ledger-subtitle {
+  font-size: 1rem;
+  color: var(--text-muted, #888);
+  max-width: 600px;
+  margin: 0 auto;
+  line-height: 1.6;
+}
+
+/* Controls ----------------------------------------------------------------- */
+.ledger-controls {
+  margin-bottom: 1.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.ledger-search-row {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.ledger-search {
+  flex: 1;
+  background: var(--surface-2, #1a1a1a);
+  border: 1px solid var(--border, #2a2a2a);
+  border-radius: 0.5rem;
+  color: var(--text, #f5f5f5);
+  font-family: 'DM Mono', monospace;
+  font-size: 0.875rem;
+  padding: 0.6rem 1rem;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.ledger-search:focus {
+  border-color: var(--accent, #a78bfa);
+}
+
+.ledger-btn {
+  background: var(--accent, #a78bfa);
+  border: none;
+  border-radius: 0.5rem;
+  color: #000;
+  font-family: 'Manrope', sans-serif;
+  font-weight: 700;
+  font-size: 0.875rem;
+  padding: 0.6rem 1.25rem;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.ledger-btn:hover {
+  opacity: 0.85;
+}
+
+.ledger-btn-outline {
+  background: transparent;
+  border: 1px solid var(--accent, #a78bfa);
+  color: var(--accent, #a78bfa);
+}
+
+.ledger-btn-outline:hover {
+  background: var(--accent, #a78bfa);
+  color: #000;
+}
+
+.ledger-filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.ledger-chip {
+  background: var(--surface-2, #1a1a1a);
+  border: 1px solid var(--border, #2a2a2a);
+  border-radius: 999px;
+  color: var(--text-muted, #888);
+  font-family: 'DM Mono', monospace;
+  font-size: 0.75rem;
+  padding: 0.3rem 0.85rem;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s, border-color 0.2s;
+}
+
+.ledger-chip:hover,
+.ledger-chip.active {
+  background: var(--accent, #a78bfa);
+  border-color: var(--accent, #a78bfa);
+  color: #000;
+}
+
+/* Status message ----------------------------------------------------------- */
+.ledger-status {
+  font-family: 'DM Mono', monospace;
+  font-size: 0.8rem;
+  color: var(--text-muted, #888);
+  margin-bottom: 1rem;
+  min-height: 1.25em;
+}
+
+/* Entries list ------------------------------------------------------------- */
+.ledger-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.ledger-entry {
+  background: var(--surface-2, #151515);
+  border: 1px solid var(--border, #222);
+  border-radius: 0.75rem;
+  padding: 1rem 1.25rem;
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s;
+}
+
+.ledger-entry:hover {
+  border-color: var(--accent, #a78bfa);
+  background: var(--surface-3, #1c1c1c);
+}
+
+.ledger-entry-top {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.4rem;
+}
+
+.ledger-category-badge {
+  font-family: 'DM Mono', monospace;
+  font-size: 0.7rem;
+  font-weight: 500;
+  padding: 0.2rem 0.6rem;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+/* Per-category badge colours */
+.ledger-category-badge[data-category="upload_event"]     { background: #1e3a5f; color: #60a5fa; }
+.ledger-category-badge[data-category="issue_report"]     { background: #3b1f1f; color: #f87171; }
+.ledger-category-badge[data-category="fix_record"]       { background: #1a3520; color: #4ade80; }
+.ledger-category-badge[data-category="department_action"]{ background: #2d2a1a; color: #fbbf24; }
+.ledger-category-badge[data-category="approval_event"]   { background: #1a2d3a; color: #38bdf8; }
+.ledger-category-badge[data-category="agent_activity"]   { background: #2a1a3a; color: #c084fc; }
+.ledger-category-badge[data-category="feature_request"]  { background: #2a1a1a; color: #fb923c; }
+.ledger-category-badge[data-category="system_event"]     { background: #1f1f1f; color: #94a3b8; }
+
+.ledger-entry-summary {
+  font-family: 'Manrope', sans-serif;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text, #f0f0f0);
+  flex: 1;
+}
+
+.ledger-entry-meta {
+  font-family: 'DM Mono', monospace;
+  font-size: 0.7rem;
+  color: var(--text-muted, #666);
+  display: flex;
+  gap: 1rem;
+}
+
+.ledger-outcome {
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.ledger-outcome[data-outcome="success"] { color: #4ade80; }
+.ledger-outcome[data-outcome="failure"] { color: #f87171; }
+.ledger-outcome[data-outcome="pending"] { color: #fbbf24; }
+.ledger-outcome[data-outcome="cancelled"] { color: #94a3b8; }
+
+/* Load more ---------------------------------------------------------------- */
+.ledger-load-more-row {
+  margin-top: 1.5rem;
+  text-align: center;
+}
+
+/* Detail panel ------------------------------------------------------------- */
+.ledger-detail {
+  position: fixed;
+  top: 0;
+  right: 0;
+  height: 100dvh;
+  width: min(480px, 100vw);
+  background: var(--surface-2, #111);
+  border-left: 1px solid var(--border, #222);
+  overflow-y: auto;
+  padding: 2rem 1.5rem;
+  z-index: 200;
+  box-shadow: -4px 0 24px rgba(0, 0, 0, 0.5);
+}
+
+.ledger-detail[hidden] {
+  display: none;
+}
+
+.ledger-detail-close {
+  background: transparent;
+  border: none;
+  color: var(--text-muted, #888);
+  font-size: 1.25rem;
+  cursor: pointer;
+  float: right;
+  padding: 0.25rem 0.5rem;
+}
+
+.ledger-detail-close:hover {
+  color: var(--text, #f5f5f5);
+}
+
+.ledger-detail-body h2 {
+  font-family: 'Manrope', sans-serif;
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--text, #f0f0f0);
+  margin: 1rem 0 0.5rem;
+}
+
+.ledger-detail-body p,
+.ledger-detail-body pre {
+  font-family: 'DM Mono', monospace;
+  font-size: 0.8rem;
+  color: var(--text-muted, #888);
+  line-height: 1.6;
+  word-break: break-word;
+  margin: 0 0 0.75rem;
+}
+
+.ledger-detail-body pre {
+  background: var(--surface-3, #1a1a1a);
+  border: 1px solid var(--border, #2a2a2a);
+  border-radius: 0.5rem;
+  padding: 0.75rem;
+  overflow-x: auto;
+  white-space: pre-wrap;
+}
+
+/* Footer ------------------------------------------------------------------- */
+.ledger-footer {
+  text-align: center;
+  padding: 1.5rem;
+  font-family: 'DM Mono', monospace;
+  font-size: 0.75rem;
+  color: var(--text-muted, #555);
+  border-top: 1px solid var(--border, #1a1a1a);
+}
+
+/* Accessibility ------------------------------------------------------------ */
+@media (prefers-reduced-motion: reduce) {
+  .ledger-entry,
+  .ledger-btn,
+  .ledger-chip { transition: none; }
+}
+
+@media (max-width: 640px) {
+  .ledger-header { flex-direction: column; gap: 0.75rem; padding: 1rem; }
+  .ledger-detail { width: 100vw; border-left: none; }
+}

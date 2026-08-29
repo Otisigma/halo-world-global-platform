@@ -63,12 +63,10 @@ async function ownedSong(db: Awaited<ReturnType<typeof getDatabase>>, ownerMembe
 
 async function ownedVersion(db: Awaited<ReturnType<typeof getDatabase>>, ownerMemberId: string, songId: string, versionId: string) {
   const rows = await db.sql`
-    SELECT v.id, v.song_id, v.artwork_url, v.artwork_blob_prefix, v.artwork_chunk_count,
-           v.artwork_byte_size, v.artwork_content_type, v.artwork_filename
+    SELECT v.id, v.artwork_url, v.artwork_blob_prefix, v.artwork_chunk_count, v.artwork_byte_size, v.artwork_content_type, v.artwork_filename
     FROM halo_song_versions v
     JOIN halo_song_catalog s ON s.id = v.song_id
-    WHERE v.id = ${versionId} AND v.song_id = ${songId}
-      AND s.owner_member_id = ${ownerMemberId} AND s.status = 'active' AND v.status = 'active'
+    WHERE v.id = ${versionId} AND v.song_id = ${songId} AND s.owner_member_id = ${ownerMemberId} AND v.status = 'active' AND s.status = 'active'
     LIMIT 1
   `;
   return rows[0] || null;
@@ -83,7 +81,7 @@ async function removeArtwork(prefix: string) {
 async function uploadChunk(request: Request, db: Awaited<ReturnType<typeof getDatabase>>, ownerMemberId: string) {
   const form = await request.formData();
   const songId = cleanId(form.get("songId"));
-  const versionId = cleanId(form.get("versionId") || "");
+  const versionId = cleanId(form.get("versionId"));
   const uploadId = cleanUploadId(form.get("uploadId"));
   const chunkIndex = Number.parseInt(String(form.get("chunkIndex") || ""), 10);
   const chunkCount = Number.parseInt(String(form.get("chunkCount") || ""), 10);
@@ -101,16 +99,14 @@ async function uploadChunk(request: Request, db: Awaited<ReturnType<typeof getDa
   } else {
     if (!(await ownedSong(db, ownerMemberId, songId))) return json({ message: "That song was not found" }, 404);
   }
-  const prefix = versionId
-    ? `${ownerMemberId}/${songId}/versions/${versionId}/${uploadId}/parts/`
-    : `${ownerMemberId}/${songId}/${uploadId}/parts/`;
+  const prefix = versionId ? `${ownerMemberId}/${songId}/${versionId}/${uploadId}/parts/` : `${ownerMemberId}/${songId}/${uploadId}/parts/`;
   await artworkStore.set(`${prefix}${String(chunkIndex).padStart(3, "0")}`, chunk);
   return json({ message: "Artwork chunk uploaded", chunkIndex });
 }
 
 async function finalizeUpload(payload: Record<string, unknown>, db: Awaited<ReturnType<typeof getDatabase>>, ownerMemberId: string) {
   const songId = cleanId(payload.songId);
-  const versionId = cleanId(payload.versionId || "");
+  const versionId = cleanId(payload.versionId);
   const uploadId = cleanUploadId(payload.uploadId);
   const chunkCount = Number.parseInt(String(payload.chunkCount || ""), 10);
   const byteSize = Number.parseInt(String(payload.byteSize || ""), 10);
@@ -121,7 +117,7 @@ async function finalizeUpload(payload: Record<string, unknown>, db: Awaited<Retu
   if (versionId) {
     const version = await ownedVersion(db, ownerMemberId, songId, versionId);
     if (!version) return json({ message: "That version was not found" }, 404);
-    const prefix = `${ownerMemberId}/${songId}/versions/${versionId}/${uploadId}/parts/`;
+    const prefix = `${ownerMemberId}/${songId}/${versionId}/${uploadId}/parts/`;
     const stored = await artworkStore.list({ prefix });
     if (stored.blobs.length !== chunkCount) return json({ message: "The artwork upload is incomplete. Try it again." }, 409);
     const artworkUrl = `/api/song-catalog/artwork?songId=${encodeURIComponent(songId)}&versionId=${encodeURIComponent(versionId)}`;
@@ -138,7 +134,7 @@ async function finalizeUpload(payload: Record<string, unknown>, db: Awaited<Retu
       WHERE id = ${versionId} AND song_id = ${songId}
     `;
     if (version.artwork_blob_prefix && version.artwork_blob_prefix !== prefix) await removeArtwork(String(version.artwork_blob_prefix)).catch(() => undefined);
-    return json({ artwork_url: artworkUrl, message: "Version artwork uploaded successfully" });
+    return json({ artwork_url: artworkUrl, message: "Artwork uploaded successfully" });
   }
   const song = await ownedSong(db, ownerMemberId, songId);
   if (!song) return json({ message: "That song was not found" }, 404);
@@ -193,10 +189,13 @@ async function readArtworkRange(song: Record<string, unknown>, range: { start: n
 async function serveArtwork(request: Request, db: Awaited<ReturnType<typeof getDatabase>>, ownerMemberId: string) {
   const params = new URL(request.url).searchParams;
   const songId = cleanId(params.get("songId"));
-  const versionId = cleanId(params.get("versionId") || "");
-  const record = songId && versionId
-    ? await ownedVersion(db, ownerMemberId, songId, versionId)
-    : songId ? await ownedSong(db, ownerMemberId, songId) : null;
+  const versionId = cleanId(params.get("versionId"));
+  let record: Record<string, unknown> | null = null;
+  if (versionId && songId) {
+    record = await ownedVersion(db, ownerMemberId, songId, versionId);
+  } else if (songId) {
+    record = await ownedSong(db, ownerMemberId, songId);
+  }
   if (!record?.artwork_blob_prefix || !record.artwork_chunk_count || !record.artwork_byte_size) return json({ message: "Song artwork was not found" }, 404);
   const byteSize = Number(record.artwork_byte_size);
   const range = requestedByteRange(request.headers.get("range"), byteSize);
@@ -232,7 +231,7 @@ async function serveArtwork(request: Request, db: Awaited<ReturnType<typeof getD
 
 async function deleteArtwork(payload: Record<string, unknown>, db: Awaited<ReturnType<typeof getDatabase>>, ownerMemberId: string) {
   const songId = cleanId(payload.songId);
-  const versionId = cleanId(payload.versionId || "");
+  const versionId = cleanId(payload.versionId);
   if (!songId) return json({ message: "A valid song ID is required" }, 400);
   if (versionId) {
     const version = await ownedVersion(db, ownerMemberId, songId, versionId);
@@ -245,7 +244,7 @@ async function deleteArtwork(payload: Record<string, unknown>, db: Awaited<Retur
       WHERE id = ${versionId} AND song_id = ${songId}
     `;
     if (version.artwork_blob_prefix) await removeArtwork(String(version.artwork_blob_prefix)).catch(() => undefined);
-    return json({ message: "Version artwork removed" });
+    return json({ message: "Artwork removed" });
   }
   const song = await ownedSong(db, ownerMemberId, songId);
   if (!song) return json({ message: "That song was not found" }, 404);

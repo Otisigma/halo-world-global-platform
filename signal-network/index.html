@@ -1,0 +1,1210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Signal Network — HALO Music World</title>
+  <meta name="description" content="The private operating system for artists. Store, shape, and grow your work without losing ownership, context, or momentum.">
+  <meta name="theme-color" content="#070709">
+  <meta property="og:title" content="Signal Network — HALO Music World">
+  <meta property="og:description" content="Artist sovereignty. Creative intelligence. Release continuity. Direct value.">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="HALO Music World">
+  <meta property="og:image" content="https://halo-world-global-platform.netlify.app/assets/halo-app-icon-512.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Signal Network — HALO Music World">
+  <meta name="twitter:description" content="Artist sovereignty. Creative intelligence. Release continuity. Direct value.">
+  <meta name="twitter:image" content="https://halo-world-global-platform.netlify.app/assets/halo-app-icon-512.png">
+  <link rel="icon" href="/assets/halo-app-icon-192.png">
+  <link rel="manifest" href="/app.webmanifest">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;700;800;900&family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500;1,600&family=Share+Tech+Mono:wght@400&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/halo-brand.css">
+  <link rel="stylesheet" href="/accessibility.css">
+  <script src="/stats.js" defer></script>
+  <script src="/accessibility.js" defer></script>
+  <style>
+    /* ── Base ──────────────────────────────────────────────── */
+    :root {
+      --bg:          #070709;
+      --panel:       #0d0d14;
+      --panel-alt:   #0a0a11;
+      --gold:        #d4a847;
+      --gold-dim:    rgba(212, 168, 71, 0.18);
+      --gold-glow:   rgba(212, 168, 71, 0.08);
+      --purple:      #a855f7;
+      --purple-dim:  rgba(168, 85, 247, 0.15);
+      --border:      rgba(212, 168, 71, 0.20);
+      --border-sub:  rgba(168, 85, 247, 0.18);
+      --text:        #e8e8ec;
+      --text-dim:    #8b8b9e;
+      --radius-card: 18px;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Inter', sans-serif;
+      line-height: 1.6;
+      overflow-x: hidden;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ── Grid canvas ──────────────────────────────────────── */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 0;
+      background-image:
+        linear-gradient(rgba(168, 85, 247, 0.04) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(168, 85, 247, 0.04) 1px, transparent 1px);
+      background-size: 32px 32px;
+    }
+
+    /* ── Typography ───────────────────────────────────────── */
+    .font-condensed { font-family: 'Barlow Condensed', sans-serif; }
+    .font-serif     { font-family: 'Cormorant Garamond', serif; }
+    .font-mono      { font-family: 'Share Tech Mono', monospace; }
+
+    /* ── Utility ──────────────────────────────────────────── */
+    .container {
+      width: min(1120px, 92vw);
+      margin-inline: auto;
+      position: relative;
+      z-index: 1;
+    }
+
+    /* ── Site header ──────────────────────────────────────── */
+    .site-header {
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      border-bottom: 1px solid var(--border);
+      background: rgba(7, 7, 9, 0.92);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+    }
+
+    .site-header__inner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      padding-block: 0.875rem;
+    }
+
+    .site-header__brand {
+      display: flex;
+      align-items: center;
+      gap: 0.625rem;
+      text-decoration: none;
+      color: var(--text);
+    }
+
+    .site-header__brand strong {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 1.15rem;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--gold);
+    }
+
+    .site-header__brand small {
+      font-size: 0.65rem;
+      font-family: 'Share Tech Mono', monospace;
+      color: var(--text-dim);
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    .site-header__nav {
+      display: flex;
+      align-items: center;
+      gap: 1.75rem;
+      list-style: none;
+    }
+
+    .site-header__nav a {
+      font-size: 0.8rem;
+      font-weight: 500;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      text-decoration: none;
+      color: var(--text-dim);
+      transition: color 0.2s;
+    }
+
+    .site-header__nav a:hover { color: var(--gold); }
+
+    .site-header__cta {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.45rem;
+      padding: 0.5rem 1.1rem;
+      border: 1px solid var(--gold);
+      border-radius: 8px;
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 0.85rem;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      text-decoration: none;
+      color: var(--gold);
+      background: var(--gold-glow);
+      transition: background 0.2s, box-shadow 0.2s;
+    }
+
+    .site-header__cta:hover {
+      background: var(--gold-dim);
+      box-shadow: 0 0 18px rgba(212, 168, 71, 0.22);
+    }
+
+    @media (max-width: 640px) {
+      .site-header__nav { display: none; }
+    }
+
+    /* ── Hero ─────────────────────────────────────────────── */
+    .hero {
+      padding-block: clamp(5rem, 12vw, 9rem);
+      text-align: center;
+      position: relative;
+    }
+
+    .hero::after {
+      content: '';
+      position: absolute;
+      left: 50%;
+      bottom: -1px;
+      transform: translateX(-50%);
+      width: 1px;
+      height: 80px;
+      background: linear-gradient(to bottom, var(--gold), transparent);
+    }
+
+    .hero__eyebrow {
+      display: inline-block;
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 0.7rem;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--gold);
+      border: 1px solid var(--border);
+      padding: 0.35rem 1rem;
+      border-radius: 100px;
+      margin-bottom: 2.25rem;
+      position: relative;
+    }
+
+    .hero__eyebrow::before {
+      content: '';
+      display: inline-block;
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--gold);
+      margin-right: 0.6rem;
+      vertical-align: middle;
+      animation: pulse-dot 2.4s ease-in-out infinite;
+    }
+
+    @keyframes pulse-dot {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50%       { opacity: 0.4; transform: scale(0.7); }
+    }
+
+    .hero__headline {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: clamp(3rem, 8vw, 7rem);
+      font-weight: 900;
+      line-height: 0.95;
+      letter-spacing: -0.01em;
+      text-transform: uppercase;
+      color: var(--text);
+      margin-bottom: 0.25rem;
+    }
+
+    .hero__headline em {
+      font-style: italic;
+      color: var(--gold);
+    }
+
+    .hero__subhead {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: clamp(1.25rem, 3vw, 2rem);
+      font-weight: 500;
+      font-style: italic;
+      color: var(--text-dim);
+      margin-block: 1.5rem 2.5rem;
+    }
+
+    .hero__body {
+      font-size: 1.05rem;
+      color: var(--text-dim);
+      max-width: 600px;
+      margin-inline: auto;
+      line-height: 1.75;
+      margin-bottom: 3rem;
+    }
+
+    .hero__actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1rem;
+      justify-content: center;
+    }
+
+    .btn-primary {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.8rem 1.8rem;
+      background: var(--gold);
+      color: #07070a;
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 0.95rem;
+      font-weight: 800;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      text-decoration: none;
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+      transition: box-shadow 0.2s, opacity 0.2s;
+    }
+
+    .btn-primary:hover {
+      box-shadow: 0 0 28px rgba(212, 168, 71, 0.45);
+      opacity: 0.92;
+    }
+
+    .btn-ghost {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.78rem 1.6rem;
+      background: transparent;
+      color: var(--text-dim);
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 0.95rem;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      text-decoration: none;
+      border: 1px solid var(--border-sub);
+      border-radius: 10px;
+      cursor: pointer;
+      transition: border-color 0.2s, color 0.2s;
+    }
+
+    .btn-ghost:hover {
+      border-color: var(--purple);
+      color: var(--text);
+    }
+
+    /* ── Section chrome ───────────────────────────────────── */
+    .section-label {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 0.65rem;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--gold);
+      margin-bottom: 0.75rem;
+    }
+
+    .section-title {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: clamp(2rem, 4.5vw, 3.5rem);
+      font-weight: 900;
+      letter-spacing: -0.01em;
+      text-transform: uppercase;
+      line-height: 1;
+      color: var(--text);
+    }
+
+    .section-copy {
+      font-size: 1rem;
+      color: var(--text-dim);
+      line-height: 1.75;
+      max-width: 580px;
+      margin-top: 1rem;
+    }
+
+    /* ── Pillars ──────────────────────────────────────────── */
+    .pillars {
+      padding-block: clamp(4rem, 9vw, 7rem);
+      border-top: 1px solid var(--border);
+    }
+
+    .pillars__header {
+      margin-bottom: 3.5rem;
+    }
+
+    .pillars__grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 1.5px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-card);
+      overflow: hidden;
+    }
+
+    .pillar {
+      background: var(--panel);
+      padding: 2.25rem 1.75rem;
+      position: relative;
+      transition: background 0.25s;
+    }
+
+    .pillar:hover { background: var(--panel-alt); }
+
+    .pillar__num {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 0.65rem;
+      letter-spacing: 0.15em;
+      color: var(--gold);
+      margin-bottom: 1.25rem;
+    }
+
+    .pillar__icon {
+      width: 40px;
+      height: 40px;
+      border-radius: 10px;
+      background: var(--gold-dim);
+      border: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 1.25rem;
+      font-size: 1.15rem;
+    }
+
+    .pillar__title {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 1.3rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--text);
+      margin-bottom: 0.75rem;
+    }
+
+    .pillar__body {
+      font-size: 0.88rem;
+      color: var(--text-dim);
+      line-height: 1.7;
+    }
+
+    /* ── Modules ──────────────────────────────────────────── */
+    .modules {
+      padding-block: clamp(4rem, 9vw, 7rem);
+      border-top: 1px solid var(--border);
+    }
+
+    .modules__header {
+      margin-bottom: 3.5rem;
+      max-width: 640px;
+    }
+
+    .modules__grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 1.25rem;
+    }
+
+    .module-card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-card);
+      padding: 2rem 2rem 2.25rem;
+      position: relative;
+      overflow: hidden;
+      transition: border-color 0.25s, box-shadow 0.25s;
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+
+    .module-card::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      background: radial-gradient(ellipse 60% 50% at 50% 0%, var(--gold-glow), transparent);
+      opacity: 0;
+      transition: opacity 0.3s;
+    }
+
+    .module-card:hover {
+      border-color: var(--gold);
+      box-shadow: 0 0 32px rgba(212, 168, 71, 0.12);
+    }
+
+    .module-card:hover::before { opacity: 1; }
+
+    .module-card--featured {
+      grid-column: 1 / -1;
+    }
+
+    @media (min-width: 700px) {
+      .module-card--featured {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 2.5rem;
+        align-items: center;
+      }
+
+      .module-card--featured .module-card__body { display: contents; }
+    }
+
+    .module-card__eyebrow {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 0.65rem;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--gold);
+    }
+
+    .module-card__title {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 1.75rem;
+      font-weight: 900;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+      color: var(--text);
+      line-height: 1;
+    }
+
+    .module-card__desc {
+      font-size: 0.92rem;
+      color: var(--text-dim);
+      line-height: 1.7;
+      flex: 1;
+    }
+
+    .module-card__list {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 0.45rem;
+    }
+
+    .module-card__list li {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 0.78rem;
+      color: var(--text-dim);
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+    }
+
+    .module-card__list li::before {
+      content: '';
+      display: block;
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      background: var(--gold);
+      flex-shrink: 0;
+    }
+
+    .module-card__badge {
+      display: inline-block;
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 0.6rem;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: var(--gold);
+      border: 1px solid var(--border);
+      border-radius: 100px;
+      padding: 0.2rem 0.65rem;
+      align-self: flex-start;
+    }
+
+    /* ── Circles / access tier section ──────────────────── */
+    .circles {
+      padding-block: clamp(4rem, 9vw, 7rem);
+      border-top: 1px solid var(--border);
+    }
+
+    .circles__inner {
+      display: grid;
+      gap: 2.5rem;
+      align-items: center;
+    }
+
+    @media (min-width: 800px) {
+      .circles__inner {
+        grid-template-columns: 1fr 1fr;
+        gap: 5rem;
+      }
+    }
+
+    .circles__diagram {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      aspect-ratio: 1;
+      max-width: 400px;
+      margin-inline: auto;
+      position: relative;
+    }
+
+    .circle-ring {
+      position: absolute;
+      border-radius: 50%;
+      border: 1px solid;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .circle-ring--outer {
+      inset: 0;
+      border-color: var(--border-sub);
+      background: rgba(168, 85, 247, 0.03);
+    }
+
+    .circle-ring--mid {
+      inset: 18%;
+      border-color: var(--border);
+      background: rgba(212, 168, 71, 0.04);
+    }
+
+    .circle-ring--core {
+      inset: 36%;
+      border-color: var(--gold);
+      background: var(--gold-glow);
+      box-shadow: 0 0 40px rgba(212, 168, 71, 0.15);
+    }
+
+    .circle-ring__label {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 0.6rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      text-align: center;
+      pointer-events: none;
+    }
+
+    .circle-ring--core .circle-ring__label { color: var(--gold); }
+    .circle-ring--mid .circle-ring__label { color: var(--text-dim); position: absolute; bottom: 16%; }
+    .circle-ring--outer .circle-ring__label { color: var(--text-dim); position: absolute; bottom: 6%; }
+
+    .circles__tiers {
+      display: flex;
+      flex-direction: column;
+      gap: 1.25rem;
+    }
+
+    .tier-item {
+      display: flex;
+      gap: 1.25rem;
+      align-items: flex-start;
+      padding: 1.25rem 1.5rem;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      transition: border-color 0.2s;
+    }
+
+    .tier-item:hover { border-color: var(--gold); }
+
+    .tier-item__dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      margin-top: 4px;
+      flex-shrink: 0;
+    }
+
+    .tier-item__dot--gold   { background: var(--gold); box-shadow: 0 0 10px rgba(212, 168, 71, 0.5); }
+    .tier-item__dot--purple { background: var(--purple); box-shadow: 0 0 10px rgba(168, 85, 247, 0.4); }
+    .tier-item__dot--dim    { background: var(--text-dim); }
+
+    .tier-item__title {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 1rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--text);
+      margin-bottom: 0.25rem;
+    }
+
+    .tier-item__body {
+      font-size: 0.84rem;
+      color: var(--text-dim);
+      line-height: 1.65;
+    }
+
+    /* ── Ritual loop ─────────────────────────────────────── */
+    .ritual {
+      padding-block: clamp(4rem, 9vw, 7rem);
+      border-top: 1px solid var(--border);
+    }
+
+    .ritual__flow {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0;
+      margin-top: 3rem;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-card);
+      overflow: hidden;
+    }
+
+    .ritual__step {
+      flex: 1 1 160px;
+      padding: 2rem 1.5rem;
+      background: var(--panel);
+      border-right: 1px solid var(--border);
+      position: relative;
+      text-align: center;
+    }
+
+    .ritual__step:last-child { border-right: none; }
+
+    .ritual__step-num {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 0.6rem;
+      letter-spacing: 0.15em;
+      color: var(--gold);
+      margin-bottom: 0.75rem;
+    }
+
+    .ritual__step-icon {
+      font-size: 1.5rem;
+      margin-bottom: 0.75rem;
+    }
+
+    .ritual__step-title {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 1.1rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--text);
+      margin-bottom: 0.5rem;
+    }
+
+    .ritual__step-body {
+      font-size: 0.8rem;
+      color: var(--text-dim);
+      line-height: 1.65;
+    }
+
+    /* ── Closing ─────────────────────────────────────────── */
+    .closing {
+      padding-block: clamp(5rem, 12vw, 9rem);
+      text-align: center;
+      border-top: 1px solid var(--border);
+      position: relative;
+    }
+
+    .closing::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 1px;
+      height: 80px;
+      background: linear-gradient(to bottom, transparent, var(--gold));
+    }
+
+    .closing__quote {
+      font-family: 'Cormorant Garamond', serif;
+      font-size: clamp(1.5rem, 4vw, 3rem);
+      font-weight: 600;
+      font-style: italic;
+      color: var(--text);
+      max-width: 700px;
+      margin-inline: auto;
+      line-height: 1.35;
+      margin-bottom: 1.75rem;
+    }
+
+    .closing__tagline {
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 0.7rem;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--gold);
+      margin-bottom: 2.5rem;
+    }
+
+    /* ── Footer ──────────────────────────────────────────── */
+    .site-footer {
+      border-top: 1px solid var(--border);
+      padding-block: 2.5rem;
+    }
+
+    .site-footer__inner {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1.5rem;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .site-footer__brand {
+      font-family: 'Barlow Condensed', sans-serif;
+      font-size: 0.9rem;
+      font-weight: 800;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--gold);
+      text-decoration: none;
+    }
+
+    .site-footer__links {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1.5rem;
+      list-style: none;
+    }
+
+    .site-footer__links a {
+      font-size: 0.8rem;
+      font-weight: 500;
+      text-decoration: none;
+      color: var(--text-dim);
+      transition: color 0.2s;
+    }
+
+    .site-footer__links a:hover { color: var(--gold); }
+
+    .site-footer__copy {
+      font-size: 0.75rem;
+      color: var(--text-dim);
+      font-family: 'Share Tech Mono', monospace;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ── Header ──────────────────────────────────────────── -->
+  <header class="site-header">
+    <div class="container site-header__inner">
+      <a class="site-header__brand" href="/halo.html" aria-label="HALO home">
+        <img class="halo-brand-image halo-brand-image--small" src="/assets/halo-logo-mark.webp" alt="">
+        <span>
+          <strong>HALO</strong>
+          <small>Signal Network</small>
+        </span>
+      </a>
+
+      <nav aria-label="Platform navigation">
+        <ul class="site-header__nav">
+          <li><a href="#pillars">Pillars</a></li>
+          <li><a href="#modules">Modules</a></li>
+          <li><a href="#circles">Circles</a></li>
+          <li><a href="#ritual">Ritual Engine</a></li>
+          <li><a href="/halo.html">Home</a></li>
+        </ul>
+      </nav>
+
+      <a class="site-header__cta" href="/halo.html#join">
+        Request Access
+      </a>
+    </div>
+  </header>
+
+  <main>
+
+    <!-- ── Hero ──────────────────────────────────────────── -->
+    <section class="hero" aria-labelledby="hero-headline">
+      <div class="container">
+        <p class="hero__eyebrow">HALO Signal Network — Artist Intelligence Layer</p>
+
+        <h1 class="hero__headline font-condensed" id="hero-headline">
+          Your creative life.<br>
+          <em>Artist-owned.</em>
+        </h1>
+
+        <p class="hero__subhead font-serif">
+          Store the work. Shape the work. Move the work forward.
+        </p>
+
+        <p class="hero__body">
+          Signal Network is the private operating system inside HALO that helps artists
+          keep their catalogue organized, their collaborators aligned, and their releases
+          moving forward — without losing ownership, context, or momentum.
+        </p>
+
+        <div class="hero__actions">
+          <a class="btn-primary" href="/halo.html#join">Request Access</a>
+          <a class="btn-ghost" href="#modules">Explore Modules</a>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── Core Pillars ───────────────────────────────────── -->
+    <section class="pillars" id="pillars" aria-labelledby="pillars-title">
+      <div class="container">
+        <header class="pillars__header">
+          <p class="section-label">Core Pillars</p>
+          <h2 class="section-title" id="pillars-title">Five principles.<br>One operating system.</h2>
+          <p class="section-copy">
+            Signal Network is built on five convictions about how artists should move
+            through the world — privately, intelligently, and with full sovereignty over
+            what they create.
+          </p>
+        </header>
+
+        <div class="pillars__grid" role="list">
+
+          <article class="pillar" role="listitem">
+            <p class="pillar__num">01 / 05</p>
+            <div class="pillar__icon" aria-hidden="true">🔒</div>
+            <h3 class="pillar__title">Artist Sovereignty</h3>
+            <p class="pillar__body">
+              Your work stays yours. Drafts, stems, notes, splits, release plans, campaign
+              ideas, and audience signals remain inside your control — never shared, never
+              sold, never surfaced without your permission.
+            </p>
+          </article>
+
+          <article class="pillar" role="listitem">
+            <p class="pillar__num">02 / 05</p>
+            <div class="pillar__icon" aria-hidden="true">✦</div>
+            <h3 class="pillar__title">Creative Intelligence</h3>
+            <p class="pillar__body">
+              HALO makes sense of the work already happening — sessions, versions, assets,
+              collaborator input, audience response, and campaign progress — and converts
+              scattered material into clear next steps.
+            </p>
+          </article>
+
+          <article class="pillar" role="listitem">
+            <p class="pillar__num">03 / 05</p>
+            <div class="pillar__icon" aria-hidden="true">◎</div>
+            <h3 class="pillar__title">Trusted Circles</h3>
+            <p class="pillar__body">
+              Not everyone needs the same level of access. Signal Network supports layered
+              collaboration so every person in your world — manager, producer, distributor,
+              or family — sees exactly what they need, and nothing more.
+            </p>
+          </article>
+
+          <article class="pillar" role="listitem">
+            <p class="pillar__num">04 / 05</p>
+            <div class="pillar__icon" aria-hidden="true">⟳</div>
+            <h3 class="pillar__title">Release Continuity</h3>
+            <p class="pillar__body">
+              Every release has a full story. HALO tracks the arc from first idea through
+              final master, artwork, credits, and live performance — so nothing is lost and
+              every decision has a record.
+            </p>
+          </article>
+
+          <article class="pillar" role="listitem">
+            <p class="pillar__num">05 / 05</p>
+            <div class="pillar__icon" aria-hidden="true">◈</div>
+            <h3 class="pillar__title">Direct Value</h3>
+            <p class="pillar__body">
+              Artists should understand where the value goes. Signal Network helps track
+              ownership, credits, catalogue momentum, and earnings — so more of what you
+              generate stays with you.
+            </p>
+          </article>
+
+        </div>
+      </div>
+    </section>
+
+    <!-- ── Platform Modules ───────────────────────────────── -->
+    <section class="modules" id="modules" aria-labelledby="modules-title">
+      <div class="container">
+        <header class="modules__header">
+          <p class="section-label">Platform Modules</p>
+          <h2 class="section-title" id="modules-title">Six rooms.<br>One world.</h2>
+          <p class="section-copy">
+            Every module inside Signal Network is built to give artists a specific kind of
+            control over a specific part of their creative life.
+          </p>
+        </header>
+
+        <div class="modules__grid">
+
+          <!-- Sovereign Vault — featured full-width -->
+          <article class="module-card module-card--featured" id="sovereign-vault">
+            <div class="module-card__body">
+              <div>
+                <p class="module-card__eyebrow">Module 01</p>
+                <h3 class="module-card__title">Sovereign Vault</h3>
+                <p class="module-card__desc">
+                  A private, encrypted archive for everything that belongs to you. Tracks,
+                  stems, artwork, contracts, credits, split sheets, release notes, and the
+                  full history of every decision. Nothing leaves without your sign-off.
+                </p>
+                <span class="module-card__badge">Private by default</span>
+              </div>
+              <ul class="module-card__list" aria-label="Sovereign Vault features">
+                <li>Full catalogue storage — released and unreleased</li>
+                <li>Version control for stems, mixes, and masters</li>
+                <li>Split and rights documentation</li>
+                <li>Release history and decision log</li>
+                <li>Artwork and metadata archive</li>
+                <li>Contract and agreement storage</li>
+                <li>Granular access controls per asset</li>
+              </ul>
+            </div>
+          </article>
+
+          <!-- Pearl Hall -->
+          <article class="module-card" id="pearl-hall">
+            <p class="module-card__eyebrow">Module 02</p>
+            <h3 class="module-card__title">Pearl Hall</h3>
+            <p class="module-card__desc">
+              A visual timeline of every milestone, release, win, and important moment in
+              your career. Each Pearl represents a real creative achievement — something you
+              can revisit, share privately, or build on.
+            </p>
+            <ul class="module-card__list" aria-label="Pearl Hall features">
+              <li>Milestone timeline for every release</li>
+              <li>First-idea-to-launch story for each track</li>
+              <li>Collaboration credits and acknowledgements</li>
+              <li>Private and shareable Pearl views</li>
+            </ul>
+            <span class="module-card__badge">Live milestone archive</span>
+          </article>
+
+          <!-- Dreamweaver -->
+          <article class="module-card" id="dreamweaver">
+            <p class="module-card__eyebrow">Module 03</p>
+            <h3 class="module-card__title">Dreamweaver</h3>
+            <p class="module-card__desc">
+              An intelligence layer that turns raw creative material into useful outputs.
+              Feed in a session, a voice note, a rough draft, or an idea — and Dreamweaver
+              helps shape it into release copy, campaign language, next-step plans, and
+              creative prompts.
+            </p>
+            <ul class="module-card__list" aria-label="Dreamweaver features">
+              <li>Session-to-summary synthesis</li>
+              <li>Release copy and bio drafts</li>
+              <li>Campaign language and pitch material</li>
+              <li>Creative prompts from existing work</li>
+            </ul>
+            <span class="module-card__badge">AI-assisted, artist-directed</span>
+          </article>
+
+          <!-- Ritual Engine -->
+          <article class="module-card" id="ritual-engine">
+            <p class="module-card__eyebrow">Module 04</p>
+            <h3 class="module-card__title">Ritual Engine</h3>
+            <p class="module-card__desc">
+              A simple daily focus loop built for creative momentum. Ritual Engine takes
+              the chaos out of a working day and replaces it with a clear, repeatable
+              sequence that keeps releases moving forward.
+            </p>
+            <ul class="module-card__list" aria-label="Ritual Engine steps">
+              <li>Capture — log what happened today</li>
+              <li>Refine — move one thing forward</li>
+              <li>Publish — put something into the world</li>
+              <li>Review — see what is working</li>
+              <li>Repeat — build the habit</li>
+            </ul>
+            <span class="module-card__badge">Daily creative practice</span>
+          </article>
+
+          <!-- Release Desk -->
+          <article class="module-card" id="release-desk">
+            <p class="module-card__eyebrow">Module 05</p>
+            <h3 class="module-card__title">Release Desk</h3>
+            <p class="module-card__desc">
+              A single control room for everything a release needs before it goes live.
+              Metadata, artwork, rights, credits, distribution, launch sequencing — all in
+              one place so nothing is missing when it matters.
+            </p>
+            <ul class="module-card__list" aria-label="Release Desk features">
+              <li>Metadata completion and ISRC management</li>
+              <li>Artwork review and approval workflow</li>
+              <li>Rights and credits verification</li>
+              <li>Distribution routing and launch scheduling</li>
+            </ul>
+            <span class="module-card__badge">Release-ready checklist</span>
+          </article>
+
+          <!-- Signal Network -->
+          <article class="module-card" id="signal-network-module">
+            <p class="module-card__eyebrow">Module 06</p>
+            <h3 class="module-card__title">Signal Network</h3>
+            <p class="module-card__desc">
+              A live view of creative momentum — what is gaining traction, what needs
+              attention, and what should happen next. Signal Network connects every other
+              module and surfaces the signals that matter most to you right now.
+            </p>
+            <ul class="module-card__list" aria-label="Signal Network features">
+              <li>Release health and traction overview</li>
+              <li>Collaborator activity and open actions</li>
+              <li>Catalogue-wide momentum signals</li>
+              <li>Prioritised next-step recommendations</li>
+            </ul>
+            <span class="module-card__badge">Live intelligence layer</span>
+          </article>
+
+        </div>
+      </div>
+    </section>
+
+    <!-- ── Trusted Circles ────────────────────────────────── -->
+    <section class="circles" id="circles" aria-labelledby="circles-title">
+      <div class="container">
+        <div class="circles__inner">
+
+          <div class="circles__diagram" aria-hidden="true">
+            <div class="circle-ring circle-ring--outer">
+              <span class="circle-ring__label">Extended World<br>Label · Distribution · Press</span>
+            </div>
+            <div class="circle-ring circle-ring--mid">
+              <span class="circle-ring__label">Creative Team<br>Producers · Managers · Designers</span>
+            </div>
+            <div class="circle-ring circle-ring--core">
+              <span class="circle-ring__label">Artist<br>Core</span>
+            </div>
+          </div>
+
+          <div>
+            <p class="section-label">Trusted Circles</p>
+            <h2 class="section-title" id="circles-title">Every person<br>in the right place.</h2>
+            <p class="section-copy">
+              Signal Network uses layered access so your creative life stays organized and
+              private. Three concentric circles — each with its own permissions, visibility,
+              and purpose.
+            </p>
+
+            <div class="circles__tiers" style="margin-top: 2rem;">
+
+              <div class="tier-item">
+                <div class="tier-item__dot tier-item__dot--gold"></div>
+                <div>
+                  <p class="tier-item__title">Artist Core</p>
+                  <p class="tier-item__body">
+                    The innermost circle. Full access to the Sovereign Vault, all release
+                    materials, earnings data, and every creative decision. This is your
+                    private space — no one enters without your explicit invitation.
+                  </p>
+                </div>
+              </div>
+
+              <div class="tier-item">
+                <div class="tier-item__dot tier-item__dot--purple"></div>
+                <div>
+                  <p class="tier-item__title">Creative Team</p>
+                  <p class="tier-item__body">
+                    Producers, managers, collaborators, and designers. Access is scoped
+                    to the specific projects, stems, briefs, and approvals they need.
+                    Feedback flows in — final decisions flow out from the core.
+                  </p>
+                </div>
+              </div>
+
+              <div class="tier-item">
+                <div class="tier-item__dot tier-item__dot--dim"></div>
+                <div>
+                  <p class="tier-item__title">Extended World</p>
+                  <p class="tier-item__body">
+                    Labels, distributors, press contacts, and legal partners. This circle
+                    receives only what they need to do their job — delivery-ready assets,
+                    approved bios, release schedules, and nothing more.
+                  </p>
+                </div>
+              </div>
+
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </section>
+
+    <!-- ── Ritual Engine detail ───────────────────────────── -->
+    <section class="ritual" id="ritual" aria-labelledby="ritual-title">
+      <div class="container">
+        <p class="section-label">Ritual Engine</p>
+        <h2 class="section-title" id="ritual-title">The daily loop<br>that builds a career.</h2>
+        <p class="section-copy">
+          Momentum is a habit. Ritual Engine gives you a simple, repeatable creative
+          practice that keeps ideas moving from spark to release — every single day.
+        </p>
+
+        <div class="ritual__flow" role="list">
+          <div class="ritual__step" role="listitem">
+            <p class="ritual__step-num">01</p>
+            <p class="ritual__step-icon" aria-hidden="true">✎</p>
+            <h3 class="ritual__step-title">Capture</h3>
+            <p class="ritual__step-body">Log what happened today. A rough take, a voice note, a line, a feeling. Everything counts.</p>
+          </div>
+          <div class="ritual__step" role="listitem">
+            <p class="ritual__step-num">02</p>
+            <p class="ritual__step-icon" aria-hidden="true">◐</p>
+            <h3 class="ritual__step-title">Refine</h3>
+            <p class="ritual__step-body">Pick one thing and move it one step forward. A better mix, a stronger hook, a cleaner arrangement.</p>
+          </div>
+          <div class="ritual__step" role="listitem">
+            <p class="ritual__step-num">03</p>
+            <p class="ritual__step-icon" aria-hidden="true">↑</p>
+            <h3 class="ritual__step-title">Publish</h3>
+            <p class="ritual__step-body">Put something into the world. A preview, a release, a reel, a post. Visibility is momentum.</p>
+          </div>
+          <div class="ritual__step" role="listitem">
+            <p class="ritual__step-num">04</p>
+            <p class="ritual__step-icon" aria-hidden="true">◉</p>
+            <h3 class="ritual__step-title">Review</h3>
+            <p class="ritual__step-body">See what is working. Signal Network surfaces the response, the traction, and the next opportunity.</p>
+          </div>
+          <div class="ritual__step" role="listitem">
+            <p class="ritual__step-num">05</p>
+            <p class="ritual__step-icon" aria-hidden="true">⟳</p>
+            <h3 class="ritual__step-title">Repeat</h3>
+            <p class="ritual__step-body">Build the practice. Consistent creative output compounds into a lasting catalogue and career.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── Closing ─────────────────────────────────────────── -->
+    <section class="closing" aria-label="Platform positioning">
+      <div class="container">
+        <blockquote class="closing__quote font-serif">
+          "HALO is the artist-owned operating system for creative continuity,
+          release intelligence, and trusted collaboration."
+        </blockquote>
+        <p class="closing__tagline font-mono">Signal Network — HALO Music World</p>
+        <div class="hero__actions">
+          <a class="btn-primary" href="/halo.html#join">Request Access</a>
+          <a class="btn-ghost" href="/halo.html">Return to HALO</a>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ── Footer ──────────────────────────────────────────── -->
+  <footer class="site-footer">
+    <div class="container site-footer__inner">
+      <a class="site-footer__brand" href="/halo.html">HALO Music World</a>
+
+      <ul class="site-footer__links">
+        <li><a href="/halo.html">Home</a></li>
+        <li><a href="/dreamweaver/">Dreamweaver</a></li>
+        <li><a href="/song-catalog/">Song Catalog</a></li>
+        <li><a href="/campaign-studio/">Campaign Studio</a></li>
+        <li><a href="/release-house/">Release House</a></li>
+      </ul>
+
+      <p class="site-footer__copy">© HALO Music World</p>
+    </div>
+  </footer>
+
+</body>
+</html>

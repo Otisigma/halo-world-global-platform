@@ -25,6 +25,7 @@
   <script src="/site-monitor.js" defer></script>
   <script src="/accessibility.js" defer></script>
   <script type="module" src="/identity.js"></script>
+  <script src="/upload-progress.js" defer></script>
   <script src="/mixes/mixes.js" defer></script>
 </head>
 <body>
@@ -107,6 +108,14 @@
           <p>Long-form sessions from the HALO rooms. Press play here or let Long Play carry the queue without interruption.</p>
           <a href="/radio/">Enter HALO Radio <span>↗</span></a>
         </div>
+      </div>
+      <div class="mix-sort-row">
+        <label class="mix-sort-label" for="mixSort">Sort</label>
+        <select id="mixSort">
+          <option value="newest">Newest first</option>
+          <option value="az">Title A–Z</option>
+          <option value="duration">Longest first</option>
+        </select>
       </div>
       <div class="mix-rail-wrap">
         <div class="mix-rail" id="mixRail" aria-live="polite">

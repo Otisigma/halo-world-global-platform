@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Halo Ledger — Platform Operational Memory</title>
+  <meta name="description" content="Search and review every upload, issue, fix, department action, and agent activity logged by the Halo platform.">
+  <meta name="theme-color" content="#0d1513">
+  <link rel="manifest" href="/app.webmanifest">
+  <link rel="apple-touch-icon" href="/assets/halo-app-icon-180.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/halo-brand.css">
+  <link rel="stylesheet" href="/accessibility.css">
+  <link rel="stylesheet" href="/halo-ledger/halo-ledger.css">
+  <script src="/stats.js" defer></script>
+  <script src="/site-monitor.js" defer></script>
+  <script src="/accessibility.js" defer></script>
+  <script src="/identity.js" type="module"></script>
+  <script src="/halo-ledger/halo-ledger.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#ledger-workspace">Skip to Halo Ledger</a>
+
+  <header class="ledger-header">
+    <a class="ledger-wordmark" href="/">HALO</a>
+    <nav class="ledger-nav" aria-label="Ledger navigation">
+      <a href="/upload-pipeline/">Upload Pipeline</a>
+      <a href="/song-catalog/">Song Catalog</a>
+      <a href="/halo-ledger/" aria-current="page">Ledger</a>
+    </nav>
+  </header>
+
+  <main id="ledger-workspace" class="ledger-workspace">
+    <section class="ledger-hero">
+      <h1 class="ledger-title">Halo Ledger</h1>
+      <p class="ledger-subtitle">The platform's persistent operational memory — every upload, issue, fix, and action, searchable in one place.</p>
+    </section>
+
+    <section class="ledger-controls" aria-label="Filter and search">
+      <div class="ledger-search-row">
+        <label for="ledgerQuery" class="visually-hidden">Search ledger</label>
+        <input
+          id="ledgerQuery"
+          class="ledger-search"
+          type="search"
+          placeholder="Search entries…"
+          autocomplete="off"
+          aria-label="Search ledger entries"
+        />
+        <button id="ledgerSearchBtn" class="ledger-btn" type="button">Search</button>
+      </div>
+      <div class="ledger-filter-row" role="group" aria-label="Filter by category">
+        <button class="ledger-chip active" data-category="">All</button>
+        <button class="ledger-chip" data-category="upload_event">Uploads</button>
+        <button class="ledger-chip" data-category="issue_report">Issues</button>
+        <button class="ledger-chip" data-category="fix_record">Fixes</button>
+        <button class="ledger-chip" data-category="department_action">Dept. Actions</button>
+        <button class="ledger-chip" data-category="approval_event">Approvals</button>
+        <button class="ledger-chip" data-category="agent_activity">Agent Activity</button>
+        <button class="ledger-chip" data-category="feature_request">Feature Asks</button>
+        <button class="ledger-chip" data-category="system_event">System</button>
+      </div>
+    </section>
+
+    <section class="ledger-list-section" aria-label="Ledger entries">
+      <div id="ledgerStatus" class="ledger-status" aria-live="polite" aria-atomic="true"></div>
+      <ul id="ledgerList" class="ledger-list" aria-label="Ledger entries"></ul>
+      <div class="ledger-load-more-row">
+        <button id="ledgerLoadMore" class="ledger-btn ledger-btn-outline" type="button" hidden>Load more</button>
+      </div>
+    </section>
+
+    <aside id="ledgerDetail" class="ledger-detail" hidden aria-label="Entry detail">
+      <button id="ledgerDetailClose" class="ledger-detail-close" type="button" aria-label="Close detail">✕</button>
+      <div id="ledgerDetailBody" class="ledger-detail-body"></div>
+    </aside>
+  </main>
+
+  <footer class="ledger-footer">
+    <p>Halo Ledger — platform memory for every action, every day.</p>
+  </footer>
+</body>
+</html>

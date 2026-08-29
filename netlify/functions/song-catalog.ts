@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { getDatabase } from "@netlify/database";
 import { getUser, verifyRequestOrigin } from "@netlify/identity";
 import { db } from "../../db/index.js";
@@ -10,6 +10,7 @@ const MAX_BODY_BYTES = 80_000;
 const RIGHTS_STATUSES = new Set(["needs_review", "cleared", "disputed"]);
 const SALE_STATUSES = new Set(["for_sale", "not_for_sale", "coming_soon"]);
 const MASTERING_STATUSES = new Set(["not_started", "queued", "in_progress", "review", "approved"]);
+const PIPELINE_STAGES = new Set(["uploaded", "processing", "needs_assets", "dreamweaver_in_progress", "ready_for_radio", "ready_for_sale", "approved", "published"]);
 const VERSION_ROUTES = {
   sale_master: { label: "Sale master", destination: "storefront", targetLufs: -14, saleEnabled: true },
   radio_edit: { label: "Radio edit", destination: "radio", targetLufs: -16, saleEnabled: false },
@@ -76,6 +77,9 @@ function serializeSong(song: typeof songs.$inferSelect, versions: Array<typeof s
     reviewedAt: song.reviewedAt?.toISOString() || "",
     artworkUrl: song.artworkUrl || "",
     artworkUploadedAt: song.artworkUploadedAt?.toISOString() || "",
+    pipelineStatus: song.pipelineStatus || "uploaded",
+    sourceUploadSurface: song.sourceUploadSurface || "",
+    pipelineUpdatedAt: song.pipelineUpdatedAt?.toISOString() || "",
     versions: versions.map(version => ({
       id: version.id,
       versionType: version.versionType,
@@ -279,9 +283,13 @@ async function saveVersion(ownerMemberId: string, payload: Record<string, unknow
   if (!ownedSong || !versionId) return json({ message: "Choose a valid song version" }, 400);
   const versionType = cleanVersionType(payload.versionType);
   const route = VERSION_ROUTES[versionType];
+  const externalAudioUrl = cleanUrl(payload.audioUrl);
   const rows = await db.update(songVersions).set({
     versionType, label: cleanText(payload.label, 100) || route.label,
-    destination: route.destination, audioUrl: cleanUrl(payload.audioUrl),
+    destination: route.destination,
+    // Preserve managed upload URLs: only overwrite audioUrl when a valid external https URL is
+    // supplied; if the field is blank and an uploaded file exists (blob prefix set), keep existing.
+    audioUrl: sql`CASE WHEN ${externalAudioUrl} <> '' THEN ${externalAudioUrl} WHEN audio_blob_prefix <> '' THEN audio_url ELSE '' END`,
     durationSeconds: Math.max(0, Math.min(86_400, Number.parseInt(String(payload.durationSeconds || "0"), 10) || 0)),
     masteringStatus: cleanEnum(payload.masteringStatus, MASTERING_STATUSES, "not_started"),
     targetLufs: Math.max(-30, Math.min(-5, Number.parseInt(String(payload.targetLufs || route.targetLufs), 10) || route.targetLufs)),
@@ -340,6 +348,15 @@ export default async function songCatalogHandler(request: Request) {
     if (payload.action === "import_existing") return importExisting(nativeDb, membership.member_id);
     if (payload.action === "queue_catalog_producer") return queueProducer(nativeDb, membership.member_id);
     if (payload.action === "set_package_status") return updatePackageStatus(nativeDb, membership.member_id, payload);
+    if (payload.action === "set_pipeline_stage") {
+      const songId = cleanId(payload.songId);
+      const stage = cleanEnum(payload.stage, PIPELINE_STAGES, "");
+      if (!songId || !stage) return json({ message: "Choose a valid song and a recognised pipeline stage" }, 400);
+      const rows = await db.update(songs).set({ pipelineStatus: stage, pipelineUpdatedAt: new Date(), updatedAt: new Date() })
+        .where(and(eq(songs.id, songId), eq(songs.ownerMemberId, membership.member_id), eq(songs.status, "active"))).returning({ id: songs.id });
+      if (!rows.length) return json({ message: "That song was not found" }, 404);
+      return json({ message: `Song moved to ${stage.replace(/_/g, " ")}`, songId, stage });
+    }
     if (payload.action === "review_song") {
       const songId = cleanId(payload.songId);
       if (!songId) return json({ message: "Choose a valid song" }, 400);

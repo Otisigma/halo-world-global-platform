@@ -166,6 +166,10 @@ async function advancePipeline(payload, db, membership) {
   if (stageIndex(toStage) < stageIndex(current)) {
     return json({ message: `Cannot move backward from "${current}" to "${toStage}"` }, 409);
   }
+  if (toStage === current) {
+    const row = await getOneSong(db, membership.member_id, songId);
+    return json({ message: `Pipeline is already at "${stageLabel(current)}"`, ...serializePipeline(row) });
+  }
 
   await db.sql`
     UPDATE halo_song_catalog

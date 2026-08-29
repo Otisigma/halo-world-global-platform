@@ -30,9 +30,12 @@ WHERE pipeline_status = 'uploaded'
   );
 
 -- Backfill: songs linked to a published release campaign are already live.
+-- Guard: only promote forward; never overwrite a song that was already past 'published'
+-- (impossible by the CHECK constraint) or has been explicitly held at an earlier stage.
 UPDATE halo_song_catalog sc
 SET pipeline_status = 'published'
-WHERE EXISTS (
-  SELECT 1 FROM halo_release_campaigns rc
-  WHERE rc.id = sc.source_release_id AND rc.status = 'published'
-);
+WHERE pipeline_status <> 'published'
+  AND EXISTS (
+    SELECT 1 FROM halo_release_campaigns rc
+    WHERE rc.id = sc.source_release_id AND rc.status = 'published'
+  );

@@ -54,7 +54,7 @@ const checks = [
   [songCatalogCss.includes("pipeline-badge") && songCatalogCss.includes("pipeline-stamp"), "song-catalog CSS styles the pipeline badge and stamp"],
   [songCatalogCss.includes('[data-stage="published"]') && songCatalogCss.includes('[data-stage="ready_for_radio"]'), "song-catalog CSS has distinct colour rules for terminal pipeline stages"],
   // Artist room integration
-  [artistsJs.includes("/api/unified-upload") && artistsJs.includes("create_project") && artistsJs.includes("artist_room"), "artist room calls unified-upload after radio upload success with artist_room surface"],
+  [artistsJs.includes("/api/unified-upload") && artistsJs.includes("create_project") && artistsJs.includes("artist_room"), "artist room calls unified-upload after artist room upload success with artist_room surface"],
   // Radio room integration
   [radioJs.includes("/api/unified-upload") && radioJs.includes("create_project") && radioJs.includes("radio_room"), "radio room calls unified-upload after track submission success with radio_room surface"],
   // Upload helper preserved

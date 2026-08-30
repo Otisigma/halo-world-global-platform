@@ -136,9 +136,12 @@ await runCheck("Album Concierge visibility on public root page", async () => {
 });
 
 const failed = results.filter(result => !result.ok);
-console.log(
-  `Deploy health summary: ${results.length - failed.length}/${results.length} checks passed.`
-);
+const summary = `Deploy health summary: ${results.length - failed.length}/${results.length} checks passed.`;
+if (failed.length > 0) {
+  console.error(summary);
+} else {
+  console.log(summary);
+}
 
 if (failed.length > 0) {
   for (const result of failed) {

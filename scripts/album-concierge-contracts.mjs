@@ -23,7 +23,7 @@ const checks = [
   [script.includes("renderResults") && script.includes("generatedTitles") && script.includes("generatedTracks") && script.includes("generatedDedication"), "renders album titles, tracklist, and dedication in the results view"],
   [script.includes("showLoading") && script.includes("showStep") && script.includes("showResults") && script.includes("showNotice"), "provides loading, step navigation, result, and error notice states"],
   [script.includes("URLSearchParams") && script.includes("purposeFromQuery") && script.includes("purposePresetMap") && script.includes("collector"), "supports homepage CTA query presets for concierge purpose"],
-  [fn.includes("verifyRequestOrigin") && fn.includes("ensureMembership") && fn.includes("VALID_PURPOSES"), "protects API with origin verification and membership controls"],
+  [fn.includes('request.method !== "GET"') && fn.includes("try {") && fn.includes("verifyRequestOrigin(request)") && fn.includes("ensureMembership") && fn.includes("VALID_PURPOSES"), "protects state-changing API requests while allowing authenticated session reads"],
   [fn.includes("handleGenerate") && fn.includes("gpt-5.4-mini") && fn.includes("Never invent credits"), "generates grounded album concepts through supported AI Gateway model"],
   [fn.includes("handleCreate") && fn.includes("handleSave") && fn.includes("handleGet"), "supports create, generate, save, and get API actions"],
   [migration.includes("halo_album_concierge_sessions") && migration.includes("generated_tracks") && migration.includes("generated_dedication"), "persists concierge sessions with generated outputs"],

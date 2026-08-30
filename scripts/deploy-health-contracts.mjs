@@ -6,11 +6,13 @@
  *   1. Migration order — no migration file has a version timestamp earlier than or
  *      equal to the last completed migration in alphabetical order (prevents the
  *      "added out of order" Netlify deploy failure).
- *   2. Homepage routing — netlify.toml rewrites / to /halo.html with a force:200
+ *   2. Production publish configuration — Netlify publishes the repository root,
+ *      where the public pages, route directories, and netlify.toml live.
+ *   3. Homepage routing — netlify.toml rewrites / to /halo.html with a force:200
  *      rule, and does NOT rewrite / to /index.html (which is the private-access page).
- *   3. Album Concierge public visibility — halo.html contains the /album-concierge/
+ *   4. Album Concierge public visibility — halo.html contains the /album-concierge/
  *      link so the promo is reachable from the public root route.
- *   4. Build Your Album promotion + route health — halo.html visibly promotes
+ *   5. Build Your Album promotion + route health — halo.html visibly promotes
  *      Build Your Album, links to /album-concierge/, and the route is wired to a
  *      healthy local page entrypoint.
  *
@@ -102,6 +104,21 @@ await runCheck("Migration ordering", async () => {
   return `${versions.length} migrations in strict order`;
 });
 
+await runCheck("Production publish configuration", async () => {
+  const netlifyConfig = await read("netlify.toml");
+  assert.match(
+    netlifyConfig,
+    /\[build\][\s\S]*?publish\s*=\s*["']\.["']/,
+    "netlify.toml must publish the repository root so halo.html and album-concierge/index.html are deployed."
+  );
+  assert.doesNotMatch(
+    netlifyConfig,
+    /publish\s*=\s*["']public\/?["']/,
+    "Do not publish the legacy public directory; it does not contain the HALO production site."
+  );
+  return "repository root is the Netlify publish directory";
+});
+
 await runCheck("Homepage routing to /halo.html", async () => {
   const netlifyConfig = await read("netlify.toml");
   const rootRedirectBlock = getRedirectBlock(netlifyConfig, "/");
@@ -144,9 +161,11 @@ await runCheck("Album Concierge visibility on public root page", async () => {
 });
 
 await runCheck("Build Your Album promotion and route health", async () => {
-  const [haloHtml, albumConciergePage, netlifyConfig] = await Promise.all([
+  const [haloHtml, albumConciergePage, albumConciergeScript, albumConciergeFunction, netlifyConfig] = await Promise.all([
     read("halo.html"),
     read("album-concierge/index.html"),
+    read("album-concierge/album-concierge.js"),
+    read("netlify/functions/album-concierge.mjs"),
     read("netlify.toml")
   ]);
 
@@ -182,6 +201,26 @@ await runCheck("Build Your Album promotion and route health", async () => {
     albumConciergePage,
     /id="step-1"/,
     "album-concierge/index.html must include the Build Your Album guided flow entrypoint."
+  );
+  assert.match(
+    albumConciergePage,
+    /src=["']\/album-concierge\/album-concierge\.js["']/,
+    "album-concierge/index.html must load its guided-flow controller."
+  );
+  assert.match(
+    albumConciergeScript,
+    /fetch\(["']\/api\/album-concierge["']/,
+    "The Build Your Album flow must submit to the Album Concierge API."
+  );
+  assert.match(
+    albumConciergeFunction,
+    /path:\s*["']\/api\/album-concierge["']/,
+    "The Album Concierge Netlify Function must expose /api/album-concierge."
+  );
+  assert.match(
+    albumConciergeFunction,
+    /request\.method\s*!==\s*["']GET["'][\s\S]*?try\s*\{[\s\S]*?verifyRequestOrigin\(request\)/,
+    "The Album Concierge API must allow authenticated GET reads and catch origin failures on state-changing requests."
   );
 
   return "Build Your Album promo and /album-concierge/ route are healthy";

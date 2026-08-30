@@ -200,7 +200,13 @@ async function handleSave(request, db, actorId) {
 }
 
 export default async function handler(request) {
-  if (!verifyRequestOrigin(request)) return json({ error: "Forbidden" }, 403);
+  if (request.method !== "GET") {
+    try {
+      verifyRequestOrigin(request);
+    } catch {
+      return json({ error: "Forbidden" }, 403);
+    }
+  }
 
   const user = await getUser(request);
   if (!user?.id) return json({ error: "Unauthorized" }, 401);

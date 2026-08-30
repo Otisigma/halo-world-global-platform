@@ -72,5 +72,14 @@ assert.match(mySensitivityLikeACrown, /artwork_override_url/, "My Sensitivity Li
 assert.match(mySensitivityLikeACrown, /Radio edit/, "My Sensitivity Like a Crown migration must include a radio edit version");
 assert.match(mySensitivityLikeACrown, /Clean version/, "My Sensitivity Like a Crown migration must include a clean version");
 assert.match(mySensitivityLikeACrown, /source_release_id|halo_dreamweaver_songs|Dream Weaver/, "My Sensitivity Like a Crown migration must document the Dream Weaver storage path");
+assert.match(mySensitivityLikeACrown, /halo_artist_pages/, "My Sensitivity Like a Crown migration must upsert the artist page so the release hero is updated");
+assert.match(mySensitivityLikeACrown, /release_url/, "My Sensitivity Like a Crown migration must set artist page release_url to the HyperFollow URL");
+// Protect against PR #40 regression: website_url must not duplicate the release HyperFollow URL.
+// website_url is for the artist streaming profile; release_url is for the HyperFollow pre-save page.
+assert.doesNotMatch(
+  mySensitivityLikeACrown,
+  /website_url\s*=\s*'https:\/\/distrokid\.com\/hyperfollow\/owenanthony\/my-sensitivity-like-a-crown'/,
+  "artist page website_url must not duplicate the release HyperFollow URL — keep release_url and website_url distinct"
+);
 
 console.log("Music catalog audit contracts passed.");

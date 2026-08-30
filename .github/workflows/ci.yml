@@ -19,3 +19,23 @@ jobs:
         run: npm install --ignore-scripts
       - name: Run deploy health contracts
         run: npm run deploy:feedback
+
+  docker:
+    name: Docker build & smoke test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build Docker image
+        run: docker build -t halo-world:ci .
+      - name: Run smoke test
+        run: |
+          docker run --rm -d \
+            --name halo-ci \
+            -p 3000:3000 \
+            -e DATABASE_URL="" \
+            -e JWT_SECRET="ci-test-secret" \
+            halo-world:ci
+          # Wait for the server to start
+          timeout 30 bash -c 'until curl -sf http://localhost:3000/healthz; do sleep 1; done'
+          curl -sf http://localhost:3000/healthz | grep '"status":"ok"'
+          docker stop halo-ci

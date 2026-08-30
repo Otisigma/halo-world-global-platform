@@ -150,6 +150,11 @@
   status = 301
 
 [[redirects]]
+  from = "/album-concierge"
+  to = "/album-concierge/"
+  status = 301
+
+[[redirects]]
   from = "/dreamweaver-lab"
   to = "/dreamweaver-lab/"
   status = 301

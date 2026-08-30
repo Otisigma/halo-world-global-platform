@@ -33,13 +33,16 @@ Public reports are same-origin only, payload-limited, sanitized, deduplicated, a
 
 ## Instant deploy feedback loop
 
-Run `npm run -s deploy:feedback` for a focused readiness check, or `npm test` for the full contract suite (which now includes the same deploy feedback step).
+Run `npm run -s deploy:feedback` for a focused pre-deploy readiness check, or `npm test` for the full contract suite (which includes the same deploy feedback step). After Netlify publishes the main deploy, run `npm run -s deploy:verify` to confirm the live homepage, Build Your Album page, and Album Concierge API route. Set `HALO_PRODUCTION_URL` to verify a deploy preview or a future custom domain.
 
-Deploy feedback reports four explicit pass/fail contracts:
+Deploy feedback reports five explicit pass/fail contracts:
 
 - migration ordering in `netlify/database/migrations`
+- repository-root production publish configuration in `netlify.toml`
 - public root routing from `/` to `/halo.html`
 - Album Concierge visibility in `halo.html` (name + `/album-concierge/` link)
-- Build Your Album promotion + route health (homepage copy + `/album-concierge/` CTA + local route entrypoint)
+- Build Your Album promotion + route health (homepage copy + `/album-concierge/` CTA + page controller + API route)
 
 When a contract fails, the script prints a `❌` line with the exact fix direction and exits non-zero so internal AI and maintainers can immediately treat the change as incomplete.
+
+The production site is sourced from the `main` branch and publishes the repository root. `halo.html` is the public homepage served at `/`; `index.html` remains the private access page. A successful main deploy invalidates Netlify's static deploy and makes the new immutable deploy current, while the explicit no-cache homepage headers prevent browsers from holding an older homepage response.

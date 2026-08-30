@@ -1,3 +1,4 @@
+-- Publish Cognitive Erasure after the latest applied migration.
 INSERT INTO halo_release_campaigns (
   id,
   title,

@@ -52,6 +52,9 @@
           <button class="btn-ghost" id="giftFlowBtn" type="button" data-stat-event="open_album_concierge" data-stat-target="hero_gift">
             Build a gift album
           </button>
+          <button class="btn-ghost" id="vibeFlowBtn" type="button" data-stat-event="open_album_concierge" data-stat-target="hero_vibe">
+            Start with a vibe
+          </button>
         </div>
       </section>
 
@@ -198,6 +201,8 @@
                 <small>Genre-defying, forward-thinking, unexpected</small>
               </button>
             </div>
+            <label class="ac-field-label" for="genreDirection">Genre, era, or reference notes <span>optional</span></label>
+            <input class="ac-text-field" id="genreDirection" type="text" maxlength="160" placeholder="Example: warm neo-soul, late-night jazz textures, analog drums">
             <div class="ac-flow-nav">
               <button class="btn-ghost" id="step3Back" type="button">Back</button>
               <button class="btn-primary" id="step3Next" type="button" disabled>Continue</button>
@@ -231,6 +236,10 @@
 
           <!-- Results -->
           <div class="ac-results" id="acResults" aria-labelledby="results-heading">
+            <div class="ac-shared-banner" id="sharedBanner" hidden>
+              <span>Shared keepsake</span>
+              <p>This album was made to be opened, heard, and remembered.</p>
+            </div>
             <div class="ac-results-header">
               <p class="ac-eyebrow">Your album concept is ready</p>
               <h2 id="results-heading">Here's what we built.</h2>
@@ -245,8 +254,9 @@
 
             <div class="ac-results-grid">
               <!-- Cover preview -->
-              <div class="ac-cover-panel" aria-label="Album cover preview">
-                <div class="ac-cover-icon" aria-hidden="true">🎵</div>
+              <div class="ac-cover-panel" id="coverPanel" aria-label="Album cover preview">
+                <img class="ac-cover-image" id="coverImage" alt="Generated album cover" hidden>
+                <div class="ac-cover-icon" id="coverIcon" aria-hidden="true">✦</div>
                 <div class="ac-cover-title">
                   <strong id="coverTitleDisplay">—</strong>
                   <small>Album Concept</small>
@@ -261,6 +271,14 @@
                   <p class="ac-panel-text" id="themeText"></p>
                 </div>
                 <div class="ac-panel-section">
+                  <p class="ac-panel-label">Why this album matters</p>
+                  <p class="ac-panel-text" id="whyText"></p>
+                </div>
+                <div class="ac-panel-section">
+                  <p class="ac-panel-label">Style references</p>
+                  <div class="ac-style-list" id="styleReferences"></div>
+                </div>
+                <div class="ac-panel-section">
                   <p class="ac-panel-label">Tracklist</p>
                   <ol class="ac-tracklist" id="tracklistEl" aria-label="Track ideas"></ol>
                 </div>
@@ -268,18 +286,45 @@
             </div>
 
             <!-- Dedication -->
-            <blockquote class="ac-dedication" id="dedicationEl"></blockquote>
+            <div class="ac-dedication-wrap">
+              <p class="ac-panel-label">Dedication / liner note</p>
+              <blockquote class="ac-dedication" id="dedicationEl"></blockquote>
+              <textarea class="ac-dedication-editor owner-only" id="dedicationEditor" maxlength="600" rows="4" aria-label="Edit dedication"></textarea>
+            </div>
+
+            <section class="ac-refinement owner-only" aria-labelledby="refinement-title">
+              <div class="ac-section-heading">
+                <div>
+                  <p class="ac-eyebrow">Creative refinement</p>
+                  <h3 id="refinement-title">Shape the second draft.</h3>
+                </div>
+                <p>Adjust the creative brief, then rebuild the complete concept without losing your session.</p>
+              </div>
+              <div class="ac-refine-grid">
+                <label>Genre direction<input id="refineGenre" type="text" maxlength="160" placeholder="Soulful electronic, orchestral pop…"></label>
+                <label>Track count<select id="refineTrackCount"><option>5</option><option>6</option><option>7</option><option selected>8</option><option>9</option><option>10</option><option>11</option><option>12</option></select></label>
+                <label>Tone<select id="refineTone"><option value="">Stay true to the story</option><option>More intimate</option><option>More hopeful</option><option>More cinematic</option><option>More raw</option><option>More celebratory</option><option>More experimental</option></select></label>
+                <label>Artwork style<select id="refineArtwork"><option value="">Concierge choice</option><option>Editorial photography</option><option>Painterly fine art</option><option>Minimal typography</option><option>Surreal collage</option><option>Vintage record sleeve</option><option>Cinematic still</option></select></label>
+              </div>
+              <label class="ac-field-label" for="refinementPrompt">What should change?</label>
+              <textarea class="ac-story-field ac-refinement-prompt" id="refinementPrompt" maxlength="1000" rows="3" placeholder="Make the middle act more hopeful, keep track 1 intimate, and give the ending a sense of arrival."></textarea>
+              <button class="btn-primary" id="refineBtn" type="button">Refine this album</button>
+            </section>
+
+            <button class="ac-secret" id="secretRevealBtn" type="button" hidden>✦ Open the hidden sleeve note</button>
+            <div class="ac-secret-note" id="secretNote" hidden></div>
 
             <!-- Result actions -->
             <div class="ac-result-actions">
               <button class="btn-primary" id="savePrivateBtn" type="button">Save privately</button>
               <button class="btn-ghost" id="shareBtn" type="button">Share</button>
               <button class="btn-ghost" id="giftBtn" type="button">Send as a gift</button>
+              <button class="btn-ghost" id="exportBtn" type="button">Export keepsake</button>
               <button class="btn-ghost" id="restartBtn" type="button">Start over</button>
             </div>
 
             <!-- Premium upsell -->
-            <div class="ac-premium-card" role="complementary" aria-label="Upgrade to collector edition">
+            <div class="ac-premium-card owner-only" id="collector" role="complementary" aria-label="Upgrade to collector edition">
               <div class="ac-premium-card-text">
                 <span class="ac-premium-badge">Collector Edition</span>
                 <h3>Make it a keepsake.</h3>
@@ -291,18 +336,56 @@
                   <li>Private vault storage</li>
                   <li>Printable booklet</li>
                 </ul>
+                <p class="ac-premium-status" id="premiumStatus">Collector tools are locked.</p>
                 <button class="btn-premium" id="upgradeBtn" type="button" data-stat-event="open_album_concierge" data-stat-target="premium_upsell">
                   Unlock collector edition
                 </button>
+                <div class="ac-collector-tools" id="collectorTools" hidden>
+                  <button class="btn-premium" id="generateCoverBtn" type="button">Generate custom cover</button>
+                  <label class="ac-upload-label" for="voiceNoteInput">Add an artist or concierge voice note</label>
+                  <input id="voiceNoteInput" type="file" accept="audio/mpeg,audio/mp4,audio/aac,audio/ogg,audio/webm,audio/wav">
+                  <button class="btn-ghost" id="uploadVoiceBtn" type="button">Upload voice note</button>
+                  <button class="btn-ghost" id="printBookletBtn" type="button">Print story booklet</button>
+                </div>
               </div>
             </div>
+
+            <audio class="ac-voice-note" id="voiceNotePlayer" controls hidden></audio>
 
           </div>
           <!-- /ac-results -->
 
+          <section class="ac-treasury owner-only" id="treasury" aria-labelledby="treasury-title">
+            <div class="ac-section-heading">
+              <div>
+                <p class="ac-eyebrow">Your Treasury</p>
+                <h2 id="treasury-title">Albums worth returning to.</h2>
+              </div>
+              <button class="btn-ghost" id="refreshTreasuryBtn" type="button">Refresh</button>
+            </div>
+            <div class="ac-treasury-grid" id="treasuryList">
+              <p class="ac-empty-state">Sign in and create an album to begin your Treasury.</p>
+            </div>
+          </section>
+
         </div>
       </section>
     </main>
+
+    <dialog class="ac-auth-dialog" id="authDialog" aria-labelledby="authTitle">
+      <form class="ac-auth-card" id="authForm">
+        <button class="ac-dialog-close" id="authCloseBtn" type="button" aria-label="Close">×</button>
+        <p class="ac-eyebrow">HALO membership</p>
+        <h2 id="authTitle">Sign in to keep your album.</h2>
+        <p>Saving, refining, sharing, and collector tools stay connected to your private Treasury.</p>
+        <label id="authNameLabel" hidden>Name<input id="authName" type="text" autocomplete="name" maxlength="100"></label>
+        <label>Email<input id="authEmail" type="email" autocomplete="email" required></label>
+        <label>Password<input id="authPassword" type="password" autocomplete="current-password" minlength="8" required></label>
+        <p class="ac-auth-message" id="authMessage" role="alert"></p>
+        <button class="btn-primary" id="authSubmitBtn" type="submit">Sign in</button>
+        <button class="ac-auth-switch" id="authSwitchBtn" type="button">New here? Create an account</button>
+      </form>
+    </dialog>
 
     <footer class="ac-footer">
       <span class="ac-footer-copy">© HALO World — Album Concierge</span>

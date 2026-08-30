@@ -1,3 +1,4 @@
+-- Publish I'll Do It All Again after the latest applied migration.
 INSERT INTO halo_release_campaigns (
   id,
   title,

@@ -1,0 +1,45 @@
+CREATE TABLE "halo_album_concierge_sessions" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+	"member_id" text NOT NULL,
+	"purpose" text DEFAULT '' NOT NULL,
+	"emotion" text DEFAULT '' NOT NULL,
+	"sound_direction" text DEFAULT '' NOT NULL,
+	"story_input" text DEFAULT '' NOT NULL,
+	"generated_titles" jsonb DEFAULT '[]' NOT NULL,
+	"selected_title" text DEFAULT '' NOT NULL,
+	"generated_theme" text DEFAULT '' NOT NULL,
+	"generated_why" text DEFAULT '' NOT NULL,
+	"generated_style_references" jsonb DEFAULT '[]' NOT NULL,
+	"generated_tracks" jsonb DEFAULT '[]' NOT NULL,
+	"generated_cover_prompt" text DEFAULT '' NOT NULL,
+	"generated_dedication" text DEFAULT '' NOT NULL,
+	"genre_direction" text DEFAULT '' NOT NULL,
+	"track_count" integer DEFAULT 8 NOT NULL,
+	"tone_direction" text DEFAULT '' NOT NULL,
+	"artwork_style" text DEFAULT '' NOT NULL,
+	"final_dedication" text DEFAULT '' NOT NULL,
+	"cover_blob_key" text DEFAULT '' NOT NULL,
+	"cover_content_type" text DEFAULT '' NOT NULL,
+	"voice_note_blob_key" text DEFAULT '' NOT NULL,
+	"voice_note_content_type" text DEFAULT '' NOT NULL,
+	"voice_note_filename" text DEFAULT '' NOT NULL,
+	"share_token" uuid DEFAULT gen_random_uuid() NOT NULL,
+	"booklet_json" jsonb DEFAULT '{}' NOT NULL,
+	"unlocked_extras" jsonb DEFAULT '[]' NOT NULL,
+	"mode" text DEFAULT 'private' NOT NULL,
+	"is_premium" boolean DEFAULT false NOT NULL,
+	"premium_status" text DEFAULT 'free' NOT NULL,
+	"premium_checkout_id" text DEFAULT '' NOT NULL,
+	"status" text DEFAULT 'draft' NOT NULL,
+	"error_message" text DEFAULT '' NOT NULL,
+	"model" text DEFAULT '' NOT NULL,
+	"last_refinement" text DEFAULT '' NOT NULL,
+	"published_at" timestamp with time zone,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
+CREATE INDEX "halo_album_concierge_member_created_idx" ON "halo_album_concierge_sessions" ("member_id","created_at");--> statement-breakpoint
+CREATE INDEX "halo_album_concierge_status_idx" ON "halo_album_concierge_sessions" ("status","updated_at");--> statement-breakpoint
+CREATE INDEX "halo_album_concierge_mode_updated_idx" ON "halo_album_concierge_sessions" ("mode","updated_at");--> statement-breakpoint
+CREATE UNIQUE INDEX "halo_album_concierge_share_token_idx" ON "halo_album_concierge_sessions" ("share_token");

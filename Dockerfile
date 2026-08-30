@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 FROM node:20-alpine AS base
 
 # ---- dependencies ----
@@ -29,3 +30,20 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
 
 CMD ["node", "server.js"]
 
+=======
+FROM node:20-alpine
+
+WORKDIR /app
+
+COPY package.json package-lock.json* ./
+RUN if [ -f package-lock.json ]; then npm ci --omit=dev; else npm install --omit=dev; fi
+
+COPY . .
+
+ENV NODE_ENV=production
+ENV PORT=3000
+
+EXPOSE 3000
+
+CMD ["npm", "start"]
+>>>>>>> refs/remotes/origin/pr-65

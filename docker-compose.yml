@@ -1,4 +1,5 @@
 services:
+<<<<<<< HEAD
   app:
     build: .
     ports:
@@ -65,3 +66,20 @@ services:
 volumes:
   postgres_data:
   minio_data:
+=======
+  halo:
+    build: .
+    container_name: halo-world-global-platform
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:3000/healthz >/dev/null 2>&1 || curl -fsS http://localhost:3000/healthz >/dev/null"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+>>>>>>> refs/remotes/origin/pr-65

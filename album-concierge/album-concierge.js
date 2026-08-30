@@ -329,11 +329,12 @@
   document.getElementById("shareBtn")?.addEventListener("click", async () => {
     if (!state.sessionId) return;
     try {
-      await fetch("/api/album-concierge?action=save", {
+      const saveRes = await fetch("/api/album-concierge?action=save", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ sessionId: state.sessionId, mode: "public" })
       });
+      if (!saveRes.ok) throw new Error("Could not make session shareable");
       const url = `${location.origin}/album-concierge/?session=${encodeURIComponent(state.sessionId)}`;
       if (navigator.share) {
         await navigator.share({ title: state.selectedTitle || "My Album Concept", url });

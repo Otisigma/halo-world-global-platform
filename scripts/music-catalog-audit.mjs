@@ -9,7 +9,7 @@ const [auditLib, scout, catalogApi, cognitiveErasure, illDoItAllAgain, blessed, 
   read("netlify/lib/music-catalog-audit.mjs"),
   read("netlify/functions/music-catalog-scout.mjs"),
   read("netlify/functions/release-catalog.mjs"),
-  read("netlify/database/migrations/20260828060000_publish-cognitive-erasure.sql"),
+  read("netlify/database/migrations/20260830020000_publish-cognitive-erasure.sql"),
   read("netlify/database/migrations/20260828061000_publish-ill-do-it-all-again.sql"),
   read("netlify/database/migrations/20260828062000_publish-blessed.sql"),
   read("netlify/database/migrations/20260830000000_publish-my-sensitivity-like-a-crown.sql")

@@ -139,6 +139,20 @@
     });
   }
 
+  const purposeFromQuery = new URLSearchParams(window.location.search).get("purpose");
+  const purposePresetMap = {
+    self: "self",
+    gift: "gift",
+    fans: "fans",
+    collector: "fans",
+    project: "project"
+  };
+  const mappedPurposePreset = purposeFromQuery ? (purposePresetMap[purposeFromQuery] ?? "") : "";
+  if (mappedPurposePreset && step1El) {
+    const preset = Array.from(step1El.querySelectorAll(".ac-choice")).find(btn => btn.dataset.value === mappedPurposePreset);
+    if (preset) preset.click();
+  }
+
   step1Next?.addEventListener("click", () => showStep(2));
 
   /* ── Step 2: Emotion ──────────────────────────────────────────────────────── */

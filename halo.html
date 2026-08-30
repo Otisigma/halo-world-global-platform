@@ -3065,8 +3065,8 @@
                         <a href="/dreamweaver-lab/" data-stat-event="open_dreamweaver_song_lab" data-stat-target="header" data-signal="AUDIO TO CAMPAIGN">
                           <Icon name="music" className="halo-menu-icon" /><span><strong>DREAMWEAVER SONG LAB</strong><small>Load a recording. Analyze the wave. Build the release world.</small></span>
                         </a>
-                        <a href="/album-concierge/" data-stat-event="open_album_concierge" data-stat-target="header" data-signal="ALBUM CONCIERGE">
-                          <Icon name="heart" className="halo-menu-icon" /><span><strong>ALBUM CONCIERGE</strong><small>Turn a story into a custom album concept</small></span>
+                        <a href="/album-concierge/" data-stat-event="open_album_concierge" data-stat-target="header" data-signal="CREATE YOUR ALBUM">
+                          <Icon name="heart" className="halo-menu-icon" /><span><strong>CREATE YOUR ALBUM</strong><small>Album Concierge · premium, gift, and collector editions</small></span>
                         </a>
                         <a href="/finish-house/" data-stat-event="open_finish_house" data-stat-target="header" data-signal="MASTER + LICENSE">
                           <Icon name="check-circle" className="halo-menu-icon" /><span><strong>FINISH HOUSE</strong><small>Mix to master to licensing-ready package</small></span>
@@ -3219,12 +3219,16 @@
                           <p className="text-[9px] font-black uppercase tracking-[.3em] text-[#cfa76a]">New / Premium experience</p>
                           <h2 id="concierge-promo-title" className="mt-5 font-sans-alt text-3xl font-black uppercase leading-[.9] tracking-[-.03em] text-[#f1ede4] md:text-5xl">Turn your story<br/>into an album<br/><span style={{fontStyle:'italic',fontFamily:'Georgia,serif',textTransform:'none',fontWeight:'normal',fontSize:'1.05em',letterSpacing:'-.01em'}}>worth keeping.</span></h2>
                           <p className="mt-5 max-w-md text-sm leading-7 text-[#a6a096]">Album Concierge is a premium guided experience that helps you shape a personal album concept — complete with song ideas, tracklist, cover art direction, and a keepsake-worthy dedication.</p>
+                          <p className="mt-3 max-w-md text-xs leading-6 text-[#8b8579]">Start your own album, build a gift album for someone you love, or explore collector edition details designed to be treasured.</p>
                           <div className="mt-7 flex flex-wrap gap-3">
                             <a href="/album-concierge/" data-stat-event="open_album_concierge" data-stat-target="promo_section" className="inline-flex items-center gap-2 rounded-full bg-[#cfa76a] px-6 py-3 text-[10px] font-black uppercase tracking-[.16em] text-[#0e0c09] transition hover:opacity-90">
                               Start your album
                             </a>
-                            <a href="/album-concierge/" data-stat-event="open_album_concierge" data-stat-target="promo_section_gift" className="inline-flex items-center gap-2 rounded-full border border-[#cfa76a]/30 px-6 py-3 text-[10px] font-black uppercase tracking-[.16em] text-[#cfa76a] transition hover:border-[#cfa76a]/60">
+                            <a href="/album-concierge/?purpose=gift" data-stat-event="open_album_concierge" data-stat-target="promo_section_gift" className="inline-flex items-center gap-2 rounded-full border border-[#cfa76a]/30 px-6 py-3 text-[10px] font-black uppercase tracking-[.16em] text-[#cfa76a] transition hover:border-[#cfa76a]/60">
                               Build a gift album
+                            </a>
+                            <a href="/album-concierge/?purpose=collector" data-stat-event="open_album_concierge" data-stat-target="promo_section_collector" className="inline-flex items-center gap-2 rounded-full border border-white/15 px-6 py-3 text-[10px] font-black uppercase tracking-[.16em] text-[#f1ede4] transition hover:border-white/35">
+                              Explore collector edition
                             </a>
                           </div>
                         </div>
@@ -3234,7 +3238,7 @@
                           ['🎵', 'Album concept', 'A complete idea built around your story and mood'],
                           ['🎼', 'Song ideas', '8–10 original track concepts with mood notes'],
                           ['🎨', 'Cover art direction', 'A visual identity matched to the feeling'],
-                          ['✉️', 'Dedication', 'A personal liner note ready to keep or share']
+                          ['✉️', 'Collector edition', 'Keepsake-ready dedication and album details for gifting or collecting']
                         ].map(([icon, title, desc]) => (
                           <div key={title} className="flex flex-col gap-2 bg-[#0e0c09]/80 p-5">
                             <span className="text-2xl leading-none">{icon}</span>

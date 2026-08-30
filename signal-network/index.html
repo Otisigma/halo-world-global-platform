@@ -21,6 +21,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;700;800;900&family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500;1,600&family=Share+Tech+Mono:wght@400&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/halo-brand.css">
+  <link rel="stylesheet" href="/signal-network/signal-network.css">
   <link rel="stylesheet" href="/accessibility.css">
   <script src="/stats.js" defer></script>
   <script src="/accessibility.js" defer></script>
@@ -806,15 +807,14 @@
         <ul class="site-header__nav">
           <li><a href="#pillars">Pillars</a></li>
           <li><a href="#modules">Modules</a></li>
+          <li><a href="#command-center">Network Live</a></li>
           <li><a href="#circles">Circles</a></li>
           <li><a href="#ritual">Ritual Engine</a></li>
           <li><a href="/halo.html">Home</a></li>
         </ul>
       </nav>
 
-      <a class="site-header__cta" href="/halo.html#join">
-        Request Access
-      </a>
+      <button class="site-header__cta" id="signalAuthButton" type="button">Open Network</button>
     </div>
   </header>
 
@@ -841,8 +841,114 @@
         </p>
 
         <div class="hero__actions">
-          <a class="btn-primary" href="/halo.html#join">Request Access</a>
+          <a class="btn-primary" href="#command-center">Open Signal Network</a>
           <a class="btn-ghost" href="#modules">Explore Modules</a>
+        </div>
+      </div>
+    </section>
+
+    <section class="signal-console" id="command-center" aria-labelledby="command-center-title">
+      <div class="signal-console__noise" aria-hidden="true"></div>
+      <div class="container signal-console__shell">
+        <header class="signal-console__intro">
+          <div>
+            <p class="signal-console__kicker">Live Member Workspace / Private by Default</p>
+            <h2 id="command-center-title">Turn creative motion<br>into <em>connection.</em></h2>
+          </div>
+          <p>
+            Find the right people, send a clear signal, follow campaign momentum, talk privately,
+            and see where the HALO network is active—without exposing precise member locations.
+          </p>
+        </header>
+
+        <div class="signal-gate" id="networkGate">
+          <p class="signal-gate__index">ACCESS / 01</p>
+          <div>
+            <h3>Your network starts after sign-in.</h3>
+            <p>Create a private member profile, choose what becomes discoverable, and control whether your region appears on the aggregate map.</p>
+          </div>
+          <button class="signal-button signal-button--bright" id="gateAuthButton" type="button">Join or sign in</button>
+        </div>
+
+        <div class="signal-workspace" id="signalWorkspace" hidden>
+          <div class="signal-statusbar">
+            <div class="signal-statusbar__identity">
+              <span class="signal-statusbar__pulse" aria-hidden="true"></span>
+              <div>
+                <small>Connected as</small>
+                <strong id="workspaceMemberName">HALO member</strong>
+              </div>
+            </div>
+            <div class="signal-statusbar__actions">
+              <button class="signal-text-button" id="editProfileButton" type="button">Edit signal profile</button>
+              <button class="signal-text-button" id="signOutButton" type="button">Sign out</button>
+            </div>
+          </div>
+
+          <div class="signal-metrics" aria-label="Signal Network summary">
+            <article><span id="metricCollaborators">—</span><small>Discoverable collaborators</small></article>
+            <article><span id="metricSignals">—</span><small>Signals awaiting you</small></article>
+            <article><span id="metricMessages">—</span><small>Unread messages</small></article>
+            <article><span id="metricRegions">—</span><small>Active regions today</small></article>
+          </div>
+
+          <div class="signal-deck">
+            <nav class="signal-tabs" aria-label="Signal Network workspace">
+              <button class="is-active" type="button" role="tab" aria-selected="true" data-signal-tab="discover"><span>01</span> Discover</button>
+              <button type="button" role="tab" aria-selected="false" data-signal-tab="signals"><span>02</span> Signals <b id="signalTabBadge" hidden>0</b></button>
+              <button type="button" role="tab" aria-selected="false" data-signal-tab="campaigns"><span>03</span> Campaigns</button>
+              <button type="button" role="tab" aria-selected="false" data-signal-tab="messages"><span>04</span> Messages <b id="messageTabBadge" hidden>0</b></button>
+              <button type="button" role="tab" aria-selected="false" data-signal-tab="map"><span>05</span> Live map</button>
+            </nav>
+
+            <div class="signal-panels">
+              <section class="signal-panel is-active" id="signalPanelDiscover" role="tabpanel" data-signal-panel="discover">
+                <header class="signal-panel__header">
+                  <div><p>People Finder</p><h3>Discover collaborators</h3></div>
+                  <form class="signal-search" id="collaboratorSearchForm">
+                    <label><span class="sr-only">Search collaborators</span><input id="collaboratorSearch" type="search" maxlength="80" placeholder="Role, genre, skill, name…"></label>
+                    <label><span class="sr-only">Availability</span><select id="availabilityFilter"><option value="">Any availability</option><option value="open">Open now</option><option value="selective">Selective</option></select></label>
+                    <button type="submit">Search</button>
+                  </form>
+                </header>
+                <div class="signal-card-grid" id="collaboratorGrid" aria-live="polite"></div>
+              </section>
+
+              <section class="signal-panel" id="signalPanelSignals" role="tabpanel" data-signal-panel="signals" hidden>
+                <header class="signal-panel__header"><div><p>Intent Before Access</p><h3>Your signal queue</h3></div><span>Accepting a signal opens a private conversation.</span></header>
+                <div class="signal-list" id="signalRequestList" aria-live="polite"></div>
+              </section>
+
+              <section class="signal-panel" id="signalPanelCampaigns" role="tabpanel" data-signal-panel="campaigns" hidden>
+                <header class="signal-panel__header">
+                  <div><p>Release Momentum</p><h3>Campaign tracker</h3></div>
+                  <a class="signal-button" href="/campaign-studio/">Create campaign</a>
+                </header>
+                <div class="signal-card-grid signal-card-grid--campaigns" id="campaignGrid" aria-live="polite"></div>
+              </section>
+
+              <section class="signal-panel" id="signalPanelMessages" role="tabpanel" data-signal-panel="messages" hidden>
+                <header class="signal-panel__header"><div><p>Trusted Circles</p><h3>Private messages</h3></div><span>Only accepted connections can start a conversation.</span></header>
+                <div class="signal-messenger">
+                  <aside class="signal-conversations" id="conversationList" aria-label="Conversations"></aside>
+                  <div class="signal-thread" id="messageThread">
+                    <div class="signal-empty signal-empty--thread"><span>◎</span><h4>Choose a conversation</h4><p>Accepted signals appear here.</p></div>
+                  </div>
+                </div>
+              </section>
+
+              <section class="signal-panel" id="signalPanelMap" role="tabpanel" data-signal-panel="map" hidden>
+                <header class="signal-panel__header"><div><p>Aggregate Presence</p><h3>Live network map</h3></div><span>No exact coordinates. Members choose whether their broad region appears.</span></header>
+                <div class="signal-map-layout">
+                  <div class="signal-map-stage">
+                    <canvas id="signalMapCanvas" aria-label="Animated map of active HALO regions"></canvas>
+                    <div class="signal-map-legend"><span><i class="is-live"></i>Active now</span><span><i></i>Active today</span></div>
+                  </div>
+                  <div class="signal-region-list" id="signalRegionList"></div>
+                </div>
+              </section>
+            </div>
+          </div>
         </div>
       </div>
     </section>
@@ -1181,7 +1287,7 @@
         </blockquote>
         <p class="closing__tagline font-mono">Signal Network — HALO Music World</p>
         <div class="hero__actions">
-          <a class="btn-primary" href="/halo.html#join">Request Access</a>
+          <a class="btn-primary" href="#command-center">Open Signal Network</a>
           <a class="btn-ghost" href="/halo.html">Return to HALO</a>
         </div>
       </div>
@@ -1205,6 +1311,68 @@
       <p class="site-footer__copy">© HALO Music World</p>
     </div>
   </footer>
+
+  <dialog class="signal-dialog" id="signalAuthDialog">
+    <form class="signal-dialog__form" id="signalAuthForm">
+      <button class="signal-dialog__close" type="button" data-close-dialog aria-label="Close">×</button>
+      <p class="signal-dialog__kicker">Membership Gateway</p>
+      <h2 id="signalAuthTitle">Join Signal Network</h2>
+      <div class="signal-auth-switch" role="tablist">
+        <button class="is-active" type="button" role="tab" aria-selected="true" data-auth-mode="signup">Join</button>
+        <button type="button" role="tab" aria-selected="false" data-auth-mode="login">Sign in</button>
+      </div>
+      <label id="signalNameField">Display name<input id="signalAuthName" name="name" autocomplete="name" maxlength="64"></label>
+      <label>Email<input id="signalAuthEmail" name="email" type="email" autocomplete="email" required></label>
+      <label>Password<input id="signalAuthPassword" name="password" type="password" autocomplete="new-password" minlength="8" required></label>
+      <button class="signal-button signal-button--bright" id="signalAuthSubmit" type="submit">Create membership</button>
+      <p class="signal-form-message" id="signalAuthMessage" role="status"></p>
+    </form>
+  </dialog>
+
+  <dialog class="signal-dialog signal-dialog--wide" id="signalProfileDialog">
+    <form class="signal-dialog__form" id="signalProfileForm">
+      <button class="signal-dialog__close" type="button" data-close-dialog aria-label="Close">×</button>
+      <p class="signal-dialog__kicker">Your Public Signal</p>
+      <h2>Shape how collaborators find you.</h2>
+      <div class="signal-form-grid signal-form-grid--two">
+        <label>Headline<input id="profileHeadline" maxlength="120" placeholder="Producer building cinematic electronic worlds"></label>
+        <label>Availability<select id="profileAvailability"><option value="open">Open now</option><option value="selective">Selective</option><option value="unavailable">Unavailable</option></select></label>
+      </div>
+      <label>Short bio<textarea id="profileBio" maxlength="900" rows="4" placeholder="What are you making, and what kind of connection matters right now?"></textarea></label>
+      <div class="signal-form-grid signal-form-grid--two">
+        <label>Roles <small>Comma separated</small><input id="profileRoles" maxlength="300" placeholder="Artist, Producer, Songwriter"></label>
+        <label>Genres <small>Comma separated</small><input id="profileGenres" maxlength="400" placeholder="Alt-pop, Electronic, R&B"></label>
+        <label>Skills <small>Comma separated</small><input id="profileSkills" maxlength="400" placeholder="Mixing, Vocal production, Visual direction"></label>
+        <label>Looking for <small>Comma separated</small><input id="profileLookingFor" maxlength="300" placeholder="Co-writes, Remixes, Live collaborators"></label>
+        <label>Broad region<input id="profileRegion" maxlength="80" placeholder="London, UK"></label>
+        <label>Profile accent<select id="profileAccent"><option value="gold">Signal gold</option><option value="cyan">Relay cyan</option><option value="violet">Dream violet</option><option value="coral">Pulse coral</option><option value="lime">Circuit lime</option></select></label>
+      </div>
+      <label class="signal-check"><input id="profileDiscoverable" type="checkbox" checked><span>Let signed-in members discover this profile.</span></label>
+      <label class="signal-check"><input id="profileMapVisible" type="checkbox"><span>Show my broad region in aggregate map counts.</span></label>
+      <button class="signal-button signal-button--bright" type="submit">Save signal profile</button>
+      <p class="signal-form-message" id="signalProfileMessage" role="status"></p>
+    </form>
+  </dialog>
+
+  <dialog class="signal-dialog" id="sendSignalDialog">
+    <form class="signal-dialog__form" id="sendSignalForm">
+      <button class="signal-dialog__close" type="button" data-close-dialog aria-label="Close">×</button>
+      <p class="signal-dialog__kicker">Send With Intent</p>
+      <h2>Signal <span id="signalRecipientName">a collaborator</span>.</h2>
+      <input id="signalRecipientId" type="hidden">
+      <label>Signal type<select id="signalKind"><option value="collaboration">Collaboration request</option><option value="signal">Quick signal</option></select></label>
+      <label>Subject<input id="signalSubject" maxlength="120" required placeholder="Co-write for an upcoming release"></label>
+      <label>Note<textarea id="signalBody" maxlength="1200" rows="6" required placeholder="Share the context, timing, and why this person feels right."></textarea></label>
+      <label>Campaign slug <small>Optional</small><input id="signalCampaignSlug" maxlength="96" placeholder="midnight-listening-party"></label>
+      <button class="signal-button signal-button--bright" type="submit">Transmit signal</button>
+      <p class="signal-form-message" id="sendSignalMessage" role="status"></p>
+    </form>
+  </dialog>
+
+  <div class="signal-toast" id="signalToast" role="status" aria-live="polite" hidden></div>
+
+  <script type="module" src="/identity.js"></script>
+  <script type="module" src="/signal-network/signal-network.js"></script>
 
 </body>
 </html>

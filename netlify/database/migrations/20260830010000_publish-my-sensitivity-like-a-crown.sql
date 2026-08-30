@@ -94,7 +94,7 @@ VALUES (
   '/release-kit.html?audience=radio&slug=my-sensitivity-like-a-crown',
   '/release-kit.html?audience=press&slug=my-sensitivity-like-a-crown',
   '/#clubhouse',
-  'https://open.spotify.com/artist/owenanthony',
+  'https://distrokid.com/hyperfollow/owenanthony/my-sensitivity-like-a-crown',
   'published'
 )
 ON CONFLICT (slug) DO UPDATE SET

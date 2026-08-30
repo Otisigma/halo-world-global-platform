@@ -4,16 +4,24 @@ import { resolve } from "node:path";
 
 const root = resolve(import.meta.dirname, "..");
 const read = path => readFile(resolve(root, path), "utf8");
+const releaseMigrationPaths = [
+  "netlify/database/migrations/20260828081000_publish-cognitive-erasure.sql",
+  "netlify/database/migrations/20260828082000_publish-ill-do-it-all-again.sql",
+  "netlify/database/migrations/20260828083000_publish-blessed.sql"
+];
 
 const [auditLib, scout, catalogApi, cognitiveErasure, illDoItAllAgain, blessed, mySensitivityLikeACrown] = await Promise.all([
   read("netlify/lib/music-catalog-audit.mjs"),
   read("netlify/functions/music-catalog-scout.mjs"),
   read("netlify/functions/release-catalog.mjs"),
-  read("netlify/database/migrations/20260828060000_publish-cognitive-erasure.sql"),
-  read("netlify/database/migrations/20260828061000_publish-ill-do-it-all-again.sql"),
-  read("netlify/database/migrations/20260828062000_publish-blessed.sql"),
+  ...releaseMigrationPaths.map(read),
   read("netlify/database/migrations/20260830000000_publish-my-sensitivity-like-a-crown.sql")
 ]);
+
+assert.ok(
+  releaseMigrationPaths.every(path => path.split("/").at(-1).slice(0, 14) > "20260828080000"),
+  "release publish migrations must sort after the applied production migration"
+);
 
 assert.match(auditLib, /REQUIRED_RELEASES/, "audit library must define required releases");
 assert.match(auditLib, /cognitive-erasure/, "audit library must include Cognitive Erasure in required releases");

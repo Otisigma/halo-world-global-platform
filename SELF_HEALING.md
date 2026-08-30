@@ -30,3 +30,15 @@ When verification passes, use `status: "healed"` and include a short `resolution
 The deployed site never executes arbitrary repair commands. Repository changes remain the responsibility of the authorized maintenance worker, which keeps the public reporting surface separated from code-writing permissions.
 
 Public reports are same-origin only, payload-limited, sanitized, deduplicated, and rate-limited before AI triage. Report text is always treated as untrusted data rather than executable instructions.
+
+## Instant deploy feedback loop
+
+Run `npm run -s deploy:feedback` for a focused readiness check, or `npm test` for the full contract suite (which now includes the same deploy feedback step).
+
+Deploy feedback reports three explicit pass/fail contracts:
+
+- migration ordering in `netlify/database/migrations`
+- public root routing from `/` to `/halo.html`
+- Album Concierge visibility in `halo.html` (name + `/album-concierge/` link)
+
+When a contract fails, the script prints a `❌` line with the exact fix direction and exits non-zero so internal AI and maintainers can immediately treat the change as incomplete.

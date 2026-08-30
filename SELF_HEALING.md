@@ -35,10 +35,11 @@ Public reports are same-origin only, payload-limited, sanitized, deduplicated, a
 
 Run `npm run -s deploy:feedback` for a focused readiness check, or `npm test` for the full contract suite (which now includes the same deploy feedback step).
 
-Deploy feedback reports three explicit pass/fail contracts:
+Deploy feedback reports four explicit pass/fail contracts:
 
 - migration ordering in `netlify/database/migrations`
 - public root routing from `/` to `/halo.html`
 - Album Concierge visibility in `halo.html` (name + `/album-concierge/` link)
+- Build Your Album promotion + route health (homepage copy + `/album-concierge/` CTA + local route entrypoint)
 
 When a contract fails, the script prints a `❌` line with the exact fix direction and exits non-zero so internal AI and maintainers can immediately treat the change as incomplete.

@@ -28,16 +28,21 @@ import {
   HeadObjectCommand,
 } from "@aws-sdk/client-s3";
 
+let _client = null;
+
 function getClient() {
-  return new S3Client({
-    endpoint: process.env.BLOB_ENDPOINT,
-    region: process.env.BLOB_REGION || "us-east-1",
-    credentials: {
-      accessKeyId: process.env.BLOB_ACCESS_KEY || "",
-      secretAccessKey: process.env.BLOB_SECRET_KEY || "",
-    },
-    forcePathStyle: true, // required for MinIO / non-AWS endpoints
-  });
+  if (!_client) {
+    _client = new S3Client({
+      endpoint: process.env.BLOB_ENDPOINT,
+      region: process.env.BLOB_REGION || "us-east-1",
+      credentials: {
+        accessKeyId: process.env.BLOB_ACCESS_KEY || "",
+        secretAccessKey: process.env.BLOB_SECRET_KEY || "",
+      },
+      forcePathStyle: true, // required for MinIO / non-AWS endpoints
+    });
+  }
+  return _client;
 }
 
 const BUCKET = () => process.env.BLOB_BUCKET || "halo-blobs";

@@ -72,6 +72,19 @@ app.use((req, res, next) => {
 });
 
 // ---------------------------------------------------------------------------
+// Raw body capture (must be before JSON/URL body parsers)
+// ---------------------------------------------------------------------------
+app.use((req, _res, next) => {
+  const chunks = [];
+  req.on("data", (chunk) => chunks.push(chunk));
+  req.on("end", () => {
+    req.rawBody = chunks.length ? Buffer.concat(chunks) : undefined;
+    next();
+  });
+  req.on("error", next);
+});
+
+// ---------------------------------------------------------------------------
 // Body parsing
 // ---------------------------------------------------------------------------
 app.use(express.json({ limit: "50mb" }));
@@ -132,7 +145,6 @@ const trailingSlashRoutes = [
   "/campaign-studio",
   "/youtube-studio",
   "/dreamweaver",
-  "/album-concierge",
   "/dreamweaver-lab",
   "/when-the-world-goes-dark",
   "/iam-social",
@@ -226,25 +238,17 @@ async function netlifyAdapter(handler, req, res) {
     const body = await webResponse.arrayBuffer();
     res.end(Buffer.from(body));
   } catch (err) {
-    console.error(`[api] ${req.path} error:`, err?.message ?? err);
+    // Log with separate args to avoid format-string injection from user-controlled path
+    const safePath = String(req.path).replace(/[\r\n\t]/g, " ").slice(0, 200);
+    console.error("[api]", safePath, "error:", err?.message ?? err);
     if (!res.headersSent) {
       res.status(500).json({ error: "Internal server error" });
     }
   }
 }
 
-/**
- * Middleware to capture the raw request body (needed for multipart/binary).
- */
-app.use((req, _res, next) => {
-  const chunks = [];
-  req.on("data", (chunk) => chunks.push(chunk));
-  req.on("end", () => {
-    req.rawBody = chunks.length ? Buffer.concat(chunks) : undefined;
-    next();
-  });
-  req.on("error", next);
-});
+// Remove the old raw body middleware that was placed after body parsers
+// (moved above — see "Raw body capture" section)
 
 /**
  * Register all API routes from netlify/functions/.
@@ -384,6 +388,28 @@ async function registerApiRoutes() {
     console.warn(`[server] ${errors.length} function(s) failed to load:`, errors);
   }
 }
+
+// ---------------------------------------------------------------------------
+// Block sensitive server-side directories from static file access
+// ---------------------------------------------------------------------------
+const BLOCKED_PREFIXES = [
+  "/netlify/",
+  "/scripts/",
+  "/db/",
+  "/deploy/",
+  "/.github/",
+  "/node_modules/",
+];
+
+app.use((req, res, next) => {
+  const p = req.path;
+  for (const prefix of BLOCKED_PREFIXES) {
+    if (p === prefix.slice(0, -1) || p.startsWith(prefix)) {
+      return res.status(404).end();
+    }
+  }
+  next();
+});
 
 // ---------------------------------------------------------------------------
 // Static files (serve repo root)

@@ -4,15 +4,15 @@
  * Internal AI maintenance check for the HALO World production deploy.
  * Validates:
  *   1. Migration order — no migration file has a version timestamp earlier than or
- *      equal to the last completed migration in alphabetical order (prevents the
- *      "added out of order" Netlify deploy failure).
- *   2. Homepage routing — netlify.toml rewrites / to /halo.html with a force:200
- *      rule, and does NOT rewrite / to /index.html (which is the private-access page).
+ *      equal to the last completed migration in alphabetical order (prevents deploy
+ *      failures caused by out-of-order migration files).
+ *   2. Homepage routing — server.js registers a GET "/" route that serves halo.html,
+ *      and does NOT serve index.html from "/" (which is the private-access page).
  *   3. Album Concierge public visibility — halo.html contains the /album-concierge/
  *      link so the promo is reachable from the public root route.
  *   4. Build Your Album promotion + route health — halo.html visibly promotes
- *      Build Your Album, links to /album-concierge/, and the route is wired to a
- *      healthy local page entrypoint.
+ *      Build Your Album, links to /album-concierge/, and server.js registers a
+ *      301 redirect from /album-concierge to /album-concierge/.
  *
  * Run: node scripts/deploy-health-contracts.mjs
  * Included in: npm test
@@ -25,11 +25,6 @@ import { resolve } from "node:path";
 const root = resolve(import.meta.dirname, "..");
 const read = path => readFile(resolve(root, path), "utf8");
 const results = [];
-const escapeRegExp = value => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-const getRedirectBlock = (toml, fromPath) => toml
-  .split("[[redirects]]")
-  .map(block => block.trim())
-  .find(block => new RegExp(`^from\\s*=\\s*["']${escapeRegExp(fromPath)}["']`, "m").test(block));
 
 const reportPass = (name, detail) => {
   console.log(`✅ ${name}${detail ? ` — ${detail}` : ""}`);
@@ -103,22 +98,28 @@ await runCheck("Migration ordering", async () => {
 });
 
 await runCheck("Homepage routing to /halo.html", async () => {
-  const netlifyConfig = await read("netlify.toml");
-  const rootRedirectBlock = getRedirectBlock(netlifyConfig, "/");
-  assert.ok(
-    rootRedirectBlock,
-    "netlify.toml must have a [[redirects]] block with from = \"/\"."
+  const serverJs = await read("server.js");
+
+  // server.js must register a GET "/" route that serves halo.html
+  assert.match(
+    serverJs,
+    /app\.get\s*\(\s*["']\/["']/,
+    "server.js must register a GET \"/\" route for the public homepage."
   );
-  const rootBlock = rootRedirectBlock;
-  assert.match(rootBlock, /to\s*=\s*["']\/halo\.html["']/, "netlify.toml root redirect must point to /halo.html.");
-  assert.match(rootBlock, /status\s*=\s*200/, "netlify.toml root redirect must use status = 200.");
-  assert.match(rootBlock, /force\s*=\s*true/, "netlify.toml root redirect must use force = true.");
+  assert.match(
+    serverJs,
+    /halo\.html/,
+    "server.js GET \"/\" route must serve halo.html."
+  );
+  // server.js must NOT serve index.html from the root path directly
+  // (index.html is the private-access page)
+  const rootRouteSection = serverJs.match(/app\.get\s*\(\s*["']\/["'][^)]*\)\s*[^{]*\{[^}]*/)?.[0] ?? "";
   assert.doesNotMatch(
-    rootBlock,
-    /to\s*=\s*["']\/index\.html["']/,
-    "netlify.toml must not force-rewrite / to /index.html — that is the private-access page, not the public homepage."
+    rootRouteSection,
+    /index\.html/,
+    "server.js GET \"/\" must not serve index.html — that is the private-access page, not the public homepage."
   );
-  return "root redirect enforces / -> /halo.html (200 force)";
+  return "server.js GET \"/\" serves halo.html (not index.html)";
 });
 
 await runCheck("Album Concierge visibility on public root page", async () => {
@@ -144,10 +145,10 @@ await runCheck("Album Concierge visibility on public root page", async () => {
 });
 
 await runCheck("Build Your Album promotion and route health", async () => {
-  const [haloHtml, albumConciergePage, netlifyConfig] = await Promise.all([
+  const [haloHtml, albumConciergePage, serverJs] = await Promise.all([
     read("halo.html"),
     read("album-concierge/index.html"),
-    read("netlify.toml")
+    read("server.js")
   ]);
 
   assert.match(
@@ -166,13 +167,17 @@ await runCheck("Build Your Album promotion and route health", async () => {
       "Restore the route in the homepage CTA."
     ].join(" ")
   );
-  const albumRedirectBlock = getRedirectBlock(netlifyConfig, "/album-concierge");
-  assert.ok(
-    albumRedirectBlock,
-    "netlify.toml must have a [[redirects]] block with from = \"/album-concierge\"."
+  // server.js must register a 301 redirect from /album-concierge → /album-concierge/
+  assert.match(
+    serverJs,
+    /["']\/album-concierge["']/,
+    "server.js must register the /album-concierge route."
   );
-  assert.match(albumRedirectBlock, /to\s*=\s*["']\/album-concierge\/["']/, "netlify.toml must normalize /album-concierge to /album-concierge/.");
-  assert.match(albumRedirectBlock, /status\s*=\s*301/, "netlify.toml must normalize /album-concierge with a 301 redirect.");
+  assert.match(
+    serverJs,
+    /redirect\s*\(\s*301\s*,\s*["']\/album-concierge\/["']\)/,
+    "server.js must 301-redirect /album-concierge → /album-concierge/."
+  );
   assert.match(
     albumConciergePage,
     /Album Concierge — HALO World/,

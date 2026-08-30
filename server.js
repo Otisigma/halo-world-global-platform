@@ -9,6 +9,7 @@ const root = path.resolve(__dirname);
 
 const app = express();
 const port = Number(process.env.PORT || 3000);
+app.enable("strict routing");
 const blockedPathPrefixes = [
   ".git",
   ".github",
@@ -118,8 +119,18 @@ app.get("/healthz", (_req, res) => {
   });
 });
 
-app.get("/", (_req, res) => sendFileIfPresent(res, "halo.html"));
-app.get("/private", (_req, res) => sendFileIfPresent(res, "index.html"));
+app.get("/", (_req, res) => {
+  return sendFileIfPresent(res, "halo.html");
+});
+
+app.get("/private", (_req, res) => {
+  return sendFileIfPresent(res, "index.html");
+});
+
+app.get("/album-concierge", (_req, res) => {
+  return res.redirect(301, "/album-concierge/");
+});
+
 app.get("/album-concierge/", (_req, res) =>
   sendFileIfPresent(res, path.join("album-concierge", "index.html"))
 );

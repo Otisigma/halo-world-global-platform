@@ -5,13 +5,14 @@ import { resolve } from "node:path";
 const root = resolve(import.meta.dirname, "..");
 const read = path => readFile(resolve(root, path), "utf8");
 
-const [auditLib, scout, catalogApi, cognitiveErasure, illDoItAllAgain, blessed] = await Promise.all([
+const [auditLib, scout, catalogApi, cognitiveErasure, illDoItAllAgain, blessed, mySensitivity] = await Promise.all([
   read("netlify/lib/music-catalog-audit.mjs"),
   read("netlify/functions/music-catalog-scout.mjs"),
   read("netlify/functions/release-catalog.mjs"),
   read("netlify/database/migrations/20260828060000_publish-cognitive-erasure.sql"),
   read("netlify/database/migrations/20260828061000_publish-ill-do-it-all-again.sql"),
-  read("netlify/database/migrations/20260828062000_publish-blessed.sql")
+  read("netlify/database/migrations/20260828062000_publish-blessed.sql"),
+  read("netlify/database/migrations/20260830010000_publish-my-sensitivity-like-a-crown.sql")
 ]);
 
 assert.match(auditLib, /REQUIRED_RELEASES/, "audit library must define required releases");
@@ -56,5 +57,19 @@ assert.match(blessed, /Owen Anthony/, "Blessed migration must credit the correct
 assert.match(blessed, /distrokid\.com\/hyperfollow\/owenanthony\/blessed/, "Blessed migration must wire the DistroKid hyperfollow URL");
 assert.match(blessed, /published/, "Blessed migration must publish the release");
 assert.match(blessed, /ON CONFLICT.*DO UPDATE/, "Blessed migration must be idempotent");
+
+assert.match(auditLib, /my-sensitivity-like-a-crown/, "audit library must include My Sensitivity Like a Crown in required releases");
+assert.match(auditLib, /distrokid\.com\/hyperfollow\/owenanthony\/my-sensitivity-like-a-crown/, "audit library must reference the correct DistroKid URL for My Sensitivity Like a Crown");
+
+assert.match(mySensitivity, /'my-sensitivity-like-a-crown'/, "My Sensitivity Like a Crown migration must use the correct release ID");
+assert.match(mySensitivity, /Owen Anthony/, "My Sensitivity Like a Crown migration must credit the correct artist");
+assert.match(mySensitivity, /distrokid\.com\/hyperfollow\/owenanthony\/my-sensitivity-like-a-crown/, "My Sensitivity Like a Crown migration must wire the DistroKid hyperfollow URL");
+assert.match(mySensitivity, /published/, "My Sensitivity Like a Crown migration must publish the release");
+assert.match(mySensitivity, /ON CONFLICT.*DO UPDATE/, "My Sensitivity Like a Crown migration must be idempotent");
+assert.match(mySensitivity, /is_chart_eligible/, "My Sensitivity Like a Crown migration must set chart eligibility");
+assert.match(mySensitivity, /artwork_url/, "My Sensitivity Like a Crown migration must include artwork_url");
+assert.match(mySensitivity, /imported_artwork_url/, "My Sensitivity Like a Crown migration must include imported_artwork_url so artwork contract resolves correctly");
+assert.match(mySensitivity, /available_versions/, "My Sensitivity Like a Crown migration must declare available versions");
+assert.match(mySensitivity, /halo_artist_pages/, "My Sensitivity Like a Crown migration must upsert the artist page so release appears on the artist's page");
 
 console.log("Music catalog audit contracts passed.");

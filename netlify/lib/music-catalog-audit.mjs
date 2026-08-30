@@ -20,6 +20,12 @@ export const REQUIRED_RELEASES = [
     title: "Blessed",
     artist: "Owen Anthony",
     officialUrl: "https://distrokid.com/hyperfollow/owenanthony/blessed"
+  },
+  {
+    id: "my-sensitivity-like-a-crown",
+    title: "My Sensitivity Like a Crown",
+    artist: "Owen Anthony",
+    officialUrl: "https://distrokid.com/hyperfollow/owenanthony/my-sensitivity-like-a-crown"
   }
 ];
 

@@ -58,7 +58,7 @@ async function memberContext() {
 }
 
 async function loadFlightplan(db, memberId) {
-  const [plans, manualSignals, audienceSignals, externalSignals, radioSignals] = await Promise.all([
+  const [plans, manualSignals, audienceSignals, externalSignals, radioSignals, reviewCycles] = await Promise.all([
     db.sql`
       SELECT * FROM halo_mix_release_plans
       WHERE member_id = ${memberId}
@@ -98,11 +98,28 @@ async function loadFlightplan(db, memberId) {
       WHERE status = 'active'
       ORDER BY created_at DESC
       LIMIT 8
+    `,
+    db.sql`
+      SELECT rc.id, rc.status, rc.overall_score, rc.final_summary, rc.cycle_number, rc.updated_at
+      FROM halo_mix_review_cycles rc
+      INNER JOIN halo_mixes m ON m.id = rc.mix_id
+      WHERE m.member_id = ${memberId}
+      ORDER BY rc.cycle_number DESC
+      LIMIT 1
     `
   ]);
 
+  const cycle = reviewCycles[0] || null;
   return {
     plan: publicPlan(plans[0]),
+    latestCycle: cycle ? {
+      id: cycle.id,
+      cycleNumber: Number(cycle.cycle_number),
+      status: cycle.status,
+      overallScore: cycle.overall_score !== null ? Number(cycle.overall_score) : null,
+      finalSummary: cycle.final_summary || "",
+      updatedAt: cycle.updated_at
+    } : null,
     radar: {
       manual: manualSignals.map(row => ({
         id: Number(row.id), query: row.query, source: row.source,

@@ -523,3 +523,85 @@ body > footer nav { display: flex; gap: 20px; font: 600 10px/1 var(--mono); text
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; }
 }
+
+/* ── Mix card premium treatment ──────────────────────────────────── */
+.mix-card {
+  box-shadow: 0 8px 32px rgba(0,0,0,.32), 0 2px 8px rgba(0,0,0,.22);
+  transition: transform 220ms ease, border-color 220ms ease, box-shadow 220ms ease;
+}
+.mix-card:hover {
+  border-color: var(--acid);
+  transform: translateY(-8px) rotate(-.3deg);
+  box-shadow: 0 18px 52px rgba(0,0,0,.42), 0 4px 14px rgba(200,255,54,.1);
+}
+.mix-card-index { letter-spacing: .15em; }
+.mix-version-compare { border-color: rgba(215,238,82,.36); }
+
+/* ── Quality ribbon ──────────────────────────────────────────────── */
+.quality-ribbon {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 12px 18px;
+  padding: 16px 22px; margin-bottom: 22px;
+  border: 1px solid rgba(25,23,20,.15); border-left: 4px solid var(--rust);
+  background: rgba(255,255,255,.38);
+}
+.qr-label {
+  flex: 0 0 auto; color: var(--rust-dark); font: 600 9px/1 var(--mono);
+  letter-spacing: .14em; text-transform: uppercase;
+}
+.qr-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.qr-chip {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 5px 10px; border: 1px solid var(--line);
+  font: 600 9px/1 var(--mono); letter-spacing: .1em; text-transform: uppercase;
+  background: rgba(255,255,255,.5);
+}
+.qr-chip::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--muted); flex: 0 0 auto; }
+.qr-chip--mastered { border-color: rgba(200,215,70,.5); }
+.qr-chip--mastered::before { background: #b0c030; }
+.qr-chip--rights { border-color: rgba(210,130,0,.35); color: #9a5c00; }
+.qr-chip--rights::before { background: #d48000; }
+.qr-chip--ready { border-color: rgba(0,120,200,.28); color: #005a9e; }
+.qr-chip--ready::before { background: #007bc8; }
+.qr-chip--approved { border-color: rgba(80,160,40,.45); color: #2e6e0e; font-weight: 700; background: rgba(80,160,40,.07); }
+.qr-chip--approved::before { background: #4a9e20; }
+.qr-note { flex: 1 1 200px; color: var(--muted); font: 500 10px/1.5 var(--mono); }
+
+/* ── Visual readiness strip ──────────────────────────────────────── */
+.visual-readiness-strip {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 0;
+  padding: 14px clamp(20px, 7vw, 112px) 22px; margin-top: 0;
+  border-top: 1px solid rgba(255,255,255,.1);
+  background: rgba(255,255,255,.03);
+}
+.vrs-stage {
+  display: flex; flex-direction: column; gap: 4px;
+  padding: 12px 18px; border: 1px solid rgba(255,255,255,.1);
+  background: rgba(255,255,255,.04); min-width: 130px;
+}
+.vrs-stage span { color: rgba(255,255,255,.5); font: 500 8px/1 var(--mono); letter-spacing: .1em; text-transform: uppercase; }
+.vrs-stage strong { font: 700 13px/1.1 var(--condensed); color: rgba(255,255,255,.65); text-transform: uppercase; }
+.vrs-stage--active { border-color: rgba(215,238,82,.45); background: rgba(215,238,82,.07); }
+.vrs-stage--active strong { color: var(--acid); }
+.vrs-divider { padding: 0 10px; color: rgba(255,255,255,.25); font: 400 14px/1 var(--mono); }
+
+/* ── Visual project card enhancement ────────────────────────────── */
+.visual-project-tabs button {
+  padding: 8px 14px; border: 1px solid rgba(255,255,255,.15);
+  background: rgba(255,255,255,.04); color: var(--paper);
+  font: 600 9px/1 var(--mono); letter-spacing: .1em; text-transform: uppercase; cursor: pointer;
+  transition: border-color .18s ease, background .18s ease;
+}
+.visual-project-tabs button.is-active,
+.visual-project-tabs button:hover {
+  border-color: var(--rust); background: rgba(216,95,53,.09); color: var(--paper);
+}
+
+/* ── Edition readiness section ───────────────────────────────────── */
+.edition-readiness { padding: 14px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); margin-bottom: 28px; }
+
+@media (max-width: 540px) {
+  .quality-ribbon { padding: 14px 16px; }
+  .vrs-divider { display: none; }
+  .visual-readiness-strip { gap: 6px; padding-inline: clamp(20px, 7vw, 112px); }
+  .vrs-stage { min-width: 110px; padding: 10px 12px; }
+}

@@ -70,6 +70,9 @@ if (flightplan) {
       hint = "All gates passed — request final sale review.";
       cls = "is-complete";
       small.textContent = "Ready for release";
+    } else if (completed === 0) {
+      hint = "Start with the Demand Radar to give this mix a clear audience direction.";
+      small.textContent = "Next: demand radar";
     } else if (!value("demandTheme")) {
       hint = "Add at least one demand signal so the flightplan has a theme to build around.";
       small.textContent = "Next: demand radar";

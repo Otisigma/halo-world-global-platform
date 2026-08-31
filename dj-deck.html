@@ -5476,8 +5476,7 @@
         const readyPct = readiness * 20;
 
         readyValue.textContent = `${readiness} / 5`;
-        readyBar.style.width = `${readyPct}%`;
-        document.getElementById("deckReviewPanel").querySelector(".drp-readiness-bar span").style.setProperty("--drp-ready", `${readyPct}%`);
+        readyBar.style.setProperty("--drp-ready", `${readyPct}%`);
 
         const chips = [];
         if (masterStatus && MASTERING_CHIP[masterStatus]) {

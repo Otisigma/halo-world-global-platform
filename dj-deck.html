@@ -963,6 +963,70 @@
     @media (prefers-reduced-motion: reduce) {
       *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; }
     }
+
+    /* ── Deck review summary panel ─────────────────────────────────── */
+    .deck-review-panel { padding: 24px; }
+    .deck-review-panel .drp-head {
+      display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 18px; align-items: end;
+      padding-bottom: 18px; border-bottom: 1px solid var(--line);
+    }
+    .deck-review-panel .drp-kicker { color: var(--acid); font: 500 9px "DM Mono", monospace; letter-spacing: .1em; text-transform: uppercase; }
+    .deck-review-panel .drp-head h2 { margin: 6px 0 0; font: 400 clamp(22px, 3vw, 36px)/.94 "Archivo Black", sans-serif; letter-spacing: -.04em; text-transform: uppercase; }
+    .drp-readiness { min-width: 160px; text-align: right; }
+    .drp-readiness strong { display: block; font: 500 28px/1 "DM Mono", monospace; color: var(--acid); letter-spacing: -.03em; }
+    .drp-readiness span { color: var(--muted); font: 500 9px "DM Mono", monospace; letter-spacing: .1em; text-transform: uppercase; }
+    .drp-readiness-bar { height: 5px; margin-top: 8px; background: rgba(255,255,255,.07); overflow: hidden; }
+    .drp-readiness-bar span { display: block; width: var(--drp-ready, 0%); height: 100%; background: var(--acid); box-shadow: 0 0 8px rgba(200,255,54,.4); transition: width .4s cubic-bezier(.25,.8,.25,1); }
+    .drp-body {
+      display: grid; grid-template-columns: 100px minmax(0, 1fr); gap: 0; margin-top: 18px;
+      border: 1px solid var(--line); background: rgba(0,0,0,.22);
+    }
+    .drp-score-col {
+      display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
+      padding: 20px 12px; border-right: 1px solid var(--line);
+    }
+    .drp-score-ring {
+      position: relative; width: 68px; height: 68px; border-radius: 50%;
+      background: conic-gradient(var(--acid) calc(var(--drp-score, 0) * 1%), rgba(255,255,255,.07) 0);
+    }
+    .drp-score-ring::before { content: ""; position: absolute; inset: 8px; border-radius: 50%; background: var(--panel); }
+    .drp-score-ring strong { position: absolute; inset: 0; display: grid; place-items: center; font: 500 17px/1 "DM Mono", monospace; }
+    .drp-score-col span { color: var(--muted); font: 500 8px "DM Mono", monospace; letter-spacing: .07em; text-transform: uppercase; text-align: center; }
+    .drp-detail { padding: 16px 20px; display: grid; gap: 10px; }
+    .drp-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+    .drp-chip {
+      display: inline-flex; align-items: center; gap: 5px;
+      padding: 4px 8px; border: 1px solid var(--line-strong);
+      font: 500 8px/1.1 "DM Mono", monospace; letter-spacing: .1em; text-transform: uppercase; white-space: nowrap;
+    }
+    .drp-chip::before { content: ""; width: 5px; height: 5px; border-radius: 50%; background: var(--muted); flex: 0 0 auto; }
+    .drp-chip.is-mastered { border-color: rgba(200,255,54,.4); color: var(--acid); }
+    .drp-chip.is-mastered::before { background: var(--acid); }
+    .drp-chip.is-rights { border-color: rgba(255,200,60,.35); color: #ffc83c; }
+    .drp-chip.is-rights::before { background: #ffc83c; }
+    .drp-chip.is-ready { border-color: rgba(72,168,255,.4); color: var(--blue); }
+    .drp-chip.is-ready::before { background: var(--blue); }
+    .drp-chip.is-approved { border-color: rgba(200,255,54,.65); background: rgba(200,255,54,.09); color: var(--acid); font-weight: 700; }
+    .drp-chip.is-approved::before { background: var(--acid); box-shadow: 0 0 5px var(--acid); }
+    .drp-chip.is-hold { border-color: rgba(255,106,50,.4); color: var(--orange); }
+    .drp-chip.is-hold::before { background: var(--orange); }
+    .drp-chip.is-revise { border-color: rgba(255,77,93,.4); color: var(--red); }
+    .drp-chip.is-revise::before { background: var(--red); }
+    .drp-summary { margin: 0; color: #b0bab0; font-size: 11px; line-height: 1.6;
+      display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+    .drp-next {
+      margin-top: 0; padding: 10px 12px;
+      border-left: 2px solid var(--acid); background: rgba(200,255,54,.05);
+      font-size: 10px; line-height: 1.5;
+    }
+    .drp-next b { display: block; color: var(--acid); font: 500 8px "DM Mono", monospace; letter-spacing: .09em; text-transform: uppercase; margin-bottom: 4px; }
+    .drp-next p { margin: 0; color: #adb6ab; }
+    .drp-empty { grid-column: 1 / -1; padding: 28px; text-align: center; color: var(--muted); font: 400 10px "DM Mono", monospace; line-height: 1.6; }
+    .drp-empty a { color: var(--acid); text-underline-offset: 3px; text-decoration: underline; }
+    @media (max-width: 720px) {
+      .drp-body { grid-template-columns: 1fr; }
+      .drp-score-col { flex-direction: row; justify-content: start; gap: 16px; border-right: 0; border-bottom: 1px solid var(--line); }
+    }
   </style>
 </head>
 <body>
@@ -1064,6 +1128,23 @@
         <span><strong>Preserved:</strong> decks · recorder · booth screen · stems · AI assists · preflight · flightplan</span>
         <span>One desk / complete mix lifecycle</span>
       </footer>
+    </section>
+
+    <section class="deck-review-panel panel" id="deckReviewPanel" aria-labelledby="deckReviewTitle">
+      <header class="drp-head">
+        <div>
+          <p class="drp-kicker">Current mix // review &amp; readiness</p>
+          <h2 id="deckReviewTitle">Mix status <span style="color:var(--acid)">at a glance.</span></h2>
+        </div>
+        <div class="drp-readiness" aria-live="polite">
+          <strong id="drpReadyValue">—</strong>
+          <span>readiness</span>
+          <div class="drp-readiness-bar"><span id="drpReadyBar"></span></div>
+        </div>
+      </header>
+      <div class="drp-body" id="drpBody">
+        <p class="drp-empty">Sign in and open the <a href="/mixes/#upload">Mix Desk</a> to see your latest review score, status, and next improvement step here.</p>
+      </div>
     </section>
 
     <section class="recording-rig panel" id="recordingRig" aria-labelledby="recordingTitle">
@@ -1168,6 +1249,9 @@
               <div class="flightplan-field"><label for="artworkStatus">Artwork</label><select id="artworkStatus" name="artworkStatus"><option value="needed">Needed</option><option value="draft">Draft ready</option><option value="approved">Approved</option></select></div>
               <div class="flightplan-field"><label for="territory">Territory</label><input id="territory" name="territory" maxlength="120" value="Worldwide"></div>
               <div class="flightplan-field wide"><label for="tracklist">Tracklist + timestamps</label><textarea id="tracklist" name="tracklist" maxlength="4000" placeholder="00:00 Artist — Track&#10;04:18 Artist — Track"></textarea></div>
+              <div class="flightplan-field wide"><label for="reviewIntent">Creative intent for reviewers</label><textarea id="reviewIntent" name="reviewIntent" maxlength="1000" placeholder="What should this mix make the room feel, and which choices are deliberate?"></textarea></div>
+              <div class="flightplan-field wide"><label for="reviewContext">Context reviewers may not know</label><textarea id="reviewContext" name="reviewContext" maxlength="1000" placeholder="Genre language, source limitations, performance conditions or references that affect a fair review."></textarea></div>
+              <div class="flightplan-field wide"><label for="protectedMoments">Moments to protect before changing</label><textarea id="protectedMoments" name="protectedMoments" maxlength="1000" placeholder="List unusual breaks, pauses, clashes or transitions that are intentional and why."></textarea></div>
             </div>
             <div class="flightplan-actions"><a class="flightplan-link" href="/release-house/?format=dj-mix">Open Release House</a><button class="flightplan-button primary" type="button" onclick="document.querySelector('.flightplan-step[data-step=\'4\']').click()">Check sale gate</button></div>
           </section>
@@ -1180,6 +1264,7 @@
             </div>
             <label class="flightplan-check"><input type="checkbox" name="rightsConfirmed"><span>I confirm the mix has been reviewed for the permissions, licences, credits, reporting, and revenue treatment required for its intended sale and territories.</span></label>
             <div class="flightplan-gate" id="flightplanGate"><div class="flightplan-gate-mark">HOLD</div><div><strong>Sale gate is still closed</strong><span>Complete mastering, metadata, pricing, and rights review first.</span></div></div>
+            <div class="next-improvement" id="flightplanNextImprovement"><small>Next step</small><p>Follow the steps in order — Demand Radar first, then the mastering gate.</p></div>
             <div class="flightplan-actions"><button class="flightplan-button primary" type="button" onclick="document.querySelector('.flightplan-step[data-step=\'5\']').click()">Prepare campaign</button></div>
           </section>
           <section class="flightplan-stage" data-stage="5">
@@ -5367,5 +5452,74 @@
     }, 3200);
   </script>
   <script type="module" src="/mix-flightplan.js"></script>
+  <script>
+    (function initDeckReviewPanel() {
+      const panel = document.getElementById("drpBody");
+      const readyValue = document.getElementById("drpReadyValue");
+      const readyBar = document.getElementById("drpReadyBar");
+      if (!panel) return;
+
+      const STATUS_CLASS = { approved: "is-approved", ready: "is-ready", needs_context: "is-rights", in_review: "is-rights", revise: "is-revise", hold: "is-hold", queued: "" };
+      const STATUS_LABEL = { approved: "Approved", ready: "Ready", needs_context: "Needs context", in_review: "In review", revise: "Revise", hold: "Hold", queued: "Queued" };
+      const MASTERING_CHIP = { mastered: ["is-mastered", "Mastered"], approved: ["is-mastered", "Master approved"], mastering_booked: ["is-rights", "Mastering booked"], mix_review: ["is-rights", "Mix review"] };
+
+      function esc(str) { const n = document.createElement("span"); n.textContent = str || ""; return n.innerHTML; }
+
+      function renderPanel(plan, cycle) {
+        const score = cycle && cycle.overallScore != null ? Math.round(Number(cycle.overallScore)) : null;
+        const status = cycle ? cycle.status : null;
+        const summary = cycle && cycle.finalSummary ? cycle.finalSummary : null;
+        const masterStatus = plan ? plan.masteringStatus : null;
+        const rightsConfirmed = plan ? plan.rightsConfirmed : false;
+        const saleReady = plan ? plan.saleReady : false;
+        const readiness = [plan && plan.demandBrief && plan.demandBrief.theme, plan && ["mastered","approved"].includes(masterStatus), plan && plan.metadata && plan.metadata.djName && plan.metadata.price, rightsConfirmed, plan && plan.metadata && plan.metadata.campaignHook].filter(Boolean).length;
+        const readyPct = readiness * 20;
+
+        readyValue.textContent = `${readiness} / 5`;
+        readyBar.style.setProperty("--drp-ready", `${readyPct}%`);
+
+        const chips = [];
+        if (masterStatus && MASTERING_CHIP[masterStatus]) {
+          const [cls, label] = MASTERING_CHIP[masterStatus];
+          chips.push(`<span class="drp-chip ${esc(cls)}">${esc(label)}</span>`);
+        }
+        if (rightsConfirmed) chips.push(`<span class="drp-chip is-ready">Rights confirmed</span>`);
+        if (saleReady) chips.push(`<span class="drp-chip is-approved">Sale ready</span>`);
+        if (status && STATUS_LABEL[status]) {
+          chips.push(`<span class="drp-chip ${esc(STATUS_CLASS[status] || "")}">${esc(STATUS_LABEL[status])}</span>`);
+        }
+
+        let nextHint = "Follow the flightplan steps to improve this mix and unlock release readiness.";
+        if (status === "approved") nextHint = "Mix is approved. Confirm sale readiness in the flightplan before publishing.";
+        else if (status === "revise") nextHint = "Reviewer requested revision. Read the final summary and address the noted areas.";
+        else if (status === "hold") nextHint = "Mix is on hold for context. Add creative intent and protected moments to unblock review.";
+        else if (!masterStatus || masterStatus === "not_started") nextHint = "Start with mastering — send the final sequence and confirm loudness targets in the flightplan.";
+        else if (!["mastered","approved"].includes(masterStatus)) nextHint = "Mastering is in progress. Confirm it reaches the target LUFS before advancing to release pack.";
+        else if (!rightsConfirmed) nextHint = "Confirm rights and clearances in the flightplan to open the sale gate.";
+        else if (saleReady) nextHint = "All checks passed. Open the flightplan to request a final sale review.";
+
+        panel.innerHTML = `
+          <div class="drp-score-col">
+            <div class="drp-score-ring" style="--drp-score:${score || 0}">
+              <strong>${score !== null ? score : "—"}</strong>
+            </div>
+            <span>Quality<br>score</span>
+          </div>
+          <div class="drp-detail">
+            <div class="drp-chips">${chips.length ? chips.join("") : '<span class="drp-chip">No status yet</span>'}</div>
+            ${summary ? `<p class="drp-summary">${esc(summary)}</p>` : ""}
+            <div class="drp-next"><b>Next improvement</b><p>${esc(nextHint)}</p></div>
+          </div>`;
+      }
+
+      fetch("/api/mix-flightplan", { credentials: "same-origin" })
+        .then(function(r) { return r.ok ? r.json() : null; })
+        .then(function(data) {
+          if (!data) return;
+          renderPanel(data.plan, data.latestCycle || null);
+        })
+        .catch(function() {});
+    }());
+  </script>
 </body>
 </html>

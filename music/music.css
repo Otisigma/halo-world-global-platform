@@ -198,12 +198,6 @@ h1 em { color: var(--acid); font-family: var(--serif); font-weight: 400; text-tr
 .stage-copy { padding: clamp(28px, 4vw, 48px); }
 .stage-kicker { display: flex; justify-content: space-between; gap: 15px; color: #5d655c; font: 500 8px/1.3 var(--mono); letter-spacing: 0.1em; text-transform: uppercase; }
 .stage-kicker span:first-child { color: #b63e15; }
-.release-statuses { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0 0; padding: 0; list-style: none; }
-.status-pill { padding: 6px 9px; border: 1px solid #c7c6bc; color: #4f574f; background: #ece9de; font: 600 7px/1 var(--mono); letter-spacing: 0.08em; text-transform: uppercase; }
-.status-pill.is-artwork-verified { border-color: #b9c7a8; color: #35512b; background: #e8f4df; }
-.status-pill.is-video-real { border-color: #b6ccd7; color: #224559; background: #e2eef4; }
-.status-pill.is-dreamweaver-fallback { border-color: #dac6a6; color: #7a4f1b; background: #f3e8d7; }
-.status-pill.is-video-pending { border-color: #d8cebe; color: #6f6350; background: #f0e9dd; }
 .stage-copy h3 { margin: 24px 0 0; font-size: clamp(40px, 5vw, 72px); line-height: 0.88; letter-spacing: -0.06em; text-transform: uppercase; }
 .stage-artist { margin: 13px 0 0; color: #b63e15; font: italic 400 27px/1 var(--serif); }
 .stage-story { margin: 27px 0 0; color: #50584f; font-size: 13px; line-height: 1.7; }
@@ -224,7 +218,6 @@ h1 em { color: var(--acid); font-family: var(--serif); font-weight: 400; text-tr
 .stage-video-empty span { color: #b63e15; font: 500 7px/1 var(--mono); letter-spacing: 0.12em; }
 .stage-video-empty strong { display: block; margin-top: 10px; font-size: 17px; }
 .stage-video-empty p { margin: 8px 0 0; color: #656c64; font-size: 11px; line-height: 1.55; }
-.stage-video-fallback audio { width: 100%; margin-top: 16px; }
 .stage-copy .release-actions { margin-top: 24px; }
 .stage-copy .action { border-color: #b9b7ae; }
 .stage-copy .action.primary { color: var(--paper); background: var(--ink); }

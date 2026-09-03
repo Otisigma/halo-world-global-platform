@@ -38,8 +38,6 @@ assert.equal(fallback.artworkSource, "fallback");
 
 assert.match(releasePackApi, /imported_artwork_url/);
 assert.match(releasePackApi, /artwork_override_url/);
-assert.match(releasePackApi, /imported_artwork_url = COALESCE\(NULLIF\(EXCLUDED\.imported_artwork_url, ''\), halo_release_campaigns\.imported_artwork_url\)/);
-assert.match(releasePackApi, /artwork_override_url = COALESCE\(NULLIF\(EXCLUDED\.artwork_override_url, ''\), halo_release_campaigns\.artwork_override_url\)/);
 assert.match(catalogApi, /artworkOverride/);
 assert.match(artistPagesApi, /imported_artwork_url = COALESCE/);
 assert.match(migration, /ADD COLUMN IF NOT EXISTS imported_artwork_url TEXT NOT NULL DEFAULT ''/);

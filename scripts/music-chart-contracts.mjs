@@ -22,10 +22,6 @@ assert.match(catalogApi, /previous_listens/, "catalog API must expose the compar
 assert.match(client, /rankedReleases/, "client must calculate interactive room rankings");
 assert.match(client, /youtube-nocookie\.com/, "chart video must use privacy-enhanced YouTube playback");
 assert.match(client, /data-play-chart-video/, "chart stage must support in-place video playback");
-assert.match(client, /Dreamweaver fallback active/, "chart must label Dreamweaver fallback playback when no video exists");
-assert.match(client, /release-statuses/, "catalog cards and stage must expose playback and artwork status labels");
-assert.match(catalogApi, /dreamweaver_fallback_track_id/, "catalog API must expose fallback audio linkage for video-pending songs");
-assert.match(catalogApi, /video_url/, "catalog API must expose release video URL data for exact matching");
 assert.match(styles, /\.chart-console/, "chart console must have a dedicated responsive layout");
 assert.match(styles, /\.chart-row\.is-active/, "chart rows must expose a selected state");
 

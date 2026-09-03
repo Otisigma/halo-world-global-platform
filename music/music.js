@@ -87,6 +87,38 @@
       .trim();
   }
 
+  function parseYouTubeId(value) {
+    const url = safeUrl(value);
+    if (!url) return "";
+    try {
+      const parsed = new URL(url);
+      const host = parsed.hostname.toLowerCase().replace(/\.$/, "");
+      if (host === "youtu.be" || host.endsWith(".youtu.be")) return parsed.pathname.replace("/", "").trim();
+      if (host === "youtube.com" || host.endsWith(".youtube.com")) {
+        if (parsed.pathname === "/watch") return parsed.searchParams.get("v") || "";
+        if (parsed.pathname.startsWith("/embed/")) return parsed.pathname.split("/")[2] || "";
+      }
+      return "";
+    } catch {
+      return "";
+    }
+  }
+
+  function releaseNativeVideo(release) {
+    const sourceUrl = safeUrl(release?.videoUrl);
+    if (!sourceUrl) return null;
+    const youtubeId = parseYouTubeId(sourceUrl);
+    return {
+      id: `release-video-${release.id}`,
+      title: release.videoTitle || `${release.title} video`,
+      sourceType: youtubeId ? "youtube" : "upload",
+      sourceUrl,
+      embedUrl: youtubeId ? `https://www.youtube.com/embed/${youtubeId}` : "",
+      thumbnailUrl: youtubeId ? `https://i.ytimg.com/vi/${youtubeId}/hqdefault.jpg` : releaseArtwork(release).src,
+      isReleaseMapped: true
+    };
+  }
+
   function releaseAgeInDays(release) {
     if (!release.releaseDate) return 365;
     const released = new Date(`${release.releaseDate}T00:00:00Z`).getTime();
@@ -148,18 +180,43 @@
   }
 
   function videoForRelease(release) {
+    const mappedVideo = releaseNativeVideo(release);
+    if (mappedVideo) return mappedVideo;
     const title = normalized(release.title);
     const artist = normalized(release.artist);
     return state.videos.find(video => {
       const videoTitle = normalized(video.title);
       const videoArtist = normalized(video.artistName);
-      return (title && (videoTitle.includes(title) || title.includes(videoTitle)))
-        || (artist && videoArtist === artist && videoTitle.split(" ").some(word => word.length > 4 && title.includes(word)));
+      return title && artist && videoArtist === artist && (videoTitle.includes(title) || title.includes(videoTitle));
     });
+  }
+
+  function releaseStatuses(release, video) {
+    const statuses = [];
+    if (release.artworkVerifiedImported) {
+      statuses.push({ kind: "artwork-verified", label: release.importedArtworkSource || "Verified imported artwork" });
+    }
+    if (video) {
+      statuses.push({ kind: "video-real", label: "Real video ready" });
+    } else if (safeUrl(release.dreamweaverFallbackAudioUrl)) {
+      statuses.push({ kind: "dreamweaver-fallback", label: "Dreamweaver fallback active" });
+      statuses.push({ kind: "video-pending", label: "Video pending" });
+    } else {
+      statuses.push({ kind: "video-pending", label: "Video pending" });
+    }
+    return statuses;
+  }
+
+  function statusMarkup(release, video) {
+    return `<ul class="release-statuses">${releaseStatuses(release, video).map(status => `<li class="status-pill is-${escapeHtml(status.kind)}">${escapeHtml(status.label)}</li>`).join("")}</ul>`;
   }
 
   function videoMarkup(video, release) {
     if (!video) {
+      const fallbackAudio = safeUrl(release.dreamweaverFallbackAudioUrl);
+      if (fallbackAudio) {
+        return `<div class="stage-video-empty stage-video-fallback"><span>DREAMWEAVER</span><strong>Internal playback bridge active</strong><p>This release has no official video yet. HALO is serving the Dreamweaver fallback version until approved footage is attached.</p><audio controls preload="none" src="${escapeHtml(fallbackAudio)}"></audio></div>`;
+      }
       return `<div class="stage-video-empty"><span>HALO TV</span><strong>Footage lane open</strong><p>When approved footage is attached to this release, it plays here without sending listeners away from the chart.</p></div>`;
     }
     const thumbnail = safeUrl(video.thumbnailUrl, releaseArtwork(release).src);
@@ -180,6 +237,7 @@
       <div class="stage-art release-artwork-frame" data-artwork-frame><img class="release-artwork-image" src="${escapeHtml(artwork.src)}" alt="${escapeHtml(`${release.title} cover artwork`)}" data-release-artwork data-artwork-fallback="${escapeHtml(artwork.fallback)}"><span class="stage-rank">#${position}</span></div>
       <div class="stage-copy">
         <div class="stage-kicker"><span>${escapeHtml(movement.label)}</span><span>${escapeHtml(release.genres.join(" · ") || "HALO release")}</span></div>
+        ${statusMarkup(release, video)}
         <h3>${escapeHtml(release.title)}</h3><p class="stage-artist">${escapeHtml(release.artist)}</p>
         <p class="stage-story">${escapeHtml(release.pitch || "Open the full release signal and approved campaign room.")}</p>
         <div class="stage-metrics"><span><strong>${Number(activity.recentListens || 0)}</strong>Listen exits</span><span><strong>${Number(activity.recentOpens || 0)}</strong>Room opens</span><span><strong>${escapeHtml(movement.value)}</strong>Momentum</span></div>
@@ -309,9 +367,10 @@
       return;
     }
     const artwork = releaseArtwork(release);
+    const video = videoForRelease(release);
     elements.featured.innerHTML = `<article class="featured-release">
       <div class="featured-art release-artwork-frame" data-artwork-frame><img class="release-artwork-image" src="${escapeHtml(artwork.src)}" alt="${escapeHtml(`${release.title} cover artwork`)}" width="1200" height="1200" data-release-artwork data-artwork-fallback="${escapeHtml(artwork.fallback)}"></div>
-      <div class="featured-copy"><div>${releaseMeta(release)}<h2>${escapeHtml(release.title)}</h2><p class="featured-artist">${escapeHtml(release.artist)}</p><p class="featured-pitch">${escapeHtml(release.pitch || "Open the official release signal, approved listening destination, and campaign room.")}</p></div>${releaseActions(release)}</div>
+      <div class="featured-copy"><div>${releaseMeta(release)}${statusMarkup(release, video)}<h2>${escapeHtml(release.title)}</h2><p class="featured-artist">${escapeHtml(release.artist)}</p><p class="featured-pitch">${escapeHtml(release.pitch || "Open the official release signal, approved listening destination, and campaign room.")}</p></div>${releaseActions(release)}</div>
     </article>`;
     wireArtwork(elements.featured);
   }
@@ -359,9 +418,10 @@
     }
     elements.grid.innerHTML = releases.map((release, index) => {
       const artwork = releaseArtwork(release);
+      const video = videoForRelease(release);
       return `<article class="release-card">
       <div class="card-art release-artwork-frame" data-artwork-frame><img class="release-artwork-image" src="${escapeHtml(artwork.src)}" alt="${escapeHtml(`${release.title} cover artwork`)}" loading="lazy" width="900" height="900" data-release-artwork data-artwork-fallback="${escapeHtml(artwork.fallback)}"><span class="card-number">${String(index + 1).padStart(2, "0")}</span></div>
-      <div class="card-copy">${releaseMeta(release)}<h3>${escapeHtml(release.title)}</h3><p class="card-artist">${escapeHtml(release.artist)}</p>${release.pitch ? `<p class="card-pitch">${escapeHtml(release.pitch)}</p>` : ""}${releaseActions(release)}</div>
+      <div class="card-copy">${releaseMeta(release)}${statusMarkup(release, video)}<h3>${escapeHtml(release.title)}</h3><p class="card-artist">${escapeHtml(release.artist)}</p>${release.pitch ? `<p class="card-pitch">${escapeHtml(release.pitch)}</p>` : ""}${releaseActions(release)}</div>
     </article>`;
     }).join("");
     wireArtwork(elements.grid);

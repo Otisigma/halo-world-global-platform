@@ -5,33 +5,29 @@ import { fileURLToPath } from "node:url";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const page = await readFile(resolve(root, "halo.html"), "utf8");
-const releaseMatch = page.match(/const FEATURED_RELEASE = \{([\s\S]*?)\n        \};/);
 
-assert.ok(releaseMatch, "FEATURED_RELEASE must remain the homepage feature source");
+assert.match(page, /const DEFAULT_FEATURED_RELEASE = \{/);
+assert.match(page, /const DEFAULT_NEW_RELEASE = \{/);
+assert.match(page, /\/api\/release-catalog/);
+assert.match(page, /\/api\/fan-campaigns\?feed=public/);
+assert.match(page, /\/api\/dreamweaver-campaigns\?feed=public/);
+assert.match(page, /pickFeaturedRelease/);
+assert.match(page, /setFeaturedRelease\(toFeaturedRelease/);
+assert.match(page, /setNewRelease\(toNewRelease/);
+assert.match(page, /data-stat-event="open_new_release"/);
+assert.match(page, /data-stat-event="open_featured_release"/);
+assert.doesNotMatch(page, /FEATURED_RELEASE\.titleLines\.map/);
+assert.doesNotMatch(page, />\s*Now transmitting\s*</);
 
-const releaseSource = releaseMatch[1];
-const stringField = field => {
-  const match = releaseSource.match(new RegExp(`${field}:\\s*'([^']+)'`));
-  assert.ok(match, `FEATURED_RELEASE.${field} must be defined`);
-  return match[1];
-};
+const defaultFeaturedArtwork = page.match(/const DEFAULT_FEATURED_RELEASE = \{[\s\S]*?artwork:\s*'([^']+)'/);
+const defaultFeaturedUrl = page.match(/const DEFAULT_FEATURED_RELEASE = \{[\s\S]*?url:\s*'([^']+)'/);
+const defaultNewArtwork = page.match(/const DEFAULT_NEW_RELEASE = \{[\s\S]*?artwork:\s*'([^']+)'/);
+assert.ok(defaultFeaturedArtwork?.[1], "DEFAULT_FEATURED_RELEASE.artwork must be defined");
+assert.ok(defaultFeaturedUrl?.[1], "DEFAULT_FEATURED_RELEASE.url must be defined");
+assert.ok(defaultNewArtwork?.[1], "DEFAULT_NEW_RELEASE.artwork must be defined");
 
-const releaseId = stringField("id");
-const title = stringField("title");
-const artwork = stringField("artwork");
-const url = stringField("url");
-const description = stringField("description");
+await access(resolve(root, defaultFeaturedArtwork[1].slice(1)));
+await access(resolve(root, defaultNewArtwork[1].slice(1)));
+await access(resolve(root, defaultFeaturedUrl[1].slice(1), "index.html"));
 
-assert.equal(title, "When The World Goes Dark");
-assert.equal(artwork, `/assets/releases/${releaseId}.jpg`);
-assert.equal(url, `/${releaseId}/`);
-assert.ok(description.length >= 80, "featured release description must be editorially complete");
-assert.match(releaseSource, /titleLines:/);
-assert.match(page, /FEATURED_RELEASE\.titleLines\.map/);
-assert.match(page, /\{FEATURED_RELEASE\.description\}/);
-assert.doesNotMatch(page, /The Cold Is<br\/>/);
-
-await access(resolve(root, artwork.slice(1)));
-await access(resolve(root, url.slice(1), "index.html"));
-
-console.log("Featured release artwork and writeup contracts passed");
+console.log("Featured release rotation and promotional feed contracts passed");

@@ -934,7 +934,7 @@
           }
         };
 
-        const FEATURED_RELEASE = {
+        const DEFAULT_FEATURED_RELEASE = {
           id: 'when-the-world-goes-dark',
           title: 'When The World Goes Dark',
           titleLines: [
@@ -942,6 +942,7 @@
             { text: 'Goes Dark', emphasis: true }
           ],
           artist: 'Owen Anthony',
+          featuredType: 'month',
           featureMonth: 'August 2026',
           releaseDate: '20 August 2026',
           duration: 'New transmission',
@@ -953,7 +954,7 @@
           locked: true
         };
 
-        const NEW_RELEASE = {
+        const DEFAULT_NEW_RELEASE = {
           title: 'My Sensitivity Like a Crown',
           artist: 'Owen Anthony',
           artwork: '/assets/releases/my-sensitivity-like-a-crown.jpg',
@@ -1226,6 +1227,110 @@
           };
         };
 
+        const sanitizePromoUrl = (value, fallback = '#') => {
+          try {
+            const url = new URL(String(value || ''), window.location.origin);
+            return ['http:', 'https:'].includes(url.protocol) ? url.href : fallback;
+          } catch {
+            return fallback;
+          }
+        };
+
+        const toTitleLines = (title) => {
+          const words = String(title || '').trim().split(/\s+/).filter(Boolean);
+          if (!words.length) return DEFAULT_FEATURED_RELEASE.titleLines;
+          if (words.length <= 2) return [{ text: words.join(' '), emphasis: false }];
+          const splitAt = Math.min(words.length - 1, Math.max(1, Math.ceil(words.length * 0.58)));
+          return [
+            { text: words.slice(0, splitAt).join(' '), emphasis: false },
+            { text: words.slice(splitAt).join(' '), emphasis: true }
+          ];
+        };
+
+        const releaseAgeInDays = (releaseDate) => {
+          if (!releaseDate) return 365;
+          const released = new Date(`${releaseDate}T00:00:00Z`).getTime();
+          if (Number.isNaN(released) || released > Date.now()) return 365;
+          return Math.max(0, Math.floor((Date.now() - released) / 86_400_000));
+        };
+
+        const promoSignal = (release) => {
+          const activity = release?.chartActivity || {};
+          const recent = Number(activity.recentListens || 0) * 8 + Number(activity.recentOpens || 0) * 3;
+          const previous = Number(activity.previousListens || 0) * 8 + Number(activity.previousOpens || 0) * 3;
+          const freshness = Math.max(0, 30 - releaseAgeInDays(release?.releaseDate)) / 3;
+          return { recent, previous, score: recent * 2 + previous + freshness };
+        };
+
+        const formatFeatureMonth = (release) => {
+          const value = release?.featuredUntil || release?.releaseDate;
+          if (!value) return new Intl.DateTimeFormat('en-GB', { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(new Date());
+          const date = new Date(`${String(value).slice(0, 10)}T00:00:00Z`);
+          if (Number.isNaN(date.valueOf())) return DEFAULT_FEATURED_RELEASE.featureMonth;
+          return new Intl.DateTimeFormat('en-GB', { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(date);
+        };
+
+        const formatFeatureDate = (value) => {
+          if (!value) return 'Date to be announced';
+          const date = new Date(`${String(value).slice(0, 10)}T00:00:00Z`);
+          if (Number.isNaN(date.valueOf())) return 'Date to be announced';
+          return new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' }).format(date);
+        };
+
+        const toFeaturedRelease = (release) => {
+          if (!release) return DEFAULT_FEATURED_RELEASE;
+          const activity = release.chartActivity || {};
+          const genres = Array.isArray(release.genres) && release.genres.length ? release.genres.join(' · ') : 'HALO signal';
+          const listenCount = Number(activity.recentListens || 0);
+          const openCount = Number(activity.recentOpens || 0);
+          return {
+            id: release.id || DEFAULT_FEATURED_RELEASE.id,
+            title: release.title || DEFAULT_FEATURED_RELEASE.title,
+            titleLines: toTitleLines(release.title),
+            artist: release.artist || DEFAULT_FEATURED_RELEASE.artist,
+            featuredType: release.featuredType || 'month',
+            featureMonth: formatFeatureMonth(release),
+            releaseDate: formatFeatureDate(release.releaseDate),
+            duration: release.duration || `${listenCount} listens · ${openCount} opens (7d)`,
+            genres,
+            description: release.pitch || `A featured HALO release from ${release.artist || 'the HALO catalog'}, selected using live fan and listener momentum.`,
+            roles: DEFAULT_FEATURED_RELEASE.roles,
+            artwork: release.artwork || DEFAULT_FEATURED_RELEASE.artwork,
+            url: sanitizePromoUrl(release.listenUrl || release.purchaseUrl || release.streamUrl || release.kitUrl, DEFAULT_FEATURED_RELEASE.url),
+            locked: false
+          };
+        };
+
+        const toNewRelease = (release) => {
+          if (!release) return DEFAULT_NEW_RELEASE;
+          return {
+            title: release.title || DEFAULT_NEW_RELEASE.title,
+            artist: release.artist || DEFAULT_NEW_RELEASE.artist,
+            artwork: release.artwork || DEFAULT_NEW_RELEASE.artwork,
+            url: sanitizePromoUrl(release.listenUrl || release.purchaseUrl || release.streamUrl || release.kitUrl, DEFAULT_NEW_RELEASE.url),
+            pitch: release.pitch || ''
+          };
+        };
+
+        const sortBySignal = (releases) => [...releases].sort((a, b) => {
+          const aSignal = promoSignal(a);
+          const bSignal = promoSignal(b);
+          if (bSignal.score !== aSignal.score) return bSignal.score - aSignal.score;
+          return new Date(`${b.releaseDate || '1970-01-01'}T00:00:00Z`).getTime()
+            - new Date(`${a.releaseDate || '1970-01-01'}T00:00:00Z`).getTime();
+        });
+
+        const pickFeaturedRelease = (releases) =>
+          releases.find(item => item.featuredType === 'week')
+          || releases.find(item => item.featuredType === 'month')
+          || sortBySignal(releases)[0]
+          || null;
+
+        const pickPromoRelease = (releases, featuredId) =>
+          sortBySignal(releases).find(item => item.id !== featuredId)
+          || releases.find(item => item.id !== featuredId)
+          || null;
+
         function App() {
           const [viewMode, setViewMode] = useState('landing'); // 'landing' or 'console'
 
@@ -1306,6 +1411,9 @@
           const [releasePackLoading, setReleasePackLoading] = useState(true);
           const [releasePackError, setReleasePackError] = useState('');
           const [releasePackNotice, setReleasePackNotice] = useState('');
+          const [featuredRelease, setFeaturedRelease] = useState(DEFAULT_FEATURED_RELEASE);
+          const [newRelease, setNewRelease] = useState(DEFAULT_NEW_RELEASE);
+          const [promoFeed, setPromoFeed] = useState({ giveaways: [], dreamweaver: [] });
           const [campaignEditorOpen, setCampaignEditorOpen] = useState(false);
           const [campaignSaving, setCampaignSaving] = useState(false);
           const [campaignDraft, setCampaignDraft] = useState(null);
@@ -1865,6 +1973,34 @@
             setShowUploadAlerts(true);
             const next = await loadUploadAlerts();
             if (next?.unreadCount) await updateUploadAlerts('mark-seen');
+          };
+
+          const loadHomepagePromotions = async () => {
+            const readJson = async (url) => {
+              const response = await fetch(url, { headers: { Accept: 'application/json' } });
+              const payload = await response.json().catch(() => ({}));
+              return response.ok ? payload : null;
+            };
+            try {
+              const [catalogData, campaignData, dreamweaverData] = await Promise.all([
+                readJson('/api/release-catalog'),
+                readJson('/api/fan-campaigns?feed=public'),
+                readJson('/api/dreamweaver-campaigns?feed=public')
+              ]);
+              const releases = Array.isArray(catalogData?.releases) ? catalogData.releases : [];
+              const featured = pickFeaturedRelease(releases);
+              const promo = pickPromoRelease(releases, featured?.id);
+              setFeaturedRelease(toFeaturedRelease(featured));
+              setNewRelease(toNewRelease(promo || featured));
+              setPromoFeed({
+                giveaways: Array.isArray(campaignData?.campaigns) ? campaignData.campaigns.slice(0, 3) : [],
+                dreamweaver: Array.isArray(dreamweaverData?.campaigns) ? dreamweaverData.campaigns.slice(0, 2) : []
+              });
+            } catch {
+              setFeaturedRelease(DEFAULT_FEATURED_RELEASE);
+              setNewRelease(DEFAULT_NEW_RELEASE);
+              setPromoFeed({ giveaways: [], dreamweaver: [] });
+            }
           };
 
           const applyReleasePackState = (data) => {
@@ -2502,6 +2638,12 @@
             const refresh = window.setInterval(loadCommunity, 30000);
             return () => window.clearInterval(refresh);
           }, [identityUser?.id]);
+
+          useEffect(() => {
+            loadHomepagePromotions();
+            const refresh = window.setInterval(loadHomepagePromotions, 120000);
+            return () => window.clearInterval(refresh);
+          }, []);
 
           useEffect(() => {
             const requestedSlug = new URLSearchParams(window.location.search).get('slug') || '';
@@ -3312,8 +3454,8 @@
                     <div className="relative grid items-stretch md:grid-cols-[220px_minmax(0,1fr)_auto]">
                       <div className="overflow-hidden border-b border-white/10 bg-[#26211b] md:border-b-0 md:border-r">
                         <img
-                          src={NEW_RELEASE.artwork}
-                          alt={`${NEW_RELEASE.title} by ${NEW_RELEASE.artist} cover artwork`}
+                          src={newRelease.artwork}
+                          alt={`${newRelease.title} by ${newRelease.artist} cover artwork`}
                           className="aspect-square h-full w-full object-cover transition duration-700 group-hover:scale-[1.035] group-hover:saturate-125"
                           width="800"
                           height="800"
@@ -3323,17 +3465,17 @@
                       </div>
                       <div className="flex flex-col justify-center p-6 sm:p-8">
                         <div className="flex flex-wrap items-center gap-3 font-mono text-[9px] font-black uppercase tracking-[.25em] text-amber-300">
-                          <span className="inline-flex items-center gap-2"><span className="h-1.5 w-1.5 animate-pulse rounded-full bg-amber-300 shadow-[0_0_12px_rgba(252,211,77,.8)]"></span>New release</span>
+                          <span className="inline-flex items-center gap-2"><span className="h-1.5 w-1.5 animate-pulse rounded-full bg-amber-300 shadow-[0_0_12px_rgba(252,211,77,.8)]"></span>Live featured signal</span>
                           <span className="h-px w-10 bg-amber-300/35"></span>
-                          <span>Now transmitting</span>
+                          <span>Auto-ranked by listener momentum</span>
                         </div>
-                        <h2 id="new-release-title" className="mt-4 font-sans-alt text-5xl font-black uppercase leading-[.82] tracking-[-.04em] text-white sm:text-6xl">{NEW_RELEASE.title}</h2>
-                        <p className="mt-3 font-serif text-2xl italic text-amber-100/80">{NEW_RELEASE.artist}</p>
-                        <p className="mt-4 max-w-xl text-xs leading-5 text-gray-400">The newest Owen Anthony signal is live. Open the official release page to save it, share it, and choose your platform.</p>
+                        <h2 id="new-release-title" className="mt-4 font-sans-alt text-5xl font-black uppercase leading-[.82] tracking-[-.04em] text-white sm:text-6xl">{newRelease.title}</h2>
+                        <p className="mt-3 font-serif text-2xl italic text-amber-100/80">{newRelease.artist}</p>
+                        <p className="mt-4 max-w-xl text-xs leading-5 text-gray-400">{newRelease.pitch || 'Open the official release page to save it, share it, and choose your platform.'}</p>
                       </div>
                       <div className="flex items-center border-t border-white/10 p-6 md:border-l md:border-t-0 md:p-8">
                         <a
-                          href={NEW_RELEASE.url}
+                          href={newRelease.url}
                           target="_blank"
                           rel="noopener noreferrer"
                           data-stat-event="open_new_release"
@@ -3347,7 +3489,7 @@
                     </div>
                   </section>
 
-                  {/* Monthly artist showcase. Rotate FEATURED_RELEASE only when the owner requests a new project. */}
+                  {/* Live spotlight powered by release-catalog ranking + featured type. */}
                   <section
                     className="release-spotlight rounded-[2rem] border border-slate-300/20 shadow-[0_40px_110px_rgba(0,0,0,.48)]"
                     data-permanent-section="artist-of-the-month"
@@ -3361,16 +3503,16 @@
                         <div className="relative mx-auto max-w-[390px]">
                           <div className="release-art-shell overflow-hidden rounded-sm bg-[#d8e1e1] p-2">
                             <img
-                              src={FEATURED_RELEASE.artwork}
-                              alt={`${FEATURED_RELEASE.title} by ${FEATURED_RELEASE.artist} cover artwork`}
+                              src={featuredRelease.artwork}
+                              alt={`${featuredRelease.title} by ${featuredRelease.artist} cover artwork`}
                               className="aspect-square w-full object-cover"
                               width="1024"
                               height="1024"
                             />
                           </div>
                           <div className="release-stamp absolute -bottom-5 -right-3 border border-amber-300/45 bg-[#17100d]/95 px-4 py-3 font-mono text-[9px] font-black uppercase tracking-[.22em] text-amber-200 backdrop-blur md:-right-8">
-                            <span className="block text-[8px] text-amber-500">ARTIST OF THE MONTH</span>
-                            August // 2026
+                            <span className="block text-[8px] text-amber-500">{featuredRelease.featuredType === 'week' ? 'ARTIST OF THE WEEK' : 'ARTIST OF THE MONTH'}</span>
+                            {featuredRelease.featureMonth}
                           </div>
                         </div>
                       </div>
@@ -3378,16 +3520,16 @@
                       <div className="relative flex flex-col justify-between p-6 sm:p-9 lg:p-12">
                         <div>
                           <div className="flex flex-wrap items-center gap-3 text-[9px] font-black uppercase tracking-[.26em]">
-                            <span className="text-slate-300">Monthly portrait // 001</span>
+                            <span className="text-slate-300">{featuredRelease.featuredType === 'week' ? 'Weekly portrait // live' : 'Monthly portrait // live'}</span>
                             <span className="h-px w-10 bg-slate-300/35"></span>
-                            <span className="text-amber-300">{FEATURED_RELEASE.featureMonth}</span>
+                            <span className="text-amber-300">{featuredRelease.featureMonth}</span>
                           </div>
 
                           <div className="release-rule mt-7 h-px w-full bg-gradient-to-r from-slate-200/70 via-slate-400/20 to-transparent"></div>
 
-                          <p className="mt-7 font-mono text-[10px] font-black uppercase tracking-[.32em] text-slate-400">{FEATURED_RELEASE.artist} presents</p>
+                          <p className="mt-7 font-mono text-[10px] font-black uppercase tracking-[.32em] text-slate-400">{featuredRelease.artist} presents</p>
                           <h2 id="featured-release-title" className="release-title mt-3 max-w-3xl text-5xl font-black uppercase leading-[.82] tracking-[-.04em] text-[#edf2ef] sm:text-6xl md:text-7xl">
-                            {FEATURED_RELEASE.titleLines.map((line, index) => (
+                            {featuredRelease.titleLines.map((line, index) => (
                               <React.Fragment key={line.text}>
                                 {index > 0 && <br/>}
                                 {line.emphasis ? <em className="normal-case text-[#c9d9dc]">{line.text}</em> : line.text}
@@ -3396,17 +3538,17 @@
                           </h2>
 
                           <div className="mt-7 grid max-w-xl grid-cols-2 gap-px overflow-hidden rounded-xl border border-white/10 bg-white/10 sm:grid-cols-3">
-                            <div className="bg-[#0b0e11]/90 p-4"><span className="block text-[8px] uppercase tracking-[.2em] text-gray-600">Released</span><strong className="mt-1 block text-xs text-white">{FEATURED_RELEASE.releaseDate}</strong></div>
-                            <div className="bg-[#0b0e11]/90 p-4"><span className="block text-[8px] uppercase tracking-[.2em] text-gray-600">Runtime</span><strong className="mt-1 block text-xs text-white">{FEATURED_RELEASE.duration}</strong></div>
-                            <div className="col-span-2 bg-[#0b0e11]/90 p-4 sm:col-span-1"><span className="block text-[8px] uppercase tracking-[.2em] text-gray-600">Signal</span><strong className="mt-1 block text-xs text-white">{FEATURED_RELEASE.genres}</strong></div>
+                            <div className="bg-[#0b0e11]/90 p-4"><span className="block text-[8px] uppercase tracking-[.2em] text-gray-600">Released</span><strong className="mt-1 block text-xs text-white">{featuredRelease.releaseDate}</strong></div>
+                            <div className="bg-[#0b0e11]/90 p-4"><span className="block text-[8px] uppercase tracking-[.2em] text-gray-600">Runtime</span><strong className="mt-1 block text-xs text-white">{featuredRelease.duration}</strong></div>
+                            <div className="col-span-2 bg-[#0b0e11]/90 p-4 sm:col-span-1"><span className="block text-[8px] uppercase tracking-[.2em] text-gray-600">Signal</span><strong className="mt-1 block text-xs text-white">{featuredRelease.genres}</strong></div>
                           </div>
 
                           <p className="mt-6 max-w-xl font-sans-alt text-sm leading-6 text-slate-300">
-                            {FEATURED_RELEASE.description}
+                            {featuredRelease.description}
                           </p>
 
-                          <div className="mt-6 flex max-w-2xl flex-wrap gap-2" aria-label="Owen Anthony creative roles">
-                            {FEATURED_RELEASE.roles.map((role, index) => (
+                          <div className="mt-6 flex max-w-2xl flex-wrap gap-2" aria-label={`${featuredRelease.artist} creative roles`}>
+                            {featuredRelease.roles.map((role, index) => (
                               <span key={role} className="artist-role rounded-full border border-slate-200/15 bg-slate-100/[.055] px-4 py-2 font-mono text-[9px] font-black uppercase tracking-[.2em] text-slate-200">
                                 <span className="mr-2 text-amber-400">0{index + 1}</span>{role}
                               </span>
@@ -3416,14 +3558,14 @@
 
                         <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center">
                           <a
-                            href={FEATURED_RELEASE.url}
+                            href={featuredRelease.url}
                             target="_blank"
                             rel="noopener noreferrer"
                             data-stat-event="open_featured_release"
                             data-stat-target="homepage_spotlight"
                             className="inline-flex items-center justify-center gap-3 rounded-xl bg-[#dce7e7] px-6 py-4 font-mono text-xs font-black uppercase tracking-[.14em] text-[#111719] transition hover:-translate-y-1 hover:bg-white focus:outline-none focus:ring-2 focus:ring-slate-200 focus:ring-offset-2 focus:ring-offset-[#0b0e11]"
                           >
-                            Listen to {FEATURED_RELEASE.title}
+                            Listen to {featuredRelease.title}
                             <Icon name="external-link" className="h-4 w-4 stroke-[2.5]" />
                           </a>
                           <button
@@ -3439,6 +3581,48 @@
                           <span className="px-2 text-center font-mono text-[8px] uppercase tracking-[.18em] text-gray-500 sm:text-left">
                             Monthly editorial placement<br/>artist, singer, DJ + producer
                           </span>
+                        </div>
+                      </div>
+                    </div>
+                  </section>
+
+                  <section className="rounded-[2rem] border border-white/10 bg-[#0b0e11] p-6 shadow-[0_30px_80px_rgba(0,0,0,.45)] sm:p-8" aria-labelledby="promo-feed-title">
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div>
+                        <p className="text-[9px] font-black uppercase tracking-[.3em] text-rose-300">HALO promo feed</p>
+                        <h2 id="promo-feed-title" className="mt-2 font-sans-alt text-3xl font-black uppercase leading-[.9] text-white sm:text-4xl">Weekly giveaways + featured promos</h2>
+                      </div>
+                      <a href="/campaign-studio/" className="inline-flex items-center gap-2 rounded-full border border-rose-300/40 px-4 py-2 text-[9px] font-black uppercase tracking-[.18em] text-rose-200 transition hover:border-rose-200 hover:text-rose-100">Open campaign studio <Icon name="arrow-right" className="h-4 w-4" /></a>
+                    </div>
+                    <div className="mt-6 grid gap-4 lg:grid-cols-2">
+                      <div className="rounded-2xl border border-rose-300/20 bg-rose-950/10 p-5">
+                        <p className="text-[8px] font-black uppercase tracking-[.26em] text-rose-200">Live giveaway campaigns</p>
+                        <div className="mt-4 space-y-3">
+                          {promoFeed.giveaways.length ? promoFeed.giveaways.map(campaign => (
+                            <a key={campaign.slug} href={campaign.fanUrl} className="group block rounded-xl border border-white/10 bg-black/30 p-4 transition hover:border-rose-300/45 hover:bg-rose-300/10">
+                              <div className="flex items-center justify-between gap-3 text-[9px] font-black uppercase tracking-[.2em] text-rose-200">
+                                <span>{campaign.promotion?.eyebrow || 'Listening party'}</span>
+                                <span>{campaign.progress}%</span>
+                              </div>
+                              <h3 className="mt-2 text-base font-black text-white">{campaign.title}</h3>
+                              <p className="mt-1 text-[10px] leading-5 text-gray-300">{campaign.promotion?.caption || campaign.rewardDescription || 'Vote with the community to unlock a weekly reward.'}</p>
+                            </a>
+                          )) : <p className="rounded-xl border border-dashed border-white/15 p-4 text-[10px] text-gray-400">No active giveaway campaign is published yet.</p>}
+                        </div>
+                      </div>
+                      <div className="rounded-2xl border border-cyan-300/20 bg-cyan-950/10 p-5">
+                        <p className="text-[8px] font-black uppercase tracking-[.26em] text-cyan-200">Dreamweaver featured promos</p>
+                        <div className="mt-4 space-y-3">
+                          {promoFeed.dreamweaver.length ? promoFeed.dreamweaver.map(campaign => (
+                            <a key={campaign.id} href={sanitizePromoUrl(campaign.destinationUrl || '/dreamweaver/')} target="_blank" rel="noopener noreferrer" className="group block rounded-xl border border-white/10 bg-black/30 p-4 transition hover:border-cyan-300/45 hover:bg-cyan-300/10">
+                              <div className="flex items-center justify-between gap-3 text-[9px] font-black uppercase tracking-[.2em] text-cyan-200">
+                                <span>Momentum score</span>
+                                <span>{campaign.performanceScore}/100</span>
+                              </div>
+                              <h3 className="mt-2 text-base font-black text-white">{campaign.package?.campaignTitle || campaign.title}</h3>
+                              <p className="mt-1 text-[10px] leading-5 text-gray-300">{campaign.package?.coreIdea || campaign.recommendations?.summary || 'Generated from artist-owned catalog and campaign media.'}</p>
+                            </a>
+                          )) : <p className="rounded-xl border border-dashed border-white/15 p-4 text-[10px] text-gray-400">No active Dreamweaver promo is currently pinned.</p>}
                         </div>
                       </div>
                     </div>

@@ -160,6 +160,44 @@ function serializeJob(row, campaign = null) {
   };
 }
 
+function serializePublicCampaign(row) {
+  return {
+    id: row.id,
+    title: row.title,
+    artistName: row.artist_name,
+    destinationUrl: row.destination_url || "",
+    status: row.status,
+    performanceScore: Number(row.performance_score || 0),
+    package: {
+      campaignTitle: cleanText(row.package?.campaignTitle, 180),
+      coreIdea: cleanText(row.package?.coreIdea, 320),
+      callToAction: cleanText(row.package?.callToAction, 220),
+      platformPackages: row.package?.platformPackages || {}
+    },
+    recommendations: row.recommendations || {},
+    updatedAt: new Date(row.updated_at).toISOString()
+  };
+}
+
+async function listPublicCampaigns(db) {
+  const active = await db.sql`
+    SELECT id, title, artist_name, destination_url, status, package, recommendations, performance_score, updated_at
+    FROM halo_dreamweaver_campaigns
+    WHERE status = 'active'
+    ORDER BY performance_score DESC, updated_at DESC
+    LIMIT 6
+  `;
+  if (active.length) return active.map(serializePublicCampaign);
+  const fallback = await db.sql`
+    SELECT id, title, artist_name, destination_url, status, package, recommendations, performance_score, updated_at
+    FROM halo_dreamweaver_campaigns
+    WHERE status = 'ready'
+    ORDER BY performance_score DESC, updated_at DESC
+    LIMIT 3
+  `;
+  return fallback.map(serializePublicCampaign);
+}
+
 async function aggregateEvents(db, campaignIds) {
   if (!campaignIds.length) return new Map();
   const rows = await db.sql`
@@ -468,6 +506,9 @@ export default async function dreamweaverCampaignsHandler(request, context) {
     const user = await getUser().catch(() => null);
     if (request.method === "GET") {
       const params = new URL(request.url).searchParams;
+      if (params.get("feed") === "public") {
+        return json({ campaigns: await listPublicCampaigns(db) });
+      }
       const mixId = cleanText(params.get("mixId"), 80);
       const jobId = cleanId(params.get("jobId"));
       if (!user?.id) return json(jobId ? { message: "Sign in to read this campaign build" } : { campaigns: [], jobs: [] }, jobId ? 401 : 200);

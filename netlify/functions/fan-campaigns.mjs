@@ -120,6 +120,50 @@ function serializeCampaign(row, tracks, viewerVote = null, owner = false) {
   };
 }
 
+function serializeCampaignSummary(row) {
+  const totalVotes = Number(row.total_votes || 0);
+  const voteGoal = Number(row.vote_goal || 0);
+  const now = Date.now();
+  const startsAt = new Date(row.starts_at).toISOString();
+  const endsAt = new Date(row.ends_at).toISOString();
+  return {
+    slug: row.slug,
+    title: row.title,
+    subtitle: row.subtitle || "",
+    rewardTitle: row.reward_title || "",
+    rewardDescription: row.reward_description || "",
+    voteGoal,
+    totalVotes,
+    trackCount: Number(row.track_count || 0),
+    startsAt,
+    endsAt,
+    launchedAt: row.launched_at ? new Date(row.launched_at).toISOString() : null,
+    hostPersonaId: row.host_persona_id || "halo",
+    promotion: row.promotion || {},
+    partyTheme: row.party_theme || {},
+    progress: voteGoal > 0 ? Math.min(100, Math.round((totalVotes / voteGoal) * 100)) : 0,
+    rewardUnlocked: voteGoal > 0 && totalVotes >= voteGoal,
+    acceptingVotes: now >= new Date(startsAt).valueOf() && now < new Date(endsAt).valueOf(),
+    fanUrl: `/campaign-studio/?campaign=${encodeURIComponent(row.slug)}&view=fan`
+  };
+}
+
+async function loadPublicCampaignFeed(db) {
+  const rows = await db.sql`
+    SELECT campaign.slug, campaign.title, campaign.subtitle, campaign.reward_title, campaign.reward_description,
+      campaign.vote_goal, campaign.starts_at, campaign.ends_at, campaign.launched_at, campaign.host_persona_id,
+      campaign.promotion, campaign.party_theme,
+      (SELECT COUNT(*)::int FROM halo_fan_vote_campaign_votes vote WHERE vote.campaign_id = campaign.id) AS total_votes,
+      (SELECT COUNT(*)::int FROM halo_fan_vote_campaign_tracks track WHERE track.campaign_id = campaign.id) AS track_count
+    FROM halo_fan_vote_campaigns campaign
+    WHERE campaign.status = 'published'
+      AND campaign.ends_at > NOW()
+    ORDER BY campaign.launched_at DESC NULLS LAST, campaign.starts_at DESC
+    LIMIT 8
+  `;
+  return rows.map(serializeCampaignSummary);
+}
+
 async function campaignRows(db, campaignId) {
   return db.sql`
     SELECT track.id, track.source_track_id, track.title, track.artist_name, track.description,
@@ -369,6 +413,9 @@ export default async function fanCampaignsHandler(request) {
     const [db, user] = await Promise.all([getDatabase(), getUser()]);
     const url = new URL(request.url);
     if (request.method === "GET") {
+      if (url.searchParams.get("feed") === "public") {
+        return json({ campaigns: await loadPublicCampaignFeed(db) });
+      }
       const slug = slugify(url.searchParams.get("slug"));
       if (!slug) return loadStudio(db, user);
       const campaign = await loadCampaign(db, slug, user);

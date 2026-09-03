@@ -1,4 +1,3 @@
-import { getDatabase } from "@netlify/database";
 import { resolveReleaseArtworkFields } from "../lib/release-artwork.mjs";
 
 function json(body, status = 200, headers = {}) {
@@ -9,6 +8,14 @@ function json(body, status = 200, headers = {}) {
       ...headers
     }
   });
+}
+
+let databaseModulePromise;
+
+async function loadDatabase() {
+  if (!databaseModulePromise) databaseModulePromise = import("@netlify/database");
+  const { getDatabase } = await databaseModulePromise;
+  return getDatabase();
 }
 
 function cleanHttpsUrl(value) {
@@ -31,23 +38,39 @@ function importedArtworkSourceLabel(url) {
   return `Imported from ${host}`;
 }
 
-function serializeRelease(row) {
+function readText(value) {
+  if (typeof value === "string") return value;
+  if (value === null || value === undefined) return "";
+  return String(value);
+}
+
+function readBoolean(value) {
+  if (typeof value === "boolean") return value;
+  if (typeof value === "number") return value !== 0;
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    return normalized === "true" || normalized === "t" || normalized === "1";
+  }
+  return false;
+}
+
+export function serializeRelease(row) {
   const artwork = resolveReleaseArtworkFields({
-    artworkUrl: row.artwork_url,
-    importedArtworkUrl: row.imported_artwork_url,
-    artworkOverrideUrl: row.artwork_override_url
+    artworkUrl: readText(row.artwork_url),
+    importedArtworkUrl: readText(row.imported_artwork_url),
+    artworkOverrideUrl: readText(row.artwork_override_url)
   });
-  const videoUrl = cleanHttpsUrl(row.video_url);
-  const fallbackTrackId = typeof row.dreamweaver_fallback_track_id === "string" ? row.dreamweaver_fallback_track_id : "";
+  const videoUrl = cleanHttpsUrl(readText(row.video_url));
+  const fallbackTrackId = readText(row.dreamweaver_fallback_track_id);
   const playbackStatus = videoUrl ? "real_video" : fallbackTrackId ? "dreamweaver_fallback" : "pending_video";
   const importedArtworkSource = importedArtworkSourceLabel(artwork.importedArtwork);
   return {
-    id: row.id,
-    title: row.title,
-    artist: row.artist,
+    id: readText(row.id),
+    title: readText(row.title),
+    artist: readText(row.artist),
     releaseDate: row.release_date ? String(row.release_date).slice(0, 10) : "",
-    duration: row.duration || "",
-    genres: Array.isArray(row.genres) ? row.genres : [],
+    duration: readText(row.duration),
+    genres: Array.isArray(row.genres) ? row.genres.map(value => readText(value)).filter(Boolean) : [],
     artwork: artwork.artwork,
     importedArtwork: artwork.importedArtwork,
     importedArtworkSource,
@@ -55,18 +78,18 @@ function serializeRelease(row) {
     artworkOverride: artwork.artworkOverride,
     artworkSource: artwork.artworkSource,
     artworkLockState: artwork.artworkOverride ? "manual_lock" : artwork.importedArtwork ? "import_lock" : "unlocked",
-    bpm: row.bpm === null ? null : Number(row.bpm),
-    musicalKey: row.musical_key || "",
-    contentRating: row.content_rating || "unspecified",
-    pitch: row.pitch || "",
-    availableVersions: Array.isArray(row.available_versions) ? row.available_versions : [],
-    isCleanVersion: Boolean(row.is_clean_version),
-    isChartEligible: Boolean(row.is_chart_eligible),
-    purchaseUrl: row.purchase_url || "",
-    streamUrl: row.stream_url || "",
-    featuredType: row.featured_type || "",
+    bpm: Number.isFinite(Number(row.bpm)) ? Number(row.bpm) : null,
+    musicalKey: readText(row.musical_key),
+    contentRating: readText(row.content_rating) || "unspecified",
+    pitch: readText(row.pitch),
+    availableVersions: Array.isArray(row.available_versions) ? row.available_versions.map(value => readText(value)).filter(Boolean) : [],
+    isCleanVersion: readBoolean(row.is_clean_version),
+    isChartEligible: readBoolean(row.is_chart_eligible),
+    purchaseUrl: readText(row.purchase_url),
+    streamUrl: readText(row.stream_url),
+    featuredType: readText(row.featured_type),
     featuredUntil: row.featured_until ? String(row.featured_until).slice(0, 10) : "",
-    videoTitle: row.video_title || "",
+    videoTitle: readText(row.video_title),
     videoUrl,
     dreamweaverFallbackTrackId: fallbackTrackId,
     dreamweaverFallbackAudioUrl: fallbackTrackId ? `/api/radio/audio?id=${encodeURIComponent(fallbackTrackId)}` : "",
@@ -82,14 +105,8 @@ function serializeRelease(row) {
   };
 }
 
-export default async function releaseCatalogHandler(request) {
-  if (request.method !== "GET") {
-    return json({ message: "Method not allowed" }, 405, { Allow: "GET" });
-  }
-
-  try {
-    const db = getDatabase();
-    const rows = await db.sql`
+export async function queryCatalogRows(db) {
+  return db.sql`
       SELECT
         release.id,
         release.title,
@@ -98,22 +115,22 @@ export default async function releaseCatalogHandler(request) {
         release.duration,
         release.genres,
         release.artwork_url,
-        release.imported_artwork_url,
-        release.artwork_override_url,
-        release.video_title,
-        release.video_url,
+        to_jsonb(release) ->> 'imported_artwork_url' AS imported_artwork_url,
+        to_jsonb(release) ->> 'artwork_override_url' AS artwork_override_url,
+        to_jsonb(release) ->> 'video_title' AS video_title,
+        to_jsonb(release) ->> 'video_url' AS video_url,
         release.bpm,
         release.musical_key,
         release.content_rating,
         release.pitch,
         release.available_versions,
-        release.is_clean_version,
-        release.is_chart_eligible,
-        release.purchase_url,
-        release.stream_url,
-        release.featured_type,
-        release.featured_until,
-        fallback_track.id AS dreamweaver_fallback_track_id,
+        to_jsonb(release) ->> 'is_clean_version' AS is_clean_version,
+        to_jsonb(release) ->> 'is_chart_eligible' AS is_chart_eligible,
+        to_jsonb(release) ->> 'purchase_url' AS purchase_url,
+        to_jsonb(release) ->> 'stream_url' AS stream_url,
+        to_jsonb(release) ->> 'featured_type' AS featured_type,
+        to_jsonb(release) ->> 'featured_until' AS featured_until,
+        to_jsonb(fallback_track) ->> 'id' AS dreamweaver_fallback_track_id,
         COUNT(event.id) FILTER (
           WHERE event.event_type = 'kit_open'
             AND event.created_at >= NOW() - INTERVAL '7 days'
@@ -136,7 +153,7 @@ export default async function releaseCatalogHandler(request) {
       LEFT JOIN LATERAL (
         SELECT track.id
         FROM halo_radio_tracks track
-        WHERE track.release_id = release.id
+        WHERE COALESCE(to_jsonb(track) ->> 'release_id', '') = release.id
           AND track.status = 'rotation'
         ORDER BY track.updated_at DESC, track.created_at DESC
         LIMIT 1
@@ -149,6 +166,16 @@ export default async function releaseCatalogHandler(request) {
       ORDER BY release.release_date DESC NULLS LAST, release.updated_at DESC
       LIMIT 200
     `;
+}
+
+export default async function releaseCatalogHandler(request) {
+  if (request.method !== "GET") {
+    return json({ message: "Method not allowed" }, 405, { Allow: "GET" });
+  }
+
+  try {
+    const db = await loadDatabase();
+    const rows = await queryCatalogRows(db);
     const releases = rows.map(serializeRelease);
     return json({ releases, count: releases.length });
   } catch (error) {

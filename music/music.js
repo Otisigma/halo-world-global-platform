@@ -41,6 +41,28 @@
     }
   }
 
+  function normalizeRelease(release) {
+    const source = release && typeof release === "object" ? release : {};
+    const activity = source.chartActivity && typeof source.chartActivity === "object" ? source.chartActivity : {};
+    return {
+      ...source,
+      genres: Array.isArray(source.genres) ? source.genres.map(value => String(value ?? "")).filter(Boolean) : [],
+      availableVersions: Array.isArray(source.availableVersions) ? source.availableVersions.map(value => String(value ?? "")).filter(Boolean) : [],
+      importedArtworkSource: String(source.importedArtworkSource || ""),
+      videoTitle: String(source.videoTitle || ""),
+      videoUrl: String(source.videoUrl || ""),
+      dreamweaverFallbackTrackId: String(source.dreamweaverFallbackTrackId || ""),
+      dreamweaverFallbackAudioUrl: String(source.dreamweaverFallbackAudioUrl || ""),
+      playbackStatus: String(source.playbackStatus || ""),
+      chartActivity: {
+        recentOpens: Number(activity.recentOpens || 0),
+        recentListens: Number(activity.recentListens || 0),
+        previousOpens: Number(activity.previousOpens || 0),
+        previousListens: Number(activity.previousListens || 0)
+      }
+    };
+  }
+
   function releaseArtwork(release) {
     return window.HaloReleaseArtwork?.resolve(release, fallbackArtwork) || {
       src: safeUrl(release?.artwork, fallbackArtwork),
@@ -443,7 +465,7 @@
       const response = await fetch("/api/release-catalog", { headers: { Accept: "application/json" } });
       const data = await response.json();
       if (!response.ok) throw new Error(data.message || "The catalog could not be loaded.");
-      state.releases = Array.isArray(data.releases) ? data.releases : [];
+      state.releases = Array.isArray(data.releases) ? data.releases.map(normalizeRelease) : [];
       renderFeatured();
       renderChart();
       renderGenres();

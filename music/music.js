@@ -17,6 +17,7 @@
   };
   const state = { releases: [], videos: [], query: "", genre: "all", sort: "newest", chartRoom: "all", chartSort: "signal", activeReleaseId: "" };
   const fallbackArtwork = window.HaloReleaseArtwork?.DEFAULT_RELEASE_ARTWORK || "/assets/halo-app-icon-512.png";
+  const satelliteVideoFallbackEnabled = new URLSearchParams(window.location.search).get("satellite") === "music-video-fallback";
   const chartRooms = {
     all: [],
     "hip-hop": ["hip hop", "hip-hop", "rap", "drill", "grime"],
@@ -147,15 +148,38 @@
     });
   }
 
+  function hasSafeMediaUrl(value) {
+    return Boolean(String(value || "").trim() && safeUrl(value));
+  }
+
+  function isPlayableVideo(video) {
+    if (!video) return false;
+    if (video.sourceType === "youtube") return hasSafeMediaUrl(video.embedUrl);
+    return hasSafeMediaUrl(video.sourceUrl);
+  }
+
+  function fallbackVideoForRelease(release) {
+    if (!satelliteVideoFallbackEnabled) return null;
+    return {
+      id: `fallback-${release.id}`,
+      sourceType: "fallback-visual",
+      title: `${release.title} visual`,
+      thumbnailUrl: releaseArtwork(release).src,
+      isFallbackVisual: true
+    };
+  }
+
   function videoForRelease(release) {
     const title = normalized(release.title);
     const artist = normalized(release.artist);
-    return state.videos.find(video => {
-      const videoTitle = normalized(video.title);
-      const videoArtist = normalized(video.artistName);
+    const video = state.videos.find(videoItem => {
+      if (satelliteVideoFallbackEnabled && !isPlayableVideo(videoItem)) return false;
+      const videoTitle = normalized(videoItem.title);
+      const videoArtist = normalized(videoItem.artistName);
       return (title && (videoTitle.includes(title) || title.includes(videoTitle)))
         || (artist && videoArtist === artist && videoTitle.split(" ").some(word => word.length > 4 && title.includes(word)));
     });
+    return video || fallbackVideoForRelease(release);
   }
 
   function videoMarkup(video, release) {
@@ -163,10 +187,47 @@
       return `<div class="stage-video-empty"><span>HALO TV</span><strong>Footage lane open</strong><p>When approved footage is attached to this release, it plays here without sending listeners away from the chart.</p></div>`;
     }
     const thumbnail = safeUrl(video.thumbnailUrl, releaseArtwork(release).src);
+    if (video.isFallbackVisual) {
+      return `<button class="stage-video-poster" type="button" data-play-chart-video="${escapeHtml(video.id)}" data-video-fallback="visual">
+      <img src="${escapeHtml(thumbnail)}" alt="" loading="lazy">
+      <span class="video-play" aria-hidden="true">▶</span><span><small>Fallback visual</small><strong>Play ${escapeHtml(release.title)} visual</strong></span>
+    </button>`;
+    }
     return `<button class="stage-video-poster" type="button" data-play-chart-video="${escapeHtml(video.id)}">
       <img src="${escapeHtml(thumbnail)}" alt="" loading="lazy">
       <span class="video-play" aria-hidden="true">▶</span><span><small>Watch inside the chart</small><strong>${escapeHtml(video.title)}</strong></span>
     </button>`;
+  }
+
+  function playFallbackVisual(video, poster) {
+    const frame = document.createElement("div");
+    frame.className = "stage-video-frame";
+    frame.innerHTML = `<div class="stage-video-fallback-visual">
+      <img src="${escapeHtml(safeUrl(video.thumbnailUrl, fallbackArtwork))}" alt="" loading="eager">
+      <div class="stage-video-fallback-copy"><span>HALO TV</span><strong>${escapeHtml(video.title)}</strong></div>
+    </div>`;
+    poster.replaceWith(frame);
+  }
+
+  function playChartVideo(videoId) {
+    const video = state.videos.find(item => item.id === videoId) || state.releases.map(fallbackVideoForRelease).find(item => item?.id === videoId);
+    const poster = elements.chartStage.querySelector("[data-play-chart-video]");
+    if (!video || !poster) return;
+    if (video.isFallbackVisual) {
+      playFallbackVisual(video, poster);
+      window.haloStats?.track("play_halo_video", { target: "fallback_visual", track: state.activeReleaseId });
+      return;
+    }
+    const source = safeUrl(video.sourceUrl);
+    const embed = safeUrl(video.embedUrl).replace("www.youtube.com", "www.youtube-nocookie.com");
+    const player = video.sourceType === "youtube"
+      ? `<iframe src="${escapeHtml(embed)}?autoplay=1&amp;rel=0" title="${escapeHtml(video.title)}" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>`
+      : `<video src="${escapeHtml(source)}" controls autoplay playsinline></video>`;
+    const frame = document.createElement("div");
+    frame.className = "stage-video-frame";
+    frame.innerHTML = player;
+    poster.replaceWith(frame);
+    window.haloStats?.track("play_halo_video", { target: video.id, track: state.activeReleaseId });
   }
 
   function renderChartStage(release, position) {
@@ -219,21 +280,6 @@
     renderChartStage(releases.find(release => release.id === state.activeReleaseId), releases.findIndex(release => release.id === state.activeReleaseId) + 1);
   }
 
-  function playChartVideo(videoId) {
-    const video = state.videos.find(item => item.id === videoId);
-    const poster = elements.chartStage.querySelector("[data-play-chart-video]");
-    if (!video || !poster) return;
-    const source = safeUrl(video.sourceUrl);
-    const embed = safeUrl(video.embedUrl).replace("www.youtube.com", "www.youtube-nocookie.com");
-    const player = video.sourceType === "youtube"
-      ? `<iframe src="${escapeHtml(embed)}?autoplay=1&amp;rel=0" title="${escapeHtml(video.title)}" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>`
-      : `<video src="${escapeHtml(source)}" controls autoplay playsinline></video>`;
-    const frame = document.createElement("div");
-    frame.className = "stage-video-frame";
-    frame.innerHTML = player;
-    poster.replaceWith(frame);
-    window.haloStats?.track("play_halo_video", { target: video.id, track: state.activeReleaseId });
-  }
 
   function showToast(message) {
     elements.toast.textContent = message;

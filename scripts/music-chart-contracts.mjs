@@ -22,7 +22,10 @@ assert.match(catalogApi, /previous_listens/, "catalog API must expose the compar
 assert.match(client, /rankedReleases/, "client must calculate interactive room rankings");
 assert.match(client, /youtube-nocookie\.com/, "chart video must use privacy-enhanced YouTube playback");
 assert.match(client, /data-play-chart-video/, "chart stage must support in-place video playback");
+assert.match(client, /satellite"\) === "music-video-fallback"/, "chart must keep fallback behavior behind a satellite query-flag path");
+assert.match(client, /isFallbackVisual/, "chart must generate a per-release fallback visual when no playable video exists in satellite mode");
 assert.match(styles, /\.chart-console/, "chart console must have a dedicated responsive layout");
 assert.match(styles, /\.chart-row\.is-active/, "chart rows must expose a selected state");
+assert.match(styles, /\.stage-video-fallback-visual/, "chart styles must support fallback visual playback without remote media");
 
 console.log("Music chart contracts passed.");

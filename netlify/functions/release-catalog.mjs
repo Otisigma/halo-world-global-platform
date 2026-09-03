@@ -89,7 +89,7 @@ function isOptionalCatalogMetadataError(error) {
   const missingFallbackReleaseLink = missingFallbackRelation && message.includes("release_id");
   const missingFallbackAlias = message.includes("dreamweaver_fallback_track_id");
   const missingVideoColumns = isOptionalVideoMetadataError(error);
-  return missingFallbackReleaseLink || missingFallbackAlias || missingVideoColumns;
+  return missingFallbackRelation || missingFallbackReleaseLink || missingFallbackAlias || missingVideoColumns;
 }
 
 function isOptionalVideoMetadataError(error) {

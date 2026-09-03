@@ -282,7 +282,7 @@ async function loadCatalogRows(db) {
   } catch (error) {
     if (!isOptionalVideoMetadataError(error)) throw error;
     console.warn("HALO release catalog optional video columns unavailable; serving published releases without video metadata");
-    return queryCatalogRowsWithoutFallbackOrVideo(db);
+    return await queryCatalogRowsWithoutFallbackOrVideo(db);
   }
 }
 

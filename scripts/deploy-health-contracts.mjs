@@ -6,8 +6,8 @@
  *   1. Migration order — no migration file has a version timestamp earlier than or
  *      equal to the last completed migration in alphabetical order (prevents deploy
  *      failures caused by out-of-order migration files).
- *   2. Homepage routing — server.js registers a GET "/" route that serves halo.html,
- *      and does NOT serve index.html from "/" (which is the private-access page).
+ *   2. Homepage routing — server.js registers a GET "/" route that sends users to
+ *      /halo, and /halo serves halo.html (while index.html remains private access).
  *   3. Album Concierge public visibility — halo.html contains the /album-concierge/
  *      link so the promo is reachable from the public root route.
  *   4. Build Your Album promotion + route health — halo.html visibly promotes
@@ -97,10 +97,10 @@ await runCheck("Migration ordering", async () => {
   return `${versions.length} migrations in strict order`;
 });
 
-await runCheck("Homepage routing to /halo.html", async () => {
+await runCheck("Homepage routing to /halo", async () => {
   const serverJs = await read("server.js");
 
-  // server.js must register a GET "/" route that serves halo.html
+  // server.js must register a GET "/" route that routes users into /halo
   assert.match(
     serverJs,
     /app\.get\s*\(\s*["']\/["']/,
@@ -108,18 +108,28 @@ await runCheck("Homepage routing to /halo.html", async () => {
   );
   assert.match(
     serverJs,
-    /halo\.html/,
-    "server.js GET \"/\" route must serve halo.html."
+    /redirect\s*\(\s*301\s*,\s*["']\/halo["']\)/,
+    "server.js GET \"/\" route must redirect to /halo."
   );
-  // server.js must NOT serve index.html from the root path directly
+  assert.match(
+    serverJs,
+    /app\.get\s*\(\s*["']\/halo["']/,
+    "server.js must register a GET \"/halo\" route for the public homepage."
+  );
+  assert.match(
+    serverJs,
+    /app\.get\s*\(\s*["']\/halo["'][\s\S]*?halo\.html/,
+    "server.js GET \"/halo\" route must serve halo.html."
+  );
+  // server.js must NOT serve index.html from the public homepage paths
   // (index.html is the private-access page)
-  const rootRouteSection = serverJs.match(/app\.get\s*\(\s*["']\/["'][^)]*\)\s*[^{]*\{[^}]*/)?.[0] ?? "";
+  const publicRouteSection = serverJs.match(/app\.get\s*\(\s*["']\/["'][\s\S]*?app\.get\s*\(\s*["']\/private["']/)?.[0] ?? "";
   assert.doesNotMatch(
-    rootRouteSection,
+    publicRouteSection,
     /index\.html/,
-    "server.js GET \"/\" must not serve index.html — that is the private-access page, not the public homepage."
+    "server.js public routes must not serve index.html — that is the private-access page, not the public homepage."
   );
-  return "server.js GET \"/\" serves halo.html (not index.html)";
+  return "server.js routes GET \"/\" to /halo and serves halo.html there";
 });
 
 await runCheck("Album Concierge visibility on public root page", async () => {
@@ -190,6 +200,28 @@ await runCheck("Build Your Album promotion and route health", async () => {
   );
 
   return "Build Your Album promo and /album-concierge/ route are healthy";
+});
+
+await runCheck("Core public navigation routes", async () => {
+  const haloHtml = await read("halo.html");
+  const requiredRoutes = [
+    "/mixes/",
+    "dj-deck.html",
+    "/artists/",
+    "/release-house/",
+    "/campaign-studio/",
+    "/radio/"
+  ];
+
+  for (const route of requiredRoutes) {
+    assert.match(
+      haloHtml,
+      new RegExp(`href=["']${route.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\\\$&")}`),
+      `halo.html must link to ${route} from the main landing experience.`
+    );
+  }
+
+  return "halo.html keeps links to mixes, DJ deck, artist rooms, release house, campaign studio, and radio";
 });
 
 const failed = results.filter(result => !result.ok);

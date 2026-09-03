@@ -1,0 +1,116 @@
+[build]
+  publish = "."
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    Permissions-Policy = "camera=(), microphone=(), geolocation=()"
+
+[[headers]]
+  for = "/api/*"
+  [headers.values]
+    Cache-Control = "no-store"
+    X-Robots-Tag = "noindex, nofollow"
+
+[[headers]]
+  for = "/youtube-studio*"
+  [headers.values]
+    X-Robots-Tag = "noindex, nofollow"
+
+[[redirects]]
+  from = "/"
+  to = "/halo"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/halo"
+  to = "/halo.html"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/halo/"
+  to = "/halo"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/private"
+  to = "/index.html"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/private/"
+  to = "/private"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/control-center"
+  to = "/private"
+  status = 302
+  force = true
+
+[[redirects]]
+  from = "/artists/owen-anthony"
+  to = "/artists/"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/album-concierge"
+  to = "/album-concierge/"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/artist-pro"
+  to = "/artist-pro/"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/campaign-studio"
+  to = "/campaign-studio/"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/dreamweaver"
+  to = "/dreamweaver/"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/dreamweaver-lab"
+  to = "/dreamweaver-lab/"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/iam-social"
+  to = "/iam-social/"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/release-house"
+  to = "/release-house/"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/song-catalog"
+  to = "/song-catalog/"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/youtube-studio"
+  to = "/youtube-studio/"
+  status = 301
+  force = true

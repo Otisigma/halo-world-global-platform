@@ -26,8 +26,9 @@ assert.match(client, /Dreamweaver fallback active/, "chart must label Dreamweave
 assert.match(client, /release-statuses/, "catalog cards and stage must expose playback and artwork status labels");
 assert.match(catalogApi, /dreamweaver_fallback_track_id/, "catalog API must expose fallback audio linkage for video-pending songs");
 assert.match(catalogApi, /video_url/, "catalog API must expose release video URL data for exact matching");
-assert.match(catalogApi, /queryCatalogRowsWithoutFallback/, "catalog API must degrade gracefully when fallback-track linkage metadata is unavailable");
-assert.match(catalogApi, /queryCatalogRowsWithoutFallbackOrVideo/, "catalog API must still return published releases when optional video metadata columns are unavailable");
+assert.match(catalogApi, /if \(!isOptionalCatalogMetadataError\(error\)\) throw error;/, "catalog API must only degrade for optional metadata failures");
+assert.match(catalogApi, /return await queryCatalogRowsWithoutFallback\(db\);/, "catalog API must retry without fallback-track linkage when optional fallback metadata is unavailable");
+assert.match(catalogApi, /return queryCatalogRowsWithoutFallbackOrVideo\(db\);/, "catalog API must still return releases when optional video metadata columns are unavailable");
 assert.match(styles, /\.chart-console/, "chart console must have a dedicated responsive layout");
 assert.match(styles, /\.chart-row\.is-active/, "chart rows must expose a selected state");
 

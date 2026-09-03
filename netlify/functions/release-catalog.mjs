@@ -85,13 +85,11 @@ function serializeRelease(row) {
 function isOptionalCatalogMetadataError(error) {
   const message = String(error instanceof Error ? error.message : error || "").toLowerCase();
   if (!message.includes("does not exist")) return false;
-  return [
-    "halo_radio_tracks",
-    "release_id",
-    "video_url",
-    "video_title",
-    "dreamweaver_fallback_track_id"
-  ].some(fragment => message.includes(fragment));
+  const missingFallbackRelation = message.includes("halo_radio_tracks");
+  const missingFallbackReleaseLink = missingFallbackRelation && message.includes("release_id");
+  const missingFallbackAlias = message.includes("dreamweaver_fallback_track_id");
+  const missingVideoColumns = message.includes("video_url") || message.includes("video_title");
+  return missingFallbackReleaseLink || missingFallbackAlias || missingVideoColumns;
 }
 
 async function queryCatalogRowsWithFallback(db) {

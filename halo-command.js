@@ -4,10 +4,29 @@
   const state = { identity: null, user: null, dashboard: null, controlCenter: null };
 
   const byId = id => document.getElementById(id);
-  const escapeHtml = value => String(value ?? "").replace(/[&<>'"]/g, character => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" })[character]);
   const number = value => new Intl.NumberFormat("en-GB").format(Number(value || 0));
   const formatDateTime = value => value ? new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short", timeZone: "UTC" }).format(new Date(value)) + " UTC" : "Not available";
-  const listHtml = (items, empty) => (items?.length ? items : [empty]).map(item => `<li>${escapeHtml(item)}</li>`).join("");
+
+  function el(tag, attrs, ...children) {
+    const node = document.createElement(tag);
+    for (const [key, val] of Object.entries(attrs || {})) {
+      if (val !== null && val !== undefined) node.setAttribute(key, val);
+    }
+    for (const child of children.flat()) {
+      if (child === null || child === undefined) continue;
+      node.append(typeof child === "string" ? document.createTextNode(child) : child);
+    }
+    return node;
+  }
+
+  function emptyState(message) {
+    return el("div", { class: "empty-state" }, message);
+  }
+
+  function renderList(target, items, empty) {
+    const data = items?.length ? items : [empty];
+    target.replaceChildren(...data.map(item => el("li", null, item)));
+  }
 
   function showLocked(message) {
     byId("commandView").hidden = true;
@@ -86,41 +105,94 @@
   function renderFindings(findings = [], roles = {}) {
     const target = byId("agentFindings");
     if (!findings.length) {
-      target.innerHTML = Object.entries(roles).map(([key, role]) => `<article class="agent-card" data-agent="${key}" style="--agent-color:${colors[key]}"><header><div><span>${escapeHtml(role.title)}</span><h3>${escapeHtml(role.name)}</h3></div><span class="confidence">WAITING</span></header><p>${escapeHtml(role.mission)}</p></article>`).join("");
+      target.replaceChildren(...Object.entries(roles).map(([key, role]) => {
+        const article = el("article", { class: "agent-card", "data-agent": key });
+        article.style.setProperty("--agent-color", colors[key] || "#d4a44f");
+        const headerDiv = el("div", null, el("span", null, role.title), el("h3", null, role.name));
+        article.append(el("header", null, headerDiv, el("span", { class: "confidence" }, "WAITING")));
+        article.append(el("p", null, role.mission));
+        return article;
+      }));
       return;
     }
-    target.innerHTML = findings.map(finding => {
+    target.replaceChildren(...findings.map(finding => {
       const role = roles[finding.agentKey] || {};
-      const evidence = finding.evidence?.length ? `<details><summary>READ EVIDENCE</summary><ul>${listHtml(finding.evidence, "No evidence recorded")}</ul></details>` : "";
-      return `<article class="agent-card" data-agent="${escapeHtml(finding.agentKey)}" style="--agent-color:${colors[finding.agentKey] || "#d4a44f"}">
-        <header><div><span>${escapeHtml(role.title || finding.agentKey)}</span><h3>${escapeHtml(role.name || names[finding.agentKey])}</h3></div><span class="confidence">${Math.round(Number(finding.confidence || 0) * 100)}%${finding.usedFallback ? " / FALLBACK" : ""}</span></header>
-        <p><strong>${escapeHtml(finding.headline)}</strong><br>${escapeHtml(finding.summary)}</p>${evidence}
-      </article>`;
-    }).join("");
+      const article = el("article", { class: "agent-card", "data-agent": finding.agentKey });
+      article.style.setProperty("--agent-color", colors[finding.agentKey] || "#d4a44f");
+      const confidence = `${Math.round(Number(finding.confidence || 0) * 100)}%${finding.usedFallback ? " / FALLBACK" : ""}`;
+      const headerDiv = el("div", null,
+        el("span", null, role.title || finding.agentKey),
+        el("h3", null, role.name || names[finding.agentKey])
+      );
+      article.append(el("header", null, headerDiv, el("span", { class: "confidence" }, confidence)));
+      const p = el("p", null, el("strong", null, finding.headline));
+      p.append(document.createElement("br"));
+      p.append(document.createTextNode(finding.summary));
+      article.append(p);
+      if (finding.evidence?.length) {
+        const ul = el("ul", null, ...finding.evidence.map(e => el("li", null, e)));
+        article.append(el("details", null, el("summary", null, "READ EVIDENCE"), ul));
+      }
+      return article;
+    }));
   }
 
   function actionCard(action) {
-    const statusOptions = ["proposed", "approved", "in_progress", "completed", "dismissed"].map(status => `<option value="${status}"${status === action.status ? " selected" : ""}>${status.replaceAll("_", " ")}</option>`).join("");
-    return `<article class="action-card" data-priority="${escapeHtml(action.priority)}" data-action-id="${action.id}">
-      <div class="action-source"><span>${escapeHtml(names[action.agentKey] || action.agentKey)}</span><small>${escapeHtml(action.priority)} / ${escapeHtml(action.status)}</small></div>
-      <div class="action-copy"><h3>${escapeHtml(action.title)}</h3><p>${escapeHtml(action.rationale)}</p><strong>EXPECTED SIGNAL — ${escapeHtml(action.expectedMetric || "Owner defines success before approval")}</strong></div>
-      <details class="action-controls"><summary>Review decision</summary><form class="action-form">
-        <label>Status<select name="status">${statusOptions}</select></label>
-        <label>Owner note<textarea name="ownerNote" rows="3" maxlength="1200">${escapeHtml(action.ownerNote)}</textarea></label>
-        <label>Actual outcome<textarea name="actualOutcome" rows="3" maxlength="1200" placeholder="Record measurable evidence after the work is tested.">${escapeHtml(action.actualOutcome)}</textarea></label>
-        <button type="submit">Save to council memory</button>
-      </form></details>
-    </article>`;
+    const article = el("article", { class: "action-card", "data-priority": action.priority, "data-action-id": action.id });
+    const sourceDiv = el("div", { class: "action-source" },
+      el("span", null, names[action.agentKey] || action.agentKey),
+      el("small", null, `${action.priority} / ${action.status}`)
+    );
+    const copyStrong = el("strong", null, `EXPECTED SIGNAL — ${action.expectedMetric || "Owner defines success before approval"}`);
+    const copyDiv = el("div", { class: "action-copy" },
+      el("h3", null, action.title),
+      el("p", null, action.rationale),
+      copyStrong
+    );
+    const select = el("select", { name: "status" });
+    for (const status of ["proposed", "approved", "in_progress", "completed", "dismissed"]) {
+      const opt = el("option", { value: status }, status.replaceAll("_", " "));
+      if (status === action.status) opt.selected = true;
+      select.append(opt);
+    }
+    const noteArea = el("textarea", { name: "ownerNote", rows: "3", maxlength: "1200" });
+    noteArea.value = action.ownerNote || "";
+    const outcomeArea = el("textarea", { name: "actualOutcome", rows: "3", maxlength: "1200", placeholder: "Record measurable evidence after the work is tested." });
+    outcomeArea.value = action.actualOutcome || "";
+    const form = el("form", { class: "action-form" },
+      el("label", null, "Status", select),
+      el("label", null, "Owner note", noteArea),
+      el("label", null, "Actual outcome", outcomeArea),
+      el("button", { type: "submit" }, "Save to council memory")
+    );
+    const details = el("details", { class: "action-controls" }, el("summary", null, "Review decision"), form);
+    article.append(sourceDiv, copyDiv, details);
+    return article;
   }
 
   function renderActions(actions = []) {
     const target = byId("actionQueue");
-    target.innerHTML = actions.length ? actions.map(actionCard).join("") : `<div class="empty-state">No proposed actions yet. Run the council after the platform has collected operating signals.</div>`;
+    if (!actions.length) {
+      target.replaceChildren(emptyState("No proposed actions yet. Run the council after the platform has collected operating signals."));
+    } else {
+      target.replaceChildren(...actions.map(actionCard));
+    }
     target.querySelectorAll(".action-form").forEach(form => form.addEventListener("submit", saveAction));
   }
 
   function renderMemory(memory = []) {
-    byId("memoryLedger").innerHTML = memory.length ? memory.map(item => `<article class="memory-row"><strong>${escapeHtml(names[item.agentKey] || item.agentKey)}</strong><p>${escapeHtml(item.lastReflection || "No reflection has been stored yet.")}</p><span>${number(item.runCount)} RUNS</span></article>`).join("") : `<div class="empty-state">Memory begins after the first council run.</div>`;
+    const target = byId("memoryLedger");
+    if (!memory.length) {
+      target.replaceChildren(emptyState("Memory begins after the first council run."));
+      return;
+    }
+    target.replaceChildren(...memory.map(item =>
+      el("article", { class: "memory-row" },
+        el("strong", null, names[item.agentKey] || item.agentKey),
+        el("p", null, item.lastReflection || "No reflection has been stored yet."),
+        el("span", null, `${number(item.runCount)} RUNS`)
+      )
+    ));
   }
 
   function renderMaintenance(maintenance = {}) {
@@ -133,29 +205,78 @@
     byId("maintenanceTimestamp").textContent = sweep ? `Latest sweep ${formatDateTime(sweep.completedAt || sweep.startedAt)}` : "Waiting for the first deployed-site sweep.";
     const checks = maintenance.checks || [];
     const visibleChecks = checks.filter(check => check.status === "failed").concat(checks.filter(check => check.status === "passed").slice(0, 12));
-    byId("maintenanceChecks").innerHTML = visibleChecks.length ? visibleChecks.map(check => `<article class="maintenance-check" data-status="${escapeHtml(check.status)}"><span>${escapeHtml(check.kind)}</span><strong>${escapeHtml(check.target)}</strong><p>${escapeHtml(check.detail)}</p><small>${check.httpStatus ? `HTTP ${number(check.httpStatus)} · ` : ""}${number(check.durationMs)} MS</small></article>`).join("") : `<div class="empty-state">The scheduled maintenance team runs every 15 minutes after deployment.</div>`;
+    const target = byId("maintenanceChecks");
+    if (!visibleChecks.length) {
+      target.replaceChildren(emptyState("The scheduled maintenance team runs every 15 minutes after deployment."));
+    } else {
+      target.replaceChildren(...visibleChecks.map(check => {
+        const durationText = `${check.httpStatus ? `HTTP ${number(check.httpStatus)} · ` : ""}${number(check.durationMs)} MS`;
+        return el("article", { class: "maintenance-check", "data-status": check.status },
+          el("span", null, check.kind),
+          el("strong", null, check.target),
+          el("p", null, check.detail),
+          el("small", null, durationText)
+        );
+      }));
+    }
   }
 
   function renderActivity(activity = []) {
-    byId("activityFeed").innerHTML = activity.length ? activity.map(item => `<article class="activity-row" data-type="${escapeHtml(item.type)}">
-      <span class="activity-dot" aria-hidden="true"></span>
-      <span class="activity-type">${escapeHtml(item.type)}<br>${escapeHtml(item.status)}</span>
-      <div class="activity-copy"><strong>${escapeHtml(item.title)}</strong><span>${escapeHtml(item.detail)}</span></div>
-      <time class="activity-time" datetime="${escapeHtml(item.occurredAt)}">${formatDateTime(item.occurredAt)}</time>
-    </article>`).join("") : `<div class="empty-state">No operational activity has been recorded yet.</div>`;
+    const target = byId("activityFeed");
+    if (!activity.length) {
+      target.replaceChildren(emptyState("No operational activity has been recorded yet."));
+      return;
+    }
+    target.replaceChildren(...activity.map(item => {
+      const typeSpan = el("span", { class: "activity-type" }, item.type);
+      typeSpan.append(document.createElement("br"));
+      typeSpan.append(document.createTextNode(item.status));
+      const copyDiv = el("div", { class: "activity-copy" },
+        el("strong", null, item.title),
+        el("span", null, item.detail)
+      );
+      const time = el("time", { class: "activity-time", datetime: item.occurredAt }, formatDateTime(item.occurredAt));
+      return el("article", { class: "activity-row", "data-type": item.type },
+        el("span", { class: "activity-dot", "aria-hidden": "true" }),
+        typeSpan,
+        copyDiv,
+        time
+      );
+    }));
   }
 
   function renderCommandThread(commands = []) {
+    const target = byId("commandThread");
     const visible = commands.slice(0, 24).reverse();
-    byId("commandThread").innerHTML = visible.length ? visible.map(command => {
-      const targetName = command.targetAgent === "council" ? "Full council" : names[command.targetAgent] || command.targetAgent;
-      const actionChip = command.actionId ? `<span class="approval-chip">Action #${number(command.actionId)} · ${escapeHtml(command.actionStatus || "proposed")}</span>` : "";
-      return `<article class="command-exchange">
-        <div class="owner-message"><div class="message-meta"><span>OWNER → ${escapeHtml(targetName)}</span><time>${formatDateTime(command.createdAt)}</time></div><p>${escapeHtml(command.message)}</p></div>
-        <div class="agent-response" style="--agent-color:${colors[command.targetAgent] || "#d4a44f"}"><div class="message-meta"><span>${escapeHtml(targetName)} RESPONSE</span><span>${escapeHtml(command.status)}</span></div><strong>${escapeHtml(command.assessment || "Team acknowledgement")}</strong><p>${escapeHtml(command.response || "The team is preparing a response.")}</p>${actionChip}</div>
-      </article>`;
-    }).join("") : `<div class="command-empty"><strong>The council is listening.</strong><span>Send a question, instruction, or request for a measurable action.</span></div>`;
-    byId("commandThread").scrollTop = byId("commandThread").scrollHeight;
+    if (!visible.length) {
+      target.replaceChildren(el("div", { class: "command-empty" },
+        el("strong", null, "The council is listening."),
+        el("span", null, "Send a question, instruction, or request for a measurable action.")
+      ));
+    } else {
+      target.replaceChildren(...visible.map(command => {
+        const targetName = command.targetAgent === "council" ? "Full council" : names[command.targetAgent] || command.targetAgent;
+        const ownerMeta = el("div", { class: "message-meta" },
+          el("span", null, `OWNER → ${targetName}`),
+          el("time", null, formatDateTime(command.createdAt))
+        );
+        const ownerDiv = el("div", { class: "owner-message" }, ownerMeta, el("p", null, command.message));
+        const responseMeta = el("div", { class: "message-meta" },
+          el("span", null, `${targetName} RESPONSE`),
+          el("span", null, command.status)
+        );
+        const responseDiv = el("div", { class: "agent-response" }, responseMeta,
+          el("strong", null, command.assessment || "Team acknowledgement"),
+          el("p", null, command.response || "The team is preparing a response.")
+        );
+        responseDiv.style.setProperty("--agent-color", colors[command.targetAgent] || "#d4a44f");
+        if (command.actionId) {
+          responseDiv.append(el("span", { class: "approval-chip" }, `Action #${number(command.actionId)} · ${command.actionStatus || "proposed"}`));
+        }
+        return el("article", { class: "command-exchange" }, ownerDiv, responseDiv);
+      }));
+    }
+    target.scrollTop = target.scrollHeight;
   }
 
   function renderControlCenter(controlCenter) {
@@ -184,8 +305,8 @@
     byId("reportModel").textContent = run ? `${run.model} · Human approval required` : "Human approval remains required";
     byId("mirrorSummary").textContent = run?.reflection?.tomorrowQuestion || "Mirror is waiting for the first complete council run.";
     byId("executiveSummary").textContent = run?.executiveSummary || "The first daily report has not been generated.";
-    byId("winsList").innerHTML = listHtml(run?.wins, "No recorded wins yet.");
-    byId("concernsList").innerHTML = listHtml(run?.concerns, "No recorded concerns yet.");
+    renderList(byId("winsList"), run?.wins, "No recorded wins yet.");
+    renderList(byId("concernsList"), run?.concerns, "No recorded concerns yet.");
     byId("tomorrowQuestion").textContent = `“${run?.reflection?.tomorrowQuestion || "What changed, and what evidence proved it?"}”`;
     byId("reflectionChanged").textContent = run?.reflection?.whatChanged || "Awaiting comparison data.";
     byId("reflectionWrong").textContent = run?.reflection?.whatWasWrong || "No prior assumption has been reviewed.";

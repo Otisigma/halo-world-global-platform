@@ -4,11 +4,13 @@ import { resolve } from "node:path";
 import { allowedEvents } from "../netlify/lib/stats.mjs";
 
 const root = resolve(import.meta.dirname, "..");
-const [client, styles, stats, summary] = await Promise.all([
+const [client, styles, stats, summary, statsLib, statsEvent] = await Promise.all([
   readFile(resolve(root, "music-player.js"), "utf8"),
   readFile(resolve(root, "music-player.css"), "utf8"),
   readFile(resolve(root, "stats.js"), "utf8"),
-  readFile(resolve(root, "netlify/functions/stats-summary.mjs"), "utf8")
+  readFile(resolve(root, "netlify/functions/stats-summary.mjs"), "utf8"),
+  readFile(resolve(root, "netlify/lib/stats.mjs"), "utf8"),
+  readFile(resolve(root, "netlify/functions/stats-event.mjs"), "utf8")
 ]);
 
 for (const eventName of [
@@ -34,5 +36,9 @@ assert.match(stats, /music-player\.js/, "the shared analytics client must load t
 assert.match(summary, /averageListenSeconds/, "admin reporting must expose listening duration");
 assert.match(summary, /listeningVariants/, "admin reporting must compare preview variants");
 assert.match(summary, /commercialIntent/, "preview reporting must connect listening with commercial intent");
+assert.match(statsLib, /export async function getStatsDatabase\(\)/, "stats database access must stay asynchronous");
+assert.match(statsLib, /await import\("@netlify\/database"\)/, "stats database access must use lazy dynamic import");
+assert.match(summary, /await getStatsDatabase\(\)/, "stats summary must await database initialization");
+assert.match(statsEvent, /await getStatsDatabase\(\)/, "stats event ingestion must await database initialization");
 
 console.log("Music player contracts passed.");

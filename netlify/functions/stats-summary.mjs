@@ -34,7 +34,7 @@ export default async function statsSummaryHandler(request) {
   const days = Number.isInteger(requestedDays) ? Math.min(365, Math.max(1, requestedDays)) : 30;
 
   try {
-    const db = getStatsDatabase();
+    const db = await getStatsDatabase();
     const interval = `${days} days`;
 
     const [overviewRows, eventRows, dailyRows, pageRows, funnelRows, commercialRows, creatorRows, listeningRows, listeningVariantRows] = await Promise.all([

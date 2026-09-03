@@ -1,4 +1,3 @@
-import { getDatabase } from "@netlify/database";
 import { timingSafeEqual } from "node:crypto";
 
 export const allowedEvents = new Set([
@@ -205,7 +204,8 @@ const allowedMetadataKeys = new Set([
 
 const numericMetadataKeys = new Set(["seconds", "position"]);
 
-export function getStatsDatabase() {
+export async function getStatsDatabase() {
+  const { getDatabase } = await import("@netlify/database");
   return getDatabase();
 }
 

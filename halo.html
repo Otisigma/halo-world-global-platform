@@ -28,6 +28,7 @@
     <script src="/site-monitor.js" defer></script>
     <link rel="stylesheet" href="/accessibility.css">
     <link rel="stylesheet" href="/halo-brand.css">
+    <link rel="stylesheet" href="/release-artwork.css">
     <script src="/accessibility.js" defer></script>
     <link rel="stylesheet" href="/mobile-navigation.css">
     <script src="/mobile-navigation.js" defer></script>
@@ -859,6 +860,7 @@
 <body class="selection:bg-amber-500 selection:text-black">
     <div id="root"></div>
 
+    <script src="/release-artwork.js"></script>
     <script type="text/babel" crossorigin="anonymous">
         const { useState, useEffect, useRef } = React;
 
@@ -952,10 +954,10 @@
         };
 
         const NEW_RELEASE = {
-          title: 'Salty',
+          title: 'My Sensitivity Like a Crown',
           artist: 'Owen Anthony',
-          artwork: '/assets/releases/salty.jpg',
-          url: 'https://distrokid.com/hyperfollow/owenanthony/salty?ref=release'
+          artwork: '/assets/releases/my-sensitivity-like-a-crown.jpg',
+          url: 'https://distrokid.com/hyperfollow/owenanthony/my-sensitivity-like-a-crown'
         };
 
         const FALLBACK_ARTWORK = '/assets/halo-app-icon-512.png';
@@ -1338,6 +1340,7 @@
           const [roomPostDraft, setRoomPostDraft] = useState({ title: '', description: '', videoUrl: '', options: ['', ''] });
           const [showEqualizer, setShowEqualizer] = useState(false);
           const [equalizer, setEqualizer] = useState({ master: 70, bass: 0, mid: 0, treble: 0 });
+          const fallbackReleaseArtwork = window.HaloReleaseArtwork?.DEFAULT_RELEASE_ARTWORK || '/assets/halo-app-icon-512.png';
 
           const audioCtxRef = useRef(null);
           const canvasRef = useRef(null);
@@ -1368,6 +1371,9 @@
               return videoId ? `https://www.youtube.com/embed/${videoId}` : '';
             } catch { return ''; }
           };
+
+          const releaseArtwork = (release) => window.HaloReleaseArtwork?.resolve(release, fallbackReleaseArtwork)
+            || { src: release?.artwork || fallbackReleaseArtwork, fallback: fallbackReleaseArtwork, source: release?.artwork ? 'legacy' : 'fallback' };
 
           const parseAndLoadYoutube = (e) => {
             if (e) e.preventDefault();
@@ -1760,7 +1766,11 @@
               avatar: data.profile.avatar,
               region: data.profile.region,
               favoriteGenres: (data.profile.favorite_genres || []).join(', '),
-              vibeStatus: data.profile.vibe_status
+              vibeStatus: data.profile.vibe_status,
+              personaName: data.profile.persona_name || '',
+              personaType: data.profile.persona_type || '',
+              personaBio: data.profile.persona_bio || '',
+              visibilityLevel: data.profile.visibility_level || 'community'
             } : null);
           };
 
@@ -1876,6 +1886,11 @@
             }
           };
 
+          useEffect(() => {
+            if (!releasePack) return;
+            window.HaloReleaseArtwork?.wire(document.body, fallbackReleaseArtwork);
+          }, [releasePack, campaignEditorOpen]);
+
           const loadReleasePack = async (slug = '') => {
             setReleasePackLoading(true);
             setReleasePackError('');
@@ -1919,6 +1934,7 @@
           const newCampaignDraft = () => {
             setCampaignDraft({
               id: '', title: '', artist: identityUser?.name || '', releaseDate: '', duration: '', genresText: '', artwork: '',
+              importedArtwork: '', artworkOverride: '', artworkSource: 'fallback',
               officialUrl: '', djUrl: '', radioUrl: '', pressUrl: '', previewUrl: '', previewExpiresAt: '', bpm: '',
               musicalKey: '', isrc: '', contentRating: 'unspecified', pitch: '', pressDescription: '', credits: '',
               contactName: '', contactEmail: '', versionsText: '', previewAccessCode: '', clearPreviewAccessCode: false, status: 'draft'
@@ -1937,6 +1953,7 @@
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                   ...campaignDraft,
+                  artwork: campaignDraft.artworkOverride || campaignDraft.importedArtwork || campaignDraft.artwork || '',
                   status,
                   genres: campaignDraft.genresText.split(',').map(value => value.trim()).filter(Boolean),
                   availableVersions: campaignDraft.versionsText.split('\n').map(value => value.trim()).filter(Boolean),
@@ -2027,20 +2044,30 @@
           const releaseArtworkFilename = () => `${releasePack.release.artist}-${releasePack.release.title}-social-card.jpg`.replace(/[^a-z0-9.-]+/gi, '-').replace(/-+/g, '-');
 
           const getReleaseArtworkFile = async () => {
-            const response = await fetch(releasePack.release.artwork || '/assets/releases/the-cold-is-lasting-longer.jpg');
-            if (!response.ok) throw new Error('The release artwork could not be prepared.');
+            const primaryArtwork = releaseArtwork(releasePack.release);
+            const response = await fetch(primaryArtwork.src);
+            if (!response.ok) {
+              const fallbackResponse = await fetch(primaryArtwork.fallback);
+              if (!fallbackResponse.ok) throw new Error('The release artwork could not be prepared.');
+              const fallbackBlob = await fallbackResponse.blob();
+              return new File([fallbackBlob], releaseArtworkFilename(), { type: fallbackBlob.type || 'image/png' });
+            }
             const artworkBlob = await response.blob();
             return new File([artworkBlob], releaseArtworkFilename(), { type: artworkBlob.type || 'image/jpeg' });
           };
 
           const downloadReleaseArtwork = () => {
             const downloadLink = document.createElement('a');
-            downloadLink.href = releasePack.release.artwork || '/assets/releases/the-cold-is-lasting-longer.jpg';
+            downloadLink.href = releaseArtwork(releasePack.release).src;
             downloadLink.download = releaseArtworkFilename();
             document.body.appendChild(downloadLink);
             downloadLink.click();
             downloadLink.remove();
           };
+
+          const activeReleaseArtwork = releasePack
+            ? releaseArtwork(releasePack.release)
+            : { src: fallbackReleaseArtwork, fallback: fallbackReleaseArtwork, source: 'fallback' };
 
           const openSocialPlatform = async (platform, label) => {
             if (!confirmSocialRights()) return;
@@ -2284,7 +2311,11 @@
               avatar: profileDraft.avatar,
               region: profileDraft.region,
               favoriteGenres: profileDraft.favoriteGenres.split(',').map(item => item.trim()).filter(Boolean),
-              vibeStatus: profileDraft.vibeStatus
+              vibeStatus: profileDraft.vibeStatus,
+              personaName: profileDraft.personaName || '',
+              personaType: profileDraft.personaType || '',
+              personaBio: profileDraft.personaBio || '',
+              visibilityLevel: profileDraft.visibilityLevel || 'community'
             }, 'Your fan signal is updated.');
             window.haloStats?.track('community_profile_updated');
           };
@@ -3044,6 +3075,9 @@
                         <a href="/dreamweaver-lab/" data-stat-event="open_dreamweaver_song_lab" data-stat-target="header" data-signal="AUDIO TO CAMPAIGN">
                           <Icon name="music" className="halo-menu-icon" /><span><strong>DREAMWEAVER SONG LAB</strong><small>Load a recording. Analyze the wave. Build the release world.</small></span>
                         </a>
+                        <a href="/album-concierge/" data-stat-event="open_album_concierge" data-stat-target="header" data-signal="CREATE YOUR ALBUM">
+                          <Icon name="heart" className="halo-menu-icon" /><span><strong>CREATE YOUR ALBUM</strong><small>Album Concierge · premium, gift, and collector editions</small></span>
+                        </a>
                         <a href="/finish-house/" data-stat-event="open_finish_house" data-stat-target="header" data-signal="MASTER + LICENSE">
                           <Icon name="check-circle" className="halo-menu-icon" /><span><strong>FINISH HOUSE</strong><small>Mix to master to licensing-ready package</small></span>
                         </a>
@@ -3188,6 +3222,44 @@
                     {!identityUser && <button type="button" onClick={() => openIdentity('signup', 'Your membership carries your profile, follows, and recognition from show to show.')} className="absolute bottom-5 right-5 z-20 hidden rounded-full border border-white/10 bg-black/35 px-4 py-2 text-[8px] font-black uppercase tracking-[.18em] text-white/55 backdrop-blur transition hover:border-white/25 hover:text-white md:inline-flex">Community access</button>}
                   </section>
 
+                  <section className="relative overflow-hidden rounded-[2rem] border border-[#cfa76a]/25 bg-[#0e0c09] shadow-[0_30px_90px_rgba(0,0,0,.38)]" aria-labelledby="concierge-promo-title">
+                    <div className="grid lg:grid-cols-2">
+                      <div className="flex flex-col justify-between p-7 md:p-10 lg:border-r lg:border-[#cfa76a]/15">
+                        <div>
+                          <p className="text-[9px] font-black uppercase tracking-[.3em] text-[#cfa76a]">New / Premium experience</p>
+                          <h2 id="concierge-promo-title" className="mt-5 font-sans-alt text-3xl font-black uppercase leading-[.9] tracking-[-.03em] text-[#f1ede4] md:text-5xl">Turn your story<br/>into an album<br/><span style={{fontStyle:'italic',fontFamily:'Georgia,serif',textTransform:'none',fontWeight:'normal',fontSize:'1.05em',letterSpacing:'-.01em'}}>worth keeping.</span></h2>
+                          <p className="mt-5 max-w-md text-sm leading-7 text-[#a6a096]">Album Concierge is a premium guided experience that helps you shape a personal album concept — complete with song ideas, tracklist, cover art direction, and a keepsake-worthy dedication.</p>
+                          <p className="mt-3 max-w-md text-xs leading-6 text-[#8b8579]">Build Your Album now: start your own album, build a gift album for someone you love, or explore collector edition details designed to be treasured.</p>
+                          <div className="mt-7 flex flex-wrap gap-3">
+                            <a href="/album-concierge/" data-stat-event="open_album_concierge" data-stat-target="promo_section" className="inline-flex items-center gap-2 rounded-full bg-[#cfa76a] px-6 py-3 text-[10px] font-black uppercase tracking-[.16em] text-[#0e0c09] transition hover:opacity-90">
+                              Start your album
+                            </a>
+                            <a href="/album-concierge/?purpose=gift" data-stat-event="open_album_concierge" data-stat-target="promo_section_gift" className="inline-flex items-center gap-2 rounded-full border border-[#cfa76a]/30 px-6 py-3 text-[10px] font-black uppercase tracking-[.16em] text-[#cfa76a] transition hover:border-[#cfa76a]/60">
+                              Build a gift album
+                            </a>
+                            <a href="/album-concierge/?purpose=collector" data-stat-event="open_album_concierge" data-stat-target="promo_section_collector" className="inline-flex items-center gap-2 rounded-full border border-white/15 px-6 py-3 text-[10px] font-black uppercase tracking-[.16em] text-[#f1ede4] transition hover:border-white/35">
+                              Explore collector edition
+                            </a>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-px overflow-hidden border-t border-[#cfa76a]/15 bg-[#cfa76a]/10 lg:border-t-0">
+                        {[
+                          ['🎵', 'Album concept', 'A complete idea built around your story and mood'],
+                          ['🎼', 'Song ideas', '8–10 original track concepts with mood notes'],
+                          ['🎨', 'Cover art direction', 'A visual identity matched to the feeling'],
+                          ['✉️', 'Collector edition', 'Keepsake-ready dedication and album details for gifting or collecting']
+                        ].map(([icon, title, desc]) => (
+                          <div key={title} className="flex flex-col gap-2 bg-[#0e0c09]/80 p-5">
+                            <span className="text-2xl leading-none">{icon}</span>
+                            <strong className="text-[9px] font-black uppercase tracking-[.18em] text-[#cfa76a]">{title}</strong>
+                            <p className="text-[11px] leading-5 text-[#6d6860]">{desc}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </section>
+
                   <section className="relative overflow-hidden rounded-[2rem] border border-white/10 bg-[#0a0b0d] shadow-[0_30px_90px_rgba(0,0,0,.38)]" aria-labelledby="halo-engine-title">
                     <div className="absolute inset-y-0 left-[42%] hidden w-px bg-gradient-to-b from-transparent via-amber-300/30 to-transparent lg:block"></div>
                     <div className="grid lg:grid-cols-[.72fr_1.28fr]">
@@ -3251,7 +3323,7 @@
                         </div>
                         <h2 id="new-release-title" className="mt-4 font-sans-alt text-5xl font-black uppercase leading-[.82] tracking-[-.04em] text-white sm:text-6xl">{NEW_RELEASE.title}</h2>
                         <p className="mt-3 font-serif text-2xl italic text-amber-100/80">{NEW_RELEASE.artist}</p>
-                        <p className="mt-4 max-w-xl text-xs leading-5 text-gray-400">The newest Owen Anthony signal is live. Open the official release page to stream it, save it, and choose your platform.</p>
+                        <p className="mt-4 max-w-xl text-xs leading-5 text-gray-400">The newest Owen Anthony signal is live. Open the official release page to save it, share it, and choose your platform.</p>
                       </div>
                       <div className="flex items-center border-t border-white/10 p-6 md:border-l md:border-t-0 md:p-8">
                         <a
@@ -3538,6 +3610,11 @@
                         <span className="text-[10px] font-black tracking-[0.24em] text-amber-400">06 / GROW</span>
                         <strong className="mt-8 block text-xl text-white">Find an opportunity</strong>
                         <span className="mt-2 block font-sans-alt text-xs leading-5 text-gray-500">Artists can connect prepared music with active industry calls.</span>
+                      </a>
+                      <a href="/mixes/#library" data-stat-event="open_halo_x_mixes" data-stat-target="fan_pathways" className="group min-h-48 rounded-2xl border border-fuchsia-900/50 bg-gradient-to-b from-fuchsia-950/30 to-black/20 p-5 text-left transition hover:-translate-y-1 hover:border-fuchsia-400">
+                        <span className="text-[10px] font-black tracking-[0.24em] text-fuchsia-400">07 / STREAM</span>
+                        <strong className="mt-8 block text-xl text-white">Browse the Mix Cloud</strong>
+                        <span className="mt-2 block font-sans-alt text-xs leading-5 text-gray-500">Jump straight to published HALO X mixes, long plays, and the listener library.</span>
                       </a>
                     </div>
                   </section>
@@ -4100,8 +4177,14 @@
                                   <label className="text-[7px] font-black uppercase tracking-wider text-gray-500">Release title<input value={campaignDraft.title} maxLength="160" onChange={event => updateCampaignDraft('title', event.target.value)} placeholder="Hit That Beat" className="mt-2 w-full rounded-xl border border-white/10 bg-black/40 px-3 py-3 text-[10px] normal-case text-white outline-none placeholder:text-gray-700 focus:border-lime-300/50" /></label>
                                   <label className="text-[7px] font-black uppercase tracking-wider text-gray-500">Artist<input value={campaignDraft.artist} maxLength="120" onChange={event => updateCampaignDraft('artist', event.target.value)} placeholder="Owen Anthony" className="mt-2 w-full rounded-xl border border-white/10 bg-black/40 px-3 py-3 text-[10px] normal-case text-white outline-none placeholder:text-gray-700 focus:border-lime-300/50" /></label>
                                   <label className="text-[7px] font-black uppercase tracking-wider text-gray-500">Release date<input type="date" value={campaignDraft.releaseDate || ''} onChange={event => updateCampaignDraft('releaseDate', event.target.value)} className="mt-2 w-full rounded-xl border border-white/10 bg-black/40 px-3 py-3 text-[10px] normal-case text-white outline-none focus:border-lime-300/50" /></label>
-                                  <label className="text-[7px] font-black uppercase tracking-wider text-gray-500">Artwork URL<input value={campaignDraft.artwork} maxLength="1000" onChange={event => updateCampaignDraft('artwork', event.target.value)} placeholder="/assets/releases/cover.jpg" className="mt-2 w-full rounded-xl border border-white/10 bg-black/40 px-3 py-3 text-[10px] normal-case text-white outline-none placeholder:text-gray-700 focus:border-lime-300/50" /></label>
+                                  <label className="text-[7px] font-black uppercase tracking-wider text-gray-500">Imported DistroKid artwork<input value={campaignDraft.importedArtwork || ''} maxLength="1000" onChange={event => updateCampaignDraft('importedArtwork', event.target.value)} placeholder="https://distrokid.imgix.net/..." className="mt-2 w-full rounded-xl border border-white/10 bg-black/40 px-3 py-3 text-[10px] normal-case text-white outline-none placeholder:text-gray-700 focus:border-lime-300/50" /></label>
                                 </div>
+
+                                <div className="mt-3 grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
+                                  <label className="text-[7px] font-black uppercase tracking-wider text-gray-500">Manual artwork override (optional)<input value={campaignDraft.artworkOverride || ''} maxLength="1000" onChange={event => updateCampaignDraft('artworkOverride', event.target.value)} placeholder="/assets/releases/cover.jpg" className="mt-2 w-full rounded-xl border border-white/10 bg-black/40 px-3 py-3 text-[10px] normal-case text-white outline-none placeholder:text-gray-700 focus:border-lime-300/50" /></label>
+                                  <button type="button" onClick={() => updateCampaignDraft('artworkOverride', '')} className="rounded-xl border border-white/10 px-4 py-3 text-[8px] font-black uppercase tracking-widest text-gray-300 hover:border-lime-300/40 hover:text-white">Use imported image</button>
+                                </div>
+                                <p className="mt-2 text-[9px] leading-4 text-gray-500">Live artwork uses manual override → imported DistroKid artwork → HALO fallback. Re-syncing the imported image will not replace a manual override.</p>
 
                                 <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-5">{[
                                   ['officialUrl', 'Primary / HyperFollow', 'https://distrokid.com/hyperfollow/...'],
@@ -4142,11 +4225,14 @@
                               </div>}
                             </section>}
                             <section className="overflow-hidden rounded-2xl border border-white/10 bg-black/50">
-                              <img src={releasePack.release.artwork || '/assets/releases/the-cold-is-lasting-longer.jpg'} alt={`${releasePack.release.title} cover artwork`} className="aspect-square w-full object-cover" width="1024" height="1024" />
+                              <div className="release-artwork-frame" data-artwork-frame>
+                                <img src={activeReleaseArtwork.src} alt={`${releasePack.release.title} cover artwork`} className="release-artwork-image" width="1024" height="1024" data-release-artwork data-artwork-fallback={activeReleaseArtwork.fallback} />
+                              </div>
                               <div className="p-4">
                                 <p className="text-[8px] font-black uppercase tracking-[.25em] text-cyan-300">{releasePack.release.artist} // Advance signal</p>
                                 <h4 className="mt-2 text-2xl font-black leading-none text-white">{releasePack.release.title}</h4>
                                 <p className="mt-3 text-[10px] leading-5 text-gray-400">{releasePack.release.pitch}</p>
+                                <p className="mt-3 text-[8px] font-black uppercase tracking-[.22em] text-gray-500">Artwork source · {releasePack.release.artworkSource || 'fallback'}</p>
                                 <a href={`/api/release-link?slug=${encodeURIComponent(releasePack.release.id)}&audience=fan`} target="_blank" rel="noopener noreferrer" data-stat-event="open_featured_release" data-stat-target="selector_room" className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.05] px-4 py-3 text-[9px] font-black uppercase tracking-widest text-white hover:border-cyan-300/40 hover:bg-cyan-300/10">Open official release <Icon name="external-link" className="h-3.5 w-3.5" /></a>
                               </div>
                             </section>
@@ -4185,7 +4271,7 @@
                                         <strong className="mt-2 max-w-full truncate text-[9px] uppercase tracking-wider text-white">{socialMediaFile ? socialMediaFile.name : 'Release artwork ready'}</strong>
                                         <span className="mt-1 text-[8px] text-gray-600">{socialMediaFile ? 'Custom media attached · tap to replace' : 'Included automatically · tap to replace with a clip'}</span>
                                       </label>
-                                      <a href={releasePack.release.artwork || '/assets/releases/the-cold-is-lasting-longer.jpg'} download={`${releasePack.release.artist}-${releasePack.release.title}-social-card.jpg`} className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-white/10 px-3 py-2 text-[8px] font-black uppercase tracking-widest text-gray-300 transition hover:border-white/30 hover:text-white"><Icon name="folder" className="h-3.5 w-3.5" />Download social card</a>
+                                      <a href={activeReleaseArtwork.src} download={`${releasePack.release.artist}-${releasePack.release.title}-social-card.jpg`} className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-white/10 px-3 py-2 text-[8px] font-black uppercase tracking-widest text-gray-300 transition hover:border-white/30 hover:text-white"><Icon name="folder" className="h-3.5 w-3.5" />Download social card</a>
                                     </div>
 
                                     <div className="rounded-xl border border-white/10 bg-black/45 p-3">
@@ -4482,6 +4568,30 @@
                                   <input aria-label="Favorite genres" value={profileDraft?.favoriteGenres || ''} onChange={event => setProfileDraft(previous => ({...previous, favoriteGenres: event.target.value}))} placeholder="Genres, comma separated" className="rounded-lg border border-white/10 bg-black/50 px-3 py-2 text-[11px] text-white focus:border-amber-400 focus:outline-none" />
                                 </div>
                                 <input aria-label="Currently vibing to" value={profileDraft?.vibeStatus || ''} onChange={event => setProfileDraft(previous => ({...previous, vibeStatus: event.target.value}))} placeholder="Currently vibing to…" className="mt-2 w-full rounded-lg border border-white/10 bg-black/50 px-3 py-2 text-[11px] text-white focus:border-rose-400 focus:outline-none" />
+                                <div className="mt-4 border-t border-white/10 pt-4">
+                                  <p className="mb-2 text-[9px] font-black uppercase tracking-widest text-purple-300">Persona</p>
+                                  <div className="grid grid-cols-[1fr_1fr] gap-2">
+                                    <input aria-label="Persona name" value={profileDraft?.personaName || ''} onChange={event => setProfileDraft(previous => ({...previous, personaName: event.target.value}))} placeholder="Persona name (optional)" maxLength="48" className="col-span-2 rounded-lg border border-white/10 bg-black/50 px-3 py-2 text-[11px] text-white focus:border-purple-400 focus:outline-none" />
+                                    <select aria-label="Persona archetype" value={profileDraft?.personaType || ''} onChange={event => setProfileDraft(previous => ({...previous, personaType: event.target.value}))} className="rounded-lg border border-white/10 bg-black/50 px-3 py-2 text-[11px] text-white focus:border-purple-400 focus:outline-none">
+                                      <option value="">Archetype…</option>
+                                      <option value="listener">Listener</option>
+                                      <option value="creator">Creator</option>
+                                      <option value="dj">DJ</option>
+                                      <option value="collector">Collector</option>
+                                      <option value="advocate">Advocate</option>
+                                      <option value="wanderer">Wanderer</option>
+                                      <option value="oracle">Oracle</option>
+                                      <option value="architect">Architect</option>
+                                    </select>
+                                    <select aria-label="Visibility level" value={profileDraft?.visibilityLevel || 'community'} onChange={event => setProfileDraft(previous => ({...previous, visibilityLevel: event.target.value}))} className="rounded-lg border border-white/10 bg-black/50 px-3 py-2 text-[11px] text-white focus:border-purple-400 focus:outline-none">
+                                      <option value="public">Public</option>
+                                      <option value="community">Community</option>
+                                      <option value="circle">Circle</option>
+                                      <option value="private">Private</option>
+                                    </select>
+                                  </div>
+                                  <textarea aria-label="Persona bio" value={profileDraft?.personaBio || ''} onChange={event => setProfileDraft(previous => ({...previous, personaBio: event.target.value}))} placeholder="A short persona description or bio… (optional)" maxLength="280" rows="3" className="mt-2 w-full rounded-lg border border-white/10 bg-black/50 px-3 py-2 text-[11px] text-white focus:border-purple-400 focus:outline-none resize-none" />
+                                </div>
                                 <button type="submit" className="mt-3 rounded-full bg-amber-300 px-4 py-2 text-[9px] font-black uppercase tracking-widest text-black transition hover:bg-amber-200">Save profile</button>
                               </form> : <div className="relative overflow-hidden rounded-2xl border border-amber-400/25 bg-black/30 p-5"><div className="absolute -right-16 -top-16 h-40 w-40 rounded-full bg-amber-300/10 blur-3xl"></div><div className="relative"><p className="text-[9px] font-black uppercase tracking-[0.26em] text-amber-300">Guest pass</p><h4 className="mt-3 text-xl font-black text-white">The room is open. Your place in it can be permanent.</h4><p className="mt-2 max-w-md text-xs leading-5 text-gray-400">Explore tonight’s people and conversation. Join free when you are ready to chat, follow, vote, and carry your recognition into the next show.</p><button type="button" onClick={() => openIdentity('signup', 'Membership protects your identity and keeps your community history between shows.')} className="mt-5 rounded-full bg-amber-300 px-5 py-2.5 text-[10px] font-black uppercase tracking-widest text-black transition hover:bg-amber-200">Claim your place</button></div></div>}
 

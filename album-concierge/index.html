@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Album Concierge — HALO World</title>
+  <meta name="description" content="Turn your story into a custom album concept you'll treasure. Album Concierge guides you through a premium creative experience.">
+  <meta name="theme-color" content="#0e0d0b">
+  <link rel="manifest" href="/app.webmanifest">
+  <link rel="apple-touch-icon" href="/assets/halo-app-icon-180.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Instrument+Serif:ital@0;1&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/halo-brand.css">
+  <link rel="stylesheet" href="/accessibility.css">
+  <link rel="stylesheet" href="/mobile-navigation.css">
+  <link rel="stylesheet" href="/album-concierge/album-concierge.css">
+  <script src="/stats.js" defer></script>
+  <script src="/site-monitor.js" defer></script>
+  <script src="/accessibility.js" defer></script>
+  <script src="/mobile-navigation.js" defer></script>
+  <script src="/identity.js" type="module"></script>
+  <script src="/album-concierge/album-concierge.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#workspace">Skip to Album Concierge</a>
+
+  <div class="ac-wrap">
+    <header class="ac-header">
+      <a class="ac-wordmark" href="/">
+        <img src="/assets/halo-logo-mark.webp" alt="">
+        <span><strong>HALO</strong><small>Album Concierge</small></span>
+      </a>
+      <nav class="ac-header-nav" aria-label="Album Concierge navigation">
+        <a href="/release-house/">Release House</a>
+        <a href="/dreamweaver-lab/">Song Lab</a>
+        <a href="/finish-house/">Finish House</a>
+        <a href="/">HALO World</a>
+      </nav>
+      <button class="account-button" id="accountButton" type="button">Join / sign in</button>
+    </header>
+
+    <main>
+      <section class="ac-hero" aria-labelledby="ac-hero-title">
+        <p class="ac-eyebrow">Premium creative experience / HALO World</p>
+        <h1 id="ac-hero-title">Turn your story into an album<br>worth <em>keeping.</em></h1>
+        <p class="ac-hero-intro">Album Concierge helps you shape a personal album concept with song ideas, cover art direction, and a keepsake-worthy presentation. Share a feeling, memory, or moment — we'll do the rest.</p>
+        <div class="ac-hero-actions">
+          <button class="btn-primary" id="startFlowBtn" type="button" data-stat-event="open_album_concierge" data-stat-target="hero">
+            Start your album
+          </button>
+          <button class="btn-ghost" id="giftFlowBtn" type="button" data-stat-event="open_album_concierge" data-stat-target="hero_gift">
+            Build a gift album
+          </button>
+        </div>
+      </section>
+
+      <div class="ac-value-strip" aria-label="What Album Concierge gives you">
+        <div class="ac-value-strip-inner">
+          <div class="ac-value-item">
+            <strong>Album concept</strong>
+            <p>A complete album idea built around your story and mood.</p>
+          </div>
+          <div class="ac-value-item">
+            <strong>Song ideas</strong>
+            <p>8–10 original track concepts with titles and mood notes.</p>
+          </div>
+          <div class="ac-value-item">
+            <strong>Cover art direction</strong>
+            <p>Visual identity and art prompt matched to the feeling.</p>
+          </div>
+          <div class="ac-value-item">
+            <strong>Dedication</strong>
+            <p>A personal liner note message ready to keep or share.</p>
+          </div>
+          <div class="ac-value-item">
+            <strong>Collector edition</strong>
+            <p>Upgrade to a polished keepsake presentation.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── Notice banner ── -->
+      <div id="workspace" class="ac-wrap" style="padding-bottom:0">
+        <div style="max-width:68rem;margin:0 auto;width:100%;padding:0 clamp(1.25rem,5vw,4.5rem)">
+          <div class="ac-notice" id="acNotice" role="alert" aria-live="polite"></div>
+        </div>
+      </div>
+
+      <!-- ── Concierge guided flow ── -->
+      <section id="concierge" class="ac-wrap" style="padding:0" aria-label="Album Concierge flow">
+        <div id="workspace-inner" style="max-width:68rem;margin:0 auto;width:100%;padding:1.5rem clamp(1.25rem,5vw,4.5rem) 3rem">
+
+          <!-- Stepper -->
+          <nav class="ac-stepper" aria-label="Concierge steps" id="acStepper">
+            <div class="ac-step" data-step="1" role="listitem">
+              <span class="ac-step-dot" aria-hidden="true"></span>
+              <span>Purpose</span>
+            </div>
+            <div class="ac-step-sep" aria-hidden="true"></div>
+            <div class="ac-step" data-step="2" role="listitem">
+              <span class="ac-step-dot" aria-hidden="true"></span>
+              <span>Emotion</span>
+            </div>
+            <div class="ac-step-sep" aria-hidden="true"></div>
+            <div class="ac-step" data-step="3" role="listitem">
+              <span class="ac-step-dot" aria-hidden="true"></span>
+              <span>Sound</span>
+            </div>
+            <div class="ac-step-sep" aria-hidden="true"></div>
+            <div class="ac-step" data-step="4" role="listitem">
+              <span class="ac-step-dot" aria-hidden="true"></span>
+              <span>Story</span>
+            </div>
+            <div class="ac-step-sep" aria-hidden="true"></div>
+            <div class="ac-step" data-step="5" role="listitem">
+              <span class="ac-step-dot" aria-hidden="true"></span>
+              <span>Result</span>
+            </div>
+          </nav>
+
+          <!-- Step 1: Purpose -->
+          <div class="ac-flow" id="step-1" aria-labelledby="step1-title">
+            <p class="ac-eyebrow">Step 1 of 4</p>
+            <h2 class="ac-flow-title" id="step1-title">Who is this album for?</h2>
+            <p class="ac-flow-helper">Choose the purpose that best describes what you're creating.</p>
+            <div class="ac-choice-grid" role="group" aria-labelledby="step1-title">
+              <button class="ac-choice" data-value="self" type="button" aria-pressed="false">
+                <strong>Just for me</strong>
+                <small>A personal project or chapter of my life</small>
+              </button>
+              <button class="ac-choice" data-value="gift" type="button" aria-pressed="false">
+                <strong>A gift</strong>
+                <small>Made for someone special</small>
+              </button>
+              <button class="ac-choice" data-value="fans" type="button" aria-pressed="false">
+                <strong>My fans</strong>
+                <small>A collector release for the people who follow my work</small>
+              </button>
+              <button class="ac-choice" data-value="project" type="button" aria-pressed="false">
+                <strong>A creative project</strong>
+                <small>Shaping a concept for an artist or collaboration</small>
+              </button>
+            </div>
+            <div class="ac-flow-nav">
+              <span></span>
+              <button class="btn-primary" id="step1Next" type="button" disabled>Continue</button>
+            </div>
+          </div>
+
+          <!-- Step 2: Emotion -->
+          <div class="ac-flow" id="step-2" aria-labelledby="step2-title">
+            <p class="ac-eyebrow">Step 2 of 4</p>
+            <h2 class="ac-flow-title" id="step2-title">What should it feel like?</h2>
+            <p class="ac-flow-helper">Choose one or more emotional directions. These guide the tone of your album concept.</p>
+            <div class="ac-chip-grid" role="group" aria-labelledby="step2-title">
+              <button class="ac-chip" data-value="Healing" type="button" aria-pressed="false">Healing</button>
+              <button class="ac-chip" data-value="Romantic" type="button" aria-pressed="false">Romantic</button>
+              <button class="ac-chip" data-value="Nostalgic" type="button" aria-pressed="false">Nostalgic</button>
+              <button class="ac-chip" data-value="Powerful" type="button" aria-pressed="false">Powerful</button>
+              <button class="ac-chip" data-value="Celebratory" type="button" aria-pressed="false">Celebratory</button>
+              <button class="ac-chip" data-value="Dreamy" type="button" aria-pressed="false">Dreamy</button>
+              <button class="ac-chip" data-value="Dark" type="button" aria-pressed="false">Dark</button>
+              <button class="ac-chip" data-value="Cinematic" type="button" aria-pressed="false">Cinematic</button>
+              <button class="ac-chip" data-value="Tender" type="button" aria-pressed="false">Tender</button>
+              <button class="ac-chip" data-value="Euphoric" type="button" aria-pressed="false">Euphoric</button>
+            </div>
+            <div class="ac-flow-nav">
+              <button class="btn-ghost" id="step2Back" type="button">Back</button>
+              <button class="btn-primary" id="step2Next" type="button" disabled>Continue</button>
+            </div>
+          </div>
+
+          <!-- Step 3: Sound -->
+          <div class="ac-flow" id="step-3" aria-labelledby="step3-title">
+            <p class="ac-eyebrow">Step 3 of 4</p>
+            <h2 class="ac-flow-title" id="step3-title">How should it sound?</h2>
+            <p class="ac-flow-helper">Pick the sonic direction, or let us suggest one based on your other choices.</p>
+            <div class="ac-choice-grid" role="group" aria-labelledby="step3-title">
+              <button class="ac-choice" data-value="Soft and intimate" type="button" aria-pressed="false">
+                <strong>Soft and intimate</strong>
+                <small>Quiet, personal, close-mic energy</small>
+              </button>
+              <button class="ac-choice" data-value="Raw and emotional" type="button" aria-pressed="false">
+                <strong>Raw and emotional</strong>
+                <small>Unpolished, honest, stripped back</small>
+              </button>
+              <button class="ac-choice" data-value="Bold and anthemic" type="button" aria-pressed="false">
+                <strong>Bold and anthemic</strong>
+                <small>Stadium-ready, sweeping, powerful</small>
+              </button>
+              <button class="ac-choice" data-value="Dreamy and atmospheric" type="button" aria-pressed="false">
+                <strong>Dreamy and atmospheric</strong>
+                <small>Layered textures, ambient, spatial</small>
+              </button>
+              <button class="ac-choice" data-value="Experimental and modern" type="button" aria-pressed="false">
+                <strong>Experimental and modern</strong>
+                <small>Genre-defying, forward-thinking, unexpected</small>
+              </button>
+            </div>
+            <div class="ac-flow-nav">
+              <button class="btn-ghost" id="step3Back" type="button">Back</button>
+              <button class="btn-primary" id="step3Next" type="button" disabled>Continue</button>
+            </div>
+          </div>
+
+          <!-- Step 4: Story -->
+          <div class="ac-flow" id="step-4" aria-labelledby="step4-title">
+            <p class="ac-eyebrow">Step 4 of 4</p>
+            <h2 class="ac-flow-title" id="step4-title">Tell us the story.</h2>
+            <p class="ac-flow-helper">A memory, a relationship, a season of life, a dream — anything that matters. The more you share, the more personal your album will feel.</p>
+            <textarea
+              class="ac-story-field"
+              id="storyInput"
+              placeholder="e.g. This album is about the two years after I moved cities alone. It should feel like late nights, the first time a new place starts to feel like home, and the friends I made along the way…"
+              maxlength="4000"
+              aria-label="Tell the story behind your album"
+              rows="7"
+            ></textarea>
+            <div class="ac-flow-nav">
+              <button class="btn-ghost" id="step4Back" type="button">Back</button>
+              <button class="btn-primary" id="step4Generate" type="button" disabled>Build my album</button>
+            </div>
+          </div>
+
+          <!-- Loading -->
+          <div class="ac-loading" id="acLoading" aria-live="polite" aria-label="Generating album concept">
+            <div class="ac-loading-ring" aria-hidden="true"></div>
+            <p class="ac-loading-label" id="acLoadingLabel">Crafting your album story…</p>
+          </div>
+
+          <!-- Results -->
+          <div class="ac-results" id="acResults" aria-labelledby="results-heading">
+            <div class="ac-results-header">
+              <p class="ac-eyebrow">Your album concept is ready</p>
+              <h2 id="results-heading">Here's what we built.</h2>
+              <p id="resultsThemeIntro"></p>
+            </div>
+
+            <!-- Title selector -->
+            <div style="margin-bottom:1.25rem">
+              <p class="ac-panel-label" style="margin-bottom:.65rem">Choose a title</p>
+              <div class="ac-title-chips" id="titleChips" role="group" aria-label="Album title options"></div>
+            </div>
+
+            <div class="ac-results-grid">
+              <!-- Cover preview -->
+              <div class="ac-cover-panel" aria-label="Album cover preview">
+                <div class="ac-cover-icon" aria-hidden="true">🎵</div>
+                <div class="ac-cover-title">
+                  <strong id="coverTitleDisplay">—</strong>
+                  <small>Album Concept</small>
+                </div>
+                <p class="ac-cover-prompt-note" id="coverPromptNote"></p>
+              </div>
+
+              <!-- Info panel -->
+              <div class="ac-info-panel">
+                <div class="ac-panel-section">
+                  <p class="ac-panel-label">Theme</p>
+                  <p class="ac-panel-text" id="themeText"></p>
+                </div>
+                <div class="ac-panel-section">
+                  <p class="ac-panel-label">Tracklist</p>
+                  <ol class="ac-tracklist" id="tracklistEl" aria-label="Track ideas"></ol>
+                </div>
+              </div>
+            </div>
+
+            <!-- Dedication -->
+            <blockquote class="ac-dedication" id="dedicationEl"></blockquote>
+
+            <!-- Result actions -->
+            <div class="ac-result-actions">
+              <button class="btn-primary" id="savePrivateBtn" type="button">Save privately</button>
+              <button class="btn-ghost" id="shareBtn" type="button">Share</button>
+              <button class="btn-ghost" id="giftBtn" type="button">Send as a gift</button>
+              <button class="btn-ghost" id="restartBtn" type="button">Start over</button>
+            </div>
+
+            <!-- Premium upsell -->
+            <div class="ac-premium-card" role="complementary" aria-label="Upgrade to collector edition">
+              <div class="ac-premium-card-text">
+                <span class="ac-premium-badge">Collector Edition</span>
+                <h3>Make it a keepsake.</h3>
+                <p>Add custom cover artwork, a dedication page, and a collector-grade presentation designed to feel like a true album you'd hold in your hands.</p>
+                <ul class="ac-premium-list">
+                  <li>Custom cover art</li>
+                  <li>Dedication page</li>
+                  <li>Polished keepsake layout</li>
+                  <li>Private vault storage</li>
+                  <li>Printable booklet</li>
+                </ul>
+                <button class="btn-premium" id="upgradeBtn" type="button" data-stat-event="open_album_concierge" data-stat-target="premium_upsell">
+                  Unlock collector edition
+                </button>
+              </div>
+            </div>
+
+          </div>
+          <!-- /ac-results -->
+
+        </div>
+      </section>
+    </main>
+
+    <footer class="ac-footer">
+      <span class="ac-footer-copy">© HALO World — Album Concierge</span>
+      <nav class="ac-footer-links" aria-label="Footer navigation">
+        <a href="/">HALO World</a>
+        <a href="/release-house/">Release House</a>
+        <a href="/support/">Support</a>
+      </nav>
+    </footer>
+  </div>
+</body>
+</html>

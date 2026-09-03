@@ -92,7 +92,8 @@ function isOptionalFallbackMetadataError(error) {
   const message = String(error instanceof Error ? error.message : error || "").toLowerCase();
   if (!message.includes("does not exist")) return false;
   const missingFallbackRelation = message.includes("halo_radio_tracks");
-  const missingFallbackReleaseLink = missingFallbackRelation && message.includes("release_id");
+  const missingFallbackReleaseLink = message.includes("track.release_id")
+    || (missingFallbackRelation && message.includes("release_id"));
   const missingFallbackAlias = message.includes("dreamweaver_fallback_track_id");
   return missingFallbackRelation || missingFallbackReleaseLink || missingFallbackAlias;
 }
@@ -279,12 +280,16 @@ async function loadCatalogRows(db) {
   try {
     return await queryCatalogRowsWithFallback(db);
   } catch (error) {
-    if (isOptionalVideoMetadataError(error)) {
+    const optionalFallbackMetadataMissing = isOptionalFallbackMetadataError(error);
+    const optionalVideoMetadataMissing = isOptionalVideoMetadataError(error);
+    if (optionalFallbackMetadataMissing) {
+      console.warn("HALO release catalog optional fallback lookup unavailable; serving published releases without fallback tracks");
+    }
+    if (optionalVideoMetadataMissing) {
       console.warn("HALO release catalog optional video columns unavailable; serving published releases without video metadata");
       return await queryCatalogRowsWithoutFallbackOrVideo(db);
     }
-    if (!isOptionalFallbackMetadataError(error)) throw error;
-    console.warn("HALO release catalog optional fallback lookup unavailable; serving published releases without fallback tracks");
+    if (!optionalFallbackMetadataMissing) throw error;
   }
   try {
     return await queryCatalogRowsWithoutFallback(db);
@@ -294,6 +299,12 @@ async function loadCatalogRows(db) {
     return await queryCatalogRowsWithoutFallbackOrVideo(db);
   }
 }
+
+export const __test = {
+  loadCatalogRows,
+  isOptionalFallbackMetadataError,
+  isOptionalVideoMetadataError
+};
 
 export default async function releaseCatalogHandler(request) {
   if (request.method !== "GET") {

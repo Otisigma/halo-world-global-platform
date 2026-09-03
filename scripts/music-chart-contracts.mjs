@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
+import { __test as releaseCatalogTest } from "../netlify/functions/release-catalog.mjs";
 
 const root = resolve(import.meta.dirname, "..");
 const [page, client, styles, catalogApi] = await Promise.all([
@@ -29,6 +30,38 @@ assert.match(catalogApi, /video_url/, "catalog API must expose release video URL
 assert.match(catalogApi, /optional fallback lookup unavailable/, "catalog API must keep serving published releases when fallback-track metadata is unavailable");
 assert.match(catalogApi, /optional video columns unavailable/, "catalog API must keep serving published releases when video metadata columns are unavailable");
 assert.match(catalogApi, /queryCatalogRowsWithoutFallbackOrVideo/, "catalog API must provide a no-video retry path for optional-metadata gaps");
+{
+  const calls = [];
+  const expectedRows = [{ id: "release-1" }];
+  const fallbackMissingDb = {
+    sql(strings) {
+      const query = strings.join("");
+      calls.push(query);
+      if (query.includes("LEFT JOIN LATERAL")) throw new Error('column track.release_id does not exist');
+      if (query.includes("''::text AS dreamweaver_fallback_track_id") && query.includes("release.video_url")) return expectedRows;
+      throw new Error("Unexpected query path");
+    }
+  };
+  const rows = await releaseCatalogTest.loadCatalogRows(fallbackMissingDb);
+  assert.deepEqual(rows, expectedRows, "catalog loader should retry without fallback lookup when release linkage metadata is missing");
+  assert.equal(calls.length, 2, "catalog loader should perform a two-step retry when fallback metadata is missing");
+}
+{
+  const calls = [];
+  const expectedRows = [{ id: "release-2" }];
+  const videoMissingDb = {
+    sql(strings) {
+      const query = strings.join("");
+      calls.push(query);
+      if (query.includes("LEFT JOIN LATERAL")) throw new Error('column release.video_url does not exist');
+      if (query.includes("''::text AS video_url")) return expectedRows;
+      throw new Error("Unexpected query path");
+    }
+  };
+  const rows = await releaseCatalogTest.loadCatalogRows(videoMissingDb);
+  assert.deepEqual(rows, expectedRows, "catalog loader should retry without video metadata columns when they are absent");
+  assert.equal(calls.length, 2, "catalog loader should skip the middle retry when video metadata is missing in the first query");
+}
 assert.match(styles, /\.chart-console/, "chart console must have a dedicated responsive layout");
 assert.match(styles, /\.chart-row\.is-active/, "chart rows must expose a selected state");
 

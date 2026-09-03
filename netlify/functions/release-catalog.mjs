@@ -85,11 +85,16 @@ function serializeRelease(row) {
 function isOptionalCatalogMetadataError(error) {
   const message = String(error instanceof Error ? error.message : error || "").toLowerCase();
   if (!message.includes("does not exist")) return false;
+  return isOptionalFallbackMetadataError(error) || isOptionalVideoMetadataError(error);
+}
+
+function isOptionalFallbackMetadataError(error) {
+  const message = String(error instanceof Error ? error.message : error || "").toLowerCase();
+  if (!message.includes("does not exist")) return false;
   const missingFallbackRelation = message.includes("halo_radio_tracks");
   const missingFallbackReleaseLink = missingFallbackRelation && message.includes("release_id");
   const missingFallbackAlias = message.includes("dreamweaver_fallback_track_id");
-  const missingVideoColumns = isOptionalVideoMetadataError(error);
-  return missingFallbackRelation || missingFallbackReleaseLink || missingFallbackAlias || missingVideoColumns;
+  return missingFallbackRelation || missingFallbackReleaseLink || missingFallbackAlias;
 }
 
 function isOptionalVideoMetadataError(error) {
@@ -274,7 +279,11 @@ async function loadCatalogRows(db) {
   try {
     return await queryCatalogRowsWithFallback(db);
   } catch (error) {
-    if (!isOptionalCatalogMetadataError(error)) throw error;
+    if (isOptionalVideoMetadataError(error)) {
+      console.warn("HALO release catalog optional video columns unavailable; serving published releases without video metadata");
+      return await queryCatalogRowsWithoutFallbackOrVideo(db);
+    }
+    if (!isOptionalFallbackMetadataError(error)) throw error;
     console.warn("HALO release catalog optional fallback lookup unavailable; serving published releases without fallback tracks");
   }
   try {

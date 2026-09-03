@@ -226,6 +226,10 @@ h1 em { color: var(--acid); font-family: var(--serif); font-weight: 400; text-tr
 .stage-video-fallback-copy small { color: var(--acid); font: 500 7px/1 var(--mono); letter-spacing: 0.12em; text-transform: uppercase; }
 .stage-video-fallback-copy strong { font-size: clamp(20px, 3vw, 28px); line-height: 1; }
 .stage-video-fallback-copy span { color: rgba(255,255,255,.82); font-size: 12px; line-height: 1.45; }
+.stage-video-fallback-link { width: fit-content; margin-top: 4px; padding: 10px 12px; border: 1px solid rgba(255,255,255,.28); color: white; background: rgba(7,9,8,.42); font: 500 8px/1 var(--mono); letter-spacing: 0.08em; text-transform: uppercase; text-decoration: none; }
+.stage-video-fallback-link:visited { color: white; }
+.stage-video-fallback-link:hover,
+.stage-video-fallback-link:focus-visible { border-color: var(--acid); color: var(--ink); background: var(--acid); outline: 2px solid var(--acid); outline-offset: 2px; }
 .stage-video-empty { margin-top: 24px; padding: 22px; border: 1px dashed #aaa99f; }
 .stage-video-empty span { color: #b63e15; font: 500 7px/1 var(--mono); letter-spacing: 0.12em; }
 .stage-video-empty strong { display: block; margin-top: 10px; font-size: 17px; }
@@ -254,6 +258,11 @@ h1 em { color: var(--acid); font-family: var(--serif); font-weight: 400; text-tr
   .stage-video-fallback-shell::after,
   .stage-video-fallback-image,
   .stage-video-fallback-mark { animation: none; }
+}
+
+@media (max-width: 640px) {
+  .stage-video-fallback-copy { width: 100%; max-width: none; }
+  .stage-video-fallback-mark { width: 58px; height: 58px; }
 }
 
 .catalog-controls { display: flex; align-items: end; gap: 16px; flex-wrap: wrap; }

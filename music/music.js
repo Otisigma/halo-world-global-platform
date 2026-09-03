@@ -182,16 +182,38 @@
     if (video.sourceType === "artwork_fallback") {
       const thumbnail = safeUrl(video.thumbnailUrl, releaseArtwork(release).src);
       const fallbackLabel = video.fallbackVisual === "cover" ? "Cover art motion" : "HALO logo motion";
-      return `<button class="stage-video-poster is-fallback" type="button" data-play-chart-video="${escapeHtml(video.id)}">
+      return `<button class="stage-video-poster is-fallback" type="button" data-play-chart-video="${escapeHtml(video.id)}" aria-label="${escapeHtml(`Open the ${fallbackLabel.toLowerCase()} for ${release.title}`)}">
         <img src="${escapeHtml(thumbnail)}" alt="" loading="lazy">
         <span class="video-play" aria-hidden="true">▶</span><span><small>${escapeHtml(fallbackLabel)}</small><strong>${escapeHtml(video.title)}</strong></span>
       </button>`;
     }
     const thumbnail = safeUrl(video.thumbnailUrl, releaseArtwork(release).src);
-    return `<button class="stage-video-poster" type="button" data-play-chart-video="${escapeHtml(video.id)}">
+    return `<button class="stage-video-poster" type="button" data-play-chart-video="${escapeHtml(video.id)}" aria-label="${escapeHtml(`Open the video ${video.title} for ${release.title}`)}">
       <img src="${escapeHtml(thumbnail)}" alt="" loading="lazy">
       <span class="video-play" aria-hidden="true">▶</span><span><small>Watch inside the chart</small><strong>${escapeHtml(video.title)}</strong></span>
     </button>`;
+  }
+
+  function embedPlaybackUrl(value) {
+    const embed = safeUrl(value);
+    if (!embed) return "";
+    try {
+      const url = new URL(embed);
+      const host = url.hostname.toLowerCase().replace(/\.$/, "");
+      const videoId = host === "youtu.be" || host.endsWith(".youtu.be")
+        ? url.pathname.split("/").filter(Boolean)[0] || ""
+        : host === "youtube.com" || host.endsWith(".youtube.com")
+          ? url.pathname.startsWith("/embed/")
+            ? url.pathname.split("/")[2] || ""
+            : url.pathname === "/watch"
+              ? url.searchParams.get("v") || ""
+              : ""
+          : "";
+      if (!videoId) return "";
+      return `https://www.youtube-nocookie.com/embed/${encodeURIComponent(videoId)}?${new URLSearchParams({ autoplay: "1", rel: "0" }).toString()}`;
+    } catch {
+      return "";
+    }
   }
 
   function renderChartStage(release, position) {
@@ -256,26 +278,32 @@
       const artwork = releaseArtwork(release);
       const thumbnail = safeUrl(selectedVideo.thumbnailUrl, artwork.src);
       const mark = safeUrl(fallbackVideoMark, "/assets/halo-logo-mark.webp");
+      const roomHref = safeUrl(release.kitUrl);
       const detail = selectedVideo.fallbackVisual === "cover"
         ? "Cover art motion fallback"
         : "HALO logo motion fallback";
       frame.className = "stage-video-frame stage-video-fallback-frame";
-      frame.innerHTML = `<div class="stage-video-fallback-shell" role="img" aria-label="${escapeHtml(`${release.title} fallback visual`)}">
+      frame.innerHTML = `<div class="stage-video-fallback-shell" role="group" aria-label="${escapeHtml(`${detail} for ${release.title} by ${release.artist || "HALO Music"}`)}">
         <img class="stage-video-fallback-image" src="${escapeHtml(thumbnail)}" alt="" data-release-artwork data-artwork-fallback="${escapeHtml(artwork.fallback)}">
         <div class="stage-video-fallback-mark" aria-hidden="true"><img src="${escapeHtml(mark)}" alt=""></div>
-        <div class="stage-video-fallback-copy"><small>${escapeHtml(detail)}</small><strong>${escapeHtml(release.title)}</strong><span>${escapeHtml(release.artist || "HALO Music")}</span></div>
+        <div class="stage-video-fallback-copy"><small>${escapeHtml(detail)}</small><strong>${escapeHtml(release.title)}</strong><span>${escapeHtml(release.artist || "HALO Music")}</span>${roomHref ? `<a class="stage-video-fallback-link" href="${escapeHtml(roomHref)}">Open release room</a>` : ""}</div>
       </div>`;
       wireArtwork(frame);
     } else {
       const source = safeUrl(selectedVideo.sourceUrl);
-      const embed = safeUrl(selectedVideo.embedUrl).replace("www.youtube.com", "www.youtube-nocookie.com");
+      const embed = embedPlaybackUrl(selectedVideo.embedUrl);
+      if ((selectedVideo.sourceType === "youtube" && !embed) || (selectedVideo.sourceType !== "youtube" && !source)) return;
       const player = selectedVideo.sourceType === "youtube"
-        ? `<iframe src="${escapeHtml(embed)}?autoplay=1&amp;rel=0" title="${escapeHtml(selectedVideo.title)}" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>`
+        ? `<iframe src="${escapeHtml(embed)}" title="${escapeHtml(selectedVideo.title)}" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>`
         : `<video src="${escapeHtml(source)}" controls autoplay playsinline></video>`;
       frame.className = "stage-video-frame";
       frame.innerHTML = player;
     }
     poster.replaceWith(frame);
+    if (selectedVideo.sourceType === "artwork_fallback") {
+      const fallbackLink = frame.querySelector(".stage-video-fallback-link");
+      if (fallbackLink) window.requestAnimationFrame(() => fallbackLink.focus());
+    }
     window.haloStats?.track("play_halo_video", {
       target: selectedVideo.id,
       track: state.activeReleaseId,

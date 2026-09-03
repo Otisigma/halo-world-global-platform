@@ -21,11 +21,17 @@ assert.match(catalogApi, /recent_listens/, "catalog API must expose rolling rece
 assert.match(catalogApi, /previous_listens/, "catalog API must expose the comparison window");
 assert.match(client, /rankedReleases/, "client must calculate interactive room rankings");
 assert.match(client, /artwork_fallback/, "chart must synthesize a fallback visual when no official video matches");
+assert.match(client, /artwork\.source === "fallback" \? "logo" : "cover"/, "chart fallback selection must keep separate logo and cover-art branches");
+assert.match(client, /fallbackVisual === "cover"/, "chart fallback playback must preserve the cover-art branch");
+assert.match(client, /host === "youtu\.be"/, "chart playback must normalize shortened YouTube hosts");
 assert.match(client, /youtube-nocookie\.com/, "chart video must use privacy-enhanced YouTube playback");
+assert.match(client, /new URLSearchParams\(\{ autoplay: "1", rel: "0" \}\)/, "chart video embeds must build a constrained playback query");
 assert.match(client, /data-play-chart-video/, "chart stage must support in-place video playback");
 assert.match(client, /stage-video-fallback-shell/, "chart fallback playback must render an in-place visual");
 assert.match(styles, /\.chart-console/, "chart console must have a dedicated responsive layout");
 assert.match(styles, /\.chart-row\.is-active/, "chart rows must expose a selected state");
 assert.match(styles, /\.stage-video-fallback-shell/, "chart fallback visual must have dedicated styling");
+assert.match(styles, /@media \(prefers-reduced-motion: reduce\)/, "chart fallback visual must respect reduced-motion preferences");
+assert.match(styles, /@media \(max-width: 640px\)/, "chart fallback visual must adapt on compact screens");
 
 console.log("Music chart contracts passed.");

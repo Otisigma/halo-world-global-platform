@@ -169,15 +169,31 @@
     };
   }
 
-  function videoForRelease(release) {
+  function privacyEnhancedEmbedUrl(value) {
+    const embed = safeUrl(value);
+    if (!embed) return "";
+    try {
+      const url = new URL(embed);
+      if (url.hostname === "youtube.com" || url.hostname.endsWith(".youtube.com")) url.hostname = "www.youtube-nocookie.com";
+      return url.href;
+    } catch {
+      return embed.replace("www.youtube.com", "www.youtube-nocookie.com");
+    }
+  }
+
+  function releaseMatchesVideoCandidate(release, videoItem) {
     const title = normalized(release.title);
     const artist = normalized(release.artist);
+    const videoTitle = normalized(videoItem.title);
+    const videoArtist = normalized(videoItem.artistName);
+    return (title && (videoTitle.includes(title) || title.includes(videoTitle)))
+      || (artist && videoArtist === artist && videoTitle.split(" ").some(word => word.length > 4 && title.includes(word)));
+  }
+
+  function videoForRelease(release) {
     const video = state.videos.find(videoItem => {
       if (satelliteVideoFallbackEnabled && !isPlayableVideo(videoItem)) return false;
-      const videoTitle = normalized(videoItem.title);
-      const videoArtist = normalized(videoItem.artistName);
-      return (title && (videoTitle.includes(title) || title.includes(videoTitle)))
-        || (artist && videoArtist === artist && videoTitle.split(" ").some(word => word.length > 4 && title.includes(word)));
+      return releaseMatchesVideoCandidate(release, videoItem);
     });
     return video || fallbackVideoForRelease(release);
   }
@@ -189,7 +205,7 @@
     const thumbnail = safeUrl(video.thumbnailUrl, releaseArtwork(release).src);
     if (video.isFallbackVisual) {
       return `<button class="stage-video-poster" type="button" data-play-chart-video="${escapeHtml(video.id)}" data-video-fallback="visual">
-      <img src="${escapeHtml(thumbnail)}" alt="" loading="lazy">
+      <img src="${escapeHtml(thumbnail)}" alt="${escapeHtml(`${release.title} fallback visual artwork`)}" loading="lazy">
       <span class="video-play" aria-hidden="true">▶</span><span><small>Fallback visual</small><strong>Play ${escapeHtml(release.title)} visual</strong></span>
     </button>`;
     }
@@ -203,14 +219,23 @@
     const frame = document.createElement("div");
     frame.className = "stage-video-frame";
     frame.innerHTML = `<div class="stage-video-fallback-visual">
-      <img src="${escapeHtml(safeUrl(video.thumbnailUrl, fallbackArtwork))}" alt="" loading="eager">
+      <img src="${escapeHtml(safeUrl(video.thumbnailUrl, fallbackArtwork))}" alt="${escapeHtml(`${video.title} fallback visual artwork`)}" loading="eager">
       <div class="stage-video-fallback-copy"><span>HALO TV</span><strong>${escapeHtml(video.title)}</strong></div>
     </div>`;
     poster.replaceWith(frame);
   }
 
   function playChartVideo(videoId) {
-    const video = state.videos.find(item => item.id === videoId) || state.releases.map(fallbackVideoForRelease).find(item => item?.id === videoId);
+    const releaseForFallback = satelliteVideoFallbackEnabled
+      ? state.releases.find(release => `fallback-${release.id}` === videoId)
+      : null;
+    const matchedVideo = state.videos.find(item => item.id === videoId);
+    const releaseForMatchedVideoFallback = satelliteVideoFallbackEnabled && matchedVideo && !isPlayableVideo(matchedVideo)
+      ? state.releases.find(release => release.id === state.activeReleaseId)
+      : null;
+    const video = (satelliteVideoFallbackEnabled && matchedVideo && !isPlayableVideo(matchedVideo))
+      ? fallbackVideoForRelease(releaseForMatchedVideoFallback)
+      : (matchedVideo || fallbackVideoForRelease(releaseForFallback));
     const poster = elements.chartStage.querySelector("[data-play-chart-video]");
     if (!video || !poster) return;
     if (video.isFallbackVisual) {
@@ -219,9 +244,16 @@
       return;
     }
     const source = safeUrl(video.sourceUrl);
-    const embed = safeUrl(video.embedUrl).replace("www.youtube.com", "www.youtube-nocookie.com");
+    const embed = privacyEnhancedEmbedUrl(video.embedUrl);
+    let youtubeEmbed = `${embed}${embed.includes("?") ? "&" : "?"}autoplay=1&rel=0`;
+    try {
+      const embedUrl = new URL(embed);
+      embedUrl.searchParams.set("autoplay", "1");
+      embedUrl.searchParams.set("rel", "0");
+      youtubeEmbed = embedUrl.href;
+    } catch {}
     const player = video.sourceType === "youtube"
-      ? `<iframe src="${escapeHtml(embed)}?autoplay=1&amp;rel=0" title="${escapeHtml(video.title)}" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>`
+      ? `<iframe src="${escapeHtml(youtubeEmbed)}" title="${escapeHtml(video.title)}" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>`
       : `<video src="${escapeHtml(source)}" controls autoplay playsinline></video>`;
     const frame = document.createElement("div");
     frame.className = "stage-video-frame";

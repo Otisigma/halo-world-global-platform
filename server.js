@@ -106,6 +106,7 @@ app.use((req, _res, next) => {
 
 app.get("/healthz", (_req, res) => {
   res.status(200).json({
+    status: "ok",
     ok: true,
     service: "halo-world-global-platform",
     branch: process.env.GIT_BRANCH || process.env.BRANCH || null,
@@ -120,7 +121,15 @@ app.get("/healthz", (_req, res) => {
 });
 
 app.get("/", (_req, res) => {
+  return res.redirect(301, "/halo");
+});
+
+app.get("/halo", (_req, res) => {
   return sendFileIfPresent(res, "halo.html");
+});
+
+app.get("/halo/", (_req, res) => {
+  return res.redirect(301, "/halo");
 });
 
 app.get("/private", (_req, res) => {

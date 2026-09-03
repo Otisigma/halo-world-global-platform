@@ -82,6 +82,207 @@ function serializeRelease(row) {
   };
 }
 
+function isOptionalCatalogMetadataError(error) {
+  const message = String(error instanceof Error ? error.message : error || "").toLowerCase();
+  if (!message.includes("does not exist")) return false;
+  return [
+    "halo_radio_tracks",
+    "release_id",
+    "video_url",
+    "video_title",
+    "dreamweaver_fallback_track_id"
+  ].some(fragment => message.includes(fragment));
+}
+
+async function queryCatalogRowsWithFallback(db) {
+  return db.sql`
+    SELECT
+      release.id,
+      release.title,
+      release.artist,
+      release.release_date,
+      release.duration,
+      release.genres,
+      release.artwork_url,
+      release.imported_artwork_url,
+      release.artwork_override_url,
+      release.video_title,
+      release.video_url,
+      release.bpm,
+      release.musical_key,
+      release.content_rating,
+      release.pitch,
+      release.available_versions,
+      release.is_clean_version,
+      release.is_chart_eligible,
+      release.purchase_url,
+      release.stream_url,
+      release.featured_type,
+      release.featured_until,
+      fallback_track.id AS dreamweaver_fallback_track_id,
+      COUNT(event.id) FILTER (
+        WHERE event.event_type = 'kit_open'
+          AND event.created_at >= NOW() - INTERVAL '7 days'
+      )::int AS recent_opens,
+      COUNT(event.id) FILTER (
+        WHERE event.event_type = 'outbound_click'
+          AND event.created_at >= NOW() - INTERVAL '7 days'
+      )::int AS recent_listens,
+      COUNT(event.id) FILTER (
+        WHERE event.event_type = 'kit_open'
+          AND event.created_at >= NOW() - INTERVAL '14 days'
+          AND event.created_at < NOW() - INTERVAL '7 days'
+      )::int AS previous_opens,
+      COUNT(event.id) FILTER (
+        WHERE event.event_type = 'outbound_click'
+          AND event.created_at >= NOW() - INTERVAL '14 days'
+          AND event.created_at < NOW() - INTERVAL '7 days'
+      )::int AS previous_listens
+    FROM halo_release_campaigns release
+    LEFT JOIN LATERAL (
+      SELECT track.id
+      FROM halo_radio_tracks track
+      WHERE track.release_id = release.id
+        AND track.status = 'rotation'
+      ORDER BY track.updated_at DESC, track.created_at DESC
+      LIMIT 1
+    ) fallback_track ON TRUE
+    LEFT JOIN halo_release_campaign_events event
+      ON event.release_id = release.id
+      AND event.created_at >= NOW() - INTERVAL '14 days'
+    WHERE release.status = 'published'
+    GROUP BY release.id, fallback_track.id
+    ORDER BY release.release_date DESC NULLS LAST, release.updated_at DESC
+    LIMIT 200
+  `;
+}
+
+async function queryCatalogRowsWithoutFallback(db) {
+  return db.sql`
+    SELECT
+      release.id,
+      release.title,
+      release.artist,
+      release.release_date,
+      release.duration,
+      release.genres,
+      release.artwork_url,
+      release.imported_artwork_url,
+      release.artwork_override_url,
+      release.video_title,
+      release.video_url,
+      release.bpm,
+      release.musical_key,
+      release.content_rating,
+      release.pitch,
+      release.available_versions,
+      release.is_clean_version,
+      release.is_chart_eligible,
+      release.purchase_url,
+      release.stream_url,
+      release.featured_type,
+      release.featured_until,
+      ''::text AS dreamweaver_fallback_track_id,
+      COUNT(event.id) FILTER (
+        WHERE event.event_type = 'kit_open'
+          AND event.created_at >= NOW() - INTERVAL '7 days'
+      )::int AS recent_opens,
+      COUNT(event.id) FILTER (
+        WHERE event.event_type = 'outbound_click'
+          AND event.created_at >= NOW() - INTERVAL '7 days'
+      )::int AS recent_listens,
+      COUNT(event.id) FILTER (
+        WHERE event.event_type = 'kit_open'
+          AND event.created_at >= NOW() - INTERVAL '14 days'
+          AND event.created_at < NOW() - INTERVAL '7 days'
+      )::int AS previous_opens,
+      COUNT(event.id) FILTER (
+        WHERE event.event_type = 'outbound_click'
+          AND event.created_at >= NOW() - INTERVAL '14 days'
+          AND event.created_at < NOW() - INTERVAL '7 days'
+      )::int AS previous_listens
+    FROM halo_release_campaigns release
+    LEFT JOIN halo_release_campaign_events event
+      ON event.release_id = release.id
+      AND event.created_at >= NOW() - INTERVAL '14 days'
+    WHERE release.status = 'published'
+    GROUP BY release.id
+    ORDER BY release.release_date DESC NULLS LAST, release.updated_at DESC
+    LIMIT 200
+  `;
+}
+
+async function queryCatalogRowsWithoutFallbackOrVideo(db) {
+  return db.sql`
+    SELECT
+      release.id,
+      release.title,
+      release.artist,
+      release.release_date,
+      release.duration,
+      release.genres,
+      release.artwork_url,
+      release.imported_artwork_url,
+      release.artwork_override_url,
+      ''::text AS video_title,
+      ''::text AS video_url,
+      release.bpm,
+      release.musical_key,
+      release.content_rating,
+      release.pitch,
+      release.available_versions,
+      release.is_clean_version,
+      release.is_chart_eligible,
+      release.purchase_url,
+      release.stream_url,
+      release.featured_type,
+      release.featured_until,
+      ''::text AS dreamweaver_fallback_track_id,
+      COUNT(event.id) FILTER (
+        WHERE event.event_type = 'kit_open'
+          AND event.created_at >= NOW() - INTERVAL '7 days'
+      )::int AS recent_opens,
+      COUNT(event.id) FILTER (
+        WHERE event.event_type = 'outbound_click'
+          AND event.created_at >= NOW() - INTERVAL '7 days'
+      )::int AS recent_listens,
+      COUNT(event.id) FILTER (
+        WHERE event.event_type = 'kit_open'
+          AND event.created_at >= NOW() - INTERVAL '14 days'
+          AND event.created_at < NOW() - INTERVAL '7 days'
+      )::int AS previous_opens,
+      COUNT(event.id) FILTER (
+        WHERE event.event_type = 'outbound_click'
+          AND event.created_at >= NOW() - INTERVAL '14 days'
+          AND event.created_at < NOW() - INTERVAL '7 days'
+      )::int AS previous_listens
+    FROM halo_release_campaigns release
+    LEFT JOIN halo_release_campaign_events event
+      ON event.release_id = release.id
+      AND event.created_at >= NOW() - INTERVAL '14 days'
+    WHERE release.status = 'published'
+    GROUP BY release.id
+    ORDER BY release.release_date DESC NULLS LAST, release.updated_at DESC
+    LIMIT 200
+  `;
+}
+
+async function loadCatalogRows(db) {
+  try {
+    return await queryCatalogRowsWithFallback(db);
+  } catch (error) {
+    if (!isOptionalCatalogMetadataError(error)) throw error;
+    console.warn("HALO release catalog optional fallback lookup unavailable; serving published releases without fallback tracks");
+  }
+  try {
+    return await queryCatalogRowsWithoutFallback(db);
+  } catch (error) {
+    if (!isOptionalCatalogMetadataError(error)) throw error;
+    console.warn("HALO release catalog optional video columns unavailable; serving published releases without video metadata");
+    return queryCatalogRowsWithoutFallbackOrVideo(db);
+  }
+}
+
 export default async function releaseCatalogHandler(request) {
   if (request.method !== "GET") {
     return json({ message: "Method not allowed" }, 405, { Allow: "GET" });
@@ -89,66 +290,7 @@ export default async function releaseCatalogHandler(request) {
 
   try {
     const db = getDatabase();
-    const rows = await db.sql`
-      SELECT
-        release.id,
-        release.title,
-        release.artist,
-        release.release_date,
-        release.duration,
-        release.genres,
-        release.artwork_url,
-        release.imported_artwork_url,
-        release.artwork_override_url,
-        release.video_title,
-        release.video_url,
-        release.bpm,
-        release.musical_key,
-        release.content_rating,
-        release.pitch,
-        release.available_versions,
-        release.is_clean_version,
-        release.is_chart_eligible,
-        release.purchase_url,
-        release.stream_url,
-        release.featured_type,
-        release.featured_until,
-        fallback_track.id AS dreamweaver_fallback_track_id,
-        COUNT(event.id) FILTER (
-          WHERE event.event_type = 'kit_open'
-            AND event.created_at >= NOW() - INTERVAL '7 days'
-        )::int AS recent_opens,
-        COUNT(event.id) FILTER (
-          WHERE event.event_type = 'outbound_click'
-            AND event.created_at >= NOW() - INTERVAL '7 days'
-        )::int AS recent_listens,
-        COUNT(event.id) FILTER (
-          WHERE event.event_type = 'kit_open'
-            AND event.created_at >= NOW() - INTERVAL '14 days'
-            AND event.created_at < NOW() - INTERVAL '7 days'
-        )::int AS previous_opens,
-        COUNT(event.id) FILTER (
-          WHERE event.event_type = 'outbound_click'
-            AND event.created_at >= NOW() - INTERVAL '14 days'
-            AND event.created_at < NOW() - INTERVAL '7 days'
-        )::int AS previous_listens
-      FROM halo_release_campaigns release
-      LEFT JOIN LATERAL (
-        SELECT track.id
-        FROM halo_radio_tracks track
-        WHERE track.release_id = release.id
-          AND track.status = 'rotation'
-        ORDER BY track.updated_at DESC, track.created_at DESC
-        LIMIT 1
-      ) fallback_track ON TRUE
-      LEFT JOIN halo_release_campaign_events event
-        ON event.release_id = release.id
-        AND event.created_at >= NOW() - INTERVAL '14 days'
-      WHERE release.status = 'published'
-      GROUP BY release.id, fallback_track.id
-      ORDER BY release.release_date DESC NULLS LAST, release.updated_at DESC
-      LIMIT 200
-    `;
+    const rows = await loadCatalogRows(db);
     const releases = rows.map(serializeRelease);
     return json({ releases, count: releases.length });
   } catch (error) {

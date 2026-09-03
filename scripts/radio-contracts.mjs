@@ -77,6 +77,8 @@ const checks = [
   ["curated YouTube long plays", ["IbwPoo-b1bs", "Bn1V4lvhFTA", "d8Nd2jb7BDs", "GKjU4Ac1Pzw"].every(value => files.longPlayMigration.includes(value)) && files.haloTvMigration.includes("yh7qQGvzmdw") && files.mixes.includes("alternateLongPlays") && files.mixes.includes("loadCuratedLongPlays")],
   ["automatic YouTube long play advancement", files.client.includes("playYouTubeLongPlay") && files.client.includes("youtubeLongPlayActive") && files.client.includes("PlayerState?.ENDED) advanceLongPlay()")],
   ["DJ HALO X takeover long play mix", files.mixes.includes("preview-pool-60-minute-mix") && files.mixes.includes("DJ HALO X 60 MIN TAKEOVER MIX") && files.mixes.includes("stationFallback: true") && files.client.includes("advanceLongPlay")],
+  ["visible backup takeover state", files.page.includes('id="backupStatus"') && files.page.includes('id="manualTakeoverButton"') && files.client.includes("renderBackupBanner") && files.client.includes("toggleManualTakeover")],
+  ["preflighted station backup audio", files.client.includes("validateAudioSource") && files.client.includes("readyRotationTarget") && files.client.includes("readyTakeoverTarget") && files.mixes.includes("content_type LIKE 'audio/%'")],
   ["latest recorded hour leads long play", files.mixes.includes("prioritizeLatestHourSession") && files.mixes.includes("hourSessionMinimumSeconds") && files.mixes.includes("hourSessionMaximumSeconds")],
   ["long form audio range playback", files.mixAudio.includes('consistency: "strong"') && files.mixAudio.includes('"Accept-Ranges"') && files.mixAudio.includes('status: 206') && files.mixAudio.includes('"Content-Range"')],
   ["persistent station player", files.page.includes('id="stationAudio"') && files.client.includes("playCurrentRoom")],

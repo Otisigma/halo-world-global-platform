@@ -92,8 +92,9 @@
     if (!url) return "";
     try {
       const parsed = new URL(url);
-      if (parsed.hostname.endsWith("youtu.be")) return parsed.pathname.replace("/", "").trim();
-      if (parsed.hostname.includes("youtube.com")) {
+      const host = parsed.hostname.toLowerCase().replace(/\.$/, "");
+      if (host === "youtu.be" || host.endsWith(".youtu.be")) return parsed.pathname.replace("/", "").trim();
+      if (host === "youtube.com" || host.endsWith(".youtube.com")) {
         if (parsed.pathname === "/watch") return parsed.searchParams.get("v") || "";
         if (parsed.pathname.startsWith("/embed/")) return parsed.pathname.split("/")[2] || "";
       }

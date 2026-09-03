@@ -24,8 +24,10 @@ function cleanHttpsUrl(value) {
 function importedArtworkSourceLabel(url) {
   const cleaned = cleanHttpsUrl(url);
   if (!cleaned) return "";
-  const host = new URL(cleaned).hostname.toLowerCase().replace(/^www\./, "");
-  if (host.endsWith("distrokid.imgix.net") || host.endsWith("distrokid.com")) return "DistroKid import";
+  const host = new URL(cleaned).hostname.toLowerCase().replace(/^www\./, "").replace(/\.$/, "");
+  const isDistrokidImportHost = host === "distrokid.imgix.net" || host.endsWith(".distrokid.imgix.net")
+    || host === "distrokid.com" || host.endsWith(".distrokid.com");
+  if (isDistrokidImportHost) return "DistroKid import";
   return `Imported from ${host}`;
 }
 

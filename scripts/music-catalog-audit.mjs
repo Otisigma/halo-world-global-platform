@@ -69,6 +69,8 @@ assert.match(mySensitivityLikeACrown, /is_chart_eligible/, "My Sensitivity Like 
 assert.match(mySensitivityLikeACrown, /artwork_url/, "My Sensitivity Like a Crown migration must populate the artwork_url field");
 assert.match(mySensitivityLikeACrown, /imported_artwork_url/, "My Sensitivity Like a Crown migration must include imported_artwork_url per the artwork contract");
 assert.match(mySensitivityLikeACrown, /artwork_override_url/, "My Sensitivity Like a Crown migration must include artwork_override_url per the artwork contract");
+assert.match(mySensitivityLikeACrown, /imported_artwork_url\s*=\s*COALESCE\(NULLIF\(EXCLUDED\.imported_artwork_url, ''\), halo_release_campaigns\.imported_artwork_url\)/, "My Sensitivity Like a Crown migration must preserve imported_artwork_url when the seed reruns with an empty placeholder");
+assert.match(mySensitivityLikeACrown, /artwork_override_url\s*=\s*COALESCE\(NULLIF\(EXCLUDED\.artwork_override_url, ''\), halo_release_campaigns\.artwork_override_url\)/, "My Sensitivity Like a Crown migration must preserve any manual artwork override when the seed reruns");
 assert.match(mySensitivityLikeACrown, /Radio edit/, "My Sensitivity Like a Crown migration must include a radio edit version");
 assert.match(mySensitivityLikeACrown, /Clean version/, "My Sensitivity Like a Crown migration must include a clean version");
 assert.match(mySensitivityLikeACrown, /source_release_id|halo_dreamweaver_songs|Dream Weaver/, "My Sensitivity Like a Crown migration must document the Dream Weaver storage path");

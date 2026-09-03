@@ -130,7 +130,7 @@ export async function queryCatalogRows(db) {
         to_jsonb(release) ->> 'stream_url' AS stream_url,
         to_jsonb(release) ->> 'featured_type' AS featured_type,
         to_jsonb(release) ->> 'featured_until' AS featured_until,
-        COALESCE(to_jsonb(fallback_track) ->> 'id', '') AS dreamweaver_fallback_track_id,
+        to_jsonb(fallback_track) ->> 'id' AS dreamweaver_fallback_track_id,
         COUNT(event.id) FILTER (
           WHERE event.event_type = 'kit_open'
             AND event.created_at >= NOW() - INTERVAL '7 days'

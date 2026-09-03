@@ -960,6 +960,8 @@
           url: 'https://distrokid.com/hyperfollow/owenanthony/my-sensitivity-like-a-crown'
         };
 
+        const FALLBACK_ARTWORK = '/assets/halo-app-icon-512.png';
+
         const INITIAL_TRACKS = [
           {
             id: 'closest-thing-to-heaven',
@@ -973,6 +975,7 @@
             waveColor: '#d97706',
             synthPattern: 'progressive',
             isBinarySource: false,
+            artwork: '/assets/releases/the-cold-is-lasting-longer.jpg',
             chats: [
               { user: 'Kaelen_Ibiza', text: 'Closest Thing To Heaven is a total sunrise anthem! 🌅', color: 'text-amber-400' },
               { user: 'Sasha_London', text: 'This remix completely floats above the terrace.', color: 'text-purple-400' }
@@ -990,6 +993,7 @@
             waveColor: '#ec4899',
             synthPattern: 'transition',
             isBinarySource: false,
+            artwork: '/assets/releases/salty.jpg',
             chats: [
               { user: 'Chill_Purist', text: 'DJ Romy locked down the room here. Beautiful analog textures. 🌌', color: 'text-rose-400' }
             ]
@@ -1006,6 +1010,7 @@
             waveColor: '#a855f7',
             synthPattern: 'transition',
             isBinarySource: false,
+            artwork: '/assets/releases/hit-that-beat.webp',
             chats: [
               { user: 'Berlin_Mindset', text: 'The low-end presence on My Decision is incredibly robust!', color: 'text-purple-400' }
             ]
@@ -1569,6 +1574,10 @@
               const title = file.name.replace(/\.[^/.]+$/, '') || file.name;
               const extension = file.name.split('.').pop()?.toUpperCase() || 'AUDIO';
               const folderPath = file.webkitRelativePath ? file.webkitRelativePath.split('/').slice(0, -1).join('/') : '';
+              const progress = Math.round(((index + 1) / audioFiles.length) * 100);
+              setUploadProgress(progress);
+              setProcessingStatus(`Indexing ${index + 1} of ${audioFiles.length}: ${file.name}`);
+              await new Promise(resolve => requestAnimationFrame(resolve));
 
               indexedTracks.push({
                 id: `local-${Date.now()}-${index}-${Math.random().toString(36).slice(2, 8)}`,
@@ -1582,6 +1591,7 @@
                 waveColor: waveColors[index % waveColors.length],
                 synthPattern: 'local',
                 isBinarySource: true,
+                artwork: FALLBACK_ARTWORK,
                 sourceFile: file,
                 binaryBuffer: null,
                 chats: []
@@ -1596,7 +1606,7 @@
               setIsPlaying(false);
               setTracks(previousTracks => [...indexedTracks, ...previousTracks]);
               setActiveTrack(indexedTracks[0]);
-              setProcessingStatus(`${indexedTracks.length} file${indexedTracks.length === 1 ? '' : 's'} ready instantly${skippedCount ? ` • ${skippedCount} skipped` : ''}. Audio decodes only when played.`);
+              setProcessingStatus(`${indexedTracks.length} file${indexedTracks.length === 1 ? '' : 's'} ready${skippedCount ? ` · ${skippedCount} skipped (unsupported format)` : ''}. Press play to start.`);
               addLog(`LOCAL DRIVE READY: Indexed ${indexedTracks.length} audio file${indexedTracks.length === 1 ? '' : 's'} without pre-decoding.`);
               window.haloStats?.track('load_local_audio', {
                 source_type: mode,
@@ -4078,6 +4088,16 @@
                         <span>{activeTrack.personaLabel}</span>
                       </div>
 
+                      {activeTrack.artwork && (
+                        <img
+                          key={activeTrack.artwork}
+                          src={activeTrack.artwork}
+                          alt={`${activeTrack.title} artwork`}
+                          className="absolute inset-0 w-full h-full object-cover opacity-20 pointer-events-none"
+                          onError={event => { event.currentTarget.src = FALLBACK_ARTWORK; event.currentTarget.onerror = null; }}
+                        />
+                      )}
+
                       <canvas ref={canvasRef} width={400} height={260} className="w-full max-w-[240px] aspect-[4/3] pointer-events-none z-20" />
 
                       <div className="absolute bottom-4 z-30 flex items-center gap-3 bg-black/90 px-4 py-2 rounded-full border border-purple-950">
@@ -4095,6 +4115,12 @@
                           {isFilterActive ? 'Bypass Filter' : 'Corridor Acoustics'}
                         </button>
                       </div>
+
+                      {!activeTrack.isBinarySource && (
+                        <div className="absolute top-3 right-3 z-20 max-w-[140px] rounded bg-black/70 px-2 py-1.5 text-[9px] text-center text-amber-200 border border-amber-500/30">
+                          Upload an audio file to play this track
+                        </div>
+                      )}
                     </div>
 
                     {/* RADIO + DJ SELECTOR ROOM */}

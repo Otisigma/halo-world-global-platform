@@ -17,6 +17,7 @@
   };
   const state = { releases: [], videos: [], query: "", genre: "all", sort: "newest", chartRoom: "all", chartSort: "signal", activeReleaseId: "" };
   const fallbackArtwork = window.HaloReleaseArtwork?.DEFAULT_RELEASE_ARTWORK || "/assets/halo-app-icon-512.png";
+  const fallbackVideoMark = "/assets/halo-logo-mark.webp";
   const chartRooms = {
     all: [],
     "hip-hop": ["hip hop", "hip-hop", "rap", "drill", "grime"],
@@ -87,6 +88,21 @@
       .trim();
   }
 
+  function fallbackVideoForRelease(release) {
+    const artwork = releaseArtwork(release);
+    const fallbackVisual = artwork.source === "fallback" ? "logo" : "cover";
+    return {
+      id: `fallback-${release.id}`,
+      title: fallbackVisual === "cover" ? `${release.title} cover motion` : `${release.title} HALO motion`,
+      artistName: release.artist || "",
+      sourceType: "artwork_fallback",
+      sourceUrl: "",
+      embedUrl: "",
+      thumbnailUrl: artwork.src,
+      fallbackVisual
+    };
+  }
+
   function releaseAgeInDays(release) {
     if (!release.releaseDate) return 365;
     const released = new Date(`${release.releaseDate}T00:00:00Z`).getTime();
@@ -150,17 +166,26 @@
   function videoForRelease(release) {
     const title = normalized(release.title);
     const artist = normalized(release.artist);
-    return state.videos.find(video => {
+    const matchedVideo = state.videos.find(video => {
       const videoTitle = normalized(video.title);
       const videoArtist = normalized(video.artistName);
       return (title && (videoTitle.includes(title) || title.includes(videoTitle)))
         || (artist && videoArtist === artist && videoTitle.split(" ").some(word => word.length > 4 && title.includes(word)));
     });
+    return matchedVideo || fallbackVideoForRelease(release);
   }
 
   function videoMarkup(video, release) {
     if (!video) {
       return `<div class="stage-video-empty"><span>HALO TV</span><strong>Footage lane open</strong><p>When approved footage is attached to this release, it plays here without sending listeners away from the chart.</p></div>`;
+    }
+    if (video.sourceType === "artwork_fallback") {
+      const thumbnail = safeUrl(video.thumbnailUrl, releaseArtwork(release).src);
+      const fallbackLabel = video.fallbackVisual === "cover" ? "Cover art motion" : "HALO logo motion";
+      return `<button class="stage-video-poster is-fallback" type="button" data-play-chart-video="${escapeHtml(video.id)}">
+        <img src="${escapeHtml(thumbnail)}" alt="" loading="lazy">
+        <span class="video-play" aria-hidden="true">▶</span><span><small>${escapeHtml(fallbackLabel)}</small><strong>${escapeHtml(video.title)}</strong></span>
+      </button>`;
     }
     const thumbnail = safeUrl(video.thumbnailUrl, releaseArtwork(release).src);
     return `<button class="stage-video-poster" type="button" data-play-chart-video="${escapeHtml(video.id)}">
@@ -221,18 +246,42 @@
 
   function playChartVideo(videoId) {
     const video = state.videos.find(item => item.id === videoId);
+    const release = state.releases.find(item => item.id === state.activeReleaseId);
     const poster = elements.chartStage.querySelector("[data-play-chart-video]");
-    if (!video || !poster) return;
-    const source = safeUrl(video.sourceUrl);
-    const embed = safeUrl(video.embedUrl).replace("www.youtube.com", "www.youtube-nocookie.com");
-    const player = video.sourceType === "youtube"
-      ? `<iframe src="${escapeHtml(embed)}?autoplay=1&amp;rel=0" title="${escapeHtml(video.title)}" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>`
-      : `<video src="${escapeHtml(source)}" controls autoplay playsinline></video>`;
+    const fallbackVideo = !video && release && videoId === `fallback-${release.id}` ? fallbackVideoForRelease(release) : null;
+    const selectedVideo = video || fallbackVideo;
+    if (!selectedVideo || !poster || !release) return;
     const frame = document.createElement("div");
-    frame.className = "stage-video-frame";
-    frame.innerHTML = player;
+    if (selectedVideo.sourceType === "artwork_fallback") {
+      const artwork = releaseArtwork(release);
+      const thumbnail = safeUrl(selectedVideo.thumbnailUrl, artwork.src);
+      const mark = safeUrl(fallbackVideoMark, "/assets/halo-logo-mark.webp");
+      const detail = selectedVideo.fallbackVisual === "cover"
+        ? "Cover art motion fallback"
+        : "HALO logo motion fallback";
+      frame.className = "stage-video-frame stage-video-fallback-frame";
+      frame.innerHTML = `<div class="stage-video-fallback-shell" role="img" aria-label="${escapeHtml(`${release.title} fallback visual`)}">
+        <img class="stage-video-fallback-image" src="${escapeHtml(thumbnail)}" alt="" data-release-artwork data-artwork-fallback="${escapeHtml(artwork.fallback)}">
+        <div class="stage-video-fallback-mark" aria-hidden="true"><img src="${escapeHtml(mark)}" alt=""></div>
+        <div class="stage-video-fallback-copy"><small>${escapeHtml(detail)}</small><strong>${escapeHtml(release.title)}</strong><span>${escapeHtml(release.artist || "HALO Music")}</span></div>
+      </div>`;
+      wireArtwork(frame);
+    } else {
+      const source = safeUrl(selectedVideo.sourceUrl);
+      const embed = safeUrl(selectedVideo.embedUrl).replace("www.youtube.com", "www.youtube-nocookie.com");
+      const player = selectedVideo.sourceType === "youtube"
+        ? `<iframe src="${escapeHtml(embed)}?autoplay=1&amp;rel=0" title="${escapeHtml(selectedVideo.title)}" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>`
+        : `<video src="${escapeHtml(source)}" controls autoplay playsinline></video>`;
+      frame.className = "stage-video-frame";
+      frame.innerHTML = player;
+    }
     poster.replaceWith(frame);
-    window.haloStats?.track("play_halo_video", { target: video.id, track: state.activeReleaseId });
+    window.haloStats?.track("play_halo_video", {
+      target: selectedVideo.id,
+      track: state.activeReleaseId,
+      sourceType: selectedVideo.sourceType,
+      fallback: selectedVideo.sourceType === "artwork_fallback"
+    });
   }
 
   function showToast(message) {

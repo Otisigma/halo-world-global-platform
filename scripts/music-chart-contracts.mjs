@@ -20,9 +20,12 @@ assert.match(page, /transparent HALO activity chart—not an industry sales char
 assert.match(catalogApi, /recent_listens/, "catalog API must expose rolling recent listening activity");
 assert.match(catalogApi, /previous_listens/, "catalog API must expose the comparison window");
 assert.match(client, /rankedReleases/, "client must calculate interactive room rankings");
+assert.match(client, /artwork_fallback/, "chart must synthesize a fallback visual when no official video matches");
 assert.match(client, /youtube-nocookie\.com/, "chart video must use privacy-enhanced YouTube playback");
 assert.match(client, /data-play-chart-video/, "chart stage must support in-place video playback");
+assert.match(client, /stage-video-fallback-shell/, "chart fallback playback must render an in-place visual");
 assert.match(styles, /\.chart-console/, "chart console must have a dedicated responsive layout");
 assert.match(styles, /\.chart-row\.is-active/, "chart rows must expose a selected state");
+assert.match(styles, /\.stage-video-fallback-shell/, "chart fallback visual must have dedicated styling");
 
 console.log("Music chart contracts passed.");

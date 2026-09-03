@@ -208,12 +208,24 @@ h1 em { color: var(--acid); font-family: var(--serif); font-weight: 400; text-tr
 .stage-video-poster > img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 .stage-video-poster::before { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(9,11,10,.06), rgba(9,11,10,.88)); }
 .stage-video-poster > * { position: relative; z-index: 1; }
+.stage-video-poster.is-fallback::after { content: ""; position: absolute; inset: auto -18% -42% auto; width: 170px; height: 170px; border-radius: 50%; background: radial-gradient(circle, rgba(242,255,98,.34), rgba(242,255,98,0)); opacity: 0.95; }
 .video-play { display: grid; place-items: center; flex: 0 0 45px; width: 45px; height: 45px; border-radius: 50%; color: var(--ink); background: var(--acid); font-size: 12px; }
 .stage-video-poster small, .stage-video-poster strong { display: block; }
 .stage-video-poster small { margin-bottom: 6px; color: var(--acid); font: 500 7px/1 var(--mono); letter-spacing: 0.1em; text-transform: uppercase; }
 .stage-video-poster strong { font-size: 14px; }
 .stage-video-frame { width: 100%; aspect-ratio: 16 / 9; margin-top: 24px; background: #000; }
 .stage-video-frame iframe, .stage-video-frame video { width: 100%; height: 100%; border: 0; object-fit: contain; }
+.stage-video-fallback-frame { overflow: hidden; background: #060707; }
+.stage-video-fallback-shell { position: relative; width: 100%; height: 100%; display: flex; align-items: end; min-height: 220px; overflow: hidden; isolation: isolate; }
+.stage-video-fallback-shell::before { content: ""; position: absolute; inset: 0; z-index: 1; background: linear-gradient(180deg, rgba(7,9,8,.1), rgba(7,9,8,.9)); }
+.stage-video-fallback-shell::after { content: ""; position: absolute; inset: 12%; border: 1px solid rgba(242,255,98,.24); box-shadow: 0 0 0 1px rgba(255,255,255,.04) inset; z-index: 1; animation: stage-video-pulse 4.2s ease-in-out infinite; }
+.stage-video-fallback-image { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; transform: scale(1.02); filter: saturate(.96) contrast(1.03); animation: stage-video-drift 18s ease-in-out infinite alternate; }
+.stage-video-fallback-mark { position: absolute; top: 22px; right: 22px; z-index: 2; display: grid; place-items: center; width: 72px; height: 72px; border-radius: 50%; background: rgba(7,9,8,.56); backdrop-filter: blur(10px); animation: stage-video-mark-float 6s ease-in-out infinite; }
+.stage-video-fallback-mark img { width: 58%; height: 58%; object-fit: contain; filter: drop-shadow(0 0 18px rgba(242,255,98,.35)); }
+.stage-video-fallback-copy { position: relative; z-index: 2; display: grid; gap: 8px; padding: 22px; max-width: min(74%, 360px); }
+.stage-video-fallback-copy small { color: var(--acid); font: 500 7px/1 var(--mono); letter-spacing: 0.12em; text-transform: uppercase; }
+.stage-video-fallback-copy strong { font-size: clamp(20px, 3vw, 28px); line-height: 1; }
+.stage-video-fallback-copy span { color: rgba(255,255,255,.82); font-size: 12px; line-height: 1.45; }
 .stage-video-empty { margin-top: 24px; padding: 22px; border: 1px dashed #aaa99f; }
 .stage-video-empty span { color: #b63e15; font: 500 7px/1 var(--mono); letter-spacing: 0.12em; }
 .stage-video-empty strong { display: block; margin-top: 10px; font-size: 17px; }
@@ -222,6 +234,27 @@ h1 em { color: var(--acid); font-family: var(--serif); font-weight: 400; text-tr
 .stage-copy .action { border-color: #b9b7ae; }
 .stage-copy .action.primary { color: var(--paper); background: var(--ink); }
 .chart-row:focus-visible, .chart-rooms button:focus-visible, .stage-video-poster:focus-visible { outline: 3px solid var(--orange); outline-offset: -3px; }
+
+@keyframes stage-video-drift {
+  from { transform: scale(1.02) translate3d(0, 0, 0); }
+  to { transform: scale(1.1) translate3d(-2%, -1.5%, 0); }
+}
+
+@keyframes stage-video-pulse {
+  0%, 100% { opacity: 0.42; transform: scale(0.98); }
+  50% { opacity: 0.95; transform: scale(1); }
+}
+
+@keyframes stage-video-mark-float {
+  0%, 100% { transform: translate3d(0, 0, 0); }
+  50% { transform: translate3d(0, 6px, 0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stage-video-fallback-shell::after,
+  .stage-video-fallback-image,
+  .stage-video-fallback-mark { animation: none; }
+}
 
 .catalog-controls { display: flex; align-items: end; gap: 16px; flex-wrap: wrap; }
 .sort-control { display: flex; flex-direction: column; gap: 10px; }

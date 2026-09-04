@@ -236,6 +236,22 @@ await runCheck("Homepage music experiment markers and tracking", async () => {
     /homepage_music_experiment_exit/,
     "halo.html must emit a homepage experiment exit tracking event."
   );
+  assert.match(
+    haloHtml,
+    /Measurement focus[\s\S]*Listening[\s\S]*Relationship room[\s\S]*Support actions[\s\S]*Repeat visits[\s\S]*Supporter conversion/,
+    "halo.html must make the homepage experiment success signals easy to review."
+  );
+  assert.match(
+    haloHtml,
+    /transparent on-page behavior signals[\s\S]*without exploiting either side of the relationship/i,
+    "halo.html must preserve the ethical data-use note for the experiment."
+  );
+  const statsDoc = await read("STATS.md");
+  assert.match(
+    statsDoc,
+    /\| Goal \| Variant A target \| Variant B target \| Reading \|/,
+    "STATS.md must document the homepage experiment comparison scorecard."
+  );
   return "Homepage experiment variants and analytics hooks are present";
 });
 

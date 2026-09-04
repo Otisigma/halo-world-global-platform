@@ -1349,13 +1349,15 @@
           const showNativeExperiment = musicExperimentVariant !== 'embed';
           const showEmbedExperiment = musicExperimentVariant !== 'native';
           const experimentViewMode = musicExperimentVariant === 'compare' ? 'side_by_side' : 'single_variant';
-          const trackMusicExperimentAction = (goal, target, variant) => {
-            window.haloStats?.track('homepage_music_experiment_action', {
-              variant,
-              mode: experimentViewMode,
-              goal,
-              target
-            });
+          const trackMusicExperimentAction = (goals, target, variant) => {
+            for (const goal of Array.isArray(goals) ? goals : [goals]) {
+              window.haloStats?.track('homepage_music_experiment_action', {
+                variant,
+                mode: experimentViewMode,
+                goal,
+                target
+              });
+            }
           };
 
           const audioCtxRef = useRef(null);
@@ -3355,8 +3357,34 @@
                     <div className="p-6 md:p-8">
                       <p className="text-[9px] font-black uppercase tracking-[.28em] text-amber-300">Homepage experiment / Artist-first listening test / Supporter-first model</p>
                       <h2 id="music-experiment-title" className="mt-4 font-sans-alt text-3xl font-black uppercase leading-[.9] tracking-[-.03em] text-white md:text-4xl">Which music home performs best for listeners and artists?</h2>
-                      <p className="mt-4 max-w-3xl text-xs leading-6 text-gray-300">We are comparing the best listener experience and the best artist outcome. Variant A keeps the HALO-native artist home central. Variant B is a quick-listen embed comparison. Both paths route support back to artist-owned HALO actions, where fans become supporters and supporters are rewarded.</p>
+                      <p className="mt-4 max-w-3xl text-xs leading-6 text-gray-300">We are comparing the best listener experience and the best artist outcome. Variant A keeps the HALO-native artist home central as the brand path. Variant B is only a simpler quick-listen comparison. Both paths route support back to artist-owned HALO actions, where fans become supporters and supporters are rewarded.</p>
                       <p className="mt-3 text-[10px] uppercase tracking-[.18em] text-gray-500">Active test mode: {musicExperimentVariant === 'compare' ? 'A + B side-by-side' : musicExperimentVariant === 'native' ? 'A only (native)' : 'B only (embed)'}</p>
+                      <div className="mt-5 overflow-x-auto rounded-2xl border border-white/10 bg-black/20">
+                        <table className="min-w-full text-[10px] uppercase tracking-[.18em] text-gray-400">
+                          <caption className="sr-only">Homepage music experiment measurement focus</caption>
+                          <thead>
+                            <tr>
+                              <th scope="col" className="px-4 py-3 text-left text-white">Measurement focus</th>
+                              <th scope="col" className="px-4 py-3 text-left">Listening</th>
+                              <th scope="col" className="px-4 py-3 text-left">Relationship room</th>
+                              <th scope="col" className="px-4 py-3 text-left">Support actions</th>
+                              <th scope="col" className="px-4 py-3 text-left">Repeat visits</th>
+                              <th scope="col" className="px-4 py-3 text-left">Supporter conversion</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            <tr className="border-t border-white/10">
+                              <th scope="row" className="px-4 py-3 text-left text-white/80">Primary signal</th>
+                              <td className="px-4 py-3">Entry or quick-listen availability</td>
+                              <td className="px-4 py-3">HALO relationship-room handoff</td>
+                              <td className="px-4 py-3">Support CTA intent</td>
+                              <td className="px-4 py-3">Variant revisit cohort</td>
+                              <td className="px-4 py-3">Support path toward membership</td>
+                            </tr>
+                          </tbody>
+                        </table>
+                      </div>
+                      <p className="mt-3 max-w-3xl text-xs leading-6 text-gray-400">We use transparent on-page behavior signals to improve the experience for artists and fans without exploiting either side of the relationship. Listening is currently compared through HALO music-home entry on Variant A and quick-listen embed availability on Variant B.</p>
                     </div>
                     <div className="grid gap-px border-t border-white/10 bg-white/10 lg:grid-cols-2">
                       {showNativeExperiment && (
@@ -3384,7 +3412,7 @@
                               onClick={() => {
                                 openConsoleArea('party');
                                 window.haloStats?.track('enter_console', { target: 'homepage_experiment_native_relationship_room' });
-                                trackMusicExperimentAction('follows', 'homepage_experiment_native_relationship_room', 'native');
+                                trackMusicExperimentAction('relationship_room', 'homepage_experiment_native_relationship_room', 'native');
                               }}
                               className="inline-flex items-center gap-2 rounded-full border border-white/15 px-5 py-2.5 text-[10px] font-black uppercase tracking-[.14em] text-gray-100 transition hover:border-white/35"
                             >
@@ -3432,9 +3460,20 @@
                             >
                               Continue in HALO
                             </a>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                openConsoleArea('party');
+                                window.haloStats?.track('enter_console', { target: 'homepage_experiment_embed_relationship_room' });
+                                trackMusicExperimentAction('relationship_room', 'homepage_experiment_embed_relationship_room', 'embed');
+                              }}
+                              className="inline-flex items-center gap-2 rounded-full border border-white/15 px-5 py-2.5 text-[10px] font-black uppercase tracking-[.14em] text-gray-100 transition hover:border-white/35"
+                            >
+                              Open relationship room
+                            </button>
                             <a
                               href="/support/"
-                              onClick={() => trackMusicExperimentAction('supporter_conversion', 'homepage_experiment_embed_support_action', 'embed')}
+                              onClick={() => trackMusicExperimentAction('support_actions', 'homepage_experiment_embed_support_action', 'embed')}
                               data-stat-event="open_feedback_desk"
                               data-stat-target="homepage_experiment_embed_support_action"
                               className="inline-flex items-center gap-2 rounded-full border border-cyan-200/35 px-5 py-2.5 text-[10px] font-black uppercase tracking-[.14em] text-cyan-100 transition hover:border-cyan-100"

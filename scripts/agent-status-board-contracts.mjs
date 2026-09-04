@@ -10,7 +10,7 @@ for (const field of ["Focus", "Done", "Watching", "Impact", "Next"]) {
   assert.match(liveBoard, new RegExp(`- ${field}:`), `live board must include ${field} updates`);
 }
 
-assert.match(board, /Change log/, "status board must track dated changes over time");
+assert.match(liveBoard, /Change log/, "live board must track dated changes over time");
 assert.match(liveBoard, /\b\d{4}-\d{2}-\d{2}:/, "live board must include at least one dated change entry");
 assert.match(board, /protects both the artist and the fan/i, "status board must state artist and fan protection");
 assert.match(board, /do not exploit/i, "status board must reject exploitation");

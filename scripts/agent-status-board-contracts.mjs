@@ -17,7 +17,7 @@ assert.match(board, /artist-owned music and software ecosystem/i, "status board 
 assert.match(board, /fans become supporters, supporters are rewarded/i, "status board must preserve supporter reward positioning");
 
 for (const exampleTeam of ["Music Agent", "Stripe / Payments Agent", "Supporter Experience Agent", "Monitoring / QA Agent", "Insights / Data Agent"]) {
-  assert.match(board, new RegExp(exampleTeam), `status board must include ${exampleTeam} example entry`);
+  assert.ok(board.includes(exampleTeam), `status board must include ${exampleTeam} example entry`);
 }
 
 assert.match(teamDoc, /HALO_AGENT_STATUS_BOARD\.md/, "agent council handbook must point to the status board");

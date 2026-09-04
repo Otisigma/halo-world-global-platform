@@ -135,6 +135,74 @@ Use this operating loop:
 
 This keeps decision rights close to the work, while preserving one clear escalation and approval path for the whole site.
 
+
+
+## Implementation map (code + contract anchors)
+
+Use this map to keep team boundaries enforceable instead of aspirational:
+
+1. **Governance source:** this handbook (`HALO_SITE_AI_OPERATING_MODEL.md`) remains the source of role and escalation intent.
+2. **Execution policy layer:** implement role authority, proposal boundaries, fallback behavior, and evidence grounding in `netlify/lib/agent-team.mjs` and `netlify/lib/artist-agents.mjs`.
+3. **Protected domain APIs:** enforce ownership, origin checks, payload limits, and domain mutations in `netlify/functions/*` endpoints (`halo-agent-team`, `artist-agents`, `payment-link`, `fan-campaigns`, `release-pack`, `release-house`, `halo-relations`).
+4. **Durable constraints:** encode tenancy, approval, enum/range checks, and lifecycle state in Netlify DB migrations.
+5. **Regression gates:** enforce boundaries in `scripts/*-contracts.mjs`; CI keeps `npm run deploy:feedback` and repository contracts as launch gates.
+
+## Domain teams with explicit "cannot-do" guardrails
+
+### Music Catalog Agent Team
+
+- **Scope:** release truth, chart eligibility, artwork and link integrity, playback metadata.
+- **Must not do:** mutate payment state, bypass catalog publication rules, or bypass release workflow observability.
+- **Enforcement anchors:** `netlify/functions/release-catalog.mjs`, `music/music.js`, `netlify/lib/music-catalog-audit.mjs`, `scripts/music-chart-contracts.mjs`, `scripts/music-workflow-log-contracts.mjs`.
+
+### Payments and Rights Agent Team
+
+- **Scope:** checkout readiness, Stripe session/payment-link routing, rights and sale gating.
+- **Must not do:** open checkout when readiness gates fail, accept cross-origin checkout mutation, or redefine catalog-facing release state.
+- **Enforcement anchors:** `netlify/functions/payment-link.mjs`, `netlify/functions/mix-reviews.mjs`, `netlify/database/migrations/20260818190000_require-paid-mix-readiness.sql`.
+
+### Supporter Experience and Reward Integrity Team
+
+- **Scope:** fan-vote campaigns, release-pack selector responses, unlock progression, anti-abuse identity handling.
+- **Must not do:** bypass one-vote identity constraints, accept votes outside campaign windows, or allow unauthorized campaign edits.
+- **Enforcement anchors:** `netlify/functions/fan-campaigns.mjs`, `netlify/functions/release-pack.mjs`, `netlify/database/migrations/20260814180000_create-fan-vote-campaigns.sql`.
+
+### Dreamweaver Promo Team
+
+- **Scope:** campaign package generation, staged background jobs, measured campaign review, creative variants.
+- **Must not do:** claim autonomous external posting, fabricate platform outcomes, or block creators when inference is unavailable.
+- **Enforcement anchors:** `netlify/lib/dreamweaver-campaigns.mjs`, `netlify/functions/dreamweaver-campaigns.mjs`, `netlify/functions/dreamweaver-campaign-monitor.mjs`, `netlify/database/migrations/20260816210000_add-dreamweaver-background-jobs.sql`.
+
+### CRN and Relationship Integrity Team
+
+- **Scope:** identity and relationship workflow integrity, consent-aware drafting, member-state quality.
+- **Must not do:** generate outreach drafts without consent, expose owner-only relationship workspace, or allow unverified cross-origin writes.
+- **Enforcement anchors:** `netlify/functions/halo-relations.mjs`, `netlify/database/migrations/20260807190000_create-halo-relations.sql`.
+
+### Monitoring and Incident Team
+
+- **Scope:** recurring sweeps, runtime scout intake, issue reconciliation, incident evidence quality.
+- **Must not do:** silently drop failed checks, release without monitoring checks, or skip issue reconciliation for recurring failures/recoveries.
+- **Enforcement anchors:** `site-monitor.js`, `netlify/lib/maintenance-sweep.mjs`, `netlify/functions/health-scout.mjs`.
+
+### Site Orchestrator and Bridge
+
+- **Scope:** cross-team contract decisions, escalation command, rollback/approval ownership.
+- **Must not do:** permit cross-team contract drift without explicit handoff contract, rollback note, and monitoring check.
+- **Enforcement anchors:** this handbook’s handoff/escalation/release-gate sections and contract scripts in `scripts/`.
+
+## Shared evidence and learning loop
+
+All teams improve from shared evidence while preserving human authority:
+
+1. Ingest allowlisted telemetry only through `POST /api/stats/events` with origin and payload controls.
+2. Review protected aggregate summaries through `GET /api/stats/summary` using admin-token auth.
+3. Combine domain events (release link interactions, Dreamweaver campaign events, workflow actions, incident outcomes) into role briefings.
+4. Keep every recommendation approval-gated and record actual outcomes so future runs can correct prior assumptions.
+5. Treat fallback output as explicit lower-confidence guidance, never hidden automation.
+
+This model keeps decisions evidence-based, continuously improvable, and safe for both artists and fans.
+
 ## Reusable template for future teams
 
 When adding a new HALO page or system team, document:

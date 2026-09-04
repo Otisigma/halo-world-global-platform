@@ -123,6 +123,7 @@ For documentation-only changes, use the normal repository validation path and co
 - The team closest to the failing boundary opens the incident; the Bridge Team joins if the issue crosses contracts.
 - Every incident ends with: root cause, owner, fix, verification, and whether handbook rules need updating.
 - Teams should keep `HALO_AGENT_STATUS_BOARD.md` current so owners can see Focus, Done, Watching, Impact, Next, and dated changes across domains.
+- Teams should also keep the status board's recent outcomes loop current so the latest operational change, evidence, learning, open risk, and next check stay visible in one owner-readable place.
 
 ## Practical scaling model
 
@@ -133,6 +134,7 @@ Use this operating loop:
 3. Bridge teams absorb shared-contract complexity instead of pushing it to the owner.
 4. QA / Release owners prevent partial work from shipping.
 5. Monitoring owners watch live health and trigger fast escalation when signals drift.
+6. Recent outcomes are reviewed against Halo Ledger, deploy-health checks, and Builder/Verifier/Committee evidence so the next improvement question stays explicit.
 
 For AI-delivered work verification, follow `HALO_AI_COMMITTEE_WORKFLOW.md` so implementation, challenge testing, and acceptance are separated across Builder, Verifier, and Committee roles, and complete `.github/pull_request_template.md` to capture Builder evidence, Verifier findings, and Committee decision in the PR record.
 

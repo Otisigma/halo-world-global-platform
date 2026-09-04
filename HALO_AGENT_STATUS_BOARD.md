@@ -44,6 +44,7 @@ Use this lightweight loop to turn recent work into the next improvement decision
    - **Learning**
    - **Open risk**
    - **Next check**
+   - **Check by**
 
 ## Outcomes loop template (copy/paste)
 
@@ -56,6 +57,7 @@ Loop reviewed: YYYY-MM-DD HH:MM UTC
 - Learning:
 - Open risk:
 - Next check:
+- Check by: YYYY-MM-DD
 ```
 
 ## Live board
@@ -117,6 +119,7 @@ Loop reviewed: 2026-09-04 16:30 UTC
 - Learning: HALO improves faster when governance evidence is captured in the same place work is proposed and accepted.
 - Open risk: Teams can still prove a change happened without making the follow-up learning explicit.
 - Next check: Keep this loop updated whenever committee rules or owner-visible operating guidance changes.
+- Check by: 2026-09-11
 
 ### Halo Ledger made memory durable, but not yet concise
 - Outcome: Halo Ledger now stores uploads, issues, fixes, approvals, and agent activity as searchable operational memory.
@@ -124,6 +127,7 @@ Loop reviewed: 2026-09-04 16:30 UTC
 - Learning: Durable memory is strongest when the latest high-signal outcomes are pulled forward into a small owner review surface.
 - Open risk: Important changes can stay buried inside raw ledger history unless someone summarizes what matters now.
 - Next check: Use this loop to surface the most important ledger-backed change, risk, and follow-up question after meaningful operational work.
+- Check by: 2026-09-11
 
 ### Deploy feedback closes the release loop faster
 - Outcome: Deploy-health contracts now verify routing, promotion visibility, and homepage experiment evidence before release work is considered complete.
@@ -131,3 +135,4 @@ Loop reviewed: 2026-09-04 16:30 UTC
 - Learning: Fast contract feedback is most useful when it ends with the next operational question, not just a pass/fail result.
 - Open risk: A green deploy check still does not say what HALO should refine next for supporter value or operator trust.
 - Next check: After each deploy-health or support-critical homepage change, record the observed outcome here with the next validation question.
+- Check by: 2026-09-11

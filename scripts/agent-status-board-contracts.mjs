@@ -4,12 +4,14 @@ import { readFile } from "node:fs/promises";
 const board = await readFile(new URL("../HALO_AGENT_STATUS_BOARD.md", import.meta.url), "utf8");
 const teamDoc = await readFile(new URL("../HALO_AGENT_TEAM.md", import.meta.url), "utf8");
 const operatingModel = await readFile(new URL("../HALO_SITE_AI_OPERATING_MODEL.md", import.meta.url), "utf8");
+const liveBoard = board.split("## Live board")[1] || "";
 
 for (const field of ["Focus", "Done", "Watching", "Impact", "Next"]) {
-  assert.match(board, new RegExp(`\\*\\*${field}\\*\\*`), `status board must include ${field} updates`);
+  assert.match(liveBoard, new RegExp(`- ${field}:`), `live board must include ${field} updates`);
 }
 
 assert.match(board, /Change log/, "status board must track dated changes over time");
+assert.match(liveBoard, /\b\d{4}-\d{2}-\d{2}:/, "live board must include at least one dated change entry");
 assert.match(board, /protects both the artist and the fan/i, "status board must state artist and fan protection");
 assert.match(board, /do not exploit/i, "status board must reject exploitation");
 assert.match(board, /use behavior and engagement data to improve/i, "status board must define ethical data use");

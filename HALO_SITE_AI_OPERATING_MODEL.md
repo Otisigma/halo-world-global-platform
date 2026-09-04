@@ -122,6 +122,7 @@ For documentation-only changes, use the normal repository validation path and co
 - Sev-1 or multi-team incidents move immediately to Site Leadership-led incident command.
 - The team closest to the failing boundary opens the incident; the Bridge Team joins if the issue crosses contracts.
 - Every incident ends with: root cause, owner, fix, verification, and whether handbook rules need updating.
+- Teams should keep `HALO_AGENT_STATUS_BOARD.md` current so owners can see Focus, Done, Watching, Impact, Next, and dated changes across domains.
 
 ## Practical scaling model
 

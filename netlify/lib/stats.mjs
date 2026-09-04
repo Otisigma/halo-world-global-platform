@@ -51,6 +51,8 @@ export const allowedEvents = new Set([
   "execute_adaptive_move",
   "explore_halo_worlds",
   "focus_mode_toggle",
+  "homepage_music_experiment_exit",
+  "homepage_music_experiment_viewed",
   "halo_dj_audience_signal",
   "halo_dj_mode",
   "halo_x_auth",

@@ -27,7 +27,7 @@ The latest report appears at `/halo-command.html`. Owners can also trigger up to
 
 For lightweight human updates across specialist teams, use `HALO_AGENT_STATUS_BOARD.md` as the shared Focus / Done / Watching / Impact / Next board plus dated change-log entries.
 
-For multi-role verification governance, use `HALO_AI_COMMITTEE_WORKFLOW.md` to run the Builder → Verifier → Committee operating loop with evidence-first acceptance rules.
+For multi-role verification governance, use `HALO_AI_COMMITTEE_WORKFLOW.md` to run the Builder → Verifier → Committee operating loop with evidence-first acceptance rules, and complete `.github/pull_request_template.md` for AI-delivered work so Builder evidence, Verifier findings, and Committee decision are recorded in every PR.
 
 To deliver a privacy-safe summary to an external notification workflow, configure `HALO_AGENT_REPORT_WEBHOOK_URL` with a secure HTTPS webhook. The webhook receives aggregate health, findings, reflection, and proposed priorities. It does not receive private member messages, passwords, payment information, owner notes, or raw personal records.
 

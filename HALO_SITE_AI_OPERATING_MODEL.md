@@ -134,7 +134,7 @@ Use this operating loop:
 4. QA / Release owners prevent partial work from shipping.
 5. Monitoring owners watch live health and trigger fast escalation when signals drift.
 
-For AI-delivered work verification, follow `HALO_AI_COMMITTEE_WORKFLOW.md` so implementation, challenge testing, and acceptance are separated across Builder, Verifier, and Committee roles.
+For AI-delivered work verification, follow `HALO_AI_COMMITTEE_WORKFLOW.md` so implementation, challenge testing, and acceptance are separated across Builder, Verifier, and Committee roles, and complete `.github/pull_request_template.md` to capture Builder evidence, Verifier findings, and Committee decision in the PR record.
 
 This keeps decision rights close to the work, while preserving one clear escalation and approval path for the whole site.
 

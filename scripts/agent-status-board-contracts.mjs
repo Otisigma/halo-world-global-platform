@@ -4,6 +4,7 @@ import { readFile } from "node:fs/promises";
 const board = await readFile(new URL("../HALO_AGENT_STATUS_BOARD.md", import.meta.url), "utf8");
 const teamDoc = await readFile(new URL("../HALO_AGENT_TEAM.md", import.meta.url), "utf8");
 const operatingModel = await readFile(new URL("../HALO_SITE_AI_OPERATING_MODEL.md", import.meta.url), "utf8");
+const committeeWorkflow = await readFile(new URL("../HALO_AI_COMMITTEE_WORKFLOW.md", import.meta.url), "utf8");
 const liveBoard = board.split("## Live board")[1] || "";
 const exampleTeams = ["Music Agent", "Stripe / Payments Agent", "Supporter Experience Agent", "Monitoring / QA Agent", "Insights / Data Agent"];
 const escapeRegExp = value => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -27,5 +28,19 @@ assert.match(board, /fans become supporters, supporters are rewarded/i, "status 
 
 assert.match(teamDoc, /HALO_AGENT_STATUS_BOARD\.md/, "agent council handbook must point to the status board");
 assert.match(operatingModel, /HALO_AGENT_STATUS_BOARD\.md/, "operating model handbook must point to the status board");
+assert.match(teamDoc, /HALO_AI_COMMITTEE_WORKFLOW\.md/, "agent council handbook must point to the AI committee workflow");
+assert.match(operatingModel, /HALO_AI_COMMITTEE_WORKFLOW\.md/, "operating model handbook must point to the AI committee workflow");
+
+assert.match(committeeWorkflow, /## Purpose/, "committee workflow must define purpose");
+assert.match(committeeWorkflow, /### Builder/, "committee workflow must define the Builder role");
+assert.match(committeeWorkflow, /### Verifier/, "committee workflow must define the Verifier role");
+assert.match(committeeWorkflow, /### Committee/, "committee workflow must define the Committee role");
+assert.match(committeeWorkflow, /## Verification rules/, "committee workflow must define verification rules");
+assert.match(committeeWorkflow, /\*\*Accept:?/, "committee workflow must define Accept outcome");
+assert.match(committeeWorkflow, /\*\*Accept with caveat:?/, "committee workflow must define Accept with caveat outcome");
+assert.match(committeeWorkflow, /\*\*Send back:?/, "committee workflow must define Send back outcome");
+assert.match(committeeWorkflow, /\*\*Reject:?/, "committee workflow must define Reject outcome");
+assert.match(committeeWorkflow, /evidence over claims/i, "committee workflow must preserve evidence-first skepticism");
+assert.match(committeeWorkflow, /live-state checks over code-only claims/i, "committee workflow must prefer live-state verification");
 
 console.log("HALO agent status board contracts passed.");

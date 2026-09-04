@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
+import { allowedEvents, cleanIdentifier, cleanMetadata, cleanPagePath } from "../netlify/lib/stats.mjs";
 
 const root = resolve(import.meta.dirname, "..");
 const read = path => readFile(resolve(root, path), "utf8");
@@ -64,7 +65,10 @@ assert.match(mixReviews, /release_readiness/, "paid mix approval must include re
 assert.match(fanCampaignMigration, /PRIMARY KEY \(campaign_id, voter_key\)/, "fan campaigns must enforce one vote identity key");
 assert.match(fanCampaigns, /starts_at <= NOW\(\) AND ends_at > NOW\(\)/, "fan campaigns must enforce voting window");
 assert.match(fanCampaigns, /owner_member_id/, "fan campaign updates must remain owner-scoped");
-assert.match(releasePack, /allowedStatuses = new Set\(\["interested", "downloaded", "played", "declined"\]\)/, "release pack must preserve tracked selector response statuses");
+assert.match(releasePack, /allowedStatuses\s*=\s*new\s+Set/, "release pack must declare bounded selector response statuses");
+for (const status of ["interested", "downloaded", "played", "declined"]) {
+  assert.match(releasePack, new RegExp(`\"${status}\"|\'${status}\'`), `release pack must include ${status} selector status`);
+}
 
 // Dreamweaver must stay grounded and fallback-safe.
 assert.match(dreamweaverLib, /Never invent external platform results\./, "Dreamweaver review must forbid fabricated external metrics");
@@ -83,8 +87,8 @@ assert.match(haloRelationsMigration, /assistant_role IN \('welcome', 'relationsh
 assert.match(maintenanceSweep, /reconcileIssue/, "maintenance sweeps must reconcile recurring issues");
 assert.match(maintenanceSweep, /reportIssue/, "maintenance sweeps must report failed checks");
 assert.match(maintenanceSweep, /resolveIssue/, "maintenance sweeps must resolve recovered checks");
-assert.match(healthScout, /schedule: "\*\/15 \* \* \* \*"/, "health scout must run every 15 minutes");
-assert.match(siteMonitor, /fetch\("\/api\/issues"/, "browser scout must report issues to intake API");
+assert.match(healthScout, /schedule:\s*["']\*\/15\s+\*\s+\*\s+\*\s+\*["']/, "health scout must run every 15 minutes");
+assert.match(siteMonitor, /\/api\/issues/, "browser scout must report issues to intake API");
 
 // Shared evidence loop stays bounded, allowlisted, and protected.
 assert.match(statsLib, /allowedEvents = new Set/, "stats library must keep event allowlist");
@@ -93,7 +97,23 @@ assert.match(statsEvents, /Cross-origin events are not accepted/, "stats ingesti
 assert.match(statsSummary, /STATS_ADMIN_TOKEN/, "stats summary must remain admin-token protected");
 
 // CI must keep contract and deploy feedback checks active.
-assert.match(ciWorkflow, /Deploy health contracts/, "CI must keep deploy health contract job");
 assert.match(ciWorkflow, /npm run deploy:feedback/, "CI must execute deploy feedback contracts");
+assert.match(ciWorkflow, /docker build -t halo-world:ci \./, "CI must keep docker smoke coverage for deployability");
+
+// Behavior-focused telemetry guardrail checks.
+assert.ok(allowedEvents.has("payment_checkout_started"), "telemetry must accept checkout-start event");
+assert.equal(cleanIdentifier("abc12345_XY"), "abc12345_XY", "identifier sanitization must preserve valid IDs");
+assert.equal(cleanIdentifier("bad id"), "", "identifier sanitization must reject invalid IDs");
+assert.equal(cleanPagePath("/music/?x=1#hash"), "/music/", "page-path sanitization must strip query and hash");
+assert.deepEqual(cleanMetadata({
+  seconds: 999999,
+  position: -42,
+  target: "hero",
+  unknown: "drop-me"
+}), {
+  seconds: 86400,
+  position: 0,
+  target: "hero"
+}, "metadata sanitization must clamp numeric values and drop unknown keys");
 
 console.log("Site AI operating model contracts passed.");

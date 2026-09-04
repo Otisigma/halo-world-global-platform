@@ -1349,6 +1349,14 @@
           const showNativeExperiment = musicExperimentVariant !== 'embed';
           const showEmbedExperiment = musicExperimentVariant !== 'native';
           const experimentViewMode = musicExperimentVariant === 'compare' ? 'side_by_side' : 'single_variant';
+          const trackMusicExperimentAction = (goal, target, variant) => {
+            window.haloStats?.track('homepage_music_experiment_action', {
+              variant,
+              mode: experimentViewMode,
+              goal,
+              target
+            });
+          };
 
           const audioCtxRef = useRef(null);
           const canvasRef = useRef(null);
@@ -1362,6 +1370,7 @@
           const midNodeRef = useRef(null);
           const trebleNodeRef = useRef(null);
           const activeSourceNodeRef = useRef(null);
+          const embedIframeTrackedRef = useRef(false);
           const [isFilterActive, setIsFilterActive] = useState(false);
 
           const addLog = (msg) => {
@@ -3344,9 +3353,9 @@
 
                   <section className="relative overflow-hidden rounded-[2rem] border border-amber-300/20 bg-[#0f0f13] shadow-[0_24px_70px_rgba(0,0,0,.35)]" aria-labelledby="music-experiment-title">
                     <div className="p-6 md:p-8">
-                      <p className="text-[9px] font-black uppercase tracking-[.28em] text-amber-300">Homepage experiment / Artist-first listening test</p>
+                      <p className="text-[9px] font-black uppercase tracking-[.28em] text-amber-300">Homepage experiment / Artist-first listening test / Supporter-first model</p>
                       <h2 id="music-experiment-title" className="mt-4 font-sans-alt text-3xl font-black uppercase leading-[.9] tracking-[-.03em] text-white md:text-4xl">Which music home performs best for listeners and artists?</h2>
-                      <p className="mt-4 max-w-3xl text-xs leading-6 text-gray-300">We are comparing the best listener experience and the best artist outcome. Variant A keeps the HALO-native artist home central. Variant B is a quick-listen embed comparison. Both paths route support back to artist-owned HALO actions.</p>
+                      <p className="mt-4 max-w-3xl text-xs leading-6 text-gray-300">We are comparing the best listener experience and the best artist outcome. Variant A keeps the HALO-native artist home central. Variant B is a quick-listen embed comparison. Both paths route support back to artist-owned HALO actions, where fans become supporters and supporters are rewarded.</p>
                       <p className="mt-3 text-[10px] uppercase tracking-[.18em] text-gray-500">Active test mode: {musicExperimentVariant === 'compare' ? 'A + B side-by-side' : musicExperimentVariant === 'native' ? 'A only (native)' : 'B only (embed)'}</p>
                     </div>
                     <div className="grid gap-px border-t border-white/10 bg-white/10 lg:grid-cols-2">
@@ -3361,16 +3370,35 @@
                             <li>• Conversion path: supporter actions stay inside HALO</li>
                           </ul>
                           <div className="mt-6 flex flex-wrap gap-3">
-                            <a href="/music/" data-stat-event="open_music_catalog" data-stat-target="homepage_experiment_native_listen" className="inline-flex items-center gap-2 rounded-full bg-emerald-300 px-5 py-2.5 text-[10px] font-black uppercase tracking-[.14em] text-black transition hover:bg-emerald-200">
+                            <a
+                              href="/music/"
+                              onClick={() => trackMusicExperimentAction('listening', 'homepage_experiment_native_listen', 'native')}
+                              data-stat-event="open_music_catalog"
+                              data-stat-target="homepage_experiment_native_listen"
+                              className="inline-flex items-center gap-2 rounded-full bg-emerald-300 px-5 py-2.5 text-[10px] font-black uppercase tracking-[.14em] text-black transition hover:bg-emerald-200"
+                            >
                               Enter HALO music home
                             </a>
                             <button
                               type="button"
-                              onClick={() => { openConsoleArea('party'); window.haloStats?.track('enter_console', { target: 'homepage_experiment_native_relationship_room' }); }}
+                              onClick={() => {
+                                openConsoleArea('party');
+                                window.haloStats?.track('enter_console', { target: 'homepage_experiment_native_relationship_room' });
+                                trackMusicExperimentAction('follows', 'homepage_experiment_native_relationship_room', 'native');
+                              }}
                               className="inline-flex items-center gap-2 rounded-full border border-white/15 px-5 py-2.5 text-[10px] font-black uppercase tracking-[.14em] text-gray-100 transition hover:border-white/35"
                             >
                               Open relationship room
                             </button>
+                            <a
+                              href="/support/"
+                              onClick={() => trackMusicExperimentAction('support_actions', 'homepage_experiment_native_support_action', 'native')}
+                              data-stat-event="open_feedback_desk"
+                              data-stat-target="homepage_experiment_native_support_action"
+                              className="inline-flex items-center gap-2 rounded-full border border-emerald-300/40 px-5 py-2.5 text-[10px] font-black uppercase tracking-[.14em] text-emerald-100 transition hover:border-emerald-200"
+                            >
+                              Support the artist
+                            </a>
                           </div>
                         </article>
                       )}
@@ -3384,16 +3412,33 @@
                               src={QUICK_LISTEN_EMBED_URL}
                               title="HALO quick-listen embed comparison"
                               loading="lazy"
+                              onLoad={() => {
+                                if (embedIframeTrackedRef.current) return;
+                                embedIframeTrackedRef.current = true;
+                                trackMusicExperimentAction('iframe_loaded', 'homepage_experiment_embed_iframe_loaded', 'embed');
+                              }}
                               allow="autoplay; encrypted-media; picture-in-picture"
                               sandbox="allow-scripts allow-same-origin allow-presentation allow-popups allow-popups-to-escape-sandbox"
                               className="aspect-video w-full border-0"
                             ></iframe>
                           </div>
                           <div className="mt-6 flex flex-wrap gap-3">
-                            <a href="/music/" data-stat-event="open_music_catalog" data-stat-target="homepage_experiment_embed_continue_halo" className="inline-flex items-center gap-2 rounded-full bg-cyan-200 px-5 py-2.5 text-[10px] font-black uppercase tracking-[.14em] text-black transition hover:bg-cyan-100">
+                            <a
+                              href="/music/"
+                              onClick={() => trackMusicExperimentAction('repeat_visits', 'homepage_experiment_embed_continue_halo', 'embed')}
+                              data-stat-event="open_music_catalog"
+                              data-stat-target="homepage_experiment_embed_continue_halo"
+                              className="inline-flex items-center gap-2 rounded-full bg-cyan-200 px-5 py-2.5 text-[10px] font-black uppercase tracking-[.14em] text-black transition hover:bg-cyan-100"
+                            >
                               Continue in HALO
                             </a>
-                            <a href="/support/" data-stat-event="open_feedback_desk" data-stat-target="homepage_experiment_embed_support_action" className="inline-flex items-center gap-2 rounded-full border border-cyan-200/35 px-5 py-2.5 text-[10px] font-black uppercase tracking-[.14em] text-cyan-100 transition hover:border-cyan-100">
+                            <a
+                              href="/support/"
+                              onClick={() => trackMusicExperimentAction('supporter_conversion', 'homepage_experiment_embed_support_action', 'embed')}
+                              data-stat-event="open_feedback_desk"
+                              data-stat-target="homepage_experiment_embed_support_action"
+                              className="inline-flex items-center gap-2 rounded-full border border-cyan-200/35 px-5 py-2.5 text-[10px] font-black uppercase tracking-[.14em] text-cyan-100 transition hover:border-cyan-100"
+                            >
                               Support actions
                             </a>
                           </div>

@@ -53,6 +53,13 @@ Instrumentation hooks:
 
 - `homepage_music_experiment_viewed` with metadata `variant` and `view`
 - `homepage_music_experiment_exit` with metadata `variant` and `seconds`
+- `homepage_music_experiment_action` with metadata `variant`, `mode`, `goal`, and `target` for comparison placeholders:
+  - `goal: listening` for native music-home entry
+  - `goal: iframe_loaded` for embed iframe load target `homepage_experiment_embed_iframe_loaded` (render-only, not playback intent)
+  - `goal: follows` for native relationship-room entry
+  - `goal: support_actions` for native support CTA
+  - `goal: repeat_visits` for embed continue-in-HALO handoff
+  - `goal: supporter_conversion` for embed support CTA
 - Existing events already on the page for follow/support/conversion actions (for example `community_*`, `payment_checkout_started`, and route click events via `data-stat-event`)
 
-Interpretation note: the purpose is to compare the best listener experience and the best artist outcome, consistent with HALO's artist-owned values. Keep Variant A as the brand center while using Variant B as a measurable comparison path.
+Interpretation note: the purpose is to compare the best listener experience and the best artist outcome, consistent with HALO's artist-owned values. Keep Variant A as the brand center while using Variant B as a measurable comparison path. Use this behavior data to improve supporter value and artist outcomes without exploitation.

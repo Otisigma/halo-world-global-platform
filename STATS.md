@@ -58,7 +58,7 @@ Instrumentation hooks:
   - `goal: iframe_loaded` for embed iframe load target `homepage_experiment_embed_iframe_loaded` (current quick-listen availability proxy; render-only, not playback intent)
   - `goal: follows` for relationship-room entry in both variants
   - `goal: support_actions` for support CTA in both variants
-  - `goal: repeat_visits` for relationship-room return intent in both variants
+  - `goal: repeat_visits` for the embed continue-in-HALO handoff; compare longer-term revisit rate by variant with `homepage_music_experiment_viewed` and `homepage_music_experiment_exit`
   - `goal: supporter_conversion` for support CTA in both variants
 - Existing events already on the page for follow/support/conversion actions (for example `community_*`, `payment_checkout_started`, and route click events via `data-stat-event`)
 
@@ -69,7 +69,7 @@ Recommended comparison view:
 | Listening | `homepage_experiment_native_listen` | `homepage_experiment_embed_iframe_loaded` | Compare HALO music-home entry against quick-listen availability until a deeper embed playback signal exists |
 | Follows | `homepage_experiment_native_relationship_room` | `homepage_experiment_embed_relationship_room` | Which path gets people into the relationship room |
 | Support actions | `homepage_experiment_native_support_action` | `homepage_experiment_embed_support_action` | Which path gets more support-intent clicks |
-| Repeat visits | `homepage_experiment_native_relationship_room` | `homepage_experiment_embed_continue_halo` and `homepage_experiment_embed_relationship_room` | Which path creates stronger return intent |
+| Repeat visits | `homepage_music_experiment_viewed` / `homepage_music_experiment_exit` cohort by `variant` | `homepage_music_experiment_viewed` / `homepage_music_experiment_exit` cohort by `variant`, plus `homepage_experiment_embed_continue_halo` as a handoff signal | Which variant brings people back over time, with the embed handoff acting as an immediate supporting signal |
 | Supporter conversion | `homepage_experiment_native_support_action` | `homepage_experiment_embed_support_action` | Which path is more likely to move fans toward supporter actions |
 
 Interpretation note: the purpose is to compare the best listener experience and the best artist outcome, consistent with HALO's artist-owned values. Keep Variant A as the brand center while using Variant B as a measurable comparison path. Use transparent behavior data to improve supporter value and artist outcomes without exploitation.

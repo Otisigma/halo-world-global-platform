@@ -3395,7 +3395,7 @@
                               onClick={() => {
                                 openConsoleArea('party');
                                 window.haloStats?.track('enter_console', { target: 'homepage_experiment_native_relationship_room' });
-                                trackMusicExperimentAction(['follows', 'repeat_visits'], 'homepage_experiment_native_relationship_room', 'native');
+                                trackMusicExperimentAction('follows', 'homepage_experiment_native_relationship_room', 'native');
                               }}
                               className="inline-flex items-center gap-2 rounded-full border border-white/15 px-5 py-2.5 text-[10px] font-black uppercase tracking-[.14em] text-gray-100 transition hover:border-white/35"
                             >
@@ -3448,7 +3448,7 @@
                               onClick={() => {
                                 openConsoleArea('party');
                                 window.haloStats?.track('enter_console', { target: 'homepage_experiment_embed_relationship_room' });
-                                trackMusicExperimentAction(['follows', 'repeat_visits'], 'homepage_experiment_embed_relationship_room', 'embed');
+                                trackMusicExperimentAction('follows', 'homepage_experiment_embed_relationship_room', 'embed');
                               }}
                               className="inline-flex items-center gap-2 rounded-full border border-white/15 px-5 py-2.5 text-[10px] font-black uppercase tracking-[.14em] text-gray-100 transition hover:border-white/35"
                             >

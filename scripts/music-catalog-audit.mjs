@@ -88,7 +88,7 @@ assert.match(requestedReleaseNormalization, /'blessed'/, "Normalization migratio
 assert.match(requestedReleaseNormalization, /'my-sensitivity-like-a-crown'/, "Normalization migration must include My Sensitivity Like a Crown");
 assert.match(requestedReleaseNormalization, /'when-the-world-goes-dark'/, "Normalization migration must include When The World Goes Dark");
 assert.match(requestedReleaseNormalization, /purchase_url/, "Normalization migration must wire buy\/stream URLs for the requested releases");
-assert.match(requestedReleaseNormalization, /is_chart_eligible\s*=\s*EXCLUDED\.is_chart_eligible/, "Normalization migration must preserve chart eligibility on rerun");
+assert.match(requestedReleaseNormalization, /WHEN NULLIF\(halo_release_campaigns\.purchase_url, ''\) IS NULL THEN EXCLUDED\.is_chart_eligible/, "Normalization migration must only restore chart eligibility when a stale requested release is still missing its normalized buy\/stream link");
 assert.match(requestedReleaseNormalization, /\/assets\/halo-app-icon-512\.png/, "Normalization migration must provide the shared fallback artwork for releases without local cover assets");
 assert.match(requestedReleaseNormalization, /artwork_override_url\s*=\s*COALESCE\(NULLIF\(EXCLUDED\.artwork_override_url, ''\), halo_release_campaigns\.artwork_override_url\)/, "Normalization migration must preserve any manual artwork override");
 // Protect against PR #40 regression: website_url must not duplicate the release HyperFollow URL.

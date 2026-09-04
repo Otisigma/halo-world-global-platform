@@ -128,7 +128,13 @@ ON CONFLICT (id) DO UPDATE SET
   press_description    = EXCLUDED.press_description,
   credits              = EXCLUDED.credits,
   available_versions   = EXCLUDED.available_versions,
-  is_clean_version     = EXCLUDED.is_clean_version,
-  is_chart_eligible    = EXCLUDED.is_chart_eligible,
+  is_clean_version     = CASE
+    WHEN NULLIF(halo_release_campaigns.purchase_url, '') IS NULL THEN EXCLUDED.is_clean_version
+    ELSE halo_release_campaigns.is_clean_version
+  END,
+  is_chart_eligible    = CASE
+    WHEN NULLIF(halo_release_campaigns.purchase_url, '') IS NULL THEN EXCLUDED.is_chart_eligible
+    ELSE halo_release_campaigns.is_chart_eligible
+  END,
   status               = EXCLUDED.status,
   updated_at           = NOW();

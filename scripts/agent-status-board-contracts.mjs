@@ -7,7 +7,9 @@ const operatingModel = await readFile(new URL("../HALO_SITE_AI_OPERATING_MODEL.m
 const committeeWorkflow = await readFile(new URL("../HALO_AI_COMMITTEE_WORKFLOW.md", import.meta.url), "utf8");
 const pullRequestTemplate = await readFile(new URL("../.github/pull_request_template.md", import.meta.url), "utf8");
 const liveBoard = board.split("## Live board")[1] || "";
-const outcomesLoop = board.split("## Current outcomes loop")[1] || "";
+const outcomesLoopGuidance = board.match(/## Recent outcomes loop([\s\S]*?)## Outcomes loop template/)?.[1] || "";
+const outcomesLoopTemplate = board.match(/## Outcomes loop template \(copy\/paste\)([\s\S]*?)## Live board/)?.[1] || "";
+const currentOutcomesLoop = board.split("## Current outcomes loop")[1] || "";
 const exampleTeams = ["Music Agent", "Stripe / Payments Agent", "Supporter Experience Agent", "Monitoring / QA Agent", "Insights / Data Agent"];
 const exampleOutcomes = [
   "Governance now has an evidence trail",
@@ -33,12 +35,13 @@ assert.match(board, /use behavior and engagement data to improve/i, "status boar
 assert.match(board, /artist-owned music and software ecosystem/i, "status board must preserve HALO brand positioning");
 assert.match(board, /fans become supporters, supporters are rewarded/i, "status board must preserve supporter reward positioning");
 assert.match(board, /## Recent outcomes loop/, "status board must define a recent outcomes loop");
-assert.match(board, /Halo Ledger, deploy-health checks, status-board changes, and Builder\/Verifier\/Committee PR evidence/, "status board outcomes loop must stay evidence-first");
-assert.match(board, /- \*\*Outcome\*\*[\s\S]*- \*\*Evidence\*\*[\s\S]*- \*\*Learning\*\*[\s\S]*- \*\*Open risk\*\*[\s\S]*- \*\*Next check\*\*/, "status board outcomes loop template must require outcome, evidence, learning, open risk, and next check");
+assert.match(outcomesLoopGuidance, /Halo Ledger, deploy-health checks, status-board changes, and Builder\/Verifier\/Committee PR evidence/, "status board outcomes loop must stay evidence-first");
+assert.match(outcomesLoopGuidance, /- \*\*Outcome\*\*[\s\S]*- \*\*Evidence\*\*[\s\S]*- \*\*Learning\*\*[\s\S]*- \*\*Open risk\*\*[\s\S]*- \*\*Next check\*\*/, "status board outcomes loop guidance must require outcome, evidence, learning, open risk, and next check");
 
-assert.match(board, /Loop reviewed: \d{4}-\d{2}-\d{2} \d{2}:\d{2} UTC/, "status board must timestamp the current outcomes loop");
+assert.match(outcomesLoopTemplate, /Loop reviewed: YYYY-MM-DD HH:MM UTC/, "status board outcomes loop template must include a Loop reviewed timestamp");
+assert.match(currentOutcomesLoop, /Loop reviewed: \d{4}-\d{2}-\d{2} \d{2}:\d{2} UTC/, "status board must timestamp the current outcomes loop");
 for (const exampleOutcome of exampleOutcomes) {
-  const outcomeSection = outcomesLoop.match(new RegExp(`### ${escapeRegExp(exampleOutcome)}([\\s\\S]*?)(?=\\n### |$)`))?.[1] || "";
+  const outcomeSection = currentOutcomesLoop.match(new RegExp(`### ${escapeRegExp(exampleOutcome)}([\\s\\S]*?)(?=\\n### |$)`))?.[1] || "";
   assert.ok(outcomeSection, `current outcomes loop must include ${exampleOutcome}`);
   for (const field of ["Outcome", "Evidence", "Learning", "Open risk", "Next check"]) {
     assert.match(outcomeSection, new RegExp(`- ${escapeRegExp(field)}:`), `${exampleOutcome} must include ${field}`);

@@ -56,7 +56,7 @@ Instrumentation hooks:
 - `homepage_music_experiment_action` with metadata `variant`, `mode`, `goal`, and `target` for comparison placeholders:
   - `goal: listening` for native music-home entry
   - `goal: iframe_loaded` for embed iframe load target `homepage_experiment_embed_iframe_loaded` (current quick-listen availability proxy; render-only, not playback intent)
-  - `goal: follows` for relationship-room entry in both variants
+  - `goal: relationship_room` for relationship-room entry in both variants (top-of-funnel handoff before downstream follow actions)
   - `goal: support_actions` for support CTA in both variants
   - `goal: repeat_visits` for the embed continue-in-HALO handoff; compare longer-term revisit rate by variant with `homepage_music_experiment_viewed` and `homepage_music_experiment_exit`
   - `goal: supporter_conversion` for support CTA in both variants
@@ -67,7 +67,7 @@ Recommended comparison view:
 | Goal | Variant A target | Variant B target | Reading |
 | --- | --- | --- | --- |
 | Listening | `homepage_experiment_native_listen` | `homepage_experiment_embed_iframe_loaded` | Compare HALO music-home entry against quick-listen availability until a deeper embed playback signal exists |
-| Follows | `homepage_experiment_native_relationship_room` | `homepage_experiment_embed_relationship_room` | Which path gets people into the relationship room |
+| Follows | `homepage_music_experiment_viewed` cohort by `variant`, with `homepage_experiment_native_relationship_room` as the HALO handoff signal | `homepage_music_experiment_viewed` cohort by `variant`, with `homepage_experiment_embed_relationship_room` as the HALO handoff signal | Which variant leads to stronger downstream follow/community actions after the relationship-room handoff |
 | Support actions | `homepage_experiment_native_support_action` | `homepage_experiment_embed_support_action` | Which path gets more support-intent clicks |
 | Repeat visits | `homepage_music_experiment_viewed` / `homepage_music_experiment_exit` cohort by `variant` | `homepage_music_experiment_viewed` / `homepage_music_experiment_exit` cohort by `variant`, plus `homepage_experiment_embed_continue_halo` as a handoff signal | Which variant brings people back over time, with the embed handoff acting as an immediate supporting signal |
 | Supporter conversion | `homepage_experiment_native_support_action` | `homepage_experiment_embed_support_action` | Which path is more likely to move fans toward supporter actions |

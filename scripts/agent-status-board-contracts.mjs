@@ -10,6 +10,7 @@ const liveBoard = board.split("## Live board")[1] || "";
 const outcomesLoopGuidance = board.match(/## Recent outcomes loop([\s\S]*?)## Outcomes loop template/)?.[1] || "";
 const outcomesLoopTemplate = board.match(/## Outcomes loop template \(copy\/paste\)([\s\S]*?)## Live board/)?.[1] || "";
 const currentOutcomesLoop = board.split("## Current outcomes loop")[1] || "";
+const committeeOutcomesHandoff = committeeWorkflow.match(/## Committee-to-outcomes handoff([\s\S]*?)## Decision outcomes/)?.[1] || "";
 const exampleTeams = ["Music Agent", "Stripe / Payments Agent", "Supporter Experience Agent", "Monitoring / QA Agent", "Insights / Data Agent"];
 const exampleOutcomes = [
   "Governance now has an evidence trail",
@@ -17,6 +18,15 @@ const exampleOutcomes = [
   "Deploy feedback closes the release loop faster"
 ];
 const escapeRegExp = value => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+const isValidIsoDate = value => {
+  const dateParts = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!dateParts) return false;
+  const year = Number(dateParts[1]);
+  const month = Number(dateParts[2]);
+  const day = Number(dateParts[3]);
+  const normalized = new Date(Date.UTC(year, month - 1, day));
+  return normalized.getUTCFullYear() === year && normalized.getUTCMonth() === month - 1 && normalized.getUTCDate() === day;
+};
 
 for (const exampleTeam of exampleTeams) {
   const teamSection = liveBoard.match(new RegExp(`### ${escapeRegExp(exampleTeam)}([\\s\\S]*?)(?=\\n### |$)`))?.[1] || "";
@@ -47,7 +57,9 @@ for (const exampleOutcome of exampleOutcomes) {
   for (const field of ["Outcome", "Evidence", "Learning", "Open risk", "Next check", "Check by"]) {
     assert.match(outcomeSection, new RegExp(`- ${escapeRegExp(field)}:`), `${exampleOutcome} must include ${field}`);
   }
-  assert.match(outcomeSection, /- Check by: \d{4}-\d{2}-\d{2}/, `${exampleOutcome} must include a YYYY-MM-DD check-by date`);
+  const checkByValue = outcomeSection.match(/- Check by: (\d{4}-\d{2}-\d{2})/)?.[1];
+  assert.ok(checkByValue, `${exampleOutcome} must include a YYYY-MM-DD check-by date`);
+  assert.ok(isValidIsoDate(checkByValue), `${exampleOutcome} check-by date must be a valid calendar date`);
 }
 
 assert.match(teamDoc, /HALO_AGENT_STATUS_BOARD\.md/, "agent council handbook must point to the status board");
@@ -77,7 +89,9 @@ assert.match(committeeWorkflow, /live-state checks over code-only claims/i, "com
 assert.match(committeeWorkflow, /\.github\/pull_request_template\.md/, "committee workflow must define PR template handoff");
 assert.match(committeeWorkflow, /HALO_AGENT_STATUS_BOARD\.md/, "committee workflow must point to the status board outcomes loop");
 assert.match(committeeWorkflow, /current outcomes loop/i, "committee workflow must require a current outcomes loop handoff");
-assert.match(committeeWorkflow, /Outcome, Evidence, Learning, Open risk, Next check, and Check by/i, "committee workflow handoff must preserve outcomes loop field discipline");
+for (const field of ["Outcome", "Evidence", "Learning", "Open risk", "Next check", "Check by"]) {
+  assert.match(committeeOutcomesHandoff, new RegExp(`- \\*\\*${escapeRegExp(field)}\\*\\*`), `committee workflow handoff must include ${field} field labels`);
+}
 
 assert.match(pullRequestTemplate, /^# Summary/m, "PR template must include a Summary section");
 assert.match(pullRequestTemplate, /^## Builder evidence/m, "PR template must include Builder evidence section");

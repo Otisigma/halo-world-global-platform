@@ -48,7 +48,13 @@ This workflow adds a skeptical verification loop for AI-delivered work. No singl
 ## Committee-to-outcomes handoff
 
 - After Accept or Accept with caveat, update the current outcomes loop in `HALO_AGENT_STATUS_BOARD.md`.
-- Record each outcome with Outcome, Evidence, Learning, Open risk, Next check, and Check by so follow-up accountability is explicit.
+- Record each outcome with:
+  - **Outcome**
+  - **Evidence**
+  - **Learning**
+  - **Open risk**
+  - **Next check**
+  - **Check by**
 - Keep outcome evidence tied to the PR record, Halo Ledger, and deploy/contract checks when available.
 
 ## Decision outcomes

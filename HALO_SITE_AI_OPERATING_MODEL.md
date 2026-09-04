@@ -123,7 +123,7 @@ For documentation-only changes, use the normal repository validation path and co
 - The team closest to the failing boundary opens the incident; the Bridge Team joins if the issue crosses contracts.
 - Every incident ends with: root cause, owner, fix, verification, and whether handbook rules need updating.
 - Teams should keep `HALO_AGENT_STATUS_BOARD.md` current so owners can see Focus, Done, Watching, Impact, Next, and dated changes across domains.
-- Teams should also keep the status board's recent outcomes loop current so the latest operational change, evidence, learning, open risk, and next check stay visible in one owner-readable place. Each entry should include a check-by date so teams know when that follow-up question must be revisited.
+- Teams should also keep the status board's recent outcomes loop current so the latest operational change, evidence, learning, open risk, next check, and check-by date stay visible in one owner-readable place.
 
 ## Practical scaling model
 

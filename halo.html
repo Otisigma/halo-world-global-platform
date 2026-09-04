@@ -2545,17 +2545,30 @@
 
           useEffect(() => {
             const startedAt = Date.now();
-            window.haloStats?.track('homepage_music_experiment_viewed', {
-              variant: musicExperimentVariant,
-              view: experimentViewMode
-            });
-            return () => {
+            let hasTrackedExit = false;
+            const trackExit = () => {
+              if (hasTrackedExit) return;
+              hasTrackedExit = true;
               window.haloStats?.track('homepage_music_experiment_exit', {
                 variant: musicExperimentVariant,
                 seconds: Math.max(0, Math.round((Date.now() - startedAt) / 1000))
               });
             };
-          }, [musicExperimentVariant, experimentViewMode]);
+            const onVisibilityChange = () => {
+              if (document.visibilityState === 'hidden') trackExit();
+            };
+            window.haloStats?.track('homepage_music_experiment_viewed', {
+              variant: musicExperimentVariant,
+              view: experimentViewMode
+            });
+            window.addEventListener('pagehide', trackExit);
+            document.addEventListener('visibilitychange', onVisibilityChange);
+            return () => {
+              if (document.visibilityState === 'hidden') trackExit();
+              window.removeEventListener('pagehide', trackExit);
+              document.removeEventListener('visibilitychange', onVisibilityChange);
+            };
+          }, []);
 
           useEffect(() => {
             if (!canvasRef.current) return;
@@ -3372,6 +3385,7 @@
                               title="HALO quick-listen embed comparison"
                               loading="lazy"
                               allow="autoplay; encrypted-media; picture-in-picture"
+                              sandbox="allow-scripts allow-same-origin allow-presentation allow-popups allow-popups-to-escape-sandbox"
                               className="aspect-video w-full border-0"
                             ></iframe>
                           </div>

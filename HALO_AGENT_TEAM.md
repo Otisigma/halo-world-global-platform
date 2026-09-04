@@ -25,6 +25,8 @@ Every deployed sweep stores its coverage and individual results in Netlify Datab
 
 The latest report appears at `/halo-command.html`. Owners can also trigger up to two manual runs per hour from the dashboard.
 
+For lightweight human updates across specialist teams, use `HALO_AGENT_STATUS_BOARD.md` as the shared Focus / Done / Watching / Impact / Next board plus dated change-log entries.
+
 To deliver a privacy-safe summary to an external notification workflow, configure `HALO_AGENT_REPORT_WEBHOOK_URL` with a secure HTTPS webhook. The webhook receives aggregate health, findings, reflection, and proposed priorities. It does not receive private member messages, passwords, payment information, owner notes, or raw personal records.
 
 The system cannot initiate a new ChatGPT conversation or proactively message the project owner inside this development session. Daily updates are delivered through the private dashboard and the optional webhook.

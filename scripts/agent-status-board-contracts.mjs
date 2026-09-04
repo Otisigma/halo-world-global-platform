@@ -16,8 +16,7 @@ for (const exampleTeam of exampleTeams) {
     assert.match(teamSection, new RegExp(`- ${field}:`), `${exampleTeam} must include ${field}`);
   }
 
-  assert.match(teamSection, /- Change log:/, `${exampleTeam} must include a change log`);
-  assert.match(teamSection, /\r?\n\s*-\s*\d{4}-\d{2}-\d{2}:/, `${exampleTeam} must include at least one dated change entry`);
+  assert.match(teamSection, /- Change log:\r?\n\s*-\s*\d{4}-\d{2}-\d{2}:/, `${exampleTeam} must include a change log with a dated entry`);
 }
 
 assert.match(board, /protects both the artist and the fan/i, "status board must state artist and fan protection");

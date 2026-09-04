@@ -959,6 +959,7 @@
           artwork: '/assets/releases/my-sensitivity-like-a-crown.jpg',
           url: 'https://distrokid.com/hyperfollow/owenanthony/my-sensitivity-like-a-crown'
         };
+        const QUICK_LISTEN_EMBED_URL = 'https://www.youtube.com/embed/videoseries?list=PLcmaoB9ss1YE';
 
         const FALLBACK_ARTWORK = '/assets/halo-app-icon-512.png';
 
@@ -1341,6 +1342,13 @@
           const [showEqualizer, setShowEqualizer] = useState(false);
           const [equalizer, setEqualizer] = useState({ master: 70, bass: 0, mid: 0, treble: 0 });
           const fallbackReleaseArtwork = window.HaloReleaseArtwork?.DEFAULT_RELEASE_ARTWORK || '/assets/halo-app-icon-512.png';
+          const [musicExperimentVariant] = useState(() => {
+            const requested = new URLSearchParams(window.location.search).get('musicExperiment');
+            return ['native', 'embed'].includes(requested) ? requested : 'compare';
+          });
+          const showNativeExperiment = musicExperimentVariant !== 'embed';
+          const showEmbedExperiment = musicExperimentVariant !== 'native';
+          const experimentViewMode = musicExperimentVariant === 'compare' ? 'side_by_side' : 'single_variant';
 
           const audioCtxRef = useRef(null);
           const canvasRef = useRef(null);
@@ -2536,6 +2544,20 @@
           }, []);
 
           useEffect(() => {
+            const startedAt = Date.now();
+            window.haloStats?.track('homepage_music_experiment_viewed', {
+              variant: musicExperimentVariant,
+              view: experimentViewMode
+            });
+            return () => {
+              window.haloStats?.track('homepage_music_experiment_exit', {
+                variant: musicExperimentVariant,
+                seconds: Math.max(0, Math.round((Date.now() - startedAt) / 1000))
+              });
+            };
+          }, [musicExperimentVariant, experimentViewMode]);
+
+          useEffect(() => {
             if (!canvasRef.current) return;
             const canvas = canvasRef.current;
             const ctx = canvas.getContext('2d');
@@ -3304,6 +3326,65 @@
                     <div className="flex flex-col gap-4 border-t border-white/10 bg-[#111015] px-6 py-5 md:flex-row md:items-center md:justify-between md:px-9">
                       <p className="max-w-3xl text-xs leading-5 text-gray-400"><strong className="text-white">Built from both sides of the studio.</strong> HALO combines music-making experience with software development to build the infrastructure artists need to stay in control and create lasting value around their work.</p>
                       <a href="/creators/" className="inline-flex shrink-0 items-center gap-2 text-[9px] font-black uppercase tracking-[.2em] text-amber-300 transition hover:text-amber-100">See the artist promise <Icon name="arrow-right" className="h-4 w-4" /></a>
+                    </div>
+                  </section>
+
+                  <section className="relative overflow-hidden rounded-[2rem] border border-amber-300/20 bg-[#0f0f13] shadow-[0_24px_70px_rgba(0,0,0,.35)]" aria-labelledby="music-experiment-title">
+                    <div className="p-6 md:p-8">
+                      <p className="text-[9px] font-black uppercase tracking-[.28em] text-amber-300">Homepage experiment / Artist-first listening test</p>
+                      <h2 id="music-experiment-title" className="mt-4 font-sans-alt text-3xl font-black uppercase leading-[.9] tracking-[-.03em] text-white md:text-4xl">Which music home performs best for listeners and artists?</h2>
+                      <p className="mt-4 max-w-3xl text-xs leading-6 text-gray-300">We are comparing the best listener experience and the best artist outcome. Variant A keeps the HALO-native artist home central. Variant B is a quick-listen embed comparison. Both paths route support back to artist-owned HALO actions.</p>
+                      <p className="mt-3 text-[10px] uppercase tracking-[.18em] text-gray-500">Active test mode: {musicExperimentVariant === 'compare' ? 'A + B side-by-side' : musicExperimentVariant === 'native' ? 'A only (native)' : 'B only (embed)'}</p>
+                    </div>
+                    <div className="grid gap-px border-t border-white/10 bg-white/10 lg:grid-cols-2">
+                      {showNativeExperiment && (
+                        <article className="bg-[#0b0d10] p-6 md:p-8" data-experiment-variant="native">
+                          <p className="text-[9px] font-black uppercase tracking-[.22em] text-emerald-300">Variant A (Primary): Native HALO artist home</p>
+                          <h3 className="mt-4 font-sans-alt text-2xl font-black uppercase text-white">Artist-owned listening + support journey</h3>
+                          <p className="mt-3 text-xs leading-6 text-gray-300">Drive listening, follows, support actions, and repeat visits inside HALO where artists control the presentation, relationship, and rewards.</p>
+                          <ul className="mt-5 space-y-2 text-[11px] leading-5 text-gray-400">
+                            <li>• Listening depth: catalog and room actions in one flow</li>
+                            <li>• Follows + support: pass light, boost, and direct contributions</li>
+                            <li>• Conversion path: supporter actions stay inside HALO</li>
+                          </ul>
+                          <div className="mt-6 flex flex-wrap gap-3">
+                            <a href="/music/" data-stat-event="open_music_catalog" data-stat-target="homepage_experiment_native_listen" className="inline-flex items-center gap-2 rounded-full bg-emerald-300 px-5 py-2.5 text-[10px] font-black uppercase tracking-[.14em] text-black transition hover:bg-emerald-200">
+                              Enter HALO music home
+                            </a>
+                            <button
+                              type="button"
+                              onClick={() => { openConsoleArea('party'); window.haloStats?.track('enter_console', { target: 'homepage_experiment_native_relationship_room' }); }}
+                              className="inline-flex items-center gap-2 rounded-full border border-white/15 px-5 py-2.5 text-[10px] font-black uppercase tracking-[.14em] text-gray-100 transition hover:border-white/35"
+                            >
+                              Open relationship room
+                            </button>
+                          </div>
+                        </article>
+                      )}
+                      {showEmbedExperiment && (
+                        <article className="bg-[#121017] p-6 md:p-8" data-experiment-variant="embed">
+                          <p className="text-[9px] font-black uppercase tracking-[.22em] text-cyan-200">Variant B (Comparison): Quick-listen embed</p>
+                          <h3 className="mt-4 font-sans-alt text-2xl font-black uppercase text-white">Fast familiar player, then route back to HALO</h3>
+                          <p className="mt-3 text-xs leading-6 text-gray-300">Use an embed-style listen for speed testing while keeping HALO as the destination for follows, support actions, repeat visits, and supporter conversion.</p>
+                          <div className="mt-5 overflow-hidden rounded-xl border border-white/10 bg-black/40">
+                            <iframe
+                              src={QUICK_LISTEN_EMBED_URL}
+                              title="HALO quick-listen embed comparison"
+                              loading="lazy"
+                              allow="autoplay; encrypted-media; picture-in-picture"
+                              className="aspect-video w-full border-0"
+                            ></iframe>
+                          </div>
+                          <div className="mt-6 flex flex-wrap gap-3">
+                            <a href="/music/" data-stat-event="open_music_catalog" data-stat-target="homepage_experiment_embed_continue_halo" className="inline-flex items-center gap-2 rounded-full bg-cyan-200 px-5 py-2.5 text-[10px] font-black uppercase tracking-[.14em] text-black transition hover:bg-cyan-100">
+                              Continue in HALO
+                            </a>
+                            <a href="/support/" data-stat-event="open_feedback_desk" data-stat-target="homepage_experiment_embed_support_action" className="inline-flex items-center gap-2 rounded-full border border-cyan-200/35 px-5 py-2.5 text-[10px] font-black uppercase tracking-[.14em] text-cyan-100 transition hover:border-cyan-100">
+                              Support actions
+                            </a>
+                          </div>
+                        </article>
+                      )}
                     </div>
                   </section>
 

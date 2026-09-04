@@ -13,6 +13,8 @@
  *   4. Build Your Album promotion + route health — halo.html visibly promotes
  *      Build Your Album, links to /album-concierge/, and server.js registers a
  *      301 redirect from /album-concierge to /album-concierge/.
+ *   5. Homepage music experiment visibility — halo.html includes the native-vs-
+ *      embed comparison markers and instrumentation hooks for measurement.
  *
  * Run: node scripts/deploy-health-contracts.mjs
  * Included in: npm test
@@ -200,6 +202,41 @@ await runCheck("Build Your Album promotion and route health", async () => {
   );
 
   return "Build Your Album promo and /album-concierge/ route are healthy";
+});
+
+await runCheck("Homepage music experiment markers and tracking", async () => {
+  const haloHtml = await read("halo.html");
+  assert.match(
+    haloHtml,
+    /Homepage experiment \/ Artist-first listening test/,
+    "halo.html must include the homepage experiment framing label."
+  );
+  assert.match(
+    haloHtml,
+    /Variant A \(Primary\): Native HALO artist home/,
+    "halo.html must include the native HALO music-home variant marker."
+  );
+  assert.match(
+    haloHtml,
+    /Variant B \(Comparison\): Quick-listen embed/,
+    "halo.html must include the embed quick-listen variant marker."
+  );
+  assert.match(
+    haloHtml,
+    /musicExperiment/,
+    "halo.html must support controlled variant rendering via a musicExperiment query parameter."
+  );
+  assert.match(
+    haloHtml,
+    /homepage_music_experiment_viewed/,
+    "halo.html must emit a homepage experiment view tracking event."
+  );
+  assert.match(
+    haloHtml,
+    /homepage_music_experiment_exit/,
+    "halo.html must emit a homepage experiment exit tracking event."
+  );
+  return "Homepage experiment variants and analytics hooks are present";
 });
 
 await runCheck("Core public navigation routes", async () => {

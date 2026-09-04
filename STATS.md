@@ -39,3 +39,20 @@ window.haloStats?.track("enter_console", { target: "hero" });
 ```
 
 New event names or metadata fields must also be added to the allowlists in `netlify/lib/stats.mjs` before they are accepted.
+
+## Homepage music experience experiment (native vs quick-listen)
+
+The homepage includes an explicit comparison section to test two approaches:
+
+- **Variant A (primary):** Native HALO artist-home listening and support flow
+- **Variant B (comparison):** Quick-listen embed path that routes people back into HALO actions
+
+Use `?musicExperiment=native` or `?musicExperiment=embed` to force a single variant, or load without that parameter for side-by-side comparison.
+
+Instrumentation hooks:
+
+- `homepage_music_experiment_viewed` with metadata `variant` and `view`
+- `homepage_music_experiment_exit` with metadata `variant` and `seconds`
+- Existing events already on the page for follow/support/conversion actions (for example `community_*`, `payment_checkout_started`, and route click events via `data-stat-event`)
+
+Interpretation note: the purpose is to compare the best listener experience and the best artist outcome, consistent with HALO's artist-owned values. Keep Variant A as the brand center while using Variant B as a measurable comparison path.

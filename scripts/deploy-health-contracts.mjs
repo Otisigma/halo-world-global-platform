@@ -238,7 +238,7 @@ await runCheck("Homepage music experiment markers and tracking", async () => {
   );
   assert.match(
     haloHtml,
-    /Measurement focus[\s\S]*Listening[\s\S]*Follows[\s\S]*Support actions[\s\S]*Repeat visits[\s\S]*Supporter conversion/,
+    /Measurement focus[\s\S]*Listening[\s\S]*Relationship room[\s\S]*Support actions[\s\S]*Repeat visits[\s\S]*Supporter conversion/,
     "halo.html must make the homepage experiment success signals easy to review."
   );
   assert.match(

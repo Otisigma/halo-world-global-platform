@@ -39,6 +39,12 @@ This workflow adds a skeptical verification loop for AI-delivered work. No singl
 4. Verification must include what was checked and what remains uncertain.
 5. Any unresolved high-risk gap must be surfaced as a caveat or send-back.
 
+## PR handoff requirement
+
+- AI-delivered implementation work must use `.github/pull_request_template.md` as the handoff artifact.
+- Builder evidence, Verifier findings, and Committee decision sections are required before acceptance.
+- Decision rationale must cite evidence, not confidence statements.
+
 ## Decision outcomes
 
 - **Accept:** Evidence is sufficient and no blocking verification gaps remain.

@@ -5,6 +5,7 @@ const board = await readFile(new URL("../HALO_AGENT_STATUS_BOARD.md", import.met
 const teamDoc = await readFile(new URL("../HALO_AGENT_TEAM.md", import.meta.url), "utf8");
 const operatingModel = await readFile(new URL("../HALO_SITE_AI_OPERATING_MODEL.md", import.meta.url), "utf8");
 const committeeWorkflow = await readFile(new URL("../HALO_AI_COMMITTEE_WORKFLOW.md", import.meta.url), "utf8");
+const pullRequestTemplate = await readFile(new URL("../.github/pull_request_template.md", import.meta.url), "utf8");
 const liveBoard = board.split("## Live board")[1] || "";
 const exampleTeams = ["Music Agent", "Stripe / Payments Agent", "Supporter Experience Agent", "Monitoring / QA Agent", "Insights / Data Agent"];
 const escapeRegExp = value => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -30,6 +31,8 @@ assert.match(teamDoc, /HALO_AGENT_STATUS_BOARD\.md/, "agent council handbook mus
 assert.match(operatingModel, /HALO_AGENT_STATUS_BOARD\.md/, "operating model handbook must point to the status board");
 assert.match(teamDoc, /HALO_AI_COMMITTEE_WORKFLOW\.md/, "agent council handbook must point to the AI committee workflow");
 assert.match(operatingModel, /HALO_AI_COMMITTEE_WORKFLOW\.md/, "operating model handbook must point to the AI committee workflow");
+assert.match(teamDoc, /\.github\/pull_request_template\.md/, "agent council handbook must require the committee PR template");
+assert.match(operatingModel, /\.github\/pull_request_template\.md/, "operating model handbook must require the committee PR template");
 
 assert.match(committeeWorkflow, /## Purpose/, "committee workflow must define purpose");
 assert.match(committeeWorkflow, /### Builder/, "committee workflow must define the Builder role");
@@ -42,5 +45,16 @@ assert.match(committeeWorkflow, /\*\*Send back:?/, "committee workflow must defi
 assert.match(committeeWorkflow, /\*\*Reject:?/, "committee workflow must define Reject outcome");
 assert.match(committeeWorkflow, /evidence over claims/i, "committee workflow must preserve evidence-first skepticism");
 assert.match(committeeWorkflow, /live-state checks over code-only claims/i, "committee workflow must prefer live-state verification");
+assert.match(committeeWorkflow, /\.github\/pull_request_template\.md/, "committee workflow must define PR template handoff");
+
+assert.match(pullRequestTemplate, /^# Summary/m, "PR template must include a Summary section");
+assert.match(pullRequestTemplate, /^## Builder evidence/m, "PR template must include Builder evidence section");
+assert.match(pullRequestTemplate, /^## Verifier findings/m, "PR template must include Verifier findings section");
+assert.match(pullRequestTemplate, /^## Committee decision/m, "PR template must include Committee decision section");
+assert.match(pullRequestTemplate, /^## Verification checklist/m, "PR template must include verification checklist section");
+assert.match(pullRequestTemplate, /^## Remaining risks/m, "PR template must include remaining risks section");
+assert.match(pullRequestTemplate, /evidence over claims/i, "PR template must preserve evidence-first language");
+assert.match(pullRequestTemplate, /no acceptance without Builder evidence and Verifier evidence/i, "PR template must require builder and verifier proof before acceptance");
+assert.match(pullRequestTemplate, /live-state checks/i, "PR template must require live-state checks for user-facing claims when possible");
 
 console.log("HALO agent status board contracts passed.");

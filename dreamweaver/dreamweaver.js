@@ -225,7 +225,8 @@
   }
 
   function isSatelliteFlow() {
-    return !campaignIdFromUrl() && (!new URLSearchParams(location.search).get("mix") || Boolean(state.unlock));
+    const params = new URLSearchParams(location.search);
+    return !campaignIdFromUrl() && params.get("experience") !== "studio";
   }
 
   function rewardSearchQuery() {
@@ -304,7 +305,7 @@
       renderSatelliteState();
       setUnlockStatus(result.message || "Dreamweaver unlocked your release doorway.", "success");
       await loadShow();
-      elements.reward?.scrollIntoView({ behavior: "smooth", block: "start" });
+      elements.shell.scrollIntoView({ behavior: "smooth", block: "start" });
     } catch (error) {
       setUnlockStatus(error instanceof Error ? error.message : "Dreamweaver could not unlock the experience right now.", "error");
     } finally {

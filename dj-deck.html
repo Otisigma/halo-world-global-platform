@@ -4997,7 +4997,7 @@
         recordingState.publishedMixId = data.id;
         elements.postMix.textContent = elements.mixVisibility.value === "room" ? "Posted to room" : "Saved privately";
         elements.playlistMix.disabled = false;
-        elements.dreamweaverMix.href = `/dreamweaver/?mix=${encodeURIComponent(data.id)}`;
+        elements.dreamweaverMix.href = `/dreamweaver/?mix=${encodeURIComponent(data.id)}&experience=studio`;
         mixReleaseUi.success(data.message, true);
         showToast("Mix released", data.message);
         window.haloStats?.track("publish_finished_mix", { visibility: elements.mixVisibility.value, recorded_seconds: recordingState.durationSeconds });

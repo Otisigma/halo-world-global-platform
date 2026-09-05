@@ -218,8 +218,8 @@ export async function runMaintenanceSweep(db, baseUrl, { triggerType = "schedule
 
   const satelliteStatuses = SATELLITE_STATUS_TARGETS.map(target => {
     const route = normalizeRoute(target.route);
-    const built = Boolean(pageStatusByRoute.get(route));
-    const live = built;
+    const built = pageStatusByRoute.has(route);
+    const live = pageStatusByRoute.get(route) === true;
     const connected = connectedRoutesFromMainMenu.has(route);
     const verified = built && live && connected;
     const status = verified ? "green" : built && live ? "yellow" : "red";
@@ -282,7 +282,7 @@ export async function runMaintenanceSweep(db, baseUrl, { triggerType = "schedule
     WHERE id = ${sweepId}
   `;
 
-  appendLedgerEntry(db, {
+  await appendLedgerEntry(db, {
     actorId: "system",
     actorType: "system",
     eventCategory: "system_event",
@@ -300,7 +300,7 @@ export async function runMaintenanceSweep(db, baseUrl, { triggerType = "schedule
     },
     body: `${failedChecks.length} failed checks across live-connected satellite status workflow.`,
     outcome: status === "passed" ? "success" : "failure"
-  }).catch(error => console.error("Ledger system_event entry failed", error instanceof Error ? error.message : "unknown error"));
+  });
 
   await Promise.allSettled(checks.map(reconcileIssue));
   return {

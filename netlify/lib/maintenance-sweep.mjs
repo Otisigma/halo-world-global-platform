@@ -10,8 +10,14 @@ const CORE_PAGES = [
 ];
 
 const SATELLITE_STATUS_TARGETS = [
+  { name: "HALO X", route: "/halo-x.html" },
+  { name: "DJ Deck", route: "/dj-deck.html" },
+  { name: "HALO Live", route: "/halo-live.html" },
+  { name: "Magazine", route: "/magazine.html" },
   { name: "Dreamweaver", route: "/dreamweaver/" },
   { name: "Dreamweaver Lab", route: "/dreamweaver-lab/" },
+  { name: "Creator World", route: "/creators/" },
+  { name: "Creator Freedom", route: "/creator-freedom/" },
   { name: "Campaign Studio", route: "/campaign-studio/" },
   { name: "Finish House", route: "/finish-house/" },
   { name: "Release House", route: "/release-house/" },
@@ -21,7 +27,8 @@ const SATELLITE_STATUS_TARGETS = [
   { name: "Radio", route: "/radio/" },
   { name: "Mixes", route: "/mixes/" },
   { name: "Song Catalog", route: "/song-catalog/" },
-  { name: "Album Concierge", route: "/album-concierge/" }
+  { name: "Album Concierge", route: "/album-concierge/" },
+  { name: "Support", route: "/support/" }
 ];
 
 const API_ROUTES = [

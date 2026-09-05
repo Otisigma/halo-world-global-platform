@@ -962,6 +962,14 @@
         const QUICK_LISTEN_EMBED_URL = 'https://www.youtube.com/embed/videoseries?list=PLcmaoB9ss1YE';
 
         const FALLBACK_ARTWORK = '/assets/halo-app-icon-512.png';
+        const MENU_ROUTE_STATUS_LABELS = { green: 'WORKING', yellow: 'ATTENTION', red: 'BROKEN' };
+        const MENU_ROUTE_STATUS_GLYPHS = { green: 'G', yellow: 'Y', red: 'R' };
+        const MENU_ROUTE_STATUS_TARGETS = new Set([
+          '/music/', '/halo-x.html/', '/mixes/', '/dj-deck.html/', '/halo-live.html/', '/radio/',
+          '/artist-pro/', '/creators/', '/artists/', '/creator-freedom/', '/campaign-studio/',
+          '/release-house/', '/song-catalog/', '/dreamweaver/', '/dreamweaver-lab/',
+          '/album-concierge/', '/finish-house/', '/magazine.html/', '/support/'
+        ]);
 
         const INITIAL_TRACKS = [
           {
@@ -1337,6 +1345,8 @@
           const [uploadAlerts, setUploadAlerts] = useState({ enabled: false, unreadCount: 0, notifications: [] });
           const [uploadAlertsBusy, setUploadAlertsBusy] = useState(false);
           const [uploadAlertsError, setUploadAlertsError] = useState('');
+          const [menuRouteStatuses, setMenuRouteStatuses] = useState({});
+          const [menuRouteStatusesLoaded, setMenuRouteStatusesLoaded] = useState(false);
           const [showRoomComposer, setShowRoomComposer] = useState(false);
           const [roomPostDraft, setRoomPostDraft] = useState({ title: '', description: '', videoUrl: '', options: ['', ''] });
           const [showEqualizer, setShowEqualizer] = useState(false);
@@ -1378,6 +1388,41 @@
           const addLog = (msg) => {
             const timestamp = new Date().toLocaleTimeString();
             setTerminalLogs(prev => [`[${timestamp}] ${msg}`, ...prev.slice(0, 30)]);
+          };
+
+          const normalizeMenuRoute = (route = '') => {
+            if (!route) return '/';
+            const pathname = route.split('?')[0].split('#')[0] || '/';
+            if (pathname === '/') return '/';
+            return pathname.endsWith('/') ? pathname : `${pathname}/`;
+          };
+
+          const menuStatusForRoute = (route, fallbackStatus = 'red') => {
+            const normalizedRoute = normalizeMenuRoute(route);
+            const fromSweep = MENU_ROUTE_STATUS_TARGETS.has(normalizedRoute)
+              ? menuRouteStatuses[normalizedRoute]
+              : null;
+            const status = fromSweep && MENU_ROUTE_STATUS_LABELS[fromSweep.status]
+              ? fromSweep.status
+              : MENU_ROUTE_STATUS_TARGETS.has(normalizedRoute) && !menuRouteStatusesLoaded
+                ? 'yellow'
+                : fallbackStatus;
+            return {
+              status,
+              label: MENU_ROUTE_STATUS_LABELS[status] || MENU_ROUTE_STATUS_LABELS.red,
+              glyph: MENU_ROUTE_STATUS_GLYPHS[status] || MENU_ROUTE_STATUS_GLYPHS.red
+            };
+          };
+
+          const renderMenuStatusBadge = (route, fallbackStatus = 'red') => {
+            const indicator = menuStatusForRoute(route, fallbackStatus);
+            return (
+              <span className={`halo-menu-route-status halo-menu-route-status-${indicator.status}`} aria-label={`Status ${indicator.label}`}>
+                <i aria-hidden="true"></i>
+                <b>{indicator.glyph}</b>
+                {indicator.label}
+              </span>
+            );
           };
 
           const getYouTubeEmbed = (value) => {
@@ -1847,6 +1892,31 @@
             } catch (error) {
               setUploadAlertsError(error.message || 'Upload alerts could not connect.');
               return null;
+            }
+          };
+
+          const loadMenuRouteStatuses = async () => {
+            try {
+              const response = await fetch('/api/halo-agent-team', {
+                headers: { Accept: 'application/json' },
+                cache: 'no-store'
+              });
+              const data = await response.json().catch(() => ({}));
+              if (!response.ok) throw new Error(data.message || 'Status lookup failed.');
+              const statuses = Array.isArray(data?.maintenance?.latest?.satelliteStatuses)
+                ? data.maintenance.latest.satelliteStatuses
+                : [];
+              const next = statuses.reduce((acc, item) => {
+                const route = normalizeMenuRoute(item?.route || '');
+                if (!route || route === '/' || !MENU_ROUTE_STATUS_TARGETS.has(route)) return acc;
+                acc[route] = item;
+                return acc;
+              }, {});
+              setMenuRouteStatuses(next);
+              setMenuRouteStatusesLoaded(true);
+            } catch {
+              setMenuRouteStatuses({});
+              setMenuRouteStatusesLoaded(true);
             }
           };
 
@@ -2542,6 +2612,12 @@
           }, [identityUser?.id]);
 
           useEffect(() => {
+            loadMenuRouteStatuses();
+            const refresh = window.setInterval(loadMenuRouteStatuses, 60000);
+            return () => window.clearInterval(refresh);
+          }, []);
+
+          useEffect(() => {
             const openCompanionRoute = () => {
               const requestedRoom = new URLSearchParams(window.location.search).get('room');
               if (window.location.hash !== '#clubhouse' && !['mixes', 'selectors'].includes(requestedRoom)) return;
@@ -3058,23 +3134,23 @@
                         <div className="halo-menu-lane-title"><span>01</span><h3 id="halo-lane-start">Arrive</h3></div>
                         <button type="button" onClick={() => setShowFanGuide(true)} data-stat-event="open_fan_guide" data-stat-target="header" data-signal="ORIENTATION">
                           <Icon name="users" className="halo-menu-icon" />
-                          <span><strong>NEW HERE? START HERE</strong><small>A two-minute map of the world</small></span>
+                          <span><strong>NEW HERE? START HERE {renderMenuStatusBadge('/halo.html', 'green')}</strong><small>A two-minute map of the world</small></span>
                         </button>
                         {identityUser ? (
                           <React.Fragment>
                             <button type="button" onClick={signOut} title="Sign out of HALO" data-signal="MEMBER ONLINE">
                               <span className="halo-member-pulse"></span>
-                              <span><strong>{identityUser.name || 'MEMBER'}</strong><small>Signed in · tap to leave</small></span>
+                              <span><strong>{identityUser.name || 'MEMBER'} {renderMenuStatusBadge('/halo.html', 'green')}</strong><small>Signed in · tap to leave</small></span>
                             </button>
                             <button type="button" onClick={openUploadAlertCenter} data-signal={uploadAlerts.unreadCount ? `${uploadAlerts.unreadCount} NEW` : 'UPLOAD ALERTS'}>
                               <Icon name="bell" className="halo-menu-icon" />
-                              <span><strong>NEW MUSIC ALERTS{uploadAlerts.unreadCount ? ` · ${uploadAlerts.unreadCount}` : ''}</strong><small>{uploadAlerts.enabled ? 'Pings are on for new uploads' : 'Get pinged when a mix lands'}</small></span>
+                              <span><strong>NEW MUSIC ALERTS{uploadAlerts.unreadCount ? ` · ${uploadAlerts.unreadCount}` : ''} {renderMenuStatusBadge('/upload-alerts', 'green')}</strong><small>{uploadAlerts.enabled ? 'Pings are on for new uploads' : 'Get pinged when a mix lands'}</small></span>
                             </button>
                           </React.Fragment>
                         ) : (
                           <button type="button" onClick={() => openIdentity('login')} data-signal="MEMBER ACCESS">
                             <span className="halo-member-pulse"></span>
-                            <span><strong>JOIN / SIGN IN</strong><small>Keep your place in the world</small></span>
+                            <span><strong>JOIN / SIGN IN {renderMenuStatusBadge('/identity', 'green')}</strong><small>Keep your place in the world</small></span>
                           </button>
                         )}
                       </section>
@@ -3082,66 +3158,66 @@
                       <section className="halo-menu-lane halo-menu-lane-listen" aria-labelledby="halo-lane-listen">
                         <div className="halo-menu-lane-title"><span>02</span><h3 id="halo-lane-listen">Listen</h3></div>
                         <a href="/music/" data-stat-event="open_music_catalog" data-stat-target="header" data-signal="CATALOG">
-                          <Icon name="music" className="halo-menu-icon" /><span><strong>ALL MUSIC</strong><small>The permanent catalog</small></span>
+                          <Icon name="music" className="halo-menu-icon" /><span><strong>ALL MUSIC {renderMenuStatusBadge('/music/')}</strong><small>The permanent catalog</small></span>
                         </a>
-                        <a href="halo-x.html" data-stat-event="open_halo_x" data-stat-target="header" data-signal="ARTIST ROOM">
-                          <Icon name="star" className="halo-menu-icon" /><span><strong>DJ HALO X</strong><small>Enter the artist universe</small></span>
+                        <a href="/halo-x.html" data-stat-event="open_halo_x" data-stat-target="header" data-signal="ARTIST ROOM">
+                          <Icon name="star" className="halo-menu-icon" /><span><strong>DJ HALO X {renderMenuStatusBadge('/halo-x.html')}</strong><small>Enter the artist universe</small></span>
                         </a>
                         <a href="/mixes/" data-stat-event="open_halo_x_mixes" data-stat-target="header" data-signal="MIX SERIES">
-                          <Icon name="disc" className="halo-menu-icon" /><span><strong>HALO X MIXES</strong><small>Watch, stream, and own the edition</small></span>
+                          <Icon name="disc" className="halo-menu-icon" /><span><strong>HALO X MIXES {renderMenuStatusBadge('/mixes/')}</strong><small>Watch, stream, and own the edition</small></span>
                         </a>
-                        <a href="dj-deck.html" data-stat-event="open_dj_deck" data-stat-target="header" data-signal="PERFORMANCE">
-                          <Icon name="disc" className="halo-menu-icon" /><span><strong>LIVE DJ DECK</strong><small>Touch the performance system</small></span>
+                        <a href="/dj-deck.html" data-stat-event="open_dj_deck" data-stat-target="header" data-signal="PERFORMANCE">
+                          <Icon name="disc" className="halo-menu-icon" /><span><strong>LIVE DJ DECK {renderMenuStatusBadge('/dj-deck.html')}</strong><small>Touch the performance system</small></span>
                         </a>
-                        <a href="halo-live.html" data-stat-event="open_halo_live" data-stat-target="header" data-signal="LIVE ROOM">
-                          <Icon name="radio" className="halo-menu-icon" /><span><strong>HALO LIVE</strong><small>Join the current transmission</small></span>
+                        <a href="/halo-live.html" data-stat-event="open_halo_live" data-stat-target="header" data-signal="LIVE ROOM">
+                          <Icon name="radio" className="halo-menu-icon" /><span><strong>HALO LIVE {renderMenuStatusBadge('/halo-live.html')}</strong><small>Join the current transmission</small></span>
                         </a>
                         <a href="/radio/" data-stat-event="open_halo_radio" data-stat-target="header" data-signal="RADIO">
-                          <Icon name="radio" className="halo-menu-icon" /><span><strong>HALO RADIO</strong><small>Continuous world broadcast</small></span>
+                          <Icon name="radio" className="halo-menu-icon" /><span><strong>HALO RADIO {renderMenuStatusBadge('/radio/')}</strong><small>Continuous world broadcast</small></span>
                         </a>
                       </section>
 
                       <section className="halo-menu-lane halo-menu-lane-build" aria-labelledby="halo-lane-build">
                         <div className="halo-menu-lane-title"><span>03</span><h3 id="halo-lane-build">Build</h3></div>
                         <a href="/artist-pro/" data-stat-event="open_artist_pro" data-stat-target="header" data-signal="FOUNDING ARTIST OFFER">
-                          <Icon name="arrow-right" className="halo-menu-icon" /><span><strong>ARTIST PRO</strong><small>One release. One command system.</small></span>
+                          <Icon name="arrow-right" className="halo-menu-icon" /><span><strong>ARTIST PRO {renderMenuStatusBadge('/artist-pro/')}</strong><small>One release. One command system.</small></span>
                         </a>
                         <a href="/creators/" data-stat-event="open_creator_world" data-stat-target="header" data-signal="CREATOR SYSTEM">
-                          <Icon name="star" className="halo-menu-icon" /><span><strong>CREATOR WORLD</strong><small>Tools, pathways, and artist power</small></span>
+                          <Icon name="star" className="halo-menu-icon" /><span><strong>CREATOR WORLD {renderMenuStatusBadge('/creators/')}</strong><small>Tools, pathways, and artist power</small></span>
                         </a>
                         <a href="/artists/" data-stat-event="open_artist_rooms" data-stat-target="header" data-signal="ARTIST ROOMS">
-                          <Icon name="music" className="halo-menu-icon" /><span><strong>ARTIST ROOMS + CHARTS</strong><small>Browse rooms, charts, and featured drops</small></span>
+                          <Icon name="music" className="halo-menu-icon" /><span><strong>ARTIST ROOMS + CHARTS {renderMenuStatusBadge('/artists/')}</strong><small>Browse rooms, charts, and featured drops</small></span>
                         </a>
                         <a href="/creator-freedom/" data-stat-event="open_creator_charter" data-stat-target="header" data-signal="PUBLIC POLICY">
-                          <Icon name="book-open" className="halo-menu-icon" /><span><strong>CREATOR FREEDOM</strong><small>White paper, seven-point charter, and public room</small></span>
+                          <Icon name="book-open" className="halo-menu-icon" /><span><strong>CREATOR FREEDOM {renderMenuStatusBadge('/creator-freedom/')}</strong><small>White paper, seven-point charter, and public room</small></span>
                         </a>
                         <a href="/campaign-studio/" data-stat-event="open_campaign_studio" data-stat-target="header" data-signal="CAMPAIGN STUDIO">
-                          <Icon name="check-circle" className="halo-menu-icon" /><span><strong>CAMPAIGN STUDIO</strong><small>Plan launch messaging and campaign flow</small></span>
+                          <Icon name="check-circle" className="halo-menu-icon" /><span><strong>CAMPAIGN STUDIO {renderMenuStatusBadge('/campaign-studio/')}</strong><small>Plan launch messaging and campaign flow</small></span>
                         </a>
                         <a href="/release-house/" data-stat-event="open_release_house" data-stat-target="header" data-signal="FIRST RELEASE">
-                          <Icon name="disc" className="halo-menu-icon" /><span><strong>RELEASE HOUSE</strong><small>Idea to release, one guided room at a time</small></span>
+                          <Icon name="disc" className="halo-menu-icon" /><span><strong>RELEASE HOUSE {renderMenuStatusBadge('/release-house/')}</strong><small>Idea to release, one guided room at a time</small></span>
                         </a>
                         <a href="/song-catalog/" data-stat-event="open_song_catalog" data-stat-target="header" data-signal="MASTERS + VERSIONS">
-                          <Icon name="list-music" className="halo-menu-icon" /><span><strong>SONG CATALOG</strong><small>Sale masters, radio edits, stems, and metadata review</small></span>
+                          <Icon name="list-music" className="halo-menu-icon" /><span><strong>SONG CATALOG {renderMenuStatusBadge('/song-catalog/')}</strong><small>Sale masters, radio edits, stems, and metadata review</small></span>
                         </a>
                         <a href="/dreamweaver/" data-stat-event="open_dreamweaver_show" data-stat-target="header" data-signal="FAN JOURNEY">
-                          <Icon name="star" className="halo-menu-icon" /><span><strong>DREAMWEAVER EXPERIENCE</strong><small>Unlock the fan path and signal campaign room</small></span>
+                          <Icon name="star" className="halo-menu-icon" /><span><strong>DREAMWEAVER EXPERIENCE {renderMenuStatusBadge('/dreamweaver/')}</strong><small>Unlock the fan path and signal campaign room</small></span>
                         </a>
                         <a href="/dreamweaver-lab/" data-stat-event="open_dreamweaver_song_lab" data-stat-target="header" data-signal="AUDIO TO CAMPAIGN">
-                          <Icon name="music" className="halo-menu-icon" /><span><strong>DREAMWEAVER SONG LAB</strong><small>Load a recording. Analyze the wave. Build the release world.</small></span>
+                          <Icon name="music" className="halo-menu-icon" /><span><strong>DREAMWEAVER SONG LAB {renderMenuStatusBadge('/dreamweaver-lab/')}</strong><small>Load a recording. Analyze the wave. Build the release world.</small></span>
                         </a>
                         <a href="/album-concierge/" data-stat-event="open_album_concierge" data-stat-target="header" data-signal="CREATE YOUR ALBUM">
-                          <Icon name="heart" className="halo-menu-icon" /><span><strong>CREATE YOUR ALBUM</strong><small>Album Concierge · premium, gift, and collector editions</small></span>
+                          <Icon name="heart" className="halo-menu-icon" /><span><strong>CREATE YOUR ALBUM {renderMenuStatusBadge('/album-concierge/')}</strong><small>Album Concierge · premium, gift, and collector editions</small></span>
                         </a>
                         <a href="/finish-house/" data-stat-event="open_finish_house" data-stat-target="header" data-signal="MASTER + LICENSE">
-                          <Icon name="check-circle" className="halo-menu-icon" /><span><strong>FINISH HOUSE</strong><small>Mix to master to licensing-ready package</small></span>
+                          <Icon name="check-circle" className="halo-menu-icon" /><span><strong>FINISH HOUSE {renderMenuStatusBadge('/finish-house/')}</strong><small>Mix to master to licensing-ready package</small></span>
                         </a>
                         <a href="/magazine.html" data-stat-event="open_halo_signal" data-stat-target="header" data-signal="EDITORIAL">
-                          <Icon name="book-open" className="halo-menu-icon" /><span><strong>HALO SIGNAL</strong><small>Stories from inside the world</small></span>
+                          <Icon name="book-open" className="halo-menu-icon" /><span><strong>HALO SIGNAL {renderMenuStatusBadge('/magazine.html')}</strong><small>Stories from inside the world</small></span>
                         </a>
                         {ownerControlAccess && (
                           <a href="/control-center" data-stat-event="open_owner_control_room" data-stat-target="header" data-signal="OWNER ONLY">
-                            <Icon name="lock" className="halo-menu-icon" /><span><strong>PRIVATE CONTROL ROOM</strong><small>Your protected command center</small></span>
+                            <Icon name="lock" className="halo-menu-icon" /><span><strong>PRIVATE CONTROL ROOM {renderMenuStatusBadge('/control-center', 'green')}</strong><small>Your protected command center</small></span>
                           </a>
                         )}
                       </section>
@@ -3149,10 +3225,10 @@
                       <section className="halo-menu-lane halo-menu-lane-care" aria-labelledby="halo-lane-care">
                         <div className="halo-menu-lane-title"><span>04</span><h3 id="halo-lane-care">Care</h3></div>
                         <a href="/support/" data-stat-event="open_feedback_desk" data-stat-target="header" data-signal="SYSTEM CARE">
-                          <Icon name="bug" className="halo-menu-icon" /><span><strong>FEEDBACK DESK</strong><small>Report bugs, request features, get help</small></span>
+                          <Icon name="bug" className="halo-menu-icon" /><span><strong>FEEDBACK DESK {renderMenuStatusBadge('/support/')}</strong><small>Report bugs, request features, get help</small></span>
                         </a>
                         <button type="button" onClick={() => { setPaymentError(''); setShowPaymentModal(true); }} data-stat-event="open_payment" data-stat-target="header" data-signal="DIRECT SUPPORT">
-                          <Icon name="credit-card" className="halo-menu-icon" /><span><strong>SUPPORT HALO</strong><small>Fuel independent infrastructure</small></span>
+                          <Icon name="credit-card" className="halo-menu-icon" /><span><strong>SUPPORT HALO {renderMenuStatusBadge('/payment-link', 'green')}</strong><small>Fuel independent infrastructure</small></span>
                         </button>
                       </section>
                     </div>

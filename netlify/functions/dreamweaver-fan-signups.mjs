@@ -55,7 +55,7 @@ export default async function dreamweaverFanSignups(request) {
 
   try {
     const db = getDatabase();
-    await db.sql`
+    const rows = await db.sql`
       INSERT INTO halo_dreamweaver_fan_signups (
         id, email, first_name, favorite_platform, source, unlock_reward, consent_at
       ) VALUES (
@@ -69,11 +69,12 @@ export default async function dreamweaverFanSignups(request) {
         unlock_reward = EXCLUDED.unlock_reward,
         consent_at = NOW(),
         updated_at = NOW()
+      RETURNING xmax = 0 AS inserted
     `;
     return json({
       accepted: true,
       message: "Dreamweaver is unlocked. Your full doorway and platform links are ready."
-    }, 201);
+    }, rows[0]?.inserted ? 201 : 200);
   } catch (error) {
     console.error("Dreamweaver fan signup failed", error instanceof Error ? error.message : "unknown error");
     return json({ message: "Dreamweaver could not save the unlock right now" }, 500);

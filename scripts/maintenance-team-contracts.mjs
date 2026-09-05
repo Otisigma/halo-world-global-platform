@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
-const [migration, sweep, scheduled, api, page, client, docs, packageJson] = await Promise.all([
+const [migration, satelliteStatusesMigration, sweep, scheduled, api, page, client, docs, packageJson] = await Promise.all([
   readFile(new URL("../netlify/database/migrations/20260809150000_create-maintenance-sweeps.sql", import.meta.url), "utf8"),
+  readFile(new URL("../netlify/database/migrations/20260905073000_add_satellite_statuses_to_maintenance_sweeps.sql", import.meta.url), "utf8"),
   readFile(new URL("../netlify/lib/maintenance-sweep.mjs", import.meta.url), "utf8"),
   readFile(new URL("../netlify/functions/health-scout.mjs", import.meta.url), "utf8"),
   readFile(new URL("../netlify/functions/halo-agent-team.mjs", import.meta.url), "utf8"),
@@ -14,6 +15,7 @@ const [migration, sweep, scheduled, api, page, client, docs, packageJson] = awai
 
 assert.match(migration, /CREATE TABLE IF NOT EXISTS halo_maintenance_sweeps/, "maintenance sweeps must persist");
 assert.match(migration, /CREATE TABLE IF NOT EXISTS halo_maintenance_checks/, "individual maintenance checks must persist");
+assert.match(satelliteStatusesMigration, /satellite_statuses/i, "maintenance sweeps must persist satellite status snapshots");
 for (const kind of ["page", "connection", "output"]) assert.match(migration, new RegExp(`'${kind}'`), `${kind} checks must be constrained`);
 assert.match(sweep, /CORE_PAGES/, "the maintenance team must cover core pages");
 assert.match(sweep, /extractConnections/, "the maintenance team must discover internal connections");
@@ -23,6 +25,8 @@ assert.match(sweep, /reportIssue/, "failed checks must enter maintenance triage"
 assert.match(sweep, /SATELLITE_STATUS_TARGETS/, "the maintenance team must track satellite status targets");
 assert.match(sweep, /halo-signal-check/, "the maintenance team must label the one-command satellite workflow");
 assert.match(sweep, /appendLedgerEntry/, "the maintenance team must write sweep command outcomes to the Halo Ledger");
+assert.match(sweep, /satellite_statuses/i, "the maintenance sweep must store satellite statuses for dashboard reloads");
+assert.match(sweep, /satelliteStatuses:\s*Array\.isArray\(row\.satellite_statuses\)/, "dashboard hydration must read persisted satellite statuses");
 assert.match(sweep, /\/dreamweaver\//, "the maintenance team must include Dreamweaver in core page checks");
 assert.match(sweep, /\/dreamweaver-lab\//, "the maintenance team must include Dreamweaver Lab in core page checks");
 assert.match(scheduled, /schedule: "\*\/15 \* \* \* \*"/, "the maintenance team must run every 15 minutes");

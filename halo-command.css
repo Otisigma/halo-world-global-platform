@@ -209,8 +209,12 @@ main { width: min(1500px, 100%); margin: 0 auto; }
 .maintenance-summary span, .maintenance-check span, .maintenance-check small { color: var(--muted); font: 500 8px var(--mono); letter-spacing: .12em; text-transform: uppercase; }
 .maintenance-summary strong { color: var(--gold-soft); font: 700 clamp(24px,3vw,42px) var(--display); }
 .satellite-status-panel { display: grid; gap: 16px; margin-top: 12px; }
-.satellite-status-copy p:last-child { margin: 0; color: var(--muted); font: 400 10px/1.7 var(--mono); }
-.satellite-status-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.satellite-status-description { margin: 0; color: var(--muted); font: 400 10px/1.7 var(--mono); }
+.satellite-status-legend { list-style: none; display: grid; gap: 8px; margin: 12px 0 0; padding: 0; }
+.satellite-status-legend li { display: grid; gap: 4px; padding: 10px 12px; border: 1px solid var(--line); background: rgba(238,230,213,.025); }
+.satellite-status-legend strong { color: var(--gold-soft); font: 600 12px var(--display); }
+.satellite-status-legend span { color: var(--muted); font: 400 9px/1.6 var(--mono); letter-spacing: .04em; text-transform: none; }
+.satellite-status-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
 .satellite-status-card { min-height: 190px; padding: 22px; border: 1px solid var(--line); border-top: 3px solid var(--gold); background: rgba(238,230,213,.025); }
 .satellite-status-card[data-status="green"] { border-top-color: #839379; }
 .satellite-status-card[data-status="yellow"] { border-top-color: #d4a44f; }

@@ -10,18 +10,18 @@ const CORE_PAGES = [
 ];
 
 const SATELLITE_STATUS_TARGETS = [
-  { name: "Dreamweaver", route: "/dreamweaver/", verification: ["scripts/dreamweaver-show-contracts.mjs", "scripts/live-connected-satellite-contracts.mjs"] },
-  { name: "Dreamweaver Lab", route: "/dreamweaver-lab/", verification: ["scripts/dreamweaver-song-lab-contracts.mjs", "scripts/live-connected-satellite-contracts.mjs"] },
-  { name: "Campaign Studio", route: "/campaign-studio/", verification: ["scripts/live-connected-satellite-contracts.mjs"] },
-  { name: "Finish House", route: "/finish-house/", verification: ["scripts/finish-house-contracts.mjs", "scripts/live-connected-satellite-contracts.mjs"] },
-  { name: "Release House", route: "/release-house/", verification: ["scripts/release-house-contracts.mjs", "scripts/live-connected-satellite-contracts.mjs"] },
-  { name: "Artist Pro", route: "/artist-pro/", verification: ["scripts/artist-pro-contracts.mjs", "scripts/live-connected-satellite-contracts.mjs"] },
-  { name: "Artists", route: "/artists/", verification: ["scripts/artist-page-contracts.mjs", "scripts/live-connected-satellite-contracts.mjs"] },
-  { name: "Music", route: "/music/", verification: ["scripts/music-catalog-audit.mjs", "scripts/live-connected-satellite-contracts.mjs"] },
-  { name: "Radio", route: "/radio/", verification: ["scripts/radio-contracts.mjs", "scripts/live-connected-satellite-contracts.mjs"] },
-  { name: "Mixes", route: "/mixes/", verification: ["scripts/halo-x-mixes-contracts.mjs", "scripts/live-connected-satellite-contracts.mjs"] },
-  { name: "Song Catalog", route: "/song-catalog/", verification: ["scripts/song-catalog-contracts.mjs", "scripts/live-connected-satellite-contracts.mjs"] },
-  { name: "Album Concierge", route: "/album-concierge/", verification: ["scripts/album-concierge-contracts.mjs", "scripts/deploy-health-contracts.mjs", "scripts/live-connected-satellite-contracts.mjs"] }
+  { name: "Dreamweaver", route: "/dreamweaver/" },
+  { name: "Dreamweaver Lab", route: "/dreamweaver-lab/" },
+  { name: "Campaign Studio", route: "/campaign-studio/" },
+  { name: "Finish House", route: "/finish-house/" },
+  { name: "Release House", route: "/release-house/" },
+  { name: "Artist Pro", route: "/artist-pro/" },
+  { name: "Artists", route: "/artists/" },
+  { name: "Music", route: "/music/" },
+  { name: "Radio", route: "/radio/" },
+  { name: "Mixes", route: "/mixes/" },
+  { name: "Song Catalog", route: "/song-catalog/" },
+  { name: "Album Concierge", route: "/album-concierge/" }
 ];
 
 const API_ROUTES = [
@@ -57,6 +57,8 @@ const OUTPUT_CHECKS = [
     accept: response => response.status !== 404 && response.status < 500
   }))
 ];
+
+const SIGNAL_CHECK_COMMAND = "halo-signal-check";
 
 function cleanDetail(value, maximum = 600) {
   return String(value || "").replace(/\s+/g, " ").trim().slice(0, maximum);
@@ -174,6 +176,7 @@ export async function runMaintenanceSweep(db, baseUrl, { triggerType = "schedule
   let pagesChecked = 0;
   let connectionsChecked = 0;
   const pageStatusByRoute = new Map();
+  const pageBodyByRoute = new Map();
   const connectedRoutesFromMainMenu = new Set();
 
   for (const pageUrl of queuedPages.values()) {
@@ -190,6 +193,7 @@ export async function runMaintenanceSweep(db, baseUrl, { triggerType = "schedule
     checks.push(pageCheck);
     await persistCheck(db, sweepId, pageCheck);
     pageStatusByRoute.set(normalizeRoute(pageUrl.pathname), passed);
+    pageBodyByRoute.set(normalizeRoute(pageUrl.pathname), request.body);
     pagesChecked += 1;
     if (!passed) continue;
 
@@ -217,16 +221,28 @@ export async function runMaintenanceSweep(db, baseUrl, { triggerType = "schedule
     }
   }
 
-  const satelliteStatuses = SATELLITE_STATUS_TARGETS.map(target => {
+  const satelliteStatuses = [];
+  for (const target of SATELLITE_STATUS_TARGETS) {
     const route = normalizeRoute(target.route);
     const built = pageStatusByRoute.has(route);
     const live = pageStatusByRoute.get(route) === true;
     const connected = connectedRoutesFromMainMenu.has(route);
-    const verification = Array.isArray(target.verification) ? target.verification : [];
-    const verified = built && live && connected && verification.length > 0;
-    const status = verified ? "green" : built && live ? "yellow" : "red";
-    return { name: target.name, route, built, live, connected, verified, status, verification };
-  });
+    const smokeVerified = Boolean(live && /<title[\s>][\s\S]*<\/title>/i.test(pageBodyByRoute.get(route) || ""));
+    const verified = built && live && connected && smokeVerified;
+    const status = !built || !live || !connected ? "red" : verified ? "green" : "yellow";
+    satelliteStatuses.push({ name: target.name, route, built, live, connected, verified, status });
+    const smokeCheck = checkRecord(
+      "output",
+      `${route}#smoke`,
+      { response: null, durationMs: 0 },
+      smokeVerified,
+      smokeVerified
+        ? `${target.name} passed its deployed smoke check.`
+        : `${target.name} did not pass the deployed smoke check.`
+    );
+    checks.push(smokeCheck);
+    await persistCheck(db, sweepId, smokeCheck);
+  }
 
   for (const status of satelliteStatuses) {
     if (!status.connected) {
@@ -247,7 +263,7 @@ export async function runMaintenanceSweep(db, baseUrl, { triggerType = "schedule
       { response: null, durationMs: 0 },
       status.verified,
       status.verified
-        ? `${status.name} is built, live, connected, and backed by HALO contract or smoke checks.`
+        ? `${status.name} is built, live, connected, and passed its smoke check.`
         : `${status.name} failed one or more satellite checks (built/live/connected/verified).`
     );
     checks.push(verifiedCheck);
@@ -277,13 +293,14 @@ export async function runMaintenanceSweep(db, baseUrl, { triggerType = "schedule
   const liveCount = satelliteStatuses.filter(item => item.live).length;
   const connectedCount = satelliteStatuses.filter(item => item.connected).length;
   const verifiedCount = satelliteStatuses.filter(item => item.verified).length;
-  const ledgerCommandName = commandName === "halo-signal-check" ? "halo-signal-check" : "run_maintenance";
+  const ledgerCommandName = commandName || "run_maintenance";
+  const outputsChecked = OUTPUT_CHECKS.length + (SATELLITE_STATUS_TARGETS.length * 2);
   await db.sql`
     UPDATE halo_maintenance_sweeps SET
       status = ${status},
       pages_checked = ${pagesChecked},
       connections_checked = ${connectionsChecked},
-      outputs_checked = ${OUTPUT_CHECKS.length + SATELLITE_STATUS_TARGETS.length},
+      outputs_checked = ${outputsChecked},
       passed_checks = ${passedChecks},
       failed_checks = ${failedChecks.length},
       satellite_statuses = ${JSON.stringify(satelliteStatuses)}::jsonb,
@@ -306,7 +323,7 @@ export async function runMaintenanceSweep(db, baseUrl, { triggerType = "schedule
       pagesChecked,
       linksChecked: connectionsChecked,
       routesChecked: satelliteStatuses.length,
-      outputsChecked: OUTPUT_CHECKS.length + SATELLITE_STATUS_TARGETS.length,
+      outputsChecked,
       builtCount,
       liveCount,
       connectedCount,
@@ -318,7 +335,7 @@ export async function runMaintenanceSweep(db, baseUrl, { triggerType = "schedule
         target: check.target,
         detail: check.detail
       })),
-      notes: "Red requires a missing or broken route. Yellow means built/live but not fully menu-connected and contract-backed. Green means built, connected, live, and verified.",
+      notes: `Red requires a missing or broken route. Yellow means built/live but not fully menu-connected or smoke-verified. Green means built, connected, live, and verified by the deployed smoke check used by ${SIGNAL_CHECK_COMMAND}.`,
       satelliteStatuses
     },
     body: `${failedChecks.length} failed checks across ${ledgerCommandName}.`,
@@ -331,7 +348,7 @@ export async function runMaintenanceSweep(db, baseUrl, { triggerType = "schedule
     status,
     pagesChecked,
     connectionsChecked,
-    outputsChecked: OUTPUT_CHECKS.length + SATELLITE_STATUS_TARGETS.length,
+    outputsChecked,
     passedChecks,
     failedChecks: failedChecks.length,
     satelliteStatuses

@@ -224,6 +224,7 @@
 
   function renderSatelliteStatuses(statuses = []) {
     const target = byId("satelliteStatuses");
+    if (!target) return;
     if (!statuses.length) {
       target.replaceChildren(emptyState("Run halo-signal-check to publish trusted satellite status cards."));
       return;
@@ -237,10 +238,10 @@
         )
       ),
       el("small", null, item.status === "green"
-        ? "Trusted across build, menu, route, and contract checks."
+        ? "Trusted across build, menu, route, and deployed smoke checks."
         : item.status === "yellow"
-          ? "Built and reachable, but still missing a required menu or verification signal."
-          : "Missing a build, route, menu link, or verification requirement.")
+          ? "Built and reachable, but still missing a required menu or smoke-verification signal."
+          : "Missing a build, route, menu link, or smoke-verification requirement.")
     )));
   }
 

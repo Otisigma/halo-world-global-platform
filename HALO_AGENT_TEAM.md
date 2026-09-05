@@ -28,13 +28,13 @@ Every deployed sweep stores its coverage and individual results in Netlify Datab
 - confirm the page or system is built
 - confirm the main HALO menu links to it
 - confirm the deployed route is live and reachable
-- confirm the route is covered by HALO contract or smoke checks
+- confirm the deployed route passes the live smoke check, while repository contracts guard menu links and route coverage
 
 ### Visible states
 
 - **Red** — a required build, route, menu link, or verification requirement is missing
-- **Yellow** — the page is built and live, but a required menu connection or verification signal is still incomplete
-- **Green** — the page is built, menu-connected, live, and verified
+- **Yellow** — the page is built and live, but a required menu connection or deployed smoke verification is still incomplete
+- **Green** — the page is built, menu-connected, live, and verified by the deployed smoke check
 
 ### Ledger fields
 

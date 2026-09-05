@@ -54,7 +54,7 @@ export default async function haloAgentTeamHandler(request, context) {
       return json({ generated: true, dashboard: await dashboardResponse(db) });
     }
 
-    if (body?.action === "run_maintenance" || body?.action === "run_live_connected_satellite_status" || body?.action === "halo-signal-check") {
+    if (body?.action === "run_maintenance" || body?.action === "halo-signal-check") {
       const recentRows = await db.sql`
         SELECT COUNT(*)::int AS total FROM halo_maintenance_sweeps
         WHERE trigger_type = 'manual' AND started_at >= NOW() - INTERVAL '1 hour'
@@ -66,7 +66,7 @@ export default async function haloAgentTeamHandler(request, context) {
       if (!baseUrl) return json({ message: "The deployed site URL is unavailable" }, 503);
       await runMaintenanceSweep(db, baseUrl, {
         triggerType: "manual",
-        commandName: body?.action === "run_maintenance" ? "run_maintenance" : "halo-signal-check"
+        commandName: body?.action
       });
       return json({ generated: true, dashboard: await dashboardResponse(db) });
     }

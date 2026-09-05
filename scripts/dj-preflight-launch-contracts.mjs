@@ -77,7 +77,7 @@ const checks = [
   [personas.includes("signatureMotif") && personas.includes("vocalRevealBars"), "carries selective HALO identity and delayed-vocal staging into resident plans"],
   [aiDj.includes("HALO_DJ_MIXING_DOCTRINE") && aiDj.includes("breathPlan") && aiDj.includes("bridgeElement"), "applies the five-stage HALO BREATH doctrine to cloud AI transition decisions"],
   [deck.includes("HALO BREATH") && deck.includes("scheduleBreathStages") && deck.includes("cleanRatio"), "executes mode-aware breath stages while protecting full-song listening time"],
-  [deck.includes("matchDeckLevels") && deck.includes("Math.max(5000") && deck.includes("source.start(context.currentTime, 0)"), "starts incoming records at zero, matches their level, and preserves a five-second vocal gap"],
+  [deck.includes("matchDeckLevels") && deck.includes("Math.max(5000") && deck.includes("source.start(startAt, 0)"), "starts incoming records at zero, matches their level, and preserves a five-second vocal gap"],
   [deck.includes("buildTakeoverPlan") && deck.includes("recordingState.takeoverPlan") && deck.includes("playedTrackIds"), "builds one complete DJ takeover order and enforces a no-repeat ledger"],
   [deck.includes('"clean-break"') && deck.includes("plan.hardCut") && deck.includes("setStemState(incomingDeck, \"vocals\", false"), "blocks lead-vocal crossover with stem handoffs or a true clean break"],
   [deck.includes("Takeover quality control") && deck.includes("updateTakeoverQualityControl"), "shows live sequence, vocal, repeat, and continuity quality control"]

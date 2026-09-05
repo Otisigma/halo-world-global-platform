@@ -19,6 +19,16 @@
   [headers.values]
     X-Robots-Tag = "noindex, nofollow"
 
+[[headers]]
+  for = "/partner-trust.html"
+  [headers.values]
+    X-Robots-Tag = "noindex, nofollow, noarchive"
+
+[[headers]]
+  for = "/artist-economy*"
+  [headers.values]
+    X-Robots-Tag = "noindex, nofollow"
+
 [[redirects]]
   from = "/"
   to = "/halo"
@@ -51,8 +61,8 @@
 
 [[redirects]]
   from = "/control-center"
-  to = "/private"
-  status = 302
+  to = "/halo-command.html"
+  status = 200
   force = true
 
 [[redirects]]
@@ -100,6 +110,12 @@
 [[redirects]]
   from = "/release-house"
   to = "/release-house/"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/signal"
+  to = "/signal-network/"
   status = 301
   force = true
 

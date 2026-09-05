@@ -3,13 +3,13 @@ import { resolve } from "node:path";
 
 const root = resolve(import.meta.dirname, "..");
 const read = path => readFile(resolve(root, path), "utf8");
-const [page, script, styles, api, migration, redirects] = await Promise.all([
+const [page, script, styles, api, migration, netlifyConfig] = await Promise.all([
   read("signal-network/index.html"),
   read("signal-network/signal-network.js"),
   read("signal-network/signal-network.css"),
   read("netlify/functions/signal-network.mjs"),
   read("netlify/database/migrations/20260829150000_create_signal_command_center.sql"),
-  read("public/_redirects")
+  read("netlify.toml")
 ]);
 
 const checks = [
@@ -24,7 +24,10 @@ const checks = [
   [migration.includes("halo_signal_profiles") && migration.includes("halo_signal_requests") && migration.includes("halo_signal_conversations") && migration.includes("halo_signal_messages"), "persists profiles, requests, conversations, and messages in Netlify Database"],
   [migration.includes("halo_signal_blocks") && migration.includes("halo_signal_reports") && migration.includes("CHECK (member_a_id < member_b_id)"), "enforces safety and unique conversation pairs at the database layer"],
   [styles.includes("@media (max-width: 760px)") && styles.includes("prefers-reduced-motion") && styles.includes("signal-skeleton"), "supports mobile, reduced motion, and loading states"],
-  [redirects.includes("/signal /signal-network/ 301"), "routes the short Signal URL to the live workspace"]
+  [
+    /\[\[redirects\]\][\s\S]*from\s*=\s*"\/signal"[\s\S]*to\s*=\s*"\/signal-network\/"[\s\S]*status\s*=\s*301/.test(netlifyConfig),
+    "routes the short Signal URL to the live workspace"
+  ]
 ];
 
 const failures = checks.filter(([passed]) => !passed);

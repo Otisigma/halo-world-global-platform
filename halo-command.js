@@ -369,6 +369,23 @@
     }
   }
 
+  async function runSatelliteStatus() {
+    const button = byId("runSatelliteStatusButton");
+    button.disabled = true;
+    button.textContent = "Status sweep in progress";
+    byId("maintenanceTimestamp").textContent = "Checking built, live, connected, and verified status across satellite routes now.";
+    try {
+      const data = await api("POST", { action: "run_live_connected_satellite_status" });
+      renderDashboard(data.dashboard);
+      await loadControlCenter();
+    } catch (error) {
+      byId("maintenanceTimestamp").textContent = error instanceof Error ? error.message : "The live-connected satellite sweep failed.";
+    } finally {
+      button.disabled = false;
+      button.textContent = "Run live-connected sweep";
+    }
+  }
+
   async function saveAction(event) {
     event.preventDefault();
     const form = event.currentTarget;
@@ -436,6 +453,7 @@
   byId("ownerAuthForm").addEventListener("submit", signIn);
   byId("runCouncilButton").addEventListener("click", runCouncil);
   byId("runMaintenanceButton").addEventListener("click", runMaintenance);
+  byId("runSatelliteStatusButton").addEventListener("click", runSatelliteStatus);
   byId("commandForm").addEventListener("submit", sendCommand);
   window.setInterval(() => {
     if (state.user && document.visibilityState === "visible") loadControlCenter();

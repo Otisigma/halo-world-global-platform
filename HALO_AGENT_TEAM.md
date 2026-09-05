@@ -17,7 +17,7 @@ It does not autonomously send messages, spend money, publish content, modify acc
 
 Sentinel now receives evidence from a dedicated maintenance team with two complementary layers. The source-line audit inspects every first-party project text line during validation, checks JavaScript syntax and JSON structure, and verifies local page and asset connections. The deployed-site sweep runs every 15 minutes, loads every core page, discovers and verifies same-origin links, scripts, styles, images, and form actions, then verifies every declared API route plus important API and browser output contracts.
 
-Every deployed sweep stores its coverage and individual results in Netlify Database. Failed checks enter the existing AI-assisted maintenance triage flow, while recovered checks automatically heal their matching issue. Owners can inspect the latest evidence or request a rate-limited full sweep from `/halo-command.html`.
+Every deployed sweep stores its coverage and individual results in Netlify Database. Failed checks enter the existing AI-assisted maintenance triage flow, while recovered checks automatically heal their matching issue. Owners can inspect the latest evidence or request a rate-limited one-command `run_live_connected_satellite_status` sweep from `/halo-command.html` to verify built, live, connected, and verified states while writing the command outcome into Halo Ledger.
 
 ## Daily operation
 

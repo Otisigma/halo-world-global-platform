@@ -258,11 +258,14 @@ await runCheck("Homepage music experiment markers and tracking", async () => {
 await runCheck("Core public navigation routes", async () => {
   const haloHtml = await read("halo.html");
   const requiredRoutes = [
+    "/dreamweaver/",
+    "/dreamweaver-lab/",
     "/mixes/",
     "dj-deck.html",
     "/artists/",
     "/release-house/",
     "/campaign-studio/",
+    "/finish-house/",
     "/radio/"
   ];
 
@@ -274,7 +277,7 @@ await runCheck("Core public navigation routes", async () => {
     );
   }
 
-  return "halo.html keeps links to mixes, DJ deck, artist rooms, release house, campaign studio, and radio";
+  return "halo.html keeps links to Dreamweaver routes, mixes, DJ deck, artist rooms, release house, campaign studio, finish house, and radio";
 });
 
 const failed = results.filter(result => !result.ok);

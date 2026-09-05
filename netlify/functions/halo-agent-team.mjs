@@ -54,7 +54,7 @@ export default async function haloAgentTeamHandler(request, context) {
       return json({ generated: true, dashboard: await dashboardResponse(db) });
     }
 
-    if (body?.action === "run_maintenance") {
+    if (body?.action === "run_maintenance" || body?.action === "run_live_connected_satellite_status") {
       const recentRows = await db.sql`
         SELECT COUNT(*)::int AS total FROM halo_maintenance_sweeps
         WHERE trigger_type = 'manual' AND started_at >= NOW() - INTERVAL '1 hour'

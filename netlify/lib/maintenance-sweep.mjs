@@ -10,18 +10,18 @@ const CORE_PAGES = [
 ];
 
 const SATELLITE_STATUS_TARGETS = [
-  { name: "Dreamweaver", route: "/dreamweaver/" },
-  { name: "Dreamweaver Lab", route: "/dreamweaver-lab/" },
-  { name: "Campaign Studio", route: "/campaign-studio/" },
-  { name: "Finish House", route: "/finish-house/" },
-  { name: "Release House", route: "/release-house/" },
-  { name: "Artist Pro", route: "/artist-pro/" },
-  { name: "Artists", route: "/artists/" },
-  { name: "Music", route: "/music/" },
-  { name: "Radio", route: "/radio/" },
-  { name: "Mixes", route: "/mixes/" },
-  { name: "Song Catalog", route: "/song-catalog/" },
-  { name: "Album Concierge", route: "/album-concierge/" }
+  { name: "Dreamweaver", route: "/dreamweaver/", verification: ["scripts/dreamweaver-show-contracts.mjs", "scripts/live-connected-satellite-contracts.mjs"] },
+  { name: "Dreamweaver Lab", route: "/dreamweaver-lab/", verification: ["scripts/dreamweaver-song-lab-contracts.mjs", "scripts/live-connected-satellite-contracts.mjs"] },
+  { name: "Campaign Studio", route: "/campaign-studio/", verification: ["scripts/live-connected-satellite-contracts.mjs"] },
+  { name: "Finish House", route: "/finish-house/", verification: ["scripts/finish-house-contracts.mjs", "scripts/live-connected-satellite-contracts.mjs"] },
+  { name: "Release House", route: "/release-house/", verification: ["scripts/release-house-contracts.mjs", "scripts/live-connected-satellite-contracts.mjs"] },
+  { name: "Artist Pro", route: "/artist-pro/", verification: ["scripts/artist-pro-contracts.mjs", "scripts/live-connected-satellite-contracts.mjs"] },
+  { name: "Artists", route: "/artists/", verification: ["scripts/artist-page-contracts.mjs", "scripts/live-connected-satellite-contracts.mjs"] },
+  { name: "Music", route: "/music/", verification: ["scripts/music-catalog-audit.mjs", "scripts/live-connected-satellite-contracts.mjs"] },
+  { name: "Radio", route: "/radio/", verification: ["scripts/radio-contracts.mjs", "scripts/live-connected-satellite-contracts.mjs"] },
+  { name: "Mixes", route: "/mixes/", verification: ["scripts/halo-x-mixes-contracts.mjs", "scripts/live-connected-satellite-contracts.mjs"] },
+  { name: "Song Catalog", route: "/song-catalog/", verification: ["scripts/song-catalog-contracts.mjs", "scripts/live-connected-satellite-contracts.mjs"] },
+  { name: "Album Concierge", route: "/album-concierge/", verification: ["scripts/album-concierge-contracts.mjs", "scripts/deploy-health-contracts.mjs", "scripts/live-connected-satellite-contracts.mjs"] }
 ];
 
 const API_ROUTES = [
@@ -156,12 +156,13 @@ async function reconcileIssue(check) {
   });
 }
 
-export async function runMaintenanceSweep(db, baseUrl, { triggerType = "scheduled" } = {}) {
+export async function runMaintenanceSweep(db, baseUrl, { triggerType = "scheduled", commandName = "run_maintenance" } = {}) {
   const rootUrl = new URL(baseUrl);
   const sweepId = randomUUID();
+  const startedAt = new Date().toISOString();
   await db.sql`
-    INSERT INTO halo_maintenance_sweeps (id, trigger_type, base_url)
-    VALUES (${sweepId}, ${triggerType}, ${rootUrl.origin})
+    INSERT INTO halo_maintenance_sweeps (id, trigger_type, base_url, started_at)
+    VALUES (${sweepId}, ${triggerType}, ${rootUrl.origin}, ${startedAt})
   `;
 
   const checks = [];
@@ -221,9 +222,10 @@ export async function runMaintenanceSweep(db, baseUrl, { triggerType = "schedule
     const built = pageStatusByRoute.has(route);
     const live = pageStatusByRoute.get(route) === true;
     const connected = connectedRoutesFromMainMenu.has(route);
-    const verified = built && live && connected;
+    const verification = Array.isArray(target.verification) ? target.verification : [];
+    const verified = built && live && connected && verification.length > 0;
     const status = verified ? "green" : built && live ? "yellow" : "red";
-    return { name: target.name, route, built, live, connected, verified, status };
+    return { name: target.name, route, built, live, connected, verified, status, verification };
   });
 
   for (const status of satelliteStatuses) {
@@ -245,7 +247,7 @@ export async function runMaintenanceSweep(db, baseUrl, { triggerType = "schedule
       { response: null, durationMs: 0 },
       status.verified,
       status.verified
-        ? `${status.name} is built, live, connected, and verified.`
+        ? `${status.name} is built, live, connected, and backed by HALO contract or smoke checks.`
         : `${status.name} failed one or more satellite checks (built/live/connected/verified).`
     );
     checks.push(verifiedCheck);
@@ -270,6 +272,12 @@ export async function runMaintenanceSweep(db, baseUrl, { triggerType = "schedule
   const failedChecks = checks.filter(check => check.status === "failed");
   const passedChecks = checks.length - failedChecks.length;
   const status = failedChecks.some(check => check.kind === "page") ? "failed" : failedChecks.length ? "degraded" : "passed";
+  const finishedAt = new Date().toISOString();
+  const builtCount = satelliteStatuses.filter(item => item.built).length;
+  const liveCount = satelliteStatuses.filter(item => item.live).length;
+  const connectedCount = satelliteStatuses.filter(item => item.connected).length;
+  const verifiedCount = satelliteStatuses.filter(item => item.verified).length;
+  const ledgerCommandName = commandName === "halo-signal-check" ? "halo-signal-check" : "run_maintenance";
   await db.sql`
     UPDATE halo_maintenance_sweeps SET
       status = ${status},
@@ -278,7 +286,8 @@ export async function runMaintenanceSweep(db, baseUrl, { triggerType = "schedule
       outputs_checked = ${OUTPUT_CHECKS.length + SATELLITE_STATUS_TARGETS.length},
       passed_checks = ${passedChecks},
       failed_checks = ${failedChecks.length},
-      completed_at = NOW()
+      satellite_statuses = ${JSON.stringify(satelliteStatuses)}::jsonb,
+      completed_at = ${finishedAt}
     WHERE id = ${sweepId}
   `;
 
@@ -286,19 +295,33 @@ export async function runMaintenanceSweep(db, baseUrl, { triggerType = "schedule
     actorId: "system",
     actorType: "system",
     eventCategory: "system_event",
-    summary: `Live-connected satellite status command completed (${status})`,
+    summary: `${ledgerCommandName} completed (${status})`,
     details: {
-      command: "run_live_connected_satellite_status",
+      commandName: ledgerCommandName,
+      startedAt,
+      finishedAt,
+      status,
       triggerType,
       baseUrl: rootUrl.origin,
       pagesChecked,
-      connectionsChecked,
+      linksChecked: connectionsChecked,
+      routesChecked: satelliteStatuses.length,
       outputsChecked: OUTPUT_CHECKS.length + SATELLITE_STATUS_TARGETS.length,
+      builtCount,
+      liveCount,
+      connectedCount,
+      verifiedCount,
       passedChecks,
       failedChecks: failedChecks.length,
+      failures: failedChecks.map(check => ({
+        kind: check.kind,
+        target: check.target,
+        detail: check.detail
+      })),
+      notes: "Red requires a missing or broken route. Yellow means built/live but not fully menu-connected and contract-backed. Green means built, connected, live, and verified.",
       satelliteStatuses
     },
-    body: `${failedChecks.length} failed checks across live-connected satellite status workflow.`,
+    body: `${failedChecks.length} failed checks across ${ledgerCommandName}.`,
     outcome: status === "passed" ? "success" : "failure"
   });
 
@@ -325,6 +348,7 @@ function serializeSweep(row) {
     outputsChecked: Number(row.outputs_checked || 0),
     passedChecks: Number(row.passed_checks || 0),
     failedChecks: Number(row.failed_checks || 0),
+    satelliteStatuses: Array.isArray(row.satellite_statuses) ? row.satellite_statuses : [],
     startedAt: row.started_at ? new Date(row.started_at).toISOString() : null,
     completedAt: row.completed_at ? new Date(row.completed_at).toISOString() : null
   };

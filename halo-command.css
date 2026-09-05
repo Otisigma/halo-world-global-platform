@@ -208,6 +208,22 @@ main { width: min(1500px, 100%); margin: 0 auto; }
 .maintenance-summary article:last-child { border-right: 0; }
 .maintenance-summary span, .maintenance-check span, .maintenance-check small { color: var(--muted); font: 500 8px var(--mono); letter-spacing: .12em; text-transform: uppercase; }
 .maintenance-summary strong { color: var(--gold-soft); font: 700 clamp(24px,3vw,42px) var(--display); }
+.satellite-status-panel { display: grid; gap: 16px; margin-top: 12px; }
+.satellite-status-copy p:last-child { margin: 0; color: var(--muted); font: 400 10px/1.7 var(--mono); }
+.satellite-status-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.satellite-status-card { min-height: 190px; padding: 22px; border: 1px solid var(--line); border-top: 3px solid var(--gold); background: rgba(238,230,213,.025); }
+.satellite-status-card[data-status="green"] { border-top-color: #839379; }
+.satellite-status-card[data-status="yellow"] { border-top-color: #d4a44f; }
+.satellite-status-card[data-status="red"] { border-top-color: #c36e59; }
+.satellite-status-card header { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; }
+.satellite-status-card span,
+.satellite-status-card li,
+.satellite-status-card small { color: var(--muted); font: 500 8px var(--mono); letter-spacing: .12em; text-transform: uppercase; }
+.satellite-status-card strong { display: block; margin-top: 10px; font: 600 20px var(--display); }
+.satellite-status-card ul { list-style: none; display: grid; gap: 8px; margin: 18px 0 0; padding: 0; }
+.satellite-status-card li { display: flex; justify-content: space-between; gap: 12px; padding-top: 8px; border-top: 1px solid var(--line); }
+.satellite-status-card li em { font-style: normal; color: var(--paper-soft); }
+.satellite-status-card small { display: block; margin-top: 16px; }
 .maintenance-checks { display: grid; grid-template-columns: repeat(3,1fr); gap: 12px; margin-top: 12px; }
 .maintenance-check { min-height: 170px; padding: 22px; border: 1px solid var(--line); border-top: 3px solid #839379; background: rgba(238,230,213,.025); }
 .maintenance-check[data-status="failed"] { border-top-color: #c36e59; }
@@ -285,6 +301,7 @@ footer { min-height: 92px; display: flex; justify-content: space-between; align-
   .maintenance-control-actions { justify-content: flex-start; }
   .maintenance-summary { grid-template-columns: 1fr 1fr; }
   .maintenance-summary article { border-bottom: 1px solid var(--line); }
+  .satellite-status-grid { grid-template-columns: 1fr; }
   .maintenance-checks { grid-template-columns: 1fr; }
   footer { display: grid; }
 }

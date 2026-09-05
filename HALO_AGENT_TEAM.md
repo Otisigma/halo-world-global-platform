@@ -17,7 +17,46 @@ It does not autonomously send messages, spend money, publish content, modify acc
 
 Sentinel now receives evidence from a dedicated maintenance team with two complementary layers. The source-line audit inspects every first-party project text line during validation, checks JavaScript syntax and JSON structure, and verifies local page and asset connections. The deployed-site sweep runs every 15 minutes, loads every core page, discovers and verifies same-origin links, scripts, styles, images, and form actions, then verifies every declared API route plus important API and browser output contracts.
 
-Every deployed sweep stores its coverage and individual results in Netlify Database. Failed checks enter the existing AI-assisted maintenance triage flow, while recovered checks automatically heal their matching issue. Owners can inspect the latest evidence or request a rate-limited one-command `run_live_connected_satellite_status` sweep from `/halo-command.html` to verify built, live, connected, and verified states while writing the command outcome into Halo Ledger.
+Every deployed sweep stores its coverage and individual results in Netlify Database. Failed checks enter the existing AI-assisted maintenance triage flow, while recovered checks automatically heal their matching issue. Owners can inspect the latest evidence or request the rate-limited one-command `halo-signal-check` sweep from `/halo-command.html` to verify built, live, connected, and verified states while writing the command outcome into Halo Ledger.
+
+## halo-signal-check
+
+`halo-signal-check` is HALO's canonical one-command verification workflow for Dreamweaver pages and the other major menu-linked satellites.
+
+### Purpose
+
+- confirm the page or system is built
+- confirm the main HALO menu links to it
+- confirm the deployed route is live and reachable
+- confirm the route is covered by HALO contract or smoke checks
+
+### Visible states
+
+- **Red** — a required build, route, menu link, or verification requirement is missing
+- **Yellow** — the page is built and live, but a required menu connection or verification signal is still incomplete
+- **Green** — the page is built, menu-connected, live, and verified
+
+### Ledger fields
+
+Each `halo-signal-check` run writes a Halo Ledger system event with these reviewable fields:
+
+- `commandName`
+- `startedAt`
+- `finishedAt`
+- `status`
+- `pagesChecked`
+- `linksChecked`
+- `routesChecked`
+- `outputsChecked`
+- `builtCount`
+- `liveCount`
+- `connectedCount`
+- `verifiedCount`
+- `passedChecks`
+- `failedChecks`
+- `failures`
+- `notes`
+- `satelliteStatuses`
 
 ## Daily operation
 

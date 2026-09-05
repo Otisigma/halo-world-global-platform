@@ -219,6 +219,30 @@
         );
       }));
     }
+    renderSatelliteStatuses(sweep?.satelliteStatuses || []);
+  }
+
+  function renderSatelliteStatuses(statuses = []) {
+    const target = byId("satelliteStatuses");
+    if (!target) return;
+    if (!statuses.length) {
+      target.replaceChildren(emptyState("Run halo-signal-check to publish trusted satellite status cards."));
+      return;
+    }
+    target.replaceChildren(...statuses.map(item => el("article", { class: "satellite-status-card", "data-status": item.status },
+      el("header", null, el("span", null, item.status.toUpperCase()), el("span", null, item.route)),
+      el("strong", null, item.name),
+      el("ul", null,
+        ["built", "connected", "live", "verified"].map(key =>
+          el("li", null, key.toUpperCase(), el("em", null, item[key] ? "YES" : "NO"))
+        )
+      ),
+      el("small", null, item.status === "green"
+        ? "Trusted across build, menu, route, and deployed smoke checks."
+        : item.status === "yellow"
+          ? "Built and reachable, but still missing a required menu or smoke-verification signal."
+          : "Missing a build, route, menu link, or smoke-verification requirement.")
+    )));
   }
 
   function renderActivity(activity = []) {
@@ -369,20 +393,20 @@
     }
   }
 
-  async function runSatelliteStatus() {
-    const button = byId("runSatelliteStatusButton");
+  async function runSignalCheck() {
+    const button = byId("runSignalCheckButton");
     button.disabled = true;
-    button.textContent = "Status sweep in progress";
+    button.textContent = "Signal check in progress";
     byId("maintenanceTimestamp").textContent = "Checking built, live, connected, and verified status across satellite routes now.";
     try {
-      const data = await api("POST", { action: "run_live_connected_satellite_status" });
+      const data = await api("POST", { action: "halo-signal-check" });
       renderDashboard(data.dashboard);
       await loadControlCenter();
     } catch (error) {
-      byId("maintenanceTimestamp").textContent = error instanceof Error ? error.message : "The live-connected satellite sweep failed.";
+      byId("maintenanceTimestamp").textContent = error instanceof Error ? error.message : "halo-signal-check failed.";
     } finally {
       button.disabled = false;
-      button.textContent = "Run live-connected sweep";
+      button.textContent = "Run halo-signal-check";
     }
   }
 
@@ -453,7 +477,7 @@
   byId("ownerAuthForm").addEventListener("submit", signIn);
   byId("runCouncilButton").addEventListener("click", runCouncil);
   byId("runMaintenanceButton").addEventListener("click", runMaintenance);
-  byId("runSatelliteStatusButton").addEventListener("click", runSatelliteStatus);
+  byId("runSignalCheckButton").addEventListener("click", runSignalCheck);
   byId("commandForm").addEventListener("submit", sendCommand);
   window.setInterval(() => {
     if (state.user && document.visibilityState === "visible") loadControlCenter();

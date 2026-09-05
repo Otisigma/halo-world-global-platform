@@ -12,21 +12,28 @@ const satellites = [
   { name: "Campaign Studio", route: "/campaign-studio/", file: "campaign-studio/index.html" },
   { name: "Finish House", route: "/finish-house/", file: "finish-house/index.html" },
   { name: "Release House", route: "/release-house/", file: "release-house/index.html" },
+  { name: "Artist Pro", route: "/artist-pro/", file: "artist-pro/index.html" },
   { name: "Artists", route: "/artists/", file: "artists/index.html" },
+  { name: "Mixes", route: "/mixes/", file: "mixes/index.html" },
   { name: "Music", route: "/music/", file: "music/index.html" },
-  { name: "Radio", route: "/radio/", file: "radio/index.html" }
+  { name: "Radio", route: "/radio/", file: "radio/index.html" },
+  { name: "Song Catalog", route: "/song-catalog/", file: "song-catalog/index.html" },
+  { name: "Album Concierge", route: "/album-concierge/", file: "album-concierge/index.html" }
 ];
 
-const [menuSource, sweepSource, commandApiSource, commandClientSource, netlifyConfigSource] = await Promise.all([
+const [menuSource, sweepSource, commandApiSource, commandClientSource, docsSource, packageSource, netlifyConfigSource] = await Promise.all([
   read("halo.html"),
   read("netlify/lib/maintenance-sweep.mjs"),
   read("netlify/functions/halo-agent-team.mjs"),
   read("halo-command.js"),
+  read("HALO_AGENT_TEAM.md"),
+  read("package.json"),
   read("netlify.toml")
 ]);
 
 const redirectAliases = new Set([...netlifyConfigSource.matchAll(/^\s*from\s*=\s*["']([^"']+)["']/gm)].map(match => match[1]));
-const commandName = "run_live_connected_satellite_status";
+const commandName = "halo-signal-check";
+const packageJson = JSON.parse(packageSource);
 
 async function pathExists(path) {
   try {
@@ -37,9 +44,11 @@ async function pathExists(path) {
   }
 }
 
-assert.match(commandApiSource, /run_live_connected_satellite_status/, "The HALO command API must expose run_live_connected_satellite_status.");
-assert.match(commandClientSource, /run_live_connected_satellite_status/, "The owner dashboard must trigger run_live_connected_satellite_status.");
-assert.match(sweepSource, /appendLedgerEntry/, "The maintenance sweep must write command outcomes into the Halo Ledger.");
+assert.match(commandApiSource, /halo-signal-check/, "The HALO command API must expose halo-signal-check.");
+assert.match(commandClientSource, /halo-signal-check/, "The owner dashboard must trigger halo-signal-check.");
+assert.match(sweepSource, /halo-signal-check/, "The maintenance sweep must write halo-signal-check into the Halo Ledger.");
+assert.match(docsSource, /## halo-signal-check/, "The canonical halo-signal-check README section must exist.");
+assert.equal(packageJson.scripts["halo-signal-check"], "node scripts/live-connected-satellite-contracts.mjs", "package.json must expose halo-signal-check as the canonical repo command.");
 
 const failures = [];
 for (const satellite of satellites) {
@@ -56,7 +65,7 @@ for (const satellite of satellites) {
 
 if (failures.length) {
   failures.forEach(message => console.error(`- ${message}`));
-  console.error(`Fix failures and rerun: node scripts/live-connected-satellite-contracts.mjs (${commandName})`);
+  console.error(`Fix failures and rerun: npm run ${commandName}`);
   process.exitCode = 1;
 } else {
   console.log(`HALO live-connected satellite command checks passed via ${commandName}.`);

@@ -58,6 +58,8 @@ const OUTPUT_CHECKS = [
   }))
 ];
 
+const SIGNAL_CHECK_COMMAND = "halo-signal-check";
+
 function cleanDetail(value, maximum = 600) {
   return String(value || "").replace(/\s+/g, " ").trim().slice(0, maximum);
 }
@@ -156,12 +158,13 @@ async function reconcileIssue(check) {
   });
 }
 
-export async function runMaintenanceSweep(db, baseUrl, { triggerType = "scheduled" } = {}) {
+export async function runMaintenanceSweep(db, baseUrl, { triggerType = "scheduled", commandName = "run_maintenance" } = {}) {
   const rootUrl = new URL(baseUrl);
   const sweepId = randomUUID();
+  const startedAt = new Date().toISOString();
   await db.sql`
-    INSERT INTO halo_maintenance_sweeps (id, trigger_type, base_url)
-    VALUES (${sweepId}, ${triggerType}, ${rootUrl.origin})
+    INSERT INTO halo_maintenance_sweeps (id, trigger_type, base_url, started_at)
+    VALUES (${sweepId}, ${triggerType}, ${rootUrl.origin}, ${startedAt})
   `;
 
   const checks = [];
@@ -173,6 +176,7 @@ export async function runMaintenanceSweep(db, baseUrl, { triggerType = "schedule
   let pagesChecked = 0;
   let connectionsChecked = 0;
   const pageStatusByRoute = new Map();
+  const pageBodyByRoute = new Map();
   const connectedRoutesFromMainMenu = new Set();
 
   for (const pageUrl of queuedPages.values()) {
@@ -189,6 +193,7 @@ export async function runMaintenanceSweep(db, baseUrl, { triggerType = "schedule
     checks.push(pageCheck);
     await persistCheck(db, sweepId, pageCheck);
     pageStatusByRoute.set(normalizeRoute(pageUrl.pathname), passed);
+    pageBodyByRoute.set(normalizeRoute(pageUrl.pathname), request.body);
     pagesChecked += 1;
     if (!passed) continue;
 
@@ -216,15 +221,28 @@ export async function runMaintenanceSweep(db, baseUrl, { triggerType = "schedule
     }
   }
 
-  const satelliteStatuses = SATELLITE_STATUS_TARGETS.map(target => {
+  const satelliteStatuses = [];
+  for (const target of SATELLITE_STATUS_TARGETS) {
     const route = normalizeRoute(target.route);
     const built = pageStatusByRoute.has(route);
     const live = pageStatusByRoute.get(route) === true;
     const connected = connectedRoutesFromMainMenu.has(route);
-    const verified = built && live && connected;
-    const status = verified ? "green" : built && live ? "yellow" : "red";
-    return { name: target.name, route, built, live, connected, verified, status };
-  });
+    const smokeVerified = Boolean(live && /<title[\s>][\s\S]*<\/title>/i.test(pageBodyByRoute.get(route) || ""));
+    const verified = built && live && connected && smokeVerified;
+    const status = !built || !live || !connected ? "red" : verified ? "green" : "yellow";
+    satelliteStatuses.push({ name: target.name, route, built, live, connected, verified, status });
+    const smokeCheck = checkRecord(
+      "output",
+      `${route}#smoke`,
+      { response: null, durationMs: 0 },
+      smokeVerified,
+      smokeVerified
+        ? `${target.name} passed its deployed smoke check.`
+        : `${target.name} did not pass the deployed smoke check.`
+    );
+    checks.push(smokeCheck);
+    await persistCheck(db, sweepId, smokeCheck);
+  }
 
   for (const status of satelliteStatuses) {
     if (!status.connected) {
@@ -245,7 +263,7 @@ export async function runMaintenanceSweep(db, baseUrl, { triggerType = "schedule
       { response: null, durationMs: 0 },
       status.verified,
       status.verified
-        ? `${status.name} is built, live, connected, and verified.`
+        ? `${status.name} is built, live, connected, and passed its smoke check.`
         : `${status.name} failed one or more satellite checks (built/live/connected/verified).`
     );
     checks.push(verifiedCheck);
@@ -270,15 +288,23 @@ export async function runMaintenanceSweep(db, baseUrl, { triggerType = "schedule
   const failedChecks = checks.filter(check => check.status === "failed");
   const passedChecks = checks.length - failedChecks.length;
   const status = failedChecks.some(check => check.kind === "page") ? "failed" : failedChecks.length ? "degraded" : "passed";
+  const finishedAt = new Date().toISOString();
+  const builtCount = satelliteStatuses.filter(item => item.built).length;
+  const liveCount = satelliteStatuses.filter(item => item.live).length;
+  const connectedCount = satelliteStatuses.filter(item => item.connected).length;
+  const verifiedCount = satelliteStatuses.filter(item => item.verified).length;
+  const ledgerCommandName = commandName || "run_maintenance";
+  const outputsChecked = OUTPUT_CHECKS.length + (SATELLITE_STATUS_TARGETS.length * 2);
   await db.sql`
     UPDATE halo_maintenance_sweeps SET
       status = ${status},
       pages_checked = ${pagesChecked},
       connections_checked = ${connectionsChecked},
-      outputs_checked = ${OUTPUT_CHECKS.length + SATELLITE_STATUS_TARGETS.length},
+      outputs_checked = ${outputsChecked},
       passed_checks = ${passedChecks},
       failed_checks = ${failedChecks.length},
-      completed_at = NOW()
+      satellite_statuses = ${JSON.stringify(satelliteStatuses)}::jsonb,
+      completed_at = ${finishedAt}
     WHERE id = ${sweepId}
   `;
 
@@ -286,19 +312,33 @@ export async function runMaintenanceSweep(db, baseUrl, { triggerType = "schedule
     actorId: "system",
     actorType: "system",
     eventCategory: "system_event",
-    summary: `Live-connected satellite status command completed (${status})`,
+    summary: `${ledgerCommandName} completed (${status})`,
     details: {
-      command: "run_live_connected_satellite_status",
+      commandName: ledgerCommandName,
+      startedAt,
+      finishedAt,
+      status,
       triggerType,
       baseUrl: rootUrl.origin,
       pagesChecked,
-      connectionsChecked,
-      outputsChecked: OUTPUT_CHECKS.length + SATELLITE_STATUS_TARGETS.length,
+      linksChecked: connectionsChecked,
+      routesChecked: satelliteStatuses.length,
+      outputsChecked,
+      builtCount,
+      liveCount,
+      connectedCount,
+      verifiedCount,
       passedChecks,
       failedChecks: failedChecks.length,
+      failures: failedChecks.map(check => ({
+        kind: check.kind,
+        target: check.target,
+        detail: check.detail
+      })),
+      notes: `Red requires a missing or broken route. Yellow means built/live but not fully menu-connected or smoke-verified. Green means built, connected, live, and verified by the deployed smoke check used by ${SIGNAL_CHECK_COMMAND}.`,
       satelliteStatuses
     },
-    body: `${failedChecks.length} failed checks across live-connected satellite status workflow.`,
+    body: `${failedChecks.length} failed checks across ${ledgerCommandName}.`,
     outcome: status === "passed" ? "success" : "failure"
   });
 
@@ -308,7 +348,7 @@ export async function runMaintenanceSweep(db, baseUrl, { triggerType = "schedule
     status,
     pagesChecked,
     connectionsChecked,
-    outputsChecked: OUTPUT_CHECKS.length + SATELLITE_STATUS_TARGETS.length,
+    outputsChecked,
     passedChecks,
     failedChecks: failedChecks.length,
     satelliteStatuses
@@ -325,6 +365,7 @@ function serializeSweep(row) {
     outputsChecked: Number(row.outputs_checked || 0),
     passedChecks: Number(row.passed_checks || 0),
     failedChecks: Number(row.failed_checks || 0),
+    satelliteStatuses: Array.isArray(row.satellite_statuses) ? row.satellite_statuses : [],
     startedAt: row.started_at ? new Date(row.started_at).toISOString() : null,
     completedAt: row.completed_at ? new Date(row.completed_at).toISOString() : null
   };

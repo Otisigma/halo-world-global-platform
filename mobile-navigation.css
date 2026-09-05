@@ -336,7 +336,7 @@
   padding: 1px 4px;
   border: 1px solid currentColor;
   border-radius: 999px;
-  font: 700 6px/1 "Share Tech Mono", ui-monospace, monospace;
+  font: 700 8px/1 "Share Tech Mono", ui-monospace, monospace;
   letter-spacing: .1em;
   text-transform: uppercase;
 }
@@ -351,7 +351,7 @@
 
 .halo-menu-route-status b {
   color: #f9f4ea;
-  font-size: 6px;
+  font-size: 7px;
 }
 
 .halo-menu-route-status-green { color: #9bd09b; }

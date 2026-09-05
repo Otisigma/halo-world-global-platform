@@ -6,8 +6,7 @@ CREATE TABLE IF NOT EXISTS halo_dreamweaver_fan_signups (
   source            TEXT NOT NULL DEFAULT 'dreamweaver_satellite',
   unlock_reward     TEXT NOT NULL DEFAULT 'full_track_doorway',
   consent_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE INDEX IF NOT EXISTS halo_dreamweaver_fan_signups_created_idx

@@ -67,8 +67,7 @@ export default async function dreamweaverFanSignups(request) {
         favorite_platform = EXCLUDED.favorite_platform,
         source = EXCLUDED.source,
         unlock_reward = EXCLUDED.unlock_reward,
-        consent_at = NOW(),
-        updated_at = NOW()
+        consent_at = NOW()
       RETURNING xmax = 0 AS inserted
     `;
     return json({

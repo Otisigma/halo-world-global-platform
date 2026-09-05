@@ -226,9 +226,10 @@
 
   function isSatelliteFlow() {
     const params = new URLSearchParams(location.search);
-    return !campaignIdFromUrl()
-      && params.get("experience") !== "studio"
-      && (!params.get("mix") || params.get("satellite") === "dreamweaver");
+    if (campaignIdFromUrl() || params.get("experience") === "studio") return false;
+    const hasMix = Boolean(params.get("mix"));
+    if (!hasMix) return true;
+    return params.get("satellite") === "dreamweaver";
   }
 
   function rewardSearchQuery() {

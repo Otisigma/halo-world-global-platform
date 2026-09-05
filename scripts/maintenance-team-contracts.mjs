@@ -36,8 +36,11 @@ assert.match(api, /halo-signal-check/, "owners must be able to trigger the one-c
 assert.match(page, /Every page\. Every connection\. Every output\./, "the owner dashboard must explain sweep coverage");
 assert.match(client, /renderMaintenance/, "the owner dashboard must render sweep evidence");
 assert.match(page, /id="satelliteStatuses"/, "the owner dashboard must show satellite status cards");
+assert.match(page, /operator\/admin reference light/i, "the owner dashboard must describe the operator/admin reference light");
 assert.match(client, /halo-signal-check/, "the owner dashboard must trigger the one-command satellite sweep");
 assert.match(client, /renderSatelliteStatuses/, "the owner dashboard must render red\/yellow\/green satellite states");
+assert.match(client, /Operator\/Admin green-light reference/, "the owner dashboard must render the operator/admin status reference card");
+assert.match(client, /status-badge/, "the owner dashboard must render visible status badges");
 assert.match(docs, /source-line audit/, "maintenance coverage must be documented");
 assert.match(docs, /## halo-signal-check/, "the canonical halo-signal-check README section must be documented");
 const parsedPackage = JSON.parse(packageJson);

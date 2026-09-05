@@ -229,20 +229,41 @@
       target.replaceChildren(emptyState("Run halo-signal-check to publish trusted satellite status cards."));
       return;
     }
-    target.replaceChildren(...statuses.map(item => el("article", { class: "satellite-status-card", "data-status": item.status },
-      el("header", null, el("span", null, item.status.toUpperCase()), el("span", null, item.route)),
+    const statusCopy = {
+      green: "Trusted across build, menu, route, and deployed smoke checks.",
+      yellow: "Built and reachable, but still missing a required menu or smoke-verification signal.",
+      red: "Missing a build, route, menu link, or smoke-verification requirement."
+    };
+    const statusLabel = { green: "WORKING", yellow: "ATTENTION", red: "BROKEN" };
+    const statusGlyph = { green: "G", yellow: "Y", red: "R" };
+    const statusRank = { green: 0, yellow: 1, red: 2 };
+    const operatorStatus = statuses.reduce(
+      (worst, item) => (statusRank[item.status] ?? 2) > (statusRank[worst] ?? 2) ? item.status : worst,
+      "green"
+    );
+    const operatorReferenceGates = {
+      built: statuses.every(item => item.built === true),
+      connected: statuses.every(item => item.connected === true),
+      live: statuses.every(item => item.live === true),
+      verified: statuses.every(item => item.verified === true)
+    };
+    const operatorReference = {
+      name: "Operator/Admin green-light reference",
+      route: "/halo-command.html",
+      ...operatorReferenceGates,
+      status: operatorStatus
+    };
+    const statusCard = item => el("article", { class: "satellite-status-card", "data-status": item.status },
+      el("header", null, el("span", { class: "status-badge", "aria-label": `Status ${item.status.toUpperCase()} ${statusLabel[item.status] || "BROKEN"}` }, el("i", { "aria-hidden": "true" }), el("b", null, statusGlyph[item.status] || "R"), `${item.status.toUpperCase()} · ${statusLabel[item.status] || "BROKEN"}`), el("span", null, item.route)),
       el("strong", null, item.name),
       el("ul", null,
         ["built", "connected", "live", "verified"].map(key =>
           el("li", null, key.toUpperCase(), el("em", null, item[key] ? "YES" : "NO"))
         )
       ),
-      el("small", null, item.status === "green"
-        ? "Trusted across build, menu, route, and deployed smoke checks."
-        : item.status === "yellow"
-          ? "Built and reachable, but still missing a required menu or smoke-verification signal."
-          : "Missing a build, route, menu link, or smoke-verification requirement.")
-    )));
+      el("small", null, statusCopy[item.status] || statusCopy.red)
+    );
+    target.replaceChildren(statusCard(operatorReference), ...statuses.map(statusCard));
   }
 
   function renderActivity(activity = []) {

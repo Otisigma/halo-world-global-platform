@@ -220,6 +220,13 @@ main { width: min(1500px, 100%); margin: 0 auto; }
 .satellite-status-card[data-status="yellow"] { border-top-color: #d4a44f; }
 .satellite-status-card[data-status="red"] { border-top-color: #c36e59; }
 .satellite-status-card header { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; }
+.status-badge { display: inline-flex; align-items: center; gap: 6px; }
+.status-badge i { width: 8px; height: 8px; border-radius: 999px; background: currentColor; box-shadow: 0 0 12px currentColor; }
+.status-badge { font: 700 10px var(--mono); letter-spacing: .1em; }
+.status-badge b { min-width: 10px; font: 700 9px var(--mono); letter-spacing: .08em; color: var(--paper-soft); }
+.satellite-status-card[data-status="green"] .status-badge { color: #9bd09b; }
+.satellite-status-card[data-status="yellow"] .status-badge { color: #f2ce77; }
+.satellite-status-card[data-status="red"] .status-badge { color: #eaa08f; }
 .satellite-status-card span,
 .satellite-status-card li,
 .satellite-status-card small { color: var(--muted); font: 500 8px var(--mono); letter-spacing: .12em; text-transform: uppercase; }

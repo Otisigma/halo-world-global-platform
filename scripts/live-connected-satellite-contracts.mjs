@@ -46,6 +46,8 @@ async function pathExists(path) {
 
 assert.match(commandApiSource, /halo-signal-check/, "The HALO command API must expose halo-signal-check.");
 assert.match(commandClientSource, /halo-signal-check/, "The owner dashboard must trigger halo-signal-check.");
+assert.match(commandClientSource, /Operator\/Admin green-light reference/, "The owner dashboard must render the operator/admin reference light.");
+assert.match(commandClientSource, /status-badge/, "The owner dashboard must render visible satellite status badges.");
 assert.match(sweepSource, /halo-signal-check/, "The maintenance sweep must write halo-signal-check into the Halo Ledger.");
 assert.match(docsSource, /## halo-signal-check/, "The canonical halo-signal-check README section must exist.");
 assert.equal(packageJson.scripts["halo-signal-check"], "node scripts/live-connected-satellite-contracts.mjs", "package.json must expose halo-signal-check as the canonical repo command.");

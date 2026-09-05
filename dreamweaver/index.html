@@ -37,6 +37,86 @@
     </div>
   </header>
 
+  <section class="satellite-landing" id="dreamweaverSatellite" aria-labelledby="dreamweaverSatelliteTitle" hidden>
+    <div class="satellite-copy">
+      <p class="satellite-kicker">SATELLITE RELEASE FUNNEL / DREAMWEAVER AI CONCIERGE</p>
+      <h1 id="dreamweaverSatelliteTitle">Let Dreamweaver introduce the release before the stream links do.</h1>
+      <p class="satellite-lede">This is the first taste of the concierge service: Dreamweaver AI guides a full five-movement listening doorway, gives fans more than a snippet, and then routes them to Spotify, Apple Music, YouTube, and the next step that fits.</p>
+      <div class="satellite-proof" aria-label="Dreamweaver concierge flow">
+        <article><span>01</span><strong>Concierge intro</strong><p>Dreamweaver frames the release like a host, not a banner ad.</p></article>
+        <article><span>02</span><strong>Email unlock</strong><p>Your signup opens the complete Dreamweaver track experience and follow-on platform links.</p></article>
+        <article><span>03</span><strong>Paid next step</strong><p>Premium remixes and album builds stay direct, human-approved, and sold by the team.</p></article>
+      </div>
+    </div>
+
+    <aside class="satellite-unlock">
+      <p class="satellite-form-kicker">UNLOCK THE FULL EXPERIENCE</p>
+      <h2>Leave your email and Dreamweaver opens the complete track doorway.</h2>
+      <p>The reward is the full guided experience below plus direct streaming exits and premium next-step options.</p>
+      <form id="dreamweaverUnlockForm" class="satellite-form" novalidate>
+        <label>
+          <span>First name <small>optional</small></span>
+          <input name="firstName" type="text" maxlength="80" autocomplete="given-name" placeholder="How Dreamweaver should greet you">
+        </label>
+        <label>
+          <span>Email *</span>
+          <input name="email" type="email" maxlength="254" autocomplete="email" required placeholder="you@example.com">
+        </label>
+        <label>
+          <span>Preferred platform</span>
+          <select name="favoritePlatform">
+            <option value="spotify">Spotify</option>
+            <option value="apple_music">Apple Music</option>
+            <option value="youtube">YouTube</option>
+          </select>
+        </label>
+        <label class="satellite-trap" aria-hidden="true">
+          <span>Company</span>
+          <input name="company" type="text" tabindex="-1" autocomplete="off">
+        </label>
+        <label class="satellite-consent">
+          <input name="consent" type="checkbox" required>
+          <span>I want Dreamweaver to unlock the release experience and send follow-up release notes. Platform links stay optional and premium remixes / album builds are separate paid offers handled directly by the team.</span>
+        </label>
+        <button class="satellite-submit" type="submit"><span>Unlock the full Dreamweaver doorway</span><b>↘</b></button>
+        <p class="satellite-status" id="dreamweaverUnlockStatus" role="status" aria-live="polite"></p>
+      </form>
+    </aside>
+  </section>
+
+  <section class="satellite-reward" id="dreamweaverReward" aria-labelledby="dreamweaverRewardTitle" hidden>
+    <div class="reward-intro">
+      <p class="satellite-kicker">UNLOCKED / DREAMWEAVER OPEN</p>
+      <h2 id="dreamweaverRewardTitle">Your concierge doorway is ready.</h2>
+      <p id="dreamweaverRewardCopy">Start the full Dreamweaver experience below, then take the release with you on the platform that fits your listening habit.</p>
+      <div class="reward-primary-actions">
+        <button class="reward-button" id="startDreamweaverShow" type="button">Start the full Dreamweaver experience</button>
+        <a class="reward-link" href="/support/#roadmap">Build notes ↗</a>
+      </div>
+    </div>
+
+    <div class="reward-grid">
+      <article class="reward-card">
+        <p>STREAMING EXITS</p>
+        <h3>Take the release into your own listening world.</h3>
+        <div class="platform-links" aria-label="Streaming platforms">
+          <a id="dreamweaverSpotifyLink" href="https://open.spotify.com/search/owen%20anthony" target="_blank" rel="noopener noreferrer">Spotify ↗</a>
+          <a id="dreamweaverAppleLink" href="https://music.apple.com/us/search?term=owen%20anthony" target="_blank" rel="noopener noreferrer">Apple Music ↗</a>
+          <a id="dreamweaverYouTubeLink" href="https://www.youtube.com/@halo-music-world" target="_blank" rel="noopener noreferrer">YouTube ↗</a>
+        </div>
+      </article>
+      <article class="reward-card reward-card--premium">
+        <p>PAID NEXT STEP</p>
+        <h3>Want the premium version built for you?</h3>
+        <div class="premium-links">
+          <a href="/support/#send">Commission a paid Dreamweaver remix</a>
+          <a href="/album-concierge/?purpose=collector">Build a paid album edition</a>
+        </div>
+        <small>Premium remix and album-builder work stays direct with the HALO team.</small>
+      </article>
+    </div>
+  </section>
+
   <main class="show-shell" id="showShell" aria-live="polite" aria-busy="true">
     <section class="loading-show" id="loadingShow">
       <p>Dreamweaver / preparing this edition</p>

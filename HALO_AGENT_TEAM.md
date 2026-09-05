@@ -32,7 +32,7 @@ Every deployed sweep stores its coverage and individual results in Netlify Datab
 
 ### Visible states
 
-- The dashboard renders an **operator/admin reference light** first, then each menu-linked satellite card with the same status model.
+- Every main HALO menu button/tile renders a live **red/yellow/green status badge** beside the title as the primary operator signal, while the dashboard keeps the operator/admin reference light and full summary cards.
 - **Red** — a required build, route, menu link, or verification requirement is missing
 - **Yellow** — the page is built and live, but a required menu connection or deployed smoke verification is still incomplete
 - **Green** — the page is built, menu-connected, live, and verified by the deployed smoke check

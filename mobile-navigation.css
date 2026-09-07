@@ -358,6 +358,13 @@
 .halo-menu-route-status-yellow { color: #f2ce77; }
 .halo-menu-route-status-red { color: #eaa08f; }
 
+.halo-menu-route-status-current {
+  border-color: #f8e3a8;
+  background: rgba(248, 227, 168, .1);
+  color: #f8e3a8;
+  box-shadow: 0 0 0 2px rgba(248, 227, 168, .08), 0 0 14px rgba(248, 227, 168, .18);
+}
+
 .halo-menu-lane small {
   margin-top: 4px;
   overflow: hidden;

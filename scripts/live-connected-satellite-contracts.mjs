@@ -58,8 +58,12 @@ assert.match(commandClientSource, /Operator\/Admin green-light reference/, "The 
 assert.match(commandClientSource, /status-badge/, "The owner dashboard must render visible satellite status badges.");
 assert.match(menuSource, /renderMenuStatusBadge/, "Main menu buttons must render per-tile status badges.");
 assert.match(menuSource, /loadMenuRouteStatuses/, "Main menu badges must use halo-signal-check route statuses.");
+assert.match(menuSource, /halo-menu-route-status-current/, "Main menu badges must identify the current page.");
+assert.match(menuSource, /AI ALERTED/, "Main menu badges must expose the AI repair handoff for unhealthy routes.");
 assert.match(navigationCssSource, /\.halo-menu-route-status/, "Main menu status badge styling must exist.");
+assert.match(navigationCssSource, /\.halo-menu-route-status-current/, "Current-page status styling must exist.");
 assert.match(sweepSource, /halo-signal-check/, "The maintenance sweep must write halo-signal-check into the Halo Ledger.");
+assert.match(sweepSource, /repairStatus/, "Unhealthy satellite statuses must queue an AI-assisted repair handoff.");
 assert.match(docsSource, /## halo-signal-check/, "The canonical halo-signal-check README section must exist.");
 assert.equal(packageJson.scripts["halo-signal-check"], "node scripts/live-connected-satellite-contracts.mjs", "package.json must expose halo-signal-check as the canonical repo command.");
 

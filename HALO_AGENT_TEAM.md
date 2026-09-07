@@ -33,9 +33,11 @@ Every deployed sweep stores its coverage and individual results in Netlify Datab
 ### Visible states
 
 - Every main HALO menu button/tile renders a live **red/yellow/green status badge** beside the title as the primary operator signal, while the dashboard keeps the operator/admin reference light and full summary cards.
+- When the menu is available on the page being viewed, that route is marked **CURRENT** so the active location is unambiguous.
 - **Red** — a required build, route, menu link, or verification requirement is missing
 - **Yellow** — the page is built and live, but a required menu connection or deployed smoke verification is still incomplete
 - **Green** — the page is built, menu-connected, live, and verified by the deployed smoke check
+- Red and yellow routes display **AI ALERTED** after the maintenance sweep queues the failure for AI-assisted triage and repair dispatch. The issue remains reviewable in the maintenance system and Halo Ledger until the route recovers.
 
 ### Ledger fields
 

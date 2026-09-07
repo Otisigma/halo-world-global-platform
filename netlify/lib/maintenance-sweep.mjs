@@ -237,7 +237,8 @@ export async function runMaintenanceSweep(db, baseUrl, { triggerType = "schedule
     const smokeVerified = Boolean(live && /<title[\s>][\s\S]*<\/title>/i.test(pageBodyByRoute.get(route) || ""));
     const verified = built && live && connected && smokeVerified;
     const status = !built || !live || !connected ? "red" : verified ? "green" : "yellow";
-    satelliteStatuses.push({ name: target.name, route, built, live, connected, verified, status });
+    const repairStatus = status === "green" ? "not_needed" : "queued";
+    satelliteStatuses.push({ name: target.name, route, built, live, connected, verified, status, repairStatus });
     const smokeCheck = checkRecord(
       "output",
       `${route}#smoke`,

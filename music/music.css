@@ -214,6 +214,15 @@ h1 em { color: var(--acid); font-family: var(--serif); font-weight: 400; text-tr
 .stage-video-poster strong { font-size: 14px; }
 .stage-video-frame { width: 100%; aspect-ratio: 16 / 9; margin-top: 24px; background: #000; }
 .stage-video-frame iframe, .stage-video-frame video { width: 100%; height: 100%; border: 0; object-fit: contain; }
+.stage-video-fallback-visual { position: relative; width: 100%; height: 100%; display: grid; place-items: center; overflow: hidden; background: radial-gradient(circle at 20% 20%, #30312f, #0f1010 58%); }
+.stage-video-fallback-visual::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(0,0,0,.08), rgba(0,0,0,.72)); }
+.stage-video-fallback-visual > img { width: 100%; height: 100%; object-fit: cover; opacity: .45; transform: scale(1.04); }
+.stage-video-fallback-copy { position: absolute; inset: auto 16px 16px; z-index: 1; width: calc(100% - 32px); max-width: 420px; padding: 12px 14px; color: #fff; background: rgba(8, 8, 8, .82); border: 1px solid rgba(255, 255, 255, .3); box-shadow: 0 10px 24px rgba(0, 0, 0, .45); backdrop-filter: blur(2px); }
+.stage-video-fallback-copy span { display: block; margin-bottom: 6px; color: var(--acid); font: 500 7px/1 var(--mono); letter-spacing: .12em; text-transform: uppercase; }
+.stage-video-fallback-copy strong { display: block; font-size: 13px; line-height: 1.3; overflow-wrap: anywhere; }
+@supports not (backdrop-filter: blur(2px)) {
+  .stage-video-fallback-copy { background: rgba(8, 8, 8, .92); }
+}
 .stage-video-empty { margin-top: 24px; padding: 22px; border: 1px dashed #aaa99f; }
 .stage-video-empty span { color: #b63e15; font: 500 7px/1 var(--mono); letter-spacing: 0.12em; }
 .stage-video-empty strong { display: block; margin-top: 10px; font-size: 17px; }
@@ -276,10 +285,15 @@ footer a { text-decoration: none; color: var(--paper); }
 .toast.is-visible { transform: translateY(0); }
 
 @keyframes shimmer { to { background-position: -200% 0; } }
+@keyframes stageVisualDrift {
+  from { transform: scale(1.03); }
+  to { transform: scale(1.08); }
+}
 @media (prefers-reduced-motion: no-preference) {
   .masthead-copy > *, .catalog-code { animation: rise 0.7s both; }
   .masthead-copy > *:nth-child(2) { animation-delay: 0.08s; }
   .masthead-copy > *:nth-child(3), .catalog-code { animation-delay: 0.16s; }
+  .stage-video-fallback-visual > img { animation: stageVisualDrift 8s ease-in-out infinite alternate; }
   @keyframes rise { from { opacity: 0; transform: translateY(24px); } }
 }
 @media (max-width: 980px) {

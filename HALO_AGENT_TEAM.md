@@ -17,13 +17,59 @@ It does not autonomously send messages, spend money, publish content, modify acc
 
 Sentinel now receives evidence from a dedicated maintenance team with two complementary layers. The source-line audit inspects every first-party project text line during validation, checks JavaScript syntax and JSON structure, and verifies local page and asset connections. The deployed-site sweep runs every 15 minutes, loads every core page, discovers and verifies same-origin links, scripts, styles, images, and form actions, then verifies every declared API route plus important API and browser output contracts.
 
-Every deployed sweep stores its coverage and individual results in Netlify Database. Failed checks enter the existing AI-assisted maintenance triage flow, while recovered checks automatically heal their matching issue. Owners can inspect the latest evidence or request a rate-limited full sweep from `/halo-command.html`.
+Every deployed sweep stores its coverage and individual results in Netlify Database. Failed checks enter the existing AI-assisted maintenance triage flow, while recovered checks automatically heal their matching issue. Owners can inspect the latest evidence or request the rate-limited one-command `halo-signal-check` sweep from `/halo-command.html` to verify built, live, connected, and verified states while writing the command outcome into Halo Ledger.
+
+## halo-signal-check
+
+`halo-signal-check` is HALO's canonical one-command verification workflow for Dreamweaver pages and the other major menu-linked satellites.
+
+### Purpose
+
+- confirm the page or system is built
+- confirm the main HALO menu links to it
+- confirm the deployed route is live and reachable
+- confirm the deployed route passes the live smoke check, while repository contracts guard menu links and route coverage
+
+### Visible states
+
+- Every main HALO menu button/tile renders a live **red/yellow/green status badge** beside the title as the primary operator signal, while the dashboard keeps the operator/admin reference light and full summary cards.
+- **Red** — a required build, route, menu link, or verification requirement is missing
+- **Yellow** — the page is built and live, but a required menu connection or deployed smoke verification is still incomplete
+- **Green** — the page is built, menu-connected, live, and verified by the deployed smoke check
+
+### Ledger fields
+
+Each `halo-signal-check` run writes a Halo Ledger system event with these reviewable fields:
+
+- `commandName`
+- `startedAt`
+- `finishedAt`
+- `status`
+- `pagesChecked`
+- `linksChecked`
+- `routesChecked`
+- `outputsChecked`
+- `builtCount`
+- `liveCount`
+- `connectedCount`
+- `verifiedCount`
+- `passedChecks`
+- `failedChecks`
+- `failures`
+- `notes`
+- `satelliteStatuses`
 
 ## Daily operation
 
 `halo-agent-daily.mjs` runs every published-deploy day at 07:30 UTC. Five specialist calls run in parallel with strict timeouts. Mirror then produces the combined report. If AI inference is unavailable or exceeds its time limit, deterministic fallbacks still produce a conservative report and mark the run as partial.
 
 The latest report appears at `/halo-command.html`. Owners can also trigger up to two manual runs per hour from the dashboard.
+
+For lightweight human updates across specialist teams, use `HALO_AGENT_STATUS_BOARD.md` as the shared Focus / Done / Watching / Impact / Next board plus dated change-log entries.
+
+Use the same file's recent outcomes loop to summarize the latest operational change, the supporting evidence, what HALO learned, the open risk, and the next check to run. Prefer evidence from Halo Ledger, deploy-health feedback, status-board updates, and Builder/Verifier/Committee PR records so the learning loop stays reviewable. Include each outcome's check-by date so follow-up ownership stays explicit.
+
+For multi-role verification governance, use `HALO_AI_COMMITTEE_WORKFLOW.md` to run the Builder → Verifier → Committee operating loop with evidence-first acceptance rules, and complete `.github/pull_request_template.md` for AI-delivered work so Builder evidence, Verifier findings, and Committee decision are recorded in every PR.
 
 To deliver a privacy-safe summary to an external notification workflow, configure `HALO_AGENT_REPORT_WEBHOOK_URL` with a secure HTTPS webhook. The webhook receives aggregate health, findings, reflection, and proposed priorities. It does not receive private member messages, passwords, payment information, owner notes, or raw personal records.
 

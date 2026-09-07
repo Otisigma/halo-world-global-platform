@@ -319,13 +319,44 @@
 }
 
 .halo-menu-lane strong {
-  overflow: hidden;
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
   color: #f5efe5;
   font: 800 9px/1.1 "Barlow Condensed", sans-serif;
   letter-spacing: .08em;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
+
+.halo-menu-route-status {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  gap: 3px;
+  padding: 1px 4px;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  font: 700 8px/1 "Share Tech Mono", ui-monospace, monospace;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+}
+
+.halo-menu-route-status i {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 0 8px currentColor;
+}
+
+.halo-menu-route-status b {
+  color: #f9f4ea;
+  font-size: 7px;
+}
+
+.halo-menu-route-status-green { color: #9bd09b; }
+.halo-menu-route-status-yellow { color: #f2ce77; }
+.halo-menu-route-status-red { color: #eaa08f; }
 
 .halo-menu-lane small {
   margin-top: 4px;

@@ -63,6 +63,15 @@
   ];
 
   const elements = {
+    satellite: document.getElementById("dreamweaverSatellite"),
+    unlockForm: document.getElementById("dreamweaverUnlockForm"),
+    unlockStatus: document.getElementById("dreamweaverUnlockStatus"),
+    reward: document.getElementById("dreamweaverReward"),
+    rewardCopy: document.getElementById("dreamweaverRewardCopy"),
+    startDreamweaverShow: document.getElementById("startDreamweaverShow"),
+    spotifyLink: document.getElementById("dreamweaverSpotifyLink"),
+    appleLink: document.getElementById("dreamweaverAppleLink"),
+    youtubeLink: document.getElementById("dreamweaverYouTubeLink"),
     shell: document.getElementById("showShell"),
     loading: document.getElementById("loadingShow"),
     stage: document.getElementById("showStage"),
@@ -145,8 +154,25 @@
     toast: document.getElementById("toast")
   };
 
+  const unlockStorageKey = "halo:dreamweaver-unlock";
+  const unlockPlatforms = {
+    spotify: {
+      label: "Spotify",
+      href: query => `https://open.spotify.com/search/${encodeURIComponent(query)}`
+    },
+    apple_music: {
+      label: "Apple Music",
+      href: query => `https://music.apple.com/us/search?term=${encodeURIComponent(query)}`
+    },
+    youtube: {
+      label: "YouTube",
+      href: query => `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`
+    }
+  };
+
   const state = {
     mix: null,
+    unlock: readStoredUnlock(),
     activeChapter: 0,
     duration: 0,
     videos: [],
@@ -163,9 +189,32 @@
     buildPreviewFrame: 0,
     buildPreviewStartedAt: 0,
     trackedProgress: new Set(),
+    startPlaybackAfterLoad: false,
     sessionToken: window.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`
   };
   const escapeHtml = value => String(value ?? "").replace(/[&<>'"]/g, character => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" })[character]);
+
+  function readStoredUnlock() {
+    try {
+      const parsed = JSON.parse(localStorage.getItem(unlockStorageKey) || "null");
+      if (!parsed || typeof parsed !== "object") return null;
+      const email = String(parsed.email || "").trim().toLowerCase();
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) return null;
+      return {
+        firstName: String(parsed.firstName || "").trim().slice(0, 80),
+        email,
+        favoritePlatform: unlockPlatforms[String(parsed.favoritePlatform || "")] ? String(parsed.favoritePlatform) : "spotify"
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  function rememberUnlock(unlock) {
+    try {
+      localStorage.setItem(unlockStorageKey, JSON.stringify(unlock));
+    } catch {}
+  }
 
   function formatTime(seconds) {
     const safe = Math.max(0, Math.floor(Number(seconds) || 0));
@@ -173,6 +222,111 @@
     const minutes = Math.floor((safe % 3600) / 60);
     const remainder = safe % 60;
     return hours ? `${hours}:${String(minutes).padStart(2, "0")}:${String(remainder).padStart(2, "0")}` : `${String(minutes).padStart(2, "0")}:${String(remainder).padStart(2, "0")}`;
+  }
+
+  function isSatelliteFlow() {
+    const params = new URLSearchParams(location.search);
+    if (campaignIdFromUrl() || params.get("experience") === "studio") return false;
+    const hasMix = Boolean(params.get("mix"));
+    if (!hasMix) return true;
+    return params.get("satellite") === "dreamweaver";
+  }
+
+  function rewardSearchQuery() {
+    return `${state.mix?.title || "Dreamweaver"} ${state.mix?.creator?.name || "Owen Anthony"}`.trim();
+  }
+
+  function setUnlockStatus(message = "", tone = "") {
+    if (!elements.unlockStatus) return;
+    elements.unlockStatus.textContent = message;
+    elements.unlockStatus.className = "satellite-status";
+    if (tone) elements.unlockStatus.classList.add(`is-${tone}`);
+  }
+
+  function updatePlatformLinks() {
+    const query = rewardSearchQuery();
+    if (elements.spotifyLink) elements.spotifyLink.href = unlockPlatforms.spotify.href(query);
+    if (elements.appleLink) elements.appleLink.href = unlockPlatforms.apple_music.href(query);
+    if (elements.youtubeLink) elements.youtubeLink.href = unlockPlatforms.youtube.href(query);
+  }
+
+  function renderRewardState() {
+    if (!elements.rewardCopy) return;
+    const firstName = state.unlock?.firstName || "You";
+    const platform = unlockPlatforms[state.unlock?.favoritePlatform || "spotify"]?.label || "your streaming app";
+    elements.rewardCopy.textContent = `${firstName}, your concierge doorway is open. Start the full Dreamweaver experience below, then continue on ${platform}, Spotify, Apple Music, or YouTube when you are ready.`;
+    updatePlatformLinks();
+  }
+
+  function renderSatelliteState() {
+    const satelliteFlow = isSatelliteFlow();
+    if (!satelliteFlow) {
+      if (elements.satellite) elements.satellite.hidden = true;
+      if (elements.reward) elements.reward.hidden = true;
+      elements.shell.hidden = false;
+      return;
+    }
+    if (elements.satellite) elements.satellite.hidden = Boolean(state.unlock);
+    if (elements.reward) elements.reward.hidden = !state.unlock;
+    elements.shell.hidden = !state.unlock;
+    if (state.unlock) renderRewardState();
+  }
+
+  async function unlockDreamweaver(event) {
+    event.preventDefault();
+    if (!elements.unlockForm?.reportValidity()) {
+      setUnlockStatus("Add your email and accept the unlock terms before continuing.", "error");
+      return;
+    }
+    const submitButton = elements.unlockForm.querySelector("button[type='submit']");
+    const data = new FormData(elements.unlockForm);
+    const payload = {
+      firstName: String(data.get("firstName") || "").trim(),
+      email: String(data.get("email") || "").trim(),
+      favoritePlatform: String(data.get("favoritePlatform") || "spotify"),
+      company: String(data.get("company") || "").trim(),
+      consent: data.get("consent") === "on"
+    };
+    submitButton.disabled = true;
+    submitButton.querySelector("span").textContent = "Unlocking Dreamweaver…";
+    setUnlockStatus("Saving your unlock and preparing the listening room.");
+    try {
+      const response = await fetch("/api/dreamweaver-fan-signups", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify(payload)
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.message || "Dreamweaver could not unlock the experience right now.");
+      state.unlock = {
+        firstName: payload.firstName,
+        email: payload.email.trim().toLowerCase(),
+        favoritePlatform: unlockPlatforms[payload.favoritePlatform] ? payload.favoritePlatform : "spotify"
+      };
+      rememberUnlock(state.unlock);
+      renderSatelliteState();
+      setUnlockStatus(result.message || "Dreamweaver unlocked your release doorway.", "success");
+      await loadShow();
+      elements.shell.scrollIntoView({ behavior: "smooth", block: "start" });
+    } catch (error) {
+      setUnlockStatus(error instanceof Error ? error.message : "Dreamweaver could not unlock the experience right now.", "error");
+    } finally {
+      submitButton.disabled = false;
+      submitButton.querySelector("span").textContent = "Unlock the full Dreamweaver doorway";
+    }
+  }
+
+  async function startUnlockedShow() {
+    state.startPlaybackAfterLoad = true;
+    if (elements.shell.hidden) {
+      renderSatelliteState();
+      await loadShow();
+    } else if (elements.audio.paused) {
+      try { await elements.audio.play(); } catch {}
+      state.startPlaybackAfterLoad = false;
+    }
+    elements.shell.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
   function showToast(message) {
@@ -974,6 +1128,7 @@
   }
 
   function showEmpty(message) {
+    elements.shell.hidden = false;
     elements.loading.hidden = true;
     elements.stage.hidden = true;
     elements.empty.hidden = false;
@@ -982,6 +1137,7 @@
   }
 
   async function loadShow() {
+    elements.shell.hidden = false;
     elements.loading.hidden = false;
     elements.stage.hidden = true;
     elements.empty.hidden = true;
@@ -1007,15 +1163,31 @@
       elements.loading.hidden = true;
       elements.stage.hidden = false;
       elements.shell.setAttribute("aria-busy", "false");
+      updatePlatformLinks();
       await loadVideos();
       if (campaignIdFromUrl() && !state.trackedProgress.has("landing")) {
         state.trackedProgress.add("landing");
         trackCampaignEvent("landing", currentParams.get("source") || "halo");
       }
       window.haloStats?.track("open_dreamweaver_show", { mix_id: mix.id, mix_title: mix.title || "" });
+      if (state.startPlaybackAfterLoad) {
+        state.startPlaybackAfterLoad = false;
+        try { await elements.audio.play(); } catch {}
+      }
     } catch (error) {
+      state.startPlaybackAfterLoad = false;
       showEmpty(error.message || "Dreamweaver could not open the mix right now.");
     }
+  }
+
+  async function initializeDreamweaver() {
+   renderSatelliteState();
+   updatePlatformLinks();
+   if (isSatelliteFlow() && !state.unlock) {
+     elements.shell.setAttribute("aria-busy", "false");
+     return;
+   }
+   await loadShow();
   }
 
   buildExperience();
@@ -1062,6 +1234,8 @@
   elements.downloadCover.addEventListener("click", downloadCover);
   elements.downloadPackage.addEventListener("click", downloadCampaignPackage);
   elements.reviewCampaign.addEventListener("click", reviewCampaign);
+  elements.unlockForm?.addEventListener("submit", unlockDreamweaver);
+  elements.startDreamweaverShow?.addEventListener("click", startUnlockedShow);
   document.querySelectorAll("[data-platform-tab]").forEach(button => button.addEventListener("click", () => {
     state.activePlatform = button.dataset.platformTab;
     document.querySelectorAll("[data-platform-tab]").forEach(tab => tab.setAttribute("aria-selected", String(tab === button)));
@@ -1110,5 +1284,5 @@
     if (event.key === "ArrowRight") activateChapter(state.activeChapter + 1, true);
     if (event.key === "ArrowLeft") activateChapter(state.activeChapter - 1, true);
   });
-  loadShow();
+  initializeDreamweaver();
 })();

@@ -1,10 +1,34 @@
 import { randomUUID } from "node:crypto";
 import { issueKeyForFingerprint, reportIssue, resolveIssue } from "./maintenance.mjs";
+import { appendLedgerEntry } from "./halo-ledger.mjs";
 
 const CORE_PAGES = [
   "/", "/magazine.html", "/dj-deck.html", "/vip_launchpad.html", "/halo-live.html",
   "/halo-x.html", "/halo-relations.html", "/halo-command.html", "/creators/",
-  "/creators/gear-guide.html", "/music/", "/radio/"
+  "/creators/gear-guide.html", "/music/", "/radio/", "/dreamweaver/", "/dreamweaver-lab/",
+  "/campaign-studio/", "/release-house/", "/finish-house/", "/artists/", "/mixes/"
+];
+
+const SATELLITE_STATUS_TARGETS = [
+  { name: "HALO X", route: "/halo-x.html" },
+  { name: "DJ Deck", route: "/dj-deck.html" },
+  { name: "HALO Live", route: "/halo-live.html" },
+  { name: "Magazine", route: "/magazine.html" },
+  { name: "Dreamweaver", route: "/dreamweaver/" },
+  { name: "Dreamweaver Lab", route: "/dreamweaver-lab/" },
+  { name: "Creator World", route: "/creators/" },
+  { name: "Creator Freedom", route: "/creator-freedom/" },
+  { name: "Campaign Studio", route: "/campaign-studio/" },
+  { name: "Finish House", route: "/finish-house/" },
+  { name: "Release House", route: "/release-house/" },
+  { name: "Artist Pro", route: "/artist-pro/" },
+  { name: "Artists", route: "/artists/" },
+  { name: "Music", route: "/music/" },
+  { name: "Radio", route: "/radio/" },
+  { name: "Mixes", route: "/mixes/" },
+  { name: "Song Catalog", route: "/song-catalog/" },
+  { name: "Album Concierge", route: "/album-concierge/" },
+  { name: "Support", route: "/support/" }
 ];
 
 const API_ROUTES = [
@@ -41,6 +65,8 @@ const OUTPUT_CHECKS = [
   }))
 ];
 
+const SIGNAL_CHECK_COMMAND = "halo-signal-check";
+
 function cleanDetail(value, maximum = 600) {
   return String(value || "").replace(/\s+/g, " ").trim().slice(0, maximum);
 }
@@ -69,6 +95,11 @@ function extractConnections(baseUrl, html) {
 function isHtml(response, body) {
   const contentType = response.headers.get("content-type") || "";
   return contentType.includes("text/html") || /<!doctype html|<html[\s>]/i.test(body);
+}
+
+function normalizeRoute(pathname) {
+  if (!pathname || pathname === "/") return "/";
+  return pathname.endsWith("/") ? pathname : `${pathname}/`;
 }
 
 async function requestTarget(url, options = {}) {
@@ -134,12 +165,13 @@ async function reconcileIssue(check) {
   });
 }
 
-export async function runMaintenanceSweep(db, baseUrl, { triggerType = "scheduled" } = {}) {
+export async function runMaintenanceSweep(db, baseUrl, { triggerType = "scheduled", commandName = "run_maintenance" } = {}) {
   const rootUrl = new URL(baseUrl);
   const sweepId = randomUUID();
+  const startedAt = new Date().toISOString();
   await db.sql`
-    INSERT INTO halo_maintenance_sweeps (id, trigger_type, base_url)
-    VALUES (${sweepId}, ${triggerType}, ${rootUrl.origin})
+    INSERT INTO halo_maintenance_sweeps (id, trigger_type, base_url, started_at)
+    VALUES (${sweepId}, ${triggerType}, ${rootUrl.origin}, ${startedAt})
   `;
 
   const checks = [];
@@ -150,6 +182,9 @@ export async function runMaintenanceSweep(db, baseUrl, { triggerType = "schedule
   const checkedConnections = new Set();
   let pagesChecked = 0;
   let connectionsChecked = 0;
+  const pageStatusByRoute = new Map();
+  const pageBodyByRoute = new Map();
+  const connectedRoutesFromMainMenu = new Set();
 
   for (const pageUrl of queuedPages.values()) {
     if (pagesChecked >= 80) break;
@@ -164,6 +199,8 @@ export async function runMaintenanceSweep(db, baseUrl, { triggerType = "schedule
     );
     checks.push(pageCheck);
     await persistCheck(db, sweepId, pageCheck);
+    pageStatusByRoute.set(normalizeRoute(pageUrl.pathname), passed);
+    pageBodyByRoute.set(normalizeRoute(pageUrl.pathname), request.body);
     pagesChecked += 1;
     if (!passed) continue;
 
@@ -182,10 +219,62 @@ export async function runMaintenanceSweep(db, baseUrl, { triggerType = "schedule
       checks.push(connectionCheck);
       await persistCheck(db, sweepId, connectionCheck);
       connectionsChecked += 1;
+      if (normalizeRoute(pageUrl.pathname) === "/") {
+        connectedRoutesFromMainMenu.add(normalizeRoute(connectionUrl.pathname));
+      }
       if (connectionPassed && isHtml(connectionRequest.response, connectionRequest.body) && !queuedPages.has(connectionUrl.href)) {
         queuedPages.set(connectionUrl.href, connectionUrl);
       }
     }
+  }
+
+  const satelliteStatuses = [];
+  for (const target of SATELLITE_STATUS_TARGETS) {
+    const route = normalizeRoute(target.route);
+    const built = pageStatusByRoute.has(route);
+    const live = pageStatusByRoute.get(route) === true;
+    const connected = connectedRoutesFromMainMenu.has(route);
+    const smokeVerified = Boolean(live && /<title[\s>][\s\S]*<\/title>/i.test(pageBodyByRoute.get(route) || ""));
+    const verified = built && live && connected && smokeVerified;
+    const status = !built || !live || !connected ? "red" : verified ? "green" : "yellow";
+    satelliteStatuses.push({ name: target.name, route, built, live, connected, verified, status });
+    const smokeCheck = checkRecord(
+      "output",
+      `${route}#smoke`,
+      { response: null, durationMs: 0 },
+      smokeVerified,
+      smokeVerified
+        ? `${target.name} passed its deployed smoke check.`
+        : `${target.name} did not pass the deployed smoke check.`
+    );
+    checks.push(smokeCheck);
+    await persistCheck(db, sweepId, smokeCheck);
+  }
+
+  for (const status of satelliteStatuses) {
+    if (!status.connected) {
+      const connectedCheck = checkRecord(
+        "connection",
+        status.route,
+        { response: null, durationMs: 0 },
+        false,
+        `${status.name} is not linked from the main menu route.`
+      );
+      checks.push(connectedCheck);
+      await persistCheck(db, sweepId, connectedCheck);
+      connectionsChecked += 1;
+    }
+    const verifiedCheck = checkRecord(
+      "output",
+      `${status.route}#verified`,
+      { response: null, durationMs: 0 },
+      status.verified,
+      status.verified
+        ? `${status.name} is built, live, connected, and passed its smoke check.`
+        : `${status.name} failed one or more satellite checks (built/live/connected/verified).`
+    );
+    checks.push(verifiedCheck);
+    await persistCheck(db, sweepId, verifiedCheck);
   }
 
   for (const output of OUTPUT_CHECKS) {
@@ -206,20 +295,71 @@ export async function runMaintenanceSweep(db, baseUrl, { triggerType = "schedule
   const failedChecks = checks.filter(check => check.status === "failed");
   const passedChecks = checks.length - failedChecks.length;
   const status = failedChecks.some(check => check.kind === "page") ? "failed" : failedChecks.length ? "degraded" : "passed";
+  const finishedAt = new Date().toISOString();
+  const builtCount = satelliteStatuses.filter(item => item.built).length;
+  const liveCount = satelliteStatuses.filter(item => item.live).length;
+  const connectedCount = satelliteStatuses.filter(item => item.connected).length;
+  const verifiedCount = satelliteStatuses.filter(item => item.verified).length;
+  const ledgerCommandName = commandName || "run_maintenance";
+  const outputsChecked = OUTPUT_CHECKS.length + (SATELLITE_STATUS_TARGETS.length * 2);
   await db.sql`
     UPDATE halo_maintenance_sweeps SET
       status = ${status},
       pages_checked = ${pagesChecked},
       connections_checked = ${connectionsChecked},
-      outputs_checked = ${OUTPUT_CHECKS.length},
+      outputs_checked = ${outputsChecked},
       passed_checks = ${passedChecks},
       failed_checks = ${failedChecks.length},
-      completed_at = NOW()
+      satellite_statuses = ${JSON.stringify(satelliteStatuses)}::jsonb,
+      completed_at = ${finishedAt}
     WHERE id = ${sweepId}
   `;
 
+  await appendLedgerEntry(db, {
+    actorId: "system",
+    actorType: "system",
+    eventCategory: "system_event",
+    summary: `${ledgerCommandName} completed (${status})`,
+    details: {
+      commandName: ledgerCommandName,
+      startedAt,
+      finishedAt,
+      status,
+      triggerType,
+      baseUrl: rootUrl.origin,
+      pagesChecked,
+      linksChecked: connectionsChecked,
+      routesChecked: satelliteStatuses.length,
+      outputsChecked,
+      builtCount,
+      liveCount,
+      connectedCount,
+      verifiedCount,
+      passedChecks,
+      failedChecks: failedChecks.length,
+      failures: failedChecks.map(check => ({
+        kind: check.kind,
+        target: check.target,
+        detail: check.detail
+      })),
+      notes: `Red requires a missing or broken route. Yellow means built/live but not fully menu-connected or smoke-verified. Green means built, connected, live, and verified by the deployed smoke check used by ${SIGNAL_CHECK_COMMAND}.`,
+      satelliteStatuses
+    },
+    body: `${failedChecks.length} failed checks across ${ledgerCommandName}.`,
+    outcome: status === "passed" ? "success" : "failure"
+  });
+
   await Promise.allSettled(checks.map(reconcileIssue));
-  return { id: sweepId, status, pagesChecked, connectionsChecked, outputsChecked: OUTPUT_CHECKS.length, passedChecks, failedChecks: failedChecks.length };
+  return {
+    id: sweepId,
+    status,
+    pagesChecked,
+    connectionsChecked,
+    outputsChecked,
+    passedChecks,
+    failedChecks: failedChecks.length,
+    satelliteStatuses
+  };
 }
 
 function serializeSweep(row) {
@@ -232,6 +372,7 @@ function serializeSweep(row) {
     outputsChecked: Number(row.outputs_checked || 0),
     passedChecks: Number(row.passed_checks || 0),
     failedChecks: Number(row.failed_checks || 0),
+    satelliteStatuses: Array.isArray(row.satellite_statuses) ? row.satellite_statuses : [],
     startedAt: row.started_at ? new Date(row.started_at).toISOString() : null,
     completedAt: row.completed_at ? new Date(row.completed_at).toISOString() : null
   };

@@ -105,6 +105,8 @@ const mixQueueCount = document.querySelector("#mixQueueCount");
 const playbackProgress = document.querySelector("#playbackProgress");
 const previousMixButton = document.querySelector("#previousMixButton");
 const nextMixButton = document.querySelector("#nextMixButton");
+const backupStatus = document.querySelector("#backupStatus");
+const manualTakeoverButton = document.querySelector("#manualTakeoverButton");
 const transitionSeconds = document.querySelector("#transitionSeconds");
 const transitionMode = document.querySelector("#transitionMode");
 const transitionReadout = document.querySelector("#transitionReadout");
@@ -748,6 +750,79 @@ function audioSourceMatches(audio, source) {
   return Boolean(source && audio.getAttribute("src") === source);
 }
 
+const audioHealthCache = new Map();
+const audioHealthCacheMs = 60_000;
+
+function rememberAudioHealth(url, ready) {
+  if (!url) return ready;
+  audioHealthCache.set(url, { ready, checkedAt: Date.now() });
+  return ready;
+}
+
+async function validateAudioSource(url) {
+  if (!url) return false;
+  const cached = audioHealthCache.get(url);
+  if (cached && Date.now() - cached.checkedAt < audioHealthCacheMs) return cached.ready;
+  try {
+    const response = await fetch(url, { method: "HEAD", credentials: "same-origin", cache: "no-store" });
+    return rememberAudioHealth(url, response.ok && String(response.headers.get("content-type") || "").startsWith("audio/"));
+  } catch {
+    return rememberAudioHealth(url, false);
+  }
+}
+
+async function readyRotationTarget(room, startIndex = rotationIndex(room)) {
+  const queue = room?.rotation || [];
+  if (!queue.length) return null;
+  const normalizedIndex = (startIndex + queue.length) % queue.length;
+  for (let offset = 0; offset < queue.length; offset += 1) {
+    const index = (normalizedIndex + offset) % queue.length;
+    const track = queue[index];
+    if (await validateAudioSource(track?.audioUrl)) return { index, track };
+  }
+  return null;
+}
+
+async function readyTakeoverTarget(startIndex = state.takeoverSegmentIndex) {
+  const mix = takeoverMix();
+  const playlist = mix?.playlist || [];
+  for (let index = Math.max(0, startIndex); index < playlist.length; index += 1) {
+    const segment = mixSegment(mix, index);
+    if (!segment?.audioUrl || Number(segment.playSeconds || 0) <= 0) continue;
+    if (await validateAudioSource(segment.audioUrl)) return { index, segment };
+  }
+  return null;
+}
+
+function renderBackupBanner(room = activeRoom()) {
+  if (!backupStatus || !manualTakeoverButton || !room) return;
+  const takeover = takeoverMix();
+  const takeoverReady = Boolean(!room.longPlay && takeover);
+  manualTakeoverButton.hidden = !takeoverReady;
+  manualTakeoverButton.textContent = state.takeoverFallbackActive
+    ? room.streamUrl || room.rotation?.length ? "Return to live source" : "Open playlist backup"
+    : "Start takeover now";
+  if (state.fallbackMixActive) {
+    backupStatus.textContent = "Backup active · the Halo artist playlist is keeping the station live while audio recovers.";
+    return;
+  }
+  if (state.takeoverFallbackActive && takeover) {
+    backupStatus.textContent = `Backup active · ${takeover.title} is keeping ${room.name} live and will hand back when a ready source is found.`;
+    return;
+  }
+  if (takeoverReady) {
+    backupStatus.textContent = room.streamUrl
+      ? "Backup ready · the Halo artist playlist recovers stream failure, and the DJ HALO X takeover is available manually."
+      : room.rotation?.length
+        ? `Backup queued · ${takeover.title} will auto-start if the next room track cannot play, and manual takeover is available now.`
+        : `Backup queued · ${takeover.title} is standing by because no room track is ready, and manual takeover is available now.`;
+    return;
+  }
+  backupStatus.textContent = room.longPlay
+    ? "Backup ready · the Halo artist playlist will recover if Long Play cannot continue."
+    : "Backup ready · the Halo artist playlist will recover if the current source fails.";
+}
+
 function currentPlaybackBpm() {
   if (state.takeoverFallbackActive) return Number(takeoverMixSegment()?.bpm || takeoverMix()?.bpm || 0);
   if (state.activeRoom === "longplay") return Number(currentMixSegment()?.bpm || currentMix()?.bpm || 0);
@@ -999,10 +1074,11 @@ function renderLongPlayQueue() {
     longPlayQueue.innerHTML = `<p>No full-length mixes are available yet. Open the DJ deck and record the first session.</p>`;
     return;
   }
+  const takeover = takeoverMix();
   longPlayQueue.innerHTML = state.mixes.map((mix, index) => `
     <button class="mix-queue-item ${state.activeRoom === "longplay" && index === state.mixIndex ? "active" : ""}" type="button" data-mix-index="${index}" aria-label="Play ${escapeHtml(mix.title)} by ${escapeHtml(mix.creator.name)}">
       <span class="mix-queue-number">${index === state.mixIndex && state.activeRoom === "longplay" && (youtubeLongPlayPlaying() || !stationAudio.paused) ? "Ⅱ" : String(index + 1).padStart(2, "0")}</span>
-      <span class="mix-queue-copy"><strong>${escapeHtml(mix.title)}</strong><small>${escapeHtml(mix.creator.name)} · ${mix.videoId ? "YouTube Long Play" : `${mix.trackCount || "DJ"} ${mix.trackCount === 1 ? "track" : "tracks"} · ${mix.playCount} plays`}</small></span>
+      <span class="mix-queue-copy"><strong>${escapeHtml(mix.title)}</strong><small>${escapeHtml(mix.creator.name)} · ${mix.stationFallback ? state.takeoverFallbackActive && takeover?.id === mix.id ? "Station backup live" : "Station backup queued" : mix.videoId ? "YouTube Long Play" : `${mix.trackCount || "DJ"} ${mix.trackCount === 1 ? "track" : "tracks"} · ${mix.playCount} plays`}</small></span>
       <span class="mix-queue-time">${escapeHtml(formatDuration(mix.durationSeconds, "Long play"))}</span>
     </button>
   `).join("");
@@ -1097,6 +1173,7 @@ function renderConsole() {
   if (progressIsIndeterminate) playbackProgress.setAttribute("aria-valuetext", "Reading the Long Play library");
   else playbackProgress.setAttribute("aria-valuenow", String(Math.round(progress)));
   document.querySelector("#trackProgress").style.width = `${progress}%`;
+  renderBackupBanner(room);
   renderRooms();
   renderLongPlayQueue();
 }
@@ -1241,7 +1318,10 @@ async function playTakeoverFallback(roomId = activeRoom()?.id, forcePlay = false
   if (!continuing) state.takeoverSegmentIndex = 0;
   state.takeoverFallbackActive = true;
   state.takeoverFallbackRoom = roomId || "";
-  const segment = takeoverMixSegment();
+  const target = await readyTakeoverTarget(state.takeoverSegmentIndex);
+  if (!target) return playFallbackMix();
+  state.takeoverSegmentIndex = target.index;
+  const segment = target.segment;
   if (!segment?.audioUrl) return playFallbackMix();
   const sameSegment = stationAudio.getAttribute("src") === segment.audioUrl;
   stopYouTubeLongPlay();
@@ -1258,6 +1338,7 @@ async function playTakeoverFallback(roomId = activeRoom()?.id, forcePlay = false
   }
   try {
     await stationAudio.play();
+    state.rotationErrorCount = 0;
     prepareStandbyAudio();
   } catch {
     document.querySelector("#signalStatus").textContent = "Tap play again to start the DJ HALO X takeover";
@@ -1269,11 +1350,10 @@ async function advanceTakeoverFallback() {
   state.advancingTakeoverFallback = true;
   try {
     if (await startSeamlessTransition()) return;
-    const mix = takeoverMix();
-    const playlist = mix?.playlist || [];
-    if (state.takeoverSegmentIndex + 1 < playlist.length) {
-      state.takeoverSegmentIndex += 1;
-      const segment = takeoverMixSegment();
+    const target = await readyTakeoverTarget(state.takeoverSegmentIndex + 1);
+    if (target) {
+      state.takeoverSegmentIndex = target.index;
+      const segment = target.segment;
       stationAudio.src = segment.audioUrl;
       stationAudio.load();
       await stationAudio.play();
@@ -1521,11 +1601,12 @@ async function playYouTubeLongPlay(mix, forcePlay = false) {
 async function playRotation(index = rotationIndex(activeRoom()), forcePlay = false) {
   const room = activeRoom();
   const queue = room?.rotation || [];
-  if (!room || !queue.length) return playFallbackMix();
+  if (!room || !queue.length) return playTakeoverFallback(room?.id, true);
   cancelAudioTransition();
-  const normalizedIndex = (index + queue.length) % queue.length;
-  state.rotationIndexes[room.id] = normalizedIndex;
-  const track = queue[normalizedIndex];
+  const target = await readyRotationTarget(room, index);
+  if (!target) return playTakeoverFallback(room.id, true);
+  state.rotationIndexes[room.id] = target.index;
+  const track = target.track;
   const sameTrack = stationAudio.getAttribute("src") === track.audioUrl;
   stopTakeoverFallback();
   stopYouTubeLongPlay();
@@ -1542,6 +1623,7 @@ async function playRotation(index = rotationIndex(activeRoom()), forcePlay = fal
   }
   try {
     await stationAudio.play();
+    state.rotationErrorCount = 0;
     prepareStandbyAudio();
   } catch {
     document.querySelector("#signalStatus").textContent = "Tap play again to start the station rotation";
@@ -1550,7 +1632,7 @@ async function playRotation(index = rotationIndex(activeRoom()), forcePlay = fal
 
 async function advanceRotation() {
   const room = activeRoom();
-  if (state.advancingRotation || !room?.rotation?.length) return playFallbackMix();
+  if (state.advancingRotation || !room?.rotation?.length) return playTakeoverFallback(room?.id, true);
   state.advancingRotation = true;
   try {
     if (await startSeamlessTransition()) return;
@@ -1594,7 +1676,7 @@ async function playCurrentRoom() {
   if (room?.longPlay) return playLongPlay();
   if (!room?.streamUrl) {
     if (room?.rotation?.length) return playRotation();
-    return playFallbackMix();
+    return playTakeoverFallback(room?.id, true);
   }
   cancelAudioTransition();
   stopTakeoverFallback();
@@ -1619,6 +1701,18 @@ function toggleCurrentPlayback() {
   if (state.youtubeLongPlayActive) return playLongPlay(state.mixIndex);
   if (state.takeoverFallbackActive) return playTakeoverFallback(state.takeoverFallbackRoom);
   return playCurrentRoom();
+}
+
+async function toggleManualTakeover() {
+  const room = activeRoom();
+  if (!room || room.longPlay || !takeoverMix()) return;
+  if (state.takeoverFallbackActive) {
+    if (!room.streamUrl && room.rotation?.length) await playRotation(rotationIndex(room), true);
+    else if (room.streamUrl) await playCurrentRoom();
+    else await playFallbackMix();
+    return;
+  }
+  await playTakeoverFallback(room.id, true);
 }
 
 function syncPlayState() {
@@ -2468,6 +2562,7 @@ document.querySelectorAll("[data-action=play-current]").forEach(button => button
 mainPlayButton.addEventListener("click", toggleCurrentPlayback);
 previousMixButton.addEventListener("click", () => stepLongPlay(-1));
 nextMixButton.addEventListener("click", () => stepLongPlay(1));
+manualTakeoverButton?.addEventListener("click", toggleManualTakeover);
 transitionSeconds.addEventListener("input", () => {
   state.transitionSeconds = Number(transitionSeconds.value || 0);
   updateTransitionReadout();
@@ -2495,21 +2590,24 @@ function handleDeckEnded(event) {
   if (state.takeoverFallbackActive) advanceTakeoverFallback();
   else if (state.activeRoom === "longplay") advanceLongPlay();
   else if (!activeRoom()?.streamUrl && activeRoom()?.rotation?.length) advanceRotation();
-  else playFallbackMix();
+  else playTakeoverFallback(activeRoom()?.id, true);
 }
 
 function handleDeckError(event) {
   if (event.currentTarget !== stationAudio) return;
+  rememberAudioHealth(stationAudio.getAttribute("src"), false);
   const room = activeRoom();
   if (state.takeoverFallbackActive) {
     state.rotationErrorCount = 0;
-    playFallbackMix();
+    advanceTakeoverFallback();
+  } else if (state.activeRoom === "longplay" && (currentMix()?.playlist?.length > 1 || state.mixes.length > 1)) {
+    advanceLongPlay();
   } else if (!state.fallbackMixActive && !room?.streamUrl && room?.rotation?.length && state.rotationErrorCount < room.rotation.length - 1) {
     state.rotationErrorCount += 1;
     advanceRotation();
   } else {
     state.rotationErrorCount = 0;
-    playFallbackMix();
+    playTakeoverFallback(room?.id, true);
   }
 }
 

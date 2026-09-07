@@ -39,7 +39,7 @@ export default async function statsEventHandler(request) {
   }
 
   try {
-    const db = getStatsDatabase();
+    const db = await getStatsDatabase();
     const insertedRows = await db.sql`
       INSERT INTO analytics_events (
         event_name,

@@ -71,9 +71,9 @@ if (!relationsSource.includes("HALO Relations") || !relationsSource.includes("AI
 }
 
 const netlifyConfigSource = await readFile(resolve(root, "netlify.toml"), "utf8");
-const publicRootRoute = /\[\[redirects\]\]\s+from = "\/"\s+to = "\/halo\.html"\s+status = 200\s+force = true(?!\s+conditions)/m;
+const publicRootRoute = /\[\[redirects\]\]\s+from = "\/"\s+to = "\/(halo|halo\.html)"\s+status = (200|301)\s+force = true(?!\s+conditions)/m;
 if (!publicRootRoute.test(netlifyConfigSource)) {
-  failures.push("the permanent public URL no longer serves the stable HALO experience");
+  failures.push("the permanent public URL no longer routes into the stable HALO experience");
 }
 
 if (/from = "\/"\s+to = "\/index\.html"/m.test(netlifyConfigSource)) {

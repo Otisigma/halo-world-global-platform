@@ -45,13 +45,61 @@ if (flightplan) {
     const percent = completed * 20;
     progressValue.textContent = `${completed} / 5`;
     progressBar.style.setProperty("--flight-progress", `${percent}%`);
-    const saleReady = completed >= 4 && ["mastered", "approved"].includes(value("masteringStatus")) && form.elements.rightsConfirmed.checked;
+    const masterStatus = value("masteringStatus");
+    const saleReady = completed >= 4 && ["mastered", "approved"].includes(masterStatus) && form.elements.rightsConfirmed.checked;
     gate.classList.toggle("is-ready", saleReady);
     gate.querySelector(".flightplan-gate-mark").textContent = saleReady ? "GO" : "HOLD";
     gate.querySelector("strong").textContent = saleReady ? "Ready for a final sale review" : "Sale gate is still closed";
     gate.querySelector("span").textContent = saleReady
       ? "Mastering, core metadata, pricing, and rights checks are present. Review the package before publishing."
       : "A paid mix needs an approved master, complete product information, a price, and confirmed rights or clearances.";
+    renderNextImprovement(completed, masterStatus, saleReady);
+  }
+
+  function renderNextImprovement(completed, masterStatus, saleReady) {
+    const container = flightplan.querySelector("#flightplanNextImprovement");
+    if (!container) return;
+    const small = container.querySelector("small");
+    const para = container.querySelector("p");
+    if (!small || !para) return;
+
+    let hint = "";
+    let cls = "";
+
+    if (saleReady) {
+      hint = "All gates passed — request final sale review.";
+      cls = "is-complete";
+      small.textContent = "Ready for release";
+    } else if (completed === 0) {
+      hint = "Start with the Demand Radar to give this mix a clear audience direction.";
+      small.textContent = "Next: demand radar";
+    } else if (!value("demandTheme")) {
+      hint = "Add at least one demand signal so the flightplan has a theme to build around.";
+      small.textContent = "Next: demand radar";
+    } else if (!["mastered", "approved"].includes(masterStatus)) {
+      hint = masterStatus === "not_started"
+        ? "The master has not been started. Upload the final audio and set mastering status to continue."
+        : "Mastering is in progress. Complete the master and confirm it reaches target LUFS before advancing.";
+      small.textContent = "Next: mastering";
+    } else if (!value("djName") || !value("projectTitle") || !value("genre") || !value("releaseDate") || !value("price")) {
+      hint = "Complete the product information — DJ name, project title, genre, release date and price are all required before the gate can open.";
+      small.textContent = "Next: product info";
+    } else if (!form.elements.rightsConfirmed.checked) {
+      hint = "Confirm rights and clearances to unlock the final sale gate.";
+      small.textContent = "Next: rights confirmation";
+    } else if (!value("campaignHook")) {
+      hint = "Add a campaign hook so the marketing brief is complete.";
+      small.textContent = "Next: campaign brief";
+    } else if (!value("reviewIntent")) {
+      hint = "Describe the creative intent for reviewers — this protects your deliberate choices during the quality review.";
+      small.textContent = "Next: review intent";
+    } else {
+      hint = "The flightplan looks complete. Submit the form to save the current state.";
+      small.textContent = "Check everything";
+    }
+
+    para.textContent = hint;
+    container.className = `next-improvement${cls ? " " + cls : ""}`;
   }
 
   function payload() {
@@ -80,7 +128,10 @@ if (flightplan) {
         territory: value("territory"),
         artworkStatus: value("artworkStatus"),
         tracklist: value("tracklist"),
-        campaignHook: value("campaignHook")
+        campaignHook: value("campaignHook"),
+        reviewIntent: value("reviewIntent"),
+        reviewContext: value("reviewContext"),
+        protectedMoments: value("protectedMoments")
       }
     };
   }
@@ -108,7 +159,10 @@ if (flightplan) {
       territory: metadata.territory,
       artworkStatus: metadata.artworkStatus,
       tracklist: metadata.tracklist,
-      campaignHook: metadata.campaignHook
+      campaignHook: metadata.campaignHook,
+      reviewIntent: metadata.reviewIntent,
+      reviewContext: metadata.reviewContext,
+      protectedMoments: metadata.protectedMoments
     };
     Object.entries(values).forEach(([name, fieldValue]) => {
       if (form.elements[name] && fieldValue !== undefined && fieldValue !== null) form.elements[name].value = fieldValue;

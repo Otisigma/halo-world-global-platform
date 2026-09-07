@@ -954,10 +954,37 @@
         };
 
         const NEW_RELEASE = {
-          title: 'Salty',
+          title: 'My Sensitivity Like a Crown',
           artist: 'Owen Anthony',
-          artwork: '/assets/releases/salty.jpg',
-          url: 'https://distrokid.com/hyperfollow/owenanthony/salty?ref=release'
+          artwork: '/assets/releases/my-sensitivity-like-a-crown.jpg',
+          url: 'https://distrokid.com/hyperfollow/owenanthony/my-sensitivity-like-a-crown'
+        };
+        const QUICK_LISTEN_EMBED_URL = 'https://www.youtube.com/embed/videoseries?list=PLcmaoB9ss1YE';
+
+        const FALLBACK_ARTWORK = '/assets/halo-app-icon-512.png';
+        const MENU_ROUTE_STATUS_LABELS = { green: 'WORKING', yellow: 'ATTENTION', red: 'BROKEN' };
+        const MENU_ROUTE_STATUS_GLYPHS = { green: 'G', yellow: 'Y', red: 'R' };
+        const MENU_ROUTE_STATUS_TARGETS = new Set([
+          '/music/', '/halo-x.html', '/mixes/', '/dj-deck.html', '/halo-live.html', '/radio/',
+          '/artist-pro/', '/creators/', '/artists/', '/creator-freedom/', '/campaign-studio/',
+          '/release-house/', '/song-catalog/', '/dreamweaver/', '/dreamweaver-lab/',
+          '/album-concierge/', '/finish-house/', '/magazine.html', '/support/'
+        ]);
+        const loadHaloAgentTeamSnapshot = async () => {
+          if (!window.__haloAgentTeamSnapshotPromise) {
+            window.__haloAgentTeamSnapshotPromise = fetch('/api/halo-agent-team', {
+              headers: { Accept: 'application/json' },
+              cache: 'no-store'
+            }).then(async response => {
+              const data = await response.json().catch(() => ({}));
+              if (!response.ok) throw new Error(data.message || 'Status lookup failed.');
+              return data;
+            }).catch(error => {
+              window.__haloAgentTeamSnapshotPromise = null;
+              throw error;
+            });
+          }
+          return window.__haloAgentTeamSnapshotPromise;
         };
 
         const INITIAL_TRACKS = [
@@ -973,6 +1000,7 @@
             waveColor: '#d97706',
             synthPattern: 'progressive',
             isBinarySource: false,
+            artwork: '/assets/releases/the-cold-is-lasting-longer.jpg',
             chats: [
               { user: 'Kaelen_Ibiza', text: 'Closest Thing To Heaven is a total sunrise anthem! 🌅', color: 'text-amber-400' },
               { user: 'Sasha_London', text: 'This remix completely floats above the terrace.', color: 'text-purple-400' }
@@ -990,6 +1018,7 @@
             waveColor: '#ec4899',
             synthPattern: 'transition',
             isBinarySource: false,
+            artwork: '/assets/releases/salty.jpg',
             chats: [
               { user: 'Chill_Purist', text: 'DJ Romy locked down the room here. Beautiful analog textures. 🌌', color: 'text-rose-400' }
             ]
@@ -1006,6 +1035,7 @@
             waveColor: '#a855f7',
             synthPattern: 'transition',
             isBinarySource: false,
+            artwork: '/assets/releases/hit-that-beat.webp',
             chats: [
               { user: 'Berlin_Mindset', text: 'The low-end presence on My Decision is incredibly robust!', color: 'text-purple-400' }
             ]
@@ -1331,11 +1361,30 @@
           const [uploadAlerts, setUploadAlerts] = useState({ enabled: false, unreadCount: 0, notifications: [] });
           const [uploadAlertsBusy, setUploadAlertsBusy] = useState(false);
           const [uploadAlertsError, setUploadAlertsError] = useState('');
+          const [menuRouteStatuses, setMenuRouteStatuses] = useState({});
+          const [menuRouteStatusesUnavailable, setMenuRouteStatusesUnavailable] = useState(false);
           const [showRoomComposer, setShowRoomComposer] = useState(false);
           const [roomPostDraft, setRoomPostDraft] = useState({ title: '', description: '', videoUrl: '', options: ['', ''] });
           const [showEqualizer, setShowEqualizer] = useState(false);
           const [equalizer, setEqualizer] = useState({ master: 70, bass: 0, mid: 0, treble: 0 });
           const fallbackReleaseArtwork = window.HaloReleaseArtwork?.DEFAULT_RELEASE_ARTWORK || '/assets/halo-app-icon-512.png';
+          const [musicExperimentVariant] = useState(() => {
+            const requested = new URLSearchParams(window.location.search).get('musicExperiment');
+            return ['native', 'embed'].includes(requested) ? requested : 'compare';
+          });
+          const showNativeExperiment = musicExperimentVariant !== 'embed';
+          const showEmbedExperiment = musicExperimentVariant !== 'native';
+          const experimentViewMode = musicExperimentVariant === 'compare' ? 'side_by_side' : 'single_variant';
+          const trackMusicExperimentAction = (goals, target, variant) => {
+            for (const goal of Array.isArray(goals) ? goals : [goals]) {
+              window.haloStats?.track('homepage_music_experiment_action', {
+                variant,
+                mode: experimentViewMode,
+                goal,
+                target
+              });
+            }
+          };
 
           const audioCtxRef = useRef(null);
           const canvasRef = useRef(null);
@@ -1349,11 +1398,64 @@
           const midNodeRef = useRef(null);
           const trebleNodeRef = useRef(null);
           const activeSourceNodeRef = useRef(null);
+          const embedIframeTrackedRef = useRef(false);
           const [isFilterActive, setIsFilterActive] = useState(false);
 
           const addLog = (msg) => {
             const timestamp = new Date().toLocaleTimeString();
             setTerminalLogs(prev => [`[${timestamp}] ${msg}`, ...prev.slice(0, 30)]);
+          };
+
+          const normalizeMenuRoute = (route = '') => {
+            if (!route) return '/';
+            let pathname = route.split('?')[0].split('#')[0] || '/';
+            if (pathname === '/') return '/';
+            if (pathname.length > 1 && pathname.endsWith('/')) pathname = pathname.slice(0, -1);
+            if (pathname.endsWith('.html')) return pathname;
+            return pathname.endsWith('/') ? pathname : `${pathname}/`;
+          };
+
+          const menuStatusForRoute = (route, fallbackStatus = 'red') => {
+            const normalizedRoute = normalizeMenuRoute(route);
+            const fromSweep = MENU_ROUTE_STATUS_TARGETS.has(normalizedRoute)
+              ? menuRouteStatuses[normalizedRoute]
+              : null;
+            const status = fromSweep && MENU_ROUTE_STATUS_LABELS[fromSweep.status]
+              ? fromSweep.status
+              : MENU_ROUTE_STATUS_TARGETS.has(normalizedRoute) && menuRouteStatusesUnavailable
+                ? 'yellow'
+              : fallbackStatus;
+            return {
+              status,
+              label: MENU_ROUTE_STATUS_LABELS[status] || MENU_ROUTE_STATUS_LABELS.red,
+              glyph: MENU_ROUTE_STATUS_GLYPHS[status] || MENU_ROUTE_STATUS_GLYPHS.red
+            };
+          };
+
+          const renderMenuStatusBadge = (route, context = route, fallbackStatus = 'red') => {
+            const indicator = menuStatusForRoute(route, fallbackStatus);
+            return (
+              <span className={`halo-menu-route-status halo-menu-route-status-${indicator.status}`}>
+                <i aria-hidden="true"></i>
+                <b aria-hidden="true">{indicator.glyph}</b>
+                <span className="sr-only">{context} status {indicator.label}</span>
+                <span aria-hidden="true">{indicator.label}</span>
+              </span>
+            );
+          };
+
+          const renderLocalMenuStatusBadge = (status = 'green', context = 'local action') => {
+            const normalizedStatus = MENU_ROUTE_STATUS_LABELS[status] ? status : 'green';
+            const label = MENU_ROUTE_STATUS_LABELS[normalizedStatus];
+            const glyph = MENU_ROUTE_STATUS_GLYPHS[normalizedStatus];
+            return (
+              <span className={`halo-menu-route-status halo-menu-route-status-${normalizedStatus}`}>
+                <i aria-hidden="true"></i>
+                <b aria-hidden="true">{glyph}</b>
+                <span className="sr-only">{context} status {label}</span>
+                <span aria-hidden="true">{label}</span>
+              </span>
+            );
           };
 
           const getYouTubeEmbed = (value) => {
@@ -1569,6 +1671,10 @@
               const title = file.name.replace(/\.[^/.]+$/, '') || file.name;
               const extension = file.name.split('.').pop()?.toUpperCase() || 'AUDIO';
               const folderPath = file.webkitRelativePath ? file.webkitRelativePath.split('/').slice(0, -1).join('/') : '';
+              const progress = Math.round(((index + 1) / audioFiles.length) * 100);
+              setUploadProgress(progress);
+              setProcessingStatus(`Indexing ${index + 1} of ${audioFiles.length}: ${file.name}`);
+              await new Promise(resolve => requestAnimationFrame(resolve));
 
               indexedTracks.push({
                 id: `local-${Date.now()}-${index}-${Math.random().toString(36).slice(2, 8)}`,
@@ -1582,6 +1688,7 @@
                 waveColor: waveColors[index % waveColors.length],
                 synthPattern: 'local',
                 isBinarySource: true,
+                artwork: FALLBACK_ARTWORK,
                 sourceFile: file,
                 binaryBuffer: null,
                 chats: []
@@ -1596,7 +1703,7 @@
               setIsPlaying(false);
               setTracks(previousTracks => [...indexedTracks, ...previousTracks]);
               setActiveTrack(indexedTracks[0]);
-              setProcessingStatus(`${indexedTracks.length} file${indexedTracks.length === 1 ? '' : 's'} ready instantly${skippedCount ? ` • ${skippedCount} skipped` : ''}. Audio decodes only when played.`);
+              setProcessingStatus(`${indexedTracks.length} file${indexedTracks.length === 1 ? '' : 's'} ready${skippedCount ? ` · ${skippedCount} skipped (unsupported format)` : ''}. Press play to start.`);
               addLog(`LOCAL DRIVE READY: Indexed ${indexedTracks.length} audio file${indexedTracks.length === 1 ? '' : 's'} without pre-decoding.`);
               window.haloStats?.track('load_local_audio', {
                 source_type: mode,
@@ -1818,6 +1925,31 @@
             } catch (error) {
               setUploadAlertsError(error.message || 'Upload alerts could not connect.');
               return null;
+            }
+          };
+
+          const loadMenuRouteStatuses = async () => {
+            try {
+              const data = await loadHaloAgentTeamSnapshot();
+              const statuses = Array.isArray(data?.maintenance?.latest?.satelliteStatuses)
+                ? data.maintenance.latest.satelliteStatuses
+                : [];
+              if (!statuses.length) {
+                setMenuRouteStatuses({});
+                setMenuRouteStatusesUnavailable(true);
+                return;
+              }
+              const next = statuses.reduce((acc, item) => {
+                const route = normalizeMenuRoute(item?.route || '');
+                if (!route || route === '/' || !MENU_ROUTE_STATUS_TARGETS.has(route)) return acc;
+                acc[route] = item;
+                return acc;
+              }, {});
+              setMenuRouteStatuses(next);
+              setMenuRouteStatusesUnavailable(false);
+            } catch {
+              setMenuRouteStatuses({});
+              setMenuRouteStatusesUnavailable(true);
             }
           };
 
@@ -2513,6 +2645,10 @@
           }, [identityUser?.id]);
 
           useEffect(() => {
+            loadMenuRouteStatuses();
+          }, []);
+
+          useEffect(() => {
             const openCompanionRoute = () => {
               const requestedRoom = new URLSearchParams(window.location.search).get('room');
               if (window.location.hash !== '#clubhouse' && !['mixes', 'selectors'].includes(requestedRoom)) return;
@@ -2523,6 +2659,33 @@
             openCompanionRoute();
             window.addEventListener('hashchange', openCompanionRoute);
             return () => window.removeEventListener('hashchange', openCompanionRoute);
+          }, []);
+
+          useEffect(() => {
+            const startedAt = Date.now();
+            let hasTrackedExit = false;
+            const trackExit = () => {
+              if (hasTrackedExit) return;
+              hasTrackedExit = true;
+              window.haloStats?.track('homepage_music_experiment_exit', {
+                variant: musicExperimentVariant,
+                seconds: Math.max(0, Math.round((Date.now() - startedAt) / 1000))
+              });
+            };
+            const onVisibilityChange = () => {
+              if (document.visibilityState === 'hidden') trackExit();
+            };
+            window.haloStats?.track('homepage_music_experiment_viewed', {
+              variant: musicExperimentVariant,
+              view: experimentViewMode
+            });
+            window.addEventListener('pagehide', trackExit);
+            document.addEventListener('visibilitychange', onVisibilityChange);
+            return () => {
+              if (document.visibilityState === 'hidden') trackExit();
+              window.removeEventListener('pagehide', trackExit);
+              document.removeEventListener('visibilitychange', onVisibilityChange);
+            };
           }, []);
 
           useEffect(() => {
@@ -3002,23 +3165,23 @@
                         <div className="halo-menu-lane-title"><span>01</span><h3 id="halo-lane-start">Arrive</h3></div>
                         <button type="button" onClick={() => setShowFanGuide(true)} data-stat-event="open_fan_guide" data-stat-target="header" data-signal="ORIENTATION">
                           <Icon name="users" className="halo-menu-icon" />
-                          <span><strong>NEW HERE? START HERE</strong><small>A two-minute map of the world</small></span>
+                          <span><strong>NEW HERE? START HERE {renderLocalMenuStatusBadge('green', 'fan guide')}</strong><small>A two-minute map of the world</small></span>
                         </button>
                         {identityUser ? (
                           <React.Fragment>
                             <button type="button" onClick={signOut} title="Sign out of HALO" data-signal="MEMBER ONLINE">
                               <span className="halo-member-pulse"></span>
-                              <span><strong>{identityUser.name || 'MEMBER'}</strong><small>Signed in · tap to leave</small></span>
+                              <span><strong>{identityUser.name || 'MEMBER'} {renderLocalMenuStatusBadge('green', 'member session')}</strong><small>Signed in · tap to leave</small></span>
                             </button>
                             <button type="button" onClick={openUploadAlertCenter} data-signal={uploadAlerts.unreadCount ? `${uploadAlerts.unreadCount} NEW` : 'UPLOAD ALERTS'}>
                               <Icon name="bell" className="halo-menu-icon" />
-                              <span><strong>NEW MUSIC ALERTS{uploadAlerts.unreadCount ? ` · ${uploadAlerts.unreadCount}` : ''}</strong><small>{uploadAlerts.enabled ? 'Pings are on for new uploads' : 'Get pinged when a mix lands'}</small></span>
+                              <span><strong>NEW MUSIC ALERTS{uploadAlerts.unreadCount ? ` · ${uploadAlerts.unreadCount}` : ''} {renderLocalMenuStatusBadge('green', 'upload alerts')}</strong><small>{uploadAlerts.enabled ? 'Pings are on for new uploads' : 'Get pinged when a mix lands'}</small></span>
                             </button>
                           </React.Fragment>
                         ) : (
                           <button type="button" onClick={() => openIdentity('login')} data-signal="MEMBER ACCESS">
                             <span className="halo-member-pulse"></span>
-                            <span><strong>JOIN / SIGN IN</strong><small>Keep your place in the world</small></span>
+                            <span><strong>JOIN / SIGN IN {renderLocalMenuStatusBadge('green', 'member access')}</strong><small>Keep your place in the world</small></span>
                           </button>
                         )}
                       </section>
@@ -3026,54 +3189,66 @@
                       <section className="halo-menu-lane halo-menu-lane-listen" aria-labelledby="halo-lane-listen">
                         <div className="halo-menu-lane-title"><span>02</span><h3 id="halo-lane-listen">Listen</h3></div>
                         <a href="/music/" data-stat-event="open_music_catalog" data-stat-target="header" data-signal="CATALOG">
-                          <Icon name="music" className="halo-menu-icon" /><span><strong>ALL MUSIC</strong><small>The permanent catalog</small></span>
+                          <Icon name="music" className="halo-menu-icon" /><span><strong>ALL MUSIC {renderMenuStatusBadge('/music/', 'All Music')}</strong><small>The permanent catalog</small></span>
                         </a>
-                        <a href="halo-x.html" data-stat-event="open_halo_x" data-stat-target="header" data-signal="ARTIST ROOM">
-                          <Icon name="star" className="halo-menu-icon" /><span><strong>DJ HALO X</strong><small>Enter the artist universe</small></span>
+                        <a href="/halo-x.html" data-stat-event="open_halo_x" data-stat-target="header" data-signal="ARTIST ROOM">
+                          <Icon name="star" className="halo-menu-icon" /><span><strong>DJ HALO X {renderMenuStatusBadge('/halo-x.html', 'DJ Halo X')}</strong><small>Enter the artist universe</small></span>
                         </a>
                         <a href="/mixes/" data-stat-event="open_halo_x_mixes" data-stat-target="header" data-signal="MIX SERIES">
-                          <Icon name="disc" className="halo-menu-icon" /><span><strong>HALO X MIXES</strong><small>Watch, stream, and own the edition</small></span>
+                          <Icon name="disc" className="halo-menu-icon" /><span><strong>HALO X MIXES {renderMenuStatusBadge('/mixes/', 'Halo X Mixes')}</strong><small>Watch, stream, and own the edition</small></span>
                         </a>
-                        <a href="dj-deck.html" data-stat-event="open_dj_deck" data-stat-target="header" data-signal="PERFORMANCE">
-                          <Icon name="disc" className="halo-menu-icon" /><span><strong>LIVE DJ DECK</strong><small>Touch the performance system</small></span>
+                        <a href="/dj-deck.html" data-stat-event="open_dj_deck" data-stat-target="header" data-signal="PERFORMANCE">
+                          <Icon name="disc" className="halo-menu-icon" /><span><strong>LIVE DJ DECK {renderMenuStatusBadge('/dj-deck.html', 'Live DJ Deck')}</strong><small>Touch the performance system</small></span>
                         </a>
-                        <a href="halo-live.html" data-stat-event="open_halo_live" data-stat-target="header" data-signal="LIVE ROOM">
-                          <Icon name="radio" className="halo-menu-icon" /><span><strong>HALO LIVE</strong><small>Join the current transmission</small></span>
+                        <a href="/halo-live.html" data-stat-event="open_halo_live" data-stat-target="header" data-signal="LIVE ROOM">
+                          <Icon name="radio" className="halo-menu-icon" /><span><strong>HALO LIVE {renderMenuStatusBadge('/halo-live.html', 'HALO Live')}</strong><small>Join the current transmission</small></span>
                         </a>
                         <a href="/radio/" data-stat-event="open_halo_radio" data-stat-target="header" data-signal="RADIO">
-                          <Icon name="radio" className="halo-menu-icon" /><span><strong>HALO RADIO</strong><small>Continuous world broadcast</small></span>
+                          <Icon name="radio" className="halo-menu-icon" /><span><strong>HALO RADIO {renderMenuStatusBadge('/radio/', 'HALO Radio')}</strong><small>Continuous world broadcast</small></span>
                         </a>
                       </section>
 
                       <section className="halo-menu-lane halo-menu-lane-build" aria-labelledby="halo-lane-build">
                         <div className="halo-menu-lane-title"><span>03</span><h3 id="halo-lane-build">Build</h3></div>
                         <a href="/artist-pro/" data-stat-event="open_artist_pro" data-stat-target="header" data-signal="FOUNDING ARTIST OFFER">
-                          <Icon name="arrow-right" className="halo-menu-icon" /><span><strong>ARTIST PRO</strong><small>One release. One command system.</small></span>
+                          <Icon name="arrow-right" className="halo-menu-icon" /><span><strong>ARTIST PRO {renderMenuStatusBadge('/artist-pro/', 'Artist Pro')}</strong><small>One release. One command system.</small></span>
                         </a>
                         <a href="/creators/" data-stat-event="open_creator_world" data-stat-target="header" data-signal="CREATOR SYSTEM">
-                          <Icon name="star" className="halo-menu-icon" /><span><strong>CREATOR WORLD</strong><small>Tools, pathways, and artist power</small></span>
+                          <Icon name="star" className="halo-menu-icon" /><span><strong>CREATOR WORLD {renderMenuStatusBadge('/creators/', 'Creator World')}</strong><small>Tools, pathways, and artist power</small></span>
+                        </a>
+                        <a href="/artists/" data-stat-event="open_artist_rooms" data-stat-target="header" data-signal="ARTIST ROOMS">
+                          <Icon name="music" className="halo-menu-icon" /><span><strong>ARTIST ROOMS + CHARTS {renderMenuStatusBadge('/artists/', 'Artist Rooms and Charts')}</strong><small>Browse rooms, charts, and featured drops</small></span>
                         </a>
                         <a href="/creator-freedom/" data-stat-event="open_creator_charter" data-stat-target="header" data-signal="PUBLIC POLICY">
-                          <Icon name="book-open" className="halo-menu-icon" /><span><strong>CREATOR FREEDOM</strong><small>White paper, seven-point charter, and public room</small></span>
+                          <Icon name="book-open" className="halo-menu-icon" /><span><strong>CREATOR FREEDOM {renderMenuStatusBadge('/creator-freedom/', 'Creator Freedom')}</strong><small>White paper, seven-point charter, and public room</small></span>
+                        </a>
+                        <a href="/campaign-studio/" data-stat-event="open_campaign_studio" data-stat-target="header" data-signal="CAMPAIGN STUDIO">
+                          <Icon name="check-circle" className="halo-menu-icon" /><span><strong>CAMPAIGN STUDIO {renderMenuStatusBadge('/campaign-studio/', 'Campaign Studio')}</strong><small>Plan launch messaging and campaign flow</small></span>
                         </a>
                         <a href="/release-house/" data-stat-event="open_release_house" data-stat-target="header" data-signal="FIRST RELEASE">
-                          <Icon name="disc" className="halo-menu-icon" /><span><strong>RELEASE HOUSE</strong><small>Idea to release, one guided room at a time</small></span>
+                          <Icon name="disc" className="halo-menu-icon" /><span><strong>RELEASE HOUSE {renderMenuStatusBadge('/release-house/', 'Release House')}</strong><small>Idea to release, one guided room at a time</small></span>
                         </a>
                         <a href="/song-catalog/" data-stat-event="open_song_catalog" data-stat-target="header" data-signal="MASTERS + VERSIONS">
-                          <Icon name="list-music" className="halo-menu-icon" /><span><strong>SONG CATALOG</strong><small>Sale masters, radio edits, stems, and metadata review</small></span>
+                          <Icon name="list-music" className="halo-menu-icon" /><span><strong>SONG CATALOG {renderMenuStatusBadge('/song-catalog/', 'Song Catalog')}</strong><small>Sale masters, radio edits, stems, and metadata review</small></span>
+                        </a>
+                        <a href="/dreamweaver/" data-stat-event="open_dreamweaver_show" data-stat-target="header" data-signal="FAN JOURNEY">
+                          <Icon name="star" className="halo-menu-icon" /><span><strong>DREAMWEAVER EXPERIENCE {renderMenuStatusBadge('/dreamweaver/', 'Dreamweaver Experience')}</strong><small>Unlock the fan path and signal campaign room</small></span>
                         </a>
                         <a href="/dreamweaver-lab/" data-stat-event="open_dreamweaver_song_lab" data-stat-target="header" data-signal="AUDIO TO CAMPAIGN">
-                          <Icon name="music" className="halo-menu-icon" /><span><strong>DREAMWEAVER SONG LAB</strong><small>Load a recording. Analyze the wave. Build the release world.</small></span>
+                          <Icon name="music" className="halo-menu-icon" /><span><strong>DREAMWEAVER SONG LAB {renderMenuStatusBadge('/dreamweaver-lab/', 'Dreamweaver Song Lab')}</strong><small>Load a recording. Analyze the wave. Build the release world.</small></span>
+                        </a>
+                        <a href="/album-concierge/" data-stat-event="open_album_concierge" data-stat-target="header" data-signal="CREATE YOUR ALBUM">
+                          <Icon name="heart" className="halo-menu-icon" /><span><strong>CREATE YOUR ALBUM {renderMenuStatusBadge('/album-concierge/', 'Create Your Album')}</strong><small>Album Concierge · premium, gift, and collector editions</small></span>
                         </a>
                         <a href="/finish-house/" data-stat-event="open_finish_house" data-stat-target="header" data-signal="MASTER + LICENSE">
-                          <Icon name="check-circle" className="halo-menu-icon" /><span><strong>FINISH HOUSE</strong><small>Mix to master to licensing-ready package</small></span>
+                          <Icon name="check-circle" className="halo-menu-icon" /><span><strong>FINISH HOUSE {renderMenuStatusBadge('/finish-house/', 'Finish House')}</strong><small>Mix to master to licensing-ready package</small></span>
                         </a>
                         <a href="/magazine.html" data-stat-event="open_halo_signal" data-stat-target="header" data-signal="EDITORIAL">
-                          <Icon name="book-open" className="halo-menu-icon" /><span><strong>HALO SIGNAL</strong><small>Stories from inside the world</small></span>
+                          <Icon name="book-open" className="halo-menu-icon" /><span><strong>HALO SIGNAL {renderMenuStatusBadge('/magazine.html', 'HALO Signal')}</strong><small>Stories from inside the world</small></span>
                         </a>
                         {ownerControlAccess && (
                           <a href="/control-center" data-stat-event="open_owner_control_room" data-stat-target="header" data-signal="OWNER ONLY">
-                            <Icon name="lock" className="halo-menu-icon" /><span><strong>PRIVATE CONTROL ROOM</strong><small>Your protected command center</small></span>
+                            <Icon name="lock" className="halo-menu-icon" /><span><strong>PRIVATE CONTROL ROOM {renderLocalMenuStatusBadge('green', 'private control room')}</strong><small>Your protected command center</small></span>
                           </a>
                         )}
                       </section>
@@ -3081,10 +3256,10 @@
                       <section className="halo-menu-lane halo-menu-lane-care" aria-labelledby="halo-lane-care">
                         <div className="halo-menu-lane-title"><span>04</span><h3 id="halo-lane-care">Care</h3></div>
                         <a href="/support/" data-stat-event="open_feedback_desk" data-stat-target="header" data-signal="SYSTEM CARE">
-                          <Icon name="bug" className="halo-menu-icon" /><span><strong>FEEDBACK DESK</strong><small>Report bugs, request features, get help</small></span>
+                          <Icon name="bug" className="halo-menu-icon" /><span><strong>FEEDBACK DESK {renderMenuStatusBadge('/support/', 'Feedback Desk')}</strong><small>Report bugs, request features, get help</small></span>
                         </a>
                         <button type="button" onClick={() => { setPaymentError(''); setShowPaymentModal(true); }} data-stat-event="open_payment" data-stat-target="header" data-signal="DIRECT SUPPORT">
-                          <Icon name="credit-card" className="halo-menu-icon" /><span><strong>SUPPORT HALO</strong><small>Fuel independent infrastructure</small></span>
+                          <Icon name="credit-card" className="halo-menu-icon" /><span><strong>SUPPORT HALO {renderLocalMenuStatusBadge('green', 'direct support')}</strong><small>Fuel independent infrastructure</small></span>
                         </button>
                       </section>
                     </div>
@@ -3209,6 +3384,44 @@
                     {!identityUser && <button type="button" onClick={() => openIdentity('signup', 'Your membership carries your profile, follows, and recognition from show to show.')} className="absolute bottom-5 right-5 z-20 hidden rounded-full border border-white/10 bg-black/35 px-4 py-2 text-[8px] font-black uppercase tracking-[.18em] text-white/55 backdrop-blur transition hover:border-white/25 hover:text-white md:inline-flex">Community access</button>}
                   </section>
 
+                  <section className="relative overflow-hidden rounded-[2rem] border border-[#cfa76a]/25 bg-[#0e0c09] shadow-[0_30px_90px_rgba(0,0,0,.38)]" aria-labelledby="concierge-promo-title">
+                    <div className="grid lg:grid-cols-2">
+                      <div className="flex flex-col justify-between p-7 md:p-10 lg:border-r lg:border-[#cfa76a]/15">
+                        <div>
+                          <p className="text-[9px] font-black uppercase tracking-[.3em] text-[#cfa76a]">New / Premium experience</p>
+                          <h2 id="concierge-promo-title" className="mt-5 font-sans-alt text-3xl font-black uppercase leading-[.9] tracking-[-.03em] text-[#f1ede4] md:text-5xl">Turn your story<br/>into an album<br/><span style={{fontStyle:'italic',fontFamily:'Georgia,serif',textTransform:'none',fontWeight:'normal',fontSize:'1.05em',letterSpacing:'-.01em'}}>worth keeping.</span></h2>
+                          <p className="mt-5 max-w-md text-sm leading-7 text-[#a6a096]">Album Concierge is a premium guided experience that helps you shape a personal album concept — complete with song ideas, tracklist, cover art direction, and a keepsake-worthy dedication.</p>
+                          <p className="mt-3 max-w-md text-xs leading-6 text-[#8b8579]">Build Your Album now: start your own album, build a gift album for someone you love, or explore collector edition details designed to be treasured.</p>
+                          <div className="mt-7 flex flex-wrap gap-3">
+                            <a href="/album-concierge/" data-stat-event="open_album_concierge" data-stat-target="promo_section" className="inline-flex items-center gap-2 rounded-full bg-[#cfa76a] px-6 py-3 text-[10px] font-black uppercase tracking-[.16em] text-[#0e0c09] transition hover:opacity-90">
+                              Start your album
+                            </a>
+                            <a href="/album-concierge/?purpose=gift" data-stat-event="open_album_concierge" data-stat-target="promo_section_gift" className="inline-flex items-center gap-2 rounded-full border border-[#cfa76a]/30 px-6 py-3 text-[10px] font-black uppercase tracking-[.16em] text-[#cfa76a] transition hover:border-[#cfa76a]/60">
+                              Build a gift album
+                            </a>
+                            <a href="/album-concierge/?purpose=collector" data-stat-event="open_album_concierge" data-stat-target="promo_section_collector" className="inline-flex items-center gap-2 rounded-full border border-white/15 px-6 py-3 text-[10px] font-black uppercase tracking-[.16em] text-[#f1ede4] transition hover:border-white/35">
+                              Explore collector edition
+                            </a>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-px overflow-hidden border-t border-[#cfa76a]/15 bg-[#cfa76a]/10 lg:border-t-0">
+                        {[
+                          ['🎵', 'Album concept', 'A complete idea built around your story and mood'],
+                          ['🎼', 'Song ideas', '8–10 original track concepts with mood notes'],
+                          ['🎨', 'Cover art direction', 'A visual identity matched to the feeling'],
+                          ['✉️', 'Collector edition', 'Keepsake-ready dedication and album details for gifting or collecting']
+                        ].map(([icon, title, desc]) => (
+                          <div key={title} className="flex flex-col gap-2 bg-[#0e0c09]/80 p-5">
+                            <span className="text-2xl leading-none">{icon}</span>
+                            <strong className="text-[9px] font-black uppercase tracking-[.18em] text-[#cfa76a]">{title}</strong>
+                            <p className="text-[11px] leading-5 text-[#6d6860]">{desc}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </section>
+
                   <section className="relative overflow-hidden rounded-[2rem] border border-white/10 bg-[#0a0b0d] shadow-[0_30px_90px_rgba(0,0,0,.38)]" aria-labelledby="halo-engine-title">
                     <div className="absolute inset-y-0 left-[42%] hidden w-px bg-gradient-to-b from-transparent via-amber-300/30 to-transparent lg:block"></div>
                     <div className="grid lg:grid-cols-[.72fr_1.28fr]">
@@ -3250,6 +3463,139 @@
                     </div>
                   </section>
 
+                  <section className="relative overflow-hidden rounded-[2rem] border border-amber-300/20 bg-[#0f0f13] shadow-[0_24px_70px_rgba(0,0,0,.35)]" aria-labelledby="music-experiment-title">
+                    <div className="p-6 md:p-8">
+                      <p className="text-[9px] font-black uppercase tracking-[.28em] text-amber-300">Homepage experiment / Artist-first listening test / Supporter-first model</p>
+                      <h2 id="music-experiment-title" className="mt-4 font-sans-alt text-3xl font-black uppercase leading-[.9] tracking-[-.03em] text-white md:text-4xl">Which music home performs best for listeners and artists?</h2>
+                      <p className="mt-4 max-w-3xl text-xs leading-6 text-gray-300">We are comparing the best listener experience and the best artist outcome. Variant A keeps the HALO-native artist home central as the brand path. Variant B is only a simpler quick-listen comparison. Both paths route support back to artist-owned HALO actions, where fans become supporters and supporters are rewarded.</p>
+                      <p className="mt-3 text-[10px] uppercase tracking-[.18em] text-gray-500">Active test mode: {musicExperimentVariant === 'compare' ? 'A + B side-by-side' : musicExperimentVariant === 'native' ? 'A only (native)' : 'B only (embed)'}</p>
+                      <div className="mt-5 overflow-x-auto rounded-2xl border border-white/10 bg-black/20">
+                        <table className="min-w-full text-[10px] uppercase tracking-[.18em] text-gray-400">
+                          <caption className="sr-only">Homepage music experiment measurement focus</caption>
+                          <thead>
+                            <tr>
+                              <th scope="col" className="px-4 py-3 text-left text-white">Measurement focus</th>
+                              <th scope="col" className="px-4 py-3 text-left">Listening</th>
+                              <th scope="col" className="px-4 py-3 text-left">Relationship room</th>
+                              <th scope="col" className="px-4 py-3 text-left">Support actions</th>
+                              <th scope="col" className="px-4 py-3 text-left">Repeat visits</th>
+                              <th scope="col" className="px-4 py-3 text-left">Supporter conversion</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            <tr className="border-t border-white/10">
+                              <th scope="row" className="px-4 py-3 text-left text-white/80">Primary signal</th>
+                              <td className="px-4 py-3">Entry or quick-listen availability</td>
+                              <td className="px-4 py-3">HALO relationship-room handoff</td>
+                              <td className="px-4 py-3">Support CTA intent</td>
+                              <td className="px-4 py-3">Variant revisit cohort</td>
+                              <td className="px-4 py-3">Support path toward membership</td>
+                            </tr>
+                          </tbody>
+                        </table>
+                      </div>
+                      <p className="mt-3 max-w-3xl text-xs leading-6 text-gray-400">We use transparent on-page behavior signals to improve the experience for artists and fans without exploiting either side of the relationship. Listening is currently compared through HALO music-home entry on Variant A and quick-listen embed availability on Variant B.</p>
+                    </div>
+                    <div className="grid gap-px border-t border-white/10 bg-white/10 lg:grid-cols-2">
+                      {showNativeExperiment && (
+                        <article className="bg-[#0b0d10] p-6 md:p-8" data-experiment-variant="native">
+                          <p className="text-[9px] font-black uppercase tracking-[.22em] text-emerald-300">Variant A (Primary): Native HALO artist home</p>
+                          <h3 className="mt-4 font-sans-alt text-2xl font-black uppercase text-white">Artist-owned listening + support journey</h3>
+                          <p className="mt-3 text-xs leading-6 text-gray-300">Drive listening, follows, support actions, and repeat visits inside HALO where artists control the presentation, relationship, and rewards.</p>
+                          <ul className="mt-5 space-y-2 text-[11px] leading-5 text-gray-400">
+                            <li>• Listening depth: catalog and room actions in one flow</li>
+                            <li>• Follows + support: pass light, boost, and direct contributions</li>
+                            <li>• Conversion path: supporter actions stay inside HALO</li>
+                          </ul>
+                          <div className="mt-6 flex flex-wrap gap-3">
+                            <a
+                              href="/music/"
+                              onClick={() => trackMusicExperimentAction('listening', 'homepage_experiment_native_listen', 'native')}
+                              data-stat-event="open_music_catalog"
+                              data-stat-target="homepage_experiment_native_listen"
+                              className="inline-flex items-center gap-2 rounded-full bg-emerald-300 px-5 py-2.5 text-[10px] font-black uppercase tracking-[.14em] text-black transition hover:bg-emerald-200"
+                            >
+                              Enter HALO music home
+                            </a>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                openConsoleArea('party');
+                                window.haloStats?.track('enter_console', { target: 'homepage_experiment_native_relationship_room' });
+                                trackMusicExperimentAction('relationship_room', 'homepage_experiment_native_relationship_room', 'native');
+                              }}
+                              className="inline-flex items-center gap-2 rounded-full border border-white/15 px-5 py-2.5 text-[10px] font-black uppercase tracking-[.14em] text-gray-100 transition hover:border-white/35"
+                            >
+                              Open relationship room
+                            </button>
+                            <a
+                              href="/support/"
+                              onClick={() => trackMusicExperimentAction('support_actions', 'homepage_experiment_native_support_action', 'native')}
+                              data-stat-event="open_feedback_desk"
+                              data-stat-target="homepage_experiment_native_support_action"
+                              className="inline-flex items-center gap-2 rounded-full border border-emerald-300/40 px-5 py-2.5 text-[10px] font-black uppercase tracking-[.14em] text-emerald-100 transition hover:border-emerald-200"
+                            >
+                              Support the artist
+                            </a>
+                          </div>
+                        </article>
+                      )}
+                      {showEmbedExperiment && (
+                        <article className="bg-[#121017] p-6 md:p-8" data-experiment-variant="embed">
+                          <p className="text-[9px] font-black uppercase tracking-[.22em] text-cyan-200">Variant B (Comparison): Quick-listen embed</p>
+                          <h3 className="mt-4 font-sans-alt text-2xl font-black uppercase text-white">Fast familiar player, then route back to HALO</h3>
+                          <p className="mt-3 text-xs leading-6 text-gray-300">Use an embed-style listen for speed testing while keeping HALO as the destination for follows, support actions, repeat visits, and supporter conversion.</p>
+                          <div className="mt-5 overflow-hidden rounded-xl border border-white/10 bg-black/40">
+                            <iframe
+                              src={QUICK_LISTEN_EMBED_URL}
+                              title="HALO quick-listen embed comparison"
+                              loading="lazy"
+                              onLoad={() => {
+                                if (embedIframeTrackedRef.current) return;
+                                embedIframeTrackedRef.current = true;
+                                trackMusicExperimentAction('iframe_loaded', 'homepage_experiment_embed_iframe_loaded', 'embed');
+                              }}
+                              allow="autoplay; encrypted-media; picture-in-picture"
+                              sandbox="allow-scripts allow-same-origin allow-presentation allow-popups allow-popups-to-escape-sandbox"
+                              className="aspect-video w-full border-0"
+                            ></iframe>
+                          </div>
+                          <div className="mt-6 flex flex-wrap gap-3">
+                            <a
+                              href="/music/"
+                              onClick={() => trackMusicExperimentAction('repeat_visits', 'homepage_experiment_embed_continue_halo', 'embed')}
+                              data-stat-event="open_music_catalog"
+                              data-stat-target="homepage_experiment_embed_continue_halo"
+                              className="inline-flex items-center gap-2 rounded-full bg-cyan-200 px-5 py-2.5 text-[10px] font-black uppercase tracking-[.14em] text-black transition hover:bg-cyan-100"
+                            >
+                              Continue in HALO
+                            </a>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                openConsoleArea('party');
+                                window.haloStats?.track('enter_console', { target: 'homepage_experiment_embed_relationship_room' });
+                                trackMusicExperimentAction('relationship_room', 'homepage_experiment_embed_relationship_room', 'embed');
+                              }}
+                              className="inline-flex items-center gap-2 rounded-full border border-white/15 px-5 py-2.5 text-[10px] font-black uppercase tracking-[.14em] text-gray-100 transition hover:border-white/35"
+                            >
+                              Open relationship room
+                            </button>
+                            <a
+                              href="/support/"
+                              onClick={() => trackMusicExperimentAction('support_actions', 'homepage_experiment_embed_support_action', 'embed')}
+                              data-stat-event="open_feedback_desk"
+                              data-stat-target="homepage_experiment_embed_support_action"
+                              className="inline-flex items-center gap-2 rounded-full border border-cyan-200/35 px-5 py-2.5 text-[10px] font-black uppercase tracking-[.14em] text-cyan-100 transition hover:border-cyan-100"
+                            >
+                              Support actions
+                            </a>
+                          </div>
+                        </article>
+                      )}
+                    </div>
+                  </section>
+
                   <section className="group relative overflow-hidden rounded-[2rem] border border-amber-300/25 bg-[#111015] shadow-[0_32px_90px_rgba(0,0,0,.42)]" aria-labelledby="new-release-title">
                     <div className="absolute inset-0 bg-[radial-gradient(circle_at_18%_20%,rgba(251,191,36,.14),transparent_30%),linear-gradient(115deg,transparent_35%,rgba(255,255,255,.025),transparent_66%)]" aria-hidden="true"></div>
                     <div className="relative grid items-stretch md:grid-cols-[220px_minmax(0,1fr)_auto]">
@@ -3272,7 +3618,7 @@
                         </div>
                         <h2 id="new-release-title" className="mt-4 font-sans-alt text-5xl font-black uppercase leading-[.82] tracking-[-.04em] text-white sm:text-6xl">{NEW_RELEASE.title}</h2>
                         <p className="mt-3 font-serif text-2xl italic text-amber-100/80">{NEW_RELEASE.artist}</p>
-                        <p className="mt-4 max-w-xl text-xs leading-5 text-gray-400">The newest Owen Anthony signal is live. Open the official release page to stream it, save it, and choose your platform.</p>
+                        <p className="mt-4 max-w-xl text-xs leading-5 text-gray-400">The newest Owen Anthony signal is live. Open the official release page to save it, share it, and choose your platform.</p>
                       </div>
                       <div className="flex items-center border-t border-white/10 p-6 md:border-l md:border-t-0 md:p-8">
                         <a
@@ -3559,6 +3905,11 @@
                         <span className="text-[10px] font-black tracking-[0.24em] text-amber-400">06 / GROW</span>
                         <strong className="mt-8 block text-xl text-white">Find an opportunity</strong>
                         <span className="mt-2 block font-sans-alt text-xs leading-5 text-gray-500">Artists can connect prepared music with active industry calls.</span>
+                      </a>
+                      <a href="/mixes/#library" data-stat-event="open_halo_x_mixes" data-stat-target="fan_pathways" className="group min-h-48 rounded-2xl border border-fuchsia-900/50 bg-gradient-to-b from-fuchsia-950/30 to-black/20 p-5 text-left transition hover:-translate-y-1 hover:border-fuchsia-400">
+                        <span className="text-[10px] font-black tracking-[0.24em] text-fuchsia-400">07 / STREAM</span>
+                        <strong className="mt-8 block text-xl text-white">Browse the Mix Cloud</strong>
+                        <span className="mt-2 block font-sans-alt text-xs leading-5 text-gray-500">Jump straight to published HALO X mixes, long plays, and the listener library.</span>
                       </a>
                     </div>
                   </section>
@@ -4032,6 +4383,16 @@
                         <span>{activeTrack.personaLabel}</span>
                       </div>
 
+                      {activeTrack.artwork && (
+                        <img
+                          key={activeTrack.artwork}
+                          src={activeTrack.artwork}
+                          alt={`${activeTrack.title} artwork`}
+                          className="absolute inset-0 w-full h-full object-cover opacity-20 pointer-events-none"
+                          onError={event => { event.currentTarget.src = FALLBACK_ARTWORK; event.currentTarget.onerror = null; }}
+                        />
+                      )}
+
                       <canvas ref={canvasRef} width={400} height={260} className="w-full max-w-[240px] aspect-[4/3] pointer-events-none z-20" />
 
                       <div className="absolute bottom-4 z-30 flex items-center gap-3 bg-black/90 px-4 py-2 rounded-full border border-purple-950">
@@ -4049,6 +4410,12 @@
                           {isFilterActive ? 'Bypass Filter' : 'Corridor Acoustics'}
                         </button>
                       </div>
+
+                      {!activeTrack.isBinarySource && (
+                        <div className="absolute top-3 right-3 z-20 max-w-[140px] rounded bg-black/70 px-2 py-1.5 text-[9px] text-center text-amber-200 border border-amber-500/30">
+                          Upload an audio file to play this track
+                        </div>
+                      )}
                     </div>
 
                     {/* RADIO + DJ SELECTOR ROOM */}

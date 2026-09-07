@@ -79,6 +79,100 @@
 .flightplan-check input { margin-top: 3px; accent-color: var(--acid); }
 .flightplan-status { display: block; min-height: 20px; margin-top: 13px; color: var(--muted); font: 500 11px "DM Mono", monospace; }
 
+/* ── Status chips ─────────────────────────────────────────────────── */
+.status-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 9px; border: 1px solid var(--line-strong);
+  font: 500 9px/1.1 "DM Mono", monospace; letter-spacing: .1em; text-transform: uppercase;
+  white-space: nowrap;
+}
+.status-chip::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--muted); flex: 0 0 auto; }
+.status-chip.is-mastered { border-color: rgba(200,255,54,.45); color: var(--acid); }
+.status-chip.is-mastered::before { background: var(--acid); }
+.status-chip.is-rights { border-color: rgba(255,200,60,.4); color: #ffc83c; }
+.status-chip.is-rights::before { background: #ffc83c; }
+.status-chip.is-ready { border-color: rgba(72,168,255,.45); color: var(--blue, #48a8ff); }
+.status-chip.is-ready::before { background: var(--blue, #48a8ff); }
+.status-chip.is-approved { border-color: rgba(200,255,54,.7); background: rgba(200,255,54,.1); color: var(--acid); font-weight: 700; }
+.status-chip.is-approved::before { background: var(--acid); box-shadow: 0 0 6px var(--acid); }
+.status-chip.is-hold { border-color: rgba(255,106,50,.45); color: var(--orange, #ff6a32); }
+.status-chip.is-hold::before { background: var(--orange, #ff6a32); }
+.status-chip.is-revise { border-color: rgba(255,77,93,.45); color: var(--red, #ff4d5d); }
+.status-chip.is-revise::before { background: var(--red, #ff4d5d); }
+
+/* ── Review summary card ──────────────────────────────────────────── */
+.review-summary-card {
+  margin-top: 22px; border: 1px solid var(--line);
+  background: rgba(0,0,0,.3);
+}
+.review-summary-card .rsc-head {
+  display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap;
+  gap: 12px; padding: 14px 18px; border-bottom: 1px solid var(--line);
+}
+.review-summary-card .rsc-label {
+  color: var(--muted); font: 500 9px "DM Mono", monospace; letter-spacing: .1em; text-transform: uppercase;
+}
+.review-summary-card .rsc-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.review-summary-card .rsc-body { display: grid; grid-template-columns: 90px 1fr; gap: 0; }
+.review-summary-card .rsc-score-col {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px;
+  padding: 18px 14px; border-right: 1px solid var(--line);
+}
+.review-summary-card .rsc-score-ring {
+  position: relative; width: 66px; height: 66px; border-radius: 50%;
+  background: conic-gradient(var(--acid) calc(var(--review-score, 0) * 1%), rgba(255,255,255,.08) 0);
+}
+.review-summary-card .rsc-score-ring::before {
+  content: ""; position: absolute; inset: 7px; border-radius: 50%;
+  background: rgba(10,13,12,.9);
+}
+.review-summary-card .rsc-score-ring strong {
+  position: absolute; inset: 0; display: grid; place-items: center;
+  font: 500 18px/1 "DM Mono", monospace;
+}
+.review-summary-card .rsc-score-col span {
+  color: var(--muted); font: 500 8px "DM Mono", monospace; letter-spacing: .08em; text-transform: uppercase; text-align: center;
+}
+.review-summary-card .rsc-detail { padding: 14px 18px; }
+.review-summary-card .rsc-summary {
+  margin: 0; color: #b8c4b6; font-size: 11px; line-height: 1.6;
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden;
+}
+.review-summary-card .rsc-empty {
+  padding: 24px 18px; color: var(--muted); font: 400 10px "DM Mono", monospace; text-align: center;
+}
+
+/* ── Next improvement block ───────────────────────────────────────── */
+.next-improvement {
+  margin-top: 18px; padding: 16px 18px;
+  border-left: 3px solid var(--acid); background: rgba(200,255,54,.055);
+}
+.next-improvement small {
+  display: block; color: var(--acid); font: 500 9px "DM Mono", monospace;
+  letter-spacing: .1em; text-transform: uppercase; margin-bottom: 6px;
+}
+.next-improvement p { margin: 0; color: #c8d4c6; font-size: 12px; line-height: 1.55; }
+.next-improvement.is-complete { border-left-color: rgba(200,255,54,.4); background: rgba(200,255,54,.03); }
+.next-improvement.is-blocked { border-left-color: var(--red, #ff4d5d); background: rgba(255,77,93,.045); }
+.next-improvement.is-blocked small { color: var(--red, #ff4d5d); }
+
+/* ── Readiness meter refinements ──────────────────────────────────── */
+.flightplan-meter { height: 6px; margin-top: 12px; overflow: hidden; background: rgba(255,255,255,.07); border-radius: 0; }
+.flightplan-meter span { display: block; width: var(--flight-progress, 20%); height: 100%; background: var(--acid); box-shadow: 0 0 8px rgba(200,255,54,.4); transition: width .35s cubic-bezier(.25,.8,.25,1); }
+.flightplan-progress strong { font-size: 32px; letter-spacing: -.04em; }
+
+/* ── Demand radar refinements ─────────────────────────────────────── */
+.radar-card { min-height: 128px; padding: 16px; border: 1px solid var(--line); background: rgba(0,0,0,.28); box-shadow: 0 4px 18px rgba(0,0,0,.2); transition: border-color .2s ease; }
+.radar-card:hover { border-color: rgba(200,255,54,.35); }
+.radar-card small { display: block; margin-bottom: 10px; color: var(--acid); font: 500 9px "DM Mono", monospace; letter-spacing: .1em; text-transform: uppercase; }
+.radar-card strong { display: block; font-size: 13px; line-height: 1.2; }
+.radar-card p { margin: 8px 0 0; color: var(--muted); font-size: 11px; line-height: 1.5; }
+.radar-score { float: right; border: 1px solid rgba(200,255,54,.4); background: rgba(200,255,54,.07); color: var(--acid); padding: 2px 5px; font: 600 10px "DM Mono", monospace; }
+
+/* ── Gate refinements ─────────────────────────────────────────────── */
+.flightplan-gate { box-shadow: inset 0 0 0 1px var(--line); transition: border-color .3s ease, background .3s ease; }
+.flightplan-gate.is-ready { box-shadow: inset 0 0 0 1px rgba(200,255,54,.45), 0 0 30px rgba(200,255,54,.06); }
+
 @media (max-width: 900px) {
   .flightplan-body { grid-template-columns: 1fr; }
   .flightplan-nav { display: grid; grid-template-columns: repeat(5, minmax(120px, 1fr)); overflow-x: auto; border-right: 0; border-bottom: 1px solid var(--line); }

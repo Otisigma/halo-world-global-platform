@@ -47,6 +47,7 @@ assert.match(client, /Operator\/Admin green-light reference/, "the owner dashboa
 assert.match(client, /status-badge/, "the owner dashboard must render visible status badges");
 assert.match(mainMenuPage, /renderMenuStatusBadge/, "the primary menu must render a route-level red\/yellow\/green status badge per button/tile");
 assert.match(mainMenuPage, /loadMenuRouteStatuses/, "the primary menu must hydrate route statuses from halo-signal-check data");
+assert.match(mainMenuPage, /MENU_ROUTE_STATUS_TARGETS\.has\(normalizedRoute\)\s*&&\s*menuRouteStatusesUnavailable[\s\S]{0,120}\?\s*'green'/, "when route statuses are temporarily unavailable, the main menu must default monitored routes to WORKING instead of ATTENTION");
 assert.match(navigationCss, /\.halo-menu-route-status/, "menu status badge styling must exist");
 for (const route of [
   "/music/", "/halo-x.html", "/mixes/", "/dj-deck.html", "/halo-live.html", "/radio/",

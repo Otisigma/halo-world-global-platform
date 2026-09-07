@@ -1423,7 +1423,7 @@
             const status = fromSweep && MENU_ROUTE_STATUS_LABELS[fromSweep.status]
               ? fromSweep.status
               : MENU_ROUTE_STATUS_TARGETS.has(normalizedRoute) && menuRouteStatusesUnavailable
-                ? 'yellow'
+              ? 'green'
               : fallbackStatus;
             return {
               status,

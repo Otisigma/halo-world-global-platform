@@ -6,6 +6,7 @@ const read = path => readFile(resolve(root, path), "utf8");
 
 const [
   migration,
+  routeHealthMigration,
   ledgerLib,
   ledgerFn,
   unifiedUploadFn,
@@ -15,6 +16,7 @@ const [
   ledgerJs,
 ] = await Promise.all([
   read("netlify/database/migrations/20260829020000_create_halo_ledger.sql"),
+  read("netlify/database/migrations/20260908234500_create_halo_route_health_entries.sql"),
   read("netlify/lib/halo-ledger.mjs"),
   read("netlify/functions/halo-ledger.mjs"),
   read("netlify/functions/unified-upload.mjs"),
@@ -35,13 +37,20 @@ const checks = [
   [migration.includes("CREATE INDEX IF NOT EXISTS halo_ledger_category_idx"), "migration creates category index for filtered queries"],
   [migration.includes("CREATE INDEX IF NOT EXISTS halo_ledger_song_idx"), "migration creates partial song ref index"],
   [migration.includes("CREATE INDEX IF NOT EXISTS halo_ledger_issue_idx"), "migration creates partial issue ref index"],
+  [routeHealthMigration.includes("CREATE TABLE IF NOT EXISTS halo_route_health_entries"), "route health migration creates persisted route health table"],
+  [routeHealthMigration.includes("ledger_entry_id") && routeHealthMigration.includes("route_states"), "route health migration includes ledger linkage and route state payloads"],
+  [routeHealthMigration.includes("chart_status IN ('working', 'attention', 'broken', 'disconnected')"), "route health migration preserves working/attention/broken/disconnected state constraints"],
 
   // Ledger lib
   [ledgerLib.includes("export const LEDGER_CATEGORIES") && ledgerLib.includes("upload_event") && ledgerLib.includes("issue_report"), "ledger lib exports LEDGER_CATEGORIES set including upload_event and issue_report"],
   [ledgerLib.includes("fix_record") && ledgerLib.includes("department_action") && ledgerLib.includes("approval_event"), "ledger lib includes fix_record, department_action, approval_event categories"],
   [ledgerLib.includes("agent_activity") && ledgerLib.includes("feature_request") && ledgerLib.includes("system_event"), "ledger lib includes agent_activity, feature_request, system_event categories"],
+  [ledgerLib.includes("route_health"), "ledger lib includes route_health category"],
   [ledgerLib.includes("export async function appendLedgerEntry"), "ledger lib exports appendLedgerEntry function"],
+  [ledgerLib.includes("export async function appendRouteHealthEntry"), "ledger lib exports appendRouteHealthEntry helper"],
+  [ledgerLib.includes("ROUTE_HEALTH_STATES") && ledgerLib.includes("disconnected"), "route-health helper validates working/attention/broken/disconnected states"],
   [ledgerLib.includes("INSERT INTO halo_ledger") && ledgerLib.includes("randomUUID"), "appendLedgerEntry inserts into halo_ledger with a random UUID"],
+  [ledgerLib.includes("INSERT INTO halo_route_health_entries"), "appendRouteHealthEntry persists route-health snapshots"],
 
   // Ledger API function
   [ledgerFn.includes('path: "/api/halo-ledger"'), "halo-ledger function registers at /api/halo-ledger"],
@@ -66,10 +75,13 @@ const checks = [
   [ledgerHtml.includes("data-category") && ledgerHtml.includes("upload_event"), "ledger HTML includes category filter chips"],
   [ledgerHtml.includes("ledgerQuery") && ledgerHtml.includes("ledgerSearchBtn"), "ledger HTML has search input and button"],
   [ledgerHtml.includes("ledgerDetail") && ledgerHtml.includes("ledgerDetailClose"), "ledger HTML has detail panel with close button"],
+  [ledgerHtml.includes('data-category="route_health"'), "ledger HTML exposes route_health category filtering"],
   [ledgerCss.includes("ledger-entry") && ledgerCss.includes("ledger-category-badge"), "ledger CSS styles entry cards and category badges"],
   [ledgerCss.includes('[data-category="upload_event"]') && ledgerCss.includes('[data-category="issue_report"]'), "ledger CSS has distinct colour rules for upload_event and issue_report"],
+  [ledgerCss.includes('[data-category="route_health"]'), "ledger CSS has distinct colour rules for route_health"],
   [ledgerCss.includes('[data-outcome="success"]') && ledgerCss.includes('[data-outcome="failure"]'), "ledger CSS colours outcome indicators"],
   [ledgerJs.includes("fetchEntries") && ledgerJs.includes("renderEntries"), "ledger JS fetches and renders entries"],
+  [ledgerJs.includes("route_health") && ledgerJs.includes("Route Health"), "ledger JS labels route_health entries"],
   [ledgerJs.includes("nextBefore") && ledgerJs.includes("Load more"), "ledger JS supports paginated load-more"],
   [ledgerJs.includes("showDetail") && ledgerJs.includes("detailPanel"), "ledger JS opens a detail panel for individual entries"],
   [ledgerJs.includes("escHtml") && ledgerJs.includes("replace"), "ledger JS escapes HTML to prevent XSS in rendered entries"],

@@ -10,10 +10,12 @@ export const LEDGER_CATEGORIES = new Set([
   "agent_activity",
   "feature_request",
   "system_event",
+  "route_health",
 ]);
 
 /** Valid outcome values. */
 const OUTCOMES = new Set(["success", "failure", "pending", "cancelled"]);
+const ROUTE_HEALTH_STATES = new Set(["working", "attention", "broken", "disconnected"]);
 
 /**
  * Write one entry to halo_ledger.
@@ -63,4 +65,54 @@ export async function appendLedgerEntry(db, {
     )
   `;
   return id;
+}
+
+/**
+ * Persist one route-health chart snapshot in halo_route_health_entries and halo_ledger.
+ */
+export async function appendRouteHealthEntry(db, {
+  actorId = "system",
+  actorType = "system",
+  pagePath = "/halo",
+  chartStatus = "working",
+  stateCounts = {},
+  routeStates = [],
+  triggerType = "scheduled",
+  commandName = "halo-signal-check",
+  notes = "",
+} = {}) {
+  if (!ROUTE_HEALTH_STATES.has(chartStatus)) {
+    throw new Error(`Unknown route-health chart status: ${chartStatus}`);
+  }
+  const normalizedCounts = {
+    working: Number(stateCounts.working || 0),
+    attention: Number(stateCounts.attention || 0),
+    broken: Number(stateCounts.broken || 0),
+    disconnected: Number(stateCounts.disconnected || 0),
+  };
+  const summary = `Route health chart: ${chartStatus.toUpperCase()} (${normalizedCounts.working} working · ${normalizedCounts.attention} attention · ${normalizedCounts.broken} broken · ${normalizedCounts.disconnected} disconnected)`;
+  const ledgerEntryId = await appendLedgerEntry(db, {
+    actorId,
+    actorType,
+    eventCategory: "route_health",
+    summary,
+    details: {
+      chartStatus,
+      stateCounts: normalizedCounts,
+      routeStates,
+      triggerType,
+      commandName,
+    },
+    body: notes || `Persisted route health snapshot for ${pagePath}.`,
+    outcome: chartStatus === "working" ? "success" : "failure",
+  });
+  await db.sql`
+    INSERT INTO halo_route_health_entries (
+      id, ledger_entry_id, page_path, chart_status, state_counts, route_states, created_at
+    ) VALUES (
+      ${randomUUID()}, ${ledgerEntryId}, ${String(pagePath || "/halo").slice(0, 500)}, ${chartStatus},
+      ${JSON.stringify(normalizedCounts)}::jsonb, ${JSON.stringify(routeStates)}::jsonb, NOW()
+    )
+  `;
+  return ledgerEntryId;
 }

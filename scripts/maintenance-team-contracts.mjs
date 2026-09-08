@@ -1,12 +1,13 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
-const [migration, satelliteStatusesMigration, sweep, scheduled, api, page, client, docs, packageJson, navigationCss, mainMenuPage] = await Promise.all([
+const [migration, satelliteStatusesMigration, sweep, scheduled, api, satelliteApi, page, client, docs, packageJson, navigationCss, mainMenuPage] = await Promise.all([
   readFile(new URL("../netlify/database/migrations/20260809150000_create-maintenance-sweeps.sql", import.meta.url), "utf8"),
   readFile(new URL("../netlify/database/migrations/20260905073000_add_satellite_statuses_to_maintenance_sweeps.sql", import.meta.url), "utf8"),
   readFile(new URL("../netlify/lib/maintenance-sweep.mjs", import.meta.url), "utf8"),
   readFile(new URL("../netlify/functions/health-scout.mjs", import.meta.url), "utf8"),
   readFile(new URL("../netlify/functions/halo-agent-team.mjs", import.meta.url), "utf8"),
+  readFile(new URL("../netlify/functions/halo-satellite-status.mjs", import.meta.url), "utf8"),
   readFile(new URL("../halo-command.html", import.meta.url), "utf8"),
   readFile(new URL("../halo-command.js", import.meta.url), "utf8"),
   readFile(new URL("../HALO_AGENT_TEAM.md", import.meta.url), "utf8"),
@@ -29,14 +30,20 @@ assert.match(sweep, /halo-signal-check/, "the maintenance team must label the on
 assert.match(sweep, /appendLedgerEntry/, "the maintenance team must write sweep command outcomes to the Halo Ledger");
 assert.match(sweep, /satellite_statuses/i, "the maintenance sweep must store satellite statuses for dashboard reloads");
 assert.match(sweep, /satelliteStatuses:\s*Array\.isArray\(row\.satellite_statuses\)/, "dashboard hydration must read persisted satellite statuses");
+assert.match(sweep, /SATELLITE_MANUAL_ATTENTION/, "the maintenance sweep must support per-route manual attention overrides");
 assert.match(sweep, /\/dreamweaver\//, "the maintenance team must include Dreamweaver in core page checks");
 assert.match(sweep, /\/dreamweaver-lab\//, "the maintenance team must include Dreamweaver Lab in core page checks");
 assert.match(sweep, /\/halo-x\.html/, "the maintenance team must include HALO X in satellite checks");
 assert.match(sweep, /\/support\//, "the maintenance team must include Support in satellite checks");
+for (const route of ["/dreamweaver/", "/artist-pro/", "/release-house/", "/song-catalog/", "/dreamweaver-lab/"]) {
+  assert.match(sweep, new RegExp(route.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")), `${route} must be configurable as a manual attention satellite`);
+}
 assert.match(scheduled, /schedule: "\*\/15 \* \* \* \*"/, "the maintenance team must run every 15 minutes");
 assert.doesNotMatch(scheduled, /process\.env/, "new scheduled code must use Netlify function environment access");
 assert.match(api, /run_maintenance/, "owners must be able to request a manual sweep");
 assert.match(api, /halo-signal-check/, "owners must be able to trigger the one-command satellite sweep");
+assert.match(satelliteApi, /path: "\/api\/halo-satellite-status"/, "the public satellite status API must expose the expected route");
+assert.match(satelliteApi, /satelliteStatuses/, "the public satellite status API must return the latest satellite status snapshot");
 assert.match(page, /Every page\. Every connection\. Every output\./, "the owner dashboard must explain sweep coverage");
 assert.match(client, /renderMaintenance/, "the owner dashboard must render sweep evidence");
 assert.match(page, /id="satelliteStatuses"/, "the owner dashboard must show satellite status cards");
@@ -47,7 +54,8 @@ assert.match(client, /Operator\/Admin green-light reference/, "the owner dashboa
 assert.match(client, /status-badge/, "the owner dashboard must render visible status badges");
 assert.match(mainMenuPage, /renderMenuStatusBadge/, "the primary menu must render a route-level red\/yellow\/green status badge per button/tile");
 assert.match(mainMenuPage, /loadMenuRouteStatuses/, "the primary menu must hydrate route statuses from halo-signal-check data");
-assert.match(mainMenuPage, /MENU_ROUTE_STATUS_TARGETS\.has\(normalizedRoute\)\s*&&\s*menuRouteStatusesUnavailable[\s\S]{0,120}\?\s*'green'/, "when route statuses are temporarily unavailable, the main menu must default monitored routes to WORKING instead of ATTENTION");
+assert.match(mainMenuPage, /\/api\/halo-satellite-status/, "the primary menu must load public satellite statuses without owner authentication");
+assert.match(mainMenuPage, /MENU_ROUTE_STATUS_TARGETS\.has\(normalizedRoute\)\s*&&\s*menuRouteStatusesUnavailable[\s\S]{0,120}\?\s*'yellow'/, "when route statuses are temporarily unavailable, the main menu must default monitored routes to ATTENTION instead of WORKING");
 assert.match(navigationCss, /\.halo-menu-route-status/, "menu status badge styling must exist");
 for (const route of [
   "/music/", "/halo-x.html", "/mixes/", "/dj-deck.html", "/halo-live.html", "/radio/",

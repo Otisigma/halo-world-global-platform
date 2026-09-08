@@ -33,7 +33,7 @@ const SATELLITE_STATUS_TARGETS = [
 
 const API_ROUTES = [
   "/api/ai-dj", "/api/ambassadors", "/api/broadcast-control", "/api/community",
-  "/api/creator-marketplace", "/api/dj-intelligence", "/api/halo-agent-team",
+  "/api/creator-marketplace", "/api/dj-intelligence", "/api/halo-agent-team", "/api/halo-satellite-status",
   "/api/halo-companion", "/api/halo-journal", "/api/halo-relations", "/api/halo-session",
   "/api/halo-x", "/api/issues", "/api/maintenance/issues", "/api/mixes", "/api/mixes/audio",
   "/api/payment-link", "/api/radio/audio", "/api/radio/health", "/api/radio/personas",
@@ -66,9 +66,31 @@ const OUTPUT_CHECKS = [
 ];
 
 const SIGNAL_CHECK_COMMAND = "halo-signal-check";
+const SATELLITE_MANUAL_ATTENTION = {
+  "/dreamweaver/": "Manual attention while the page-by-page loading audit is still in progress.",
+  "/artist-pro/": "Manual attention while the page-by-page loading audit is still in progress.",
+  "/release-house/": "Manual attention while the page-by-page loading audit is still in progress.",
+  "/song-catalog/": "Manual attention while the page-by-page loading audit is still in progress.",
+  "/dreamweaver-lab/": "Manual attention while the page-by-page loading audit is still in progress."
+};
 
 function cleanDetail(value, maximum = 600) {
   return String(value || "").replace(/\s+/g, " ").trim().slice(0, maximum);
+}
+
+function applyManualAttentionStatus(statusRecord) {
+  const attentionReason = SATELLITE_MANUAL_ATTENTION[statusRecord.route];
+  if (!attentionReason) return statusRecord;
+  if (statusRecord.status === "red") {
+    return { ...statusRecord, manualAttention: true, attentionReason };
+  }
+  return {
+    ...statusRecord,
+    verified: false,
+    status: "yellow",
+    manualAttention: true,
+    attentionReason
+  };
 }
 
 function sameOriginTarget(baseUrl, rawTarget) {
@@ -237,7 +259,7 @@ export async function runMaintenanceSweep(db, baseUrl, { triggerType = "schedule
     const smokeVerified = Boolean(live && /<title[\s>][\s\S]*<\/title>/i.test(pageBodyByRoute.get(route) || ""));
     const verified = built && live && connected && smokeVerified;
     const status = !built || !live || !connected ? "red" : verified ? "green" : "yellow";
-    satelliteStatuses.push({ name: target.name, route, built, live, connected, verified, status });
+    satelliteStatuses.push(applyManualAttentionStatus({ name: target.name, route, built, live, connected, verified, status }));
     const smokeCheck = checkRecord(
       "output",
       `${route}#smoke`,
@@ -342,7 +364,7 @@ export async function runMaintenanceSweep(db, baseUrl, { triggerType = "schedule
         target: check.target,
         detail: check.detail
       })),
-      notes: `Red requires a missing or broken route. Yellow means built/live but not fully menu-connected or smoke-verified. Green means built, connected, live, and verified by the deployed smoke check used by ${SIGNAL_CHECK_COMMAND}.`,
+      notes: `Red requires a missing or broken route. Yellow means built/live but not fully menu-connected or smoke-verified, or a satellite has been manually held in attention while it is audited. Green means built, connected, live, and verified by the deployed smoke check used by ${SIGNAL_CHECK_COMMAND}.`,
       satelliteStatuses
     },
     body: `${failedChecks.length} failed checks across ${ledgerCommandName}.`,

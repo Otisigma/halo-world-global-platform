@@ -953,12 +953,6 @@
           locked: true
         };
 
-        const NEW_RELEASE = {
-          title: 'My Sensitivity Like a Crown',
-          artist: 'Owen Anthony',
-          artwork: '/assets/releases/my-sensitivity-like-a-crown.jpg',
-          url: 'https://distrokid.com/hyperfollow/owenanthony/my-sensitivity-like-a-crown'
-        };
         const QUICK_LISTEN_EMBED_URL = 'https://www.youtube.com/embed/videoseries?list=PLcmaoB9ss1YE';
 
         const FALLBACK_ARTWORK = '/assets/halo-app-icon-512.png';
@@ -3663,46 +3657,6 @@
                           </div>
                         </article>
                       )}
-                    </div>
-                  </section>
-
-                  <section className="group relative overflow-hidden rounded-[2rem] border border-amber-300/25 bg-[#111015] shadow-[0_32px_90px_rgba(0,0,0,.42)]" aria-labelledby="new-release-title">
-                    <div className="absolute inset-0 bg-[radial-gradient(circle_at_18%_20%,rgba(251,191,36,.14),transparent_30%),linear-gradient(115deg,transparent_35%,rgba(255,255,255,.025),transparent_66%)]" aria-hidden="true"></div>
-                    <div className="relative grid items-stretch md:grid-cols-[220px_minmax(0,1fr)_auto]">
-                      <div className="overflow-hidden border-b border-white/10 bg-[#26211b] md:border-b-0 md:border-r">
-                        <img
-                          src={NEW_RELEASE.artwork}
-                          alt={`${NEW_RELEASE.title} by ${NEW_RELEASE.artist} cover artwork`}
-                          className="aspect-square h-full w-full object-cover transition duration-700 group-hover:scale-[1.035] group-hover:saturate-125"
-                          width="800"
-                          height="800"
-                          loading="eager"
-                          referrerPolicy="no-referrer"
-                        />
-                      </div>
-                      <div className="flex flex-col justify-center p-6 sm:p-8">
-                        <div className="flex flex-wrap items-center gap-3 font-mono text-[9px] font-black uppercase tracking-[.25em] text-amber-300">
-                          <span className="inline-flex items-center gap-2"><span className="h-1.5 w-1.5 animate-pulse rounded-full bg-amber-300 shadow-[0_0_12px_rgba(252,211,77,.8)]"></span>New release</span>
-                          <span className="h-px w-10 bg-amber-300/35"></span>
-                          <span>Now transmitting</span>
-                        </div>
-                        <h2 id="new-release-title" className="mt-4 font-sans-alt text-5xl font-black uppercase leading-[.82] tracking-[-.04em] text-white sm:text-6xl">{NEW_RELEASE.title}</h2>
-                        <p className="mt-3 font-serif text-2xl italic text-amber-100/80">{NEW_RELEASE.artist}</p>
-                        <p className="mt-4 max-w-xl text-xs leading-5 text-gray-400">The newest Owen Anthony signal is live. Open the official release page to save it, share it, and choose your platform.</p>
-                      </div>
-                      <div className="flex items-center border-t border-white/10 p-6 md:border-l md:border-t-0 md:p-8">
-                        <a
-                          href={NEW_RELEASE.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          data-stat-event="open_new_release"
-                          data-stat-target="homepage_new_release_card"
-                          className="inline-flex w-full items-center justify-center gap-3 rounded-xl bg-amber-300 px-6 py-4 font-mono text-xs font-black uppercase tracking-[.14em] text-[#17130f] transition hover:-translate-y-1 hover:bg-amber-100 focus:outline-none focus:ring-2 focus:ring-amber-200 focus:ring-offset-2 focus:ring-offset-[#111015] md:w-auto"
-                        >
-                          Stream + save
-                          <Icon name="external-link" className="h-4 w-4 stroke-[2.5]" />
-                        </a>
-                      </div>
                     </div>
                   </section>
 

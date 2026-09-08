@@ -66,30 +66,30 @@ const OUTPUT_CHECKS = [
 ];
 
 const SIGNAL_CHECK_COMMAND = "halo-signal-check";
-const SATELLITE_MANUAL_ATTENTION = {
-  "/dreamweaver/": "Manual attention while the page-by-page loading audit is still in progress.",
-  "/artist-pro/": "Manual attention while the page-by-page loading audit is still in progress.",
-  "/release-house/": "Manual attention while the page-by-page loading audit is still in progress.",
-  "/song-catalog/": "Manual attention while the page-by-page loading audit is still in progress.",
-  "/dreamweaver-lab/": "Manual attention while the page-by-page loading audit is still in progress."
-};
+const DEFAULT_SATELLITE_ATTENTION_ROUTE = "/dreamweaver/";
+const SATELLITE_ATTENTION_REASON = "Manual attention while the selected satellite page is being fixed.";
+const SATELLITE_STATUS_ROUTES = new Set(SATELLITE_STATUS_TARGETS.map(target => normalizeRoute(target.route)));
 
 function cleanDetail(value, maximum = 600) {
   return String(value || "").replace(/\s+/g, " ").trim().slice(0, maximum);
 }
 
-function applyManualAttentionStatus(statusRecord) {
-  const attentionReason = SATELLITE_MANUAL_ATTENTION[statusRecord.route];
-  if (!attentionReason) return statusRecord;
-  if (statusRecord.status === "red") {
-    return { ...statusRecord, manualAttention: true, attentionReason };
-  }
+function resolveManualAttentionRoute() {
+  const configuredRoute = normalizeRoute(cleanDetail(
+    process.env.HALO_ACTIVE_ATTENTION_ROUTE || DEFAULT_SATELLITE_ATTENTION_ROUTE,
+    160
+  ));
+  return SATELLITE_STATUS_ROUTES.has(configuredRoute) ? configuredRoute : DEFAULT_SATELLITE_ATTENTION_ROUTE;
+}
+
+function applyManualAttentionStatus(statusRecord, manualAttentionRoute) {
+  if (statusRecord.route !== manualAttentionRoute) return statusRecord;
   return {
     ...statusRecord,
     verified: false,
     status: "yellow",
     manualAttention: true,
-    attentionReason
+    attentionReason: SATELLITE_ATTENTION_REASON
   };
 }
 
@@ -207,6 +207,7 @@ export async function runMaintenanceSweep(db, baseUrl, { triggerType = "schedule
   const pageStatusByRoute = new Map();
   const pageBodyByRoute = new Map();
   const connectedRoutesFromMainMenu = new Set();
+  const manualAttentionRoute = resolveManualAttentionRoute();
 
   for (const pageUrl of queuedPages.values()) {
     if (pagesChecked >= 80) break;
@@ -259,7 +260,7 @@ export async function runMaintenanceSweep(db, baseUrl, { triggerType = "schedule
     const smokeVerified = Boolean(live && /<title[\s>][\s\S]*<\/title>/i.test(pageBodyByRoute.get(route) || ""));
     const verified = built && live && connected && smokeVerified;
     const status = !built || !live || !connected ? "red" : verified ? "green" : "yellow";
-    satelliteStatuses.push(applyManualAttentionStatus({ name: target.name, route, built, live, connected, verified, status }));
+    satelliteStatuses.push(applyManualAttentionStatus({ name: target.name, route, built, live, connected, verified, status }, manualAttentionRoute));
     const smokeCheck = checkRecord(
       "output",
       `${route}#smoke`,
@@ -364,7 +365,7 @@ export async function runMaintenanceSweep(db, baseUrl, { triggerType = "schedule
         target: check.target,
         detail: check.detail
       })),
-      notes: `Red requires a missing or broken route. Yellow means built/live but not fully menu-connected or smoke-verified, or a satellite has been manually held in attention while it is audited. Green means built, connected, live, and verified by the deployed smoke check used by ${SIGNAL_CHECK_COMMAND}.`,
+      notes: `Red requires a missing or broken route. Yellow means built/live but not fully menu-connected or smoke-verified, or the selected attention route (${manualAttentionRoute}) is being held in manual attention. Green means built, connected, live, and verified by the deployed smoke check used by ${SIGNAL_CHECK_COMMAND}.`,
       satelliteStatuses
     },
     body: `${failedChecks.length} failed checks across ${ledgerCommandName}.`,

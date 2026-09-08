@@ -17,6 +17,8 @@
  *      embed comparison markers and instrumentation hooks for measurement.
  *   6. Dreamweaver homepage hero — halo.html includes the adaptive Dreamweaver
  *      preview/player surface and preserves the experiment copy and routing.
+ *   7. Homepage menu reachability — the collapsible menu panel and lane stack
+ *      remain scrollable so lower navigation cards are reachable.
  *
  * Run: node scripts/deploy-health-contracts.mjs
  * Included in: npm test
@@ -290,6 +292,34 @@ await runCheck("Adaptive Dreamweaver homepage preview surface", async () => {
     "halo.html must reuse the existing quick-listen embed path for adaptive preview playback."
   );
   return "Adaptive Dreamweaver preview surface is present and wired";
+});
+
+await runCheck("Homepage menu panel and lane stack remain reachable", async () => {
+  const [haloHtml, navigationCss] = await Promise.all([
+    read("halo.html"),
+    read("mobile-navigation.css")
+  ]);
+  assert.match(
+    haloHtml,
+    /<details className="halo-mobile-menu">/,
+    "halo.html must keep the menu collapsible through the halo-mobile-menu details wrapper."
+  );
+  assert.match(
+    navigationCss,
+    /\.halo-site-actions[\s\S]*overflow-y:\s*auto;/,
+    "mobile-navigation.css must keep the menu panel vertically scrollable."
+  );
+  assert.match(
+    navigationCss,
+    /\.halo-site-actions[\s\S]*max-height:/,
+    "mobile-navigation.css must bound menu panel height so lower cards stay reachable."
+  );
+  assert.match(
+    navigationCss,
+    /@media\s*\(max-height:\s*860px\)[\s\S]*\.halo-menu-lanes[\s\S]*overflow-y:\s*auto;/,
+    "mobile-navigation.css must allow the menu lane stack to scroll on short viewports."
+  );
+  return "collapsible menu + lane stack stay scrollable for lower-card reachability";
 });
 
 await runCheck("Core public navigation routes", async () => {

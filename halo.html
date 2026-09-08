@@ -1257,6 +1257,14 @@
         ];
         const DEFAULT_MENU_ATTENTION_ROUTE = '/dreamweaver/';
         const BASE_MENU_DESTINATION_COUNT = MENU_STATUS_GROUP_TARGETS.length + 3;
+        const DEFAULT_MENU_SECTION_STATE = Object.freeze({
+          statusAttention: true,
+          statusWorking: true,
+          laneStart: true,
+          laneListen: true,
+          laneBuild: true,
+          laneCare: true
+        });
         const normalizeMenuRoutePath = (route = '') => {
           if (!route) return '/';
           let pathname = route.split('?')[0].split('#')[0] || '/';
@@ -1673,11 +1681,13 @@
           const [uploadAlertsError, setUploadAlertsError] = useState('');
           const [menuRouteStatuses, setMenuRouteStatuses] = useState(() => buildDefaultMenuRouteStatuses());
           const [menuRouteStatusesUnavailable, setMenuRouteStatusesUnavailable] = useState(false);
+          const [menuSectionState, setMenuSectionState] = useState(() => ({ ...DEFAULT_MENU_SECTION_STATE }));
           const [showRoomComposer, setShowRoomComposer] = useState(false);
           const [roomPostDraft, setRoomPostDraft] = useState({ title: '', description: '', videoUrl: '', options: ['', ''] });
           const [showEqualizer, setShowEqualizer] = useState(false);
           const [equalizer, setEqualizer] = useState({ master: 70, bass: 0, mid: 0, treble: 0 });
           const [isDreamweaverPreviewPlaying, setIsDreamweaverPreviewPlaying] = useState(false);
+          const [dreamweaverPreviewStatus, setDreamweaverPreviewStatus] = useState('checking');
           const fallbackReleaseArtwork = window.HaloReleaseArtwork?.DEFAULT_RELEASE_ARTWORK || '/assets/halo-app-icon-512.png';
           const [musicExperimentVariant] = useState(() => {
             const requested = new URLSearchParams(window.location.search).get('musicExperiment');
@@ -1808,6 +1818,9 @@
               guidance: 'Dreamweaver is reporting a break. Preview is still available, and support + fallback routes are ready now.'
             };
           })();
+          const toggleMenuSection = (section) => {
+            setMenuSectionState(current => ({ ...current, [section]: !current[section] }));
+          };
 
           const getYouTubeEmbed = (value) => {
             try {
@@ -2696,18 +2709,24 @@
           };
 
           const dreamweaverPreviewMix = roomMixes.find(mix => mix.audioUrl && mix.source !== 'youtube') || roomMixes.find(mix => mix.audioUrl) || null;
+          const dreamweaverPreviewSource = dreamweaverPreviewMix?.audioUrl || '';
           const dreamweaverRouteIndicator = menuStatusForRoute('/dreamweaver/', dreamweaverPreviewMix ? 'green' : 'yellow');
-          const dreamweaverPreviewReady = Boolean(dreamweaverPreviewMix?.audioUrl);
-          const dreamweaverPreviewLabel = dreamweaverPreviewReady
-            ? 'Route-aware playback · Preview ready'
-            : communityLoading
-              ? 'Route-aware playback · Signal checking'
-              : 'Route-aware playback · Preview standing by';
+          const dreamweaverPreviewReady = dreamweaverPreviewStatus === 'ready' && Boolean(dreamweaverPreviewSource);
+          const dreamweaverPreviewState = dreamweaverPreviewReady
+            ? { status: 'green', label: 'Preview ready', detail: 'Route-aware playback · Preview ready', chip: 'Preview ready' }
+            : dreamweaverPreviewStatus === 'unavailable'
+              ? { status: 'red', label: 'Preview unavailable', detail: 'Route-aware playback · Preview unavailable', chip: 'Preview unavailable' }
+              : dreamweaverPreviewStatus === 'checking'
+                ? { status: 'yellow', label: 'Checking preview', detail: 'Route-aware playback · Checking preview', chip: 'Checking signal' }
+                : { status: 'yellow', label: 'Preview standing by', detail: 'Route-aware playback · Preview standing by', chip: 'Signal standing by' };
+          const dreamweaverPreviewLabel = dreamweaverPreviewState.detail;
           const dreamweaverPreviewSummary = dreamweaverPreviewReady
             ? `${dreamweaverPreviewMix.title || 'Current signal'} · ${formatMixDuration(dreamweaverPreviewMix.durationSeconds)} · ${dreamweaverPreviewMix.trackCount || 1} ${(dreamweaverPreviewMix.trackCount || 1) === 1 ? 'track' : 'tracks'}`
-            : communityLoading
-              ? 'Scanning the current Dreamweaver signal from the Mix Desk.'
-              : 'No public Dreamweaver mix is live yet. The route remains open while the next preview is prepared.';
+            : dreamweaverPreviewStatus === 'unavailable'
+              ? 'This Dreamweaver preview cannot play right now. The route stays open while the audio signal is restored.'
+              : dreamweaverPreviewStatus === 'checking'
+                ? 'Checking the current Dreamweaver signal from the Mix Desk.'
+                : 'No public Dreamweaver mix is live yet. The route remains open while the next preview is prepared.';
 
           const toggleDreamweaverPreview = async () => {
             const preview = dreamweaverPreviewAudioRef.current;
@@ -2716,11 +2735,60 @@
               trackMusicExperimentAction('listening', 'homepage_experiment_dreamweaver_preview', 'native');
               try {
                 await preview.play();
-              } catch {}
+              } catch {
+                setIsDreamweaverPreviewPlaying(false);
+                setDreamweaverPreviewStatus('unavailable');
+              }
               return;
             }
             preview.pause();
           };
+
+          useEffect(() => {
+            const preview = dreamweaverPreviewAudioRef.current;
+            setIsDreamweaverPreviewPlaying(false);
+
+            if (!dreamweaverPreviewSource) {
+              setDreamweaverPreviewStatus(communityLoading ? 'checking' : 'standby');
+              if (preview) {
+                preview.pause();
+                preview.removeAttribute('src');
+                preview.load();
+              }
+              return;
+            }
+
+            if (!preview) {
+              setDreamweaverPreviewStatus('checking');
+              return;
+            }
+
+            let active = true;
+            const markReady = () => {
+              if (!active) return;
+              setDreamweaverPreviewStatus('ready');
+            };
+            const markUnavailable = () => {
+              if (!active) return;
+              setIsDreamweaverPreviewPlaying(false);
+              setDreamweaverPreviewStatus('unavailable');
+            };
+
+            setDreamweaverPreviewStatus('checking');
+            preview.pause();
+            preview.currentTime = 0;
+            preview.load();
+            preview.addEventListener('canplay', markReady);
+            preview.addEventListener('error', markUnavailable);
+
+            if (preview.readyState >= 2) markReady();
+
+            return () => {
+              active = false;
+              preview.removeEventListener('canplay', markReady);
+              preview.removeEventListener('error', markUnavailable);
+            };
+          }, [dreamweaverPreviewSource, communityLoading]);
 
           const communityAction = async (payload, notice = '') => {
             if (!identityUser) {
@@ -3539,144 +3607,186 @@
                     </div>
 
                     <div className="halo-menu-status-groups" aria-label="Satellite route status groups">
-                      <section className="halo-menu-status-group halo-menu-status-group-attention" aria-labelledby="halo-menu-status-attention">
+                      <section className={`halo-menu-status-group halo-menu-status-group-attention ${menuSectionState.statusAttention ? '' : 'is-collapsed'}`} aria-labelledby="halo-menu-status-attention">
                         <div className="halo-menu-status-group-title">
-                          <span>00</span>
-                          <h3 id="halo-menu-status-attention">Attention now</h3>
+                          <div className="halo-menu-section-heading">
+                            <span>00</span>
+                            <h3 id="halo-menu-status-attention">Attention now</h3>
+                          </div>
+                          <button type="button" className="halo-menu-section-toggle" onClick={() => toggleMenuSection('statusAttention')} aria-expanded={menuSectionState.statusAttention}>
+                            {menuSectionState.statusAttention ? 'Collapse' : 'Expand'}
+                          </button>
                         </div>
-                        {menuStatusGroupedTargets.attention.length ? (
+                        <div className="halo-menu-section-body">
+                          {menuStatusGroupedTargets.attention.length ? (
+                            <div className="halo-menu-status-buttons">
+                              {menuStatusGroupedTargets.attention.map(target => (
+                                <a key={`attention-${target.route}`} href={target.route} className="halo-menu-status-button">
+                                  <span className="halo-menu-status-label">{target.label}</span>
+                                  {renderMenuStatusBadge(target.route, target.label, 'yellow')}
+                                </a>
+                              ))}
+                            </div>
+                          ) : (
+                            <p className="halo-menu-status-empty">No active amber satellites. All monitored routes are currently working.</p>
+                          )}
+                        </div>
+                      </section>
+                      <section className={`halo-menu-status-group halo-menu-status-group-working ${menuSectionState.statusWorking ? '' : 'is-collapsed'}`} aria-labelledby="halo-menu-status-working">
+                        <div className="halo-menu-status-group-title">
+                          <div className="halo-menu-section-heading">
+                            <span>01</span>
+                            <h3 id="halo-menu-status-working">Working now</h3>
+                          </div>
+                          <button type="button" className="halo-menu-section-toggle" onClick={() => toggleMenuSection('statusWorking')} aria-expanded={menuSectionState.statusWorking}>
+                            {menuSectionState.statusWorking ? 'Collapse' : 'Expand'}
+                          </button>
+                        </div>
+                        <div className="halo-menu-section-body">
                           <div className="halo-menu-status-buttons">
-                            {menuStatusGroupedTargets.attention.map(target => (
-                              <a key={`attention-${target.route}`} href={target.route} className="halo-menu-status-button">
+                            {menuStatusGroupedTargets.working.map(target => (
+                              <a key={`working-${target.route}`} href={target.route} className="halo-menu-status-button">
                                 <span className="halo-menu-status-label">{target.label}</span>
-                                {renderMenuStatusBadge(target.route, target.label, 'yellow')}
+                                {renderMenuStatusBadge(target.route, target.label, 'green')}
                               </a>
                             ))}
                           </div>
-                        ) : (
-                          <p className="halo-menu-status-empty">No active amber satellites. All monitored routes are currently working.</p>
-                        )}
-                      </section>
-                      <section className="halo-menu-status-group halo-menu-status-group-working" aria-labelledby="halo-menu-status-working">
-                        <div className="halo-menu-status-group-title">
-                          <span>01</span>
-                          <h3 id="halo-menu-status-working">Working now</h3>
+                          {menuRouteStatusesUnavailable && (
+                            <p className="halo-menu-status-empty">Live status is refreshing. The public route map stays visible while fresh checks publish.</p>
+                          )}
                         </div>
-                        <div className="halo-menu-status-buttons">
-                          {menuStatusGroupedTargets.working.map(target => (
-                            <a key={`working-${target.route}`} href={target.route} className="halo-menu-status-button">
-                              <span className="halo-menu-status-label">{target.label}</span>
-                              {renderMenuStatusBadge(target.route, target.label, 'green')}
-                            </a>
-                          ))}
-                        </div>
-                        {menuRouteStatusesUnavailable && (
-                          <p className="halo-menu-status-empty">Live status is refreshing. The public route map stays visible while fresh checks publish.</p>
-                        )}
                       </section>
                     </div>
 
                     <div className="halo-menu-lanes">
-                      <section className="halo-menu-lane halo-menu-lane-start" aria-labelledby="halo-lane-start">
-                        <div className="halo-menu-lane-title"><span>01</span><h3 id="halo-lane-start">Arrive</h3></div>
-                        <button type="button" onClick={() => setShowFanGuide(true)} data-stat-event="open_fan_guide" data-stat-target="header" data-signal="ORIENTATION">
-                          <Icon name="users" className="halo-menu-icon" />
-                          <span><strong>NEW HERE? START HERE {renderLocalMenuStatusBadge('green', 'fan guide')}</strong><small>A two-minute map of the world</small></span>
-                        </button>
-                        {identityUser ? (
-                          <React.Fragment>
-                            <button type="button" onClick={signOut} title="Sign out of HALO" data-signal="MEMBER ONLINE">
-                              <span className="halo-member-pulse"></span>
-                              <span><strong>{identityUser.name || 'MEMBER'} {renderLocalMenuStatusBadge('green', 'member session')}</strong><small>Signed in · tap to leave</small></span>
-                            </button>
-                            <button type="button" onClick={openUploadAlertCenter} data-signal={uploadAlerts.unreadCount ? `${uploadAlerts.unreadCount} NEW` : 'UPLOAD ALERTS'}>
-                              <Icon name="bell" className="halo-menu-icon" />
-                              <span><strong>NEW MUSIC ALERTS{uploadAlerts.unreadCount ? ` · ${uploadAlerts.unreadCount}` : ''} {renderLocalMenuStatusBadge('green', 'upload alerts')}</strong><small>{uploadAlerts.enabled ? 'Pings are on for new uploads' : 'Get pinged when a mix lands'}</small></span>
-                            </button>
-                          </React.Fragment>
-                        ) : (
-                          <button type="button" onClick={() => openIdentity('login')} data-signal="MEMBER ACCESS">
-                            <span className="halo-member-pulse"></span>
-                            <span><strong>JOIN / SIGN IN {renderLocalMenuStatusBadge('green', 'member access')}</strong><small>Keep your place in the world</small></span>
+                      <section className={`halo-menu-lane halo-menu-lane-start ${menuSectionState.laneStart ? '' : 'is-collapsed'}`} aria-labelledby="halo-lane-start">
+                        <div className="halo-menu-lane-title">
+                          <div className="halo-menu-section-heading"><span>01</span><h3 id="halo-lane-start">Arrive</h3></div>
+                          <button type="button" className="halo-menu-section-toggle" onClick={() => toggleMenuSection('laneStart')} aria-expanded={menuSectionState.laneStart}>
+                            {menuSectionState.laneStart ? 'Collapse' : 'Expand'}
                           </button>
-                        )}
+                        </div>
+                        <div className="halo-menu-section-body">
+                          <button type="button" onClick={() => setShowFanGuide(true)} data-stat-event="open_fan_guide" data-stat-target="header" data-signal="ORIENTATION">
+                            <Icon name="users" className="halo-menu-icon" />
+                            <span><strong>NEW HERE? START HERE {renderLocalMenuStatusBadge('green', 'fan guide')}</strong><small>A two-minute map of the world</small></span>
+                          </button>
+                          {identityUser ? (
+                            <React.Fragment>
+                              <button type="button" onClick={signOut} title="Sign out of HALO" data-signal="MEMBER ONLINE">
+                                <span className="halo-member-pulse"></span>
+                                <span><strong>{identityUser.name || 'MEMBER'} {renderLocalMenuStatusBadge('green', 'member session')}</strong><small>Signed in · tap to leave</small></span>
+                              </button>
+                              <button type="button" onClick={openUploadAlertCenter} data-signal={uploadAlerts.unreadCount ? `${uploadAlerts.unreadCount} NEW` : 'UPLOAD ALERTS'}>
+                                <Icon name="bell" className="halo-menu-icon" />
+                                <span><strong>NEW MUSIC ALERTS{uploadAlerts.unreadCount ? ` · ${uploadAlerts.unreadCount}` : ''} {renderLocalMenuStatusBadge('green', 'upload alerts')}</strong><small>{uploadAlerts.enabled ? 'Pings are on for new uploads' : 'Get pinged when a mix lands'}</small></span>
+                              </button>
+                            </React.Fragment>
+                          ) : (
+                            <button type="button" onClick={() => openIdentity('login')} data-signal="MEMBER ACCESS">
+                              <span className="halo-member-pulse"></span>
+                              <span><strong>JOIN / SIGN IN {renderLocalMenuStatusBadge('green', 'member access')}</strong><small>Keep your place in the world</small></span>
+                            </button>
+                          )}
+                        </div>
                       </section>
 
-                      <section className="halo-menu-lane halo-menu-lane-listen" aria-labelledby="halo-lane-listen">
-                        <div className="halo-menu-lane-title"><span>02</span><h3 id="halo-lane-listen">Listen</h3></div>
-                        <a href="/music/" data-stat-event="open_music_catalog" data-stat-target="header" data-signal="CATALOG">
-                          <Icon name="music" className="halo-menu-icon" /><span><strong>ALL MUSIC {renderMenuStatusBadge('/music/', 'All Music')}</strong><small>The permanent catalog</small></span>
-                        </a>
-                        <a href="/halo-x.html" data-stat-event="open_halo_x" data-stat-target="header" data-signal="ARTIST ROOM">
-                          <Icon name="star" className="halo-menu-icon" /><span><strong>DJ HALO X {renderMenuStatusBadge('/halo-x.html', 'DJ Halo X')}</strong><small>Enter the artist universe</small></span>
-                        </a>
-                        <a href="/mixes/" data-stat-event="open_halo_x_mixes" data-stat-target="header" data-signal="MIX SERIES">
-                          <Icon name="disc" className="halo-menu-icon" /><span><strong>HALO X MIXES {renderMenuStatusBadge('/mixes/', 'Halo X Mixes')}</strong><small>Watch, stream, and own the edition</small></span>
-                        </a>
-                        <a href="/dj-deck.html" data-stat-event="open_dj_deck" data-stat-target="header" data-signal="PERFORMANCE">
-                          <Icon name="disc" className="halo-menu-icon" /><span><strong>LIVE DJ DECK {renderMenuStatusBadge('/dj-deck.html', 'Live DJ Deck')}</strong><small>Touch the performance system</small></span>
-                        </a>
-                        <a href="/halo-live.html" data-stat-event="open_halo_live" data-stat-target="header" data-signal="LIVE ROOM">
-                          <Icon name="radio" className="halo-menu-icon" /><span><strong>HALO LIVE {renderMenuStatusBadge('/halo-live.html', 'HALO Live')}</strong><small>Join the current transmission</small></span>
-                        </a>
-                        <a href="/radio/" data-stat-event="open_halo_radio" data-stat-target="header" data-signal="RADIO">
-                          <Icon name="radio" className="halo-menu-icon" /><span><strong>HALO RADIO {renderMenuStatusBadge('/radio/', 'HALO Radio')}</strong><small>Continuous world broadcast</small></span>
-                        </a>
-                      </section>
-
-                      <section className="halo-menu-lane halo-menu-lane-build" aria-labelledby="halo-lane-build">
-                        <div className="halo-menu-lane-title"><span>03</span><h3 id="halo-lane-build">Build</h3></div>
-                        <a href="/artist-pro/" data-stat-event="open_artist_pro" data-stat-target="header" data-signal="FOUNDING ARTIST OFFER">
-                          <Icon name="arrow-right" className="halo-menu-icon" /><span><strong>ARTIST PRO {renderMenuStatusBadge('/artist-pro/', 'Artist Pro')}</strong><small>One release. One command system.</small></span>
-                        </a>
-                        <a href="/creators/" data-stat-event="open_creator_world" data-stat-target="header" data-signal="CREATOR SYSTEM">
-                          <Icon name="star" className="halo-menu-icon" /><span><strong>CREATOR WORLD {renderMenuStatusBadge('/creators/', 'Creator World')}</strong><small>Tools, pathways, and artist power</small></span>
-                        </a>
-                        <a href="/artists/" data-stat-event="open_artist_rooms" data-stat-target="header" data-signal="ARTIST ROOMS">
-                          <Icon name="music" className="halo-menu-icon" /><span><strong>ARTIST ROOMS + CHARTS {renderMenuStatusBadge('/artists/', 'Artist Rooms and Charts')}</strong><small>Browse rooms, charts, and featured drops</small></span>
-                        </a>
-                        <a href="/creator-freedom/" data-stat-event="open_creator_charter" data-stat-target="header" data-signal="PUBLIC POLICY">
-                          <Icon name="book-open" className="halo-menu-icon" /><span><strong>CREATOR FREEDOM {renderMenuStatusBadge('/creator-freedom/', 'Creator Freedom')}</strong><small>White paper, seven-point charter, and public room</small></span>
-                        </a>
-                        <a href="/campaign-studio/" data-stat-event="open_campaign_studio" data-stat-target="header" data-signal="CAMPAIGN STUDIO">
-                          <Icon name="check-circle" className="halo-menu-icon" /><span><strong>CAMPAIGN STUDIO {renderMenuStatusBadge('/campaign-studio/', 'Campaign Studio')}</strong><small>Plan launch messaging and campaign flow</small></span>
-                        </a>
-                        <a href="/release-house/" data-stat-event="open_release_house" data-stat-target="header" data-signal="FIRST RELEASE">
-                          <Icon name="disc" className="halo-menu-icon" /><span><strong>RELEASE HOUSE {renderMenuStatusBadge('/release-house/', 'Release House')}</strong><small>Idea to release, one guided room at a time</small></span>
-                        </a>
-                        <a href="/song-catalog/" data-stat-event="open_song_catalog" data-stat-target="header" data-signal="MASTERS + VERSIONS">
-                          <Icon name="list-music" className="halo-menu-icon" /><span><strong>SONG CATALOG {renderMenuStatusBadge('/song-catalog/', 'Song Catalog')}</strong><small>Sale masters, radio edits, stems, and metadata review</small></span>
-                        </a>
-                        <a href="/dreamweaver/" data-stat-event="open_dreamweaver_show" data-stat-target="header" data-signal="FAN JOURNEY">
-                          <Icon name="star" className="halo-menu-icon" /><span><strong>DREAMWEAVER EXPERIENCE {renderMenuStatusBadge('/dreamweaver/', 'Dreamweaver Experience')}</strong><small>Unlock the fan path and signal campaign room</small></span>
-                        </a>
-                        <a href="/dreamweaver-lab/" data-stat-event="open_dreamweaver_song_lab" data-stat-target="header" data-signal="AUDIO TO CAMPAIGN">
-                          <Icon name="music" className="halo-menu-icon" /><span><strong>DREAMWEAVER SONG LAB {renderMenuStatusBadge('/dreamweaver-lab/', 'Dreamweaver Song Lab')}</strong><small>Load a recording. Analyze the wave. Build the release world.</small></span>
-                        </a>
-                        <a href="/album-concierge/" data-stat-event="open_album_concierge" data-stat-target="header" data-signal="CREATE YOUR ALBUM">
-                          <Icon name="heart" className="halo-menu-icon" /><span><strong>CREATE YOUR ALBUM {renderMenuStatusBadge('/album-concierge/', 'Create Your Album')}</strong><small>Album Concierge · premium, gift, and collector editions</small></span>
-                        </a>
-                        <a href="/finish-house/" data-stat-event="open_finish_house" data-stat-target="header" data-signal="MASTER + LICENSE">
-                          <Icon name="check-circle" className="halo-menu-icon" /><span><strong>FINISH HOUSE {renderMenuStatusBadge('/finish-house/', 'Finish House')}</strong><small>Mix to master to licensing-ready package</small></span>
-                        </a>
-                        <a href="/magazine.html" data-stat-event="open_halo_signal" data-stat-target="header" data-signal="EDITORIAL">
-                          <Icon name="book-open" className="halo-menu-icon" /><span><strong>HALO SIGNAL {renderMenuStatusBadge('/magazine.html', 'HALO Signal')}</strong><small>Stories from inside the world</small></span>
-                        </a>
-                        {ownerControlAccess && (
-                          <a href="/control-center" data-stat-event="open_owner_control_room" data-stat-target="header" data-signal="OWNER ONLY">
-                            <Icon name="lock" className="halo-menu-icon" /><span><strong>PRIVATE CONTROL ROOM {renderLocalMenuStatusBadge('green', 'private control room')}</strong><small>Your protected command center</small></span>
+                      <section className={`halo-menu-lane halo-menu-lane-listen ${menuSectionState.laneListen ? '' : 'is-collapsed'}`} aria-labelledby="halo-lane-listen">
+                        <div className="halo-menu-lane-title">
+                          <div className="halo-menu-section-heading"><span>02</span><h3 id="halo-lane-listen">Listen</h3></div>
+                          <button type="button" className="halo-menu-section-toggle" onClick={() => toggleMenuSection('laneListen')} aria-expanded={menuSectionState.laneListen}>
+                            {menuSectionState.laneListen ? 'Collapse' : 'Expand'}
+                          </button>
+                        </div>
+                        <div className="halo-menu-section-body">
+                          <a href="/music/" data-stat-event="open_music_catalog" data-stat-target="header" data-signal="CATALOG">
+                            <Icon name="music" className="halo-menu-icon" /><span><strong>ALL MUSIC {renderMenuStatusBadge('/music/', 'All Music')}</strong><small>The permanent catalog</small></span>
                           </a>
-                        )}
+                          <a href="/halo-x.html" data-stat-event="open_halo_x" data-stat-target="header" data-signal="ARTIST ROOM">
+                            <Icon name="star" className="halo-menu-icon" /><span><strong>DJ HALO X {renderMenuStatusBadge('/halo-x.html', 'DJ Halo X')}</strong><small>Enter the artist universe</small></span>
+                          </a>
+                          <a href="/mixes/" data-stat-event="open_halo_x_mixes" data-stat-target="header" data-signal="MIX SERIES">
+                            <Icon name="disc" className="halo-menu-icon" /><span><strong>HALO X MIXES {renderMenuStatusBadge('/mixes/', 'Halo X Mixes')}</strong><small>Watch, stream, and own the edition</small></span>
+                          </a>
+                          <a href="/dj-deck.html" data-stat-event="open_dj_deck" data-stat-target="header" data-signal="PERFORMANCE">
+                            <Icon name="disc" className="halo-menu-icon" /><span><strong>LIVE DJ DECK {renderMenuStatusBadge('/dj-deck.html', 'Live DJ Deck')}</strong><small>Touch the performance system</small></span>
+                          </a>
+                          <a href="/halo-live.html" data-stat-event="open_halo_live" data-stat-target="header" data-signal="LIVE ROOM">
+                            <Icon name="radio" className="halo-menu-icon" /><span><strong>HALO LIVE {renderMenuStatusBadge('/halo-live.html', 'HALO Live')}</strong><small>Join the current transmission</small></span>
+                          </a>
+                          <a href="/radio/" data-stat-event="open_halo_radio" data-stat-target="header" data-signal="RADIO">
+                            <Icon name="radio" className="halo-menu-icon" /><span><strong>HALO RADIO {renderMenuStatusBadge('/radio/', 'HALO Radio')}</strong><small>Continuous world broadcast</small></span>
+                          </a>
+                        </div>
                       </section>
 
-                      <section className="halo-menu-lane halo-menu-lane-care" aria-labelledby="halo-lane-care">
-                        <div className="halo-menu-lane-title"><span>04</span><h3 id="halo-lane-care">Care</h3></div>
-                        <a href="/support/" data-stat-event="open_feedback_desk" data-stat-target="header" data-signal="SYSTEM CARE">
-                          <Icon name="bug" className="halo-menu-icon" /><span><strong>FEEDBACK DESK {renderMenuStatusBadge('/support/', 'Feedback Desk')}</strong><small>Report bugs, request features, get help</small></span>
-                        </a>
-                        <button type="button" onClick={() => { setPaymentError(''); setShowPaymentModal(true); }} data-stat-event="open_payment" data-stat-target="header" data-signal="DIRECT SUPPORT">
-                          <Icon name="credit-card" className="halo-menu-icon" /><span><strong>SUPPORT HALO {renderLocalMenuStatusBadge('green', 'direct support')}</strong><small>Fuel independent infrastructure</small></span>
-                        </button>
+                      <section className={`halo-menu-lane halo-menu-lane-build ${menuSectionState.laneBuild ? '' : 'is-collapsed'}`} aria-labelledby="halo-lane-build">
+                        <div className="halo-menu-lane-title">
+                          <div className="halo-menu-section-heading"><span>03</span><h3 id="halo-lane-build">Build</h3></div>
+                          <button type="button" className="halo-menu-section-toggle" onClick={() => toggleMenuSection('laneBuild')} aria-expanded={menuSectionState.laneBuild}>
+                            {menuSectionState.laneBuild ? 'Collapse' : 'Expand'}
+                          </button>
+                        </div>
+                        <div className="halo-menu-section-body">
+                          <a href="/artist-pro/" data-stat-event="open_artist_pro" data-stat-target="header" data-signal="FOUNDING ARTIST OFFER">
+                            <Icon name="arrow-right" className="halo-menu-icon" /><span><strong>ARTIST PRO {renderMenuStatusBadge('/artist-pro/', 'Artist Pro')}</strong><small>One release. One command system.</small></span>
+                          </a>
+                          <a href="/creators/" data-stat-event="open_creator_world" data-stat-target="header" data-signal="CREATOR SYSTEM">
+                            <Icon name="star" className="halo-menu-icon" /><span><strong>CREATOR WORLD {renderMenuStatusBadge('/creators/', 'Creator World')}</strong><small>Tools, pathways, and artist power</small></span>
+                          </a>
+                          <a href="/artists/" data-stat-event="open_artist_rooms" data-stat-target="header" data-signal="ARTIST ROOMS">
+                            <Icon name="music" className="halo-menu-icon" /><span><strong>ARTIST ROOMS + CHARTS {renderMenuStatusBadge('/artists/', 'Artist Rooms and Charts')}</strong><small>Browse rooms, charts, and featured drops</small></span>
+                          </a>
+                          <a href="/creator-freedom/" data-stat-event="open_creator_charter" data-stat-target="header" data-signal="PUBLIC POLICY">
+                            <Icon name="book-open" className="halo-menu-icon" /><span><strong>CREATOR FREEDOM {renderMenuStatusBadge('/creator-freedom/', 'Creator Freedom')}</strong><small>White paper, seven-point charter, and public room</small></span>
+                          </a>
+                          <a href="/campaign-studio/" data-stat-event="open_campaign_studio" data-stat-target="header" data-signal="CAMPAIGN STUDIO">
+                            <Icon name="check-circle" className="halo-menu-icon" /><span><strong>CAMPAIGN STUDIO {renderMenuStatusBadge('/campaign-studio/', 'Campaign Studio')}</strong><small>Plan launch messaging and campaign flow</small></span>
+                          </a>
+                          <a href="/release-house/" data-stat-event="open_release_house" data-stat-target="header" data-signal="FIRST RELEASE">
+                            <Icon name="disc" className="halo-menu-icon" /><span><strong>RELEASE HOUSE {renderMenuStatusBadge('/release-house/', 'Release House')}</strong><small>Idea to release, one guided room at a time</small></span>
+                          </a>
+                          <a href="/song-catalog/" data-stat-event="open_song_catalog" data-stat-target="header" data-signal="MASTERS + VERSIONS">
+                            <Icon name="list-music" className="halo-menu-icon" /><span><strong>SONG CATALOG {renderMenuStatusBadge('/song-catalog/', 'Song Catalog')}</strong><small>Sale masters, radio edits, stems, and metadata review</small></span>
+                          </a>
+                          <a href="/dreamweaver/" data-stat-event="open_dreamweaver_show" data-stat-target="header" data-signal="FAN JOURNEY">
+                            <Icon name="star" className="halo-menu-icon" /><span><strong>DREAMWEAVER EXPERIENCE {renderMenuStatusBadge('/dreamweaver/', 'Dreamweaver Experience')}</strong><small>Unlock the fan path and signal campaign room</small></span>
+                          </a>
+                          <a href="/dreamweaver-lab/" data-stat-event="open_dreamweaver_song_lab" data-stat-target="header" data-signal="AUDIO TO CAMPAIGN">
+                            <Icon name="music" className="halo-menu-icon" /><span><strong>DREAMWEAVER SONG LAB {renderMenuStatusBadge('/dreamweaver-lab/', 'Dreamweaver Song Lab')}</strong><small>Load a recording. Analyze the wave. Build the release world.</small></span>
+                          </a>
+                          <a href="/album-concierge/" data-stat-event="open_album_concierge" data-stat-target="header" data-signal="CREATE YOUR ALBUM">
+                            <Icon name="heart" className="halo-menu-icon" /><span><strong>CREATE YOUR ALBUM {renderMenuStatusBadge('/album-concierge/', 'Create Your Album')}</strong><small>Album Concierge · premium, gift, and collector editions</small></span>
+                          </a>
+                          <a href="/finish-house/" data-stat-event="open_finish_house" data-stat-target="header" data-signal="MASTER + LICENSE">
+                            <Icon name="check-circle" className="halo-menu-icon" /><span><strong>FINISH HOUSE {renderMenuStatusBadge('/finish-house/', 'Finish House')}</strong><small>Mix to master to licensing-ready package</small></span>
+                          </a>
+                          <a href="/magazine.html" data-stat-event="open_halo_signal" data-stat-target="header" data-signal="EDITORIAL">
+                            <Icon name="book-open" className="halo-menu-icon" /><span><strong>HALO SIGNAL {renderMenuStatusBadge('/magazine.html', 'HALO Signal')}</strong><small>Stories from inside the world</small></span>
+                          </a>
+                          {ownerControlAccess && (
+                            <a href="/control-center" data-stat-event="open_owner_control_room" data-stat-target="header" data-signal="OWNER ONLY">
+                              <Icon name="lock" className="halo-menu-icon" /><span><strong>PRIVATE CONTROL ROOM {renderLocalMenuStatusBadge('green', 'private control room')}</strong><small>Your protected command center</small></span>
+                            </a>
+                          )}
+                        </div>
+                      </section>
+
+                      <section className={`halo-menu-lane halo-menu-lane-care ${menuSectionState.laneCare ? '' : 'is-collapsed'}`} aria-labelledby="halo-lane-care">
+                        <div className="halo-menu-lane-title">
+                          <div className="halo-menu-section-heading"><span>04</span><h3 id="halo-lane-care">Care</h3></div>
+                          <button type="button" className="halo-menu-section-toggle" onClick={() => toggleMenuSection('laneCare')} aria-expanded={menuSectionState.laneCare}>
+                            {menuSectionState.laneCare ? 'Collapse' : 'Expand'}
+                          </button>
+                        </div>
+                        <div className="halo-menu-section-body">
+                          <a href="/support/" data-stat-event="open_feedback_desk" data-stat-target="header" data-signal="SYSTEM CARE">
+                            <Icon name="bug" className="halo-menu-icon" /><span><strong>FEEDBACK DESK {renderMenuStatusBadge('/support/', 'Feedback Desk')}</strong><small>Report bugs, request features, get help</small></span>
+                          </a>
+                          <button type="button" onClick={() => { setPaymentError(''); setShowPaymentModal(true); }} data-stat-event="open_payment" data-stat-target="header" data-signal="DIRECT SUPPORT">
+                            <Icon name="credit-card" className="halo-menu-icon" /><span><strong>SUPPORT HALO {renderLocalMenuStatusBadge('green', 'direct support')}</strong><small>Fuel independent infrastructure</small></span>
+                          </button>
+                        </div>
                       </section>
                     </div>
 
@@ -3716,7 +3826,7 @@
                               loading="lazy"
                             />
                             <span className={`halo-home-experiment__player-chip ${dreamweaverPreviewReady ? 'halo-home-experiment__player-chip--ready' : 'halo-home-experiment__player-chip--standby'}`}>
-                              {dreamweaverPreviewReady ? 'Preview ready' : 'Signal standing by'}
+                              {dreamweaverPreviewState.chip}
                             </span>
                           </div>
 
@@ -3726,21 +3836,33 @@
                                 <p className="halo-home-experiment__signal-copy">Current signal</p>
                                 <p className="halo-home-experiment__signal-title">{dreamweaverPreviewMix?.title || 'Dreamweaver preview is scanning the current room mix.'}</p>
                               </div>
-                              {renderMenuStatusBadge('/dreamweaver/', 'Dreamweaver route', dreamweaverPreviewReady ? 'green' : 'yellow')}
+                              {renderLocalMenuStatusBadge(dreamweaverPreviewState.status, dreamweaverPreviewState.label)}
                             </div>
                             <p className="halo-home-experiment__signal-copy">{dreamweaverPreviewSummary}</p>
                             <p className="text-sm leading-6 text-gray-300">{dreamweaverPreviewMix ? `From ${dreamweaverPreviewMix.creator?.name || 'HALO'} · ${dreamweaverPreviewMix.credits?.originalArtist || 'Owen Anthony'} signal.` : 'Dreamweaver keeps the route visible even when a fresh public preview is still loading.'}</p>
+                            {!dreamweaverPreviewReady && (
+                              <p className="halo-home-experiment__note">
+                                {dreamweaverPreviewStatus === 'unavailable'
+                                  ? 'Playback is unavailable on the current public preview, so this player stays in an unavailable state instead of pretending it is ready.'
+                                  : 'This player only shows ready once the public Dreamweaver preview can actually play.'}
+                              </p>
+                            )}
                             <audio
                               id="dreamweaver-homepage-preview"
                               ref={dreamweaverPreviewAudioRef}
                               className="halo-home-experiment__audio"
                               controls
-                              preload="none"
-                              src={dreamweaverPreviewMix?.audioUrl || undefined}
+                              preload="metadata"
+                              src={dreamweaverPreviewSource || undefined}
                               aria-label="Dreamweaver homepage preview player"
+                              onCanPlay={() => setDreamweaverPreviewStatus('ready')}
                               onPlay={() => setIsDreamweaverPreviewPlaying(true)}
                               onPause={() => setIsDreamweaverPreviewPlaying(false)}
                               onEnded={() => setIsDreamweaverPreviewPlaying(false)}
+                              onError={() => {
+                                setIsDreamweaverPreviewPlaying(false);
+                                setDreamweaverPreviewStatus('unavailable');
+                              }}
                             ></audio>
                           </div>
                         </div>

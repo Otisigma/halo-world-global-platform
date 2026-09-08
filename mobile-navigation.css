@@ -145,8 +145,10 @@
   right: 0;
   z-index: 10020;
   width: min(94vw, 900px);
+  max-height: min(calc(100vh - 110px), 860px);
   padding: 18px;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
   border: 1px solid rgba(245, 158, 11, .25);
   border-radius: 24px;
   background:
@@ -159,6 +161,8 @@
   animation: halo-menu-arrive 220ms cubic-bezier(.2, .8, .2, 1) both;
   backdrop-filter: blur(24px);
   -webkit-backdrop-filter: blur(24px);
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable both-edges;
 }
 
 .halo-site-actions::before {
@@ -231,9 +235,17 @@
 .halo-menu-status-group-title {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 8px;
   margin-bottom: 8px;
   padding: 0 2px;
+}
+
+.halo-menu-section-heading {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
 }
 
 .halo-menu-status-group-title span {
@@ -298,11 +310,18 @@
   text-transform: uppercase;
 }
 
+.halo-menu-section-body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
 .halo-menu-lanes {
   display: grid;
   grid-template-columns: .95fr 1.25fr .95fr .95fr;
   gap: 10px;
   padding: 14px 0;
+  align-items: start;
 }
 
 .halo-menu-lane {
@@ -311,25 +330,23 @@
   min-width: 0;
   flex-direction: column;
   gap: 6px;
-  padding: 0 5px;
+  padding: 10px;
+  border: 1px solid rgba(255, 255, 255, .08);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, .025);
 }
 
 .halo-menu-lane:not(:last-child)::after {
-  position: absolute;
-  top: 30px;
-  right: -5px;
-  bottom: 4px;
-  width: 1px;
-  background: linear-gradient(transparent, rgba(255, 255, 255, .09), transparent);
-  content: "";
+  display: none;
 }
 
 .halo-menu-lane-title {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 7px;
   min-height: 24px;
-  padding: 0 6px;
+  padding: 0 2px;
 }
 
 .halo-menu-lane-title span {
@@ -345,8 +362,8 @@
   text-transform: uppercase;
 }
 
-.halo-menu-lane > a,
-.halo-menu-lane > button {
+.halo-menu-section-body > a,
+.halo-menu-section-body > button {
   position: relative;
   display: grid;
   min-height: 52px;
@@ -365,8 +382,8 @@
   transition: background 170ms ease, border-color 170ms ease, transform 170ms ease;
 }
 
-.halo-menu-lane > a::after,
-.halo-menu-lane > button::after {
+.halo-menu-section-body > a::after,
+.halo-menu-section-body > button::after {
   position: absolute;
   right: 7px;
   bottom: 5px;
@@ -377,20 +394,20 @@
   transition: color 170ms ease;
 }
 
-.halo-menu-lane > a:hover,
-.halo-menu-lane > button:hover,
-.halo-menu-lane > a:focus-visible,
-.halo-menu-lane > button:focus-visible {
+.halo-menu-section-body > a:hover,
+.halo-menu-section-body > button:hover,
+.halo-menu-section-body > a:focus-visible,
+.halo-menu-section-body > button:focus-visible {
   border-color: rgba(245, 158, 11, .38);
   background: rgba(245, 158, 11, .08);
   outline: none;
   transform: translateY(-2px);
 }
 
-.halo-menu-lane > a:hover::after,
-.halo-menu-lane > button:hover::after,
-.halo-menu-lane > a:focus-visible::after,
-.halo-menu-lane > button:focus-visible::after {
+.halo-menu-section-body > a:hover::after,
+.halo-menu-section-body > button:hover::after,
+.halo-menu-section-body > a:focus-visible::after,
+.halo-menu-section-body > button:focus-visible::after {
   color: rgba(232, 184, 101, .55);
 }
 
@@ -519,6 +536,34 @@
   transform: rotate(180deg) translateX(4px);
 }
 
+.halo-menu-section-toggle {
+  flex: 0 0 auto;
+  min-height: 28px;
+  padding: 0 10px;
+  border: 1px solid rgba(245, 158, 11, .26);
+  border-radius: 999px;
+  background: rgba(245, 158, 11, .08);
+  color: #f6d69b;
+  cursor: pointer;
+  font: 700 8px/1 "Share Tech Mono", ui-monospace, monospace;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  transition: border-color 170ms ease, background-color 170ms ease, color 170ms ease;
+}
+
+.halo-menu-section-toggle:hover,
+.halo-menu-section-toggle:focus-visible {
+  border-color: rgba(245, 158, 11, .5);
+  background: rgba(245, 158, 11, .14);
+  color: #fff2d5;
+  outline: none;
+}
+
+.halo-menu-status-group.is-collapsed .halo-menu-section-body,
+.halo-menu-lane.is-collapsed .halo-menu-section-body {
+  display: none;
+}
+
 .halo-install-card {
   display: none;
 }
@@ -617,7 +662,7 @@
     bottom: max(10px, env(safe-area-inset-bottom));
     left: 10px;
     width: auto;
-    max-height: none;
+    max-height: calc(100dvh - 80px);
     padding: 15px;
     overflow-y: auto;
     border-radius: 20px;
@@ -650,9 +695,15 @@
     display: none;
   }
 
-  .halo-menu-lane > a,
-  .halo-menu-lane > button {
+  .halo-menu-section-body > a,
+  .halo-menu-section-body > button {
     min-height: 50px;
+  }
+
+  .halo-menu-section-toggle {
+    min-height: 24px;
+    padding: 0 8px;
+    font-size: 7px;
   }
 
   .halo-floating-action {
@@ -763,8 +814,8 @@
     display: none;
   }
 
-  .halo-menu-lane > a,
-  .halo-menu-lane > button {
+  .halo-menu-section-body > a,
+  .halo-menu-section-body > button {
     min-height: 43px;
   }
 

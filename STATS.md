@@ -42,10 +42,10 @@ New event names or metadata fields must also be added to the allowlists in `netl
 
 ## Homepage music experience experiment (native vs quick-listen)
 
-The homepage includes an explicit comparison section to test two approaches:
+The homepage keeps an explicit comparison section while treating Variant A as the default framing:
 
-- **Variant A (primary):** Native HALO artist-home listening and support flow
-- **Variant B (comparison):** Quick-listen embed path that routes people back into HALO actions
+- **Variant A (primary framing):** Native HALO artist-home listening and support flow
+- **Variant B (comparison path):** Quick-listen embed path that routes people back into HALO actions
 
 Use `?musicExperiment=native` or `?musicExperiment=embed` to force a single variant, or load without that parameter for side-by-side comparison.
 

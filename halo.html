@@ -3773,9 +3773,9 @@
 
                       <article className="halo-home-experiment__panel halo-home-experiment__panel--copy">
                         <div>
-                          <p className="halo-home-experiment__eyebrow">Homepage Experiment</p>
-                          <h2 id="halo-home-experiment-title" className="halo-home-experiment__title">Artist-first listening test / Supporter-first model</h2>
-                          <p className="halo-home-experiment__lede">We are comparing the best listener experience and the best artist outcome. Variant A keeps the HALO-native artist home central as the brand path. Variant B is a simpler quick-listen comparison. Both paths route support back to artist-owned HALO actions, where fans become supporters and supporters are rewarded.</p>
+                          <p className="halo-home-experiment__eyebrow">Primary homepage framing</p>
+                          <h2 id="halo-home-experiment-title" className="halo-home-experiment__title">Native HALO artist home</h2>
+                          <p className="halo-home-experiment__lede">HALO should lead with the artist-owned listening and support journey. Dreamweaver stays the first musical click, while Variant B remains a quick-listen comparison that routes fans back into HALO for follows, support actions, repeat visits, and supporter conversion.</p>
                         </div>
 
                         <span className="halo-home-experiment__status-line">
@@ -4050,9 +4050,9 @@
 
                   <section id="music-experiment-detail" className="relative overflow-hidden rounded-[2rem] border border-amber-300/20 bg-[#0f0f13] shadow-[0_24px_70px_rgba(0,0,0,.35)]" aria-labelledby="music-experiment-title">
                     <div className="p-6 md:p-8">
-                      <p className="text-[9px] font-black uppercase tracking-[.28em] text-amber-300">Experiment detail / Variant scorecard</p>
-                      <h2 id="music-experiment-title" className="mt-4 font-sans-alt text-3xl font-black uppercase leading-[.9] tracking-[-.03em] text-white md:text-4xl">How the two music-home paths are being measured</h2>
-                      <p className="mt-4 max-w-3xl text-xs leading-6 text-gray-300">The hero above makes Dreamweaver the first musical click. This detail keeps the current A/B comparison, CTA instrumentation, and supporter-path markers visible for ongoing review.</p>
+                      <p className="text-[9px] font-black uppercase tracking-[.28em] text-amber-300">Experiment detail / Primary framing scorecard</p>
+                      <h2 id="music-experiment-title" className="mt-4 font-sans-alt text-3xl font-black uppercase leading-[.9] tracking-[-.03em] text-white md:text-4xl">How HALO measures the primary artist-home path</h2>
+                      <p className="mt-4 max-w-3xl text-xs leading-6 text-gray-300">The hero above keeps Dreamweaver as the first musical click while framing Variant A as the homepage default. This detail preserves the current A/B comparison, CTA instrumentation, and supporter-path markers for ongoing review.</p>
                       <p className="mt-3 text-[10px] uppercase tracking-[.18em] text-gray-500">Active test mode: {musicExperimentVariant === 'compare' ? 'A + B side-by-side' : musicExperimentVariant === 'native' ? 'A only (native)' : 'B only (embed)'}</p>
                       <div className="mt-5 overflow-x-auto rounded-2xl border border-white/10 bg-black/20">
                         <table className="min-w-full text-[10px] uppercase tracking-[.18em] text-gray-400">
@@ -4084,7 +4084,7 @@
                     <div className="grid gap-px border-t border-white/10 bg-white/10 lg:grid-cols-2">
                       {showNativeExperiment && (
                         <article className="bg-[#0b0d10] p-6 md:p-8" data-experiment-variant="native">
-                          <p className="text-[9px] font-black uppercase tracking-[.22em] text-emerald-300">Variant A (Primary): Native HALO artist home</p>
+                          <p className="text-[9px] font-black uppercase tracking-[.22em] text-emerald-300">Variant A (Primary framing): Native HALO artist home</p>
                           <h3 className="mt-4 font-sans-alt text-2xl font-black uppercase text-white">Artist-owned listening + support journey</h3>
                           <p className="mt-3 text-xs leading-6 text-gray-300">Drive listening, follows, support actions, and repeat visits inside HALO where artists control the presentation, relationship, and rewards.</p>
                           <ul className="mt-5 space-y-2 text-[11px] leading-5 text-gray-400">
@@ -4127,7 +4127,7 @@
                       )}
                       {showEmbedExperiment && (
                         <article className="bg-[#121017] p-6 md:p-8" data-experiment-variant="embed">
-                          <p className="text-[9px] font-black uppercase tracking-[.22em] text-cyan-200">Variant B (Comparison): Quick-listen embed</p>
+                          <p className="text-[9px] font-black uppercase tracking-[.22em] text-cyan-200">Variant B (Comparison path): Quick-listen embed</p>
                           <h3 className="mt-4 font-sans-alt text-2xl font-black uppercase text-white">Fast familiar player, then route back to HALO</h3>
                           <p className="mt-3 text-xs leading-6 text-gray-300">Use an embed-style listen for speed testing while keeping HALO as the destination for follows, support actions, repeat visits, and supporter conversion.</p>
                           <div className="mt-5 overflow-hidden rounded-xl border border-white/10 bg-black/40">

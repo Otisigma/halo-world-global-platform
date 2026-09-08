@@ -210,7 +210,7 @@ await runCheck("Homepage music experiment markers and tracking", async () => {
   const haloHtml = await read("halo.html");
   assert.match(
     haloHtml,
-    /Homepage Experiment[\s\S]*Artist-first listening test \/ Supporter-first model/,
+    /Primary homepage framing[\s\S]*Native HALO artist home/,
     "halo.html must include the homepage experiment framing label in the homepage hero."
   );
   assert.match(
@@ -220,12 +220,12 @@ await runCheck("Homepage music experiment markers and tracking", async () => {
   );
   assert.match(
     haloHtml,
-    /Variant A \(Primary\): Native HALO artist home/,
+    /Variant A \(Primary framing\): Native HALO artist home/,
     "halo.html must include the native HALO music-home variant marker."
   );
   assert.match(
     haloHtml,
-    /Variant B \(Comparison\): Quick-listen embed/,
+    /Variant B \(Comparison path\): Quick-listen embed/,
     "halo.html must include the embed quick-listen variant marker."
   );
   assert.match(

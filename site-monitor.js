@@ -37,7 +37,9 @@
     const style = document.createElement("style");
     style.textContent = `
       .halo-qa-launcher{position:fixed;right:16px;bottom:16px;z-index:9998;border:1px solid #c8ff36;background:#10140f;color:#efffd0;padding:10px 13px;font:700 10px/1.2 "DM Mono","Share Tech Mono",monospace;letter-spacing:.08em;text-transform:uppercase;cursor:pointer;box-shadow:0 12px 32px rgba(0,0,0,.4)}
-      .halo-qa-launcher[data-state="attention"]{border-color:#ff9b78;color:#ffd2c3}.halo-qa-launcher[data-state="healthy"]::before{content:"";display:inline-block;width:7px;height:7px;margin-right:7px;border-radius:50%;background:#c8ff36;box-shadow:0 0 0 4px rgba(200,255,54,.12)}
+      .halo-qa-launcher[data-state="attention"]{border-color:#ff9b78;color:#ffd2c3}
+      .halo-qa-launcher[data-state="broken"]{border-color:#ff6b6b;color:#ffd1d1}
+      .halo-qa-launcher[data-state="healthy"]::before{content:"";display:inline-block;width:7px;height:7px;margin-right:7px;border-radius:50%;background:#c8ff36;box-shadow:0 0 0 4px rgba(200,255,54,.12)}
       .halo-qa-panel{position:fixed;right:16px;bottom:62px;z-index:9999;width:min(390px,calc(100vw - 32px));max-height:min(620px,calc(100vh - 90px));overflow:auto;background:#0b0e0b;color:#f5f7f2;border:1px solid rgba(200,255,54,.4);box-shadow:0 24px 80px rgba(0,0,0,.62);font-family:"DM Mono","Share Tech Mono",monospace}.halo-qa-panel[hidden]{display:none}
       .halo-qa-head{position:sticky;top:0;display:flex;justify-content:space-between;gap:16px;align-items:flex-start;padding:17px;background:#111510;border-bottom:1px solid rgba(255,255,255,.1)}.halo-qa-head strong{display:block;font-size:13px;letter-spacing:.08em;text-transform:uppercase}.halo-qa-head span{display:block;margin-top:5px;color:#8f9a8d;font-size:9px}.halo-qa-close{border:0;background:transparent;color:#b9c1b6;font-size:18px;cursor:pointer}
       .halo-qa-list{display:grid;gap:1px;background:rgba(255,255,255,.08)}.halo-qa-card{display:grid;grid-template-columns:10px 1fr auto;gap:11px;align-items:start;padding:14px;background:#0b0e0b}.halo-qa-dot{width:8px;height:8px;margin-top:3px;border-radius:50%;background:#c8ff36}.halo-qa-card[data-state="attention"] .halo-qa-dot{background:#ff9b78}.halo-qa-copy strong{display:block;font-size:10px;text-transform:uppercase}.halo-qa-copy p{margin:5px 0 0;color:#98a096;font:400 9px/1.45 "DM Mono","Share Tech Mono",monospace}.halo-qa-count{color:#c8ff36;font-size:9px}.halo-qa-card[data-state="attention"] .halo-qa-count{color:#ff9b78}
@@ -156,9 +158,15 @@
     const render = () => {
       const checks = runChecks();
       const issueCount = checks.reduce((total, check) => total + check.count, 0);
+      const hasHighSeverityIssue = checks.some(check => !check.ok && check.severity === "high");
+      const launcherState = hasHighSeverityIssue ? "broken" : issueCount ? "attention" : "healthy";
       panel.querySelector(".halo-qa-list").innerHTML = checks.map(check => `<article class="halo-qa-card" data-state="${check.ok ? "healthy" : "attention"}"><span class="halo-qa-dot"></span><div class="halo-qa-copy"><strong>${escapeHTML(check.name)}</strong><p>${escapeHTML(check.detail)}</p></div><span class="halo-qa-count">${check.ok ? "PASS" : `${check.count} ISSUE${check.count === 1 ? "" : "S"}`}</span></article>`).join("");
-      launcher.dataset.state = issueCount ? "attention" : "healthy";
-      launcher.textContent = issueCount ? `Maintenance: ${issueCount} Alert${issueCount === 1 ? "" : "s"}` : "Maintenance: All Clear";
+      launcher.dataset.state = launcherState;
+      launcher.textContent = hasHighSeverityIssue
+        ? `Site status: BROKEN (${issueCount} alert${issueCount === 1 ? "" : "s"})`
+        : issueCount
+          ? `Site status: ATTENTION (${issueCount} alert${issueCount === 1 ? "" : "s"})`
+          : "Site status: WORKING";
       panel.querySelector(".halo-qa-time").textContent = `Last run ${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}`;
       reportFindings(checks, panel.querySelector(".halo-qa-report"));
     };

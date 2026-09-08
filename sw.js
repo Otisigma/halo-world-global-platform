@@ -1,4 +1,4 @@
-const CACHE_NAME = "halo-app-shell-v3";
+const CACHE_NAME = "halo-app-shell-v4";
 const APP_SHELL = [
   "/halo",
   "/app.webmanifest",
@@ -8,10 +8,45 @@ const APP_SHELL = [
   "/assets/halo-app-icon-512.png"
 ];
 
+const CANONICAL_ROUTE_REDIRECTS = new Map([
+  ["/artists", "/artists/"],
+  ["/artist-pro", "/artist-pro/"],
+  ["/campaign-studio", "/campaign-studio/"],
+  ["/creator-freedom", "/creator-freedom/"],
+  ["/creators", "/creators/"],
+  ["/dreamweaver", "/dreamweaver/"],
+  ["/dreamweaver-lab", "/dreamweaver-lab/"],
+  ["/finish-house", "/finish-house/"],
+  ["/iam-social", "/iam-social/"],
+  ["/mixes", "/mixes/"],
+  ["/music", "/music/"],
+  ["/radio", "/radio/"],
+  ["/release-house", "/release-house/"],
+  ["/signal", "/signal-network/"],
+  ["/song-catalog", "/song-catalog/"],
+  ["/support", "/support/"],
+  ["/youtube-studio", "/youtube-studio/"],
+  ["/dj-deck", "/dj-deck.html"],
+  ["/halo-command", "/halo-command.html"],
+  ["/halo-live", "/halo-live.html"],
+  ["/halo-x", "/halo-x.html"],
+  ["/magazine", "/magazine.html"],
+]);
+
+const CANONICAL_FILE_REDIRECTS = new Map([
+  ["/halo.html", "/halo"],
+  ["/dreamweaver/index.html", "/dreamweaver/"],
+  ["/mixes/index.html", "/mixes/"],
+  ["/music/index.html", "/music/"],
+  ["/radio/index.html", "/radio/"],
+  ["/creators/index.html", "/creators/"],
+]);
+
 function canonicalNavigationPath(pathname = "/") {
   if (!pathname || pathname === "/" || pathname === "/halo/" || pathname === "/halo.html") return "/halo";
-  if (pathname === "/dreamweaver" || pathname === "/dreamweaver/index.html") return "/dreamweaver/";
-  if (/^\/(?:music|radio|creators|mixes)\/index\.html$/.test(pathname)) return pathname.replace(/index\.html$/, "");
+  if (pathname.endsWith("/index.html")) return pathname.replace(/index\.html$/, "");
+  if (CANONICAL_FILE_REDIRECTS.has(pathname)) return CANONICAL_FILE_REDIRECTS.get(pathname);
+  if (CANONICAL_ROUTE_REDIRECTS.has(pathname)) return CANONICAL_ROUTE_REDIRECTS.get(pathname);
   return pathname;
 }
 
@@ -45,9 +80,13 @@ self.addEventListener("fetch", event => {
   if (event.request.mode !== "navigate" || event.request.method !== "GET") return;
 
   event.respondWith(
-    fetch(event.request)
+    fetch(new Request(event.request, { cache: "no-store" }))
       .then(async response => {
         if (!response.ok || response.type !== "basic") return response;
+        const contentType = (response.headers.get("content-type") || "").toLowerCase();
+        const cacheControl = (response.headers.get("cache-control") || "").toLowerCase();
+        const canCache = contentType.includes("text/html") && !cacheControl.includes("no-store");
+        if (!canCache) return response;
         const cache = await caches.open(CACHE_NAME);
         await cache.put(cacheKeyForNavigation(event.request), response.clone());
         return response;

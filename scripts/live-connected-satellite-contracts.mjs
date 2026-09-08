@@ -28,7 +28,7 @@ const satellites = [
   { name: "Support", route: "/support/", file: "support/index.html" }
 ];
 
-const [menuSource, sweepSource, commandApiSource, publicStatusApiSource, commandClientSource, docsSource, packageSource, netlifyConfigSource, navigationCssSource] = await Promise.all([
+const [menuSource, sweepSource, commandApiSource, publicStatusApiSource, commandClientSource, docsSource, packageSource, netlifyConfigSource, navigationCssSource, serviceWorkerSource, siteMonitorSource] = await Promise.all([
   read("halo.html"),
   read("netlify/lib/maintenance-sweep.mjs"),
   read("netlify/functions/halo-agent-team.mjs"),
@@ -37,7 +37,9 @@ const [menuSource, sweepSource, commandApiSource, publicStatusApiSource, command
   read("HALO_AGENT_TEAM.md"),
   read("package.json"),
   read("netlify.toml"),
-  read("mobile-navigation.css")
+  read("mobile-navigation.css"),
+  read("sw.js"),
+  read("site-monitor.js")
 ]);
 
 const redirectAliases = new Set([...netlifyConfigSource.matchAll(/^\s*from\s*=\s*["']([^"']+)["']/gm)].map(match => match[1]));
@@ -78,6 +80,10 @@ assert.match(menuSource, /AI ALERTED/, "Main menu badges must expose the AI repa
 assert.match(navigationCssSource, /\.halo-menu-route-status-current/, "Current-page status styling must exist.");
 assert.match(sweepSource, /halo-signal-check/, "The maintenance sweep must write halo-signal-check into the Halo Ledger.");
 assert.match(sweepSource, /repairStatus/, "Unhealthy satellite statuses must queue an AI-assisted repair handoff.");
+assert.match(serviceWorkerSource, /cache:\s*"no-store"/, "Service worker navigation requests must bypass stale HTTP cache.");
+assert.match(serviceWorkerSource, /CANONICAL_FILE_REDIRECTS/, "Service worker must normalize direct file entry routes.");
+assert.match(siteMonitorSource, /Site status:\s*WORKING/, "Public monitor must expose an immediate working status signal.");
+assert.match(siteMonitorSource, /Site status:\s*BROKEN/, "Public monitor must expose an immediate broken status signal.");
 assert.match(docsSource, /## halo-signal-check/, "The canonical halo-signal-check README section must exist.");
 assert.equal(packageJson.scripts["halo-signal-check"], "node scripts/live-connected-satellite-contracts.mjs", "package.json must expose halo-signal-check as the canonical repo command.");
 

@@ -5,28 +5,26 @@ import { fileURLToPath } from "node:url";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const page = await readFile(resolve(root, "halo.html"), "utf8");
-const releaseMatch = page.match(/const FEATURED_RELEASE = \{([\s\S]*?)\n        \};/);
+const configMatch = page.match(/<script id="haloFeaturedReleaseConfig" type="application\/json">\s*([\s\S]*?)\s*<\/script>/);
 
-assert.ok(releaseMatch, "FEATURED_RELEASE must remain the homepage feature source");
+assert.ok(configMatch, "haloFeaturedReleaseConfig must remain the homepage feature source");
 
-const releaseSource = releaseMatch[1];
-const stringField = field => {
-  const match = releaseSource.match(new RegExp(`${field}:\\s*'([^']+)'`));
-  assert.ok(match, `FEATURED_RELEASE.${field} must be defined`);
-  return match[1];
-};
-
-const releaseId = stringField("id");
-const title = stringField("title");
-const artwork = stringField("artwork");
-const url = stringField("url");
-const description = stringField("description");
+const release = JSON.parse(configMatch[1]);
+const releaseId = release.id;
+const title = release.title;
+const artwork = release.artwork;
+const url = release.url;
+const description = release.description;
 
 assert.equal(title, "When The World Goes Dark");
 assert.equal(artwork, `/assets/releases/${releaseId}.jpg`);
 assert.equal(url, `/${releaseId}/`);
 assert.ok(description.length >= 80, "featured release description must be editorially complete");
-assert.match(releaseSource, /titleLines:/);
+assert.ok(Array.isArray(release.titleLines) && release.titleLines.length > 0, "featured release title lines must be defined in the config");
+assert.ok(Array.isArray(release.roles) && release.roles.length > 0, "featured release roles must remain configurable");
+assert.match(page, /const DEFAULT_FEATURED_RELEASE = \{/);
+assert.match(page, /JSON\.parse\(configNode\.textContent\)/);
+assert.match(page, /FEATURED_RELEASE = Object\.freeze/);
 assert.match(page, /FEATURED_RELEASE\.titleLines\.map/);
 assert.match(page, /\{FEATURED_RELEASE\.description\}/);
 assert.doesNotMatch(page, /The Cold Is<br\/>/);

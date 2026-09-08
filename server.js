@@ -78,6 +78,14 @@ const canonicalRouteRedirects = new Map([
   ["/halo-x", "/halo-x.html"],
   ["/magazine", "/magazine.html"],
 ]);
+const canonicalFileRedirects = new Map([
+  ["/halo.html", "/halo"],
+  ["/dreamweaver/index.html", "/dreamweaver/"],
+  ["/mixes/index.html", "/mixes/"],
+  ["/music/index.html", "/music/"],
+  ["/radio/index.html", "/radio/"],
+  ["/creators/index.html", "/creators/"],
+]);
 const rateLimitWindowMs = 60_000;
 const rateLimitMaxRequests = Number(process.env.STATIC_REQUEST_LIMIT || 240);
 const recentRequestBuckets = new Map();
@@ -195,11 +203,21 @@ app.get("/album-concierge/", (_req, res) =>
   sendFileIfPresent(res, path.join("album-concierge", "index.html"))
 );
 
+app.get("/sw.js", (_req, res) => {
+  res.set("Cache-Control", "no-cache, no-store, must-revalidate");
+  return sendFileIfPresent(res, "sw.js");
+});
+
 app.get("*", (req, res, next) => {
   const routePath = decodeURIComponent(req.path);
   const relativePath = routePath.replace(/^\/+/, "");
   const searchSuffix = new URL(req.originalUrl, "http://localhost").search;
   if (!relativePath) return next();
+
+  const fileRedirect = canonicalFileRedirects.get(routePath);
+  if (fileRedirect) {
+    return res.redirect(301, `${fileRedirect}${searchSuffix}`);
+  }
 
   const extension = path.extname(relativePath).toLowerCase();
   if (extension && allowedExtensions.has(extension)) {

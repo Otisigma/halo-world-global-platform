@@ -3,7 +3,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const pages = ["halo.html", "magazine.html", "dj-deck.html", "vip_launchpad.html", "halo-live.html", "halo-x.html", "halo-relations.html", "halo-command.html", "artist-team.html", "creators/index.html", "creators/gear-guide.html", "music/index.html", "mixes/index.html", "artists/index.html"];
+const pages = ["halo.html", "magazine.html", "dj-deck.html", "vip_launchpad.html", "halo-live.html", "halo-x.html", "halo-relations.html", "halo-command.html", "artist-team.html", "creators/index.html", "creators/gear-guide.html", "dreamweaver/index.html", "music/index.html", "mixes/index.html", "radio/index.html", "artists/index.html"];
 const results = [];
 const netlifyConfigSource = await readFile(resolve(root, "netlify.toml"), "utf8");
 const redirectAliases = new Set([...netlifyConfigSource.matchAll(/^\s*from\s*=\s*["']([^"']+)["']/gm)].map(match => match[1]));

@@ -16,6 +16,7 @@
     toast: document.querySelector("#catalogToast")
   };
   const state = { releases: [], videos: [], query: "", genre: "all", sort: "newest", chartRoom: "all", chartSort: "signal", activeReleaseId: "" };
+  const configuredFeaturedReleaseId = elements.featured?.dataset.featuredReleaseId?.trim() || "";
   const fallbackArtwork = window.HaloReleaseArtwork?.DEFAULT_RELEASE_ARTWORK || "/assets/halo-app-icon-512.png";
   const satelliteVideoFallbackEnabled = new URLSearchParams(window.location.search).get("satellite") === "music-video-fallback";
   const chartRooms = {
@@ -379,9 +380,15 @@
   }
 
   function renderFeatured() {
-    const release = state.releases.find(r => r.featuredType === "week")
+    const release = (configuredFeaturedReleaseId
+      ? state.releases.find(candidate => candidate.id === configuredFeaturedReleaseId)
+      : null)
+      || state.releases.find(r => r.featuredType === "week")
       || state.releases.find(r => r.featuredType === "month")
       || state.releases[0];
+    if (configuredFeaturedReleaseId && release?.id !== configuredFeaturedReleaseId) {
+      logMusicIssue("music_featured_release_missing", "Configured featured release missing from catalog", { releaseId: configuredFeaturedReleaseId });
+    }
     if (!release) {
       elements.featured.innerHTML = `<div class="catalog-empty"><div><strong>The next signal is being prepared.</strong><p>Published HALO releases appear here automatically.</p></div></div>`;
       return;

@@ -15,6 +15,11 @@
     X-Robots-Tag = "noindex, nofollow"
 
 [[headers]]
+  for = "/sw.js"
+  [headers.values]
+    Cache-Control = "no-cache, no-store, must-revalidate"
+
+[[headers]]
   for = "/youtube-studio*"
   [headers.values]
     X-Robots-Tag = "noindex, nofollow"
@@ -43,6 +48,12 @@
 
 [[redirects]]
   from = "/halo/"
+  to = "/halo"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/halo.html"
   to = "/halo"
   status = 301
   force = true
@@ -144,6 +155,12 @@
   force = true
 
 [[redirects]]
+  from = "/creators/index.html"
+  to = "/creators/"
+  status = 301
+  force = true
+
+[[redirects]]
   from = "/dreamweaver"
   to = "/dreamweaver/"
   status = 301
@@ -153,6 +170,12 @@
   from = "/dreamweaver/"
   to = "/dreamweaver/index.html"
   status = 200
+  force = true
+
+[[redirects]]
+  from = "/dreamweaver/index.html"
+  to = "/dreamweaver/"
+  status = 301
   force = true
 
 [[redirects]]
@@ -180,13 +203,31 @@
   force = true
 
 [[redirects]]
+  from = "/mixes/index.html"
+  to = "/mixes/"
+  status = 301
+  force = true
+
+[[redirects]]
   from = "/music"
   to = "/music/"
   status = 301
   force = true
 
 [[redirects]]
+  from = "/music/index.html"
+  to = "/music/"
+  status = 301
+  force = true
+
+[[redirects]]
   from = "/radio"
+  to = "/radio/"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/radio/index.html"
   to = "/radio/"
   status = 301
   force = true

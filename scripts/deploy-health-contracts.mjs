@@ -294,6 +294,26 @@ await runCheck("Adaptive Dreamweaver homepage preview surface", async () => {
   return "Adaptive Dreamweaver preview surface is present and wired";
 });
 
+await runCheck("Homepage featured release configuration", async () => {
+  const haloHtml = await read("halo.html");
+  assert.match(
+    haloHtml,
+    /id="haloFeaturedReleaseConfig"/,
+    "halo.html must expose the featured release through a dedicated JSON config node."
+  );
+  assert.match(
+    haloHtml,
+    /JSON\.parse\(configNode\.textContent\)/,
+    "halo.html must parse the featured release config instead of relying only on an inline hardcoded object."
+  );
+  assert.match(
+    haloHtml,
+    /FEATURED_RELEASE = Object\.freeze/,
+    "halo.html must freeze the resolved featured release configuration before rendering it."
+  );
+  return "homepage spotlight stays explicitly configurable";
+});
+
 await runCheck("Homepage menu panel and lane stack remain reachable", async () => {
   const [haloHtml, navigationCss] = await Promise.all([
     read("halo.html"),
@@ -348,10 +368,11 @@ await runCheck("Core public navigation routes", async () => {
 });
 
 await runCheck("Canonical menu route aliases", async () => {
-  const [haloHtml, serverJs, netlifyConfig] = await Promise.all([
+  const [haloHtml, serverJs, netlifyConfig, serviceWorker] = await Promise.all([
     read("halo.html"),
     read("server.js"),
-    read("netlify.toml")
+    read("netlify.toml"),
+    read("sw.js")
   ]);
 
   for (const href of ["href=\"/dj-deck.html\"", "href=\"/halo-live.html\"", "href=\"/halo-x.html\""]) {
@@ -362,22 +383,33 @@ await runCheck("Canonical menu route aliases", async () => {
     ["/artists", "/artists/"],
     ["/creator-freedom", "/creator-freedom/"],
     ["/creators", "/creators/"],
+    ["/creators/index.html", "/creators/"],
     ["/finish-house", "/finish-house/"],
     ["/mixes", "/mixes/"],
+    ["/mixes/index.html", "/mixes/"],
     ["/music", "/music/"],
+    ["/music/index.html", "/music/"],
     ["/radio", "/radio/"],
+    ["/radio/index.html", "/radio/"],
     ["/support", "/support/"],
     ["/dj-deck", "/dj-deck.html"],
+    ["/halo.html", "/halo"],
     ["/halo-live", "/halo-live.html"],
     ["/halo-x", "/halo-x.html"],
-    ["/magazine", "/magazine.html"]
+    ["/magazine", "/magazine.html"],
+    ["/dreamweaver/index.html", "/dreamweaver/"]
   ]) {
     assert.match(netlifyConfig, new RegExp(`from = "${from.replace(/[.*+?^${}()|[\\]\\]/g, "\\$&")}"[\\s\\S]*to = "${to.replace(/[.*+?^${}()|[\\]\\]/g, "\\$&")}"`), `netlify.toml must canonicalize ${from} to ${to}.`);
   }
 
   assert.match(serverJs, /app\.get\("\/control-center"/, "server.js must serve the control-center alias locally.");
   assert.match(serverJs, /canonicalRouteRedirects = new Map\(/, "server.js must declare explicit canonical route aliases.");
+  assert.match(serverJs, /canonicalFileRedirects = new Map\(/, "server.js must declare explicit direct-file canonical redirects.");
   assert.match(serverJs, /canonicalRouteRedirects\.get\(routePath\)/, "server.js must use the canonical route alias map at runtime.");
+  assert.match(serverJs, /canonicalFileRedirects\.get\(routePath\)/, "server.js must normalize direct file entrypoints at runtime.");
+  assert.match(netlifyConfig, /for = "\/sw\.js"[\s\S]*Cache-Control = "no-cache, no-store, must-revalidate"/, "netlify.toml must force fresh service worker checks.");
+  assert.match(serviceWorker, /const APP_SHELL = \[\s*"\/halo"/, "sw.js must precache the canonical HALO landing route.");
+  assert.match(serviceWorker, /canonicalNavigationPath/, "sw.js must normalize navigations before caching.");
 
   return "menu routes stay canonical across halo.html, netlify.toml, and server.js";
 });

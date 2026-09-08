@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { access, readFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { HALO_BUTTON_WATCHER_REGISTRY, canonicalizeWatcherTarget } from "../lib/watcher-registry.js";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const read = path => readFile(resolve(root, path), "utf8");
@@ -28,7 +29,7 @@ const satellites = [
   { name: "Support", route: "/support/", file: "support/index.html" }
 ];
 
-const [menuSource, sweepSource, commandApiSource, publicStatusApiSource, commandClientSource, docsSource, packageSource, netlifyConfigSource, navigationCssSource] = await Promise.all([
+const [menuSource, sweepSource, commandApiSource, publicStatusApiSource, commandClientSource, docsSource, packageSource, netlifyConfigSource, navigationCssSource, siteMonitorSource, djDeckSource, haloLiveSource, musicSource, radioSource, creatorsSource, magazineSource] = await Promise.all([
   read("halo.html"),
   read("netlify/lib/maintenance-sweep.mjs"),
   read("netlify/functions/halo-agent-team.mjs"),
@@ -37,7 +38,14 @@ const [menuSource, sweepSource, commandApiSource, publicStatusApiSource, command
   read("HALO_AGENT_TEAM.md"),
   read("package.json"),
   read("netlify.toml"),
-  read("mobile-navigation.css")
+  read("mobile-navigation.css"),
+  read("site-monitor.js"),
+  read("dj-deck.html"),
+  read("halo-live.html"),
+  read("music/index.html"),
+  read("radio/index.html"),
+  read("creators/index.html"),
+  read("magazine.html")
 ]);
 
 const redirectAliases = new Set([...netlifyConfigSource.matchAll(/^\s*from\s*=\s*["']([^"']+)["']/gm)].map(match => match[1]));
@@ -78,8 +86,27 @@ assert.match(menuSource, /AI ALERTED/, "Main menu badges must expose the AI repa
 assert.match(navigationCssSource, /\.halo-menu-route-status-current/, "Current-page status styling must exist.");
 assert.match(sweepSource, /halo-signal-check/, "The maintenance sweep must write halo-signal-check into the Halo Ledger.");
 assert.match(sweepSource, /repairStatus/, "Unhealthy satellite statuses must queue an AI-assisted repair handoff.");
+assert.match(siteMonitorSource, /Dash AI Link Aggregator/, "The site monitor must expose a Dash AI aggregation check.");
+assert.match(siteMonitorSource, /halo:dash-ai-update/, "The site monitor must broadcast Dash AI status updates.");
+assert.match(siteMonitorSource, /ownerAgent/, "Dash AI issue routing metadata must include owning fix agents.");
 assert.match(docsSource, /## halo-signal-check/, "The canonical halo-signal-check README section must exist.");
 assert.equal(packageJson.scripts["halo-signal-check"], "node scripts/live-connected-satellite-contracts.mjs", "package.json must expose halo-signal-check as the canonical repo command.");
+assert.ok(HALO_BUTTON_WATCHER_REGISTRY.length >= 20, "Watcher registry must cover major buttons and links.");
+
+const blockedLegacyTargets = new Set(["/", "/halo/", "/halo.html", "/music", "/music/index.html", "/radio", "/radio/index.html", "/creators", "/creators/index.html", "/dj-deck", "/halo-live", "/halo-x", "/magazine"]);
+for (const watcher of HALO_BUTTON_WATCHER_REGISTRY) {
+  assert.ok(watcher.id && watcher.label && watcher.pageRoute && watcher.target && watcher.expectedBehavior && watcher.ownerAgent, `Watcher ${watcher.id || "unknown"} must include id, label, pageRoute, target, expectedBehavior, and ownerAgent.`);
+  assert.equal(canonicalizeWatcherTarget(watcher.target), watcher.target, `Watcher ${watcher.id} must use canonical route targets.`);
+  assert.ok(!blockedLegacyTargets.has(watcher.target), `Watcher ${watcher.id} must not use legacy route target ${watcher.target}.`);
+}
+
+assert.doesNotMatch(djDeckSource, /href="\/halo-live"/, "DJ Deck links must use canonical HALO Live route.");
+assert.doesNotMatch(djDeckSource, /href="\/halo-x"/, "DJ Deck links must use canonical HALO X route.");
+assert.doesNotMatch(haloLiveSource, /href="\/dj-deck"/, "HALO Live links must use canonical DJ deck route.");
+assert.doesNotMatch(musicSource, /href="\/"/, "Music route-to-home links must point to /halo.");
+assert.doesNotMatch(radioSource, /href="\/"/, "Radio route-to-home links must point to /halo.");
+assert.doesNotMatch(creatorsSource, /href="\/"/, "Creators route-to-home links must point to /halo.");
+assert.doesNotMatch(magazineSource, /href="\/"/, "Magazine route-to-home links must point to /halo.");
 
 const failures = [];
 for (const satellite of satellites) {

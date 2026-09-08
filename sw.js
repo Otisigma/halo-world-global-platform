@@ -1,4 +1,4 @@
-const CACHE_NAME = "halo-app-shell-v3";
+const CACHE_NAME = "halo-app-shell-v4";
 const APP_SHELL = [
   "/halo",
   "/app.webmanifest",
@@ -11,6 +11,11 @@ const APP_SHELL = [
 function canonicalNavigationPath(pathname = "/") {
   if (!pathname || pathname === "/" || pathname === "/halo/" || pathname === "/halo.html") return "/halo";
   if (pathname === "/dreamweaver" || pathname === "/dreamweaver/index.html") return "/dreamweaver/";
+  if (pathname === "/dj-deck") return "/dj-deck.html";
+  if (pathname === "/halo-live") return "/halo-live.html";
+  if (pathname === "/halo-x") return "/halo-x.html";
+  if (pathname === "/magazine") return "/magazine.html";
+  if (pathname === "/halo-command") return "/halo-command.html";
   if (/^\/(?:music|radio|creators|mixes)\/index\.html$/.test(pathname)) return pathname.replace(/index\.html$/, "");
   return pathname;
 }
@@ -45,7 +50,7 @@ self.addEventListener("fetch", event => {
   if (event.request.mode !== "navigate" || event.request.method !== "GET") return;
 
   event.respondWith(
-    fetch(event.request)
+    fetch(event.request, { cache: "no-store" })
       .then(async response => {
         if (!response.ok || response.type !== "basic") return response;
         const cache = await caches.open(CACHE_NAME);

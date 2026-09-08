@@ -11,6 +11,7 @@
     approval_event: "Approval",
     agent_activity: "Agent",
     feature_request: "Feature Ask",
+    route_health: "Route Health",
     system_event: "System",
   };
 

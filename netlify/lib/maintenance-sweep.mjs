@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { issueKeyForFingerprint, reportIssue, resolveIssue } from "./maintenance.mjs";
-import { appendLedgerEntry } from "./halo-ledger.mjs";
+import { appendLedgerEntry, appendRouteHealthEntry } from "./halo-ledger.mjs";
 import { CANONICAL_HOME_ROUTE, SATELLITE_STATUS_TARGETS, canonicalizeRoutePath } from "../../lib/route-registry.js";
 
 export { SATELLITE_STATUS_TARGETS };
@@ -119,6 +119,13 @@ function isHtml(response, body) {
 
 function normalizeRoute(pathname) {
   return canonicalizeRoutePath(pathname);
+}
+
+function routeHealthStateFromStatus(statusRecord) {
+  if (!statusRecord.connected) return "disconnected";
+  if (statusRecord.status === "green") return "working";
+  if (!statusRecord.built || !statusRecord.live) return "broken";
+  return "attention";
 }
 
 async function requestTarget(url, options = {}) {
@@ -330,6 +337,29 @@ export async function runMaintenanceSweep(db, baseUrl, { triggerType = "schedule
   const liveCount = satelliteStatuses.filter(item => item.live).length;
   const connectedCount = satelliteStatuses.filter(item => item.connected).length;
   const verifiedCount = satelliteStatuses.filter(item => item.verified).length;
+  const routeStates = satelliteStatuses.map(item => ({
+    name: item.name,
+    route: item.route,
+    state: routeHealthStateFromStatus(item),
+    built: item.built,
+    live: item.live,
+    connected: item.connected,
+    verified: item.verified
+  }));
+  const stateCounts = routeStates.reduce((acc, item) => {
+    acc[item.state] += 1;
+    return acc;
+  }, {
+    working: 0,
+    attention: 0,
+    broken: 0,
+    disconnected: 0
+  });
+  const chartStatus = stateCounts.broken > 0
+    ? "broken"
+    : stateCounts.attention > 0 || stateCounts.disconnected > 0
+      ? "attention"
+      : "working";
   const ledgerCommandName = commandName || "run_maintenance";
   const outputsChecked = OUTPUT_CHECKS.length + (SATELLITE_STATUS_TARGETS.length * 2);
   await db.sql`
@@ -365,6 +395,10 @@ export async function runMaintenanceSweep(db, baseUrl, { triggerType = "schedule
       liveCount,
       connectedCount,
       verifiedCount,
+      routeHealthChart: {
+        status: chartStatus,
+        counts: stateCounts
+      },
       passedChecks,
       failedChecks: failedChecks.length,
       failures: failedChecks.map(check => ({
@@ -377,6 +411,18 @@ export async function runMaintenanceSweep(db, baseUrl, { triggerType = "schedule
     },
     body: `${failedChecks.length} failed checks across ${ledgerCommandName}.`,
     outcome: status === "passed" ? "success" : "failure"
+  });
+
+  await appendRouteHealthEntry(db, {
+    actorId: "system",
+    actorType: "system",
+    pagePath: CANONICAL_HOME_ROUTE,
+    chartStatus,
+    stateCounts,
+    routeStates,
+    triggerType,
+    commandName: ledgerCommandName,
+    notes: `Snapshot from ${ledgerCommandName} (${status}).`
   });
 
   await Promise.allSettled(checks.map(reconcileIssue));

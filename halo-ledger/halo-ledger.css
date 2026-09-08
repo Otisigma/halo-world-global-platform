@@ -208,6 +208,7 @@
 .ledger-category-badge[data-category="approval_event"]   { background: #1a2d3a; color: #38bdf8; }
 .ledger-category-badge[data-category="agent_activity"]   { background: #2a1a3a; color: #c084fc; }
 .ledger-category-badge[data-category="feature_request"]  { background: #2a1a1a; color: #fb923c; }
+.ledger-category-badge[data-category="route_health"]     { background: #1d2e22; color: #86efac; }
 .ledger-category-badge[data-category="system_event"]     { background: #1f1f1f; color: #94a3b8; }
 
 .ledger-entry-summary {

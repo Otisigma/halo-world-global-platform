@@ -16,9 +16,11 @@ const read = path => readFile(resolve(root, path), "utf8");
 const satellites = MENU_ROUTE_REGISTRY.map(({ name, route, file }) => ({ name, route, file }));
 const publicRouteFiles = [...new Set([...PUBLIC_ROUTE_REGISTRY.map(route => route.file), "index.html"])];
 
-const [menuSource, sweepSource, commandApiSource, publicStatusApiSource, commandClientSource, docsSource, packageSource, netlifyConfigSource, navigationCssSource, siteMonitorSource, mobileNavigationSource, serverSource, swSource, djDeckSource, haloLiveSource, musicSource, radioSource, creatorsSource, magazineSource, ...publicPageSources] = await Promise.all([
+const [menuSource, sweepSource, ledgerSource, routeHealthMigrationSource, commandApiSource, publicStatusApiSource, commandClientSource, docsSource, packageSource, netlifyConfigSource, navigationCssSource, siteMonitorSource, mobileNavigationSource, serverSource, swSource, djDeckSource, haloLiveSource, musicSource, radioSource, creatorsSource, magazineSource, ...publicPageSources] = await Promise.all([
   read("halo.html"),
   read("netlify/lib/maintenance-sweep.mjs"),
+  read("netlify/lib/halo-ledger.mjs"),
+  read("netlify/database/migrations/20260908234500_create_halo_route_health_entries.sql"),
   read("netlify/functions/halo-agent-team.mjs"),
   read("netlify/functions/halo-satellite-status.mjs"),
   read("halo-command.js"),
@@ -84,6 +86,12 @@ assert.match(menuSource, /halo-menu-route-status-current/, "Main menu badges mus
 assert.match(menuSource, /AI ALERTED/, "Main menu badges must expose the AI repair handoff for unhealthy routes.");
 assert.match(navigationCssSource, /\.halo-menu-route-status-current/, "Current-page status styling must exist.");
 assert.match(sweepSource, /halo-signal-check/, "The maintenance sweep must write halo-signal-check into the Halo Ledger.");
+assert.match(ledgerSource, /route_health/, "Halo Ledger categories must include route_health.");
+assert.match(ledgerSource, /appendRouteHealthEntry/, "Halo Ledger must expose a route-health append helper.");
+assert.match(routeHealthMigrationSource, /CREATE TABLE IF NOT EXISTS halo_route_health_entries/, "Route-health persistence migration must exist.");
+assert.match(routeHealthMigrationSource, /chart_status IN \('working', 'attention', 'broken', 'disconnected'\)/, "Route-health persistence must preserve working/attention/broken/disconnected states.");
+assert.match(sweepSource, /appendRouteHealthEntry/, "The route-health chart producer must append route-health snapshots to the ledger.");
+assert.match(sweepSource, /disconnected/, "Route-health snapshots must include disconnected state coverage.");
 assert.match(sweepSource, /SATELLITE_STATUS_TARGETS/, "The maintenance sweep must use the shared satellite route registry.");
 assert.match(sweepSource, /canonicalizeRoutePath/, "The maintenance sweep must use the shared canonical route normalizer.");
 assert.match(sweepSource, /CANONICAL_HOME_ROUTE/, "The maintenance sweep must compare menu connections against the canonical home route.");

@@ -95,6 +95,12 @@ assert.match(serverSource, /CANONICAL_ROUTE_ALIAS_ENTRIES/, "The local static se
 assert.match(serverSource, /canonicalRouteRedirects = new Map/, "The local static server must build redirects from the shared canonical route map.");
 assert.match(swSource, /canonicalizeRoutePath/, "The service worker must use the shared canonical route map.");
 assert.match(mobileNavigationSource, /type:\s*"module"/, "The service worker must register as a module so it can import the shared canonical route map.");
+assert.match(swSource, /halo-app-shell-v4/, "Service worker must use the v4 shell cache namespace.");
+assert.match(swSource, /cache:\s*"no-store"/, "Service worker navigation requests must bypass stale HTTP cache.");
+assert.match(swSource, /contentType\.includes\("text\/html"\)\s*&&\s*!cacheControl\.includes\("no-store"\)/, "Service worker must only cache cacheable HTML navigation responses.");
+assert.match(siteMonitorSource, /Site status:\s*WORKING/, "Public monitor must expose an immediate working status signal.");
+assert.match(siteMonitorSource, /Site status:\s*ATTENTION/, "Public monitor must expose an immediate attention status signal.");
+assert.match(siteMonitorSource, /Site status:\s*BROKEN/, "Public monitor must expose an immediate broken status signal.");
 assert.match(docsSource, /## halo-signal-check/, "The canonical halo-signal-check README section must exist.");
 assert.equal(packageJson.scripts["halo-signal-check"], "node scripts/live-connected-satellite-contracts.mjs", "package.json must expose halo-signal-check as the canonical repo command.");
 assert.ok(HALO_BUTTON_WATCHER_REGISTRY.length >= 20, "Watcher registry must cover major buttons and links.");

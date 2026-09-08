@@ -385,7 +385,8 @@ await runCheck("Canonical menu route aliases", async () => {
   }
 
   assert.match(serverJs, /app\.get\("\/control-center"/, "server.js must serve the control-center alias locally.");
-  assert.match(serverJs, /canonicalizeRoutePath/, "server.js must use the shared canonical route alias map at runtime.");
+  assert.match(serverJs, /CANONICAL_ROUTE_ALIAS_ENTRIES/, "server.js must use the shared canonical route alias map at runtime.");
+  assert.match(serverJs, /canonicalRouteRedirects = new Map\(/, "server.js must build explicit redirect allowlists from the shared route registry.");
   assert.match(netlifyConfig, /for = "\/sw\.js"[\s\S]*Cache-Control = "no-cache, no-store, must-revalidate"/, "netlify.toml must force fresh service worker checks.");
   assert.match(serviceWorker, /const APP_SHELL = \[\s*CANONICAL_HOME_ROUTE/, "sw.js must precache the canonical HALO landing route.");
   assert.match(serviceWorker, /canonicalizeRoutePath/, "sw.js must normalize navigations before caching.");

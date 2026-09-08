@@ -91,7 +91,8 @@ assert.match(sweepSource, /repairStatus/, "Unhealthy satellite statuses must que
 assert.match(siteMonitorSource, /Dash AI Link Aggregator/, "The site monitor must expose a Dash AI aggregation check.");
 assert.match(siteMonitorSource, /halo:dash-ai-update/, "The site monitor must broadcast Dash AI status updates.");
 assert.match(siteMonitorSource, /ownerAgent/, "Dash AI issue routing metadata must include owning fix agents.");
-assert.match(serverSource, /canonicalizeRoutePath/, "The local static server must use the shared canonical route map.");
+assert.match(serverSource, /CANONICAL_ROUTE_ALIAS_ENTRIES/, "The local static server must use the shared canonical route map.");
+assert.match(serverSource, /canonicalRouteRedirects = new Map/, "The local static server must build redirects from the shared canonical route map.");
 assert.match(swSource, /canonicalizeRoutePath/, "The service worker must use the shared canonical route map.");
 assert.match(mobileNavigationSource, /type:\s*"module"/, "The service worker must register as a module so it can import the shared canonical route map.");
 assert.match(docsSource, /## halo-signal-check/, "The canonical halo-signal-check README section must exist.");

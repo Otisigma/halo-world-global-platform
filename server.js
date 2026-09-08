@@ -2,7 +2,7 @@ import express from "express";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { canonicalizeRoutePath } from "./lib/route-registry.js";
+import { CANONICAL_ROUTE_ALIAS_ENTRIES } from "./lib/route-registry.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -55,6 +55,7 @@ const allowedExtensions = new Set([
   ".mp4",
   ".webm",
 ]);
+const canonicalRouteRedirects = new Map(CANONICAL_ROUTE_ALIAS_ENTRIES.map(({ from, to }) => [from, to]));
 const rateLimitWindowMs = 60_000;
 const rateLimitMaxRequests = Number(process.env.STATIC_REQUEST_LIMIT || 240);
 const recentRequestBuckets = new Map();
@@ -183,8 +184,8 @@ app.get("*", (req, res, next) => {
   const searchSuffix = new URL(req.originalUrl, "http://localhost").search;
   if (!relativePath) return next();
 
-  const canonicalRoute = canonicalizeRoutePath(routePath);
-  if (canonicalRoute !== routePath) return res.redirect(301, `${canonicalRoute}${searchSuffix}`);
+  const canonicalRoute = canonicalRouteRedirects.get(routePath);
+  if (canonicalRoute) return res.redirect(301, `${canonicalRoute}${searchSuffix}`);
 
   const extension = path.extname(relativePath).toLowerCase();
   if (extension && allowedExtensions.has(extension)) {

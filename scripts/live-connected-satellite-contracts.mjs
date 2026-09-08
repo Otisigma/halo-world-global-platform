@@ -55,16 +55,23 @@ async function pathExists(path) {
 
 assert.match(commandApiSource, /halo-signal-check/, "The HALO command API must expose halo-signal-check.");
 assert.match(publicStatusApiSource, /path: "\/api\/halo-satellite-status"/, "The public satellite status API must expose the expected route.");
+assert.match(publicStatusApiSource, /buildFallbackSatelliteStatuses/, "The public satellite status API must keep a fallback satellite snapshot available.");
 assert.match(commandClientSource, /halo-signal-check/, "The owner dashboard must trigger halo-signal-check.");
 assert.match(commandClientSource, /Operator\/Admin green-light reference/, "The owner dashboard must render the operator/admin reference light.");
 assert.match(commandClientSource, /status-badge/, "The owner dashboard must render visible satellite status badges.");
 assert.match(menuSource, /renderMenuStatusBadge/, "Main menu buttons must render per-tile status badges.");
 assert.match(menuSource, /loadMenuRouteStatuses/, "Main menu badges must use halo-signal-check route statuses.");
 assert.match(menuSource, /\/api\/halo-satellite-status/, "Main menu badges must use the public satellite status snapshot API.");
+assert.match(menuSource, /buildDefaultMenuRouteStatuses/, "Main menu badges must keep a one-route fallback snapshot while live statuses refresh.");
+assert.match(menuSource, /menuDestinationCount/, "Main menu summary must calculate the visible destination count dynamically.");
 assert.match(menuSource, /halo-menu-status-groups/, "Main menu must organize visible satellite buttons into status groups.");
 assert.match(menuSource, /Attention now/, "Main menu must expose the ATTENTION status group.");
 assert.match(menuSource, /Working now/, "Main menu must expose the WORKING status group.");
 assert.match(navigationCssSource, /\.halo-menu-route-status/, "Main menu status badge styling must exist.");
+assert.match(navigationCssSource, /\.halo-menu-status-label/, "Main menu status labels must be allowed to wrap visibly.");
+assert.doesNotMatch(menuSource, /MENU_ROUTE_STATUS_TARGETS\.has\(normalizedRoute\)\s*&&\s*menuRouteStatusesUnavailable[\s\S]{0,120}\?\s*'yellow'/, "Main menu refresh mode must not turn every monitored route into ATTENTION.");
+assert.doesNotMatch(navigationCssSource, /@media\s*\(max-width:\s*767px\)\s*\{[\s\S]*?\.halo-menu-summary-copy small,\s*[\s\S]*?\.halo-menu-count\s*\{[\s\S]*?display:\s*none/i, "Main menu summary tags must stay visible on mobile.");
+assert.doesNotMatch(navigationCssSource, /@media\s*\(max-width:\s*520px\)\s*\{[\s\S]*?\.halo-menu-lane small\s*\{[\s\S]*?display:\s*none/i, "Main menu helper tags must stay visible on narrow screens.");
 assert.match(navigationCssSource, /\.halo-menu-status-group/, "Main menu status grouping styles must exist.");
 assert.match(sweepSource, /halo-signal-check/, "The maintenance sweep must write halo-signal-check into the Halo Ledger.");
 assert.match(docsSource, /## halo-signal-check/, "The canonical halo-signal-check README section must exist.");

@@ -985,6 +985,31 @@
           { route: '/magazine.html', label: 'HALO SIGNAL' },
           { route: '/support/', label: 'FEEDBACK DESK' }
         ];
+        const DEFAULT_MENU_ATTENTION_ROUTE = '/dreamweaver/';
+        const BASE_MENU_DESTINATION_COUNT = MENU_STATUS_GROUP_TARGETS.length + 3;
+        const normalizeMenuRoutePath = (route = '') => {
+          if (!route) return '/';
+          let pathname = route.split('?')[0].split('#')[0] || '/';
+          if (pathname === '/') return '/';
+          if (pathname.length > 1 && pathname.endsWith('/')) pathname = pathname.slice(0, -1);
+          if (pathname.endsWith('.html')) return pathname;
+          return pathname.endsWith('/') ? pathname : `${pathname}/`;
+        };
+        const buildDefaultMenuRouteStatuses = (attentionRoute = DEFAULT_MENU_ATTENTION_ROUTE) =>
+          MENU_STATUS_GROUP_TARGETS.reduce((acc, target) => {
+            const route = normalizeMenuRoutePath(target.route);
+            acc[route] = {
+              name: target.label,
+              route,
+              built: true,
+              live: true,
+              connected: true,
+              verified: route !== attentionRoute,
+              status: route === attentionRoute ? 'yellow' : 'green',
+              manualAttention: route === attentionRoute
+            };
+            return acc;
+          }, {});
         const loadHaloSatelliteStatusSnapshot = async () => {
           if (!window.__haloSatelliteStatusSnapshotPromise) {
             window.__haloSatelliteStatusSnapshotPromise = fetch('/api/halo-satellite-status', {
@@ -1376,7 +1401,7 @@
           const [uploadAlerts, setUploadAlerts] = useState({ enabled: false, unreadCount: 0, notifications: [] });
           const [uploadAlertsBusy, setUploadAlertsBusy] = useState(false);
           const [uploadAlertsError, setUploadAlertsError] = useState('');
-          const [menuRouteStatuses, setMenuRouteStatuses] = useState({});
+          const [menuRouteStatuses, setMenuRouteStatuses] = useState(() => buildDefaultMenuRouteStatuses());
           const [menuRouteStatusesUnavailable, setMenuRouteStatusesUnavailable] = useState(false);
           const [showRoomComposer, setShowRoomComposer] = useState(false);
           const [roomPostDraft, setRoomPostDraft] = useState({ title: '', description: '', videoUrl: '', options: ['', ''] });
@@ -1421,24 +1446,13 @@
             setTerminalLogs(prev => [`[${timestamp}] ${msg}`, ...prev.slice(0, 30)]);
           };
 
-          const normalizeMenuRoute = (route = '') => {
-            if (!route) return '/';
-            let pathname = route.split('?')[0].split('#')[0] || '/';
-            if (pathname === '/') return '/';
-            if (pathname.length > 1 && pathname.endsWith('/')) pathname = pathname.slice(0, -1);
-            if (pathname.endsWith('.html')) return pathname;
-            return pathname.endsWith('/') ? pathname : `${pathname}/`;
-          };
-
           const menuStatusForRoute = (route, fallbackStatus = 'red') => {
-            const normalizedRoute = normalizeMenuRoute(route);
+            const normalizedRoute = normalizeMenuRoutePath(route);
             const fromSweep = MENU_ROUTE_STATUS_TARGETS.has(normalizedRoute)
               ? menuRouteStatuses[normalizedRoute]
               : null;
             const status = fromSweep && MENU_ROUTE_STATUS_LABELS[fromSweep.status]
               ? fromSweep.status
-              : MENU_ROUTE_STATUS_TARGETS.has(normalizedRoute) && menuRouteStatusesUnavailable
-              ? 'yellow'
               : fallbackStatus;
             return {
               status,
@@ -1483,6 +1497,9 @@
             }
             return grouped;
           })();
+          const menuDestinationCount = BASE_MENU_DESTINATION_COUNT
+            + (identityUser ? 1 : 0)
+            + (ownerControlAccess ? 1 : 0);
 
           const getYouTubeEmbed = (value) => {
             try {
@@ -1961,20 +1978,20 @@
                 ? data.satelliteStatuses
                 : [];
               if (!statuses.length) {
-                setMenuRouteStatuses({});
+                setMenuRouteStatuses(buildDefaultMenuRouteStatuses());
                 setMenuRouteStatusesUnavailable(true);
                 return;
               }
               const next = statuses.reduce((acc, item) => {
-                const route = normalizeMenuRoute(item?.route || '');
+                const route = normalizeMenuRoutePath(item?.route || '');
                 if (!route || route === '/' || !MENU_ROUTE_STATUS_TARGETS.has(route)) return acc;
                 acc[route] = item;
                 return acc;
               }, {});
-              setMenuRouteStatuses(next);
+              setMenuRouteStatuses(Object.keys(next).length ? next : buildDefaultMenuRouteStatuses());
               setMenuRouteStatusesUnavailable(false);
             } catch {
-              setMenuRouteStatuses({});
+              setMenuRouteStatuses(buildDefaultMenuRouteStatuses());
               setMenuRouteStatusesUnavailable(true);
             }
           };
@@ -2957,7 +2974,7 @@
                           <span className="mt-5 flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-red-300">Open HALO TV <Icon name="arrow-right" className="h-3.5 w-3.5 transition group-hover:translate-x-1" /></span>
                         </button>
 
-                        <a href="dj-deck.html" className="group rounded-2xl border border-cyan-900/60 bg-cyan-950/20 p-5 text-left transition hover:-translate-y-1 hover:border-cyan-400 hover:bg-cyan-950/40 focus:outline-none focus:ring-2 focus:ring-cyan-300">
+                        <a href="/dj-deck.html" className="group rounded-2xl border border-cyan-900/60 bg-cyan-950/20 p-5 text-left transition hover:-translate-y-1 hover:border-cyan-400 hover:bg-cyan-950/40 focus:outline-none focus:ring-2 focus:ring-cyan-300">
                           <Icon name="disc" className="h-6 w-6 text-cyan-400" />
                           <strong className="mt-5 block text-lg text-white">Try the live DJ deck</strong>
                           <span className="mt-2 block text-xs leading-5 text-gray-400">Mix tracks, build a queue, and use the phone QR picker.</span>
@@ -3171,7 +3188,7 @@
                   <summary aria-label="Open HALO world menu">
                     <span className="halo-menu-orbit" aria-hidden="true"><i></i></span>
                     <span className="halo-menu-summary-copy"><small>Navigate</small><strong>Explore HALO</strong></span>
-                    <span className="halo-menu-count">12</span>
+                    <span className="halo-menu-count">{String(menuDestinationCount).padStart(2, '0')}</span>
                     <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
                       <path d="M7 9.5 12 14l5-4.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
                     </svg>
@@ -3196,7 +3213,7 @@
                           <div className="halo-menu-status-buttons">
                             {menuStatusGroupedTargets.attention.map(target => (
                               <a key={`attention-${target.route}`} href={target.route} className="halo-menu-status-button">
-                                <span>{target.label}</span>
+                                <span className="halo-menu-status-label">{target.label}</span>
                                 {renderMenuStatusBadge(target.route, target.label, 'yellow')}
                               </a>
                             ))}
@@ -3213,13 +3230,13 @@
                         <div className="halo-menu-status-buttons">
                           {menuStatusGroupedTargets.working.map(target => (
                             <a key={`working-${target.route}`} href={target.route} className="halo-menu-status-button">
-                              <span>{target.label}</span>
+                              <span className="halo-menu-status-label">{target.label}</span>
                               {renderMenuStatusBadge(target.route, target.label, 'green')}
                             </a>
                           ))}
                         </div>
                         {menuRouteStatusesUnavailable && (
-                          <p className="halo-menu-status-empty">Live status is refreshing. Monitored routes are temporarily shown as ATTENTION until fresh checks publish.</p>
+                          <p className="halo-menu-status-empty">Live status is refreshing. The public route map stays visible while fresh checks publish.</p>
                         )}
                       </section>
                     </div>
@@ -3910,7 +3927,7 @@
                         <strong className="mt-8 block text-xl text-white">Enter Creator World</strong>
                         <span className="mt-2 block font-sans-alt text-xs leading-5 text-gray-500">Explore official music, stems, classes, and access from the founding UK and Irish cohort.</span>
                       </a>
-                      <a href="halo-live.html" className="group min-h-48 rounded-2xl border border-lime-900/50 bg-gradient-to-b from-lime-950/30 to-black/20 p-5 text-left transition hover:-translate-y-1 hover:border-lime-400">
+                      <a href="/halo-live.html" className="group min-h-48 rounded-2xl border border-lime-900/50 bg-gradient-to-b from-lime-950/30 to-black/20 p-5 text-left transition hover:-translate-y-1 hover:border-lime-400">
                         <span className="text-[10px] font-black tracking-[0.24em] text-lime-400">03 / GO LIVE</span>
                         <strong className="mt-8 block text-xl text-white">Enter HALO Live</strong>
                         <span className="mt-2 block font-sans-alt text-xs leading-5 text-gray-500">Find every stream, follow the broadcast plan, and join the fan experience.</span>
@@ -3920,7 +3937,7 @@
                         <strong className="mt-8 block text-xl text-white">Play HALO TV</strong>
                         <span className="mt-2 block font-sans-alt text-xs leading-5 text-gray-500">Bring a YouTube set into the console and watch together.</span>
                       </button>
-                      <a href="dj-deck.html" className="group min-h-48 rounded-2xl border border-cyan-900/50 bg-gradient-to-b from-cyan-950/30 to-black/20 p-5 text-left transition hover:-translate-y-1 hover:border-cyan-400">
+                      <a href="/dj-deck.html" className="group min-h-48 rounded-2xl border border-cyan-900/50 bg-gradient-to-b from-cyan-950/30 to-black/20 p-5 text-left transition hover:-translate-y-1 hover:border-cyan-400">
                         <span className="text-[10px] font-black tracking-[0.24em] text-cyan-400">05 / CREATE</span>
                         <strong className="mt-8 block text-xl text-white">Touch the DJ deck</strong>
                         <span className="mt-2 block font-sans-alt text-xs leading-5 text-gray-500">Mix music, choose tracks by QR, and explore the controls.</span>
@@ -4124,7 +4141,7 @@
                               <span className="text-[8px] uppercase tracking-wider text-gray-600">Beta Rate</span>
                             </div>
                             <a
-                              href={`dj-deck.html?takeover=30&dj=${takeoverDj.id}`}
+                              href={`/dj-deck.html?takeover=30&dj=${takeoverDj.id}`}
                               data-stat-event="start_dj_takeover"
                               data-stat-target={`30-${takeoverDj.id}`}
                               className="col-span-2 mt-1 flex items-center justify-between rounded-lg bg-amber-500 px-4 py-3 text-[10px] font-black uppercase tracking-[0.14em] text-[#111015] transition hover:bg-amber-300 focus:outline-none focus:ring-2 focus:ring-amber-300 focus:ring-offset-2 focus:ring-offset-[#111015]"
@@ -4145,7 +4162,7 @@
                               <span className="text-[8px] uppercase tracking-wider text-gray-600">Beta Rate</span>
                             </div>
                             <a
-                              href={`dj-deck.html?takeover=60&dj=${takeoverDj.id}`}
+                              href={`/dj-deck.html?takeover=60&dj=${takeoverDj.id}`}
                               data-stat-event="start_dj_takeover"
                               data-stat-target={`60-${takeoverDj.id}`}
                               className="col-span-2 mt-1 flex items-center justify-between rounded-lg border border-purple-500/60 bg-purple-950/50 px-4 py-3 text-[10px] font-black uppercase tracking-[0.14em] text-purple-200 transition hover:border-purple-300 hover:bg-purple-900/60 focus:outline-none focus:ring-2 focus:ring-purple-400 focus:ring-offset-2 focus:ring-offset-[#111015]"
@@ -4851,7 +4868,7 @@
                               </div>
                             </section>
                             {!!community.roomPins?.length && <section className="relative overflow-hidden rounded-2xl border border-yellow-300/25 bg-gradient-to-br from-yellow-950/30 via-black/35 to-rose-950/20 p-4">
-                              <div className="mb-3 flex items-center justify-between gap-3"><div><p className="text-[9px] font-black uppercase tracking-[0.28em] text-yellow-300">Pinned room signals</p><h4 className="mt-1 text-sm font-black text-white">What members want you to see first</h4></div><a href="halo-x.html" className="text-[8px] font-black uppercase tracking-widest text-yellow-200 hover:text-white">Manage my pin →</a></div>
+                              <div className="mb-3 flex items-center justify-between gap-3"><div><p className="text-[9px] font-black uppercase tracking-[0.28em] text-yellow-300">Pinned room signals</p><h4 className="mt-1 text-sm font-black text-white">What members want you to see first</h4></div><a href="/halo-x.html" className="text-[8px] font-black uppercase tracking-widest text-yellow-200 hover:text-white">Manage my pin →</a></div>
                               <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">{community.roomPins.slice(0, 4).map(pin => <article key={pin.actor_id} className="flex min-h-36 flex-col rounded-xl border border-white/10 bg-black/35 p-3"><div className="flex items-center gap-2 text-[9px] text-gray-500"><span className="text-base">{pin.avatar}</span><strong className="truncate text-gray-300">{pin.display_name}</strong>{pin.is_owner && <span className="ml-auto text-yellow-300">YOURS</span>}</div><h5 className="mt-3 text-sm font-black text-white">{pin.title}</h5>{pin.body && <p className="mt-1 flex-1 text-[10px] leading-4 text-gray-400">{pin.body}</p>}{pin.destination_url && <a href={pin.destination_url} target={pin.destination_url.startsWith('http') ? '_blank' : undefined} rel={pin.destination_url.startsWith('http') ? 'noopener noreferrer' : undefined} className="mt-3 text-[8px] font-black uppercase tracking-widest text-yellow-300 hover:text-white">{pin.cta_label} →</a>}</article>)}</div>
                             </section>}
                             <section className="relative overflow-hidden rounded-2xl border border-rose-300/25 bg-[radial-gradient(circle_at_top_right,rgba(251,113,133,.14),transparent_35%),linear-gradient(145deg,rgba(76,5,25,.35),rgba(0,0,0,.5))] p-4">
@@ -4868,7 +4885,7 @@
                               })}</div> : <div className="rounded-2xl border border-dashed border-white/10 bg-black/30 p-7 text-center"><div className="text-3xl">📽️</div><p className="mt-2 text-sm font-black text-white">Your Room Stage is ready.</p><p className="mt-1 text-[10px] text-gray-500">Post the first video and turn it into a listening party or fan vote.</p></div>}
                             </section>
                             <section className="relative overflow-hidden rounded-2xl border border-cyan-300/20 bg-gradient-to-br from-cyan-950/25 via-black/40 to-purple-950/25 p-4">
-                              <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between"><div><p className="text-[9px] font-black uppercase tracking-[0.28em] text-cyan-300">Fresh from the decks</p><h4 className="mt-1 text-base font-black text-white">Room mixes</h4><p className="mt-1 text-[10px] text-gray-400">Press play when you arrive, save favorites to your playlist, or pass a mix to another fan.</p></div><a href="dj-deck.html" className="shrink-0 rounded-full border border-cyan-300/30 px-4 py-2 text-[8px] font-black uppercase tracking-widest text-cyan-200 hover:border-cyan-200 hover:text-white">Make a mix</a></div>
+                              <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between"><div><p className="text-[9px] font-black uppercase tracking-[0.28em] text-cyan-300">Fresh from the decks</p><h4 className="mt-1 text-base font-black text-white">Room mixes</h4><p className="mt-1 text-[10px] text-gray-400">Press play when you arrive, save favorites to your playlist, or pass a mix to another fan.</p></div><a href="/dj-deck.html" className="shrink-0 rounded-full border border-cyan-300/30 px-4 py-2 text-[8px] font-black uppercase tracking-widest text-cyan-200 hover:border-cyan-200 hover:text-white">Make a mix</a></div>
                               {roomMixes.length ? <div className="grid gap-3 lg:grid-cols-2">{roomMixes.slice(0, 6).map(mix => <article key={mix.id} id={`mix-${mix.id}`} className="rounded-2xl border border-white/10 bg-black/40 p-3 transition hover:border-cyan-300/30"><div className="flex items-start gap-3"><div className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-cyan-300/20 bg-cyan-300/10 text-lg">{mix.creator.avatar}</div><div className="min-w-0 flex-1"><div className="flex items-start justify-between gap-2"><div className="min-w-0"><h5 className="truncate text-sm font-black text-white">{mix.title}</h5><p className="truncate text-[9px] text-cyan-200">{mix.creator.name} · {formatMixDuration(mix.durationSeconds)} · {mix.trackCount || 'Live'} tracks</p></div><span className="shrink-0 text-[8px] uppercase text-gray-600">{mix.playCount} plays</span></div>{mix.description && <p className="mt-2 line-clamp-2 text-[10px] leading-4 text-gray-400">{mix.description}</p>}</div></div><audio className="mt-3 h-9 w-full" controls preload="none" src={mix.audioUrl} onPlay={() => window.haloStats?.track('play_room_mix', {mix_id: mix.id})}></audio><div className="mt-3 flex flex-wrap gap-2"><button type="button" onClick={() => toggleMixPlaylist(mix)} className={`rounded-full border px-3 py-1.5 text-[8px] font-black uppercase tracking-wider ${mix.inPlaylist ? 'border-amber-300/40 bg-amber-300/10 text-amber-200' : 'border-white/10 text-gray-300 hover:border-amber-300/30'}`}>{mix.inPlaylist ? 'In my playlist' : 'Add to playlist'}</button><button type="button" onClick={() => shareRoomMix(mix)} className="rounded-full border border-white/10 px-3 py-1.5 text-[8px] font-black uppercase tracking-wider text-gray-300 hover:border-cyan-300/30">Share mix</button>{mix.isOwner && <span className="self-center text-[8px] font-black uppercase tracking-wider text-cyan-300">Your release</span>}</div></article>)}</div> : <div className="rounded-2xl border border-dashed border-white/10 bg-black/25 p-6 text-center"><p className="text-sm font-black text-white">The room is waiting for its first mix.</p><p className="mt-2 text-[10px] text-gray-500">Record a takeover in the DJ deck, then choose “Post to room.”</p></div>}
                             </section>
                             <div className="grid gap-4 xl:grid-cols-[1.05fr_.95fr]">

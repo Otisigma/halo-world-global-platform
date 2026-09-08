@@ -261,7 +261,7 @@ await runCheck("Core public navigation routes", async () => {
     "/dreamweaver/",
     "/dreamweaver-lab/",
     "/mixes/",
-    "dj-deck.html",
+    "/dj-deck.html",
     "/artists/",
     "/release-house/",
     "/campaign-studio/",
@@ -278,6 +278,41 @@ await runCheck("Core public navigation routes", async () => {
   }
 
   return "halo.html keeps links to Dreamweaver routes, mixes, DJ deck, artist rooms, release house, campaign studio, finish house, and radio";
+});
+
+await runCheck("Canonical menu route aliases", async () => {
+  const [haloHtml, serverJs, netlifyConfig] = await Promise.all([
+    read("halo.html"),
+    read("server.js"),
+    read("netlify.toml")
+  ]);
+
+  for (const href of ["href=\"/dj-deck.html\"", "href=\"/halo-live.html\"", "href=\"/halo-x.html\""]) {
+    assert.match(haloHtml, new RegExp(href.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")), `halo.html must use the canonical absolute route ${href.slice(6, -1)}.`);
+  }
+
+  for (const [from, to] of [
+    ["/artists", "/artists/"],
+    ["/creator-freedom", "/creator-freedom/"],
+    ["/creators", "/creators/"],
+    ["/finish-house", "/finish-house/"],
+    ["/mixes", "/mixes/"],
+    ["/music", "/music/"],
+    ["/radio", "/radio/"],
+    ["/support", "/support/"],
+    ["/dj-deck", "/dj-deck.html"],
+    ["/halo-live", "/halo-live.html"],
+    ["/halo-x", "/halo-x.html"],
+    ["/magazine", "/magazine.html"]
+  ]) {
+    assert.match(netlifyConfig, new RegExp(`from = "${from.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}"[\\s\\S]*to = "${to.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}"`), `netlify.toml must canonicalize ${from} to ${to}.`);
+  }
+
+  assert.match(serverJs, /app\.get\("\/control-center"/, "server.js must serve the control-center alias locally.");
+  assert.match(serverJs, /directoryIndexPath[\s\S]*res\.redirect\(301,\s*`\$\{routePath\}\/\$\{searchSuffix\}`\)/, "server.js must canonicalize directory routes to trailing-slash URLs.");
+  assert.match(serverJs, /htmlCandidate[\s\S]*res\.redirect\(301,\s*`\/\$\{relativePath\}\.html\$\{searchSuffix\}`\)/, "server.js must canonicalize extensionless HTML routes to .html URLs.");
+
+  return "menu routes stay canonical across halo.html, netlify.toml, and server.js";
 });
 
 const failed = results.filter(result => !result.ok);

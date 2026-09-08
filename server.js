@@ -136,6 +136,14 @@ app.get("/private", (_req, res) => {
   return sendFileIfPresent(res, "index.html");
 });
 
+app.get("/control-center", (_req, res) => {
+  return sendFileIfPresent(res, "halo-command.html");
+});
+
+app.get("/control-center/", (_req, res) => {
+  return res.redirect(301, "/control-center");
+});
+
 app.get("/album-concierge", (_req, res) => {
   return res.redirect(301, "/album-concierge/");
 });
@@ -147,6 +155,7 @@ app.get("/album-concierge/", (_req, res) =>
 app.get("*", (req, res, next) => {
   const routePath = decodeURIComponent(req.path);
   const relativePath = routePath.replace(/^\/+/, "");
+  const searchSuffix = req.originalUrl.slice(req.path.length);
   if (!relativePath) return next();
 
   const extension = path.extname(relativePath).toLowerCase();
@@ -159,8 +168,16 @@ app.get("*", (req, res, next) => {
     return;
   }
 
-  if (!extension && sendStaticCandidate(res, `${relativePath}.html`)) {
-    return;
+  if (!extension) {
+    const directoryIndexPath = safeResolve(path.join(relativePath, "index.html"));
+    if (directoryIndexPath && fs.existsSync(directoryIndexPath) && fs.statSync(directoryIndexPath).isFile()) {
+      return res.redirect(301, `${routePath}/${searchSuffix}`);
+    }
+
+    const htmlCandidate = safeResolve(`${relativePath}.html`);
+    if (htmlCandidate && fs.existsSync(htmlCandidate) && fs.statSync(htmlCandidate).isFile()) {
+      return res.redirect(301, `/${relativePath}.html${searchSuffix}`);
+    }
   }
 
   return next();

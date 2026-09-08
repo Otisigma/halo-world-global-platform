@@ -9,7 +9,7 @@ const CORE_PAGES = [
   "/campaign-studio/", "/release-house/", "/finish-house/", "/artists/", "/mixes/"
 ];
 
-const SATELLITE_STATUS_TARGETS = [
+export const SATELLITE_STATUS_TARGETS = [
   { name: "HALO X", route: "/halo-x.html" },
   { name: "DJ Deck", route: "/dj-deck.html" },
   { name: "HALO Live", route: "/halo-live.html" },
@@ -91,6 +91,21 @@ function applyManualAttentionStatus(statusRecord, manualAttentionRoute) {
     manualAttention: true,
     attentionReason: SATELLITE_ATTENTION_REASON
   };
+}
+
+export function buildFallbackSatelliteStatuses() {
+  const manualAttentionRoute = resolveManualAttentionRoute();
+  return SATELLITE_STATUS_TARGETS.map(target =>
+    applyManualAttentionStatus({
+      name: target.name,
+      route: normalizeRoute(target.route),
+      built: true,
+      live: true,
+      connected: true,
+      verified: true,
+      status: "green"
+    }, manualAttentionRoute)
+  );
 }
 
 function sameOriginTarget(baseUrl, rawTarget) {

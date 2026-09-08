@@ -2701,8 +2701,11 @@
             try {
               const url = new URL(value, window.location.origin);
               const host = url.hostname.replace(/^www\./, '').toLowerCase();
+              const isYouTubeHost = host === 'youtu.be'
+                || /(^|\.)youtube\.com$/i.test(host)
+                || /(^|\.)youtube-nocookie\.com$/i.test(host);
               if (!['http:', 'https:'].includes(url.protocol)) return false;
-              if (host === 'youtu.be' || host.includes('youtube.com') || host.includes('youtube-nocookie.com')) return false;
+              if (isYouTubeHost) return false;
               return true;
             } catch {
               return false;

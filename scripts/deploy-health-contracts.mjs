@@ -15,6 +15,8 @@
  *      301 redirect from /album-concierge to /album-concierge/.
  *   5. Homepage music experiment visibility — halo.html includes the native-vs-
  *      embed comparison markers and instrumentation hooks for measurement.
+ *   6. Dreamweaver homepage hero — halo.html includes the adaptive Dreamweaver
+ *      preview/player surface and preserves the experiment copy and routing.
  *
  * Run: node scripts/deploy-health-contracts.mjs
  * Included in: npm test
@@ -105,7 +107,7 @@ await runCheck("Homepage routing to /halo", async () => {
   // server.js must register a GET "/" route that routes users into /halo
   assert.match(
     serverJs,
-    /app\.get\s*\(\s*["']\/["']/,
+    /app\.get\s*\(\s*["']\/["]/,
     "server.js must register a GET \"/\" route for the public homepage."
   );
   assert.match(
@@ -115,7 +117,7 @@ await runCheck("Homepage routing to /halo", async () => {
   );
   assert.match(
     serverJs,
-    /app\.get\s*\(\s*["']\/halo["']/,
+    /app\.get\s*\(\s*["']\/halo["']/, 
     "server.js must register a GET \"/halo\" route for the public homepage."
   );
   assert.match(
@@ -125,7 +127,7 @@ await runCheck("Homepage routing to /halo", async () => {
   );
   // server.js must NOT serve index.html from the public homepage paths
   // (index.html is the private-access page)
-  const publicRouteSection = serverJs.match(/app\.get\s*\(\s*["']\/["'][\s\S]*?app\.get\s*\(\s*["']\/private["']/)?.[0] ?? "";
+  const publicRouteSection = serverJs.match(/app\.get\s*\(\s*["']\/["][\s\S]*?app\.get\s*\(\s*["']\/private["']/)?.[0] ?? "";
   assert.doesNotMatch(
     publicRouteSection,
     /index\.html/,
@@ -173,7 +175,7 @@ await runCheck("Build Your Album promotion and route health", async () => {
   );
   assert.match(
     haloHtml,
-    /href\s*=\s*["']\/album-concierge\/["']/,
+    /href\s*=\s*["']\/album-concierge\/["']/, 
     [
       "Build Your Album homepage promo must link to /album-concierge/.",
       "Restore the route in the homepage CTA."
@@ -182,7 +184,7 @@ await runCheck("Build Your Album promotion and route health", async () => {
   // server.js must register a 301 redirect from /album-concierge → /album-concierge/
   assert.match(
     serverJs,
-    /["']\/album-concierge["']/,
+    /["']\/album-concierge["']/, 
     "server.js must register the /album-concierge route."
   );
   assert.match(
@@ -307,7 +309,7 @@ await runCheck("Core public navigation routes", async () => {
   for (const route of requiredRoutes) {
     assert.match(
       haloHtml,
-      new RegExp(`href=["']${route.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\\\$&")}`),
+      new RegExp(`href=["']${route.replace(/[.*+?^${}()|[\\]\\]/g, "\\$&")}`),
       `halo.html must link to ${route} from the main landing experience.`
     );
   }
@@ -340,7 +342,7 @@ await runCheck("Canonical menu route aliases", async () => {
     ["/halo-x", "/halo-x.html"],
     ["/magazine", "/magazine.html"]
   ]) {
-    assert.match(netlifyConfig, new RegExp(`from = "${from.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}"[\\s\\S]*to = "${to.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}"`), `netlify.toml must canonicalize ${from} to ${to}.`);
+    assert.match(netlifyConfig, new RegExp(`from = "${from.replace(/[.*+?^${}()|[\\]\\]/g, "\\$&")}"[\\s\\S]*to = "${to.replace(/[.*+?^${}()|[\\]\\]/g, "\\$&")}"`), `netlify.toml must canonicalize ${from} to ${to}.`);
   }
 
   assert.match(serverJs, /app\.get\("\/control-center"/, "server.js must serve the control-center alias locally.");

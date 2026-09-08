@@ -150,6 +150,12 @@
   force = true
 
 [[redirects]]
+  from = "/dreamweaver/"
+  to = "/dreamweaver/index.html"
+  status = 200
+  force = true
+
+[[redirects]]
   from = "/dreamweaver-lab"
   to = "/dreamweaver-lab/"
   status = 301

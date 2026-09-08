@@ -1678,6 +1678,7 @@
           const [showEqualizer, setShowEqualizer] = useState(false);
           const [equalizer, setEqualizer] = useState({ master: 70, bass: 0, mid: 0, treble: 0 });
           const [isDreamweaverPreviewPlaying, setIsDreamweaverPreviewPlaying] = useState(false);
+          const [dreamweaverPreviewError, setDreamweaverPreviewError] = useState(false);
           const fallbackReleaseArtwork = window.HaloReleaseArtwork?.DEFAULT_RELEASE_ARTWORK || '/assets/halo-app-icon-512.png';
           const [musicExperimentVariant] = useState(() => {
             const requested = new URLSearchParams(window.location.search).get('musicExperiment');
@@ -2695,19 +2696,45 @@
             return `${minutes}:${String(Math.floor(total % 60)).padStart(2, '0')}`;
           };
 
-          const dreamweaverPreviewMix = roomMixes.find(mix => mix.audioUrl && mix.source !== 'youtube') || roomMixes.find(mix => mix.audioUrl) || null;
-          const dreamweaverRouteIndicator = menuStatusForRoute('/dreamweaver/', dreamweaverPreviewMix ? 'green' : 'yellow');
-          const dreamweaverPreviewReady = Boolean(dreamweaverPreviewMix?.audioUrl);
+          const isLikelyPlayableAudioUrl = (value) => {
+            if (!value) return false;
+            try {
+              const url = new URL(value, window.location.origin);
+              const host = url.hostname.replace(/^www\./, '').toLowerCase();
+              if (!['http:', 'https:'].includes(url.protocol)) return false;
+              if (host === 'youtu.be' || host.includes('youtube.com') || host.includes('youtube-nocookie.com')) return false;
+              return true;
+            } catch {
+              return false;
+            }
+          };
+          const hasPlayableDreamweaverPreview = (mix) => Boolean(mix?.audioUrl)
+            && mix.source !== 'youtube'
+            && isLikelyPlayableAudioUrl(mix.audioUrl);
+          const dreamweaverPreviewMix = roomMixes.find(hasPlayableDreamweaverPreview) || null;
+          const dreamweaverPreviewSourceReady = Boolean(dreamweaverPreviewMix?.audioUrl);
+          const dreamweaverPreviewReady = dreamweaverPreviewSourceReady && !dreamweaverPreviewError;
+          const dreamweaverRouteIndicator = menuStatusForRoute('/dreamweaver/', dreamweaverPreviewReady ? 'green' : 'yellow');
           const dreamweaverPreviewLabel = dreamweaverPreviewReady
             ? 'Route-aware playback · Preview ready'
             : communityLoading
               ? 'Route-aware playback · Signal checking'
-              : 'Route-aware playback · Preview standing by';
+              : dreamweaverPreviewError
+                ? 'Route-aware playback · Preview unavailable'
+                : 'Route-aware playback · Preview standing by';
+          const dreamweaverPreviewUnavailableSummary = dreamweaverPreviewError
+            ? 'This homepage preview cannot play in the current browser state. Open Dreamweaver to continue while the preview resets.'
+            : 'No public Dreamweaver audio mix is live yet. The route remains open while the next preview is prepared.';
           const dreamweaverPreviewSummary = dreamweaverPreviewReady
             ? `${dreamweaverPreviewMix.title || 'Current signal'} · ${formatMixDuration(dreamweaverPreviewMix.durationSeconds)} · ${dreamweaverPreviewMix.trackCount || 1} ${(dreamweaverPreviewMix.trackCount || 1) === 1 ? 'track' : 'tracks'}`
             : communityLoading
               ? 'Scanning the current Dreamweaver signal from the Mix Desk.'
-              : 'No public Dreamweaver mix is live yet. The route remains open while the next preview is prepared.';
+              : dreamweaverPreviewUnavailableSummary;
+
+          useEffect(() => {
+            setDreamweaverPreviewError(false);
+            setIsDreamweaverPreviewPlaying(false);
+          }, [dreamweaverPreviewMix?.id, dreamweaverPreviewMix?.audioUrl]);
 
           const toggleDreamweaverPreview = async () => {
             const preview = dreamweaverPreviewAudioRef.current;
@@ -2716,7 +2743,10 @@
               trackMusicExperimentAction('listening', 'homepage_experiment_dreamweaver_preview', 'native');
               try {
                 await preview.play();
-              } catch {}
+              } catch {
+                setDreamweaverPreviewError(true);
+                setIsDreamweaverPreviewPlaying(false);
+              }
               return;
             }
             preview.pause();
@@ -3716,7 +3746,7 @@
                               loading="lazy"
                             />
                             <span className={`halo-home-experiment__player-chip ${dreamweaverPreviewReady ? 'halo-home-experiment__player-chip--ready' : 'halo-home-experiment__player-chip--standby'}`}>
-                              {dreamweaverPreviewReady ? 'Preview ready' : 'Signal standing by'}
+                              {dreamweaverPreviewReady ? 'Preview ready' : dreamweaverPreviewError ? 'Preview unavailable' : 'Signal standing by'}
                             </span>
                           </div>
 
@@ -3724,12 +3754,12 @@
                             <div className="halo-home-experiment__signal">
                               <div>
                                 <p className="halo-home-experiment__signal-copy">Current signal</p>
-                                <p className="halo-home-experiment__signal-title">{dreamweaverPreviewMix?.title || 'Dreamweaver preview is scanning the current room mix.'}</p>
+                                <p className="halo-home-experiment__signal-title">{dreamweaverPreviewMix?.title || (dreamweaverPreviewError ? 'Dreamweaver preview is temporarily unavailable.' : 'Dreamweaver preview is scanning the current room mix.')}</p>
                               </div>
                               {renderMenuStatusBadge('/dreamweaver/', 'Dreamweaver route', dreamweaverPreviewReady ? 'green' : 'yellow')}
                             </div>
                             <p className="halo-home-experiment__signal-copy">{dreamweaverPreviewSummary}</p>
-                            <p className="text-sm leading-6 text-gray-300">{dreamweaverPreviewMix ? `From ${dreamweaverPreviewMix.creator?.name || 'HALO'} · ${dreamweaverPreviewMix.credits?.originalArtist || 'Owen Anthony'} signal.` : 'Dreamweaver keeps the route visible even when a fresh public preview is still loading.'}</p>
+                            <p className="text-sm leading-6 text-gray-300">{dreamweaverPreviewReady ? `From ${dreamweaverPreviewMix.creator?.name || 'HALO'} · ${dreamweaverPreviewMix.credits?.originalArtist || 'Owen Anthony'} signal.` : 'Dreamweaver keeps the route visible even when a fresh public preview is still loading.'}</p>
                             <audio
                               id="dreamweaver-homepage-preview"
                               ref={dreamweaverPreviewAudioRef}
@@ -3741,6 +3771,11 @@
                               onPlay={() => setIsDreamweaverPreviewPlaying(true)}
                               onPause={() => setIsDreamweaverPreviewPlaying(false)}
                               onEnded={() => setIsDreamweaverPreviewPlaying(false)}
+                              onCanPlay={() => setDreamweaverPreviewError(false)}
+                              onError={() => {
+                                setDreamweaverPreviewError(true);
+                                setIsDreamweaverPreviewPlaying(false);
+                              }}
                             ></audio>
                           </div>
                         </div>
@@ -3773,9 +3808,9 @@
 
                       <article className="halo-home-experiment__panel halo-home-experiment__panel--copy">
                         <div>
-                          <p className="halo-home-experiment__eyebrow">Homepage Experiment</p>
-                          <h2 id="halo-home-experiment-title" className="halo-home-experiment__title">Artist-first listening test / Supporter-first model</h2>
-                          <p className="halo-home-experiment__lede">We are comparing the best listener experience and the best artist outcome. Variant A keeps the HALO-native artist home central as the brand path. Variant B is a simpler quick-listen comparison. Both paths route support back to artist-owned HALO actions, where fans become supporters and supporters are rewarded.</p>
+                          <p className="halo-home-experiment__eyebrow">Primary framing / Homepage Experiment</p>
+                          <h2 id="halo-home-experiment-title" className="halo-home-experiment__title">Sovereign HALO World: Autonomous Audio</h2>
+                          <p className="halo-home-experiment__lede">Variant A remains the primary path: Native HALO artist home with an artist-owned listening + support journey. Variant B remains comparison-only: quick-listen embed for speed checks, then route back into HALO actions.</p>
                         </div>
 
                         <span className="halo-home-experiment__status-line">

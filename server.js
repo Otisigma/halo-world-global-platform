@@ -195,6 +195,14 @@ app.get("/album-concierge/", (_req, res) =>
   sendFileIfPresent(res, path.join("album-concierge", "index.html"))
 );
 
+app.get("/dreamweaver", (_req, res) => {
+  return res.redirect(301, "/dreamweaver/");
+});
+
+app.get("/dreamweaver/", (_req, res) =>
+  sendFileIfPresent(res, path.join("dreamweaver", "index.html"))
+);
+
 app.get("*", (req, res, next) => {
   const routePath = decodeURIComponent(req.path);
   const relativePath = routePath.replace(/^\/+/, "");

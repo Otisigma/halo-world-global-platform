@@ -136,6 +136,41 @@ await runCheck("Homepage routing to /halo", async () => {
   return "server.js routes GET \"/\" to /halo and serves halo.html there";
 });
 
+await runCheck("Dreamweaver route opening", async () => {
+  const [serverJs, netlifyConfig, haloHtml, dreamweaverPage] = await Promise.all([
+    read("server.js"),
+    read("netlify.toml"),
+    read("halo.html"),
+    read("dreamweaver/index.html")
+  ]);
+  assert.match(
+    haloHtml,
+    /href=["']\/dreamweaver\/["']/,
+    "halo.html must link the Open Dreamweaver CTA to /dreamweaver/."
+  );
+  assert.match(
+    serverJs,
+    /app\.get\(\s*["']\/dreamweaver["'][\s\S]*?redirect\s*\(\s*301\s*,\s*["']\/dreamweaver\/["']\s*\)/,
+    "server.js must 301-redirect /dreamweaver → /dreamweaver/."
+  );
+  assert.match(
+    serverJs,
+    /app\.get\(\s*["']\/dreamweaver\/["'][\s\S]*?dreamweaver[\s\S]*index\.html/,
+    "server.js must serve dreamweaver/index.html from /dreamweaver/."
+  );
+  assert.match(
+    netlifyConfig,
+    /from = "\/dreamweaver\/"[\s\S]*to = "\/dreamweaver\/index\.html"[\s\S]*status = 200/,
+    "netlify.toml must map /dreamweaver/ to /dreamweaver/index.html."
+  );
+  assert.match(
+    dreamweaverPage,
+    /<title>Dreamweaver Show — HALO<\/title>/,
+    "dreamweaver/index.html must exist and expose the Dreamweaver page."
+  );
+  return "Open Dreamweaver CTA and /dreamweaver/ route resolve to dreamweaver/index.html";
+});
+
 await runCheck("Album Concierge visibility on public root page", async () => {
   const haloHtml = await read("halo.html");
   assert.match(
@@ -210,8 +245,8 @@ await runCheck("Homepage music experiment markers and tracking", async () => {
   const haloHtml = await read("halo.html");
   assert.match(
     haloHtml,
-    /Homepage Experiment[\s\S]*Artist-first listening test \/ Supporter-first model/,
-    "halo.html must include the homepage experiment framing label in the homepage hero."
+    /Sovereign HALO World: Autonomous Audio/,
+    "halo.html must include Sovereign HALO World: Autonomous Audio as the primary homepage framing."
   );
   assert.match(
     haloHtml,

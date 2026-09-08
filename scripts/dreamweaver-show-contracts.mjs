@@ -30,7 +30,13 @@ const checks = [
   [styles.includes("body.mode-room") && styles.includes("body.mode-explore") && styles.includes("prefers-reduced-motion"), "styles atmospheric modes and reduced-motion behavior"],
   [deck.includes('id="dreamweaverMix"') && deck.includes("/dreamweaver/?mix=${encodeURIComponent(data.id)}&experience=studio"), "moves a newly published mix directly into Dreamweaver"],
   [campaign.includes('href="/dreamweaver/"') && radio.includes('href="/dreamweaver/"'), "links the show from Campaign Studio and Radio"],
-  [config.includes('from = "/dreamweaver"') && config.includes('to = "/dreamweaver/"'), "normalizes the public Dreamweaver route"],
+  [
+    config.includes('from = "/dreamweaver"')
+      && config.includes('to = "/dreamweaver/"')
+      && config.includes('from = "/dreamweaver/"')
+      && config.includes('to = "/dreamweaver/index.html"'),
+    "normalizes the public Dreamweaver route and serves /dreamweaver/ as a concrete page in static deploys"
+  ],
   [page.includes('id="campaignStudio"') && page.includes('id="campaignCanvas"') && page.includes("Make a Reel / Short"), "adds the Dreamweaver campaign cutting room"],
   [script.includes("renderVerticalClip") && script.includes("captureStream") && script.includes("MediaRecorder"), "renders a downloadable vertical clip in supported browsers"],
   [page.includes('id="downloadClip"') && page.includes('id="renderStatus"') && styles.includes('[hidden] { display: none !important; }'), "shows reliable film progress and keeps hidden overlays out of the preview"],

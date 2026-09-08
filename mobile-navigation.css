@@ -146,7 +146,10 @@
   z-index: 10020;
   width: min(94vw, 900px);
   padding: 18px;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
+  max-height: min(86vh, calc(100vh - 92px));
+  scrollbar-gutter: stable;
   border: 1px solid rgba(245, 158, 11, .25);
   border-radius: 24px;
   background:
@@ -303,6 +306,14 @@
   grid-template-columns: .95fr 1.25fr .95fr .95fr;
   gap: 10px;
   padding: 14px 0;
+}
+
+@media (max-height: 860px) {
+  .halo-menu-lanes {
+    max-height: min(50vh, 420px);
+    overflow-y: auto;
+    padding-right: 4px;
+  }
 }
 
 .halo-menu-lane {
@@ -640,6 +651,9 @@
   .halo-menu-lanes {
     grid-template-columns: 1fr 1fr;
     gap: 12px 6px;
+    max-height: none;
+    overflow: visible;
+    padding-right: 0;
   }
 
   .halo-menu-status-buttons {

@@ -945,6 +945,9 @@
         .halo-home-experiment__player-chip--standby {
             color: #fbbf24;
         }
+        .halo-home-experiment__player-chip--unavailable {
+            color: #fca5a5;
+        }
         .halo-home-experiment__signal {
             display: flex;
             flex-wrap: wrap;
@@ -1678,6 +1681,7 @@
           const [showEqualizer, setShowEqualizer] = useState(false);
           const [equalizer, setEqualizer] = useState({ master: 70, bass: 0, mid: 0, treble: 0 });
           const [isDreamweaverPreviewPlaying, setIsDreamweaverPreviewPlaying] = useState(false);
+          const [dreamweaverPreviewError, setDreamweaverPreviewError] = useState('');
           const fallbackReleaseArtwork = window.HaloReleaseArtwork?.DEFAULT_RELEASE_ARTWORK || '/assets/halo-app-icon-512.png';
           const [musicExperimentVariant] = useState(() => {
             const requested = new URLSearchParams(window.location.search).get('musicExperiment');
@@ -1793,19 +1797,19 @@
             }
             if (dreamweaverStatus.status === 'yellow') {
               return {
-                primaryRoute: '/music/',
-                primaryLabel: 'Continue in Music Home',
-                supportRoute: '/dreamweaver/',
-                supportLabel: 'Check Dreamweaver status',
-                guidance: 'Dreamweaver is in attention mode. Preview here, then continue through the stable music route while updates land.'
+                primaryRoute: '/dreamweaver/',
+                primaryLabel: 'Open Dreamweaver',
+                supportRoute: '/music/',
+                supportLabel: 'Continue in Music Home',
+                guidance: 'Dreamweaver is in attention mode. Enter Dreamweaver directly or continue through the stable music route while updates land.'
               };
             }
             return {
-              primaryRoute: '/support/',
-              primaryLabel: 'Open Feedback Desk',
-              supportRoute: '/music/',
-              supportLabel: 'Use Music Home fallback',
-              guidance: 'Dreamweaver is reporting a break. Preview is still available, and support + fallback routes are ready now.'
+              primaryRoute: '/dreamweaver/',
+              primaryLabel: 'Open Dreamweaver',
+              supportRoute: '/support/',
+              supportLabel: 'Open Feedback Desk',
+              guidance: 'Dreamweaver is reporting a break. You can still try Dreamweaver directly, and support is ready if the route needs attention.'
             };
           })();
 
@@ -2696,15 +2700,19 @@
           };
 
           const dreamweaverPreviewMix = roomMixes.find(mix => mix.audioUrl && mix.source !== 'youtube') || roomMixes.find(mix => mix.audioUrl) || null;
-          const dreamweaverRouteIndicator = menuStatusForRoute('/dreamweaver/', dreamweaverPreviewMix ? 'green' : 'yellow');
+          const dreamweaverRouteIndicator = menuStatusForRoute('/dreamweaver/', dreamweaverPreviewMix && !dreamweaverPreviewError ? 'green' : 'yellow');
           const dreamweaverPreviewReady = Boolean(dreamweaverPreviewMix?.audioUrl);
           const dreamweaverPreviewLabel = dreamweaverPreviewReady
-            ? 'Route-aware playback · Preview ready'
+            ? dreamweaverPreviewError
+              ? 'Route-aware playback · Preview unavailable'
+              : 'Route-aware playback · Preview ready'
             : communityLoading
               ? 'Route-aware playback · Signal checking'
               : 'Route-aware playback · Preview standing by';
-          const dreamweaverPreviewSummary = dreamweaverPreviewReady
-            ? `${dreamweaverPreviewMix.title || 'Current signal'} · ${formatMixDuration(dreamweaverPreviewMix.durationSeconds)} · ${dreamweaverPreviewMix.trackCount || 1} ${(dreamweaverPreviewMix.trackCount || 1) === 1 ? 'track' : 'tracks'}`
+          const dreamweaverPreviewSummary = dreamweaverPreviewError
+            ? dreamweaverPreviewError
+            : dreamweaverPreviewReady
+              ? `${dreamweaverPreviewMix.title || 'Current signal'} · ${formatMixDuration(dreamweaverPreviewMix.durationSeconds)} · ${dreamweaverPreviewMix.trackCount || 1} ${(dreamweaverPreviewMix.trackCount || 1) === 1 ? 'track' : 'tracks'}`
             : communityLoading
               ? 'Scanning the current Dreamweaver signal from the Mix Desk.'
               : 'No public Dreamweaver mix is live yet. The route remains open while the next preview is prepared.';
@@ -2716,11 +2724,19 @@
               trackMusicExperimentAction('listening', 'homepage_experiment_dreamweaver_preview', 'native');
               try {
                 await preview.play();
-              } catch {}
+                setDreamweaverPreviewError('');
+              } catch {
+                setDreamweaverPreviewError('Preview audio is unavailable right now. You can still open Dreamweaver directly.');
+              }
               return;
             }
             preview.pause();
           };
+
+          useEffect(() => {
+            setDreamweaverPreviewError('');
+            setIsDreamweaverPreviewPlaying(false);
+          }, [dreamweaverPreviewMix?.audioUrl]);
 
           const communityAction = async (payload, notice = '') => {
             if (!identityUser) {
@@ -3715,8 +3731,8 @@
                               alt={dreamweaverPreviewMix ? `${dreamweaverPreviewMix.title} Dreamweaver preview artwork` : 'HALO Dreamweaver preview artwork'}
                               loading="lazy"
                             />
-                            <span className={`halo-home-experiment__player-chip ${dreamweaverPreviewReady ? 'halo-home-experiment__player-chip--ready' : 'halo-home-experiment__player-chip--standby'}`}>
-                              {dreamweaverPreviewReady ? 'Preview ready' : 'Signal standing by'}
+                            <span className={`halo-home-experiment__player-chip ${dreamweaverPreviewError ? 'halo-home-experiment__player-chip--unavailable' : dreamweaverPreviewReady ? 'halo-home-experiment__player-chip--ready' : 'halo-home-experiment__player-chip--standby'}`}>
+                              {dreamweaverPreviewError ? 'Preview unavailable' : dreamweaverPreviewReady ? 'Preview ready' : 'Signal standing by'}
                             </span>
                           </div>
 
@@ -3738,9 +3754,16 @@
                               preload="none"
                               src={dreamweaverPreviewMix?.audioUrl || undefined}
                               aria-label="Dreamweaver homepage preview player"
-                              onPlay={() => setIsDreamweaverPreviewPlaying(true)}
+                              onPlay={() => {
+                                setIsDreamweaverPreviewPlaying(true);
+                                setDreamweaverPreviewError('');
+                              }}
                               onPause={() => setIsDreamweaverPreviewPlaying(false)}
                               onEnded={() => setIsDreamweaverPreviewPlaying(false)}
+                              onError={() => {
+                                setIsDreamweaverPreviewPlaying(false);
+                                setDreamweaverPreviewError('Preview audio is unavailable right now. You can still open Dreamweaver directly.');
+                              }}
                             ></audio>
                           </div>
                         </div>

@@ -309,8 +309,8 @@ await runCheck("Canonical menu route aliases", async () => {
   }
 
   assert.match(serverJs, /app\.get\("\/control-center"/, "server.js must serve the control-center alias locally.");
-  assert.match(serverJs, /directoryIndexPath[\s\S]*res\.redirect\(301,\s*`\$\{routePath\}\/\$\{searchSuffix\}`\)/, "server.js must canonicalize directory routes to trailing-slash URLs.");
-  assert.match(serverJs, /htmlCandidate[\s\S]*res\.redirect\(301,\s*`\/\$\{relativePath\}\.html\$\{searchSuffix\}`\)/, "server.js must canonicalize extensionless HTML routes to .html URLs.");
+  assert.match(serverJs, /canonicalRouteRedirects = new Map\(/, "server.js must declare explicit canonical route aliases.");
+  assert.match(serverJs, /canonicalRouteRedirects\.get\(routePath\)/, "server.js must use the canonical route alias map at runtime.");
 
   return "menu routes stay canonical across halo.html, netlify.toml, and server.js";
 });

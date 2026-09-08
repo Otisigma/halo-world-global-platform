@@ -54,6 +54,33 @@ const allowedExtensions = new Set([
   ".mp4",
   ".webm",
 ]);
+const canonicalRouteRedirects = new Map([
+  ["/artists", "/artists/"],
+  ["/artist-pro", "/artist-pro/"],
+  ["/campaign-studio", "/campaign-studio/"],
+  ["/creator-freedom", "/creator-freedom/"],
+  ["/creators", "/creators/"],
+  ["/dreamweaver", "/dreamweaver/"],
+  ["/dreamweaver-lab", "/dreamweaver-lab/"],
+  ["/finish-house", "/finish-house/"],
+  ["/iam-social", "/iam-social/"],
+  ["/mixes", "/mixes/"],
+  ["/music", "/music/"],
+  ["/radio", "/radio/"],
+  ["/release-house", "/release-house/"],
+  ["/signal", "/signal-network/"],
+  ["/song-catalog", "/song-catalog/"],
+  ["/support", "/support/"],
+  ["/youtube-studio", "/youtube-studio/"],
+  ["/dj-deck", "/dj-deck.html"],
+  ["/halo-command", "/halo-command.html"],
+  ["/halo-live", "/halo-live.html"],
+  ["/halo-x", "/halo-x.html"],
+  ["/magazine", "/magazine.html"],
+]);
+const rateLimitWindowMs = 60_000;
+const rateLimitMaxRequests = Number(process.env.STATIC_REQUEST_LIMIT || 240);
+const recentRequestBuckets = new Map();
 
 function resolveFromRoot(relativePath) {
   return path.join(root, relativePath);
@@ -99,6 +126,22 @@ function sendStaticCandidate(res, relativePath) {
   return true;
 }
 
+function rateLimit(req, res, next) {
+  const now = Date.now();
+  const key = req.ip || req.socket.remoteAddress || "unknown";
+  const bucket = recentRequestBuckets.get(key);
+  if (!bucket || now - bucket.startedAt >= rateLimitWindowMs) {
+    recentRequestBuckets.set(key, { count: 1, startedAt: now });
+    return next();
+  }
+  if (bucket.count >= rateLimitMaxRequests) {
+    return res.status(429).send("Too many requests");
+  }
+  bucket.count += 1;
+  return next();
+}
+
+app.use(rateLimit);
 app.use((req, _res, next) => {
   console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
   next();
@@ -155,7 +198,7 @@ app.get("/album-concierge/", (_req, res) =>
 app.get("*", (req, res, next) => {
   const routePath = decodeURIComponent(req.path);
   const relativePath = routePath.replace(/^\/+/, "");
-  const searchSuffix = req.originalUrl.slice(req.path.length);
+  const searchSuffix = new URL(req.originalUrl, "http://localhost").search;
   if (!relativePath) return next();
 
   const extension = path.extname(relativePath).toLowerCase();
@@ -169,14 +212,9 @@ app.get("*", (req, res, next) => {
   }
 
   if (!extension) {
-    const directoryIndexPath = safeResolve(path.join(relativePath, "index.html"));
-    if (directoryIndexPath && fs.existsSync(directoryIndexPath) && fs.statSync(directoryIndexPath).isFile()) {
-      return res.redirect(301, `${routePath}/${searchSuffix}`);
-    }
-
-    const htmlCandidate = safeResolve(`${relativePath}.html`);
-    if (htmlCandidate && fs.existsSync(htmlCandidate) && fs.statSync(htmlCandidate).isFile()) {
-      return res.redirect(301, `/${relativePath}.html${searchSuffix}`);
+    const canonicalRedirect = canonicalRouteRedirects.get(routePath);
+    if (canonicalRedirect) {
+      return res.redirect(301, `${canonicalRedirect}${searchSuffix}`);
     }
   }
 

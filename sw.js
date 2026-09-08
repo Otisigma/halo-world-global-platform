@@ -1,5 +1,4 @@
 import { CANONICAL_HOME_ROUTE, canonicalizeRoutePath } from "./lib/route-registry.js";
-
 const CACHE_NAME = "halo-app-shell-v4";
 const APP_SHELL = [
   CANONICAL_HOME_ROUTE,
@@ -40,9 +39,13 @@ self.addEventListener("fetch", event => {
   if (event.request.mode !== "navigate" || event.request.method !== "GET") return;
 
   event.respondWith(
-    fetch(event.request, { cache: "no-store" })
+    fetch(new Request(event.request, { cache: "no-store" }))
       .then(async response => {
         if (!response.ok || response.type !== "basic") return response;
+        const contentType = (response.headers.get("content-type") || "").toLowerCase();
+        const cacheControl = (response.headers.get("cache-control") || "").toLowerCase();
+        const canCache = contentType.includes("text/html") && !cacheControl.includes("no-store");
+        if (!canCache) return response;
         const cache = await caches.open(CACHE_NAME);
         await cache.put(cacheKeyForNavigation(event.request), response.clone());
         return response;

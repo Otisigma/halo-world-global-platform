@@ -970,6 +970,27 @@
           '/release-house/', '/song-catalog/', '/dreamweaver/', '/dreamweaver-lab/',
           '/album-concierge/', '/finish-house/', '/magazine.html', '/support/'
         ]);
+        const MENU_STATUS_GROUP_TARGETS = [
+          { route: '/music/', label: 'ALL MUSIC' },
+          { route: '/halo-x.html', label: 'DJ HALO X' },
+          { route: '/mixes/', label: 'HALO X MIXES' },
+          { route: '/dj-deck.html', label: 'LIVE DJ DECK' },
+          { route: '/halo-live.html', label: 'HALO LIVE' },
+          { route: '/radio/', label: 'HALO RADIO' },
+          { route: '/artist-pro/', label: 'ARTIST PRO' },
+          { route: '/creators/', label: 'CREATOR WORLD' },
+          { route: '/artists/', label: 'ARTIST ROOMS + CHARTS' },
+          { route: '/creator-freedom/', label: 'CREATOR FREEDOM' },
+          { route: '/campaign-studio/', label: 'CAMPAIGN STUDIO' },
+          { route: '/release-house/', label: 'RELEASE HOUSE' },
+          { route: '/song-catalog/', label: 'SONG CATALOG' },
+          { route: '/dreamweaver/', label: 'DREAMWEAVER EXPERIENCE' },
+          { route: '/dreamweaver-lab/', label: 'DREAMWEAVER SONG LAB' },
+          { route: '/album-concierge/', label: 'CREATE YOUR ALBUM' },
+          { route: '/finish-house/', label: 'FINISH HOUSE' },
+          { route: '/magazine.html', label: 'HALO SIGNAL' },
+          { route: '/support/', label: 'FEEDBACK DESK' }
+        ];
         const loadHaloSatelliteStatusSnapshot = async () => {
           if (!window.__haloSatelliteStatusSnapshotPromise) {
             window.__haloSatelliteStatusSnapshotPromise = fetch('/api/halo-satellite-status', {
@@ -1457,6 +1478,17 @@
               </span>
             );
           };
+
+          const menuStatusGroupedTargets = (() => {
+            const grouped = { attention: [], working: [] };
+            for (const target of MENU_STATUS_GROUP_TARGETS) {
+              const indicator = menuStatusForRoute(target.route, 'green');
+              const entry = { ...target, status: indicator.status };
+              if (indicator.status === 'green') grouped.working.push(entry);
+              else grouped.attention.push(entry);
+            }
+            return grouped;
+          })();
 
           const getYouTubeEmbed = (value) => {
             try {
@@ -3158,6 +3190,44 @@
                         <h2>Choose your signal.</h2>
                       </div>
                       <p>Listen, build, broadcast, or step behind the console.</p>
+                    </div>
+
+                    <div className="halo-menu-status-groups" aria-label="Satellite route status groups">
+                      <section className="halo-menu-status-group halo-menu-status-group-attention" aria-labelledby="halo-menu-status-attention">
+                        <div className="halo-menu-status-group-title">
+                          <span>00</span>
+                          <h3 id="halo-menu-status-attention">Attention now</h3>
+                        </div>
+                        {menuStatusGroupedTargets.attention.length ? (
+                          <div className="halo-menu-status-buttons">
+                            {menuStatusGroupedTargets.attention.map(target => (
+                              <a key={`attention-${target.route}`} href={target.route} className="halo-menu-status-button">
+                                <span>{target.label}</span>
+                                {renderMenuStatusBadge(target.route, target.label, 'yellow')}
+                              </a>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="halo-menu-status-empty">No active amber satellites. All monitored routes are currently working.</p>
+                        )}
+                      </section>
+                      <section className="halo-menu-status-group halo-menu-status-group-working" aria-labelledby="halo-menu-status-working">
+                        <div className="halo-menu-status-group-title">
+                          <span>01</span>
+                          <h3 id="halo-menu-status-working">Working now</h3>
+                        </div>
+                        <div className="halo-menu-status-buttons">
+                          {menuStatusGroupedTargets.working.map(target => (
+                            <a key={`working-${target.route}`} href={target.route} className="halo-menu-status-button">
+                              <span>{target.label}</span>
+                              {renderMenuStatusBadge(target.route, target.label, 'green')}
+                            </a>
+                          ))}
+                        </div>
+                        {menuRouteStatusesUnavailable && (
+                          <p className="halo-menu-status-empty">Live status is refreshing. Monitored routes are temporarily shown as ATTENTION until fresh checks publish.</p>
+                        )}
+                      </section>
                     </div>
 
                     <div className="halo-menu-lanes">

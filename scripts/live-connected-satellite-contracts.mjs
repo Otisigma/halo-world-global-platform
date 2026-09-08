@@ -61,7 +61,11 @@ assert.match(commandClientSource, /status-badge/, "The owner dashboard must rend
 assert.match(menuSource, /renderMenuStatusBadge/, "Main menu buttons must render per-tile status badges.");
 assert.match(menuSource, /loadMenuRouteStatuses/, "Main menu badges must use halo-signal-check route statuses.");
 assert.match(menuSource, /\/api\/halo-satellite-status/, "Main menu badges must use the public satellite status snapshot API.");
+assert.match(menuSource, /halo-menu-status-groups/, "Main menu must organize visible satellite buttons into status groups.");
+assert.match(menuSource, /Attention now/, "Main menu must expose the ATTENTION status group.");
+assert.match(menuSource, /Working now/, "Main menu must expose the WORKING status group.");
 assert.match(navigationCssSource, /\.halo-menu-route-status/, "Main menu status badge styling must exist.");
+assert.match(navigationCssSource, /\.halo-menu-status-group/, "Main menu status grouping styles must exist.");
 assert.match(sweepSource, /halo-signal-check/, "The maintenance sweep must write halo-signal-check into the Halo Ledger.");
 assert.match(docsSource, /## halo-signal-check/, "The canonical halo-signal-check README section must exist.");
 assert.equal(packageJson.scripts["halo-signal-check"], "node scripts/live-connected-satellite-contracts.mjs", "package.json must expose halo-signal-check as the canonical repo command.");

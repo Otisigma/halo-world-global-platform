@@ -30,14 +30,13 @@ assert.match(sweep, /halo-signal-check/, "the maintenance team must label the on
 assert.match(sweep, /appendLedgerEntry/, "the maintenance team must write sweep command outcomes to the Halo Ledger");
 assert.match(sweep, /satellite_statuses/i, "the maintenance sweep must store satellite statuses for dashboard reloads");
 assert.match(sweep, /satelliteStatuses:\s*Array\.isArray\(row\.satellite_statuses\)/, "dashboard hydration must read persisted satellite statuses");
-assert.match(sweep, /SATELLITE_MANUAL_ATTENTION/, "the maintenance sweep must support per-route manual attention overrides");
+assert.match(sweep, /HALO_ACTIVE_ATTENTION_ROUTE/, "the maintenance sweep must allow selecting the current attention route independently");
+assert.match(sweep, /DEFAULT_SATELLITE_ATTENTION_ROUTE/, "the maintenance sweep must provide a default single-route attention target");
+assert.match(sweep, /statusRecord\.route !== manualAttentionRoute/, "the maintenance sweep must keep manual attention scoped to one selected route");
 assert.match(sweep, /\/dreamweaver\//, "the maintenance team must include Dreamweaver in core page checks");
 assert.match(sweep, /\/dreamweaver-lab\//, "the maintenance team must include Dreamweaver Lab in core page checks");
 assert.match(sweep, /\/halo-x\.html/, "the maintenance team must include HALO X in satellite checks");
 assert.match(sweep, /\/support\//, "the maintenance team must include Support in satellite checks");
-for (const route of ["/dreamweaver/", "/artist-pro/", "/release-house/", "/song-catalog/", "/dreamweaver-lab/"]) {
-  assert.match(sweep, new RegExp(route.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")), `${route} must be configurable as a manual attention satellite`);
-}
 assert.match(scheduled, /schedule: "\*\/15 \* \* \* \*"/, "the maintenance team must run every 15 minutes");
 assert.doesNotMatch(scheduled, /process\.env/, "new scheduled code must use Netlify function environment access");
 assert.match(api, /run_maintenance/, "owners must be able to request a manual sweep");

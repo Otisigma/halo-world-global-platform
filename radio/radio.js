@@ -100,6 +100,7 @@ const artistActivityForm = document.querySelector("#artistActivityForm");
 const gemmaStatus = document.querySelector("#gemmaStatus");
 const gemmaPriorities = document.querySelector("#gemmaPriorities");
 const gemmaRelay = document.querySelector("#gemmaRelay");
+const gemmaActionButtons = [...document.querySelectorAll("[data-gemma-action]")];
 const longPlayQueue = document.querySelector("#longPlayQueue");
 const mixQueueCount = document.querySelector("#mixQueueCount");
 const playbackProgress = document.querySelector("#playbackProgress");
@@ -610,6 +611,7 @@ async function personaAction(payload, button) {
 }
 
 function renderGemma(data) {
+  if (!gemmaStatus || !gemmaPriorities || !gemmaRelay) return;
   state.gemma = data;
   const assessment = data.assessment;
   const health = data.health;
@@ -629,7 +631,7 @@ function renderGemma(data) {
 }
 
 async function loadGemmaStatus() {
-  if (!state.canManageSchedule) return;
+  if (!state.canManageSchedule || !gemmaStatus || !gemmaPriorities || !gemmaRelay) return;
   try {
     const response = await fetch("/api/radio/gemma", { headers: { Accept: "application/json" }, credentials: "same-origin" });
     const data = await response.json().catch(() => ({}));
@@ -643,10 +645,14 @@ async function loadGemmaStatus() {
 }
 
 async function runGemmaAction(action) {
-  const buttons = [...document.querySelectorAll("[data-gemma-action]")];
+  if (!state.canManageSchedule || !gemmaStatus || !gemmaPriorities || !gemmaRelay) return;
+  if (!["assess", "health_check", "watchtower_update"].includes(action)) return;
+  const buttons = gemmaActionButtons;
   if (action === "watchtower_update" && !window.confirm("Approve Gemma to request an AzuraCast update check now?")) return;
   buttons.forEach(button => { button.disabled = true; });
-  stationDeskNotice.textContent = action === "watchtower_update" ? "Sending the approved update check through Gemma's protected relay…" : "Gemma is reading the latest station evidence…";
+  if (stationDeskNotice) {
+    stationDeskNotice.textContent = action === "watchtower_update" ? "Sending the approved update check through Gemma's protected relay…" : "Gemma is reading the latest station evidence…";
+  }
   try {
     const response = await fetch("/api/radio/gemma", {
       method: "POST",
@@ -657,9 +663,13 @@ async function runGemmaAction(action) {
     const data = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(data.message || "Gemma could not complete the operator action");
     renderGemma(data);
-    stationDeskNotice.textContent = data.message || (action === "assess" ? "Gemma completed the station assessment." : "Gemma completed the operator action.");
+    if (stationDeskNotice) {
+      stationDeskNotice.textContent = data.message || (action === "assess" ? "Gemma completed the station assessment." : "Gemma completed the operator action.");
+    }
   } catch (error) {
-    stationDeskNotice.textContent = error instanceof Error ? error.message : "Gemma's operator channel is unavailable.";
+    if (stationDeskNotice) {
+      stationDeskNotice.textContent = error instanceof Error ? error.message : "Gemma's operator channel is unavailable.";
+    }
   } finally {
     buttons.forEach(button => { button.disabled = false; });
   }
@@ -2705,7 +2715,7 @@ managerCouncilOutput.addEventListener("click", event => {
   const button = event.target.closest("[data-manager-decision]");
   if (button) decideManagerAction(button);
 });
-document.querySelectorAll("[data-gemma-action]").forEach(button => button.addEventListener("click", () => runGemmaAction(button.dataset.gemmaAction)));
+gemmaActionButtons.forEach(button => button.addEventListener("click", () => runGemmaAction(button.dataset.gemmaAction)));
 document.querySelector("#authSwitch").addEventListener("click", () => setAuthMode(state.authMode === "login" ? "signup" : "login"));
 authForm.addEventListener("submit", handleAuth);
 trackEditorForm.addEventListener("submit", saveTrackEdits);

@@ -51,6 +51,7 @@
     if (!installCard) return;
     const copy = installCard.querySelector("small");
     const action = installCard.querySelector(".halo-install-action");
+    if (!copy || !action) return;
     const isAppleMobile = /iphone|ipad|ipod/i.test(window.navigator.userAgent);
     copy.textContent = isAppleMobile
       ? "In Safari, tap Share, then Add to Home Screen."
@@ -91,8 +92,11 @@
       <button class="halo-install-action" type="button" data-stat-event="install_halo_app">Add</button>
       <button class="halo-install-dismiss" type="button" aria-label="Dismiss home screen prompt">×</button>`;
 
-    installCard.querySelector(".halo-install-action").addEventListener("click", requestInstall);
-    installCard.querySelector(".halo-install-dismiss").addEventListener("click", dismissInstallCard);
+    const action = installCard.querySelector(".halo-install-action");
+    const dismiss = installCard.querySelector(".halo-install-dismiss");
+    if (!action || !dismiss) return;
+    action.addEventListener("click", requestInstall);
+    dismiss.addEventListener("click", dismissInstallCard);
     document.body.append(installCard);
     document.body.classList.add("halo-install-visible");
   };
@@ -110,6 +114,7 @@
   });
 
   document.addEventListener("click", event => {
+    if (!(event.target instanceof Element)) return;
     const activeMenu = event.target.closest(".halo-mobile-menu");
     if (!activeMenu) {
       closeNavigationMenus();

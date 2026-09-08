@@ -1703,6 +1703,7 @@
           };
 
           const audioCtxRef = useRef(null);
+          const audioUnlockHandlerRef = useRef(null);
           const canvasRef = useRef(null);
           const dreamweaverPreviewAudioRef = useRef(null);
           const singleFileInputRef = useRef(null);
@@ -1951,10 +1952,42 @@
             setVideoNotice(`${file.name} is ready to publish.`);
           };
 
+          const teardownAudioUnlock = () => {
+            if (!audioUnlockHandlerRef.current) return;
+            ['click', 'touchstart', 'keydown'].forEach(eventName => {
+              document.removeEventListener(eventName, audioUnlockHandlerRef.current, { passive: true });
+            });
+            audioUnlockHandlerRef.current = null;
+          };
+
+          const attachAudioUnlock = () => {
+            if (audioUnlockHandlerRef.current) return;
+            const unlockAudio = async () => {
+              const context = audioCtxRef.current;
+              if (!context) return;
+              if (context.state === 'suspended') {
+                try {
+                  await context.resume();
+                } catch (error) {
+                  console.warn('Audio context resume is still blocked until another gesture.', error);
+                  return;
+                }
+              }
+              if (context.state === 'running') {
+                teardownAudioUnlock();
+              }
+            };
+            audioUnlockHandlerRef.current = unlockAudio;
+            ['click', 'touchstart', 'keydown'].forEach(eventName => {
+              document.addEventListener(eventName, unlockAudio, { passive: true });
+            });
+          };
+
           const initAudio = () => {
             try {
               if (!audioCtxRef.current) {
                 const AudioContext = window.AudioContext || window.webkitAudioContext;
+                if (!AudioContext) throw new Error('This browser does not support audio playback.');
                 audioCtxRef.current = new AudioContext();
 
                 const gainNode = audioCtxRef.current.createGain();
@@ -1993,9 +2026,28 @@
                 analyzerRef.current = analyzer;
                 window.__haloAudioContext = audioCtxRef.current;
               }
+              attachAudioUnlock();
             } catch (err) {
+              setProcessingStatus(err.message || 'Audio playback is unavailable in this browser.');
               console.warn("Web Audio API warning:", err);
             }
+          };
+
+          const ensureAudioReady = async () => {
+            initAudio();
+            const ctx = audioCtxRef.current;
+            if (!ctx) throw new Error('Audio playback is not supported in this browser.');
+            if (ctx.state === 'suspended') {
+              try {
+                await ctx.resume();
+              } catch (error) {
+                throw new Error('Audio is locked by browser policy. Tap any playback control again to unlock.');
+              }
+            }
+            if (ctx.state !== 'running') {
+              throw new Error(`Audio engine is ${ctx.state}. Tap any playback control again to unlock.`);
+            }
+            return ctx;
           };
 
           const isSupportedAudioFile = (file) => {
@@ -2095,12 +2147,7 @@
           };
 
           const startHybridPlayback = async (track) => {
-            initAudio();
-            const ctx = audioCtxRef.current;
-            if (!ctx) throw new Error('Audio playback is not supported in this browser.');
-            if (ctx.state === 'suspended') {
-              await ctx.resume();
-            }
+            const ctx = await ensureAudioReady();
             window.dispatchEvent(new CustomEvent('halo:audio-state'));
 
             stopActiveSource();
@@ -2723,10 +2770,11 @@
             if (preview.paused) {
               trackMusicExperimentAction('listening', 'homepage_experiment_dreamweaver_preview', 'native');
               try {
+                await ensureAudioReady();
                 await preview.play();
                 setDreamweaverPreviewError('');
-              } catch {
-                setDreamweaverPreviewError('Preview audio is unavailable right now. You can still open Dreamweaver directly.');
+              } catch (error) {
+                setDreamweaverPreviewError(error.message || 'Preview audio is unavailable right now. You can still open Dreamweaver directly.');
               }
               return;
             }
@@ -2737,6 +2785,8 @@
             setDreamweaverPreviewError('');
             setIsDreamweaverPreviewPlaying(false);
           }, [dreamweaverPreviewMix?.audioUrl]);
+
+          useEffect(() => () => teardownAudioUnlock(), []);
 
           const communityAction = async (payload, notice = '') => {
             if (!identityUser) {

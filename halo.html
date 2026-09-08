@@ -819,16 +819,281 @@
         @keyframes artist-pro-card-float { 50% { transform: translateZ(58px) translateY(-10px) rotate(-3deg); } }
         @keyframes artist-pro-node { 50% { transform: scale(1.08); border-color: rgba(216, 188, 124, .55); color: #f0ddb1; } }
         @keyframes artist-pro-proof-scan { 45%, 100% { transform: translateX(120%); } }
+        .halo-home-experiment {
+            position: relative;
+            overflow: hidden;
+            border: 1px solid rgba(245, 158, 11, .24);
+            border-radius: 2rem;
+            background:
+                radial-gradient(circle at 14% 18%, rgba(245, 158, 11, .14), transparent 26%),
+                radial-gradient(circle at 82% 24%, rgba(34, 211, 238, .12), transparent 24%),
+                linear-gradient(140deg, #0f1115 0%, #090a0d 54%, #120d12 100%);
+            box-shadow: 0 34px 110px rgba(0, 0, 0, .42);
+        }
+        .halo-home-experiment::before {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            content: '';
+            background-image:
+                linear-gradient(rgba(255,255,255,.035) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255,255,255,.03) 1px, transparent 1px);
+            background-size: 34px 34px;
+            mask-image: linear-gradient(135deg, #000, transparent 85%);
+            opacity: .55;
+        }
+        .halo-home-experiment__grid {
+            display: grid;
+            gap: 1px;
+            background: rgba(255, 255, 255, .08);
+        }
+        .halo-home-experiment__panel {
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            gap: 1.35rem;
+            min-width: 0;
+            padding: clamp(1.5rem, 2vw, 2.25rem);
+            background: linear-gradient(180deg, rgba(9, 11, 15, .96), rgba(9, 11, 15, .88));
+        }
+        .halo-home-experiment__panel--copy {
+            background: linear-gradient(180deg, rgba(18, 16, 23, .96), rgba(12, 13, 16, .92));
+        }
+        .halo-home-experiment__eyebrow {
+            margin: 0;
+            color: #fbbf24;
+            font: 900 .58rem/1.2 'Inter', sans-serif;
+            letter-spacing: .3em;
+            text-transform: uppercase;
+        }
+        .halo-home-experiment__title {
+            margin: 0;
+            font-family: 'Barlow Condensed', sans-serif;
+            font-size: clamp(2.5rem, 5vw, 4.25rem);
+            font-weight: 900;
+            line-height: .88;
+            letter-spacing: -.05em;
+            text-transform: uppercase;
+            text-wrap: balance;
+        }
+        .halo-home-experiment__lede {
+            margin: 0;
+            max-width: 40rem;
+            color: #d1d5db;
+            font: 500 .98rem/1.7 'Inter', sans-serif;
+        }
+        .halo-home-experiment__player-surface {
+            display: grid;
+            gap: 1rem;
+            align-items: center;
+            border: 1px solid rgba(255, 255, 255, .1);
+            border-radius: 1.5rem;
+            background: linear-gradient(145deg, rgba(255,255,255,.04), rgba(255,255,255,.015));
+            padding: 1rem;
+        }
+        .halo-home-experiment__player-visual {
+            position: relative;
+            overflow: hidden;
+            border-radius: 1.2rem;
+            border: 1px solid rgba(255, 255, 255, .1);
+            aspect-ratio: 1;
+            background: #050608;
+        }
+        .halo-home-experiment__player-visual img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+        }
+        .halo-home-experiment__player-visual::after {
+            position: absolute;
+            inset: 0;
+            content: '';
+            background:
+                linear-gradient(180deg, rgba(8,10,12,.1), rgba(8,10,12,.7)),
+                radial-gradient(circle at 75% 20%, rgba(34, 211, 238, .28), transparent 24%);
+        }
+        .halo-home-experiment__player-chip {
+            position: absolute;
+            left: 1rem;
+            bottom: 1rem;
+            z-index: 1;
+            display: inline-flex;
+            align-items: center;
+            gap: .5rem;
+            padding: .45rem .8rem;
+            border: 1px solid rgba(255, 255, 255, .12);
+            border-radius: 999px;
+            background: rgba(6, 8, 11, .82);
+            color: #f3f4f6;
+            font: 800 .55rem/1 'Inter', sans-serif;
+            letter-spacing: .18em;
+            text-transform: uppercase;
+            backdrop-filter: blur(14px);
+        }
+        .halo-home-experiment__player-chip::before {
+            width: .45rem;
+            aspect-ratio: 1;
+            border-radius: 50%;
+            background: currentColor;
+            box-shadow: 0 0 12px currentColor;
+            content: '';
+        }
+        .halo-home-experiment__player-chip--ready {
+            color: #86efac;
+        }
+        .halo-home-experiment__player-chip--standby {
+            color: #fbbf24;
+        }
+        .halo-home-experiment__signal {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: .75rem;
+        }
+        .halo-home-experiment__signal-title {
+            margin: 0;
+            color: #fff;
+            font: 800 1rem/1.2 'Inter', sans-serif;
+        }
+        .halo-home-experiment__signal-copy {
+            margin: 0;
+            color: #9ca3af;
+            font-size: .72rem;
+            line-height: 1.6;
+            text-transform: uppercase;
+            letter-spacing: .14em;
+        }
+        .halo-home-experiment__audio {
+            width: 100%;
+            min-width: 0;
+        }
+        .halo-home-experiment__actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: .75rem;
+        }
+        .halo-home-experiment__primary-action,
+        .halo-home-experiment__secondary-action {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: .6rem;
+            min-height: 3.25rem;
+            padding: 0 1.35rem;
+            border-radius: 999px;
+            font: 900 .68rem/1 'Inter', sans-serif;
+            letter-spacing: .18em;
+            text-transform: uppercase;
+            text-decoration: none;
+            transition: transform 180ms ease, border-color 180ms ease, background-color 180ms ease, color 180ms ease;
+        }
+        .halo-home-experiment__primary-action {
+            border: 0;
+            background: #fbbf24;
+            color: #0b0d10;
+            cursor: pointer;
+        }
+        .halo-home-experiment__primary-action:hover:not(:disabled),
+        .halo-home-experiment__secondary-action:hover {
+            transform: translateY(-1px);
+        }
+        .halo-home-experiment__primary-action:disabled {
+            cursor: not-allowed;
+            opacity: .58;
+        }
+        .halo-home-experiment__secondary-action {
+            border: 1px solid rgba(255, 255, 255, .16);
+            color: #f3f4f6;
+            background: rgba(255, 255, 255, .02);
+        }
+        .halo-home-experiment__meta {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: space-between;
+            gap: .75rem;
+            color: #9ca3af;
+            font-size: .76rem;
+            line-height: 1.5;
+        }
+        .halo-home-experiment__measure-label {
+            margin: .35rem 0 0;
+            color: #f3f4f6;
+            font: 800 .72rem/1.4 'Inter', sans-serif;
+            letter-spacing: .18em;
+            text-transform: uppercase;
+        }
+        .halo-home-experiment__measurements {
+            display: flex;
+            flex-wrap: wrap;
+            gap: .65rem;
+            margin: 0;
+            padding: 0;
+            list-style: none;
+        }
+        .halo-home-experiment__measurements li {
+            padding: .55rem .8rem;
+            border: 1px solid rgba(255, 255, 255, .1);
+            border-radius: 999px;
+            background: rgba(255, 255, 255, .03);
+            color: #e5e7eb;
+            font: 800 .66rem/1.35 'Inter', sans-serif;
+            letter-spacing: .12em;
+            text-transform: uppercase;
+        }
+        .halo-home-experiment__note {
+            margin: 0;
+            max-width: 40rem;
+            color: #9ca3af;
+            font: 500 .84rem/1.7 'Inter', sans-serif;
+        }
+        .halo-home-experiment__status-line {
+            display: inline-flex;
+            align-items: center;
+            gap: .6rem;
+            width: fit-content;
+            padding: .55rem .8rem;
+            border: 1px solid rgba(251, 191, 36, .18);
+            border-radius: 999px;
+            background: rgba(251, 191, 36, .06);
+            color: #f8ddb0;
+            font: 800 .6rem/1 'Inter', sans-serif;
+            letter-spacing: .18em;
+            text-transform: uppercase;
+        }
+        .halo-home-experiment__status-line::before {
+            width: .45rem;
+            aspect-ratio: 1;
+            border-radius: 50%;
+            background: currentColor;
+            box-shadow: 0 0 12px currentColor;
+            content: '';
+        }
+        @media (min-width: 960px) {
+            .halo-home-experiment__grid {
+                grid-template-columns: minmax(0, 1.02fr) minmax(0, .98fr);
+            }
+            .halo-home-experiment__player-surface {
+                grid-template-columns: minmax(210px, .72fr) minmax(0, 1fr);
+            }
+        }
         @media (max-width: 900px) {
             .artist-pro-takeover { min-height: auto; }
             .artist-pro-machine-wrap { min-height: 520px; }
             .artist-pro-machine { width: min(78vw, 410px); }
+            .halo-home-experiment__panel {
+                padding: 1.35rem;
+            }
         }
         @media (max-width: 520px) {
             .artist-pro-machine-wrap { min-height: 420px; }
             .artist-pro-machine { min-width: 270px; width: 76vw; }
             .artist-pro-node { width: 3.9rem; font-size: .42rem; }
             .artist-pro-price { right: 0; bottom: 5%; }
+            .halo-home-experiment__actions > * {
+                width: 100%;
+            }
         }
         @media (prefers-reduced-motion: reduce) {
             .headline-gradient-glow,
@@ -854,6 +1119,10 @@
             }
             .artist-pro-display span { opacity: 1; transform: none; }
             .artist-pro-machine { transform: none !important; transition: none; }
+            .halo-home-experiment__primary-action,
+            .halo-home-experiment__secondary-action {
+                transition: none;
+            }
         }
     </style>
 </head>
@@ -1407,6 +1676,7 @@
           const [roomPostDraft, setRoomPostDraft] = useState({ title: '', description: '', videoUrl: '', options: ['', ''] });
           const [showEqualizer, setShowEqualizer] = useState(false);
           const [equalizer, setEqualizer] = useState({ master: 70, bass: 0, mid: 0, treble: 0 });
+          const [isDreamweaverPreviewPlaying, setIsDreamweaverPreviewPlaying] = useState(false);
           const fallbackReleaseArtwork = window.HaloReleaseArtwork?.DEFAULT_RELEASE_ARTWORK || '/assets/halo-app-icon-512.png';
           const [musicExperimentVariant] = useState(() => {
             const requested = new URLSearchParams(window.location.search).get('musicExperiment');
@@ -1428,6 +1698,7 @@
 
           const audioCtxRef = useRef(null);
           const canvasRef = useRef(null);
+          const dreamweaverPreviewAudioRef = useRef(null);
           const singleFileInputRef = useRef(null);
           const multiFileInputRef = useRef(null);
           const folderInputRef = useRef(null);
@@ -2385,6 +2656,33 @@
             const total = Math.max(0, Number(seconds) || 0);
             const minutes = Math.floor(total / 60);
             return `${minutes}:${String(Math.floor(total % 60)).padStart(2, '0')}`;
+          };
+
+          const dreamweaverPreviewMix = roomMixes.find(mix => mix.audioUrl && mix.source !== 'youtube') || roomMixes.find(mix => mix.audioUrl) || null;
+          const dreamweaverRouteIndicator = menuStatusForRoute('/dreamweaver/', dreamweaverPreviewMix ? 'green' : 'yellow');
+          const dreamweaverPreviewReady = Boolean(dreamweaverPreviewMix?.audioUrl);
+          const dreamweaverPreviewLabel = dreamweaverPreviewReady
+            ? 'Route-aware playback · Preview ready'
+            : communityLoading
+              ? 'Route-aware playback · Signal checking'
+              : 'Route-aware playback · Preview standing by';
+          const dreamweaverPreviewSummary = dreamweaverPreviewReady
+            ? `${dreamweaverPreviewMix.title || 'Current signal'} · ${formatMixDuration(dreamweaverPreviewMix.durationSeconds)} · ${dreamweaverPreviewMix.trackCount || 1} ${(dreamweaverPreviewMix.trackCount || 1) === 1 ? 'track' : 'tracks'}`
+            : communityLoading
+              ? 'Scanning the current Dreamweaver signal from the Mix Desk.'
+              : 'No public Dreamweaver mix is live yet. The route remains open while the next preview is prepared.';
+
+          const toggleDreamweaverPreview = async () => {
+            const preview = dreamweaverPreviewAudioRef.current;
+            if (!preview || !dreamweaverPreviewReady) return;
+            if (preview.paused) {
+              trackMusicExperimentAction('listening', 'homepage_experiment_dreamweaver_preview', 'native');
+              try {
+                await preview.play();
+              } catch {}
+              return;
+            }
+            preview.pause();
           };
 
           const communityAction = async (payload, notice = '') => {
@@ -3364,6 +3662,105 @@
               {viewMode === 'landing' && (
                 <main className="flex-1 max-w-6xl mx-auto w-full px-4 py-8 md:py-12 space-y-12 overflow-y-auto">
 
+                  <section className="halo-home-experiment" aria-labelledby="halo-home-experiment-title" data-homepage-hero="dreamweaver">
+                    <div className="halo-home-experiment__grid">
+                      <article className="halo-home-experiment__panel halo-home-experiment__panel--player">
+                        <div>
+                          <p className="halo-home-experiment__eyebrow">Dreamweaver Preview</p>
+                          <h2 className="halo-home-experiment__title">Dreamweaver Player</h2>
+                          <p className="halo-home-experiment__lede">Press play to hear the current signal before you enter.</p>
+                        </div>
+
+                        <div className="halo-home-experiment__player-surface">
+                          <div className="halo-home-experiment__player-visual">
+                            <img
+                              src={dreamweaverPreviewMix?.artworkUrl || fallbackReleaseArtwork}
+                              alt={dreamweaverPreviewMix ? `${dreamweaverPreviewMix.title} Dreamweaver preview artwork` : 'HALO Dreamweaver preview artwork'}
+                              loading="lazy"
+                            />
+                            <span className={`halo-home-experiment__player-chip ${dreamweaverPreviewReady ? 'halo-home-experiment__player-chip--ready' : 'halo-home-experiment__player-chip--standby'}`}>
+                              {dreamweaverPreviewReady ? 'Preview ready' : 'Signal standing by'}
+                            </span>
+                          </div>
+
+                          <div className="space-y-4">
+                            <div className="halo-home-experiment__signal">
+                              <div>
+                                <p className="halo-home-experiment__signal-copy">Current signal</p>
+                                <p className="halo-home-experiment__signal-title">{dreamweaverPreviewMix?.title || 'Dreamweaver preview is scanning the current room mix.'}</p>
+                              </div>
+                              {renderMenuStatusBadge('/dreamweaver/', 'Dreamweaver route', dreamweaverPreviewReady ? 'green' : 'yellow')}
+                            </div>
+                            <p className="halo-home-experiment__signal-copy">{dreamweaverPreviewSummary}</p>
+                            <p className="text-sm leading-6 text-gray-300">{dreamweaverPreviewMix ? `From ${dreamweaverPreviewMix.creator?.name || 'HALO'} · ${dreamweaverPreviewMix.credits?.originalArtist || 'Owen Anthony'} signal.` : 'Dreamweaver keeps the route visible even when a fresh public preview is still loading.'}</p>
+                            <audio
+                              id="dreamweaver-homepage-preview"
+                              ref={dreamweaverPreviewAudioRef}
+                              className="halo-home-experiment__audio"
+                              controls
+                              preload="none"
+                              src={dreamweaverPreviewMix?.audioUrl || undefined}
+                              aria-label="Dreamweaver homepage preview player"
+                              onPlay={() => setIsDreamweaverPreviewPlaying(true)}
+                              onPause={() => setIsDreamweaverPreviewPlaying(false)}
+                              onEnded={() => setIsDreamweaverPreviewPlaying(false)}
+                            ></audio>
+                          </div>
+                        </div>
+
+                        <div className="halo-home-experiment__actions">
+                          <button
+                            type="button"
+                            className="halo-home-experiment__primary-action focus:outline-none focus:ring-2 focus:ring-amber-200 focus:ring-offset-2 focus:ring-offset-[#090a0d]"
+                            onClick={toggleDreamweaverPreview}
+                            disabled={!dreamweaverPreviewReady}
+                            aria-controls="dreamweaver-homepage-preview"
+                          >
+                            {isDreamweaverPreviewPlaying ? 'Pause preview' : 'Play preview'}
+                          </button>
+                          <a
+                            href="/dreamweaver/"
+                            className="halo-home-experiment__secondary-action focus:outline-none focus:ring-2 focus:ring-amber-200 focus:ring-offset-2 focus:ring-offset-[#090a0d]"
+                            data-stat-event="open_dreamweaver_show"
+                            data-stat-target="homepage_hero"
+                          >
+                            Open Dreamweaver
+                          </a>
+                        </div>
+
+                        <div className="halo-home-experiment__meta" role="status" aria-live="polite">
+                          <span>{dreamweaverPreviewLabel}</span>
+                          <span className="text-[10px] uppercase tracking-[.18em] text-gray-500">Route status: {dreamweaverRouteIndicator.label}</span>
+                        </div>
+                      </article>
+
+                      <article className="halo-home-experiment__panel halo-home-experiment__panel--copy">
+                        <div>
+                          <p className="halo-home-experiment__eyebrow">Homepage Experiment</p>
+                          <h2 id="halo-home-experiment-title" className="halo-home-experiment__title">Artist-first listening test / Supporter-first model</h2>
+                          <p className="halo-home-experiment__lede">We are comparing the best listener experience and the best artist outcome. Variant A keeps the HALO-native artist home central as the brand path. Variant B is a simpler quick-listen comparison. Both paths route support back to artist-owned HALO actions, where fans become supporters and supporters are rewarded.</p>
+                        </div>
+
+                        <span className="halo-home-experiment__status-line">
+                          Active test mode: {musicExperimentVariant === 'compare' ? 'A + B side-by-side' : musicExperimentVariant === 'native' ? 'A only (native)' : 'B only (embed)'}
+                        </span>
+
+                        <div>
+                          <p className="halo-home-experiment__measure-label">Measurement focus</p>
+                          <ul className="halo-home-experiment__measurements" aria-label="Homepage experiment measurement focus">
+                            <li>Listening</li>
+                            <li>Relationship room handoff</li>
+                            <li>Support actions</li>
+                            <li>Repeat visits</li>
+                            <li>Supporter conversion</li>
+                          </ul>
+                        </div>
+
+                        <p className="halo-home-experiment__note">We use transparent on-page behavior signals to improve the experience for artists and fans without exploiting either side of the relationship.</p>
+                      </article>
+                    </div>
+                  </section>
+
                   {/* FOUNDING ARTIST PRO TAKEOVER */}
                   <section
                     className="artist-pro-takeover"
@@ -3544,11 +3941,11 @@
                     </div>
                   </section>
 
-                  <section className="relative overflow-hidden rounded-[2rem] border border-amber-300/20 bg-[#0f0f13] shadow-[0_24px_70px_rgba(0,0,0,.35)]" aria-labelledby="music-experiment-title">
+                  <section id="music-experiment-detail" className="relative overflow-hidden rounded-[2rem] border border-amber-300/20 bg-[#0f0f13] shadow-[0_24px_70px_rgba(0,0,0,.35)]" aria-labelledby="music-experiment-title">
                     <div className="p-6 md:p-8">
-                      <p className="text-[9px] font-black uppercase tracking-[.28em] text-amber-300">Homepage experiment / Artist-first listening test / Supporter-first model</p>
-                      <h2 id="music-experiment-title" className="mt-4 font-sans-alt text-3xl font-black uppercase leading-[.9] tracking-[-.03em] text-white md:text-4xl">Which music home performs best for listeners and artists?</h2>
-                      <p className="mt-4 max-w-3xl text-xs leading-6 text-gray-300">We are comparing the best listener experience and the best artist outcome. Variant A keeps the HALO-native artist home central as the brand path. Variant B is only a simpler quick-listen comparison. Both paths route support back to artist-owned HALO actions, where fans become supporters and supporters are rewarded.</p>
+                      <p className="text-[9px] font-black uppercase tracking-[.28em] text-amber-300">Experiment detail / Variant scorecard</p>
+                      <h2 id="music-experiment-title" className="mt-4 font-sans-alt text-3xl font-black uppercase leading-[.9] tracking-[-.03em] text-white md:text-4xl">How the two music-home paths are being measured</h2>
+                      <p className="mt-4 max-w-3xl text-xs leading-6 text-gray-300">The hero above makes Dreamweaver the first musical click. This detail keeps the current A/B comparison, CTA instrumentation, and supporter-path markers visible for ongoing review.</p>
                       <p className="mt-3 text-[10px] uppercase tracking-[.18em] text-gray-500">Active test mode: {musicExperimentVariant === 'compare' ? 'A + B side-by-side' : musicExperimentVariant === 'native' ? 'A only (native)' : 'B only (embed)'}</p>
                       <div className="mt-5 overflow-x-auto rounded-2xl border border-white/10 bg-black/20">
                         <table className="min-w-full text-[10px] uppercase tracking-[.18em] text-gray-400">

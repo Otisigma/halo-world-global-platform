@@ -141,7 +141,7 @@
 
   if ("serviceWorker" in window.navigator) {
     window.addEventListener("load", () => {
-      window.navigator.serviceWorker.register("/sw.js").catch(() => {});
+      window.navigator.serviceWorker.register("/sw.js", { type: "module" }).catch(() => {});
     });
   }
 

@@ -1,34 +1,15 @@
 import { randomUUID } from "node:crypto";
 import { issueKeyForFingerprint, reportIssue, resolveIssue } from "./maintenance.mjs";
 import { appendLedgerEntry } from "./halo-ledger.mjs";
+import { CANONICAL_HOME_ROUTE, SATELLITE_STATUS_TARGETS, canonicalizeRoutePath } from "../../lib/route-registry.js";
+
+export { SATELLITE_STATUS_TARGETS };
 
 const CORE_PAGES = [
   "/", "/magazine.html", "/dj-deck.html", "/vip_launchpad.html", "/halo-live.html",
   "/halo-x.html", "/halo-relations.html", "/halo-command.html", "/creators/",
   "/creators/gear-guide.html", "/music/", "/radio/", "/dreamweaver/", "/dreamweaver-lab/",
   "/campaign-studio/", "/release-house/", "/finish-house/", "/artists/", "/mixes/"
-];
-
-export const SATELLITE_STATUS_TARGETS = [
-  { name: "HALO X", route: "/halo-x.html" },
-  { name: "DJ Deck", route: "/dj-deck.html" },
-  { name: "HALO Live", route: "/halo-live.html" },
-  { name: "Magazine", route: "/magazine.html" },
-  { name: "Dreamweaver", route: "/dreamweaver/" },
-  { name: "Dreamweaver Lab", route: "/dreamweaver-lab/" },
-  { name: "Creator World", route: "/creators/" },
-  { name: "Creator Freedom", route: "/creator-freedom/" },
-  { name: "Campaign Studio", route: "/campaign-studio/" },
-  { name: "Finish House", route: "/finish-house/" },
-  { name: "Release House", route: "/release-house/" },
-  { name: "Artist Pro", route: "/artist-pro/" },
-  { name: "Artists", route: "/artists/" },
-  { name: "Music", route: "/music/" },
-  { name: "Radio", route: "/radio/" },
-  { name: "Mixes", route: "/mixes/" },
-  { name: "Song Catalog", route: "/song-catalog/" },
-  { name: "Album Concierge", route: "/album-concierge/" },
-  { name: "Support", route: "/support/" }
 ];
 
 const API_ROUTES = [
@@ -137,8 +118,7 @@ function isHtml(response, body) {
 }
 
 function normalizeRoute(pathname) {
-  if (!pathname || pathname === "/") return "/";
-  return pathname.endsWith("/") ? pathname : `${pathname}/`;
+  return canonicalizeRoutePath(pathname);
 }
 
 async function requestTarget(url, options = {}) {
@@ -259,7 +239,7 @@ export async function runMaintenanceSweep(db, baseUrl, { triggerType = "schedule
       checks.push(connectionCheck);
       await persistCheck(db, sweepId, connectionCheck);
       connectionsChecked += 1;
-      if (normalizeRoute(pageUrl.pathname) === "/") {
+      if (normalizeRoute(pageUrl.pathname) === CANONICAL_HOME_ROUTE) {
         connectedRoutesFromMainMenu.add(normalizeRoute(connectionUrl.pathname));
       }
       if (connectionPassed && isHtml(connectionRequest.response, connectionRequest.body) && !queuedPages.has(connectionUrl.href)) {

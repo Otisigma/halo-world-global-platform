@@ -133,7 +133,7 @@ check("Import Safety", "netlify/functions/resolve-track.mjs", resolveTrackSource
 check("Import Safety", "netlify/functions/resolve-track.mjs", resolveTrackSource.includes("Cross-origin music imports are not accepted") && resolveTrackSource.includes("nextPlatform.name !== platform.name"), "rejects cross-origin requests and untrusted redirects");
 check("Production Gate", "netlify.toml", netlifyConfigSource.includes("X-Content-Type-Options") && netlifyConfigSource.includes("Referrer-Policy") && netlifyConfigSource.includes("Permissions-Policy"), "applies baseline browser security headers");
 check("Production Gate", "netlify.toml", netlifyConfigSource.includes('for = "/api/*"') && netlifyConfigSource.includes("no-store") && netlifyConfigSource.includes("noindex, nofollow"), "prevents API caching and indexing");
-check("Production Gate", "404.html", notFoundSource.includes("Signal Lost") && notFoundSource.includes('href="/"') && notFoundSource.includes('name="robots" content="noindex"'), "provides a branded recoverable not-found experience");
+check("Production Gate", "404.html", notFoundSource.includes("Signal Lost") && notFoundSource.includes('href="/halo"') && notFoundSource.includes('name="robots" content="noindex"'), "provides a branded recoverable not-found experience");
 const broadcastControlSource = await readFile(resolve(root, "netlify/functions/broadcast-control.mjs"), "utf8");
 check("Broadcast Controller", "netlify/functions/broadcast-control.mjs", broadcastControlSource.includes('path: "/api/broadcast-control"') && broadcastControlSource.includes("timingSafeEqual"), "protects relay commands behind a server-side control code");
 const issueSource = await readFile(resolve(root, "netlify/functions/issues.mjs"), "utf8");

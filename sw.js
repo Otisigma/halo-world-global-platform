@@ -1,6 +1,8 @@
+import { CANONICAL_HOME_ROUTE, canonicalizeRoutePath } from "./lib/route-registry.js";
+
 const CACHE_NAME = "halo-app-shell-v4";
 const APP_SHELL = [
-  "/halo",
+  CANONICAL_HOME_ROUTE,
   "/app.webmanifest",
   "/mobile-navigation.css",
   "/mobile-navigation.js",
@@ -8,26 +10,14 @@ const APP_SHELL = [
   "/assets/halo-app-icon-512.png"
 ];
 
-function canonicalNavigationPath(pathname = "/") {
-  if (!pathname || pathname === "/" || pathname === "/halo/" || pathname === "/halo.html") return "/halo";
-  if (pathname === "/dreamweaver" || pathname === "/dreamweaver/index.html") return "/dreamweaver/";
-  if (pathname === "/dj-deck") return "/dj-deck.html";
-  if (pathname === "/halo-live") return "/halo-live.html";
-  if (pathname === "/halo-x") return "/halo-x.html";
-  if (pathname === "/magazine") return "/magazine.html";
-  if (pathname === "/halo-command") return "/halo-command.html";
-  if (/^\/(?:music|radio|creators|mixes)\/index\.html$/.test(pathname)) return pathname.replace(/index\.html$/, "");
-  return pathname;
-}
-
 function cacheKeyForNavigation(requestOrUrl) {
   const url = new URL(typeof requestOrUrl === "string" ? requestOrUrl : requestOrUrl.url, self.location.origin);
   url.hash = "";
-  url.pathname = canonicalNavigationPath(url.pathname);
+  url.pathname = canonicalizeRoutePath(url.pathname);
   return url.toString();
 }
 
-const HOME_CACHE_KEY = cacheKeyForNavigation("/halo");
+const HOME_CACHE_KEY = cacheKeyForNavigation(CANONICAL_HOME_ROUTE);
 
 self.addEventListener("install", event => {
   event.waitUntil(

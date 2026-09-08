@@ -2,6 +2,7 @@ import express from "express";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { CANONICAL_ROUTE_ALIAS_ENTRIES } from "./lib/route-registry.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -54,38 +55,7 @@ const allowedExtensions = new Set([
   ".mp4",
   ".webm",
 ]);
-const canonicalRouteRedirects = new Map([
-  ["/artists", "/artists/"],
-  ["/artist-pro", "/artist-pro/"],
-  ["/campaign-studio", "/campaign-studio/"],
-  ["/creator-freedom", "/creator-freedom/"],
-  ["/creators", "/creators/"],
-  ["/dreamweaver", "/dreamweaver/"],
-  ["/dreamweaver-lab", "/dreamweaver-lab/"],
-  ["/finish-house", "/finish-house/"],
-  ["/iam-social", "/iam-social/"],
-  ["/mixes", "/mixes/"],
-  ["/music", "/music/"],
-  ["/radio", "/radio/"],
-  ["/release-house", "/release-house/"],
-  ["/signal", "/signal-network/"],
-  ["/song-catalog", "/song-catalog/"],
-  ["/support", "/support/"],
-  ["/youtube-studio", "/youtube-studio/"],
-  ["/dj-deck", "/dj-deck.html"],
-  ["/halo-command", "/halo-command.html"],
-  ["/halo-live", "/halo-live.html"],
-  ["/halo-x", "/halo-x.html"],
-  ["/magazine", "/magazine.html"],
-]);
-const canonicalFileRedirects = new Map([
-  ["/halo.html", "/halo"],
-  ["/dreamweaver/index.html", "/dreamweaver/"],
-  ["/mixes/index.html", "/mixes/"],
-  ["/music/index.html", "/music/"],
-  ["/radio/index.html", "/radio/"],
-  ["/creators/index.html", "/creators/"],
-]);
+const canonicalRouteRedirects = new Map(CANONICAL_ROUTE_ALIAS_ENTRIES.map(({ from, to }) => [from, to]));
 const rateLimitWindowMs = 60_000;
 const rateLimitMaxRequests = Number(process.env.STATIC_REQUEST_LIMIT || 240);
 const recentRequestBuckets = new Map();
@@ -214,10 +184,8 @@ app.get("*", (req, res, next) => {
   const searchSuffix = new URL(req.originalUrl, "http://localhost").search;
   if (!relativePath) return next();
 
-  const fileRedirect = canonicalFileRedirects.get(routePath);
-  if (fileRedirect) {
-    return res.redirect(301, `${fileRedirect}${searchSuffix}`);
-  }
+  const canonicalRoute = canonicalRouteRedirects.get(routePath);
+  if (canonicalRoute) return res.redirect(301, `${canonicalRoute}${searchSuffix}`);
 
   const extension = path.extname(relativePath).toLowerCase();
   if (extension && allowedExtensions.has(extension)) {
@@ -227,13 +195,6 @@ app.get("*", (req, res, next) => {
 
   if (routePath.endsWith("/") && sendStaticCandidate(res, path.join(relativePath, "index.html"))) {
     return;
-  }
-
-  if (!extension) {
-    const canonicalRedirect = canonicalRouteRedirects.get(routePath);
-    if (canonicalRedirect) {
-      return res.redirect(301, `${canonicalRedirect}${searchSuffix}`);
-    }
   }
 
   return next();

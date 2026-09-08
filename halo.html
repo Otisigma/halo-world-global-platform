@@ -1269,12 +1269,6 @@
         const FALLBACK_ARTWORK = '/assets/halo-app-icon-512.png';
         const MENU_ROUTE_STATUS_LABELS = { green: 'WORKING', yellow: 'ATTENTION', red: 'BROKEN' };
         const MENU_ROUTE_STATUS_GLYPHS = { green: 'G', yellow: 'Y', red: 'R' };
-        const MENU_ROUTE_STATUS_TARGETS = new Set([
-          '/music/', '/halo-x.html', '/mixes/', '/dj-deck.html', '/halo-live.html', '/radio/',
-          '/artist-pro/', '/creators/', '/artists/', '/creator-freedom/', '/campaign-studio/',
-          '/release-house/', '/song-catalog/', '/dreamweaver/', '/dreamweaver-lab/',
-          '/album-concierge/', '/finish-house/', '/magazine.html', '/support/'
-        ]);
         const MENU_STATUS_GROUP_TARGETS = [
           { route: '/music/', label: 'ALL MUSIC' },
           { route: '/halo-x.html', label: 'DJ HALO X' },
@@ -1296,6 +1290,7 @@
           { route: '/magazine.html', label: 'HALO SIGNAL' },
           { route: '/support/', label: 'FEEDBACK DESK' }
         ];
+        const MENU_ROUTE_STATUS_TARGETS = new Set(MENU_STATUS_GROUP_TARGETS.map(target => target.route));
         const DEFAULT_MENU_ATTENTION_ROUTE = '/dreamweaver/';
         const BASE_MENU_DESTINATION_COUNT = MENU_STATUS_GROUP_TARGETS.length + 3;
         const normalizeMenuRoutePath = (route = '') => {
@@ -2876,7 +2871,7 @@
             try {
               await window.haloIdentity?.logout();
             } finally {
-              window.location.replace('/');
+              window.location.replace('/halo');
             }
           };
 

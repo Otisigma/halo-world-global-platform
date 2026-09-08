@@ -208,8 +208,13 @@ await runCheck("Homepage music experiment markers and tracking", async () => {
   const haloHtml = await read("halo.html");
   assert.match(
     haloHtml,
-    /Homepage experiment \/ Artist-first listening test/,
-    "halo.html must include the homepage experiment framing label."
+    /Homepage Experiment[\s\S]*Artist-first listening test \/ Supporter-first model/,
+    "halo.html must include the homepage experiment framing label in the homepage hero."
+  );
+  assert.match(
+    haloHtml,
+    /data-homepage-hero="dreamweaver"[\s\S]*Dreamweaver Preview[\s\S]*Dreamweaver Player[\s\S]*Play preview[\s\S]*Open Dreamweaver/,
+    "halo.html must expose the Dreamweaver homepage hero player surface and its primary actions."
   );
   assert.match(
     haloHtml,

@@ -55,6 +55,7 @@ Instrumentation hooks:
 - `homepage_music_experiment_exit` with metadata `variant` and `seconds`
 - `homepage_music_experiment_action` with metadata `variant`, `mode`, `goal`, and `target` for comparison placeholders:
   - `goal: listening` for native music-home entry
+  - `goal: listening` for the Dreamweaver homepage hero preview target `homepage_experiment_dreamweaver_preview`
   - `goal: iframe_loaded` for embed iframe load target `homepage_experiment_embed_iframe_loaded` (current quick-listen availability proxy; render-only, not playback intent)
   - `goal: relationship_room` for relationship-room entry in both variants (top-of-funnel handoff before downstream follow actions)
   - `goal: support_actions` for support CTA in both variants

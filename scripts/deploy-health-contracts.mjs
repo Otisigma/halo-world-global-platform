@@ -255,6 +255,36 @@ await runCheck("Homepage music experiment markers and tracking", async () => {
   return "Homepage experiment variants and analytics hooks are present";
 });
 
+await runCheck("Adaptive Dreamweaver homepage preview surface", async () => {
+  const haloHtml = await read("halo.html");
+  assert.match(
+    haloHtml,
+    /data-homepage-surface="adaptive-dreamweaver-player"/,
+    "halo.html must include the adaptive Dreamweaver homepage preview surface marker."
+  );
+  assert.match(
+    haloHtml,
+    /Adaptive Dreamweaver preview player/,
+    "halo.html must include the adaptive Dreamweaver preview heading."
+  );
+  assert.match(
+    haloHtml,
+    /Route-aware mode/,
+    "halo.html must include route-aware context copy for the homepage preview surface."
+  );
+  assert.match(
+    haloHtml,
+    /homepage_adaptive_preview_play/,
+    "halo.html must emit adaptive preview action telemetry targets."
+  );
+  assert.match(
+    haloHtml,
+    /QUICK_LISTEN_AUTOPLAY_URL/,
+    "halo.html must reuse the existing quick-listen embed path for adaptive preview playback."
+  );
+  return "Adaptive Dreamweaver preview surface is present and wired";
+});
+
 await runCheck("Core public navigation routes", async () => {
   const haloHtml = await read("halo.html");
   const requiredRoutes = [

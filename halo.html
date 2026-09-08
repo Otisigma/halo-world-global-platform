@@ -954,6 +954,7 @@
         };
 
         const QUICK_LISTEN_EMBED_URL = 'https://www.youtube.com/embed/videoseries?list=PLcmaoB9ss1YE';
+        const QUICK_LISTEN_AUTOPLAY_URL = `${QUICK_LISTEN_EMBED_URL}&autoplay=1`;
 
         const FALLBACK_ARTWORK = '/assets/halo-app-icon-512.png';
         const MENU_ROUTE_STATUS_LABELS = { green: 'WORKING', yellow: 'ATTENTION', red: 'BROKEN' };
@@ -1415,6 +1416,7 @@
           const showNativeExperiment = musicExperimentVariant !== 'embed';
           const showEmbedExperiment = musicExperimentVariant !== 'native';
           const experimentViewMode = musicExperimentVariant === 'compare' ? 'side_by_side' : 'single_variant';
+          const [isAdaptivePreviewPlaying, setIsAdaptivePreviewPlaying] = useState(false);
           const trackMusicExperimentAction = (goals, target, variant) => {
             for (const goal of Array.isArray(goals) ? goals : [goals]) {
               window.haloStats?.track('homepage_music_experiment_action', {
@@ -1500,6 +1502,41 @@
           const menuDestinationCount = BASE_MENU_DESTINATION_COUNT
             + (identityUser ? 1 : 0)
             + (ownerControlAccess ? 1 : 0);
+          const currentRoutePath = normalizeMenuRoutePath(window.location.pathname || '/');
+          const currentRouteLabel = currentRoutePath === '/halo/'
+            ? 'HALO HOMEPAGE'
+            : (MENU_STATUS_GROUP_TARGETS.find(target => normalizeMenuRoutePath(target.route) === currentRoutePath)?.label || currentRoutePath);
+          const currentRouteStatus = currentRoutePath === '/halo/'
+            ? { status: 'green', label: 'WORKING', glyph: 'G' }
+            : menuStatusForRoute(currentRoutePath, 'green');
+          const adaptiveDreamweaverPreview = (() => {
+            const dreamweaverStatus = menuStatusForRoute('/dreamweaver/', 'yellow');
+            if (dreamweaverStatus.status === 'green') {
+              return {
+                primaryRoute: '/dreamweaver/',
+                primaryLabel: 'Open Dreamweaver',
+                supportRoute: '/dreamweaver-lab/',
+                supportLabel: 'Dreamweaver Song Lab',
+                guidance: 'Dreamweaver is clear. Start with a quick listen, then enter the full fan unlock world.'
+              };
+            }
+            if (dreamweaverStatus.status === 'yellow') {
+              return {
+                primaryRoute: '/music/',
+                primaryLabel: 'Continue in Music Home',
+                supportRoute: '/dreamweaver/',
+                supportLabel: 'Check Dreamweaver status',
+                guidance: 'Dreamweaver is in attention mode. Preview here, then continue through the stable music route while updates land.'
+              };
+            }
+            return {
+              primaryRoute: '/support/',
+              primaryLabel: 'Open Feedback Desk',
+              supportRoute: '/music/',
+              supportLabel: 'Use Music Home fallback',
+              guidance: 'Dreamweaver is reporting a break. Preview is still available, and support + fallback routes are ready now.'
+            };
+          })();
 
           const getYouTubeEmbed = (value) => {
             try {
@@ -3463,6 +3500,76 @@
                     </div>
 
                     {!identityUser && <button type="button" onClick={() => openIdentity('signup', 'Your membership carries your profile, follows, and recognition from show to show.')} className="absolute bottom-5 right-5 z-20 hidden rounded-full border border-white/10 bg-black/35 px-4 py-2 text-[8px] font-black uppercase tracking-[.18em] text-white/55 backdrop-blur transition hover:border-white/25 hover:text-white md:inline-flex">Community access</button>}
+                  </section>
+
+                  <section className="relative overflow-hidden rounded-[2rem] border border-amber-300/25 bg-[#090a0d] shadow-[0_30px_90px_rgba(0,0,0,.4)]" aria-labelledby="adaptive-dreamweaver-title" data-homepage-surface="adaptive-dreamweaver-player">
+                    <div className="grid gap-px bg-white/10 lg:grid-cols-[1.06fr_.94fr]">
+                      <article className="bg-[#0d0d12] p-6 md:p-8">
+                        <p className="text-[9px] font-black uppercase tracking-[.28em] text-amber-300">First musical interaction on /halo</p>
+                        <h2 id="adaptive-dreamweaver-title" className="mt-4 font-sans-alt text-3xl font-black uppercase leading-[.9] tracking-[-.03em] text-white md:text-4xl">Adaptive Dreamweaver preview player</h2>
+                        <p className="mt-4 max-w-2xl text-xs leading-6 text-gray-300">{adaptiveDreamweaverPreview.guidance}</p>
+                        <div className="mt-5 flex flex-wrap items-center gap-2 text-[9px] font-black uppercase tracking-[.18em] text-gray-300">
+                          <span className="rounded-full border border-white/15 px-3 py-1">Route-aware mode</span>
+                          <span className="rounded-full border border-white/10 px-3 py-1">{currentRouteLabel}</span>
+                          {renderMenuStatusBadge('/dreamweaver/', 'Dreamweaver route', 'yellow')}
+                          {currentRoutePath === '/halo/' ? renderLocalMenuStatusBadge('green', 'HALO homepage') : renderLocalMenuStatusBadge(currentRouteStatus.status, `${currentRouteLabel} route`)}
+                        </div>
+                        <div className="mt-6 flex flex-wrap gap-3">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const nextMode = !isAdaptivePreviewPlaying;
+                              setIsAdaptivePreviewPlaying(nextMode);
+                              trackMusicExperimentAction('listening', nextMode ? 'homepage_adaptive_preview_play' : 'homepage_adaptive_preview_stop', 'adaptive');
+                            }}
+                            data-stat-event="open_music_catalog"
+                            data-stat-target="homepage_adaptive_preview_play"
+                            className="inline-flex items-center gap-2 rounded-full bg-amber-300 px-5 py-2.5 text-[10px] font-black uppercase tracking-[.14em] text-black transition duration-300 hover:bg-amber-200 motion-reduce:transition-none"
+                            aria-pressed={isAdaptivePreviewPlaying}
+                          >
+                            {isAdaptivePreviewPlaying ? 'Stop preview' : 'Play preview'}
+                          </button>
+                          <a
+                            href={adaptiveDreamweaverPreview.primaryRoute}
+                            onClick={() => trackMusicExperimentAction(['relationship_room', 'repeat_visits'], 'homepage_adaptive_preview_primary_route', 'adaptive')}
+                            className="inline-flex items-center gap-2 rounded-full border border-white/20 px-5 py-2.5 text-[10px] font-black uppercase tracking-[.14em] text-white transition duration-300 hover:border-white/40 motion-reduce:transition-none"
+                          >
+                            {adaptiveDreamweaverPreview.primaryLabel}
+                          </a>
+                          <a
+                            href={adaptiveDreamweaverPreview.supportRoute}
+                            onClick={() => trackMusicExperimentAction('support_actions', 'homepage_adaptive_preview_support_route', 'adaptive')}
+                            className="inline-flex items-center gap-2 rounded-full border border-amber-300/35 px-5 py-2.5 text-[10px] font-black uppercase tracking-[.14em] text-amber-100 transition duration-300 hover:border-amber-200 motion-reduce:transition-none"
+                          >
+                            {adaptiveDreamweaverPreview.supportLabel}
+                          </a>
+                        </div>
+                      </article>
+                      <article className="flex min-h-[300px] flex-col justify-between bg-[#13131a] p-6 md:p-8">
+                        <p className="text-[9px] font-black uppercase tracking-[.24em] text-cyan-200">Live preview / Dreamweaver + Music fallback</p>
+                        <div className="mt-4 overflow-hidden rounded-2xl border border-white/10 bg-black/40">
+                          {isAdaptivePreviewPlaying ? (
+                            <iframe
+                              src={QUICK_LISTEN_AUTOPLAY_URL}
+                              title="Adaptive Dreamweaver homepage preview"
+                              loading="lazy"
+                              allow="autoplay; encrypted-media; picture-in-picture"
+                              sandbox="allow-scripts allow-same-origin allow-presentation allow-popups allow-popups-to-escape-sandbox"
+                              className="aspect-video w-full border-0"
+                            ></iframe>
+                          ) : (
+                            <div className="grid gap-4 p-4 sm:grid-cols-[90px_1fr] sm:items-center">
+                              <img src={FEATURED_RELEASE.artwork} alt={`${FEATURED_RELEASE.title} release artwork`} className="h-[90px] w-[90px] rounded-xl border border-white/15 object-cover" loading="lazy" />
+                              <div>
+                                <p className="text-[10px] font-black uppercase tracking-[.18em] text-white">{FEATURED_RELEASE.title}</p>
+                                <p className="mt-2 text-[11px] leading-5 text-gray-400">Press play to hear the current signal before you enter Dreamweaver.</p>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                        <p className="mt-4 text-[10px] uppercase tracking-[.16em] text-gray-500">Playback starts only after your click. Reduced-motion settings stay respected.</p>
+                      </article>
+                    </div>
                   </section>
 
                   <section className="relative overflow-hidden rounded-[2rem] border border-[#cfa76a]/25 bg-[#0e0c09] shadow-[0_30px_90px_rgba(0,0,0,.38)]" aria-labelledby="concierge-promo-title">

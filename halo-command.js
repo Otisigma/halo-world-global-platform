@@ -261,7 +261,7 @@
           el("li", null, key.toUpperCase(), el("em", null, item[key] ? "YES" : "NO"))
         )
       ),
-      el("small", null, statusCopy[item.status] || statusCopy.red)
+      el("small", null, item.attentionReason || statusCopy[item.status] || statusCopy.red)
     );
     target.replaceChildren(statusCard(operatorReference), ...statuses.map(statusCard));
   }

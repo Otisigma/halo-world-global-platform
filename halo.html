@@ -970,9 +970,9 @@
           '/release-house/', '/song-catalog/', '/dreamweaver/', '/dreamweaver-lab/',
           '/album-concierge/', '/finish-house/', '/magazine.html', '/support/'
         ]);
-        const loadHaloAgentTeamSnapshot = async () => {
-          if (!window.__haloAgentTeamSnapshotPromise) {
-            window.__haloAgentTeamSnapshotPromise = fetch('/api/halo-agent-team', {
+        const loadHaloSatelliteStatusSnapshot = async () => {
+          if (!window.__haloSatelliteStatusSnapshotPromise) {
+            window.__haloSatelliteStatusSnapshotPromise = fetch('/api/halo-satellite-status', {
               headers: { Accept: 'application/json' },
               cache: 'no-store'
             }).then(async response => {
@@ -980,11 +980,11 @@
               if (!response.ok) throw new Error(data.message || 'Status lookup failed.');
               return data;
             }).catch(error => {
-              window.__haloAgentTeamSnapshotPromise = null;
+              window.__haloSatelliteStatusSnapshotPromise = null;
               throw error;
             });
           }
-          return window.__haloAgentTeamSnapshotPromise;
+          return window.__haloSatelliteStatusSnapshotPromise;
         };
 
         const INITIAL_TRACKS = [
@@ -1423,7 +1423,7 @@
             const status = fromSweep && MENU_ROUTE_STATUS_LABELS[fromSweep.status]
               ? fromSweep.status
               : MENU_ROUTE_STATUS_TARGETS.has(normalizedRoute) && menuRouteStatusesUnavailable
-              ? 'green'
+              ? 'yellow'
               : fallbackStatus;
             return {
               status,
@@ -1930,9 +1930,9 @@
 
           const loadMenuRouteStatuses = async () => {
             try {
-              const data = await loadHaloAgentTeamSnapshot();
-              const statuses = Array.isArray(data?.maintenance?.latest?.satelliteStatuses)
-                ? data.maintenance.latest.satelliteStatuses
+              const data = await loadHaloSatelliteStatusSnapshot();
+              const statuses = Array.isArray(data?.satelliteStatuses)
+                ? data.satelliteStatuses
                 : [];
               if (!statuses.length) {
                 setMenuRouteStatuses({});

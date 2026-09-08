@@ -28,10 +28,11 @@ const satellites = [
   { name: "Support", route: "/support/", file: "support/index.html" }
 ];
 
-const [menuSource, sweepSource, commandApiSource, commandClientSource, docsSource, packageSource, netlifyConfigSource, navigationCssSource] = await Promise.all([
+const [menuSource, sweepSource, commandApiSource, publicStatusApiSource, commandClientSource, docsSource, packageSource, netlifyConfigSource, navigationCssSource] = await Promise.all([
   read("halo.html"),
   read("netlify/lib/maintenance-sweep.mjs"),
   read("netlify/functions/halo-agent-team.mjs"),
+  read("netlify/functions/halo-satellite-status.mjs"),
   read("halo-command.js"),
   read("HALO_AGENT_TEAM.md"),
   read("package.json"),
@@ -53,11 +54,13 @@ async function pathExists(path) {
 }
 
 assert.match(commandApiSource, /halo-signal-check/, "The HALO command API must expose halo-signal-check.");
+assert.match(publicStatusApiSource, /path: "\/api\/halo-satellite-status"/, "The public satellite status API must expose the expected route.");
 assert.match(commandClientSource, /halo-signal-check/, "The owner dashboard must trigger halo-signal-check.");
 assert.match(commandClientSource, /Operator\/Admin green-light reference/, "The owner dashboard must render the operator/admin reference light.");
 assert.match(commandClientSource, /status-badge/, "The owner dashboard must render visible satellite status badges.");
 assert.match(menuSource, /renderMenuStatusBadge/, "Main menu buttons must render per-tile status badges.");
 assert.match(menuSource, /loadMenuRouteStatuses/, "Main menu badges must use halo-signal-check route statuses.");
+assert.match(menuSource, /\/api\/halo-satellite-status/, "Main menu badges must use the public satellite status snapshot API.");
 assert.match(navigationCssSource, /\.halo-menu-route-status/, "Main menu status badge styling must exist.");
 assert.match(sweepSource, /halo-signal-check/, "The maintenance sweep must write halo-signal-check into the Halo Ledger.");
 assert.match(docsSource, /## halo-signal-check/, "The canonical halo-signal-check README section must exist.");

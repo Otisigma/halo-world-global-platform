@@ -1133,6 +1133,26 @@
     <div id="root"></div>
 
     <script src="/release-artwork.js"></script>
+    <script id="haloFeaturedReleaseConfig" type="application/json">
+      {
+        "id": "when-the-world-goes-dark",
+        "title": "When The World Goes Dark",
+        "titleLines": [
+          { "text": "When The World", "emphasis": false },
+          { "text": "Goes Dark", "emphasis": true }
+        ],
+        "artist": "Owen Anthony",
+        "featureMonth": "August 2026",
+        "releaseDate": "20 August 2026",
+        "duration": "New transmission",
+        "genres": "Electronic · Cinematic",
+        "description": "A cinematic electronic transmission about protecting the last human signal when certainty, connection, and light disappear.",
+        "roles": ["DJ", "Artist", "Singer", "Producer"],
+        "artwork": "/assets/releases/when-the-world-goes-dark.jpg",
+        "url": "/when-the-world-goes-dark/",
+        "locked": true
+      }
+    </script>
     <script type="text/babel" crossorigin="anonymous">
         const { useState, useEffect, useRef } = React;
 
@@ -1206,7 +1226,7 @@
           }
         };
 
-        const FEATURED_RELEASE = {
+        const DEFAULT_FEATURED_RELEASE = {
           id: 'when-the-world-goes-dark',
           title: 'When The World Goes Dark',
           titleLines: [
@@ -1224,6 +1244,24 @@
           url: '/when-the-world-goes-dark/',
           locked: true
         };
+        const FEATURED_RELEASE = Object.freeze((() => {
+          const configNode = document.getElementById('haloFeaturedReleaseConfig');
+          if (!configNode?.textContent.trim()) return DEFAULT_FEATURED_RELEASE;
+          try {
+            const parsed = JSON.parse(configNode.textContent);
+            const merged = { ...DEFAULT_FEATURED_RELEASE, ...parsed };
+            merged.titleLines = Array.isArray(parsed?.titleLines) && parsed.titleLines.length
+              ? parsed.titleLines.map(line => ({ text: String(line?.text || '').trim(), emphasis: Boolean(line?.emphasis) })).filter(line => line.text)
+              : (merged.title ? [{ text: merged.title, emphasis: false }] : DEFAULT_FEATURED_RELEASE.titleLines);
+            merged.roles = Array.isArray(parsed?.roles) && parsed.roles.length
+              ? parsed.roles.map(role => String(role || '').trim()).filter(Boolean)
+              : DEFAULT_FEATURED_RELEASE.roles;
+            return merged;
+          } catch (error) {
+            console.warn('[HALO] Featured release config is invalid; using the default release.', error);
+            return DEFAULT_FEATURED_RELEASE;
+          }
+        })());
 
         const QUICK_LISTEN_EMBED_URL = 'https://www.youtube.com/embed/videoseries?list=PLcmaoB9ss1YE';
         const QUICK_LISTEN_AUTOPLAY_URL = `${QUICK_LISTEN_EMBED_URL}&autoplay=1`;

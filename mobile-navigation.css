@@ -559,8 +559,8 @@
   outline: none;
 }
 
-.halo-menu-status-group.is-collapsed .halo-menu-section-body,
-.halo-menu-lane.is-collapsed .halo-menu-section-body {
+.halo-menu-status-group[data-collapsed="true"] .halo-menu-section-body,
+.halo-menu-lane[data-collapsed="true"] .halo-menu-section-body {
   display: none;
 }
 

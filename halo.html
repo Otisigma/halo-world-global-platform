@@ -3607,7 +3607,7 @@
                     </div>
 
                     <div className="halo-menu-status-groups" aria-label="Satellite route status groups">
-                      <section className={`halo-menu-status-group halo-menu-status-group-attention ${menuSectionState.statusAttention ? '' : 'is-collapsed'}`} aria-labelledby="halo-menu-status-attention">
+                      <section className="halo-menu-status-group halo-menu-status-group-attention" data-collapsed={!menuSectionState.statusAttention} aria-labelledby="halo-menu-status-attention">
                         <div className="halo-menu-status-group-title">
                           <div className="halo-menu-section-heading">
                             <span>00</span>
@@ -3632,7 +3632,7 @@
                           )}
                         </div>
                       </section>
-                      <section className={`halo-menu-status-group halo-menu-status-group-working ${menuSectionState.statusWorking ? '' : 'is-collapsed'}`} aria-labelledby="halo-menu-status-working">
+                      <section className="halo-menu-status-group halo-menu-status-group-working" data-collapsed={!menuSectionState.statusWorking} aria-labelledby="halo-menu-status-working">
                         <div className="halo-menu-status-group-title">
                           <div className="halo-menu-section-heading">
                             <span>01</span>
@@ -3659,7 +3659,7 @@
                     </div>
 
                     <div className="halo-menu-lanes">
-                      <section className={`halo-menu-lane halo-menu-lane-start ${menuSectionState.laneStart ? '' : 'is-collapsed'}`} aria-labelledby="halo-lane-start">
+                      <section className="halo-menu-lane halo-menu-lane-start" data-collapsed={!menuSectionState.laneStart} aria-labelledby="halo-lane-start">
                         <div className="halo-menu-lane-title">
                           <div className="halo-menu-section-heading"><span>01</span><h3 id="halo-lane-start">Arrive</h3></div>
                           <button type="button" className="halo-menu-section-toggle" onClick={() => toggleMenuSection('laneStart')} aria-expanded={menuSectionState.laneStart}>
@@ -3691,7 +3691,7 @@
                         </div>
                       </section>
 
-                      <section className={`halo-menu-lane halo-menu-lane-listen ${menuSectionState.laneListen ? '' : 'is-collapsed'}`} aria-labelledby="halo-lane-listen">
+                      <section className="halo-menu-lane halo-menu-lane-listen" data-collapsed={!menuSectionState.laneListen} aria-labelledby="halo-lane-listen">
                         <div className="halo-menu-lane-title">
                           <div className="halo-menu-section-heading"><span>02</span><h3 id="halo-lane-listen">Listen</h3></div>
                           <button type="button" className="halo-menu-section-toggle" onClick={() => toggleMenuSection('laneListen')} aria-expanded={menuSectionState.laneListen}>
@@ -3720,7 +3720,7 @@
                         </div>
                       </section>
 
-                      <section className={`halo-menu-lane halo-menu-lane-build ${menuSectionState.laneBuild ? '' : 'is-collapsed'}`} aria-labelledby="halo-lane-build">
+                      <section className="halo-menu-lane halo-menu-lane-build" data-collapsed={!menuSectionState.laneBuild} aria-labelledby="halo-lane-build">
                         <div className="halo-menu-lane-title">
                           <div className="halo-menu-section-heading"><span>03</span><h3 id="halo-lane-build">Build</h3></div>
                           <button type="button" className="halo-menu-section-toggle" onClick={() => toggleMenuSection('laneBuild')} aria-expanded={menuSectionState.laneBuild}>
@@ -3772,7 +3772,7 @@
                         </div>
                       </section>
 
-                      <section className={`halo-menu-lane halo-menu-lane-care ${menuSectionState.laneCare ? '' : 'is-collapsed'}`} aria-labelledby="halo-lane-care">
+                      <section className="halo-menu-lane halo-menu-lane-care" data-collapsed={!menuSectionState.laneCare} aria-labelledby="halo-lane-care">
                         <div className="halo-menu-lane-title">
                           <div className="halo-menu-section-heading"><span>04</span><h3 id="halo-lane-care">Care</h3></div>
                           <button type="button" className="halo-menu-section-toggle" onClick={() => toggleMenuSection('laneCare')} aria-expanded={menuSectionState.laneCare}>

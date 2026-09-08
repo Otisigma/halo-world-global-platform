@@ -30,6 +30,8 @@ assert.match(releaseSource, /titleLines:/);
 assert.match(page, /FEATURED_RELEASE\.titleLines\.map/);
 assert.match(page, /\{FEATURED_RELEASE\.description\}/);
 assert.doesNotMatch(page, /The Cold Is<br\/>/);
+assert.doesNotMatch(page, /The newest Owen Anthony signal is live/);
+assert.doesNotMatch(page, /const NEW_RELEASE = \{/);
 
 await access(resolve(root, artwork.slice(1)));
 await access(resolve(root, url.slice(1), "index.html"));

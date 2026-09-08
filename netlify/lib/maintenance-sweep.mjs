@@ -88,6 +88,7 @@ function applyManualAttentionStatus(statusRecord, manualAttentionRoute) {
     ...statusRecord,
     verified: false,
     status: "yellow",
+    repairStatus: "queued",
     manualAttention: true,
     attentionReason: SATELLITE_ATTENTION_REASON
   };
@@ -103,7 +104,8 @@ export function buildFallbackSatelliteStatuses() {
       live: true,
       connected: true,
       verified: true,
-      status: "green"
+      status: "green",
+      repairStatus: "not_needed"
     }, manualAttentionRoute)
   );
 }
@@ -275,7 +277,17 @@ export async function runMaintenanceSweep(db, baseUrl, { triggerType = "schedule
     const smokeVerified = Boolean(live && /<title[\s>][\s\S]*<\/title>/i.test(pageBodyByRoute.get(route) || ""));
     const verified = built && live && connected && smokeVerified;
     const status = !built || !live || !connected ? "red" : verified ? "green" : "yellow";
-    satelliteStatuses.push(applyManualAttentionStatus({ name: target.name, route, built, live, connected, verified, status }, manualAttentionRoute));
+    const satelliteStatus = applyManualAttentionStatus({
+      name: target.name,
+      route,
+      built,
+      live,
+      connected,
+      verified,
+      status,
+      repairStatus: status === "green" ? "not_needed" : "queued"
+    }, manualAttentionRoute);
+    satelliteStatuses.push(satelliteStatus);
     const smokeCheck = checkRecord(
       "output",
       `${route}#smoke`,

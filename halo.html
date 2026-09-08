@@ -1725,6 +1725,7 @@
 
           const menuStatusForRoute = (route, fallbackStatus = 'red') => {
             const normalizedRoute = normalizeMenuRoutePath(route);
+            const currentRoute = normalizeMenuRoutePath(window.location.pathname || '/');
             const fromSweep = MENU_ROUTE_STATUS_TARGETS.has(normalizedRoute)
               ? menuRouteStatuses[normalizedRoute]
               : null;
@@ -1734,18 +1735,41 @@
             return {
               status,
               label: MENU_ROUTE_STATUS_LABELS[status] || MENU_ROUTE_STATUS_LABELS.red,
-              glyph: MENU_ROUTE_STATUS_GLYPHS[status] || MENU_ROUTE_STATUS_GLYPHS.red
+              glyph: MENU_ROUTE_STATUS_GLYPHS[status] || MENU_ROUTE_STATUS_GLYPHS.red,
+              isCurrent: normalizedRoute === currentRoute,
+              repairQueued: fromSweep?.repairStatus === 'queued',
+              checks: fromSweep ? {
+                built: Boolean(fromSweep.built),
+                live: Boolean(fromSweep.live),
+                connected: Boolean(fromSweep.connected),
+                verified: Boolean(fromSweep.verified)
+              } : null
             };
           };
 
           const renderMenuStatusBadge = (route, context = route, fallbackStatus = 'red') => {
             const indicator = menuStatusForRoute(route, fallbackStatus);
+            const visibleLabel = [
+              indicator.isCurrent ? 'CURRENT' : '',
+              indicator.label,
+              indicator.repairQueued ? 'AI ALERTED' : ''
+            ].filter(Boolean).join(' · ');
+            const checkSummary = indicator.checks
+              ? `Built ${indicator.checks.built ? 'yes' : 'no'}, live ${indicator.checks.live ? 'yes' : 'no'}, connected ${indicator.checks.connected ? 'yes' : 'no'}, verified ${indicator.checks.verified ? 'yes' : 'no'}.`
+              : 'Awaiting the next deployed route check.';
+            const repairSummary = indicator.repairQueued
+              ? ' A repair issue has been queued for AI-assisted maintenance.'
+              : '';
             return (
-              <span className={`halo-menu-route-status halo-menu-route-status-${indicator.status}`}>
+              <span
+                className={`halo-menu-route-status halo-menu-route-status-${indicator.status}${indicator.isCurrent ? ' halo-menu-route-status-current' : ''}`}
+                aria-current={indicator.isCurrent ? 'page' : undefined}
+                title={`${context}: ${visibleLabel}. ${checkSummary}${repairSummary}`}
+              >
                 <i aria-hidden="true"></i>
                 <b aria-hidden="true">{indicator.glyph}</b>
-                <span className="sr-only">{context} status {indicator.label}</span>
-                <span aria-hidden="true">{indicator.label}</span>
+                <span className="sr-only">{context} status {visibleLabel}. {checkSummary}{repairSummary}</span>
+                <span aria-hidden="true">{visibleLabel}</span>
               </span>
             );
           };

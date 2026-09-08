@@ -1,5 +1,5 @@
 import { getDatabase } from "@netlify/database";
-import { loadMaintenanceSweeps } from "../lib/maintenance-sweep.mjs";
+import { buildFallbackSatelliteStatuses, loadMaintenanceSweeps } from "../lib/maintenance-sweep.mjs";
 
 function json(body, status = 200, headers = {}) {
   return Response.json(body, { status, headers: { "Cache-Control": "no-store", ...headers } });
@@ -19,7 +19,12 @@ export default async function haloSatelliteStatusHandler(request) {
     });
   } catch (error) {
     console.error("HALO satellite status request failed", error instanceof Error ? error.message : "unknown error");
-    return json({ message: "Satellite status is temporarily unavailable", satelliteStatuses: [] }, 503);
+    return json({
+      message: "Satellite status is temporarily unavailable; serving the public fallback route map.",
+      latest: null,
+      satelliteStatuses: buildFallbackSatelliteStatuses(),
+      fallback: true
+    });
   }
 }
 

@@ -66,6 +66,42 @@
   force = true
 
 [[redirects]]
+  from = "/control-center/"
+  to = "/control-center"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/dj-deck"
+  to = "/dj-deck.html"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/halo-command"
+  to = "/halo-command.html"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/halo-live"
+  to = "/halo-live.html"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/halo-x"
+  to = "/halo-x.html"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/magazine"
+  to = "/magazine.html"
+  status = 301
+  force = true
+
+[[redirects]]
   from = "/artists/owen-anthony"
   to = "/artists/"
   status = 301
@@ -74,6 +110,12 @@
 [[redirects]]
   from = "/album-concierge"
   to = "/album-concierge/"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/artists"
+  to = "/artists/"
   status = 301
   force = true
 
@@ -90,6 +132,18 @@
   force = true
 
 [[redirects]]
+  from = "/creator-freedom"
+  to = "/creator-freedom/"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/creators"
+  to = "/creators/"
+  status = 301
+  force = true
+
+[[redirects]]
   from = "/dreamweaver"
   to = "/dreamweaver/"
   status = 301
@@ -102,8 +156,32 @@
   force = true
 
 [[redirects]]
+  from = "/finish-house"
+  to = "/finish-house/"
+  status = 301
+  force = true
+
+[[redirects]]
   from = "/iam-social"
   to = "/iam-social/"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/mixes"
+  to = "/mixes/"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/music"
+  to = "/music/"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/radio"
+  to = "/radio/"
   status = 301
   force = true
 
@@ -122,6 +200,12 @@
 [[redirects]]
   from = "/song-catalog"
   to = "/song-catalog/"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/support"
+  to = "/support/"
   status = 301
   force = true
 

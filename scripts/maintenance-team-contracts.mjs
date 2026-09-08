@@ -43,6 +43,7 @@ assert.match(api, /run_maintenance/, "owners must be able to request a manual sw
 assert.match(api, /halo-signal-check/, "owners must be able to trigger the one-command satellite sweep");
 assert.match(satelliteApi, /path: "\/api\/halo-satellite-status"/, "the public satellite status API must expose the expected route");
 assert.match(satelliteApi, /satelliteStatuses/, "the public satellite status API must return the latest satellite status snapshot");
+assert.match(satelliteApi, /buildFallbackSatelliteStatuses/, "the public satellite status API must keep a public fallback snapshot available");
 assert.match(page, /Every page\. Every connection\. Every output\./, "the owner dashboard must explain sweep coverage");
 assert.match(client, /renderMaintenance/, "the owner dashboard must render sweep evidence");
 assert.match(page, /id="satelliteStatuses"/, "the owner dashboard must show satellite status cards");
@@ -54,8 +55,13 @@ assert.match(client, /status-badge/, "the owner dashboard must render visible st
 assert.match(mainMenuPage, /renderMenuStatusBadge/, "the primary menu must render a route-level red\/yellow\/green status badge per button/tile");
 assert.match(mainMenuPage, /loadMenuRouteStatuses/, "the primary menu must hydrate route statuses from halo-signal-check data");
 assert.match(mainMenuPage, /\/api\/halo-satellite-status/, "the primary menu must load public satellite statuses without owner authentication");
-assert.match(mainMenuPage, /MENU_ROUTE_STATUS_TARGETS\.has\(normalizedRoute\)\s*&&\s*menuRouteStatusesUnavailable[\s\S]{0,120}\?\s*'yellow'/, "when route statuses are temporarily unavailable, the main menu must default monitored routes to ATTENTION instead of WORKING");
+assert.match(mainMenuPage, /buildDefaultMenuRouteStatuses/, "the primary menu must keep a one-route fallback snapshot when live statuses refresh");
+assert.match(mainMenuPage, /menuDestinationCount/, "the primary menu summary must calculate the visible destination count dynamically");
+assert.doesNotMatch(mainMenuPage, /MENU_ROUTE_STATUS_TARGETS\.has\(normalizedRoute\)\s*&&\s*menuRouteStatusesUnavailable[\s\S]{0,120}\?\s*'yellow'/, "the primary menu must not force every monitored route into ATTENTION during a refresh");
 assert.match(navigationCss, /\.halo-menu-route-status/, "menu status badge styling must exist");
+assert.match(navigationCss, /\.halo-menu-status-label/, "menu status labels must wrap visibly");
+assert.doesNotMatch(navigationCss, /@media\s*\(max-width:\s*767px\)\s*\{[\s\S]*?\.halo-menu-summary-copy small,\s*[\s\S]*?\.halo-menu-count\s*\{[\s\S]*?display:\s*none/i, "mobile styles must keep the menu summary tags visible");
+assert.doesNotMatch(navigationCss, /@media\s*\(max-width:\s*520px\)\s*\{[\s\S]*?\.halo-menu-lane small\s*\{[\s\S]*?display:\s*none/i, "mobile styles must keep helper tags visible");
 for (const route of [
   "/music/", "/halo-x.html", "/mixes/", "/dj-deck.html", "/halo-live.html", "/radio/",
   "/artist-pro/", "/creators/", "/artists/", "/creator-freedom/", "/campaign-studio/",

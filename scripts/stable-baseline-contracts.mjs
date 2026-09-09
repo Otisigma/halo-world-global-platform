@@ -46,7 +46,8 @@ const pageMarkers = {
   "halo-x.html": ["FOUNDERS CONTROL ROOM", "Activate access", "Who joined"],
   "vip_launchpad.html": ["VIP PRIVATE BETA", "ACTIVATE DJ HALO X ACCESS", "HALO LIVE"],
   "creators/index.html": ["HALO Creator World", "founding catalog", "THE WORK"],
-  "creators/gear-guide.html": ["Use what works. Upgrade with purpose.", "Release readiness", "Help first. Context always."]
+  "creators/gear-guide.html": ["Use what works. Upgrade with purpose.", "Release readiness", "Help first. Context always."],
+  "404.html": ["This HALO page is being built right now.", "Promotions live now", "Dreamweaver player", "Working routes"]
 };
 
 const failures = [];

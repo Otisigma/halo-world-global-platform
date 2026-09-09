@@ -10,6 +10,9 @@
   const metrics = { tempo: byId("metricTempo"), key: byId("metricKey"), dynamics: byId("metricDynamics"), brightness: byId("metricBrightness"), peak: byId("metricPeak"), width: byId("metricWidth") };
   const state = { file: null, audioBuffer: null, objectUrl: "", evidence: null, project: null, pollTimer: 0, projects: [] };
   const noteNames = ["C", "C♯", "D", "E♭", "E", "F", "F♯", "G", "A♭", "A", "B♭", "B"];
+  const uploadTrustStorageKey = "halo-dreamweaver-upload-trust";
+  const uploadTrustTtlMs = 15 * 60 * 1000;
+  const approvedTrustRoutes = new Set(["/dreamweaver/", "/dreamweaver/index.html", "/dreamweaver-lab/", "/dreamweaver-lab/index.html"]);
 
   function escapeHtml(value) { return String(value ?? "").replace(/[&<>'"]/g, character => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" })[character]); }
   function formatTime(seconds) { const value = Math.max(0, Number(seconds || 0)); return `${String(Math.floor(value / 60)).padStart(2, "0")}:${String(Math.floor(value % 60)).padStart(2, "0")}`; }
@@ -19,6 +22,84 @@
   function list(items) { return (items || []).map(item => `<li>${escapeHtml(item)}</li>`).join(""); }
   function average(values) { return values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : 0; }
   function percentile(values, ratio) { if (!values.length) return 0; const ordered = [...values].sort((a, b) => a - b); return ordered[Math.min(ordered.length - 1, Math.floor(ordered.length * ratio))]; }
+
+  function normalizeTrustRoute(value) {
+    const route = String(value || "").trim();
+    if (!route) return "";
+    if (route === "/dreamweaver") return "/dreamweaver/";
+    if (route === "/dreamweaver-lab") return "/dreamweaver-lab/";
+    return route;
+  }
+
+  function sameOriginTrustRoute(value) {
+    try {
+      const url = new URL(value, location.origin);
+      return url.origin === location.origin ? normalizeTrustRoute(url.pathname) : "";
+    } catch {
+      return "";
+    }
+  }
+
+  function readUploadTrust() {
+    try {
+      const trust = JSON.parse(sessionStorage.getItem(uploadTrustStorageKey) || "null");
+      if (!trust || trust.flow !== "artist-upload") return null;
+      const route = normalizeTrustRoute(trust.route);
+      const issuedAt = Number(trust.issuedAt);
+      if (!approvedTrustRoutes.has(route) || !Number.isFinite(issuedAt) || Date.now() - issuedAt > uploadTrustTtlMs) {
+        sessionStorage.removeItem(uploadTrustStorageKey);
+        return null;
+      }
+      return { flow: "artist-upload", route, issuedAt, reason: String(trust.reason || "") };
+    } catch {
+      return null;
+    }
+  }
+
+  function writeUploadTrust(route, reason = "entry") {
+    const normalizedRoute = approvedTrustRoutes.has(normalizeTrustRoute(route)) ? normalizeTrustRoute(route) : "/dreamweaver/";
+    const trust = { flow: "artist-upload", route: normalizedRoute, reason, issuedAt: Date.now() };
+    try { sessionStorage.setItem(uploadTrustStorageKey, JSON.stringify(trust)); } catch {}
+    return trust;
+  }
+
+  function refreshUploadTrust(reason = "continue") {
+    const existing = readUploadTrust();
+    return existing ? writeUploadTrust(existing.route, reason) : null;
+  }
+
+  function bootstrapUploadTrust() {
+    const params = new URLSearchParams(location.search);
+    if (params.get("flow") === "artist-upload") {
+      const trust = writeUploadTrust(sameOriginTrustRoute(document.referrer) || "/dreamweaver/", params.get("verified") === "1" ? "verified" : "entry");
+      setStatus(params.get("verified") === "1" ? "Dreamweaver verified this upload path. Continue with your private song intake." : "Dreamweaver opened Song Lab as your trusted upload path.");
+      return trust;
+    }
+    return refreshUploadTrust();
+  }
+
+  function trustedUploadHeaders(headers = {}) {
+    const trust = readUploadTrust();
+    if (!trust) return headers;
+    return {
+      ...headers,
+      "X-Halo-Dreamweaver-Flow": trust.flow,
+      "X-Halo-Dreamweaver-Route": trust.route,
+      "X-Halo-Dreamweaver-Issued-At": String(trust.issuedAt)
+    };
+  }
+
+  function throwApiError(data, fallbackMessage) {
+    const message = data?.message || fallbackMessage;
+    if (data?.trustState === "challenge" && data.challengeRoute) {
+      const detail = `${message} Continue in Dreamweaver to verify this upload.`;
+      setStatus(detail, true);
+      showToast(detail);
+      if (window.confirm(`${message}\n\nContinue in Dreamweaver to verify this upload?`)) location.href = data.challengeRoute;
+      throw new Error(detail);
+    }
+    throw new Error(message);
+  }
 
   function drawWaveform(buffer) {
     const canvas = elements.canvas;
@@ -183,8 +264,8 @@
       elements.processingStage.textContent = `SECURING AUDIO / ${index + 1} OF ${chunkCount}`;
       elements.processingDetail.textContent = "Uploading encrypted private chunks into HALO storage. Nothing is published.";
       const body = new FormData(); body.append("chunk", file.slice(index * chunkSize, Math.min(file.size, (index + 1) * chunkSize), file.type), file.name); body.append("uploadId", uploadId); body.append("chunkIndex", String(index)); body.append("chunkCount", String(chunkCount));
-      const response = await fetch("/api/dreamweaver-song-lab", { method: "POST", body, credentials: "same-origin" });
-      const data = await response.json().catch(() => ({})); if (!response.ok) throw new Error(data.message || "The private audio upload stopped early.");
+      const response = await fetch("/api/dreamweaver-song-lab", { method: "POST", body, credentials: "same-origin", headers: trustedUploadHeaders() });
+      const data = await response.json().catch(() => ({})); if (!response.ok) throwApiError(data, "The private audio upload stopped early.");
     }
     return { uploadId, chunkCount };
   }
@@ -212,11 +293,11 @@
     try {
       const upload = await uploadFile(state.file);
       elements.processingStage.textContent = "STARTING DREAMWEAVER"; elements.processingDetail.textContent = "The waveform evidence and artist context are entering the private creative engine.";
-      const response = await fetch("/api/dreamweaver-song-lab", { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" }, body: JSON.stringify({
+      const response = await fetch("/api/dreamweaver-song-lab", { method: "POST", credentials: "same-origin", headers: trustedUploadHeaders({ "Content-Type": "application/json" }), body: JSON.stringify({
         action: "analyze", ...upload, title: elements.title.value, artistName: elements.artist.value, creativeBrief: elements.brief.value, lyrics: elements.lyrics.value,
         rightsAttested: elements.rights.checked, fileName: state.file.name, contentType: state.file.type, byteSize: state.file.size, analysis: state.evidence
       }) });
-      const data = await response.json().catch(() => ({})); if (!response.ok) throw new Error(data.message || "Dreamweaver could not start the analysis.");
+      const data = await response.json().catch(() => ({})); if (!response.ok) throwApiError(data, "Dreamweaver could not start the analysis.");
       state.project = data.project; window.haloStats?.track("dreamweaver_song_analysis_started", { project_id: data.project.id }); await pollProject(data.project.id);
     } catch (error) { handleFailure(error); }
   }
@@ -253,6 +334,7 @@
 
   async function loadHistory() { try { const response = await fetch("/api/dreamweaver-song-lab", { credentials: "same-origin", headers: { Accept: "application/json" } }); const data = await response.json().catch(() => ({})); if (!response.ok) return; state.projects = data.projects || []; renderHistory(); } catch {} }
 
+  bootstrapUploadTrust();
   elements.file.addEventListener("change", event => loadFile(event.target.files?.[0]));
   ["dragenter", "dragover"].forEach(name => elements.dropZone.addEventListener(name, event => { event.preventDefault(); elements.dropZone.classList.add("dragging"); }));
   ["dragleave", "drop"].forEach(name => elements.dropZone.addEventListener(name, event => { event.preventDefault(); elements.dropZone.classList.remove("dragging"); }));

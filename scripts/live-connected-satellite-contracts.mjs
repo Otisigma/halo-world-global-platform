@@ -54,6 +54,12 @@ const packageJson = JSON.parse(packageSource);
 const publicPageSourceByFile = new Map(publicRouteFiles.map((file, index) => [file, publicPageSources[index]]));
 const escapeForPattern = value => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 const publicRouteByCanonicalTarget = new Map(PUBLIC_ROUTE_REGISTRY.map(route => [route.route, route]));
+const renderedIndexRoutes = new Set(ROUTE_RENDER_INDEX_TARGETS);
+const requiresNetlifyCanonicalRedirect = (from, to) => {
+  if (renderedIndexRoutes.has(to) && from === `${to}index.html`) return false;
+  if (to === CANONICAL_HOME_ROUTE && from === "/halo.html") return false;
+  return true;
+};
 
 function legacyNavigationPattern(route) {
   const escaped = escapeForPattern(route);
@@ -126,7 +132,14 @@ assert.ok(HALO_BUTTON_WATCHER_REGISTRY.length >= 20, "Watcher registry must cove
 
 for (const { from, to } of CANONICAL_ROUTE_ALIAS_ENTRIES) {
   assert.equal(canonicalizeRoutePath(from), to, `${from} must canonicalize to ${to}.`);
-  assert.equal(redirectTargets.get(from), to, `Netlify redirects must map ${from} to ${to}.`);
+  if (requiresNetlifyCanonicalRedirect(from, to)) {
+    assert.equal(redirectTargets.get(from), to, `Netlify redirects must map ${from} to ${to}.`);
+  } else {
+    assert.ok(
+      !redirectTargets.has(from),
+      `Netlify must not redirect ${from} back to ${to} because ${to} already renders ${from}.`
+    );
+  }
 }
 
 const allowedLedgerStatuses = new Set(Object.values(PAGE_LINK_STATUS));

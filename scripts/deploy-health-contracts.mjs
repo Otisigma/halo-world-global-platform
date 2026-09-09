@@ -27,11 +27,18 @@
 import assert from "node:assert/strict";
 import { readdir, readFile } from "node:fs/promises";
 import { resolve } from "node:path";
-import { CANONICAL_ROUTE_ALIAS_ENTRIES } from "../lib/route-registry.js";
+import { ROUTE_RENDER_INDEX_TARGETS } from "../lib/page-link-ledger.js";
+import { CANONICAL_HOME_ROUTE, CANONICAL_ROUTE_ALIAS_ENTRIES } from "../lib/route-registry.js";
 
 const root = resolve(import.meta.dirname, "..");
 const read = path => readFile(resolve(root, path), "utf8");
 const results = [];
+const renderedIndexRoutes = new Set(ROUTE_RENDER_INDEX_TARGETS);
+const requiresNetlifyCanonicalRedirect = (from, to) => {
+  if (renderedIndexRoutes.has(to) && from === `${to}index.html`) return false;
+  if (to === CANONICAL_HOME_ROUTE && from === "/halo.html") return false;
+  return true;
+};
 
 const reportPass = (name, detail) => {
   console.log(`✅ ${name}${detail ? ` — ${detail}` : ""}`);
@@ -381,7 +388,12 @@ await runCheck("Canonical menu route aliases", async () => {
   }
 
   for (const { from, to } of CANONICAL_ROUTE_ALIAS_ENTRIES) {
-    assert.match(netlifyConfig, new RegExp(`from = "${from.replace(/[.*+?^${}()|[\\]\\]/g, "\\$&")}"[\\s\\S]*to = "${to.replace(/[.*+?^${}()|[\\]\\]/g, "\\$&")}"`), `netlify.toml must canonicalize ${from} to ${to}.`);
+    const redirectPattern = new RegExp(`from = "${from.replace(/[.*+?^${}()|[\\]\\]/g, "\\$&")}"[\\s\\S]*to = "${to.replace(/[.*+?^${}()|[\\]\\]/g, "\\$&")}"`);
+    if (requiresNetlifyCanonicalRedirect(from, to)) {
+      assert.match(netlifyConfig, redirectPattern, `netlify.toml must canonicalize ${from} to ${to}.`);
+    } else {
+      assert.doesNotMatch(netlifyConfig, redirectPattern, `netlify.toml must not redirect ${from} back to ${to} because ${to} already rewrites to ${from}.`);
+    }
   }
 
   assert.match(serverJs, /app\.get\("\/control-center"/, "server.js must serve the control-center alias locally.");

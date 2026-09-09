@@ -56,6 +56,8 @@ const allowedExtensions = new Set([
   ".webm",
 ]);
 const canonicalRouteRedirects = new Map(CANONICAL_ROUTE_ALIAS_ENTRIES.map(({ from, to }) => [from, to]));
+const fallbackPagePath = resolveFromRoot("404.html");
+const fallbackPageExists = fs.existsSync(fallbackPagePath);
 const rateLimitWindowMs = 60_000;
 const rateLimitMaxRequests = Number(process.env.STATIC_REQUEST_LIMIT || 240);
 const recentRequestBuckets = new Map();
@@ -201,11 +203,8 @@ app.get("*", (req, res, next) => {
 });
 
 app.use((req, res) => {
-  if (req.accepts("html")) {
-    const fallbackPage = resolveFromRoot("404.html");
-    if (fs.existsSync(fallbackPage)) {
-      return res.status(404).sendFile(fallbackPage);
-    }
+  if (req.accepts("html") && fallbackPageExists) {
+    return res.status(404).sendFile(fallbackPagePath);
   }
   res.status(404).send("Not found");
 });

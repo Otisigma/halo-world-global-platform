@@ -25,6 +25,7 @@ const checks = [
   [page.includes("Dreamweaver Show — HALO") && page.includes('id="showAudio"'), "ships the standalone Dreamweaver visual show"],
   [page.includes('data-mode="watch"') && page.includes('data-mode="room"') && page.includes('data-mode="explore"'), "offers Watch, Room, and Explore modes"],
   [script.includes('fetch("/api/mixes?limit=100"') && script.includes("requestedMix"), "loads an existing Mix Desk recording and supports direct mix links"],
+  [page.includes('id="dreamweaverSongLabLink"') && script.includes('halo-dreamweaver-upload-trust') && script.includes('target.searchParams.set("flow", "artist-upload")'), "bridges the canonical Dreamweaver route into a trusted artist upload handoff"],
   [script.includes('fetch("/api/videos?artistSlug=owen-anthony"') && script.includes("archiveReel"), "enriches the experience with the connected artist video archive"],
   [script.includes("activateChapter") && script.includes("elements.audio.currentTime") && script.includes("chapters.length - 1"), "synchronizes five story movements with audio playback"],
   [styles.includes("body.mode-room") && styles.includes("body.mode-explore") && styles.includes("prefers-reduced-motion"), "styles atmospheric modes and reduced-motion behavior"],

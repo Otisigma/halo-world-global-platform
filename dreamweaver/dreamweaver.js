@@ -67,8 +67,11 @@
     artist: "Owen Anthony",
     url: "https://distrokid.com/hyperfollow/owenanthony/blessed"
   });
+  const uploadTrustStorageKey = "halo-dreamweaver-upload-trust";
+  const approvedUploadReturnPaths = new Set(["/dreamweaver-lab/", "/dreamweaver-lab/index.html"]);
 
   const elements = {
+    songLabLink: document.getElementById("dreamweaverSongLabLink"),
     satellite: document.getElementById("dreamweaverSatellite"),
     unlockForm: document.getElementById("dreamweaverUnlockForm"),
     unlockStatus: document.getElementById("dreamweaverUnlockStatus"),
@@ -345,6 +348,46 @@
     elements.toast.classList.add("show");
     window.clearTimeout(showToast.timeout);
     showToast.timeout = window.setTimeout(() => elements.toast.classList.remove("show"), 2600);
+  }
+
+  function normalizeUploadPath(value) {
+    const route = String(value || "").trim();
+    if (!route) return "";
+    if (route === "/dreamweaver") return "/dreamweaver/";
+    if (route === "/dreamweaver-lab") return "/dreamweaver-lab/";
+    return route;
+  }
+
+  function safeUploadReturnPath(value) {
+    try {
+      const url = new URL(value || "/dreamweaver-lab/", location.origin);
+      if (url.origin !== location.origin) return "/dreamweaver-lab/";
+      const path = normalizeUploadPath(url.pathname);
+      return approvedUploadReturnPaths.has(path) ? path : "/dreamweaver-lab/";
+    } catch {
+      return "/dreamweaver-lab/";
+    }
+  }
+
+  function storeUploadTrust(reason = "entry") {
+    const trust = { flow: "artist-upload", route: "/dreamweaver/", reason, issuedAt: Date.now() };
+    try { sessionStorage.setItem(uploadTrustStorageKey, JSON.stringify(trust)); } catch {}
+    return trust;
+  }
+
+  function openSongLabUpload(reason = "entry", returnPath = "/dreamweaver-lab/") {
+    storeUploadTrust(reason);
+    const target = new URL(safeUploadReturnPath(returnPath), location.origin);
+    target.searchParams.set("flow", "artist-upload");
+    if (reason === "verified") target.searchParams.set("verified", "1");
+    location.assign(`${target.pathname}${target.search}`);
+  }
+
+  function resumeUploadVerification() {
+    const params = new URLSearchParams(location.search);
+    if (params.get("upload") !== "verify") return false;
+    openSongLabUpload("verified", params.get("returnTo") || "/dreamweaver-lab/");
+    return true;
   }
 
   function setRenderStatus(status, title, detail) {
@@ -1201,6 +1244,12 @@
    await loadShow();
   }
 
+  if (resumeUploadVerification()) return;
+  elements.songLabLink?.addEventListener("click", event => {
+    if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    event.preventDefault();
+    openSongLabUpload();
+  });
   buildExperience();
   renderFootageSelector();
   renderArchive();

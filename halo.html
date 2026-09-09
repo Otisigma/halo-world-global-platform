@@ -3612,9 +3612,30 @@
                     </div>
 
                     <div className="halo-menu-status-groups" aria-label="Satellite route status groups">
-                      <section className="halo-menu-status-group halo-menu-status-group-attention" aria-labelledby="halo-menu-status-attention">
+                      <section className="halo-menu-status-group halo-menu-status-group-working" aria-labelledby="halo-menu-status-working">
                         <div className="halo-menu-status-group-title">
                           <span>00</span>
+                          <h3 id="halo-menu-status-working">All working menu</h3>
+                        </div>
+                        {menuStatusGroupedTargets.working.length ? (
+                          <div className="halo-menu-status-buttons">
+                            {menuStatusGroupedTargets.working.map(target => (
+                              <a key={`working-${target.route}`} href={target.route} className="halo-menu-status-button">
+                                <span className="halo-menu-status-label">{target.label}</span>
+                                {renderMenuStatusBadge(target.route, target.label, 'green')}
+                              </a>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="halo-menu-status-empty">Working routes appear here as soon as the live check completes.</p>
+                        )}
+                        {menuRouteStatusesUnavailable && (
+                          <p className="halo-menu-status-empty">Live status is refreshing. The public route map stays visible while fresh checks publish.</p>
+                        )}
+                      </section>
+                      <section className="halo-menu-status-group halo-menu-status-group-attention" aria-labelledby="halo-menu-status-attention">
+                        <div className="halo-menu-status-group-title">
+                          <span>01</span>
                           <h3 id="halo-menu-status-attention">Attention now</h3>
                         </div>
                         {menuStatusGroupedTargets.attention.length ? (
@@ -3628,23 +3649,6 @@
                           </div>
                         ) : (
                           <p className="halo-menu-status-empty">No active amber satellites. All monitored routes are currently working.</p>
-                        )}
-                      </section>
-                      <section className="halo-menu-status-group halo-menu-status-group-working" aria-labelledby="halo-menu-status-working">
-                        <div className="halo-menu-status-group-title">
-                          <span>01</span>
-                          <h3 id="halo-menu-status-working">Working now</h3>
-                        </div>
-                        <div className="halo-menu-status-buttons">
-                          {menuStatusGroupedTargets.working.map(target => (
-                            <a key={`working-${target.route}`} href={target.route} className="halo-menu-status-button">
-                              <span className="halo-menu-status-label">{target.label}</span>
-                              {renderMenuStatusBadge(target.route, target.label, 'green')}
-                            </a>
-                          ))}
-                        </div>
-                        {menuRouteStatusesUnavailable && (
-                          <p className="halo-menu-status-empty">Live status is refreshing. The public route map stays visible while fresh checks publish.</p>
                         )}
                       </section>
                     </div>

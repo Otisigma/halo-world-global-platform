@@ -23,6 +23,55 @@
   const shareUrl = campaign => `${location.origin}/campaign-studio/?campaign=${encodeURIComponent(campaign.slug)}&view=fan`;
   const personaName = id => ({ halo: "DJ HALO", butterfly: "DJ BUTTERFLY", romy: "DJ ROMY" }[id] || "DJ HALO");
   const selectOptions = (selected, values) => values.map(([value, label]) => `<option value="${value}" ${selected === value ? "selected" : ""}>${label}</option>`).join("");
+  const DESTINATION_ROLES = [
+    { key: "fansCopy", label: "Fans", tone: "Public link", needsPrivate: false },
+    { key: "djsCopy", label: "DJs", tone: "Playable metadata", needsPrivate: true },
+    { key: "radioCopy", label: "Radio", tone: "Programming handoff", needsPrivate: true },
+    { key: "pressCopy", label: "Press", tone: "Editorial narrative", needsPrivate: true },
+    { key: "advanceCopy", label: "Advance listeners", tone: "Private preview", needsPrivate: true }
+  ];
+
+  function buildDestinationCopies(campaign) {
+    const promotion = campaign.promotion || {};
+    const releaseSummary = promotion.releaseSummary || "One release. Five purpose-built links.";
+    const hyperfollowUrl = promotion.hyperfollowUrl || "https://distrokid.com/hyperfollow/owenanthony/blessed";
+    const privateDeliveryNote = promotion.privateDeliveryNote || "Private links stay locked until your team marks each destination ready.";
+    const defaultCopies = {
+      fansCopy: `${campaign.title} · ${releaseSummary} Save + stream: ${hyperfollowUrl}`,
+      djsCopy: `${campaign.title} DJ delivery: clean metadata, track context, and transition notes. ${privateDeliveryNote}`,
+      radioCopy: `${campaign.title} radio release copy: clean language, release date, and handoff for programming teams. ${privateDeliveryNote}`,
+      pressCopy: `${campaign.title} press brief: artist narrative, credits, and approved quote direction. ${privateDeliveryNote}`,
+      advanceCopy: `${campaign.title} advance listener note: private first listen, feedback ask, and confidentiality reminder. ${privateDeliveryNote}`
+    };
+    return Object.fromEntries(
+      DESTINATION_ROLES.map(role => [role.key, promotion[role.key] || defaultCopies[role.key]])
+    );
+  }
+
+  function destinationStatus(role, copy, hasPrivateDelivery) {
+    if (!copy?.trim()) return { label: "Needs copy", className: "status-chip--draft" };
+    if (role.needsPrivate && !hasPrivateDelivery) return { label: "Set private route", className: "status-chip--attention" };
+    return { label: "Ready", className: "status-chip--ready" };
+  }
+
+  function renderDestinationCards(campaign) {
+    const promotion = campaign.promotion || {};
+    const copies = buildDestinationCopies(campaign);
+    const hasPrivateDelivery = Boolean((promotion.privateDeliveryNote || "").trim());
+    return `<section class="destination-grid" aria-label="Destination release kits">
+      ${DESTINATION_ROLES.map(role => {
+        const status = destinationStatus(role, copies[role.key], hasPrivateDelivery);
+        return `<article class="destination-card">
+          <div class="destination-card-heading">
+            <strong>${escapeHtml(role.label)}</strong>
+            <span class="status-chip ${status.className}">${escapeHtml(status.label)}</span>
+          </div>
+          <small>${escapeHtml(role.tone)}</small>
+          <p>${escapeHtml(copies[role.key])}</p>
+        </article>`;
+      }).join("")}
+    </section>`;
+  }
 
   function withTimeout(promise, message, timeoutMs = 20_000) {
     let timeout;
@@ -59,11 +108,11 @@
   }
 
   function authGate() {
-    app.innerHTML = `<section class="auth-gate"><p class="signal-label">DREAMWEAVER / TEAM ACCESS</p><h1>Build the vote. Keep the release human.</h1><p>Sign in to bring your approved listening-party material into a controlled campaign workspace.</p><div><button class="primary-button" type="button" data-open-auth>Sign in to start</button></div></section>`;
+    app.innerHTML = `<section class="auth-gate"><p class="signal-label">CAMPAIGN STUDIO // ARTIST CONTROLS</p><h1>One release. Five purpose-built links.</h1><p>Sign in to define one release once, then publish tailored kits for fans, DJs, radio, press, and advance listeners.</p><div><button class="primary-button" type="button" data-open-auth>Sign in to start</button></div></section>`;
   }
 
   function studioHero(trackCount) {
-    return `<section class="studio-hero"><div class="hero-copy"><p class="signal-label">DREAMWEAVER / FAN CAMPAIGN STUDIO</p><h1>Turn the room into a <em>movement.</em></h1><p>Bring the shortlist into one artist-controlled space and shape a complete fan campaign without exposing the technology behind it.</p></div><aside class="hero-ticket"><span>Available listening tracks</span><strong>${trackCount}</strong><small>Choose up to 20. The latest 14 are selected when the list opens.</small></aside></section>`;
+    return `<section class="studio-hero"><div class="hero-copy"><p class="signal-label">CAMPAIGN STUDIO // ARTIST CONTROLS</p><h1>One release.<br><em>Five purpose-built links.</em></h1><p>Start from the approved HALO upload flow, define the release once, then manage destination-ready copy for fans, DJs, radio, press, and advance listeners.</p></div><aside class="hero-ticket"><span>Available listening tracks</span><strong>${trackCount}</strong><small>Choose up to 20. The latest 14 are selected when the list opens.</small></aside></section>`;
   }
 
   function renderStudio() {
@@ -85,11 +134,12 @@
   function renderCampaignEditor() {
     const campaign = state.campaign;
     const promotion = campaign.promotion || {};
+    const destinationCopies = buildDestinationCopies(campaign);
     const partyTheme = campaign.partyTheme || {};
     const deadline = new Date(new Date(campaign.endsAt).valueOf() - new Date(campaign.endsAt).getTimezoneOffset() * 60000).toISOString().slice(0, 16);
     app.innerHTML = `${studioHero(campaign.tracks.length)}<section class="campaign-editor"><div class="editor-main"><div class="step-heading"><div><p class="signal-label">02 / DREAMWEAVER DRAFT</p><h2>The campaign package is ready for the team.</h2></div><div class="track-count">${campaign.totalVotes}<small>votes</small></div></div>
-      <form class="editor-form" id="editorForm"><label class="wide">Campaign title<input name="title" maxlength="140" value="${escapeHtml(campaign.title)}" required></label><label class="wide">Invitation line<input name="subtitle" maxlength="240" value="${escapeHtml(campaign.subtitle)}"></label><label>Host persona<select name="hostPersonaId">${selectOptions(campaign.hostPersonaId || "halo", [["halo","DJ HALO"],["butterfly","DJ BUTTERFLY"],["romy","DJ ROMY"]])}</select></label><label>Room atmosphere<select name="atmosphere">${selectOptions(partyTheme.atmosphere || "midnight", [["midnight","Midnight signal"],["sunset","Sunset terrace"],["butterfly","Butterfly garden"],["electric","Electric room"]])}</select></label><label>Celebration<select name="celebration">${selectOptions(partyTheme.celebration || "confetti", [["confetti","Confetti burst"],["streamers","Slow streamers"],["starlight","Starlight"],["none","No celebration"]])}</select></label><label>Motion<select name="motion">${selectOptions(partyTheme.motion || "gentle", [["gentle","Gentle"],["full","Full atmosphere"],["reduced","Reduced motion"]])}</select></label><label>Vote goal<input name="voteGoal" type="number" min="10" max="100000" value="${campaign.voteGoal}"></label><label>Voting closes<input name="endsAt" type="datetime-local" value="${deadline}"></label><label class="wide">Community unlock<input name="rewardTitle" maxlength="140" value="${escapeHtml(campaign.rewardTitle)}"></label><label class="wide">Reward note<textarea name="rewardDescription" maxlength="500">${escapeHtml(campaign.rewardDescription)}</textarea></label><label class="wide">Room note<textarea name="roomNote" maxlength="300">${escapeHtml(partyTheme.roomNote || "Come early. Hear every song in full. Stay for the reveal.")}</textarea></label><label class="wide">Campaign headline<input name="headline" maxlength="300" value="${escapeHtml(promotion.headline || "")}"></label><label class="wide">Social caption<textarea name="caption" maxlength="2200">${escapeHtml(promotion.caption || "")}</textarea></label><label>Story title<input name="storyTitle" maxlength="300" value="${escapeHtml(promotion.storyTitle || "")}"></label><label>Story subtitle<input name="storySubtitle" maxlength="300" value="${escapeHtml(promotion.storySubtitle || "")}"></label><label>Call to action<input name="callToAction" maxlength="300" value="${escapeHtml(promotion.callToAction || "")}"></label><label>Hashtags<input name="hashtags" maxlength="300" value="${escapeHtml(promotion.hashtags || "")}"></label><p class="status-message" id="editorMessage">${campaign.launchedAt ? `Launch pack live · hosted by ${escapeHtml(personaName(campaign.hostPersonaId))}.` : campaign.status === "published" ? "Live campaign · edits remain available." : "Draft campaign · launch when the team approves."}</p><div class="form-actions"><button class="ghost-button" type="submit">Save edits</button><button class="primary-button" type="button" data-launch>${campaign.launchedAt ? "Update launch pack" : "Create launch pack + go live"}</button></div></form></div>
-      <aside class="editor-aside"><p class="signal-label">03 / SHARE KIT</p><h3>Ready to move.</h3><code class="share-url">${escapeHtml(shareUrl(campaign))}</code><div class="mini-card"><small>${escapeHtml(personaName(campaign.hostPersonaId))} / ${escapeHtml(promotion.eyebrow || "HALO LISTENING PARTY")}</small><strong>${escapeHtml(promotion.storyTitle || campaign.title)}</strong><span>${escapeHtml(promotion.callToAction || "Listen. Vote. Unlock.")}</span></div><div class="asset-actions"><button type="button" data-share-party>Share listening party</button><button type="button" data-copy-caption>Copy caption + link</button><button type="button" data-download-card>Download social card</button><button type="button" data-copy-link>Copy voting link</button><a href="${escapeHtml(shareUrl(campaign))}" target="_blank" rel="noopener">Open fan preview</a></div></aside></section>`;
+      <form class="editor-form" id="editorForm"><label class="wide">Campaign title<input name="title" maxlength="140" value="${escapeHtml(campaign.title)}" required></label><label class="wide">Invitation line<input name="subtitle" maxlength="240" value="${escapeHtml(campaign.subtitle)}"></label><label>Host persona<select name="hostPersonaId">${selectOptions(campaign.hostPersonaId || "halo", [["halo","DJ HALO"],["butterfly","DJ BUTTERFLY"],["romy","DJ ROMY"]])}</select></label><label>Room atmosphere<select name="atmosphere">${selectOptions(partyTheme.atmosphere || "midnight", [["midnight","Midnight signal"],["sunset","Sunset terrace"],["butterfly","Butterfly garden"],["electric","Electric room"]])}</select></label><label>Celebration<select name="celebration">${selectOptions(partyTheme.celebration || "confetti", [["confetti","Confetti burst"],["streamers","Slow streamers"],["starlight","Starlight"],["none","No celebration"]])}</select></label><label>Motion<select name="motion">${selectOptions(partyTheme.motion || "gentle", [["gentle","Gentle"],["full","Full atmosphere"],["reduced","Reduced motion"]])}</select></label><label>Vote goal<input name="voteGoal" type="number" min="10" max="100000" value="${campaign.voteGoal}"></label><label>Voting closes<input name="endsAt" type="datetime-local" value="${deadline}"></label><label class="wide">Community unlock<input name="rewardTitle" maxlength="140" value="${escapeHtml(campaign.rewardTitle)}"></label><label class="wide">Reward note<textarea name="rewardDescription" maxlength="500">${escapeHtml(campaign.rewardDescription)}</textarea></label><label class="wide">Room note<textarea name="roomNote" maxlength="300">${escapeHtml(partyTheme.roomNote || "Come early. Hear every song in full. Stay for the reveal.")}</textarea></label><label class="wide">Campaign headline<input name="headline" maxlength="300" value="${escapeHtml(promotion.headline || "")}"></label><label class="wide">Social caption<textarea name="caption" maxlength="2200">${escapeHtml(promotion.caption || "")}</textarea></label><label>Story title<input name="storyTitle" maxlength="300" value="${escapeHtml(promotion.storyTitle || "")}"></label><label>Story subtitle<input name="storySubtitle" maxlength="300" value="${escapeHtml(promotion.storySubtitle || "")}"></label><label>Call to action<input name="callToAction" maxlength="300" value="${escapeHtml(promotion.callToAction || "")}"></label><label>Hashtags<input name="hashtags" maxlength="300" value="${escapeHtml(promotion.hashtags || "")}"></label><label class="wide">Release summary<input name="releaseSummary" maxlength="400" value="${escapeHtml(promotion.releaseSummary || "One release. Five purpose-built links.")}"></label><label class="wide">HyperFollow link<input name="hyperfollowUrl" maxlength="500" value="${escapeHtml(promotion.hyperfollowUrl || "https://distrokid.com/hyperfollow/owenanthony/blessed")}"></label><label class="wide">Private delivery note<textarea name="privateDeliveryNote" maxlength="400">${escapeHtml(promotion.privateDeliveryNote || "Private links stay locked until your team marks each destination ready.")}</textarea></label><label class="wide">Fans copy<textarea name="fansCopy" maxlength="1200">${escapeHtml(destinationCopies.fansCopy)}</textarea></label><label class="wide">DJs copy<textarea name="djsCopy" maxlength="1200">${escapeHtml(destinationCopies.djsCopy)}</textarea></label><label class="wide">Radio copy<textarea name="radioCopy" maxlength="1200">${escapeHtml(destinationCopies.radioCopy)}</textarea></label><label class="wide">Press copy<textarea name="pressCopy" maxlength="1200">${escapeHtml(destinationCopies.pressCopy)}</textarea></label><label class="wide">Advance listeners copy<textarea name="advanceCopy" maxlength="1200">${escapeHtml(destinationCopies.advanceCopy)}</textarea></label><p class="status-message" id="editorMessage">${campaign.launchedAt ? `Launch pack live · hosted by ${escapeHtml(personaName(campaign.hostPersonaId))}.` : campaign.status === "published" ? "Live campaign · edits remain available." : "Draft campaign · launch when the team approves."}</p><div class="form-actions"><button class="ghost-button" type="submit">Save edits</button><button class="primary-button" type="button" data-launch>${campaign.launchedAt ? "Update launch pack" : "Create launch pack + go live"}</button></div></form></div>
+      <aside class="editor-aside"><p class="signal-label">03 / ARTIST CONTROLS HUB</p><h3>Campaign Studio // Artist Controls</h3><code class="share-url">${escapeHtml(shareUrl(campaign))}</code><div class="mini-card"><small>${escapeHtml(personaName(campaign.hostPersonaId))} / ${escapeHtml(promotion.eyebrow || "HALO LISTENING PARTY")}</small><strong>${escapeHtml(promotion.storyTitle || campaign.title)}</strong><span>${escapeHtml(promotion.callToAction || "Listen. Vote. Unlock.")}</span></div>${renderDestinationCards(campaign)}<div class="asset-actions"><button type="button" data-share-party>Share listening party</button><button type="button" data-copy-caption>Copy caption + link</button><button type="button" data-download-card>Download social card</button><button type="button" data-copy-link>Copy voting link</button><a href="${escapeHtml(shareUrl(campaign))}" target="_blank" rel="noopener">Open fan preview</a><a href="${escapeHtml(promotion.hyperfollowUrl || "https://distrokid.com/hyperfollow/owenanthony/blessed")}" target="_blank" rel="noopener noreferrer">Open HyperFollow link</a><a href="/dreamweaver/" rel="noopener">Return to Dreamweaver</a><a href="/dreamweaver-lab/" rel="noopener">Open Song Lab prep</a><a href="/radio/" rel="noopener">Open HALO Radio + DJ Room</a></div></aside></section>`;
   }
 
   function renderPublicCampaign() {
@@ -106,7 +156,7 @@
 
   function campaignPayload(form) {
     const data = new FormData(form);
-    return { slug: state.campaign.slug, title: data.get("title"), subtitle: data.get("subtitle"), voteGoal: data.get("voteGoal"), endsAt: new Date(data.get("endsAt")).toISOString(), rewardTitle: data.get("rewardTitle"), rewardDescription: data.get("rewardDescription"), hostPersonaId: data.get("hostPersonaId"), preflightId: state.campaign.preflightId || state.preflightId, partyTheme: { atmosphere: data.get("atmosphere"), celebration: data.get("celebration"), motion: data.get("motion"), accent: state.campaign.partyTheme?.accent || "#d5ef5a", roomNote: data.get("roomNote") }, promotion: { eyebrow: state.campaign.promotion?.eyebrow || "HALO LISTENING PARTY", headline: data.get("headline"), caption: data.get("caption"), storyTitle: data.get("storyTitle"), storySubtitle: data.get("storySubtitle"), callToAction: data.get("callToAction"), hashtags: data.get("hashtags") } };
+    return { slug: state.campaign.slug, title: data.get("title"), subtitle: data.get("subtitle"), voteGoal: data.get("voteGoal"), endsAt: new Date(data.get("endsAt")).toISOString(), rewardTitle: data.get("rewardTitle"), rewardDescription: data.get("rewardDescription"), hostPersonaId: data.get("hostPersonaId"), preflightId: state.campaign.preflightId || state.preflightId, partyTheme: { atmosphere: data.get("atmosphere"), celebration: data.get("celebration"), motion: data.get("motion"), accent: state.campaign.partyTheme?.accent || "#d5ef5a", roomNote: data.get("roomNote") }, promotion: { eyebrow: state.campaign.promotion?.eyebrow || "HALO LISTENING PARTY", headline: data.get("headline"), caption: data.get("caption"), storyTitle: data.get("storyTitle"), storySubtitle: data.get("storySubtitle"), callToAction: data.get("callToAction"), hashtags: data.get("hashtags"), releaseSummary: data.get("releaseSummary"), hyperfollowUrl: data.get("hyperfollowUrl"), privateDeliveryNote: data.get("privateDeliveryNote"), fansCopy: data.get("fansCopy"), djsCopy: data.get("djsCopy"), radioCopy: data.get("radioCopy"), pressCopy: data.get("pressCopy"), advanceCopy: data.get("advanceCopy") } };
   }
 
   async function loadStudio() {

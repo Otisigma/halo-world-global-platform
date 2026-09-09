@@ -3725,7 +3725,7 @@
                           <Icon name="book-open" className="halo-menu-icon" /><span><strong>CREATOR FREEDOM {renderMenuStatusBadge('/creator-freedom/', 'Creator Freedom')}</strong><small>White paper, seven-point charter, and public room</small></span>
                         </a>
                         <a href="/campaign-studio/" data-stat-event="open_campaign_studio" data-stat-target="header" data-signal="CAMPAIGN STUDIO">
-                          <Icon name="check-circle" className="halo-menu-icon" /><span><strong>CAMPAIGN STUDIO {renderMenuStatusBadge('/campaign-studio/', 'Campaign Studio')}</strong><small>Plan launch messaging and campaign flow</small></span>
+                          <Icon name="check-circle" className="halo-menu-icon" /><span><strong>CAMPAIGN STUDIO // ARTIST CONTROLS {renderMenuStatusBadge('/campaign-studio/', 'Campaign Studio')}</strong><small>One release. Five purpose-built links for every destination.</small></span>
                         </a>
                         <a href="/release-house/" data-stat-event="open_release_house" data-stat-target="header" data-signal="FIRST RELEASE">
                           <Icon name="disc" className="halo-menu-icon" /><span><strong>RELEASE HOUSE {renderMenuStatusBadge('/release-house/', 'Release House')}</strong><small>Idea to release, one guided room at a time</small></span>
@@ -4529,11 +4529,11 @@
                         <strong className="mt-8 block text-xl text-white">Enter HALO Live</strong>
                         <span className="mt-2 block font-sans-alt text-xs leading-5 text-gray-500">Find every stream, follow the broadcast plan, and join the fan experience.</span>
                       </a>
-                      <button type="button" onClick={() => openConsoleArea('halo-tv')} className="group min-h-48 rounded-2xl border border-red-900/50 bg-gradient-to-b from-red-950/30 to-black/20 p-5 text-left transition hover:-translate-y-1 hover:border-red-400">
-                        <span className="text-[10px] font-black tracking-[0.24em] text-red-400">04 / WATCH</span>
-                        <strong className="mt-8 block text-xl text-white">Play HALO TV</strong>
-                        <span className="mt-2 block font-sans-alt text-xs leading-5 text-gray-500">Bring a YouTube set into the console and watch together.</span>
-                      </button>
+                      <a href="/campaign-studio/" data-stat-event="open_campaign_studio" data-stat-target="fan_pathways" className="group min-h-48 rounded-2xl border border-red-900/50 bg-gradient-to-b from-red-950/30 to-black/20 p-5 text-left transition hover:-translate-y-1 hover:border-red-400">
+                        <span className="text-[10px] font-black tracking-[0.24em] text-red-400">04 / RELEASE HUB</span>
+                        <strong className="mt-8 block text-xl text-white">Campaign Studio // Artist Controls</strong>
+                        <span className="mt-2 block font-sans-alt text-xs leading-5 text-gray-500">Define one release once, then route destination-ready kits for fans, DJs, radio, press, and advance listeners.</span>
+                      </a>
                       <a href="/dj-deck.html" className="group min-h-48 rounded-2xl border border-cyan-900/50 bg-gradient-to-b from-cyan-950/30 to-black/20 p-5 text-left transition hover:-translate-y-1 hover:border-cyan-400">
                         <span className="text-[10px] font-black tracking-[0.24em] text-cyan-400">05 / CREATE</span>
                         <strong className="mt-8 block text-xl text-white">Touch the DJ deck</strong>
@@ -4549,6 +4549,11 @@
                         <strong className="mt-8 block text-xl text-white">Browse the Mix Cloud</strong>
                         <span className="mt-2 block font-sans-alt text-xs leading-5 text-gray-500">Jump straight to published HALO X mixes, long plays, and the listener library.</span>
                       </a>
+                      <button type="button" onClick={() => openConsoleArea('halo-tv')} className="group min-h-48 rounded-2xl border border-red-900/50 bg-gradient-to-b from-red-950/30 to-black/20 p-5 text-left transition hover:-translate-y-1 hover:border-red-400">
+                        <span className="text-[10px] font-black tracking-[0.24em] text-red-400">08 / WATCH</span>
+                        <strong className="mt-8 block text-xl text-white">Play HALO TV</strong>
+                        <span className="mt-2 block font-sans-alt text-xs leading-5 text-gray-500">Bring a YouTube set into the console and watch together.</span>
+                      </button>
                     </div>
                   </section>
 

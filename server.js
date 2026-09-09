@@ -200,7 +200,13 @@ app.get("*", (req, res, next) => {
   return next();
 });
 
-app.use((_req, res) => {
+app.use((req, res) => {
+  if (req.accepts("html")) {
+    const fallbackPage = resolveFromRoot("404.html");
+    if (fs.existsSync(fallbackPage)) {
+      return res.status(404).sendFile(fallbackPage);
+    }
+  }
   res.status(404).send("Not found");
 });
 

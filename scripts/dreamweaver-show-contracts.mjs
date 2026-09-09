@@ -31,11 +31,9 @@ const checks = [
   [deck.includes('id="dreamweaverMix"') && deck.includes("/dreamweaver/?mix=${encodeURIComponent(data.id)}&experience=studio"), "moves a newly published mix directly into Dreamweaver"],
   [campaign.includes('href="/dreamweaver/"') && radio.includes('href="/dreamweaver/"'), "links the show from Campaign Studio and Radio"],
   [
-    config.includes('from = "/dreamweaver"')
-      && config.includes('to = "/dreamweaver/"')
-      && config.includes('from = "/dreamweaver/"')
-      && config.includes('to = "/dreamweaver/index.html"'),
-    "normalizes the public Dreamweaver route and serves /dreamweaver/ as a concrete page in static deploys"
+    /from = "\/dreamweaver\/"[\s\S]*to = "\/dreamweaver\/index\.html"/.test(config)
+      && !/from = "\/dreamweaver"\s+to = "\/dreamweaver\/"/.test(config),
+    "serves the canonical /dreamweaver/ route directly without reintroducing the legacy alias redirect"
   ],
   [page.includes('id="campaignStudio"') && page.includes('id="campaignCanvas"') && page.includes("Make a Reel / Short"), "adds the Dreamweaver campaign cutting room"],
   [script.includes("renderVerticalClip") && script.includes("captureStream") && script.includes("MediaRecorder"), "renders a downloadable vertical clip in supported browsers"],
@@ -43,6 +41,16 @@ const checks = [
   [script.includes("blob.size < 1024") && script.includes("state.renderedClip") && script.includes("downloadRenderedClip"), "verifies a completed film before enabling its download"],
   [page.includes('id="dreamweaverSatellite"') && page.includes('id="dreamweaverUnlockForm"') && page.includes("Dreamweaver AI") && page.includes("concierge service"), "ships a fan-facing Dreamweaver satellite landing with email unlock framing"],
   [page.includes('id="dreamweaverReward"') && page.includes('id="dreamweaverSpotifyLink"') && page.includes('href="/album-concierge/?purpose=collector"') && page.includes('href="/support/#send"'), "unlocks streaming exits and keeps premium remix and album-builder offers as paid direct next steps"],
+  [
+    page.includes('id="dreamweaverSourceLink"')
+      && page.includes("Blessed — Owen Anthony")
+      && page.includes('href="https://distrokid.com/hyperfollow/owenanthony/blessed"')
+      && script.includes('title: "Blessed"')
+      && script.includes('artist: "Owen Anthony"')
+      && script.includes('url: "https://distrokid.com/hyperfollow/owenanthony/blessed"')
+      && script.includes("elements.sourceLink.href = featuredTrack.url"),
+    "keeps Blessed by Owen Anthony wired into the Dreamweaver release doorway with the canonical HyperFollow source"
+  ],
   [script.includes('fetch("/api/dreamweaver-fan-signups"') && script.includes("readStoredUnlock") && script.includes("updatePlatformLinks"), "submits email unlocks and rehydrates the lightweight fan reward state"],
   [script.includes('action: "start"') && script.includes("pollCampaignJob") && script.includes("renderPlatformPackages"), "starts, monitors, and exports background campaign packages"],
   [page.includes('id="campaignYoutubeUrl"') && page.includes("Load it. Shape it. Send it.") && campaignFunction.includes("cleanYouTubeUrl") && campaignFunction.includes("halo_youtube_sources"), "offers a one-link YouTube launch that persists the source signal"],

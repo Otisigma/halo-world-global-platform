@@ -21,7 +21,7 @@ const checks = [
   [handler.includes("Never claim you watched or transcribed a source") && handler.includes("youtubeUrl"), "keeps generation grounded and restricts saved links to YouTube"],
   [handler.includes("getUser") && handler.includes("verifyRequestOrigin") && handler.includes("ensureMembership"), "protects the workspace with membership and same-origin checks"],
   [migration.includes("halo_youtube_sources") && migration.includes("halo_youtube_campaign_briefs") && migration.includes("halo_memberships(member_id)"), "persists private sources and generated briefs in Netlify Database"],
-  [config.includes('from = "/youtube-studio"') && config.includes('for = "/youtube-studio*"'), "normalizes and protects the private route"],
+  [/from = "\/youtube-studio\/"[\s\S]*to = "\/youtube-studio\/index\.html"/.test(config) && config.includes('for = "/youtube-studio*"'), "serves the canonical private route directly and keeps it protected"],
   [campaign.includes('href="/youtube-studio/"'), "links the source box from Campaign Studio"],
   [styles.includes("prefers-reduced-motion") && styles.includes("@media(max-width:680px)"), "supports reduced motion and mobile layouts"]
 ];

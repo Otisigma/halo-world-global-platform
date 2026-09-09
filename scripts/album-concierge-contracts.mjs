@@ -29,7 +29,7 @@ const checks = [
   [migration.includes("halo_album_concierge_sessions") && migration.includes("generated_tracks") && migration.includes("generated_dedication"), "persists concierge sessions with generated outputs"],
   [styles.includes(".ac-flow") && styles.includes(".ac-choice") && styles.includes(".ac-results") && styles.includes("prefers-reduced-motion"), "ships flow, choice, and results styles with reduced-motion support"],
   [styles.includes(".ac-premium-card") && styles.includes(".btn-premium") && page.includes("Collector Edition"), "ships collector-edition premium upsell styles"],
-  [config.includes('from = "/album-concierge"') && home.includes('href="/album-concierge/"'), "makes Album Concierge discoverable from HALO and normalizes its route"],
+  [/from = "\/album-concierge\/"[\s\S]*to = "\/album-concierge\/index\.html"/.test(config) && home.includes('href="/album-concierge/"'), "makes Album Concierge discoverable from HALO and serves the canonical /album-concierge/ route directly"],
   [home.includes("open_album_concierge") && home.includes("CREATE YOUR ALBUM"), "adds a visible \"Create your album\" CTA to HALO Build lane navigation"],
   [home.includes("Turn your story") && home.includes("worth keeping") && home.includes("Build a gift album") && home.includes("/album-concierge/?purpose=gift") && home.includes("Explore collector edition") && home.includes("/album-concierge/?purpose=collector"), "ships homepage Album Concierge promotion with start, gift, and collector discovery CTAs"],
   [stats.includes('"open_album_concierge"') && stats.includes('"album_concierge_result_ready"'), "registers Album Concierge product analytics events"]

@@ -19,7 +19,13 @@ const PROMOTION_FIELDS = new Set([
   "djsCopy",
   "radioCopy",
   "pressCopy",
-  "advanceCopy"
+  "advanceCopy",
+  "visualAssetDataUrl",
+  "visualAssetFilename",
+  "visualAssetPlacement",
+  "visualAssetFit",
+  "visualAssetTint",
+  "visualAssetTintColor"
 ]);
 const PARTY_THEME_FIELDS = new Set(["atmosphere", "accent", "celebration", "motion", "roomNote"]);
 const HOST_PERSONAS = new Set(["halo", "butterfly", "romy"]);
@@ -48,13 +54,22 @@ function cleanPromotion(value) {
     if (key === "caption") return 2200;
     if (key === "hyperfollowUrl") return 500;
     if (key === "releaseSummary" || key === "privateDeliveryNote") return 400;
+    if (key === "visualAssetDataUrl") return 18000;
+    if (key === "visualAssetFilename") return 180;
     return 1200;
   };
-  return Object.fromEntries(
+  const promotion = Object.fromEntries(
     Object.entries(value)
       .filter(([key]) => PROMOTION_FIELDS.has(key))
       .map(([key, item]) => [key, cleanText(item, promotionFieldLimit(key))])
   );
+  if (!/^data:image\/(?:jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(promotion.visualAssetDataUrl || "")) promotion.visualAssetDataUrl = "";
+  if (!["hero", "background", "both"].includes(promotion.visualAssetPlacement)) promotion.visualAssetPlacement = "hero";
+  if (!["cover", "contain"].includes(promotion.visualAssetFit)) promotion.visualAssetFit = "cover";
+  const tint = Number.parseInt(promotion.visualAssetTint, 10);
+  promotion.visualAssetTint = String(Number.isFinite(tint) ? Math.max(0, Math.min(85, tint)) : 28);
+  if (!/^#[0-9a-f]{6}$/i.test(promotion.visualAssetTintColor || "")) promotion.visualAssetTintColor = "#171713";
+  return promotion;
 }
 
 function cleanPartyTheme(value) {
@@ -98,7 +113,13 @@ function defaultPromotion({ title, trackCount, voteGoal, rewardTitle }) {
     djsCopy: `${title} DJ kit: clean metadata, transition-ready context, and direct campaign listening access for selector prep.`,
     radioCopy: `${title} radio service copy with release timing, approved language, and clear handoff for programming teams.`,
     pressCopy: `${title} press narrative with artist context, approved quote framing, and launch-day editorial direction.`,
-    advanceCopy: `${title} advance listener note with private delivery guidance, review timing, and trusted early-access context.`
+    advanceCopy: `${title} advance listener note with private delivery guidance, review timing, and trusted early-access context.`,
+    visualAssetDataUrl: "",
+    visualAssetFilename: "",
+    visualAssetPlacement: "hero",
+    visualAssetFit: "cover",
+    visualAssetTint: "28",
+    visualAssetTintColor: "#171713"
   };
 }
 

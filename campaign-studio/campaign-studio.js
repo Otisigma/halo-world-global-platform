@@ -30,6 +30,24 @@
     { key: "pressCopy", label: "Press", tone: "Editorial narrative", needsPrivate: true },
     { key: "advanceCopy", label: "Advance listeners", tone: "Private preview", needsPrivate: true }
   ];
+  const VISUAL_ASSET_LIMIT = 18_000;
+  const VISUAL_ASSET_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
+
+  const normalizeVisualAsset = promotion => {
+    const placement = ["hero", "background", "both"].includes(promotion?.visualAssetPlacement) ? promotion.visualAssetPlacement : "hero";
+    const fit = ["cover", "contain"].includes(promotion?.visualAssetFit) ? promotion.visualAssetFit : "cover";
+    const tint = Math.max(0, Math.min(85, Number.parseInt(promotion?.visualAssetTint, 10) || 28));
+    const tintColor = /^#[0-9a-f]{6}$/i.test(promotion?.visualAssetTintColor || "") ? promotion.visualAssetTintColor : "#171713";
+    const dataUrl = /^data:image\/(?:jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/.test(promotion?.visualAssetDataUrl || "") ? promotion.visualAssetDataUrl : "";
+    return {
+      dataUrl,
+      filename: String(promotion?.visualAssetFilename || "").slice(0, 180),
+      placement,
+      fit,
+      tint,
+      tintColor
+    };
+  };
 
   function buildDestinationCopies(campaign) {
     const promotion = campaign.promotion || {};
@@ -71,6 +89,89 @@
         </article>`;
       }).join("")}
     </section>`;
+  }
+
+  async function fileToDataUrl(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result || ""));
+      reader.onerror = () => reject(new Error("The cover image could not be read."));
+      reader.readAsDataURL(file);
+    });
+  }
+
+  async function normalizeVisualAssetFile(file) {
+    if (!file) throw new Error("Choose a cover image first.");
+    if (!VISUAL_ASSET_TYPES.has(file.type)) throw new Error("Choose a JPEG, PNG, or WebP cover image.");
+    const source = await fileToDataUrl(file);
+    const image = await new Promise((resolve, reject) => {
+      const next = new Image();
+      next.onload = () => resolve(next);
+      next.onerror = () => reject(new Error("The cover image preview could not be generated."));
+      next.src = source;
+    });
+    let width = image.naturalWidth || image.width || 1;
+    let height = image.naturalHeight || image.height || 1;
+    const maxEdge = 960;
+    const scale = Math.min(1, maxEdge / Math.max(width, height));
+    width = Math.max(1, Math.round(width * scale));
+    height = Math.max(1, Math.round(height * scale));
+    const canvas = document.createElement("canvas");
+    const context = canvas.getContext("2d");
+    if (!context) throw new Error("Your browser cannot prepare this image.");
+    let quality = 0.9;
+    let encoded = "";
+    while (!encoded) {
+      canvas.width = width;
+      canvas.height = height;
+      context.clearRect(0, 0, width, height);
+      context.drawImage(image, 0, 0, width, height);
+      encoded = canvas.toDataURL(file.type === "image/png" ? "image/png" : "image/jpeg", quality);
+      if (encoded.length <= VISUAL_ASSET_LIMIT) break;
+      encoded = "";
+      if (quality > 0.46) quality -= 0.12;
+      else if (Math.max(width, height) > 240) {
+        width = Math.max(240, Math.round(width * 0.85));
+        height = Math.max(240, Math.round(height * 0.85));
+        quality = 0.82;
+      } else throw new Error("This cover image is too large. Try a smaller file.");
+    }
+    return encoded;
+  }
+
+  function updateVisualAssetPreview() {
+    const form = document.getElementById("editorForm");
+    if (!form) return;
+    const promotion = state.campaign?.promotion || {};
+    const fallback = normalizeVisualAsset(promotion);
+    const settings = {
+      dataUrl: String(form.elements.visualAssetDataUrl?.value || fallback.dataUrl || ""),
+      filename: String(form.elements.visualAssetFilename?.value || fallback.filename || ""),
+      placement: String(form.elements.visualAssetPlacement?.value || fallback.placement || "hero"),
+      fit: String(form.elements.visualAssetFit?.value || fallback.fit || "cover"),
+      tint: Math.max(0, Math.min(85, Number.parseInt(form.elements.visualAssetTint?.value, 10) || fallback.tint || 28)),
+      tintColor: /^#[0-9a-f]{6}$/i.test(form.elements.visualAssetTintColor?.value || "") ? form.elements.visualAssetTintColor.value : fallback.tintColor
+    };
+    const hasAsset = Boolean(settings.dataUrl);
+    const modeLabel = settings.placement === "both" ? "hero + background" : settings.placement;
+    const tintLabel = document.getElementById("visualAssetTintValue");
+    if (tintLabel) tintLabel.textContent = `${settings.tint}%`;
+    const status = document.getElementById("visualAssetStatus");
+    if (status) status.textContent = hasAsset
+      ? `Cover ready · ${settings.filename || "release-cover.jpg"} · ${modeLabel} · ${settings.fit} · tint ${settings.tint}%`
+      : "No cover uploaded yet. Upload to preview hero/background behavior.";
+    const hero = document.getElementById("visualAssetHeroPreview");
+    const background = document.getElementById("visualAssetBackgroundPreview");
+    for (const [target, node] of [["hero", hero], ["background", background]]) {
+      if (!node) continue;
+      const active = settings.placement === target || settings.placement === "both";
+      node.dataset.active = String(active && hasAsset);
+      node.style.backgroundImage = active && hasAsset
+        ? `linear-gradient(${settings.tintColor}${Math.round(settings.tint * 2.55).toString(16).padStart(2, "0")}, ${settings.tintColor}${Math.round(settings.tint * 2.55).toString(16).padStart(2, "0")}), url("${settings.dataUrl}")`
+        : "";
+      node.style.backgroundSize = settings.fit;
+      node.style.backgroundPosition = "center";
+    }
   }
 
   function withTimeout(promise, message, timeoutMs = 20_000) {
@@ -134,29 +235,39 @@
   function renderCampaignEditor() {
     const campaign = state.campaign;
     const promotion = campaign.promotion || {};
+    const visualAsset = normalizeVisualAsset(promotion);
     const destinationCopies = buildDestinationCopies(campaign);
     const partyTheme = campaign.partyTheme || {};
     const deadline = new Date(new Date(campaign.endsAt).valueOf() - new Date(campaign.endsAt).getTimezoneOffset() * 60000).toISOString().slice(0, 16);
     app.innerHTML = `${studioHero(campaign.tracks.length)}<section class="campaign-editor"><div class="editor-main"><div class="step-heading"><div><p class="signal-label">02 / DREAMWEAVER DRAFT</p><h2>The campaign package is ready for the team.</h2></div><div class="track-count">${campaign.totalVotes}<small>votes</small></div></div>
-      <form class="editor-form" id="editorForm"><label class="wide">Campaign title<input name="title" maxlength="140" value="${escapeHtml(campaign.title)}" required></label><label class="wide">Invitation line<input name="subtitle" maxlength="240" value="${escapeHtml(campaign.subtitle)}"></label><label>Host persona<select name="hostPersonaId">${selectOptions(campaign.hostPersonaId || "halo", [["halo","DJ HALO"],["butterfly","DJ BUTTERFLY"],["romy","DJ ROMY"]])}</select></label><label>Room atmosphere<select name="atmosphere">${selectOptions(partyTheme.atmosphere || "midnight", [["midnight","Midnight signal"],["sunset","Sunset terrace"],["butterfly","Butterfly garden"],["electric","Electric room"]])}</select></label><label>Celebration<select name="celebration">${selectOptions(partyTheme.celebration || "confetti", [["confetti","Confetti burst"],["streamers","Slow streamers"],["starlight","Starlight"],["none","No celebration"]])}</select></label><label>Motion<select name="motion">${selectOptions(partyTheme.motion || "gentle", [["gentle","Gentle"],["full","Full atmosphere"],["reduced","Reduced motion"]])}</select></label><label>Vote goal<input name="voteGoal" type="number" min="10" max="100000" value="${campaign.voteGoal}"></label><label>Voting closes<input name="endsAt" type="datetime-local" value="${deadline}"></label><label class="wide">Community unlock<input name="rewardTitle" maxlength="140" value="${escapeHtml(campaign.rewardTitle)}"></label><label class="wide">Reward note<textarea name="rewardDescription" maxlength="500">${escapeHtml(campaign.rewardDescription)}</textarea></label><label class="wide">Room note<textarea name="roomNote" maxlength="300">${escapeHtml(partyTheme.roomNote || "Come early. Hear every song in full. Stay for the reveal.")}</textarea></label><label class="wide">Campaign headline<input name="headline" maxlength="300" value="${escapeHtml(promotion.headline || "")}"></label><label class="wide">Social caption<textarea name="caption" maxlength="2200">${escapeHtml(promotion.caption || "")}</textarea></label><label>Story title<input name="storyTitle" maxlength="300" value="${escapeHtml(promotion.storyTitle || "")}"></label><label>Story subtitle<input name="storySubtitle" maxlength="300" value="${escapeHtml(promotion.storySubtitle || "")}"></label><label>Call to action<input name="callToAction" maxlength="300" value="${escapeHtml(promotion.callToAction || "")}"></label><label>Hashtags<input name="hashtags" maxlength="300" value="${escapeHtml(promotion.hashtags || "")}"></label><label class="wide">Release summary<input name="releaseSummary" maxlength="400" value="${escapeHtml(promotion.releaseSummary || "One release. Five purpose-built links.")}"></label><label class="wide">HyperFollow link<input name="hyperfollowUrl" maxlength="500" value="${escapeHtml(promotion.hyperfollowUrl || "https://distrokid.com/hyperfollow/owenanthony/blessed")}"></label><label class="wide">Private delivery note<textarea name="privateDeliveryNote" maxlength="400">${escapeHtml(promotion.privateDeliveryNote || "Private links stay locked until your team marks each destination ready.")}</textarea></label><label class="wide">Fans copy<textarea name="fansCopy" maxlength="1200">${escapeHtml(destinationCopies.fansCopy)}</textarea></label><label class="wide">DJs copy<textarea name="djsCopy" maxlength="1200">${escapeHtml(destinationCopies.djsCopy)}</textarea></label><label class="wide">Radio copy<textarea name="radioCopy" maxlength="1200">${escapeHtml(destinationCopies.radioCopy)}</textarea></label><label class="wide">Press copy<textarea name="pressCopy" maxlength="1200">${escapeHtml(destinationCopies.pressCopy)}</textarea></label><label class="wide">Advance listeners copy<textarea name="advanceCopy" maxlength="1200">${escapeHtml(destinationCopies.advanceCopy)}</textarea></label><p class="status-message" id="editorMessage">${campaign.launchedAt ? `Launch pack live · hosted by ${escapeHtml(personaName(campaign.hostPersonaId))}.` : campaign.status === "published" ? "Live campaign · edits remain available." : "Draft campaign · launch when the team approves."}</p><div class="form-actions"><button class="ghost-button" type="submit">Save edits</button><button class="primary-button" type="button" data-launch>${campaign.launchedAt ? "Update launch pack" : "Create launch pack + go live"}</button></div></form></div>
+      <form class="editor-form" id="editorForm"><label class="wide">Campaign title<input name="title" maxlength="140" value="${escapeHtml(campaign.title)}" required></label><label class="wide">Invitation line<input name="subtitle" maxlength="240" value="${escapeHtml(campaign.subtitle)}"></label><label>Host persona<select name="hostPersonaId">${selectOptions(campaign.hostPersonaId || "halo", [["halo","DJ HALO"],["butterfly","DJ BUTTERFLY"],["romy","DJ ROMY"]])}</select></label><label>Room atmosphere<select name="atmosphere">${selectOptions(partyTheme.atmosphere || "midnight", [["midnight","Midnight signal"],["sunset","Sunset terrace"],["butterfly","Butterfly garden"],["electric","Electric room"]])}</select></label><label>Celebration<select name="celebration">${selectOptions(partyTheme.celebration || "confetti", [["confetti","Confetti burst"],["streamers","Slow streamers"],["starlight","Starlight"],["none","No celebration"]])}</select></label><label>Motion<select name="motion">${selectOptions(partyTheme.motion || "gentle", [["gentle","Gentle"],["full","Full atmosphere"],["reduced","Reduced motion"]])}</select></label><label>Vote goal<input name="voteGoal" type="number" min="10" max="100000" value="${campaign.voteGoal}"></label><label>Voting closes<input name="endsAt" type="datetime-local" value="${deadline}"></label><label class="wide">Community unlock<input name="rewardTitle" maxlength="140" value="${escapeHtml(campaign.rewardTitle)}"></label><label class="wide">Reward note<textarea name="rewardDescription" maxlength="500">${escapeHtml(campaign.rewardDescription)}</textarea></label><label class="wide">Room note<textarea name="roomNote" maxlength="300">${escapeHtml(partyTheme.roomNote || "Come early. Hear every song in full. Stay for the reveal.")}</textarea></label><label class="wide">Campaign headline<input name="headline" maxlength="300" value="${escapeHtml(promotion.headline || "")}"></label><label class="wide">Social caption<textarea name="caption" maxlength="2200">${escapeHtml(promotion.caption || "")}</textarea></label><label>Story title<input name="storyTitle" maxlength="300" value="${escapeHtml(promotion.storyTitle || "")}"></label><label>Story subtitle<input name="storySubtitle" maxlength="300" value="${escapeHtml(promotion.storySubtitle || "")}"></label><label>Call to action<input name="callToAction" maxlength="300" value="${escapeHtml(promotion.callToAction || "")}"></label><label>Hashtags<input name="hashtags" maxlength="300" value="${escapeHtml(promotion.hashtags || "")}"></label><label class="wide">Release summary<input name="releaseSummary" maxlength="400" value="${escapeHtml(promotion.releaseSummary || "One release. Five purpose-built links.")}"></label><label class="wide">HyperFollow link<input name="hyperfollowUrl" maxlength="500" value="${escapeHtml(promotion.hyperfollowUrl || "https://distrokid.com/hyperfollow/owenanthony/blessed")}"></label><label class="wide">Private delivery note<textarea name="privateDeliveryNote" maxlength="400">${escapeHtml(promotion.privateDeliveryNote || "Private links stay locked until your team marks each destination ready.")}</textarea></label>
+      <fieldset class="visual-asset-section wide"><legend>Release visual asset override</legend><p>Upload one cover image, choose where it applies, preview crop/fit/tint, and save it into this release kit.</p><label class="wide">Upload cover image<input id="visualAssetFile" type="file" accept="image/jpeg,image/png,image/webp"></label><div class="visual-asset-controls"><label>Apply to<select name="visualAssetPlacement">${selectOptions(visualAsset.placement, [["hero","Replace hero art"],["background","Set background override"],["both","Hero + background"]])}</select></label><label>Preview fit<select name="visualAssetFit">${selectOptions(visualAsset.fit, [["cover","Crop to cover"],["contain","Fit inside"]])}</select></label><label>Tint color<input name="visualAssetTintColor" type="color" value="${escapeHtml(visualAsset.tintColor)}"></label><label>Tint strength<input name="visualAssetTint" type="range" min="0" max="85" value="${visualAsset.tint}"><small id="visualAssetTintValue">${visualAsset.tint}%</small></label></div><div class="visual-asset-preview-grid"><figure><figcaption>Hero preview</figcaption><div class="visual-asset-preview" id="visualAssetHeroPreview" data-active="false"></div></figure><figure><figcaption>Background preview</figcaption><div class="visual-asset-preview" id="visualAssetBackgroundPreview" data-active="false"></div></figure></div><input type="hidden" name="visualAssetDataUrl" value="${escapeHtml(visualAsset.dataUrl)}"><input type="hidden" name="visualAssetFilename" value="${escapeHtml(visualAsset.filename)}"><p class="visual-asset-status" id="visualAssetStatus">No cover uploaded yet. Upload to preview hero/background behavior.</p><div class="visual-asset-actions"><button class="ghost-button" type="button" data-clear-visual-asset ${visualAsset.dataUrl ? "" : "disabled"}>Remove override</button><button class="primary-button" type="button" data-save-visual-asset>Save visual asset to release kit</button></div></fieldset><label class="wide">Fans copy<textarea name="fansCopy" maxlength="1200">${escapeHtml(destinationCopies.fansCopy)}</textarea></label><label class="wide">DJs copy<textarea name="djsCopy" maxlength="1200">${escapeHtml(destinationCopies.djsCopy)}</textarea></label><label class="wide">Radio copy<textarea name="radioCopy" maxlength="1200">${escapeHtml(destinationCopies.radioCopy)}</textarea></label><label class="wide">Press copy<textarea name="pressCopy" maxlength="1200">${escapeHtml(destinationCopies.pressCopy)}</textarea></label><label class="wide">Advance listeners copy<textarea name="advanceCopy" maxlength="1200">${escapeHtml(destinationCopies.advanceCopy)}</textarea></label><p class="status-message" id="editorMessage">${campaign.launchedAt ? `Launch pack live · hosted by ${escapeHtml(personaName(campaign.hostPersonaId))}.` : campaign.status === "published" ? "Live campaign · edits remain available." : "Draft campaign · launch when the team approves."}</p><div class="form-actions"><button class="ghost-button" type="submit">Save edits</button><button class="primary-button" type="button" data-launch>${campaign.launchedAt ? "Update launch pack" : "Create launch pack + go live"}</button></div></form></div>
       <aside class="editor-aside"><p class="signal-label">03 / ARTIST CONTROLS HUB</p><h3>Campaign Studio // Artist Controls</h3><code class="share-url">${escapeHtml(shareUrl(campaign))}</code><div class="mini-card"><small>${escapeHtml(personaName(campaign.hostPersonaId))} / ${escapeHtml(promotion.eyebrow || "HALO LISTENING PARTY")}</small><strong>${escapeHtml(promotion.storyTitle || campaign.title)}</strong><span>${escapeHtml(promotion.callToAction || "Listen. Vote. Unlock.")}</span></div>${renderDestinationCards(campaign)}<div class="asset-actions"><button type="button" data-share-party>Share listening party</button><button type="button" data-copy-caption>Copy caption + link</button><button type="button" data-download-card>Download social card</button><button type="button" data-copy-link>Copy voting link</button><a href="${escapeHtml(shareUrl(campaign))}" target="_blank" rel="noopener">Open fan preview</a><a href="${escapeHtml(promotion.hyperfollowUrl || "https://distrokid.com/hyperfollow/owenanthony/blessed")}" target="_blank" rel="noopener noreferrer">Open HyperFollow link</a><a href="/dreamweaver/" rel="noopener">Return to Dreamweaver</a><a href="/dreamweaver-lab/" rel="noopener">Open Song Lab prep</a><a href="/radio/" rel="noopener">Open HALO Radio + DJ Room</a></div></aside></section>`;
+    updateVisualAssetPreview();
   }
 
   function renderPublicCampaign() {
     const campaign = state.campaign;
     const promotion = campaign.promotion || {};
     const partyTheme = campaign.partyTheme || {};
+    const visualAsset = normalizeVisualAsset(promotion);
+    const heroStyle = visualAsset.dataUrl && (visualAsset.placement === "hero" || visualAsset.placement === "both")
+      ? `style="background-image:linear-gradient(${visualAsset.tintColor}${Math.round(visualAsset.tint * 2.55).toString(16).padStart(2, "0")}, ${visualAsset.tintColor}${Math.round(visualAsset.tint * 2.55).toString(16).padStart(2, "0")}),url('${escapeHtml(visualAsset.dataUrl)}');background-size:${visualAsset.fit};background-position:center;"`
+      : "";
+    const backgroundStyle = visualAsset.dataUrl && (visualAsset.placement === "background" || visualAsset.placement === "both")
+      ? `style="background-image:linear-gradient(${visualAsset.tintColor}${Math.round(visualAsset.tint * 2.55).toString(16).padStart(2, "0")}, ${visualAsset.tintColor}${Math.round(visualAsset.tint * 2.55).toString(16).padStart(2, "0")}),url('${escapeHtml(visualAsset.dataUrl)}');background-size:${visualAsset.fit};background-position:center;"`
+      : "";
     document.body.dataset.partyAtmosphere = partyTheme.atmosphere || "midnight";
     document.body.dataset.partyMotion = partyTheme.motion || "gentle";
     document.documentElement.style.setProperty("--party-accent", partyTheme.accent || "#d5ef5a");
-    app.innerHTML = `<div class="party-atmosphere party-${escapeHtml(partyTheme.celebration || "confetti")}" aria-hidden="true">${Array.from({ length: 28 }, (_, index) => `<i style="--i:${index}"></i>`).join("")}</div><section class="vote-hero"><div class="hero-copy"><p class="signal-label">${escapeHtml(personaName(campaign.hostPersonaId))} / ${escapeHtml(promotion.eyebrow || "HALO LISTENING PARTY")}</p><h1>${escapeHtml(promotion.headline || campaign.title)}</h1><p>${escapeHtml(campaign.subtitle)}</p><p class="party-room-note">${escapeHtml(partyTheme.roomNote || "Hear every record. Stay for the reveal.")}</p></div><aside class="vote-progress"><strong>${campaign.totalVotes}</strong><span>of ${campaign.voteGoal} votes · ${campaign.progress}% unlocked</span><div class="progress-bar"><i style="transform:scaleX(${campaign.progress / 100})"></i></div></aside></section>
+    app.innerHTML = `<div class="party-atmosphere party-${escapeHtml(partyTheme.celebration || "confetti")}" aria-hidden="true">${Array.from({ length: 28 }, (_, index) => `<i style="--i:${index}"></i>`).join("")}</div><section class="vote-hero" ${backgroundStyle}><div class="hero-copy" ${heroStyle}><p class="signal-label">${escapeHtml(personaName(campaign.hostPersonaId))} / ${escapeHtml(promotion.eyebrow || "HALO LISTENING PARTY")}</p><h1>${escapeHtml(promotion.headline || campaign.title)}</h1><p>${escapeHtml(campaign.subtitle)}</p><p class="party-room-note">${escapeHtml(partyTheme.roomNote || "Hear every record. Stay for the reveal.")}</p></div><aside class="vote-progress"><strong>${campaign.totalVotes}</strong><span>of ${campaign.voteGoal} votes · ${campaign.progress}% unlocked</span><div class="progress-bar"><i style="transform:scaleX(${campaign.progress / 100})"></i></div></aside></section>
       <section class="reward-strip"><b>${campaign.rewardUnlocked ? "UNLOCKED" : "THE UNLOCK"}</b><div><strong>${escapeHtml(campaign.rewardTitle)}</strong><br><small>${escapeHtml(campaign.rewardDescription)}</small></div><small>Voting closes ${escapeHtml(formatDate(campaign.endsAt))}</small></section>
       <section class="vote-grid">${campaign.tracks.map(track => `<article class="vote-track ${campaign.viewerVote === track.id ? "is-selected" : ""}"><div class="track-art" ${track.artworkUrl ? `style="background-image:url('${escapeHtml(track.artworkUrl)}')"` : ""}></div><div class="track-content"><span class="track-index">TRACK ${String(track.position).padStart(2, "0")} / ${escapeHtml(track.genre || formatDuration(track.durationSeconds))}</span><h2>${escapeHtml(track.title)}</h2><span class="artist">${escapeHtml(track.artist)}</span><p>${escapeHtml(track.description || "Listen before you choose. Your vote helps decide the next release.")}</p>${track.audioUrl ? `<audio controls preload="none" src="${escapeHtml(track.audioUrl)}"></audio>` : ""}<div class="vote-row"><button class="vote-button" type="button" data-vote="${track.id}" ${campaign.acceptingVotes ? "" : "disabled"}>${campaign.viewerVote === track.id ? "Your vote" : "Vote for this track"}</button><span class="vote-total">${track.votes} ${track.votes === 1 ? "vote" : "votes"}</span></div></div></article>`).join("")}</section><p class="vote-message" id="voteMessage">${campaign.acceptingVotes ? "One vote per fan. You can change your choice before the campaign closes." : "Voting is closed. The final signal remains visible."}</p>`;
   }
 
   function campaignPayload(form) {
     const data = new FormData(form);
-    return { slug: state.campaign.slug, title: data.get("title"), subtitle: data.get("subtitle"), voteGoal: data.get("voteGoal"), endsAt: new Date(data.get("endsAt")).toISOString(), rewardTitle: data.get("rewardTitle"), rewardDescription: data.get("rewardDescription"), hostPersonaId: data.get("hostPersonaId"), preflightId: state.campaign.preflightId || state.preflightId, partyTheme: { atmosphere: data.get("atmosphere"), celebration: data.get("celebration"), motion: data.get("motion"), accent: state.campaign.partyTheme?.accent || "#d5ef5a", roomNote: data.get("roomNote") }, promotion: { eyebrow: state.campaign.promotion?.eyebrow || "HALO LISTENING PARTY", headline: data.get("headline"), caption: data.get("caption"), storyTitle: data.get("storyTitle"), storySubtitle: data.get("storySubtitle"), callToAction: data.get("callToAction"), hashtags: data.get("hashtags"), releaseSummary: data.get("releaseSummary"), hyperfollowUrl: data.get("hyperfollowUrl"), privateDeliveryNote: data.get("privateDeliveryNote"), fansCopy: data.get("fansCopy"), djsCopy: data.get("djsCopy"), radioCopy: data.get("radioCopy"), pressCopy: data.get("pressCopy"), advanceCopy: data.get("advanceCopy") } };
+    return { slug: state.campaign.slug, title: data.get("title"), subtitle: data.get("subtitle"), voteGoal: data.get("voteGoal"), endsAt: new Date(data.get("endsAt")).toISOString(), rewardTitle: data.get("rewardTitle"), rewardDescription: data.get("rewardDescription"), hostPersonaId: data.get("hostPersonaId"), preflightId: state.campaign.preflightId || state.preflightId, partyTheme: { atmosphere: data.get("atmosphere"), celebration: data.get("celebration"), motion: data.get("motion"), accent: state.campaign.partyTheme?.accent || "#d5ef5a", roomNote: data.get("roomNote") }, promotion: { eyebrow: state.campaign.promotion?.eyebrow || "HALO LISTENING PARTY", headline: data.get("headline"), caption: data.get("caption"), storyTitle: data.get("storyTitle"), storySubtitle: data.get("storySubtitle"), callToAction: data.get("callToAction"), hashtags: data.get("hashtags"), releaseSummary: data.get("releaseSummary"), hyperfollowUrl: data.get("hyperfollowUrl"), privateDeliveryNote: data.get("privateDeliveryNote"), fansCopy: data.get("fansCopy"), djsCopy: data.get("djsCopy"), radioCopy: data.get("radioCopy"), pressCopy: data.get("pressCopy"), advanceCopy: data.get("advanceCopy"), visualAssetDataUrl: data.get("visualAssetDataUrl"), visualAssetFilename: data.get("visualAssetFilename"), visualAssetPlacement: data.get("visualAssetPlacement"), visualAssetFit: data.get("visualAssetFit"), visualAssetTint: data.get("visualAssetTint"), visualAssetTintColor: data.get("visualAssetTintColor") } };
   }
 
   async function loadStudio() {
@@ -283,12 +394,45 @@
     const copyCaption = event.target.closest("[data-copy-caption]"); if (copyCaption) return copyText(`${state.campaign.promotion.caption}\n\n${state.campaign.promotion.hashtags}\n${shareUrl(state.campaign)}`, copyCaption);
     const copyLink = event.target.closest("[data-copy-link]"); if (copyLink) return copyText(shareUrl(state.campaign), copyLink);
     if (event.target.closest("[data-download-card]")) return downloadCard();
+    if (event.target.closest("[data-save-visual-asset]")) return saveEditor("save");
+    if (event.target.closest("[data-clear-visual-asset]")) {
+      const form = document.getElementById("editorForm");
+      if (!form) return;
+      form.elements.visualAssetDataUrl.value = "";
+      form.elements.visualAssetFilename.value = "";
+      const clearButton = form.querySelector("[data-clear-visual-asset]");
+      if (clearButton) clearButton.disabled = true;
+      updateVisualAssetPreview();
+    }
   });
 
-  app.addEventListener("change", event => {
-    if (!event.target.matches("[data-track-choice]")) return;
-    if (event.target.checked) state.selected.add(event.target.value); else state.selected.delete(event.target.value);
-    renderStudio();
+  app.addEventListener("change", async event => {
+    if (event.target.matches("[data-track-choice]")) {
+      if (event.target.checked) state.selected.add(event.target.value); else state.selected.delete(event.target.value);
+      renderStudio();
+      return;
+    }
+    if (event.target.id === "visualAssetFile") {
+      const form = document.getElementById("editorForm");
+      const status = document.getElementById("visualAssetStatus");
+      try {
+        if (status) status.textContent = "Preparing cover preview…";
+        const file = event.target.files?.[0];
+        if (!file) throw new Error("Choose a cover image first.");
+        const encoded = await normalizeVisualAssetFile(file);
+        form.elements.visualAssetDataUrl.value = encoded;
+        form.elements.visualAssetFilename.value = file.name.slice(0, 180);
+        const clearButton = form.querySelector("[data-clear-visual-asset]");
+        if (clearButton) clearButton.disabled = false;
+        updateVisualAssetPreview();
+      } catch (error) {
+        if (status) status.textContent = error instanceof Error ? error.message : "The cover image could not be used.";
+      }
+      return;
+    }
+    if (event.target.form?.id === "editorForm" && ["visualAssetPlacement", "visualAssetFit", "visualAssetTint", "visualAssetTintColor"].includes(event.target.name)) {
+      updateVisualAssetPreview();
+    }
   });
 
   app.addEventListener("submit", async event => {

@@ -53,12 +53,6 @@
   force = true
 
 [[redirects]]
-  from = "/halo.html"
-  to = "/halo"
-  status = 301
-  force = true
-
-[[redirects]]
   from = "/private"
   to = "/index.html"
   status = 200
@@ -155,12 +149,6 @@
   force = true
 
 [[redirects]]
-  from = "/creators/index.html"
-  to = "/creators/"
-  status = 301
-  force = true
-
-[[redirects]]
   from = "/dreamweaver"
   to = "/dreamweaver/"
   status = 301
@@ -170,12 +158,6 @@
   from = "/dreamweaver/"
   to = "/dreamweaver/index.html"
   status = 200
-  force = true
-
-[[redirects]]
-  from = "/dreamweaver/index.html"
-  to = "/dreamweaver/"
-  status = 301
   force = true
 
 [[redirects]]
@@ -203,31 +185,13 @@
   force = true
 
 [[redirects]]
-  from = "/mixes/index.html"
-  to = "/mixes/"
-  status = 301
-  force = true
-
-[[redirects]]
   from = "/music"
   to = "/music/"
   status = 301
   force = true
 
 [[redirects]]
-  from = "/music/index.html"
-  to = "/music/"
-  status = 301
-  force = true
-
-[[redirects]]
   from = "/radio"
-  to = "/radio/"
-  status = 301
-  force = true
-
-[[redirects]]
-  from = "/radio/index.html"
   to = "/radio/"
   status = 301
   force = true
@@ -275,12 +239,6 @@
   force = true
 
 [[redirects]]
-  from = "/album-concierge/index.html"
-  to = "/album-concierge/"
-  status = 301
-  force = true
-
-[[redirects]]
   from = "/album-concierge/"
   to = "/album-concierge/index.html"
   status = 200
@@ -311,12 +269,6 @@
   force = true
 
 [[redirects]]
-  from = "/artist-pro/index.html"
-  to = "/artist-pro/"
-  status = 301
-  force = true
-
-[[redirects]]
   from = "/artist-team"
   to = "/artist-team.html"
   status = 301
@@ -325,24 +277,6 @@
 [[redirects]]
   from = "/artist-team/"
   to = "/artist-team.html"
-  status = 301
-  force = true
-
-[[redirects]]
-  from = "/artists/index.html"
-  to = "/artists/"
-  status = 301
-  force = true
-
-[[redirects]]
-  from = "/campaign-studio/index.html"
-  to = "/campaign-studio/"
-  status = 301
-  force = true
-
-[[redirects]]
-  from = "/creator-freedom/index.html"
-  to = "/creator-freedom/"
   status = 301
   force = true
 
@@ -361,12 +295,6 @@
 [[redirects]]
   from = "/dj-deck/"
   to = "/dj-deck.html"
-  status = 301
-  force = true
-
-[[redirects]]
-  from = "/dreamweaver-lab/index.html"
-  to = "/dreamweaver-lab/"
   status = 301
   force = true
 
@@ -404,12 +332,6 @@
   from = "/creators/"
   to = "/creators/index.html"
   status = 200
-  force = true
-
-[[redirects]]
-  from = "/finish-house/index.html"
-  to = "/finish-house/"
-  status = 301
   force = true
 
 [[redirects]]
@@ -509,12 +431,6 @@
   force = true
 
 [[redirects]]
-  from = "/release-house/index.html"
-  to = "/release-house/"
-  status = 301
-  force = true
-
-[[redirects]]
   from = "/release-house/"
   to = "/release-house/index.html"
   status = 200
@@ -533,21 +449,9 @@
   force = true
 
 [[redirects]]
-  from = "/song-catalog/index.html"
-  to = "/song-catalog/"
-  status = 301
-  force = true
-
-[[redirects]]
   from = "/song-catalog/"
   to = "/song-catalog/index.html"
   status = 200
-  force = true
-
-[[redirects]]
-  from = "/support/index.html"
-  to = "/support/"
-  status = 301
   force = true
 
 [[redirects]]

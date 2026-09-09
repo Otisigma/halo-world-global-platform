@@ -74,8 +74,9 @@ assert.match(menuSource, /buildDefaultMenuRouteStatuses/, "Main menu badges must
 assert.match(menuSource, /menuDestinationCount/, "Main menu summary must calculate the visible destination count dynamically.");
 assert.match(menuSource, /halo-menu-status-groups/, "Main menu must organize visible satellite buttons into status groups.");
 assert.match(menuSource, /new Set\(MENU_STATUS_GROUP_TARGETS\.map\(target => target\.route\)\)/, "Main menu route status targets must derive from the same menu target list.");
-assert.match(menuSource, /Attention now/, "Main menu must expose the ATTENTION status group.");
-assert.match(menuSource, /Working now/, "Main menu must expose the WORKING status group.");
+assert.match(menuSource, /ownerControlAccess && \(/, "Main menu must gate ATTENTION status visibility behind owner/team access.");
+assert.match(menuSource, /Attention now/, "Main menu must still include the ATTENTION status group for authorized users.");
+assert.match(menuSource, /All working menu/, "Main menu must expose the WORKING status group.");
 assert.match(navigationCssSource, /\.halo-menu-route-status/, "Main menu status badge styling must exist.");
 assert.match(navigationCssSource, /\.halo-menu-status-label/, "Main menu status labels must be allowed to wrap visibly.");
 assert.doesNotMatch(menuSource, /MENU_ROUTE_STATUS_TARGETS\.has\(normalizedRoute\)\s*&&\s*menuRouteStatusesUnavailable[\s\S]{0,120}\?\s*'yellow'/, "Main menu refresh mode must not turn every monitored route into ATTENTION.");

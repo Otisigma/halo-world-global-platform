@@ -3633,24 +3633,26 @@
                           <p className="halo-menu-status-empty">Live status is refreshing. The public route map stays visible while fresh checks publish.</p>
                         )}
                       </section>
-                      <section className="halo-menu-status-group halo-menu-status-group-attention" aria-labelledby="halo-menu-status-attention">
-                        <div className="halo-menu-status-group-title">
-                          <span>01</span>
-                          <h3 id="halo-menu-status-attention">Attention now</h3>
-                        </div>
-                        {menuStatusGroupedTargets.attention.length ? (
-                          <div className="halo-menu-status-buttons">
-                            {menuStatusGroupedTargets.attention.map(target => (
-                              <a key={`attention-${target.route}`} href={target.route} className="halo-menu-status-button">
-                                <span className="halo-menu-status-label">{target.label}</span>
-                                {renderMenuStatusBadge(target.route, target.label, 'yellow')}
-                              </a>
-                            ))}
+                      {ownerControlAccess && (
+                        <section className="halo-menu-status-group halo-menu-status-group-attention" aria-labelledby="halo-menu-status-attention">
+                          <div className="halo-menu-status-group-title">
+                            <span>01</span>
+                            <h3 id="halo-menu-status-attention">Attention now</h3>
                           </div>
-                        ) : (
-                          <p className="halo-menu-status-empty">No active amber satellites. All monitored routes are currently working.</p>
-                        )}
-                      </section>
+                          {menuStatusGroupedTargets.attention.length ? (
+                            <div className="halo-menu-status-buttons">
+                              {menuStatusGroupedTargets.attention.map(target => (
+                                <a key={`attention-${target.route}`} href={target.route} className="halo-menu-status-button">
+                                  <span className="halo-menu-status-label">{target.label}</span>
+                                  {renderMenuStatusBadge(target.route, target.label, 'yellow')}
+                                </a>
+                              ))}
+                            </div>
+                          ) : (
+                            <p className="halo-menu-status-empty">No active amber satellites. All monitored routes are currently working.</p>
+                          )}
+                        </section>
+                      )}
                     </div>
 
                     <div className="halo-menu-lanes">

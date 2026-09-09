@@ -23,6 +23,16 @@
   const loading = document.getElementById("acLoading");
   const loadingLabel = document.getElementById("acLoadingLabel");
   const results = document.getElementById("acResults");
+  const accountButton = document.getElementById("accountButton");
+  const accountDialog = document.getElementById("accountDialog");
+  const accountDialogClose = document.getElementById("accountDialogClose");
+  const accountForm = document.getElementById("accountForm");
+  const accountStatus = document.getElementById("accountStatus");
+
+  let identity = window.haloIdentity || null;
+  let identityUser = null;
+  let identityConnected = false;
+  let authMode = "login";
 
   const steps = [1, 2, 3, 4].map(n => document.getElementById(`step-${n}`));
 
@@ -39,6 +49,34 @@
     if (!notice) return;
     notice.textContent = "";
     notice.className = "ac-notice";
+  }
+
+  function setAccountUser(user) {
+    identityUser = user || null;
+    if (accountButton) accountButton.textContent = identityUser ? "Sign out" : "Join / sign in";
+  }
+
+  function setAuthMode(mode) {
+    authMode = mode === "signup" ? "signup" : "login";
+    document.querySelectorAll("[data-auth-mode]").forEach(button => {
+      const selected = button.dataset.authMode === authMode;
+      button.classList.toggle("is-active", selected);
+      button.setAttribute("aria-selected", String(selected));
+    });
+    const nameField = accountForm?.querySelector(".ac-auth-name");
+    if (nameField) nameField.hidden = authMode !== "signup";
+    if (accountForm?.elements.password) {
+      accountForm.elements.password.autocomplete = authMode === "signup" ? "new-password" : "current-password";
+    }
+    if (accountStatus) accountStatus.textContent = "";
+  }
+
+  async function connectIdentity(nextIdentity) {
+    if (!nextIdentity || identityConnected) return;
+    identity = nextIdentity;
+    identityConnected = true;
+    setAccountUser(await identity.getUser().catch(() => null));
+    identity.onAuthChange((_event, user) => setAccountUser(user));
   }
 
   function showStep(n) {
@@ -422,6 +460,57 @@
       giftChoice.click();
     }
   });
+
+  accountButton?.addEventListener("click", async () => {
+    if (identityUser) {
+      await identity?.logout();
+      setAccountUser(null);
+      showNotice("You are signed out.", "success");
+      return;
+    }
+    setAuthMode("login");
+    accountDialog?.showModal();
+  });
+
+  accountDialogClose?.addEventListener("click", () => accountDialog?.close());
+  accountDialog?.addEventListener("click", event => {
+    if (event.target === accountDialog) accountDialog.close();
+  });
+  document.querySelectorAll("[data-auth-mode]").forEach(button => {
+    button.addEventListener("click", () => setAuthMode(button.dataset.authMode));
+  });
+
+  accountForm?.addEventListener("submit", async event => {
+    event.preventDefault();
+    if (!identity) {
+      if (accountStatus) accountStatus.textContent = "Member access is still connecting. Please try again.";
+      return;
+    }
+    const submitButton = accountForm.querySelector('[type="submit"]');
+    if (submitButton) submitButton.disabled = true;
+    if (accountStatus) accountStatus.textContent = "Connecting…";
+    try {
+      const email = accountForm.elements.email.value.trim();
+      const password = accountForm.elements.password.value;
+      if (authMode === "signup") {
+        await identity.signup(email, password, { full_name: accountForm.elements.name.value.trim() });
+        if (accountStatus) accountStatus.textContent = "Check your email to confirm your HALO account.";
+        return;
+      }
+      const user = await identity.login(email, password);
+      setAccountUser(user);
+      accountDialog?.close();
+      accountForm.reset();
+      showNotice("Signed in. Your album work can now be saved to your account.", "success");
+    } catch (error) {
+      if (accountStatus) accountStatus.textContent = error?.message || "Member access failed. Please try again.";
+    } finally {
+      if (submitButton) submitButton.disabled = false;
+    }
+  });
+
+  window.addEventListener("halo-identity-ready", event => connectIdentity(event.detail), { once: true });
+  if (identity) connectIdentity(identity);
 
   /* ── Load existing session from URL ──────────────────────────────────────── */
 

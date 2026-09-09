@@ -23,6 +23,7 @@ const checks = [
   [script.includes("renderResults") && script.includes("generatedTitles") && script.includes("generatedTracks") && script.includes("generatedDedication"), "renders album titles, tracklist, and dedication in the results view"],
   [script.includes("showLoading") && script.includes("showStep") && script.includes("showResults") && script.includes("showNotice"), "provides loading, step navigation, result, and error notice states"],
   [script.includes("URLSearchParams") && script.includes("purposeFromQuery") && script.includes("purposePresetMap") && script.includes("collector"), "supports homepage CTA query presets for concierge purpose"],
+  [page.includes('id="accountDialog"') && script.includes('accountButton?.addEventListener("click"') && script.includes("identity.login") && script.includes("identity.signup") && script.includes("identity?.logout"), "connects the account button to sign in, signup, and sign out behavior"],
   [fn.includes("verifyRequestOrigin") && fn.includes("ensureMembership") && fn.includes("VALID_PURPOSES"), "protects API with origin verification and membership controls"],
   [fn.includes("handleGenerate") && fn.includes("gpt-5.4-mini") && fn.includes("Never invent credits"), "generates grounded album concepts through supported AI Gateway model"],
   [fn.includes("handleCreate") && fn.includes("handleSave") && fn.includes("handleGet"), "supports create, generate, save, and get API actions"],

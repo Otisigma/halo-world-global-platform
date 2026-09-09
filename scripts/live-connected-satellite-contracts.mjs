@@ -11,6 +11,7 @@ import {
   canonicalizeRoutePath
 } from "../lib/route-registry.js";
 import {
+  BROKEN_PUBLIC_ROUTE_TARGETS,
   PAGE_LINK_LEDGER,
   PAGE_LINK_STATUS,
   ROUTE_RENDER_INDEX_TARGETS,
@@ -131,6 +132,8 @@ for (const { from, to } of CANONICAL_ROUTE_ALIAS_ENTRIES) {
 const allowedLedgerStatuses = new Set(Object.values(PAGE_LINK_STATUS));
 const ledgerRoutes = new Set();
 const ledgerCanonicalTargets = new Set();
+const menuRouteTargets = new Set(MENU_ROUTE_REGISTRY.map(({ route }) => route));
+const publicRouteTargets = new Set(PUBLIC_ROUTE_REGISTRY.map(({ route }) => route));
 for (const entry of PAGE_LINK_LEDGER) {
   assert.ok(entry.route && entry.canonicalTarget && entry.file, "Page-link ledger entries must include route, canonicalTarget, and file.");
   assert.ok(allowedLedgerStatuses.has(entry.status), `Page-link ledger route ${entry.route} has unsupported status "${entry.status}".`);
@@ -145,6 +148,17 @@ for (const { route } of MENU_ROUTE_REGISTRY) {
   assert.ok(ledgerCanonicalTargets.has(route), `Page-link ledger must include canonical menu route ${route}.`);
 }
 assert.ok(ledgerCanonicalTargets.has(CANONICAL_HOME_ROUTE), "Page-link ledger must include the canonical /halo home route.");
+
+assert.deepEqual(
+  new Set(ROUTE_RENDER_INDEX_TARGETS),
+  new Set(BROKEN_PUBLIC_ROUTE_TARGETS),
+  "Broken-route slash-index render targets must stay aligned with the durable broken-route target list."
+);
+for (const route of BROKEN_PUBLIC_ROUTE_TARGETS) {
+  assert.ok(menuRouteTargets.has(route), `Broken-route target ${route} must exist in the menu route registry.`);
+  assert.ok(publicRouteTargets.has(route), `Broken-route target ${route} must exist in the public route registry.`);
+  assert.ok(ledgerRoutes.has(route), `Page-link ledger must include broken-route target ${route}.`);
+}
 
 const menuWorkingSetMatch = menuSource.match(/const MENU_PRIMARY_WORKING_TARGET_ROUTES = new Set\(\[([\s\S]*?)\]\)/);
 assert.ok(menuWorkingSetMatch, "Main menu must define MENU_PRIMARY_WORKING_TARGET_ROUTES.");

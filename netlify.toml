@@ -47,12 +47,6 @@
   force = true
 
 [[redirects]]
-  from = "/halo/"
-  to = "/halo"
-  status = 301
-  force = true
-
-[[redirects]]
   from = "/private"
   to = "/index.html"
   status = 200
@@ -77,230 +71,20 @@
   force = true
 
 [[redirects]]
-  from = "/dj-deck"
-  to = "/dj-deck.html"
-  status = 301
-  force = true
-
-[[redirects]]
-  from = "/halo-command"
-  to = "/halo-command.html"
-  status = 301
-  force = true
-
-[[redirects]]
-  from = "/halo-live"
-  to = "/halo-live.html"
-  status = 301
-  force = true
-
-[[redirects]]
-  from = "/halo-x"
-  to = "/halo-x.html"
-  status = 301
-  force = true
-
-[[redirects]]
-  from = "/magazine"
-  to = "/magazine.html"
-  status = 301
-  force = true
-
-[[redirects]]
-  from = "/artists/owen-anthony"
-  to = "/artists/"
-  status = 301
-  force = true
-
-[[redirects]]
-  from = "/album-concierge"
-  to = "/album-concierge/"
-  status = 301
-  force = true
-
-[[redirects]]
-  from = "/artists"
-  to = "/artists/"
-  status = 301
-  force = true
-
-[[redirects]]
-  from = "/artist-pro"
-  to = "/artist-pro/"
-  status = 301
-  force = true
-
-[[redirects]]
-  from = "/campaign-studio"
-  to = "/campaign-studio/"
-  status = 301
-  force = true
-
-[[redirects]]
-  from = "/creator-freedom"
-  to = "/creator-freedom/"
-  status = 301
-  force = true
-
-[[redirects]]
-  from = "/creators"
-  to = "/creators/"
-  status = 301
-  force = true
-
-[[redirects]]
-  from = "/dreamweaver"
-  to = "/dreamweaver/"
-  status = 301
-  force = true
-
-[[redirects]]
-  from = "/dreamweaver/"
-  to = "/dreamweaver/index.html"
-  status = 200
-  force = true
-
-[[redirects]]
-  from = "/dreamweaver-lab"
-  to = "/dreamweaver-lab/"
-  status = 301
-  force = true
-
-[[redirects]]
-  from = "/finish-house"
-  to = "/finish-house/"
-  status = 301
-  force = true
-
-[[redirects]]
-  from = "/iam-social"
-  to = "/iam-social/"
-  status = 301
-  force = true
-
-[[redirects]]
-  from = "/mixes"
-  to = "/mixes/"
-  status = 301
-  force = true
-
-[[redirects]]
-  from = "/music"
-  to = "/music/"
-  status = 301
-  force = true
-
-[[redirects]]
-  from = "/radio"
-  to = "/radio/"
-  status = 301
-  force = true
-
-[[redirects]]
-  from = "/radio/"
-  to = "/radio/index.html"
-  status = 200
-  force = true
-
-[[redirects]]
-  from = "/release-house"
-  to = "/release-house/"
-  status = 301
-  force = true
-
-[[redirects]]
-  from = "/signal"
-  to = "/signal-network/"
-  status = 301
-  force = true
-
-[[redirects]]
-  from = "/song-catalog"
-  to = "/song-catalog/"
-  status = 301
-  force = true
-
-[[redirects]]
-  from = "/support"
-  to = "/support/"
-  status = 301
-  force = true
-
-[[redirects]]
-  from = "/youtube-studio"
-  to = "/youtube-studio/"
-  status = 301
-  force = true
-
-[[redirects]]
-  from = "/youtube-studio/index.html"
-  to = "/youtube-studio/"
-  status = 301
-  force = true
-
-[[redirects]]
   from = "/album-concierge/"
   to = "/album-concierge/index.html"
   status = 200
   force = true
 
 [[redirects]]
-  from = "/ambassadors"
-  to = "/ambassadors/"
-  status = 301
+  from = "/ambassadors/"
+  to = "/ambassadors/index.html"
+  status = 200
   force = true
 
 [[redirects]]
-  from = "/ambassadors/index.html"
-  to = "/ambassadors/"
-  status = 301
-  force = true
-
-[[redirects]]
-  from = "/artist-economy"
-  to = "/artist-economy/"
-  status = 301
-  force = true
-
-[[redirects]]
-  from = "/artist-economy/index.html"
-  to = "/artist-economy/"
-  status = 301
-  force = true
-
-[[redirects]]
-  from = "/artist-team"
-  to = "/artist-team.html"
-  status = 301
-  force = true
-
-[[redirects]]
-  from = "/artist-team/"
-  to = "/artist-team.html"
-  status = 301
-  force = true
-
-[[redirects]]
-  from = "/creators/gear-guide"
-  to = "/creators/gear-guide.html"
-  status = 301
-  force = true
-
-[[redirects]]
-  from = "/creators/gear-guide/"
-  to = "/creators/gear-guide.html"
-  status = 301
-  force = true
-
-[[redirects]]
-  from = "/dj-deck/"
-  to = "/dj-deck.html"
-  status = 301
-  force = true
-
-[[redirects]]
-  from = "/dreamweaver-lab/"
-  to = "/dreamweaver-lab/index.html"
+  from = "/artist-economy/"
+  to = "/artist-economy/index.html"
   status = 200
   force = true
 
@@ -335,57 +119,33 @@
   force = true
 
 [[redirects]]
+  from = "/dreamweaver/"
+  to = "/dreamweaver/index.html"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/dreamweaver-lab/"
+  to = "/dreamweaver-lab/index.html"
+  status = 200
+  force = true
+
+[[redirects]]
   from = "/finish-house/"
   to = "/finish-house/index.html"
   status = 200
   force = true
 
 [[redirects]]
-  from = "/halo-command/"
-  to = "/halo-command.html"
-  status = 301
+  from = "/halo-ledger/"
+  to = "/halo-ledger/index.html"
+  status = 200
   force = true
 
 [[redirects]]
-  from = "/halo-ledger"
-  to = "/halo-ledger/"
-  status = 301
-  force = true
-
-[[redirects]]
-  from = "/halo-ledger/index.html"
-  to = "/halo-ledger/"
-  status = 301
-  force = true
-
-[[redirects]]
-  from = "/halo-live/"
-  to = "/halo-live.html"
-  status = 301
-  force = true
-
-[[redirects]]
-  from = "/halo-relations"
-  to = "/halo-relations.html"
-  status = 301
-  force = true
-
-[[redirects]]
-  from = "/halo-relations/"
-  to = "/halo-relations.html"
-  status = 301
-  force = true
-
-[[redirects]]
-  from = "/halo-x/"
-  to = "/halo-x.html"
-  status = 301
-  force = true
-
-[[redirects]]
-  from = "/iam-social/index.html"
-  to = "/iam-social/"
-  status = 301
+  from = "/iam-social/"
+  to = "/iam-social/index.html"
+  status = 200
   force = true
 
 [[redirects]]
@@ -395,39 +155,15 @@
   force = true
 
 [[redirects]]
-  from = "/magazine/"
-  to = "/magazine.html"
-  status = 301
-  force = true
-
-[[redirects]]
   from = "/music/"
   to = "/music/index.html"
   status = 200
   force = true
 
 [[redirects]]
-  from = "/outreach"
-  to = "/outreach.html"
-  status = 301
-  force = true
-
-[[redirects]]
-  from = "/outreach/"
-  to = "/outreach.html"
-  status = 301
-  force = true
-
-[[redirects]]
-  from = "/partner-trust"
-  to = "/partner-trust.html"
-  status = 301
-  force = true
-
-[[redirects]]
-  from = "/partner-trust/"
-  to = "/partner-trust.html"
-  status = 301
+  from = "/radio/"
+  to = "/radio/index.html"
+  status = 200
   force = true
 
 [[redirects]]
@@ -437,15 +173,9 @@
   force = true
 
 [[redirects]]
-  from = "/signal-network"
-  to = "/signal-network/"
-  status = 301
-  force = true
-
-[[redirects]]
-  from = "/signal-network/index.html"
-  to = "/signal-network/"
-  status = 301
+  from = "/signal-network/"
+  to = "/signal-network/index.html"
+  status = 200
   force = true
 
 [[redirects]]
@@ -461,61 +191,19 @@
   force = true
 
 [[redirects]]
-  from = "/halo-support"
-  to = "/support/"
-  status = 301
+  from = "/upload-pipeline/"
+  to = "/upload-pipeline/index.html"
+  status = 200
   force = true
 
 [[redirects]]
-  from = "/halo-support/"
-  to = "/support/"
-  status = 301
+  from = "/when-the-world-goes-dark/"
+  to = "/when-the-world-goes-dark/index.html"
+  status = 200
   force = true
 
 [[redirects]]
-  from = "/halo-%20support"
-  to = "/support/"
-  status = 301
-  force = true
-
-[[redirects]]
-  from = "/halo- support"
-  to = "/support/"
-  status = 301
-  force = true
-
-[[redirects]]
-  from = "/upload-pipeline"
-  to = "/upload-pipeline/"
-  status = 301
-  force = true
-
-[[redirects]]
-  from = "/upload-pipeline/index.html"
-  to = "/upload-pipeline/"
-  status = 301
-  force = true
-
-[[redirects]]
-  from = "/vip_launchpad"
-  to = "/vip_launchpad.html"
-  status = 301
-  force = true
-
-[[redirects]]
-  from = "/vip_launchpad/"
-  to = "/vip_launchpad.html"
-  status = 301
-  force = true
-
-[[redirects]]
-  from = "/when-the-world-goes-dark"
-  to = "/when-the-world-goes-dark/"
-  status = 301
-  force = true
-
-[[redirects]]
-  from = "/when-the-world-goes-dark/index.html"
-  to = "/when-the-world-goes-dark/"
-  status = 301
+  from = "/youtube-studio/"
+  to = "/youtube-studio/index.html"
+  status = 200
   force = true

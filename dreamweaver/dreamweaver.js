@@ -1121,10 +1121,10 @@
 
   function renderArchive() {
     if (!state.videos.length) {
-      elements.archiveReel.innerHTML = `<a class="archive-card" href="/artists/owen-anthony"><img src="/assets/releases/the-cold-is-lasting-longer.jpg" alt=""><span>Enter Owen Anthony's connected artist room</span></a><a class="archive-card" href="/radio/"><img src="/assets/artists/owen-anthony-glass-house.webp" alt=""><span>Continue into the HALO radio signal</span></a>`;
+      elements.archiveReel.innerHTML = `<a class="archive-card" href="/artists/"><img src="/assets/releases/the-cold-is-lasting-longer.jpg" alt=""><span>Enter Owen Anthony's connected artist room</span></a><a class="archive-card" href="/radio/"><img src="/assets/artists/owen-anthony-glass-house.webp" alt=""><span>Continue into the HALO radio signal</span></a>`;
       return;
     }
-    elements.archiveReel.innerHTML = state.videos.map(video => `<a class="archive-card" href="${escapeHtml(video.sourceUrl || video.embedUrl || "/artists/owen-anthony")}" ${video.sourceType === "youtube" ? 'target="_blank" rel="noopener noreferrer"' : ""}><img src="${escapeHtml(video.thumbnailUrl || "/assets/halo-logo-mark.webp")}" alt=""><span>${escapeHtml(video.title)}</span></a>`).join("");
+    elements.archiveReel.innerHTML = state.videos.map(video => `<a class="archive-card" href="${escapeHtml(video.sourceUrl || video.embedUrl || "/artists/")}" ${video.sourceType === "youtube" ? 'target="_blank" rel="noopener noreferrer"' : ""}><img src="${escapeHtml(video.thumbnailUrl || "/assets/halo-logo-mark.webp")}" alt=""><span>${escapeHtml(video.title)}</span></a>`).join("");
   }
 
   function showEmpty(message) {

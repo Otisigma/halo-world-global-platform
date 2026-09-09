@@ -34,6 +34,20 @@ for (const rule of redirectRules) {
 const renderedIndexRoutes = new Set(ROUTE_RENDER_INDEX_TARGETS);
 const directoryRoutes = PUBLIC_ROUTE_REGISTRY.filter(({ route, file }) => route.endsWith("/") && file.endsWith("/index.html"));
 const fileRenderRoutes = PUBLIC_ROUTE_REGISTRY.filter(({ route, file }) => !route.endsWith("/") && !route.endsWith(".html") && `/${file}` !== route);
+const canonicalHtmlFileRoutes = PUBLIC_ROUTE_REGISTRY.filter(({ route }) => route.endsWith(".html"));
+const forbiddenLegacyAliases = ["/signal", "/halo-support", "/halo-support/", "/halo-%20support", "/halo- support"];
+
+assert.deepEqual(
+  CANONICAL_ROUTE_ALIAS_ENTRIES,
+  [],
+  "Canonical route alias registry must stay empty so non-canonical public aliases cannot silently reappear."
+);
+for (const legacyAlias of forbiddenLegacyAliases) {
+  assert.ok(
+    !redirectRuleBySource.has(legacyAlias),
+    `Legacy alias redirect ${legacyAlias} must remain removed.`
+  );
+}
 
 for (const { route } of directoryRoutes) {
   const nonSlashAlias = route.slice(0, -1);
@@ -41,8 +55,7 @@ for (const { route } of directoryRoutes) {
   const nonSlashRedirect = redirectRuleBySource.get(nonSlashAlias);
   const canonicalRenderRule = redirectRuleBySource.get(route);
   const indexFileRedirect = redirectRuleBySource.get(indexFilePath);
-
-  assert.equal(canonicalizeRoutePath(nonSlashAlias), route, `${nonSlashAlias} must canonicalize to ${route}.`);
+  assert.equal(canonicalizeRoutePath(nonSlashAlias), nonSlashAlias, `${nonSlashAlias} must remain non-canonicalized once aliases are removed.`);
 
   const familyCanonicalTargets = new Set(
     CANONICAL_ROUTE_ALIAS_ENTRIES
@@ -56,39 +69,17 @@ for (const { route } of directoryRoutes) {
     `Route family ${route} must have exactly one canonical target path across route canonicalization files.`
   );
 
-  assert.ok(nonSlashRedirect, `netlify.toml must redirect ${nonSlashAlias} to the canonical directory route ${route}.`);
-  assert.equal(nonSlashRedirect.status, 301, `${nonSlashAlias} must use a 301 redirect to ${route}.`);
-  assert.equal(nonSlashRedirect.to, route, `${nonSlashAlias} must redirect to the canonical directory route ${route}.`);
-
+  assert.ok(!nonSlashRedirect, `${nonSlashAlias} alias redirect must be removed for canonical-only routing.`);
+  assert.ok(canonicalRenderRule, `netlify.toml must render ${route} from ${indexFilePath}.`);
+  assert.equal(canonicalRenderRule.status, 200, `${route} must use a 200 rewrite to ${indexFilePath}.`);
+  assert.equal(canonicalRenderRule.to, indexFilePath, `${route} must rewrite to ${indexFilePath}.`);
+  assert.ok(
+    !indexFileRedirect,
+    `${indexFilePath} alias redirect must be removed for canonical-only routing.`
+  );
   if (renderedIndexRoutes.has(route)) {
-    assert.ok(canonicalRenderRule, `netlify.toml must render ${route} from ${indexFilePath}.`);
-    assert.equal(canonicalRenderRule.status, 200, `${route} must use a 200 rewrite to ${indexFilePath}.`);
-    assert.equal(canonicalRenderRule.to, indexFilePath, `${route} must rewrite to ${indexFilePath}.`);
-    assert.ok(
-      !indexFileRedirect,
-      `${indexFilePath} must not redirect back to ${route} while ${route} already rewrites to ${indexFilePath}.`
-    );
-    continue;
+    assert.equal(canonicalRenderRule.to, indexFilePath, `${route} must keep index rendering enabled for monitored non-live pages.`);
   }
-
-  if (canonicalRenderRule) {
-    assert.equal(canonicalRenderRule.status, 200, `${route} may only map to a rendered index target with status 200.`);
-    assert.equal(canonicalRenderRule.to, indexFilePath, `${route} may only rewrite to its own index file ${indexFilePath}.`);
-  }
-
-  if (indexFileRedirect) {
-    assert.equal(indexFileRedirect.status, 301, `${indexFilePath} must canonicalize with a 301 redirect.`);
-    assert.equal(indexFileRedirect.to, route, `${indexFilePath} must redirect to the canonical route ${route}.`);
-  }
-
-  const familyRedirectTargets = new Set(
-    [nonSlashRedirect.to, indexFileRedirect?.to].filter(Boolean)
-  );
-  assert.deepEqual(
-    familyRedirectTargets,
-    new Set([route]),
-    `Directory route family ${route} must converge on exactly one canonical public target path.`
-  );
 }
 
 for (const { route, file } of fileRenderRoutes) {
@@ -117,4 +108,16 @@ for (const { route, file } of fileRenderRoutes) {
   );
 }
 
-console.log(`Redirect loop contracts passed for ${redirectRules.length} Netlify rules, ${directoryRoutes.length} directory route families, and ${fileRenderRoutes.length} file-backed canonical routes.`);
+for (const { route } of canonicalHtmlFileRoutes) {
+  const basename = route.replace(/\.html$/, "");
+  assert.ok(
+    !redirectRuleBySource.has(basename),
+    `${basename} alias redirect must be removed for canonical file route ${route}.`
+  );
+  assert.ok(
+    !redirectRuleBySource.has(`${basename}/`),
+    `${basename}/ alias redirect must be removed for canonical file route ${route}.`
+  );
+}
+
+console.log(`Redirect loop contracts passed for ${redirectRules.length} Netlify rules, ${directoryRoutes.length} directory route families, ${fileRenderRoutes.length} file-backed canonical rewrites, and ${canonicalHtmlFileRoutes.length} canonical file-route alias checks.`);

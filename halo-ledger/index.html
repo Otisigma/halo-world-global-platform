@@ -24,7 +24,7 @@
   <a class="skip-link" href="#ledger-workspace">Skip to Halo Ledger</a>
 
   <header class="ledger-header">
-    <a class="ledger-wordmark" href="/">HALO</a>
+    <a class="ledger-wordmark" href="/halo">HALO</a>
     <nav class="ledger-nav" aria-label="Ledger navigation">
       <a href="/upload-pipeline/">Upload Pipeline</a>
       <a href="/song-catalog/">Song Catalog</a>
@@ -60,8 +60,21 @@
         <button class="ledger-chip" data-category="approval_event">Approvals</button>
         <button class="ledger-chip" data-category="agent_activity">Agent Activity</button>
         <button class="ledger-chip" data-category="feature_request">Feature Asks</button>
+        <button class="ledger-chip" data-category="route_health">Route Health</button>
         <button class="ledger-chip" data-category="system_event">System</button>
       </div>
+    </section>
+
+    <section id="routeHealthTrends" class="ledger-trends" aria-labelledby="routeHealthTrendsTitle" hidden>
+      <div class="ledger-trends-header">
+        <div>
+          <p class="ledger-trends-eyebrow">Historical trends</p>
+          <h2 id="routeHealthTrendsTitle">Route health</h2>
+        </div>
+        <span class="ledger-category-badge" data-category="route_health">Route Health</span>
+      </div>
+      <div id="routeHealthSummary" class="ledger-route-health-summary"></div>
+      <ol id="routeHealthHistory" class="ledger-route-health-history" aria-label="Recent route-health snapshots"></ol>
     </section>
 
     <section class="ledger-list-section" aria-label="Ledger entries">

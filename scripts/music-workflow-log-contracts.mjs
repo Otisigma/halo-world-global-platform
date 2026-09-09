@@ -27,8 +27,9 @@ import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
 const root = resolve(import.meta.dirname, "..");
-const [musicClient, artworkHelper, musicPlayer] = await Promise.all([
+const [musicClient, musicPage, artworkHelper, musicPlayer] = await Promise.all([
   readFile(resolve(root, "music/music.js"), "utf8"),
+  readFile(resolve(root, "music/index.html"), "utf8"),
   readFile(resolve(root, "release-artwork.js"), "utf8"),
   readFile(resolve(root, "music-player.js"), "utf8")
 ]);
@@ -43,7 +44,10 @@ assert.match(musicClient, /music_purchase_url_missing/, "music client must log r
 assert.match(musicClient, /isChartEligible/, "music client must gate chart entries on the isChartEligible flag");
 assert.match(musicClient, /featuredType.*week|week.*featuredType/s, "music client must surface Song of the Week when featuredType is 'week'");
 assert.match(musicClient, /featuredType.*month|month.*featuredType/s, "music client must surface Song of the Month when featuredType is 'month'");
+assert.match(musicClient, /dataset\.featuredReleaseId/, "music client must support an explicit featured release selection");
+assert.match(musicClient, /music_featured_release_missing/, "music client must log when an explicit featured release is missing");
 assert.match(musicClient, /logMusicIssue.*renderError|renderError.*logMusicIssue/s, "renderError must call logMusicIssue");
+assert.match(musicPage, /data-featured-release-id=/, "music page must declare the featured release slot in markup");
 
 // release-artwork.js — artwork failure observability
 assert.match(artworkHelper, /logArtworkIssue/, "release-artwork helper must define a logArtworkIssue function");

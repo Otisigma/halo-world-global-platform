@@ -1045,11 +1045,11 @@
       <div class="top-actions">
         <!-- Permanent destination: keep the Opportunity Exchange linked across future updates. -->
         <a class="compact-button" href="https://agent-6a6c032a9e80fd--halo-world-global-platform.netlify.app/" target="_blank" rel="noopener noreferrer" data-permanent-destination="opportunity-exchange" data-stat-event="open_opportunity_exchange" data-stat-target="dj-deck-header">Opportunity Exchange</a>
-        <a class="compact-button" href="halo-live.html" data-stat-event="open_halo_live" data-stat-target="dj-deck-header">HALO Live</a>
-        <a class="compact-button" href="halo-x.html">DJ HALO X</a>
+        <a class="compact-button" href="/halo-live.html" data-stat-event="open_halo_live" data-stat-target="dj-deck-header">HALO Live</a>
+        <a class="compact-button" href="/halo-x.html">DJ HALO X</a>
         <a class="compact-button" href="/mixes/" data-stat-event="open_halo_x_mixes" data-stat-target="dj-deck-header">HALO X Mixes</a>
         <a class="compact-button" href="/dreamweaver/" data-stat-event="open_dreamweaver_show" data-stat-target="dj-deck-header">Dreamweaver Show</a>
-        <a class="compact-button" href="index.html">Global portal</a>
+        <a class="compact-button" href="/halo">Global portal</a>
         <button class="compact-button" id="openTrackPicker" type="button">Track QR</button>
         <div class="status-pill is-offline" id="sessionSaveStatus"><span class="dot"></span><span>Saved on device</span></div>
         <div class="status-pill" id="cloudStatus"><span class="dot"></span><span>Cloud ready</span></div>
@@ -4997,7 +4997,7 @@
         recordingState.publishedMixId = data.id;
         elements.postMix.textContent = elements.mixVisibility.value === "room" ? "Posted to room" : "Saved privately";
         elements.playlistMix.disabled = false;
-        elements.dreamweaverMix.href = `/dreamweaver/?mix=${encodeURIComponent(data.id)}`;
+        elements.dreamweaverMix.href = `/dreamweaver/?mix=${encodeURIComponent(data.id)}&experience=studio`;
         mixReleaseUi.success(data.message, true);
         showToast("Mix released", data.message);
         window.haloStats?.track("publish_finished_mix", { visibility: elements.mixVisibility.value, recorded_seconds: recordingState.durationSeconds });

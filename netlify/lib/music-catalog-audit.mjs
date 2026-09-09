@@ -26,6 +26,12 @@ export const REQUIRED_RELEASES = [
     title: "My Sensitivity Like a Crown",
     artist: "Owen Anthony",
     officialUrl: "https://distrokid.com/hyperfollow/owenanthony/my-sensitivity-like-a-crown"
+  },
+  {
+    id: "when-the-world-goes-dark",
+    title: "When The World Goes Dark",
+    artist: "Owen Anthony",
+    officialUrl: "https://distrokid.com/hyperfollow/owenanthony/when-the-world-goes-dark?ref=release"
   }
 ];
 

@@ -1,0 +1,509 @@
+[build]
+  publish = "."
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    Permissions-Policy = "camera=(), microphone=(), geolocation=()"
+
+[[headers]]
+  for = "/api/*"
+  [headers.values]
+    Cache-Control = "no-store"
+    X-Robots-Tag = "noindex, nofollow"
+
+[[headers]]
+  for = "/sw.js"
+  [headers.values]
+    Cache-Control = "no-cache, no-store, must-revalidate"
+
+[[headers]]
+  for = "/youtube-studio*"
+  [headers.values]
+    X-Robots-Tag = "noindex, nofollow"
+
+[[headers]]
+  for = "/partner-trust.html"
+  [headers.values]
+    X-Robots-Tag = "noindex, nofollow, noarchive"
+
+[[headers]]
+  for = "/artist-economy*"
+  [headers.values]
+    X-Robots-Tag = "noindex, nofollow"
+
+[[redirects]]
+  from = "/"
+  to = "/halo"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/halo"
+  to = "/halo.html"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/halo/"
+  to = "/halo"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/halo.html"
+  to = "/halo"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/private"
+  to = "/index.html"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/private/"
+  to = "/private"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/control-center"
+  to = "/halo-command.html"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/control-center/"
+  to = "/control-center"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/dj-deck"
+  to = "/dj-deck.html"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/halo-command"
+  to = "/halo-command.html"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/halo-live"
+  to = "/halo-live.html"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/halo-x"
+  to = "/halo-x.html"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/magazine"
+  to = "/magazine.html"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/artists/owen-anthony"
+  to = "/artists/"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/album-concierge"
+  to = "/album-concierge/"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/artists"
+  to = "/artists/"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/artist-pro"
+  to = "/artist-pro/"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/campaign-studio"
+  to = "/campaign-studio/"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/creator-freedom"
+  to = "/creator-freedom/"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/creators"
+  to = "/creators/"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/creators/index.html"
+  to = "/creators/"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/dreamweaver"
+  to = "/dreamweaver/"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/dreamweaver/"
+  to = "/dreamweaver/index.html"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/dreamweaver/index.html"
+  to = "/dreamweaver/"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/dreamweaver-lab"
+  to = "/dreamweaver-lab/"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/finish-house"
+  to = "/finish-house/"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/iam-social"
+  to = "/iam-social/"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/mixes"
+  to = "/mixes/"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/mixes/index.html"
+  to = "/mixes/"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/music"
+  to = "/music/"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/music/index.html"
+  to = "/music/"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/radio"
+  to = "/radio/"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/radio/index.html"
+  to = "/radio/"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/release-house"
+  to = "/release-house/"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/signal"
+  to = "/signal-network/"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/song-catalog"
+  to = "/song-catalog/"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/support"
+  to = "/support/"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/youtube-studio"
+  to = "/youtube-studio/"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/youtube-studio/index.html"
+  to = "/youtube-studio/"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/album-concierge/index.html"
+  to = "/album-concierge/"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/ambassadors"
+  to = "/ambassadors/"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/ambassadors/index.html"
+  to = "/ambassadors/"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/artist-economy"
+  to = "/artist-economy/"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/artist-economy/index.html"
+  to = "/artist-economy/"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/artist-pro/index.html"
+  to = "/artist-pro/"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/artist-team"
+  to = "/artist-team.html"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/artist-team/"
+  to = "/artist-team.html"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/artists/index.html"
+  to = "/artists/"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/campaign-studio/index.html"
+  to = "/campaign-studio/"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/creator-freedom/index.html"
+  to = "/creator-freedom/"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/creators/gear-guide"
+  to = "/creators/gear-guide.html"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/creators/gear-guide/"
+  to = "/creators/gear-guide.html"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/dj-deck/"
+  to = "/dj-deck.html"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/dreamweaver-lab/index.html"
+  to = "/dreamweaver-lab/"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/finish-house/index.html"
+  to = "/finish-house/"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/halo-command/"
+  to = "/halo-command.html"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/halo-ledger"
+  to = "/halo-ledger/"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/halo-ledger/index.html"
+  to = "/halo-ledger/"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/halo-live/"
+  to = "/halo-live.html"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/halo-relations"
+  to = "/halo-relations.html"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/halo-relations/"
+  to = "/halo-relations.html"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/halo-x/"
+  to = "/halo-x.html"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/iam-social/index.html"
+  to = "/iam-social/"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/magazine/"
+  to = "/magazine.html"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/outreach"
+  to = "/outreach.html"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/outreach/"
+  to = "/outreach.html"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/partner-trust"
+  to = "/partner-trust.html"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/partner-trust/"
+  to = "/partner-trust.html"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/release-house/index.html"
+  to = "/release-house/"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/signal-network"
+  to = "/signal-network/"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/signal-network/index.html"
+  to = "/signal-network/"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/song-catalog/index.html"
+  to = "/song-catalog/"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/support/index.html"
+  to = "/support/"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/upload-pipeline"
+  to = "/upload-pipeline/"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/upload-pipeline/index.html"
+  to = "/upload-pipeline/"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/vip_launchpad"
+  to = "/vip_launchpad.html"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/vip_launchpad/"
+  to = "/vip_launchpad.html"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/when-the-world-goes-dark"
+  to = "/when-the-world-goes-dark/"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/when-the-world-goes-dark/index.html"
+  to = "/when-the-world-goes-dark/"
+  status = 301
+  force = true

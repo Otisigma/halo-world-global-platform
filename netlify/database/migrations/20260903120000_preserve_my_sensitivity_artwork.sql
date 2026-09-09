@@ -1,7 +1,5 @@
--- Reapply the release campaign seed without clearing user-managed artwork.
--- This follow-up migration keeps the already-applied publication migration
--- immutable while preserving imported artwork and manual overrides.
-
+-- Reapply the My Sensitivity Like a Crown release seed without replacing
+-- imported artwork or a manually selected artwork override.
 INSERT INTO halo_release_campaigns (
   id,
   title,

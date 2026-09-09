@@ -1,10 +1,10 @@
-import { getDatabase } from "@netlify/database";
 import { timingSafeEqual } from "node:crypto";
 
 export const allowedEvents = new Set([
   "add_finished_mix_to_playlist",
   "analyze_ai_set",
   "artist_booking_open",
+  "artist_buy_stream",
   "artist_mix_open",
   "artist_pro_application_error",
   "artist_pro_application_submit",
@@ -19,6 +19,7 @@ export const allowedEvents = new Set([
   "artist_website_open",
   "audio_check_failed",
   "build_dj_takeover",
+  "buy_release",
   "build_visual_mix_timeline",
   "community_boost_sent",
   "community_gift_sent",
@@ -52,6 +53,9 @@ export const allowedEvents = new Set([
   "execute_adaptive_move",
   "explore_halo_worlds",
   "focus_mode_toggle",
+  "homepage_music_experiment_action",
+  "homepage_music_experiment_exit",
+  "homepage_music_experiment_viewed",
   "halo_dj_audience_signal",
   "halo_dj_mode",
   "halo_x_auth",
@@ -78,8 +82,10 @@ export const allowedEvents = new Set([
   "album_concierge_result_ready",
   "open_affiliate_gear",
   "open_album_concierge",
+  "open_artist_rooms",
   "open_artist_pro",
   "open_bug_report",
+  "open_campaign_studio",
   "open_catalog_release",
   "open_creator_charter",
   "open_creator_world",
@@ -205,7 +211,8 @@ const allowedMetadataKeys = new Set([
 
 const numericMetadataKeys = new Set(["seconds", "position"]);
 
-export function getStatsDatabase() {
+export async function getStatsDatabase() {
+  const { getDatabase } = await import("@netlify/database");
   return getDatabase();
 }
 

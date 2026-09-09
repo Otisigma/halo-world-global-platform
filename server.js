@@ -2,6 +2,7 @@ import express from "express";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { CANONICAL_ROUTE_ALIAS_ENTRIES } from "./lib/route-registry.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -54,6 +55,10 @@ const allowedExtensions = new Set([
   ".mp4",
   ".webm",
 ]);
+const canonicalRouteRedirects = new Map(CANONICAL_ROUTE_ALIAS_ENTRIES.map(({ from, to }) => [from, to]));
+const rateLimitWindowMs = 60_000;
+const rateLimitMaxRequests = Number(process.env.STATIC_REQUEST_LIMIT || 240);
+const recentRequestBuckets = new Map();
 
 function resolveFromRoot(relativePath) {
   return path.join(root, relativePath);
@@ -99,6 +104,22 @@ function sendStaticCandidate(res, relativePath) {
   return true;
 }
 
+function rateLimit(req, res, next) {
+  const now = Date.now();
+  const key = req.ip || req.socket.remoteAddress || "unknown";
+  const bucket = recentRequestBuckets.get(key);
+  if (!bucket || now - bucket.startedAt >= rateLimitWindowMs) {
+    recentRequestBuckets.set(key, { count: 1, startedAt: now });
+    return next();
+  }
+  if (bucket.count >= rateLimitMaxRequests) {
+    return res.status(429).send("Too many requests");
+  }
+  bucket.count += 1;
+  return next();
+}
+
+app.use(rateLimit);
 app.use((req, _res, next) => {
   console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
   next();
@@ -106,6 +127,7 @@ app.use((req, _res, next) => {
 
 app.get("/healthz", (_req, res) => {
   res.status(200).json({
+    status: "ok",
     ok: true,
     service: "halo-world-global-platform",
     branch: process.env.GIT_BRANCH || process.env.BRANCH || null,
@@ -120,11 +142,27 @@ app.get("/healthz", (_req, res) => {
 });
 
 app.get("/", (_req, res) => {
+  return res.redirect(301, "/halo");
+});
+
+app.get("/halo", (_req, res) => {
   return sendFileIfPresent(res, "halo.html");
+});
+
+app.get("/halo/", (_req, res) => {
+  return res.redirect(301, "/halo");
 });
 
 app.get("/private", (_req, res) => {
   return sendFileIfPresent(res, "index.html");
+});
+
+app.get("/control-center", (_req, res) => {
+  return sendFileIfPresent(res, "halo-command.html");
+});
+
+app.get("/control-center/", (_req, res) => {
+  return res.redirect(301, "/control-center");
 });
 
 app.get("/album-concierge", (_req, res) => {
@@ -135,10 +173,19 @@ app.get("/album-concierge/", (_req, res) =>
   sendFileIfPresent(res, path.join("album-concierge", "index.html"))
 );
 
+app.get("/sw.js", (_req, res) => {
+  res.set("Cache-Control", "no-cache, no-store, must-revalidate");
+  return sendFileIfPresent(res, "sw.js");
+});
+
 app.get("*", (req, res, next) => {
   const routePath = decodeURIComponent(req.path);
   const relativePath = routePath.replace(/^\/+/, "");
+  const searchSuffix = new URL(req.originalUrl, "http://localhost").search;
   if (!relativePath) return next();
+
+  const canonicalRoute = canonicalRouteRedirects.get(routePath);
+  if (canonicalRoute) return res.redirect(301, `${canonicalRoute}${searchSuffix}`);
 
   const extension = path.extname(relativePath).toLowerCase();
   if (extension && allowedExtensions.has(extension)) {
@@ -147,10 +194,6 @@ app.get("*", (req, res, next) => {
   }
 
   if (routePath.endsWith("/") && sendStaticCandidate(res, path.join(relativePath, "index.html"))) {
-    return;
-  }
-
-  if (!extension && sendStaticCandidate(res, `${relativePath}.html`)) {
     return;
   }
 

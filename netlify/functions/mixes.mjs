@@ -219,6 +219,10 @@ async function loadPreviewPoolMix(db) {
     SELECT id, title, artist_name, duration_seconds, play_count, created_at
     FROM halo_radio_tracks
     WHERE status IN ('preview', 'rotation')
+      AND blob_key <> ''
+      AND chunk_count > 0
+      AND byte_size > 0
+      AND content_type LIKE 'audio/%'
       AND duration_seconds > 0
       AND (status = 'rotation' OR votes_up > votes_down OR ai_score >= 60)
     ORDER BY created_at DESC,

@@ -47,6 +47,7 @@ const checks = [
   [script.includes("episode-empty") && script.includes("mix-empty") && script.includes("Promise.allSettled"), "keeps useful empty and partial-failure states"],
   [styles.includes("prefers-reduced-motion") && styles.includes("@media (max-width: 680px)"), "supports reduced motion and narrow screens"],
   [halo.includes('href="/mixes/"') && radio.includes('href="/mixes/"') && deck.includes('href="/mixes/"'), "links the destination from the world, radio, and DJ deck"],
+  [halo.includes('href="/mixes/#library"') && halo.includes("Browse the Mix Cloud"), "restores the world dashboard card for the published mix library"],
   [deck.includes('id="mixOperations"') && deck.includes("Mix upload desk") && deck.includes("Original comparison") && deck.includes("Visual mix studio") && deck.includes("Quality room") && deck.includes("Paid mix readiness") && deck.includes("Mix cloud"), "keeps the complete mix operations rack on the DJ desk"],
   [deck.includes('href="/mixes/#upload"') && deck.includes('href="/mixes/#visual-studio"') && deck.includes('href="/mixes/#quality"') && deck.includes('href="/mixes/#editions"') && deck.includes('href="/mixes/#library"'), "connects every rack operation to its Mixes workspace"],
   [deck.includes('{ id: "mixOperations", label: "Mix operations rack" }') && deck.includes('id="packageFocusMode"') && deck.includes("[elements.focusMode, elements.packageFocusMode]"), "keeps the rack collapsible and recoverable from desk-only mode on every screen size"],

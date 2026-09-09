@@ -6,10 +6,8 @@ import { CANONICAL_HOME_ROUTE, SATELLITE_STATUS_TARGETS, canonicalizeRoutePath }
 export { SATELLITE_STATUS_TARGETS };
 
 const CORE_PAGES = [
-  "/", "/magazine.html", "/dj-deck.html", "/vip_launchpad.html", "/halo-live.html",
-  "/halo-x.html", "/halo-relations.html", "/halo-command.html", "/creators/",
-  "/creators/gear-guide.html", "/music/", "/radio/", "/dreamweaver/", "/dreamweaver-lab/",
-  "/campaign-studio/", "/release-house/", "/finish-house/", "/artists/", "/mixes/"
+  "/",
+  ...new Set(SATELLITE_STATUS_TARGETS.map(target => target.route))
 ];
 
 const API_ROUTES = [
@@ -69,6 +67,7 @@ function applyManualAttentionStatus(statusRecord, manualAttentionRoute) {
     ...statusRecord,
     verified: false,
     status: "yellow",
+    state: "attention",
     repairStatus: "queued",
     manualAttention: true,
     attentionReason: SATELLITE_ATTENTION_REASON
@@ -81,11 +80,16 @@ export function buildFallbackSatelliteStatuses() {
     applyManualAttentionStatus({
       name: target.name,
       route: normalizeRoute(target.route),
-      built: true,
-      live: true,
-      connected: true,
-      verified: true,
-      status: "green",
+      file: target.file,
+      fallbackLabel: target.fallbackLabel,
+      featuredWorking: Boolean(target.featuredWorking),
+      built: null,
+      live: null,
+      connected: null,
+      verified: false,
+      status: "yellow",
+      state: "fallback",
+      fallback: true,
       repairStatus: "not_needed"
     }, manualAttentionRoute)
   );
@@ -121,11 +125,22 @@ function normalizeRoute(pathname) {
   return canonicalizeRoutePath(pathname);
 }
 
+function routeDisplayStateFromStatus(statusRecord) {
+  if (statusRecord.fallback) return "fallback";
+  return statusRecord.verified ? "working" : "attention";
+}
+
 function routeHealthStateFromStatus(statusRecord) {
   if (!statusRecord.connected) return "disconnected";
   if (statusRecord.status === "green") return "working";
   if (!statusRecord.built || !statusRecord.live) return "broken";
   return "attention";
+}
+
+function matchesContentSentinel(body = "", sentinel = null) {
+  if (!sentinel) return /<title[\s>][\s\S]*<\/title>/i.test(body);
+  const sentinelList = Array.isArray(sentinel) ? sentinel : [sentinel];
+  return sentinelList.every(expected => body.includes(expected));
 }
 
 async function requestTarget(url, options = {}) {
@@ -261,17 +276,22 @@ export async function runMaintenanceSweep(db, baseUrl, { triggerType = "schedule
     const built = pageStatusByRoute.has(route);
     const live = pageStatusByRoute.get(route) === true;
     const connected = connectedRoutesFromMainMenu.has(route);
-    const smokeVerified = Boolean(live && /<title[\s>][\s\S]*<\/title>/i.test(pageBodyByRoute.get(route) || ""));
+    const smokeVerified = Boolean(live && matchesContentSentinel(pageBodyByRoute.get(route) || "", target.contentSentinel));
     const verified = built && live && connected && smokeVerified;
     const status = !built || !live || !connected ? "red" : verified ? "green" : "yellow";
     const satelliteStatus = applyManualAttentionStatus({
       name: target.name,
       route,
+      file: target.file,
+      fallbackLabel: target.fallbackLabel,
+      featuredWorking: Boolean(target.featuredWorking),
       built,
       live,
       connected,
       verified,
       status,
+      state: verified ? "working" : "attention",
+      fallback: false,
       repairStatus: status === "green" ? "not_needed" : "queued"
     }, manualAttentionRoute);
     satelliteStatuses.push(satelliteStatus);
@@ -341,6 +361,7 @@ export async function runMaintenanceSweep(db, baseUrl, { triggerType = "schedule
     name: item.name,
     route: item.route,
     state: routeHealthStateFromStatus(item),
+    displayState: routeDisplayStateFromStatus(item),
     built: item.built,
     live: item.live,
     connected: item.connected,
@@ -406,7 +427,7 @@ export async function runMaintenanceSweep(db, baseUrl, { triggerType = "schedule
         target: check.target,
         detail: check.detail
       })),
-      notes: `Red requires a missing or broken route. Yellow means built/live but not fully menu-connected or smoke-verified, or the selected attention route (${manualAttentionRoute}) is being held in manual attention. Green means built, connected, live, and verified by the deployed smoke check used by ${SIGNAL_CHECK_COMMAND}.`,
+      notes: `Fallback means the public route map is visible but no trusted live verification snapshot is available yet. Red requires a missing or broken route. Yellow means built/live but not fully menu-connected or smoke-verified, or the selected attention route (${manualAttentionRoute}) is being held in manual attention. Green means built, connected, live, and verified by the deployed content sentinel used by ${SIGNAL_CHECK_COMMAND}.`,
       satelliteStatuses
     },
     body: `${failedChecks.length} failed checks across ${ledgerCommandName}.`,

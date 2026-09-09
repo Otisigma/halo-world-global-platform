@@ -80,8 +80,8 @@
       </article>
       <article class="panel">
         <h2>Working routes</h2>
-        <p>Use these active routes to stay inside the HALO world while this address is completed.</p>
-        <ul class="route-list">
+        <p id="routeLedgerNote">Use verified live routes when they are available. Otherwise HALO keeps the fallback hub visible.</p>
+        <ul class="route-list" id="routeLedgerList">
           <li><a href="/halo">HALO Home</a></li>
           <li><a href="/music/">Music Room</a></li>
           <li><a href="/radio/">HALO Radio</a></li>
@@ -91,5 +91,43 @@
       </article>
     </section>
   </main>
+  <script type="module">
+    import { FALLBACK_HUB_ROUTE_TARGETS } from "/lib/route-registry.js";
+
+    const routeList = document.getElementById("routeLedgerList");
+    const note = document.getElementById("routeLedgerNote");
+
+    const renderRoutes = (routes) => {
+      if (!routeList || !Array.isArray(routes) || !routes.length) return;
+      routeList.innerHTML = routes.map(({ route, label }) => `<li><a href="${route}">${label}</a></li>`).join("");
+    };
+
+    const fallbackRoutes = FALLBACK_HUB_ROUTE_TARGETS
+      .slice(0, 5)
+      .map(({ route, fallbackLabel }) => ({ route, label: fallbackLabel || route }));
+
+    renderRoutes(fallbackRoutes);
+
+    try {
+      const response = await fetch("/api/halo-satellite-status", {
+        headers: { Accept: "application/json" },
+        cache: "no-store"
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.message || "Route status is unavailable.");
+      const verifiedRoutes = (Array.isArray(data?.satelliteStatuses) ? data.satelliteStatuses : [])
+        .filter(route => route?.featuredWorking && route?.verified && route?.status === "green")
+        .slice(0, 5)
+        .map(route => ({ route: route.route, label: route.fallbackLabel || route.name || route.route }));
+      renderRoutes(verifiedRoutes.length ? verifiedRoutes : fallbackRoutes);
+      if (note) {
+        note.textContent = verifiedRoutes.length
+          ? "These routes are currently verified live by the route ledger."
+          : "Trusted live verification is still refreshing, so HALO is showing fallback hub routes.";
+      }
+    } catch {
+      if (note) note.textContent = "Trusted live verification is unavailable right now, so HALO is showing fallback hub routes.";
+    }
+  </script>
 </body>
 </html>

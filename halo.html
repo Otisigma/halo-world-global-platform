@@ -1268,6 +1268,7 @@
 
         const FALLBACK_ARTWORK = '/assets/halo-app-icon-512.png';
         const MENU_ROUTE_STATUS_LABELS = { green: 'WORKING', yellow: 'ATTENTION', red: 'BROKEN' };
+        const MENU_ROUTE_DISPLAY_LABELS = { working: 'WORKING', attention: 'ATTENTION', fallback: 'FALLBACK', broken: 'BROKEN' };
         const MENU_ROUTE_STATUS_GLYPHS = { green: 'G', yellow: 'Y', red: 'R' };
         const MENU_STATUS_GROUP_TARGETS = [
           { route: '/music/', label: 'ALL MUSIC' },
@@ -1290,12 +1291,6 @@
           { route: '/magazine.html', label: 'HALO SIGNAL' },
           { route: '/support/', label: 'FEEDBACK DESK' }
         ];
-        const MENU_PRIMARY_WORKING_TARGET_ROUTES = new Set([
-          '/halo-x.html',
-          '/dj-deck.html',
-          '/halo-live.html',
-          '/magazine.html'
-        ]);
         const MENU_ROUTE_STATUS_TARGETS = new Set(MENU_STATUS_GROUP_TARGETS.map(target => target.route));
         const DEFAULT_MENU_ATTENTION_ROUTE = '/dreamweaver/';
         const BASE_MENU_DESTINATION_COUNT = MENU_STATUS_GROUP_TARGETS.length + 3;
@@ -1313,12 +1308,15 @@
             acc[route] = {
               name: target.label,
               route,
-              built: true,
-              live: true,
-              connected: true,
-              verified: route !== attentionRoute,
-              status: route === attentionRoute ? 'yellow' : 'green',
-              manualAttention: route === attentionRoute
+              built: null,
+              live: null,
+              connected: null,
+              verified: false,
+              status: 'yellow',
+              state: route === attentionRoute ? 'attention' : 'fallback',
+              fallback: route !== attentionRoute,
+              manualAttention: route === attentionRoute,
+              featuredWorking: false
             };
             return acc;
           }, {});
@@ -1771,33 +1769,39 @@
             const status = fromSweep && MENU_ROUTE_STATUS_LABELS[fromSweep.status]
               ? fromSweep.status
               : fallbackStatus;
+            const displayState = fromSweep?.state || (status === 'green' ? 'working' : status === 'yellow' ? 'attention' : 'broken');
             return {
               status,
-              label: MENU_ROUTE_STATUS_LABELS[status] || MENU_ROUTE_STATUS_LABELS.red,
+              label: MENU_ROUTE_DISPLAY_LABELS[displayState] || MENU_ROUTE_STATUS_LABELS[status] || MENU_ROUTE_STATUS_LABELS.red,
               glyph: MENU_ROUTE_STATUS_GLYPHS[status] || MENU_ROUTE_STATUS_GLYPHS.red,
               isCurrent: normalizedRoute === currentRoute,
-              repairQueued: fromSweep?.repairStatus === 'queued',
+              repairQueued: fromSweep?.repairStatus === 'queued' && displayState !== 'fallback',
+              displayState,
+              featuredWorking: Boolean(fromSweep?.featuredWorking),
               checks: fromSweep ? {
-                built: Boolean(fromSweep.built),
-                live: Boolean(fromSweep.live),
-                connected: Boolean(fromSweep.connected),
-                verified: Boolean(fromSweep.verified)
+                built: fromSweep.built == null ? null : Boolean(fromSweep.built),
+                live: fromSweep.live == null ? null : Boolean(fromSweep.live),
+                connected: fromSweep.connected == null ? null : Boolean(fromSweep.connected),
+                verified: fromSweep.verified == null ? null : Boolean(fromSweep.verified)
               } : null
             };
           };
 
           const renderMenuStatusBadge = (route, context = route, fallbackStatus = 'red') => {
             const indicator = menuStatusForRoute(route, fallbackStatus);
+            const formatCheckValue = value => value == null ? 'unknown' : value ? 'yes' : 'no';
             const visibleLabel = [
               indicator.isCurrent ? 'CURRENT' : '',
               indicator.label,
               indicator.repairQueued ? 'AI ALERTED' : ''
             ].filter(Boolean).join(' · ');
             const checkSummary = indicator.checks
-              ? `Built ${indicator.checks.built ? 'yes' : 'no'}, live ${indicator.checks.live ? 'yes' : 'no'}, connected ${indicator.checks.connected ? 'yes' : 'no'}, verified ${indicator.checks.verified ? 'yes' : 'no'}.`
+              ? `Built ${formatCheckValue(indicator.checks.built)}, live ${formatCheckValue(indicator.checks.live)}, connected ${formatCheckValue(indicator.checks.connected)}, verified ${formatCheckValue(indicator.checks.verified)}.`
               : 'Awaiting the next deployed route check.';
             const repairSummary = indicator.repairQueued
               ? ' A repair issue has been queued for AI-assisted maintenance.'
+              : indicator.displayState === 'fallback'
+                ? ' The public route map is visible, but a trusted live verification snapshot has not published yet.'
               : '';
             return (
               <span
@@ -1832,7 +1836,7 @@
             for (const target of MENU_STATUS_GROUP_TARGETS) {
               const indicator = menuStatusForRoute(target.route, 'green');
               const entry = { ...target, status: indicator.status };
-              if (MENU_PRIMARY_WORKING_TARGET_ROUTES.has(target.route) && indicator.status === 'green') grouped.working.push(entry);
+              if (indicator.featuredWorking && indicator.status === 'green') grouped.working.push(entry);
               else if (indicator.status !== 'green') grouped.attention.push(entry);
             }
             return grouped;
@@ -2363,7 +2367,7 @@
                 acc[route] = item;
                 return acc;
               }, {});
-              setMenuRouteStatuses(Object.keys(next).length ? next : buildDefaultMenuRouteStatuses());
+              setMenuRouteStatuses(Object.keys(next).length ? { ...buildDefaultMenuRouteStatuses(), ...next } : buildDefaultMenuRouteStatuses());
               setMenuRouteStatusesUnavailable(false);
             } catch {
               setMenuRouteStatuses(buildDefaultMenuRouteStatuses());

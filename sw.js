@@ -2,6 +2,7 @@ import { CANONICAL_HOME_ROUTE, canonicalizeRoutePath } from "./lib/route-registr
 const CACHE_NAME = "halo-app-shell-v4";
 const APP_SHELL = [
   CANONICAL_HOME_ROUTE,
+  "/404.html",
   "/app.webmanifest",
   "/mobile-navigation.css",
   "/mobile-navigation.js",
@@ -51,9 +52,14 @@ self.addEventListener("fetch", event => {
         return response;
       })
       .catch(async () => {
+        const requestUrl = new URL(event.request.url);
+        const normalizedPath = canonicalizeRoutePath(requestUrl.pathname);
         const cachedPage = await caches.match(cacheKeyForNavigation(event.request));
+        if (cachedPage) return cachedPage;
+        const cachedFallback = await caches.match("/404.html");
         const cachedHome = await caches.match(HOME_CACHE_KEY);
-        return cachedPage || cachedHome || new Response("HALO is temporarily offline.", {
+        if (normalizedPath !== CANONICAL_HOME_ROUTE && cachedFallback) return cachedFallback;
+        return cachedHome || cachedFallback || new Response("HALO is temporarily offline.", {
           status: 503,
           headers: { "Content-Type": "text/plain; charset=utf-8" }
         });

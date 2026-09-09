@@ -1709,6 +1709,7 @@
           const [uploadAlertsError, setUploadAlertsError] = useState('');
           const [menuRouteStatuses, setMenuRouteStatuses] = useState(() => buildDefaultMenuRouteStatuses());
           const [menuRouteStatusesUnavailable, setMenuRouteStatusesUnavailable] = useState(false);
+          const [attentionStatusCollapsed, setAttentionStatusCollapsed] = useState(false);
           const [showRoomComposer, setShowRoomComposer] = useState(false);
           const [roomPostDraft, setRoomPostDraft] = useState({ title: '', description: '', videoUrl: '', options: ['', ''] });
           const [showEqualizer, setShowEqualizer] = useState(false);
@@ -3613,22 +3614,33 @@
 
                     <div className="halo-menu-status-groups" aria-label="Satellite route status groups">
                       <section className="halo-menu-status-group halo-menu-status-group-attention" aria-labelledby="halo-menu-status-attention">
-                        <div className="halo-menu-status-group-title">
+                        <button
+                          type="button"
+                          className="halo-menu-status-group-title halo-menu-status-group-toggle"
+                          aria-expanded={!attentionStatusCollapsed}
+                          aria-controls="halo-menu-status-attention-content"
+                          onClick={() => setAttentionStatusCollapsed(collapsed => !collapsed)}
+                        >
                           <span>00</span>
                           <h3 id="halo-menu-status-attention">Attention now</h3>
+                          <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
+                            <path d="m5 7.5 5 5 5-5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                          </svg>
+                        </button>
+                        <div id="halo-menu-status-attention-content" hidden={attentionStatusCollapsed}>
+                          {menuStatusGroupedTargets.attention.length ? (
+                            <div className="halo-menu-status-buttons">
+                              {menuStatusGroupedTargets.attention.map(target => (
+                                <a key={`attention-${target.route}`} href={target.route} className="halo-menu-status-button">
+                                  <span className="halo-menu-status-label">{target.label}</span>
+                                  {renderMenuStatusBadge(target.route, target.label, 'yellow')}
+                                </a>
+                              ))}
+                            </div>
+                          ) : (
+                            <p className="halo-menu-status-empty">No active amber satellites. All monitored routes are currently working.</p>
+                          )}
                         </div>
-                        {menuStatusGroupedTargets.attention.length ? (
-                          <div className="halo-menu-status-buttons">
-                            {menuStatusGroupedTargets.attention.map(target => (
-                              <a key={`attention-${target.route}`} href={target.route} className="halo-menu-status-button">
-                                <span className="halo-menu-status-label">{target.label}</span>
-                                {renderMenuStatusBadge(target.route, target.label, 'yellow')}
-                              </a>
-                            ))}
-                          </div>
-                        ) : (
-                          <p className="halo-menu-status-empty">No active amber satellites. All monitored routes are currently working.</p>
-                        )}
                       </section>
                       <section className="halo-menu-status-group halo-menu-status-group-working" aria-labelledby="halo-menu-status-working">
                         <div className="halo-menu-status-group-title">
@@ -5298,7 +5310,7 @@
                             <div className="grid grid-cols-2 gap-2">{[['galleryVisible','Global gallery'],['sofaVisible','HALO sofa']].map(([key,label]) => <label key={key} className="flex items-center gap-2 rounded-xl border border-white/10 p-3 text-[8px] font-black uppercase tracking-wider text-gray-300"><input type="checkbox" checked={videoDraft[key]} onChange={event => setVideoDraft(previous => ({...previous, [key]: event.target.checked}))} />{label}</label>)}</div>
                             {videoError && <p className="rounded-xl border border-red-500/30 bg-red-950/40 px-3 py-2 text-[10px] text-red-200" role="alert">{videoError}</p>}
                             {videoNotice && <p className="rounded-xl border border-emerald-500/30 bg-emerald-950/30 px-3 py-2 text-[10px] text-emerald-200" role="status">{videoNotice}</p>}
-                            <button disabled={videoBusy || !identityUser} className="flex w-full items-center justify-center gap-2 rounded-xl bg-red-500 px-4 py-3 text-[9px] font-black uppercase tracking-[.16em] text-white transition hover:bg-red-400 disabled:cursor-not-allowed disabled:opacity-40"><Icon name="upload" className="h-4 w-4" />{videoBusy ? 'Publishing…' : 'Publish to HALO TV'}</button>
+                            <button type="submit" disabled={videoBusy || !identityUser} className="flex w-full items-center justify-center gap-2 rounded-xl bg-red-500 px-4 py-3 text-[9px] font-black uppercase tracking-[.16em] text-white transition hover:bg-red-400 disabled:cursor-not-allowed disabled:opacity-40"><Icon name="upload" className="h-4 w-4" />{videoBusy ? 'Publishing…' : 'Publish to HALO TV'}</button>
                           </form>
                         </div>
 

@@ -239,6 +239,42 @@
   padding: 0 2px;
 }
 
+.halo-menu-status-group-toggle {
+  width: 100%;
+  border: 0;
+  color: inherit;
+  text-align: left;
+  background: transparent;
+  cursor: pointer;
+}
+
+.halo-menu-status-group-toggle:hover h3,
+.halo-menu-status-group-toggle:focus-visible h3 {
+  color: #fff1cc;
+}
+
+.halo-menu-status-group-toggle:focus-visible {
+  border-radius: 6px;
+  outline: 1px solid rgba(245, 158, 11, .65);
+  outline-offset: 3px;
+}
+
+.halo-menu-status-group-toggle svg {
+  width: 14px;
+  height: 14px;
+  margin-left: auto;
+  color: #c89137;
+  transition: transform .2s ease;
+}
+
+.halo-menu-status-group-toggle[aria-expanded="false"] {
+  margin-bottom: 0;
+}
+
+.halo-menu-status-group-toggle[aria-expanded="false"] svg {
+  transform: rotate(-90deg);
+}
+
 .halo-menu-status-group-title span {
   color: #8c816c;
   font-size: 8px;

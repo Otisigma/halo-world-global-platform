@@ -25,7 +25,7 @@ const checks = [
   [migration.includes("halo_fan_vote_campaigns") && migration.includes("halo_fan_vote_campaign_tracks") && migration.includes("halo_fan_vote_campaign_votes"), "stores campaigns, track snapshots, and votes in Netlify Database"],
   [migration.includes("PRIMARY KEY (campaign_id, voter_key)") && migration.includes("vote_goal BETWEEN 10 AND 100000"), "enforces one vote identity and bounded goals at the database layer"],
   [styles.includes("@media(max-width:720px)") && styles.includes("prefers-reduced-motion"), "supports mobile layouts and reduced motion"],
-  [config.includes('from = "/campaign-studio"') && releaseHouse.includes('href="/campaign-studio/"'), "makes the studio discoverable from Release House"]
+  [/from = "\/campaign-studio\/"[\s\S]*to = "\/campaign-studio\/index\.html"/.test(config) && releaseHouse.includes('href="/campaign-studio/"'), "makes the studio discoverable from Release House and serves the canonical /campaign-studio/ route directly"]
 ];
 
 const failures = checks.filter(([passed]) => !passed);

@@ -23,7 +23,7 @@ const checks = [
   [fn.includes('model = "gpt-5.4-mini"') && fn.includes('model: "gpt-image-1"') && fn.includes("Never invent credits"), "generates grounded copy and original artwork through supported AI Gateway models"],
   [migration.includes("halo_dreamweaver_songs") && migration.includes("rights_attested") && migration.includes("analysis_evidence"), "persists private projects and measured evidence"],
   [styles.includes(".wave-stage") && styles.includes("prefers-reduced-motion") && styles.includes(".result-grid"), "provides a responsive designed waveform and package experience"],
-  [config.includes('from = "/dreamweaver-lab"') && home.includes('href="/dreamweaver-lab/"'), "makes Song Lab discoverable from Halo and normalizes its route"],
+  [/from = "\/dreamweaver-lab\/"[\s\S]*to = "\/dreamweaver-lab\/index\.html"/.test(config) && home.includes('href="/dreamweaver-lab/"'), "makes Song Lab discoverable from Halo and serves the canonical /dreamweaver-lab/ route directly"],
   [stats.includes('"open_dreamweaver_song_lab"') && stats.includes('"dreamweaver_song_package_ready"'), "accepts Song Lab product analytics events"]
 ];
 

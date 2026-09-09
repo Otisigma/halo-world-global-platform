@@ -49,7 +49,7 @@ const checks = [
   [schema.includes("halo_catalog_packages") && schema.includes("halo_catalog_package_tracks") && producerMigration.includes("halo_catalog_producer_jobs"), "persists producer jobs, packages, pricing, and track lists in Netlify Database"],
   [packageJson.peerDependencies?.["@netlify/database"] && !packageJson.dependencies?.["@netlify/database"], "keeps the database SDK installed without repeating preview branch provisioning"],
   [styles.includes("@media(max-width:720px)") && styles.includes("prefers-reduced-motion:reduce"), "provides a responsive catalog layout with reduced-motion support"],
-  [config.includes('from = "/song-catalog"') && home.includes('href="/song-catalog/"'), "makes the catalog discoverable and normalizes its route"],
+  [/from = "\/song-catalog\/"[\s\S]*to = "\/song-catalog\/index\.html"/.test(config) && home.includes('href="/song-catalog/"'), "makes the catalog discoverable and serves the canonical /song-catalog/ route directly"],
   [artworkApi.includes('getStore({ name: "halo-song-catalog-artwork"') && artworkApi.includes("verifyRequestOrigin") && artworkApi.includes("ownedSong"), "stores private artwork in Netlify Blobs with ownership and origin checks"],
   [artworkApi.includes("requestedByteRange") && artworkApi.includes('path: "/api/song-catalog/artwork"'), "serves uploaded artwork with private range support"],
   [artworkApi.includes("ALLOWED_TYPES") && artworkApi.includes("image/jpeg") && artworkApi.includes("image/png") && artworkApi.includes("image/webp"), "validates artwork file type allowing only JPEG, PNG, and WebP"],

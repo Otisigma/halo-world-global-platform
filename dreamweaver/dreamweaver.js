@@ -62,6 +62,12 @@
     }
   ];
 
+  const featuredTrack = Object.freeze({
+    title: "Blessed",
+    artist: "Owen Anthony",
+    url: "https://distrokid.com/hyperfollow/owenanthony/blessed"
+  });
+
   const elements = {
     satellite: document.getElementById("dreamweaverSatellite"),
     unlockForm: document.getElementById("dreamweaverUnlockForm"),
@@ -72,6 +78,7 @@
     spotifyLink: document.getElementById("dreamweaverSpotifyLink"),
     appleLink: document.getElementById("dreamweaverAppleLink"),
     youtubeLink: document.getElementById("dreamweaverYouTubeLink"),
+    sourceLink: document.getElementById("dreamweaverSourceLink"),
     shell: document.getElementById("showShell"),
     loading: document.getElementById("loadingShow"),
     stage: document.getElementById("showStage"),
@@ -233,7 +240,7 @@
   }
 
   function rewardSearchQuery() {
-    return `${state.mix?.title || "Dreamweaver"} ${state.mix?.creator?.name || "Owen Anthony"}`.trim();
+    return `${state.mix?.title || featuredTrack.title} ${state.mix?.creator?.name || featuredTrack.artist}`.trim();
   }
 
   function setUnlockStatus(message = "", tone = "") {
@@ -248,6 +255,10 @@
     if (elements.spotifyLink) elements.spotifyLink.href = unlockPlatforms.spotify.href(query);
     if (elements.appleLink) elements.appleLink.href = unlockPlatforms.apple_music.href(query);
     if (elements.youtubeLink) elements.youtubeLink.href = unlockPlatforms.youtube.href(query);
+    if (elements.sourceLink) {
+      elements.sourceLink.href = featuredTrack.url;
+      elements.sourceLink.setAttribute("aria-label", `Open ${featuredTrack.title} by ${featuredTrack.artist} on DistroKid HyperFollow`);
+    }
   }
 
   function renderRewardState() {

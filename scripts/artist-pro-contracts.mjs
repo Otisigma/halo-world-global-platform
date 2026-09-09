@@ -33,7 +33,7 @@ const checks = [
   [stats.includes('"open_artist_pro"') && stats.includes('"artist_pro_application_success"') && summary.includes("completedApplication"), "adds Artist Pro conversion reporting to HALO analytics"],
   [dailyReport.includes("artistProLeadsToday") && dailyReport.includes("artistProAwaitingReview"), "places new Artist Pro applications in the owner daily report"],
   [homepage.includes('href="/artist-pro/"') && homepage.includes("BUILD MY NEXT RELEASE") && homepage.includes("One release. One command system."), "makes Artist Pro the main artist pathway from HALO World"],
-  [config.includes('from = "/artist-pro"') && config.includes('to = "/artist-pro/"'), "keeps the Artist Pro URL canonical"],
+  [/from = "\/artist-pro\/"[\s\S]*to = "\/artist-pro\/index\.html"/.test(config) && !/from = "\/artist-pro"\s+to = "\/artist-pro\/"/.test(config), "serves the canonical /artist-pro/ route directly without reintroducing the legacy alias redirect"],
   [page.includes("/accessibility.css") && page.includes("/site-monitor.js") && page.includes('class="skip-link"') && styles.includes("@media (max-width: 760px)") && styles.includes("prefers-reduced-motion") && styles.includes(":focus"), "supports monitored, mobile, focus, and reduced-motion visitors"]
 ];
 

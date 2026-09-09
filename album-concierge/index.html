@@ -312,6 +312,24 @@
         <a href="/support/">Support</a>
       </nav>
     </footer>
+
+    <dialog class="ac-auth-dialog" id="accountDialog" aria-labelledby="accountDialogTitle">
+      <button class="ac-dialog-close" id="accountDialogClose" type="button" aria-label="Close member access">×</button>
+      <p class="ac-eyebrow">HALO member access</p>
+      <h2 id="accountDialogTitle">Keep your album connected.</h2>
+      <p class="ac-auth-copy">Sign in to build, save, and share album concepts from your private HALO account.</p>
+      <div class="ac-auth-tabs" role="tablist" aria-label="Member access mode">
+        <button class="is-active" type="button" role="tab" aria-selected="true" data-auth-mode="login">Sign in</button>
+        <button type="button" role="tab" aria-selected="false" data-auth-mode="signup">Create account</button>
+      </div>
+      <form class="ac-auth-form" id="accountForm">
+        <label class="ac-auth-name" hidden><span>Name</span><input name="name" autocomplete="name"></label>
+        <label><span>Email</span><input name="email" type="email" autocomplete="email" required></label>
+        <label><span>Password</span><input name="password" type="password" minlength="8" autocomplete="current-password" required></label>
+        <button class="btn-primary" type="submit">Continue</button>
+      </form>
+      <p class="ac-auth-status" id="accountStatus" role="status" aria-live="polite"></p>
+    </dialog>
   </div>
 </body>
 </html>

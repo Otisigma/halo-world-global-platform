@@ -4,7 +4,23 @@ import { getUser, verifyRequestOrigin } from "@netlify/identity";
 import { cleanText, ensureMembership, isOwner } from "../lib/halo-x.mjs";
 
 const MAX_BODY_BYTES = 32_000;
-const PROMOTION_FIELDS = new Set(["eyebrow", "headline", "caption", "storyTitle", "storySubtitle", "callToAction", "hashtags"]);
+const PROMOTION_FIELDS = new Set([
+  "eyebrow",
+  "headline",
+  "caption",
+  "storyTitle",
+  "storySubtitle",
+  "callToAction",
+  "hashtags",
+  "hyperfollowUrl",
+  "releaseSummary",
+  "privateDeliveryNote",
+  "fansCopy",
+  "djsCopy",
+  "radioCopy",
+  "pressCopy",
+  "advanceCopy"
+]);
 const PARTY_THEME_FIELDS = new Set(["atmosphere", "accent", "celebration", "motion", "roomNote"]);
 const HOST_PERSONAS = new Set(["halo", "butterfly", "romy"]);
 
@@ -28,10 +44,16 @@ function cleanTrackIds(value) {
 
 function cleanPromotion(value) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  const promotionFieldLimit = key => {
+    if (key === "caption") return 2200;
+    if (key === "hyperfollowUrl") return 500;
+    if (key === "releaseSummary" || key === "privateDeliveryNote") return 400;
+    return 1200;
+  };
   return Object.fromEntries(
     Object.entries(value)
       .filter(([key]) => PROMOTION_FIELDS.has(key))
-      .map(([key, item]) => [key, cleanText(item, key === "caption" ? 2200 : 300)])
+      .map(([key, item]) => [key, cleanText(item, promotionFieldLimit(key))])
   );
 }
 
@@ -68,7 +90,15 @@ function defaultPromotion({ title, trackCount, voteGoal, rewardTitle }) {
     storyTitle: "YOU CHOOSE THE RELEASE",
     storySubtitle: `${count} tracks · ${voteGoal} vote community unlock`,
     callToAction: "Listen. Vote. Unlock the mix.",
-    hashtags: "#HALOListeningParty #FanSelected #NewMusic"
+    hashtags: "#HALOListeningParty #FanSelected #NewMusic",
+    releaseSummary: "One release. Five purpose-built links.",
+    hyperfollowUrl: "https://distrokid.com/hyperfollow/owenanthony/blessed",
+    privateDeliveryNote: "Private links stay locked until your team marks each destination ready.",
+    fansCopy: `${title} is live on HALO. Save the release, stream it first, and share it with your people.`,
+    djsCopy: `${title} DJ kit: clean metadata, transition-ready context, and direct campaign listening access for selector prep.`,
+    radioCopy: `${title} radio service copy with release timing, approved language, and clear handoff for programming teams.`,
+    pressCopy: `${title} press narrative with artist context, approved quote framing, and launch-day editorial direction.`,
+    advanceCopy: `${title} advance listener note with private delivery guidance, review timing, and trusted early-access context.`
   };
 }
 

@@ -73,7 +73,9 @@ assert.match(menuSource, /\/api\/halo-satellite-status/, "Main menu badges must 
 assert.match(menuSource, /buildDefaultMenuRouteStatuses/, "Main menu badges must keep a one-route fallback snapshot while live statuses refresh.");
 assert.match(menuSource, /menuDestinationCount/, "Main menu summary must calculate the visible destination count dynamically.");
 assert.match(menuSource, /halo-menu-status-groups/, "Main menu must organize visible satellite buttons into status groups.");
+assert.match(menuSource, /const MENU_PRIMARY_WORKING_TARGET_ROUTES = new Set\(\[\s*'\/halo-x\.html',\s*'\/dj-deck\.html',\s*'\/halo-live\.html',\s*'\/magazine\.html'\s*\]\)/s, "Main menu must define the known working-route set for the top status card.");
 assert.match(menuSource, /new Set\(MENU_STATUS_GROUP_TARGETS\.map\(target => target\.route\)\)/, "Main menu route status targets must derive from the same menu target list.");
+assert.match(menuSource, /MENU_PRIMARY_WORKING_TARGET_ROUTES\.has\(target\.route\) && indicator\.status === 'green'/, "Main menu top status card must only list known working routes when they are green.");
 assert.match(menuSource, /ownerControlAccess && \(/, "Main menu must gate ATTENTION status visibility behind owner/team access.");
 assert.match(menuSource, /Attention now/, "Main menu must still include the ATTENTION status group for authorized users.");
 assert.match(menuSource, /All working menu/, "Main menu must expose the WORKING status group.");

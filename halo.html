@@ -1290,6 +1290,12 @@
           { route: '/magazine.html', label: 'HALO SIGNAL' },
           { route: '/support/', label: 'FEEDBACK DESK' }
         ];
+        const MENU_PRIMARY_WORKING_TARGET_ROUTES = new Set([
+          '/halo-x.html',
+          '/dj-deck.html',
+          '/halo-live.html',
+          '/magazine.html'
+        ]);
         const MENU_ROUTE_STATUS_TARGETS = new Set(MENU_STATUS_GROUP_TARGETS.map(target => target.route));
         const DEFAULT_MENU_ATTENTION_ROUTE = '/dreamweaver/';
         const BASE_MENU_DESTINATION_COUNT = MENU_STATUS_GROUP_TARGETS.length + 3;
@@ -1826,8 +1832,8 @@
             for (const target of MENU_STATUS_GROUP_TARGETS) {
               const indicator = menuStatusForRoute(target.route, 'green');
               const entry = { ...target, status: indicator.status };
-              if (indicator.status === 'green') grouped.working.push(entry);
-              else grouped.attention.push(entry);
+              if (MENU_PRIMARY_WORKING_TARGET_ROUTES.has(target.route) && indicator.status === 'green') grouped.working.push(entry);
+              else if (indicator.status !== 'green') grouped.attention.push(entry);
             }
             return grouped;
           })();

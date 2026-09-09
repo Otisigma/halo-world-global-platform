@@ -1849,30 +1849,31 @@
             : menuStatusForRoute(currentRoutePath, 'green');
           const adaptiveDreamweaverPreview = (() => {
             const dreamweaverStatus = menuStatusForRoute('/dreamweaver/', 'yellow');
+            const dreamweaverEntryLabel = 'Start your Halo here — Upload to Dreamweaver';
             if (dreamweaverStatus.status === 'green') {
               return {
                 primaryRoute: '/dreamweaver/',
-                primaryLabel: 'Open Dreamweaver',
+                primaryLabel: dreamweaverEntryLabel,
                 supportRoute: '/dreamweaver-lab/',
                 supportLabel: 'Dreamweaver Song Lab',
-                guidance: 'Dreamweaver is clear. Start with a quick listen, then enter the full fan unlock world.'
+                guidance: 'Dreamweaver is clear. Artists start here to upload a release, shape the build, and send the song to the right listening doors.'
               };
             }
             if (dreamweaverStatus.status === 'yellow') {
               return {
                 primaryRoute: '/dreamweaver/',
-                primaryLabel: 'Open Dreamweaver',
+                primaryLabel: dreamweaverEntryLabel,
                 supportRoute: '/music/',
                 supportLabel: 'Continue in Music Home',
-                guidance: 'Dreamweaver is in attention mode. Enter Dreamweaver directly or continue through the stable music route while updates land.'
+                guidance: 'Dreamweaver is in attention mode. Artists still start here for upload and release shaping, or can continue through the stable music route while updates land.'
               };
             }
             return {
               primaryRoute: '/dreamweaver/',
-              primaryLabel: 'Open Dreamweaver',
+              primaryLabel: dreamweaverEntryLabel,
               supportRoute: '/support/',
               supportLabel: 'Open Feedback Desk',
-              guidance: 'Dreamweaver is reporting a break. You can still try Dreamweaver directly, and support is ready if the route needs attention.'
+              guidance: 'Dreamweaver is reporting a break. Artists can still try the upload doorway directly, and support is ready if the route needs attention.'
             };
           })();
 
@@ -3733,7 +3734,7 @@
                           <Icon name="list-music" className="halo-menu-icon" /><span><strong>SONG CATALOG {renderMenuStatusBadge('/song-catalog/', 'Song Catalog')}</strong><small>Sale masters, radio edits, stems, and metadata review</small></span>
                         </a>
                         <a href="/dreamweaver/" data-stat-event="open_dreamweaver_show" data-stat-target="header" data-signal="FAN JOURNEY">
-                          <Icon name="star" className="halo-menu-icon" /><span><strong>DREAMWEAVER EXPERIENCE {renderMenuStatusBadge('/dreamweaver/', 'Dreamweaver Experience')}</strong><small>Unlock the fan path and signal campaign room</small></span>
+                          <Icon name="star" className="halo-menu-icon" /><span><strong>DREAMWEAVER EXPERIENCE {renderMenuStatusBadge('/dreamweaver/', 'Dreamweaver Experience')}</strong><small>Start your Halo here — upload to Dreamweaver</small></span>
                         </a>
                         <a href="/dreamweaver-lab/" data-stat-event="open_dreamweaver_song_lab" data-stat-target="header" data-signal="AUDIO TO CAMPAIGN">
                           <Icon name="music" className="halo-menu-icon" /><span><strong>DREAMWEAVER SONG LAB {renderMenuStatusBadge('/dreamweaver-lab/', 'Dreamweaver Song Lab')}</strong><small>Load a recording. Analyze the wave. Build the release world.</small></span>
@@ -3853,7 +3854,7 @@
                             data-stat-event="open_dreamweaver_show"
                             data-stat-target="homepage_hero"
                           >
-                            Open Dreamweaver
+                            Start your Halo here — Upload to Dreamweaver
                           </a>
                         </div>
 

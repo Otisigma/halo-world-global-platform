@@ -225,7 +225,7 @@ await runCheck("Homepage music experiment markers and tracking", async () => {
   );
   assert.match(
     haloHtml,
-    /data-homepage-hero="dreamweaver"[\s\S]*Dreamweaver Preview[\s\S]*Dreamweaver Player[\s\S]*Play preview[\s\S]*Open Dreamweaver/,
+    /data-homepage-hero="dreamweaver"[\s\S]*Dreamweaver Preview[\s\S]*Dreamweaver Player[\s\S]*Play preview[\s\S]*Start your Halo here — Upload to Dreamweaver/,
     "halo.html must expose the Dreamweaver homepage hero player surface and its primary actions."
   );
   assert.match(
@@ -298,6 +298,21 @@ await runCheck("Adaptive Dreamweaver homepage preview surface", async () => {
     haloHtml,
     /QUICK_LISTEN_AUTOPLAY_URL/,
     "halo.html must reuse the existing quick-listen embed path for adaptive preview playback."
+  );
+  assert.match(
+    haloHtml,
+    /Start your Halo here — Upload to Dreamweaver/,
+    "halo.html must present Dreamweaver as the clear artist starting point."
+  );
+  assert.match(
+    haloHtml,
+    /data-stat-target="header"[\s\S]*Start your Halo here — upload to Dreamweaver/,
+    "halo.html must keep the menu card copy telling artists to start in Dreamweaver."
+  );
+  assert.match(
+    haloHtml,
+    /primaryRoute:\s*'\/dreamweaver\/'/,
+    "halo.html must keep the artist CTA pointed at the canonical /dreamweaver/ route."
   );
   return "Adaptive Dreamweaver preview surface is present and wired";
 });

@@ -884,6 +884,47 @@ main {
 
 .skip-link:focus { left: .5rem; }
 
+/* ── Member access ───────────────────────────────────────────────────────── */
+
+.ac-auth-dialog {
+  position: relative;
+  width: min(31rem, calc(100vw - 2rem));
+  color: var(--ac-cream);
+  background: #171511;
+  border: 1px solid var(--ac-line);
+  border-radius: 1rem;
+  padding: 2rem;
+  box-shadow: 0 2rem 6rem rgba(0, 0, 0, .65);
+}
+
+.ac-auth-dialog::backdrop { background: rgba(8, 7, 6, .78); backdrop-filter: blur(.5rem); }
+.ac-auth-dialog h2 { margin: .35rem 0 .6rem; font-family: var(--ac-serif); font-size: clamp(1.8rem, 6vw, 2.5rem); font-weight: 400; }
+.ac-auth-copy { margin: 0 0 1.3rem; color: var(--ac-muted); line-height: 1.65; }
+
+.ac-dialog-close {
+  position: absolute;
+  top: .8rem;
+  right: .8rem;
+  width: 2.2rem;
+  height: 2.2rem;
+  border: 1px solid var(--ac-line);
+  border-radius: 50%;
+  color: var(--ac-muted);
+  background: transparent;
+  cursor: pointer;
+}
+
+.ac-auth-tabs { display: grid; grid-template-columns: 1fr 1fr; gap: .45rem; margin-bottom: 1rem; }
+.ac-auth-tabs button { padding: .7rem; border: 1px solid var(--ac-line); border-radius: 2rem; color: var(--ac-muted); background: transparent; cursor: pointer; }
+.ac-auth-tabs button.is-active { color: #171511; background: var(--ac-ember); border-color: var(--ac-ember); }
+.ac-auth-form { display: grid; gap: .85rem; }
+.ac-auth-form label { display: grid; gap: .35rem; color: var(--ac-muted); font-size: .72rem; letter-spacing: .06em; }
+.ac-auth-form input { width: 100%; padding: .85rem 1rem; border: 1px solid var(--ac-line); border-radius: .6rem; color: var(--ac-cream); background: rgba(255, 255, 255, .035); font: inherit; }
+.ac-auth-form input:focus { outline: 2px solid var(--ac-ember); outline-offset: 2px; }
+.ac-auth-form button { justify-self: start; }
+.ac-auth-form button:disabled { cursor: wait; opacity: .55; }
+.ac-auth-status { min-height: 1.4em; margin: .9rem 0 0; color: var(--ac-ember); font-size: .76rem; }
+
 /* ── Responsive ───────────────────────────────────────────────────────────── */
 
 @media (max-width: 640px) {

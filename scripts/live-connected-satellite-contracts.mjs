@@ -10,6 +10,12 @@ import {
   PUBLIC_ROUTE_REGISTRY,
   canonicalizeRoutePath
 } from "../lib/route-registry.js";
+import {
+  PAGE_LINK_LEDGER,
+  PAGE_LINK_STATUS,
+  ROUTE_RENDER_INDEX_TARGETS,
+  VERIFIED_WORKING_CARD_ROUTES
+} from "../lib/page-link-ledger.js";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const read = path => readFile(resolve(root, path), "utf8");
@@ -46,6 +52,7 @@ const commandName = "halo-signal-check";
 const packageJson = JSON.parse(packageSource);
 const publicPageSourceByFile = new Map(publicRouteFiles.map((file, index) => [file, publicPageSources[index]]));
 const escapeForPattern = value => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+const publicRouteByCanonicalTarget = new Map(PUBLIC_ROUTE_REGISTRY.map(route => [route.route, route]));
 
 function legacyNavigationPattern(route) {
   const escaped = escapeForPattern(route);
@@ -119,6 +126,46 @@ assert.ok(HALO_BUTTON_WATCHER_REGISTRY.length >= 20, "Watcher registry must cove
 for (const { from, to } of CANONICAL_ROUTE_ALIAS_ENTRIES) {
   assert.equal(canonicalizeRoutePath(from), to, `${from} must canonicalize to ${to}.`);
   assert.equal(redirectTargets.get(from), to, `Netlify redirects must map ${from} to ${to}.`);
+}
+
+const allowedLedgerStatuses = new Set(Object.values(PAGE_LINK_STATUS));
+const ledgerRoutes = new Set();
+const ledgerCanonicalTargets = new Set();
+for (const entry of PAGE_LINK_LEDGER) {
+  assert.ok(entry.route && entry.canonicalTarget && entry.file, "Page-link ledger entries must include route, canonicalTarget, and file.");
+  assert.ok(allowedLedgerStatuses.has(entry.status), `Page-link ledger route ${entry.route} has unsupported status "${entry.status}".`);
+  assert.ok(!ledgerRoutes.has(entry.route), `Page-link ledger route ${entry.route} must be unique.`);
+  assert.equal(canonicalizeRoutePath(entry.route), entry.canonicalTarget, `Page-link ledger route ${entry.route} must canonicalize to ${entry.canonicalTarget}.`);
+  assert.ok(publicRouteByCanonicalTarget.has(entry.canonicalTarget), `Page-link ledger canonical target ${entry.canonicalTarget} must exist in the public route registry.`);
+  ledgerRoutes.add(entry.route);
+  ledgerCanonicalTargets.add(entry.canonicalTarget);
+}
+
+for (const { route } of MENU_ROUTE_REGISTRY) {
+  assert.ok(ledgerCanonicalTargets.has(route), `Page-link ledger must include canonical menu route ${route}.`);
+}
+assert.ok(ledgerCanonicalTargets.has(CANONICAL_HOME_ROUTE), "Page-link ledger must include the canonical /halo home route.");
+
+const menuWorkingSetMatch = menuSource.match(/const MENU_PRIMARY_WORKING_TARGET_ROUTES = new Set\(\[([\s\S]*?)\]\)/);
+assert.ok(menuWorkingSetMatch, "Main menu must define MENU_PRIMARY_WORKING_TARGET_ROUTES.");
+const configuredWorkingCardRoutes = [...menuWorkingSetMatch[1].matchAll(/'([^']+)'/g)].map(([, route]) => route);
+assert.deepEqual(
+  new Set(configuredWorkingCardRoutes),
+  new Set(VERIFIED_WORKING_CARD_ROUTES),
+  "Main menu top working-routes card must stay aligned with the page-link ledger verified working routes."
+);
+assert.deepEqual(
+  new Set(PAGE_LINK_LEDGER.filter(entry => entry.workingCard).map(entry => entry.canonicalTarget)),
+  new Set(VERIFIED_WORKING_CARD_ROUTES),
+  "Page-link ledger working-card routes must match the verified menu working-routes card."
+);
+
+for (const route of ROUTE_RENDER_INDEX_TARGETS) {
+  assert.equal(
+    redirectTargets.get(route),
+    `${route}index.html`,
+    `Netlify route ${route} must render ${route}index.html to prevent blank slash-route responses.`
+  );
 }
 
 const blockedLegacyTargets = new Set(CANONICAL_ROUTE_ALIAS_ENTRIES.map(({ from }) => from));

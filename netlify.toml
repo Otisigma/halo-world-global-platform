@@ -233,6 +233,12 @@
   force = true
 
 [[redirects]]
+  from = "/radio/"
+  to = "/radio/index.html"
+  status = 200
+  force = true
+
+[[redirects]]
   from = "/release-house"
   to = "/release-house/"
   status = 301
@@ -272,6 +278,12 @@
   from = "/album-concierge/index.html"
   to = "/album-concierge/"
   status = 301
+  force = true
+
+[[redirects]]
+  from = "/album-concierge/"
+  to = "/album-concierge/index.html"
+  status = 200
   force = true
 
 [[redirects]]
@@ -359,9 +371,51 @@
   force = true
 
 [[redirects]]
+  from = "/dreamweaver-lab/"
+  to = "/dreamweaver-lab/index.html"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/artists/"
+  to = "/artists/index.html"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/artist-pro/"
+  to = "/artist-pro/index.html"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/campaign-studio/"
+  to = "/campaign-studio/index.html"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/creator-freedom/"
+  to = "/creator-freedom/index.html"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/creators/"
+  to = "/creators/index.html"
+  status = 200
+  force = true
+
+[[redirects]]
   from = "/finish-house/index.html"
   to = "/finish-house/"
   status = 301
+  force = true
+
+[[redirects]]
+  from = "/finish-house/"
+  to = "/finish-house/index.html"
+  status = 200
   force = true
 
 [[redirects]]
@@ -413,9 +467,21 @@
   force = true
 
 [[redirects]]
+  from = "/mixes/"
+  to = "/mixes/index.html"
+  status = 200
+  force = true
+
+[[redirects]]
   from = "/magazine/"
   to = "/magazine.html"
   status = 301
+  force = true
+
+[[redirects]]
+  from = "/music/"
+  to = "/music/index.html"
+  status = 200
   force = true
 
 [[redirects]]
@@ -449,6 +515,12 @@
   force = true
 
 [[redirects]]
+  from = "/release-house/"
+  to = "/release-house/index.html"
+  status = 200
+  force = true
+
+[[redirects]]
   from = "/signal-network"
   to = "/signal-network/"
   status = 301
@@ -467,7 +539,43 @@
   force = true
 
 [[redirects]]
+  from = "/song-catalog/"
+  to = "/song-catalog/index.html"
+  status = 200
+  force = true
+
+[[redirects]]
   from = "/support/index.html"
+  to = "/support/"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/support/"
+  to = "/support/index.html"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/halo-support"
+  to = "/support/"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/halo-support/"
+  to = "/support/"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/halo-%20support"
+  to = "/support/"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/halo- support"
   to = "/support/"
   status = 301
   force = true

@@ -70,7 +70,7 @@ for (const page of pages) {
   const source = await readFile(page, "utf8");
   let scripts = "";
 
-  for (const match of source.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/gi)) {
+  for (const match of source.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script\s*>/gi)) {
     const attributes = parseAttributes(match[1]);
     const scriptTarget = attributes.get("src");
     if (!scriptTarget) {

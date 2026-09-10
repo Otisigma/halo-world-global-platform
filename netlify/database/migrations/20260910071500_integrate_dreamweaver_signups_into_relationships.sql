@@ -71,9 +71,21 @@ ON CONFLICT (email) DO UPDATE SET
   source = EXCLUDED.source,
   unlock_reward = EXCLUDED.unlock_reward,
   signup_count = GREATEST(halo_relationship_signups.signup_count, EXCLUDED.signup_count),
-  consent_at = LEAST(halo_relationship_signups.consent_at, EXCLUDED.consent_at),
-  first_signup_at = LEAST(halo_relationship_signups.first_signup_at, EXCLUDED.first_signup_at),
-  last_signup_at = GREATEST(halo_relationship_signups.last_signup_at, EXCLUDED.last_signup_at),
+  consent_at = COALESCE(
+    LEAST(halo_relationship_signups.consent_at, EXCLUDED.consent_at),
+    halo_relationship_signups.consent_at,
+    EXCLUDED.consent_at
+  ),
+  first_signup_at = COALESCE(
+    LEAST(halo_relationship_signups.first_signup_at, EXCLUDED.first_signup_at),
+    halo_relationship_signups.first_signup_at,
+    EXCLUDED.first_signup_at
+  ),
+  last_signup_at = COALESCE(
+    GREATEST(halo_relationship_signups.last_signup_at, EXCLUDED.last_signup_at),
+    halo_relationship_signups.last_signup_at,
+    EXCLUDED.last_signup_at
+  ),
   updated_at = NOW(),
   status = CASE
     WHEN COALESCE(EXCLUDED.linked_member_id, halo_relationship_signups.linked_member_id) IS NOT NULL THEN 'linked_member'

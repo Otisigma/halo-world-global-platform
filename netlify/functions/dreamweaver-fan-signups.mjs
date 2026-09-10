@@ -23,13 +23,6 @@ function cleanEmail(value) {
 }
 
 async function syncRelationshipSignup(db, signup) {
-  const membershipRows = await db.sql`
-    SELECT member_id
-    FROM halo_memberships
-    WHERE email = ${signup.email}
-    LIMIT 1
-  `;
-  const linkedMemberId = membershipRows[0]?.member_id || null;
   const relationshipRows = await db.sql`
     INSERT INTO halo_relationship_signups (
       email,
@@ -47,12 +40,15 @@ async function syncRelationshipSignup(db, signup) {
     ) VALUES (
       ${signup.email},
       ${signup.id},
-      ${linkedMemberId},
+      (SELECT member_id FROM halo_memberships WHERE email = ${signup.email} LIMIT 1),
       ${signup.first_name},
       ${signup.favorite_platform},
       ${signup.source},
       ${signup.unlock_reward},
-      ${linkedMemberId ? "linked_member" : "received"},
+      CASE
+        WHEN EXISTS(SELECT 1 FROM halo_memberships WHERE email = ${signup.email}) THEN 'linked_member'
+        ELSE 'received'
+      END,
       1,
       ${signup.consent_at},
       NOW(),
@@ -65,7 +61,11 @@ async function syncRelationshipSignup(db, signup) {
       favorite_platform = EXCLUDED.favorite_platform,
       source = EXCLUDED.source,
       unlock_reward = EXCLUDED.unlock_reward,
-      consent_at = LEAST(halo_relationship_signups.consent_at, EXCLUDED.consent_at),
+      consent_at = COALESCE(
+        LEAST(halo_relationship_signups.consent_at, EXCLUDED.consent_at),
+        halo_relationship_signups.consent_at,
+        EXCLUDED.consent_at
+      ),
       signup_count = CASE
         WHEN halo_relationship_signups.source_signup_id IS DISTINCT FROM EXCLUDED.source_signup_id THEN halo_relationship_signups.signup_count + 1
         ELSE halo_relationship_signups.signup_count
@@ -101,64 +101,71 @@ async function syncRelationshipSignup(db, signup) {
   `;
 }
 
-export default async function dreamweaverFanSignups(request) {
-  if (request.method !== "POST") {
-    return json({ message: "Method not allowed" }, 405, { Allow: "POST" });
-  }
+export function createDreamweaverFanSignupHandler({
+  database = getDatabase,
+  verifyOrigin = verifyRequestOrigin
+} = {}) {
+  return async function dreamweaverFanSignups(request) {
+    if (request.method !== "POST") {
+      return json({ message: "Method not allowed" }, 405, { Allow: "POST" });
+    }
 
-  try {
-    verifyRequestOrigin(request);
-  } catch {
-    return json({ message: "Cross-origin unlocks are not accepted" }, 403);
-  }
+    try {
+      verifyOrigin(request);
+    } catch {
+      return json({ message: "Cross-origin unlocks are not accepted" }, 403);
+    }
 
-  if (Number(request.headers.get("content-length") || 0) > MAX_BODY_BYTES) {
-    return json({ message: "That unlock request is too large" }, 413);
-  }
+    if (Number(request.headers.get("content-length") || 0) > MAX_BODY_BYTES) {
+      return json({ message: "That unlock request is too large" }, 413);
+    }
 
-  let payload;
-  try {
-    payload = await request.json();
-  } catch {
-    return json({ message: "Unlock details must be valid JSON" }, 400);
-  }
+    let payload;
+    try {
+      payload = await request.json();
+    } catch {
+      return json({ message: "Unlock details must be valid JSON" }, 400);
+    }
 
-  if (cleanText(payload?.company, 120)) return json({ accepted: true }, 202);
+    if (cleanText(payload?.company, 120)) return json({ accepted: true }, 202);
 
-  const email = cleanEmail(payload?.email);
-  const firstName = cleanText(payload?.firstName, 80);
-  const favoritePlatform = PLATFORMS.has(payload?.favoritePlatform) ? payload.favoritePlatform : "spotify";
+    const email = cleanEmail(payload?.email);
+    const firstName = cleanText(payload?.firstName, 80);
+    const favoritePlatform = PLATFORMS.has(payload?.favoritePlatform) ? payload.favoritePlatform : "spotify";
 
-  if (!email) return json({ message: "Add a valid email address" }, 400);
-  if (payload?.consent !== true) return json({ message: "Accept the unlock terms to continue" }, 400);
+    if (!email) return json({ message: "Add a valid email address" }, 400);
+    if (payload?.consent !== true) return json({ message: "Accept the unlock terms to continue" }, 400);
 
-  try {
-    const db = getDatabase();
-    const rows = await db.sql`
-      INSERT INTO halo_dreamweaver_fan_signups (
-        id, email, first_name, favorite_platform, source, unlock_reward, consent_at
-      ) VALUES (
-        ${randomUUID()}, ${email}, ${firstName}, ${favoritePlatform},
-        'dreamweaver_satellite', 'full_track_doorway', NOW()
-      )
-      ON CONFLICT (email) DO UPDATE SET
-        first_name = EXCLUDED.first_name,
-        favorite_platform = EXCLUDED.favorite_platform,
-        source = EXCLUDED.source,
-        unlock_reward = EXCLUDED.unlock_reward,
-        consent_at = NOW()
-      RETURNING id, email, first_name, favorite_platform, source, unlock_reward, consent_at, xmax = 0 AS inserted
-    `;
-    await syncRelationshipSignup(db, rows[0]);
-    return json({
-      accepted: true,
-      message: "Dreamweaver is unlocked. Your full doorway and platform links are ready."
-    }, rows[0]?.inserted ? 201 : 200);
-  } catch (error) {
-    console.error("Dreamweaver fan signup failed", error instanceof Error ? error.message : "unknown error");
-    return json({ message: "Dreamweaver could not save the unlock right now" }, 500);
-  }
+    try {
+      const db = await database();
+      const rows = await db.sql`
+        INSERT INTO halo_dreamweaver_fan_signups (
+          id, email, first_name, favorite_platform, source, unlock_reward, consent_at
+        ) VALUES (
+          ${randomUUID()}, ${email}, ${firstName}, ${favoritePlatform},
+          'dreamweaver_satellite', 'full_track_doorway', NOW()
+        )
+        ON CONFLICT (email) DO UPDATE SET
+          first_name = EXCLUDED.first_name,
+          favorite_platform = EXCLUDED.favorite_platform,
+          source = EXCLUDED.source,
+          unlock_reward = EXCLUDED.unlock_reward,
+          consent_at = NOW()
+        RETURNING id, email, first_name, favorite_platform, source, unlock_reward, consent_at, xmax = 0 AS inserted
+      `;
+      await syncRelationshipSignup(db, rows[0]);
+      return json({
+        accepted: true,
+        message: "Dreamweaver is unlocked. Your full doorway and platform links are ready."
+      }, rows[0]?.inserted ? 201 : 200);
+    } catch (error) {
+      console.error("Dreamweaver fan signup failed", error instanceof Error ? error.message : "unknown error");
+      return json({ message: "Dreamweaver could not save the unlock right now" }, 500);
+    }
+  };
 }
+
+export default createDreamweaverFanSignupHandler();
 
 export const config = {
   path: "/api/dreamweaver-fan-signups"

@@ -57,6 +57,11 @@ function setMessage(text) {
   elements.message.textContent = text;
 }
 
+if (!uploadHelper) {
+  elements.submitButton.disabled = true;
+  setMessage("HALO upload runtime did not load. Refresh this page and try again.");
+}
+
 function stageChip(stage) {
   const label = STAGE_LABEL[stage] || String(stage || "uploaded").replaceAll("_", " ");
   return `<span class="stage-chip stage-${escapeHtml(stage || "uploaded")}">${escapeHtml(label)}</span>`;

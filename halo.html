@@ -2997,7 +2997,7 @@
             }
             setIsDreamweaverPreviewLoading(false);
             dreamweaverPreviewRetryActiveRef.current = false;
-          }, [dreamweaverPreviewMix?.previewUrl]);
+          }, [dreamweaverPreviewCandidateKey, dreamweaverPreviewMix?.previewUrl]);
 
           const communityAction = async (payload, notice = '') => {
             if (!identityUser) {
@@ -4062,7 +4062,8 @@
                                 const currentCandidates = dreamweaverPreviewCandidatesRef.current;
                                 const failedIndex = currentCandidates.findIndex(mix => mix.previewUrl === failedSource);
                                 const nextCandidates = failedIndex >= 0 ? currentCandidates.slice(failedIndex + 1) : [];
-                                if (dreamweaverPreviewRetryAllowedRef.current && nextCandidates.length) {
+                                if (dreamweaverPreviewRetryAllowedRef.current && !dreamweaverPreviewRetryActiveRef.current && nextCandidates.length) {
+                                  dreamweaverPreviewRetryActiveRef.current = true;
                                   dreamweaverPreviewRetryAllowedRef.current = false;
                                   setDreamweaverPreviewError('This preview source failed. Loading the next Dreamweaver signal.');
                                   setIsDreamweaverPreviewLoading(true);

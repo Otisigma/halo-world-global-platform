@@ -6,17 +6,19 @@ import { normalizeHttpsList } from "../music-upload/link-validation.js";
 const root = resolve(import.meta.dirname, "..");
 const read = path => readFile(resolve(root, path), "utf8");
 
-const sources = {
-  page: await read("music-upload/index.html"),
-  client: await read("music-upload/music-upload.js"),
-  styles: await read("music-upload/music-upload.css"),
-  world: await read("halo.html"),
-  routes: await read("lib/route-registry.js"),
-  unifiedUpload: await read("netlify/functions/unified-upload.mjs"),
-  audioFn: await read("netlify/functions/song-catalog-audio.ts"),
-  artworkFn: await read("netlify/functions/song-catalog-artwork.ts"),
-  config: await read("netlify.toml"),
-};
+const [page, client, styles, world, routes, unifiedUpload, audioFn, artworkFn, config] = await Promise.all([
+  read("music-upload/index.html"),
+  read("music-upload/music-upload.js"),
+  read("music-upload/music-upload.css"),
+  read("halo.html"),
+  read("lib/route-registry.js"),
+  read("netlify/functions/unified-upload.mjs"),
+  read("netlify/functions/song-catalog-audio.ts"),
+  read("netlify/functions/song-catalog-artwork.ts"),
+  read("netlify.toml"),
+]);
+
+const sources = { page, client, styles, world, routes, unifiedUpload, audioFn, artworkFn, config };
 
 const checks = [
   {
@@ -194,7 +196,8 @@ const checks = [
     source: "routes",
     description: "route registry publishes the dedicated music upload route",
     signals: [
-      'directoryRoute("Halo Music Upload", "/music-upload/", "music-upload/index.html", { menuLabel: "HALO MUSIC UPLOAD" })',
+      /directoryRoute\(\s*"Halo Music Upload"\s*,\s*"\/music-upload\/"\s*,\s*"music-upload\/index\.html"/,
+      /menuLabel:\s*"HALO MUSIC UPLOAD"/,
     ],
     diagnose: "Deployment stage is broken: route registry no longer exposes /music-upload/ consistently.",
   },
@@ -237,11 +240,33 @@ const checks = [
   },
 ];
 
-const missingSignals = (text, signals) => signals.filter(signal => !text.includes(signal));
+const hasSignal = (text, signal) => {
+  if (typeof text !== "string") return false;
+  if (signal instanceof RegExp) {
+    const stateless = new RegExp(signal.source, signal.flags.replace(/[gy]/g, ""));
+    return stateless.test(text);
+  }
+  return text.includes(signal);
+};
+const signalLabel = signal => signal instanceof RegExp ? signal.toString() : signal;
+const missingSignals = (text, signals) => signals.filter(signal => !hasSignal(text, signal));
 const failures = [];
 
 for (const check of checks) {
   const text = sources[check.source];
+  if (typeof text !== "string") {
+    failures.push({
+      ...check,
+      missing: [`[missing source: ${check.source}]`],
+      diagnose: `${check.diagnose} Source key "${check.source}" is not available in the watchdog inputs.`,
+    });
+    console.log(`FAIL [${check.id}] ${check.description}`);
+    console.log(`  area: ${check.area}`);
+    console.log(`  file: ${check.source}`);
+    console.log(`  missing signals: [missing source: ${check.source}]`);
+    console.log(`  diagnosis: ${check.diagnose} Source key "${check.source}" is not available in the watchdog inputs.`);
+    continue;
+  }
   const missing = missingSignals(text, check.signals);
   if (missing.length === 0) {
     console.log(`PASS [${check.id}] ${check.description}`);
@@ -252,7 +277,7 @@ for (const check of checks) {
   console.log(`FAIL [${check.id}] ${check.description}`);
   console.log(`  area: ${check.area}`);
   console.log(`  file: ${check.source}`);
-  console.log(`  missing signals: ${missing.join(" | ")}`);
+  console.log(`  missing signals: ${missing.map(signalLabel).join(" | ")}`);
   console.log(`  diagnosis: ${check.diagnose}`);
 }
 

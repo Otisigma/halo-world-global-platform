@@ -1756,6 +1756,7 @@
           const dreamweaverPreviewAudioRef = useRef(null);
           const dreamweaverPreviewCandidatesRef = useRef([]);
           const dreamweaverPreviewCandidateKeyRef = useRef('');
+          const dreamweaverPreviewSourceIdRef = useRef('');
           const dreamweaverPreviewInternalSourceSwapRef = useRef(false);
           const dreamweaverPreviewPlayIntentRef = useRef(false);
           const dreamweaverPreviewRetryActiveRef = useRef(false);
@@ -2882,6 +2883,7 @@
               try {
                 dreamweaverPreviewRetryAllowedRef.current = true;
                 await preview.play();
+                dreamweaverPreviewSourceIdRef.current = String(candidate.id);
                 setDreamweaverPreviewSourceId(String(candidate.id));
                 if (retryContext && dreamweaverPreviewCandidateKeyRef.current !== retryContext.candidateKey) {
                   preview.pause();
@@ -2900,6 +2902,8 @@
               } catch (error) {
                 lastError = error;
                 if (error?.name === 'NotAllowedError') {
+                  dreamweaverPreviewSourceIdRef.current = String(candidate.id);
+                  setDreamweaverPreviewSourceId(String(candidate.id));
                   setDreamweaverPreviewNeedsGesture(true);
                   break;
                 }
@@ -2938,6 +2942,10 @@
             dreamweaverPreviewCandidatesRef.current = dreamweaverPreviewCandidates;
             dreamweaverPreviewCandidateKeyRef.current = dreamweaverPreviewCandidateKey;
           }, [dreamweaverPreviewCandidateKey, dreamweaverPreviewCandidates]);
+
+          useEffect(() => {
+            dreamweaverPreviewSourceIdRef.current = String(dreamweaverPreviewSourceId || '');
+          }, [dreamweaverPreviewSourceId]);
 
           useEffect(() => {
             const preview = dreamweaverPreviewAudioRef.current;
@@ -4026,12 +4034,10 @@
                               aria-label="Dreamweaver homepage preview player"
                               onLoadStart={() => {
                                 setIsDreamweaverPreviewLoading(true);
-                                setDreamweaverPreviewError('');
                                 setDreamweaverPreviewNeedsGesture(false);
                               }}
                               onCanPlay={() => {
                                 setIsDreamweaverPreviewLoading(false);
-                                setDreamweaverPreviewError('');
                                 setDreamweaverPreviewNeedsGesture(false);
                               }}
                               onPlay={markDreamweaverPreviewPlaying}
@@ -4061,7 +4067,9 @@
                                 const failedSource = preview?.currentSrc || '';
                                 const currentCandidates = dreamweaverPreviewCandidatesRef.current;
                                 const failedIndex = currentCandidates.findIndex(mix => mix.previewUrl === failedSource);
-                                const nextCandidates = failedIndex >= 0 ? currentCandidates.slice(failedIndex + 1) : [];
+                                const selectedIndex = currentCandidates.findIndex(mix => String(mix.id) === dreamweaverPreviewSourceIdRef.current);
+                                const sourceIndex = failedIndex >= 0 ? failedIndex : selectedIndex;
+                                const nextCandidates = sourceIndex >= 0 ? currentCandidates.slice(sourceIndex + 1) : currentCandidates.slice(1);
                                 if (dreamweaverPreviewRetryAllowedRef.current && !dreamweaverPreviewRetryActiveRef.current && nextCandidates.length) {
                                   dreamweaverPreviewRetryActiveRef.current = true;
                                   dreamweaverPreviewRetryAllowedRef.current = false;

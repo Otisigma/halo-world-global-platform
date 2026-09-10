@@ -42,6 +42,8 @@ assert.match(haloHome, /Preview ready/, "the homepage Dreamweaver player must ex
 assert.match(haloHome, /Preview playing/, "the homepage Dreamweaver player must expose a playing state");
 assert.match(haloHome, /Preview unavailable/, "the homepage Dreamweaver player must expose a failed state");
 assert.match(haloHome, /playDreamweaverPreviewCandidates/, "the homepage Dreamweaver player must use fallback-aware playback attempts");
+assert.match(haloHome, /This preview source failed\. Loading the next Dreamweaver signal\./, "the homepage Dreamweaver player must explain automatic source fallback");
+assert.match(haloHome, /dreamweaverPreviewRetryAllowedRef\.current[\s\S]*!dreamweaverPreviewRetryActiveRef\.current[\s\S]*nextCandidates\.length/, "the homepage Dreamweaver player must only retry to the next candidate after a guarded play attempt");
 assert.match(summary, /averageListenSeconds/, "admin reporting must expose listening duration");
 assert.match(summary, /listeningVariants/, "admin reporting must compare preview variants");
 assert.match(summary, /commercialIntent/, "preview reporting must connect listening with commercial intent");

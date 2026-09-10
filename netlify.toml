@@ -161,6 +161,12 @@
   force = true
 
 [[redirects]]
+  from = "/music-upload/"
+  to = "/music-upload/index.html"
+  status = 200
+  force = true
+
+[[redirects]]
   from = "/radio/"
   to = "/radio/index.html"
   status = 200

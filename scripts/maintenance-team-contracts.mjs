@@ -63,7 +63,7 @@ assert.doesNotMatch(navigationCss, /@media\s*\(max-width:\s*520px\)\s*\{[\s\S]*?
 for (const route of [
   "/music/", "/halo-x.html", "/mixes/", "/dj-deck.html", "/halo-live.html", "/radio/",
   "/artist-pro/", "/creators/", "/artists/", "/creator-freedom/", "/campaign-studio/",
-  "/release-house/", "/song-catalog/", "/dreamweaver/", "/dreamweaver-lab/",
+  "/release-house/", "/song-catalog/", "/music-upload/", "/dreamweaver/", "/dreamweaver-lab/",
   "/album-concierge/", "/finish-house/", "/magazine.html", "/support/"
 ]) {
   assert.match(mainMenuPage, new RegExp(`renderMenuStatusBadge\\(["']${route.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`), `menu route ${route} must expose a visible status badge`);

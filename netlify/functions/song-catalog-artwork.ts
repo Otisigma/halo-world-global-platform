@@ -132,7 +132,7 @@ async function finalizeUpload(payload: Record<string, unknown>, db: Awaited<Retu
     if (!version) return json({ message: "That version was not found" }, 404);
     const prefix = `${ownerMemberId}/${songId}/${versionId}/${uploadId}/parts/`;
     const stored = await artworkStore.list({ prefix });
-    if (stored.blobs.length !== chunkCount || !hasCompleteChunkSet(stored.blobs, prefix, chunkCount)) {
+    if (!hasCompleteChunkSet(stored.blobs, prefix, chunkCount)) {
       return json({ message: "The artwork upload is incomplete. Try it again." }, 409);
     }
     const artworkUrl = `/api/song-catalog/artwork?songId=${encodeURIComponent(songId)}&versionId=${encodeURIComponent(versionId)}`;
@@ -161,7 +161,7 @@ async function finalizeUpload(payload: Record<string, unknown>, db: Awaited<Retu
   if (!song) return json({ message: "That song was not found" }, 404);
   const prefix = `${ownerMemberId}/${songId}/${uploadId}/parts/`;
   const stored = await artworkStore.list({ prefix });
-  if (stored.blobs.length !== chunkCount || !hasCompleteChunkSet(stored.blobs, prefix, chunkCount)) {
+  if (!hasCompleteChunkSet(stored.blobs, prefix, chunkCount)) {
     return json({ message: "The artwork upload is incomplete. Try it again." }, 409);
   }
   const artworkUrl = `/api/song-catalog/artwork?songId=${encodeURIComponent(songId)}`;

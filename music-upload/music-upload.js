@@ -208,14 +208,31 @@ async function apiJson(url, payload, method = "POST") {
 }
 
 async function confirmPersistedAsset(url, label) {
-  const response = await fetch(url, {
+  const headResponse = await fetch(url, {
     method: "HEAD",
     credentials: "same-origin",
     headers: { Accept: "*/*" },
   });
-  if (!response.ok) throw new Error(`HALO could not confirm persisted ${label}. Please retry.`);
-  const size = Number(response.headers.get("content-length") || "0");
-  if (!Number.isFinite(size) || size < 1) throw new Error(`HALO could not confirm persisted ${label}. Please retry.`);
+  if (headResponse.ok) {
+    const sizeHeader = headResponse.headers.get("content-length");
+    if (sizeHeader != null && sizeHeader !== "") {
+      const size = Number(sizeHeader);
+      if (!Number.isFinite(size) || size < 1) throw new Error(`HALO could not confirm persisted ${label}. Please retry.`);
+    }
+    return;
+  }
+  if (![405, 501].includes(headResponse.status)) throw new Error(`HALO could not confirm persisted ${label}. Please retry.`);
+  const getResponse = await fetch(url, {
+    method: "GET",
+    credentials: "same-origin",
+    headers: { Accept: "*/*", Range: "bytes=0-0" },
+  });
+  if (!getResponse.ok) throw new Error(`HALO could not confirm persisted ${label}. Please retry.`);
+  const rangeHeader = getResponse.headers.get("content-range") || "";
+  if (rangeHeader) {
+    const total = Number(rangeHeader.split("/").pop() || "0");
+    if (!Number.isFinite(total) || total < 1) throw new Error(`HALO could not confirm persisted ${label}. Please retry.`);
+  }
 }
 
 async function uploadArtwork(songId, file) {
@@ -255,7 +272,7 @@ async function uploadArtwork(songId, file) {
     contentType,
   });
   const artworkUrl = finalized.artwork_url || finalized.artworkUrl;
-  if (!finalized.persisted || !artworkUrl) throw new Error("HALO could not confirm cover art persistence. Please retry.");
+  if (!finalized.persisted || !finalized.lockedIn || !artworkUrl) throw new Error("HALO could not confirm cover art persistence. Please retry.");
   await confirmPersistedAsset(artworkUrl, "cover art");
   artworkUploadUi.success("Cover art locked into HALO storage.", true);
   return artworkUrl;
@@ -300,7 +317,7 @@ async function uploadAudio(songId, versionId, file, position, total) {
     contentType,
     durationSeconds: await audioDuration(file),
   });
-  if (!finalized.persisted || !finalized.audioUrl) throw new Error(`HALO could not confirm persistence for ${file.name}. Please retry.`);
+  if (!finalized.persisted || !finalized.lockedIn || !finalized.audioUrl) throw new Error(`HALO could not confirm persistence for ${file.name}. Please retry.`);
   await confirmPersistedAsset(finalized.audioUrl, "audio");
   audioUploadUi.success(`${file.name} is locked into HALO storage.`, true);
   return finalized.audioUrl;
@@ -440,7 +457,6 @@ async function handleSubmit(event) {
       });
       state.results = [result, ...state.results];
       renderResults();
-      setMessage(`${result.title} is ${STAGE_LABEL[result.pipelineStatus] || result.pipelineStatus}. Locked-in uploads are now stored in HALO.`);
     }
     elements.form.reset();
     renderQueue();

@@ -1,10 +1,26 @@
 import { normalizeHttpsList } from "/music-upload/link-validation.js";
 
 const $ = selector => document.querySelector(selector);
+
+function loadUploadHelperScript() {
+  return new Promise((resolve, reject) => {
+    const fallbackSrc = "/upload-progress.js?v=music-upload-runtime";
+    if (window.HaloUploadProgress) {
+      resolve();
+      return;
+    }
+    const script = document.createElement("script");
+    script.src = fallbackSrc;
+    script.addEventListener("load", () => resolve(), { once: true });
+    script.addEventListener("error", () => reject(new Error("Upload runtime failed to load.")), { once: true });
+    document.head.append(script);
+  });
+}
+
 let uploadHelper = window.HaloUploadProgress;
 if (!uploadHelper) {
   try {
-    await import("/upload-progress.js?v=music-upload-runtime");
+    await loadUploadHelperScript();
   } catch {}
   uploadHelper = window.HaloUploadProgress;
 }

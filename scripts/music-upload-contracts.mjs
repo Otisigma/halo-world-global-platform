@@ -61,7 +61,8 @@ const checks = [
     description: "music-upload client bootstraps upload helper when global script is stale or missing",
     signals: [
       "let uploadHelper = window.HaloUploadProgress",
-      'await import("/upload-progress.js?v=music-upload-runtime")',
+      "function loadUploadHelperScript()",
+      "const script = document.createElement(\"script\")",
       "HALO upload runtime did not load",
     ],
     diagnose: "Bundle stage is broken: music-upload.js is not resilient to missing/stale upload-progress runtime wiring.",

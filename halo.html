@@ -1755,6 +1755,8 @@
           const canvasRef = useRef(null);
           const dreamweaverPreviewAudioRef = useRef(null);
           const dreamweaverPreviewCandidateKeyRef = useRef('');
+          const dreamweaverPreviewInternalSourceSwapRef = useRef(false);
+          const dreamweaverPreviewPlayIntentRef = useRef(false);
           const dreamweaverPreviewRetryActiveRef = useRef(false);
           const dreamweaverPreviewRetryAllowedRef = useRef(false);
           const singleFileInputRef = useRef(null);
@@ -2847,6 +2849,7 @@
             if (!preview || !mix?.previewUrl) return false;
             setDreamweaverPreviewSourceId(String(mix.id));
             if (preview.src !== mix.previewUrl) {
+              dreamweaverPreviewInternalSourceSwapRef.current = true;
               preview.pause();
               preview.src = mix.previewUrl;
               preview.load();
@@ -2863,6 +2866,7 @@
 
           const playDreamweaverPreviewCandidates = async (preview, candidateList, retryContext = null) => {
             let lastError = null;
+            dreamweaverPreviewPlayIntentRef.current = true;
             if (retryContext && (
               dreamweaverPreviewCandidateKeyRef.current !== retryContext.candidateKey
               || preview?.currentSrc !== retryContext.failedSource
@@ -2941,6 +2945,7 @@
               setIsDreamweaverPreviewPlaying(false);
               setIsDreamweaverPreviewLoading(false);
               setDreamweaverPreviewNeedsGesture(false);
+              dreamweaverPreviewPlayIntentRef.current = false;
               dreamweaverPreviewRetryActiveRef.current = false;
               dreamweaverPreviewRetryAllowedRef.current = false;
               if (preview) {
@@ -2962,11 +2967,15 @@
             const nextPreviewUrl = dreamweaverPreviewMix?.previewUrl || '';
             const sourceChanged = nextPreviewUrl ? preview.currentSrc !== nextPreviewUrl : Boolean(preview.currentSrc);
             if (!sourceChanged) return;
-            const shouldResumePlayback = !preview.paused && !dreamweaverPreviewRetryActiveRef.current;
+            const internalSourceSwap = dreamweaverPreviewInternalSourceSwapRef.current;
+            dreamweaverPreviewInternalSourceSwapRef.current = false;
+            if (internalSourceSwap) return;
+            const shouldResumePlayback = dreamweaverPreviewPlayIntentRef.current;
             setIsDreamweaverPreviewPlaying(false);
             dreamweaverPreviewRetryAllowedRef.current = false;
             if (!nextPreviewUrl) {
               setIsDreamweaverPreviewLoading(false);
+              dreamweaverPreviewPlayIntentRef.current = false;
               dreamweaverPreviewRetryActiveRef.current = false;
               preview.pause();
               preview.removeAttribute('src');
@@ -4031,11 +4040,15 @@
                               }}
                               onPause={() => {
                                 setIsDreamweaverPreviewPlaying(false);
-                                if (!dreamweaverPreviewRetryActiveRef.current) setIsDreamweaverPreviewLoading(false);
+                                if (!dreamweaverPreviewRetryActiveRef.current) {
+                                  setIsDreamweaverPreviewLoading(false);
+                                  dreamweaverPreviewPlayIntentRef.current = false;
+                                }
                               }}
                               onEnded={() => {
                                 setIsDreamweaverPreviewPlaying(false);
                                 setIsDreamweaverPreviewLoading(false);
+                                dreamweaverPreviewPlayIntentRef.current = false;
                                 dreamweaverPreviewRetryActiveRef.current = false;
                                 dreamweaverPreviewRetryAllowedRef.current = false;
                               }}

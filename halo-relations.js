@@ -116,9 +116,11 @@
     clear(list);
     if (!rows.length) return list.append(node("p", "empty-row", "No Dreamweaver signups recorded yet."));
     rows.forEach(row => {
-      const item = node("button", "pulse-row");
-      item.type = "button";
-      if (row.memberId) item.addEventListener("click", () => selectMember(row.memberId));
+      const item = row.memberId ? node("button", "pulse-row") : node("article", "pulse-row");
+      if (row.memberId) {
+        item.type = "button";
+        item.addEventListener("click", () => selectMember(row.memberId));
+      }
       const title = row.firstName || row.memberName || row.email;
       const detail = `${signupStatusLabels[row.status] || "Received"} · ${platformLabels[row.favoritePlatform] || "Spotify"}${row.signupCount > 1 ? ` · ${row.signupCount} unlocks` : ""}`;
       const linked = row.memberName ? `Linked: ${row.memberName}` : row.email;

@@ -140,7 +140,7 @@ async function loadWorkspace(db) {
       LIMIT 30
     `,
     db.sql`
-      SELECT s.email, s.first_name, s.favorite_platform, s.status, s.signup_count,
+      SELECT s.email, s.source_signup_id, s.first_name, s.favorite_platform, s.status, s.signup_count,
         s.last_signup_at, s.linked_member_id, m.display_name AS linked_member_name
       FROM halo_relationship_signups s
       LEFT JOIN halo_memberships m ON m.member_id = s.linked_member_id
@@ -170,8 +170,8 @@ async function loadWorkspace(db) {
       memberId: row.member_id,
       memberName: row.display_name
     })),
-    dreamweaverSignups: dreamweaverRows.map((row, index) => ({
-      id: `dreamweaver-${index}-${row.email}`,
+    dreamweaverSignups: dreamweaverRows.map(row => ({
+      id: row.source_signup_id || row.email,
       email: row.email,
       firstName: row.first_name || "",
       favoritePlatform: row.favorite_platform,

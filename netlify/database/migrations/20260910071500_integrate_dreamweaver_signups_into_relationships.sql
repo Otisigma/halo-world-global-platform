@@ -85,11 +85,6 @@ ON CONFLICT (member_id) DO NOTHING;
 
 UPDATE halo_relationship_profiles AS profile
 SET
-  contact_consent = TRUE,
-  preferred_channel = CASE
-    WHEN profile.preferred_channel = 'none' THEN 'email'
-    ELSE profile.preferred_channel
-  END,
   tags = CASE
     WHEN 'dreamweaver' = ANY(profile.tags) THEN profile.tags
     ELSE array_append(profile.tags, 'dreamweaver')

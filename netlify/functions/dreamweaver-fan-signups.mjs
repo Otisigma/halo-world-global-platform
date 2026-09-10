@@ -66,7 +66,10 @@ async function syncRelationshipSignup(db, signup) {
       source = EXCLUDED.source,
       unlock_reward = EXCLUDED.unlock_reward,
       consent_at = EXCLUDED.consent_at,
-      signup_count = halo_relationship_signups.signup_count + 1,
+      signup_count = CASE
+        WHEN halo_relationship_signups.source_signup_id IS DISTINCT FROM EXCLUDED.source_signup_id THEN halo_relationship_signups.signup_count + 1
+        ELSE halo_relationship_signups.signup_count
+      END,
       last_signup_at = NOW(),
       updated_at = NOW(),
       status = CASE
@@ -85,11 +88,6 @@ async function syncRelationshipSignup(db, signup) {
   await db.sql`
     UPDATE halo_relationship_profiles
     SET
-      contact_consent = TRUE,
-      preferred_channel = CASE
-        WHEN preferred_channel = 'none' THEN 'email'
-        ELSE preferred_channel
-      END,
       tags = CASE
         WHEN 'dreamweaver' = ANY(tags) THEN tags
         ELSE array_append(tags, 'dreamweaver')

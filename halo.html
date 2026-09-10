@@ -942,6 +942,12 @@
         .halo-home-experiment__player-chip--ready {
             color: #86efac;
         }
+        .halo-home-experiment__player-chip--loading {
+            color: #67e8f9;
+        }
+        .halo-home-experiment__player-chip--playing {
+            color: #fbbf24;
+        }
         .halo-home-experiment__player-chip--standby {
             color: #fbbf24;
         }
@@ -1721,7 +1727,10 @@
           const [showEqualizer, setShowEqualizer] = useState(false);
           const [equalizer, setEqualizer] = useState({ master: 70, bass: 0, mid: 0, treble: 0 });
           const [isDreamweaverPreviewPlaying, setIsDreamweaverPreviewPlaying] = useState(false);
+          const [isDreamweaverPreviewLoading, setIsDreamweaverPreviewLoading] = useState(false);
+          const [dreamweaverPreviewNeedsGesture, setDreamweaverPreviewNeedsGesture] = useState(false);
           const [dreamweaverPreviewError, setDreamweaverPreviewError] = useState('');
+          const [dreamweaverPreviewSourceId, setDreamweaverPreviewSourceId] = useState('');
           const fallbackReleaseArtwork = window.HaloReleaseArtwork?.DEFAULT_RELEASE_ARTWORK || '/assets/halo-app-icon-512.png';
           const [musicExperimentVariant] = useState(() => {
             const requested = new URLSearchParams(window.location.search).get('musicExperiment');
@@ -1745,6 +1754,14 @@
           const audioCtxRef = useRef(null);
           const canvasRef = useRef(null);
           const dreamweaverPreviewAudioRef = useRef(null);
+          const dreamweaverPreviewCandidatesRef = useRef([]);
+          const dreamweaverPreviewCandidateKeyRef = useRef('');
+          const dreamweaverPreviewSourceIdRef = useRef('');
+          const dreamweaverPreviewInternalSourceSwapRef = useRef(false);
+          const dreamweaverPreviewPlayIntentRef = useRef(false);
+          const dreamweaverPreviewPlayAttemptActiveRef = useRef(false);
+          const dreamweaverPreviewRetryActiveRef = useRef(false);
+          const dreamweaverPreviewRetryAllowedRef = useRef(false);
           const singleFileInputRef = useRef(null);
           const multiFileInputRef = useRef(null);
           const folderInputRef = useRef(null);
@@ -1887,6 +1904,18 @@
               const videoId = url.searchParams.get('v') || url.pathname.split('/').filter(Boolean).pop();
               return videoId ? `https://www.youtube.com/embed/${videoId}` : '';
             } catch { return ''; }
+          };
+
+          const resolveDreamweaverPreviewUrl = (value) => {
+            if (typeof value !== 'string' || !value.trim()) return '';
+            try {
+              const url = new URL(value.trim(), window.location.href);
+              if (!['http:', 'https:'].includes(url.protocol)) return '';
+              if (url.protocol === 'http:' && url.origin !== window.location.origin) return '';
+              return url.href;
+            } catch {
+              return '';
+            }
           };
 
           const releaseArtwork = (release) => window.HaloReleaseArtwork?.resolve(release, fallbackReleaseArtwork)
@@ -2764,44 +2793,228 @@
             return `${minutes}:${String(Math.floor(total % 60)).padStart(2, '0')}`;
           };
 
-          const dreamweaverPreviewMix = roomMixes.find(mix => mix.audioUrl && mix.source !== 'youtube') || roomMixes.find(mix => mix.audioUrl) || null;
-          const dreamweaverRouteIndicator = menuStatusForRoute('/dreamweaver/', dreamweaverPreviewMix && !dreamweaverPreviewError ? 'green' : 'yellow');
-          const dreamweaverPreviewReady = Boolean(dreamweaverPreviewMix?.audioUrl);
-          const dreamweaverPreviewLabel = dreamweaverPreviewReady
-            ? dreamweaverPreviewError
-              ? 'Route-aware playback · Preview unavailable'
-              : 'Route-aware playback · Preview ready'
-            : communityLoading
-              ? 'Route-aware playback · Signal checking'
-              : 'Route-aware playback · Preview standing by';
+          const dreamweaverPreviewCandidates = roomMixes
+            .filter(mix => mix?.source !== 'youtube')
+            .map(mix => {
+              const previewUrl = resolveDreamweaverPreviewUrl(mix?.audioUrl);
+              return previewUrl ? { ...mix, previewUrl } : null;
+            })
+            .filter(Boolean);
+          const dreamweaverPreviewCandidateKey = dreamweaverPreviewCandidates.map(mix => `${mix.id}:${mix.previewUrl}`).join('|');
+          const dreamweaverPreviewMix = dreamweaverPreviewCandidates.find(mix => String(mix.id) === String(dreamweaverPreviewSourceId || ''))
+            || dreamweaverPreviewCandidates[0]
+            || null;
+          const dreamweaverPreviewReady = Boolean(dreamweaverPreviewMix?.previewUrl);
+          const dreamweaverPreviewUnavailable = !dreamweaverPreviewReady && !communityLoading;
+          const dreamweaverPreviewState = dreamweaverPreviewError && !dreamweaverPreviewNeedsGesture
+            ? 'failed'
+            : isDreamweaverPreviewPlaying
+              ? 'playing'
+              : isDreamweaverPreviewLoading
+                ? 'loading'
+                : dreamweaverPreviewReady
+                  ? 'ready'
+                  : communityLoading
+                    ? 'loading'
+                    : dreamweaverPreviewUnavailable
+                      ? 'failed'
+                      : 'standby';
+          const dreamweaverPreviewChipLabel = dreamweaverPreviewState === 'failed'
+            ? 'Preview unavailable'
+            : dreamweaverPreviewState === 'playing'
+              ? 'Preview playing'
+              : dreamweaverPreviewState === 'loading'
+                ? 'Preview loading'
+                : dreamweaverPreviewState === 'ready'
+                  ? 'Preview ready'
+                  : 'Signal standing by';
+          const dreamweaverRouteIndicator = menuStatusForRoute('/dreamweaver/', dreamweaverPreviewReady && dreamweaverPreviewState !== 'failed' ? 'green' : 'yellow');
+          const dreamweaverPreviewLabel = dreamweaverPreviewState === 'failed'
+            ? 'Route-aware playback · Preview unavailable'
+            : dreamweaverPreviewState === 'playing'
+              ? 'Route-aware playback · Preview playing'
+              : dreamweaverPreviewState === 'loading'
+                ? 'Route-aware playback · Preview loading'
+                : dreamweaverPreviewReady
+                  ? 'Route-aware playback · Preview ready'
+                  : 'Route-aware playback · Preview standing by';
           const dreamweaverPreviewSummary = dreamweaverPreviewError
             ? dreamweaverPreviewError
-            : dreamweaverPreviewReady
-              ? `${dreamweaverPreviewMix.title || 'Current signal'} · ${formatMixDuration(dreamweaverPreviewMix.durationSeconds)} · ${dreamweaverPreviewMix.trackCount || 1} ${(dreamweaverPreviewMix.trackCount || 1) === 1 ? 'track' : 'tracks'}`
-            : communityLoading
-              ? 'Scanning the current Dreamweaver signal from the Mix Desk.'
-              : 'No public Dreamweaver mix is live yet. The route remains open while the next preview is prepared.';
+            : dreamweaverPreviewState === 'loading' && dreamweaverPreviewReady
+              ? `Loading ${dreamweaverPreviewMix.title || 'the current signal'} for playback.`
+              : dreamweaverPreviewReady
+                ? `${dreamweaverPreviewMix.title || 'Current signal'} · ${formatMixDuration(dreamweaverPreviewMix.durationSeconds)} · ${dreamweaverPreviewMix.trackCount || 1} ${(dreamweaverPreviewMix.trackCount || 1) === 1 ? 'track' : 'tracks'}`
+                : communityLoading
+                  ? 'Scanning the current Dreamweaver signal from the Mix Desk.'
+                  : 'No public Dreamweaver mix is live yet. The route remains open while the next preview is prepared.';
+
+          const ensureDreamweaverPreviewSource = (preview, mix) => {
+            if (!preview || !mix?.previewUrl) return false;
+            if (preview.src !== mix.previewUrl) {
+              dreamweaverPreviewInternalSourceSwapRef.current = true;
+              preview.pause();
+              preview.src = mix.previewUrl;
+              preview.load();
+            }
+            return true;
+          };
+
+          const markDreamweaverPreviewPlaying = () => {
+            setIsDreamweaverPreviewPlaying(true);
+            setIsDreamweaverPreviewLoading(false);
+            setDreamweaverPreviewError('');
+            setDreamweaverPreviewNeedsGesture(false);
+          };
+
+          const playDreamweaverPreviewCandidates = async (preview, candidateList, retryContext = null) => {
+            if (dreamweaverPreviewPlayAttemptActiveRef.current) return false;
+            let lastError = null;
+            dreamweaverPreviewPlayIntentRef.current = true;
+            if (retryContext && (
+              dreamweaverPreviewCandidateKeyRef.current !== retryContext.candidateKey
+              || preview?.currentSrc !== retryContext.failedSource
+            )) {
+              dreamweaverPreviewRetryActiveRef.current = false;
+              dreamweaverPreviewRetryAllowedRef.current = false;
+              return false;
+            }
+            dreamweaverPreviewPlayAttemptActiveRef.current = true;
+            dreamweaverPreviewRetryActiveRef.current = true;
+            for (const candidate of candidateList) {
+              dreamweaverPreviewRetryAllowedRef.current = false;
+              if (!ensureDreamweaverPreviewSource(preview, candidate)) continue;
+              try {
+                dreamweaverPreviewRetryAllowedRef.current = true;
+                await preview.play();
+                dreamweaverPreviewSourceIdRef.current = String(candidate.id);
+                setDreamweaverPreviewSourceId(String(candidate.id));
+                if (retryContext && dreamweaverPreviewCandidateKeyRef.current !== retryContext.candidateKey) {
+                  preview.pause();
+                  dreamweaverPreviewPlayAttemptActiveRef.current = false;
+                  dreamweaverPreviewRetryActiveRef.current = false;
+                  dreamweaverPreviewRetryAllowedRef.current = false;
+                  return false;
+                }
+                if (preview.currentSrc !== candidate.previewUrl) {
+                  preview.pause();
+                  dreamweaverPreviewPlayAttemptActiveRef.current = false;
+                  dreamweaverPreviewRetryActiveRef.current = false;
+                  dreamweaverPreviewRetryAllowedRef.current = false;
+                  return false;
+                }
+                dreamweaverPreviewPlayAttemptActiveRef.current = false;
+                dreamweaverPreviewRetryActiveRef.current = false;
+                return true;
+              } catch (error) {
+                lastError = error;
+                if (error?.name === 'NotAllowedError') {
+                  dreamweaverPreviewSourceIdRef.current = String(candidate.id);
+                  setDreamweaverPreviewSourceId(String(candidate.id));
+                  setDreamweaverPreviewNeedsGesture(true);
+                  break;
+                }
+              }
+            }
+            dreamweaverPreviewPlayAttemptActiveRef.current = false;
+            dreamweaverPreviewRetryActiveRef.current = false;
+            dreamweaverPreviewRetryAllowedRef.current = false;
+            setIsDreamweaverPreviewPlaying(false);
+            setIsDreamweaverPreviewLoading(false);
+            setDreamweaverPreviewError(lastError?.name === 'NotAllowedError'
+              ? 'Playback is waiting for a browser-approved tap. Press play again to continue.'
+              : 'Preview audio is unavailable right now. You can still open Dreamweaver directly.');
+            return false;
+          };
 
           const toggleDreamweaverPreview = async () => {
             const preview = dreamweaverPreviewAudioRef.current;
-            if (!preview || !dreamweaverPreviewReady) return;
+            if (!preview || !dreamweaverPreviewCandidates.length) return;
             if (preview.paused) {
               trackMusicExperimentAction('listening', 'homepage_experiment_dreamweaver_preview', 'native');
-              try {
-                await preview.play();
-                setDreamweaverPreviewError('');
-              } catch {
-                setDreamweaverPreviewError('Preview audio is unavailable right now. You can still open Dreamweaver directly.');
-              }
+              dreamweaverPreviewRetryAllowedRef.current = true;
+              setDreamweaverPreviewError('');
+              setDreamweaverPreviewNeedsGesture(false);
+              setIsDreamweaverPreviewLoading(true);
+              const currentIndex = Math.max(0, dreamweaverPreviewCandidates.findIndex(mix => String(mix.id) === String(dreamweaverPreviewMix?.id || '')));
+              const orderedCandidates = currentIndex > 0
+                ? [...dreamweaverPreviewCandidates.slice(currentIndex), ...dreamweaverPreviewCandidates.slice(0, currentIndex)]
+                : dreamweaverPreviewCandidates;
+              await playDreamweaverPreviewCandidates(preview, orderedCandidates);
               return;
             }
             preview.pause();
           };
 
           useEffect(() => {
-            setDreamweaverPreviewError('');
+            dreamweaverPreviewCandidatesRef.current = dreamweaverPreviewCandidates;
+            dreamweaverPreviewCandidateKeyRef.current = dreamweaverPreviewCandidateKey;
+          }, [dreamweaverPreviewCandidateKey, dreamweaverPreviewCandidates]);
+
+          useEffect(() => {
+            dreamweaverPreviewSourceIdRef.current = String(dreamweaverPreviewSourceId || '');
+          }, [dreamweaverPreviewSourceId]);
+
+          useEffect(() => {
+            const preview = dreamweaverPreviewAudioRef.current;
+            if (!dreamweaverPreviewCandidates.length) {
+              dreamweaverPreviewSourceIdRef.current = '';
+              setDreamweaverPreviewSourceId('');
+              setDreamweaverPreviewError('');
+              setIsDreamweaverPreviewPlaying(false);
+              setIsDreamweaverPreviewLoading(false);
+              setDreamweaverPreviewNeedsGesture(false);
+              dreamweaverPreviewPlayIntentRef.current = false;
+              dreamweaverPreviewRetryActiveRef.current = false;
+              dreamweaverPreviewRetryAllowedRef.current = false;
+              if (preview) {
+                preview.pause();
+                preview.removeAttribute('src');
+                preview.load();
+              }
+              return;
+            }
+            if (!dreamweaverPreviewCandidates.some(mix => String(mix.id) === String(dreamweaverPreviewSourceId || ''))) {
+              dreamweaverPreviewSourceIdRef.current = String(dreamweaverPreviewCandidates[0].id);
+              setDreamweaverPreviewSourceId(String(dreamweaverPreviewCandidates[0].id));
+            }
+          }, [dreamweaverPreviewCandidateKey, dreamweaverPreviewSourceId]);
+
+          useEffect(() => {
+            const preview = dreamweaverPreviewAudioRef.current;
+            if (!preview) return;
+            const nextPreviewUrl = dreamweaverPreviewMix?.previewUrl || '';
+            const sourceChanged = nextPreviewUrl ? preview.currentSrc !== nextPreviewUrl : Boolean(preview.currentSrc);
+            if (!sourceChanged) return;
+            const internalSourceSwap = dreamweaverPreviewInternalSourceSwapRef.current;
+            dreamweaverPreviewInternalSourceSwapRef.current = false;
+            if (internalSourceSwap) return;
+            const shouldResumePlayback = dreamweaverPreviewPlayIntentRef.current;
             setIsDreamweaverPreviewPlaying(false);
-          }, [dreamweaverPreviewMix?.audioUrl]);
+            dreamweaverPreviewRetryAllowedRef.current = false;
+            if (!nextPreviewUrl) {
+              setIsDreamweaverPreviewLoading(false);
+              dreamweaverPreviewPlayIntentRef.current = false;
+              dreamweaverPreviewRetryActiveRef.current = false;
+              preview.pause();
+              preview.removeAttribute('src');
+              preview.load();
+              return;
+            }
+            preview.pause();
+            preview.src = nextPreviewUrl;
+            preview.load();
+            if (shouldResumePlayback) {
+              setIsDreamweaverPreviewLoading(true);
+              const startIndex = Math.max(0, dreamweaverPreviewCandidates.findIndex(mix => mix.previewUrl === nextPreviewUrl));
+              const resumeCandidates = startIndex > 0
+                ? [...dreamweaverPreviewCandidates.slice(startIndex), ...dreamweaverPreviewCandidates.slice(0, startIndex)]
+                : dreamweaverPreviewCandidates;
+              void playDreamweaverPreviewCandidates(preview, resumeCandidates);
+              return;
+            }
+            setIsDreamweaverPreviewLoading(false);
+            dreamweaverPreviewRetryActiveRef.current = false;
+          }, [dreamweaverPreviewCandidateKey, dreamweaverPreviewMix?.previewUrl]);
 
           const communityAction = async (payload, notice = '') => {
             if (!identityUser) {
@@ -3805,8 +4018,8 @@
                               alt={dreamweaverPreviewMix ? `${dreamweaverPreviewMix.title} Dreamweaver preview artwork` : 'HALO Dreamweaver preview artwork'}
                               loading="lazy"
                             />
-                            <span className={`halo-home-experiment__player-chip ${dreamweaverPreviewError ? 'halo-home-experiment__player-chip--unavailable' : dreamweaverPreviewReady ? 'halo-home-experiment__player-chip--ready' : 'halo-home-experiment__player-chip--standby'}`}>
-                              {dreamweaverPreviewError ? 'Preview unavailable' : dreamweaverPreviewReady ? 'Preview ready' : 'Signal standing by'}
+                            <span className={`halo-home-experiment__player-chip ${dreamweaverPreviewState === 'failed' ? 'halo-home-experiment__player-chip--unavailable' : dreamweaverPreviewState === 'playing' ? 'halo-home-experiment__player-chip--playing' : dreamweaverPreviewState === 'loading' ? 'halo-home-experiment__player-chip--loading' : dreamweaverPreviewState === 'ready' ? 'halo-home-experiment__player-chip--ready' : 'halo-home-experiment__player-chip--standby'}`}>
+                              {dreamweaverPreviewChipLabel}
                             </span>
                           </div>
 
@@ -3825,17 +4038,55 @@
                               ref={dreamweaverPreviewAudioRef}
                               className="halo-home-experiment__audio"
                               controls
-                              preload="none"
-                              src={dreamweaverPreviewMix?.audioUrl || undefined}
+                              preload="metadata"
+                              src={dreamweaverPreviewMix?.previewUrl || undefined}
                               aria-label="Dreamweaver homepage preview player"
-                              onPlay={() => {
-                                setIsDreamweaverPreviewPlaying(true);
-                                setDreamweaverPreviewError('');
+                              onLoadStart={() => {
+                                setIsDreamweaverPreviewLoading(true);
+                                setDreamweaverPreviewNeedsGesture(false);
                               }}
-                              onPause={() => setIsDreamweaverPreviewPlaying(false)}
-                              onEnded={() => setIsDreamweaverPreviewPlaying(false)}
+                              onCanPlay={() => {
+                                setIsDreamweaverPreviewLoading(false);
+                                setDreamweaverPreviewNeedsGesture(false);
+                              }}
+                              onPlay={markDreamweaverPreviewPlaying}
+                              onPlaying={markDreamweaverPreviewPlaying}
+                              onWaiting={() => {
+                                if (!dreamweaverPreviewNeedsGesture) setIsDreamweaverPreviewLoading(true);
+                              }}
+                              onPause={() => {
+                                setIsDreamweaverPreviewPlaying(false);
+                                if (!dreamweaverPreviewRetryActiveRef.current) {
+                                  setIsDreamweaverPreviewLoading(false);
+                                  dreamweaverPreviewPlayIntentRef.current = false;
+                                }
+                              }}
+                              onEnded={() => {
+                                setIsDreamweaverPreviewPlaying(false);
+                                setIsDreamweaverPreviewLoading(false);
+                                dreamweaverPreviewPlayIntentRef.current = false;
+                                dreamweaverPreviewRetryActiveRef.current = false;
+                                dreamweaverPreviewRetryAllowedRef.current = false;
+                              }}
                               onError={() => {
                                 setIsDreamweaverPreviewPlaying(false);
+                                setIsDreamweaverPreviewLoading(false);
+                                setDreamweaverPreviewNeedsGesture(false);
+                                const preview = dreamweaverPreviewAudioRef.current;
+                                const failedSource = preview?.currentSrc || '';
+                                const currentCandidates = dreamweaverPreviewCandidatesRef.current;
+                                const failedIndex = currentCandidates.findIndex(mix => mix.previewUrl === failedSource);
+                                const selectedIndex = currentCandidates.findIndex(mix => String(mix.id) === dreamweaverPreviewSourceIdRef.current);
+                                const sourceIndex = failedIndex >= 0 ? failedIndex : selectedIndex;
+                                const nextCandidates = sourceIndex >= 0 ? currentCandidates.slice(sourceIndex + 1) : currentCandidates.slice(1);
+                                if (dreamweaverPreviewRetryAllowedRef.current && !dreamweaverPreviewRetryActiveRef.current && nextCandidates.length) {
+                                  dreamweaverPreviewRetryActiveRef.current = true;
+                                  dreamweaverPreviewRetryAllowedRef.current = false;
+                                  setDreamweaverPreviewError('This preview source failed. Loading the next Dreamweaver signal.');
+                                  setIsDreamweaverPreviewLoading(true);
+                                  void playDreamweaverPreviewCandidates(preview, nextCandidates, { candidateKey: dreamweaverPreviewCandidateKeyRef.current, failedSource });
+                                  return;
+                                }
                                 setDreamweaverPreviewError('Preview audio is unavailable right now. You can still open Dreamweaver directly.');
                               }}
                             ></audio>
@@ -3850,7 +4101,7 @@
                             disabled={!dreamweaverPreviewReady}
                             aria-controls="dreamweaver-homepage-preview"
                           >
-                            {isDreamweaverPreviewPlaying ? 'Pause preview' : 'Play preview'}
+                            {dreamweaverPreviewState === 'loading' ? 'Loading preview…' : isDreamweaverPreviewPlaying ? 'Pause preview' : 'Play preview'}
                           </button>
                           <a
                             href="/dreamweaver/"

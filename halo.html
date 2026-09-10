@@ -2957,19 +2957,33 @@
 
           useEffect(() => {
             const preview = dreamweaverPreviewAudioRef.current;
-            setIsDreamweaverPreviewPlaying(false);
-            setIsDreamweaverPreviewLoading(false);
             setDreamweaverPreviewNeedsGesture(false);
-            dreamweaverPreviewRetryActiveRef.current = false;
-            dreamweaverPreviewRetryAllowedRef.current = false;
             if (!preview) return;
-            preview.pause();
-            if (dreamweaverPreviewMix?.previewUrl) {
-              if (preview.src !== dreamweaverPreviewMix.previewUrl) preview.src = dreamweaverPreviewMix.previewUrl;
-            } else {
+            const nextPreviewUrl = dreamweaverPreviewMix?.previewUrl || '';
+            const sourceChanged = nextPreviewUrl ? preview.currentSrc !== nextPreviewUrl : Boolean(preview.currentSrc);
+            if (!sourceChanged) return;
+            const shouldResumePlayback = !preview.paused || dreamweaverPreviewRetryActiveRef.current;
+            setIsDreamweaverPreviewPlaying(false);
+            dreamweaverPreviewRetryAllowedRef.current = false;
+            if (!nextPreviewUrl) {
+              setIsDreamweaverPreviewLoading(false);
+              dreamweaverPreviewRetryActiveRef.current = false;
+              preview.pause();
               preview.removeAttribute('src');
+              preview.load();
+              return;
             }
+            preview.pause();
+            preview.src = nextPreviewUrl;
             preview.load();
+            if (shouldResumePlayback) {
+              setIsDreamweaverPreviewLoading(true);
+              dreamweaverPreviewRetryAllowedRef.current = true;
+              void preview.play().catch(() => undefined);
+              return;
+            }
+            setIsDreamweaverPreviewLoading(false);
+            dreamweaverPreviewRetryActiveRef.current = false;
           }, [dreamweaverPreviewMix?.previewUrl]);
 
           const communityAction = async (payload, notice = '') => {
@@ -4031,6 +4045,7 @@
                                 const failedIndex = dreamweaverPreviewCandidates.findIndex(mix => mix.previewUrl === failedSource);
                                 const nextCandidates = failedIndex >= 0 ? dreamweaverPreviewCandidates.slice(failedIndex + 1) : [];
                                 if (dreamweaverPreviewRetryAllowedRef.current && nextCandidates.length) {
+                                  dreamweaverPreviewRetryAllowedRef.current = false;
                                   setDreamweaverPreviewError('This preview source failed. Loading the next Dreamweaver signal.');
                                   setIsDreamweaverPreviewLoading(true);
                                   void playDreamweaverPreviewCandidates(preview, nextCandidates, { candidateKey: dreamweaverPreviewCandidateKeyRef.current, failedSource });

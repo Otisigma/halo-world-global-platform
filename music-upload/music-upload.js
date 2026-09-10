@@ -132,6 +132,7 @@ function renderResults() {
     const attentionNote = result.needsAttention
       ? `<p class="result-note needs-attention">${escapeHtml(result.needsAttention)}</p>`
       : `<p class="result-note">${escapeHtml(result.summary)}</p>`;
+    const nextStepNote = result.nextStep ? `<p class="result-next-step">${escapeHtml(result.nextStep)}</p>` : "";
     return `
       <article class="result-card">
         <div class="result-topline">
@@ -143,6 +144,7 @@ function renderResults() {
           <span>${escapeHtml(result.surfaceLabel)}</span>
         </div>
         ${attentionNote}
+        ${nextStepNote}
         <div class="route-grid">${routeGrid}</div>
       </article>
     `;
@@ -205,6 +207,17 @@ async function apiJson(url, payload, method = "POST") {
   return data;
 }
 
+async function confirmPersistedAsset(url, label) {
+  const response = await fetch(url, {
+    method: "HEAD",
+    credentials: "same-origin",
+    headers: { Accept: "*/*" },
+  });
+  if (!response.ok) throw new Error(`HALO could not confirm persisted ${label}. Please retry.`);
+  const size = Number(response.headers.get("content-length") || "0");
+  if (!Number.isFinite(size) || size < 1) throw new Error(`HALO could not confirm persisted ${label}. Please retry.`);
+}
+
 async function uploadArtwork(songId, file) {
   const contentType = normalizeArtworkType(file);
   if (!contentType) throw new Error("Choose a JPEG, PNG, or WebP image file for cover art.");
@@ -232,7 +245,7 @@ async function uploadArtwork(songId, file) {
     },
   });
   artworkUploadUi.progress(100, "Finishing artwork upload…");
-  await apiJson("/api/song-catalog/artwork", {
+  const finalized = await apiJson("/api/song-catalog/artwork", {
     action: "finalize_upload",
     songId,
     uploadId,
@@ -241,7 +254,11 @@ async function uploadArtwork(songId, file) {
     filename: file.name,
     contentType,
   });
-  artworkUploadUi.success("Cover art uploaded and attached.", true);
+  const artworkUrl = finalized.artwork_url || finalized.artworkUrl;
+  if (!finalized.persisted || !artworkUrl) throw new Error("HALO could not confirm cover art persistence. Please retry.");
+  await confirmPersistedAsset(artworkUrl, "cover art");
+  artworkUploadUi.success("Cover art locked into HALO storage.", true);
+  return artworkUrl;
 }
 
 async function uploadAudio(songId, versionId, file, position, total) {
@@ -272,7 +289,7 @@ async function uploadAudio(songId, versionId, file, position, total) {
     },
   });
   audioUploadUi.progress(100, `Finishing ${file.name}…`);
-  await apiJson("/api/song-catalog/audio", {
+  const finalized = await apiJson("/api/song-catalog/audio", {
     action: "finalize_upload",
     songId,
     versionId,
@@ -283,8 +300,10 @@ async function uploadAudio(songId, versionId, file, position, total) {
     contentType,
     durationSeconds: await audioDuration(file),
   });
-  audioUploadUi.success(`${file.name} uploaded and attached.`, true);
-  return `/api/song-catalog/audio?versionId=${versionId}`;
+  if (!finalized.persisted || !finalized.audioUrl) throw new Error(`HALO could not confirm persistence for ${file.name}. Please retry.`);
+  await confirmPersistedAsset(finalized.audioUrl, "audio");
+  audioUploadUi.success(`${file.name} is locked into HALO storage.`, true);
+  return finalized.audioUrl;
 }
 
 async function loadCatalogSong(songId) {
@@ -344,10 +363,10 @@ async function processPackage({ artistName, title, albumTitle, genre, isrc, upc,
     pipelineStatus: pipeline.pipelineStatus,
     departments: pipeline.departments,
     summary: finalStage === "dreamweaver_in_progress"
-      ? "Built and routed into Dreamweaver-ready processing."
+      ? "Audio/artwork persisted and locked. Package moved into Dreamweaver build processing."
       : file
-        ? "Validated and routed, but still waiting on cover art or missing assets."
-        : "Validated and routed for Dreamweaver follow-up while audio and artwork are still being gathered.",
+        ? "Audio persisted and locked. Waiting on cover art or missing assets."
+        : "Metadata routed. Add audio/artwork to lock source assets into HALO.",
     needsAttention: finalStage === "needs_assets"
       ? file
         ? "Needs attention: add cover art or more approved assets before the package can move deeper into the build."
@@ -355,6 +374,9 @@ async function processPackage({ artistName, title, albumTitle, genre, isrc, upc,
       : issueCount
         ? `Needs attention: Dreamweaver review found ${issueCount} blocking item${issueCount === 1 ? "" : "s"} in the catalog package.`
         : "",
+    nextStep: finalStage === "dreamweaver_in_progress"
+      ? "Next: Dreamweaver now processes this locked package. You can close this page or upload another song."
+      : "Next: Upload remaining assets. This package is saved; remove or replace files only if needed.",
   };
 }
 
@@ -418,12 +440,13 @@ async function handleSubmit(event) {
       });
       state.results = [result, ...state.results];
       renderResults();
-      setMessage(`${result.title} is now ${STAGE_LABEL[result.pipelineStatus] || result.pipelineStatus}.`);
+      setMessage(`${result.title} is ${STAGE_LABEL[result.pipelineStatus] || result.pipelineStatus}. Locked-in uploads are now stored in HALO.`);
     }
     elements.form.reset();
     renderQueue();
     audioUploadUi.idle("Upload complete. Add the next intake package when ready.");
     artworkUploadUi.idle("Artwork attached where supplied.");
+    setMessage(`Upload complete: ${jobs.length} package${jobs.length === 1 ? "" : "s"} saved. Files marked locked-in are persisted in HALO and should be removed only if needed.`);
   } catch (error) {
     audioUploadUi.fail(error.message);
     artworkUploadUi.fail(error.message);

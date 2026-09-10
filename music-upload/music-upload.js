@@ -356,7 +356,7 @@ async function processPackage({ artistName, title, albumTitle, genre, isrc, upc,
   }
 
   if (artworkFile) await uploadArtwork(created.songId, artworkFile);
-  const finalStage = artworkFile ? "dreamweaver_in_progress" : "needs_assets";
+  const finalStage = artworkFile || !file ? "dreamweaver_in_progress" : "needs_assets";
   const pipeline = await apiJson("/api/unified-upload", { action: "advance_pipeline", songId: created.songId, toStage: finalStage });
   const song = await loadCatalogSong(created.songId).catch(() => null);
   const issueCount = Array.isArray(song?.metadataIssues) ? song.metadataIssues.filter(issue => issue.level === "required").length : 0;

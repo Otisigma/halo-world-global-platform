@@ -2962,7 +2962,7 @@
             const nextPreviewUrl = dreamweaverPreviewMix?.previewUrl || '';
             const sourceChanged = nextPreviewUrl ? preview.currentSrc !== nextPreviewUrl : Boolean(preview.currentSrc);
             if (!sourceChanged) return;
-            const shouldResumePlayback = !preview.paused || dreamweaverPreviewRetryActiveRef.current;
+            const shouldResumePlayback = !preview.paused && !dreamweaverPreviewRetryActiveRef.current;
             setIsDreamweaverPreviewPlaying(false);
             dreamweaverPreviewRetryAllowedRef.current = false;
             if (!nextPreviewUrl) {

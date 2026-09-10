@@ -1,3 +1,5 @@
+import { normalizeHttpsList } from "/music-upload/link-validation.js";
+
 const $ = selector => document.querySelector(selector);
 const uploadHelper = window.HaloUploadProgress;
 const AUDIO_CHUNK_BYTES = 4 * 1024 * 1024;
@@ -90,18 +92,6 @@ function renderQueue() {
     </div>
   `).join("");
   if (files.length === 1 && !$("#title").value.trim()) $("#title").value = files[0].name.replace(/\.[^.]+$/, "");
-}
-
-function normalizeHttpsList(rawValue) {
-  return String(rawValue || "")
-    .split(/\n+/)
-    .map(value => value.trim())
-    .filter(Boolean)
-    .map(value => {
-      const url = new URL(value);
-      if (url.protocol !== "https:" || url.username || url.password) throw new Error("Use https:// links only for official and video sources.");
-      return url.toString();
-    });
 }
 
 function buildNotes(baseTitle, audioFile) {
@@ -338,28 +328,12 @@ async function processPackage({ artistName, title, albumTitle, genre, isrc, upc,
   if (file) {
     const versionId = created.versionIds?.sale_master || created.versionIds?.radio_edit;
     if (!versionId) throw new Error("The intake package did not provision an audio version.");
-    const uploadedAudioUrl = await uploadAudio(created.songId, versionId, file, position, total);
-    if (created.versionIds?.radio_edit && created.versionIds.radio_edit !== versionId) {
-      await apiJson("/api/song-catalog", {
-        action: "save_version",
-        songId: created.songId,
-        versionId: created.versionIds.radio_edit,
-        versionType: "radio_edit",
-        label: "Radio edit",
-        masteringStatus: "queued",
-        audioUrl: uploadedAudioUrl,
-        cleanLyrics: !explicitLyrics,
-        saleEnabled: false,
-        notes: "Mirrors the uploaded intake master until a dedicated radio edit is delivered.",
-      });
-    }
+    await uploadAudio(created.songId, versionId, file, position, total);
   }
 
   if (artworkFile) await uploadArtwork(created.songId, artworkFile);
-  const finalStage = file ? (artworkFile ? "dreamweaver_in_progress" : "needs_assets") : "processing";
-  const pipeline = finalStage === "processing"
-    ? await apiJson(`/api/unified-upload?songId=${encodeURIComponent(created.songId)}`, null, "GET")
-    : await apiJson("/api/unified-upload", { action: "advance_pipeline", songId: created.songId, toStage: finalStage });
+  const finalStage = file && artworkFile ? "dreamweaver_in_progress" : "needs_assets";
+  const pipeline = await apiJson("/api/unified-upload", { action: "advance_pipeline", songId: created.songId, toStage: finalStage });
   const song = await loadCatalogSong(created.songId).catch(() => null);
   const issueCount = Array.isArray(song?.metadataIssues) ? song.metadataIssues.filter(issue => issue.level === "required").length : 0;
   return {
@@ -371,11 +345,13 @@ async function processPackage({ artistName, title, albumTitle, genre, isrc, upc,
     departments: pipeline.departments,
     summary: finalStage === "dreamweaver_in_progress"
       ? "Built and routed into Dreamweaver-ready processing."
-      : finalStage === "processing"
-        ? "Validated and queued for Dreamweaver review while source material is gathered."
-        : "Received and routed, but still waiting on cover art or missing assets.",
+      : file
+        ? "Validated and routed, but still waiting on cover art or missing assets."
+        : "Validated and routed for Dreamweaver follow-up while audio and artwork are still being gathered.",
     needsAttention: finalStage === "needs_assets"
-      ? "Needs attention: add cover art or more approved assets before the package can move deeper into the build."
+      ? file
+        ? "Needs attention: add cover art or more approved assets before the package can move deeper into the build."
+        : "Needs attention: add audio or cover art when the source assets are ready so the package can move from intake review into the build."
       : issueCount
         ? `Needs attention: Dreamweaver review found ${issueCount} blocking item${issueCount === 1 ? "" : "s"} in the catalog package.`
         : "",

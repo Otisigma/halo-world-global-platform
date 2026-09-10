@@ -99,8 +99,14 @@
           <label><span>UPC</span><input id="upc" maxlength="24" placeholder="Optional release UPC"></label>
           <label><span>Rights</span><select id="rightsStatus"><option value="needs_review">Needs review</option><option value="cleared">Cleared</option><option value="disputed">Disputed</option></select></label>
           <label><span>Sale status</span><select id="saleStatus"><option value="for_sale">For sale</option><option value="coming_soon">Coming soon</option><option value="not_for_sale">Not for sale</option></select></label>
-          <label class="wide-field"><span>Official link</span><input id="officialLink" type="url" inputmode="url" placeholder="https://official-release-link.example"></label>
-          <label class="wide-field"><span>Video links</span><textarea id="videoLinks" maxlength="1600" rows="3" placeholder="One https:// link per line"></textarea></label>
+          <div class="wide-field field-group">
+            <label for="officialLink">Official link</label>
+            <input id="officialLink" type="url" inputmode="url" placeholder="https://official-release-link.example">
+          </div>
+          <div class="wide-field field-group">
+            <label for="videoLinks">Video links</label>
+            <textarea id="videoLinks" maxlength="1600" rows="3" placeholder="One https:// link per line"></textarea>
+          </div>
           <label class="check-label"><input id="explicitLyrics" type="checkbox"><span>Explicit lyrics</span></label>
 
           <fieldset class="wide-field route-fieldset">

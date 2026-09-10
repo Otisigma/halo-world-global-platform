@@ -1,5 +1,7 @@
+import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
+import { normalizeHttpsList } from "../music-upload/link-validation.js";
 
 const root = resolve(import.meta.dirname, "..");
 const read = path => readFile(resolve(root, path), "utf8");
@@ -37,3 +39,19 @@ if (failures.length) {
 } else {
   console.log(`\nMusic upload contracts: ${checks.length}/${checks.length} checks passed.`);
 }
+
+assert.deepEqual(
+  normalizeHttpsList("https://halo.world/release\nhttps://www.youtube.com/watch?v=halo"),
+  ["https://halo.world/release", "https://www.youtube.com/watch?v=halo"],
+  "link validation must preserve valid https official and video links"
+);
+assert.throws(
+  () => normalizeHttpsList("http://halo.world/release"),
+  /https:\/\//,
+  "link validation must reject non-https sources"
+);
+assert.throws(
+  () => normalizeHttpsList("https://user@halo.world/release"),
+  /https:\/\//,
+  "link validation must reject credential-bearing URLs"
+);

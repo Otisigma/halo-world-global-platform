@@ -7,6 +7,7 @@
     "dev": "node server.js",
     "diagnose": "node deploy/diagnostics.js",
     "deploy:feedback": "node scripts/deploy-health-contracts.mjs",
+    "music-upload:watchdog": "node scripts/music-upload-contracts.mjs",
     "halo-signal-check": "node scripts/live-connected-satellite-contracts.mjs",
     "redirect-loop-check": "node scripts/redirect-loop-contracts.mjs",
     "satellite:verify": "node scripts/live-connected-satellite-contracts.mjs",

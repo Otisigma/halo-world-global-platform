@@ -1754,6 +1754,7 @@
           const audioCtxRef = useRef(null);
           const canvasRef = useRef(null);
           const dreamweaverPreviewAudioRef = useRef(null);
+          const dreamweaverPreviewCandidatesRef = useRef([]);
           const dreamweaverPreviewCandidateKeyRef = useRef('');
           const dreamweaverPreviewInternalSourceSwapRef = useRef(false);
           const dreamweaverPreviewPlayIntentRef = useRef(false);
@@ -2934,8 +2935,9 @@
           };
 
           useEffect(() => {
+            dreamweaverPreviewCandidatesRef.current = dreamweaverPreviewCandidates;
             dreamweaverPreviewCandidateKeyRef.current = dreamweaverPreviewCandidateKey;
-          }, [dreamweaverPreviewCandidateKey]);
+          }, [dreamweaverPreviewCandidateKey, dreamweaverPreviewCandidates]);
 
           useEffect(() => {
             const preview = dreamweaverPreviewAudioRef.current;
@@ -4058,8 +4060,9 @@
                                 setDreamweaverPreviewNeedsGesture(false);
                                 const preview = dreamweaverPreviewAudioRef.current;
                                 const failedSource = preview?.currentSrc || '';
-                                const failedIndex = dreamweaverPreviewCandidates.findIndex(mix => mix.previewUrl === failedSource);
-                                const nextCandidates = failedIndex >= 0 ? dreamweaverPreviewCandidates.slice(failedIndex + 1) : [];
+                                const currentCandidates = dreamweaverPreviewCandidatesRef.current;
+                                const failedIndex = currentCandidates.findIndex(mix => mix.previewUrl === failedSource);
+                                const nextCandidates = failedIndex >= 0 ? currentCandidates.slice(failedIndex + 1) : [];
                                 if (dreamweaverPreviewRetryAllowedRef.current && nextCandidates.length) {
                                   dreamweaverPreviewRetryAllowedRef.current = false;
                                   setDreamweaverPreviewError('This preview source failed. Loading the next Dreamweaver signal.');

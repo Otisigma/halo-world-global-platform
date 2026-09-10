@@ -356,8 +356,10 @@ async function processPackage({ artistName, title, albumTitle, genre, isrc, upc,
   }
 
   if (artworkFile) await uploadArtwork(created.songId, artworkFile);
-  const finalStage = artworkFile || !file ? "dreamweaver_in_progress" : "needs_assets";
-  const pipeline = await apiJson("/api/unified-upload", { action: "advance_pipeline", songId: created.songId, toStage: finalStage });
+  const finalStage = file ? (artworkFile ? "dreamweaver_in_progress" : "needs_assets") : "processing";
+  const pipeline = finalStage === "processing"
+    ? await apiJson(`/api/unified-upload?songId=${encodeURIComponent(created.songId)}`, null, "GET")
+    : await apiJson("/api/unified-upload", { action: "advance_pipeline", songId: created.songId, toStage: finalStage });
   const song = await loadCatalogSong(created.songId).catch(() => null);
   const issueCount = Array.isArray(song?.metadataIssues) ? song.metadataIssues.filter(issue => issue.level === "required").length : 0;
   return {
@@ -369,7 +371,9 @@ async function processPackage({ artistName, title, albumTitle, genre, isrc, upc,
     departments: pipeline.departments,
     summary: finalStage === "dreamweaver_in_progress"
       ? "Built and routed into Dreamweaver-ready processing."
-      : "Received and routed, but still waiting on cover art or missing assets.",
+      : finalStage === "processing"
+        ? "Validated and queued for Dreamweaver review while source material is gathered."
+        : "Received and routed, but still waiting on cover art or missing assets.",
     needsAttention: finalStage === "needs_assets"
       ? "Needs attention: add cover art or more approved assets before the package can move deeper into the build."
       : issueCount

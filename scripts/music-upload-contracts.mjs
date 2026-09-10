@@ -62,7 +62,10 @@ const checks = [
     signals: [
       "let uploadHelper = window.HaloUploadProgress",
       "function loadUploadHelperScript()",
-      "const script = document.createElement(\"script\")",
+      "RUNTIME_LOAD_TIMEOUT_MS",
+      "RUNTIME_LOAD_ATTEMPTS",
+      "function injectUploadRuntimeScript",
+      "function ensureUploadRuntime()",
       "HALO upload runtime did not load",
     ],
     diagnose: "Bundle stage is broken: music-upload.js is not resilient to missing/stale upload-progress runtime wiring.",
@@ -133,6 +136,9 @@ const checks = [
     description: "client confirms persisted assets before reporting lock-in success",
     signals: [
       "async function confirmPersistedAsset",
+      "fetchWithTimeout(",
+      "AbortController",
+      "PERSISTENCE_CHECK_TIMEOUT_MS",
       'method: "HEAD"',
       'Range: "bytes=0-0"',
       "!finalized.persisted || !finalized.lockedIn",

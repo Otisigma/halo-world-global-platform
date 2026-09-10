@@ -21,6 +21,7 @@ const checks = [
   [page.includes("upload-pipeline.css") && page.includes("upload-pipeline.js"), "page loads its own CSS and JS"],
   [page.includes("dept-tab") && page.includes('data-dept="all"') && page.includes('data-dept="dreamweaver"') && page.includes('data-dept="radio"') && page.includes('data-dept="sales"'), "page provides department filter tabs for all, Dream Weaver, radio, and sales"],
   [page.includes("pipelineBoard") && page.includes("stageDialog") && page.includes("stageSelect"), "page includes the pipeline board and stage dialog elements"],
+  [page.includes("pipeline-insights") && page.includes("pipelineTimeline") && page.includes("pipelineGuidanceCopy") && page.includes("pipelineTrustSignal"), "page includes a live pipeline insights panel with guidance and trust signals"],
   [page.includes("/song-catalog/") && page.includes("Open Song Catalog"), "page links back to the song catalog for one-upload entry"],
   [page.includes("pipeline-legend") && page.includes("Needs Assets") && page.includes("Dream Weaver") && page.includes("Ready for Radio"), "page shows the pipeline stage legend"],
 
@@ -29,11 +30,14 @@ const checks = [
   [client.includes("dept-tab") && client.includes("loadPipeline"), "client reloads pipeline when a department tab is clicked"],
   [client.includes("set_stage") && client.includes("stageSubmitButton"), "client submits stage transitions to the API"],
   [client.includes("radioTracks") && client.includes("radio-linked"), "client shows radio track link status on each pipeline item"],
+  [client.includes("renderInsights") && client.includes("STAGE_GUIDANCE") && client.includes("pipelineStoryCopy") && client.includes("renderTimeline"), "client drives animated guidance content from live pipeline runtime state"],
   [client.includes("identity:login") && client.includes("identity:logout"), "client responds to authentication events"],
 
   // CSS
   [styles.includes("stage-uploaded") && styles.includes("stage-published") && styles.includes("stage-dreamweaver_in_progress"), "CSS defines visual chips for all pipeline stages"],
   [styles.includes("dept-tab.is-active") && styles.includes("pipeline-item"), "CSS styles the department tabs and pipeline item cards"],
+  [styles.includes("pipeline-shell") && styles.includes("pipeline-insights") && styles.includes("story-signal") && styles.includes("@keyframes storyPulse"), "CSS uses dead space for animated pipeline guidance panels"],
+  [styles.includes("grid-row: 3") && styles.includes("grid-row: 4") && styles.includes("text-overflow: ellipsis"), "CSS keeps mobile pipeline cards readable and non-overlapping"],
 
   // API function
   [api.includes("PIPELINE_STAGES") && api.includes('"uploaded"') && api.includes('"dreamweaver_in_progress"') && api.includes('"ready_for_radio"') && api.includes('"published"'), "API defines the full set of valid pipeline stages"],

@@ -20,6 +20,14 @@ const elements = {
   stageSubmitButton: $("#stageSubmitButton"),
   stageCloseButton: $("#stageCloseButton"),
   stageDialogSongName: $("#stageDialogSongName"),
+  storyCopy: $("#pipelineStoryCopy"),
+  storySignal: $("#pipelineStorySignal"),
+  timeline: $("#pipelineTimeline"),
+  trackTitle: $("#pipelineTrackTitle"),
+  trackMeta: $("#pipelineTrackMeta"),
+  trustSignal: $("#pipelineTrustSignal"),
+  guidanceCopy: $("#pipelineGuidanceCopy"),
+  counts: $("#pipelineCounts"),
 };
 
 const escapeHtml = value =>
@@ -34,6 +42,28 @@ const STAGE_LABEL = {
   ready_for_sale: "Ready for Sale",
   approved: "Approved",
   published: "Published",
+};
+
+const STAGE_ORDER = [
+  "uploaded",
+  "processing",
+  "needs_assets",
+  "dreamweaver_in_progress",
+  "ready_for_radio",
+  "ready_for_sale",
+  "approved",
+  "published",
+];
+
+const STAGE_GUIDANCE = {
+  uploaded: "Package created. Confirm source details and route ownership before deeper processing.",
+  processing: "Validation is active. Keep metadata complete and rights status current for handoff confidence.",
+  needs_assets: "Action needed: add missing audio/artwork so the pipeline can keep moving without lock delays.",
+  dreamweaver_in_progress: "Dream Weaver is assembling downstream presentation and contextual rollout assets.",
+  ready_for_radio: "Ready for radio programming sync and on-air placement decisions.",
+  ready_for_sale: "Prepare buy/stream links and release timing so commerce can publish cleanly.",
+  approved: "Approved by reviewers. Final publication checks and scheduling are next.",
+  published: "Published and fan-facing. Monitor engagement and keep follow-up campaigns aligned.",
 };
 
 const STAGE_CSS_CLASS = {
@@ -69,6 +99,7 @@ async function loadPipeline() {
   } catch (error) {
     elements.loading.hidden = false;
     elements.loading.textContent = error.message;
+    renderInsights();
   } finally {
     elements.shell.setAttribute("aria-busy", "false");
   }
@@ -113,17 +144,100 @@ function render() {
   elements.loading.hidden = true;
   if (!state.authenticated) {
     elements.loading.hidden = false;
-  elements.loading.textContent = "Sign in to view the upload pipeline.";
-  elements.board.querySelectorAll(".pipeline-item").forEach(el => el.remove());
+    elements.loading.textContent = "Sign in to view the upload pipeline.";
+    elements.board.querySelectorAll(".pipeline-item").forEach(el => el.remove());
+    renderInsights();
     return;
   }
   if (!state.items.length) {
     elements.empty.hidden = false;
     elements.board.querySelectorAll(".pipeline-item").forEach(el => el.remove());
+    renderInsights();
     return;
   }
   elements.empty.hidden = true;
   elements.board.innerHTML = state.items.map(renderItem).join("");
+  renderInsights();
+}
+
+function nextStage(stage) {
+  const index = STAGE_ORDER.indexOf(stage);
+  if (index < 0 || index >= STAGE_ORDER.length - 1) return null;
+  return STAGE_ORDER[index + 1];
+}
+
+function latestByUpdatedAt(items) {
+  return [...items].sort((a, b) => {
+    const aTs = Date.parse(a.pipelineUpdatedAt || "") || 0;
+    const bTs = Date.parse(b.pipelineUpdatedAt || "") || 0;
+    return bTs - aTs;
+  })[0] || null;
+}
+
+function renderTimeline(stage) {
+  elements.timeline.innerHTML = STAGE_ORDER.map(step => {
+    const isActive = step === stage;
+    const isComplete = STAGE_ORDER.indexOf(step) <= STAGE_ORDER.indexOf(stage);
+    return `<li class="timeline-step${isActive ? " is-active" : ""}${isComplete ? " is-complete" : ""}">
+      <span class="timeline-dot" aria-hidden="true"></span>
+      <span>${escapeHtml(STAGE_LABEL[step] || step)}</span>
+    </li>`;
+  }).join("");
+}
+
+function renderCounts(items) {
+  const counts = STAGE_ORDER.map(stage => ({
+    stage,
+    count: items.filter(item => item.pipelineStatus === stage).length,
+  })).filter(item => item.count > 0);
+  if (!counts.length) {
+    elements.counts.innerHTML = "<li>No staged packages yet.</li>";
+    return;
+  }
+  elements.counts.innerHTML = counts.map(item => `<li><span>${escapeHtml(STAGE_LABEL[item.stage] || item.stage)}</span><strong>${item.count}</strong></li>`).join("");
+}
+
+function renderInsights() {
+  if (!state.authenticated) {
+    elements.storyCopy.textContent = "Sign in to activate live stage storytelling, counts, and guided next steps.";
+    elements.storySignal.className = "story-signal";
+    elements.trackTitle.textContent = "Sign in required";
+    elements.trackMeta.textContent = "Authentication unlocks the active song board and department guidance.";
+    elements.trustSignal.textContent = "Trust signal: awaiting authenticated pipeline data.";
+    elements.guidanceCopy.textContent = "After sign in, use each department tab to review exactly what needs action.";
+    renderTimeline("uploaded");
+    renderCounts([]);
+    return;
+  }
+  if (!state.items.length) {
+    elements.storyCopy.textContent = "No active songs yet. The board is ready for a new upload package from Music Upload or Song Catalog.";
+    elements.storySignal.className = "story-signal";
+    elements.trackTitle.textContent = "No active package yet";
+    elements.trackMeta.textContent = "Once uploaded, HALO will stream status updates here and guide each next stage.";
+    elements.trustSignal.textContent = "Trust signal: no persistence confirmations yet.";
+    elements.guidanceCopy.textContent = "Start in Music Upload, then return here to guide stage-by-stage progression.";
+    renderTimeline("uploaded");
+    renderCounts([]);
+    return;
+  }
+  const current = latestByUpdatedAt(state.items);
+  const stage = current?.pipelineStatus || "uploaded";
+  const next = nextStage(stage);
+  const updated = current?.pipelineUpdatedAt ? new Date(current.pipelineUpdatedAt).toLocaleString() : "just now";
+  const linkedCount = Number(current?.radioTracks?.length || 0);
+  const trustMessage = stage === "published" || stage === "dreamweaver_in_progress" || stage === "ready_for_radio"
+    ? "Trust signal: persistence-confirmed package is moving through the shared pipeline."
+    : "Trust signal: wait for persistence-confirmed assets before final lock-in.";
+  elements.storyCopy.textContent = STAGE_GUIDANCE[stage] || "HALO is tracking this package in the unified pipeline.";
+  elements.storySignal.className = `story-signal stage-${stage}`;
+  elements.trackTitle.textContent = current?.title || "Untitled package";
+  elements.trackMeta.textContent = `${current?.artistName || "Unknown artist"} · ${updated} · ${linkedCount} radio link${linkedCount === 1 ? "" : "s"}`;
+  elements.trustSignal.textContent = trustMessage;
+  elements.guidanceCopy.textContent = next
+    ? `Next recommended stage: ${STAGE_LABEL[next] || next}. Confirm assets/metadata, then move the stage when ready.`
+    : "This package is at the final stage. Monitor fan-facing performance and downstream actions.";
+  renderTimeline(stage);
+  renderCounts(state.items);
 }
 
 function openStageDialog(songId, songTitle, currentStage) {
@@ -190,6 +304,7 @@ window.addEventListener("identity:logout", () => {
   elements.loading.textContent = "Sign in to view the upload pipeline.";
   elements.empty.hidden = true;
   elements.board.querySelectorAll(".pipeline-item").forEach(el => el.remove());
+  renderInsights();
 });
 
 loadPipeline();

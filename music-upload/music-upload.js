@@ -2,38 +2,66 @@ import { normalizeHttpsList } from "/music-upload/link-validation.js";
 
 const $ = selector => document.querySelector(selector);
 let uploadHelperLoadPromise = null;
+const RUNTIME_SCRIPT_SELECTOR = 'script[src*="/upload-progress.js"]';
+const RUNTIME_LOAD_TIMEOUT_MS = 6000;
+const RUNTIME_LOAD_ATTEMPTS = 3;
+const RUNTIME_RETRY_DELAY_MS = 400;
+const PERSISTENCE_CHECK_TIMEOUT_MS = 10000;
+
+function wait(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function waitForUploadRuntime(timeoutMs = RUNTIME_LOAD_TIMEOUT_MS) {
+  if (window.HaloUploadProgress) return Promise.resolve(window.HaloUploadProgress);
+  return new Promise((resolve, reject) => {
+    const start = Date.now();
+    const check = () => {
+      if (window.HaloUploadProgress) {
+        resolve(window.HaloUploadProgress);
+        return;
+      }
+      if (Date.now() - start >= timeoutMs) {
+        reject(new Error("Upload runtime failed to load."));
+        return;
+      }
+      setTimeout(check, 80);
+    };
+    check();
+  });
+}
+
+function injectUploadRuntimeScript(src) {
+  return new Promise((resolve, reject) => {
+    const script = document.createElement("script");
+    script.src = src;
+    script.addEventListener("load", resolve, { once: true });
+    script.addEventListener("error", () => reject(new Error("Upload runtime failed to load.")), { once: true });
+    document.head.append(script);
+  });
+}
 
 function loadUploadHelperScript() {
   if (uploadHelperLoadPromise) return uploadHelperLoadPromise;
-  uploadHelperLoadPromise = new Promise((resolve, reject) => {
-    const finish = () => {
-      uploadHelperLoadPromise = null;
-      resolve();
-    };
-    const fail = () => {
-      uploadHelperLoadPromise = null;
-      reject(new Error("Upload runtime failed to load."));
-    };
-    const fallbackSrc = "/upload-progress.js?v=music-upload-runtime";
-    if (window.HaloUploadProgress) {
-      finish();
-      return;
+  uploadHelperLoadPromise = (async () => {
+    for (let attempt = 0; attempt < RUNTIME_LOAD_ATTEMPTS; attempt += 1) {
+      try {
+        if (window.HaloUploadProgress) return window.HaloUploadProgress;
+        const existingScript = document.querySelector(RUNTIME_SCRIPT_SELECTOR);
+        if (existingScript && attempt === 0) {
+          return await waitForUploadRuntime();
+        }
+        const cacheBust = `music-upload-runtime-${Date.now()}-${attempt}`;
+        await injectUploadRuntimeScript(`/upload-progress.js?v=${cacheBust}`);
+        return await waitForUploadRuntime();
+      } catch (error) {
+        if (attempt === RUNTIME_LOAD_ATTEMPTS - 1) throw error;
+        await wait(RUNTIME_RETRY_DELAY_MS * (attempt + 1));
+      }
     }
-    const existingScript = document.querySelector('script[src*="/upload-progress.js"]');
-    if (existingScript) {
-      existingScript.addEventListener("load", () => window.HaloUploadProgress ? finish() : fail(), { once: true });
-      existingScript.addEventListener("error", fail, { once: true });
-      setTimeout(() => {
-        if (window.HaloUploadProgress) finish();
-        else fail();
-      }, 2500);
-      return;
-    }
-    const script = document.createElement("script");
-    script.src = fallbackSrc;
-    script.addEventListener("load", () => window.HaloUploadProgress ? finish() : fail(), { once: true });
-    script.addEventListener("error", fail, { once: true });
-    document.head.append(script);
+    throw new Error("Upload runtime failed to load.");
+  })().finally(() => {
+    uploadHelperLoadPromise = null;
   });
   return uploadHelperLoadPromise;
 }
@@ -41,9 +69,8 @@ function loadUploadHelperScript() {
 let uploadHelper = window.HaloUploadProgress;
 if (!uploadHelper) {
   try {
-    await loadUploadHelperScript();
+    uploadHelper = await loadUploadHelperScript();
   } catch {}
-  uploadHelper = window.HaloUploadProgress;
 }
 const AUDIO_CHUNK_BYTES = 4 * 1024 * 1024;
 const MAX_AUDIO_BYTES = 128 * 1024 * 1024;
@@ -72,21 +99,27 @@ const elements = {
   resultsList: $("#resultsList"),
 };
 
-const audioUploadUi = uploadHelper?.createUploadUi({
-  panel: document.querySelector('[aria-labelledby="musicFilesHeading"]'),
-  status: $("#audioUploadProgress"),
-  track: $("#audioUploadTrack"),
-  fill: $("#audioUploadTrack .upload-progress-fill"),
-  idleMessage: "No music uploaded yet.",
-});
+let audioUploadUi = null;
+let artworkUploadUi = null;
 
-const artworkUploadUi = uploadHelper?.createUploadUi({
-  panel: document.querySelector('[aria-labelledby="artworkHeading"]'),
-  status: $("#artworkUploadProgress"),
-  track: $("#artworkUploadTrack"),
-  fill: $("#artworkUploadTrack .upload-progress-fill"),
-  idleMessage: "No artwork uploaded yet.",
-});
+function bindUploadUi() {
+  if (!uploadHelper?.createUploadUi) return false;
+  audioUploadUi = uploadHelper.createUploadUi({
+    panel: document.querySelector('[aria-labelledby="musicFilesHeading"]'),
+    status: $("#audioUploadProgress"),
+    track: $("#audioUploadTrack"),
+    fill: $("#audioUploadTrack .upload-progress-fill"),
+    idleMessage: "No music uploaded yet.",
+  });
+  artworkUploadUi = uploadHelper.createUploadUi({
+    panel: document.querySelector('[aria-labelledby="artworkHeading"]'),
+    status: $("#artworkUploadProgress"),
+    track: $("#artworkUploadTrack"),
+    fill: $("#artworkUploadTrack .upload-progress-fill"),
+    idleMessage: "No artwork uploaded yet.",
+  });
+  return Boolean(audioUploadUi && artworkUploadUi);
+}
 
 const escapeHtml = value => String(value ?? "").replace(/[&<>'"]/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" }[char]));
 
@@ -97,6 +130,37 @@ function setMessage(text) {
 if (!uploadHelper) {
   elements.submitButton.disabled = true;
   setMessage("HALO upload runtime did not load. Refresh this page and try again.");
+} else {
+  bindUploadUi();
+}
+
+async function ensureUploadRuntime() {
+  if (uploadHelper?.uploadChunkedFile && audioUploadUi && artworkUploadUi) return true;
+  try {
+    uploadHelper = await loadUploadHelperScript();
+  } catch {}
+  if (!uploadHelper || !bindUploadUi()) {
+    elements.submitButton.disabled = true;
+    setMessage("HALO upload runtime did not load. Refresh this page and try again.");
+    return false;
+  }
+  return true;
+}
+
+async function fetchWithTimeout(url, options = {}, timeoutMs = PERSISTENCE_CHECK_TIMEOUT_MS) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, {
+      ...options,
+      signal: controller.signal,
+    });
+  } catch (error) {
+    if (error?.name === "AbortError") throw new Error("HALO could not confirm persisted assets in time. Please retry.");
+    throw error;
+  } finally {
+    clearTimeout(timeoutId);
+  }
 }
 
 function stageChip(stage) {
@@ -256,7 +320,7 @@ async function apiJson(url, payload, method = "POST") {
 }
 
 async function confirmPersistedAsset(url, label) {
-  const headResponse = await fetch(url, {
+  const headResponse = await fetchWithTimeout(url, {
     method: "HEAD",
     credentials: "same-origin",
     headers: { Accept: "*/*" },
@@ -270,7 +334,7 @@ async function confirmPersistedAsset(url, label) {
     return;
   }
   if (![405, 501].includes(headResponse.status)) throw new Error(`HALO could not confirm persisted ${label}. Please retry.`);
-  const getResponse = await fetch(url, {
+  const getResponse = await fetchWithTimeout(url, {
     method: "GET",
     credentials: "same-origin",
     headers: { Accept: "*/*", Range: "bytes=0-0" },
@@ -447,7 +511,7 @@ async function processPackage({ artistName, title, albumTitle, genre, isrc, upc,
 
 async function handleSubmit(event) {
   event.preventDefault();
-  if (!uploadHelper || !audioUploadUi || !artworkUploadUi) {
+  if (!await ensureUploadRuntime()) {
     setMessage("HALO upload runtime did not load. Refresh this page and try again.");
     return;
   }

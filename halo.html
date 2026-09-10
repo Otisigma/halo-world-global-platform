@@ -1759,6 +1759,7 @@
           const dreamweaverPreviewSourceIdRef = useRef('');
           const dreamweaverPreviewInternalSourceSwapRef = useRef(false);
           const dreamweaverPreviewPlayIntentRef = useRef(false);
+          const dreamweaverPreviewPlayAttemptActiveRef = useRef(false);
           const dreamweaverPreviewRetryActiveRef = useRef(false);
           const dreamweaverPreviewRetryAllowedRef = useRef(false);
           const singleFileInputRef = useRef(null);
@@ -2866,6 +2867,7 @@
           };
 
           const playDreamweaverPreviewCandidates = async (preview, candidateList, retryContext = null) => {
+            if (dreamweaverPreviewPlayAttemptActiveRef.current) return false;
             let lastError = null;
             dreamweaverPreviewPlayIntentRef.current = true;
             if (retryContext && (
@@ -2876,6 +2878,7 @@
               dreamweaverPreviewRetryAllowedRef.current = false;
               return false;
             }
+            dreamweaverPreviewPlayAttemptActiveRef.current = true;
             dreamweaverPreviewRetryActiveRef.current = true;
             for (const candidate of candidateList) {
               dreamweaverPreviewRetryAllowedRef.current = false;
@@ -2887,16 +2890,19 @@
                 setDreamweaverPreviewSourceId(String(candidate.id));
                 if (retryContext && dreamweaverPreviewCandidateKeyRef.current !== retryContext.candidateKey) {
                   preview.pause();
+                  dreamweaverPreviewPlayAttemptActiveRef.current = false;
                   dreamweaverPreviewRetryActiveRef.current = false;
                   dreamweaverPreviewRetryAllowedRef.current = false;
                   return false;
                 }
                 if (preview.currentSrc !== candidate.previewUrl) {
                   preview.pause();
+                  dreamweaverPreviewPlayAttemptActiveRef.current = false;
                   dreamweaverPreviewRetryActiveRef.current = false;
                   dreamweaverPreviewRetryAllowedRef.current = false;
                   return false;
                 }
+                dreamweaverPreviewPlayAttemptActiveRef.current = false;
                 dreamweaverPreviewRetryActiveRef.current = false;
                 return true;
               } catch (error) {
@@ -2909,6 +2915,7 @@
                 }
               }
             }
+            dreamweaverPreviewPlayAttemptActiveRef.current = false;
             dreamweaverPreviewRetryActiveRef.current = false;
             dreamweaverPreviewRetryAllowedRef.current = false;
             setIsDreamweaverPreviewPlaying(false);
@@ -2950,6 +2957,7 @@
           useEffect(() => {
             const preview = dreamweaverPreviewAudioRef.current;
             if (!dreamweaverPreviewCandidates.length) {
+              dreamweaverPreviewSourceIdRef.current = '';
               setDreamweaverPreviewSourceId('');
               setDreamweaverPreviewError('');
               setIsDreamweaverPreviewPlaying(false);
@@ -2966,6 +2974,7 @@
               return;
             }
             if (!dreamweaverPreviewCandidates.some(mix => String(mix.id) === String(dreamweaverPreviewSourceId || ''))) {
+              dreamweaverPreviewSourceIdRef.current = String(dreamweaverPreviewCandidates[0].id);
               setDreamweaverPreviewSourceId(String(dreamweaverPreviewCandidates[0].id));
             }
           }, [dreamweaverPreviewCandidateKey, dreamweaverPreviewSourceId]);

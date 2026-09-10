@@ -2854,6 +2854,13 @@
             return true;
           };
 
+          const markDreamweaverPreviewPlaying = () => {
+            setIsDreamweaverPreviewPlaying(true);
+            setIsDreamweaverPreviewLoading(false);
+            setDreamweaverPreviewError('');
+            setDreamweaverPreviewNeedsGesture(false);
+          };
+
           const playDreamweaverPreviewCandidates = async (preview, candidateList, retryContext = null) => {
             let lastError = null;
             if (retryContext && (
@@ -4000,18 +4007,8 @@
                                 setDreamweaverPreviewError('');
                                 setDreamweaverPreviewNeedsGesture(false);
                               }}
-                              onPlay={() => {
-                                setIsDreamweaverPreviewPlaying(true);
-                                setIsDreamweaverPreviewLoading(false);
-                                setDreamweaverPreviewError('');
-                                setDreamweaverPreviewNeedsGesture(false);
-                              }}
-                              onPlaying={() => {
-                                setIsDreamweaverPreviewPlaying(true);
-                                setIsDreamweaverPreviewLoading(false);
-                                setDreamweaverPreviewError('');
-                                setDreamweaverPreviewNeedsGesture(false);
-                              }}
+                              onPlay={markDreamweaverPreviewPlaying}
+                              onPlaying={markDreamweaverPreviewPlaying}
                               onWaiting={() => {
                                 if (!dreamweaverPreviewNeedsGesture) setIsDreamweaverPreviewLoading(true);
                               }}

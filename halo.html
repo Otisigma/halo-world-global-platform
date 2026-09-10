@@ -2848,7 +2848,6 @@
 
           const ensureDreamweaverPreviewSource = (preview, mix) => {
             if (!preview || !mix?.previewUrl) return false;
-            setDreamweaverPreviewSourceId(String(mix.id));
             if (preview.src !== mix.previewUrl) {
               dreamweaverPreviewInternalSourceSwapRef.current = true;
               preview.pause();
@@ -2883,6 +2882,7 @@
               try {
                 dreamweaverPreviewRetryAllowedRef.current = true;
                 await preview.play();
+                setDreamweaverPreviewSourceId(String(candidate.id));
                 if (retryContext && dreamweaverPreviewCandidateKeyRef.current !== retryContext.candidateKey) {
                   preview.pause();
                   dreamweaverPreviewRetryActiveRef.current = false;
@@ -2964,7 +2964,6 @@
 
           useEffect(() => {
             const preview = dreamweaverPreviewAudioRef.current;
-            setDreamweaverPreviewNeedsGesture(false);
             if (!preview) return;
             const nextPreviewUrl = dreamweaverPreviewMix?.previewUrl || '';
             const sourceChanged = nextPreviewUrl ? preview.currentSrc !== nextPreviewUrl : Boolean(preview.currentSrc);

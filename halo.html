@@ -2978,8 +2978,11 @@
             preview.load();
             if (shouldResumePlayback) {
               setIsDreamweaverPreviewLoading(true);
-              dreamweaverPreviewRetryAllowedRef.current = true;
-              void preview.play().catch(() => undefined);
+              const startIndex = Math.max(0, dreamweaverPreviewCandidates.findIndex(mix => mix.previewUrl === nextPreviewUrl));
+              const resumeCandidates = startIndex > 0
+                ? [...dreamweaverPreviewCandidates.slice(startIndex), ...dreamweaverPreviewCandidates.slice(0, startIndex)]
+                : dreamweaverPreviewCandidates;
+              void playDreamweaverPreviewCandidates(preview, resumeCandidates);
               return;
             }
             setIsDreamweaverPreviewLoading(false);

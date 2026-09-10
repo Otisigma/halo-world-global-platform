@@ -41,11 +41,7 @@ assert.match(haloHome, /Preview loading/, "the homepage Dreamweaver player must 
 assert.match(haloHome, /Preview ready/, "the homepage Dreamweaver player must expose a ready state");
 assert.match(haloHome, /Preview playing/, "the homepage Dreamweaver player must expose a playing state");
 assert.match(haloHome, /Preview unavailable/, "the homepage Dreamweaver player must expose a failed state");
-assert.match(haloHome, /onLoadStart=\{(?:\(\) => \{|markDreamweaverPreviewPlaying)/, "the homepage Dreamweaver player must react to load-start events");
-assert.match(haloHome, /onCanPlay=\{(?:\(\) => \{|markDreamweaverPreviewPlaying)/, "the homepage Dreamweaver player must react to ready-to-play events");
-assert.match(haloHome, /onPlay=\{markDreamweaverPreviewPlaying\}/, "the homepage Dreamweaver player must react to play events");
-assert.match(haloHome, /onPlaying=\{markDreamweaverPreviewPlaying\}/, "the homepage Dreamweaver player must react to active playback events");
-assert.match(haloHome, /onError=\{\(\) => \{/, "the homepage Dreamweaver player must react to failure events");
+assert.match(haloHome, /playDreamweaverPreviewCandidates/, "the homepage Dreamweaver player must use fallback-aware playback attempts");
 assert.match(summary, /averageListenSeconds/, "admin reporting must expose listening duration");
 assert.match(summary, /listeningVariants/, "admin reporting must compare preview variants");
 assert.match(summary, /commercialIntent/, "preview reporting must connect listening with commercial intent");

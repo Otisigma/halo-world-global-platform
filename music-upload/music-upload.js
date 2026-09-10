@@ -1,7 +1,50 @@
 import { normalizeHttpsList } from "/music-upload/link-validation.js";
 
 const $ = selector => document.querySelector(selector);
-const uploadHelper = window.HaloUploadProgress;
+let uploadHelperLoadPromise = null;
+
+function loadUploadHelperScript() {
+  if (uploadHelperLoadPromise) return uploadHelperLoadPromise;
+  uploadHelperLoadPromise = new Promise((resolve, reject) => {
+    const finish = () => {
+      uploadHelperLoadPromise = null;
+      resolve();
+    };
+    const fail = () => {
+      uploadHelperLoadPromise = null;
+      reject(new Error("Upload runtime failed to load."));
+    };
+    const fallbackSrc = "/upload-progress.js?v=music-upload-runtime";
+    if (window.HaloUploadProgress) {
+      finish();
+      return;
+    }
+    const existingScript = document.querySelector('script[src*="/upload-progress.js"]');
+    if (existingScript) {
+      existingScript.addEventListener("load", () => window.HaloUploadProgress ? finish() : fail(), { once: true });
+      existingScript.addEventListener("error", fail, { once: true });
+      setTimeout(() => {
+        if (window.HaloUploadProgress) finish();
+        else fail();
+      }, 2500);
+      return;
+    }
+    const script = document.createElement("script");
+    script.src = fallbackSrc;
+    script.addEventListener("load", () => window.HaloUploadProgress ? finish() : fail(), { once: true });
+    script.addEventListener("error", fail, { once: true });
+    document.head.append(script);
+  });
+  return uploadHelperLoadPromise;
+}
+
+let uploadHelper = window.HaloUploadProgress;
+if (!uploadHelper) {
+  try {
+    await loadUploadHelperScript();
+  } catch {}
+  uploadHelper = window.HaloUploadProgress;
+}
 const AUDIO_CHUNK_BYTES = 4 * 1024 * 1024;
 const MAX_AUDIO_BYTES = 128 * 1024 * 1024;
 const ARTWORK_CHUNK_BYTES = 4 * 1024 * 1024;
@@ -29,7 +72,7 @@ const elements = {
   resultsList: $("#resultsList"),
 };
 
-const audioUploadUi = uploadHelper.createUploadUi({
+const audioUploadUi = uploadHelper?.createUploadUi({
   panel: document.querySelector('[aria-labelledby="musicFilesHeading"]'),
   status: $("#audioUploadProgress"),
   track: $("#audioUploadTrack"),
@@ -37,7 +80,7 @@ const audioUploadUi = uploadHelper.createUploadUi({
   idleMessage: "No music uploaded yet.",
 });
 
-const artworkUploadUi = uploadHelper.createUploadUi({
+const artworkUploadUi = uploadHelper?.createUploadUi({
   panel: document.querySelector('[aria-labelledby="artworkHeading"]'),
   status: $("#artworkUploadProgress"),
   track: $("#artworkUploadTrack"),
@@ -49,6 +92,11 @@ const escapeHtml = value => String(value ?? "").replace(/[&<>'"]/g, char => ({ "
 
 function setMessage(text) {
   elements.message.textContent = text;
+}
+
+if (!uploadHelper) {
+  elements.submitButton.disabled = true;
+  setMessage("HALO upload runtime did not load. Refresh this page and try again.");
 }
 
 function stageChip(stage) {
@@ -399,6 +447,10 @@ async function processPackage({ artistName, title, albumTitle, genre, isrc, upc,
 
 async function handleSubmit(event) {
   event.preventDefault();
+  if (!uploadHelper || !audioUploadUi || !artworkUploadUi) {
+    setMessage("HALO upload runtime did not load. Refresh this page and try again.");
+    return;
+  }
   const audioFiles = gatherAudioFiles();
   const artworkFile = elements.artworkFile.files?.[0] || null;
   const artistName = $("#artistName").value.trim();

@@ -55,6 +55,19 @@ const checks = [
     diagnose: "Bundle stage is broken: /music-upload/ is likely missing a required script include.",
   },
   {
+    id: "bundle.helper-bootstrap",
+    area: "Script bundle",
+    source: "client",
+    description: "music-upload client bootstraps upload helper when global script is stale or missing",
+    signals: [
+      "let uploadHelper = window.HaloUploadProgress",
+      "function loadUploadHelperScript()",
+      "const script = document.createElement(\"script\")",
+      "HALO upload runtime did not load",
+    ],
+    diagnose: "Bundle stage is broken: music-upload.js is not resilient to missing/stale upload-progress runtime wiring.",
+  },
+  {
     id: "flow.file-selection",
     area: "UI",
     source: "client",
@@ -189,6 +202,18 @@ const checks = [
       'to = "/music-upload/index.html"',
     ],
     diagnose: "Deployment stage is broken: canonical /music-upload/ routing is missing or changed.",
+  },
+  {
+    id: "deploy.cache-control",
+    area: "Deployment mismatch",
+    source: "config",
+    description: "deploy config prevents stale music-upload HTML/JS bundles from masking UI updates",
+    signals: [
+      'for = "/music-upload/*"',
+      'for = "/upload-progress.js"',
+      'Cache-Control = "no-cache, no-store, must-revalidate"',
+    ],
+    diagnose: "Deployment stage is broken: music-upload cache headers are missing, so stale bundles can hide upload indicators on live.",
   },
   {
     id: "discoverability.route-registry",

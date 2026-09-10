@@ -1728,6 +1728,7 @@
           const [equalizer, setEqualizer] = useState({ master: 70, bass: 0, mid: 0, treble: 0 });
           const [isDreamweaverPreviewPlaying, setIsDreamweaverPreviewPlaying] = useState(false);
           const [isDreamweaverPreviewLoading, setIsDreamweaverPreviewLoading] = useState(false);
+          const [dreamweaverPreviewNeedsGesture, setDreamweaverPreviewNeedsGesture] = useState(false);
           const [dreamweaverPreviewError, setDreamweaverPreviewError] = useState('');
           const [dreamweaverPreviewSourceId, setDreamweaverPreviewSourceId] = useState('');
           const fallbackReleaseArtwork = window.HaloReleaseArtwork?.DEFAULT_RELEASE_ARTWORK || '/assets/halo-app-icon-512.png';
@@ -2796,7 +2797,7 @@
             || dreamweaverPreviewCandidates[0]
             || null;
           const dreamweaverPreviewReady = Boolean(dreamweaverPreviewMix?.previewUrl);
-          const dreamweaverPreviewState = dreamweaverPreviewError
+          const dreamweaverPreviewState = dreamweaverPreviewError && !dreamweaverPreviewNeedsGesture
             ? 'failed'
             : isDreamweaverPreviewPlaying
               ? 'playing'
@@ -2836,14 +2837,6 @@
                   ? 'Scanning the current Dreamweaver signal from the Mix Desk.'
                   : 'No public Dreamweaver mix is live yet. The route remains open while the next preview is prepared.';
 
-          const advanceDreamweaverPreviewSource = (currentId = dreamweaverPreviewMix?.id) => {
-            const currentIndex = dreamweaverPreviewCandidates.findIndex(mix => String(mix.id) === String(currentId || ''));
-            const nextMix = currentIndex >= 0 ? dreamweaverPreviewCandidates[currentIndex + 1] : dreamweaverPreviewCandidates[0];
-            if (!nextMix) return false;
-            setDreamweaverPreviewSourceId(String(nextMix.id));
-            return true;
-          };
-
           const ensureDreamweaverPreviewSource = (preview, mix) => {
             if (!preview || !mix?.previewUrl) return false;
             setDreamweaverPreviewSourceId(String(mix.id));
@@ -2855,33 +2848,42 @@
             return true;
           };
 
+          const playDreamweaverPreviewCandidates = async (preview, candidateList) => {
+            let lastError = null;
+            for (const candidate of candidateList) {
+              if (!ensureDreamweaverPreviewSource(preview, candidate)) continue;
+              try {
+                await preview.play();
+                return true;
+              } catch (error) {
+                lastError = error;
+                if (error?.name === 'NotAllowedError') {
+                  setDreamweaverPreviewNeedsGesture(true);
+                  break;
+                }
+              }
+            }
+            setIsDreamweaverPreviewPlaying(false);
+            setIsDreamweaverPreviewLoading(false);
+            setDreamweaverPreviewError(lastError?.name === 'NotAllowedError'
+              ? 'Playback is waiting for a browser-approved tap. Press play again to continue.'
+              : 'Preview audio is unavailable right now. You can still open Dreamweaver directly.');
+            return false;
+          };
+
           const toggleDreamweaverPreview = async () => {
             const preview = dreamweaverPreviewAudioRef.current;
             if (!preview || !dreamweaverPreviewCandidates.length) return;
             if (preview.paused) {
               trackMusicExperimentAction('listening', 'homepage_experiment_dreamweaver_preview', 'native');
               setDreamweaverPreviewError('');
+              setDreamweaverPreviewNeedsGesture(false);
               setIsDreamweaverPreviewLoading(true);
               const currentIndex = Math.max(0, dreamweaverPreviewCandidates.findIndex(mix => String(mix.id) === String(dreamweaverPreviewMix?.id || '')));
               const orderedCandidates = currentIndex > 0
                 ? [...dreamweaverPreviewCandidates.slice(currentIndex), ...dreamweaverPreviewCandidates.slice(0, currentIndex)]
                 : dreamweaverPreviewCandidates;
-              let lastError = null;
-              for (const candidate of orderedCandidates) {
-                if (!ensureDreamweaverPreviewSource(preview, candidate)) continue;
-                try {
-                  await preview.play();
-                  return;
-                } catch (error) {
-                  lastError = error;
-                  if (error?.name === 'NotAllowedError') break;
-                }
-              }
-              setIsDreamweaverPreviewPlaying(false);
-              setIsDreamweaverPreviewLoading(false);
-              setDreamweaverPreviewError(lastError?.name === 'NotAllowedError'
-                ? 'Playback is waiting for a browser-approved tap. Press play again to continue.'
-                : 'Preview audio is unavailable right now. You can still open Dreamweaver directly.');
+              await playDreamweaverPreviewCandidates(preview, orderedCandidates);
               return;
             }
             preview.pause();
@@ -2894,6 +2896,7 @@
               setDreamweaverPreviewError('');
               setIsDreamweaverPreviewPlaying(false);
               setIsDreamweaverPreviewLoading(false);
+              setDreamweaverPreviewNeedsGesture(false);
               if (preview) {
                 preview.pause();
                 preview.removeAttribute('src');
@@ -2910,6 +2913,7 @@
             const preview = dreamweaverPreviewAudioRef.current;
             setIsDreamweaverPreviewPlaying(false);
             setIsDreamweaverPreviewLoading(false);
+            setDreamweaverPreviewNeedsGesture(false);
             if (!preview) return;
             preview.pause();
             if (dreamweaverPreviewMix?.previewUrl) {
@@ -3948,22 +3952,28 @@
                               onLoadStart={() => {
                                 setIsDreamweaverPreviewLoading(true);
                                 setDreamweaverPreviewError('');
+                                setDreamweaverPreviewNeedsGesture(false);
                               }}
                               onCanPlay={() => {
                                 setIsDreamweaverPreviewLoading(false);
                                 setDreamweaverPreviewError('');
+                                setDreamweaverPreviewNeedsGesture(false);
                               }}
                               onPlay={() => {
                                 setIsDreamweaverPreviewPlaying(true);
                                 setIsDreamweaverPreviewLoading(false);
                                 setDreamweaverPreviewError('');
+                                setDreamweaverPreviewNeedsGesture(false);
                               }}
                               onPlaying={() => {
                                 setIsDreamweaverPreviewPlaying(true);
                                 setIsDreamweaverPreviewLoading(false);
                                 setDreamweaverPreviewError('');
+                                setDreamweaverPreviewNeedsGesture(false);
                               }}
-                              onWaiting={() => setIsDreamweaverPreviewLoading(true)}
+                              onWaiting={() => {
+                                if (!dreamweaverPreviewNeedsGesture) setIsDreamweaverPreviewLoading(true);
+                              }}
                               onPause={() => {
                                 setIsDreamweaverPreviewPlaying(false);
                                 setIsDreamweaverPreviewLoading(false);
@@ -3975,8 +3985,13 @@
                               onError={() => {
                                 setIsDreamweaverPreviewPlaying(false);
                                 setIsDreamweaverPreviewLoading(false);
-                                if (advanceDreamweaverPreviewSource()) {
-                                  setDreamweaverPreviewError('This preview source failed. The next Dreamweaver signal is queued — press play to retry.');
+                                setDreamweaverPreviewNeedsGesture(false);
+                                const currentIndex = dreamweaverPreviewCandidates.findIndex(mix => String(mix.id) === String(dreamweaverPreviewMix?.id || ''));
+                                const nextCandidates = currentIndex >= 0 ? dreamweaverPreviewCandidates.slice(currentIndex + 1) : [];
+                                if (nextCandidates.length) {
+                                  setDreamweaverPreviewError('This preview source failed. Loading the next Dreamweaver signal.');
+                                  setIsDreamweaverPreviewLoading(true);
+                                  void playDreamweaverPreviewCandidates(dreamweaverPreviewAudioRef.current, nextCandidates);
                                   return;
                                 }
                                 setDreamweaverPreviewError('Preview audio is unavailable right now. You can still open Dreamweaver directly.');
@@ -3990,7 +4005,7 @@
                             type="button"
                             className="halo-home-experiment__primary-action focus:outline-none focus:ring-2 focus:ring-amber-200 focus:ring-offset-2 focus:ring-offset-[#090a0d]"
                             onClick={toggleDreamweaverPreview}
-                            disabled={!dreamweaverPreviewReady || dreamweaverPreviewState === 'loading'}
+                            disabled={!dreamweaverPreviewReady}
                             aria-controls="dreamweaver-homepage-preview"
                           >
                             {dreamweaverPreviewState === 'loading' ? 'Loading preview…' : isDreamweaverPreviewPlaying ? 'Pause preview' : 'Play preview'}

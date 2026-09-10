@@ -65,7 +65,7 @@ async function syncRelationshipSignup(db, signup) {
       favorite_platform = EXCLUDED.favorite_platform,
       source = EXCLUDED.source,
       unlock_reward = EXCLUDED.unlock_reward,
-      consent_at = EXCLUDED.consent_at,
+      consent_at = LEAST(halo_relationship_signups.consent_at, EXCLUDED.consent_at),
       signup_count = CASE
         WHEN halo_relationship_signups.source_signup_id IS DISTINCT FROM EXCLUDED.source_signup_id THEN halo_relationship_signups.signup_count + 1
         ELSE halo_relationship_signups.signup_count

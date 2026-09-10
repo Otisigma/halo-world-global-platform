@@ -134,7 +134,7 @@ export async function generateDailyReport(db, reportDate = new Date()) {
     `,
     db.sql`
       SELECT COUNT(*)::int AS total,
-        COUNT(*) FILTER (WHERE first_signup_at::date = ${date}::date)::int AS submitted_today,
+        COUNT(*) FILTER (WHERE last_signup_at::date = ${date}::date)::int AS submitted_today,
         COUNT(*) FILTER (WHERE last_signup_at >= ${date}::date - INTERVAL '6 days')::int AS submitted_7d,
         COUNT(*) FILTER (WHERE linked_member_id IS NOT NULL)::int AS linked_members
       FROM halo_relationship_signups

@@ -30,6 +30,9 @@ CREATE INDEX IF NOT EXISTS halo_relationship_signups_member_idx
   ON halo_relationship_signups(linked_member_id, last_signup_at DESC)
   WHERE linked_member_id IS NOT NULL;
 
+CREATE INDEX IF NOT EXISTS halo_relationship_signups_recent_idx
+  ON halo_relationship_signups(last_signup_at DESC);
+
 INSERT INTO halo_relationship_signups (
   email,
   source_signup_id,
@@ -54,7 +57,7 @@ SELECT
   MIN(s.unlock_reward),
   CASE WHEN m.member_id IS NOT NULL THEN 'linked_member' ELSE 'received' END,
   COUNT(*)::int,
-  MAX(s.consent_at),
+  MIN(s.consent_at),
   MIN(s.created_at),
   MAX(s.created_at)
 FROM halo_dreamweaver_fan_signups s
@@ -68,7 +71,7 @@ ON CONFLICT (email) DO UPDATE SET
   source = EXCLUDED.source,
   unlock_reward = EXCLUDED.unlock_reward,
   signup_count = GREATEST(halo_relationship_signups.signup_count, EXCLUDED.signup_count),
-  consent_at = EXCLUDED.consent_at,
+  consent_at = LEAST(halo_relationship_signups.consent_at, EXCLUDED.consent_at),
   first_signup_at = LEAST(halo_relationship_signups.first_signup_at, EXCLUDED.first_signup_at),
   last_signup_at = GREATEST(halo_relationship_signups.last_signup_at, EXCLUDED.last_signup_at),
   updated_at = NOW(),

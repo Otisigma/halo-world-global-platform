@@ -1754,6 +1754,7 @@
           const audioCtxRef = useRef(null);
           const canvasRef = useRef(null);
           const dreamweaverPreviewAudioRef = useRef(null);
+          const dreamweaverPreviewRetryAllowedRef = useRef(false);
           const singleFileInputRef = useRef(null);
           const multiFileInputRef = useRef(null);
           const folderInputRef = useRef(null);
@@ -2876,6 +2877,7 @@
             if (!preview || !dreamweaverPreviewCandidates.length) return;
             if (preview.paused) {
               trackMusicExperimentAction('listening', 'homepage_experiment_dreamweaver_preview', 'native');
+              dreamweaverPreviewRetryAllowedRef.current = true;
               setDreamweaverPreviewError('');
               setDreamweaverPreviewNeedsGesture(false);
               setIsDreamweaverPreviewLoading(true);
@@ -2897,6 +2899,7 @@
               setIsDreamweaverPreviewPlaying(false);
               setIsDreamweaverPreviewLoading(false);
               setDreamweaverPreviewNeedsGesture(false);
+              dreamweaverPreviewRetryAllowedRef.current = false;
               if (preview) {
                 preview.pause();
                 preview.removeAttribute('src');
@@ -2914,6 +2917,7 @@
             setIsDreamweaverPreviewPlaying(false);
             setIsDreamweaverPreviewLoading(false);
             setDreamweaverPreviewNeedsGesture(false);
+            dreamweaverPreviewRetryAllowedRef.current = false;
             if (!preview) return;
             preview.pause();
             if (dreamweaverPreviewMix?.previewUrl) {
@@ -3981,6 +3985,7 @@
                               onEnded={() => {
                                 setIsDreamweaverPreviewPlaying(false);
                                 setIsDreamweaverPreviewLoading(false);
+                                dreamweaverPreviewRetryAllowedRef.current = false;
                               }}
                               onError={() => {
                                 setIsDreamweaverPreviewPlaying(false);
@@ -3988,7 +3993,7 @@
                                 setDreamweaverPreviewNeedsGesture(false);
                                 const currentIndex = dreamweaverPreviewCandidates.findIndex(mix => String(mix.id) === String(dreamweaverPreviewMix?.id || ''));
                                 const nextCandidates = currentIndex >= 0 ? dreamweaverPreviewCandidates.slice(currentIndex + 1) : [];
-                                if (nextCandidates.length) {
+                                if (dreamweaverPreviewRetryAllowedRef.current && nextCandidates.length) {
                                   setDreamweaverPreviewError('This preview source failed. Loading the next Dreamweaver signal.');
                                   setIsDreamweaverPreviewLoading(true);
                                   void playDreamweaverPreviewCandidates(dreamweaverPreviewAudioRef.current, nextCandidates);

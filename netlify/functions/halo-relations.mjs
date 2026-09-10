@@ -73,14 +73,17 @@ async function ensureRelationshipProfiles(db) {
 
 async function loadWorkspace(db) {
   await ensureRelationshipProfiles(db);
-  const [metricRows, memberRows, taskRows, activityRows] = await Promise.all([
+  const [metricRows, memberRows, taskRows, activityRows, dreamweaverRows] = await Promise.all([
     db.sql`
       SELECT
         COUNT(*)::int AS total_members,
         COUNT(*) FILTER (WHERE m.joined_at >= NOW() - INTERVAL '7 days')::int AS joined_7d,
         COUNT(*) FILTER (WHERE COALESCE(a.last_sign_in_at, m.last_seen_at) >= NOW() - INTERVAL '7 days')::int AS active_7d,
         COUNT(*) FILTER (WHERE r.contact_consent = TRUE)::int AS contactable,
-        (SELECT COUNT(*)::int FROM halo_relationship_tasks WHERE status = 'open' AND due_at <= NOW()) AS overdue_tasks
+        (SELECT COUNT(*)::int FROM halo_relationship_tasks WHERE status = 'open' AND due_at <= NOW()) AS overdue_tasks,
+        (SELECT COUNT(*)::int FROM halo_relationship_signups) AS dreamweaver_signups,
+        (SELECT COUNT(*)::int FROM halo_relationship_signups WHERE last_signup_at >= NOW() - INTERVAL '7 days') AS dreamweaver_signups_7d,
+        (SELECT COUNT(*)::int FROM halo_relationship_signups WHERE linked_member_id IS NOT NULL) AS dreamweaver_linked
       FROM halo_memberships m
       JOIN halo_relationship_profiles r ON r.member_id = m.member_id
       LEFT JOIN (
@@ -135,6 +138,14 @@ async function loadWorkspace(db) {
       JOIN halo_memberships m ON m.member_id = a.member_id
       ORDER BY a.occurred_at DESC
       LIMIT 30
+    `,
+    db.sql`
+      SELECT s.email, s.source_signup_id, s.first_name, s.favorite_platform, s.status, s.signup_count,
+        s.last_signup_at, s.linked_member_id, m.display_name AS linked_member_name
+      FROM halo_relationship_signups s
+      LEFT JOIN halo_memberships m ON m.member_id = s.linked_member_id
+      ORDER BY s.last_signup_at DESC
+      LIMIT 30
     `
   ]);
 
@@ -145,7 +156,10 @@ async function loadWorkspace(db) {
       joined7d: Number(metrics.joined_7d || 0),
       active7d: Number(metrics.active_7d || 0),
       contactable: Number(metrics.contactable || 0),
-      overdueTasks: Number(metrics.overdue_tasks || 0)
+      overdueTasks: Number(metrics.overdue_tasks || 0),
+      dreamweaverSignups: Number(metrics.dreamweaver_signups || 0),
+      dreamweaverSignups7d: Number(metrics.dreamweaver_signups_7d || 0),
+      dreamweaverLinked: Number(metrics.dreamweaver_linked || 0)
     },
     members: memberRows.map(serializeMember),
     tasks: taskRows.map(serializeTask),
@@ -155,6 +169,17 @@ async function loadWorkspace(db) {
       occurredAt: iso(row.occurred_at),
       memberId: row.member_id,
       memberName: row.display_name
+    })),
+    dreamweaverSignups: dreamweaverRows.map(row => ({
+      id: row.source_signup_id || row.email,
+      email: row.email,
+      firstName: row.first_name || "",
+      favoritePlatform: row.favorite_platform,
+      status: row.status,
+      signupCount: Number(row.signup_count || 0),
+      occurredAt: iso(row.last_signup_at),
+      memberId: row.linked_member_id,
+      memberName: row.linked_member_name || ""
     }))
   };
 }

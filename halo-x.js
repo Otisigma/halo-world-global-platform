@@ -118,6 +118,8 @@
     const metricItems = [
       [metrics.totalMembers || 0, "Total members"],
       [metrics.joinedToday || 0, "Joined today"],
+      [metrics.dreamweaverSignupsTotal || 0, "Dreamweaver signups"],
+      [metrics.dreamweaverSignupsToday || 0, "Dreamweaver today"],
       [metrics.uniqueVisitorsToday || 0, "Visitors today"],
       [metrics.pageViewsToday || 0, "Page views today"],
       [metrics.active24h || 0, "Active in 24 hours"],
@@ -125,7 +127,8 @@
       [metrics.passesRedeemedToday || 0, "Passes activated"],
       [metrics.djSessionsSavedToday || 0, "DJ sessions saved"],
       [metrics.roomMessagesToday || 0, "Room messages"],
-      [metrics.supportSignalsToday || 0, "Support signals"]
+      [metrics.supportSignalsToday || 0, "Support signals"],
+      [metrics.dreamweaverLinkedMembers || 0, "Dreamweaver linked"]
     ];
     byId("reportMetrics").innerHTML = metricItems.map(([value, label]) => `<div class="metric"><strong>${Number(value)}</strong><span>${escapeHtml(label)}</span></div>`).join("");
     text("reportDate", report ? formatDate(report.date) : "Awaiting first report");

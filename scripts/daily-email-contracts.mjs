@@ -17,6 +17,7 @@ assert.match(library, /HALO_DAILY_REPORT_FROM_EMAIL/, "email delivery must requi
 assert.match(library, /emails\/halo-daily-summary/, "email delivery must target the versioned summary template");
 assert.match(template, /{{reportDate}}/, "the email template must show the report date");
 assert.match(template, /{{uniqueVisitorsToday}}/, "the email template must include audience activity");
+assert.match(template, /{{dreamweaverSignupsToday}}/, "the email template must include Dreamweaver signup activity");
 assert.match(template, /{{artistProAwaitingReview}}/, "the email template must include actionable lead activity");
 assert.match(docs, /Netlify Email Integration/, "owner documentation must explain email delivery setup");
 
@@ -27,6 +28,9 @@ const parameters = dailyReportEmailParameters({
     joinedToday: 2,
     active24h: 7,
     uniqueVisitorsToday: 21,
+    dreamweaverSignupsTotal: "9",
+    dreamweaverSignupsToday: 4,
+    dreamweaverLinkedMembers: 2,
     artistProAwaitingReview: 3
   }
 });
@@ -44,6 +48,9 @@ assert.deepEqual(parameters, {
   roomPinsUpdatedToday: 0,
   supportSignalsToday: 0,
   djSessionsSavedToday: 0,
+  dreamweaverSignupsTotal: 9,
+  dreamweaverSignupsToday: 4,
+  dreamweaverLinkedMembers: 2,
   artistProLeadsToday: 0,
   artistProAwaitingReview: 3
 });

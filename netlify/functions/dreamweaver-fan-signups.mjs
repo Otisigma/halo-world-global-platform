@@ -22,6 +22,87 @@ function cleanEmail(value) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email) ? email : "";
 }
 
+async function syncRelationshipSignup(db, signup) {
+  const membershipRows = await db.sql`
+    SELECT member_id
+    FROM halo_memberships
+    WHERE email = ${signup.email}
+    LIMIT 1
+  `;
+  const linkedMemberId = membershipRows[0]?.member_id || null;
+  const relationshipRows = await db.sql`
+    INSERT INTO halo_relationship_signups (
+      email,
+      source_signup_id,
+      linked_member_id,
+      first_name,
+      favorite_platform,
+      source,
+      unlock_reward,
+      status,
+      signup_count,
+      consent_at,
+      first_signup_at,
+      last_signup_at
+    ) VALUES (
+      ${signup.email},
+      ${signup.id},
+      ${linkedMemberId},
+      ${signup.first_name},
+      ${signup.favorite_platform},
+      ${signup.source},
+      ${signup.unlock_reward},
+      ${linkedMemberId ? "linked_member" : "received"},
+      1,
+      ${signup.consent_at},
+      NOW(),
+      NOW()
+    )
+    ON CONFLICT (email) DO UPDATE SET
+      source_signup_id = EXCLUDED.source_signup_id,
+      linked_member_id = COALESCE(EXCLUDED.linked_member_id, halo_relationship_signups.linked_member_id),
+      first_name = EXCLUDED.first_name,
+      favorite_platform = EXCLUDED.favorite_platform,
+      source = EXCLUDED.source,
+      unlock_reward = EXCLUDED.unlock_reward,
+      consent_at = EXCLUDED.consent_at,
+      signup_count = halo_relationship_signups.signup_count + 1,
+      last_signup_at = NOW(),
+      updated_at = NOW(),
+      status = CASE
+        WHEN COALESCE(EXCLUDED.linked_member_id, halo_relationship_signups.linked_member_id) IS NOT NULL THEN 'linked_member'
+        ELSE 'repeat_signup'
+      END
+    RETURNING linked_member_id
+  `;
+  const relationshipSignup = relationshipRows[0];
+  if (!relationshipSignup?.linked_member_id) return;
+  await db.sql`
+    INSERT INTO halo_relationship_profiles (member_id)
+    VALUES (${relationshipSignup.linked_member_id})
+    ON CONFLICT (member_id) DO NOTHING
+  `;
+  await db.sql`
+    UPDATE halo_relationship_profiles
+    SET
+      contact_consent = TRUE,
+      preferred_channel = CASE
+        WHEN preferred_channel = 'none' THEN 'email'
+        ELSE preferred_channel
+      END,
+      tags = CASE
+        WHEN 'dreamweaver' = ANY(tags) THEN tags
+        ELSE array_append(tags, 'dreamweaver')
+      END,
+      relationship_summary = CASE
+        WHEN relationship_summary = '' THEN 'Dreamweaver fan signup captured from the public unlock flow.'
+        ELSE relationship_summary
+      END,
+      updated_at = NOW()
+    WHERE member_id = ${relationshipSignup.linked_member_id}
+  `;
+}
+
 export default async function dreamweaverFanSignups(request) {
   if (request.method !== "POST") {
     return json({ message: "Method not allowed" }, 405, { Allow: "POST" });
@@ -68,8 +149,9 @@ export default async function dreamweaverFanSignups(request) {
         source = EXCLUDED.source,
         unlock_reward = EXCLUDED.unlock_reward,
         consent_at = NOW()
-      RETURNING xmax = 0 AS inserted
+      RETURNING id, email, first_name, favorite_platform, source, unlock_reward, consent_at, xmax = 0 AS inserted
     `;
+    await syncRelationshipSignup(db, rows[0]);
     return json({
       accepted: true,
       message: "Dreamweaver is unlocked. Your full doorway and platform links are ready."

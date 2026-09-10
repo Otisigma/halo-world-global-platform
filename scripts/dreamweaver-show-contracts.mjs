@@ -3,7 +3,7 @@ import { resolve } from "node:path";
 
 const root = resolve(import.meta.dirname, "..");
 const read = path => readFile(resolve(root, path), "utf8");
-const [page, styles, script, deck, campaign, radio, config, campaignFunction, campaignLibrary, campaignMigration, campaignJobMigration, campaignMonitor, stats, fanSignupFunction, fanSignupMigration] = await Promise.all([
+const [page, styles, script, deck, campaign, radio, config, campaignFunction, campaignLibrary, campaignMigration, campaignJobMigration, campaignMonitor, stats, fanSignupFunction, fanSignupMigration, relationsPage, relationsScript, relationsFunction, haloXLib, dailyEmailTemplate, relationshipSignupMigration] = await Promise.all([
   read("dreamweaver/index.html"),
   read("dreamweaver/dreamweaver.css"),
   read("dreamweaver/dreamweaver.js"),
@@ -18,7 +18,13 @@ const [page, styles, script, deck, campaign, radio, config, campaignFunction, ca
   read("netlify/functions/dreamweaver-campaign-monitor.mjs"),
   read("netlify/lib/stats.mjs"),
   read("netlify/functions/dreamweaver-fan-signups.mjs"),
-  read("netlify/database/migrations/20260905025500_create_dreamweaver_fan_signups.sql")
+  read("netlify/database/migrations/20260905025500_create_dreamweaver_fan_signups.sql"),
+  read("halo-relations.html"),
+  read("halo-relations.js"),
+  read("netlify/functions/halo-relations.mjs"),
+  read("netlify/lib/halo-x.mjs"),
+  read("emails/halo-daily-summary/index.html"),
+  read("netlify/database/migrations/20260910071500_integrate_dreamweaver_signups_into_relationships.sql")
 ]);
 
 const checks = [
@@ -63,8 +69,11 @@ const checks = [
   [campaignJobMigration.includes("halo_dreamweaver_campaign_jobs") && campaignJobMigration.includes("halo_memberships(member_id)") && campaignFunction.includes("context.waitUntil") && campaignFunction.includes("processCampaignJob"), "persists resumable background campaign jobs"],
   [campaignFunction.includes("owner_member_id = ${job.member_id}") && campaignFunction.includes("rightsNote"), "limits production footage to artist-owned published video records"],
   [campaignMonitor.includes('schedule: "30 7 * * *"') && campaignMonitor.includes("reviewCampaignEvidence"), "runs the automated daily campaign monitoring loop"],
-  [fanSignupFunction.includes("verifyRequestOrigin") && fanSignupFunction.includes("halo_dreamweaver_fan_signups") && fanSignupFunction.includes('path: "/api/dreamweaver-fan-signups"'), "stores public Dreamweaver unlock requests behind an origin-checked lightweight endpoint"],
+  [fanSignupFunction.includes("verifyRequestOrigin") && fanSignupFunction.includes("halo_dreamweaver_fan_signups") && fanSignupFunction.includes("halo_relationship_signups") && fanSignupFunction.includes("contact_consent = TRUE") && fanSignupFunction.includes('path: "/api/dreamweaver-fan-signups"'), "stores public Dreamweaver unlock requests behind an origin-checked endpoint and syncs them into CRM records"],
   [fanSignupMigration.includes("halo_dreamweaver_fan_signups") && fanSignupMigration.includes("favorite_platform") && fanSignupMigration.includes("unlock_reward"), "persists Dreamweaver fan signups and their unlocked reward metadata"],
+  [relationshipSignupMigration.includes("halo_relationship_signups") && relationshipSignupMigration.includes("linked_member_id") && relationshipSignupMigration.includes("signup_count"), "maps Dreamweaver unlocks into a CRM signup spine with member linkage and repeat activity"],
+  [relationsPage.includes("DREAMWEAVER CRM") && relationsScript.includes("dreamweaverSignupList") && relationsFunction.includes("halo_relationship_signups"), "surfaces Dreamweaver signup counts and recent CRM activity in the owner relationship desk"],
+  [haloXLib.includes("dreamweaverSignupsTotal") && dailyEmailTemplate.includes("{{dreamweaverSignupsToday}}"), "adds Dreamweaver signup observability to the owner daily report"],
   [stats.includes('"open_dreamweaver_campaign_studio"') && stats.includes('"dreamweaver_campaign_generated"'), "accepts Dreamweaver campaign analytics events"]
 ];
 

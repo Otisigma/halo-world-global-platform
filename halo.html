@@ -1283,6 +1283,7 @@
           { route: '/campaign-studio/', label: 'CAMPAIGN STUDIO' },
           { route: '/release-house/', label: 'RELEASE HOUSE' },
           { route: '/song-catalog/', label: 'SONG CATALOG' },
+          { route: '/music-upload/', label: 'HALO MUSIC UPLOAD' },
           { route: '/dreamweaver/', label: 'DREAMWEAVER EXPERIENCE' },
           { route: '/dreamweaver-lab/', label: 'DREAMWEAVER SONG LAB' },
           { route: '/album-concierge/', label: 'CREATE YOUR ALBUM' },
@@ -3733,6 +3734,9 @@
                         <a href="/song-catalog/" data-stat-event="open_song_catalog" data-stat-target="header" data-signal="MASTERS + VERSIONS">
                           <Icon name="list-music" className="halo-menu-icon" /><span><strong>SONG CATALOG {renderMenuStatusBadge('/song-catalog/', 'Song Catalog')}</strong><small>Sale masters, radio edits, stems, and metadata review</small></span>
                         </a>
+                        <a href="/music-upload/" data-stat-event="open_halo_music_upload" data-stat-target="header" data-signal="CENTRAL INTAKE">
+                          <Icon name="upload" className="halo-menu-icon" /><span><strong>HALO MUSIC UPLOAD {renderMenuStatusBadge('/music-upload/', 'Halo Music Upload')}</strong><small>Standalone intake hub for music, art, links, and Dreamweaver handoff</small></span>
+                        </a>
                         <a href="/dreamweaver/" data-stat-event="open_dreamweaver_show" data-stat-target="header" data-signal="FAN JOURNEY">
                           <Icon name="star" className="halo-menu-icon" /><span><strong>DREAMWEAVER EXPERIENCE {renderMenuStatusBadge('/dreamweaver/', 'Dreamweaver Experience')}</strong><small>Start your Halo here — upload to Dreamweaver</small></span>
                         </a>
@@ -4918,6 +4922,16 @@
                         <span className="flex items-center gap-2"><Icon name="radio" className="h-4 w-4 text-cyan-300" />Radio + DJ Room</span>
                         <span className="bg-cyan-950/80 border border-cyan-800/40 text-cyan-300 text-[9px] px-1.5 py-0.5 rounded">PACK 001</span>
                       </button>
+
+                      <a
+                        href="/music-upload/"
+                        data-stat-event="open_halo_music_upload"
+                        data-stat-target="system-controller"
+                        className="w-full flex items-center justify-between px-3 py-2.5 rounded text-xs tracking-wider uppercase transition text-gray-400 hover:text-white hover:bg-purple-950/10"
+                      >
+                        <span className="flex items-center gap-2"><Icon name="upload" className="h-4 w-4 text-emerald-300" />Halo Music Upload</span>
+                        <span className="bg-emerald-950/80 border border-emerald-800/40 text-emerald-300 text-[9px] px-1.5 py-0.5 rounded">INTAKE</span>
+                      </a>
                     </div>
 
                     {/* SETLIST SELECTOR */}

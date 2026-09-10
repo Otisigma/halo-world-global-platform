@@ -98,6 +98,7 @@ export const allowedEvents = new Set([
   "open_feedback_desk",
   "open_finish_house",
   "open_halo_live",
+  "open_halo_music_upload",
   "open_halo_radio",
   "open_halo_signal",
   "open_halo_x",

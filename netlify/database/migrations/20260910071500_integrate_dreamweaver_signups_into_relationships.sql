@@ -46,19 +46,20 @@ INSERT INTO halo_relationship_signups (
 )
 SELECT
   s.email,
-  s.id,
+  MIN(s.id),
   m.member_id,
-  s.first_name,
-  s.favorite_platform,
-  s.source,
-  s.unlock_reward,
+  MIN(s.first_name),
+  MIN(s.favorite_platform),
+  MIN(s.source),
+  MIN(s.unlock_reward),
   CASE WHEN m.member_id IS NOT NULL THEN 'linked_member' ELSE 'received' END,
-  1,
-  s.consent_at,
-  s.created_at,
-  s.created_at
+  COUNT(*)::int,
+  MAX(s.consent_at),
+  MIN(s.created_at),
+  MAX(s.created_at)
 FROM halo_dreamweaver_fan_signups s
 LEFT JOIN halo_memberships m ON m.email = s.email
+GROUP BY s.email, m.member_id
 ON CONFLICT (email) DO UPDATE SET
   source_signup_id = EXCLUDED.source_signup_id,
   linked_member_id = COALESCE(EXCLUDED.linked_member_id, halo_relationship_signups.linked_member_id),
@@ -66,7 +67,9 @@ ON CONFLICT (email) DO UPDATE SET
   favorite_platform = EXCLUDED.favorite_platform,
   source = EXCLUDED.source,
   unlock_reward = EXCLUDED.unlock_reward,
+  signup_count = GREATEST(halo_relationship_signups.signup_count, EXCLUDED.signup_count),
   consent_at = EXCLUDED.consent_at,
+  first_signup_at = LEAST(halo_relationship_signups.first_signup_at, EXCLUDED.first_signup_at),
   last_signup_at = GREATEST(halo_relationship_signups.last_signup_at, EXCLUDED.last_signup_at),
   updated_at = NOW(),
   status = CASE

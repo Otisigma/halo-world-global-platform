@@ -1,20 +1,41 @@
 import { normalizeHttpsList } from "/music-upload/link-validation.js";
 
 const $ = selector => document.querySelector(selector);
+let uploadHelperLoadPromise = null;
 
 function loadUploadHelperScript() {
-  return new Promise((resolve, reject) => {
+  if (uploadHelperLoadPromise) return uploadHelperLoadPromise;
+  uploadHelperLoadPromise = new Promise((resolve, reject) => {
+    const finish = () => {
+      uploadHelperLoadPromise = null;
+      resolve();
+    };
+    const fail = () => {
+      uploadHelperLoadPromise = null;
+      reject(new Error("Upload runtime failed to load."));
+    };
     const fallbackSrc = "/upload-progress.js?v=music-upload-runtime";
     if (window.HaloUploadProgress) {
-      resolve();
+      finish();
+      return;
+    }
+    const existingScript = document.querySelector('script[src*="/upload-progress.js"]');
+    if (existingScript) {
+      existingScript.addEventListener("load", () => window.HaloUploadProgress ? finish() : fail(), { once: true });
+      existingScript.addEventListener("error", fail, { once: true });
+      setTimeout(() => {
+        if (window.HaloUploadProgress) finish();
+        else fail();
+      }, 2500);
       return;
     }
     const script = document.createElement("script");
     script.src = fallbackSrc;
-    script.addEventListener("load", () => resolve(), { once: true });
-    script.addEventListener("error", () => reject(new Error("Upload runtime failed to load.")), { once: true });
+    script.addEventListener("load", () => window.HaloUploadProgress ? finish() : fail(), { once: true });
+    script.addEventListener("error", fail, { once: true });
     document.head.append(script);
   });
+  return uploadHelperLoadPromise;
 }
 
 let uploadHelper = window.HaloUploadProgress;

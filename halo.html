@@ -1754,6 +1754,7 @@
           const audioCtxRef = useRef(null);
           const canvasRef = useRef(null);
           const dreamweaverPreviewAudioRef = useRef(null);
+          const dreamweaverPreviewCandidateKeyRef = useRef('');
           const dreamweaverPreviewRetryAllowedRef = useRef(false);
           const singleFileInputRef = useRef(null);
           const multiFileInputRef = useRef(null);
@@ -2798,6 +2799,7 @@
             || dreamweaverPreviewCandidates[0]
             || null;
           const dreamweaverPreviewReady = Boolean(dreamweaverPreviewMix?.previewUrl);
+          const dreamweaverPreviewUnavailable = !dreamweaverPreviewReady && !communityLoading;
           const dreamweaverPreviewState = dreamweaverPreviewError && !dreamweaverPreviewNeedsGesture
             ? 'failed'
             : isDreamweaverPreviewPlaying
@@ -2808,7 +2810,9 @@
                   ? 'ready'
                   : communityLoading
                     ? 'loading'
-                    : 'standby';
+                    : dreamweaverPreviewUnavailable
+                      ? 'failed'
+                      : 'standby';
           const dreamweaverPreviewChipLabel = dreamweaverPreviewState === 'failed'
             ? 'Preview unavailable'
             : dreamweaverPreviewState === 'playing'
@@ -2849,14 +2853,31 @@
             return true;
           };
 
-          const playDreamweaverPreviewCandidates = async (preview, candidateList) => {
+          const playDreamweaverPreviewCandidates = async (preview, candidateList, retryContext = null) => {
             let lastError = null;
+            if (retryContext && (
+              dreamweaverPreviewCandidateKeyRef.current !== retryContext.candidateKey
+              || preview?.currentSrc !== retryContext.failedSource
+            )) {
+              dreamweaverPreviewRetryAllowedRef.current = false;
+              return false;
+            }
             for (const candidate of candidateList) {
               dreamweaverPreviewRetryAllowedRef.current = false;
               if (!ensureDreamweaverPreviewSource(preview, candidate)) continue;
               try {
                 dreamweaverPreviewRetryAllowedRef.current = true;
                 await preview.play();
+                if (retryContext && dreamweaverPreviewCandidateKeyRef.current !== retryContext.candidateKey) {
+                  preview.pause();
+                  dreamweaverPreviewRetryAllowedRef.current = false;
+                  return false;
+                }
+                if (preview.currentSrc !== candidate.previewUrl) {
+                  preview.pause();
+                  dreamweaverPreviewRetryAllowedRef.current = false;
+                  return false;
+                }
                 return true;
               } catch (error) {
                 lastError = error;
@@ -2893,6 +2914,10 @@
             }
             preview.pause();
           };
+
+          useEffect(() => {
+            dreamweaverPreviewCandidateKeyRef.current = dreamweaverPreviewCandidateKey;
+          }, [dreamweaverPreviewCandidateKey]);
 
           useEffect(() => {
             const preview = dreamweaverPreviewAudioRef.current;
@@ -3994,12 +4019,14 @@
                                 setIsDreamweaverPreviewPlaying(false);
                                 setIsDreamweaverPreviewLoading(false);
                                 setDreamweaverPreviewNeedsGesture(false);
+                                const preview = dreamweaverPreviewAudioRef.current;
+                                const failedSource = preview?.currentSrc || '';
                                 const currentIndex = dreamweaverPreviewCandidates.findIndex(mix => String(mix.id) === String(dreamweaverPreviewMix?.id || ''));
                                 const nextCandidates = currentIndex >= 0 ? dreamweaverPreviewCandidates.slice(currentIndex + 1) : [];
                                 if (dreamweaverPreviewRetryAllowedRef.current && nextCandidates.length) {
                                   setDreamweaverPreviewError('This preview source failed. Loading the next Dreamweaver signal.');
                                   setIsDreamweaverPreviewLoading(true);
-                                  void playDreamweaverPreviewCandidates(dreamweaverPreviewAudioRef.current, nextCandidates);
+                                  void playDreamweaverPreviewCandidates(preview, nextCandidates, { candidateKey: dreamweaverPreviewCandidateKeyRef.current, failedSource });
                                   return;
                                 }
                                 setDreamweaverPreviewError('Preview audio is unavailable right now. You can still open Dreamweaver directly.');

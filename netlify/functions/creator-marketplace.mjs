@@ -10,6 +10,12 @@ function actorIdFor(userId) {
   return `member-${createHash("sha256").update(String(userId)).digest("hex").slice(0, 32)}`;
 }
 
+const marketplaceCurrencies = new Set(["GBP", "EUR"]);
+function normalizeCurrency(value, fallback = "GBP") {
+  const currency = String(value || "").trim().toUpperCase();
+  return marketplaceCurrencies.has(currency) ? currency : fallback;
+}
+
 function serializeCreator(row) {
   return {
     id: Number(row.id),
@@ -37,7 +43,7 @@ function serializeProduct(row, savedProductIds) {
     type: row.product_type,
     description: row.description,
     priceMinor: Number(row.price_minor),
-    currency: row.currency,
+    currency: normalizeCurrency(row.currency),
     format: row.format_label,
     edition: row.edition_label,
     featured: row.is_featured,
@@ -81,6 +87,9 @@ async function loadCatalog(db, user) {
     products: productRows.map(row => serializeProduct(row, savedProductIds)),
     launch: {
       region: "United Kingdom + Ireland",
+      territoryCodes: ["GB", "IE"],
+      pricingSource: "marketplace_products.currency",
+      supportedCurrencies: ["GBP", "EUR"],
       access: "Founding edition · Invite-led",
       note: "Preview catalog — products shown are concept listings until launch creators are approved."
     }

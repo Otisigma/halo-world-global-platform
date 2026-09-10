@@ -65,13 +65,25 @@ function escapeHtml(value) {
     .replaceAll("'", "&#039;");
 }
 
-function formatMoney(priceMinor) {
-  return new Intl.NumberFormat("en-GB", {
-    style: "currency",
-    currency: "GBP",
-    currencyDisplay: "narrowSymbol",
-    minimumFractionDigits: 2
-  }).format(priceMinor / 100);
+const currencyLocales = {
+  GBP: "en-GB",
+  EUR: "en-IE"
+};
+
+function formatMoney(priceMinor, currency = "GBP") {
+  const candidate = String(currency || "GBP").toUpperCase();
+  const normalizedCurrency = Object.hasOwn(currencyLocales, candidate) ? candidate : "GBP";
+  const locale = currencyLocales[normalizedCurrency] || "en-GB";
+  try {
+    return new Intl.NumberFormat(locale, {
+      style: "currency",
+      currency: normalizedCurrency,
+      currencyDisplay: "narrowSymbol",
+      minimumFractionDigits: 2
+    }).format(priceMinor / 100);
+  } catch {
+    return `${normalizedCurrency} ${(Number(priceMinor || 0) / 100).toFixed(2)}`;
+  }
 }
 
 function initials(name) {
@@ -164,7 +176,17 @@ function renderProducts() {
 function updateCatalogMeta() {
   const creatorCount = state.catalog?.creators.length || 0;
   const productCount = state.catalog?.products.length || 0;
-  elements.catalogStatus.textContent = `${creatorCount} preview creators · ${productCount} concept drops · ${state.catalog?.launch.access || "Founding edition"}`;
+  const launch = state.catalog?.launch || {};
+  const supportedCurrencies = Array.isArray(launch.supportedCurrencies)
+    ? launch.supportedCurrencies.filter(code => Object.hasOwn(currencyLocales, code))
+    : [];
+  const currencyList = supportedCurrencies.length > 1
+    ? `${supportedCurrencies.slice(0, -1).join(", ")} and ${supportedCurrencies.at(-1)}`
+    : supportedCurrencies[0];
+  const pricingCopy = currencyList
+    ? `prices shown in product currency (${currencyList})`
+    : "prices shown in product currency";
+  elements.catalogStatus.textContent = `${creatorCount} preview creators · ${productCount} concept drops · ${launch.access || "Founding edition"} · ${pricingCopy}`;
   const interested = Boolean(state.catalog?.foundingCreatorInterest);
   elements.foundingButtons.forEach(button => {
     button.textContent = interested ? "Founding interest registered ✓" : button.id === "founding-creator-hero" ? "Apply as a founding creator" : "Register founding interest";

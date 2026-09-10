@@ -1,7 +1,13 @@
 import { normalizeHttpsList } from "/music-upload/link-validation.js";
 
 const $ = selector => document.querySelector(selector);
-const uploadHelper = window.HaloUploadProgress;
+let uploadHelper = window.HaloUploadProgress;
+if (!uploadHelper) {
+  try {
+    await import("/upload-progress.js?v=music-upload-runtime");
+  } catch {}
+  uploadHelper = window.HaloUploadProgress;
+}
 const AUDIO_CHUNK_BYTES = 4 * 1024 * 1024;
 const MAX_AUDIO_BYTES = 128 * 1024 * 1024;
 const ARTWORK_CHUNK_BYTES = 4 * 1024 * 1024;
@@ -29,7 +35,7 @@ const elements = {
   resultsList: $("#resultsList"),
 };
 
-const audioUploadUi = uploadHelper.createUploadUi({
+const audioUploadUi = uploadHelper?.createUploadUi({
   panel: document.querySelector('[aria-labelledby="musicFilesHeading"]'),
   status: $("#audioUploadProgress"),
   track: $("#audioUploadTrack"),
@@ -37,7 +43,7 @@ const audioUploadUi = uploadHelper.createUploadUi({
   idleMessage: "No music uploaded yet.",
 });
 
-const artworkUploadUi = uploadHelper.createUploadUi({
+const artworkUploadUi = uploadHelper?.createUploadUi({
   panel: document.querySelector('[aria-labelledby="artworkHeading"]'),
   status: $("#artworkUploadProgress"),
   track: $("#artworkUploadTrack"),
@@ -399,6 +405,10 @@ async function processPackage({ artistName, title, albumTitle, genre, isrc, upc,
 
 async function handleSubmit(event) {
   event.preventDefault();
+  if (!uploadHelper || !audioUploadUi || !artworkUploadUi) {
+    setMessage("HALO upload runtime did not load. Refresh this page and try again.");
+    return;
+  }
   const audioFiles = gatherAudioFiles();
   const artworkFile = elements.artworkFile.files?.[0] || null;
   const artistName = $("#artistName").value.trim();

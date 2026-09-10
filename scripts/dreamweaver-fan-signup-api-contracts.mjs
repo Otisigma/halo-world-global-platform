@@ -153,6 +153,7 @@ async function submit(handler, payload) {
     consent: true
   });
   const firstConsentAt = store.relationshipRows.get("fan@example.com")?.consent_at;
+  const firstSourceSignupId = store.relationshipRows.get("fan@example.com")?.source_signup_id;
   const { response } = await submit(handler, {
     email: "fan@example.com",
     firstName: "Fan",
@@ -162,7 +163,8 @@ async function submit(handler, payload) {
   const crm = store.relationshipRows.get("fan@example.com");
   assert.equal(response.status, 200);
   assert.equal(crm?.status, "repeat_signup");
-  assert.equal(crm?.signup_count, 1);
+  assert.equal(crm?.source_signup_id, firstSourceSignupId);
+  assert.equal(crm?.signup_count, 1, "same source signup rows should stay idempotent on public unlock retries");
   assert.equal(crm?.consent_at, firstConsentAt);
   assert.equal(crm?.favorite_platform, "youtube");
 }

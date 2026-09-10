@@ -33,6 +33,29 @@ CREATE INDEX IF NOT EXISTS halo_relationship_signups_member_idx
 CREATE INDEX IF NOT EXISTS halo_relationship_signups_recent_idx
   ON halo_relationship_signups(last_signup_at DESC);
 
+WITH dreamweaver_signup_totals AS (
+  SELECT
+    email,
+    COUNT(*)::int AS signup_count,
+    MIN(consent_at) AS consent_at,
+    MIN(created_at) AS first_signup_at,
+    MAX(created_at) AS last_signup_at
+  FROM halo_dreamweaver_fan_signups
+  GROUP BY email
+),
+latest_dreamweaver_signups AS (
+  SELECT DISTINCT ON (s.email)
+    s.email,
+    s.id,
+    s.first_name,
+    s.favorite_platform,
+    s.source,
+    s.unlock_reward,
+    m.member_id
+  FROM halo_dreamweaver_fan_signups s
+  LEFT JOIN halo_memberships m ON m.email = s.email
+  ORDER BY s.email, s.created_at DESC, s.consent_at DESC, s.id DESC
+)
 INSERT INTO halo_relationship_signups (
   email,
   source_signup_id,
@@ -48,21 +71,20 @@ INSERT INTO halo_relationship_signups (
   last_signup_at
 )
 SELECT
-  s.email,
-  MIN(s.id),
-  m.member_id,
-  MIN(s.first_name),
-  MIN(s.favorite_platform),
-  MIN(s.source),
-  MIN(s.unlock_reward),
-  CASE WHEN m.member_id IS NOT NULL THEN 'linked_member' ELSE 'received' END,
-  COUNT(*)::int,
-  MIN(s.consent_at),
-  MIN(s.created_at),
-  MAX(s.created_at)
-FROM halo_dreamweaver_fan_signups s
-LEFT JOIN halo_memberships m ON m.email = s.email
-GROUP BY s.email, m.member_id
+  latest.email,
+  latest.id,
+  latest.member_id,
+  latest.first_name,
+  latest.favorite_platform,
+  latest.source,
+  latest.unlock_reward,
+  CASE WHEN latest.member_id IS NOT NULL THEN 'linked_member' ELSE 'received' END,
+  totals.signup_count,
+  totals.consent_at,
+  totals.first_signup_at,
+  totals.last_signup_at
+FROM latest_dreamweaver_signups latest
+JOIN dreamweaver_signup_totals totals USING (email)
 ON CONFLICT (email) DO UPDATE SET
   source_signup_id = EXCLUDED.source_signup_id,
   linked_member_id = COALESCE(EXCLUDED.linked_member_id, halo_relationship_signups.linked_member_id),

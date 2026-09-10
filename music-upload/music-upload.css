@@ -408,6 +408,12 @@ select:focus {
   line-height: 1.55;
 }
 
+.result-next-step {
+  margin: 0;
+  line-height: 1.5;
+  color: #a6ffc1;
+}
+
 .needs-attention {
   color: #ffb2b2;
 }

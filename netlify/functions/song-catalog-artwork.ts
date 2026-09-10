@@ -51,6 +51,19 @@ function requestedByteRange(value: string | null, byteSize: number) {
   return { start, end: Math.min(end, byteSize - 1) };
 }
 
+function hasCompleteChunkSet(
+  blobs: Array<{ key?: string | null }>,
+  prefix: string,
+  chunkCount: number,
+) {
+  const keys = new Set(blobs.map(blob => String(blob?.key || "")));
+  for (let index = 0; index < chunkCount; index += 1) {
+    const expectedKey = `${prefix}${String(index).padStart(3, "0")}`;
+    if (!keys.has(expectedKey)) return false;
+  }
+  return true;
+}
+
 async function ownedSong(db: Awaited<ReturnType<typeof getDatabase>>, ownerMemberId: string, songId: string) {
   const rows = await db.sql`
     SELECT id, artwork_url, artwork_blob_prefix, artwork_chunk_count, artwork_byte_size, artwork_content_type, artwork_filename
@@ -119,7 +132,9 @@ async function finalizeUpload(payload: Record<string, unknown>, db: Awaited<Retu
     if (!version) return json({ message: "That version was not found" }, 404);
     const prefix = `${ownerMemberId}/${songId}/${versionId}/${uploadId}/parts/`;
     const stored = await artworkStore.list({ prefix });
-    if (stored.blobs.length !== chunkCount) return json({ message: "The artwork upload is incomplete. Try it again." }, 409);
+    if (!hasCompleteChunkSet(stored.blobs, prefix, chunkCount)) {
+      return json({ message: "The artwork upload is incomplete. Try it again." }, 409);
+    }
     const artworkUrl = `/api/song-catalog/artwork?songId=${encodeURIComponent(songId)}&versionId=${encodeURIComponent(versionId)}`;
     await db.sql`
       UPDATE halo_song_versions
@@ -134,13 +149,21 @@ async function finalizeUpload(payload: Record<string, unknown>, db: Awaited<Retu
       WHERE id = ${versionId} AND song_id = ${songId}
     `;
     if (version.artwork_blob_prefix && version.artwork_blob_prefix !== prefix) await removeArtwork(String(version.artwork_blob_prefix)).catch(() => undefined);
-    return json({ artwork_url: artworkUrl, message: "Artwork uploaded successfully" });
+    return json({
+      artwork_url: artworkUrl,
+      message: "Artwork is persisted and locked into HALO storage.",
+      persisted: true,
+      lockedIn: true,
+      confirmedAt: new Date().toISOString(),
+    });
   }
   const song = await ownedSong(db, ownerMemberId, songId);
   if (!song) return json({ message: "That song was not found" }, 404);
   const prefix = `${ownerMemberId}/${songId}/${uploadId}/parts/`;
   const stored = await artworkStore.list({ prefix });
-  if (stored.blobs.length !== chunkCount) return json({ message: "The artwork upload is incomplete. Try it again." }, 409);
+  if (!hasCompleteChunkSet(stored.blobs, prefix, chunkCount)) {
+    return json({ message: "The artwork upload is incomplete. Try it again." }, 409);
+  }
   const artworkUrl = `/api/song-catalog/artwork?songId=${encodeURIComponent(songId)}`;
   await db.sql`
     UPDATE halo_song_catalog
@@ -155,7 +178,13 @@ async function finalizeUpload(payload: Record<string, unknown>, db: Awaited<Retu
     WHERE id = ${songId} AND owner_member_id = ${ownerMemberId}
   `;
   if (song.artwork_blob_prefix && song.artwork_blob_prefix !== prefix) await removeArtwork(String(song.artwork_blob_prefix)).catch(() => undefined);
-  return json({ artwork_url: artworkUrl, message: "Artwork uploaded successfully" });
+  return json({
+    artwork_url: artworkUrl,
+    message: "Artwork is persisted and locked into HALO storage.",
+    persisted: true,
+    lockedIn: true,
+    confirmedAt: new Date().toISOString(),
+  });
 }
 
 async function readArtworkRange(song: Record<string, unknown>, range: { start: number; end: number }) {

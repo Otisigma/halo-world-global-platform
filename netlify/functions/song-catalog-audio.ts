@@ -72,6 +72,19 @@ function requestedByteRange(value: string | null, byteSize: number) {
   return { start, end: Math.min(end, byteSize - 1) };
 }
 
+function hasCompleteChunkSet(
+  blobs: Array<{ key?: string | null }>,
+  prefix: string,
+  chunkCount: number,
+) {
+  const keys = new Set(blobs.map(blob => String(blob?.key || "")));
+  for (let index = 0; index < chunkCount; index += 1) {
+    const expectedKey = `${prefix}${String(index).padStart(3, "0")}`;
+    if (!keys.has(expectedKey)) return false;
+  }
+  return true;
+}
+
 async function ownedVersion(db: Awaited<ReturnType<typeof getDatabase>>, ownerMemberId: string, versionId: string, songId = "") {
   const rows = songId
     ? await db.sql`
@@ -158,7 +171,9 @@ async function finalizeUpload(payload: Record<string, unknown>, db: Awaited<Retu
   if (!version) return json({ message: "That song version was not found" }, 404);
   const prefix = `${ownerMemberId}/${versionId}/${uploadId}/parts/`;
   const stored = await audioStore.list({ prefix });
-  if (stored.blobs.length !== chunkCount) return json({ message: "The audio upload is incomplete. Try it again." }, 409);
+  if (!hasCompleteChunkSet(stored.blobs, prefix, chunkCount)) {
+    return json({ message: "The audio upload is incomplete. Try it again." }, 409);
+  }
   const audioUrl = `/api/song-catalog/audio?versionId=${encodeURIComponent(versionId)}`;
   await db.sql`
     UPDATE halo_song_versions
@@ -171,7 +186,15 @@ async function finalizeUpload(payload: Record<string, unknown>, db: Awaited<Retu
   `;
   await runDreamweaverReview(songId, ownerMemberId);
   if (version.audio_blob_prefix && version.audio_blob_prefix !== prefix) await removeUpload(version.audio_blob_prefix).catch(() => undefined);
-  return json({ message: "Audio uploaded, routed, and checked by Dream Weaver", songId, versionId, audioUrl });
+  return json({
+    message: "Audio is persisted and locked into HALO storage.",
+    songId,
+    versionId,
+    audioUrl,
+    persisted: true,
+    lockedIn: true,
+    confirmedAt: new Date().toISOString(),
+  });
 }
 
 async function readAudioRange(version: Record<string, unknown>, range: { start: number; end: number }) {

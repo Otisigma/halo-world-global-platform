@@ -65,7 +65,7 @@
                 <strong>HALO upload controller is offline.</strong>
                 <p id="runtimeAlertText">The upload runtime is unavailable, so this intake surface cannot safely accept packages.</p>
               </div>
-              <button class="quiet-button" type="button" id="runtimeRetryButton">Reinitialize controller</button>
+              <button class="quiet-button" type="button" id="runtimeRetryButton" onclick="window.__haloMusicUploadRetry?.()">Reinitialize controller</button>
             </div>
             <div class="controller-metrics" aria-label="Controller intake metrics">
               <article><span>Queue</span><strong id="queueMetric">0 files ready</strong></article>

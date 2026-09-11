@@ -702,6 +702,8 @@ async function handleRuntimeRetry() {
   }
 }
 
+window.__haloMusicUploadRetry = handleRuntimeRetry;
+
 async function handleSubmit(event) {
   event.preventDefault();
   try {

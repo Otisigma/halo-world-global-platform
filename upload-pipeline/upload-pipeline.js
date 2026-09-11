@@ -2,6 +2,9 @@ const state = {
   items: [],
   department: "all",
   authenticated: false,
+  authState: "pending",
+  identity: null,
+  identityResolved: false,
   activeSongId: "",
   activeSongTitle: "",
 };
@@ -77,31 +80,72 @@ const STAGE_CSS_CLASS = {
   published: "stage-published",
 };
 
+function clearPipelineItems() {
+  elements.board.querySelectorAll(".pipeline-item").forEach(el => el.remove());
+}
+
+function setLoadingMessage(message) {
+  elements.loading.hidden = false;
+  elements.loading.textContent = message;
+}
+
+function setPendingAuthState(message = "Checking HALO session…") {
+  state.authenticated = false;
+  state.authState = "pending";
+  state.items = [];
+  elements.empty.hidden = true;
+  clearPipelineItems();
+  setLoadingMessage(message);
+  renderInsights();
+}
+
+function setSignedOutState(message = "Sign in to view the upload pipeline.") {
+  state.authenticated = false;
+  state.authState = "unauthenticated";
+  state.items = [];
+  elements.empty.hidden = true;
+  clearPipelineItems();
+  setLoadingMessage(message);
+  renderInsights();
+}
+
 async function api(payload) {
   const options = payload
-    ? { method: "POST", headers: { "Content-Type": "application/json" }, credentials: "same-origin", body: JSON.stringify(payload) }
-    : { credentials: "same-origin", headers: { Accept: "application/json" } };
+   ? { method: "POST", headers: { "Content-Type": "application/json" }, credentials: "same-origin", body: JSON.stringify(payload) }
+   : { credentials: "same-origin", headers: { Accept: "application/json" } };
   const response = await fetch(`/api/upload-pipeline?department=${encodeURIComponent(state.department)}`, options);
   const data = await response.json().catch(() => ({ message: "Response could not be read" }));
-  if (!response.ok) throw new Error(data.message || "Pipeline request failed");
+  if (!response.ok) {
+   const error = new Error(data.message || "Pipeline request failed");
+   error.status = response.status;
+   throw error;
+  }
   return data;
 }
 
 async function loadPipeline() {
   elements.shell.setAttribute("aria-busy", "true");
-  elements.loading.hidden = false;
+  setLoadingMessage(state.identityResolved ? "Loading pipeline…" : "Checking HALO session…");
   elements.empty.hidden = true;
   try {
-    const data = await api();
-    state.authenticated = Boolean(data.authenticated);
-    state.items = data.items || [];
-    render();
+   const data = await api();
+   state.authenticated = Boolean(data.authenticated);
+   state.authState = state.authenticated ? "authenticated" : (state.identityResolved ? "unauthenticated" : "pending");
+   state.items = state.authenticated ? (data.items || []) : [];
+   render();
   } catch (error) {
-    elements.loading.hidden = false;
-    elements.loading.textContent = error.message;
-    renderInsights();
+   if (error.status === 401 && !state.identityResolved) {
+     setPendingAuthState();
+     return;
+   }
+   if (error.status === 401) {
+     setSignedOutState(error.message);
+     return;
+   }
+   setLoadingMessage(error.message);
+   renderInsights();
   } finally {
-    elements.shell.setAttribute("aria-busy", "false");
+   elements.shell.setAttribute("aria-busy", "false");
   }
 }
 
@@ -141,17 +185,22 @@ function renderItem(item) {
 }
 
 function render() {
+  if (state.authState === "pending") {
+    elements.empty.hidden = true;
+    clearPipelineItems();
+    renderInsights();
+    return;
+  }
   elements.loading.hidden = true;
   if (!state.authenticated) {
-    elements.loading.hidden = false;
-    elements.loading.textContent = "Sign in to view the upload pipeline.";
-    elements.board.querySelectorAll(".pipeline-item").forEach(el => el.remove());
+    setLoadingMessage("Sign in to view the upload pipeline.");
+    clearPipelineItems();
     renderInsights();
     return;
   }
   if (!state.items.length) {
     elements.empty.hidden = false;
-    elements.board.querySelectorAll(".pipeline-item").forEach(el => el.remove());
+    clearPipelineItems();
     renderInsights();
     return;
   }
@@ -198,6 +247,17 @@ function renderCounts(items) {
 }
 
 function renderInsights() {
+  if (state.authState === "pending") {
+    elements.storyCopy.textContent = "HALO is checking your membership session before loading live pipeline data.";
+    elements.storySignal.className = "story-signal";
+    elements.trackTitle.textContent = "Checking sign-in state";
+    elements.trackMeta.textContent = "Stay on this page while authentication hydrates and the pipeline reconnects.";
+    elements.trustSignal.textContent = "Trust signal: waiting for confirmed session hydration.";
+    elements.guidanceCopy.textContent = "Once your session is confirmed, HALO will load the active board without redirecting you away.";
+    renderTimeline("uploaded");
+    renderCounts([]);
+    return;
+  }
   if (!state.authenticated) {
     elements.storyCopy.textContent = "Sign in to activate live stage storytelling, counts, and guided next steps.";
     elements.storySignal.className = "story-signal";
@@ -295,16 +355,21 @@ document.querySelectorAll(".dept-tab").forEach(tab => {
 elements.stageForm.addEventListener("submit", handleStageSubmit);
 elements.stageCloseButton.addEventListener("click", () => elements.stageDialog.close());
 
-// Listen for Netlify Identity auth events to reload when the user signs in.
-window.addEventListener("identity:login", loadPipeline);
-window.addEventListener("identity:logout", () => {
-  state.authenticated = false;
-  state.items = [];
-  elements.loading.hidden = false;
-  elements.loading.textContent = "Sign in to view the upload pipeline.";
-  elements.empty.hidden = true;
-  elements.board.querySelectorAll(".pipeline-item").forEach(el => el.remove());
-  renderInsights();
-});
+async function connectIdentity(identity) {
+  if (!identity || state.identity) return;
+  state.identity = identity;
+  const user = await identity.getUser().catch(() => null);
+  state.identityResolved = true;
+  if (user) await loadPipeline();
+  else setSignedOutState();
+  identity.onAuthChange((_event, changedUser) => {
+    state.identityResolved = true;
+    if (changedUser) loadPipeline();
+    else setSignedOutState();
+  });
+}
 
+window.addEventListener("halo-identity-ready", event => connectIdentity(event.detail), { once: true });
+if (window.haloIdentity) connectIdentity(window.haloIdentity);
+setPendingAuthState();
 loadPipeline();

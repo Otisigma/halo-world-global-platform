@@ -31,7 +31,8 @@ const checks = [
   [client.includes("set_stage") && client.includes("stageSubmitButton"), "client submits stage transitions to the API"],
   [client.includes("radioTracks") && client.includes("radio-linked"), "client shows radio track link status on each pipeline item"],
   [client.includes("renderInsights") && client.includes("STAGE_GUIDANCE") && client.includes("pipelineStoryCopy") && client.includes("renderTimeline"), "client drives animated guidance content from live pipeline runtime state"],
-  [client.includes("identity:login") && client.includes("identity:logout"), "client responds to authentication events"],
+  [client.includes('authState: "pending"') && client.includes("setPendingAuthState") && client.includes("halo-identity-ready") && client.includes("onAuthChange"), "client waits for auth hydration and reloads from Netlify Identity state changes"],
+  [client.includes("Checking HALO session") && client.includes("setSignedOutState"), "client shows a pending auth state before falling back to the sign-in prompt"],
 
   // CSS
   [styles.includes("stage-uploaded") && styles.includes("stage-published") && styles.includes("stage-dreamweaver_in_progress"), "CSS defines visual chips for all pipeline stages"],
@@ -45,6 +46,7 @@ const checks = [
   [api.includes("set_stage") && api.includes("pipeline_status") && api.includes("pipeline_updated_at"), "API persists stage transitions with a timestamp"],
   [api.includes("link_radio_track") && api.includes("master_song_id"), "API supports linking a radio track to its master song catalog entry"],
   [api.includes("verifyRequestOrigin") && api.includes("ensureMembership") && api.includes('path: "/api/upload-pipeline"'), "API protects pipeline actions with membership and origin checks"],
+  [api.includes("await getUser(request)") && api.includes("user?.id") && api.includes("authenticated: false"), "API waits for the authenticated user and returns a hydration-safe unauthenticated GET payload"],
   [api.includes("department") && api.includes("ready_for_radio") && api.includes("ready_for_sale") && api.includes("dreamweaver"), "API filters items by department when a department query param is given"],
 
   // Song catalog integration

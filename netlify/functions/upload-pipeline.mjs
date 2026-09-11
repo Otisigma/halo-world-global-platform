@@ -150,8 +150,12 @@ async function linkRadioTrack(db, ownerMemberId, payload) {
 
 export default async function handler(request) {
   try {
-    const user = getUser(request);
-    if (!user?.sub) return json({ message: "Sign in to access the upload pipeline" }, 401);
+    const user = await getUser(request).catch(() => null);
+    if (!user?.id) {
+      return request.method === "GET"
+        ? json({ authenticated: false, items: [], stageOrder: [...PIPELINE_STAGES] })
+        : json({ message: "Sign in to access the upload pipeline" }, 401);
+    }
     const db = await getDatabase();
     const membership = await ensureMembership(db, user);
 

@@ -25,6 +25,11 @@
     Cache-Control = "no-cache, no-store, must-revalidate"
 
 [[headers]]
+  for = "/upload-pipeline/*"
+  [headers.values]
+    Cache-Control = "no-cache, no-store, must-revalidate"
+
+[[headers]]
   for = "/upload-progress.js"
   [headers.values]
     Cache-Control = "no-cache, no-store, must-revalidate"

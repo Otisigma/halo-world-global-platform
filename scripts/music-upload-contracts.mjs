@@ -38,12 +38,14 @@ const checks = [
   {
     stage: "page bootstrap / runtime load",
     source: "page",
-    description: "page loads required runtime scripts for telemetry, monitor, helper, and client",
+    description: "page loads required runtime scripts and a visible runtime alert surface",
     signals: [
       "/stats.js",
       "/site-monitor.js",
       "/upload-progress.js",
       "/music-upload/music-upload.js",
+      'id="runtimeAlert"',
+      'id="runtimeRetryButton"',
     ],
     diagnose: "Bootstrap stage failed: /music-upload/ is missing required runtime script wiring.",
   },
@@ -78,12 +80,15 @@ const checks = [
   {
     stage: "progress visibility / movement",
     source: "client",
-    description: "audio/artwork upload flow validates concrete UI nodes and emits start, progress, success, and fail states",
+    description: "audio/artwork upload flow validates concrete UI nodes and emits controller, start, progress, success, and fail states",
     signals: [
       'resolveUploadUiElements("#audioUploadTrack", "#audioUploadProgress")',
       'track?.closest(".upload-panel")',
       'validateUploadUiElements("audio", audioElements)',
       "HALO upload progress UI failed to initialize",
+      "setRuntimeStatus(",
+      "setControllerPhase(",
+      "handleRuntimeRetry",
       "audioUploadUi.start",
       "audioUploadUi.progress",
       "audioUploadUi.success",
@@ -164,9 +169,12 @@ const checks = [
   {
     stage: "post-upload guidance / pipeline insights",
     source: "client",
-    description: "client outputs stage diagnostics, needs-attention, and next-step guidance",
+    description: "client outputs stage diagnostics, needs-attention, next-step guidance, and package receipts",
     signals: [
       "stageChip(result.pipelineStatus)",
+      "result-receipt",
+      "lockedAssets",
+      "handoffLabel",
       "Needs attention:",
       "result-next-step",
       "Upload complete:",
@@ -178,14 +186,29 @@ const checks = [
   {
     stage: "post-upload guidance / pipeline insights",
     source: "styles",
-    description: "styles preserve progress tracks and stage guidance markers",
+    description: "styles preserve progress tracks, controller stages, and stage guidance markers",
     signals: [
       ".upload-progress-track",
       ".upload-progress-fill",
+      ".controller-stage",
+      ".runtime-alert",
       ".stage-dreamweaver_in_progress",
       ".result-next-step",
     ],
     diagnose: "Guidance stage failed: style markers for progress and next-step guidance are missing.",
+  },
+  {
+    stage: "page structure / controller surface",
+    source: "page",
+    description: "page exposes a central intake controller with explicit stage and routing sections",
+    signals: [
+      "Live intake supervision",
+      'id="controllerStageTimeline"',
+      "Pipeline handoff",
+      'id="handoffPreview"',
+      "Who receives this package",
+    ],
+    diagnose: "Surface stage failed: /music-upload/ is missing the explicit controller stage/routing UI.",
   },
   {
     stage: "deployment/runtime cache freshness",

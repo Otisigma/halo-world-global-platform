@@ -53,6 +53,68 @@
           <button class="primary-button" type="submit" id="submitButton">Submit to Halo Music Pipeline</button>
         </div>
 
+        <section class="controller-overview" aria-labelledby="controllerHeading">
+          <article class="controller-card runtime-card">
+            <div class="controller-card-heading">
+              <div><p class="eyebrow">Controller state</p><h3 id="controllerHeading">Live intake supervision</h3></div>
+              <span class="runtime-badge is-pending" id="runtimeStatusBadge">Checking runtime</span>
+            </div>
+            <p class="runtime-copy" id="runtimeStatusText">Verifying the shared upload runtime, progress surface, and unified handoff controls.</p>
+            <div class="runtime-alert" id="runtimeAlert" role="alert" hidden>
+              <div>
+                <strong>HALO upload controller is offline.</strong>
+                <p id="runtimeAlertText">The upload runtime is unavailable, so this intake surface cannot safely accept packages.</p>
+              </div>
+              <button class="quiet-button" type="button" id="runtimeRetryButton" onclick="window.__haloMusicUploadRetry?.()">Reinitialize controller</button>
+            </div>
+            <div class="controller-metrics" aria-label="Controller intake metrics">
+              <article><span>Queue</span><strong id="queueMetric">0 files ready</strong></article>
+              <article><span>Artwork</span><strong id="artworkMetric">Awaiting cover art</strong></article>
+              <article><span>Routing</span><strong id="routingMetric">2 departments selected</strong></article>
+              <article><span>Mode</span><strong id="intakeModeMetric">Metadata + source links</strong></article>
+            </div>
+          </article>
+
+          <article class="controller-card">
+            <div class="controller-card-heading">
+              <div><p class="eyebrow">Pipeline handoff</p><h3>Explicit stage control</h3></div>
+            </div>
+            <ol class="controller-stage-list" id="controllerStageTimeline" aria-live="polite">
+              <li class="controller-stage is-active" data-phase="runtime">
+                <span class="controller-stage-dot" aria-hidden="true"></span>
+                <div><strong>Runtime handshake</strong><small>HALO verifies the shared upload runtime and progress UI before submission can start.</small></div>
+              </li>
+              <li class="controller-stage" data-phase="package">
+                <span class="controller-stage-dot" aria-hidden="true"></span>
+                <div><strong>Package validation</strong><small>Metadata, rights, sale status, and route targets are assembled into one master package.</small></div>
+              </li>
+              <li class="controller-stage" data-phase="transfer">
+                <span class="controller-stage-dot" aria-hidden="true"></span>
+                <div><strong>Asset transfer</strong><small>Audio and artwork uploads go into tracked storage with visible live progress.</small></div>
+              </li>
+              <li class="controller-stage" data-phase="persistence">
+                <span class="controller-stage-dot" aria-hidden="true"></span>
+                <div><strong>Persistence lock</strong><small>HALO confirms the bytes are persisted before reporting the package as locked in.</small></div>
+              </li>
+              <li class="controller-stage" data-phase="handoff">
+                <span class="controller-stage-dot" aria-hidden="true"></span>
+                <div><strong>Pipeline handoff</strong><small>Dreamweaver and downstream departments refresh from the same master record.</small></div>
+              </li>
+            </ol>
+          </article>
+
+          <article class="controller-card">
+            <div class="controller-card-heading">
+              <div><p class="eyebrow">Downstream routing</p><h3>Who receives this package</h3></div>
+            </div>
+            <div class="handoff-preview" id="handoffPreview" aria-live="polite">
+              <span class="handoff-pill">Dreamweaver</span>
+              <span class="handoff-pill">Music Page</span>
+            </div>
+            <p class="handoff-copy" id="handoffStatus">HALO will create one master record, lock approved assets into storage, and expose the same package to every selected downstream surface.</p>
+          </article>
+        </section>
+
         <div class="field-grid">
           <section class="wide-field upload-panel" aria-labelledby="musicFilesHeading">
             <div>
@@ -130,7 +192,7 @@
         <div class="results-list" id="resultsList">
           <article class="result-card is-empty">
             <strong>No packages submitted yet.</strong>
-            <p>Your built/processed feedback will appear here after each upload enters the pipeline.</p>
+            <p>Your built, locked, and routed feedback will appear here after each upload enters the pipeline.</p>
           </article>
         </div>
       </aside>

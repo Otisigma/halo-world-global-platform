@@ -7,9 +7,18 @@ const RUNTIME_LOAD_TIMEOUT_MS = 6000;
 const RUNTIME_LOAD_ATTEMPTS = 3;
 const RUNTIME_RETRY_DELAY_MS = 400;
 const PERSISTENCE_CHECK_TIMEOUT_MS = 10000;
+const RUNTIME_UNAVAILABLE_MESSAGE = "HALO upload runtime did not load. Refresh this page and try again.";
 
 function wait(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function logMusicUploadError(context, error) {
+  if (typeof error === "undefined") {
+    console.error(`[HaloMusicUpload] ${context}`);
+    return;
+  }
+  console.error(`[HaloMusicUpload] ${context}`, error);
 }
 
 function waitForUploadRuntime(timeoutMs = RUNTIME_LOAD_TIMEOUT_MS) {
@@ -70,7 +79,9 @@ let uploadHelper = window.HaloUploadProgress;
 if (!uploadHelper) {
   try {
     uploadHelper = await loadUploadHelperScript();
-  } catch {}
+  } catch (error) {
+    logMusicUploadError("Upload runtime bootstrap failed.", error);
+  }
 }
 const AUDIO_CHUNK_BYTES = 4 * 1024 * 1024;
 const MAX_AUDIO_BYTES = 128 * 1024 * 1024;
@@ -102,20 +113,42 @@ const elements = {
 let audioUploadUi = null;
 let artworkUploadUi = null;
 
+function resolveUploadUiElements(trackSelector, statusSelector) {
+  const track = $(trackSelector);
+  return {
+    panel: track?.closest(".upload-panel") || null,
+    status: $(statusSelector),
+    track,
+    fill: track?.querySelector(".upload-progress-fill") || null,
+  };
+}
+
+function validateUploadUiElements(label, resolved) {
+  for (const [name, element] of Object.entries(resolved)) {
+    if (element) continue;
+    logMusicUploadError(`Missing ${label} upload UI element: ${name}.`);
+    return false;
+  }
+  return true;
+}
+
 function bindUploadUi() {
   if (!uploadHelper?.createUploadUi) return false;
+  const audioElements = resolveUploadUiElements("#audioUploadTrack", "#audioUploadProgress");
+  const artworkElements = resolveUploadUiElements("#artworkUploadTrack", "#artworkUploadProgress");
+  if (!validateUploadUiElements("audio", audioElements) || !validateUploadUiElements("artwork", artworkElements)) return false;
   audioUploadUi = uploadHelper.createUploadUi({
-    panel: document.querySelector('[aria-labelledby="musicFilesHeading"]'),
-    status: $("#audioUploadProgress"),
-    track: $("#audioUploadTrack"),
-    fill: $("#audioUploadTrack .upload-progress-fill"),
+    panel: audioElements.panel,
+    status: audioElements.status,
+    track: audioElements.track,
+    fill: audioElements.fill,
     idleMessage: "No music uploaded yet.",
   });
   artworkUploadUi = uploadHelper.createUploadUi({
-    panel: document.querySelector('[aria-labelledby="artworkHeading"]'),
-    status: $("#artworkUploadProgress"),
-    track: $("#artworkUploadTrack"),
-    fill: $("#artworkUploadTrack .upload-progress-fill"),
+    panel: artworkElements.panel,
+    status: artworkElements.status,
+    track: artworkElements.track,
+    fill: artworkElements.fill,
     idleMessage: "No artwork uploaded yet.",
   });
   return Boolean(audioUploadUi && artworkUploadUi);
@@ -127,24 +160,36 @@ function setMessage(text) {
   elements.message.textContent = text;
 }
 
-if (!uploadHelper) {
+function setRuntimeUnavailable(error, message = RUNTIME_UNAVAILABLE_MESSAGE) {
+  if (error) logMusicUploadError(message, error);
   elements.submitButton.disabled = true;
-  setMessage("HALO upload runtime did not load. Refresh this page and try again.");
+  setMessage(message);
+}
+
+if (!uploadHelper) {
+  setRuntimeUnavailable();
 } else {
-  bindUploadUi();
+  const bound = bindUploadUi();
+  if (!bound) {
+    const message = "HALO upload progress UI failed to initialize. Refresh this page and try again.";
+    setRuntimeUnavailable(new Error(message), message);
+  }
 }
 
 async function ensureUploadRuntime() {
-  if (uploadHelper?.uploadChunkedFile && audioUploadUi && artworkUploadUi) return true;
+  if (uploadHelper?.uploadChunkedFile && audioUploadUi && artworkUploadUi) return uploadHelper;
   try {
     uploadHelper = await loadUploadHelperScript();
-  } catch {}
-  if (!uploadHelper || !bindUploadUi()) {
-    elements.submitButton.disabled = true;
-    setMessage("HALO upload runtime did not load. Refresh this page and try again.");
-    return false;
+  } catch (error) {
+    setRuntimeUnavailable(error);
+    throw new Error(RUNTIME_UNAVAILABLE_MESSAGE, { cause: error });
   }
-  return true;
+  if (!uploadHelper || !bindUploadUi()) {
+    const message = "HALO upload progress UI failed to initialize. Refresh this page and try again.";
+    setRuntimeUnavailable(undefined, message);
+    throw new Error(message);
+  }
+  return uploadHelper;
 }
 
 async function fetchWithTimeout(url, options = {}, timeoutMs = PERSISTENCE_CHECK_TIMEOUT_MS) {
@@ -511,8 +556,10 @@ async function processPackage({ artistName, title, albumTitle, genre, isrc, upc,
 
 async function handleSubmit(event) {
   event.preventDefault();
-  if (!await ensureUploadRuntime()) {
-    setMessage("HALO upload runtime did not load. Refresh this page and try again.");
+  try {
+    await ensureUploadRuntime();
+  } catch (error) {
+    setMessage(error.message);
     return;
   }
   const audioFiles = gatherAudioFiles();
@@ -545,8 +592,16 @@ async function handleSubmit(event) {
   state.results = [];
   renderResults();
   setMessage("Submitting your Halo Music Upload package…");
-  audioUploadUi.idle("No music uploaded yet.");
-  artworkUploadUi.idle("No artwork uploaded yet.");
+  if (audioFiles.length) {
+    audioUploadUi.start(`Preparing ${audioFiles.length === 1 ? "music upload" : `music upload 1 of ${audioFiles.length}`}…`);
+  } else {
+    audioUploadUi.idle("No music uploaded yet.");
+  }
+  if (artworkFile && !audioFiles.length) {
+    artworkUploadUi.start("Preparing cover art upload…");
+  } else {
+    artworkUploadUi.idle("No artwork uploaded yet.");
+  }
 
   try {
     const jobs = audioFiles.length ? audioFiles.map(file => ({

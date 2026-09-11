@@ -25,9 +25,12 @@
     }
     if(ui.track){
       ui.track.hidden=!state.showTrack;
+      ui.track.setAttribute("aria-hidden",state.showTrack?"false":"true");
     }
     if(ui.fill){
-      ui.fill.style.width=`${clampPercent(state.progress)}%`;
+      const progress=clampPercent(state.progress);
+      const visualProgress=state.uploading&&progress===0?3:progress;
+      ui.fill.style.width=`${visualProgress}%`;
     }
     if(ui.status&&state.message){
       ui.status.textContent=state.message;

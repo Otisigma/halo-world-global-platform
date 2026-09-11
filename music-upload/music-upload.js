@@ -97,8 +97,40 @@ const STAGE_LABEL = {
   approved: "Approved",
   published: "Published",
 };
+const CONTROLLER_PHASES = [
+  {
+    id: "runtime",
+    label: "Runtime handshake",
+    detail: "HALO verifies the shared upload runtime and progress UI before submission can start.",
+  },
+  {
+    id: "package",
+    label: "Package validation",
+    detail: "Metadata, rights, sale status, and route targets are assembled into one master package.",
+  },
+  {
+    id: "transfer",
+    label: "Asset transfer",
+    detail: "Audio and artwork uploads go into tracked storage with visible live progress.",
+  },
+  {
+    id: "persistence",
+    label: "Persistence lock",
+    detail: "HALO confirms the bytes are persisted before reporting the package as locked in.",
+  },
+  {
+    id: "handoff",
+    label: "Pipeline handoff",
+    detail: "Dreamweaver and downstream departments refresh from the same master record.",
+  },
+];
 
-const state = { results: [] };
+const state = {
+  results: [],
+  controllerPhase: "runtime",
+  controllerPhaseStatus: "active",
+  controllerPhaseDetail: CONTROLLER_PHASES[0].detail,
+};
 const elements = {
   form: $("#musicUploadForm"),
   submitButton: $("#submitButton"),
@@ -108,6 +140,18 @@ const elements = {
   musicQueue: $("#musicQueue"),
   artworkFile: $("#artworkFile"),
   resultsList: $("#resultsList"),
+  runtimeStatusBadge: $("#runtimeStatusBadge"),
+  runtimeStatusText: $("#runtimeStatusText"),
+  runtimeAlert: $("#runtimeAlert"),
+  runtimeAlertText: $("#runtimeAlertText"),
+  runtimeRetryButton: $("#runtimeRetryButton"),
+  queueMetric: $("#queueMetric"),
+  artworkMetric: $("#artworkMetric"),
+  routingMetric: $("#routingMetric"),
+  intakeModeMetric: $("#intakeModeMetric"),
+  controllerStageTimeline: $("#controllerStageTimeline"),
+  handoffPreview: $("#handoffPreview"),
+  handoffStatus: $("#handoffStatus"),
 };
 
 let audioUploadUi = null;
@@ -160,9 +204,70 @@ function setMessage(text) {
   elements.message.textContent = text;
 }
 
+function setRuntimeStatus(status, text, alertText = "") {
+  elements.runtimeStatusBadge.className = `runtime-badge is-${status}`;
+  elements.runtimeStatusBadge.textContent = status === "online" ? "Controller online" : status === "error" ? "Controller blocked" : "Checking runtime";
+  elements.runtimeStatusText.textContent = text;
+  elements.runtimeAlert.hidden = !alertText;
+  elements.runtimeAlertText.textContent = alertText || "The upload runtime is unavailable, so this intake surface cannot safely accept packages.";
+}
+
+function renderControllerTimeline() {
+  const activeIndex = Math.max(0, CONTROLLER_PHASES.findIndex(phase => phase.id === state.controllerPhase));
+  elements.controllerStageTimeline.innerHTML = CONTROLLER_PHASES.map((phase, index) => {
+    let phaseClass = "";
+    if (index < activeIndex || (index === activeIndex && state.controllerPhaseStatus === "complete")) phaseClass = " is-complete";
+    else if (index === activeIndex && state.controllerPhaseStatus === "error") phaseClass = " is-error";
+    else if (index === activeIndex) phaseClass = " is-active";
+    const detail = index === activeIndex ? state.controllerPhaseDetail : phase.detail;
+    return `<li class="controller-stage${phaseClass}" data-phase="${escapeHtml(phase.id)}">
+      <span class="controller-stage-dot" aria-hidden="true"></span>
+      <div><strong>${escapeHtml(phase.label)}</strong><small>${escapeHtml(detail)}</small></div>
+    </li>`;
+  }).join("");
+}
+
+function setControllerPhase(phase, detail, status = "active") {
+  state.controllerPhase = phase;
+  state.controllerPhaseStatus = status;
+  state.controllerPhaseDetail = detail;
+  renderControllerTimeline();
+}
+
+function renderHandoffPreview() {
+  const targets = selectedRouteTargets();
+  elements.handoffPreview.innerHTML = (targets.length ? targets : ["Dreamweaver review"]).map(target => `
+    <span class="handoff-pill">${escapeHtml(target)}</span>
+  `).join("");
+  elements.handoffStatus.textContent = targets.length
+    ? `HALO will keep ${targets.join(", ")} aligned to the same master package record after persistence lock-in.`
+    : "No downstream targets are selected yet. HALO will default to Dreamweaver review until you choose a route.";
+}
+
+function renderIntakeMetrics() {
+  const audioFiles = gatherAudioFiles();
+  const artworkFile = elements.artworkFile.files?.[0] || null;
+  const officialLink = $("#officialLink").value.trim();
+  const videoLinks = $("#videoLinks").value.trim();
+  const routeTargets = selectedRouteTargets();
+  const intakeMode = audioFiles.length
+    ? (officialLink || videoLinks ? "Audio + source links" : "Audio-led package")
+    : officialLink || videoLinks
+      ? "Metadata + source links"
+      : "Metadata staging";
+  elements.queueMetric.textContent = `${audioFiles.length} file${audioFiles.length === 1 ? "" : "s"} ready`;
+  elements.artworkMetric.textContent = artworkFile ? `Attached · ${artworkFile.name}` : "Awaiting cover art";
+  elements.routingMetric.textContent = `${routeTargets.length} department${routeTargets.length === 1 ? "" : "s"} selected`;
+  elements.intakeModeMetric.textContent = intakeMode;
+  renderHandoffPreview();
+}
+
 function setRuntimeUnavailable(error, message = RUNTIME_UNAVAILABLE_MESSAGE) {
   if (error) logMusicUploadError(message, error);
   elements.submitButton.disabled = true;
+  elements.runtimeRetryButton.disabled = false;
+  setRuntimeStatus("error", "HALO stopped the intake surface because the shared upload runtime or progress UI could not initialize.", message);
+  setControllerPhase("runtime", "Runtime verification failed. Reinitialize the controller or refresh the page before attempting another submission.", "error");
   setMessage(message);
 }
 
@@ -173,11 +278,15 @@ if (!uploadHelper) {
   if (!bound) {
     const message = "HALO upload progress UI failed to initialize. Refresh this page and try again.";
     setRuntimeUnavailable(new Error(message), message);
+  } else {
+    setRuntimeStatus("online", "HALO verified the shared upload runtime and progress surface. The controller is ready to build intake packages.");
+    setControllerPhase("runtime", "Runtime verified. When you submit, HALO will immediately activate progress and begin package validation.", "complete");
   }
 }
 
 async function ensureUploadRuntime() {
   if (uploadHelper?.uploadChunkedFile && audioUploadUi && artworkUploadUi) return uploadHelper;
+  setRuntimeStatus("pending", "HALO is re-checking the shared upload runtime and progress surface before accepting new packages.");
   try {
     uploadHelper = await loadUploadHelperScript();
   } catch (error) {
@@ -189,6 +298,10 @@ async function ensureUploadRuntime() {
     setRuntimeUnavailable(undefined, message);
     throw new Error(message);
   }
+  elements.submitButton.disabled = false;
+  elements.runtimeRetryButton.disabled = false;
+  setRuntimeStatus("online", "HALO verified the shared upload runtime and progress surface. The controller is ready to build intake packages.");
+  setControllerPhase("runtime", "Runtime verified. When you submit, HALO will immediately activate progress and begin package validation.", "complete");
   return uploadHelper;
 }
 
@@ -240,6 +353,7 @@ function renderQueue() {
   const files = gatherAudioFiles();
   if (!files.length) {
     elements.musicQueue.innerHTML = `<p class="file-list-empty">No audio files selected yet. Link-only intake is allowed if you provide title, artist, and source links.</p>`;
+    renderIntakeMetrics();
     return;
   }
   elements.musicQueue.innerHTML = files.map(file => `
@@ -249,6 +363,7 @@ function renderQueue() {
     </div>
   `).join("");
   if (files.length === 1 && !$("#title").value.trim()) $("#title").value = files[0].name.replace(/\.[^.]+$/, "");
+  renderIntakeMetrics();
 }
 
 function buildNotes(baseTitle, audioFile) {
@@ -299,6 +414,11 @@ function renderResults() {
         <div class="result-meta">
           <span>${escapeHtml(result.artistName)}</span>
           <span>${escapeHtml(result.surfaceLabel)}</span>
+        </div>
+        <div class="result-receipt">
+          <p><span>Master record</span><strong>${escapeHtml(result.songId)}</strong></p>
+          <p><span>Locked assets</span><strong>${escapeHtml(result.lockedAssets)}</strong></p>
+          <p><span>Pipeline handoff</span><strong>${escapeHtml(result.handoffLabel)}</strong></p>
         </div>
         ${attentionNote}
         ${nextStepNote}
@@ -486,6 +606,7 @@ async function loadCatalogSong(songId) {
 }
 
 async function processPackage({ artistName, title, albumTitle, genre, isrc, upc, rightsStatus, saleStatus, explicitLyrics, artworkFile, file, position, total }) {
+  setControllerPhase("package", `Creating the master package for ${title} and validating metadata, rights, and route targets.`);
   const notes = buildNotes(title, file);
   const created = await apiJson("/api/unified-upload", {
     action: "create_project",
@@ -517,7 +638,12 @@ async function processPackage({ artistName, title, albumTitle, genre, isrc, upc,
     explicitLyrics,
     notes,
   });
-
+  setControllerPhase(
+    "transfer",
+    file || artworkFile
+      ? "Uploading source assets into the tracked HALO package with live transfer progress."
+      : "No source files were attached, so HALO is preparing a metadata-first intake package.",
+  );
   if (file) {
     const versionId = created.versionIds?.sale_master || created.versionIds?.radio_edit;
     if (!versionId) throw new Error("The intake package did not provision an audio version.");
@@ -525,7 +651,14 @@ async function processPackage({ artistName, title, albumTitle, genre, isrc, upc,
   }
 
   if (artworkFile) await uploadArtwork(created.songId, artworkFile);
+  setControllerPhase("persistence", "HALO is confirming persisted bytes and storage lock-in before routing the package.");
   const finalStage = file && artworkFile ? "dreamweaver_in_progress" : "needs_assets";
+  setControllerPhase(
+    "handoff",
+    finalStage === "dreamweaver_in_progress"
+      ? "HALO is handing the locked package into Dreamweaver build processing and downstream department views."
+      : "HALO is saving the package in Needs attention until the remaining source assets arrive.",
+  );
   const pipeline = await apiJson("/api/unified-upload", { action: "advance_pipeline", songId: created.songId, toStage: finalStage });
   const song = await loadCatalogSong(created.songId).catch(() => null);
   const issueCount = Array.isArray(song?.metadataIssues) ? song.metadataIssues.filter(issue => issue.level === "required").length : 0;
@@ -536,6 +669,8 @@ async function processPackage({ artistName, title, albumTitle, genre, isrc, upc,
     surfaceLabel: "Halo Music Upload",
     pipelineStatus: pipeline.pipelineStatus,
     departments: pipeline.departments,
+    lockedAssets: file && artworkFile ? "Audio + artwork locked" : file ? "Audio locked · artwork pending" : artworkFile ? "Artwork locked · audio pending" : "Metadata package only",
+    handoffLabel: finalStage === "dreamweaver_in_progress" ? "Dreamweaver build active" : "Needs attention queue",
     summary: finalStage === "dreamweaver_in_progress"
       ? "Audio/artwork persisted and locked. Package moved into Dreamweaver build processing."
       : file
@@ -552,6 +687,19 @@ async function processPackage({ artistName, title, albumTitle, genre, isrc, upc,
       ? "Next: Dreamweaver now processes this locked package. You can close this page or upload another song."
       : "Next: Upload remaining assets. This package is saved; remove or replace files only if needed.",
   };
+}
+
+async function handleRuntimeRetry() {
+  elements.runtimeRetryButton.disabled = true;
+  setMessage("Reinitializing the HALO upload controller…");
+  try {
+    await ensureUploadRuntime();
+    setMessage("HALO upload controller restored. You can submit the intake package now.");
+  } catch (error) {
+    setMessage(error.message);
+  } finally {
+    elements.runtimeRetryButton.disabled = false;
+  }
 }
 
 async function handleSubmit(event) {
@@ -592,13 +740,14 @@ async function handleSubmit(event) {
   state.results = [];
   renderResults();
   setMessage("Submitting your Halo Music Upload package…");
+  setControllerPhase("package", "HALO is assembling the master package and validating every selected intake field.");
   if (audioFiles.length) {
     audioUploadUi.start(`Preparing ${audioFiles.length === 1 ? "music upload" : `music upload 1 of ${audioFiles.length}`}…`);
   } else {
     audioUploadUi.idle("No music uploaded yet.");
   }
-  if (artworkFile && !audioFiles.length) {
-    artworkUploadUi.start("Preparing cover art upload…");
+  if (artworkFile) {
+    artworkUploadUi.start(audioFiles.length ? "Artwork upload queued after music lock-in…" : "Preparing cover art upload…");
   } else {
     artworkUploadUi.idle("No artwork uploaded yet.");
   }
@@ -631,10 +780,12 @@ async function handleSubmit(event) {
     }
     elements.form.reset();
     renderQueue();
+    setControllerPhase("handoff", "Pipeline handoff complete. The package is saved, visible, and ready for the next intake run.", "complete");
     audioUploadUi.idle("Upload complete. Add the next intake package when ready.");
     artworkUploadUi.idle("Artwork attached where supplied.");
     setMessage(`Upload complete: ${jobs.length} package${jobs.length === 1 ? "" : "s"} saved. Files marked locked-in are persisted in HALO and should be removed only if needed.`);
   } catch (error) {
+    setControllerPhase(state.controllerPhase, error.message, "error");
     audioUploadUi.fail(error.message);
     artworkUploadUi.fail(error.message);
     setMessage(error.message);
@@ -645,6 +796,14 @@ async function handleSubmit(event) {
 
 elements.musicFiles.addEventListener("change", renderQueue);
 elements.musicFolder.addEventListener("change", renderQueue);
+elements.artworkFile.addEventListener("change", renderIntakeMetrics);
+elements.form.querySelectorAll('input[name="routeTargets"], #officialLink, #videoLinks').forEach(element => {
+  element.addEventListener("change", renderIntakeMetrics);
+  element.addEventListener("input", renderIntakeMetrics);
+});
+elements.runtimeRetryButton.addEventListener("click", handleRuntimeRetry);
 elements.form.addEventListener("submit", handleSubmit);
+renderControllerTimeline();
 renderQueue();
 renderResults();
+renderIntakeMetrics();

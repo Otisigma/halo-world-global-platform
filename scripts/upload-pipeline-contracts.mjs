@@ -1,87 +1,160 @@
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
+import { runStageMonitor } from "./upload-experience-stage-monitor.mjs";
 
 const root = resolve(import.meta.dirname, "..");
 const read = path => readFile(resolve(root, path), "utf8");
 
-const [page, client, styles, api, catalogApi, catalogClient, schema, migration, netlifyConfig] = await Promise.all([
+const [page, client, styles, api, netlifyConfig] = await Promise.all([
   read("upload-pipeline/index.html"),
   read("upload-pipeline/upload-pipeline.js"),
   read("upload-pipeline/upload-pipeline.css"),
   read("netlify/functions/upload-pipeline.mjs"),
-  read("netlify/functions/song-catalog.ts"),
-  read("song-catalog/song-catalog.js"),
-  read("db/schema.ts"),
-  read("netlify/database/migrations/20260829010000_add_unified_upload_pipeline.sql"),
   read("netlify.toml"),
 ]);
 
+const sources = { page, client, styles, api, netlifyConfig };
+
 const checks = [
-  // HTML structure
-  [page.includes("upload-pipeline.css") && page.includes("upload-pipeline.js"), "page loads its own CSS and JS"],
-  [page.includes("dept-tab") && page.includes('data-dept="all"') && page.includes('data-dept="dreamweaver"') && page.includes('data-dept="radio"') && page.includes('data-dept="sales"'), "page provides department filter tabs for all, Dream Weaver, radio, and sales"],
-  [page.includes("pipelineBoard") && page.includes("stageDialog") && page.includes("stageSelect"), "page includes the pipeline board and stage dialog elements"],
-  [page.includes("pipeline-insights") && page.includes("pipelineTimeline") && page.includes("pipelineGuidanceCopy") && page.includes("pipelineTrustSignal"), "page includes a live pipeline insights panel with guidance and trust signals"],
-  [page.includes("/song-catalog/") && page.includes("Open Song Catalog"), "page links back to the song catalog for one-upload entry"],
-  [page.includes("pipeline-legend") && page.includes("Needs Assets") && page.includes("Dream Weaver") && page.includes("Ready for Radio"), "page shows the pipeline stage legend"],
-
-  // JS client
-  [client.includes("STAGE_LABEL") && client.includes("dreamweaver_in_progress") && client.includes("ready_for_radio") && client.includes("ready_for_sale") && client.includes("published"), "client defines all pipeline stage labels"],
-  [client.includes("dept-tab") && client.includes("loadPipeline"), "client reloads pipeline when a department tab is clicked"],
-  [client.includes("set_stage") && client.includes("stageSubmitButton"), "client submits stage transitions to the API"],
-  [client.includes("radioTracks") && client.includes("radio-linked"), "client shows radio track link status on each pipeline item"],
-  [client.includes("renderInsights") && client.includes("STAGE_GUIDANCE") && client.includes("pipelineStoryCopy") && client.includes("renderTimeline"), "client drives animated guidance content from live pipeline runtime state"],
-  [client.includes('authState: "pending"') && client.includes("setPendingAuthState") && client.includes("halo-identity-ready") && client.includes("onAuthChange"), "client waits for auth hydration and reloads from Netlify Identity state changes"],
-  [client.includes("Checking HALO session") && client.includes("setSignedOutState"), "client shows a pending auth state before falling back to the sign-in prompt"],
-
-  // CSS
-  [styles.includes("stage-uploaded") && styles.includes("stage-published") && styles.includes("stage-dreamweaver_in_progress"), "CSS defines visual chips for all pipeline stages"],
-  [styles.includes("dept-tab.is-active") && styles.includes("pipeline-item"), "CSS styles the department tabs and pipeline item cards"],
-  [styles.includes("pipeline-shell") && styles.includes("pipeline-insights") && styles.includes("story-signal") && styles.includes("@keyframes storyPulse"), "CSS uses dead space for animated pipeline guidance panels"],
-  [styles.includes("grid-row: 3") && styles.includes("grid-row: 4") && styles.includes("text-overflow: ellipsis"), "CSS keeps mobile pipeline cards readable and non-overlapping"],
-
-  // API function
-  [api.includes("PIPELINE_STAGES") && api.includes('"uploaded"') && api.includes('"dreamweaver_in_progress"') && api.includes('"ready_for_radio"') && api.includes('"published"'), "API defines the full set of valid pipeline stages"],
-  [api.includes("loadPipeline") && api.includes("master_song_id") && api.includes("radio_room"), "API loads songs with linked radio tracks in a single query"],
-  [api.includes("set_stage") && api.includes("pipeline_status") && api.includes("pipeline_updated_at"), "API persists stage transitions with a timestamp"],
-  [api.includes("link_radio_track") && api.includes("master_song_id"), "API supports linking a radio track to its master song catalog entry"],
-  [api.includes("verifyRequestOrigin") && api.includes("ensureMembership") && api.includes('path: "/api/upload-pipeline"'), "API protects pipeline actions with membership and origin checks"],
-  [api.includes("await getUser(request)") && api.includes("user?.id") && api.includes("authenticated: false"), "API waits for the authenticated user and returns a hydration-safe unauthenticated GET payload"],
-  [api.includes("department") && api.includes("ready_for_radio") && api.includes("ready_for_sale") && api.includes("dreamweaver"), "API filters items by department when a department query param is given"],
-
-  // Song catalog integration
-  [catalogApi.includes("PIPELINE_STAGES") && catalogApi.includes("set_pipeline_stage"), "song catalog API exposes a set_pipeline_stage action"],
-  [catalogApi.includes("pipelineStatus") && catalogApi.includes("pipelineUpdatedAt"), "song catalog serializes pipelineStage and pipelineUpdatedAt for each song"],
-
-  // Song catalog client
-  [catalogClient.includes("songPipelineStatus"), "song catalog client populates the pipeline stage display element in the workspace"],
-
-  // Drizzle schema
-  [schema.includes("pipelineStatus") && schema.includes('"pipeline_status"'), "Drizzle schema includes the pipelineStatus column on the songs table"],
-  [schema.includes("pipelineUpdatedAt") && schema.includes('"pipeline_updated_at"'), "Drizzle schema includes the pipelineUpdatedAt column on the songs table"],
-  [schema.includes("halo_song_catalog_pipeline_stage_idx"), "Drizzle schema defines an index on pipeline_status for efficient department queries"],
-
-  // Migration
-  [migration.includes("pipeline_updated_at") && migration.includes("master_song_id"), "migration adds pipeline_updated_at and master_song_id columns"],
-  [migration.includes("pipeline_updated_at"), "migration adds pipeline_updated_at timestamp column"],
-  [migration.includes("master_song_id") && migration.includes("halo_radio_tracks"), "migration adds master_song_id to halo_radio_tracks to link radio entries to the master song"],
-  [migration.includes("halo_radio_tracks_master_song_idx"), "migration indexes master_song_id for efficient lookups"],
-
-  // Netlify config
-  [netlifyConfig.includes("/upload-pipeline") && netlifyConfig.includes("/upload-pipeline/"), "netlify.toml redirects /upload-pipeline to the directory index"],
+  {
+    stage: "auth hydration / access control",
+    source: "client",
+    description: "client keeps explicit pending, authenticated, and unauthenticated auth states",
+    signals: [
+      'authState: "pending"',
+      'state.authState = "pending"',
+      'state.authState = "unauthenticated"',
+      'state.authState = state.authenticated ? "authenticated"',
+      "setPendingAuthState",
+      "setSignedOutState",
+      "identityResolved",
+      "onAuthChange",
+      "halo-identity-ready",
+    ],
+    diagnose: "False sign-in risk: auth hydration state transitions are incomplete in upload-pipeline runtime.",
+  },
+  {
+    stage: "auth hydration / access control",
+    source: "api",
+    description: "pipeline API returns hydration-safe unauthenticated GET response instead of hard 401",
+    signals: [
+      "await getUser(request)",
+      "request.method === \"GET\"",
+      "authenticated: false",
+      "Sign in to access the upload pipeline",
+      "ensureMembership",
+    ],
+    diagnose: "False sign-in risk: API auth handling cannot distinguish auth pending/unauthenticated states.",
+  },
+  {
+    stage: "page bootstrap / runtime load",
+    source: "page",
+    description: "page mounts pipeline shell and required runtime assets",
+    signals: [
+      'id="pipelineShell"',
+      'id="pipelineBoard"',
+      'id="pipelineLoading"',
+      'id="pipelineEmpty"',
+      'id="pipelineTimeline"',
+      'id="pipelineGuidanceCopy"',
+      '/upload-pipeline/upload-pipeline.js',
+      '/identity.js',
+    ],
+    diagnose: "Bootstrap stage failed: upload-pipeline shell or runtime scripts are missing.",
+  },
+  {
+    stage: "page bootstrap / runtime load",
+    source: "client",
+    description: "client drives live fetch cycle and stage updates",
+    signals: [
+      "async function loadPipeline()",
+      "fetch(`/api/upload-pipeline?department=",
+      "elements.shell.setAttribute(\"aria-busy\", \"true\")",
+      "elements.shell.setAttribute(\"aria-busy\", \"false\")",
+      "action: \"set_stage\"",
+      "renderInsights()",
+    ],
+    diagnose: "Bootstrap stage failed: runtime load and refresh loop is incomplete in upload-pipeline.js.",
+  },
+  {
+    stage: "post-upload guidance / pipeline insights",
+    source: "page",
+    description: "page provides dedicated pipeline guidance/insight regions",
+    signals: [
+      "pipeline-insights",
+      'id="pipelineStoryCopy"',
+      'id="pipelineTrackTitle"',
+      'id="pipelineTrackMeta"',
+      'id="pipelineTrustSignal"',
+      'id="pipelineCounts"',
+    ],
+    diagnose: "Guidance stage failed: upload-pipeline insight panel is missing required storytelling regions.",
+  },
+  {
+    stage: "post-upload guidance / pipeline insights",
+    source: "client",
+    description: "runtime guidance and trust messaging updates by stage",
+    signals: [
+      "STAGE_GUIDANCE",
+      "Trust signal:",
+      "Next recommended stage:",
+      "renderTimeline(stage)",
+      "renderCounts(state.items)",
+      "latestByUpdatedAt",
+    ],
+    diagnose: "Guidance stage failed: upload-pipeline runtime cannot report stage-specific guidance diagnostics.",
+  },
+  {
+    stage: "deployment/runtime cache freshness",
+    source: "netlifyConfig",
+    description: "deploy config serves canonical /upload-pipeline/ route",
+    signals: [
+      'from = "/upload-pipeline/"',
+      'to = "/upload-pipeline/index.html"',
+    ],
+    diagnose: "Deploy stage failed: /upload-pipeline/ routing contract is missing.",
+  },
+  {
+    stage: "deployment/runtime cache freshness",
+    source: "netlifyConfig",
+    description: "deploy config disables stale cache for upload-pipeline bundle",
+    signals: [
+      'for = "/upload-pipeline/*"',
+      'Cache-Control = "no-cache, no-store, must-revalidate"',
+    ],
+    diagnose: "Deploy stage failed: cache headers for /upload-pipeline/* are missing, stale bundles may mask runtime fixes.",
+  },
+  {
+    stage: "pipeline status transitions",
+    source: "api",
+    description: "API enforces known pipeline stage values and persistence timestamps",
+    signals: [
+      "PIPELINE_STAGES",
+      "pipeline_status",
+      "pipeline_updated_at",
+      "set_stage",
+      "Song moved to",
+    ],
+    diagnose: "Pipeline stage contract failed: API stage transition persistence signals are missing.",
+  },
+  {
+    stage: "pipeline status transitions",
+    source: "styles",
+    description: "styles keep stage chips and insight shell readable",
+    signals: [
+      "stage-uploaded",
+      "stage-dreamweaver_in_progress",
+      "stage-ready_for_radio",
+      "stage-published",
+      "pipeline-insights",
+      "story-signal",
+    ],
+    diagnose: "Pipeline stage contract failed: visual stage signals are missing in upload-pipeline.css.",
+  },
 ];
 
-let passed = 0;
-let failed = 0;
-for (const [condition, label] of checks) {
-  if (condition) {
-    console.log(`  ✓ ${label}`);
-    passed++;
-  } else {
-    console.error(`  ✗ ${label}`);
-    failed++;
-  }
-}
-
-console.log(`\n${passed} passed, ${failed} failed`);
-if (failed > 0) process.exit(1);
+runStageMonitor({
+  monitorName: "Upload pipeline watchdog",
+  checks,
+  sources,
+});

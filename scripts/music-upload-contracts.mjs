@@ -1,16 +1,18 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
+import vm from "node:vm";
 import { normalizeHttpsList } from "../music-upload/link-validation.js";
 import { runStageMonitor } from "./upload-experience-stage-monitor.mjs";
 
 const root = resolve(import.meta.dirname, "..");
 const read = path => readFile(resolve(root, path), "utf8");
 
-const [page, client, styles, world, routes, unifiedUpload, audioFn, artworkFn, config] = await Promise.all([
+const [page, client, styles, uploadHelper, world, routes, unifiedUpload, audioFn, artworkFn, config] = await Promise.all([
   read("music-upload/index.html"),
   read("music-upload/music-upload.js"),
   read("music-upload/music-upload.css"),
+  read("upload-progress.js"),
   read("halo.html"),
   read("lib/route-registry.js"),
   read("netlify/functions/unified-upload.mjs"),
@@ -19,7 +21,7 @@ const [page, client, styles, world, routes, unifiedUpload, audioFn, artworkFn, c
   read("netlify.toml"),
 ]);
 
-const sources = { page, client, styles, world, routes, unifiedUpload, audioFn, artworkFn, config };
+const sources = { page, client, styles, uploadHelper, world, routes, unifiedUpload, audioFn, artworkFn, config };
 
 const checks = [
   {
@@ -76,8 +78,12 @@ const checks = [
   {
     stage: "progress visibility / movement",
     source: "client",
-    description: "audio/artwork upload flow emits start, progress, success, and fail states",
+    description: "audio/artwork upload flow validates concrete UI nodes and emits start, progress, success, and fail states",
     signals: [
+      'resolveUploadUiElements("#audioUploadTrack", "#audioUploadProgress")',
+      'track?.closest(".upload-panel")',
+      'validateUploadUiElements("audio", audioElements)',
+      "HALO upload progress UI failed to initialize",
       "audioUploadUi.start",
       "audioUploadUi.progress",
       "audioUploadUi.success",
@@ -89,6 +95,17 @@ const checks = [
       "uploadHelper.uploadChunkedFile",
     ],
     diagnose: "Progress stage failed: upload indicator transitions are missing for audio/artwork pipelines.",
+  },
+  {
+    stage: "progress visibility / movement",
+    source: "uploadHelper",
+    description: "shared helper unhides tracks accessibly and renders visible in-flight progress immediately",
+    signals: [
+      'ui.track.hidden=!state.showTrack',
+      'ui.track.setAttribute("aria-hidden",state.showTrack?"false":"true")',
+      "state.uploading&&progress===0?3:progress",
+    ],
+    diagnose: "Progress stage failed: shared upload helper no longer exposes visible active progress tracks.",
   },
   {
     stage: "backend success response",
@@ -238,3 +255,40 @@ assert.throws(
   /https:\/\//,
   "link validation must reject credential-bearing URLs"
 );
+
+const helperContext = {
+  window: {},
+  console,
+  XMLHttpRequest: class {},
+  setTimeout,
+  clearTimeout,
+};
+vm.runInNewContext(uploadHelper, helperContext, { filename: "upload-progress.js" });
+assert.equal(typeof helperContext.window.HaloUploadProgress?.createUploadUi, "function", "shared upload helper should expose createUploadUi");
+const track = {
+  hidden: true,
+  attrs: { "aria-hidden": "true" },
+  setAttribute(name, value) {
+    this.attrs[name] = value;
+  }
+};
+const fill = { style: { width: "0%" } };
+const status = { textContent: "" };
+const panel = {
+  dataset: {},
+  classList: { toggle() {} },
+  setAttribute(name, value) {
+    this[name] = value;
+  }
+};
+const uploadUi = helperContext.window.HaloUploadProgress.createUploadUi({
+  panel,
+  status,
+  track,
+  fill,
+  idleMessage: "Idle",
+});
+uploadUi.start("Preparing upload…");
+assert.equal(track.hidden, false, "shared upload helper should reveal the progress track when upload starts");
+assert.equal(track.attrs["aria-hidden"], "false", "shared upload helper should clear aria-hidden when upload starts");
+assert.equal(fill.style.width, "3%", "shared upload helper should show visible in-flight progress before the first chunk advances");

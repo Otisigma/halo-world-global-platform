@@ -111,14 +111,14 @@ function setSignedOutState(message = "Sign in to view the upload pipeline.") {
 
 async function api(payload) {
   const options = payload
-   ? { method: "POST", headers: { "Content-Type": "application/json" }, credentials: "same-origin", body: JSON.stringify(payload) }
-   : { credentials: "same-origin", headers: { Accept: "application/json" } };
+    ? { method: "POST", headers: { "Content-Type": "application/json" }, credentials: "same-origin", body: JSON.stringify(payload) }
+    : { credentials: "same-origin", headers: { Accept: "application/json" } };
   const response = await fetch(`/api/upload-pipeline?department=${encodeURIComponent(state.department)}`, options);
   const data = await response.json().catch(() => ({ message: "Response could not be read" }));
   if (!response.ok) {
-   const error = new Error(data.message || "Pipeline request failed");
-   error.status = response.status;
-   throw error;
+    const error = new Error(data.message || "Pipeline request failed");
+    error.status = response.status;
+    throw error;
   }
   return data;
 }
@@ -128,24 +128,24 @@ async function loadPipeline() {
   setLoadingMessage(state.identityResolved ? "Loading pipeline…" : "Checking HALO session…");
   elements.empty.hidden = true;
   try {
-   const data = await api();
-   state.authenticated = Boolean(data.authenticated);
-   state.authState = state.authenticated ? "authenticated" : (state.identityResolved ? "unauthenticated" : "pending");
-   state.items = state.authenticated ? (data.items || []) : [];
-   render();
+    const data = await api();
+    state.authenticated = Boolean(data.authenticated);
+    state.authState = state.authenticated ? "authenticated" : (state.identityResolved ? "unauthenticated" : "pending");
+    state.items = state.authenticated ? (data.items || []) : [];
+    render();
   } catch (error) {
-   if (error.status === 401 && !state.identityResolved) {
-     setPendingAuthState();
-     return;
-   }
-   if (error.status === 401) {
-     setSignedOutState(error.message);
-     return;
-   }
-   setLoadingMessage(error.message);
-   renderInsights();
+    if (error.status === 401 && !state.identityResolved) {
+      setPendingAuthState();
+      return;
+    }
+    if (error.status === 401) {
+      setSignedOutState(error.message);
+      return;
+    }
+    setLoadingMessage(error.message);
+    renderInsights();
   } finally {
-   elements.shell.setAttribute("aria-busy", "false");
+    elements.shell.setAttribute("aria-busy", "false");
   }
 }
 

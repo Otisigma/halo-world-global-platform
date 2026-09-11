@@ -18,7 +18,7 @@ function logMusicUploadError(context, error) {
     console.error(`[HaloMusicUpload] ${context}`);
     return;
   }
-  console.error(`[HaloMusicUpload] ${context}`, error instanceof Error ? error.message : error);
+  console.error(`[HaloMusicUpload] ${context}`, error);
 }
 
 function waitForUploadRuntime(timeoutMs = RUNTIME_LOAD_TIMEOUT_MS) {

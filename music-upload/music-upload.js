@@ -182,7 +182,7 @@ async function ensureUploadRuntime() {
     uploadHelper = await loadUploadHelperScript();
   } catch (error) {
     setRuntimeUnavailable(error);
-    throw new Error(RUNTIME_UNAVAILABLE_MESSAGE);
+    throw new Error(RUNTIME_UNAVAILABLE_MESSAGE, { cause: error });
   }
   if (!uploadHelper || !bindUploadUi()) {
     const message = "HALO upload progress UI failed to initialize. Refresh this page and try again.";

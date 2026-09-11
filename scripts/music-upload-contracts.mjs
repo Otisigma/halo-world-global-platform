@@ -292,3 +292,6 @@ uploadUi.start("Preparing upload…");
 assert.equal(track.hidden, false, "shared upload helper should reveal the progress track when upload starts");
 assert.equal(track.attrs["aria-hidden"], "false", "shared upload helper should clear aria-hidden when upload starts");
 assert.equal(fill.style.width, "3%", "shared upload helper should show visible in-flight progress before the first chunk advances");
+uploadUi.idle("Idle");
+assert.equal(track.hidden, true, "shared upload helper should hide the progress track again when upload returns to idle");
+assert.equal(track.attrs["aria-hidden"], "true", "shared upload helper should restore aria-hidden when upload returns to idle");

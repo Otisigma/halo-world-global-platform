@@ -1,7 +1,8 @@
 import { randomUUID } from "node:crypto";
 import OpenAI from "openai";
+import { AI_MODELS } from "./ai-governance.mjs";
 
-export const AGENT_MODEL = "gpt-5.4-mini";
+export const AGENT_MODEL = AI_MODELS.council;
 
 export const AGENT_ROLES = Object.freeze({
   atlas: {

@@ -7,8 +7,8 @@ on:
     branches: [main]
 
 jobs:
-  contracts:
-    name: Deploy health contracts
+  ai-maintenance-contracts:
+    name: AI + maintenance governance contracts
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -19,6 +19,8 @@ jobs:
           node-version: '20'
       - name: Install dependencies
         run: npm install --ignore-scripts
+      - name: Run AI and maintenance contract suite
+        run: npm run contracts:ai-maintenance
       - name: Run deploy health contracts
         run: npm run deploy:feedback
 

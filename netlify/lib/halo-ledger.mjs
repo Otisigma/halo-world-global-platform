@@ -11,6 +11,7 @@ export const LEDGER_CATEGORIES = new Set([
   "feature_request",
   "system_event",
   "route_health",
+  "maintenance_lifecycle",
 ]);
 
 /** Valid outcome values. */

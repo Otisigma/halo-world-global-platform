@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0f1018">
+  <title>HALO Live Party Hub</title>
+  <meta name="description" content="Dreamweave-powered live party room with DJ controls, fan chat, and optional multistream distribution.">
+  <link rel="stylesheet" href="/halo-brand.css">
+  <link rel="stylesheet" href="/accessibility.css">
+  <link rel="stylesheet" href="/live-party/live-party.css">
+  <script src="/stats.js" defer></script>
+  <script src="/accessibility.js" defer></script>
+  <script type="module" src="/identity.js"></script>
+  <script type="module" src="/live-party/live-party.js"></script>
+</head>
+<body>
+  <header class="party-header">
+    <a class="party-brand" href="/halo">
+      <img class="halo-brand-image" src="/assets/halo-logo-mark.webp" alt="HALO logo">
+      <span><strong>HALO</strong><small>Live Party Hub</small></span>
+    </a>
+    <nav>
+      <a href="/dreamweaver/">Dreamweave</a>
+      <a href="/radio/">Radio + DJ Room</a>
+      <a href="/halo-live.html">Broadcast Console</a>
+    </nav>
+  </header>
+
+  <main id="app">
+    <section class="loading-stage">
+      <p class="signal-label">LIVE PARTY HUB</p>
+      <h1>Connecting the room…</h1>
+    </section>
+  </main>
+  <p id="liveStatus" class="signal-label" aria-live="polite"></p>
+</body>
+</html>

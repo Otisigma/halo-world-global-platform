@@ -182,6 +182,12 @@
   force = true
 
 [[redirects]]
+  from = "/live-party/"
+  to = "/live-party/index.html"
+  status = 200
+  force = true
+
+[[redirects]]
   from = "/radio/"
   to = "/radio/index.html"
   status = 200

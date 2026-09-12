@@ -122,7 +122,7 @@ function render() {
       </div>
     </section>
 
-    <div class="view-toggle" role="tablist" aria-label="Live party views">
+    <div class="view-toggle" aria-label="Live party views">
       <button type="button" data-view="fan" aria-pressed="${state.view === "fan"}">Fan Floor</button>
       <button type="button" data-view="dj" aria-pressed="${state.view === "dj"}">DJ Booth</button>
     </div>
@@ -258,6 +258,11 @@ function bindEvents() {
     }
 
     if (actionButton.dataset.action === "mute") {
+      if (!/^[a-zA-Z0-9_-]{8,64}$/.test(actorId || "")) {
+        state.statusError = "That room member can not be muted right now.";
+        render();
+        return;
+      }
       await communityAction({ action: "control", kind: "mute", targetId: actorId }, "Member muted for your room view.");
     }
   });

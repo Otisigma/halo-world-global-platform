@@ -88,8 +88,9 @@ function tierUnlocked(requiredTier = "free") {
 }
 
 function monetizationHooks() {
-  return partyTheme().monetizationHooks && typeof partyTheme().monetizationHooks === "object"
-    ? partyTheme().monetizationHooks
+  const theme = partyTheme();
+  return theme.monetizationHooks && typeof theme.monetizationHooks === "object"
+    ? theme.monetizationHooks
     : {};
 }
 
@@ -112,7 +113,7 @@ function renderPremiumActions() {
         : "Hook placeholder ready"
       : `${ACCESS_TIERS[action.requiredTier]?.label || action.requiredTier} required`;
     const reasonId = `premium-lock-${index}`;
-    return `<li class="premium-item"><strong>${escapeHtml(action.title)}</strong><p>${escapeHtml(action.description)}</p><p class="track-meta" id="${reasonId}">${escapeHtml(lockMessage)}</p><button type="button" data-action="premium" data-hook-key="${escapeHtml(action.key)}" data-required-tier="${escapeHtml(action.requiredTier)}" ${unlocked ? "" : "disabled"} aria-describedby="${reasonId}">${unlocked ? "Open hook" : "Locked"}</button></li>`;
+    return `<li class="premium-item"><strong>${escapeHtml(action.title)}</strong><p>${escapeHtml(action.description)}</p><p class="track-meta" id="${reasonId}">${escapeHtml(lockMessage)}</p><button type="button" data-action="premium" data-hook-key="${escapeHtml(action.key)}" data-required-tier="${escapeHtml(action.requiredTier)}" aria-disabled="${unlocked ? "false" : "true"}" aria-describedby="${reasonId}">${unlocked ? "Open hook" : "Locked"}</button></li>`;
   }).join("");
 }
 

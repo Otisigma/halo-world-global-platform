@@ -122,6 +122,10 @@ main { width: min(1200px, 100%); margin: 0 auto; padding: 1rem; }
   padding: 0.32rem 0.5rem;
   cursor: pointer;
 }
+.premium-item button[aria-disabled="true"] {
+  opacity: 0.62;
+  cursor: not-allowed;
+}
 .chat-form textarea {
   width: 100%;
   min-height: 92px;

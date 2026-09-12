@@ -72,6 +72,14 @@ Small teams can combine roles, but the responsibilities should still be covered.
 - **Owns:** point logic, badge criteria, progression rules, reward issuance, anti-abuse guardrails for game mechanics.
 - **Boundary:** Does not own prize eligibility rules for formal competitions.
 
+### Halo Party Team
+
+- **Mission:** Run `/live-party/` as HALO's internal-first music venue with clear free access, healthy loyalty progression, and safe event operations.
+- **Recommended roles:** Party Lead, Experience Owner, Loyalty & Perks Owner, Access Standards Owner, Moderation Liaison, Seasonal Programming Owner, QA / Analytics Owner.
+- **Owns:** room atmosphere standards, event run-of-show, loyalty/perk policy for party experiences, gift/unlock guardrails, free/supporter/vip access standards, launch checklists, party analytics and quality reviews.
+- **Boundary:** Does not replace Community moderation policy, payment-state authority, or canonical gamification and competition rule ownership.
+- **Operating standard:** `HALO_PARTY_TEAM_CHARTER.md`
+
 ### Competition Team
 
 - **Mission:** Run contests, challenges, rankings, and prize flows with clear fairness and auditability.
@@ -86,7 +94,8 @@ Small teams can combine roles, but the responsibilities should still be covered.
 3. **Dreamweaver ↔ CRN:** any shared event, identity, or state dependency must go through a versioned contract owned by the Bridge Team.
 4. **Payments ↔ other teams:** access rules based on paid status must rely on Stripe-owned payment state, never copied logic.
 5. **Gamification ↔ Competition:** reusable points/progression stay with Gamification; event-specific scoring and prizes stay with Competition.
-6. **Any cross-team change:** the sending team must provide a clear contract, expected result, rollback note, and monitoring check.
+6. **Halo Party ↔ Community/Gamification/Payments:** party operations may use room actions, progression, and tier hooks, but must inherit moderation boundaries, avoid shadow payment logic, and keep free-core access explicit.
+7. **Any cross-team change:** the sending team must provide a clear contract, expected result, rollback note, and monitoring check.
 
 ## Escalation matrix
 
@@ -98,6 +107,7 @@ Small teams can combine roles, but the responsibilities should still be covered.
 | Dreamweaver/CRN contract mismatch | Bridge Team | Dreamweaver Lead + CRN Lead | Site Orchestrator |
 | Payment failure or Stripe webhook issue | Payments / Stripe Team | Release Ops + Site Leadership | Site Orchestrator |
 | Points/rewards logic dispute | Gamification Team | Site Leadership | Site Orchestrator |
+| Live-party free-vs-premium, perk fairness, or launch-readiness dispute | Halo Party Team | Site Leadership + Gamification Lead | Site Orchestrator |
 | Competition eligibility/scoring dispute | Competition Team | Site Leadership | Site Orchestrator |
 | Cross-team release blocker | Release Ops Lead | Relevant team leads | Site Leadership |
 | Production incident affecting multiple domains | Monitoring Lead | Incident command with all leads | Site Orchestrator |

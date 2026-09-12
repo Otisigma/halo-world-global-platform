@@ -112,7 +112,7 @@ function renderPremiumActions() {
         : "Hook placeholder ready"
       : `${ACCESS_TIERS[action.requiredTier]?.label || action.requiredTier} required`;
     const reasonId = `premium-lock-${index}`;
-    return `<li class="premium-item"><div class="track-meta">${escapeHtml(lockMessage)}</div><strong>${escapeHtml(action.title)}</strong><p>${escapeHtml(action.description)}</p><p class="track-meta" id="${reasonId}">${escapeHtml(lockMessage)}</p><button type="button" data-action="premium" data-hook-key="${escapeHtml(action.key)}" data-required-tier="${escapeHtml(action.requiredTier)}" ${unlocked ? "" : "disabled"} aria-describedby="${reasonId}">${unlocked ? "Open hook" : "Locked"}</button></li>`;
+    return `<li class="premium-item"><strong>${escapeHtml(action.title)}</strong><p>${escapeHtml(action.description)}</p><p class="track-meta" id="${reasonId}">${escapeHtml(lockMessage)}</p><button type="button" data-action="premium" data-hook-key="${escapeHtml(action.key)}" data-required-tier="${escapeHtml(action.requiredTier)}" ${unlocked ? "" : "disabled"} aria-describedby="${reasonId}">${unlocked ? "Open hook" : "Locked"}</button></li>`;
   }).join("");
 }
 
@@ -349,9 +349,6 @@ function bindEvents() {
       const hookValue = String(monetizationHooks()[hookKey] || "");
       if (hookValue.startsWith("/")) {
         window.location.assign(hookValue);
-        state.status = "Opening configured premium route.";
-        state.statusError = "";
-        render();
         return;
       }
       if (hookValue) {

@@ -1,5 +1,7 @@
 # HALO One-Button Broadcast Setup
 
+The internal venue for live events is `/live-party/` (Dreamweave + fan room + DJ booth). External multistream distribution is optional and controlled from `/halo-live.html`.
+
 The live page sends one protected server-side command to a multistream relay. The relay remains responsible for receiving the encoder feed and distributing it to YouTube, TikTok, and any other enabled destination.
 
 Configure these Netlify environment variables:

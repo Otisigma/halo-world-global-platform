@@ -20,7 +20,7 @@
   const escapeHtml = value => String(value ?? "").replace(/[&<>'"]/g, character => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" })[character]);
   const formatDate = value => new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
   const formatDuration = seconds => seconds ? `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}` : "Preview";
-  const shareUrl = campaign => `${location.origin}/campaign-studio/?campaign=${encodeURIComponent(campaign.slug)}&view=fan`;
+  const shareUrl = campaign => `${location.origin}/live-party/?campaign=${encodeURIComponent(campaign.slug)}`;
   const personaName = id => ({ halo: "DJ HALO", butterfly: "DJ BUTTERFLY", romy: "DJ ROMY" }[id] || "DJ HALO");
   const selectOptions = (selected, values) => values.map(([value, label]) => `<option value="${value}" ${selected === value ? "selected" : ""}>${label}</option>`).join("");
   const DESTINATION_ROLES = [

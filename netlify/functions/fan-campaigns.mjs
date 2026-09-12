@@ -359,7 +359,7 @@ async function updateCampaign(db, user, body, status, launch = false) {
   return json({
     campaign,
     launchPack: launch ? {
-      path: `/campaign-studio/?campaign=${encodeURIComponent(campaign.slug)}&view=fan`,
+      path: `/live-party/?campaign=${encodeURIComponent(campaign.slug)}`,
       caption: `${campaign.promotion.caption || campaign.title}\n\n${campaign.promotion.hashtags || "#HALOListeningParty"}`,
       hostPersonaId: campaign.hostPersonaId,
       atmosphere: campaign.partyTheme.atmosphere || "midnight"

@@ -8,10 +8,47 @@ const DREAMWEAVE_CUES = {
   electric: ["Voltage build", "Laser drop", "Neon reset"]
 };
 
+const ACCESS_TIER_ORDER = ["free", "supporter", "vip"];
+const ACCESS_TIERS = {
+  free: {
+    label: "Free Discovery",
+    summary: "Join the room, listen live, and chat with the community."
+  },
+  supporter: {
+    label: "Supporter",
+    summary: "Unlock supporter-only moments, featured sessions, and early room drops."
+  },
+  vip: {
+    label: "VIP",
+    summary: "Get private room invites, priority access, and premium event routing."
+  }
+};
+const PREMIUM_ACTIONS = [
+  {
+    key: "featuredSession",
+    requiredTier: "supporter",
+    title: "Featured DJ session access",
+    description: "Reserve supporter-only entries for highlighted DJ rooms."
+  },
+  {
+    key: "ticketedSession",
+    requiredTier: "supporter",
+    title: "Ticketed room access",
+    description: "Join paid live parties without leaving the Live Party Hub flow."
+  },
+  {
+    key: "privateAfterparty",
+    requiredTier: "vip",
+    title: "Private afterparty invite",
+    description: "Route VIP listeners into private post-show sessions."
+  }
+];
+
 const state = {
   campaignSlug: new URLSearchParams(window.location.search).get("campaign") || "",
   season: (new URLSearchParams(window.location.search).get("season") || "").toLowerCase(),
   eventName: new URLSearchParams(window.location.search).get("event") || "",
+  accessTier: (new URLSearchParams(window.location.search).get("tier") || "free").toLowerCase(),
   view: "fan",
   campaign: null,
   community: null,
@@ -37,6 +74,42 @@ function formatDate(value) {
 
 function partyTheme() {
   return state.campaign?.partyTheme || {};
+}
+
+function activeAccessTier() {
+  return ACCESS_TIERS[state.accessTier] ? state.accessTier : "free";
+}
+
+function tierUnlocked(requiredTier = "free") {
+  return ACCESS_TIER_ORDER.indexOf(activeAccessTier()) >= ACCESS_TIER_ORDER.indexOf(requiredTier);
+}
+
+function monetizationHooks() {
+  return partyTheme().monetizationHooks && typeof partyTheme().monetizationHooks === "object"
+    ? partyTheme().monetizationHooks
+    : {};
+}
+
+function renderAccessTiers() {
+  return ACCESS_TIER_ORDER.map(tierKey => {
+    const tier = ACCESS_TIERS[tierKey];
+    const active = activeAccessTier() === tierKey;
+    return `<li class="access-tier-card" data-active="${active}"><p class="signal-label">${escapeHtml(tier.label)}</p><p>${escapeHtml(tier.summary)}</p></li>`;
+  }).join("");
+}
+
+function renderPremiumActions() {
+  const hooks = monetizationHooks();
+  return PREMIUM_ACTIONS.map(action => {
+    const unlocked = tierUnlocked(action.requiredTier);
+    const hookValue = String(hooks[action.key] || "");
+    const lockMessage = unlocked
+      ? hookValue
+        ? "Ready for route"
+        : "Hook placeholder ready"
+      : `${ACCESS_TIERS[action.requiredTier]?.label || action.requiredTier} required`;
+    return `<li class="premium-item"><div class="track-meta">${escapeHtml(lockMessage)}</div><strong>${escapeHtml(action.title)}</strong><p>${escapeHtml(action.description)}</p><button type="button" data-action="premium" data-hook-key="${escapeHtml(action.key)}" data-required-tier="${escapeHtml(action.requiredTier)}">${unlocked ? "Open hook" : "Locked"}</button></li>`;
+  }).join("");
 }
 
 function applyAtmosphere() {
@@ -125,6 +198,17 @@ function render() {
       </div>
     </section>
 
+    <section class="panel access-model">
+      <div class="access-model-head">
+        <div>
+          <p class="signal-label">Access model</p>
+          <h2>Free discovery with premium room upgrades</h2>
+        </div>
+        <p class="track-meta">Preview tiers with <code>?tier=free|supporter|vip</code>. Current tier: <strong>${escapeHtml(ACCESS_TIERS[activeAccessTier()].label)}</strong></p>
+      </div>
+      <ul class="access-tier-list">${renderAccessTiers()}</ul>
+    </section>
+
     <div class="view-toggle" aria-label="Live party views">
       <button type="button" data-view="fan" aria-pressed="${state.view === "fan"}">Fan Floor</button>
       <button type="button" data-view="dj" aria-pressed="${state.view === "dj"}">DJ Booth</button>
@@ -147,6 +231,8 @@ function render() {
           <p class="status-line">Room actions follow moderation policy and consent boundaries.</p>
           <h3>Dreamweave cues</h3>
           <ul class="track-list">${cues.map(cue => `<li class="track-item">${escapeHtml(cue)}</li>`).join("")}</ul>
+          <h3>Premium room options</h3>
+          <ul class="premium-list">${renderPremiumActions()}</ul>
           <h3>Pinned moments</h3>
           <ul class="pin-list">${renderPins()}</ul>
         </article>
@@ -246,6 +332,30 @@ function bindEvents() {
 
     const actionButton = event.target.closest("button[data-action]");
     if (!actionButton) return;
+
+    if (actionButton.dataset.action === "premium") {
+      const requiredTier = actionButton.dataset.requiredTier || "free";
+      if (!tierUnlocked(requiredTier)) {
+        state.statusError = `${ACCESS_TIERS[requiredTier]?.label || requiredTier} unlocks this room option.`;
+        state.status = "";
+        render();
+        return;
+      }
+      const hookKey = actionButton.dataset.hookKey || "";
+      const hookValue = String(monetizationHooks()[hookKey] || "");
+      if (hookValue.startsWith("/") || hookValue.startsWith("http://") || hookValue.startsWith("https://")) {
+        window.open(hookValue, "_blank", "noopener");
+        state.status = "Opening configured premium route.";
+        state.statusError = "";
+        render();
+        return;
+      }
+      state.statusError = "Premium hook is not configured yet. Keep discovery open while premium routing is finalized.";
+      state.status = "";
+      render();
+      return;
+    }
+
     const item = actionButton.closest("[data-message-id]");
     if (!item) return;
     const messageId = decodeURIComponent(item.dataset.messageId || "");

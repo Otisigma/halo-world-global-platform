@@ -19,10 +19,13 @@ const checks = [
   [script.includes("/api/community") && script.includes('action: "message"') && script.includes('action: "report"') && script.includes('action: "reaction"'), "uses existing moderated community actions for live room interactions"],
   [script.includes("/api/fan-campaigns") && script.includes("Current mix board"), "surfaces campaign mix state for DJ booth view"],
   [script.includes("/api/broadcast-control") && script.includes("Internal room remains primary"), "keeps internal venue primary while exposing optional distribution hooks"],
+  [script.includes("Free discovery with premium room upgrades") && script.includes("Free Discovery") && script.includes("Supporter") && script.includes("VIP"), "shows clear free/supporter/vip access tiers in live party UI"],
+  [script.includes('data-action="premium"') && script.includes("unlocks this room option") && script.includes("Premium hook is not configured yet"), "includes premium lock messaging and monetization hook placeholders"],
   [styles.includes("data-party-atmosphere") && styles.includes("data-party-season"), "supports atmosphere and seasonal presentation hooks"],
+  [styles.includes(".access-tier-list") && styles.includes(".premium-list"), "styles access-tier and premium lock surfaces"],
   [campaignsApi.includes("/live-party/?campaign="), "launch packs now point to the live party venue"],
   [/from = "\/live-party\/"[\s\S]*to = "\/live-party\/index\.html"/.test(redirects), "serves canonical /live-party/ route"],
-  [docs.includes("/live-party/") && docs.includes("optional"), "documents internal-first venue and optional external relay"],
+  [docs.includes("Live Party access model") && docs.includes("partyTheme.monetizationHooks") && docs.includes("Recommended rollout"), "documents free-to-premium access model and rollout guidance"],
 ];
 
 const failures = checks.filter(([passed]) => !passed);

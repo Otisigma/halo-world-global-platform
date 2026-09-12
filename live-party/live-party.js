@@ -16,7 +16,8 @@ const state = {
   community: null,
   broadcast: null,
   status: "",
-  statusError: ""
+  statusError: "",
+  statusTimer: null
 };
 
 const escapeHtml = value => String(value ?? "")
@@ -219,8 +220,10 @@ async function communityAction(payload, notice = "") {
   }
   state.community = data;
   state.status = notice;
-  setTimeout(() => {
+  window.clearTimeout(state.statusTimer);
+  state.statusTimer = window.setTimeout(() => {
     state.status = "";
+    state.statusTimer = null;
     render();
   }, 2400);
   render();

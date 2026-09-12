@@ -3,12 +3,14 @@ import { getDatabase } from "@netlify/database";
 import OpenAI from "openai";
 import { appendLedgerEntry } from "./halo-ledger.mjs";
 import { AI_MODELS, MAINTENANCE_TRIAGE_SYSTEM_PROMPT } from "./ai-governance.mjs";
+import { normalizeVerificationMetadata } from "./verification-metadata.mjs";
 
 const severityLevels = new Set(["low", "medium", "high", "critical"]);
 const sources = new Set(["browser", "manual", "scheduled", "server"]);
 const DISPATCH_MAX_ATTEMPTS = 3;
 const DISPATCH_BACKOFF_MINUTES = [2, 10, 30];
-const RETRYABLE_DISPATCH_STATUSES = new Set(["pending", "failed", "retrying"]);
+const RETRYABLE_DISPATCH_STATUS_LIST = ["pending", "failed", "retrying", "escalated"];
+const RETRYABLE_DISPATCH_STATUSES = new Set(RETRYABLE_DISPATCH_STATUS_LIST);
 
 function toIsoTimestamp(value) {
   const date = value ? new Date(value) : null;
@@ -38,24 +40,6 @@ function cleanMetadata(value) {
         return [];
       })
   );
-}
-
-export function normalizeVerificationMetadata(value, fallback = {}) {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
-  const checkIds = Array.isArray(value.checkIds)
-    ? value.checkIds.map(item => cleanText(item, 120)).filter(Boolean).slice(0, 8)
-    : [];
-  const checkedAt = toIsoTimestamp(value.checkedAt || fallback.checkedAt || new Date().toISOString());
-  const verification = {
-    command: cleanText(value.command || fallback.command, 240),
-    checkIds,
-    resultSummary: cleanText(value.resultSummary || fallback.resultSummary, 1200),
-    confidence: Math.max(0, Math.min(1, Number(value.confidence ?? fallback.confidence ?? 0.5))),
-    checkedAt,
-    source: cleanText(value.source || fallback.source, 80)
-  };
-  if (!verification.resultSummary || !verification.checkedAt) return null;
-  return verification;
 }
 
 export async function recordMaintenanceLifecycle(db, issue, lifecycleEvent, {
@@ -278,6 +262,13 @@ function dispatchAttempts(issue) {
 
 function canRetryDispatch(issue) {
   if (!RETRYABLE_DISPATCH_STATUSES.has(issue.dispatchStatus)) return false;
+  if (issue.dispatchStatus === "escalated") {
+    const escalatedAt = toIsoTimestamp(issue?.metadata?.dispatchEscalatedAt);
+    const lastSeenAt = toIsoTimestamp(issue.lastSeenAt);
+    if (!lastSeenAt) return false;
+    if (!escalatedAt) return true;
+    return new Date(lastSeenAt) > new Date(escalatedAt);
+  }
   const nextDispatchWindow = toIsoTimestamp(issue?.metadata?.nextDispatchAt);
   if (!nextDispatchWindow) return true;
   return new Date(nextDispatchWindow) <= new Date();
@@ -298,8 +289,22 @@ function triageFromIssue(issue) {
   };
 }
 
+function maintenanceProgressTimestamp(issue) {
+  return toIsoTimestamp(
+    issue?.metadata?.lastMaintenanceUpdateAt
+      || issue?.updatedAt
+      || issue?.dispatchedAt
+      || issue?.lastSeenAt
+      || issue?.firstSeenAt
+  );
+}
+
 async function dispatchWithPersistence(db, issue, triage, source) {
-  const attempt = dispatchAttempts(issue) + 1;
+  const escalatedAt = toIsoTimestamp(issue?.metadata?.dispatchEscalatedAt);
+  const issueLastSeenAt = toIsoTimestamp(issue?.lastSeenAt);
+  const restartAfterEscalation = issue.dispatchStatus === "escalated"
+    && (!escalatedAt || (issueLastSeenAt && new Date(issueLastSeenAt) > new Date(escalatedAt)));
+  const attempt = restartAfterEscalation ? 1 : dispatchAttempts(issue) + 1;
   try {
     const dispatch = await dispatchIssue(issue, triage);
     const nextMetadata = {
@@ -313,7 +318,7 @@ async function dispatchWithPersistence(db, issue, triage, source) {
     const [dispatchedRow] = await db.sql`
       UPDATE maintenance_issues
       SET dispatch_status = ${dispatch.status},
-          metadata = ${JSON.stringify(nextMetadata)}::jsonb,
+          metadata = COALESCE(metadata, '{}'::jsonb) || ${JSON.stringify(nextMetadata)}::jsonb,
           maintenance_reference = COALESCE(${dispatch.reference}, maintenance_reference),
           dispatched_at = CASE WHEN ${dispatch.status} = 'sent' THEN NOW() ELSE dispatched_at END,
           status = CASE WHEN ${dispatch.status} = 'sent' AND status = 'open' THEN 'reported' ELSE status END,
@@ -342,7 +347,8 @@ async function dispatchWithPersistence(db, issue, triage, source) {
     const [failedRow] = await db.sql`
       UPDATE maintenance_issues
       SET dispatch_status = ${escalated ? "escalated" : "retrying"},
-          metadata = ${JSON.stringify(nextMetadata)}::jsonb,
+          status = CASE WHEN ${escalated} THEN 'failed' ELSE status END,
+          metadata = COALESCE(metadata, '{}'::jsonb) || ${JSON.stringify(nextMetadata)}::jsonb,
           updated_at = NOW()
       WHERE id = ${issue.id}
       RETURNING *
@@ -383,6 +389,7 @@ export async function reportIssue(payload) {
       END,
       dispatch_status = CASE
         WHEN maintenance_issues.status IN ('healed', 'ignored')
+          OR maintenance_issues.dispatch_status = 'escalated'
           OR maintenance_issues.last_seen_at < NOW() - INTERVAL '30 minutes' THEN 'pending'
         ELSE maintenance_issues.dispatch_status
       END,
@@ -447,11 +454,13 @@ export async function reportIssue(payload) {
       fixPlan: ["Reproduce and diagnose the issue", "Apply a focused fix"],
       verification: ["Verify the original report"]
     };
-    await db.sql`
+    const [failedTriageRow] = await db.sql`
       UPDATE maintenance_issues
       SET triage_status = 'failed', updated_at = NOW()
       WHERE id = ${storedIssue.id}
+      RETURNING *
     `;
+    if (failedTriageRow) storedIssue = mapIssueRow(failedTriageRow);
     await recordMaintenanceLifecycle(db, storedIssue, "triage_failed", {
       summary: `Maintenance triage failed: ${storedIssue.title}`,
       outcome: "failure",
@@ -480,11 +489,11 @@ export async function resolveIssue(issueKey, summary, options = {}) {
     UPDATE maintenance_issues
     SET status = 'healed',
         resolution_summary = ${cleanText(summary, 2000, "Automated verification passed.")},
-        metadata = COALESCE(metadata, '{}'::jsonb) || ${JSON.stringify(metadataPatch)}::jsonb,
+        metadata = (COALESCE(metadata, '{}'::jsonb) - 'autoHealVerification' - 'verificationUnavailableReason') || ${JSON.stringify(metadataPatch)}::jsonb,
         healed_at = NOW(),
         updated_at = NOW()
     WHERE issue_key = ${issueKey}
-      AND status NOT IN ('healed', 'ignored')
+      AND status IN ('open', 'reported', 'acknowledged', 'in_progress', 'failed')
     RETURNING *
   `;
   if (!row) return false;
@@ -501,8 +510,12 @@ export async function retryDispatchQueue(db, { limit = 12 } = {}) {
   const rows = await db.sql`
     SELECT *
     FROM maintenance_issues
-    WHERE status IN ('open', 'reported')
-      AND dispatch_status IN ('pending', 'failed', 'retrying')
+    WHERE status IN ('open', 'reported', 'failed')
+      AND dispatch_status = ANY(${RETRYABLE_DISPATCH_STATUS_LIST})
+      AND (
+        dispatch_status <> 'escalated'
+        OR last_seen_at > COALESCE(NULLIF(metadata->>'dispatchEscalatedAt', '')::timestamptz, to_timestamp(0))
+      )
       AND (
         metadata->>'nextDispatchAt' IS NULL
         OR NULLIF(metadata->>'nextDispatchAt', '')::timestamptz <= NOW()
@@ -536,22 +549,37 @@ export async function escalateStaleMaintenanceIssues(db, { limit = 24 } = {}) {
     FROM maintenance_issues
     WHERE status IN ('open', 'reported', 'acknowledged', 'in_progress', 'failed')
       AND (
-        (severity IN ('critical', 'high') AND updated_at < NOW() - INTERVAL '2 hours')
-        OR (severity = 'medium' AND updated_at < NOW() - INTERVAL '8 hours')
-        OR (severity = 'low' AND updated_at < NOW() - INTERVAL '24 hours')
+        metadata->>'staleEscalatedAt' IS NULL
+        OR NULLIF(metadata->>'staleEscalatedAt', '')::timestamptz < COALESCE(NULLIF(metadata->>'lastMaintenanceUpdateAt', '')::timestamptz, updated_at, dispatched_at, last_seen_at, first_seen_at)
+      )
+      AND (
+        (severity IN ('critical', 'high') AND COALESCE(NULLIF(metadata->>'lastMaintenanceUpdateAt', '')::timestamptz, updated_at, dispatched_at, last_seen_at, first_seen_at) < NOW() - INTERVAL '2 hours')
+        OR (severity = 'medium' AND COALESCE(NULLIF(metadata->>'lastMaintenanceUpdateAt', '')::timestamptz, updated_at, dispatched_at, last_seen_at, first_seen_at) < NOW() - INTERVAL '8 hours')
+        OR (severity = 'low' AND COALESCE(NULLIF(metadata->>'lastMaintenanceUpdateAt', '')::timestamptz, updated_at, dispatched_at, last_seen_at, first_seen_at) < NOW() - INTERVAL '24 hours')
       )
     ORDER BY updated_at ASC
     LIMIT ${Math.max(1, Math.min(100, Number(limit) || 24))}
   `;
   const issues = rows.map(mapIssueRow);
   for (const issue of issues) {
-    await recordMaintenanceLifecycle(db, issue, "stale_escalated", {
+    const metadataPatch = {
+      staleEscalatedAt: new Date().toISOString()
+    };
+    const [updatedRow] = await db.sql`
+      UPDATE maintenance_issues
+      SET metadata = COALESCE(metadata, '{}'::jsonb) || ${JSON.stringify(metadataPatch)}::jsonb,
+          updated_at = NOW()
+      WHERE id = ${issue.id}
+      RETURNING *
+    `;
+    const updatedIssue = updatedRow ? mapIssueRow(updatedRow) : issue;
+    await recordMaintenanceLifecycle(db, updatedIssue, "stale_escalated", {
       summary: `Maintenance issue escalated for SLA breach: ${issue.title}`,
       outcome: "failure",
       details: {
-        staleSince: issue.updatedAt,
-        severity: issue.severity,
-        dispatchStatus: issue.dispatchStatus
+        staleSince: maintenanceProgressTimestamp(updatedIssue),
+        severity: updatedIssue.severity,
+        dispatchStatus: updatedIssue.dispatchStatus
       }
     });
   }

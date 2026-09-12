@@ -26,30 +26,43 @@ export async function recordScheduledHeartbeat(db, agentKey, status = "success",
   });
 }
 
-async function latestHeartbeatAt(db, agentKey) {
-  const [row] = await db.sql`
-    SELECT created_at
+export async function reconcileScheduledHeartbeats(db, now = new Date()) {
+  const agentKeys = SCHEDULED_HEARTBEAT_SLA.map(item => item.agentKey);
+  const rows = await db.sql`
+    SELECT DISTINCT ON (details->>'agentKey')
+      details->>'agentKey' AS agent_key,
+      details->>'status' AS status,
+      created_at
     FROM halo_ledger
     WHERE event_category = 'system_event'
       AND details->>'lifecycleEvent' = 'scheduled_heartbeat'
-      AND details->>'agentKey' = ${agentKey}
-    ORDER BY created_at DESC
-    LIMIT 1
+      AND details->>'agentKey' = ANY(${agentKeys})
+    ORDER BY details->>'agentKey', created_at DESC
   `;
-  return row?.created_at ? new Date(row.created_at) : null;
-}
-
-export async function reconcileScheduledHeartbeats(db, now = new Date()) {
+  const latestByAgent = new Map(
+    rows.map(row => [row.agent_key, {
+      seenAt: row.created_at ? new Date(row.created_at) : null,
+      status: String(row.status || "unknown")
+    }])
+  );
   let stale = 0;
+  let failed = 0;
+  const tasks = [];
   for (const heartbeat of SCHEDULED_HEARTBEAT_SLA) {
-    const lastSeenAt = await latestHeartbeatAt(db, heartbeat.agentKey);
+    const latest = latestByAgent.get(heartbeat.agentKey) || null;
+    const lastSeenAt = latest?.seenAt || null;
     const maxAgeMs = heartbeat.maxAgeMinutes * 60 * 1000;
     const ageMs = lastSeenAt ? now.getTime() - lastSeenAt.getTime() : Number.POSITIVE_INFINITY;
-    const fingerprint = `scheduled-heartbeat:${heartbeat.agentKey}`;
-    const issueKey = issueKeyForFingerprint(fingerprint);
-    if (ageMs > maxAgeMs) {
-      stale += 1;
-      await reportIssue({
+    const isStale = ageMs > maxAgeMs;
+    const isFailed = Boolean(latest && latest.status !== "success" && !isStale);
+    const staleFingerprint = `scheduled-heartbeat:missed:${heartbeat.agentKey}`;
+    const staleIssueKey = issueKeyForFingerprint(staleFingerprint);
+    const failedFingerprint = `scheduled-heartbeat:failed:${heartbeat.agentKey}`;
+    const failedIssueKey = issueKeyForFingerprint(failedFingerprint);
+    if (isStale) stale += 1;
+    if (isFailed) failed += 1;
+    if (isStale) {
+      tasks.push(reportIssue({
         source: "scheduled",
         category: "operations",
         severity: "high",
@@ -58,25 +71,62 @@ export async function reconcileScheduledHeartbeats(db, now = new Date()) {
           ? `${heartbeat.agentKey} has not recorded a run since ${lastSeenAt.toISOString()}.`
           : `${heartbeat.agentKey} has not recorded any scheduled heartbeat yet.`,
         pagePath: "/halo-command.html",
-        fingerprint,
+        fingerprint: staleFingerprint,
         metadata: {
           agentKey: heartbeat.agentKey,
           maxAgeMinutes: heartbeat.maxAgeMinutes,
-          lastSeenAt: lastSeenAt ? lastSeenAt.toISOString() : null
+          lastSeenAt: lastSeenAt ? lastSeenAt.toISOString() : null,
+          lastStatus: latest?.status || null
         }
-      });
-      continue;
+      }));
+    } else {
+      tasks.push(resolveIssue(staleIssueKey, `${heartbeat.agentKey} heartbeat freshness is within SLA.`, {
+        source: "scheduled_heartbeat",
+        verification: {
+          command: "scheduled-heartbeat-monitor",
+          checkIds: [heartbeat.agentKey, "freshness"],
+          resultSummary: `${heartbeat.agentKey} heartbeat freshness is within SLA.`,
+          confidence: 0.95,
+          checkedAt: now.toISOString()
+        }
+      }));
     }
-    await resolveIssue(issueKey, `${heartbeat.agentKey} heartbeat is within SLA.`, {
-      source: "scheduled_heartbeat",
-      verification: {
-        command: "scheduled-heartbeat-monitor",
-        checkIds: [heartbeat.agentKey],
-        resultSummary: `${heartbeat.agentKey} heartbeat is within SLA.`,
-        confidence: 0.95,
-        checkedAt: now.toISOString()
-      }
-    });
+    if (isFailed) {
+      tasks.push(reportIssue({
+        source: "scheduled",
+        category: "operations",
+        severity: "high",
+        title: `Scheduled heartbeat failing: ${heartbeat.agentKey}`,
+        details: `${heartbeat.agentKey} recorded a ${latest?.status || "unknown"} heartbeat at ${lastSeenAt?.toISOString() || "unknown time"}.`,
+        pagePath: "/halo-command.html",
+        fingerprint: failedFingerprint,
+        metadata: {
+          agentKey: heartbeat.agentKey,
+          lastSeenAt: lastSeenAt ? lastSeenAt.toISOString() : null,
+          lastStatus: latest?.status || null
+        }
+      }));
+    } else {
+      tasks.push(resolveIssue(failedIssueKey, `${heartbeat.agentKey} heartbeat status is healthy.`, {
+        source: "scheduled_heartbeat",
+        verification: {
+          command: "scheduled-heartbeat-monitor",
+          checkIds: [heartbeat.agentKey, "status"],
+          resultSummary: `${heartbeat.agentKey} heartbeat status is healthy.`,
+          confidence: 0.95,
+          checkedAt: now.toISOString()
+        }
+      }));
+    }
   }
-  return { stale };
+  const results = await Promise.allSettled(tasks);
+  const failures = results.filter(result => result.status === "rejected");
+  if (failures.length) {
+    const message = failures
+      .slice(0, 4)
+      .map(result => result.reason instanceof Error ? result.reason.message : String(result.reason || "unknown failure"))
+      .join("; ");
+    throw new Error(message);
+  }
+  return { stale, failed };
 }

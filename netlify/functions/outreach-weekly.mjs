@@ -45,7 +45,8 @@ export default async function handler() {
       }
     }
 
-    await recordScheduledHeartbeat(db, "outreach-weekly", "success", { releases: releases.length, results });
+    const hadFailures = results.some(item => item?.skipped === "run_failed");
+    await recordScheduledHeartbeat(db, "outreach-weekly", hadFailures ? "failure" : "success", { releases: releases.length, results });
     console.log("HALO outreach desk weekly queues prepared", { releases: releases.length, results });
   } catch (error) {
     await recordScheduledHeartbeat(db, "outreach-weekly", "failure", {

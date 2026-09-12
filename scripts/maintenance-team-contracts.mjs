@@ -1,13 +1,14 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
-const [migration, satelliteStatusesMigration, sweep, scheduled, maintenanceLib, maintenanceIssuesApi, heartbeatLib, radioScout, outreachWeekly, artistWeekly, api, satelliteApi, page, client, docs, packageJson, navigationCss, mainMenuPage] = await Promise.all([
+const [migration, satelliteStatusesMigration, sweep, scheduled, maintenanceLib, maintenanceIssuesApi, maintenanceIssuesValidation, heartbeatLib, radioScout, outreachWeekly, artistWeekly, api, satelliteApi, page, client, docs, packageJson, navigationCss, mainMenuPage] = await Promise.all([
   readFile(new URL("../netlify/database/migrations/20260809150000_create-maintenance-sweeps.sql", import.meta.url), "utf8"),
   readFile(new URL("../netlify/database/migrations/20260905073000_add_satellite_statuses_to_maintenance_sweeps.sql", import.meta.url), "utf8"),
   readFile(new URL("../netlify/lib/maintenance-sweep.mjs", import.meta.url), "utf8"),
   readFile(new URL("../netlify/functions/health-scout.mjs", import.meta.url), "utf8"),
   readFile(new URL("../netlify/lib/maintenance.mjs", import.meta.url), "utf8"),
   readFile(new URL("../netlify/functions/maintenance-issues.mjs", import.meta.url), "utf8"),
+  readFile(new URL("../netlify/lib/maintenance-issues-validation.mjs", import.meta.url), "utf8"),
   readFile(new URL("../netlify/lib/scheduled-heartbeats.mjs", import.meta.url), "utf8"),
   readFile(new URL("../netlify/functions/radio-health-scout.mjs", import.meta.url), "utf8"),
   readFile(new URL("../netlify/functions/outreach-weekly.mjs", import.meta.url), "utf8"),
@@ -53,8 +54,9 @@ assert.match(maintenanceLib, /DISPATCH_MAX_ATTEMPTS/, "dispatch retries must enf
 assert.match(maintenanceLib, /nextDispatchAt/, "dispatch retries must schedule an explicit retry window");
 assert.match(maintenanceLib, /recordMaintenanceLifecycle/, "maintenance lifecycle changes must be written to the Halo Ledger");
 assert.match(maintenanceLib, /normalizeVerificationMetadata/, "maintenance heals must support structured verification metadata");
-assert.match(maintenanceIssuesApi, /verificationUnavailableReason/, "healed issue updates must document unverified cases");
-assert.match(maintenanceIssuesApi, /structured verification metadata/i, "healed issue updates must enforce verification metadata when possible");
+assert.match(maintenanceIssuesValidation, /verificationUnavailableReason/, "healed issue updates must document unverified cases");
+assert.match(maintenanceIssuesValidation, /structured verification metadata/i, "healed issue updates must enforce verification metadata when possible");
+assert.match(maintenanceIssuesApi, /validateMaintenancePatchPayload/, "maintenance issue handler must enforce payload validation centrally");
 assert.match(heartbeatLib, /SCHEDULED_HEARTBEAT_SLA/, "scheduled heartbeat monitoring must define SLA windows");
 assert.match(heartbeatLib, /scheduled-heartbeat:/, "scheduled heartbeat monitoring must escalate missed runs into maintenance issues");
 assert.match(radioScout, /recordScheduledHeartbeat/, "radio scheduled checks must record heartbeat coverage");
@@ -96,7 +98,9 @@ assert.match(docs, /## halo-signal-check/, "the canonical halo-signal-check READ
 const parsedPackage = JSON.parse(packageJson);
 assert.equal(parsedPackage.scripts["halo-signal-check"], "node scripts/live-connected-satellite-contracts.mjs", "the canonical halo-signal-check command must exist");
 assert.match(parsedPackage.scripts["contracts:ai-maintenance"], /maintenance-team-contracts\.mjs/, "focused AI-maintenance contract gating must include maintenance contracts");
+assert.match(parsedPackage.scripts["contracts:ai-maintenance"], /maintenance-issues-contracts\.mjs/, "focused AI-maintenance contract gating must include maintenance issue API verification checks");
 assert.match(parsedPackage.scripts.test, /maintenance-source-audit\.mjs/, "the source-line audit must run in the test suite");
+assert.match(parsedPackage.scripts.test, /maintenance-issues-contracts\.mjs/, "maintenance issue API verification checks must run in the default test suite");
 assert.match(parsedPackage.scripts.test, /maintenance-team-contracts\.mjs/, "maintenance contracts must run in the test suite");
 assert.match(parsedPackage.scripts["satellite:verify"], /live-connected-satellite-contracts\.mjs/, "a one-command satellite verification script must exist");
 assert.match(parsedPackage.scripts.test, /live-connected-satellite-contracts\.mjs/, "the live-connected satellite contracts must run in the test suite");

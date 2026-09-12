@@ -27,7 +27,8 @@ export default async function artistAgentWeeklyHandler() {
       }
     }
 
-    await recordScheduledHeartbeat(db, "artist-agent-weekly", "success", { artists: plans.length, results });
+    const hadFailures = results.some(item => item?.skipped === "run_failed");
+    await recordScheduledHeartbeat(db, "artist-agent-weekly", hadFailures ? "failure" : "success", { artists: plans.length, results });
     console.log("HALO artist agent weekly briefings generated", { artists: plans.length, results });
   } catch (error) {
     await recordScheduledHeartbeat(db, "artist-agent-weekly", "failure", {

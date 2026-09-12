@@ -1,19 +1,14 @@
 import { getDatabase } from "@netlify/database";
-import { maintenanceAuthorized, mapIssueRow, normalizeVerificationMetadata, recordMaintenanceLifecycle } from "../lib/maintenance.mjs";
-
-const updateStatuses = new Set(["acknowledged", "in_progress", "healed", "failed", "ignored"]);
+import { maintenanceAuthorized, mapIssueRow, recordMaintenanceLifecycle } from "../lib/maintenance.mjs";
+import { cleanText, validateMaintenancePatchPayload } from "../lib/maintenance-issues-validation.mjs";
 
 function jsonResponse(body, status = 200, headers = {}) {
   return Response.json(body, { status, headers: { "Cache-Control": "no-store", ...headers } });
 }
 
-function cleanText(value, maximum) {
-  return typeof value === "string" ? value.replace(/\s+/g, " ").trim().slice(0, maximum) : "";
-}
-
 function lifecycleEventForStatus(status) {
   if (status === "ignored") return "ignored";
-  if (status === "healed") return "resolved";
+  if (status === "healed") return "healed";
   return "updated";
 }
 
@@ -56,17 +51,9 @@ export default async function maintenanceIssuesHandler(request, context) {
       return jsonResponse({ message: "Update must be valid JSON" }, 400);
     }
 
-    const status = cleanText(payload.status, 24);
-    if (!updateStatuses.has(status)) return jsonResponse({ message: "Unsupported maintenance status" }, 422);
-    const verification = normalizeVerificationMetadata(payload.verification, {
-      source: "maintenance_worker"
-    });
-    const verificationUnavailableReason = cleanText(payload.verificationUnavailableReason, 400);
-    if (status === "healed" && !verification && !verificationUnavailableReason) {
-      return jsonResponse({
-        message: "Healed updates require structured verification metadata or a verificationUnavailableReason"
-      }, 422);
-    }
+    const validation = validateMaintenancePatchPayload(payload);
+    if (!validation.ok) return jsonResponse({ message: validation.message }, 422);
+    const { status, verification, verificationUnavailableReason } = validation;
     const resolutionSummary = cleanText(payload.resolutionSummary, 2000) || null;
     const maintenanceReference = cleanText(payload.reference, 180) || null;
     const metadataPatch = {
@@ -79,8 +66,19 @@ export default async function maintenanceIssuesHandler(request, context) {
       SET status = ${status},
           resolution_summary = COALESCE(${resolutionSummary}, resolution_summary),
           maintenance_reference = COALESCE(${maintenanceReference}, maintenance_reference),
-          metadata = COALESCE(metadata, '{}'::jsonb) || ${JSON.stringify(metadataPatch)}::jsonb,
-          healed_at = CASE WHEN ${status} = 'healed' THEN NOW() ELSE healed_at END,
+          metadata = (
+            CASE
+              WHEN ${status} <> 'healed' THEN COALESCE(metadata, '{}'::jsonb) - 'autoHealVerification' - 'resolutionVerification' - 'verificationUnavailableReason'
+              WHEN ${Boolean(verification)} THEN COALESCE(metadata, '{}'::jsonb) - 'autoHealVerification' - 'resolutionVerification' - 'verificationUnavailableReason'
+              ELSE COALESCE(metadata, '{}'::jsonb) - 'autoHealVerification' - 'resolutionVerification'
+            END
+          ) || ${JSON.stringify(metadataPatch)}::jsonb,
+          healed_at = CASE
+            WHEN ${status} = 'healed' AND status <> 'healed' THEN NOW()
+            WHEN ${status} = 'healed' THEN healed_at
+            WHEN status = 'healed' THEN NULL
+            ELSE healed_at
+          END,
           updated_at = NOW()
       WHERE id = ${issueId}
       RETURNING *
@@ -88,8 +86,8 @@ export default async function maintenanceIssuesHandler(request, context) {
     if (!row) return jsonResponse({ message: "Issue not found" }, 404);
     const issue = mapIssueRow(row);
     await recordMaintenanceLifecycle(db, issue, lifecycleEventForStatus(status), {
-      summary: `Maintenance issue ${status.replace("_", " ")}: ${issue.title}`,
-      outcome: status === "healed" || status === "ignored" ? "success" : "pending",
+      summary: `Maintenance issue ${status.replaceAll("_", " ")}: ${issue.title}`,
+      outcome: status === "failed" ? "failure" : status === "healed" || status === "ignored" ? "success" : "pending",
       details: {
         updateStatus: status,
         maintenanceReference,

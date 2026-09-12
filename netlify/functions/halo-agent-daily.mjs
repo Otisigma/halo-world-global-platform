@@ -12,7 +12,7 @@ export default async function haloAgentDailyHandler() {
     } catch (error) {
       console.error("HALO agent daily webhook failed", error instanceof Error ? error.message : "unknown error");
     }
-    await recordScheduledHeartbeat(db, "halo-agent-daily", "success", {
+    await recordScheduledHeartbeat(db, "halo-agent-daily", delivered ? "success" : "failure", {
       reportDate: report.reportDate,
       delivered
     });

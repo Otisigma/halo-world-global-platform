@@ -32,7 +32,7 @@ async function reconcileCheck({ fingerprint, healthy, title, details, severity =
 
 export default async function radioHealthScoutHandler() {
   const db = getDatabase();
-  const baseUrl = process.env.URL || process.env.DEPLOY_PRIME_URL;
+  const baseUrl = globalThis.Netlify?.env?.get("URL") || globalThis.Netlify?.env?.get("DEPLOY_PRIME_URL");
   if (!baseUrl) {
     console.error("Radio health scout skipped because the site URL is unavailable");
     await recordScheduledHeartbeat(db, "radio-health-scout", "failure", { reason: "site_url_unavailable" });

@@ -81,7 +81,10 @@ function activeAccessTier() {
 }
 
 function tierUnlocked(requiredTier = "free") {
-  return ACCESS_TIER_ORDER.indexOf(activeAccessTier()) >= ACCESS_TIER_ORDER.indexOf(requiredTier);
+  const activeIndex = ACCESS_TIER_ORDER.indexOf(activeAccessTier());
+  const requiredIndex = ACCESS_TIER_ORDER.indexOf(requiredTier);
+  if (requiredIndex < 0) return false;
+  return activeIndex >= requiredIndex;
 }
 
 function monetizationHooks() {
@@ -100,7 +103,7 @@ function renderAccessTiers() {
 
 function renderPremiumActions() {
   const hooks = monetizationHooks();
-  return PREMIUM_ACTIONS.map(action => {
+  return PREMIUM_ACTIONS.map((action, index) => {
     const unlocked = tierUnlocked(action.requiredTier);
     const hookValue = String(hooks[action.key] || "");
     const lockMessage = unlocked
@@ -108,7 +111,8 @@ function renderPremiumActions() {
         ? "Ready for route"
         : "Hook placeholder ready"
       : `${ACCESS_TIERS[action.requiredTier]?.label || action.requiredTier} required`;
-    return `<li class="premium-item"><div class="track-meta">${escapeHtml(lockMessage)}</div><strong>${escapeHtml(action.title)}</strong><p>${escapeHtml(action.description)}</p><button type="button" data-action="premium" data-hook-key="${escapeHtml(action.key)}" data-required-tier="${escapeHtml(action.requiredTier)}">${unlocked ? "Open hook" : "Locked"}</button></li>`;
+    const reasonId = `premium-lock-${index}`;
+    return `<li class="premium-item"><div class="track-meta">${escapeHtml(lockMessage)}</div><strong>${escapeHtml(action.title)}</strong><p>${escapeHtml(action.description)}</p><p class="track-meta" id="${reasonId}">${escapeHtml(lockMessage)}</p><button type="button" data-action="premium" data-hook-key="${escapeHtml(action.key)}" data-required-tier="${escapeHtml(action.requiredTier)}" ${unlocked ? "" : "disabled"} aria-describedby="${reasonId}">${unlocked ? "Open hook" : "Locked"}</button></li>`;
   }).join("");
 }
 
@@ -343,10 +347,16 @@ function bindEvents() {
       }
       const hookKey = actionButton.dataset.hookKey || "";
       const hookValue = String(monetizationHooks()[hookKey] || "");
-      if (hookValue.startsWith("/") || hookValue.startsWith("http://") || hookValue.startsWith("https://")) {
-        window.open(hookValue, "_blank", "noopener");
+      if (hookValue.startsWith("/")) {
+        window.location.assign(hookValue);
         state.status = "Opening configured premium route.";
         state.statusError = "";
+        render();
+        return;
+      }
+      if (hookValue) {
+        state.statusError = "Premium hook must use a same-origin route path.";
+        state.status = "";
         render();
         return;
       }

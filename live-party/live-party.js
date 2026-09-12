@@ -69,10 +69,12 @@ function renderChat() {
   const messages = [...(state.community?.messages || [])].slice(-18).reverse();
   if (!messages.length) return '<li class="chat-item">The room is warming up. Say hello to kick it off.</li>';
   return messages.map(message => {
+    const messageId = encodeURIComponent(String(message.id ?? ""));
+    const actorId = encodeURIComponent(String(message.actor_id ?? ""));
     const reactions = message.reactions && typeof message.reactions === "object"
       ? Object.entries(message.reactions).map(([emoji, total]) => `${emoji} ${Number(total || 0)}`).join(" · ")
       : "";
-    return `<li class="chat-item" data-message-id="${message.id}" data-actor-id="${escapeHtml(message.actor_id || "")}"><div class="chat-meta">${escapeHtml(message.display_name || "Fan")} · ${escapeHtml(formatDate(message.created_at))}</div><p>${escapeHtml(message.body || "")}</p><div class="chat-meta">${escapeHtml(reactions)}</div><div class="chat-item-actions"><button type="button" data-action="reaction" data-emoji="✨">✨</button><button type="button" data-action="reaction" data-emoji="💜">💜</button><button type="button" data-action="reaction" data-emoji="🔥">🔥</button><button type="button" data-action="reaction" data-emoji="🌊">🌊</button><button type="button" data-action="report">Report</button></div></li>`;
+    return `<li class="chat-item" data-message-id="${messageId}" data-actor-id="${actorId}"><div class="chat-meta">${escapeHtml(message.display_name || "Fan")} · ${escapeHtml(formatDate(message.created_at))}</div><p>${escapeHtml(message.body || "")}</p><div class="chat-meta">${escapeHtml(reactions)}</div><div class="chat-item-actions"><button type="button" data-action="reaction" data-emoji="✨">✨</button><button type="button" data-action="reaction" data-emoji="💜">💜</button><button type="button" data-action="reaction" data-emoji="🔥">🔥</button><button type="button" data-action="reaction" data-emoji="🌊">🌊</button><button type="button" data-action="report">Report</button></div></li>`;
   }).join("");
 }
 
@@ -142,7 +144,7 @@ function render() {
             <textarea name="body" maxlength="320" placeholder="Drop a question, shout, or track request."></textarea>
             <div class="quick-actions"><button type="submit">Send to room</button></div>
           </form>
-          <p class="status-line ${state.statusError ? "error" : ""}">${escapeHtml(state.statusError || state.status || "")}</p>
+          <p class="status-line">Room actions follow moderation policy and consent boundaries.</p>
           <h3>Dreamweave cues</h3>
           <ul class="track-list">${cues.map(cue => `<li class="track-item">${escapeHtml(cue)}</li>`).join("")}</ul>
           <h3>Pinned moments</h3>
@@ -246,8 +248,8 @@ function bindEvents() {
     if (!actionButton) return;
     const item = actionButton.closest("[data-message-id]");
     if (!item) return;
-    const messageId = Number(item.dataset.messageId);
-    const actorId = item.dataset.actorId;
+    const messageId = decodeURIComponent(item.dataset.messageId || "");
+    const actorId = decodeURIComponent(item.dataset.actorId || "");
 
     if (actionButton.dataset.action === "reaction") {
       await communityAction({ action: "reaction", messageId, emoji: actionButton.dataset.emoji }, "Reaction sent.");

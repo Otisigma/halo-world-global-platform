@@ -347,7 +347,7 @@ function bindEvents() {
       }
       const hookKey = actionButton.dataset.hookKey || "";
       const hookValue = String(monetizationHooks()[hookKey] || "");
-      if (hookValue.startsWith("/")) {
+      if (hookValue.startsWith("/") && !hookValue.startsWith("//")) {
         window.location.assign(hookValue);
         return;
       }

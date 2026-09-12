@@ -14,6 +14,8 @@ The live page sends one protected server-side command to a multistream relay. Th
 
 Premium flows are intentionally hook-based (`partyTheme.monetizationHooks`) so the room can launch without hardwiring payment providers. Keep the internal room as the primary venue and use external relays as distribution only.
 
+Operational ownership and launch standards for these choices are defined in `HALO_PARTY_TEAM_CHARTER.md`.
+
 ### Recommended rollout
 
 1. Start with free launch events to build recurring attendance and baseline chat engagement.

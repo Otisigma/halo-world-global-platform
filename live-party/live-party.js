@@ -1,4 +1,5 @@
 const app = document.getElementById("app");
+const liveStatus = document.getElementById("liveStatus");
 
 const DREAMWEAVE_CUES = {
   midnight: ["Origin pulse", "Undertow blend", "Reflection glide"],
@@ -71,7 +72,7 @@ function renderChat() {
     const reactions = message.reactions && typeof message.reactions === "object"
       ? Object.entries(message.reactions).map(([emoji, total]) => `${emoji} ${Number(total || 0)}`).join(" · ")
       : "";
-    return `<li class="chat-item" data-message-id="${message.id}" data-actor-id="${escapeHtml(message.actor_id || "")}"><div class="chat-meta">${escapeHtml(message.display_name || "Fan")} · ${escapeHtml(formatDate(message.created_at))}</div><p>${escapeHtml(message.body || "")}</p><div class="chat-meta">${escapeHtml(reactions)}</div><div class="chat-item-actions"><button type="button" data-action="reaction" data-emoji="✨">✨</button><button type="button" data-action="reaction" data-emoji="💜">💜</button><button type="button" data-action="reaction" data-emoji="🔥">🔥</button><button type="button" data-action="reaction" data-emoji="🌊">🌊</button><button type="button" data-action="report">Report</button><button type="button" data-action="mute">Mute</button></div></li>`;
+    return `<li class="chat-item" data-message-id="${message.id}" data-actor-id="${escapeHtml(message.actor_id || "")}"><div class="chat-meta">${escapeHtml(message.display_name || "Fan")} · ${escapeHtml(formatDate(message.created_at))}</div><p>${escapeHtml(message.body || "")}</p><div class="chat-meta">${escapeHtml(reactions)}</div><div class="chat-item-actions"><button type="button" data-action="reaction" data-emoji="✨">✨</button><button type="button" data-action="reaction" data-emoji="💜">💜</button><button type="button" data-action="reaction" data-emoji="🔥">🔥</button><button type="button" data-action="reaction" data-emoji="🌊">🌊</button><button type="button" data-action="report">Report</button></div></li>`;
   }).join("");
 }
 
@@ -168,6 +169,7 @@ function render() {
       </div>
     </section>
   `;
+  if (liveStatus) liveStatus.textContent = state.statusError || state.status || "";
 }
 
 async function loadCampaign() {
@@ -215,6 +217,7 @@ async function communityAction(payload, notice = "") {
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
     state.statusError = data.message || "That room action did not land.";
+    if (liveStatus) liveStatus.textContent = state.statusError;
     render();
     return false;
   }
@@ -257,14 +260,6 @@ function bindEvents() {
       return;
     }
 
-    if (actionButton.dataset.action === "mute") {
-      if (!/^[a-zA-Z0-9_-]{8,64}$/.test(actorId || "")) {
-        state.statusError = "That room member can not be muted right now.";
-        render();
-        return;
-      }
-      await communityAction({ action: "control", kind: "mute", targetId: actorId }, "Member muted for your room view.");
-    }
   });
 
   app.addEventListener("submit", async event => {

@@ -118,7 +118,16 @@ export async function auditMusicCatalog(db) {
     const fingerprint = `music-catalog-audit:${check.category}:${check.release}`;
     const issueKey = issueKeyForFingerprint(fingerprint);
     if (check.passed) {
-      await resolveIssue(issueKey, check.detail);
+      await resolveIssue(issueKey, check.detail, {
+        source: "music_catalog_audit",
+        verification: {
+          command: "music-catalog-audit",
+          checkIds: [`${check.category}:${check.release}`],
+          resultSummary: check.detail,
+          confidence: 0.9,
+          checkedAt: new Date().toISOString()
+        }
+      });
     } else {
       console.error(`HALO music audit failed [${check.category}] ${check.release}: ${check.detail}`);
       await reportIssue({

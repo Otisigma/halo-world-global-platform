@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
-const [migration, knowledgeMigration, library, api, scheduled, page, client, docs, radioRunbook, packageJson] = await Promise.all([
+const [migration, knowledgeMigration, library, api, scheduled, page, client, docs, radioRunbook, packageJson, aiGovernance] = await Promise.all([
   readFile(new URL("../netlify/database/migrations/20260808160000_create-halo-agent-team.sql", import.meta.url), "utf8"),
   readFile(new URL("../netlify/database/migrations/20260811170000_create-agent-incident-knowledge.sql", import.meta.url), "utf8"),
   readFile(new URL("../netlify/lib/agent-team.mjs", import.meta.url), "utf8"),
@@ -11,7 +11,8 @@ const [migration, knowledgeMigration, library, api, scheduled, page, client, doc
   readFile(new URL("../halo-command.js", import.meta.url), "utf8"),
   readFile(new URL("../HALO_AGENT_TEAM.md", import.meta.url), "utf8"),
   readFile(new URL("../HALO_RADIO_VIDEO_PLAYBACK_RUNBOOK.md", import.meta.url), "utf8"),
-  readFile(new URL("../package.json", import.meta.url), "utf8")
+  readFile(new URL("../package.json", import.meta.url), "utf8"),
+  readFile(new URL("../netlify/lib/ai-governance.mjs", import.meta.url), "utf8")
 ]);
 
 for (const table of ["halo_agent_runs", "halo_agent_findings", "halo_agent_actions", "halo_agent_memory"]) {
@@ -25,7 +26,8 @@ for (const agent of ["atlas", "pulse", "bridge", "hearth", "sentinel", "mirror"]
 assert.match(knowledgeMigration, /CREATE TABLE IF NOT EXISTS halo_agent_knowledge/, "the council must have searchable incident knowledge");
 assert.match(knowledgeMigration, /radio-video-recovery-2026-08-11/, "the successful radio recovery must be stored as council knowledge");
 
-assert.match(library, /gpt-5\.4-mini/, "the council must use an AI Gateway-supported model");
+assert.match(aiGovernance, /council:\s*"gpt-5\.4-mini"/, "the shared AI governance registry must define the council model");
+assert.match(library, /AI_MODELS/, "the council library must read its model from shared AI governance config");
 assert.doesNotMatch(library, /process\.env/, "new agent code must read function environment through Netlify.env");
 assert.match(library, /needsApproval/, "agent priorities must preserve a human approval gate");
 assert.match(library, /actual_outcome/, "the council must learn from recorded outcomes");

@@ -1,11 +1,17 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
-const [migration, satelliteStatusesMigration, sweep, scheduled, api, satelliteApi, page, client, docs, packageJson, navigationCss, mainMenuPage] = await Promise.all([
+const [migration, satelliteStatusesMigration, sweep, scheduled, maintenanceLib, maintenanceIssuesApi, heartbeatLib, radioScout, outreachWeekly, artistWeekly, api, satelliteApi, page, client, docs, packageJson, navigationCss, mainMenuPage] = await Promise.all([
   readFile(new URL("../netlify/database/migrations/20260809150000_create-maintenance-sweeps.sql", import.meta.url), "utf8"),
   readFile(new URL("../netlify/database/migrations/20260905073000_add_satellite_statuses_to_maintenance_sweeps.sql", import.meta.url), "utf8"),
   readFile(new URL("../netlify/lib/maintenance-sweep.mjs", import.meta.url), "utf8"),
   readFile(new URL("../netlify/functions/health-scout.mjs", import.meta.url), "utf8"),
+  readFile(new URL("../netlify/lib/maintenance.mjs", import.meta.url), "utf8"),
+  readFile(new URL("../netlify/functions/maintenance-issues.mjs", import.meta.url), "utf8"),
+  readFile(new URL("../netlify/lib/scheduled-heartbeats.mjs", import.meta.url), "utf8"),
+  readFile(new URL("../netlify/functions/radio-health-scout.mjs", import.meta.url), "utf8"),
+  readFile(new URL("../netlify/functions/outreach-weekly.mjs", import.meta.url), "utf8"),
+  readFile(new URL("../netlify/functions/artist-agent-weekly.mjs", import.meta.url), "utf8"),
   readFile(new URL("../netlify/functions/halo-agent-team.mjs", import.meta.url), "utf8"),
   readFile(new URL("../netlify/functions/halo-satellite-status.mjs", import.meta.url), "utf8"),
   readFile(new URL("../halo-command.html", import.meta.url), "utf8"),
@@ -30,6 +36,7 @@ assert.match(sweep, /canonicalizeRoutePath/, "the maintenance team must use the 
 assert.match(sweep, /CANONICAL_HOME_ROUTE/, "the maintenance team must compare menu links against the canonical home route");
 assert.match(sweep, /halo-signal-check/, "the maintenance team must label the one-command satellite workflow");
 assert.match(sweep, /appendLedgerEntry/, "the maintenance team must write sweep command outcomes to the Halo Ledger");
+assert.match(sweep, /command:\s*SIGNAL_CHECK_COMMAND/, "maintenance auto-heals must attach verification command metadata");
 assert.match(sweep, /satellite_statuses/i, "the maintenance sweep must store satellite statuses for dashboard reloads");
 assert.match(sweep, /satelliteStatuses:\s*Array\.isArray\(row\.satellite_statuses\)/, "dashboard hydration must read persisted satellite statuses");
 assert.match(sweep, /HALO_ACTIVE_ATTENTION_ROUTE/, "the maintenance sweep must allow selecting the current attention route independently");
@@ -37,6 +44,22 @@ assert.match(sweep, /DEFAULT_SATELLITE_ATTENTION_ROUTE/, "the maintenance sweep 
 assert.match(sweep, /statusRecord\.route !== manualAttentionRoute/, "the maintenance sweep must keep manual attention scoped to one selected route");
 assert.match(scheduled, /schedule: "\*\/15 \* \* \* \*"/, "the maintenance team must run every 15 minutes");
 assert.doesNotMatch(scheduled, /process\.env/, "new scheduled code must use Netlify function environment access");
+assert.match(scheduled, /retryDispatchQueue/, "the health scout must retry dispatch failures");
+assert.match(scheduled, /escalateStaleMaintenanceIssues/, "the health scout must escalate stale maintenance issues");
+assert.match(scheduled, /reconcileScheduledHeartbeats/, "the health scout must monitor scheduled heartbeats");
+assert.match(scheduled, /recordScheduledHeartbeat/, "the health scout must emit heartbeat telemetry");
+assert.match(maintenanceLib, /retryDispatchQueue/, "the maintenance library must expose dispatch retry handling");
+assert.match(maintenanceLib, /DISPATCH_MAX_ATTEMPTS/, "dispatch retries must enforce a maximum attempts cap");
+assert.match(maintenanceLib, /nextDispatchAt/, "dispatch retries must schedule an explicit retry window");
+assert.match(maintenanceLib, /recordMaintenanceLifecycle/, "maintenance lifecycle changes must be written to the Halo Ledger");
+assert.match(maintenanceLib, /normalizeVerificationMetadata/, "maintenance heals must support structured verification metadata");
+assert.match(maintenanceIssuesApi, /verificationUnavailableReason/, "healed issue updates must document unverified cases");
+assert.match(maintenanceIssuesApi, /structured verification metadata/i, "healed issue updates must enforce verification metadata when possible");
+assert.match(heartbeatLib, /SCHEDULED_HEARTBEAT_SLA/, "scheduled heartbeat monitoring must define SLA windows");
+assert.match(heartbeatLib, /scheduled-heartbeat:/, "scheduled heartbeat monitoring must escalate missed runs into maintenance issues");
+assert.match(radioScout, /recordScheduledHeartbeat/, "radio scheduled checks must record heartbeat coverage");
+assert.match(outreachWeekly, /recordScheduledHeartbeat/, "outreach scheduled checks must record heartbeat coverage");
+assert.match(artistWeekly, /recordScheduledHeartbeat/, "artist scheduled checks must record heartbeat coverage");
 assert.match(api, /run_maintenance/, "owners must be able to request a manual sweep");
 assert.match(api, /halo-signal-check/, "owners must be able to trigger the one-command satellite sweep");
 assert.match(satelliteApi, /path: "\/api\/halo-satellite-status"/, "the public satellite status API must expose the expected route");
@@ -72,6 +95,7 @@ assert.match(docs, /source-line audit/, "maintenance coverage must be documented
 assert.match(docs, /## halo-signal-check/, "the canonical halo-signal-check README section must be documented");
 const parsedPackage = JSON.parse(packageJson);
 assert.equal(parsedPackage.scripts["halo-signal-check"], "node scripts/live-connected-satellite-contracts.mjs", "the canonical halo-signal-check command must exist");
+assert.match(parsedPackage.scripts["contracts:ai-maintenance"], /maintenance-team-contracts\.mjs/, "focused AI-maintenance contract gating must include maintenance contracts");
 assert.match(parsedPackage.scripts.test, /maintenance-source-audit\.mjs/, "the source-line audit must run in the test suite");
 assert.match(parsedPackage.scripts.test, /maintenance-team-contracts\.mjs/, "maintenance contracts must run in the test suite");
 assert.match(parsedPackage.scripts["satellite:verify"], /live-connected-satellite-contracts\.mjs/, "a one-command satellite verification script must exist");

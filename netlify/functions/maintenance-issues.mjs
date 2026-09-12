@@ -1,5 +1,5 @@
 import { getDatabase } from "@netlify/database";
-import { maintenanceAuthorized, mapIssueRow } from "../lib/maintenance.mjs";
+import { maintenanceAuthorized, mapIssueRow, normalizeVerificationMetadata, recordMaintenanceLifecycle } from "../lib/maintenance.mjs";
 
 const updateStatuses = new Set(["acknowledged", "in_progress", "healed", "failed", "ignored"]);
 
@@ -9,6 +9,12 @@ function jsonResponse(body, status = 200, headers = {}) {
 
 function cleanText(value, maximum) {
   return typeof value === "string" ? value.replace(/\s+/g, " ").trim().slice(0, maximum) : "";
+}
+
+function lifecycleEventForStatus(status) {
+  if (status === "ignored") return "ignored";
+  if (status === "healed") return "resolved";
+  return "updated";
 }
 
 export default async function maintenanceIssuesHandler(request, context) {
@@ -52,20 +58,46 @@ export default async function maintenanceIssuesHandler(request, context) {
 
     const status = cleanText(payload.status, 24);
     if (!updateStatuses.has(status)) return jsonResponse({ message: "Unsupported maintenance status" }, 422);
+    const verification = normalizeVerificationMetadata(payload.verification, {
+      source: "maintenance_worker"
+    });
+    const verificationUnavailableReason = cleanText(payload.verificationUnavailableReason, 400);
+    if (status === "healed" && !verification && !verificationUnavailableReason) {
+      return jsonResponse({
+        message: "Healed updates require structured verification metadata or a verificationUnavailableReason"
+      }, 422);
+    }
     const resolutionSummary = cleanText(payload.resolutionSummary, 2000) || null;
     const maintenanceReference = cleanText(payload.reference, 180) || null;
+    const metadataPatch = {
+      lastMaintenanceUpdateAt: new Date().toISOString()
+    };
+    if (verification) metadataPatch.resolutionVerification = verification;
+    if (verificationUnavailableReason) metadataPatch.verificationUnavailableReason = verificationUnavailableReason;
     const [row] = await db.sql`
       UPDATE maintenance_issues
       SET status = ${status},
           resolution_summary = COALESCE(${resolutionSummary}, resolution_summary),
           maintenance_reference = COALESCE(${maintenanceReference}, maintenance_reference),
+          metadata = COALESCE(metadata, '{}'::jsonb) || ${JSON.stringify(metadataPatch)}::jsonb,
           healed_at = CASE WHEN ${status} = 'healed' THEN NOW() ELSE healed_at END,
           updated_at = NOW()
       WHERE id = ${issueId}
       RETURNING *
     `;
     if (!row) return jsonResponse({ message: "Issue not found" }, 404);
-    return jsonResponse({ issue: mapIssueRow(row) });
+    const issue = mapIssueRow(row);
+    await recordMaintenanceLifecycle(db, issue, lifecycleEventForStatus(status), {
+      summary: `Maintenance issue ${status.replace("_", " ")}: ${issue.title}`,
+      outcome: status === "healed" || status === "ignored" ? "success" : "pending",
+      details: {
+        updateStatus: status,
+        maintenanceReference,
+        verification: verification || null,
+        verificationUnavailableReason: verificationUnavailableReason || null
+      }
+    });
+    return jsonResponse({ issue });
   }
 
   return jsonResponse({ message: "Method not allowed" }, 405, { Allow: "GET, PATCH" });
@@ -74,4 +106,3 @@ export default async function maintenanceIssuesHandler(request, context) {
 export const config = {
   path: ["/api/maintenance/issues", "/api/maintenance/issues/:id"]
 };
-

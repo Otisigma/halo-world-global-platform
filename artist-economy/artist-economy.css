@@ -303,6 +303,38 @@ input:focus, select:focus, textarea:focus { border-color: var(--ink); box-shadow
 .workspace-tabs button.is-active { background: var(--ink); color: var(--acid); }
 .workspace-panel { min-height: 680px; }
 .workspace-panel:nth-of-type(even) { background: rgba(255,255,255,.14); }
+.rights-guidance { display: grid; gap: 16px; margin-bottom: 28px; }
+.guidance-boundary {
+  display: grid;
+  gap: 8px;
+  padding: 18px 20px;
+  color: var(--paper);
+  background: var(--ink);
+}
+.guidance-boundary span,
+.guidance-card header span {
+  font: 500 9px var(--mono);
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+.guidance-boundary p { margin: 0; line-height: 1.6; }
+.guidance-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.guidance-card {
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+  background: rgba(255,255,255,.35);
+  border: 1px solid var(--ink);
+}
+.guidance-card header { display: flex; justify-content: space-between; gap: 12px; }
+.guidance-card header strong { font: 800 32px/1 var(--serif); }
+.guidance-body { display: grid; gap: 12px; }
+.guidance-body section { padding-top: 12px; border-top: 1px solid var(--line); }
+.guidance-body section:first-child { padding-top: 0; border-top: 0; }
+.guidance-body h3 { margin: 0 0 6px; font: 700 21px/1.05 var(--serif); }
+.guidance-body p,
+.guidance-body ol { margin: 0; color: var(--muted); line-height: 1.55; }
+.guidance-body ol { padding-left: 18px; }
 .record-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
 .record-list { display: grid; gap: 14px; }
 .record-card {
@@ -330,7 +362,18 @@ input:focus, select:focus, textarea:focus { border-color: var(--ink); box-shadow
 .record-details small { display: block; color: var(--muted); font: 500 9px var(--mono); text-transform: uppercase; }
 .record-details strong { display: block; margin-top: 4px; }
 .participant-list { display: grid; gap: 6px; margin: 18px 0; padding: 0; list-style: none; }
-.participant-list li { display: flex; justify-content: space-between; gap: 12px; padding: 10px; background: rgba(17,17,15,.05); font-size: 13px; }
+.participant-list li { display: grid; gap: 10px; padding: 10px; background: rgba(17,17,15,.05); font-size: 13px; }
+.participant-row { display: flex; justify-content: space-between; gap: 12px; }
+.participant-societies { display: flex; flex-wrap: wrap; gap: 6px; }
+.society-chip {
+  display: inline-flex;
+  padding: 6px 8px;
+  background: rgba(17,17,15,.08);
+  font: 500 10px/1.4 var(--mono);
+}
+.society-chip.is-empty { color: var(--muted); }
+.participant-tools { display: flex; justify-content: flex-end; }
+.participant-tools .button { min-height: 34px; padding: 6px 10px; }
 .record-actions { display: flex; flex-wrap: wrap; align-items: end; gap: 8px; margin-top: 20px; }
 .record-actions label { min-width: 130px; flex: 1; }
 .record-actions select,
@@ -376,6 +419,7 @@ input:focus, select:focus, textarea:focus { border-color: var(--ink); box-shadow
   .money-grid { grid-template-columns: repeat(2, 1fr); }
   .money-card-main { grid-row: auto; grid-column: 1 / -1; }
   .allocation-board { grid-template-columns: repeat(2, 1fr); }
+  .guidance-grid { grid-template-columns: 1fr; }
   .record-grid { grid-template-columns: 1fr; }
 }
 
@@ -395,6 +439,7 @@ input:focus, select:focus, textarea:focus { border-color: var(--ink); box-shadow
   .dialog-fields { grid-template-columns: 1fr; }
   .dialog-fields .field-wide { grid-column: auto; }
   .record-card header { flex-direction: column; }
+  .participant-row { flex-direction: column; }
   .economy-footer { flex-direction: column; }
 }
 

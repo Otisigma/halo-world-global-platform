@@ -9,8 +9,11 @@ const paymentStatuses = new Set(["not_connected", "preparing", "restricted", "re
 const workTypes = new Set(["recording", "composition"]);
 const rightsStatuses = new Set(["incomplete", "review", "cleared", "hold", "disputed"]);
 const publisherStatuses = new Set(["unknown", "self_published", "administered", "publisher_controlled"]);
+const adminPublishingStatuses = new Set(["unknown", "self_administered", "administered", "publisher_controlled", "seeking_admin"]);
 const participantRoles = new Set(["master_owner", "songwriter", "publisher", "producer", "featured_artist", "performer", "manager", "other"]);
 const collectionStatuses = new Set(["unconfirmed", "registered", "collecting", "hold"]);
+const societyTypes = new Set(["pro", "cmo", "neighbouring_rights", "mechanical", "publisher_admin", "other"]);
+const membershipStatuses = new Set(["research", "applied", "active", "hold"]);
 const incomeSources = new Set(["distribution", "publishing", "neighbouring_rights", "direct_sale", "membership", "licensing", "live", "merchandise", "service", "grant", "other"]);
 const incomeStatuses = new Set(["expected", "received", "overdue", "disputed", "reconciled"]);
 const campaignStages = new Set(["readiness", "test", "scale", "closed"]);
@@ -19,6 +22,7 @@ const campaignDecisions = new Set(["prepare", "test", "scale", "stop", "complete
 const mediaTypes = new Set(["film", "television", "advertising", "game", "trailer", "creator", "documentary", "other"]);
 const licensingStages = new Set(["brief", "matched", "artist_approval", "pitched", "negotiating", "contracted", "delivered", "paid", "declined"]);
 const rightsChecks = new Set(["required", "reviewing", "clear", "hold"]);
+const licensingApprovalStatuses = new Set(["required", "requested", "approved", "declined"]);
 const settlementStatuses = new Set(["planning", "confirmed", "performed", "settling", "paid", "cancelled"]);
 const proposalTypes = new Set(["product", "fee", "algorithm", "partnership", "campaign", "licensing", "policy", "other"]);
 const ownershipEffects = new Set(["strengthens", "neutral", "weakens"]);
@@ -141,6 +145,19 @@ function mapParticipant(row) {
   };
 }
 
+function mapSocietyMembership(row) {
+  return {
+    id: Number(row.id),
+    participantId: Number(row.participant_id),
+    territory: row.territory,
+    societyType: row.society_type,
+    societyName: row.society_name,
+    membershipIdentifier: row.membership_identifier,
+    membershipStatus: row.membership_status,
+    notes: row.notes
+  };
+}
+
 function iso(value) {
   return value ? new Date(value).toISOString() : null;
 }
@@ -150,6 +167,160 @@ function dateOnly(value) {
   if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}/.test(value)) return value.slice(0, 10);
   const date = new Date(value);
   return Number.isNaN(date.valueOf()) ? "" : date.toISOString().slice(0, 10);
+}
+
+function shareLabel(bps) {
+  const share = Number(bps || 0) / 100;
+  return Number.isInteger(share) ? `${share}%` : `${share.toFixed(2)}%`;
+}
+
+function buildRightsGuidance(works, licensing) {
+  const missingData = [];
+  const conflicts = [];
+  const nextSteps = [];
+  const draftPackets = [];
+  const trackMissing = (title, detail) => {
+    if (!missingData.some(item => item.title === title)) missingData.push({ title, detail });
+  };
+  const trackConflict = (title, detail) => {
+    if (!conflicts.some(item => item.title === title)) conflicts.push({ title, detail });
+  };
+  const trackStep = (title, detail) => {
+    if (!nextSteps.some(item => item.title === title)) nextSteps.push({ title, detail });
+  };
+  const trackPacket = (title, detail, checklist) => {
+    if (!draftPackets.some(item => item.title === title)) draftPackets.push({ title, detail, checklist: checklist.slice(0, 6) });
+  };
+
+  if (!works.length) {
+    trackStep("Open the first rights record", "Add the recording and the composition before the next release, pitch, or royalty registration.");
+  }
+
+  let missingWriterMembership = false;
+  let missingRecordingMembership = false;
+  let missingLicensingApproval = false;
+
+  for (const work of works) {
+    const masterParticipants = work.participants.filter(participant => participant.role === "master_owner");
+    const songwriterParticipants = work.participants.filter(participant => participant.role === "songwriter");
+    const publisherParticipants = work.participants.filter(participant => participant.role === "publisher");
+    const performerParticipants = work.participants.filter(participant => ["master_owner", "featured_artist", "performer"].includes(participant.role));
+    const masterShare = masterParticipants.reduce((sum, participant) => sum + participant.shareBps, 0);
+    const compositionShare = songwriterParticipants.reduce((sum, participant) => sum + participant.shareBps, 0);
+    const recordingNeedsCode = work.workType === "recording" && !work.isrc;
+    const compositionNeedsCode = (work.workType === "composition" || songwriterParticipants.length) && !work.iswc;
+
+    if (!work.masterOwner && !masterParticipants.length) {
+      trackMissing(`${work.title}: confirm master ownership`, "Record who controls the sound recording before the work is distributed or licensed.");
+    }
+    if (!work.compositionOwner && !songwriterParticipants.length) {
+      trackMissing(`${work.title}: confirm composition ownership`, "Name the songwriter or composition owner and capture the ownership split before registration.");
+    }
+    if (recordingNeedsCode) {
+      trackMissing(`${work.title}: add the ISRC`, "A recording should carry its identifier before delivery, neighbouring-rights collection, or licensing.");
+    }
+    if (compositionNeedsCode) {
+      trackMissing(`${work.title}: add the ISWC`, "A composition should carry its identifier when available so registrations and royalty tracking line up.");
+    }
+    if (work.publisherStatus === "unknown") {
+      trackStep(`${work.title}: decide the publishing path`, "Choose whether the composition is self-published, administered, or publisher-controlled before the next registration.");
+    }
+    if (work.adminPublishingStatus === "unknown" || (work.adminPublishingStatus === "seeking_admin" && !work.adminPublisherName)) {
+      trackStep(`${work.title}: set the admin publishing status`, "Record whether the writer is self-administering, appointing an admin publisher, or still seeking a partner.");
+    }
+    if (work.adminPublishingStatus === "administered" && !work.adminPublisherName) {
+      trackMissing(`${work.title}: name the admin publisher`, "Administrative publishing is marked as active, but the responsible administrator has not been named.");
+    }
+    if (masterParticipants.length && masterShare !== 10000) {
+      trackConflict(`${work.title}: master splits total ${shareLabel(masterShare)}`, "Master-rights participants should add up to 100% before clearances or statements are treated as final.");
+    }
+    if (songwriterParticipants.length && compositionShare !== 10000) {
+      trackConflict(`${work.title}: composition splits total ${shareLabel(compositionShare)}`, "Songwriter shares should add up to 100% before PRO/CMO registrations or licensing.");
+    }
+    if (work.rightsStatus === "hold" || work.rightsStatus === "disputed") {
+      trackConflict(`${work.title}: rights are ${work.rightsStatus}`, "This work should not move into commercial use until the hold or dispute is resolved by a human.");
+    }
+
+    const missingWriterMembershipHere = [...songwriterParticipants, ...publisherParticipants].some(participant => !participant.societies.length);
+    const missingRecordingMembershipHere = performerParticipants.some(participant => !participant.societies.length);
+    missingWriterMembership ||= missingWriterMembershipHere;
+    missingRecordingMembership ||= missingRecordingMembershipHere;
+
+    if (missingWriterMembershipHere) {
+      trackMissing(`${work.title}: add territory memberships for writers`, "Record each songwriter or publisher's territory-specific PRO, CMO, or admin memberships so income has somewhere to land.");
+    }
+    if (missingRecordingMembershipHere && work.workType === "recording") {
+      trackMissing(`${work.title}: add recording-side collection memberships`, "Recording owners and performers should have territory-specific neighbouring-rights or CMO memberships recorded.");
+    }
+  }
+
+  for (const item of licensing) {
+    if (item.approvalStatus !== "approved" && item.stage !== "declined") {
+      missingLicensingApproval = true;
+      trackStep(`${item.opportunityName}: wait for artist approval`, "HALO can prepare the brief, rights summary, and restrictions, but no external pitch or licence should move without an explicit human approval.");
+    }
+    if (item.stage === "artist_approval" && item.approvalStatus === "required") {
+      trackConflict(`${item.opportunityName}: approval has not been requested`, "The opportunity is waiting at the approval gate but does not yet show a requested or approved artist decision.");
+    }
+    if (["pitched", "negotiating", "contracted", "delivered", "paid"].includes(item.stage) && item.approvalStatus !== "approved") {
+      trackConflict(`${item.opportunityName}: stage outruns approval`, "Commercial licensing stages beyond the approval gate require a human approval record.");
+    }
+    if (item.rightsCheck !== "clear" && ["pitched", "negotiating", "contracted", "delivered", "paid"].includes(item.stage)) {
+      trackConflict(`${item.opportunityName}: rights check is ${item.rightsCheck}`, "A licensing opportunity should not progress externally while the linked rights check is unresolved.");
+    }
+  }
+
+  if (missingWriterMembership) {
+    trackPacket(
+      "UK-first songwriting registration draft",
+      "Prepare the facts for the home territory first while keeping the structure extensible for BMI, ASCAP, SOCAN, SACEM, or other societies later.",
+      [
+        "Confirm the composition title, writers, and 100% songwriter splits.",
+        "Add each writer's IPI/CAE or leave a visible gap to resolve.",
+        "Record the relevant society by territory, for example PRS for Music in the UK.",
+        "Confirm whether publishing is self-managed, administered, or publisher-controlled.",
+        "Keep the draft inside HALO until the artist explicitly approves the registration."
+      ]
+    );
+  }
+  if (missingRecordingMembership) {
+    trackPacket(
+      "UK-first recording collection draft",
+      "Prepare the recording-side collection pack for the home territory before any neighbouring-rights claims are filed.",
+      [
+        "Confirm the master owner and performer lineup for the recording.",
+        "Check that recording-side splits add up to 100% where they are being tracked.",
+        "Add the ISRC and any performer identifiers that already exist.",
+        "Record the relevant collecting body by territory, for example PPL in the UK.",
+        "Wait for the artist to approve any external registration or submission."
+      ]
+    );
+  }
+  if (missingLicensingApproval) {
+    trackPacket(
+      "Licensing approval pack draft",
+      "Use one approval pack per opportunity so the artist sees the fee, territory, media, restrictions, and risks before anything leaves HALO.",
+      [
+        "Confirm the linked work is cleared or explicitly marked for review.",
+        "Summarise the territory, media, term, fee, and restrictions in plain language.",
+        "List the collaborators or publishers who must agree before signature.",
+        "Record whether the artist approved, requested changes, or declined.",
+        "Do not pitch, register, sign, or send externally until a human approval is saved."
+      ]
+    );
+  }
+
+  if (!missingData.length && !conflicts.length && !nextSteps.length) {
+    trackStep("Rights foundations are recorded", "Keep identifiers, territories, and approvals current as new collaborators, societies, and licensing opportunities arrive.");
+  }
+
+  return {
+    missingData: missingData.slice(0, 6),
+    conflicts: conflicts.slice(0, 6),
+    nextSteps: nextSteps.slice(0, 6),
+    draftPackets: draftPackets.slice(0, 4),
+    approvalBoundary: "HALO can prepare drafts, registrations, and licensing packs, but the artist must approve every external filing, licence, registration, or send."
+  };
 }
 
 function buildSummary(profile, works, incomes, campaigns, licensing, live) {
@@ -206,7 +377,7 @@ function buildSummary(profile, works, incomes, campaigns, licensing, live) {
 }
 
 async function loadDashboard(db, slug, access) {
-  const [profileRows, workRows, participantRows, incomeRows, campaignRows, licensingRows, liveRows, reviewRows] = await Promise.all([
+  const [profileRows, workRows, participantRows, societyRows, incomeRows, campaignRows, licensingRows, liveRows, reviewRows] = await Promise.all([
     db.sql`SELECT * FROM halo_artist_economy_profiles WHERE artist_slug = ${slug} LIMIT 1`,
     db.sql`SELECT * FROM halo_artist_rights_works WHERE artist_slug = ${slug} ORDER BY updated_at DESC LIMIT 100`,
     db.sql`
@@ -216,6 +387,15 @@ async function loadDashboard(db, slug, access) {
       WHERE work.artist_slug = ${slug}
       ORDER BY participant.id
       LIMIT 500
+    `,
+    db.sql`
+      SELECT membership.*
+      FROM halo_artist_rights_society_memberships membership
+      INNER JOIN halo_artist_rights_participants participant ON participant.id = membership.participant_id
+      INNER JOIN halo_artist_rights_works work ON work.id = participant.work_id
+      WHERE work.artist_slug = ${slug}
+      ORDER BY membership.id
+      LIMIT 1000
     `,
     db.sql`SELECT * FROM halo_artist_income_entries WHERE artist_slug = ${slug} ORDER BY occurred_on DESC, created_at DESC LIMIT 200`,
     db.sql`SELECT * FROM halo_artist_campaign_investments WHERE artist_slug = ${slug} ORDER BY updated_at DESC LIMIT 100`,
@@ -242,9 +422,18 @@ async function loadDashboard(db, slug, access) {
     missionNote: row.mission_note,
     updatedAt: iso(row.updated_at)
   };
+  const societiesByParticipant = new Map();
+  for (const societyRow of societyRows) {
+    const membership = mapSocietyMembership(societyRow);
+    if (!societiesByParticipant.has(membership.participantId)) societiesByParticipant.set(membership.participantId, []);
+    societiesByParticipant.get(membership.participantId).push(membership);
+  }
   const participantsByWork = new Map();
   for (const participantRow of participantRows) {
-    const participant = mapParticipant(participantRow);
+    const participant = {
+    ...mapParticipant(participantRow),
+    societies: societiesByParticipant.get(Number(participantRow.id)) || []
+    };
     if (!participantsByWork.has(participant.workId)) participantsByWork.set(participant.workId, []);
     participantsByWork.get(participant.workId).push(participant);
   }
@@ -259,7 +448,10 @@ async function loadDashboard(db, slug, access) {
     rightsStatus: item.rights_status,
     oneStop: item.one_stop,
     masterOwner: item.master_owner,
+    compositionOwner: item.composition_owner,
     publisherStatus: item.publisher_status,
+    adminPublisherName: item.admin_publisher_name,
+    adminPublishingStatus: item.admin_publishing_status,
     restrictions: item.restrictions || [],
     evidence: item.evidence || {},
     notes: item.notes,
@@ -308,6 +500,9 @@ async function loadDashboard(db, slug, access) {
     commissionBps: Number(item.commission_bps),
     stage: item.stage,
     rightsCheck: item.rights_check,
+    approvalStatus: item.approval_status,
+    approvedAt: iso(item.approved_at),
+    approvalNote: item.approval_note,
     decisionDueAt: iso(item.decision_due_at),
     restrictions: item.restrictions,
     notes: item.notes,
@@ -352,6 +547,7 @@ async function loadDashboard(db, slug, access) {
     viewer: { platformOwner: access.platformOwner },
     profile,
     summary: buildSummary(profile, works, incomes, campaigns, licensing, live),
+    rightsGuidance: buildRightsGuidance(works, licensing),
     works,
     incomes,
     campaigns,
@@ -407,12 +603,16 @@ async function createWork(db, slug, ownerMemberId, body) {
   await db.sql`
     INSERT INTO halo_artist_rights_works (
       id, artist_slug, owner_member_id, title, work_type, isrc, iswc, upc,
-      rights_status, one_stop, master_owner, publisher_status, restrictions, notes
+      rights_status, one_stop, master_owner, composition_owner, publisher_status,
+      admin_publisher_name, admin_publishing_status, restrictions, notes
     ) VALUES (
       ${id}, ${slug}, ${ownerMemberId}, ${title}, ${enumValue(body.workType, workTypes, "recording")},
       ${cleanText(body.isrc, 15).toUpperCase()}, ${cleanText(body.iswc, 20).toUpperCase()}, ${cleanText(body.upc, 20)},
       ${enumValue(body.rightsStatus, rightsStatuses, "incomplete")}, ${bool(body.oneStop)},
-      ${cleanText(body.masterOwner, 180)}, ${enumValue(body.publisherStatus, publisherStatuses, "unknown")},
+      ${cleanText(body.masterOwner, 180)}, ${cleanText(body.compositionOwner, 180)},
+      ${enumValue(body.publisherStatus, publisherStatuses, "unknown")},
+      ${cleanText(body.adminPublisherName, 180)},
+      ${enumValue(body.adminPublishingStatus, adminPublishingStatuses, "unknown")},
       ${cleanRestrictions(body.restrictions)}::text[], ${cleanMultiline(body.notes, 4000)}
     )
   `;
@@ -432,6 +632,33 @@ async function addParticipant(db, slug, body) {
       ${workId}, ${name}, ${enumValue(body.role, participantRoles, "other")},
       ${integer(body.shareBps, 0, 10000)}, ${enumValue(body.collectionStatus, collectionStatuses, "unconfirmed")},
       ${cleanText(body.societyName, 120)}, ${cleanText(body.identifier, 120)}
+    )
+    RETURNING id
+  `;
+  return Number(rows[0]?.id || 0);
+}
+
+async function addSocietyMembership(db, slug, body) {
+  const participantId = integer(body.participantId, 0, 100000000000);
+  const societyName = cleanText(body.societyName, 120);
+  if (!participantId || !societyName) return false;
+  const participants = await db.sql`
+    SELECT participant.id
+    FROM halo_artist_rights_participants participant
+    INNER JOIN halo_artist_rights_works work ON work.id = participant.work_id
+    WHERE participant.id = ${participantId} AND work.artist_slug = ${slug}
+    LIMIT 1
+  `;
+  if (!participants.length) return false;
+  const rows = await db.sql`
+    INSERT INTO halo_artist_rights_society_memberships (
+      participant_id, territory, society_type, society_name, membership_identifier, membership_status, notes
+    ) VALUES (
+      ${participantId}, ${cleanText(body.territory, 120) || "UK"},
+      ${enumValue(body.societyType, societyTypes, "pro")}, ${societyName},
+      ${cleanText(body.membershipIdentifier, 120)},
+      ${enumValue(body.membershipStatus, membershipStatuses, "research")},
+      ${cleanMultiline(body.notes, 4000)}
     )
     RETURNING id
   `;
@@ -555,7 +782,7 @@ async function createReview(db, slug, memberId, body) {
   return id;
 }
 
-async function updateItem(db, slug, platformOwner, body) {
+async function updateItem(db, slug, platformOwner, memberId, body) {
   const id = cleanIdentifier(body.id);
   if (!id) return false;
   const recordType = cleanText(body.recordType, 40).toLowerCase();
@@ -592,10 +819,16 @@ async function updateItem(db, slug, platformOwner, body) {
     return rows[0]?.id || false;
   }
   if (recordType === "licensing") {
+    const approvalStatus = enumValue(body.approvalStatus, licensingApprovalStatuses, "required");
     const rows = await db.sql`
       UPDATE halo_artist_licensing_opportunities
       SET stage = ${enumValue(body.stage, licensingStages, "brief")},
-        rights_check = ${enumValue(body.rightsCheck, rightsChecks, "required")}, updated_at = NOW()
+        rights_check = ${enumValue(body.rightsCheck, rightsChecks, "required")},
+        approval_status = ${approvalStatus},
+        approval_note = ${cleanMultiline(body.approvalNote, 2000)},
+        approved_by_member_id = ${approvalStatus === "approved" ? memberId : null},
+        approved_at = ${approvalStatus === "approved" ? new Date().toISOString() : null},
+        updated_at = NOW()
       WHERE id = ${id} AND artist_slug = ${slug}
       RETURNING id
     `;
@@ -658,12 +891,13 @@ export default async function artistEconomyHandler(request) {
     if (body.action === "save_profile") result = await saveProfile(db, slug, access.ownerMemberId, body);
     if (body.action === "create_work") result = await createWork(db, slug, access.ownerMemberId, body);
     if (body.action === "add_participant") result = await addParticipant(db, slug, body);
+    if (body.action === "add_society_membership") result = await addSocietyMembership(db, slug, body);
     if (body.action === "create_income") result = await createIncome(db, slug, access.ownerMemberId, body);
     if (body.action === "create_campaign") result = await createCampaign(db, slug, access.ownerMemberId, body);
     if (body.action === "create_licensing") result = await createLicensing(db, slug, access.ownerMemberId, body);
     if (body.action === "create_live") result = await createLive(db, slug, access.ownerMemberId, body);
     if (body.action === "create_review" && access.platformOwner) result = await createReview(db, slug, access.memberId, body);
-    if (body.action === "update_item") result = await updateItem(db, slug, access.platformOwner, body);
+    if (body.action === "update_item") result = await updateItem(db, slug, access.platformOwner, access.memberId, body);
     if (!result) return json({ message: "That Artist Economy update could not be saved" }, 400);
     return json({ saved: true, id: result === true ? null : result, dashboard: await loadDashboard(db, slug, access) });
   } catch (error) {

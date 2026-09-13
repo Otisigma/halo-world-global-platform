@@ -377,7 +377,9 @@ input:focus, select:focus, textarea:focus { border-color: var(--ink); box-shadow
 .record-actions { display: flex; flex-wrap: wrap; align-items: end; gap: 8px; margin-top: 20px; }
 .record-actions label { min-width: 130px; flex: 1; }
 .record-actions select,
-.record-actions input { min-height: 39px; padding: 7px 8px; background: var(--paper); }
+.record-actions input,
+.record-actions textarea { min-height: 39px; padding: 7px 8px; background: var(--paper); }
+.record-actions textarea { min-height: 86px; }
 .record-actions button { min-height: 39px; padding: 8px 12px; }
 .empty-records { padding: 50px; border: 1px dashed var(--ink); text-align: center; }
 .empty-records strong { display: block; font: 800 32px var(--serif); }

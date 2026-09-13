@@ -255,6 +255,10 @@ function buildRightsGuidance(works, licensing) {
   }
 
   for (const item of licensing) {
+    if (item.approvalStatus === "declined") {
+      trackStep(`${item.opportunityName}: artist declined this opportunity`, "Keep the opportunity as an internal record unless a human reopens the conversation with new terms or evidence.");
+      continue;
+    }
     if (item.approvalStatus !== "approved" && item.stage !== "declined") {
       missingLicensingApproval = true;
       trackStep(`${item.opportunityName}: wait for artist approval`, "HALO can prepare the brief, rights summary, and restrictions, but no external pitch or licence should move without an explicit human approval.");

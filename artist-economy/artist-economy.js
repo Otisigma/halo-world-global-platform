@@ -240,7 +240,7 @@
         <ul class="participant-list">${work.participants.length ? work.participants.map(participant => `<li>
           <div class="participant-row"><span><strong>${escapeHtml(participant.name)}</strong> · ${escapeHtml(titleCase(participant.role))}</span><span>${participant.shareBps / 100}% · ${escapeHtml(titleCase(participant.collectionStatus))}</span></div>
           <div class="participant-societies">${participant.societies.length ? participant.societies.map(society => `<span class="society-chip">${escapeHtml(`${society.territory} · ${titleCase(society.societyType)} · ${society.societyName} · ${titleCase(society.membershipStatus)}${society.membershipIdentifier ? ` · ${society.membershipIdentifier}` : ""}`)}</span>`).join("") : '<span class="society-chip is-empty">No territory memberships recorded yet</span>'}</div>
-          <div class="participant-tools"><button class="button button-quiet" type="button" data-open-form="membership" data-participant-id="${participant.id}">Add territory membership</button></div>
+          <div class="participant-tools"><button class="button button-quiet" type="button" data-open-form="membership" data-participant-id="${participant.id}" data-participant-name="${escapeHtml(participant.name)}" data-work-title="${escapeHtml(work.title)}">Add territory membership</button></div>
         </li>`).join("") : "<li><div class=\"participant-row\"><span>No participants recorded</span><span>Shares unknown</span></div></li>"}</ul>
         <div class="record-actions">
           <label>Status<select data-field="rightsStatus">${options(statusOptions.work, work.rightsStatus)}</select></label>
@@ -420,6 +420,7 @@
       title: "Record a territory membership", kicker: "PRO / CMO / ADMIN", action: "add_society_membership", submit: "Add membership",
       fields: [
         field("participantId", "Participant", "hidden", "", context.participantId),
+        field("participantSummary", "Participant", "text", "", [context.participantName, context.workTitle].filter(Boolean).join(" · "), "readonly"),
         field("territory", "Territory", "text", "", "UK", "required maxlength=120"),
         field("societyType", "Society type", "select", options(statusOptions.societyType, "pro")),
         field("societyName", "Society or administrator", "text", "", "", "required maxlength=120"),
@@ -634,7 +635,9 @@
     if (formButton) {
       openForm(formButton.dataset.openForm, {
         workId: formButton.dataset.workId || "",
-        participantId: formButton.dataset.participantId || ""
+        participantId: formButton.dataset.participantId || "",
+        participantName: formButton.dataset.participantName || "",
+        workTitle: formButton.dataset.workTitle || ""
       });
       return;
     }

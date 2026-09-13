@@ -1,12 +1,31 @@
 ALTER TABLE halo_artist_rights_works
-  ADD COLUMN composition_owner TEXT NOT NULL DEFAULT '',
-  ADD COLUMN admin_publisher_name TEXT NOT NULL DEFAULT '',
-  ADD COLUMN admin_publishing_status TEXT NOT NULL DEFAULT 'unknown',
-  ADD CONSTRAINT halo_artist_rights_works_composition_owner_length CHECK (char_length(composition_owner) <= 180),
-  ADD CONSTRAINT halo_artist_rights_works_admin_publisher_name_length CHECK (char_length(admin_publisher_name) <= 180),
-  ADD CONSTRAINT halo_artist_rights_works_admin_publishing_status_check CHECK (
-    admin_publishing_status IN ('unknown', 'self_administered', 'administered', 'publisher_controlled', 'seeking_admin')
-  );
+  ADD COLUMN IF NOT EXISTS composition_owner TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS admin_publisher_name TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS admin_publishing_status TEXT NOT NULL DEFAULT 'unknown';
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'halo_artist_rights_works_composition_owner_length'
+  ) THEN
+    ALTER TABLE halo_artist_rights_works
+      ADD CONSTRAINT halo_artist_rights_works_composition_owner_length CHECK (char_length(composition_owner) <= 180);
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'halo_artist_rights_works_admin_publisher_name_length'
+  ) THEN
+    ALTER TABLE halo_artist_rights_works
+      ADD CONSTRAINT halo_artist_rights_works_admin_publisher_name_length CHECK (char_length(admin_publisher_name) <= 180);
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'halo_artist_rights_works_admin_publishing_status_check'
+  ) THEN
+    ALTER TABLE halo_artist_rights_works
+      ADD CONSTRAINT halo_artist_rights_works_admin_publishing_status_check CHECK (
+        admin_publishing_status IN ('unknown', 'self_administered', 'administered', 'publisher_controlled', 'seeking_admin')
+      );
+  END IF;
+END $$;
 
 CREATE TABLE IF NOT EXISTS halo_artist_rights_society_memberships (
   id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
@@ -33,10 +52,10 @@ CREATE INDEX IF NOT EXISTS halo_artist_rights_society_memberships_participant_id
   ON halo_artist_rights_society_memberships(participant_id, membership_status, territory);
 
 ALTER TABLE halo_artist_licensing_opportunities
-  ADD COLUMN approval_status TEXT,
-  ADD COLUMN approved_by_member_id TEXT REFERENCES halo_memberships(member_id) ON DELETE SET NULL,
-  ADD COLUMN approved_at TIMESTAMPTZ,
-  ADD COLUMN approval_note TEXT NOT NULL DEFAULT '';
+  ADD COLUMN IF NOT EXISTS approval_status TEXT,
+  ADD COLUMN IF NOT EXISTS approved_by_member_id TEXT REFERENCES halo_memberships(member_id) ON DELETE SET NULL,
+  ADD COLUMN IF NOT EXISTS approved_at TIMESTAMPTZ,
+  ADD COLUMN IF NOT EXISTS approval_note TEXT NOT NULL DEFAULT '';
 
 UPDATE halo_artist_licensing_opportunities
 SET approval_status = CASE
@@ -57,14 +76,38 @@ WHERE approval_status IS NULL;
 
 ALTER TABLE halo_artist_licensing_opportunities
   ALTER COLUMN approval_status SET DEFAULT 'required',
-  ALTER COLUMN approval_status SET NOT NULL,
-  ADD CONSTRAINT halo_artist_licensing_approval_status_check CHECK (
-    approval_status IN ('required', 'requested', 'approved', 'declined')
-  ),
-  ADD CONSTRAINT halo_artist_licensing_approval_note_length CHECK (char_length(approval_note) <= 2000),
-  ADD CONSTRAINT halo_artist_licensing_approval_guard CHECK (
-    approval_status <> 'approved' OR (approved_by_member_id IS NOT NULL AND approved_at IS NOT NULL)
-  ),
-  ADD CONSTRAINT halo_artist_licensing_stage_requires_approval CHECK (
-    stage IN ('brief', 'matched', 'artist_approval', 'declined') OR approval_status = 'approved'
-  );
+  ALTER COLUMN approval_status SET NOT NULL;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'halo_artist_licensing_approval_status_check'
+  ) THEN
+    ALTER TABLE halo_artist_licensing_opportunities
+      ADD CONSTRAINT halo_artist_licensing_approval_status_check CHECK (
+        approval_status IN ('required', 'requested', 'approved', 'declined')
+      );
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'halo_artist_licensing_approval_note_length'
+  ) THEN
+    ALTER TABLE halo_artist_licensing_opportunities
+      ADD CONSTRAINT halo_artist_licensing_approval_note_length CHECK (char_length(approval_note) <= 2000);
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'halo_artist_licensing_approval_guard'
+  ) THEN
+    ALTER TABLE halo_artist_licensing_opportunities
+      ADD CONSTRAINT halo_artist_licensing_approval_guard CHECK (
+        approval_status <> 'approved' OR (approved_by_member_id IS NOT NULL AND approved_at IS NOT NULL)
+      );
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'halo_artist_licensing_stage_requires_approval'
+  ) THEN
+    ALTER TABLE halo_artist_licensing_opportunities
+      ADD CONSTRAINT halo_artist_licensing_stage_requires_approval CHECK (
+        stage IN ('brief', 'matched', 'artist_approval', 'declined') OR approval_status = 'approved'
+      );
+  END IF;
+END $$;

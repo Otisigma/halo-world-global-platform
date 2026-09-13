@@ -782,7 +782,7 @@ async function createReview(db, slug, memberId, body) {
   return id;
 }
 
-async function updateItem(db, slug, platformOwner, memberId, body) {
+async function updateItem(db, slug, platformOwner, memberId, canApproveLicensing, body) {
   const id = cleanIdentifier(body.id);
   if (!id) return false;
   const recordType = cleanText(body.recordType, 40).toLowerCase();
@@ -831,6 +831,8 @@ async function updateItem(db, slug, platformOwner, memberId, body) {
     const approvalStatus = approvalSpecified
       ? enumValue(approvalSpecified, licensingApprovalStatuses, current.approval_status || "required")
       : current.approval_status || "required";
+    const changingApprovalWorkflow = approvalSpecified && approvalStatus !== (current.approval_status || "required");
+    if (changingApprovalWorkflow && !canApproveLicensing) return false;
     const approvalNote = Object.prototype.hasOwnProperty.call(body, "approvalNote")
       ? cleanMultiline(body.approvalNote, 2000)
       : current.approval_note;
@@ -906,6 +908,21 @@ export default async function artistEconomyHandler(request) {
     const access = await authorize(db, user, slug);
     if (access.status) return json({ message: access.message }, access.status);
     await ensureProfile(db, slug, access.ownerMemberId);
+    const canEditRoom = access.platformOwner || access.memberId === access.ownerMemberId;
+    const ownerScopedActions = new Set([
+      "save_profile",
+      "create_work",
+      "add_participant",
+      "add_society_membership",
+      "create_income",
+      "create_campaign",
+      "create_licensing",
+      "create_live",
+      "update_item"
+    ]);
+    if (ownerScopedActions.has(body.action) && !canEditRoom) {
+      return json({ message: "Only the artist owner or HALO can change this rights record" }, 403);
+    }
 
     let result = false;
     if (body.action === "save_profile") result = await saveProfile(db, slug, access.ownerMemberId, body);
@@ -917,7 +934,7 @@ export default async function artistEconomyHandler(request) {
     if (body.action === "create_licensing") result = await createLicensing(db, slug, access.ownerMemberId, body);
     if (body.action === "create_live") result = await createLive(db, slug, access.ownerMemberId, body);
     if (body.action === "create_review" && access.platformOwner) result = await createReview(db, slug, access.memberId, body);
-    if (body.action === "update_item") result = await updateItem(db, slug, access.platformOwner, access.memberId, body);
+    if (body.action === "update_item") result = await updateItem(db, slug, access.platformOwner, access.memberId, canEditRoom, body);
     if (!result) return json({ message: "That Artist Economy update could not be saved" }, 400);
     return json({ saved: true, id: result === true ? null : result, dashboard: await loadDashboard(db, slug, access) });
   } catch (error) {

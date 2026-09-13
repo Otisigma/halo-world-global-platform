@@ -30,7 +30,7 @@ assert.match(files.rightsOwnershipMigration, /admin_publisher_name TEXT NOT NULL
 assert.match(files.rightsOwnershipMigration, /admin_publishing_status TEXT NOT NULL DEFAULT 'unknown'/);
 assert.match(files.rightsOwnershipMigration, /CREATE TABLE IF NOT EXISTS halo_artist_rights_society_memberships/);
 assert.match(files.rightsOwnershipMigration, /society_type IN \('pro', 'cmo', 'neighbouring_rights', 'mechanical', 'publisher_admin', 'other'\)/);
-assert.match(files.rightsOwnershipMigration, /ADD COLUMN approval_status TEXT/);
+assert.match(files.rightsOwnershipMigration, /ADD COLUMN IF NOT EXISTS approval_status TEXT/);
 assert.match(files.rightsOwnershipMigration, /ALTER COLUMN approval_status SET DEFAULT 'required'/);
 assert.match(files.rightsOwnershipMigration, /WHEN stage IN \('pitched', 'negotiating', 'contracted', 'delivered', 'paid'\) THEN 'approved'/);
 assert.match(files.rightsOwnershipMigration, /approved_by_member_id TEXT REFERENCES halo_memberships/);

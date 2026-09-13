@@ -33,10 +33,31 @@ CREATE INDEX IF NOT EXISTS halo_artist_rights_society_memberships_participant_id
   ON halo_artist_rights_society_memberships(participant_id, membership_status, territory);
 
 ALTER TABLE halo_artist_licensing_opportunities
-  ADD COLUMN approval_status TEXT NOT NULL DEFAULT 'required',
+  ADD COLUMN approval_status TEXT,
   ADD COLUMN approved_by_member_id TEXT REFERENCES halo_memberships(member_id) ON DELETE SET NULL,
   ADD COLUMN approved_at TIMESTAMPTZ,
-  ADD COLUMN approval_note TEXT NOT NULL DEFAULT '',
+  ADD COLUMN approval_note TEXT NOT NULL DEFAULT '';
+
+UPDATE halo_artist_licensing_opportunities
+SET approval_status = CASE
+    WHEN stage IN ('pitched', 'negotiating', 'contracted', 'delivered', 'paid') THEN 'approved'
+    WHEN stage = 'artist_approval' THEN 'requested'
+    WHEN stage = 'declined' THEN 'declined'
+    ELSE 'required'
+  END,
+  approved_by_member_id = CASE
+    WHEN stage IN ('pitched', 'negotiating', 'contracted', 'delivered', 'paid') THEN owner_member_id
+    ELSE NULL
+  END,
+  approved_at = CASE
+    WHEN stage IN ('pitched', 'negotiating', 'contracted', 'delivered', 'paid') THEN COALESCE(updated_at, created_at, NOW())
+    ELSE NULL
+  END
+WHERE approval_status IS NULL;
+
+ALTER TABLE halo_artist_licensing_opportunities
+  ALTER COLUMN approval_status SET DEFAULT 'required',
+  ALTER COLUMN approval_status SET NOT NULL,
   ADD CONSTRAINT halo_artist_licensing_approval_status_check CHECK (
     approval_status IN ('required', 'requested', 'approved', 'declined')
   ),

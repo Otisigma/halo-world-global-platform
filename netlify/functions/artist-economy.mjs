@@ -819,15 +819,35 @@ async function updateItem(db, slug, platformOwner, memberId, body) {
     return rows[0]?.id || false;
   }
   if (recordType === "licensing") {
-    const approvalStatus = enumValue(body.approvalStatus, licensingApprovalStatuses, "required");
+    const currentRows = await db.sql`
+      SELECT approval_status, approved_by_member_id, approved_at, approval_note
+      FROM halo_artist_licensing_opportunities
+      WHERE id = ${id} AND artist_slug = ${slug}
+      LIMIT 1
+    `;
+    if (!currentRows.length) return false;
+    const current = currentRows[0];
+    const approvalSpecified = cleanText(body.approvalStatus, 40);
+    const approvalStatus = approvalSpecified
+      ? enumValue(approvalSpecified, licensingApprovalStatuses, current.approval_status || "required")
+      : current.approval_status || "required";
+    const approvalNote = Object.prototype.hasOwnProperty.call(body, "approvalNote")
+      ? cleanMultiline(body.approvalNote, 2000)
+      : current.approval_note;
+    const approvedByMemberId = approvalStatus === "approved"
+      ? (current.approval_status === "approved" ? current.approved_by_member_id : memberId)
+      : null;
+    const approvedAt = approvalStatus === "approved"
+      ? (current.approval_status === "approved" ? current.approved_at : new Date().toISOString())
+      : null;
     const rows = await db.sql`
       UPDATE halo_artist_licensing_opportunities
       SET stage = ${enumValue(body.stage, licensingStages, "brief")},
         rights_check = ${enumValue(body.rightsCheck, rightsChecks, "required")},
         approval_status = ${approvalStatus},
-        approval_note = ${cleanMultiline(body.approvalNote, 2000)},
-        approved_by_member_id = ${approvalStatus === "approved" ? memberId : null},
-        approved_at = ${approvalStatus === "approved" ? new Date().toISOString() : null},
+        approval_note = ${approvalNote},
+        approved_by_member_id = ${approvedByMemberId},
+        approved_at = ${approvedAt},
         updated_at = NOW()
       WHERE id = ${id} AND artist_slug = ${slug}
       RETURNING id

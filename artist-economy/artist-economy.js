@@ -226,10 +226,15 @@
       return;
     }
     target.innerHTML = works.map(work => {
-      const shares = work.participants.reduce((sum, participant) => sum + participant.shareBps, 0);
+      const masterShares = work.participants.filter(participant => participant.role === "master_owner").reduce((sum, participant) => sum + participant.shareBps, 0);
+      const compositionShares = work.participants.filter(participant => participant.role === "songwriter").reduce((sum, participant) => sum + participant.shareBps, 0);
+      const shareSummary = [
+        masterShares ? `Master ${masterShares / 100}%` : "",
+        compositionShares ? `Composition ${compositionShares / 100}%` : ""
+      ].filter(Boolean).join(" · ") || "Shares not recorded";
       const publishingLabel = [titleCase(work.publisherStatus), work.adminPublishingStatus ? titleCase(work.adminPublishingStatus) : ""].filter(Boolean).join(" · ");
       return `<article class="record-card" data-record-id="${escapeHtml(work.id)}" data-tone="${escapeHtml(work.rightsStatus)}">
-        <header><div><div class="record-meta"><span>${escapeHtml(work.workType)}</span><span>${escapeHtml(work.rightsStatus)}</span>${work.oneStop ? "<span>One-stop</span>" : ""}</div><h3>${escapeHtml(work.title)}</h3></div><span class="status-label">${shares / 100}% recorded</span></header>
+        <header><div><div class="record-meta"><span>${escapeHtml(work.workType)}</span><span>${escapeHtml(work.rightsStatus)}</span>${work.oneStop ? "<span>One-stop</span>" : ""}</div><h3>${escapeHtml(work.title)}</h3></div><span class="status-label">${escapeHtml(shareSummary)}</span></header>
         <p>${escapeHtml(work.notes || "No private rights note has been added.")}</p>
         <div class="record-details"><div><small>Master owner</small><strong>${escapeHtml(work.masterOwner || "Not confirmed")}</strong></div><div><small>Composition owner</small><strong>${escapeHtml(work.compositionOwner || "Not confirmed")}</strong></div><div><small>Publishing / admin</small><strong>${escapeHtml(publishingLabel || "Unknown")}</strong></div><div><small>Admin publisher</small><strong>${escapeHtml(work.adminPublisherName || "Not assigned")}</strong></div><div><small>ISRC / ISWC</small><strong>${escapeHtml([work.isrc || "Missing ISRC", work.iswc || "Missing ISWC"].join(" · "))}</strong></div><div><small>Restrictions</small><strong>${escapeHtml(work.restrictions.join(", ") || "None recorded")}</strong></div></div>
         <ul class="participant-list">${work.participants.length ? work.participants.map(participant => `<li>

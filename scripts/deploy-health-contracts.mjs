@@ -260,7 +260,7 @@ await runCheck("Homepage music experiment markers and tracking", async () => {
   );
   assert.match(
     haloHtml,
-    /transparent on-page behavior signals[\s\S]*without exploiting either side of the relationship/i,
+    /does not require your personal information[\s\S]*only there to make Halo better/i,
     "halo.html must preserve the ethical data-use note for the experiment."
   );
   const statsDoc = await read("STATS.md");

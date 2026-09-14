@@ -2004,6 +2004,7 @@
     let sessionRestoring = false;
     const artistJourneyObservers = [];
     let artistJourneyFormElement = null;
+    let artistJourneyRenderQueued = false;
     let artistJourneyScheduleHandler = null;
     let artistJourneyUnloadHandler = null;
     const stemVaultState = { authenticated: false, packs: [], loading: false };
@@ -2235,6 +2236,7 @@
       }
       if (artistJourneyUnloadHandler) window.removeEventListener("beforeunload", artistJourneyUnloadHandler);
       artistJourneyFormElement = null;
+      artistJourneyRenderQueued = false;
       artistJourneyScheduleHandler = null;
       artistJourneyUnloadHandler = null;
     }
@@ -2242,7 +2244,14 @@
     function initializeArtistJourneyGuidance() {
       cleanupArtistJourneyGuidance();
       const form = document.querySelector("#mixFlightplanForm");
-      const schedule = () => window.requestAnimationFrame(renderArtistJourneyGuidance);
+      const schedule = () => {
+        if (artistJourneyRenderQueued) return;
+        artistJourneyRenderQueued = true;
+        window.requestAnimationFrame(() => {
+          artistJourneyRenderQueued = false;
+          renderArtistJourneyGuidance();
+        });
+      };
       [elements.importStatus, elements.stemVaultStatus, elements.mixReleaseStatus, document.querySelector("#flightplanStatus")].filter(Boolean).forEach(node => {
         const observer = new MutationObserver(schedule);
         observer.observe(node, { childList: true, subtree: true, characterData: true });

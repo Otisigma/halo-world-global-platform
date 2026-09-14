@@ -1719,6 +1719,8 @@
       boothVideoPlayer: document.querySelector("#boothVideoPlayer"),
       boothYouTubePlayer: document.querySelector("#boothYouTubePlayer"),
       boothVideoPlaceholder: document.querySelector("#boothVideoPlaceholder"),
+      boothClipTitle: document.querySelector("#boothClipTitle"),
+      boothClipStatus: document.querySelector("#boothClipStatus"),
       boothVideoPresets: document.querySelector("#boothVideoPresets"),
       boothVideoClips: document.querySelector("#boothVideoClips"),
       boothVideoUrlForm: document.querySelector("#boothVideoUrlForm"),
@@ -2134,7 +2136,7 @@
     }
 
     function syncBoothPresetButtons() {
-      document.querySelectorAll("[data-booth-preset]").forEach(button => {
+      elements.boothVideoPresets?.querySelectorAll("[data-booth-preset]").forEach(button => {
         button.classList.toggle("is-active", button.dataset.boothPreset === activeBoothVideoId);
       });
     }
@@ -2148,8 +2150,8 @@
       }
       stopBoothVideo();
       activeBoothVideoId = preset.id;
-      document.querySelector("#boothClipTitle").textContent = preset.title;
-      document.querySelector("#boothClipStatus").textContent = "Preset ready";
+      elements.boothClipTitle.textContent = preset.title;
+      elements.boothClipStatus.textContent = "Preset ready";
       elements.boothVideoPlaceholder.hidden = false;
       setBoothVideoInputStatus(preset.message || "Add a source below to continue.");
       syncBoothPresetButtons();
@@ -2168,8 +2170,8 @@
       if (!video) return;
       stopBoothVideo();
       activeBoothVideoId = video.id;
-      const title = document.querySelector("#boothClipTitle");
-      const status = document.querySelector("#boothClipStatus");
+      const title = elements.boothClipTitle;
+      const status = elements.boothClipStatus;
       title.textContent = video.title;
       setBoothScreenMode("video");
 

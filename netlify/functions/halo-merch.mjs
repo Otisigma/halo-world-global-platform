@@ -17,6 +17,17 @@ function json(body, status = 200, headers = {}) {
   });
 }
 
+function redirect(location) {
+  return new Response(null, {
+    status: 302,
+    headers: {
+      Location: location,
+      "Cache-Control": "no-store",
+      "Referrer-Policy": "strict-origin-when-cross-origin"
+    }
+  });
+}
+
 export default async function haloMerchHandler(request) {
   if (request.method !== "GET") {
     return json({ message: "Method not allowed" }, 405, { Allow: "GET" });
@@ -34,7 +45,7 @@ export default async function haloMerchHandler(request) {
       if (intent === "checkout") {
         const redirectUrl = haloMerchRedirectUrl(product);
         if (!redirectUrl) return json({ message: "This HALO merch route is still being prepared" }, 409, { "Cache-Control": "no-store" });
-        return Response.redirect(redirectUrl, 302);
+        return redirect(redirectUrl);
       }
       return json({ product: serializePublicMerchProduct(product), disclosure: buildHaloMerchResponse([product]).disclosure });
     }

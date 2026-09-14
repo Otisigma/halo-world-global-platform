@@ -31,7 +31,8 @@ assert.match(styles, /\.merch-disclosure/, "music styles must define the merch d
 assert.match(styles, /\.merch-variant/, "music styles must define merch variant chips");
 
 assert.match(api, /intent === "checkout"/, "merch API must support same-origin checkout routing");
-assert.match(api, /Response\.redirect\(redirectUrl, 302\)/, "merch API must redirect checkout requests to the provider destination");
+assert.match(api, /"Cache-Control": "no-store"/, "merch API must mark checkout redirects as non-cacheable");
+assert.match(api, /Location: location/, "merch API must redirect checkout requests to the provider destination");
 assert.match(api, /loadHaloMerchCatalog/, "merch API must load the merch integration layer");
 
 assert.match(lib, /providerSku/, "merch integration layer must store provider SKUs server-side");

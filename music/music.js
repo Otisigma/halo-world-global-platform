@@ -611,7 +611,7 @@
           ${variants.length ? `<div class="merch-variants">${variants.map(variant => `<span class="merch-variant">${escapeHtml(variant)}</span>`).join("")}</div>` : ""}
           <p class="merch-description">${escapeHtml(product.fulfillment?.note || "")}</p>
           <div class="release-actions">
-            <a class="action buy" href="${escapeHtml(safeUrl(product.purchasePath, product.purchasePath))}" target="_blank" rel="noopener" data-stat-event="open_payment" data-stat-target="${escapeHtml(product.slug)}">Shop merch <span aria-hidden="true">↗</span></a>
+            <a class="action buy" href="${escapeHtml(safeUrl(product.purchasePath, product.purchasePath))}" data-stat-event="open_payment" data-stat-target="${escapeHtml(product.slug)}">Shop merch <span aria-hidden="true">↗</span></a>
             ${product.associatedReleaseId ? `<button class="action tertiary" type="button" data-select-release="${escapeHtml(product.associatedReleaseId)}">Pair with song</button>` : ""}
           </div>
         </div>

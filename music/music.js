@@ -127,9 +127,8 @@
     function updateShopUrl(release) {
       if (!release?.id) return;
       const currentUrl = new URL(window.location.href);
-      const url = new URL(shopPath(), window.location.origin);
-      const satelliteFlag = currentUrl.searchParams.get("satellite");
-      if (satelliteFlag) url.searchParams.set("satellite", satelliteFlag);
+      const url = new URL(window.location.href);
+      url.pathname = shopPath();
       url.searchParams.set("song", release.id);
       if (`${currentUrl.pathname}${currentUrl.search}` === `${url.pathname}${url.search}`) return;
       window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
@@ -483,8 +482,15 @@
   }
 
   function relatedReleases(release) {
+    const stableArtistId = String(release.artistSlug || "").trim().toLowerCase();
+    const fallbackArtistName = normalized(release.artist);
     return state.releases
-      .filter(item => item.id !== release.id && item.artist === release.artist)
+      .filter(item => {
+        if (item.id === release.id) return false;
+        const itemArtistId = String(item.artistSlug || "").trim().toLowerCase();
+        if (stableArtistId && itemArtistId) return itemArtistId === stableArtistId;
+        return normalized(item.artist) === fallbackArtistName;
+      })
       .slice(0, 3);
   }
 
@@ -504,7 +510,7 @@
         <span class="shop-eyebrow">Shop spotlight</span>
         <strong class="shop-badge">${escapeHtml(availability.badge)}</strong>
         <p class="availability-note">${escapeHtml(availability.note)}</p>
-        ${previewUrl ? `<div class="preview-shell"><span>Direct preview</span><audio controls preload="none" src="${escapeHtml(previewUrl)}"></audio></div>` : `<div class="preview-shell"><span>Public listening</span><p>Use the listen link for the approved public destination. Direct in-page audio appears automatically when the shared catalog points to a preview-safe stream.</p></div>`}
+        ${previewUrl ? `<div class="preview-shell" data-preview-url="${encodeURIComponent(previewUrl)}"><span>Direct preview</span><audio controls preload="none"></audio></div>` : `<div class="preview-shell"><span>Public listening</span><p>Use the listen link for the approved public destination. Direct in-page audio appears automatically when the shared catalog points to a preview-safe stream.</p></div>`}
         <dl class="shop-facts">
           <div><dt>Catalog source</dt><dd>${catalog.source === "song-catalog" ? "Shared song catalog" : "Published release campaign"}</dd></div>
           <div><dt>Versions mapped</dt><dd>${versionCount || "—"}</dd></div>
@@ -561,6 +567,11 @@
       <div class="featured-art release-artwork-frame" data-artwork-frame><img class="release-artwork-image" src="${escapeHtml(artwork.src)}" alt="${escapeHtml(`${release.title} cover artwork`)}" width="1200" height="1200" data-release-artwork data-artwork-fallback="${escapeHtml(artwork.fallback)}"></div>
       <div class="featured-copy"><div>${releaseMeta(release)}<h2 data-featured-heading tabindex="-1">${escapeHtml(release.title)}</h2><p class="featured-artist">${escapeHtml(release.artist)}</p><p class="featured-pitch">${escapeHtml(release.pitch || "Open the official release signal, approved listening destination, and campaign room.")}</p>${featuredDetailMarkup(release)}</div>${releaseActions(release, { includeCopy: true })}</div>
     </article>`;
+    const preview = elements.featured.querySelector("[data-preview-url]");
+    if (preview?.dataset.previewUrl) {
+      const audio = preview.querySelector("audio");
+      if (audio) audio.src = decodeURIComponent(preview.dataset.previewUrl);
+    }
     wireArtwork(elements.featured);
     if (focusHeading) elements.featured.querySelector("[data-featured-heading]")?.focus({ preventScroll: true });
   }

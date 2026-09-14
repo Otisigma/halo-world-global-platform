@@ -19,6 +19,7 @@ const checks = [
   [mainStudio.includes("YouTube / live") && mainStudio.includes("Direct clip"), "supports YouTube streams and direct clips"],
   [mainStudio.includes("chooseVideoFile") && mainStudio.includes("videoFileInputKey") && mainStudio.includes("larger than 5 MB"), "validates and resets direct clip inputs before upload"],
   [djDeck.includes('id="boothVideoUrlForm"') && djDeck.includes("loadBoothYouTube") && djDeck.includes("boothYouTubeId"), "loads YouTube links directly onto the DJ booth screen"],
+  [djDeck.includes('id="boothVideoPresets"') && djDeck.includes("Ghost To Me") && djDeck.includes("HALO Music World 50+") && djDeck.includes("DJ HALO X Long Mix Videos"), "keeps the named booth-screen video preset selectors on the DJ deck"],
   [djDeck.includes("Clip format could not play") && djDeck.includes("extensionAllowed"), "reports local booth file and browser decode failures"],
   [mainStudio.includes("reportHaloTvHealth") && mainStudio.includes("Media check passed"), "reports HALO TV playback health to the site monitor"],
   [videoApi.includes('getStore("halo-video-gallery")') && videoApi.includes("MAX_UPLOAD_BYTES"), "stores uploaded media in Netlify Blobs with a bounded payload"],

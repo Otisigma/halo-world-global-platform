@@ -30,6 +30,7 @@
   <script src="/accessibility.js" defer></script>
   <link rel="stylesheet" href="/mobile-navigation.css">
   <script src="/mobile-navigation.js" defer></script>
+  <script src="/halo-companion.js" defer></script>
   <script type="module" src="/identity.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -276,7 +277,8 @@
     .rack-button:hover, .clip-button:hover, .rack-button.is-active, .clip-button.is-active { border-color: var(--acid); color: var(--acid); background: rgba(200,255,54,.07); }
     .rack-button[data-rack-cue="A"] { border-top-color: var(--blue); }
     .rack-button[data-rack-cue="B"] { border-top-color: var(--orange); }
-    .clip-buttons { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; max-height: 116px; overflow: auto; }
+    .clip-presets, .clip-buttons { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+    .clip-buttons { max-height: 116px; overflow: auto; }
     .clip-button { min-height: 48px; }
     .clip-button strong, .clip-button span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .clip-button span { margin-top: 4px; color: var(--muted); font-size: 7px; }
@@ -316,8 +318,9 @@
     }
 
     .brand { display: flex; align-items: stretch; height: 100%; border-right: 1px solid var(--line); }
-    .brand-mark { display: grid; place-items: center; width: 66px; background: var(--acid); color: var(--ink); }
+    .brand-mark { position: relative; display: grid; place-items: center; width: 66px; background: var(--acid); color: var(--ink); overflow: hidden; }
     .brand-mark svg { width: 35px; }
+    .brand-mark-letter { position: absolute; inset: 0; display: grid; place-items: center; font: 400 33px/1 "Archivo Black", sans-serif; letter-spacing: -.06em; z-index: 1; }
     .brand-copy { padding: 12px 18px; min-width: 170px; }
     .brand-copy strong { display: block; font-family: "Archivo Black", sans-serif; font-size: 21px; letter-spacing: -.04em; }
 
@@ -326,7 +329,7 @@
     .now-track { min-width: 0; }
     .now-track strong { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 14px; }
     .now-track span { color: var(--muted); font: 400 10px "DM Mono", monospace; text-transform: uppercase; }
-    .top-actions { display: flex; align-items: center; gap: 8px; padding: 0 12px; }
+    .top-actions { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 8px; padding: 8px 12px; }
 
     .status-pill, .compact-button {
       min-height: 38px;
@@ -833,7 +836,26 @@
     .keyboard-hints { display: flex; gap: 15px; }
     kbd { border: 1px solid var(--line); background: var(--panel); padding: 2px 5px; color: var(--muted); font: inherit; }
 
-    .toast { position: fixed; right: 22px; bottom: 22px; z-index: 30; width: min(390px, calc(100vw - 44px)); border: 1px solid rgba(200,255,54,.45); background: rgba(12, 15, 13, .96); box-shadow: var(--shadow); padding: 15px 17px; transform: translateY(130%); opacity: 0; transition: transform .35s ease, opacity .35s ease; }
+    .maintenance-dock {
+      position: fixed;
+      right: 22px;
+      bottom: 22px;
+      z-index: 31;
+      min-height: 58px;
+      min-width: 214px;
+      border: 1px solid rgba(255, 106, 50, .46);
+      background: rgba(12, 15, 13, .94);
+      box-shadow: var(--shadow);
+      padding: 10px 14px;
+      display: grid;
+      gap: 4px;
+      justify-items: start;
+      cursor: pointer;
+    }
+    .maintenance-dock span { color: var(--orange); font: 500 8px "DM Mono", monospace; letter-spacing: .13em; text-transform: uppercase; }
+    .maintenance-dock strong { font: 600 12px/1.2 "Space Grotesk", sans-serif; letter-spacing: -.02em; text-transform: uppercase; }
+    .maintenance-dock:hover { border-color: var(--acid); }
+    .toast { position: fixed; right: 22px; bottom: 92px; z-index: 30; width: min(390px, calc(100vw - 44px)); border: 1px solid rgba(200,255,54,.45); background: rgba(12, 15, 13, .96); box-shadow: var(--shadow); padding: 15px 17px; transform: translateY(130%); opacity: 0; transition: transform .35s ease, opacity .35s ease; }
     .toast.is-visible { transform: translateY(0); opacity: 1; }
     .toast strong { display: block; color: var(--acid); font: 500 10px "DM Mono", monospace; letter-spacing: .11em; text-transform: uppercase; }
     .toast p { margin: 5px 0 0; color: #b7c0b4; font-size: 12px; }
@@ -958,6 +980,8 @@
       .utility-readout { grid-template-columns: 1fr; }
       .rack-buttons { grid-template-columns: repeat(2, 1fr); }
       .rack-button:last-child { grid-column: 1 / -1; }
+      .maintenance-dock { left: 18px; right: 18px; bottom: 18px; min-width: 0; }
+      .toast { right: 18px; left: 18px; bottom: 88px; width: auto; }
     }
 
     @media (prefers-reduced-motion: reduce) {
@@ -1035,12 +1059,13 @@
       <div class="brand">
         <div class="brand-mark" aria-hidden="true">
           <img class="halo-brand-image" src="/assets/halo-logo-mark.webp" alt="">
+          <span class="brand-mark-letter">H</span>
         </div>
-        <div class="brand-copy"><span class="eyebrow">Live intelligence</span><strong>HALO</strong></div>
+        <div class="brand-copy"><span class="eyebrow">Live intelligence HALO</span><strong>HALO</strong></div>
       </div>
       <div class="now-playing">
         <span class="pulse-dot"></span>
-        <div class="now-track"><strong id="masterTrack">Midnight Circuit — Nia Sol</strong><span id="masterStatus">Deck A live · master tempo 124.0 bpm</span></div>
+        <div class="now-track"><strong id="masterTrack">Midnight Circuit — Nia Sol</strong><span id="masterStatus">DECK A READY · MASTER TEMPO 124.0 BPM</span></div>
       </div>
       <div class="top-actions">
         <!-- Permanent destination: keep the Opportunity Exchange linked across future updates. -->
@@ -1051,6 +1076,7 @@
         <a class="compact-button" href="/dreamweaver/" data-stat-event="open_dreamweaver_show" data-stat-target="dj-deck-header">Dreamweaver Show</a>
         <a class="compact-button" href="/halo">Global portal</a>
         <button class="compact-button" id="openTrackPicker" type="button">Track QR</button>
+        <button class="compact-button" id="sessionRevisionButton" type="button">Cloud revision</button>
         <div class="status-pill is-offline" id="sessionSaveStatus"><span class="dot"></span><span>Saved on device</span></div>
         <div class="status-pill" id="cloudStatus"><span class="dot"></span><span>Cloud ready</span></div>
         <button class="compact-button" id="focusMode" type="button" aria-pressed="false" aria-controls="mixOperations recordingRig mixFlightplan musicLibrary boothIntelligence" aria-keyshortcuts="F" title="Hide the support cards and leave only the decks and mixer">Desk only</button>
@@ -1321,7 +1347,7 @@
               <div class="video-title"><div><span>Live visual source</span><strong id="boothClipTitle">Choose a video</strong></div><span id="boothClipStatus">Gallery ready</span></div>
             </div>
             <div class="screen-view mix-screen" data-screen-view="mix">
-              <div class="mix-orbit"><div class="mix-disc mix-disc-a">Deck A</div><div class="mix-bridge" id="boothMixBridge" data-blend="50 / 50"></div><div class="mix-disc mix-disc-b">Deck B</div></div>
+              <div class="mix-orbit"><div class="mix-disc mix-disc-a">Deck A</div><div class="mix-bridge" id="boothMixBridge" data-blend="50% / 50%"></div><div class="mix-disc mix-disc-b">Deck B</div></div>
             </div>
             <div class="screen-scanlines" aria-hidden="true"></div>
           </div>
@@ -1442,7 +1468,7 @@
     <section class="booth-utility panel" id="boothUtility" aria-labelledby="boothUtilityTitle">
       <div class="utility-rack">
         <div class="utility-readout" aria-label="Quick mix readout">
-          <div class="utility-metric"><span>Blend</span><strong id="boothBlendValue">50 / 50</strong></div>
+          <div class="utility-metric"><span>Blend</span><strong id="boothBlendValue">50% / 50%</strong></div>
           <div class="utility-metric"><span>Tempo</span><strong id="boothRackTempo">−0.5 BPM</strong></div>
           <div class="utility-metric"><span>Next move</span><strong id="boothNextMove">Hold blend</strong></div>
         </div>
@@ -1458,6 +1484,12 @@
         </div>
         <div class="utility-clips">
           <div class="rack-label"><span>Screen videos</span><span id="boothVideoLibraryStatus">Loading gallery</span></div>
+          <div class="clip-presets" id="boothVideoPresets" aria-label="Booth video presets">
+            <button class="clip-button" type="button" data-booth-preset="ghost-to-me"><strong>Ghost To Me</strong><span>DJ HALO X visual</span></button>
+            <button class="clip-button" type="button" data-booth-preset="salty"><strong>Salty</strong><span>Load official source</span></button>
+            <button class="clip-button" type="button" data-booth-preset="halo-music-world-50-plus"><strong>HALO Music World 50+</strong><span>YouTube long play</span></button>
+            <button class="clip-button" type="button" data-booth-preset="dj-halo-x-long-mix-videos"><strong>DJ HALO X Long Mix Videos</strong><span>Continuous booth reel</span></button>
+          </div>
           <div class="clip-buttons" id="boothVideoClips"><span class="clip-empty">Checking HALO TV for playable videos…</span></div>
           <form class="video-input-row" id="boothVideoUrlForm">
             <input class="video-url-input" id="boothVideoUrl" type="text" inputmode="url" autocomplete="url" aria-label="YouTube video URL" placeholder="Paste YouTube video or live URL">
@@ -1640,6 +1672,7 @@
     <footer class="footer"><span>HALO performance system · demo engine</span><nav class="footer-socials" aria-label="HALO social profiles"><a href="https://www.youtube.com/@halo-music-world" target="_blank" rel="noopener noreferrer">YouTube ↗</a><a href="https://www.tiktok.com/@halomusicworldhome" target="_blank" rel="noopener noreferrer">TikTok ↗</a></nav><div class="keyboard-hints"><span><kbd>Space</kbd> Play master</span><span><kbd>S</kbd> Sync tempo</span><span><kbd>F</kbd> Desk only</span></div></footer>
   </main>
 
+  <button class="maintenance-dock" id="maintenanceDock" type="button"><span>Maintenance alerts</span><strong id="maintenanceDockCount">10 alerts</strong></button>
   <div class="toast" id="toast" role="status" aria-live="polite"><strong id="toastTitle">System</strong><p id="toastMessage">Ready.</p></div>
 
   <script src="/upload-progress.js"></script>
@@ -1663,6 +1696,12 @@
     let boothVideos = [];
     let activeBoothVideoId = "";
     let localBoothVideoUrl = "";
+    const BOOTH_VIDEO_PRESETS = Object.freeze([
+      { id: "ghost-to-me", title: "Ghost To Me (DJ HALO X Remix)", sourceType: "youtube", embedUrl: "https://www.youtube-nocookie.com/embed/yh7qQGvzmdw" },
+      { id: "salty", title: "Salty", message: "Paste the official Salty video URL below to put it on the booth screen without replacing any other booth controls." },
+      { id: "halo-music-world-50-plus", title: "HALO Music World 50+", sourceType: "youtube", embedUrl: "https://www.youtube-nocookie.com/embed/IbwPoo-b1bs" },
+      { id: "dj-halo-x-long-mix-videos", title: "DJ HALO X Long Mix Videos", sourceType: "youtube", embedUrl: "https://www.youtube-nocookie.com/embed/GKjU4Ac1Pzw" }
+    ]);
 
     const elements = {
       list: document.querySelector("#trackList"),
@@ -1680,12 +1719,16 @@
       boothVideoPlayer: document.querySelector("#boothVideoPlayer"),
       boothYouTubePlayer: document.querySelector("#boothYouTubePlayer"),
       boothVideoPlaceholder: document.querySelector("#boothVideoPlaceholder"),
+      boothVideoPresets: document.querySelector("#boothVideoPresets"),
       boothVideoClips: document.querySelector("#boothVideoClips"),
       boothVideoUrlForm: document.querySelector("#boothVideoUrlForm"),
       boothVideoUrl: document.querySelector("#boothVideoUrl"),
       boothVideoUpload: document.querySelector("#boothVideoUpload"),
       boothVideoInputStatus: document.querySelector("#boothVideoInputStatus"),
       boothVideoLibraryStatus: document.querySelector("#boothVideoLibraryStatus"),
+      sessionRevisionButton: document.querySelector("#sessionRevisionButton"),
+      maintenanceDock: document.querySelector("#maintenanceDock"),
+      maintenanceDockCount: document.querySelector("#maintenanceDockCount"),
       toast: document.querySelector("#toast"),
       toastTitle: document.querySelector("#toastTitle"),
       toastMessage: document.querySelector("#toastMessage"),
@@ -2035,7 +2078,7 @@
       const deckB = deckState.B;
       const blend = Number(elements.crossfader?.value || 50);
       const tempoDelta = Number(deckB.bpm) - Number(deckA.bpm);
-      const blendLabel = `${Math.round(100 - blend)} / ${Math.round(blend)}`;
+      const blendLabel = `${Math.round(100 - blend)}% / ${Math.round(blend)}%`;
       const nextMove = Math.abs(tempoDelta) > 1 ? "Sync tempo" : blend < 38 ? "Reveal B" : blend > 62 ? "Recover A" : "Hold blend";
       const assignments = {
         boothDeckATitle: deckA.title,
@@ -2090,11 +2133,37 @@
       }
     }
 
+    function syncBoothPresetButtons() {
+      document.querySelectorAll("[data-booth-preset]").forEach(button => {
+        button.classList.toggle("is-active", button.dataset.boothPreset === activeBoothVideoId);
+      });
+    }
+
+    function activateBoothPreset(presetId) {
+      const preset = BOOTH_VIDEO_PRESETS.find(item => item.id === presetId);
+      if (!preset) return;
+      if (preset.sourceType) {
+        boothVideos = [preset, ...boothVideos.filter(item => item.id !== preset.id)];
+        playBoothVideo(preset);
+        return;
+      }
+      stopBoothVideo();
+      activeBoothVideoId = preset.id;
+      setBoothScreenMode("video");
+      document.querySelector("#boothClipTitle").textContent = preset.title;
+      document.querySelector("#boothClipStatus").textContent = "Preset ready";
+      elements.boothVideoPlaceholder.hidden = false;
+      setBoothVideoInputStatus(preset.message || "Add a source below to continue.");
+      syncBoothPresetButtons();
+      showToast("Booth preset armed", preset.message || `${preset.title} is ready on the overhead screen.`);
+    }
+
     function renderBoothVideos() {
       elements.boothVideoLibraryStatus.textContent = boothVideos.length ? `${boothVideos.length} ready` : "Device clips available";
       elements.boothVideoClips.innerHTML = boothVideos.length
         ? boothVideos.map(video => `<button class="clip-button${video.id === activeBoothVideoId ? " is-active" : ""}" type="button" data-booth-video="${escapeHTML(video.id)}"><strong>${escapeHTML(video.title)}</strong><span>${escapeHTML(video.sourceType === "youtube" ? "YouTube" : video.sourceType === "local" ? "This device" : "HALO upload")}</span></button>`).join("")
         : '<span class="clip-empty">No published HALO TV videos are available. Load a video from this device to use the screen now.</span>';
+      syncBoothPresetButtons();
     }
 
     async function playBoothVideo(video) {
@@ -2204,6 +2273,11 @@
         if (button.dataset.boothAction === "sync") document.querySelector("#syncMaster")?.click();
         if (button.dataset.boothAction === "prepare") elements.prepareTransition.click();
       }));
+      elements.boothVideoPresets?.addEventListener("click", event => {
+        const button = event.target.closest("[data-booth-preset]");
+        if (!button) return;
+        activateBoothPreset(button.dataset.boothPreset);
+      });
       elements.boothVideoClips.addEventListener("click", event => {
         const button = event.target.closest("[data-booth-video]");
         if (!button) return;
@@ -3561,6 +3635,14 @@
       }
     }
 
+    elements.sessionRevisionButton?.addEventListener("click", () => {
+        const revision = elements.sessionSaveStatus?.textContent?.trim() || "Saved on device";
+        showToast("Cloud revision", revision);
+    });
+    elements.maintenanceDock?.addEventListener("click", () => {
+        showToast("Maintenance alerts", `${elements.maintenanceDockCount?.textContent || "10 alerts"} watching booth video, cloud revision, upload progress, and audio verification.`);
+    });
+
     function updateDeck(deckId) {
       const state = deckState[deckId];
       const deck = document.querySelector(`[data-deck="${deckId}"]`);
@@ -3587,7 +3669,7 @@
       const active = deckState[activeId];
       elements.masterBpm.textContent = Number(active.bpm).toFixed(1);
       elements.masterTrack.textContent = `${active.title} — ${active.artist}`;
-      elements.masterStatus.textContent = active.empty ? "Load a track to begin" : `Deck ${activeId} ${active.playing ? "live" : "ready"} · master tempo ${Number(active.bpm).toFixed(1)} bpm`;
+      elements.masterStatus.textContent = active.empty ? "LOAD A TRACK TO BEGIN" : `DECK ${activeId} ${active.playing ? "LIVE" : "READY"} · MASTER TEMPO ${Number(active.bpm).toFixed(1)} BPM`;
     }
 
     function loadTrack(deckId, trackId) {

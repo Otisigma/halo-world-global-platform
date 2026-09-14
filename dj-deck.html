@@ -2037,6 +2037,7 @@
     let sessionSaveTimer = null;
     let sessionCloudEnabled = false;
     let sessionRestoring = false;
+    let maintenanceDockInvoker = null;
     const stemVaultState = { authenticated: false, packs: [], loading: false };
     const stemCollectorState = { authenticated: false, kits: [], current: null, loading: false };
 
@@ -3007,11 +3008,21 @@
       if (elements.dockPanelAudio) elements.dockPanelAudio.textContent = window.__haloAudioHealth?.message || "Audio engine waiting";
     }
 
-    function setMaintenanceDockPanel(open) {
+    function setMaintenanceDockPanel(open, invoker = null) {
       if (!elements.maintenanceDockPanel) return;
+      if (open && invoker && typeof invoker.focus === "function") maintenanceDockInvoker = invoker;
       elements.maintenanceDockPanel.hidden = !open;
       elements.maintenanceDock?.setAttribute("aria-expanded", String(open));
-      if (open) updateProductionHud();
+      if (open) {
+        updateProductionHud();
+        if (elements.closeMaintenanceDockPanel && typeof requestAnimationFrame === "function") {
+          requestAnimationFrame(() => elements.closeMaintenanceDockPanel.focus());
+        } else if (elements.closeMaintenanceDockPanel?.focus) {
+          elements.closeMaintenanceDockPanel.focus();
+        }
+        return;
+      }
+      if (maintenanceDockInvoker && typeof maintenanceDockInvoker.focus === "function") maintenanceDockInvoker.focus();
     }
 
     function showCloudRevisionToast() {
@@ -3021,7 +3032,8 @@
     function showMaintenanceAlertsToast() {
       syncMaintenanceDockLabel();
       showToast("Maintenance alerts", `${maintenanceAlertCountLabel()} watching booth video, cloud revision, upload progress, and audio verification.`);
-      if (typeof setMaintenanceDockPanel === "function") setMaintenanceDockPanel(true);
+      const invoker = typeof document !== "undefined" ? document.activeElement : null;
+      if (typeof setMaintenanceDockPanel === "function") setMaintenanceDockPanel(true, invoker);
     }
 
     function setStemVaultStatus(message, error = false) {

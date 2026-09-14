@@ -2763,9 +2763,13 @@
       showToast.timer = setTimeout(() => elements.toast.classList.remove("is-visible"), 3200);
     }
 
+    function maintenanceAlertCountLabel() {
+      return elements.maintenanceDockCount?.textContent?.trim() || "10 alerts";
+    }
+
     function syncMaintenanceDockLabel() {
       if (!elements.maintenanceDock) return;
-      const count = elements.maintenanceDockCount?.textContent?.trim() || "10 alerts";
+      const count = maintenanceAlertCountLabel();
       const label = `${count} currently monitored.`;
       elements.maintenanceDock.title = `Show maintenance alerts. ${label}`;
       if (elements.maintenanceDockHelp) elements.maintenanceDockHelp.textContent = `Opens a toast with current booth, cloud revision, upload progress, and audio verification maintenance status. ${label}`;
@@ -2784,7 +2788,7 @@
 
     function showMaintenanceAlertsToast() {
       syncMaintenanceDockLabel();
-      showToast("Maintenance alerts", `${elements.maintenanceDockCount?.textContent || "10 alerts"} watching booth video, cloud revision, upload progress, and audio verification.`);
+      showToast("Maintenance alerts", `${maintenanceAlertCountLabel()} watching booth video, cloud revision, upload progress, and audio verification.`);
     }
 
     function setStemVaultStatus(message, error = false) {

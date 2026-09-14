@@ -40,6 +40,7 @@ const sandbox = {
 
 vm.createContext(sandbox);
 vm.runInContext([
+  extractFunctionSource("maintenanceAlertCountLabel"),
   extractFunctionSource("syncMaintenanceDockLabel"),
   extractFunctionSource("currentCloudRevisionLabel"),
   extractFunctionSource("showCloudRevisionToast"),

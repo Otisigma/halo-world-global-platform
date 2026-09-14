@@ -1,254 +1,380 @@
-import { access, readFile } from "node:fs/promises";
-import { resolve } from "node:path";
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
+import { resolve } from "node:path";
 import vm from "node:vm";
+import { normalizeHttpsList } from "../music-upload/link-validation.js";
+import { runStageMonitor } from "./upload-experience-stage-monitor.mjs";
 
 const root = resolve(import.meta.dirname, "..");
 const read = path => readFile(resolve(root, path), "utf8");
 
-const [page, uploadHelper, routes, world, config, unifiedUploadFn, songCatalogFn, audioFn, artworkFn] = await Promise.all([
-  read("song-catalog/index.html"),
+const [page, client, styles, uploadHelper, world, routes, unifiedUpload, audioFn, artworkFn, config, sharedPage, sharedClient] = await Promise.all([
+  read("music-upload/index.html"),
+  read("music-upload/music-upload.js"),
+  read("music-upload/music-upload.css"),
   read("upload-progress.js"),
-  read("lib/route-registry.js"),
   read("halo.html"),
-  read("netlify.toml"),
+  read("lib/route-registry.js"),
   read("netlify/functions/unified-upload.mjs"),
-  read("netlify/functions/song-catalog.ts"),
   read("netlify/functions/song-catalog-audio.ts"),
   read("netlify/functions/song-catalog-artwork.ts"),
+  read("netlify.toml"),
+  read("song-catalog/index.html"),
+  read("song-catalog/song-catalog.js"),
 ]);
-const legacyAssets = await Promise.allSettled([
-  access(resolve(root, "music-upload/music-upload.js")),
-  access(resolve(root, "music-upload/music-upload.css")),
-  access(resolve(root, "music-upload/link-validation.js")),
-]);
-const clientScriptMatch = page.match(/<script type="module" src="([^"]*song-catalog\/song-catalog\.js[^"]*)"><\/script>/);
-assert.ok(clientScriptMatch, "music-upload page must mount the shared song-catalog module client");
-const catalogClientPath = clientScriptMatch[1].split("?")[0].replace(/^\//, "");
-await read(catalogClientPath);
-function parseNetlifyToml(text) {
-  const stripInlineComment = input => {
-    let quote = "";
-    let escaped = false;
-    for (let index = 0; index < input.length; index += 1) {
-      const char = input[index];
-      if (escaped) {
-        escaped = false;
-        continue;
-      }
-      if (char === "\\") {
-        escaped = true;
-        continue;
-      }
-      if (!quote && (char === '"' || char === "'")) {
-        quote = char;
-        continue;
-      }
-      if (quote && char === quote) {
-        quote = "";
-        continue;
-      }
-      if (!quote && char === "#") return input.slice(0, index);
-    }
-    return input;
-  };
-  const parseTomlValue = rawValue => {
-    const value = stripInlineComment(rawValue).trim();
-    if (!value) return "";
-    const splitTopLevel = (text, separator = ",") => {
-      const values = [];
-      let start = 0;
-      let depthSquare = 0;
-      let depthCurly = 0;
-      let quote = "";
-      let escaped = false;
-      for (let index = 0; index < text.length; index += 1) {
-        const char = text[index];
-        if (escaped) {
-          escaped = false;
-          continue;
-        }
-        if (char === "\\") {
-          escaped = true;
-          continue;
-        }
-        if (!quote && (char === '"' || char === "'")) {
-          quote = char;
-          continue;
-        }
-        if (quote && char === quote) {
-          quote = "";
-          continue;
-        }
-        if (quote) continue;
-        if (char === "[") depthSquare += 1;
-        if (char === "]") depthSquare = Math.max(0, depthSquare - 1);
-        if (char === "{") depthCurly += 1;
-        if (char === "}") depthCurly = Math.max(0, depthCurly - 1);
-        if (char === separator && depthSquare === 0 && depthCurly === 0) {
-          values.push(text.slice(start, index).trim());
-          start = index + 1;
-        }
-      }
-      values.push(text.slice(start).trim());
-      return values.filter(Boolean);
-    };
-    if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
-      const inner = value.slice(1, -1);
-      return value.startsWith('"') ? inner.replace(/\\"/g, '"') : inner.replace(/\\'/g, "'");
-    }
-    if (value.startsWith("[") && value.endsWith("]")) {
-      return splitTopLevel(value.slice(1, -1)).map(part => parseTomlValue(part));
-    }
-    if (value.startsWith("{") && value.endsWith("}")) {
-      const entry = {};
-      for (const part of splitTopLevel(value.slice(1, -1))) {
-        const pair = part.match(/^([A-Za-z0-9_.-]+)\s*=\s*(.+)$/);
-        if (!pair) continue;
-        entry[pair[1]] = parseTomlValue(pair[2]);
-      }
-      return entry;
-    }
-    if (/^(true|false)$/i.test(value)) return value.toLowerCase() === "true";
-    if (/^[+-]?\d+(\.\d+)?$/.test(value)) return Number(value);
-    return value;
-  };
-  const headers = [];
-  const redirects = [];
-  let section = null;
-  let current = null;
-  let nestedTable = "";
-  for (const rawLine of text.split("\n")) {
-    const line = rawLine.trim();
-    if (!line || line.startsWith("#")) continue;
-    if (line === "[[headers]]") {
-      section = "headers";
-      current = {};
-      headers.push(current);
-      nestedTable = "";
-      continue;
-    }
-    if (line === "[[redirects]]") {
-      section = "redirects";
-      current = {};
-      redirects.push(current);
-      nestedTable = "";
-      continue;
-    }
-    if (line.startsWith("[") && line.endsWith("]")) {
-      const tableName = line.slice(1, -1);
-      if (section === "headers" && tableName === "headers.values") {
-        nestedTable = tableName;
-        continue;
-      }
-      nestedTable = "__ignore__";
-      continue;
-    }
-    if (!section || !current) continue;
-    const match = line.match(/^([A-Za-z0-9_.-]+)\s*=\s*(.+)$/);
-    if (!match) continue;
-    const [, key, rawValue] = match;
-    const value = parseTomlValue(rawValue);
-    if (nestedTable === "__ignore__") continue;
-    if (nestedTable === "headers.values") {
-      current.values ||= {};
-      current.values[key] = value;
-    } else {
-      current[key] = value;
-    }
-  }
-  return { headers, redirects };
-}
-const netlifyConfig = parseNetlifyToml(config);
-const hasNoCacheHeader = routePath =>
-  netlifyConfig.headers.some(
-    item =>
-      item.for === routePath &&
-      (item.values?.["Cache-Control"] === "no-cache, no-store, must-revalidate" ||
-        item["Cache-Control"] === "no-cache, no-store, must-revalidate")
-  );
-const hasCanonicalRedirect = (from, to) =>
-  netlifyConfig.redirects.some(
-    item =>
-      item.from === from &&
-      item.to === to &&
-      Number(item.status) === 200 &&
-      item.force === true
-  );
+
+const sources = { page, client, styles, uploadHelper, world, routes, unifiedUpload, audioFn, artworkFn, config, sharedPage, sharedClient };
 
 const checks = [
-  [page.includes('id="catalogShell"') && page.includes('id="workspace"') && page.includes('id="songWorkspace"') && page.includes('id="songForm"') && page.includes('id="versionForm"'), "exposes the shared catalog upload structure and edit forms on /music-upload/"],
-  [
-    /<title>\s*Song Catalog \| HALO\s*<\/title>/.test(page) &&
-      !page.includes("Song Catalog Upload") &&
-      page.includes('aria-label="Catalog pathways"'),
-    "uses the canonical song catalog branding and pathways copy on /music-upload/"
-  ],
-  [page.includes('/song-catalog/song-catalog.css') && page.includes('/song-catalog/song-catalog.js'), "reuses the proven song catalog UI and client implementation"],
-  [page.includes('/stats.js') && page.includes('/site-monitor.js') && page.includes('/accessibility.js'), "keeps site-level monitoring and accessibility bootstraps on /music-upload/"],
-  [page.includes('/identity.js') && page.includes('/upload-progress.js') && page.includes('/song-catalog/song-catalog.js'), "keeps identity and shared upload/client wiring"],
-  [catalogClientPath === "song-catalog/song-catalog.js", "music-upload mounts the expected shared catalog client asset"],
-  [!page.includes('/music-upload/music-upload.js') && page.includes('id="addSongButton"') && page.includes('id="importButton"'), "entry surface now boots from the shared catalog module instead of the retired music-upload client"],
-  [page.includes('id="audioFile"') && page.includes('id="uploadAudioButton"') && page.includes('id="audioUploadTrack"'), "keeps working version-audio upload controls on /music-upload/"],
-  [page.includes('id="artworkFile"') && page.includes('id="uploadArtworkButton"') && page.includes('id="artworkUploadTrack"') && page.includes('id="versionArtworkTrack"'), "keeps working song and version artwork uploads on /music-upload/"],
-  [unifiedUploadFn.includes('"music_upload"') && unifiedUploadFn.includes('payload.action === "create_project"') && unifiedUploadFn.includes('payload.action === "advance_pipeline"') && unifiedUploadFn.includes("versionIds"), "keeps unified upload pipeline contract for music_upload project provisioning"],
-  [songCatalogFn.includes('payload.action === "save_song"') && songCatalogFn.includes('payload.action === "save_version"') && songCatalogFn.includes("/api/song-catalog") && audioFn.includes("/api/song-catalog/audio") && artworkFn.includes("/api/song-catalog/artwork"), "music upload surface is backed by the existing catalog/song-save/version/audio/artwork API routes"],
-  [page.includes('id="audioUploadTrack"') && page.includes('id="artworkUploadTrack"') && /createUploadUi/.test(uploadHelper) && /uploadChunkedFile/.test(uploadHelper), "uses shared chunked upload behavior with visible progress states"],
-  [/hasCompleteChunkSet/.test(audioFn) && /persisted:\s*true/.test(audioFn) && /lockedIn:\s*true/.test(audioFn) && /hasCompleteChunkSet/.test(artworkFn) && /persisted:\s*true/.test(artworkFn) && /lockedIn:\s*true/.test(artworkFn), "audio/artwork finalization keeps persisted lock-in signals"],
-  [hasCanonicalRedirect("/music-upload/", "/song-catalog/index.html"), "serves /music-upload/ from the canonical shared song-catalog page"],
-  [hasNoCacheHeader("/music-upload/*") && hasNoCacheHeader("/song-catalog/*") && hasNoCacheHeader("/upload-progress.js"), "keeps no-cache headers on music-upload and shared catalog runtime assets"],
-  [/directoryRoute\(\s*"Song Catalog Upload"\s*,\s*"\/music-upload\/"\s*,\s*"song-catalog\/index\.html"/.test(routes), "route registry exposes /music-upload/ as the shared song-catalog surface"],
-  [legacyAssets.every(result => result.status === "rejected"), "retired legacy music-upload hub assets are removed from the route directory"],
-  [world.includes('href="/music-upload/"') && world.includes("open_song_catalog_upload"), "homepage discovery links continue pointing to /music-upload/"],
+  {
+    stage: "auth hydration / access control",
+    source: "page",
+    description: "music-upload bootstrap includes identity runtime and sign-in guidance",
+    signals: [
+      "/identity.js",
+      "Sign in, add source material",
+      'id="formMessage"',
+    ],
+    diagnose: "Auth stage failed: /music-upload/ is missing identity bootstrap or sign-in guidance signal.",
+  },
+  {
+    stage: "page bootstrap / runtime load",
+    source: "page",
+    description: "page loads required runtime scripts and a visible runtime alert surface",
+    signals: [
+      "/stats.js",
+      "/site-monitor.js",
+      "/upload-progress.js",
+      "/music-upload/music-upload.js",
+      'id="runtimeAlert"',
+      'id="runtimeRetryButton"',
+    ],
+    diagnose: "Bootstrap stage failed: /music-upload/ is missing required runtime script wiring.",
+  },
+  {
+    stage: "page bootstrap / runtime load",
+    source: "page",
+    description: "page announces the bridge fallback and appends the shared song catalog workspace underneath the legacy intake",
+    signals: [
+      'id="bridgeNoticeTitle"',
+      "Jump to the newer upload workspace",
+      'id="sharedSongCatalog"',
+      'id="sharedCatalogFrame"',
+      '/song-catalog/index.html?embed=music-upload',
+    ],
+    diagnose: "Bridge stage failed: /music-upload/ is missing the appended shared song-catalog fallback section.",
+  },
+  {
+    stage: "page bootstrap / runtime load",
+    source: "client",
+    description: "client can self-heal stale/missing upload runtime bundle",
+    signals: [
+      "let uploadHelper = window.HaloUploadProgress",
+      "function loadUploadHelperScript()",
+      "RUNTIME_LOAD_TIMEOUT_MS",
+      "RUNTIME_LOAD_ATTEMPTS",
+      "function injectUploadRuntimeScript",
+      "function ensureUploadRuntime()",
+      "HALO upload runtime did not load",
+    ],
+    diagnose: "Bootstrap stage failed: music-upload runtime cannot recover from stale/missing upload-progress bundle.",
+  },
+  {
+    stage: "page bootstrap / runtime load",
+    source: "client",
+    description: "legacy music-upload page listens for embedded shared-catalog sizing updates",
+    signals: [
+      "sharedCatalogFrame",
+      "BRIDGE_FRAME_MIN_HEIGHT",
+      "function syncSharedCatalogFrameHeight",
+      "function handleSharedCatalogFrameMessage",
+      'window.addEventListener("message", handleSharedCatalogFrameMessage)',
+      'halo-song-catalog-height',
+    ],
+    diagnose: "Bridge stage failed: legacy /music-upload/ page does not keep the appended shared catalog visible.",
+  },
+  {
+    stage: "page bootstrap / runtime load",
+    source: "sharedClient",
+    description: "shared song-catalog runtime reports its embedded height back to the bridge surface",
+    signals: [
+      "const postEmbeddedHeight",
+      "window.parent.postMessage",
+      'type:"halo-song-catalog-height"',
+      "ResizeObserver",
+      'window.addEventListener("resize",postEmbeddedHeight)',
+    ],
+    diagnose: "Bridge stage failed: shared song-catalog client does not report iframe sizing for /music-upload/.",
+  },
+  {
+    stage: "file selection / upload start",
+    source: "client",
+    description: "client wires file selection into queue rendering and package jobs",
+    signals: [
+      "function gatherAudioFiles()",
+      "function renderQueue()",
+      "elements.musicFiles.addEventListener(\"change\", renderQueue)",
+      "elements.musicFolder.addEventListener(\"change\", renderQueue)",
+      "const jobs = audioFiles.length ?",
+    ],
+    diagnose: "Upload start stage failed: file selection events/jobs are not fully wired in music-upload.js.",
+  },
+  {
+    stage: "progress visibility / movement",
+    source: "client",
+    description: "audio/artwork upload flow validates concrete UI nodes and emits controller, start, progress, success, and fail states",
+    signals: [
+      'resolveUploadUiElements("#audioUploadTrack", "#audioUploadProgress")',
+      'track?.closest(".upload-panel")',
+      'validateUploadUiElements("audio", audioElements)',
+      "HALO upload progress UI failed to initialize",
+      "setRuntimeStatus(",
+      "setControllerPhase(",
+      "handleRuntimeRetry",
+      "audioUploadUi.start",
+      "audioUploadUi.progress",
+      "audioUploadUi.success",
+      "audioUploadUi.fail",
+      "artworkUploadUi.start",
+      "artworkUploadUi.progress",
+      "artworkUploadUi.success",
+      "artworkUploadUi.fail",
+      "uploadHelper.uploadChunkedFile",
+    ],
+    diagnose: "Progress stage failed: upload indicator transitions are missing for audio/artwork pipelines.",
+  },
+  {
+    stage: "progress visibility / movement",
+    source: "uploadHelper",
+    description: "shared helper unhides tracks accessibly and renders visible in-flight progress immediately",
+    signals: [
+      'ui.track.hidden=!state.showTrack',
+      'ui.track.setAttribute("aria-hidden",state.showTrack?"false":"true")',
+      "state.uploading&&progress===0?3:progress",
+    ],
+    diagnose: "Progress stage failed: shared upload helper no longer exposes visible active progress tracks.",
+  },
+  {
+    stage: "backend success response",
+    source: "client",
+    description: "intake and staged backend API actions are present, including shared artwork reuse for batch packages",
+    signals: [
+      "/api/unified-upload",
+      "action: \"create_project\"",
+      "action: \"advance_pipeline\"",
+      "/api/song-catalog",
+      "action: \"save_song\"",
+      "/api/song-catalog/audio",
+      "/api/song-catalog/artwork",
+      "action: \"finalize_upload\"",
+      "action: \"reuse_song_artwork\"",
+    ],
+    diagnose: "Backend stage failed: create/advance/save/finalize API calls are incomplete in music-upload flow.",
+  },
+  {
+    stage: "persistence confirmation",
+    source: "client",
+    description: "client confirms persisted bytes before reporting locked-in success",
+    signals: [
+      "async function confirmPersistedAsset",
+      "fetchWithTimeout(",
+      "AbortController",
+      "PERSISTENCE_CHECK_TIMEOUT_MS",
+      'method: "HEAD"',
+      'Range: "bytes=0-0"',
+      "!finalized.persisted || !finalized.lockedIn",
+      "HALO could not confirm persisted",
+    ],
+    diagnose: "Persistence stage failed: client can report success before confirming persisted asset bytes.",
+  },
+  {
+    stage: "persistence confirmation",
+    source: "audioFn",
+    description: "audio finalize response preserves persisted + lockedIn contract",
+    signals: [
+      "hasCompleteChunkSet",
+      "persisted: true",
+      "lockedIn: true",
+    ],
+    diagnose: "Persistence stage failed: audio finalize no longer proves complete persisted lock-in.",
+  },
+  {
+    stage: "persistence confirmation",
+    source: "artworkFn",
+    description: "artwork finalize response preserves persisted + lockedIn contract",
+    signals: [
+      "hasCompleteChunkSet",
+      "persisted: true",
+      "lockedIn: true",
+    ],
+    diagnose: "Persistence stage failed: artwork finalize no longer proves complete persisted lock-in.",
+  },
+  {
+    stage: "post-upload guidance / pipeline insights",
+    source: "client",
+    description: "client outputs stage diagnostics, needs-attention, next-step guidance, and package receipts",
+    signals: [
+      "stageChip(result.pipelineStatus)",
+      "result-receipt",
+      "lockedAssets",
+      "handoffLabel",
+      "Needs attention:",
+      "result-next-step",
+      "Upload complete:",
+      "locked into HALO storage",
+      "should be removed only if needed",
+    ],
+    diagnose: "Guidance stage failed: post-upload diagnostic copy/next-step guidance is missing.",
+  },
+  {
+    stage: "post-upload guidance / pipeline insights",
+    source: "styles",
+    description: "styles preserve progress tracks, controller stages, stage guidance, and the appended shared-catalog frame",
+    signals: [
+      ".upload-progress-track",
+      ".upload-progress-fill",
+      ".controller-stage",
+      ".runtime-alert",
+      ".stage-dreamweaver_in_progress",
+      ".result-next-step",
+      ".bridge-notice",
+      ".shared-catalog-frame",
+    ],
+    diagnose: "Guidance stage failed: style markers for progress and next-step guidance are missing.",
+  },
+  {
+    stage: "page structure / controller surface",
+    source: "page",
+    description: "page exposes a central intake controller with explicit stage and routing sections",
+    signals: [
+      "Live intake supervision",
+      'id="controllerStageTimeline"',
+      "Pipeline handoff",
+      'id="handoffPreview"',
+      "Who receives this package",
+    ],
+    diagnose: "Surface stage failed: /music-upload/ is missing the explicit controller stage/routing UI.",
+  },
+  {
+    stage: "deployment/runtime cache freshness",
+    source: "config",
+    description: "Netlify serves canonical route and cache-busting headers for music upload runtime",
+    signals: [
+      'from = "/music-upload/"',
+      'to = "/music-upload/index.html"',
+      'for = "/music-upload/*"',
+      'for = "/upload-progress.js"',
+      'Cache-Control = "no-cache, no-store, must-revalidate"',
+    ],
+    diagnose: "Deploy stage failed: canonical route or no-cache runtime headers are missing for /music-upload/.",
+  },
+  {
+    stage: "deployment/runtime cache freshness",
+    source: "routes",
+    description: "route registry publishes the bridge-backed song catalog upload directory route",
+    signals: [
+      /directoryRoute\(\s*"Song Catalog Upload"\s*,\s*"\/music-upload\/"\s*,\s*"music-upload\/index\.html"/,
+      /menuLabel:\s*"SONG CATALOG UPLOAD"/,
+    ],
+    diagnose: "Deploy stage failed: route registry no longer exposes /music-upload/ consistently.",
+  },
+  {
+    stage: "deployment/runtime cache freshness",
+    source: "world",
+    description: "home surface links users to monitored music upload route",
+    signals: [
+      'href="/music-upload/"',
+      "Song Catalog Upload",
+      "open_song_catalog_upload",
+    ],
+    diagnose: "Deploy stage failed: homepage discovery signals to /music-upload/ are missing.",
+  },
+  {
+    stage: "backend success response",
+    source: "unifiedUpload",
+    description: "unified upload supports music_upload surface and version provisioning",
+    signals: [
+      '"music_upload"',
+      "versionIds",
+      "sale_master",
+    ],
+    diagnose: "Backend stage failed: unified upload no longer provisions music-upload packages correctly.",
+  },
+  {
+    stage: "shared upload workspace availability",
+    source: "sharedPage",
+    description: "shared song-catalog page keeps the expected artist-controlled upload workspace intact",
+    signals: [
+      'id="catalogShell"',
+      'id="workspace"',
+      'id="songWorkspace"',
+      'id="songForm"',
+      'id="versionForm"',
+      '/upload-progress.js',
+      '/song-catalog/song-catalog.js',
+    ],
+    diagnose: "Shared workspace stage failed: appended song-catalog fallback is no longer a full upload workspace.",
+  },
 ];
 
-const failures = checks.filter(([passed]) => !passed);
-const passedCount = checks.length - failures.length;
-for (const [passed, description] of checks) console.log(`${passed ? "PASS" : "FAIL"}: ${description}`);
-console.log(`Music upload contracts: ${passedCount}/${checks.length} checks passed.`);
-assert.equal(
-  failures.length,
-  0,
-  `Music upload contract failures: ${failures.map(([, description]) => description).join("; ")}`
+runStageMonitor({
+  monitorName: "Music upload watchdog",
+  checks,
+  sources,
+});
+
+assert.deepEqual(
+  normalizeHttpsList("https://halo.world/release\nhttps://www.youtube.com/watch?v=halo"),
+  ["https://halo.world/release", "https://www.youtube.com/watch?v=halo"],
+  "link validation must preserve valid https official and video links"
 );
-{
-  const helperContext = {
-    window: {},
-    console,
-    XMLHttpRequest: class {},
-    setTimeout,
-    clearTimeout,
-  };
-  vm.runInNewContext(uploadHelper, helperContext, { filename: "upload-progress.js" });
-  assert.equal(typeof helperContext.window.HaloUploadProgress?.createUploadUi, "function", "shared upload helper should expose createUploadUi");
-  const track = {
-    hidden: true,
-    attrs: { "aria-hidden": "true" },
-    setAttribute(name, value) {
-      this.attrs[name] = value;
-    }
-  };
-  const fill = { style: { width: "0%" } };
-  const status = { textContent: "" };
-  const panel = {
-    dataset: {},
-    classList: { toggle() {} },
-    setAttribute(name, value) {
-      this[name] = value;
-    }
-  };
-  const uploadUi = helperContext.window.HaloUploadProgress.createUploadUi({
-    panel,
-    status,
-    track,
-    fill,
-    idleMessage: "Idle",
-  });
-  uploadUi.start("Preparing upload…");
-  assert.equal(track.hidden, false, "shared upload helper should reveal the progress track when upload starts");
-  assert.equal(track.attrs["aria-hidden"], "false", "shared upload helper should clear aria-hidden when upload starts");
-  assert.equal(fill.style.width, "3%", "shared upload helper should show visible in-flight progress before the first chunk advances");
-  uploadUi.idle("Idle");
-  assert.equal(track.hidden, true, "shared upload helper should hide progress track when upload returns to idle");
-  assert.equal(track.attrs["aria-hidden"], "true", "shared upload helper should restore aria-hidden when upload returns to idle");
-}
+assert.throws(
+  () => normalizeHttpsList("http://halo.world/release"),
+  /https:\/\//,
+  "link validation must reject non-https sources"
+);
+assert.throws(
+  () => normalizeHttpsList("https://user@halo.world/release"),
+  /https:\/\//,
+  "link validation must reject credential-bearing URLs"
+);
+
+const helperContext = {
+  window: {},
+  console,
+  XMLHttpRequest: class {},
+  setTimeout,
+  clearTimeout,
+};
+vm.runInNewContext(uploadHelper, helperContext, { filename: "upload-progress.js" });
+assert.equal(typeof helperContext.window.HaloUploadProgress?.createUploadUi, "function", "shared upload helper should expose createUploadUi");
+const track = {
+  hidden: true,
+  attrs: { "aria-hidden": "true" },
+  setAttribute(name, value) {
+    this.attrs[name] = value;
+  }
+};
+const fill = { style: { width: "0%" } };
+const status = { textContent: "" };
+const panel = {
+  dataset: {},
+  classList: { toggle() {} },
+  setAttribute(name, value) {
+    this[name] = value;
+  }
+};
+const uploadUi = helperContext.window.HaloUploadProgress.createUploadUi({
+  panel,
+  status,
+  track,
+  fill,
+  idleMessage: "Idle",
+});
+uploadUi.start("Preparing upload…");
+assert.equal(track.hidden, false, "shared upload helper should reveal the progress track when upload starts");
+assert.equal(track.attrs["aria-hidden"], "false", "shared upload helper should clear aria-hidden when upload starts");
+assert.equal(fill.style.width, "3%", "shared upload helper should show visible in-flight progress before the first chunk advances");
+uploadUi.idle("Idle");
+assert.equal(track.hidden, true, "shared upload helper should hide the progress track again when upload returns to idle");
+assert.equal(track.attrs["aria-hidden"], "true", "shared upload helper should restore aria-hidden when upload returns to idle");

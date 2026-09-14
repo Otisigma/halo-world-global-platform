@@ -288,6 +288,40 @@ async function deleteArtwork(payload: Record<string, unknown>, db: Awaited<Retur
   return json({ message: "Artwork removed" });
 }
 
+async function reuseSongArtwork(payload: Record<string, unknown>, db: Awaited<ReturnType<typeof getDatabase>>, ownerMemberId: string) {
+  const songId = cleanId(payload.songId);
+  const sourceSongId = cleanId(payload.sourceSongId);
+  if (!songId || !sourceSongId || songId === sourceSongId) return json({ message: "Valid source and target songs are required" }, 400);
+  const [targetSong, sourceSong] = await Promise.all([
+    ownedSong(db, ownerMemberId, songId),
+    ownedSong(db, ownerMemberId, sourceSongId),
+  ]);
+  if (!targetSong) return json({ message: "That song was not found" }, 404);
+  if (!sourceSong?.artwork_blob_prefix || !sourceSong.artwork_chunk_count || !sourceSong.artwork_byte_size) {
+    return json({ message: "The source artwork was not found" }, 404);
+  }
+  const artworkUrl = `/api/song-catalog/artwork?songId=${encodeURIComponent(songId)}`;
+  await db.sql`
+    UPDATE halo_song_catalog
+    SET artwork_url = ${artworkUrl},
+        artwork_blob_prefix = ${sourceSong.artwork_blob_prefix},
+        artwork_chunk_count = ${sourceSong.artwork_chunk_count},
+        artwork_content_type = ${sourceSong.artwork_content_type},
+        artwork_byte_size = ${sourceSong.artwork_byte_size},
+        artwork_filename = ${sourceSong.artwork_filename},
+        artwork_uploaded_at = NOW(),
+        updated_at = NOW()
+    WHERE id = ${songId} AND owner_member_id = ${ownerMemberId}
+  `;
+  return json({
+    artwork_url: artworkUrl,
+    message: "Artwork linked into this package.",
+    persisted: true,
+    lockedIn: true,
+    confirmedAt: new Date().toISOString(),
+  });
+}
+
 export default async function songCatalogArtworkHandler(request: Request) {
   if (!["GET", "HEAD", "POST", "DELETE"].includes(request.method)) return json({ message: "Method not allowed" }, 405, { Allow: "GET, HEAD, POST, DELETE" });
   try {
@@ -304,7 +338,9 @@ export default async function songCatalogArtworkHandler(request: Request) {
     const contentType = request.headers.get("content-type") || "";
     if (contentType.includes("multipart/form-data")) return uploadChunk(request, db, membership.member_id);
     const payload = await request.json().catch(() => null) as Record<string, unknown> | null;
-    if (!payload || payload.action !== "finalize_upload") return json({ message: "Choose a supported artwork action" }, 400);
+    if (!payload) return json({ message: "Choose a supported artwork action" }, 400);
+    if (payload.action === "reuse_song_artwork") return reuseSongArtwork(payload, db, membership.member_id);
+    if (payload.action !== "finalize_upload") return json({ message: "Choose a supported artwork action" }, 400);
     return finalizeUpload(payload, db, membership.member_id);
   } catch (error) {
     console.error("Song catalog artwork failed", error instanceof Error ? error.message : "unknown error");

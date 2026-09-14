@@ -2,6 +2,10 @@ const state={songs:[],selectedId:"",filter:"",authenticated:false,producer:{jobs
 const $=selector=>document.querySelector(selector);
 const elements={shell:$("#catalogShell"),songList:$("#songList"),empty:$("#emptyState"),workspace:$("#songWorkspace"),search:$("#searchInput"),status:$("#statusMessage"),songDialog:$("#songDialog"),versionDialog:$("#versionDialog")};
 const uploadHelper=window.HaloUploadProgress;
+const embeddedParentOrigin=(()=>{if(window.parent===window)return"";const explicitParentOrigin=new URLSearchParams(window.location.search).get("parentOrigin");if(explicitParentOrigin){try{return new URL(explicitParentOrigin).origin}catch{}}return window.location.origin})();
+const measureEmbeddedHeight=()=>Math.max(document.documentElement?.scrollHeight||0,document.body?.scrollHeight||0,document.documentElement?.offsetHeight||0,document.body?.offsetHeight||0,document.documentElement?.clientHeight||0,document.body?.clientHeight||0);
+const postEmbeddedHeight=()=>{if(window.parent===window||!embeddedParentOrigin)return;window.parent.postMessage({type:"halo-song-catalog-height",height:measureEmbeddedHeight()},embeddedParentOrigin)};
+if(window.parent!==window){if(typeof ResizeObserver==="function"){const observer=new ResizeObserver(()=>postEmbeddedHeight());if(document.body)observer.observe(document.body);else window.addEventListener("DOMContentLoaded",()=>observer.observe(document.body),{once:true});}window.addEventListener("load",postEmbeddedHeight,{once:true});window.addEventListener("resize",postEmbeddedHeight);setTimeout(postEmbeddedHeight,0);}
 const escapeHtml=value=>String(value??"").replace(/[&<>'"]/g,char=>({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;",'"':"&quot;"}[char]));
 const titleCase=value=>String(value||"").replaceAll("_"," ").replace(/\b\w/g,letter=>letter.toUpperCase());
 const money=(cents,currency="USD")=>{if(cents==null)return"Not priced";const code=String(currency||"USD").toUpperCase();try{return new Intl.NumberFormat(undefined,{style:"currency",currency:code}).format(cents/100)}catch{return`${code} ${(Number(cents||0)/100).toFixed(2)}`}};

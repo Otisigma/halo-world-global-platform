@@ -175,6 +175,7 @@
   function handleSharedCatalogFrameMessage(event) {
     if (event.origin !== window.location.origin) return;
     if (!event.data || event.data.type !== "halo-song-catalog-height") return;
+    if (event.source !== elements.sharedCatalogFrame?.contentWindow) return;
     syncSharedCatalogFrameHeight(event.data.height);
   }
 

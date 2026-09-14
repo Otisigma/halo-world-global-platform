@@ -28,6 +28,7 @@ assert.match(musicPage, /Listen\. Buy\.[\s\S]*Share\./, "shop page must headline
 assert.match(musicPage, /artist-controlled songs from the shared catalog/i, "shop page must keep the shared catalog as the public source-of-truth copy");
 assert.match(musicPage, /<details class="catalog-workspace-details" id="catalogWorkspaceDetails">/, "shop page must expose the shared song catalog inside a native collapsible details panel");
 assert.match(musicPage, /data-src="\/song-catalog\/\?embed=shop"/, "shop page must keep the shared song catalog workspace embeddable beneath the storefront");
+assert.match(musicPage, /sandbox="allow-same-origin allow-scripts allow-forms allow-modals"/, "shop page must sandbox the embedded shared song catalog workspace explicitly");
 
 assert.match(musicClient, /\/api\/release-catalog/, "shop client must load the shared release catalog API");
 assert.match(musicClient, /release\.catalog/, "shop client must read shared song-catalog metadata from the release API");

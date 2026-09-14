@@ -2,7 +2,8 @@ const state={songs:[],selectedId:"",filter:"",authenticated:false,producer:{jobs
 const $=selector=>document.querySelector(selector);
 const elements={shell:$("#catalogShell"),songList:$("#songList"),empty:$("#emptyState"),workspace:$("#songWorkspace"),search:$("#searchInput"),status:$("#statusMessage"),songDialog:$("#songDialog"),versionDialog:$("#versionDialog")};
 const uploadHelper=window.HaloUploadProgress;
-const postEmbeddedHeight=()=>{if(window.parent===window)return;window.parent.postMessage({type:"halo-song-catalog-height",height:Math.max(document.documentElement?.scrollHeight||0,document.body?.scrollHeight||0)},window.location.origin)};
+const embeddedParentOrigin=(()=>{if(window.parent===window)return"";const explicitParentOrigin=new URLSearchParams(window.location.search).get("parentOrigin");if(explicitParentOrigin){try{return new URL(explicitParentOrigin).origin}catch{}}if(document.referrer){try{return new URL(document.referrer).origin}catch{}}return window.location.origin})();
+const postEmbeddedHeight=()=>{if(window.parent===window||!embeddedParentOrigin)return;window.parent.postMessage({type:"halo-song-catalog-height",height:Math.max(document.documentElement?.scrollHeight||0,document.body?.scrollHeight||0)},embeddedParentOrigin)};
 if(window.parent!==window){if(typeof ResizeObserver==="function"){const observer=new ResizeObserver(()=>postEmbeddedHeight());if(document.body)observer.observe(document.body);else window.addEventListener("DOMContentLoaded",()=>observer.observe(document.body),{once:true});}window.addEventListener("load",postEmbeddedHeight,{once:true});window.addEventListener("resize",postEmbeddedHeight);setTimeout(postEmbeddedHeight,0);}
 const escapeHtml=value=>String(value??"").replace(/[&<>'"]/g,char=>({"&":"&amp;","<":"&lt;",">":"&gt;","'":"&#39;",'"':"&quot;"}[char]));
 const titleCase=value=>String(value||"").replaceAll("_"," ").replace(/\b\w/g,letter=>letter.toUpperCase());

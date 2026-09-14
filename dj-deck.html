@@ -1655,7 +1655,7 @@
             </div>
             <span class="journey-badge" id="artistJourneyStageBadge" aria-live="polite">0 / 5 stages ready</span>
           </div>
-          <div class="journey-chip-row" id="artistJourneyStageChips" aria-label="Artist journey progress"></div>
+          <div class="journey-chip-row" id="artistJourneyStageChips" aria-label="Artist journey progress" role="list"></div>
           <div class="journey-assist-grid">
             <article class="journey-assist-card">
               <small>Upload watch</small>
@@ -2003,6 +2003,9 @@
     let sessionCloudEnabled = false;
     let sessionRestoring = false;
     const artistJourneyObservers = [];
+    let artistJourneyFormElement = null;
+    let artistJourneyScheduleHandler = null;
+    let artistJourneyUnloadHandler = null;
     const stemVaultState = { authenticated: false, packs: [], loading: false };
     const stemCollectorState = { authenticated: false, kits: [], current: null, loading: false };
 
@@ -2206,7 +2209,7 @@
         mixReleaseStatus: elements.mixReleaseStatus?.textContent || ""
       });
       elements.artistJourneyStageBadge.textContent = model.stageBadge;
-      elements.artistJourneyStageChips.innerHTML = model.stages.map((stage, index) => `<span class="journey-chip is-${stage.status}" data-step="${String(index + 1).padStart(2, "0")}">${escapeHTML(stage.label)}</span>`).join("");
+      elements.artistJourneyStageChips.innerHTML = model.stages.map((stage, index) => `<span class="journey-chip is-${stage.status}" data-step="${String(index + 1).padStart(2, "0")}" role="listitem"${stage.status === "active" ? ' aria-current="step"' : ""}>${escapeHTML(stage.label)}</span>`).join("");
       elements.artistJourneyUploadTitle.textContent = model.uploadTitle;
       elements.artistJourneyUploadCopy.textContent = model.uploadCopy;
       elements.artistJourneyNextActionTitle.textContent = model.nextActionTitle;
@@ -2224,7 +2227,20 @@
         : '<span class="journey-blocker is-clear">All five stages are ready. HALO AI can guide the launch without changing the mix desk.</span>';
     }
 
+    function cleanupArtistJourneyGuidance() {
+      artistJourneyObservers.splice(0).forEach(observer => observer.disconnect());
+      if (artistJourneyFormElement && artistJourneyScheduleHandler) {
+        artistJourneyFormElement.removeEventListener("input", artistJourneyScheduleHandler);
+        artistJourneyFormElement.removeEventListener("change", artistJourneyScheduleHandler);
+      }
+      if (artistJourneyUnloadHandler) window.removeEventListener("beforeunload", artistJourneyUnloadHandler);
+      artistJourneyFormElement = null;
+      artistJourneyScheduleHandler = null;
+      artistJourneyUnloadHandler = null;
+    }
+
     function initializeArtistJourneyGuidance() {
+      cleanupArtistJourneyGuidance();
       const form = document.querySelector("#mixFlightplanForm");
       const schedule = () => window.requestAnimationFrame(renderArtistJourneyGuidance);
       [elements.importStatus, elements.stemVaultStatus, elements.mixReleaseStatus, document.querySelector("#flightplanStatus")].filter(Boolean).forEach(node => {
@@ -2234,10 +2250,11 @@
       });
       form?.addEventListener("input", schedule);
       form?.addEventListener("change", schedule);
+      artistJourneyFormElement = form;
+      artistJourneyScheduleHandler = schedule;
+      artistJourneyUnloadHandler = () => cleanupArtistJourneyGuidance();
+      window.addEventListener("beforeunload", artistJourneyUnloadHandler, { once: true });
       schedule();
-      window.addEventListener("beforeunload", () => {
-        artistJourneyObservers.splice(0).forEach(observer => observer.disconnect());
-      }, { once: true });
     }
 
     async function saveDjIntelligenceSession() {

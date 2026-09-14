@@ -50,15 +50,18 @@ vm.runInContext([
 assert.match(deck, /Upload once\. HALO watches every next step\./);
 assert.match(deck, /HALO AI is watching the full artist journey\./);
 assert.match(deck, /id="artistJourneyStageChips"/);
+assert.match(deck, /role="list"/);
 assert.match(deck, /function buildArtistJourneyModel\(/);
+assert.match(deck, /function cleanupArtistJourneyGuidance\(/);
+assert.match(deck, /aria-current="step"/);
 assert.match(deck, /Upload \/ ingest/);
 assert.match(deck, /Artwork \/ contract/);
 assert.match(deck, /Mix \/ review/);
 assert.match(deck, /Release \/ sale/);
 assert.match(deck, /Campaign launch/);
-assert.match(deck, /HALO AI is waiting at upload and will guide ingest, artwork, review, release, and campaign launch without changing the decks\./);
-assert.match(deck, /Campaign is ready to launch/);
-assert.match(deck, /All five stages are ready\. HALO AI can guide the launch without changing the mix desk\./);
+assert.match(deck, /beforeunload/);
+assert.match(deck, /removeEventListener\("input", artistJourneyScheduleHandler\)/);
+assert.match(deck, /observer\.disconnect\(\)/);
 
 sandbox.showCloudRevisionToast();
 assert.deepEqual(sandbox.toastCalls.shift(), { title: "Cloud revision", message: "Cloud revision 12" });

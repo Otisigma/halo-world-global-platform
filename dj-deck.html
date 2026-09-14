@@ -3021,8 +3021,7 @@
     function showMaintenanceAlertsToast() {
       syncMaintenanceDockLabel();
       showToast("Maintenance alerts", `${maintenanceAlertCountLabel()} watching booth video, cloud revision, upload progress, and audio verification.`);
-      const shouldOpen = Boolean(elements.maintenanceDockPanel?.hidden);
-      if (typeof setMaintenanceDockPanel === "function") setMaintenanceDockPanel(shouldOpen);
+      if (typeof setMaintenanceDockPanel === "function") setMaintenanceDockPanel(true);
     }
 
     function setStemVaultStatus(message, error = false) {

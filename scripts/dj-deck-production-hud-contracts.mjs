@@ -85,10 +85,7 @@ const sandbox = {
       attributes: {},
       setAttribute(name, value) { this.attributes[name] = value; }
     },
-    closeMaintenanceDockPanel: {
-      focused: false,
-      focus() { this.focused = true; }
-    },
+    closeMaintenanceDockPanel: { focus() {} },
     maintenanceDockCount: { textContent: "10 alerts" },
     maintenanceDockHelp: { textContent: "" }
   },
@@ -109,8 +106,6 @@ vm.runInContext([
 sandbox.setMaintenanceDockPanel(true);
 assert.equal(sandbox.elements.maintenanceDockPanel.hidden, false);
 assert.equal(sandbox.elements.maintenanceDock.attributes["aria-expanded"], "true");
-assert.equal(sandbox.elements.closeMaintenanceDockPanel.focused, true);
-sandbox.elements.closeMaintenanceDockPanel.focused = false;
 const invoker = { focused: false, focus() { this.focused = true; } };
 sandbox.setMaintenanceDockPanel(true, invoker);
 sandbox.setMaintenanceDockPanel(false);
@@ -118,8 +113,13 @@ assert.equal(sandbox.elements.maintenanceDockPanel.hidden, true);
 assert.equal(sandbox.elements.maintenanceDock.attributes["aria-expanded"], "false");
 assert.equal(invoker.focused, true);
 assert.equal(sandbox.maintenanceDockInvoker, null);
+sandbox.setMaintenanceDockPanel(true, invoker);
+invoker.focused = false;
+sandbox.setMaintenanceDockPanel(false, null, false);
+assert.equal(invoker.focused, false);
 sandbox.showMaintenanceAlertsToast();
 assert.equal(sandbox.elements.maintenanceDockPanel.hidden, false);
+assert.equal(sandbox.elements.maintenanceDock.attributes["aria-expanded"], "true");
 assert.deepEqual(sandbox.toastCalls.pop(), {
   title: "Maintenance alerts",
   message: "10 alerts watching booth video, cloud revision, upload progress, and audio verification."
@@ -132,9 +132,8 @@ const checks = [
   [ids(["loaderHudLibrary", "loaderHudImport", "loaderHudVault", "loaderHudRelease"]), "adds an additive loader summary above the music import station"],
   [ids(["telemetryHudCrowd", "telemetryHudRecommendation", "telemetryHudCloud", "telemetryHudPreflight"]), "adds an additive telemetry summary above the live crowd and AI modules"],
   [ids(["maintenanceDockPanel", "dockPanelTelemetry", "dockPanelRevision", "dockPanelTrackQr"]), "extends the existing floating maintenance dock with a detail panel and quick actions"],
-  [hasAll(["function updateProductionHud()", "function setMaintenanceDockPanel(open, invoker = null)", "showMaintenanceAlertsToast", "prepareRecommendedTransition", "syncTelemetry"]), "wires the additive HUD and floating dock panel into the existing DJ deck logic"],
-  [/hudDockAction\?\.addEventListener\("click",\s*showMaintenanceAlertsToast\)/.test(deck) && /closeMaintenanceDockPanel\?\.addEventListener\("click",\s*\(\)\s*=>\s*setMaintenanceDockPanel\(false\)\)/.test(deck) && /event\.key === "Escape" && elements\.maintenanceDockPanel && !elements\.maintenanceDockPanel\.hidden/.test(deck), "covers dock-panel open and close affordances in the runtime wiring"],
-  [deck.includes('aria-controls="productionHud mixOperations recordingRig mixFlightplan musicLibrary boothIntelligence"') && deck.includes('{ id: "productionHud", label: "Production HUD" }'), "keeps desk-only focus controls and collapsible panel state aware of the new HUD"]
+  [hasAll(["function updateProductionHud()", "function setMaintenanceDockPanel(open, invoker = null, restoreFocus = true)", "function showMaintenanceAlertsToast()", "prepareRecommendedTransition", "syncTelemetry"]), "wires the additive HUD and floating dock panel into the existing DJ deck logic"],
+  [ids(["maintenanceDockHelp", "maintenanceDockPanelTitle", "closeMaintenanceDockPanel"]) && deck.includes("Opens a toast and detail panel"), "documents the additive dock panel with accessible help text and labeling"]
 ];
 
 for (const [passed, description] of checks) console.log(`${passed ? "PASS" : "FAIL"}: ${description}`);

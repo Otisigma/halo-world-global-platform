@@ -2777,9 +2777,9 @@
     }
 
     function currentCloudRevisionLabel() {
-      const sessionLabel = elements.sessionSaveStatus?.querySelector("span:last-child")?.textContent?.trim() || "";
+      const sessionLabel = elements.sessionSaveStatus?.textContent?.trim() || "";
       if (/^Cloud revision/i.test(sessionLabel)) return sessionLabel;
-      const cloudLabel = elements.cloudStatus?.querySelector("span:last-child")?.textContent?.trim() || "Cloud ready";
+      const cloudLabel = elements.cloudStatus?.textContent?.trim() || "Cloud ready";
       return `${cloudLabel} · awaiting first revision`;
     }
 

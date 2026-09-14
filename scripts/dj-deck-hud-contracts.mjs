@@ -26,8 +26,8 @@ function textNode(text) {
 
 const sandbox = {
   elements: {
-    sessionSaveStatus: { querySelector: () => textNode("Cloud revision 12") },
-    cloudStatus: { querySelector: () => textNode("Cloud ready") },
+    sessionSaveStatus: textNode("Cloud revision 12"),
+    cloudStatus: textNode("Cloud ready"),
     maintenanceDock: { title: "" },
     maintenanceDockCount: { textContent: "10 alerts" },
     maintenanceDockHelp: { textContent: "" }
@@ -50,7 +50,7 @@ vm.runInContext([
 sandbox.showCloudRevisionToast();
 assert.deepEqual(sandbox.toastCalls.shift(), { title: "Cloud revision", message: "Cloud revision 12" });
 
-sandbox.elements.sessionSaveStatus.querySelector = () => textNode("Saved on device");
+sandbox.elements.sessionSaveStatus.textContent = "Saved on device";
 sandbox.showCloudRevisionToast();
 assert.deepEqual(sandbox.toastCalls.shift(), { title: "Cloud revision", message: "Cloud ready · awaiting first revision" });
 

@@ -1791,8 +1791,8 @@
   </main>
 
   <span class="visually-hidden" id="maintenanceDockHelp">Opens a toast and detail panel with current booth, cloud revision, upload progress, and audio verification maintenance status.</span>
-  <button class="maintenance-dock" id="maintenanceDock" type="button" aria-label="Show maintenance alerts" aria-describedby="maintenanceDockHelp"><span class="visually-hidden">Show </span><span>Maintenance alerts</span><strong id="maintenanceDockCount">10 alerts</strong></button>
-  <section class="maintenance-dock-panel" id="maintenanceDockPanel" role="dialog" aria-modal="false" aria-labelledby="maintenanceDockPanelTitle" hidden>
+  <button class="maintenance-dock" id="maintenanceDock" type="button" aria-label="Show maintenance alerts" aria-describedby="maintenanceDockHelp" aria-controls="maintenanceDockPanel" aria-haspopup="dialog"><span class="visually-hidden">Show </span><span>Maintenance alerts</span><strong id="maintenanceDockCount">10 alerts</strong></button>
+  <section class="maintenance-dock-panel" id="maintenanceDockPanel" role="dialog" aria-modal="false" aria-labelledby="maintenanceDockPanelTitle" tabindex="-1" hidden>
     <header>
       <div><p class="eyebrow">Floating dock detail</p><h3 id="maintenanceDockPanelTitle">Maintenance + cloud</h3><p>Open the existing maintenance dock without losing the toast feedback already wired into the page.</p></div>
       <button class="dock-panel-close" id="closeMaintenanceDockPanel" type="button" aria-label="Close maintenance dock panel">×</button>
@@ -5789,7 +5789,7 @@
         closeTrackPicker();
         return;
       }
-      if (event.key === "Escape" && elements.maintenanceDockPanel && !elements.maintenanceDockPanel.hidden) {
+      if (event.key === "Escape" && elements.maintenanceDockPanel && !elements.maintenanceDockPanel.hidden && elements.maintenanceDockPanel.contains(document.activeElement)) {
         setMaintenanceDockPanel(false);
         return;
       }

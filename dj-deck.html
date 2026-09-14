@@ -280,6 +280,7 @@
     .clip-presets, .clip-buttons { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
     .clip-presets { max-height: 132px; overflow: auto; align-content: start; }
     .clip-buttons { max-height: 116px; overflow: auto; }
+    .clip-presets:focus-visible, .clip-buttons:focus-visible { outline: 2px solid var(--acid); outline-offset: 3px; }
     .clip-button { min-height: 48px; }
     .clip-button strong, .clip-button span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .clip-presets .clip-button { min-height: 56px; align-content: center; }
@@ -1489,13 +1490,13 @@
         </div>
         <div class="utility-clips">
           <div class="rack-label"><span>Screen videos</span><span id="boothVideoLibraryStatus">Loading gallery</span></div>
-          <div class="clip-presets" id="boothVideoPresets" aria-label="Booth video presets">
+          <div class="clip-presets" id="boothVideoPresets" aria-label="Booth video presets" tabindex="0">
             <button class="clip-button" type="button" data-booth-preset="ghost-to-me"><strong>Ghost To Me</strong><span>DJ HALO X visual</span></button>
             <button class="clip-button" type="button" data-booth-preset="salty"><strong>Salty</strong><span>Load official source</span></button>
             <button class="clip-button" type="button" data-booth-preset="halo-music-world-50-plus"><strong>HALO Music World 50+</strong><span>YouTube long play</span></button>
             <button class="clip-button" type="button" data-booth-preset="dj-halo-x-long-mix-videos"><strong>DJ HALO X Long Mix Videos</strong><span>Continuous booth reel</span></button>
           </div>
-          <div class="clip-buttons" id="boothVideoClips"><span class="clip-empty">Checking HALO TV for playable videos…</span></div>
+          <div class="clip-buttons" id="boothVideoClips" aria-label="Booth video gallery clips" tabindex="0"><span class="clip-empty">Checking HALO TV for playable videos…</span></div>
           <form class="video-input-row" id="boothVideoUrlForm">
             <input class="video-url-input" id="boothVideoUrl" type="text" inputmode="url" autocomplete="url" aria-label="YouTube video URL" placeholder="Paste YouTube video or live URL">
             <button class="video-input-button" type="submit">Load URL</button>

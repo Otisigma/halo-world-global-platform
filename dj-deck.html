@@ -3021,7 +3021,8 @@
     function showMaintenanceAlertsToast() {
       syncMaintenanceDockLabel();
       showToast("Maintenance alerts", `${maintenanceAlertCountLabel()} watching booth video, cloud revision, upload progress, and audio verification.`);
-      if (typeof setMaintenanceDockPanel === "function") setMaintenanceDockPanel(elements.maintenanceDockPanel?.hidden !== false);
+      const shouldOpen = Boolean(elements.maintenanceDockPanel?.hidden);
+      if (typeof setMaintenanceDockPanel === "function") setMaintenanceDockPanel(shouldOpen);
     }
 
     function setStemVaultStatus(message, error = false) {
@@ -3916,13 +3917,13 @@
     elements.maintenanceDock?.setAttribute("aria-expanded", "false");
     elements.maintenanceDock?.addEventListener("click", showMaintenanceAlertsToast);
     elements.closeMaintenanceDockPanel?.addEventListener("click", () => setMaintenanceDockPanel(false));
-    elements.dockPanelTelemetry?.addEventListener("click", () => elements.syncTelemetry?.click());
+    elements.dockPanelTelemetry?.addEventListener("click", syncTelemetry);
     elements.dockPanelRevision?.addEventListener("click", showCloudRevisionToast);
     elements.dockPanelTrackQr?.addEventListener("click", () => openTrackPicker("dock_panel"));
-    elements.hudDeckAction?.addEventListener("click", () => elements.prepareTransition?.click());
-    elements.hudMixerAction?.addEventListener("click", () => document.querySelector("#syncMaster")?.click());
-    elements.hudLoaderAction?.addEventListener("click", () => elements.driveButton?.click());
-    elements.hudTelemetryAction?.addEventListener("click", () => elements.syncTelemetry?.click());
+    elements.hudDeckAction?.addEventListener("click", prepareRecommendedTransition);
+    elements.hudMixerAction?.addEventListener("click", syncDecks);
+    elements.hudLoaderAction?.addEventListener("click", () => elements.driveUpload?.click());
+    elements.hudTelemetryAction?.addEventListener("click", syncTelemetry);
     elements.hudDockAction?.addEventListener("click", showMaintenanceAlertsToast);
     elements.hudCloudAction?.addEventListener("click", showCloudRevisionToast);
 

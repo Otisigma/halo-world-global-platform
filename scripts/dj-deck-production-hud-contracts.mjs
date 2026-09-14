@@ -2,15 +2,17 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
 const deck = await readFile(new URL("../dj-deck.html", import.meta.url), "utf8");
+const hasAll = values => values.every(value => deck.includes(value));
+const ids = values => values.every(value => deck.includes(`id="${value}"`));
 
 const checks = [
-  [deck.includes('id="productionHud"') && deck.includes("Production HUD // additive overview"), "adds a top-level production HUD section without replacing the deck"],
-  [deck.includes('id="hudDeckTitle"') && deck.includes('id="hudMixerMeta"') && deck.includes('id="hudLoaderMeta"') && deck.includes('id="hudTelemetryMeta"') && deck.includes('id="hudFlightplanMeta"') && deck.includes('id="hudDockMeta"'), "adds dedicated HUD readouts for deck, mixer, loader, telemetry, release, and dock state"],
-  [deck.includes('id="deckOpsNowPlaying"') && deck.includes('id="deckOpsQueue"') && deck.includes('id="deckOpsBlend"') && deck.includes('id="deckOpsPolicy"'), "adds an additive deck and mixer summary strip inside the deck package"],
-  [deck.includes('id="loaderHudLibrary"') && deck.includes('id="loaderHudImport"') && deck.includes('id="loaderHudVault"') && deck.includes('id="loaderHudRelease"'), "adds an additive loader summary above the music import station"],
-  [deck.includes('id="telemetryHudCrowd"') && deck.includes('id="telemetryHudRecommendation"') && deck.includes('id="telemetryHudCloud"') && deck.includes('id="telemetryHudPreflight"'), "adds an additive telemetry summary above the live crowd and AI modules"],
-  [deck.includes('id="maintenanceDockPanel"') && deck.includes('id="dockPanelTelemetry"') && deck.includes('id="dockPanelRevision"') && deck.includes('id="dockPanelTrackQr"'), "extends the existing floating maintenance dock with a detail panel and quick actions"],
-  [deck.includes("function updateProductionHud()") && deck.includes("function setMaintenanceDockPanel(open)") && deck.includes('elements.hudDockAction?.addEventListener("click", showMaintenanceAlertsToast);'), "wires the additive HUD and floating dock panel into the existing DJ deck logic"],
+  [ids(["productionHud"]) && deck.includes("Production HUD // additive overview"), "adds a top-level production HUD section without replacing the deck"],
+  [ids(["hudDeckTitle", "hudMixerMeta", "hudLoaderMeta", "hudTelemetryMeta", "hudFlightplanMeta", "hudDockMeta"]), "adds dedicated HUD readouts for deck, mixer, loader, telemetry, release, and dock state"],
+  [ids(["deckOpsNowPlaying", "deckOpsQueue", "deckOpsBlend", "deckOpsPolicy"]), "adds an additive deck and mixer summary strip inside the deck package"],
+  [ids(["loaderHudLibrary", "loaderHudImport", "loaderHudVault", "loaderHudRelease"]), "adds an additive loader summary above the music import station"],
+  [ids(["telemetryHudCrowd", "telemetryHudRecommendation", "telemetryHudCloud", "telemetryHudPreflight"]), "adds an additive telemetry summary above the live crowd and AI modules"],
+  [ids(["maintenanceDockPanel", "dockPanelTelemetry", "dockPanelRevision", "dockPanelTrackQr"]), "extends the existing floating maintenance dock with a detail panel and quick actions"],
+  [hasAll(["function updateProductionHud()", "function setMaintenanceDockPanel(open)", "showMaintenanceAlertsToast", "prepareRecommendedTransition", "syncTelemetry"]), "wires the additive HUD and floating dock panel into the existing DJ deck logic"],
   [deck.includes('aria-controls="productionHud mixOperations recordingRig mixFlightplan musicLibrary boothIntelligence"') && deck.includes('{ id: "productionHud", label: "Production HUD" }'), "keeps desk-only focus controls and collapsible panel state aware of the new HUD"]
 ];
 

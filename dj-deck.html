@@ -2234,7 +2234,7 @@
       });
       form?.addEventListener("input", schedule);
       form?.addEventListener("change", schedule);
-      window.addEventListener("load", schedule, { once: true });
+      schedule();
       window.addEventListener("beforeunload", () => {
         artistJourneyObservers.splice(0).forEach(observer => observer.disconnect());
       }, { once: true });

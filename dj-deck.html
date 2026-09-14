@@ -855,6 +855,7 @@
     .maintenance-dock span { color: var(--orange); font: 500 8px "DM Mono", monospace; letter-spacing: .13em; text-transform: uppercase; }
     .maintenance-dock strong { font: 600 12px/1.2 "Space Grotesk", sans-serif; letter-spacing: -.02em; text-transform: uppercase; }
     .maintenance-dock:hover { border-color: var(--acid); }
+    .visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
     .toast { position: fixed; right: 22px; bottom: 92px; z-index: 30; width: min(390px, calc(100vw - 44px)); border: 1px solid rgba(200,255,54,.45); background: rgba(12, 15, 13, .96); box-shadow: var(--shadow); padding: 15px 17px; transform: translateY(130%); opacity: 0; transition: transform .35s ease, opacity .35s ease; }
     .toast.is-visible { transform: translateY(0); opacity: 1; }
     .toast strong { display: block; color: var(--acid); font: 500 10px "DM Mono", monospace; letter-spacing: .11em; text-transform: uppercase; }
@@ -1672,7 +1673,8 @@
     <footer class="footer"><span>HALO performance system · demo engine</span><nav class="footer-socials" aria-label="HALO social profiles"><a href="https://www.youtube.com/@halo-music-world" target="_blank" rel="noopener noreferrer">YouTube ↗</a><a href="https://www.tiktok.com/@halomusicworldhome" target="_blank" rel="noopener noreferrer">TikTok ↗</a></nav><div class="keyboard-hints"><span><kbd>Space</kbd> Play master</span><span><kbd>S</kbd> Sync tempo</span><span><kbd>F</kbd> Desk only</span></div></footer>
   </main>
 
-  <button class="maintenance-dock" id="maintenanceDock" type="button" aria-label="Show maintenance alert status for the deck" aria-describedby="maintenanceDockCount"><span>Maintenance alerts</span><strong id="maintenanceDockCount">10 alerts</strong></button>
+  <span class="visually-hidden" id="maintenanceDockHelp">Shows current booth, cloud revision, upload progress, and audio verification maintenance status in a toast.</span>
+  <button class="maintenance-dock" id="maintenanceDock" type="button" aria-describedby="maintenanceDockHelp"><span>Maintenance alerts</span><strong id="maintenanceDockCount">10 alerts</strong></button>
   <div class="toast" id="toast" role="status" aria-live="polite"><strong id="toastTitle">System</strong><p id="toastMessage">Ready.</p></div>
 
   <script src="/upload-progress.js"></script>
@@ -2150,6 +2152,7 @@
       }
       stopBoothVideo();
       activeBoothVideoId = preset.id;
+      setBoothScreenMode("wave");
       elements.boothClipTitle.textContent = preset.title;
       elements.boothClipStatus.textContent = "Preset ready";
       elements.boothVideoPlaceholder.hidden = false;

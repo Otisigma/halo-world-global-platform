@@ -99,12 +99,18 @@
     if (elements.workspaceFrame.dataset.loaded === "true") return Promise.resolve(true);
     if (catalogWorkspaceLoadPromise) return catalogWorkspaceLoadPromise;
     catalogWorkspaceLoadPromise = new Promise(resolve => {
+      const cleanup = () => {
+        elements.workspaceFrame.removeEventListener("load", markLoaded);
+        elements.workspaceFrame.removeEventListener("error", markFailed);
+      };
       const markLoaded = () => {
+        cleanup();
         elements.workspaceFrame.dataset.loaded = "true";
         catalogWorkspaceLoadPromise = null;
         resolve(true);
       };
       const markFailed = () => {
+        cleanup();
         catalogWorkspaceLoadPromise = null;
         resolve(false);
       };
@@ -598,6 +604,7 @@
         <span class="upload-surface-kicker">Sell → upload</span>
         <strong>Open the upload surface</strong>
         <small>Keep the public sales flow on top, then expand this area to add a song or pull in an existing release before opening the shared catalog below.</small>
+        <span class="disclosure-state"><span class="state-closed">Expand</span><span class="state-open">Collapse</span></span>
       </summary>
       <div class="upload-surface-panel">
         <div class="upload-surface-actions" role="group" aria-label="Upload actions">

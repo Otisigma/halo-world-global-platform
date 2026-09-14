@@ -184,19 +184,6 @@ h1 em { color: var(--acid); font-family: var(--serif); font-weight: 400; text-tr
   gap: 10px;
   padding: 18px 20px;
 }
-.upload-surface summary::after,
-.workspace-disclosure summary::after {
-  justify-self: end;
-  color: var(--orange);
-  font: 500 8px/1 var(--mono);
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  content: "Expand ↘";
-}
-.upload-surface[open] summary::after,
-.workspace-disclosure[open] summary::after {
-  content: "Collapse ↗";
-}
 .upload-surface summary strong,
 .workspace-disclosure summary h2 {
   margin: 0;
@@ -217,6 +204,26 @@ h1 em { color: var(--acid); font-family: var(--serif); font-weight: 400; text-tr
   font: 500 8px/1 var(--mono);
   letter-spacing: 0.14em;
   text-transform: uppercase;
+}
+.disclosure-state {
+  justify-self: end;
+  display: inline-flex;
+  gap: 6px;
+  color: var(--orange);
+  font: 500 8px/1 var(--mono);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.disclosure-state .state-open {
+  display: none;
+}
+.upload-surface[open] .disclosure-state .state-open,
+.workspace-disclosure[open] .disclosure-state .state-open {
+  display: inline;
+}
+.upload-surface[open] .disclosure-state .state-closed,
+.workspace-disclosure[open] .disclosure-state .state-closed {
+  display: none;
 }
 .upload-surface-panel,
 .workspace-panel {

@@ -3008,16 +3008,16 @@
       if (elements.dockPanelAudio) elements.dockPanelAudio.textContent = window.__haloAudioHealth?.message || "Audio engine waiting";
     }
 
-    function setMaintenanceDockPanel(open, invoker = null, restoreFocus = true) {
+    function setMaintenanceDockPanel(open, invoker = null, restoreFocus = true, focusPanel = invoker === elements.maintenanceDock) {
       if (!elements.maintenanceDockPanel) return;
       if (open) maintenanceDockInvoker = invoker && typeof invoker.focus === "function" ? invoker : null;
       elements.maintenanceDockPanel.hidden = !open;
       elements.maintenanceDock?.setAttribute("aria-expanded", String(open));
       if (open) {
         updateProductionHud();
-        if (elements.closeMaintenanceDockPanel && typeof requestAnimationFrame === "function") {
+        if (focusPanel && elements.closeMaintenanceDockPanel && typeof requestAnimationFrame === "function") {
           requestAnimationFrame(() => elements.closeMaintenanceDockPanel.focus());
-        } else if (elements.closeMaintenanceDockPanel?.focus) {
+        } else if (focusPanel && elements.closeMaintenanceDockPanel?.focus) {
           elements.closeMaintenanceDockPanel.focus();
         }
         return;
@@ -5789,7 +5789,7 @@
         closeTrackPicker();
         return;
       }
-      if (event.key === "Escape" && elements.maintenanceDockPanel && !elements.maintenanceDockPanel.hidden && elements.maintenanceDockPanel.contains(document.activeElement)) {
+      if (event.key === "Escape" && elements.maintenanceDockPanel && !elements.maintenanceDockPanel.hidden) {
         setMaintenanceDockPanel(false);
         return;
       }

@@ -83,7 +83,8 @@ const sandbox = {
     maintenanceDockPanel: { hidden: true },
     maintenanceDock: {
       attributes: {},
-      setAttribute(name, value) { this.attributes[name] = value; }
+      setAttribute(name, value) { this.attributes[name] = value; },
+      focus() {}
     },
     closeMaintenanceDockPanel: {
       focused: false,
@@ -106,7 +107,7 @@ vm.runInContext([
   extractFunctionSource("showMaintenanceAlertsToast")
 ].join("\n\n"), sandbox);
 
-sandbox.setMaintenanceDockPanel(true);
+sandbox.setMaintenanceDockPanel(true, sandbox.elements.maintenanceDock);
 assert.equal(sandbox.elements.maintenanceDockPanel.hidden, false);
 assert.equal(sandbox.elements.maintenanceDock.attributes["aria-expanded"], "true");
 assert.equal(sandbox.elements.closeMaintenanceDockPanel.focused, true);
@@ -133,7 +134,7 @@ const checks = [
   [ids(["loaderHudLibrary", "loaderHudImport", "loaderHudVault", "loaderHudRelease"]), "adds an additive loader summary above the music import station"],
   [ids(["telemetryHudCrowd", "telemetryHudRecommendation", "telemetryHudCloud", "telemetryHudPreflight"]), "adds an additive telemetry summary above the live crowd and AI modules"],
   [ids(["maintenanceDockPanel", "dockPanelTelemetry", "dockPanelRevision", "dockPanelTrackQr"]) && ids(["maintenanceDock", "maintenanceDockPanelTitle"]) && /id="maintenanceDock"[^>]*aria-controls="maintenanceDockPanel"[^>]*aria-haspopup="dialog"/.test(deck) && /id="maintenanceDockPanel"[^>]*role="dialog"[^>]*aria-modal="false"[^>]*tabindex="-1"/.test(deck), "extends the existing floating maintenance dock with a detail panel and quick actions"],
-  [/function updateProductionHud\(\)/.test(deck) && /function setMaintenanceDockPanel\(/.test(deck) && /function showMaintenanceAlertsToast\(\)/.test(deck) && deck.includes("prepareRecommendedTransition") && deck.includes("syncTelemetry"), "wires the additive HUD and floating dock panel into the existing DJ deck logic"],
+  [/function updateProductionHud\(\)/.test(deck) && /function setMaintenanceDockPanel\(open, invoker = null, restoreFocus = true, focusPanel = invoker === elements\.maintenanceDock\)/.test(deck) && /function showMaintenanceAlertsToast\(\)/.test(deck) && deck.includes("prepareRecommendedTransition") && deck.includes("syncTelemetry"), "wires the additive HUD and floating dock panel into the existing DJ deck logic"],
   [ids(["maintenanceDockHelp", "maintenanceDockPanelTitle", "closeMaintenanceDockPanel"]) && deck.includes("Opens a toast and detail panel with current booth, cloud revision, upload progress, and audio verification maintenance status."), "documents the additive dock panel with accessible help text, focus target, and non-modal dialog semantics"]
 ];
 

@@ -22,6 +22,42 @@ assert.ok(clientScriptMatch, "music-upload page must mount the shared song-catal
 const catalogClientPath = clientScriptMatch[1].split("?")[0].replace(/^\//, "");
 await read(catalogClientPath);
 function parseNetlifyToml(text) {
+  const stripInlineComment = input => {
+    let quote = "";
+    let escaped = false;
+    for (let index = 0; index < input.length; index += 1) {
+      const char = input[index];
+      if (escaped) {
+        escaped = false;
+        continue;
+      }
+      if (char === "\\") {
+        escaped = true;
+        continue;
+      }
+      if (!quote && (char === '"' || char === "'")) {
+        quote = char;
+        continue;
+      }
+      if (quote && char === quote) {
+        quote = "";
+        continue;
+      }
+      if (!quote && char === "#") return input.slice(0, index);
+    }
+    return input;
+  };
+  const parseTomlValue = rawValue => {
+    const value = stripInlineComment(rawValue).trim();
+    if (!value) return "";
+    if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+      const inner = value.slice(1, -1);
+      return value.startsWith('"') ? inner.replace(/\\"/g, '"') : inner.replace(/\\'/g, "'");
+    }
+    if (/^(true|false)$/i.test(value)) return value.toLowerCase() === "true";
+    if (/^[+-]?\d+(\.\d+)?$/.test(value)) return Number(value);
+    return value;
+  };
   const headers = [];
   const redirects = [];
   let section = null;
@@ -52,7 +88,7 @@ function parseNetlifyToml(text) {
     const match = line.match(/^([A-Za-z0-9_.-]+)\s*=\s*(.+)$/);
     if (!match) continue;
     const [, key, rawValue] = match;
-    const value = rawValue.replace(/^"(.*)"$/, "$1");
+    const value = parseTomlValue(rawValue);
     if (nestedTable === "headers.values") {
       current.values ||= {};
       current.values[key] = value;
@@ -75,8 +111,8 @@ const hasCanonicalRedirect = (from, to) =>
     item =>
       item.from === from &&
       item.to === to &&
-      String(item.status) === "200" &&
-      String(item.force) === "true"
+      Number(item.status) === 200 &&
+      item.force === true
   );
 
 const checks = [

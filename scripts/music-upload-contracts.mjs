@@ -173,6 +173,11 @@ const hasCanonicalRedirect = (from, to) =>
 
 const checks = [
   [page.includes('id="catalogShell"') && page.includes('id="workspace"') && page.includes('id="songWorkspace"') && page.includes('id="songForm"') && page.includes('id="versionForm"'), "exposes the shared catalog upload structure and edit forms on /music-upload/"],
+  [
+    /<title>\s*Song Catalog Upload \| HALO\s*<\/title>/.test(page) &&
+      page.includes('aria-label="Catalog pathways"'),
+    "uses catalog-aligned branding and pathways copy on /music-upload/"
+  ],
   [page.includes('/song-catalog/song-catalog.css') && page.includes('/song-catalog/song-catalog.js'), "reuses the proven song catalog UI and client implementation"],
   [page.includes('/stats.js') && page.includes('/site-monitor.js') && page.includes('/accessibility.js'), "keeps site-level monitoring and accessibility bootstraps on /music-upload/"],
   [page.includes('/identity.js') && page.includes('/upload-progress.js?v=music-upload-runtime') && page.includes('/song-catalog/song-catalog.js?v=music-upload-runtime'), "keeps identity, cache-busted runtime, and client wiring"],
@@ -186,8 +191,8 @@ const checks = [
   [/hasCompleteChunkSet/.test(audioFn) && /persisted:\s*true/.test(audioFn) && /lockedIn:\s*true/.test(audioFn) && /hasCompleteChunkSet/.test(artworkFn) && /persisted:\s*true/.test(artworkFn) && /lockedIn:\s*true/.test(artworkFn), "audio/artwork finalization keeps persisted lock-in signals"],
   [hasCanonicalRedirect("/music-upload/", "/music-upload/index.html"), "serves canonical /music-upload/ route"],
   [hasNoCacheHeader("/music-upload/*") && hasNoCacheHeader("/upload-progress.js"), "keeps no-cache headers for music-upload runtime freshness"],
-  [/directoryRoute\(\s*"Halo Music Upload"\s*,\s*"\/music-upload\/"\s*,\s*"music-upload\/index\.html"/.test(routes), "route registry exposes /music-upload/ as Halo Music Upload"],
-  [world.includes('href="/music-upload/"') && world.includes("open_halo_music_upload"), "homepage discovery links continue pointing to /music-upload/"],
+  [/directoryRoute\(\s*"Song Catalog Upload"\s*,\s*"\/music-upload\/"\s*,\s*"music-upload\/index\.html"/.test(routes), "route registry exposes /music-upload/ as Song Catalog Upload"],
+  [world.includes('href="/music-upload/"') && world.includes("open_song_catalog_upload"), "homepage discovery links continue pointing to /music-upload/"],
 ];
 
 const failures = checks.filter(([passed]) => !passed);

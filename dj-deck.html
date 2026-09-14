@@ -641,7 +641,7 @@
       letter-spacing: .09em;
       text-transform: uppercase;
     }
-    .journey-chip-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+    .journey-chip-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; padding: 0; list-style: none; }
     .journey-chip {
       display: inline-flex;
       align-items: center;
@@ -1655,7 +1655,7 @@
             </div>
             <span class="journey-badge" id="artistJourneyStageBadge" aria-live="polite">0 / 5 stages ready</span>
           </div>
-          <div class="journey-chip-row" id="artistJourneyStageChips" aria-label="Artist journey progress" role="list"></div>
+          <ol class="journey-chip-row" id="artistJourneyStageChips" aria-label="Artist journey progress"></ol>
           <div class="journey-assist-grid">
             <article class="journey-assist-card">
               <small>Upload watch</small>
@@ -2214,7 +2214,7 @@
         mixReleaseStatus: elements.mixReleaseStatus?.textContent || ""
       });
       elements.artistJourneyStageBadge.textContent = model.stageBadge;
-      elements.artistJourneyStageChips.innerHTML = model.stages.map((stage, index) => `<span class="journey-chip is-${stage.status}" data-step="${String(index + 1).padStart(2, "0")}" role="listitem"${stage.status === "active" ? ' aria-current="step"' : ""}>${escapeHTML(stage.label)}</span>`).join("");
+      elements.artistJourneyStageChips.innerHTML = model.stages.map((stage, index) => `<li class="journey-chip is-${stage.status}" data-step="${String(index + 1).padStart(2, "0")}"${stage.status === "active" ? ' aria-current="step"' : ""}>${escapeHTML(stage.label)}</li>`).join("");
       elements.artistJourneyUploadTitle.textContent = model.uploadTitle;
       elements.artistJourneyUploadCopy.textContent = model.uploadCopy;
       elements.artistJourneyNextActionTitle.textContent = model.nextActionTitle;

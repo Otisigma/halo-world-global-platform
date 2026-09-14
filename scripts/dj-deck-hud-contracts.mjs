@@ -50,9 +50,10 @@ vm.runInContext([
 assert.match(deck, /Upload once\. HALO watches every next step\./);
 assert.match(deck, /HALO AI is watching the full artist journey\./);
 assert.match(deck, /id="artistJourneyStageChips"/);
-assert.match(deck, /role="list"/);
+assert.match(deck, /<ol class="journey-chip-row" id="artistJourneyStageChips"/);
 assert.match(deck, /function buildArtistJourneyModel\(/);
 assert.match(deck, /function cleanupArtistJourneyGuidance\(/);
+assert.match(deck, /<li class="journey-chip is-\$\{stage\.status\}"/);
 assert.match(deck, /aria-current="step"/);
 assert.match(deck, /Upload \/ ingest/);
 assert.match(deck, /Artwork \/ contract/);

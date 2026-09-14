@@ -49,12 +49,13 @@ for (const legacyAlias of forbiddenLegacyAliases) {
   );
 }
 
-for (const { route } of directoryRoutes) {
+for (const { route, file } of directoryRoutes) {
   const nonSlashAlias = route.slice(0, -1);
-  const indexFilePath = `${route}index.html`;
+  const renderFilePath = `/${file}`;
+  const legacyIndexFilePath = `${route}index.html`;
   const nonSlashRedirect = redirectRuleBySource.get(nonSlashAlias);
   const canonicalRenderRule = redirectRuleBySource.get(route);
-  const indexFileRedirect = redirectRuleBySource.get(indexFilePath);
+  const renderFileRedirect = redirectRuleBySource.get(renderFilePath);
   assert.equal(canonicalizeRoutePath(nonSlashAlias), nonSlashAlias, `${nonSlashAlias} must remain non-canonicalized once aliases are removed.`);
 
   const familyCanonicalTargets = new Set(
@@ -70,15 +71,15 @@ for (const { route } of directoryRoutes) {
   );
 
   assert.ok(!nonSlashRedirect, `${nonSlashAlias} alias redirect must be removed for canonical-only routing.`);
-  assert.ok(canonicalRenderRule, `netlify.toml must render ${route} from ${indexFilePath}.`);
-  assert.equal(canonicalRenderRule.status, 200, `${route} must use a 200 rewrite to ${indexFilePath}.`);
-  assert.equal(canonicalRenderRule.to, indexFilePath, `${route} must rewrite to ${indexFilePath}.`);
+  assert.ok(canonicalRenderRule, `netlify.toml must render ${route} from ${renderFilePath}.`);
+  assert.equal(canonicalRenderRule.status, 200, `${route} must use a 200 rewrite to ${renderFilePath}.`);
+  assert.equal(canonicalRenderRule.to, renderFilePath, `${route} must rewrite to ${renderFilePath}.`);
   assert.ok(
-    !indexFileRedirect,
-    `${indexFilePath} alias redirect must be removed for canonical-only routing.`
+    !renderFileRedirect,
+    `${renderFilePath} alias redirect must be removed for canonical-only routing.`
   );
   if (renderedIndexRoutes.has(route)) {
-    assert.equal(canonicalRenderRule.to, indexFilePath, `${route} must keep index rendering enabled for monitored non-live pages.`);
+    assert.equal(canonicalRenderRule.to, legacyIndexFilePath, `${route} must keep index rendering enabled for monitored non-live pages.`);
   }
 }
 

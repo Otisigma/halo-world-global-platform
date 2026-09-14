@@ -81,7 +81,14 @@ function parseNetlifyToml(text) {
       continue;
     }
     if (line.startsWith("[") && line.endsWith("]")) {
-      nestedTable = line.slice(1, -1);
+      const tableName = line.slice(1, -1);
+      if (section === "headers" && tableName === "headers.values") {
+        nestedTable = tableName;
+        continue;
+      }
+      section = null;
+      current = null;
+      nestedTable = "";
       continue;
     }
     if (!section || !current) continue;

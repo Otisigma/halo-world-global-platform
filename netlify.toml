@@ -25,6 +25,11 @@
     Cache-Control = "no-cache, no-store, must-revalidate"
 
 [[headers]]
+  for = "/song-catalog/*"
+  [headers.values]
+    Cache-Control = "no-cache, no-store, must-revalidate"
+
+[[headers]]
   for = "/upload-pipeline/*"
   [headers.values]
     Cache-Control = "no-cache, no-store, must-revalidate"
@@ -177,7 +182,7 @@
 
 [[redirects]]
   from = "/music-upload/"
-  to = "/music-upload/index.html"
+  to = "/song-catalog/index.html"
   status = 200
   force = true
 

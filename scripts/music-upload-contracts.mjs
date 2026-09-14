@@ -1,4 +1,4 @@
-import { readFile } from "node:fs/promises";
+import { access, readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import assert from "node:assert/strict";
 import vm from "node:vm";
@@ -7,7 +7,7 @@ const root = resolve(import.meta.dirname, "..");
 const read = path => readFile(resolve(root, path), "utf8");
 
 const [page, uploadHelper, routes, world, config, unifiedUploadFn, songCatalogFn, audioFn, artworkFn] = await Promise.all([
-  read("music-upload/index.html"),
+  read("song-catalog/index.html"),
   read("upload-progress.js"),
   read("lib/route-registry.js"),
   read("halo.html"),
@@ -16,6 +16,11 @@ const [page, uploadHelper, routes, world, config, unifiedUploadFn, songCatalogFn
   read("netlify/functions/song-catalog.ts"),
   read("netlify/functions/song-catalog-audio.ts"),
   read("netlify/functions/song-catalog-artwork.ts"),
+]);
+const legacyAssets = await Promise.allSettled([
+  access(resolve(root, "music-upload/music-upload.js")),
+  access(resolve(root, "music-upload/music-upload.css")),
+  access(resolve(root, "music-upload/link-validation.js")),
 ]);
 const clientScriptMatch = page.match(/<script type="module" src="([^"]*song-catalog\/song-catalog\.js[^"]*)"><\/script>/);
 assert.ok(clientScriptMatch, "music-upload page must mount the shared song-catalog module client");
@@ -174,13 +179,14 @@ const hasCanonicalRedirect = (from, to) =>
 const checks = [
   [page.includes('id="catalogShell"') && page.includes('id="workspace"') && page.includes('id="songWorkspace"') && page.includes('id="songForm"') && page.includes('id="versionForm"'), "exposes the shared catalog upload structure and edit forms on /music-upload/"],
   [
-    /<title>\s*Song Catalog Upload \| HALO\s*<\/title>/.test(page) &&
+    /<title>\s*Song Catalog \| HALO\s*<\/title>/.test(page) &&
+      !page.includes("Song Catalog Upload") &&
       page.includes('aria-label="Catalog pathways"'),
-    "uses catalog-aligned branding and pathways copy on /music-upload/"
+    "uses the canonical song catalog branding and pathways copy on /music-upload/"
   ],
   [page.includes('/song-catalog/song-catalog.css') && page.includes('/song-catalog/song-catalog.js'), "reuses the proven song catalog UI and client implementation"],
   [page.includes('/stats.js') && page.includes('/site-monitor.js') && page.includes('/accessibility.js'), "keeps site-level monitoring and accessibility bootstraps on /music-upload/"],
-  [page.includes('/identity.js') && page.includes('/upload-progress.js?v=music-upload-runtime') && page.includes('/song-catalog/song-catalog.js?v=music-upload-runtime'), "keeps identity, cache-busted runtime, and client wiring"],
+  [page.includes('/identity.js') && page.includes('/upload-progress.js') && page.includes('/song-catalog/song-catalog.js'), "keeps identity and shared upload/client wiring"],
   [catalogClientPath === "song-catalog/song-catalog.js", "music-upload mounts the expected shared catalog client asset"],
   [!page.includes('/music-upload/music-upload.js') && page.includes('id="addSongButton"') && page.includes('id="importButton"'), "entry surface now boots from the shared catalog module instead of the retired music-upload client"],
   [page.includes('id="audioFile"') && page.includes('id="uploadAudioButton"') && page.includes('id="audioUploadTrack"'), "keeps working version-audio upload controls on /music-upload/"],
@@ -189,9 +195,10 @@ const checks = [
   [songCatalogFn.includes('payload.action === "save_song"') && songCatalogFn.includes('payload.action === "save_version"') && songCatalogFn.includes("/api/song-catalog") && audioFn.includes("/api/song-catalog/audio") && artworkFn.includes("/api/song-catalog/artwork"), "music upload surface is backed by the existing catalog/song-save/version/audio/artwork API routes"],
   [page.includes('id="audioUploadTrack"') && page.includes('id="artworkUploadTrack"') && /createUploadUi/.test(uploadHelper) && /uploadChunkedFile/.test(uploadHelper), "uses shared chunked upload behavior with visible progress states"],
   [/hasCompleteChunkSet/.test(audioFn) && /persisted:\s*true/.test(audioFn) && /lockedIn:\s*true/.test(audioFn) && /hasCompleteChunkSet/.test(artworkFn) && /persisted:\s*true/.test(artworkFn) && /lockedIn:\s*true/.test(artworkFn), "audio/artwork finalization keeps persisted lock-in signals"],
-  [hasCanonicalRedirect("/music-upload/", "/music-upload/index.html"), "serves canonical /music-upload/ route"],
-  [hasNoCacheHeader("/music-upload/*") && hasNoCacheHeader("/upload-progress.js"), "keeps no-cache headers for music-upload runtime freshness"],
-  [/directoryRoute\(\s*"Song Catalog Upload"\s*,\s*"\/music-upload\/"\s*,\s*"music-upload\/index\.html"/.test(routes), "route registry exposes /music-upload/ as Song Catalog Upload"],
+  [hasCanonicalRedirect("/music-upload/", "/song-catalog/index.html"), "serves /music-upload/ from the canonical shared song-catalog page"],
+  [hasNoCacheHeader("/music-upload/*") && hasNoCacheHeader("/song-catalog/*") && hasNoCacheHeader("/upload-progress.js"), "keeps no-cache headers on music-upload and shared catalog runtime assets"],
+  [/directoryRoute\(\s*"Song Catalog Upload"\s*,\s*"\/music-upload\/"\s*,\s*"song-catalog\/index\.html"/.test(routes), "route registry exposes /music-upload/ as the shared song-catalog surface"],
+  [legacyAssets.every(result => result.status === "rejected"), "retired legacy music-upload hub assets are removed from the route directory"],
   [world.includes('href="/music-upload/"') && world.includes("open_song_catalog_upload"), "homepage discovery links continue pointing to /music-upload/"],
 ];
 

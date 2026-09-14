@@ -13,20 +13,21 @@
 </head>
 <body>
   <header class="catalog-header">
-    <a class="brand" href="/halo"><img src="/assets/halo-logo-mark.webp" alt=""><span><strong>HALO</strong><small>Song Catalog</small></span></a>
-    <nav aria-label="Catalog pathways"><a href="/release-house/">Release House</a><a href="/finish-house/">Finish House</a><a href="/radio/">Radio</a></nav>
-    <div class="header-actions"><button class="quiet-button" id="importButton" type="button">Load existing songs</button><button class="primary-button" id="addSongButton" type="button">Add a song</button></div>
+    <a class="brand" href="/halo"><img src="/assets/halo-logo-mark.webp" alt="" aria-hidden="true"><span><strong>HALO</strong><small>Song Catalog</small></span></a>
+    <nav aria-label="Catalog pathways"><a href="/song-catalog/">Song Catalog</a><a href="/release-house/">Release House</a><a href="/finish-house/">Finish House</a><a href="/radio/">Radio</a></nav>
+    <div class="header-actions" role="group" aria-label="Catalog actions"><button class="quiet-button" id="importButton" type="button">Load existing songs</button><button class="primary-button" id="addSongButton" type="button">Add a song</button></div>
   </header>
+  <noscript><p class="catalog-noscript">JavaScript is required for upload controls. <a href="/song-catalog/">Open Song Catalog</a>.</p></noscript>
 
   <main>
     <section class="catalog-hero" aria-labelledby="pageTitle">
       <div>
         <p class="eyebrow">One song · every useful version</p>
         <h1 id="pageTitle">Put every master on the right track.</h1>
-        <p>Keep the sale master separate from radio, clean, instrumental, stem, extended, demo, and alternate versions. Dream Weaver checks the information every time the catalog changes.</p>
+        <p>Keep the sale master separate from radio, clean, instrumental, stem, extended, demo, and alternate versions. Dreamweaver checks the information every time the catalog changes.</p>
       </div>
       <div class="signal-card" aria-label="Catalog status">
-        <span>Dream Weaver signal</span>
+        <span>Dreamweaver signal</span>
         <strong id="overallScore">—</strong>
         <small id="overallCopy">Sign in to inspect the catalog.</small>
       </div>
@@ -36,7 +37,7 @@
       <article><span>Catalog</span><strong id="songCount">0</strong><small>active songs</small></article>
       <article><span>For sale</span><strong id="saleCount">0</strong><small>priced releases</small></article>
       <article><span>Radio queue</span><strong id="radioCount">0</strong><small>masters to finish</small></article>
-      <article><span>Ready</span><strong id="readyCount">0</strong><small>Dream Weaver cleared</small></article>
+      <article><span>Ready</span><strong id="readyCount">0</strong><small>Dreamweaver cleared</small></article>
     </section>
 
     <section class="catalog-shell" id="catalogShell" aria-busy="true">
@@ -97,8 +98,8 @@
             </form>
 
             <aside class="review-panel">
-              <div class="panel-heading"><div><p class="eyebrow">Automatic check</p><h3>Dream Weaver review</h3></div><button class="text-button" id="reviewButton" type="button">Run again</button></div>
-              <p class="review-intro" id="reviewIntro">Dream Weaver checks the information and version routing after every save.</p>
+              <div class="panel-heading"><div><p class="eyebrow">Automatic check</p><h3>Dreamweaver review</h3></div><button class="text-button" id="reviewButton" type="button">Run again</button></div>
+              <p class="review-intro" id="reviewIntro">Dreamweaver checks the information and version routing after every save.</p>
               <div class="issue-list" id="issueList"></div>
             </aside>
           </div>
@@ -193,6 +194,9 @@
     </form>
   </dialog>
 
+  <script src="/stats.js" defer></script>
+  <script src="/site-monitor.js" defer></script>
+  <script src="/accessibility.js" defer></script>
   <script type="module" src="/identity.js"></script>
   <script src="/upload-progress.js" defer></script>
   <script type="module" src="/song-catalog/song-catalog.js"></script>

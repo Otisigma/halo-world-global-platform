@@ -47,6 +47,23 @@ vm.runInContext([
   extractFunctionSource("showMaintenanceAlertsToast")
 ].join("\n\n"), sandbox);
 
+assert.match(deck, /Upload once\. HALO watches every next step\./);
+assert.match(deck, /HALO AI is watching the full artist journey\./);
+assert.match(deck, /id="artistJourneyStageChips"/);
+assert.match(deck, /<ol class="journey-chip-row" id="artistJourneyStageChips"/);
+assert.match(deck, /function buildArtistJourneyModel\(/);
+assert.match(deck, /function cleanupArtistJourneyGuidance\(/);
+assert.match(deck, /<li class="journey-chip is-\$\{stage\.status\}"/);
+assert.match(deck, /aria-current="step"/);
+assert.match(deck, /Upload \/ ingest/);
+assert.match(deck, /Artwork \/ contract/);
+assert.match(deck, /Mix \/ review/);
+assert.match(deck, /Release \/ sale/);
+assert.match(deck, /Campaign launch/);
+assert.match(deck, /beforeunload/);
+assert.match(deck, /removeEventListener\("input", artistJourneyScheduleHandler\)/);
+assert.match(deck, /observer\.disconnect\(\)/);
+
 sandbox.showCloudRevisionToast();
 assert.deepEqual(sandbox.toastCalls.shift(), { title: "Cloud revision", message: "Cloud revision 12" });
 
@@ -62,4 +79,4 @@ assert.deepEqual(sandbox.toastCalls.shift(), {
 assert.match(sandbox.elements.maintenanceDock.title, /10 alerts currently monitored\.$/);
 assert.match(sandbox.elements.maintenanceDockHelp.textContent, /10 alerts currently monitored\.$/);
 
-console.log("DJ deck HUD contracts: cloud revision and maintenance toast actions behave as expected.");
+console.log("DJ deck HUD contracts: artist journey guidance plus cloud revision and maintenance toast actions behave as expected.");

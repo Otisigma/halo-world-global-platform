@@ -18,7 +18,7 @@ const [page, catalogClient, uploadHelper, routes, world, config, audioFn, artwor
 ]);
 
 const checks = [
-  [page.includes("Catalog upload surface") && page.includes("Upload every master, keep one catalog truth."), "positions /music-upload/ as the upload-facing catalog surface"],
+  [page.includes("Catalog upload surface · one song every useful version") && page.includes("Upload every master, keep one catalog truth."), "positions /music-upload/ as the upload-facing catalog surface"],
   [page.includes('/song-catalog/song-catalog.css') && page.includes('/song-catalog/song-catalog.js'), "reuses the proven song catalog UI and client implementation"],
   [page.includes('/stats.js') && page.includes('/site-monitor.js') && page.includes('/accessibility.js'), "keeps site-level monitoring and accessibility bootstraps on /music-upload/"],
   [page.includes('/identity.js') && page.includes('/upload-progress.js?v=music-upload-runtime') && page.includes('/song-catalog/song-catalog.js?v=music-upload-runtime'), "keeps identity, cache-busted runtime, and client wiring"],
@@ -82,5 +82,5 @@ assert.equal(
   uploadUi.idle("Idle");
   assert.equal(track.hidden, true, "shared upload helper should hide progress track when upload returns to idle");
   assert.equal(track.attrs["aria-hidden"], "true", "shared upload helper should restore aria-hidden when upload returns to idle");
-  console.log(`Music upload contracts: ${checks.length}/${checks.length} checks passed.`);
 }
+console.log(`Music upload contracts: ${checks.length}/${checks.length} checks passed.`);

@@ -116,8 +116,7 @@
     }
 
     function shareUrlForRelease(release) {
-      const url = new URL(window.location.href);
-      url.pathname = shopPath();
+      const url = new URL(shopPath(), window.location.origin);
       url.searchParams.set("song", release.id);
       return url.toString();
     }
@@ -504,7 +503,7 @@
         <dl class="shop-facts">
           <div><dt>Catalog source</dt><dd>${catalog.source === "song-catalog" ? "Shared song catalog" : "Published release campaign"}</dd></div>
           <div><dt>Versions mapped</dt><dd>${versionCount || "—"}</dd></div>
-          <div><dt>Preview-ready versions</dt><dd>${previewCount || "—"}</dd></div>
+          <div><dt>Public-ready versions</dt><dd>${previewCount || "—"}</dd></div>
         </dl>
       </section>
       <section class="shop-artist-card" aria-label="Artist context and related songs">
@@ -540,7 +539,7 @@
     </div>`;
   }
 
-  function renderFeatured() {
+  function renderFeatured({ focusHeading = false } = {}) {
     const release = selectedShopRelease();
     if (configuredFeaturedReleaseId && !state.releases.some(candidate => candidate.id === configuredFeaturedReleaseId)) {
       logMusicIssue("music_featured_release_missing", "Configured featured release missing from catalog", { releaseId: configuredFeaturedReleaseId });
@@ -555,9 +554,10 @@
     const artwork = releaseArtwork(release);
     elements.featured.innerHTML = `<article class="featured-release">
       <div class="featured-art release-artwork-frame" data-artwork-frame><img class="release-artwork-image" src="${escapeHtml(artwork.src)}" alt="${escapeHtml(`${release.title} cover artwork`)}" width="1200" height="1200" data-release-artwork data-artwork-fallback="${escapeHtml(artwork.fallback)}"></div>
-      <div class="featured-copy"><div>${releaseMeta(release)}<h2>${escapeHtml(release.title)}</h2><p class="featured-artist">${escapeHtml(release.artist)}</p><p class="featured-pitch">${escapeHtml(release.pitch || "Open the official release signal, approved listening destination, and campaign room.")}</p>${featuredDetailMarkup(release)}</div>${releaseActions(release, { includeCopy: true })}</div>
+      <div class="featured-copy"><div>${releaseMeta(release)}<h2 data-featured-heading tabindex="-1">${escapeHtml(release.title)}</h2><p class="featured-artist">${escapeHtml(release.artist)}</p><p class="featured-pitch">${escapeHtml(release.pitch || "Open the official release signal, approved listening destination, and campaign room.")}</p>${featuredDetailMarkup(release)}</div>${releaseActions(release, { includeCopy: true })}</div>
     </article>`;
     wireArtwork(elements.featured);
+    if (focusHeading) elements.featured.querySelector("[data-featured-heading]")?.focus({ preventScroll: true });
   }
 
   function filteredReleases() {
@@ -687,7 +687,7 @@
   function focusRelease(releaseId) {
     if (!state.releases.some(release => release.id === releaseId)) return;
     state.activeShopId = releaseId;
-    renderFeatured();
+    renderFeatured({ focusHeading: true });
     if (window.matchMedia("(max-width: 980px)").matches) {
       elements.featured.scrollIntoView({ behavior: "smooth", block: "start" });
     }

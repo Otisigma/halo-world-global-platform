@@ -156,6 +156,7 @@ export default async function releaseCatalogHandler(request) {
           COUNT(*)::int AS catalog_version_count,
           COUNT(*) FILTER (
             WHERE version.audio_url <> ''
+              AND version.sale_enabled = TRUE
           )::int AS catalog_preview_version_count,
           COUNT(*) FILTER (
             WHERE version.sale_enabled = TRUE

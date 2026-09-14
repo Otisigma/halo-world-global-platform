@@ -20,6 +20,7 @@ const [page, catalogClient, uploadHelper, routes, world, config, audioFn, artwor
 const checks = [
   [page.includes("Catalog upload surface") && page.includes("Upload every master, keep one catalog truth."), "positions /music-upload/ as the upload-facing catalog surface"],
   [page.includes('/song-catalog/song-catalog.css') && page.includes('/song-catalog/song-catalog.js'), "reuses the proven song catalog UI and client implementation"],
+  [page.includes('/stats.js') && page.includes('/site-monitor.js') && page.includes('/accessibility.js'), "keeps site-level monitoring and accessibility bootstraps on /music-upload/"],
   [page.includes('/identity.js') && page.includes('/upload-progress.js?v=music-upload-runtime') && page.includes('/song-catalog/song-catalog.js?v=music-upload-runtime'), "keeps identity, cache-busted runtime, and client wiring"],
   [!page.includes('/music-upload/music-upload.js') && page.includes('id="addSongButton"') && page.includes('id="importButton"'), "entry surface now boots from the shared catalog module instead of the retired music-upload client"],
   [page.includes('id="audioFile"') && page.includes('id="uploadAudioButton"') && page.includes('id="audioUploadTrack"'), "keeps working version-audio upload controls on /music-upload/"],

@@ -5789,7 +5789,7 @@
         closeTrackPicker();
         return;
       }
-      if (event.key === "Escape" && elements.maintenanceDockPanel && !elements.maintenanceDockPanel.hidden) {
+      if (event.key === "Escape" && elements.maintenanceDockPanel && !elements.maintenanceDockPanel.hidden && elements.maintenanceDockPanel.contains(document.activeElement)) {
         setMaintenanceDockPanel(false);
         return;
       }

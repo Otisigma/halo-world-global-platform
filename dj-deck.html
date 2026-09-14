@@ -2159,6 +2159,8 @@
       const preset = BOOTH_VIDEO_PRESETS.find(item => item.id === presetId);
       if (!preset) return;
       if (preset.sourceType) {
+        activeBoothVideoId = preset.id;
+        syncBoothPresetButtons();
         playBoothVideo(preset);
         return;
       }

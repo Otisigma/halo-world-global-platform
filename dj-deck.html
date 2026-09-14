@@ -5798,7 +5798,7 @@
         ["INPUT", "TEXTAREA", "SELECT"].includes(activeElement?.tagName)
         || activeElement?.isContentEditable
       ) return;
-      if (elements.maintenanceDockPanel?.contains(activeElement) && (event.code === "Space" || event.key.toLowerCase() === "s")) return;
+      if (elements.maintenanceDockPanel?.contains(activeElement)) return;
       if (event.code === "Space") { event.preventDefault(); document.querySelector(".deck-a .play-button").click(); }
       if (event.key.toLowerCase() === "s") syncDecks();
       if (event.key.toLowerCase() === "f") elements.focusMode.click();

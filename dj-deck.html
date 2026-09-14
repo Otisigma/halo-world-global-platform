@@ -5796,7 +5796,7 @@
       const activeElement = document.activeElement;
       if (
         elements.maintenanceDockPanel?.contains(activeElement)
-        || ["INPUT", "TEXTAREA", "SELECT", "BUTTON", "A"].includes(activeElement?.tagName)
+        || ["INPUT", "TEXTAREA", "SELECT"].includes(activeElement?.tagName)
         || activeElement?.isContentEditable
       ) return;
       if (event.code === "Space") { event.preventDefault(); document.querySelector(".deck-a .play-button").click(); }

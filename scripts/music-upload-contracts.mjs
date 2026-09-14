@@ -21,7 +21,7 @@ const catalogClientPath = clientScriptMatch[1].split("?")[0].replace(/^\//, "");
 const catalogClient = await read(catalogClientPath);
 
 const checks = [
-  [page.includes('id="catalogShell"') && page.includes('id="songWorkspace"') && page.includes('id="songForm"') && page.includes('id="versionForm"'), "exposes the shared catalog upload structure and edit forms on /music-upload/"],
+  [page.includes('id="catalogShell"') && page.includes('id="workspace"') && page.includes('id="songWorkspace"') && page.includes('id="songForm"') && page.includes('id="versionForm"'), "exposes the shared catalog upload structure and edit forms on /music-upload/"],
   [page.includes('/song-catalog/song-catalog.css') && page.includes('/song-catalog/song-catalog.js'), "reuses the proven song catalog UI and client implementation"],
   [page.includes('/stats.js') && page.includes('/site-monitor.js') && page.includes('/accessibility.js'), "keeps site-level monitoring and accessibility bootstraps on /music-upload/"],
   [page.includes('/identity.js') && page.includes('/upload-progress.js?v=music-upload-runtime') && page.includes('/song-catalog/song-catalog.js?v=music-upload-runtime'), "keeps identity, cache-busted runtime, and client wiring"],

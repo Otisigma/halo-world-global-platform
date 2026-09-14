@@ -201,13 +201,14 @@ app.get("*", (req, res, next) => {
     return next();
   }
 
-  const directoryRouteFile = directoryRouteFiles.get(routePath);
-  if (directoryRouteFile && sendStaticCandidate(res, directoryRouteFile)) {
-    return;
-  }
-
-  if (routePath.endsWith("/") && sendStaticCandidate(res, path.join(relativePath, "index.html"))) {
-    return;
+  if (routePath.endsWith("/")) {
+    const directoryRouteFile = directoryRouteFiles.get(routePath);
+    if (directoryRouteFile && sendStaticCandidate(res, directoryRouteFile)) {
+      return;
+    }
+    if (sendStaticCandidate(res, path.join(relativePath, "index.html"))) {
+      return;
+    }
   }
 
   return next();

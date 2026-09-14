@@ -1,238 +1,157 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#191713">
-  <title>Halo Music Upload | HALO</title>
-  <meta name="description" content="Central HALO upload hub for music files, cover art, official links, video links, metadata, and Dreamweaver-ready routing feedback.">
-  <link rel="icon" href="/assets/halo-app-icon-192.png">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#f2ff62">
+  <meta name="description" content="A public HALO shop front for listening, buying, and sharing artist-controlled songs from the shared catalog.">
+  <meta property="og:title" content="HALO Shop — Listen, buy, and share.">
+  <meta property="og:description" content="Listen, buy, and share artist-controlled HALO songs from one public shop front.">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="HALO Music World">
+  <meta property="og:image" content="https://halo-world-global-platform.netlify.app/assets/releases/the-cold-is-lasting-longer.jpg">
+  <meta property="og:image:width" content="1024">
+  <meta property="og:image:height" content="1024">
+  <meta property="og:image:alt" content="The Cold Is Lasting Longer release artwork">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:image" content="https://halo-world-global-platform.netlify.app/assets/releases/the-cold-is-lasting-longer.jpg">
+  <meta name="twitter:image:alt" content="The Cold Is Lasting Longer release artwork">
+  <title>HALO Shop — Listen, Buy, and Share</title>
+  <link rel="icon" href="/assets/halo-app-icon-192.png" type="image/png">
+  <link rel="apple-touch-icon" href="/assets/halo-app-icon-180.png">
   <link rel="stylesheet" href="/accessibility.css">
   <link rel="stylesheet" href="/halo-brand.css">
-  <link rel="stylesheet" href="/music-upload/music-upload.css">
+  <link rel="stylesheet" href="/release-artwork.css">
+  <link rel="stylesheet" href="/music/music.css">
 </head>
-<body>
-  <header class="hub-header">
-    <a class="brand" href="/halo"><img src="/assets/halo-logo-mark.webp" alt="" aria-hidden="true"><span><strong>HALO</strong><small>Music Upload</small></span></a>
-    <nav aria-label="Upload pathways">
-      <a href="/upload-pipeline/">Pipeline</a>
-      <a href="/song-catalog/">Song Catalog</a>
-      <a href="/dreamweaver/">Dreamweaver</a>
-      <a href="/music/">Music Page</a>
+<body data-shop-path="/music-upload/">
+  <div class="grain" aria-hidden="true"></div>
+  <header class="site-header">
+    <a class="brand" href="/halo" aria-label="HALO home">
+      <img class="halo-brand-image" src="/assets/halo-logo-mark.webp" alt="">
+      <span><strong>HALO</strong><small>Music World</small></span>
+    </a>
+    <nav aria-label="Music catalog navigation">
+      <a href="/halo">World</a>
+      <a href="/dj-deck.html">DJ Deck</a>
+      <a href="/mixes/">HALO X Mixes</a>
+      <a href="/artists/">Artist Rooms</a>
+      <a href="/creators/">Creators</a>
+      <button class="share-catalog" id="shareCatalog" type="button">Share this shop</button>
     </nav>
-    <a class="primary-button" href="/upload-pipeline/">Open live pipeline</a>
   </header>
 
   <main>
-    <section class="hub-hero" aria-labelledby="pageTitle">
-      <div>
-        <p class="eyebrow">System Controller · central intake surface</p>
-        <h1 id="pageTitle">Halo Music Upload</h1>
-        <p>Bring music, cover art, official links, video links, and routing notes into one intake hub. HALO creates the master package, validates the handoff, and keeps Dreamweaver and downstream departments pointed at the same source of truth.</p>
+    <section class="masthead" aria-labelledby="catalogTitle">
+      <div class="masthead-copy">
+        <p class="kicker"><span>Public shop front</span><span id="releaseCount">Loading signals</span></p>
+        <h1 id="catalogTitle">Listen. Buy.<br><em>Share.</em></h1>
+        <p class="intro">Every signal. The HALO shop front keeps artist-controlled songs in one public surface for listening, support, and sharing—while the shared catalog remains the source of truth behind every release.</p>
       </div>
-      <div class="hero-status" aria-label="Pipeline feedback states">
-        <span class="stage-chip stage-uploaded">Received</span>
-        <span class="stage-chip stage-processing">Validated</span>
-        <span class="stage-chip stage-dreamweaver_in_progress">Built</span>
-        <span class="stage-chip stage-ready_for_radio">Routed</span>
-        <span class="stage-chip stage-needs_assets">Needs attention</span>
+      <div class="catalog-code" aria-label="Permanent HALO shop address">
+        <span>SHOP LINK</span>
+        <strong id="catalogAddress">halo.world/music-upload</strong>
+        <button id="copyCatalog" type="button">Copy address</button>
       </div>
     </section>
 
-    <section class="summary-strip" aria-label="Upload hub capabilities">
-      <article><span>Music</span><strong>Single · multi · folder</strong><small>Batch every file into a tracked package</small></article>
-      <article><span>Artwork</span><strong>Cover art intake</strong><small>Attach one shared image to the batch</small></article>
-      <article><span>Links</span><strong>Official + video</strong><small>Carry release context into routing notes</small></article>
-      <article><span>Handoff</span><strong>Dreamweaver + departments</strong><small>Prepare one package for every downstream team</small></article>
-    </section>
-
-    <section class="bridge-notice" aria-labelledby="bridgeNoticeTitle">
-      <div>
-        <p class="eyebrow">Bridge release · shared catalog now attached below</p>
-        <h2 id="bridgeNoticeTitle">Keep the live intake, then continue into the newer Song Catalog workspace.</h2>
-        <p>The original Music Upload controller stays live for compatibility. The shared artist-controlled Song Catalog upload surface is appended underneath so the newer experience is immediately visible on this route too.</p>
+    <section id="featuredRelease" class="featured-shell" data-featured-release-id="when-the-world-goes-dark" aria-live="polite">
+      <div class="featured-skeleton" aria-label="Loading featured release">
+        <span></span><span></span><span></span>
       </div>
-      <a class="primary-button" href="#sharedSongCatalog">Jump to the newer upload workspace</a>
     </section>
 
-    <section class="hub-shell">
-      <form class="intake-panel" id="musicUploadForm">
-        <div class="panel-heading">
-          <div><p class="eyebrow">Upload intake</p><h2>Build the master package once.</h2></div>
-          <button class="primary-button" type="submit" id="submitButton">Submit to Halo Music Pipeline</button>
-        </div>
-
-        <section class="controller-overview" aria-labelledby="controllerHeading">
-          <article class="controller-card runtime-card">
-            <div class="controller-card-heading">
-              <div><p class="eyebrow">Controller state</p><h3 id="controllerHeading">Live intake supervision</h3></div>
-              <span class="runtime-badge is-pending" id="runtimeStatusBadge">Checking runtime</span>
-            </div>
-            <p class="runtime-copy" id="runtimeStatusText">Verifying the shared upload runtime, progress surface, and unified handoff controls.</p>
-            <div class="runtime-alert" id="runtimeAlert" role="alert" hidden>
-              <div>
-                <strong>HALO upload controller is offline.</strong>
-                <p id="runtimeAlertText">The upload runtime is unavailable, so this intake surface cannot safely accept packages.</p>
-              </div>
-              <button class="quiet-button" type="button" id="runtimeRetryButton">Reinitialize controller</button>
-            </div>
-            <div class="controller-metrics" aria-label="Controller intake metrics">
-              <article><span>Queue</span><strong id="queueMetric">0 files ready</strong></article>
-              <article><span>Artwork</span><strong id="artworkMetric">Awaiting cover art</strong></article>
-              <article><span>Routing</span><strong id="routingMetric">2 departments selected</strong></article>
-              <article><span>Mode</span><strong id="intakeModeMetric">Metadata + source links</strong></article>
-            </div>
-          </article>
-
-          <article class="controller-card">
-            <div class="controller-card-heading">
-              <div><p class="eyebrow">Pipeline handoff</p><h3>Explicit stage control</h3></div>
-            </div>
-            <ol class="controller-stage-list" id="controllerStageTimeline" aria-live="polite">
-              <li class="controller-stage is-active" data-phase="runtime">
-                <span class="controller-stage-dot" aria-hidden="true"></span>
-                <div><strong>Runtime handshake</strong><small>HALO verifies the shared upload runtime and progress UI before submission can start.</small></div>
-              </li>
-              <li class="controller-stage" data-phase="package">
-                <span class="controller-stage-dot" aria-hidden="true"></span>
-                <div><strong>Package validation</strong><small>Metadata, rights, sale status, and route targets are assembled into one master package.</small></div>
-              </li>
-              <li class="controller-stage" data-phase="transfer">
-                <span class="controller-stage-dot" aria-hidden="true"></span>
-                <div><strong>Asset transfer</strong><small>Audio and artwork uploads go into tracked storage with visible live progress.</small></div>
-              </li>
-              <li class="controller-stage" data-phase="persistence">
-                <span class="controller-stage-dot" aria-hidden="true"></span>
-                <div><strong>Persistence lock</strong><small>HALO confirms the bytes are persisted before reporting the package as locked in.</small></div>
-              </li>
-              <li class="controller-stage" data-phase="handoff">
-                <span class="controller-stage-dot" aria-hidden="true"></span>
-                <div><strong>Pipeline handoff</strong><small>Dreamweaver and downstream departments refresh from the same master record.</small></div>
-              </li>
-            </ol>
-          </article>
-
-          <article class="controller-card">
-            <div class="controller-card-heading">
-              <div><p class="eyebrow">Downstream routing</p><h3>Who receives this package</h3></div>
-            </div>
-            <div class="handoff-preview" id="handoffPreview" aria-live="polite">
-              <span class="handoff-pill">Dreamweaver</span>
-              <span class="handoff-pill">Music Page</span>
-            </div>
-            <p class="handoff-copy" id="handoffStatus">HALO will create one master record, lock approved assets into storage, and expose the same package to every selected downstream surface.</p>
-          </article>
-        </section>
-
-        <div class="field-grid">
-          <section class="wide-field upload-panel" aria-labelledby="musicFilesHeading">
-            <div>
-              <span class="field-label" id="musicFilesHeading">Music files</span>
-              <strong>Upload one track, a batch, or a folder.</strong>
-              <p>Each selected audio file becomes its own tracked HALO intake package so Dreamweaver, radio, and the music page can receive a clear handoff.</p>
-            </div>
-            <div class="picker-grid">
-              <label class="file-picker"><span>Choose music files</span><input id="musicFiles" type="file" accept="audio/*,.mp3,.m4a,.aac,.ogg,.webm,.wav,.flac" multiple></label>
-              <label class="file-picker"><span>Choose folder</span><input id="musicFolder" type="file" accept="audio/*,.mp3,.m4a,.aac,.ogg,.webm,.wav,.flac" webkitdirectory directory multiple></label>
-            </div>
-            <div class="upload-progress-track" id="audioUploadTrack" hidden aria-hidden="true"><span class="upload-progress-fill"></span></div>
-            <p class="upload-progress-copy" id="audioUploadProgress" role="status">No music uploaded yet.</p>
-            <div class="file-list" id="musicQueue"><p class="file-list-empty">No audio files selected yet. Link-only intake is allowed if you provide title, artist, and source links.</p></div>
-          </section>
-
-          <section class="upload-panel" aria-labelledby="artworkHeading">
-            <div>
-              <span class="field-label" id="artworkHeading">Cover art</span>
-              <strong>Attach the artwork the package should follow.</strong>
-              <p>JPEG, PNG, or WebP · 20 MB maximum. Batch uploads reuse the same approved cover art across each generated package.</p>
-            </div>
-            <label class="file-picker"><span>Choose cover art</span><input id="artworkFile" type="file" accept="image/jpeg,image/png,image/webp,.jpg,.jpeg,.png,.webp"></label>
-            <div class="upload-progress-track" id="artworkUploadTrack" hidden aria-hidden="true"><span class="upload-progress-fill"></span></div>
-            <p class="upload-progress-copy" id="artworkUploadProgress" role="status">No artwork uploaded yet.</p>
-          </section>
-
-          <section class="status-panel" aria-labelledby="feedbackHeading">
-            <div><p class="eyebrow">Feedback loop</p><h3 id="feedbackHeading">What HALO tells the team</h3></div>
-            <ol class="feedback-list">
-              <li><strong>Received</strong><span>Master package created in the unified upload pipeline.</span></li>
-              <li><strong>Validated</strong><span>Metadata saved and reviewed for routing readiness.</span></li>
-              <li><strong>Built</strong><span>Audio and artwork uploads are assembled into the package.</span></li>
-              <li><strong>Routed</strong><span>Dreamweaver and department handoff views refresh from the same record.</span></li>
-            </ol>
-            <p class="status-message" id="formMessage" role="status">Sign in, add source material, and send the package through the intake hub.</p>
-          </section>
-
-          <label><span>Artist</span><input id="artistName" maxlength="120" required placeholder="HALO artist"></label>
-          <label><span>Song title</span><input id="title" maxlength="160" placeholder="Required for link-only intake; optional for batches"></label>
-          <label><span>Album / project</span><input id="albumTitle" maxlength="160" placeholder="Dreamweaver Show Vol. 1"></label>
-          <label><span>Primary genre</span><input id="genre" maxlength="80" placeholder="Afrobeats"></label>
-          <label><span>ISRC</span><input id="isrc" maxlength="24" placeholder="US-AAA-26-00001"></label>
-          <label><span>UPC</span><input id="upc" maxlength="24" placeholder="Optional release UPC"></label>
-          <label><span>Rights</span><select id="rightsStatus"><option value="needs_review">Needs review</option><option value="cleared">Cleared</option><option value="disputed">Disputed</option></select></label>
-          <label><span>Sale status</span><select id="saleStatus"><option value="for_sale">For sale</option><option value="coming_soon">Coming soon</option><option value="not_for_sale">Not for sale</option></select></label>
-          <div class="wide-field field-group">
-            <label for="officialLink">Official link</label>
-            <input id="officialLink" type="url" inputmode="url" placeholder="https://official-release-link.example">
-          </div>
-          <div class="wide-field field-group">
-            <label for="videoLinks">Video links</label>
-            <textarea id="videoLinks" maxlength="1600" rows="3" placeholder="One https:// link per line"></textarea>
-          </div>
-          <label class="check-label"><input id="explicitLyrics" type="checkbox"><span>Explicit lyrics</span></label>
-
-          <fieldset class="wide-field route-fieldset">
-            <legend>Department handoff</legend>
-            <label class="check-label"><input type="checkbox" name="routeTargets" value="Dreamweaver" checked><span>Dreamweaver</span></label>
-            <label class="check-label"><input type="checkbox" name="routeTargets" value="Music Page" checked><span>Music Page</span></label>
-            <label class="check-label"><input type="checkbox" name="routeTargets" value="Radio"><span>Radio</span></label>
-            <label class="check-label"><input type="checkbox" name="routeTargets" value="Listening Party"><span>Listening Party</span></label>
-            <label class="check-label"><input type="checkbox" name="routeTargets" value="Halo TV Stream"><span>Halo TV Stream</span></label>
-          </fieldset>
-
-          <label class="wide-field"><span>Notes and routing instructions</span><textarea id="notes" maxlength="2400" rows="6" placeholder="Tell Dreamweaver and downstream teams what this upload is for, what should happen next, and anything that still needs attention."></textarea></label>
-        </div>
-      </form>
-
-      <aside class="results-panel" aria-labelledby="resultsHeading">
-        <div class="panel-heading">
-          <div><p class="eyebrow">Live intake status</p><h2 id="resultsHeading">Package feedback</h2></div>
-          <a class="quiet-link" href="/song-catalog/">Open Song Catalog →</a>
-        </div>
-        <div class="results-list" id="resultsList">
-          <article class="result-card is-empty">
-            <strong>No packages submitted yet.</strong>
-            <p>Your built, locked, and routed feedback will appear here after each upload enters the pipeline.</p>
-          </article>
-        </div>
-      </aside>
-    </section>
-
-    <section class="shared-catalog-bridge" id="sharedSongCatalog" aria-labelledby="sharedCatalogTitle">
-      <div class="shared-catalog-bridge-heading">
+    <section class="chart-section" aria-labelledby="chartTitle">
+      <header class="chart-header">
         <div>
-          <p class="eyebrow">Shared runtime fallback</p>
-          <h2 id="sharedCatalogTitle">New Song Catalog upload workspace</h2>
-          <p id="sharedCatalogDescription">The shared catalog upload page is mounted below this legacy intake surface so artists can move straight into the newer rights-aware workflow while route and deploy changes continue to propagate.</p>
+          <p class="section-index">02 / The living chart</p>
+          <h2 id="chartTitle">Don’t just count it.<br><em>Enter the signal.</em></h2>
         </div>
-        <a class="quiet-link" href="/song-catalog/">Open in its own page →</a>
+        <div class="chart-intro">
+          <p>HALO ranks its own published releases using recent listening clicks, release-room opens, and release momentum. This is a transparent HALO activity chart—not an industry sales chart.</p>
+          <div class="chart-window"><span class="live-dot" aria-hidden="true"></span><strong>Rolling 7 days</strong><span>Compared with the previous 7</span></div>
+        </div>
+      </header>
+
+      <div class="chart-rooms" id="chartRooms" aria-label="Choose a chart room">
+        <button type="button" data-chart-room="all" aria-pressed="true">All signal</button>
+        <button type="button" data-chart-room="hip-hop">Hip-Hop / Rap</button>
+        <button type="button" data-chart-room="rnb">R&amp;B / Soul</button>
+        <button type="button" data-chart-room="dance">House / Dance</button>
+        <button type="button" data-chart-room="gospel">Gospel / Inspirational</button>
+        <button type="button" data-chart-room="global">Afrobeats / Global</button>
       </div>
-      <iframe
-        class="shared-catalog-frame"
-        id="sharedCatalogFrame"
-        src="/song-catalog/index.html?embed=music-upload"
-        title="Shared Song Catalog upload workspace"
-        aria-labelledby="sharedCatalogTitle"
-        aria-describedby="sharedCatalogDescription"
-        loading="eager"
-      ></iframe>
+
+      <div class="chart-sort-row" id="chartSortButtons" role="group" aria-label="Sort chart">
+        <button type="button" data-chart-sort="signal" aria-pressed="true">Signal score</button>
+        <button type="button" data-chart-sort="newest" aria-pressed="false">Newest</button>
+        <button type="button" data-chart-sort="listens" aria-pressed="false">Most listens</button>
+        <button type="button" data-chart-sort="opens" aria-pressed="false">Most opens</button>
+      </div>
+
+      <div class="chart-console">
+        <div class="chart-board" id="chartBoard" aria-live="polite">
+          <div class="chart-loading"><span></span><span></span><span></span></div>
+        </div>
+        <aside class="chart-stage" id="chartStage" aria-live="polite">
+          <div class="stage-empty">
+            <span class="stage-number">#</span>
+            <p>Select any chart position to open the artwork, story, movement, listening link, and available video without leaving the chart.</p>
+          </div>
+        </aside>
+      </div>
+    </section>
+
+    <section class="catalog-section" aria-labelledby="allReleasesTitle">
+      <header class="catalog-header">
+        <div>
+          <p class="section-index">03 / Full transmission</p>
+          <h2 id="allReleasesTitle">All releases</h2>
+        </div>
+        <div class="catalog-controls">
+          <label class="search-control">
+            <span>Search the catalog</span>
+            <input id="catalogSearch" type="search" placeholder="Title, artist, genre…" autocomplete="off">
+          </label>
+          <label class="sort-control">
+            <span>Sort by</span>
+            <select id="catalogSort">
+              <option value="newest">Newest first</option>
+              <option value="oldest">Oldest first</option>
+              <option value="az">Title A–Z</option>
+              <option value="za">Title Z–A</option>
+              <option value="artist">Artist A–Z</option>
+            </select>
+          </label>
+        </div>
+      </header>
+      <div class="genre-filter" id="genreFilter" aria-label="Filter releases by genre"></div>
+      <div class="release-grid" id="releaseGrid" aria-live="polite">
+        <article class="card-skeleton"></article>
+        <article class="card-skeleton"></article>
+        <article class="card-skeleton"></article>
+      </div>
+    </section>
+
+    <section class="dj-callout">
+      <p class="section-index">For selectors, stations and press</p>
+      <h2>Need the version behind the version?</h2>
+      <p>Each release has an audience-specific room for radio service, DJ delivery, press materials, and approved previews.</p>
+      <a href="/halo" data-stat-event="open_release_room" data-stat-target="music_catalog">Enter HALO World <span aria-hidden="true">↗</span></a>
     </section>
   </main>
 
-  <script src="/stats.js" defer></script>
+  <footer>
+    <span>HALO Music World</span>
+    <span>One catalog. Every release.</span>
+    <a href="/halo" aria-label="Return to HALO home">Return home ↗</a>
+  </footer>
+
+  <div class="toast" id="catalogToast" role="status" aria-live="polite"></div>
   <script src="/site-monitor.js" defer></script>
+  <script src="/stats.js" defer></script>
   <script src="/accessibility.js" defer></script>
-  <script type="module" src="/identity.js"></script>
-  <script src="/upload-progress.js?v=music-upload-runtime"></script>
-  <script type="module" src="/music-upload/music-upload.js?v=music-upload-runtime"></script>
+  <script src="/release-artwork.js"></script>
+  <script src="/music/music.js" defer></script>
 </body>
 </html>

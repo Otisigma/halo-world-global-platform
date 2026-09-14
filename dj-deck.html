@@ -2170,7 +2170,11 @@
         nextActionCopy: completedStages === normalizedStages.length
           ? "HALO AI can keep watching the launch handoff while the decks stay live."
           : currentStage.nextAction,
-        statusEcho: String(mixReleaseStatus || importStatus || stemVaultStatus || "").trim()
+        statusNote: (() => {
+          const raw = String(mixReleaseStatus || importStatus || stemVaultStatus || "").trim().replace(/\s+/g, " ");
+          if (!raw) return "";
+          return `Latest status: ${raw.replace(/[.!?]+$/, "")}.`;
+        })()
       };
     }
 
@@ -2215,7 +2219,7 @@
       elements.artistJourneyUploadCopy.textContent = model.uploadCopy;
       elements.artistJourneyNextActionTitle.textContent = model.nextActionTitle;
       elements.artistJourneyNextActionCopy.textContent = model.nextActionCopy;
-      elements.artistJourneyPulseCopy.textContent = model.statusEcho ? `${model.summary} ${model.statusEcho}` : model.summary;
+      elements.artistJourneyPulseCopy.textContent = model.statusNote ? `${model.summary} ${model.statusNote}` : model.summary;
       elements.artistJourneyStatusCards.innerHTML = model.stages.map(stage => `
         <article class="journey-status-card is-${stage.status}">
           <small>${escapeHTML(stage.label)}</small>
@@ -2254,7 +2258,7 @@
       };
       [elements.importStatus, elements.stemVaultStatus, elements.mixReleaseStatus, document.querySelector("#flightplanStatus")].filter(Boolean).forEach(node => {
         const observer = new MutationObserver(schedule);
-        observer.observe(node, { childList: true, subtree: true, characterData: true });
+        observer.observe(node, { childList: true });
         artistJourneyObservers.push(observer);
       });
       form?.addEventListener("input", schedule);

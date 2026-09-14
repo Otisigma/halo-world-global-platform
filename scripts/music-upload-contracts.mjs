@@ -50,9 +50,59 @@ function parseNetlifyToml(text) {
   const parseTomlValue = rawValue => {
     const value = stripInlineComment(rawValue).trim();
     if (!value) return "";
+    const splitTopLevel = (text, separator = ",") => {
+      const values = [];
+      let start = 0;
+      let depthSquare = 0;
+      let depthCurly = 0;
+      let quote = "";
+      let escaped = false;
+      for (let index = 0; index < text.length; index += 1) {
+        const char = text[index];
+        if (escaped) {
+          escaped = false;
+          continue;
+        }
+        if (char === "\\") {
+          escaped = true;
+          continue;
+        }
+        if (!quote && (char === '"' || char === "'")) {
+          quote = char;
+          continue;
+        }
+        if (quote && char === quote) {
+          quote = "";
+          continue;
+        }
+        if (quote) continue;
+        if (char === "[") depthSquare += 1;
+        if (char === "]") depthSquare = Math.max(0, depthSquare - 1);
+        if (char === "{") depthCurly += 1;
+        if (char === "}") depthCurly = Math.max(0, depthCurly - 1);
+        if (char === separator && depthSquare === 0 && depthCurly === 0) {
+          values.push(text.slice(start, index).trim());
+          start = index + 1;
+        }
+      }
+      values.push(text.slice(start).trim());
+      return values.filter(Boolean);
+    };
     if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
       const inner = value.slice(1, -1);
       return value.startsWith('"') ? inner.replace(/\\"/g, '"') : inner.replace(/\\'/g, "'");
+    }
+    if (value.startsWith("[") && value.endsWith("]")) {
+      return splitTopLevel(value.slice(1, -1)).map(part => parseTomlValue(part));
+    }
+    if (value.startsWith("{") && value.endsWith("}")) {
+      const entry = {};
+      for (const part of splitTopLevel(value.slice(1, -1))) {
+        const pair = part.match(/^([A-Za-z0-9_.-]+)\s*=\s*(.+)$/);
+        if (!pair) continue;
+        entry[pair[1]] = parseTomlValue(pair[2]);
+      }
+      return entry;
     }
     if (/^(true|false)$/i.test(value)) return value.toLowerCase() === "true";
     if (/^[+-]?\d+(\.\d+)?$/.test(value)) return Number(value);

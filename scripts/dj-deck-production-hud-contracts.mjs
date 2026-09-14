@@ -11,8 +11,63 @@ function extractFunctionSource(name) {
   assert.notEqual(start, -1, `Missing function ${name}`);
   const braceStart = deck.indexOf("{", start);
   let depth = 0;
+  let stringQuote = null;
+  let templateDepth = 0;
+  let inLineComment = false;
+  let inBlockComment = false;
   for (let index = braceStart; index < deck.length; index += 1) {
     const character = deck[index];
+    const next = deck[index + 1];
+    const previous = deck[index - 1];
+
+    if (inLineComment) {
+      if (character === "\n") inLineComment = false;
+      continue;
+    }
+    if (inBlockComment) {
+      if (previous === "*" && character === "/") inBlockComment = false;
+      continue;
+    }
+    if (!stringQuote && character === "/" && next === "/") {
+      inLineComment = true;
+      index += 1;
+      continue;
+    }
+    if (!stringQuote && character === "/" && next === "*") {
+      inBlockComment = true;
+      index += 1;
+      continue;
+    }
+    if (stringQuote) {
+      if (character === "\\" && stringQuote !== "`") {
+        index += 1;
+        continue;
+      }
+      if (stringQuote === "`") {
+        if (character === "`" && templateDepth === 0) {
+          stringQuote = null;
+          continue;
+        }
+        if (character === "$" && next === "{") {
+          templateDepth += 1;
+          depth += 1;
+          index += 1;
+          continue;
+        }
+        if (character === "}" && templateDepth > 0) {
+          templateDepth -= 1;
+          depth -= 1;
+          continue;
+        }
+      } else if (character === stringQuote && previous !== "\\") {
+        stringQuote = null;
+      }
+      continue;
+    }
+    if (character === "'" || character === "\"" || character === "`") {
+      stringQuote = character;
+      continue;
+    }
     if (character === "{") depth += 1;
     if (character === "}") {
       depth -= 1;
@@ -62,6 +117,7 @@ sandbox.setMaintenanceDockPanel(false);
 assert.equal(sandbox.elements.maintenanceDockPanel.hidden, true);
 assert.equal(sandbox.elements.maintenanceDock.attributes["aria-expanded"], "false");
 assert.equal(invoker.focused, true);
+assert.equal(sandbox.maintenanceDockInvoker, null);
 sandbox.showMaintenanceAlertsToast();
 assert.equal(sandbox.elements.maintenanceDockPanel.hidden, false);
 assert.deepEqual(sandbox.toastCalls.pop(), {

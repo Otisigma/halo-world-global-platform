@@ -1790,7 +1790,7 @@
     <footer class="footer"><span>HALO performance system · demo engine</span><nav class="footer-socials" aria-label="HALO social profiles"><a href="https://www.youtube.com/@halo-music-world" target="_blank" rel="noopener noreferrer">YouTube ↗</a><a href="https://www.tiktok.com/@halomusicworldhome" target="_blank" rel="noopener noreferrer">TikTok ↗</a></nav><div class="keyboard-hints"><span><kbd>Space</kbd> Play master</span><span><kbd>S</kbd> Sync tempo</span><span><kbd>F</kbd> Desk only</span></div></footer>
   </main>
 
-  <span class="visually-hidden" id="maintenanceDockHelp">Opens a toast with current booth, cloud revision, upload progress, and audio verification maintenance status.</span>
+  <span class="visually-hidden" id="maintenanceDockHelp">Opens a toast and detail panel with current booth, cloud revision, upload progress, and audio verification maintenance status.</span>
   <button class="maintenance-dock" id="maintenanceDock" type="button" aria-label="Show maintenance alerts" aria-describedby="maintenanceDockHelp"><span class="visually-hidden">Show </span><span>Maintenance alerts</span><strong id="maintenanceDockCount">10 alerts</strong></button>
   <section class="maintenance-dock-panel" id="maintenanceDockPanel" aria-label="Maintenance dock detail panel" hidden>
     <header>
@@ -3023,6 +3023,7 @@
         return;
       }
       if (maintenanceDockInvoker && typeof maintenanceDockInvoker.focus === "function") maintenanceDockInvoker.focus();
+      maintenanceDockInvoker = null;
     }
 
     function showCloudRevisionToast() {

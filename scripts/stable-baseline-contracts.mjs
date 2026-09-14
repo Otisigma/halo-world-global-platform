@@ -41,7 +41,7 @@ const baselineFiles = [
 const pageMarkers = {
   "index.html": ["HALO World — Private Access", "Unlock HALO", "admin role"],
   "halo.html": ["BUILD THE WORLD AROUND YOUR MUSIC", "Pass the Light", "Radio + DJ Release Room", "CREATOR WORLD"],
-  "dj-deck.html": ["Opportunity Exchange", "sessionSaveStatus", "openTrackPicker", "AI booth crew"],
+  "dj-deck.html": ["Opportunity Exchange", "sessionSaveStatus", "openTrackPicker", "AI booth crew", "Cloud revision", "Maintenance alerts", "/halo-companion.js"],
   "halo-live.html": ["HALO LIVE", "Copy this live room", "Open the DJ deck"],
   "halo-x.html": ["FOUNDERS CONTROL ROOM", "Activate access", "Who joined"],
   "vip_launchpad.html": ["VIP PRIVATE BETA", "ACTIVATE DJ HALO X ACCESS", "HALO LIVE"],

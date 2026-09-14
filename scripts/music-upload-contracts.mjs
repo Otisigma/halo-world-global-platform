@@ -6,9 +6,8 @@ import vm from "node:vm";
 const root = resolve(import.meta.dirname, "..");
 const read = path => readFile(resolve(root, path), "utf8");
 
-const [page, catalogClient, uploadHelper, routes, world, config, audioFn, artworkFn] = await Promise.all([
+const [page, uploadHelper, routes, world, config, audioFn, artworkFn] = await Promise.all([
   read("music-upload/index.html"),
-  read("song-catalog/song-catalog.js"),
   read("upload-progress.js"),
   read("lib/route-registry.js"),
   read("halo.html"),
@@ -16,9 +15,13 @@ const [page, catalogClient, uploadHelper, routes, world, config, audioFn, artwor
   read("netlify/functions/song-catalog-audio.ts"),
   read("netlify/functions/song-catalog-artwork.ts"),
 ]);
+const clientScriptMatch = page.match(/<script type="module" src="([^"]*song-catalog\/song-catalog\.js[^"]*)"><\/script>/);
+assert.ok(clientScriptMatch, "music-upload page must mount the shared song-catalog module client");
+const catalogClientPath = clientScriptMatch[1].split("?")[0].replace(/^\//, "");
+const catalogClient = await read(catalogClientPath);
 
 const checks = [
-  [page.includes("Catalog upload surface · one song every useful version") && page.includes("Upload every master, keep one catalog truth."), "positions /music-upload/ as the upload-facing catalog surface"],
+  [page.includes('id="catalogShell"') && page.includes('id="songWorkspace"') && page.includes('id="songForm"') && page.includes('id="versionForm"'), "exposes the shared catalog upload structure and edit forms on /music-upload/"],
   [page.includes('/song-catalog/song-catalog.css') && page.includes('/song-catalog/song-catalog.js'), "reuses the proven song catalog UI and client implementation"],
   [page.includes('/stats.js') && page.includes('/site-monitor.js') && page.includes('/accessibility.js'), "keeps site-level monitoring and accessibility bootstraps on /music-upload/"],
   [page.includes('/identity.js') && page.includes('/upload-progress.js?v=music-upload-runtime') && page.includes('/song-catalog/song-catalog.js?v=music-upload-runtime'), "keeps identity, cache-busted runtime, and client wiring"],

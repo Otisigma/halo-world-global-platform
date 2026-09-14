@@ -3676,6 +3676,9 @@
     }
 
     syncMaintenanceDockLabel();
+    if (window.MutationObserver && elements.maintenanceDockCount) {
+      new MutationObserver(syncMaintenanceDockLabel).observe(elements.maintenanceDockCount, { childList: true, characterData: true, subtree: true });
+    }
     elements.sessionRevisionButton?.addEventListener("click", showCloudRevisionToast);
     elements.maintenanceDock?.addEventListener("click", showMaintenanceAlertsToast);
 

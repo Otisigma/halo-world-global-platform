@@ -21,7 +21,7 @@ const checks = [
   [djDeck.includes('id="boothVideoUrlForm"') && djDeck.includes("loadBoothYouTube") && djDeck.includes("boothYouTubeId"), "loads YouTube links directly onto the DJ booth screen"],
   [djDeck.includes('id="boothVideoPresets"') && djDeck.includes("Ghost To Me") && djDeck.includes("HALO Music World 50+") && djDeck.includes("DJ HALO X Long Mix Videos"), "keeps the named booth-screen video preset selectors on the DJ deck"],
   [djDeck.includes('elements.sessionRevisionButton?.addEventListener("click"') && djDeck.includes("currentCloudRevisionLabel()") && djDeck.includes('showToast("Cloud revision"') && djDeck.includes('syncMaintenanceDockLabel()') && djDeck.includes('elements.maintenanceDock?.addEventListener("click"') && djDeck.includes('showToast("Maintenance alerts"'), "wires the new HUD dock actions into toast feedback"],
-  [djDeck.includes('aria-label="Show maintenance alerts"') && djDeck.includes(".maintenance-dock:focus-visible"), "keeps the maintenance dock keyboard-accessible and explicitly named"],
+  [djDeck.includes('aria-label="Show maintenance alerts"') && djDeck.includes(".maintenance-dock:focus-visible") && djDeck.includes("new MutationObserver(syncMaintenanceDockLabel)"), "keeps the maintenance dock keyboard-accessible and explicitly named"],
   [djDeck.includes("Clip format could not play") && djDeck.includes("extensionAllowed"), "reports local booth file and browser decode failures"],
   [mainStudio.includes("reportHaloTvHealth") && mainStudio.includes("Media check passed"), "reports HALO TV playback health to the site monitor"],
   [videoApi.includes('getStore("halo-video-gallery")') && videoApi.includes("MAX_UPLOAD_BYTES"), "stores uploaded media in Netlify Blobs with a bounded payload"],

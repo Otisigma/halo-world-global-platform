@@ -5798,10 +5798,11 @@
         ["INPUT", "TEXTAREA", "SELECT"].includes(activeElement?.tagName)
         || activeElement?.isContentEditable
       ) return;
-      if (elements.maintenanceDockPanel?.contains(activeElement)) return;
-      if (event.code === "Space") { event.preventDefault(); document.querySelector(".deck-a .play-button").click(); }
-      if (event.key.toLowerCase() === "s") syncDecks();
-      if (event.key.toLowerCase() === "f") elements.focusMode.click();
+      if (!elements.maintenanceDockPanel?.contains(activeElement)) {
+        if (event.code === "Space") { event.preventDefault(); document.querySelector(".deck-a .play-button").click(); }
+        if (event.key.toLowerCase() === "s") syncDecks();
+        if (event.key.toLowerCase() === "f") elements.focusMode.click();
+      }
     });
 
     document.addEventListener("input", scheduleSessionSave);

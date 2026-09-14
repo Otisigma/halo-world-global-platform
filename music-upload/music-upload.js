@@ -153,6 +153,18 @@ const elements = {
   handoffPreview: $("#handoffPreview"),
   handoffStatus: $("#handoffStatus"),
   sharedCatalogFrame: $("#sharedCatalogFrame"),
+  artistName: $("#artistName"),
+  title: $("#title"),
+  albumTitle: $("#albumTitle"),
+  genre: $("#genre"),
+  isrc: $("#isrc"),
+  upc: $("#upc"),
+  rightsStatus: $("#rightsStatus"),
+  saleStatus: $("#saleStatus"),
+  officialLink: $("#officialLink"),
+  videoLinks: $("#videoLinks"),
+  explicitLyrics: $("#explicitLyrics"),
+  notes: $("#notes"),
 };
 
 let audioUploadUi = null;
@@ -262,8 +274,8 @@ function renderHandoffPreview() {
 function renderIntakeMetrics() {
   const audioFiles = gatherAudioFiles();
   const artworkFile = elements.artworkFile.files?.[0] || null;
-  const officialLink = $("#officialLink").value.trim();
-  const videoLinks = $("#videoLinks").value.trim();
+  const officialLink = elements.officialLink.value.trim();
+  const videoLinks = elements.videoLinks.value.trim();
   const routeTargets = selectedRouteTargets();
   const intakeMode = audioFiles.length
     ? (officialLink || videoLinks ? "Audio + source links" : "Audio-led package")
@@ -377,15 +389,15 @@ function renderQueue() {
       <span>${escapeHtml(formatMb(file.size))}</span>
     </div>
   `).join("");
-  if (files.length === 1 && !$("#title").value.trim()) $("#title").value = files[0].name.replace(/\.[^.]+$/, "");
+  if (files.length === 1 && !elements.title.value.trim()) elements.title.value = files[0].name.replace(/\.[^.]+$/, "");
   renderIntakeMetrics();
 }
 
 function buildNotes(baseTitle, audioFile) {
-  const officialLink = $("#officialLink").value.trim();
-  const videoLinks = $("#videoLinks").value.trim();
+  const officialLink = elements.officialLink.value.trim();
+  const videoLinks = elements.videoLinks.value.trim();
   const routeTargets = selectedRouteTargets();
-  const operatorNotes = $("#notes").value.trim();
+  const operatorNotes = elements.notes.value.trim();
   const lines = [
     "Halo Music Upload intake",
     `Title context: ${baseTitle}`,
@@ -729,25 +741,25 @@ async function handleSubmit(event) {
   }
   const audioFiles = gatherAudioFiles();
   const artworkFile = elements.artworkFile.files?.[0] || null;
-  const artistName = $("#artistName").value.trim();
-  const title = $("#title").value.trim();
-  const albumTitle = $("#albumTitle").value.trim();
-  const genre = $("#genre").value.trim();
-  const isrc = $("#isrc").value.trim();
-  const upc = $("#upc").value.trim();
-  const rightsStatus = $("#rightsStatus").value;
-  const saleStatus = $("#saleStatus").value;
-  const explicitLyrics = $("#explicitLyrics").checked;
+  const artistName = elements.artistName.value.trim();
+  const title = elements.title.value.trim();
+  const albumTitle = elements.albumTitle.value.trim();
+  const genre = elements.genre.value.trim();
+  const isrc = elements.isrc.value.trim();
+  const upc = elements.upc.value.trim();
+  const rightsStatus = elements.rightsStatus.value;
+  const saleStatus = elements.saleStatus.value;
+  const explicitLyrics = elements.explicitLyrics.checked;
   try {
     if (!artistName) throw new Error("Add the artist name before submitting the intake package.");
     if (!audioFiles.length && !title) throw new Error("Add a song title when sending a link-only or metadata-only intake package.");
     if (!audioFiles.length) {
-      const officialLink = $("#officialLink").value.trim();
-      const videoLinks = normalizeHttpsList($("#videoLinks").value);
+      const officialLink = elements.officialLink.value.trim();
+      const videoLinks = normalizeHttpsList(elements.videoLinks.value);
       if (!officialLink && !videoLinks.length) throw new Error("Add music files, or provide an official link or video link so HALO has source material to route.");
     }
-    if ($("#officialLink").value.trim()) normalizeHttpsList($("#officialLink").value);
-    normalizeHttpsList($("#videoLinks").value);
+    if (elements.officialLink.value.trim()) normalizeHttpsList(elements.officialLink.value);
+    normalizeHttpsList(elements.videoLinks.value);
   } catch (error) {
     setMessage(error.message);
     return;

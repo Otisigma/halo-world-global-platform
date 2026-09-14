@@ -212,7 +212,7 @@
         <div>
           <p class="eyebrow">Shared runtime fallback</p>
           <h2 id="sharedCatalogTitle">New Song Catalog upload workspace</h2>
-          <p>The shared catalog upload page is mounted below this legacy intake surface so artists can move straight into the newer rights-aware workflow while route and deploy changes continue to propagate.</p>
+          <p id="sharedCatalogDescription">The shared catalog upload page is mounted below this legacy intake surface so artists can move straight into the newer rights-aware workflow while route and deploy changes continue to propagate.</p>
         </div>
         <a class="quiet-link" href="/song-catalog/">Open in its own page →</a>
       </div>
@@ -221,6 +221,8 @@
         id="sharedCatalogFrame"
         src="/song-catalog/index.html?embed=music-upload"
         title="Shared Song Catalog upload workspace"
+        aria-labelledby="sharedCatalogTitle"
+        aria-describedby="sharedCatalogDescription"
         loading="eager"
       ></iframe>
     </section>

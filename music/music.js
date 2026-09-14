@@ -611,7 +611,7 @@
           ${variants.length ? `<div class="merch-variants">${variants.map(variant => `<span class="merch-variant">${escapeHtml(variant)}</span>`).join("")}</div>` : ""}
           <p class="merch-description">${escapeHtml(product.fulfillment?.note || "")}</p>
           <div class="release-actions">
-            <a class="action buy" href="${escapeHtml(safeUrl(product.purchasePath, product.purchasePath))}" data-stat-event="open_payment" data-stat-target="${escapeHtml(product.slug)}">Shop merch <span aria-hidden="true">↗</span></a>
+            <a class="action buy" href="${escapeHtml(safeUrl(product.purchasePath, product.purchasePath))}" data-open-merch data-stat-target="${escapeHtml(product.slug)}">Shop merch <span aria-hidden="true">↗</span></a>
             ${product.associatedReleaseId ? `<button class="action tertiary" type="button" data-select-release="${escapeHtml(product.associatedReleaseId)}">Pair with song</button>` : ""}
           </div>
         </div>
@@ -624,6 +624,16 @@
     if (!elements.merchGrid || !elements.merchCount) return;
     elements.merchCount.textContent = "Merch unavailable";
     elements.merchGrid.innerHTML = `<div class="catalog-empty"><div><strong>Merch signal interrupted.</strong><p>${escapeHtml(message)}</p></div></div>`;
+  }
+
+  async function openMerchRoute(link) {
+    const href = safeUrl(link?.getAttribute("href") || "");
+    if (!href) return;
+    window.haloStats?.track("open_payment", {
+      target: link?.dataset.statTarget || link?.textContent?.trim().slice(0, 80) || "halo_merch"
+    });
+    await new Promise(resolve => window.setTimeout(resolve, 80));
+    window.location.assign(href);
   }
 
   function releaseActions(release, options = {}) {
@@ -851,6 +861,15 @@
     handleReleaseActionClick(event).catch(() => showToast("That song link could not be shared yet."));
   });
   elements.merchGrid?.addEventListener("click", event => {
+    const merchLink = event.target.closest("[data-open-merch]");
+    if (merchLink) {
+      event.preventDefault();
+      openMerchRoute(merchLink).catch(() => {
+        const href = safeUrl(merchLink.getAttribute("href") || "");
+        if (href) window.location.assign(href);
+      });
+      return;
+    }
     handleReleaseActionClick(event).catch(() => showToast("That song link could not be opened yet."));
   });
   elements.grid.addEventListener("click", event => {

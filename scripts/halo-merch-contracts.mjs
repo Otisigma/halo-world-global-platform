@@ -24,7 +24,8 @@ assert.match(page, /id="merchDisclosure"/, "music storefront must provide a merc
 assert.match(client, /\/api\/halo-merch/, "music client must load the merch API");
 assert.match(client, /purchasePath/, "music client must use HALO-routed merch checkout paths");
 assert.match(client, /associatedReleaseId/, "music client must connect merch products back to related releases");
-assert.match(client, /open_payment/, "music client must track merch checkout opens with the existing payment telemetry event");
+assert.match(client, /data-open-merch/, "music client must mark merch links for same-tab routed checkout");
+assert.match(client, /haloStats\?\.track\("open_payment"/, "music client must track merch checkout opens with the existing payment telemetry event");
 
 assert.match(styles, /\.merch-grid/, "music styles must define the merch grid");
 assert.match(styles, /\.merch-disclosure/, "music styles must define the merch disclosure panel");

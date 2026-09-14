@@ -141,7 +141,9 @@ const checks = [
 ];
 
 const failures = checks.filter(([passed]) => !passed);
+const passedCount = checks.length - failures.length;
 for (const [passed, description] of checks) console.log(`${passed ? "PASS" : "FAIL"}: ${description}`);
+console.log(`Music upload contracts: ${passedCount}/${checks.length} checks passed.`);
 assert.equal(
   failures.length,
   0,
@@ -188,4 +190,3 @@ assert.equal(
   assert.equal(track.hidden, true, "shared upload helper should hide progress track when upload returns to idle");
   assert.equal(track.attrs["aria-hidden"], "true", "shared upload helper should restore aria-hidden when upload returns to idle");
 }
-console.log(`Music upload contracts: ${checks.length}/${checks.length} checks passed.`);

@@ -1736,6 +1736,7 @@
       sessionRevisionButton: document.querySelector("#sessionRevisionButton"),
       maintenanceDock: document.querySelector("#maintenanceDock"),
       maintenanceDockCount: document.querySelector("#maintenanceDockCount"),
+      maintenanceDockHelp: document.querySelector("#maintenanceDockHelp"),
       toast: document.querySelector("#toast"),
       toastTitle: document.querySelector("#toastTitle"),
       toastMessage: document.querySelector("#toastMessage"),
@@ -2120,6 +2121,13 @@
       elements.boothVideoPlaceholder.hidden = false;
     }
 
+    function showBoothPlaceholderState(title, status) {
+      stopBoothVideo();
+      elements.boothClipTitle.textContent = title;
+      elements.boothClipStatus.textContent = status;
+      elements.boothVideoPlaceholder.hidden = false;
+    }
+
     function setBoothVideoInputStatus(message, isError = false) {
       elements.boothVideoInputStatus.textContent = message;
       elements.boothVideoInputStatus.classList.toggle("is-error", isError);
@@ -2153,12 +2161,9 @@
         playBoothVideo(preset);
         return;
       }
-      stopBoothVideo();
       activeBoothVideoId = preset.id;
       setBoothScreenMode("wave");
-      elements.boothClipTitle.textContent = preset.title;
-      elements.boothClipStatus.textContent = "Preset ready";
-      elements.boothVideoPlaceholder.hidden = false;
+      showBoothPlaceholderState(preset.title, "Preset ready");
       setBoothVideoInputStatus(preset.message || "Add a source below to continue.");
       syncBoothPresetButtons();
       showToast("Booth preset armed", preset.message || `${preset.title} is ready on the overhead screen.`);
@@ -2761,8 +2766,9 @@
     function syncMaintenanceDockLabel() {
       if (!elements.maintenanceDock) return;
       const count = elements.maintenanceDockCount?.textContent?.trim() || "10 alerts";
-      const label = `Show maintenance alerts. ${count} currently monitored.`;
-      elements.maintenanceDock.title = label;
+      const label = `${count} currently monitored.`;
+      elements.maintenanceDock.title = `Show maintenance alerts. ${label}`;
+      if (elements.maintenanceDockHelp) elements.maintenanceDockHelp.textContent = `Opens a toast with current booth, cloud revision, upload progress, and audio verification maintenance status. ${label}`;
     }
 
     function currentCloudRevisionLabel() {
@@ -2770,6 +2776,15 @@
       if (/^Cloud revision/i.test(sessionLabel)) return sessionLabel;
       const cloudLabel = elements.cloudStatus?.querySelector("span:last-child")?.textContent?.trim() || "Cloud ready";
       return `${cloudLabel} · awaiting first revision`;
+    }
+
+    function showCloudRevisionToast() {
+      showToast("Cloud revision", currentCloudRevisionLabel());
+    }
+
+    function showMaintenanceAlertsToast() {
+      syncMaintenanceDockLabel();
+      showToast("Maintenance alerts", `${elements.maintenanceDockCount?.textContent || "10 alerts"} watching booth video, cloud revision, upload progress, and audio verification.`);
     }
 
     function setStemVaultStatus(message, error = false) {
@@ -3656,13 +3671,8 @@
     }
 
     syncMaintenanceDockLabel();
-    elements.sessionRevisionButton?.addEventListener("click", () => {
-      showToast("Cloud revision", currentCloudRevisionLabel());
-    });
-    elements.maintenanceDock?.addEventListener("click", () => {
-      syncMaintenanceDockLabel();
-      showToast("Maintenance alerts", `${elements.maintenanceDockCount?.textContent || "10 alerts"} watching booth video, cloud revision, upload progress, and audio verification.`);
-    });
+    elements.sessionRevisionButton?.addEventListener("click", showCloudRevisionToast);
+    elements.maintenanceDock?.addEventListener("click", showMaintenanceAlertsToast);
 
     function updateDeck(deckId) {
       const state = deckState[deckId];

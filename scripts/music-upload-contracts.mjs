@@ -43,6 +43,7 @@ assert.match(musicClient, /availabilitySummary/, "shop client must render public
 assert.match(musicClient, /data-featured-heading/, "shop client must move focus to the updated spotlight heading for accessibility");
 assert.match(musicClient, /halo-song-catalog-command/, "shop client must bridge quick actions into the shared song catalog workspace");
 assert.match(musicClient, /shopCatalogFrame/, "shop client must manage the embedded shared catalog frame");
+assert.match(musicClient, /halo-song-catalog-ready/, "shop client must wait for the embedded catalog workspace to report ready before sending quick actions");
 
 assert.match(musicStyles, /\.shop-panel/, "shop styles must include the storefront detail layout");
 assert.match(musicStyles, /\.availability-note/, "shop styles must expose rights-aware availability messaging");

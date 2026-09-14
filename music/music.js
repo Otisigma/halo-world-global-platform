@@ -23,6 +23,8 @@
   const fallbackArtwork = window.HaloReleaseArtwork?.DEFAULT_RELEASE_ARTWORK || "/assets/halo-app-icon-512.png";
   const satelliteVideoFallbackEnabled = new URLSearchParams(window.location.search).get("satellite") === "music-video-fallback";
   const catalogWorkspaceMinHeight = 1800;
+  let catalogWorkspaceReady = false;
+  let pendingCatalogWorkspaceAction = "";
   let catalogWorkspaceLoadPromise = null;
   const chartRooms = {
     all: [],
@@ -90,8 +92,16 @@
   function handleCatalogWorkspaceMessage(event) {
     if (event.origin !== window.location.origin) return;
     if (event.source !== elements.workspaceFrame?.contentWindow) return;
-    if (!event.data || event.data.type !== "halo-song-catalog-height") return;
-    syncCatalogWorkspaceHeight(event.data.height);
+    if (!event.data) return;
+    if (event.data.type === "halo-song-catalog-ready") {
+      catalogWorkspaceReady = true;
+      if (pendingCatalogWorkspaceAction) {
+        sendCatalogWorkspaceCommand(pendingCatalogWorkspaceAction);
+        pendingCatalogWorkspaceAction = "";
+      }
+      return;
+    }
+    if (event.data.type === "halo-song-catalog-height") syncCatalogWorkspaceHeight(event.data.height);
   }
 
   function ensureCatalogWorkspaceLoaded() {
@@ -116,7 +126,10 @@
       };
       elements.workspaceFrame.addEventListener("load", markLoaded, { once: true });
       elements.workspaceFrame.addEventListener("error", markFailed, { once: true });
-      if (!elements.workspaceFrame.src) elements.workspaceFrame.src = catalogWorkspaceUrl();
+      if (!elements.workspaceFrame.src) {
+        catalogWorkspaceReady = false;
+        elements.workspaceFrame.src = catalogWorkspaceUrl();
+      }
     });
     return catalogWorkspaceLoadPromise;
   }
@@ -131,7 +144,11 @@
     elements.workspaceDisclosure.open = true;
     const loaded = await ensureCatalogWorkspaceLoaded();
     if (!loaded) return;
-    sendCatalogWorkspaceCommand(action);
+    pendingCatalogWorkspaceAction = action || "";
+    if (catalogWorkspaceReady && pendingCatalogWorkspaceAction) {
+      sendCatalogWorkspaceCommand(pendingCatalogWorkspaceAction);
+      pendingCatalogWorkspaceAction = "";
+    }
     elements.workspaceDisclosure.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 

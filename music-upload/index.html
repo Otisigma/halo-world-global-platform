@@ -24,7 +24,7 @@
   <link rel="stylesheet" href="/release-artwork.css">
   <link rel="stylesheet" href="/music/music.css">
 </head>
-<body data-shop-path="/music-upload/">
+<body data-shop-path="/music-upload/" data-shop-workspace="shared-catalog" data-catalog-workspace-path="/song-catalog/">
   <div class="grain" aria-hidden="true"></div>
   <header class="site-header">
     <a class="brand" href="/halo" aria-label="HALO home">
@@ -131,6 +131,27 @@
         <article class="card-skeleton"></article>
         <article class="card-skeleton"></article>
       </div>
+    </section>
+
+    <section class="workspace-section" aria-labelledby="workspaceTitle">
+      <details class="workspace-disclosure" id="catalogWorkspaceDisclosure">
+        <summary>
+          <div>
+            <p class="section-index">04 / Shared workspace</p>
+            <h2 id="workspaceTitle">Song catalog workspace</h2>
+          </div>
+          <p>Keep the shop public-first. Expand the shared workspace only when it is time to upload, route versions, or manage catalog details.</p>
+        </summary>
+        <div class="workspace-panel">
+          <p class="workspace-copy">This is the same shared <code>/song-catalog/</code> workspace that powers HALO song setup, uploads, version routing, and release review. It stays collapsed by default so the storefront remains the primary public experience.</p>
+          <div class="workspace-actions" role="group" aria-label="Catalog workspace quick actions">
+            <button class="action tertiary" type="button" data-open-catalog-intent="open_add_song">Add a song</button>
+            <button class="action tertiary" type="button" data-open-catalog-intent="import_existing">Load existing songs</button>
+            <a class="action secondary" href="/song-catalog/">Open full workspace</a>
+          </div>
+          <iframe id="shopCatalogFrame" class="workspace-frame" title="Shared HALO song catalog workspace" loading="lazy"></iframe>
+        </div>
+      </details>
     </section>
 
     <section class="dj-callout">

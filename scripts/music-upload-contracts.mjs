@@ -21,6 +21,9 @@ assert.match(routes, /directoryRoute\("HALO Shop", "\/music-upload\/", "music-up
 assert.match(uploadPage, /data-shop-path="\/music-upload\/"/, "music-upload entry page must preserve its public shop path for deep links");
 assert.match(uploadPage, /HALO Shop — Listen, Buy, and Share/, "music-upload entry page must serve the HALO shop storefront copy");
 assert.match(uploadPage, /music\/music\.js/, "music-upload entry page must reuse the shared shop runtime");
+assert.match(uploadPage, /data-shop-workspace="shared-catalog"/, "music-upload entry page must opt into the shared catalog workspace bridge");
+assert.match(uploadPage, /id="catalogWorkspaceDisclosure"/, "music-upload entry page must include a collapsed shared workspace section");
+assert.match(uploadPage, /id="shopCatalogFrame"/, "music-upload entry page must embed the shared song catalog frame");
 assert.doesNotMatch(uploadPage, /Halo Music Upload|sharedSongCatalog|musicUploadForm/, "legacy bridge shell markup must not remain in the music-upload entry file");
 
 assert.match(musicPage, /public HALO shop front/i, "shop page must describe the public storefront role");
@@ -38,6 +41,8 @@ assert.match(musicClient, /history\.replaceState/, "shop client must keep spotli
 assert.match(musicClient, /relatedReleases/, "shop client must expose related songs from the shared catalog feed");
 assert.match(musicClient, /availabilitySummary/, "shop client must render public-safe rights and availability messaging");
 assert.match(musicClient, /data-featured-heading/, "shop client must move focus to the updated spotlight heading for accessibility");
+assert.match(musicClient, /halo-song-catalog-command/, "shop client must bridge quick actions into the shared song catalog workspace");
+assert.match(musicClient, /shopCatalogFrame/, "shop client must manage the embedded shared catalog frame");
 
 assert.match(musicStyles, /\.shop-panel/, "shop styles must include the storefront detail layout");
 assert.match(musicStyles, /\.availability-note/, "shop styles must expose rights-aware availability messaging");

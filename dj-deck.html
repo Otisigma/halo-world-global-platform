@@ -1059,7 +1059,7 @@
       <div class="brand">
         <div class="brand-mark" aria-hidden="true">
           <img class="halo-brand-image" src="/assets/halo-logo-mark.webp" alt="">
-          <span class="brand-mark-letter">H</span>
+          <span class="brand-mark-letter" aria-hidden="true">H</span>
         </div>
         <div class="brand-copy"><span class="eyebrow">Live intelligence HALO</span><strong>HALO</strong></div>
       </div>
@@ -2143,7 +2143,6 @@
       const preset = BOOTH_VIDEO_PRESETS.find(item => item.id === presetId);
       if (!preset) return;
       if (preset.sourceType) {
-        boothVideos = [preset, ...boothVideos.filter(item => item.id !== preset.id)];
         playBoothVideo(preset);
         return;
       }

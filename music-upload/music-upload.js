@@ -533,10 +533,15 @@ async function confirmPersistedAsset(url, label) {
   });
   if (!getResponse.ok) throw new Error(`HALO could not confirm persisted ${label}. Please retry.`);
   const rangeHeader = getResponse.headers.get("content-range") || "";
+  const lengthHeader = Number(getResponse.headers.get("content-length") || "0");
   if (rangeHeader) {
     const total = Number(rangeHeader.split("/").pop() || "0");
     if (!Number.isFinite(total) || total < 1) throw new Error(`HALO could not confirm persisted ${label}. Please retry.`);
+    return;
   }
+  if (getResponse.status === 206 && Number.isFinite(lengthHeader) && lengthHeader > 0) return;
+  if (Number.isFinite(lengthHeader) && lengthHeader > 0) return;
+  throw new Error(`HALO could not confirm persisted ${label}. Please retry.`);
 }
 
 async function uploadArtwork(songId, file) {
@@ -579,6 +584,18 @@ async function uploadArtwork(songId, file) {
   if (!finalized.persisted || !finalized.lockedIn || !artworkUrl) throw new Error("HALO could not confirm cover art persistence. Please retry.");
   await confirmPersistedAsset(artworkUrl, "cover art");
   artworkUploadUi.success("Cover art locked into HALO storage.", true);
+  return artworkUrl;
+}
+
+async function reuseArtwork(targetSongId, sourceSongId, fileName) {
+  const reused = await apiJson("/api/song-catalog/artwork", {
+    action: "reuse_song_artwork",
+    songId: targetSongId,
+    sourceSongId,
+  });
+  const artworkUrl = reused.artwork_url || reused.artworkUrl;
+  if (!reused.persisted || !reused.lockedIn || !artworkUrl) throw new Error("HALO could not confirm cover art persistence. Please retry.");
+  artworkUploadUi.success(`${fileName} cover art linked into this package.`, true);
   return artworkUrl;
 }
 
@@ -632,7 +649,7 @@ async function loadCatalogSong(songId) {
   return (response.songs || []).find(song => song.id === songId) || null;
 }
 
-async function processPackage({ artistName, title, albumTitle, genre, isrc, upc, rightsStatus, saleStatus, explicitLyrics, artworkFile, file, position, total }) {
+async function processPackage({ artistName, title, albumTitle, genre, isrc, upc, rightsStatus, saleStatus, explicitLyrics, artworkFile, artworkSourceSongId = "", file, position, total }) {
   setControllerPhase("package", `Creating the master package for ${title} and validating metadata, rights, and route targets.`);
   const notes = buildNotes(title, file);
   const created = await apiJson("/api/unified-upload", {
@@ -677,7 +694,13 @@ async function processPackage({ artistName, title, albumTitle, genre, isrc, upc,
     await uploadAudio(created.songId, versionId, file, position, total);
   }
 
-  if (artworkFile) await uploadArtwork(created.songId, artworkFile);
+  let nextArtworkSourceSongId = artworkSourceSongId;
+  if (artworkFile && artworkSourceSongId) {
+    await reuseArtwork(created.songId, artworkSourceSongId, artworkFile.name);
+  } else if (artworkFile) {
+    await uploadArtwork(created.songId, artworkFile);
+    nextArtworkSourceSongId = created.songId;
+  }
   setControllerPhase("persistence", "HALO is confirming persisted bytes and storage lock-in before routing the package.");
   const finalStage = file && artworkFile ? "dreamweaver_in_progress" : "needs_assets";
   setControllerPhase(
@@ -713,6 +736,7 @@ async function processPackage({ artistName, title, albumTitle, genre, isrc, upc,
     nextStep: finalStage === "dreamweaver_in_progress"
       ? "Next: Dreamweaver now processes this locked package. You can close this page or upload another song."
       : "Next: Upload remaining assets. This package is saved; remove or replace files only if needed.",
+    artworkSourceSongId: nextArtworkSourceSongId,
   };
 }
 
@@ -786,6 +810,7 @@ async function handleSubmit(event) {
       file,
       title: audioFiles.length === 1 && title ? title : file.name.replace(/\.[^.]+$/, ""),
     })) : [{ file: null, title }];
+    let artworkSourceSongId = "";
 
     for (let index = 0; index < jobs.length; index += 1) {
       const job = jobs[index];
@@ -800,10 +825,12 @@ async function handleSubmit(event) {
         saleStatus,
         explicitLyrics,
         artworkFile,
+        artworkSourceSongId,
         file: job.file,
         position: index + 1,
         total: jobs.length,
       });
+      artworkSourceSongId = result.artworkSourceSongId || artworkSourceSongId;
       state.results = [result, ...state.results];
       renderResults();
     }

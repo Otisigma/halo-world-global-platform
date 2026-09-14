@@ -157,7 +157,7 @@ const checks = [
   {
     stage: "backend success response",
     source: "client",
-    description: "intake and staged backend API actions are present",
+    description: "intake and staged backend API actions are present, including shared artwork reuse for batch packages",
     signals: [
       "/api/unified-upload",
       "action: \"create_project\"",
@@ -167,6 +167,7 @@ const checks = [
       "/api/song-catalog/audio",
       "/api/song-catalog/artwork",
       "action: \"finalize_upload\"",
+      "action: \"reuse_song_artwork\"",
     ],
     diagnose: "Backend stage failed: create/advance/save/finalize API calls are incomplete in music-upload flow.",
   },

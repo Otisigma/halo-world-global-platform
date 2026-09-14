@@ -13,7 +13,9 @@
     address: document.querySelector("#catalogAddress"),
     copy: document.querySelector("#copyCatalog"),
     share: document.querySelector("#shareCatalog"),
-    toast: document.querySelector("#catalogToast")
+    toast: document.querySelector("#catalogToast"),
+    catalogWorkspace: document.querySelector("#catalogWorkspaceDetails"),
+    sharedCatalogFrame: document.querySelector("#sharedCatalogFrame")
   };
   const state = { releases: [], videos: [], query: "", genre: "all", sort: "newest", chartRoom: "all", chartSort: "signal", activeReleaseId: "", activeShopId: "" };
   const configuredFeaturedReleaseId = elements.featured?.dataset.featuredReleaseId?.trim() || "";
@@ -42,116 +44,146 @@
     } catch {
       return fallback;
     }
+  }
 
-    function shopPath() {
-      const configuredPath = document.body?.dataset.shopPath;
-      if (/^\/[a-z0-9-]+(?:\/[a-z0-9-]+)*\/$/i.test(configuredPath || "")) return configuredPath;
-      const normalizedPath = window.location.pathname.replace(/index\.html$/i, "");
-      return normalizedPath.startsWith("/music-upload") ? "/music-upload/" : "/music/";
+  function shopPath() {
+    const configuredPath = document.body?.dataset.shopPath;
+    if (/^\/[a-z0-9-]+(?:\/[a-z0-9-]+)*\/$/i.test(configuredPath || "")) return configuredPath;
+    const normalizedPath = window.location.pathname.replace(/index\.html$/i, "");
+    return normalizedPath.startsWith("/music-upload") ? "/music-upload/" : "/music/";
+  }
+
+  function money(cents, currency = "USD") {
+    if (cents == null || Number.isNaN(Number(cents))) return "";
+    const code = String(currency || "USD").toUpperCase();
+    try {
+      return new Intl.NumberFormat(undefined, { style: "currency", currency: code }).format(Number(cents) / 100);
+    } catch {
+      return `${code} ${(Number(cents) / 100).toFixed(2)}`;
     }
+  }
 
-    function money(cents, currency = "USD") {
-      if (cents == null || Number.isNaN(Number(cents))) return "";
-      const code = String(currency || "USD").toUpperCase();
-      try {
-        return new Intl.NumberFormat(undefined, { style: "currency", currency: code }).format(Number(cents) / 100);
-      } catch {
-        return `${code} ${(Number(cents) / 100).toFixed(2)}`;
-      }
-    }
+  function catalogState(release) {
+    return release?.catalog && typeof release.catalog === "object" ? release.catalog : {};
+  }
 
-    function catalogState(release) {
-      return release?.catalog && typeof release.catalog === "object" ? release.catalog : {};
-    }
-
-    function directAudioPreviewUrl(release) {
-      const candidate = safeUrl(release?.streamUrl || "");
-      if (!candidate) return "";
-      try {
-        const { pathname } = new URL(candidate);
-        return /\.(mp3|m4a|aac|ogg|wav|flac|webm)$/i.test(pathname) ? candidate : "";
-      } catch {
-        return "";
-      }
-    }
-
-    function availabilitySummary(release) {
-      const catalog = catalogState(release);
-      const rightsStatus = String(catalog.rightsStatus || "").toLowerCase();
-      const saleStatus = String(catalog.saleStatus || "").toLowerCase();
-      const metadataStatus = String(catalog.metadataStatus || "").toLowerCase();
-      if (rightsStatus === "cleared" && saleStatus === "for_sale" && release.purchaseUrl) {
-        return {
-          badge: "Artist-controlled release",
-          note: `Rights cleared in the shared song catalog${metadataStatus === "ready" ? " and marked release-ready" : ""}. Support opens through the artist-approved buy link.`
-        };
-      }
-      if (rightsStatus === "cleared" && saleStatus === "coming_soon") {
-        return {
-          badge: "Support opens soon",
-          note: "Public listening is open, while artist-controlled purchasing stays timed to the release window."
-        };
-      }
-      if (rightsStatus && rightsStatus !== "cleared") {
-        return {
-          badge: "Listening open · rights review active",
-          note: "Public listening can surface now, but product language stays rights-aware until ownership, samples, and splits are cleared."
-        };
-      }
-      if (saleStatus === "not_for_sale" || !release.purchaseUrl) {
-        return {
-          badge: "Listening-first release",
-          note: "This song is presented for public listening and sharing while direct purchase remains artist-controlled."
-        };
-      }
-      return {
-        badge: "Shared catalog source",
-        note: "This public release is sourced from HALO’s shared catalog and campaign system."
-      };
-    }
-
-    function buyActionLabel(release) {
-      const catalog = catalogState(release);
-      if (release.purchaseUrl && catalog.salePriceCents > 0) return `Buy / support · ${money(catalog.salePriceCents, catalog.currency)}`;
-      if (release.purchaseUrl) return "Buy / support";
-      if (release.streamUrl) return "Open stream";
+  function directAudioPreviewUrl(release) {
+    const candidate = safeUrl(release?.streamUrl || "");
+    if (!candidate) return "";
+    try {
+      const { pathname } = new URL(candidate);
+      return /\.(mp3|m4a|aac|ogg|wav|flac|webm)$/i.test(pathname) ? candidate : "";
+    } catch {
       return "";
     }
+  }
 
-    function shareUrlForRelease(release) {
-      const url = new URL(shopPath(), window.location.origin);
-      url.searchParams.set("song", release.id);
-      return url.toString();
+  function availabilitySummary(release) {
+    const catalog = catalogState(release);
+    const rightsStatus = String(catalog.rightsStatus || "").toLowerCase();
+    const saleStatus = String(catalog.saleStatus || "").toLowerCase();
+    const metadataStatus = String(catalog.metadataStatus || "").toLowerCase();
+    if (rightsStatus === "cleared" && saleStatus === "for_sale" && release.purchaseUrl) {
+      return {
+        badge: "Artist-controlled release",
+        note: `Rights cleared in the shared song catalog${metadataStatus === "ready" ? " and marked release-ready" : ""}. Support opens through the artist-approved buy link.`
+      };
     }
+    if (rightsStatus === "cleared" && saleStatus === "coming_soon") {
+      return {
+        badge: "Support opens soon",
+        note: "Public listening is open, while artist-controlled purchasing stays timed to the release window."
+      };
+    }
+    if (rightsStatus && rightsStatus !== "cleared") {
+      return {
+        badge: "Listening open · rights review active",
+        note: "Public listening can surface now, but product language stays rights-aware until ownership, samples, and splits are cleared."
+      };
+    }
+    if (saleStatus === "not_for_sale" || !release.purchaseUrl) {
+      return {
+        badge: "Listening-first release",
+        note: "This song is presented for public listening and sharing while direct purchase remains artist-controlled."
+      };
+    }
+    return {
+      badge: "Shared catalog source",
+      note: "This public release is sourced from HALO’s shared catalog and campaign system."
+    };
+  }
 
-    function updateShopUrl(release) {
-      if (!release?.id) return;
-      const currentUrl = new URL(window.location.href);
-      const url = new URL(window.location.href);
-      url.pathname = shopPath();
-      url.searchParams.set("song", release.id);
-      if (`${currentUrl.pathname}${currentUrl.search}` === `${url.pathname}${url.search}`) return;
-      window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
-    }
+  function buyActionLabel(release) {
+    const catalog = catalogState(release);
+    if (release.purchaseUrl && catalog.salePriceCents > 0) return `Buy / support · ${money(catalog.salePriceCents, catalog.currency)}`;
+    if (release.purchaseUrl) return "Buy / support";
+    if (release.streamUrl) return "Open stream";
+    return "";
+  }
 
-    function setHeadMeta(selector, content) {
-      const node = document.head.querySelector(selector);
-      if (node && content) node.setAttribute("content", content);
-    }
+  function shareUrlForRelease(release) {
+    const url = new URL(shopPath(), window.location.origin);
+    url.searchParams.set("song", release.id);
+    return url.toString();
+  }
 
-    function updateShopHead(release) {
-      if (!release) return;
-      const availability = availabilitySummary(release);
-      document.title = `${release.title} — ${release.artist} | HALO Shop`;
-      setHeadMeta('meta[name="description"]', release.pitch || availability.note);
-      setHeadMeta('meta[property="og:title"]', `${release.title} — ${release.artist} | HALO Shop`);
-      setHeadMeta('meta[property="og:description"]', release.pitch || availability.note);
-      setHeadMeta('meta[name="twitter:title"]', `${release.title} — ${release.artist} | HALO Shop`);
-      setHeadMeta('meta[name="twitter:description"]', release.pitch || availability.note);
-      const artwork = releaseArtwork(release);
-      setHeadMeta('meta[property="og:image"]', artwork.src);
-      setHeadMeta('meta[name="twitter:image"]', artwork.src);
-    }
+  function updateShopUrl(release) {
+    if (!release?.id) return;
+    const currentUrl = new URL(window.location.href);
+    const url = new URL(window.location.href);
+    url.pathname = shopPath();
+    url.searchParams.set("song", release.id);
+    if (`${currentUrl.pathname}${currentUrl.search}` === `${url.pathname}${url.search}`) return;
+    window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
+  }
+
+  function setHeadMeta(selector, content) {
+    const node = document.head.querySelector(selector);
+    if (node && content) node.setAttribute("content", content);
+  }
+
+  function updateShopHead(release) {
+    if (!release) return;
+    const availability = availabilitySummary(release);
+    document.title = `${release.title} — ${release.artist} | HALO Shop`;
+    setHeadMeta('meta[name="description"]', release.pitch || availability.note);
+    setHeadMeta('meta[property="og:title"]', `${release.title} — ${release.artist} | HALO Shop`);
+    setHeadMeta('meta[property="og:description"]', release.pitch || availability.note);
+    setHeadMeta('meta[name="twitter:title"]', `${release.title} — ${release.artist} | HALO Shop`);
+    setHeadMeta('meta[name="twitter:description"]', release.pitch || availability.note);
+    const artwork = releaseArtwork(release);
+    setHeadMeta('meta[property="og:image"]', artwork.src);
+    setHeadMeta('meta[name="twitter:image"]', artwork.src);
+  }
+
+  const CATALOG_FRAME_MIN_HEIGHT = 960;
+
+  function sharedCatalogFrameUrl() {
+    const url = new URL("/song-catalog/", window.location.origin);
+    url.searchParams.set("embed", "shop");
+    url.searchParams.set("parentOrigin", window.location.origin);
+    return url.toString();
+  }
+
+  function syncSharedCatalogFrameHeight(nextHeight) {
+    if (!elements.sharedCatalogFrame) return;
+    const safeHeight = Number(nextHeight);
+    if (!Number.isFinite(safeHeight) || safeHeight < 0) return;
+    elements.sharedCatalogFrame.style.height = `${Math.max(CATALOG_FRAME_MIN_HEIGHT, Math.ceil(safeHeight))}px`;
+  }
+
+  function handleSharedCatalogFrameMessage(event) {
+    if (event.origin !== window.location.origin) return;
+    if (!event.data || event.data.type !== "halo-song-catalog-height") return;
+    if (event.source !== elements.sharedCatalogFrame?.contentWindow) return;
+    syncSharedCatalogFrameHeight(event.data.height);
+  }
+
+  function loadSharedCatalogFrame() {
+    const frame = elements.sharedCatalogFrame;
+    if (!frame || frame.dataset.loaded === "true") return;
+    frame.src = frame.dataset.src || sharedCatalogFrameUrl();
+    frame.dataset.loaded = "true";
   }
 
   function releaseArtwork(release) {
@@ -727,6 +759,11 @@
   }
 
   elements.address.textContent = `${window.location.host}${shopPath().replace(/\/$/, "")}`;
+  window.addEventListener("message", handleSharedCatalogFrameMessage);
+  elements.catalogWorkspace?.addEventListener("toggle", () => {
+    if (elements.catalogWorkspace.open) loadSharedCatalogFrame();
+  });
+  if (elements.catalogWorkspace?.open) loadSharedCatalogFrame();
   elements.copy.addEventListener("click", copyCatalogAddress);
   elements.share.addEventListener("click", shareCatalog);
   elements.featured.addEventListener("click", event => {

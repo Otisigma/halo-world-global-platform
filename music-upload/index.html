@@ -139,6 +139,31 @@
       <p>Each release has an audience-specific room for radio service, DJ delivery, press materials, and approved previews.</p>
       <a href="/halo" data-stat-event="open_release_room" data-stat-target="music_catalog">Enter HALO World <span aria-hidden="true">↗</span></a>
     </section>
+
+    <section class="catalog-workspace-shell" aria-labelledby="catalogWorkspaceTitle">
+      <details class="catalog-workspace-details" id="catalogWorkspaceDetails">
+        <summary class="catalog-workspace-summary">
+          <span class="catalog-workspace-summary-copy">
+            <span class="section-index">04 / Shared workspace</span>
+            <strong id="catalogWorkspaceTitle">Song Catalog workspace</strong>
+            <span>Keep the shop tidy by default, then expand the shared <code>/song-catalog/</code> workspace for deeper browsing and management.</span>
+          </span>
+        </summary>
+        <div class="catalog-workspace-panel">
+          <p class="catalog-workspace-intro">Open the shared catalog below the public storefront without leaving the HALO shop flow.</p>
+          <a class="catalog-workspace-link" href="/song-catalog/">Open the full Song Catalog workspace <span aria-hidden="true">↗</span></a>
+          <iframe
+            id="sharedCatalogFrame"
+            class="shared-catalog-frame"
+            title="HALO shared song catalog workspace"
+            loading="lazy"
+            referrerpolicy="strict-origin-when-cross-origin"
+            sandbox="allow-same-origin allow-scripts allow-forms allow-modals"
+            data-src="/song-catalog/?embed=shop"
+          ></iframe>
+        </div>
+      </details>
+    </section>
   </main>
 
   <footer>

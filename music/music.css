@@ -302,6 +302,77 @@ h1 em { color: var(--acid); font-family: var(--serif); font-weight: 400; text-tr
 .dj-callout p:not(.section-index) { max-width: 680px; margin: 30px 0 0; font-size: 16px; line-height: 1.7; }
 .dj-callout a { display: inline-block; margin-top: 34px; padding-bottom: 4px; border-bottom: 2px solid var(--ink); text-decoration: none; font: 700 10px/1.6 var(--mono); letter-spacing: 0.12em; text-transform: uppercase; }
 
+.catalog-workspace-shell { padding: 0 0 90px; }
+.catalog-workspace-details { border: 1px solid var(--line); background: #0c0f0d; }
+.catalog-workspace-summary {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 24px;
+  padding: clamp(24px, 4vw, 34px);
+  cursor: pointer;
+  list-style: none;
+}
+.catalog-workspace-summary::-webkit-details-marker { display: none; }
+.catalog-workspace-summary::after {
+  content: "Expand workspace ↘";
+  flex: 0 0 auto;
+  color: var(--acid);
+  font: 500 9px/1 var(--mono);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.catalog-workspace-details[open] .catalog-workspace-summary::after { content: "Collapse workspace ↗"; }
+.catalog-workspace-summary-copy { display: grid; gap: 12px; max-width: 860px; }
+.catalog-workspace-summary-copy strong {
+  font-size: clamp(30px, 4vw, 56px);
+  line-height: 0.95;
+  letter-spacing: -0.05em;
+  text-transform: uppercase;
+}
+.catalog-workspace-summary-copy span:last-child,
+.catalog-workspace-intro {
+  color: #adb5ac;
+  font-size: 15px;
+  line-height: 1.7;
+}
+.catalog-workspace-summary-copy code {
+  color: var(--paper);
+  font-family: var(--mono);
+  font-size: 0.95em;
+}
+.catalog-workspace-panel {
+  display: grid;
+  gap: 20px;
+  padding: 0 clamp(24px, 4vw, 34px) clamp(24px, 4vw, 34px);
+  border-top: 1px solid var(--line);
+}
+.catalog-workspace-intro { margin: 0; padding-top: 24px; }
+.catalog-workspace-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  width: fit-content;
+  color: var(--paper);
+  text-decoration: none;
+  font: 700 10px/1.6 var(--mono);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.catalog-workspace-link:hover { color: var(--acid); }
+.shared-catalog-frame {
+  display: block;
+  width: 100%;
+  min-height: 960px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: #09090d;
+}
+.catalog-workspace-summary:focus-visible,
+.catalog-workspace-link:focus-visible {
+  outline: 3px solid var(--orange);
+  outline-offset: 4px;
+}
+
 footer { width: min(1480px, calc(100% - 48px)); margin: 0 auto; padding: 26px 0 36px; display: flex; justify-content: space-between; gap: 20px; border-top: 1px solid var(--line); color: #798178; font: 500 9px/1.5 var(--mono); letter-spacing: 0.1em; text-transform: uppercase; }
 footer a { text-decoration: none; color: var(--paper); }
 .toast { position: fixed; right: 22px; bottom: 22px; z-index: 30; max-width: min(360px, calc(100% - 44px)); padding: 15px 18px; color: var(--ink); background: var(--acid); font: 700 10px/1.5 var(--mono); transform: translateY(140%); transition: transform 0.3s cubic-bezier(.2,.8,.2,1); }
@@ -332,6 +403,7 @@ footer a { text-decoration: none; color: var(--paper); }
   .chart-stage { border-top: 1px solid var(--line); }
   .stage-card { grid-template-columns: minmax(280px, 0.85fr) minmax(0, 1.15fr); grid-template-rows: auto; }
   .release-card, .release-card:nth-child(5n + 1), .release-card:nth-child(5n + 4) { grid-column: span 6; }
+  .catalog-workspace-summary { flex-direction: column; }
 }
 @media (max-width: 680px) {
   .site-header, main, footer { width: min(100% - 28px, 1480px); }
@@ -367,6 +439,10 @@ footer a { text-decoration: none; color: var(--paper); }
   .search-control, .sort-control select { width: 100%; }
   .release-grid { gap: 14px; }
   .release-card, .release-card:nth-child(5n + 1), .release-card:nth-child(5n + 4), .card-skeleton { grid-column: 1 / -1; }
+  .catalog-workspace-shell { padding-bottom: 60px; }
+  .catalog-workspace-summary::after { content: "Expand ↘"; }
+  .catalog-workspace-details[open] .catalog-workspace-summary::after { content: "Collapse ↗"; }
+  .shared-catalog-frame { min-height: 720px; }
   .dj-callout { margin-bottom: 60px; }
   footer { flex-direction: column; }
 }

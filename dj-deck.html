@@ -2258,7 +2258,7 @@
       };
       [elements.importStatus, elements.stemVaultStatus, elements.mixReleaseStatus, document.querySelector("#flightplanStatus")].filter(Boolean).forEach(node => {
         const observer = new MutationObserver(schedule);
-        observer.observe(node, { childList: true });
+        observer.observe(node, { childList: true, characterData: true, subtree: true });
         artistJourneyObservers.push(observer);
       });
       form?.addEventListener("input", schedule);

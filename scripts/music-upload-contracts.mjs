@@ -5,7 +5,7 @@ import { resolve } from "node:path";
 const root = resolve(import.meta.dirname, "..");
 const read = path => readFile(resolve(root, path), "utf8");
 
-const [musicPage, musicClient, musicStyles, uploadEntry, home, routes, catalogApi, config] = await Promise.all([
+const [musicPage, musicClient, musicStyles, uploadPage, home, routes, catalogApi, config] = await Promise.all([
   read("music/index.html"),
   read("music/music.js"),
   read("music/music.css"),
@@ -16,11 +16,12 @@ const [musicPage, musicClient, musicStyles, uploadEntry, home, routes, catalogAp
   read("netlify.toml"),
 ]);
 
-assert.match(config, /from = "\/music-upload\/"[\s\S]*to = "\/music\/index\.html"/, "music-upload route must resolve to the shared public shop front");
-assert.match(routes, /directoryRoute\("HALO Shop", "\/music-upload\/", "music\/index\.html", \{ menuLabel: "HALO SHOP" \}\)/, "route registry must publish /music-upload/ as the HALO Shop alias");
-assert.match(uploadEntry, /http-equiv="refresh" content="0; url=\/music-upload\/"/, "direct music-upload index file must bounce to the canonical shop route");
-assert.match(uploadEntry, /window\.location\.replace\("\/music-upload\/"\)/, "direct music-upload index file must client-redirect to the canonical shop route");
-assert.doesNotMatch(uploadEntry, /Halo Music Upload|sharedSongCatalog|musicUploadForm/, "legacy bridge shell markup must not remain in the direct music-upload entry file");
+assert.match(config, /from = "\/music-upload\/"[\s\S]*to = "\/music-upload\/index\.html"/, "music-upload route must resolve to the HALO shop entry file");
+assert.match(routes, /directoryRoute\("HALO Shop", "\/music-upload\/", "music-upload\/index\.html", \{ menuLabel: "HALO SHOP" \}\)/, "route registry must publish /music-upload/ as the HALO Shop route");
+assert.match(uploadPage, /data-shop-path="\/music-upload\/"/, "music-upload entry page must preserve its public shop path for deep links");
+assert.match(uploadPage, /HALO Shop — Listen, Buy, and Share/, "music-upload entry page must serve the HALO shop storefront copy");
+assert.match(uploadPage, /music\/music\.js/, "music-upload entry page must reuse the shared shop runtime");
+assert.doesNotMatch(uploadPage, /Halo Music Upload|sharedSongCatalog|musicUploadForm/, "legacy bridge shell markup must not remain in the music-upload entry file");
 
 assert.match(musicPage, /public HALO shop front/i, "shop page must describe the public storefront role");
 assert.match(musicPage, /Listen\. Buy\.[\s\S]*Share\./, "shop page must headline listening, buying, and sharing");
@@ -30,10 +31,13 @@ assert.match(musicClient, /\/api\/release-catalog/, "shop client must load the s
 assert.match(musicClient, /release\.catalog/, "shop client must read shared song-catalog metadata from the release API");
 assert.match(musicClient, /navigator\.share/, "shop client must support native sharing when available");
 assert.match(musicClient, /clipboard\.writeText/, "shop client must support copy-link sharing");
+assert.match(musicClient, /dataset\.shopPath/, "shop client must read the page-level public route signal");
+assert.match(musicClient, /new URL\(shopPath\(\), window\.location\.origin\)/, "shop client must build canonical route URLs from the public shop path");
 assert.match(musicClient, /searchParams\.set\("song", release\.id\)/, "shop client must create per-song share URLs");
 assert.match(musicClient, /history\.replaceState/, "shop client must keep spotlighted songs deep-linkable");
 assert.match(musicClient, /relatedReleases/, "shop client must expose related songs from the shared catalog feed");
 assert.match(musicClient, /availabilitySummary/, "shop client must render public-safe rights and availability messaging");
+assert.match(musicClient, /data-featured-heading/, "shop client must move focus to the updated spotlight heading for accessibility");
 
 assert.match(musicStyles, /\.shop-panel/, "shop styles must include the storefront detail layout");
 assert.match(musicStyles, /\.availability-note/, "shop styles must expose rights-aware availability messaging");
@@ -45,7 +49,7 @@ assert.match(catalogApi, /halo_song_versions/, "release catalog API must reuse s
 assert.match(catalogApi, /catalog_song_id/, "release catalog API must expose shared catalog linkage");
 assert.match(catalogApi, /catalog_rights_status/, "release catalog API must expose rights-aware catalog status");
 assert.match(catalogApi, /catalog_sale_price_cents/, "release catalog API must expose catalog-driven support pricing");
-assert.match(catalogApi, /catalog_preview_version_count/, "release catalog API must expose preview/version availability derived from the shared catalog");
+assert.match(catalogApi, /catalog_sale_enabled_count/, "release catalog API must expose sale-enabled shared-version counts for storefront messaging");
 assert.match(catalogApi, /source: row\.catalog_song_id \? "song-catalog" : "release-catalog"/, "release catalog API must identify when storefront data came from the shared song catalog");
 
 assert.match(home, /href="\/music-upload\/"[\s\S]*HALO SHOP/, "HALO navigation must advertise the storefront instead of the old upload bridge");

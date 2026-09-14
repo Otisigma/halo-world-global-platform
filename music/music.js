@@ -44,7 +44,10 @@
     }
 
     function shopPath() {
-      return window.location.pathname.startsWith("/music-upload") ? "/music-upload/" : "/music/";
+      const configuredPath = document.body?.dataset.shopPath;
+      if (/^\/[a-z0-9-]+(?:\/[a-z0-9-]+)*\/$/i.test(configuredPath || "")) return configuredPath;
+      const normalizedPath = window.location.pathname.replace(/index\.html$/i, "");
+      return normalizedPath.startsWith("/music-upload") ? "/music-upload/" : "/music/";
     }
 
     function money(cents, currency = "USD") {
@@ -123,10 +126,12 @@
 
     function updateShopUrl(release) {
       if (!release?.id) return;
-      const url = new URL(window.location.href);
-      if (url.pathname !== shopPath()) return;
-      if (url.searchParams.get("song") === release.id) return;
+      const currentUrl = new URL(window.location.href);
+      const url = new URL(shopPath(), window.location.origin);
+      const satelliteFlag = currentUrl.searchParams.get("satellite");
+      if (satelliteFlag) url.searchParams.set("satellite", satelliteFlag);
       url.searchParams.set("song", release.id);
+      if (`${currentUrl.pathname}${currentUrl.search}` === `${url.pathname}${url.search}`) return;
       window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
     }
 
@@ -489,7 +494,7 @@
     const previewUrl = directAudioPreviewUrl(release);
     const related = relatedReleases(release);
     const versionCount = Number(catalog.versionCount || release.availableVersions?.length || 0);
-    const previewCount = Number(catalog.previewVersionCount || 0);
+    const saleEnabledCount = Number(catalog.saleEnabledVersionCount || 0);
     const availableVersions = (release.availableVersions || []).filter(Boolean).slice(0, 4);
     const artistContext = related.length
       ? `Related songs by ${release.artist} stay grouped here so the artist controls one public listening and support surface.`
@@ -503,7 +508,7 @@
         <dl class="shop-facts">
           <div><dt>Catalog source</dt><dd>${catalog.source === "song-catalog" ? "Shared song catalog" : "Published release campaign"}</dd></div>
           <div><dt>Versions mapped</dt><dd>${versionCount || "—"}</dd></div>
-          <div><dt>Public-ready versions</dt><dd>${previewCount || "—"}</dd></div>
+          <div><dt>Sale-enabled versions</dt><dd>${saleEnabledCount || "—"}</dd></div>
         </dl>
       </section>
       <section class="shop-artist-card" aria-label="Artist context and related songs">

@@ -51,7 +51,6 @@ function serializeRelease(row) {
       salePriceCents: row.catalog_sale_price_cents === null ? null : Number(row.catalog_sale_price_cents),
       currency: row.catalog_currency || "USD",
       versionCount: Number(row.catalog_version_count || 0),
-      previewVersionCount: Number(row.catalog_preview_version_count || 0),
       saleEnabledVersionCount: Number(row.catalog_sale_enabled_count || 0)
     },
     chartActivity: {
@@ -108,7 +107,6 @@ export default async function releaseCatalogHandler(request) {
         catalog.catalog_sale_price_cents,
         catalog.catalog_currency,
         catalog_versions.catalog_version_count,
-        catalog_versions.catalog_preview_version_count,
         catalog_versions.catalog_sale_enabled_count
       FROM halo_release_campaigns release
       LEFT JOIN LATERAL (
@@ -154,10 +152,6 @@ export default async function releaseCatalogHandler(request) {
       LEFT JOIN LATERAL (
         SELECT
           COUNT(*)::int AS catalog_version_count,
-          COUNT(*) FILTER (
-            WHERE version.audio_url <> ''
-              AND version.sale_enabled = TRUE
-          )::int AS catalog_preview_version_count,
           COUNT(*) FILTER (
             WHERE version.sale_enabled = TRUE
           )::int AS catalog_sale_enabled_count

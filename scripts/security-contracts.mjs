@@ -3,6 +3,7 @@ import aiDjHandler from "../netlify/functions/ai-dj.mjs";
 import resolveTrackHandler from "../netlify/functions/resolve-track.mjs";
 import releasePackHandler from "../netlify/functions/release-pack.mjs";
 import releaseCatalogHandler from "../netlify/functions/release-catalog.mjs";
+import haloMerchHandler from "../netlify/functions/halo-merch.mjs";
 import haloCompanionHandler from "../netlify/functions/halo-companion.mjs";
 
 async function expectStatus(handler, request, expectedStatus) {
@@ -14,6 +15,7 @@ async function expectStatus(handler, request, expectedStatus) {
 await expectStatus(aiDjHandler, new Request("https://halo.test/api/ai-dj", { method: "GET" }), 405);
 await expectStatus(releasePackHandler, new Request("https://halo.test/api/release-pack", { method: "DELETE" }), 405);
 await expectStatus(releaseCatalogHandler, new Request("https://halo.test/api/release-catalog", { method: "POST" }), 405);
+await expectStatus(haloMerchHandler, new Request("https://halo.test/api/halo-merch", { method: "POST" }), 405);
 await expectStatus(haloCompanionHandler, new Request("https://halo.test/api/halo-companion", { method: "GET" }), 405);
 
 await expectStatus(
@@ -58,4 +60,4 @@ try {
   globalThis.fetch = originalFetch;
 }
 
-console.log("HALO security contracts: 7/7 checks passed.");
+console.log("HALO security contracts: 8/8 checks passed.");

@@ -169,6 +169,43 @@ h1 em { color: var(--acid); font-family: var(--serif); font-weight: 400; text-tr
 .featured-skeleton span { background: linear-gradient(100deg, #111512 20%, #1b211c 40%, #111512 60%); background-size: 200% 100%; animation: shimmer 1.4s linear infinite; }
 .featured-skeleton span:first-child { grid-row: span 2; }
 
+.merch-section { padding: 0 0 130px; border-top: 1px solid var(--line); }
+.merch-header { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(320px, 0.8fr); gap: clamp(40px, 8vw, 130px); align-items: end; padding: 90px 0 44px; }
+.merch-header h2 { margin: 0; font-size: clamp(52px, 8vw, 118px); line-height: 0.82; letter-spacing: -0.07em; text-transform: uppercase; }
+.merch-header h2 em { color: var(--acid); font-family: var(--serif); font-weight: 400; text-transform: none; }
+.merch-intro > p { margin: 0; color: #aab2aa; font-size: 15px; line-height: 1.75; }
+.merch-window { display: flex; flex-wrap: wrap; align-items: center; gap: 9px 14px; margin-top: 28px; padding-top: 18px; border-top: 1px solid var(--line); font: 500 9px/1.4 var(--mono); letter-spacing: 0.08em; text-transform: uppercase; }
+.merch-window span:last-child { color: var(--muted); }
+.merch-grid { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 18px; }
+.merch-card { grid-column: span 6; display: grid; grid-template-columns: minmax(220px, 0.78fr) minmax(0, 1.22fr); min-width: 0; border: 1px solid var(--line); background: #0c0f0d; }
+.merch-card:first-child { grid-column: 1 / -1; }
+.merch-art { min-height: 270px; background: #202520; }
+.merch-art img { width: 100%; height: 100%; object-fit: cover; filter: saturate(0.82); }
+.merch-copy { display: flex; flex-direction: column; min-width: 0; padding: 24px; }
+.merch-eyebrow { margin: 0; color: var(--orange); font: 500 8px/1 var(--mono); letter-spacing: 0.14em; text-transform: uppercase; }
+.merch-heading { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 14px; margin-top: 16px; }
+.merch-heading h3 { margin: 0; font-size: clamp(28px, 3.4vw, 52px); line-height: 0.95; letter-spacing: -0.05em; text-transform: uppercase; }
+.merch-price { color: var(--acid); font: 700 11px/1.4 var(--mono); letter-spacing: 0.1em; text-transform: uppercase; }
+.merch-artist { margin: 12px 0 0; color: var(--paper); font: italic 400 22px/1 var(--serif); }
+.merch-description { margin: 18px 0 0; color: #aab2aa; font-size: 13px; line-height: 1.7; }
+.merch-badges, .merch-variants { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 18px; }
+.merch-badge, .merch-variant { min-height: 36px; display: inline-flex; align-items: center; padding: 0 14px; border: 1px solid var(--line); color: var(--paper); font: 500 8px/1 var(--mono); letter-spacing: 0.1em; text-transform: uppercase; }
+.merch-badge { background: rgba(242, 255, 98, 0.08); border-color: rgba(242, 255, 98, 0.22); }
+.merch-badge--muted { color: #b7bfb7; background: transparent; border-color: var(--line); }
+.merch-facts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin: 18px 0 0; }
+.merch-facts div { min-width: 0; padding-top: 12px; border-top: 1px solid var(--line); }
+.merch-facts dt { color: #6e766e; font: 500 7px/1.4 var(--mono); letter-spacing: 0.12em; text-transform: uppercase; }
+.merch-facts dd { margin: 8px 0 0; color: var(--paper); font-size: 13px; line-height: 1.55; }
+.merch-card .release-actions { margin-top: auto; padding-top: 26px; }
+.merch-card .action { border-color: var(--line); color: var(--paper); }
+.merch-card .action.buy { border-color: var(--acid); color: var(--acid); }
+.merch-card .action.tertiary:hover { background: rgba(242, 255, 98, 0.08); }
+.merch-skeleton { grid-column: span 4; min-height: 420px; border: 1px solid var(--line); background: linear-gradient(100deg, #0f1310 20%, #171c18 40%, #0f1310 60%); background-size: 200% 100%; animation: shimmer 1.4s linear infinite; }
+.merch-disclosure-shell { margin-top: 18px; }
+.merch-disclosure { display: grid; grid-template-columns: .38fr 1.62fr; gap: 22px; padding: 22px; border: 1px solid var(--line); background: rgba(242, 255, 98, 0.06); }
+.merch-disclosure span { color: var(--acid); font: 500 8px/1.2 var(--mono); letter-spacing: 0.14em; text-transform: uppercase; }
+.merch-disclosure p { margin: 0; color: #d9dfd9; font-size: 15px; line-height: 1.7; }
+
 .chart-section { padding: 0 0 130px; }
 .chart-header { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(300px, 0.8fr); gap: clamp(40px, 8vw, 130px); align-items: end; padding: 90px 0 44px; border-top: 1px solid var(--line); }
 .chart-header h2 { margin: 0; font-size: clamp(52px, 8vw, 118px); line-height: 0.82; letter-spacing: -0.07em; text-transform: uppercase; }
@@ -397,6 +434,11 @@ footer a { text-decoration: none; color: var(--paper); }
   .featured-release { grid-template-columns: 1fr; }
   .featured-art { min-height: 0; aspect-ratio: 1; }
   .shop-panel { grid-template-columns: 1fr; }
+  .merch-header { grid-template-columns: 1fr; }
+  .merch-card, .merch-card:first-child { grid-column: 1 / -1; grid-template-columns: 1fr; }
+  .merch-art { min-height: 0; aspect-ratio: 1; }
+  .merch-facts { grid-template-columns: 1fr; }
+  .merch-disclosure { grid-template-columns: 1fr; }
   .chart-header { grid-template-columns: 1fr; }
   .chart-console { grid-template-columns: 1fr; }
   .chart-board { border-right: 0; }
@@ -417,6 +459,14 @@ footer a { text-decoration: none; color: var(--paper); }
   .featured-copy h2 { font-size: clamp(45px, 14vw, 75px); }
   .shop-preview-card, .shop-artist-card { padding: 18px; }
   .shop-facts { grid-template-columns: 1fr; }
+  .merch-section { padding-bottom: 90px; }
+  .merch-header { padding: 70px 0 32px; }
+  .merch-header h2 { font-size: clamp(50px, 16vw, 82px); }
+  .merch-grid { gap: 14px; }
+  .merch-copy { padding: 22px 18px; }
+  .merch-heading { align-items: start; }
+  .merch-heading h3 { font-size: clamp(34px, 11vw, 54px); }
+  .merch-skeleton { grid-column: 1 / -1; }
   .chart-section { padding-bottom: 90px; }
   .chart-header { padding: 70px 0 32px; }
   .chart-header h2 { font-size: clamp(50px, 16vw, 82px); }

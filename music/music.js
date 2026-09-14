@@ -1,6 +1,9 @@
 (() => {
   const elements = {
     featured: document.querySelector("#featuredRelease"),
+    merchGrid: document.querySelector("#merchGrid"),
+    merchCount: document.querySelector("#merchCount"),
+    merchDisclosure: document.querySelector("#merchDisclosure"),
     grid: document.querySelector("#releaseGrid"),
     genres: document.querySelector("#genreFilter"),
     search: document.querySelector("#catalogSearch"),
@@ -17,7 +20,7 @@
     catalogWorkspace: document.querySelector("#catalogWorkspaceDetails"),
     sharedCatalogFrame: document.querySelector("#sharedCatalogFrame")
   };
-  const state = { releases: [], videos: [], query: "", genre: "all", sort: "newest", chartRoom: "all", chartSort: "signal", activeReleaseId: "", activeShopId: "" };
+  const state = { releases: [], merch: [], videos: [], query: "", genre: "all", sort: "newest", chartRoom: "all", chartSort: "signal", activeReleaseId: "", activeShopId: "" };
   const configuredFeaturedReleaseId = elements.featured?.dataset.featuredReleaseId?.trim() || "";
   const requestedReleaseId = new URLSearchParams(window.location.search).get("song")?.trim() || "";
   const fallbackArtwork = window.HaloReleaseArtwork?.DEFAULT_RELEASE_ARTWORK || "/assets/halo-app-icon-512.png";
@@ -60,6 +63,26 @@
       return new Intl.NumberFormat(undefined, { style: "currency", currency: code }).format(Number(cents) / 100);
     } catch {
       return `${code} ${(Number(cents) / 100).toFixed(2)}`;
+    }
+
+    function merchPriceLabel(product) {
+      if (!product) return "HALO merch";
+      if (product.startingPriceMinor > 0) return `From ${money(product.startingPriceMinor, product.currency)}`;
+      return "Pricing in HALO merch route";
+    }
+
+    function merchVariantLabels(product) {
+      return (product?.variants || [])
+        .map(variant => [variant.color, variant.size].filter(Boolean).join(" / ") || variant.label)
+        .filter(Boolean)
+        .slice(0, 4);
+    }
+
+    function renderMerchDisclosure(disclosure, note = "") {
+      if (!elements.merchDisclosure) return;
+      const label = disclosure?.label || "Affiliate + fulfilment note";
+      const copy = disclosure?.detailCopy || disclosure?.shortCopy || note || "HALO keeps the storefront voice public while fulfilment routing and affiliate handling stay behind the API.";
+      elements.merchDisclosure.innerHTML = `<div class="merch-disclosure"><span>${escapeHtml(label)}</span><p>${escapeHtml(copy)}</p></div>`;
     }
   }
 
@@ -559,6 +582,50 @@
     </div>`;
   }
 
+  function renderMerch() {
+    if (!elements.merchGrid || !elements.merchCount) return;
+    const products = Array.isArray(state.merch) ? state.merch : [];
+    elements.merchCount.textContent = `${products.length} ${products.length === 1 ? "merch route" : "merch routes"} live`;
+    if (!products.length) {
+      elements.merchGrid.innerHTML = `<div class="catalog-empty"><div><strong>Merch routing is warming up.</strong><p>The HALO storefront is ready for Printful-backed merch, but no public products are live yet.</p></div></div>`;
+      return;
+    }
+    elements.merchGrid.innerHTML = products.map(product => {
+      const variants = merchVariantLabels(product);
+      return `<article class="merch-card">
+        <div class="merch-art release-artwork-frame" data-artwork-frame><img class="release-artwork-image" src="${escapeHtml(safeUrl(product.imageUrl, fallbackArtwork))}" alt="${escapeHtml(`${product.title} HALO merch artwork`)}" loading="lazy" width="900" height="900" data-release-artwork data-artwork-fallback="${escapeHtml(fallbackArtwork)}"></div>
+        <div class="merch-copy">
+          <p class="merch-eyebrow">${escapeHtml(product.collectionLabel || "HALO merch")}</p>
+          <div class="merch-heading"><h3>${escapeHtml(product.title)}</h3><span class="merch-price">${escapeHtml(merchPriceLabel(product))}</span></div>
+          <p class="merch-artist">${escapeHtml(product.artistName || "HALO")}</p>
+          <p class="merch-description">${escapeHtml(product.description || "HALO merch route")}</p>
+          <div class="merch-badges">
+            <span class="merch-badge">${escapeHtml(product.badge || "HALO merch")}</span>
+            <span class="merch-badge merch-badge--muted">${escapeHtml(product.fulfillment?.providerLabel || "Printful fulfilment")}</span>
+          </div>
+          <dl class="merch-facts">
+            <div><dt>Related release</dt><dd>${escapeHtml(product.associatedReleaseTitle || "HALO shop")}</dd></div>
+            <div><dt>Dispatch</dt><dd>${escapeHtml(product.fulfillment?.dispatchWindow || "2–5 working days")}</dd></div>
+            <div><dt>Regions</dt><dd>${escapeHtml((product.fulfillment?.regions || []).join(" · ") || "UK + international")}</dd></div>
+          </dl>
+          ${variants.length ? `<div class="merch-variants">${variants.map(variant => `<span class="merch-variant">${escapeHtml(variant)}</span>`).join("")}</div>` : ""}
+          <p class="merch-description">${escapeHtml(product.fulfillment?.note || "")}</p>
+          <div class="release-actions">
+            <a class="action buy" href="${escapeHtml(safeUrl(product.purchasePath, product.purchasePath))}" target="_blank" rel="noopener" data-stat-event="open_payment" data-stat-target="${escapeHtml(product.slug)}">Shop merch <span aria-hidden="true">↗</span></a>
+            ${product.associatedReleaseId ? `<button class="action tertiary" type="button" data-select-release="${escapeHtml(product.associatedReleaseId)}">Pair with song</button>` : ""}
+          </div>
+        </div>
+      </article>`;
+    }).join("");
+    wireArtwork(elements.merchGrid);
+  }
+
+  function renderMerchError(message) {
+    if (!elements.merchGrid || !elements.merchCount) return;
+    elements.merchCount.textContent = "Merch unavailable";
+    elements.merchGrid.innerHTML = `<div class="catalog-empty"><div><strong>Merch signal interrupted.</strong><p>${escapeHtml(message)}</p></div></div>`;
+  }
+
   function releaseActions(release, options = {}) {
     const { includeCopy = false, includeSelect = false } = options;
     const listenHref = safeUrl(release.listenUrl);
@@ -699,6 +766,20 @@
     }
   }
 
+  async function loadMerch() {
+    try {
+      const response = await fetch("/api/halo-merch", { headers: { Accept: "application/json" } });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.message || "The merch catalog could not be loaded.");
+      state.merch = Array.isArray(data.products) ? data.products : [];
+      renderMerch();
+      renderMerchDisclosure(data.disclosure, data.note);
+    } catch (error) {
+      renderMerchError(error instanceof Error ? error.message : "The merch catalog could not be loaded.");
+      renderMerchDisclosure(null, "HALO keeps the merch lane branded even when the provider route is unavailable.");
+    }
+  }
+
   async function copyReleaseLink(releaseId) {
     const release = state.releases.find(item => item.id === releaseId);
     if (!release) return;
@@ -769,6 +850,9 @@
   elements.featured.addEventListener("click", event => {
     handleReleaseActionClick(event).catch(() => showToast("That song link could not be shared yet."));
   });
+  elements.merchGrid?.addEventListener("click", event => {
+    handleReleaseActionClick(event).catch(() => showToast("That song link could not be opened yet."));
+  });
   elements.grid.addEventListener("click", event => {
     handleReleaseActionClick(event).catch(() => showToast("That song link could not be shared yet."));
   });
@@ -808,4 +892,5 @@
     handleReleaseActionClick(event).catch(() => showToast("That song link could not be shared yet."));
   });
   loadCatalog();
+  loadMerch();
 })();

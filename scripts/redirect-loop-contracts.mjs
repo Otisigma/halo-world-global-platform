@@ -79,7 +79,7 @@ for (const { route, file } of directoryRoutes) {
     `${renderFilePath} alias redirect must be removed for canonical-only routing.`
   );
   if (renderedIndexRoutes.has(route)) {
-    assert.equal(canonicalRenderRule.to, legacyIndexFilePath, `${route} must keep index rendering enabled for monitored non-live pages.`);
+    assert.equal(canonicalRenderRule.to, renderFilePath, `${route} must keep its route-registry render target enabled for monitored non-live pages.`);
   }
 }
 

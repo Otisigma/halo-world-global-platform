@@ -200,7 +200,11 @@ function groupMerchRows(rows) {
       });
     }
   }
-  return [...products.values()].sort((left, right) => left.sortOrder - right.sortOrder || left.title.localeCompare(right.title));
+  return [...products.values()].sort((left, right) => (
+    left.sortOrder - right.sortOrder
+    || left.title.localeCompare(right.title)
+    || left.id.localeCompare(right.id)
+  ));
 }
 
 export function serializePublicMerchProduct(product) {

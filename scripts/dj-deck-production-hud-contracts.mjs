@@ -85,7 +85,10 @@ const sandbox = {
       attributes: {},
       setAttribute(name, value) { this.attributes[name] = value; }
     },
-    closeMaintenanceDockPanel: { focus() {} },
+    closeMaintenanceDockPanel: {
+      focused: false,
+      focus() { this.focused = true; }
+    },
     maintenanceDockCount: { textContent: "10 alerts" },
     maintenanceDockHelp: { textContent: "" }
   },
@@ -106,6 +109,8 @@ vm.runInContext([
 sandbox.setMaintenanceDockPanel(true);
 assert.equal(sandbox.elements.maintenanceDockPanel.hidden, false);
 assert.equal(sandbox.elements.maintenanceDock.attributes["aria-expanded"], "true");
+assert.equal(sandbox.elements.closeMaintenanceDockPanel.focused, true);
+sandbox.elements.closeMaintenanceDockPanel.focused = false;
 const invoker = { focused: false, focus() { this.focused = true; } };
 sandbox.setMaintenanceDockPanel(true, invoker);
 sandbox.setMaintenanceDockPanel(false);
@@ -129,7 +134,7 @@ const checks = [
   [ids(["telemetryHudCrowd", "telemetryHudRecommendation", "telemetryHudCloud", "telemetryHudPreflight"]), "adds an additive telemetry summary above the live crowd and AI modules"],
   [ids(["maintenanceDockPanel", "dockPanelTelemetry", "dockPanelRevision", "dockPanelTrackQr"]), "extends the existing floating maintenance dock with a detail panel and quick actions"],
   [hasAll(["function updateProductionHud()", "function setMaintenanceDockPanel(open, invoker = null, restoreFocus = true)", "function showMaintenanceAlertsToast()", "prepareRecommendedTransition", "syncTelemetry"]), "wires the additive HUD and floating dock panel into the existing DJ deck logic"],
-  [ids(["maintenanceDockHelp", "maintenanceDockPanelTitle", "closeMaintenanceDockPanel"]) && deck.includes("Opens a toast and detail panel"), "documents the additive dock panel with accessible help text and labeling"]
+  [ids(["maintenanceDockHelp", "maintenanceDockPanelTitle", "closeMaintenanceDockPanel"]) && deck.includes('role="dialog"') && deck.includes('aria-modal="false"') && deck.includes("Opens a toast and detail panel"), "documents the additive dock panel with accessible help text, focus target, and non-modal dialog semantics"]
 ];
 
 for (const [passed, description] of checks) console.log(`${passed ? "PASS" : "FAIL"}: ${description}`);

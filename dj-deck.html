@@ -1792,7 +1792,7 @@
 
   <span class="visually-hidden" id="maintenanceDockHelp">Opens a toast and detail panel with current booth, cloud revision, upload progress, and audio verification maintenance status.</span>
   <button class="maintenance-dock" id="maintenanceDock" type="button" aria-label="Show maintenance alerts" aria-describedby="maintenanceDockHelp"><span class="visually-hidden">Show </span><span>Maintenance alerts</span><strong id="maintenanceDockCount">10 alerts</strong></button>
-  <section class="maintenance-dock-panel" id="maintenanceDockPanel" aria-labelledby="maintenanceDockPanelTitle" hidden>
+  <section class="maintenance-dock-panel" id="maintenanceDockPanel" role="dialog" aria-modal="false" aria-labelledby="maintenanceDockPanelTitle" hidden>
     <header>
       <div><p class="eyebrow">Floating dock detail</p><h3 id="maintenanceDockPanelTitle">Maintenance + cloud</h3><p>Open the existing maintenance dock without losing the toast feedback already wired into the page.</p></div>
       <button class="dock-panel-close" id="closeMaintenanceDockPanel" type="button" aria-label="Close maintenance dock panel">×</button>
@@ -3013,7 +3013,15 @@
       if (open && invoker && typeof invoker.focus === "function") maintenanceDockInvoker = invoker;
       elements.maintenanceDockPanel.hidden = !open;
       elements.maintenanceDock?.setAttribute("aria-expanded", String(open));
-      if (open) return updateProductionHud();
+      if (open) {
+        updateProductionHud();
+        if (elements.closeMaintenanceDockPanel && typeof requestAnimationFrame === "function") {
+          requestAnimationFrame(() => elements.closeMaintenanceDockPanel.focus());
+        } else if (elements.closeMaintenanceDockPanel?.focus) {
+          elements.closeMaintenanceDockPanel.focus();
+        }
+        return;
+      }
       if (restoreFocus && maintenanceDockInvoker && typeof maintenanceDockInvoker.focus === "function") maintenanceDockInvoker.focus();
       maintenanceDockInvoker = null;
     }
@@ -5785,7 +5793,12 @@
         setMaintenanceDockPanel(false);
         return;
       }
-      if (["INPUT", "TEXTAREA"].includes(document.activeElement.tagName)) return;
+      const activeElement = document.activeElement;
+      if (
+        elements.maintenanceDockPanel?.contains(activeElement)
+        || ["INPUT", "TEXTAREA", "SELECT", "BUTTON", "A"].includes(activeElement?.tagName)
+        || activeElement?.isContentEditable
+      ) return;
       if (event.code === "Space") { event.preventDefault(); document.querySelector(".deck-a .play-button").click(); }
       if (event.key.toLowerCase() === "s") syncDecks();
       if (event.key.toLowerCase() === "f") elements.focusMode.click();

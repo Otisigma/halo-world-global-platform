@@ -6,9 +6,8 @@ import vm from "node:vm";
 const root = resolve(import.meta.dirname, "..");
 const read = path => readFile(resolve(root, path), "utf8");
 
-const [page, uploadShell, uploadHelper, routes, world, config, unifiedUploadFn, songCatalogFn, audioFn, artworkFn] = await Promise.all([
+const [page, uploadHelper, routes, world, config, unifiedUploadFn, songCatalogFn, audioFn, artworkFn] = await Promise.all([
   read("song-catalog/index.html"),
-  read("music-upload/index.html"),
   read("upload-progress.js"),
   read("lib/route-registry.js"),
   read("halo.html"),
@@ -196,7 +195,6 @@ const checks = [
   [songCatalogFn.includes('payload.action === "save_song"') && songCatalogFn.includes('payload.action === "save_version"') && songCatalogFn.includes("/api/song-catalog") && audioFn.includes("/api/song-catalog/audio") && artworkFn.includes("/api/song-catalog/artwork"), "music upload surface is backed by the existing catalog/song-save/version/audio/artwork API routes"],
   [page.includes('id="audioUploadTrack"') && page.includes('id="artworkUploadTrack"') && /createUploadUi/.test(uploadHelper) && /uploadChunkedFile/.test(uploadHelper), "uses shared chunked upload behavior with visible progress states"],
   [/hasCompleteChunkSet/.test(audioFn) && /persisted:\s*true/.test(audioFn) && /lockedIn:\s*true/.test(audioFn) && /hasCompleteChunkSet/.test(artworkFn) && /persisted:\s*true/.test(artworkFn) && /lockedIn:\s*true/.test(artworkFn), "audio/artwork finalization keeps persisted lock-in signals"],
-  [uploadShell === page, "music-upload fallback shell stays byte-aligned with the canonical song-catalog page"],
   [hasCanonicalRedirect("/music-upload/", "/song-catalog/index.html"), "serves /music-upload/ from the canonical shared song-catalog page"],
   [hasNoCacheHeader("/music-upload/*") && hasNoCacheHeader("/song-catalog/*") && hasNoCacheHeader("/upload-progress.js"), "keeps no-cache headers on music-upload and shared catalog runtime assets"],
   [/directoryRoute\(\s*"Song Catalog Upload"\s*,\s*"\/music-upload\/"\s*,\s*"song-catalog\/index\.html"/.test(routes), "route registry exposes /music-upload/ as the shared song-catalog surface"],

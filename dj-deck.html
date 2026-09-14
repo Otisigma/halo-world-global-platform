@@ -278,9 +278,12 @@
     .rack-button[data-rack-cue="A"] { border-top-color: var(--blue); }
     .rack-button[data-rack-cue="B"] { border-top-color: var(--orange); }
     .clip-presets, .clip-buttons { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+    .clip-presets { max-height: 132px; overflow: auto; align-content: start; }
     .clip-buttons { max-height: 116px; overflow: auto; }
     .clip-button { min-height: 48px; }
     .clip-button strong, .clip-button span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .clip-presets .clip-button { min-height: 56px; align-content: center; }
+    .clip-presets .clip-button strong, .clip-presets .clip-button span { white-space: normal; }
     .clip-button span { margin-top: 4px; color: var(--muted); font-size: 7px; }
     .clip-button.is-active span { color: var(--acid); opacity: .72; }
     .video-load-button { position: relative; display: grid; min-height: 42px; place-items: center; border: 1px dashed var(--line-strong); color: var(--muted); cursor: pointer; font: 500 8px "DM Mono", monospace; letter-spacing: .08em; text-transform: uppercase; }
@@ -1673,7 +1676,7 @@
     <footer class="footer"><span>HALO performance system · demo engine</span><nav class="footer-socials" aria-label="HALO social profiles"><a href="https://www.youtube.com/@halo-music-world" target="_blank" rel="noopener noreferrer">YouTube ↗</a><a href="https://www.tiktok.com/@halomusicworldhome" target="_blank" rel="noopener noreferrer">TikTok ↗</a></nav><div class="keyboard-hints"><span><kbd>Space</kbd> Play master</span><span><kbd>S</kbd> Sync tempo</span><span><kbd>F</kbd> Desk only</span></div></footer>
   </main>
 
-  <button class="maintenance-dock" id="maintenanceDock" type="button"><span class="visually-hidden">Show </span><span>Maintenance alerts</span><strong id="maintenanceDockCount">10 alerts</strong></button>
+  <button class="maintenance-dock" id="maintenanceDock" type="button" aria-label="Show maintenance alerts. 10 alerts currently monitored."><span class="visually-hidden">Show </span><span>Maintenance alerts</span><strong id="maintenanceDockCount">10 alerts</strong></button>
   <div class="toast" id="toast" role="status" aria-live="polite"><strong id="toastTitle">System</strong><p id="toastMessage">Ready.</p></div>
 
   <script src="/upload-progress.js"></script>

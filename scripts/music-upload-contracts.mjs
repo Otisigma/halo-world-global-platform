@@ -26,6 +26,7 @@ function parseNetlifyToml(text) {
   const redirects = [];
   let section = null;
   let current = null;
+  let nestedTable = "";
   for (const rawLine of text.split("\n")) {
     const line = rawLine.trim();
     if (!line || line.startsWith("#")) continue;
@@ -33,12 +34,18 @@ function parseNetlifyToml(text) {
       section = "headers";
       current = {};
       headers.push(current);
+      nestedTable = "";
       continue;
     }
     if (line === "[[redirects]]") {
       section = "redirects";
       current = {};
       redirects.push(current);
+      nestedTable = "";
+      continue;
+    }
+    if (line.startsWith("[") && line.endsWith("]")) {
+      nestedTable = line.slice(1, -1);
       continue;
     }
     if (!section || !current) continue;
@@ -46,7 +53,12 @@ function parseNetlifyToml(text) {
     if (!match) continue;
     const [, key, rawValue] = match;
     const value = rawValue.replace(/^"(.*)"$/, "$1");
-    current[key] = value;
+    if (nestedTable === "headers.values") {
+      current.values ||= {};
+      current.values[key] = value;
+    } else {
+      current[key] = value;
+    }
   }
   return { headers, redirects };
 }
@@ -55,7 +67,8 @@ const hasNoCacheHeader = routePath =>
   netlifyConfig.headers.some(
     item =>
       item.for === routePath &&
-      item["Cache-Control"] === "no-cache, no-store, must-revalidate"
+      (item.values?.["Cache-Control"] === "no-cache, no-store, must-revalidate" ||
+        item["Cache-Control"] === "no-cache, no-store, must-revalidate")
   );
 const hasCanonicalRedirect = (from, to) =>
   netlifyConfig.redirects.some(

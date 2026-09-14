@@ -86,9 +86,7 @@ function parseNetlifyToml(text) {
         nestedTable = tableName;
         continue;
       }
-      section = null;
-      current = null;
-      nestedTable = "";
+      nestedTable = "__ignore__";
       continue;
     }
     if (!section || !current) continue;
@@ -96,6 +94,7 @@ function parseNetlifyToml(text) {
     if (!match) continue;
     const [, key, rawValue] = match;
     const value = parseTomlValue(rawValue);
+    if (nestedTable === "__ignore__") continue;
     if (nestedTable === "headers.values") {
       current.values ||= {};
       current.values[key] = value;

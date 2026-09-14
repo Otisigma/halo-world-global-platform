@@ -3010,7 +3010,7 @@
 
     function setMaintenanceDockPanel(open, invoker = null, restoreFocus = true) {
       if (!elements.maintenanceDockPanel) return;
-      if (open && invoker && typeof invoker.focus === "function") maintenanceDockInvoker = invoker;
+      if (open) maintenanceDockInvoker = invoker && typeof invoker.focus === "function" ? invoker : null;
       elements.maintenanceDockPanel.hidden = !open;
       elements.maintenanceDock?.setAttribute("aria-expanded", String(open));
       if (open) {
@@ -5794,9 +5794,9 @@
         return;
       }
       const activeElement = document.activeElement;
+      if (elements.maintenanceDockPanel?.contains(activeElement) && event.key.toLowerCase() !== "f") return;
       if (
-        elements.maintenanceDockPanel?.contains(activeElement)
-        || ["INPUT", "TEXTAREA", "SELECT"].includes(activeElement?.tagName)
+        ["INPUT", "TEXTAREA", "SELECT"].includes(activeElement?.tagName)
         || activeElement?.isContentEditable
       ) return;
       if (event.code === "Space") { event.preventDefault(); document.querySelector(".deck-a .play-button").click(); }

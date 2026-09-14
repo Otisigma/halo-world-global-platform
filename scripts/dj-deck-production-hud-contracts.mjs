@@ -127,14 +127,14 @@ assert.deepEqual(sandbox.toastCalls.pop(), {
 });
 
 const checks = [
-  [ids(["productionHud"]) && deck.includes("Production HUD // additive overview"), "adds a top-level production HUD section without replacing the deck"],
+  [ids(["productionHud"]) && /<section class="production-hud panel" id="productionHud" aria-labelledby="productionHudTitle">[\s\S]*?Production HUD \/\/ additive overview[\s\S]*?id="productionHudTitle"/.test(deck), "adds a top-level production HUD section without replacing the deck"],
   [ids(["hudDeckTitle", "hudMixerMeta", "hudLoaderMeta", "hudTelemetryMeta", "hudFlightplanMeta", "hudDockMeta"]), "adds dedicated HUD readouts for deck, mixer, loader, telemetry, release, and dock state"],
   [ids(["deckOpsNowPlaying", "deckOpsQueue", "deckOpsBlend", "deckOpsPolicy"]), "adds an additive deck and mixer summary strip inside the deck package"],
   [ids(["loaderHudLibrary", "loaderHudImport", "loaderHudVault", "loaderHudRelease"]), "adds an additive loader summary above the music import station"],
   [ids(["telemetryHudCrowd", "telemetryHudRecommendation", "telemetryHudCloud", "telemetryHudPreflight"]), "adds an additive telemetry summary above the live crowd and AI modules"],
-  [ids(["maintenanceDockPanel", "dockPanelTelemetry", "dockPanelRevision", "dockPanelTrackQr"]), "extends the existing floating maintenance dock with a detail panel and quick actions"],
+  [ids(["maintenanceDockPanel", "dockPanelTelemetry", "dockPanelRevision", "dockPanelTrackQr"]) && /<section class="maintenance-dock-panel" id="maintenanceDockPanel" role="dialog" aria-modal="false" aria-labelledby="maintenanceDockPanelTitle" hidden>/.test(deck), "extends the existing floating maintenance dock with a detail panel and quick actions"],
   [hasAll(["function updateProductionHud()", "function setMaintenanceDockPanel(open, invoker = null, restoreFocus = true)", "function showMaintenanceAlertsToast()", "prepareRecommendedTransition", "syncTelemetry"]), "wires the additive HUD and floating dock panel into the existing DJ deck logic"],
-  [ids(["maintenanceDockHelp", "maintenanceDockPanelTitle", "closeMaintenanceDockPanel"]) && deck.includes('role="dialog"') && deck.includes('aria-modal="false"') && deck.includes("Opens a toast and detail panel"), "documents the additive dock panel with accessible help text, focus target, and non-modal dialog semantics"]
+  [ids(["maintenanceDockHelp", "maintenanceDockPanelTitle", "closeMaintenanceDockPanel"]) && /<span class="visually-hidden" id="maintenanceDockHelp">Opens a toast and detail panel with current booth, cloud revision, upload progress, and audio verification maintenance status\.<\/span>/.test(deck), "documents the additive dock panel with accessible help text, focus target, and non-modal dialog semantics"]
 ];
 
 for (const [passed, description] of checks) console.log(`${passed ? "PASS" : "FAIL"}: ${description}`);

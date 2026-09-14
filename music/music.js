@@ -23,6 +23,7 @@
   const fallbackArtwork = window.HaloReleaseArtwork?.DEFAULT_RELEASE_ARTWORK || "/assets/halo-app-icon-512.png";
   const satelliteVideoFallbackEnabled = new URLSearchParams(window.location.search).get("satellite") === "music-video-fallback";
   const catalogWorkspaceMinHeight = 1800;
+  let catalogWorkspaceLoadPromise = null;
   const chartRooms = {
     all: [],
     "hip-hop": ["hip hop", "hip-hop", "rap", "drill", "grime"],
@@ -88,6 +89,7 @@
 
   function handleCatalogWorkspaceMessage(event) {
     if (event.origin !== window.location.origin) return;
+    if (event.source !== elements.workspaceFrame?.contentWindow) return;
     if (!event.data || event.data.type !== "halo-song-catalog-height") return;
     syncCatalogWorkspaceHeight(event.data.height);
   }
@@ -95,18 +97,22 @@
   function ensureCatalogWorkspaceLoaded() {
     if (!catalogWorkspaceEnabled()) return Promise.resolve(false);
     if (elements.workspaceFrame.dataset.loaded === "true") return Promise.resolve(true);
-    return new Promise(resolve => {
+    if (catalogWorkspaceLoadPromise) return catalogWorkspaceLoadPromise;
+    catalogWorkspaceLoadPromise = new Promise(resolve => {
       const markLoaded = () => {
         elements.workspaceFrame.dataset.loaded = "true";
+        catalogWorkspaceLoadPromise = null;
         resolve(true);
       };
+      const markFailed = () => {
+        catalogWorkspaceLoadPromise = null;
+        resolve(false);
+      };
       elements.workspaceFrame.addEventListener("load", markLoaded, { once: true });
-      if (!elements.workspaceFrame.src) {
-        elements.workspaceFrame.src = catalogWorkspaceUrl();
-      } else {
-        markLoaded();
-      }
+      elements.workspaceFrame.addEventListener("error", markFailed, { once: true });
+      if (!elements.workspaceFrame.src) elements.workspaceFrame.src = catalogWorkspaceUrl();
     });
+    return catalogWorkspaceLoadPromise;
   }
 
   function sendCatalogWorkspaceCommand(action) {

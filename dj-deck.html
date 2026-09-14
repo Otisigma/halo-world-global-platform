@@ -5794,11 +5794,11 @@
         return;
       }
       const activeElement = document.activeElement;
-      if (elements.maintenanceDockPanel?.contains(activeElement) && event.key.toLowerCase() !== "f") return;
       if (
         ["INPUT", "TEXTAREA", "SELECT"].includes(activeElement?.tagName)
         || activeElement?.isContentEditable
       ) return;
+      if (elements.maintenanceDockPanel?.contains(activeElement) && (event.code === "Space" || event.key.toLowerCase() === "s")) return;
       if (event.code === "Space") { event.preventDefault(); document.querySelector(".deck-a .play-button").click(); }
       if (event.key.toLowerCase() === "s") syncDecks();
       if (event.key.toLowerCase() === "f") elements.focusMode.click();

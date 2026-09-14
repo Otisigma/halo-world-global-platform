@@ -1673,8 +1673,7 @@
     <footer class="footer"><span>HALO performance system · demo engine</span><nav class="footer-socials" aria-label="HALO social profiles"><a href="https://www.youtube.com/@halo-music-world" target="_blank" rel="noopener noreferrer">YouTube ↗</a><a href="https://www.tiktok.com/@halomusicworldhome" target="_blank" rel="noopener noreferrer">TikTok ↗</a></nav><div class="keyboard-hints"><span><kbd>Space</kbd> Play master</span><span><kbd>S</kbd> Sync tempo</span><span><kbd>F</kbd> Desk only</span></div></footer>
   </main>
 
-  <span class="visually-hidden" id="maintenanceDockHelp">Shows current booth, cloud revision, upload progress, and audio verification maintenance status in a toast.</span>
-  <button class="maintenance-dock" id="maintenanceDock" type="button" aria-describedby="maintenanceDockHelp"><span>Maintenance alerts</span><strong id="maintenanceDockCount">10 alerts</strong></button>
+  <button class="maintenance-dock" id="maintenanceDock" type="button"><span class="visually-hidden">Show </span><span>Maintenance alerts</span><strong id="maintenanceDockCount">10 alerts</strong></button>
   <div class="toast" id="toast" role="status" aria-live="polite"><strong id="toastTitle">System</strong><p id="toastMessage">Ready.</p></div>
 
   <script src="/upload-progress.js"></script>
@@ -2755,6 +2754,14 @@
       showToast.timer = setTimeout(() => elements.toast.classList.remove("is-visible"), 3200);
     }
 
+    function syncMaintenanceDockLabel() {
+      if (!elements.maintenanceDock) return;
+      const count = elements.maintenanceDockCount?.textContent?.trim() || "10 alerts";
+      const label = `Show maintenance alerts. ${count} currently monitored.`;
+      elements.maintenanceDock.setAttribute("aria-label", label);
+      elements.maintenanceDock.title = label;
+    }
+
     function setStemVaultStatus(message, error = false) {
       elements.stemVaultStatus.textContent = message;
       elements.stemVaultStatus.classList.toggle("is-error", error);
@@ -3638,11 +3645,13 @@
       }
     }
 
+    syncMaintenanceDockLabel();
     elements.sessionRevisionButton?.addEventListener("click", () => {
       const revision = elements.sessionSaveStatus?.textContent?.trim() || "Saved on device";
       showToast("Cloud revision", revision);
     });
     elements.maintenanceDock?.addEventListener("click", () => {
+      syncMaintenanceDockLabel();
       showToast("Maintenance alerts", `${elements.maintenanceDockCount?.textContent || "10 alerts"} watching booth video, cloud revision, upload progress, and audio verification.`);
     });
 

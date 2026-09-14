@@ -1676,7 +1676,8 @@
     <footer class="footer"><span>HALO performance system · demo engine</span><nav class="footer-socials" aria-label="HALO social profiles"><a href="https://www.youtube.com/@halo-music-world" target="_blank" rel="noopener noreferrer">YouTube ↗</a><a href="https://www.tiktok.com/@halomusicworldhome" target="_blank" rel="noopener noreferrer">TikTok ↗</a></nav><div class="keyboard-hints"><span><kbd>Space</kbd> Play master</span><span><kbd>S</kbd> Sync tempo</span><span><kbd>F</kbd> Desk only</span></div></footer>
   </main>
 
-  <button class="maintenance-dock" id="maintenanceDock" type="button" aria-label="Show maintenance alerts. 10 alerts currently monitored."><span class="visually-hidden">Show </span><span>Maintenance alerts</span><strong id="maintenanceDockCount">10 alerts</strong></button>
+  <span class="visually-hidden" id="maintenanceDockHelp">Opens a toast with current booth, cloud revision, upload progress, and audio verification maintenance status.</span>
+  <button class="maintenance-dock" id="maintenanceDock" type="button" aria-describedby="maintenanceDockHelp"><span class="visually-hidden">Show </span><span>Maintenance alerts</span><strong id="maintenanceDockCount">10 alerts</strong></button>
   <div class="toast" id="toast" role="status" aria-live="polite"><strong id="toastTitle">System</strong><p id="toastMessage">Ready.</p></div>
 
   <script src="/upload-progress.js"></script>
@@ -2761,8 +2762,14 @@
       if (!elements.maintenanceDock) return;
       const count = elements.maintenanceDockCount?.textContent?.trim() || "10 alerts";
       const label = `Show maintenance alerts. ${count} currently monitored.`;
-      elements.maintenanceDock.setAttribute("aria-label", label);
       elements.maintenanceDock.title = label;
+    }
+
+    function currentCloudRevisionLabel() {
+      const sessionLabel = elements.sessionSaveStatus?.querySelector("span:last-child")?.textContent?.trim() || "";
+      if (/^Cloud revision/i.test(sessionLabel)) return sessionLabel;
+      const cloudLabel = elements.cloudStatus?.querySelector("span:last-child")?.textContent?.trim() || "Cloud ready";
+      return `${cloudLabel} · awaiting first revision`;
     }
 
     function setStemVaultStatus(message, error = false) {
@@ -3650,8 +3657,7 @@
 
     syncMaintenanceDockLabel();
     elements.sessionRevisionButton?.addEventListener("click", () => {
-      const revision = elements.sessionSaveStatus?.textContent?.trim() || "Saved on device";
-      showToast("Cloud revision", revision);
+      showToast("Cloud revision", currentCloudRevisionLabel());
     });
     elements.maintenanceDock?.addEventListener("click", () => {
       syncMaintenanceDockLabel();

@@ -64,26 +64,26 @@
     } catch {
       return `${code} ${(Number(cents) / 100).toFixed(2)}`;
     }
+  }
 
-    function merchPriceLabel(product) {
-      if (!product) return "HALO merch";
-      if (product.startingPriceMinor > 0) return `From ${money(product.startingPriceMinor, product.currency)}`;
-      return "Pricing in HALO merch route";
-    }
+  function merchPriceLabel(product) {
+    if (!product) return "HALO merch";
+    if (product.startingPriceMinor > 0) return `From ${money(product.startingPriceMinor, product.currency)}`;
+    return "Pricing in HALO merch route";
+  }
 
-    function merchVariantLabels(product) {
-      return (product?.variants || [])
-        .map(variant => [variant.color, variant.size].filter(Boolean).join(" / ") || variant.label)
-        .filter(Boolean)
-        .slice(0, 4);
-    }
+  function merchVariantLabels(product) {
+    return (product?.variants || [])
+      .map(variant => [variant.color, variant.size].filter(Boolean).join(" / ") || variant.label)
+      .filter(Boolean)
+      .slice(0, 4);
+  }
 
-    function renderMerchDisclosure(disclosure, note = "") {
-      if (!elements.merchDisclosure) return;
-      const label = disclosure?.label || "Affiliate + fulfilment note";
-      const copy = disclosure?.detailCopy || disclosure?.shortCopy || note || "HALO keeps the storefront voice public while fulfilment routing and affiliate handling stay behind the API.";
-      elements.merchDisclosure.innerHTML = `<div class="merch-disclosure"><span>${escapeHtml(label)}</span><p>${escapeHtml(copy)}</p></div>`;
-    }
+  function renderMerchDisclosure(disclosure, note = "") {
+    if (!elements.merchDisclosure) return;
+    const label = disclosure?.label || "Affiliate + fulfilment note";
+    const copy = disclosure?.detailCopy || disclosure?.shortCopy || note || "HALO keeps the storefront voice public while fulfilment routing and affiliate handling stay behind the API.";
+    elements.merchDisclosure.innerHTML = `<div class="merch-disclosure"><span>${escapeHtml(label)}</span><p>${escapeHtml(copy)}</p></div>`;
   }
 
   function catalogState(release) {

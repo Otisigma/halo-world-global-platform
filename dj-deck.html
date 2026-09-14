@@ -858,6 +858,7 @@
     .maintenance-dock span { color: var(--orange); font: 500 8px "DM Mono", monospace; letter-spacing: .13em; text-transform: uppercase; }
     .maintenance-dock strong { font: 600 12px/1.2 "Space Grotesk", sans-serif; letter-spacing: -.02em; text-transform: uppercase; }
     .maintenance-dock:hover { border-color: var(--acid); }
+    .maintenance-dock:focus-visible { border-color: var(--acid); outline: 2px solid var(--acid); outline-offset: 3px; }
     .visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
     .toast { position: fixed; right: 22px; bottom: 92px; z-index: 30; width: min(390px, calc(100vw - 44px)); border: 1px solid rgba(200,255,54,.45); background: rgba(12, 15, 13, .96); box-shadow: var(--shadow); padding: 15px 17px; transform: translateY(130%); opacity: 0; transition: transform .35s ease, opacity .35s ease; }
     .toast.is-visible { transform: translateY(0); opacity: 1; }
@@ -1677,7 +1678,7 @@
   </main>
 
   <span class="visually-hidden" id="maintenanceDockHelp">Opens a toast with current booth, cloud revision, upload progress, and audio verification maintenance status.</span>
-  <button class="maintenance-dock" id="maintenanceDock" type="button" aria-describedby="maintenanceDockHelp"><span class="visually-hidden">Show </span><span>Maintenance alerts</span><strong id="maintenanceDockCount">10 alerts</strong></button>
+  <button class="maintenance-dock" id="maintenanceDock" type="button" aria-label="Show maintenance alerts" aria-describedby="maintenanceDockHelp"><span class="visually-hidden">Show </span><span>Maintenance alerts</span><strong id="maintenanceDockCount">10 alerts</strong></button>
   <div class="toast" id="toast" role="status" aria-live="polite"><strong id="toastTitle">System</strong><p id="toastMessage">Ready.</p></div>
 
   <script src="/upload-progress.js"></script>

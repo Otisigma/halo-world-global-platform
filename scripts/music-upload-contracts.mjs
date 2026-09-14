@@ -21,6 +21,7 @@ const checks = [
   [page.includes("Catalog upload surface") && page.includes("Upload every master, keep one catalog truth."), "positions /music-upload/ as the upload-facing catalog surface"],
   [page.includes('/song-catalog/song-catalog.css') && page.includes('/song-catalog/song-catalog.js'), "reuses the proven song catalog UI and client implementation"],
   [page.includes('/identity.js') && page.includes('/upload-progress.js?v=music-upload-runtime') && page.includes('/song-catalog/song-catalog.js?v=music-upload-runtime'), "keeps identity, cache-busted runtime, and client wiring"],
+  [!page.includes('/music-upload/music-upload.js') && page.includes('id="addSongButton"') && page.includes('id="importButton"'), "entry surface now boots from the shared catalog module instead of the retired music-upload client"],
   [page.includes('id="audioFile"') && page.includes('id="uploadAudioButton"') && page.includes('id="audioUploadTrack"'), "keeps working version-audio upload controls on /music-upload/"],
   [page.includes('id="artworkFile"') && page.includes('id="uploadArtworkButton"') && page.includes('id="artworkUploadTrack"') && page.includes('id="versionArtworkTrack"'), "keeps working song and version artwork uploads on /music-upload/"],
   [/fetch\(\s*["']\/api\/song-catalog["']/.test(catalogClient) && /fetch\(\s*["']\/api\/song-catalog\/audio["']/.test(catalogClient) && /fetch\(\s*["']\/api\/song-catalog\/artwork["']/.test(catalogClient), "music upload surface is backed by existing catalog upload APIs"],
@@ -34,8 +35,12 @@ const checks = [
 
 const failures = checks.filter(([passed]) => !passed);
 for (const [passed, description] of checks) console.log(`${passed ? "PASS" : "FAIL"}: ${description}`);
-if (failures.length) process.exitCode = 1;
-else {
+assert.equal(
+  failures.length,
+  0,
+  `Music upload contract failures: ${failures.map(([, description]) => description).join("; ")}`
+);
+{
   const helperContext = {
     window: {},
     console,

@@ -2214,7 +2214,7 @@
         mixReleaseStatus: elements.mixReleaseStatus?.textContent || ""
       });
       elements.artistJourneyStageBadge.textContent = model.stageBadge;
-      elements.artistJourneyStageChips.innerHTML = model.stages.map((stage, index) => `<li class="journey-chip is-${stage.status}" data-step="${String(index + 1).padStart(2, "0")}"${stage.id === model.currentStage.id ? ' aria-current="step"' : ""}>${escapeHTML(stage.label)}</li>`).join("");
+      elements.artistJourneyStageChips.innerHTML = model.stages.map((stage, index) => `<li class="journey-chip is-${stage.status}" data-step="${String(index + 1).padStart(2, "0")}"${model.completedStages < model.stages.length && stage.id === model.currentStage.id ? ' aria-current="step"' : ""}>${escapeHTML(stage.label)}</li>`).join("");
       elements.artistJourneyUploadTitle.textContent = model.uploadTitle;
       elements.artistJourneyUploadCopy.textContent = model.uploadCopy;
       elements.artistJourneyNextActionTitle.textContent = model.nextActionTitle;

@@ -2002,6 +2002,7 @@
     let sessionSaveTimer = null;
     let sessionCloudEnabled = false;
     let sessionRestoring = false;
+    const artistJourneyObservers = [];
     const stemVaultState = { authenticated: false, packs: [], loading: false };
     const stemCollectorState = { authenticated: false, kits: [], current: null, loading: false };
 
@@ -2227,12 +2228,16 @@
       const form = document.querySelector("#mixFlightplanForm");
       const schedule = () => window.requestAnimationFrame(renderArtistJourneyGuidance);
       [elements.importStatus, elements.stemVaultStatus, elements.mixReleaseStatus, document.querySelector("#flightplanStatus")].filter(Boolean).forEach(node => {
-        new MutationObserver(schedule).observe(node, { childList: true, subtree: true, characterData: true });
+        const observer = new MutationObserver(schedule);
+        observer.observe(node, { childList: true, subtree: true, characterData: true });
+        artistJourneyObservers.push(observer);
       });
       form?.addEventListener("input", schedule);
       form?.addEventListener("change", schedule);
-      window.setTimeout(schedule, 250);
-      window.setTimeout(schedule, 1200);
+      window.addEventListener("load", schedule, { once: true });
+      window.addEventListener("beforeunload", () => {
+        artistJourneyObservers.splice(0).forEach(observer => observer.disconnect());
+      }, { once: true });
     }
 
     async function saveDjIntelligenceSession() {

@@ -182,7 +182,7 @@
 
 [[redirects]]
   from = "/music-upload/"
-  to = "/music-upload/index.html"
+  to = "/music/index.html"
   status = 200
   force = true
 

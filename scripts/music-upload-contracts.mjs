@@ -1,380 +1,54 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
-import vm from "node:vm";
-import { normalizeHttpsList } from "../music-upload/link-validation.js";
-import { runStageMonitor } from "./upload-experience-stage-monitor.mjs";
 
 const root = resolve(import.meta.dirname, "..");
 const read = path => readFile(resolve(root, path), "utf8");
 
-const [page, client, styles, uploadHelper, world, routes, unifiedUpload, audioFn, artworkFn, config, sharedPage, sharedClient] = await Promise.all([
+const [musicPage, musicClient, musicStyles, uploadEntry, home, routes, catalogApi, config] = await Promise.all([
+  read("music/index.html"),
+  read("music/music.js"),
+  read("music/music.css"),
   read("music-upload/index.html"),
-  read("music-upload/music-upload.js"),
-  read("music-upload/music-upload.css"),
-  read("upload-progress.js"),
   read("halo.html"),
   read("lib/route-registry.js"),
-  read("netlify/functions/unified-upload.mjs"),
-  read("netlify/functions/song-catalog-audio.ts"),
-  read("netlify/functions/song-catalog-artwork.ts"),
+  read("netlify/functions/release-catalog.mjs"),
   read("netlify.toml"),
-  read("song-catalog/index.html"),
-  read("song-catalog/song-catalog.js"),
 ]);
 
-const sources = { page, client, styles, uploadHelper, world, routes, unifiedUpload, audioFn, artworkFn, config, sharedPage, sharedClient };
+assert.match(config, /from = "\/music-upload\/"[\s\S]*to = "\/music\/index\.html"/, "music-upload route must resolve to the shared public shop front");
+assert.match(routes, /directoryRoute\("HALO Shop", "\/music-upload\/", "music\/index\.html", \{ menuLabel: "HALO SHOP" \}\)/, "route registry must publish /music-upload/ as the HALO Shop alias");
+assert.match(uploadEntry, /http-equiv="refresh" content="0; url=\/music-upload\/"/, "direct music-upload index file must bounce to the canonical shop route");
+assert.match(uploadEntry, /window\.location\.replace\("\/music-upload\/"\)/, "direct music-upload index file must client-redirect to the canonical shop route");
+assert.doesNotMatch(uploadEntry, /Halo Music Upload|sharedSongCatalog|musicUploadForm/, "legacy bridge shell markup must not remain in the direct music-upload entry file");
 
-const checks = [
-  {
-    stage: "auth hydration / access control",
-    source: "page",
-    description: "music-upload bootstrap includes identity runtime and sign-in guidance",
-    signals: [
-      "/identity.js",
-      "Sign in, add source material",
-      'id="formMessage"',
-    ],
-    diagnose: "Auth stage failed: /music-upload/ is missing identity bootstrap or sign-in guidance signal.",
-  },
-  {
-    stage: "page bootstrap / runtime load",
-    source: "page",
-    description: "page loads required runtime scripts and a visible runtime alert surface",
-    signals: [
-      "/stats.js",
-      "/site-monitor.js",
-      "/upload-progress.js",
-      "/music-upload/music-upload.js",
-      'id="runtimeAlert"',
-      'id="runtimeRetryButton"',
-    ],
-    diagnose: "Bootstrap stage failed: /music-upload/ is missing required runtime script wiring.",
-  },
-  {
-    stage: "page bootstrap / runtime load",
-    source: "page",
-    description: "page announces the bridge fallback and appends the shared song catalog workspace underneath the legacy intake",
-    signals: [
-      'id="bridgeNoticeTitle"',
-      "Jump to the newer upload workspace",
-      'id="sharedSongCatalog"',
-      'id="sharedCatalogFrame"',
-      '/song-catalog/index.html?embed=music-upload',
-    ],
-    diagnose: "Bridge stage failed: /music-upload/ is missing the appended shared song-catalog fallback section.",
-  },
-  {
-    stage: "page bootstrap / runtime load",
-    source: "client",
-    description: "client can self-heal stale/missing upload runtime bundle",
-    signals: [
-      "let uploadHelper = window.HaloUploadProgress",
-      "function loadUploadHelperScript()",
-      "RUNTIME_LOAD_TIMEOUT_MS",
-      "RUNTIME_LOAD_ATTEMPTS",
-      "function injectUploadRuntimeScript",
-      "function ensureUploadRuntime()",
-      "HALO upload runtime did not load",
-    ],
-    diagnose: "Bootstrap stage failed: music-upload runtime cannot recover from stale/missing upload-progress bundle.",
-  },
-  {
-    stage: "page bootstrap / runtime load",
-    source: "client",
-    description: "legacy music-upload page listens for embedded shared-catalog sizing updates",
-    signals: [
-      "sharedCatalogFrame",
-      "BRIDGE_FRAME_MIN_HEIGHT",
-      "function syncSharedCatalogFrameHeight",
-      "function handleSharedCatalogFrameMessage",
-      'window.addEventListener("message", handleSharedCatalogFrameMessage)',
-      'halo-song-catalog-height',
-    ],
-    diagnose: "Bridge stage failed: legacy /music-upload/ page does not keep the appended shared catalog visible.",
-  },
-  {
-    stage: "page bootstrap / runtime load",
-    source: "sharedClient",
-    description: "shared song-catalog runtime reports its embedded height back to the bridge surface",
-    signals: [
-      "const postEmbeddedHeight",
-      "window.parent.postMessage",
-      'type:"halo-song-catalog-height"',
-      "ResizeObserver",
-      'window.addEventListener("resize",postEmbeddedHeight)',
-    ],
-    diagnose: "Bridge stage failed: shared song-catalog client does not report iframe sizing for /music-upload/.",
-  },
-  {
-    stage: "file selection / upload start",
-    source: "client",
-    description: "client wires file selection into queue rendering and package jobs",
-    signals: [
-      "function gatherAudioFiles()",
-      "function renderQueue()",
-      "elements.musicFiles.addEventListener(\"change\", renderQueue)",
-      "elements.musicFolder.addEventListener(\"change\", renderQueue)",
-      "const jobs = audioFiles.length ?",
-    ],
-    diagnose: "Upload start stage failed: file selection events/jobs are not fully wired in music-upload.js.",
-  },
-  {
-    stage: "progress visibility / movement",
-    source: "client",
-    description: "audio/artwork upload flow validates concrete UI nodes and emits controller, start, progress, success, and fail states",
-    signals: [
-      'resolveUploadUiElements("#audioUploadTrack", "#audioUploadProgress")',
-      'track?.closest(".upload-panel")',
-      'validateUploadUiElements("audio", audioElements)',
-      "HALO upload progress UI failed to initialize",
-      "setRuntimeStatus(",
-      "setControllerPhase(",
-      "handleRuntimeRetry",
-      "audioUploadUi.start",
-      "audioUploadUi.progress",
-      "audioUploadUi.success",
-      "audioUploadUi.fail",
-      "artworkUploadUi.start",
-      "artworkUploadUi.progress",
-      "artworkUploadUi.success",
-      "artworkUploadUi.fail",
-      "uploadHelper.uploadChunkedFile",
-    ],
-    diagnose: "Progress stage failed: upload indicator transitions are missing for audio/artwork pipelines.",
-  },
-  {
-    stage: "progress visibility / movement",
-    source: "uploadHelper",
-    description: "shared helper unhides tracks accessibly and renders visible in-flight progress immediately",
-    signals: [
-      'ui.track.hidden=!state.showTrack',
-      'ui.track.setAttribute("aria-hidden",state.showTrack?"false":"true")',
-      "state.uploading&&progress===0?3:progress",
-    ],
-    diagnose: "Progress stage failed: shared upload helper no longer exposes visible active progress tracks.",
-  },
-  {
-    stage: "backend success response",
-    source: "client",
-    description: "intake and staged backend API actions are present, including shared artwork reuse for batch packages",
-    signals: [
-      "/api/unified-upload",
-      "action: \"create_project\"",
-      "action: \"advance_pipeline\"",
-      "/api/song-catalog",
-      "action: \"save_song\"",
-      "/api/song-catalog/audio",
-      "/api/song-catalog/artwork",
-      "action: \"finalize_upload\"",
-      "action: \"reuse_song_artwork\"",
-    ],
-    diagnose: "Backend stage failed: create/advance/save/finalize API calls are incomplete in music-upload flow.",
-  },
-  {
-    stage: "persistence confirmation",
-    source: "client",
-    description: "client confirms persisted bytes before reporting locked-in success",
-    signals: [
-      "async function confirmPersistedAsset",
-      "fetchWithTimeout(",
-      "AbortController",
-      "PERSISTENCE_CHECK_TIMEOUT_MS",
-      'method: "HEAD"',
-      'Range: "bytes=0-0"',
-      "!finalized.persisted || !finalized.lockedIn",
-      "HALO could not confirm persisted",
-    ],
-    diagnose: "Persistence stage failed: client can report success before confirming persisted asset bytes.",
-  },
-  {
-    stage: "persistence confirmation",
-    source: "audioFn",
-    description: "audio finalize response preserves persisted + lockedIn contract",
-    signals: [
-      "hasCompleteChunkSet",
-      "persisted: true",
-      "lockedIn: true",
-    ],
-    diagnose: "Persistence stage failed: audio finalize no longer proves complete persisted lock-in.",
-  },
-  {
-    stage: "persistence confirmation",
-    source: "artworkFn",
-    description: "artwork finalize response preserves persisted + lockedIn contract",
-    signals: [
-      "hasCompleteChunkSet",
-      "persisted: true",
-      "lockedIn: true",
-    ],
-    diagnose: "Persistence stage failed: artwork finalize no longer proves complete persisted lock-in.",
-  },
-  {
-    stage: "post-upload guidance / pipeline insights",
-    source: "client",
-    description: "client outputs stage diagnostics, needs-attention, next-step guidance, and package receipts",
-    signals: [
-      "stageChip(result.pipelineStatus)",
-      "result-receipt",
-      "lockedAssets",
-      "handoffLabel",
-      "Needs attention:",
-      "result-next-step",
-      "Upload complete:",
-      "locked into HALO storage",
-      "should be removed only if needed",
-    ],
-    diagnose: "Guidance stage failed: post-upload diagnostic copy/next-step guidance is missing.",
-  },
-  {
-    stage: "post-upload guidance / pipeline insights",
-    source: "styles",
-    description: "styles preserve progress tracks, controller stages, stage guidance, and the appended shared-catalog frame",
-    signals: [
-      ".upload-progress-track",
-      ".upload-progress-fill",
-      ".controller-stage",
-      ".runtime-alert",
-      ".stage-dreamweaver_in_progress",
-      ".result-next-step",
-      ".bridge-notice",
-      ".shared-catalog-frame",
-    ],
-    diagnose: "Guidance stage failed: style markers for progress and next-step guidance are missing.",
-  },
-  {
-    stage: "page structure / controller surface",
-    source: "page",
-    description: "page exposes a central intake controller with explicit stage and routing sections",
-    signals: [
-      "Live intake supervision",
-      'id="controllerStageTimeline"',
-      "Pipeline handoff",
-      'id="handoffPreview"',
-      "Who receives this package",
-    ],
-    diagnose: "Surface stage failed: /music-upload/ is missing the explicit controller stage/routing UI.",
-  },
-  {
-    stage: "deployment/runtime cache freshness",
-    source: "config",
-    description: "Netlify serves canonical route and cache-busting headers for music upload runtime",
-    signals: [
-      'from = "/music-upload/"',
-      'to = "/music-upload/index.html"',
-      'for = "/music-upload/*"',
-      'for = "/upload-progress.js"',
-      'Cache-Control = "no-cache, no-store, must-revalidate"',
-    ],
-    diagnose: "Deploy stage failed: canonical route or no-cache runtime headers are missing for /music-upload/.",
-  },
-  {
-    stage: "deployment/runtime cache freshness",
-    source: "routes",
-    description: "route registry publishes the bridge-backed song catalog upload directory route",
-    signals: [
-      /directoryRoute\(\s*"Song Catalog Upload"\s*,\s*"\/music-upload\/"\s*,\s*"music-upload\/index\.html"/,
-      /menuLabel:\s*"SONG CATALOG UPLOAD"/,
-    ],
-    diagnose: "Deploy stage failed: route registry no longer exposes /music-upload/ consistently.",
-  },
-  {
-    stage: "deployment/runtime cache freshness",
-    source: "world",
-    description: "home surface links users to monitored music upload route",
-    signals: [
-      'href="/music-upload/"',
-      "Song Catalog Upload",
-      "open_song_catalog_upload",
-    ],
-    diagnose: "Deploy stage failed: homepage discovery signals to /music-upload/ are missing.",
-  },
-  {
-    stage: "backend success response",
-    source: "unifiedUpload",
-    description: "unified upload supports music_upload surface and version provisioning",
-    signals: [
-      '"music_upload"',
-      "versionIds",
-      "sale_master",
-    ],
-    diagnose: "Backend stage failed: unified upload no longer provisions music-upload packages correctly.",
-  },
-  {
-    stage: "shared upload workspace availability",
-    source: "sharedPage",
-    description: "shared song-catalog page keeps the expected artist-controlled upload workspace intact",
-    signals: [
-      'id="catalogShell"',
-      'id="workspace"',
-      'id="songWorkspace"',
-      'id="songForm"',
-      'id="versionForm"',
-      '/upload-progress.js',
-      '/song-catalog/song-catalog.js',
-    ],
-    diagnose: "Shared workspace stage failed: appended song-catalog fallback is no longer a full upload workspace.",
-  },
-];
+assert.match(musicPage, /public HALO shop front/i, "shop page must describe the public storefront role");
+assert.match(musicPage, /Listen\. Buy\.[\s\S]*Share\./, "shop page must headline listening, buying, and sharing");
+assert.match(musicPage, /artist-controlled songs from the shared catalog/i, "shop page must keep the shared catalog as the public source-of-truth copy");
 
-runStageMonitor({
-  monitorName: "Music upload watchdog",
-  checks,
-  sources,
-});
+assert.match(musicClient, /\/api\/release-catalog/, "shop client must load the shared release catalog API");
+assert.match(musicClient, /release\.catalog/, "shop client must read shared song-catalog metadata from the release API");
+assert.match(musicClient, /navigator\.share/, "shop client must support native sharing when available");
+assert.match(musicClient, /clipboard\.writeText/, "shop client must support copy-link sharing");
+assert.match(musicClient, /searchParams\.set\("song", release\.id\)/, "shop client must create per-song share URLs");
+assert.match(musicClient, /history\.replaceState/, "shop client must keep spotlighted songs deep-linkable");
+assert.match(musicClient, /relatedReleases/, "shop client must expose related songs from the shared catalog feed");
+assert.match(musicClient, /availabilitySummary/, "shop client must render public-safe rights and availability messaging");
 
-assert.deepEqual(
-  normalizeHttpsList("https://halo.world/release\nhttps://www.youtube.com/watch?v=halo"),
-  ["https://halo.world/release", "https://www.youtube.com/watch?v=halo"],
-  "link validation must preserve valid https official and video links"
-);
-assert.throws(
-  () => normalizeHttpsList("http://halo.world/release"),
-  /https:\/\//,
-  "link validation must reject non-https sources"
-);
-assert.throws(
-  () => normalizeHttpsList("https://user@halo.world/release"),
-  /https:\/\//,
-  "link validation must reject credential-bearing URLs"
-);
+assert.match(musicStyles, /\.shop-panel/, "shop styles must include the storefront detail layout");
+assert.match(musicStyles, /\.availability-note/, "shop styles must expose rights-aware availability messaging");
+assert.match(musicStyles, /\.action\.tertiary/, "shop styles must support share and spotlight controls");
+assert.match(musicStyles, /\.related-release/, "shop styles must support related-song navigation");
 
-const helperContext = {
-  window: {},
-  console,
-  XMLHttpRequest: class {},
-  setTimeout,
-  clearTimeout,
-};
-vm.runInNewContext(uploadHelper, helperContext, { filename: "upload-progress.js" });
-assert.equal(typeof helperContext.window.HaloUploadProgress?.createUploadUi, "function", "shared upload helper should expose createUploadUi");
-const track = {
-  hidden: true,
-  attrs: { "aria-hidden": "true" },
-  setAttribute(name, value) {
-    this.attrs[name] = value;
-  }
-};
-const fill = { style: { width: "0%" } };
-const status = { textContent: "" };
-const panel = {
-  dataset: {},
-  classList: { toggle() {} },
-  setAttribute(name, value) {
-    this[name] = value;
-  }
-};
-const uploadUi = helperContext.window.HaloUploadProgress.createUploadUi({
-  panel,
-  status,
-  track,
-  fill,
-  idleMessage: "Idle",
-});
-uploadUi.start("Preparing upload…");
-assert.equal(track.hidden, false, "shared upload helper should reveal the progress track when upload starts");
-assert.equal(track.attrs["aria-hidden"], "false", "shared upload helper should clear aria-hidden when upload starts");
-assert.equal(fill.style.width, "3%", "shared upload helper should show visible in-flight progress before the first chunk advances");
-uploadUi.idle("Idle");
-assert.equal(track.hidden, true, "shared upload helper should hide the progress track again when upload returns to idle");
-assert.equal(track.attrs["aria-hidden"], "true", "shared upload helper should restore aria-hidden when upload returns to idle");
+assert.match(catalogApi, /halo_song_catalog/, "release catalog API must reuse the shared song catalog data source");
+assert.match(catalogApi, /halo_song_versions/, "release catalog API must reuse shared version data for storefront context");
+assert.match(catalogApi, /catalog_song_id/, "release catalog API must expose shared catalog linkage");
+assert.match(catalogApi, /catalog_rights_status/, "release catalog API must expose rights-aware catalog status");
+assert.match(catalogApi, /catalog_sale_price_cents/, "release catalog API must expose catalog-driven support pricing");
+assert.match(catalogApi, /catalog_preview_version_count/, "release catalog API must expose preview/version availability derived from the shared catalog");
+assert.match(catalogApi, /source: row\.catalog_song_id \? "song-catalog" : "release-catalog"/, "release catalog API must identify when storefront data came from the shared song catalog");
+
+assert.match(home, /href="\/music-upload\/"[\s\S]*HALO SHOP/, "HALO navigation must advertise the storefront instead of the old upload bridge");
+assert.match(home, /Public song shop for listening, buying, sharing, and artist-controlled release context/, "HALO navigation copy must describe the public shop role");
+
+console.log("Music upload storefront contracts passed.");

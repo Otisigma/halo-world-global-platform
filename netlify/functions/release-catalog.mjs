@@ -39,6 +39,21 @@ function serializeRelease(row) {
     streamUrl: row.stream_url || "",
     featuredType: row.featured_type || "",
     featuredUntil: row.featured_until ? String(row.featured_until).slice(0, 10) : "",
+    artistSlug: row.artist_slug || "",
+    catalog: {
+      source: row.catalog_song_id ? "song-catalog" : "release-catalog",
+      songId: row.catalog_song_id || "",
+      artistName: row.catalog_artist_name || row.artist,
+      title: row.catalog_title || row.title,
+      rightsStatus: row.catalog_rights_status || "",
+      saleStatus: row.catalog_sale_status || "",
+      metadataStatus: row.catalog_metadata_status || "",
+      salePriceCents: row.catalog_sale_price_cents === null ? null : Number(row.catalog_sale_price_cents),
+      currency: row.catalog_currency || "USD",
+      versionCount: Number(row.catalog_version_count || 0),
+      previewVersionCount: Number(row.catalog_preview_version_count || 0),
+      saleEnabledVersionCount: Number(row.catalog_sale_enabled_count || 0)
+    },
     chartActivity: {
       recentOpens: Number(row.recent_opens || 0),
       recentListens: Number(row.recent_listens || 0),
@@ -60,6 +75,7 @@ export default async function releaseCatalogHandler(request) {
     const rows = await db.sql`
       SELECT
         release.id,
+        release.artist_slug,
         release.title,
         release.artist,
         release.release_date,
@@ -79,30 +95,76 @@ export default async function releaseCatalogHandler(request) {
         release.stream_url,
         release.featured_type,
         release.featured_until,
-        COUNT(event.id) FILTER (
-          WHERE event.event_type = 'kit_open'
-            AND event.created_at >= NOW() - INTERVAL '7 days'
-        )::int AS recent_opens,
-        COUNT(event.id) FILTER (
-          WHERE event.event_type = 'outbound_click'
-            AND event.created_at >= NOW() - INTERVAL '7 days'
-        )::int AS recent_listens,
-        COUNT(event.id) FILTER (
-          WHERE event.event_type = 'kit_open'
-            AND event.created_at >= NOW() - INTERVAL '14 days'
-            AND event.created_at < NOW() - INTERVAL '7 days'
-        )::int AS previous_opens,
-        COUNT(event.id) FILTER (
-          WHERE event.event_type = 'outbound_click'
-            AND event.created_at >= NOW() - INTERVAL '14 days'
-            AND event.created_at < NOW() - INTERVAL '7 days'
-        )::int AS previous_listens
+        engagement.recent_opens,
+        engagement.recent_listens,
+        engagement.previous_opens,
+        engagement.previous_listens,
+        catalog.catalog_song_id,
+        catalog.catalog_artist_name,
+        catalog.catalog_title,
+        catalog.catalog_rights_status,
+        catalog.catalog_sale_status,
+        catalog.catalog_metadata_status,
+        catalog.catalog_sale_price_cents,
+        catalog.catalog_currency,
+        catalog_versions.catalog_version_count,
+        catalog_versions.catalog_preview_version_count,
+        catalog_versions.catalog_sale_enabled_count
       FROM halo_release_campaigns release
-      LEFT JOIN halo_release_campaign_events event
-        ON event.release_id = release.id
-        AND event.created_at >= NOW() - INTERVAL '14 days'
+      LEFT JOIN LATERAL (
+        SELECT
+          COUNT(*) FILTER (
+            WHERE event.event_type = 'kit_open'
+              AND event.created_at >= NOW() - INTERVAL '7 days'
+          )::int AS recent_opens,
+          COUNT(*) FILTER (
+            WHERE event.event_type = 'outbound_click'
+              AND event.created_at >= NOW() - INTERVAL '7 days'
+          )::int AS recent_listens,
+          COUNT(*) FILTER (
+            WHERE event.event_type = 'kit_open'
+              AND event.created_at >= NOW() - INTERVAL '14 days'
+              AND event.created_at < NOW() - INTERVAL '7 days'
+          )::int AS previous_opens,
+          COUNT(*) FILTER (
+            WHERE event.event_type = 'outbound_click'
+              AND event.created_at >= NOW() - INTERVAL '14 days'
+              AND event.created_at < NOW() - INTERVAL '7 days'
+          )::int AS previous_listens
+        FROM halo_release_campaign_events event
+        WHERE event.release_id = release.id
+          AND event.created_at >= NOW() - INTERVAL '14 days'
+      ) engagement ON TRUE
+      LEFT JOIN LATERAL (
+        SELECT
+          song.id AS catalog_song_id,
+          song.artist_name AS catalog_artist_name,
+          song.title AS catalog_title,
+          song.rights_status AS catalog_rights_status,
+          song.sale_status AS catalog_sale_status,
+          song.metadata_status AS catalog_metadata_status,
+          song.sale_price_cents AS catalog_sale_price_cents,
+          song.currency AS catalog_currency
+        FROM halo_song_catalog song
+        WHERE song.source_release_id = release.id
+          AND song.status = 'active'
+        ORDER BY song.updated_at DESC
+        LIMIT 1
+      ) catalog ON TRUE
+      LEFT JOIN LATERAL (
+        SELECT
+          COUNT(*)::int AS catalog_version_count,
+          COUNT(*) FILTER (
+            WHERE version.audio_url <> ''
+          )::int AS catalog_preview_version_count,
+          COUNT(*) FILTER (
+            WHERE version.sale_enabled = TRUE
+          )::int AS catalog_sale_enabled_count
+        FROM halo_song_versions version
+        WHERE version.song_id = catalog.catalog_song_id
+          AND version.status = 'active'
+      ) catalog_versions ON TRUE
       WHERE release.status = 'published'
-      GROUP BY release.id
       ORDER BY release.release_date DESC NULLS LAST, release.updated_at DESC
       LIMIT 200
     `;

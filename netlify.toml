@@ -115,6 +115,12 @@
   force = true
 
 [[redirects]]
+  from = "/asset-editor/"
+  to = "/asset-editor/index.html"
+  status = 200
+  force = true
+
+[[redirects]]
   from = "/artist-pro/"
   to = "/artist-pro/index.html"
   status = 200

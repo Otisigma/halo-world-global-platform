@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#17130f">
+  <title>HALO Sitewide Asset Editor</title>
+  <meta name="description" content="Edit artwork images, song metadata, and release title/description records from one shared HALO editor hub.">
+  <link rel="icon" href="/assets/halo-app-icon-192.png">
+  <link rel="stylesheet" href="/halo-brand.css">
+  <link rel="stylesheet" href="/accessibility.css">
+  <link rel="stylesheet" href="/asset-editor/asset-editor.css">
+</head>
+<body>
+  <a class="skip-link" href="#editorPanels">Skip to editor panels</a>
+  <main class="editor-shell" aria-labelledby="editorTitle">
+    <header class="editor-header">
+      <a class="editor-brand" href="/halo/"><img src="/assets/halo-logo-mark.webp" alt="HALO"><span><strong>HALO</strong><small>Sitewide Asset Editor</small></span></a>
+      <nav aria-label="Editor navigation">
+        <a href="/halo/">HALO World</a>
+        <a href="/album-concierge/">Album Concierge</a>
+        <a href="/song-catalog/">Song Catalog</a>
+        <a href="/release-house/">Release House</a>
+      </nav>
+    </header>
+
+    <section class="editor-intro">
+      <p class="eyebrow">Shared editing hub</p>
+      <h1 id="editorTitle">Edit the same assets from anywhere in HALO.</h1>
+      <p>Use one shell to update image artwork assets, song/track details, and release title + description fields already represented in Release House metadata.</p>
+    </section>
+
+    <section class="editor-tabs" aria-label="Editor workspaces" role="tablist">
+      <button class="tab-button is-active" id="songCatalogTab" role="tab" type="button" data-tab-target="songCatalogPanel" aria-controls="songCatalogPanel" aria-selected="true" tabindex="0">Songs + artwork assets</button>
+      <button class="tab-button" id="releaseMetadataTab" role="tab" type="button" data-tab-target="releaseMetadataPanel" aria-controls="releaseMetadataPanel" aria-selected="false" tabindex="-1">Release title + description metadata</button>
+    </section>
+
+    <section id="editorPanels" class="editor-panels">
+      <article class="editor-panel is-active" id="songCatalogPanel" role="tabpanel" aria-labelledby="songCatalogTab" aria-label="Song and artwork editor">
+        <p class="panel-copy">This is the shared Song Catalog editor, including image artwork upload/removal and track metadata editing.</p>
+        <iframe id="songCatalogFrame" title="HALO Song Catalog editor" loading="lazy"></iframe>
+      </article>
+      <article class="editor-panel" id="releaseMetadataPanel" role="tabpanel" aria-labelledby="releaseMetadataTab" aria-label="Release metadata editor" hidden>
+        <p class="panel-copy">This is the shared Release House metadata editor for release title and descriptive release fields.</p>
+        <iframe id="releaseHouseFrame" title="HALO Release House metadata editor" loading="lazy"></iframe>
+      </article>
+    </section>
+  </main>
+
+  <script src="/stats.js" defer></script>
+  <script src="/site-monitor.js" defer></script>
+  <script src="/accessibility.js" defer></script>
+  <script src="/asset-editor/asset-editor.js" defer></script>
+</body>
+</html>

@@ -30,17 +30,17 @@
       <p>Use one shell to update image artwork assets, song/track details, and release title + description fields already represented in Release House metadata.</p>
     </section>
 
-    <section class="editor-tabs" aria-label="Editor workspaces">
-      <button class="tab-button is-active" type="button" data-tab-target="songCatalogPanel" aria-pressed="true">Songs + artwork assets</button>
-      <button class="tab-button" type="button" data-tab-target="releaseMetadataPanel" aria-pressed="false">Release title + description metadata</button>
+    <section class="editor-tabs" aria-label="Editor workspaces" role="tablist">
+      <button class="tab-button is-active" id="songCatalogTab" role="tab" type="button" data-tab-target="songCatalogPanel" aria-controls="songCatalogPanel" aria-selected="true">Songs + artwork assets</button>
+      <button class="tab-button" id="releaseMetadataTab" role="tab" type="button" data-tab-target="releaseMetadataPanel" aria-controls="releaseMetadataPanel" aria-selected="false" tabindex="-1">Release title + description metadata</button>
     </section>
 
     <section id="editorPanels" class="editor-panels">
-      <article class="editor-panel is-active" id="songCatalogPanel" aria-label="Song and artwork editor">
+      <article class="editor-panel is-active" id="songCatalogPanel" role="tabpanel" aria-labelledby="songCatalogTab" aria-label="Song and artwork editor">
         <p class="panel-copy">This is the shared Song Catalog editor, including image artwork upload/removal and track metadata editing.</p>
         <iframe id="songCatalogFrame" title="HALO Song Catalog editor" loading="lazy"></iframe>
       </article>
-      <article class="editor-panel" id="releaseMetadataPanel" aria-label="Release metadata editor" hidden>
+      <article class="editor-panel" id="releaseMetadataPanel" role="tabpanel" aria-labelledby="releaseMetadataTab" aria-label="Release metadata editor" hidden>
         <p class="panel-copy">This is the shared Release House metadata editor for release title and descriptive release fields.</p>
         <iframe id="releaseHouseFrame" title="HALO Release House metadata editor" loading="lazy" src="/release-house/"></iframe>
       </article>

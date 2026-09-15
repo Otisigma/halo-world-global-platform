@@ -25,7 +25,8 @@
     tabButtons.forEach(button => {
       const active = button.dataset.tabTarget === panelId;
       button.classList.toggle("is-active", active);
-      button.setAttribute("aria-pressed", String(active));
+      button.setAttribute("aria-selected", String(active));
+      button.tabIndex = active ? 0 : -1;
     });
   }
 

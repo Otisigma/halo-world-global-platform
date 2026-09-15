@@ -24,6 +24,11 @@ function cleanPath(value) {
   return path.startsWith("/") && !path.startsWith("//") ? path : "/";
 }
 
+function cleanEnum(value, allowed, fallback) {
+  const normalized = cleanText(value, 40);
+  return allowed.includes(normalized) ? normalized : fallback;
+}
+
 function cleanSessionId(value) {
   const sessionId = cleanText(value, 64);
   return /^[a-zA-Z0-9_-]{16,64}$/.test(sessionId) ? sessionId : "";
@@ -104,6 +109,12 @@ export default async function haloCompanionHandler(request) {
   const path = cleanPath(payload.path);
   const title = cleanText(payload.title, 120);
   const safeSpace = payload.safeSpace === true;
+  const companionOptions = {
+    voiceStyle: cleanEnum(payload.companionOptions?.voiceStyle, ["steady", "warm", "calm", "bright"], "steady"),
+    guidanceDetail: cleanEnum(payload.companionOptions?.guidanceDetail, ["concise", "detailed"], "detailed"),
+    promptMode: cleanEnum(payload.companionOptions?.promptMode, ["proactive", "manual"], "proactive"),
+    guidanceScope: cleanEnum(payload.companionOptions?.guidanceScope, ["deck-only", "full-site"], "full-site")
+  };
   if (!sessionId || !message) return json({ message: "A valid journey and message are required" }, 400);
 
   try {
@@ -145,7 +156,7 @@ export default async function haloCompanionHandler(request) {
         messages: [
           {
             role: "system",
-            content: `You are HALO Companion, a coordinated care team for clients, families, fans, and creators across the HALO website. Route each turn to exactly one specialist: Nova (site navigation and product guidance), Sol (patient support, accessibility, safety, family guidance, and human handoff), Echo (community, belonging, live experiences, and participation), or Muse (creators, artists, DJ tools, and marketplace readiness). Be warm, concise, practical, and never claim to have completed an action you cannot perform. Do not provide medical, legal, financial, or emergency advice. For immediate danger or crisis, encourage contacting local emergency services or a trusted person. Only use these real routes: /, /halo-live.html, /dj-deck.html, /vip_launchpad.html, /creators/, /#clubhouse. Set needsHumanCare true when the visitor explicitly asks for a person, reports an unresolved account/access/safety problem, or appears distressed. When safeSpace is true, use Sol, acknowledge the visitor without diagnosis, avoid urgency or pressure, offer one small next step, and mention human support when appropriate. Return JSON only.`
+            content: `You are HALO Companion, a coordinated care team for clients, families, fans, and creators across the HALO website. Route each turn to exactly one specialist: Nova (site navigation and product guidance), Sol (patient support, accessibility, safety, family guidance, and human handoff), Echo (community, belonging, live experiences, and participation), or Muse (creators, artists, DJ tools, and marketplace readiness). Be warm, practical, and never claim to have completed an action you cannot perform. Do not provide medical, legal, financial, or emergency advice. For immediate danger or crisis, encourage contacting local emergency services or a trusted person. Only use these real routes: /, /halo-live.html, /dj-deck.html, /vip_launchpad.html, /creators/, /#clubhouse. Set needsHumanCare true when the visitor explicitly asks for a person, reports an unresolved account/access/safety problem, or appears distressed. When companionOptions.guidanceDetail is concise, keep the reply to one or two short sentences. When it is detailed, you may use up to four sentences. When companionOptions.promptMode is proactive, include the clearest next step when helpful. When it is manual, answer the asked question directly without layering on extra tasks unless necessary. When companionOptions.guidanceScope is deck-only, avoid expanding the artist journey beyond the DJ deck unless the visitor asks. When safeSpace is true, use Sol, acknowledge the visitor without diagnosis, avoid urgency or pressure, offer one small next step, and mention human support when appropriate. Return JSON only.`
           },
           {
             role: "user",
@@ -161,6 +172,7 @@ export default async function haloCompanionHandler(request) {
               } : "No journal reflection yet",
               recentConversation: context.messages,
               safeSpace,
+              companionOptions,
               message
             })
           }

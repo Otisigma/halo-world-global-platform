@@ -55,6 +55,8 @@ assert.match(deck, /function buildArtistJourneyModel\(/);
 assert.match(deck, /function cleanupArtistJourneyGuidance\(/);
 assert.match(deck, /<li class="journey-chip is-\$\{stage\.status\}"/);
 assert.match(deck, /aria-current="step"/);
+assert.match(deck, /halo-artist-journey-state\.v1/);
+assert.match(deck, /halo:artist-journey-update/);
 assert.match(deck, /Upload \/ ingest/);
 assert.match(deck, /Artwork \/ contract/);
 assert.match(deck, /Mix \/ review/);

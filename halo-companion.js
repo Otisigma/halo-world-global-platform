@@ -19,30 +19,255 @@
     "/creators/index.html": { eyebrow: "Creator signal", welcome: "Muse here. I can help artists and creators understand the marketplace, prepare their story, and choose the right next step.", prompts: ["How does the marketplace work?", "Help me prepare my profile", "What can creators offer?"] },
     "/creators/gear-guide.html": { eyebrow: "Signal chain", welcome: "Muse here. I can help you identify the problem before considering equipment, then check the details that make a track ready for distribution.", prompts: ["Do I need new gear?", "Help me check my release", "Explain the affiliate links"] }
   };
+  const SETTINGS_KEY = "halo-companion-settings.v1";
+  const JOURNEY_STATE_KEY = "halo-artist-journey-state.v1";
+  const DEFAULT_SETTINGS = {
+    voiceEnabled: false,
+    voiceStyle: "steady",
+    guidanceDetail: "detailed",
+    promptMode: "proactive",
+    guidanceScope: "full-site"
+  };
 
   const state = {
     open: false,
     busy: false,
     agent: location.pathname.startsWith("/creators") || location.pathname === "/dj-deck.html" ? "muse" : location.pathname === "/halo-live.html" ? "echo" : "nova",
-    sessionId: getSessionId()
+    sessionId: getSessionId(),
+    settings: readSettings(),
+    journey: readJourneyState(),
+    voices: [],
+    lastJourneySignature: ""
   };
+
+  function randomToken() {
+    if (crypto.randomUUID) return crypto.randomUUID().replaceAll("-", "");
+    if (crypto.getRandomValues) {
+      const bytes = new Uint8Array(16);
+      crypto.getRandomValues(bytes);
+      return Array.from(bytes, value => value.toString(16).padStart(2, "0")).join("");
+    }
+    return `${Date.now().toString(16)}0000000000000000`.slice(0, 32);
+  }
 
   function getSessionId() {
     const key = "halo-companion-journey";
     try {
       const stored = localStorage.getItem(key);
       if (/^[a-zA-Z0-9_-]{16,64}$/.test(stored || "")) return stored;
-      const randomPart = crypto.randomUUID ? crypto.randomUUID().replaceAll("-", "") : `${Date.now()}_${Math.random().toString(36).slice(2)}`;
-      const generated = `journey_${randomPart}`.slice(0, 64);
+      const generated = `journey_${randomToken()}`.slice(0, 64);
       localStorage.setItem(key, generated);
       return generated;
     } catch {
-      return `journey_${Date.now()}_${Math.random().toString(36).slice(2)}`.slice(0, 64);
+      return `journey_${randomToken()}`.slice(0, 64);
     }
   }
 
   function pageGuide() {
     return pageGuides[location.pathname] || pageGuides["/"];
+  }
+
+  function normalizeSettings(value) {
+    const settings = value && typeof value === "object" ? value : {};
+    return {
+      voiceEnabled: settings.voiceEnabled === true,
+      voiceStyle: ["steady", "warm", "calm", "bright"].includes(settings.voiceStyle) ? settings.voiceStyle : DEFAULT_SETTINGS.voiceStyle,
+      guidanceDetail: ["concise", "detailed"].includes(settings.guidanceDetail) ? settings.guidanceDetail : DEFAULT_SETTINGS.guidanceDetail,
+      promptMode: ["proactive", "manual"].includes(settings.promptMode) ? settings.promptMode : DEFAULT_SETTINGS.promptMode,
+      guidanceScope: ["deck-only", "full-site"].includes(settings.guidanceScope) ? settings.guidanceScope : DEFAULT_SETTINGS.guidanceScope
+    };
+  }
+
+  function readSettings() {
+    try {
+      return normalizeSettings(JSON.parse(localStorage.getItem(SETTINGS_KEY) || "null"));
+    } catch {
+      return { ...DEFAULT_SETTINGS };
+    }
+  }
+
+  function persistSettings() {
+    try {
+      localStorage.setItem(SETTINGS_KEY, JSON.stringify(state.settings));
+    } catch {}
+  }
+
+  function normalizeJourneyState(value) {
+    if (!value || typeof value !== "object") return null;
+    const stage = value.currentStage && typeof value.currentStage === "object" ? {
+      id: String(value.currentStage.id || "").trim(),
+      label: String(value.currentStage.label || "").trim()
+    } : null;
+    if (!stage?.id) return null;
+    return {
+      stageBadge: String(value.stageBadge || "").trim(),
+      summary: String(value.summary || "").trim(),
+      statusNote: String(value.statusNote || "").trim(),
+      nextActionTitle: String(value.nextActionTitle || "").trim(),
+      nextActionCopy: String(value.nextActionCopy || "").trim(),
+      currentStage: stage,
+      updatedAt: String(value.updatedAt || "").trim()
+    };
+  }
+
+  function readJourneyState() {
+    try {
+      return normalizeJourneyState(JSON.parse(localStorage.getItem(JOURNEY_STATE_KEY) || "null"));
+    } catch {
+      return null;
+    }
+  }
+
+  function prefersJourneyEverywhere() {
+    return state.settings.guidanceScope === "full-site" || location.pathname === "/dj-deck.html";
+  }
+
+  function guidanceSignature(journey = state.journey) {
+    return journey ? [journey.stageBadge, journey.currentStage?.id, journey.nextActionTitle, journey.nextActionCopy].filter(Boolean).join("|") : "";
+  }
+
+  function conciseCopy(text, limit = 2) {
+    const sentences = String(text || "").trim().split(/(?<=[.!?])\s+/).filter(Boolean);
+    return sentences.slice(0, limit).join(" ") || String(text || "").trim();
+  }
+
+  function formatJourneyCopy(journey = state.journey) {
+    if (!journey) {
+      return {
+        badge: state.settings.guidanceScope === "deck-only" ? "Deck guidance only" : "Full-site guidance",
+        stage: state.settings.guidanceScope === "deck-only" ? "Journey updates stay inside the DJ deck." : "Open the DJ deck once and HALO can keep the artist journey in view across the site.",
+        copy: "Voice playback stays optional and only runs when your browser allows it."
+      };
+    }
+    const detail = state.settings.guidanceDetail;
+    return {
+      badge: journey.stageBadge || "Artist journey active",
+      stage: detail === "concise" ? `${journey.nextActionTitle || "Next step ready"} · ${journey.currentStage.label}` : journey.nextActionTitle || `Watching ${journey.currentStage.label}`,
+      copy: detail === "concise"
+        ? conciseCopy(journey.nextActionCopy || journey.summary || "", 1)
+        : [journey.summary, journey.statusNote, journey.nextActionCopy].filter(Boolean).join(" ")
+    };
+  }
+
+  function journeyVoiceCopy(journey = state.journey) {
+    if (!journey) return "HALO voice is ready. Open the DJ deck to begin an artist journey watch.";
+    const detail = state.settings.guidanceDetail;
+    return detail === "concise"
+      ? [journey.stageBadge, journey.nextActionTitle, journey.nextActionCopy].filter(Boolean).join(". ")
+      : [journey.summary, journey.statusNote, journey.nextActionTitle, journey.nextActionCopy].filter(Boolean).join(". ");
+  }
+
+  function voiceSupported() {
+    return typeof window.speechSynthesis !== "undefined" && typeof window.SpeechSynthesisUtterance !== "undefined";
+  }
+
+  function voiceProfile() {
+    return {
+      steady: { rate: 1, pitch: 1, tokens: [] },
+      warm: { rate: 0.96, pitch: 0.95, tokens: ["warm", "samantha", "victoria", "serena"] },
+      calm: { rate: 0.92, pitch: 0.9, tokens: ["calm", "daniel", "serena", "zira"] },
+      bright: { rate: 1.02, pitch: 1.08, tokens: ["bright", "ava", "aria", "luna", "nova"] }
+    }[state.settings.voiceStyle] || { rate: 1, pitch: 1, tokens: [] };
+  }
+
+  function resolveVoice() {
+    if (!voiceSupported()) return null;
+    const voices = state.voices.length ? state.voices : window.speechSynthesis.getVoices();
+    const englishVoices = voices.filter(voice => /^en(-|_|\b)/i.test(voice.lang || ""));
+    const profile = voiceProfile();
+    const preferred = englishVoices.find(voice => profile.tokens.some(token => String(voice.name || "").toLowerCase().includes(token)));
+    return preferred || englishVoices[0] || voices[0] || null;
+  }
+
+  function speakText(text, options = {}) {
+    if (!voiceSupported() || !state.settings.voiceEnabled) return false;
+    const message = state.settings.guidanceDetail === "concise" ? conciseCopy(text) : String(text || "").trim();
+    if (!message) return false;
+    try {
+      if (!options.queue) window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(message);
+      const selectedVoice = resolveVoice();
+      const profile = voiceProfile();
+      if (selectedVoice) utterance.voice = selectedVoice;
+      utterance.rate = profile.rate;
+      utterance.pitch = profile.pitch;
+      window.speechSynthesis.speak(utterance);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  function updateJourneyDisplay() {
+    const section = root.querySelector("#haloCompanionJourney");
+    if (!section) return;
+    const shouldShow = prefersJourneyEverywhere();
+    section.hidden = !shouldShow;
+    if (!shouldShow) return;
+    const content = formatJourneyCopy();
+    root.querySelector("#haloCompanionJourneyBadge").textContent = content.badge;
+    root.querySelector("#haloCompanionJourneyStage").textContent = content.stage;
+    root.querySelector("#haloCompanionJourneyCopy").textContent = content.copy;
+    const speak = root.querySelector("#haloCompanionJourneySpeak");
+    if (speak) {
+      speak.disabled = !voiceSupported() || !state.settings.voiceEnabled;
+      speak.textContent = state.settings.promptMode === "manual" ? "Speak guidance" : "Replay latest guidance";
+    }
+  }
+
+  function updateSettingsDock() {
+    const form = root.querySelector(".halo-companion-settings-form");
+    if (!form) return;
+    form.elements.haloCompanionVoiceEnabled.checked = state.settings.voiceEnabled;
+    form.elements.haloCompanionVoiceStyle.value = state.settings.voiceStyle;
+    form.elements.haloCompanionGuidanceDetail.value = state.settings.guidanceDetail;
+    form.elements.haloCompanionPromptMode.value = state.settings.promptMode;
+    form.elements.haloCompanionGuidanceScope.value = state.settings.guidanceScope;
+    const status = root.querySelector("#haloCompanionVoiceStatus");
+    if (status) {
+      status.textContent = voiceSupported()
+        ? state.settings.voiceEnabled
+          ? `Voice ready · ${state.settings.voiceStyle} tone`
+          : "Voice available · currently off"
+        : "Voice unavailable in this browser";
+    }
+    root.querySelectorAll(".halo-companion-voice-action").forEach(button => {
+      button.disabled = !voiceSupported() || !state.settings.voiceEnabled;
+    });
+    updateJourneyDisplay();
+  }
+
+  function applySettings(nextSettings) {
+    state.settings = normalizeSettings(nextSettings);
+    persistSettings();
+    if (!state.settings.voiceEnabled && voiceSupported()) window.speechSynthesis.cancel();
+    updateSettingsDock();
+  }
+
+  function maybeAnnounceJourney(journey = state.journey) {
+    if (!journey || state.settings.promptMode !== "proactive" || state.settings.guidanceScope !== "full-site") return;
+    const signature = guidanceSignature(journey);
+    if (!signature || signature === state.lastJourneySignature) return;
+    state.lastJourneySignature = signature;
+    addMessage("assistant", journeyVoiceCopy(journey), { agent: "muse", speak: true });
+  }
+
+  function handleJourneyUpdate(value) {
+    const journey = normalizeJourneyState(value);
+    if (!journey) {
+      state.journey = null;
+      updateJourneyDisplay();
+      return;
+    }
+    state.journey = journey;
+    updateJourneyDisplay();
+    maybeAnnounceJourney(journey);
+  }
+
+  function hydrateVoices() {
+    if (!voiceSupported()) return;
+    state.voices = window.speechSynthesis.getVoices();
+    updateSettingsDock();
   }
 
   function injectStyles() {
@@ -61,11 +286,12 @@
       .halo-companion-panel::before{content:"";position:absolute;inset:0;pointer-events:none;background:radial-gradient(circle at 9% 2%,color-mix(in srgb,var(--hc-agent) 20%,transparent),transparent 29%),linear-gradient(115deg,rgba(255,255,255,.025),transparent 40%)}
       .halo-companion-head{position:relative;display:grid;grid-template-columns:1fr auto;gap:18px;padding:20px 20px 15px;border-bottom:1px solid rgba(255,255,255,.1)}.halo-companion-eyebrow{display:flex;align-items:center;gap:8px;color:var(--hc-agent);font-size:8px;letter-spacing:.2em;text-transform:uppercase}.halo-companion-eyebrow::before{content:"";width:18px;height:1px;background:currentColor}.halo-companion-title{margin:7px 0 0;font-family:Georgia,"Times New Roman",serif;font-size:25px;font-weight:400;line-height:1}.halo-companion-title em{color:var(--hc-agent);font-style:italic}.halo-companion-close{align-self:start;width:32px;height:32px;border:1px solid rgba(255,255,255,.14);border-radius:50%;background:transparent;color:#d4d7d1;cursor:pointer}
       .halo-companion-roster{position:relative;display:grid;grid-template-columns:repeat(4,1fr);border-bottom:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.025)}.halo-companion-agent{display:grid;place-items:center;gap:2px;padding:11px 4px;border:0;border-right:1px solid rgba(255,255,255,.08);background:transparent;color:#777e77;cursor:pointer;transition:background .2s,color .2s}.halo-companion-agent:last-child{border-right:0}.halo-companion-agent[data-active="true"]{background:color-mix(in srgb,var(--agent-color) 11%,transparent);color:var(--agent-color)}.halo-companion-agent-glyph{font-size:15px}.halo-companion-agent strong{font-size:8px;letter-spacing:.1em;text-transform:uppercase}.halo-companion-agent span:last-child{font-size:7px;text-transform:uppercase}
+      .halo-companion-journey{padding:14px 18px;border-bottom:1px solid rgba(255,255,255,.1);background:linear-gradient(180deg,rgba(216,255,98,.05),transparent)}.halo-companion-journey[hidden]{display:none}.halo-companion-journey-head{display:flex;align-items:center;justify-content:space-between;gap:10px}.halo-companion-journey-head strong{font-size:8px;letter-spacing:.14em;text-transform:uppercase;color:var(--hc-agent)}.halo-companion-journey-badge{padding:4px 7px;border:1px solid rgba(255,255,255,.16);font-size:7px;letter-spacing:.08em;text-transform:uppercase;color:#d8ddd8}.halo-companion-journey-stage{margin:10px 0 5px;color:#fff;font-size:10px;text-transform:uppercase;letter-spacing:.08em}.halo-companion-journey-copy{margin:0;color:#9ca39c;font-size:9px;line-height:1.55}.halo-companion-journey-action,.halo-companion-voice-action{margin-top:9px;border:1px solid rgba(255,255,255,.16);background:transparent;color:var(--hc-agent);padding:7px 9px;font-size:8px;letter-spacing:.08em;text-transform:uppercase;cursor:pointer}.halo-companion-journey-action[disabled],.halo-companion-voice-action[disabled]{opacity:.45;cursor:not-allowed}
       .halo-companion-feed{position:relative;display:flex;flex-direction:column;gap:13px;overflow-y:auto;padding:18px 18px 24px;scrollbar-width:thin;scrollbar-color:var(--hc-agent) #171a17}.halo-companion-message{max-width:88%;animation:halo-companion-rise .24s ease-out both}.halo-companion-message[data-role="visitor"]{align-self:flex-end}.halo-companion-message-label{margin:0 0 5px;color:#767d76;font-size:7px;letter-spacing:.14em;text-transform:uppercase}.halo-companion-message[data-role="visitor"] .halo-companion-message-label{text-align:right}.halo-companion-bubble{padding:12px 14px;border:1px solid rgba(255,255,255,.1);background:#131613;font:400 11px/1.55 "DM Mono","IBM Plex Mono",monospace;white-space:pre-wrap}.halo-companion-message[data-role="visitor"] .halo-companion-bubble{border-color:color-mix(in srgb,var(--hc-agent) 30%,transparent);background:color-mix(in srgb,var(--hc-agent) 9%,#111)}
       .halo-companion-suggestions{display:flex;flex-wrap:wrap;gap:7px;margin-top:9px}.halo-companion-suggestion,.halo-companion-route{border:1px solid rgba(255,255,255,.14);background:transparent;color:#d9ddd6;padding:7px 9px;font-size:8px;cursor:pointer;transition:border-color .2s,color .2s}.halo-companion-suggestion:hover,.halo-companion-route:hover{border-color:var(--hc-agent);color:var(--hc-agent)}.halo-companion-route{display:inline-flex;margin-top:9px;text-decoration:none;color:var(--hc-agent);border-color:color-mix(in srgb,var(--hc-agent) 45%,transparent)}
       .halo-companion-thinking{display:flex;align-items:center;gap:8px;color:#858c85;font-size:8px;text-transform:uppercase;letter-spacing:.12em}.halo-companion-thinking::before{content:"";width:15px;height:15px;border:1px solid rgba(255,255,255,.15);border-top-color:var(--hc-agent);border-radius:50%;animation:halo-companion-orbit .7s linear infinite}
-      .halo-companion-compose{position:relative;padding:13px 14px 15px;border-top:1px solid rgba(255,255,255,.1);background:#0e110e}.halo-companion-form{display:grid;grid-template-columns:1fr 44px;gap:8px}.halo-companion-input{min-width:0;height:44px;border:1px solid rgba(255,255,255,.16);border-radius:0;background:#070908;color:#fff;padding:0 12px;font-size:10px}.halo-companion-input::placeholder{color:#656b65}.halo-companion-send{display:grid;place-items:center;border:1px solid var(--hc-agent);background:var(--hc-agent);color:#080a08;cursor:pointer;font-size:16px}.halo-companion-send:disabled{cursor:wait;opacity:.55}.halo-companion-foot{display:flex;justify-content:space-between;gap:10px;margin-top:8px;color:#666d66;font-size:7px;letter-spacing:.05em}.halo-companion-memory{color:#8fa178}.halo-companion-memory::before{content:"●";margin-right:5px;color:var(--hc-agent)}
-      @media(max-width:600px){.halo-companion{left:10px;bottom:10px}.halo-companion-launcher{grid-template-columns:42px auto;min-height:52px}.halo-companion-launcher-core{width:42px;height:42px}.halo-companion-panel{bottom:64px;width:calc(100vw - 20px);height:min(690px,calc(100vh - 84px))}.halo-companion-title{font-size:22px}.halo-companion-roster{grid-template-columns:repeat(4,1fr)}.halo-companion-agent span:last-child{display:none}}
+      .halo-companion-compose{position:relative;padding:13px 14px 15px;border-top:1px solid rgba(255,255,255,.1);background:#0e110e}.halo-companion-form{display:grid;grid-template-columns:1fr 44px;gap:8px}.halo-companion-input{min-width:0;height:44px;border:1px solid rgba(255,255,255,.16);border-radius:0;background:#070908;color:#fff;padding:0 12px;font-size:10px}.halo-companion-input::placeholder{color:#656b65}.halo-companion-send{display:grid;place-items:center;border:1px solid var(--hc-agent);background:var(--hc-agent);color:#080a08;cursor:pointer;font-size:16px}.halo-companion-send:disabled{cursor:wait;opacity:.55}.halo-companion-foot{display:flex;justify-content:space-between;gap:10px;margin-top:8px;color:#666d66;font-size:7px;letter-spacing:.05em}.halo-companion-memory{color:#8fa178}.halo-companion-memory::before{content:"●";margin-right:5px;color:var(--hc-agent)}.halo-companion-settings{margin-top:12px;border-top:1px solid rgba(255,255,255,.08);padding-top:10px}.halo-companion-settings summary{cursor:pointer;color:#dfe4dd;font-size:8px;letter-spacing:.14em;text-transform:uppercase;list-style:none}.halo-companion-settings summary::-webkit-details-marker{display:none}.halo-companion-settings summary::after{content:"+";float:right;color:var(--hc-agent)}.halo-companion-settings[open] summary::after{content:"–"}.halo-companion-settings-form{display:grid;gap:8px;margin-top:10px}.halo-companion-settings-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.halo-companion-setting{display:grid;gap:5px;color:#9ea49e;font-size:8px;letter-spacing:.06em;text-transform:uppercase}.halo-companion-setting-check{grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;padding:8px 10px;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.025)}.halo-companion-setting select{height:34px;border:1px solid rgba(255,255,255,.14);background:#080a08;color:#fff;padding:0 9px;font-size:9px}.halo-companion-setting input[type="checkbox"]{width:18px;height:18px;accent-color:var(--hc-agent)}.halo-companion-settings-status{margin:2px 0 0;color:#757c75;font-size:8px}
+      @media(max-width:600px){.halo-companion{left:10px;bottom:10px}.halo-companion-launcher{grid-template-columns:42px auto;min-height:52px}.halo-companion-launcher-core{width:42px;height:42px}.halo-companion-panel{bottom:64px;width:calc(100vw - 20px);height:min(690px,calc(100vh - 84px))}.halo-companion-title{font-size:22px}.halo-companion-roster{grid-template-columns:repeat(4,1fr)}.halo-companion-agent span:last-child{display:none}.halo-companion-settings-grid{grid-template-columns:1fr}}
       @media(prefers-reduced-motion:reduce){.halo-companion *{animation:none!important;transition:none!important}}
     `;
     document.head.appendChild(style);
@@ -83,12 +309,31 @@
           <button class="halo-companion-close" type="button" aria-label="Close companion">×</button>
         </header>
         <div class="halo-companion-roster" aria-label="AI specialist team"></div>
+        <section class="halo-companion-journey" id="haloCompanionJourney" aria-label="HALO artist journey guidance" aria-live="polite">
+          <div class="halo-companion-journey-head"><strong>HALO artist journey</strong><span class="halo-companion-journey-badge" id="haloCompanionJourneyBadge">Full-site guidance</span></div>
+          <p class="halo-companion-journey-stage" id="haloCompanionJourneyStage">Open the DJ deck to begin journey watch.</p>
+          <p class="halo-companion-journey-copy" id="haloCompanionJourneyCopy">HALO can carry stage guidance across the site without changing the deck workflow.</p>
+          <button class="halo-companion-journey-action" id="haloCompanionJourneySpeak" type="button">Replay latest guidance</button>
+        </section>
         <div class="halo-companion-feed" role="log" aria-live="polite"></div>
         <footer class="halo-companion-compose">
           <form class="halo-companion-form">
             <input class="halo-companion-input" maxlength="1000" autocomplete="off" aria-label="Ask the HALO companion team" placeholder="Tell us what you need…">
             <button class="halo-companion-send" type="submit" aria-label="Send message">↗</button>
           </form>
+          <details class="halo-companion-settings">
+            <summary>Voice + guidance options</summary>
+            <form class="halo-companion-settings-form">
+              <label class="halo-companion-setting halo-companion-setting-check"><span>Voice guidance</span><input id="haloCompanionVoiceEnabled" name="haloCompanionVoiceEnabled" type="checkbox"></label>
+              <div class="halo-companion-settings-grid">
+                <label class="halo-companion-setting"><span>Voice tone</span><select id="haloCompanionVoiceStyle" name="haloCompanionVoiceStyle"><option value="steady">Steady</option><option value="warm">Warm</option><option value="calm">Calm</option><option value="bright">Bright</option></select></label>
+                <label class="halo-companion-setting"><span>Guidance detail</span><select id="haloCompanionGuidanceDetail" name="haloCompanionGuidanceDetail"><option value="concise">Concise</option><option value="detailed">Detailed</option></select></label>
+                <label class="halo-companion-setting"><span>Prompt mode</span><select id="haloCompanionPromptMode" name="haloCompanionPromptMode"><option value="proactive">Proactive</option><option value="manual">Manual</option></select></label>
+                <label class="halo-companion-setting"><span>Guidance scope</span><select id="haloCompanionGuidanceScope" name="haloCompanionGuidanceScope"><option value="full-site">Full-site</option><option value="deck-only">Deck-only</option></select></label>
+              </div>
+              <p class="halo-companion-settings-status" id="haloCompanionVoiceStatus">Voice available · currently off</p>
+            </form>
+          </details>
           <div class="halo-companion-foot"><span class="halo-companion-memory">Journey memory on</span><span>AI guidance · Human care available</span></div>
         </footer>
       </section>
@@ -181,8 +426,18 @@
       link.textContent = "Continue this journey →";
       message.appendChild(link);
     }
+    if (role === "assistant") {
+      const voiceAction = document.createElement("button");
+      voiceAction.type = "button";
+      voiceAction.className = "halo-companion-voice-action";
+      voiceAction.textContent = "Speak";
+      voiceAction.disabled = !voiceSupported() || !state.settings.voiceEnabled;
+      voiceAction.addEventListener("click", () => speakText(text));
+      message.appendChild(voiceAction);
+    }
     feed.appendChild(message);
     feed.scrollTop = feed.scrollHeight;
+    if (role === "assistant" && options.speak && state.settings.promptMode === "proactive") speakText(text);
   }
 
   function showThinking(show) {
@@ -211,13 +466,24 @@
       const response = await fetch("/api/halo-companion", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sessionId: state.sessionId, message, path: `${location.pathname}${location.hash}`, title: document.title })
+        body: JSON.stringify({
+          sessionId: state.sessionId,
+          message,
+          path: `${location.pathname}${location.hash}`,
+          title: document.title,
+          companionOptions: {
+            voiceStyle: state.settings.voiceStyle,
+            guidanceDetail: state.settings.guidanceDetail,
+            promptMode: state.settings.promptMode,
+            guidanceScope: state.settings.guidanceScope
+          }
+        })
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data.message || "The companion team could not respond.");
       showThinking(false);
       setAgent(data.agent?.id || "nova");
-      addMessage("assistant", data.reply, { agent: data.agent?.id, suggestions: data.suggestions, route: data.route });
+      addMessage("assistant", data.reply, { agent: data.agent?.id, suggestions: data.suggestions, route: data.route, speak: true });
       window.dispatchEvent(new CustomEvent("halo:journal-event", {
         detail: {
           eventType: "companion_guidance_received",
@@ -251,6 +517,8 @@
   const root = createShell();
   renderRoster();
   setAgent(state.agent);
+  state.lastJourneySignature = guidanceSignature(state.journey);
+  updateSettingsDock();
   const guide = pageGuide();
   addMessage("assistant", guide.welcome, { agent: state.agent, suggestions: guide.prompts });
 
@@ -263,4 +531,49 @@
   document.addEventListener("keydown", event => {
     if (event.key === "Escape" && state.open) toggle(false);
   });
+  root.querySelector(".halo-companion-settings-form").addEventListener("input", event => {
+    const form = event.currentTarget;
+    applySettings({
+      voiceEnabled: form.elements.haloCompanionVoiceEnabled.checked,
+      voiceStyle: form.elements.haloCompanionVoiceStyle.value,
+      guidanceDetail: form.elements.haloCompanionGuidanceDetail.value,
+      promptMode: form.elements.haloCompanionPromptMode.value,
+      guidanceScope: form.elements.haloCompanionGuidanceScope.value
+    });
+  });
+  root.querySelector("#haloCompanionJourneySpeak").addEventListener("click", () => {
+    speakText(journeyVoiceCopy());
+  });
+  window.addEventListener("halo:artist-journey-update", event => {
+    handleJourneyUpdate(event.detail);
+  });
+  window.addEventListener("storage", event => {
+    if (event.key === JOURNEY_STATE_KEY) {
+      if (!event.newValue) {
+        handleJourneyUpdate(null);
+        return;
+      }
+      try {
+        handleJourneyUpdate(JSON.parse(event.newValue));
+      } catch {
+        handleJourneyUpdate(null);
+      }
+      return;
+    }
+    if (event.key === SETTINGS_KEY) {
+      if (!event.newValue) {
+        applySettings(DEFAULT_SETTINGS);
+        return;
+      }
+      try {
+        applySettings(JSON.parse(event.newValue));
+      } catch {
+        applySettings(DEFAULT_SETTINGS);
+      }
+    }
+  });
+  if (voiceSupported()) {
+    hydrateVoices();
+    window.speechSynthesis.addEventListener?.("voiceschanged", hydrateVoices);
+  }
 })();

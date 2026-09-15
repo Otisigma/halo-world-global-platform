@@ -245,7 +245,7 @@
   }
 
   function maybeAnnounceJourney(journey = state.journey) {
-    if (!journey || state.settings.promptMode !== "proactive" || state.settings.guidanceScope !== "full-site") return;
+    if (!journey || !state.settings.voiceEnabled || state.settings.promptMode !== "proactive" || state.settings.guidanceScope !== "full-site") return;
     const signature = guidanceSignature(journey);
     if (!signature || signature === state.lastJourneySignature) return;
     state.lastJourneySignature = signature;
@@ -574,6 +574,9 @@
   });
   if (voiceSupported()) {
     hydrateVoices();
-    window.speechSynthesis.addEventListener?.("voiceschanged", hydrateVoices);
+    if (!window.__haloCompanionVoicesHandler) {
+      window.__haloCompanionVoicesHandler = () => hydrateVoices();
+      window.speechSynthesis.addEventListener?.("voiceschanged", window.__haloCompanionVoicesHandler);
+    }
   }
 })();

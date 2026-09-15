@@ -1997,6 +1997,7 @@
     let latestPreflightReport = null;
     let currentTransitionObservationId = null;
     const sessionStorageKey = "halo.dj.session.v1";
+    const artistJourneyStorageKey = "halo-artist-journey-state.v1";
     const djSessionId = window.crypto?.randomUUID ? window.crypto.randomUUID() : `halo-dj-${Date.now()}-${Math.random().toString(16).slice(2)}`;
     let djMode = "listening";
     let sessionSaveTimer = null;
@@ -2230,6 +2231,11 @@
       elements.artistJourneyBlockers.innerHTML = model.blockers.length
         ? model.blockers.map(blocker => `<span class="journey-blocker">${escapeHTML(blocker)}</span>`).join("")
         : '<span class="journey-blocker is-clear">All five stages are ready. HALO AI can guide the launch without changing the mix desk.</span>';
+      const publishedModel = { ...model, updatedAt: new Date().toISOString() };
+      try {
+        localStorage.setItem(artistJourneyStorageKey, JSON.stringify(publishedModel));
+      } catch {}
+      window.dispatchEvent(new CustomEvent("halo:artist-journey-update", { detail: publishedModel }));
     }
 
     function cleanupArtistJourneyGuidance() {

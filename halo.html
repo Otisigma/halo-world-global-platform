@@ -3857,7 +3857,7 @@
                       </section>
                       {ownerControlAccess && (
                         <section className="halo-menu-status-group halo-menu-status-group-attention" aria-labelledby="halo-menu-status-attention-heading">
-                          <h3 id="halo-menu-status-attention-heading" className="sr-only">Attention now</h3>
+                          <span id="halo-menu-status-attention-heading" className="sr-only">Attention now</span>
                           <button
                             type="button"
                             className="halo-menu-status-group-title halo-menu-status-group-toggle"
@@ -3867,7 +3867,7 @@
                             onClick={() => setAttentionStatusCollapsed(collapsed => !collapsed)}
                           >
                             <span>01</span>
-                            <span>Attention now</span>
+                            <h3>Attention now</h3>
                             <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
                               <path d="m5 7.5 5 5 5-5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
                             </svg>

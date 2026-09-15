@@ -5,6 +5,7 @@
   const panels = Array.from(document.querySelectorAll(".editor-panel"));
   const songCatalogFrame = document.getElementById("songCatalogFrame");
   const releaseHouseFrame = document.getElementById("releaseHouseFrame");
+  let lastSongCatalogHeight = 0;
   const tabMap = {
     songs: "songCatalogPanel",
     release: "releaseMetadataPanel"
@@ -36,11 +37,38 @@
     });
   }
 
+  function activatePanel(panelId) {
+    setActiveTab(panelId);
+    if (panelId === "songCatalogPanel") setSongCatalogSource();
+    if (panelId === "releaseMetadataPanel") setReleaseHouseSource();
+  }
+
+  function focusTab(index) {
+    const target = tabButtons[index];
+    if (!target) return;
+    target.focus();
+    activatePanel(target.dataset.tabTarget);
+  }
+
   tabButtons.forEach(button => {
     button.addEventListener("click", () => {
-      setActiveTab(button.dataset.tabTarget);
-      if (button.dataset.tabTarget === "songCatalogPanel") setSongCatalogSource();
-      if (button.dataset.tabTarget === "releaseMetadataPanel") setReleaseHouseSource();
+      activatePanel(button.dataset.tabTarget);
+    });
+    button.addEventListener("keydown", event => {
+      const currentIndex = tabButtons.indexOf(button);
+      if (event.key === "ArrowRight") {
+        event.preventDefault();
+        focusTab((currentIndex + 1) % tabButtons.length);
+      } else if (event.key === "ArrowLeft") {
+        event.preventDefault();
+        focusTab((currentIndex - 1 + tabButtons.length) % tabButtons.length);
+      } else if (event.key === "Home") {
+        event.preventDefault();
+        focusTab(0);
+      } else if (event.key === "End") {
+        event.preventDefault();
+        focusTab(tabButtons.length - 1);
+      }
     });
   });
 
@@ -50,12 +78,13 @@
     if (event.source !== songCatalogFrame?.contentWindow) return;
     const height = Number(event.data.height || 0);
     if (!songCatalogFrame || !Number.isFinite(height) || height < 200) return;
-    songCatalogFrame.style.height = `${Math.max(700, Math.round(height))}px`;
+    const nextHeight = Math.max(700, Math.round(height));
+    if (nextHeight === lastSongCatalogHeight) return;
+    lastSongCatalogHeight = nextHeight;
+    songCatalogFrame.style.height = `${nextHeight}px`;
   });
 
   const requestedTab = new URLSearchParams(window.location.search).get("tab");
   const targetPanelId = tabMap[requestedTab] || "songCatalogPanel";
-  setActiveTab(targetPanelId);
-  setSongCatalogSource();
-  if (targetPanelId === "releaseMetadataPanel") setReleaseHouseSource();
+  activatePanel(targetPanelId);
 })();

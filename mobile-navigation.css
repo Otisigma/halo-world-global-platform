@@ -298,18 +298,7 @@
 }
 
 .halo-menu-status-content {
-  max-height: 32rem;
   margin-top: 8px;
-  overflow: hidden;
-  opacity: 1;
-  transition: max-height .2s ease, margin-top .2s ease, opacity .2s ease;
-}
-
-.halo-menu-status-content.is-collapsed {
-  max-height: 0;
-  margin-top: 0;
-  opacity: 0;
-  pointer-events: none;
 }
 
 .halo-menu-status-buttons {

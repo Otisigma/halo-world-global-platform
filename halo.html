@@ -3874,9 +3874,9 @@
                           <div
                             id="halo-menu-status-attention-content"
                             role="region"
-                            aria-hidden={attentionStatusCollapsed}
                             aria-labelledby="halo-menu-status-attention-heading"
                             className={`halo-menu-status-content${attentionStatusCollapsed ? ' is-collapsed' : ''}`}
+                            hidden={attentionStatusCollapsed}
                           >
                             {menuStatusGroupedTargets.attention.length ? (
                               <div className="halo-menu-status-buttons">

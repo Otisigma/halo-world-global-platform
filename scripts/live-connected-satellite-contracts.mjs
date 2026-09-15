@@ -95,7 +95,7 @@ assert.match(menuSource, /Attention now/, "Main menu must still include the ATTE
 assert.match(menuSource, /attentionStatusCollapsed/, "The ATTENTION status group must keep a collapsible state for authorized users.");
 assert.match(menuSource, /aria-controls="halo-menu-status-attention-content"/, "The ATTENTION status toggle must identify its collapsible content.");
 assert.match(menuSource, /halo-menu-status-content/, "The ATTENTION status content must use the shared collapsible content wrapper.");
-assert.match(menuSource, /is-collapsed/, "The ATTENTION status content must respond to the collapse control.");
+assert.match(menuSource, /hidden=\{attentionStatusCollapsed\}/, "The ATTENTION status content must mirror the collapse control state.");
 assert.match(menuSource, /All working menu/, "Main menu must expose the WORKING status group.");
 assert.match(navigationCssSource, /\.halo-menu-route-status/, "Main menu status badge styling must exist.");
 assert.match(navigationCssSource, /\.halo-menu-status-label/, "Main menu status labels must be allowed to wrap visibly.");

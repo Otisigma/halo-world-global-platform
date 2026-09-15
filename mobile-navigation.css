@@ -231,6 +231,15 @@
   background: rgba(245, 158, 11, .06);
 }
 
+.halo-menu-status-group-working {
+  border-color: rgba(163, 230, 53, .22);
+  background: rgba(163, 230, 53, .045);
+}
+
+.halo-menu-status-group-working .halo-menu-status-group-title h3 {
+  color: #bddd83;
+}
+
 .halo-menu-status-group-title {
   display: flex;
   align-items: center;

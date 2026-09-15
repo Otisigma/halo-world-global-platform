@@ -27,11 +27,18 @@
 import assert from "node:assert/strict";
 import { readdir, readFile } from "node:fs/promises";
 import { resolve } from "node:path";
-import { CANONICAL_ROUTE_ALIAS_ENTRIES } from "../lib/route-registry.js";
+import { ROUTE_RENDER_INDEX_TARGETS } from "../lib/page-link-ledger.js";
+import { CANONICAL_HOME_ROUTE, CANONICAL_ROUTE_ALIAS_ENTRIES } from "../lib/route-registry.js";
 
 const root = resolve(import.meta.dirname, "..");
 const read = path => readFile(resolve(root, path), "utf8");
 const results = [];
+const renderedIndexRoutes = new Set(ROUTE_RENDER_INDEX_TARGETS);
+const requiresNetlifyCanonicalRedirect = (from, to) => {
+  if (renderedIndexRoutes.has(to) && from === `${to}index.html`) return false;
+  if (to === CANONICAL_HOME_ROUTE && from === "/halo.html") return false;
+  return true;
+};
 
 const reportPass = (name, detail) => {
   console.log(`✅ ${name}${detail ? ` — ${detail}` : ""}`);
@@ -218,7 +225,7 @@ await runCheck("Homepage music experiment markers and tracking", async () => {
   );
   assert.match(
     haloHtml,
-    /data-homepage-hero="dreamweaver"[\s\S]*Dreamweaver Preview[\s\S]*Dreamweaver Player[\s\S]*Play preview[\s\S]*Open Dreamweaver/,
+    /data-homepage-hero="dreamweaver"[\s\S]*Dreamweaver Preview[\s\S]*Dreamweaver Player[\s\S]*Play preview[\s\S]*Start your Halo here — Upload to Dreamweaver/,
     "halo.html must expose the Dreamweaver homepage hero player surface and its primary actions."
   );
   assert.match(
@@ -253,7 +260,7 @@ await runCheck("Homepage music experiment markers and tracking", async () => {
   );
   assert.match(
     haloHtml,
-    /transparent on-page behavior signals[\s\S]*without exploiting either side of the relationship/i,
+    /does not require your personal information[\s\S]*only there to make Halo better/i,
     "halo.html must preserve the ethical data-use note for the experiment."
   );
   const statsDoc = await read("STATS.md");
@@ -291,6 +298,21 @@ await runCheck("Adaptive Dreamweaver homepage preview surface", async () => {
     haloHtml,
     /QUICK_LISTEN_AUTOPLAY_URL/,
     "halo.html must reuse the existing quick-listen embed path for adaptive preview playback."
+  );
+  assert.match(
+    haloHtml,
+    /Start your Halo here — Upload to Dreamweaver/,
+    "halo.html must present Dreamweaver as the clear artist starting point."
+  );
+  assert.match(
+    haloHtml,
+    /data-stat-target="header"[\s\S]*Start your Halo here — upload to Dreamweaver/,
+    "halo.html must keep the menu card copy telling artists to start in Dreamweaver."
+  );
+  assert.match(
+    haloHtml,
+    /primaryRoute:\s*'\/dreamweaver\/'/,
+    "halo.html must keep the artist CTA pointed at the canonical /dreamweaver/ route."
   );
   return "Adaptive Dreamweaver preview surface is present and wired";
 });
@@ -381,7 +403,12 @@ await runCheck("Canonical menu route aliases", async () => {
   }
 
   for (const { from, to } of CANONICAL_ROUTE_ALIAS_ENTRIES) {
-    assert.match(netlifyConfig, new RegExp(`from = "${from.replace(/[.*+?^${}()|[\\]\\]/g, "\\$&")}"[\\s\\S]*to = "${to.replace(/[.*+?^${}()|[\\]\\]/g, "\\$&")}"`), `netlify.toml must canonicalize ${from} to ${to}.`);
+    const redirectPattern = new RegExp(`from = "${from.replace(/[.*+?^${}()|[\\]\\]/g, "\\$&")}"[\\s\\S]*to = "${to.replace(/[.*+?^${}()|[\\]\\]/g, "\\$&")}"`);
+    if (requiresNetlifyCanonicalRedirect(from, to)) {
+      assert.match(netlifyConfig, redirectPattern, `netlify.toml must canonicalize ${from} to ${to}.`);
+    } else {
+      assert.doesNotMatch(netlifyConfig, redirectPattern, `netlify.toml must not redirect ${from} back to ${to} because ${to} already rewrites to ${from}.`);
+    }
   }
 
   assert.match(serverJs, /app\.get\("\/control-center"/, "server.js must serve the control-center alias locally.");

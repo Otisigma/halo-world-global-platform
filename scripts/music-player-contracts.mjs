@@ -4,13 +4,14 @@ import { resolve } from "node:path";
 import { allowedEvents } from "../netlify/lib/stats.mjs";
 
 const root = resolve(import.meta.dirname, "..");
-const [client, styles, stats, summary, statsLib, statsEvent] = await Promise.all([
+const [client, styles, stats, summary, statsLib, statsEvent, haloHome] = await Promise.all([
   readFile(resolve(root, "music-player.js"), "utf8"),
   readFile(resolve(root, "music-player.css"), "utf8"),
   readFile(resolve(root, "stats.js"), "utf8"),
   readFile(resolve(root, "netlify/functions/stats-summary.mjs"), "utf8"),
   readFile(resolve(root, "netlify/lib/stats.mjs"), "utf8"),
-  readFile(resolve(root, "netlify/functions/stats-event.mjs"), "utf8")
+  readFile(resolve(root, "netlify/functions/stats-event.mjs"), "utf8"),
+  readFile(resolve(root, "halo.html"), "utf8")
 ]);
 
 for (const eventName of [
@@ -33,6 +34,16 @@ assert.match(client, /MutationObserver/, "dynamically rendered music links must 
 assert.match(client, /dataset\.haloPlayer === "off"/, "links must support an explicit player opt-out");
 assert.match(styles, /PLAY HERE/, "eligible links must advertise on-site playback");
 assert.match(stats, /music-player\.js/, "the shared analytics client must load the player");
+assert.match(haloHome, /resolveDreamweaverPreviewUrl/, "the homepage Dreamweaver player must validate preview audio sources before playback");
+assert.match(haloHome, /dreamweaverPreviewCandidates/, "the homepage Dreamweaver player must keep alternate preview candidates available");
+assert.match(haloHome, /preload="metadata"/, "the homepage Dreamweaver player must preload metadata for reliable click-to-play behavior");
+assert.match(haloHome, /Preview loading/, "the homepage Dreamweaver player must expose a loading state");
+assert.match(haloHome, /Preview ready/, "the homepage Dreamweaver player must expose a ready state");
+assert.match(haloHome, /Preview playing/, "the homepage Dreamweaver player must expose a playing state");
+assert.match(haloHome, /Preview unavailable/, "the homepage Dreamweaver player must expose a failed state");
+assert.match(haloHome, /playDreamweaverPreviewCandidates/, "the homepage Dreamweaver player must use fallback-aware playback attempts");
+assert.match(haloHome, /This preview source failed\. Loading the next Dreamweaver signal\./, "the homepage Dreamweaver player must explain automatic source fallback");
+assert.match(haloHome, /dreamweaverPreviewRetryAllowedRef\.current[\s\S]*!dreamweaverPreviewRetryActiveRef\.current[\s\S]*nextCandidates\.length/, "the homepage Dreamweaver player must only retry to the next candidate after a guarded play attempt");
 assert.match(summary, /averageListenSeconds/, "admin reporting must expose listening duration");
 assert.match(summary, /listeningVariants/, "admin reporting must compare preview variants");
 assert.match(summary, /commercialIntent/, "preview reporting must connect listening with commercial intent");

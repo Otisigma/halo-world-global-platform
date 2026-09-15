@@ -2,7 +2,7 @@ import express from "express";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { CANONICAL_ROUTE_ALIAS_ENTRIES } from "./lib/route-registry.js";
+import { CANONICAL_ROUTE_ALIAS_ENTRIES, PUBLIC_ROUTE_REGISTRY } from "./lib/route-registry.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -56,6 +56,14 @@ const allowedExtensions = new Set([
   ".webm",
 ]);
 const canonicalRouteRedirects = new Map(CANONICAL_ROUTE_ALIAS_ENTRIES.map(({ from, to }) => [from, to]));
+const directoryRouteFiles = new Map(
+  PUBLIC_ROUTE_REGISTRY
+    .filter(({ route }) => route.endsWith("/"))
+    .map(({ route, file }) => [route, file])
+);
+const fallbackPagePath = resolveFromRoot("404.html");
+const fallbackPageExists = fs.existsSync(fallbackPagePath);
+const fallbackPageMarkup = fallbackPageExists ? fs.readFileSync(fallbackPagePath, "utf8") : "";
 const rateLimitWindowMs = 60_000;
 const rateLimitMaxRequests = Number(process.env.STATIC_REQUEST_LIMIT || 240);
 const recentRequestBuckets = new Map();
@@ -193,14 +201,23 @@ app.get("*", (req, res, next) => {
     return next();
   }
 
-  if (routePath.endsWith("/") && sendStaticCandidate(res, path.join(relativePath, "index.html"))) {
-    return;
+  if (routePath.endsWith("/")) {
+    const directoryRouteFile = directoryRouteFiles.get(routePath);
+    if (directoryRouteFile && sendStaticCandidate(res, directoryRouteFile)) {
+      return;
+    }
+    if (sendStaticCandidate(res, path.join(relativePath, "index.html"))) {
+      return;
+    }
   }
 
   return next();
 });
 
-app.use((_req, res) => {
+app.use((req, res) => {
+  if (req.accepts("html") && fallbackPageExists) {
+    return res.status(404).type("html").send(fallbackPageMarkup);
+  }
   res.status(404).send("Not found");
 });
 

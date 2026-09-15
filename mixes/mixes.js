@@ -63,7 +63,14 @@
     const remaining = Math.floor(total % 60);
     return hours ? `${hours}:${String(minutes).padStart(2, "0")}:${String(remaining).padStart(2, "0")}` : `${minutes}:${String(remaining).padStart(2, "0")}`;
   };
-  const formatMoney = (minor, currency = "USD") => new Intl.NumberFormat("en-US", { style: "currency", currency }).format(Number(minor || 0) / 100);
+  const formatMoney = (minor, currency = "USD") => {
+    const code = String(currency || "USD").toUpperCase();
+    try {
+      return new Intl.NumberFormat("en-US", { style: "currency", currency: code }).format(Number(minor || 0) / 100);
+    } catch {
+      return `${code} ${(Number(minor || 0) / 100).toFixed(2)}`;
+    }
+  };
 
   const mixMeta = mix => {
     if (mix.source === "youtube") return "YouTube long play";

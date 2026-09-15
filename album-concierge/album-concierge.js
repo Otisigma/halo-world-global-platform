@@ -29,12 +29,13 @@
   const accountForm = document.getElementById("accountForm");
   const accountStatus = document.getElementById("accountStatus");
 
+  const steps = [1, 2, 3, 4].map(n => document.getElementById(`step-${n}`));
+  const accountModeButtons = Array.from(document.querySelectorAll("[data-auth-mode]"));
+
   let identity = window.haloIdentity || null;
   let identityUser = null;
   let identityConnected = false;
   let authMode = "login";
-
-  const steps = [1, 2, 3, 4].map(n => document.getElementById(`step-${n}`));
 
   /* ── Utilities ────────────────────────────────────────────────────────────── */
 
@@ -58,7 +59,7 @@
 
   function setAuthMode(mode) {
     authMode = mode === "signup" ? "signup" : "login";
-    document.querySelectorAll("[data-auth-mode]").forEach(button => {
+    accountModeButtons.forEach(button => {
       const selected = button.dataset.authMode === authMode;
       button.classList.toggle("is-active", selected);
       button.setAttribute("aria-selected", String(selected));
@@ -71,12 +72,25 @@
     if (accountStatus) accountStatus.textContent = "";
   }
 
+  function openAccountDialog(message = "", mode = "login") {
+    setAuthMode(mode);
+    if (accountStatus) accountStatus.textContent = message;
+    accountDialog?.showModal();
+  }
+
   async function connectIdentity(nextIdentity) {
     if (!nextIdentity || identityConnected) return;
     identity = nextIdentity;
     identityConnected = true;
     setAccountUser(await identity.getUser().catch(() => null));
     identity.onAuthChange((_event, user) => setAccountUser(user));
+  }
+
+  function requireSignedIn(message) {
+    if (identityUser) return true;
+    showNotice(message, "error");
+    openAccountDialog("Sign in or create an account to continue.", "login");
+    return false;
   }
 
   function showStep(n) {
@@ -240,6 +254,7 @@
   step4Back?.addEventListener("click", () => showStep(3));
 
   step4Generate?.addEventListener("click", async () => {
+    if (!requireSignedIn("Sign in to build and save your album concept.")) return;
     clearNotice();
     const stop = showLoading();
 
@@ -366,6 +381,7 @@
 
   document.getElementById("savePrivateBtn")?.addEventListener("click", async () => {
     if (!state.sessionId) return;
+    if (!requireSignedIn("Sign in to save this album concept.")) return;
     try {
       await fetch("/api/album-concierge?action=save", {
         method: "POST",
@@ -380,6 +396,7 @@
 
   document.getElementById("shareBtn")?.addEventListener("click", async () => {
     if (!state.sessionId) return;
+    if (!requireSignedIn("Sign in to share this album concept.")) return;
     try {
       const saveRes = await fetch("/api/album-concierge?action=save", {
         method: "POST",
@@ -401,6 +418,7 @@
 
   document.getElementById("giftBtn")?.addEventListener("click", async () => {
     if (!state.sessionId) return;
+    if (!requireSignedIn("Sign in to send this album concept as a gift.")) return;
     try {
       await fetch("/api/album-concierge?action=save", {
         method: "POST",
@@ -444,23 +462,6 @@
     showNotice("Collector edition is coming soon. Your session has been saved.", "success");
   });
 
-  /* ── Entry points from hero ───────────────────────────────────────────────── */
-
-  document.getElementById("startFlowBtn")?.addEventListener("click", () => {
-    document.getElementById("concierge")?.scrollIntoView({ behavior: "smooth" });
-    showStep(1);
-  });
-
-  document.getElementById("giftFlowBtn")?.addEventListener("click", () => {
-    document.getElementById("concierge")?.scrollIntoView({ behavior: "smooth" });
-    showStep(1);
-    /* Pre-select "gift" purpose */
-    const giftChoice = step1El?.querySelector('[data-value="gift"]');
-    if (giftChoice) {
-      giftChoice.click();
-    }
-  });
-
   accountButton?.addEventListener("click", async () => {
     if (identityUser) {
       await identity?.logout();
@@ -468,15 +469,14 @@
       showNotice("You are signed out.", "success");
       return;
     }
-    setAuthMode("login");
-    accountDialog?.showModal();
+    openAccountDialog();
   });
 
   accountDialogClose?.addEventListener("click", () => accountDialog?.close());
   accountDialog?.addEventListener("click", event => {
     if (event.target === accountDialog) accountDialog.close();
   });
-  document.querySelectorAll("[data-auth-mode]").forEach(button => {
+  accountModeButtons.forEach(button => {
     button.addEventListener("click", () => setAuthMode(button.dataset.authMode));
   });
 
@@ -495,6 +495,7 @@
       if (authMode === "signup") {
         await identity.signup(email, password, { full_name: accountForm.elements.name.value.trim() });
         if (accountStatus) accountStatus.textContent = "Check your email to confirm your HALO account.";
+        setAuthMode("login");
         return;
       }
       const user = await identity.login(email, password);
@@ -511,6 +512,23 @@
 
   window.addEventListener("halo-identity-ready", event => connectIdentity(event.detail), { once: true });
   if (identity) connectIdentity(identity);
+
+  /* ── Entry points from hero ───────────────────────────────────────────────── */
+
+  document.getElementById("startFlowBtn")?.addEventListener("click", () => {
+    document.getElementById("concierge")?.scrollIntoView({ behavior: "smooth" });
+    showStep(1);
+  });
+
+  document.getElementById("giftFlowBtn")?.addEventListener("click", () => {
+    document.getElementById("concierge")?.scrollIntoView({ behavior: "smooth" });
+    showStep(1);
+    /* Pre-select "gift" purpose */
+    const giftChoice = step1El?.querySelector('[data-value="gift"]');
+    if (giftChoice) {
+      giftChoice.click();
+    }
+  });
 
   /* ── Load existing session from URL ──────────────────────────────────────── */
 

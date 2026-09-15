@@ -10,6 +10,12 @@
     return Math.max(0,Math.min(100,Number(value)||0));
   }
 
+  function requireElement(name,element){
+    if(element)return element;
+    console.warn(`[HaloUploadProgress] Missing UI element: ${name}`);
+    return null;
+  }
+
   function updateUi(ui,state){
     if(!ui)return;
     if(ui.panel){
@@ -19,9 +25,12 @@
     }
     if(ui.track){
       ui.track.hidden=!state.showTrack;
+      ui.track.setAttribute("aria-hidden",state.showTrack?"false":"true");
     }
     if(ui.fill){
-      ui.fill.style.width=`${clampPercent(state.progress)}%`;
+      const progress=clampPercent(state.progress);
+      const visualProgress=state.uploading&&progress===0?3:progress;
+      ui.fill.style.width=`${visualProgress}%`;
     }
     if(ui.status&&state.message){
       ui.status.textContent=state.message;
@@ -30,10 +39,10 @@
 
   function createUploadUi(options){
     const ui={
-      panel:options?.panel||null,
-      status:options?.status||null,
-      track:options?.track||null,
-      fill:options?.fill||null,
+      panel:requireElement("panel",options?.panel||null),
+      status:requireElement("status",options?.status||null),
+      track:requireElement("track",options?.track||null),
+      fill:requireElement("fill",options?.fill||null),
       busyClass:options?.busyClass||"is-uploading"
     };
     const idleMessage=options?.idleMessage||"";
@@ -63,10 +72,11 @@
     return api;
   }
 
-  function sendFormData(url,body,{method="POST",headers={},credentials="same-origin",onProgress=()=>{}}={}){
+  function sendFormData(url,body,{method="POST",headers={},credentials="same-origin",onProgress=()=>{},timeoutMs=120000}={}){
     return new Promise((resolve,reject)=>{
       const xhr=new XMLHttpRequest();
       xhr.open(method,url,true);
+      xhr.timeout=timeoutMs;
       if(credentials==="include")xhr.withCredentials=true;
       if(credentials==="omit")xhr.withCredentials=false;
       Object.entries(headers).forEach(([key,value])=>{if(value!=null)xhr.setRequestHeader(key,String(value));});
@@ -74,6 +84,7 @@
         if(event.lengthComputable&&event.total>0)onProgress(event.loaded/event.total,event);
       };
       xhr.onerror=()=>reject(new Error("The upload connection stopped. Please try again."));
+      xhr.ontimeout=()=>reject(new Error("The upload took too long to finish. Please try again."));
       xhr.onload=()=>{
         const data=parseBody(xhr.responseText);
         resolve({ok:xhr.status>=200&&xhr.status<300,status:xhr.status,data});

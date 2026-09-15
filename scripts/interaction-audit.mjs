@@ -27,10 +27,11 @@ function parseAttributes(source) {
 function isExternalTarget(target) {
   return /^(?:https?:|mailto:|tel:|sms:|data:|blob:|javascript:)/i.test(target)
     || target.includes("${")
-    || target.includes("{");
+    || target.includes("{")
+    || target.includes("{{");
 }
 
-async function targetExists(page, target, redirectAliases) {
+async function targetExists(page, target, redirectAliases, redirectWildcardPrefixes) {
   const cleanTarget = target.split(/[?#]/)[0];
   const fileTarget = cleanTarget.startsWith("/")
     ? resolve(root, cleanTarget.slice(1))
@@ -41,23 +42,25 @@ async function targetExists(page, target, redirectAliases) {
     return true;
   } catch {}
 
-  if (cleanTarget.endsWith("/")) {
-    try {
-      await access(resolve(fileTarget, "index.html"));
-      return true;
-    } catch {}
-  }
+  try {
+    await access(resolve(fileTarget, "index.html"));
+    return true;
+  } catch {}
 
-  const route = cleanTarget.startsWith("/") ? cleanTarget : `/${cleanTarget}`;
-  return redirectAliases.has(route);
+  if (!cleanTarget.startsWith("/")) return false;
+  return redirectAliases.has(cleanTarget) || redirectWildcardPrefixes.some(prefix => cleanTarget.startsWith(prefix));
 }
 
 const files = await walk(root);
 const pages = files.filter(file => extname(file) === ".html");
 const netlifyConfig = await readFile(resolve(root, "netlify.toml"), "utf8");
 const redirectAliases = new Set(
-  [...netlifyConfig.matchAll(/^\s*from\s*=\s*["']([^"']+)['"]/gm)].map(match => match[1])
+  [...netlifyConfig.matchAll(/^\s*from\s*=\s*["']([^"']+)["']/gm)].map(match => match[1])
 );
+const redirectWildcardPrefixes = [...redirectAliases]
+  .filter(path => path.includes("*"))
+  .map(path => path.split("*")[0])
+  .filter(Boolean);
 const failures = [];
 let targetCount = 0;
 let buttonCount = 0;
@@ -67,7 +70,7 @@ for (const page of pages) {
   const source = await readFile(page, "utf8");
   let scripts = "";
 
-  for (const match of source.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/gi)) {
+  for (const match of source.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script\s*>/gi)) {
     const attributes = parseAttributes(match[1]);
     const scriptTarget = attributes.get("src");
     if (!scriptTarget) {
@@ -90,7 +93,7 @@ for (const page of pages) {
     const target = attributes.get(attributeName);
     if (!target || target.startsWith("#") || isExternalTarget(target)) continue;
     targetCount += 1;
-    if (!await targetExists(page, target, redirectAliases)) {
+    if (!await targetExists(page, target, redirectAliases, redirectWildcardPrefixes)) {
       failures.push(`${pageName}: unresolved ${tag} ${attributeName}="${target}"`);
     }
   }
@@ -101,7 +104,7 @@ for (const page of pages) {
     const id = attributes.get("id");
     const escapedId = id?.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     const assignmentPattern = escapedId
-      ? new RegExp(`(?:getElementById\\(["']${escapedId}["']\\)|querySelector\\(["']#${escapedId}["']\\)|\\b${escapedId}\\b)[\\s\\S]{0,200}\\.href\\s*=`)
+      ? new RegExp(`(?:getElementById\\(["']${escapedId}["']\\)|querySelector\\(["']#${escapedId}["']\\)|\\b${escapedId}\\b)[\\s\\S]{0,240}\\.href\\s*=`)
       : null;
     if (!assignmentPattern?.test(scripts)) {
       failures.push(`${pageName}: placeholder link "#" is never assigned a destination`);

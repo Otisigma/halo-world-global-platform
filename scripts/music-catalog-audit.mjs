@@ -5,7 +5,7 @@ import { resolve } from "node:path";
 const root = resolve(import.meta.dirname, "..");
 const read = path => readFile(resolve(root, path), "utf8");
 
-const [auditLib, scout, catalogApi, cognitiveErasure, illDoItAllAgain, blessed, mySensitivityLikeACrown, mySensitivityArtworkPreservation, requestedReleaseNormalization, worldDarkCampaign] = await Promise.all([
+const [auditLib, scout, catalogApi, cognitiveErasure, illDoItAllAgain, blessed, mySensitivityLikeACrown, mySensitivityArtworkPreservation, mySensitivityImportedArtworkBackfill, requestedReleaseNormalization, worldDarkCampaign] = await Promise.all([
   read("netlify/lib/music-catalog-audit.mjs"),
   read("netlify/functions/music-catalog-scout.mjs"),
   read("netlify/functions/release-catalog.mjs"),
@@ -14,6 +14,7 @@ const [auditLib, scout, catalogApi, cognitiveErasure, illDoItAllAgain, blessed, 
   read("netlify/database/migrations/20260830022000_publish-blessed.sql"),
   read("netlify/database/migrations/20260830000000_publish-my-sensitivity-like-a-crown.sql"),
   read("netlify/database/migrations/20260903120000_preserve_my_sensitivity_artwork.sql"),
+  read("netlify/database/migrations/20260909224000_backfill-my-sensitivity-imported-artwork.sql"),
   read("netlify/database/migrations/20260904010000_normalize_requested_music_releases.sql"),
   read("netlify/database/migrations/20260820200000_launch-when-world-dark-campaign.sql")
 ]);
@@ -76,6 +77,9 @@ assert.match(mySensitivityLikeACrown, /imported_artwork_url/, "My Sensitivity Li
 assert.match(mySensitivityLikeACrown, /artwork_override_url/, "My Sensitivity Like a Crown migration must include artwork_override_url per the artwork contract");
 assert.match(mySensitivityArtworkPreservation, /imported_artwork_url\s*=\s*COALESCE\(NULLIF\(EXCLUDED\.imported_artwork_url, ''\), halo_release_campaigns\.imported_artwork_url\)/, "The follow-up migration must preserve imported_artwork_url when the seed reruns with an empty placeholder");
 assert.match(mySensitivityArtworkPreservation, /artwork_override_url\s*=\s*COALESCE\(NULLIF\(EXCLUDED\.artwork_override_url, ''\), halo_release_campaigns\.artwork_override_url\)/, "The follow-up migration must preserve any manual artwork override when the seed reruns");
+assert.match(mySensitivityImportedArtworkBackfill, /UPDATE halo_release_campaigns/, "The artwork backfill migration must repair the seeded campaign row in place");
+assert.match(mySensitivityImportedArtworkBackfill, /id\s*=\s*'my-sensitivity-like-a-crown'/, "The artwork backfill migration must target My Sensitivity Like a Crown specifically");
+assert.match(mySensitivityImportedArtworkBackfill, /imported_artwork_url\s*=\s*COALESCE\(NULLIF\(imported_artwork_url, ''\), NULLIF\(artwork_url, ''\)\)/, "The artwork backfill migration must populate imported_artwork_url from artwork_url when the seed left it empty");
 assert.match(mySensitivityLikeACrown, /Radio edit/, "My Sensitivity Like a Crown migration must include a radio edit version");
 assert.match(mySensitivityLikeACrown, /Clean version/, "My Sensitivity Like a Crown migration must include a clean version");
 assert.match(mySensitivityLikeACrown, /source_release_id|halo_dreamweaver_songs|Dream Weaver/, "My Sensitivity Like a Crown migration must document the Dream Weaver storage path");

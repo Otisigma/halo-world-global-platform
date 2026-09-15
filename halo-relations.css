@@ -117,7 +117,7 @@ input:focus,select:focus,textarea:focus { border-color:var(--rust); box-shadow:i
 .event-row { display:grid; grid-template-columns:10px 1fr auto; align-items:center; gap:.7rem; padding:.7rem 0; border-bottom:1px solid rgba(238,233,222,.12); font-size:.7rem; }
 .event-row i { width:7px; height:7px; border-radius:50%; background:#d1b184; }
 .event-row time { color:rgba(238,233,222,.55); font-family:var(--mono); font-size:.5rem; }
-.pulse-section { display:grid; grid-template-columns:1fr 1fr; gap:1rem; margin-top:1rem; }
+.pulse-section { display:grid; grid-template-columns:repeat(auto-fit, minmax(260px, 1fr)); gap:1rem; margin-top:1rem; }
 .pulse-column { min-height:320px; padding:2rem; border:1px solid var(--ink); }
 .pulse-list { display:grid; margin-top:1.5rem; border-top:1px solid var(--line); }
 .pulse-row { display:grid; grid-template-columns:150px 1fr auto; gap:1rem; width:100%; padding:.9rem 0; border:0; border-bottom:1px solid var(--line); color:inherit; background:transparent; text-align:left; cursor:pointer; }

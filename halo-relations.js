@@ -3,6 +3,8 @@
   const byId = id => document.getElementById(id);
   const formatDate = value => value ? new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric", year: "numeric" }).format(new Date(value)) : "No signal yet";
   const formatDateTime = value => value ? new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }).format(new Date(value)) : "Not scheduled";
+  const signupStatusLabels = { received: "Received", repeat_signup: "Repeat signup", linked_member: "Linked to member" };
+  const platformLabels = { spotify: "Spotify", apple_music: "Apple Music", youtube: "YouTube" };
 
   function relativeTime(value) {
     if (!value) return "No signal yet";
@@ -49,7 +51,16 @@
   function renderMetrics(metrics) {
     const grid = byId("metricGrid");
     clear(grid);
-    [["Known members", metrics.totalMembers], ["Joined · 7 days", metrics.joined7d], ["Active · 7 days", metrics.active7d], ["Consent recorded", metrics.contactable], ["Follow-ups overdue", metrics.overdueTasks]].forEach(([label, value]) => {
+    [
+      ["Known members", metrics.totalMembers],
+      ["Joined · 7 days", metrics.joined7d],
+      ["Active · 7 days", metrics.active7d],
+      ["Consent recorded", metrics.contactable],
+      ["Follow-ups overdue", metrics.overdueTasks],
+      ["Dreamweaver signups", metrics.dreamweaverSignups],
+      ["Dreamweaver · 7 days", metrics.dreamweaverSignups7d],
+      ["Dreamweaver linked", metrics.dreamweaverLinked]
+    ].forEach(([label, value]) => {
       const card = node("article", "metric");
       card.append(node("span", "", label), node("strong", "", String(value)));
       grid.append(card);
@@ -100,6 +111,25 @@
     });
   }
 
+  function renderDreamweaverSignups(rows) {
+    const list = byId("dreamweaverSignupList");
+    clear(list);
+    if (!rows.length) return list.append(node("p", "empty-row", "No Dreamweaver signups recorded yet."));
+    rows.forEach(row => {
+      const item = row.memberId ? node("button", "pulse-row") : node("article", "pulse-row");
+      const title = row.firstName || row.memberName || row.email;
+      if (row.memberId) {
+        item.type = "button";
+        item.setAttribute("aria-label", `Open linked member profile for ${title}`);
+        item.addEventListener("click", () => selectMember(row.memberId));
+      }
+      const detail = `${signupStatusLabels[row.status] || "Received"} · ${platformLabels[row.favoritePlatform] || "Spotify"}${row.signupCount > 1 ? ` · ${row.signupCount} unlocks` : ""}`;
+      const linked = row.memberName ? `Linked: ${row.memberName}` : row.email;
+      item.append(node("time", "", relativeTime(row.occurredAt)), node("strong", "", title), node("span", "", `${detail} · ${linked}`));
+      list.append(item);
+    });
+  }
+
   function renderWorkspace() {
     byId("gateView").hidden = true;
     byId("workspaceView").hidden = false;
@@ -107,6 +137,7 @@
     renderMemberList();
     renderPulseList("globalTaskList", state.workspace.tasks, "task");
     renderPulseList("activityList", state.workspace.activity, "activity");
+    renderDreamweaverSignups(state.workspace.dreamweaverSignups || []);
   }
 
   function renderNotes(notes) {

@@ -10,6 +10,9 @@ const allowedTypes = new Set(["audio/wav", "audio/x-wav", "audio/mpeg", "audio/m
 const maxChunkBytes = 4 * 1024 * 1024;
 const maxUploadBytes = 128 * 1024 * 1024;
 const model = "gpt-5.4-mini";
+const trustedUploadFlow = "artist-upload";
+const trustedUploadWindowMs = 15 * 60 * 1000;
+const approvedArtistRoutes = new Set(["/dreamweaver/", "/dreamweaver/index.html", "/dreamweaver-lab/", "/dreamweaver-lab/index.html"]);
 
 function json(body, status = 200, headers = {}) {
   return Response.json(body, { status, headers: { "Cache-Control": "no-store", ...headers } });
@@ -37,6 +40,64 @@ function normalizeAudioType(value, fileName = "") {
 function safeNumber(value, min, max, fallback = 0) {
   const number = Number(value);
   return Number.isFinite(number) ? Math.max(min, Math.min(max, number)) : fallback;
+}
+
+function normalizeArtistRoute(value) {
+  const route = cleanText(value, 160);
+  if (!route) return "";
+  if (route === "/dreamweaver") return "/dreamweaver/";
+  if (route === "/dreamweaver-lab") return "/dreamweaver-lab/";
+  return route;
+}
+
+function readArtistRequestContext(request) {
+  const requestUrl = new URL(request.url);
+  const rawReferrer = request.headers.get("referer") || request.headers.get("referrer") || "";
+  let referrerUrl = null;
+  try { referrerUrl = rawReferrer ? new URL(rawReferrer) : null; } catch {}
+  return {
+    requestUrl,
+    referrerUrl,
+    flow: cleanText(request.headers.get("x-halo-dreamweaver-flow"), 40).toLowerCase(),
+    route: normalizeArtistRoute(request.headers.get("x-halo-dreamweaver-route")),
+    issuedAt: Number.parseInt(request.headers.get("x-halo-dreamweaver-issued-at"), 10),
+    secFetchSite: cleanText(request.headers.get("sec-fetch-site"), 20).toLowerCase()
+  };
+}
+
+function hasSafeFetchSite(context) {
+  return !context.secFetchSite || ["same-origin", "same-site", "none"].includes(context.secFetchSite);
+}
+
+function hasApprovedArtistReferrer(context) {
+  return Boolean(
+    context.referrerUrl
+    && context.referrerUrl.origin === context.requestUrl.origin
+    && approvedArtistRoutes.has(normalizeArtistRoute(context.referrerUrl.pathname))
+  );
+}
+
+function hasFreshArtistFlow(context) {
+  return context.flow === trustedUploadFlow
+    && approvedArtistRoutes.has(context.route)
+    && Number.isFinite(context.issuedAt)
+    && Math.abs(Date.now() - context.issuedAt) <= trustedUploadWindowMs;
+}
+
+async function assessArtistUploadTrust(request, user) {
+  const context = readArtistRequestContext(request);
+  let originVerified = false;
+  try { originVerified = await verifyRequestOrigin(request); } catch {}
+  if (originVerified) return { state: "trusted" };
+  if (user?.id && hasSafeFetchSite(context) && (hasFreshArtistFlow(context) || hasApprovedArtistReferrer(context))) return { state: "trusted" };
+  if (user?.id && (hasFreshArtistFlow(context) || (context.referrerUrl && context.referrerUrl.origin === context.requestUrl.origin))) {
+    return {
+      state: "challenge",
+      message: "Dreamweaver needs a quick confirmation before Song Lab can continue this upload. Return through the Dreamweaver upload path to verify this session.",
+      challengeRoute: "/dreamweaver/?upload=verify&returnTo=/dreamweaver-lab/"
+    };
+  }
+  return { state: "blocked", message: "Cross-origin Song Lab updates are not accepted" };
 }
 
 function sanitizeEvidence(input) {
@@ -311,7 +372,9 @@ export default async function dreamweaverSongLabHandler(request, context) {
     const db = getDatabase();
     const user = await getUser().catch(() => null);
     if (["GET", "HEAD"].includes(request.method)) return readProjects(request, db, user);
-    if (!(await verifyRequestOrigin(request))) return json({ message: "Cross-origin Song Lab updates are not accepted" }, 403);
+    const trust = await assessArtistUploadTrust(request, user);
+    if (trust.state === "blocked") return json({ message: trust.message, trustState: "blocked" }, 403);
+    if (trust.state === "challenge") return json({ message: trust.message, trustState: "challenge", challengeRoute: trust.challengeRoute }, 409);
     const contentType = request.headers.get("content-type") || "";
     if (contentType.includes("multipart/form-data")) return uploadChunk(request, db, user);
     const contentLength = Number(request.headers.get("content-length") || 0);

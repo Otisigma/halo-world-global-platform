@@ -10,6 +10,11 @@ function json(body, status = 200, extraHeaders = {}) {
   return Response.json(body, { status, headers: { ...responseHeaders, ...extraHeaders } });
 }
 
+function normalizeCurrency(value, fallback = "USD") {
+  const currency = String(value || "").trim().toUpperCase();
+  return /^[A-Z]{3}$/.test(currency) ? currency : fallback;
+}
+
 function validCheckoutUrl(value) {
   try {
     const url = new URL(String(value || "").trim());
@@ -22,13 +27,14 @@ function validCheckoutUrl(value) {
 async function createStripeCheckout(request, mix, secretKey) {
   const requestUrl = new URL(request.url);
   const siteOrigin = requestUrl.origin;
+  const currency = normalizeCurrency(mix.currency);
   const body = new URLSearchParams({
     mode: "payment",
     client_reference_id: mix.id,
     success_url: `${siteOrigin}/mixes/?mix=${encodeURIComponent(mix.id)}&payment=success#editions`,
     cancel_url: `${siteOrigin}/mixes/?mix=${encodeURIComponent(mix.id)}&payment=cancelled#editions`,
     "line_items[0][quantity]": "1",
-    "line_items[0][price_data][currency]": String(mix.currency || "USD").toLowerCase(),
+    "line_items[0][price_data][currency]": currency.toLowerCase(),
     "line_items[0][price_data][unit_amount]": String(mix.price_minor),
     "line_items[0][price_data][product_data][name]": `${mix.title} — Mix Edition`,
     "line_items[0][price_data][product_data][description]": `${mix.original_artist} · Remix by ${mix.remixer_name}`,
@@ -110,7 +116,7 @@ export default async function paymentLinkHandler(request) {
       checkoutUrl = configuredUrl.href;
     }
 
-    return json({ checkoutUrl, priceMinor: Number(mix.price_minor), currency: mix.currency || "USD" });
+    return json({ checkoutUrl, priceMinor: Number(mix.price_minor), currency: normalizeCurrency(mix.currency) });
   } catch (error) {
     console.error("HALO checkout failed", error instanceof Error ? error.message : "unknown error");
     return json({ message: "Secure checkout could not be opened right now." }, 503);

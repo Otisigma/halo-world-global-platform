@@ -887,6 +887,7 @@ main {
 /* ── Member access ───────────────────────────────────────────────────────── */
 
 .ac-auth-dialog {
+  position: relative;
   width: min(31rem, calc(100vw - 2rem));
   color: var(--ac-cream);
   background: #171511;

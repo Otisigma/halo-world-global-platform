@@ -1,6 +1,26 @@
 # HALO One-Button Broadcast Setup
 
+The internal venue for live events is `/live-party/` (Dreamweave + fan room + DJ booth). External multistream distribution is optional and controlled from `/halo-live.html`.
+
 The live page sends one protected server-side command to a multistream relay. The relay remains responsible for receiving the encoder feed and distributing it to YouTube, TikTok, and any other enabled destination.
+
+## Live Party access model
+
+`/live-party/` is designed to keep discovery simple while supporting paid growth:
+
+- **Free Discovery**: core listening room, fan chat, and Dreamweave cues stay open for public launch events.
+- **Supporter**: unlocks featured DJ sessions and ticketed room routing hooks.
+- **VIP**: unlocks private afterparty routing and priority premium room access.
+
+Premium flows are intentionally hook-based (`partyTheme.monetizationHooks`) so the room can launch without hardwiring payment providers. Keep the internal room as the primary venue and use external relays as distribution only.
+
+Operational ownership and launch standards for these choices are defined in `HALO_PARTY_TEAM_CHARTER.md`.
+
+### Recommended rollout
+
+1. Start with free launch events to build recurring attendance and baseline chat engagement.
+2. Enable Supporter hooks for featured/ticketed sessions once weekly cadence is stable.
+3. Enable VIP private-room hooks for monthly headline mixes or invite-only sessions.
 
 Configure these Netlify environment variables:
 

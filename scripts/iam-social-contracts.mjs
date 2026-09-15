@@ -15,7 +15,7 @@ const checks = [
   [api.includes('path: "/api/iam-social"') && api.includes("verifyRequestOrigin") && api.includes("ensureMembership"), "protects the social workspace with membership and origin verification"],
   [api.includes("halo_release_campaigns") && api.includes("halo_artist_activity") && api.includes("halo_videos") && api.includes("halo_dreamweaver_campaigns"), "collects current and archived artist material"],
   [migration.includes("halo_social_snippets") && migration.includes("halo_social_snippet_feedback") && migration.includes("use_count"), "persists reusable language and its feedback loop"],
-  [dreamweaver.includes('href="/iam-social/"') && config.includes('from = "/iam-social"'), "links and normalizes the first I AM Social connection"]
+  [/from = "\/iam-social\/"[\s\S]*to = "\/iam-social\/index\.html"/.test(config) && dreamweaver.includes('href="/iam-social/"'), "links the first I AM Social connection and serves the canonical /iam-social/ route directly"]
 ];
 
 const failures = checks.filter(([passed]) => !passed);

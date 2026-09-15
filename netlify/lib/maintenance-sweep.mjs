@@ -176,7 +176,16 @@ async function reconcileIssue(check) {
   const fingerprint = `maintenance-sweep:${check.kind}:${check.target}`;
   const issueKey = issueKeyForFingerprint(fingerprint);
   if (check.status === "passed") {
-    await resolveIssue(issueKey, `${check.target} passed the recurring maintenance sweep.`);
+    await resolveIssue(issueKey, `${check.target} passed the recurring maintenance sweep.`, {
+      source: "maintenance_sweep",
+      verification: {
+        command: SIGNAL_CHECK_COMMAND,
+        checkIds: [`${check.kind}:${check.target}`],
+        resultSummary: `${check.target} passed the recurring maintenance sweep.`,
+        confidence: 0.9,
+        checkedAt: new Date().toISOString()
+      }
+    });
     return;
   }
   await reportIssue({

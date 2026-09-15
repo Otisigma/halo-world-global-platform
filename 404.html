@@ -5,10 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="robots" content="noindex">
   <meta name="theme-color" content="#070709">
-  <title>Signal Lost — HALO</title>
-  <meta name="description" content="Return to HALO Music World and reconnect with the music, artists, and rooms inside the platform.">
-  <meta property="og:title" content="Signal Lost — HALO">
-  <meta property="og:description" content="Return to HALO Music World and reconnect with the music, artists, and rooms inside the platform.">
+  <title>Route Assembling — HALO</title>
+  <meta name="description" content="This HALO route is being assembled. Keep exploring live promotions, Dreamweaver playback, and active platform rooms.">
+  <meta property="og:title" content="Route Assembling — HALO">
+  <meta property="og:description" content="This HALO route is being assembled. Keep exploring live promotions, Dreamweaver playback, and active platform rooms.">
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="HALO Music World">
   <meta property="og:image" content="https://halo-world-global-platform.netlify.app/assets/halo-app-icon-512.png">
@@ -23,29 +23,73 @@
   <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@700;800;900&family=Share+Tech+Mono&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/halo-brand.css">
   <style>
-    :root { color-scheme: dark; --ink: #070709; --paper: #f5efe2; --amber: #e6a84f; --violet: #8d6ab8; }
+    :root { color-scheme: dark; --ink: #070709; --paper: #f5efe2; --amber: #e6a84f; --violet: #8d6ab8; --teal: #6ddad1; }
     * { box-sizing: border-box; }
-    body { min-height: 100vh; margin: 0; display: grid; place-items: center; overflow: hidden; background: radial-gradient(circle at 80% 20%, rgba(141,106,184,.2), transparent 32%), linear-gradient(135deg, #070709, #111019); color: var(--paper); font-family: "Share Tech Mono", monospace; }
-    body::before { content: ""; position: fixed; inset: 0; pointer-events: none; opacity: .18; background-image: linear-gradient(rgba(230,168,79,.12) 1px, transparent 1px), linear-gradient(90deg, rgba(230,168,79,.12) 1px, transparent 1px); background-size: 32px 32px; mask-image: linear-gradient(to bottom, black, transparent 80%); }
-    main { width: min(92vw, 760px); position: relative; padding: clamp(2rem, 7vw, 5rem); border: 1px solid rgba(230,168,79,.5); background: rgba(8,8,12,.8); box-shadow: 0 36px 100px rgba(0,0,0,.45); }
-    .lost-logo { margin-bottom: 1.5rem; }
-    .code { margin: 0; color: var(--amber); letter-spacing: .28em; text-transform: uppercase; }
-    h1 { margin: .25rem 0 1rem; max-width: 8ch; font: 900 clamp(4.8rem, 17vw, 10rem)/.72 "Barlow Condensed", sans-serif; letter-spacing: -.055em; text-transform: uppercase; }
-    h1 span { display: block; color: transparent; -webkit-text-stroke: 1px var(--violet); transform: translateX(clamp(1rem, 8vw, 5rem)); }
-    .message { max-width: 48ch; color: #c8c1b6; line-height: 1.7; }
-    a { display: inline-flex; margin-top: 1.5rem; padding: .85rem 1.15rem; border: 1px solid var(--amber); color: var(--paper); text-decoration: none; text-transform: uppercase; letter-spacing: .08em; transition: transform .2s ease, background .2s ease, color .2s ease; }
-    a:hover { transform: translateY(-2px); background: var(--amber); color: var(--ink); }
+    body { min-height: 100vh; margin: 0; background: radial-gradient(circle at 85% 8%, rgba(141,106,184,.22), transparent 36%), linear-gradient(130deg, #070709, #111019); color: var(--paper); font-family: "Share Tech Mono", monospace; }
+    body::before { content: ""; position: fixed; inset: 0; pointer-events: none; opacity: .15; background-image: linear-gradient(rgba(230,168,79,.12) 1px, transparent 1px), linear-gradient(90deg, rgba(230,168,79,.12) 1px, transparent 1px); background-size: 32px 32px; mask-image: linear-gradient(to bottom, black, transparent 88%); }
+    main { width: min(96vw, 1100px); margin: clamp(1rem, 4vw, 2rem) auto; position: relative; padding: clamp(1.2rem, 2.5vw, 2.2rem); border: 1px solid rgba(230,168,79,.45); background: rgba(8,8,12,.84); box-shadow: 0 36px 100px rgba(0,0,0,.4); }
+    .headline { display: grid; gap: .75rem; }
+    .lost-logo { width: min(230px, 55vw); }
+    .code { margin: 0; color: var(--amber); letter-spacing: .24em; text-transform: uppercase; font-size: .75rem; }
+    h1 { margin: 0; font: 900 clamp(2.6rem, 9vw, 5.2rem)/.82 "Barlow Condensed", sans-serif; letter-spacing: -.05em; text-transform: uppercase; }
+    h1 span { display: block; color: transparent; -webkit-text-stroke: 1px var(--violet); }
+    .message { max-width: 60ch; color: #c8c1b6; line-height: 1.65; margin: 0; }
+    .status-note { margin: 0; color: #9fe7df; text-transform: uppercase; letter-spacing: .12em; font-size: .73rem; }
+    .grid { margin-top: 1.4rem; display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+    .panel { border: 1px solid rgba(255,255,255,.16); background: rgba(14,15,19,.75); padding: 1rem; }
+    .panel h2 { margin: 0 0 .75rem; font: 900 1.55rem/1 "Barlow Condensed", sans-serif; letter-spacing: .02em; text-transform: uppercase; }
+    .panel p { margin: 0 0 .75rem; color: #cbc4b8; font-size: .86rem; line-height: 1.6; }
+    .promo-list, .route-list { list-style: none; margin: 0; padding: 0; display: grid; gap: .55rem; }
+    .promo-list a, .route-list a, .cta {
+      display: inline-flex; align-items: center; width: 100%; min-height: 2.6rem; padding: .66rem .82rem; border: 1px solid rgba(230,168,79,.45); color: var(--paper); text-decoration: none; text-transform: uppercase; letter-spacing: .06em; font-size: .75rem; transition: transform .2s ease, background .2s ease, color .2s ease;
+    }
+    .promo-list a:hover, .route-list a:hover, .cta:hover { transform: translateY(-2px); background: var(--amber); color: var(--ink); }
+    .player { aspect-ratio: 16 / 9; border: 1px solid rgba(109,218,209,.38); background: #050608; }
+    .player iframe { width: 100%; height: 100%; border: 0; }
+    .cta { margin-top: .75rem; justify-content: center; border-color: rgba(109,218,209,.6); }
     a:focus-visible { outline: 3px solid var(--paper); outline-offset: 4px; }
-    @media (prefers-reduced-motion: reduce) { a { transition: none; } }
+    @media (prefers-reduced-motion: reduce) { .promo-list a, .route-list a, .cta { transition: none; } }
   </style>
 </head>
 <body>
   <main>
-    <img class="halo-brand-lockup lost-logo" src="/assets/halo-logo.webp" alt="HALO Music World">
-    <p class="code">Error 404 / signal path unavailable</p>
-    <h1>Signal <span>lost.</span></h1>
-    <p class="message">This room is off-air or the address has changed. Return to the main HALO world and reconnect from there.</p>
-    <a href="/halo">Return to HALO</a>
+    <section class="headline">
+      <img class="halo-brand-lockup lost-logo" src="/assets/halo-logo.webp" alt="HALO Music World">
+      <p class="code">Error 404 / route unavailable</p>
+      <h1>Route <span>assembling.</span></h1>
+      <p class="message">This HALO page is being built right now. While this route is assembled, keep listening and exploring live destinations below.</p>
+      <p class="status-note">Page under construction / signal still in progress</p>
+    </section>
+    <section class="grid" aria-label="Fallback exploration hub">
+      <article class="panel">
+        <h2>Promotions live now</h2>
+        <p>Keep momentum going with active campaigns and release-world paths.</p>
+        <ul class="promo-list">
+          <li><a href="/album-concierge/?purpose=start">Build your album promotion</a></li>
+          <li><a href="/campaign-studio/">Open campaign studio</a></li>
+          <li><a href="/release-house/">Enter release house</a></li>
+        </ul>
+      </article>
+      <article class="panel">
+        <h2>Dreamweaver player</h2>
+        <p>Play the HALO Dreamweaver signal while this page comes online.</p>
+        <div class="player">
+          <iframe src="https://www.youtube.com/embed/videoseries?list=PLcmaoB9ss1YE" title="HALO Dreamweaver fallback player" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen loading="lazy"></iframe>
+        </div>
+        <a class="cta" href="/dreamweaver/">Open Dreamweaver experience</a>
+      </article>
+      <article class="panel">
+        <h2>Working routes</h2>
+        <p>Use these active routes to stay inside the HALO world while this address is completed.</p>
+        <ul class="route-list">
+          <li><a href="/halo">HALO Home</a></li>
+          <li><a href="/music/">Music Room</a></li>
+          <li><a href="/radio/">HALO Radio</a></li>
+          <li><a href="/artists/">Artist Rooms</a></li>
+          <li><a href="/support/">Support</a></li>
+        </ul>
+      </article>
+    </section>
   </main>
 </body>
 </html>

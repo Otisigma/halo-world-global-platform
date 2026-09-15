@@ -942,6 +942,12 @@
         .halo-home-experiment__player-chip--ready {
             color: #86efac;
         }
+        .halo-home-experiment__player-chip--loading {
+            color: #67e8f9;
+        }
+        .halo-home-experiment__player-chip--playing {
+            color: #fbbf24;
+        }
         .halo-home-experiment__player-chip--standby {
             color: #fbbf24;
         }
@@ -1283,6 +1289,7 @@
           { route: '/campaign-studio/', label: 'CAMPAIGN STUDIO' },
           { route: '/release-house/', label: 'RELEASE HOUSE' },
           { route: '/song-catalog/', label: 'SONG CATALOG' },
+          { route: '/music-upload/', label: 'HALO SHOP' },
           { route: '/dreamweaver/', label: 'DREAMWEAVER EXPERIENCE' },
           { route: '/dreamweaver-lab/', label: 'DREAMWEAVER SONG LAB' },
           { route: '/album-concierge/', label: 'CREATE YOUR ALBUM' },
@@ -1290,6 +1297,12 @@
           { route: '/magazine.html', label: 'HALO SIGNAL' },
           { route: '/support/', label: 'FEEDBACK DESK' }
         ];
+        const MENU_PRIMARY_WORKING_TARGET_ROUTES = new Set([
+          '/halo-x.html',
+          '/dj-deck.html',
+          '/halo-live.html',
+          '/magazine.html'
+        ]);
         const MENU_ROUTE_STATUS_TARGETS = new Set(MENU_STATUS_GROUP_TARGETS.map(target => target.route));
         const DEFAULT_MENU_ATTENTION_ROUTE = '/dreamweaver/';
         const BASE_MENU_DESTINATION_COUNT = MENU_STATUS_GROUP_TARGETS.length + 3;
@@ -1715,7 +1728,10 @@
           const [showEqualizer, setShowEqualizer] = useState(false);
           const [equalizer, setEqualizer] = useState({ master: 70, bass: 0, mid: 0, treble: 0 });
           const [isDreamweaverPreviewPlaying, setIsDreamweaverPreviewPlaying] = useState(false);
+          const [isDreamweaverPreviewLoading, setIsDreamweaverPreviewLoading] = useState(false);
+          const [dreamweaverPreviewNeedsGesture, setDreamweaverPreviewNeedsGesture] = useState(false);
           const [dreamweaverPreviewError, setDreamweaverPreviewError] = useState('');
+          const [dreamweaverPreviewSourceId, setDreamweaverPreviewSourceId] = useState('');
           const fallbackReleaseArtwork = window.HaloReleaseArtwork?.DEFAULT_RELEASE_ARTWORK || '/assets/halo-app-icon-512.png';
           const [musicExperimentVariant] = useState(() => {
             const requested = new URLSearchParams(window.location.search).get('musicExperiment');
@@ -1739,6 +1755,14 @@
           const audioCtxRef = useRef(null);
           const canvasRef = useRef(null);
           const dreamweaverPreviewAudioRef = useRef(null);
+          const dreamweaverPreviewCandidatesRef = useRef([]);
+          const dreamweaverPreviewCandidateKeyRef = useRef('');
+          const dreamweaverPreviewSourceIdRef = useRef('');
+          const dreamweaverPreviewInternalSourceSwapRef = useRef(false);
+          const dreamweaverPreviewPlayIntentRef = useRef(false);
+          const dreamweaverPreviewPlayAttemptActiveRef = useRef(false);
+          const dreamweaverPreviewRetryActiveRef = useRef(false);
+          const dreamweaverPreviewRetryAllowedRef = useRef(false);
           const singleFileInputRef = useRef(null);
           const multiFileInputRef = useRef(null);
           const folderInputRef = useRef(null);
@@ -1827,8 +1851,8 @@
             for (const target of MENU_STATUS_GROUP_TARGETS) {
               const indicator = menuStatusForRoute(target.route, 'green');
               const entry = { ...target, status: indicator.status };
-              if (indicator.status === 'green') grouped.working.push(entry);
-              else grouped.attention.push(entry);
+              if (MENU_PRIMARY_WORKING_TARGET_ROUTES.has(target.route) && indicator.status === 'green') grouped.working.push(entry);
+              else if (indicator.status !== 'green') grouped.attention.push(entry);
             }
             return grouped;
           })();
@@ -1844,30 +1868,31 @@
             : menuStatusForRoute(currentRoutePath, 'green');
           const adaptiveDreamweaverPreview = (() => {
             const dreamweaverStatus = menuStatusForRoute('/dreamweaver/', 'yellow');
+            const dreamweaverEntryLabel = 'Start your Halo here — Upload to Dreamweaver';
             if (dreamweaverStatus.status === 'green') {
               return {
                 primaryRoute: '/dreamweaver/',
-                primaryLabel: 'Open Dreamweaver',
+                primaryLabel: dreamweaverEntryLabel,
                 supportRoute: '/dreamweaver-lab/',
                 supportLabel: 'Dreamweaver Song Lab',
-                guidance: 'Dreamweaver is clear. Start with a quick listen, then enter the full fan unlock world.'
+                guidance: 'Dreamweaver is clear. Artists start here to upload a release, shape the build, and send the song to the right listening doors.'
               };
             }
             if (dreamweaverStatus.status === 'yellow') {
               return {
                 primaryRoute: '/dreamweaver/',
-                primaryLabel: 'Open Dreamweaver',
+                primaryLabel: dreamweaverEntryLabel,
                 supportRoute: '/music/',
                 supportLabel: 'Continue in Music Home',
-                guidance: 'Dreamweaver is in attention mode. Enter Dreamweaver directly or continue through the stable music route while updates land.'
+                guidance: 'Dreamweaver is in attention mode. Artists still start here for upload and release shaping, or can continue through the stable music route while updates land.'
               };
             }
             return {
               primaryRoute: '/dreamweaver/',
-              primaryLabel: 'Open Dreamweaver',
+              primaryLabel: dreamweaverEntryLabel,
               supportRoute: '/support/',
               supportLabel: 'Open Feedback Desk',
-              guidance: 'Dreamweaver is reporting a break. You can still try Dreamweaver directly, and support is ready if the route needs attention.'
+              guidance: 'Dreamweaver is reporting a break. Artists can still try the upload doorway directly, and support is ready if the route needs attention.'
             };
           })();
 
@@ -1880,6 +1905,18 @@
               const videoId = url.searchParams.get('v') || url.pathname.split('/').filter(Boolean).pop();
               return videoId ? `https://www.youtube.com/embed/${videoId}` : '';
             } catch { return ''; }
+          };
+
+          const resolveDreamweaverPreviewUrl = (value) => {
+            if (typeof value !== 'string' || !value.trim()) return '';
+            try {
+              const url = new URL(value.trim(), window.location.href);
+              if (!['http:', 'https:'].includes(url.protocol)) return '';
+              if (url.protocol === 'http:' && url.origin !== window.location.origin) return '';
+              return url.href;
+            } catch {
+              return '';
+            }
           };
 
           const releaseArtwork = (release) => window.HaloReleaseArtwork?.resolve(release, fallbackReleaseArtwork)
@@ -2757,44 +2794,228 @@
             return `${minutes}:${String(Math.floor(total % 60)).padStart(2, '0')}`;
           };
 
-          const dreamweaverPreviewMix = roomMixes.find(mix => mix.audioUrl && mix.source !== 'youtube') || roomMixes.find(mix => mix.audioUrl) || null;
-          const dreamweaverRouteIndicator = menuStatusForRoute('/dreamweaver/', dreamweaverPreviewMix && !dreamweaverPreviewError ? 'green' : 'yellow');
-          const dreamweaverPreviewReady = Boolean(dreamweaverPreviewMix?.audioUrl);
-          const dreamweaverPreviewLabel = dreamweaverPreviewReady
-            ? dreamweaverPreviewError
-              ? 'Route-aware playback · Preview unavailable'
-              : 'Route-aware playback · Preview ready'
-            : communityLoading
-              ? 'Route-aware playback · Signal checking'
-              : 'Route-aware playback · Preview standing by';
+          const dreamweaverPreviewCandidates = roomMixes
+            .filter(mix => mix?.source !== 'youtube')
+            .map(mix => {
+              const previewUrl = resolveDreamweaverPreviewUrl(mix?.audioUrl);
+              return previewUrl ? { ...mix, previewUrl } : null;
+            })
+            .filter(Boolean);
+          const dreamweaverPreviewCandidateKey = dreamweaverPreviewCandidates.map(mix => `${mix.id}:${mix.previewUrl}`).join('|');
+          const dreamweaverPreviewMix = dreamweaverPreviewCandidates.find(mix => String(mix.id) === String(dreamweaverPreviewSourceId || ''))
+            || dreamweaverPreviewCandidates[0]
+            || null;
+          const dreamweaverPreviewReady = Boolean(dreamweaverPreviewMix?.previewUrl);
+          const dreamweaverPreviewUnavailable = !dreamweaverPreviewReady && !communityLoading;
+          const dreamweaverPreviewState = dreamweaverPreviewError && !dreamweaverPreviewNeedsGesture
+            ? 'failed'
+            : isDreamweaverPreviewPlaying
+              ? 'playing'
+              : isDreamweaverPreviewLoading
+                ? 'loading'
+                : dreamweaverPreviewReady
+                  ? 'ready'
+                  : communityLoading
+                    ? 'loading'
+                    : dreamweaverPreviewUnavailable
+                      ? 'failed'
+                      : 'standby';
+          const dreamweaverPreviewChipLabel = dreamweaverPreviewState === 'failed'
+            ? 'Preview unavailable'
+            : dreamweaverPreviewState === 'playing'
+              ? 'Preview playing'
+              : dreamweaverPreviewState === 'loading'
+                ? 'Preview loading'
+                : dreamweaverPreviewState === 'ready'
+                  ? 'Preview ready'
+                  : 'Signal standing by';
+          const dreamweaverRouteIndicator = menuStatusForRoute('/dreamweaver/', dreamweaverPreviewReady && dreamweaverPreviewState !== 'failed' ? 'green' : 'yellow');
+          const dreamweaverPreviewLabel = dreamweaverPreviewState === 'failed'
+            ? 'Route-aware playback · Preview unavailable'
+            : dreamweaverPreviewState === 'playing'
+              ? 'Route-aware playback · Preview playing'
+              : dreamweaverPreviewState === 'loading'
+                ? 'Route-aware playback · Preview loading'
+                : dreamweaverPreviewReady
+                  ? 'Route-aware playback · Preview ready'
+                  : 'Route-aware playback · Preview standing by';
           const dreamweaverPreviewSummary = dreamweaverPreviewError
             ? dreamweaverPreviewError
-            : dreamweaverPreviewReady
-              ? `${dreamweaverPreviewMix.title || 'Current signal'} · ${formatMixDuration(dreamweaverPreviewMix.durationSeconds)} · ${dreamweaverPreviewMix.trackCount || 1} ${(dreamweaverPreviewMix.trackCount || 1) === 1 ? 'track' : 'tracks'}`
-            : communityLoading
-              ? 'Scanning the current Dreamweaver signal from the Mix Desk.'
-              : 'No public Dreamweaver mix is live yet. The route remains open while the next preview is prepared.';
+            : dreamweaverPreviewState === 'loading' && dreamweaverPreviewReady
+              ? `Loading ${dreamweaverPreviewMix.title || 'the current signal'} for playback.`
+              : dreamweaverPreviewReady
+                ? `${dreamweaverPreviewMix.title || 'Current signal'} · ${formatMixDuration(dreamweaverPreviewMix.durationSeconds)} · ${dreamweaverPreviewMix.trackCount || 1} ${(dreamweaverPreviewMix.trackCount || 1) === 1 ? 'track' : 'tracks'}`
+                : communityLoading
+                  ? 'Scanning the current Dreamweaver signal from the Mix Desk.'
+                  : 'No public Dreamweaver mix is live yet. The route remains open while the next preview is prepared.';
+
+          const ensureDreamweaverPreviewSource = (preview, mix) => {
+            if (!preview || !mix?.previewUrl) return false;
+            if (preview.src !== mix.previewUrl) {
+              dreamweaverPreviewInternalSourceSwapRef.current = true;
+              preview.pause();
+              preview.src = mix.previewUrl;
+              preview.load();
+            }
+            return true;
+          };
+
+          const markDreamweaverPreviewPlaying = () => {
+            setIsDreamweaverPreviewPlaying(true);
+            setIsDreamweaverPreviewLoading(false);
+            setDreamweaverPreviewError('');
+            setDreamweaverPreviewNeedsGesture(false);
+          };
+
+          const playDreamweaverPreviewCandidates = async (preview, candidateList, retryContext = null) => {
+            if (dreamweaverPreviewPlayAttemptActiveRef.current) return false;
+            let lastError = null;
+            dreamweaverPreviewPlayIntentRef.current = true;
+            if (retryContext && (
+              dreamweaverPreviewCandidateKeyRef.current !== retryContext.candidateKey
+              || preview?.currentSrc !== retryContext.failedSource
+            )) {
+              dreamweaverPreviewRetryActiveRef.current = false;
+              dreamweaverPreviewRetryAllowedRef.current = false;
+              return false;
+            }
+            dreamweaverPreviewPlayAttemptActiveRef.current = true;
+            dreamweaverPreviewRetryActiveRef.current = true;
+            for (const candidate of candidateList) {
+              dreamweaverPreviewRetryAllowedRef.current = false;
+              if (!ensureDreamweaverPreviewSource(preview, candidate)) continue;
+              try {
+                dreamweaverPreviewRetryAllowedRef.current = true;
+                await preview.play();
+                dreamweaverPreviewSourceIdRef.current = String(candidate.id);
+                setDreamweaverPreviewSourceId(String(candidate.id));
+                if (retryContext && dreamweaverPreviewCandidateKeyRef.current !== retryContext.candidateKey) {
+                  preview.pause();
+                  dreamweaverPreviewPlayAttemptActiveRef.current = false;
+                  dreamweaverPreviewRetryActiveRef.current = false;
+                  dreamweaverPreviewRetryAllowedRef.current = false;
+                  return false;
+                }
+                if (preview.currentSrc !== candidate.previewUrl) {
+                  preview.pause();
+                  dreamweaverPreviewPlayAttemptActiveRef.current = false;
+                  dreamweaverPreviewRetryActiveRef.current = false;
+                  dreamweaverPreviewRetryAllowedRef.current = false;
+                  return false;
+                }
+                dreamweaverPreviewPlayAttemptActiveRef.current = false;
+                dreamweaverPreviewRetryActiveRef.current = false;
+                return true;
+              } catch (error) {
+                lastError = error;
+                if (error?.name === 'NotAllowedError') {
+                  dreamweaverPreviewSourceIdRef.current = String(candidate.id);
+                  setDreamweaverPreviewSourceId(String(candidate.id));
+                  setDreamweaverPreviewNeedsGesture(true);
+                  break;
+                }
+              }
+            }
+            dreamweaverPreviewPlayAttemptActiveRef.current = false;
+            dreamweaverPreviewRetryActiveRef.current = false;
+            dreamweaverPreviewRetryAllowedRef.current = false;
+            setIsDreamweaverPreviewPlaying(false);
+            setIsDreamweaverPreviewLoading(false);
+            setDreamweaverPreviewError(lastError?.name === 'NotAllowedError'
+              ? 'Playback is waiting for a browser-approved tap. Press play again to continue.'
+              : 'Preview audio is unavailable right now. You can still open Dreamweaver directly.');
+            return false;
+          };
 
           const toggleDreamweaverPreview = async () => {
             const preview = dreamweaverPreviewAudioRef.current;
-            if (!preview || !dreamweaverPreviewReady) return;
+            if (!preview || !dreamweaverPreviewCandidates.length) return;
             if (preview.paused) {
               trackMusicExperimentAction('listening', 'homepage_experiment_dreamweaver_preview', 'native');
-              try {
-                await preview.play();
-                setDreamweaverPreviewError('');
-              } catch {
-                setDreamweaverPreviewError('Preview audio is unavailable right now. You can still open Dreamweaver directly.');
-              }
+              dreamweaverPreviewRetryAllowedRef.current = true;
+              setDreamweaverPreviewError('');
+              setDreamweaverPreviewNeedsGesture(false);
+              setIsDreamweaverPreviewLoading(true);
+              const currentIndex = Math.max(0, dreamweaverPreviewCandidates.findIndex(mix => String(mix.id) === String(dreamweaverPreviewMix?.id || '')));
+              const orderedCandidates = currentIndex > 0
+                ? [...dreamweaverPreviewCandidates.slice(currentIndex), ...dreamweaverPreviewCandidates.slice(0, currentIndex)]
+                : dreamweaverPreviewCandidates;
+              await playDreamweaverPreviewCandidates(preview, orderedCandidates);
               return;
             }
             preview.pause();
           };
 
           useEffect(() => {
-            setDreamweaverPreviewError('');
+            dreamweaverPreviewCandidatesRef.current = dreamweaverPreviewCandidates;
+            dreamweaverPreviewCandidateKeyRef.current = dreamweaverPreviewCandidateKey;
+          }, [dreamweaverPreviewCandidateKey, dreamweaverPreviewCandidates]);
+
+          useEffect(() => {
+            dreamweaverPreviewSourceIdRef.current = String(dreamweaverPreviewSourceId || '');
+          }, [dreamweaverPreviewSourceId]);
+
+          useEffect(() => {
+            const preview = dreamweaverPreviewAudioRef.current;
+            if (!dreamweaverPreviewCandidates.length) {
+              dreamweaverPreviewSourceIdRef.current = '';
+              setDreamweaverPreviewSourceId('');
+              setDreamweaverPreviewError('');
+              setIsDreamweaverPreviewPlaying(false);
+              setIsDreamweaverPreviewLoading(false);
+              setDreamweaverPreviewNeedsGesture(false);
+              dreamweaverPreviewPlayIntentRef.current = false;
+              dreamweaverPreviewRetryActiveRef.current = false;
+              dreamweaverPreviewRetryAllowedRef.current = false;
+              if (preview) {
+                preview.pause();
+                preview.removeAttribute('src');
+                preview.load();
+              }
+              return;
+            }
+            if (!dreamweaverPreviewCandidates.some(mix => String(mix.id) === String(dreamweaverPreviewSourceId || ''))) {
+              dreamweaverPreviewSourceIdRef.current = String(dreamweaverPreviewCandidates[0].id);
+              setDreamweaverPreviewSourceId(String(dreamweaverPreviewCandidates[0].id));
+            }
+          }, [dreamweaverPreviewCandidateKey, dreamweaverPreviewSourceId]);
+
+          useEffect(() => {
+            const preview = dreamweaverPreviewAudioRef.current;
+            if (!preview) return;
+            const nextPreviewUrl = dreamweaverPreviewMix?.previewUrl || '';
+            const sourceChanged = nextPreviewUrl ? preview.currentSrc !== nextPreviewUrl : Boolean(preview.currentSrc);
+            if (!sourceChanged) return;
+            const internalSourceSwap = dreamweaverPreviewInternalSourceSwapRef.current;
+            dreamweaverPreviewInternalSourceSwapRef.current = false;
+            if (internalSourceSwap) return;
+            const shouldResumePlayback = dreamweaverPreviewPlayIntentRef.current;
             setIsDreamweaverPreviewPlaying(false);
-          }, [dreamweaverPreviewMix?.audioUrl]);
+            dreamweaverPreviewRetryAllowedRef.current = false;
+            if (!nextPreviewUrl) {
+              setIsDreamweaverPreviewLoading(false);
+              dreamweaverPreviewPlayIntentRef.current = false;
+              dreamweaverPreviewRetryActiveRef.current = false;
+              preview.pause();
+              preview.removeAttribute('src');
+              preview.load();
+              return;
+            }
+            preview.pause();
+            preview.src = nextPreviewUrl;
+            preview.load();
+            if (shouldResumePlayback) {
+              setIsDreamweaverPreviewLoading(true);
+              const startIndex = Math.max(0, dreamweaverPreviewCandidates.findIndex(mix => mix.previewUrl === nextPreviewUrl));
+              const resumeCandidates = startIndex > 0
+                ? [...dreamweaverPreviewCandidates.slice(startIndex), ...dreamweaverPreviewCandidates.slice(0, startIndex)]
+                : dreamweaverPreviewCandidates;
+              void playDreamweaverPreviewCandidates(preview, resumeCandidates);
+              return;
+            }
+            setIsDreamweaverPreviewLoading(false);
+            dreamweaverPreviewRetryActiveRef.current = false;
+          }, [dreamweaverPreviewCandidateKey, dreamweaverPreviewMix?.previewUrl]);
 
           const communityAction = async (payload, notice = '') => {
             if (!identityUser) {
@@ -3613,52 +3834,58 @@
                     </div>
 
                     <div className="halo-menu-status-groups" aria-label="Satellite route status groups">
-                      <section className="halo-menu-status-group halo-menu-status-group-attention" aria-labelledby="halo-menu-status-attention">
-                        <button
-                          type="button"
-                          className="halo-menu-status-group-title halo-menu-status-group-toggle"
-                          aria-expanded={!attentionStatusCollapsed}
-                          aria-controls="halo-menu-status-attention-content"
-                          onClick={() => setAttentionStatusCollapsed(collapsed => !collapsed)}
-                        >
-                          <span>00</span>
-                          <h3 id="halo-menu-status-attention">Attention now</h3>
-                          <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
-                            <path d="m5 7.5 5 5 5-5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-                          </svg>
-                        </button>
-                        <div id="halo-menu-status-attention-content" hidden={attentionStatusCollapsed}>
-                          {menuStatusGroupedTargets.attention.length ? (
-                            <div className="halo-menu-status-buttons">
-                              {menuStatusGroupedTargets.attention.map(target => (
-                                <a key={`attention-${target.route}`} href={target.route} className="halo-menu-status-button">
-                                  <span className="halo-menu-status-label">{target.label}</span>
-                                  {renderMenuStatusBadge(target.route, target.label, 'yellow')}
-                                </a>
-                              ))}
-                            </div>
-                          ) : (
-                            <p className="halo-menu-status-empty">No active amber satellites. All monitored routes are currently working.</p>
-                          )}
-                        </div>
-                      </section>
                       <section className="halo-menu-status-group halo-menu-status-group-working" aria-labelledby="halo-menu-status-working">
                         <div className="halo-menu-status-group-title">
-                          <span>01</span>
-                          <h3 id="halo-menu-status-working">Working now</h3>
+                          <span>00</span>
+                          <h3 id="halo-menu-status-working">All working menu</h3>
                         </div>
-                        <div className="halo-menu-status-buttons">
-                          {menuStatusGroupedTargets.working.map(target => (
-                            <a key={`working-${target.route}`} href={target.route} className="halo-menu-status-button">
-                              <span className="halo-menu-status-label">{target.label}</span>
-                              {renderMenuStatusBadge(target.route, target.label, 'green')}
-                            </a>
-                          ))}
-                        </div>
+                        {menuStatusGroupedTargets.working.length ? (
+                          <div className="halo-menu-status-buttons">
+                            {menuStatusGroupedTargets.working.map(target => (
+                              <a key={`working-${target.route}`} href={target.route} className="halo-menu-status-button">
+                                <span className="halo-menu-status-label">{target.label}</span>
+                                {renderMenuStatusBadge(target.route, target.label, 'green')}
+                              </a>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="halo-menu-status-empty">Working routes appear here as soon as the live check completes.</p>
+                        )}
                         {menuRouteStatusesUnavailable && (
                           <p className="halo-menu-status-empty">Live status is refreshing. The public route map stays visible while fresh checks publish.</p>
                         )}
                       </section>
+                      {ownerControlAccess && (
+                        <section className="halo-menu-status-group halo-menu-status-group-attention" aria-labelledby="halo-menu-status-attention">
+                          <button
+                            type="button"
+                            className="halo-menu-status-group-title halo-menu-status-group-toggle"
+                            aria-expanded={!attentionStatusCollapsed}
+                            aria-controls="halo-menu-status-attention-content"
+                            onClick={() => setAttentionStatusCollapsed(collapsed => !collapsed)}
+                          >
+                            <span>01</span>
+                            <h3 id="halo-menu-status-attention">Attention now</h3>
+                            <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
+                              <path d="m5 7.5 5 5 5-5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                            </svg>
+                          </button>
+                          <div id="halo-menu-status-attention-content" hidden={attentionStatusCollapsed}>
+                            {menuStatusGroupedTargets.attention.length ? (
+                              <div className="halo-menu-status-buttons">
+                                {menuStatusGroupedTargets.attention.map(target => (
+                                  <a key={`attention-${target.route}`} href={target.route} className="halo-menu-status-button">
+                                    <span className="halo-menu-status-label">{target.label}</span>
+                                    {renderMenuStatusBadge(target.route, target.label, 'yellow')}
+                                  </a>
+                                ))}
+                              </div>
+                            ) : (
+                              <p className="halo-menu-status-empty">No active amber satellites. All monitored routes are currently working.</p>
+                            )}
+                          </div>
+                        </section>
+                      )}
                     </div>
 
                     <div className="halo-menu-lanes">
@@ -3724,7 +3951,7 @@
                           <Icon name="book-open" className="halo-menu-icon" /><span><strong>CREATOR FREEDOM {renderMenuStatusBadge('/creator-freedom/', 'Creator Freedom')}</strong><small>White paper, seven-point charter, and public room</small></span>
                         </a>
                         <a href="/campaign-studio/" data-stat-event="open_campaign_studio" data-stat-target="header" data-signal="CAMPAIGN STUDIO">
-                          <Icon name="check-circle" className="halo-menu-icon" /><span><strong>CAMPAIGN STUDIO {renderMenuStatusBadge('/campaign-studio/', 'Campaign Studio')}</strong><small>Plan launch messaging and campaign flow</small></span>
+                          <Icon name="check-circle" className="halo-menu-icon" /><span><strong>CAMPAIGN STUDIO // ARTIST CONTROLS {renderMenuStatusBadge('/campaign-studio/', 'Campaign Studio')}</strong><small>One release. Five purpose-built links for every destination.</small></span>
                         </a>
                         <a href="/release-house/" data-stat-event="open_release_house" data-stat-target="header" data-signal="FIRST RELEASE">
                           <Icon name="disc" className="halo-menu-icon" /><span><strong>RELEASE HOUSE {renderMenuStatusBadge('/release-house/', 'Release House')}</strong><small>Idea to release, one guided room at a time</small></span>
@@ -3732,8 +3959,11 @@
                         <a href="/song-catalog/" data-stat-event="open_song_catalog" data-stat-target="header" data-signal="MASTERS + VERSIONS">
                           <Icon name="list-music" className="halo-menu-icon" /><span><strong>SONG CATALOG {renderMenuStatusBadge('/song-catalog/', 'Song Catalog')}</strong><small>Sale masters, radio edits, stems, and metadata review</small></span>
                         </a>
+                        <a href="/music-upload/" data-stat-event="open_song_catalog_upload" data-stat-target="header" data-signal="HALO SHOP">
+                          <Icon name="upload" className="halo-menu-icon" /><span><strong>HALO SHOP {renderMenuStatusBadge('/music-upload/', 'HALO Shop')}</strong><small>Public song shop for listening, buying, sharing, and artist-controlled release context</small></span>
+                        </a>
                         <a href="/dreamweaver/" data-stat-event="open_dreamweaver_show" data-stat-target="header" data-signal="FAN JOURNEY">
-                          <Icon name="star" className="halo-menu-icon" /><span><strong>DREAMWEAVER EXPERIENCE {renderMenuStatusBadge('/dreamweaver/', 'Dreamweaver Experience')}</strong><small>Unlock the fan path and signal campaign room</small></span>
+                          <Icon name="star" className="halo-menu-icon" /><span><strong>DREAMWEAVER EXPERIENCE {renderMenuStatusBadge('/dreamweaver/', 'Dreamweaver Experience')}</strong><small>Start your Halo here — upload to Dreamweaver</small></span>
                         </a>
                         <a href="/dreamweaver-lab/" data-stat-event="open_dreamweaver_song_lab" data-stat-target="header" data-signal="AUDIO TO CAMPAIGN">
                           <Icon name="music" className="halo-menu-icon" /><span><strong>DREAMWEAVER SONG LAB {renderMenuStatusBadge('/dreamweaver-lab/', 'Dreamweaver Song Lab')}</strong><small>Load a recording. Analyze the wave. Build the release world.</small></span>
@@ -3800,8 +4030,8 @@
                               alt={dreamweaverPreviewMix ? `${dreamweaverPreviewMix.title} Dreamweaver preview artwork` : 'HALO Dreamweaver preview artwork'}
                               loading="lazy"
                             />
-                            <span className={`halo-home-experiment__player-chip ${dreamweaverPreviewError ? 'halo-home-experiment__player-chip--unavailable' : dreamweaverPreviewReady ? 'halo-home-experiment__player-chip--ready' : 'halo-home-experiment__player-chip--standby'}`}>
-                              {dreamweaverPreviewError ? 'Preview unavailable' : dreamweaverPreviewReady ? 'Preview ready' : 'Signal standing by'}
+                            <span className={`halo-home-experiment__player-chip ${dreamweaverPreviewState === 'failed' ? 'halo-home-experiment__player-chip--unavailable' : dreamweaverPreviewState === 'playing' ? 'halo-home-experiment__player-chip--playing' : dreamweaverPreviewState === 'loading' ? 'halo-home-experiment__player-chip--loading' : dreamweaverPreviewState === 'ready' ? 'halo-home-experiment__player-chip--ready' : 'halo-home-experiment__player-chip--standby'}`}>
+                              {dreamweaverPreviewChipLabel}
                             </span>
                           </div>
 
@@ -3820,17 +4050,55 @@
                               ref={dreamweaverPreviewAudioRef}
                               className="halo-home-experiment__audio"
                               controls
-                              preload="none"
-                              src={dreamweaverPreviewMix?.audioUrl || undefined}
+                              preload="metadata"
+                              src={dreamweaverPreviewMix?.previewUrl || undefined}
                               aria-label="Dreamweaver homepage preview player"
-                              onPlay={() => {
-                                setIsDreamweaverPreviewPlaying(true);
-                                setDreamweaverPreviewError('');
+                              onLoadStart={() => {
+                                setIsDreamweaverPreviewLoading(true);
+                                setDreamweaverPreviewNeedsGesture(false);
                               }}
-                              onPause={() => setIsDreamweaverPreviewPlaying(false)}
-                              onEnded={() => setIsDreamweaverPreviewPlaying(false)}
+                              onCanPlay={() => {
+                                setIsDreamweaverPreviewLoading(false);
+                                setDreamweaverPreviewNeedsGesture(false);
+                              }}
+                              onPlay={markDreamweaverPreviewPlaying}
+                              onPlaying={markDreamweaverPreviewPlaying}
+                              onWaiting={() => {
+                                if (!dreamweaverPreviewNeedsGesture) setIsDreamweaverPreviewLoading(true);
+                              }}
+                              onPause={() => {
+                                setIsDreamweaverPreviewPlaying(false);
+                                if (!dreamweaverPreviewRetryActiveRef.current) {
+                                  setIsDreamweaverPreviewLoading(false);
+                                  dreamweaverPreviewPlayIntentRef.current = false;
+                                }
+                              }}
+                              onEnded={() => {
+                                setIsDreamweaverPreviewPlaying(false);
+                                setIsDreamweaverPreviewLoading(false);
+                                dreamweaverPreviewPlayIntentRef.current = false;
+                                dreamweaverPreviewRetryActiveRef.current = false;
+                                dreamweaverPreviewRetryAllowedRef.current = false;
+                              }}
                               onError={() => {
                                 setIsDreamweaverPreviewPlaying(false);
+                                setIsDreamweaverPreviewLoading(false);
+                                setDreamweaverPreviewNeedsGesture(false);
+                                const preview = dreamweaverPreviewAudioRef.current;
+                                const failedSource = preview?.currentSrc || '';
+                                const currentCandidates = dreamweaverPreviewCandidatesRef.current;
+                                const failedIndex = currentCandidates.findIndex(mix => mix.previewUrl === failedSource);
+                                const selectedIndex = currentCandidates.findIndex(mix => String(mix.id) === dreamweaverPreviewSourceIdRef.current);
+                                const sourceIndex = failedIndex >= 0 ? failedIndex : selectedIndex;
+                                const nextCandidates = sourceIndex >= 0 ? currentCandidates.slice(sourceIndex + 1) : currentCandidates.slice(1);
+                                if (dreamweaverPreviewRetryAllowedRef.current && !dreamweaverPreviewRetryActiveRef.current && nextCandidates.length) {
+                                  dreamweaverPreviewRetryActiveRef.current = true;
+                                  dreamweaverPreviewRetryAllowedRef.current = false;
+                                  setDreamweaverPreviewError('This preview source failed. Loading the next Dreamweaver signal.');
+                                  setIsDreamweaverPreviewLoading(true);
+                                  void playDreamweaverPreviewCandidates(preview, nextCandidates, { candidateKey: dreamweaverPreviewCandidateKeyRef.current, failedSource });
+                                  return;
+                                }
                                 setDreamweaverPreviewError('Preview audio is unavailable right now. You can still open Dreamweaver directly.');
                               }}
                             ></audio>
@@ -3845,7 +4113,7 @@
                             disabled={!dreamweaverPreviewReady}
                             aria-controls="dreamweaver-homepage-preview"
                           >
-                            {isDreamweaverPreviewPlaying ? 'Pause preview' : 'Play preview'}
+                            {dreamweaverPreviewState === 'loading' ? 'Loading preview…' : isDreamweaverPreviewPlaying ? 'Pause preview' : 'Play preview'}
                           </button>
                           <a
                             href="/dreamweaver/"
@@ -3853,7 +4121,7 @@
                             data-stat-event="open_dreamweaver_show"
                             data-stat-target="homepage_hero"
                           >
-                            Open Dreamweaver
+                            Start your Halo here — Upload to Dreamweaver
                           </a>
                         </div>
 
@@ -3885,7 +4153,7 @@
                           </ul>
                         </div>
 
-                        <p className="halo-home-experiment__note">We use transparent on-page behavior signals to improve the experience for artists and fans without exploiting either side of the relationship.</p>
+                        <p className="halo-home-experiment__note">Halo does not require your personal information. Any simple on-page signals we use are only there to make Halo better for artists and fans.</p>
                       </article>
                     </div>
                   </section>
@@ -4171,7 +4439,7 @@
                           </tbody>
                         </table>
                       </div>
-                      <p className="mt-3 max-w-3xl text-xs leading-6 text-gray-400">We use transparent on-page behavior signals to improve the experience for artists and fans without exploiting either side of the relationship. Listening is currently compared through HALO music-home entry on Variant A and quick-listen embed availability on Variant B.</p>
+                      <p className="mt-3 max-w-3xl text-xs leading-6 text-gray-400">Halo does not require your personal information. Any simple on-page signals we use are only there to make Halo better for artists and fans. Listening is currently compared through HALO music-home entry on Variant A and quick-listen embed availability on Variant B.</p>
                     </div>
                     <div className="grid gap-px border-t border-white/10 bg-white/10 lg:grid-cols-2">
                       {showNativeExperiment && (
@@ -4528,11 +4796,11 @@
                         <strong className="mt-8 block text-xl text-white">Enter HALO Live</strong>
                         <span className="mt-2 block font-sans-alt text-xs leading-5 text-gray-500">Find every stream, follow the broadcast plan, and join the fan experience.</span>
                       </a>
-                      <button type="button" onClick={() => openConsoleArea('halo-tv')} className="group min-h-48 rounded-2xl border border-red-900/50 bg-gradient-to-b from-red-950/30 to-black/20 p-5 text-left transition hover:-translate-y-1 hover:border-red-400">
-                        <span className="text-[10px] font-black tracking-[0.24em] text-red-400">04 / WATCH</span>
-                        <strong className="mt-8 block text-xl text-white">Play HALO TV</strong>
-                        <span className="mt-2 block font-sans-alt text-xs leading-5 text-gray-500">Bring a YouTube set into the console and watch together.</span>
-                      </button>
+                      <a href="/campaign-studio/" data-stat-event="open_campaign_studio" data-stat-target="fan_pathways" className="group min-h-48 rounded-2xl border border-red-900/50 bg-gradient-to-b from-red-950/30 to-black/20 p-5 text-left transition hover:-translate-y-1 hover:border-red-400">
+                        <span className="text-[10px] font-black tracking-[0.24em] text-red-400">04 / RELEASE HUB</span>
+                        <strong className="mt-8 block text-xl text-white">Campaign Studio // Artist Controls</strong>
+                        <span className="mt-2 block font-sans-alt text-xs leading-5 text-gray-500">Define one release once, then route destination-ready kits for fans, DJs, radio, press, and advance listeners.</span>
+                      </a>
                       <a href="/dj-deck.html" className="group min-h-48 rounded-2xl border border-cyan-900/50 bg-gradient-to-b from-cyan-950/30 to-black/20 p-5 text-left transition hover:-translate-y-1 hover:border-cyan-400">
                         <span className="text-[10px] font-black tracking-[0.24em] text-cyan-400">05 / CREATE</span>
                         <strong className="mt-8 block text-xl text-white">Touch the DJ deck</strong>
@@ -4548,6 +4816,11 @@
                         <strong className="mt-8 block text-xl text-white">Browse the Mix Cloud</strong>
                         <span className="mt-2 block font-sans-alt text-xs leading-5 text-gray-500">Jump straight to published HALO X mixes, long plays, and the listener library.</span>
                       </a>
+                      <button type="button" onClick={() => openConsoleArea('halo-tv')} className="group min-h-48 rounded-2xl border border-red-900/50 bg-gradient-to-b from-red-950/30 to-black/20 p-5 text-left transition hover:-translate-y-1 hover:border-red-400">
+                        <span className="text-[10px] font-black tracking-[0.24em] text-red-400">08 / WATCH</span>
+                        <strong className="mt-8 block text-xl text-white">Play HALO TV</strong>
+                        <span className="mt-2 block font-sans-alt text-xs leading-5 text-gray-500">Bring a YouTube set into the console and watch together.</span>
+                      </button>
                     </div>
                   </section>
 
@@ -4912,6 +5185,16 @@
                         <span className="flex items-center gap-2"><Icon name="radio" className="h-4 w-4 text-cyan-300" />Radio + DJ Room</span>
                         <span className="bg-cyan-950/80 border border-cyan-800/40 text-cyan-300 text-[9px] px-1.5 py-0.5 rounded">PACK 001</span>
                       </button>
+
+                      <a
+                        href="/music-upload/"
+                        data-stat-event="open_song_catalog_upload"
+                        data-stat-target="system-controller"
+                        className="w-full flex items-center justify-between px-3 py-2.5 rounded text-xs tracking-wider uppercase transition text-gray-400 hover:text-white hover:bg-purple-950/10"
+                      >
+                        <span className="flex items-center gap-2"><Icon name="upload" className="h-4 w-4 text-emerald-300" />HALO Shop</span>
+                        <span className="bg-emerald-950/80 border border-emerald-800/40 text-emerald-300 text-[9px] px-1.5 py-0.5 rounded">SHOP</span>
+                      </a>
                     </div>
 
                     {/* SETLIST SELECTOR */}

@@ -46,6 +46,7 @@ const checks = [
   [ledgerLib.includes("fix_record") && ledgerLib.includes("department_action") && ledgerLib.includes("approval_event"), "ledger lib includes fix_record, department_action, approval_event categories"],
   [ledgerLib.includes("agent_activity") && ledgerLib.includes("feature_request") && ledgerLib.includes("system_event"), "ledger lib includes agent_activity, feature_request, system_event categories"],
   [ledgerLib.includes("route_health"), "ledger lib includes route_health category"],
+  [ledgerLib.includes("maintenance_lifecycle"), "ledger lib includes maintenance_lifecycle category"],
   [ledgerLib.includes("export async function appendLedgerEntry"), "ledger lib exports appendLedgerEntry function"],
   [ledgerLib.includes("export async function appendRouteHealthEntry"), "ledger lib exports appendRouteHealthEntry helper"],
   [ledgerLib.includes("ROUTE_HEALTH_STATES") && ledgerLib.includes("disconnected"), "route-health helper validates working/attention/broken/disconnected states"],
@@ -68,7 +69,8 @@ const checks = [
 
   // Issues/fix integration
   [maintenanceLib.includes("appendLedgerEntry") && maintenanceLib.includes("./halo-ledger.mjs"), "maintenance lib imports appendLedgerEntry from halo-ledger"],
-  [maintenanceLib.includes("issue_report") && maintenanceLib.includes("Issue reported:"), "maintenance lib logs issue_report events to the ledger"],
+  [maintenanceLib.includes("recordMaintenanceLifecycle") && maintenanceLib.includes("Issue reported:"), "maintenance lib logs issue reporting into the maintenance lifecycle ledger stream"],
+  [maintenanceLib.includes("recordMaintenanceLifecycle") && maintenanceLib.includes("maintenance_lifecycle"), "maintenance lib records full maintenance lifecycle events in the ledger"],
 
   // UI
   [ledgerHtml.includes("/api/halo-ledger") || ledgerJs.includes("/api/halo-ledger"), "ledger UI calls /api/halo-ledger endpoint"],

@@ -13,10 +13,13 @@
     address: document.querySelector("#catalogAddress"),
     copy: document.querySelector("#copyCatalog"),
     share: document.querySelector("#shareCatalog"),
-    toast: document.querySelector("#catalogToast")
+    toast: document.querySelector("#catalogToast"),
+    catalogWorkspace: document.querySelector("#catalogWorkspaceDetails"),
+    sharedCatalogFrame: document.querySelector("#sharedCatalogFrame")
   };
-  const state = { releases: [], videos: [], query: "", genre: "all", sort: "newest", chartRoom: "all", chartSort: "signal", activeReleaseId: "" };
+  const state = { releases: [], videos: [], query: "", genre: "all", sort: "newest", chartRoom: "all", chartSort: "signal", activeReleaseId: "", activeShopId: "" };
   const configuredFeaturedReleaseId = elements.featured?.dataset.featuredReleaseId?.trim() || "";
+  const requestedReleaseId = new URLSearchParams(window.location.search).get("song")?.trim() || "";
   const fallbackArtwork = window.HaloReleaseArtwork?.DEFAULT_RELEASE_ARTWORK || "/assets/halo-app-icon-512.png";
   const satelliteVideoFallbackEnabled = new URLSearchParams(window.location.search).get("satellite") === "music-video-fallback";
   const chartRooms = {
@@ -41,6 +44,146 @@
     } catch {
       return fallback;
     }
+  }
+
+  function shopPath() {
+    const configuredPath = document.body?.dataset.shopPath;
+    if (/^\/[a-z0-9-]+(?:\/[a-z0-9-]+)*\/$/i.test(configuredPath || "")) return configuredPath;
+    const normalizedPath = window.location.pathname.replace(/index\.html$/i, "");
+    return normalizedPath.startsWith("/music-upload") ? "/music-upload/" : "/music/";
+  }
+
+  function money(cents, currency = "USD") {
+    if (cents == null || Number.isNaN(Number(cents))) return "";
+    const code = String(currency || "USD").toUpperCase();
+    try {
+      return new Intl.NumberFormat(undefined, { style: "currency", currency: code }).format(Number(cents) / 100);
+    } catch {
+      return `${code} ${(Number(cents) / 100).toFixed(2)}`;
+    }
+  }
+
+  function catalogState(release) {
+    return release?.catalog && typeof release.catalog === "object" ? release.catalog : {};
+  }
+
+  function directAudioPreviewUrl(release) {
+    const candidate = safeUrl(release?.streamUrl || "");
+    if (!candidate) return "";
+    try {
+      const { pathname } = new URL(candidate);
+      return /\.(mp3|m4a|aac|ogg|wav|flac|webm)$/i.test(pathname) ? candidate : "";
+    } catch {
+      return "";
+    }
+  }
+
+  function availabilitySummary(release) {
+    const catalog = catalogState(release);
+    const rightsStatus = String(catalog.rightsStatus || "").toLowerCase();
+    const saleStatus = String(catalog.saleStatus || "").toLowerCase();
+    const metadataStatus = String(catalog.metadataStatus || "").toLowerCase();
+    if (rightsStatus === "cleared" && saleStatus === "for_sale" && release.purchaseUrl) {
+      return {
+        badge: "Artist-controlled release",
+        note: `Rights cleared in the shared song catalog${metadataStatus === "ready" ? " and marked release-ready" : ""}. Support opens through the artist-approved buy link.`
+      };
+    }
+    if (rightsStatus === "cleared" && saleStatus === "coming_soon") {
+      return {
+        badge: "Support opens soon",
+        note: "Public listening is open, while artist-controlled purchasing stays timed to the release window."
+      };
+    }
+    if (rightsStatus && rightsStatus !== "cleared") {
+      return {
+        badge: "Listening open · rights review active",
+        note: "Public listening can surface now, but product language stays rights-aware until ownership, samples, and splits are cleared."
+      };
+    }
+    if (saleStatus === "not_for_sale" || !release.purchaseUrl) {
+      return {
+        badge: "Listening-first release",
+        note: "This song is presented for public listening and sharing while direct purchase remains artist-controlled."
+      };
+    }
+    return {
+      badge: "Shared catalog source",
+      note: "This public release is sourced from HALO’s shared catalog and campaign system."
+    };
+  }
+
+  function buyActionLabel(release) {
+    const catalog = catalogState(release);
+    if (release.purchaseUrl && catalog.salePriceCents > 0) return `Buy / support · ${money(catalog.salePriceCents, catalog.currency)}`;
+    if (release.purchaseUrl) return "Buy / support";
+    if (release.streamUrl) return "Open stream";
+    return "";
+  }
+
+  function shareUrlForRelease(release) {
+    const url = new URL(shopPath(), window.location.origin);
+    url.searchParams.set("song", release.id);
+    return url.toString();
+  }
+
+  function updateShopUrl(release) {
+    if (!release?.id) return;
+    const currentUrl = new URL(window.location.href);
+    const url = new URL(window.location.href);
+    url.pathname = shopPath();
+    url.searchParams.set("song", release.id);
+    if (`${currentUrl.pathname}${currentUrl.search}` === `${url.pathname}${url.search}`) return;
+    window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
+  }
+
+  function setHeadMeta(selector, content) {
+    const node = document.head.querySelector(selector);
+    if (node && content) node.setAttribute("content", content);
+  }
+
+  function updateShopHead(release) {
+    if (!release) return;
+    const availability = availabilitySummary(release);
+    document.title = `${release.title} — ${release.artist} | HALO Shop`;
+    setHeadMeta('meta[name="description"]', release.pitch || availability.note);
+    setHeadMeta('meta[property="og:title"]', `${release.title} — ${release.artist} | HALO Shop`);
+    setHeadMeta('meta[property="og:description"]', release.pitch || availability.note);
+    setHeadMeta('meta[name="twitter:title"]', `${release.title} — ${release.artist} | HALO Shop`);
+    setHeadMeta('meta[name="twitter:description"]', release.pitch || availability.note);
+    const artwork = releaseArtwork(release);
+    setHeadMeta('meta[property="og:image"]', artwork.src);
+    setHeadMeta('meta[name="twitter:image"]', artwork.src);
+  }
+
+  const CATALOG_FRAME_MIN_HEIGHT = 960;
+
+  function sharedCatalogFrameUrl() {
+    const url = new URL("/song-catalog/", window.location.origin);
+    url.searchParams.set("embed", "shop");
+    url.searchParams.set("parentOrigin", window.location.origin);
+    return url.toString();
+  }
+
+  function syncSharedCatalogFrameHeight(nextHeight) {
+    if (!elements.sharedCatalogFrame) return;
+    const safeHeight = Number(nextHeight);
+    if (!Number.isFinite(safeHeight) || safeHeight < 0) return;
+    elements.sharedCatalogFrame.style.height = `${Math.max(CATALOG_FRAME_MIN_HEIGHT, Math.ceil(safeHeight))}px`;
+  }
+
+  function handleSharedCatalogFrameMessage(event) {
+    if (event.origin !== window.location.origin) return;
+    if (!event.data || event.data.type !== "halo-song-catalog-height") return;
+    if (event.source !== elements.sharedCatalogFrame?.contentWindow) return;
+    syncSharedCatalogFrameHeight(event.data.height);
+  }
+
+  function loadSharedCatalogFrame() {
+    const frame = elements.sharedCatalogFrame;
+    if (!frame || frame.dataset.loaded === "true") return;
+    frame.src = frame.dataset.src || sharedCatalogFrameUrl();
+    frame.dataset.loaded = "true";
   }
 
   function releaseArtwork(release) {
@@ -322,21 +465,21 @@
   }
 
   async function copyCatalogAddress() {
-    const address = `${window.location.origin}/music/`;
+    const address = `${window.location.origin}${shopPath()}`;
     try {
       await navigator.clipboard.writeText(address);
-      showToast("HALO music address copied");
+      showToast("HALO shop address copied");
       elements.copy.textContent = "Address copied";
     } catch {
-      window.prompt("Copy the HALO music address", address);
+      window.prompt("Copy the HALO shop address", address);
     }
   }
 
   async function shareCatalog() {
     const shareData = {
-      title: "HALO Music",
-      text: "Every official HALO release in one place.",
-      url: `${window.location.origin}/music/`
+      title: "HALO Shop",
+      text: "Listen, buy, and share artist-controlled HALO songs from one public shop front.",
+      url: `${window.location.origin}${shopPath()}`
     };
     if (navigator.share) {
       try {
@@ -347,6 +490,16 @@
       }
     }
     await copyCatalogAddress();
+  }
+
+  function selectedShopRelease() {
+    return state.releases.find(release => release.id === state.activeShopId)
+      || state.releases.find(candidate => candidate.id === requestedReleaseId)
+      || (configuredFeaturedReleaseId ? state.releases.find(candidate => candidate.id === configuredFeaturedReleaseId) : null)
+      || state.releases.find(r => r.featuredType === "week")
+      || state.releases.find(r => r.featuredType === "month")
+      || state.releases[0]
+      || null;
   }
 
   function releaseMeta(release) {
@@ -360,7 +513,54 @@
     return "";
   }
 
-  function releaseActions(release) {
+  function relatedReleases(release) {
+    const stableArtistId = String(release.artistSlug || "").trim().toLowerCase();
+    const fallbackArtistName = normalized(release.artist);
+    return state.releases
+      .filter(item => {
+        if (item.id === release.id) return false;
+        const itemArtistId = String(item.artistSlug || "").trim().toLowerCase();
+        if (stableArtistId && itemArtistId) return itemArtistId === stableArtistId;
+        return normalized(item.artist) === fallbackArtistName;
+      })
+      .slice(0, 3);
+  }
+
+  function featuredDetailMarkup(release) {
+    const availability = availabilitySummary(release);
+    const catalog = catalogState(release);
+    const previewUrl = directAudioPreviewUrl(release);
+    const related = relatedReleases(release);
+    const versionCount = Number(catalog.versionCount || release.availableVersions?.length || 0);
+    const saleEnabledCount = Number(catalog.saleEnabledVersionCount || 0);
+    const availableVersions = (release.availableVersions || []).filter(Boolean).slice(0, 4);
+    const artistContext = related.length
+      ? `Related songs by ${release.artist} stay grouped here so the artist controls one public listening and support surface.`
+      : `${release.artist} stays present through HALO’s public catalog, artist rooms, and approved release destinations.`;
+    return `<div class="shop-panel">
+      <section class="shop-preview-card" aria-label="Listening and rights information">
+        <span class="shop-eyebrow">Shop spotlight</span>
+        <strong class="shop-badge">${escapeHtml(availability.badge)}</strong>
+        <p class="availability-note">${escapeHtml(availability.note)}</p>
+        ${previewUrl ? `<div class="preview-shell" data-preview-url="${encodeURIComponent(previewUrl)}"><span>Direct preview</span><audio controls preload="none"></audio></div>` : `<div class="preview-shell"><span>Public listening</span><p>Use the listen link for the approved public destination. Direct in-page audio appears automatically when the shared catalog points to a preview-safe stream.</p></div>`}
+        <dl class="shop-facts">
+          <div><dt>Catalog source</dt><dd>${catalog.source === "song-catalog" ? "Shared song catalog" : "Published release campaign"}</dd></div>
+          <div><dt>Versions mapped</dt><dd>${versionCount || "—"}</dd></div>
+          <div><dt>Sale-enabled versions</dt><dd>${saleEnabledCount || "—"}</dd></div>
+        </dl>
+      </section>
+      <section class="shop-artist-card" aria-label="Artist context and related songs">
+        <span class="shop-eyebrow">Artist context</span>
+        <strong>${escapeHtml(release.artist)}</strong>
+        <p>${escapeHtml(artistContext)}</p>
+        <div class="version-pill-row">${availableVersions.length ? availableVersions.map(version => `<span class="version-pill">${escapeHtml(version)}</span>`).join("") : '<span class="version-pill">Artist-controlled release path</span>'}</div>
+        <div class="related-release-list">${related.length ? related.map(item => `<button class="related-release" type="button" data-select-release="${escapeHtml(item.id)}">${escapeHtml(item.title)}</button>`).join("") : '<a class="related-release related-release-link" href="/artists/">Browse HALO artist rooms</a>'}</div>
+      </section>
+    </div>`;
+  }
+
+  function releaseActions(release, options = {}) {
+    const { includeCopy = false, includeSelect = false } = options;
     const listenHref = safeUrl(release.listenUrl);
     if (!listenHref) logMusicIssue("music_listen_url_missing", "Music release missing listen link", { releaseId: release.id, title: release.title });
     const listenAction = listenHref
@@ -368,37 +568,44 @@
       : `<span class="action primary" aria-disabled="true">Listen link unavailable</span>`;
     const buyHref = safeUrl(release.purchaseUrl || release.streamUrl);
     const buyAction = buyHref
-      ? `<a class="action buy" href="${escapeHtml(buyHref)}" target="_blank" rel="noopener" data-stat-event="buy_release" data-stat-target="${escapeHtml(release.id)}">Buy / Stream <span aria-hidden="true">↗</span></a>`
+      ? `<a class="action buy" href="${escapeHtml(buyHref)}" target="_blank" rel="noopener" data-stat-event="buy_release" data-stat-target="${escapeHtml(release.id)}">${escapeHtml(buyActionLabel(release))} <span aria-hidden="true">↗</span></a>`
       : "";
     if (!buyHref && release.isChartEligible) logMusicIssue("music_purchase_url_missing", "Music release missing buy/stream link", { releaseId: release.id, title: release.title });
     return `<div class="release-actions">
       ${featuredBadge(release)}
       ${listenAction}
       ${buyAction}
+      ${includeSelect ? `<button class="action tertiary" type="button" data-select-release="${escapeHtml(release.id)}">View in shop</button>` : ""}
+      <button class="action tertiary" type="button" data-share-release="${escapeHtml(release.id)}">Share song</button>
+      ${includeCopy ? `<button class="action tertiary" type="button" data-copy-release="${escapeHtml(release.id)}">Copy link</button>` : ""}
       <a class="action secondary" href="${escapeHtml(safeUrl(release.kitUrl))}" data-stat-event="open_release_kit" data-stat-target="${escapeHtml(release.id)}">Release room</a>
     </div>`;
   }
 
-  function renderFeatured() {
-    const release = (configuredFeaturedReleaseId
-      ? state.releases.find(candidate => candidate.id === configuredFeaturedReleaseId)
-      : null)
-      || state.releases.find(r => r.featuredType === "week")
-      || state.releases.find(r => r.featuredType === "month")
-      || state.releases[0];
-    if (configuredFeaturedReleaseId && release?.id !== configuredFeaturedReleaseId) {
+  function renderFeatured({ focusHeading = false } = {}) {
+    const release = selectedShopRelease();
+    if (configuredFeaturedReleaseId && !state.releases.some(candidate => candidate.id === configuredFeaturedReleaseId)) {
       logMusicIssue("music_featured_release_missing", "Configured featured release missing from catalog", { releaseId: configuredFeaturedReleaseId });
     }
     if (!release) {
       elements.featured.innerHTML = `<div class="catalog-empty"><div><strong>The next signal is being prepared.</strong><p>Published HALO releases appear here automatically.</p></div></div>`;
       return;
     }
+    state.activeShopId = release.id;
+    updateShopUrl(release);
+    updateShopHead(release);
     const artwork = releaseArtwork(release);
     elements.featured.innerHTML = `<article class="featured-release">
       <div class="featured-art release-artwork-frame" data-artwork-frame><img class="release-artwork-image" src="${escapeHtml(artwork.src)}" alt="${escapeHtml(`${release.title} cover artwork`)}" width="1200" height="1200" data-release-artwork data-artwork-fallback="${escapeHtml(artwork.fallback)}"></div>
-      <div class="featured-copy"><div>${releaseMeta(release)}<h2>${escapeHtml(release.title)}</h2><p class="featured-artist">${escapeHtml(release.artist)}</p><p class="featured-pitch">${escapeHtml(release.pitch || "Open the official release signal, approved listening destination, and campaign room.")}</p></div>${releaseActions(release)}</div>
+      <div class="featured-copy"><div>${releaseMeta(release)}<h2 data-featured-heading tabindex="-1">${escapeHtml(release.title)}</h2><p class="featured-artist">${escapeHtml(release.artist)}</p><p class="featured-pitch">${escapeHtml(release.pitch || "Open the official release signal, approved listening destination, and campaign room.")}</p>${featuredDetailMarkup(release)}</div>${releaseActions(release, { includeCopy: true })}</div>
     </article>`;
+    const preview = elements.featured.querySelector("[data-preview-url]");
+    if (preview?.dataset.previewUrl) {
+      const audio = preview.querySelector("audio");
+      if (audio) audio.src = decodeURIComponent(preview.dataset.previewUrl);
+    }
     wireArtwork(elements.featured);
+    if (focusHeading) elements.featured.querySelector("[data-featured-heading]")?.focus({ preventScroll: true });
   }
 
   function filteredReleases() {
@@ -444,9 +651,10 @@
     }
     elements.grid.innerHTML = releases.map((release, index) => {
       const artwork = releaseArtwork(release);
-      return `<article class="release-card">
+     const availability = availabilitySummary(release);
+     return `<article class="release-card">
       <div class="card-art release-artwork-frame" data-artwork-frame><img class="release-artwork-image" src="${escapeHtml(artwork.src)}" alt="${escapeHtml(`${release.title} cover artwork`)}" loading="lazy" width="900" height="900" data-release-artwork data-artwork-fallback="${escapeHtml(artwork.fallback)}"><span class="card-number">${String(index + 1).padStart(2, "0")}</span></div>
-      <div class="card-copy">${releaseMeta(release)}<h3>${escapeHtml(release.title)}</h3><p class="card-artist">${escapeHtml(release.artist)}</p>${release.pitch ? `<p class="card-pitch">${escapeHtml(release.pitch)}</p>` : ""}${releaseActions(release)}</div>
+     <div class="card-copy">${releaseMeta(release)}<h3>${escapeHtml(release.title)}</h3><p class="card-artist">${escapeHtml(release.artist)}</p><p class="card-availability">${escapeHtml(availability.badge)}</p>${release.pitch ? `<p class="card-pitch">${escapeHtml(release.pitch)}</p>` : ""}${releaseActions(release, { includeSelect: true })}</div>
     </article>`;
     }).join("");
     wireArtwork(elements.grid);
@@ -469,6 +677,12 @@
       const data = await response.json();
       if (!response.ok) throw new Error(data.message || "The catalog could not be loaded.");
       state.releases = Array.isArray(data.releases) ? data.releases : [];
+      if (!state.activeShopId) {
+        const preferredId = state.releases.some(release => release.id === requestedReleaseId)
+          ? requestedReleaseId
+          : (configuredFeaturedReleaseId && state.releases.some(release => release.id === configuredFeaturedReleaseId) ? configuredFeaturedReleaseId : state.releases[0]?.id || "");
+        state.activeShopId = preferredId;
+      }
       renderFeatured();
       renderChart();
       renderGenres();
@@ -485,9 +699,79 @@
     }
   }
 
-  elements.address.textContent = `${window.location.host}/music`;
+  async function copyReleaseLink(releaseId) {
+    const release = state.releases.find(item => item.id === releaseId);
+    if (!release) return;
+    const shareUrl = shareUrlForRelease(release);
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      showToast(`${release.title} link copied`);
+    } catch {
+      window.prompt(`Copy the link for ${release.title}`, shareUrl);
+    }
+  }
+
+  async function shareRelease(releaseId) {
+    const release = state.releases.find(item => item.id === releaseId);
+    if (!release) return;
+    const availability = availabilitySummary(release);
+    const shareData = {
+      title: `${release.title} — ${release.artist}`,
+      text: `${release.pitch || availability.note} Listen, support, or share this artist-controlled HALO song.`,
+      url: shareUrlForRelease(release)
+    };
+    if (navigator.share) {
+      try {
+        await navigator.share(shareData);
+        showToast(`${release.title} opened in your share sheet`);
+        return;
+      } catch (error) {
+        if (error?.name === "AbortError") return;
+      }
+    }
+    await copyReleaseLink(releaseId);
+  }
+
+  function focusRelease(releaseId) {
+    if (!state.releases.some(release => release.id === releaseId)) return;
+    state.activeShopId = releaseId;
+    renderFeatured({ focusHeading: true });
+    if (window.matchMedia("(max-width: 980px)").matches) {
+      elements.featured.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }
+
+  async function handleReleaseActionClick(event) {
+    const selectButton = event.target.closest("[data-select-release]");
+    if (selectButton) {
+      focusRelease(selectButton.dataset.selectRelease);
+      return;
+    }
+    const shareButton = event.target.closest("[data-share-release]");
+    if (shareButton) {
+      await shareRelease(shareButton.dataset.shareRelease);
+      return;
+    }
+    const copyButton = event.target.closest("[data-copy-release]");
+    if (copyButton) {
+      await copyReleaseLink(copyButton.dataset.copyRelease);
+    }
+  }
+
+  elements.address.textContent = `${window.location.host}${shopPath().replace(/\/$/, "")}`;
+  window.addEventListener("message", handleSharedCatalogFrameMessage);
+  elements.catalogWorkspace?.addEventListener("toggle", () => {
+    if (elements.catalogWorkspace.open) loadSharedCatalogFrame();
+  });
+  if (elements.catalogWorkspace?.open) loadSharedCatalogFrame();
   elements.copy.addEventListener("click", copyCatalogAddress);
   elements.share.addEventListener("click", shareCatalog);
+  elements.featured.addEventListener("click", event => {
+    handleReleaseActionClick(event).catch(() => showToast("That song link could not be shared yet."));
+  });
+  elements.grid.addEventListener("click", event => {
+    handleReleaseActionClick(event).catch(() => showToast("That song link could not be shared yet."));
+  });
   elements.search.addEventListener("input", event => { state.query = event.target.value.trim(); renderGrid(); });
   elements.sort?.addEventListener("change", event => { state.sort = event.target.value; renderGrid(); });
   elements.genres.addEventListener("click", event => {
@@ -521,6 +805,7 @@
   elements.chartStage.addEventListener("click", event => {
     const playButton = event.target.closest("[data-play-chart-video]");
     if (playButton) playChartVideo(playButton.dataset.playChartVideo);
+    handleReleaseActionClick(event).catch(() => showToast("That song link could not be shared yet."));
   });
   loadCatalog();
 })();

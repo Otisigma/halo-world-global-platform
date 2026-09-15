@@ -51,6 +51,19 @@ function requestedByteRange(value: string | null, byteSize: number) {
   return { start, end: Math.min(end, byteSize - 1) };
 }
 
+function hasCompleteChunkSet(
+  blobs: Array<{ key?: string | null }>,
+  prefix: string,
+  chunkCount: number,
+) {
+  const keys = new Set(blobs.map(blob => String(blob?.key || "")));
+  for (let index = 0; index < chunkCount; index += 1) {
+    const expectedKey = `${prefix}${String(index).padStart(3, "0")}`;
+    if (!keys.has(expectedKey)) return false;
+  }
+  return true;
+}
+
 async function ownedSong(db: Awaited<ReturnType<typeof getDatabase>>, ownerMemberId: string, songId: string) {
   const rows = await db.sql`
     SELECT id, artwork_url, artwork_blob_prefix, artwork_chunk_count, artwork_byte_size, artwork_content_type, artwork_filename
@@ -119,7 +132,9 @@ async function finalizeUpload(payload: Record<string, unknown>, db: Awaited<Retu
     if (!version) return json({ message: "That version was not found" }, 404);
     const prefix = `${ownerMemberId}/${songId}/${versionId}/${uploadId}/parts/`;
     const stored = await artworkStore.list({ prefix });
-    if (stored.blobs.length !== chunkCount) return json({ message: "The artwork upload is incomplete. Try it again." }, 409);
+    if (!hasCompleteChunkSet(stored.blobs, prefix, chunkCount)) {
+      return json({ message: "The artwork upload is incomplete. Try it again." }, 409);
+    }
     const artworkUrl = `/api/song-catalog/artwork?songId=${encodeURIComponent(songId)}&versionId=${encodeURIComponent(versionId)}`;
     await db.sql`
       UPDATE halo_song_versions
@@ -134,13 +149,21 @@ async function finalizeUpload(payload: Record<string, unknown>, db: Awaited<Retu
       WHERE id = ${versionId} AND song_id = ${songId}
     `;
     if (version.artwork_blob_prefix && version.artwork_blob_prefix !== prefix) await removeArtwork(String(version.artwork_blob_prefix)).catch(() => undefined);
-    return json({ artwork_url: artworkUrl, message: "Artwork uploaded successfully" });
+    return json({
+      artwork_url: artworkUrl,
+      message: "Artwork is persisted and locked into HALO storage.",
+      persisted: true,
+      lockedIn: true,
+      confirmedAt: new Date().toISOString(),
+    });
   }
   const song = await ownedSong(db, ownerMemberId, songId);
   if (!song) return json({ message: "That song was not found" }, 404);
   const prefix = `${ownerMemberId}/${songId}/${uploadId}/parts/`;
   const stored = await artworkStore.list({ prefix });
-  if (stored.blobs.length !== chunkCount) return json({ message: "The artwork upload is incomplete. Try it again." }, 409);
+  if (!hasCompleteChunkSet(stored.blobs, prefix, chunkCount)) {
+    return json({ message: "The artwork upload is incomplete. Try it again." }, 409);
+  }
   const artworkUrl = `/api/song-catalog/artwork?songId=${encodeURIComponent(songId)}`;
   await db.sql`
     UPDATE halo_song_catalog
@@ -155,7 +178,13 @@ async function finalizeUpload(payload: Record<string, unknown>, db: Awaited<Retu
     WHERE id = ${songId} AND owner_member_id = ${ownerMemberId}
   `;
   if (song.artwork_blob_prefix && song.artwork_blob_prefix !== prefix) await removeArtwork(String(song.artwork_blob_prefix)).catch(() => undefined);
-  return json({ artwork_url: artworkUrl, message: "Artwork uploaded successfully" });
+  return json({
+    artwork_url: artworkUrl,
+    message: "Artwork is persisted and locked into HALO storage.",
+    persisted: true,
+    lockedIn: true,
+    confirmedAt: new Date().toISOString(),
+  });
 }
 
 async function readArtworkRange(song: Record<string, unknown>, range: { start: number; end: number }) {
@@ -259,6 +288,40 @@ async function deleteArtwork(payload: Record<string, unknown>, db: Awaited<Retur
   return json({ message: "Artwork removed" });
 }
 
+async function reuseSongArtwork(payload: Record<string, unknown>, db: Awaited<ReturnType<typeof getDatabase>>, ownerMemberId: string) {
+  const songId = cleanId(payload.songId);
+  const sourceSongId = cleanId(payload.sourceSongId);
+  if (!songId || !sourceSongId || songId === sourceSongId) return json({ message: "Valid source and target songs are required" }, 400);
+  const [targetSong, sourceSong] = await Promise.all([
+    ownedSong(db, ownerMemberId, songId),
+    ownedSong(db, ownerMemberId, sourceSongId),
+  ]);
+  if (!targetSong) return json({ message: "That song was not found" }, 404);
+  if (!sourceSong?.artwork_blob_prefix || !sourceSong.artwork_chunk_count || !sourceSong.artwork_byte_size) {
+    return json({ message: "The source artwork was not found" }, 404);
+  }
+  const artworkUrl = `/api/song-catalog/artwork?songId=${encodeURIComponent(songId)}`;
+  await db.sql`
+    UPDATE halo_song_catalog
+    SET artwork_url = ${artworkUrl},
+        artwork_blob_prefix = ${sourceSong.artwork_blob_prefix},
+        artwork_chunk_count = ${sourceSong.artwork_chunk_count},
+        artwork_content_type = ${sourceSong.artwork_content_type},
+        artwork_byte_size = ${sourceSong.artwork_byte_size},
+        artwork_filename = ${sourceSong.artwork_filename},
+        artwork_uploaded_at = NOW(),
+        updated_at = NOW()
+    WHERE id = ${songId} AND owner_member_id = ${ownerMemberId}
+  `;
+  return json({
+    artwork_url: artworkUrl,
+    message: "Artwork linked into this package.",
+    persisted: true,
+    lockedIn: true,
+    confirmedAt: new Date().toISOString(),
+  });
+}
+
 export default async function songCatalogArtworkHandler(request: Request) {
   if (!["GET", "HEAD", "POST", "DELETE"].includes(request.method)) return json({ message: "Method not allowed" }, 405, { Allow: "GET, HEAD, POST, DELETE" });
   try {
@@ -275,7 +338,9 @@ export default async function songCatalogArtworkHandler(request: Request) {
     const contentType = request.headers.get("content-type") || "";
     if (contentType.includes("multipart/form-data")) return uploadChunk(request, db, membership.member_id);
     const payload = await request.json().catch(() => null) as Record<string, unknown> | null;
-    if (!payload || payload.action !== "finalize_upload") return json({ message: "Choose a supported artwork action" }, 400);
+    if (!payload) return json({ message: "Choose a supported artwork action" }, 400);
+    if (payload.action === "reuse_song_artwork") return reuseSongArtwork(payload, db, membership.member_id);
+    if (payload.action !== "finalize_upload") return json({ message: "Choose a supported artwork action" }, 400);
     return finalizeUpload(payload, db, membership.member_id);
   } catch (error) {
     console.error("Song catalog artwork failed", error instanceof Error ? error.message : "unknown error");

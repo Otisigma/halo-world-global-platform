@@ -30,6 +30,7 @@
   <script src="/accessibility.js" defer></script>
   <link rel="stylesheet" href="/mobile-navigation.css">
   <script src="/mobile-navigation.js" defer></script>
+  <script src="/halo-companion.js" defer></script>
   <script type="module" src="/identity.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -276,9 +277,13 @@
     .rack-button:hover, .clip-button:hover, .rack-button.is-active, .clip-button.is-active { border-color: var(--acid); color: var(--acid); background: rgba(200,255,54,.07); }
     .rack-button[data-rack-cue="A"] { border-top-color: var(--blue); }
     .rack-button[data-rack-cue="B"] { border-top-color: var(--orange); }
-    .clip-buttons { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; max-height: 116px; overflow: auto; }
+    .clip-presets, .clip-buttons { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+    .clip-presets { align-content: start; }
+    .clip-buttons { max-height: 116px; overflow: auto; }
     .clip-button { min-height: 48px; }
     .clip-button strong, .clip-button span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .clip-presets .clip-button { min-height: 56px; align-content: center; }
+    .clip-presets .clip-button strong, .clip-presets .clip-button span { white-space: normal; }
     .clip-button span { margin-top: 4px; color: var(--muted); font-size: 7px; }
     .clip-button.is-active span { color: var(--acid); opacity: .72; }
     .video-load-button { position: relative; display: grid; min-height: 42px; place-items: center; border: 1px dashed var(--line-strong); color: var(--muted); cursor: pointer; font: 500 8px "DM Mono", monospace; letter-spacing: .08em; text-transform: uppercase; }
@@ -316,8 +321,9 @@
     }
 
     .brand { display: flex; align-items: stretch; height: 100%; border-right: 1px solid var(--line); }
-    .brand-mark { display: grid; place-items: center; width: 66px; background: var(--acid); color: var(--ink); }
+    .brand-mark { position: relative; display: grid; place-items: center; width: 66px; background: var(--acid); color: var(--ink); overflow: hidden; }
     .brand-mark svg { width: 35px; }
+    .brand-mark-letter { position: absolute; inset: 0; display: grid; place-items: center; font: 400 33px/1 "Archivo Black", sans-serif; letter-spacing: -.06em; z-index: 1; }
     .brand-copy { padding: 12px 18px; min-width: 170px; }
     .brand-copy strong { display: block; font-family: "Archivo Black", sans-serif; font-size: 21px; letter-spacing: -.04em; }
 
@@ -326,7 +332,7 @@
     .now-track { min-width: 0; }
     .now-track strong { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 14px; }
     .now-track span { color: var(--muted); font: 400 10px "DM Mono", monospace; text-transform: uppercase; }
-    .top-actions { display: flex; align-items: center; gap: 8px; padding: 0 12px; }
+    .top-actions { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 8px; padding: 8px 12px; }
 
     .status-pill, .compact-button {
       min-height: 38px;
@@ -617,6 +623,92 @@
     .import-button[disabled] { opacity: .58; cursor: wait; }
     .import-status { grid-column: 1 / -1; min-height: 14px; margin: 1px 0 0; color: var(--muted); font: 400 9px "DM Mono", monospace; }
     .import-status.is-error { color: #ff9b78; }
+    .journey-assist {
+      margin: 0 8px 8px;
+      border: 1px solid rgba(200,255,54,.24);
+      background: linear-gradient(135deg, rgba(200,255,54,.06), rgba(72,168,255,.03) 52%, rgba(9,11,10,.98));
+      padding: 14px;
+    }
+    .journey-assist-head, .journey-pulse-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+    .journey-assist-head h4, .journey-pulse-head h4 { margin: 5px 0 6px; font-size: 18px; letter-spacing: -.04em; }
+    .journey-assist-head p, .journey-pulse-copy { margin: 0; color: var(--muted); font-size: 11px; line-height: 1.5; }
+    .journey-badge {
+      flex: 0 0 auto;
+      border: 1px solid rgba(200,255,54,.35);
+      color: var(--acid);
+      padding: 6px 8px;
+      font: 500 8px/1.4 "DM Mono", monospace;
+      letter-spacing: .09em;
+      text-transform: uppercase;
+    }
+    .journey-chip-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; padding: 0; list-style: none; }
+    .journey-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      border: 1px solid var(--line);
+      background: rgba(0,0,0,.16);
+      padding: 6px 8px;
+      color: var(--muted);
+      font: 500 8px "DM Mono", monospace;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+    .journey-chip::before { content: attr(data-step); color: var(--paper); opacity: .72; }
+    .journey-chip.is-active { border-color: var(--acid); color: var(--acid); background: rgba(200,255,54,.08); }
+    .journey-chip.is-complete { border-color: rgba(72,168,255,.36); color: #8bc7ff; }
+    .journey-assist-grid, .journey-status-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 8px; margin-top: 12px; }
+    .journey-assist-card, .journey-status-card {
+      border: 1px solid var(--line);
+      background: rgba(0,0,0,.18);
+      padding: 10px;
+      min-height: 96px;
+    }
+    .journey-assist-card small, .journey-status-card small {
+      display: block;
+      color: var(--muted);
+      font: 500 8px "DM Mono", monospace;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+    .journey-assist-card strong, .journey-status-card strong {
+      display: block;
+      margin-top: 7px;
+      color: var(--paper);
+      font: 500 12px/1.2 "Space Grotesk", sans-serif;
+      letter-spacing: -.02em;
+    }
+    .journey-assist-card p, .journey-status-card p {
+      margin: 7px 0 0;
+      color: #aeb8ac;
+      font-size: 9px;
+      line-height: 1.5;
+    }
+    .journey-status-card.is-active { border-color: rgba(200,255,54,.4); background: rgba(200,255,54,.05); }
+    .journey-status-card.is-active strong { color: var(--acid); }
+    .journey-status-card.is-complete { border-color: rgba(72,168,255,.34); }
+    .journey-status-card.is-complete strong { color: #8bc7ff; }
+    .journey-pulse {
+      padding: 18px;
+      border-bottom: 1px solid var(--line);
+      background: linear-gradient(145deg, rgba(72,168,255,.03), rgba(200,255,54,.05));
+    }
+    .journey-blockers { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+    .journey-blocker {
+      display: inline-flex;
+      border: 1px solid rgba(255,106,50,.26);
+      background: rgba(255,106,50,.04);
+      color: #cba594;
+      padding: 6px 8px;
+      font: 500 8px/1.45 "DM Mono", monospace;
+      letter-spacing: .05em;
+      text-transform: uppercase;
+    }
+    .journey-blocker.is-clear {
+      border-color: rgba(72,168,255,.32);
+      background: rgba(72,168,255,.05);
+      color: #8bc7ff;
+    }
 
     .track-list { padding: 8px; }
     .track-row { display: grid; grid-template-columns: 46px minmax(160px, 1.5fr) 70px 55px 55px 75px auto; align-items: center; gap: 12px; min-height: 64px; padding: 7px 10px; border: 1px solid transparent; transition: .18s ease; }
@@ -833,7 +925,28 @@
     .keyboard-hints { display: flex; gap: 15px; }
     kbd { border: 1px solid var(--line); background: var(--panel); padding: 2px 5px; color: var(--muted); font: inherit; }
 
-    .toast { position: fixed; right: 22px; bottom: 22px; z-index: 30; width: min(390px, calc(100vw - 44px)); border: 1px solid rgba(200,255,54,.45); background: rgba(12, 15, 13, .96); box-shadow: var(--shadow); padding: 15px 17px; transform: translateY(130%); opacity: 0; transition: transform .35s ease, opacity .35s ease; }
+    .maintenance-dock {
+      position: fixed;
+      right: 22px;
+      bottom: 22px;
+      z-index: 31;
+      min-height: 58px;
+      min-width: 214px;
+      border: 1px solid rgba(255, 106, 50, .46);
+      background: rgba(12, 15, 13, .94);
+      box-shadow: var(--shadow);
+      padding: 10px 14px;
+      display: grid;
+      gap: 4px;
+      justify-items: start;
+      cursor: pointer;
+    }
+    .maintenance-dock span { color: var(--orange); font: 500 8px "DM Mono", monospace; letter-spacing: .13em; text-transform: uppercase; }
+    .maintenance-dock strong { font: 600 12px/1.2 "Space Grotesk", sans-serif; letter-spacing: -.02em; text-transform: uppercase; }
+    .maintenance-dock:hover { border-color: var(--acid); }
+    .maintenance-dock:focus-visible { border-color: var(--acid); outline: 2px solid var(--acid); outline-offset: 3px; }
+    .visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+    .toast { position: fixed; right: 22px; bottom: 92px; z-index: 30; width: min(390px, calc(100vw - 44px)); border: 1px solid rgba(200,255,54,.45); background: rgba(12, 15, 13, .96); box-shadow: var(--shadow); padding: 15px 17px; transform: translateY(130%); opacity: 0; transition: transform .35s ease, opacity .35s ease; }
     .toast.is-visible { transform: translateY(0); opacity: 1; }
     .toast strong { display: block; color: var(--acid); font: 500 10px "DM Mono", monospace; letter-spacing: .11em; text-transform: uppercase; }
     .toast p { margin: 5px 0 0; color: #b7c0b4; font-size: 12px; }
@@ -958,6 +1071,8 @@
       .utility-readout { grid-template-columns: 1fr; }
       .rack-buttons { grid-template-columns: repeat(2, 1fr); }
       .rack-button:last-child { grid-column: 1 / -1; }
+      .maintenance-dock { left: 18px; right: 18px; bottom: 18px; min-width: 0; }
+      .toast { right: 18px; left: 18px; bottom: 88px; width: auto; }
     }
 
     @media (prefers-reduced-motion: reduce) {
@@ -1035,12 +1150,13 @@
       <div class="brand">
         <div class="brand-mark" aria-hidden="true">
           <img class="halo-brand-image" src="/assets/halo-logo-mark.webp" alt="">
+          <span class="brand-mark-letter" aria-hidden="true">H</span>
         </div>
-        <div class="brand-copy"><span class="eyebrow">Live intelligence</span><strong>HALO</strong></div>
+        <div class="brand-copy"><span class="eyebrow">Live intelligence HALO</span><strong>HALO</strong></div>
       </div>
       <div class="now-playing">
         <span class="pulse-dot"></span>
-        <div class="now-track"><strong id="masterTrack">Midnight Circuit — Nia Sol</strong><span id="masterStatus">Deck A live · master tempo 124.0 bpm</span></div>
+        <div class="now-track"><strong id="masterTrack">Midnight Circuit — Nia Sol</strong><span id="masterStatus">DECK A READY · MASTER TEMPO 124.0 BPM</span></div>
       </div>
       <div class="top-actions">
         <!-- Permanent destination: keep the Opportunity Exchange linked across future updates. -->
@@ -1051,6 +1167,7 @@
         <a class="compact-button" href="/dreamweaver/" data-stat-event="open_dreamweaver_show" data-stat-target="dj-deck-header">Dreamweaver Show</a>
         <a class="compact-button" href="/halo">Global portal</a>
         <button class="compact-button" id="openTrackPicker" type="button">Track QR</button>
+        <button class="compact-button" id="sessionRevisionButton" type="button">Cloud revision</button>
         <div class="status-pill is-offline" id="sessionSaveStatus"><span class="dot"></span><span>Saved on device</span></div>
         <div class="status-pill" id="cloudStatus"><span class="dot"></span><span>Cloud ready</span></div>
         <button class="compact-button" id="focusMode" type="button" aria-pressed="false" aria-controls="mixOperations recordingRig mixFlightplan musicLibrary boothIntelligence" aria-keyshortcuts="F" title="Hide the support cards and leave only the decks and mixer">Desk only</button>
@@ -1321,7 +1438,7 @@
               <div class="video-title"><div><span>Live visual source</span><strong id="boothClipTitle">Choose a video</strong></div><span id="boothClipStatus">Gallery ready</span></div>
             </div>
             <div class="screen-view mix-screen" data-screen-view="mix">
-              <div class="mix-orbit"><div class="mix-disc mix-disc-a">Deck A</div><div class="mix-bridge" id="boothMixBridge" data-blend="50 / 50"></div><div class="mix-disc mix-disc-b">Deck B</div></div>
+              <div class="mix-orbit"><div class="mix-disc mix-disc-a">Deck A</div><div class="mix-bridge" id="boothMixBridge" data-blend="50% / 50%"></div><div class="mix-disc mix-disc-b">Deck B</div></div>
             </div>
             <div class="screen-scanlines" aria-hidden="true"></div>
           </div>
@@ -1442,7 +1559,7 @@
     <section class="booth-utility panel" id="boothUtility" aria-labelledby="boothUtilityTitle">
       <div class="utility-rack">
         <div class="utility-readout" aria-label="Quick mix readout">
-          <div class="utility-metric"><span>Blend</span><strong id="boothBlendValue">50 / 50</strong></div>
+          <div class="utility-metric"><span>Blend</span><strong id="boothBlendValue">50% / 50%</strong></div>
           <div class="utility-metric"><span>Tempo</span><strong id="boothRackTempo">−0.5 BPM</strong></div>
           <div class="utility-metric"><span>Next move</span><strong id="boothNextMove">Hold blend</strong></div>
         </div>
@@ -1458,7 +1575,13 @@
         </div>
         <div class="utility-clips">
           <div class="rack-label"><span>Screen videos</span><span id="boothVideoLibraryStatus">Loading gallery</span></div>
-          <div class="clip-buttons" id="boothVideoClips"><span class="clip-empty">Checking HALO TV for playable videos…</span></div>
+          <div class="clip-presets" id="boothVideoPresets" aria-label="Booth video presets">
+            <button class="clip-button" type="button" data-booth-preset="ghost-to-me"><strong>Ghost To Me</strong><span>DJ HALO X visual</span></button>
+            <button class="clip-button" type="button" data-booth-preset="salty"><strong>Salty</strong><span>Load official source</span></button>
+            <button class="clip-button" type="button" data-booth-preset="halo-music-world-50-plus"><strong>HALO Music World 50+</strong><span>YouTube long play</span></button>
+            <button class="clip-button" type="button" data-booth-preset="dj-halo-x-long-mix-videos"><strong>DJ HALO X Long Mix Videos</strong><span>Continuous booth reel</span></button>
+          </div>
+          <div class="clip-buttons" id="boothVideoClips" aria-label="Booth video gallery clips"><span class="clip-empty">Checking HALO TV for playable videos…</span></div>
           <form class="video-input-row" id="boothVideoUrlForm">
             <input class="video-url-input" id="boothVideoUrl" type="text" inputmode="url" autocomplete="url" aria-label="YouTube video URL" placeholder="Paste YouTube video or live URL">
             <button class="video-input-button" type="submit">Load URL</button>
@@ -1523,6 +1646,29 @@
             <p class="import-status" id="importStatus" aria-live="polite">Upload audio for direct playback, or paste a public link for cover art and credits. Music services do not provide the audio file.</p>
           </form>
         </div>
+        <section class="journey-assist" aria-labelledby="artistJourneyAssistTitle">
+          <div class="journey-assist-head">
+            <div>
+              <p class="eyebrow">Artist journey watch</p>
+              <h4 id="artistJourneyAssistTitle">Upload once. HALO watches every next step.</h4>
+              <p>Song upload stays easy here, then HALO AI keeps tracking artwork, contract checks, mix review, release readiness, and campaign launch across the site.</p>
+            </div>
+            <span class="journey-badge" id="artistJourneyStageBadge" aria-live="polite">0 / 5 stages ready</span>
+          </div>
+          <ol class="journey-chip-row" id="artistJourneyStageChips" aria-label="Artist journey progress"></ol>
+          <div class="journey-assist-grid">
+            <article class="journey-assist-card">
+              <small>Upload watch</small>
+              <strong id="artistJourneyUploadTitle">Song upload is easiest here.</strong>
+              <p id="artistJourneyUploadCopy">Paste one song link for cover art and credits, or upload audio / a private stem pack for direct playback. HALO AI will keep the rest of the journey in view.</p>
+            </article>
+            <article class="journey-assist-card">
+              <small>HALO AI next</small>
+              <strong id="artistJourneyNextActionTitle">Next: Upload / ingest</strong>
+              <p id="artistJourneyNextActionCopy">Add the first song link, drive upload, or private stem pack so HALO can guide the complete artist workflow.</p>
+            </article>
+          </div>
+        </section>
         <section class="stem-vault" aria-labelledby="stemVaultTitle">
           <header class="stem-vault-head">
             <div><p class="eyebrow">HALO private source library</p><h4 id="stemVaultTitle">In-house Stem Vault</h4><p>Bring in stems created for HALO, including Suno exports. Packs stay private to the signed-in member and play as synchronized drums, bass, music, vocals, and effects.</p></div>
@@ -1584,6 +1730,18 @@
           <div class="energy-architect"><header><span>Target journey</span><strong id="modeObjective">Discovery · story · patience</strong></header><div class="energy-curve" id="energyCurveGraph" aria-label="Target energy curve"></div></div>
           <p class="sonic-weather"><strong>Sonic weather:</strong> <span id="sonicWeather">Warm, organic, patient and gradually revealing.</span></p>
         </section>
+        <section class="journey-pulse" aria-labelledby="artistJourneyPulseTitle">
+          <div class="journey-pulse-head">
+            <div>
+              <p class="eyebrow">HALO artist guidance</p>
+              <h4 id="artistJourneyPulseTitle">HALO AI is watching the full artist journey.</h4>
+            </div>
+            <span class="ai-badge">Proactive guide</span>
+          </div>
+          <p class="journey-pulse-copy" id="artistJourneyPulseCopy">HALO AI is waiting at upload and will guide ingest, artwork, review, release, and campaign launch without changing the decks.</p>
+          <div class="journey-status-grid" id="artistJourneyStatusCards" aria-live="polite"></div>
+          <div class="journey-blockers" id="artistJourneyBlockers" aria-live="polite"></div>
+        </section>
         <div class="crowd-card">
           <p class="eyebrow">Room telemetry</p>
           <div class="crowd-score">
@@ -1640,6 +1798,8 @@
     <footer class="footer"><span>HALO performance system · demo engine</span><nav class="footer-socials" aria-label="HALO social profiles"><a href="https://www.youtube.com/@halo-music-world" target="_blank" rel="noopener noreferrer">YouTube ↗</a><a href="https://www.tiktok.com/@halomusicworldhome" target="_blank" rel="noopener noreferrer">TikTok ↗</a></nav><div class="keyboard-hints"><span><kbd>Space</kbd> Play master</span><span><kbd>S</kbd> Sync tempo</span><span><kbd>F</kbd> Desk only</span></div></footer>
   </main>
 
+  <span class="visually-hidden" id="maintenanceDockHelp">Opens a toast with current booth, cloud revision, upload progress, and audio verification maintenance status.</span>
+  <button class="maintenance-dock" id="maintenanceDock" type="button" aria-label="Show maintenance alerts" aria-describedby="maintenanceDockHelp"><span class="visually-hidden">Show </span><span>Maintenance alerts</span><strong id="maintenanceDockCount">10 alerts</strong></button>
   <div class="toast" id="toast" role="status" aria-live="polite"><strong id="toastTitle">System</strong><p id="toastMessage">Ready.</p></div>
 
   <script src="/upload-progress.js"></script>
@@ -1663,6 +1823,12 @@
     let boothVideos = [];
     let activeBoothVideoId = "";
     let localBoothVideoUrl = "";
+    const BOOTH_VIDEO_PRESETS = Object.freeze([
+      { id: "ghost-to-me", title: "Ghost To Me (DJ HALO X Remix)", sourceType: "youtube", embedUrl: "https://www.youtube-nocookie.com/embed/yh7qQGvzmdw" },
+      { id: "salty", title: "Salty", message: "Paste the official Salty video URL below to put it on the booth screen without replacing any other booth controls." },
+      { id: "halo-music-world-50-plus", title: "HALO Music World 50+", sourceType: "youtube", embedUrl: "https://www.youtube-nocookie.com/embed/IbwPoo-b1bs" },
+      { id: "dj-halo-x-long-mix-videos", title: "DJ HALO X Long Mix Videos", sourceType: "youtube", embedUrl: "https://www.youtube-nocookie.com/embed/GKjU4Ac1Pzw" }
+    ]);
 
     const elements = {
       list: document.querySelector("#trackList"),
@@ -1680,12 +1846,19 @@
       boothVideoPlayer: document.querySelector("#boothVideoPlayer"),
       boothYouTubePlayer: document.querySelector("#boothYouTubePlayer"),
       boothVideoPlaceholder: document.querySelector("#boothVideoPlaceholder"),
+      boothClipTitle: document.querySelector("#boothClipTitle"),
+      boothClipStatus: document.querySelector("#boothClipStatus"),
+      boothVideoPresets: document.querySelector("#boothVideoPresets"),
       boothVideoClips: document.querySelector("#boothVideoClips"),
       boothVideoUrlForm: document.querySelector("#boothVideoUrlForm"),
       boothVideoUrl: document.querySelector("#boothVideoUrl"),
       boothVideoUpload: document.querySelector("#boothVideoUpload"),
       boothVideoInputStatus: document.querySelector("#boothVideoInputStatus"),
       boothVideoLibraryStatus: document.querySelector("#boothVideoLibraryStatus"),
+      sessionRevisionButton: document.querySelector("#sessionRevisionButton"),
+      maintenanceDock: document.querySelector("#maintenanceDock"),
+      maintenanceDockCount: document.querySelector("#maintenanceDockCount"),
+      maintenanceDockHelp: document.querySelector("#maintenanceDockHelp"),
       toast: document.querySelector("#toast"),
       toastTitle: document.querySelector("#toastTitle"),
       toastMessage: document.querySelector("#toastMessage"),
@@ -1790,7 +1963,16 @@
       buildCollectorKit: document.querySelector("#buildCollectorKit"),
       collectorStatus: document.querySelector("#collectorStatus"),
       collectorBlueprint: document.querySelector("#collectorBlueprint"),
-      collectorKitList: document.querySelector("#collectorKitList")
+      collectorKitList: document.querySelector("#collectorKitList"),
+      artistJourneyStageBadge: document.querySelector("#artistJourneyStageBadge"),
+      artistJourneyStageChips: document.querySelector("#artistJourneyStageChips"),
+      artistJourneyUploadTitle: document.querySelector("#artistJourneyUploadTitle"),
+      artistJourneyUploadCopy: document.querySelector("#artistJourneyUploadCopy"),
+      artistJourneyNextActionTitle: document.querySelector("#artistJourneyNextActionTitle"),
+      artistJourneyNextActionCopy: document.querySelector("#artistJourneyNextActionCopy"),
+      artistJourneyPulseCopy: document.querySelector("#artistJourneyPulseCopy"),
+      artistJourneyStatusCards: document.querySelector("#artistJourneyStatusCards"),
+      artistJourneyBlockers: document.querySelector("#artistJourneyBlockers")
     };
     const mixReleaseUi = window.HaloUploadProgress.createUploadUi({
       panel: elements.mixReleaseForm,
@@ -1815,11 +1997,17 @@
     let latestPreflightReport = null;
     let currentTransitionObservationId = null;
     const sessionStorageKey = "halo.dj.session.v1";
+    const artistJourneyStorageKey = "halo-artist-journey-state.v1";
     const djSessionId = window.crypto?.randomUUID ? window.crypto.randomUUID() : `halo-dj-${Date.now()}-${Math.random().toString(16).slice(2)}`;
     let djMode = "listening";
     let sessionSaveTimer = null;
     let sessionCloudEnabled = false;
     let sessionRestoring = false;
+    const artistJourneyObservers = [];
+    let artistJourneyFormElement = null;
+    let artistJourneyRenderQueued = false;
+    let artistJourneyScheduleHandler = null;
+    let artistJourneyUnloadHandler = null;
     const stemVaultState = { authenticated: false, packs: [], loading: false };
     const stemCollectorState = { authenticated: false, kits: [], current: null, loading: false };
 
@@ -1840,9 +2028,252 @@
       afterhours: [5, 6, 6, 7, 7, 8, 7, 6]
     };
 
+    function buildArtistJourneyModel({
+      trackList = [],
+      stemPacks = [],
+      preflightReport = null,
+      recommendation = null,
+      mixReleasePublished = false,
+      formState = {},
+      importStatus = "",
+      stemVaultStatus = "",
+      mixReleaseStatus = ""
+    } = {}) {
+      const uploadedTracks = trackList.filter(track => {
+        const id = String(track?.id || "");
+        const platform = String(track?.platform || "");
+        return id.startsWith("imported-") || id.startsWith("drive-") || platform === "Private Drive Upload" || Boolean(track?.vaultPackId);
+      }).length;
+      const privateStemPacks = Array.isArray(stemPacks) ? stemPacks.length : 0;
+      const hasUploadWatch = uploadedTracks > 0
+        || privateStemPacks > 0
+        || /loaded to deck|playing on deck|indexed|cover art and credits|ready on both decks/i.test(importStatus)
+        || /private pack/i.test(stemVaultStatus);
+      const masteringStatus = String(formState.masteringStatus || "").trim();
+      const artworkStatus = String(formState.artworkStatus || "").trim();
+      const rightsConfirmed = Boolean(formState.rightsConfirmed);
+      const reviewIntent = String(formState.reviewIntent || "").trim();
+      const campaignHook = String(formState.campaignHook || "").trim();
+      const hasMetadata = ["djName", "projectTitle", "genre", "releaseDate"].every(name => String(formState[name] || "").trim());
+      const hasPrice = String(formState.price || "").trim();
+      const masterInReview = ["mix_review", "mastering_booked", "mastered", "approved"].includes(masteringStatus);
+      const masterApproved = ["mastered", "approved"].includes(masteringStatus);
+      const preflightTransitions = Array.isArray(preflightReport?.transitions) ? preflightReport.transitions.length : 0;
+      const hasPreflight = preflightTransitions > 0;
+      const recommendationTrack = trackList.find(track => track.id === recommendation?.trackId);
+      const saleReady = hasMetadata && hasPrice && masterApproved && rightsConfirmed;
+      const uploadSummary = uploadedTracks
+        ? `${uploadedTracks} artist upload${uploadedTracks === 1 ? "" : "s"} on watch`
+        : privateStemPacks
+          ? `${privateStemPacks} private stem pack${privateStemPacks === 1 ? "" : "s"} on watch`
+          : "No artist upload on watch yet";
+      const stages = [
+        {
+          id: "upload-ingest",
+          label: "Upload / ingest",
+          complete: hasUploadWatch,
+          readyCopy: `${uploadSummary}. HALO can now guide the rest of the release path.`,
+          blocker: "Add a song link, drive upload, or private stem pack so HALO can start the full artist journey.",
+          nextAction: "Paste the public song link for cover art and credits, then choose the audio file or private stems for playback."
+        },
+        {
+          id: "artwork-contract",
+          label: "Artwork / contract",
+          complete: artworkStatus === "approved" && rightsConfirmed,
+          readyCopy: "Artwork is approved and rights confirmation is in place for the release package.",
+          blocker: artworkStatus !== "approved" && !rightsConfirmed
+            ? "Approve artwork and confirm rights so HALO can package the release safely."
+            : artworkStatus !== "approved"
+              ? "Approve the cover art so HALO can move from ingest into release packaging."
+              : "Confirm rights and contract checks so HALO can clear the release path.",
+          nextAction: "Finish cover art approval and rights confirmation before the release pack moves forward."
+        },
+        {
+          id: "mix-review",
+          label: "Mix / review",
+          complete: masterInReview && hasPreflight && Boolean(reviewIntent),
+          readyCopy: `Mix review is documented${recommendationTrack ? `, and HALO is protecting the next move toward ${recommendationTrack.title}.` : "."}`,
+          blocker: !masterInReview
+            ? "Start mix review or mastering status so HALO can watch the quality gate."
+            : !reviewIntent
+              ? "Add creative intent for reviewers so HALO can protect the choices that must survive the review."
+              : !hasPreflight
+                ? "Run set preflight so HALO can surface collisions and phrase-safe handoffs."
+                : "Mix review is still waiting on one more quality signal.",
+          nextAction: recommendationTrack
+            ? `Review the mix, protect the deliberate moments, and keep ${recommendationTrack.title} as the prepared next action.`
+            : "Run preflight, document creative intent, and let HALO turn the review stage into a clear next move."
+        },
+        {
+          id: "release-sale",
+          label: "Release / sale",
+          complete: saleReady,
+          readyCopy: mixReleasePublished
+            ? "Release details, pricing, and rights are ready, and the mix has already been published into HALO."
+            : "Release details, pricing, and rights are ready for a final sale review.",
+          blocker: !masterApproved
+            ? "Approve the master before HALO opens the release and sale gate."
+            : !hasMetadata
+              ? "Complete the DJ name, project title, genre, and release date so HALO can build the release package."
+              : !hasPrice
+                ? "Set the release price so HALO can prepare the sale handoff."
+                : !rightsConfirmed
+                  ? "Confirm rights and clearances before HALO opens the sale gate."
+                  : "Release readiness still needs one more confirmation.",
+          nextAction: mixReleasePublished
+            ? "Review the sales handoff, then brief the campaign launch."
+            : "Finish the release metadata, mastering, pricing, and rights checks, then request the sale review."
+        },
+        {
+          id: "campaign-launch",
+          label: "Campaign launch",
+          complete: saleReady && Boolean(campaignHook),
+          readyCopy: "Campaign brief is ready. HALO can now carry the artist from release into launch planning.",
+          blocker: !saleReady
+            ? "Finish the release and sale checks first so HALO can launch the campaign at the right time."
+            : "Add the campaign hook so HALO can recommend the strongest launch move.",
+          nextAction: saleReady
+            ? "Open Campaign Studio or Dreamweaver with the campaign hook HALO is watching."
+            : "Keep the release gate moving so the campaign brief is not built too early."
+        }
+      ];
+      const firstIncompleteIndex = stages.findIndex(stage => !stage.complete);
+      const activeIndex = firstIncompleteIndex === -1 ? stages.length - 1 : firstIncompleteIndex;
+      const completedStages = stages.filter(stage => stage.complete).length;
+      const normalizedStages = stages.map((stage, index) => ({
+        ...stage,
+        status: stage.complete ? "complete" : index === activeIndex ? "active" : "upcoming"
+      }));
+      const currentStage = normalizedStages[activeIndex];
+      const summary = currentStage.id === "upload-ingest"
+        ? "HALO AI is waiting at upload and will guide ingest, artwork, review, release, and campaign launch without changing the decks."
+        : currentStage.id === "artwork-contract"
+          ? "HALO AI saw the song arrive and is now watching artwork approval and rights checks before pushing the release path forward."
+          : currentStage.id === "mix-review"
+            ? `HALO AI is guiding mix review${recommendationTrack ? ` while keeping ${recommendationTrack.title} ready as the next move.` : " while protecting the current deck story."}`
+            : currentStage.id === "release-sale"
+              ? "HALO AI is now watching the release pack, pricing, and sale gate so the artist can finish the product handoff cleanly."
+              : completedStages === normalizedStages.length
+                ? "HALO AI can see every major artist stage is ready, from upload through campaign launch."
+                : "HALO AI is watching the campaign brief so the release can move from sale readiness into launch with the right story.";
+      return {
+        completedStages,
+        currentStage,
+        stages: normalizedStages,
+        stageBadge: `${completedStages} / ${normalizedStages.length} stages ready`,
+        summary,
+        blockers: normalizedStages.filter(stage => !stage.complete).slice(0, 3).map(stage => stage.blocker),
+        uploadTitle: hasUploadWatch ? uploadSummary : "Song upload is easiest here.",
+        uploadCopy: hasUploadWatch
+          ? "HALO AI saw artist material arrive and is now tracking artwork, contracts, mix review, release readiness, and campaign launch."
+          : "Paste one public song link for cover art and credits, or upload audio / a private stem pack for direct playback. HALO AI will keep the rest of the journey in view.",
+        nextActionTitle: completedStages === normalizedStages.length ? "Campaign is ready to launch" : `Next: ${currentStage.label}`,
+        nextActionCopy: completedStages === normalizedStages.length
+          ? "HALO AI can keep watching the launch handoff while the decks stay live."
+          : currentStage.nextAction,
+        statusNote: (() => {
+          const raw = String(mixReleaseStatus || importStatus || stemVaultStatus || "").trim().replace(/\s+/g, " ");
+          if (!raw) return "";
+          return `Latest status: ${raw.replace(/[.!?]+$/, "")}.`;
+        })()
+      };
+    }
+
     function renderEnergyArchitecture() {
       const values = energyCurves[elements.energyCurve.value] || energyCurves.journey;
       elements.energyCurveGraph.innerHTML = values.map((value, index) => `<i style="--energy:${value}" title="Stage ${index + 1}: energy ${value}"></i>`).join("");
+    }
+
+    function currentArtistJourneyFormState() {
+      const form = document.querySelector("#mixFlightplanForm");
+      const value = name => String(form?.elements?.[name]?.value || "").trim();
+      return {
+        masteringStatus: value("masteringStatus"),
+        artworkStatus: value("artworkStatus"),
+        rightsConfirmed: Boolean(form?.elements?.rightsConfirmed?.checked),
+        djName: value("djName"),
+        projectTitle: value("projectTitle"),
+        genre: value("genre"),
+        releaseDate: value("releaseDate"),
+        price: value("price"),
+        reviewIntent: value("reviewIntent"),
+        campaignHook: value("campaignHook")
+      };
+    }
+
+    function renderArtistJourneyGuidance() {
+      if (!elements.artistJourneyStageChips || !elements.artistJourneyStatusCards) return;
+      const model = buildArtistJourneyModel({
+        trackList: tracks,
+        stemPacks: stemVaultState.packs,
+        preflightReport: latestPreflightReport,
+        recommendation: currentRecommendation,
+        mixReleasePublished: Boolean(recordingState.publishedMixId),
+        formState: currentArtistJourneyFormState(),
+        importStatus: elements.importStatus?.textContent || "",
+        stemVaultStatus: elements.stemVaultStatus?.textContent || "",
+        mixReleaseStatus: elements.mixReleaseStatus?.textContent || ""
+      });
+      elements.artistJourneyStageBadge.textContent = model.stageBadge;
+      elements.artistJourneyStageChips.innerHTML = model.stages.map((stage, index) => `<li class="journey-chip is-${stage.status}" data-step="${String(index + 1).padStart(2, "0")}"${model.completedStages < model.stages.length && stage.id === model.currentStage.id ? ' aria-current="step"' : ""}>${escapeHTML(stage.label)}</li>`).join("");
+      elements.artistJourneyUploadTitle.textContent = model.uploadTitle;
+      elements.artistJourneyUploadCopy.textContent = model.uploadCopy;
+      elements.artistJourneyNextActionTitle.textContent = model.nextActionTitle;
+      elements.artistJourneyNextActionCopy.textContent = model.nextActionCopy;
+      elements.artistJourneyPulseCopy.textContent = model.statusNote ? `${model.summary} ${model.statusNote}` : model.summary;
+      elements.artistJourneyStatusCards.innerHTML = model.stages.map(stage => `
+        <article class="journey-status-card is-${stage.status}">
+          <small>${escapeHTML(stage.label)}</small>
+          <strong>${stage.complete ? "Ready" : stage.status === "active" ? "Watching now" : "Queued"}</strong>
+          <p>${escapeHTML(stage.complete ? stage.readyCopy : stage.blocker)}</p>
+        </article>
+      `).join("");
+      elements.artistJourneyBlockers.innerHTML = model.blockers.length
+        ? model.blockers.map(blocker => `<span class="journey-blocker">${escapeHTML(blocker)}</span>`).join("")
+        : '<span class="journey-blocker is-clear">All five stages are ready. HALO AI can guide the launch without changing the mix desk.</span>';
+      const publishedModel = { ...model, updatedAt: new Date().toISOString() };
+      try {
+        localStorage.setItem(artistJourneyStorageKey, JSON.stringify(publishedModel));
+      } catch {}
+      window.dispatchEvent(new CustomEvent("halo:artist-journey-update", { detail: publishedModel }));
+    }
+
+    function cleanupArtistJourneyGuidance() {
+      artistJourneyObservers.splice(0).forEach(observer => observer.disconnect());
+      if (artistJourneyFormElement && artistJourneyScheduleHandler) {
+        artistJourneyFormElement.removeEventListener("input", artistJourneyScheduleHandler);
+        artistJourneyFormElement.removeEventListener("change", artistJourneyScheduleHandler);
+      }
+      if (artistJourneyUnloadHandler) window.removeEventListener("beforeunload", artistJourneyUnloadHandler);
+      artistJourneyFormElement = null;
+      artistJourneyRenderQueued = false;
+      artistJourneyScheduleHandler = null;
+      artistJourneyUnloadHandler = null;
+    }
+
+    function initializeArtistJourneyGuidance() {
+      cleanupArtistJourneyGuidance();
+      const form = document.querySelector("#mixFlightplanForm");
+      const schedule = () => {
+        if (artistJourneyRenderQueued) return;
+        artistJourneyRenderQueued = true;
+        window.requestAnimationFrame(() => {
+          artistJourneyRenderQueued = false;
+          renderArtistJourneyGuidance();
+        });
+      };
+      [elements.importStatus, elements.stemVaultStatus, elements.mixReleaseStatus, document.querySelector("#flightplanStatus")].filter(Boolean).forEach(node => {
+        const observer = new MutationObserver(schedule);
+        observer.observe(node, { childList: true, characterData: true, subtree: true });
+        artistJourneyObservers.push(observer);
+      });
+      form?.addEventListener("input", schedule);
+      form?.addEventListener("change", schedule);
+      artistJourneyFormElement = form;
+      artistJourneyScheduleHandler = schedule;
+      artistJourneyUnloadHandler = () => cleanupArtistJourneyGuidance();
+      window.addEventListener("beforeunload", artistJourneyUnloadHandler, { once: true });
+      schedule();
     }
 
     async function saveDjIntelligenceSession() {
@@ -2035,7 +2466,7 @@
       const deckB = deckState.B;
       const blend = Number(elements.crossfader?.value || 50);
       const tempoDelta = Number(deckB.bpm) - Number(deckA.bpm);
-      const blendLabel = `${Math.round(100 - blend)} / ${Math.round(blend)}`;
+      const blendLabel = `${Math.round(100 - blend)}% / ${Math.round(blend)}%`;
       const nextMove = Math.abs(tempoDelta) > 1 ? "Sync tempo" : blend < 38 ? "Reveal B" : blend > 62 ? "Recover A" : "Hold blend";
       const assignments = {
         boothDeckATitle: deckA.title,
@@ -2070,6 +2501,13 @@
       elements.boothVideoPlaceholder.hidden = false;
     }
 
+    function showBoothPlaceholderState(title, status) {
+      stopBoothVideo();
+      elements.boothClipTitle.textContent = title;
+      elements.boothClipStatus.textContent = status;
+      elements.boothVideoPlaceholder.hidden = false;
+    }
+
     function setBoothVideoInputStatus(message, isError = false) {
       elements.boothVideoInputStatus.textContent = message;
       elements.boothVideoInputStatus.classList.toggle("is-error", isError);
@@ -2090,19 +2528,43 @@
       }
     }
 
+    function syncBoothPresetButtons() {
+      elements.boothVideoPresets?.querySelectorAll("[data-booth-preset]").forEach(button => {
+        button.classList.toggle("is-active", button.dataset.boothPreset === activeBoothVideoId);
+      });
+    }
+
+    function activateBoothPreset(presetId) {
+      const preset = BOOTH_VIDEO_PRESETS.find(item => item.id === presetId);
+      if (!preset) return;
+      if (preset.sourceType) {
+        activeBoothVideoId = preset.id;
+        syncBoothPresetButtons();
+        playBoothVideo(preset);
+        return;
+      }
+      activeBoothVideoId = preset.id;
+      setBoothScreenMode("wave");
+      showBoothPlaceholderState(preset.title, "Preset ready");
+      setBoothVideoInputStatus(preset.message || "Add a source below to continue.");
+      syncBoothPresetButtons();
+      showToast("Booth preset armed", preset.message || `${preset.title} is ready on the overhead screen.`);
+    }
+
     function renderBoothVideos() {
       elements.boothVideoLibraryStatus.textContent = boothVideos.length ? `${boothVideos.length} ready` : "Device clips available";
       elements.boothVideoClips.innerHTML = boothVideos.length
         ? boothVideos.map(video => `<button class="clip-button${video.id === activeBoothVideoId ? " is-active" : ""}" type="button" data-booth-video="${escapeHTML(video.id)}"><strong>${escapeHTML(video.title)}</strong><span>${escapeHTML(video.sourceType === "youtube" ? "YouTube" : video.sourceType === "local" ? "This device" : "HALO upload")}</span></button>`).join("")
         : '<span class="clip-empty">No published HALO TV videos are available. Load a video from this device to use the screen now.</span>';
+      syncBoothPresetButtons();
     }
 
     async function playBoothVideo(video) {
       if (!video) return;
       stopBoothVideo();
       activeBoothVideoId = video.id;
-      const title = document.querySelector("#boothClipTitle");
-      const status = document.querySelector("#boothClipStatus");
+      const title = elements.boothClipTitle;
+      const status = elements.boothClipStatus;
       title.textContent = video.title;
       setBoothScreenMode("video");
 
@@ -2204,6 +2666,11 @@
         if (button.dataset.boothAction === "sync") document.querySelector("#syncMaster")?.click();
         if (button.dataset.boothAction === "prepare") elements.prepareTransition.click();
       }));
+      elements.boothVideoPresets?.addEventListener("click", event => {
+        const button = event.target.closest("[data-booth-preset]");
+        if (!button) return;
+        activateBoothPreset(button.dataset.boothPreset);
+      });
       elements.boothVideoClips.addEventListener("click", event => {
         const button = event.target.closest("[data-booth-video]");
         if (!button) return;
@@ -2611,6 +3078,7 @@
       elements.empty.style.display = filtered.length ? "none" : "block";
       elements.trackCount.textContent = `${tracks.length} track${tracks.length === 1 ? "" : "s"} · every source`;
       bindBrokenArtwork(elements.list);
+        renderArtistJourneyGuidance();
     }
 
     function trackPickerUrl() {
@@ -2678,9 +3146,38 @@
       showToast.timer = setTimeout(() => elements.toast.classList.remove("is-visible"), 3200);
     }
 
+    function maintenanceAlertCountLabel() {
+      return elements.maintenanceDockCount?.textContent?.trim() || "10 alerts";
+    }
+
+    function syncMaintenanceDockLabel() {
+      if (!elements.maintenanceDock) return;
+      const count = maintenanceAlertCountLabel();
+      const label = `${count} currently monitored.`;
+      elements.maintenanceDock.title = `Show maintenance alerts. ${label}`;
+      if (elements.maintenanceDockHelp) elements.maintenanceDockHelp.textContent = `Opens a toast with current booth, cloud revision, upload progress, and audio verification maintenance status. ${label}`;
+    }
+
+    function currentCloudRevisionLabel() {
+      const sessionLabel = elements.sessionSaveStatus?.textContent?.trim() || "";
+      if (/^Cloud revision/i.test(sessionLabel)) return sessionLabel;
+      const cloudLabel = elements.cloudStatus?.textContent?.trim() || "Cloud ready";
+      return `${cloudLabel} · awaiting first revision`;
+    }
+
+    function showCloudRevisionToast() {
+      showToast("Cloud revision", currentCloudRevisionLabel());
+    }
+
+    function showMaintenanceAlertsToast() {
+      syncMaintenanceDockLabel();
+      showToast("Maintenance alerts", `${maintenanceAlertCountLabel()} watching booth video, cloud revision, upload progress, and audio verification.`);
+    }
+
     function setStemVaultStatus(message, error = false) {
       elements.stemVaultStatus.textContent = message;
       elements.stemVaultStatus.classList.toggle("is-error", error);
+      renderArtistJourneyGuidance();
     }
 
     function normalizedAudioType(file) {
@@ -3561,6 +4058,13 @@
       }
     }
 
+    syncMaintenanceDockLabel();
+    if (window.MutationObserver && elements.maintenanceDockCount) {
+      new MutationObserver(syncMaintenanceDockLabel).observe(elements.maintenanceDockCount, { childList: true, characterData: true, subtree: true });
+    }
+    elements.sessionRevisionButton?.addEventListener("click", showCloudRevisionToast);
+    elements.maintenanceDock?.addEventListener("click", showMaintenanceAlertsToast);
+
     function updateDeck(deckId) {
       const state = deckState[deckId];
       const deck = document.querySelector(`[data-deck="${deckId}"]`);
@@ -3587,7 +4091,7 @@
       const active = deckState[activeId];
       elements.masterBpm.textContent = Number(active.bpm).toFixed(1);
       elements.masterTrack.textContent = `${active.title} — ${active.artist}`;
-      elements.masterStatus.textContent = active.empty ? "Load a track to begin" : `Deck ${activeId} ${active.playing ? "live" : "ready"} · master tempo ${Number(active.bpm).toFixed(1)} bpm`;
+      elements.masterStatus.textContent = active.empty ? "LOAD A TRACK TO BEGIN" : `DECK ${activeId} ${active.playing ? "LIVE" : "READY"} · MASTER TEMPO ${Number(active.bpm).toFixed(1)} BPM`;
     }
 
     function loadTrack(deckId, trackId) {
@@ -3773,6 +4277,7 @@
         : `${recommendation.transitionBars || 32}-bar ${styleLabel}: prepare the inactive deck, match phrase starts, then move the crossfader after the outgoing vocal clears.`;
       elements.aiMode.textContent = mode;
       renderAssistantCrew(recommendation.assistantTeam);
+      renderArtistJourneyGuidance();
     }
 
     function localAssistantTeam(track, intent) {
@@ -3802,6 +4307,7 @@
       if (!candidates.length) {
         currentRecommendation = null;
         elements.aiBrief.textContent = "Load more music to create a meaningful next-track recommendation.";
+        renderArtistJourneyGuidance();
         return null;
       }
       const intent = elements.mixIntent.value;
@@ -3956,6 +4462,7 @@
       const params = new URLSearchParams({ source: "dj-preflight", persona: report.personaId || "halo" });
       if (latestPreflightId) params.set("preflight", latestPreflightId);
       elements.preflightLaunch.href = `/campaign-studio/?${params}`;
+      renderArtistJourneyGuidance();
     }
 
     async function buildTakeoverPlan() {
@@ -5088,6 +5595,7 @@
     document.querySelectorAll('input[type="range"]').forEach(updateRangeFill);
     initializeCollapsiblePanels();
     initializeBoothControls();
+    initializeArtistJourneyGuidance();
     renderTracks();
     renderQueue();
     updateDeck("A");
@@ -5096,6 +5604,7 @@
     renderEnergyArchitecture();
     recommendLocally();
     renderAssistantCrew(currentRecommendation?.assistantTeam);
+    renderArtistJourneyGuidance();
     animateAudio();
     if (window.haloIdentity) connectSessionIdentity();
     else window.addEventListener("halo-identity-ready", connectSessionIdentity, { once: true });

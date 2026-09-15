@@ -16,11 +16,23 @@ const PIPELINE_STAGES = [
   "published",
 ];
 
+const VERSION_ROUTES = [
+  { versionType: "sale_master", label: "Sale master", destination: "storefront" },
+  { versionType: "radio_edit", label: "Radio edit", destination: "radio" },
+  { versionType: "clean", label: "Clean radio edit", destination: "radio" },
+  { versionType: "instrumental", label: "Instrumental", destination: "licensing" },
+  { versionType: "stems", label: "Stems package", destination: "stem_vault" },
+  { versionType: "extended", label: "Extended mix", destination: "dj_pool" },
+  { versionType: "demo", label: "Demo", destination: "archive" },
+  { versionType: "alternate", label: "Alternate version", destination: "storefront" },
+];
+
 const UPLOAD_SURFACES = new Set([
   "artist_room",
   "radio_room",
   "song_catalog",
   "dreamweaver_lab",
+  "music_upload",
 ]);
 
 function json(body, status = 200) {
@@ -114,7 +126,7 @@ async function createProject(payload, db, membership) {
   `;
   if (existingRows[0]) {
     const row = await getOneSong(db, membership.member_id, existingRows[0].id);
-    return json({ message: "Existing master project returned", ...serializePipeline(row), isExisting: true });
+    return json({ message: "Existing master project returned", ...serializePipeline(row), versionIds: await getSongVersionIds(db, existingRows[0].id), isExisting: true });
   }
 
   const id = randomUUID();
@@ -122,28 +134,38 @@ async function createProject(payload, db, membership) {
   const albumTitle = cleanText(payload.albumTitle, 200) || "";
   const isrc = cleanText(payload.isrc, 30) || "";
   const upc = cleanText(payload.upc, 30) || "";
+  const notes = cleanText(payload.notes, 4000) || "";
+  const explicitLyrics = payload.explicitLyrics === true;
+  const rightsStatus = ["needs_review", "cleared", "disputed"].includes(String(payload.rightsStatus || "").trim().toLowerCase())
+    ? String(payload.rightsStatus || "").trim().toLowerCase()
+    : "needs_review";
+  const saleStatus = ["for_sale", "coming_soon", "not_for_sale"].includes(String(payload.saleStatus || "").trim().toLowerCase())
+    ? String(payload.saleStatus || "").trim().toLowerCase()
+    : "for_sale";
 
   await db.sql`
     INSERT INTO halo_song_catalog (
-      id, owner_member_id, artist_name, title, album_title, isrc, upc, genre,
+      id, owner_member_id, artist_name, title, album_title, isrc, upc, genre, notes, explicit_lyrics, rights_status, sale_status,
       pipeline_status, source_upload_surface, status, created_at, updated_at
     ) VALUES (
       ${id}, ${membership.member_id}, ${artistName}, ${title}, ${albumTitle},
-      ${isrc}, ${upc}, ${genre},
+      ${isrc}, ${upc}, ${genre}, ${notes}, ${explicitLyrics}, ${rightsStatus}, ${saleStatus},
       'uploaded', ${surface}, 'active', NOW(), NOW()
     )
   `;
 
-  // Create a default radio-edit version slot so all departments have a shared
-  // version to reference immediately.
-  const versionId = randomUUID();
-  await db.sql`
-    INSERT INTO halo_song_versions (
-      id, song_id, version_type, label, destination, status, created_at, updated_at
-    ) VALUES (
-      ${versionId}, ${id}, 'radio_edit', 'Radio Edit', 'radio', 'active', NOW(), NOW()
-    )
-  `;
+  const versionIds = {};
+  for (const route of VERSION_ROUTES) {
+    const versionId = randomUUID();
+    versionIds[route.versionType] = versionId;
+    await db.sql`
+      INSERT INTO halo_song_versions (
+        id, song_id, version_type, label, destination, status, created_at, updated_at
+      ) VALUES (
+        ${versionId}, ${id}, ${route.versionType}, ${route.label}, ${route.destination}, 'active', NOW(), NOW()
+      )
+    `;
+  }
 
   const row = await getOneSong(db, membership.member_id, id);
   // Fire-and-forget ledger entry — don't block the response if it fails.
@@ -153,11 +175,11 @@ async function createProject(payload, db, membership) {
     eventCategory: "upload_event",
     refSongId: id,
     summary: `Master project created: "${title}" by ${artistName}`,
-    details: { surface, genre, albumTitle, isrc, upc, versionId },
+    details: { surface, genre, albumTitle, isrc, upc, versionIds },
     pipelineStage: "uploaded",
     outcome: "success",
   }).catch(err => console.error("Ledger create_project entry failed", err instanceof Error ? err.message : err));
-  return json({ message: "Master project created", ...serializePipeline(row), versionId, isExisting: false }, 201);
+  return json({ message: "Master project created", ...serializePipeline(row), versionIds, isExisting: false }, 201);
 }
 
 /** Advance the pipeline stage for a master project. */
@@ -236,6 +258,18 @@ async function getOneSong(db, ownerMemberId, songId) {
     LIMIT 1
   `;
   return rows[0] || null;
+}
+
+async function getSongVersionIds(db, songId) {
+  const rows = await db.sql`
+    SELECT id, version_type
+    FROM halo_song_versions
+    WHERE song_id = ${songId} AND status = 'active'
+  `;
+  return rows.reduce((acc, row) => {
+    acc[row.version_type] = row.id;
+    return acc;
+  }, {});
 }
 
 // ----- Handler ---------------------------------------------------------------

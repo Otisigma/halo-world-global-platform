@@ -11,6 +11,7 @@ const maxUploadBytes = 128 * 1024 * 1024;
 const previewPoolMixSeconds = 60 * 60;
 const hourSessionMinimumSeconds = 50 * 60;
 const hourSessionMaximumSeconds = 70 * 60;
+const mixCurrency = "USD";
 
 function normalizeAudioContentType(value, filename = "") {
   const contentType = cleanText(value, 80).split(";")[0].toLowerCase();
@@ -36,6 +37,11 @@ function normalizeAudioContentType(value, filename = "") {
 
 function json(body, status = 200) {
   return Response.json(body, { status, headers: { "Cache-Control": "no-store" } });
+}
+
+function normalizeCurrency(value, fallback = mixCurrency) {
+  const currency = cleanText(value, 3).toUpperCase();
+  return currency === mixCurrency ? mixCurrency : fallback;
 }
 
 async function removeStoredUpload(prefix) {
@@ -74,7 +80,7 @@ function mixPayload(row) {
       mixingFeeIncluded: Boolean(row.mixing_fee_included),
       editionFormat: row.edition_format || "mp3",
       priceMinor,
-      currency: row.currency || "USD"
+      currency: normalizeCurrency(row.currency)
     },
     readiness,
     salesPageUrl: `/mixes/?mix=${encodeURIComponent(row.id)}#editions`,
@@ -346,7 +352,7 @@ async function finalizeMix(payload, db, user) {
     && hasValidArtworkUrl(payload.artworkUrl)
   );
   if (clientSaleEnabled && (!productInfoComplete || !Number.isInteger(priceMinor) || priceMinor < 100 || priceMinor > 50000)) {
-    return json({ message: "Paid mixes need artwork, a complete edition story, and a price from $1.00 to $500.00" }, 400);
+    return json({ message: "Paid mixes need artwork, a complete edition story, and a USD price from $1.00 to $500.00" }, 400);
   }
   const reviewIntent = cleanText(payload.reviewIntent, 1000);
   const reviewContext = cleanText(payload.reviewContext, 1000);
@@ -370,7 +376,7 @@ async function finalizeMix(payload, db, user) {
     rightsAttested,
     editionFormat,
     priceMinor,
-    currency: "USD",
+    currency: mixCurrency,
     productInfoComplete
   });
 
@@ -389,7 +395,7 @@ async function finalizeMix(payload, db, user) {
       ${artworkUrl}, ${originalArtist}, ${originalBlobPrefix}, ${originalChunkCount}, ${originalContentType}, ${originalByteSize},
       ${originalDurationSeconds}, ${remixerName}, ${salesStatus}, ${uploadSource},
       ${productionRoute}, ${sellerMode}, ${clientSaleEnabled}, ${productionRoute === "halo_mixed"}, ${rightsAttested},
-      ${editionFormat}, ${clientSaleEnabled ? priceMinor : 0}, 'USD', ${clientSaleEnabled && productInfoComplete}, FALSE, 'pending',
+      ${editionFormat}, ${clientSaleEnabled ? priceMinor : 0}, ${mixCurrency}, ${clientSaleEnabled && productInfoComplete}, FALSE, 'pending',
       ${reviewIntent}, ${reviewContext}, ${protectedMoments}
     )
   `;

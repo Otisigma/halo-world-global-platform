@@ -41,7 +41,7 @@ const checks = [
   [api.includes("MAX_BODY_BYTES") && api.includes("cleanRoomData") && api.includes("cleanCompletedRooms"), "bounds and sanitises saved project data"],
   [migration.includes("halo_release_house_projects") && migration.includes("room_data JSONB") && migration.includes("completed_rooms SMALLINT[]"), "stores structured release progress in Netlify Database"],
   [styles.includes("@media (max-width: 800px)") && styles.includes("prefers-reduced-motion"), "supports mobile and reduced-motion visitors"],
-  [config.includes('from = "/release-house"') && config.includes('to = "/release-house/"'), "keeps the Release House URL canonical"]
+  [/from = "\/release-house\/"[\s\S]*to = "\/release-house\/index\.html"/.test(config) && !/from = "\/release-house"\s+to = "\/release-house\/"/.test(config), "serves the canonical /release-house/ route directly without reintroducing the legacy alias redirect"]
 ];
 
 const failures = checks.filter(([passed]) => !passed);

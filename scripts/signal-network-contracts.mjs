@@ -12,10 +12,13 @@ const [page, script, styles, api, migration, netlifyConfig] = await Promise.all(
   read("netlify.toml")
 ]);
 const redirectBlocks = netlifyConfig.split("[[redirects]]").slice(1);
-const hasSignalRedirect = redirectBlocks.some(block =>
-  /from\s*=\s*"\/signal"/.test(block) &&
-  /to\s*=\s*"\/signal-network\/"/.test(block) &&
-  /status\s*=\s*301/.test(block)
+const hasSignalNetworkCanonicalRewrite = redirectBlocks.some(block =>
+  /from\s*=\s*"\/signal-network\/"/.test(block) &&
+  /to\s*=\s*"\/signal-network\/index\.html"/.test(block) &&
+  /status\s*=\s*200/.test(block)
+);
+const hasLegacySignalAliasRedirect = redirectBlocks.some(block =>
+  /from\s*=\s*"\/signal"/.test(block)
 );
 
 const checks = [
@@ -30,7 +33,8 @@ const checks = [
   [migration.includes("halo_signal_profiles") && migration.includes("halo_signal_requests") && migration.includes("halo_signal_conversations") && migration.includes("halo_signal_messages"), "persists profiles, requests, conversations, and messages in Netlify Database"],
   [migration.includes("halo_signal_blocks") && migration.includes("halo_signal_reports") && migration.includes("CHECK (member_a_id < member_b_id)"), "enforces safety and unique conversation pairs at the database layer"],
   [styles.includes("@media (max-width: 760px)") && styles.includes("prefers-reduced-motion") && styles.includes("signal-skeleton"), "supports mobile, reduced motion, and loading states"],
-  [hasSignalRedirect, "routes the short Signal URL to the live workspace"]
+  [hasSignalNetworkCanonicalRewrite, "serves the canonical Signal Network route directly"],
+  [!hasLegacySignalAliasRedirect, "removes the legacy short Signal alias redirect"]
 ];
 
 const failures = checks.filter(([passed]) => !passed);

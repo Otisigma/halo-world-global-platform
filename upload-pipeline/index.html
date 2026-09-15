@@ -45,11 +45,31 @@
       </div>
     </section>
 
-    <div id="pipelineShell" aria-busy="true">
+    <div id="pipelineShell" class="pipeline-shell" aria-busy="true">
       <section class="pipeline-board" id="pipelineBoard" aria-label="Pipeline items" aria-live="polite">
         <p class="pipeline-loading" id="pipelineLoading" role="status">Loading pipeline…</p>
         <p class="pipeline-empty" id="pipelineEmpty" hidden>No songs in this view yet. Add a song in the <a href="/song-catalog/">Song Catalog</a> and it will appear here.</p>
       </section>
+      <aside class="pipeline-insights" aria-labelledby="pipelineInsightsTitle">
+        <div class="insight-card">
+          <p class="eyebrow">Live story</p>
+          <h2 id="pipelineInsightsTitle">Pipeline guidance</h2>
+          <p id="pipelineStoryCopy">HALO reads from the master upload records and shows what each department needs next.</p>
+          <div class="story-signal" id="pipelineStorySignal" aria-hidden="true"></div>
+          <ol class="pipeline-timeline" id="pipelineTimeline" aria-label="Current pipeline stage timeline"></ol>
+        </div>
+        <div class="insight-card">
+          <p class="eyebrow">Track context</p>
+          <h3 id="pipelineTrackTitle">No active package yet</h3>
+          <p id="pipelineTrackMeta">Submit from Music Upload or Song Catalog to start a guided pipeline handoff.</p>
+          <p class="trust-signal" id="pipelineTrustSignal">Waiting for confirmed persisted assets.</p>
+        </div>
+        <div class="insight-card">
+          <p class="eyebrow">What to do now</p>
+          <p id="pipelineGuidanceCopy">Choose a department tab to focus reviews, then move each song only after metadata and source assets are confirmed.</p>
+          <ul class="pipeline-counts" id="pipelineCounts" aria-label="Pipeline stage counts"></ul>
+        </div>
+      </aside>
     </div>
   </main>
 

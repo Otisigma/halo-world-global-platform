@@ -93,7 +93,7 @@ export function generatePassCode(passType) {
 
 export async function generateDailyReport(db, reportDate = new Date()) {
   const date = reportDate.toISOString().slice(0, 10);
-  const [membershipRows, activityRows, redemptionRows, pinRows, messageRows, supportRows, sessionRows, recentJoins, analyticsRows, artistProRows] = await Promise.all([
+  const [membershipRows, activityRows, redemptionRows, pinRows, messageRows, supportRows, sessionRows, recentJoins, analyticsRows, artistProRows, dreamweaverRows] = await Promise.all([
     db.sql`
       SELECT COUNT(*)::int AS total,
         COUNT(*) FILTER (WHERE joined_at::date = ${date}::date)::int AS joined_today,
@@ -131,6 +131,13 @@ export async function generateDailyReport(db, reportDate = new Date()) {
         COUNT(*) FILTER (WHERE created_at::date = ${date}::date)::int AS submitted_today,
         COUNT(*) FILTER (WHERE status = 'new')::int AS awaiting_review
       FROM halo_artist_pro_leads
+    `,
+    db.sql`
+      SELECT COUNT(*)::int AS total,
+        COUNT(*) FILTER (WHERE last_signup_at::date = ${date}::date)::int AS submitted_today,
+        COUNT(*) FILTER (WHERE last_signup_at >= ${date}::date - INTERVAL '6 days')::int AS submitted_7d,
+        COUNT(*) FILTER (WHERE linked_member_id IS NOT NULL)::int AS linked_members
+      FROM halo_relationship_signups
     `
   ]);
 
@@ -152,7 +159,11 @@ export async function generateDailyReport(db, reportDate = new Date()) {
     siteSessionsToday: Number(analyticsRows[0]?.sessions || 0),
     artistProLeads: Number(artistProRows[0]?.total || 0),
     artistProLeadsToday: Number(artistProRows[0]?.submitted_today || 0),
-    artistProAwaitingReview: Number(artistProRows[0]?.awaiting_review || 0)
+    artistProAwaitingReview: Number(artistProRows[0]?.awaiting_review || 0),
+    dreamweaverSignupsTotal: Number(dreamweaverRows[0]?.total || 0),
+    dreamweaverSignupsToday: Number(dreamweaverRows[0]?.submitted_today || 0),
+    dreamweaverSignups7d: Number(dreamweaverRows[0]?.submitted_7d || 0),
+    dreamweaverLinkedMembers: Number(dreamweaverRows[0]?.linked_members || 0)
   };
   const joins = recentJoins.map(row => ({
     displayName: row.display_name,
@@ -207,6 +218,9 @@ export function dailyReportEmailParameters(report) {
     roomPinsUpdatedToday: Number(metrics.roomPinsUpdatedToday || 0),
     supportSignalsToday: Number(metrics.supportSignalsToday || 0),
     djSessionsSavedToday: Number(metrics.djSessionsSavedToday || 0),
+    dreamweaverSignupsTotal: Number(metrics.dreamweaverSignupsTotal || 0),
+    dreamweaverSignupsToday: Number(metrics.dreamweaverSignupsToday || 0),
+    dreamweaverLinkedMembers: Number(metrics.dreamweaverLinkedMembers || 0),
     artistProLeadsToday: Number(metrics.artistProLeadsToday || 0),
     artistProAwaitingReview: Number(metrics.artistProAwaitingReview || 0)
   };

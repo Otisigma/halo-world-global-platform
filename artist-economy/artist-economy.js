@@ -17,13 +17,17 @@
   };
   const statusOptions = {
     work: ["incomplete", "review", "cleared", "hold", "disputed"],
+    adminPublishing: ["unknown", "self_administered", "administered", "publisher_controlled", "seeking_admin"],
     income: ["expected", "received", "overdue", "disputed", "reconciled"],
     campaignStage: ["readiness", "test", "scale", "closed"],
     campaignDecision: ["prepare", "test", "scale", "stop", "complete"],
     licensingStage: ["brief", "matched", "artist_approval", "pitched", "negotiating", "contracted", "delivered", "paid", "declined"],
     rightsCheck: ["required", "reviewing", "clear", "hold"],
+    licensingApproval: ["required", "requested", "approved", "declined"],
     settlement: ["planning", "confirmed", "performed", "settling", "paid", "cancelled"],
-    review: ["review", "approve", "revise", "reject"]
+    review: ["review", "approve", "revise", "reject"],
+    societyType: ["pro", "cmo", "neighbouring_rights", "mechanical", "publisher_admin", "other"],
+    membershipStatus: ["research", "applied", "active", "hold"]
   };
 
   function escapeHtml(value) {
@@ -171,6 +175,7 @@
       ? summary.gaps.map(gap => `<li>${escapeHtml(gap)}</li>`).join("")
       : "<li>The recorded foundations are complete. Review outcomes and protect the next move.</li>";
     byId("conscienceTab").hidden = !viewer.platformOwner;
+    renderRightsGuidance();
     renderRights();
     renderIncome();
     renderCampaigns();
@@ -183,6 +188,36 @@
     return `<article class="empty-records"><strong>${escapeHtml(title)}</strong><p>${escapeHtml(copy)}</p></article>`;
   }
 
+  function renderGuidanceSection(title, items, fallbackTitle, fallbackCopy, withChecklist = false) {
+    return `<article class="guidance-card">
+      <header><span>${escapeHtml(title)}</span><strong>${items.length}</strong></header>
+      <div class="guidance-body">
+        ${items.length ? items.map(item => `<section>
+          <h3>${escapeHtml(item.title)}</h3>
+          <p>${escapeHtml(item.detail)}</p>
+          ${withChecklist && item.checklist?.length ? `<ol>${item.checklist.map(step => `<li>${escapeHtml(step)}</li>`).join("")}</ol>` : ""}
+        </section>`).join("") : `<section><h3>${escapeHtml(fallbackTitle)}</h3><p>${escapeHtml(fallbackCopy)}</p></section>`}
+      </div>
+    </article>`;
+  }
+
+  function renderRightsGuidance() {
+    const target = byId("rightsGuidance");
+    const guidance = state.dashboard?.rightsGuidance || {};
+    target.innerHTML = `
+      <article class="guidance-boundary">
+        <span>HALO RIGHTS COPILOT</span>
+        <p>${escapeHtml(guidance.approvalBoundary || "HALO can prepare the checklist, but the artist approves the external move.")}</p>
+      </article>
+      <div class="guidance-grid">
+        ${renderGuidanceSection("Missing data", guidance.missingData || [], "Nothing critical is missing.", "Keep identifiers, collaborators, and society memberships current as the catalogue grows.")}
+        ${renderGuidanceSection("Conflicts to resolve", guidance.conflicts || [], "No conflicts are currently flagged.", "The recorded ownership picture is internally consistent right now.")}
+        ${renderGuidanceSection("Suggested next steps", guidance.nextSteps || [], "No urgent next step.", "Use the Rights Passport to keep the system current before the next release or opportunity.")}
+        ${renderGuidanceSection("Draft packs + checklists", guidance.draftPackets || [], "No draft pack is waiting.", "When the system sees a rights gap, it prepares a checklist here rather than acting externally.", true)}
+      </div>
+    `;
+  }
+
   function renderRights() {
     const target = byId("rightsList");
     const works = state.dashboard.works || [];
@@ -191,12 +226,22 @@
       return;
     }
     target.innerHTML = works.map(work => {
-      const shares = work.participants.reduce((sum, participant) => sum + participant.shareBps, 0);
+      const masterShares = work.participants.filter(participant => participant.role === "master_owner").reduce((sum, participant) => sum + participant.shareBps, 0);
+      const compositionShares = work.participants.filter(participant => participant.role === "songwriter").reduce((sum, participant) => sum + participant.shareBps, 0);
+      const shareSummary = [
+        masterShares ? `Master ${masterShares / 100}%` : "",
+        compositionShares ? `Composition ${compositionShares / 100}%` : ""
+      ].filter(Boolean).join(" · ") || "Shares not recorded";
+      const publishingLabel = [titleCase(work.publisherStatus), work.adminPublishingStatus ? titleCase(work.adminPublishingStatus) : ""].filter(Boolean).join(" · ");
       return `<article class="record-card" data-record-id="${escapeHtml(work.id)}" data-tone="${escapeHtml(work.rightsStatus)}">
-        <header><div><div class="record-meta"><span>${escapeHtml(work.workType)}</span><span>${escapeHtml(work.rightsStatus)}</span>${work.oneStop ? "<span>One-stop</span>" : ""}</div><h3>${escapeHtml(work.title)}</h3></div><span class="status-label">${shares / 100}% recorded</span></header>
+        <header><div><div class="record-meta"><span>${escapeHtml(work.workType)}</span><span>${escapeHtml(work.rightsStatus)}</span>${work.oneStop ? "<span>One-stop</span>" : ""}</div><h3>${escapeHtml(work.title)}</h3></div><span class="status-label">${escapeHtml(shareSummary)}</span></header>
         <p>${escapeHtml(work.notes || "No private rights note has been added.")}</p>
-        <div class="record-details"><div><small>Master owner</small><strong>${escapeHtml(work.masterOwner || "Not confirmed")}</strong></div><div><small>Publishing</small><strong>${escapeHtml(titleCase(work.publisherStatus))}</strong></div><div><small>ISRC</small><strong>${escapeHtml(work.isrc || "Missing")}</strong></div><div><small>Restrictions</small><strong>${escapeHtml(work.restrictions.join(", ") || "None recorded")}</strong></div></div>
-        <ul class="participant-list">${work.participants.length ? work.participants.map(participant => `<li><span><strong>${escapeHtml(participant.name)}</strong> · ${escapeHtml(titleCase(participant.role))}</span><span>${participant.shareBps / 100}% · ${escapeHtml(titleCase(participant.collectionStatus))}</span></li>`).join("") : "<li><span>No participants recorded</span><span>Shares unknown</span></li>"}</ul>
+        <div class="record-details"><div><small>Master owner</small><strong>${escapeHtml(work.masterOwner || "Not confirmed")}</strong></div><div><small>Composition owner</small><strong>${escapeHtml(work.compositionOwner || "Not confirmed")}</strong></div><div><small>Publishing / admin</small><strong>${escapeHtml(publishingLabel || "Unknown")}</strong></div><div><small>Admin publisher</small><strong>${escapeHtml(work.adminPublisherName || "Not assigned")}</strong></div><div><small>ISRC / ISWC</small><strong>${escapeHtml([work.isrc || "Missing ISRC", work.iswc || "Missing ISWC"].join(" · "))}</strong></div><div><small>Restrictions</small><strong>${escapeHtml(work.restrictions.join(", ") || "None recorded")}</strong></div></div>
+        <ul class="participant-list">${work.participants.length ? work.participants.map(participant => `<li>
+          <div class="participant-row"><span><strong>${escapeHtml(participant.name)}</strong> · ${escapeHtml(titleCase(participant.role))}</span><span>${participant.shareBps / 100}% · ${escapeHtml(titleCase(participant.collectionStatus))}</span></div>
+          <div class="participant-societies">${participant.societies.length ? participant.societies.map(society => `<span class="society-chip">${escapeHtml(`${society.territory} · ${titleCase(society.societyType)} · ${society.societyName} · ${titleCase(society.membershipStatus)}${society.membershipIdentifier ? ` · ${society.membershipIdentifier}` : ""}`)}</span>`).join("") : '<span class="society-chip is-empty">No territory memberships recorded yet</span>'}</div>
+          <div class="participant-tools"><button class="button button-quiet" type="button" data-open-form="membership" data-participant-id="${participant.id}" data-participant-name="${escapeHtml(participant.name)}" data-work-title="${escapeHtml(work.title)}">Add territory membership</button></div>
+        </li>`).join("") : "<li><div class=\"participant-row\"><span>No participants recorded</span><span>Shares unknown</span></div></li>"}</ul>
         <div class="record-actions">
           <label>Status<select data-field="rightsStatus">${options(statusOptions.work, work.rightsStatus)}</select></label>
           <label>One-stop<select data-field="oneStop"><option value="false"${!work.oneStop ? " selected" : ""}>No</option><option value="true"${work.oneStop ? " selected" : ""}>Yes</option></select></label>
@@ -262,8 +307,8 @@
     target.innerHTML = records.map(item => `<article class="record-card" data-record-id="${escapeHtml(item.id)}" data-tone="${escapeHtml(item.rightsCheck)}">
       <header><div><div class="record-meta"><span>${escapeHtml(titleCase(item.mediaType))}</span><span>${escapeHtml(item.stage)}</span><span>Rights ${escapeHtml(item.rightsCheck)}</span></div><h3>${escapeHtml(item.opportunityName)}</h3></div><strong class="record-value">${escapeHtml(money(item.quotedFeeMinor, item.currency))}</strong></header>
       <p>${escapeHtml(item.notes || "No internal opportunity note has been added.")}</p>
-      <div class="record-details"><div><small>Buyer</small><strong>${escapeHtml(item.buyerName || "Not recorded")}</strong></div><div><small>Territory</small><strong>${escapeHtml(item.territory)}</strong></div><div><small>Commission</small><strong>${item.commissionBps / 100}%</strong></div><div><small>Decision due</small><strong>${escapeHtml(formatDate(item.decisionDueAt))}</strong></div></div>
-      <div class="record-actions"><label>Stage<select data-field="stage">${options(statusOptions.licensingStage, item.stage)}</select></label><label>Rights check<select data-field="rightsCheck">${options(statusOptions.rightsCheck, item.rightsCheck)}</select></label><button class="button button-quiet" type="button" data-update-record="licensing">Update pipeline</button></div>
+      <div class="record-details"><div><small>Buyer</small><strong>${escapeHtml(item.buyerName || "Not recorded")}</strong></div><div><small>Territory</small><strong>${escapeHtml(item.territory)}</strong></div><div><small>Commission</small><strong>${item.commissionBps / 100}%</strong></div><div><small>Decision due</small><strong>${escapeHtml(formatDate(item.decisionDueAt))}</strong></div><div><small>Artist approval</small><strong>${escapeHtml(titleCase(item.approvalStatus || "required"))}${item.approvedAt ? ` · ${escapeHtml(formatDate(item.approvedAt, true))}` : ""}</strong></div></div>
+      <div class="record-actions"><label>Stage<select data-field="stage">${options(statusOptions.licensingStage, item.stage)}</select></label><label>Rights check<select data-field="rightsCheck">${options(statusOptions.rightsCheck, item.rightsCheck)}</select></label><label>Approval<select data-field="approvalStatus">${options(statusOptions.licensingApproval, item.approvalStatus || "required")}</select></label><label class="field-wide">Approval note<textarea data-field="approvalNote" maxlength="2000">${escapeHtml(item.approvalNote || "")}</textarea></label><button class="button button-quiet" type="button" data-update-record="licensing">Update pipeline</button></div>
     </article>`).join("");
   }
 
@@ -348,7 +393,10 @@
         field("rightsStatus", "Rights status", "select", options(statusOptions.work, "incomplete")),
         field("oneStop", "One-stop clearance", "select", options(["false", "true"], "false")),
         field("masterOwner", "Master owner", "text", "", "", "maxlength=180"),
+        field("compositionOwner", "Composition owner", "text", "", "", "maxlength=180"),
         field("publisherStatus", "Publishing status", "select", options(["unknown", "self_published", "administered", "publisher_controlled"], "unknown")),
+        field("adminPublisherName", "Admin publisher", "text", "", "", "maxlength=180"),
+        field("adminPublishingStatus", "Admin publishing status", "select", options(statusOptions.adminPublishing, "unknown")),
         field("isrc", "ISRC", "text", "", "", "maxlength=15"),
         field("iswc", "ISWC", "text", "", "", "maxlength=20"),
         field("upc", "UPC", "text", "", "", "maxlength=20"),
@@ -366,6 +414,19 @@
         field("collectionStatus", "Collection status", "select", options(["unconfirmed", "registered", "collecting", "hold"], "unconfirmed")),
         field("societyName", "Society / administrator", "text", "", "", "maxlength=120"),
         field("identifier", "IPI / member / contract reference", "text", "", "", "maxlength=120")
+      ].join("")
+    };
+    if (kind === "membership") return {
+      title: "Record a territory membership", kicker: "PRO / CMO / ADMIN", action: "add_society_membership", submit: "Add membership",
+      fields: [
+        field("participantId", "Participant", "hidden", "", context.participantId),
+        field("participantSummary", "Participant", "text", "", [context.participantName, context.workTitle].filter(Boolean).join(" · "), "readonly"),
+        field("territory", "Territory", "text", "", "UK", "required maxlength=120"),
+        field("societyType", "Society type", "select", options(statusOptions.societyType, "pro")),
+        field("societyName", "Society or administrator", "text", "", "", "required maxlength=120"),
+        field("membershipIdentifier", "Membership / IPI / CAE reference", "text", "", "", "maxlength=120"),
+        field("membershipStatus", "Membership status", "select", options(statusOptions.membershipStatus, "research")),
+        field("notes", "Internal note", "textarea", "", "", "maxlength=4000 class=field-wide")
       ].join("")
     };
     if (kind === "income") return {
@@ -572,7 +633,12 @@
     }
     const formButton = event.target.closest("[data-open-form]");
     if (formButton) {
-      openForm(formButton.dataset.openForm, { workId: formButton.dataset.workId || "" });
+      openForm(formButton.dataset.openForm, {
+        workId: formButton.dataset.workId || "",
+        participantId: formButton.dataset.participantId || "",
+        participantName: formButton.dataset.participantName || "",
+        workTitle: formButton.dataset.workTitle || ""
+      });
       return;
     }
     const updateButton = event.target.closest("[data-update-record]");

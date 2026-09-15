@@ -92,6 +92,9 @@ assert.match(menuSource, /new Set\(MENU_STATUS_GROUP_TARGETS\.map\(target => tar
 assert.match(menuSource, /MENU_PRIMARY_WORKING_TARGET_ROUTES\.has\(target\.route\) && indicator\.status === 'green'/, "Main menu top status card must only list known working routes when they are green.");
 assert.match(menuSource, /ownerControlAccess && \(/, "Main menu must gate ATTENTION status visibility behind owner/team access.");
 assert.match(menuSource, /Attention now/, "Main menu must still include the ATTENTION status group for authorized users.");
+assert.match(menuSource, /attentionStatusCollapsed/, "The ATTENTION status group must keep a collapsible state.");
+assert.match(menuSource, /aria-controls="halo-menu-status-attention-content"/, "The ATTENTION status toggle must identify its collapsible content.");
+assert.match(menuSource, /hidden=\{attentionStatusCollapsed\}/, "The ATTENTION status content must respond to the collapse control.");
 assert.match(menuSource, /All working menu/, "Main menu must expose the WORKING status group.");
 assert.match(navigationCssSource, /\.halo-menu-route-status/, "Main menu status badge styling must exist.");
 assert.match(navigationCssSource, /\.halo-menu-status-label/, "Main menu status labels must be allowed to wrap visibly.");

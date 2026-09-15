@@ -1,0 +1,158 @@
+:root {
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background: #0f0b08;
+  color: #f4ede2;
+  font-family: "Manrope", "Inter", sans-serif;
+}
+
+a {
+  color: inherit;
+}
+
+.editor-shell {
+  width: min(1200px, 100% - 2rem);
+  margin: 0 auto;
+  padding: 1.5rem 0 2rem;
+}
+
+.editor-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem 1.5rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid rgba(255, 255, 255, .15);
+}
+
+.editor-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: .7rem;
+  text-decoration: none;
+}
+
+.editor-brand img {
+  width: 1.75rem;
+  height: 1.75rem;
+}
+
+.editor-brand strong {
+  display: block;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  font-size: .72rem;
+}
+
+.editor-brand small {
+  display: block;
+  color: #b5aa9d;
+  font-size: .62rem;
+  letter-spacing: .08em;
+}
+
+.editor-header nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .8rem 1.1rem;
+}
+
+.editor-header nav a {
+  text-decoration: none;
+  font-size: .72rem;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: #d7ccbd;
+}
+
+.editor-intro {
+  padding: 1.25rem 0;
+}
+
+.eyebrow {
+  margin: 0 0 .45rem;
+  color: #e8ba6d;
+  font-size: .66rem;
+  letter-spacing: .18em;
+  text-transform: uppercase;
+}
+
+.editor-intro h1 {
+  margin: 0;
+  font-size: clamp(1.8rem, 2.9vw, 2.8rem);
+}
+
+.editor-intro p {
+  margin: .75rem 0 0;
+  color: #ccbfae;
+  max-width: 52rem;
+}
+
+.editor-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .75rem;
+  margin-bottom: 1rem;
+}
+
+.tab-button {
+  border: 1px solid rgba(255,255,255,.2);
+  border-radius: 999px;
+  background: rgba(255,255,255,.04);
+  color: #e5d9c8;
+  padding: .65rem 1rem;
+  font-size: .75rem;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.tab-button.is-active {
+  border-color: #f0c982;
+  background: rgba(240, 201, 130, .17);
+  color: #fff8ec;
+}
+
+.editor-panel {
+  border: 1px solid rgba(255,255,255,.15);
+  border-radius: 1rem;
+  background: rgba(0,0,0,.2);
+  padding: .9rem;
+}
+
+.panel-copy {
+  margin: 0 0 .75rem;
+  font-size: .78rem;
+  letter-spacing: .03em;
+  color: #ccbfae;
+}
+
+.editor-panel iframe {
+  width: 100%;
+  min-height: 70vh;
+  border: 0;
+  border-radius: .8rem;
+  background: #100d0a;
+}
+
+@media (max-width: 760px) {
+  .editor-shell {
+    width: calc(100% - 1rem);
+    padding-top: 1rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tab-button {
+    transition: none;
+  }
+}

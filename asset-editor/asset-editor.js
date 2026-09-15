@@ -4,6 +4,7 @@
   const tabButtons = Array.from(document.querySelectorAll(".tab-button"));
   const panels = Array.from(document.querySelectorAll(".editor-panel"));
   const songCatalogFrame = document.getElementById("songCatalogFrame");
+  const releaseHouseFrame = document.getElementById("releaseHouseFrame");
   const tabMap = {
     songs: "songCatalogPanel",
     release: "releaseMetadataPanel"
@@ -14,6 +15,11 @@
     const url = new URL("/song-catalog/", window.location.origin);
     url.searchParams.set("parentOrigin", window.location.origin);
     songCatalogFrame.src = url.toString();
+  }
+
+  function setReleaseHouseSource() {
+    if (!releaseHouseFrame || releaseHouseFrame.src) return;
+    releaseHouseFrame.src = new URL("/release-house/", window.location.origin).toString();
   }
 
   function setActiveTab(panelId) {
@@ -34,12 +40,14 @@
     button.addEventListener("click", () => {
       setActiveTab(button.dataset.tabTarget);
       if (button.dataset.tabTarget === "songCatalogPanel") setSongCatalogSource();
+      if (button.dataset.tabTarget === "releaseMetadataPanel") setReleaseHouseSource();
     });
   });
 
   window.addEventListener("message", event => {
     if (event.origin !== window.location.origin) return;
     if (event.data?.type !== "halo-song-catalog-height") return;
+    if (event.source !== songCatalogFrame?.contentWindow) return;
     const height = Number(event.data.height || 0);
     if (!songCatalogFrame || !Number.isFinite(height) || height < 200) return;
     songCatalogFrame.style.height = `${Math.max(700, Math.round(height))}px`;
@@ -49,4 +57,5 @@
   const targetPanelId = tabMap[requestedTab] || "songCatalogPanel";
   setActiveTab(targetPanelId);
   setSongCatalogSource();
+  if (targetPanelId === "releaseMetadataPanel") setReleaseHouseSource();
 })();

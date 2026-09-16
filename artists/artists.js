@@ -322,6 +322,7 @@
     const artwork = page.artworkUrl || "/assets/halo-app-icon-512.png";
     const featuredUrl = page.websiteUrl && page.websiteUrl !== page.releaseUrl ? page.websiteUrl : "";
     const editChip = state.canEdit ? `<button class="edit-chip" id="editPageButton" type="button">Edit this room</button>` : "";
+    const artworkEditorChip = state.canEdit ? `<a class="edit-chip" href="/asset-editor/?surface=artists-release-artwork" target="_blank" rel="noopener">Edit in Asset Editor</a>` : "";
     const attachedVideos = state.videos || [];
     const featuredVideo = attachedVideos.find(video => video.featured) || attachedVideos[0];
     const videoStage = featuredVideo
@@ -356,7 +357,7 @@
             <span class="art-fallback" aria-hidden="true"><b>${escapeHtml((page.releaseTitle || page.artistName).slice(0, 1))}</b><small>HALO / permanent cover signal</small></span>
             <img src="${escapeHtml(artwork)}" alt="${escapeHtml(page.releaseTitle || page.artistName)} artwork" data-artwork-fallback="/assets/halo-app-icon-512.png">
           </div>
-          <div class="art-caption"><span>Current signal</span><strong>${escapeHtml(page.releaseTitle || page.artistName)}</strong><small>${formatDate(page.releaseDate)}</small></div>
+          <div class="art-caption"><span>Current signal</span><strong>${escapeHtml(page.releaseTitle || page.artistName)}</strong><small>${formatDate(page.releaseDate)}</small>${artworkEditorChip}</div>
           ${radioCardMarkup()}
         </div>
         <div class="hero-rail" aria-hidden="true"><span>Music</span><span>Visuals</span><span>Rooms</span><span>Contact</span></div>
@@ -754,7 +755,7 @@
     const status = String(form.get("status") || "draft");
     elements.catalogPreview.innerHTML = `<article class="catalog-preview-card">
       <div class="catalog-preview-art" data-artwork-frame><img src="${escapeHtml(artwork)}" alt="${escapeHtml(`${title || "Release"} cover preview`)}" data-artwork-fallback="/assets/halo-app-icon-512.png"><span>${status === "published" ? "Publishes to catalog" : "Draft only"}</span></div>
-      <div class="catalog-preview-copy"><div><div class="catalog-preview-meta"><span>${escapeHtml(formatDate(releaseDate))}</span><span>HALO release</span></div><h5>${escapeHtml(title || "Untitled release")}</h5><p class="catalog-preview-artist">${escapeHtml(artist || "Artist name")}</p>${tagline ? `<p>${escapeHtml(tagline)}</p>` : ""}</div><div class="catalog-preview-actions"><span>Listen now ↗</span><span>Release room</span></div></div>
+      <div class="catalog-preview-copy"><div><div class="catalog-preview-meta"><span>${escapeHtml(formatDate(releaseDate))}</span><span>HALO release</span></div><h5>${escapeHtml(title || "Untitled release")}</h5><p class="catalog-preview-artist">${escapeHtml(artist || "Artist name")}</p>${tagline ? `<p>${escapeHtml(tagline)}</p>` : ""}</div><div class="catalog-preview-actions"><span>Listen now ↗</span><a href="/asset-editor/?surface=artists-release-artwork" target="_blank" rel="noopener">Edit in Asset Editor ↗</a></div></div>
     </article>`;
     wireArtworkFallbacks(elements.catalogPreview);
   }

@@ -327,6 +327,16 @@ function renderCreationAssist(room) {
   </aside>`;
 }
 
+function renderAssetEditorAction(room) {
+  if (room.key === "identity") {
+    return `<div class="room-editor-action"><p>Need the shared artwork workspace?</p><a class="button button-paper" href="/asset-editor/?surface=release-house-artwork" target="_blank" rel="noopener">Edit in Asset Editor</a></div>`;
+  }
+  if (room.key === "metadata") {
+    return `<div class="room-editor-action"><p>Open the shared release metadata editor without leaving this workflow behind.</p><a class="button button-paper" href="/asset-editor/?surface=release-house-metadata" target="_blank" rel="noopener">Edit in Asset Editor</a></div>`;
+  }
+  return "";
+}
+
 function renderRoom() {
   const roomNumber = state.current.currentRoom;
   const room = rooms[roomNumber - 1];
@@ -341,6 +351,7 @@ function renderRoom() {
       <div class="lesson-card"><span>See it</span><strong>A concrete example</strong><p>${escapeHtml(room.example)}</p></div>
     </div>
     ${renderCreationAssist(room)}
+    ${renderAssetEditorAction(room)}
     <form class="room-form" id="activeRoomForm" novalidate>
       <div class="room-form-grid">${room.fields.map(field => renderField(room, field)).join("")}</div>
       <p class="room-validation" id="roomValidation" role="status"></p>

@@ -97,6 +97,20 @@ a {
   max-width: 52rem;
 }
 
+.editor-context {
+  display: inline-flex;
+  align-items: center;
+  gap: .45rem;
+  padding: .45rem .7rem;
+  border: 1px solid rgba(240, 201, 130, .3);
+  border-radius: 999px;
+  background: rgba(240, 201, 130, .1);
+  color: #fff1d6;
+  font-size: .72rem;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+ }
+
 .editor-tabs {
   display: flex;
   flex-wrap: wrap;

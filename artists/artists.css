@@ -543,7 +543,7 @@ dialog::backdrop { background: rgba(12, 13, 10, .82); backdrop-filter: blur(7px)
 .catalog-preview-copy p { margin: 0; font-size: 11px; line-height: 1.6; }
 .catalog-preview-copy .catalog-preview-artist { font-family: var(--mono); font-size: 9px; text-transform: uppercase; letter-spacing: .12em; }
 .catalog-preview-actions { display: flex; gap: 10px; }
-.catalog-preview-actions span { min-height: 38px; display: inline-flex; align-items: center; padding: 0 13px; border: 1px solid var(--ink); font-family: var(--mono); font-size: 8px; text-transform: uppercase; letter-spacing: .1em; }
+.catalog-preview-actions span, .catalog-preview-actions a { min-height: 38px; display: inline-flex; align-items: center; padding: 0 13px; border: 1px solid var(--ink); font-family: var(--mono); font-size: 8px; text-transform: uppercase; letter-spacing: .1em; text-decoration: none; }
 .catalog-preview-actions span:first-child { background: var(--ink); color: var(--paper); }
 .catalog-preview-empty { margin: 0; padding: 38px 25px; color: #72756d; font-size: 11px; line-height: 1.7; }
 .handle-field { display: flex; align-items: stretch; margin-top: 10px; border-bottom: 1px solid var(--ink); background: rgba(255,255,255,.18); }

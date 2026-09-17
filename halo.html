@@ -1293,6 +1293,7 @@
           { route: '/dreamweaver/', label: 'DREAMWEAVER EXPERIENCE' },
           { route: '/dreamweaver-lab/', label: 'DREAMWEAVER SONG LAB' },
           { route: '/album-concierge/', label: 'CREATE YOUR ALBUM' },
+          { route: '/toolost/', label: 'HALO DISTRIBUTION' },
           { route: '/finish-house/', label: 'FINISH HOUSE' },
           { route: '/magazine.html', label: 'HALO SIGNAL' },
           { route: '/support/', label: 'FEEDBACK DESK' }
@@ -3974,6 +3975,9 @@
                         <a href="/album-concierge/" data-stat-event="open_album_concierge" data-stat-target="header" data-signal="CREATE YOUR ALBUM">
                           <Icon name="heart" className="halo-menu-icon" /><span><strong>CREATE YOUR ALBUM {renderMenuStatusBadge('/album-concierge/', 'Create Your Album')}</strong><small>Album Concierge · premium, gift, and collector editions</small></span>
                         </a>
+                        <a href="/toolost/" data-stat-event="open_toolost_partner" data-stat-target="header" data-signal="HALO DISTRIBUTION">
+                          <Icon name="arrow-right" className="halo-menu-icon" /><span><strong>HALO DISTRIBUTION {renderMenuStatusBadge('/toolost/', 'HALO Distribution')}</strong><small>Toolost-powered partner route for release delivery</small></span>
+                        </a>
                         <a href="/finish-house/" data-stat-event="open_finish_house" data-stat-target="header" data-signal="MASTER + LICENSE">
                           <Icon name="check-circle" className="halo-menu-icon" /><span><strong>FINISH HOUSE {renderMenuStatusBadge('/finish-house/', 'Finish House')}</strong><small>Mix to master to licensing-ready package</small></span>
                         </a>
@@ -4364,6 +4368,40 @@
                             <span className="text-2xl leading-none">{icon}</span>
                             <strong className="text-[9px] font-black uppercase tracking-[.18em] text-[#cfa76a]">{title}</strong>
                             <p className="text-[11px] leading-5 text-[#6d6860]">{desc}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </section>
+
+                  <section className="relative overflow-hidden rounded-[2rem] border border-cyan-200/20 bg-[#090b10] shadow-[0_30px_90px_rgba(0,0,0,.38)]" aria-labelledby="toolost-promo-title">
+                    <div className="grid lg:grid-cols-[1.1fr_.9fr]">
+                      <div className="p-7 md:p-10 lg:border-r lg:border-cyan-200/10">
+                        <p className="text-[9px] font-black uppercase tracking-[.3em] text-cyan-200">Partner release route</p>
+                        <h2 id="toolost-promo-title" className="mt-5 font-sans-alt text-3xl font-black uppercase leading-[.9] tracking-[-.03em] text-white md:text-5xl">HALO Distribution<br/>powered by Toolost.</h2>
+                        <p className="mt-5 max-w-xl text-sm leading-7 text-[#bdd1df]">Enter a HALO-branded distribution surface, understand the handoff, and keep the release journey premium from preparation through delivery.</p>
+                        <p className="mt-3 max-w-2xl text-xs leading-6 text-[#7c90a2]">Prepare the release inside HALO, continue to Toolost when distributor-owned setup is required, and return to HALO for campaign, radio, and partner support.</p>
+                        <div className="mt-7 flex flex-wrap gap-3">
+                          <a href="/toolost/" data-stat-event="open_toolost_partner" data-stat-target="promo_section" className="inline-flex items-center gap-2 rounded-full bg-cyan-200 px-6 py-3 text-[10px] font-black uppercase tracking-[.16em] text-[#051017] transition hover:opacity-90">
+                            Open HALO Distribution
+                          </a>
+                          <a href="https://toolost.com" target="_blank" rel="noopener noreferrer" aria-describedby="toolostPromoNewTabNote" data-stat-event="continue_to_toolost" data-stat-target="promo_section_external" className="inline-flex items-center gap-2 rounded-full border border-cyan-200/30 px-6 py-3 text-[10px] font-black uppercase tracking-[.16em] text-cyan-100 transition hover:border-cyan-200/60">
+                            Continue on Toolost.com
+                          </a>
+                          <span id="toolostPromoNewTabNote" className="sr-only">Opens Toolost in a new tab.</span>
+                        </div>
+                        <p className="mt-4 text-[10px] uppercase tracking-[.18em] text-[#5d7386]">Toolost handles the official distributor-owned step. HALO keeps the guidance and brand shell around it.</p>
+                      </div>
+                      <div className="grid gap-px overflow-hidden border-t border-cyan-200/10 bg-cyan-200/10 lg:border-t-0">
+                        {[
+                          ['01', 'Prepare in HALO', 'Release House keeps metadata, artwork, credits, and launch timing organised before the distributor step.'],
+                          ['02', 'Handoff with clarity', 'Every CTA makes it explicit when you are leaving HALO and opening Toolost-owned functionality.'],
+                          ['03', 'Return with momentum', 'Campaign Studio, radio, and artist storytelling stay connected after delivery is live.']
+                        ].map(([index, title, desc]) => (
+                          <div key={title} className="flex flex-col gap-2 bg-[#0b1018]/85 p-6">
+                            <span className="text-[9px] font-black uppercase tracking-[.2em] text-cyan-200">{index}</span>
+                            <strong className="text-[11px] font-black uppercase tracking-[.18em] text-white">{title}</strong>
+                            <p className="text-[11px] leading-5 text-[#90a4b7]">{desc}</p>
                           </div>
                         ))}
                       </div>

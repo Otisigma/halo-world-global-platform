@@ -298,6 +298,7 @@ button { color: inherit; font: inherit; }
 .dock-copy small { margin-top: 3px; color: #9f978d; font: 500 8px/1 var(--mono); }
 .dock-share { min-height: 34px; padding: 0 14px; border: 1px solid rgba(255,255,255,.2); background: transparent; color: #d9d0c4; cursor: pointer; font: 600 8px/1 var(--mono); letter-spacing: .11em; text-transform: uppercase; }
 .dock-share:hover { border-color: var(--acid); color: var(--acid); }
+.dock-share:focus-visible { outline: 2px solid var(--acid); outline-offset: 2px; border-color: var(--acid); color: var(--acid); }
 .dock-version-switch { display: grid; grid-template-columns: 1fr 1fr; border: 1px solid rgba(255,255,255,.16); }
 .dock-version-switch[hidden] { display: none; }
 .dock-version-switch button { min-height: 34px; padding: 0 11px; border: 0; background: transparent; color: #9f978d; cursor: pointer; font: 600 7px/1 var(--mono); text-transform: uppercase; }
@@ -521,7 +522,7 @@ body > footer nav { display: flex; gap: 20px; font: 600 10px/1 var(--mono); text
   .package-includes ul { grid-template-columns: 1fr; }
   .week-grid { grid-template-columns: 1fr; }
   .week-grid li { min-height: 170px; }
-  .player-dock { right: 10px; bottom: 10px; left: 10px; grid-template-columns: auto 1fr auto; gap: 11px; padding: 10px; }
+  .player-dock { right: 10px; bottom: 10px; left: 10px; grid-template-columns: auto 1fr auto auto; gap: 11px; padding: 10px; }
   .dock-share { min-height: 30px; padding: 0 10px; }
   .dock-progress { display: none; }
   .dock-version-switch { grid-column: 1 / -1; width: 100%; }

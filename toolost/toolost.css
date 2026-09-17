@@ -206,7 +206,7 @@ a { color: inherit; }
 .toolost-route-grid a:focus-visible {
   outline: 2px solid var(--toolost-cool);
   outline-offset: 4px;
-  opacity: 1;
+  opacity: 0.92;
 }
 
 .toolost-button-primary {

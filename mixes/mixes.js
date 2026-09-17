@@ -6,6 +6,10 @@
   const heroPlay = document.querySelector("#heroPlay");
   const heroShare = document.querySelector("#heroShare");
   const mixShareStatus = document.querySelector("#mixShareStatus");
+  const mixShareDialog = document.querySelector("#mixShareDialog");
+  const mixShareLink = document.querySelector("#mixShareLink");
+  const mixShareCopy = document.querySelector("#mixShareCopy");
+  const mixShareOpen = document.querySelector("#mixShareOpen");
   const mixRail = document.querySelector("#mixRail");
   const episodeStage = document.querySelector("#episodeStage");
   const checkoutStatus = document.querySelector("#checkoutStatus");
@@ -122,6 +126,22 @@
     field.remove();
   }
 
+  function openDialog(dialog) {
+    if (!dialog) return false;
+    if (typeof dialog.showModal === "function") {
+      if (!dialog.open) dialog.showModal();
+      return true;
+    }
+    dialog.setAttribute("open", "open");
+    return true;
+  }
+
+  function closeDialog(dialog) {
+    if (!dialog) return;
+    if (typeof dialog.close === "function") dialog.close();
+    else dialog.removeAttribute("open");
+  }
+
   function mixSharePayload(mix) {
     const url = new URL("/mixes/", location.origin);
     if (mix?.id) url.searchParams.set("mix", mix.id);
@@ -134,8 +154,35 @@
     };
   }
 
+  function syncMixUrl(mix = state.selectedMix) {
+    const url = new URL(location.href);
+    if (mix?.id) url.searchParams.set("mix", mix.id);
+    else url.searchParams.delete("mix");
+    window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
+  }
+
+  function selectMix(mix, options = {}) {
+    const { syncUrl = true } = options;
+    state.selectedMix = mix || null;
+    renderFeatured();
+    renderMixes();
+    renderEdition();
+    if (syncUrl) syncMixUrl(state.selectedMix);
+  }
+
+  function hydrateMixShareDialog(payload, mix) {
+    if (mixShareLink) mixShareLink.value = payload.url;
+    if (mixShareOpen) mixShareOpen.href = payload.url;
+    document.querySelector("#mixShareTitle").innerHTML = mix ? `SEND ${escapeHtml(mix.title)}<br>FORWARD.` : "SEND THIS<br>MIX FORWARD.";
+    document.querySelector("#mixShareDescription").textContent = mix
+      ? `Use the direct HALO X link to bring listeners back to ${mix.title} and keep this exact long-play session in focus.`
+      : "Use the direct HALO X link to bring listeners back to this long-play world and the station around it.";
+  }
+
   async function shareMix(mix = state.activeMix || state.featuredMix) {
+    if (mix) selectMix(mix);
     const payload = mixSharePayload(mix);
+    hydrateMixShareDialog(payload, mix);
     let method = "clipboard";
     try {
       const canUseNativeShare = typeof navigator.share === "function"
@@ -144,8 +191,10 @@
         await navigator.share(payload);
         method = "share_sheet";
         setMixShareStatus("Mix link shared.", "success");
+        closeDialog(mixShareDialog);
       } else {
         await copyShareLink(payload.url);
+        openDialog(mixShareDialog);
         setMixShareStatus("Mix link copied. Ready to share.", "success");
       }
     } catch (error) {
@@ -153,10 +202,12 @@
       try {
         await copyShareLink(payload.url);
         method = "clipboard_fallback";
+        openDialog(mixShareDialog);
         setMixShareStatus("Mix link copied. Ready to share.", "success");
       } catch {
-        setMixShareStatus("Share unavailable. Copying was blocked.", "error");
-        return;
+        method = "manual_fallback";
+        openDialog(mixShareDialog);
+        setMixShareStatus("Copy was blocked. Use the mix share card.", "error");
       }
     }
     window.haloStats?.track("share_halo_x_mix", { method, mix_id: mix?.id || "", mix_title: mix?.title || "HALO X Mixes", target: "mix_page" });
@@ -362,13 +413,13 @@
     }
     mixRail.innerHTML = sorted.map((mix, index) => {
       const initials = (mix.title || "HX").split(/\s+/).slice(0, 2).map(word => word[0]).join("");
-      return `<article class="mix-card">
+      return `<article class="mix-card${state.selectedMix?.id === mix.id ? " is-featured" : ""}">
         <div class="mix-card-index"><span>HX / ${String(index + 1).padStart(2, "0")}</span><span>${escapeHtml(mix.creator?.badge || "Long Play")}</span></div>
         <div class="mix-art"><img src="${escapeHtml(safeArtwork(mix.artworkUrl, artworkPool[index % artworkPool.length]))}" alt="${escapeHtml(`${mix.title} artwork`)}" loading="lazy" data-mix-artwork><strong>${escapeHtml(initials)}</strong></div>
         <h3>${escapeHtml(mix.title)}</h3>
         <p>${escapeHtml(mix.description || "A full-length HALO room session, left intact from first transition to final handoff.")}</p>
         ${mix.hasOriginalComparison ? `<div class="mix-version-compare"><span>Hear the difference</span><div><button type="button" data-compare-version="original" data-compare-id="${escapeHtml(mix.id)}">Original</button><button type="button" data-compare-version="mastered" data-compare-id="${escapeHtml(mix.id)}">Mastered remix</button></div><small>Switches at the same timestamp for a direct A/B check.</small></div>` : ""}
-        <footer><span>${escapeHtml(mix.credits?.originalArtist || mix.creator?.name || "Owen Anthony")} · ${escapeHtml(mix.credits?.remixer || "DJ HALO X")}<br>${escapeHtml(mixMeta(mix))}</span><span class="mix-card-actions">${mix.salesPageUrl ? `<a href="${escapeHtml(mix.salesPageUrl)}">Sales page</a>` : ""}${mix.isOwner ? `<button class="mix-delete" type="button" data-delete-mix="${escapeHtml(mix.id)}" aria-label="Delete ${escapeHtml(mix.title)}">Delete</button>` : ""}<button class="mix-play" type="button" data-mix-id="${escapeHtml(mix.id)}" aria-label="${mix.source === "youtube" ? "Watch" : "Play"} ${escapeHtml(mix.title)}"></button></span></footer>
+        <footer><span>${escapeHtml(mix.credits?.originalArtist || mix.creator?.name || "Owen Anthony")} · ${escapeHtml(mix.credits?.remixer || "DJ HALO X")}<br>${escapeHtml(mixMeta(mix))}</span><span class="mix-card-actions">${mix.salesPageUrl ? `<a href="${escapeHtml(mix.salesPageUrl)}">Sales page</a>` : ""}<button class="mix-share" type="button" data-share-mix="${escapeHtml(mix.id)}" aria-label="Share ${escapeHtml(mix.title)}">Share</button>${mix.isOwner ? `<button class="mix-delete" type="button" data-delete-mix="${escapeHtml(mix.id)}" aria-label="Delete ${escapeHtml(mix.title)}">Delete</button>` : ""}<button class="mix-play" type="button" data-mix-id="${escapeHtml(mix.id)}" aria-label="${mix.source === "youtube" ? "Watch" : "Play"} ${escapeHtml(mix.title)}"></button></span></footer>
       </article>`;
     }).join("");
     bindArtworkFallbacks(mixRail);
@@ -704,6 +755,7 @@
       window.location.href = "/radio/";
       return;
     }
+    selectMix(mix);
     if (mix.source === "youtube" || (!mix.audioUrl && mix.videoUrl)) {
       window.open(mix.videoUrl, "_blank", "noopener,noreferrer");
       window.haloStats?.track("open_halo_x_long_play", { mix_id: mix.id, source: "youtube" });
@@ -737,6 +789,7 @@
 
   async function switchMixVersion(mix, version) {
     if (!mix?.hasOriginalComparison || !["original", "mastered"].includes(version)) return;
+    selectMix(mix);
     const nextSource = version === "original" ? mix.originalAudioUrl : mix.audioUrl;
     const sameMix = state.activeMix?.id === mix.id;
     const currentTime = sameMix && Number.isFinite(audio.currentTime) ? audio.currentTime : 0;
@@ -781,6 +834,11 @@
   heroPlay.addEventListener("click", () => playMix(state.featuredMix));
   heroShare.addEventListener("click", () => shareMix(state.featuredMix));
   mixRail.addEventListener("click", event => {
+    const shareButton = event.target.closest("[data-share-mix]");
+    if (shareButton) {
+      shareMix(state.mixes.find(m => m.id === shareButton.dataset.shareMix) || null);
+      return;
+    }
     const deleteButton = event.target.closest("[data-delete-mix]");
     if (deleteButton) {
       deleteMix(deleteButton.dataset.deleteMix);
@@ -814,6 +872,21 @@
     event.currentTarget.setAttribute("aria-label", audio.paused ? "Play mix" : "Pause mix");
   });
   dockShare.addEventListener("click", () => shareMix(state.activeMix || state.featuredMix));
+  document.querySelector("[data-action=close-mix-share]")?.addEventListener("click", () => closeDialog(mixShareDialog));
+  mixShareCopy?.addEventListener("click", async () => {
+    const mix = state.selectedMix || state.activeMix || state.featuredMix;
+    const payload = mixSharePayload(mix);
+    hydrateMixShareDialog(payload, mix);
+    try {
+      await copyShareLink(payload.url);
+      setMixShareStatus("Mix link copied. Ready to share.", "success");
+    } catch {
+      setMixShareStatus("Copy was blocked. Select the link manually.", "error");
+      mixShareLink?.focus();
+      mixShareLink?.select?.();
+    }
+  });
+  mixShareLink?.addEventListener("focus", event => event.currentTarget.select());
   audio.addEventListener("play", () => {
     heroRecord.classList.add("is-playing");
     document.querySelector("#dockToggle").classList.remove("is-paused");

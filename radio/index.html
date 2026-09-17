@@ -361,6 +361,21 @@
   <audio id="stationAudio" preload="auto"></audio>
   <audio id="standbyAudio" preload="auto"></audio>
 
+  <dialog class="share-dialog" id="stationShareDialog">
+    <div class="share-dialog-shell">
+      <button class="dialog-close" type="button" data-action="close-station-share" aria-label="Close station share">×</button>
+      <p class="eyebrow">Share the signal</p>
+      <h2 id="stationShareTitle">SEND THE<br>LONG-PLAY STATION.</h2>
+      <p id="stationShareDescription">Give listeners the direct HALO Radio landing page for uninterrupted playback, long-play video recovery, and a clean route back to the station.</p>
+      <label class="share-link-field"><span>Direct station link</span><input id="stationShareLink" type="text" readonly></label>
+      <div class="share-dialog-actions">
+        <button class="primary-button share-copy-button" id="stationShareCopy" type="button">Copy link <span>↗</span></button>
+        <a class="outline-button share-open-link" id="stationShareOpen" href="/radio/" target="_blank" rel="noopener noreferrer">Open station page</a>
+      </div>
+      <p class="share-dialog-note">Built for continuous listening, share sheets, and message-ready copy-link fallback.</p>
+    </div>
+  </dialog>
+
   <dialog class="auth-dialog" id="authDialog">
     <form method="dialog" class="dialog-shell" id="authForm">
       <button class="dialog-close" type="button" data-action="close-auth" aria-label="Close">×</button>

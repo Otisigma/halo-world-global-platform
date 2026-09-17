@@ -154,20 +154,25 @@
     };
   }
 
-  function syncMixUrl(mix = state.selectedMix) {
+  function syncMixUrl(mix = state.selectedMix, options = {}) {
+    const { historyMode = "replace" } = options;
     const url = new URL(location.href);
+    const currentMixId = new URLSearchParams(location.search).get("mix") || "";
+    const nextMixId = mix?.id || "";
     if (mix?.id) url.searchParams.set("mix", mix.id);
     else url.searchParams.delete("mix");
-    window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
+    const nextLocation = `${url.pathname}${url.search}${url.hash}`;
+    if (historyMode === "push" && currentMixId !== nextMixId) window.history.pushState({}, "", nextLocation);
+    else window.history.replaceState({}, "", nextLocation);
   }
 
   function selectMix(mix, options = {}) {
-    const { syncUrl = true } = options;
+    const { syncUrl = true, syncMethod = "replace" } = options;
     state.selectedMix = mix || null;
     renderFeatured();
     renderMixes();
     renderEdition();
-    if (syncUrl) syncMixUrl(state.selectedMix);
+    if (syncUrl) syncMixUrl(state.selectedMix, { historyMode: syncMethod });
   }
 
   function selectMixFromLocation(options = {}) {
@@ -180,14 +185,17 @@
   function hydrateMixShareDialog(payload, mix) {
     if (mixShareLink) mixShareLink.value = payload.url;
     if (mixShareOpen) mixShareOpen.href = payload.url;
-    document.querySelector("#mixShareTitle").innerHTML = mix ? `SEND ${escapeHtml(mix.title)}<br>FORWARD.` : "SEND THIS<br>MIX FORWARD.";
+    const titleLead = document.querySelector("#mixShareTitleLead");
+    const titleName = document.querySelector("#mixShareTitleName");
+    if (titleLead) titleLead.textContent = mix ? "SEND" : "SEND THIS";
+    if (titleName) titleName.textContent = mix ? `${mix.title} FORWARD.` : "MIX FORWARD.";
     document.querySelector("#mixShareDescription").textContent = mix
       ? `Use the direct HALO X link to bring listeners back to ${mix.title} and keep this exact long-play session in focus.`
       : "Use the direct HALO X link to bring listeners back to this long-play world and the station around it.";
   }
 
   async function shareMix(mix = state.activeMix || state.featuredMix) {
-    if (mix) selectMix(mix);
+    if (mix) selectMix(mix, { syncMethod: "push" });
     const payload = mixSharePayload(mix);
     hydrateMixShareDialog(payload, mix);
     let method = "clipboard";
@@ -762,7 +770,7 @@
       window.location.href = "/radio/";
       return;
     }
-    selectMix(mix);
+    selectMix(mix, { syncMethod: "push" });
     if (mix.source === "youtube" || (!mix.audioUrl && mix.videoUrl)) {
       window.open(mix.videoUrl, "_blank", "noopener,noreferrer");
       window.haloStats?.track("open_halo_x_long_play", { mix_id: mix.id, source: "youtube" });
@@ -796,7 +804,7 @@
 
   async function switchMixVersion(mix, version) {
     if (!mix?.hasOriginalComparison || !["original", "mastered"].includes(version)) return;
-    selectMix(mix);
+    selectMix(mix, { syncMethod: "push" });
     const nextSource = version === "original" ? mix.originalAudioUrl : mix.audioUrl;
     const sameMix = state.activeMix?.id === mix.id;
     const currentTime = sameMix && Number.isFinite(audio.currentTime) ? audio.currentTime : 0;

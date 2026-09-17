@@ -76,6 +76,8 @@ const roomGrid = document.querySelector("#roomGrid");
 const previewGrid = document.querySelector("#previewGrid");
 const previewPlaybackStatus = document.querySelector("#previewPlaybackStatus");
 const mainPlayButton = document.querySelector("#mainPlayButton");
+const stationShareButton = document.querySelector("#stationShareButton");
+const stationShareStatus = document.querySelector("#stationShareStatus");
 const accountButton = document.querySelector("#accountButton");
 const authDialog = document.querySelector("#authDialog");
 const authForm = document.querySelector("#authForm");
@@ -194,6 +196,65 @@ function formatScheduleDate(value) {
     day: date.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" }),
     time: date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })
   };
+}
+
+function setStationShareStatus(message, state = "") {
+  if (!stationShareStatus) return;
+  stationShareStatus.textContent = message || "";
+  if (state) stationShareStatus.dataset.state = state;
+  else delete stationShareStatus.dataset.state;
+}
+
+async function copyShareLink(value) {
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(value);
+    return;
+  }
+  const field = document.createElement("textarea");
+  field.value = value;
+  field.style.position = "fixed";
+  field.style.opacity = "0";
+  document.body.append(field);
+  field.select();
+  document.execCommand("copy");
+  field.remove();
+}
+
+function stationSharePayload() {
+  const url = new URL("/radio/", location.origin);
+  return {
+    title: "HALO Radio — nonstop creator long play",
+    text: "Tune into HALO Radio for continuous long-play sessions and creator-owned broadcasts.",
+    url: url.href
+  };
+}
+
+async function shareStation() {
+  const payload = stationSharePayload();
+  let method = "clipboard";
+  try {
+    const canUseNativeShare = typeof navigator.share === "function"
+      && (typeof navigator.canShare !== "function" || navigator.canShare(payload));
+    if (canUseNativeShare) {
+      await navigator.share(payload);
+      method = "share_sheet";
+      setStationShareStatus("Station link shared.", "success");
+    } else {
+      await copyShareLink(payload.url);
+      setStationShareStatus("Station link copied. Ready to share.", "success");
+    }
+  } catch (error) {
+    if (error?.name === "AbortError") return;
+    try {
+      await copyShareLink(payload.url);
+      method = "clipboard_fallback";
+      setStationShareStatus("Station link copied. Ready to share.", "success");
+    } catch {
+      setStationShareStatus("Share unavailable. Copying was blocked.", "error");
+      return;
+    }
+  }
+  window.haloStats?.track("share_halo_radio_station", { method, room: state.activeRoom, target: "station_landing" });
 }
 
 function selectedRelease() {
@@ -2560,6 +2621,7 @@ roomGrid.addEventListener("click", event => {
 });
 document.querySelectorAll("[data-action=play-current]").forEach(button => button.addEventListener("click", toggleCurrentPlayback));
 mainPlayButton.addEventListener("click", toggleCurrentPlayback);
+stationShareButton?.addEventListener("click", shareStation);
 previousMixButton.addEventListener("click", () => stepLongPlay(-1));
 nextMixButton.addEventListener("click", () => stepLongPlay(1));
 manualTakeoverButton?.addEventListener("click", toggleManualTakeover);

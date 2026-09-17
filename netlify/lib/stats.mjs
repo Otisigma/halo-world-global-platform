@@ -141,6 +141,8 @@ export const allowedEvents = new Set([
   "queue_track",
   "radio_heartbeat",
   "radio_skip",
+  "share_halo_radio_station",
+  "share_halo_x_mix",
   "radio_tune_in",
   "radio_tune_out",
   "release_campaign_saved",

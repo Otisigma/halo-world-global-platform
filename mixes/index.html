@@ -57,6 +57,7 @@
         <p class="hero-intro">The story, pressure and decisions behind the set—then the uninterrupted version, exactly as it was meant to move.</p>
         <div class="hero-actions">
           <button class="primary-action" id="heroPlay" type="button" disabled>Loading latest mix</button>
+          <button class="secondary-action" id="heroShare" type="button" disabled>Share mix</button>
           <a class="text-action" href="#series">Watch the series <span>↘</span></a>
         </div>
         <div class="hero-note">
@@ -64,6 +65,7 @@
           <strong>Road to the Worlds</strong>
           <p>Regional rooms. Global ambition. Every episode leaves a new signal behind.</p>
         </div>
+        <p class="share-feedback" id="mixShareStatus" role="status" aria-live="polite"></p>
       </div>
 
       <div class="hero-record" id="heroRecord" aria-live="polite">
@@ -421,6 +423,7 @@
   <aside class="player-dock" id="playerDock" aria-label="HALO X mix player" hidden>
     <button class="dock-toggle" id="dockToggle" type="button" aria-label="Pause mix"><span></span></button>
     <div class="dock-copy"><span>Now transmitting</span><strong id="dockTitle">HALO X Mix</strong><small id="dockCreator">DJ HALO X</small></div>
+    <button class="dock-share" id="dockShare" type="button">Share</button>
     <div class="dock-version-switch" id="dockVersionSwitch" aria-label="Compare audio versions" hidden><button type="button" data-dock-version="original">Original</button><button class="is-active" type="button" data-dock-version="mastered">Mastered</button></div>
     <div class="dock-progress"><span id="dockProgress"></span></div>
     <time id="dockTime">00:00 / 00:00</time>

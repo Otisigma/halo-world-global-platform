@@ -78,6 +78,10 @@ const previewPlaybackStatus = document.querySelector("#previewPlaybackStatus");
 const mainPlayButton = document.querySelector("#mainPlayButton");
 const stationShareButton = document.querySelector("#stationShareButton");
 const stationShareStatus = document.querySelector("#stationShareStatus");
+const stationShareDialog = document.querySelector("#stationShareDialog");
+const stationShareLink = document.querySelector("#stationShareLink");
+const stationShareCopy = document.querySelector("#stationShareCopy");
+const stationShareOpen = document.querySelector("#stationShareOpen");
 const accountButton = document.querySelector("#accountButton");
 const authDialog = document.querySelector("#authDialog");
 const authForm = document.querySelector("#authForm");
@@ -220,6 +224,22 @@ async function copyShareLink(value) {
   field.remove();
 }
 
+function openDialog(dialog) {
+  if (!dialog) return false;
+  if (typeof dialog.showModal === "function") {
+    if (!dialog.open) dialog.showModal();
+    return true;
+  }
+  dialog.setAttribute("open", "open");
+  return true;
+}
+
+function closeDialog(dialog) {
+  if (!dialog) return;
+  if (typeof dialog.close === "function") dialog.close();
+  else dialog.removeAttribute("open");
+}
+
 function stationSharePayload() {
   const url = new URL("/radio/", location.origin);
   return {
@@ -229,8 +249,14 @@ function stationSharePayload() {
   };
 }
 
+function hydrateStationShareDialog(payload) {
+  if (stationShareLink) stationShareLink.value = payload.url;
+  if (stationShareOpen) stationShareOpen.href = payload.url;
+}
+
 async function shareStation() {
   const payload = stationSharePayload();
+  hydrateStationShareDialog(payload);
   let method = "clipboard";
   try {
     const canUseNativeShare = typeof navigator.share === "function"
@@ -239,8 +265,10 @@ async function shareStation() {
       await navigator.share(payload);
       method = "share_sheet";
       setStationShareStatus("Station link shared.", "success");
+      closeDialog(stationShareDialog);
     } else {
       await copyShareLink(payload.url);
+      openDialog(stationShareDialog);
       setStationShareStatus("Station link copied. Ready to share.", "success");
     }
   } catch (error) {
@@ -248,10 +276,12 @@ async function shareStation() {
     try {
       await copyShareLink(payload.url);
       method = "clipboard_fallback";
+      openDialog(stationShareDialog);
       setStationShareStatus("Station link copied. Ready to share.", "success");
     } catch {
-      setStationShareStatus("Share unavailable. Copying was blocked.", "error");
-      return;
+      method = "manual_fallback";
+      openDialog(stationShareDialog);
+      setStationShareStatus("Copy was blocked. Use the station share card.", "error");
     }
   }
   window.haloStats?.track("share_halo_radio_station", { method, room: state.activeRoom, target: "station_landing" });
@@ -2750,6 +2780,7 @@ accountButton.addEventListener("click", async () => {
   loadMixes();
 });
 document.querySelector("[data-action=close-auth]").addEventListener("click", () => authDialog.close());
+document.querySelector("[data-action=close-station-share]")?.addEventListener("click", () => closeDialog(stationShareDialog));
 document.querySelector("[data-action=close-track-editor]").addEventListener("click", () => trackEditorDialog.close());
 document.querySelector("[data-action=delete-track]").addEventListener("click", deleteTrackUpload);
 trackEditorForm.elements.linkedTrackId.addEventListener("change", event => {
@@ -2771,6 +2802,19 @@ document.querySelectorAll("[data-gemma-action]").forEach(button => button.addEve
 document.querySelector("#authSwitch").addEventListener("click", () => setAuthMode(state.authMode === "login" ? "signup" : "login"));
 authForm.addEventListener("submit", handleAuth);
 trackEditorForm.addEventListener("submit", saveTrackEdits);
+stationShareCopy?.addEventListener("click", async () => {
+  const payload = stationSharePayload();
+  hydrateStationShareDialog(payload);
+  try {
+    await copyShareLink(payload.url);
+    setStationShareStatus("Station link copied. Ready to share.", "success");
+  } catch {
+    setStationShareStatus("Copy was blocked. Select the link manually.", "error");
+    stationShareLink?.focus();
+    stationShareLink?.select?.();
+  }
+});
+stationShareLink?.addEventListener("focus", event => event.currentTarget.select());
 submissionForm.addEventListener("submit", submitTrack);
 bulkUploadForm.addEventListener("submit", submitBulkTracks);
 showForm.addEventListener("submit", event => submitDeskForm(event, "save_show").catch(() => {}));

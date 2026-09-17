@@ -423,12 +423,27 @@
   <aside class="player-dock" id="playerDock" aria-label="HALO X mix player" hidden>
     <button class="dock-toggle" id="dockToggle" type="button" aria-label="Pause mix"><span></span></button>
     <div class="dock-copy"><span>Now transmitting</span><strong id="dockTitle">HALO X Mix</strong><small id="dockCreator">DJ HALO X</small></div>
-    <button class="dock-share" id="dockShare" type="button">Share</button>
+    <button class="dock-share" id="dockShare" type="button">Share mix</button>
     <div class="dock-version-switch" id="dockVersionSwitch" aria-label="Compare audio versions" hidden><button type="button" data-dock-version="original">Original</button><button class="is-active" type="button" data-dock-version="mastered">Mastered</button></div>
     <div class="dock-progress"><span id="dockProgress"></span></div>
     <time id="dockTime">00:00 / 00:00</time>
     <audio id="mixAudio" preload="metadata"></audio>
   </aside>
+
+  <dialog class="mix-share-dialog" id="mixShareDialog">
+    <div class="mix-share-shell">
+      <button class="mix-share-close" type="button" data-action="close-mix-share" aria-label="Close mix share">×</button>
+      <p class="section-code">Share the exact version</p>
+      <h2 id="mixShareTitle"><span id="mixShareTitleLead">SEND THIS</span><span id="mixShareTitleName">MIX FORWARD.</span></h2>
+      <p id="mixShareDescription">Use the direct HALO X link to bring listeners back to this exact long-play mix and the station world around it.</p>
+      <label class="mix-share-field"><span>Direct mix link</span><input id="mixShareLink" type="text" readonly aria-label="Direct mix link"></label>
+      <div class="mix-share-actions">
+        <button class="edition-button" id="mixShareCopy" type="button">Copy link</button>
+        <a class="mix-share-open" id="mixShareOpen" href="/mixes/" target="_blank" rel="noopener noreferrer">Open mix page ↗</a>
+      </div>
+      <p class="mix-share-note">Best for uninterrupted listening, long-play video handoffs, and return visits into HALO.</p>
+    </div>
+  </dialog>
 
   <footer>
     <a class="footer-brand" href="/halo"><img class="halo-brand-image halo-brand-image--small" src="/assets/halo-logo-mark.webp" alt=""><span>HALO X MIXES</span></a>

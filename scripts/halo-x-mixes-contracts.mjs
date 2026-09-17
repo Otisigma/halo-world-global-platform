@@ -55,8 +55,8 @@ const checks = [
   [deck.includes('{ id: "mixOperations", label: "Mix operations rack" }') && deck.includes('id="packageFocusMode"') && deck.includes("[elements.focusMode, elements.packageFocusMode]"), "keeps the rack collapsible and recoverable from desk-only mode on every screen size"],
   [script.includes('data-delete-mix') && api.includes('payload.action === "delete"') && api.includes("member_id = ${membership.member_id}") && api.includes("Mix deleted"), "lets artists delete their own mix uploads with ownership enforcement"],
   [deck.includes('id="mixReleaseProgress"') && deck.includes("HaloUploadProgress") && uploadHelper.includes("uploadChunkedFile"), "shows live upload progress for DJ deck mix publishing"],
-  [page.includes('id="heroShare"') && page.includes('id="mixShareStatus"') && page.includes('id="dockShare"'), "adds visible mix share controls in hero and dock"],
-  [script.includes("shareMix(") && script.includes("navigator.share") && script.includes('url.searchParams.set("mix", mix.id)'), "preserves mix deep links and supports native sharing"],
+  [page.includes('id="heroShare"') && page.includes('id="mixShareStatus"') && page.includes('id="dockShare"') && page.includes('id="mixShareDialog"'), "adds visible mix share controls in hero, dock, and fallback share card"],
+  [script.includes("shareMix(") && script.includes("navigator.share") && script.includes('url.searchParams.set("mix", mix.id)') && script.includes('data-share-mix="${escapeHtml(mix.id)}"') && script.includes("window.history.pushState") && script.includes("window.history.replaceState"), "preserves mix deep links and supports native sharing from library cards"],
   [script.includes('window.haloStats?.track("share_halo_x_mix"') && script.includes('target: "mix_page"'), "tracks mix sharing analytics with method and mix context"]
 ];
 

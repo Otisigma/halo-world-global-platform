@@ -57,6 +57,19 @@ h1 em { color: var(--signal); font-style: normal; transition: color 400ms ease; 
 .share-feedback { min-height: 18px; margin: 14px 0 0; color: #bdb8ad; font: 700 9px/1.4 monospace; letter-spacing: .08em; text-transform: uppercase; }
 .share-feedback[data-state="success"] { color: var(--signal); }
 .share-feedback[data-state="error"] { color: #ff8f81; }
+.share-dialog { width: min(92vw, 560px); padding: 0; border: 1px solid color-mix(in srgb, var(--signal) 40%, #312f29); background: #090907; color: var(--paper); box-shadow: 0 42px 140px rgba(0,0,0,.72); }
+.share-dialog::backdrop { background: rgba(0,0,0,.82); backdrop-filter: blur(12px); }
+.share-dialog-shell { position: relative; display: grid; gap: 18px; padding: clamp(26px, 4vw, 38px); }
+.share-dialog-shell h2 { font-size: clamp(38px, 7vw, 62px); line-height: .82; letter-spacing: -.07em; }
+.share-dialog-shell > p:not(.eyebrow) { margin: 0; color: var(--muted); font-size: 14px; line-height: 1.65; }
+.share-link-field { display: grid; gap: 8px; }
+.share-link-field span, .share-dialog-note { font: 700 9px/1.4 monospace; letter-spacing: .08em; text-transform: uppercase; }
+.share-link-field input { width: 100%; border: 1px solid #313028; background: #12120f; color: var(--paper); padding: 14px 16px; }
+.share-dialog-actions { display: flex; flex-wrap: wrap; gap: 12px; }
+.share-copy-button { min-height: 48px; }
+.share-open-link { display: inline-flex; min-height: 48px; align-items: center; justify-content: center; color: #e8e3d8; }
+.share-open-link:hover { border-color: var(--signal); color: var(--signal); }
+.share-dialog-note { color: var(--signal); }
 .hero-orbit { position: relative; z-index: 2; width: min(42vw, 590px); aspect-ratio: 1; justify-self: end; }
 .orbit-ring { position: absolute; border: 1px solid var(--line); border-radius: 50%; }
 .ring-one { inset: 7%; animation: spin 26s linear infinite; }

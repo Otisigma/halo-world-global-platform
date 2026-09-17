@@ -233,7 +233,9 @@ async function shareStation() {
   const payload = stationSharePayload();
   let method = "clipboard";
   try {
-    if (typeof navigator.share === "function") {
+    const canUseNativeShare = typeof navigator.share === "function"
+      && (typeof navigator.canShare !== "function" || navigator.canShare(payload));
+    if (canUseNativeShare) {
       await navigator.share(payload);
       method = "share_sheet";
       setStationShareStatus("Station link shared.", "success");

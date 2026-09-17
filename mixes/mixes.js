@@ -4,6 +4,8 @@
   const playerDock = document.querySelector("#playerDock");
   const heroRecord = document.querySelector("#heroRecord");
   const heroPlay = document.querySelector("#heroPlay");
+  const heroShare = document.querySelector("#heroShare");
+  const mixShareStatus = document.querySelector("#mixShareStatus");
   const mixRail = document.querySelector("#mixRail");
   const episodeStage = document.querySelector("#episodeStage");
   const checkoutStatus = document.querySelector("#checkoutStatus");
@@ -45,6 +47,7 @@
   const visualScreenMedia = document.querySelector("#visualScreenMedia");
   const visualScreenLogo = document.querySelector("#visualScreenLogo");
   const dockVersionSwitch = document.querySelector("#dockVersionSwitch");
+  const dockShare = document.querySelector("#dockShare");
   const artworkPool = ["/assets/releases/salty.jpg", "/assets/releases/the-cold-is-lasting-longer.jpg", "/assets/releases/hit-that-beat.webp"];
   const fallbackArtwork = artworkPool[0];
   const reviewAreaLabels = { creative_intent: "Creative intent", technical_sound: "Technical sound", transitions_breaks: "Transitions & breaks", audience_programming: "Audience & programming", rights_credits: "Rights & credits", release_readiness: "Release readiness" };
@@ -94,6 +97,59 @@
       return ["http:", "https:"].includes(url.protocol) ? url.href : "";
     } catch {
       return "";
+    }
+  }
+
+  function setMixShareStatus(message, state = "") {
+    if (!mixShareStatus) return;
+    mixShareStatus.textContent = message || "";
+    if (state) mixShareStatus.dataset.state = state;
+    else delete mixShareStatus.dataset.state;
+  }
+
+  async function copyShareLink(value) {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(value);
+      return;
+    }
+    const field = document.createElement("textarea");
+    field.value = value;
+    field.style.position = "fixed";
+    field.style.opacity = "0";
+    document.body.append(field);
+    field.select();
+    document.execCommand("copy");
+    field.remove();
+  }
+
+  function mixSharePayload(mix) {
+    const url = new URL("/mixes/", location.origin);
+    if (mix?.id) url.searchParams.set("mix", mix.id);
+    return {
+      title: mix ? `${mix.title} · HALO X Mixes` : "HALO X Mixes",
+      text: mix
+        ? `Listen to ${mix.title} on HALO X Mixes and keep the long-play session moving.`
+        : "Stream uninterrupted long-play sessions on HALO X Mixes.",
+      url: url.href
+    };
+  }
+
+  async function shareMix(mix = state.activeMix || state.featuredMix) {
+    const payload = mixSharePayload(mix);
+    try {
+      let method = "clipboard";
+      if (typeof navigator.share === "function") {
+        await navigator.share(payload);
+        method = "share_sheet";
+        setMixShareStatus("Mix link shared.", "success");
+      } else {
+        await copyShareLink(payload.url);
+        setMixShareStatus("Mix link copied. Ready to share.", "success");
+      }
+      window.haloStats?.track("share_halo_x_mix", { method, mix_id: mix?.id || "", mix_title: mix?.title || "HALO X Mixes", target: "mix_page" });
+    } catch (error) {
+      if (error?.name === "AbortError") return;
+      setMixShareStatus("Share unavailable. Copying was blocked.", "error");
     }
   }
 
@@ -265,6 +321,8 @@
       document.querySelector("#featuredCreator").textContent = "DJ HALO X";
       heroPlay.textContent = "Enter HALO Radio";
       heroPlay.disabled = false;
+      heroShare.textContent = "Share HALO X Mixes";
+      heroShare.disabled = false;
       return;
     }
     document.querySelector("#featuredMeta").textContent = mixMeta(mix);
@@ -276,6 +334,8 @@
     document.querySelector("#featuredArtwork").alt = `${mix.title} artwork`;
     heroPlay.textContent = mix.source === "youtube" ? "Watch latest long play" : "Play latest mix";
     heroPlay.disabled = false;
+    heroShare.textContent = mix.source === "youtube" ? "Share long play" : "Share this mix";
+    heroShare.disabled = false;
   }
 
   function renderMixes() {
@@ -710,6 +770,7 @@
   }
 
   heroPlay.addEventListener("click", () => playMix(state.featuredMix));
+  heroShare.addEventListener("click", () => shareMix());
   mixRail.addEventListener("click", event => {
     const deleteButton = event.target.closest("[data-delete-mix]");
     if (deleteButton) {
@@ -743,6 +804,7 @@
     event.currentTarget.classList.toggle("is-paused", audio.paused);
     event.currentTarget.setAttribute("aria-label", audio.paused ? "Play mix" : "Pause mix");
   });
+  dockShare.addEventListener("click", () => shareMix(state.activeMix || state.featuredMix));
   audio.addEventListener("play", () => {
     heroRecord.classList.add("is-playing");
     document.querySelector("#dockToggle").classList.remove("is-paused");

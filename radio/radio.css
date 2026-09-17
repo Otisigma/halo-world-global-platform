@@ -50,8 +50,13 @@ h1 em { color: var(--signal); font-style: normal; transition: color 400ms ease; 
 .hero-actions { display: flex; align-items: center; gap: 30px; margin-top: 40px; }
 .primary-button { display: inline-flex; min-height: 54px; align-items: center; justify-content: space-between; gap: 26px; padding: 0 23px; border: 0; border-radius: 2px; background: var(--signal); color: #090907; cursor: pointer; font: 900 11px/1 monospace; letter-spacing: .1em; text-transform: uppercase; transition: transform 160ms ease, filter 160ms ease, background 400ms ease; }
 .primary-button:hover { transform: translateY(-2px); filter: brightness(1.15); }
+.hero-share-button { min-height: 54px; border-color: color-mix(in srgb, var(--signal) 45%, var(--line)); color: #ece8df; font: 800 10px/1 monospace; letter-spacing: .11em; }
+.hero-share-button:hover { border-color: var(--signal); color: var(--signal); }
 .text-link { padding: 14px 0; border-bottom: 1px solid var(--line); color: #d9d6cc; font: 800 11px/1 monospace; letter-spacing: .1em; text-transform: uppercase; }
 .text-link span { margin-left: 18px; color: var(--signal); }
+.share-feedback { min-height: 18px; margin: 14px 0 0; color: #bdb8ad; font: 700 9px/1.4 monospace; letter-spacing: .08em; text-transform: uppercase; }
+.share-feedback[data-state="success"] { color: var(--signal); }
+.share-feedback[data-state="error"] { color: #ff8f81; }
 .hero-orbit { position: relative; z-index: 2; width: min(42vw, 590px); aspect-ratio: 1; justify-self: end; }
 .orbit-ring { position: absolute; border: 1px solid var(--line); border-radius: 50%; }
 .ring-one { inset: 7%; animation: spin 26s linear infinite; }

@@ -130,7 +130,10 @@ const checks = [
   ["artist review updates", files.submissions.includes("acknowledgeArtistUpdate") && files.submissions.includes("artist_message") && files.client.includes("data-artist-message") && files.artistReviewMigration.includes("artist_viewed_at")],
   ["artist development review ledger", files.developmentMigration.includes("halo_radio_development_reviews") && files.developmentMigration.includes("development_stage") && files.submissions.includes("draftDevelopmentCoaching") && files.submissions.includes("scorecard")],
   ["artist development interface", files.page.includes('id="developmentBoard"') && files.client.includes("renderDevelopmentBoard") && files.client.includes("data-coaching-draft") && files.styles.includes(".development-guidance")],
-  ["artist owner update acknowledgement", files.submissions.includes("page.slug = track.artist_slug") && files.submissions.includes("page.owner_member_id = ${membership.member_id}")]
+  ["artist owner update acknowledgement", files.submissions.includes("page.slug = track.artist_slug") && files.submissions.includes("page.owner_member_id = ${membership.member_id}")],
+  ["station share entry point", files.page.includes('id="stationShareButton"') && files.page.includes('id="stationShareStatus"')],
+  ["station share fallback flow", files.client.includes("shareStation") && files.client.includes("navigator.share") && files.client.includes('new URL("/radio/", location.origin)') && files.client.includes("copyShareLink")],
+  ["station share analytics hook", files.client.includes('window.haloStats?.track("share_halo_radio_station"') && files.client.includes('target: "station_landing"')]
 ];
 
 const failures = checks.filter(([, passed]) => !passed);

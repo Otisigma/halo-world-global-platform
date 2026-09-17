@@ -42,6 +42,8 @@ export const allowedEvents = new Set([
   "dj_booth_video_play",
   "download_dj_takeover_recording",
   "dj_package_toggle",
+  "dj_continuity_filler_started",
+  "dj_continuity_preroll",
   "dreamweaver_campaign_generated",
   "dreamweaver_chapter",
   "dreamweaver_mode",
@@ -141,6 +143,8 @@ export const allowedEvents = new Set([
   "publish_finished_mix",
   "publish_halo_video",
   "queue_track",
+  "radio_continuity_bridge",
+  "radio_continuity_preroll_ready",
   "radio_heartbeat",
   "radio_skip",
   "share_halo_radio_station",
@@ -213,10 +217,17 @@ const allowedMetadataKeys = new Set([
   "model",
   "report_id",
   "platform",
-  "variant"
+  "variant",
+  "reason",
+  "incoming",
+  "bridgeType",
+  "remainingSec",
+  "silentDurationMs",
+  "recoveries",
+  "fillerActive"
 ]);
 
-const numericMetadataKeys = new Set(["seconds", "position"]);
+const numericMetadataKeys = new Set(["seconds", "position", "remainingSec", "silentDurationMs", "recoveries"]);
 
 export async function getStatsDatabase() {
   const { getDatabase } = await import("@netlify/database");

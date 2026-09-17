@@ -103,7 +103,7 @@
         this.lastCriticalCycleKey = "";
         return;
       }
-      const cycleKey = `${boundary.activeId || "active"}:${boundary.incomingId || "incoming"}`;
+      const cycleKey = `${boundary.activeDeckId || boundary.activeId || "active"}:${boundary.incomingDeckId || boundary.incomingId || "incoming"}`;
       if (remainingSec <= this.config.prerollWarningWindowSec && remainingSec > this.config.criticalDeadlineSec && this.lastPrerollCycleKey !== cycleKey) {
         this.lastPrerollCycleKey = cycleKey;
         this.callbacks.onPreroll(boundary);

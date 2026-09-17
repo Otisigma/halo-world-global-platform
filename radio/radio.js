@@ -1140,14 +1140,7 @@ function ensureRadioContinuityGuard() {
       radioContinuity.bridgeType = "standby";
       renderContinuityStatus();
     },
-    onTelemetry: payload => {
-      window.haloStats?.track(`radio_${payload.event}`, {
-        room: state.activeRoom,
-        bridgeType: radioContinuity.bridgeType,
-        remainingSec: Number(payload.remainingSec || 0),
-        silentDurationMs: Number(payload.silentDurationMs || 0)
-      });
-    },
+    onTelemetry: () => {},
     onStatusChange: status => {
       radioContinuity.status = status;
       renderContinuityStatus();

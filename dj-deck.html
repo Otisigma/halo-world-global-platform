@@ -3743,14 +3743,7 @@
         onCriticalBoundary: detail => { prepareDeckContinuityPreroll(detail.incomingDeckId); },
         startFiller: startDeckContinuityFiller,
         stopFiller: stopDeckContinuityFiller,
-        onTelemetry: payload => {
-          window.haloStats?.track(`dj_${payload.event}`, {
-            deck: payload.activeDeckId || activeDeckId(),
-            incoming: payload.incomingDeckId || "",
-            reason: payload.reason || "",
-            silentDurationMs: Number(payload.silentDurationMs || 0)
-          });
-        },
+        onTelemetry: () => {},
         onStatusChange: status => {
           audioHealth.continuity = {
             state: status.state,

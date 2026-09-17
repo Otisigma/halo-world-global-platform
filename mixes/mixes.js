@@ -136,8 +136,8 @@
 
   async function shareMix(mix = state.activeMix || state.featuredMix) {
     const payload = mixSharePayload(mix);
+    let method = "clipboard";
     try {
-      let method = "clipboard";
       if (typeof navigator.share === "function") {
         await navigator.share(payload);
         method = "share_sheet";
@@ -146,11 +146,18 @@
         await copyShareLink(payload.url);
         setMixShareStatus("Mix link copied. Ready to share.", "success");
       }
-      window.haloStats?.track("share_halo_x_mix", { method, mix_id: mix?.id || "", mix_title: mix?.title || "HALO X Mixes", target: "mix_page" });
     } catch (error) {
       if (error?.name === "AbortError") return;
-      setMixShareStatus("Share unavailable. Copying was blocked.", "error");
+      try {
+        await copyShareLink(payload.url);
+        method = "clipboard_fallback";
+        setMixShareStatus("Mix link copied. Ready to share.", "success");
+      } catch {
+        setMixShareStatus("Share unavailable. Copying was blocked.", "error");
+        return;
+      }
     }
+    window.haloStats?.track("share_halo_x_mix", { method, mix_id: mix?.id || "", mix_title: mix?.title || "HALO X Mixes", target: "mix_page" });
   }
 
   function selectedVisualProject() {

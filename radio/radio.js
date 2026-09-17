@@ -231,8 +231,8 @@ function stationSharePayload() {
 
 async function shareStation() {
   const payload = stationSharePayload();
+  let method = "clipboard";
   try {
-    let method = "clipboard";
     if (typeof navigator.share === "function") {
       await navigator.share(payload);
       method = "share_sheet";
@@ -241,11 +241,18 @@ async function shareStation() {
       await copyShareLink(payload.url);
       setStationShareStatus("Station link copied. Ready to share.", "success");
     }
-    window.haloStats?.track("share_halo_radio_station", { method, room: state.activeRoom, target: "station_landing" });
   } catch (error) {
     if (error?.name === "AbortError") return;
-    setStationShareStatus("Share unavailable. Copying was blocked.", "error");
+    try {
+      await copyShareLink(payload.url);
+      method = "clipboard_fallback";
+      setStationShareStatus("Station link copied. Ready to share.", "success");
+    } catch {
+      setStationShareStatus("Share unavailable. Copying was blocked.", "error");
+      return;
+    }
   }
+  window.haloStats?.track("share_halo_radio_station", { method, room: state.activeRoom, target: "station_landing" });
 }
 
 function selectedRelease() {

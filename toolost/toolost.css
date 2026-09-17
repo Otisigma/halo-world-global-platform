@@ -200,6 +200,15 @@ a { color: inherit; }
   opacity: 0.92;
 }
 
+.toolost-button:focus-visible,
+.toolost-header nav a:focus-visible,
+.toolost-footer a:focus-visible,
+.toolost-route-grid a:focus-visible {
+  outline: 2px solid var(--toolost-cool);
+  outline-offset: 4px;
+  opacity: 1;
+}
+
 .toolost-button-primary {
   background: var(--toolost-accent);
   color: #120f0a;

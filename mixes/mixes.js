@@ -779,7 +779,7 @@
   }
 
   heroPlay.addEventListener("click", () => playMix(state.featuredMix));
-  heroShare.addEventListener("click", () => shareMix());
+  heroShare.addEventListener("click", () => shareMix(state.featuredMix));
   mixRail.addEventListener("click", event => {
     const deleteButton = event.target.closest("[data-delete-mix]");
     if (deleteButton) {

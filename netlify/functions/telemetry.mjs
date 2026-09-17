@@ -36,17 +36,25 @@ export default async function telemetryHandler(request, context) {
   const deckBBpm = Number(telemetry.deckB.bpm);
   const locked = Math.abs(deckABpm - deckBBpm) < 0.05;
   const crowdScore = Math.max(0, Math.min(100, Number(telemetry.crowd?.score) || 0));
+  const continuity = telemetry.continuity && typeof telemetry.continuity === "object"
+    ? {
+        state: String(telemetry.continuity.state || "idle"),
+        recoveries: Math.max(0, Number(telemetry.continuity.recoveries) || 0),
+        fillerActive: Boolean(telemetry.continuity.fillerActive)
+      }
+    : null;
 
   return Response.json(
     {
       status: "SUCCESS",
       agentName: "Netlify_Cloud_AI",
       agentMessage: locked
-        ? `Telemetry synced! Deck A/B locked at ${deckABpm.toFixed(1)} BPM with crowd energy at ${crowdScore}%.`
-        : `Telemetry synced! Deck A is ${deckABpm.toFixed(1)} BPM and Deck B is ${deckBBpm.toFixed(1)} BPM.`,
+        ? `Telemetry synced! Deck A/B locked at ${deckABpm.toFixed(1)} BPM with crowd energy at ${crowdScore}%${continuity ? ` and continuity ${continuity.state.replaceAll("_", " ")}` : ""}.`
+        : `Telemetry synced! Deck A is ${deckABpm.toFixed(1)} BPM and Deck B is ${deckBBpm.toFixed(1)} BPM${continuity ? ` while continuity is ${continuity.state.replaceAll("_", " ")}` : ""}.`,
       session: {
         tempoLocked: locked,
         crowdScore,
+        continuity,
         region: context.server?.region || "automatic",
         requestId: context.requestId
       }

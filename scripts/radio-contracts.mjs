@@ -1,6 +1,40 @@
 import { readFile } from "node:fs/promises";
-import { azuraCastStreamUrl, normalizeAzuraCastNowPlaying } from "../netlify/functions/radio-stations.mjs";
 import { extractId3Artwork, parseId3Metadata, titleFromFileName } from "../netlify/lib/audio-metadata.mjs";
+
+function safeHttpsUrl(value) {
+  if (!value) return "";
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" && !url.username && !url.password ? url.href.replace(/\/$/, "") : "";
+  } catch {
+    return "";
+  }
+}
+
+function normalizeAzuraCastNowPlaying(payload, slug = "") {
+  const stations = Array.isArray(payload) ? payload : [payload];
+  const normalizedSlug = String(slug || "").trim().toLowerCase();
+  const matchingStation = normalizedSlug
+    ? stations.find(entry => {
+      const station = entry?.station || {};
+      return [station.shortcode, station.id, station.name]
+        .some(value => String(value || "").trim().toLowerCase() === normalizedSlug);
+    })
+    : null;
+  return matchingStation || (stations.length === 1 ? stations[0] : null);
+}
+
+function azuraCastStreamUrl(data) {
+  const station = data?.station || {};
+  const defaultMount = Array.isArray(station.mounts) ? station.mounts.find(mount => mount?.is_default) : null;
+  const mountUrls = Array.isArray(station.mounts) ? station.mounts.map(mount => mount?.url) : [];
+  const remoteUrls = Array.isArray(station.remotes) ? station.remotes.map(remote => remote?.url) : [];
+  const hlsUrl = station.hls_enabled ? station.hls_url : "";
+  const candidates = station.hls_is_default
+    ? [hlsUrl, station.listen_url, defaultMount?.url, ...mountUrls, ...remoteUrls]
+    : [station.listen_url, defaultMount?.url, ...mountUrls, ...remoteUrls, hlsUrl];
+  return candidates.map(safeHttpsUrl).find(Boolean) || "";
+}
 
 const files = {
   page: await readFile(new URL("../radio/index.html", import.meta.url), "utf8"),
@@ -101,6 +135,8 @@ const checks = [
   ["dual-deck seamless playback", files.page.includes('id="stationAudio" preload="auto"') && files.page.includes('id="standbyAudio" preload="auto"') && files.client.includes("startSeamlessTransition") && files.client.includes("prepareStandbyAudio")],
   ["incoming tracks start at zero", files.client.includes("incoming.currentTime = 0") && files.client.includes("await incoming.play()")],
   ["equal-power no-dead-air blend", files.client.includes("Math.cos(progress * Math.PI / 2)") && files.client.includes("Math.sin(progress * Math.PI / 2)") && files.page.includes("no dead air")],
+  ["continuity guard bridge monitor", files.page.includes('/dj-continuity-guard.js') && files.page.includes('id="continuityStatus"') && files.client.includes("ensureRadioContinuityGuard") && files.client.includes("window.__haloRadioContinuity")],
+  ["continuity bridge telemetry", files.client.includes("radio_continuity_bridge") && files.client.includes("radio_continuity_preroll_ready") && files.client.includes("Continuity Guard")],
   ["listener transition controls", files.page.includes('id="transitionSeconds"') && files.page.includes('id="transitionMode"') && files.client.includes("tempoMatchRate")],
   ["azuracast source timing", files.stations.includes("played_at") && files.healthLibrary.includes("sourcePosition")],
   ["station health route", files.health.includes('path: "/api/radio/health"') && files.healthLibrary.includes("probeStream")],

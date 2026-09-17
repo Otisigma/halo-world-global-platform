@@ -29,6 +29,7 @@
   <script type="module" src="/identity.js"></script>
   <script src="/release-context.js" defer></script>
   <script src="/upload-progress.js" defer></script>
+  <script src="/dj-continuity-guard.js" defer></script>
   <script src="/radio/radio.js" defer></script>
 </head>
 <body data-room="club">
@@ -197,6 +198,7 @@
               <p class="eyebrow">Background station team</p>
               <h3 id="signalWatchTitle"><span class="health-lamp" aria-hidden="true"></span><span id="healthStatus">Verifying the network</span></h3>
               <p id="healthSummary">Signal, station data, and network time are being checked.</p>
+              <p class="continuity-status" id="continuityStatus" data-state="idle">Continuity guard standing by.</p>
             </div>
             <div class="network-clock">
               <span>HALO network time / UTC</span>
@@ -207,6 +209,7 @@
           <div class="signal-scope" aria-label="Live station signal visualization">
             <canvas id="signalScope"></canvas>
             <span class="scope-label">Live signal scope</span>
+            <small class="continuity-scope-readout" id="continuityTelemetry">Predictive pre-roll idle · bridge standby</small>
             <strong id="healthScore">--</strong>
           </div>
           <div class="agent-rail" id="agentRail" aria-live="polite">

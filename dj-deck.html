@@ -31,6 +31,7 @@
   <link rel="stylesheet" href="/mobile-navigation.css">
   <script src="/mobile-navigation.js" defer></script>
   <script src="/halo-companion.js" defer></script>
+  <script src="/dj-continuity-guard.js" defer></script>
   <script type="module" src="/identity.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -332,6 +333,9 @@
     .now-track { min-width: 0; }
     .now-track strong { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 14px; }
     .now-track span { color: var(--muted); font: 400 10px "DM Mono", monospace; text-transform: uppercase; }
+    .now-track span[data-continuity-state="pre-roll"] { color: #f0c78a; }
+    .now-track span[data-continuity-state="bridge-active"] { color: #ff8d68; }
+    .now-track span[data-continuity-state="normal"] { color: var(--acid); }
     .top-actions { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 8px; padding: 8px 12px; }
 
     .status-pill, .compact-button {
@@ -2841,7 +2845,16 @@
       message: "Audio engine loads on the first playback gesture.",
       lastError: "",
       updatedAt: Date.now(),
-      decks: { A: { playing: false, hasSignal: false }, B: { playing: false, hasSignal: false } }
+      decks: { A: { playing: false, hasSignal: false }, B: { playing: false, hasSignal: false } },
+      continuity: { state: "idle", message: "Continuity guard standing by.", fillerActive: false, recoveries: 0 }
+    };
+    const continuityState = {
+      guard: null,
+      analyser: null,
+      analyserData: null,
+      fillerGain: null,
+      fillerNodes: [],
+      fillerTimeout: 0
     };
     const recordingState = {
       recorder: null,
@@ -3538,13 +3551,220 @@
         message: audioHealth.message,
         lastError: audioHealth.lastError,
         updatedAt: audioHealth.updatedAt,
-        decks: { A: { ...audioHealth.decks.A }, B: { ...audioHealth.decks.B } }
+        decks: { A: { ...audioHealth.decks.A }, B: { ...audioHealth.decks.B } },
+        continuity: { ...audioHealth.continuity }
       };
       window.dispatchEvent(new CustomEvent("halo:audio-state", { detail: window.__haloAudioHealth }));
       if (status === "error" && changed) {
         console.error(`HALO audio check failed: ${message}`);
         window.haloStats?.track("audio_check_failed", { deck: options.deckId || "master", reason: options.error || message });
       }
+    }
+
+    function continuityStatusLabel() {
+      const continuity = audioHealth.continuity || {};
+      if (continuity.state === "bridge-active") return "CONTINUITY BRIDGE ACTIVE";
+      if (continuity.state === "pre-roll") return "CONTINUITY PRE-ROLL ARMED";
+      if (continuity.state === "normal") return "CONTINUITY LOCKED";
+      return "";
+    }
+
+    function cleanupDeckContinuityFillerNodes() {
+      continuityState.fillerNodes.forEach(node => {
+        try {
+          if (typeof node.stop === "function") node.stop();
+          node.disconnect?.();
+        } catch {}
+      });
+      continuityState.fillerNodes = [];
+    }
+
+    function stopDeckContinuityFiller() {
+      if (!continuityState.fillerGain || !audioEngine.context) return;
+      const now = audioEngine.context.currentTime;
+      continuityState.fillerGain.gain.cancelScheduledValues(now);
+      continuityState.fillerGain.gain.setValueAtTime(Math.max(.0001, continuityState.fillerGain.gain.value), now);
+      continuityState.fillerGain.gain.exponentialRampToValueAtTime(.0001, now + .28);
+      clearTimeout(continuityState.fillerTimeout);
+      continuityState.fillerTimeout = setTimeout(() => cleanupDeckContinuityFillerNodes(), 320);
+    }
+
+    function startDeckContinuityFiller(detail = {}) {
+      if (!audioEngine.context || !audioEngine.masterGain) return;
+      if (!continuityState.fillerGain) {
+        continuityState.fillerGain = audioEngine.context.createGain();
+        continuityState.fillerGain.gain.setValueAtTime(.0001, audioEngine.context.currentTime);
+        continuityState.fillerGain.connect(audioEngine.masterGain);
+      }
+      cleanupDeckContinuityFillerNodes();
+      clearTimeout(continuityState.fillerTimeout);
+      const now = audioEngine.context.currentTime;
+      const active = deckState[activeDeckId()];
+      const bpm = Number(active?.bpm) || 124;
+      const beat = 60 / bpm;
+      const padA = audioEngine.context.createOscillator();
+      const padB = audioEngine.context.createOscillator();
+      const padFilter = audioEngine.context.createBiquadFilter();
+      const padGain = audioEngine.context.createGain();
+      const pulse = audioEngine.context.createOscillator();
+      const pulseGain = audioEngine.context.createGain();
+      padA.type = "triangle";
+      padB.type = "sine";
+      padA.frequency.setValueAtTime(130.81, now);
+      padB.frequency.setValueAtTime(131.5, now);
+      padFilter.type = "lowpass";
+      padFilter.frequency.setValueAtTime(420, now);
+      padFilter.frequency.exponentialRampToValueAtTime(780, now + 3.2);
+      padGain.gain.setValueAtTime(.22, now);
+      pulse.type = "sine";
+      pulse.frequency.setValueAtTime(55, now);
+      for (let index = 0; index < 24; index += 1) {
+        const beatTime = now + index * beat;
+        pulseGain.gain.setValueAtTime(.001, beatTime);
+        pulseGain.gain.exponentialRampToValueAtTime(.26, beatTime + .02);
+        pulseGain.gain.exponentialRampToValueAtTime(.001, beatTime + .16);
+      }
+      padA.connect(padFilter);
+      padB.connect(padFilter);
+      padFilter.connect(padGain);
+      padGain.connect(continuityState.fillerGain);
+      pulse.connect(pulseGain);
+      pulseGain.connect(continuityState.fillerGain);
+      padA.start(now);
+      padB.start(now);
+      pulse.start(now);
+      continuityState.fillerNodes = [padA, padB, padFilter, padGain, pulse, pulseGain];
+      continuityState.fillerGain.gain.cancelScheduledValues(now);
+      continuityState.fillerGain.gain.setValueAtTime(.001, now);
+      continuityState.fillerGain.gain.exponentialRampToValueAtTime(.5, now + .12);
+      window.haloStats?.track("dj_continuity_filler_started", {
+        deck: detail.activeDeckId || activeDeckId(),
+        incoming: detail.incomingDeckId || "",
+        reason: detail.reason || "silence_watchdog"
+      });
+    }
+
+    function deckContinuityLevelDb() {
+      if (!continuityState.analyser || !continuityState.analyserData) return -100;
+      continuityState.analyser.getFloatTimeDomainData(continuityState.analyserData);
+      let total = 0;
+      for (let index = 0; index < continuityState.analyserData.length; index += 1) total += continuityState.analyserData[index] * continuityState.analyserData[index];
+      const rms = Math.sqrt(total / continuityState.analyserData.length);
+      return rms > .00001 ? 20 * Math.log10(rms) : -100;
+    }
+
+    function deckContinuityReady(deckId) {
+      const state = deckState[deckId];
+      if (!state || state.empty) return false;
+      if (state.audioBuffer || state.audioAsset?.buffer) return true;
+      if (state.stemAssets) return Object.values(state.stemAssets).every(asset => asset.buffer);
+      return false;
+    }
+
+    function prepareDeckContinuityPreroll(deckId) {
+      const state = deckState[deckId];
+      if (!audioEngine.context || !state || state.empty) return Promise.resolve(false);
+      if (state.audioAsset?.file && !state.audioBuffer && !state.audioAsset.buffer && !state.audioAsset.promise) {
+        state.audioAsset.promise = state.audioAsset.file.arrayBuffer()
+          .then(buffer => audioEngine.context.decodeAudioData(buffer))
+          .then(buffer => {
+            state.audioAsset.buffer = buffer;
+            state.audioBuffer = buffer;
+            state.duration = buffer.duration;
+            return buffer;
+          })
+          .catch(() => null)
+          .finally(() => { state.audioAsset.promise = null; });
+      }
+      if (state.stemAssets) {
+        const pending = Object.values(state.stemAssets).filter(asset => asset.url && !asset.buffer && !asset.promise);
+        pending.forEach(asset => {
+          asset.promise = fetch(asset.url, { credentials: "same-origin" })
+            .then(response => {
+              if (!response.ok) throw new Error("Stem pre-roll failed.");
+              return response.arrayBuffer();
+            })
+            .then(buffer => audioEngine.context.decodeAudioData(buffer))
+            .then(buffer => {
+              asset.buffer = buffer;
+              return buffer;
+            })
+            .catch(() => null)
+            .finally(() => { asset.promise = null; });
+        });
+      }
+      return Promise.resolve(Boolean(state.audioAsset?.promise || state.audioBuffer || state.audioAsset?.buffer || state.stemAssets));
+    }
+
+    function deckContinuityBoundaryState() {
+      if (!audioEngine.context) return null;
+      const activeDeck = activeDeckId();
+      const incomingDeck = activeDeck === "A" ? "B" : "A";
+      const activeState = deckState[activeDeck];
+      const incomingState = deckState[incomingDeck];
+      const activeChannel = audioEngine.decks[activeDeck];
+      if (!activeState?.playing || !activeChannel?.startedAt || !Number(activeState.duration || 0)) return null;
+      const remainingSec = Number(activeState.duration || 0) - Math.max(0, audioEngine.context.currentTime - activeChannel.startedAt);
+      if (!Number.isFinite(remainingSec) || remainingSec <= 0) return null;
+      return {
+        activeDeckId: activeDeck,
+        incomingDeckId: incomingDeck,
+        remainingSec,
+        incomingReady: deckContinuityReady(incomingDeck),
+        incomingTitle: incomingState?.title || "Next deck"
+      };
+    }
+
+    function attachContinuityGuardToDeck() {
+      if (continuityState.guard || !window.HaloContinuityGuard || !audioEngine.context || !audioEngine.masterGain) return;
+      continuityState.analyser = audioEngine.context.createAnalyser();
+      continuityState.analyser.fftSize = 512;
+      continuityState.analyser.smoothingTimeConstant = .32;
+      continuityState.analyserData = new Float32Array(continuityState.analyser.fftSize);
+      audioEngine.masterGain.connect(continuityState.analyser);
+      continuityState.guard = new window.HaloContinuityGuard({
+        config: {
+          silenceThresholdDb: -46,
+          maxAllowedSilenceMs: 200,
+          criticalDeadlineSec: 4,
+          prerollWarningWindowSec: 12
+        },
+        isPlaybackExpected: () => Boolean(deckState.A.playing || deckState.B.playing),
+        getLevelDb: deckContinuityLevelDb,
+        getBoundaryState: deckContinuityBoundaryState,
+        onPreroll: detail => {
+          prepareDeckContinuityPreroll(detail.incomingDeckId);
+          window.haloStats?.track("dj_continuity_preroll", {
+            deck: detail.activeDeckId,
+            incoming: detail.incomingDeckId,
+            remainingSec: Number(detail.remainingSec || 0)
+          });
+        },
+        onCriticalBoundary: detail => { prepareDeckContinuityPreroll(detail.incomingDeckId); },
+        startFiller: startDeckContinuityFiller,
+        stopFiller: stopDeckContinuityFiller,
+        onTelemetry: payload => {
+          window.haloStats?.track(`dj_${payload.event}`, {
+            deck: payload.activeDeckId || activeDeckId(),
+            incoming: payload.incomingDeckId || "",
+            reason: payload.reason || "",
+            silentDurationMs: Number(payload.silentDurationMs || 0)
+          });
+        },
+        onStatusChange: status => {
+          audioHealth.continuity = {
+            state: status.state,
+            message: status.message,
+            fillerActive: Boolean(status.fillerActive),
+            recoveries: Number(status.recoveries || 0)
+          };
+          if (status.state === "bridge-active") setQcCheck(elements.qcContinuity, elements.qcContinuityValue, "blocked", "Continuity bridge active");
+          else if (status.state === "pre-roll") setQcCheck(elements.qcContinuity, elements.qcContinuityValue, "ready", "Predictive pre-roll armed");
+          else updateTakeoverQualityControl();
+          updateMasterReadout();
+          reportAudioHealth(audioHealth.status, audioHealth.message);
+        }
+      }).init();
     }
 
     async function ensureAudio() {
@@ -3632,6 +3852,7 @@
       }
       if (audioEngine.context.state !== "running") await audioEngine.context.resume();
       if (audioEngine.context.state !== "running") throw new Error(`Audio engine remained ${audioEngine.context.state}.`);
+      attachContinuityGuardToDeck();
       reportAudioHealth("ready", "Audio engine is running and checking deck output.");
       return audioEngine.context;
     }
@@ -4091,7 +4312,11 @@
       const active = deckState[activeId];
       elements.masterBpm.textContent = Number(active.bpm).toFixed(1);
       elements.masterTrack.textContent = `${active.title} — ${active.artist}`;
-      elements.masterStatus.textContent = active.empty ? "LOAD A TRACK TO BEGIN" : `DECK ${activeId} ${active.playing ? "LIVE" : "READY"} · MASTER TEMPO ${Number(active.bpm).toFixed(1)} BPM`;
+      const continuity = continuityStatusLabel();
+      elements.masterStatus.dataset.continuityState = audioHealth.continuity?.state || "idle";
+      elements.masterStatus.textContent = active.empty
+        ? "LOAD A TRACK TO BEGIN"
+        : `${`DECK ${activeId} ${active.playing ? "LIVE" : "READY"} · MASTER TEMPO ${Number(active.bpm).toFixed(1)} BPM`}${continuity ? ` · ${continuity}` : ""}`;
     }
 
     function loadTrack(deckId, trackId) {
@@ -4104,16 +4329,7 @@
       updateRangeFill(slider);
       updateDeck(deckId);
       showToast(`Loaded to deck ${deckId}`, `${track.title} by ${track.artist} is ready from ${track.platform || "your library"}.`);
-      // Pre-decode the audio buffer in the background so the first play is
-      // instantaneous and hard-cut transitions have no decode gap.
-      const asset = deckState[deckId].audioAsset;
-      if (asset?.file && !asset.buffer && !asset.promise && audioEngine.context) {
-        asset.promise = asset.file.arrayBuffer()
-          .then(buffer => audioEngine.context.decodeAudioData(buffer))
-          .then(buffer => { asset.buffer = buffer; return buffer; })
-          .catch(() => null)
-          .finally(() => { asset.promise = null; });
-      }
+      prepareDeckContinuityPreroll(deckId);
       window.haloStats?.track("load_track", { deck: deckId, source_type: track.platform || "library" });
     }
 
@@ -5567,6 +5783,7 @@
           density: Number(document.querySelector("#densityValue").textContent),
           response: Number(document.querySelector("#responseValue").textContent)
         },
+        continuity: { ...audioHealth.continuity },
         crossfader: Number(elements.crossfader.value),
         syncedAt: new Date().toISOString()
       };

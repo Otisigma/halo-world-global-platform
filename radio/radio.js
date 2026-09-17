@@ -116,6 +116,8 @@ const manualTakeoverButton = document.querySelector("#manualTakeoverButton");
 const transitionSeconds = document.querySelector("#transitionSeconds");
 const transitionMode = document.querySelector("#transitionMode");
 const transitionReadout = document.querySelector("#transitionReadout");
+const continuityStatus = document.querySelector("#continuityStatus");
+const continuityTelemetry = document.querySelector("#continuityTelemetry");
 const uploadHelper = window.HaloUploadProgress;
 const bulkUploadForm = document.querySelector("#bulkUploadForm");
 const bulkUploadProgress = document.querySelector("#bulkUploadProgress");
@@ -142,6 +144,14 @@ const developmentStageLabels = {
   featured: "Featured rotation",
   development: "Development review",
   closed: "Current version closed"
+};
+
+const radioContinuity = {
+  guard: null,
+  status: { state: "idle", message: "Continuity guard standing by.", fillerActive: false, recoveries: 0 },
+  stalled: false,
+  lastPrerollSource: "",
+  bridgeType: "standby"
 };
 
 const scoreLabels = {
@@ -999,6 +1009,153 @@ function nextSeamlessTarget() {
   } : null;
 }
 
+function continuityAgentSnapshot() {
+  const stateName = radioContinuity.status.state;
+  return {
+    name: "Continuity Guard",
+    role: radioContinuity.status.message || "Predictive pre-roll and silence watch",
+    status: stateName === "bridge-active" ? "attention" : stateName === "pre-roll" ? "watching" : stateName === "normal" ? "verified" : "waiting"
+  };
+}
+
+function renderContinuityStatus() {
+  const status = radioContinuity.status;
+  const watch = document.querySelector("#signalWatch");
+  if (watch) watch.dataset.continuityState = status.state || "idle";
+  if (continuityStatus) {
+    continuityStatus.dataset.state = status.state || "idle";
+    continuityStatus.textContent = status.message || "Continuity guard standing by.";
+  }
+  if (continuityTelemetry) {
+    const detail = status.state === "pre-roll"
+      ? `Predictive pre-roll · ${status.incomingId || "next source"} armed`
+      : status.state === "bridge-active"
+        ? `Audible bridge active · ${radioContinuity.bridgeType}`
+        : status.state === "watching"
+          ? `Silence watch · ${status.silentDurationMs || 0}ms below floor`
+          : "Predictive pre-roll idle · bridge standby";
+    continuityTelemetry.textContent = detail;
+  }
+  window.__haloRadioContinuity = {
+    state: status.state || "idle",
+    message: status.message || "Continuity guard standing by.",
+    bridgeType: radioContinuity.bridgeType,
+    fillerActive: Boolean(status.fillerActive),
+    recoveries: Number(status.recoveries || 0)
+  };
+}
+
+function continuityDurationSeconds() {
+  if (state.takeoverFallbackActive) return Number(takeoverMixSegment()?.playSeconds || (Number.isFinite(stationAudio.duration) ? stationAudio.duration : 0));
+  if (state.activeRoom === "longplay") return Number(currentMixSegment()?.playSeconds || currentMix()?.durationSeconds || (Number.isFinite(stationAudio.duration) ? stationAudio.duration : 0));
+  const room = activeRoom();
+  return Number(rotationTrack(room)?.duration || (Number.isFinite(stationAudio.duration) ? stationAudio.duration : 0));
+}
+
+function continuityPlaybackExpected() {
+  if (state.fallbackMixActive) return fallbackMixPlaying();
+  if (state.youtubeLongPlayActive) return youtubeLongPlayPlaying();
+  return [stationAudio, standbyAudio].some(audio => Boolean(audio?.getAttribute("src")) && !audio.paused);
+}
+
+function continuityLevelDb() {
+  if (state.fallbackMixActive && fallbackMixPlaying()) return -14;
+  if (state.youtubeLongPlayActive && youtubeLongPlayPlaying()) return -14;
+  const active = !stationAudio.paused && stationAudio.getAttribute("src") ? stationAudio : !standbyAudio.paused && standbyAudio.getAttribute("src") ? standbyAudio : null;
+  if (!active) return -100;
+  if (radioContinuity.stalled || active.seeking || active.readyState < HTMLMediaElement.HAVE_FUTURE_DATA || active.ended) return -100;
+  return -18;
+}
+
+function continuityBoundaryState() {
+  if (state.fallbackMixActive || state.youtubeLongPlayActive) return null;
+  const target = nextSeamlessTarget();
+  if (!target?.source) return null;
+  const totalSeconds = continuityDurationSeconds();
+  const remainingSec = totalSeconds - Number(stationAudio.currentTime || 0);
+  if (!Number.isFinite(remainingSec) || remainingSec <= 0) return null;
+  return {
+    activeId: state.takeoverFallbackActive ? "takeover" : state.activeRoom,
+    incomingId: target.source,
+    incomingReady: audioSourceMatches(standbyAudio, target.source) && standbyAudio.readyState >= HTMLMediaElement.HAVE_FUTURE_DATA,
+    remainingSec,
+    source: target.source,
+    mode: state.takeoverFallbackActive ? "takeover" : state.activeRoom
+  };
+}
+
+async function prepareContinuityPreroll(boundary = continuityBoundaryState()) {
+  if (!boundary?.source) return;
+  if (radioContinuity.lastPrerollSource === boundary.source && audioSourceMatches(standbyAudio, boundary.source) && standbyAudio.readyState >= HTMLMediaElement.HAVE_FUTURE_DATA) return;
+  radioContinuity.lastPrerollSource = boundary.source;
+  prepareStandbyAudio();
+  validateAudioSource(boundary.source).then(ready => {
+    if (!ready) return;
+    radioContinuity.bridgeType = "standby armed";
+    renderContinuityStatus();
+    window.haloStats?.track("radio_continuity_preroll_ready", { room: state.activeRoom, source: boundary.source });
+  }).catch(() => {});
+}
+
+async function engageContinuityBridge(reason, boundary = continuityBoundaryState()) {
+  if (state.audioTransitioning || state.fallbackMixActive || state.youtubeLongPlayActive) return;
+  const room = activeRoom();
+  if (boundary?.incomingReady) {
+    radioContinuity.bridgeType = "seamless handoff";
+    if (await startSeamlessTransition()) return;
+  }
+  if (await startSeamlessTransition()) {
+    radioContinuity.bridgeType = "seamless handoff";
+    return;
+  }
+  radioContinuity.bridgeType = state.activeRoom === "longplay" ? "artist playlist fallback" : "takeover bridge";
+  window.haloStats?.track("radio_continuity_bridge", { room: state.activeRoom, reason, bridgeType: radioContinuity.bridgeType });
+  if (state.activeRoom === "longplay") {
+    await playFallbackMix();
+    return;
+  }
+  if (takeoverMix()) {
+    await playTakeoverFallback(room?.id, true);
+    return;
+  }
+  await playFallbackMix();
+}
+
+function ensureRadioContinuityGuard() {
+  if (radioContinuity.guard || !window.HaloContinuityGuard) return;
+  radioContinuity.guard = new window.HaloContinuityGuard({
+    config: {
+      silenceThresholdDb: -46,
+      maxAllowedSilenceMs: 250,
+      criticalDeadlineSec: 4,
+      prerollWarningWindowSec: 12
+    },
+    isPlaybackExpected: continuityPlaybackExpected,
+    getLevelDb: continuityLevelDb,
+    getBoundaryState: continuityBoundaryState,
+    onPreroll: boundary => { prepareContinuityPreroll(boundary); },
+    onCriticalBoundary: boundary => { engageContinuityBridge("critical_boundary", boundary).catch(() => {}); },
+    startFiller: detail => { engageContinuityBridge(detail.reason, continuityBoundaryState()).catch(() => {}); },
+    stopFiller: () => {
+      radioContinuity.bridgeType = "standby";
+      renderContinuityStatus();
+    },
+    onTelemetry: payload => {
+      window.haloStats?.track(`radio_${payload.event}`, {
+        room: state.activeRoom,
+        bridgeType: radioContinuity.bridgeType,
+        remainingSec: Number(payload.remainingSec || 0),
+        silentDurationMs: Number(payload.silentDurationMs || 0)
+      });
+    },
+    onStatusChange: status => {
+      radioContinuity.status = status;
+      renderContinuityStatus();
+    }
+  }).init();
+  renderContinuityStatus();
+}
+
 function prepareStandbyAudio() {
   if (state.audioTransitioning) return;
   const target = nextSeamlessTarget();
@@ -1479,12 +1636,13 @@ function renderHealth() {
   document.querySelector("#healthSummary").textContent = health.summary;
   document.querySelector("#healthScore").textContent = `${health.score}/100`;
   document.querySelector("#lastVerified").textContent = `Verified ${new Date(health.checkedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}`;
-  document.querySelector("#agentRail").innerHTML = (health.agents || []).map(agent => `
+  document.querySelector("#agentRail").innerHTML = [...(health.agents || []), continuityAgentSnapshot()].map(agent => `
     <article data-status="${escapeHtml(agent.status)}">
       <span aria-hidden="true"></span>
       <div><strong>${escapeHtml(agent.name)}</strong><small>${escapeHtml(agent.role)} · ${escapeHtml(agent.status)}</small></div>
     </article>
   `).join("");
+  renderContinuityStatus();
   renderConsole();
 }
 
@@ -1562,6 +1720,10 @@ function drawSignalScope(timestamp = 0) {
     if (x === 0) context.moveTo(x, y); else context.lineTo(x, y);
   }
   context.stroke();
+  if (radioContinuity.status.state === "bridge-active" || radioContinuity.status.state === "watching") {
+    context.fillStyle = radioContinuity.status.state === "bridge-active" ? "rgba(255,118,95,.14)" : "rgba(228,180,94,.1)";
+    context.fillRect(0, 0, width, Math.max(8, height * .12));
+  }
   if (!window.matchMedia("(prefers-reduced-motion: reduce)").matches) requestAnimationFrame(drawSignalScope);
 }
 
@@ -2664,6 +2826,7 @@ transitionMode.addEventListener("change", () => {
 });
 
 function handleDeckPlay(event) {
+  radioContinuity.stalled = false;
   if (event.currentTarget === stationAudio) syncPlayState();
 }
 
@@ -2686,6 +2849,7 @@ function handleDeckEnded(event) {
 }
 
 function handleDeckError(event) {
+  radioContinuity.stalled = true;
   if (event.currentTarget !== stationAudio) return;
   rememberAudioHealth(stationAudio.getAttribute("src"), false);
   const room = activeRoom();
@@ -2705,8 +2869,12 @@ function handleDeckError(event) {
 
 [stationAudio, standbyAudio].forEach(audio => {
   audio.addEventListener("play", handleDeckPlay);
+  audio.addEventListener("playing", () => { radioContinuity.stalled = false; });
   audio.addEventListener("pause", handleDeckPause);
   audio.addEventListener("timeupdate", handleDeckTimeUpdate);
+  audio.addEventListener("canplay", () => { radioContinuity.stalled = false; });
+  audio.addEventListener("waiting", () => { radioContinuity.stalled = true; });
+  audio.addEventListener("stalled", () => { radioContinuity.stalled = true; });
   audio.addEventListener("loadedmetadata", event => {
     if (event.currentTarget === stationAudio) updatePlaybackProgress();
   });
@@ -2714,6 +2882,7 @@ function handleDeckError(event) {
   audio.addEventListener("error", handleDeckError);
 });
 updateTransitionReadout();
+ensureRadioContinuityGuard();
 longPlayQueue.addEventListener("click", event => {
   const retryButton = event.target.closest("[data-retry-mixes]");
   const item = event.target.closest("[data-mix-index]");

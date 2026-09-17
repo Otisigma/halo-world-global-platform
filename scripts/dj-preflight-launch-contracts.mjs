@@ -80,7 +80,9 @@ const checks = [
   [deck.includes("matchDeckLevels") && deck.includes("Math.max(5000") && deck.includes("source.start(startAt, 0)"), "starts incoming records at zero, matches their level, and preserves a five-second vocal gap"],
   [deck.includes("buildTakeoverPlan") && deck.includes("recordingState.takeoverPlan") && deck.includes("playedTrackIds"), "builds one complete DJ takeover order and enforces a no-repeat ledger"],
   [deck.includes('"clean-break"') && deck.includes("plan.hardCut") && deck.includes("setStemState(incomingDeck, \"vocals\", false"), "blocks lead-vocal crossover with stem handoffs or a true clean break"],
-  [deck.includes("Takeover quality control") && deck.includes("updateTakeoverQualityControl"), "shows live sequence, vocal, repeat, and continuity quality control"]
+  [deck.includes("Takeover quality control") && deck.includes("updateTakeoverQualityControl"), "shows live sequence, vocal, repeat, and continuity quality control"],
+  [deck.includes('/dj-continuity-guard.js') && deck.includes("attachContinuityGuardToDeck") && deck.includes("CONTINUITY BRIDGE ACTIVE"), "arms the shared continuity guard and exposes bridge state in the live master readout"],
+  [deck.includes("continuity: { ...audioHealth.continuity }") && deck.includes("continuity: { ...audioHealth.continuity },") && deck.includes("Sync live telemetry"), "includes continuity state in deck health and live telemetry sync payloads"]
 ];
 
 const failures = checks.filter(([passed]) => !passed);

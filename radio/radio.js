@@ -1106,10 +1106,6 @@ async function engageContinuityBridge(reason, boundary = continuityBoundaryState
     radioContinuity.bridgeType = "seamless handoff";
     if (await startSeamlessTransition()) return;
   }
-  if (await startSeamlessTransition()) {
-    radioContinuity.bridgeType = "seamless handoff";
-    return;
-  }
   radioContinuity.bridgeType = state.activeRoom === "longplay" ? "artist playlist fallback" : "takeover bridge";
   window.haloStats?.track("radio_continuity_bridge", { room: state.activeRoom, reason, bridgeType: radioContinuity.bridgeType });
   if (state.activeRoom === "longplay") {

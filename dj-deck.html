@@ -3664,6 +3664,7 @@
     function prepareDeckContinuityPreroll(deckId) {
       const state = deckState[deckId];
       if (!audioEngine.context || !state || state.empty) return Promise.resolve(false);
+      const pending = [];
       if (state.audioAsset?.file && !state.audioBuffer && !state.audioAsset.buffer && !state.audioAsset.promise) {
         state.audioAsset.promise = state.audioAsset.file.arrayBuffer()
           .then(buffer => audioEngine.context.decodeAudioData(buffer))
@@ -3676,9 +3677,9 @@
           .catch(() => null)
           .finally(() => { state.audioAsset.promise = null; });
       }
+      if (state.audioAsset?.promise) pending.push(state.audioAsset.promise);
       if (state.stemAssets) {
-        const pending = Object.values(state.stemAssets).filter(asset => asset.url && !asset.buffer && !asset.promise);
-        pending.forEach(asset => {
+        Object.values(state.stemAssets).filter(asset => asset.url && !asset.buffer && !asset.promise).forEach(asset => {
           asset.promise = fetch(asset.url, { credentials: "same-origin" })
             .then(response => {
               if (!response.ok) throw new Error("Stem pre-roll failed.");
@@ -3692,8 +3693,12 @@
             .catch(() => null)
             .finally(() => { asset.promise = null; });
         });
+        Object.values(state.stemAssets).forEach(asset => {
+          if (asset.promise) pending.push(asset.promise);
+        });
       }
-      return Promise.resolve(Boolean(state.audioAsset?.promise || state.audioBuffer || state.audioAsset?.buffer || state.stemAssets));
+      if (!pending.length) return Promise.resolve(deckContinuityReady(deckId));
+      return Promise.all(pending).then(() => deckContinuityReady(deckId));
     }
 
     function deckContinuityBoundaryState() {

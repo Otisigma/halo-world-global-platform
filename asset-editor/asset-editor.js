@@ -3,12 +3,24 @@
 
   const tabButtons = Array.from(document.querySelectorAll(".tab-button"));
   const panels = Array.from(document.querySelectorAll(".editor-panel"));
+  const editorContext = document.getElementById("editorContext");
   const songCatalogFrame = document.getElementById("songCatalogFrame");
   const releaseHouseFrame = document.getElementById("releaseHouseFrame");
   let lastSongCatalogHeight = 0;
   const tabMap = {
     songs: "songCatalogPanel",
     release: "releaseMetadataPanel"
+  };
+  const surfaceMap = {
+    "song-catalog-artwork": { panelId: "songCatalogPanel", label: "Song Catalog · album artwork" },
+    "song-catalog-version-artwork": { panelId: "songCatalogPanel", label: "Song Catalog · version cover art" },
+    "campaign-visual-asset": { panelId: "songCatalogPanel", label: "Campaign Studio · visual asset override" },
+    "artwork-manager": { panelId: "songCatalogPanel", label: "Artwork Manager · library and uploads" },
+    "single-cover-lab": { panelId: "songCatalogPanel", label: "Single Cover Lab · artwork and media" },
+    "release-house-artwork": { panelId: "songCatalogPanel", label: "Release House · artwork room" },
+    "release-house-metadata": { panelId: "releaseMetadataPanel", label: "Release House · release metadata" },
+    "artists-release-artwork": { panelId: "songCatalogPanel", label: "Artist Room · release artwork" },
+    "mixes-artwork": { panelId: "songCatalogPanel", label: "Mixes · artwork" }
   };
 
   function setSongCatalogSource() {
@@ -41,6 +53,17 @@
     setActiveTab(panelId);
     if (panelId === "songCatalogPanel") setSongCatalogSource();
     if (panelId === "releaseMetadataPanel") setReleaseHouseSource();
+  }
+
+  function setEditorContext(label) {
+    if (!editorContext) return;
+    if (!label) {
+      editorContext.hidden = true;
+      editorContext.textContent = "";
+      return;
+    }
+    editorContext.hidden = false;
+    editorContext.textContent = `Opened from ${label}`;
   }
 
   function focusTab(index) {
@@ -84,7 +107,11 @@
     songCatalogFrame.style.height = `${nextHeight}px`;
   });
 
-  const requestedTab = new URLSearchParams(window.location.search).get("tab");
-  const targetPanelId = tabMap[requestedTab] || "songCatalogPanel";
+  const params = new URLSearchParams(window.location.search);
+  const surface = params.get("surface");
+  const requestedTab = params.get("tab");
+  const surfaceConfig = surfaceMap[surface] || null;
+  const targetPanelId = surfaceConfig?.panelId || tabMap[requestedTab] || "songCatalogPanel";
+  setEditorContext(surfaceConfig?.label || "");
   activatePanel(targetPanelId);
 })();

@@ -118,6 +118,7 @@ export const allowedEvents = new Set([
   "open_release_kit",
   "open_release_room",
   "open_release_selector_room",
+  "open_sitewide_asset_editor",
   "open_social_profile",
   "open_song_catalog",
   "open_sovereign_ambassador_path",

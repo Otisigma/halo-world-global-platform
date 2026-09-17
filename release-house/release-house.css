@@ -178,6 +178,8 @@ a { color: inherit; }
 .check-group legend { margin-bottom: .6rem; }
 .check-grid { display: grid; grid-template-columns: 1fr 1fr; gap: .55rem; }
 .room-validation { min-height: 1.2rem; margin: 0; color: var(--clay-dark); font: 500 .66rem/1.5 var(--mono); }
+.room-editor-action { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .9rem; margin-bottom: 1.25rem; padding: 1rem 1.1rem; border: 1px solid var(--line); background: rgba(255,255,255,.35); }
+.room-editor-action p { margin: 0; max-width: 34rem; color: var(--ink-soft); font-size: .76rem; line-height: 1.6; }
 .room-footer-actions { display: flex; justify-content: space-between; gap: 1rem; padding-top: .4rem; }
 .room-footer-actions button { min-height: 46px; padding: 0 1.2rem; border: 1px solid var(--ink); background: transparent; color: var(--ink); font: 700 .62rem/1 var(--mono); letter-spacing: .07em; text-transform: uppercase; cursor: pointer; }
 .room-footer-actions .complete-room { margin-left: auto; background: var(--ink); color: var(--paper-bright); }

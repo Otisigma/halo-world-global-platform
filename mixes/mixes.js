@@ -157,11 +157,13 @@
   function syncMixUrl(mix = state.selectedMix, options = {}) {
     const { historyMode = "replace" } = options;
     const url = new URL(location.href);
+    const currentLocation = `${url.pathname}${url.search}${url.hash}`;
     const currentMixId = new URLSearchParams(location.search).get("mix") || "";
     const nextMixId = mix?.id || "";
     if (mix?.id) url.searchParams.set("mix", mix.id);
     else url.searchParams.delete("mix");
     const nextLocation = `${url.pathname}${url.search}${url.hash}`;
+    if (nextLocation === currentLocation) return;
     if (historyMode === "push" && currentMixId !== nextMixId) window.history.pushState({}, "", nextLocation);
     else window.history.replaceState({}, "", nextLocation);
   }

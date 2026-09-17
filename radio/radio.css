@@ -260,17 +260,22 @@ body.is-playing .waveform i { animation-play-state: running; }
 
 .signal-watch { --health-color: #8b8982; display: grid; gap: 24px; padding: 28px 32px 32px; border-top: 1px solid var(--line); background: linear-gradient(135deg, color-mix(in srgb, var(--health-color) 7%, transparent), transparent 52%); }
 .signal-watch[data-health="live"] { --health-color: #73d99c; }.signal-watch[data-health="degraded"], .signal-watch[data-health="offline"] { --health-color: #ff765f; }.signal-watch[data-health="standby"] { --health-color: #e4b45e; }
+.signal-watch[data-continuity-state="bridge-active"] { box-shadow: inset 0 0 0 1px rgba(255,118,95,.35); }
 .signal-watch-heading { display: grid; grid-template-columns: 1fr auto; align-items: end; gap: 30px; }
 .signal-watch-heading .eyebrow { margin-bottom: 10px; }.signal-watch-heading h3 { display: flex; align-items: center; gap: 12px; margin: 0; font-size: clamp(25px, 3vw, 42px); letter-spacing: -.045em; }
 .signal-watch-heading > div > p:last-child { max-width: 650px; margin: 10px 0 0; color: #89867e; font-size: 12px; line-height: 1.55; }
+.continuity-status { margin: 10px 0 0; color: #8f8b82; font: 700 9px/1.45 monospace; letter-spacing: .08em; text-transform: uppercase; }
+.continuity-status[data-state="pre-roll"], .continuity-status[data-state="watching"] { color: #e4b45e; }
+.continuity-status[data-state="bridge-active"] { color: #ff9a7f; }
+.continuity-status[data-state="normal"] { color: #73d99c; }
 .health-lamp { width: 10px; height: 10px; flex: 0 0 auto; border-radius: 50%; background: var(--health-color); box-shadow: 0 0 0 6px color-mix(in srgb, var(--health-color) 14%, transparent); }
 .signal-watch[data-health="live"] .health-lamp { animation: pulse 1.7s infinite; }
 .network-clock { display: grid; justify-items: end; gap: 5px; font-family: monospace; text-transform: uppercase; }.network-clock span, .network-clock small { color: #6f6d67; font-size: 8px; letter-spacing: .13em; }.network-clock strong { color: var(--health-color); font-size: 24px; letter-spacing: .04em; }
 .signal-scope { position: relative; height: 150px; overflow: hidden; border: 1px solid #282722; background: repeating-linear-gradient(90deg, transparent 0, transparent calc(12.5% - 1px), rgba(255,255,255,.035) 12.5%); }
 .signal-scope::after { position: absolute; inset: 0; background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--health-color) 8%, transparent), transparent); content: ""; transform: translateX(-100%); }.signal-watch[data-health="live"] .signal-scope::after { animation: scope-scan 3.8s linear infinite; }
 @keyframes scope-scan { to { transform: translateX(100%); } }
-.signal-scope canvas { width: 100%; height: 100%; }.scope-label, .signal-scope strong { position: absolute; z-index: 2; top: 12px; color: #77746d; font: 700 8px/1 monospace; letter-spacing: .12em; text-transform: uppercase; }.scope-label { left: 14px; }.signal-scope strong { right: 14px; color: var(--health-color); }
-.agent-rail { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; background: #2a2924; border: 1px solid #2a2924; }
+.signal-scope canvas { width: 100%; height: 100%; }.scope-label, .continuity-scope-readout, .signal-scope strong { position: absolute; z-index: 2; color: #77746d; font: 700 8px/1 monospace; letter-spacing: .12em; text-transform: uppercase; }.scope-label { top: 12px; left: 14px; }.continuity-scope-readout { left: 14px; bottom: 12px; max-width: calc(100% - 120px); line-height: 1.4; }.signal-scope strong { top: 12px; right: 14px; color: var(--health-color); }
+.agent-rail { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 1px; background: #2a2924; border: 1px solid #2a2924; }
 .agent-rail article { display: grid; min-width: 0; grid-template-columns: auto 1fr; align-items: center; gap: 11px; padding: 15px; background: #0e0e0b; }.agent-rail article > span { width: 7px; height: 7px; border-radius: 50%; background: #68665f; }.agent-rail article[data-status="verified"] > span { background: #73d99c; }.agent-rail article[data-status="attention"] > span { background: #ff765f; }.agent-rail article[data-status="watching"] > span { background: #6f9fd8; }.agent-rail article[data-status="waiting"] > span { background: #e4b45e; }
 .agent-rail article div { display: grid; min-width: 0; gap: 5px; }.agent-rail strong { overflow: hidden; color: #dedad0; font: 700 9px/1 monospace; letter-spacing: .07em; text-overflow: ellipsis; text-transform: uppercase; white-space: nowrap; }.agent-rail small { overflow: hidden; color: #66645f; font: 700 8px/1.2 monospace; text-overflow: ellipsis; text-transform: uppercase; white-space: nowrap; }
 

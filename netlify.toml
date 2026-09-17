@@ -229,6 +229,12 @@
   force = true
 
 [[redirects]]
+  from = "/toolost/"
+  to = "/toolost/index.html"
+  status = 200
+  force = true
+
+[[redirects]]
   from = "/upload-pipeline/"
   to = "/upload-pipeline/index.html"
   status = 200

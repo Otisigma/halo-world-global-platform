@@ -103,7 +103,8 @@
         this.lastCriticalCycleKey = "";
         return;
       }
-      const cycleKey = `${boundary.activeDeckId || boundary.activeId || "active"}:${boundary.incomingDeckId || boundary.incomingId || "incoming"}`;
+      const cycleKey = boundary.boundaryKey
+        || `${boundary.activeDeckId || boundary.activeId || "active"}:${boundary.incomingDeckId || boundary.incomingId || "incoming"}:${boundary.source || boundary.activeTrackId || boundary.incomingTitle || "boundary"}`;
       if (remainingSec <= this.config.prerollWarningWindowSec && remainingSec > this.config.criticalDeadlineSec && this.lastPrerollCycleKey !== cycleKey) {
         this.lastPrerollCycleKey = cycleKey;
         this.callbacks.onPreroll(boundary);

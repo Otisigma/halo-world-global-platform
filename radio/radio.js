@@ -1069,6 +1069,7 @@ function continuityLevelDb() {
 
 function continuityBoundaryState() {
   if (state.fallbackMixActive || state.youtubeLongPlayActive) return null;
+  const room = activeRoom();
   const target = nextSeamlessTarget();
   if (!target?.source) return null;
   const totalSeconds = continuityDurationSeconds();
@@ -1079,6 +1080,7 @@ function continuityBoundaryState() {
     incomingId: target.source,
     incomingReady: audioSourceMatches(standbyAudio, target.source) && standbyAudio.readyState >= HTMLMediaElement.HAVE_FUTURE_DATA,
     remainingSec,
+    boundaryKey: `${stationAudio.getAttribute("src") || state.activeRoom}:${target.source}:${state.takeoverFallbackActive ? state.takeoverSegmentIndex : state.activeRoom === "longplay" ? `${state.mixIndex}:${state.mixSegmentIndex}` : rotationIndex(room)}`,
     source: target.source,
     mode: state.takeoverFallbackActive ? "takeover" : state.activeRoom
   };

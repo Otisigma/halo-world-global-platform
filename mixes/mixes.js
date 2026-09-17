@@ -170,6 +170,13 @@
     if (syncUrl) syncMixUrl(state.selectedMix);
   }
 
+  function selectMixFromLocation(options = {}) {
+    const { syncUrl = false } = options;
+    const requestedMixId = new URLSearchParams(location.search).get("mix");
+    const requestedMix = state.mixes.find(mix => mix.id === requestedMixId) || null;
+    selectMix(requestedMix, { syncUrl });
+  }
+
   function hydrateMixShareDialog(payload, mix) {
     if (mixShareLink) mixShareLink.value = payload.url;
     if (mixShareOpen) mixShareOpen.href = payload.url;
@@ -821,13 +828,9 @@
       })
     ]);
     state.mixes = mixResult.status === "fulfilled" ? mixResult.value.mixes || [] : [];
-    const requestedMixId = new URLSearchParams(location.search).get("mix");
-    state.selectedMix = state.mixes.find(mix => mix.id === requestedMixId) || null;
     state.videos = videoResult.status === "fulfilled" ? videoResult.value.videos || [] : [];
-    renderFeatured();
-    renderMixes();
+    selectMixFromLocation();
     renderEpisodes();
-    renderEdition();
     bindArtworkFallbacks();
   }
 
@@ -1094,6 +1097,7 @@
     state.mixSort = event.target.value;
     renderMixes();
   });
+  window.addEventListener("popstate", () => selectMixFromLocation());
 
   loadData();
 })();

@@ -62,8 +62,10 @@ a { color: inherit; }
 .toolost-header nav a,
 .toolost-footer a {
   color: var(--toolost-muted);
-  text-decoration: none;
   font-size: 0.82rem;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.24em;
 }
 
 .toolost-wordmark {
@@ -275,6 +277,12 @@ a { color: inherit; }
 
 .toolost-route-grid a {
   text-decoration: none;
+}
+
+.toolost-route-grid a strong {
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.24em;
 }
 
 .toolost-footer {

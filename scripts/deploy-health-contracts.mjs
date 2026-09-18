@@ -372,6 +372,7 @@ await runCheck("Core public navigation routes", async () => {
     "/dreamweaver-lab/",
     "/mixes/",
     "/dj-deck.html",
+    "/artist-economy/",
     "/artists/",
     "/release-house/",
     "/campaign-studio/",
@@ -387,7 +388,7 @@ await runCheck("Core public navigation routes", async () => {
     );
   }
 
-  return "halo.html keeps links to Dreamweaver routes, mixes, DJ deck, artist rooms, release house, campaign studio, finish house, and radio";
+  return "halo.html keeps links to Dreamweaver routes, mixes, DJ deck, artist stats, artist rooms, release house, campaign studio, finish house, and radio";
 });
 
 await runCheck("Canonical menu route aliases", async () => {

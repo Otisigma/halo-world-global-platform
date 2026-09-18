@@ -7,6 +7,7 @@ const files = {
   api: await readFile("netlify/functions/artist-economy.mjs", "utf8"),
   html: await readFile("artist-economy/index.html", "utf8"),
   js: await readFile("artist-economy/artist-economy.js", "utf8"),
+  halo: await readFile("halo.html", "utf8"),
   config: await readFile("netlify.toml", "utf8"),
   docs: await readFile("ARTIST_ECONOMY.md", "utf8")
 };
@@ -57,6 +58,9 @@ assert.match(files.html, /data-panel="licensing"/);
 assert.match(files.html, /data-panel="live"/);
 assert.match(files.html, /data-panel="conscience"/);
 assert.match(files.html, /No automatic spending/);
+assert.match(files.halo, /href="\/artist-economy\/"/);
+assert.match(files.halo, /ARTIST STATS DASHBOARD/);
+assert.match(files.halo, /open_artist_stats_dashboard/);
 assert.match(files.js, /\/api\/artist-economy/);
 assert.match(files.js, /renderRightsGuidance/);
 assert.match(files.js, /data-open-form="membership"/);

@@ -8,7 +8,8 @@ const files = {
   html: await readFile("artist-economy/index.html", "utf8"),
   js: await readFile("artist-economy/artist-economy.js", "utf8"),
   config: await readFile("netlify.toml", "utf8"),
-  docs: await readFile("ARTIST_ECONOMY.md", "utf8")
+  docs: await readFile("ARTIST_ECONOMY.md", "utf8"),
+  routes: await readFile("lib/route-registry.js", "utf8")
 };
 
 for (const table of [
@@ -63,6 +64,7 @@ assert.match(files.js, /data-open-form="membership"/);
 assert.match(files.js, /add_society_membership/);
 assert.match(files.js, /licensingApproval/);
 assert.match(files.config, /for = "\/artist-economy\*"/);
+assert.match(files.routes, /directoryRoute\("Artist Economy", "\/artist-economy\/", "artist-economy\/index\.html", \{ menuLabel: "ARTIST STATS" \}\)/);
 assert.match(files.docs, /does not move money/);
 assert.match(files.docs, /UK-first rather than BMI-first/);
 assert.match(files.docs, /PRS for Music and PPL/);

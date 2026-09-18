@@ -105,6 +105,8 @@ assert.match(artistStudio, /id="radioAudioVersion"/);
 assert.match(artistStudio, /\/upload-progress\.js/);
 assert.match(artistStudio, /Publish free to activate your Starter team/);
 assert.match(artistStudio, /fills remaining empty card fields/);
+assert.match(artistStudio, /href="\/artist-economy\/"/);
+assert.match(artistStudio, /Open artist stats dashboard/);
 assert.match(artistStudio, /Backstage team/);
 assert.match(artistScript, /renderCatalogPreview/);
 assert.match(artistScript, /wireArtworkFallbacks/);

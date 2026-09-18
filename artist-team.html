@@ -130,6 +130,71 @@
         <article><span>Releases</span><strong id="signalReleases">—</strong><small id="signalReleaseAge">&nbsp;</small></article>
       </section>
 
+      <section id="labelLayer" class="label-layer" aria-labelledby="labelLayerTitle" hidden>
+        <header class="label-layer-hero">
+          <div>
+            <p class="section-label">WORLD AI LABEL LAYER</p>
+            <h2 id="labelLayerTitle">The artist dashboard now runs like a label cockpit.</h2>
+            <p class="panel-meta">Roster, releases, A&amp;R, payouts, campaigns, and AI next moves sit on the same evidence-backed system without touching the continuity guard.</p>
+          </div>
+          <aside class="label-continuity-card">
+            <span id="labelContinuityTitle">Continuity guard armed</span>
+            <strong id="labelNextAction">Review the roster for the next coordinated release push.</strong>
+            <p id="labelContinuitySummary">The shared no-dead-air continuity guard remains active across HALO Radio and the DJ Command Deck.</p>
+          </aside>
+        </header>
+        <nav id="labelTabRail" class="label-tab-rail" aria-label="World AI label navigation">
+          <button class="is-active" type="button" data-label-tab="dashboard">Dashboard</button>
+          <button type="button" data-label-tab="roster">Roster</button>
+          <button type="button" data-label-tab="releases">Releases</button>
+          <button type="button" data-label-tab="ar">A&amp;R</button>
+          <button type="button" data-label-tab="payouts">Payouts</button>
+          <button type="button" data-label-tab="campaigns">Campaigns</button>
+          <button type="button" data-label-tab="insights">Insights</button>
+        </nav>
+        <section class="label-panel is-active" data-label-panel="dashboard">
+          <div id="labelSummaryGrid" class="label-summary-grid" aria-live="polite"></div>
+          <div class="label-dashboard-grid">
+            <article class="label-data-card">
+              <header><span>ROSTER PRESSURE</span><strong>Signed + pending</strong></header>
+              <div id="labelRosterPreview" class="label-stack"></div>
+            </article>
+            <article class="label-data-card">
+              <header><span>RELEASE CLOCK</span><strong>Draft to evergreen</strong></header>
+              <div id="labelReleasePreview" class="label-stack"></div>
+            </article>
+            <article class="label-data-card">
+              <header><span>RISK + MOVEMENT</span><strong>Owner attention now</strong></header>
+              <div id="labelInsightPreview" class="label-stack"></div>
+            </article>
+          </div>
+        </section>
+        <section class="label-panel" data-label-panel="roster" hidden>
+          <header><p class="section-label">ROSTER</p><h3>Signed artists and pending rooms</h3></header>
+          <div id="labelRosterList" class="label-card-grid" aria-live="polite"></div>
+        </section>
+        <section class="label-panel" data-label-panel="releases" hidden>
+          <header><p class="section-label">RELEASES</p><h3>Draft, scheduled, live, evergreen</h3></header>
+          <div id="labelReleaseList" class="label-card-grid" aria-live="polite"></div>
+        </section>
+        <section class="label-panel" data-label-panel="ar" hidden>
+          <header><p class="section-label">A&amp;R DISCOVERY</p><h3>Who fits, who is moving, what to sign next</h3></header>
+          <div id="labelDiscoveryList" class="label-card-grid" aria-live="polite"></div>
+        </section>
+        <section class="label-panel" data-label-panel="payouts" hidden>
+          <header><p class="section-label">PAYOUTS + RIGHTS</p><h3>Direct vs label share, pending wire, escrow</h3></header>
+          <div id="labelPayoutList" class="label-card-grid" aria-live="polite"></div>
+        </section>
+        <section class="label-panel" data-label-panel="campaigns" hidden>
+          <header><p class="section-label">CAMPAIGNS</p><h3>Radio, playlist, social, direct sale, takeover lanes</h3></header>
+          <div id="labelCampaignList" class="label-card-grid" aria-live="polite"></div>
+        </section>
+        <section class="label-panel" data-label-panel="insights" hidden>
+          <header><p class="section-label">AI INSIGHTS</p><h3>Recommended next action and risk alerts</h3></header>
+          <div id="labelInsightList" class="label-card-grid" aria-live="polite"></div>
+        </section>
+      </section>
+
       <section class="briefing-panel" aria-labelledby="briefingTitle">
         <header>
           <p class="section-label">COMPASS BRIEFING</p>

@@ -115,6 +115,7 @@ const libSource = await readFile(resolve(root, "netlify/lib/artist-agents.mjs"),
 const functionSource = await readFile(resolve(root, "netlify/functions/artist-agents.mjs"), "utf8");
 const migrationSource = await readFile(resolve(root, "netlify/database/migrations/20260812160000_create-artist-agent-teams.sql"), "utf8");
 const pageSource = await readFile(resolve(root, "artist-team.html"), "utf8");
+const clientSource = await readFile(resolve(root, "artist-team.js"), "utf8");
 const scheduledSource = await readFile(resolve(root, "netlify/functions/artist-agent-weekly.mjs"), "utf8");
 
 // Only models the AI Gateway actually serves.
@@ -129,9 +130,21 @@ assert.match(migrationSource, /external_publishing_enabled BOOLEAN NOT NULL DEFA
 assert.match(pageSource, /It does not post to any outside platform on your behalf/);
 assert.match(pageSource, /BACKSTAGE OPERATING DECK/);
 assert.match(pageSource, /Private artist room/);
+assert.match(pageSource, /WORLD AI LABEL LAYER/);
+assert.match(pageSource, /data-label-tab="dashboard"/);
+assert.match(pageSource, /id="labelRosterList"/);
+assert.match(pageSource, /id="labelInsightList"/);
 for (const seat of ["Scout", "Steer", "Echo", "Circle", "Compass"]) {
   assert.match(pageSource, new RegExp(`>${seat}<`), `${seat} must appear in the operating deck`);
 }
+assert.match(clientSource, /function renderLabelDashboard/);
+assert.match(clientSource, /data-label-tab/);
+assert.match(clientSource, /Continuity guard armed/);
+assert.match(functionSource, /loadLabelDashboard/);
+assert.match(libSource, /export async function loadLabelDashboard/);
+assert.match(libSource, /labelFitScore/);
+assert.match(libSource, /halo_artist_pro_leads/);
+assert.match(libSource, /shared no-dead-air continuity guard remains active/i);
 
 // Fan-facing words carry a disclosure by default.
 assert.match(migrationSource, /disclosure TEXT NOT NULL DEFAULT 'Drafted by this artist''s HALO agent team and approved by a human before publishing\.'/);

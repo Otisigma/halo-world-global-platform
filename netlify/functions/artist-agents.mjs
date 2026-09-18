@@ -3,6 +3,7 @@ import { getUser, verifyRequestOrigin } from "@netlify/identity";
 import { ensureMembership, isOwner } from "../lib/halo-x.mjs";
 import {
   loadArtistAgentDashboard,
+  loadLabelDashboard,
   loadArtistPlan,
   reserveArtistRun,
   runArtistAgentTeam,
@@ -55,8 +56,13 @@ export default async function artistAgentsHandler(request) {
       if (!slug) return json({ message: "Add an artist room handle" }, 400);
       const access = await authorize(db, user, slug);
       if (access.status) return json({ message: access.message }, access.status);
+      const [dashboard, labelDashboard] = await Promise.all([
+        loadArtistAgentDashboard(db, slug),
+        access.platformOwner ? loadLabelDashboard(db) : Promise.resolve(null)
+      ]);
       return json({
-        ...await loadArtistAgentDashboard(db, slug),
+        ...dashboard,
+        labelDashboard,
         viewer: { platformOwner: access.platformOwner }
       });
     }

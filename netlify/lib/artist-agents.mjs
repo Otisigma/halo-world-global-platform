@@ -938,6 +938,406 @@ function serializeDraft(row) {
   };
 }
 
+function splitRegions(value) {
+  const regions = cleanText(value, 160)
+    .split(/[•,\/|]+/)
+    .map(item => cleanText(item, 48))
+    .filter(Boolean);
+  return regions.length ? regions.slice(0, 3) : ["Global"];
+}
+
+function releaseState(row) {
+  const releaseDate = dateOnly(row.release_date);
+  const age = releaseDate ? daysSince(`${releaseDate}T00:00:00Z`) : null;
+  if (row.status !== "published") return "draft";
+  if (row.release_stage === "scheduled") return "scheduled";
+  if (releaseDate && releaseDate > dateOnly(new Date())) return "scheduled";
+  if (age !== null && age > 90) return "evergreen";
+  return "live";
+}
+
+function momentumBand(score) {
+  if (score >= 75) return "Breakout";
+  if (score >= 50) return "Accelerating";
+  if (score >= 25) return "Building";
+  return "Watching";
+}
+
+function pendingStageLabel(status) {
+  return {
+    new: "Pending review",
+    contacted: "Contacted",
+    qualified: "Qualified",
+    accepted: "Accepted",
+    waitlisted: "Waitlisted",
+    declined: "Declined"
+  }[status] || "Pending review";
+}
+
+function labelFitScore(candidate = {}) {
+  const stageBase = {
+    idea: 38,
+    recording: 50,
+    finishing: 64,
+    scheduled: 74,
+    released: 82,
+    signed: 68
+  };
+  const goalBoost = {
+    finish_release: 6,
+    build_campaign: 8,
+    reach_djs_radio: 10,
+    grow_fans: 7,
+    organise_team: 9
+  };
+  const topLine = stageBase[candidate.stage] || 42;
+  const score = topLine
+    + Math.round(numberValue(candidate.momentum) * 0.22)
+    + numberValue(goalBoost[candidate.goal])
+    + (candidate.hasRelease ? 6 : 0)
+    + (candidate.hasVideo ? 4 : 0)
+    + (candidate.hasTargetDate ? 4 : 0);
+  return clamp(score, 0, 100);
+}
+
+function signedMomentumNote(score, signals) {
+  if (score >= 75) return `Breakout pressure from ${numberValue(signals?.plays?.last30d)} radio plays and ${numberValue(signals?.room?.views30d)} room views.`;
+  if (score >= 50) return `Acceleration visible across ${numberValue(signals?.followers?.new30d)} new followers and ${numberValue(signals?.activity?.published30d)} fresh room updates.`;
+  if (score >= 25) return `Momentum is building; use the next release and campaign window before the signal cools.`;
+  return "Needs a sharper release, campaign, or fan signal before the next push.";
+}
+
+function discoveryRecommendation(candidate) {
+  if (candidate.kind === "pending") {
+    if (candidate.fitScore >= 80) return `Fast-track ${candidate.artistName} for an A&R review and release-operating call.`;
+    if (candidate.fitScore >= 65) return `Keep ${candidate.artistName} in the signed-room queue and test one concrete campaign brief.`;
+    return `Watch ${candidate.artistName} for one more verified signal before offering a label operating slot.`;
+  }
+  if (candidate.momentum >= 70) return `Move ${candidate.artistName} into a coordinated label campaign while the signal is hot.`;
+  if (candidate.momentum >= 45) return `Strengthen ${candidate.artistName}'s next release plan and territory push before the current energy fades.`;
+  return `Support ${candidate.artistName} with focused release prep before scaling spend.`;
+}
+
+function campaignActions(item) {
+  const actions = [];
+  if (["completed_listen", "retained_fan"].includes(item.objective)) actions.push("Social");
+  if (["direct_sale", "retained_fan"].includes(item.objective)) actions.push("Direct sale");
+  if (item.objective === "licensing_lead") actions.push("Playlist");
+  actions.push("Radio", "Takeover");
+  return [...new Set(actions)].slice(0, 5);
+}
+
+function priorityRank(priority) {
+  return { critical: 0, high: 1, medium: 2, low: 3 }[priority] ?? 4;
+}
+
+export async function loadLabelDashboard(db) {
+  const [pageRows, releaseRows, pendingRows, payoutRows, campaignRows, actionRows, riskRows] = await Promise.all([
+    db.sql`
+      SELECT slug, artist_name, location, status, updated_at
+      FROM halo_artist_pages
+      ORDER BY CASE WHEN status = 'published' THEN 0 ELSE 1 END, updated_at DESC
+      LIMIT 24
+    `,
+    db.sql`
+      SELECT
+        release.id, release.artist_slug, release.artist, release.title, release.release_date, release.status,
+        release.release_stage, release.available_versions, release.official_url, release.dj_url, release.radio_url, release.press_url,
+        COALESCE(SUM(CASE WHEN event.event_type = 'kit_open' AND event.created_at >= NOW() - INTERVAL '30 days' THEN 1 ELSE 0 END), 0)::int AS opens_30d,
+        COALESCE(SUM(CASE WHEN event.event_type = 'outbound_click' AND event.created_at >= NOW() - INTERVAL '30 days' THEN 1 ELSE 0 END), 0)::int AS listens_30d
+      FROM halo_release_campaigns release
+      LEFT JOIN halo_release_campaign_events event ON event.release_id = release.id
+      GROUP BY release.id
+      ORDER BY release.updated_at DESC, release.release_date DESC NULLS LAST
+      LIMIT 40
+    `,
+    db.sql`
+      SELECT id, artist_name, country_code, release_stage, release_title, target_release_date, primary_goal, status, created_at
+      FROM halo_artist_pro_leads
+      WHERE status IN ('new', 'contacted', 'qualified', 'waitlisted')
+      ORDER BY created_at DESC
+      LIMIT 16
+    `,
+    db.sql`
+      SELECT
+        page.slug,
+        page.artist_name,
+        COALESCE(profile.currency, 'GBP') AS currency,
+        COALESCE(profile.artist_pay_bps, 0) AS artist_pay_bps,
+        COALESCE(10000 - profile.artist_pay_bps, 0) AS label_share_bps,
+        COALESCE(SUM(CASE
+          WHEN income.status IN ('received', 'reconciled')
+            AND income.source_type IN ('direct_sale', 'membership', 'merchandise')
+          THEN income.gross_minor ELSE 0 END), 0)::bigint AS direct_minor,
+        COALESCE(SUM(CASE
+          WHEN income.status IN ('received', 'reconciled')
+            AND income.source_type NOT IN ('direct_sale', 'membership', 'merchandise')
+          THEN income.gross_minor ELSE 0 END), 0)::bigint AS label_minor,
+        COALESCE(SUM(CASE
+          WHEN income.status IN ('expected', 'overdue')
+          THEN income.gross_minor ELSE 0 END), 0)::bigint AS pending_minor,
+        COALESCE(SUM(CASE
+          WHEN income.status IN ('received', 'reconciled', 'expected', 'overdue')
+          THEN income.tax_reserve_minor + income.obligations_minor ELSE 0 END), 0)::bigint AS escrow_minor
+      FROM halo_artist_pages page
+      LEFT JOIN halo_artist_economy_profiles profile ON profile.artist_slug = page.slug
+      LEFT JOIN halo_artist_income_entries income ON income.artist_slug = page.slug
+      GROUP BY page.slug, page.artist_name, profile.currency, profile.artist_pay_bps
+      ORDER BY page.artist_name
+    `,
+    db.sql`
+      SELECT artist_slug, title, stage, objective, currency, budget_minor, spent_minor, meaningful_actions, decision, learning, updated_at
+      FROM halo_artist_campaign_investments
+      ORDER BY updated_at DESC
+      LIMIT 18
+    `,
+    db.sql`
+      SELECT artist_slug, title, priority, category, status, expected_metric
+      FROM halo_artist_agent_actions
+      WHERE status IN ('proposed', 'approved', 'in_progress')
+      ORDER BY
+        CASE priority WHEN 'critical' THEN 0 WHEN 'high' THEN 1 WHEN 'medium' THEN 2 ELSE 3 END,
+        updated_at DESC
+      LIMIT 18
+    `,
+    db.sql`
+      SELECT artist_slug, title, rights_status AS status, notes
+      FROM halo_artist_rights_works
+      WHERE rights_status IN ('hold', 'disputed')
+      ORDER BY updated_at DESC
+      LIMIT 12
+    `
+  ]);
+
+  const signedPages = pageRows.filter(row => row.status === "published");
+  const rosterSignals = await Promise.all(signedPages.map(async row => {
+    const [signals, plan] = await Promise.all([
+      collectArtistSignals(db, row.slug),
+      loadArtistPlan(db, row.slug)
+    ]);
+    return { page: row, signals, plan: serializePlan(plan) };
+  }));
+
+  const roster = rosterSignals.map(({ page, signals, plan }) => {
+    const momentum = numberValue(signals?.momentum ?? 0);
+    return {
+      slug: page.slug,
+      artistName: signals?.artistName || page.artist_name,
+      status: "Signed",
+      tier: (plan?.planTier || "starter").toUpperCase(),
+      planStatus: plan?.status || "active",
+      region: splitRegions(page.location)[0],
+      topRegions: splitRegions(page.location),
+      momentum,
+      momentumBand: momentumBand(momentum),
+      followers: numberValue(signals?.signals?.followers?.total),
+      radioPlays30d: numberValue(signals?.signals?.plays?.last30d),
+      roomViews30d: numberValue(signals?.signals?.room?.views30d),
+      releases: numberValue(signals?.signals?.releases?.published),
+      note: signedMomentumNote(momentum, signals?.signals)
+    };
+  }).sort((left, right) => right.momentum - left.momentum);
+
+  const pendingArtists = pendingRows.map(row => {
+    const candidate = {
+      kind: "pending",
+      artistName: cleanText(row.artist_name, 120),
+      stage: cleanText(row.release_stage, 24),
+      goal: cleanText(row.primary_goal, 40),
+      hasTargetDate: Boolean(dateOnly(row.target_release_date)),
+      hasRelease: Boolean(cleanText(row.release_title, 160)),
+      hasVideo: false,
+      momentum: 0
+    };
+    const fitScore = labelFitScore(candidate);
+    return {
+      id: row.id,
+      artistName: candidate.artistName,
+      status: pendingStageLabel(row.status),
+      tier: "PENDING",
+      region: cleanText(row.country_code, 2) || "Global",
+      topRegions: [cleanText(row.country_code, 2) || "Global"],
+      releaseStage: candidate.stage,
+      releaseTitle: cleanText(row.release_title, 160) || "Untitled release",
+      primaryGoal: candidate.goal,
+      fitScore,
+      momentum: 0,
+      momentumBand: "Pending read",
+      note: discoveryRecommendation({ ...candidate, fitScore })
+    };
+  }).sort((left, right) => right.fitScore - left.fitScore);
+
+  const releases = releaseRows.map(row => {
+    const state = releaseState(row);
+    const releaseDate = dateOnly(row.release_date);
+    const opens = numberValue(row.opens_30d);
+    const listens = numberValue(row.listens_30d);
+    const score = clamp((opens * 4) + (listens * 6), 0, 100);
+    return {
+      id: row.id,
+      artistSlug: cleanText(row.artist_slug, 80),
+      artistName: cleanText(row.artist, 120),
+      title: cleanText(row.title, 160),
+      state,
+      releaseDate,
+      versions: Array.isArray(row.available_versions) ? row.available_versions : [],
+      momentumScore: score,
+      momentumBand: momentumBand(score),
+      opens30d: opens,
+      listens30d: listens,
+      links: {
+        official: row.official_url || "",
+        dj: row.dj_url || "",
+        radio: row.radio_url || "",
+        press: row.press_url || ""
+      }
+    };
+  });
+
+  const payoutMap = new Map(payoutRows.map(row => [row.slug, {
+    slug: row.slug,
+    artistName: row.artist_name,
+    currency: row.currency || "GBP",
+    directMinor: numberValue(row.direct_minor),
+    labelMinor: numberValue(row.label_minor),
+    pendingMinor: numberValue(row.pending_minor),
+    escrowMinor: numberValue(row.escrow_minor),
+    artistShareBps: numberValue(row.artist_pay_bps),
+    labelShareBps: numberValue(row.label_share_bps)
+  }]));
+
+  const payouts = roster.map(artist => ({
+    ...payoutMap.get(artist.slug),
+    slug: artist.slug,
+    artistName: artist.artistName,
+    currency: payoutMap.get(artist.slug)?.currency || "GBP",
+    directMinor: payoutMap.get(artist.slug)?.directMinor ?? 0,
+    labelMinor: payoutMap.get(artist.slug)?.labelMinor ?? 0,
+    pendingMinor: payoutMap.get(artist.slug)?.pendingMinor ?? 0,
+    escrowMinor: payoutMap.get(artist.slug)?.escrowMinor ?? 0,
+    artistShareBps: payoutMap.get(artist.slug)?.artistShareBps ?? 0,
+    labelShareBps: payoutMap.get(artist.slug)?.labelShareBps ?? 0
+  })).sort((left, right) => (right.pendingMinor + right.labelMinor + right.directMinor) - (left.pendingMinor + left.labelMinor + left.directMinor));
+
+  const rosterMap = new Map(roster.map(item => [item.slug, item]));
+  const campaigns = campaignRows.map(row => {
+    const artist = rosterMap.get(row.artist_slug);
+    return {
+      artistSlug: row.artist_slug,
+      artistName: artist?.artistName || row.artist_slug,
+      title: cleanText(row.title, 180),
+      stage: cleanText(row.stage, 24),
+      objective: cleanText(row.objective, 40),
+      decision: cleanText(row.decision, 24),
+      currency: cleanText(row.currency, 3) || "GBP",
+      budgetMinor: numberValue(row.budget_minor),
+      spentMinor: numberValue(row.spent_minor),
+      meaningfulActions: numberValue(row.meaningful_actions),
+      learning: cleanText(row.learning, 4000),
+      actions: campaignActions(row)
+    };
+  });
+
+  const discovery = [
+    ...roster.slice(0, 8).map(item => {
+      const fitScore = labelFitScore({
+        kind: "signed",
+        stage: "signed",
+        momentum: item.momentum,
+        hasRelease: item.releases > 0,
+        hasVideo: false,
+        hasTargetDate: false
+      });
+      return {
+        kind: "signed",
+        artistSlug: item.slug,
+        artistName: item.artistName,
+        fitScore,
+        momentum: item.momentum,
+        topRegions: item.topRegions,
+        recommendation: discoveryRecommendation({ artistName: item.artistName, momentum: item.momentum }),
+        status: item.status
+      };
+    }),
+    ...pendingArtists.slice(0, 8).map(item => ({
+      kind: "pending",
+      artistName: item.artistName,
+      fitScore: item.fitScore,
+      momentum: item.momentum,
+      topRegions: item.topRegions,
+      recommendation: item.note,
+      status: item.status,
+      releaseStage: item.releaseStage
+    }))
+  ].sort((left, right) => {
+    if (right.fitScore !== left.fitScore) return right.fitScore - left.fitScore;
+    return right.momentum - left.momentum;
+  }).slice(0, 12);
+
+  const prioritizedActions = actionRows.map(row => ({
+    artistSlug: row.artist_slug,
+    artistName: rosterMap.get(row.artist_slug)?.artistName || row.artist_slug,
+    title: cleanText(row.title, 200),
+    priority: cleanText(row.priority, 20),
+    category: cleanText(row.category, 24),
+    status: cleanText(row.status, 24),
+    expectedMetric: cleanText(row.expected_metric, 240)
+  })).sort((left, right) => priorityRank(left.priority) - priorityRank(right.priority));
+
+  const alerts = [
+    ...riskRows.map(row => ({
+      artistSlug: row.artist_slug,
+      artistName: rosterMap.get(row.artist_slug)?.artistName || row.artist_slug,
+      title: cleanText(row.title, 180),
+      status: cleanText(row.status, 24),
+      detail: cleanText(row.notes, 220) || "Rights hold requires a human decision."
+    })),
+    ...pendingArtists.slice(0, 3).map(item => ({
+      artistSlug: "",
+      artistName: item.artistName,
+      title: "Pending artist queue",
+      status: item.status,
+      detail: `${item.releaseTitle} is waiting with a ${item.fitScore} label-fit score.`
+    }))
+  ].slice(0, 12);
+
+  const topAction = prioritizedActions[0];
+  return {
+    labelName: "World AI Record Label",
+    continuity: {
+      title: "Continuity guard armed",
+      summary: "The shared no-dead-air continuity guard remains active across HALO Radio and the DJ Command Deck.",
+      routes: ["/radio/", "/dj-deck.html"]
+    },
+    summary: {
+      signedArtists: roster.length,
+      pendingArtists: pendingArtists.length,
+      liveReleases: releases.filter(item => item.state === "live").length,
+      scheduledReleases: releases.filter(item => item.state === "scheduled").length,
+      directMinor: payouts.reduce((sum, item) => sum + item.directMinor, 0),
+      labelMinor: payouts.reduce((sum, item) => sum + item.labelMinor, 0),
+      pendingMinor: payouts.reduce((sum, item) => sum + item.pendingMinor, 0),
+      escrowMinor: payouts.reduce((sum, item) => sum + item.escrowMinor, 0)
+    },
+    nextAction: topAction
+      ? `${topAction.artistName}: ${topAction.title}`
+      : pendingArtists[0]
+        ? `Review ${pendingArtists[0].artistName} for the next label slot.`
+        : "Review the roster for the next coordinated release push.",
+    roster,
+    pendingArtists,
+    releases,
+    discovery,
+    payouts,
+    campaigns,
+    insights: {
+      actionCount: prioritizedActions.length,
+      prioritizedActions: prioritizedActions.slice(0, 8),
+      alerts
+    }
+  };
+}
+
 export async function loadArtistAgentDashboard(db, slug) {
   const [planRow, runRows, findingRows, actionRows, draftRows, memoryRows] = await Promise.all([
     loadArtistPlan(db, slug),

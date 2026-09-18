@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import vm from "node:vm";
 import {
   ARTIST_AGENT_MODEL,
   ARTIST_AGENT_ROLES,
@@ -116,6 +117,7 @@ const functionSource = await readFile(resolve(root, "netlify/functions/artist-ag
 const migrationSource = await readFile(resolve(root, "netlify/database/migrations/20260812160000_create-artist-agent-teams.sql"), "utf8");
 const pageSource = await readFile(resolve(root, "artist-team.html"), "utf8");
 const clientSource = await readFile(resolve(root, "artist-team.js"), "utf8");
+const labelLayerSource = await readFile(resolve(root, "artist-team-label-layer.js"), "utf8");
 const scheduledSource = await readFile(resolve(root, "netlify/functions/artist-agent-weekly.mjs"), "utf8");
 
 // Only models the AI Gateway actually serves.
@@ -134,6 +136,7 @@ assert.match(pageSource, /WORLD AI LABEL LAYER/);
 assert.match(pageSource, /role="tablist"/);
 assert.match(pageSource, /role="tab"/);
 assert.match(pageSource, /role="tabpanel"/);
+assert.match(pageSource, /artist-team-label-layer\.js/);
 assert.match(pageSource, /data-label-tab="dashboard"/);
 assert.match(pageSource, /id="labelRosterList"/);
 assert.match(pageSource, /id="labelInsightList"/);
@@ -145,12 +148,22 @@ assert.match(clientSource, /function loadLabelLayer/);
 assert.match(clientSource, /aria-selected/);
 assert.match(clientSource, /data-label-tab/);
 assert.match(clientSource, /Continuity guard armed/);
+assert.match(clientSource, /ArrowRight|ArrowLeft|Home|End/);
 assert.match(functionSource, /loadLabelDashboard/);
 assert.match(functionSource, /mode === "label"/);
 assert.match(libSource, /export async function loadLabelDashboard/);
 assert.match(libSource, /labelFitScore/);
 assert.match(libSource, /halo_artist_pro_leads/);
 assert.match(libSource, /shared no-dead-air continuity guard remains active/i);
+
+const sandbox = { window: {} };
+vm.runInNewContext(labelLayerSource, sandbox);
+assert.equal(sandbox.window.HaloArtistTeamLabelLayer.nextTab("dashboard", "ArrowLeft"), "insights");
+assert.equal(sandbox.window.HaloArtistTeamLabelLayer.nextTab("dashboard", "End"), "insights");
+assert.equal(sandbox.window.HaloArtistTeamLabelLayer.nextTab("campaigns", "ArrowRight"), "insights");
+const unavailable = sandbox.window.HaloArtistTeamLabelLayer.unavailableState("Label telemetry unavailable");
+assert.equal(unavailable.summary.value, "—");
+assert.equal(unavailable.cards.labelInsightList.body, "Label telemetry unavailable");
 
 // Fan-facing words carry a disclosure by default.
 assert.match(migrationSource, /disclosure TEXT NOT NULL DEFAULT 'Drafted by this artist''s HALO agent team and approved by a human before publishing\.'/);

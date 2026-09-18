@@ -14,6 +14,14 @@
   const escapeHtml = value => String(value ?? "").replace(/[&<>'"]/g, character => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" })[character]);
   const number = value => new Intl.NumberFormat("en-GB").format(Number(value || 0));
   const formatDateTime = value => value ? `${new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short", timeZone: "UTC" }).format(new Date(value))} UTC` : "Not available";
+  const labelLayerHelpers = window.HaloArtistTeamLabelLayer || {
+    tabs: ["dashboard", "roster", "releases", "ar", "payouts", "campaigns", "insights"],
+    nextTab: current => current,
+    unavailableState: message => ({
+      summary: { label: "Label layer", value: "—", detail: "Artist intelligence remains available even when label telemetry is offline." },
+      cards: Object.fromEntries(["labelRosterPreview", "labelReleasePreview", "labelInsightPreview", "labelRosterList", "labelReleaseList", "labelDiscoveryList", "labelPayoutList", "labelCampaignList", "labelInsightList"].map(id => [id, { title: "Unavailable", body: message }]))
+    })
+  };
   const money = (value, currency = "GBP") => {
     try {
       return new Intl.NumberFormat("en-GB", { style: "currency", currency, maximumFractionDigits: 0 }).format(Number(value || 0) / 100);
@@ -298,6 +306,10 @@
     return items?.length ? items : [fallback];
   }
 
+  function unavailableCard(detail) {
+    return el("article", { class: "label-row-card" }, el("h4", null, "Unavailable"), el("p", null, detail));
+  }
+
   function renderLabelDashboard(labelDashboard) {
     const layer = byId("labelLayer");
     if (!labelDashboard) {
@@ -473,12 +485,12 @@
       renderLabelDashboard(payload.labelDashboard || null);
     } catch (error) {
       if (state.labelRequest !== requestId) return;
+      const unavailable = labelLayerHelpers.unavailableState(error instanceof Error ? error.message : "The label cockpit could not be loaded.");
       byId("labelContinuityTitle").textContent = "World AI label layer";
       byId("labelNextAction").textContent = "Label telemetry unavailable";
-      byId("labelContinuitySummary").textContent = error instanceof Error ? error.message : "The label cockpit could not be loaded.";
-      clearChildren(byId("labelSummaryGrid"), [metricCard("Label layer", "—", "Artist intelligence remains available even when label telemetry is offline.")]);
-      ["labelRosterPreview", "labelReleasePreview", "labelInsightPreview", "labelRosterList", "labelReleaseList", "labelDiscoveryList", "labelPayoutList", "labelCampaignList", "labelInsightList"]
-        .forEach(id => clearChildren(byId(id), [el("article", { class: "label-row-card" }, el("h4", null, "Unavailable"), el("p", null, "Reload to retry the label cockpit."))]));
+      byId("labelContinuitySummary").textContent = unavailable.cards.labelRosterList.body;
+      clearChildren(byId("labelSummaryGrid"), [metricCard(unavailable.summary.label, unavailable.summary.value, unavailable.summary.detail)]);
+      Object.entries(unavailable.cards).forEach(([id, card]) => clearChildren(byId(id), [unavailableCard(card.body)]));
       setLabelTab(document.querySelector("[data-label-tab].is-active")?.dataset.labelTab || "dashboard");
     }
   }
@@ -619,6 +631,16 @@
     const button = event.target.closest("button[data-label-tab]");
     if (!button) return;
     setLabelTab(button.dataset.labelTab);
+  });
+  byId("labelTabRail")?.addEventListener("keydown", event => {
+    if (!["ArrowRight", "ArrowLeft", "ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) return;
+    const current = event.target.closest("button[data-label-tab]")?.dataset.labelTab || "dashboard";
+    const next = labelLayerHelpers.nextTab(current, event.key, labelLayerHelpers.tabs);
+    const button = document.querySelector(`[data-label-tab="${next}"]`);
+    if (!button) return;
+    event.preventDefault();
+    setLabelTab(next);
+    button.focus();
   });
   window.addEventListener("halo-identity-ready", initializeIdentity, { once: true });
   if (window.haloIdentity) initializeIdentity();

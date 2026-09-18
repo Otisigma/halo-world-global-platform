@@ -1282,7 +1282,11 @@ export async function loadLabelDashboard(db) {
     category: cleanText(row.category, 24),
     status: cleanText(row.status, 24),
     expectedMetric: cleanText(row.expected_metric, 240)
-  })).sort((left, right) => priorityRank(left.priority) - priorityRank(right.priority));
+  })).sort((left, right) => {
+    const leftRank = priorityRank(left.priority);
+    const rightRank = priorityRank(right.priority);
+    return leftRank === rightRank ? 0 : leftRank < rightRank ? -1 : 1;
+  });
 
   const alerts = [
     ...riskRows.map(row => ({

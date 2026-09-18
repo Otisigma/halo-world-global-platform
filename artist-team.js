@@ -310,6 +310,10 @@
     return el("article", { class: "label-row-card" }, el("h4", null, "Unavailable"), el("p", null, detail));
   }
 
+  function loadingCard(detail) {
+    return el("article", { class: "label-row-card" }, el("h4", null, "Loading"), el("p", null, detail));
+  }
+
   function renderLabelDashboard(labelDashboard) {
     const layer = byId("labelLayer");
     if (!labelDashboard) {
@@ -479,6 +483,9 @@
     byId("labelContinuityTitle").textContent = "World AI label layer";
     byId("labelNextAction").textContent = "Loading label telemetry…";
     byId("labelContinuitySummary").textContent = "Roster, release, payout, and campaign signals are being assembled.";
+    clearChildren(byId("labelSummaryGrid"), [metricCard("Label layer", "…", "Refreshing the owner-only cockpit from current HALO telemetry.")]);
+    ["labelRosterPreview", "labelReleasePreview", "labelInsightPreview", "labelRosterList", "labelReleaseList", "labelDiscoveryList", "labelPayoutList", "labelCampaignList", "labelInsightList"]
+      .forEach(id => clearChildren(byId(id), [loadingCard("Refreshing label telemetry for the current room context.")]));    
     try {
       const payload = await api("GET", "/api/artist-agents?mode=label");
       if (state.labelRequest !== requestId) return;
@@ -506,7 +513,7 @@
     renderActions(dashboard.actions);
     renderDrafts(dashboard.drafts);
     renderPlan(dashboard.plan, dashboard.latestRun);
-    if (dashboard.viewer?.platformOwner) loadLabelLayer();
+    if (dashboard.labelLayerEnabled) loadLabelLayer();
     else renderLabelDashboard(null);
     byId("runButton").disabled = !dashboard.plan || dashboard.plan.runsRemaining <= 0;
     byId("runMessage").textContent = dashboard.plan

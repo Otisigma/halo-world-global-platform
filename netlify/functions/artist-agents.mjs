@@ -60,7 +60,7 @@ export default async function artistAgentsHandler(request) {
       if (mode === "label") {
         if (!user?.id) return json({ message: "Sign in to open the World AI label layer" }, 401);
         if (!isOwner(user)) return json({ message: "Owner access is required for the label layer" }, 403);
-        return json({ labelDashboard: await loadLabelDashboard(db), viewer: { platformOwner: true } });
+        return json({ labelDashboard: await loadLabelDashboard(db), viewer: { platformOwner: true }, labelLayerEnabled: true });
       }
       const slug = cleanSlug(url.searchParams.get("slug"));
       if (!slug) return json({ message: "Add an artist room handle" }, 400);
@@ -68,7 +68,8 @@ export default async function artistAgentsHandler(request) {
       if (access.status) return json({ message: access.message }, access.status);
       return json({
         ...await loadArtistAgentDashboard(db, slug),
-        viewer: { platformOwner: access.platformOwner }
+        viewer: { platformOwner: access.platformOwner },
+        labelLayerEnabled: access.platformOwner
       });
     }
 

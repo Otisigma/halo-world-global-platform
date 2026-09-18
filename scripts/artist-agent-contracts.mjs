@@ -157,7 +157,7 @@ assert.match(libSource, /halo_artist_pro_leads/);
 assert.match(libSource, /shared no-dead-air continuity guard remains active/i);
 
 const sandbox = { window: {} };
-vm.runInNewContext(labelLayerSource, sandbox);
+vm.runInNewContext(labelLayerSource, sandbox, { timeout: 250 });
 assert.equal(sandbox.window.HaloArtistTeamLabelLayer.nextTab("dashboard", "ArrowLeft"), "insights");
 assert.equal(sandbox.window.HaloArtistTeamLabelLayer.nextTab("dashboard", "End"), "insights");
 assert.equal(sandbox.window.HaloArtistTeamLabelLayer.nextTab("campaigns", "ArrowRight"), "insights");

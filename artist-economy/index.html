@@ -107,6 +107,57 @@
         <ol id="gapList"></ol>
       </section>
 
+      <section class="stats-board" aria-labelledby="statsBoardTitle">
+        <header class="section-heading">
+          <div>
+            <p class="kicker">02 / ARTIST DASHBOARD STATS</p>
+            <h2 id="statsBoardTitle">The numbers that move the next decision.</h2>
+            <p>A focused readout of artist performance, audience telemetry, revenue signals, conversion progress, opportunity flow, and track-level direction.</p>
+          </div>
+        </header>
+        <div id="statsKpiGrid" class="stats-kpi-grid"></div>
+        <div class="stats-surface-grid">
+          <article class="stats-card">
+            <header><span>GLOBAL AUDIENCE</span><h3>Territories + cities</h3></header>
+            <div class="stats-dual-list">
+              <div><h4>Top territories</h4><ul id="statsTerritoryList"></ul></div>
+              <div><h4>Top cities</h4><ul id="statsCityList"></ul></div>
+            </div>
+          </article>
+          <article class="stats-card">
+            <header><span>REVENUE + ROYALTY MATRIX</span><h3>Source and realised net</h3></header>
+            <div class="stats-table-shell">
+              <table class="stats-table">
+                <thead><tr><th>Source</th><th>Gross</th><th>Net</th><th>Status</th></tr></thead>
+                <tbody id="statsRevenueTableBody"></tbody>
+              </table>
+            </div>
+          </article>
+          <article class="stats-card">
+            <header><span>TRAFFIC + CONVERSION</span><h3>Signal funnel</h3></header>
+            <ol id="statsFunnelList" class="stats-funnel-list"></ol>
+          </article>
+          <article class="stats-card">
+            <header><span>RELEASE / TRACK PERFORMANCE</span><h3>Rights + earnings direction</h3></header>
+            <div class="stats-table-shell">
+              <table class="stats-table">
+                <thead><tr><th>Track</th><th>Rights</th><th>Received</th><th>Open pipeline</th><th>Next action</th></tr></thead>
+                <tbody id="statsTrackTableBody"></tbody>
+              </table>
+            </div>
+          </article>
+          <article class="stats-card">
+            <header><span>OPPORTUNITY EXCHANGE</span><h3>Active inquiries</h3></header>
+            <ul id="statsOpportunityList" class="stats-highlight-list"></ul>
+          </article>
+          <article class="stats-card">
+            <header><span>AI INSIGHT</span><h3>Recommended next move</h3></header>
+            <p id="statsNextAction" class="stats-next-action"></p>
+            <ul id="statsInsightList" class="stats-highlight-list"></ul>
+          </article>
+        </div>
+      </section>
+
       <nav class="workspace-tabs" aria-label="Artist Economy sections">
         <button class="is-active" type="button" data-tab="rights">Rights passport</button>
         <button type="button" data-tab="income">Income ledger</button>

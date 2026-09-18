@@ -175,6 +175,7 @@
       ? summary.gaps.map(gap => `<li>${escapeHtml(gap)}</li>`).join("")
       : "<li>The recorded foundations are complete. Review outcomes and protect the next move.</li>";
     byId("conscienceTab").hidden = !viewer.platformOwner;
+    renderStats();
     renderRightsGuidance();
     renderRights();
     renderIncome();
@@ -216,6 +217,195 @@
         ${renderGuidanceSection("Draft packs + checklists", guidance.draftPackets || [], "No draft pack is waiting.", "When the system sees a rights gap, it prepares a checklist here rather than acting externally.", true)}
       </div>
     `;
+  }
+
+  function compactNumber(value) {
+    return new Intl.NumberFormat(undefined, { maximumFractionDigits: 1 }).format(Number(value || 0));
+  }
+
+  function buildStatsSnapshot() {
+    const profile = state.dashboard?.profile || {};
+    const summary = state.dashboard?.summary || {};
+    const works = state.dashboard?.works || [];
+    const incomes = state.dashboard?.incomes || [];
+    const campaigns = state.dashboard?.campaigns || [];
+    const licensing = state.dashboard?.licensing || [];
+    const live = state.dashboard?.live || [];
+    const rightsGuidance = state.dashboard?.rightsGuidance || {};
+
+    const receivedStatuses = new Set(["received", "reconciled"]);
+    const openLicensing = licensing.filter(item => !["paid", "declined"].includes(item.stage));
+    const paidLicensing = licensing.filter(item => item.stage === "paid");
+    const paidShows = live.filter(item => item.settlementStatus === "paid");
+
+    const trafficSignals = campaigns.reduce((sum, item) => sum + Number(item.meaningfulActions || 0), 0);
+    const engagedFans = live.reduce((sum, item) => sum + Number(item.fansCaptured || 0), 0);
+    const conversionRate = trafficSignals > 0 ? Math.min(1, engagedFans / trafficSignals) : 0;
+
+    const territories = new Map();
+    for (const item of licensing) {
+      const territory = (item.territory || "unspecified").trim().toUpperCase();
+      territories.set(territory, (territories.get(territory) || 0) + 1);
+    }
+    const cities = new Map();
+    for (const item of live) {
+      const city = (item.city || item.venueName || "unlisted city").trim();
+      if (!city) continue;
+      cities.set(city, (cities.get(city) || 0) + 1);
+    }
+
+    const revenueBySource = new Map();
+    for (const item of incomes) {
+      const key = item.sourceType || "other";
+      const current = revenueBySource.get(key) || {
+        source: key,
+        currency: item.currency || profile.currency || "GBP",
+        grossMinor: 0,
+        netMinor: 0,
+        openCount: 0,
+        settledCount: 0
+      };
+      current.grossMinor += Number(item.grossMinor || 0);
+      if (receivedStatuses.has(item.status)) {
+        current.netMinor += Math.max(0, Number(item.grossMinor || 0) - Number(item.feesMinor || 0) - Number(item.taxReserveMinor || 0) - Number(item.obligationsMinor || 0));
+        current.settledCount += 1;
+      } else {
+        current.openCount += 1;
+      }
+      revenueBySource.set(key, current);
+    }
+
+    const receivedByWork = new Map();
+    const expectedByWork = new Map();
+    for (const item of incomes) {
+      if (!item.workId) continue;
+      if (receivedStatuses.has(item.status)) {
+        receivedByWork.set(item.workId, (receivedByWork.get(item.workId) || 0) + Number(item.grossMinor || 0));
+      } else if (item.status === "expected") {
+        expectedByWork.set(item.workId, (expectedByWork.get(item.workId) || 0) + Number(item.grossMinor || 0));
+      }
+    }
+    const licensingByWork = new Map();
+    for (const item of openLicensing) {
+      if (!item.workId) continue;
+      const current = licensingByWork.get(item.workId) || 0;
+      licensingByWork.set(item.workId, current + Number(item.quotedFeeMinor || 0));
+    }
+
+    const trackPerformance = works.map(work => {
+      const openPipelineMinor = licensingByWork.get(work.id) || 0;
+      const receivedMinor = receivedByWork.get(work.id) || 0;
+      const expectedMinor = expectedByWork.get(work.id) || 0;
+      let nextAction = "Drive first monetisation";
+      if (work.rightsStatus !== "cleared") nextAction = "Clear rights status";
+      else if (openPipelineMinor > 0) nextAction = "Advance active opportunities";
+      else if (receivedMinor > 0) nextAction = "Scale strongest channels";
+      else if (expectedMinor > 0) nextAction = "Convert expected to received";
+      return { work, receivedMinor, openPipelineMinor, nextAction };
+    }).sort((left, right) => (right.receivedMinor + right.openPipelineMinor) - (left.receivedMinor + left.openPipelineMinor)).slice(0, 8);
+
+    const opportunities = openLicensing
+      .map(item => ({ ...item, dueScore: item.decisionDueAt ? new Date(item.decisionDueAt).valueOf() : Number.POSITIVE_INFINITY }))
+      .sort((left, right) => left.dueScore - right.dueScore || right.quotedFeeMinor - left.quotedFeeMinor)
+      .slice(0, 5);
+
+    const insights = [
+      ...(rightsGuidance.conflicts || []).map(item => item.title),
+      ...(rightsGuidance.missingData || []).map(item => item.title),
+      ...(summary.gaps || [])
+    ].filter(Boolean).slice(0, 5);
+
+    const nextAction = insights[0]
+      || (opportunities[0] ? `${opportunities[0].opportunityName}: move to artist approval with clear rights context.` : "No critical blockers detected. Keep the system current and review new signals weekly.");
+
+    const repeatableChannels = Array.from(revenueBySource.values()).filter(item => item.settledCount >= 2).length;
+
+    return {
+      kpis: [
+        { label: "Available now", value: money(summary.availableMinor), detail: "Artist spendable after fees, tax reserve, and obligations." },
+        { label: "Pipeline value", value: money((summary.expectedMinor || 0) + (summary.licensingPipelineMinor || 0)), detail: "Expected income plus open licensing value." },
+        { label: "Rights-ready tracks", value: `${summary.clearedWorks || 0}/${summary.totalWorks || 0}`, detail: "Works marked cleared in the rights passport." },
+        { label: "Fan conversion", value: `${Math.round(conversionRate * 100)}%`, detail: `${compactNumber(engagedFans)} engaged from ${compactNumber(trafficSignals)} campaign actions.` },
+        { label: "Open opportunities", value: String(openLicensing.length), detail: `${paidLicensing.length} paid and recorded so far.` },
+        { label: "Live profit", value: money(summary.liveProfitMinor), detail: `${paidShows.length} settled show(s) marked paid.` }
+      ],
+      territories: Array.from(territories.entries()).sort((left, right) => right[1] - left[1]).slice(0, 5),
+      cities: Array.from(cities.entries()).sort((left, right) => right[1] - left[1]).slice(0, 5),
+      revenueRows: Array.from(revenueBySource.values()).sort((left, right) => right.grossMinor - left.grossMinor).slice(0, 8),
+      funnel: [
+        { label: "Campaign traffic signals", value: trafficSignals, detail: "Meaningful actions recorded across campaign tests." },
+        { label: "Captured fans", value: engagedFans, detail: "Permissioned fan captures from live engagements." },
+        { label: "Revenue events", value: incomes.filter(item => receivedStatuses.has(item.status)).length + paidLicensing.length + paidShows.length, detail: "Received or paid commercial records." },
+        { label: "Repeatable channels", value: repeatableChannels, detail: "Income sources with at least two settled entries." }
+      ],
+      trackPerformance,
+      opportunities,
+      insights,
+      nextAction
+    };
+  }
+
+  function renderStats() {
+    const target = byId("statsKpiGrid");
+    if (!target) return;
+    const snapshot = buildStatsSnapshot();
+    target.innerHTML = snapshot.kpis.map(item => `
+      <article class="stats-kpi-card">
+        <span>${escapeHtml(item.label)}</span>
+        <strong>${escapeHtml(item.value)}</strong>
+        <small>${escapeHtml(item.detail)}</small>
+      </article>
+    `).join("");
+
+    const listMarkup = entries => entries.length
+      ? entries.map(([name, count]) => `<li><span>${escapeHtml(name)}</span><strong>${escapeHtml(String(count))}</strong></li>`).join("")
+      : '<li class="stats-empty">No data recorded yet.</li>';
+    byId("statsTerritoryList").innerHTML = listMarkup(snapshot.territories);
+    byId("statsCityList").innerHTML = listMarkup(snapshot.cities);
+
+    byId("statsRevenueTableBody").innerHTML = snapshot.revenueRows.length
+      ? snapshot.revenueRows.map(row => `
+        <tr>
+          <td>${escapeHtml(titleCase(row.source))}</td>
+          <td>${escapeHtml(money(row.grossMinor, row.currency))}</td>
+          <td>${escapeHtml(money(row.netMinor, row.currency))}</td>
+          <td>${escapeHtml(`${row.settledCount} settled / ${row.openCount} open`)}</td>
+        </tr>
+      `).join("")
+      : '<tr><td colspan="4" class="stats-empty">Add income records to build this matrix.</td></tr>';
+
+    const funnelMax = Math.max(1, ...snapshot.funnel.map(item => item.value));
+    byId("statsFunnelList").innerHTML = snapshot.funnel.map(item => `
+      <li>
+        <div><strong>${escapeHtml(item.label)}</strong><small>${escapeHtml(item.detail)}</small></div>
+        <span>${escapeHtml(compactNumber(item.value))}</span>
+        <i style="width:${Math.round((item.value / funnelMax) * 100)}%"></i>
+      </li>
+    `).join("");
+
+    byId("statsTrackTableBody").innerHTML = snapshot.trackPerformance.length
+      ? snapshot.trackPerformance.map(({ work, receivedMinor, openPipelineMinor, nextAction }) => `
+        <tr>
+          <td>${escapeHtml(work.title)}</td>
+          <td>${escapeHtml(titleCase(work.rightsStatus))}</td>
+          <td>${escapeHtml(money(receivedMinor))}</td>
+          <td>${escapeHtml(money(openPipelineMinor))}</td>
+          <td>${escapeHtml(nextAction)}</td>
+        </tr>
+      `).join("")
+      : '<tr><td colspan="5" class="stats-empty">Add works to unlock track-level performance.</td></tr>';
+
+    byId("statsOpportunityList").innerHTML = snapshot.opportunities.length
+      ? snapshot.opportunities.map(item => `<li>
+        <div><strong>${escapeHtml(item.opportunityName)}</strong><small>${escapeHtml(`${titleCase(item.stage)} · Rights ${titleCase(item.rightsCheck)} · ${item.territory}`)}</small></div>
+        <span>${escapeHtml(money(item.quotedFeeMinor, item.currency))}</span>
+      </li>`).join("")
+      : '<li class="stats-empty">No active opportunities yet.</li>';
+
+    byId("statsNextAction").textContent = snapshot.nextAction;
+    byId("statsInsightList").innerHTML = snapshot.insights.length
+      ? snapshot.insights.map(item => `<li>${escapeHtml(item)}</li>`).join("")
+      : '<li class="stats-empty">No urgent blockers are currently recorded.</li>';
   }
 
   function renderRights() {

@@ -240,11 +240,11 @@
 
     const trafficSignals = campaigns.reduce((sum, item) => sum + Number(item.meaningfulActions || 0), 0);
     const engagedFans = live.reduce((sum, item) => sum + Number(item.fansCaptured || 0), 0);
-    const conversionRate = trafficSignals > 0 ? Math.min(1, engagedFans / trafficSignals) : 0;
+    const conversionRate = trafficSignals > 0 ? engagedFans / trafficSignals : 0;
 
     const territories = new Map();
     for (const item of licensing) {
-      const territory = (item.territory || "unspecified").trim().toUpperCase();
+      const territory = (item.territory || "Unspecified").trim();
       territories.set(territory, (territories.get(territory) || 0) + 1);
     }
     const cities = new Map();
@@ -257,9 +257,11 @@
     const revenueBySource = new Map();
     for (const item of incomes) {
       const key = item.sourceType || "other";
-      const current = revenueBySource.get(key) || {
+      const currency = item.currency || profile.currency || "GBP";
+      const bucketKey = `${key}::${currency}`;
+      const current = revenueBySource.get(bucketKey) || {
         source: key,
-        currency: item.currency || profile.currency || "GBP",
+        currency,
         grossMinor: 0,
         netMinor: 0,
         openCount: 0,
@@ -272,37 +274,59 @@
       } else {
         current.openCount += 1;
       }
-      revenueBySource.set(key, current);
+      revenueBySource.set(bucketKey, current);
     }
 
     const receivedByWork = new Map();
     const expectedByWork = new Map();
+
+    function addWorkAmount(store, workId, currency, amountMinor) {
+      if (!store.has(workId)) store.set(workId, new Map());
+      const workMap = store.get(workId);
+      workMap.set(currency, (workMap.get(currency) || 0) + amountMinor);
+    }
+
+    function currencyBreakdown(store, workId) {
+      const workMap = store.get(workId);
+      if (!workMap) return [];
+      return Array.from(workMap.entries()).map(([currency, amountMinor]) => ({ currency, amountMinor }));
+    }
+
+    function totalFromBreakdown(items) {
+      return items.reduce((sum, item) => sum + item.amountMinor, 0);
+    }
+
     for (const item of incomes) {
       if (!item.workId) continue;
+      const currency = item.currency || profile.currency || "GBP";
       if (receivedStatuses.has(item.status)) {
-        receivedByWork.set(item.workId, (receivedByWork.get(item.workId) || 0) + Number(item.grossMinor || 0));
+        const netMinor = Math.max(0, Number(item.grossMinor || 0) - Number(item.feesMinor || 0) - Number(item.taxReserveMinor || 0) - Number(item.obligationsMinor || 0));
+        addWorkAmount(receivedByWork, item.workId, currency, netMinor);
       } else if (item.status === "expected") {
-        expectedByWork.set(item.workId, (expectedByWork.get(item.workId) || 0) + Number(item.grossMinor || 0));
+        addWorkAmount(expectedByWork, item.workId, currency, Number(item.grossMinor || 0));
       }
     }
     const licensingByWork = new Map();
     for (const item of openLicensing) {
       if (!item.workId) continue;
-      const current = licensingByWork.get(item.workId) || 0;
-      licensingByWork.set(item.workId, current + Number(item.quotedFeeMinor || 0));
+      const currency = item.currency || profile.currency || "GBP";
+      addWorkAmount(licensingByWork, item.workId, currency, Number(item.quotedFeeMinor || 0));
     }
 
     const trackPerformance = works.map(work => {
-      const openPipelineMinor = licensingByWork.get(work.id) || 0;
-      const receivedMinor = receivedByWork.get(work.id) || 0;
-      const expectedMinor = expectedByWork.get(work.id) || 0;
+      const openPipelineBreakdown = currencyBreakdown(licensingByWork, work.id);
+      const receivedBreakdown = currencyBreakdown(receivedByWork, work.id);
+      const expectedBreakdown = currencyBreakdown(expectedByWork, work.id);
+      const openPipelineMinor = totalFromBreakdown(openPipelineBreakdown);
+      const receivedMinor = totalFromBreakdown(receivedBreakdown);
+      const expectedMinor = totalFromBreakdown(expectedBreakdown);
       let nextAction = "Drive first monetisation";
       if (work.rightsStatus !== "cleared") nextAction = "Clear rights status";
       else if (openPipelineMinor > 0) nextAction = "Advance active opportunities";
       else if (receivedMinor > 0) nextAction = "Scale strongest channels";
       else if (expectedMinor > 0) nextAction = "Convert expected to received";
-      return { work, receivedMinor, openPipelineMinor, nextAction };
-    }).sort((left, right) => (right.receivedMinor + right.openPipelineMinor) - (left.receivedMinor + left.openPipelineMinor)).slice(0, 8);
+      return { work, receivedMinor, expectedMinor, receivedBreakdown, openPipelineMinor, openPipelineBreakdown, nextAction };
+    }).sort((left, right) => (right.receivedMinor + right.openPipelineMinor + right.expectedMinor) - (left.receivedMinor + left.openPipelineMinor + left.expectedMinor)).slice(0, 8);
 
     const opportunities = openLicensing
       .map(item => ({ ...item, dueScore: item.decisionDueAt ? new Date(item.decisionDueAt).valueOf() : Number.POSITIVE_INFINITY }))
@@ -348,6 +372,9 @@
   function renderStats() {
     const target = byId("statsKpiGrid");
     if (!target) return;
+    const moneyBreakdown = values => values.length
+      ? values.map(item => money(item.amountMinor, item.currency)).join(" + ")
+      : money(0);
     const snapshot = buildStatsSnapshot();
     target.innerHTML = snapshot.kpis.map(item => `
       <article class="stats-kpi-card">
@@ -384,12 +411,12 @@
     `).join("");
 
     byId("statsTrackTableBody").innerHTML = snapshot.trackPerformance.length
-      ? snapshot.trackPerformance.map(({ work, receivedMinor, openPipelineMinor, nextAction }) => `
+      ? snapshot.trackPerformance.map(({ work, receivedBreakdown, openPipelineBreakdown, nextAction }) => `
         <tr>
           <td>${escapeHtml(work.title)}</td>
           <td>${escapeHtml(titleCase(work.rightsStatus))}</td>
-          <td>${escapeHtml(money(receivedMinor))}</td>
-          <td>${escapeHtml(money(openPipelineMinor))}</td>
+          <td>${escapeHtml(moneyBreakdown(receivedBreakdown))}</td>
+          <td>${escapeHtml(moneyBreakdown(openPipelineBreakdown))}</td>
           <td>${escapeHtml(nextAction)}</td>
         </tr>
       `).join("")

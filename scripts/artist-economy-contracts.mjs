@@ -62,6 +62,8 @@ assert.match(files.html, /id="statsRevenueTableBody"/);
 assert.match(files.html, /id="statsTrackTableBody"/);
 assert.match(files.html, /id="statsOpportunityList"/);
 assert.match(files.html, /id="statsInsightList"/);
+assert.match(files.html, /Revenue and royalty matrix by source/);
+assert.match(files.html, /Release and track performance by rights state and pipeline value/);
 assert.match(files.html, /No automatic spending/);
 assert.match(files.js, /\/api\/artist-economy/);
 assert.match(files.js, /buildStatsSnapshot/);

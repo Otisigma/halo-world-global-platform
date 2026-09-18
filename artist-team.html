@@ -143,16 +143,16 @@
             <p id="labelContinuitySummary">The shared no-dead-air continuity guard remains active across HALO Radio and the DJ Command Deck.</p>
           </aside>
         </header>
-        <nav id="labelTabRail" class="label-tab-rail" aria-label="World AI label navigation">
-          <button class="is-active" type="button" data-label-tab="dashboard">Dashboard</button>
-          <button type="button" data-label-tab="roster">Roster</button>
-          <button type="button" data-label-tab="releases">Releases</button>
-          <button type="button" data-label-tab="ar">A&amp;R</button>
-          <button type="button" data-label-tab="payouts">Payouts</button>
-          <button type="button" data-label-tab="campaigns">Campaigns</button>
-          <button type="button" data-label-tab="insights">Insights</button>
+        <nav id="labelTabRail" class="label-tab-rail" aria-label="World AI label navigation" role="tablist">
+          <button id="labelTabDashboard" class="is-active" type="button" role="tab" aria-selected="true" aria-controls="labelPanelDashboard" tabindex="0" data-label-tab="dashboard">Dashboard</button>
+          <button id="labelTabRoster" type="button" role="tab" aria-selected="false" aria-controls="labelPanelRoster" tabindex="-1" data-label-tab="roster">Roster</button>
+          <button id="labelTabReleases" type="button" role="tab" aria-selected="false" aria-controls="labelPanelReleases" tabindex="-1" data-label-tab="releases">Releases</button>
+          <button id="labelTabAr" type="button" role="tab" aria-selected="false" aria-controls="labelPanelAr" tabindex="-1" data-label-tab="ar">A&amp;R</button>
+          <button id="labelTabPayouts" type="button" role="tab" aria-selected="false" aria-controls="labelPanelPayouts" tabindex="-1" data-label-tab="payouts">Payouts</button>
+          <button id="labelTabCampaigns" type="button" role="tab" aria-selected="false" aria-controls="labelPanelCampaigns" tabindex="-1" data-label-tab="campaigns">Campaigns</button>
+          <button id="labelTabInsights" type="button" role="tab" aria-selected="false" aria-controls="labelPanelInsights" tabindex="-1" data-label-tab="insights">Insights</button>
         </nav>
-        <section class="label-panel is-active" data-label-panel="dashboard">
+        <section id="labelPanelDashboard" class="label-panel is-active" role="tabpanel" aria-labelledby="labelTabDashboard" data-label-panel="dashboard">
           <div id="labelSummaryGrid" class="label-summary-grid" aria-live="polite"></div>
           <div class="label-dashboard-grid">
             <article class="label-data-card">
@@ -169,27 +169,27 @@
             </article>
           </div>
         </section>
-        <section class="label-panel" data-label-panel="roster" hidden>
+        <section id="labelPanelRoster" class="label-panel" role="tabpanel" aria-labelledby="labelTabRoster" data-label-panel="roster" hidden>
           <header><p class="section-label">ROSTER</p><h3>Signed artists and pending rooms</h3></header>
           <div id="labelRosterList" class="label-card-grid" aria-live="polite"></div>
         </section>
-        <section class="label-panel" data-label-panel="releases" hidden>
+        <section id="labelPanelReleases" class="label-panel" role="tabpanel" aria-labelledby="labelTabReleases" data-label-panel="releases" hidden>
           <header><p class="section-label">RELEASES</p><h3>Draft, scheduled, live, evergreen</h3></header>
           <div id="labelReleaseList" class="label-card-grid" aria-live="polite"></div>
         </section>
-        <section class="label-panel" data-label-panel="ar" hidden>
+        <section id="labelPanelAr" class="label-panel" role="tabpanel" aria-labelledby="labelTabAr" data-label-panel="ar" hidden>
           <header><p class="section-label">A&amp;R DISCOVERY</p><h3>Who fits, who is moving, what to sign next</h3></header>
           <div id="labelDiscoveryList" class="label-card-grid" aria-live="polite"></div>
         </section>
-        <section class="label-panel" data-label-panel="payouts" hidden>
+        <section id="labelPanelPayouts" class="label-panel" role="tabpanel" aria-labelledby="labelTabPayouts" data-label-panel="payouts" hidden>
           <header><p class="section-label">PAYOUTS + RIGHTS</p><h3>Direct vs label share, pending wire, escrow</h3></header>
           <div id="labelPayoutList" class="label-card-grid" aria-live="polite"></div>
         </section>
-        <section class="label-panel" data-label-panel="campaigns" hidden>
+        <section id="labelPanelCampaigns" class="label-panel" role="tabpanel" aria-labelledby="labelTabCampaigns" data-label-panel="campaigns" hidden>
           <header><p class="section-label">CAMPAIGNS</p><h3>Radio, playlist, social, direct sale, takeover lanes</h3></header>
           <div id="labelCampaignList" class="label-card-grid" aria-live="polite"></div>
         </section>
-        <section class="label-panel" data-label-panel="insights" hidden>
+        <section id="labelPanelInsights" class="label-panel" role="tabpanel" aria-labelledby="labelTabInsights" data-label-panel="insights" hidden>
           <header><p class="section-label">AI INSIGHTS</p><h3>Recommended next action and risk alerts</h3></header>
           <div id="labelInsightList" class="label-card-grid" aria-live="polite"></div>
         </section>

@@ -8,7 +8,7 @@
     external_social: "Outside platform"
   };
   const lockedCopy = "Sign in with the account that owns your HALO artist room. The team reads only your room's signals, and every proposal waits for you.";
-  const state = { identity: null, user: null, slug: "", dashboard: null };
+  const state = { identity: null, user: null, slug: "", dashboard: null, labelRequest: 0 };
 
   const byId = id => document.getElementById(id);
   const escapeHtml = value => String(value ?? "").replace(/[&<>'"]/g, character => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" })[character]);
@@ -269,7 +269,12 @@
   }
 
   function setLabelTab(tab) {
-    document.querySelectorAll("[data-label-tab]").forEach(button => button.classList.toggle("is-active", button.dataset.labelTab === tab));
+    document.querySelectorAll("[data-label-tab]").forEach(button => {
+      const active = button.dataset.labelTab === tab;
+      button.classList.toggle("is-active", active);
+      button.setAttribute("aria-selected", active ? "true" : "false");
+      button.tabIndex = active ? 0 : -1;
+    });
     document.querySelectorAll("[data-label-panel]").forEach(panel => {
       const active = panel.dataset.labelPanel === tab;
       panel.hidden = !active;
@@ -454,6 +459,30 @@
     setLabelTab(document.querySelector("[data-label-tab].is-active")?.dataset.labelTab || "dashboard");
   }
 
+  async function loadLabelLayer() {
+    const requestId = state.labelRequest + 1;
+    state.labelRequest = requestId;
+    const layer = byId("labelLayer");
+    layer.hidden = false;
+    byId("labelContinuityTitle").textContent = "World AI label layer";
+    byId("labelNextAction").textContent = "Loading label telemetry…";
+    byId("labelContinuitySummary").textContent = "Roster, release, payout, and campaign signals are being assembled.";
+    try {
+      const payload = await api("GET", "/api/artist-agents?mode=label");
+      if (state.labelRequest !== requestId) return;
+      renderLabelDashboard(payload.labelDashboard || null);
+    } catch (error) {
+      if (state.labelRequest !== requestId) return;
+      byId("labelContinuityTitle").textContent = "World AI label layer";
+      byId("labelNextAction").textContent = "Label telemetry unavailable";
+      byId("labelContinuitySummary").textContent = error instanceof Error ? error.message : "The label cockpit could not be loaded.";
+      clearChildren(byId("labelSummaryGrid"), [metricCard("Label layer", "—", "Artist intelligence remains available even when label telemetry is offline.")]);
+      ["labelRosterPreview", "labelReleasePreview", "labelInsightPreview", "labelRosterList", "labelReleaseList", "labelDiscoveryList", "labelPayoutList", "labelCampaignList", "labelInsightList"]
+        .forEach(id => clearChildren(byId(id), [el("article", { class: "label-row-card" }, el("h4", null, "Unavailable"), el("p", null, "Reload to retry the label cockpit."))]));
+      setLabelTab(document.querySelector("[data-label-tab].is-active")?.dataset.labelTab || "dashboard");
+    }
+  }
+
   function renderDashboard(dashboard) {
     state.dashboard = dashboard;
     showOnly("teamView");
@@ -465,7 +494,8 @@
     renderActions(dashboard.actions);
     renderDrafts(dashboard.drafts);
     renderPlan(dashboard.plan, dashboard.latestRun);
-    renderLabelDashboard(dashboard.viewer?.platformOwner ? dashboard.labelDashboard : null);
+    if (dashboard.viewer?.platformOwner) loadLabelLayer();
+    else renderLabelDashboard(null);
     byId("runButton").disabled = !dashboard.plan || dashboard.plan.runsRemaining <= 0;
     byId("runMessage").textContent = dashboard.plan
       ? dashboard.plan.runsRemaining <= 0 ? "This plan has used its runs for the month." : ""

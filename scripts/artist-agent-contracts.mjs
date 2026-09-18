@@ -131,6 +131,9 @@ assert.match(pageSource, /It does not post to any outside platform on your behal
 assert.match(pageSource, /BACKSTAGE OPERATING DECK/);
 assert.match(pageSource, /Private artist room/);
 assert.match(pageSource, /WORLD AI LABEL LAYER/);
+assert.match(pageSource, /role="tablist"/);
+assert.match(pageSource, /role="tab"/);
+assert.match(pageSource, /role="tabpanel"/);
 assert.match(pageSource, /data-label-tab="dashboard"/);
 assert.match(pageSource, /id="labelRosterList"/);
 assert.match(pageSource, /id="labelInsightList"/);
@@ -138,9 +141,12 @@ for (const seat of ["Scout", "Steer", "Echo", "Circle", "Compass"]) {
   assert.match(pageSource, new RegExp(`>${seat}<`), `${seat} must appear in the operating deck`);
 }
 assert.match(clientSource, /function renderLabelDashboard/);
+assert.match(clientSource, /function loadLabelLayer/);
+assert.match(clientSource, /aria-selected/);
 assert.match(clientSource, /data-label-tab/);
 assert.match(clientSource, /Continuity guard armed/);
 assert.match(functionSource, /loadLabelDashboard/);
+assert.match(functionSource, /mode === "label"/);
 assert.match(libSource, /export async function loadLabelDashboard/);
 assert.match(libSource, /labelFitScore/);
 assert.match(libSource, /halo_artist_pro_leads/);

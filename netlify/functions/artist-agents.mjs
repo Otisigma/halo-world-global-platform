@@ -22,6 +22,10 @@ function cleanSlug(value) {
     : "";
 }
 
+function cleanMode(value) {
+  return typeof value === "string" ? value.trim().toLowerCase().slice(0, 32) : "";
+}
+
 async function bodyFrom(request) {
   const contentLength = Number(request.headers.get("Content-Length") || 0);
   if (contentLength > 12_000) throw new Error("payload_too_large");
@@ -52,17 +56,18 @@ export default async function artistAgentsHandler(request) {
     const url = new URL(request.url);
 
     if (request.method === "GET") {
+      const mode = cleanMode(url.searchParams.get("mode"));
+      if (mode === "label") {
+        if (!user?.id) return json({ message: "Sign in to open the World AI label layer" }, 401);
+        if (!isOwner(user)) return json({ message: "Owner access is required for the label layer" }, 403);
+        return json({ labelDashboard: await loadLabelDashboard(db), viewer: { platformOwner: true } });
+      }
       const slug = cleanSlug(url.searchParams.get("slug"));
       if (!slug) return json({ message: "Add an artist room handle" }, 400);
       const access = await authorize(db, user, slug);
       if (access.status) return json({ message: access.message }, access.status);
-      const [dashboard, labelDashboard] = await Promise.all([
-        loadArtistAgentDashboard(db, slug),
-        access.platformOwner ? loadLabelDashboard(db) : Promise.resolve(null)
-      ]);
       return json({
-        ...dashboard,
-        labelDashboard,
+        ...await loadArtistAgentDashboard(db, slug),
         viewer: { platformOwner: access.platformOwner }
       });
     }

@@ -182,6 +182,7 @@
 
   const state = {
     mix: null,
+    publishedSongId: new URLSearchParams(location.search).get("song") || "",
     unlock: readStoredUnlock(),
     activeChapter: 0,
     duration: 0,
@@ -246,6 +247,13 @@
     return `${state.mix?.title || featuredTrack.title} ${state.mix?.creator?.name || featuredTrack.artist}`.trim();
   }
 
+  function publishedSongShareUrl() {
+    if (!state.publishedSongId) return "";
+    const url = new URL("/music/", location.origin);
+    url.searchParams.set("song", state.publishedSongId);
+    return url.toString();
+  }
+
   function setUnlockStatus(message = "", tone = "") {
     if (!elements.unlockStatus) return;
     elements.unlockStatus.textContent = message;
@@ -259,8 +267,14 @@
     if (elements.appleLink) elements.appleLink.href = unlockPlatforms.apple_music.href(query);
     if (elements.youtubeLink) elements.youtubeLink.href = unlockPlatforms.youtube.href(query);
     if (elements.sourceLink) {
-      elements.sourceLink.href = featuredTrack.url;
-      elements.sourceLink.setAttribute("aria-label", `Open ${featuredTrack.title} by ${featuredTrack.artist} on DistroKid HyperFollow`);
+      const publishedSongUrl = publishedSongShareUrl();
+      if (publishedSongUrl) {
+        elements.sourceLink.href = publishedSongUrl;
+        elements.sourceLink.setAttribute("aria-label", "Open this published HALO song");
+      } else {
+        elements.sourceLink.href = featuredTrack.url;
+        elements.sourceLink.setAttribute("aria-label", `Open ${featuredTrack.title} by ${featuredTrack.artist} on DistroKid HyperFollow`);
+      }
     }
   }
 
@@ -1284,7 +1298,20 @@
   elements.audio.addEventListener("error", () => showToast("The mix audio is unavailable. The visual edition remains open."));
   elements.muteButton.addEventListener("click", () => { elements.audio.muted = !elements.audio.muted; elements.muteButton.setAttribute("aria-label", elements.audio.muted ? "Unmute show" : "Mute show"); showToast(elements.audio.muted ? "Show muted" : "Sound restored"); });
   elements.fullScreenButton.addEventListener("click", async () => { try { if (document.fullscreenElement) await document.exitFullscreen(); else await elements.stage.requestFullscreen(); } catch { showToast("Full screen is not available in this browser."); } });
-  elements.shareShow.addEventListener("click", async () => { const shareData = { title: document.title, text: "Enter this HALO Dreamweaver visual mix experience.", url: location.href }; try { if (navigator.share) await navigator.share(shareData); else { await navigator.clipboard.writeText(location.href); showToast("Dreamweaver show link copied."); } } catch {} });
+  elements.shareShow.addEventListener("click", async () => {
+    const publishedSongUrl = publishedSongShareUrl();
+    const shareData = publishedSongUrl
+      ? { title: document.title, text: "Open this published HALO song.", url: publishedSongUrl }
+      : { title: document.title, text: "Enter this HALO Dreamweaver visual mix experience.", url: location.href };
+    try {
+      if (navigator.share) {
+        await navigator.share(shareData);
+      } else {
+        await navigator.clipboard.writeText(shareData.url);
+        showToast(publishedSongUrl ? "Published song link copied." : "Dreamweaver show link copied.");
+      }
+    } catch {}
+  });
   elements.makeCampaign.addEventListener("click", openCampaignStudio);
   elements.closeCampaign.addEventListener("click", closeCampaignStudio);
   elements.campaignForm.addEventListener("submit", generateCampaign);

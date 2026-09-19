@@ -3,6 +3,7 @@ import { getDatabase } from "@netlify/database";
 import { getUser, verifyRequestOrigin } from "@netlify/identity";
 import { cleanText, ensureMembership } from "../lib/halo-x.mjs";
 import { appendLedgerEntry } from "../lib/halo-ledger.mjs";
+import { reconcilePublishedSong } from "../lib/song-publication.mjs";
 
 // Pipeline stages in order.  Departments can only advance; they cannot regress.
 const PIPELINE_STAGES = [
@@ -210,6 +211,15 @@ async function advancePipeline(payload, db, membership) {
     SET pipeline_status = ${toStage}, updated_at = NOW()
     WHERE id = ${songId}
   `;
+
+  if (toStage === "published") {
+    await reconcilePublishedSong(db, {
+      songId,
+      ownerMemberId: membership.member_id,
+      actorId: membership.actor_id,
+      actorType: "member",
+    });
+  }
 
   const row = await getOneSong(db, membership.member_id, songId);
   // Fire-and-forget ledger entry for the pipeline stage transition.

@@ -83,6 +83,24 @@ export const dreamweaverSongReviews = pgTable("halo_dreamweaver_song_reviews", {
   index("halo_dreamweaver_song_reviews_song_idx").on(table.songId, table.createdAt),
 ]);
 
+export const publicationSync = pgTable("halo_song_publication_sync", {
+  songId: text("song_id").primaryKey().references(() => songs.id, { onDelete: "cascade" }),
+  ownerMemberId: text("owner_member_id").notNull(),
+  releaseId: text("release_id"),
+  radioTrackId: text("radio_track_id"),
+  canonicalUrl: text("canonical_url").notNull().default(""),
+  releaseStatus: text("release_status").notNull().default("pending"),
+  radioStatus: text("radio_status").notNull().default("pending"),
+  dreamweaverStatus: text("dreamweaver_status").notNull().default("pending"),
+  details: jsonb("details").notNull().default({}),
+  lastError: text("last_error").notNull().default(""),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  lastReconciledAt: timestamp("last_reconciled_at", { withTimezone: true }),
+}, table => [
+  index("halo_song_publication_sync_owner_idx").on(table.ownerMemberId, table.updatedAt),
+]);
+
 export const catalogProducerJobs = pgTable("halo_catalog_producer_jobs", {
   id: text("id").primaryKey(),
   ownerMemberId: text("owner_member_id").notNull(),

@@ -399,11 +399,7 @@
       elements.sourceLink.dataset.haloPlayerRelease = cleanText(state.release?.releaseDate || state.publishedSongId, 40);
       elements.sourceLink.dataset.haloPlayerStatus = cleanText(state.release?.publication?.dreamweaverStatus || state.release?.publication?.releaseStatus || "", 40);
       elements.sourceLink.dataset.haloPlayerArtwork = safeMediaUrl(state.release?.artwork || state.release?.artworkOverride || state.release?.importedArtwork);
-      if (publishedSongUrl) {
-        elements.sourceLink.dataset.haloPlayer = "off";
-      } else {
-        delete elements.sourceLink.dataset.haloPlayer;
-      }
+      delete elements.sourceLink.dataset.haloPlayer;
     }
   }
 
@@ -1424,7 +1420,12 @@
     }
     setReleasePlaybackState("playing");
   });
-  elements.audio.addEventListener("pause", () => { document.body.classList.remove("is-playing"); elements.playButton.setAttribute("aria-label", "Play show"); document.body.classList.remove("idle"); setReleasePlaybackState("paused"); });
+  elements.audio.addEventListener("pause", () => {
+    document.body.classList.remove("is-playing");
+    elements.playButton.setAttribute("aria-label", "Play show");
+    document.body.classList.remove("idle");
+    if (!elements.audio.ended) setReleasePlaybackState("paused");
+  });
   elements.audio.addEventListener("ended", () => {
     activateChapter(chapters.length - 1, false);
     if (campaignIdFromUrl() && !state.trackedProgress.has("mix_complete")) {

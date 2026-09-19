@@ -201,7 +201,16 @@
       ["Release", info.release],
       ["Status", info.status],
     ].filter(([, value]) => value);
-    facts.innerHTML = rows.map(([label, value]) => `<div><dt>${label}</dt><dd>${value}</dd></div>`).join("");
+    facts.replaceChildren();
+    for (const [label, value] of rows) {
+      const row = document.createElement("div");
+      const term = document.createElement("dt");
+      const data = document.createElement("dd");
+      term.textContent = label;
+      data.textContent = value;
+      row.append(term, data);
+      facts.append(row);
+    }
     const artwork = info.artwork || "";
     if (artwork) {
       artworkImage.src = artwork;
@@ -211,7 +220,8 @@
       artworkImage.removeAttribute("src");
       artworkImage.hidden = true;
       artworkFallback.hidden = false;
-      artworkFallback.textContent = active.title.slice(0, 2).toUpperCase() || "H▶";
+      const marker = cleanText(active.title, 40).replace(/[^a-z0-9]/gi, "");
+      artworkFallback.textContent = (marker.slice(0, 2).toUpperCase() || "H▶");
     }
     artworkWrap.hidden = false;
     metaPanel.hidden = rows.length === 0;

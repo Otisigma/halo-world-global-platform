@@ -59,6 +59,15 @@ function serializeRelease(row) {
       previousOpens: Number(row.previous_opens || 0),
       previousListens: Number(row.previous_listens || 0)
     },
+    publication: {
+      releaseStatus: row.publication_release_status || "published",
+      radioStatus: row.publication_radio_status || "pending",
+      dreamweaverStatus: row.publication_dreamweaver_status || "pending",
+      canonicalUrl: row.publication_canonical_url || `/music/?song=${encodeURIComponent(row.id)}`,
+      lastReconciledAt: row.publication_last_reconciled_at
+        ? new Date(row.publication_last_reconciled_at).toISOString()
+        : ""
+    },
     listenUrl: `/api/release-link?slug=${encodeURIComponent(row.id)}&audience=fan`,
     kitUrl: `/release-kit.html?slug=${encodeURIComponent(row.id)}&audience=fan`
   };
@@ -107,8 +116,21 @@ export default async function releaseCatalogHandler(request) {
         catalog.catalog_sale_price_cents,
         catalog.catalog_currency,
         catalog_versions.catalog_version_count,
-        catalog_versions.catalog_sale_enabled_count
+        catalog_versions.catalog_sale_enabled_count,
+        publication.release_status AS publication_release_status,
+        publication.radio_status AS publication_radio_status,
+        publication.dreamweaver_status AS publication_dreamweaver_status,
+        publication.canonical_url AS publication_canonical_url,
+        publication.last_reconciled_at AS publication_last_reconciled_at
       FROM halo_release_campaigns release
+      LEFT JOIN LATERAL (
+        SELECT sync.release_status, sync.radio_status, sync.dreamweaver_status,
+          sync.canonical_url, sync.last_reconciled_at
+        FROM halo_song_publication_sync sync
+        WHERE sync.release_id = release.id
+        ORDER BY sync.last_reconciled_at DESC NULLS LAST
+        LIMIT 1
+      ) publication ON TRUE
       LEFT JOIN LATERAL (
         SELECT
           COUNT(*) FILTER (

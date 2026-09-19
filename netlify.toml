@@ -67,6 +67,12 @@
   force = true
 
 [[redirects]]
+  from = "/stats"
+  to = "/stats/"
+  status = 301
+  force = true
+
+[[redirects]]
   from = "/private"
   to = "/index.html"
   status = 200

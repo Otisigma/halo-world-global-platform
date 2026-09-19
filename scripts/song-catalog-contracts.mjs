@@ -1,13 +1,16 @@
+import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
+import { attachPublicationHealthToSongs } from "../netlify/lib/song-publication-health.mjs";
 
 const root = resolve(import.meta.dirname, "..");
 const read = path => readFile(resolve(root, path), "utf8");
-const [page, client, styles, api, audioApi, artworkApi, producerApi, producerLib, schema, migration, audioMigration, artworkMigration, versionArtworkMigration, producerMigration, config, home, packageText, uploadHelper] = await Promise.all([
+const [page, client, styles, api, publicationHealth, audioApi, artworkApi, producerApi, producerLib, schema, migration, audioMigration, artworkMigration, versionArtworkMigration, producerMigration, config, home, packageText, uploadHelper] = await Promise.all([
   read("song-catalog/index.html"),
   read("song-catalog/song-catalog.js"),
   read("song-catalog/song-catalog.css"),
   read("netlify/functions/song-catalog.ts"),
+  read("netlify/lib/song-publication-health.mjs"),
   read("netlify/functions/song-catalog-audio.ts"),
   read("netlify/functions/song-catalog-artwork.ts"),
   read("netlify/functions/song-catalog-producer.mjs"),
@@ -24,6 +27,44 @@ const [page, client, styles, api, audioApi, artworkApi, producerApi, producerLib
   read("upload-progress.js")
 ]);
 const packageJson = JSON.parse(packageText);
+const sampleSongs = attachPublicationHealthToSongs([
+  {
+    id: "published-song",
+    title: "Published song",
+    artistName: "HALO",
+    pipelineStatus: "published",
+    rightsStatus: "cleared",
+    metadataIssues: [],
+    versions: [
+      { versionType: "sale_master", audioUrl: "https://example.com/sale.mp3", masteringStatus: "approved" },
+      { versionType: "radio_edit", audioUrl: "https://example.com/radio.mp3", masteringStatus: "approved" }
+    ]
+  },
+  {
+    id: "draft-song",
+    title: "Draft song",
+    artistName: "HALO",
+    pipelineStatus: "uploaded",
+    rightsStatus: "cleared",
+    metadataIssues: [],
+    versions: []
+  }
+], [
+  {
+    song_id: "published-song",
+    release_id: "halo-release",
+    radio_track_id: "radio-track",
+    canonical_url: "/music/?song=halo-release",
+    release_status: "published",
+    radio_status: "rotation",
+    dreamweaver_status: "ready",
+    details: {},
+    last_error: "",
+    last_reconciled_at: "2026-09-19T16:00:00.000Z"
+  }
+]);
+assert.equal(sampleSongs[0].publicationHealth?.state, "published_and_fully_distributed", "published songs should receive computed publication health");
+assert.equal(sampleSongs[1].publicationHealth, null, "non-published songs should expose publicationHealth as null");
 
 const checks = [
   [page.includes("One song · every useful version") && page.includes("Radio mastering queue"), "ships a unified catalog and dedicated broadcast queue"],
@@ -46,13 +87,17 @@ const checks = [
   [migration.includes("halo_song_catalog_owner_source_unique") && migration.includes("ON DELETE CASCADE"), "migrates version and review records with duplicate-import protection"],
   [schema.includes("audioBlobPrefix") && schema.includes("audioChunkCount") && audioMigration.includes('ADD COLUMN "audio_blob_prefix"'), "tracks uploaded audio storage and playback details in the database"],
   [page.includes("Dreamweaver production team") && client.includes("queue_catalog_producer") && client.includes("projectedMonthlyNetCents"), "adds an artist-approved album, mix, and vault packaging room"],
+  [page.includes('id="publicationBoard"') && page.includes('id="publicationHealthPanel"') && page.includes("Publication health"), "renders a site-visible publication health board and detail panel for published songs"],
+  [client.includes("renderPublicationBoard") && client.includes("renderPublicationHealth") && client.includes("Ask Dreamweaver AI"), "renders deterministic publication states, fixes, and AI-assisted next steps in the catalog client"],
+  [api.includes("attachPublicationHealth") && api.includes("publicationHealth"), "includes publication health data in song catalog API responses"],
+  [publicationHealth.includes("recommendedFixes") && publicationHealth.includes("agentTeam") && publicationHealth.includes("awaiting_radio_ready_assets"), "keeps publication guidance and state classification in a shared domain helper"],
   [producerApi.includes("background: true") && producerApi.includes("runCatalogProducer"), "runs catalog packaging without blocking the browser"],
   [producerLib.includes("halo_release_campaign_events") && producerLib.includes("engagement_then_readiness") && producerLib.includes("Complete Catalog Vault"), "uses audience signals and catalog readiness to create product proposals"],
   [client.includes("money(item.priceCents,item.currency)") && client.includes("money(item.projectedMonthlyNetCents,item.currency)"), "formats producer package pricing and net projections from package currency metadata"],
   [schema.includes("halo_catalog_packages") && schema.includes("halo_catalog_package_tracks") && producerMigration.includes("halo_catalog_producer_jobs"), "persists producer jobs, packages, pricing, and track lists in Netlify Database"],
   [client.includes("halo-song-catalog-height") && client.includes("parentOrigin") && client.includes("ResizeObserver"), "supports embedded shop/workspace height messaging for shared song catalog panels"],
   [packageJson.peerDependencies?.["@netlify/database"] && !packageJson.dependencies?.["@netlify/database"], "keeps the database SDK installed without repeating preview branch provisioning"],
-  [styles.includes("@media(max-width:720px)") && styles.includes("prefers-reduced-motion:reduce"), "provides a responsive catalog layout with reduced-motion support"],
+  [styles.includes("@media(max-width:720px)") && styles.includes("prefers-reduced-motion:reduce") && styles.includes(".publication-board") && styles.includes(".publication-health-panel"), "provides a responsive catalog layout with reduced-motion support including publication health surfaces"],
   [/from = "\/song-catalog\/"[\s\S]*to = "\/song-catalog\/index\.html"/.test(config) && home.includes('href="/song-catalog/"'), "makes the catalog discoverable and serves the canonical /song-catalog/ route directly"],
   [artworkApi.includes('getStore({ name: "halo-song-catalog-artwork"') && artworkApi.includes("verifyRequestOrigin") && artworkApi.includes("ownedSong"), "stores private artwork in Netlify Blobs with ownership and origin checks"],
   [artworkApi.includes("requestedByteRange") && artworkApi.includes('path: "/api/song-catalog/artwork"'), "serves uploaded artwork with private range support"],

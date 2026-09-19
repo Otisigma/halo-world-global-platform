@@ -97,6 +97,13 @@
     storyCopy: document.getElementById("storyCopy"),
     mixTitle: document.getElementById("mixTitle"),
     mixCreator: document.getElementById("mixCreator"),
+    releasePanel: document.getElementById("releasePanel"),
+    releasePanelKicker: document.getElementById("releasePanelKicker"),
+    releaseTitle: document.getElementById("releaseTitle"),
+    releaseSubtitle: document.getElementById("releaseSubtitle"),
+    releaseArtwork: document.getElementById("releaseArtwork"),
+    releaseArtworkFallback: document.getElementById("releaseArtworkFallback"),
+    releaseFacts: document.getElementById("releaseFacts"),
     playButton: document.getElementById("playButton"),
     progress: document.getElementById("showProgress"),
     elapsed: document.getElementById("elapsedTime"),
@@ -182,6 +189,8 @@
 
   const state = {
     mix: null,
+    release: null,
+    releasePlaybackState: "loading",
     publishedSongId: new URLSearchParams(location.search).get("song") || "",
     unlock: readStoredUnlock(),
     activeChapter: 0,
@@ -235,6 +244,107 @@
     return hours ? `${hours}:${String(minutes).padStart(2, "0")}:${String(remainder).padStart(2, "0")}` : `${String(minutes).padStart(2, "0")}:${String(remainder).padStart(2, "0")}`;
   }
 
+  function cleanText(value, limit = 120) {
+    return typeof value === "string" ? value.trim().replace(/\s+/g, " ").slice(0, limit) : "";
+  }
+
+  function safeMediaUrl(value) {
+    const text = cleanText(value, 1200);
+    if (!text) return "";
+    try {
+      const url = new URL(text, location.origin);
+      if (!/^https?:$/.test(url.protocol)) return "";
+      if (url.protocol === "http:" && url.origin !== location.origin) return "";
+      return url.href;
+    } catch {
+      return "";
+    }
+  }
+
+  function releaseStateLabel(status) {
+    if (status === "loading") return "Loading signal";
+    if (status === "playing") return "Playing now";
+    if (status === "ready") return "Ready";
+    if (status === "unavailable") return "Unavailable";
+    return "Paused";
+  }
+
+  function releaseStateDetail(status) {
+    if (status === "loading") return "Dreamweaver is preparing the audio and release context.";
+    if (status === "playing") return "Live playback is active across the Dreamweaver stage.";
+    if (status === "ready") return "Audio is ready. Press play to move through the five movements.";
+    if (status === "unavailable") return "Audio is currently unavailable, but release context is still on stage.";
+    return "Playback is paused. Resume when you are ready.";
+  }
+
+  function renderReleasePanel() {
+    if (!elements.releasePanel) return;
+    const release = state.release || {};
+    const mixTitle = cleanText(state.mix?.title || "");
+    const mixArtist = cleanText(state.mix?.creator?.name || featuredTrack.artist);
+    const title = cleanText(release.title || mixTitle || featuredTrack.title);
+    const artist = cleanText(release.artist || mixArtist || featuredTrack.artist);
+    const genres = Array.isArray(release.genres) ? release.genres.filter(Boolean).map(value => cleanText(value, 60)) : [];
+    const genre = genres[0] || "";
+    const bpm = Number(release.bpm) > 0 ? String(Number(release.bpm)) : "";
+    const musicalKey = cleanText(release.musicalKey, 20);
+    const duration = state.duration ? formatTime(state.duration) : cleanText(release.duration, 24);
+    const releaseInfo = cleanText(release.releaseDate || state.publishedSongId, 40);
+    const publication = release.publication || {};
+    const status = cleanText(publication.dreamweaverStatus || publication.releaseStatus, 40);
+    const album = cleanText(release.albumTitle || release.collectionTitle || "", 120);
+    const artwork = safeMediaUrl(release.artwork || release.artworkOverride || release.importedArtwork);
+    const rows = [
+      ["Artist", artist],
+      ["Album", album],
+      ["Genre", genre],
+      ["BPM", bpm],
+      ["Key", musicalKey],
+      ["Duration", duration],
+      ["Release", releaseInfo],
+      ["Status", status]
+    ].filter(([, value]) => value);
+
+    elements.releasePanelKicker.textContent = `Now playing / ${releaseStateLabel(state.releasePlaybackState)}`;
+    elements.releaseTitle.textContent = title || "Dreamweaver show";
+    elements.releaseSubtitle.textContent = releaseStateDetail(state.releasePlaybackState);
+    elements.releaseFacts.innerHTML = rows.map(([label, value]) => `<div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd></div>`).join("");
+
+    if (artwork) {
+      elements.releaseArtwork.src = artwork;
+      elements.releaseArtwork.hidden = false;
+      elements.releaseArtworkFallback.hidden = true;
+    } else {
+      elements.releaseArtwork.hidden = true;
+      elements.releaseArtwork.removeAttribute("src");
+      elements.releaseArtworkFallback.hidden = false;
+      elements.releaseArtworkFallback.textContent = (title || "DW").slice(0, 2).toUpperCase();
+    }
+  }
+
+  function setReleasePlaybackState(nextState) {
+    state.releasePlaybackState = nextState;
+    renderReleasePanel();
+  }
+
+  async function loadReleaseContext() {
+    if (!state.publishedSongId) {
+      state.release = null;
+      renderReleasePanel();
+      return;
+    }
+    try {
+      const response = await fetch("/api/release-catalog", { headers: { Accept: "application/json" }, credentials: "same-origin" });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload.message || "Release catalog unavailable");
+      const releases = Array.isArray(payload.releases) ? payload.releases : [];
+      state.release = releases.find(release => String(release.id || "") === state.publishedSongId) || null;
+    } catch {
+      state.release = null;
+    }
+    renderReleasePanel();
+  }
+
   function isSatelliteFlow() {
     const params = new URLSearchParams(location.search);
     if (campaignIdFromUrl() || params.get("experience") === "studio") return false;
@@ -271,10 +381,25 @@
       if (publishedSongUrl) {
         elements.sourceLink.href = publishedSongUrl;
         elements.sourceLink.setAttribute("aria-label", "Open this published HALO song");
+        const title = cleanText(state.release?.title || state.mix?.title || featuredTrack.title);
+        const artist = cleanText(state.release?.artist || state.mix?.creator?.name || featuredTrack.artist);
+        elements.sourceLink.textContent = `${title} — ${artist} ↗`;
       } else {
         elements.sourceLink.href = featuredTrack.url;
         elements.sourceLink.setAttribute("aria-label", `Open ${featuredTrack.title} by ${featuredTrack.artist} on DistroKid HyperFollow`);
+        elements.sourceLink.textContent = `${featuredTrack.title} — ${featuredTrack.artist} ↗`;
       }
+      elements.sourceLink.dataset.haloPlayerTitle = cleanText(state.release?.title || state.mix?.title || featuredTrack.title);
+      elements.sourceLink.dataset.haloPlayerArtist = cleanText(state.release?.artist || state.mix?.creator?.name || featuredTrack.artist);
+      elements.sourceLink.dataset.haloPlayerAlbum = cleanText(state.release?.albumTitle || state.release?.collectionTitle || "");
+      elements.sourceLink.dataset.haloPlayerGenre = Array.isArray(state.release?.genres) ? cleanText(state.release.genres[0] || "", 80) : "";
+      elements.sourceLink.dataset.haloPlayerBpm = Number(state.release?.bpm) > 0 ? String(Number(state.release.bpm)) : "";
+      elements.sourceLink.dataset.haloPlayerKey = cleanText(state.release?.musicalKey || "", 20);
+      elements.sourceLink.dataset.haloPlayerDuration = state.duration ? formatTime(state.duration) : cleanText(state.release?.duration || "", 24);
+      elements.sourceLink.dataset.haloPlayerRelease = cleanText(state.release?.releaseDate || state.publishedSongId, 40);
+      elements.sourceLink.dataset.haloPlayerStatus = cleanText(state.release?.publication?.dreamweaverStatus || state.release?.publication?.releaseStatus || "", 40);
+      elements.sourceLink.dataset.haloPlayerArtwork = safeMediaUrl(state.release?.artwork || state.release?.artworkOverride || state.release?.importedArtwork);
+      delete elements.sourceLink.dataset.haloPlayer;
     }
   }
 
@@ -1205,6 +1330,7 @@
   }
 
   async function loadShow() {
+    setReleasePlaybackState("loading");
     elements.shell.hidden = false;
     elements.loading.hidden = false;
     elements.stage.hidden = true;
@@ -1231,6 +1357,8 @@
       elements.loading.hidden = true;
       elements.stage.hidden = false;
       elements.shell.setAttribute("aria-busy", "false");
+      await loadReleaseContext();
+      setReleasePlaybackState("ready");
       updatePlatformLinks();
       await loadVideos();
       if (campaignIdFromUrl() && !state.trackedProgress.has("landing")) {
@@ -1244,6 +1372,7 @@
       }
     } catch (error) {
       state.startPlaybackAfterLoad = false;
+      setReleasePlaybackState("unavailable");
       showEmpty(error.message || "Dreamweaver could not open the mix right now.");
     }
   }
@@ -1265,6 +1394,7 @@
     openSongLabUpload();
   });
   buildExperience();
+  renderReleasePanel();
   renderFootageSelector();
   renderArchive();
   elements.playButton.addEventListener("click", togglePlayback);
@@ -1276,6 +1406,8 @@
   elements.audio.addEventListener("loadedmetadata", () => {
     if (Number.isFinite(elements.audio.duration)) state.duration = elements.audio.duration;
     updateProgress();
+    renderReleasePanel();
+    if (state.releasePlaybackState === "loading") setReleasePlaybackState("ready");
   });
   elements.audio.addEventListener("timeupdate", updateProgress);
   elements.audio.addEventListener("play", () => {
@@ -1286,16 +1418,23 @@
       state.trackedProgress.add("show_play");
       trackCampaignEvent("show_play", new URLSearchParams(location.search).get("source") || "halo");
     }
+    setReleasePlaybackState("playing");
   });
-  elements.audio.addEventListener("pause", () => { document.body.classList.remove("is-playing"); elements.playButton.setAttribute("aria-label", "Play show"); document.body.classList.remove("idle"); });
+  elements.audio.addEventListener("pause", () => {
+    document.body.classList.remove("is-playing");
+    elements.playButton.setAttribute("aria-label", "Play show");
+    document.body.classList.remove("idle");
+    if (!elements.audio.ended) setReleasePlaybackState("paused");
+  });
   elements.audio.addEventListener("ended", () => {
     activateChapter(chapters.length - 1, false);
     if (campaignIdFromUrl() && !state.trackedProgress.has("mix_complete")) {
       state.trackedProgress.add("mix_complete");
       trackCampaignEvent("mix_complete", new URLSearchParams(location.search).get("source") || "halo");
     }
+    setReleasePlaybackState("ready");
   });
-  elements.audio.addEventListener("error", () => showToast("The mix audio is unavailable. The visual edition remains open."));
+  elements.audio.addEventListener("error", () => { setReleasePlaybackState("unavailable"); showToast("The mix audio is unavailable. The visual edition remains open."); });
   elements.muteButton.addEventListener("click", () => { elements.audio.muted = !elements.audio.muted; elements.muteButton.setAttribute("aria-label", elements.audio.muted ? "Unmute show" : "Mute show"); showToast(elements.audio.muted ? "Show muted" : "Sound restored"); });
   elements.fullScreenButton.addEventListener("click", async () => { try { if (document.fullscreenElement) await document.exitFullscreen(); else await elements.stage.requestFullscreen(); } catch { showToast("Full screen is not available in this browser."); } });
   elements.shareShow.addEventListener("click", async () => {

@@ -79,6 +79,32 @@ button { color: inherit; }
 .mix-caption strong { overflow: hidden; margin-top: 7px; font: 500 12px var(--mono); letter-spacing: .08em; text-overflow: ellipsis; text-transform: uppercase; white-space: nowrap; }
 .mix-caption small { margin-top: 6px; color: var(--gold); font-size: 7px; letter-spacing: .14em; text-transform: uppercase; }
 
+.release-panel {
+  position: absolute;
+  z-index: 11;
+  right: clamp(22px, 4vw, 64px);
+  bottom: 126px;
+  width: min(360px, 34vw);
+  display: grid;
+  grid-template-columns: 86px minmax(0, 1fr);
+  gap: 12px;
+  border: 1px solid rgba(255,255,255,.18);
+  background: rgba(13, 12, 10, .7);
+  backdrop-filter: blur(12px);
+  padding: 12px;
+}
+.release-panel__artwork { margin: 0; width: 86px; height: 86px; border: 1px solid rgba(255,255,255,.22); background: rgba(239,108,55,.12); }
+.release-panel__artwork img { width: 100%; height: 100%; object-fit: cover; }
+.release-panel__artwork span { display: grid; width: 100%; height: 100%; place-items: center; color: var(--gold); font: italic 500 30px/1 var(--serif); letter-spacing: -.05em; }
+.release-panel__copy { min-width: 0; }
+.release-panel__kicker { margin: 0; color: var(--acid); font-size: 7px; letter-spacing: .2em; text-transform: uppercase; }
+.release-panel h2 { overflow: hidden; margin: 7px 0 0; text-overflow: ellipsis; white-space: nowrap; font: 500 14px/1.2 var(--mono); letter-spacing: .04em; text-transform: uppercase; }
+.release-panel__copy > p:last-child { margin: 8px 0 0; color: var(--smoke); font-size: 8px; line-height: 1.5; }
+.release-panel__facts { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 12px; margin: 0; }
+.release-panel__facts div { min-width: 0; }
+.release-panel__facts dt { margin: 0; color: var(--smoke); font-size: 7px; letter-spacing: .15em; text-transform: uppercase; }
+.release-panel__facts dd { margin: 5px 0 0; overflow: hidden; color: var(--paper); font-size: 10px; text-overflow: ellipsis; text-transform: uppercase; white-space: nowrap; }
+
 .transport { position: absolute; z-index: 12; right: clamp(18px, 3.5vw, 54px); bottom: 26px; left: clamp(18px, 3.5vw, 54px); display: grid; grid-template-columns: 58px minmax(0, 1fr) 58px 42px 42px; align-items: center; gap: 14px; min-height: 76px; border-top: 1px solid rgba(255,255,255,.22); padding-top: 15px; transition: opacity .5s ease, transform .5s ease; }
 .play-button, .icon-button { display: grid; place-items: center; border: 1px solid rgba(255,255,255,.24); background: rgba(10,9,7,.34); cursor: pointer; backdrop-filter: blur(10px); }
 .play-button { width: 58px; height: 58px; border-color: var(--paper); border-radius: 50%; }
@@ -119,7 +145,7 @@ body.is-playing .signal-bars i { animation: bars .62s ease-in-out infinite alter
 body.mode-room .chapter-rail, body.mode-room .story-frame, body.mode-room .mix-caption, body.mode-room .edition-mark { opacity: 0; pointer-events: none; transform: translateY(14px); }
 body.mode-room .visual-layer::before { filter: saturate(.65) contrast(1.04) brightness(.82); animation-duration: 32s; }
 body.mode-room.idle .show-header { opacity: 0; transform: translateY(-100%); }
-body.mode-room.idle .transport, body.mode-room.idle .mode-switcher { opacity: 0; transform: translateY(30px); }
+body.mode-room.idle .transport, body.mode-room.idle .mode-switcher, body.mode-room.idle .release-panel { opacity: 0; transform: translateY(30px); }
 body.mode-explore .story-drawer { transform: translateX(0); }
 
 @media (max-width: 980px) {
@@ -129,7 +155,7 @@ body.mode-explore .story-drawer { transform: translateX(0); }
   .satellite-proof { grid-template-columns: 1fr; }
   .chapter-rail { top: auto; right: 18px; bottom: 118px; left: 18px; width: auto; transform: none; }.chapter-rail > p { display: none; }.chapter-list { display: flex; gap: 5px; }.chapter-button { grid-template-columns: 1fr; width: 44px; min-height: 34px; padding: 5px; border: 1px solid rgba(255,255,255,.2); text-align: center; }.chapter-button strong { display: none; }.chapter-button:hover, .chapter-button.active { transform: translateY(-3px); }
   .story-frame { left: clamp(24px, 7vw, 70px); bottom: 190px; width: min(760px, 82vw); }.story-frame h1 { font-size: clamp(56px, 11vw, 100px); }.story-copy { max-width: 580px; }
-  .mix-caption { display: none; }.transport { grid-template-columns: 52px minmax(0, 1fr) 42px 42px; }.signal-bars { display: none; }.play-button { width: 52px; height: 52px; }
+  .mix-caption { display: none; }.release-panel { right: 18px; bottom: 118px; width: min(420px, calc(100vw - 36px)); grid-template-columns: 72px minmax(0, 1fr); }.release-panel__artwork { width: 72px; height: 72px; }.transport { grid-template-columns: 52px minmax(0, 1fr) 42px 42px; }.signal-bars { display: none; }.play-button { width: 52px; height: 52px; }
 }
 
 @media (max-width: 650px) {
@@ -147,6 +173,7 @@ body.mode-explore .story-drawer { transform: translateX(0); }
   .edition-mark { top: 92px; right: 18px; }.edition-mark span { font-size: 38px; }
   .story-frame { right: 18px; bottom: 180px; left: 18px; width: auto; }.story-counter { margin-bottom: 15px; }.story-kicker { margin-bottom: 9px; }.story-frame h1 { font-size: clamp(48px, 16vw, 78px); }.story-copy { display: -webkit-box; overflow: hidden; margin-top: 17px; font-size: 10px; -webkit-box-orient: vertical; -webkit-line-clamp: 3; }.story-detail-button { margin-top: 13px; }
   .chapter-rail { bottom: 110px; }.chapter-list { justify-content: center; }
+  .release-panel { right: 12px; bottom: 98px; left: 12px; width: auto; grid-template-columns: 56px minmax(0, 1fr); gap: 10px; }.release-panel__artwork { width: 56px; height: 56px; }.release-panel__facts { grid-template-columns: 1fr 1fr; gap: 7px 10px; }.release-panel__copy > p:last-child { display: none; }
   .transport { right: 12px; bottom: 16px; left: 12px; grid-template-columns: 46px minmax(0, 1fr) 38px; gap: 9px; min-height: 68px; }.play-button { width: 46px; height: 46px; }.icon-button { width: 38px; height: 38px; }.transport .icon-button:last-child { display: none; }.time-row { grid-template-columns: 52px 1fr 52px; font-size: 7px; }
   .story-drawer { width: 100vw; padding: 90px 22px 44px; }.drawer-grid section { grid-template-columns: 1fr; gap: 10px; }.archive-reel { grid-template-columns: 1fr; }
 }

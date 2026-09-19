@@ -68,6 +68,59 @@
       .slice(0, 120) || "HALO music";
   }
 
+  function cleanText(value, limit = 120) {
+    return typeof value === "string" ? value.replace(/\s+/g, " ").trim().slice(0, limit) : "";
+  }
+
+  function safeUrl(value) {
+    const text = cleanText(value, 1200);
+    if (!text) return "";
+    try {
+      const url = new URL(text, window.location.href);
+      if (!/^https?:$/.test(url.protocol)) return "";
+      if (url.protocol === "http:" && url.origin !== window.location.origin) return "";
+      return url.href;
+    } catch {
+      return "";
+    }
+  }
+
+  function parseDuration(value) {
+    const text = cleanText(value, 24);
+    if (!text) return 0;
+    if (/^\d+$/.test(text)) return Number.parseInt(text, 10) || 0;
+    const parts = text.split(":").map(part => Number.parseInt(part, 10));
+    if (parts.some(part => !Number.isFinite(part) || part < 0)) return 0;
+    if (parts.length === 2) return parts[0] * 60 + parts[1];
+    if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
+    return 0;
+  }
+
+  function formatDuration(totalSeconds) {
+    const seconds = Math.max(0, Math.floor(Number(totalSeconds) || 0));
+    const hours = Math.floor(seconds / 3600);
+    const mins = Math.floor((seconds % 3600) / 60);
+    const secs = seconds % 60;
+    if (hours > 0) return `${hours}:${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
+    return `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
+  }
+
+  function detailsFor(link) {
+    const durationValue = cleanText(link.dataset.haloPlayerDuration || link.dataset.duration, 24);
+    const parsedDuration = parseDuration(durationValue);
+    return {
+      artist: cleanText(link.dataset.haloPlayerArtist || link.dataset.artist),
+      album: cleanText(link.dataset.haloPlayerAlbum || link.dataset.album),
+      genre: cleanText(link.dataset.haloPlayerGenre || link.dataset.genre, 80),
+      bpm: Number.parseInt(link.dataset.haloPlayerBpm || link.dataset.bpm || "0", 10) || 0,
+      key: cleanText(link.dataset.haloPlayerKey || link.dataset.key, 32),
+      duration: durationValue || (parsedDuration ? formatDuration(parsedDuration) : ""),
+      release: cleanText(link.dataset.haloPlayerRelease || link.dataset.release),
+      status: cleanText(link.dataset.haloPlayerStatus || link.dataset.status, 80),
+      artwork: safeUrl(link.dataset.haloPlayerArtwork || link.dataset.artwork),
+    };
+  }
+
   function buildRoom() {
     const room = document.createElement("section");
     room.className = "halo-listening-room";
@@ -87,6 +140,13 @@
           </div>
           <button class="halo-listening-room__close" type="button" data-halo-close aria-label="Close player">×</button>
         </header>
+        <section class="halo-listening-room__meta" data-halo-meta>
+          <figure class="halo-listening-room__artwork" data-halo-artwork-wrap>
+            <img data-halo-artwork alt="" hidden>
+            <span data-halo-artwork-fallback>H▶</span>
+          </figure>
+          <dl class="halo-listening-room__facts" data-halo-facts></dl>
+        </section>
         <div class="halo-listening-room__stage" data-halo-stage></div>
         <div class="halo-listening-room__gate" data-halo-gate hidden>
           <strong>You found the signal.</strong>
@@ -117,6 +177,45 @@
   const title = room.querySelector("#haloListeningTitle");
   const source = room.querySelector("[data-halo-source]");
   const testCopy = room.querySelector("[data-halo-test-copy]");
+  const metaPanel = room.querySelector("[data-halo-meta]");
+  const artworkWrap = room.querySelector("[data-halo-artwork-wrap]");
+  const artworkImage = room.querySelector("[data-halo-artwork]");
+  const artworkFallback = room.querySelector("[data-halo-artwork-fallback]");
+  const facts = room.querySelector("[data-halo-facts]");
+
+  function renderDetails() {
+    if (!active) {
+      metaPanel.hidden = true;
+      return;
+    }
+    const info = active.details || {};
+    const playbackType = active.media.type === "youtube" ? "Embedded YouTube signal" : "Direct audio stream";
+    const rows = [
+      ["Playback", playbackType],
+      ["Artist", info.artist],
+      ["Album", info.album],
+      ["Genre", info.genre],
+      ["BPM", info.bpm > 0 ? String(info.bpm) : ""],
+      ["Key", info.key],
+      ["Duration", info.duration],
+      ["Release", info.release],
+      ["Status", info.status],
+    ].filter(([, value]) => value);
+    facts.innerHTML = rows.map(([label, value]) => `<div><dt>${label}</dt><dd>${value}</dd></div>`).join("");
+    const artwork = info.artwork || "";
+    if (artwork) {
+      artworkImage.src = artwork;
+      artworkImage.hidden = false;
+      artworkFallback.hidden = true;
+    } else {
+      artworkImage.removeAttribute("src");
+      artworkImage.hidden = true;
+      artworkFallback.hidden = false;
+      artworkFallback.textContent = active.title.slice(0, 2).toUpperCase() || "H▶";
+    }
+    artworkWrap.hidden = false;
+    metaPanel.hidden = rows.length === 0;
+  }
 
   function metadata(seconds = 0, position = 0) {
     if (!active) return {};
@@ -297,6 +396,7 @@
     active = {
       media,
       title: titleFor(link),
+      details: detailsFor(link),
       variant,
       previewSeconds: variants[variant],
       previewReached: false,
@@ -308,6 +408,7 @@
     title.textContent = active.title;
     source.textContent = media.type === "youtube" ? "YouTube playback, kept inside HALO" : "Audio playback, kept inside HALO";
     testCopy.textContent = active.previewSeconds ? `${active.previewSeconds}-second preview test` : "Full-listen test";
+    renderDetails();
     for (const externalLink of externalLinks) externalLink.href = media.url;
     gate.hidden = true;
     room.hidden = false;
@@ -325,6 +426,7 @@
     track("music_player_close", { ...metadata(Math.round(currentSeconds())), action: reason });
     stopPlayback();
     active = null;
+    renderDetails();
     gate.hidden = true;
     room.hidden = true;
     document.body.classList.remove("halo-listening-room-open");

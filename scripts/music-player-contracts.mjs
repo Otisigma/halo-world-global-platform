@@ -32,6 +32,9 @@ assert.match(client, /youtube-nocookie\.com/, "YouTube playback must use the pri
 assert.match(client, /quick_15: 15, sample_30: 30, full_listen: 0/, "preview duration variants must remain measurable");
 assert.match(client, /MutationObserver/, "dynamically rendered music links must be discovered");
 assert.match(client, /dataset\.haloPlayer === "off"/, "links must support an explicit player opt-out");
+assert.match(client, /dataset\.haloPlayerArtist/, "the player should read artist metadata from link dataset fields");
+assert.match(client, /halo-listening-room__facts/, "the player should render rich now-playing metadata rows");
+assert.match(styles, /halo-listening-room__meta/, "the listening room styles must support the metadata panel");
 assert.match(styles, /PLAY HERE/, "eligible links must advertise on-site playback");
 assert.match(stats, /music-player\.js/, "the shared analytics client must load the player");
 assert.match(haloHome, /resolveDreamweaverPreviewUrl/, "the homepage Dreamweaver player must validate preview audio sources before playback");

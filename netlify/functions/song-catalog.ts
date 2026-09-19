@@ -5,6 +5,7 @@ import { getUser, verifyRequestOrigin } from "@netlify/identity";
 import { db } from "../../db/index.js";
 import { dreamweaverSongReviews, songs, songVersions } from "../../db/schema.js";
 import { cleanText, ensureMembership } from "../lib/halo-x.mjs";
+import { reconcilePublishedSong } from "../lib/song-publication.mjs";
 
 const MAX_BODY_BYTES = 80_000;
 const RIGHTS_STATUSES = new Set(["needs_review", "cleared", "disputed"]);
@@ -380,6 +381,14 @@ export default async function songCatalogHandler(request: Request) {
       const rows = await db.update(songs).set({ pipelineStatus: stage, pipelineUpdatedAt: new Date(), updatedAt: new Date() })
         .where(and(eq(songs.id, songId), eq(songs.ownerMemberId, membership.member_id), eq(songs.status, "active"))).returning({ id: songs.id });
       if (!rows.length) return json({ message: "That song was not found" }, 404);
+      if (stage === "published") {
+        await reconcilePublishedSong(nativeDb, {
+          songId,
+          ownerMemberId: membership.member_id,
+          actorId: membership.actor_id,
+          actorType: "member",
+        });
+      }
       return json({ message: `Song moved to ${stage.replace(/_/g, " ")}`, songId, stage });
     }
     if (payload.action === "review_song") {

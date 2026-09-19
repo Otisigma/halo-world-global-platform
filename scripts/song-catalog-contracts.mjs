@@ -32,6 +32,7 @@ const checks = [
   [client.includes("const money=(cents,currency=\"USD\")") && client.includes("money(song.salePriceCents,song.currency)"), "formats song sale prices from each song's stored currency instead of a hardcoded display currency"],
   [api.includes("VERSION_ROUTES") && api.includes("instrumental") && api.includes("stems") && api.includes("extended"), "creates every requested version route for each song"],
   [api.includes("runDreamweaverReview") && api.includes("radio_master") && api.includes("rightsStatus"), "runs Dream Weaver metadata, rights, sale, and radio checks"],
+  [api.includes("reconcilePublishedSong") && api.includes('payload.action === "set_pipeline_stage"') && api.includes('stage === "published"'), "reconciles published songs into public release and radio fan-out from catalog stage transitions"],
   [api.includes("verifyRequestOrigin") && api.includes("ensureMembership") && api.includes('path: "/api/song-catalog"'), "protects catalog records with membership and origin checks"],
   [api.includes("halo_release_campaigns") && api.includes("halo_artist_pages") && api.includes("import_existing"), "loads reusable existing songs from release data with ownership checks"],
   [page.includes('id="audioFile"') && client.includes("AUDIO_CHUNK_BYTES") && client.includes("finalize_upload"), "uploads full song-version audio in browser-safe chunks"],

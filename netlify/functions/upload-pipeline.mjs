@@ -1,6 +1,7 @@
 import { getDatabase } from "@netlify/database";
 import { getUser, verifyRequestOrigin } from "@netlify/identity";
 import { cleanText, ensureMembership } from "../lib/halo-x.mjs";
+import { reconcilePublishedSong } from "../lib/song-publication.mjs";
 
 const MAX_BODY_BYTES = 40_000;
 const PIPELINE_STAGES = new Set([
@@ -128,6 +129,14 @@ async function setStage(db, ownerMemberId, payload) {
     RETURNING id
   `;
   if (!rows.length) return json({ message: "That song was not found" }, 404);
+  if (stage === "published") {
+    await reconcilePublishedSong(db, {
+      songId,
+      ownerMemberId,
+      actorId: payload.actorId || "system",
+      actorType: "member",
+    });
+  }
   return json({ message: `Song moved to ${stage.replace(/_/g, " ")}`, songId, stage });
 }
 
@@ -171,7 +180,7 @@ export default async function handler(request) {
     const payload = await request.json().catch(() => null);
     if (!payload) return json({ message: "Request body must be valid JSON" }, 400);
 
-    if (payload.action === "set_stage") return setStage(db, membership.member_id, payload);
+    if (payload.action === "set_stage") return setStage(db, membership.member_id, { ...payload, actorId: membership.actor_id });
     if (payload.action === "link_radio_track") return linkRadioTrack(db, membership.member_id, payload);
 
     return json({ message: "Choose a supported pipeline action" }, 400);

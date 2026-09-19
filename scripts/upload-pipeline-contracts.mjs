@@ -133,6 +133,7 @@ const checks = [
       "pipeline_status",
       "pipeline_updated_at",
       "set_stage",
+      "reconcilePublishedSong",
       "Song moved to",
     ],
     diagnose: "Pipeline stage contract failed: API stage transition persistence signals are missing.",

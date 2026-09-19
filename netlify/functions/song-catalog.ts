@@ -6,7 +6,7 @@ import { db } from "../../db/index.js";
 import { dreamweaverSongReviews, songs, songVersions } from "../../db/schema.js";
 import { cleanText, ensureMembership } from "../lib/halo-x.mjs";
 import { reconcilePublishedSong } from "../lib/song-publication.mjs";
-import { buildPublicationHealth } from "../lib/song-publication-health.mjs";
+import { attachPublicationHealthToSongs } from "../lib/song-publication-health.mjs";
 
 const MAX_BODY_BYTES = 80_000;
 const RIGHTS_STATUSES = new Set(["needs_review", "cleared", "disputed"]);
@@ -204,25 +204,9 @@ async function attachPublicationHealth(nativeDb: Awaited<ReturnType<typeof getDa
       last_reconciled_at
     FROM halo_song_publication_sync
     WHERE owner_member_id = ${ownerMemberId}
+      AND song_id = ANY(${publishedSongIds})
   `;
-  const healthBySong = new Map<string, ReturnType<typeof buildPublicationHealth>>();
-  publishedSongIds.forEach(songId => {
-    const song = catalog.find(item => item.id === songId);
-    if (!song) return;
-    const sync = syncRows.find(row => row.song_id === songId);
-    healthBySong.set(songId, buildPublicationHealth(song, sync ? {
-      releaseId: sync.release_id,
-      radioTrackId: sync.radio_track_id,
-      canonicalUrl: sync.canonical_url,
-      releaseStatus: sync.release_status,
-      radioStatus: sync.radio_status,
-      dreamweaverStatus: sync.dreamweaver_status,
-      details: sync.details,
-      lastError: sync.last_error,
-      lastReconciledAt: sync.last_reconciled_at
-    } : {}));
-  });
-  return catalog.map(song => ({ ...song, publicationHealth: healthBySong.get(song.id) || null }));
+  return attachPublicationHealthToSongs(catalog, syncRows);
 }
 
 async function queueProducer(nativeDb: Awaited<ReturnType<typeof getDatabase>>, ownerMemberId: string) {

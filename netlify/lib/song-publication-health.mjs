@@ -253,3 +253,28 @@ export function buildPublicationHealth(song, sync = {}, now = new Date()) {
     retryAgeMinutes
   };
 }
+
+function normalizeSyncRow(sync) {
+  return {
+    releaseId: sync?.releaseId ?? sync?.release_id ?? "",
+    radioTrackId: sync?.radioTrackId ?? sync?.radio_track_id ?? "",
+    canonicalUrl: sync?.canonicalUrl ?? sync?.canonical_url ?? "",
+    releaseStatus: sync?.releaseStatus ?? sync?.release_status ?? "",
+    radioStatus: sync?.radioStatus ?? sync?.radio_status ?? "",
+    dreamweaverStatus: sync?.dreamweaverStatus ?? sync?.dreamweaver_status ?? "",
+    details: sync?.details && typeof sync.details === "object" ? sync.details : {},
+    lastError: sync?.lastError ?? sync?.last_error ?? "",
+    lastReconciledAt: sync?.lastReconciledAt ?? sync?.last_reconciled_at ?? ""
+  };
+}
+
+export function attachPublicationHealthToSongs(catalog, syncRows = []) {
+  const songs = cleanArray(catalog);
+  const syncBySongId = new Map(cleanArray(syncRows).map(sync => [String(sync?.song_id || sync?.songId || ""), normalizeSyncRow(sync)]));
+  return songs.map(song => ({
+    ...song,
+    publicationHealth: song?.pipelineStatus === "published"
+      ? buildPublicationHealth(song, syncBySongId.get(String(song.id)) || {})
+      : null
+  }));
+}

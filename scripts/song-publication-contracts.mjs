@@ -49,7 +49,7 @@ assert.match(reconcileFunction, /path: "\/api\/song-publication-reconcile"/, "sc
 assert.match(unifiedUpload, /reconcilePublishedSong/, "unified upload pipeline must trigger publication fan-out on publish");
 assert.match(uploadPipeline, /reconcilePublishedSong/, "upload pipeline must trigger publication fan-out on publish");
 assert.match(catalogApi, /attachPublicationHealth/, "song catalog API must attach publication health to artist songs");
-assert.match(catalogApi, /buildPublicationHealth/, "song catalog API must reuse the deterministic publication health helper");
+assert.match(catalogApi, /attachPublicationHealthToSongs/, "song catalog API must reuse the deterministic publication health helper");
 assert.match(dreamweaver, /new URL\("\/music\/", location\.origin\)/, "Dreamweaver share flow must target the canonical published-song URL");
 
 console.log("Song publication contracts passed.");

@@ -1,5 +1,7 @@
+import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
+import { attachPublicationHealthToSongs } from "../netlify/lib/song-publication-health.mjs";
 
 const root = resolve(import.meta.dirname, "..");
 const read = path => readFile(resolve(root, path), "utf8");
@@ -25,6 +27,44 @@ const [page, client, styles, api, publicationHealth, audioApi, artworkApi, produ
   read("upload-progress.js")
 ]);
 const packageJson = JSON.parse(packageText);
+const sampleSongs = attachPublicationHealthToSongs([
+  {
+    id: "published-song",
+    title: "Published song",
+    artistName: "HALO",
+    pipelineStatus: "published",
+    rightsStatus: "cleared",
+    metadataIssues: [],
+    versions: [
+      { versionType: "sale_master", audioUrl: "https://example.com/sale.mp3", masteringStatus: "approved" },
+      { versionType: "radio_edit", audioUrl: "https://example.com/radio.mp3", masteringStatus: "approved" }
+    ]
+  },
+  {
+    id: "draft-song",
+    title: "Draft song",
+    artistName: "HALO",
+    pipelineStatus: "uploaded",
+    rightsStatus: "cleared",
+    metadataIssues: [],
+    versions: []
+  }
+], [
+  {
+    song_id: "published-song",
+    release_id: "halo-release",
+    radio_track_id: "radio-track",
+    canonical_url: "/music/?song=halo-release",
+    release_status: "published",
+    radio_status: "rotation",
+    dreamweaver_status: "ready",
+    details: {},
+    last_error: "",
+    last_reconciled_at: "2026-09-19T16:00:00.000Z"
+  }
+]);
+assert.equal(sampleSongs[0].publicationHealth?.state, "published_and_fully_distributed", "published songs should receive computed publication health");
+assert.equal(sampleSongs[1].publicationHealth, null, "non-published songs should expose publicationHealth as null");
 
 const checks = [
   [page.includes("One song · every useful version") && page.includes("Radio mastering queue"), "ships a unified catalog and dedicated broadcast queue"],

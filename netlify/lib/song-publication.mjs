@@ -550,10 +550,13 @@ export async function reconcilePublishedSong(db, {
     const errorStreak = Math.max(1, Number.parseInt(String(existingDetails.errorStreak || "0"), 10) + 1 || 1);
     const firstFailureAt = String(existingDetails.firstFailureAt || new Date().toISOString());
     const escalatedAt = String(existingDetails.escalatedAt || (errorStreak >= 4 ? new Date().toISOString() : ""));
+    const fallbackReleaseId = existingSync?.release_id || song.source_release_id || null;
+    const fallbackRadioTrackId = existingSync?.radio_track_id || null;
+    const fallbackCanonicalUrl = existingSync?.canonical_url || (fallbackReleaseId ? publicationPath(fallbackReleaseId) : "");
     const healthInput = {
-      releaseId: song.source_release_id || null,
-      radioTrackId: null,
-      canonicalUrl: song.source_release_id ? publicationPath(song.source_release_id) : "",
+      releaseId: fallbackReleaseId,
+      radioTrackId: fallbackRadioTrackId,
+      canonicalUrl: fallbackCanonicalUrl,
       releaseStatus: "error",
       radioStatus: "error",
       dreamweaverStatus: "error",
@@ -568,9 +571,9 @@ export async function reconcilePublishedSong(db, {
     };
     const health = buildPublicationHealth(publicationHealthSong(song, versions), healthInput);
     await upsertPublicationSync(db, song, {
-      releaseId: song.source_release_id || null,
-      radioTrackId: null,
-      canonicalUrl: song.source_release_id ? publicationPath(song.source_release_id) : "",
+      releaseId: fallbackReleaseId,
+      radioTrackId: fallbackRadioTrackId,
+      canonicalUrl: fallbackCanonicalUrl,
       releaseStatus: "error",
       radioStatus: "error",
       dreamweaverStatus: "error",

@@ -45,6 +45,16 @@ function titleCase(value) {
     .replace(/\b\w/g, letter => letter.toUpperCase());
 }
 
+function readField(record, snakeCaseKey, camelCaseKey) {
+  if (!record || typeof record !== "object") return undefined;
+  if (record[snakeCaseKey] !== undefined) return record[snakeCaseKey];
+  return record[camelCaseKey];
+}
+
+function readVersionField(version, snakeCaseKey, camelCaseKey) {
+  return readField(version, snakeCaseKey, camelCaseKey);
+}
+
 function buildAgentAssignments(deliveryState) {
   return IN_HOUSE_DISTRIBUTOR_TEAM.map(agent => ({
     id: agent.id,
@@ -66,12 +76,14 @@ export function buildPublicationHealth({
   radioDetails = {},
   lastError = "",
 } = {}) {
-  const saleMaster = versions.find(version => version.version_type === "sale_master" && version.audio_url);
-  const hasArtwork = Boolean(song?.artwork_url || versions.some(version => version.artwork_url));
+  const saleMaster = versions.find(version =>
+    readVersionField(version, "version_type", "versionType") === "sale_master"
+    && readVersionField(version, "audio_url", "audioUrl")
+  );
   const approvedRadioVersion = versions.find(version =>
-    ["radio_edit", "clean"].includes(version.version_type)
-    && version.audio_url
-    && version.mastering_status === "approved"
+    ["radio_edit", "clean"].includes(String(readVersionField(version, "version_type", "versionType") || ""))
+    && readVersionField(version, "audio_url", "audioUrl")
+    && readVersionField(version, "mastering_status", "masteringStatus") === "approved"
   );
   const propagatedSurfaces = [];
   const missingSurfaces = [];
@@ -112,6 +124,15 @@ export function buildPublicationHealth({
       "Press “Recheck now” after any internal release repair or migration backfill.",
       "If the row still does not appear, send the song title and release ID to HALO support for manual repair."
     );
+  } else if (!saleMaster) {
+    deliveryState = "awaiting_assets";
+    owner = { code: "artist", label: "Artist action" };
+    reason = "HALO still needs a connected sale master audio source before every downstream surface can stay healthy.";
+    checklist.push("Upload or reconnect the approved sale master audio for this song.");
+    checklist.push(
+      "Save the catalog record, then press “Recheck now” to have the distributor team inspect the new assets.",
+      "Leave the song published so the monitor can keep retrying the missing surfaces."
+    );
   } else if (!dreamweaverReady) {
     deliveryState = "missing_dreamweaver_share_payload";
     owner = { code: "internal", label: "Dreamweaver Watch" };
@@ -120,18 +141,6 @@ export function buildPublicationHealth({
       "Keep the song published so Dreamweaver Watch can rebuild the share payload automatically.",
       "Press “Recheck now” after the public song route or release ID is corrected.",
       "Use the release row as the source of truth and avoid replacing the canonical song URL manually."
-    );
-  } else if (!saleMaster || !hasArtwork) {
-    deliveryState = "awaiting_assets";
-    owner = { code: "artist", label: "Artist action" };
-    reason = !saleMaster
-      ? "HALO still needs a connected sale master audio source before every downstream surface can stay healthy."
-      : "HALO still needs artwork so the published song can travel with the right public-facing package.";
-    if (!saleMaster) checklist.push("Upload or reconnect the approved sale master audio for this song.");
-    if (!hasArtwork) checklist.push("Upload cover art for the song or at least one published version.");
-    checklist.push(
-      "Save the catalog record, then press “Recheck now” to have the distributor team inspect the new assets.",
-      "Leave the song published so the monitor can keep retrying the missing surfaces."
     );
   } else if (!approvedRadioVersion || !radioReady) {
     deliveryState = "awaiting_radio_ready_version";
@@ -154,14 +163,20 @@ export function buildPublicationHealth({
         "Press “Recheck now” so Radio Watch can route the approved version into HALO Radio."
       );
     }
-  } else if (song?.rights_status !== "cleared" || (song?.sale_status === "for_sale" && Number(song?.sale_price_cents || 0) <= 0)) {
+  } else if (
+    readField(song, "rights_status", "rightsStatus") !== "cleared"
+    || (
+      readField(song, "sale_status", "saleStatus") === "for_sale"
+      && Number(readField(song, "sale_price_cents", "salePriceCents") || 0) <= 0
+    )
+  ) {
     deliveryState = "needs_artist_action";
     owner = { code: "artist", label: "Artist action" };
-    reason = song?.rights_status !== "cleared"
+    reason = readField(song, "rights_status", "rightsStatus") !== "cleared"
       ? "HALO needs a cleared rights confirmation before the published delivery loop can treat the release as complete."
       : "HALO still needs a sale price because the song is marked for sale.";
-    if (song?.rights_status !== "cleared") checklist.push("Confirm ownership, samples, features, and splits in the catalog.");
-    if (song?.sale_status === "for_sale" && Number(song?.sale_price_cents || 0) <= 0) checklist.push("Set a sale price for the published song.");
+    if (readField(song, "rights_status", "rightsStatus") !== "cleared") checklist.push("Confirm ownership, samples, features, and splits in the catalog.");
+    if (readField(song, "sale_status", "saleStatus") === "for_sale" && Number(readField(song, "sale_price_cents", "salePriceCents") || 0) <= 0) checklist.push("Set a sale price for the published song.");
     checklist.push(
       "Save the song details so the distributor loop can read the new metadata.",
       "Press “Recheck now” to refresh the publication health report."

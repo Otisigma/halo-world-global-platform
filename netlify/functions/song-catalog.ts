@@ -423,6 +423,15 @@ export default async function songCatalogHandler(request: Request) {
     if (payload.action === "recheck_publication") {
       const songId = cleanId(payload.songId);
       if (!songId) return json({ message: "Choose a valid song" }, 400);
+      const [ownedSong] = await db.select({ id: songs.id }).from(songs)
+        .where(and(
+          eq(songs.id, songId),
+          eq(songs.ownerMemberId, membership.member_id),
+          eq(songs.status, "active"),
+          eq(songs.pipelineStatus, "published")
+        ))
+        .limit(1);
+      if (!ownedSong) return json({ message: "Choose a published song you own" }, 404);
       const result = await reconcilePublishedSong(nativeDb, {
         songId,
         ownerMemberId: membership.member_id,

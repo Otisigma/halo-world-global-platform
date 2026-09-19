@@ -503,13 +503,20 @@ export async function reconcilePublishedSong(db, {
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : "unknown error";
+    const existingSync = await db.sql`
+    SELECT canonical_url
+    FROM halo_song_publication_sync
+    WHERE song_id = ${song.id}
+    LIMIT 1
+    `;
+    const lastKnownCanonicalUrl = existingSync[0]?.canonical_url || "";
     const details = {
     error: message,
     publicationHealth: buildPublicationHealth({
       song,
       versions,
       releaseId: song.source_release_id || "",
-      canonicalUrl: song.source_release_id ? publicationPath(song.source_release_id) : "",
+      canonicalUrl: lastKnownCanonicalUrl,
       releaseStatus: "error",
       radioStatus: "error",
       dreamweaverStatus: "error",
@@ -519,7 +526,7 @@ export async function reconcilePublishedSong(db, {
     await upsertPublicationSync(db, song, {
     releaseId: song.source_release_id || null,
     radioTrackId: null,
-    canonicalUrl: song.source_release_id ? publicationPath(song.source_release_id) : "",
+    canonicalUrl: lastKnownCanonicalUrl,
     releaseStatus: "error",
     radioStatus: "error",
     dreamweaverStatus: "error",

@@ -5,7 +5,7 @@ function json(body, status = 200) {
   return Response.json(body, { status, headers: { "Cache-Control": "no-store" } });
 }
 
-async function runReconcile(limit = 50) {
+export async function runReconcile(limit = 50) {
   const db = getDatabase();
   const results = await reconcilePublishedSongs(db, {
     limit,
@@ -30,6 +30,5 @@ export default async function songPublicationReconcileHandler(request) {
 }
 
 export const config = {
-  path: "/api/song-publication-reconcile",
-  schedule: "*/15 * * * *"
+  path: "/api/song-publication-reconcile"
 };

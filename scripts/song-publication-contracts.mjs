@@ -5,10 +5,11 @@ import { resolve } from "node:path";
 const root = resolve(import.meta.dirname, "..");
 const read = path => readFile(resolve(root, path), "utf8");
 
-const [helper, migration, reconcileFunction, unifiedUpload, uploadPipeline, dreamweaver] = await Promise.all([
+const [helper, migration, reconcileFunction, scheduledReconcileFunction, unifiedUpload, uploadPipeline, dreamweaver] = await Promise.all([
   read("netlify/lib/song-publication.mjs"),
   read("netlify/database/migrations/20260919130000_create_song_publication_sync.sql"),
   read("netlify/functions/song-publication-reconcile.mjs"),
+  read("netlify/functions/song-publication-reconcile-scheduled.mjs"),
   read("netlify/functions/unified-upload.mjs"),
   read("netlify/functions/upload-pipeline.mjs"),
   read("dreamweaver/dreamweaver.js"),
@@ -27,9 +28,12 @@ assert.match(migration, /release_status/, "migration must track public release r
 assert.match(migration, /radio_status/, "migration must track radio reconciliation state");
 assert.match(migration, /dreamweaver_status/, "migration must track Dreamweaver sharing readiness");
 
-assert.match(reconcileFunction, /reconcilePublishedSongs/, "scheduled reconciler must invoke published-song repair");
-assert.match(reconcileFunction, /schedule: "\*\/15 \* \* \* \*"/, "scheduled reconciler must run on an automated cadence");
-assert.match(reconcileFunction, /path: "\/api\/song-publication-reconcile"/, "scheduled reconciler must expose a manual repair endpoint");
+assert.match(reconcileFunction, /reconcilePublishedSongs/, "manual reconciler must invoke published-song repair");
+assert.match(reconcileFunction, /path: "\/api\/song-publication-reconcile"/, "reconciler must expose a manual repair endpoint");
+assert.doesNotMatch(reconcileFunction, /schedule:/, "manual reconciler must not also be configured as a scheduled function");
+assert.match(scheduledReconcileFunction, /runReconcile/, "scheduled reconciler must invoke published-song repair");
+assert.match(scheduledReconcileFunction, /schedule: "\*\/15 \* \* \* \*"/, "scheduled reconciler must run on an automated cadence");
+assert.doesNotMatch(scheduledReconcileFunction, /path:/, "scheduled reconciler must not specify a custom path");
 
 assert.match(unifiedUpload, /reconcilePublishedSong/, "unified upload pipeline must trigger publication fan-out on publish");
 assert.match(uploadPipeline, /reconcilePublishedSong/, "upload pipeline must trigger publication fan-out on publish");

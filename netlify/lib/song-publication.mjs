@@ -494,7 +494,12 @@ export async function reconcilePublishedSong(db, {
       releaseStatus: "published",
       radioStatus: radio.status,
       dreamweaverStatus: release.publicUrl ? "ready" : "pending",
-      details: existingDetails,
+      details: {
+        ...existingDetails,
+        errorStreak: 0,
+        firstFailureAt: "",
+        escalatedAt: ""
+      },
       lastError: "",
       lastReconciledAt: new Date().toISOString()
     };

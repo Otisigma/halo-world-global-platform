@@ -172,8 +172,8 @@ export function buildPublicationHealth(song, sync = {}, now = new Date()) {
     state = "awaiting_radio_ready_assets";
     summary = "The public release is moving, but HALO Radio is still waiting for a dedicated radio-ready version.";
     if (!radioVersions.length) failureReasons.push("No radio edit or clean version exists yet.");
-    else if (!hasRadioAudio) failureReasons.push("A radio edit exists, but its audio file is not connected.");
-    else failureReasons.push("The radio or clean version audio is connected, but mastering is not approved yet.");
+    else if (!hasRadioAudio) failureReasons.push("A radio or clean version exists, but its audio file is not connected.");
+    else failureReasons.push("A radio or clean version is connected, but mastering is not approved yet.");
     recommendedFixes.push(buildFix(
       "Finish the radio version route",
       [

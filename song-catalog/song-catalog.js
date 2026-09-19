@@ -62,7 +62,7 @@ async function runProducer(){if(!state.authenticated&&!(await requestSignIn()))r
 async function setPackageStatus(packageId,status){try{const data=await api({action:"set_package_status",packageId,status});message(data.message);await loadCatalog()}catch(error){message(error.message)}}
 
 elements.songList.addEventListener("click",event=>{const button=event.target.closest("[data-song-id]");if(!button)return;state.selectedId=button.dataset.songId;render()});
-const publicationBoard=$("#publicationBoard");if(publicationBoard)publicationBoard.addEventListener("click",event=>{const button=event.target.closest("[data-publication-song]");if(!button)return;state.selectedId=button.dataset.publicationSong;render()});
+const publicationBoard=$("#publicationBoard");if(publicationBoard)publicationBoard.addEventListener("click",event=>{const button=event.target.closest("[data-publication-song]");if(!button)return;state.selectedId=button.dataset.publicationSong;render();$("#publicationHealthTitle")?.focus()});
 elements.search.addEventListener("input",()=>{state.filter=elements.search.value;renderSongList()});
 $("#addSongButton").addEventListener("click",openSongDialog);document.querySelectorAll("[data-add-song]").forEach(button=>button.addEventListener("click",openSongDialog));
 $("#importButton").addEventListener("click",importExisting);document.querySelectorAll("[data-import]").forEach(button=>button.addEventListener("click",importExisting));

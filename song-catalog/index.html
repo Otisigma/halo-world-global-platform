@@ -40,6 +40,14 @@
       <article><span>Ready</span><strong id="readyCount">0</strong><small>Dreamweaver cleared</small></article>
     </section>
 
+    <section class="publication-board" aria-labelledby="publicationBoardTitle">
+      <div class="publication-board-heading">
+        <div><p class="eyebrow">Publication health desk</p><h2 id="publicationBoardTitle">Published songs stay under watch.</h2></div>
+        <p>HALO keeps checking every published song until the public release page, Dreamweaver share, and radio route are confirmed or the issue is escalated.</p>
+      </div>
+      <div class="publication-board-list" id="publicationBoard"><p class="publication-empty">Move a song to Published and HALO will start tracking its distribution health here.</p></div>
+    </section>
+
     <section class="catalog-shell" id="catalogShell" aria-busy="true">
       <aside class="song-rail" aria-label="Songs">
         <div class="rail-heading"><div><p class="eyebrow">The catalog</p><h2>All songs</h2></div><label><span class="sr-only">Search songs</span><input id="searchInput" type="search" placeholder="Search title or artist"></label></div>
@@ -108,6 +116,34 @@
           <section class="versions-panel">
             <div class="panel-heading"><div><p class="eyebrow">Version routing</p><h3>Every version, one clear destination</h3></div><p>Open a row to connect audio and update mastering.</p></div>
             <div class="version-table" id="versionTable"></div>
+          </section>
+
+          <section class="publication-health-panel" id="publicationHealthPanel" hidden aria-labelledby="publicationHealthTitle">
+            <div class="panel-heading"><div><p class="eyebrow">Distributor team</p><h3 id="publicationHealthTitle">Publication health</h3></div><a class="quiet-link" id="publicationCanonicalLink" href="/music/" target="_blank" rel="noopener" hidden>Open live song ↗</a></div>
+            <div class="publication-health-grid">
+              <article class="publication-health-card publication-health-summary-card">
+                <span class="publication-state-badge" id="publicationStateBadge" data-state="idle">Waiting</span>
+                <strong id="publicationStateTitle">Select a published song to inspect its distribution.</strong>
+                <p id="publicationSummary">HALO will show surfaces reached, missing surfaces, failure reasons, fixes, and retry status here.</p>
+                <small id="publicationRetryStatus">No publication check loaded yet.</small>
+              </article>
+              <article class="publication-health-card">
+                <h4>Surfaces</h4>
+                <div class="publication-surface-list" id="publicationSurfaces"></div>
+              </article>
+              <article class="publication-health-card">
+                <h4>Failure reasons</h4>
+                <div class="publication-copy-list" id="publicationReasons"></div>
+              </article>
+              <article class="publication-health-card">
+                <h4>Recommended fixes</h4>
+                <div class="publication-fix-list" id="publicationFixes"></div>
+              </article>
+              <article class="publication-health-card publication-health-agents-card">
+                <h4>Distributor agents</h4>
+                <div class="publication-agent-list" id="publicationAgents"></div>
+              </article>
+            </div>
           </section>
         </div>
       </div>

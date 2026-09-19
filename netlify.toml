@@ -56,14 +56,20 @@
 
 [[redirects]]
   from = "/"
-  to = "/halo"
-  status = 301
+  to = "/music-world.html"
+  status = 200
   force = true
 
 [[redirects]]
   from = "/halo"
   to = "/halo.html"
   status = 200
+  force = true
+
+[[redirects]]
+  from = "/stats"
+  to = "/stats/"
+  status = 301
   force = true
 
 [[redirects]]

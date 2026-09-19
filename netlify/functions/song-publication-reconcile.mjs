@@ -30,6 +30,5 @@ export default async function songPublicationReconcileHandler(request) {
 }
 
 export const config = {
-  path: "/api/song-publication-reconcile",
   schedule: "*/15 * * * *"
 };

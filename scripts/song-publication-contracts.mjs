@@ -29,7 +29,7 @@ assert.match(migration, /dreamweaver_status/, "migration must track Dreamweaver 
 
 assert.match(reconcileFunction, /reconcilePublishedSongs/, "scheduled reconciler must invoke published-song repair");
 assert.match(reconcileFunction, /schedule: "\*\/15 \* \* \* \*"/, "scheduled reconciler must run on an automated cadence");
-assert.match(reconcileFunction, /path: "\/api\/song-publication-reconcile"/, "scheduled reconciler must expose a manual repair endpoint");
+assert.doesNotMatch(reconcileFunction, /path\s*:/, "scheduled reconciler must not expose a custom path");
 
 assert.match(unifiedUpload, /reconcilePublishedSong/, "unified upload pipeline must trigger publication fan-out on publish");
 assert.match(uploadPipeline, /reconcilePublishedSong/, "upload pipeline must trigger publication fan-out on publish");

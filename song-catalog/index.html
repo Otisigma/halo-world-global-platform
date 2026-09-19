@@ -38,6 +38,8 @@
       <article><span>For sale</span><strong id="saleCount">0</strong><small>priced releases</small></article>
       <article><span>Radio queue</span><strong id="radioCount">0</strong><small>masters to finish</small></article>
       <article><span>Ready</span><strong id="readyCount">0</strong><small>Dreamweaver cleared</small></article>
+      <article><span>Fully distributed</span><strong id="distributedCount">0</strong><small>all surfaces ready</small></article>
+      <article><span>Need action</span><strong id="actionCount">0</strong><small>follow next steps</small></article>
     </section>
 
     <section class="catalog-shell" id="catalogShell" aria-busy="true">
@@ -60,6 +62,34 @@
             <div class="song-heading-art"><img class="song-heading-artwork" id="songHeadingArtwork" src="" alt="" hidden><div><p class="eyebrow" id="songArtist">Artist</p><h2 id="songTitle">Song title</h2><p id="songRouteSummary">0 versions routed</p></div></div>
             <div class="score-stamp"><span>DW score</span><strong id="songScore">0</strong><small id="songStatus">Needs review</small></div>
             <div class="pipeline-stamp"><span>Pipeline</span><strong id="songPipelineStatus" class="pipeline-badge" data-stage="uploaded">Uploaded</strong><a class="quiet-link" href="/upload-pipeline/" title="Open unified pipeline view">View pipeline →</a></div>
+          </section>
+
+          <section class="publication-health-panel" id="publicationHealthPanel" hidden aria-labelledby="publicationHealthTitle">
+            <div class="publication-health-status">
+              <div class="publication-health-badge" id="publicationHealthBadge" data-state="pending">Pending</div>
+              <div>
+                <p class="eyebrow">In-house distributor team</p>
+                <h3 id="publicationHealthTitle">Publication health</h3>
+                <p class="publication-health-summary" id="publicationHealthSummary">Publish a song to start the continuous distributor loop.</p>
+              </div>
+            </div>
+            <div class="publication-health-meta">
+              <div><span>Owner</span><strong id="publicationHealthOwner">Dreamweaver Watch</strong></div>
+              <div><span>Last check</span><strong id="publicationHealthChecked">Not checked yet</strong></div>
+              <div><span>Canonical route</span><strong id="publicationHealthRoute">—</strong></div>
+            </div>
+            <div class="publication-health-grid">
+              <article>
+                <div class="panel-heading"><div><p class="eyebrow">Surface status</p><h3>What has propagated</h3></div></div>
+                <div class="publication-surface-list" id="publicationSurfaceList"></div>
+              </article>
+              <article>
+                <div class="panel-heading"><div><p class="eyebrow">Artist next steps</p><h3>What to fix next</h3></div><button class="quiet-button" id="recheckPublicationButton" type="button">Recheck now</button></div>
+                <p class="publication-health-reason" id="publicationHealthReason"></p>
+                <ol class="publication-checklist" id="publicationChecklist"></ol>
+                <div class="publication-agent-list" id="publicationAgentList"></div>
+              </article>
+            </div>
           </section>
 
           <section class="artwork-upload-panel" aria-labelledby="artworkHeading">

@@ -3,7 +3,7 @@ import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { getDatabase } from "@netlify/database";
 import { getUser, verifyRequestOrigin } from "@netlify/identity";
 import { db } from "../../db/index.js";
-import { dreamweaverSongReviews, songs, songVersions } from "../../db/schema.js";
+import { dreamweaverSongReviews, publicationSync, songs, songVersions } from "../../db/schema.js";
 import { cleanText, ensureMembership } from "../lib/halo-x.mjs";
 import { reconcilePublishedSong } from "../lib/song-publication.mjs";
 
@@ -73,8 +73,15 @@ function cleanVersionType(value: unknown): VersionType {
   return VERSION_ROUTES[type] ? type : "alternate";
 }
 
-function serializeSong(song: typeof songs.$inferSelect, versions: Array<typeof songVersions.$inferSelect>) {
+function serializeSong(
+  song: typeof songs.$inferSelect,
+  versions: Array<typeof songVersions.$inferSelect>,
+  sync?: typeof publicationSync.$inferSelect
+) {
   const songArtworkUrl = song.artworkUrl || "";
+  const publicationHealth = sync?.details && typeof sync.details === "object" && !Array.isArray(sync.details)
+    ? (sync.details as Record<string, unknown>).publicationHealth as Record<string, unknown> | undefined
+    : undefined;
   return {
     id: song.id,
     sourceReleaseId: song.sourceReleaseId || "",
@@ -99,6 +106,17 @@ function serializeSong(song: typeof songs.$inferSelect, versions: Array<typeof s
     pipelineStatus: song.pipelineStatus || "uploaded",
     sourceUploadSurface: song.sourceUploadSurface || "",
     pipelineUpdatedAt: song.pipelineUpdatedAt?.toISOString() || "",
+    publicationSync: sync ? {
+      releaseId: sync.releaseId || "",
+      radioTrackId: sync.radioTrackId || "",
+      canonicalUrl: sync.canonicalUrl || "",
+      releaseStatus: sync.releaseStatus,
+      radioStatus: sync.radioStatus,
+      dreamweaverStatus: sync.dreamweaverStatus,
+      lastError: sync.lastError || "",
+      lastReconciledAt: sync.lastReconciledAt?.toISOString() || "",
+    } : null,
+    publicationHealth: publicationHealth || null,
     versions: versions.map(version => ({
       id: version.id,
       versionType: version.versionType,
@@ -129,12 +147,17 @@ async function loadCatalog(ownerMemberId: string) {
     .where(and(eq(songs.ownerMemberId, ownerMemberId), eq(songs.status, "active")))
     .orderBy(desc(songs.updatedAt));
   const ids = songRows.map(song => song.id);
-  const versionRows = ids.length
-    ? await db.select().from(songVersions).where(and(inArray(songVersions.songId, ids), eq(songVersions.status, "active"))).orderBy(desc(songVersions.updatedAt))
-    : [];
+  const [versionRows, syncRows] = ids.length
+    ? await Promise.all([
+        db.select().from(songVersions).where(and(inArray(songVersions.songId, ids), eq(songVersions.status, "active"))).orderBy(desc(songVersions.updatedAt)),
+        db.select().from(publicationSync).where(inArray(publicationSync.songId, ids)),
+      ])
+    : [[], []];
   const versionsBySong = new Map<string, Array<typeof songVersions.$inferSelect>>();
+  const syncBySong = new Map<string, typeof publicationSync.$inferSelect>();
   versionRows.forEach(version => versionsBySong.set(version.songId, [...(versionsBySong.get(version.songId) || []), version]));
-  return songRows.map(song => serializeSong(song, versionsBySong.get(song.id) || []));
+  syncRows.forEach(sync => syncBySong.set(sync.songId, sync));
+  return songRows.map(song => serializeSong(song, versionsBySong.get(song.id) || [], syncBySong.get(song.id)));
 }
 
 async function loadProducer(nativeDb: Awaited<ReturnType<typeof getDatabase>>, ownerMemberId: string) {
@@ -396,6 +419,18 @@ export default async function songCatalogHandler(request: Request) {
       if (!songId) return json({ message: "Choose a valid song" }, 400);
       await runDreamweaverReview(songId, membership.member_id);
       return json({ message: "Dream Weaver review completed", songId });
+    }
+    if (payload.action === "recheck_publication") {
+      const songId = cleanId(payload.songId);
+      if (!songId) return json({ message: "Choose a valid song" }, 400);
+      const result = await reconcilePublishedSong(nativeDb, {
+        songId,
+        ownerMemberId: membership.member_id,
+        actorId: membership.actor_id,
+        actorType: "member",
+      });
+      if (result?.skipped) return json({ message: "Move the song to Published before running the distributor check", songId }, 409);
+      return json({ message: "Publication health rechecked", songId, publicationHealth: result.publicationHealth || null });
     }
     return json({ message: "Choose a supported catalog action" }, 400);
   } catch (error) {

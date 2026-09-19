@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { appendLedgerEntry } from "./halo-ledger.mjs";
+import { buildPublicationHealth, PUBLICATION_MONITOR_WINDOW_MINUTES } from "./publication-health.mjs";
 
 const VERSION_LABELS = {
   sale_master: "Sale master",
@@ -451,6 +452,18 @@ export async function reconcilePublishedSong(db, {
       syncedAudioVersionCount: syncedVersions.length,
       radio: radio.details,
     };
+    const publicationHealth = buildPublicationHealth({
+      song,
+      versions,
+      releaseId: release.id,
+      canonicalUrl: release.publicUrl,
+      releaseStatus: "published",
+      radioStatus: radio.status,
+      dreamweaverStatus: release.publicUrl ? "ready" : "pending",
+      radioTrackId: radio.trackId,
+      radioDetails: radio.details,
+    });
+    details.publicationHealth = publicationHealth;
     await upsertPublicationSync(db, song, {
       releaseId: release.id,
       radioTrackId: radio.trackId,
@@ -486,18 +499,32 @@ export async function reconcilePublishedSong(db, {
       radioStatus: radio.status,
       radioTrackId: radio.trackId,
       syncedAudioVersionCount: syncedVersions.length,
+      publicationHealth,
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : "unknown error";
-    await upsertPublicationSync(db, song, {
-      releaseId: song.source_release_id || null,
-      radioTrackId: null,
+    const details = {
+    error: message,
+    publicationHealth: buildPublicationHealth({
+      song,
+      versions,
+      releaseId: song.source_release_id || "",
       canonicalUrl: song.source_release_id ? publicationPath(song.source_release_id) : "",
       releaseStatus: "error",
       radioStatus: "error",
       dreamweaverStatus: "error",
-      details: { error: message },
       lastError: message,
+    }),
+    };
+    await upsertPublicationSync(db, song, {
+    releaseId: song.source_release_id || null,
+    radioTrackId: null,
+    canonicalUrl: song.source_release_id ? publicationPath(song.source_release_id) : "",
+    releaseStatus: "error",
+    radioStatus: "error",
+    dreamweaverStatus: "error",
+    details,
+    lastError: message,
     });
     if (recordLedger) {
       await appendLedgerEntry(db, {
@@ -551,7 +578,7 @@ export async function reconcilePublishedSongs(db, {
             OR sync.dreamweaver_status <> 'ready'
             OR sync.canonical_url = ''
             OR sync.last_reconciled_at IS NULL
-            OR sync.last_reconciled_at < NOW() - INTERVAL '1 day'
+            OR sync.last_reconciled_at < NOW() - (${PUBLICATION_MONITOR_WINDOW_MINUTES} * INTERVAL '1 minute')
           )
         ORDER BY song.updated_at DESC
         LIMIT ${limit}

@@ -137,13 +137,27 @@ async function resolveReleaseId(db, song) {
   return fallbackId;
 }
 
+function resolveReleaseDreamweaverFlow(songId, {
+  releaseId,
+  publicUrl,
+  streamUrl,
+  officialUrl = "",
+} = {}) {
+  return resolveDreamweaverPageFlow(songId, {
+    mixId: releaseId,
+    publicUrl,
+    streamUrl,
+    officialUrl,
+  });
+}
+
 async function ensureReleaseCampaign(db, song, versions) {
   const releaseId = await resolveReleaseId(db, song);
   const publicUrl = publicationPath(releaseId);
   const saleMaster = versions.find(version => version.version_type === "sale_master" && version.audio_url);
   const firstPlayableVersion = versions.find(version => version.audio_url);
   const streamUrl = cleanText(saleMaster?.audio_url || firstPlayableVersion?.audio_url, 1200);
-  const dreamweaver = resolveDreamweaverPageFlow(song.id, { publicUrl, streamUrl });
+  const dreamweaver = resolveReleaseDreamweaverFlow(song.id, { releaseId, publicUrl, streamUrl });
   const officialUrl = dreamweaver.managed || isLegacySongCatalogAudioUrl(streamUrl)
     ? (dreamweaver.launchUrl || dreamweaver.page?.route || streamUrl || publicUrl)
     : (dreamweaver.launchUrl || streamUrl || publicUrl);
@@ -208,6 +222,8 @@ async function ensureReleaseCampaign(db, song, versions) {
       artist = EXCLUDED.artist,
       artwork_url = COALESCE(NULLIF(EXCLUDED.artwork_url, ''), halo_release_campaigns.artwork_url),
       official_url = CASE
+        WHEN halo_release_campaigns.official_url ~* '^https?://(?:[^/]+\\.)?distrokid\\.com/hyperfollow/'
+        THEN halo_release_campaigns.official_url
         WHEN halo_release_campaigns.official_url = ''
           OR halo_release_campaigns.official_url = ${publicUrl}
           OR halo_release_campaigns.official_url = ${streamUrl}
@@ -250,7 +266,8 @@ async function ensureReleaseCampaign(db, song, versions) {
     officialUrl: releaseRows[0]?.official_url || officialUrl,
     streamUrl: releaseRows[0]?.stream_url || streamUrl,
     publicUrl,
-    dreamweaver: resolveDreamweaverPageFlow(song.id, {
+    dreamweaver: resolveReleaseDreamweaverFlow(song.id, {
+      releaseId,
       publicUrl,
       streamUrl,
       officialUrl: releaseRows[0]?.official_url || officialUrl,

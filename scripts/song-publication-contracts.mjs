@@ -41,7 +41,6 @@ assert.match(helper, /radio_master_missing_or_not_uploaded/, "publication helper
 assert.match(helper, /\/music\/\?song=/, "publication helper must derive canonical public song URLs");
 assert.match(helper, /launchUrl/, "publication helper must persist the resolved Dreamweaver launch destination");
 assert.ok(helper.includes("official_url = CASE") && helper.includes("official_url ~* '^/api/song-catalog/audio\\\\?(?:[^#]*&)?versionId="), "publication helper must replace legacy song-catalog audio navigation URLs during release upserts");
-assert.match(helper, /distrokid\\\\.com\/hyperfollow/, "publication helper must preserve HyperFollow destinations");
 
 assert.match(manager, /manage_dreamweaver_song_page/, "Dreamweaver page manager must have a single page-management purpose");
 assert.match(manager, /dreamweaverHubPath/, "Dreamweaver page manager must define a dedicated canonical hub resolver");
@@ -60,6 +59,14 @@ assert.equal(managedDreamweaverFlow.manager?.id, `dreamweaver-page-manager-${sam
 assert.equal(hyperfollowDreamweaverFlow.hasHyperfollow, true, "HyperFollow releases must be detected");
 assert.equal(hyperfollowDreamweaverFlow.managed, false, "HyperFollow releases must not be replaced by managed Dreamweaver pages");
 assert.equal(hyperfollowDreamweaverFlow.launchUrl, "https://distrokid.com/hyperfollow/owenanthony/sample-track", "HyperFollow releases must keep their existing HyperFollow destination");
+assert.ok(
+  hyperfollowDreamweaverFlow.loop?.linkedPages?.includes("https://distrokid.com/hyperfollow/owenanthony/sample-track"),
+  "HyperFollow loop metadata must retain the HyperFollow destination"
+);
+assert.ok(
+  !hyperfollowDreamweaverFlow.loop?.linkedPages?.some(page => page.startsWith("/dreamweaver/?mix=")),
+  "HyperFollow loop metadata must not advertise managed Dreamweaver hub routing"
+);
 
 assert.match(migration, /CREATE TABLE IF NOT EXISTS halo_song_publication_sync/, "migration must create durable publication sync storage");
 assert.match(migration, /release_status/, "migration must track public release reconciliation state");

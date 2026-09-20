@@ -34,7 +34,6 @@ function serializeRelease(row) {
   const dreamweaverPage = dreamweaverFlow?.page || null;
   const dreamweaverHubUrl = dreamweaverFlow?.hubUrl || "";
   const dreamweaverLoop = dreamweaverFlow?.loop || null;
-    : null;
   const catalogAlbumTitle = row.catalog_album_title || "";
   const catalogGenres = String(row.catalog_genre || "")
     .split(",")

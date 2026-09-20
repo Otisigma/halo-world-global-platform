@@ -45,6 +45,7 @@ const checks = [
     /from = "\/"[\s\S]*to = "\/halo"[\s\S]*status = 301/.test(config)
       && /from = "\/dreamweaver\/"[\s\S]*to = "\/dreamweaver\/index\.html"/.test(config)
       && /from = "\/dreamweaver\/satellite\/"[\s\S]*to = "\/dreamweaver\/index\.html"/.test(config)
+      && /from = "\/dreamweaver\/satellite\/\*"[\s\S]*to = "\/dreamweaver\/index\.html"/.test(config)
       && !/from = "\/dreamweaver"\s+to = "\/dreamweaver\/"/.test(config),
     "keeps Netlify aligned to the canonical HALO home route and serves /dreamweaver/ plus /dreamweaver/satellite/ directly without reintroducing the legacy alias redirect"
   ],

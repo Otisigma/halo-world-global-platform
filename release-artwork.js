@@ -1,5 +1,6 @@
 (() => {
   const DEFAULT_RELEASE_ARTWORK = "/assets/releases/halo-premium-placeholder.svg";
+  const DEFAULT_RELEASE_ARTWORK_BADGE = "HALO placeholder cover";
 
   function safeUrl(value, fallback = "") {
     const raw = typeof value === "string" ? value.trim() : "";
@@ -39,9 +40,9 @@
     frame.classList.toggle("artwork-missing", isMissing);
     frame.dataset.artworkState = isMissing ? "missing" : (isFallback ? "fallback" : "live");
     if (!badge) return;
-    badge.textContent = image.dataset.artworkBadge || "HALO placeholder cover";
+    badge.textContent = image.dataset.artworkBadge || DEFAULT_RELEASE_ARTWORK_BADGE;
     badge.hidden = !isFallback && !isMissing;
-    if (isMissing) {
+    if (isFallback || isMissing) {
       badge.removeAttribute("aria-hidden");
     } else {
       badge.setAttribute("aria-hidden", "true");
@@ -101,6 +102,7 @@
 
   window.HaloReleaseArtwork = {
     DEFAULT_RELEASE_ARTWORK,
+    DEFAULT_RELEASE_ARTWORK_BADGE,
     resolve,
     wire
   };

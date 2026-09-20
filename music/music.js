@@ -21,6 +21,7 @@
   const configuredFeaturedReleaseId = elements.featured?.dataset.featuredReleaseId?.trim() || "";
   const requestedReleaseId = new URLSearchParams(window.location.search).get("song")?.trim() || "";
   const fallbackArtwork = window.HaloReleaseArtwork?.DEFAULT_RELEASE_ARTWORK || "/assets/releases/halo-premium-placeholder.svg";
+  const fallbackArtworkBadge = window.HaloReleaseArtwork?.DEFAULT_RELEASE_ARTWORK_BADGE || "HALO placeholder cover";
   const satelliteVideoFallbackEnabled = new URLSearchParams(window.location.search).get("satellite") === "music-video-fallback";
   const chartRooms = {
     all: [],
@@ -197,7 +198,7 @@
   }
 
   function artworkAttributes(artwork) {
-    return `data-artwork-source="${escapeHtml(artwork?.source || "")}" data-artwork-badge="HALO placeholder cover"`;
+    return `data-artwork-source="${escapeHtml(artwork?.source || "")}" data-artwork-badge="${escapeHtml(fallbackArtworkBadge)}"`;
   }
 
   function wireArtwork(root) {

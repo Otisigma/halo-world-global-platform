@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { appendLedgerEntry } from "./halo-ledger.mjs";
+import { dreamweaverStorefrontPath } from "./dreamweaver-satellite.mjs";
 
 const VERSION_LABELS = {
   sale_master: "Sale master",
@@ -25,13 +26,6 @@ function slugify(value) {
 
 function publicationPath(releaseId) {
   return `/music/?song=${encodeURIComponent(releaseId)}`;
-}
-
-function dreamweaverSatellitePath(songId) {
-  const id = cleanText(songId, 60).toLowerCase();
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(id)
-    ? `/dreamweaver/satellite/${id}/`
-    : "";
 }
 
 function cleanText(value, maxLength) {
@@ -149,10 +143,8 @@ async function ensureReleaseCampaign(db, song, versions) {
   const saleMaster = versions.find(version => version.version_type === "sale_master" && version.audio_url);
   const firstPlayableVersion = versions.find(version => version.audio_url);
   const streamUrl = cleanText(saleMaster?.audio_url || firstPlayableVersion?.audio_url, 1200);
-  const satelliteUrl = dreamweaverSatellitePath(song.id);
-  const officialUrl = satelliteUrl && isLegacySongCatalogAudioUrl(streamUrl)
-    ? satelliteUrl
-    : streamUrl || publicUrl;
+  const dreamweaverUrl = dreamweaverStorefrontPath(song.id);
+  const officialUrl = dreamweaverUrl || streamUrl || publicUrl;
   const artworkUrl = cleanText(
     saleMaster?.artwork_url
       || firstPlayableVersion?.artwork_url
@@ -219,6 +211,8 @@ async function ensureReleaseCampaign(db, song, versions) {
           OR halo_release_campaigns.official_url = ${streamUrl}
           OR halo_release_campaigns.official_url ~* '^/api/song-catalog/audio\\?(?:[^#]*&)?versionId=[0-9a-f-]+(?:&[^#]*)?$'
           OR halo_release_campaigns.official_url ~* '^https?://[^[:space:]]+/api/song-catalog/audio\\?(?:[^#]*&)?versionId=[0-9a-f-]+(?:&[^#]*)?$'
+          OR halo_release_campaigns.official_url ~* '^/dreamweaver/satellite/[0-9a-f-]+/?(?:\\?[^#]*)?$'
+          OR halo_release_campaigns.official_url ~* '^https?://[^[:space:]]+/dreamweaver/satellite/[0-9a-f-]+/?(?:\\?[^#]*)?$'
         THEN EXCLUDED.official_url
         ELSE halo_release_campaigns.official_url
       END,

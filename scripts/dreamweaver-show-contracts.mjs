@@ -49,12 +49,13 @@ const checks = [
     "keeps Netlify aligned to the canonical HALO home route and serves /dreamweaver/ directly without reintroducing the legacy alias redirect"
   ],
   [
-    /from = "\/dreamweaver\/satellite\/:songId"[\s\S]*to = "\/dreamweaver\/satellite\/:songId\/"[\s\S]*status = 301/.test(config)
-      && /from = "\/dreamweaver\/satellite\/:songId\/"[\s\S]*to = "\/dreamweaver\/index\.html"[\s\S]*status = 200/.test(config)
+    /from = "\/dreamweaver\/satellite\/:songId"[\s\S]*to = "\/dreamweaver\/\?mix=a1aefa12-2369-48cc-bf3f-3d3a99bcf982&song=:songId&satellite=dreamweaver"[\s\S]*status = 301/.test(config)
+      && /from = "\/dreamweaver\/satellite\/:songId\/"[\s\S]*to = "\/dreamweaver\/\?mix=a1aefa12-2369-48cc-bf3f-3d3a99bcf982&song=:songId&satellite=dreamweaver"[\s\S]*status = 301/.test(config)
       && server.includes("app.get(/^\\/dreamweaver\\/satellite\\/([^/]+)$/")
       && server.includes("app.get(/^\\/dreamweaver\\/satellite\\/([^/]+)\\/$")
+      && server.includes("dreamweaverStorefrontPath")
       && server.includes("songIdPattern"),
-    "keeps deterministic Dreamweaver satellite routing live for per-song pages across Netlify and local server"
+    "funnels deterministic Dreamweaver satellite URLs into the storefront route across Netlify and local server"
   ],
   [page.includes('id="campaignStudio"') && page.includes('id="campaignCanvas"') && page.includes("Make a Reel / Short"), "adds the Dreamweaver campaign cutting room"],
   [script.includes("renderVerticalClip") && script.includes("captureStream") && script.includes("MediaRecorder"), "renders a downloadable vertical clip in supported browsers"],
@@ -73,7 +74,7 @@ const checks = [
     "keeps Blessed by Owen Anthony wired into the Dreamweaver release doorway with the canonical HyperFollow source"
   ],
   [script.includes("publishedSongId: resolveSongContextId()") && script.includes('new URL("/music/", location.origin)') && script.includes("Published song link copied."), "shares a published song from Dreamweaver using the canonical public music URL when song context is present"],
-  [script.includes("resolveSongContextId") && script.includes("songIdFromSatellitePath") && script.includes("startSatelliteAgentLoop") && script.includes("dreamweaver-satellite-"), "derives song-specific satellite context from deterministic routes and runs an isolated per-song update loop"],
+  [script.includes("resolveSongContextId") && script.includes("songIdFromSatellitePath") && script.includes("canonicalDreamweaverUrl") && script.includes("startSatelliteAgentLoop") && script.includes("dreamweaver-satellite-"), "derives song-specific context from deterministic storefront/satellite routes and runs an isolated per-song update loop"],
   [script.includes('fetch("/api/dreamweaver-fan-signups"') && script.includes("readStoredUnlock") && script.includes("updatePlatformLinks"), "submits email unlocks and rehydrates the lightweight fan reward state"],
   [script.includes('action: "start"') && script.includes("pollCampaignJob") && script.includes("renderPlatformPackages"), "starts, monitors, and exports background campaign packages"],
   [page.includes('id="campaignYoutubeUrl"') && page.includes("Load it. Shape it. Send it.") && campaignFunction.includes("cleanYouTubeUrl") && campaignFunction.includes("halo_youtube_sources"), "offers a one-link YouTube launch that persists the source signal"],

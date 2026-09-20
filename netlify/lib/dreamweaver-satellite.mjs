@@ -3,15 +3,34 @@ function cleanId(value) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(id) ? id : "";
 }
 
+export const DREAMWEAVER_STOREFRONT_MIX_ID = "a1aefa12-2369-48cc-bf3f-3d3a99bcf982";
+
+export function dreamweaverSatellitePath(songId) {
+  const id = cleanId(songId);
+  return id ? `/dreamweaver/satellite/${id}/` : "";
+}
+
+export function dreamweaverStorefrontPath(songId, options = {}) {
+  const id = cleanId(songId);
+  if (!id) return "";
+  const params = new URLSearchParams();
+  params.set("mix", cleanId(options.mixId) || DREAMWEAVER_STOREFRONT_MIX_ID);
+  params.set("song", id);
+  if (options.includeSatelliteFlag !== false) params.set("satellite", "dreamweaver");
+  return `/dreamweaver/?${params.toString()}`;
+}
+
 export function dreamweaverSatellite(songId, options = {}) {
   const id = cleanId(songId);
   if (!id) return null;
-  const route = `/dreamweaver/satellite/${id}/`;
+  const route = dreamweaverStorefrontPath(id, options);
+  const satelliteRoute = dreamweaverSatellitePath(id);
   const metadata = {
     route,
     experienceUrl: route,
     launchUrl: route,
-    fallbackUrl: `/dreamweaver/?satellite=dreamweaver&song=${encodeURIComponent(id)}`,
+    satelliteRoute,
+    fallbackUrl: route,
   };
   if (!options.includeAgentLoop) return metadata;
   return {

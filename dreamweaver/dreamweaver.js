@@ -73,6 +73,7 @@
   const RELEASE_CONTEXT_TIMEOUT_MS = 8000;
   const VIDEO_LIBRARY_TIMEOUT_MS = 8000;
   const SATELLITE_AGENT_REFRESH_MS = 45_000;
+  const DREAMWEAVER_STOREFRONT_MIX_ID = "a1aefa12-2369-48cc-bf3f-3d3a99bcf982";
   const DREAMWEAVER_RELEASE_FALLBACK_ARTWORK = window.HaloReleaseArtwork?.DEFAULT_RELEASE_ARTWORK || "/assets/releases/halo-premium-placeholder.svg";
 
   const elements = {
@@ -450,6 +451,19 @@
     const hasMix = Boolean(params.get("mix"));
     if (!hasMix) return true;
     return params.get("satellite") === "dreamweaver";
+  }
+
+  function canonicalDreamweaverUrl({ includeSatelliteFlag = false, searchParams = location.search } = {}) {
+    const params = searchParams instanceof URLSearchParams
+      ? new URLSearchParams(searchParams)
+      : new URLSearchParams(searchParams);
+    params.set("mix", cleanSongId(params.get("mix")) || DREAMWEAVER_STOREFRONT_MIX_ID);
+    const songId = resolveSongContextId();
+    if (songId) params.set("song", songId);
+    else params.delete("song");
+    if (includeSatelliteFlag || isSatellitePath() || params.get("satellite") === "dreamweaver") params.set("satellite", "dreamweaver");
+    else params.delete("satellite");
+    return `/dreamweaver/?${params.toString()}`;
   }
 
   function rewardSearchQuery() {
@@ -1494,8 +1508,10 @@
       const currentParams = new URLSearchParams(location.search);
       currentParams.set("mix", mix.id);
       if (state.publishedSongId) currentParams.set("song", state.publishedSongId);
-      if (isSatellitePath()) history.replaceState(null, "", `${location.pathname}?${currentParams.toString()}`);
-      else history.replaceState(null, "", `/dreamweaver/?${currentParams.toString()}`);
+      history.replaceState(null, "", canonicalDreamweaverUrl({
+        includeSatelliteFlag: isSatelliteFlow(),
+        searchParams: currentParams,
+      }));
       setLoadingProgress(58, "Scoring the release frame", "Artwork and release details are being synced so the first screen lands with context.");
       await loadReleaseContext();
       setLoadingProgress(82, "Finalizing chapter movement", "The five-movement chapter rail and controls are aligning to the mix timeline.");
@@ -1525,6 +1541,9 @@
   }
 
   async function initializeDreamweaver() {
+   if (isSatellitePath() || (isSatelliteFlow() && !new URLSearchParams(location.search).get("mix"))) {
+     history.replaceState(null, "", canonicalDreamweaverUrl({ includeSatelliteFlag: isSatelliteFlow() }));
+   }
    renderSatelliteState();
    updatePlatformLinks();
    if (isSatelliteFlow()) startSatelliteAgentLoop();

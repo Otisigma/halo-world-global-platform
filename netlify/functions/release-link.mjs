@@ -1,6 +1,7 @@
 import { getDatabase } from "@netlify/database";
 import { verifyRequestOrigin } from "@netlify/identity";
 import { createHash, timingSafeEqual } from "node:crypto";
+import { dreamweaverStorefrontPath } from "../lib/dreamweaver-satellite.mjs";
 
 const audiences = new Set(["fan", "dj", "radio", "press", "preview"]);
 const destinations = {
@@ -69,7 +70,7 @@ async function remapLegacyAudioDestination(db, versionId) {
     `;
     const rows = Array.isArray(result) ? result : Array.isArray(result?.rows) ? result.rows : [];
     const songId = cleanId(rows[0]?.song_id);
-    return songId ? `/dreamweaver/satellite/${songId}/` : "";
+    return dreamweaverStorefrontPath(songId);
   } catch {
     return "";
   }

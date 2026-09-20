@@ -152,14 +152,14 @@
 
 [[redirects]]
   from = "/dreamweaver/satellite/:songId"
-  to = "/dreamweaver/satellite/:songId/"
+  to = "/dreamweaver/?mix=a1aefa12-2369-48cc-bf3f-3d3a99bcf982&song=:songId&satellite=dreamweaver"
   status = 301
   force = true
 
 [[redirects]]
   from = "/dreamweaver/satellite/:songId/"
-  to = "/dreamweaver/index.html"
-  status = 200
+  to = "/dreamweaver/?mix=a1aefa12-2369-48cc-bf3f-3d3a99bcf982&song=:songId&satellite=dreamweaver"
+  status = 301
   force = true
 
 [[redirects]]

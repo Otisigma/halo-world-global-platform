@@ -23,8 +23,8 @@ assert.match(helper, /halo_song_publication_sync/, "publication helper must pers
 assert.match(helper, /appendLedgerEntry/, "publication helper must write ledger entries for reconciliation results");
 assert.match(helper, /radio_master_missing_or_not_uploaded/, "publication helper must keep a deterministic radio fallback reason");
 assert.match(helper, /\/music\/\?song=/, "publication helper must derive canonical public song URLs");
-assert.match(helper, /\/dreamweaver\/satellite\/\$\{id\}\//, "publication helper must set Dreamweaver satellite pages as release entry routes");
-assert.ok(helper.includes("official_url = CASE") && helper.includes("official_url ~* '^/api/song-catalog/audio\\\\?(?:[^#]*&)?versionId="), "publication helper must replace legacy song-catalog audio navigation URLs during release upserts");
+assert.match(helper, /dreamweaverStorefrontPath/, "publication helper must set Dreamweaver storefront pages as release entry routes");
+assert.ok(helper.includes("official_url = CASE") && helper.includes("official_url ~* '^/api/song-catalog/audio\\\\?(?:[^#]*&)?versionId=") && helper.includes("official_url ~* '^/dreamweaver/satellite/"), "publication helper must replace legacy song-catalog audio and satellite navigation URLs during release upserts");
 
 assert.match(migration, /CREATE TABLE IF NOT EXISTS halo_song_publication_sync/, "migration must create durable publication sync storage");
 assert.match(migration, /release_status/, "migration must track public release reconciliation state");
@@ -42,6 +42,6 @@ assert.match(unifiedUpload, /reconcilePublishedSong/, "unified upload pipeline m
 assert.match(uploadPipeline, /reconcilePublishedSong/, "upload pipeline must trigger publication fan-out on publish");
 assert.match(dreamweaver, /new URL\("\/music\/", location\.origin\)/, "Dreamweaver share flow must target the canonical published-song URL");
 assert.match(releaseLink, /remapLegacyAudioDestination/, "release-link handler must guard against legacy song-catalog audio entry URLs");
-assert.match(releaseLink, /\/dreamweaver\/satellite\/\$\{songId\}\//, "release-link handler must reroute legacy audio entries into Dreamweaver satellite pages");
+assert.match(releaseLink, /dreamweaverStorefrontPath/, "release-link handler must reroute legacy audio entries into the Dreamweaver storefront page");
 
 console.log("Song publication contracts passed.");

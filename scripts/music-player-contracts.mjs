@@ -53,8 +53,8 @@ assert.match(haloHome, /dreamweaverPreviewRetryAllowedRef\.current[\s\S]*!dreamw
 assert.match(releaseCatalogApi, /catalog_album_title/, "release catalog must include song-catalog album metadata for player hydration");
 assert.match(releaseCatalogApi, /catalog_genre/, "release catalog must include song-catalog genre metadata for player hydration");
 assert.match(releaseCatalogApi, /catalog_artwork_url/, "release catalog must include song-catalog artwork metadata for player hydration");
-assert.match(musicWorld, /details\.albumTitle/, "music world player mapping must hydrate album metadata from catalog fallbacks");
-assert.match(musicWorld, /details\.genre/, "music world player mapping must hydrate genre metadata from catalog fallbacks");
+assert.match(musicWorld, /album:release\.albumTitle\|\|release\.collectionTitle\|\|details\.albumTitle\|\|''/, "music world player mapping must hydrate album metadata from catalog fallbacks");
+assert.match(musicWorld, /genre:genres\[0\]\|\|details\.genre\|\|''/, "music world player mapping must hydrate genre metadata from catalog fallbacks");
 assert.match(dreamweaver, /state\.release\?\.catalog\?\.albumTitle/, "dreamweaver source link must hydrate album metadata from catalog fallbacks");
 assert.match(dreamweaver, /state\.release\?\.catalog\?\.genre/, "dreamweaver source link must hydrate genre metadata from catalog fallbacks");
 assert.match(dreamweaver, /state\.release\?\.catalog\?\.artworkUrl/, "dreamweaver source link must hydrate artwork metadata from catalog fallbacks");

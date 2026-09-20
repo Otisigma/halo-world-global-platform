@@ -404,11 +404,13 @@
 
   async function flushQueuedAudioFeedback() {
     if (state.audioFeedbackFlushPromise) return state.audioFeedbackFlushPromise;
-    const pending = state.audioFeedbackQueue.filter(entry => entry.deliveryStatus !== "sent");
-    if (!pending.length) return null;
     state.audioFeedbackFlushPromise = (async () => {
       try {
-        for (const incident of pending) await sendAudioFeedbackIncident(incident);
+        while (true) {
+          const pending = state.audioFeedbackQueue.filter(entry => entry.deliveryStatus !== "sent");
+          if (!pending.length) break;
+          for (const incident of pending) await sendAudioFeedbackIncident(incident);
+        }
       } finally {
         state.audioFeedbackFlushPromise = null;
       }
@@ -500,6 +502,7 @@
         });
       }
 
+      if (requested && requestedEntry) return null;
       return library.find(isPlayablePrimaryMix) || null;
     }
 

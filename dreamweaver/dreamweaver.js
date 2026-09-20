@@ -390,7 +390,7 @@
           severity: incident.severity,
           title: incident.title,
           details: incident.details,
-          pagePath: location.pathname,
+          pagePath: incident.pagePath || location.pathname,
           fingerprint: incident.fingerprint,
           metadata: incident.metadata
         })
@@ -471,13 +471,18 @@
       window.clearTimeout(timeoutId);
     }
 
+    function isPlayablePrimaryMix(mix) {
+      const source = cleanText(mix?.source, 60).toLowerCase();
+      return Boolean(cleanText(mix?.audioUrl, 1200)) && source !== "youtube" && !cleanText(mix?.videoUrl, 1200);
+    }
+
     function resolvePrimaryPlaybackMix(mixes = [], requestedMixId = "") {
       const requested = cleanText(requestedMixId, 120);
       const library = Array.isArray(mixes) ? mixes : [];
       const requestedEntry = requested ? library.find(item => cleanText(item?.id, 120) === requested) : null;
-      if (requestedEntry?.audioUrl && requestedEntry.source !== "youtube") return requestedEntry;
+      if (isPlayablePrimaryMix(requestedEntry)) return requestedEntry;
 
-      if (requestedEntry && !requestedEntry.audioUrl) {
+      if (requestedEntry && !cleanText(requestedEntry.audioUrl, 1200)) {
         queueAudioFeedbackIncident("missing_audio", {
           severity: "high",
           title: "Dreamweaver primary mix is missing audio",
@@ -485,7 +490,7 @@
           mix: requestedEntry,
           metadata: { requestedMixId: requested, failureState: "missing_audio" }
         });
-      } else if (requestedEntry?.source === "youtube") {
+      } else if (requestedEntry && !isPlayablePrimaryMix(requestedEntry)) {
         queueAudioFeedbackIncident("non_playable_audio", {
           severity: "medium",
           title: "Dreamweaver requested mix is not directly playable",
@@ -495,7 +500,7 @@
         });
       }
 
-      return library.find(mix => mix.audioUrl && mix.source !== "youtube") || null;
+      return library.find(isPlayablePrimaryMix) || null;
     }
 
     function describeAudioElementFailure() {

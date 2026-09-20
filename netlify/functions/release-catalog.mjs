@@ -17,17 +17,28 @@ function serializeRelease(row) {
     importedArtworkUrl: row.imported_artwork_url,
     artworkOverrideUrl: row.artwork_override_url
   });
+  const catalogAlbumTitle = row.catalog_album_title || "";
+  const catalogGenre = row.catalog_genre || "";
+  const catalogArtworkUrl = row.catalog_artwork_url || "";
+  const releaseGenres = Array.isArray(row.genres)
+    ? row.genres.map(value => String(value || "").trim()).filter(Boolean)
+    : [];
+  const genres = releaseGenres.length ? releaseGenres : (catalogGenre ? [catalogGenre] : []);
+  const resolvedArtwork = artwork.artwork || catalogArtworkUrl;
+  const artworkSource = artwork.artworkSource || (catalogArtworkUrl ? "song-catalog" : "");
   return {
     id: row.id,
     title: row.title,
     artist: row.artist,
     releaseDate: row.release_date ? String(row.release_date).slice(0, 10) : "",
     duration: row.duration || "",
-    genres: Array.isArray(row.genres) ? row.genres : [],
-    artwork: artwork.artwork,
+    albumTitle: catalogAlbumTitle,
+    collectionTitle: catalogAlbumTitle,
+    genres,
+    artwork: resolvedArtwork,
     importedArtwork: artwork.importedArtwork,
     artworkOverride: artwork.artworkOverride,
-    artworkSource: artwork.artworkSource,
+    artworkSource,
     bpm: row.bpm === null ? null : Number(row.bpm),
     musicalKey: row.musical_key || "",
     contentRating: row.content_rating || "unspecified",
@@ -45,6 +56,9 @@ function serializeRelease(row) {
       songId: row.catalog_song_id || "",
       artistName: row.catalog_artist_name || row.artist,
       title: row.catalog_title || row.title,
+      albumTitle: catalogAlbumTitle,
+      genre: catalogGenre,
+      artworkUrl: catalogArtworkUrl,
       rightsStatus: row.catalog_rights_status || "",
       saleStatus: row.catalog_sale_status || "",
       metadataStatus: row.catalog_metadata_status || "",
@@ -160,6 +174,9 @@ export default async function releaseCatalogHandler(request) {
           song.id AS catalog_song_id,
           song.artist_name AS catalog_artist_name,
           song.title AS catalog_title,
+          song.album_title AS catalog_album_title,
+          song.genre AS catalog_genre,
+          song.artwork_url AS catalog_artwork_url,
           song.rights_status AS catalog_rights_status,
           song.sale_status AS catalog_sale_status,
           song.metadata_status AS catalog_metadata_status,

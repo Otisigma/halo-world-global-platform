@@ -4,14 +4,17 @@ import { resolve } from "node:path";
 import { allowedEvents } from "../netlify/lib/stats.mjs";
 
 const root = resolve(import.meta.dirname, "..");
-const [client, styles, stats, summary, statsLib, statsEvent, haloHome] = await Promise.all([
+const [client, styles, stats, summary, statsLib, statsEvent, haloHome, releaseCatalogApi, musicWorld, dreamweaver] = await Promise.all([
   readFile(resolve(root, "music-player.js"), "utf8"),
   readFile(resolve(root, "music-player.css"), "utf8"),
   readFile(resolve(root, "stats.js"), "utf8"),
   readFile(resolve(root, "netlify/functions/stats-summary.mjs"), "utf8"),
   readFile(resolve(root, "netlify/lib/stats.mjs"), "utf8"),
   readFile(resolve(root, "netlify/functions/stats-event.mjs"), "utf8"),
-  readFile(resolve(root, "halo.html"), "utf8")
+  readFile(resolve(root, "halo.html"), "utf8"),
+  readFile(resolve(root, "netlify/functions/release-catalog.mjs"), "utf8"),
+  readFile(resolve(root, "music-world.html"), "utf8"),
+  readFile(resolve(root, "dreamweaver/dreamweaver.js"), "utf8")
 ]);
 
 for (const eventName of [
@@ -47,6 +50,14 @@ assert.match(haloHome, /Preview unavailable/, "the homepage Dreamweaver player m
 assert.match(haloHome, /playDreamweaverPreviewCandidates/, "the homepage Dreamweaver player must use fallback-aware playback attempts");
 assert.match(haloHome, /This preview source failed\. Loading the next Dreamweaver signal\./, "the homepage Dreamweaver player must explain automatic source fallback");
 assert.match(haloHome, /dreamweaverPreviewRetryAllowedRef\.current[\s\S]*!dreamweaverPreviewRetryActiveRef\.current[\s\S]*nextCandidates\.length/, "the homepage Dreamweaver player must only retry to the next candidate after a guarded play attempt");
+assert.match(releaseCatalogApi, /catalog_album_title/, "release catalog must include song-catalog album metadata for player hydration");
+assert.match(releaseCatalogApi, /catalog_genre/, "release catalog must include song-catalog genre metadata for player hydration");
+assert.match(releaseCatalogApi, /catalog_artwork_url/, "release catalog must include song-catalog artwork metadata for player hydration");
+assert.match(musicWorld, /details\.albumTitle/, "music world player mapping must hydrate album metadata from catalog fallbacks");
+assert.match(musicWorld, /details\.genre/, "music world player mapping must hydrate genre metadata from catalog fallbacks");
+assert.match(dreamweaver, /state\.release\?\.catalog\?\.albumTitle/, "dreamweaver source link must hydrate album metadata from catalog fallbacks");
+assert.match(dreamweaver, /state\.release\?\.catalog\?\.genre/, "dreamweaver source link must hydrate genre metadata from catalog fallbacks");
+assert.match(dreamweaver, /state\.release\?\.catalog\?\.artworkUrl/, "dreamweaver source link must hydrate artwork metadata from catalog fallbacks");
 assert.match(summary, /averageListenSeconds/, "admin reporting must expose listening duration");
 assert.match(summary, /listeningVariants/, "admin reporting must compare preview variants");
 assert.match(summary, /commercialIntent/, "preview reporting must connect listening with commercial intent");

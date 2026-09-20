@@ -3,7 +3,7 @@ import { resolve } from "node:path";
 
 const root = resolve(import.meta.dirname, "..");
 const read = path => readFile(resolve(root, path), "utf8");
-const [page, client, styles, api, audioApi, artworkApi, producerApi, producerLib, schema, migration, audioMigration, artworkMigration, versionArtworkMigration, producerMigration, config, home, packageText, uploadHelper] = await Promise.all([
+const [page, client, styles, api, audioApi, artworkApi, producerApi, producerLib, schema, migration, audioMigration, artworkMigration, versionArtworkMigration, producerMigration, config, home, packageText, uploadHelper, satelliteHelper] = await Promise.all([
   read("song-catalog/index.html"),
   read("song-catalog/song-catalog.js"),
   read("song-catalog/song-catalog.css"),
@@ -21,7 +21,8 @@ const [page, client, styles, api, audioApi, artworkApi, producerApi, producerLib
   read("netlify.toml"),
   read("halo.html"),
   read("package.json"),
-  read("upload-progress.js")
+  read("upload-progress.js"),
+  read("netlify/lib/dreamweaver-satellite.mjs")
 ]);
 const packageJson = JSON.parse(packageText);
 
@@ -33,7 +34,7 @@ const checks = [
   [api.includes("VERSION_ROUTES") && api.includes("instrumental") && api.includes("stems") && api.includes("extended"), "creates every requested version route for each song"],
   [api.includes("runDreamweaverReview") && api.includes("radio_master") && api.includes("rightsStatus"), "runs Dream Weaver metadata, rights, sale, and radio checks"],
   [api.includes("reconcilePublishedSong") && api.includes('payload.action === "set_pipeline_stage"') && api.includes('stage === "published"'), "reconciles published songs into public release and radio fan-out from catalog stage transitions"],
-  [api.includes("dreamweaverSatellite") && api.includes("/dreamweaver/satellite/") && api.includes("experienceUrl"), "exposes deterministic Dreamweaver satellite entry metadata in song catalog responses"],
+  [api.includes("dreamweaverSatellite") && api.includes("dreamweaver-satellite.mjs") && satelliteHelper.includes("/dreamweaver/satellite/") && satelliteHelper.includes("experienceUrl"), "exposes deterministic Dreamweaver satellite entry metadata in song catalog responses"],
   [api.includes("verifyRequestOrigin") && api.includes("ensureMembership") && api.includes('path: "/api/song-catalog"'), "protects catalog records with membership and origin checks"],
   [api.includes("halo_release_campaigns") && api.includes("halo_artist_pages") && api.includes("import_existing"), "loads reusable existing songs from release data with ownership checks"],
   [page.includes('id="audioFile"') && client.includes("AUDIO_CHUNK_BYTES") && client.includes("finalize_upload"), "uploads full song-version audio in browser-safe chunks"],

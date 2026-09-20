@@ -6,6 +6,7 @@ import { db } from "../../db/index.js";
 import { dreamweaverSongReviews, songs, songVersions } from "../../db/schema.js";
 import { cleanText, ensureMembership } from "../lib/halo-x.mjs";
 import { reconcilePublishedSong } from "../lib/song-publication.mjs";
+import { dreamweaverSatellite } from "../lib/dreamweaver-satellite.mjs";
 
 const MAX_BODY_BYTES = 80_000;
 const RIGHTS_STATUSES = new Set(["needs_review", "cleared", "disputed"]);
@@ -71,18 +72,6 @@ function cleanAudioUrl(value: unknown) {
 function cleanVersionType(value: unknown): VersionType {
   const type = String(value || "").trim().toLowerCase() as VersionType;
   return VERSION_ROUTES[type] ? type : "alternate";
-}
-
-function dreamweaverSatellite(songId: string) {
-  const id = cleanId(songId);
-  if (!id) return null;
-  const route = `/dreamweaver/satellite/${id}/`;
-  return {
-    route,
-    experienceUrl: route,
-    launchUrl: route,
-    fallbackUrl: `/dreamweaver/?satellite=dreamweaver&song=${encodeURIComponent(id)}`,
-  };
 }
 
 function serializeSong(song: typeof songs.$inferSelect, versions: Array<typeof songVersions.$inferSelect>) {

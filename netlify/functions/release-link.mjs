@@ -58,7 +58,6 @@ async function remapLegacyAudioDestination(db, destination, requestUrl) {
       SELECT song_id
       FROM halo_song_versions
       WHERE id = ${versionId}
-        AND status = 'active'
       LIMIT 1
     `;
     const rows = Array.isArray(result) ? result : Array.isArray(result?.rows) ? result.rows : [];

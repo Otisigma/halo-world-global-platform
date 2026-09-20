@@ -59,18 +59,28 @@ function legacyAudioVersionIdFromDestination(destination, requestUrl) {
   }
 }
 
-async function remapLegacyAudioDestination(db, versionId) {
+async function remapLegacyAudioDestination(db, versionId, {
+  releaseSlug = "",
+  officialUrl = "",
+  streamUrl = "",
+} = {}) {
   try {
     if (!versionId) return "";
     const result = await db.sql`
-      SELECT song_id
-      FROM halo_song_versions
-      WHERE id = ${versionId}
+      SELECT version.song_id
+      FROM halo_song_versions version
+      WHERE version.id = ${versionId}
       LIMIT 1
     `;
     const rows = Array.isArray(result) ? result : Array.isArray(result?.rows) ? result.rows : [];
     const songId = cleanId(rows[0]?.song_id);
-    return resolveDreamweaverPageFlow(songId).page?.route || "";
+    const mixId = cleanSlug(releaseSlug);
+    const flow = resolveDreamweaverPageFlow(songId, {
+      mixId,
+      officialUrl,
+      streamUrl,
+    });
+    return flow.launchUrl || flow.page?.route || "";
   } catch {
     return "";
   }
@@ -107,13 +117,13 @@ export default async function releaseLinkHandler(request) {
     }
 
     const url = new URL(request.url);
-    const releaseId = cleanSlug(url.searchParams.get("slug"));
+    const releaseSlug = cleanSlug(url.searchParams.get("slug"));
     const audience = cleanAudience(url.searchParams.get("audience"));
-    if (!releaseId) return json({ message: "Choose a valid release campaign" }, 400);
+    if (!releaseSlug) return json({ message: "Choose a valid release campaign" }, 400);
     const rows = await db.sql`
-      SELECT official_url, dj_url, radio_url, press_url, preview_url, preview_expires_at, preview_access_code_hash
+      SELECT official_url, stream_url, dj_url, radio_url, press_url, preview_url, preview_expires_at, preview_access_code_hash
       FROM halo_release_campaigns
-      WHERE id = ${releaseId} AND status = 'published'
+      WHERE id = ${releaseSlug} AND status = 'published'
       LIMIT 1
     `;
     if (!rows.length) return json({ message: "Release campaign not found" }, 404);
@@ -129,13 +139,19 @@ export default async function releaseLinkHandler(request) {
     const destination = absoluteDestination(row[column] || row.official_url, request.url);
     if (!destination) return json({ message: "This campaign destination is not available" }, 404);
     const legacyAudioVersionId = legacyAudioVersionIdFromDestination(destination, request.url);
-    const remappedDestination = legacyAudioVersionId ? await remapLegacyAudioDestination(db, legacyAudioVersionId) : "";
+    const remappedDestination = legacyAudioVersionId
+      ? await remapLegacyAudioDestination(db, legacyAudioVersionId, {
+          releaseSlug,
+          officialUrl: row.official_url || "",
+          streamUrl: row.stream_url || "",
+        })
+      : "";
     const finalDestination = absoluteDestination(remappedDestination || destination, request.url);
     if (!finalDestination) return json({ message: "This campaign destination is not available" }, 404);
 
     await db.sql`
       INSERT INTO halo_release_campaign_events (release_id, audience, event_type, target)
-      VALUES (${releaseId}, ${audience}, 'outbound_click', ${target})
+      VALUES (${releaseSlug}, ${audience}, 'outbound_click', ${target})
     `;
     return new Response(null, {
       status: 302,

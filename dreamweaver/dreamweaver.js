@@ -413,7 +413,7 @@
     const params = new URLSearchParams(location.search);
     if (campaignIdFromUrl() || params.get("experience") === "studio") return false;
     const normalizedPath = location.pathname.endsWith("/") ? location.pathname : `${location.pathname}/`;
-    const isSatelliteRoute = normalizedPath === "/dreamweaver/satellite/";
+    const isSatelliteRoute = normalizedPath.startsWith("/dreamweaver/satellite/");
     return isSatelliteRoute || params.get("satellite") === "dreamweaver";
   }
 

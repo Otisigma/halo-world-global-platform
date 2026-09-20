@@ -248,6 +248,13 @@
     return typeof value === "string" ? value.trim().replace(/\s+/g, " ").slice(0, limit) : "";
   }
 
+  function releaseDateLabel(value) {
+    const text = cleanText(value, 120);
+    if (!text) return "";
+    const parsed = new Date(text);
+    return Number.isNaN(parsed.getTime()) ? "" : parsed.toISOString().slice(0, 10);
+  }
+
   function safeMediaUrl(value) {
     const text = cleanText(value, 1200);
     if (!text) return "";
@@ -292,7 +299,7 @@
     const bpm = Number(release.bpm) > 0 ? String(Number(release.bpm)) : "";
     const musicalKey = cleanText(release.musicalKey, 20);
     const duration = state.duration ? formatTime(state.duration) : cleanText(release.duration, 24);
-    const releaseInfo = cleanText(release.releaseDate || release.publication?.lastReconciledAt || state.publishedSongId, 40);
+    const releaseInfo = cleanText(release.releaseDate || releaseDateLabel(release.publication?.lastReconciledAt) || state.publishedSongId, 40);
     const publication = release.publication || {};
     const status = cleanText(publication.dreamweaverStatus || publication.releaseStatus || catalog.saleStatus, 40);
     const album = cleanText(release.albumTitle || release.collectionTitle || catalog.albumTitle || "", 120);
@@ -401,7 +408,7 @@
       elements.sourceLink.dataset.haloPlayerBpm = Number(state.release?.bpm) > 0 ? String(Number(state.release.bpm)) : "";
       elements.sourceLink.dataset.haloPlayerKey = cleanText(state.release?.musicalKey || "", 20);
       elements.sourceLink.dataset.haloPlayerDuration = state.duration ? formatTime(state.duration) : cleanText(state.release?.duration || "", 24);
-      elements.sourceLink.dataset.haloPlayerRelease = cleanText(state.release?.releaseDate || state.release?.publication?.lastReconciledAt || state.publishedSongId, 40);
+      elements.sourceLink.dataset.haloPlayerRelease = cleanText(state.release?.releaseDate || releaseDateLabel(state.release?.publication?.lastReconciledAt) || state.publishedSongId, 40);
       elements.sourceLink.dataset.haloPlayerStatus = cleanText(state.release?.publication?.dreamweaverStatus || state.release?.publication?.releaseStatus || state.release?.catalog?.saleStatus || "", 40);
       elements.sourceLink.dataset.haloPlayerArtwork = safeMediaUrl(state.release?.artwork || state.release?.artworkOverride || state.release?.importedArtwork || state.release?.catalog?.artworkUrl);
       delete elements.sourceLink.dataset.haloPlayer;

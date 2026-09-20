@@ -53,11 +53,11 @@ assert.match(haloHome, /dreamweaverPreviewRetryAllowedRef\.current[\s\S]*!dreamw
 assert.match(releaseCatalogApi, /catalog_album_title/, "release catalog must include song-catalog album metadata for player hydration");
 assert.match(releaseCatalogApi, /catalog_genre/, "release catalog must include song-catalog genre metadata for player hydration");
 assert.match(releaseCatalogApi, /catalog_artwork_url/, "release catalog must include song-catalog artwork metadata for player hydration");
-assert.match(musicWorld, /album:release\.albumTitle\|\|release\.collectionTitle\|\|details\.albumTitle\|\|''/, "music world player mapping must hydrate album metadata from catalog fallbacks");
-assert.match(musicWorld, /genre:genres\[0\]\|\|details\.genre\|\|''/, "music world player mapping must hydrate genre metadata from catalog fallbacks");
-assert.match(dreamweaver, /state\.release\?\.catalog\?\.albumTitle/, "dreamweaver source link must hydrate album metadata from catalog fallbacks");
-assert.match(dreamweaver, /state\.release\?\.catalog\?\.genre/, "dreamweaver source link must hydrate genre metadata from catalog fallbacks");
-assert.match(dreamweaver, /state\.release\?\.catalog\?\.artworkUrl/, "dreamweaver source link must hydrate artwork metadata from catalog fallbacks");
+assert.match(musicWorld, /album\s*:\s*release\.albumTitle\s*\|\|\s*release\.collectionTitle\s*\|\|\s*details\.albumTitle\s*\|\|\s*''/, "music world player mapping must hydrate album metadata from catalog fallbacks");
+assert.match(musicWorld, /genre\s*:\s*genres\[0\]\s*\|\|\s*details\.genre\s*\|\|\s*''/, "music world player mapping must hydrate genre metadata from catalog fallbacks");
+assert.match(dreamweaver, /dataset\.haloPlayerAlbum\s*=\s*cleanText\(state\.release\?\.albumTitle\s*\|\|\s*state\.release\?\.collectionTitle\s*\|\|\s*state\.release\?\.catalog\?\.albumTitle\s*\|\|\s*""\)/, "dreamweaver source link must hydrate album metadata from catalog fallbacks");
+assert.match(dreamweaver, /dataset\.haloPlayerGenre\s*=\s*Array\.isArray\(state\.release\?\.genres\)\s*&&\s*state\.release\.genres\.length[\s\S]*state\.release\?\.catalog\?\.genre/, "dreamweaver source link must hydrate genre metadata from catalog fallbacks");
+assert.match(dreamweaver, /dataset\.haloPlayerArtwork\s*=\s*safeMediaUrl\(state\.release\?\.artwork\s*\|\|\s*state\.release\?\.artworkOverride\s*\|\|\s*state\.release\?\.importedArtwork\s*\|\|\s*state\.release\?\.catalog\?\.artworkUrl\)/, "dreamweaver source link must hydrate artwork metadata from catalog fallbacks");
 assert.match(summary, /averageListenSeconds/, "admin reporting must expose listening duration");
 assert.match(summary, /listeningVariants/, "admin reporting must compare preview variants");
 assert.match(summary, /commercialIntent/, "preview reporting must connect listening with commercial intent");

@@ -24,7 +24,7 @@ assert.match(helper, /appendLedgerEntry/, "publication helper must write ledger 
 assert.match(helper, /radio_master_missing_or_not_uploaded/, "publication helper must keep a deterministic radio fallback reason");
 assert.match(helper, /\/music\/\?song=/, "publication helper must derive canonical public song URLs");
 assert.match(helper, /\/dreamweaver\/satellite\/\$\{id\}\//, "publication helper must set Dreamweaver satellite pages as release entry routes");
-assert.ok(helper.includes("official_url = CASE") && helper.includes("official_url ~* '^/api/song-catalog/audio\\\\?versionId=[0-9a-f-]+$'"), "publication helper must replace legacy song-catalog audio navigation URLs during release upserts");
+assert.ok(helper.includes("official_url = CASE") && helper.includes("official_url ~* '^/api/song-catalog/audio\\\\?(?:[^#]*&)?versionId="), "publication helper must replace legacy song-catalog audio navigation URLs during release upserts");
 
 assert.match(migration, /CREATE TABLE IF NOT EXISTS halo_song_publication_sync/, "migration must create durable publication sync storage");
 assert.match(migration, /release_status/, "migration must track public release reconciliation state");

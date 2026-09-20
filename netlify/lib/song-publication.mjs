@@ -218,8 +218,8 @@ async function ensureReleaseCampaign(db, song, versions) {
         WHEN halo_release_campaigns.official_url = ''
           OR halo_release_campaigns.official_url = ${publicUrl}
           OR halo_release_campaigns.official_url = ${streamUrl}
-          OR halo_release_campaigns.official_url ~* '^/api/song-catalog/audio\\?versionId=[0-9a-f-]+$'
-          OR halo_release_campaigns.official_url ~* '^https?://[^[:space:]]+/api/song-catalog/audio\\?versionId=[0-9a-f-]+$'
+          OR halo_release_campaigns.official_url ~* '^/api/song-catalog/audio\\?(?:[^#]*&)?versionId=[0-9a-f-]+(?:&[^#]*)?$'
+          OR halo_release_campaigns.official_url ~* '^https?://[^[:space:]]+/api/song-catalog/audio\\?(?:[^#]*&)?versionId=[0-9a-f-]+(?:&[^#]*)?$'
         THEN EXCLUDED.official_url
         ELSE halo_release_campaigns.official_url
       END,

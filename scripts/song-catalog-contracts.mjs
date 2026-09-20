@@ -1,5 +1,7 @@
+import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
+import { dreamweaverSatellite as buildDreamweaverSatellite } from "../netlify/lib/dreamweaver-satellite.mjs";
 
 const root = resolve(import.meta.dirname, "..");
 const read = path => readFile(resolve(root, path), "utf8");
@@ -25,6 +27,7 @@ const [page, client, styles, api, audioApi, artworkApi, producerApi, producerLib
   read("netlify/lib/dreamweaver-satellite.mjs")
 ]);
 const packageJson = JSON.parse(packageText);
+const sampleDreamweaverSatellite = buildDreamweaverSatellite("11111111-1111-4111-8111-111111111111");
 
 const checks = [
   [page.includes("One song · every useful version") && page.includes("Radio mastering queue"), "ships a unified catalog and dedicated broadcast queue"],
@@ -35,6 +38,7 @@ const checks = [
   [api.includes("runDreamweaverReview") && api.includes("radio_master") && api.includes("rightsStatus"), "runs Dream Weaver metadata, rights, sale, and radio checks"],
   [api.includes("reconcilePublishedSong") && api.includes('payload.action === "set_pipeline_stage"') && api.includes('stage === "published"'), "reconciles published songs into public release and radio fan-out from catalog stage transitions"],
   [api.includes("dreamweaverSatellite") && api.includes("dreamweaver-satellite.mjs") && satelliteHelper.includes("/dreamweaver/satellite/") && satelliteHelper.includes("experienceUrl"), "exposes deterministic Dreamweaver satellite entry metadata in song catalog responses"],
+  [Boolean(sampleDreamweaverSatellite?.route) && sampleDreamweaverSatellite.route === "/dreamweaver/satellite/11111111-1111-4111-8111-111111111111/" && sampleDreamweaverSatellite.experienceUrl === sampleDreamweaverSatellite.route && sampleDreamweaverSatellite.launchUrl === sampleDreamweaverSatellite.route, "shared Dreamweaver satellite helper returns deterministic route/experience/launch metadata for serialized API payloads"],
   [api.includes("verifyRequestOrigin") && api.includes("ensureMembership") && api.includes('path: "/api/song-catalog"'), "protects catalog records with membership and origin checks"],
   [api.includes("halo_release_campaigns") && api.includes("halo_artist_pages") && api.includes("import_existing"), "loads reusable existing songs from release data with ownership checks"],
   [page.includes('id="audioFile"') && client.includes("AUDIO_CHUNK_BYTES") && client.includes("finalize_upload"), "uploads full song-version audio in browser-safe chunks"],
@@ -82,5 +86,6 @@ const checks = [
 
 const failures = checks.filter(([passed]) => !passed);
 for (const [passed, description] of checks) console.log(`${passed ? "PASS" : "FAIL"}: ${description}`);
+assert.equal(buildDreamweaverSatellite("not-a-song-id"), null, "shared Dreamweaver satellite helper must reject invalid song IDs");
 if (failures.length) process.exitCode = 1;
 else console.log(`Song catalog contracts: ${checks.length}/${checks.length} checks passed.`);

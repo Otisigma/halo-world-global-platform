@@ -56,6 +56,7 @@ function dreamweaverSatellite(songId) {
   const route = `/dreamweaver/satellite/${id}/`;
   return {
     route,
+    experienceUrl: route,
     launchUrl: route,
     fallbackUrl: `/dreamweaver/?satellite=dreamweaver&song=${encodeURIComponent(id)}`,
     agentLoop: {

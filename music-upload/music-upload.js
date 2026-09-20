@@ -432,7 +432,13 @@ function renderResults() {
       ? `<p class="result-note needs-attention">${escapeHtml(result.needsAttention)}</p>`
       : `<p class="result-note">${escapeHtml(result.summary)}</p>`;
     const nextStepNote = result.nextStep ? `<p class="result-next-step">${escapeHtml(result.nextStep)}</p>` : "";
-    const satelliteRoute = typeof result.dreamweaverSatellite?.route === "string" ? result.dreamweaverSatellite.route : "";
+    const satelliteRoute = typeof result.dreamweaverSatellite?.experienceUrl === "string" && result.dreamweaverSatellite.experienceUrl
+      ? result.dreamweaverSatellite.experienceUrl
+      : typeof result.dreamweaverSatellite?.launchUrl === "string" && result.dreamweaverSatellite.launchUrl
+        ? result.dreamweaverSatellite.launchUrl
+        : typeof result.dreamweaverSatellite?.route === "string"
+          ? result.dreamweaverSatellite.route
+          : "";
     const satelliteLoopId = typeof result.dreamweaverSatellite?.agentLoop?.id === "string" ? result.dreamweaverSatellite.agentLoop.id : "";
     const satelliteReceipt = satelliteRoute
       ? `<div class="result-satellite">

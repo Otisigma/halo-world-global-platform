@@ -25,6 +25,11 @@ function cleanAudience(value) {
   return audiences.has(audience) ? audience : "fan";
 }
 
+function cleanId(value) {
+  const id = String(value || "").trim().toLowerCase();
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(id) ? id : "";
+}
+
 function absoluteDestination(value, requestUrl) {
   try {
     const parsed = new URL(value, requestUrl);
@@ -40,6 +45,26 @@ function accessCodeMatches(code, expectedHash) {
   const receivedHash = createHash("sha256").update(String(code || "")).digest();
   const storedHash = Buffer.from(expectedHash, "hex");
   return storedHash.length === receivedHash.length && timingSafeEqual(storedHash, receivedHash);
+}
+
+async function remapLegacyAudioDestination(db, destination, requestUrl) {
+  try {
+    const parsed = new URL(destination, requestUrl);
+    if (parsed.pathname !== "/api/song-catalog/audio") return "";
+    const versionId = cleanId(parsed.searchParams.get("versionId"));
+    if (!versionId) return "";
+    const rows = await db.sql`
+      SELECT song_id
+      FROM halo_song_versions
+      WHERE id = ${versionId}
+        AND status = 'active'
+      LIMIT 1
+    `;
+    const songId = cleanId(rows[0]?.song_id);
+    return songId ? `/dreamweaver/satellite/${songId}/` : "";
+  } catch {
+    return "";
+  }
 }
 
 export default async function releaseLinkHandler(request) {
@@ -94,6 +119,9 @@ export default async function releaseLinkHandler(request) {
     const [column, target] = destinations[audience];
     const destination = absoluteDestination(row[column] || row.official_url, request.url);
     if (!destination) return json({ message: "This campaign destination is not available" }, 404);
+    const remappedDestination = await remapLegacyAudioDestination(db, destination, request.url);
+    const finalDestination = absoluteDestination(remappedDestination || destination, request.url);
+    if (!finalDestination) return json({ message: "This campaign destination is not available" }, 404);
 
     await db.sql`
       INSERT INTO halo_release_campaign_events (release_id, audience, event_type, target)
@@ -102,7 +130,7 @@ export default async function releaseLinkHandler(request) {
     return new Response(null, {
       status: 302,
       headers: {
-        Location: destination,
+        Location: finalDestination,
         "Cache-Control": "no-store",
         "Referrer-Policy": "no-referrer"
       }

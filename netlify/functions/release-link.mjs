@@ -117,13 +117,13 @@ export default async function releaseLinkHandler(request) {
     }
 
     const url = new URL(request.url);
-    const releaseId = cleanSlug(url.searchParams.get("slug"));
+    const releaseSlug = cleanSlug(url.searchParams.get("slug"));
     const audience = cleanAudience(url.searchParams.get("audience"));
-    if (!releaseId) return json({ message: "Choose a valid release campaign" }, 400);
+    if (!releaseSlug) return json({ message: "Choose a valid release campaign" }, 400);
     const rows = await db.sql`
-      SELECT official_url, dj_url, radio_url, press_url, preview_url, preview_expires_at, preview_access_code_hash
+      SELECT official_url, stream_url, dj_url, radio_url, press_url, preview_url, preview_expires_at, preview_access_code_hash
       FROM halo_release_campaigns
-      WHERE id = ${releaseId} AND status = 'published'
+      WHERE id = ${releaseSlug} AND status = 'published'
       LIMIT 1
     `;
     if (!rows.length) return json({ message: "Release campaign not found" }, 404);
@@ -141,7 +141,7 @@ export default async function releaseLinkHandler(request) {
     const legacyAudioVersionId = legacyAudioVersionIdFromDestination(destination, request.url);
     const remappedDestination = legacyAudioVersionId
       ? await remapLegacyAudioDestination(db, legacyAudioVersionId, {
-          releaseSlug: releaseId,
+          releaseSlug,
           officialUrl: row.official_url || "",
           streamUrl: row.stream_url || "",
         })
@@ -151,7 +151,7 @@ export default async function releaseLinkHandler(request) {
 
     await db.sql`
       INSERT INTO halo_release_campaign_events (release_id, audience, event_type, target)
-      VALUES (${releaseId}, ${audience}, 'outbound_click', ${target})
+      VALUES (${releaseSlug}, ${audience}, 'outbound_click', ${target})
     `;
     return new Response(null, {
       status: 302,

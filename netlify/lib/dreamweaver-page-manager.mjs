@@ -34,8 +34,9 @@ function dreamweaverLoopMetadata({
   const promoPages = cleanLinkList(promoUrls);
   const managedLinks = includeManagedLinks ? [hubUrl, route, storefrontUrl] : [];
   const resolvedLaunchUrl = hyperfollowUrl ? "" : launchUrl;
+  const releaseUrl = hyperfollowUrl ? "" : publicUrl;
   const linkedPages = [...new Set(
-    [...managedLinks, publicUrl, resolvedLaunchUrl, hyperfollowUrl, ...relatedPages, ...promoPages]
+    [...managedLinks, releaseUrl, resolvedLaunchUrl, hyperfollowUrl, ...relatedPages, ...promoPages]
       .map(value => cleanText(value, 1200))
       .filter(Boolean)
   )];
@@ -124,12 +125,12 @@ export function resolveDreamweaverPageFlow(songId, options = {}) {
   const hubUrl = dreamweaverHubPath(mixId);
   const route = dreamweaverSatellitePath(id);
   const storefrontUrl = dreamweaverStorefrontPath(id);
+  const managed = Boolean(route) && !hyperfollowUrl;
   const manager = dreamweaverPageManager(id, {
     ...options,
     mixId,
-    includeManagedLinks: !hyperfollowUrl,
+    includeManagedLinks: managed,
   });
-  const managed = Boolean(route) && !hyperfollowUrl;
   const managedLaunchUrl = managed ? (hubUrl || route) : (route || publicUrl);
   const launchUrl = hyperfollowUrl || managedLaunchUrl;
   const loop = dreamweaverLoopMetadata({
@@ -139,7 +140,7 @@ export function resolveDreamweaverPageFlow(songId, options = {}) {
     storefrontUrl,
     publicUrl,
     hyperfollowUrl,
-    includeManagedLinks: !hyperfollowUrl,
+    includeManagedLinks: managed,
     relatedUrls: options.relatedUrls,
     promoUrls: options.promoUrls,
   });

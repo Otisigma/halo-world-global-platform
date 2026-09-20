@@ -41,10 +41,9 @@ function cleanText(value, maxLength) {
 function isLegacySongCatalogAudioUrl(value) {
   const url = cleanText(value, 1200);
   if (!url) return false;
-  if (/^\/api\/song-catalog\/audio\?versionId=[0-9a-f-]+$/i.test(url)) return true;
   try {
-    const parsed = new URL(url);
-    return /^\/api\/song-catalog\/audio$/i.test(parsed.pathname) && /^[0-9a-f-]+$/i.test(parsed.searchParams.get("versionId") || "");
+    const parsed = new URL(url, "https://halo.world");
+    return /^\/api\/song-catalog\/audio$/i.test(parsed.pathname) && Boolean(cleanId(parsed.searchParams.get("versionId")));
   } catch {
     return false;
   }

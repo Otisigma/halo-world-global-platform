@@ -470,7 +470,9 @@ function isDreamweaverExperienceUrl(value) {
   if (!text || /^\/api\/song-catalog\/audio\?versionId=/i.test(text)) return false;
   try {
     const url = new URL(text, window.location.origin);
-    return url.origin === window.location.origin && /^\/dreamweaver(?:\/|$)/.test(url.pathname);
+    if (url.origin !== window.location.origin) return false;
+    if (/^\/dreamweaver\/satellite\/[0-9a-f-]+\/$/i.test(url.pathname)) return true;
+    return /^\/dreamweaver\/?$/i.test(url.pathname) && /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(url.searchParams.get("song") || "");
   } catch {
     return false;
   }

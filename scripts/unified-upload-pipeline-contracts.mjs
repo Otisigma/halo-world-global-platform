@@ -1,8 +1,20 @@
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 
 const root = resolve(import.meta.dirname, "..");
 const read = path => readFile(resolve(root, path), "utf8");
+const { buildDreamweaverSatellite } = await import(pathToFileURL(resolve(root, "netlify/lib/dreamweaver-satellite.mjs")).href);
+const sampleSongId = "123e4567-e89b-42d3-a456-426614174000";
+const sampleSatellite = buildDreamweaverSatellite(sampleSongId, {
+  agentLoop: {
+    id: `dreamweaver-satellite-${sampleSongId}`,
+    updatePath: "/api/release-catalog",
+    intervalMs: 45_000,
+    channels: ["metadata", "artwork", "playback_state", "refinements"],
+  },
+});
+const invalidSatellite = buildDreamweaverSatellite("not-a-song");
 
 const [
   migration,
@@ -40,6 +52,8 @@ const checks = [
   [schema.includes("pipelineStatus") && schema.includes('"pipeline_status"'), "schema includes pipelineStatus column in songs table"],
   [schema.includes("sourceUploadSurface") && schema.includes('"source_upload_surface"'), "schema includes sourceUploadSurface column in songs table"],
   [dreamweaverSatelliteLib.includes("experienceUrl") && dreamweaverSatelliteLib.includes("canonicalDreamweaverUrl") && dreamweaverSatelliteLib.includes("fallbackUrl"), "shared Dreamweaver satellite helper defines explicit navigation metadata for page entry"],
+  [sampleSatellite?.experienceUrl === `/dreamweaver/satellite/${sampleSongId}/` && sampleSatellite?.canonicalDreamweaverUrl === `/dreamweaver/?song=${sampleSongId}` && sampleSatellite?.fallbackUrl === `/dreamweaver/?satellite=dreamweaver&song=${sampleSongId}`, "shared Dreamweaver satellite helper returns deterministic navigation URLs for valid song ids"],
+  [sampleSatellite?.agentLoop?.id === `dreamweaver-satellite-${sampleSongId}` && invalidSatellite === null, "shared Dreamweaver satellite helper preserves optional agent-loop metadata and rejects invalid song ids"],
   // Unified upload function
   [unifiedUploadFn.includes('path: "/api/unified-upload"'), "unified-upload function registers at /api/unified-upload"],
   [unifiedUploadFn.includes("create_project") && unifiedUploadFn.includes("advance_pipeline"), "unified-upload supports create_project and advance_pipeline actions"],

@@ -213,10 +213,6 @@ app.get(/^\/dreamweaver\/satellite\/([^/]+)\/$/i, (req, res, next) => {
   return sendFileIfPresent(res, path.join("dreamweaver", "index.html"));
 });
 
-app.get("/dreamweaver/satellite/*", (_req, res) =>
-  sendFileIfPresent(res, path.join("dreamweaver", "index.html"))
-);
-
 app.get("/sw.js", (_req, res) => {
   res.set("Cache-Control", "no-cache, no-store, must-revalidate");
   return sendFileIfPresent(res, "sw.js");

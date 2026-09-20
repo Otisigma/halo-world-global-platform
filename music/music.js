@@ -677,9 +677,10 @@
      const cardKicker = release.featuredType === "week"
        ? "Song of the Week"
        : (release.featuredType === "month" ? "Song of the Month" : "Editorial pick");
+     const cardDateLabel = release.releaseDate ? formatReleaseDate(release.releaseDate) : "";
      return `<article class="release-card">
       <div class="card-art release-artwork-frame" data-artwork-frame><img class="release-artwork-image" src="${escapeHtml(artwork.src)}" alt="${escapeHtml(`${release.title} cover artwork`)}" loading="lazy" width="900" height="900" data-release-artwork data-artwork-fallback="${escapeHtml(artwork.fallback)}"><span class="card-number">${String(index + 1).padStart(2, "0")}</span></div>
-     <div class="card-copy"><p class="card-kicker"><span>${escapeHtml(cardKicker)}</span><span>${escapeHtml(formatReleaseDate(release.releaseDate))}</span></p>${releaseMeta(release)}<h3>${escapeHtml(release.title)}</h3><p class="card-artist">${escapeHtml(release.artist)}</p><p class="card-availability">${escapeHtml(availability.badge)}</p><p class="card-pitch">${escapeHtml(releaseStoryline(release))}</p><ul class="card-facts">${dossier.map(item => `<li><span>${escapeHtml(item.label)}</span><strong>${escapeHtml(item.value)}</strong></li>`).join("")}</ul>${releaseActions(release, { includeSelect: true })}</div>
+     <div class="card-copy"><p class="card-kicker"><span>${escapeHtml(cardKicker)}</span>${cardDateLabel ? `<span>${escapeHtml(cardDateLabel)}</span>` : ""}</p>${releaseMeta(release)}<h3>${escapeHtml(release.title)}</h3><p class="card-artist">${escapeHtml(release.artist)}</p><p class="card-availability">${escapeHtml(availability.badge)}</p><p class="card-pitch">${escapeHtml(releaseStoryline(release))}</p><ul class="card-facts">${dossier.map(item => `<li><span>${escapeHtml(item.label)}</span><strong>${escapeHtml(item.value)}</strong></li>`).join("")}</ul>${releaseActions(release, { includeSelect: true })}</div>
     </article>`;
     }).join("");
     wireArtwork(elements.grid);

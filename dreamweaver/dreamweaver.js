@@ -69,6 +69,7 @@
   });
   const uploadTrustStorageKey = "halo-dreamweaver-upload-trust";
   const approvedUploadReturnPaths = new Set(["/dreamweaver-lab/", "/dreamweaver-lab/index.html"]);
+  const MIX_LIBRARY_TIMEOUT_MS = 12000;
 
   const elements = {
     songLabLink: document.getElementById("dreamweaverSongLabLink"),
@@ -1374,9 +1375,29 @@
     elements.shell.setAttribute("aria-busy", "true");
     try {
       const requestedMix = new URLSearchParams(location.search).get("mix") || "";
-      const response = await fetch("/api/mixes?limit=100", { headers: { Accept: "application/json" }, credentials: "same-origin" });
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(data.message || "The Mix Desk library could not be read.");
+      const supportsAbortController = typeof AbortController === "function";
+      const mixesRequestController = supportsAbortController ? new AbortController() : null;
+      const mixesRequestTimeout = supportsAbortController
+        ? window.setTimeout(() => mixesRequestController.abort(), MIX_LIBRARY_TIMEOUT_MS)
+        : 0;
+      let response;
+      let data;
+      try {
+        response = await fetch("/api/mixes?limit=100", {
+          headers: { Accept: "application/json" },
+          credentials: "same-origin",
+          ...(mixesRequestController ? { signal: mixesRequestController.signal } : {})
+        });
+        data = await response.json().catch(() => ({}));
+      } catch (error) {
+        if (supportsAbortController && error?.name === "AbortError") {
+          throw new Error("Dreamweaver timed out while loading the mix library. Please try again.");
+        }
+        throw error;
+      } finally {
+        if (mixesRequestTimeout) window.clearTimeout(mixesRequestTimeout);
+      }
+      if (!response.ok) throw new Error(data.message || "The Dreamweaver mix library could not be read.");
       const playable = (data.mixes || []).filter(mix => mix.audioUrl && mix.source !== "youtube");
       const mix = playable.find(item => item.id === requestedMix) || playable[0];
       if (!mix) return showEmpty("No playable audio mix is available yet. Post the existing set to the HALO room or sign in to open a private mix.");

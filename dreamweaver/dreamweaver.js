@@ -248,6 +248,16 @@
     return typeof value === "string" ? value.trim().replace(/\s+/g, " ").slice(0, limit) : "";
   }
 
+  function releaseDateLabel(value) {
+    const text = cleanText(value, 120);
+    if (!text) return "";
+    const direct = text.match(/^(\d{4}-\d{2}-\d{2})/);
+    if (direct) return direct[1];
+    const parsed = new Date(text);
+    if (Number.isNaN(parsed.getTime())) return "";
+    return `${parsed.getFullYear()}-${String(parsed.getMonth() + 1).padStart(2, "0")}-${String(parsed.getDate()).padStart(2, "0")}`;
+  }
+
   function safeMediaUrl(value) {
     const text = cleanText(value, 1200);
     if (!text) return "";
@@ -280,24 +290,28 @@
   function renderReleasePanel() {
     if (!elements.releasePanel) return;
     const release = state.release || {};
+    const catalog = release.catalog || {};
     const mixTitle = cleanText(state.mix?.title || "");
     const mixArtist = cleanText(state.mix?.creator?.name || featuredTrack.artist);
     const title = cleanText(release.title || mixTitle || featuredTrack.title);
     const artist = cleanText(release.artist || mixArtist || featuredTrack.artist);
-    const genres = Array.isArray(release.genres) ? release.genres.filter(Boolean).map(value => cleanText(value, 60)) : [];
+    const genres = Array.isArray(release.genres)
+      ? release.genres.filter(Boolean).map(value => cleanText(value, 60))
+      : [];
     const genre = genres[0] || "";
+    const catalogGenre = cleanText(String(catalog.genre || "").split(",")[0] || "", 60);
     const bpm = Number(release.bpm) > 0 ? String(Number(release.bpm)) : "";
     const musicalKey = cleanText(release.musicalKey, 20);
     const duration = state.duration ? formatTime(state.duration) : cleanText(release.duration, 24);
-    const releaseInfo = cleanText(release.releaseDate || state.publishedSongId, 40);
+    const releaseInfo = cleanText(release.releaseDate || releaseDateLabel(release.publication?.lastReconciledAt) || state.publishedSongId, 40);
     const publication = release.publication || {};
-    const status = cleanText(publication.dreamweaverStatus || publication.releaseStatus, 40);
-    const album = cleanText(release.albumTitle || release.collectionTitle || "", 120);
-    const artwork = safeMediaUrl(release.artwork || release.artworkOverride || release.importedArtwork);
+    const status = cleanText(publication.dreamweaverStatus || publication.releaseStatus || catalog.saleStatus, 40);
+    const album = cleanText(release.albumTitle || release.collectionTitle || catalog.albumTitle || "", 120);
+    const artwork = safeMediaUrl(release.artwork || release.artworkOverride || release.importedArtwork || catalog.artworkUrl);
     const rows = [
       ["Artist", artist],
       ["Album", album],
-      ["Genre", genre],
+      ["Genre", genre || catalogGenre],
       ["BPM", bpm],
       ["Key", musicalKey],
       ["Duration", duration],
@@ -391,14 +405,16 @@
       }
       elements.sourceLink.dataset.haloPlayerTitle = cleanText(state.release?.title || state.mix?.title || featuredTrack.title);
       elements.sourceLink.dataset.haloPlayerArtist = cleanText(state.release?.artist || state.mix?.creator?.name || featuredTrack.artist);
-      elements.sourceLink.dataset.haloPlayerAlbum = cleanText(state.release?.albumTitle || state.release?.collectionTitle || "");
-      elements.sourceLink.dataset.haloPlayerGenre = Array.isArray(state.release?.genres) ? cleanText(state.release.genres[0] || "", 80) : "";
+      elements.sourceLink.dataset.haloPlayerAlbum = cleanText(state.release?.albumTitle || state.release?.collectionTitle || state.release?.catalog?.albumTitle || "");
+      elements.sourceLink.dataset.haloPlayerGenre = Array.isArray(state.release?.genres) && state.release.genres.length
+        ? cleanText(state.release.genres[0] || "", 80)
+        : cleanText(String(state.release?.catalog?.genre || "").split(",")[0] || "", 80);
       elements.sourceLink.dataset.haloPlayerBpm = Number(state.release?.bpm) > 0 ? String(Number(state.release.bpm)) : "";
       elements.sourceLink.dataset.haloPlayerKey = cleanText(state.release?.musicalKey || "", 20);
       elements.sourceLink.dataset.haloPlayerDuration = state.duration ? formatTime(state.duration) : cleanText(state.release?.duration || "", 24);
-      elements.sourceLink.dataset.haloPlayerRelease = cleanText(state.release?.releaseDate || state.publishedSongId, 40);
-      elements.sourceLink.dataset.haloPlayerStatus = cleanText(state.release?.publication?.dreamweaverStatus || state.release?.publication?.releaseStatus || "", 40);
-      elements.sourceLink.dataset.haloPlayerArtwork = safeMediaUrl(state.release?.artwork || state.release?.artworkOverride || state.release?.importedArtwork);
+      elements.sourceLink.dataset.haloPlayerRelease = cleanText(state.release?.releaseDate || releaseDateLabel(state.release?.publication?.lastReconciledAt) || state.publishedSongId, 40);
+      elements.sourceLink.dataset.haloPlayerStatus = cleanText(state.release?.publication?.dreamweaverStatus || state.release?.publication?.releaseStatus || state.release?.catalog?.saleStatus || "", 40);
+      elements.sourceLink.dataset.haloPlayerArtwork = safeMediaUrl(state.release?.artwork || state.release?.artworkOverride || state.release?.importedArtwork || state.release?.catalog?.artworkUrl);
       delete elements.sourceLink.dataset.haloPlayer;
     }
   }

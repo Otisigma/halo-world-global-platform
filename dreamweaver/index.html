@@ -12,10 +12,12 @@
   <link rel="icon" href="/assets/halo-app-icon-192.png">
   <link rel="stylesheet" href="/halo-brand.css">
   <link rel="stylesheet" href="/accessibility.css">
+  <link rel="stylesheet" href="/release-artwork.css">
   <link rel="stylesheet" href="/dreamweaver/dreamweaver.css">
   <script src="/stats.js" defer></script>
   <script src="/site-monitor.js" defer></script>
   <script src="/accessibility.js" defer></script>
+  <script src="/release-artwork.js" defer></script>
   <script src="/dreamweaver/dreamweaver.js" defer></script>
 </head>
 <body>
@@ -161,9 +163,8 @@
 
       <aside class="release-panel" id="releasePanel" aria-live="polite">
         <p class="release-panel__signature">Dreamweaver cinema edition</p>
-        <figure class="release-panel__artwork">
-          <img id="releaseArtwork" alt="" hidden>
-          <span id="releaseArtworkFallback">DW</span>
+        <figure class="release-panel__artwork release-artwork-frame" data-artwork-frame>
+          <img id="releaseArtwork" class="release-artwork-image" alt="" data-release-artwork data-artwork-badge="HALO placeholder cover">
         </figure>
         <div class="release-panel__copy">
           <p class="release-panel__kicker" id="releasePanelKicker">Now playing / Dreamweaver</p>

@@ -3,7 +3,7 @@ import { resolve } from "node:path";
 
 const root = resolve(import.meta.dirname, "..");
 const read = path => readFile(resolve(root, path), "utf8");
-const [page, styles, script, deck, campaign, radio, config, campaignFunction, campaignLibrary, campaignMigration, campaignJobMigration, campaignMonitor, stats, fanSignupFunction, fanSignupMigration, relationsPage, relationsScript, relationsFunction, haloXLib, dailyEmailTemplate, relationshipSignupMigration] = await Promise.all([
+const [page, styles, script, deck, campaign, radio, config, artworkHelper, campaignFunction, campaignLibrary, campaignMigration, campaignJobMigration, campaignMonitor, stats, fanSignupFunction, fanSignupMigration, relationsPage, relationsScript, relationsFunction, haloXLib, dailyEmailTemplate, relationshipSignupMigration] = await Promise.all([
   read("dreamweaver/index.html"),
   read("dreamweaver/dreamweaver.css"),
   read("dreamweaver/dreamweaver.js"),
@@ -11,6 +11,7 @@ const [page, styles, script, deck, campaign, radio, config, campaignFunction, ca
   read("campaign-studio/index.html"),
   read("radio/index.html"),
   read("netlify.toml"),
+  read("release-artwork.js"),
   read("netlify/functions/dreamweaver-campaigns.mjs"),
   read("netlify/lib/dreamweaver-campaigns.mjs"),
   read("netlify/database/migrations/20260816180000_create-dreamweaver-campaigns.sql"),
@@ -29,18 +30,22 @@ const [page, styles, script, deck, campaign, radio, config, campaignFunction, ca
 
 const checks = [
   [page.includes("Dreamweaver Show — HALO") && page.includes('id="showAudio"'), "ships the standalone Dreamweaver visual show"],
+  [page.includes("release-artwork.css") && page.includes("release-artwork.js"), "loads the shared HALO artwork fallback assets on the Dreamweaver page"],
   [page.includes('data-mode="watch"') && page.includes('data-mode="room"') && page.includes('data-mode="explore"'), "offers Watch, Room, and Explore modes"],
-  [script.includes('fetch("/api/mixes?limit=100"') && script.includes("requestedMix"), "loads an existing Mix Desk recording and supports direct mix links"],
+  [script.includes('fetchJsonWithTimeout("/api/mixes?limit=100"') && script.includes("requestedMix"), "loads an existing Mix Desk recording and supports direct mix links"],
   [page.includes('id="dreamweaverSongLabLink"') && script.includes('halo-dreamweaver-upload-trust') && script.includes('target.searchParams.set("flow", "artist-upload")'), "bridges the canonical Dreamweaver route into a trusted artist upload handoff"],
-  [script.includes('fetch("/api/videos?artistSlug=owen-anthony"') && script.includes("archiveReel"), "enriches the experience with the connected artist video archive"],
+  [script.includes('fetchJsonWithTimeout("/api/videos?artistSlug=owen-anthony"') && script.includes("archiveReel"), "enriches the experience with the connected artist video archive"],
+  [script.includes("fetchJsonWithTimeout") && script.includes("RELEASE_CONTEXT_TIMEOUT_MS") && script.includes("VIDEO_LIBRARY_TIMEOUT_MS"), "guards Dreamweaver release-context and video loads with deterministic timeouts"],
+  [page.includes('data-release-artwork') && script.includes("HaloReleaseArtwork?.resolve") && artworkHelper.includes("window.HaloReleaseArtwork"), "routes Dreamweaver release artwork through the shared HALO fallback recovery system"],
   [script.includes("activateChapter") && script.includes("elements.audio.currentTime") && script.includes("chapters.length - 1"), "synchronizes five story movements with audio playback"],
   [styles.includes("body.mode-room") && styles.includes("body.mode-explore") && styles.includes("prefers-reduced-motion"), "styles atmospheric modes and reduced-motion behavior"],
   [deck.includes('id="dreamweaverMix"') && deck.includes("/dreamweaver/?mix=${encodeURIComponent(data.id)}&experience=studio"), "moves a newly published mix directly into Dreamweaver"],
   [campaign.includes('href="/dreamweaver/"') && radio.includes('href="/dreamweaver/"'), "links the show from Campaign Studio and Radio"],
   [
-    /from = "\/dreamweaver\/"[\s\S]*to = "\/dreamweaver\/index\.html"/.test(config)
+    /from = "\/"[\s\S]*to = "\/halo"[\s\S]*status = 301/.test(config)
+      && /from = "\/dreamweaver\/"[\s\S]*to = "\/dreamweaver\/index\.html"/.test(config)
       && !/from = "\/dreamweaver"\s+to = "\/dreamweaver\/"/.test(config),
-    "serves the canonical /dreamweaver/ route directly without reintroducing the legacy alias redirect"
+    "keeps Netlify aligned to the canonical HALO home route and serves /dreamweaver/ directly without reintroducing the legacy alias redirect"
   ],
   [page.includes('id="campaignStudio"') && page.includes('id="campaignCanvas"') && page.includes("Make a Reel / Short"), "adds the Dreamweaver campaign cutting room"],
   [script.includes("renderVerticalClip") && script.includes("captureStream") && script.includes("MediaRecorder"), "renders a downloadable vertical clip in supported browsers"],

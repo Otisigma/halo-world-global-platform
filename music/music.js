@@ -228,8 +228,8 @@
     if (release.pitch) return release.pitch;
     const availability = availabilitySummary(release);
     const genres = Array.isArray(release.genres) ? release.genres : [];
-    const primaryGenre = genres[0] ? `${genres[0]} signal.` : "HALO signal.";
-    return `${release.artist} in focus through the public shop front with a ${primaryGenre} ${availability.note}`;
+    const primaryGenre = genres[0] ? `${genres[0]} signal` : "HALO signal";
+    return `${release.artist} in focus through the public shop front with a ${primaryGenre}. ${availability.note}`;
   }
 
   function releaseDossier(release) {

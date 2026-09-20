@@ -41,6 +41,11 @@
     if (!badge) return;
     badge.textContent = image.dataset.artworkBadge || "HALO placeholder cover";
     badge.hidden = !isFallback && !isMissing;
+    if (isMissing) {
+      badge.removeAttribute("aria-hidden");
+    } else {
+      badge.setAttribute("aria-hidden", "true");
+    }
   }
 
   function resolve(release = {}, fallbackArtwork = DEFAULT_RELEASE_ARTWORK) {

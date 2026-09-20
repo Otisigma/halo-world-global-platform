@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { access, readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { resolveReleaseArtworkFields, DEFAULT_RELEASE_ARTWORK } from "../netlify/lib/release-artwork.mjs";
 
@@ -36,6 +36,8 @@ const fallback = resolveReleaseArtworkFields({});
 assert.equal(fallback.artwork, DEFAULT_RELEASE_ARTWORK);
 assert.equal(fallback.artworkSource, "fallback");
 assert.equal(DEFAULT_RELEASE_ARTWORK, "/assets/releases/halo-premium-placeholder.svg");
+await access(resolve(root, DEFAULT_RELEASE_ARTWORK.slice(1)));
+await access(resolve(root, "assets/releases/halo-premium-placeholder.png"));
 
 assert.match(releasePackApi, /imported_artwork_url/);
 assert.match(releasePackApi, /artwork_override_url/);
@@ -56,6 +58,6 @@ assert.match(browserHelper, /HALO placeholder cover/);
 assert.match(sharedStyles, /\.release-artwork-frame/);
 assert.match(sharedStyles, /\.release-artwork-badge/);
 assert.match(musicClient, /data-artwork-source/);
-assert.match(musicPage, /halo-premium-placeholder\.svg/);
+assert.match(musicPage, /halo-premium-placeholder\.png/);
 
 console.log("Release artwork contracts passed.");

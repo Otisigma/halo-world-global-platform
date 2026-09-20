@@ -47,7 +47,8 @@
 }
 
 .release-artwork-frame.artwork-missing .release-artwork-image {
-  opacity: 0;
+  opacity: 0.18;
+  filter: grayscale(1) contrast(0.72);
 }
 
 .release-artwork-badge {

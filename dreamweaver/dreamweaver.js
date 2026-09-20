@@ -414,7 +414,10 @@
     if (campaignIdFromUrl() || params.get("experience") === "studio") return false;
     const normalizedPath = location.pathname.endsWith("/") ? location.pathname : `${location.pathname}/`;
     const isSatelliteRoute = normalizedPath.startsWith("/dreamweaver/satellite/");
-    return isSatelliteRoute || params.get("satellite") === "dreamweaver";
+    if (isSatelliteRoute) return true;
+    const hasMix = Boolean(params.get("mix"));
+    if (!hasMix) return true;
+    return params.get("satellite") === "dreamweaver";
   }
 
   function rewardSearchQuery() {

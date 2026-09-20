@@ -36,6 +36,10 @@ const directoryRoutes = PUBLIC_ROUTE_REGISTRY.filter(({ route, file }) => route.
 const fileRenderRoutes = PUBLIC_ROUTE_REGISTRY.filter(({ route, file }) => !route.endsWith("/") && !route.endsWith(".html") && `/${file}` !== route);
 const canonicalHtmlFileRoutes = PUBLIC_ROUTE_REGISTRY.filter(({ route }) => route.endsWith(".html"));
 const forbiddenLegacyAliases = ["/signal", "/halo-support", "/halo-support/", "/halo-%20support", "/halo- support"];
+const nonSlashRoutingModeByRoute = new Map([
+  ["/dreamweaver/", "rewrite"],
+  ["/dreamweaver/satellite/", "redirect"],
+]);
 
 assert.deepEqual(
   CANONICAL_ROUTE_ALIAS_ENTRIES,
@@ -56,7 +60,7 @@ for (const { route, file } of directoryRoutes) {
   const nonSlashRedirect = redirectRuleBySource.get(nonSlashAlias);
   const canonicalRenderRule = redirectRuleBySource.get(route);
   const renderFileRedirect = redirectRuleBySource.get(renderFilePath);
-  const allowsNonSlashDirectRender = route === "/dreamweaver/";
+  const nonSlashRoutingMode = nonSlashRoutingModeByRoute.get(route) || "none";
   assert.equal(canonicalizeRoutePath(nonSlashAlias), nonSlashAlias, `${nonSlashAlias} must remain non-canonicalized once aliases are removed.`);
 
   const familyCanonicalTargets = new Set(
@@ -71,10 +75,14 @@ for (const { route, file } of directoryRoutes) {
     `Route family ${route} must have exactly one canonical target path across route canonicalization files.`
   );
 
-  if (allowsNonSlashDirectRender) {
+  if (nonSlashRoutingMode === "rewrite") {
     assert.ok(nonSlashRedirect, `${nonSlashAlias} must render directly to ${renderFilePath} to avoid Dreamweaver route dead-ends.`);
     assert.equal(nonSlashRedirect.status, 200, `${nonSlashAlias} must use a 200 rewrite to ${renderFilePath}.`);
     assert.equal(nonSlashRedirect.to, renderFilePath, `${nonSlashAlias} must rewrite to ${renderFilePath}.`);
+  } else if (nonSlashRoutingMode === "redirect") {
+    assert.ok(nonSlashRedirect, `${nonSlashAlias} must redirect to ${route} to preserve the canonical satellite route.`);
+    assert.equal(nonSlashRedirect.status, 301, `${nonSlashAlias} must use a 301 redirect to ${route}.`);
+    assert.equal(nonSlashRedirect.to, route, `${nonSlashAlias} must redirect to ${route}.`);
   } else {
     assert.ok(!nonSlashRedirect, `${nonSlashAlias} alias redirect must be removed for canonical-only routing.`);
   }

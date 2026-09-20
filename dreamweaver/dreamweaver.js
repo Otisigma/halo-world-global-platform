@@ -528,6 +528,8 @@
   }
 
   function satelliteAgentLoopId(songId) {
+    const managerId = cleanText(state.release?.dreamweaverPage?.manager?.id || "", 160);
+    if (managerId) return managerId;
     const id = cleanSongId(songId);
     return id ? `dreamweaver-satellite-${id}` : "";
   }
@@ -541,7 +543,11 @@
     stopSatelliteAgentLoop();
     const songId = cleanSongId(state.publishedSongId) || songIdFromSatellitePath();
     if (!songId) return;
+    const manager = state.release?.dreamweaverPage?.manager || null;
     state.satelliteAgentLoop.loopId = satelliteAgentLoopId(songId);
+    state.satelliteAgentLoop.updateIntervalMs = Number(manager?.intervalMs) > 0
+      ? Number(manager.intervalMs)
+      : SATELLITE_AGENT_REFRESH_MS;
     state.satelliteAgentLoop.lastError = "";
     state.satelliteAgentLoop.timer = window.setInterval(async () => {
       try {

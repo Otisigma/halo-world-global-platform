@@ -1,5 +1,6 @@
 import { getDatabase } from "@netlify/database";
 import { resolveReleaseArtworkFields } from "../lib/release-artwork.mjs";
+import { resolveDreamweaverPageFlow } from "../lib/dreamweaver-page-manager.mjs";
 
 function json(body, status = 200, headers = {}) {
   return Response.json(body, {
@@ -17,6 +18,14 @@ function serializeRelease(row) {
     importedArtworkUrl: row.imported_artwork_url,
     artworkOverrideUrl: row.artwork_override_url
   });
+  const publicUrl = `/music/?song=${encodeURIComponent(row.id)}`;
+  const dreamweaverPage = row.catalog_song_id
+    ? resolveDreamweaverPageFlow(row.catalog_song_id, {
+        officialUrl: row.official_url,
+        streamUrl: row.stream_url,
+        publicUrl,
+      }).page
+    : null;
   const catalogAlbumTitle = row.catalog_album_title || "";
   const catalogGenres = String(row.catalog_genre || "")
     .split(",")
@@ -82,11 +91,12 @@ function serializeRelease(row) {
       releaseStatus: row.publication_release_status || "published",
       radioStatus: row.publication_radio_status || "pending",
       dreamweaverStatus: row.publication_dreamweaver_status || "pending",
-      canonicalUrl: row.publication_canonical_url || `/music/?song=${encodeURIComponent(row.id)}`,
+      canonicalUrl: row.publication_canonical_url || publicUrl,
       lastReconciledAt: row.publication_last_reconciled_at
         ? new Date(row.publication_last_reconciled_at).toISOString()
         : ""
     },
+    dreamweaverPage,
     listenUrl: `/api/release-link?slug=${encodeURIComponent(row.id)}&audience=fan`,
     kitUrl: `/release-kit.html?slug=${encodeURIComponent(row.id)}&audience=fan`
   };
@@ -105,6 +115,7 @@ export default async function releaseCatalogHandler(request) {
         release.artist_slug,
         release.title,
         release.artist,
+        release.official_url,
         release.release_date,
         release.duration,
         release.genres,

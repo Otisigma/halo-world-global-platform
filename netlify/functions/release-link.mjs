@@ -119,7 +119,9 @@ export default async function releaseLinkHandler(request) {
     const [column, target] = destinations[audience];
     const destination = absoluteDestination(row[column] || row.official_url, request.url);
     if (!destination) return json({ message: "This campaign destination is not available" }, 404);
-    const remappedDestination = await remapLegacyAudioDestination(db, destination, request.url);
+    const remappedDestination = audience === "fan"
+      ? await remapLegacyAudioDestination(db, destination, request.url)
+      : "";
     const finalDestination = absoluteDestination(remappedDestination || destination, request.url);
     if (!finalDestination) return json({ message: "This campaign destination is not available" }, 404);
 

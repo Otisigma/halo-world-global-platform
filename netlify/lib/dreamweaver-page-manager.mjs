@@ -85,11 +85,11 @@ export function buildDreamweaverSongPage(songId, options = {}) {
     linkedSongUrl: linkedSongUrl(id),
     pageAgent,
   };
-  if (!options.includeAgentLoop) return metadata;
+  if (options.includeAgentLoop === false) return metadata;
   return {
     ...metadata,
     agentLoop: {
-      id: `dreamweaver-satellite-${id}`,
+      id: pageAgent?.id || `dreamweaver-page-manager-${id}`,
       updatePath: options.updatePath || DEFAULT_UPDATE_PATH,
       intervalMs: Number(options.intervalMs) > 0 ? Number(options.intervalMs) : DEFAULT_INTERVAL_MS,
       channels: ["metadata", "artwork", "playback_state", "refinements", "linked_song_pages"],

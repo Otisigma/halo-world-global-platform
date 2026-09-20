@@ -71,7 +71,9 @@ async function remapLegacyAudioDestination(db, destination, requestUrl) {
 function shouldRemapLegacyAudioDestination(destination, requestUrl) {
   try {
     const parsed = new URL(destination, requestUrl);
-    return parsed.origin === new URL(requestUrl).origin && parsed.pathname === "/api/song-catalog/audio";
+    return parsed.origin === new URL(requestUrl).origin
+      && parsed.pathname === "/api/song-catalog/audio"
+      && Boolean(cleanId(parsed.searchParams.get("versionId")));
   } catch {
     return false;
   }

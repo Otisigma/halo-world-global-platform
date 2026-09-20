@@ -1,3 +1,5 @@
+import { DREAMWEAVER_STOREFRONT_MIX_ID } from "../lib/dreamweaver-storefront.js";
+
 (() => {
   const chapters = [
     {
@@ -452,10 +454,15 @@
     return params.get("satellite") === "dreamweaver";
   }
 
-  function canonicalDreamweaverUrl({ includeSatelliteFlag = false, searchParams = location.search } = {}) {
+  function canonicalDreamweaverUrl({
+    includeSatelliteFlag = false,
+    searchParams = location.search,
+    fallbackMixId = "",
+  } = {}) {
     const params = searchParams instanceof URLSearchParams
       ? new URLSearchParams(searchParams)
       : new URLSearchParams(searchParams);
+    if (!cleanText(params.get("mix"), 80) && fallbackMixId) params.set("mix", fallbackMixId);
     const songId = resolveSongContextId();
     if (songId) params.set("song", songId);
     else params.delete("song");
@@ -1540,11 +1547,17 @@
 
   async function initializeDreamweaver() {
    if (isSatellitePath()) {
-     window.location.replace(canonicalDreamweaverUrl({ includeSatelliteFlag: true }));
+     window.location.replace(canonicalDreamweaverUrl({
+       includeSatelliteFlag: true,
+       fallbackMixId: DREAMWEAVER_STOREFRONT_MIX_ID,
+     }));
      return;
    }
    if (isSatelliteFlow() && !new URLSearchParams(location.search).get("mix")) {
-     history.replaceState(null, "", canonicalDreamweaverUrl({ includeSatelliteFlag: isSatelliteFlow() }));
+     history.replaceState(null, "", canonicalDreamweaverUrl({
+       includeSatelliteFlag: isSatelliteFlow(),
+       fallbackMixId: DREAMWEAVER_STOREFRONT_MIX_ID,
+     }));
    }
    renderSatelliteState();
    updatePlatformLinks();

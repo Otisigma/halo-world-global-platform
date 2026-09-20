@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
+import { DREAMWEAVER_STOREFRONT_MIX_ID } from "../lib/dreamweaver-storefront.js";
 import {
-  DREAMWEAVER_STOREFRONT_MIX_ID,
   dreamweaverSatellite as buildDreamweaverSatellite,
 } from "../netlify/lib/dreamweaver-satellite.mjs";
 

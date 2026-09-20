@@ -1,3 +1,5 @@
+import { DREAMWEAVER_STOREFRONT_MIX_ID } from "../../lib/dreamweaver-storefront.js";
+
 function cleanId(value) {
   const id = String(value || "").trim().toLowerCase();
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(id) ? id : "";
@@ -7,8 +9,6 @@ function cleanMixId(value) {
   const mixId = String(value || "").trim().toLowerCase();
   return /^[a-z0-9-]{12,80}$/.test(mixId) ? mixId : "";
 }
-
-export const DREAMWEAVER_STOREFRONT_MIX_ID = "a1aefa12-2369-48cc-bf3f-3d3a99bcf982";
 
 export function dreamweaverSatellitePath(songId) {
   const id = cleanId(songId);

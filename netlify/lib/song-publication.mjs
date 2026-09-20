@@ -213,8 +213,8 @@ async function ensureReleaseCampaign(db, song, versions) {
           OR halo_release_campaigns.official_url = ${streamUrl}
           OR halo_release_campaigns.official_url ~* '^/api/song-catalog/audio\\?(?:[^#]*&)?versionId=[0-9a-f-]+(?:&[^#]*)?$'
           OR halo_release_campaigns.official_url ~* '^https?://[^[:space:]]+/api/song-catalog/audio\\?(?:[^#]*&)?versionId=[0-9a-f-]+(?:&[^#]*)?$'
-          OR halo_release_campaigns.official_url ~* '^/dreamweaver/satellite/[0-9a-f-]+/?(?:\\?[^#]*)?$'
-          OR halo_release_campaigns.official_url ~* '^https?://[^[:space:]]+/dreamweaver/satellite/[0-9a-f-]+/?(?:\\?[^#]*)?$'
+          OR halo_release_campaigns.official_url ~* '^/dreamweaver/satellite/[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/?(?:\\?[^#]*)?$'
+          OR halo_release_campaigns.official_url ~* '^https?://[^[:space:]]+/dreamweaver/satellite/[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/?(?:\\?[^#]*)?$'
         THEN EXCLUDED.official_url
         ELSE halo_release_campaigns.official_url
       END,

@@ -35,6 +35,7 @@ const checks = [
   [api.includes("reconcilePublishedSong") && api.includes('payload.action === "set_pipeline_stage"') && api.includes('stage === "published"'), "reconciles published songs into public release and radio fan-out from catalog stage transitions"],
   [api.includes("verifyRequestOrigin") && api.includes("ensureMembership") && api.includes('path: "/api/song-catalog"'), "protects catalog records with membership and origin checks"],
   [api.includes("halo_release_campaigns") && api.includes("halo_artist_pages") && api.includes("import_existing"), "loads reusable existing songs from release data with ownership checks"],
+  [api.includes("dreamweaverSatellite: dreamweaverSatellite(song.id)") && api.includes("experienceUrl") && api.includes("canonicalDreamweaverUrl"), "song-catalog API returns Dreamweaver satellite navigation metadata alongside playback URLs"],
   [page.includes('id="audioFile"') && client.includes("AUDIO_CHUNK_BYTES") && client.includes("finalize_upload"), "uploads full song-version audio in browser-safe chunks"],
   [api.includes("cleanAudioUrl") && api.includes("/api/song-catalog/audio?versionId="), "keeps uploaded catalog audio URLs valid when saving version metadata"],
   [page.includes('id="audioUrl" type="text"'), "avoids URL-field validation conflicts for internal uploaded-audio URLs"],

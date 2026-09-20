@@ -43,6 +43,7 @@ const checks = [
   [unifiedUploadFn.includes("PIPELINE_STAGES") && unifiedUploadFn.includes("uploaded") && unifiedUploadFn.includes("published"), "unified-upload defines the full ordered pipeline stages array"],
   [unifiedUploadFn.includes("buildDepartmentViews") && unifiedUploadFn.includes("artistRoom") && unifiedUploadFn.includes("radioRoom") && unifiedUploadFn.includes("dreamWeaver") && unifiedUploadFn.includes("salesPublishing"), "unified-upload returns department views for all four departments"],
   [unifiedUploadFn.includes("dreamweaverSatellite") && unifiedUploadFn.includes("/dreamweaver/satellite/") && unifiedUploadFn.includes("dreamweaver-satellite-"), "unified-upload returns deterministic per-song Dreamweaver satellite routing and loop identity"],
+  [unifiedUploadFn.includes("experienceUrl") && unifiedUploadFn.includes("canonicalDreamweaverUrl") && unifiedUploadFn.includes("fallbackUrl"), "unified-upload exposes explicit Dreamweaver navigation metadata instead of relying on audio asset URLs for page entry"],
   [unifiedUploadFn.includes("verifyRequestOrigin") && unifiedUploadFn.includes("ensureMembership"), "unified-upload protects mutations with origin and membership checks"],
   [unifiedUploadFn.includes("Cannot move backward") && unifiedUploadFn.includes("stageIndex"), "unified-upload rejects backward pipeline regressions"],
   [unifiedUploadFn.includes("isExisting") && unifiedUploadFn.includes("Existing master project returned"), "unified-upload returns existing project instead of creating a duplicate"],

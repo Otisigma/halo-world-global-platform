@@ -432,7 +432,7 @@ function renderResults() {
       ? `<p class="result-note needs-attention">${escapeHtml(result.needsAttention)}</p>`
       : `<p class="result-note">${escapeHtml(result.summary)}</p>`;
     const nextStepNote = result.nextStep ? `<p class="result-next-step">${escapeHtml(result.nextStep)}</p>` : "";
-    const satelliteRoute = typeof result.dreamweaverSatellite?.route === "string" ? result.dreamweaverSatellite.route : "";
+    const satelliteRoute = resolveDreamweaverExperienceUrl(result.dreamweaverSatellite);
     const satelliteLoopId = typeof result.dreamweaverSatellite?.agentLoop?.id === "string" ? result.dreamweaverSatellite.agentLoop.id : "";
     const satelliteReceipt = satelliteRoute
       ? `<div class="result-satellite">
@@ -462,6 +462,22 @@ function renderResults() {
       </article>
     `;
   }).join("");
+}
+
+function isDreamweaverExperienceUrl(value) {
+  if (typeof value !== "string") return false;
+  const text = value.trim();
+  return /^\/dreamweaver(?:\/|\?)/.test(text) && !/^\/api\/song-catalog\/audio\?versionId=/i.test(text);
+}
+
+function resolveDreamweaverExperienceUrl(satellite) {
+  const candidates = [
+    satellite?.experienceUrl,
+    satellite?.launchUrl,
+    satellite?.route,
+    satellite?.fallbackUrl,
+  ];
+  return candidates.find(isDreamweaverExperienceUrl) || "";
 }
 
 function normalizeAudioType(file) {

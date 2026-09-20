@@ -68,6 +68,20 @@ function cleanAudioUrl(value: unknown) {
   }
 }
 
+function dreamweaverSatellite(songId: string) {
+  const id = cleanId(songId);
+  if (!id) return null;
+  const experienceUrl = `/dreamweaver/satellite/${id}/`;
+  return {
+    songId: id,
+    route: experienceUrl,
+    launchUrl: experienceUrl,
+    experienceUrl,
+    canonicalDreamweaverUrl: `/dreamweaver/?song=${encodeURIComponent(id)}`,
+    fallbackUrl: `/dreamweaver/?satellite=dreamweaver&song=${encodeURIComponent(id)}`,
+  };
+}
+
 function cleanVersionType(value: unknown): VersionType {
   const type = String(value || "").trim().toLowerCase() as VersionType;
   return VERSION_ROUTES[type] ? type : "alternate";
@@ -96,6 +110,7 @@ function serializeSong(song: typeof songs.$inferSelect, versions: Array<typeof s
     reviewedAt: song.reviewedAt?.toISOString() || "",
     artworkUrl: songArtworkUrl,
     artworkUploadedAt: song.artworkUploadedAt?.toISOString() || "",
+    dreamweaverSatellite: dreamweaverSatellite(song.id),
     pipelineStatus: song.pipelineStatus || "uploaded",
     sourceUploadSurface: song.sourceUploadSurface || "",
     pipelineUpdatedAt: song.pipelineUpdatedAt?.toISOString() || "",

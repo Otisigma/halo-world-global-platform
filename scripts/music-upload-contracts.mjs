@@ -5,11 +5,12 @@ import { resolve } from "node:path";
 const root = resolve(import.meta.dirname, "..");
 const read = path => readFile(resolve(root, path), "utf8");
 
-const [musicPage, musicClient, musicStyles, uploadPage, home, routes, catalogApi, config] = await Promise.all([
+const [musicPage, musicClient, musicStyles, uploadPage, uploadClient, home, routes, catalogApi, config] = await Promise.all([
   read("music/index.html"),
   read("music/music.js"),
   read("music/music.css"),
   read("music-upload/index.html"),
+  read("music-upload/music-upload.js"),
   read("halo.html"),
   read("lib/route-registry.js"),
   read("netlify/functions/release-catalog.mjs"),
@@ -61,5 +62,7 @@ assert.match(catalogApi, /source: row\.catalog_song_id \? "song-catalog" : "rele
 
 assert.match(home, /href="\/music-upload\/"[\s\S]*HALO SHOP/, "HALO navigation must advertise the storefront instead of the old upload bridge");
 assert.match(home, /Public song shop for listening, buying, sharing, and artist-controlled release context/, "HALO navigation copy must describe the public shop role");
+assert.match(uploadClient, /satellite\?\.experienceUrl/, "upload controller must prefer the Dreamweaver satellite experience URL");
+assert.match(uploadClient, /isDreamweaverExperienceUrl/, "upload controller must guard against non-Dreamweaver navigation targets such as raw audio asset URLs");
 
 console.log("Music upload storefront contracts passed.");

@@ -46,17 +46,16 @@ function cleanId(value) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(id) ? id : "";
 }
 
-function stageIndex(stage) {
-  return PIPELINE_STAGES.indexOf(stage);
-}
-
 function dreamweaverSatellite(songId) {
   const id = cleanId(songId);
   if (!id) return null;
-  const route = `/dreamweaver/satellite/${id}/`;
+  const experienceUrl = `/dreamweaver/satellite/${id}/`;
   return {
-    route,
-    launchUrl: route,
+    songId: id,
+    route: experienceUrl,
+    launchUrl: experienceUrl,
+    experienceUrl,
+    canonicalDreamweaverUrl: `/dreamweaver/?song=${encodeURIComponent(id)}`,
     fallbackUrl: `/dreamweaver/?satellite=dreamweaver&song=${encodeURIComponent(id)}`,
     agentLoop: {
       id: `dreamweaver-satellite-${id}`,
@@ -65,6 +64,10 @@ function dreamweaverSatellite(songId) {
       channels: ["metadata", "artwork", "playback_state", "refinements"],
     },
   };
+}
+
+function stageIndex(stage) {
+  return PIPELINE_STAGES.indexOf(stage);
 }
 
 function serializePipeline(row) {

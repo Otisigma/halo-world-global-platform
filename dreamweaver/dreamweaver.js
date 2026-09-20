@@ -263,11 +263,6 @@
     return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(songId) ? songId : "";
   }
 
-  function cleanMixId(value) {
-    const mixId = cleanText(value, 80).toLowerCase();
-    return /^[a-z0-9-]{12,80}$/.test(mixId) ? mixId : "";
-  }
-
   function songIdFromSatellitePath(pathname = location.pathname) {
     const match = String(pathname || "").match(/^\/dreamweaver\/satellite\/([0-9a-f-]{36})\/?$/i);
     return cleanSongId(match?.[1] || "");
@@ -462,7 +457,7 @@
     const params = searchParams instanceof URLSearchParams
       ? new URLSearchParams(searchParams)
       : new URLSearchParams(searchParams);
-    params.set("mix", cleanMixId(params.get("mix")) || DREAMWEAVER_STOREFRONT_MIX_ID);
+    if (!cleanText(params.get("mix"), 80)) params.set("mix", DREAMWEAVER_STOREFRONT_MIX_ID);
     const songId = resolveSongContextId();
     if (songId) params.set("song", songId);
     else params.delete("song");

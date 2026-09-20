@@ -1,5 +1,5 @@
 (() => {
-  const DEFAULT_RELEASE_ARTWORK = "/assets/halo-app-icon-512.png";
+  const DEFAULT_RELEASE_ARTWORK = "/assets/releases/halo-premium-placeholder.svg";
 
   function safeUrl(value, fallback = "") {
     const raw = typeof value === "string" ? value.trim() : "";
@@ -10,6 +10,37 @@
     } catch {
       return fallback;
     }
+  }
+
+  function sameUrl(left, right) {
+    return safeUrl(left) === safeUrl(right);
+  }
+
+  function ensureBadge(frame) {
+    if (!frame) return null;
+    let badge = frame.querySelector(".release-artwork-badge");
+    if (badge) return badge;
+    badge = document.createElement("span");
+    badge.className = "release-artwork-badge";
+    badge.hidden = true;
+    badge.setAttribute("aria-hidden", "true");
+    frame.append(badge);
+    return badge;
+  }
+
+  function syncFrameState(image, frame, fallback, state = "auto") {
+    if (!frame) return;
+    const badge = ensureBadge(frame);
+    const isFallback = state === "fallback"
+      || (state !== "missing" && (image.dataset.artworkSource === "fallback" || sameUrl(image.currentSrc || image.getAttribute("src"), fallback)));
+    const isMissing = state === "missing";
+    frame.classList.toggle("artwork-fallback", isFallback || isMissing);
+    frame.classList.toggle("artwork-live", !isFallback && !isMissing);
+    frame.classList.toggle("artwork-missing", isMissing);
+    frame.dataset.artworkState = isMissing ? "missing" : (isFallback ? "fallback" : "live");
+    if (!badge) return;
+    badge.textContent = image.dataset.artworkBadge || "HALO placeholder cover";
+    badge.hidden = !isFallback && !isMissing;
   }
 
   function resolve(release = {}, fallbackArtwork = DEFAULT_RELEASE_ARTWORK) {
@@ -42,18 +73,23 @@
       const frame = image.closest("[data-artwork-frame]");
       const fallback = safeUrl(image.dataset.artworkFallback || fallbackArtwork, DEFAULT_RELEASE_ARTWORK);
       const recover = () => {
-        if (image.getAttribute("src") !== fallback) {
+        if (!sameUrl(image.currentSrc || image.getAttribute("src"), fallback)) {
           logArtworkIssue("music_artwork_error", image.getAttribute("src") || "(no src)", window.location.pathname);
           frame?.classList.add("artwork-recovered");
-          frame?.classList.remove("artwork-missing");
+          image.dataset.artworkSource = "fallback";
+          syncFrameState(image, frame, fallback, "fallback");
           image.src = fallback;
           return;
         }
-        frame?.classList.add("artwork-missing");
+        syncFrameState(image, frame, fallback, "missing");
         logArtworkIssue("music_artwork_missing", fallback, window.location.pathname);
       };
-      image.addEventListener("load", () => frame?.classList.remove("artwork-missing"));
+      image.addEventListener("load", () => {
+        if (!sameUrl(image.currentSrc || image.getAttribute("src"), fallback)) frame?.classList.remove("artwork-recovered");
+        syncFrameState(image, frame, fallback);
+      });
       image.addEventListener("error", recover);
+      syncFrameState(image, frame, fallback);
       if (image.complete && image.naturalWidth === 0) recover();
     });
   }

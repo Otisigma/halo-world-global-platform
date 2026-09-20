@@ -3,7 +3,9 @@
   aspect-ratio: 1;
   overflow: hidden;
   isolation: isolate;
-  background: linear-gradient(145deg, rgba(215, 255, 95, 0.12), rgba(15, 20, 22, 0.96));
+  background:
+    radial-gradient(circle at 18% 14%, rgba(242, 255, 98, 0.24), transparent 28%),
+    linear-gradient(145deg, rgba(21, 26, 23, 0.98), rgba(9, 11, 10, 0.96) 58%, rgba(30, 21, 14, 0.94));
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
 }
 
@@ -23,6 +25,20 @@
   object-fit: cover;
   object-position: center;
   background: #10181a;
+  transform: scale(1.001);
+  transition: opacity 0.3s ease, filter 0.3s ease, transform 0.6s ease;
+}
+
+.release-artwork-frame.artwork-fallback::before {
+  border-color: rgba(242, 255, 98, 0.22);
+}
+
+.release-artwork-frame.artwork-recovered::before {
+  border-color: rgba(242, 255, 98, 0.32);
+}
+
+.release-artwork-frame.artwork-fallback .release-artwork-image {
+  filter: saturate(0.94) contrast(1.04);
 }
 
 .release-artwork-frame.artwork-missing::before {
@@ -31,5 +47,36 @@
 }
 
 .release-artwork-frame.artwork-missing .release-artwork-image {
-  opacity: 0.7;
+  opacity: 0;
+}
+
+.release-artwork-badge {
+  position: absolute;
+  left: 14px;
+  right: 14px;
+  bottom: 14px;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  max-width: calc(100% - 28px);
+  min-height: 32px;
+  padding: 0 12px;
+  color: #f2eee3;
+  background: rgba(8, 10, 9, 0.76);
+  border: 1px solid rgba(242, 255, 98, 0.24);
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.28);
+  backdrop-filter: blur(10px);
+  font: 500 8px/1 var(--mono, "DM Mono", monospace);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@supports not (backdrop-filter: blur(10px)) {
+  .release-artwork-badge {
+    background: rgba(8, 10, 9, 0.92);
+  }
 }

@@ -224,6 +224,25 @@
       .join(" · ");
   }
 
+  function releaseStoryline(release) {
+    if (release.pitch) return release.pitch;
+    const availability = availabilitySummary(release);
+    const genres = Array.isArray(release.genres) ? release.genres : [];
+    const primaryGenre = genres[0] ? `${genres[0]} signal` : "HALO signal";
+    return `${release.artist} in focus through the public shop front with a ${primaryGenre}. ${availability.note}`;
+  }
+
+  function releaseDossier(release) {
+    const catalog = catalogState(release);
+    const saleStatus = String(catalog.saleStatus || "").replace(/_/g, " ").trim();
+    return [
+      { label: "Release status", value: saleStatus || availabilitySummary(release).badge },
+      { label: "Chart", value: release.isChartEligible ? "Chart eligible" : "Listening only" },
+      { label: "ISRC", value: release.isrc || "Pending" },
+      { label: "Support", value: release.purchaseUrl ? "Direct link live" : "Listen link live" }
+    ];
+  }
+
   function normalized(value) {
     return String(value || "")
       .toLowerCase()
@@ -531,6 +550,7 @@
     const catalog = catalogState(release);
     const previewUrl = directAudioPreviewUrl(release);
     const related = relatedReleases(release);
+    const dossier = releaseDossier(release);
     const versionCount = Number(catalog.versionCount || release.availableVersions?.length || 0);
     const saleEnabledCount = Number(catalog.saleEnabledVersionCount || 0);
     const availableVersions = (release.availableVersions || []).filter(Boolean).slice(0, 4);
@@ -553,6 +573,7 @@
         <span class="shop-eyebrow">Artist context</span>
         <strong>${escapeHtml(release.artist)}</strong>
         <p>${escapeHtml(artistContext)}</p>
+        <ul class="release-dossier">${dossier.map(item => `<li><span>${escapeHtml(item.label)}</span><strong>${escapeHtml(item.value)}</strong></li>`).join("")}</ul>
         <div class="version-pill-row">${availableVersions.length ? availableVersions.map(version => `<span class="version-pill">${escapeHtml(version)}</span>`).join("") : '<span class="version-pill">Artist-controlled release path</span>'}</div>
         <div class="related-release-list">${related.length ? related.map(item => `<button class="related-release" type="button" data-select-release="${escapeHtml(item.id)}">${escapeHtml(item.title)}</button>`).join("") : '<a class="related-release related-release-link" href="/artists/">Browse HALO artist rooms</a>'}</div>
       </section>
@@ -652,9 +673,14 @@
     elements.grid.innerHTML = releases.map((release, index) => {
       const artwork = releaseArtwork(release);
      const availability = availabilitySummary(release);
+     const dossier = releaseDossier(release).slice(0, 2);
+     const cardKicker = release.featuredType === "week"
+       ? "Song of the Week"
+       : (release.featuredType === "month" ? "Song of the Month" : "Editorial pick");
+     const cardDateLabel = release.releaseDate ? formatReleaseDate(release.releaseDate) : "";
      return `<article class="release-card">
       <div class="card-art release-artwork-frame" data-artwork-frame><img class="release-artwork-image" src="${escapeHtml(artwork.src)}" alt="${escapeHtml(`${release.title} cover artwork`)}" loading="lazy" width="900" height="900" data-release-artwork data-artwork-fallback="${escapeHtml(artwork.fallback)}"><span class="card-number">${String(index + 1).padStart(2, "0")}</span></div>
-     <div class="card-copy">${releaseMeta(release)}<h3>${escapeHtml(release.title)}</h3><p class="card-artist">${escapeHtml(release.artist)}</p><p class="card-availability">${escapeHtml(availability.badge)}</p>${release.pitch ? `<p class="card-pitch">${escapeHtml(release.pitch)}</p>` : ""}${releaseActions(release, { includeSelect: true })}</div>
+     <div class="card-copy"><p class="card-kicker"><span>${escapeHtml(cardKicker)}</span>${cardDateLabel ? `<span>${escapeHtml(cardDateLabel)}</span>` : ""}</p>${releaseMeta(release)}<h3>${escapeHtml(release.title)}</h3><p class="card-artist">${escapeHtml(release.artist)}</p><p class="card-availability">${escapeHtml(availability.badge)}</p><p class="card-pitch">${escapeHtml(releaseStoryline(release))}</p><ul class="card-facts">${dossier.map(item => `<li><span>${escapeHtml(item.label)}</span><strong>${escapeHtml(item.value)}</strong></li>`).join("")}</ul>${releaseActions(release, { includeSelect: true })}</div>
     </article>`;
     }).join("");
     wireArtwork(elements.grid);

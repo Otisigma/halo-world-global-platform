@@ -50,6 +50,19 @@ function injectUploadRuntimeScript(src) {
   });
 }
 
+function safeDreamweaverRoute(value) {
+  const text = String(value || "").trim();
+  if (!text) return "";
+  try {
+    const url = new URL(text, window.location.origin);
+    if (url.origin !== window.location.origin) return "";
+    if (!/^\/dreamweaver(?:\/|$)/.test(url.pathname)) return "";
+    return `${url.pathname}${url.search}${url.hash}`;
+  } catch {
+    return "";
+  }
+}
+
 function loadUploadHelperScript() {
   if (uploadHelperLoadPromise) return uploadHelperLoadPromise;
   uploadHelperLoadPromise = (async () => {
@@ -432,13 +445,15 @@ function renderResults() {
       ? `<p class="result-note needs-attention">${escapeHtml(result.needsAttention)}</p>`
       : `<p class="result-note">${escapeHtml(result.summary)}</p>`;
     const nextStepNote = result.nextStep ? `<p class="result-next-step">${escapeHtml(result.nextStep)}</p>` : "";
-    const satelliteRoute = typeof result.dreamweaverSatellite?.experienceUrl === "string"
-      ? result.dreamweaverSatellite.experienceUrl
-      : typeof result.dreamweaverSatellite?.launchUrl === "string"
-        ? result.dreamweaverSatellite.launchUrl
-        : typeof result.dreamweaverSatellite?.route === "string"
-          ? result.dreamweaverSatellite.route
-          : "";
+    const satelliteRoute = safeDreamweaverRoute(
+      typeof result.dreamweaverSatellite?.experienceUrl === "string"
+        ? result.dreamweaverSatellite.experienceUrl
+        : typeof result.dreamweaverSatellite?.launchUrl === "string"
+          ? result.dreamweaverSatellite.launchUrl
+          : typeof result.dreamweaverSatellite?.route === "string"
+            ? result.dreamweaverSatellite.route
+            : ""
+    );
     const satelliteLoopId = typeof result.dreamweaverSatellite?.agentLoop?.id === "string" ? result.dreamweaverSatellite.agentLoop.id : "";
     const satelliteReceipt = satelliteRoute
       ? `<div class="result-satellite">

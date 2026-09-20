@@ -1394,7 +1394,7 @@
       } finally {
         window.clearTimeout(mixesRequestTimeout);
       }
-      if (!response.ok) throw new Error(data.message || "The Mix Desk library could not be read.");
+      if (!response.ok) throw new Error(data.message || "The Dreamweaver mix library could not be read.");
       const playable = (data.mixes || []).filter(mix => mix.audioUrl && mix.source !== "youtube");
       const mix = playable.find(item => item.id === requestedMix) || playable[0];
       if (!mix) return showEmpty("No playable audio mix is available yet. Post the existing set to the HALO room or sign in to open a private mix.");

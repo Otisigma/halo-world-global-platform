@@ -73,7 +73,6 @@
   const RELEASE_CONTEXT_TIMEOUT_MS = 8000;
   const VIDEO_LIBRARY_TIMEOUT_MS = 8000;
   const SATELLITE_AGENT_REFRESH_MS = 45_000;
-  const DREAMWEAVER_STOREFRONT_MIX_ID = "a1aefa12-2369-48cc-bf3f-3d3a99bcf982";
   const DREAMWEAVER_RELEASE_FALLBACK_ARTWORK = window.HaloReleaseArtwork?.DEFAULT_RELEASE_ARTWORK || "/assets/releases/halo-premium-placeholder.svg";
 
   const elements = {
@@ -457,7 +456,6 @@
     const params = searchParams instanceof URLSearchParams
       ? new URLSearchParams(searchParams)
       : new URLSearchParams(searchParams);
-    if (!cleanText(params.get("mix"), 80)) params.set("mix", DREAMWEAVER_STOREFRONT_MIX_ID);
     const songId = resolveSongContextId();
     if (songId) params.set("song", songId);
     else params.delete("song");

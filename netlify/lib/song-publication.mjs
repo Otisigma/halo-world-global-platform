@@ -144,7 +144,9 @@ async function ensureReleaseCampaign(db, song, versions) {
   const firstPlayableVersion = versions.find(version => version.audio_url);
   const streamUrl = cleanText(saleMaster?.audio_url || firstPlayableVersion?.audio_url, 1200);
   const dreamweaverUrl = dreamweaverStorefrontPath(song.id);
-  const officialUrl = dreamweaverUrl || streamUrl || publicUrl;
+  const officialUrl = dreamweaverUrl && isLegacySongCatalogAudioUrl(streamUrl)
+    ? dreamweaverUrl
+    : streamUrl || publicUrl;
   const artworkUrl = cleanText(
     saleMaster?.artwork_url
       || firstPlayableVersion?.artwork_url

@@ -1,5 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
+import { DREAMWEAVER_STOREFRONT_MIX_ID } from "../netlify/lib/dreamweaver-satellite.mjs";
 
 const root = resolve(import.meta.dirname, "..");
 const read = path => readFile(resolve(root, path), "utf8");
@@ -49,8 +50,9 @@ const checks = [
     "keeps Netlify aligned to the canonical HALO home route and serves /dreamweaver/ directly without reintroducing the legacy alias redirect"
   ],
   [
-    /from = "\/dreamweaver\/satellite\/:songId"[\s\S]*to = "\/dreamweaver\/\?mix=a1aefa12-2369-48cc-bf3f-3d3a99bcf982&song=:songId&satellite=dreamweaver"[\s\S]*status = 301/.test(config)
-      && /from = "\/dreamweaver\/satellite\/:songId\/"[\s\S]*to = "\/dreamweaver\/\?mix=a1aefa12-2369-48cc-bf3f-3d3a99bcf982&song=:songId&satellite=dreamweaver"[\s\S]*status = 301/.test(config)
+    config.includes(`/dreamweaver/?mix=${DREAMWEAVER_STOREFRONT_MIX_ID}&song=:songId&satellite=dreamweaver`)
+      && /from = "\/dreamweaver\/satellite\/:songId"[\s\S]*status = 301/.test(config)
+      && /from = "\/dreamweaver\/satellite\/:songId\/"[\s\S]*status = 301/.test(config)
       && server.includes("app.get(/^\\/dreamweaver\\/satellite\\/([^/]+)$/")
       && server.includes("app.get(/^\\/dreamweaver\\/satellite\\/([^/]+)\\/$")
       && server.includes("dreamweaverStorefrontPath")

@@ -31,22 +31,23 @@
 
   function syncFrameState(image, frame, fallback, state = "auto") {
     if (!frame) return;
+    if (!image.dataset.originalAlt) image.dataset.originalAlt = image.getAttribute("alt") || "";
     const badge = ensureBadge(frame);
     const isFallback = state === "fallback"
       || (state !== "missing" && (image.dataset.artworkSource === "fallback" || sameUrl(image.currentSrc || image.getAttribute("src"), fallback)));
     const isMissing = state === "missing";
+    const originalAlt = image.dataset.originalAlt || "";
     frame.classList.toggle("artwork-fallback", isFallback || isMissing);
     frame.classList.toggle("artwork-live", !isFallback && !isMissing);
     frame.classList.toggle("artwork-missing", isMissing);
     frame.dataset.artworkState = isMissing ? "missing" : (isFallback ? "fallback" : "live");
+    image.setAttribute("alt", isFallback || isMissing
+      ? `${originalAlt}${originalAlt ? ". " : ""}${DEFAULT_RELEASE_ARTWORK_BADGE}.`
+      : originalAlt);
     if (!badge) return;
     badge.textContent = image.dataset.artworkBadge || DEFAULT_RELEASE_ARTWORK_BADGE;
     badge.hidden = !isFallback && !isMissing;
-    if (isFallback || isMissing) {
-      badge.removeAttribute("aria-hidden");
-    } else {
-      badge.setAttribute("aria-hidden", "true");
-    }
+    badge.setAttribute("aria-hidden", "true");
   }
 
   function resolve(release = {}, fallbackArtwork = DEFAULT_RELEASE_ARTWORK) {

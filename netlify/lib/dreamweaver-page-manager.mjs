@@ -26,6 +26,17 @@ function cleanAudience(value) {
   return audience || DEFAULT_AUDIENCE;
 }
 
+function isLegacyAudioEntry(value) {
+  const destination = cleanText(value, 1200);
+  if (!destination) return false;
+  try {
+    const url = new URL(destination, "https://halo.world");
+    return /^\/api\/song-catalog\/audio$/i.test(url.pathname) && /^[0-9a-f-]{36}$/i.test(url.searchParams.get("versionId") || "");
+  } catch {
+    return false;
+  }
+}
+
 function linkedSongUrl(songId) {
   const id = cleanId(songId);
   return id ? `/music/?song=${encodeURIComponent(id)}` : "";
@@ -106,12 +117,17 @@ export function resolveDreamweaverPageFlow({
     updatePath,
     intervalMs,
   });
-  const destinationUrl = hyperfollowUrl || dreamweaverPage?.experienceUrl || cleanedOfficialUrl || dreamweaverPage?.linkedSongUrl || "";
+  const useGeneratedDreamweaverPage = !hyperfollowUrl && (!cleanedOfficialUrl || isLegacyAudioEntry(cleanedOfficialUrl));
+  const destinationUrl = hyperfollowUrl
+    || (useGeneratedDreamweaverPage ? dreamweaverPage?.experienceUrl || cleanedOfficialUrl : cleanedOfficialUrl)
+    || dreamweaverPage?.experienceUrl
+    || dreamweaverPage?.linkedSongUrl
+    || "";
   return {
     hasHyperFollow: Boolean(hyperfollowUrl),
     hyperfollowUrl,
     dreamweaverPage,
     destinationUrl,
-    routeMode: hyperfollowUrl ? "hyperfollow" : dreamweaverPage ? "dreamweaver_page" : cleanedOfficialUrl ? "existing_destination" : "",
+    routeMode: hyperfollowUrl ? "hyperfollow" : useGeneratedDreamweaverPage ? "dreamweaver_page" : cleanedOfficialUrl ? "existing_destination" : dreamweaverPage ? "dreamweaver_page" : "",
   };
 }

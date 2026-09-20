@@ -148,11 +148,9 @@ async function ensureReleaseCampaign(db, song, versions) {
     releaseId,
     artistName: song.artist_name,
     title: song.title,
+    officialUrl: streamUrl,
   });
-  const officialUrl = dreamweaverFlow.destinationUrl
-    || (isLegacySongCatalogAudioUrl(streamUrl) ? dreamweaverFlow.dreamweaverPage?.experienceUrl || "" : "")
-    || streamUrl
-    || publicUrl;
+  const officialUrl = dreamweaverFlow.destinationUrl || streamUrl || publicUrl;
   const artworkUrl = cleanText(
     saleMaster?.artwork_url
       || firstPlayableVersion?.artwork_url

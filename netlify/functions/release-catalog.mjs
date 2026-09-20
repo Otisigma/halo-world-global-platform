@@ -18,12 +18,16 @@ function serializeRelease(row) {
     artworkOverrideUrl: row.artwork_override_url
   });
   const catalogAlbumTitle = row.catalog_album_title || "";
-  const catalogGenre = row.catalog_genre || "";
+  const catalogGenres = String(row.catalog_genre || "")
+    .split(",")
+    .map(value => value.trim())
+    .filter(Boolean);
+  const catalogGenre = catalogGenres[0] || "";
   const catalogArtworkUrl = row.catalog_artwork_url || "";
   const releaseGenres = Array.isArray(row.genres)
     ? row.genres.map(value => String(value || "").trim()).filter(Boolean)
     : [];
-  const genres = releaseGenres.length ? releaseGenres : (catalogGenre ? [catalogGenre] : []);
+  const genres = releaseGenres.length ? releaseGenres : catalogGenres;
   const resolvedArtwork = artwork.artwork || catalogArtworkUrl;
   const artworkSource = artwork.artworkSource || (catalogArtworkUrl ? "song-catalog" : "");
   return {
@@ -31,6 +35,7 @@ function serializeRelease(row) {
     title: row.title,
     artist: row.artist,
     releaseDate: row.release_date ? String(row.release_date).slice(0, 10) : "",
+    isrc: row.catalog_isrc || "",
     duration: row.duration || "",
     albumTitle: catalogAlbumTitle,
     genres,
@@ -53,6 +58,7 @@ function serializeRelease(row) {
     catalog: {
       source: row.catalog_song_id ? "song-catalog" : "release-catalog",
       songId: row.catalog_song_id || "",
+      isrc: row.catalog_isrc || "",
       artistName: row.catalog_artist_name || row.artist,
       title: row.catalog_title || row.title,
       albumTitle: catalogAlbumTitle,
@@ -171,6 +177,7 @@ export default async function releaseCatalogHandler(request) {
       LEFT JOIN LATERAL (
         SELECT
           song.id AS catalog_song_id,
+          song.isrc AS catalog_isrc,
           song.artist_name AS catalog_artist_name,
           song.title AS catalog_title,
           song.album_title AS catalog_album_title,

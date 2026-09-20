@@ -299,6 +299,7 @@
       ? release.genres.filter(Boolean).map(value => cleanText(value, 60))
       : [];
     const genre = genres[0] || "";
+    const catalogGenre = cleanText(String(catalog.genre || "").split(",")[0] || "", 60);
     const bpm = Number(release.bpm) > 0 ? String(Number(release.bpm)) : "";
     const musicalKey = cleanText(release.musicalKey, 20);
     const duration = state.duration ? formatTime(state.duration) : cleanText(release.duration, 24);
@@ -310,7 +311,7 @@
     const rows = [
       ["Artist", artist],
       ["Album", album],
-      ["Genre", genre || cleanText(catalog.genre || "", 60)],
+      ["Genre", genre || catalogGenre],
       ["BPM", bpm],
       ["Key", musicalKey],
       ["Duration", duration],
@@ -407,7 +408,7 @@
       elements.sourceLink.dataset.haloPlayerAlbum = cleanText(state.release?.albumTitle || state.release?.collectionTitle || state.release?.catalog?.albumTitle || "");
       elements.sourceLink.dataset.haloPlayerGenre = Array.isArray(state.release?.genres) && state.release.genres.length
         ? cleanText(state.release.genres[0] || "", 80)
-        : cleanText(state.release?.catalog?.genre || "", 80);
+        : cleanText(String(state.release?.catalog?.genre || "").split(",")[0] || "", 80);
       elements.sourceLink.dataset.haloPlayerBpm = Number(state.release?.bpm) > 0 ? String(Number(state.release.bpm)) : "";
       elements.sourceLink.dataset.haloPlayerKey = cleanText(state.release?.musicalKey || "", 20);
       elements.sourceLink.dataset.haloPlayerDuration = state.duration ? formatTime(state.duration) : cleanText(state.release?.duration || "", 24);

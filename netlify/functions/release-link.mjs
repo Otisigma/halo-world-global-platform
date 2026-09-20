@@ -70,7 +70,8 @@ async function remapLegacyAudioDestination(db, versionId) {
     `;
     const rows = Array.isArray(result) ? result : Array.isArray(result?.rows) ? result.rows : [];
     const songId = cleanId(rows[0]?.song_id);
-    return resolveDreamweaverPageFlow(songId).page?.route || "";
+    const flow = resolveDreamweaverPageFlow(songId);
+    return flow.launchUrl || flow.page?.route || "";
   } catch {
     return "";
   }

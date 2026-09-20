@@ -13,7 +13,7 @@ export function dreamweaverSatellite(songId, options = {}) {
       id: flow.manager?.id || "",
       updatePath: flow.manager?.updatePath || "/api/release-catalog",
       intervalMs: flow.manager?.intervalMs || 45_000,
-      channels: ["metadata", "artwork", "playback_state", "linked_song_pages", "routing"],
+      channels: ["metadata", "artwork", "playback_state", "linked_song_pages", "hub_loop", "routing"],
     },
   };
 }

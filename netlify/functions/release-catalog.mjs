@@ -19,12 +19,21 @@ function serializeRelease(row) {
     artworkOverrideUrl: row.artwork_override_url
   });
   const publicUrl = `/music/?song=${encodeURIComponent(row.id)}`;
-  const dreamweaverPage = row.catalog_song_id
+  const listenUrl = `/api/release-link?slug=${encodeURIComponent(row.id)}&audience=fan`;
+  const kitUrl = `/release-kit.html?slug=${encodeURIComponent(row.id)}&audience=fan`;
+  const dreamweaverFlow = row.catalog_song_id
     ? resolveDreamweaverPageFlow(row.catalog_song_id, {
+        mixId: row.id,
         officialUrl: row.official_url,
         streamUrl: row.stream_url,
         publicUrl,
-      }).page
+        relatedUrls: [listenUrl],
+        promoUrls: [kitUrl],
+      })
+    : null;
+  const dreamweaverPage = dreamweaverFlow?.page || null;
+  const dreamweaverHubUrl = dreamweaverFlow?.hubUrl || "";
+  const dreamweaverLoop = dreamweaverFlow?.loop || null;
     : null;
   const catalogAlbumTitle = row.catalog_album_title || "";
   const catalogGenres = String(row.catalog_genre || "")
@@ -97,8 +106,10 @@ function serializeRelease(row) {
         : ""
     },
     dreamweaverPage,
-    listenUrl: `/api/release-link?slug=${encodeURIComponent(row.id)}&audience=fan`,
-    kitUrl: `/release-kit.html?slug=${encodeURIComponent(row.id)}&audience=fan`
+    dreamweaverHubUrl,
+    dreamweaverLoop,
+    listenUrl,
+    kitUrl
   };
 }
 

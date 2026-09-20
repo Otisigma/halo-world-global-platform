@@ -45,6 +45,7 @@ const checks = [
   [unifiedUploadFn.includes("verifyRequestOrigin") && unifiedUploadFn.includes("ensureMembership"), "unified-upload protects mutations with origin and membership checks"],
   [unifiedUploadFn.includes("Cannot move backward") && unifiedUploadFn.includes("stageIndex"), "unified-upload rejects backward pipeline regressions"],
   [unifiedUploadFn.includes("isExisting") && unifiedUploadFn.includes("Existing master project returned"), "unified-upload returns existing project instead of creating a duplicate"],
+  [unifiedUploadFn.includes("dreamweaverSatellite") && unifiedUploadFn.includes("/dreamweaver/satellite/") && unifiedUploadFn.includes("canonicalDreamweaverUrl"), "unified-upload returns deterministic per-song Dreamweaver satellite metadata"],
   // Song catalog serializer
   [songCatalogFn.includes("pipelineStatus") && songCatalogFn.includes("sourceUploadSurface"), "song-catalog API serializes pipelineStatus and sourceUploadSurface"],
   // Song catalog UI

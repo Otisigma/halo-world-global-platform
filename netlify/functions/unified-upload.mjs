@@ -50,6 +50,7 @@ function stageIndex(stage) {
 }
 
 function serializePipeline(row) {
+  const dreamweaverSatellite = buildDreamweaverSatellite(row);
   return {
     songId: row.id,
     title: row.title,
@@ -62,8 +63,25 @@ function serializePipeline(row) {
     saleStatus: row.sale_status || "for_sale",
     rightsStatus: row.rights_status || "needs_review",
     genre: row.genre || "",
+    dreamweaverSatellite,
     updatedAt: new Date(row.updated_at).toISOString(),
     departments: buildDepartmentViews(row),
+  };
+}
+
+function buildDreamweaverSatellite(row) {
+  const songId = cleanId(row?.id);
+  if (!songId) return null;
+  const route = "/dreamweaver/satellite/";
+  const query = new URLSearchParams({
+    song: songId,
+    satellite: "dreamweaver"
+  });
+  return {
+    route,
+    songId,
+    experienceUrl: `${route}?${query.toString()}`,
+    canonicalDreamweaverUrl: `/dreamweaver/?song=${encodeURIComponent(songId)}`,
   };
 }
 

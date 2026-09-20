@@ -412,9 +412,9 @@
   function isSatelliteFlow() {
     const params = new URLSearchParams(location.search);
     if (campaignIdFromUrl() || params.get("experience") === "studio") return false;
-    const hasMix = Boolean(params.get("mix"));
-    if (!hasMix) return true;
-    return params.get("satellite") === "dreamweaver";
+    const normalizedPath = location.pathname.endsWith("/") ? location.pathname : `${location.pathname}/`;
+    const isSatelliteRoute = normalizedPath === "/dreamweaver/satellite/";
+    return isSatelliteRoute || params.get("satellite") === "dreamweaver";
   }
 
   function rewardSearchQuery() {
@@ -1431,7 +1431,8 @@
       document.title = `${mix.title || "Dreamweaver Show"} — HALO`;
       const currentParams = new URLSearchParams(location.search);
       currentParams.set("mix", mix.id);
-      history.replaceState(null, "", `/dreamweaver/?${currentParams.toString()}`);
+      const currentPath = location.pathname.startsWith("/dreamweaver/satellite") ? "/dreamweaver/satellite/" : "/dreamweaver/";
+      history.replaceState(null, "", `${currentPath}?${currentParams.toString()}`);
       setLoadingProgress(58, "Scoring the release frame", "Artwork and release details are being synced so the first screen lands with context.");
       await loadReleaseContext();
       setLoadingProgress(82, "Finalizing chapter movement", "The five-movement chapter rail and controls are aligning to the mix timeline.");

@@ -405,9 +405,13 @@
   async function flushQueuedAudioFeedback() {
     if (state.audioFeedbackFlushPromise) return state.audioFeedbackFlushPromise;
     state.audioFeedbackFlushPromise = (async () => {
+      const flushStartedAt = Date.now();
       try {
         while (true) {
-          const pending = state.audioFeedbackQueue.filter(entry => entry.deliveryStatus !== "sent");
+          const pending = state.audioFeedbackQueue.filter(entry => (
+            entry.deliveryStatus !== "sent"
+            && (!entry.lastAttemptAt || Number.isNaN(Date.parse(entry.lastAttemptAt)) || Date.parse(entry.lastAttemptAt) < flushStartedAt)
+          ));
           if (!pending.length) break;
           for (const incident of pending) await sendAudioFeedbackIncident(incident);
         }
@@ -475,7 +479,7 @@
 
     function isPlayablePrimaryMix(mix) {
       const source = cleanText(mix?.source, 60).toLowerCase();
-      return Boolean(cleanText(mix?.audioUrl, 1200)) && source !== "youtube" && !cleanText(mix?.videoUrl, 1200);
+      return Boolean(cleanText(mix?.audioUrl, 1200)) && source !== "youtube";
     }
 
     function resolvePrimaryPlaybackMix(mixes = [], requestedMixId = "") {
@@ -521,7 +525,7 @@
         let settled = false;
         const cleanup = () => {
           window.clearTimeout(timeoutId);
-          elements.audio.removeEventListener("loadedmetadata", handleReady);
+          elements.audio.removeEventListener("loadeddata", handleReady);
           elements.audio.removeEventListener("canplay", handleReady);
           elements.audio.removeEventListener("error", handleError);
         };
@@ -534,7 +538,7 @@
         const handleReady = () => settle({ ok: true, state: "ready" });
         const handleError = () => settle({ ok: false, state: "error", detail: describeAudioElementFailure() });
         const timeoutId = window.setTimeout(() => settle({ ok: false, state: "timeout", detail: "Dreamweaver waited too long for the linked audio to become playable." }), AUDIO_BOOTSTRAP_TIMEOUT_MS);
-        elements.audio.addEventListener("loadedmetadata", handleReady, { once: true });
+        elements.audio.addEventListener("loadeddata", handleReady, { once: true });
         elements.audio.addEventListener("canplay", handleReady, { once: true });
         elements.audio.addEventListener("error", handleError, { once: true });
       });

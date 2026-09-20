@@ -273,7 +273,8 @@
   }
 
   function isSatellitePath() {
-    return Boolean(songIdFromSatellitePath());
+    const pathname = String(location.pathname || "");
+    return /^\/dreamweaver\/satellite(?:\/|$)/i.test(pathname);
   }
 
   function releaseDateLabel(value) {

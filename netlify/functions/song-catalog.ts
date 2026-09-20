@@ -73,6 +73,22 @@ function cleanVersionType(value: unknown): VersionType {
   return VERSION_ROUTES[type] ? type : "alternate";
 }
 
+function dreamweaverSatellite(songId: string) {
+  const id = cleanId(songId);
+  if (!id) return null;
+  const route = "/dreamweaver/satellite/";
+  const query = new URLSearchParams({
+    song: id,
+    satellite: "dreamweaver",
+  });
+  return {
+    route,
+    songId: id,
+    experienceUrl: `${route}?${query.toString()}`,
+    canonicalDreamweaverUrl: `/dreamweaver/?song=${encodeURIComponent(id)}`,
+  };
+}
+
 function serializeSong(song: typeof songs.$inferSelect, versions: Array<typeof songVersions.$inferSelect>) {
   const songArtworkUrl = song.artworkUrl || "";
   return {
@@ -98,6 +114,7 @@ function serializeSong(song: typeof songs.$inferSelect, versions: Array<typeof s
     artworkUploadedAt: song.artworkUploadedAt?.toISOString() || "",
     pipelineStatus: song.pipelineStatus || "uploaded",
     sourceUploadSurface: song.sourceUploadSurface || "",
+    dreamweaverSatellite: dreamweaverSatellite(song.id),
     pipelineUpdatedAt: song.pipelineUpdatedAt?.toISOString() || "",
     versions: versions.map(version => ({
       id: version.id,

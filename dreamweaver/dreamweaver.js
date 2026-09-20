@@ -69,6 +69,7 @@
   });
   const uploadTrustStorageKey = "halo-dreamweaver-upload-trust";
   const approvedUploadReturnPaths = new Set(["/dreamweaver-lab/", "/dreamweaver-lab/index.html"]);
+  const MIX_LIBRARY_TIMEOUT_MS = 12000;
 
   const elements = {
     songLabLink: document.getElementById("dreamweaverSongLabLink"),
@@ -1375,7 +1376,7 @@
     try {
       const requestedMix = new URLSearchParams(location.search).get("mix") || "";
       const mixesRequestController = new AbortController();
-      const mixesRequestTimeout = window.setTimeout(() => mixesRequestController.abort(), 12000);
+      const mixesRequestTimeout = window.setTimeout(() => mixesRequestController.abort(), MIX_LIBRARY_TIMEOUT_MS);
       let response;
       let data;
       try {
@@ -1387,7 +1388,7 @@
         data = await response.json().catch(() => ({}));
       } catch (error) {
         if (error?.name === "AbortError") {
-          throw new Error("Dreamweaver timed out while loading this mix. Please try again.");
+          throw new Error("Dreamweaver timed out while loading the mix library. Please try again.");
         }
         throw error;
       } finally {

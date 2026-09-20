@@ -54,9 +54,13 @@ function dreamweaverSatellite(songId) {
   const id = cleanId(songId);
   if (!id) return null;
   const route = `/dreamweaver/satellite/${id}/`;
+  const canonicalDreamweaverUrl = `/dreamweaver/?song=${encodeURIComponent(id)}`;
   return {
     route,
+    songId: id,
     launchUrl: route,
+    experienceUrl: route,
+    canonicalDreamweaverUrl,
     fallbackUrl: `/dreamweaver/?satellite=dreamweaver&song=${encodeURIComponent(id)}`,
     agentLoop: {
       id: `dreamweaver-satellite-${id}`,
@@ -68,6 +72,7 @@ function dreamweaverSatellite(songId) {
 }
 
 function serializePipeline(row) {
+  const satellite = dreamweaverSatellite(row.id);
   return {
     songId: row.id,
     title: row.title,
@@ -80,8 +85,8 @@ function serializePipeline(row) {
     saleStatus: row.sale_status || "for_sale",
     rightsStatus: row.rights_status || "needs_review",
     genre: row.genre || "",
+    dreamweaverSatellite: satellite,
     updatedAt: new Date(row.updated_at).toISOString(),
-    dreamweaverSatellite: dreamweaverSatellite(row.id),
     departments: buildDepartmentViews(row),
   };
 }

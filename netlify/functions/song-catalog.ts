@@ -12,6 +12,7 @@ const RIGHTS_STATUSES = new Set(["needs_review", "cleared", "disputed"]);
 const SALE_STATUSES = new Set(["for_sale", "not_for_sale", "coming_soon"]);
 const MASTERING_STATUSES = new Set(["not_started", "queued", "in_progress", "review", "approved"]);
 const PIPELINE_STAGES = new Set(["uploaded", "processing", "needs_assets", "dreamweaver_in_progress", "ready_for_radio", "ready_for_sale", "approved", "published"]);
+const DREAMWEAVER_SATELLITE_REFRESH_MS = 45_000;
 const VERSION_ROUTES = {
   sale_master: { label: "Sale master", destination: "storefront", targetLufs: -14, saleEnabled: true },
   radio_edit: { label: "Radio edit", destination: "radio", targetLufs: -16, saleEnabled: false },
@@ -73,6 +74,26 @@ function cleanVersionType(value: unknown): VersionType {
   return VERSION_ROUTES[type] ? type : "alternate";
 }
 
+function dreamweaverSatellite(songId: string) {
+  const id = cleanId(songId);
+  if (!id) return null;
+  const route = `/dreamweaver/satellite/${id}/`;
+  return {
+    route,
+    songId: id,
+    launchUrl: route,
+    experienceUrl: route,
+    canonicalDreamweaverUrl: `/dreamweaver/?song=${encodeURIComponent(id)}`,
+    fallbackUrl: `/dreamweaver/?satellite=dreamweaver&song=${encodeURIComponent(id)}`,
+    agentLoop: {
+      id: `dreamweaver-satellite-${id}`,
+      updatePath: "/api/release-catalog",
+      intervalMs: DREAMWEAVER_SATELLITE_REFRESH_MS,
+      channels: ["metadata", "artwork", "playback_state", "refinements"],
+    },
+  };
+}
+
 function serializeSong(song: typeof songs.$inferSelect, versions: Array<typeof songVersions.$inferSelect>) {
   const songArtworkUrl = song.artworkUrl || "";
   return {
@@ -99,6 +120,7 @@ function serializeSong(song: typeof songs.$inferSelect, versions: Array<typeof s
     pipelineStatus: song.pipelineStatus || "uploaded",
     sourceUploadSurface: song.sourceUploadSurface || "",
     pipelineUpdatedAt: song.pipelineUpdatedAt?.toISOString() || "",
+    dreamweaverSatellite: dreamweaverSatellite(song.id),
     versions: versions.map(version => ({
       id: version.id,
       versionType: version.versionType,

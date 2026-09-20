@@ -272,6 +272,12 @@
     return cleanSongId(params.get("song")) || songIdFromSatellitePath();
   }
 
+  function isSatelliteRoutePath(pathname = location.pathname) {
+    const currentPath = String(pathname || "");
+    const normalizedPath = currentPath.endsWith("/") ? currentPath : `${currentPath}/`;
+    return normalizedPath.startsWith("/dreamweaver/satellite/");
+  }
+
   function isSatellitePath() {
     return Boolean(songIdFromSatellitePath());
   }
@@ -445,7 +451,7 @@
 
   function isSatelliteFlow() {
     const params = new URLSearchParams(location.search);
-    if (isSatellitePath()) return true;
+    if (isSatelliteRoutePath()) return true;
     if (campaignIdFromUrl() || params.get("experience") === "studio") return false;
     const hasMix = Boolean(params.get("mix"));
     if (!hasMix) return true;
@@ -1494,8 +1500,10 @@
       const currentParams = new URLSearchParams(location.search);
       currentParams.set("mix", mix.id);
       if (state.publishedSongId) currentParams.set("song", state.publishedSongId);
-      if (isSatellitePath()) history.replaceState(null, "", `${location.pathname}?${currentParams.toString()}`);
-      else history.replaceState(null, "", `/dreamweaver/?${currentParams.toString()}`);
+      const currentPath = isSatelliteRoutePath()
+        ? (location.pathname.endsWith("/") ? location.pathname : `${location.pathname}/`)
+        : "/dreamweaver/";
+      history.replaceState(null, "", `${currentPath}?${currentParams.toString()}`);
       setLoadingProgress(58, "Scoring the release frame", "Artwork and release details are being synced so the first screen lands with context.");
       await loadReleaseContext();
       setLoadingProgress(82, "Finalizing chapter movement", "The five-movement chapter rail and controls are aligning to the mix timeline.");

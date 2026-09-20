@@ -59,7 +59,7 @@ function legacyAudioVersionIdFromDestination(destination, requestUrl) {
   }
 }
 
-async function remapLegacyAudioDestination(db, versionId) {
+async function remapLegacyAudioDestination(db, versionId, audience = "fan") {
   try {
     if (!versionId) return "";
     const result = await db.sql`
@@ -70,7 +70,7 @@ async function remapLegacyAudioDestination(db, versionId) {
     `;
     const rows = Array.isArray(result) ? result : Array.isArray(result?.rows) ? result.rows : [];
     const songId = cleanId(rows[0]?.song_id);
-    return buildDreamweaverSongPage(songId)?.experienceUrl || "";
+    return buildDreamweaverSongPage(songId, { audience })?.experienceUrl || "";
   } catch {
     return "";
   }
@@ -129,7 +129,7 @@ export default async function releaseLinkHandler(request) {
     const destination = absoluteDestination(row[column] || row.official_url, request.url);
     if (!destination) return json({ message: "This campaign destination is not available" }, 404);
     const legacyAudioVersionId = legacyAudioVersionIdFromDestination(destination, request.url);
-    const remappedDestination = legacyAudioVersionId ? await remapLegacyAudioDestination(db, legacyAudioVersionId) : "";
+    const remappedDestination = legacyAudioVersionId ? await remapLegacyAudioDestination(db, legacyAudioVersionId, audience) : "";
     const finalDestination = absoluteDestination(remappedDestination || destination, request.url);
     if (!finalDestination) return json({ message: "This campaign destination is not available" }, 404);
 

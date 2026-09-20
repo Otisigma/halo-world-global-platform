@@ -38,7 +38,6 @@ const canonicalHtmlFileRoutes = PUBLIC_ROUTE_REGISTRY.filter(({ route }) => rout
 const forbiddenLegacyAliases = ["/signal", "/halo-support", "/halo-support/", "/halo-%20support", "/halo- support"];
 const nonSlashRoutingModeByRoute = new Map([
   ["/dreamweaver/", "rewrite"],
-  ["/dreamweaver/satellite/", "redirect"],
 ]);
 
 assert.deepEqual(

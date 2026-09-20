@@ -86,6 +86,7 @@
     loading: document.getElementById("loadingShow"),
     loadingPhase: document.getElementById("loadingPhase"),
     loadingMeterBar: document.getElementById("loadingMeterBar"),
+    loadingProgress: document.getElementById("loadingProgress"),
     loadingSubtitle: document.getElementById("loadingSubtitle"),
     stage: document.getElementById("showStage"),
     empty: document.getElementById("emptyShow"),
@@ -349,6 +350,10 @@
   function setLoadingProgress(percent = 0, phase = "", subtitle = "") {
     const safePercent = Math.max(0, Math.min(100, Number(percent) || 0));
     if (elements.loadingMeterBar) elements.loadingMeterBar.style.width = `${safePercent}%`;
+    if (elements.loadingProgress) {
+      elements.loadingProgress.setAttribute("aria-valuenow", String(Math.round(safePercent)));
+      if (phase) elements.loadingProgress.setAttribute("aria-valuetext", `${phase} (${Math.round(safePercent)}%)`);
+    }
     if (elements.loadingPhase && phase) elements.loadingPhase.textContent = phase;
     if (elements.loadingSubtitle && subtitle) elements.loadingSubtitle.textContent = subtitle;
   }
@@ -1392,10 +1397,10 @@
       updatePlatformLinks();
       await loadVideos();
       setLoadingProgress(100, "Dreamweaver is ready", "Press play and move through the full cinematic edition.");
+      document.body.classList.add("show-ready");
       elements.loading.hidden = true;
       elements.stage.hidden = false;
       elements.shell.setAttribute("aria-busy", "false");
-      document.body.classList.add("show-ready");
       if (campaignIdFromUrl() && !state.trackedProgress.has("landing")) {
         state.trackedProgress.add("landing");
         trackCampaignEvent("landing", currentParams.get("source") || "halo");

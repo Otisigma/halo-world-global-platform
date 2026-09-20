@@ -481,7 +481,6 @@ function resolveDreamweaverExperienceUrl(satellite) {
     satellite?.experienceUrl,
     satellite?.launchUrl,
     satellite?.route,
-    satellite?.fallbackUrl,
   ];
   return candidates.find(isDreamweaverExperienceUrl) || "";
 }

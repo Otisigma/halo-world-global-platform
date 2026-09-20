@@ -515,6 +515,8 @@
         elements.sourceLink.setAttribute("aria-label", "Open this song's Dreamweaver page");
       } else if (doorway.mode === "published_song") {
         elements.sourceLink.setAttribute("aria-label", "Open this published HALO song");
+      } else if (doorway.mode === "existing_destination") {
+        elements.sourceLink.setAttribute("aria-label", "Open this release source");
       } else {
         elements.sourceLink.setAttribute("aria-label", `Open ${featuredTrack.title} by ${featuredTrack.artist} on DistroKid HyperFollow`);
       }

@@ -118,6 +118,7 @@ export function resolveDreamweaverPageFlow({
     intervalMs,
   });
   const useGeneratedDreamweaverPage = !hyperfollowUrl && (!cleanedOfficialUrl || isLegacyAudioEntry(cleanedOfficialUrl));
+  const generatedDreamweaverMode = useGeneratedDreamweaverPage && Boolean(dreamweaverPage);
   const destinationUrl = hyperfollowUrl
     || (useGeneratedDreamweaverPage ? dreamweaverPage?.experienceUrl || cleanedOfficialUrl : cleanedOfficialUrl)
     || dreamweaverPage?.experienceUrl
@@ -128,6 +129,6 @@ export function resolveDreamweaverPageFlow({
     hyperfollowUrl,
     dreamweaverPage,
     destinationUrl,
-    routeMode: hyperfollowUrl ? "hyperfollow" : useGeneratedDreamweaverPage ? "dreamweaver_page" : cleanedOfficialUrl ? "existing_destination" : dreamweaverPage ? "dreamweaver_page" : "",
+    routeMode: hyperfollowUrl ? "hyperfollow" : generatedDreamweaverMode ? "dreamweaver_page" : cleanedOfficialUrl ? "existing_destination" : dreamweaverPage ? "dreamweaver_page" : "",
   };
 }

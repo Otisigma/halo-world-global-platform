@@ -1397,9 +1397,9 @@
       updatePlatformLinks();
       await loadVideos();
       setLoadingProgress(100, "Dreamweaver is ready", "Press play and move through the full cinematic edition.");
-      document.body.classList.add("show-ready");
-      elements.loading.hidden = true;
       elements.stage.hidden = false;
+      window.requestAnimationFrame(() => document.body.classList.add("show-ready"));
+      elements.loading.hidden = true;
       elements.shell.setAttribute("aria-busy", "false");
       if (campaignIdFromUrl() && !state.trackedProgress.has("landing")) {
         state.trackedProgress.add("landing");

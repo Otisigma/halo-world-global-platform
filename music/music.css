@@ -135,6 +135,10 @@ h1 em { color: var(--acid); font-family: var(--serif); font-weight: 400; text-tr
 .shop-facts dd { margin: 8px 0 0; color: var(--ink); font-size: 13px; line-height: 1.4; }
 .shop-artist-card strong { display: block; margin-top: 12px; font-size: 24px; line-height: 1.05; }
 .shop-artist-card p { margin: 12px 0 0; color: #50584f; font-size: 13px; line-height: 1.7; }
+.release-dossier { margin: 18px 0 0; padding: 0; list-style: none; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.release-dossier li { min-width: 0; padding: 12px; border: 1px solid rgba(9, 11, 10, 0.12); background: rgba(255, 255, 255, 0.34); }
+.release-dossier span { display: block; color: #6e766e; font: 500 7px/1 var(--mono); letter-spacing: 0.11em; text-transform: uppercase; }
+.release-dossier strong { display: block; margin-top: 8px; font-size: 12px; line-height: 1.4; }
 .version-pill-row, .related-release-list { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 18px; }
 .version-pill, .related-release { min-height: 40px; padding: 0 14px; border: 1px solid rgba(9, 11, 10, 0.16); color: var(--ink); background: transparent; font: 500 8px/1 var(--mono); letter-spacing: 0.1em; text-transform: uppercase; }
 .related-release { cursor: pointer; text-decoration: none; display: inline-flex; align-items: center; justify-content: center; }
@@ -282,10 +286,15 @@ h1 em { color: var(--acid); font-family: var(--serif); font-weight: 400; text-tr
 .release-card:hover .card-art img { transform: scale(1.035); filter: saturate(1); }
 .card-number { position: absolute; right: 12px; top: 12px; z-index: 2; display: grid; place-items: center; width: 38px; height: 38px; color: var(--ink); background: var(--paper); font: 500 9px/1 var(--mono); }
 .card-copy { display: flex; flex: 1; flex-direction: column; padding: 24px; }
+.card-kicker { display: flex; justify-content: space-between; gap: 10px; margin: 0 0 12px; color: #8f968f; font: 500 7px/1.4 var(--mono); letter-spacing: 0.12em; text-transform: uppercase; }
 .card-copy h3 { margin: 14px 0 0; font-size: clamp(25px, 3vw, 43px); line-height: 0.98; letter-spacing: -0.045em; }
 .card-artist { margin: 10px 0 0; color: var(--acid); font-family: var(--serif); font-size: 22px; font-style: italic; }
 .card-availability { margin-top: 18px; color: var(--acid); }
 .card-pitch { margin: 22px 0 0; color: #9da69d; font-size: 13px; line-height: 1.65; }
+.card-facts { margin: 16px 0 0; padding: 0; list-style: none; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.card-facts li { min-width: 0; padding-top: 10px; border-top: 1px solid rgba(242, 238, 227, 0.2); }
+.card-facts span { display: block; color: #828b82; font: 500 7px/1 var(--mono); letter-spacing: 0.1em; text-transform: uppercase; }
+.card-facts strong { display: block; margin-top: 7px; font-size: 12px; color: #dde3dd; line-height: 1.35; }
 .card-copy .release-actions { margin-top: auto; padding-top: 28px; }
 .release-card .action { border-color: var(--line); color: var(--paper); }
 .release-card .action.primary { border-color: var(--acid); color: var(--ink); background: var(--acid); }
@@ -417,6 +426,7 @@ footer a { text-decoration: none; color: var(--paper); }
   .featured-copy h2 { font-size: clamp(45px, 14vw, 75px); }
   .shop-preview-card, .shop-artist-card { padding: 18px; }
   .shop-facts { grid-template-columns: 1fr; }
+  .release-dossier { grid-template-columns: 1fr; }
   .chart-section { padding-bottom: 90px; }
   .chart-header { padding: 70px 0 32px; }
   .chart-header h2 { font-size: clamp(50px, 16vw, 82px); }
@@ -439,6 +449,7 @@ footer a { text-decoration: none; color: var(--paper); }
   .search-control, .sort-control select { width: 100%; }
   .release-grid { gap: 14px; }
   .release-card, .release-card:nth-child(5n + 1), .release-card:nth-child(5n + 4), .card-skeleton { grid-column: 1 / -1; }
+  .card-facts { grid-template-columns: 1fr; }
   .catalog-workspace-shell { padding-bottom: 60px; }
   .catalog-workspace-summary::after { content: "Expand ↘"; }
   .catalog-workspace-details[open] .catalog-workspace-summary::after { content: "Collapse ↗"; }

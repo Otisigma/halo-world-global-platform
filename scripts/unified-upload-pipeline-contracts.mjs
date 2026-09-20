@@ -46,8 +46,10 @@ const checks = [
   [unifiedUploadFn.includes("verifyRequestOrigin") && unifiedUploadFn.includes("ensureMembership"), "unified-upload protects mutations with origin and membership checks"],
   [unifiedUploadFn.includes("Cannot move backward") && unifiedUploadFn.includes("stageIndex"), "unified-upload rejects backward pipeline regressions"],
   [unifiedUploadFn.includes("isExisting") && unifiedUploadFn.includes("Existing master project returned"), "unified-upload returns existing project instead of creating a duplicate"],
+  [unifiedUploadFn.includes("dreamweaverSatellite") && unifiedUploadFn.includes("experienceUrl") && unifiedUploadFn.includes("canonicalDreamweaverUrl") && unifiedUploadFn.includes("fallbackUrl"), "unified-upload returns deterministic per-song Dreamweaver satellite metadata"],
   // Song catalog serializer
   [songCatalogFn.includes("pipelineStatus") && songCatalogFn.includes("sourceUploadSurface"), "song-catalog API serializes pipelineStatus and sourceUploadSurface"],
+  [songCatalogFn.includes("dreamweaverSatellite") && songCatalogFn.includes("dreamweaver-satellite-") && songCatalogFn.includes("canonicalDreamweaverUrl"), "song-catalog API serializes deterministic Dreamweaver satellite routing metadata"],
   // Song catalog UI
   [songCatalogJs.includes("pipeline-badge") && songCatalogJs.includes("pipelineStatus"), "song-catalog client renders pipeline badge using pipelineStatus"],
   [songCatalogJs.includes("songPipelineStatus") && songCatalogJs.includes("dataset.stage"), "song-catalog client updates the pipeline stamp element in the workspace"],

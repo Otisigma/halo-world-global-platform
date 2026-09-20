@@ -55,9 +55,12 @@ function dreamweaverSatellite(songId) {
   if (!id) return null;
   const route = `/dreamweaver/satellite/${id}/`;
   return {
+    songId: id,
     route,
     launchUrl: route,
+    experienceUrl: route,
     fallbackUrl: `/dreamweaver/?satellite=dreamweaver&song=${encodeURIComponent(id)}`,
+    canonicalDreamweaverUrl: `/dreamweaver/?song=${encodeURIComponent(id)}`,
     agentLoop: {
       id: `dreamweaver-satellite-${id}`,
       updatePath: "/api/release-catalog",

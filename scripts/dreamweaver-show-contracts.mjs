@@ -45,8 +45,9 @@ const checks = [
   [
     /from = "\/"[\s\S]*to = "\/halo"[\s\S]*status = 301/.test(config)
       && /from = "\/dreamweaver\/"[\s\S]*to = "\/dreamweaver\/index\.html"/.test(config)
+      && /from = "\/dreamweaver\/satellite\/"[\s\S]*to = "\/dreamweaver\/index\.html"/.test(config)
       && !/from = "\/dreamweaver"\s+to = "\/dreamweaver\/"/.test(config),
-    "keeps Netlify aligned to the canonical HALO home route and serves /dreamweaver/ directly without reintroducing the legacy alias redirect"
+    "keeps Netlify aligned to the canonical HALO home route and serves /dreamweaver/ plus /dreamweaver/satellite/ directly without reintroducing the legacy alias redirect"
   ],
   [
     /from = "\/dreamweaver\/satellite\/:songId"[\s\S]*to = "\/dreamweaver\/satellite\/:songId\/"[\s\S]*status = 301/.test(config)
@@ -73,6 +74,7 @@ const checks = [
     "keeps Blessed by Owen Anthony wired into the Dreamweaver release doorway with the canonical HyperFollow source"
   ],
   [script.includes("publishedSongId: resolveSongContextId()") && script.includes('new URL("/music/", location.origin)') && script.includes("Published song link copied."), "shares a published song from Dreamweaver using the canonical public music URL when song context is present"],
+  [script.includes('location.pathname.startsWith("/dreamweaver/satellite")') && script.includes('const currentPath = location.pathname.endsWith("/") ? location.pathname : `${location.pathname}/`;'), "keeps Dreamweaver satellite URLs stable while loading mix context"],
   [script.includes("resolveSongContextId") && script.includes("songIdFromSatellitePath") && script.includes("startSatelliteAgentLoop") && script.includes("dreamweaver-satellite-"), "derives song-specific satellite context from deterministic routes and runs an isolated per-song update loop"],
   [script.includes('fetch("/api/dreamweaver-fan-signups"') && script.includes("readStoredUnlock") && script.includes("updatePlatformLinks"), "submits email unlocks and rehydrates the lightweight fan reward state"],
   [script.includes('action: "start"') && script.includes("pollCampaignJob") && script.includes("renderPlatformPackages"), "starts, monitors, and exports background campaign packages"],

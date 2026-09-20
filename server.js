@@ -190,6 +190,10 @@ app.get("/dreamweaver/", (_req, res) =>
   sendFileIfPresent(res, path.join("dreamweaver", "index.html"))
 );
 
+app.get("/dreamweaver/satellite/", (_req, res) =>
+  sendFileIfPresent(res, path.join("dreamweaver", "index.html"))
+);
+
 app.get(/^\/dreamweaver\/satellite\/([^/]+)$/i, (req, res, next) => {
   const songId = String(req.params[0] || "").toLowerCase();
   if (!songIdPattern.test(songId)) return next();

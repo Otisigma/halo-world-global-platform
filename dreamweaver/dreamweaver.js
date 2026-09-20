@@ -445,11 +445,12 @@
 
   function isSatelliteFlow() {
     const params = new URLSearchParams(location.search);
-    if (isSatellitePath()) return true;
+    const normalizedPath = location.pathname.endsWith("/") ? location.pathname : `${location.pathname}/`;
+    if (isSatellitePath() || normalizedPath === "/dreamweaver/satellite/") return true;
     if (campaignIdFromUrl() || params.get("experience") === "studio") return false;
+    if (params.get("satellite") === "dreamweaver") return true;
     const hasMix = Boolean(params.get("mix"));
-    if (!hasMix) return true;
-    return params.get("satellite") === "dreamweaver";
+    return !hasMix;
   }
 
   function rewardSearchQuery() {
@@ -1494,7 +1495,10 @@
       const currentParams = new URLSearchParams(location.search);
       currentParams.set("mix", mix.id);
       if (state.publishedSongId) currentParams.set("song", state.publishedSongId);
-      if (isSatellitePath()) history.replaceState(null, "", `${location.pathname}?${currentParams.toString()}`);
+      if (location.pathname.startsWith("/dreamweaver/satellite")) {
+        const currentPath = location.pathname.endsWith("/") ? location.pathname : `${location.pathname}/`;
+        history.replaceState(null, "", `${currentPath}?${currentParams.toString()}`);
+      }
       else history.replaceState(null, "", `/dreamweaver/?${currentParams.toString()}`);
       setLoadingProgress(58, "Scoring the release frame", "Artwork and release details are being synced so the first screen lands with context.");
       await loadReleaseContext();

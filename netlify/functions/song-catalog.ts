@@ -73,6 +73,28 @@ function cleanVersionType(value: unknown): VersionType {
   return VERSION_ROUTES[type] ? type : "alternate";
 }
 
+const DREAMWEAVER_SATELLITE_REFRESH_MS = 45_000;
+
+function dreamweaverSatellite(songId: string) {
+  const id = cleanId(songId);
+  if (!id) return null;
+  const route = `/dreamweaver/satellite/${id}/`;
+  return {
+    songId: id,
+    route,
+    launchUrl: route,
+    experienceUrl: route,
+    fallbackUrl: `/dreamweaver/?satellite=dreamweaver&song=${encodeURIComponent(id)}`,
+    canonicalDreamweaverUrl: `/dreamweaver/?song=${encodeURIComponent(id)}`,
+    agentLoop: {
+      id: `dreamweaver-satellite-${id}`,
+      updatePath: "/api/release-catalog",
+      intervalMs: DREAMWEAVER_SATELLITE_REFRESH_MS,
+      channels: ["metadata", "artwork", "playback_state", "refinements"],
+    },
+  };
+}
+
 function serializeSong(song: typeof songs.$inferSelect, versions: Array<typeof songVersions.$inferSelect>) {
   const songArtworkUrl = song.artworkUrl || "";
   return {
@@ -99,6 +121,7 @@ function serializeSong(song: typeof songs.$inferSelect, versions: Array<typeof s
     pipelineStatus: song.pipelineStatus || "uploaded",
     sourceUploadSurface: song.sourceUploadSurface || "",
     pipelineUpdatedAt: song.pipelineUpdatedAt?.toISOString() || "",
+    dreamweaverSatellite: dreamweaverSatellite(song.id),
     versions: versions.map(version => ({
       id: version.id,
       versionType: version.versionType,

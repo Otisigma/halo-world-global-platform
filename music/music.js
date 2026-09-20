@@ -20,7 +20,8 @@
   const state = { releases: [], videos: [], query: "", genre: "all", sort: "newest", chartRoom: "all", chartSort: "signal", activeReleaseId: "", activeShopId: "" };
   const configuredFeaturedReleaseId = elements.featured?.dataset.featuredReleaseId?.trim() || "";
   const requestedReleaseId = new URLSearchParams(window.location.search).get("song")?.trim() || "";
-  const fallbackArtwork = window.HaloReleaseArtwork?.DEFAULT_RELEASE_ARTWORK || "/assets/halo-app-icon-512.png";
+  const fallbackArtwork = window.HaloReleaseArtwork?.DEFAULT_RELEASE_ARTWORK || "/assets/releases/halo-premium-placeholder.svg";
+  const fallbackArtworkBadge = window.HaloReleaseArtwork?.DEFAULT_RELEASE_ARTWORK_BADGE || "HALO placeholder cover";
   const satelliteVideoFallbackEnabled = new URLSearchParams(window.location.search).get("satellite") === "music-video-fallback";
   const chartRooms = {
     all: [],
@@ -187,10 +188,17 @@
   }
 
   function releaseArtwork(release) {
+    const src = safeUrl(release?.artwork, fallbackArtwork);
+    const fallbackSrc = safeUrl(fallbackArtwork, fallbackArtwork);
     return window.HaloReleaseArtwork?.resolve(release, fallbackArtwork) || {
-      src: safeUrl(release?.artwork, fallbackArtwork),
-      fallback: fallbackArtwork
+      src,
+      fallback: fallbackArtwork,
+      source: src === fallbackSrc ? "fallback" : "legacy"
     };
+  }
+
+  function artworkAttributes(artwork) {
+    return `data-artwork-source="${escapeHtml(artwork?.source || "")}" data-artwork-badge="${escapeHtml(fallbackArtworkBadge)}"`;
   }
 
   function wireArtwork(root) {
@@ -433,7 +441,7 @@
     const activity = release.chartActivity || {};
     const video = videoForRelease(release);
     elements.chartStage.innerHTML = `<article class="stage-card">
-      <div class="stage-art release-artwork-frame" data-artwork-frame><img class="release-artwork-image" src="${escapeHtml(artwork.src)}" alt="${escapeHtml(`${release.title} cover artwork`)}" data-release-artwork data-artwork-fallback="${escapeHtml(artwork.fallback)}"><span class="stage-rank">#${position}</span></div>
+      <div class="stage-art release-artwork-frame" data-artwork-frame><img class="release-artwork-image" src="${escapeHtml(artwork.src)}" alt="${escapeHtml(`${release.title} cover artwork`)}" data-release-artwork data-artwork-fallback="${escapeHtml(artwork.fallback)}" ${artworkAttributes(artwork)}><span class="stage-rank">#${position}</span></div>
       <div class="stage-copy">
         <div class="stage-kicker"><span>${escapeHtml(movement.label)}</span><span>${escapeHtml(release.genres.join(" · ") || "HALO release")}</span></div>
         <h3>${escapeHtml(release.title)}</h3><p class="stage-artist">${escapeHtml(release.artist)}</p>
@@ -465,7 +473,7 @@
       const artwork = releaseArtwork(release);
       return `<button class="chart-row${active ? " is-active" : ""}" type="button" data-chart-release="${escapeHtml(release.id)}" aria-pressed="${active}">
         <span class="chart-position">${String(index + 1).padStart(2, "0")}</span>
-        <span class="chart-art release-artwork-frame" data-artwork-frame><img class="release-artwork-image" src="${escapeHtml(artwork.src)}" alt="" loading="lazy" data-release-artwork data-artwork-fallback="${escapeHtml(artwork.fallback)}"></span>
+        <span class="chart-art release-artwork-frame" data-artwork-frame><img class="release-artwork-image" src="${escapeHtml(artwork.src)}" alt="" loading="lazy" data-release-artwork data-artwork-fallback="${escapeHtml(artwork.fallback)}" ${artworkAttributes(artwork)}></span>
         <span class="chart-track"><strong>${escapeHtml(release.title)}</strong><small>${escapeHtml(release.artist)} · ${escapeHtml(release.genres[0] || "HALO")}</small></span>
         <span class="chart-motion is-${movement.direction}"><b>${escapeHtml(movement.value)}</b><small>${escapeHtml(movement.label)}</small></span>
         <span class="chart-open" aria-hidden="true">OPEN ↗</span>
@@ -617,7 +625,7 @@
     updateShopHead(release);
     const artwork = releaseArtwork(release);
     elements.featured.innerHTML = `<article class="featured-release">
-      <div class="featured-art release-artwork-frame" data-artwork-frame><img class="release-artwork-image" src="${escapeHtml(artwork.src)}" alt="${escapeHtml(`${release.title} cover artwork`)}" width="1200" height="1200" data-release-artwork data-artwork-fallback="${escapeHtml(artwork.fallback)}"></div>
+      <div class="featured-art release-artwork-frame" data-artwork-frame><img class="release-artwork-image" src="${escapeHtml(artwork.src)}" alt="${escapeHtml(`${release.title} cover artwork`)}" width="1200" height="1200" data-release-artwork data-artwork-fallback="${escapeHtml(artwork.fallback)}" ${artworkAttributes(artwork)}></div>
       <div class="featured-copy"><div>${releaseMeta(release)}<h2 data-featured-heading tabindex="-1">${escapeHtml(release.title)}</h2><p class="featured-artist">${escapeHtml(release.artist)}</p><p class="featured-pitch">${escapeHtml(release.pitch || "Open the official release signal, approved listening destination, and campaign room.")}</p>${featuredDetailMarkup(release)}</div>${releaseActions(release, { includeCopy: true })}</div>
     </article>`;
     const preview = elements.featured.querySelector("[data-preview-url]");
@@ -679,7 +687,7 @@
        : (release.featuredType === "month" ? "Song of the Month" : "Editorial pick");
      const cardDateLabel = release.releaseDate ? formatReleaseDate(release.releaseDate) : "";
      return `<article class="release-card">
-      <div class="card-art release-artwork-frame" data-artwork-frame><img class="release-artwork-image" src="${escapeHtml(artwork.src)}" alt="${escapeHtml(`${release.title} cover artwork`)}" loading="lazy" width="900" height="900" data-release-artwork data-artwork-fallback="${escapeHtml(artwork.fallback)}"><span class="card-number">${String(index + 1).padStart(2, "0")}</span></div>
+      <div class="card-art release-artwork-frame" data-artwork-frame><img class="release-artwork-image" src="${escapeHtml(artwork.src)}" alt="${escapeHtml(`${release.title} cover artwork`)}" loading="lazy" width="900" height="900" data-release-artwork data-artwork-fallback="${escapeHtml(artwork.fallback)}" ${artworkAttributes(artwork)}><span class="card-number">${String(index + 1).padStart(2, "0")}</span></div>
      <div class="card-copy"><p class="card-kicker"><span>${escapeHtml(cardKicker)}</span>${cardDateLabel ? `<span>${escapeHtml(cardDateLabel)}</span>` : ""}</p>${releaseMeta(release)}<h3>${escapeHtml(release.title)}</h3><p class="card-artist">${escapeHtml(release.artist)}</p><p class="card-availability">${escapeHtml(availability.badge)}</p><p class="card-pitch">${escapeHtml(releaseStoryline(release))}</p><ul class="card-facts">${dossier.map(item => `<li><span>${escapeHtml(item.label)}</span><strong>${escapeHtml(item.value)}</strong></li>`).join("")}</ul>${releaseActions(release, { includeSelect: true })}</div>
     </article>`;
     }).join("");

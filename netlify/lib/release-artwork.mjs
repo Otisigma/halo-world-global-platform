@@ -1,4 +1,4 @@
-export const DEFAULT_RELEASE_ARTWORK = "/assets/halo-app-icon-512.png";
+export const DEFAULT_RELEASE_ARTWORK = "/assets/releases/halo-premium-placeholder.svg";
 
 function cleanArtworkValue(value) {
   return typeof value === "string" ? value.trim() : "";

@@ -19,9 +19,9 @@
   </defs>
   <rect width="1200" height="1200" fill="url(#bg)"/>
   <rect width="1200" height="1200" fill="url(#glow)"/>
-  <rect x="56" y="56" width="1088" height="1088" fill="none" stroke="rgba(255,255,255,.16)"/>
-  <rect x="92" y="92" width="1016" height="1016" rx="14" fill="none" stroke="rgba(255,255,255,.08)"/>
-  <path d="M0 920L1200 620V1200H0Z" fill="rgba(255,122,69,.08)"/>
+  <rect x="56" y="56" width="1088" height="1088" fill="none" stroke="#ffffff" stroke-opacity=".16"/>
+  <rect x="92" y="92" width="1016" height="1016" rx="14" fill="none" stroke="#ffffff" stroke-opacity=".08"/>
+  <path d="M0 920L1200 620V1200H0Z" fill="#ff7a45" fill-opacity=".08"/>
   <g transform="translate(132 142)">
     <text x="0" y="0" fill="#f2ff62" font-family="Arial, sans-serif" font-size="38" letter-spacing="18">HALO</text>
     <text x="0" y="72" fill="#f2eee3" font-family="Arial, sans-serif" font-size="146" font-weight="700" letter-spacing="-7">SIGNAL</text>
@@ -29,9 +29,9 @@
   </g>
   <g transform="translate(600 650)">
     <circle r="192" fill="none" stroke="url(#accent)" stroke-width="2" opacity=".9"/>
-    <circle r="152" fill="none" stroke="rgba(242,238,227,.22)" stroke-width="1.5"/>
+    <circle r="152" fill="none" stroke="#f2eee3" stroke-opacity=".22" stroke-width="1.5"/>
     <path d="M-98 110v-228h48l83 94 83-94h48v228h-54v-137l-77 83-77-83v137z" fill="#f2eee3"/>
-    <rect x="-210" y="-210" width="420" height="420" rx="210" fill="none" stroke="rgba(242,255,98,.12)" stroke-width="28"/>
+    <rect x="-210" y="-210" width="420" height="420" rx="210" fill="none" stroke="#f2ff62" stroke-opacity=".12" stroke-width="28"/>
   </g>
   <g transform="translate(132 1004)">
     <text x="0" y="0" fill="#f2eee3" font-family="Arial, sans-serif" font-size="34" font-weight="700" letter-spacing="2">OFFICIAL HALO ARTWORK FALLBACK</text>

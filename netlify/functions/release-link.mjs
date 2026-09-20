@@ -50,6 +50,7 @@ function accessCodeMatches(code, expectedHash) {
 async function remapLegacyAudioDestination(db, destination, requestUrl) {
   try {
     const parsed = new URL(destination, requestUrl);
+    if (parsed.origin !== new URL(requestUrl).origin) return "";
     if (parsed.pathname !== "/api/song-catalog/audio") return "";
     const versionId = cleanId(parsed.searchParams.get("versionId"));
     if (!versionId) return "";
@@ -64,6 +65,15 @@ async function remapLegacyAudioDestination(db, destination, requestUrl) {
     return songId ? `/dreamweaver/satellite/${songId}/` : "";
   } catch {
     return "";
+  }
+}
+
+function shouldRemapLegacyAudioDestination(destination, requestUrl) {
+  try {
+    const parsed = new URL(destination, requestUrl);
+    return parsed.origin === new URL(requestUrl).origin && parsed.pathname === "/api/song-catalog/audio";
+  } catch {
+    return false;
   }
 }
 
@@ -119,7 +129,7 @@ export default async function releaseLinkHandler(request) {
     const [column, target] = destinations[audience];
     const destination = absoluteDestination(row[column] || row.official_url, request.url);
     if (!destination) return json({ message: "This campaign destination is not available" }, 404);
-    const remappedDestination = /\/api\/song-catalog\/audio/i.test(destination)
+    const remappedDestination = shouldRemapLegacyAudioDestination(destination, request.url)
       ? await remapLegacyAudioDestination(db, destination, request.url)
       : "";
     const finalDestination = absoluteDestination(remappedDestination || destination, request.url);

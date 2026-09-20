@@ -38,6 +38,18 @@ function cleanText(value, maxLength) {
   return typeof value === "string" ? value.trim().replace(/\s+/g, " ").slice(0, maxLength) : "";
 }
 
+function isLegacySongCatalogAudioUrl(value) {
+  const url = cleanText(value, 1200);
+  if (!url) return false;
+  if (/^\/api\/song-catalog\/audio\?versionId=[0-9a-f-]+$/i.test(url)) return true;
+  try {
+    const parsed = new URL(url);
+    return /^\/api\/song-catalog\/audio$/i.test(parsed.pathname) && /^[0-9a-f-]+$/i.test(parsed.searchParams.get("versionId") || "");
+  } catch {
+    return false;
+  }
+}
+
 function radioRoomForGenre(genre) {
   const normalized = cleanText(genre, 80).toLowerCase();
   if (!normalized) return "lounge";
@@ -138,7 +150,8 @@ async function ensureReleaseCampaign(db, song, versions) {
   const saleMaster = versions.find(version => version.version_type === "sale_master" && version.audio_url);
   const firstPlayableVersion = versions.find(version => version.audio_url);
   const streamUrl = cleanText(saleMaster?.audio_url || firstPlayableVersion?.audio_url, 1200);
-  const officialUrl = dreamweaverSatellitePath(song.id) || streamUrl || publicUrl;
+  const satelliteUrl = dreamweaverSatellitePath(song.id);
+  const officialUrl = satelliteUrl && isLegacySongCatalogAudioUrl(streamUrl) ? satelliteUrl : streamUrl || publicUrl;
   const artworkUrl = cleanText(
     saleMaster?.artwork_url
       || firstPlayableVersion?.artwork_url

@@ -163,6 +163,18 @@
   force = true
 
 [[redirects]]
+  from = "/dreamweaver/satellite"
+  to = "/dreamweaver/satellite/"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/dreamweaver/satellite/"
+  to = "/dreamweaver/index.html"
+  status = 200
+  force = true
+
+[[redirects]]
   from = "/dreamweaver"
   to = "/dreamweaver/index.html"
   status = 200

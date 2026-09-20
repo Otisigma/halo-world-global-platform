@@ -42,12 +42,29 @@ const checks = [
   [unifiedUploadFn.includes("create_project") && unifiedUploadFn.includes("advance_pipeline"), "unified-upload supports create_project and advance_pipeline actions"],
   [unifiedUploadFn.includes("PIPELINE_STAGES") && unifiedUploadFn.includes("uploaded") && unifiedUploadFn.includes("published"), "unified-upload defines the full ordered pipeline stages array"],
   [unifiedUploadFn.includes("buildDepartmentViews") && unifiedUploadFn.includes("artistRoom") && unifiedUploadFn.includes("radioRoom") && unifiedUploadFn.includes("dreamWeaver") && unifiedUploadFn.includes("salesPublishing"), "unified-upload returns department views for all four departments"],
-  [unifiedUploadFn.includes("dreamweaverSatellite") && unifiedUploadFn.includes("/dreamweaver/satellite/") && unifiedUploadFn.includes("dreamweaver-satellite-"), "unified-upload returns deterministic per-song Dreamweaver satellite routing and loop identity"],
+  [
+    unifiedUploadFn.includes("dreamweaverSatellite")
+      && unifiedUploadFn.includes('route = "/dreamweaver/satellite/"')
+      && unifiedUploadFn.includes("songId:")
+      && unifiedUploadFn.includes("experienceUrl:")
+      && unifiedUploadFn.includes("canonicalDreamweaverUrl:")
+      && unifiedUploadFn.includes('satellite: "dreamweaver"'),
+    "unified-upload returns deterministic Dreamweaver satellite metadata with canonical route + experience URLs"
+  ],
   [unifiedUploadFn.includes("verifyRequestOrigin") && unifiedUploadFn.includes("ensureMembership"), "unified-upload protects mutations with origin and membership checks"],
   [unifiedUploadFn.includes("Cannot move backward") && unifiedUploadFn.includes("stageIndex"), "unified-upload rejects backward pipeline regressions"],
   [unifiedUploadFn.includes("isExisting") && unifiedUploadFn.includes("Existing master project returned"), "unified-upload returns existing project instead of creating a duplicate"],
   // Song catalog serializer
-  [songCatalogFn.includes("pipelineStatus") && songCatalogFn.includes("sourceUploadSurface"), "song-catalog API serializes pipelineStatus and sourceUploadSurface"],
+  [
+    songCatalogFn.includes("pipelineStatus")
+      && songCatalogFn.includes("sourceUploadSurface")
+      && songCatalogFn.includes("dreamweaverSatellite")
+      && songCatalogFn.includes('route = "/dreamweaver/satellite/"')
+      && songCatalogFn.includes("experienceUrl:")
+      && songCatalogFn.includes("canonicalDreamweaverUrl:")
+      && songCatalogFn.includes('satellite: "dreamweaver"'),
+    "song-catalog API serializes pipeline fields and deterministic Dreamweaver satellite metadata"
+  ],
   // Song catalog UI
   [songCatalogJs.includes("pipeline-badge") && songCatalogJs.includes("pipelineStatus"), "song-catalog client renders pipeline badge using pipelineStatus"],
   [songCatalogJs.includes("songPipelineStatus") && songCatalogJs.includes("dataset.stage"), "song-catalog client updates the pipeline stamp element in the workspace"],

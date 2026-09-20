@@ -190,6 +190,15 @@ app.get("/dreamweaver/", (_req, res) =>
   sendFileIfPresent(res, path.join("dreamweaver", "index.html"))
 );
 
+app.get("/dreamweaver/satellite", (req, res) => {
+  const searchSuffix = new URL(req.originalUrl, "http://localhost").search;
+  return res.redirect(301, `/dreamweaver/satellite/${searchSuffix}`);
+});
+
+app.get("/dreamweaver/satellite/", (_req, res) =>
+  sendFileIfPresent(res, path.join("dreamweaver", "index.html"))
+);
+
 app.get(/^\/dreamweaver\/satellite\/([^/]+)$/i, (req, res, next) => {
   const songId = String(req.params[0] || "").toLowerCase();
   if (!songIdPattern.test(songId)) return next();

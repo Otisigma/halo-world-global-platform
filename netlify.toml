@@ -151,6 +151,18 @@
   force = true
 
 [[redirects]]
+  from = "/dreamweaver/satellite/:songId"
+  to = "/dreamweaver/satellite/:songId/"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/dreamweaver/satellite/:songId/"
+  to = "/dreamweaver/index.html"
+  status = 200
+  force = true
+
+[[redirects]]
   from = "/dreamweaver"
   to = "/dreamweaver/index.html"
   status = 200

@@ -432,6 +432,14 @@ function renderResults() {
       ? `<p class="result-note needs-attention">${escapeHtml(result.needsAttention)}</p>`
       : `<p class="result-note">${escapeHtml(result.summary)}</p>`;
     const nextStepNote = result.nextStep ? `<p class="result-next-step">${escapeHtml(result.nextStep)}</p>` : "";
+    const satelliteRoute = typeof result.dreamweaverSatellite?.route === "string" ? result.dreamweaverSatellite.route : "";
+    const satelliteLoopId = typeof result.dreamweaverSatellite?.agentLoop?.id === "string" ? result.dreamweaverSatellite.agentLoop.id : "";
+    const satelliteReceipt = satelliteRoute
+      ? `<div class="result-satellite">
+          <a href="${escapeHtml(satelliteRoute)}" target="_blank" rel="noopener noreferrer">Open Dreamweaver satellite page ↗</a>
+          ${satelliteLoopId ? `<small>Agent loop: ${escapeHtml(satelliteLoopId)}</small>` : ""}
+        </div>`
+      : "";
     return `
       <article class="result-card">
         <div class="result-topline">
@@ -449,6 +457,7 @@ function renderResults() {
         </div>
         ${attentionNote}
         ${nextStepNote}
+        ${satelliteReceipt}
         <div class="route-grid">${routeGrid}</div>
       </article>
     `;
@@ -734,8 +743,9 @@ async function processPackage({ artistName, title, albumTitle, genre, isrc, upc,
         ? `Needs attention: Dreamweaver review found ${issueCount} blocking item${issueCount === 1 ? "" : "s"} in the catalog package.`
         : "",
     nextStep: finalStage === "dreamweaver_in_progress"
-      ? "Next: Dreamweaver now processes this locked package. You can close this page or upload another song."
+      ? "Next: Dreamweaver now processes this locked package. Open the song satellite page to experience this release in its own isolated runtime."
       : "Next: Upload remaining assets. This package is saved; remove or replace files only if needed.",
+    dreamweaverSatellite: pipeline.dreamweaverSatellite || created.dreamweaverSatellite || null,
     artworkSourceSongId: nextArtworkSourceSongId,
   };
 }

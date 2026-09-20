@@ -72,6 +72,7 @@
   const MIX_LIBRARY_TIMEOUT_MS = 12000;
   const RELEASE_CONTEXT_TIMEOUT_MS = 8000;
   const VIDEO_LIBRARY_TIMEOUT_MS = 8000;
+  const SATELLITE_AGENT_REFRESH_MS = 45_000;
   const DREAMWEAVER_RELEASE_FALLBACK_ARTWORK = window.HaloReleaseArtwork?.DEFAULT_RELEASE_ARTWORK || "/assets/releases/halo-premium-placeholder.svg";
 
   const elements = {
@@ -198,7 +199,7 @@
     mix: null,
     release: null,
     releasePlaybackState: "loading",
-    publishedSongId: new URLSearchParams(location.search).get("song") || "",
+    publishedSongId: resolveSongContextId(),
     unlock: readStoredUnlock(),
     activeChapter: 0,
     duration: 0,
@@ -217,6 +218,7 @@
     buildPreviewStartedAt: 0,
     trackedProgress: new Set(),
     startPlaybackAfterLoad: false,
+    satelliteAgentLoop: { timer: 0, loopId: "", updateIntervalMs: SATELLITE_AGENT_REFRESH_MS, lastUpdatedAt: "", lastError: "" },
     sessionToken: window.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`
   };
   const escapeHtml = value => String(value ?? "").replace(/[&<>'"]/g, character => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" })[character]);
@@ -253,6 +255,25 @@
 
   function cleanText(value, limit = 120) {
     return typeof value === "string" ? value.trim().replace(/\s+/g, " ").slice(0, limit) : "";
+  }
+
+  function cleanSongId(value) {
+    const songId = cleanText(value, 60).toLowerCase();
+    return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(songId) ? songId : "";
+  }
+
+  function songIdFromSatellitePath(pathname = location.pathname) {
+    const match = String(pathname || "").match(/^\/dreamweaver\/satellite\/([0-9a-f-]{36})\/?$/i);
+    return cleanSongId(match?.[1] || "");
+  }
+
+  function resolveSongContextId() {
+    const params = new URLSearchParams(location.search);
+    return cleanSongId(params.get("song")) || songIdFromSatellitePath();
+  }
+
+  function isSatellitePath() {
+    return Boolean(songIdFromSatellitePath());
   }
 
   function releaseDateLabel(value) {
@@ -387,7 +408,9 @@
     if (elements.loadingSubtitle && subtitle) elements.loadingSubtitle.textContent = subtitle;
   }
 
-  async function loadReleaseContext() {
+  async function loadReleaseContext({ keepCurrentOnFailure = false } = {}) {
+    const songContextId = resolveSongContextId();
+    if (songContextId) state.publishedSongId = songContextId;
     if (!state.publishedSongId) {
       state.release = null;
       renderReleasePanel();
@@ -402,15 +425,27 @@
       });
       if (!response.ok) throw new Error(payload.message || "Release catalog unavailable");
       const releases = Array.isArray(payload.releases) ? payload.releases : [];
-      state.release = releases.find(release => String(release.id || "") === state.publishedSongId) || null;
+      const normalizedSongId = String(state.publishedSongId || "").toLowerCase();
+      const release = releases.find((item) => {
+        const releaseId = String(item.id || "").toLowerCase();
+        const catalogSongId = String(item.catalog?.songId || "").toLowerCase();
+        return releaseId === normalizedSongId || catalogSongId === normalizedSongId;
+      }) || null;
+      if (release) {
+        state.release = release;
+        state.publishedSongId = cleanSongId(release.id) || state.publishedSongId;
+      } else if (!keepCurrentOnFailure) {
+        state.release = null;
+      }
     } catch {
-      state.release = null;
+      if (!keepCurrentOnFailure) state.release = null;
     }
     renderReleasePanel();
   }
 
   function isSatelliteFlow() {
     const params = new URLSearchParams(location.search);
+    if (isSatellitePath()) return true;
     if (campaignIdFromUrl() || params.get("experience") === "studio") return false;
     const hasMix = Boolean(params.get("mix"));
     if (!hasMix) return true;
@@ -422,9 +457,10 @@
   }
 
   function publishedSongShareUrl() {
-    if (!state.publishedSongId) return "";
+    const songId = cleanSongId(state.release?.id) || cleanSongId(state.publishedSongId);
+    if (!songId) return "";
     const url = new URL("/music/", location.origin);
-    url.searchParams.set("song", state.publishedSongId);
+    url.searchParams.set("song", songId);
     return url.toString();
   }
 
@@ -489,6 +525,32 @@
     if (elements.reward) elements.reward.hidden = !state.unlock;
     elements.shell.hidden = !state.unlock;
     if (state.unlock) renderRewardState();
+  }
+
+  function satelliteAgentLoopId(songId) {
+    const id = cleanSongId(songId);
+    return id ? `dreamweaver-satellite-${id}` : "";
+  }
+
+  function stopSatelliteAgentLoop() {
+    window.clearInterval(state.satelliteAgentLoop.timer);
+    state.satelliteAgentLoop.timer = 0;
+  }
+
+  function startSatelliteAgentLoop() {
+    stopSatelliteAgentLoop();
+    const songId = cleanSongId(state.publishedSongId) || songIdFromSatellitePath();
+    if (!songId) return;
+    state.satelliteAgentLoop.loopId = satelliteAgentLoopId(songId);
+    state.satelliteAgentLoop.lastError = "";
+    state.satelliteAgentLoop.timer = window.setInterval(async () => {
+      try {
+        await loadReleaseContext({ keepCurrentOnFailure: true });
+        state.satelliteAgentLoop.lastUpdatedAt = new Date().toISOString();
+      } catch (error) {
+        state.satelliteAgentLoop.lastError = error instanceof Error ? error.message : "Satellite update unavailable";
+      }
+    }, state.satelliteAgentLoop.updateIntervalMs);
   }
 
   async function unlockDreamweaver(event) {
@@ -1431,7 +1493,9 @@
       document.title = `${mix.title || "Dreamweaver Show"} — HALO`;
       const currentParams = new URLSearchParams(location.search);
       currentParams.set("mix", mix.id);
-      history.replaceState(null, "", `/dreamweaver/?${currentParams.toString()}`);
+      if (state.publishedSongId) currentParams.set("song", state.publishedSongId);
+      if (isSatellitePath()) history.replaceState(null, "", `${location.pathname}?${currentParams.toString()}`);
+      else history.replaceState(null, "", `/dreamweaver/?${currentParams.toString()}`);
       setLoadingProgress(58, "Scoring the release frame", "Artwork and release details are being synced so the first screen lands with context.");
       await loadReleaseContext();
       setLoadingProgress(82, "Finalizing chapter movement", "The five-movement chapter rail and controls are aligning to the mix timeline.");
@@ -1463,6 +1527,8 @@
   async function initializeDreamweaver() {
    renderSatelliteState();
    updatePlatformLinks();
+   if (isSatelliteFlow()) startSatelliteAgentLoop();
+   else stopSatelliteAgentLoop();
    if (isSatelliteFlow() && !state.unlock) {
      elements.shell.setAttribute("aria-busy", "false");
      return;
@@ -1586,6 +1652,7 @@
   elements.retry.addEventListener("click", loadShow);
   document.querySelectorAll("[data-mode]").forEach(button => button.addEventListener("click", () => setMode(button.dataset.mode)));
   ["mousemove", "pointerdown", "touchstart", "keydown"].forEach(eventName => document.addEventListener(eventName, resetIdle, { passive: true }));
+  window.addEventListener("beforeunload", stopSatelliteAgentLoop);
   document.addEventListener("keydown", event => {
     if (event.key === "Escape" && elements.campaignStudio.classList.contains("open")) return closeCampaignStudio();
     if (event.key === "Escape" && elements.drawer.classList.contains("open")) closeStory();

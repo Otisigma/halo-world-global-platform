@@ -110,8 +110,8 @@ button { color: inherit; }
   text-transform: uppercase;
 }
 .release-panel__artwork { margin: 0; width: 86px; height: 86px; border: 1px solid rgba(255,255,255,.28); background: rgba(239,108,55,.12); box-shadow: 0 0 0 1px rgba(255,255,255,.08) inset; }
-.release-panel__artwork img { width: 100%; height: 100%; object-fit: cover; }
-.release-panel__artwork span { display: grid; width: 100%; height: 100%; place-items: center; color: var(--gold); font: italic 500 30px/1 var(--serif); letter-spacing: -.05em; }
+.release-panel__artwork.release-artwork-frame::before { inset: 8px; }
+.release-panel__artwork .release-artwork-badge { left: 8px; right: 8px; bottom: 8px; max-width: calc(100% - 16px); min-height: 20px; padding: 0 7px; font-size: 6px; letter-spacing: .1em; }
 .release-panel__copy { min-width: 0; }
 .release-panel__kicker { margin: 0; color: var(--acid); font-size: 7px; letter-spacing: .2em; text-transform: uppercase; }
 .release-panel h2 { overflow: hidden; margin: 9px 0 0; text-overflow: ellipsis; white-space: nowrap; font: italic 500 clamp(24px, 2.2vw, 33px)/.9 var(--serif); letter-spacing: -.02em; text-transform: none; }

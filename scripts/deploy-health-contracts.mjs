@@ -113,6 +113,7 @@ await runCheck("Migration ordering", async () => {
 
 await runCheck("Homepage routing to /halo", async () => {
   const serverJs = await read("server.js");
+  const netlifyToml = await read("netlify.toml");
 
   // server.js must register a GET "/" route that routes users into /halo
   assert.match(
@@ -142,6 +143,11 @@ await runCheck("Homepage routing to /halo", async () => {
     publicRouteSection,
     /index\.html/,
     "server.js public routes must not serve index.html — that is the private-access page, not the public homepage."
+  );
+  assert.match(
+    netlifyToml,
+    /\[\[redirects\]\][\s\S]*?from\s*=\s*"\/"[\s\S]*?to\s*=\s*"\/halo"[\s\S]*?status\s*=\s*301/,
+    'netlify.toml must redirect "/" to "/halo" so hosted routing matches the canonical public home route.'
   );
   return "server.js routes GET \"/\" to /halo and serves halo.html there";
 });

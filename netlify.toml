@@ -56,8 +56,8 @@
 
 [[redirects]]
   from = "/"
-  to = "/music-world.html"
-  status = 200
+  to = "/halo"
+  status = 301
   force = true
 
 [[redirects]]

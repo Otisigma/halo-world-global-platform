@@ -75,8 +75,6 @@
 
   function wire(root = document, fallbackArtwork = DEFAULT_RELEASE_ARTWORK) {
     root.querySelectorAll("img[data-release-artwork]").forEach(image => {
-      if (image.dataset.releaseArtworkReady === "true") return;
-      image.dataset.releaseArtworkReady = "true";
       const frame = image.closest("[data-artwork-frame]");
       const fallback = safeUrl(image.dataset.artworkFallback || fallbackArtwork, DEFAULT_RELEASE_ARTWORK);
       const recover = () => {
@@ -91,6 +89,12 @@
         syncFrameState(image, frame, fallback, "missing");
         logArtworkIssue("music_artwork_missing", fallback, window.location.pathname);
       };
+      if (image.dataset.releaseArtworkReady === "true") {
+        syncFrameState(image, frame, fallback);
+        if (image.complete && image.naturalWidth === 0) recover();
+        return;
+      }
+      image.dataset.releaseArtworkReady = "true";
       image.addEventListener("load", () => {
         if (!sameUrl(image.currentSrc || image.getAttribute("src"), fallback)) frame?.classList.remove("artwork-recovered");
         syncFrameState(image, frame, fallback);

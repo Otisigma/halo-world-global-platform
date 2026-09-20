@@ -70,6 +70,9 @@
   const uploadTrustStorageKey = "halo-dreamweaver-upload-trust";
   const approvedUploadReturnPaths = new Set(["/dreamweaver-lab/", "/dreamweaver-lab/index.html"]);
   const MIX_LIBRARY_TIMEOUT_MS = 12000;
+  const RELEASE_CONTEXT_TIMEOUT_MS = 8000;
+  const VIDEO_LIBRARY_TIMEOUT_MS = 8000;
+  const DREAMWEAVER_RELEASE_FALLBACK_ARTWORK = window.HaloReleaseArtwork?.DEFAULT_RELEASE_ARTWORK || "/assets/releases/halo-premium-placeholder.svg";
 
   const elements = {
     songLabLink: document.getElementById("dreamweaverSongLabLink"),
@@ -107,7 +110,6 @@
     releaseTitle: document.getElementById("releaseTitle"),
     releaseSubtitle: document.getElementById("releaseSubtitle"),
     releaseArtwork: document.getElementById("releaseArtwork"),
-    releaseArtworkFallback: document.getElementById("releaseArtworkFallback"),
     releaseFacts: document.getElementById("releaseFacts"),
     playButton: document.getElementById("playButton"),
     progress: document.getElementById("showProgress"),
@@ -276,6 +278,37 @@
     }
   }
 
+  async function fetchJsonWithTimeout(url, { timeoutMs = 8000, timeoutMessage = "Request timed out.", ...options } = {}) {
+    const supportsAbortController = typeof AbortController === "function";
+    const controller = supportsAbortController ? new AbortController() : null;
+    const timeoutId = window.setTimeout(() => controller?.abort(), timeoutMs);
+    try {
+      const response = await fetch(url, {
+        ...options,
+        ...(controller ? { signal: controller.signal } : {})
+      });
+      const payload = await response.json().catch(() => ({}));
+      return { response, payload };
+    } catch (error) {
+      if (error?.name === "AbortError") throw new Error(timeoutMessage);
+      throw error;
+    } finally {
+      window.clearTimeout(timeoutId);
+    }
+  }
+
+  function releaseArtwork(release = {}) {
+    const fallback = safeMediaUrl(DREAMWEAVER_RELEASE_FALLBACK_ARTWORK) || DREAMWEAVER_RELEASE_FALLBACK_ARTWORK;
+    const resolved = window.HaloReleaseArtwork?.resolve(release, fallback);
+    if (resolved) return resolved;
+    const src = safeMediaUrl(release.artwork || release.artworkOverride || release.importedArtwork || release.catalog?.artworkUrl, fallback);
+    return {
+      src,
+      fallback,
+      source: src === fallback ? "fallback" : "legacy"
+    };
+  }
+
   function releaseStateLabel(status) {
     if (status === "loading") return "Loading signal";
     if (status === "playing") return "Playing now";
@@ -313,7 +346,7 @@
     const publication = release.publication || {};
     const status = cleanText(publication.dreamweaverStatus || publication.releaseStatus || catalog.saleStatus, 40);
     const album = cleanText(release.albumTitle || release.collectionTitle || catalog.albumTitle || "", 120);
-    const artwork = safeMediaUrl(release.artwork || release.artworkOverride || release.importedArtwork || catalog.artworkUrl);
+    const artwork = releaseArtwork(release);
     const rows = [
       ["Artist", artist],
       ["Album", album],
@@ -331,16 +364,11 @@
     elements.releaseFacts.innerHTML = rows.map(([label, value]) => `<div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd></div>`).join("");
     elements.releasePanel.dataset.state = state.releasePlaybackState;
 
-    if (artwork) {
-      elements.releaseArtwork.src = artwork;
-      elements.releaseArtwork.hidden = false;
-      elements.releaseArtworkFallback.hidden = true;
-    } else {
-      elements.releaseArtwork.hidden = true;
-      elements.releaseArtwork.removeAttribute("src");
-      elements.releaseArtworkFallback.hidden = false;
-      elements.releaseArtworkFallback.textContent = (title || "DW").slice(0, 2).toUpperCase();
-    }
+    elements.releaseArtwork.src = artwork.src;
+    elements.releaseArtwork.dataset.artworkFallback = artwork.fallback;
+    elements.releaseArtwork.dataset.artworkSource = artwork.source || "";
+    elements.releaseArtwork.alt = `${title || "Dreamweaver show"} cover artwork`;
+    window.HaloReleaseArtwork?.wire(elements.releasePanel, DREAMWEAVER_RELEASE_FALLBACK_ARTWORK);
   }
 
   function setReleasePlaybackState(nextState) {
@@ -366,8 +394,12 @@
       return;
     }
     try {
-      const response = await fetch("/api/release-catalog", { headers: { Accept: "application/json" }, credentials: "same-origin" });
-      const payload = await response.json().catch(() => ({}));
+      const { response, payload } = await fetchJsonWithTimeout("/api/release-catalog", {
+        timeoutMs: RELEASE_CONTEXT_TIMEOUT_MS,
+        timeoutMessage: "Dreamweaver timed out while loading release context.",
+        headers: { Accept: "application/json" },
+        credentials: "same-origin"
+      });
       if (!response.ok) throw new Error(payload.message || "Release catalog unavailable");
       const releases = Array.isArray(payload.releases) ? payload.releases : [];
       state.release = releases.find(release => String(release.id || "") === state.publishedSongId) || null;
@@ -1324,10 +1356,14 @@
 
   async function loadVideos() {
     try {
-      const response = await fetch("/api/videos?artistSlug=owen-anthony", { headers: { Accept: "application/json" }, credentials: "same-origin" });
+      const { response, payload } = await fetchJsonWithTimeout("/api/videos?artistSlug=owen-anthony", {
+        timeoutMs: VIDEO_LIBRARY_TIMEOUT_MS,
+        timeoutMessage: "Dreamweaver timed out while loading connected videos.",
+        headers: { Accept: "application/json" },
+        credentials: "same-origin"
+      });
       if (!response.ok) return;
-      const data = await response.json();
-      state.videos = Array.isArray(data.videos) ? data.videos.slice(0, 8) : [];
+      state.videos = Array.isArray(payload.videos) ? payload.videos.slice(0, 8) : [];
       renderFootageSelector();
       renderArchive();
     } catch {}
@@ -1375,28 +1411,12 @@
     elements.shell.setAttribute("aria-busy", "true");
     try {
       const requestedMix = new URLSearchParams(location.search).get("mix") || "";
-      const supportsAbortController = typeof AbortController === "function";
-      const mixesRequestController = supportsAbortController ? new AbortController() : null;
-      const mixesRequestTimeout = supportsAbortController
-        ? window.setTimeout(() => mixesRequestController.abort(), MIX_LIBRARY_TIMEOUT_MS)
-        : 0;
-      let response;
-      let data;
-      try {
-        response = await fetch("/api/mixes?limit=100", {
-          headers: { Accept: "application/json" },
-          credentials: "same-origin",
-          ...(mixesRequestController ? { signal: mixesRequestController.signal } : {})
-        });
-        data = await response.json().catch(() => ({}));
-      } catch (error) {
-        if (supportsAbortController && error?.name === "AbortError") {
-          throw new Error("Dreamweaver timed out while loading the mix library. Please try again.");
-        }
-        throw error;
-      } finally {
-        if (mixesRequestTimeout) window.clearTimeout(mixesRequestTimeout);
-      }
+      const { response, payload: data } = await fetchJsonWithTimeout("/api/mixes?limit=100", {
+        timeoutMs: MIX_LIBRARY_TIMEOUT_MS,
+        timeoutMessage: "Dreamweaver timed out while loading the mix library. Please try again.",
+        headers: { Accept: "application/json" },
+        credentials: "same-origin"
+      });
       if (!response.ok) throw new Error(data.message || "The Dreamweaver mix library could not be read.");
       const playable = (data.mixes || []).filter(mix => mix.audioUrl && mix.source !== "youtube");
       const mix = playable.find(item => item.id === requestedMix) || playable[0];

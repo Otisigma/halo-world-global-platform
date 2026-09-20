@@ -67,6 +67,7 @@ const fallbackPageMarkup = fallbackPageExists ? fs.readFileSync(fallbackPagePath
 const rateLimitWindowMs = 60_000;
 const rateLimitMaxRequests = Number(process.env.STATIC_REQUEST_LIMIT || 240);
 const recentRequestBuckets = new Map();
+const songIdPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function resolveFromRoot(relativePath) {
   return path.join(root, relativePath);
@@ -188,6 +189,19 @@ app.get("/dreamweaver", (_req, res) =>
 app.get("/dreamweaver/", (_req, res) =>
   sendFileIfPresent(res, path.join("dreamweaver", "index.html"))
 );
+
+app.get(/^\/dreamweaver\/satellite\/([^/]+)$/i, (req, res, next) => {
+  const songId = String(req.params[0] || "").toLowerCase();
+  if (!songIdPattern.test(songId)) return next();
+  const searchSuffix = new URL(req.originalUrl, "http://localhost").search;
+  return res.redirect(301, `/dreamweaver/satellite/${songId}/${searchSuffix}`);
+});
+
+app.get(/^\/dreamweaver\/satellite\/([^/]+)\/$/i, (req, res, next) => {
+  const songId = String(req.params[0] || "").toLowerCase();
+  if (!songIdPattern.test(songId)) return next();
+  return sendFileIfPresent(res, path.join("dreamweaver", "index.html"));
+});
 
 app.get("/sw.js", (_req, res) => {
   res.set("Cache-Control", "no-cache, no-store, must-revalidate");

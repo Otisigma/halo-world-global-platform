@@ -743,6 +743,27 @@ select:focus {
   color: #a6ffc1;
 }
 
+.result-satellite {
+  display: grid;
+  gap: .35rem;
+}
+
+.result-satellite a {
+  color: #d6f6ff;
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.result-satellite a:hover,
+.result-satellite a:focus-visible {
+  text-decoration: underline;
+}
+
+.result-satellite small {
+  color: #a5aab5;
+  font-size: .76rem;
+}
+
 .needs-attention {
   color: #ffb2b2;
 }

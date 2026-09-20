@@ -3,7 +3,7 @@ import { resolve } from "node:path";
 
 const root = resolve(import.meta.dirname, "..");
 const read = path => readFile(resolve(root, path), "utf8");
-const [page, styles, script, deck, campaign, radio, config, artworkHelper, campaignFunction, campaignLibrary, campaignMigration, campaignJobMigration, campaignMonitor, stats, fanSignupFunction, fanSignupMigration, relationsPage, relationsScript, relationsFunction, haloXLib, dailyEmailTemplate, relationshipSignupMigration] = await Promise.all([
+const [page, styles, script, deck, campaign, radio, config, server, artworkHelper, campaignFunction, campaignLibrary, campaignMigration, campaignJobMigration, campaignMonitor, stats, fanSignupFunction, fanSignupMigration, relationsPage, relationsScript, relationsFunction, haloXLib, dailyEmailTemplate, relationshipSignupMigration] = await Promise.all([
   read("dreamweaver/index.html"),
   read("dreamweaver/dreamweaver.css"),
   read("dreamweaver/dreamweaver.js"),
@@ -11,6 +11,7 @@ const [page, styles, script, deck, campaign, radio, config, artworkHelper, campa
   read("campaign-studio/index.html"),
   read("radio/index.html"),
   read("netlify.toml"),
+  read("server.js"),
   read("release-artwork.js"),
   read("netlify/functions/dreamweaver-campaigns.mjs"),
   read("netlify/lib/dreamweaver-campaigns.mjs"),
@@ -47,6 +48,14 @@ const checks = [
       && !/from = "\/dreamweaver"\s+to = "\/dreamweaver\/"/.test(config),
     "keeps Netlify aligned to the canonical HALO home route and serves /dreamweaver/ directly without reintroducing the legacy alias redirect"
   ],
+  [
+    /from = "\/dreamweaver\/satellite\/:songId"[\s\S]*to = "\/dreamweaver\/satellite\/:songId\/"[\s\S]*status = 301/.test(config)
+      && /from = "\/dreamweaver\/satellite\/:songId\/"[\s\S]*to = "\/dreamweaver\/index\.html"[\s\S]*status = 200/.test(config)
+      && server.includes("app.get(/^\\/dreamweaver\\/satellite\\/([^/]+)$/")
+      && server.includes("app.get(/^\\/dreamweaver\\/satellite\\/([^/]+)\\/$")
+      && server.includes("songIdPattern"),
+    "keeps deterministic Dreamweaver satellite routing live for per-song pages across Netlify and local server"
+  ],
   [page.includes('id="campaignStudio"') && page.includes('id="campaignCanvas"') && page.includes("Make a Reel / Short"), "adds the Dreamweaver campaign cutting room"],
   [script.includes("renderVerticalClip") && script.includes("captureStream") && script.includes("MediaRecorder"), "renders a downloadable vertical clip in supported browsers"],
   [page.includes('id="downloadClip"') && page.includes('id="renderStatus"') && styles.includes('[hidden] { display: none !important; }'), "shows reliable film progress and keeps hidden overlays out of the preview"],
@@ -63,7 +72,8 @@ const checks = [
       && script.includes("elements.sourceLink.href = featuredTrack.url"),
     "keeps Blessed by Owen Anthony wired into the Dreamweaver release doorway with the canonical HyperFollow source"
   ],
-  [script.includes('publishedSongId: new URLSearchParams(location.search).get("song") || ""') && script.includes('new URL("/music/", location.origin)') && script.includes("Published song link copied."), "shares a published song from Dreamweaver using the canonical public music URL when song context is present"],
+  [script.includes("publishedSongId: resolveSongContextId()") && script.includes('new URL("/music/", location.origin)') && script.includes("Published song link copied."), "shares a published song from Dreamweaver using the canonical public music URL when song context is present"],
+  [script.includes("resolveSongContextId") && script.includes("songIdFromSatellitePath") && script.includes("startSatelliteAgentLoop") && script.includes("dreamweaver-satellite-"), "derives song-specific satellite context from deterministic routes and runs an isolated per-song update loop"],
   [script.includes('fetch("/api/dreamweaver-fan-signups"') && script.includes("readStoredUnlock") && script.includes("updatePlatformLinks"), "submits email unlocks and rehydrates the lightweight fan reward state"],
   [script.includes('action: "start"') && script.includes("pollCampaignJob") && script.includes("renderPlatformPackages"), "starts, monitors, and exports background campaign packages"],
   [page.includes('id="campaignYoutubeUrl"') && page.includes("Load it. Shape it. Send it.") && campaignFunction.includes("cleanYouTubeUrl") && campaignFunction.includes("halo_youtube_sources"), "offers a one-link YouTube launch that persists the source signal"],

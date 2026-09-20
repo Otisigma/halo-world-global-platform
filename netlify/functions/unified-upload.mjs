@@ -35,6 +35,7 @@ const UPLOAD_SURFACES = new Set([
   "dreamweaver_lab",
   "music_upload",
 ]);
+const DREAMWEAVER_SATELLITE_REFRESH_MS = 45_000;
 
 function json(body, status = 200) {
   return Response.json(body, { status, headers: { "Cache-Control": "no-store" } });
@@ -47,6 +48,23 @@ function cleanId(value) {
 
 function stageIndex(stage) {
   return PIPELINE_STAGES.indexOf(stage);
+}
+
+function dreamweaverSatellite(songId) {
+  const id = cleanId(songId);
+  if (!id) return null;
+  const route = `/dreamweaver/satellite/${id}/`;
+  return {
+    route,
+    launchUrl: route,
+    fallbackUrl: `/dreamweaver/?satellite=dreamweaver&song=${encodeURIComponent(id)}`,
+    agentLoop: {
+      id: `dreamweaver-satellite-${id}`,
+      updatePath: "/api/release-catalog",
+      intervalMs: DREAMWEAVER_SATELLITE_REFRESH_MS,
+      channels: ["metadata", "artwork", "playback_state", "refinements"],
+    },
+  };
 }
 
 function serializePipeline(row) {
@@ -63,6 +81,7 @@ function serializePipeline(row) {
     rightsStatus: row.rights_status || "needs_review",
     genre: row.genre || "",
     updatedAt: new Date(row.updated_at).toISOString(),
+    dreamweaverSatellite: dreamweaverSatellite(row.id),
     departments: buildDepartmentViews(row),
   };
 }

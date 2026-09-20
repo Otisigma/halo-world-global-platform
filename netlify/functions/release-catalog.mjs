@@ -33,7 +33,6 @@ function serializeRelease(row) {
     releaseDate: row.release_date ? String(row.release_date).slice(0, 10) : "",
     duration: row.duration || "",
     albumTitle: catalogAlbumTitle,
-    collectionTitle: catalogAlbumTitle,
     genres,
     artwork: resolvedArtwork,
     importedArtwork: artwork.importedArtwork,

@@ -251,8 +251,11 @@
   function releaseDateLabel(value) {
     const text = cleanText(value, 120);
     if (!text) return "";
+    const direct = text.match(/^(\d{4}-\d{2}-\d{2})/);
+    if (direct) return direct[1];
     const parsed = new Date(text);
-    return Number.isNaN(parsed.getTime()) ? "" : parsed.toISOString().slice(0, 10);
+    if (Number.isNaN(parsed.getTime())) return "";
+    return `${parsed.getFullYear()}-${String(parsed.getMonth() + 1).padStart(2, "0")}-${String(parsed.getDate()).padStart(2, "0")}`;
   }
 
   function safeMediaUrl(value) {

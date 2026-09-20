@@ -129,6 +129,6 @@ export function resolveDreamweaverPageFlow({
     hyperfollowUrl,
     dreamweaverPage,
     destinationUrl,
-    routeMode: hyperfollowUrl ? "hyperfollow" : generatedDreamweaverMode ? "dreamweaver_page" : cleanedOfficialUrl ? "existing_destination" : dreamweaverPage ? "dreamweaver_page" : "",
+    routeMode: hyperfollowUrl ? "hyperfollow" : generatedDreamweaverMode ? "dreamweaver_page" : cleanedOfficialUrl ? "existing_destination" : "",
   };
 }

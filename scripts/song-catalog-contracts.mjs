@@ -3,7 +3,7 @@ import { resolve } from "node:path";
 
 const root = resolve(import.meta.dirname, "..");
 const read = path => readFile(resolve(root, path), "utf8");
-const [page, client, styles, api, audioApi, artworkApi, producerApi, producerLib, schema, migration, audioMigration, artworkMigration, versionArtworkMigration, producerMigration, config, home, packageText, uploadHelper] = await Promise.all([
+const [page, client, styles, api, audioApi, artworkApi, producerApi, producerLib, dreamweaverSatelliteLib, schema, migration, audioMigration, artworkMigration, versionArtworkMigration, producerMigration, config, home, packageText, uploadHelper] = await Promise.all([
   read("song-catalog/index.html"),
   read("song-catalog/song-catalog.js"),
   read("song-catalog/song-catalog.css"),
@@ -12,6 +12,7 @@ const [page, client, styles, api, audioApi, artworkApi, producerApi, producerLib
   read("netlify/functions/song-catalog-artwork.ts"),
   read("netlify/functions/song-catalog-producer.mjs"),
   read("netlify/lib/catalog-producer.mjs"),
+  read("netlify/lib/dreamweaver-satellite.mjs"),
   read("db/schema.ts"),
   read("netlify/database/migrations/20260821035511_complete_pestilence/migration.sql"),
   read("netlify/database/migrations/20260821040411_add_song_version_audio_uploads/migration.sql"),
@@ -35,7 +36,7 @@ const checks = [
   [api.includes("reconcilePublishedSong") && api.includes('payload.action === "set_pipeline_stage"') && api.includes('stage === "published"'), "reconciles published songs into public release and radio fan-out from catalog stage transitions"],
   [api.includes("verifyRequestOrigin") && api.includes("ensureMembership") && api.includes('path: "/api/song-catalog"'), "protects catalog records with membership and origin checks"],
   [api.includes("halo_release_campaigns") && api.includes("halo_artist_pages") && api.includes("import_existing"), "loads reusable existing songs from release data with ownership checks"],
-  [api.includes("dreamweaverSatellite: dreamweaverSatellite(song.id)") && api.includes("experienceUrl") && api.includes("canonicalDreamweaverUrl"), "song-catalog API returns Dreamweaver satellite navigation metadata alongside playback URLs"],
+  [api.includes("dreamweaverSatellite: dreamweaverSatellite(song.id)") && api.includes("buildDreamweaverSatellite") && dreamweaverSatelliteLib.includes("experienceUrl") && dreamweaverSatelliteLib.includes("canonicalDreamweaverUrl"), "song-catalog API returns Dreamweaver satellite navigation metadata alongside playback URLs"],
   [page.includes('id="audioFile"') && client.includes("AUDIO_CHUNK_BYTES") && client.includes("finalize_upload"), "uploads full song-version audio in browser-safe chunks"],
   [api.includes("cleanAudioUrl") && api.includes("/api/song-catalog/audio?versionId="), "keeps uploaded catalog audio URLs valid when saving version metadata"],
   [page.includes('id="audioUrl" type="text"'), "avoids URL-field validation conflicts for internal uploaded-audio URLs"],

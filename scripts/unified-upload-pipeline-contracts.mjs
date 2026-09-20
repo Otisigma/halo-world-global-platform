@@ -7,6 +7,7 @@ const read = path => readFile(resolve(root, path), "utf8");
 const [
   migration,
   schema,
+  dreamweaverSatelliteLib,
   unifiedUploadFn,
   songCatalogFn,
   songCatalogJs,
@@ -18,6 +19,7 @@ const [
 ] = await Promise.all([
   read("netlify/database/migrations/20260829000000_unified_upload_pipeline.sql"),
   read("db/schema.ts"),
+  read("netlify/lib/dreamweaver-satellite.mjs"),
   read("netlify/functions/unified-upload.mjs"),
   read("netlify/functions/song-catalog.ts"),
   read("song-catalog/song-catalog.js"),
@@ -37,13 +39,13 @@ const checks = [
   // Schema
   [schema.includes("pipelineStatus") && schema.includes('"pipeline_status"'), "schema includes pipelineStatus column in songs table"],
   [schema.includes("sourceUploadSurface") && schema.includes('"source_upload_surface"'), "schema includes sourceUploadSurface column in songs table"],
+  [dreamweaverSatelliteLib.includes("experienceUrl") && dreamweaverSatelliteLib.includes("canonicalDreamweaverUrl") && dreamweaverSatelliteLib.includes("fallbackUrl"), "shared Dreamweaver satellite helper defines explicit navigation metadata for page entry"],
   // Unified upload function
   [unifiedUploadFn.includes('path: "/api/unified-upload"'), "unified-upload function registers at /api/unified-upload"],
   [unifiedUploadFn.includes("create_project") && unifiedUploadFn.includes("advance_pipeline"), "unified-upload supports create_project and advance_pipeline actions"],
   [unifiedUploadFn.includes("PIPELINE_STAGES") && unifiedUploadFn.includes("uploaded") && unifiedUploadFn.includes("published"), "unified-upload defines the full ordered pipeline stages array"],
   [unifiedUploadFn.includes("buildDepartmentViews") && unifiedUploadFn.includes("artistRoom") && unifiedUploadFn.includes("radioRoom") && unifiedUploadFn.includes("dreamWeaver") && unifiedUploadFn.includes("salesPublishing"), "unified-upload returns department views for all four departments"],
-  [unifiedUploadFn.includes("dreamweaverSatellite") && unifiedUploadFn.includes("/dreamweaver/satellite/") && unifiedUploadFn.includes("dreamweaver-satellite-"), "unified-upload returns deterministic per-song Dreamweaver satellite routing and loop identity"],
-  [unifiedUploadFn.includes("experienceUrl") && unifiedUploadFn.includes("canonicalDreamweaverUrl") && unifiedUploadFn.includes("fallbackUrl"), "unified-upload exposes explicit Dreamweaver navigation metadata instead of relying on audio asset URLs for page entry"],
+  [unifiedUploadFn.includes("dreamweaverSatellite") && unifiedUploadFn.includes("buildDreamweaverSatellite") && unifiedUploadFn.includes("dreamweaver-satellite-"), "unified-upload returns deterministic per-song Dreamweaver satellite routing and loop identity"],
   [unifiedUploadFn.includes("verifyRequestOrigin") && unifiedUploadFn.includes("ensureMembership"), "unified-upload protects mutations with origin and membership checks"],
   [unifiedUploadFn.includes("Cannot move backward") && unifiedUploadFn.includes("stageIndex"), "unified-upload rejects backward pipeline regressions"],
   [unifiedUploadFn.includes("isExisting") && unifiedUploadFn.includes("Existing master project returned"), "unified-upload returns existing project instead of creating a duplicate"],

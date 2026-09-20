@@ -4,6 +4,7 @@ import { getUser, verifyRequestOrigin } from "@netlify/identity";
 import { cleanText, ensureMembership } from "../lib/halo-x.mjs";
 import { appendLedgerEntry } from "../lib/halo-ledger.mjs";
 import { reconcilePublishedSong } from "../lib/song-publication.mjs";
+import { buildDreamweaverSatellite } from "../lib/dreamweaver-satellite.mjs";
 
 // Pipeline stages in order.  Departments can only advance; they cannot regress.
 const PIPELINE_STAGES = [
@@ -48,22 +49,14 @@ function cleanId(value) {
 
 function dreamweaverSatellite(songId) {
   const id = cleanId(songId);
-  if (!id) return null;
-  const experienceUrl = `/dreamweaver/satellite/${id}/`;
-  return {
-    songId: id,
-    route: experienceUrl,
-    launchUrl: experienceUrl,
-    experienceUrl,
-    canonicalDreamweaverUrl: `/dreamweaver/?song=${encodeURIComponent(id)}`,
-    fallbackUrl: `/dreamweaver/?satellite=dreamweaver&song=${encodeURIComponent(id)}`,
-    agentLoop: {
+  return buildDreamweaverSatellite(id, {
+    agentLoop: id ? {
       id: `dreamweaver-satellite-${id}`,
       updatePath: "/api/release-catalog",
       intervalMs: DREAMWEAVER_SATELLITE_REFRESH_MS,
       channels: ["metadata", "artwork", "playback_state", "refinements"],
-    },
-  };
+    } : null,
+  });
 }
 
 function stageIndex(stage) {

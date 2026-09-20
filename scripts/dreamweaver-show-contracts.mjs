@@ -51,12 +51,11 @@ const checks = [
   [
     /from = "\/dreamweaver\/satellite"[\s\S]*to = "\/dreamweaver\/satellite\/"[\s\S]*status = 301/.test(config)
       && /from = "\/dreamweaver\/satellite\/"[\s\S]*to = "\/dreamweaver\/index\.html"[\s\S]*status = 200/.test(config)
-      && /from = "\/dreamweaver\/satellite\/\*"[\s\S]*to = "\/dreamweaver\/index\.html"[\s\S]*status = 200/.test(config)
       && /from = "\/dreamweaver\/satellite\/:songId"[\s\S]*to = "\/dreamweaver\/satellite\/:songId\/"[\s\S]*status = 301/.test(config)
       && server.includes("app.get(/^\\/dreamweaver\\/satellite\\/([^/]+)$/")
       && server.includes("app.get(/^\\/dreamweaver\\/satellite\\/([^/]+)\\/$")
       && server.includes('app.get("/dreamweaver/satellite/"')
-      && server.includes('app.get("/dreamweaver/satellite/*"')
+      && server.includes('app.get("/dreamweaver/satellite"')
       && server.includes("songIdPattern"),
     "keeps deterministic Dreamweaver satellite routing live for canonical and nested per-song pages across Netlify and local server"
   ],

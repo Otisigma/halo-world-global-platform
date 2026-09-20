@@ -1375,24 +1375,27 @@
     elements.shell.setAttribute("aria-busy", "true");
     try {
       const requestedMix = new URLSearchParams(location.search).get("mix") || "";
-      const mixesRequestController = new AbortController();
-      const mixesRequestTimeout = window.setTimeout(() => mixesRequestController.abort(), MIX_LIBRARY_TIMEOUT_MS);
+      const supportsAbortController = typeof AbortController === "function";
+      const mixesRequestController = supportsAbortController ? new AbortController() : null;
+      const mixesRequestTimeout = supportsAbortController
+        ? window.setTimeout(() => mixesRequestController.abort(), MIX_LIBRARY_TIMEOUT_MS)
+        : 0;
       let response;
       let data;
       try {
         response = await fetch("/api/mixes?limit=100", {
           headers: { Accept: "application/json" },
           credentials: "same-origin",
-          signal: mixesRequestController.signal
+          ...(mixesRequestController ? { signal: mixesRequestController.signal } : {})
         });
         data = await response.json().catch(() => ({}));
       } catch (error) {
-        if (error?.name === "AbortError") {
+        if (supportsAbortController && error?.name === "AbortError") {
           throw new Error("Dreamweaver timed out while loading the mix library. Please try again.");
         }
         throw error;
       } finally {
-        window.clearTimeout(mixesRequestTimeout);
+        if (mixesRequestTimeout) window.clearTimeout(mixesRequestTimeout);
       }
       if (!response.ok) throw new Error(data.message || "The Dreamweaver mix library could not be read.");
       const playable = (data.mixes || []).filter(mix => mix.audioUrl && mix.source !== "youtube");

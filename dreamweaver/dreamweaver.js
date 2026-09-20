@@ -1368,6 +1368,7 @@
     document.body.classList.remove("show-ready");
     elements.shell.hidden = false;
     elements.loading.hidden = false;
+    elements.loading.setAttribute("aria-hidden", "false");
     elements.stage.hidden = true;
     elements.empty.hidden = true;
     elements.shell.setAttribute("aria-busy", "true");
@@ -1397,6 +1398,7 @@
       updatePlatformLinks();
       await loadVideos();
       setLoadingProgress(100, "Dreamweaver is ready", "Press play and move through the full cinematic edition.");
+      elements.loading.setAttribute("aria-hidden", "true");
       elements.stage.hidden = false;
       window.requestAnimationFrame(() => document.body.classList.add("show-ready"));
       elements.loading.hidden = true;

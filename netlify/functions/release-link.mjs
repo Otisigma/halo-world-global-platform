@@ -54,13 +54,14 @@ async function remapLegacyAudioDestination(db, destination, requestUrl) {
     if (parsed.pathname !== "/api/song-catalog/audio") return "";
     const versionId = cleanId(parsed.searchParams.get("versionId"));
     if (!versionId) return "";
-    const rows = await db.sql`
+    const result = await db.sql`
       SELECT song_id
       FROM halo_song_versions
       WHERE id = ${versionId}
         AND status = 'active'
       LIMIT 1
     `;
+    const rows = Array.isArray(result) ? result : Array.isArray(result?.rows) ? result.rows : [];
     const songId = cleanId(rows[0]?.song_id);
     return songId ? `/dreamweaver/satellite/${songId}/` : "";
   } catch {

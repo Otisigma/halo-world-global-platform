@@ -1374,8 +1374,25 @@
     elements.shell.setAttribute("aria-busy", "true");
     try {
       const requestedMix = new URLSearchParams(location.search).get("mix") || "";
-      const response = await fetch("/api/mixes?limit=100", { headers: { Accept: "application/json" }, credentials: "same-origin" });
-      const data = await response.json().catch(() => ({}));
+      const mixesRequestController = new AbortController();
+      const mixesRequestTimeout = window.setTimeout(() => mixesRequestController.abort(), 12000);
+      let response;
+      let data;
+      try {
+        response = await fetch("/api/mixes?limit=100", {
+          headers: { Accept: "application/json" },
+          credentials: "same-origin",
+          signal: mixesRequestController.signal
+        });
+        data = await response.json().catch(() => ({}));
+      } catch (error) {
+        if (error?.name === "AbortError") {
+          throw new Error("Dreamweaver timed out while loading this mix. Please try again.");
+        }
+        throw error;
+      } finally {
+        window.clearTimeout(mixesRequestTimeout);
+      }
       if (!response.ok) throw new Error(data.message || "The Mix Desk library could not be read.");
       const playable = (data.mixes || []).filter(mix => mix.audioUrl && mix.source !== "youtube");
       const mix = playable.find(item => item.id === requestedMix) || playable[0];

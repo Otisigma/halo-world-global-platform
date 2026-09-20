@@ -56,6 +56,7 @@ for (const { route, file } of directoryRoutes) {
   const nonSlashRedirect = redirectRuleBySource.get(nonSlashAlias);
   const canonicalRenderRule = redirectRuleBySource.get(route);
   const renderFileRedirect = redirectRuleBySource.get(renderFilePath);
+  const allowsNonSlashDirectRender = route === "/dreamweaver/";
   assert.equal(canonicalizeRoutePath(nonSlashAlias), nonSlashAlias, `${nonSlashAlias} must remain non-canonicalized once aliases are removed.`);
 
   const familyCanonicalTargets = new Set(
@@ -70,7 +71,13 @@ for (const { route, file } of directoryRoutes) {
     `Route family ${route} must have exactly one canonical target path across route canonicalization files.`
   );
 
-  assert.ok(!nonSlashRedirect, `${nonSlashAlias} alias redirect must be removed for canonical-only routing.`);
+  if (allowsNonSlashDirectRender) {
+    assert.ok(nonSlashRedirect, `${nonSlashAlias} must render directly to ${renderFilePath} to avoid Dreamweaver route dead-ends.`);
+    assert.equal(nonSlashRedirect.status, 200, `${nonSlashAlias} must use a 200 rewrite to ${renderFilePath}.`);
+    assert.equal(nonSlashRedirect.to, renderFilePath, `${nonSlashAlias} must rewrite to ${renderFilePath}.`);
+  } else {
+    assert.ok(!nonSlashRedirect, `${nonSlashAlias} alias redirect must be removed for canonical-only routing.`);
+  }
   assert.ok(canonicalRenderRule, `netlify.toml must render ${route} from ${renderFilePath}.`);
   assert.equal(canonicalRenderRule.status, 200, `${route} must use a 200 rewrite to ${renderFilePath}.`);
   assert.equal(canonicalRenderRule.to, renderFilePath, `${route} must rewrite to ${renderFilePath}.`);

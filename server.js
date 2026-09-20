@@ -181,6 +181,14 @@ app.get("/album-concierge/", (_req, res) =>
   sendFileIfPresent(res, path.join("album-concierge", "index.html"))
 );
 
+app.get("/dreamweaver", (_req, res) =>
+  sendFileIfPresent(res, path.join("dreamweaver", "index.html"))
+);
+
+app.get("/dreamweaver/", (_req, res) =>
+  sendFileIfPresent(res, path.join("dreamweaver", "index.html"))
+);
+
 app.get("/sw.js", (_req, res) => {
   res.set("Cache-Control", "no-cache, no-store, must-revalidate");
   return sendFileIfPresent(res, "sw.js");

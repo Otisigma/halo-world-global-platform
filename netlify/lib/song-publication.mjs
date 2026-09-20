@@ -138,7 +138,7 @@ async function ensureReleaseCampaign(db, song, versions) {
   const saleMaster = versions.find(version => version.version_type === "sale_master" && version.audio_url);
   const firstPlayableVersion = versions.find(version => version.audio_url);
   const streamUrl = cleanText(saleMaster?.audio_url || firstPlayableVersion?.audio_url, 1200);
-  const officialUrl = dreamweaverSatellitePath(song.id) || publicUrl;
+  const officialUrl = dreamweaverSatellitePath(song.id) || streamUrl || publicUrl;
   const artworkUrl = cleanText(
     saleMaster?.artwork_url
       || firstPlayableVersion?.artwork_url

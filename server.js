@@ -191,8 +191,9 @@ app.get("/dreamweaver/", (_req, res) =>
 );
 
 app.get("/dreamweaver/satellite", (req, res) => {
-  const searchSuffix = new URL(req.originalUrl, "http://localhost").search;
-  return res.redirect(301, `/dreamweaver/satellite/${searchSuffix}`);
+  const requestUrl = new URL(req.originalUrl, "http://localhost");
+  const canonicalPath = requestUrl.pathname.endsWith("/") ? requestUrl.pathname : `${requestUrl.pathname}/`;
+  return res.redirect(301, `${canonicalPath}${requestUrl.search}`);
 });
 
 app.get("/dreamweaver/satellite/", (_req, res) =>

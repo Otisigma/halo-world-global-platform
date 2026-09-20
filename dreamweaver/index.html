@@ -122,7 +122,12 @@
   <main class="show-shell" id="showShell" aria-live="polite" aria-busy="true">
     <section class="loading-show" id="loadingShow">
       <p>Dreamweaver / preparing this edition</p>
-      <h1>The artist’s world<br>is taking shape.</h1>
+      <h1>Enter the cinematic<br>HALO signal.</h1>
+      <p class="loading-subtitle" id="loadingSubtitle">Dreamweaver is staging this edition with artwork, metadata, and movement in sync.</p>
+      <div class="loading-meter" aria-live="polite">
+        <span id="loadingPhase">Calibrating Dreamweaver stage</span>
+        <div class="loading-meter__track" role="presentation"><i id="loadingMeterBar"></i></div>
+      </div>
       <div class="loading-score" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
     </section>
 
@@ -155,6 +160,7 @@
       </div>
 
       <aside class="release-panel" id="releasePanel" aria-live="polite">
+        <p class="release-panel__signature">Dreamweaver cinema edition</p>
         <figure class="release-panel__artwork">
           <img id="releaseArtwork" alt="" hidden>
           <span id="releaseArtworkFallback">DW</span>

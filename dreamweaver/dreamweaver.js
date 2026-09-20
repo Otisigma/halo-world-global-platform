@@ -84,6 +84,9 @@
     sourceLink: document.getElementById("dreamweaverSourceLink"),
     shell: document.getElementById("showShell"),
     loading: document.getElementById("loadingShow"),
+    loadingPhase: document.getElementById("loadingPhase"),
+    loadingMeterBar: document.getElementById("loadingMeterBar"),
+    loadingSubtitle: document.getElementById("loadingSubtitle"),
     stage: document.getElementById("showStage"),
     empty: document.getElementById("emptyShow"),
     emptyMessage: document.getElementById("emptyMessage"),
@@ -279,10 +282,11 @@
     return "Paused";
   }
 
-  function releaseStateDetail(status) {
+  function releaseStateDetail(status, title, artist) {
+    const releaseLine = [title, artist].filter(Boolean).join(" — ");
     if (status === "loading") return "Dreamweaver is preparing the audio and release context.";
-    if (status === "playing") return "Live playback is active across the Dreamweaver stage.";
-    if (status === "ready") return "Audio is ready. Press play to move through the five movements.";
+    if (status === "playing") return releaseLine ? `${releaseLine} is live across the Dreamweaver stage.` : "Live playback is active across the Dreamweaver stage.";
+    if (status === "ready") return releaseLine ? `${releaseLine} is ready. Press play to move through the five movements.` : "Audio is ready. Press play to move through the five movements.";
     if (status === "unavailable") return "Audio is currently unavailable, but release context is still on stage.";
     return "Playback is paused. Resume when you are ready.";
   }
@@ -321,8 +325,9 @@
 
     elements.releasePanelKicker.textContent = `Now playing / ${releaseStateLabel(state.releasePlaybackState)}`;
     elements.releaseTitle.textContent = title || "Dreamweaver show";
-    elements.releaseSubtitle.textContent = releaseStateDetail(state.releasePlaybackState);
+    elements.releaseSubtitle.textContent = releaseStateDetail(state.releasePlaybackState, title, artist);
     elements.releaseFacts.innerHTML = rows.map(([label, value]) => `<div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd></div>`).join("");
+    elements.releasePanel.dataset.state = state.releasePlaybackState;
 
     if (artwork) {
       elements.releaseArtwork.src = artwork;
@@ -339,6 +344,13 @@
   function setReleasePlaybackState(nextState) {
     state.releasePlaybackState = nextState;
     renderReleasePanel();
+  }
+
+  function setLoadingProgress(percent = 0, phase = "", subtitle = "") {
+    const safePercent = Math.max(0, Math.min(100, Number(percent) || 0));
+    if (elements.loadingMeterBar) elements.loadingMeterBar.style.width = `${safePercent}%`;
+    if (elements.loadingPhase && phase) elements.loadingPhase.textContent = phase;
+    if (elements.loadingSubtitle && subtitle) elements.loadingSubtitle.textContent = subtitle;
   }
 
   async function loadReleaseContext() {
@@ -1347,6 +1359,8 @@
 
   async function loadShow() {
     setReleasePlaybackState("loading");
+    setLoadingProgress(8, "Calibrating Dreamweaver stage", "Dreamweaver is staging this edition with artwork, metadata, and movement in sync.");
+    document.body.classList.remove("show-ready");
     elements.shell.hidden = false;
     elements.loading.hidden = false;
     elements.stage.hidden = true;
@@ -1360,6 +1374,7 @@
       const playable = (data.mixes || []).filter(mix => mix.audioUrl && mix.source !== "youtube");
       const mix = playable.find(item => item.id === requestedMix) || playable[0];
       if (!mix) return showEmpty("No playable audio mix is available yet. Post the existing set to the HALO room or sign in to open a private mix.");
+      setLoadingProgress(34, "Selecting tonight’s signal", "A published Dreamweaver mix has been selected and the room is shifting to match its pace.");
       state.mix = mix;
       state.duration = Number(mix.durationSeconds || 0);
       elements.audio.src = mix.audioUrl;
@@ -1370,13 +1385,17 @@
       const currentParams = new URLSearchParams(location.search);
       currentParams.set("mix", mix.id);
       history.replaceState(null, "", `/dreamweaver/?${currentParams.toString()}`);
-      elements.loading.hidden = true;
-      elements.stage.hidden = false;
-      elements.shell.setAttribute("aria-busy", "false");
+      setLoadingProgress(58, "Scoring the release frame", "Artwork and release details are being synced so the first screen lands with context.");
       await loadReleaseContext();
+      setLoadingProgress(82, "Finalizing chapter movement", "The five-movement chapter rail and controls are aligning to the mix timeline.");
       setReleasePlaybackState("ready");
       updatePlatformLinks();
       await loadVideos();
+      setLoadingProgress(100, "Dreamweaver is ready", "Press play and move through the full cinematic edition.");
+      elements.loading.hidden = true;
+      elements.stage.hidden = false;
+      elements.shell.setAttribute("aria-busy", "false");
+      document.body.classList.add("show-ready");
       if (campaignIdFromUrl() && !state.trackedProgress.has("landing")) {
         state.trackedProgress.add("landing");
         trackCampaignEvent("landing", currentParams.get("source") || "halo");

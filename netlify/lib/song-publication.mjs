@@ -480,7 +480,7 @@ export async function reconcilePublishedSong(db, {
       canonicalUrl: release.publicUrl,
       releaseStatus: "published",
       radioStatus: radio.status,
-      dreamweaverStatus: release.dreamweaverPage?.experienceUrl ? "ready" : "pending",
+      dreamweaverStatus: release.routeMode === "dreamweaver_page" ? "ready" : release.routeMode === "hyperfollow" ? "managed_externally" : "pending",
       details: {
         ...details,
         routeMode: release.routeMode,

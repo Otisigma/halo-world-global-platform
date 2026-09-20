@@ -467,7 +467,13 @@ function renderResults() {
 function isDreamweaverExperienceUrl(value) {
   if (typeof value !== "string") return false;
   const text = value.trim();
-  return /^\/dreamweaver(?:\/|\?)/.test(text) && !/^\/api\/song-catalog\/audio\?versionId=/i.test(text);
+  if (!text || /^\/api\/song-catalog\/audio\?versionId=/i.test(text)) return false;
+  try {
+    const url = new URL(text, window.location.origin);
+    return url.origin === window.location.origin && /^\/dreamweaver(?:\/|$)/.test(url.pathname);
+  } catch {
+    return false;
+  }
 }
 
 function resolveDreamweaverExperienceUrl(satellite) {

@@ -27,8 +27,26 @@ function publicationPath(releaseId) {
   return `/music/?song=${encodeURIComponent(releaseId)}`;
 }
 
+function dreamweaverSatellitePath(songId) {
+  const id = cleanText(songId, 60).toLowerCase();
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(id)
+    ? `/dreamweaver/satellite/${id}/`
+    : "";
+}
+
 function cleanText(value, maxLength) {
   return typeof value === "string" ? value.trim().replace(/\s+/g, " ").slice(0, maxLength) : "";
+}
+
+function isLegacySongCatalogAudioUrl(value) {
+  const url = cleanText(value, 1200);
+  if (!url) return false;
+  try {
+    const parsed = new URL(url, "https://halo.world");
+    return /^\/api\/song-catalog\/audio$/i.test(parsed.pathname) && Boolean(cleanId(parsed.searchParams.get("versionId")));
+  } catch {
+    return false;
+  }
 }
 
 function radioRoomForGenre(genre) {
@@ -131,7 +149,10 @@ async function ensureReleaseCampaign(db, song, versions) {
   const saleMaster = versions.find(version => version.version_type === "sale_master" && version.audio_url);
   const firstPlayableVersion = versions.find(version => version.audio_url);
   const streamUrl = cleanText(saleMaster?.audio_url || firstPlayableVersion?.audio_url, 1200);
-  const officialUrl = streamUrl || publicUrl;
+  const satelliteUrl = dreamweaverSatellitePath(song.id);
+  const officialUrl = satelliteUrl && isLegacySongCatalogAudioUrl(streamUrl)
+    ? satelliteUrl
+    : streamUrl || publicUrl;
   const artworkUrl = cleanText(
     saleMaster?.artwork_url
       || firstPlayableVersion?.artwork_url
@@ -196,6 +217,8 @@ async function ensureReleaseCampaign(db, song, versions) {
         WHEN halo_release_campaigns.official_url = ''
           OR halo_release_campaigns.official_url = ${publicUrl}
           OR halo_release_campaigns.official_url = ${streamUrl}
+          OR halo_release_campaigns.official_url ~* '^/api/song-catalog/audio\\?(?:[^#]*&)?versionId=[0-9a-f-]+(?:&[^#]*)?$'
+          OR halo_release_campaigns.official_url ~* '^https?://[^[:space:]]+/api/song-catalog/audio\\?(?:[^#]*&)?versionId=[0-9a-f-]+(?:&[^#]*)?$'
         THEN EXCLUDED.official_url
         ELSE halo_release_campaigns.official_url
       END,

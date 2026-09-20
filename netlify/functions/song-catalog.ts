@@ -6,6 +6,7 @@ import { db } from "../../db/index.js";
 import { dreamweaverSongReviews, songs, songVersions } from "../../db/schema.js";
 import { cleanText, ensureMembership } from "../lib/halo-x.mjs";
 import { reconcilePublishedSong } from "../lib/song-publication.mjs";
+import { dreamweaverSatellite } from "../lib/dreamweaver-satellite.mjs";
 
 const MAX_BODY_BYTES = 80_000;
 const RIGHTS_STATUSES = new Set(["needs_review", "cleared", "disputed"]);
@@ -99,6 +100,7 @@ function serializeSong(song: typeof songs.$inferSelect, versions: Array<typeof s
     pipelineStatus: song.pipelineStatus || "uploaded",
     sourceUploadSurface: song.sourceUploadSurface || "",
     pipelineUpdatedAt: song.pipelineUpdatedAt?.toISOString() || "",
+    dreamweaverSatellite: dreamweaverSatellite(song.id),
     versions: versions.map(version => ({
       id: version.id,
       versionType: version.versionType,

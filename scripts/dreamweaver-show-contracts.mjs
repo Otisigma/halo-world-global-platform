@@ -69,11 +69,13 @@ const checks = [
       && script.includes('title: "Blessed"')
       && script.includes('artist: "Owen Anthony"')
       && script.includes('url: "https://distrokid.com/hyperfollow/owenanthony/blessed"')
-      && script.includes("elements.sourceLink.href = featuredTrack.url"),
-    "keeps Blessed by Owen Anthony wired into the Dreamweaver release doorway with the canonical HyperFollow source"
+      && script.includes("preferredReleaseDoorway")
+      && script.includes("isHyperfollowUrl")
+      && script.includes('doorway.mode === "hyperfollow"'),
+    "keeps HyperFollow releases on the canonical HyperFollow doorway while allowing generated Dreamweaver pages for songs without HyperFollow"
   ],
   [script.includes("publishedSongId: resolveSongContextId()") && script.includes('new URL("/music/", location.origin)') && script.includes("Published song link copied."), "shares a published song from Dreamweaver using the canonical public music URL when song context is present"],
-  [script.includes("resolveSongContextId") && script.includes("songIdFromSatellitePath") && script.includes("startSatelliteAgentLoop") && script.includes("dreamweaver-satellite-"), "derives song-specific satellite context from deterministic routes and runs an isolated per-song update loop"],
+  [script.includes("resolveSongContextId") && script.includes("songIdFromSatellitePath") && script.includes("startSatelliteAgentLoop") && script.includes("dreamweaver-page-manager-"), "derives song-specific satellite context from deterministic routes and runs an isolated per-song update loop under a dedicated Dreamweaver page manager agent"],
   [script.includes('fetch("/api/dreamweaver-fan-signups"') && script.includes("readStoredUnlock") && script.includes("updatePlatformLinks"), "submits email unlocks and rehydrates the lightweight fan reward state"],
   [script.includes('action: "start"') && script.includes("pollCampaignJob") && script.includes("renderPlatformPackages"), "starts, monitors, and exports background campaign packages"],
   [page.includes('id="campaignYoutubeUrl"') && page.includes("Load it. Shape it. Send it.") && campaignFunction.includes("cleanYouTubeUrl") && campaignFunction.includes("halo_youtube_sources"), "offers a one-link YouTube launch that persists the source signal"],

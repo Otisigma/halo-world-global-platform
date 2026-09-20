@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { appendLedgerEntry } from "./halo-ledger.mjs";
+import { resolveDreamweaverPageFlow } from "./dreamweaver-page-manager.mjs";
 
 const VERSION_LABELS = {
   sale_master: "Sale master",
@@ -25,13 +26,6 @@ function slugify(value) {
 
 function publicationPath(releaseId) {
   return `/music/?song=${encodeURIComponent(releaseId)}`;
-}
-
-function dreamweaverSatellitePath(songId) {
-  const id = cleanText(songId, 60).toLowerCase();
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(id)
-    ? `/dreamweaver/satellite/${id}/`
-    : "";
 }
 
 function cleanText(value, maxLength) {
@@ -149,10 +143,16 @@ async function ensureReleaseCampaign(db, song, versions) {
   const saleMaster = versions.find(version => version.version_type === "sale_master" && version.audio_url);
   const firstPlayableVersion = versions.find(version => version.audio_url);
   const streamUrl = cleanText(saleMaster?.audio_url || firstPlayableVersion?.audio_url, 1200);
-  const satelliteUrl = dreamweaverSatellitePath(song.id);
-  const officialUrl = satelliteUrl && isLegacySongCatalogAudioUrl(streamUrl)
-    ? satelliteUrl
-    : streamUrl || publicUrl;
+  const dreamweaverFlow = resolveDreamweaverPageFlow({
+    songId: song.id,
+    releaseId,
+    artistName: song.artist_name,
+    title: song.title,
+  });
+  const officialUrl = dreamweaverFlow.destinationUrl
+    || (isLegacySongCatalogAudioUrl(streamUrl) ? dreamweaverFlow.dreamweaverPage?.experienceUrl || "" : "")
+    || streamUrl
+    || publicUrl;
   const artworkUrl = cleanText(
     saleMaster?.artwork_url
       || firstPlayableVersion?.artwork_url
@@ -252,6 +252,8 @@ async function ensureReleaseCampaign(db, song, versions) {
     officialUrl: releaseRows[0]?.official_url || officialUrl,
     streamUrl: releaseRows[0]?.stream_url || streamUrl,
     publicUrl,
+    dreamweaverPage: dreamweaverFlow.dreamweaverPage,
+    routeMode: dreamweaverFlow.routeMode,
   };
 }
 
@@ -480,8 +482,13 @@ export async function reconcilePublishedSong(db, {
       canonicalUrl: release.publicUrl,
       releaseStatus: "published",
       radioStatus: radio.status,
-      dreamweaverStatus: release.publicUrl ? "ready" : "pending",
-      details,
+      dreamweaverStatus: release.dreamweaverPage?.experienceUrl ? "ready" : "pending",
+      details: {
+        ...details,
+        routeMode: release.routeMode,
+        dreamweaverPageUrl: release.dreamweaverPage?.experienceUrl || "",
+        officialUrl: release.officialUrl || "",
+      },
     });
     if (recordLedger) {
       await appendLedgerEntry(db, {

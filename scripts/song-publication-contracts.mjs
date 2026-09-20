@@ -5,8 +5,9 @@ import { resolve } from "node:path";
 const root = resolve(import.meta.dirname, "..");
 const read = path => readFile(resolve(root, path), "utf8");
 
-const [helper, migration, reconcileFunction, scheduledReconcileFunction, unifiedUpload, uploadPipeline, dreamweaver, releaseLink] = await Promise.all([
+const [helper, manager, migration, reconcileFunction, scheduledReconcileFunction, unifiedUpload, uploadPipeline, dreamweaver, releaseLink, releaseCatalog] = await Promise.all([
   read("netlify/lib/song-publication.mjs"),
+  read("netlify/lib/dreamweaver-page-manager.mjs"),
   read("netlify/database/migrations/20260919130000_create_song_publication_sync.sql"),
   read("netlify/functions/song-publication-reconcile.mjs"),
   read("netlify/functions/song-publication-reconcile-scheduled.mjs"),
@@ -14,6 +15,7 @@ const [helper, migration, reconcileFunction, scheduledReconcileFunction, unified
   read("netlify/functions/upload-pipeline.mjs"),
   read("dreamweaver/dreamweaver.js"),
   read("netlify/functions/release-link.mjs"),
+  read("netlify/functions/release-catalog.mjs"),
 ]);
 
 assert.match(helper, /halo_release_campaigns/, "publication helper must upsert public release campaigns");
@@ -23,8 +25,11 @@ assert.match(helper, /halo_song_publication_sync/, "publication helper must pers
 assert.match(helper, /appendLedgerEntry/, "publication helper must write ledger entries for reconciliation results");
 assert.match(helper, /radio_master_missing_or_not_uploaded/, "publication helper must keep a deterministic radio fallback reason");
 assert.match(helper, /\/music\/\?song=/, "publication helper must derive canonical public song URLs");
-assert.match(helper, /\/dreamweaver\/satellite\/\$\{id\}\//, "publication helper must set Dreamweaver satellite pages as release entry routes");
+assert.match(helper, /resolveDreamweaverPageFlow/, "publication helper must resolve Dreamweaver page routing from a shared manager");
 assert.ok(helper.includes("official_url = CASE") && helper.includes("official_url ~* '^/api/song-catalog/audio\\\\?(?:[^#]*&)?versionId="), "publication helper must replace legacy song-catalog audio navigation URLs during release upserts");
+assert.match(manager, /isHyperFollowUrl/, "Dreamweaver page manager must detect HyperFollow URLs");
+assert.match(manager, /dreamweaver-page-manager-/, "Dreamweaver page manager must create a dedicated page manager agent id");
+assert.match(manager, /linked_song_pages/, "Dreamweaver page manager must scope the page agent loop to linked song pages");
 
 assert.match(migration, /CREATE TABLE IF NOT EXISTS halo_song_publication_sync/, "migration must create durable publication sync storage");
 assert.match(migration, /release_status/, "migration must track public release reconciliation state");
@@ -42,6 +47,8 @@ assert.match(unifiedUpload, /reconcilePublishedSong/, "unified upload pipeline m
 assert.match(uploadPipeline, /reconcilePublishedSong/, "upload pipeline must trigger publication fan-out on publish");
 assert.match(dreamweaver, /new URL\("\/music\/", location\.origin\)/, "Dreamweaver share flow must target the canonical published-song URL");
 assert.match(releaseLink, /remapLegacyAudioDestination/, "release-link handler must guard against legacy song-catalog audio entry URLs");
-assert.match(releaseLink, /\/dreamweaver\/satellite\/\$\{songId\}\//, "release-link handler must reroute legacy audio entries into Dreamweaver satellite pages");
+assert.match(releaseLink, /buildDreamweaverSongPage/, "release-link handler must reroute legacy audio entries into generated Dreamweaver song pages");
+assert.match(releaseCatalog, /entryExperience/, "release catalog must expose the resolved HyperFollow vs Dreamweaver page entry mode");
+assert.match(releaseCatalog, /dreamweaverPage/, "release catalog must expose generated Dreamweaver page metadata");
 
 console.log("Song publication contracts passed.");

@@ -299,6 +299,15 @@
     }
   }
 
+  function isHyperfollowUrl(value) {
+    try {
+      const url = new URL(value, location.origin);
+      return url.protocol === "https:" && /(^|\.)distrokid\.com$/i.test(url.hostname) && url.pathname.startsWith("/hyperfollow/");
+    } catch {
+      return false;
+    }
+  }
+
   async function fetchJsonWithTimeout(url, { timeoutMs = 8000, timeoutMessage = "Request timed out.", ...options } = {}) {
     const supportsAbortController = typeof AbortController === "function";
     const controller = supportsAbortController ? new AbortController() : null;
@@ -464,6 +473,25 @@
     return url.toString();
   }
 
+  function preferredReleaseDoorway() {
+    const officialUrl = safeMediaUrl(state.release?.officialUrl);
+    const entryUrl = safeMediaUrl(state.release?.entryUrl);
+    const generatedPageUrl = safeMediaUrl(state.release?.dreamweaverPage?.experienceUrl);
+    if (officialUrl && isHyperfollowUrl(officialUrl)) {
+      return { href: officialUrl, mode: "hyperfollow" };
+    }
+    if (entryUrl) {
+      return { href: entryUrl, mode: cleanText(state.release?.entryExperience || "dreamweaver_page", 40) };
+    }
+    if (generatedPageUrl) {
+      return { href: generatedPageUrl, mode: "dreamweaver_page" };
+    }
+    if (publishedSongShareUrl()) {
+      return { href: publishedSongShareUrl(), mode: "published_song" };
+    }
+    return { href: featuredTrack.url, mode: "featured_fallback" };
+  }
+
   function setUnlockStatus(message = "", tone = "") {
     if (!elements.unlockStatus) return;
     elements.unlockStatus.textContent = message;
@@ -477,17 +505,23 @@
     if (elements.appleLink) elements.appleLink.href = unlockPlatforms.apple_music.href(query);
     if (elements.youtubeLink) elements.youtubeLink.href = unlockPlatforms.youtube.href(query);
     if (elements.sourceLink) {
-      const publishedSongUrl = publishedSongShareUrl();
-      if (publishedSongUrl) {
-        elements.sourceLink.href = publishedSongUrl;
+      const doorway = preferredReleaseDoorway();
+      if (doorway.href) {
+        elements.sourceLink.href = doorway.href;
+      }
+      if (doorway.mode === "hyperfollow") {
+        elements.sourceLink.setAttribute("aria-label", "Open this release on DistroKid HyperFollow");
+      } else if (doorway.mode === "dreamweaver_page") {
+        elements.sourceLink.setAttribute("aria-label", "Open this song's Dreamweaver page");
+      } else if (doorway.mode === "published_song") {
         elements.sourceLink.setAttribute("aria-label", "Open this published HALO song");
+      } else {
+        elements.sourceLink.setAttribute("aria-label", `Open ${featuredTrack.title} by ${featuredTrack.artist} on DistroKid HyperFollow`);
+      }
+      if (doorway.href) {
         const title = cleanText(state.release?.title || state.mix?.title || featuredTrack.title);
         const artist = cleanText(state.release?.artist || state.mix?.creator?.name || featuredTrack.artist);
         elements.sourceLink.textContent = `${title} — ${artist} ↗`;
-      } else {
-        elements.sourceLink.href = featuredTrack.url;
-        elements.sourceLink.setAttribute("aria-label", `Open ${featuredTrack.title} by ${featuredTrack.artist} on DistroKid HyperFollow`);
-        elements.sourceLink.textContent = `${featuredTrack.title} — ${featuredTrack.artist} ↗`;
       }
       elements.sourceLink.dataset.haloPlayerTitle = cleanText(state.release?.title || state.mix?.title || featuredTrack.title);
       elements.sourceLink.dataset.haloPlayerArtist = cleanText(state.release?.artist || state.mix?.creator?.name || featuredTrack.artist);
@@ -532,6 +566,11 @@
     return id ? `dreamweaver-satellite-${id}` : "";
   }
 
+  function dreamweaverPageAgentId(songId) {
+    const id = cleanSongId(songId);
+    return id ? `dreamweaver-page-manager-${id}` : "";
+  }
+
   function stopSatelliteAgentLoop() {
     window.clearInterval(state.satelliteAgentLoop.timer);
     state.satelliteAgentLoop.timer = 0;
@@ -541,7 +580,7 @@
     stopSatelliteAgentLoop();
     const songId = cleanSongId(state.publishedSongId) || songIdFromSatellitePath();
     if (!songId) return;
-    state.satelliteAgentLoop.loopId = satelliteAgentLoopId(songId);
+    state.satelliteAgentLoop.loopId = cleanText(state.release?.dreamweaverPage?.pageAgent?.id, 120) || dreamweaverPageAgentId(songId) || satelliteAgentLoopId(songId);
     state.satelliteAgentLoop.lastError = "";
     state.satelliteAgentLoop.timer = window.setInterval(async () => {
       try {

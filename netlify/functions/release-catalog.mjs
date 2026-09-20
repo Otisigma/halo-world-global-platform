@@ -1,5 +1,6 @@
 import { getDatabase } from "@netlify/database";
 import { resolveReleaseArtworkFields } from "../lib/release-artwork.mjs";
+import { resolveDreamweaverPageFlow } from "../lib/dreamweaver-page-manager.mjs";
 
 function json(body, status = 200, headers = {}) {
   return Response.json(body, {
@@ -30,6 +31,13 @@ function serializeRelease(row) {
   const genres = releaseGenres.length ? releaseGenres : catalogGenres;
   const resolvedArtwork = artwork.artwork || catalogArtworkUrl;
   const artworkSource = artwork.artworkSource || (catalogArtworkUrl ? "song-catalog" : "");
+  const dreamweaverFlow = resolveDreamweaverPageFlow({
+    songId: row.catalog_song_id || "",
+    releaseId: row.id,
+    artistName: row.artist,
+    title: row.title,
+    officialUrl: row.official_url || "",
+  });
   return {
     id: row.id,
     title: row.title,
@@ -55,6 +63,10 @@ function serializeRelease(row) {
     featuredType: row.featured_type || "",
     featuredUntil: row.featured_until ? String(row.featured_until).slice(0, 10) : "",
     artistSlug: row.artist_slug || "",
+    officialUrl: row.official_url || "",
+    entryExperience: dreamweaverFlow.routeMode,
+    entryUrl: dreamweaverFlow.destinationUrl,
+    dreamweaverPage: dreamweaverFlow.dreamweaverPage,
     catalog: {
       source: row.catalog_song_id ? "song-catalog" : "release-catalog",
       songId: row.catalog_song_id || "",
@@ -105,6 +117,7 @@ export default async function releaseCatalogHandler(request) {
         release.artist_slug,
         release.title,
         release.artist,
+        release.official_url,
         release.release_date,
         release.duration,
         release.genres,

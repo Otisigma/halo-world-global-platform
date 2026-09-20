@@ -16,6 +16,7 @@ const [
   radioJs,
   uploadHelper,
   satelliteHelper,
+  dreamweaverManager,
 ] = await Promise.all([
   read("netlify/database/migrations/20260829000000_unified_upload_pipeline.sql"),
   read("db/schema.ts"),
@@ -28,6 +29,7 @@ const [
   read("radio/radio.js"),
   read("upload-progress.js"),
   read("netlify/lib/dreamweaver-satellite.mjs"),
+  read("netlify/lib/dreamweaver-page-manager.mjs"),
 ]);
 
 const checks = [
@@ -50,7 +52,7 @@ const checks = [
   [unifiedUploadFn.includes("isExisting") && unifiedUploadFn.includes("Existing master project returned"), "unified-upload returns existing project instead of creating a duplicate"],
   // Song catalog serializer
   [songCatalogFn.includes("pipelineStatus") && songCatalogFn.includes("sourceUploadSurface") && songCatalogFn.includes("dreamweaverSatellite"), "song-catalog API serializes pipeline status, source surface, and Dreamweaver satellite metadata"],
-  [satelliteHelper.includes("/dreamweaver/satellite/") && satelliteHelper.includes("experienceUrl") && satelliteHelper.includes("dreamweaver-satellite-"), "shared satellite helper keeps deterministic route, experience URL, and loop identity fields"],
+  [satelliteHelper.includes("resolveDreamweaverPageFlow") && satelliteHelper.includes("linked_song_pages") && dreamweaverManager.includes("dreamweaver-page-manager-"), "shared satellite helper delegates to the Dreamweaver page manager and keeps linked-page channels wired"],
   // Song catalog UI
   [songCatalogJs.includes("pipeline-badge") && songCatalogJs.includes("pipelineStatus"), "song-catalog client renders pipeline badge using pipelineStatus"],
   [songCatalogJs.includes("songPipelineStatus") && songCatalogJs.includes("dataset.stage"), "song-catalog client updates the pipeline stamp element in the workspace"],

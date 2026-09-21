@@ -996,6 +996,9 @@
       if (elements.sourceLink.hasAttribute("rel")) elements.songLobbyPlayerSource.setAttribute("rel", elements.sourceLink.getAttribute("rel") || "");
       else elements.songLobbyPlayerSource.removeAttribute("rel");
       elements.songLobbyPlayerSource.textContent = elements.sourceLink.textContent || "Open the source signal ↗";
+      Object.keys(elements.songLobbyPlayerSource.dataset).forEach((key) => {
+        delete elements.songLobbyPlayerSource.dataset[key];
+      });
       Object.entries(elements.sourceLink.dataset).forEach(([key, value]) => {
         if (value === undefined) delete elements.songLobbyPlayerSource.dataset[key];
         else elements.songLobbyPlayerSource.dataset[key] = value;

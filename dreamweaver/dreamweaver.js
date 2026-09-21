@@ -84,6 +84,7 @@
     heroReelFallback: document.getElementById("heroReelFallback"),
     heroReelStatus: document.getElementById("heroReelStatus"),
     songLobbyMakeCampaign: document.getElementById("songLobbyMakeCampaign"),
+    creatorGatewayLink: document.getElementById("dreamweaverCreatorGateway"),
     shell: document.getElementById("showShell"),
     loading: document.getElementById("loadingShow"),
     loadingPhase: document.getElementById("loadingPhase"),
@@ -1556,9 +1557,15 @@
 
   async function openCampaignStudio() {
     if (!state.mix) {
-      if (isSatelliteFlow() && !state.unlock) {
-        document.getElementById("storyActIV")?.scrollIntoView({ behavior: "smooth", block: "start" });
-        setUnlockStatus("Unlock the song lobby first, then Dreamweaver can open the reel generator.");
+      if (isSatelliteFlow()) {
+        if (!state.unlock) {
+          document.getElementById("storyActIV")?.scrollIntoView({ behavior: "smooth", block: "start" });
+          setUnlockStatus("Unlock the song lobby first, then Dreamweaver can open the reel generator.");
+          return;
+        }
+        elements.creatorGatewayLink?.scrollIntoView({ behavior: "smooth", block: "center" });
+        elements.creatorGatewayLink?.focus();
+        showToast("Creator tools live behind the DJ Deck gateway while this public lobby stays listener-first.");
         return;
       }
       return showToast("Open a playable mix before creating a campaign.");

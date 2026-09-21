@@ -29,7 +29,11 @@
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
   <noscript>
     <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-    <style>#dreamweaverSatellite[hidden] { display: block !important; }</style>
+    <style>
+      #dreamweaverSatellite[hidden] { display: block !important; }
+      #dreamweaverReward[hidden],
+      #showShell[hidden] { display: none !important; }
+    </style>
   </noscript>
   <link rel="icon" href="/assets/halo-app-icon-192.png">
   <link rel="stylesheet" href="/halo-brand.css">
@@ -75,6 +79,7 @@
         <p class="satellite-kicker">DREAMWEAVER / SONG LOBBY</p>
         <h1 id="dreamweaverSatelliteTitle">Step inside the story before the stream links take over.</h1>
         <p class="satellite-lede">Dreamweaver now opens as a fan-first song lobby: the cover art lands first, a short reel teases the world, and the release unfolds like a four-act invitation instead of a technical dashboard.</p>
+        <noscript><p class="satellite-lede">JavaScript is off, so Dreamweaver is keeping the story-first Song Lobby visible while interactive playback and unlock flows stay disabled.</p></noscript>
         <div class="song-lobby__actions">
           <button class="satellite-submit satellite-submit--inline" id="songLobbyMakeCampaign" type="button">MAKE A REEL / SHORT</button>
           <a class="song-lobby__anchor" href="#storyActI">Read the story arc</a>

@@ -24,6 +24,7 @@
       document.documentElement.dataset.dreamweaverMode = isSatelliteFlow ? (hasUnlock ? "reward" : "satellite") : "show";
       window.dreamweaverFontsLoaded = (fontLink) => {
         window.clearTimeout(window.dreamweaverFontFallbackTimer);
+        window.dreamweaverFontFallbackTimer = 0;
         if (!fontLink) return;
         fontLink.dataset.loaded = "true";
         fontLink.media = "all";
@@ -33,6 +34,7 @@
         if (!fontLink || fontLink.dataset.loaded === "true") return;
         fontLink.dataset.loaded = "true";
         fontLink.media = "all";
+        window.dreamweaverFontFallbackTimer = 0;
       }, 2500);
     })();
   </script>

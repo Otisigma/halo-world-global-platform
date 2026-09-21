@@ -2008,8 +2008,12 @@
     else stopSatelliteAgentLoop();
     if (satelliteFlow && !state.unlock) {
       elements.shell.setAttribute("aria-busy", "false");
-      void loadReleaseContext({ keepCurrentOnFailure: true });
-      void loadVideos();
+      void Promise.allSettled([
+        loadReleaseContext({ keepCurrentOnFailure: true }),
+        loadVideos()
+      ]).finally(() => {
+        renderSongLobbyHero();
+      });
       return;
     }
     await loadShow();

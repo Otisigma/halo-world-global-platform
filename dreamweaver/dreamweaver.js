@@ -72,7 +72,7 @@
   const MIX_LIBRARY_TIMEOUT_MS = 12000;
   const RELEASE_CONTEXT_TIMEOUT_MS = 8000;
   const VIDEO_LIBRARY_TIMEOUT_MS = 8000;
-  const AUDIO_BOOTSTRAP_TIMEOUT_MS = 7000;
+  const AUDIO_BOOTSTRAP_TIMEOUT_MS = 15000;
   const MAX_AUDIO_FEEDBACK_RECORDS = 24;
   const SATELLITE_AGENT_REFRESH_MS = 45_000;
   const DREAMWEAVER_RELEASE_FALLBACK_ARTWORK = window.HaloReleaseArtwork?.DEFAULT_RELEASE_ARTWORK || "/assets/releases/halo-premium-placeholder.svg";
@@ -536,10 +536,13 @@
     if (elements.audio.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) return { ok: true, state: "ready" };
     return new Promise(resolve => {
       let settled = false;
+      let metadataConfirmed = elements.audio.readyState >= HTMLMediaElement.HAVE_METADATA;
       const cleanup = () => {
         window.clearTimeout(timeoutId);
+        elements.audio.removeEventListener("loadedmetadata", handleMetadata);
         elements.audio.removeEventListener("loadeddata", handleReady);
         elements.audio.removeEventListener("canplay", handleReady);
+        elements.audio.removeEventListener("canplaythrough", handleReady);
         elements.audio.removeEventListener("error", handleError);
       };
       const settle = result => {
@@ -548,11 +551,23 @@
         cleanup();
         resolve(result);
       };
+      const handleMetadata = () => {
+        metadataConfirmed = true;
+        if (elements.audio.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) handleReady();
+      };
       const handleReady = () => settle({ ok: true, state: "ready" });
       const handleError = () => settle({ ok: false, state: "error", detail: describeAudioElementFailure() });
-      const timeoutId = window.setTimeout(() => settle({ ok: false, state: "timeout", detail: "Dreamweaver waited too long for the linked audio to become playable." }), AUDIO_BOOTSTRAP_TIMEOUT_MS);
+      const timeoutId = window.setTimeout(() => {
+        if (metadataConfirmed || elements.audio.readyState >= HTMLMediaElement.HAVE_METADATA) {
+          settle({ ok: true, state: "metadata-ready" });
+          return;
+        }
+        settle({ ok: false, state: "timeout", detail: "Dreamweaver waited too long for the linked audio to become playable." });
+      }, AUDIO_BOOTSTRAP_TIMEOUT_MS);
+      elements.audio.addEventListener("loadedmetadata", handleMetadata, { once: true });
       elements.audio.addEventListener("loadeddata", handleReady, { once: true });
       elements.audio.addEventListener("canplay", handleReady, { once: true });
+      elements.audio.addEventListener("canplaythrough", handleReady, { once: true });
       elements.audio.addEventListener("error", handleError, { once: true });
     });
   }

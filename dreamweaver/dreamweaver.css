@@ -248,6 +248,10 @@ body.show-ready .show-stage { opacity: 1; transform: scale(1); transition: opaci
   gap: clamp(24px, 4vw, 52px);
   align-items: start;
 }
+.song-lobby__copy-stack {
+  display: grid;
+  gap: 22px;
+}
 .song-lobby__actions {
   display: flex;
   flex-wrap: wrap;
@@ -268,6 +272,94 @@ body.show-ready .show-stage { opacity: 1; transform: scale(1); transition: opaci
   color: var(--paper);
   font-size: 9px;
   font-weight: 600;
+  letter-spacing: .14em;
+  text-decoration: none;
+  text-transform: uppercase;
+}
+.song-lobby__anchor--subtle {
+  border-color: rgba(255,255,255,.12);
+  background: rgba(255,255,255,.03);
+}
+.song-lobby__player {
+  position: relative;
+  display: grid;
+  gap: 16px;
+  border: 1px solid rgba(240, 235, 217, .16);
+  background:
+    radial-gradient(circle at top right, rgba(215,242,99,.16), transparent 28%),
+    linear-gradient(152deg, rgba(23,20,16,.96), rgba(12,11,9,.96));
+  box-shadow: 0 28px 80px rgba(0, 0, 0, .28);
+  padding: clamp(18px, 2.8vw, 26px);
+}
+.song-lobby__player::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border: 1px solid rgba(255,255,255,.05);
+  pointer-events: none;
+}
+.song-lobby__player-head,
+.song-lobby__player-copy,
+.song-lobby__player-actions {
+  position: relative;
+  z-index: 1;
+}
+.song-lobby__player-kicker {
+  margin: 0 0 14px;
+  color: var(--gold);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: .2em;
+  text-transform: uppercase;
+}
+.song-lobby__player-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.song-lobby__player-meta span {
+  border: 1px solid rgba(255,255,255,.12);
+  background: rgba(255,255,255,.04);
+  padding: 8px 10px;
+  color: var(--paper);
+  font-size: 8px;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+}
+.song-lobby__player-copy h2 {
+  margin: 0;
+  font: italic 500 clamp(30px, 4vw, 54px)/.92 var(--serif);
+  letter-spacing: -.04em;
+}
+.song-lobby__player-artist {
+  margin: 10px 0 0;
+  color: var(--acid);
+  font-size: 11px;
+  letter-spacing: .18em;
+  text-transform: uppercase;
+}
+.song-lobby__player-status {
+  margin: 14px 0 0;
+  color: #d5cebf;
+  font-size: 12px;
+  line-height: 1.8;
+}
+.song-lobby__audio {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  min-height: 54px;
+  accent-color: var(--acid);
+}
+.song-lobby__player-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+}
+.song-lobby__source {
+  color: var(--paper);
+  font-size: 10px;
   letter-spacing: .14em;
   text-decoration: none;
   text-transform: uppercase;

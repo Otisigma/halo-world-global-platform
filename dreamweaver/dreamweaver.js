@@ -79,6 +79,12 @@
     appleLink: document.getElementById("dreamweaverAppleLink"),
     youtubeLink: document.getElementById("dreamweaverYouTubeLink"),
     sourceLink: document.getElementById("dreamweaverSourceLink"),
+    songLobbyPlayerTitle: document.getElementById("songLobbyPlayerTitle"),
+    songLobbyPlayerArtist: document.getElementById("songLobbyPlayerArtist"),
+    songLobbyPlayerStatus: document.getElementById("songLobbyPlayerStatus"),
+    songLobbyPlayerStatePill: document.getElementById("songLobbyPlayerStatePill"),
+    songLobbyPlayerDuration: document.getElementById("songLobbyPlayerDuration"),
+    songLobbyPlayerSource: document.getElementById("songLobbyPlayerSource"),
     lobbyArtwork: document.getElementById("lobbyArtwork"),
     lobbyArtworkCaption: document.getElementById("lobbyArtworkCaption"),
     heroReelVideo: document.getElementById("heroReelVideo"),
@@ -757,10 +763,24 @@
     return "Playback is paused. Resume when you are ready.";
   }
 
+  function isMixStoryRoute() {
+    const params = new URLSearchParams(location.search);
+    return Boolean(params.get("mix")) && !(campaignIdFromUrl() || params.get("experience") === "studio");
+  }
+
   function renderSongLobbyHero() {
     const title = cleanText(state.release?.title || state.mix?.title || featuredTrack.title);
     const artist = cleanText(state.release?.artist || state.mix?.creator?.name || featuredTrack.artist);
     const artwork = releaseArtwork(state.release || {});
+    if (elements.songLobbyPlayerTitle) elements.songLobbyPlayerTitle.textContent = title || "Preparing release context…";
+    if (elements.songLobbyPlayerArtist) elements.songLobbyPlayerArtist.textContent = artist || "HALO / Dreamweaver";
+    if (elements.songLobbyPlayerStatus) elements.songLobbyPlayerStatus.textContent = releaseStateDetail(state.releasePlaybackState, title, artist);
+    if (elements.songLobbyPlayerStatePill) elements.songLobbyPlayerStatePill.textContent = releaseStateLabel(state.releasePlaybackState);
+    if (elements.songLobbyPlayerDuration) {
+      elements.songLobbyPlayerDuration.textContent = state.duration
+        ? formatTime(state.duration)
+        : cleanText(state.release?.duration || "", 24) || "00:00";
+    }
     if (elements.lobbyArtwork) {
       elements.lobbyArtwork.src = artwork.src || chapters[0].image;
       elements.lobbyArtwork.dataset.artworkFallback = artwork.fallback;
@@ -969,6 +989,16 @@
       elements.sourceLink.dataset.haloPlayerArtwork = safeMediaUrl(state.release?.artwork || state.release?.artworkOverride || state.release?.importedArtwork || state.release?.catalog?.artworkUrl);
       delete elements.sourceLink.dataset.haloPlayer;
     }
+    if (elements.songLobbyPlayerSource && elements.sourceLink) {
+      elements.songLobbyPlayerSource.href = elements.sourceLink.href;
+      elements.songLobbyPlayerSource.setAttribute("aria-label", elements.sourceLink.getAttribute("aria-label") || "Open the Dreamweaver source signal");
+      elements.songLobbyPlayerSource.textContent = elements.sourceLink.textContent || "Open the source signal ↗";
+      Object.entries(elements.sourceLink.dataset).forEach(([key, value]) => {
+        if (value === undefined) delete elements.songLobbyPlayerSource.dataset[key];
+        else elements.songLobbyPlayerSource.dataset[key] = value;
+      });
+      delete elements.songLobbyPlayerSource.dataset.haloPlayer;
+    }
   }
 
   function renderRewardState() {
@@ -981,14 +1011,30 @@
 
   function renderSatelliteState() {
     const satelliteFlow = isSatelliteFlow();
+    const mixStoryRoute = isMixStoryRoute();
     if (!satelliteFlow) {
-      if (elements.satellite) elements.satellite.hidden = true;
-      if (elements.reward) elements.reward.hidden = true;
+      if (elements.satellite) {
+        elements.satellite.hidden = !mixStoryRoute;
+        if (mixStoryRoute) elements.satellite.removeAttribute("aria-hidden");
+        else elements.satellite.setAttribute("aria-hidden", "true");
+      }
+      if (elements.reward) {
+        elements.reward.hidden = true;
+        elements.reward.setAttribute("aria-hidden", "true");
+      }
       elements.shell.hidden = false;
       return;
     }
-    if (elements.satellite) elements.satellite.hidden = Boolean(state.unlock);
-    if (elements.reward) elements.reward.hidden = !state.unlock;
+    if (elements.satellite) {
+      elements.satellite.hidden = Boolean(state.unlock);
+      if (state.unlock) elements.satellite.setAttribute("aria-hidden", "true");
+      else elements.satellite.removeAttribute("aria-hidden");
+    }
+    if (elements.reward) {
+      elements.reward.hidden = !state.unlock;
+      if (state.unlock) elements.reward.removeAttribute("aria-hidden");
+      else elements.reward.setAttribute("aria-hidden", "true");
+    }
     elements.shell.hidden = !state.unlock;
     if (state.unlock) renderRewardState();
   }

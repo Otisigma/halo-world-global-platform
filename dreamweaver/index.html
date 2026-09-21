@@ -123,21 +123,48 @@
 
   <section class="satellite-landing" id="dreamweaverSatellite" aria-labelledby="dreamweaverSatelliteTitle" aria-hidden="true" hidden>
     <script>
-      if (document.documentElement.dataset.dreamweaverMode === "satellite") {
+      const params = new URLSearchParams(window.location.search);
+      const showForMixRoute = document.documentElement.dataset.dreamweaverMode === "show"
+        && Boolean(params.get("mix"))
+        && !(params.get("campaign") || params.get("experience") === "studio");
+      if (document.documentElement.dataset.dreamweaverMode === "satellite" || showForMixRoute) {
         const section = document.currentScript.parentElement;
         section.hidden = false;
         section.removeAttribute("aria-hidden");
       }
     </script>
     <div class="song-lobby__hero" id="songLobbyHero">
-      <div class="satellite-copy">
-        <p class="satellite-kicker">DREAMWEAVER / SONG LOBBY</p>
-        <h1 id="dreamweaverSatelliteTitle">Step inside the story before the stream links take over.</h1>
-        <p class="satellite-lede">Dreamweaver now opens as a fan-first song lobby: the cover art lands first, a short reel teases the world, and the release unfolds like a four-act invitation instead of a technical dashboard.</p>
-        <div class="song-lobby__actions">
-          <button class="satellite-submit satellite-submit--inline" id="songLobbyMakeCampaign" type="button">MAKE A REEL / SHORT</button>
-          <a class="song-lobby__anchor" href="#storyActI">Read the story arc</a>
+      <div class="song-lobby__copy-stack">
+        <div class="satellite-copy">
+          <p class="satellite-kicker">DREAMWEAVER / SONG LOBBY</p>
+          <h1 id="dreamweaverSatelliteTitle">Step inside the story before the stream links take over.</h1>
+          <p class="satellite-lede">Dreamweaver now opens as a fan-first song lobby: the cover art lands first, a short reel teases the world, and the release unfolds like a four-act invitation instead of a technical dashboard.</p>
+          <div class="song-lobby__actions">
+            <button class="satellite-submit satellite-submit--inline" id="songLobbyMakeCampaign" type="button">MAKE A REEL / SHORT</button>
+            <a class="song-lobby__anchor" href="#storyActI">Read the story arc</a>
+          </div>
         </div>
+
+        <section class="song-lobby__player" id="songLobbyPlayer" aria-labelledby="songLobbyPlayerTitle">
+          <div class="song-lobby__player-head">
+            <p class="song-lobby__player-kicker">FEATURED MIX PLAYER</p>
+            <div class="song-lobby__player-meta" aria-label="Dreamweaver player status">
+              <span id="songLobbyPlayerStatePill">Loading signal</span>
+              <span id="songLobbyPlayerDuration">00:00</span>
+              <span>Dreamweaver pull source</span>
+            </div>
+          </div>
+          <div class="song-lobby__player-copy">
+            <h2 id="songLobbyPlayerTitle">Preparing release context…</h2>
+            <p class="song-lobby__player-artist" id="songLobbyPlayerArtist">HALO / Dreamweaver</p>
+            <p class="song-lobby__player-status" id="songLobbyPlayerStatus">Dreamweaver is preparing the featured mix without blocking the story-first layout.</p>
+          </div>
+          <audio id="showAudio" class="song-lobby__audio" preload="metadata" controls aria-label="Dreamweaver featured mix player"></audio>
+          <div class="song-lobby__player-actions">
+            <a id="songLobbyPlayerSource" class="song-lobby__source" href="https://distrokid.com/hyperfollow/owenanthony/blessed" target="_blank" rel="noopener noreferrer">Blessed — Owen Anthony ↗</a>
+            <a class="song-lobby__anchor song-lobby__anchor--subtle" href="/dj-deck.html">Creator gateway /dj-deck</a>
+          </div>
+        </section>
       </div>
 
       <div class="song-lobby__media" aria-label="Dreamweaver hero media">
@@ -534,7 +561,6 @@
     <div class="archive-reel" id="archiveReel" aria-label="Connected artist video archive"></div>
   </aside>
 
-  <audio id="showAudio" preload="metadata"></audio>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
   <footer class="proprietary-notice">
     <span>Dreamweaver™ is proprietary HALO technology. Public descriptions communicate capabilities and outcomes, not confidential methods.</span>

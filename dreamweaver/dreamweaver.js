@@ -61,6 +61,7 @@
   const RELEASE_CONTEXT_TIMEOUT_MS = 8000;
   const VIDEO_LIBRARY_TIMEOUT_MS = 8000;
   const AUDIO_BOOTSTRAP_TIMEOUT_MS = 15000;
+  const HERO_REEL_LOAD_TIMEOUT_MS = 3500;
   const MAX_AUDIO_FEEDBACK_RECORDS = 24;
   const SATELLITE_AGENT_REFRESH_MS = 45_000;
   const DREAMWEAVER_RELEASE_FALLBACK_ARTWORK = window.HaloReleaseArtwork?.DEFAULT_RELEASE_ARTWORK || "/assets/releases/halo-premium-placeholder.svg";
@@ -80,6 +81,7 @@
     sourceLink: document.getElementById("dreamweaverSourceLink"),
     lobbyArtwork: document.getElementById("lobbyArtwork"),
     lobbyArtworkCaption: document.getElementById("lobbyArtworkCaption"),
+    heroReelVideo: document.getElementById("heroReelVideo"),
     heroReelPlayer: document.getElementById("heroReelPlayer"),
     heroReelFallback: document.getElementById("heroReelFallback"),
     heroReelStatus: document.getElementById("heroReelStatus"),
@@ -219,6 +221,8 @@
     audioFeedbackQueue: [],
     audioFeedbackFingerprints: new Set(),
     audioFeedbackFlushPromise: null,
+    heroReelTimer: 0,
+    heroReelNonce: 0,
     satelliteAgentLoop: { timer: 0, loopId: "", updateIntervalMs: SATELLITE_AGENT_REFRESH_MS, lastUpdatedAt: "", lastError: "" },
     sessionToken: window.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`
   };
@@ -467,7 +471,89 @@
   }
 
   function preferredHeroVideo() {
-    return state.videos.find(video => safeMediaUrl(video?.embedUrl)) || state.videos.find(video => safeMediaUrl(video?.sourceUrl)) || null;
+    return state.videos.find(video => isMp4HeroSource(video?.sourceUrl))
+      || state.videos.find(video => safeMediaUrl(video?.embedUrl))
+      || state.videos.find(video => safeMediaUrl(video?.sourceUrl))
+      || null;
+  }
+
+  function isMp4HeroSource(value) {
+    const url = safeMediaUrl(value);
+    if (!url) return false;
+    try {
+      return /\.mp4$/i.test(new URL(url).pathname);
+    } catch {
+      return /\.mp4(?:$|[?#])/i.test(url);
+    }
+  }
+
+  function clearHeroReelTimer() {
+    window.clearTimeout(state.heroReelTimer);
+    state.heroReelTimer = 0;
+  }
+
+  function hideHeroReelVideo() {
+    if (!elements.heroReelVideo) return;
+    clearHeroReelTimer();
+    elements.heroReelVideo.onloadeddata = null;
+    elements.heroReelVideo.onerror = null;
+    elements.heroReelVideo.pause?.();
+    elements.heroReelVideo.hidden = true;
+    if (elements.heroReelVideo.getAttribute("src")) {
+      elements.heroReelVideo.removeAttribute("src");
+      elements.heroReelVideo.load?.();
+    }
+  }
+
+  function showHeroReelFallback(sourceUrl, reelLabel, statusCopy) {
+    hideHeroReelVideo();
+    if (elements.heroReelPlayer) {
+      elements.heroReelPlayer.onload = null;
+      elements.heroReelPlayer.hidden = true;
+      if (elements.heroReelPlayer.getAttribute("src") !== "about:blank") elements.heroReelPlayer.src = "about:blank";
+    }
+    if (elements.heroReelFallback) {
+      elements.heroReelFallback.hidden = false;
+      elements.heroReelFallback.href = sourceUrl;
+      elements.heroReelFallback.textContent = reelLabel ? `Open ${reelLabel} ↗` : "Open the HALO reel signal ↗";
+    }
+    if (elements.heroReelStatus) elements.heroReelStatus.textContent = statusCopy;
+  }
+
+  function showMutedHeroReel(mp4Url, reelLabel, artworkSrc, sourceUrl) {
+    if (!elements.heroReelVideo) return false;
+    const requestNonce = ++state.heroReelNonce;
+    clearHeroReelTimer();
+    if (elements.heroReelPlayer) {
+      elements.heroReelPlayer.onload = null;
+      elements.heroReelPlayer.hidden = true;
+      if (elements.heroReelPlayer.getAttribute("src") !== "about:blank") elements.heroReelPlayer.src = "about:blank";
+    }
+    if (elements.heroReelFallback) elements.heroReelFallback.hidden = true;
+    elements.heroReelVideo.hidden = false;
+    if (artworkSrc) elements.heroReelVideo.poster = artworkSrc;
+    if (elements.heroReelVideo.getAttribute("src") !== mp4Url) {
+      elements.heroReelVideo.src = mp4Url;
+      elements.heroReelVideo.load?.();
+    }
+    if (elements.heroReelStatus) elements.heroReelStatus.textContent = `Dreamweaver is cueing ${reelLabel}.`;
+    const fallback = message => {
+      if (requestNonce !== state.heroReelNonce) return;
+      showHeroReelFallback(sourceUrl, reelLabel, message);
+    };
+    elements.heroReelVideo.onloadeddata = () => {
+      if (requestNonce !== state.heroReelNonce) return;
+      clearHeroReelTimer();
+      if (elements.heroReelStatus) elements.heroReelStatus.textContent = `${reelLabel} is setting the tone for the lobby.`;
+      elements.heroReelVideo.play?.().catch(() => {});
+    };
+    elements.heroReelVideo.onerror = () => fallback(`${reelLabel} is available as a direct reel link.`);
+    state.heroReelTimer = window.setTimeout(() => {
+      if (requestNonce !== state.heroReelNonce) return;
+      if (elements.heroReelVideo.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) return;
+      fallback("Dreamweaver kept the story open while the reel timed out. Use the direct link if you still want the short preview.");
+    }, HERO_REEL_LOAD_TIMEOUT_MS);
+    return true;
   }
 
   async function fetchJsonWithTimeout(url, { timeoutMs = 8000, timeoutMessage = "Request timed out.", ...options } = {}) {
@@ -633,7 +719,7 @@
     setLoadingProgress(82, "Hydrating the Dreamweaver loop", "Stories, release context, and the wider loop are loading after the primary song bootstrap.");
     await loadReleaseContext();
     updatePlatformLinks();
-    await loadVideos();
+    void loadVideos();
   }
 
   function releaseArtwork(release = {}) {
@@ -683,25 +769,32 @@
     const embedUrl = safeMediaUrl(heroVideo?.embedUrl);
     const sourceUrl = safeMediaUrl(heroVideo?.sourceUrl) || "/radio/";
     const reelLabel = cleanText(heroVideo?.title || `${title} short reel preview`, 120);
+    const localAutoplayReel = isMp4HeroSource(sourceUrl) ? sourceUrl : "";
+    if (localAutoplayReel && showMutedHeroReel(localAutoplayReel, reelLabel, artwork.src || chapters[0].image, sourceUrl)) return;
+    hideHeroReelVideo();
     if (embedUrl && elements.heroReelPlayer) {
+      const requestNonce = ++state.heroReelNonce;
+      clearHeroReelTimer();
       const connector = embedUrl.includes("?") ? "&" : "?";
       const nextSrc = `${embedUrl}${connector}rel=0&modestbranding=1`;
       if (elements.heroReelPlayer.src !== nextSrc) elements.heroReelPlayer.src = nextSrc;
       elements.heroReelPlayer.hidden = false;
       if (elements.heroReelFallback) elements.heroReelFallback.hidden = true;
-      if (elements.heroReelStatus) elements.heroReelStatus.textContent = `${reelLabel} is setting the tone for the lobby.`;
+      if (elements.heroReelStatus) elements.heroReelStatus.textContent = `Dreamweaver is cueing ${reelLabel}.`;
+      elements.heroReelPlayer.onload = () => {
+        if (requestNonce !== state.heroReelNonce) return;
+        clearHeroReelTimer();
+        if (elements.heroReelStatus) elements.heroReelStatus.textContent = `${reelLabel} is setting the tone for the lobby.`;
+      };
+      state.heroReelTimer = window.setTimeout(() => {
+        if (requestNonce !== state.heroReelNonce) return;
+        showHeroReelFallback(sourceUrl, reelLabel, `${reelLabel} is available as a direct reel link.`);
+      }, HERO_REEL_LOAD_TIMEOUT_MS);
       return;
     }
-    if (elements.heroReelPlayer) {
-      elements.heroReelPlayer.hidden = true;
-      if (elements.heroReelPlayer.getAttribute("src") !== "about:blank") elements.heroReelPlayer.src = "about:blank";
-    }
-    if (elements.heroReelFallback) {
-      elements.heroReelFallback.hidden = false;
-      elements.heroReelFallback.href = sourceUrl;
-      elements.heroReelFallback.textContent = heroVideo ? `Open ${reelLabel} ↗` : "Open the HALO reel signal ↗";
-    }
-    if (elements.heroReelStatus) elements.heroReelStatus.textContent = heroVideo ? `${reelLabel} is available as a direct reel link.` : "Dreamweaver is holding the artwork in focus until a connected short reel is available.";
+    showHeroReelFallback(sourceUrl, heroVideo ? reelLabel : "", heroVideo
+      ? `${reelLabel} is available as a direct reel link.`
+      : "Dreamweaver is holding the artwork in focus until a connected short reel is available.");
   }
 
   function renderReleasePanel() {
@@ -1914,11 +2007,9 @@
     if (satelliteFlow) startSatelliteAgentLoop();
     else stopSatelliteAgentLoop();
     if (satelliteFlow && !state.unlock) {
-      await Promise.all([
-        loadReleaseContext({ keepCurrentOnFailure: true }),
-        loadVideos()
-      ]);
       elements.shell.setAttribute("aria-busy", "false");
+      void loadReleaseContext({ keepCurrentOnFailure: true });
+      void loadVideos();
       return;
     }
     await loadShow();

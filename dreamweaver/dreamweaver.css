@@ -313,11 +313,16 @@ body.show-ready .show-stage { opacity: 1; transform: scale(1); transition: opaci
   aspect-ratio: 9 / 16;
 }
 .song-lobby__reel-frame iframe,
+.song-lobby__reel-frame video,
 .song-lobby__reel-fallback {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
+}
+.song-lobby__reel-frame video {
+  display: block;
+  object-fit: cover;
 }
 .song-lobby__reel-frame iframe {
   border: 0;

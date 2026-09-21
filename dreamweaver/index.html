@@ -24,12 +24,9 @@
       document.documentElement.dataset.dreamweaverMode = isSatelliteFlow ? (hasUnlock ? "reward" : "satellite") : "show";
       window.setTimeout(() => {
         const fontLink = document.getElementById("dreamweaverFonts");
-        if (!fontLink || fontLink.dataset.loaded === "true" || document.getElementById("dreamweaverFontsFallback")) return;
-        const fallback = document.createElement("link");
-        fallback.id = "dreamweaverFontsFallback";
-        fallback.rel = "stylesheet";
-        fallback.href = fontLink.href;
-        document.head.append(fallback);
+        if (!fontLink || fontLink.dataset.loaded === "true") return;
+        fontLink.dataset.loaded = "true";
+        fontLink.media = "all";
       }, 2500);
     })();
   </script>

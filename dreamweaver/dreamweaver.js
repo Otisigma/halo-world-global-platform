@@ -1564,7 +1564,7 @@
           return;
         }
         elements.creatorGatewayLink?.scrollIntoView({ behavior: "smooth", block: "center" });
-        elements.creatorGatewayLink?.focus();
+        elements.creatorGatewayLink?.focus({ preventScroll: true });
         showToast("Creator tools live behind the DJ Deck gateway while this public lobby stays listener-first.");
         return;
       }

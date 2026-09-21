@@ -523,6 +523,7 @@
   function showMutedHeroReel(mp4Url, reelLabel, artworkSrc, sourceUrl) {
     if (!elements.heroReelVideo) return false;
     const requestNonce = ++state.heroReelNonce;
+    let ready = false;
     clearHeroReelTimer();
     if (elements.heroReelPlayer) {
       elements.heroReelPlayer.onload = null;
@@ -543,6 +544,7 @@
     };
     elements.heroReelVideo.onloadeddata = () => {
       if (requestNonce !== state.heroReelNonce) return;
+      ready = true;
       clearHeroReelTimer();
       if (elements.heroReelStatus) elements.heroReelStatus.textContent = `${reelLabel} is setting the tone for the lobby.`;
       elements.heroReelVideo.play?.().catch(() => {});
@@ -550,7 +552,7 @@
     elements.heroReelVideo.onerror = () => fallback(`${reelLabel} is available as a direct reel link.`);
     state.heroReelTimer = window.setTimeout(() => {
       if (requestNonce !== state.heroReelNonce) return;
-      if (elements.heroReelVideo.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) return;
+      if (ready) return;
       fallback("Dreamweaver kept the story open while the reel timed out. Use the direct link if you still want the short preview.");
     }, HERO_REEL_LOAD_TIMEOUT_MS);
     return true;

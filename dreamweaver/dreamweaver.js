@@ -971,15 +971,19 @@
     if (elements.sourceLink) {
       const publishedSongUrl = publishedSongShareUrl();
       if (publishedSongUrl) {
-        elements.sourceLink.href = publishedSongUrl;
-        elements.sourceLink.setAttribute("aria-label", "Open this published HALO song");
         const title = cleanText(state.release?.title || state.mix?.title || featuredTrack.title);
         const artist = cleanText(state.release?.artist || state.mix?.creator?.name || featuredTrack.artist);
-        elements.sourceLink.textContent = `${title} — ${artist} ↗`;
+        const sourceLabel = `${title} — ${artist}`;
+        const sourceText = `${sourceLabel} ↗`;
+        elements.sourceLink.href = publishedSongUrl;
+        elements.sourceLink.setAttribute("aria-label", sourceText);
+        elements.sourceLink.textContent = sourceText;
       } else {
+        const sourceLabel = `${featuredTrack.title} — ${featuredTrack.artist}`;
+        const sourceText = `${sourceLabel} ↗`;
         elements.sourceLink.href = featuredTrack.url;
-        elements.sourceLink.setAttribute("aria-label", `Open ${featuredTrack.title} by ${featuredTrack.artist} on DistroKid HyperFollow`);
-        elements.sourceLink.textContent = `${featuredTrack.title} — ${featuredTrack.artist} ↗`;
+        elements.sourceLink.setAttribute("aria-label", sourceText);
+        elements.sourceLink.textContent = sourceText;
       }
       elements.sourceLink.dataset.haloPlayerTitle = cleanText(state.release?.title || state.mix?.title || featuredTrack.title);
       elements.sourceLink.dataset.haloPlayerArtist = cleanText(state.release?.artist || state.mix?.creator?.name || featuredTrack.artist);

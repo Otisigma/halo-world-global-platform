@@ -824,6 +824,15 @@
     return /\.(mp3|wav|m4a|aac|ogg|flac|webm)$/i.test(cleanText(file.name || "", 180));
   }
 
+  function safeBlobMediaUrl(value) {
+    try {
+      const url = new URL(String(value || ""), location.href);
+      return url.protocol === "blob:" ? url.href : "";
+    } catch {
+      return "";
+    }
+  }
+
   function handleRemoteAudioUnavailable(message = "Stream unavailable — click Upload Mix File or press play to choose a local mix.") {
     clearRemoteAudioWatchdog();
     if (state.audioSourceMode !== "local") state.audioSourceMode = "error";
@@ -850,7 +859,11 @@
     }
     clearRemoteAudioWatchdog();
     revokeLocalAudioUrl();
-    const localAudioUrl = URL.createObjectURL(file);
+    const localAudioUrl = safeBlobMediaUrl(URL.createObjectURL(file));
+    if (!localAudioUrl) {
+      showToast("Dreamweaver could not prepare that local file. Try another audio export.");
+      return;
+    }
     state.localAudioUrl = localAudioUrl;
     state.localAudioName = cleanText(file.name || "Uploaded mix", 160) || "Uploaded mix";
     state.audioSourceMode = "local";

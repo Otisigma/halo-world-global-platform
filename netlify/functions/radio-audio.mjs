@@ -12,8 +12,8 @@ const MEDIA_CORS_HEADERS = Object.freeze({
   "Access-Control-Expose-Headers": "Content-Length, Content-Range"
 });
 
-function json(body, status = 200) {
-  return Response.json(body, { status, headers: { ...MEDIA_CORS_HEADERS, "Cache-Control": "no-store" } });
+function json(body, status = 200, headers = {}) {
+  return Response.json(body, { status, headers: { ...MEDIA_CORS_HEADERS, "Cache-Control": "no-store", ...headers } });
 }
 
 function requestedByteRange(value, byteSize) {

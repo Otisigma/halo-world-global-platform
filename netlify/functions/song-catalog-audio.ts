@@ -345,7 +345,7 @@ async function importFromRadio(payload: Record<string, unknown>, db: Awaited<Ret
 
 export default async function songCatalogAudioHandler(request: Request) {
   if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: MEDIA_CORS_HEADERS });
-  if (!["GET", "HEAD", "POST", "DELETE"].includes(request.method)) return json({ message: "Method not allowed" }, 405, { Allow: "GET, HEAD, POST, DELETE" });
+  if (!["GET", "HEAD", "POST", "DELETE"].includes(request.method)) return json({ message: "Method not allowed" }, 405, { Allow: "GET, HEAD, POST, DELETE, OPTIONS" });
   try {
     const [db, user] = await Promise.all([getDatabase(), getUser()]);
     if (!user?.id) return json({ message: "Join or sign in to use song audio" }, 401);

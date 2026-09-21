@@ -22,7 +22,9 @@ function json(body, status = 200, headers = {}) {
 
 function cleanPublicUrl(value) {
   try {
-    const url = new URL(String(value || ""), "https://halo.world");
+    const raw = String(value || "").trim();
+    if (!/^https?:\/\//i.test(raw)) return "";
+    const url = new URL(raw);
     if (!["http:", "https:"].includes(url.protocol) || url.username || url.password) return "";
     return url.href;
   } catch {
@@ -175,7 +177,7 @@ function serializeRelease(row) {
 export default async function releaseCatalogHandler(request) {
   if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS_HEADERS });
   if (request.method !== "GET") {
-    return json({ message: "Method not allowed" }, 405, { Allow: "GET" });
+    return json({ message: "Method not allowed" }, 405, { Allow: "GET, OPTIONS" });
   }
 
   try {

@@ -817,6 +817,13 @@
     elements.mixFileInput.click();
   }
 
+  function isSupportedLocalAudioFile(file) {
+    if (!file) return false;
+    const type = cleanText(file.type || "", 80).toLowerCase();
+    if (type.startsWith("audio/")) return true;
+    return /\.(mp3|wav|m4a|aac|ogg|flac|webm)$/i.test(cleanText(file.name || "", 180));
+  }
+
   function handleRemoteAudioUnavailable(message = "Stream unavailable — click Upload Mix File or press play to choose a local mix.") {
     clearRemoteAudioWatchdog();
     if (state.audioSourceMode !== "local") state.audioSourceMode = "error";
@@ -837,14 +844,19 @@
 
   async function activateLocalMixFile(file) {
     if (!file || !elements.audio) return;
+    if (!isSupportedLocalAudioFile(file)) {
+      showToast("Choose an audio file in MP3, WAV, M4A, AAC, OGG, FLAC, or WebM format.");
+      return;
+    }
     clearRemoteAudioWatchdog();
     revokeLocalAudioUrl();
-    state.localAudioUrl = URL.createObjectURL(file);
+    const localAudioUrl = URL.createObjectURL(file);
+    state.localAudioUrl = localAudioUrl;
     state.localAudioName = cleanText(file.name || "Uploaded mix", 160) || "Uploaded mix";
     state.audioSourceMode = "local";
     elements.audio.pause();
     elements.audio.currentTime = 0;
-    elements.audio.src = state.localAudioUrl;
+    elements.audio.src = localAudioUrl;
     elements.audio.load?.();
     setReleasePlaybackState("ready");
     try {
@@ -1626,7 +1638,6 @@
     state.playerControlsBound = true;
     elements.playButton.addEventListener("click", togglePlayback);
     elements.songLobbyHeroPlayButton?.addEventListener("click", togglePlayback);
-    elements.uploadLabel?.addEventListener("click", () => openMixFilePicker());
     elements.mixFileInput?.addEventListener("change", async event => {
       const file = event.target?.files?.[0];
       event.target.value = "";

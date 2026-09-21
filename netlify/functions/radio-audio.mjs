@@ -68,7 +68,7 @@ async function readAudioRange(track, range) {
 
 export default async function radioAudioHandler(request) {
   if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: MEDIA_CORS_HEADERS });
-  if (!["GET", "HEAD"].includes(request.method)) return json({ message: "Method not allowed" }, 405);
+  if (!["GET", "HEAD"].includes(request.method)) return json({ message: "Method not allowed" }, 405, { Allow: "GET, HEAD, OPTIONS" });
   try {
     const [db, user] = await Promise.all([getDatabase(), getUser()]);
     const id = cleanText(new URL(request.url).searchParams.get("id"), 80);

@@ -78,7 +78,7 @@ async function readMixRange(mix, range) {
 
 export default async function mixAudioHandler(request) {
   if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: MEDIA_CORS_HEADERS });
-  if (!["GET", "HEAD"].includes(request.method)) return json({ message: "Method not allowed" }, 405);
+  if (!["GET", "HEAD"].includes(request.method)) return json({ message: "Method not allowed" }, 405, { Allow: "GET, HEAD, OPTIONS" });
   try {
     const db = getDatabase();
     const user = await getUser().catch(() => null);

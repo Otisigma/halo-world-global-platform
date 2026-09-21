@@ -41,14 +41,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link id="dreamweaverFonts" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="preload" as="style" onload="window.dreamweaverFontsLoaded?.(this)">
-  <noscript>
-    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-    <style>
-      #dreamweaverSatellite[hidden] { display: block !important; }
-      #dreamweaverReward[hidden],
-      #showShell[hidden] { display: none !important; }
-    </style>
-  </noscript>
+  <noscript><link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet"></noscript>
   <link rel="icon" href="/assets/halo-app-icon-192.png">
   <link rel="stylesheet" href="/halo-brand.css">
   <link rel="stylesheet" href="/accessibility.css">
@@ -80,6 +73,51 @@
     </div>
   </header>
 
+  <noscript>
+    <section class="satellite-landing" aria-labelledby="dreamweaverNoscriptTitle">
+      <div class="song-lobby__hero">
+        <div class="satellite-copy">
+          <p class="satellite-kicker">DREAMWEAVER / SONG LOBBY</p>
+          <h1 id="dreamweaverNoscriptTitle">Step inside the story before the stream links take over.</h1>
+          <p class="satellite-lede">JavaScript is off, so Dreamweaver is keeping the story-first Song Lobby visible while interactive playback and unlock flows stay disabled.</p>
+          <div class="song-lobby__actions">
+            <a class="song-lobby__anchor" href="#dreamweaverNoscriptActI">Read the story arc</a>
+            <a class="song-lobby__anchor" href="/dj-deck.html">Creator gateway /dj-deck</a>
+          </div>
+        </div>
+
+        <div class="song-lobby__media" aria-label="Dreamweaver hero media">
+          <figure class="song-lobby__artwork release-artwork-frame" data-artwork-frame>
+            <img class="release-artwork-image" src="/assets/releases/the-cold-is-lasting-longer.jpg" alt="Dreamweaver featured song artwork" loading="eager" fetchpriority="high" decoding="async">
+            <figcaption>Dreamweaver lobby artwork</figcaption>
+          </figure>
+        </div>
+      </div>
+      <div class="song-lobby__acts" aria-label="Dreamweaver story arc">
+        <article class="story-act" id="dreamweaverNoscriptActI">
+          <p class="story-act__eyebrow">Act I / The Hook</p>
+          <h2>The origin starts in a feeling, not a feature list.</h2>
+          <p>Dreamweaver frames the release like a late-night confession, keeping the emotional reason for the song front and center.</p>
+        </article>
+        <article class="story-act">
+          <p class="story-act__eyebrow">Act II / Lyric Break</p>
+          <h2>Featured lines land like marginal notes in the dark.</h2>
+          <p>The lobby slows down long enough for a few precise lyric fragments to feel deliberate and human.</p>
+        </article>
+        <article class="story-act">
+          <p class="story-act__eyebrow">Act III / Sonic World</p>
+          <h2>This is the listening environment before it becomes a playlist tab.</h2>
+          <p>Dreamweaver describes the mood and setting in plain language so listeners know how to enter the song.</p>
+        </article>
+        <article class="story-act">
+          <p class="story-act__eyebrow">Act IV / Unlock &amp; Action</p>
+          <h2>Interactive unlocks stay available when JavaScript is on.</h2>
+          <p>For the full guided listening room, streaming exits, and creator tools, re-open Dreamweaver with scripting enabled.</p>
+        </article>
+      </div>
+    </section>
+  </noscript>
+
   <section class="satellite-landing" id="dreamweaverSatellite" aria-labelledby="dreamweaverSatelliteTitle" aria-hidden="true" hidden>
     <script>
       if (document.documentElement.dataset.dreamweaverMode === "satellite") {
@@ -93,7 +131,6 @@
         <p class="satellite-kicker">DREAMWEAVER / SONG LOBBY</p>
         <h1 id="dreamweaverSatelliteTitle">Step inside the story before the stream links take over.</h1>
         <p class="satellite-lede">Dreamweaver now opens as a fan-first song lobby: the cover art lands first, a short reel teases the world, and the release unfolds like a four-act invitation instead of a technical dashboard.</p>
-        <noscript><p class="satellite-lede">JavaScript is off, so Dreamweaver is keeping the story-first Song Lobby visible while interactive playback and unlock flows stay disabled.</p></noscript>
         <div class="song-lobby__actions">
           <button class="satellite-submit satellite-submit--inline" id="songLobbyMakeCampaign" type="button">MAKE A REEL / SHORT</button>
           <a class="song-lobby__anchor" href="#storyActI">Read the story arc</a>

@@ -509,6 +509,7 @@
     hideHeroReelVideo();
     if (elements.heroReelPlayer) {
       elements.heroReelPlayer.onload = null;
+      elements.heroReelPlayer.onerror = null;
       elements.heroReelPlayer.hidden = true;
       if (elements.heroReelPlayer.getAttribute("src") !== "about:blank") elements.heroReelPlayer.src = "about:blank";
     }
@@ -527,6 +528,7 @@
     clearHeroReelTimer();
     if (elements.heroReelPlayer) {
       elements.heroReelPlayer.onload = null;
+      elements.heroReelPlayer.onerror = null;
       elements.heroReelPlayer.hidden = true;
       if (elements.heroReelPlayer.getAttribute("src") !== "about:blank") elements.heroReelPlayer.src = "about:blank";
     }
@@ -721,7 +723,9 @@
     setLoadingProgress(82, "Hydrating the Dreamweaver loop", "Stories, release context, and the wider loop are loading after the primary song bootstrap.");
     await loadReleaseContext();
     updatePlatformLinks();
-    void loadVideos();
+    void loadVideos().finally(() => {
+      renderSongLobbyHero();
+    });
   }
 
   function releaseArtwork(release = {}) {
@@ -788,8 +792,17 @@
         clearHeroReelTimer();
         if (elements.heroReelStatus) elements.heroReelStatus.textContent = `${reelLabel} is setting the tone for the lobby.`;
       };
+      elements.heroReelPlayer.onerror = () => {
+        if (requestNonce !== state.heroReelNonce) return;
+        clearHeroReelTimer();
+        elements.heroReelPlayer.onload = null;
+        elements.heroReelPlayer.onerror = null;
+        showHeroReelFallback(sourceUrl, reelLabel, `${reelLabel} is available as a direct reel link.`);
+      };
       state.heroReelTimer = window.setTimeout(() => {
         if (requestNonce !== state.heroReelNonce) return;
+        elements.heroReelPlayer.onload = null;
+        elements.heroReelPlayer.onerror = null;
         showHeroReelFallback(sourceUrl, reelLabel, `${reelLabel} is available as a direct reel link.`);
       }, HERO_REEL_LOAD_TIMEOUT_MS);
       return;

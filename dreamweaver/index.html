@@ -24,17 +24,13 @@
       document.documentElement.dataset.dreamweaverMode = isSatelliteFlow ? (hasUnlock ? "reward" : "satellite") : "show";
     })();
   </script>
-  <style>
-    html[data-dreamweaver-mode="satellite"] .show-shell,
-    html[data-dreamweaver-mode="satellite"] .satellite-reward,
-    html[data-dreamweaver-mode="show"] .satellite-landing,
-    html[data-dreamweaver-mode="show"] .satellite-reward,
-    html[data-dreamweaver-mode="reward"] .satellite-landing { display: none; }
-  </style>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
-  <noscript><link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet"></noscript>
+  <noscript>
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>#dreamweaverSatellite[hidden] { display: block !important; }</style>
+  </noscript>
   <link rel="icon" href="/assets/halo-app-icon-192.png">
   <link rel="stylesheet" href="/halo-brand.css">
   <link rel="stylesheet" href="/accessibility.css">
@@ -66,7 +62,14 @@
     </div>
   </header>
 
-  <section class="satellite-landing" id="dreamweaverSatellite" aria-labelledby="dreamweaverSatelliteTitle">
+  <section class="satellite-landing" id="dreamweaverSatellite" aria-labelledby="dreamweaverSatelliteTitle" aria-hidden="true" hidden>
+    <script>
+      if (document.documentElement.dataset.dreamweaverMode === "satellite") {
+        const section = document.currentScript.parentElement;
+        section.hidden = false;
+        section.removeAttribute("aria-hidden");
+      }
+    </script>
     <div class="song-lobby__hero" id="songLobbyHero">
       <div class="satellite-copy">
         <p class="satellite-kicker">DREAMWEAVER / SONG LOBBY</p>
@@ -170,7 +173,14 @@
     </div>
   </section>
 
-  <section class="satellite-reward" id="dreamweaverReward" aria-labelledby="dreamweaverRewardTitle">
+  <section class="satellite-reward" id="dreamweaverReward" aria-labelledby="dreamweaverRewardTitle" aria-hidden="true" hidden>
+    <script>
+      if (document.documentElement.dataset.dreamweaverMode === "reward") {
+        const section = document.currentScript.parentElement;
+        section.hidden = false;
+        section.removeAttribute("aria-hidden");
+      }
+    </script>
     <div class="reward-intro">
       <p class="satellite-kicker">UNLOCKED / DREAMWEAVER OPEN</p>
       <h2 id="dreamweaverRewardTitle">Your concierge doorway is ready.</h2>
@@ -204,7 +214,14 @@
     </div>
   </section>
 
-  <main class="show-shell" id="showShell" aria-live="polite" aria-busy="true">
+  <main class="show-shell" id="showShell" aria-live="polite" aria-busy="true" aria-hidden="true" hidden>
+    <script>
+      if (document.documentElement.dataset.dreamweaverMode !== "satellite") {
+        const shell = document.currentScript.parentElement;
+        shell.hidden = false;
+        shell.removeAttribute("aria-hidden");
+      }
+    </script>
     <section class="loading-show" id="loadingShow">
       <p>Dreamweaver / preparing this edition</p>
       <h1>Enter the cinematic<br>HALO signal.</h1>

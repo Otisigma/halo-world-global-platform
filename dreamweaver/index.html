@@ -22,11 +22,20 @@
         } catch {}
       }
       document.documentElement.dataset.dreamweaverMode = isSatelliteFlow ? (hasUnlock ? "reward" : "satellite") : "show";
+      window.setTimeout(() => {
+        const fontLink = document.getElementById("dreamweaverFonts");
+        if (!fontLink || fontLink.dataset.loaded === "true" || document.getElementById("dreamweaverFontsFallback")) return;
+        const fallback = document.createElement("link");
+        fallback.id = "dreamweaverFontsFallback";
+        fallback.rel = "stylesheet";
+        fallback.href = fontLink.href;
+        document.head.append(fallback);
+      }, 2500);
     })();
   </script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+  <link id="dreamweaverFonts" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" media="print" onload="this.dataset.loaded='true';this.media='all'">
   <noscript>
     <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
     <style>

@@ -39,7 +39,8 @@ const checks = [
     && /document\.currentScript\.parentElement[\s\S]*section\.hidden = false/.test(page)
     && /document\.currentScript\.parentElement[\s\S]*shell\.hidden = false/.test(page), "reveals the correct Dreamweaver lobby shell before deferred JavaScript hydration instead of starting from the loading screen"],
   [page.includes('id="storyActI"') && page.includes('id="storyActII"') && page.includes('id="storyActIII"') && page.includes('id="storyActIV"') && page.includes("Act I / The Hook") && page.includes("Act II / Lyric Break") && page.includes("Act III / Sonic World") && page.includes("Act IV / Unlock &amp; Action"), "frames the public Dreamweaver page as a four-act listener story arc"],
-  [/media="print"\s+onload="this\.media='all'"/.test(page)
+  [/id="dreamweaverFonts"[\s\S]*media="print"[\s\S]*onload="this\.dataset\.loaded='true';this\.media='all'"/.test(page)
+    && /window\.setTimeout\(\(\) => \{[\s\S]*dreamweaverFontsFallback/.test(page)
     && /<noscript>[\s\S]*https:\/\/fonts\.googleapis\.com\/css2\?family=Cormorant\+Garamond/.test(page), "loads Dreamweaver's external web fonts without making them a render-blocking dependency"],
   [page.includes("release-artwork.css") && page.includes("release-artwork.js"), "loads the shared HALO artwork fallback assets on the Dreamweaver page"],
   [page.includes('data-mode="watch"') && page.includes('data-mode="room"') && page.includes('data-mode="explore"'), "offers Watch, Room, and Explore modes"],

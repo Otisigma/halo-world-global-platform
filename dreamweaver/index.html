@@ -216,7 +216,7 @@
 
   <main class="show-shell" id="showShell" aria-live="polite" aria-busy="true" aria-hidden="true" hidden>
     <script>
-      if (document.documentElement.dataset.dreamweaverMode !== "satellite") {
+      if (document.documentElement.dataset.dreamweaverMode === "show") {
         const shell = document.currentScript.parentElement;
         shell.hidden = false;
         shell.removeAttribute("aria-hidden");

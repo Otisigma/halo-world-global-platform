@@ -408,17 +408,14 @@
       const flushStartedAt = Date.now();
       const attemptedFingerprints = new Set();
       try {
-        while (true) {
-          const pending = state.audioFeedbackQueue.filter(entry => (
-            entry.deliveryStatus !== "sent"
-            && !attemptedFingerprints.has(entry.fingerprint)
-            && (!entry.lastAttemptAt || Number.isNaN(Date.parse(entry.lastAttemptAt)) || Date.parse(entry.lastAttemptAt) < flushStartedAt)
-          ));
-          if (!pending.length) break;
-          for (const incident of pending) {
-            attemptedFingerprints.add(incident.fingerprint);
-            await sendAudioFeedbackIncident(incident);
-          }
+        const pending = state.audioFeedbackQueue.filter(entry => (
+          entry.deliveryStatus !== "sent"
+          && !attemptedFingerprints.has(entry.fingerprint)
+          && (!entry.lastAttemptAt || Number.isNaN(Date.parse(entry.lastAttemptAt)) || Date.parse(entry.lastAttemptAt) < flushStartedAt)
+        ));
+        for (const incident of pending) {
+          attemptedFingerprints.add(incident.fingerprint);
+          await sendAudioFeedbackIncident(incident);
         }
       } finally {
         state.audioFeedbackFlushPromise = null;

@@ -42,7 +42,7 @@ const checks = [
     return fetchJsonBlock.includes("return { response, payload };")
       && /await bootstrapPrimaryPlayback\(mix\);[\s\S]*await hydrateDreamweaverLoopContent\(\);/.test(script);
   })(), "boots the linked mix audio before hydrating the broader Dreamweaver loop"],
-  [script.includes("audioFeedbackStorageKey") && script.includes('fetch("/api/issues"') && script.includes("deliveryStatus"), "queues structured Dreamweaver audio incidents for AI maintenance triage"],
+  [script.includes("audioFeedbackStorageKey") && script.includes('fetch("/api/issues"') && script.includes("deliveryStatus") && script.includes("attemptedFingerprints"), "queues structured Dreamweaver audio incidents for AI maintenance triage"],
   [script.includes('"missing_audio"') && script.includes('"muted_audio"') && script.includes('"corrupted_audio"') && script.includes('"non_playable_audio"'), "captures deterministic Dreamweaver audio failure states for QA review"],
   [page.includes('id="dreamweaverSongLabLink"') && script.includes('halo-dreamweaver-upload-trust') && script.includes('target.searchParams.set("flow", "artist-upload")'), "bridges the canonical Dreamweaver route into a trusted artist upload handoff"],
   [script.includes('fetchJsonWithTimeout("/api/videos?artistSlug=owen-anthony"') && script.includes("archiveReel"), "enriches the experience with the connected artist video archive"],

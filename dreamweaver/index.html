@@ -27,12 +27,12 @@
       <img class="halo-brand-image halo-brand-image--small" src="/assets/halo-logo-mark.webp" alt="">
       <span><strong>HALO</strong><small>Dreamweaver / first edition</small></span>
     </a>
-    <nav aria-label="Dreamweaver navigation">
-      <a id="dreamweaverSongLabLink" href="/dreamweaver-lab/">Song Lab</a>
-      <a href="/dj-deck.html">Mix Desk</a>
-      <a href="/iam-social/">I AM Social</a>
-      <a href="/campaign-studio/">Campaign Studio</a>
-      <a href="/radio/">Radio</a>
+    <nav aria-label="Song Lobby navigation">
+      <a href="#songLobbyHero">Hero</a>
+      <a href="#storyActI">Act I</a>
+      <a href="#storyActII">Act II</a>
+      <a href="#storyActIII">Act III</a>
+      <a href="#storyActIV">Act IV</a>
     </nav>
     <div class="header-actions">
       <button class="header-action header-action--campaign" id="makeCampaign" type="button">Make a Reel / Short</button>
@@ -41,50 +41,106 @@
   </header>
 
   <section class="satellite-landing" id="dreamweaverSatellite" aria-labelledby="dreamweaverSatelliteTitle" hidden>
-    <div class="satellite-copy">
-      <p class="satellite-kicker">SATELLITE RELEASE FUNNEL / DREAMWEAVER AI CONCIERGE</p>
-      <h1 id="dreamweaverSatelliteTitle">Let Dreamweaver introduce the release before the stream links do.</h1>
-      <p class="satellite-lede">This is the first taste of the concierge service: Dreamweaver AI guides a full five-movement listening doorway, gives fans more than a snippet, and then routes them to Spotify, Apple Music, YouTube, and the next step that fits.</p>
-      <div class="satellite-proof" aria-label="Dreamweaver concierge flow">
-        <article><span>01</span><strong>Concierge intro</strong><p>Dreamweaver frames the release like a host, not a banner ad.</p></article>
-        <article><span>02</span><strong>Email unlock</strong><p>Your signup opens the complete Dreamweaver track experience and follow-on platform links.</p></article>
-        <article><span>03</span><strong>Paid next step</strong><p>Premium remixes and album builds stay direct, human-approved, and sold by the team.</p></article>
+    <div class="song-lobby__hero" id="songLobbyHero">
+      <div class="satellite-copy">
+        <p class="satellite-kicker">DREAMWEAVER / SONG LOBBY</p>
+        <h1 id="dreamweaverSatelliteTitle">Step inside the story before the stream links take over.</h1>
+        <p class="satellite-lede">Dreamweaver now opens as a fan-first song lobby: the cover art lands first, a short reel teases the world, and the release unfolds like a four-act invitation instead of a technical dashboard.</p>
+        <div class="song-lobby__actions">
+          <button class="satellite-submit satellite-submit--inline" id="songLobbyMakeCampaign" type="button">MAKE A REEL / SHORT</button>
+          <a class="song-lobby__anchor" href="#storyActI">Read the story arc</a>
+        </div>
+      </div>
+
+      <div class="song-lobby__media" aria-label="Dreamweaver hero media">
+        <figure class="song-lobby__artwork release-artwork-frame" data-artwork-frame>
+          <img id="lobbyArtwork" class="release-artwork-image" src="/assets/releases/the-cold-is-lasting-longer.jpg" alt="Dreamweaver featured song artwork" data-release-artwork data-artwork-badge="Dreamweaver lobby artwork">
+          <figcaption id="lobbyArtworkCaption">Dreamweaver lobby artwork</figcaption>
+        </figure>
+        <section class="song-lobby__reel" aria-labelledby="heroReelTitle">
+          <p class="satellite-form-kicker">SHORT REEL PREVIEW</p>
+          <h2 id="heroReelTitle">Watch the atmosphere arrive before the full stream unlocks.</h2>
+          <div class="song-lobby__reel-frame">
+            <iframe id="heroReelPlayer" title="Dreamweaver short reel preview" src="about:blank" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen hidden></iframe>
+            <a id="heroReelFallback" class="song-lobby__reel-fallback" href="/radio/">Open the short reel preview ↗</a>
+          </div>
+          <p class="song-lobby__reel-status" id="heroReelStatus">Dreamweaver is cueing the short reel preview.</p>
+        </section>
       </div>
     </div>
 
-    <aside class="satellite-unlock">
-      <p class="satellite-form-kicker">UNLOCK THE FULL EXPERIENCE</p>
-      <h2>Leave your email and Dreamweaver opens the complete track doorway.</h2>
-      <p>The reward is the full guided experience below plus direct streaming exits and premium next-step options.</p>
-      <form id="dreamweaverUnlockForm" class="satellite-form" novalidate>
-        <label>
-          <span>First name <small>optional</small></span>
-          <input name="firstName" type="text" maxlength="80" autocomplete="given-name" placeholder="How Dreamweaver should greet you">
-        </label>
-        <label>
-          <span>Email *</span>
-          <input name="email" type="email" maxlength="254" autocomplete="email" required placeholder="you@example.com">
-        </label>
-        <label>
-          <span>Preferred platform</span>
-          <select name="favoritePlatform">
-            <option value="spotify">Spotify</option>
-            <option value="apple_music">Apple Music</option>
-            <option value="youtube">YouTube</option>
-          </select>
-        </label>
-        <label class="satellite-trap" aria-hidden="true">
-          <span>Company</span>
-          <input name="company" type="text" tabindex="-1" autocomplete="off" aria-hidden="true">
-        </label>
-        <label class="satellite-consent">
-          <input name="consent" type="checkbox" required>
-          <span>I want Dreamweaver to unlock the release experience and send follow-up release notes. Platform links stay optional and premium remixes / album builds are separate paid offers handled directly by the team.</span>
-        </label>
-        <button class="satellite-submit" type="submit"><span>Unlock the full Dreamweaver doorway</span><b>↘</b></button>
-        <p class="satellite-status" id="dreamweaverUnlockStatus" role="status" aria-live="polite"></p>
-      </form>
-    </aside>
+    <div class="song-lobby__acts" aria-label="Dreamweaver story arc">
+      <article class="story-act" id="storyActI" aria-labelledby="storyActITitle">
+        <p class="story-act__eyebrow">Act I / The Hook</p>
+        <h2 id="storyActITitle">The origin starts in a feeling, not a feature list.</h2>
+        <p>Dreamweaver frames the release like a late-night confession: the room quiets, the artwork holds eye contact, and the track steps forward carrying whatever had to be said before anyone asked for a chorus.</p>
+        <p>The public view stays close to the emotional reason the song exists, so first-time listeners meet the world of the record before any production mechanics or creator tooling enter the frame.</p>
+      </article>
+
+      <article class="story-act" id="storyActII" aria-labelledby="storyActIITitle">
+        <p class="story-act__eyebrow">Act II / Lyric Break</p>
+        <h2 id="storyActIITitle">Featured lines land like marginal notes in the dark.</h2>
+        <div class="lyric-fragments" aria-label="Featured lyric fragments">
+          <blockquote class="lyric-fragment">
+            <p>“Stay with the light when the room turns blue.”</p>
+            <cite>Dreamweaver note: the line plays like a promise made under pressure, so the typography stays spacious and deliberate.</cite>
+          </blockquote>
+          <blockquote class="lyric-fragment">
+            <p>“Every quiet echo still remembers your name.”</p>
+            <cite>Dreamweaver note: this is the lyric break where the song stops performing and starts confiding.</cite>
+          </blockquote>
+          <blockquote class="lyric-fragment">
+            <p>“If the night opens, let the heartbeat answer first.”</p>
+            <cite>Dreamweaver note: the lobby treats the phrase like a cue for breath, warmth, and a slower camera move.</cite>
+          </blockquote>
+        </div>
+      </article>
+
+      <article class="story-act" id="storyActIII" aria-labelledby="storyActIIITitle">
+        <p class="story-act__eyebrow">Act III / Sonic World</p>
+        <h2 id="storyActIIITitle">This is the listening environment before it becomes a playlist tab.</h2>
+        <ul class="sonic-world-list">
+          <li><strong>Mood:</strong> cinematic, intimate, and slightly nocturnal.</li>
+          <li><strong>Instrumentation:</strong> patient low-end, suspended keys, vocal air, and a rhythm that arrives like weather.</li>
+          <li><strong>Best setting:</strong> headphones after midnight, a quiet drive, or the first five minutes after everyone else leaves the room.</li>
+        </ul>
+        <p>Dreamweaver keeps the sonic description editorial and human so general listeners know how to enter the song, not how the mix bus was wired.</p>
+      </article>
+
+      <aside class="satellite-unlock story-act story-act--unlock" id="storyActIV" aria-labelledby="storyActIVTitle">
+        <p class="satellite-form-kicker">Act IV / Unlock &amp; Action</p>
+        <h2 id="storyActIVTitle">Leave your email and Dreamweaver opens the full streaming doorway.</h2>
+        <p>The reward is the full guided listening room below, direct exits to Spotify, Apple Music, and YouTube, plus a quiet creator gateway in the footer for the people building from the inside.</p>
+        <form id="dreamweaverUnlockForm" class="satellite-form" novalidate>
+          <label>
+            <span>First name <small>optional</small></span>
+            <input name="firstName" type="text" maxlength="80" autocomplete="given-name" placeholder="How Dreamweaver should greet you">
+          </label>
+          <label>
+            <span>Email *</span>
+            <input name="email" type="email" maxlength="254" autocomplete="email" required placeholder="you@example.com">
+          </label>
+          <label>
+            <span>Preferred platform</span>
+            <select name="favoritePlatform">
+              <option value="spotify">Spotify</option>
+              <option value="apple_music">Apple Music</option>
+              <option value="youtube">YouTube</option>
+            </select>
+          </label>
+          <label class="satellite-trap" aria-hidden="true">
+            <span>Company</span>
+            <input name="company" type="text" tabindex="-1" autocomplete="off" aria-hidden="true">
+          </label>
+          <label class="satellite-consent">
+            <input name="consent" type="checkbox" required>
+            <span>I want Dreamweaver to unlock the release experience and send follow-up release notes. Platform links stay optional and premium remixes / album builds are separate paid offers handled directly by the team.</span>
+          </label>
+          <button class="satellite-submit" type="submit"><span>Unlock full streaming access</span><b>↘</b></button>
+          <p class="satellite-status" id="dreamweaverUnlockStatus" role="status" aria-live="polite"></p>
+        </form>
+      </aside>
+    </div>
   </section>
 
   <section class="satellite-reward" id="dreamweaverReward" aria-labelledby="dreamweaverRewardTitle" hidden>
@@ -143,26 +199,26 @@
       </div>
 
       <aside class="chapter-rail" aria-label="Show chapters">
-        <p>Five movements</p>
+        <p>Four acts</p>
         <div class="chapter-list" id="chapterList"></div>
       </aside>
 
       <article class="story-frame" id="storyFrame">
-        <div class="story-counter"><span id="chapterNumber">01</span><i></i><span>05</span></div>
-        <p class="story-kicker" id="storyKicker">An artist story in motion</p>
-        <h1 id="storyTitle">The signal begins slowly.</h1>
+        <div class="story-counter"><span id="chapterNumber">I</span><i></i><span>IV</span></div>
+        <p class="story-kicker" id="storyKicker">Act I / Emotional origin</p>
+        <h1 id="storyTitle">Before the chorus, there was a reason to stay.</h1>
         <p class="story-copy" id="storyCopy"></p>
-        <button class="story-detail-button" id="openStory" type="button">Open the story notes</button>
+        <button class="story-detail-button" id="openStory" type="button">Open the act notes</button>
       </article>
 
       <div class="mix-caption">
-        <span>Now woven from the Mix Desk</span>
+        <span>Now playing in the Song Lobby</span>
         <strong id="mixTitle">Loading the mix…</strong>
         <small id="mixCreator">HALO / Dreamweaver</small>
       </div>
 
       <aside class="release-panel" id="releasePanel" aria-live="polite">
-        <p class="release-panel__signature">Dreamweaver cinema edition</p>
+        <p class="release-panel__signature">Dreamweaver song lobby</p>
         <figure class="release-panel__artwork release-artwork-frame" data-artwork-frame>
           <img id="releaseArtwork" class="release-artwork-image" alt="" data-release-artwork data-artwork-badge="HALO placeholder cover">
         </figure>
@@ -180,7 +236,7 @@
           <svg class="pause-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5h4v14H7zM14 5h4v14h-4z"></path></svg>
         </button>
         <div class="transport-main">
-          <div class="time-row"><span id="elapsedTime">00:00</span><span id="chapterTime">Movement 01</span><span id="durationTime">00:00</span></div>
+          <div class="time-row"><span id="elapsedTime">00:00</span><span id="chapterTime">Act I / The Hook</span><span id="durationTime">00:00</span></div>
           <input class="show-progress" id="showProgress" type="range" min="0" max="1000" value="0" aria-label="Show progress">
           <div class="progress-markers" id="progressMarkers" aria-hidden="true"></div>
         </div>
@@ -194,9 +250,9 @@
       </section>
 
       <div class="mode-switcher" role="group" aria-label="Dreamweaver viewing mode">
-        <button type="button" data-mode="watch" aria-pressed="true">Watch</button>
+        <button type="button" data-mode="watch" aria-pressed="true">Listen</button>
         <button type="button" data-mode="room" aria-pressed="false">Room</button>
-        <button type="button" data-mode="explore" aria-pressed="false">Explore</button>
+        <button type="button" data-mode="explore" aria-pressed="false">Notes</button>
       </div>
     </section>
 
@@ -204,7 +260,7 @@
       <p>Dreamweaver / no playable mix found</p>
       <h1>The room is ready.<br>The story needs a set.</h1>
       <p id="emptyMessage">Post an audio mix from the Mix Desk, then return here to turn it into a visual journey.</p>
-      <div><a href="/dj-deck.html">Open the Mix Desk</a><button id="retryShow" type="button">Read the room again</button></div>
+      <div><a href="/dj-deck.html">Open the creator deck</a><button id="retryShow" type="button">Read the room again</button></div>
     </section>
   </main>
 
@@ -364,8 +420,8 @@
 
   <aside class="story-drawer" id="storyDrawer" aria-labelledby="drawerTitle" aria-hidden="true">
     <button class="drawer-close" id="closeStory" type="button" aria-label="Close story notes">Close</button>
-    <p class="drawer-kicker" id="drawerKicker">Movement 01 / Origin</p>
-    <h2 id="drawerTitle">The signal begins slowly.</h2>
+    <p class="drawer-kicker" id="drawerKicker">Act I / The Hook</p>
+    <h2 id="drawerTitle">Before the chorus, there was a reason to stay.</h2>
     <p class="drawer-lead" id="drawerLead"></p>
     <div class="drawer-grid">
       <section><span>Dreamweaver note</span><p id="drawerNote"></p></section>
@@ -377,6 +433,12 @@
 
   <audio id="showAudio" preload="metadata"></audio>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
-  <footer class="proprietary-notice">Dreamweaver™ is proprietary HALO technology. Public descriptions communicate capabilities and outcomes, not confidential methods.</footer>
+  <footer class="proprietary-notice">
+    <span>Dreamweaver™ is proprietary HALO technology. Public descriptions communicate capabilities and outcomes, not confidential methods.</span>
+    <div class="creator-footer-links">
+      <a id="dreamweaverSongLabLink" class="creator-footer-link creator-footer-link--secondary" href="/dreamweaver-lab/">Song Lab upload</a>
+      <a class="creator-footer-link" href="/dj-deck.html">Creator gateway /dj-deck</a>
+    </div>
+  </footer>
 </body>
 </html>

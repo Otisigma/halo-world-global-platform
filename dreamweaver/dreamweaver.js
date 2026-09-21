@@ -72,8 +72,11 @@
   const MIX_LIBRARY_TIMEOUT_MS = 12000;
   const RELEASE_CONTEXT_TIMEOUT_MS = 8000;
   const VIDEO_LIBRARY_TIMEOUT_MS = 8000;
+  const AUDIO_BOOTSTRAP_TIMEOUT_MS = 7000;
+  const MAX_AUDIO_FEEDBACK_RECORDS = 24;
   const SATELLITE_AGENT_REFRESH_MS = 45_000;
   const DREAMWEAVER_RELEASE_FALLBACK_ARTWORK = window.HaloReleaseArtwork?.DEFAULT_RELEASE_ARTWORK || "/assets/releases/halo-premium-placeholder.svg";
+  const audioFeedbackStorageKey = "halo:dreamweaver-audio-feedback";
 
   const elements = {
     songLabLink: document.getElementById("dreamweaverSongLabLink"),
@@ -218,6 +221,9 @@
     buildPreviewStartedAt: 0,
     trackedProgress: new Set(),
     startPlaybackAfterLoad: false,
+    audioFeedbackQueue: [],
+    audioFeedbackFingerprints: new Set(),
+    audioFeedbackFlushPromise: null,
     satelliteAgentLoop: { timer: 0, loopId: "", updateIntervalMs: SATELLITE_AGENT_REFRESH_MS, lastUpdatedAt: "", lastError: "" },
     sessionToken: window.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`
   };
@@ -260,6 +266,172 @@
   function cleanSongId(value) {
     const songId = cleanText(value, 60).toLowerCase();
     return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(songId) ? songId : "";
+  }
+
+  function readAudioFeedbackQueue() {
+    try {
+      const parsed = JSON.parse(localStorage.getItem(audioFeedbackStorageKey) || "[]");
+      if (!Array.isArray(parsed)) return [];
+      return parsed
+        .map(entry => ({
+          id: cleanText(entry?.id, 120),
+          kind: cleanText(entry?.kind, 60),
+          severity: cleanText(entry?.severity, 24) || "medium",
+          title: cleanText(entry?.title, 180),
+          details: cleanText(entry?.details, 1200),
+          pagePath: cleanText(entry?.pagePath, 320) || "/dreamweaver/",
+          mixId: cleanText(entry?.mixId, 120),
+          songId: cleanSongId(entry?.songId),
+          fingerprint: cleanText(entry?.fingerprint, 500),
+          createdAt: cleanText(entry?.createdAt, 80),
+          lastAttemptAt: cleanText(entry?.lastAttemptAt, 80),
+          deliveryStatus: cleanText(entry?.deliveryStatus, 24) || "queued",
+          metadata: entry?.metadata && typeof entry.metadata === "object" && !Array.isArray(entry.metadata) ? entry.metadata : {}
+        }))
+        .filter(entry => entry.fingerprint && entry.title);
+    } catch {
+      return [];
+    }
+  }
+
+  function writeAudioFeedbackQueue(records) {
+    try {
+      localStorage.setItem(audioFeedbackStorageKey, JSON.stringify(records.slice(0, MAX_AUDIO_FEEDBACK_RECORDS)));
+    } catch {}
+  }
+
+  function hydrateAudioFeedbackQueue() {
+    state.audioFeedbackQueue = readAudioFeedbackQueue();
+    state.audioFeedbackFingerprints = new Set(state.audioFeedbackQueue.map(entry => entry.fingerprint));
+  }
+
+  function patchAudioFeedbackRecord(fingerprint, patch = {}) {
+    if (!fingerprint) return;
+    state.audioFeedbackQueue = state.audioFeedbackQueue.map(entry => entry.fingerprint === fingerprint ? { ...entry, ...patch } : entry);
+    writeAudioFeedbackQueue(state.audioFeedbackQueue);
+  }
+
+  function queueAudioFeedbackIncident(kind, {
+    severity = "medium",
+    title = "Dreamweaver audio issue detected",
+    details = "Dreamweaver detected an audio issue while bootstrapping playback.",
+    mix = state.mix,
+    metadata = {},
+    fingerprint = ""
+  } = {}) {
+    const normalizedFingerprint = cleanText(
+      fingerprint || [
+        kind,
+        cleanText(mix?.id, 120),
+        cleanSongId(state.publishedSongId),
+        cleanText(location.pathname, 160),
+        cleanText(details, 240)
+      ].join("|"),
+      500
+    );
+    if (!normalizedFingerprint || state.audioFeedbackFingerprints.has(normalizedFingerprint)) return null;
+
+    const incident = {
+      id: window.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+      kind: cleanText(kind, 60),
+      severity: cleanText(severity, 24) || "medium",
+      title: cleanText(title, 180),
+      details: cleanText(details, 1200),
+      pagePath: cleanText(`${location.pathname}${location.search}`, 320) || "/dreamweaver/",
+      mixId: cleanText(mix?.id, 120),
+      songId: cleanSongId(state.publishedSongId),
+      fingerprint: normalizedFingerprint,
+      createdAt: new Date().toISOString(),
+      lastAttemptAt: "",
+      deliveryStatus: "queued",
+      metadata: {
+        mixTitle: cleanText(mix?.title, 160),
+        mixSource: cleanText(mix?.source, 60) || "audio",
+        muted: Boolean(elements.audio?.muted),
+        volume: Number.isFinite(elements.audio?.volume) ? Number(elements.audio.volume) : 1,
+        sessionToken: cleanText(state.sessionToken, 120),
+        ...metadata
+      }
+    };
+
+    state.audioFeedbackFingerprints.add(normalizedFingerprint);
+    state.audioFeedbackQueue = [incident, ...state.audioFeedbackQueue].slice(0, MAX_AUDIO_FEEDBACK_RECORDS);
+    writeAudioFeedbackQueue(state.audioFeedbackQueue);
+    window.dispatchEvent(new CustomEvent("halo:journal-event", {
+      detail: {
+        eventType: "qa_issue",
+        category: "problem",
+        targetName: "dreamweaver-audio",
+        details: {
+          kind: incident.kind,
+          severity: incident.severity,
+          mixId: incident.mixId || null,
+          deliveryStatus: incident.deliveryStatus
+        },
+        immediate: true
+      }
+    }));
+    void flushQueuedAudioFeedback();
+    return incident;
+  }
+
+  async function sendAudioFeedbackIncident(incident) {
+    if (!incident?.fingerprint) return;
+    const nextAttemptAt = new Date().toISOString();
+    patchAudioFeedbackRecord(incident.fingerprint, { lastAttemptAt: nextAttemptAt, deliveryStatus: "sending" });
+    try {
+      const response = await fetch("/api/issues", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        keepalive: true,
+        body: JSON.stringify({
+          source: "browser",
+          category: "dreamweaver-audio",
+          severity: incident.severity,
+          title: incident.title,
+          details: incident.details,
+          pagePath: incident.pagePath || location.pathname,
+          fingerprint: incident.fingerprint,
+          metadata: incident.metadata
+        })
+      });
+      if (!response.ok) throw new Error(`Issue endpoint returned ${response.status}`);
+      patchAudioFeedbackRecord(incident.fingerprint, { deliveryStatus: "sent" });
+    } catch {
+      patchAudioFeedbackRecord(incident.fingerprint, { deliveryStatus: "queued" });
+    }
+  }
+
+  async function flushQueuedAudioFeedback() {
+    if (state.audioFeedbackFlushPromise) return state.audioFeedbackFlushPromise;
+    state.audioFeedbackFlushPromise = (async () => {
+      const flushStartedAt = Date.now();
+      const seenFingerprints = new Set();
+      try {
+        const pending = [];
+        for (const entry of state.audioFeedbackQueue) {
+          if (
+            entry.deliveryStatus === "sent"
+            || seenFingerprints.has(entry.fingerprint)
+            || (
+              entry.lastAttemptAt
+              && !Number.isNaN(Date.parse(entry.lastAttemptAt))
+              && Date.parse(entry.lastAttemptAt) >= flushStartedAt
+            )
+          ) {
+            continue;
+          }
+          seenFingerprints.add(entry.fingerprint);
+          pending.push(entry);
+        }
+        for (const incident of pending) {
+          await sendAudioFeedbackIncident(incident);
+        }
+      } finally {
+        state.audioFeedbackFlushPromise = null;
+      }
+    })();
+    return state.audioFeedbackFlushPromise;
   }
 
   function songIdFromSatellitePath(pathname = location.pathname) {
@@ -316,6 +488,138 @@
     } finally {
       window.clearTimeout(timeoutId);
     }
+  }
+
+  function isPlayablePrimaryMix(mix) {
+    const source = cleanText(mix?.source, 60).toLowerCase();
+    return Boolean(cleanText(mix?.audioUrl, 1200)) && source !== "youtube";
+  }
+
+  function resolvePrimaryPlaybackMix(mixes = [], requestedMixId = "") {
+    const requested = cleanText(requestedMixId, 120);
+    const library = Array.isArray(mixes) ? mixes : [];
+    const requestedEntry = requested ? library.find(item => cleanText(item?.id, 120) === requested) : null;
+    if (isPlayablePrimaryMix(requestedEntry)) return requestedEntry;
+
+    if (requestedEntry && !cleanText(requestedEntry.audioUrl, 1200)) {
+      queueAudioFeedbackIncident("missing_audio", {
+        severity: "high",
+        title: "Dreamweaver primary mix is missing audio",
+        details: `The requested mix ${requestedEntry.id || requested} does not have a playable audio source.`,
+        mix: requestedEntry,
+        metadata: { requestedMixId: requested, failureState: "missing_audio" }
+      });
+    } else if (requestedEntry && !isPlayablePrimaryMix(requestedEntry)) {
+      queueAudioFeedbackIncident("non_playable_audio", {
+        severity: "medium",
+        title: "Dreamweaver requested mix is not directly playable",
+        details: `The requested mix ${requestedEntry.id || requested} resolves to a non-audio source and cannot bootstrap the primary player.`,
+        mix: requestedEntry,
+        metadata: { requestedMixId: requested, failureState: "non_playable_audio", source: requestedEntry.source }
+      });
+    }
+
+    if (requested && requestedEntry) return null;
+    return library.find(isPlayablePrimaryMix) || null;
+  }
+
+  function describeAudioElementFailure() {
+    const code = Number(elements.audio?.error?.code || 0);
+    if (code === 1) return "The audio bootstrap was interrupted before Dreamweaver could start playback.";
+    if (code === 2) return "The linked audio file could not be downloaded.";
+    if (code === 3) return "The linked audio file appears corrupted or could not be decoded.";
+    if (code === 4) return "The linked audio format is not supported for Dreamweaver playback.";
+    return "Dreamweaver could not prepare the linked audio for playback.";
+  }
+
+  async function awaitPrimaryPlaybackReadiness() {
+    if (elements.audio.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) return { ok: true, state: "ready" };
+    return new Promise(resolve => {
+      let settled = false;
+      const cleanup = () => {
+        window.clearTimeout(timeoutId);
+        elements.audio.removeEventListener("loadeddata", handleReady);
+        elements.audio.removeEventListener("canplay", handleReady);
+        elements.audio.removeEventListener("error", handleError);
+      };
+      const settle = result => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        resolve(result);
+      };
+      const handleReady = () => settle({ ok: true, state: "ready" });
+      const handleError = () => settle({ ok: false, state: "error", detail: describeAudioElementFailure() });
+      const timeoutId = window.setTimeout(() => settle({ ok: false, state: "timeout", detail: "Dreamweaver waited too long for the linked audio to become playable." }), AUDIO_BOOTSTRAP_TIMEOUT_MS);
+      elements.audio.addEventListener("loadeddata", handleReady, { once: true });
+      elements.audio.addEventListener("canplay", handleReady, { once: true });
+      elements.audio.addEventListener("error", handleError, { once: true });
+    });
+  }
+
+  async function bootstrapPrimaryPlayback(mix) {
+    if (!mix?.audioUrl) {
+      queueAudioFeedbackIncident("missing_audio", {
+        severity: "high",
+        title: "Dreamweaver could not find primary audio",
+        details: "The selected Dreamweaver mix does not expose a primary audio URL for playback bootstrap.",
+        mix,
+        metadata: { failureState: "missing_audio" }
+      });
+      throw new Error("The selected Dreamweaver mix is missing its primary audio source.");
+    }
+
+    setLoadingProgress(58, "Bootstrapping primary playback", "Dreamweaver is loading the linked song first so sound can start before the wider loop hydrates.");
+    state.mix = mix;
+    state.duration = Number(mix.durationSeconds || 0);
+    elements.audio.pause();
+    elements.audio.currentTime = 0;
+    elements.audio.src = mix.audioUrl;
+    elements.audio.load?.();
+
+    if (elements.audio.muted || Number(elements.audio.volume) === 0) {
+      queueAudioFeedbackIncident("muted_audio", {
+        severity: "medium",
+        title: "Dreamweaver primary audio initialized muted",
+        details: "The Dreamweaver player was muted while preparing the first linked song for playback.",
+        mix,
+        metadata: { failureState: "muted_audio" }
+      });
+    }
+
+    const readiness = await awaitPrimaryPlaybackReadiness();
+    if (!readiness.ok) {
+      queueAudioFeedbackIncident(readiness.state === "error" && Number(elements.audio?.error?.code || 0) === 3 ? "corrupted_audio" : "non_playable_audio", {
+        severity: "high",
+        title: "Dreamweaver primary audio could not be prepared",
+        details: readiness.detail || describeAudioElementFailure(),
+        mix,
+        metadata: { failureState: readiness.state === "error" && Number(elements.audio?.error?.code || 0) === 3 ? "corrupted_audio" : "non_playable_audio" }
+      });
+      throw new Error(readiness.detail || "The linked Dreamweaver audio could not be prepared.");
+    }
+
+    try {
+      await elements.audio.play();
+      return { started: true };
+    } catch (error) {
+      queueAudioFeedbackIncident("non_playable_audio", {
+        severity: "medium",
+        title: "Dreamweaver primary audio could not start",
+        details: cleanText(error instanceof Error ? error.message : "Playback was blocked before Dreamweaver could start the linked song.", 1200, "Playback was blocked before Dreamweaver could start the linked song."),
+        mix,
+        metadata: { failureState: "non_playable_audio", reason: "play-rejected" }
+      });
+      showToast("Press play again to start the audio experience.");
+      return { started: false };
+    }
+  }
+
+  async function hydrateDreamweaverLoopContent() {
+    setLoadingProgress(82, "Hydrating the Dreamweaver loop", "Stories, release context, and the wider loop are loading after the primary song bootstrap.");
+    await loadReleaseContext();
+    updatePlatformLinks();
+    await loadVideos();
   }
 
   function releaseArtwork(release = {}) {
@@ -1486,28 +1790,29 @@
         credentials: "same-origin"
       });
       if (!response.ok) throw new Error(data.message || "The Dreamweaver mix library could not be read.");
-      const playable = (data.mixes || []).filter(mix => mix.audioUrl && mix.source !== "youtube");
-      const mix = playable.find(item => item.id === requestedMix) || playable[0];
-      if (!mix) return showEmpty("No playable audio mix is available yet. Post the existing set to the HALO room or sign in to open a private mix.");
+      const mix = resolvePrimaryPlaybackMix(data.mixes || [], requestedMix);
+      if (!mix) {
+        queueAudioFeedbackIncident("missing_audio", {
+          severity: "high",
+          title: "Dreamweaver has no playable primary audio",
+          details: "Dreamweaver could not resolve a playable linked song from the current hub request.",
+          metadata: { requestedMixId: cleanText(requestedMix, 120), failureState: "missing_audio" }
+        });
+        return showEmpty("No playable audio mix is available yet. Post the existing set to the HALO room or sign in to open a private mix.");
+      }
       setLoadingProgress(34, "Selecting tonight’s signal", "A published Dreamweaver mix has been selected and the room is shifting to match its pace.");
-      state.mix = mix;
-      state.duration = Number(mix.durationSeconds || 0);
-      elements.audio.src = mix.audioUrl;
       elements.mixTitle.textContent = mix.title || "Untitled HALO mix";
       elements.mixCreator.textContent = `${mix.creator?.name || "Owen Anthony"} / ${mix.trackCount || "DJ"} ${mix.trackCount === 1 ? "track" : "tracks"}`;
-      elements.duration.textContent = formatTime(state.duration);
+      elements.duration.textContent = formatTime(Number(mix.durationSeconds || 0));
       document.title = `${mix.title || "Dreamweaver Show"} — HALO`;
       const currentParams = new URLSearchParams(location.search);
       currentParams.set("mix", mix.id);
       if (state.publishedSongId) currentParams.set("song", state.publishedSongId);
       if (isSatellitePath()) history.replaceState(null, "", `${location.pathname}?${currentParams.toString()}`);
       else history.replaceState(null, "", `/dreamweaver/?${currentParams.toString()}`);
-      setLoadingProgress(58, "Scoring the release frame", "Artwork and release details are being synced so the first screen lands with context.");
-      await loadReleaseContext();
-      setLoadingProgress(82, "Finalizing chapter movement", "The five-movement chapter rail and controls are aligning to the mix timeline.");
-      setReleasePlaybackState("ready");
-      updatePlatformLinks();
-      await loadVideos();
+      const playbackBootstrap = await bootstrapPrimaryPlayback(mix);
+      await hydrateDreamweaverLoopContent();
+      if (!playbackBootstrap?.started || elements.audio.paused || elements.audio.ended) setReleasePlaybackState("ready");
       setLoadingProgress(100, "Dreamweaver is ready", "Press play and move through the full cinematic edition.");
       elements.loading.setAttribute("aria-hidden", "true");
       elements.stage.hidden = false;
@@ -1531,15 +1836,17 @@
   }
 
   async function initializeDreamweaver() {
-   renderSatelliteState();
-   updatePlatformLinks();
-   if (isSatelliteFlow()) startSatelliteAgentLoop();
-   else stopSatelliteAgentLoop();
-   if (isSatelliteFlow() && !state.unlock) {
-     elements.shell.setAttribute("aria-busy", "false");
-     return;
-   }
-   await loadShow();
+    hydrateAudioFeedbackQueue();
+    void flushQueuedAudioFeedback();
+    renderSatelliteState();
+    updatePlatformLinks();
+    if (isSatelliteFlow()) startSatelliteAgentLoop();
+    else stopSatelliteAgentLoop();
+    if (isSatelliteFlow() && !state.unlock) {
+      elements.shell.setAttribute("aria-busy", "false");
+      return;
+    }
+    await loadShow();
   }
 
   if (resumeUploadVerification()) return;
@@ -1589,8 +1896,18 @@
     }
     setReleasePlaybackState("ready");
   });
-  elements.audio.addEventListener("error", () => { setReleasePlaybackState("unavailable"); showToast("The mix audio is unavailable. The visual edition remains open."); });
+  elements.audio.addEventListener("error", () => {
+    queueAudioFeedbackIncident(Number(elements.audio?.error?.code || 0) === 3 ? "corrupted_audio" : "non_playable_audio", {
+      severity: "high",
+      title: "Dreamweaver audio playback failed",
+      details: describeAudioElementFailure(),
+      metadata: { failureState: Number(elements.audio?.error?.code || 0) === 3 ? "corrupted_audio" : "non_playable_audio" }
+    });
+    setReleasePlaybackState("unavailable");
+    showToast("The mix audio is unavailable. The visual edition remains open.");
+  });
   elements.muteButton.addEventListener("click", () => { elements.audio.muted = !elements.audio.muted; elements.muteButton.setAttribute("aria-label", elements.audio.muted ? "Unmute show" : "Mute show"); showToast(elements.audio.muted ? "Show muted" : "Sound restored"); });
+  window.addEventListener("online", () => { void flushQueuedAudioFeedback(); });
   elements.fullScreenButton.addEventListener("click", async () => { try { if (document.fullscreenElement) await document.exitFullscreen(); else await elements.stage.requestFullscreen(); } catch { showToast("Full screen is not available in this browser."); } });
   elements.shareShow.addEventListener("click", async () => {
     const publishedSongUrl = publishedSongShareUrl();

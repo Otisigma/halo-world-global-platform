@@ -344,11 +344,53 @@ body.show-ready .show-stage { opacity: 1; transform: scale(1); transition: opaci
   font-size: 12px;
   line-height: 1.8;
 }
-.song-lobby__audio {
+.song-lobby__transport {
   position: relative;
   z-index: 1;
+  display: grid;
+  grid-template-columns: 132px minmax(0, 1fr);
+  gap: 14px;
+  align-items: center;
+}
+.song-lobby__transport-button {
+  display: grid;
+  gap: 8px;
+  min-height: 88px;
+  border: 1px solid rgba(255,255,255,.14);
+  background: rgba(255,255,255,.04);
+  color: var(--paper);
+  font: inherit;
+  place-items: center;
+  text-transform: uppercase;
+}
+.song-lobby__transport-button span {
+  font-size: 18px;
+}
+.song-lobby__transport-button strong,
+.song-lobby__transport-times {
+  font-size: 9px;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+}
+.song-lobby__transport-main {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+.song-lobby__transport-times {
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1fr) 56px;
+  gap: 8px;
+  color: var(--smoke);
+}
+.song-lobby__transport-times span:nth-child(2) {
+  text-align: center;
+}
+.song-lobby__transport-times span:last-child {
+  text-align: right;
+}
+.song-lobby__transport-progress {
   width: 100%;
-  min-height: 54px;
   accent-color: var(--acid);
 }
 .song-lobby__player-actions {
@@ -363,6 +405,14 @@ body.show-ready .show-stage { opacity: 1; transform: scale(1); transition: opaci
   letter-spacing: .14em;
   text-decoration: none;
   text-transform: uppercase;
+}
+@media (max-width: 650px) {
+  .song-lobby__transport {
+    grid-template-columns: 1fr;
+  }
+  .song-lobby__transport-button {
+    min-height: 58px;
+  }
 }
 .song-lobby__media {
   display: grid;

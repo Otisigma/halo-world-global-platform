@@ -159,7 +159,20 @@
             <p class="song-lobby__player-artist" id="songLobbyPlayerArtist">HALO / Dreamweaver</p>
             <p class="song-lobby__player-status" id="songLobbyPlayerStatus">Dreamweaver is preparing the featured mix without blocking the story-first layout.</p>
           </div>
-          <audio id="showAudio" class="song-lobby__audio" preload="metadata" controls aria-label="Dreamweaver featured mix player"></audio>
+          <div class="song-lobby__transport" aria-label="Dreamweaver featured mix controls">
+            <button class="song-lobby__transport-button" id="songLobbyHeroPlayButton" type="button" aria-label="Play mix">
+              <span aria-hidden="true">▶</span>
+              <strong id="songLobbyHeroPlayLabel">Play mix</strong>
+            </button>
+            <div class="song-lobby__transport-main">
+              <div class="song-lobby__transport-times">
+                <span id="songLobbyHeroElapsed">00:00</span>
+                <span id="songLobbyHeroChapter">Act I / The Hook</span>
+                <span id="songLobbyHeroDuration">00:00</span>
+              </div>
+              <input class="song-lobby__transport-progress" id="songLobbyHeroProgress" type="range" min="0" max="1000" value="0" aria-label="Dreamweaver mix progress">
+            </div>
+          </div>
           <div class="song-lobby__player-actions">
             <a id="songLobbyPlayerSource" class="song-lobby__source" href="https://distrokid.com/hyperfollow/owenanthony/blessed" target="_blank" rel="noopener noreferrer">Blessed — Owen Anthony ↗</a>
             <a class="song-lobby__anchor song-lobby__anchor--subtle" href="/dj-deck.html">Creator gateway /dj-deck</a>
@@ -561,6 +574,7 @@
     <div class="archive-reel" id="archiveReel" aria-label="Connected artist video archive"></div>
   </aside>
 
+  <audio id="showAudio" preload="metadata"></audio>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
   <footer class="proprietary-notice">
     <span>Dreamweaver™ is proprietary HALO technology. Public descriptions communicate capabilities and outcomes, not confidential methods.</span>

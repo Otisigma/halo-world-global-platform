@@ -85,6 +85,12 @@
     songLobbyPlayerStatePill: document.getElementById("songLobbyPlayerStatePill"),
     songLobbyPlayerDuration: document.getElementById("songLobbyPlayerDuration"),
     songLobbyPlayerSource: document.getElementById("songLobbyPlayerSource"),
+    songLobbyHeroPlayButton: document.getElementById("songLobbyHeroPlayButton"),
+    songLobbyHeroPlayLabel: document.getElementById("songLobbyHeroPlayLabel"),
+    songLobbyHeroElapsed: document.getElementById("songLobbyHeroElapsed"),
+    songLobbyHeroChapter: document.getElementById("songLobbyHeroChapter"),
+    songLobbyHeroProgress: document.getElementById("songLobbyHeroProgress"),
+    songLobbyHeroDuration: document.getElementById("songLobbyHeroDuration"),
     lobbyArtwork: document.getElementById("lobbyArtwork"),
     lobbyArtworkCaption: document.getElementById("lobbyArtworkCaption"),
     heroReelVideo: document.getElementById("heroReelVideo"),
@@ -765,7 +771,7 @@
 
   function isMixStoryRoute() {
     const params = new URLSearchParams(location.search);
-    return Boolean(params.get("mix")) && !(campaignIdFromUrl() || params.get("experience") === "studio");
+    return Boolean(params.get("mix")) && !(params.get("campaign") || params.get("experience") === "studio");
   }
 
   function renderSongLobbyHero() {
@@ -1222,6 +1228,7 @@
     elements.storyTitle.textContent = chapter.title;
     elements.storyCopy.textContent = chapter.copy;
     elements.chapterTime.textContent = `Act ${chapter.number} / ${chapter.label}`;
+    if (elements.songLobbyHeroChapter) elements.songLobbyHeroChapter.textContent = `Act ${chapter.number} / ${chapter.label}`;
     elements.drawerKicker.textContent = `Act ${chapter.number} / ${chapter.label}`;
     elements.drawerTitle.textContent = chapter.title;
     elements.drawerLead.textContent = chapter.copy;
@@ -1247,8 +1254,12 @@
     const ratio = duration ? current / duration : 0;
     elements.progress.value = String(Math.round(ratio * 1000));
     elements.progress.style.setProperty("--progress", `${ratio * 100}%`);
+    if (elements.songLobbyHeroProgress) elements.songLobbyHeroProgress.value = String(Math.round(ratio * 1000));
+    if (elements.songLobbyHeroProgress) elements.songLobbyHeroProgress.style.setProperty("--progress", `${ratio * 100}%`);
     elements.elapsed.textContent = formatTime(current);
     elements.duration.textContent = formatTime(duration);
+    if (elements.songLobbyHeroElapsed) elements.songLobbyHeroElapsed.textContent = formatTime(current);
+    if (elements.songLobbyHeroDuration) elements.songLobbyHeroDuration.textContent = formatTime(duration);
     const chapterIndex = currentChapterIndex();
     if (chapterIndex !== state.activeChapter) activateChapter(chapterIndex, false);
     if (campaignIdFromUrl() && duration) {
@@ -1270,6 +1281,14 @@
         showToast("Press play again to start the audio experience.");
       }
     } else elements.audio.pause();
+  }
+
+  function updateHeroPlayButton(isPlaying) {
+    if (!elements.songLobbyHeroPlayButton) return;
+    elements.songLobbyHeroPlayButton.setAttribute("aria-label", isPlaying ? "Pause mix" : "Play mix");
+    if (elements.songLobbyHeroPlayLabel) elements.songLobbyHeroPlayLabel.textContent = isPlaying ? "Pause mix" : "Play mix";
+    const icon = elements.songLobbyHeroPlayButton.querySelector("span[aria-hidden='true']");
+    if (icon) icon.textContent = isPlaying ? "❚❚" : "▶";
   }
 
   function setMode(mode) {
@@ -2098,9 +2117,15 @@
   renderFootageSelector();
   renderArchive();
   elements.playButton.addEventListener("click", togglePlayback);
+  elements.songLobbyHeroPlayButton?.addEventListener("click", togglePlayback);
   elements.progress.addEventListener("input", () => {
     if (!state.duration) return;
     elements.audio.currentTime = Number(elements.progress.value) / 1000 * state.duration;
+    updateProgress();
+  });
+  elements.songLobbyHeroProgress?.addEventListener("input", () => {
+    if (!state.duration) return;
+    elements.audio.currentTime = Number(elements.songLobbyHeroProgress.value) / 1000 * state.duration;
     updateProgress();
   });
   elements.audio.addEventListener("loadedmetadata", () => {
@@ -2113,6 +2138,7 @@
   elements.audio.addEventListener("play", () => {
     document.body.classList.add("is-playing");
     elements.playButton.setAttribute("aria-label", "Pause show");
+    updateHeroPlayButton(true);
     resetIdle();
     if (campaignIdFromUrl() && !state.trackedProgress.has("show_play")) {
       state.trackedProgress.add("show_play");
@@ -2123,11 +2149,13 @@
   elements.audio.addEventListener("pause", () => {
     document.body.classList.remove("is-playing");
     elements.playButton.setAttribute("aria-label", "Play show");
+    updateHeroPlayButton(false);
     document.body.classList.remove("idle");
     if (!elements.audio.ended) setReleasePlaybackState("paused");
   });
   elements.audio.addEventListener("ended", () => {
     activateChapter(chapters.length - 1, false);
+    updateHeroPlayButton(false);
     if (campaignIdFromUrl() && !state.trackedProgress.has("mix_complete")) {
       state.trackedProgress.add("mix_complete");
       trackCampaignEvent("mix_complete", new URLSearchParams(location.search).get("source") || "halo");

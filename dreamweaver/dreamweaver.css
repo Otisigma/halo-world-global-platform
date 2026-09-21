@@ -156,7 +156,26 @@ body.is-playing .signal-bars i { animation: bars .62s ease-in-out infinite alter
 .archive-card { position: relative; min-height: 150px; overflow: hidden; border: 1px solid var(--line); background: #0d0d0a; text-decoration: none; }.archive-card img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: .56; transition: transform .5s ease, opacity .5s ease; }.archive-card span { position: absolute; inset: auto 12px 12px; z-index: 1; font-size: 8px; line-height: 1.4; letter-spacing: .1em; text-transform: uppercase; }.archive-card:hover img { opacity: .84; transform: scale(1.04); }
 
 .toast { position: fixed; z-index: 90; right: 22px; bottom: 22px; max-width: 320px; border: 1px solid var(--acid); background: #11130e; color: var(--paper); padding: 14px 18px; font-size: 9px; line-height: 1.5; opacity: 0; pointer-events: none; transform: translateY(12px); transition: opacity .2s ease, transform .2s ease; }.toast.show { opacity: 1; transform: translateY(0); }
-.proprietary-notice { padding: 14px 24px; border-top: 1px solid rgba(240,235,217,.12); background: #090a08; color: rgba(240,235,217,.5); font: 500 9px/1.5 "IBM Plex Mono", monospace; letter-spacing: .12em; text-align: center; text-transform: uppercase; }
+.proprietary-notice { display: grid; gap: 10px; justify-items: center; padding: 14px 24px; border-top: 1px solid rgba(240,235,217,.12); background: #090a08; color: rgba(240,235,217,.5); font: 500 9px/1.5 "IBM Plex Mono", monospace; letter-spacing: .12em; text-align: center; text-transform: uppercase; }
+.creator-footer-links {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+}
+.creator-footer-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 36px;
+  border: 1px solid rgba(255,255,255,.16);
+  padding: 0 14px;
+  color: var(--paper);
+  text-decoration: none;
+}
+.creator-footer-link--secondary {
+  color: var(--smoke);
+}
 .empty-show > p:not(:first-child) { max-width: 640px; margin: 34px 0 0; color: var(--smoke); font-size: 12px; line-height: 1.8; }.empty-show div { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 32px; }.empty-show a, .empty-show button { display: inline-grid; place-items: center; min-height: 48px; border: 1px solid var(--paper); background: transparent; color: var(--paper); padding: 0 20px; font-size: 9px; letter-spacing: .13em; text-decoration: none; text-transform: uppercase; cursor: pointer; }.empty-show a { background: var(--paper); color: var(--ink); }
 
 body.mode-room .chapter-rail, body.mode-room .story-frame, body.mode-room .mix-caption, body.mode-room .edition-mark { opacity: 0; pointer-events: none; transform: translateY(14px); }
@@ -169,7 +188,9 @@ body.show-ready .show-stage { opacity: 1; transform: scale(1); transition: opaci
 
 @media (max-width: 980px) {
   .show-header { grid-template-columns: 1fr auto; }.show-header nav { display: none; }
-  .satellite-landing,
+  .song-lobby__hero,
+  .song-lobby__media,
+  .song-lobby__acts,
   .reward-grid { grid-template-columns: 1fr; }
   .satellite-proof { grid-template-columns: 1fr; }
   .chapter-rail { top: auto; right: 18px; bottom: 118px; left: 18px; width: auto; transform: none; padding: 8px; }.chapter-rail > p { display: none; }.chapter-list { display: flex; gap: 5px; }.chapter-button { grid-template-columns: 1fr; width: 44px; min-height: 34px; padding: 5px; border: 1px solid rgba(255,255,255,.2); text-align: center; }.chapter-button strong { display: none; }.chapter-button:hover, .chapter-button.active { transform: translateY(-3px); }
@@ -188,6 +209,8 @@ body.show-ready .show-stage { opacity: 1; transform: scale(1); transition: opaci
   .reward-primary-actions { flex-direction: column; align-items: stretch; }
   .platform-links,
   .premium-links { grid-template-columns: 1fr; }
+  .song-lobby__actions,
+  .creator-footer-links { flex-direction: column; }
   .mode-switcher { top: 78px; left: 12px; }.mode-switcher button { padding: 0 10px; }
   .edition-mark { top: 92px; right: 18px; }.edition-mark span { font-size: 38px; }
   .story-frame { right: 18px; bottom: 180px; left: 18px; width: auto; }.story-counter { margin-bottom: 15px; }.story-kicker { margin-bottom: 9px; }.story-frame h1 { font-size: clamp(48px, 16vw, 78px); }.story-copy { display: -webkit-box; overflow: hidden; margin-top: 17px; font-size: 10px; -webkit-box-orient: vertical; -webkit-line-clamp: 3; }.story-detail-button { margin-top: 13px; }
@@ -217,12 +240,172 @@ body.show-ready .show-stage { opacity: 1; transform: scale(1); transition: opaci
   box-shadow: 0 30px 90px rgba(0, 0, 0, .25);
 }
 .satellite-landing {
-  display: grid;
-  grid-template-columns: minmax(0, 1.2fr) minmax(300px, .88fr);
-  gap: clamp(24px, 4vw, 48px);
   padding: clamp(28px, 5vw, 58px);
 }
+.song-lobby__hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1.04fr) minmax(320px, 1fr);
+  gap: clamp(24px, 4vw, 52px);
+  align-items: start;
+}
+.song-lobby__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 28px;
+}
+.satellite-submit--inline {
+  justify-content: center;
+  min-width: 220px;
+}
+.song-lobby__anchor {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 48px;
+  border: 1px solid rgba(255,255,255,.16);
+  padding: 0 18px;
+  color: var(--paper);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: .14em;
+  text-decoration: none;
+  text-transform: uppercase;
+}
+.song-lobby__media {
+  display: grid;
+  grid-template-columns: minmax(180px, .82fr) minmax(220px, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+.song-lobby__artwork {
+  margin: 0;
+  overflow: hidden;
+  border: 1px solid rgba(255,255,255,.16);
+  background: rgba(255,255,255,.04);
+}
+.song-lobby__artwork img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  object-fit: cover;
+}
+.song-lobby__artwork figcaption {
+  padding: 12px 14px;
+  color: var(--smoke);
+  font-size: 8px;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+}
+.song-lobby__reel {
+  display: grid;
+  gap: 14px;
+  min-height: 100%;
+  border: 1px solid rgba(255,255,255,.12);
+  background: rgba(255,255,255,.03);
+  padding: clamp(18px, 2.5vw, 24px);
+}
+.song-lobby__reel-frame {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid rgba(255,255,255,.16);
+  background: radial-gradient(circle at top, rgba(215,242,99,.08), transparent 40%), #090a08;
+  aspect-ratio: 9 / 16;
+}
+.song-lobby__reel-frame iframe,
+.song-lobby__reel-fallback {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.song-lobby__reel-frame iframe {
+  border: 0;
+}
+.song-lobby__reel-fallback {
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  color: var(--paper);
+  font-size: 10px;
+  letter-spacing: .14em;
+  text-align: center;
+  text-decoration: none;
+  text-transform: uppercase;
+}
+.song-lobby__reel-status {
+  margin: 0;
+  color: #d5cebf;
+  font-size: 11px;
+  line-height: 1.7;
+}
+.song-lobby__acts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) minmax(300px, .96fr);
+  gap: 16px;
+  margin-top: 26px;
+}
+.story-act {
+  border: 1px solid rgba(255,255,255,.12);
+  background: rgba(255,255,255,.02);
+  padding: clamp(20px, 2.5vw, 24px);
+}
+.story-act > h2 {
+  margin: 0;
+  font: italic 500 clamp(32px, 3vw, 46px)/.92 var(--serif);
+  letter-spacing: -.04em;
+}
+.story-act > p:last-child,
+.story-act > p:not(.story-act__eyebrow) {
+  color: #d5cebf;
+  font-size: 12px;
+  line-height: 1.8;
+}
+.story-act__eyebrow {
+  margin: 0 0 16px;
+  color: var(--acid);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: .2em;
+  text-transform: uppercase;
+}
+.lyric-fragments {
+  display: grid;
+  gap: 12px;
+  margin-top: 20px;
+}
+.lyric-fragment {
+  margin: 0;
+  border-left: 1px solid rgba(215,242,99,.38);
+  padding-left: 14px;
+}
+.lyric-fragment p {
+  margin: 0;
+  font: italic 500 clamp(24px, 2.4vw, 34px)/1 var(--serif);
+  letter-spacing: -.03em;
+}
+.lyric-fragment cite {
+  display: block;
+  margin-top: 10px;
+  color: var(--smoke);
+  font-style: normal;
+  font-size: 10px;
+  line-height: 1.7;
+}
+.sonic-world-list {
+  display: grid;
+  gap: 12px;
+  margin: 22px 0 18px;
+  padding-left: 18px;
+  color: #d5cebf;
+  font-size: 12px;
+  line-height: 1.8;
+}
+.story-act--unlock {
+  min-width: 0;
+}
 .satellite-copy h1,
+.song-lobby__reel h2,
 .satellite-reward h2,
 .reward-card h3,
 .satellite-unlock h2 {

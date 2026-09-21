@@ -1,64 +1,52 @@
 (() => {
   const chapters = [
     {
-      number: "01",
-      label: "Origin",
-      kicker: "An artist story in motion",
-      title: "The signal begins slowly.",
-      copy: "A patient opening for music that leaves room for atmosphere. Dreamweaver begins with distance, texture, and the feeling that something is approaching before the rhythm fully arrives.",
-      note: "Treat the first movement as an invitation rather than an announcement. Let the artwork breathe and allow the mix to establish its own scale.",
-      source: "The Cold Is Lasting Longer — Owen Anthony / HALO featured release artwork.",
+      number: "I",
+      label: "The Hook",
+      kicker: "Act I / Emotional origin",
+      title: "Before the chorus, there was a reason to stay.",
+      copy: "Dreamweaver opens with the feeling that started the song: quiet tension, held breath, and the sense that the artist is letting a private thought become public one frame at a time.",
+      note: "Keep the first act intimate. This is the emotional origin story, so the visuals should feel patient, human, and close enough for listeners to trust the room.",
+      source: "Dreamweaver Song Lobby / emotional origin artwork direction.",
       image: "/assets/releases/the-cold-is-lasting-longer.jpg",
       wash: "linear-gradient(125deg, rgba(26,45,49,.7), rgba(71,28,16,.42) 62%, rgba(6,8,8,.9))",
       start: 0
     },
     {
-      number: "02",
-      label: "Undertow",
-      kicker: "Pressure under the surface",
-      title: "Every still room has a current.",
-      copy: "The second movement pulls closer. Repetition becomes tension; small changes matter. The visual world narrows around the music until the listener can feel the floor moving underneath it.",
-      note: "Use tighter crops, darker movement, and more visible rhythm. This chapter is where a background experience starts becoming a journey.",
-      source: "Quicksand — Owen Anthony / artist-room artwork.",
+      number: "II",
+      label: "Lyric Break",
+      kicker: "Act II / Editorial typography",
+      title: "The lines hit harder when the room makes space for them.",
+      copy: "The lobby slows down long enough for lyric fragments to land like diary margins: not a wall of text, but a few precise phrases that let listeners feel the ache, the promise, and the afterglow.",
+      note: "Treat the type like a close-up. This act is about lyrical emphasis, Dreamweaver commentary, and keeping every word legible enough to feel intentional.",
+      source: "Dreamweaver Song Lobby / featured lyric break.",
       image: "/assets/artists/owen-anthony-quicksand.jpg",
       wash: "linear-gradient(120deg, rgba(53,25,13,.82), rgba(91,65,37,.35) 48%, rgba(13,12,10,.9))",
-      start: .18
+      start: .26
     },
     {
-      number: "03",
-      label: "Reflection",
-      kicker: "The room turns transparent",
-      title: "What looks fragile can carry weight.",
-      copy: "At the centre of the set, Dreamweaver changes the pace of looking. Reflections, negative space, and suspended detail create a visual pause without stopping the musical movement.",
-      note: "This is the emotional hinge. It should feel spacious enough for a personal story, an artist voice note, or an important lyric fragment once approved.",
-      source: "Glass House — Owen Anthony / artist-room artwork.",
+      number: "III",
+      label: "Sonic World",
+      kicker: "Act III / Mood and setting",
+      title: "Now the atmosphere tells listeners how to enter the song.",
+      copy: "Dreamweaver turns the production into a lived-in world: low-end pressure, suspended keys, midnight air, and the kind of environment that sounds best when the listener gives it a room of its own.",
+      note: "Describe mood, instrumentation, and listening environment in human language. This act should guide the ear without drifting into technical mix talk.",
+      source: "Dreamweaver Song Lobby / sonic world treatment.",
       image: "/assets/artists/owen-anthony-glass-house.webp",
       wash: "linear-gradient(118deg, rgba(9,21,28,.7), rgba(30,67,72,.3) 50%, rgba(7,8,9,.92))",
-      start: .39
+      start: .54
     },
     {
-      number: "04",
-      label: "Release",
-      kicker: "The body answers back",
-      title: "Then the colour breaks through.",
-      copy: "The fourth movement gives the experience its physical release. The pictures become bolder, the cuts can become quicker, and the show moves from private reflection into collective energy.",
-      note: "This chapter proves that the format can live at home, in a party, or on a large screen. Motion should answer the mix without becoming a generic visualizer.",
-      source: "Hit That Beat — Owen Anthony / release artwork.",
+      number: "IV",
+      label: "Open Door",
+      kicker: "Act IV / Unlock and action",
+      title: "The story opens outward without dropping the mood.",
+      copy: "By the end of the lobby, listeners know where to go next: start the full experience, move into streaming, or step quietly into the creator deck without crowding the fan-first presentation.",
+      note: "End with a clear doorway. The final act should unlock action while keeping the main room centered on general listeners instead of production controls.",
+      source: "Dreamweaver Song Lobby / unlock pathway direction.",
       image: "/assets/releases/hit-that-beat.webp",
       wash: "linear-gradient(130deg, rgba(103,20,42,.48), rgba(230,89,29,.34) 48%, rgba(18,10,10,.88))",
-      start: .61
-    },
-    {
-      number: "05",
-      label: "Open signal",
-      kicker: "The story continues outside the frame",
-      title: "A mix ends. A world stays open.",
-      copy: "The closing movement returns the listener to HALO with the artist, contributors, and wider catalog still visible. The experience becomes a doorway rather than a file that simply finishes.",
-      note: "End with accurate credits, acknowledgements, and a clear next path: replay, enter the artist room, hear the releases, or commission another Dreamweaver edition.",
-      source: "HALO artist world / first Dreamweaver edition.",
-      image: "/assets/halo-logo.webp",
-      wash: "radial-gradient(circle at 60% 42%, rgba(213,242,99,.2), transparent 22%), linear-gradient(120deg, rgba(8,11,9,.6), rgba(49,37,20,.42), rgba(7,8,7,.95))",
-      start: .82
+      start: .78
     }
   ];
 
@@ -90,6 +78,13 @@
     appleLink: document.getElementById("dreamweaverAppleLink"),
     youtubeLink: document.getElementById("dreamweaverYouTubeLink"),
     sourceLink: document.getElementById("dreamweaverSourceLink"),
+    lobbyArtwork: document.getElementById("lobbyArtwork"),
+    lobbyArtworkCaption: document.getElementById("lobbyArtworkCaption"),
+    heroReelPlayer: document.getElementById("heroReelPlayer"),
+    heroReelFallback: document.getElementById("heroReelFallback"),
+    heroReelStatus: document.getElementById("heroReelStatus"),
+    songLobbyMakeCampaign: document.getElementById("songLobbyMakeCampaign"),
+    creatorGatewayLink: document.getElementById("dreamweaverCreatorGateway"),
     shell: document.getElementById("showShell"),
     loading: document.getElementById("loadingShow"),
     loadingPhase: document.getElementById("loadingPhase"),
@@ -471,6 +466,10 @@
     }
   }
 
+  function preferredHeroVideo() {
+    return state.videos.find(video => safeMediaUrl(video?.embedUrl)) || state.videos.find(video => safeMediaUrl(video?.sourceUrl)) || null;
+  }
+
   async function fetchJsonWithTimeout(url, { timeoutMs = 8000, timeoutMessage = "Request timed out.", ...options } = {}) {
     const supportsAbortController = typeof AbortController === "function";
     const controller = supportsAbortController ? new AbortController() : null;
@@ -660,10 +659,49 @@
   function releaseStateDetail(status, title, artist) {
     const releaseLine = [title, artist].filter(Boolean).join(" — ");
     if (status === "loading") return "Dreamweaver is preparing the audio and release context.";
-    if (status === "playing") return releaseLine ? `${releaseLine} is live across the Dreamweaver stage.` : "Live playback is active across the Dreamweaver stage.";
-    if (status === "ready") return releaseLine ? `${releaseLine} is ready. Press play to move through the five movements.` : "Audio is ready. Press play to move through the five movements.";
+    if (status === "playing") return releaseLine ? `${releaseLine} is live across the Dreamweaver lobby.` : "Live playback is active across the Dreamweaver lobby.";
+    if (status === "ready") return releaseLine ? `${releaseLine} is ready. Press play to move through the four-act listening arc.` : "Audio is ready. Press play to move through the four-act listening arc.";
     if (status === "unavailable") return "Audio is currently unavailable, but release context is still on stage.";
     return "Playback is paused. Resume when you are ready.";
+  }
+
+  function renderSongLobbyHero() {
+    const title = cleanText(state.release?.title || state.mix?.title || featuredTrack.title);
+    const artist = cleanText(state.release?.artist || state.mix?.creator?.name || featuredTrack.artist);
+    const artwork = releaseArtwork(state.release || {});
+    if (elements.lobbyArtwork) {
+      elements.lobbyArtwork.src = artwork.src || chapters[0].image;
+      elements.lobbyArtwork.dataset.artworkFallback = artwork.fallback;
+      elements.lobbyArtwork.dataset.artworkSource = artwork.source || "";
+      elements.lobbyArtwork.alt = `${title || "Dreamweaver"} artwork${artist ? ` by ${artist}` : ""}`;
+      const lobbyFrame = elements.lobbyArtwork.closest("[data-artwork-frame]");
+      if (lobbyFrame) window.HaloReleaseArtwork?.wire(lobbyFrame, DREAMWEAVER_RELEASE_FALLBACK_ARTWORK);
+    }
+    if (elements.lobbyArtworkCaption) elements.lobbyArtworkCaption.textContent = artist ? `${title} — ${artist}` : title || "Dreamweaver lobby artwork";
+
+    const heroVideo = preferredHeroVideo();
+    const embedUrl = safeMediaUrl(heroVideo?.embedUrl);
+    const sourceUrl = safeMediaUrl(heroVideo?.sourceUrl) || "/radio/";
+    const reelLabel = cleanText(heroVideo?.title || `${title} short reel preview`, 120);
+    if (embedUrl && elements.heroReelPlayer) {
+      const connector = embedUrl.includes("?") ? "&" : "?";
+      const nextSrc = `${embedUrl}${connector}rel=0&modestbranding=1`;
+      if (elements.heroReelPlayer.src !== nextSrc) elements.heroReelPlayer.src = nextSrc;
+      elements.heroReelPlayer.hidden = false;
+      if (elements.heroReelFallback) elements.heroReelFallback.hidden = true;
+      if (elements.heroReelStatus) elements.heroReelStatus.textContent = `${reelLabel} is setting the tone for the lobby.`;
+      return;
+    }
+    if (elements.heroReelPlayer) {
+      elements.heroReelPlayer.hidden = true;
+      if (elements.heroReelPlayer.getAttribute("src") !== "about:blank") elements.heroReelPlayer.src = "about:blank";
+    }
+    if (elements.heroReelFallback) {
+      elements.heroReelFallback.hidden = false;
+      elements.heroReelFallback.href = sourceUrl;
+      elements.heroReelFallback.textContent = heroVideo ? `Open ${reelLabel} ↗` : "Open the HALO reel signal ↗";
+    }
+    if (elements.heroReelStatus) elements.heroReelStatus.textContent = heroVideo ? `${reelLabel} is available as a direct reel link.` : "Dreamweaver is holding the artwork in focus until a connected short reel is available.";
   }
 
   function renderReleasePanel() {
@@ -709,6 +747,7 @@
     elements.releaseArtwork.dataset.artworkSource = artwork.source || "";
     elements.releaseArtwork.alt = `${title || "Dreamweaver show"} cover artwork`;
     window.HaloReleaseArtwork?.wire(elements.releasePanel, DREAMWEAVER_RELEASE_FALLBACK_ARTWORK);
+    renderSongLobbyHero();
   }
 
   function setReleasePlaybackState(nextState) {
@@ -828,7 +867,7 @@
     if (!elements.rewardCopy) return;
     const firstName = state.unlock?.firstName || "You";
     const platform = unlockPlatforms[state.unlock?.favoritePlatform || "spotify"]?.label || "your streaming app";
-    elements.rewardCopy.textContent = `${firstName}, your concierge doorway is open. Start the full Dreamweaver experience below, then continue on ${platform}, Spotify, Apple Music, or YouTube when you are ready.`;
+    elements.rewardCopy.textContent = `${firstName}, your song lobby is open. Start the full Dreamweaver experience below, then continue on ${platform}, Spotify, Apple Music, or YouTube when you are ready.`;
     updatePlatformLinks();
   }
 
@@ -894,7 +933,7 @@
       consent: data.get("consent") === "on"
     };
     submitButton.disabled = true;
-    submitButton.querySelector("span").textContent = "Unlocking Dreamweaver…";
+    submitButton.querySelector("span").textContent = "Unlocking the lobby…";
     setUnlockStatus("Saving your unlock and preparing the listening room.");
     try {
       const response = await fetch("/api/dreamweaver-fan-signups", {
@@ -919,7 +958,7 @@
       setUnlockStatus(error instanceof Error ? error.message : "Dreamweaver could not unlock the experience right now.", "error");
     } finally {
       submitButton.disabled = false;
-      submitButton.querySelector("span").textContent = "Unlock the full Dreamweaver doorway";
+      submitButton.querySelector("span").textContent = "Unlock full streaming access";
     }
   }
 
@@ -1006,7 +1045,7 @@
 
   function buildExperience() {
     elements.visualStack.innerHTML = chapters.map((chapter, index) => `<div class="visual-layer ${index === 0 ? "active" : ""}" data-visual="${index}" style="--visual-image:url('${chapter.image}');--visual-wash:${chapter.wash}"></div>`).join("");
-    elements.chapterList.innerHTML = chapters.map((chapter, index) => `<button class="chapter-button ${index === 0 ? "active" : ""}" type="button" data-chapter="${index}" aria-label="Open movement ${chapter.number}: ${escapeHtml(chapter.label)}"><span>${chapter.number}</span><strong>${escapeHtml(chapter.label)}</strong></button>`).join("");
+    elements.chapterList.innerHTML = chapters.map((chapter, index) => `<button class="chapter-button ${index === 0 ? "active" : ""}" type="button" data-chapter="${index}" aria-label="Open act ${chapter.number}: ${escapeHtml(chapter.label)}"><span>${chapter.number}</span><strong>${escapeHtml(chapter.label)}</strong></button>`).join("");
     elements.progressMarkers.innerHTML = chapters.slice(1).map(chapter => `<i style="left:${chapter.start * 100}%"></i>`).join("");
     elements.chapterList.querySelectorAll("[data-chapter]").forEach(button => button.addEventListener("click", () => activateChapter(Number(button.dataset.chapter), true)));
     activateChapter(0, false);
@@ -1022,8 +1061,8 @@
     elements.storyKicker.textContent = chapter.kicker;
     elements.storyTitle.textContent = chapter.title;
     elements.storyCopy.textContent = chapter.copy;
-    elements.chapterTime.textContent = `Movement ${chapter.number} / ${chapter.label}`;
-    elements.drawerKicker.textContent = `Movement ${chapter.number} / ${chapter.label}`;
+    elements.chapterTime.textContent = `Act ${chapter.number} / ${chapter.label}`;
+    elements.drawerKicker.textContent = `Act ${chapter.number} / ${chapter.label}`;
     elements.drawerTitle.textContent = chapter.title;
     elements.drawerLead.textContent = chapter.copy;
     elements.drawerNote.textContent = chapter.note;
@@ -1517,7 +1556,20 @@
   }
 
   async function openCampaignStudio() {
-    if (!state.mix) return showToast("Open a playable mix before creating a campaign.");
+    if (!state.mix) {
+      if (isSatelliteFlow()) {
+        if (!state.unlock) {
+          document.getElementById("storyActIV")?.scrollIntoView({ behavior: "smooth", block: "start" });
+          setUnlockStatus("Unlock the song lobby first, then Dreamweaver can open the reel generator.");
+          return;
+        }
+        elements.creatorGatewayLink?.scrollIntoView({ behavior: "smooth", block: "center" });
+        elements.creatorGatewayLink?.focus({ preventScroll: true });
+        showToast("Creator tools live behind the DJ Deck gateway while this public lobby stays listener-first.");
+        return;
+      }
+      return showToast("Open a playable mix before creating a campaign.");
+    }
     elements.audio.pause();
     elements.campaignStudio.classList.add("open");
     elements.campaignStudio.setAttribute("aria-hidden", "false");
@@ -1753,6 +1805,7 @@
       state.videos = Array.isArray(payload.videos) ? payload.videos.slice(0, 8) : [];
       renderFootageSelector();
       renderArchive();
+      renderSongLobbyHero();
     } catch {}
   }
 
@@ -1764,17 +1817,19 @@
     elements.footageSelector.innerHTML = state.videos.map((video, index) => `
       <label class="footage-card">
         <input type="checkbox" name="sourceVideo" value="${escapeHtml(video.id)}" ${index < 4 ? "checked" : ""}>
-        <img src="${escapeHtml(video.thumbnailUrl || "/assets/halo-logo-mark.webp")}" alt="">
+        <img src="${escapeHtml(video.thumbnailUrl || "/assets/halo-logo-mark.webp")}" alt="${escapeHtml(video.title || "Dreamweaver source video")} thumbnail">
         <span>${escapeHtml(video.title)}<small>${video.sourceType === "upload" ? "Film source" : "Reference only"}</small></span>
       </label>`).join("");
   }
 
   function renderArchive() {
     if (!state.videos.length) {
-      elements.archiveReel.innerHTML = `<a class="archive-card" href="/artists/"><img src="/assets/releases/the-cold-is-lasting-longer.jpg" alt=""><span>Enter Owen Anthony's connected artist room</span></a><a class="archive-card" href="/radio/"><img src="/assets/artists/owen-anthony-glass-house.webp" alt=""><span>Continue into the HALO radio signal</span></a>`;
+      elements.archiveReel.innerHTML = `<a class="archive-card" href="/artists/"><img src="/assets/releases/the-cold-is-lasting-longer.jpg" alt="Enter Owen Anthony's connected artist room"><span>Enter Owen Anthony's connected artist room</span></a><a class="archive-card" href="/radio/"><img src="/assets/artists/owen-anthony-glass-house.webp" alt="Continue into the HALO radio signal"><span>Continue into the HALO radio signal</span></a>`;
+      renderSongLobbyHero();
       return;
     }
-    elements.archiveReel.innerHTML = state.videos.map(video => `<a class="archive-card" href="${escapeHtml(video.sourceUrl || video.embedUrl || "/artists/")}" ${video.sourceType === "youtube" ? 'target="_blank" rel="noopener noreferrer"' : ""}><img src="${escapeHtml(video.thumbnailUrl || "/assets/halo-logo-mark.webp")}" alt=""><span>${escapeHtml(video.title)}</span></a>`).join("");
+    elements.archiveReel.innerHTML = state.videos.map(video => `<a class="archive-card" href="${escapeHtml(video.sourceUrl || video.embedUrl || "/artists/")}" ${video.sourceType === "youtube" ? 'target="_blank" rel="noopener noreferrer"' : ""}><img src="${escapeHtml(video.thumbnailUrl || "/assets/halo-logo-mark.webp")}" alt="${escapeHtml(video.title || "Dreamweaver archive video")} thumbnail"><span>${escapeHtml(video.title)}</span></a>`).join("");
+    renderSongLobbyHero();
   }
 
   function showEmpty(message) {
@@ -1788,7 +1843,7 @@
 
   async function loadShow() {
     setReleasePlaybackState("loading");
-    setLoadingProgress(8, "Calibrating Dreamweaver stage", "Dreamweaver is staging this edition with artwork, metadata, and movement in sync.");
+    setLoadingProgress(8, "Calibrating Dreamweaver stage", "Dreamweaver is staging this edition with artwork, metadata, and the four-act lobby in sync.");
     document.body.classList.remove("show-ready");
     elements.shell.hidden = false;
     elements.loading.hidden = false;
@@ -1828,7 +1883,7 @@
       const playbackBootstrap = await bootstrapPrimaryPlayback(mix);
       await hydrateDreamweaverLoopContent();
       if (!playbackBootstrap?.started || elements.audio.paused || elements.audio.ended) setReleasePlaybackState("ready");
-      setLoadingProgress(100, "Dreamweaver is ready", "Press play and move through the full cinematic edition.");
+      setLoadingProgress(100, "Dreamweaver is ready", "Press play and move through the full four-act cinematic edition.");
       elements.loading.setAttribute("aria-hidden", "true");
       elements.stage.hidden = false;
       window.requestAnimationFrame(() => document.body.classList.add("show-ready"));
@@ -1855,9 +1910,14 @@
     void flushQueuedAudioFeedback();
     renderSatelliteState();
     updatePlatformLinks();
-    if (isSatelliteFlow()) startSatelliteAgentLoop();
+    const satelliteFlow = isSatelliteFlow();
+    if (satelliteFlow) startSatelliteAgentLoop();
     else stopSatelliteAgentLoop();
-    if (isSatelliteFlow() && !state.unlock) {
+    if (satelliteFlow && !state.unlock) {
+      await Promise.all([
+        loadReleaseContext({ keepCurrentOnFailure: true }),
+        loadVideos()
+      ]);
       elements.shell.setAttribute("aria-busy", "false");
       return;
     }
@@ -1939,6 +1999,7 @@
     } catch {}
   });
   elements.makeCampaign.addEventListener("click", openCampaignStudio);
+  elements.songLobbyMakeCampaign?.addEventListener("click", openCampaignStudio);
   elements.closeCampaign.addEventListener("click", closeCampaignStudio);
   elements.campaignForm.addEventListener("submit", generateCampaign);
   elements.campaignForm.addEventListener("input", updateClipTiming);

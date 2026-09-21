@@ -60,7 +60,7 @@
   const MIX_LIBRARY_TIMEOUT_MS = 12000;
   const RELEASE_CONTEXT_TIMEOUT_MS = 8000;
   const VIDEO_LIBRARY_TIMEOUT_MS = 8000;
-  const AUDIO_BOOTSTRAP_TIMEOUT_MS = 15000;
+  const REMOTE_AUDIO_WATCHDOG_MS = 5000;
   const HERO_REEL_LOAD_TIMEOUT_MS = 3500;
   const MAX_AUDIO_FEEDBACK_RECORDS = 24;
   const SATELLITE_AGENT_REFRESH_MS = 45_000;
@@ -85,7 +85,7 @@
     songLobbyPlayerStatePill: document.getElementById("songLobbyPlayerStatePill"),
     songLobbyPlayerDuration: document.getElementById("songLobbyPlayerDuration"),
     songLobbyPlayerSource: document.getElementById("songLobbyPlayerSource"),
-    songLobbyHeroPlayButton: document.getElementById("songLobbyHeroPlayButton"),
+    songLobbyHeroPlayButton: document.getElementById("playBtn") || document.getElementById("songLobbyHeroPlayButton"),
     songLobbyHeroPlayLabel: document.getElementById("songLobbyHeroPlayLabel"),
     songLobbyHeroElapsed: document.getElementById("songLobbyHeroElapsed"),
     songLobbyHeroChapter: document.getElementById("songLobbyHeroChapter"),
@@ -103,6 +103,8 @@
     storyActIV: document.getElementById("storyActIV"),
     songLobbyMakeCampaign: document.getElementById("songLobbyMakeCampaign"),
     creatorGatewayLink: document.getElementById("dreamweaverCreatorGateway"),
+    uploadLabel: document.querySelector(".upload-label"),
+    mixFileInput: document.getElementById("mixFileInput"),
     shell: document.getElementById("showShell"),
     loading: document.getElementById("loadingShow"),
     loadingPhase: document.getElementById("loadingPhase"),
@@ -235,6 +237,11 @@
     buildPreviewStartedAt: 0,
     trackedProgress: new Set(),
     startPlaybackAfterLoad: false,
+    audioSourceMode: "empty",
+    localAudioName: "",
+    localAudioUrl: "",
+    remoteAudioWatchdog: 0,
+    playerControlsBound: false,
     audioFeedbackQueue: [],
     audioFeedbackFingerprints: new Set(),
     audioFeedbackFlushPromise: null,
@@ -772,14 +779,88 @@
     return "Dreamweaver could not prepare the linked audio for playback.";
   }
 
+  function clearRemoteAudioWatchdog() {
+    window.clearTimeout(state.remoteAudioWatchdog);
+    state.remoteAudioWatchdog = 0;
+  }
+
+  function revokeLocalAudioUrl() {
+    if (!state.localAudioUrl) return;
+    try { URL.revokeObjectURL(state.localAudioUrl); } catch {}
+    state.localAudioUrl = "";
+  }
+
+  function publicReleaseStatus(release = state.release) {
+    const raw = cleanText(release?.storefront?.statusLabel || release?.publication?.dreamweaverStatus || release?.publication?.releaseStatus || release?.catalog?.saleStatus || "", 40).toUpperCase();
+    if (raw === "READY" || raw === "PENDING" || raw === "STANDBY") return raw;
+    if (raw === "PUBLISHED" || raw === "LIVE" || raw === "ACTIVE") return "READY";
+    if (raw === "COMING SOON" || raw === "COMING_SOON" || raw === "PROCESSING" || raw === "QUEUED") return "PENDING";
+    return "STANDBY";
+  }
+
+  function activePlayerStatusLabel(release = state.release) {
+    if (state.audioSourceMode === "local") return "LOCAL ACTIVE";
+    if (state.audioSourceMode === "error" || state.audioSourceMode === "empty") return "STANDBY";
+    return publicReleaseStatus(release);
+  }
+
+  function shouldPromptLocalUpload() {
+    return state.audioSourceMode === "error"
+      || state.audioSourceMode === "empty"
+      || (!state.mix && state.audioSourceMode !== "local")
+      || !elements.audio.currentSrc;
+  }
+
+  function openMixFilePicker() {
+    if (!elements.mixFileInput) return;
+    elements.mixFileInput.disabled = false;
+    elements.mixFileInput.click();
+  }
+
+  function handleRemoteAudioUnavailable(message = "Stream unavailable — click Upload Mix File or press play to choose a local mix.") {
+    clearRemoteAudioWatchdog();
+    if (state.audioSourceMode !== "local") state.audioSourceMode = "error";
+    setReleasePlaybackState("unavailable");
+    showToast(message);
+  }
+
+  function armRemoteAudioWatchdog() {
+    clearRemoteAudioWatchdog();
+    if (state.audioSourceMode !== "remote") return;
+    state.remoteAudioWatchdog = window.setTimeout(() => {
+      if (state.audioSourceMode !== "remote") return;
+      if (elements.audio.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
+        handleRemoteAudioUnavailable("Stream unavailable — click Upload Mix File or press play to choose a local mix.");
+      }
+    }, REMOTE_AUDIO_WATCHDOG_MS);
+  }
+
+  async function activateLocalMixFile(file) {
+    if (!file || !elements.audio) return;
+    clearRemoteAudioWatchdog();
+    revokeLocalAudioUrl();
+    state.localAudioUrl = URL.createObjectURL(file);
+    state.localAudioName = cleanText(file.name || "Uploaded mix", 160) || "Uploaded mix";
+    state.audioSourceMode = "local";
+    elements.audio.pause();
+    elements.audio.currentTime = 0;
+    elements.audio.src = state.localAudioUrl;
+    elements.audio.load?.();
+    setReleasePlaybackState("ready");
+    try {
+      await elements.audio.play();
+      showToast(`Local mix active: ${state.localAudioName}.`);
+    } catch {
+      showToast("Local file loaded. Press play when your browser is ready.");
+    }
+  }
+
   async function awaitPrimaryPlaybackReadiness() {
     if (elements.audio.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) return { ok: true, state: "ready" };
     return new Promise(resolve => {
       let settled = false;
-      let metadataConfirmed = elements.audio.readyState >= HTMLMediaElement.HAVE_METADATA;
       const cleanup = () => {
         window.clearTimeout(timeoutId);
-        elements.audio.removeEventListener("loadedmetadata", handleMetadata);
         elements.audio.removeEventListener("loadeddata", handleReady);
         elements.audio.removeEventListener("canplay", handleReady);
         elements.audio.removeEventListener("canplaythrough", handleReady);
@@ -791,20 +872,13 @@
         cleanup();
         resolve(result);
       };
-      const handleMetadata = () => {
-        metadataConfirmed = true;
-        if (elements.audio.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) handleReady();
-      };
       const handleReady = () => settle({ ok: true, state: "ready" });
       const handleError = () => settle({ ok: false, state: "error", detail: describeAudioElementFailure() });
-      const timeoutId = window.setTimeout(() => {
-        if (metadataConfirmed || elements.audio.readyState >= HTMLMediaElement.HAVE_METADATA) {
-          settle({ ok: true, state: "metadata-ready" });
-          return;
-        }
-        settle({ ok: false, state: "timeout", detail: "Dreamweaver waited too long for the linked audio to become playable." });
-      }, AUDIO_BOOTSTRAP_TIMEOUT_MS);
-      elements.audio.addEventListener("loadedmetadata", handleMetadata, { once: true });
+      const timeoutId = window.setTimeout(() => settle({
+        ok: false,
+        state: "timeout",
+        detail: "Stream unavailable — click Upload Mix File or press play to choose a local mix."
+      }), REMOTE_AUDIO_WATCHDOG_MS);
       elements.audio.addEventListener("loadeddata", handleReady, { once: true });
       elements.audio.addEventListener("canplay", handleReady, { once: true });
       elements.audio.addEventListener("canplaythrough", handleReady, { once: true });
@@ -827,10 +901,14 @@
     setLoadingProgress(58, "Bootstrapping primary playback", "Dreamweaver is loading the linked song first so sound can start before the wider loop hydrates.");
     state.mix = mix;
     state.duration = Number(mix.durationSeconds || 0);
+    revokeLocalAudioUrl();
+    state.localAudioName = "";
+    state.audioSourceMode = "remote";
     elements.audio.pause();
     elements.audio.currentTime = 0;
     elements.audio.src = mix.audioUrl;
     elements.audio.load?.();
+    armRemoteAudioWatchdog();
 
     if (elements.audio.muted || Number(elements.audio.volume) === 0) {
       queueAudioFeedbackIncident("muted_audio", {
@@ -851,7 +929,8 @@
         mix,
         metadata: { failureState: readiness.state === "error" && Number(elements.audio?.error?.code || 0) === 3 ? "corrupted_audio" : "non_playable_audio" }
       });
-      throw new Error(readiness.detail || "The linked Dreamweaver audio could not be prepared.");
+      handleRemoteAudioUnavailable(readiness.detail || "Stream unavailable — click Upload Mix File or press play to choose a local mix.");
+      return { started: false, fallback: true };
     }
 
     try {
@@ -892,19 +971,26 @@
   }
 
   function releaseStateLabel(status) {
+    if (state.audioSourceMode === "local") return elements.audio.paused ? "Local ready" : "Local active";
+    if (state.audioSourceMode === "error") return "Upload mix";
+    if (state.audioSourceMode === "empty" && status !== "loading") return "Standby";
     if (status === "loading") return "Loading signal";
     if (status === "playing") return "Playing now";
     if (status === "ready") return "Ready";
-    if (status === "unavailable") return "Unavailable";
+    if (status === "unavailable") return "Stream unavailable";
     return "Paused";
   }
 
   function releaseStateDetail(status, title, artist) {
     const releaseLine = [title, artist].filter(Boolean).join(" — ");
+    if (state.audioSourceMode === "local") return state.localAudioName
+      ? `Playing local file: ${state.localAudioName}.`
+      : "A local mix file is active in Dreamweaver.";
+    if (state.audioSourceMode === "error" || status === "unavailable") return "Stream unavailable — click Upload Mix File or press play to choose a local mix.";
+    if (state.audioSourceMode === "empty" && status !== "loading") return "No active stream is loaded yet. Press play or upload a local mix to continue.";
     if (status === "loading") return "Dreamweaver is preparing the audio and release context.";
     if (status === "playing") return releaseLine ? `${releaseLine} is live across the Dreamweaver lobby.` : "Live playback is active across the Dreamweaver lobby.";
     if (status === "ready") return releaseLine ? `${releaseLine} is ready. Press play to move through the four-act listening arc.` : "Audio is ready. Press play to move through the four-act listening arc.";
-    if (status === "unavailable") return "Audio is currently unavailable, but release context is still on stage.";
     return "Playback is paused. Resume when you are ready.";
   }
 
@@ -926,7 +1012,7 @@
     const duration = state.duration ? formatTime(state.duration) : cleanText(release.duration || "", 24);
     const bpm = Number(release.bpm) > 0 ? `${Number(release.bpm)} BPM` : "";
     const musicalKey = cleanText(release.musicalKey || "", 20);
-    const releaseStatus = cleanText(release.publication?.dreamweaverStatus || release.publication?.releaseStatus || catalog.saleStatus || "", 40);
+    const releaseStatus = activePlayerStatusLabel(release);
     const storySeed = cleanText(release.pitch || mix.description || "", 320);
     const titleArtistLine = [title, artist].filter(Boolean).join(" — ");
     return {
@@ -1079,7 +1165,7 @@
     const duration = state.duration ? formatTime(state.duration) : cleanText(release.duration, 24);
     const releaseInfo = cleanText(release.releaseDate || releaseDateLabel(release.publication?.lastReconciledAt) || state.publishedSongId, 40);
     const publication = release.publication || {};
-    const status = cleanText(publication.dreamweaverStatus || publication.releaseStatus || catalog.saleStatus, 40);
+    const status = activePlayerStatusLabel(release);
     const album = cleanText(release.albumTitle || release.collectionTitle || catalog.albumTitle || "", 120);
     const artwork = releaseArtwork(release);
     const rows = [
@@ -1233,7 +1319,7 @@
       elements.sourceLink.dataset.haloPlayerKey = cleanText(state.release?.musicalKey || "", 20);
       elements.sourceLink.dataset.haloPlayerDuration = state.duration ? formatTime(state.duration) : cleanText(state.release?.duration || "", 24);
       elements.sourceLink.dataset.haloPlayerRelease = cleanText(state.release?.releaseDate || releaseDateLabel(state.release?.publication?.lastReconciledAt) || state.publishedSongId, 40);
-      elements.sourceLink.dataset.haloPlayerStatus = cleanText(state.release?.publication?.dreamweaverStatus || state.release?.publication?.releaseStatus || state.release?.catalog?.saleStatus || "", 40);
+      elements.sourceLink.dataset.haloPlayerStatus = activePlayerStatusLabel(state.release);
       elements.sourceLink.dataset.haloPlayerArtwork = safeMediaUrl(state.release?.artwork || state.release?.artworkOverride || state.release?.importedArtwork || state.release?.catalog?.artworkUrl);
       delete elements.sourceLink.dataset.haloPlayer;
     }
@@ -1515,14 +1601,40 @@
   }
 
   async function togglePlayback() {
-    if (!state.mix) return;
+    if (shouldPromptLocalUpload()) {
+      openMixFilePicker();
+      setReleasePlaybackState("unavailable");
+      return;
+    }
     if (elements.audio.paused) {
       try {
+        if (state.audioSourceMode === "remote") armRemoteAudioWatchdog();
         await elements.audio.play();
       } catch {
-        showToast("Press play again to start the audio experience.");
+        if (state.audioSourceMode === "remote") {
+          handleRemoteAudioUnavailable();
+          openMixFilePicker();
+          return;
+        }
+        showToast("Local file loaded. Press play when your browser is ready.");
       }
     } else elements.audio.pause();
+  }
+
+  function bindPlayerControls() {
+    if (state.playerControlsBound) return;
+    state.playerControlsBound = true;
+    elements.playButton.addEventListener("click", togglePlayback);
+    elements.songLobbyHeroPlayButton?.addEventListener("click", togglePlayback);
+    elements.uploadLabel?.addEventListener("click", () => openMixFilePicker());
+    elements.mixFileInput?.addEventListener("change", async event => {
+      const file = event.target?.files?.[0];
+      event.target.value = "";
+      if (file) await activateLocalMixFile(file);
+    });
+    if (elements.playButton) elements.playButton.disabled = false;
+    if (elements.songLobbyHeroPlayButton) elements.songLobbyHeroPlayButton.disabled = false;
+    if (elements.mixFileInput) elements.mixFileInput.disabled = false;
   }
 
   function updateHeroPlayButton(isPlaying) {
@@ -2416,8 +2528,8 @@
   renderReleasePanel();
   renderFootageSelector();
   renderArchive();
-  elements.playButton.addEventListener("click", togglePlayback);
-  elements.songLobbyHeroPlayButton?.addEventListener("click", togglePlayback);
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", bindPlayerControls, { once: true });
+  else bindPlayerControls();
   elements.progress.addEventListener("input", () => {
     if (!state.duration) return;
     elements.audio.currentTime = Number(elements.progress.value) / 1000 * state.duration;
@@ -2434,8 +2546,12 @@
     renderReleasePanel();
     if (state.releasePlaybackState === "loading") setReleasePlaybackState("ready");
   });
+  elements.audio.addEventListener("loadeddata", clearRemoteAudioWatchdog);
+  elements.audio.addEventListener("canplay", clearRemoteAudioWatchdog);
+  elements.audio.addEventListener("canplaythrough", clearRemoteAudioWatchdog);
   elements.audio.addEventListener("timeupdate", updateProgress);
   elements.audio.addEventListener("play", () => {
+    clearRemoteAudioWatchdog();
     document.body.classList.add("is-playing");
     elements.playButton.setAttribute("aria-label", "Pause show");
     updateHeroPlayButton(true);
@@ -2447,6 +2563,7 @@
     setReleasePlaybackState("playing");
   });
   elements.audio.addEventListener("pause", () => {
+    clearRemoteAudioWatchdog();
     document.body.classList.remove("is-playing");
     elements.playButton.setAttribute("aria-label", "Play show");
     updateHeroPlayButton(false);
@@ -2454,6 +2571,7 @@
     if (!elements.audio.ended) setReleasePlaybackState("paused");
   });
   elements.audio.addEventListener("ended", () => {
+    clearRemoteAudioWatchdog();
     activateChapter(chapters.length - 1, false);
     updateHeroPlayButton(false);
     if (campaignIdFromUrl() && !state.trackedProgress.has("mix_complete")) {
@@ -2463,14 +2581,22 @@
     setReleasePlaybackState("ready");
   });
   elements.audio.addEventListener("error", () => {
+    clearRemoteAudioWatchdog();
     queueAudioFeedbackIncident(Number(elements.audio?.error?.code || 0) === 3 ? "corrupted_audio" : "non_playable_audio", {
       severity: "high",
       title: "Dreamweaver audio playback failed",
       details: describeAudioElementFailure(),
       metadata: { failureState: Number(elements.audio?.error?.code || 0) === 3 ? "corrupted_audio" : "non_playable_audio" }
     });
-    setReleasePlaybackState("unavailable");
-    showToast("The mix audio is unavailable. The visual edition remains open.");
+    if (state.audioSourceMode === "local" || elements.audio.currentSrc.startsWith("blob:")) {
+      state.audioSourceMode = "error";
+      state.localAudioName = "";
+      revokeLocalAudioUrl();
+      setReleasePlaybackState("unavailable");
+      showToast("The local file could not be loaded. Choose another mix file.");
+      return;
+    }
+    handleRemoteAudioUnavailable("Stream unavailable — click Upload Mix File or press play to choose a local mix.");
   });
   elements.muteButton.addEventListener("click", () => { elements.audio.muted = !elements.audio.muted; elements.muteButton.setAttribute("aria-label", elements.audio.muted ? "Unmute show" : "Mute show"); showToast(elements.audio.muted ? "Show muted" : "Sound restored"); });
   window.addEventListener("online", () => { void flushQueuedAudioFeedback(); });

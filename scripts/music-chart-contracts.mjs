@@ -22,6 +22,8 @@ assert.match(catalogApi, /previous_listens/, "catalog API must expose the compar
 assert.match(client, /rankedReleases/, "client must calculate interactive room rankings");
 assert.match(client, /youtube-nocookie\.com/, "chart video must use privacy-enhanced YouTube playback");
 assert.match(client, /data-play-chart-video/, "chart stage must support in-place video playback");
+assert.match(client, /storefrontState\(release\)/, "public release cards must normalize storefront status before rendering");
+assert.match(client, /Release status", value: statusLabel/, "public release cards must render sanitized READY\/PENDING\/STANDBY states instead of raw upstream status strings");
 assert.match(client, /satellite"\) === "music-video-fallback"/, "chart must keep fallback behavior behind a satellite query-flag path");
 assert.match(client, /isFallbackVisual/, "chart must generate a per-release fallback visual when no playable video exists in satellite mode");
 assert.match(client, /stage-art release-artwork-frame[\s\S]*release\.title[\s\S]*stage-artist/, "chart stage must keep release artwork paired with the active song and artist");

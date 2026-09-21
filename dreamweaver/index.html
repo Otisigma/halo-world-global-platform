@@ -160,7 +160,7 @@
             <p class="song-lobby__player-status" id="songLobbyPlayerStatus">Dreamweaver is preparing the featured mix without blocking the story-first layout.</p>
           </div>
           <div class="song-lobby__transport" aria-label="Dreamweaver featured mix controls">
-            <button class="song-lobby__transport-button" id="songLobbyHeroPlayButton" type="button" aria-label="Play mix">
+            <button class="song-lobby__transport-button" id="playBtn" type="button" aria-label="Play mix">
               <span aria-hidden="true">▶</span>
               <strong id="songLobbyHeroPlayLabel">Play mix</strong>
             </button>
@@ -174,6 +174,8 @@
             </div>
           </div>
           <div class="song-lobby__player-actions">
+            <label class="song-lobby__upload-label upload-label" for="mixFileInput">Upload mix file</label>
+            <input id="mixFileInput" type="file" accept="audio/*,.mp3,.wav,.m4a,.aac,.ogg,.flac,.webm" hidden>
             <a id="songLobbyPlayerSource" class="song-lobby__source" href="https://distrokid.com/hyperfollow/owenanthony/blessed" target="_blank" rel="noopener noreferrer">Blessed — Owen Anthony ↗</a>
             <a class="song-lobby__anchor song-lobby__anchor--subtle" href="/dj-deck.html">Creator gateway /dj-deck</a>
           </div>

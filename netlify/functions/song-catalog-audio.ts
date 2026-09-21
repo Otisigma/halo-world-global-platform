@@ -11,9 +11,15 @@ const ALLOWED_TYPES = new Set(["audio/mpeg", "audio/mp4", "audio/aac", "audio/og
 const MAX_CHUNK_BYTES = 4 * 1024 * 1024;
 const MAX_UPLOAD_BYTES = 128 * 1024 * 1024;
 const MAX_CHUNKS = Math.ceil(MAX_UPLOAD_BYTES / MAX_CHUNK_BYTES);
+const MEDIA_CORS_HEADERS = Object.freeze({
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "Content-Type, Range",
+  "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
+  "Access-Control-Expose-Headers": "Content-Length, Content-Range",
+});
 
 function json(body: unknown, status = 200, headers: Record<string, string> = {}) {
-  return Response.json(body, { status, headers: { "Cache-Control": "no-store", ...headers } });
+  return Response.json(body, { status, headers: { ...MEDIA_CORS_HEADERS, "Cache-Control": "no-store", ...headers } });
 }
 
 function cleanId(value: unknown) {
@@ -233,8 +239,9 @@ async function serveAudio(request: Request, db: Awaited<ReturnType<typeof getDat
   if (!version?.audio_blob_prefix || !version.audio_chunk_count || !version.audio_byte_size) return json({ message: "Song audio was not found" }, 404);
   const byteSize = Number(version.audio_byte_size);
   const range = requestedByteRange(request.headers.get("range"), byteSize);
-  if (range === false) return new Response(null, { status: 416, headers: { "Content-Range": `bytes */${byteSize}`, "Cache-Control": "private, no-store" } });
+  if (range === false) return new Response(null, { status: 416, headers: { ...MEDIA_CORS_HEADERS, "Content-Range": `bytes */${byteSize}`, "Cache-Control": "private, no-store" } });
   const headers: Record<string, string> = {
+    ...MEDIA_CORS_HEADERS,
     "Content-Type": String(version.audio_content_type || "application/octet-stream"),
     "Content-Length": String(range ? range.end - range.start + 1 : byteSize),
     "Accept-Ranges": "bytes",
@@ -337,6 +344,7 @@ async function importFromRadio(payload: Record<string, unknown>, db: Awaited<Ret
 }
 
 export default async function songCatalogAudioHandler(request: Request) {
+  if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: MEDIA_CORS_HEADERS });
   if (!["GET", "HEAD", "POST", "DELETE"].includes(request.method)) return json({ message: "Method not allowed" }, 405, { Allow: "GET, HEAD, POST, DELETE" });
   try {
     const [db, user] = await Promise.all([getDatabase(), getUser()]);

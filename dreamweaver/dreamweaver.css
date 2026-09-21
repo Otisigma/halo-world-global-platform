@@ -399,6 +399,28 @@ body.show-ready .show-stage { opacity: 1; transform: scale(1); transition: opaci
   gap: 12px;
   align-items: center;
 }
+.song-lobby__upload-label {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  padding: 0 16px;
+  border: 1px solid rgba(255,255,255,.16);
+  background: rgba(255,255,255,.05);
+  color: var(--paper);
+  font-size: 9px;
+  letter-spacing: .18em;
+  text-decoration: none;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.song-lobby__upload-label:hover,
+.song-lobby__upload-label:focus-visible,
+.song-lobby__transport-button:hover,
+.song-lobby__transport-button:focus-visible {
+  border-color: var(--acid);
+  color: var(--acid);
+}
 .song-lobby__source {
   color: var(--paper);
   font-size: 10px;

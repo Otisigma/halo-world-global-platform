@@ -5,9 +5,15 @@ import { cleanText } from "../lib/halo-x.mjs";
 
 const audioStore = getStore({ name: "halo-radio-submissions", consistency: "strong" });
 const uploadChunkBytes = 3 * 1024 * 1024;
+const MEDIA_CORS_HEADERS = Object.freeze({
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "Content-Type, Range",
+  "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
+  "Access-Control-Expose-Headers": "Content-Length, Content-Range"
+});
 
 function json(body, status = 200) {
-  return Response.json(body, { status, headers: { "Cache-Control": "no-store" } });
+  return Response.json(body, { status, headers: { ...MEDIA_CORS_HEADERS, "Cache-Control": "no-store" } });
 }
 
 function requestedByteRange(value, byteSize) {
@@ -61,6 +67,7 @@ async function readAudioRange(track, range) {
 }
 
 export default async function radioAudioHandler(request) {
+  if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: MEDIA_CORS_HEADERS });
   if (!["GET", "HEAD"].includes(request.method)) return json({ message: "Method not allowed" }, 405);
   try {
     const [db, user] = await Promise.all([getDatabase(), getUser()]);
@@ -81,6 +88,7 @@ export default async function radioAudioHandler(request) {
       return new Response(null, {
         status: 416,
         headers: {
+          ...MEDIA_CORS_HEADERS,
           "Accept-Ranges": "bytes",
           "Content-Range": `bytes */${byteSize}`,
           "Cache-Control": "private, no-store"
@@ -90,6 +98,7 @@ export default async function radioAudioHandler(request) {
 
     const cacheable = track.status === "rotation";
     const headers = {
+      ...MEDIA_CORS_HEADERS,
       "Content-Type": track.content_type,
       "Content-Length": String(range ? range.end - range.start + 1 : byteSize),
       "Cache-Control": cacheable ? "public, max-age=3600" : "private, no-store",

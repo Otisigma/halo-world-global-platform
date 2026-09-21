@@ -45,7 +45,7 @@ const checks = [
     && /<noscript>[\s\S]*https:\/\/fonts\.googleapis\.com\/css2\?family=Cormorant\+Garamond/.test(page), "loads Dreamweaver's external web fonts without making them a render-blocking dependency"],
   [page.includes("release-artwork.css") && page.includes("release-artwork.js"), "loads the shared HALO artwork fallback assets on the Dreamweaver page"],
   [page.includes('data-mode="watch"') && page.includes('data-mode="room"') && page.includes('data-mode="explore"'), "offers Watch, Room, and Explore modes"],
-  [script.includes('fetchJsonWithTimeout("/api/mixes?limit=100"') && script.includes("requestedMix") && script.includes("resolveRequestedMixToken"), "loads an existing Mix Desk recording and supports direct mix links"],
+  [script.includes('fetchJsonWithTimeout("/api/mixes?limit=100"') && script.includes("resolveRequestedMixId") && script.includes("fetchExactMixById") && script.includes('/api/mixes?id=${encodeURIComponent(requested)}'), "loads an existing Mix Desk recording and attempts direct exact-mix lookup when a mix id is requested"],
   [(() => {
     const fetchJsonStart = script.indexOf("async function fetchJsonWithTimeout");
     const playbackHelperStart = script.indexOf("\n  function isPlayablePrimaryMix");
@@ -63,7 +63,7 @@ const checks = [
   [script.includes("fetchReleaseCatalog") && script.includes("resolveReleaseFromCatalog") && script.includes("RELEASE_CONTEXT_TIMEOUT_MS") && script.includes("VIDEO_LIBRARY_TIMEOUT_MS"), "guards Dreamweaver release-context and video loads with deterministic timeouts"],
   [page.includes('data-release-artwork') && script.includes("HaloReleaseArtwork?.resolve") && artworkHelper.includes("window.HaloReleaseArtwork"), "routes Dreamweaver release artwork through the shared HALO fallback recovery system"],
   [script.includes('label: "The Hook"') && script.includes('label: "Lyric Break"') && script.includes('label: "Sonic World"') && script.includes("activateChapter") && script.includes("elements.audio.currentTime") && script.includes("chapters.length - 1"), "synchronizes the Song Lobby acts with Dreamweaver audio playback"],
-  [script.includes("resolveReleaseFromCatalog(releases, routeContext)") && script.includes("resolvePrimaryPlaybackMix(data.mixes || [], requestedMix, release, { allowFallback: true })"), "recovers playable mix audio from hydrated release context when a direct route token does not match a mix entry"],
+  [script.includes("resolveReleaseFromCatalog(releases, routeContext)") && script.includes("strictRequestedId: requestedMixId") && script.includes("allowFallback: !requestedMix"), "keeps exact requested mix ids deterministic while preserving release-context hydration"],
   [styles.includes("body.mode-room") && styles.includes("body.mode-explore") && styles.includes("prefers-reduced-motion"), "styles atmospheric modes and reduced-motion behavior"],
   [deck.includes('id="dreamweaverMix"') && deck.includes("/dreamweaver/?mix=${encodeURIComponent(data.id)}&experience=studio"), "moves a newly published mix directly into Dreamweaver"],
   [campaign.includes('href="/dreamweaver/"') && radio.includes('href="/dreamweaver/"'), "links the show from Campaign Studio and Radio"],

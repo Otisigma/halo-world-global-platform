@@ -1627,8 +1627,9 @@
 
   async function togglePlayback() {
     if (shouldPromptLocalUpload()) {
-      openMixFilePicker();
       setReleasePlaybackState("unavailable");
+      showToast("Stream unavailable — opening the local upload picker.");
+      window.setTimeout(() => openMixFilePicker(), 120);
       return;
     }
     if (elements.audio.paused) {
@@ -1638,7 +1639,7 @@
       } catch {
         if (state.audioSourceMode === "remote") {
           handleRemoteAudioUnavailable();
-          openMixFilePicker();
+          window.setTimeout(() => openMixFilePicker(), 120);
           return;
         }
         showToast("Local file loaded. Press play when your browser is ready.");

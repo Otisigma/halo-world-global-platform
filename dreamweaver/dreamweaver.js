@@ -79,6 +79,18 @@
     appleLink: document.getElementById("dreamweaverAppleLink"),
     youtubeLink: document.getElementById("dreamweaverYouTubeLink"),
     sourceLink: document.getElementById("dreamweaverSourceLink"),
+    songLobbyPlayerTitle: document.getElementById("songLobbyPlayerTitle"),
+    songLobbyPlayerArtist: document.getElementById("songLobbyPlayerArtist"),
+    songLobbyPlayerStatus: document.getElementById("songLobbyPlayerStatus"),
+    songLobbyPlayerStatePill: document.getElementById("songLobbyPlayerStatePill"),
+    songLobbyPlayerDuration: document.getElementById("songLobbyPlayerDuration"),
+    songLobbyPlayerSource: document.getElementById("songLobbyPlayerSource"),
+    songLobbyHeroPlayButton: document.getElementById("songLobbyHeroPlayButton"),
+    songLobbyHeroPlayLabel: document.getElementById("songLobbyHeroPlayLabel"),
+    songLobbyHeroElapsed: document.getElementById("songLobbyHeroElapsed"),
+    songLobbyHeroChapter: document.getElementById("songLobbyHeroChapter"),
+    songLobbyHeroProgress: document.getElementById("songLobbyHeroProgress"),
+    songLobbyHeroDuration: document.getElementById("songLobbyHeroDuration"),
     lobbyArtwork: document.getElementById("lobbyArtwork"),
     lobbyArtworkCaption: document.getElementById("lobbyArtworkCaption"),
     heroReelVideo: document.getElementById("heroReelVideo"),
@@ -757,10 +769,24 @@
     return "Playback is paused. Resume when you are ready.";
   }
 
+  function isMixStoryRoute() {
+    const params = new URLSearchParams(location.search);
+    return Boolean(params.get("mix")) && !(params.get("campaign") || params.get("experience") === "studio");
+  }
+
   function renderSongLobbyHero() {
     const title = cleanText(state.release?.title || state.mix?.title || featuredTrack.title);
     const artist = cleanText(state.release?.artist || state.mix?.creator?.name || featuredTrack.artist);
     const artwork = releaseArtwork(state.release || {});
+    if (elements.songLobbyPlayerTitle) elements.songLobbyPlayerTitle.textContent = title || "Preparing release context…";
+    if (elements.songLobbyPlayerArtist) elements.songLobbyPlayerArtist.textContent = artist || "HALO / Dreamweaver";
+    if (elements.songLobbyPlayerStatus) elements.songLobbyPlayerStatus.textContent = releaseStateDetail(state.releasePlaybackState, title, artist);
+    if (elements.songLobbyPlayerStatePill) elements.songLobbyPlayerStatePill.textContent = releaseStateLabel(state.releasePlaybackState);
+    if (elements.songLobbyPlayerDuration) {
+      elements.songLobbyPlayerDuration.textContent = state.duration
+        ? formatTime(state.duration)
+        : cleanText(state.release?.duration || "", 24) || "00:00";
+    }
     if (elements.lobbyArtwork) {
       elements.lobbyArtwork.src = artwork.src || chapters[0].image;
       elements.lobbyArtwork.dataset.artworkFallback = artwork.fallback;
@@ -945,15 +971,19 @@
     if (elements.sourceLink) {
       const publishedSongUrl = publishedSongShareUrl();
       if (publishedSongUrl) {
-        elements.sourceLink.href = publishedSongUrl;
-        elements.sourceLink.setAttribute("aria-label", "Open this published HALO song");
         const title = cleanText(state.release?.title || state.mix?.title || featuredTrack.title);
         const artist = cleanText(state.release?.artist || state.mix?.creator?.name || featuredTrack.artist);
-        elements.sourceLink.textContent = `${title} — ${artist} ↗`;
+        const sourceLabel = `${title} — ${artist}`;
+        const sourceText = `${sourceLabel} ↗`;
+        elements.sourceLink.href = publishedSongUrl;
+        elements.sourceLink.setAttribute("aria-label", sourceText);
+        elements.sourceLink.textContent = sourceText;
       } else {
+        const sourceLabel = `${featuredTrack.title} — ${featuredTrack.artist}`;
+        const sourceText = `${sourceLabel} ↗`;
         elements.sourceLink.href = featuredTrack.url;
-        elements.sourceLink.setAttribute("aria-label", `Open ${featuredTrack.title} by ${featuredTrack.artist} on DistroKid HyperFollow`);
-        elements.sourceLink.textContent = `${featuredTrack.title} — ${featuredTrack.artist} ↗`;
+        elements.sourceLink.setAttribute("aria-label", sourceText);
+        elements.sourceLink.textContent = sourceText;
       }
       elements.sourceLink.dataset.haloPlayerTitle = cleanText(state.release?.title || state.mix?.title || featuredTrack.title);
       elements.sourceLink.dataset.haloPlayerArtist = cleanText(state.release?.artist || state.mix?.creator?.name || featuredTrack.artist);
@@ -969,6 +999,22 @@
       elements.sourceLink.dataset.haloPlayerArtwork = safeMediaUrl(state.release?.artwork || state.release?.artworkOverride || state.release?.importedArtwork || state.release?.catalog?.artworkUrl);
       delete elements.sourceLink.dataset.haloPlayer;
     }
+    if (elements.songLobbyPlayerSource && elements.sourceLink) {
+      elements.songLobbyPlayerSource.href = elements.sourceLink.href;
+      elements.songLobbyPlayerSource.setAttribute("aria-label", elements.sourceLink.getAttribute("aria-label") || "Open the Dreamweaver source signal");
+      elements.songLobbyPlayerSource.target = elements.sourceLink.target;
+      if (elements.sourceLink.hasAttribute("rel")) elements.songLobbyPlayerSource.setAttribute("rel", elements.sourceLink.getAttribute("rel") || "");
+      else elements.songLobbyPlayerSource.removeAttribute("rel");
+      elements.songLobbyPlayerSource.textContent = elements.sourceLink.textContent || "Open the source signal ↗";
+      Object.keys(elements.songLobbyPlayerSource.dataset).forEach((key) => {
+        delete elements.songLobbyPlayerSource.dataset[key];
+      });
+      Object.entries(elements.sourceLink.dataset).forEach(([key, value]) => {
+        if (value === undefined) delete elements.songLobbyPlayerSource.dataset[key];
+        else elements.songLobbyPlayerSource.dataset[key] = value;
+      });
+      delete elements.songLobbyPlayerSource.dataset.haloPlayer;
+    }
   }
 
   function renderRewardState() {
@@ -981,14 +1027,30 @@
 
   function renderSatelliteState() {
     const satelliteFlow = isSatelliteFlow();
+    const mixStoryRoute = isMixStoryRoute();
     if (!satelliteFlow) {
-      if (elements.satellite) elements.satellite.hidden = true;
-      if (elements.reward) elements.reward.hidden = true;
+      if (elements.satellite) {
+        elements.satellite.hidden = !mixStoryRoute;
+        if (mixStoryRoute) elements.satellite.removeAttribute("aria-hidden");
+        else elements.satellite.setAttribute("aria-hidden", "true");
+      }
+      if (elements.reward) {
+        elements.reward.hidden = true;
+        elements.reward.setAttribute("aria-hidden", "true");
+      }
       elements.shell.hidden = false;
       return;
     }
-    if (elements.satellite) elements.satellite.hidden = Boolean(state.unlock);
-    if (elements.reward) elements.reward.hidden = !state.unlock;
+    if (elements.satellite) {
+      elements.satellite.hidden = Boolean(state.unlock);
+      if (state.unlock) elements.satellite.setAttribute("aria-hidden", "true");
+      else elements.satellite.removeAttribute("aria-hidden");
+    }
+    if (elements.reward) {
+      elements.reward.hidden = !state.unlock;
+      if (state.unlock) elements.reward.removeAttribute("aria-hidden");
+      else elements.reward.setAttribute("aria-hidden", "true");
+    }
     elements.shell.hidden = !state.unlock;
     if (state.unlock) renderRewardState();
   }
@@ -1170,6 +1232,7 @@
     elements.storyTitle.textContent = chapter.title;
     elements.storyCopy.textContent = chapter.copy;
     elements.chapterTime.textContent = `Act ${chapter.number} / ${chapter.label}`;
+    if (elements.songLobbyHeroChapter) elements.songLobbyHeroChapter.textContent = `Act ${chapter.number} / ${chapter.label}`;
     elements.drawerKicker.textContent = `Act ${chapter.number} / ${chapter.label}`;
     elements.drawerTitle.textContent = chapter.title;
     elements.drawerLead.textContent = chapter.copy;
@@ -1195,8 +1258,12 @@
     const ratio = duration ? current / duration : 0;
     elements.progress.value = String(Math.round(ratio * 1000));
     elements.progress.style.setProperty("--progress", `${ratio * 100}%`);
+    if (elements.songLobbyHeroProgress) elements.songLobbyHeroProgress.value = String(Math.round(ratio * 1000));
+    if (elements.songLobbyHeroProgress) elements.songLobbyHeroProgress.style.setProperty("--progress", `${ratio * 100}%`);
     elements.elapsed.textContent = formatTime(current);
     elements.duration.textContent = formatTime(duration);
+    if (elements.songLobbyHeroElapsed) elements.songLobbyHeroElapsed.textContent = formatTime(current);
+    if (elements.songLobbyHeroDuration) elements.songLobbyHeroDuration.textContent = formatTime(duration);
     const chapterIndex = currentChapterIndex();
     if (chapterIndex !== state.activeChapter) activateChapter(chapterIndex, false);
     if (campaignIdFromUrl() && duration) {
@@ -1218,6 +1285,14 @@
         showToast("Press play again to start the audio experience.");
       }
     } else elements.audio.pause();
+  }
+
+  function updateHeroPlayButton(isPlaying) {
+    if (!elements.songLobbyHeroPlayButton) return;
+    elements.songLobbyHeroPlayButton.setAttribute("aria-label", isPlaying ? "Pause mix" : "Play mix");
+    if (elements.songLobbyHeroPlayLabel) elements.songLobbyHeroPlayLabel.textContent = isPlaying ? "Pause mix" : "Play mix";
+    const icon = elements.songLobbyHeroPlayButton.querySelector("span[aria-hidden='true']");
+    if (icon) icon.textContent = isPlaying ? "❚❚" : "▶";
   }
 
   function setMode(mode) {
@@ -2046,9 +2121,15 @@
   renderFootageSelector();
   renderArchive();
   elements.playButton.addEventListener("click", togglePlayback);
+  elements.songLobbyHeroPlayButton?.addEventListener("click", togglePlayback);
   elements.progress.addEventListener("input", () => {
     if (!state.duration) return;
     elements.audio.currentTime = Number(elements.progress.value) / 1000 * state.duration;
+    updateProgress();
+  });
+  elements.songLobbyHeroProgress?.addEventListener("input", () => {
+    if (!state.duration) return;
+    elements.audio.currentTime = Number(elements.songLobbyHeroProgress.value) / 1000 * state.duration;
     updateProgress();
   });
   elements.audio.addEventListener("loadedmetadata", () => {
@@ -2061,6 +2142,7 @@
   elements.audio.addEventListener("play", () => {
     document.body.classList.add("is-playing");
     elements.playButton.setAttribute("aria-label", "Pause show");
+    updateHeroPlayButton(true);
     resetIdle();
     if (campaignIdFromUrl() && !state.trackedProgress.has("show_play")) {
       state.trackedProgress.add("show_play");
@@ -2071,11 +2153,13 @@
   elements.audio.addEventListener("pause", () => {
     document.body.classList.remove("is-playing");
     elements.playButton.setAttribute("aria-label", "Play show");
+    updateHeroPlayButton(false);
     document.body.classList.remove("idle");
     if (!elements.audio.ended) setReleasePlaybackState("paused");
   });
   elements.audio.addEventListener("ended", () => {
     activateChapter(chapters.length - 1, false);
+    updateHeroPlayButton(false);
     if (campaignIdFromUrl() && !state.trackedProgress.has("mix_complete")) {
       state.trackedProgress.add("mix_complete");
       trackCampaignEvent("mix_complete", new URLSearchParams(location.search).get("source") || "halo");

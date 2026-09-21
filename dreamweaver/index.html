@@ -31,7 +31,10 @@
       };
       window.dreamweaverFontFallbackTimer = window.setTimeout(() => {
         const fontLink = document.getElementById("dreamweaverFonts");
-        if (!fontLink || fontLink.dataset.loaded === "true") return;
+        if (!fontLink || fontLink.dataset.loaded === "true") {
+          window.dreamweaverFontFallbackTimer = 0;
+          return;
+        }
         fontLink.dataset.loaded = "true";
         fontLink.rel = "stylesheet";
         window.dreamweaverFontFallbackTimer = 0;

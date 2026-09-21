@@ -32,7 +32,8 @@ const [page, styles, script, deck, campaign, radio, config, server, artworkHelpe
 const checks = [
   [page.includes("Dreamweaver Show — HALO") && page.includes('id="showAudio"'), "ships the standalone Dreamweaver visual show"],
   [page.includes('id="songLobbyHero"') && page.includes('id="songLobbyPlayer"') && page.includes('id="songLobbyHeroPlayButton"') && page.includes('id="showAudio"') && page.includes('id="songLobbyPlayerSource"') && page.includes('id="lobbyArtwork"') && page.includes('id="heroReelPlayer"') && page.includes("MAKE A REEL / SHORT"), "opens Dreamweaver as a hero-led Song Lobby with artwork, an embedded player, reel media, and a short-generator hook"],
-  [/document\.documentElement\.dataset\.dreamweaverMode\s*=\s*isSatelliteFlow\s*\?\s*\(hasUnlock\s*\?\s*"reward"\s*:\s*"satellite"\)\s*:\s*"show"/.test(page)
+  [/storySlugMatch/.test(page)
+    && /document\.documentElement\.dataset\.dreamweaverMode\s*=\s*isSatelliteFlow\s*\?\s*\(hasUnlock\s*\?\s*"reward"\s*:\s*"satellite"\)\s*:\s*"show"/.test(page)
     && /id="dreamweaverSatellite"[^>]*aria-labelledby="dreamweaverSatelliteTitle"[^>]*aria-hidden="true"[^>]*hidden/.test(page)
     && /id="dreamweaverReward"[^>]*aria-labelledby="dreamweaverRewardTitle"[^>]*aria-hidden="true"[^>]*hidden/.test(page)
     && /id="showShell"[^>]*aria-live="polite"[^>]*aria-busy="true"[^>]*aria-hidden="true"[^>]*hidden/.test(page)
@@ -45,7 +46,7 @@ const checks = [
     && /<noscript>[\s\S]*https:\/\/fonts\.googleapis\.com\/css2\?family=Cormorant\+Garamond/.test(page), "loads Dreamweaver's external web fonts without making them a render-blocking dependency"],
   [page.includes("release-artwork.css") && page.includes("release-artwork.js"), "loads the shared HALO artwork fallback assets on the Dreamweaver page"],
   [page.includes('data-mode="watch"') && page.includes('data-mode="room"') && page.includes('data-mode="explore"'), "offers Watch, Room, and Explore modes"],
-  [script.includes('fetchJsonWithTimeout("/api/mixes?limit=100"') && script.includes("requestedMix"), "loads an existing Mix Desk recording and supports direct mix links"],
+  [script.includes('fetchJsonWithTimeout("/api/mixes?limit=100"') && script.includes("requestedMix") && script.includes("resolveRequestedMixToken"), "loads an existing Mix Desk recording and supports direct mix links"],
   [(() => {
     const fetchJsonStart = script.indexOf("async function fetchJsonWithTimeout");
     const playbackHelperStart = script.indexOf("\n  function isPlayablePrimaryMix");
@@ -58,9 +59,9 @@ const checks = [
   [script.includes("audioFeedbackStorageKey") && script.includes('fetch("/api/issues"') && script.includes("deliveryStatus") && script.includes("seenFingerprints"), "queues structured Dreamweaver audio incidents for AI maintenance triage"],
   [script.includes('"missing_audio"') && script.includes('"muted_audio"') && script.includes('"corrupted_audio"') && script.includes('"non_playable_audio"'), "captures deterministic Dreamweaver audio failure states for QA review"],
   [page.includes('id="dreamweaverSongLabLink"') && script.includes('halo-dreamweaver-upload-trust') && script.includes('target.searchParams.set("flow", "artist-upload")'), "bridges the canonical Dreamweaver route into a trusted artist upload handoff"],
-  [script.includes('fetchJsonWithTimeout("/api/videos?artistSlug=owen-anthony"') && script.includes("archiveReel"), "enriches the experience with the connected artist video archive"],
+  [script.includes("state.release?.artistSlug") && script.includes("encodeURIComponent(artistSlug)") && script.includes("archiveReel"), "enriches the experience with the connected artist video archive"],
   [page.includes('id="heroReelVideo"') && script.includes("preferredHeroVideo") && script.includes('elements.heroReelPlayer') && script.includes('elements.heroReelVideo') && script.includes("showMutedHeroReel") && script.includes("HERO_REEL_LOAD_TIMEOUT_MS"), "reuses connected Dreamweaver release and video context to power a non-blocking Song Lobby hero reel with muted autoplay fallback"],
-  [script.includes("fetchJsonWithTimeout") && script.includes("RELEASE_CONTEXT_TIMEOUT_MS") && script.includes("VIDEO_LIBRARY_TIMEOUT_MS"), "guards Dreamweaver release-context and video loads with deterministic timeouts"],
+  [script.includes("fetchReleaseCatalog") && script.includes("resolveReleaseFromCatalog") && script.includes("RELEASE_CONTEXT_TIMEOUT_MS") && script.includes("VIDEO_LIBRARY_TIMEOUT_MS"), "guards Dreamweaver release-context and video loads with deterministic timeouts"],
   [page.includes('data-release-artwork') && script.includes("HaloReleaseArtwork?.resolve") && artworkHelper.includes("window.HaloReleaseArtwork"), "routes Dreamweaver release artwork through the shared HALO fallback recovery system"],
   [script.includes('label: "The Hook"') && script.includes('label: "Lyric Break"') && script.includes('label: "Sonic World"') && script.includes("activateChapter") && script.includes("elements.audio.currentTime") && script.includes("chapters.length - 1"), "synchronizes the Song Lobby acts with Dreamweaver audio playback"],
   [styles.includes("body.mode-room") && styles.includes("body.mode-explore") && styles.includes("prefers-reduced-motion"), "styles atmospheric modes and reduced-motion behavior"],
@@ -98,6 +99,7 @@ const checks = [
   ],
   [script.includes("publishedSongId: resolveSongContextId()") && script.includes('new URL("/music/", location.origin)') && script.includes("Published song link copied."), "shares a published song from Dreamweaver using the canonical public music URL when song context is present"],
   [script.includes("resolveSongContextId") && script.includes("songIdFromSatellitePath") && script.includes("startSatelliteAgentLoop") && script.includes("dreamweaver-satellite-"), "derives song-specific satellite context from deterministic routes and runs an isolated per-song update loop"],
+  [script.includes("releaseRouteTokens") && script.includes("mixRouteTokens") && script.includes("loadReleaseContext") && script.includes("requestedStorySlug"), "resolves release context from direct mix and slug routes using the shared release catalog shape"],
   [script.includes('fetch("/api/dreamweaver-fan-signups"') && script.includes("readStoredUnlock") && script.includes("updatePlatformLinks"), "submits email unlocks and rehydrates the lightweight fan reward state"],
   [page.includes('href="/dj-deck.html"') && page.includes("Creator gateway /dj-deck"), "keeps creator routing secondary on the Song Lobby page while preserving the canonical deck route"],
   [script.includes('action: "start"') && script.includes("pollCampaignJob") && script.includes("renderPlatformPackages"), "starts, monitors, and exports background campaign packages"],

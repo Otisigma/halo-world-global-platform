@@ -97,6 +97,10 @@
     heroReelPlayer: document.getElementById("heroReelPlayer"),
     heroReelFallback: document.getElementById("heroReelFallback"),
     heroReelStatus: document.getElementById("heroReelStatus"),
+    storyActI: document.getElementById("storyActI"),
+    storyActII: document.getElementById("storyActII"),
+    storyActIII: document.getElementById("storyActIII"),
+    storyActIV: document.getElementById("storyActIV"),
     songLobbyMakeCampaign: document.getElementById("songLobbyMakeCampaign"),
     creatorGatewayLink: document.getElementById("dreamweaverCreatorGateway"),
     shell: document.getElementById("showShell"),
@@ -210,6 +214,7 @@
   const state = {
     mix: null,
     release: null,
+    releaseCatalog: [],
     releasePlaybackState: "loading",
     publishedSongId: resolveSongContextId(),
     unlock: readStoredUnlock(),
@@ -450,9 +455,48 @@
     return cleanSongId(match?.[1] || "");
   }
 
-  function resolveSongContextId() {
+  function cleanKey(value, max = 160) {
+    return cleanText(value, max).toLowerCase();
+  }
+
+  function slugifyDreamweaverValue(value, max = 160) {
+    try {
+      return cleanText(decodeURIComponent(String(value || "")), max)
+        .toLowerCase()
+        .replace(/['’]/g, "")
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-+|-+$/g, "");
+    } catch {
+      return cleanText(String(value || ""), max)
+        .toLowerCase()
+        .replace(/['’]/g, "")
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-+|-+$/g, "");
+    }
+  }
+
+  function storySlugFromPath(pathname = location.pathname) {
+    const match = String(pathname || "").match(/^\/dreamweaver\/([^/]+)\/?$/i);
+    const slug = slugifyDreamweaverValue(match?.[1] || "", 160);
+    return slug === "satellite" || slug === "index-html" ? "" : slug;
+  }
+
+  function resolveRequestedMixToken() {
     const params = new URLSearchParams(location.search);
-    return cleanSongId(params.get("song")) || songIdFromSatellitePath();
+    return cleanKey(params.get("mix"), 160) || storySlugFromPath();
+  }
+
+  function resolveDreamweaverRouteContext() {
+    const params = new URLSearchParams(location.search);
+    return {
+      requestedMixToken: resolveRequestedMixToken(),
+      requestedStorySlug: storySlugFromPath(),
+      requestedSongId: cleanSongId(params.get("song")) || songIdFromSatellitePath(),
+    };
+  }
+
+  function resolveSongContextId() {
+    return resolveDreamweaverRouteContext().requestedSongId;
   }
 
   function isSatellitePath() {
@@ -596,10 +640,69 @@
     return Boolean(cleanText(mix?.audioUrl, 1200)) && source !== "youtube";
   }
 
-  function resolvePrimaryPlaybackMix(mixes = [], requestedMixId = "") {
-    const requested = cleanText(requestedMixId, 120);
+  function mixRouteTokens(mix = {}) {
+    const tokens = new Set();
+    const id = cleanKey(mix?.id, 160);
+    const titleSlug = slugifyDreamweaverValue(mix?.title, 160);
+    const creatorSlug = slugifyDreamweaverValue(mix?.creator?.name, 160);
+    const titleAndCreatorSlug = slugifyDreamweaverValue([mix?.creator?.name, mix?.title].filter(Boolean).join(" "), 160);
+    if (id) tokens.add(id);
+    if (titleSlug) tokens.add(titleSlug);
+    if (creatorSlug && titleSlug) tokens.add(`${creatorSlug}-${titleSlug}`.slice(0, 160));
+    if (titleAndCreatorSlug) tokens.add(titleAndCreatorSlug);
+    return tokens;
+  }
+
+  function routeMixTokenFromUrl(value) {
+    const url = safeMediaUrl(value);
+    if (!url) return "";
+    try {
+      return cleanKey(new URL(url).searchParams.get("mix"), 160);
+    } catch {
+      return "";
+    }
+  }
+
+  function releaseRouteTokens(release = {}) {
+    const tokens = new Set();
+    const artistSlug = slugifyDreamweaverValue(release?.artistSlug, 160);
+    const titleSlug = slugifyDreamweaverValue(release?.title, 160);
+    const artistTitleSlug = slugifyDreamweaverValue([release?.artistSlug || release?.artist, release?.title].filter(Boolean).join(" "), 160);
+    [
+      cleanSongId(release?.id),
+      cleanSongId(release?.catalog?.songId),
+      cleanKey(release?.dreamweaverPage?.mixId, 160),
+      cleanKey(release?.dreamweaverPage?.manager?.mixId, 160),
+      routeMixTokenFromUrl(release?.dreamweaverHubUrl),
+      routeMixTokenFromUrl(release?.dreamweaverPage?.hubUrl),
+      artistSlug,
+      titleSlug,
+      artistTitleSlug,
+    ].filter(Boolean).forEach(token => tokens.add(token));
+    return tokens;
+  }
+
+  function releaseMatchesRouteToken(release, routeContext = {}) {
+    const requestedSongId = cleanSongId(routeContext.requestedSongId);
+    if (requestedSongId) {
+      const releaseId = cleanSongId(release?.id);
+      const catalogSongId = cleanSongId(release?.catalog?.songId);
+      if (releaseId === requestedSongId || catalogSongId === requestedSongId) return true;
+    }
+    const requestedMixToken = cleanKey(routeContext.requestedMixToken, 160);
+    if (!requestedMixToken) return false;
+    return releaseRouteTokens(release).has(requestedMixToken);
+  }
+
+  function resolveReleaseFromCatalog(releases = [], routeContext = {}) {
+    const catalog = Array.isArray(releases) ? releases : [];
+    return catalog.find(release => releaseMatchesRouteToken(release, routeContext)) || null;
+  }
+
+  function resolvePrimaryPlaybackMix(mixes = [], requestedMixId = "", release = null, { allowFallback = true } = {}) {
+    const requested = cleanKey(requestedMixId, 160);
     const library = Array.isArray(mixes) ? mixes : [];
-    const requestedEntry = requested ? library.find(item => cleanText(item?.id, 120) === requested) : null;
+    const requestedEntry = requested ? library.find(item => mixRouteTokens(item).has(requested)) : null;
     if (isPlayablePrimaryMix(requestedEntry)) return requestedEntry;
 
     if (requestedEntry && !cleanText(requestedEntry.audioUrl, 1200)) {
@@ -620,7 +723,21 @@
       });
     }
 
-    if (requested && requestedEntry) return null;
+    if (release) {
+      const releaseTitleSlug = slugifyDreamweaverValue(release?.title, 160);
+      const releaseArtistSlug = slugifyDreamweaverValue(release?.artist, 160);
+      const releaseMatch = library.find((item) => {
+        if (!isPlayablePrimaryMix(item)) return false;
+        const mixTitleSlug = slugifyDreamweaverValue(item?.title, 160);
+        const mixArtistSlug = slugifyDreamweaverValue(item?.creator?.name, 160);
+        return Boolean(releaseTitleSlug)
+          && mixTitleSlug === releaseTitleSlug
+          && (!releaseArtistSlug || !mixArtistSlug || mixArtistSlug === releaseArtistSlug);
+      });
+      if (releaseMatch) return releaseMatch;
+    }
+
+    if (requested && (requestedEntry || !allowFallback)) return null;
     return library.find(isPlayablePrimaryMix) || null;
   }
 
@@ -771,7 +888,91 @@
 
   function isMixStoryRoute() {
     const params = new URLSearchParams(location.search);
-    return Boolean(params.get("mix")) && !(params.get("campaign") || params.get("experience") === "studio");
+    return Boolean(resolveRequestedMixToken()) && !(params.get("campaign") || params.get("experience") === "studio");
+  }
+
+  function buildStoryContent() {
+    const release = state.release || {};
+    const catalog = release.catalog || {};
+    const mix = state.mix || {};
+    const title = cleanText(release.title || mix.title || featuredTrack.title, 120);
+    const artist = cleanText(release.artist || mix.creator?.name || featuredTrack.artist, 120);
+    const album = cleanText(release.albumTitle || release.collectionTitle || catalog.albumTitle || "", 120);
+    const genre = Array.isArray(release.genres) && release.genres.length
+      ? cleanText(release.genres[0] || "", 80)
+      : cleanText(String(catalog.genre || "").split(",")[0] || "", 80);
+    const duration = state.duration ? formatTime(state.duration) : cleanText(release.duration || "", 24);
+    const bpm = Number(release.bpm) > 0 ? `${Number(release.bpm)} BPM` : "";
+    const musicalKey = cleanText(release.musicalKey || "", 20);
+    const releaseStatus = cleanText(release.publication?.dreamweaverStatus || release.publication?.releaseStatus || catalog.saleStatus || "", 40);
+    const storySeed = cleanText(release.pitch || mix.description || "", 320);
+    const titleArtistLine = [title, artist].filter(Boolean).join(" — ");
+    return {
+      act1Title: title ? `${title} starts in a feeling, not a feature list.` : "The origin starts in a feeling, not a feature list.",
+      act1Lead: storySeed || `Dreamweaver frames ${titleArtistLine || "the release"} like a late-night confession: the room quiets first, then the record steps forward carrying whatever had to be said before anyone asked for a chorus.`,
+      act1Support: artist
+        ? `${artist} stays at the center of the public view so the mix route opens on story, artwork, and listening intent before any slower platform or release links have to catch up.`
+        : "The public view stays close to the emotional reason the song exists, so first-time listeners meet the world of the record before any production mechanics or creator tooling enter the frame.",
+      act2Title: title ? `${title} leaves one phrase hanging in the room after the first play.` : "Featured lines land like marginal notes in the dark.",
+      act2Notes: [
+        artist
+          ? `Dreamweaver note: ${artist} stays in close focus while the published release context hydrates artwork, source links, and lobby details around the player.`
+          : "Dreamweaver note: the line plays like a promise made under pressure, so the typography stays spacious and deliberate.",
+        storySeed
+          ? `Dreamweaver note: ${storySeed}`
+          : "Dreamweaver note: this is the lyric break where the song stops performing and starts confiding.",
+        album || genre
+          ? `Dreamweaver note: ${album || genre} gives the lobby its editorial frame, so the text can feel specific without breaking the mood.`
+          : "Dreamweaver note: the lobby treats the phrase like a cue for breath, warmth, and a slower camera move."
+      ],
+      act3Title: title ? `${title} arrives with a listening environment, not just a file.` : "This is the listening environment before it becomes a playlist tab.",
+      act3Mood: genre ? `${genre.toLowerCase()} filtered through Dreamweaver's cinematic, intimate late-night frame.` : "cinematic, intimate, and slightly nocturnal.",
+      act3Instrumentation: [bpm, musicalKey].filter(Boolean).join(" / ") || "Patient low-end, suspended keys, vocal air, and a rhythm that arrives like weather.",
+      act3Setting: duration
+        ? `Give the ${duration} running time enough room to breathe — headphones after midnight, a quiet drive, or the first five minutes after everyone else leaves.`
+        : "Headphones after midnight, a quiet drive, or the first five minutes after everyone else leaves the room.",
+      act3Support: releaseStatus
+        ? `Dreamweaver keeps the sonic description human and story-led while the published release state stays ${releaseStatus.toLowerCase()} in the connected catalog.`
+        : "Dreamweaver keeps the sonic description editorial and human so general listeners know how to enter the song, not how the mix bus was wired.",
+      act4Title: title ? `Open ${title} fully when you're ready.` : "Leave your email and Dreamweaver opens the full streaming doorway.",
+      act4Lead: titleArtistLine
+        ? `The reward is the full guided listening room for ${titleArtistLine}, direct exits to Spotify, Apple Music, and YouTube, plus the quiet creator gateway in the footer for people building from the inside.`
+        : "The reward is the full guided listening room below, direct exits to Spotify, Apple Music, and YouTube, plus a quiet creator gateway in the footer for the people building from the inside."
+    };
+  }
+
+  function renderStoryActs() {
+    const story = buildStoryContent();
+    if (elements.storyActI) {
+      const paragraphs = elements.storyActI.querySelectorAll("p:not(.story-act__eyebrow)");
+      const title = elements.storyActI.querySelector("h2");
+      if (title) title.textContent = story.act1Title;
+      if (paragraphs[0]) paragraphs[0].textContent = story.act1Lead;
+      if (paragraphs[1]) paragraphs[1].textContent = story.act1Support;
+    }
+    if (elements.storyActII) {
+      const title = elements.storyActII.querySelector("h2");
+      if (title) title.textContent = story.act2Title;
+      elements.storyActII.querySelectorAll("blockquote cite").forEach((cite, index) => {
+        if (story.act2Notes[index]) cite.textContent = story.act2Notes[index];
+      });
+    }
+    if (elements.storyActIII) {
+      const title = elements.storyActIII.querySelector("h2");
+      const bullets = elements.storyActIII.querySelectorAll("li");
+      const paragraphs = elements.storyActIII.querySelectorAll("p");
+      if (title) title.textContent = story.act3Title;
+      if (bullets[0]) bullets[0].innerHTML = `<strong>Mood:</strong> ${escapeHtml(story.act3Mood)}`;
+      if (bullets[1]) bullets[1].innerHTML = `<strong>Instrumentation:</strong> ${escapeHtml(story.act3Instrumentation)}`;
+      if (bullets[2]) bullets[2].innerHTML = `<strong>Best setting:</strong> ${escapeHtml(story.act3Setting)}`;
+      if (paragraphs[0]) paragraphs[0].textContent = story.act3Support;
+    }
+    if (elements.storyActIV) {
+      const title = elements.storyActIV.querySelector("h2");
+      const lead = elements.storyActIV.querySelector("p:not(.satellite-form-kicker)");
+      if (title) title.textContent = story.act4Title;
+      if (lead) lead.textContent = story.act4Lead;
+    }
   }
 
   function renderSongLobbyHero() {
@@ -882,6 +1083,7 @@
     elements.releaseArtwork.alt = `${title || "Dreamweaver show"} cover artwork`;
     window.HaloReleaseArtwork?.wire(elements.releasePanel, DREAMWEAVER_RELEASE_FALLBACK_ARTWORK);
     renderSongLobbyHero();
+    renderStoryActs();
   }
 
   function setReleasePlaybackState(nextState) {
@@ -900,29 +1102,29 @@
     if (elements.loadingSubtitle && subtitle) elements.loadingSubtitle.textContent = subtitle;
   }
 
+  async function fetchReleaseCatalog() {
+    const { response, payload } = await fetchJsonWithTimeout("/api/release-catalog", {
+      timeoutMs: RELEASE_CONTEXT_TIMEOUT_MS,
+      timeoutMessage: "Dreamweaver timed out while loading release context.",
+      headers: { Accept: "application/json" },
+      credentials: "same-origin"
+    });
+    if (!response.ok) throw new Error(payload.message || "Release catalog unavailable");
+    return Array.isArray(payload.releases) ? payload.releases : [];
+  }
+
   async function loadReleaseContext({ keepCurrentOnFailure = false } = {}) {
-    const songContextId = resolveSongContextId();
-    if (songContextId) state.publishedSongId = songContextId;
-    if (!state.publishedSongId) {
+    const routeContext = resolveDreamweaverRouteContext();
+    if (routeContext.requestedSongId) state.publishedSongId = routeContext.requestedSongId;
+    if (!state.publishedSongId && !routeContext.requestedMixToken) {
       state.release = null;
       renderReleasePanel();
       return;
     }
     try {
-      const { response, payload } = await fetchJsonWithTimeout("/api/release-catalog", {
-        timeoutMs: RELEASE_CONTEXT_TIMEOUT_MS,
-        timeoutMessage: "Dreamweaver timed out while loading release context.",
-        headers: { Accept: "application/json" },
-        credentials: "same-origin"
-      });
-      if (!response.ok) throw new Error(payload.message || "Release catalog unavailable");
-      const releases = Array.isArray(payload.releases) ? payload.releases : [];
-      const normalizedSongId = String(state.publishedSongId || "").toLowerCase();
-      const release = releases.find((item) => {
-        const releaseId = String(item.id || "").toLowerCase();
-        const catalogSongId = String(item.catalog?.songId || "").toLowerCase();
-        return releaseId === normalizedSongId || catalogSongId === normalizedSongId;
-      }) || null;
+      const releases = state.releaseCatalog.length ? state.releaseCatalog : await fetchReleaseCatalog();
+      state.releaseCatalog = releases;
+      const release = resolveReleaseFromCatalog(releases, routeContext);
       if (release) {
         state.release = release;
         state.publishedSongId = cleanSongId(release.id) || state.publishedSongId;
@@ -939,13 +1141,13 @@
     const params = new URLSearchParams(location.search);
     if (isSatellitePath()) return true;
     if (campaignIdFromUrl() || params.get("experience") === "studio") return false;
-    const hasMix = Boolean(params.get("mix"));
+    const hasMix = Boolean(resolveRequestedMixToken());
     if (!hasMix) return true;
     return params.get("satellite") === "dreamweaver";
   }
 
   function rewardSearchQuery() {
-    return `${state.mix?.title || featuredTrack.title} ${state.mix?.creator?.name || featuredTrack.artist}`.trim();
+    return `${state.release?.title || state.mix?.title || featuredTrack.title} ${state.release?.artist || state.mix?.creator?.name || featuredTrack.artist}`.trim();
   }
 
   function publishedSongShareUrl() {
@@ -1977,8 +2179,11 @@
   }
 
   async function loadVideos() {
+    const releaseArtistSlug = slugifyDreamweaverValue(state.release?.artistSlug, 120);
+    const fallbackArtistSlug = slugifyDreamweaverValue(state.release?.artist || state.mix?.creator?.name, 120);
+    const artistSlug = releaseArtistSlug || fallbackArtistSlug || "owen-anthony";
     try {
-      const { response, payload } = await fetchJsonWithTimeout("/api/videos?artistSlug=owen-anthony", {
+      const { response, payload } = await fetchJsonWithTimeout(`/api/videos?artistSlug=${encodeURIComponent(artistSlug)}`, {
         timeoutMs: VIDEO_LIBRARY_TIMEOUT_MS,
         timeoutMessage: "Dreamweaver timed out while loading connected videos.",
         headers: { Accept: "application/json" },
@@ -2035,7 +2240,11 @@
     elements.empty.hidden = true;
     elements.shell.setAttribute("aria-busy", "true");
     try {
-      const requestedMix = new URLSearchParams(location.search).get("mix") || "";
+      const routeContext = resolveDreamweaverRouteContext();
+      const requestedMix = routeContext.requestedMixToken;
+      const releaseCatalogPromise = requestedMix || routeContext.requestedSongId
+        ? fetchReleaseCatalog().catch(() => [])
+        : Promise.resolve(state.releaseCatalog);
       const { response, payload: data } = await fetchJsonWithTimeout("/api/mixes?limit=100", {
         timeoutMs: MIX_LIBRARY_TIMEOUT_MS,
         timeoutMessage: "Dreamweaver timed out while loading the mix library. Please try again.",
@@ -2043,7 +2252,31 @@
         credentials: "same-origin"
       });
       if (!response.ok) throw new Error(data.message || "The Dreamweaver mix library could not be read.");
-      const mix = resolvePrimaryPlaybackMix(data.mixes || [], requestedMix);
+      let release = null;
+      let mix = resolvePrimaryPlaybackMix(data.mixes || [], requestedMix, null, { allowFallback: !requestedMix });
+      if (!mix) {
+        const releases = await releaseCatalogPromise;
+        if (releases.length) state.releaseCatalog = releases;
+        release = resolveReleaseFromCatalog(releases, routeContext);
+        if (release) {
+          state.release = release;
+          state.publishedSongId = cleanSongId(release.id) || state.publishedSongId;
+          updatePlatformLinks();
+          renderReleasePanel();
+        }
+        mix = resolvePrimaryPlaybackMix(data.mixes || [], requestedMix, release, { allowFallback: true });
+      } else {
+        void releaseCatalogPromise.then((releases) => {
+          if (!releases.length || state.release) return;
+          state.releaseCatalog = releases;
+          const resolvedRelease = resolveReleaseFromCatalog(releases, routeContext);
+          if (!resolvedRelease) return;
+          state.release = resolvedRelease;
+          state.publishedSongId = cleanSongId(resolvedRelease.id) || state.publishedSongId;
+          updatePlatformLinks();
+          renderReleasePanel();
+        });
+      }
       if (!mix) {
         queueAudioFeedbackIncident("missing_audio", {
           severity: "high",

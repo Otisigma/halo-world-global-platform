@@ -2275,6 +2275,7 @@
           state.publishedSongId = cleanSongId(resolvedRelease.id) || state.publishedSongId;
           updatePlatformLinks();
           renderReleasePanel();
+          void loadVideos();
         });
       }
       if (!mix) {

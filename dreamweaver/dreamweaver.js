@@ -992,6 +992,9 @@
     if (elements.songLobbyPlayerSource && elements.sourceLink) {
       elements.songLobbyPlayerSource.href = elements.sourceLink.href;
       elements.songLobbyPlayerSource.setAttribute("aria-label", elements.sourceLink.getAttribute("aria-label") || "Open the Dreamweaver source signal");
+      elements.songLobbyPlayerSource.target = elements.sourceLink.target;
+      if (elements.sourceLink.hasAttribute("rel")) elements.songLobbyPlayerSource.setAttribute("rel", elements.sourceLink.getAttribute("rel") || "");
+      else elements.songLobbyPlayerSource.removeAttribute("rel");
       elements.songLobbyPlayerSource.textContent = elements.sourceLink.textContent || "Open the source signal ↗";
       Object.entries(elements.sourceLink.dataset).forEach(([key, value]) => {
         if (value === undefined) delete elements.songLobbyPlayerSource.dataset[key];

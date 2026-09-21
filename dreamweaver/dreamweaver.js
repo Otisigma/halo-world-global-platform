@@ -2188,8 +2188,7 @@
 
   async function loadVideos() {
     const releaseArtistSlug = slugifyDreamweaverValue(state.release?.artistSlug, 120);
-    const fallbackArtistSlug = slugifyDreamweaverValue(state.release?.artist || state.mix?.creator?.name, 120);
-    const artistSlug = releaseArtistSlug || fallbackArtistSlug || "owen-anthony";
+    const artistSlug = releaseArtistSlug || "owen-anthony";
     try {
       const { response, payload } = await fetchJsonWithTimeout(`/api/videos?artistSlug=${encodeURIComponent(artistSlug)}`, {
         timeoutMs: VIDEO_LIBRARY_TIMEOUT_MS,
@@ -2265,6 +2264,7 @@
       let mix = resolvePrimaryPlaybackMix(data.mixes || [], requestedMix, null, { allowFallback: !requestedMix });
       if (!mix) {
         const releases = await releaseCatalogPromise;
+        if (routeContextFingerprint() !== requestedRouteFingerprint) return;
         if (releases.length) state.releaseCatalog = releases;
         release = resolveReleaseFromCatalog(releases, routeContext);
         if (release) {

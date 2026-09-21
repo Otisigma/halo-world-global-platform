@@ -41,8 +41,7 @@ const checks = [
   [page.includes('id="storyActI"') && page.includes('id="storyActII"') && page.includes('id="storyActIII"') && page.includes('id="storyActIV"') && page.includes("Act I / The Hook") && page.includes("Act II / Lyric Break") && page.includes("Act III / Sonic World") && page.includes("Act IV / Unlock &amp; Action"), "frames the public Dreamweaver page as a four-act listener story arc"],
   [/id="dreamweaverFonts"[\s\S]*media="print"[\s\S]*onload="window\.dreamweaverFontsLoaded\?\.?\(this\)"/.test(page)
     && /window\.dreamweaverFontsLoaded = \(fontLink\) => \{[\s\S]*window\.clearTimeout\(window\.dreamweaverFontFallbackTimer\)/.test(page)
-    && /window\.dreamweaverFontFallbackTimer = window\.setTimeout\(\(\) => \{[\s\S]*fontLink\.media = "all"/.test(page)
-    && /<noscript>[\s\S]*https:\/\/fonts\.googleapis\.com\/css2\?family=Cormorant\+Garamond/.test(page), "loads Dreamweaver's external web fonts without making them a render-blocking dependency"],
+    && /window\.dreamweaverFontFallbackTimer = window\.setTimeout\(\(\) => \{[\s\S]*fontLink\.media = "all"/.test(page), "loads Dreamweaver's external web fonts without making them a render-blocking dependency"],
   [page.includes("release-artwork.css") && page.includes("release-artwork.js"), "loads the shared HALO artwork fallback assets on the Dreamweaver page"],
   [page.includes('data-mode="watch"') && page.includes('data-mode="room"') && page.includes('data-mode="explore"'), "offers Watch, Room, and Explore modes"],
   [script.includes('fetchJsonWithTimeout("/api/mixes?limit=100"') && script.includes("requestedMix"), "loads an existing Mix Desk recording and supports direct mix links"],

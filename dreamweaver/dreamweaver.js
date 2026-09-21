@@ -406,15 +406,25 @@
     if (state.audioFeedbackFlushPromise) return state.audioFeedbackFlushPromise;
     state.audioFeedbackFlushPromise = (async () => {
       const flushStartedAt = Date.now();
-      const attemptedFingerprints = new Set();
+      const seenFingerprints = new Set();
       try {
-        const pending = state.audioFeedbackQueue.filter(entry => (
-          entry.deliveryStatus !== "sent"
-          && !attemptedFingerprints.has(entry.fingerprint)
-          && (!entry.lastAttemptAt || Number.isNaN(Date.parse(entry.lastAttemptAt)) || Date.parse(entry.lastAttemptAt) < flushStartedAt)
-        ));
+        const pending = [];
+        for (const entry of state.audioFeedbackQueue) {
+          if (
+            entry.deliveryStatus === "sent"
+            || seenFingerprints.has(entry.fingerprint)
+            || (
+              entry.lastAttemptAt
+              && !Number.isNaN(Date.parse(entry.lastAttemptAt))
+              && Date.parse(entry.lastAttemptAt) >= flushStartedAt
+            )
+          ) {
+            continue;
+          }
+          seenFingerprints.add(entry.fingerprint);
+          pending.push(entry);
+        }
         for (const incident of pending) {
-          attemptedFingerprints.add(incident.fingerprint);
           await sendAudioFeedbackIncident(incident);
         }
       } finally {

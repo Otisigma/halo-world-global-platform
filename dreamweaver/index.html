@@ -6,9 +6,45 @@
   <title>Dreamweaver Show — HALO</title>
   <meta name="description" content="A cinematic artist experience created in HALO and presented through Dreamweaver.">
   <meta name="theme-color" content="#100f0c">
+  <script>
+    (() => {
+      const params = new URLSearchParams(window.location.search);
+      const isSatellitePath = /^\/dreamweaver\/satellite\/[^/]+\/?$/.test(window.location.pathname);
+      const hasMix = Boolean(params.get("mix"));
+      const isSatelliteFlow = isSatellitePath
+        || (!(params.get("campaign") || params.get("experience") === "studio") && (!hasMix || params.get("satellite") === "dreamweaver"));
+      let hasUnlock = false;
+      if (isSatelliteFlow) {
+        try {
+          const parsed = JSON.parse(window.localStorage.getItem("halo:dreamweaver-unlock") || "null");
+          const email = String(parsed?.email || "").trim().toLowerCase();
+          hasUnlock = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email);
+        } catch {}
+      }
+      document.documentElement.dataset.dreamweaverMode = isSatelliteFlow ? (hasUnlock ? "reward" : "satellite") : "show";
+      window.dreamweaverFontsLoaded = (fontLink) => {
+        window.clearTimeout(window.dreamweaverFontFallbackTimer);
+        window.dreamweaverFontFallbackTimer = 0;
+        if (!fontLink) return;
+        fontLink.dataset.loaded = "true";
+        fontLink.rel = "stylesheet";
+      };
+      window.dreamweaverFontFallbackTimer = window.setTimeout(() => {
+        const fontLink = document.getElementById("dreamweaverFonts");
+        if (!fontLink || fontLink.dataset.loaded === "true") {
+          window.dreamweaverFontFallbackTimer = 0;
+          return;
+        }
+        fontLink.dataset.loaded = "true";
+        fontLink.rel = "stylesheet";
+        window.dreamweaverFontFallbackTimer = 0;
+      }, 2500);
+    })();
+  </script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link id="dreamweaverFonts" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="preload" as="style" onload="window.dreamweaverFontsLoaded?.(this)">
+  <noscript><link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet"></noscript>
   <link rel="icon" href="/assets/halo-app-icon-192.png">
   <link rel="stylesheet" href="/halo-brand.css">
   <link rel="stylesheet" href="/accessibility.css">
@@ -40,7 +76,59 @@
     </div>
   </header>
 
-  <section class="satellite-landing" id="dreamweaverSatellite" aria-labelledby="dreamweaverSatelliteTitle" hidden>
+  <noscript>
+    <section class="satellite-landing" aria-labelledby="dreamweaverNoscriptTitle">
+      <div class="song-lobby__hero">
+        <div class="satellite-copy">
+          <p class="satellite-kicker">DREAMWEAVER / SONG LOBBY</p>
+          <h1 id="dreamweaverNoscriptTitle">Step inside the story before the stream links take over.</h1>
+          <p class="satellite-lede">JavaScript is off, so Dreamweaver is keeping the story-first Song Lobby visible while interactive playback and unlock flows stay disabled.</p>
+          <div class="song-lobby__actions">
+            <a class="song-lobby__anchor" href="#dreamweaverNoscriptActI">Read the story arc</a>
+            <a class="song-lobby__anchor" href="/dj-deck.html">Creator gateway /dj-deck</a>
+          </div>
+        </div>
+
+        <div class="song-lobby__media" aria-label="Dreamweaver hero media">
+          <figure class="song-lobby__artwork release-artwork-frame" data-artwork-frame>
+            <img class="release-artwork-image" src="/assets/releases/the-cold-is-lasting-longer.jpg" alt="Dreamweaver featured song artwork" loading="eager" fetchpriority="high" decoding="async">
+            <figcaption>Dreamweaver lobby artwork</figcaption>
+          </figure>
+        </div>
+      </div>
+      <div class="song-lobby__acts" aria-label="Dreamweaver story arc">
+        <article class="story-act" id="dreamweaverNoscriptActI">
+          <p class="story-act__eyebrow">Act I / The Hook</p>
+          <h2>The origin starts in a feeling, not a feature list.</h2>
+          <p>Dreamweaver frames the release like a late-night confession, keeping the emotional reason for the song front and center.</p>
+        </article>
+        <article class="story-act">
+          <p class="story-act__eyebrow">Act II / Lyric Break</p>
+          <h2>Featured lines land like marginal notes in the dark.</h2>
+          <p>The lobby slows down long enough for a few precise lyric fragments to feel deliberate and human.</p>
+        </article>
+        <article class="story-act">
+          <p class="story-act__eyebrow">Act III / Sonic World</p>
+          <h2>This is the listening environment before it becomes a playlist tab.</h2>
+          <p>Dreamweaver describes the mood and setting in plain language so listeners know how to enter the song.</p>
+        </article>
+        <article class="story-act">
+          <p class="story-act__eyebrow">Act IV / Unlock &amp; Action</p>
+          <h2>Interactive unlocks stay available when JavaScript is on.</h2>
+          <p>For the full guided listening room, streaming exits, and creator tools, re-open Dreamweaver with scripting enabled.</p>
+        </article>
+      </div>
+    </section>
+  </noscript>
+
+  <section class="satellite-landing" id="dreamweaverSatellite" aria-labelledby="dreamweaverSatelliteTitle" aria-hidden="true" hidden>
+    <script>
+      if (document.documentElement.dataset.dreamweaverMode === "satellite") {
+        const section = document.currentScript.parentElement;
+        section.hidden = false;
+        section.removeAttribute("aria-hidden");
+      }
+    </script>
     <div class="song-lobby__hero" id="songLobbyHero">
       <div class="satellite-copy">
         <p class="satellite-kicker">DREAMWEAVER / SONG LOBBY</p>
@@ -54,7 +142,7 @@
 
       <div class="song-lobby__media" aria-label="Dreamweaver hero media">
         <figure class="song-lobby__artwork release-artwork-frame" data-artwork-frame>
-          <img id="lobbyArtwork" class="release-artwork-image" src="/assets/releases/the-cold-is-lasting-longer.jpg" alt="Dreamweaver featured song artwork" data-release-artwork data-artwork-badge="Dreamweaver lobby artwork">
+          <img id="lobbyArtwork" class="release-artwork-image" src="/assets/releases/the-cold-is-lasting-longer.jpg" alt="Dreamweaver featured song artwork" loading="eager" fetchpriority="high" decoding="async" data-release-artwork data-artwork-badge="Dreamweaver lobby artwork">
           <figcaption id="lobbyArtworkCaption">Dreamweaver lobby artwork</figcaption>
         </figure>
         <section class="song-lobby__reel" aria-labelledby="heroReelTitle">
@@ -144,7 +232,14 @@
     </div>
   </section>
 
-  <section class="satellite-reward" id="dreamweaverReward" aria-labelledby="dreamweaverRewardTitle" hidden>
+  <section class="satellite-reward" id="dreamweaverReward" aria-labelledby="dreamweaverRewardTitle" aria-hidden="true" hidden>
+    <script>
+      if (document.documentElement.dataset.dreamweaverMode === "reward") {
+        const section = document.currentScript.parentElement;
+        section.hidden = false;
+        section.removeAttribute("aria-hidden");
+      }
+    </script>
     <div class="reward-intro">
       <p class="satellite-kicker">UNLOCKED / DREAMWEAVER OPEN</p>
       <h2 id="dreamweaverRewardTitle">Your concierge doorway is ready.</h2>
@@ -178,7 +273,14 @@
     </div>
   </section>
 
-  <main class="show-shell" id="showShell" aria-live="polite" aria-busy="true">
+  <main class="show-shell" id="showShell" aria-live="polite" aria-busy="true" aria-hidden="true" hidden>
+    <script>
+      if (document.documentElement.dataset.dreamweaverMode === "show") {
+        const shell = document.currentScript.parentElement;
+        shell.hidden = false;
+        shell.removeAttribute("aria-hidden");
+      }
+    </script>
     <section class="loading-show" id="loadingShow">
       <p>Dreamweaver / preparing this edition</p>
       <h1>Enter the cinematic<br>HALO signal.</h1>
@@ -438,6 +540,7 @@
     <span>Dreamweaver™ is proprietary HALO technology. Public descriptions communicate capabilities and outcomes, not confidential methods.</span>
     <div class="creator-footer-links">
       <a id="dreamweaverSongLabLink" class="creator-footer-link creator-footer-link--secondary" href="/dreamweaver-lab/">Song Lab upload</a>
+      <a class="creator-footer-link creator-footer-link--secondary" href="/iam-social/">I AM Social pool</a>
       <a id="dreamweaverCreatorGateway" class="creator-footer-link" href="/dj-deck.html" tabindex="0">Creator gateway /dj-deck</a>
     </div>
   </footer>

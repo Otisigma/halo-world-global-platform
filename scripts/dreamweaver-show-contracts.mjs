@@ -32,7 +32,17 @@ const [page, styles, script, deck, campaign, radio, config, server, artworkHelpe
 const checks = [
   [page.includes("Dreamweaver Show — HALO") && page.includes('id="showAudio"'), "ships the standalone Dreamweaver visual show"],
   [page.includes('id="songLobbyHero"') && page.includes('id="lobbyArtwork"') && page.includes('id="heroReelPlayer"') && page.includes("MAKE A REEL / SHORT"), "opens Dreamweaver as a hero-led Song Lobby with artwork, reel media, and a short-generator hook"],
+  [/document\.documentElement\.dataset\.dreamweaverMode\s*=\s*isSatelliteFlow\s*\?\s*\(hasUnlock\s*\?\s*"reward"\s*:\s*"satellite"\)\s*:\s*"show"/.test(page)
+    && /id="dreamweaverSatellite"[^>]*aria-labelledby="dreamweaverSatelliteTitle"[^>]*aria-hidden="true"[^>]*hidden/.test(page)
+    && /id="dreamweaverReward"[^>]*aria-labelledby="dreamweaverRewardTitle"[^>]*aria-hidden="true"[^>]*hidden/.test(page)
+    && /id="showShell"[^>]*aria-live="polite"[^>]*aria-busy="true"[^>]*aria-hidden="true"[^>]*hidden/.test(page)
+    && /document\.currentScript\.parentElement[\s\S]*section\.hidden = false/.test(page)
+    && /document\.currentScript\.parentElement[\s\S]*shell\.hidden = false/.test(page), "reveals the correct Dreamweaver lobby shell before deferred JavaScript hydration instead of starting from the loading screen"],
   [page.includes('id="storyActI"') && page.includes('id="storyActII"') && page.includes('id="storyActIII"') && page.includes('id="storyActIV"') && page.includes("Act I / The Hook") && page.includes("Act II / Lyric Break") && page.includes("Act III / Sonic World") && page.includes("Act IV / Unlock &amp; Action"), "frames the public Dreamweaver page as a four-act listener story arc"],
+  [/id="dreamweaverFonts"[\s\S]*rel="preload"[\s\S]*as="style"[\s\S]*onload="window\.dreamweaverFontsLoaded\?\.?\(this\)"/.test(page)
+    && /window\.dreamweaverFontsLoaded = \(fontLink\) => \{[\s\S]*window\.clearTimeout\(window\.dreamweaverFontFallbackTimer\)/.test(page)
+    && /window\.dreamweaverFontFallbackTimer = window\.setTimeout\(\(\) => \{[\s\S]*fontLink\.rel = "stylesheet"/.test(page)
+    && /<noscript>[\s\S]*https:\/\/fonts\.googleapis\.com\/css2\?family=Cormorant\+Garamond/.test(page), "loads Dreamweaver's external web fonts without making them a render-blocking dependency"],
   [page.includes("release-artwork.css") && page.includes("release-artwork.js"), "loads the shared HALO artwork fallback assets on the Dreamweaver page"],
   [page.includes('data-mode="watch"') && page.includes('data-mode="room"') && page.includes('data-mode="explore"'), "offers Watch, Room, and Explore modes"],
   [script.includes('fetchJsonWithTimeout("/api/mixes?limit=100"') && script.includes("requestedMix"), "loads an existing Mix Desk recording and supports direct mix links"],

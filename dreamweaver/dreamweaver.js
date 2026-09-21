@@ -481,14 +481,20 @@
     return slug === "satellite" || slug === "index-html" ? "" : slug;
   }
 
-  function resolveRequestedMixToken() {
+  function resolveRequestedMixId() {
     const params = new URLSearchParams(location.search);
-    return cleanKey(params.get("mix"), 160) || storySlugFromPath();
+    return cleanKey(params.get("mix"), 160);
+  }
+
+  function resolveRequestedMixToken() {
+    return resolveRequestedMixId() || storySlugFromPath();
   }
 
   function resolveDreamweaverRouteContext() {
     const params = new URLSearchParams(location.search);
+    const requestedMixId = resolveRequestedMixId();
     return {
+      requestedMixId,
       requestedMixToken: resolveRequestedMixToken(),
       requestedStorySlug: storySlugFromPath(),
       requestedSongId: cleanSongId(params.get("song")) || songIdFromSatellitePath(),
@@ -497,6 +503,7 @@
 
   function routeContextFingerprint(routeContext = resolveDreamweaverRouteContext()) {
     return [
+      cleanKey(routeContext.requestedMixId, 160),
       cleanKey(routeContext.requestedMixToken, 160),
       cleanKey(routeContext.requestedStorySlug, 160),
       cleanSongId(routeContext.requestedSongId)
@@ -707,31 +714,37 @@
     return catalog.find(release => releaseMatchesRouteToken(release, routeContext)) || null;
   }
 
-  function resolvePrimaryPlaybackMix(mixes = [], requestedMixId = "", release = null, { allowFallback = true } = {}) {
+  function resolvePrimaryPlaybackMix(mixes = [], requestedMixId = "", release = null, { allowFallback = true, strictRequestedId = "" } = {}) {
     const requested = cleanKey(requestedMixId, 160);
+    const strictRequested = cleanKey(strictRequestedId, 160);
+    const requestedKey = strictRequested || requested;
     const library = Array.isArray(mixes) ? mixes : [];
-    const requestedEntry = requested ? library.find(item => mixRouteTokens(item).has(requested)) : null;
+    const requestedEntry = strictRequested
+      ? library.find(item => cleanKey(item?.id, 160) === strictRequested)
+      : requested
+        ? library.find(item => mixRouteTokens(item).has(requested))
+        : null;
     if (isPlayablePrimaryMix(requestedEntry)) return requestedEntry;
 
     if (requestedEntry && !cleanText(requestedEntry.audioUrl, 1200)) {
       queueAudioFeedbackIncident("missing_audio", {
         severity: "high",
         title: "Dreamweaver primary mix is missing audio",
-        details: `The requested mix ${requestedEntry.id || requested} does not have a playable audio source.`,
+        details: `The requested mix ${requestedEntry.id || requestedKey} does not have a playable audio source.`,
         mix: requestedEntry,
-        metadata: { requestedMixId: requested, failureState: "missing_audio" }
+        metadata: { requestedMixId: requestedKey, failureState: "missing_audio" }
       });
     } else if (requestedEntry && !isPlayablePrimaryMix(requestedEntry)) {
       queueAudioFeedbackIncident("non_playable_audio", {
         severity: "medium",
         title: "Dreamweaver requested mix is not directly playable",
-        details: `The requested mix ${requestedEntry.id || requested} resolves to a non-audio source and cannot bootstrap the primary player.`,
+        details: `The requested mix ${requestedEntry.id || requestedKey} resolves to a non-audio source and cannot bootstrap the primary player.`,
         mix: requestedEntry,
-        metadata: { requestedMixId: requested, failureState: "non_playable_audio", source: requestedEntry.source }
+        metadata: { requestedMixId: requestedKey, failureState: "non_playable_audio", source: requestedEntry.source }
       });
     }
 
-    if (release) {
+    if (release && !strictRequested) {
       const releaseTitleSlug = slugifyDreamweaverValue(release?.title, 160);
       const releaseArtistSlug = slugifyDreamweaverValue(release?.artistSlug || release?.artist, 160);
       const releaseMatch = library.find((item) => {
@@ -746,6 +759,7 @@
     }
 
     if (requested && (requestedEntry || !allowFallback)) return null;
+    if (strictRequested) return null;
     return library.find(isPlayablePrimaryMix) || null;
   }
 
@@ -1119,6 +1133,20 @@
     });
     if (!response.ok) throw new Error(payload.message || "Release catalog unavailable");
     return Array.isArray(payload.releases) ? payload.releases : [];
+  }
+
+  async function fetchExactMixById(mixId = "") {
+    const requested = cleanKey(mixId, 160);
+    if (!requested) return null;
+    const { response, payload } = await fetchJsonWithTimeout(`/api/mixes?id=${encodeURIComponent(requested)}`, {
+      timeoutMs: MIX_LIBRARY_TIMEOUT_MS,
+      timeoutMessage: "Dreamweaver timed out while loading the requested mix.",
+      headers: { Accept: "application/json" },
+      credentials: "same-origin"
+    });
+    if (!response.ok) throw new Error(payload.message || "Dreamweaver could not resolve the requested mix.");
+    const mixes = Array.isArray(payload.mixes) ? payload.mixes : [];
+    return mixes.find(item => cleanKey(item?.id, 160) === requested) || null;
   }
 
   async function loadReleaseContext({ keepCurrentOnFailure = false } = {}) {
@@ -2250,6 +2278,8 @@
       const routeContext = resolveDreamweaverRouteContext();
       const requestedRouteFingerprint = routeContextFingerprint(routeContext);
       const requestedMix = routeContext.requestedMixToken;
+      const requestedMixId = cleanKey(routeContext.requestedMixId, 160);
+      const exactMixPromise = requestedMixId ? fetchExactMixById(requestedMixId).catch(() => null) : Promise.resolve(null);
       const releaseCatalogPromise = requestedMix || routeContext.requestedSongId
         ? fetchReleaseCatalog().catch(() => [])
         : Promise.resolve(state.releaseCatalog);
@@ -2261,7 +2291,24 @@
       });
       if (!response.ok) throw new Error(data.message || "The Dreamweaver mix library could not be read.");
       let release = null;
-      let mix = resolvePrimaryPlaybackMix(data.mixes || [], requestedMix, null, { allowFallback: !requestedMix });
+      const mixLibrary = Array.isArray(data.mixes) ? data.mixes : [];
+      let mix = resolvePrimaryPlaybackMix(mixLibrary, requestedMix, null, {
+        allowFallback: !requestedMix,
+        strictRequestedId: requestedMixId
+      });
+      const hasRequestedMixInLibrary = requestedMixId
+        ? mixLibrary.some(item => cleanKey(item?.id, 160) === requestedMixId)
+        : false;
+      if (!mix && requestedMixId && !hasRequestedMixInLibrary) {
+        const exactMix = await exactMixPromise;
+        if (routeContextFingerprint() !== requestedRouteFingerprint) return;
+        if (exactMix) {
+          mix = resolvePrimaryPlaybackMix([exactMix], requestedMix, null, {
+            allowFallback: false,
+            strictRequestedId: requestedMixId
+          });
+        }
+      }
       if (!mix) {
         const releases = await releaseCatalogPromise;
         if (routeContextFingerprint() !== requestedRouteFingerprint) return;
@@ -2273,7 +2320,10 @@
           updatePlatformLinks();
           renderReleasePanel();
         }
-        mix = resolvePrimaryPlaybackMix(data.mixes || [], requestedMix, release, { allowFallback: true });
+        mix = resolvePrimaryPlaybackMix(mixLibrary, requestedMix, release, {
+          allowFallback: !requestedMix,
+          strictRequestedId: requestedMixId
+        });
       } else {
         void releaseCatalogPromise.then((releases) => {
           if (!releases.length || state.release) return;
@@ -2295,7 +2345,9 @@
           details: "Dreamweaver could not resolve a playable linked song from the current hub request.",
           metadata: { requestedMixId: cleanText(requestedMix, 120), failureState: "missing_audio" }
         });
-        return showEmpty("No playable audio mix is available yet. Post the existing set to the HALO room or sign in to open a private mix.");
+        return showEmpty(requestedMixId
+          ? "Dreamweaver could not load the exact mix requested by this link. Confirm the mix is published and playable, then try again."
+          : "No playable audio mix is available yet. Post the existing set to the HALO room or sign in to open a private mix.");
       }
       setLoadingProgress(34, "Selecting tonight’s signal", "A published Dreamweaver mix has been selected and the room is shifting to match its pace.");
       elements.mixTitle.textContent = mix.title || "Untitled HALO mix";

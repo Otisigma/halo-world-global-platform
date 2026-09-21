@@ -32,7 +32,10 @@ const [page, styles, script, deck, campaign, radio, config, server, artworkHelpe
 const checks = [
   [page.includes("Dreamweaver Show — HALO") && page.includes('id="showAudio"'), "ships the standalone Dreamweaver visual show"],
   [page.includes('id="songLobbyHero"') && page.includes('id="lobbyArtwork"') && page.includes('id="heroReelPlayer"') && page.includes("MAKE A REEL / SHORT"), "opens Dreamweaver as a hero-led Song Lobby with artwork, reel media, and a short-generator hook"],
-  [page.includes('document.documentElement.dataset.dreamweaverMode = isSatelliteFlow ? (hasUnlock ? "reward" : "satellite") : "show";') && page.includes('html[data-dreamweaver-mode="satellite"] .show-shell') && page.includes('id="dreamweaverSatellite" aria-labelledby="dreamweaverSatelliteTitle"') && page.includes('id="dreamweaverReward" aria-labelledby="dreamweaverRewardTitle"'), "reveals the correct Dreamweaver lobby shell before deferred JavaScript hydration instead of starting from the loading screen"],
+  [/document\.documentElement\.dataset\.dreamweaverMode\s*=\s*isSatelliteFlow\s*\?\s*\(hasUnlock\s*\?\s*"reward"\s*:\s*"satellite"\)\s*:\s*"show"/.test(page)
+    && /html\[data-dreamweaver-mode="satellite"\]\s+\.show-shell/.test(page)
+    && /id="dreamweaverSatellite"[^>]*aria-labelledby="dreamweaverSatelliteTitle"/.test(page)
+    && /id="dreamweaverReward"[^>]*aria-labelledby="dreamweaverRewardTitle"/.test(page), "reveals the correct Dreamweaver lobby shell before deferred JavaScript hydration instead of starting from the loading screen"],
   [page.includes('id="storyActI"') && page.includes('id="storyActII"') && page.includes('id="storyActIII"') && page.includes('id="storyActIV"') && page.includes("Act I / The Hook") && page.includes("Act II / Lyric Break") && page.includes("Act III / Sonic World") && page.includes("Act IV / Unlock &amp; Action"), "frames the public Dreamweaver page as a four-act listener story arc"],
   [page.includes("media=\"print\" onload=\"this.media='all'\"") && page.includes("<noscript><link href=\"https://fonts.googleapis.com/css2?family=Cormorant+Garamond"), "loads Dreamweaver's external web fonts without making them a render-blocking dependency"],
   [page.includes("release-artwork.css") && page.includes("release-artwork.js"), "loads the shared HALO artwork fallback assets on the Dreamweaver page"],

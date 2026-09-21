@@ -10,8 +10,7 @@
     (() => {
       const params = new URLSearchParams(window.location.search);
       const isSatellitePath = /^\/dreamweaver\/satellite\/[^/]+\/?$/.test(window.location.pathname);
-      const storySlugMatch = window.location.pathname.match(/^\/dreamweaver\/([^/]+)\/?$/i);
-      const hasMix = Boolean(params.get("mix") || (storySlugMatch && !/^(?:satellite|index\.html)$/i.test(storySlugMatch[1])));
+      const hasMix = Boolean(params.get("mix"));
       const isSatelliteFlow = isSatellitePath
         || (!(params.get("campaign") || params.get("experience") === "studio") && (!hasMix || params.get("satellite") === "dreamweaver"));
       let hasUnlock = false;
@@ -125,10 +124,8 @@
   <section class="satellite-landing" id="dreamweaverSatellite" aria-labelledby="dreamweaverSatelliteTitle" aria-hidden="true" hidden>
     <script>
       const params = new URLSearchParams(window.location.search);
-      const storySlugMatch = window.location.pathname.match(/^\/dreamweaver\/([^/]+)\/?$/i);
-      const hasMixOrSlug = Boolean(params.get("mix") || (storySlugMatch && !/^(?:satellite|index\.html)$/i.test(storySlugMatch[1])));
       const showForMixRoute = document.documentElement.dataset.dreamweaverMode === "show"
-        && hasMixOrSlug
+        && Boolean(params.get("mix"))
         && !(params.get("campaign") || params.get("experience") === "studio");
       if (document.documentElement.dataset.dreamweaverMode === "satellite" || showForMixRoute) {
         const section = document.currentScript.parentElement;

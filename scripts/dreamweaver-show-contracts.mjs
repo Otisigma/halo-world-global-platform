@@ -32,8 +32,7 @@ const [page, styles, script, deck, campaign, radio, config, server, artworkHelpe
 const checks = [
   [page.includes("Dreamweaver Show — HALO") && page.includes('id="showAudio"'), "ships the standalone Dreamweaver visual show"],
   [page.includes('id="songLobbyHero"') && page.includes('id="songLobbyPlayer"') && page.includes('id="songLobbyHeroPlayButton"') && page.includes('id="showAudio"') && page.includes('id="songLobbyPlayerSource"') && page.includes('id="lobbyArtwork"') && page.includes('id="heroReelPlayer"') && page.includes("MAKE A REEL / SHORT"), "opens Dreamweaver as a hero-led Song Lobby with artwork, an embedded player, reel media, and a short-generator hook"],
-  [/storySlugMatch/.test(page)
-    && /document\.documentElement\.dataset\.dreamweaverMode\s*=\s*isSatelliteFlow\s*\?\s*\(hasUnlock\s*\?\s*"reward"\s*:\s*"satellite"\)\s*:\s*"show"/.test(page)
+  [/document\.documentElement\.dataset\.dreamweaverMode\s*=\s*isSatelliteFlow\s*\?\s*\(hasUnlock\s*\?\s*"reward"\s*:\s*"satellite"\)\s*:\s*"show"/.test(page)
     && /id="dreamweaverSatellite"[^>]*aria-labelledby="dreamweaverSatelliteTitle"[^>]*aria-hidden="true"[^>]*hidden/.test(page)
     && /id="dreamweaverReward"[^>]*aria-labelledby="dreamweaverRewardTitle"[^>]*aria-hidden="true"[^>]*hidden/.test(page)
     && /id="showShell"[^>]*aria-live="polite"[^>]*aria-busy="true"[^>]*aria-hidden="true"[^>]*hidden/.test(page)

@@ -495,6 +495,14 @@
     };
   }
 
+  function routeContextFingerprint(routeContext = resolveDreamweaverRouteContext()) {
+    return [
+      cleanKey(routeContext.requestedMixToken, 160),
+      cleanKey(routeContext.requestedStorySlug, 160),
+      cleanSongId(routeContext.requestedSongId)
+    ].join("|");
+  }
+
   function resolveSongContextId() {
     return resolveDreamweaverRouteContext().requestedSongId;
   }
@@ -725,7 +733,7 @@
 
     if (release) {
       const releaseTitleSlug = slugifyDreamweaverValue(release?.title, 160);
-      const releaseArtistSlug = slugifyDreamweaverValue(release?.artist, 160);
+      const releaseArtistSlug = slugifyDreamweaverValue(release?.artistSlug || release?.artist, 160);
       const releaseMatch = library.find((item) => {
         if (!isPlayablePrimaryMix(item)) return false;
         const mixTitleSlug = slugifyDreamweaverValue(item?.title, 160);
@@ -1141,7 +1149,7 @@
     const params = new URLSearchParams(location.search);
     if (isSatellitePath()) return true;
     if (campaignIdFromUrl() || params.get("experience") === "studio") return false;
-    const hasMix = Boolean(resolveRequestedMixToken());
+    const hasMix = Boolean(params.get("mix"));
     if (!hasMix) return true;
     return params.get("satellite") === "dreamweaver";
   }
@@ -2241,6 +2249,7 @@
     elements.shell.setAttribute("aria-busy", "true");
     try {
       const routeContext = resolveDreamweaverRouteContext();
+      const requestedRouteFingerprint = routeContextFingerprint(routeContext);
       const requestedMix = routeContext.requestedMixToken;
       const releaseCatalogPromise = requestedMix || routeContext.requestedSongId
         ? fetchReleaseCatalog().catch(() => [])
@@ -2268,6 +2277,7 @@
       } else {
         void releaseCatalogPromise.then((releases) => {
           if (!releases.length || state.release) return;
+          if (routeContextFingerprint() !== requestedRouteFingerprint) return;
           state.releaseCatalog = releases;
           const resolvedRelease = resolveReleaseFromCatalog(releases, routeContext);
           if (!resolvedRelease) return;

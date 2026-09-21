@@ -6,9 +6,35 @@
   <title>Dreamweaver Show — HALO</title>
   <meta name="description" content="A cinematic artist experience created in HALO and presented through Dreamweaver.">
   <meta name="theme-color" content="#100f0c">
+  <script>
+    (() => {
+      const params = new URLSearchParams(window.location.search);
+      const isSatellitePath = /^\/dreamweaver\/satellite\/[^/]+\/?$/.test(window.location.pathname);
+      const hasMix = Boolean(params.get("mix"));
+      const isSatelliteFlow = isSatellitePath
+        || (!(params.get("campaign") || params.get("experience") === "studio") && (!hasMix || params.get("satellite") === "dreamweaver"));
+      let hasUnlock = false;
+      if (isSatelliteFlow) {
+        try {
+          const parsed = JSON.parse(window.localStorage.getItem("halo:dreamweaver-unlock") || "null");
+          const email = String(parsed?.email || "").trim().toLowerCase();
+          hasUnlock = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email);
+        } catch {}
+      }
+      document.documentElement.dataset.dreamweaverMode = isSatelliteFlow ? (hasUnlock ? "reward" : "satellite") : "show";
+    })();
+  </script>
+  <style>
+    html[data-dreamweaver-mode="satellite"] .show-shell,
+    html[data-dreamweaver-mode="satellite"] .satellite-reward,
+    html[data-dreamweaver-mode="show"] .satellite-landing,
+    html[data-dreamweaver-mode="show"] .satellite-reward,
+    html[data-dreamweaver-mode="reward"] .satellite-landing { display: none; }
+  </style>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" media="print" onload="this.media='all'">
+  <noscript><link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet"></noscript>
   <link rel="icon" href="/assets/halo-app-icon-192.png">
   <link rel="stylesheet" href="/halo-brand.css">
   <link rel="stylesheet" href="/accessibility.css">
@@ -40,7 +66,7 @@
     </div>
   </header>
 
-  <section class="satellite-landing" id="dreamweaverSatellite" aria-labelledby="dreamweaverSatelliteTitle" hidden>
+  <section class="satellite-landing" id="dreamweaverSatellite" aria-labelledby="dreamweaverSatelliteTitle">
     <div class="song-lobby__hero" id="songLobbyHero">
       <div class="satellite-copy">
         <p class="satellite-kicker">DREAMWEAVER / SONG LOBBY</p>
@@ -54,7 +80,7 @@
 
       <div class="song-lobby__media" aria-label="Dreamweaver hero media">
         <figure class="song-lobby__artwork release-artwork-frame" data-artwork-frame>
-          <img id="lobbyArtwork" class="release-artwork-image" src="/assets/releases/the-cold-is-lasting-longer.jpg" alt="Dreamweaver featured song artwork" data-release-artwork data-artwork-badge="Dreamweaver lobby artwork">
+          <img id="lobbyArtwork" class="release-artwork-image" src="/assets/releases/the-cold-is-lasting-longer.jpg" alt="Dreamweaver featured song artwork" loading="eager" fetchpriority="high" decoding="async" data-release-artwork data-artwork-badge="Dreamweaver lobby artwork">
           <figcaption id="lobbyArtworkCaption">Dreamweaver lobby artwork</figcaption>
         </figure>
         <section class="song-lobby__reel" aria-labelledby="heroReelTitle">
@@ -144,7 +170,7 @@
     </div>
   </section>
 
-  <section class="satellite-reward" id="dreamweaverReward" aria-labelledby="dreamweaverRewardTitle" hidden>
+  <section class="satellite-reward" id="dreamweaverReward" aria-labelledby="dreamweaverRewardTitle">
     <div class="reward-intro">
       <p class="satellite-kicker">UNLOCKED / DREAMWEAVER OPEN</p>
       <h2 id="dreamweaverRewardTitle">Your concierge doorway is ready.</h2>
@@ -438,6 +464,7 @@
     <span>Dreamweaver™ is proprietary HALO technology. Public descriptions communicate capabilities and outcomes, not confidential methods.</span>
     <div class="creator-footer-links">
       <a id="dreamweaverSongLabLink" class="creator-footer-link creator-footer-link--secondary" href="/dreamweaver-lab/">Song Lab upload</a>
+      <a class="creator-footer-link creator-footer-link--secondary" href="/iam-social/">I AM Social pool</a>
       <a id="dreamweaverCreatorGateway" class="creator-footer-link" href="/dj-deck.html" tabindex="0">Creator gateway /dj-deck</a>
     </div>
   </footer>

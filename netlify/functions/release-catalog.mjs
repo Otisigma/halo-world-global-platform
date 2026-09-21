@@ -2,14 +2,74 @@ import { getDatabase } from "@netlify/database";
 import { resolveReleaseArtworkFields } from "../lib/release-artwork.mjs";
 import { resolveDreamweaverPageFlow } from "../lib/dreamweaver-page-manager.mjs";
 
+const CORS_HEADERS = Object.freeze({
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "Content-Type, Range",
+  "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
+  "Access-Control-Expose-Headers": "Content-Length, Content-Range"
+});
+
 function json(body, status = 200, headers = {}) {
   return Response.json(body, {
     status,
     headers: {
+      ...CORS_HEADERS,
       "Cache-Control": "public, max-age=60, s-maxage=300, stale-while-revalidate=600",
       ...headers
     }
   });
+}
+
+function cleanPublicUrl(value) {
+  try {
+    const raw = String(value || "").trim();
+    if (!/^https?:\/\//i.test(raw)) return "";
+    const url = new URL(raw);
+    if (!["http:", "https:"].includes(url.protocol) || url.username || url.password) return "";
+    return url.href;
+  } catch {
+    return "";
+  }
+}
+
+function hasReachablePublicAudio(value) {
+  const url = cleanPublicUrl(value);
+  if (!url) return false;
+  try {
+    const parsed = new URL(url);
+    return /\.(mp3|m4a|aac|ogg|oga|wav|flac|webm)(?:$|[?#])/i.test(`${parsed.pathname}${parsed.search}`)
+      || ["/api/song-catalog/audio", "/api/mixes/audio", "/api/radio/audio"].includes(parsed.pathname);
+  } catch {
+    return false;
+  }
+}
+
+function normalizedCatalogStatus(value) {
+  return String(value || "").trim().toLowerCase().replace(/[\s-]+/g, "_");
+}
+
+function storefrontStateFor(row) {
+  const statuses = [
+    row.publication_dreamweaver_status,
+    row.publication_release_status,
+    row.catalog_sale_status,
+    row.catalog_metadata_status,
+    row.catalog_rights_status
+  ].map(normalizedCatalogStatus).filter(Boolean);
+  const hasPublicDestination = Boolean(
+    cleanPublicUrl(row.purchase_url)
+    || cleanPublicUrl(row.official_url)
+    || cleanPublicUrl(row.stream_url)
+  );
+  const hasPlayableStream = hasReachablePublicAudio(row.stream_url);
+  const pending = statuses.some(status => ["pending", "processing", "queued", "draft", "review", "coming_soon"].includes(status));
+  const ready = (statuses.some(status => ["published", "ready", "live", "active", "cleared", "for_sale"].includes(status)) || hasPublicDestination)
+    && (hasPlayableStream || hasPublicDestination);
+  return {
+    statusLabel: ready ? "READY" : pending ? "PENDING" : "STANDBY",
+    hasPlayableStream,
+    hasPublicDestination
+  };
 }
 
 function serializeRelease(row) {
@@ -41,6 +101,7 @@ function serializeRelease(row) {
     .filter(Boolean);
   const catalogGenre = catalogGenres[0] || "";
   const catalogArtworkUrl = row.catalog_artwork_url || "";
+  const storefront = storefrontStateFor(row);
   const releaseGenres = Array.isArray(row.genres)
     ? row.genres.map(value => String(value || "").trim()).filter(Boolean)
     : [];
@@ -104,6 +165,7 @@ function serializeRelease(row) {
         ? new Date(row.publication_last_reconciled_at).toISOString()
         : ""
     },
+    storefront,
     dreamweaverPage,
     dreamweaverHubUrl,
     dreamweaverLoop,
@@ -113,8 +175,9 @@ function serializeRelease(row) {
 }
 
 export default async function releaseCatalogHandler(request) {
+  if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS_HEADERS });
   if (request.method !== "GET") {
-    return json({ message: "Method not allowed" }, 405, { Allow: "GET" });
+    return json({ message: "Method not allowed" }, 405, { Allow: "GET, OPTIONS" });
   }
 
   try {

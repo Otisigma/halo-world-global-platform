@@ -34,7 +34,14 @@ const checks = [
   [page.includes("release-artwork.css") && page.includes("release-artwork.js"), "loads the shared HALO artwork fallback assets on the Dreamweaver page"],
   [page.includes('data-mode="watch"') && page.includes('data-mode="room"') && page.includes('data-mode="explore"'), "offers Watch, Room, and Explore modes"],
   [script.includes('fetchJsonWithTimeout("/api/mixes?limit=100"') && script.includes("requestedMix"), "loads an existing Mix Desk recording and supports direct mix links"],
-  [script.includes("resolvePrimaryPlaybackMix") && /await bootstrapPrimaryPlayback\(mix\);[\s\S]*await hydrateDreamweaverLoopContent\(\);/.test(script), "boots the linked mix audio before hydrating the broader Dreamweaver loop"],
+  [(() => {
+    const fetchJsonStart = script.indexOf("async function fetchJsonWithTimeout");
+    const playbackHelperStart = script.indexOf("\n  function isPlayablePrimaryMix");
+    if (fetchJsonStart === -1 || playbackHelperStart === -1 || playbackHelperStart <= fetchJsonStart) return false;
+    const fetchJsonBlock = script.slice(fetchJsonStart, playbackHelperStart);
+    return fetchJsonBlock.includes("return { response, payload };")
+      && /await bootstrapPrimaryPlayback\(mix\);[\s\S]*await hydrateDreamweaverLoopContent\(\);/.test(script);
+  })(), "boots the linked mix audio before hydrating the broader Dreamweaver loop"],
   [script.includes("audioFeedbackStorageKey") && script.includes('fetch("/api/issues"') && script.includes("deliveryStatus"), "queues structured Dreamweaver audio incidents for AI maintenance triage"],
   [script.includes('"missing_audio"') && script.includes('"muted_audio"') && script.includes('"corrupted_audio"') && script.includes('"non_playable_audio"'), "captures deterministic Dreamweaver audio failure states for QA review"],
   [page.includes('id="dreamweaverSongLabLink"') && script.includes('halo-dreamweaver-upload-trust') && script.includes('target.searchParams.set("flow", "artist-upload")'), "bridges the canonical Dreamweaver route into a trusted artist upload handoff"],

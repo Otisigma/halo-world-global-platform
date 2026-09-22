@@ -558,6 +558,15 @@
     }
   }
 
+  function isDreamweaverPageUrl(value) {
+    try {
+      const url = new URL(value, location.origin);
+      return url.origin === location.origin && /^\/dreamweaver\/satellite\/[0-9a-f-]{36}\/?$/i.test(url.pathname);
+    } catch {
+      return false;
+    }
+  }
+
   function preferredHeroVideo() {
     return state.videos.find(video => isMp4HeroSource(video?.sourceUrl))
       || state.videos.find(video => safeMediaUrl(video?.embedUrl))
@@ -1384,17 +1393,25 @@
     const officialUrl = safeMediaUrl(state.release?.officialUrl);
     const safeEntryUrl = safeMediaUrl(state.release?.entryUrl);
     const generatedPageUrl = safeMediaUrl(state.release?.dreamweaverPage?.experienceUrl);
+    const publishedSongUrl = publishedSongShareUrl();
     if (officialUrl && isHyperfollowUrl(officialUrl)) {
       return { href: officialUrl, mode: "hyperfollow" };
     }
     if (safeEntryUrl) {
-      return { href: safeEntryUrl, mode: cleanText(state.release?.entryExperience || "dreamweaver_page", 40) };
+      if (isHyperfollowUrl(safeEntryUrl)) return { href: safeEntryUrl, mode: "hyperfollow" };
+      if (isDreamweaverPageUrl(safeEntryUrl) || (generatedPageUrl && safeEntryUrl === generatedPageUrl)) {
+        return { href: safeEntryUrl, mode: "dreamweaver_page" };
+      }
+      if (publishedSongUrl && safeEntryUrl === publishedSongUrl) {
+        return { href: safeEntryUrl, mode: "published_song" };
+      }
+      return { href: safeEntryUrl, mode: "existing_destination" };
     }
     if (generatedPageUrl) {
       return { href: generatedPageUrl, mode: "dreamweaver_page" };
     }
-    if (publishedSongShareUrl()) {
-      return { href: publishedSongShareUrl(), mode: "published_song" };
+    if (publishedSongUrl) {
+      return { href: publishedSongUrl, mode: "published_song" };
     }
     return { href: featuredTrack.url, mode: "featured_fallback" };
   }

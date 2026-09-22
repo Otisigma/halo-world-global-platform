@@ -1272,7 +1272,7 @@
         const QUICK_LISTEN_EMBED_URL = 'https://www.youtube.com/embed/videoseries?list=PLcmaoB9ss1YE';
         const QUICK_LISTEN_AUTOPLAY_URL = `${QUICK_LISTEN_EMBED_URL}&autoplay=1`;
 
-        const FALLBACK_ARTWORK = '/assets/halo-app-icon-512.png';
+        const FALLBACK_ARTWORK = '/assets/releases/halo-premium-placeholder.svg';
         const MENU_ROUTE_STATUS_LABELS = { green: 'WORKING', yellow: 'ATTENTION', red: 'BROKEN' };
         const MENU_ROUTE_STATUS_GLYPHS = { green: 'G', yellow: 'Y', red: 'R' };
         const MENU_STATUS_GROUP_TARGETS = [
@@ -1733,7 +1733,7 @@
           const [dreamweaverPreviewNeedsGesture, setDreamweaverPreviewNeedsGesture] = useState(false);
           const [dreamweaverPreviewError, setDreamweaverPreviewError] = useState('');
           const [dreamweaverPreviewSourceId, setDreamweaverPreviewSourceId] = useState('');
-          const fallbackReleaseArtwork = window.HaloReleaseArtwork?.DEFAULT_RELEASE_ARTWORK || '/assets/halo-app-icon-512.png';
+          const fallbackReleaseArtwork = window.HaloReleaseArtwork?.DEFAULT_RELEASE_ARTWORK || '/assets/releases/halo-premium-placeholder.svg';
           const [musicExperimentVariant] = useState(() => {
             const requested = new URLSearchParams(window.location.search).get('musicExperiment');
             return ['native', 'embed'].includes(requested) ? requested : 'compare';

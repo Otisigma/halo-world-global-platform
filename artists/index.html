@@ -23,6 +23,7 @@
   <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Instrument+Serif:ital@0;1&family=Syne:wght@500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/accessibility.css">
   <link rel="stylesheet" href="/halo-brand.css">
+  <link rel="stylesheet" href="/release-artwork.css">
   <link rel="stylesheet" href="/release-context.css">
   <link rel="stylesheet" href="/artists/artists.css">
   <script src="/identity.js" type="module"></script>
@@ -169,7 +170,9 @@
       </div>
       <form class="radio-send-form" id="radioSendForm">
         <div class="radio-release-lockup">
-          <img id="radioReleaseArtwork" src="/assets/halo-logo-mark.webp" alt="">
+          <div class="radio-release-art release-artwork-frame" data-artwork-frame>
+            <img id="radioReleaseArtwork" class="release-artwork-image" src="/assets/releases/halo-premium-placeholder.svg" alt="" data-release-artwork data-artwork-fallback="/assets/releases/halo-premium-placeholder.svg">
+          </div>
           <div><span>Sending from this card</span><strong id="radioReleaseTitle">Current release</strong><small><b id="radioReleaseArtist">HALO artist</b> · <b id="radioReleaseStage">Release</b></small></div>
         </div>
         <div class="radio-field-grid radio-source-grid">
@@ -223,6 +226,7 @@
   <script src="/site-monitor.js" defer></script>
   <script src="/stats.js" defer></script>
   <script src="/accessibility.js" defer></script>
+  <script src="/release-artwork.js" defer></script>
   <script src="/release-context.js" defer></script>
   <script src="/upload-progress.js" defer></script>
   <script src="/artists/artists.js" defer></script>

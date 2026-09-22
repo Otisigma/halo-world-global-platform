@@ -158,9 +158,7 @@ async function ensureReleaseCampaign(db, song, versions) {
   const firstPlayableVersion = versions.find(version => version.audio_url);
   const streamUrl = cleanText(saleMaster?.audio_url || firstPlayableVersion?.audio_url, 1200);
   const dreamweaver = resolveReleaseDreamweaverFlow(song.id, { releaseId, publicUrl, streamUrl });
-  const officialUrl = dreamweaver.managed || isLegacySongCatalogAudioUrl(streamUrl)
-    ? (dreamweaver.launchUrl || dreamweaver.page?.route || streamUrl || publicUrl)
-    : (dreamweaver.launchUrl || streamUrl || publicUrl);
+  const officialUrl = dreamweaver.destinationUrl || streamUrl || publicUrl;
   const artworkUrl = cleanText(
     saleMaster?.artwork_url
       || firstPlayableVersion?.artwork_url
@@ -502,6 +500,8 @@ export async function reconcilePublishedSong(db, {
         loop: release.dreamweaver.loop || null,
         managerId: release.dreamweaver.manager?.id || "",
         linkedSongPages: release.dreamweaver.manager?.linkedSongPages || [],
+        routeMode: release.dreamweaver.routeMode || "",
+        destinationUrl: release.dreamweaver.destinationUrl || "",
       },
     };
     await upsertPublicationSync(db, song, {
@@ -510,7 +510,11 @@ export async function reconcilePublishedSong(db, {
       canonicalUrl: release.publicUrl,
       releaseStatus: "published",
       radioStatus: radio.status,
-      dreamweaverStatus: release.dreamweaver.page ? "ready" : "pending",
+      dreamweaverStatus: release.dreamweaver.routeMode === "dreamweaver_page"
+        ? "ready"
+        : release.dreamweaver.routeMode === "hyperfollow"
+          ? "managed_externally"
+          : "pending",
       details,
     });
     if (recordLedger) {

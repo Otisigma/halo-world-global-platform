@@ -108,6 +108,8 @@ function serializeRelease(row) {
   const genres = releaseGenres.length ? releaseGenres : catalogGenres;
   const resolvedArtwork = artwork.artwork || catalogArtworkUrl;
   const artworkSource = artwork.artworkSource || (catalogArtworkUrl ? "song-catalog" : "");
+  const entryExperience = dreamweaverFlow?.routeMode || (row.official_url ? "existing_destination" : "");
+  const entryUrl = dreamweaverFlow?.destinationUrl || row.official_url || "";
   return {
     id: row.id,
     title: row.title,
@@ -133,6 +135,9 @@ function serializeRelease(row) {
     featuredType: row.featured_type || "",
     featuredUntil: row.featured_until ? String(row.featured_until).slice(0, 10) : "",
     artistSlug: row.artist_slug || "",
+    officialUrl: row.official_url || "",
+    entryExperience,
+    entryUrl,
     catalog: {
       source: row.catalog_song_id ? "song-catalog" : "release-catalog",
       songId: row.catalog_song_id || "",

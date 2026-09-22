@@ -94,11 +94,13 @@ const checks = [
       && script.includes('title: "Blessed"')
       && script.includes('artist: "Owen Anthony"')
       && script.includes('url: "https://distrokid.com/hyperfollow/owenanthony/blessed"')
-      && script.includes("elements.sourceLink.href = featuredTrack.url"),
-    "keeps Blessed by Owen Anthony wired into the Dreamweaver release doorway with the canonical HyperFollow source"
+      && script.includes("preferredReleaseDoorway")
+      && script.includes("isHyperfollowUrl")
+      && script.includes('doorway.mode === "hyperfollow"'),
+    "keeps HyperFollow releases on the canonical HyperFollow doorway while allowing generated Dreamweaver pages for songs without HyperFollow"
   ],
   [script.includes("publishedSongId: resolveSongContextId()") && script.includes('new URL("/music/", location.origin)') && script.includes("Published song link copied."), "shares a published song from Dreamweaver using the canonical public music URL when song context is present"],
-  [script.includes("resolveSongContextId") && script.includes("songIdFromSatellitePath") && script.includes("startSatelliteAgentLoop") && script.includes("dreamweaver-satellite-"), "derives song-specific satellite context from deterministic routes and runs an isolated per-song update loop"],
+  [script.includes("resolveSongContextId") && script.includes("songIdFromSatellitePath") && script.includes("startSatelliteAgentLoop") && script.includes("dreamweaver-page-manager-"), "derives song-specific satellite context from deterministic routes and runs an isolated per-song update loop under a dedicated Dreamweaver page manager agent"],
   [script.includes("releaseRouteTokens") && script.includes("mixRouteTokens") && script.includes("loadReleaseContext") && script.includes("requestedStorySlug"), "resolves release context from direct mix and slug routes using the shared release catalog shape"],
   [script.includes('fetch("/api/dreamweaver-fan-signups"') && script.includes("readStoredUnlock") && script.includes("updatePlatformLinks"), "submits email unlocks and rehydrates the lightweight fan reward state"],
   [page.includes('href="/dj-deck.html"') && page.includes("Creator gateway /dj-deck"), "keeps creator routing secondary on the Song Lobby page while preserving the canonical deck route"],

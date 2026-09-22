@@ -1,7 +1,7 @@
 import { getDatabase } from "@netlify/database";
 import { verifyRequestOrigin } from "@netlify/identity";
 import { createHash, timingSafeEqual } from "node:crypto";
-import { resolveDreamweaverPageFlow } from "../lib/dreamweaver-page-manager.mjs";
+import { buildDreamweaverSongPage, resolveDreamweaverPageFlow } from "../lib/dreamweaver-page-manager.mjs";
 
 const audiences = new Set(["fan", "dj", "radio", "press", "preview"]);
 const destinations = {
@@ -61,6 +61,7 @@ function legacyAudioVersionIdFromDestination(destination, requestUrl) {
 
 async function remapLegacyAudioDestination(db, versionId, {
   releaseSlug = "",
+  audience = "fan",
   officialUrl = "",
   streamUrl = "",
 } = {}) {
@@ -75,12 +76,17 @@ async function remapLegacyAudioDestination(db, versionId, {
     const rows = Array.isArray(result) ? result : Array.isArray(result?.rows) ? result.rows : [];
     const songId = cleanId(rows[0]?.song_id);
     const mixId = cleanSlug(releaseSlug);
+    const generatedPage = buildDreamweaverSongPage(songId, {
+      mixId,
+      audience,
+      includeAudienceParam: true,
+    });
     const flow = resolveDreamweaverPageFlow(songId, {
       mixId,
       officialUrl,
       streamUrl,
     });
-    return flow.launchUrl || flow.page?.route || "";
+    return generatedPage?.experienceUrl || flow.page?.experienceUrl || flow.destinationUrl || "";
   } catch {
     return "";
   }
@@ -142,6 +148,7 @@ export default async function releaseLinkHandler(request) {
     const remappedDestination = legacyAudioVersionId
       ? await remapLegacyAudioDestination(db, legacyAudioVersionId, {
           releaseSlug,
+          audience,
           officialUrl: row.official_url || "",
           streamUrl: row.stream_url || "",
         })

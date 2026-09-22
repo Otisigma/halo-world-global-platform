@@ -245,10 +245,10 @@ export function resolveDreamweaverPageFlow(songIdOrOptions, options = {}) {
   );
   const destinationUrl = hyperfollowUrl
     || (usesGeneratedDreamweaverPage ? dreamweaverPage?.experienceUrl || "" : "")
+    || publicUrl
     || officialUrl
     || streamUrl
     || dreamweaverPage?.linkedSongUrl
-    || publicUrl
     || "";
   const launchUrl = hyperfollowUrl
     || (usesGeneratedDreamweaverPage ? (dreamweaverPage?.hubUrl || dreamweaverPage?.experienceUrl || "") : "")
@@ -261,11 +261,13 @@ export function resolveDreamweaverPageFlow(songIdOrOptions, options = {}) {
     ? "hyperfollow"
     : usesGeneratedDreamweaverPage
       ? "dreamweaver_page"
-      : (officialUrl || streamUrl)
-        ? "existing_destination"
-        : dreamweaverPage
-          ? "dreamweaver_page"
-          : "";
+      : publicUrl
+        ? "published_song"
+        : (officialUrl || streamUrl)
+          ? "existing_destination"
+          : dreamweaverPage
+            ? "dreamweaver_page"
+            : "";
   const manager = dreamweaverPage?.manager || null;
   const loop = manager?.loop || dreamweaverPage?.loop || null;
   return {

@@ -17,7 +17,6 @@ const [
   uploadHelper,
   satelliteHelper,
   pageManager,
-  pageManager,
 ] = await Promise.all([
   read("netlify/database/migrations/20260829000000_unified_upload_pipeline.sql"),
   read("db/schema.ts"),

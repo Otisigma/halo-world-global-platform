@@ -158,7 +158,10 @@ async function ensureReleaseCampaign(db, song, versions) {
   const firstPlayableVersion = versions.find(version => version.audio_url);
   const streamUrl = cleanText(saleMaster?.audio_url || firstPlayableVersion?.audio_url, 1200);
   const dreamweaver = resolveReleaseDreamweaverFlow(song.id, { releaseId, publicUrl, streamUrl });
-  const officialUrl = dreamweaver.destinationUrl || streamUrl || publicUrl;
+  const releaseDoorwayUrl = dreamweaver.routeMode === "dreamweaver_page"
+    ? (dreamweaver.page?.experienceUrl || dreamweaver.destinationUrl || streamUrl || publicUrl)
+    : (dreamweaver.destinationUrl || streamUrl || publicUrl);
+  const officialUrl = releaseDoorwayUrl;
   const artworkUrl = cleanText(
     saleMaster?.artwork_url
       || firstPlayableVersion?.artwork_url

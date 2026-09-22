@@ -89,7 +89,7 @@ async function remapLegacyAudioDestination(db, versionId, {
     if (flow.routeMode === "dreamweaver_page") {
       return generatedPage?.experienceUrl || flow.page?.experienceUrl || flow.destinationUrl || "";
     }
-    return flow.destinationUrl || generatedPage?.experienceUrl || "";
+    return flow.destinationUrl || "";
   } catch {
     return "";
   }

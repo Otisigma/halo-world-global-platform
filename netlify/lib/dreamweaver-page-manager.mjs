@@ -1,4 +1,8 @@
 import { isHyperFollowUrl } from "./hyperfollow.mjs";
+import {
+  buildDreamweaverSatellitePath,
+  buildDreamweaverStorefrontPath,
+} from "../../lib/dreamweaver-storefront.js";
 
 const DEFAULT_UPDATE_PATH = "/api/release-catalog";
 const DEFAULT_INTERVAL_MS = 45_000;
@@ -88,8 +92,7 @@ function dreamweaverLoopMetadata({
 }
 
 export function dreamweaverSatellitePath(songId) {
-  const id = cleanId(songId);
-  return id ? `/dreamweaver/satellite/${id}/` : "";
+  return buildDreamweaverSatellitePath(cleanId(songId));
 }
 
 export function dreamweaverHubPath(mixId) {
@@ -97,9 +100,9 @@ export function dreamweaverHubPath(mixId) {
   return id ? `/dreamweaver/?mix=${encodeURIComponent(id)}` : "";
 }
 
-export function dreamweaverStorefrontPath(songId) {
+export function dreamweaverStorefrontPath(songId, options = {}) {
   const id = cleanId(songId);
-  return id ? `/dreamweaver/?satellite=dreamweaver&song=${encodeURIComponent(id)}` : "";
+  return id ? buildDreamweaverStorefrontPath(id, { mixId: cleanMixId(options.mixId) }) : "";
 }
 
 export function dreamweaverPageManager(songId, options = {}) {
@@ -108,7 +111,7 @@ export function dreamweaverPageManager(songId, options = {}) {
   const mixId = cleanMixId(options.mixId);
   const hubUrl = dreamweaverHubPath(mixId);
   if (!route) return null;
-  const storefrontUrl = dreamweaverStorefrontPath(id);
+  const storefrontUrl = dreamweaverStorefrontPath(id, { mixId });
   const publicUrl = cleanText(options.publicUrl, 1200);
   const loop = dreamweaverLoopMetadata({
     hubUrl,
@@ -144,7 +147,7 @@ export function buildDreamweaverSongPage(songId, options = {}) {
   const route = dreamweaverSatellitePath(id);
   const mixId = cleanMixId(options.mixId);
   const hubUrl = dreamweaverHubPath(mixId);
-  const storefrontUrl = dreamweaverStorefrontPath(id);
+  const storefrontUrl = dreamweaverStorefrontPath(id, { mixId });
   const audience = cleanAudience(options.audience);
   const query = new URLSearchParams();
   if (options.includeAudienceParam && audience) query.set("audience", audience);
@@ -203,7 +206,7 @@ export function resolveDreamweaverPageFlow(songId, options = {}) {
   const mixId = cleanMixId(options.mixId);
   const hubUrl = dreamweaverHubPath(mixId);
   const route = dreamweaverSatellitePath(id);
-  const storefrontUrl = dreamweaverStorefrontPath(id);
+  const storefrontUrl = dreamweaverStorefrontPath(id, { mixId });
   const normalizedOfficialUrl = normalizeComparableDestination(officialUrl);
   const managedDestinations = new Set(
     [publicUrl, streamUrl, route, hubUrl, storefrontUrl]

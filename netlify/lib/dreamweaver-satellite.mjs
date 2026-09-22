@@ -1,4 +1,5 @@
 import {
+  buildDreamweaverSatellitePath,
   buildDreamweaverStorefrontPath,
   cleanDreamweaverMixId,
   cleanDreamweaverSongId,
@@ -14,8 +15,7 @@ function cleanMixId(value) {
 }
 
 export function dreamweaverSatellitePath(songId) {
-  const id = cleanId(songId);
-  return id ? `/dreamweaver/satellite/${id}/` : "";
+  return buildDreamweaverSatellitePath(cleanId(songId));
 }
 
 export function dreamweaverStorefrontPath(songId, options = {}) {

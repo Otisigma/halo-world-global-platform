@@ -1,5 +1,8 @@
 import { isHyperFollowUrl } from "./hyperfollow.mjs";
 
+const DEFAULT_UPDATE_PATH = "/api/release-catalog";
+const DEFAULT_INTERVAL_MS = 45_000;
+
 function cleanText(value, maxLength = 1200) {
   return typeof value === "string" ? value.trim().replace(/\s+/g, " ").slice(0, maxLength) : "";
 }
@@ -14,9 +17,44 @@ function cleanMixId(value) {
   return mixId;
 }
 
+function cleanAudience(value) {
+  const audience = cleanText(value, 40).toLowerCase();
+  return audience;
+}
+
 function cleanLinkList(value) {
   const values = Array.isArray(value) ? value : [value];
   return [...new Set(values.map(item => cleanText(item, 1200)).filter(Boolean))];
+}
+
+function isLegacySongCatalogAudioUrl(value) {
+  const url = cleanText(value, 1200);
+  if (!url) return false;
+  try {
+    const parsed = new URL(url, "https://halo.world");
+    return /^\/api\/song-catalog\/audio$/i.test(parsed.pathname) && Boolean(cleanId(parsed.searchParams.get("versionId")));
+  } catch {
+    return false;
+  }
+}
+
+function linkedSongUrl(songId) {
+  const id = cleanId(songId);
+  return id ? `/music/?song=${encodeURIComponent(id)}` : "";
+}
+
+function normalizeComparableDestination(value) {
+  const url = cleanText(value, 1200);
+  if (!url) return "";
+  try {
+    const parsed = new URL(url, "https://halo.world");
+    const pathname = parsed.pathname !== "/" ? parsed.pathname.replace(/\/+$/, "") : parsed.pathname;
+    return parsed.origin === "https://halo.world"
+      ? `${pathname}${parsed.search}`
+      : parsed.toString();
+  } catch {
+    return url;
+  }
 }
 
 function dreamweaverLoopMetadata({
@@ -82,8 +120,8 @@ export function dreamweaverPageManager(songId, options = {}) {
     relatedUrls: options.relatedUrls,
     promoUrls: options.promoUrls,
   });
-  const updatePath = cleanText(options.updatePath || "/api/release-catalog", 200);
-  const intervalMs = Number(options.intervalMs) > 0 ? Number(options.intervalMs) : 45_000;
+  const updatePath = cleanText(options.updatePath || DEFAULT_UPDATE_PATH, 200);
+  const intervalMs = Number(options.intervalMs) > 0 ? Number(options.intervalMs) : DEFAULT_INTERVAL_MS;
   return {
     id: `dreamweaver-page-manager-${id}`,
     songId: id,
@@ -100,6 +138,44 @@ export function dreamweaverPageManager(songId, options = {}) {
   };
 }
 
+export function buildDreamweaverSongPage(songId, options = {}) {
+  const id = cleanId(songId);
+  if (!id) return null;
+  const route = dreamweaverSatellitePath(id);
+  const mixId = cleanMixId(options.mixId);
+  const hubUrl = dreamweaverHubPath(mixId);
+  const storefrontUrl = dreamweaverStorefrontPath(id);
+  const audience = cleanAudience(options.audience);
+  const query = new URLSearchParams();
+  if (options.includeAudienceParam && audience) query.set("audience", audience);
+  const experienceUrl = query.size ? `${route}?${query.toString()}` : route;
+  const manager = dreamweaverPageManager(id, options);
+  const page = {
+    route,
+    experienceUrl,
+    launchUrl: experienceUrl,
+    satelliteLaunchUrl: route,
+    mixId,
+    hubUrl,
+    fallbackUrl: storefrontUrl,
+    storefrontUrl,
+    linkedSongUrl: linkedSongUrl(id),
+    loop: manager?.loop || null,
+    manager,
+    pageAgent: manager,
+  };
+  if (options.includeAgentLoop === false) return page;
+  return {
+    ...page,
+    agentLoop: {
+      id: manager?.id || `dreamweaver-page-manager-${id}`,
+      updatePath: manager?.updatePath || DEFAULT_UPDATE_PATH,
+      intervalMs: manager?.intervalMs || DEFAULT_INTERVAL_MS,
+      channels: ["metadata", "artwork", "playback_state", "linked_song_pages", "hub_loop", "routing"],
+    },
+  };
+}
+
 export function resolveDreamweaverPageFlow(songId, options = {}) {
   const id = cleanId(songId);
   if (!id) {
@@ -111,9 +187,12 @@ export function resolveDreamweaverPageFlow(songId, options = {}) {
       mixId: "",
       hubUrl: "",
       launchUrl: "",
+      destinationUrl: "",
+      routeMode: "",
       loop: null,
       page: null,
       manager: null,
+      dreamweaverPage: null,
     };
   }
 
@@ -125,13 +204,27 @@ export function resolveDreamweaverPageFlow(songId, options = {}) {
   const hubUrl = dreamweaverHubPath(mixId);
   const route = dreamweaverSatellitePath(id);
   const storefrontUrl = dreamweaverStorefrontPath(id);
-  const managed = Boolean(route) && !hyperfollowUrl;
+  const normalizedOfficialUrl = normalizeComparableDestination(officialUrl);
+  const managedDestinations = new Set(
+    [publicUrl, streamUrl, route, hubUrl, storefrontUrl]
+      .map(normalizeComparableDestination)
+      .filter(Boolean)
+  );
+  const existingDestination = normalizedOfficialUrl
+    && !managedDestinations.has(normalizedOfficialUrl)
+    && !isLegacySongCatalogAudioUrl(officialUrl);
+  const managed = Boolean(route) && !hyperfollowUrl && !existingDestination;
   const manager = dreamweaverPageManager(id, {
     ...options,
     mixId,
     includeManagedLinks: managed,
   });
-  const managedLaunchUrl = managed ? (hubUrl || route) : (route || publicUrl);
+  const page = buildDreamweaverSongPage(id, {
+    ...options,
+    mixId,
+    includeManagedLinks: managed,
+  });
+  const managedLaunchUrl = managed ? (hubUrl || page?.experienceUrl || route) : (route || publicUrl);
   const launchUrl = hyperfollowUrl || managedLaunchUrl;
   const loop = dreamweaverLoopMetadata({
     hubUrl,
@@ -144,18 +237,26 @@ export function resolveDreamweaverPageFlow(songId, options = {}) {
     relatedUrls: options.relatedUrls,
     promoUrls: options.promoUrls,
   });
-  const page = route ? {
-    route,
-    experienceUrl: route,
+  const resolvedPage = page ? {
+    ...page,
     launchUrl,
-    satelliteLaunchUrl: route,
-    mixId,
-    hubUrl,
-    fallbackUrl: storefrontUrl,
-    storefrontUrl,
     loop,
     manager,
+    pageAgent: manager,
   } : null;
+  const destinationUrl = hyperfollowUrl
+    || (managed ? resolvedPage?.experienceUrl || resolvedPage?.route || route || officialUrl : officialUrl)
+    || publicUrl
+    || resolvedPage?.experienceUrl
+    || route
+    || "";
+  const routeMode = hyperfollowUrl
+    ? "hyperfollow"
+    : managed
+      ? "dreamweaver_page"
+      : officialUrl
+        ? "existing_destination"
+        : "";
 
   return {
     songId: id,
@@ -165,9 +266,12 @@ export function resolveDreamweaverPageFlow(songId, options = {}) {
     mixId,
     hubUrl,
     launchUrl,
+    destinationUrl,
+    routeMode,
     publicUrl,
     loop,
-    page,
+    page: resolvedPage,
     manager,
+    dreamweaverPage: resolvedPage,
   };
 }

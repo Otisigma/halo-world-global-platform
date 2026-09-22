@@ -5,6 +5,7 @@ export function dreamweaverSatellite(songId, options = {}) {
   if (!flow.page) return null;
   const metadata = {
     ...flow.page,
+    pageAgent: flow.manager || flow.page.pageAgent || null,
   };
   if (!options.includeAgentLoop) return metadata;
   return {

@@ -549,6 +549,24 @@
     }
   }
 
+  function isHyperfollowUrl(value) {
+    try {
+      const url = new URL(value, location.origin);
+      return url.protocol === "https:" && /(^|\.)distrokid\.com$/i.test(url.hostname) && url.pathname.startsWith("/hyperfollow/");
+    } catch {
+      return false;
+    }
+  }
+
+  function isDreamweaverPageUrl(value) {
+    try {
+      const url = new URL(value, location.origin);
+      return url.origin === location.origin && /^\/dreamweaver\/satellite\/[0-9a-f-]{36}\/?$/i.test(url.pathname);
+    } catch {
+      return false;
+    }
+  }
+
   function preferredHeroVideo() {
     return state.videos.find(video => isMp4HeroSource(video?.sourceUrl))
       || state.videos.find(video => safeMediaUrl(video?.embedUrl))
@@ -1319,22 +1337,26 @@
     if (elements.appleLink) elements.appleLink.href = unlockPlatforms.apple_music.href(query);
     if (elements.youtubeLink) elements.youtubeLink.href = unlockPlatforms.youtube.href(query);
     if (elements.sourceLink) {
-      const publishedSongUrl = publishedSongShareUrl();
-      if (publishedSongUrl) {
-        const title = cleanText(state.release?.title || state.mix?.title || featuredTrack.title);
-        const artist = cleanText(state.release?.artist || state.mix?.creator?.name || featuredTrack.artist);
-        const sourceLabel = `${title} — ${artist}`;
-        const sourceText = `${sourceLabel} ↗`;
-        elements.sourceLink.href = publishedSongUrl;
-        elements.sourceLink.setAttribute("aria-label", sourceText);
-        elements.sourceLink.textContent = sourceText;
+      const doorway = preferredReleaseDoorway();
+      const title = cleanText(state.release?.title || state.mix?.title || featuredTrack.title);
+      const artist = cleanText(state.release?.artist || state.mix?.creator?.name || featuredTrack.artist);
+      const sourceLabel = doorway.mode === "featured_fallback"
+        ? `${featuredTrack.title} — ${featuredTrack.artist}`
+        : `${title} — ${artist}`;
+      const sourceText = `${sourceLabel} ↗`;
+      elements.sourceLink.href = doorway.href || featuredTrack.url;
+      if (doorway.mode === "hyperfollow") {
+        elements.sourceLink.setAttribute("aria-label", "Open this release on DistroKid HyperFollow");
+      } else if (doorway.mode === "dreamweaver_page") {
+        elements.sourceLink.setAttribute("aria-label", "Open this song's Dreamweaver page");
+      } else if (doorway.mode === "published_song") {
+        elements.sourceLink.setAttribute("aria-label", "Open this published HALO song");
+      } else if (doorway.mode === "existing_destination") {
+        elements.sourceLink.setAttribute("aria-label", "Open this release source");
       } else {
-        const sourceLabel = `${featuredTrack.title} — ${featuredTrack.artist}`;
-        const sourceText = `${sourceLabel} ↗`;
-        elements.sourceLink.href = featuredTrack.url;
         elements.sourceLink.setAttribute("aria-label", sourceText);
-        elements.sourceLink.textContent = sourceText;
       }
+      elements.sourceLink.textContent = sourceText;
       elements.sourceLink.dataset.haloPlayerTitle = cleanText(state.release?.title || state.mix?.title || featuredTrack.title);
       elements.sourceLink.dataset.haloPlayerArtist = cleanText(state.release?.artist || state.mix?.creator?.name || featuredTrack.artist);
       elements.sourceLink.dataset.haloPlayerAlbum = cleanText(state.release?.albumTitle || state.release?.collectionTitle || state.release?.catalog?.albumTitle || "");
@@ -1365,6 +1387,33 @@
       });
       delete elements.songLobbyPlayerSource.dataset.haloPlayer;
     }
+  }
+
+  function preferredReleaseDoorway() {
+    const officialUrl = safeMediaUrl(state.release?.officialUrl);
+    const safeEntryUrl = safeMediaUrl(state.release?.entryUrl);
+    const generatedPageUrl = safeMediaUrl(state.release?.dreamweaverPage?.experienceUrl);
+    const publishedSongUrl = publishedSongShareUrl();
+    if (officialUrl && isHyperfollowUrl(officialUrl)) {
+      return { href: officialUrl, mode: "hyperfollow" };
+    }
+    if (safeEntryUrl) {
+      if (isHyperfollowUrl(safeEntryUrl)) return { href: safeEntryUrl, mode: "hyperfollow" };
+      if (isDreamweaverPageUrl(safeEntryUrl) || (generatedPageUrl && safeEntryUrl === generatedPageUrl)) {
+        return { href: safeEntryUrl, mode: "dreamweaver_page" };
+      }
+      if (publishedSongUrl && safeEntryUrl === publishedSongUrl) {
+        return { href: safeEntryUrl, mode: "published_song" };
+      }
+      return { href: safeEntryUrl, mode: "existing_destination" };
+    }
+    if (generatedPageUrl) {
+      return { href: generatedPageUrl, mode: "dreamweaver_page" };
+    }
+    if (publishedSongUrl) {
+      return { href: publishedSongUrl, mode: "published_song" };
+    }
+    return { href: featuredTrack.url, mode: "featured_fallback" };
   }
 
   function renderRewardState() {
@@ -1412,6 +1461,11 @@
     return id ? `dreamweaver-satellite-${id}` : "";
   }
 
+  function dreamweaverPageAgentId(songId) {
+    const id = cleanSongId(songId);
+    return id ? `dreamweaver-page-manager-${id}` : "";
+  }
+
   function stopSatelliteAgentLoop() {
     window.clearInterval(state.satelliteAgentLoop.timer);
     state.satelliteAgentLoop.timer = 0;
@@ -1422,7 +1476,10 @@
     const songId = cleanSongId(state.publishedSongId) || songIdFromSatellitePath();
     if (!songId) return;
     const manager = state.release?.dreamweaverPage?.manager || null;
-    state.satelliteAgentLoop.loopId = satelliteAgentLoopId(songId);
+    state.satelliteAgentLoop.loopId = cleanText(
+      state.release?.dreamweaverPage?.manager?.id || state.release?.dreamweaverPage?.pageAgent?.id || "",
+      160
+    ) || dreamweaverPageAgentId(songId) || satelliteAgentLoopId(songId);
     state.satelliteAgentLoop.updateIntervalMs = Number(manager?.intervalMs) > 0
       ? Number(manager.intervalMs)
       : SATELLITE_AGENT_REFRESH_MS;

@@ -39,15 +39,19 @@ assert.match(helper, /appendLedgerEntry/, "publication helper must write ledger 
 assert.match(helper, /resolveDreamweaverPageFlow/, "publication helper must delegate Dreamweaver page decisions to the dedicated manager");
 assert.match(helper, /radio_master_missing_or_not_uploaded/, "publication helper must keep a deterministic radio fallback reason");
 assert.match(helper, /\/music\/\?song=/, "publication helper must derive canonical public song URLs");
-assert.match(helper, /launchUrl/, "publication helper must persist the resolved Dreamweaver launch destination");
+assert.match(helper, /destinationUrl/, "publication helper must persist the resolved Dreamweaver destination");
 assert.ok(helper.includes("official_url = CASE") && helper.includes("official_url ~* '^/api/song-catalog/audio\\\\?(?:[^#]*&)?versionId="), "publication helper must replace legacy song-catalog audio navigation URLs during release upserts");
 
+assert.match(manager, /isHyperFollowUrl/, "Dreamweaver page manager must detect HyperFollow URLs");
 assert.match(manager, /manage_dreamweaver_song_page/, "Dreamweaver page manager must have a single page-management purpose");
+assert.match(manager, /buildDreamweaverSongPage/, "Dreamweaver page manager must expose a shared generated-page builder");
 assert.match(manager, /dreamweaverHubPath/, "Dreamweaver page manager must define a dedicated canonical hub resolver");
 assert.equal(managedDreamweaverFlow.managed, true, "songs without HyperFollow must get a managed Dreamweaver page");
+assert.equal(managedDreamweaverFlow.routeMode, "dreamweaver_page", "non-HyperFollow songs must resolve to Dreamweaver page route mode");
 assert.equal(managedDreamweaverFlow.hubUrl, "/dreamweaver/?mix=sample-release", "Dreamweaver manager must emit a canonical mix-aware hub URL");
 assert.equal(managedDreamweaverFlow.launchUrl, "/dreamweaver/?mix=sample-release", "songs without HyperFollow must launch into the Dreamweaver hub flow");
 assert.equal(managedDreamweaverFlow.page?.route, `/dreamweaver/satellite/${sampleSongId}/`, "Dreamweaver manager must preserve deterministic satellite routes");
+assert.equal(managedDreamweaverFlow.destinationUrl, managedDreamweaverFlow.page?.experienceUrl, "managed releases must expose the generated Dreamweaver page as the public doorway");
 assert.equal(managedDreamweaverFlow.page?.hubUrl, "/dreamweaver/?mix=sample-release", "Dreamweaver page metadata must expose canonical hub URL");
 assert.ok(
   managedDreamweaverFlow.loop?.linkedPages?.includes("/music/?song=sample-release")
@@ -56,8 +60,11 @@ assert.ok(
   "Dreamweaver loop metadata must link hub, sales/release pages, and related promo pages"
 );
 assert.equal(managedDreamweaverFlow.manager?.id, `dreamweaver-page-manager-${sampleSongId}`, "Dreamweaver page manager IDs must be deterministic per song");
+assert.equal(managedDreamweaverFlow.page?.pageAgent?.id, `dreamweaver-page-manager-${sampleSongId}`, "generated Dreamweaver pages must expose the dedicated page manager identity");
 assert.equal(hyperfollowDreamweaverFlow.hasHyperfollow, true, "HyperFollow releases must be detected");
 assert.equal(hyperfollowDreamweaverFlow.managed, false, "HyperFollow releases must not be replaced by managed Dreamweaver pages");
+assert.equal(hyperfollowDreamweaverFlow.routeMode, "hyperfollow", "HyperFollow releases must report the HyperFollow route mode");
+assert.equal(hyperfollowDreamweaverFlow.destinationUrl, "https://distrokid.com/hyperfollow/owenanthony/sample-track", "HyperFollow releases must preserve the HyperFollow doorway");
 assert.equal(hyperfollowDreamweaverFlow.launchUrl, "https://distrokid.com/hyperfollow/owenanthony/sample-track", "HyperFollow releases must keep their existing HyperFollow destination");
 assert.ok(
   hyperfollowDreamweaverFlow.loop?.linkedPages?.includes("https://distrokid.com/hyperfollow/owenanthony/sample-track"),
@@ -84,12 +91,15 @@ assert.match(unifiedUpload, /reconcilePublishedSong/, "unified upload pipeline m
 assert.match(uploadPipeline, /reconcilePublishedSong/, "upload pipeline must trigger publication fan-out on publish");
 assert.match(dreamweaver, /new URL\("\/music\/", location\.origin\)/, "Dreamweaver share flow must target the canonical published-song URL");
 assert.match(dreamweaver, /dreamweaverPage\?\.manager/, "Dreamweaver page must use the dedicated page manager metadata when available");
+assert.match(dreamweaver, /preferredReleaseDoorway/, "Dreamweaver page must prefer resolved release doorway metadata");
 assert.match(releaseCatalog, /dreamweaverPage/, "release catalog must expose Dreamweaver page metadata for song-linked releases");
 assert.match(releaseCatalog, /resolveDreamweaverPageFlow/, "release catalog must derive Dreamweaver page state through the shared manager");
 assert.match(releaseCatalog, /dreamweaverHubUrl/, "release catalog must serialize canonical Dreamweaver hub metadata");
 assert.match(releaseCatalog, /dreamweaverLoop/, "release catalog must serialize linked Dreamweaver loop metadata");
+assert.match(releaseCatalog, /entryExperience/, "release catalog must expose the resolved entry mode");
+assert.match(releaseCatalog, /entryUrl/, "release catalog must expose the resolved entry URL");
 assert.match(releaseLink, /remapLegacyAudioDestination/, "release-link handler must guard against legacy song-catalog audio entry URLs");
-assert.match(releaseLink, /resolveDreamweaverPageFlow/, "release-link handler must reroute legacy audio entries into managed Dreamweaver pages");
-assert.match(releaseLink, /flow\.launchUrl/, "release-link legacy remapping must route through the hub-aware Dreamweaver launch flow");
+assert.match(releaseLink, /buildDreamweaverSongPage/, "release-link handler must reroute legacy audio entries into generated Dreamweaver pages");
+assert.match(releaseLink, /includeAudienceParam: true/, "release-link legacy remapping must preserve audience-specific generated page routing");
 
 console.log("Song publication contracts passed.");

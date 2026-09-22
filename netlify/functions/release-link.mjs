@@ -1,7 +1,7 @@
 import { getDatabase } from "@netlify/database";
 import { verifyRequestOrigin } from "@netlify/identity";
 import { createHash, timingSafeEqual } from "node:crypto";
-import { resolveDreamweaverPageFlow } from "../lib/dreamweaver-page-manager.mjs";
+import { buildDreamweaverSongPage, resolveDreamweaverPageFlow } from "../lib/dreamweaver-page-manager.mjs";
 
 const audiences = new Set(["fan", "dj", "radio", "press", "preview"]);
 const destinations = {
@@ -61,6 +61,7 @@ function legacyAudioVersionIdFromDestination(destination, requestUrl) {
 
 async function remapLegacyAudioDestination(db, versionId, {
   releaseSlug = "",
+  audience = "fan",
   officialUrl = "",
   streamUrl = "",
 } = {}) {
@@ -75,12 +76,20 @@ async function remapLegacyAudioDestination(db, versionId, {
     const rows = Array.isArray(result) ? result : Array.isArray(result?.rows) ? result.rows : [];
     const songId = cleanId(rows[0]?.song_id);
     const mixId = cleanSlug(releaseSlug);
+    const generatedPage = buildDreamweaverSongPage(songId, {
+      mixId,
+      audience,
+      includeAudienceParam: true,
+    });
     const flow = resolveDreamweaverPageFlow(songId, {
       mixId,
       officialUrl,
       streamUrl,
     });
-    return flow.launchUrl || flow.page?.route || "";
+    if (flow.routeMode === "dreamweaver_page") {
+      return generatedPage?.experienceUrl || flow.page?.experienceUrl || flow.destinationUrl || "";
+    }
+    return flow.destinationUrl || "";
   } catch {
     return "";
   }
@@ -121,9 +130,26 @@ export default async function releaseLinkHandler(request) {
     const audience = cleanAudience(url.searchParams.get("audience"));
     if (!releaseSlug) return json({ message: "Choose a valid release campaign" }, 400);
     const rows = await db.sql`
-      SELECT official_url, stream_url, dj_url, radio_url, press_url, preview_url, preview_expires_at, preview_access_code_hash
-      FROM halo_release_campaigns
-      WHERE id = ${releaseSlug} AND status = 'published'
+      SELECT
+        release.official_url,
+        release.stream_url,
+        release.dj_url,
+        release.radio_url,
+        release.press_url,
+        release.preview_url,
+        release.preview_expires_at,
+        release.preview_access_code_hash,
+        catalog.song_id AS catalog_song_id
+      FROM halo_release_campaigns release
+      LEFT JOIN LATERAL (
+        SELECT song.id AS song_id
+        FROM halo_song_catalog song
+        WHERE song.source_release_id = release.id
+          AND song.status = 'active'
+        ORDER BY song.updated_at DESC
+        LIMIT 1
+      ) catalog ON TRUE
+      WHERE release.id = ${releaseSlug} AND release.status = 'published'
       LIMIT 1
     `;
     if (!rows.length) return json({ message: "Release campaign not found" }, 404);
@@ -135,13 +161,24 @@ export default async function releaseLinkHandler(request) {
     if (audience === "preview" && !accessCodeMatches(url.searchParams.get("code"), row.preview_access_code_hash)) {
       return json({ message: "Enter the private preview access code" }, 401);
     }
+    const flow = audience === "fan" && row.catalog_song_id
+      ? resolveDreamweaverPageFlow(row.catalog_song_id, {
+          mixId: releaseSlug,
+          officialUrl: row.official_url || "",
+          streamUrl: row.stream_url || "",
+        })
+      : null;
     const [column, target] = destinations[audience];
-    const destination = absoluteDestination(row[column] || row.official_url, request.url);
+    const preferredDestination = audience === "fan" && flow
+      ? flow.destinationUrl || row[column] || row.official_url
+      : row[column] || row.official_url;
+    const destination = absoluteDestination(preferredDestination, request.url);
     if (!destination) return json({ message: "This campaign destination is not available" }, 404);
     const legacyAudioVersionId = legacyAudioVersionIdFromDestination(destination, request.url);
     const remappedDestination = legacyAudioVersionId
       ? await remapLegacyAudioDestination(db, legacyAudioVersionId, {
           releaseSlug,
+          audience,
           officialUrl: row.official_url || "",
           streamUrl: row.stream_url || "",
         })

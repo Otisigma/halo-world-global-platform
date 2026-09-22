@@ -156,7 +156,9 @@ export function buildDreamweaverSongPage(songId, options = {}) {
   if (slug) params.set("slug", slug);
   if (audience) params.set("audience", audience);
   const query = params.toString();
-  const experienceUrl = query ? `${storefrontUrl}&${query}` : storefrontUrl;
+  const experienceUrl = query
+    ? `${storefrontUrl}${storefrontUrl.includes("?") ? "&" : "?"}${query}`
+    : storefrontUrl;
   const launchUrl = cleanText(options.launchUrl, 1200) || hubUrl || experienceUrl;
   const pageAgent = buildDreamweaverPageAgent(id, {
     ...options,

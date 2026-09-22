@@ -61,6 +61,7 @@ function legacyAudioVersionIdFromDestination(destination, requestUrl) {
 
 async function remapLegacyAudioDestination(db, versionId, {
   audience = "fan",
+  releaseId = "",
   releaseSlug = "",
   officialUrl = "",
   streamUrl = "",
@@ -75,7 +76,7 @@ async function remapLegacyAudioDestination(db, versionId, {
     `;
     const rows = Array.isArray(result) ? result : Array.isArray(result?.rows) ? result.rows : [];
     const songId = cleanId(rows[0]?.song_id);
-    const mixId = cleanSlug(releaseSlug);
+        const mixId = cleanSlug(releaseId || releaseSlug);
     const flow = resolveDreamweaverPageFlow(songId, {
       audience,
       mixId,
@@ -134,7 +135,7 @@ export default async function releaseLinkHandler(request) {
     const audience = cleanAudience(url.searchParams.get("audience"));
     if (!releaseSlug) return json({ message: "Choose a valid release campaign" }, 400);
     const rows = await db.sql`
-      SELECT official_url, stream_url, dj_url, radio_url, press_url, preview_url, preview_expires_at, preview_access_code_hash
+      SELECT id, official_url, stream_url, dj_url, radio_url, press_url, preview_url, preview_expires_at, preview_access_code_hash
       FROM halo_release_campaigns
       WHERE id = ${releaseSlug} AND status = 'published'
       LIMIT 1
@@ -155,6 +156,7 @@ export default async function releaseLinkHandler(request) {
     const remappedDestination = legacyAudioVersionId
       ? await remapLegacyAudioDestination(db, legacyAudioVersionId, {
           audience,
+          releaseId: cleanSlug(row.id || "") || releaseSlug,
           releaseSlug,
           officialUrl: row.official_url || "",
           streamUrl: row.stream_url || "",

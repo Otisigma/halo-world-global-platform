@@ -153,6 +153,7 @@ function resolveReleaseDreamweaverFlow(songId, {
     publicUrl,
     streamUrl,
     officialUrl,
+    preferDreamweaverPage: true,
   });
 }
 

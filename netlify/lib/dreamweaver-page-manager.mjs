@@ -222,6 +222,7 @@ export function resolveDreamweaverPageFlow(songIdOrOptions, options = {}) {
   const audience = cleanAudience(resolved.audience);
   const hyperfollowUrl = [officialUrl, streamUrl].find(isHyperFollowUrl) || "";
   const managed = Boolean(songId) && !hyperfollowUrl;
+  const preferDreamweaverPage = Boolean(resolved.preferDreamweaverPage);
   const dreamweaverPage = songId
     ? buildDreamweaverSongPage(songId, {
         ...resolved,
@@ -236,24 +237,35 @@ export function resolveDreamweaverPageFlow(songIdOrOptions, options = {}) {
         launchUrl: hyperfollowUrl ? "" : undefined,
       })
     : null;
+  const usesGeneratedDreamweaverPage = Boolean(dreamweaverPage) && !hyperfollowUrl && (
+    preferDreamweaverPage
+      || !officialUrl
+      || isLegacyAudioEntry(officialUrl)
+      || isLegacyAudioEntry(streamUrl)
+  );
   const destinationUrl = hyperfollowUrl
-    || dreamweaverPage?.experienceUrl
+    || (usesGeneratedDreamweaverPage ? dreamweaverPage?.experienceUrl || "" : "")
     || officialUrl
     || streamUrl
     || dreamweaverPage?.linkedSongUrl
     || publicUrl
     || "";
   const launchUrl = hyperfollowUrl
+    || (usesGeneratedDreamweaverPage ? (dreamweaverPage?.hubUrl || dreamweaverPage?.experienceUrl || "") : "")
+    || officialUrl
+    || streamUrl
     || dreamweaverPage?.hubUrl
     || dreamweaverPage?.experienceUrl
     || destinationUrl;
   const routeMode = hyperfollowUrl
     ? "hyperfollow"
-    : dreamweaverPage
+    : usesGeneratedDreamweaverPage
       ? "dreamweaver_page"
       : (officialUrl || streamUrl)
         ? "existing_destination"
-        : "";
+        : dreamweaverPage
+          ? "dreamweaver_page"
+          : "";
   const manager = dreamweaverPage?.manager || null;
   const loop = manager?.loop || dreamweaverPage?.loop || null;
   return {
@@ -276,6 +288,6 @@ export function resolveDreamweaverPageFlow(songIdOrOptions, options = {}) {
     pageAgent: dreamweaverPage?.pageAgent || null,
     loop,
     manager,
-    usesGeneratedDreamweaverPage: Boolean(dreamweaverPage) && !hyperfollowUrl && (!officialUrl || isLegacyAudioEntry(officialUrl) || isLegacyAudioEntry(streamUrl) || routeMode === "dreamweaver_page"),
+    usesGeneratedDreamweaverPage,
   };
 }

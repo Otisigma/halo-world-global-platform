@@ -1,7 +1,7 @@
 import { getDatabase } from "@netlify/database";
 import { verifyRequestOrigin } from "@netlify/identity";
 import { createHash, timingSafeEqual } from "node:crypto";
-import { buildDreamweaverSongPage } from "../lib/dreamweaver-page-manager.mjs";
+import { buildDreamweaverSongPage, resolveDreamweaverPageFlow } from "../lib/dreamweaver-page-manager.mjs";
 
 const audiences = new Set(["fan", "dj", "radio", "press", "preview"]);
 const destinations = {
@@ -62,6 +62,8 @@ function legacyAudioVersionIdFromDestination(destination, requestUrl) {
 async function remapLegacyAudioDestination(db, versionId, {
   audience = "fan",
   releaseSlug = "",
+  officialUrl = "",
+  streamUrl = "",
 } = {}) {
   try {
     if (!versionId) return "";
@@ -74,12 +76,21 @@ async function remapLegacyAudioDestination(db, versionId, {
     const rows = Array.isArray(result) ? result : Array.isArray(result?.rows) ? result.rows : [];
     const songId = cleanId(rows[0]?.song_id);
     const mixId = cleanSlug(releaseSlug);
+    const flow = resolveDreamweaverPageFlow(songId, {
+      audience,
+      mixId,
+      releaseId: mixId,
+      officialUrl,
+      streamUrl,
+      preferDreamweaverPage: true,
+    });
+    if (flow.routeMode === "hyperfollow") return flow.launchUrl || flow.destinationUrl || "";
     return buildDreamweaverSongPage(songId, {
       audience,
       mixId,
       releaseId: mixId,
       slug: mixId,
-    })?.experienceUrl || "";
+    })?.experienceUrl || flow.destinationUrl || "";
   } catch {
     return "";
   }
@@ -139,7 +150,12 @@ export default async function releaseLinkHandler(request) {
     if (!destination) return json({ message: "This campaign destination is not available" }, 404);
     const legacyAudioVersionId = legacyAudioVersionIdFromDestination(destination, request.url);
     const remappedDestination = legacyAudioVersionId
-      ? await remapLegacyAudioDestination(db, legacyAudioVersionId, { audience, releaseSlug })
+      ? await remapLegacyAudioDestination(db, legacyAudioVersionId, {
+          audience,
+          releaseSlug,
+          officialUrl: row.official_url || "",
+          streamUrl: row.stream_url || "",
+        })
       : "";
     const finalDestination = absoluteDestination(remappedDestination || destination, request.url);
     if (!finalDestination) return json({ message: "This campaign destination is not available" }, 404);

@@ -156,7 +156,7 @@ export function buildDreamweaverSongPage(songId, options = {}) {
   if (slug) params.set("slug", slug);
   if (audience) params.set("audience", audience);
   const query = params.toString();
-  const experienceUrl = query ? `${route}?${query}` : route;
+  const experienceUrl = query ? `${storefrontUrl}&${query}` : storefrontUrl;
   const launchUrl = cleanText(options.launchUrl, 1200) || hubUrl || experienceUrl;
   const pageAgent = buildDreamweaverPageAgent(id, {
     ...options,
@@ -246,8 +246,8 @@ export function resolveDreamweaverPageFlow(songIdOrOptions, options = {}) {
   const destinationUrl = hyperfollowUrl
     || (usesGeneratedDreamweaverPage ? dreamweaverPage?.experienceUrl || "" : "")
     || officialUrl
-    || publicUrl
     || streamUrl
+    || publicUrl
     || dreamweaverPage?.linkedSongUrl
     || "";
   const launchUrl = hyperfollowUrl

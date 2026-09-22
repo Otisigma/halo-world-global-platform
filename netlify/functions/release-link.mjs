@@ -169,8 +169,8 @@ export default async function releaseLinkHandler(request) {
         })
       : null;
     const [column, target] = destinations[audience];
-    const preferredDestination = audience === "fan" && flow?.routeMode === "dreamweaver_page"
-      ? flow.destinationUrl
+    const preferredDestination = audience === "fan" && flow
+      ? flow.destinationUrl || row[column] || row.official_url
       : row[column] || row.official_url;
     const destination = absoluteDestination(preferredDestination, request.url);
     if (!destination) return json({ message: "This campaign destination is not available" }, 404);

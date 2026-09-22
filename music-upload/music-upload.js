@@ -442,7 +442,7 @@ function renderResults() {
     const satelliteLoopId = typeof result.dreamweaverSatellite?.agentLoop?.id === "string" ? result.dreamweaverSatellite.agentLoop.id : "";
     const satelliteReceipt = satelliteRoute
       ? `<div class="result-satellite">
-          <a href="${escapeHtml(satelliteRoute)}" target="_blank" rel="noopener noreferrer">Open Dreamweaver satellite page ↗</a>
+          <a href="${escapeHtml(satelliteRoute)}" target="_blank" rel="noopener noreferrer">Open Dreamweaver storefront ↗</a>
           ${satelliteLoopId ? `<small>Agent loop: ${escapeHtml(satelliteLoopId)}</small>` : ""}
         </div>`
       : "";

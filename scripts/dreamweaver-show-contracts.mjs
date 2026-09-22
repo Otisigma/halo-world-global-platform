@@ -1,5 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
+import { DREAMWEAVER_STOREFRONT_MIX_ID } from "../lib/dreamweaver-storefront.js";
 
 const root = resolve(import.meta.dirname, "..");
 const read = path => readFile(resolve(root, path), "utf8");
@@ -74,12 +75,14 @@ const checks = [
     "keeps Netlify aligned to the canonical HALO home route and serves /dreamweaver/ directly without reintroducing the legacy alias redirect"
   ],
   [
-    /from = "\/dreamweaver\/satellite\/:songId"[\s\S]*to = "\/dreamweaver\/satellite\/:songId\/"[\s\S]*status = 301/.test(config)
-      && /from = "\/dreamweaver\/satellite\/:songId\/"[\s\S]*to = "\/dreamweaver\/index\.html"[\s\S]*status = 200/.test(config)
+    config.includes(`/dreamweaver/?mix=${DREAMWEAVER_STOREFRONT_MIX_ID}&song=:songId&satellite=dreamweaver`)
+      && /from = "\/dreamweaver\/satellite\/:songId"[\s\S]*status = 301/.test(config)
+      && /from = "\/dreamweaver\/satellite\/:songId\/"[\s\S]*status = 301/.test(config)
       && server.includes("app.get(/^\\/dreamweaver\\/satellite\\/([^/]+)$/")
       && server.includes("app.get(/^\\/dreamweaver\\/satellite\\/([^/]+)\\/$")
+      && server.includes("dreamweaverStorefrontPath")
       && server.includes("songIdPattern"),
-    "keeps deterministic Dreamweaver satellite routing live for per-song pages across Netlify and local server"
+    "funnels deterministic Dreamweaver satellite URLs into the storefront route across Netlify and local server"
   ],
   [page.includes('id="campaignStudio"') && page.includes('id="campaignCanvas"') && page.includes("Make a Reel / Short"), "adds the Dreamweaver campaign cutting room"],
   [script.includes("renderVerticalClip") && script.includes("captureStream") && script.includes("MediaRecorder"), "renders a downloadable vertical clip in supported browsers"],
@@ -100,7 +103,7 @@ const checks = [
     "keeps HyperFollow releases on the canonical HyperFollow doorway while allowing generated Dreamweaver pages for songs without HyperFollow"
   ],
   [script.includes("publishedSongId: resolveSongContextId()") && script.includes('new URL("/music/", location.origin)') && script.includes("Published song link copied."), "shares a published song from Dreamweaver using the canonical public music URL when song context is present"],
-  [script.includes("resolveSongContextId") && script.includes("songIdFromSatellitePath") && script.includes("startSatelliteAgentLoop") && script.includes("dreamweaver-page-manager-"), "derives song-specific satellite context from deterministic routes and runs an isolated per-song update loop under a dedicated Dreamweaver page manager agent"],
+  [script.includes("resolveSongContextId") && script.includes("songIdFromSatellitePath") && script.includes("canonicalDreamweaverUrl") && script.includes("startSatelliteAgentLoop") && script.includes("dreamweaver-page-manager-"), "derives song-specific storefront/satellite context and runs an isolated per-song update loop under a deterministic page-manager identity"],
   [script.includes("releaseRouteTokens") && script.includes("mixRouteTokens") && script.includes("loadReleaseContext") && script.includes("requestedStorySlug"), "resolves release context from direct mix and slug routes using the shared release catalog shape"],
   [script.includes('fetch("/api/dreamweaver-fan-signups"') && script.includes("readStoredUnlock") && script.includes("updatePlatformLinks"), "submits email unlocks and rehydrates the lightweight fan reward state"],
   [page.includes('href="/dj-deck.html"') && page.includes("Creator gateway /dj-deck"), "keeps creator routing secondary on the Song Lobby page while preserving the canonical deck route"],

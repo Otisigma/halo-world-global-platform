@@ -1,7 +1,8 @@
 import { getDatabase } from "@netlify/database";
 import { verifyRequestOrigin } from "@netlify/identity";
 import { createHash, timingSafeEqual } from "node:crypto";
-import { buildDreamweaverSongPage, resolveDreamweaverPageFlow } from "../lib/dreamweaver-page-manager.mjs";
+import { resolveDreamweaverPageFlow } from "../lib/dreamweaver-page-manager.mjs";
+import { dreamweaverStorefrontPath } from "../lib/dreamweaver-satellite.mjs";
 
 const audiences = new Set(["fan", "dj", "radio", "press", "preview"]);
 const destinations = {
@@ -75,21 +76,12 @@ async function remapLegacyAudioDestination(db, versionId, {
     `;
     const rows = Array.isArray(result) ? result : Array.isArray(result?.rows) ? result.rows : [];
     const songId = cleanId(rows[0]?.song_id);
-    const mixId = cleanSlug(releaseSlug);
-    const generatedPage = buildDreamweaverSongPage(songId, {
-      mixId,
-      audience,
-      includeAudienceParam: true,
-    });
-    const flow = resolveDreamweaverPageFlow(songId, {
-      mixId,
-      officialUrl,
-      streamUrl,
-    });
-    if (flow.routeMode === "dreamweaver_page") {
-      return generatedPage?.experienceUrl || flow.page?.experienceUrl || flow.destinationUrl || "";
-    }
-    return flow.destinationUrl || "";
+    const route = dreamweaverStorefrontPath(songId, { mixId: cleanSlug(releaseSlug) });
+    if (!route) return "";
+    const routeUrl = new URL(route, "https://halo.world");
+    if (audience && !routeUrl.searchParams.has("audience")) routeUrl.searchParams.set("audience", audience);
+    if (releaseSlug && !routeUrl.searchParams.has("slug")) routeUrl.searchParams.set("slug", releaseSlug);
+    return `${routeUrl.pathname}${routeUrl.search}`;
   } catch {
     return "";
   }
@@ -168,9 +160,12 @@ export default async function releaseLinkHandler(request) {
           streamUrl: row.stream_url || "",
         })
       : null;
+    const storefrontDestination = audience === "fan"
+      ? dreamweaverStorefrontPath(row.catalog_song_id, { mixId: releaseSlug })
+      : "";
     const [column, target] = destinations[audience];
     const preferredDestination = audience === "fan" && flow
-      ? flow.destinationUrl || row[column] || row.official_url
+      ? (flow.hasHyperfollow ? flow.destinationUrl : storefrontDestination || flow.destinationUrl) || row[column] || row.official_url
       : row[column] || row.official_url;
     const destination = absoluteDestination(preferredDestination, request.url);
     if (!destination) return json({ message: "This campaign destination is not available" }, 404);

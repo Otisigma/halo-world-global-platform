@@ -60,6 +60,7 @@
   const MIX_LIBRARY_TIMEOUT_MS = 12000;
   const RELEASE_CONTEXT_TIMEOUT_MS = 8000;
   const VIDEO_LIBRARY_TIMEOUT_MS = 8000;
+  const AUDIO_BOOTSTRAP_TIMEOUT_MS = 7000;
   const REMOTE_AUDIO_WATCHDOG_MS = 5000;
   const HERO_REEL_LOAD_TIMEOUT_MS = 3500;
   const MAX_AUDIO_FEEDBACK_RECORDS = 24;
@@ -429,26 +430,26 @@
     if (state.audioFeedbackFlushPromise) return state.audioFeedbackFlushPromise;
     state.audioFeedbackFlushPromise = (async () => {
       const flushStartedAt = Date.now();
-      const seenFingerprints = new Set();
       try {
-        const pending = [];
-        for (const entry of state.audioFeedbackQueue) {
-          if (
-            entry.deliveryStatus === "sent"
-            || seenFingerprints.has(entry.fingerprint)
-            || (
-              entry.lastAttemptAt
-              && !Number.isNaN(Date.parse(entry.lastAttemptAt))
-              && Date.parse(entry.lastAttemptAt) >= flushStartedAt
-            )
-          ) {
-            continue;
-          }
-          seenFingerprints.add(entry.fingerprint);
-          pending.push(entry);
-        }
-        for (const incident of pending) {
-          await sendAudioFeedbackIncident(incident);
+        while (true) {
+          const seenFingerprints = new Set();
+          const pending = state.audioFeedbackQueue.filter(entry => {
+            if (
+              entry.deliveryStatus === "sent"
+              || seenFingerprints.has(entry.fingerprint)
+              || (
+                entry.lastAttemptAt
+                && !Number.isNaN(Date.parse(entry.lastAttemptAt))
+                && Date.parse(entry.lastAttemptAt) >= flushStartedAt
+              )
+            ) {
+              return false;
+            }
+            seenFingerprints.add(entry.fingerprint);
+            return true;
+          });
+          if (!pending.length) break;
+          for (const incident of pending) await sendAudioFeedbackIncident(incident);
         }
       } finally {
         state.audioFeedbackFlushPromise = null;
@@ -654,6 +655,138 @@
       throw error;
     } finally {
       window.clearTimeout(timeoutId);
+    }
+
+    function isPlayablePrimaryMix(mix) {
+      const source = cleanText(mix?.source, 60).toLowerCase();
+      return Boolean(cleanText(mix?.audioUrl, 1200)) && source !== "youtube";
+    }
+
+    function resolvePrimaryPlaybackMix(mixes = [], requestedMixId = "") {
+      const requested = cleanText(requestedMixId, 120);
+      const library = Array.isArray(mixes) ? mixes : [];
+      const requestedEntry = requested ? library.find(item => cleanText(item?.id, 120) === requested) : null;
+      if (isPlayablePrimaryMix(requestedEntry)) return requestedEntry;
+
+      if (requestedEntry && !cleanText(requestedEntry.audioUrl, 1200)) {
+        queueAudioFeedbackIncident("missing_audio", {
+          severity: "high",
+          title: "Dreamweaver primary mix is missing audio",
+          details: `The requested mix ${requestedEntry.id || requested} does not have a playable audio source.`,
+          mix: requestedEntry,
+          metadata: { requestedMixId: requested, failureState: "missing_audio" }
+        });
+      } else if (requestedEntry && !isPlayablePrimaryMix(requestedEntry)) {
+        queueAudioFeedbackIncident("non_playable_audio", {
+          severity: "medium",
+          title: "Dreamweaver requested mix is not directly playable",
+          details: `The requested mix ${requestedEntry.id || requested} resolves to a non-audio source and cannot bootstrap the primary player.`,
+          mix: requestedEntry,
+          metadata: { requestedMixId: requested, failureState: "non_playable_audio", source: requestedEntry.source }
+        });
+      }
+
+      if (requested && requestedEntry) return null;
+      return library.find(isPlayablePrimaryMix) || null;
+    }
+
+    function describeAudioElementFailure() {
+      const code = Number(elements.audio?.error?.code || 0);
+      if (code === 1) return "The audio bootstrap was interrupted before Dreamweaver could start playback.";
+      if (code === 2) return "The linked audio file could not be downloaded.";
+      if (code === 3) return "The linked audio file appears corrupted or could not be decoded.";
+      if (code === 4) return "The linked audio format is not supported for Dreamweaver playback.";
+      return "Dreamweaver could not prepare the linked audio for playback.";
+    }
+
+    async function awaitPrimaryPlaybackReadiness() {
+      if (elements.audio.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) return { ok: true, state: "ready" };
+      return new Promise(resolve => {
+        let settled = false;
+        const cleanup = () => {
+          window.clearTimeout(timeoutId);
+          elements.audio.removeEventListener("loadeddata", handleReady);
+          elements.audio.removeEventListener("canplay", handleReady);
+          elements.audio.removeEventListener("error", handleError);
+        };
+        const settle = result => {
+          if (settled) return;
+          settled = true;
+          cleanup();
+          resolve(result);
+        };
+        const handleReady = () => settle({ ok: true, state: "ready" });
+        const handleError = () => settle({ ok: false, state: "error", detail: describeAudioElementFailure() });
+        const timeoutId = window.setTimeout(() => settle({ ok: false, state: "timeout", detail: "Dreamweaver waited too long for the linked audio to become playable." }), AUDIO_BOOTSTRAP_TIMEOUT_MS);
+        elements.audio.addEventListener("loadeddata", handleReady, { once: true });
+        elements.audio.addEventListener("canplay", handleReady, { once: true });
+        elements.audio.addEventListener("error", handleError, { once: true });
+      });
+    }
+
+    async function bootstrapPrimaryPlayback(mix) {
+      if (!mix?.audioUrl) {
+        queueAudioFeedbackIncident("missing_audio", {
+          severity: "high",
+          title: "Dreamweaver could not find primary audio",
+          details: "The selected Dreamweaver mix does not expose a primary audio URL for playback bootstrap.",
+          mix,
+          metadata: { failureState: "missing_audio" }
+        });
+        throw new Error("The selected Dreamweaver mix is missing its primary audio source.");
+      }
+
+      setLoadingProgress(58, "Bootstrapping primary playback", "Dreamweaver is loading the linked song first so sound can start before the wider loop hydrates.");
+      state.mix = mix;
+      state.duration = Number(mix.durationSeconds || 0);
+      elements.audio.pause();
+      elements.audio.currentTime = 0;
+      elements.audio.src = mix.audioUrl;
+      elements.audio.load?.();
+
+      if (elements.audio.muted || Number(elements.audio.volume) === 0) {
+        queueAudioFeedbackIncident("muted_audio", {
+          severity: "medium",
+          title: "Dreamweaver primary audio initialized muted",
+          details: "The Dreamweaver player was muted while preparing the first linked song for playback.",
+          mix,
+          metadata: { failureState: "muted_audio" }
+        });
+      }
+
+      const readiness = await awaitPrimaryPlaybackReadiness();
+      if (!readiness.ok) {
+        queueAudioFeedbackIncident(readiness.state === "error" && Number(elements.audio?.error?.code || 0) === 3 ? "corrupted_audio" : "non_playable_audio", {
+          severity: "high",
+          title: "Dreamweaver primary audio could not be prepared",
+          details: readiness.detail || describeAudioElementFailure(),
+          mix,
+          metadata: { failureState: readiness.state === "error" && Number(elements.audio?.error?.code || 0) === 3 ? "corrupted_audio" : "non_playable_audio" }
+        });
+        throw new Error(readiness.detail || "The linked Dreamweaver audio could not be prepared.");
+      }
+
+      try {
+        await elements.audio.play();
+        return { started: true };
+      } catch (error) {
+        queueAudioFeedbackIncident("non_playable_audio", {
+          severity: "medium",
+          title: "Dreamweaver primary audio could not start",
+          details: cleanText(error instanceof Error ? error.message : "Playback was blocked before Dreamweaver could start the linked song.", 1200, "Playback was blocked before Dreamweaver could start the linked song."),
+          mix,
+          metadata: { failureState: "non_playable_audio", reason: "play-rejected" }
+        });
+        showToast("Press play again to start the audio experience.");
+        return { started: false };
+      }
+    }
+
+    async function hydrateDreamweaverLoopContent() {
+      setLoadingProgress(82, "Hydrating the Dreamweaver loop", "Stories, release context, and the wider loop are loading after the primary song bootstrap.");
+      await loadReleaseContext();
+      updatePlatformLinks();
+      await loadVideos();
     }
   }
 

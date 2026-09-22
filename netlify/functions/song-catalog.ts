@@ -97,10 +97,10 @@ function serializeSong(song: typeof songs.$inferSelect, versions: Array<typeof s
     reviewedAt: song.reviewedAt?.toISOString() || "",
     artworkUrl: songArtworkUrl,
     artworkUploadedAt: song.artworkUploadedAt?.toISOString() || "",
+    dreamweaverSatellite: dreamweaverSatellite(song.id),
     pipelineStatus: song.pipelineStatus || "uploaded",
     sourceUploadSurface: song.sourceUploadSurface || "",
     pipelineUpdatedAt: song.pipelineUpdatedAt?.toISOString() || "",
-    dreamweaverSatellite: dreamweaverSatellite(song.id),
     versions: versions.map(version => ({
       id: version.id,
       versionType: version.versionType,

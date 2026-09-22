@@ -33,11 +33,17 @@ export function dreamweaverSatellite(songId, options = {}) {
   const flow = resolveDreamweaverPageFlow(id, options);
   const route = dreamweaverStorefrontPath(id, options);
   const satelliteRoute = dreamweaverSatellitePath(id);
+  const canonicalDreamweaverUrl = dreamweaverStorefrontPath(id, {
+    ...options,
+    includeSatelliteFlag: false,
+  });
   const metadata = {
     ...flow.page,
+    songId: id,
     route,
     experienceUrl: route,
     launchUrl: route,
+    canonicalDreamweaverUrl,
     satelliteRoute,
     fallbackUrl: route,
     pageAgent: flow.manager || flow.page?.pageAgent || null,
@@ -51,5 +57,17 @@ export function dreamweaverSatellite(songId, options = {}) {
       intervalMs: flow.manager?.intervalMs || (Number(options.intervalMs) > 0 ? Number(options.intervalMs) : 45_000),
       channels: ["metadata", "artwork", "playback_state", "linked_song_pages", "hub_loop", "routing"],
     },
+  };
+}
+
+export function buildDreamweaverSatellite(songId, options = {}) {
+  const metadata = dreamweaverSatellite(songId, {
+    ...options,
+    includeAgentLoop: options.includeAgentLoop || Boolean(options.agentLoop),
+  });
+  if (!metadata || !options.agentLoop) return metadata;
+  return {
+    ...metadata,
+    agentLoop: options.agentLoop,
   };
 }

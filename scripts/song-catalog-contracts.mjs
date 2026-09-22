@@ -8,7 +8,7 @@ import {
 
 const root = resolve(import.meta.dirname, "..");
 const read = path => readFile(resolve(root, path), "utf8");
-const [page, client, styles, api, audioApi, artworkApi, producerApi, producerLib, schema, migration, audioMigration, artworkMigration, versionArtworkMigration, producerMigration, config, home, packageText, uploadHelper, satelliteHelper, dreamweaverManager] = await Promise.all([
+const [page, client, styles, api, audioApi, artworkApi, producerApi, producerLib, satelliteHelper, schema, migration, audioMigration, artworkMigration, versionArtworkMigration, producerMigration, config, home, packageText, uploadHelper, dreamweaverManager] = await Promise.all([
   read("song-catalog/index.html"),
   read("song-catalog/song-catalog.js"),
   read("song-catalog/song-catalog.css"),
@@ -17,6 +17,7 @@ const [page, client, styles, api, audioApi, artworkApi, producerApi, producerLib
   read("netlify/functions/song-catalog-artwork.ts"),
   read("netlify/functions/song-catalog-producer.mjs"),
   read("netlify/lib/catalog-producer.mjs"),
+  read("netlify/lib/dreamweaver-satellite.mjs"),
   read("db/schema.ts"),
   read("netlify/database/migrations/20260821035511_complete_pestilence/migration.sql"),
   read("netlify/database/migrations/20260821040411_add_song_version_audio_uploads/migration.sql"),
@@ -42,9 +43,10 @@ const checks = [
   [api.includes("runDreamweaverReview") && api.includes("radio_master") && api.includes("rightsStatus"), "runs Dream Weaver metadata, rights, sale, and radio checks"],
   [api.includes("reconcilePublishedSong") && api.includes('payload.action === "set_pipeline_stage"') && api.includes('stage === "published"'), "reconciles published songs into public release and radio fan-out from catalog stage transitions"],
   [api.includes("dreamweaverSatellite") && api.includes("dreamweaver-satellite.mjs") && satelliteHelper.includes("resolveDreamweaverPageFlow") && satelliteHelper.includes("buildDreamweaverStorefrontPath") && satelliteHelper.includes("satelliteRoute"), "exposes deterministic Dreamweaver storefront metadata in song catalog responses while preserving page-manager wiring and the internal satellite path"],
-  [Boolean(sampleDreamweaverSatellite?.route) && sampleDreamweaverSatellite.route === `/dreamweaver/?mix=${DREAMWEAVER_STOREFRONT_MIX_ID}&song=11111111-1111-4111-8111-111111111111&satellite=dreamweaver` && sampleDreamweaverSatellite.experienceUrl === sampleDreamweaverSatellite.route && sampleDreamweaverSatellite.launchUrl === sampleDreamweaverSatellite.route && sampleDreamweaverSatellite.satelliteRoute === "/dreamweaver/satellite/11111111-1111-4111-8111-111111111111/" && sampleDreamweaverSatellite.pageAgent?.id === "dreamweaver-page-manager-11111111-1111-4111-8111-111111111111" && sampleDreamweaverSatellite.agentLoop?.id === sampleDreamweaverSatellite.pageAgent?.id, "shared Dreamweaver helper returns deterministic storefront routing metadata with a stable per-song page-manager identity"],
+  [Boolean(sampleDreamweaverSatellite?.route) && sampleDreamweaverSatellite.route === `/dreamweaver/?mix=${DREAMWEAVER_STOREFRONT_MIX_ID}&song=11111111-1111-4111-8111-111111111111&satellite=dreamweaver` && sampleDreamweaverSatellite.canonicalDreamweaverUrl === `/dreamweaver/?mix=${DREAMWEAVER_STOREFRONT_MIX_ID}&song=11111111-1111-4111-8111-111111111111` && sampleDreamweaverSatellite.experienceUrl === sampleDreamweaverSatellite.route && sampleDreamweaverSatellite.launchUrl === sampleDreamweaverSatellite.route && sampleDreamweaverSatellite.satelliteRoute === "/dreamweaver/satellite/11111111-1111-4111-8111-111111111111/" && sampleDreamweaverSatellite.pageAgent?.id === "dreamweaver-page-manager-11111111-1111-4111-8111-111111111111" && sampleDreamweaverSatellite.agentLoop?.id === sampleDreamweaverSatellite.pageAgent?.id, "shared Dreamweaver helper returns deterministic storefront routing metadata with a stable per-song page-manager identity"],
   [api.includes("verifyRequestOrigin") && api.includes("ensureMembership") && api.includes('path: "/api/song-catalog"'), "protects catalog records with membership and origin checks"],
   [api.includes("halo_release_campaigns") && api.includes("halo_artist_pages") && api.includes("import_existing"), "loads reusable existing songs from release data with ownership checks"],
+  [api.includes("dreamweaverSatellite: dreamweaverSatellite(song.id)") && satelliteHelper.includes("experienceUrl") && satelliteHelper.includes("canonicalDreamweaverUrl"), "song-catalog API returns Dreamweaver satellite navigation metadata alongside playback URLs"],
   [page.includes('id="audioFile"') && client.includes("AUDIO_CHUNK_BYTES") && client.includes("finalize_upload"), "uploads full song-version audio in browser-safe chunks"],
   [api.includes("cleanAudioUrl") && api.includes("/api/song-catalog/audio?versionId="), "keeps uploaded catalog audio URLs valid when saving version metadata"],
   [page.includes('id="audioUrl" type="text"'), "avoids URL-field validation conflicts for internal uploaded-audio URLs"],

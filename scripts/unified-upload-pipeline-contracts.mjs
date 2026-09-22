@@ -1,12 +1,26 @@
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
+import { pathToFileURL } from "node:url";
+import { DREAMWEAVER_STOREFRONT_MIX_ID } from "../lib/dreamweaver-storefront.js";
 
 const root = resolve(import.meta.dirname, "..");
 const read = path => readFile(resolve(root, path), "utf8");
+const { buildDreamweaverSatellite } = await import(pathToFileURL(resolve(root, "netlify/lib/dreamweaver-satellite.mjs")).href);
+const sampleSongId = "123e4567-e89b-42d3-a456-426614174000";
+const sampleSatellite = buildDreamweaverSatellite(sampleSongId, {
+  agentLoop: {
+    id: `dreamweaver-satellite-${sampleSongId}`,
+    updatePath: "/api/release-catalog",
+    intervalMs: 45_000,
+    channels: ["metadata", "artwork", "playback_state", "refinements"],
+  },
+});
+const invalidSatellite = buildDreamweaverSatellite("not-a-song");
 
 const [
   migration,
   schema,
+  dreamweaverSatelliteLib,
   unifiedUploadFn,
   songCatalogFn,
   songCatalogJs,
@@ -20,6 +34,7 @@ const [
 ] = await Promise.all([
   read("netlify/database/migrations/20260829000000_unified_upload_pipeline.sql"),
   read("db/schema.ts"),
+  read("netlify/lib/dreamweaver-satellite.mjs"),
   read("netlify/functions/unified-upload.mjs"),
   read("netlify/functions/song-catalog.ts"),
   read("song-catalog/song-catalog.js"),
@@ -41,12 +56,15 @@ const checks = [
   // Schema
   [schema.includes("pipelineStatus") && schema.includes('"pipeline_status"'), "schema includes pipelineStatus column in songs table"],
   [schema.includes("sourceUploadSurface") && schema.includes('"source_upload_surface"'), "schema includes sourceUploadSurface column in songs table"],
+  [dreamweaverSatelliteLib.includes("experienceUrl") && dreamweaverSatelliteLib.includes("canonicalDreamweaverUrl") && dreamweaverSatelliteLib.includes("fallbackUrl"), "shared Dreamweaver satellite helper defines explicit navigation metadata for page entry"],
+  [sampleSatellite?.route === `/dreamweaver/?mix=${DREAMWEAVER_STOREFRONT_MIX_ID}&song=${sampleSongId}&satellite=dreamweaver` && sampleSatellite?.experienceUrl === sampleSatellite?.route && sampleSatellite?.canonicalDreamweaverUrl === `/dreamweaver/?mix=${DREAMWEAVER_STOREFRONT_MIX_ID}&song=${sampleSongId}` && sampleSatellite?.fallbackUrl === sampleSatellite?.route && sampleSatellite?.satelliteRoute === `/dreamweaver/satellite/${sampleSongId}/`, "shared Dreamweaver satellite helper returns deterministic navigation URLs for valid song ids"],
+  [sampleSatellite?.agentLoop?.id === `dreamweaver-satellite-${sampleSongId}` && invalidSatellite === null, "shared Dreamweaver satellite helper preserves optional agent-loop metadata and rejects invalid song ids"],
   // Unified upload function
   [unifiedUploadFn.includes('path: "/api/unified-upload"'), "unified-upload function registers at /api/unified-upload"],
   [unifiedUploadFn.includes("create_project") && unifiedUploadFn.includes("advance_pipeline"), "unified-upload supports create_project and advance_pipeline actions"],
   [unifiedUploadFn.includes("PIPELINE_STAGES") && unifiedUploadFn.includes("uploaded") && unifiedUploadFn.includes("published"), "unified-upload defines the full ordered pipeline stages array"],
   [unifiedUploadFn.includes("buildDepartmentViews") && unifiedUploadFn.includes("artistRoom") && unifiedUploadFn.includes("radioRoom") && unifiedUploadFn.includes("dreamWeaver") && unifiedUploadFn.includes("salesPublishing"), "unified-upload returns department views for all four departments"],
-  [unifiedUploadFn.includes("buildDreamweaverSatellite") && unifiedUploadFn.includes("includeAgentLoop") && unifiedUploadFn.includes("dreamweaverSatellite"), "unified-upload uses the shared Dreamweaver satellite metadata helper for routing output"],
+  [unifiedUploadFn.includes("dreamweaverSatellite") && unifiedUploadFn.includes("buildDreamweaverSatellite") && unifiedUploadFn.includes("includeAgentLoop"), "unified-upload uses the shared Dreamweaver satellite metadata helper for routing output"],
   [unifiedUploadFn.includes("verifyRequestOrigin") && unifiedUploadFn.includes("ensureMembership"), "unified-upload protects mutations with origin and membership checks"],
   [unifiedUploadFn.includes("Cannot move backward") && unifiedUploadFn.includes("stageIndex"), "unified-upload rejects backward pipeline regressions"],
   [unifiedUploadFn.includes("isExisting") && unifiedUploadFn.includes("Existing master project returned"), "unified-upload returns existing project instead of creating a duplicate"],

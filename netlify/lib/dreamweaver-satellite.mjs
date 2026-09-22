@@ -1,14 +1,16 @@
-import { DREAMWEAVER_STOREFRONT_MIX_ID } from "../../lib/dreamweaver-storefront.js";
+import {
+  buildDreamweaverStorefrontPath,
+  cleanDreamweaverMixId,
+  cleanDreamweaverSongId,
+} from "../../lib/dreamweaver-storefront.js";
 import { resolveDreamweaverPageFlow } from "./dreamweaver-page-manager.mjs";
 
 function cleanId(value) {
-  const id = String(value || "").trim().toLowerCase();
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(id) ? id : "";
+  return cleanDreamweaverSongId(value);
 }
 
 function cleanMixId(value) {
-  const mixId = String(value || "").trim().toLowerCase();
-  return /^[a-z0-9-]{12,80}$/.test(mixId) ? mixId : "";
+  return cleanDreamweaverMixId(value);
 }
 
 export function dreamweaverSatellitePath(songId) {
@@ -19,11 +21,10 @@ export function dreamweaverSatellitePath(songId) {
 export function dreamweaverStorefrontPath(songId, options = {}) {
   const id = cleanId(songId);
   if (!id) return "";
-  const params = new URLSearchParams();
-  params.set("mix", cleanMixId(options.mixId) || DREAMWEAVER_STOREFRONT_MIX_ID);
-  params.set("song", id);
-  if (options.includeSatelliteFlag !== false) params.set("satellite", "dreamweaver");
-  return `/dreamweaver/?${params.toString()}`;
+  return buildDreamweaverStorefrontPath(id, {
+    mixId: cleanMixId(options.mixId),
+    includeSatelliteFlag: options.includeSatelliteFlag !== false,
+  });
 }
 
 export function dreamweaverSatellite(songId, options = {}) {

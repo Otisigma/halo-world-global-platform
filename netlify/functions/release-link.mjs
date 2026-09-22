@@ -165,7 +165,7 @@ export default async function releaseLinkHandler(request) {
       : "";
     const [column, target] = destinations[audience];
     const preferredDestination = audience === "fan" && flow
-      ? (flow.hasHyperfollow ? flow.destinationUrl : (storefrontDestination || flow.destinationUrl)) || row[column] || row.official_url
+      ? (flow.hasHyperfollow ? flow.destinationUrl : storefrontDestination || flow.destinationUrl) || row[column] || row.official_url
       : row[column] || row.official_url;
     const destination = absoluteDestination(preferredDestination, request.url);
     if (!destination) return json({ message: "This campaign destination is not available" }, 404);

@@ -1,4 +1,4 @@
-import { DREAMWEAVER_STOREFRONT_MIX_ID } from "../lib/dreamweaver-storefront.js";
+import { DREAMWEAVER_STOREFRONT_MIX_ID, buildDreamweaverStorefrontPath } from "../lib/dreamweaver-storefront.js";
 
 (() => {
   const chapters = [
@@ -1319,16 +1319,16 @@ import { DREAMWEAVER_STOREFRONT_MIX_ID } from "../lib/dreamweaver-storefront.js"
     searchParams = location.search,
     fallbackMixId = "",
   } = {}) {
+    const songId = resolveSongContextId();
     const params = searchParams instanceof URLSearchParams
       ? new URLSearchParams(searchParams)
       : new URLSearchParams(searchParams);
     if (!cleanText(params.get("mix"), 80) && fallbackMixId) params.set("mix", fallbackMixId);
-    const songId = resolveSongContextId();
-    if (songId) params.set("song", songId);
-    else params.delete("song");
-    if (includeSatelliteFlag || isSatellitePath() || params.get("satellite") === "dreamweaver") params.set("satellite", "dreamweaver");
-    else params.delete("satellite");
-    return `/dreamweaver/?${params.toString()}`;
+    return buildDreamweaverStorefrontPath(songId, {
+      mixId: params.get("mix"),
+      includeSatelliteFlag: includeSatelliteFlag || isSatellitePath() || params.get("satellite") === "dreamweaver",
+      searchParams: params,
+    });
   }
 
   function rewardSearchQuery() {

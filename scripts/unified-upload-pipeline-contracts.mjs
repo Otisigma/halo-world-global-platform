@@ -52,7 +52,7 @@ const checks = [
   [unifiedUploadFn.includes("isExisting") && unifiedUploadFn.includes("Existing master project returned"), "unified-upload returns existing project instead of creating a duplicate"],
   // Song catalog serializer
   [songCatalogFn.includes("pipelineStatus") && songCatalogFn.includes("sourceUploadSurface") && songCatalogFn.includes("dreamweaverSatellite"), "song-catalog API serializes pipeline status, source surface, and Dreamweaver satellite metadata"],
-  [satelliteHelper.includes("resolveDreamweaverPageFlow") && satelliteHelper.includes('params.set("mix"') && satelliteHelper.includes("satelliteRoute") && dreamweaverManager.includes("dreamweaver-page-manager-") && dreamweaverManager.includes("/dreamweaver/?mix=") && dreamweaverManager.includes("pageAgent"), "shared Dreamweaver helper keeps deterministic storefront routing while preserving dedicated page-manager metadata"],
+  [satelliteHelper.includes("resolveDreamweaverPageFlow") && satelliteHelper.includes("buildDreamweaverStorefrontPath") && satelliteHelper.includes("satelliteRoute") && dreamweaverManager.includes("dreamweaver-page-manager-") && dreamweaverManager.includes("/dreamweaver/?mix=") && dreamweaverManager.includes("pageAgent"), "shared Dreamweaver helper keeps deterministic storefront routing while preserving dedicated page-manager metadata"],
   // Song catalog UI
   [songCatalogJs.includes("pipeline-badge") && songCatalogJs.includes("pipelineStatus"), "song-catalog client renders pipeline badge using pipelineStatus"],
   [songCatalogJs.includes("songPipelineStatus") && songCatalogJs.includes("dataset.stage"), "song-catalog client updates the pipeline stamp element in the workspace"],

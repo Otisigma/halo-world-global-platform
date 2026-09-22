@@ -165,15 +165,16 @@ function resolveReleaseDreamweaverFlow(songId, {
 
 async function ensureReleaseCampaign(db, song, versions) {
   const releaseId = await resolveReleaseId(db, song);
+  const releaseMixId = cleanText(song.source_release_id || releaseId, 120);
   const publicUrl = publicationPath(releaseId);
   const saleMaster = versions.find(version => version.version_type === "sale_master" && version.audio_url);
   const firstPlayableVersion = versions.find(version => version.audio_url);
   const streamUrl = cleanText(saleMaster?.audio_url || firstPlayableVersion?.audio_url, 1200);
-  const dreamweaver = resolveReleaseDreamweaverFlow(song.id, { releaseId, publicUrl, streamUrl });
-  const storefrontUrl = dreamweaverStorefrontPath(song.id, { mixId: releaseId }) || dreamweaver.page?.storefrontUrl || "";
+  const dreamweaver = resolveReleaseDreamweaverFlow(song.id, { releaseId: releaseMixId, publicUrl, streamUrl });
+  const storefrontUrl = dreamweaverStorefrontPath(song.id, { mixId: releaseMixId }) || dreamweaver.page?.storefrontUrl || "";
   const officialUrl = storefrontUrl && (isLegacySongCatalogAudioUrl(streamUrl) || isLegacyDreamweaverSatelliteUrl(streamUrl))
     ? storefrontUrl
-    : streamUrl || publicUrl;
+    : dreamweaver.destinationUrl || streamUrl || publicUrl;
   const artworkUrl = cleanText(
     saleMaster?.artwork_url
       || firstPlayableVersion?.artwork_url

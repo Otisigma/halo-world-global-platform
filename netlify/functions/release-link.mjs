@@ -76,7 +76,7 @@ async function remapLegacyAudioDestination(db, versionId, {
     `;
     const rows = Array.isArray(result) ? result : Array.isArray(result?.rows) ? result.rows : [];
     const songId = cleanId(rows[0]?.song_id);
-        const mixId = cleanSlug(releaseId || releaseSlug);
+        const mixId = String(releaseId || releaseSlug || "").trim();
     const flow = resolveDreamweaverPageFlow(songId, {
       audience,
       mixId,
@@ -156,7 +156,7 @@ export default async function releaseLinkHandler(request) {
     const remappedDestination = legacyAudioVersionId
       ? await remapLegacyAudioDestination(db, legacyAudioVersionId, {
           audience,
-          releaseId: cleanSlug(row.id || "") || releaseSlug,
+          releaseId: row.id || releaseSlug,
           releaseSlug,
           officialUrl: row.official_url || "",
           streamUrl: row.stream_url || "",

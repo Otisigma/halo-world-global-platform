@@ -1349,19 +1349,20 @@
     if (elements.sourceLink) {
       const doorway = preferredReleaseDoorway();
       elements.sourceLink.href = doorway.href || featuredTrack.url;
+      const title = cleanText(state.release?.title || state.mix?.title || featuredTrack.title);
+      const artist = cleanText(state.release?.artist || state.mix?.creator?.name || featuredTrack.artist);
+      const sourceLabel = `${title} by ${artist}`;
       if (doorway.mode === "hyperfollow") {
-        elements.sourceLink.setAttribute("aria-label", "Open this release on DistroKid HyperFollow");
+        elements.sourceLink.setAttribute("aria-label", `Open ${sourceLabel} on DistroKid HyperFollow`);
       } else if (doorway.mode === "dreamweaver_page") {
-        elements.sourceLink.setAttribute("aria-label", "Open this song's Dreamweaver page");
+        elements.sourceLink.setAttribute("aria-label", `Open ${sourceLabel} on its Dreamweaver page`);
       } else if (doorway.mode === "published_song") {
-        elements.sourceLink.setAttribute("aria-label", "Open this published HALO song");
+        elements.sourceLink.setAttribute("aria-label", `Open the published HALO song for ${sourceLabel}`);
       } else if (doorway.mode === "existing_destination") {
-        elements.sourceLink.setAttribute("aria-label", "Open this release source");
+        elements.sourceLink.setAttribute("aria-label", `Open the release source for ${sourceLabel}`);
       } else {
         elements.sourceLink.setAttribute("aria-label", `Open ${featuredTrack.title} by ${featuredTrack.artist} on DistroKid HyperFollow`);
       }
-      const title = cleanText(state.release?.title || state.mix?.title || featuredTrack.title);
-      const artist = cleanText(state.release?.artist || state.mix?.creator?.name || featuredTrack.artist);
       elements.sourceLink.textContent = `${title} — ${artist} ↗`;
       elements.sourceLink.dataset.haloPlayerTitle = cleanText(state.release?.title || state.mix?.title || featuredTrack.title);
       elements.sourceLink.dataset.haloPlayerArtist = cleanText(state.release?.artist || state.mix?.creator?.name || featuredTrack.artist);

@@ -12,6 +12,10 @@
   for = "/api/*"
   [headers.values]
     Cache-Control = "no-store"
+    Access-Control-Allow-Origin = "*"
+    Access-Control-Allow-Headers = "Content-Type, Range"
+    Access-Control-Allow-Methods = "GET, HEAD, OPTIONS"
+    Access-Control-Expose-Headers = "Content-Length, Content-Range"
     X-Robots-Tag = "noindex, nofollow"
 
 [[headers]]

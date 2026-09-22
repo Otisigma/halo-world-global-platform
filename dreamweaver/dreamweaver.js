@@ -1,64 +1,52 @@
 (() => {
   const chapters = [
     {
-      number: "01",
-      label: "Origin",
-      kicker: "An artist story in motion",
-      title: "The signal begins slowly.",
-      copy: "A patient opening for music that leaves room for atmosphere. Dreamweaver begins with distance, texture, and the feeling that something is approaching before the rhythm fully arrives.",
-      note: "Treat the first movement as an invitation rather than an announcement. Let the artwork breathe and allow the mix to establish its own scale.",
-      source: "The Cold Is Lasting Longer — Owen Anthony / HALO featured release artwork.",
+      number: "I",
+      label: "The Hook",
+      kicker: "Act I / Emotional origin",
+      title: "Before the chorus, there was a reason to stay.",
+      copy: "Dreamweaver opens with the feeling that started the song: quiet tension, held breath, and the sense that the artist is letting a private thought become public one frame at a time.",
+      note: "Keep the first act intimate. This is the emotional origin story, so the visuals should feel patient, human, and close enough for listeners to trust the room.",
+      source: "Dreamweaver Song Lobby / emotional origin artwork direction.",
       image: "/assets/releases/the-cold-is-lasting-longer.jpg",
       wash: "linear-gradient(125deg, rgba(26,45,49,.7), rgba(71,28,16,.42) 62%, rgba(6,8,8,.9))",
       start: 0
     },
     {
-      number: "02",
-      label: "Undertow",
-      kicker: "Pressure under the surface",
-      title: "Every still room has a current.",
-      copy: "The second movement pulls closer. Repetition becomes tension; small changes matter. The visual world narrows around the music until the listener can feel the floor moving underneath it.",
-      note: "Use tighter crops, darker movement, and more visible rhythm. This chapter is where a background experience starts becoming a journey.",
-      source: "Quicksand — Owen Anthony / artist-room artwork.",
+      number: "II",
+      label: "Lyric Break",
+      kicker: "Act II / Editorial typography",
+      title: "The lines hit harder when the room makes space for them.",
+      copy: "The lobby slows down long enough for lyric fragments to land like diary margins: not a wall of text, but a few precise phrases that let listeners feel the ache, the promise, and the afterglow.",
+      note: "Treat the type like a close-up. This act is about lyrical emphasis, Dreamweaver commentary, and keeping every word legible enough to feel intentional.",
+      source: "Dreamweaver Song Lobby / featured lyric break.",
       image: "/assets/artists/owen-anthony-quicksand.jpg",
       wash: "linear-gradient(120deg, rgba(53,25,13,.82), rgba(91,65,37,.35) 48%, rgba(13,12,10,.9))",
-      start: .18
+      start: .26
     },
     {
-      number: "03",
-      label: "Reflection",
-      kicker: "The room turns transparent",
-      title: "What looks fragile can carry weight.",
-      copy: "At the centre of the set, Dreamweaver changes the pace of looking. Reflections, negative space, and suspended detail create a visual pause without stopping the musical movement.",
-      note: "This is the emotional hinge. It should feel spacious enough for a personal story, an artist voice note, or an important lyric fragment once approved.",
-      source: "Glass House — Owen Anthony / artist-room artwork.",
+      number: "III",
+      label: "Sonic World",
+      kicker: "Act III / Mood and setting",
+      title: "Now the atmosphere tells listeners how to enter the song.",
+      copy: "Dreamweaver turns the production into a lived-in world: low-end pressure, suspended keys, midnight air, and the kind of environment that sounds best when the listener gives it a room of its own.",
+      note: "Describe mood, instrumentation, and listening environment in human language. This act should guide the ear without drifting into technical mix talk.",
+      source: "Dreamweaver Song Lobby / sonic world treatment.",
       image: "/assets/artists/owen-anthony-glass-house.webp",
       wash: "linear-gradient(118deg, rgba(9,21,28,.7), rgba(30,67,72,.3) 50%, rgba(7,8,9,.92))",
-      start: .39
+      start: .54
     },
     {
-      number: "04",
-      label: "Release",
-      kicker: "The body answers back",
-      title: "Then the colour breaks through.",
-      copy: "The fourth movement gives the experience its physical release. The pictures become bolder, the cuts can become quicker, and the show moves from private reflection into collective energy.",
-      note: "This chapter proves that the format can live at home, in a party, or on a large screen. Motion should answer the mix without becoming a generic visualizer.",
-      source: "Hit That Beat — Owen Anthony / release artwork.",
+      number: "IV",
+      label: "Open Door",
+      kicker: "Act IV / Unlock and action",
+      title: "The story opens outward without dropping the mood.",
+      copy: "By the end of the lobby, listeners know where to go next: start the full experience, move into streaming, or step quietly into the creator deck without crowding the fan-first presentation.",
+      note: "End with a clear doorway. The final act should unlock action while keeping the main room centered on general listeners instead of production controls.",
+      source: "Dreamweaver Song Lobby / unlock pathway direction.",
       image: "/assets/releases/hit-that-beat.webp",
       wash: "linear-gradient(130deg, rgba(103,20,42,.48), rgba(230,89,29,.34) 48%, rgba(18,10,10,.88))",
-      start: .61
-    },
-    {
-      number: "05",
-      label: "Open signal",
-      kicker: "The story continues outside the frame",
-      title: "A mix ends. A world stays open.",
-      copy: "The closing movement returns the listener to HALO with the artist, contributors, and wider catalog still visible. The experience becomes a doorway rather than a file that simply finishes.",
-      note: "End with accurate credits, acknowledgements, and a clear next path: replay, enter the artist room, hear the releases, or commission another Dreamweaver edition.",
-      source: "HALO artist world / first Dreamweaver edition.",
-      image: "/assets/halo-logo.webp",
-      wash: "radial-gradient(circle at 60% 42%, rgba(213,242,99,.2), transparent 22%), linear-gradient(120deg, rgba(8,11,9,.6), rgba(49,37,20,.42), rgba(7,8,7,.95))",
-      start: .82
+      start: .78
     }
   ];
 
@@ -73,6 +61,8 @@
   const RELEASE_CONTEXT_TIMEOUT_MS = 8000;
   const VIDEO_LIBRARY_TIMEOUT_MS = 8000;
   const AUDIO_BOOTSTRAP_TIMEOUT_MS = 7000;
+  const REMOTE_AUDIO_WATCHDOG_MS = 5000;
+  const HERO_REEL_LOAD_TIMEOUT_MS = 3500;
   const MAX_AUDIO_FEEDBACK_RECORDS = 24;
   const SATELLITE_AGENT_REFRESH_MS = 45_000;
   const DREAMWEAVER_RELEASE_FALLBACK_ARTWORK = window.HaloReleaseArtwork?.DEFAULT_RELEASE_ARTWORK || "/assets/releases/halo-premium-placeholder.svg";
@@ -90,6 +80,32 @@
     appleLink: document.getElementById("dreamweaverAppleLink"),
     youtubeLink: document.getElementById("dreamweaverYouTubeLink"),
     sourceLink: document.getElementById("dreamweaverSourceLink"),
+    songLobbyPlayerTitle: document.getElementById("songLobbyPlayerTitle"),
+    songLobbyPlayerArtist: document.getElementById("songLobbyPlayerArtist"),
+    songLobbyPlayerStatus: document.getElementById("songLobbyPlayerStatus"),
+    songLobbyPlayerStatePill: document.getElementById("songLobbyPlayerStatePill"),
+    songLobbyPlayerDuration: document.getElementById("songLobbyPlayerDuration"),
+    songLobbyPlayerSource: document.getElementById("songLobbyPlayerSource"),
+    songLobbyHeroPlayButton: document.getElementById("playBtn") || document.getElementById("songLobbyHeroPlayButton"),
+    songLobbyHeroPlayLabel: document.getElementById("songLobbyHeroPlayLabel"),
+    songLobbyHeroElapsed: document.getElementById("songLobbyHeroElapsed"),
+    songLobbyHeroChapter: document.getElementById("songLobbyHeroChapter"),
+    songLobbyHeroProgress: document.getElementById("songLobbyHeroProgress"),
+    songLobbyHeroDuration: document.getElementById("songLobbyHeroDuration"),
+    lobbyArtwork: document.getElementById("lobbyArtwork"),
+    lobbyArtworkCaption: document.getElementById("lobbyArtworkCaption"),
+    heroReelVideo: document.getElementById("heroReelVideo"),
+    heroReelPlayer: document.getElementById("heroReelPlayer"),
+    heroReelFallback: document.getElementById("heroReelFallback"),
+    heroReelStatus: document.getElementById("heroReelStatus"),
+    storyActI: document.getElementById("storyActI"),
+    storyActII: document.getElementById("storyActII"),
+    storyActIII: document.getElementById("storyActIII"),
+    storyActIV: document.getElementById("storyActIV"),
+    songLobbyMakeCampaign: document.getElementById("songLobbyMakeCampaign"),
+    creatorGatewayLink: document.getElementById("dreamweaverCreatorGateway"),
+    uploadLabel: document.querySelector(".upload-label"),
+    mixFileInput: document.getElementById("mixFileInput"),
     shell: document.getElementById("showShell"),
     loading: document.getElementById("loadingShow"),
     loadingPhase: document.getElementById("loadingPhase"),
@@ -201,6 +217,7 @@
   const state = {
     mix: null,
     release: null,
+    releaseCatalog: [],
     releasePlaybackState: "loading",
     publishedSongId: resolveSongContextId(),
     unlock: readStoredUnlock(),
@@ -221,9 +238,16 @@
     buildPreviewStartedAt: 0,
     trackedProgress: new Set(),
     startPlaybackAfterLoad: false,
+    audioSourceMode: "empty",
+    localAudioName: "",
+    localAudioUrl: "",
+    remoteAudioWatchdog: 0,
+    playerControlsBound: false,
     audioFeedbackQueue: [],
     audioFeedbackFingerprints: new Set(),
     audioFeedbackFlushPromise: null,
+    heroReelTimer: 0,
+    heroReelNonce: 0,
     satelliteAgentLoop: { timer: 0, loopId: "", updateIntervalMs: SATELLITE_AGENT_REFRESH_MS, lastUpdatedAt: "", lastError: "" },
     sessionToken: window.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`
   };
@@ -408,10 +432,22 @@
       const flushStartedAt = Date.now();
       try {
         while (true) {
-          const pending = state.audioFeedbackQueue.filter(entry => (
-            entry.deliveryStatus !== "sent"
-            && (!entry.lastAttemptAt || Number.isNaN(Date.parse(entry.lastAttemptAt)) || Date.parse(entry.lastAttemptAt) < flushStartedAt)
-          ));
+          const seenFingerprints = new Set();
+          const pending = state.audioFeedbackQueue.filter(entry => {
+            if (
+              entry.deliveryStatus === "sent"
+              || seenFingerprints.has(entry.fingerprint)
+              || (
+                entry.lastAttemptAt
+                && !Number.isNaN(Date.parse(entry.lastAttemptAt))
+                && Date.parse(entry.lastAttemptAt) >= flushStartedAt
+              )
+            ) {
+              return false;
+            }
+            seenFingerprints.add(entry.fingerprint);
+            return true;
+          });
           if (!pending.length) break;
           for (const incident of pending) await sendAudioFeedbackIncident(incident);
         }
@@ -427,9 +463,63 @@
     return cleanSongId(match?.[1] || "");
   }
 
-  function resolveSongContextId() {
+  function cleanKey(value, max = 160) {
+    return cleanText(value, max).toLowerCase();
+  }
+
+  function slugifyDreamweaverValue(value, max = 160) {
+    try {
+      return cleanText(decodeURIComponent(String(value || "")), max)
+        .toLowerCase()
+        .replace(/['’]/g, "")
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-+|-+$/g, "");
+    } catch {
+      return cleanText(String(value || ""), max)
+        .toLowerCase()
+        .replace(/['’]/g, "")
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-+|-+$/g, "");
+    }
+  }
+
+  function storySlugFromPath(pathname = location.pathname) {
+    const match = String(pathname || "").match(/^\/dreamweaver\/([^/]+)\/?$/i);
+    const slug = slugifyDreamweaverValue(match?.[1] || "", 160);
+    return slug === "satellite" || slug === "index-html" ? "" : slug;
+  }
+
+  function resolveRequestedMixId() {
     const params = new URLSearchParams(location.search);
-    return cleanSongId(params.get("song")) || songIdFromSatellitePath();
+    return cleanKey(params.get("mix"), 160);
+  }
+
+  function resolveRequestedMixToken() {
+    return resolveRequestedMixId() || storySlugFromPath();
+  }
+
+  function resolveDreamweaverRouteContext() {
+    const params = new URLSearchParams(location.search);
+    const requestedMixId = resolveRequestedMixId();
+    return {
+      requestedMixId,
+      requestedMixToken: resolveRequestedMixToken(),
+      requestedStorySlug: storySlugFromPath(),
+      requestedSongId: cleanSongId(params.get("song")) || songIdFromSatellitePath(),
+    };
+  }
+
+  function routeContextFingerprint(routeContext = resolveDreamweaverRouteContext()) {
+    return [
+      cleanKey(routeContext.requestedMixId, 160),
+      cleanKey(routeContext.requestedMixToken, 160),
+      cleanKey(routeContext.requestedStorySlug, 160),
+      cleanSongId(routeContext.requestedSongId)
+    ].join("|");
+  }
+
+  function resolveSongContextId() {
+    return resolveDreamweaverRouteContext().requestedSongId;
   }
 
   function isSatellitePath() {
@@ -457,6 +547,96 @@
     } catch {
       return "";
     }
+  }
+
+  function preferredHeroVideo() {
+    return state.videos.find(video => isMp4HeroSource(video?.sourceUrl))
+      || state.videos.find(video => safeMediaUrl(video?.embedUrl))
+      || state.videos.find(video => safeMediaUrl(video?.sourceUrl))
+      || null;
+  }
+
+  function isMp4HeroSource(value) {
+    const url = safeMediaUrl(value);
+    if (!url) return false;
+    try {
+      return /\.mp4$/i.test(new URL(url).pathname);
+    } catch {
+      return /\.mp4(?:$|[?#])/i.test(url);
+    }
+  }
+
+  function clearHeroReelTimer() {
+    window.clearTimeout(state.heroReelTimer);
+    state.heroReelTimer = 0;
+  }
+
+  function hideHeroReelVideo() {
+    if (!elements.heroReelVideo) return;
+    clearHeroReelTimer();
+    elements.heroReelVideo.onloadeddata = null;
+    elements.heroReelVideo.onerror = null;
+    elements.heroReelVideo.pause?.();
+    elements.heroReelVideo.hidden = true;
+    if (elements.heroReelVideo.getAttribute("src")) {
+      elements.heroReelVideo.removeAttribute("src");
+      elements.heroReelVideo.load?.();
+    }
+  }
+
+  function showHeroReelFallback(sourceUrl, reelLabel, statusCopy) {
+    hideHeroReelVideo();
+    if (elements.heroReelPlayer) {
+      elements.heroReelPlayer.onload = null;
+      elements.heroReelPlayer.onerror = null;
+      elements.heroReelPlayer.hidden = true;
+      if (elements.heroReelPlayer.getAttribute("src") !== "about:blank") elements.heroReelPlayer.src = "about:blank";
+    }
+    if (elements.heroReelFallback) {
+      elements.heroReelFallback.hidden = false;
+      elements.heroReelFallback.href = sourceUrl;
+      elements.heroReelFallback.textContent = reelLabel ? `Open ${reelLabel} ↗` : "Open the HALO reel signal ↗";
+    }
+    if (elements.heroReelStatus) elements.heroReelStatus.textContent = statusCopy;
+  }
+
+  function showMutedHeroReel(mp4Url, reelLabel, artworkSrc, sourceUrl) {
+    if (!elements.heroReelVideo) return false;
+    const requestNonce = ++state.heroReelNonce;
+    let ready = false;
+    clearHeroReelTimer();
+    if (elements.heroReelPlayer) {
+      elements.heroReelPlayer.onload = null;
+      elements.heroReelPlayer.onerror = null;
+      elements.heroReelPlayer.hidden = true;
+      if (elements.heroReelPlayer.getAttribute("src") !== "about:blank") elements.heroReelPlayer.src = "about:blank";
+    }
+    if (elements.heroReelFallback) elements.heroReelFallback.hidden = true;
+    elements.heroReelVideo.hidden = false;
+    if (artworkSrc) elements.heroReelVideo.poster = artworkSrc;
+    if (elements.heroReelVideo.getAttribute("src") !== mp4Url) {
+      elements.heroReelVideo.src = mp4Url;
+      elements.heroReelVideo.load?.();
+    }
+    if (elements.heroReelStatus) elements.heroReelStatus.textContent = `Dreamweaver is cueing ${reelLabel}.`;
+    const fallback = message => {
+      if (requestNonce !== state.heroReelNonce) return;
+      showHeroReelFallback(sourceUrl, reelLabel, message);
+    };
+    elements.heroReelVideo.onloadeddata = () => {
+      if (requestNonce !== state.heroReelNonce) return;
+      ready = true;
+      clearHeroReelTimer();
+      if (elements.heroReelStatus) elements.heroReelStatus.textContent = `${reelLabel} is setting the tone for the lobby.`;
+      elements.heroReelVideo.play?.().catch(() => {});
+    };
+    elements.heroReelVideo.onerror = () => fallback(`${reelLabel} is available as a direct reel link.`);
+    state.heroReelTimer = window.setTimeout(() => {
+      if (requestNonce !== state.heroReelNonce) return;
+      if (ready) return;
+      fallback("Dreamweaver kept the story open while the reel timed out. Use the direct link if you still want the short preview.");
+    }, HERO_REEL_LOAD_TIMEOUT_MS);
+    return true;
   }
 
   async function fetchJsonWithTimeout(url, { timeoutMs = 8000, timeoutMessage = "Request timed out.", ...options } = {}) {
@@ -610,6 +790,332 @@
     }
   }
 
+  function isPlayablePrimaryMix(mix) {
+    const source = cleanText(mix?.source, 60).toLowerCase();
+    return Boolean(cleanText(mix?.audioUrl, 1200)) && source !== "youtube";
+  }
+
+  function mixRouteTokens(mix = {}) {
+    const tokens = new Set();
+    const id = cleanKey(mix?.id, 160);
+    const titleSlug = slugifyDreamweaverValue(mix?.title, 160);
+    const creatorSlug = slugifyDreamweaverValue(mix?.creator?.name, 160);
+    const titleAndCreatorSlug = slugifyDreamweaverValue([mix?.creator?.name, mix?.title].filter(Boolean).join(" "), 160);
+    if (id) tokens.add(id);
+    if (titleSlug) tokens.add(titleSlug);
+    if (creatorSlug && titleSlug) tokens.add(`${creatorSlug}-${titleSlug}`.slice(0, 160));
+    if (titleAndCreatorSlug) tokens.add(titleAndCreatorSlug);
+    return tokens;
+  }
+
+  function routeMixTokenFromUrl(value) {
+    const url = safeMediaUrl(value);
+    if (!url) return "";
+    try {
+      return cleanKey(new URL(url).searchParams.get("mix"), 160);
+    } catch {
+      return "";
+    }
+  }
+
+  function releaseRouteTokens(release = {}) {
+    const tokens = new Set();
+    const artistSlug = slugifyDreamweaverValue(release?.artistSlug, 160);
+    const titleSlug = slugifyDreamweaverValue(release?.title, 160);
+    const artistTitleSlug = slugifyDreamweaverValue([release?.artistSlug || release?.artist, release?.title].filter(Boolean).join(" "), 160);
+    [
+      cleanSongId(release?.id),
+      cleanSongId(release?.catalog?.songId),
+      cleanKey(release?.dreamweaverPage?.mixId, 160),
+      cleanKey(release?.dreamweaverPage?.manager?.mixId, 160),
+      routeMixTokenFromUrl(release?.dreamweaverHubUrl),
+      routeMixTokenFromUrl(release?.dreamweaverPage?.hubUrl),
+      artistSlug,
+      titleSlug,
+      artistTitleSlug,
+    ].filter(Boolean).forEach(token => tokens.add(token));
+    return tokens;
+  }
+
+  function releaseMatchesRouteToken(release, routeContext = {}) {
+    const requestedSongId = cleanSongId(routeContext.requestedSongId);
+    if (requestedSongId) {
+      const releaseId = cleanSongId(release?.id);
+      const catalogSongId = cleanSongId(release?.catalog?.songId);
+      if (releaseId === requestedSongId || catalogSongId === requestedSongId) return true;
+    }
+    const requestedMixToken = cleanKey(routeContext.requestedMixToken, 160);
+    if (!requestedMixToken) return false;
+    return releaseRouteTokens(release).has(requestedMixToken);
+  }
+
+  function resolveReleaseFromCatalog(releases = [], routeContext = {}) {
+    const catalog = Array.isArray(releases) ? releases : [];
+    return catalog.find(release => releaseMatchesRouteToken(release, routeContext)) || null;
+  }
+
+  function resolvePrimaryPlaybackMix(mixes = [], requestedMixId = "", release = null, { allowFallback = true, strictRequestedId = "" } = {}) {
+    const requested = cleanKey(requestedMixId, 160);
+    const strictRequested = cleanKey(strictRequestedId, 160);
+    const requestedKey = strictRequested || requested;
+    const library = Array.isArray(mixes) ? mixes : [];
+    const requestedEntry = strictRequested
+      ? library.find(item => cleanKey(item?.id, 160) === strictRequested)
+      : requested
+        ? library.find(item => mixRouteTokens(item).has(requested))
+        : null;
+    if (isPlayablePrimaryMix(requestedEntry)) return requestedEntry;
+
+    if (requestedEntry && !cleanText(requestedEntry.audioUrl, 1200)) {
+      queueAudioFeedbackIncident("missing_audio", {
+        severity: "high",
+        title: "Dreamweaver primary mix is missing audio",
+        details: `The requested mix ${requestedEntry.id || requestedKey} does not have a playable audio source.`,
+        mix: requestedEntry,
+        metadata: { requestedMixId: requestedKey, failureState: "missing_audio" }
+      });
+    } else if (requestedEntry && !isPlayablePrimaryMix(requestedEntry)) {
+      queueAudioFeedbackIncident("non_playable_audio", {
+        severity: "medium",
+        title: "Dreamweaver requested mix is not directly playable",
+        details: `The requested mix ${requestedEntry.id || requestedKey} resolves to a non-audio source and cannot bootstrap the primary player.`,
+        mix: requestedEntry,
+        metadata: { requestedMixId: requestedKey, failureState: "non_playable_audio", source: requestedEntry.source }
+      });
+    }
+
+    if (release && !strictRequested) {
+      const releaseTitleSlug = slugifyDreamweaverValue(release?.title, 160);
+      const releaseArtistSlug = slugifyDreamweaverValue(release?.artistSlug || release?.artist, 160);
+      const releaseMatch = library.find((item) => {
+        if (!isPlayablePrimaryMix(item)) return false;
+        const mixTitleSlug = slugifyDreamweaverValue(item?.title, 160);
+        const mixArtistSlug = slugifyDreamweaverValue(item?.creator?.name, 160);
+        return Boolean(releaseTitleSlug)
+          && mixTitleSlug === releaseTitleSlug
+          && (!releaseArtistSlug || !mixArtistSlug || mixArtistSlug === releaseArtistSlug);
+      });
+      if (releaseMatch) return releaseMatch;
+    }
+
+    if (requested && (requestedEntry || !allowFallback)) return null;
+    if (strictRequested) return null;
+    return library.find(isPlayablePrimaryMix) || null;
+  }
+
+  function describeAudioElementFailure() {
+    const code = Number(elements.audio?.error?.code || 0);
+    if (code === 1) return "The audio bootstrap was interrupted before Dreamweaver could start playback.";
+    if (code === 2) return "The linked audio file could not be downloaded.";
+    if (code === 3) return "The linked audio file appears corrupted or could not be decoded.";
+    if (code === 4) return "The linked audio format is not supported for Dreamweaver playback.";
+    return "Dreamweaver could not prepare the linked audio for playback.";
+  }
+
+  function clearRemoteAudioWatchdog() {
+    window.clearTimeout(state.remoteAudioWatchdog);
+    state.remoteAudioWatchdog = 0;
+  }
+
+  function revokeLocalAudioUrl() {
+    if (!state.localAudioUrl) return;
+    try { URL.revokeObjectURL(state.localAudioUrl); } catch {}
+    state.localAudioUrl = "";
+  }
+
+  function publicReleaseStatus(release = state.release) {
+    const raw = cleanText(release?.storefront?.statusLabel || release?.publication?.dreamweaverStatus || release?.publication?.releaseStatus || release?.catalog?.saleStatus || "", 40).toUpperCase();
+    if (raw === "READY" || raw === "PENDING" || raw === "STANDBY") return raw;
+    if (raw === "PUBLISHED" || raw === "LIVE" || raw === "ACTIVE") return "READY";
+    if (raw === "COMING SOON" || raw === "COMING_SOON" || raw === "PROCESSING" || raw === "QUEUED") return "PENDING";
+    return "STANDBY";
+  }
+
+  function activePlayerStatusLabel(release = state.release) {
+    if (state.audioSourceMode === "local") return "LOCAL ACTIVE";
+    if (state.audioSourceMode === "error" || state.audioSourceMode === "empty") return "STANDBY";
+    return publicReleaseStatus(release);
+  }
+
+  function shouldPromptLocalUpload() {
+    return state.audioSourceMode === "error"
+      || state.audioSourceMode === "empty"
+      || (!state.mix && state.audioSourceMode !== "local")
+      || !elements.audio.currentSrc;
+  }
+
+  function openMixFilePicker() {
+    if (!elements.mixFileInput) return;
+    elements.mixFileInput.disabled = false;
+    elements.mixFileInput.click();
+  }
+
+  function isSupportedLocalAudioFile(file) {
+    if (!file) return false;
+    const type = cleanText(file.type || "", 80).toLowerCase();
+    if (type.startsWith("audio/")) return true;
+    return /\.(mp3|wav|m4a|aac|ogg|flac|webm)$/i.test(cleanText(file.name || "", 180));
+  }
+
+  function safeBlobMediaUrl(value) {
+    try {
+      const url = new URL(String(value || ""), location.href);
+      return url.protocol === "blob:" ? url.href : "";
+    } catch {
+      return "";
+    }
+  }
+
+  function handleRemoteAudioUnavailable(message = "Stream unavailable — click Upload Mix File or press play to choose a local mix.") {
+    clearRemoteAudioWatchdog();
+    if (state.audioSourceMode !== "local") state.audioSourceMode = "error";
+    setReleasePlaybackState("unavailable");
+    showToast(message);
+  }
+
+  function armRemoteAudioWatchdog() {
+    clearRemoteAudioWatchdog();
+    if (state.audioSourceMode !== "remote") return;
+    state.remoteAudioWatchdog = window.setTimeout(() => {
+      if (state.audioSourceMode !== "remote") return;
+      if (elements.audio.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
+        handleRemoteAudioUnavailable("Stream unavailable — click Upload Mix File or press play to choose a local mix.");
+      }
+    }, REMOTE_AUDIO_WATCHDOG_MS);
+  }
+
+  async function activateLocalMixFile(file) {
+    if (!file || !elements.audio) return;
+    if (!isSupportedLocalAudioFile(file)) {
+      showToast("Choose an audio file in MP3, WAV, M4A, AAC, OGG, FLAC, or WebM format.");
+      return;
+    }
+    clearRemoteAudioWatchdog();
+    revokeLocalAudioUrl();
+    const localAudioUrl = safeBlobMediaUrl(URL.createObjectURL(file));
+    if (!localAudioUrl) {
+      showToast("Dreamweaver could not prepare that local file. Try another audio export.");
+      return;
+    }
+    state.localAudioUrl = localAudioUrl;
+    state.localAudioName = cleanText(file.name || "Uploaded mix", 160) || "Uploaded mix";
+    state.audioSourceMode = "local";
+    elements.audio.pause();
+    elements.audio.currentTime = 0;
+    elements.audio.src = localAudioUrl;
+    elements.audio.load?.();
+    setReleasePlaybackState("ready");
+    try {
+      await elements.audio.play();
+      showToast(`Local mix active: ${state.localAudioName}.`);
+    } catch {
+      showToast("Local file loaded. Press play when your browser is ready.");
+    }
+  }
+
+  async function awaitPrimaryPlaybackReadiness() {
+    if (elements.audio.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) return { ok: true, state: "ready" };
+    return new Promise(resolve => {
+      let settled = false;
+      const cleanup = () => {
+        window.clearTimeout(timeoutId);
+        elements.audio.removeEventListener("loadeddata", handleReady);
+        elements.audio.removeEventListener("canplay", handleReady);
+        elements.audio.removeEventListener("canplaythrough", handleReady);
+        elements.audio.removeEventListener("error", handleError);
+      };
+      const settle = result => {
+        if (settled) return;
+        settled = true;
+        cleanup();
+        resolve(result);
+      };
+      const handleReady = () => settle({ ok: true, state: "ready" });
+      const handleError = () => settle({ ok: false, state: "error", detail: describeAudioElementFailure() });
+      const timeoutId = window.setTimeout(() => settle({
+        ok: false,
+        state: "timeout",
+        detail: "Stream unavailable — click Upload Mix File or press play to choose a local mix."
+      }), REMOTE_AUDIO_WATCHDOG_MS);
+      elements.audio.addEventListener("loadeddata", handleReady, { once: true });
+      elements.audio.addEventListener("canplay", handleReady, { once: true });
+      elements.audio.addEventListener("canplaythrough", handleReady, { once: true });
+      elements.audio.addEventListener("error", handleError, { once: true });
+    });
+  }
+
+  async function bootstrapPrimaryPlayback(mix) {
+    if (!mix?.audioUrl) {
+      queueAudioFeedbackIncident("missing_audio", {
+        severity: "high",
+        title: "Dreamweaver could not find primary audio",
+        details: "The selected Dreamweaver mix does not expose a primary audio URL for playback bootstrap.",
+        mix,
+        metadata: { failureState: "missing_audio" }
+      });
+      throw new Error("The selected Dreamweaver mix is missing its primary audio source.");
+    }
+
+    setLoadingProgress(58, "Bootstrapping primary playback", "Dreamweaver is loading the linked song first so sound can start before the wider loop hydrates.");
+    state.mix = mix;
+    state.duration = Number(mix.durationSeconds || 0);
+    revokeLocalAudioUrl();
+    state.localAudioName = "";
+    state.audioSourceMode = "remote";
+    elements.audio.pause();
+    elements.audio.currentTime = 0;
+    elements.audio.src = mix.audioUrl;
+    elements.audio.load?.();
+    armRemoteAudioWatchdog();
+
+    if (elements.audio.muted || Number(elements.audio.volume) === 0) {
+      queueAudioFeedbackIncident("muted_audio", {
+        severity: "medium",
+        title: "Dreamweaver primary audio initialized muted",
+        details: "The Dreamweaver player was muted while preparing the first linked song for playback.",
+        mix,
+        metadata: { failureState: "muted_audio" }
+      });
+    }
+
+    const readiness = await awaitPrimaryPlaybackReadiness();
+    if (!readiness.ok) {
+      queueAudioFeedbackIncident(readiness.state === "error" && Number(elements.audio?.error?.code || 0) === 3 ? "corrupted_audio" : "non_playable_audio", {
+        severity: "high",
+        title: "Dreamweaver primary audio could not be prepared",
+        details: readiness.detail || describeAudioElementFailure(),
+        mix,
+        metadata: { failureState: readiness.state === "error" && Number(elements.audio?.error?.code || 0) === 3 ? "corrupted_audio" : "non_playable_audio" }
+      });
+      handleRemoteAudioUnavailable(readiness.detail || "Stream unavailable — click Upload Mix File or press play to choose a local mix.");
+      return { started: false, fallback: true };
+    }
+
+    try {
+      await elements.audio.play();
+      return { started: true };
+    } catch (error) {
+      queueAudioFeedbackIncident("non_playable_audio", {
+        severity: "medium",
+        title: "Dreamweaver primary audio could not start",
+        details: cleanText(error instanceof Error ? error.message : "Playback was blocked before Dreamweaver could start the linked song.", 1200, "Playback was blocked before Dreamweaver could start the linked song."),
+        mix,
+        metadata: { failureState: "non_playable_audio", reason: "play-rejected" }
+      });
+      showToast("Press play again to start the audio experience.");
+      return { started: false };
+    }
+  }
+
+  async function hydrateDreamweaverLoopContent() {
+    setLoadingProgress(82, "Hydrating the Dreamweaver loop", "Stories, release context, and the wider loop are loading after the primary song bootstrap.");
+    await loadReleaseContext();
+    updatePlatformLinks();
+    void loadVideos().finally(() => {
+      renderSongLobbyHero();
+    });
+  }
+
   function releaseArtwork(release = {}) {
     const fallback = safeMediaUrl(DREAMWEAVER_RELEASE_FALLBACK_ARTWORK) || DREAMWEAVER_RELEASE_FALLBACK_ARTWORK;
     const resolved = window.HaloReleaseArtwork?.resolve(release, fallback);
@@ -623,20 +1129,180 @@
   }
 
   function releaseStateLabel(status) {
+    if (state.audioSourceMode === "local") return elements.audio.paused ? "Local ready" : "Local active";
+    if (state.audioSourceMode === "error") return "Upload mix";
+    if (state.audioSourceMode === "empty" && status !== "loading") return "Standby";
     if (status === "loading") return "Loading signal";
     if (status === "playing") return "Playing now";
     if (status === "ready") return "Ready";
-    if (status === "unavailable") return "Unavailable";
+    if (status === "unavailable") return "Stream unavailable";
     return "Paused";
   }
 
   function releaseStateDetail(status, title, artist) {
     const releaseLine = [title, artist].filter(Boolean).join(" — ");
+    if (state.audioSourceMode === "local") return state.localAudioName
+      ? `Playing local file: ${state.localAudioName}.`
+      : "A local mix file is active in Dreamweaver.";
+    if (state.audioSourceMode === "error" || status === "unavailable") return "Stream unavailable — click Upload Mix File or press play to choose a local mix.";
+    if (state.audioSourceMode === "empty" && status !== "loading") return "No active stream is loaded yet. Press play or upload a local mix to continue.";
     if (status === "loading") return "Dreamweaver is preparing the audio and release context.";
-    if (status === "playing") return releaseLine ? `${releaseLine} is live across the Dreamweaver stage.` : "Live playback is active across the Dreamweaver stage.";
-    if (status === "ready") return releaseLine ? `${releaseLine} is ready. Press play to move through the five movements.` : "Audio is ready. Press play to move through the five movements.";
-    if (status === "unavailable") return "Audio is currently unavailable, but release context is still on stage.";
+    if (status === "playing") return releaseLine ? `${releaseLine} is live across the Dreamweaver lobby.` : "Live playback is active across the Dreamweaver lobby.";
+    if (status === "ready") return releaseLine ? `${releaseLine} is ready. Press play to move through the four-act listening arc.` : "Audio is ready. Press play to move through the four-act listening arc.";
     return "Playback is paused. Resume when you are ready.";
+  }
+
+  function isMixStoryRoute() {
+    const params = new URLSearchParams(location.search);
+    return Boolean(resolveRequestedMixToken()) && !(params.get("campaign") || params.get("experience") === "studio");
+  }
+
+  function buildStoryContent() {
+    const release = state.release || {};
+    const catalog = release.catalog || {};
+    const mix = state.mix || {};
+    const title = cleanText(release.title || mix.title || featuredTrack.title, 120);
+    const artist = cleanText(release.artist || mix.creator?.name || featuredTrack.artist, 120);
+    const album = cleanText(release.albumTitle || release.collectionTitle || catalog.albumTitle || "", 120);
+    const genre = Array.isArray(release.genres) && release.genres.length
+      ? cleanText(release.genres[0] || "", 80)
+      : cleanText(String(catalog.genre || "").split(",")[0] || "", 80);
+    const duration = state.duration ? formatTime(state.duration) : cleanText(release.duration || "", 24);
+    const bpm = Number(release.bpm) > 0 ? `${Number(release.bpm)} BPM` : "";
+    const musicalKey = cleanText(release.musicalKey || "", 20);
+    const releaseStatus = activePlayerStatusLabel(release);
+    const storySeed = cleanText(release.pitch || mix.description || "", 320);
+    const titleArtistLine = [title, artist].filter(Boolean).join(" — ");
+    return {
+      act1Title: title ? `${title} starts in a feeling, not a feature list.` : "The origin starts in a feeling, not a feature list.",
+      act1Lead: storySeed || `Dreamweaver frames ${titleArtistLine || "the release"} like a late-night confession: the room quiets first, then the record steps forward carrying whatever had to be said before anyone asked for a chorus.`,
+      act1Support: artist
+        ? `${artist} stays at the center of the public view so the mix route opens on story, artwork, and listening intent before any slower platform or release links have to catch up.`
+        : "The public view stays close to the emotional reason the song exists, so first-time listeners meet the world of the record before any production mechanics or creator tooling enter the frame.",
+      act2Title: title ? `${title} leaves one phrase hanging in the room after the first play.` : "Featured lines land like marginal notes in the dark.",
+      act2Notes: [
+        artist
+          ? `Dreamweaver note: ${artist} stays in close focus while the published release context hydrates artwork, source links, and lobby details around the player.`
+          : "Dreamweaver note: the line plays like a promise made under pressure, so the typography stays spacious and deliberate.",
+        storySeed
+          ? `Dreamweaver note: ${storySeed}`
+          : "Dreamweaver note: this is the lyric break where the song stops performing and starts confiding.",
+        album || genre
+          ? `Dreamweaver note: ${album || genre} gives the lobby its editorial frame, so the text can feel specific without breaking the mood.`
+          : "Dreamweaver note: the lobby treats the phrase like a cue for breath, warmth, and a slower camera move."
+      ],
+      act3Title: title ? `${title} arrives with a listening environment, not just a file.` : "This is the listening environment before it becomes a playlist tab.",
+      act3Mood: genre ? `${genre.toLowerCase()} filtered through Dreamweaver's cinematic, intimate late-night frame.` : "cinematic, intimate, and slightly nocturnal.",
+      act3Instrumentation: [bpm, musicalKey].filter(Boolean).join(" / ") || "Patient low-end, suspended keys, vocal air, and a rhythm that arrives like weather.",
+      act3Setting: duration
+        ? `Give the ${duration} running time enough room to breathe — headphones after midnight, a quiet drive, or the first five minutes after everyone else leaves.`
+        : "Headphones after midnight, a quiet drive, or the first five minutes after everyone else leaves the room.",
+      act3Support: releaseStatus
+        ? `Dreamweaver keeps the sonic description human and story-led while the published release state stays ${releaseStatus.toLowerCase()} in the connected catalog.`
+        : "Dreamweaver keeps the sonic description editorial and human so general listeners know how to enter the song, not how the mix bus was wired.",
+      act4Title: title ? `Open ${title} fully when you're ready.` : "Leave your email and Dreamweaver opens the full streaming doorway.",
+      act4Lead: titleArtistLine
+        ? `The reward is the full guided listening room for ${titleArtistLine}, direct exits to Spotify, Apple Music, and YouTube, plus the quiet creator gateway in the footer for people building from the inside.`
+        : "The reward is the full guided listening room below, direct exits to Spotify, Apple Music, and YouTube, plus a quiet creator gateway in the footer for the people building from the inside."
+    };
+  }
+
+  function renderStoryActs() {
+    const story = buildStoryContent();
+    if (elements.storyActI) {
+      const paragraphs = elements.storyActI.querySelectorAll("p:not(.story-act__eyebrow)");
+      const title = elements.storyActI.querySelector("h2");
+      if (title) title.textContent = story.act1Title;
+      if (paragraphs[0]) paragraphs[0].textContent = story.act1Lead;
+      if (paragraphs[1]) paragraphs[1].textContent = story.act1Support;
+    }
+    if (elements.storyActII) {
+      const title = elements.storyActII.querySelector("h2");
+      if (title) title.textContent = story.act2Title;
+      elements.storyActII.querySelectorAll("blockquote cite").forEach((cite, index) => {
+        if (story.act2Notes[index]) cite.textContent = story.act2Notes[index];
+      });
+    }
+    if (elements.storyActIII) {
+      const title = elements.storyActIII.querySelector("h2");
+      const bullets = elements.storyActIII.querySelectorAll("li");
+      const paragraphs = elements.storyActIII.querySelectorAll("p");
+      if (title) title.textContent = story.act3Title;
+      if (bullets[0]) bullets[0].innerHTML = `<strong>Mood:</strong> ${escapeHtml(story.act3Mood)}`;
+      if (bullets[1]) bullets[1].innerHTML = `<strong>Instrumentation:</strong> ${escapeHtml(story.act3Instrumentation)}`;
+      if (bullets[2]) bullets[2].innerHTML = `<strong>Best setting:</strong> ${escapeHtml(story.act3Setting)}`;
+      if (paragraphs[0]) paragraphs[0].textContent = story.act3Support;
+    }
+    if (elements.storyActIV) {
+      const title = elements.storyActIV.querySelector("h2");
+      const lead = elements.storyActIV.querySelector("p:not(.satellite-form-kicker)");
+      if (title) title.textContent = story.act4Title;
+      if (lead) lead.textContent = story.act4Lead;
+    }
+  }
+
+  function renderSongLobbyHero() {
+    const title = cleanText(state.release?.title || state.mix?.title || featuredTrack.title);
+    const artist = cleanText(state.release?.artist || state.mix?.creator?.name || featuredTrack.artist);
+    const artwork = releaseArtwork(state.release || {});
+    if (elements.songLobbyPlayerTitle) elements.songLobbyPlayerTitle.textContent = title || "Preparing release context…";
+    if (elements.songLobbyPlayerArtist) elements.songLobbyPlayerArtist.textContent = artist || "HALO / Dreamweaver";
+    if (elements.songLobbyPlayerStatus) elements.songLobbyPlayerStatus.textContent = releaseStateDetail(state.releasePlaybackState, title, artist);
+    if (elements.songLobbyPlayerStatePill) elements.songLobbyPlayerStatePill.textContent = releaseStateLabel(state.releasePlaybackState);
+    if (elements.songLobbyPlayerDuration) {
+      elements.songLobbyPlayerDuration.textContent = state.duration
+        ? formatTime(state.duration)
+        : cleanText(state.release?.duration || "", 24) || "00:00";
+    }
+    if (elements.lobbyArtwork) {
+      elements.lobbyArtwork.src = artwork.src || chapters[0].image;
+      elements.lobbyArtwork.dataset.artworkFallback = artwork.fallback;
+      elements.lobbyArtwork.dataset.artworkSource = artwork.source || "";
+      elements.lobbyArtwork.alt = `${title || "Dreamweaver"} artwork${artist ? ` by ${artist}` : ""}`;
+      const lobbyFrame = elements.lobbyArtwork.closest("[data-artwork-frame]");
+      if (lobbyFrame) window.HaloReleaseArtwork?.wire(lobbyFrame, DREAMWEAVER_RELEASE_FALLBACK_ARTWORK);
+    }
+    if (elements.lobbyArtworkCaption) elements.lobbyArtworkCaption.textContent = artist ? `${title} — ${artist}` : title || "Dreamweaver lobby artwork";
+
+    const heroVideo = preferredHeroVideo();
+    const embedUrl = safeMediaUrl(heroVideo?.embedUrl);
+    const sourceUrl = safeMediaUrl(heroVideo?.sourceUrl) || "/radio/";
+    const reelLabel = cleanText(heroVideo?.title || `${title} short reel preview`, 120);
+    const localAutoplayReel = isMp4HeroSource(sourceUrl) ? sourceUrl : "";
+    if (localAutoplayReel && showMutedHeroReel(localAutoplayReel, reelLabel, artwork.src || chapters[0].image, sourceUrl)) return;
+    hideHeroReelVideo();
+    if (embedUrl && elements.heroReelPlayer) {
+      const requestNonce = ++state.heroReelNonce;
+      clearHeroReelTimer();
+      const connector = embedUrl.includes("?") ? "&" : "?";
+      const nextSrc = `${embedUrl}${connector}rel=0&modestbranding=1`;
+      if (elements.heroReelPlayer.src !== nextSrc) elements.heroReelPlayer.src = nextSrc;
+      elements.heroReelPlayer.hidden = false;
+      if (elements.heroReelFallback) elements.heroReelFallback.hidden = true;
+      if (elements.heroReelStatus) elements.heroReelStatus.textContent = `Dreamweaver is cueing ${reelLabel}.`;
+      elements.heroReelPlayer.onload = () => {
+        if (requestNonce !== state.heroReelNonce) return;
+        clearHeroReelTimer();
+        if (elements.heroReelStatus) elements.heroReelStatus.textContent = `${reelLabel} is setting the tone for the lobby.`;
+      };
+      elements.heroReelPlayer.onerror = () => {
+        if (requestNonce !== state.heroReelNonce) return;
+        clearHeroReelTimer();
+        elements.heroReelPlayer.onload = null;
+        elements.heroReelPlayer.onerror = null;
+        showHeroReelFallback(sourceUrl, reelLabel, `${reelLabel} is available as a direct reel link.`);
+      };
+      state.heroReelTimer = window.setTimeout(() => {
+        if (requestNonce !== state.heroReelNonce) return;
+        elements.heroReelPlayer.onload = null;
+        elements.heroReelPlayer.onerror = null;
+        showHeroReelFallback(sourceUrl, reelLabel, `${reelLabel} is available as a direct reel link.`);
+      }, HERO_REEL_LOAD_TIMEOUT_MS);
+      return;
+    }
+    showHeroReelFallback(sourceUrl, heroVideo ? reelLabel : "", heroVideo
+      ? `${reelLabel} is available as a direct reel link.`
+      : "Dreamweaver is holding the artwork in focus until a connected short reel is available.");
   }
 
   function renderReleasePanel() {
@@ -657,7 +1323,7 @@
     const duration = state.duration ? formatTime(state.duration) : cleanText(release.duration, 24);
     const releaseInfo = cleanText(release.releaseDate || releaseDateLabel(release.publication?.lastReconciledAt) || state.publishedSongId, 40);
     const publication = release.publication || {};
-    const status = cleanText(publication.dreamweaverStatus || publication.releaseStatus || catalog.saleStatus, 40);
+    const status = activePlayerStatusLabel(release);
     const album = cleanText(release.albumTitle || release.collectionTitle || catalog.albumTitle || "", 120);
     const artwork = releaseArtwork(release);
     const rows = [
@@ -682,6 +1348,8 @@
     elements.releaseArtwork.dataset.artworkSource = artwork.source || "";
     elements.releaseArtwork.alt = `${title || "Dreamweaver show"} cover artwork`;
     window.HaloReleaseArtwork?.wire(elements.releasePanel, DREAMWEAVER_RELEASE_FALLBACK_ARTWORK);
+    renderSongLobbyHero();
+    renderStoryActs();
   }
 
   function setReleasePlaybackState(nextState) {
@@ -700,29 +1368,43 @@
     if (elements.loadingSubtitle && subtitle) elements.loadingSubtitle.textContent = subtitle;
   }
 
+  async function fetchReleaseCatalog() {
+    const { response, payload } = await fetchJsonWithTimeout("/api/release-catalog", {
+      timeoutMs: RELEASE_CONTEXT_TIMEOUT_MS,
+      timeoutMessage: "Dreamweaver timed out while loading release context.",
+      headers: { Accept: "application/json" },
+      credentials: "same-origin"
+    });
+    if (!response.ok) throw new Error(payload.message || "Release catalog unavailable");
+    return Array.isArray(payload.releases) ? payload.releases : [];
+  }
+
+  async function fetchExactMixById(mixId = "") {
+    const requested = cleanKey(mixId, 160);
+    if (!requested) return null;
+    const { response, payload } = await fetchJsonWithTimeout(`/api/mixes?id=${encodeURIComponent(requested)}`, {
+      timeoutMs: MIX_LIBRARY_TIMEOUT_MS,
+      timeoutMessage: "Dreamweaver timed out while loading the requested mix.",
+      headers: { Accept: "application/json" },
+      credentials: "same-origin"
+    });
+    if (!response.ok) throw new Error(payload.message || "Dreamweaver could not resolve the requested mix.");
+    const mixes = Array.isArray(payload.mixes) ? payload.mixes : [];
+    return mixes.find(item => cleanKey(item?.id, 160) === requested) || null;
+  }
+
   async function loadReleaseContext({ keepCurrentOnFailure = false } = {}) {
-    const songContextId = resolveSongContextId();
-    if (songContextId) state.publishedSongId = songContextId;
-    if (!state.publishedSongId) {
+    const routeContext = resolveDreamweaverRouteContext();
+    if (routeContext.requestedSongId) state.publishedSongId = routeContext.requestedSongId;
+    if (!state.publishedSongId && !routeContext.requestedMixToken) {
       state.release = null;
       renderReleasePanel();
       return;
     }
     try {
-      const { response, payload } = await fetchJsonWithTimeout("/api/release-catalog", {
-        timeoutMs: RELEASE_CONTEXT_TIMEOUT_MS,
-        timeoutMessage: "Dreamweaver timed out while loading release context.",
-        headers: { Accept: "application/json" },
-        credentials: "same-origin"
-      });
-      if (!response.ok) throw new Error(payload.message || "Release catalog unavailable");
-      const releases = Array.isArray(payload.releases) ? payload.releases : [];
-      const normalizedSongId = String(state.publishedSongId || "").toLowerCase();
-      const release = releases.find((item) => {
-        const releaseId = String(item.id || "").toLowerCase();
-        const catalogSongId = String(item.catalog?.songId || "").toLowerCase();
-        return releaseId === normalizedSongId || catalogSongId === normalizedSongId;
-      }) || null;
+      const releases = state.releaseCatalog.length ? state.releaseCatalog : await fetchReleaseCatalog();
+      state.releaseCatalog = releases;
+      const release = resolveReleaseFromCatalog(releases, routeContext);
       if (release) {
         state.release = release;
         state.publishedSongId = cleanSongId(release.id) || state.publishedSongId;
@@ -745,7 +1427,7 @@
   }
 
   function rewardSearchQuery() {
-    return `${state.mix?.title || featuredTrack.title} ${state.mix?.creator?.name || featuredTrack.artist}`.trim();
+    return `${state.release?.title || state.mix?.title || featuredTrack.title} ${state.release?.artist || state.mix?.creator?.name || featuredTrack.artist}`.trim();
   }
 
   function publishedSongShareUrl() {
@@ -771,15 +1453,19 @@
     if (elements.sourceLink) {
       const publishedSongUrl = publishedSongShareUrl();
       if (publishedSongUrl) {
-        elements.sourceLink.href = publishedSongUrl;
-        elements.sourceLink.setAttribute("aria-label", "Open this published HALO song");
         const title = cleanText(state.release?.title || state.mix?.title || featuredTrack.title);
         const artist = cleanText(state.release?.artist || state.mix?.creator?.name || featuredTrack.artist);
-        elements.sourceLink.textContent = `${title} — ${artist} ↗`;
+        const sourceLabel = `${title} — ${artist}`;
+        const sourceText = `${sourceLabel} ↗`;
+        elements.sourceLink.href = publishedSongUrl;
+        elements.sourceLink.setAttribute("aria-label", sourceText);
+        elements.sourceLink.textContent = sourceText;
       } else {
+        const sourceLabel = `${featuredTrack.title} — ${featuredTrack.artist}`;
+        const sourceText = `${sourceLabel} ↗`;
         elements.sourceLink.href = featuredTrack.url;
-        elements.sourceLink.setAttribute("aria-label", `Open ${featuredTrack.title} by ${featuredTrack.artist} on DistroKid HyperFollow`);
-        elements.sourceLink.textContent = `${featuredTrack.title} — ${featuredTrack.artist} ↗`;
+        elements.sourceLink.setAttribute("aria-label", sourceText);
+        elements.sourceLink.textContent = sourceText;
       }
       elements.sourceLink.dataset.haloPlayerTitle = cleanText(state.release?.title || state.mix?.title || featuredTrack.title);
       elements.sourceLink.dataset.haloPlayerArtist = cleanText(state.release?.artist || state.mix?.creator?.name || featuredTrack.artist);
@@ -791,9 +1477,25 @@
       elements.sourceLink.dataset.haloPlayerKey = cleanText(state.release?.musicalKey || "", 20);
       elements.sourceLink.dataset.haloPlayerDuration = state.duration ? formatTime(state.duration) : cleanText(state.release?.duration || "", 24);
       elements.sourceLink.dataset.haloPlayerRelease = cleanText(state.release?.releaseDate || releaseDateLabel(state.release?.publication?.lastReconciledAt) || state.publishedSongId, 40);
-      elements.sourceLink.dataset.haloPlayerStatus = cleanText(state.release?.publication?.dreamweaverStatus || state.release?.publication?.releaseStatus || state.release?.catalog?.saleStatus || "", 40);
+      elements.sourceLink.dataset.haloPlayerStatus = activePlayerStatusLabel(state.release);
       elements.sourceLink.dataset.haloPlayerArtwork = safeMediaUrl(state.release?.artwork || state.release?.artworkOverride || state.release?.importedArtwork || state.release?.catalog?.artworkUrl);
       delete elements.sourceLink.dataset.haloPlayer;
+    }
+    if (elements.songLobbyPlayerSource && elements.sourceLink) {
+      elements.songLobbyPlayerSource.href = elements.sourceLink.href;
+      elements.songLobbyPlayerSource.setAttribute("aria-label", elements.sourceLink.getAttribute("aria-label") || "Open the Dreamweaver source signal");
+      elements.songLobbyPlayerSource.target = elements.sourceLink.target;
+      if (elements.sourceLink.hasAttribute("rel")) elements.songLobbyPlayerSource.setAttribute("rel", elements.sourceLink.getAttribute("rel") || "");
+      else elements.songLobbyPlayerSource.removeAttribute("rel");
+      elements.songLobbyPlayerSource.textContent = elements.sourceLink.textContent || "Open the source signal ↗";
+      Object.keys(elements.songLobbyPlayerSource.dataset).forEach((key) => {
+        delete elements.songLobbyPlayerSource.dataset[key];
+      });
+      Object.entries(elements.sourceLink.dataset).forEach(([key, value]) => {
+        if (value === undefined) delete elements.songLobbyPlayerSource.dataset[key];
+        else elements.songLobbyPlayerSource.dataset[key] = value;
+      });
+      delete elements.songLobbyPlayerSource.dataset.haloPlayer;
     }
   }
 
@@ -801,20 +1503,36 @@
     if (!elements.rewardCopy) return;
     const firstName = state.unlock?.firstName || "You";
     const platform = unlockPlatforms[state.unlock?.favoritePlatform || "spotify"]?.label || "your streaming app";
-    elements.rewardCopy.textContent = `${firstName}, your concierge doorway is open. Start the full Dreamweaver experience below, then continue on ${platform}, Spotify, Apple Music, or YouTube when you are ready.`;
+    elements.rewardCopy.textContent = `${firstName}, your song lobby is open. Start the full Dreamweaver experience below, then continue on ${platform}, Spotify, Apple Music, or YouTube when you are ready.`;
     updatePlatformLinks();
   }
 
   function renderSatelliteState() {
     const satelliteFlow = isSatelliteFlow();
+    const mixStoryRoute = isMixStoryRoute();
     if (!satelliteFlow) {
-      if (elements.satellite) elements.satellite.hidden = true;
-      if (elements.reward) elements.reward.hidden = true;
+      if (elements.satellite) {
+        elements.satellite.hidden = !mixStoryRoute;
+        if (mixStoryRoute) elements.satellite.removeAttribute("aria-hidden");
+        else elements.satellite.setAttribute("aria-hidden", "true");
+      }
+      if (elements.reward) {
+        elements.reward.hidden = true;
+        elements.reward.setAttribute("aria-hidden", "true");
+      }
       elements.shell.hidden = false;
       return;
     }
-    if (elements.satellite) elements.satellite.hidden = Boolean(state.unlock);
-    if (elements.reward) elements.reward.hidden = !state.unlock;
+    if (elements.satellite) {
+      elements.satellite.hidden = Boolean(state.unlock);
+      if (state.unlock) elements.satellite.setAttribute("aria-hidden", "true");
+      else elements.satellite.removeAttribute("aria-hidden");
+    }
+    if (elements.reward) {
+      elements.reward.hidden = !state.unlock;
+      if (state.unlock) elements.reward.removeAttribute("aria-hidden");
+      else elements.reward.setAttribute("aria-hidden", "true");
+    }
     elements.shell.hidden = !state.unlock;
     if (state.unlock) renderRewardState();
   }
@@ -867,7 +1585,7 @@
       consent: data.get("consent") === "on"
     };
     submitButton.disabled = true;
-    submitButton.querySelector("span").textContent = "Unlocking Dreamweaver…";
+    submitButton.querySelector("span").textContent = "Unlocking the lobby…";
     setUnlockStatus("Saving your unlock and preparing the listening room.");
     try {
       const response = await fetch("/api/dreamweaver-fan-signups", {
@@ -892,7 +1610,7 @@
       setUnlockStatus(error instanceof Error ? error.message : "Dreamweaver could not unlock the experience right now.", "error");
     } finally {
       submitButton.disabled = false;
-      submitButton.querySelector("span").textContent = "Unlock the full Dreamweaver doorway";
+      submitButton.querySelector("span").textContent = "Unlock full streaming access";
     }
   }
 
@@ -979,7 +1697,7 @@
 
   function buildExperience() {
     elements.visualStack.innerHTML = chapters.map((chapter, index) => `<div class="visual-layer ${index === 0 ? "active" : ""}" data-visual="${index}" style="--visual-image:url('${chapter.image}');--visual-wash:${chapter.wash}"></div>`).join("");
-    elements.chapterList.innerHTML = chapters.map((chapter, index) => `<button class="chapter-button ${index === 0 ? "active" : ""}" type="button" data-chapter="${index}" aria-label="Open movement ${chapter.number}: ${escapeHtml(chapter.label)}"><span>${chapter.number}</span><strong>${escapeHtml(chapter.label)}</strong></button>`).join("");
+    elements.chapterList.innerHTML = chapters.map((chapter, index) => `<button class="chapter-button ${index === 0 ? "active" : ""}" type="button" data-chapter="${index}" aria-label="Open act ${chapter.number}: ${escapeHtml(chapter.label)}"><span>${chapter.number}</span><strong>${escapeHtml(chapter.label)}</strong></button>`).join("");
     elements.progressMarkers.innerHTML = chapters.slice(1).map(chapter => `<i style="left:${chapter.start * 100}%"></i>`).join("");
     elements.chapterList.querySelectorAll("[data-chapter]").forEach(button => button.addEventListener("click", () => activateChapter(Number(button.dataset.chapter), true)));
     activateChapter(0, false);
@@ -995,8 +1713,9 @@
     elements.storyKicker.textContent = chapter.kicker;
     elements.storyTitle.textContent = chapter.title;
     elements.storyCopy.textContent = chapter.copy;
-    elements.chapterTime.textContent = `Movement ${chapter.number} / ${chapter.label}`;
-    elements.drawerKicker.textContent = `Movement ${chapter.number} / ${chapter.label}`;
+    elements.chapterTime.textContent = `Act ${chapter.number} / ${chapter.label}`;
+    if (elements.songLobbyHeroChapter) elements.songLobbyHeroChapter.textContent = `Act ${chapter.number} / ${chapter.label}`;
+    elements.drawerKicker.textContent = `Act ${chapter.number} / ${chapter.label}`;
     elements.drawerTitle.textContent = chapter.title;
     elements.drawerLead.textContent = chapter.copy;
     elements.drawerNote.textContent = chapter.note;
@@ -1021,8 +1740,12 @@
     const ratio = duration ? current / duration : 0;
     elements.progress.value = String(Math.round(ratio * 1000));
     elements.progress.style.setProperty("--progress", `${ratio * 100}%`);
+    if (elements.songLobbyHeroProgress) elements.songLobbyHeroProgress.value = String(Math.round(ratio * 1000));
+    if (elements.songLobbyHeroProgress) elements.songLobbyHeroProgress.style.setProperty("--progress", `${ratio * 100}%`);
     elements.elapsed.textContent = formatTime(current);
     elements.duration.textContent = formatTime(duration);
+    if (elements.songLobbyHeroElapsed) elements.songLobbyHeroElapsed.textContent = formatTime(current);
+    if (elements.songLobbyHeroDuration) elements.songLobbyHeroDuration.textContent = formatTime(duration);
     const chapterIndex = currentChapterIndex();
     if (chapterIndex !== state.activeChapter) activateChapter(chapterIndex, false);
     if (campaignIdFromUrl() && duration) {
@@ -1036,14 +1759,48 @@
   }
 
   async function togglePlayback() {
-    if (!state.mix) return;
+    if (shouldPromptLocalUpload()) {
+      setReleasePlaybackState("unavailable");
+      showToast("Stream unavailable — opening the local upload picker.");
+      window.setTimeout(() => openMixFilePicker(), 120);
+      return;
+    }
     if (elements.audio.paused) {
       try {
+        if (state.audioSourceMode === "remote") armRemoteAudioWatchdog();
         await elements.audio.play();
       } catch {
-        showToast("Press play again to start the audio experience.");
+        if (state.audioSourceMode === "remote") {
+          handleRemoteAudioUnavailable();
+          window.setTimeout(() => openMixFilePicker(), 120);
+          return;
+        }
+        showToast("Local file loaded. Press play when your browser is ready.");
       }
     } else elements.audio.pause();
+  }
+
+  function bindPlayerControls() {
+    if (state.playerControlsBound) return;
+    state.playerControlsBound = true;
+    elements.playButton.addEventListener("click", togglePlayback);
+    elements.songLobbyHeroPlayButton?.addEventListener("click", togglePlayback);
+    elements.mixFileInput?.addEventListener("change", async event => {
+      const file = event.target?.files?.[0];
+      event.target.value = "";
+      if (file) await activateLocalMixFile(file);
+    });
+    if (elements.playButton) elements.playButton.disabled = false;
+    if (elements.songLobbyHeroPlayButton) elements.songLobbyHeroPlayButton.disabled = false;
+    if (elements.mixFileInput) elements.mixFileInput.disabled = false;
+  }
+
+  function updateHeroPlayButton(isPlaying) {
+    if (!elements.songLobbyHeroPlayButton) return;
+    elements.songLobbyHeroPlayButton.setAttribute("aria-label", isPlaying ? "Pause mix" : "Play mix");
+    if (elements.songLobbyHeroPlayLabel) elements.songLobbyHeroPlayLabel.textContent = isPlaying ? "Pause mix" : "Play mix";
+    const icon = elements.songLobbyHeroPlayButton.querySelector("span[aria-hidden='true']");
+    if (icon) icon.textContent = isPlaying ? "❚❚" : "▶";
   }
 
   function setMode(mode) {
@@ -1490,7 +2247,20 @@
   }
 
   async function openCampaignStudio() {
-    if (!state.mix) return showToast("Open a playable mix before creating a campaign.");
+    if (!state.mix) {
+      if (isSatelliteFlow()) {
+        if (!state.unlock) {
+          document.getElementById("storyActIV")?.scrollIntoView({ behavior: "smooth", block: "start" });
+          setUnlockStatus("Unlock the song lobby first, then Dreamweaver can open the reel generator.");
+          return;
+        }
+        elements.creatorGatewayLink?.scrollIntoView({ behavior: "smooth", block: "center" });
+        elements.creatorGatewayLink?.focus({ preventScroll: true });
+        showToast("Creator tools live behind the DJ Deck gateway while this public lobby stays listener-first.");
+        return;
+      }
+      return showToast("Open a playable mix before creating a campaign.");
+    }
     elements.audio.pause();
     elements.campaignStudio.classList.add("open");
     elements.campaignStudio.setAttribute("aria-hidden", "false");
@@ -1715,8 +2485,10 @@
   }
 
   async function loadVideos() {
+    const releaseArtistSlug = slugifyDreamweaverValue(state.release?.artistSlug, 120);
+    const artistSlug = releaseArtistSlug || "owen-anthony";
     try {
-      const { response, payload } = await fetchJsonWithTimeout("/api/videos?artistSlug=owen-anthony", {
+      const { response, payload } = await fetchJsonWithTimeout(`/api/videos?artistSlug=${encodeURIComponent(artistSlug)}`, {
         timeoutMs: VIDEO_LIBRARY_TIMEOUT_MS,
         timeoutMessage: "Dreamweaver timed out while loading connected videos.",
         headers: { Accept: "application/json" },
@@ -1726,6 +2498,7 @@
       state.videos = Array.isArray(payload.videos) ? payload.videos.slice(0, 8) : [];
       renderFootageSelector();
       renderArchive();
+      renderSongLobbyHero();
     } catch {}
   }
 
@@ -1737,17 +2510,19 @@
     elements.footageSelector.innerHTML = state.videos.map((video, index) => `
       <label class="footage-card">
         <input type="checkbox" name="sourceVideo" value="${escapeHtml(video.id)}" ${index < 4 ? "checked" : ""}>
-        <img src="${escapeHtml(video.thumbnailUrl || "/assets/halo-logo-mark.webp")}" alt="">
+        <img src="${escapeHtml(video.thumbnailUrl || "/assets/halo-logo-mark.webp")}" alt="${escapeHtml(video.title || "Dreamweaver source video")} thumbnail">
         <span>${escapeHtml(video.title)}<small>${video.sourceType === "upload" ? "Film source" : "Reference only"}</small></span>
       </label>`).join("");
   }
 
   function renderArchive() {
     if (!state.videos.length) {
-      elements.archiveReel.innerHTML = `<a class="archive-card" href="/artists/"><img src="/assets/releases/the-cold-is-lasting-longer.jpg" alt=""><span>Enter Owen Anthony's connected artist room</span></a><a class="archive-card" href="/radio/"><img src="/assets/artists/owen-anthony-glass-house.webp" alt=""><span>Continue into the HALO radio signal</span></a>`;
+      elements.archiveReel.innerHTML = `<a class="archive-card" href="/artists/"><img src="/assets/releases/the-cold-is-lasting-longer.jpg" alt="Enter Owen Anthony's connected artist room"><span>Enter Owen Anthony's connected artist room</span></a><a class="archive-card" href="/radio/"><img src="/assets/artists/owen-anthony-glass-house.webp" alt="Continue into the HALO radio signal"><span>Continue into the HALO radio signal</span></a>`;
+      renderSongLobbyHero();
       return;
     }
-    elements.archiveReel.innerHTML = state.videos.map(video => `<a class="archive-card" href="${escapeHtml(video.sourceUrl || video.embedUrl || "/artists/")}" ${video.sourceType === "youtube" ? 'target="_blank" rel="noopener noreferrer"' : ""}><img src="${escapeHtml(video.thumbnailUrl || "/assets/halo-logo-mark.webp")}" alt=""><span>${escapeHtml(video.title)}</span></a>`).join("");
+    elements.archiveReel.innerHTML = state.videos.map(video => `<a class="archive-card" href="${escapeHtml(video.sourceUrl || video.embedUrl || "/artists/")}" ${video.sourceType === "youtube" ? 'target="_blank" rel="noopener noreferrer"' : ""}><img src="${escapeHtml(video.thumbnailUrl || "/assets/halo-logo-mark.webp")}" alt="${escapeHtml(video.title || "Dreamweaver archive video")} thumbnail"><span>${escapeHtml(video.title)}</span></a>`).join("");
+    renderSongLobbyHero();
   }
 
   function showEmpty(message) {
@@ -1761,7 +2536,7 @@
 
   async function loadShow() {
     setReleasePlaybackState("loading");
-    setLoadingProgress(8, "Calibrating Dreamweaver stage", "Dreamweaver is staging this edition with artwork, metadata, and movement in sync.");
+    setLoadingProgress(8, "Calibrating Dreamweaver stage", "Dreamweaver is staging this edition with artwork, metadata, and the four-act lobby in sync.");
     document.body.classList.remove("show-ready");
     elements.shell.hidden = false;
     elements.loading.hidden = false;
@@ -1770,7 +2545,14 @@
     elements.empty.hidden = true;
     elements.shell.setAttribute("aria-busy", "true");
     try {
-      const requestedMix = new URLSearchParams(location.search).get("mix") || "";
+      const routeContext = resolveDreamweaverRouteContext();
+      const requestedRouteFingerprint = routeContextFingerprint(routeContext);
+      const requestedMix = routeContext.requestedMixToken;
+      const requestedMixId = cleanKey(routeContext.requestedMixId, 160);
+      const exactMixPromise = requestedMixId ? fetchExactMixById(requestedMixId).catch(() => null) : Promise.resolve(null);
+      const releaseCatalogPromise = requestedMix || routeContext.requestedSongId
+        ? fetchReleaseCatalog().catch(() => [])
+        : Promise.resolve(state.releaseCatalog);
       const { response, payload: data } = await fetchJsonWithTimeout("/api/mixes?limit=100", {
         timeoutMs: MIX_LIBRARY_TIMEOUT_MS,
         timeoutMessage: "Dreamweaver timed out while loading the mix library. Please try again.",
@@ -1778,7 +2560,54 @@
         credentials: "same-origin"
       });
       if (!response.ok) throw new Error(data.message || "The Dreamweaver mix library could not be read.");
-      const mix = resolvePrimaryPlaybackMix(data.mixes || [], requestedMix);
+      let release = null;
+      const mixLibrary = Array.isArray(data.mixes) ? data.mixes : [];
+      let mix = resolvePrimaryPlaybackMix(mixLibrary, requestedMix, null, {
+        allowFallback: !requestedMix,
+        strictRequestedId: requestedMixId
+      });
+      const hasRequestedMixInLibrary = requestedMixId
+        ? mixLibrary.some(item => cleanKey(item?.id, 160) === requestedMixId)
+        : false;
+      if (!mix && requestedMixId && !hasRequestedMixInLibrary) {
+        const exactMix = await exactMixPromise;
+        if (routeContextFingerprint() !== requestedRouteFingerprint) return;
+        if (exactMix) {
+          mix = resolvePrimaryPlaybackMix([exactMix], requestedMix, null, {
+            allowFallback: false,
+            strictRequestedId: requestedMixId
+          });
+        }
+      }
+      if (!mix) {
+        const releases = await releaseCatalogPromise;
+        if (routeContextFingerprint() !== requestedRouteFingerprint) return;
+        if (releases.length) state.releaseCatalog = releases;
+        release = resolveReleaseFromCatalog(releases, routeContext);
+        if (release) {
+          state.release = release;
+          state.publishedSongId = cleanSongId(release.id) || state.publishedSongId;
+          updatePlatformLinks();
+          renderReleasePanel();
+        }
+        mix = resolvePrimaryPlaybackMix(mixLibrary, requestedMix, release, {
+          allowFallback: !requestedMix,
+          strictRequestedId: requestedMixId
+        });
+      } else {
+        void releaseCatalogPromise.then((releases) => {
+          if (!releases.length || state.release) return;
+          if (routeContextFingerprint() !== requestedRouteFingerprint) return;
+          state.releaseCatalog = releases;
+          const resolvedRelease = resolveReleaseFromCatalog(releases, routeContext);
+          if (!resolvedRelease) return;
+          state.release = resolvedRelease;
+          state.publishedSongId = cleanSongId(resolvedRelease.id) || state.publishedSongId;
+          updatePlatformLinks();
+          renderReleasePanel();
+          void loadVideos();
+        });
+      }
       if (!mix) {
         queueAudioFeedbackIncident("missing_audio", {
           severity: "high",
@@ -1786,7 +2615,9 @@
           details: "Dreamweaver could not resolve a playable linked song from the current hub request.",
           metadata: { requestedMixId: cleanText(requestedMix, 120), failureState: "missing_audio" }
         });
-        return showEmpty("No playable audio mix is available yet. Post the existing set to the HALO room or sign in to open a private mix.");
+        return showEmpty(requestedMixId
+          ? "Dreamweaver could not load the exact mix requested by this link. Confirm the mix is published and playable, then try again."
+          : "No playable audio mix is available yet. Post the existing set to the HALO room or sign in to open a private mix.");
       }
       setLoadingProgress(34, "Selecting tonight’s signal", "A published Dreamweaver mix has been selected and the room is shifting to match its pace.");
       elements.mixTitle.textContent = mix.title || "Untitled HALO mix";
@@ -1801,7 +2632,7 @@
       const playbackBootstrap = await bootstrapPrimaryPlayback(mix);
       await hydrateDreamweaverLoopContent();
       if (!playbackBootstrap?.started || elements.audio.paused || elements.audio.ended) setReleasePlaybackState("ready");
-      setLoadingProgress(100, "Dreamweaver is ready", "Press play and move through the full cinematic edition.");
+      setLoadingProgress(100, "Dreamweaver is ready", "Press play and move through the full four-act cinematic edition.");
       elements.loading.setAttribute("aria-hidden", "true");
       elements.stage.hidden = false;
       window.requestAnimationFrame(() => document.body.classList.add("show-ready"));
@@ -1824,17 +2655,25 @@
   }
 
   async function initializeDreamweaver() {
-   hydrateAudioFeedbackQueue();
-   void flushQueuedAudioFeedback();
-   renderSatelliteState();
-   updatePlatformLinks();
-   if (isSatelliteFlow()) startSatelliteAgentLoop();
-   else stopSatelliteAgentLoop();
-   if (isSatelliteFlow() && !state.unlock) {
-     elements.shell.setAttribute("aria-busy", "false");
-     return;
-   }
-   await loadShow();
+    hydrateAudioFeedbackQueue();
+    void flushQueuedAudioFeedback();
+    renderSatelliteState();
+    updatePlatformLinks();
+    const satelliteFlow = isSatelliteFlow();
+    if (satelliteFlow) startSatelliteAgentLoop();
+    else stopSatelliteAgentLoop();
+    if (satelliteFlow && !state.unlock) {
+      elements.shell.setAttribute("aria-busy", "false");
+      renderSongLobbyHero();
+      void Promise.allSettled([
+        loadReleaseContext({ keepCurrentOnFailure: true }),
+        loadVideos()
+      ]).finally(() => {
+        renderSongLobbyHero();
+      });
+      return;
+    }
+    await loadShow();
   }
 
   if (resumeUploadVerification()) return;
@@ -1847,10 +2686,16 @@
   renderReleasePanel();
   renderFootageSelector();
   renderArchive();
-  elements.playButton.addEventListener("click", togglePlayback);
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", bindPlayerControls, { once: true });
+  else bindPlayerControls();
   elements.progress.addEventListener("input", () => {
     if (!state.duration) return;
     elements.audio.currentTime = Number(elements.progress.value) / 1000 * state.duration;
+    updateProgress();
+  });
+  elements.songLobbyHeroProgress?.addEventListener("input", () => {
+    if (!state.duration) return;
+    elements.audio.currentTime = Number(elements.songLobbyHeroProgress.value) / 1000 * state.duration;
     updateProgress();
   });
   elements.audio.addEventListener("loadedmetadata", () => {
@@ -1859,10 +2704,15 @@
     renderReleasePanel();
     if (state.releasePlaybackState === "loading") setReleasePlaybackState("ready");
   });
+  elements.audio.addEventListener("loadeddata", clearRemoteAudioWatchdog);
+  elements.audio.addEventListener("canplay", clearRemoteAudioWatchdog);
+  elements.audio.addEventListener("canplaythrough", clearRemoteAudioWatchdog);
   elements.audio.addEventListener("timeupdate", updateProgress);
   elements.audio.addEventListener("play", () => {
+    clearRemoteAudioWatchdog();
     document.body.classList.add("is-playing");
     elements.playButton.setAttribute("aria-label", "Pause show");
+    updateHeroPlayButton(true);
     resetIdle();
     if (campaignIdFromUrl() && !state.trackedProgress.has("show_play")) {
       state.trackedProgress.add("show_play");
@@ -1871,13 +2721,17 @@
     setReleasePlaybackState("playing");
   });
   elements.audio.addEventListener("pause", () => {
+    clearRemoteAudioWatchdog();
     document.body.classList.remove("is-playing");
     elements.playButton.setAttribute("aria-label", "Play show");
+    updateHeroPlayButton(false);
     document.body.classList.remove("idle");
     if (!elements.audio.ended) setReleasePlaybackState("paused");
   });
   elements.audio.addEventListener("ended", () => {
+    clearRemoteAudioWatchdog();
     activateChapter(chapters.length - 1, false);
+    updateHeroPlayButton(false);
     if (campaignIdFromUrl() && !state.trackedProgress.has("mix_complete")) {
       state.trackedProgress.add("mix_complete");
       trackCampaignEvent("mix_complete", new URLSearchParams(location.search).get("source") || "halo");
@@ -1885,14 +2739,22 @@
     setReleasePlaybackState("ready");
   });
   elements.audio.addEventListener("error", () => {
+    clearRemoteAudioWatchdog();
     queueAudioFeedbackIncident(Number(elements.audio?.error?.code || 0) === 3 ? "corrupted_audio" : "non_playable_audio", {
       severity: "high",
       title: "Dreamweaver audio playback failed",
       details: describeAudioElementFailure(),
       metadata: { failureState: Number(elements.audio?.error?.code || 0) === 3 ? "corrupted_audio" : "non_playable_audio" }
     });
-    setReleasePlaybackState("unavailable");
-    showToast("The mix audio is unavailable. The visual edition remains open.");
+    if (state.audioSourceMode === "local" || elements.audio.currentSrc.startsWith("blob:")) {
+      state.audioSourceMode = "error";
+      state.localAudioName = "";
+      revokeLocalAudioUrl();
+      setReleasePlaybackState("unavailable");
+      showToast("The local file could not be loaded. Choose another mix file.");
+      return;
+    }
+    handleRemoteAudioUnavailable("Stream unavailable — click Upload Mix File or press play to choose a local mix.");
   });
   elements.muteButton.addEventListener("click", () => { elements.audio.muted = !elements.audio.muted; elements.muteButton.setAttribute("aria-label", elements.audio.muted ? "Unmute show" : "Mute show"); showToast(elements.audio.muted ? "Show muted" : "Sound restored"); });
   window.addEventListener("online", () => { void flushQueuedAudioFeedback(); });
@@ -1912,6 +2774,7 @@
     } catch {}
   });
   elements.makeCampaign.addEventListener("click", openCampaignStudio);
+  elements.songLobbyMakeCampaign?.addEventListener("click", openCampaignStudio);
   elements.closeCampaign.addEventListener("click", closeCampaignStudio);
   elements.campaignForm.addEventListener("submit", generateCampaign);
   elements.campaignForm.addEventListener("input", updateClipTiming);

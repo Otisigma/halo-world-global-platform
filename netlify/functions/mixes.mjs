@@ -156,6 +156,7 @@ async function listMixes(db, user, limit = 18) {
     `;
     return rows.map(mixPayload);
   }
+
   const memberId = user.id;
   const rows = await db.sql`
     SELECT m.id, m.title, m.description, m.duration_seconds, m.track_count, m.play_count, m.created_at,
@@ -175,6 +176,45 @@ async function listMixes(db, user, limit = 18) {
     LIMIT ${limit}
   `;
   return rows.map(mixPayload);
+}
+
+async function getMixById(db, user, mixId = "") {
+  const id = cleanText(mixId, 80);
+  if (!id) return null;
+  if (!user?.id) {
+    const rows = await db.sql`
+      SELECT m.id, m.title, m.description, m.duration_seconds, m.track_count, m.play_count, m.created_at,
+        m.artwork_url, m.original_artist, m.remixer_name, m.sales_status, m.production_route,
+        m.seller_mode, m.client_sale_enabled, m.mixing_fee_included, m.edition_format,
+        m.price_minor, m.currency, m.product_info_complete, m.master_approved, m.rights_clearance_status, m.original_blob_key,
+        p.display_name, p.avatar, p.badge, FALSE AS in_playlist, FALSE AS is_owner
+      FROM halo_mixes m
+      JOIN community_profiles p ON p.actor_id = m.actor_id
+      WHERE m.id = ${id}
+        AND m.visibility = 'room'
+      LIMIT 1
+    `;
+    return rows[0] ? mixPayload(rows[0]) : null;
+  }
+  const memberId = user.id;
+  const rows = await db.sql`
+    SELECT m.id, m.title, m.description, m.duration_seconds, m.track_count, m.play_count, m.created_at,
+      m.artwork_url, m.original_artist, m.remixer_name, m.sales_status, m.production_route,
+      m.seller_mode, m.client_sale_enabled, m.mixing_fee_included, m.edition_format,
+      m.price_minor, m.currency, m.product_info_complete, m.master_approved, m.rights_clearance_status, m.original_blob_key,
+      p.display_name, p.avatar, p.badge,
+      EXISTS (
+        SELECT 1 FROM halo_mix_playlist_items i
+        WHERE i.mix_id = m.id AND i.member_id = ${memberId}
+      ) AS in_playlist,
+      (m.member_id = ${memberId}) AS is_owner
+    FROM halo_mixes m
+    JOIN community_profiles p ON p.actor_id = m.actor_id
+    WHERE m.id = ${id}
+      AND (m.visibility = 'room' OR m.member_id = ${memberId})
+    LIMIT 1
+  `;
+  return rows[0] ? mixPayload(rows[0]) : null;
 }
 
 function previewPoolMixPayload(rows) {
@@ -475,6 +515,11 @@ export default async function mixesHandler(request) {
     const user = await getUser().catch(() => null);
     if (request.method === "GET") {
       const url = new URL(request.url);
+      const requestedMixId = cleanText(url.searchParams.get("id"), 80);
+      if (requestedMixId) {
+        const mix = await getMixById(db, user, requestedMixId);
+        return json({ mixes: mix ? [mix] : [] });
+      }
       const requestedLimit = Number.parseInt(url.searchParams.get("limit"), 10);
       const limit = Math.max(1, Math.min(100, requestedLimit || 18));
       const includeLongPlayStation = url.searchParams.get("station") === "longplay";

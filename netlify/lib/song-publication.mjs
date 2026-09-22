@@ -139,12 +139,17 @@ async function resolveReleaseId(db, song) {
 
 function resolveReleaseDreamweaverFlow(songId, {
   releaseId,
+  artistName = "",
+  title = "",
   publicUrl,
   streamUrl,
   officialUrl = "",
 } = {}) {
   return resolveDreamweaverPageFlow(songId, {
     mixId: releaseId,
+    releaseId,
+    artistName,
+    title,
     publicUrl,
     streamUrl,
     officialUrl,
@@ -157,10 +162,15 @@ async function ensureReleaseCampaign(db, song, versions) {
   const saleMaster = versions.find(version => version.version_type === "sale_master" && version.audio_url);
   const firstPlayableVersion = versions.find(version => version.audio_url);
   const streamUrl = cleanText(saleMaster?.audio_url || firstPlayableVersion?.audio_url, 1200);
-  const dreamweaver = resolveReleaseDreamweaverFlow(song.id, { releaseId, publicUrl, streamUrl });
-  const officialUrl = dreamweaver.managed || isLegacySongCatalogAudioUrl(streamUrl)
-    ? (dreamweaver.launchUrl || dreamweaver.page?.route || streamUrl || publicUrl)
-    : (dreamweaver.launchUrl || streamUrl || publicUrl);
+  const dreamweaverFlow = resolveReleaseDreamweaverFlow(song.id, {
+    releaseId,
+    artistName: song.artist_name,
+    title: song.title,
+    publicUrl,
+    streamUrl,
+    officialUrl: streamUrl,
+  });
+  const officialUrl = dreamweaverFlow.destinationUrl || streamUrl || publicUrl;
   const artworkUrl = cleanText(
     saleMaster?.artwork_url
       || firstPlayableVersion?.artwork_url
@@ -227,9 +237,9 @@ async function ensureReleaseCampaign(db, song, versions) {
         WHEN halo_release_campaigns.official_url = ''
           OR halo_release_campaigns.official_url = ${publicUrl}
           OR halo_release_campaigns.official_url = ${streamUrl}
-          OR halo_release_campaigns.official_url = ${dreamweaver.page?.route || ""}
-          OR halo_release_campaigns.official_url = ${dreamweaver.hubUrl || ""}
-          OR halo_release_campaigns.official_url = ${dreamweaver.page?.storefrontUrl || ""}
+          OR halo_release_campaigns.official_url = ${dreamweaverFlow.page?.route || ""}
+          OR halo_release_campaigns.official_url = ${dreamweaverFlow.hubUrl || ""}
+          OR halo_release_campaigns.official_url = ${dreamweaverFlow.page?.storefrontUrl || ""}
           OR halo_release_campaigns.official_url ~* '^/api/song-catalog/audio\\?(?:[^#]*&)?versionId=[0-9a-f-]+(?:&[^#]*)?$'
           OR halo_release_campaigns.official_url ~* '^https?://[^[:space:]]+/api/song-catalog/audio\\?(?:[^#]*&)?versionId=[0-9a-f-]+(?:&[^#]*)?$'
           OR halo_release_campaigns.official_url !~* '^https?://(?:[^/]+\\.)?distrokid\\.com/hyperfollow/'
@@ -268,10 +278,14 @@ async function ensureReleaseCampaign(db, song, versions) {
     publicUrl,
     dreamweaver: resolveReleaseDreamweaverFlow(song.id, {
       releaseId,
+      artistName: song.artist_name,
+      title: song.title,
       publicUrl,
       streamUrl,
       officialUrl: releaseRows[0]?.official_url || officialUrl,
     }),
+    dreamweaverPage: dreamweaverFlow.dreamweaverPage,
+    routeMode: dreamweaverFlow.routeMode,
   };
 }
 
@@ -510,8 +524,13 @@ export async function reconcilePublishedSong(db, {
       canonicalUrl: release.publicUrl,
       releaseStatus: "published",
       radioStatus: radio.status,
-      dreamweaverStatus: release.dreamweaver.page ? "ready" : "pending",
-      details,
+      dreamweaverStatus: release.routeMode === "dreamweaver_page" ? "ready" : release.routeMode === "hyperfollow" ? "managed_externally" : "pending",
+      details: {
+        ...details,
+        routeMode: release.routeMode,
+        dreamweaverPageUrl: release.dreamweaverPage?.experienceUrl || "",
+        officialUrl: release.officialUrl || "",
+      },
     });
     if (recordLedger) {
       await appendLedgerEntry(db, {

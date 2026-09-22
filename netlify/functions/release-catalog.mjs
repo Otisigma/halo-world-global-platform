@@ -81,19 +81,20 @@ function serializeRelease(row) {
   const publicUrl = `/music/?song=${encodeURIComponent(row.id)}`;
   const listenUrl = `/api/release-link?slug=${encodeURIComponent(row.id)}&audience=fan`;
   const kitUrl = `/release-kit.html?slug=${encodeURIComponent(row.id)}&audience=fan`;
-  const dreamweaverFlow = row.catalog_song_id
-    ? resolveDreamweaverPageFlow(row.catalog_song_id, {
-        mixId: row.id,
-        officialUrl: row.official_url,
-        streamUrl: row.stream_url,
-        publicUrl,
-        relatedUrls: [listenUrl],
-        promoUrls: [kitUrl],
-      })
-    : null;
-  const dreamweaverPage = dreamweaverFlow?.page || null;
-  const dreamweaverHubUrl = dreamweaverFlow?.hubUrl || "";
-  const dreamweaverLoop = dreamweaverFlow?.loop || null;
+  const dreamweaverFlow = resolveDreamweaverPageFlow(row.catalog_song_id || "", {
+    mixId: row.id,
+    releaseId: row.id,
+    artistName: row.artist,
+    title: row.title,
+    officialUrl: row.official_url || "",
+    streamUrl: row.stream_url || "",
+    publicUrl,
+    relatedUrls: [listenUrl],
+    promoUrls: [kitUrl],
+  });
+  const dreamweaverPage = dreamweaverFlow.dreamweaverPage || null;
+  const dreamweaverHubUrl = dreamweaverFlow.hubUrl || "";
+  const dreamweaverLoop = dreamweaverFlow.loop || null;
   const catalogAlbumTitle = row.catalog_album_title || "";
   const catalogGenres = String(row.catalog_genre || "")
     .split(",")
@@ -133,6 +134,10 @@ function serializeRelease(row) {
     featuredType: row.featured_type || "",
     featuredUntil: row.featured_until ? String(row.featured_until).slice(0, 10) : "",
     artistSlug: row.artist_slug || "",
+    officialUrl: row.official_url || "",
+    entryExperience: dreamweaverFlow.routeMode,
+    entryUrl: dreamweaverFlow.destinationUrl,
+    dreamweaverPage: dreamweaverFlow.dreamweaverPage,
     catalog: {
       source: row.catalog_song_id ? "song-catalog" : "release-catalog",
       songId: row.catalog_song_id || "",

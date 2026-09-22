@@ -1,7 +1,7 @@
 import { getDatabase } from "@netlify/database";
 import { verifyRequestOrigin } from "@netlify/identity";
 import { createHash, timingSafeEqual } from "node:crypto";
-import { resolveDreamweaverPageFlow } from "../lib/dreamweaver-page-manager.mjs";
+import { buildDreamweaverSongPage } from "../lib/dreamweaver-page-manager.mjs";
 
 const audiences = new Set(["fan", "dj", "radio", "press", "preview"]);
 const destinations = {
@@ -59,11 +59,7 @@ function legacyAudioVersionIdFromDestination(destination, requestUrl) {
   }
 }
 
-async function remapLegacyAudioDestination(db, versionId, {
-  releaseSlug = "",
-  officialUrl = "",
-  streamUrl = "",
-} = {}) {
+async function remapLegacyAudioDestination(db, versionId, audience = "fan") {
   try {
     if (!versionId) return "";
     const result = await db.sql`
@@ -74,13 +70,7 @@ async function remapLegacyAudioDestination(db, versionId, {
     `;
     const rows = Array.isArray(result) ? result : Array.isArray(result?.rows) ? result.rows : [];
     const songId = cleanId(rows[0]?.song_id);
-    const mixId = cleanSlug(releaseSlug);
-    const flow = resolveDreamweaverPageFlow(songId, {
-      mixId,
-      officialUrl,
-      streamUrl,
-    });
-    return flow.launchUrl || flow.page?.route || "";
+    return buildDreamweaverSongPage(songId, { audience })?.experienceUrl || "";
   } catch {
     return "";
   }
@@ -139,13 +129,7 @@ export default async function releaseLinkHandler(request) {
     const destination = absoluteDestination(row[column] || row.official_url, request.url);
     if (!destination) return json({ message: "This campaign destination is not available" }, 404);
     const legacyAudioVersionId = legacyAudioVersionIdFromDestination(destination, request.url);
-    const remappedDestination = legacyAudioVersionId
-      ? await remapLegacyAudioDestination(db, legacyAudioVersionId, {
-          releaseSlug,
-          officialUrl: row.official_url || "",
-          streamUrl: row.stream_url || "",
-        })
-      : "";
+    const remappedDestination = legacyAudioVersionId ? await remapLegacyAudioDestination(db, legacyAudioVersionId, audience) : "";
     const finalDestination = absoluteDestination(remappedDestination || destination, request.url);
     if (!finalDestination) return json({ message: "This campaign destination is not available" }, 404);
 

@@ -41,6 +41,9 @@ assert.match(helper, /radio_master_missing_or_not_uploaded/, "publication helper
 assert.match(helper, /\/music\/\?song=/, "publication helper must derive canonical public song URLs");
 assert.match(helper, /launchUrl/, "publication helper must persist the resolved Dreamweaver launch destination");
 assert.ok(helper.includes("official_url = CASE") && helper.includes("official_url ~* '^/api/song-catalog/audio\\\\?(?:[^#]*&)?versionId="), "publication helper must replace legacy song-catalog audio navigation URLs during release upserts");
+assert.match(manager, /isHyperFollowUrl/, "Dreamweaver page manager must detect HyperFollow URLs");
+assert.match(manager, /dreamweaver-page-manager-/, "Dreamweaver page manager must create a dedicated page manager agent id");
+assert.match(manager, /linked_song_pages/, "Dreamweaver page manager must scope the page agent loop to linked song pages");
 
 assert.match(manager, /manage_dreamweaver_song_page/, "Dreamweaver page manager must have a single page-management purpose");
 assert.match(manager, /dreamweaverHubPath/, "Dreamweaver page manager must define a dedicated canonical hub resolver");
@@ -89,7 +92,8 @@ assert.match(releaseCatalog, /resolveDreamweaverPageFlow/, "release catalog must
 assert.match(releaseCatalog, /dreamweaverHubUrl/, "release catalog must serialize canonical Dreamweaver hub metadata");
 assert.match(releaseCatalog, /dreamweaverLoop/, "release catalog must serialize linked Dreamweaver loop metadata");
 assert.match(releaseLink, /remapLegacyAudioDestination/, "release-link handler must guard against legacy song-catalog audio entry URLs");
-assert.match(releaseLink, /resolveDreamweaverPageFlow/, "release-link handler must reroute legacy audio entries into managed Dreamweaver pages");
-assert.match(releaseLink, /flow\.launchUrl/, "release-link legacy remapping must route through the hub-aware Dreamweaver launch flow");
+assert.match(releaseLink, /buildDreamweaverSongPage/, "release-link handler must reroute legacy audio entries into generated Dreamweaver song pages");
+assert.match(releaseCatalog, /entryExperience/, "release catalog must expose the resolved HyperFollow vs Dreamweaver page entry mode");
+assert.match(releaseCatalog, /dreamweaverPage/, "release catalog must expose generated Dreamweaver page metadata");
 
 console.log("Song publication contracts passed.");

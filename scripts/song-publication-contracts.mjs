@@ -40,7 +40,8 @@ assert.match(helper, /resolveDreamweaverPageFlow/, "publication helper must dele
 assert.match(helper, /radio_master_missing_or_not_uploaded/, "publication helper must keep a deterministic radio fallback reason");
 assert.match(helper, /\/music\/\?song=/, "publication helper must derive canonical public song URLs");
 assert.match(helper, /destinationUrl/, "publication helper must persist the resolved Dreamweaver destination");
-assert.ok(helper.includes("official_url = CASE") && helper.includes("official_url ~* '^/api/song-catalog/audio\\\\?(?:[^#]*&)?versionId="), "publication helper must replace legacy song-catalog audio navigation URLs during release upserts");
+assert.match(helper, /dreamweaverStorefrontPath/, "publication helper must set Dreamweaver storefront pages as release entry routes");
+assert.ok(helper.includes("official_url = CASE") && helper.includes("official_url ~* '^/api/song-catalog/audio\\\\?(?:[^#]*&)?versionId=") && helper.includes("official_url ~* '^/dreamweaver/satellite/"), "publication helper must replace legacy song-catalog audio and satellite navigation URLs during release upserts");
 
 assert.match(manager, /isHyperFollowUrl/, "Dreamweaver page manager must detect HyperFollow URLs");
 assert.match(manager, /manage_dreamweaver_song_page/, "Dreamweaver page manager must have a single page-management purpose");
@@ -99,7 +100,7 @@ assert.match(releaseCatalog, /dreamweaverLoop/, "release catalog must serialize 
 assert.match(releaseCatalog, /entryExperience/, "release catalog must expose the resolved entry mode");
 assert.match(releaseCatalog, /entryUrl/, "release catalog must expose the resolved entry URL");
 assert.match(releaseLink, /remapLegacyAudioDestination/, "release-link handler must guard against legacy song-catalog audio entry URLs");
-assert.match(releaseLink, /buildDreamweaverSongPage/, "release-link handler must reroute legacy audio entries into generated Dreamweaver pages");
-assert.match(releaseLink, /includeAudienceParam: true/, "release-link legacy remapping must preserve audience-specific generated page routing");
+assert.match(releaseLink, /dreamweaverStorefrontPath/, "release-link handler must reroute legacy audio entries into the Dreamweaver storefront page");
+assert.match(releaseLink, /searchParams\.set\("audience"/, "release-link legacy remapping must preserve audience context on storefront redirects");
 
 console.log("Song publication contracts passed.");

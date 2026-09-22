@@ -1,3 +1,5 @@
+import { DREAMWEAVER_STOREFRONT_MIX_ID } from "../lib/dreamweaver-storefront.js";
+
 (() => {
   const chapters = [
     {
@@ -1312,6 +1314,23 @@
     return params.get("satellite") === "dreamweaver";
   }
 
+  function canonicalDreamweaverUrl({
+    includeSatelliteFlag = false,
+    searchParams = location.search,
+    fallbackMixId = "",
+  } = {}) {
+    const params = searchParams instanceof URLSearchParams
+      ? new URLSearchParams(searchParams)
+      : new URLSearchParams(searchParams);
+    if (!cleanText(params.get("mix"), 80) && fallbackMixId) params.set("mix", fallbackMixId);
+    const songId = resolveSongContextId();
+    if (songId) params.set("song", songId);
+    else params.delete("song");
+    if (includeSatelliteFlag || isSatellitePath() || params.get("satellite") === "dreamweaver") params.set("satellite", "dreamweaver");
+    else params.delete("satellite");
+    return `/dreamweaver/?${params.toString()}`;
+  }
+
   function rewardSearchQuery() {
     return `${state.release?.title || state.mix?.title || featuredTrack.title} ${state.release?.artist || state.mix?.creator?.name || featuredTrack.artist}`.trim();
   }
@@ -2552,8 +2571,11 @@
       const currentParams = new URLSearchParams(location.search);
       currentParams.set("mix", mix.id);
       if (state.publishedSongId) currentParams.set("song", state.publishedSongId);
-      if (isSatellitePath()) history.replaceState(null, "", `${location.pathname}?${currentParams.toString()}`);
-      else history.replaceState(null, "", `/dreamweaver/?${currentParams.toString()}`);
+      history.replaceState(null, "", canonicalDreamweaverUrl({
+        includeSatelliteFlag: isSatelliteFlow(),
+        searchParams: currentParams,
+        fallbackMixId: DREAMWEAVER_STOREFRONT_MIX_ID,
+      }));
       const playbackBootstrap = await bootstrapPrimaryPlayback(mix);
       await hydrateDreamweaverLoopContent();
       if (!playbackBootstrap?.started || elements.audio.paused || elements.audio.ended) setReleasePlaybackState("ready");
@@ -2582,6 +2604,19 @@
   async function initializeDreamweaver() {
     hydrateAudioFeedbackQueue();
     void flushQueuedAudioFeedback();
+    if (isSatellitePath()) {
+      window.location.replace(canonicalDreamweaverUrl({
+        includeSatelliteFlag: true,
+        fallbackMixId: DREAMWEAVER_STOREFRONT_MIX_ID,
+      }));
+      return;
+    }
+    if (isSatelliteFlow() && !new URLSearchParams(location.search).get("mix")) {
+      history.replaceState(null, "", canonicalDreamweaverUrl({
+        includeSatelliteFlag: true,
+        fallbackMixId: DREAMWEAVER_STOREFRONT_MIX_ID,
+      }));
+    }
     renderSatelliteState();
     updatePlatformLinks();
     const satelliteFlow = isSatelliteFlow();

@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { appendLedgerEntry } from "./halo-ledger.mjs";
 import { resolveDreamweaverPageFlow } from "./dreamweaver-page-manager.mjs";
+import { dreamweaverStorefrontPath } from "./dreamweaver-satellite.mjs";
 
 const VERSION_LABELS = {
   sale_master: "Sale master",
@@ -40,6 +41,17 @@ function isLegacySongCatalogAudioUrl(value) {
     return /^\/api\/song-catalog\/audio$/i.test(parsed.pathname) && Boolean(cleanId(parsed.searchParams.get("versionId")));
   } catch {
     return false;
+  }
+
+  function isLegacyDreamweaverSatelliteUrl(value) {
+    const url = cleanText(value, 1200);
+    if (!url) return false;
+    try {
+      const parsed = new URL(url, "https://halo.world");
+      return /^\/dreamweaver\/satellite\/[0-9a-f-]+\/?$/i.test(parsed.pathname);
+    } catch {
+      return false;
+    }
   }
 }
 
@@ -158,7 +170,10 @@ async function ensureReleaseCampaign(db, song, versions) {
   const firstPlayableVersion = versions.find(version => version.audio_url);
   const streamUrl = cleanText(saleMaster?.audio_url || firstPlayableVersion?.audio_url, 1200);
   const dreamweaver = resolveReleaseDreamweaverFlow(song.id, { releaseId, publicUrl, streamUrl });
-  const officialUrl = dreamweaver.destinationUrl || streamUrl || publicUrl;
+  const storefrontUrl = dreamweaverStorefrontPath(song.id, { mixId: releaseId }) || dreamweaver.page?.storefrontUrl || "";
+  const officialUrl = storefrontUrl && (isLegacySongCatalogAudioUrl(streamUrl) || isLegacyDreamweaverSatelliteUrl(streamUrl))
+    ? storefrontUrl
+    : streamUrl || publicUrl;
   const artworkUrl = cleanText(
     saleMaster?.artwork_url
       || firstPlayableVersion?.artwork_url
@@ -227,10 +242,11 @@ async function ensureReleaseCampaign(db, song, versions) {
           OR halo_release_campaigns.official_url = ${streamUrl}
           OR halo_release_campaigns.official_url = ${dreamweaver.page?.route || ""}
           OR halo_release_campaigns.official_url = ${dreamweaver.hubUrl || ""}
-          OR halo_release_campaigns.official_url = ${dreamweaver.page?.storefrontUrl || ""}
+          OR halo_release_campaigns.official_url = ${storefrontUrl}
           OR halo_release_campaigns.official_url ~* '^/api/song-catalog/audio\\?(?:[^#]*&)?versionId=[0-9a-f-]+(?:&[^#]*)?$'
           OR halo_release_campaigns.official_url ~* '^https?://[^[:space:]]+/api/song-catalog/audio\\?(?:[^#]*&)?versionId=[0-9a-f-]+(?:&[^#]*)?$'
-          OR halo_release_campaigns.official_url !~* '^https?://(?:[^/]+\\.)?distrokid\\.com/hyperfollow/'
+          OR halo_release_campaigns.official_url ~* '^/dreamweaver/satellite/[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/?(?:\\?[^#]*)?$'
+          OR halo_release_campaigns.official_url ~* '^https?://[^[:space:]]+/dreamweaver/satellite/[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/?(?:\\?[^#]*)?$'
         THEN EXCLUDED.official_url
         ELSE halo_release_campaigns.official_url
       END,

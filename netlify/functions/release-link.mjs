@@ -84,14 +84,14 @@ async function remapLegacyAudioDestination(db, versionId, {
       streamUrl,
       preferDreamweaverPage: true,
     });
-    return flow.launchUrl
-      || flow.dreamweaverPage?.experienceUrl
+    return flow.dreamweaverPage?.experienceUrl
       || buildDreamweaverSongPage(songId, {
         audience,
         mixId,
         releaseId: mixId,
         slug: mixId,
       })?.experienceUrl
+      || flow.launchUrl
       || flow.destinationUrl
       || "";
   } catch {

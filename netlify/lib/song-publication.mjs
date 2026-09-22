@@ -272,21 +272,22 @@ async function ensureReleaseCampaign(db, song, versions) {
       WHERE id = ${song.id}
     `;
   }
+  const resolvedDreamweaver = resolveReleaseDreamweaverFlow(song.id, {
+    releaseId,
+    artistName: song.artist_name,
+    title: song.title,
+    publicUrl,
+    streamUrl,
+    officialUrl: releaseRows[0]?.official_url || officialUrl,
+  });
   return {
     id: releaseRows[0]?.id || releaseId,
     officialUrl: releaseRows[0]?.official_url || officialUrl,
     streamUrl: releaseRows[0]?.stream_url || streamUrl,
     publicUrl,
-    dreamweaver: resolveReleaseDreamweaverFlow(song.id, {
-      releaseId,
-      artistName: song.artist_name,
-      title: song.title,
-      publicUrl,
-      streamUrl,
-      officialUrl: releaseRows[0]?.official_url || officialUrl,
-    }),
-    dreamweaverPage: dreamweaverFlow.dreamweaverPage,
-    routeMode: dreamweaverFlow.routeMode,
+    dreamweaver: resolvedDreamweaver,
+    dreamweaverPage: resolvedDreamweaver.dreamweaverPage,
+    routeMode: resolvedDreamweaver.routeMode,
   };
 }
 

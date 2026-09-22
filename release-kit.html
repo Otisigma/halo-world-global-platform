@@ -72,7 +72,7 @@
     const requestedAudience = params.get('audience') || 'fan';
     const audiences = new Set(['fan', 'dj', 'radio', 'press', 'preview']);
     const audience = audiences.has(requestedAudience) ? requestedAudience : 'fan';
-    const fallbackArtwork = window.HaloReleaseArtwork?.DEFAULT_RELEASE_ARTWORK || '/assets/halo-app-icon-512.png';
+    const fallbackArtwork = window.HaloReleaseArtwork?.DEFAULT_RELEASE_ARTWORK || '/assets/releases/halo-premium-placeholder.svg';
     const labels = { fan:'Official release', dj:'DJ promo desk', radio:'Radio service', press:'Press room', preview:'Private preview' };
     const escapeHtml = value => String(value ?? '').replace(/[&<>'"]/g, character => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[character]));
     const formatDate = value => value ? new Intl.DateTimeFormat('en', { day:'numeric', month:'long', year:'numeric', timeZone:'UTC' }).format(new Date(`${value}T00:00:00Z`)) : 'To be announced';

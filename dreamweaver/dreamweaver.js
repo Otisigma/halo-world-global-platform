@@ -1382,13 +1382,13 @@
 
   function preferredReleaseDoorway() {
     const officialUrl = safeMediaUrl(state.release?.officialUrl);
-    const entryUrl = safeMediaUrl(state.release?.entryUrl);
+    const safeEntryUrl = safeMediaUrl(state.release?.entryUrl);
     const generatedPageUrl = safeMediaUrl(state.release?.dreamweaverPage?.experienceUrl);
     if (officialUrl && isHyperfollowUrl(officialUrl)) {
       return { href: officialUrl, mode: "hyperfollow" };
     }
-    if (entryUrl) {
-      return { href: entryUrl, mode: cleanText(state.release?.entryExperience || "dreamweaver_page", 40) };
+    if (safeEntryUrl) {
+      return { href: safeEntryUrl, mode: cleanText(state.release?.entryExperience || "dreamweaver_page", 40) };
     }
     if (generatedPageUrl) {
       return { href: generatedPageUrl, mode: "dreamweaver_page" };

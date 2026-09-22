@@ -229,9 +229,10 @@ export function resolveDreamweaverPageFlow(songId, options = {}) {
     pageAgent: manager,
   } : null;
   const destinationUrl = hyperfollowUrl
-    || (managed ? resolvedPage?.experienceUrl || officialUrl : officialUrl)
+    || (managed ? resolvedPage?.experienceUrl || resolvedPage?.route || route || officialUrl : officialUrl)
     || publicUrl
     || resolvedPage?.experienceUrl
+    || route
     || "";
   const routeMode = hyperfollowUrl
     ? "hyperfollow"

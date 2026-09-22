@@ -84,13 +84,16 @@ async function remapLegacyAudioDestination(db, versionId, {
       streamUrl,
       preferDreamweaverPage: true,
     });
-    if (flow.routeMode === "hyperfollow") return flow.launchUrl || flow.destinationUrl || "";
-    return buildDreamweaverSongPage(songId, {
-      audience,
-      mixId,
-      releaseId: mixId,
-      slug: mixId,
-    })?.experienceUrl || flow.destinationUrl || "";
+    return flow.launchUrl
+      || flow.dreamweaverPage?.experienceUrl
+      || buildDreamweaverSongPage(songId, {
+        audience,
+        mixId,
+        releaseId: mixId,
+        slug: mixId,
+      })?.experienceUrl
+      || flow.destinationUrl
+      || "";
   } catch {
     return "";
   }

@@ -452,11 +452,19 @@
 
   function openRadioSend() {
     if (!state.canEdit || !state.page) return;
-    const artwork = document.getElementById("radioReleaseArtwork");
+    const artworkFrame = elements.radioSend.querySelector(".radio-release-art");
+    const currentArtwork = document.getElementById("radioReleaseArtwork");
+    const artwork = currentArtwork.cloneNode(false);
+    artwork.id = "radioReleaseArtwork";
+    delete artwork.dataset.releaseArtworkReady;
+    delete artwork.dataset.fallbackReady;
+    delete artwork.dataset.artworkSource;
+    delete artwork.dataset.originalAlt;
     artwork.src = safePreviewUrl(state.page.artworkUrl || "", HALO_RELEASE_FALLBACK);
     artwork.alt = `${state.page.releaseTitle || state.page.artistName} artwork`;
     artwork.dataset.artworkFallback = HALO_RELEASE_FALLBACK;
-    wireArtworkFallbacks(elements.radioSend);
+    currentArtwork.replaceWith(artwork);
+    wireArtworkFallbacks(artworkFrame || elements.radioSend);
     document.getElementById("radioReleaseTitle").textContent = state.page.releaseTitle || "Current release";
     document.getElementById("radioReleaseArtist").textContent = state.page.artistName;
     document.getElementById("radioReleaseStage").textContent = String(state.page.releaseStage || "release").replace(/_/g, " ");
@@ -965,6 +973,7 @@
     updateAuthMode();
   }));
   window.addEventListener("popstate", () => loadPage());
+  wireArtworkFallbacks(elements.radioSend);
 
   if (window.haloIdentity) connectIdentity();
   else window.addEventListener("halo-identity-ready", connectIdentity, { once: true });

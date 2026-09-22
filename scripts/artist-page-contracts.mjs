@@ -111,6 +111,8 @@ assert.match(artistStudio, /Backstage team/);
 assert.match(artistScript, /renderCatalogPreview/);
 assert.match(artistScript, /wireArtworkFallbacks/);
 assert.match(artistScript, /HALO_RELEASE_FALLBACK/);
+assert.match(artistScript, /safePreviewUrl\(page\.artworkUrl \|\| "", HALO_RELEASE_FALLBACK\)/);
+assert.match(artistScript, /safePreviewUrl\(String\(form\.get\("artworkUrl"\) \|\| ""\)\)/);
 assert.match(artistScript, /data-release-artwork/);
 assert.match(artistScript, /halo-premium-placeholder\.svg/);
 assert.match(artistScript, /image\.complete && image\.naturalWidth === 0/);

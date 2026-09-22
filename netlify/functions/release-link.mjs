@@ -76,7 +76,7 @@ async function remapLegacyAudioDestination(db, versionId, {
     `;
     const rows = Array.isArray(result) ? result : Array.isArray(result?.rows) ? result.rows : [];
     const songId = cleanId(rows[0]?.song_id);
-        const mixId = String(releaseId || releaseSlug || "").trim();
+    const mixId = String(releaseId || releaseSlug || "").trim();
     const flow = resolveDreamweaverPageFlow(songId, {
       audience,
       mixId,

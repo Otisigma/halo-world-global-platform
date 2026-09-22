@@ -169,7 +169,7 @@ async function ensureReleaseCampaign(db, song, versions) {
     title: song.title,
     publicUrl,
     streamUrl,
-    officialUrl: streamUrl,
+    officialUrl: "",
   });
   const officialUrl = dreamweaverFlow.destinationUrl || streamUrl || publicUrl;
   const artworkUrl = cleanText(

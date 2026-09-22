@@ -264,10 +264,10 @@ export function resolveDreamweaverPageFlow(songIdOrOptions, options = {}) {
       ? "dreamweaver_page"
       : officialUrl
         ? "existing_destination"
-        : publicUrl
-          ? "published_song"
-          : streamUrl
-            ? "existing_destination"
+        : streamUrl
+          ? "existing_destination"
+          : publicUrl
+            ? "published_song"
             : dreamweaverPage
               ? "dreamweaver_page"
               : "";

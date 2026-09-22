@@ -60,6 +60,7 @@
   const MIX_LIBRARY_TIMEOUT_MS = 12000;
   const RELEASE_CONTEXT_TIMEOUT_MS = 8000;
   const VIDEO_LIBRARY_TIMEOUT_MS = 8000;
+  const AUDIO_BOOTSTRAP_TIMEOUT_MS = 7000;
   const REMOTE_AUDIO_WATCHDOG_MS = 5000;
   const HERO_REEL_LOAD_TIMEOUT_MS = 3500;
   const MAX_AUDIO_FEEDBACK_RECORDS = 24;
@@ -429,26 +430,26 @@
     if (state.audioFeedbackFlushPromise) return state.audioFeedbackFlushPromise;
     state.audioFeedbackFlushPromise = (async () => {
       const flushStartedAt = Date.now();
-      const seenFingerprints = new Set();
       try {
-        const pending = [];
-        for (const entry of state.audioFeedbackQueue) {
-          if (
-            entry.deliveryStatus === "sent"
-            || seenFingerprints.has(entry.fingerprint)
-            || (
-              entry.lastAttemptAt
-              && !Number.isNaN(Date.parse(entry.lastAttemptAt))
-              && Date.parse(entry.lastAttemptAt) >= flushStartedAt
-            )
-          ) {
-            continue;
-          }
-          seenFingerprints.add(entry.fingerprint);
-          pending.push(entry);
-        }
-        for (const incident of pending) {
-          await sendAudioFeedbackIncident(incident);
+        while (true) {
+          const seenFingerprints = new Set();
+          const pending = state.audioFeedbackQueue.filter(entry => {
+            if (
+              entry.deliveryStatus === "sent"
+              || seenFingerprints.has(entry.fingerprint)
+              || (
+                entry.lastAttemptAt
+                && !Number.isNaN(Date.parse(entry.lastAttemptAt))
+                && Date.parse(entry.lastAttemptAt) >= flushStartedAt
+              )
+            ) {
+              return false;
+            }
+            seenFingerprints.add(entry.fingerprint);
+            return true;
+          });
+          if (!pending.length) break;
+          for (const incident of pending) await sendAudioFeedbackIncident(incident);
         }
       } finally {
         state.audioFeedbackFlushPromise = null;

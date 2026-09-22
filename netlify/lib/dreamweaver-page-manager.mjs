@@ -43,6 +43,20 @@ function linkedSongUrl(songId) {
   return id ? `/music/?song=${encodeURIComponent(id)}` : "";
 }
 
+function normalizeComparableDestination(value) {
+  const url = cleanText(value, 1200);
+  if (!url) return "";
+  try {
+    const parsed = new URL(url, "https://halo.world");
+    const pathname = parsed.pathname !== "/" ? parsed.pathname.replace(/\/+$/, "") : parsed.pathname;
+    return parsed.origin === "https://halo.world"
+      ? `${pathname}${parsed.search}`
+      : parsed.toString();
+  } catch {
+    return url;
+  }
+}
+
 function dreamweaverLoopMetadata({
   hubUrl,
   launchUrl,
@@ -190,12 +204,14 @@ export function resolveDreamweaverPageFlow(songId, options = {}) {
   const hubUrl = dreamweaverHubPath(mixId);
   const route = dreamweaverSatellitePath(id);
   const storefrontUrl = dreamweaverStorefrontPath(id);
-  const existingDestination = officialUrl
-    && officialUrl !== publicUrl
-    && officialUrl !== streamUrl
-    && officialUrl !== route
-    && officialUrl !== hubUrl
-    && officialUrl !== storefrontUrl
+  const normalizedOfficialUrl = normalizeComparableDestination(officialUrl);
+  const managedDestinations = new Set(
+    [publicUrl, streamUrl, route, hubUrl, storefrontUrl]
+      .map(normalizeComparableDestination)
+      .filter(Boolean)
+  );
+  const existingDestination = normalizedOfficialUrl
+    && !managedDestinations.has(normalizedOfficialUrl)
     && !isLegacySongCatalogAudioUrl(officialUrl);
   const managed = Boolean(route) && !hyperfollowUrl && !existingDestination;
   const manager = dreamweaverPageManager(id, {

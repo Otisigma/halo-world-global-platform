@@ -150,7 +150,8 @@ export function buildDreamweaverSongPage(songId, options = {}) {
   const hubUrl = dreamweaverHubPath(mixId);
   const storefrontUrl = dreamweaverStorefrontPath(id);
   const params = new URLSearchParams();
-  const slug = cleanSlug(options.slug || `${cleanText(options.artistName, 80)} ${cleanText(options.title, 80)}` || mixId);
+  const slugSource = cleanText(options.slug, 160) || [cleanText(options.artistName, 80), cleanText(options.title, 80)].filter(Boolean).join(" ") || mixId;
+  const slug = cleanSlug(slugSource);
   const audience = cleanAudience(options.audience);
   if (slug) params.set("slug", slug);
   if (audience) params.set("audience", audience);

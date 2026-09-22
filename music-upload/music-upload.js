@@ -432,13 +432,7 @@ function renderResults() {
       ? `<p class="result-note needs-attention">${escapeHtml(result.needsAttention)}</p>`
       : `<p class="result-note">${escapeHtml(result.summary)}</p>`;
     const nextStepNote = result.nextStep ? `<p class="result-next-step">${escapeHtml(result.nextStep)}</p>` : "";
-    const satelliteRoute = typeof result.dreamweaverSatellite?.experienceUrl === "string" && result.dreamweaverSatellite.experienceUrl
-      ? result.dreamweaverSatellite.experienceUrl
-      : typeof result.dreamweaverSatellite?.launchUrl === "string" && result.dreamweaverSatellite.launchUrl
-        ? result.dreamweaverSatellite.launchUrl
-        : typeof result.dreamweaverSatellite?.route === "string"
-          ? result.dreamweaverSatellite.route
-          : "";
+    const satelliteRoute = resolveDreamweaverExperienceUrl(result.dreamweaverSatellite);
     const satelliteLoopId = typeof result.dreamweaverSatellite?.agentLoop?.id === "string" ? result.dreamweaverSatellite.agentLoop.id : "";
     const satelliteReceipt = satelliteRoute
       ? `<div class="result-satellite">
@@ -468,6 +462,29 @@ function renderResults() {
       </article>
     `;
   }).join("");
+}
+
+function isDreamweaverExperienceUrl(value) {
+  if (typeof value !== "string") return false;
+  const text = value.trim();
+  if (!text || /^\/api\/song-catalog\/audio\?versionId=/i.test(text)) return false;
+  try {
+    const url = new URL(text, window.location.origin);
+    if (url.origin !== window.location.origin) return false;
+    if (/^\/dreamweaver\/satellite\/[0-9a-f-]+\/$/i.test(url.pathname)) return true;
+    return /^\/dreamweaver\/?$/i.test(url.pathname) && /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(url.searchParams.get("song") || "");
+  } catch {
+    return false;
+  }
+}
+
+function resolveDreamweaverExperienceUrl(satellite) {
+  const candidates = [
+    satellite?.experienceUrl,
+    satellite?.launchUrl,
+    satellite?.route,
+  ];
+  return candidates.find(isDreamweaverExperienceUrl) || "";
 }
 
 function normalizeAudioType(file) {

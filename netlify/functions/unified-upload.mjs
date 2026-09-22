@@ -4,7 +4,7 @@ import { getUser, verifyRequestOrigin } from "@netlify/identity";
 import { cleanText, ensureMembership } from "../lib/halo-x.mjs";
 import { appendLedgerEntry } from "../lib/halo-ledger.mjs";
 import { reconcilePublishedSong } from "../lib/song-publication.mjs";
-import { dreamweaverSatellite as buildDreamweaverSatellite } from "../lib/dreamweaver-satellite.mjs";
+import { buildDreamweaverSatellite } from "../lib/dreamweaver-satellite.mjs";
 
 // Pipeline stages in order.  Departments can only advance; they cannot regress.
 const PIPELINE_STAGES = [
@@ -47,6 +47,14 @@ function cleanId(value) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(id) ? id : "";
 }
 
+function dreamweaverSatellite(songId) {
+  const id = cleanId(songId);
+  return buildDreamweaverSatellite(id, {
+    includeAgentLoop: true,
+    intervalMs: DREAMWEAVER_SATELLITE_REFRESH_MS,
+  });
+}
+
 function stageIndex(stage) {
   return PIPELINE_STAGES.indexOf(stage);
 }
@@ -65,7 +73,7 @@ function serializePipeline(row) {
     rightsStatus: row.rights_status || "needs_review",
     genre: row.genre || "",
     updatedAt: new Date(row.updated_at).toISOString(),
-    dreamweaverSatellite: buildDreamweaverSatellite(row.id, { includeAgentLoop: true, intervalMs: DREAMWEAVER_SATELLITE_REFRESH_MS }),
+    dreamweaverSatellite: dreamweaverSatellite(row.id),
     departments: buildDepartmentViews(row),
   };
 }

@@ -2,6 +2,13 @@
 .github
 .netlify
 netlify
+!netlify/
+netlify/*
+!netlify/lib/
+netlify/lib/*
+!netlify/lib/dreamweaver-page-manager.mjs
+!netlify/lib/dreamweaver-satellite.mjs
+!netlify/lib/hyperfollow.mjs
 node_modules
 docs
 db

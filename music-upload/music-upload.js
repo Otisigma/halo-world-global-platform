@@ -474,8 +474,8 @@ function resolveDreamweaverExperienceUrl(satellite) {
     satellite?.experienceUrl,
     satellite?.launchUrl,
     satellite?.route,
-    satellite?.canonicalDreamweaverUrl,
     satellite?.fallbackUrl,
+    satellite?.canonicalDreamweaverUrl,
   ];
   for (const candidate of candidates) {
     const safeRoute = sanitizeDreamweaverAssignedRoute(candidate, { origin: window.location.origin });

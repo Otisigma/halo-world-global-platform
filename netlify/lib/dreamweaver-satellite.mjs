@@ -49,6 +49,9 @@ export function dreamweaverSatellite(songId, options = {}) {
       id: flow.manager.id || metadata.agentLoop.id,
       updatePath: flow.manager.updatePath || metadata.agentLoop.updatePath,
       intervalMs: flow.manager.intervalMs || metadata.agentLoop.intervalMs,
+      channels: Array.isArray(flow.manager.channels) && flow.manager.channels.length
+        ? [...flow.manager.channels]
+        : metadata.agentLoop.channels,
     };
   }
   return metadata;
@@ -57,7 +60,7 @@ export function dreamweaverSatellite(songId, options = {}) {
 export function buildDreamweaverSatellite(songId, options = {}) {
   const metadata = dreamweaverSatellite(songId, {
     ...options,
-    includeAgentLoop: options.includeAgentLoop !== false,
+    includeAgentLoop: options.includeAgentLoop || Boolean(options.agentLoop),
   });
   if (!metadata || !options.agentLoop) return metadata;
   return {

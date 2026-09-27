@@ -1,6 +1,5 @@
 import {
-  buildDreamweaverSatellitePath,
-  buildDreamweaverStorefrontPath,
+  buildDreamweaverSatelliteContract,
   cleanDreamweaverMixId,
   cleanDreamweaverSongId,
 } from "../../lib/dreamweaver-storefront.js";
@@ -15,49 +14,47 @@ function cleanMixId(value) {
 }
 
 export function dreamweaverSatellitePath(songId) {
-  return buildDreamweaverSatellitePath(cleanId(songId));
+  return buildDreamweaverSatelliteContract(cleanId(songId), { includeAgentLoop: false })?.satelliteRoute || "";
 }
 
 export function dreamweaverStorefrontPath(songId, options = {}) {
-  const id = cleanId(songId);
-  if (!id) return "";
-  return buildDreamweaverStorefrontPath(id, {
+  return buildDreamweaverSatelliteContract(cleanId(songId), {
     mixId: cleanMixId(options.mixId),
     includeSatelliteFlag: options.includeSatelliteFlag !== false,
-  });
+    includeAgentLoop: false,
+  })?.route || "";
 }
 
 export function dreamweaverSatellite(songId, options = {}) {
   const id = cleanId(songId);
   if (!id) return null;
   const flow = resolveDreamweaverPageFlow(id, options);
-  const route = dreamweaverStorefrontPath(id, options);
-  const satelliteRoute = dreamweaverSatellitePath(id);
-  const canonicalDreamweaverUrl = dreamweaverStorefrontPath(id, {
-    ...options,
-    includeSatelliteFlag: false,
+  const metadataContract = buildDreamweaverSatelliteContract(id, {
+    mixId: cleanMixId(options.mixId),
+    includeSatelliteFlag: options.includeSatelliteFlag !== false,
+    includeAgentLoop: options.includeAgentLoop !== false,
+    updatePath: flow.manager?.updatePath || options.updatePath,
+    intervalMs: flow.manager?.intervalMs || options.intervalMs,
   });
+  if (!metadataContract) return null;
   const metadata = {
     ...flow.page,
     songId: id,
-    route,
-    experienceUrl: route,
-    launchUrl: route,
-    canonicalDreamweaverUrl,
-    satelliteRoute,
-    fallbackUrl: route,
+    ...metadataContract,
     pageAgent: flow.manager || flow.page?.pageAgent || null,
   };
-  if (!options.includeAgentLoop) return metadata;
-  return {
-    ...metadata,
-    agentLoop: {
-      id: flow.manager?.id || `dreamweaver-satellite-${id}`,
-      updatePath: flow.manager?.updatePath || options.updatePath || "/api/release-catalog",
-      intervalMs: flow.manager?.intervalMs || (Number(options.intervalMs) > 0 ? Number(options.intervalMs) : 45_000),
-      channels: ["metadata", "artwork", "playback_state", "linked_song_pages", "hub_loop", "routing"],
-    },
-  };
+  if (metadata.agentLoop && flow.manager) {
+    metadata.agentLoop = {
+      ...metadata.agentLoop,
+      id: flow.manager.id || metadata.agentLoop.id,
+      updatePath: flow.manager.updatePath || metadata.agentLoop.updatePath,
+      intervalMs: flow.manager.intervalMs || metadata.agentLoop.intervalMs,
+      channels: Array.isArray(flow.manager.channels) && flow.manager.channels.length
+        ? [...flow.manager.channels]
+        : metadata.agentLoop.channels,
+    };
+  }
+  return metadata;
 }
 
 export function buildDreamweaverSatellite(songId, options = {}) {

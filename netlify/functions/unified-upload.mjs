@@ -5,6 +5,7 @@ import { cleanText, ensureMembership } from "../lib/halo-x.mjs";
 import { appendLedgerEntry } from "../lib/halo-ledger.mjs";
 import { reconcilePublishedSong } from "../lib/song-publication.mjs";
 import { buildDreamweaverSatellite } from "../lib/dreamweaver-satellite.mjs";
+import { cleanDreamweaverSongId } from "../../lib/dreamweaver-storefront.js";
 
 // Pipeline stages in order.  Departments can only advance; they cannot regress.
 const PIPELINE_STAGES = [
@@ -43,8 +44,7 @@ function json(body, status = 200) {
 }
 
 function cleanId(value) {
-  const id = String(value || "").trim().toLowerCase();
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(id) ? id : "";
+  return cleanDreamweaverSongId(value);
 }
 
 function dreamweaverSatellite(songId) {

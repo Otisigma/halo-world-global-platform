@@ -53,6 +53,8 @@ assert.match(haloHome, /dreamweaverPreviewRetryAllowedRef\.current[\s\S]*!dreamw
 assert.match(releaseCatalogApi, /catalog_album_title/, "release catalog must include song-catalog album metadata for player hydration");
 assert.match(releaseCatalogApi, /catalog_genre/, "release catalog must include song-catalog genre metadata for player hydration");
 assert.match(releaseCatalogApi, /catalog_artwork_url/, "release catalog must include song-catalog artwork metadata for player hydration");
+assert.match(releaseCatalogApi, /const storefront = storefrontStateFor\(row\);[\s\S]*storefront,/, "release catalog must expose sanitized storefront status metadata");
+assert.match(releaseCatalogApi, /Access-Control-Allow-Origin/, "release catalog must emit browser-friendly CORS headers");
 assert.match(musicWorld, /album\s*:\s*release\.albumTitle\s*\|\|\s*release\.collectionTitle\s*\|\|\s*details\.albumTitle\s*\|\|\s*''/, "music world player mapping must hydrate album metadata from catalog fallbacks");
 assert.match(musicWorld, /genre\s*:\s*genres\[0\]\s*\|\|\s*details\.genre\s*\|\|\s*''/, "music world player mapping must hydrate genre metadata from catalog fallbacks");
 assert.match(dreamweaver, /dataset\.haloPlayerAlbum\s*=\s*cleanText\(state\.release\?\.albumTitle\s*\|\|\s*state\.release\?\.collectionTitle\s*\|\|\s*state\.release\?\.catalog\?\.albumTitle\s*\|\|\s*""\)/, "dreamweaver source link must hydrate album metadata from catalog fallbacks");

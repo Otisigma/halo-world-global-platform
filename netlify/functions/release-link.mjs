@@ -1,6 +1,8 @@
 import { getDatabase } from "@netlify/database";
 import { verifyRequestOrigin } from "@netlify/identity";
 import { createHash, timingSafeEqual } from "node:crypto";
+import { resolveDreamweaverPageFlow } from "../lib/dreamweaver-page-manager.mjs";
+import { dreamweaverStorefrontPath } from "../lib/dreamweaver-satellite.mjs";
 
 const audiences = new Set(["fan", "dj", "radio", "press", "preview"]);
 const destinations = {
@@ -25,6 +27,11 @@ function cleanAudience(value) {
   return audiences.has(audience) ? audience : "fan";
 }
 
+function cleanId(value) {
+  const id = String(value || "").trim().toLowerCase();
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(id) ? id : "";
+}
+
 function absoluteDestination(value, requestUrl) {
   try {
     const parsed = new URL(value, requestUrl);
@@ -40,6 +47,44 @@ function accessCodeMatches(code, expectedHash) {
   const receivedHash = createHash("sha256").update(String(code || "")).digest();
   const storedHash = Buffer.from(expectedHash, "hex");
   return storedHash.length === receivedHash.length && timingSafeEqual(storedHash, receivedHash);
+}
+
+function legacyAudioVersionIdFromDestination(destination, requestUrl) {
+  try {
+    const parsed = new URL(destination, requestUrl);
+    if (parsed.origin !== new URL(requestUrl).origin) return "";
+    if (parsed.pathname !== "/api/song-catalog/audio") return "";
+    return cleanId(parsed.searchParams.get("versionId"));
+  } catch {
+    return "";
+  }
+}
+
+async function remapLegacyAudioDestination(db, versionId, {
+  releaseSlug = "",
+  audience = "fan",
+  officialUrl = "",
+  streamUrl = "",
+} = {}) {
+  try {
+    if (!versionId) return "";
+    const result = await db.sql`
+      SELECT version.song_id
+      FROM halo_song_versions version
+      WHERE version.id = ${versionId}
+      LIMIT 1
+    `;
+    const rows = Array.isArray(result) ? result : Array.isArray(result?.rows) ? result.rows : [];
+    const songId = cleanId(rows[0]?.song_id);
+    const route = dreamweaverStorefrontPath(songId, { mixId: cleanSlug(releaseSlug) });
+    if (!route) return "";
+    const routeUrl = new URL(route, "https://halo.world");
+    if (audience && !routeUrl.searchParams.has("audience")) routeUrl.searchParams.set("audience", audience);
+    if (releaseSlug && !routeUrl.searchParams.has("slug")) routeUrl.searchParams.set("slug", releaseSlug);
+    return `${routeUrl.pathname}${routeUrl.search}`;
+  } catch {
+    return "";
+  }
 }
 
 export default async function releaseLinkHandler(request) {
@@ -73,13 +118,30 @@ export default async function releaseLinkHandler(request) {
     }
 
     const url = new URL(request.url);
-    const releaseId = cleanSlug(url.searchParams.get("slug"));
+    const releaseSlug = cleanSlug(url.searchParams.get("slug"));
     const audience = cleanAudience(url.searchParams.get("audience"));
-    if (!releaseId) return json({ message: "Choose a valid release campaign" }, 400);
+    if (!releaseSlug) return json({ message: "Choose a valid release campaign" }, 400);
     const rows = await db.sql`
-      SELECT official_url, dj_url, radio_url, press_url, preview_url, preview_expires_at, preview_access_code_hash
-      FROM halo_release_campaigns
-      WHERE id = ${releaseId} AND status = 'published'
+      SELECT
+        release.official_url,
+        release.stream_url,
+        release.dj_url,
+        release.radio_url,
+        release.press_url,
+        release.preview_url,
+        release.preview_expires_at,
+        release.preview_access_code_hash,
+        catalog.song_id AS catalog_song_id
+      FROM halo_release_campaigns release
+      LEFT JOIN LATERAL (
+        SELECT song.id AS song_id
+        FROM halo_song_catalog song
+        WHERE song.source_release_id = release.id
+          AND song.status = 'active'
+        ORDER BY song.updated_at DESC
+        LIMIT 1
+      ) catalog ON TRUE
+      WHERE release.id = ${releaseSlug} AND release.status = 'published'
       LIMIT 1
     `;
     if (!rows.length) return json({ message: "Release campaign not found" }, 404);
@@ -91,18 +153,42 @@ export default async function releaseLinkHandler(request) {
     if (audience === "preview" && !accessCodeMatches(url.searchParams.get("code"), row.preview_access_code_hash)) {
       return json({ message: "Enter the private preview access code" }, 401);
     }
+    const flow = audience === "fan" && row.catalog_song_id
+      ? resolveDreamweaverPageFlow(row.catalog_song_id, {
+          mixId: releaseSlug,
+          officialUrl: row.official_url || "",
+          streamUrl: row.stream_url || "",
+        })
+      : null;
+    const storefrontDestination = audience === "fan"
+      ? dreamweaverStorefrontPath(row.catalog_song_id, { mixId: releaseSlug })
+      : "";
     const [column, target] = destinations[audience];
-    const destination = absoluteDestination(row[column] || row.official_url, request.url);
+    const preferredDestination = audience === "fan" && flow
+      ? (flow.hasHyperfollow ? flow.destinationUrl : storefrontDestination || flow.destinationUrl) || row[column] || row.official_url
+      : row[column] || row.official_url;
+    const destination = absoluteDestination(preferredDestination, request.url);
     if (!destination) return json({ message: "This campaign destination is not available" }, 404);
+    const legacyAudioVersionId = legacyAudioVersionIdFromDestination(destination, request.url);
+    const remappedDestination = legacyAudioVersionId
+      ? await remapLegacyAudioDestination(db, legacyAudioVersionId, {
+          releaseSlug,
+          audience,
+          officialUrl: row.official_url || "",
+          streamUrl: row.stream_url || "",
+        })
+      : "";
+    const finalDestination = absoluteDestination(remappedDestination || destination, request.url);
+    if (!finalDestination) return json({ message: "This campaign destination is not available" }, 404);
 
     await db.sql`
       INSERT INTO halo_release_campaign_events (release_id, audience, event_type, target)
-      VALUES (${releaseId}, ${audience}, 'outbound_click', ${target})
+      VALUES (${releaseSlug}, ${audience}, 'outbound_click', ${target})
     `;
     return new Response(null, {
       status: 302,
       headers: {
-        Location: destination,
+        Location: finalDestination,
         "Cache-Control": "no-store",
         "Referrer-Policy": "no-referrer"
       }

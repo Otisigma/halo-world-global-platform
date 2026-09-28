@@ -68,6 +68,17 @@
     return release?.catalog && typeof release.catalog === "object" ? release.catalog : {};
   }
 
+  function storefrontState(release) {
+    const storefront = release?.storefront && typeof release.storefront === "object" ? release.storefront : {};
+    const fallback = String(storefront.statusLabel || "").trim().toUpperCase();
+    if (fallback === "READY" || fallback === "PENDING" || fallback === "STANDBY") return storefront;
+    const status = String(release?.publication?.dreamweaverStatus || release?.publication?.releaseStatus || release?.catalog?.saleStatus || "").trim().toLowerCase();
+    return {
+      ...storefront,
+      statusLabel: ["published", "ready", "live", "active"].includes(status) ? "READY" : ["pending", "queued", "processing", "coming_soon"].includes(status) ? "PENDING" : "STANDBY"
+    };
+  }
+
   function directAudioPreviewUrl(release) {
     const candidate = safeUrl(release?.streamUrl || "");
     if (!candidate) return "";
@@ -241,10 +252,9 @@
   }
 
   function releaseDossier(release) {
-    const catalog = catalogState(release);
-    const saleStatus = String(catalog.saleStatus || "").replace(/_/g, " ").trim();
+    const statusLabel = storefrontState(release).statusLabel || "STANDBY";
     return [
-      { label: "Release status", value: saleStatus || availabilitySummary(release).badge },
+      { label: "Release status", value: statusLabel },
       { label: "Chart", value: release.isChartEligible ? "Chart eligible" : "Listening only" },
       { label: "ISRC", value: release.isrc || "Pending" },
       { label: "Support", value: release.purchaseUrl ? "Direct link live" : "Listen link live" }

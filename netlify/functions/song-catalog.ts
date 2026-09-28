@@ -6,6 +6,8 @@ import { db } from "../../db/index.js";
 import { dreamweaverSongReviews, songs, songVersions } from "../../db/schema.js";
 import { cleanText, ensureMembership } from "../lib/halo-x.mjs";
 import { reconcilePublishedSong } from "../lib/song-publication.mjs";
+import { dreamweaverSatellite } from "../lib/dreamweaver-satellite.mjs";
+import { cleanDreamweaverSongId } from "../../lib/dreamweaver-storefront.js";
 
 const MAX_BODY_BYTES = 80_000;
 const RIGHTS_STATUSES = new Set(["needs_review", "cleared", "disputed"]);
@@ -31,8 +33,7 @@ function json(body: unknown, status = 200, headers: Record<string, string> = {})
 }
 
 function cleanId(value: unknown) {
-  const id = String(value || "").trim().toLowerCase();
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(id) ? id : "";
+  return cleanDreamweaverSongId(value);
 }
 
 function cleanEnum(value: unknown, allowed: Set<string>, fallback: string) {
@@ -96,6 +97,7 @@ function serializeSong(song: typeof songs.$inferSelect, versions: Array<typeof s
     reviewedAt: song.reviewedAt?.toISOString() || "",
     artworkUrl: songArtworkUrl,
     artworkUploadedAt: song.artworkUploadedAt?.toISOString() || "",
+    dreamweaverSatellite: dreamweaverSatellite(song.id),
     pipelineStatus: song.pipelineStatus || "uploaded",
     sourceUploadSurface: song.sourceUploadSurface || "",
     pipelineUpdatedAt: song.pipelineUpdatedAt?.toISOString() || "",

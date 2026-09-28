@@ -1,0 +1,56 @@
+name: Telemetry artifact and optional Netlify deploy
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: telemetry-deploy-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  telemetry-artifact:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Generate telemetry payload
+        env:
+          TELEMETRY_SHA: ${{ github.sha }}
+        run: |
+          mkdir -p public
+          node --input-type=module <<'NODE'
+          import { writeFileSync } from 'node:fs';
+
+          const payload = {
+            commitSha: process.env.TELEMETRY_SHA,
+            generatedAt: new Date().toISOString()
+          };
+
+          writeFileSync('public/telemetry.json', `${JSON.stringify(payload, null, 2)}\n`);
+          NODE
+
+      - name: Upload telemetry artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: telemetry-${{ github.sha }}
+          path: public/telemetry.json
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Trigger Netlify build hook
+        if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && secrets.NETLIFY_BUILD_HOOK != '' }}
+        env:
+          NETLIFY_BUILD_HOOK: ${{ secrets.NETLIFY_BUILD_HOOK }}
+        run: curl --fail --show-error --silent --request POST "$NETLIFY_BUILD_HOOK"
+
+      - name: Skip Netlify hook when not configured
+        if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && secrets.NETLIFY_BUILD_HOOK == '' }}
+        run: echo "NETLIFY_BUILD_HOOK is not set; skipping deploy trigger."

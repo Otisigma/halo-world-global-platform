@@ -21,6 +21,7 @@
     }
   };
   const uploadHelper = window.HaloUploadProgress;
+  const HALO_RELEASE_FALLBACK = window.HaloReleaseArtwork?.DEFAULT_RELEASE_ARTWORK || "/assets/releases/halo-premium-placeholder.svg";
 
   const elements = {
     page: document.getElementById("artistPage"),
@@ -77,7 +78,7 @@
     return new Intl.DateTimeFormat("en", { day: "2-digit", month: "short", year: "numeric", timeZone: "UTC" }).format(date);
   }
 
-  function safePreviewUrl(value, fallback = "/assets/halo-app-icon-512.png") {
+  function safePreviewUrl(value, fallback = HALO_RELEASE_FALLBACK) {
     try {
       const url = new URL(value, location.origin);
       return ["http:", "https:"].includes(url.protocol) ? url.href : fallback;
@@ -87,12 +88,16 @@
   }
 
   function wireArtworkFallbacks(root = document) {
-    root.querySelectorAll("img[data-artwork-fallback]").forEach(image => {
+    if (window.HaloReleaseArtwork?.wire) {
+      window.HaloReleaseArtwork.wire(root, HALO_RELEASE_FALLBACK);
+      return;
+    }
+    root.querySelectorAll("img[data-release-artwork], img[data-artwork-fallback]").forEach(image => {
       if (image.dataset.fallbackReady === "true") return;
       image.dataset.fallbackReady = "true";
       const frame = image.closest("[data-artwork-frame]");
       const recover = () => {
-        const fallback = image.dataset.artworkFallback;
+        const fallback = image.dataset.artworkFallback || HALO_RELEASE_FALLBACK;
         if (fallback && image.getAttribute("src") !== fallback) {
           frame?.classList.add("artwork-recovered");
           image.src = fallback;
@@ -319,7 +324,7 @@
       teamLink.href = `/artist-team.html?slug=${encodeURIComponent(page.slug)}`;
     }
     const embed = videoEmbed(page.videoUrl);
-    const artwork = page.artworkUrl || "/assets/halo-app-icon-512.png";
+    const artwork = safePreviewUrl(page.artworkUrl || "", HALO_RELEASE_FALLBACK);
     const featuredUrl = page.websiteUrl && page.websiteUrl !== page.releaseUrl ? page.websiteUrl : "";
     const editChip = state.canEdit ? `<button class="edit-chip" id="editPageButton" type="button">Edit this room</button>` : "";
     const artworkEditorChip = state.canEdit ? `<a class="edit-chip" href="/asset-editor/?surface=artists-release-artwork" target="_blank" rel="noopener">Edit in Asset Editor</a>` : "";
@@ -353,9 +358,9 @@
         </div>
         <div class="hero-art">
           <div class="art-number">01</div>
-          <div class="art-frame" data-artwork-frame>
+          <div class="art-frame release-artwork-frame" data-artwork-frame>
             <span class="art-fallback" aria-hidden="true"><b>${escapeHtml((page.releaseTitle || page.artistName).slice(0, 1))}</b><small>HALO / permanent cover signal</small></span>
-            <img src="${escapeHtml(artwork)}" alt="${escapeHtml(page.releaseTitle || page.artistName)} artwork" data-artwork-fallback="/assets/halo-app-icon-512.png">
+            <img class="release-artwork-image" src="${escapeHtml(artwork)}" alt="${escapeHtml(page.releaseTitle || page.artistName)} artwork" data-release-artwork data-artwork-fallback="${escapeHtml(HALO_RELEASE_FALLBACK)}">
           </div>
           <div class="art-caption"><span>Current signal</span><strong>${escapeHtml(page.releaseTitle || page.artistName)}</strong><small>${formatDate(page.releaseDate)}</small>${artworkEditorChip}</div>
           ${radioCardMarkup()}
@@ -447,11 +452,19 @@
 
   function openRadioSend() {
     if (!state.canEdit || !state.page) return;
-    const artwork = document.getElementById("radioReleaseArtwork");
-    artwork.src = state.page.artworkUrl || "/assets/halo-logo-mark.webp";
+    const artworkFrame = elements.radioSend.querySelector(".radio-release-art");
+    const currentArtwork = document.getElementById("radioReleaseArtwork");
+    const artwork = currentArtwork.cloneNode(false);
+    artwork.id = "radioReleaseArtwork";
+    delete artwork.dataset.releaseArtworkReady;
+    delete artwork.dataset.fallbackReady;
+    delete artwork.dataset.artworkSource;
+    delete artwork.dataset.originalAlt;
+    artwork.src = safePreviewUrl(state.page.artworkUrl || "", HALO_RELEASE_FALLBACK);
     artwork.alt = `${state.page.releaseTitle || state.page.artistName} artwork`;
-    artwork.dataset.artworkFallback = "/assets/halo-logo-mark.webp";
-    wireArtworkFallbacks(elements.radioSend);
+    artwork.dataset.artworkFallback = HALO_RELEASE_FALLBACK;
+    currentArtwork.replaceWith(artwork);
+    wireArtworkFallbacks(artworkFrame || elements.radioSend);
     document.getElementById("radioReleaseTitle").textContent = state.page.releaseTitle || "Current release";
     document.getElementById("radioReleaseArtist").textContent = state.page.artistName;
     document.getElementById("radioReleaseStage").textContent = String(state.page.releaseStage || "release").replace(/_/g, " ");
@@ -754,7 +767,7 @@
     const tagline = String(form.get("tagline") || "").trim();
     const status = String(form.get("status") || "draft");
     elements.catalogPreview.innerHTML = `<article class="catalog-preview-card">
-      <div class="catalog-preview-art" data-artwork-frame><img src="${escapeHtml(artwork)}" alt="${escapeHtml(`${title || "Release"} cover preview`)}" data-artwork-fallback="/assets/halo-app-icon-512.png"><span>${status === "published" ? "Publishes to catalog" : "Draft only"}</span></div>
+      <div class="catalog-preview-art release-artwork-frame" data-artwork-frame><img class="release-artwork-image" src="${escapeHtml(artwork)}" alt="${escapeHtml(`${title || "Release"} cover preview`)}" data-release-artwork data-artwork-fallback="${escapeHtml(HALO_RELEASE_FALLBACK)}"><span>${status === "published" ? "Publishes to catalog" : "Draft only"}</span></div>
       <div class="catalog-preview-copy"><div><div class="catalog-preview-meta"><span>${escapeHtml(formatDate(releaseDate))}</span><span>HALO release</span></div><h5>${escapeHtml(title || "Untitled release")}</h5><p class="catalog-preview-artist">${escapeHtml(artist || "Artist name")}</p>${tagline ? `<p>${escapeHtml(tagline)}</p>` : ""}</div><div class="catalog-preview-actions"><span>Listen now ↗</span><a href="/asset-editor/?surface=artists-release-artwork" target="_blank" rel="noopener">Edit in Asset Editor ↗</a></div></div>
     </article>`;
     wireArtworkFallbacks(elements.catalogPreview);
@@ -960,6 +973,7 @@
     updateAuthMode();
   }));
   window.addEventListener("popstate", () => loadPage());
+  wireArtworkFallbacks(elements.radioSend);
 
   if (window.haloIdentity) connectIdentity();
   else window.addEventListener("halo-identity-ready", connectIdentity, { once: true });

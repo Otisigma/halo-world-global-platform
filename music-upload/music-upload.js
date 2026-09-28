@@ -1,4 +1,5 @@
 import { normalizeHttpsList } from "/music-upload/link-validation.js";
+import { sanitizeDreamweaverAssignedRoute } from "/lib/dreamweaver-storefront.js";
 
 const $ = selector => document.querySelector(selector);
 let uploadHelperLoadPromise = null;
@@ -432,11 +433,11 @@ function renderResults() {
       ? `<p class="result-note needs-attention">${escapeHtml(result.needsAttention)}</p>`
       : `<p class="result-note">${escapeHtml(result.summary)}</p>`;
     const nextStepNote = result.nextStep ? `<p class="result-next-step">${escapeHtml(result.nextStep)}</p>` : "";
-    const satelliteRoute = typeof result.dreamweaverSatellite?.route === "string" ? result.dreamweaverSatellite.route : "";
+    const satelliteRoute = resolveDreamweaverExperienceUrl(result.dreamweaverSatellite);
     const satelliteLoopId = typeof result.dreamweaverSatellite?.agentLoop?.id === "string" ? result.dreamweaverSatellite.agentLoop.id : "";
     const satelliteReceipt = satelliteRoute
       ? `<div class="result-satellite">
-          <a href="${escapeHtml(satelliteRoute)}" target="_blank" rel="noopener noreferrer">Open Dreamweaver satellite page ↗</a>
+          <a href="${escapeHtml(satelliteRoute)}" target="_blank" rel="noopener noreferrer">Open Dreamweaver storefront ↗</a>
           ${satelliteLoopId ? `<small>Agent loop: ${escapeHtml(satelliteLoopId)}</small>` : ""}
         </div>`
       : "";
@@ -462,6 +463,25 @@ function renderResults() {
       </article>
     `;
   }).join("");
+}
+
+function isDreamweaverExperienceUrl(value) {
+  return Boolean(sanitizeDreamweaverAssignedRoute(value, { origin: window.location.origin }));
+}
+
+function resolveDreamweaverExperienceUrl(satellite) {
+  const candidates = [
+    satellite?.experienceUrl,
+    satellite?.launchUrl,
+    satellite?.route,
+    satellite?.fallbackUrl,
+    satellite?.canonicalDreamweaverUrl,
+  ];
+  for (const candidate of candidates) {
+    const safeRoute = sanitizeDreamweaverAssignedRoute(candidate, { origin: window.location.origin });
+    if (safeRoute) return safeRoute;
+  }
+  return "";
 }
 
 function normalizeAudioType(file) {

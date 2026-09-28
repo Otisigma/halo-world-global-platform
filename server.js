@@ -3,6 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { CANONICAL_ROUTE_ALIAS_ENTRIES, PUBLIC_ROUTE_REGISTRY } from "./lib/route-registry.js";
+import { dreamweaverStorefrontPath } from "./netlify/lib/dreamweaver-satellite.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -200,7 +201,13 @@ app.get(/^\/dreamweaver\/satellite\/([^/]+)$/i, (req, res, next) => {
 app.get(/^\/dreamweaver\/satellite\/([^/]+)\/$/i, (req, res, next) => {
   const songId = String(req.params[0] || "").toLowerCase();
   if (!songIdPattern.test(songId)) return next();
-  return sendFileIfPresent(res, path.join("dreamweaver", "index.html"));
+  const targetUrl = new URL(dreamweaverStorefrontPath(songId), "http://localhost");
+  const currentUrl = new URL(req.originalUrl, "http://localhost");
+  for (const [key, value] of currentUrl.searchParams.entries()) {
+    if (targetUrl.searchParams.has(key)) continue;
+    targetUrl.searchParams.append(key, value);
+  }
+  return res.redirect(301, `${targetUrl.pathname}${targetUrl.search}`);
 });
 
 app.get("/sw.js", (_req, res) => {

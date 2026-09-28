@@ -69,6 +69,23 @@ function cleanAudioUrl(value: unknown) {
   }
 }
 
+function cleanVideoUrl(value: unknown) {
+  const text = cleanText(value, 1200);
+  if (!text) return "";
+  if (/^\/api\/videos\?media=[0-9a-f-]+$/i.test(text)) return text;
+  try {
+    const url = new URL(text, "https://halo.world");
+    if (url.pathname === "/api/videos") {
+      const mediaId = cleanId(url.searchParams.get("media"));
+      return mediaId ? `/api/videos?media=${mediaId}` : "";
+    }
+    if (url.protocol !== "https:" || url.username || url.password) return "";
+    return url.toString();
+  } catch {
+    return "";
+  }
+}
+
 function cleanVersionType(value: unknown): VersionType {
   const type = String(value || "").trim().toLowerCase() as VersionType;
   return VERSION_ROUTES[type] ? type : "alternate";
@@ -116,6 +133,8 @@ function serializeSong(song: typeof songs.$inferSelect, versions: Array<typeof s
       cleanLyrics: version.cleanLyrics,
       saleEnabled: version.saleEnabled,
       notes: version.notes,
+      videoUrl: version.videoUrl || "",
+      promoVideoUrl: version.promoVideoUrl || "",
       artworkUrl: version.artworkUrl || "",
       resolvedArtworkUrl: version.artworkUrl || songArtworkUrl,
       customArtworkUrl: version.artworkUrl || "",
@@ -229,6 +248,9 @@ export async function runDreamweaverReview(songId: string, ownerMemberId: string
   const saleMaster = versions.find(version => version.versionType === "sale_master");
   if (!saleMaster) issues.push({ field: "sale_master", level: "required", message: "Add a sale master version." });
   else if (!saleMaster.audioUrl) issues.push({ field: "sale_master_audio", level: "required", message: "Connect the approved sale master audio source." });
+  if (!versions.some(version => version.videoUrl || version.promoVideoUrl)) {
+    issues.push({ field: "video_lane", level: "warning", message: "Add at least one release video or promo film link so fans can follow the visual story from catalog to Dreamweaver." });
+  }
 
   const radioVersions = versions.filter(version => ["radio_edit", "clean"].includes(version.versionType));
   if (!radioVersions.length) issues.push({ field: "radio_edit", level: "required", message: "Add a radio edit or clean radio version." });
@@ -321,6 +343,8 @@ async function saveVersion(ownerMemberId: string, payload: Record<string, unknow
     targetLufs: Math.max(-30, Math.min(-5, Number.parseInt(String(payload.targetLufs || route.targetLufs), 10) || route.targetLufs)),
     truePeakDbtpTenths: Math.max(-100, Math.min(0, Math.round(Number(payload.truePeakDbtp ?? -1) * 10))),
     cleanLyrics: payload.cleanLyrics === true, saleEnabled: payload.saleEnabled === true,
+    videoUrl: cleanVideoUrl(payload.videoUrl),
+    promoVideoUrl: cleanVideoUrl(payload.promoVideoUrl),
     notes: cleanText(payload.notes, 2000), updatedAt: new Date(),
   }).where(and(eq(songVersions.id, versionId), eq(songVersions.songId, songId))).returning({ id: songVersions.id });
   if (!rows.length) return json({ message: "That version was not found" }, 404);

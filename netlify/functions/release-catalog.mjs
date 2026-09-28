@@ -101,6 +101,8 @@ function serializeRelease(row) {
     .filter(Boolean);
   const catalogGenre = catalogGenres[0] || "";
   const catalogArtworkUrl = row.catalog_artwork_url || "";
+  const catalogVideoUrl = row.catalog_video_url || "";
+  const catalogPromoVideoUrl = row.catalog_promo_video_url || "";
   const storefront = storefrontStateFor(row);
   const releaseGenres = Array.isArray(row.genres)
     ? row.genres.map(value => String(value || "").trim()).filter(Boolean)
@@ -132,6 +134,8 @@ function serializeRelease(row) {
     isChartEligible: Boolean(row.is_chart_eligible),
     purchaseUrl: row.purchase_url || "",
     streamUrl: row.stream_url || "",
+    videoUrl: catalogVideoUrl || "",
+    promoVideoUrl: catalogPromoVideoUrl || "",
     featuredType: row.featured_type || "",
     featuredUntil: row.featured_until ? String(row.featured_until).slice(0, 10) : "",
     artistSlug: row.artist_slug || "",
@@ -147,6 +151,8 @@ function serializeRelease(row) {
       albumTitle: catalogAlbumTitle,
       genre: catalogGenre,
       artworkUrl: catalogArtworkUrl,
+      videoUrl: catalogVideoUrl,
+      promoVideoUrl: catalogPromoVideoUrl,
       rightsStatus: row.catalog_rights_status || "",
       saleStatus: row.catalog_sale_status || "",
       metadataStatus: row.catalog_metadata_status || "",
@@ -225,6 +231,8 @@ export default async function releaseCatalogHandler(request) {
         catalog.catalog_currency,
         catalog_versions.catalog_version_count,
         catalog_versions.catalog_sale_enabled_count,
+        catalog_video.catalog_video_url,
+        catalog_video.catalog_promo_video_url,
         publication.release_status AS publication_release_status,
         publication.radio_status AS publication_radio_status,
         publication.dreamweaver_status AS publication_dreamweaver_status,
@@ -293,6 +301,14 @@ export default async function releaseCatalogHandler(request) {
         WHERE version.song_id = catalog.catalog_song_id
           AND version.status = 'active'
       ) catalog_versions ON TRUE
+      LEFT JOIN LATERAL (
+        SELECT
+          MAX(NULLIF(version.video_url, '')) AS catalog_video_url,
+          MAX(NULLIF(version.promo_video_url, '')) AS catalog_promo_video_url
+        FROM halo_song_versions version
+        WHERE version.song_id = catalog.catalog_song_id
+          AND version.status = 'active'
+      ) catalog_video ON TRUE
       WHERE release.status = 'published'
       ORDER BY release.release_date DESC NULLS LAST, release.updated_at DESC
       LIMIT 200

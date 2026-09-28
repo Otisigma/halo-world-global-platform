@@ -112,7 +112,7 @@ const CONTROLLER_PHASES = [
   {
     id: "transfer",
     label: "Asset transfer",
-    detail: "Audio and artwork uploads go into tracked storage with visible live progress.",
+    detail: "Audio and artwork uploads (plus approved source video links) go into tracked storage with visible live progress.",
   },
   {
     id: "persistence",
@@ -435,9 +435,11 @@ function renderResults() {
     const nextStepNote = result.nextStep ? `<p class="result-next-step">${escapeHtml(result.nextStep)}</p>` : "";
     const satelliteRoute = resolveDreamweaverExperienceUrl(result.dreamweaverSatellite);
     const satelliteLoopId = typeof result.dreamweaverSatellite?.agentLoop?.id === "string" ? result.dreamweaverSatellite.agentLoop.id : "";
+    const studioRoute = satelliteRoute ? `${satelliteRoute}${satelliteRoute.includes("?") ? "&" : "?"}experience=studio` : "";
     const satelliteReceipt = satelliteRoute
       ? `<div class="result-satellite">
           <a href="${escapeHtml(satelliteRoute)}" target="_blank" rel="noopener noreferrer">Open Dreamweaver storefront ↗</a>
+          ${studioRoute ? `<a href="${escapeHtml(studioRoute)}" target="_blank" rel="noopener noreferrer">Create promo film ↗</a>` : ""}
           ${satelliteLoopId ? `<small>Agent loop: ${escapeHtml(satelliteLoopId)}</small>` : ""}
         </div>`
       : "";
@@ -763,7 +765,7 @@ async function processPackage({ artistName, title, albumTitle, genre, isrc, upc,
         ? `Needs attention: Dreamweaver review found ${issueCount} blocking item${issueCount === 1 ? "" : "s"} in the catalog package.`
         : "",
     nextStep: finalStage === "dreamweaver_in_progress"
-      ? "Next: Dreamweaver now processes this locked package. Open the song satellite page to experience this release in its own isolated runtime."
+      ? "Next: Dreamweaver now processes this locked package. Open the song satellite page, then launch campaign studio to create a promo film."
       : "Next: Upload remaining assets. This package is saved; remove or replace files only if needed.",
     dreamweaverSatellite: pipeline.dreamweaverSatellite || created.dreamweaverSatellite || null,
     artworkSourceSongId: nextArtworkSourceSongId,

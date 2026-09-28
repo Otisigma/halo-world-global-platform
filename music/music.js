@@ -339,6 +339,54 @@
     return hasSafeMediaUrl(video.sourceUrl);
   }
 
+  function youtubeEmbedFromUrl(value) {
+    const urlText = safeUrl(value);
+    if (!urlText) return "";
+    try {
+      const url = new URL(urlText);
+      const host = url.hostname.replace(/^www\./, "");
+      const id = host === "youtu.be"
+        ? url.pathname.split("/").filter(Boolean)[0]
+        : url.searchParams.get("v") || url.pathname.split("/").filter(Boolean).pop();
+      return /^[A-Za-z0-9_-]{11}$/.test(id || "") ? `https://www.youtube-nocookie.com/embed/${id}` : "";
+    } catch {
+      return "";
+    }
+  }
+
+  function directVideoForRelease(release) {
+    const candidates = [
+      release?.promoVideoUrl,
+      release?.videoUrl,
+      release?.catalog?.promoVideoUrl,
+      release?.catalog?.videoUrl
+    ].map(value => safeUrl(value)).filter(Boolean);
+    for (const candidate of candidates) {
+      const embedUrl = youtubeEmbedFromUrl(candidate);
+      if (embedUrl) {
+        return {
+          id: `release-video-${release.id}`,
+          title: `${release.title} promo`,
+          sourceType: "youtube",
+          sourceUrl: candidate,
+          embedUrl,
+          thumbnailUrl: releaseArtwork(release).src
+        };
+      }
+      if (/\.(mp4|webm|mov)(?:$|[?#])/i.test(candidate) || /\/api\/videos(?:$|\?)/i.test(candidate)) {
+        return {
+          id: `release-video-${release.id}`,
+          title: `${release.title} promo`,
+          sourceType: "upload",
+          sourceUrl: candidate,
+          embedUrl: "",
+          thumbnailUrl: releaseArtwork(release).src
+        };
+      }
+    }
+    return null;
+  }
+
   function fallbackVideoForRelease(release) {
     if (!satelliteVideoFallbackEnabled) return null;
     return {
@@ -372,6 +420,8 @@
   }
 
   function videoForRelease(release) {
+    const direct = directVideoForRelease(release);
+    if (direct) return direct;
     const video = state.videos.find(videoItem => {
       if (satelliteVideoFallbackEnabled && !isPlayableVideo(videoItem)) return false;
       return releaseMatchesVideoCandidate(release, videoItem);

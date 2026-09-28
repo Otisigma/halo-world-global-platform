@@ -53,6 +53,8 @@ assert.match(haloHome, /dreamweaverPreviewRetryAllowedRef\.current[\s\S]*!dreamw
 assert.match(releaseCatalogApi, /catalog_album_title/, "release catalog must include song-catalog album metadata for player hydration");
 assert.match(releaseCatalogApi, /catalog_genre/, "release catalog must include song-catalog genre metadata for player hydration");
 assert.match(releaseCatalogApi, /catalog_artwork_url/, "release catalog must include song-catalog artwork metadata for player hydration");
+assert.match(releaseCatalogApi, /catalog_video_url/, "release catalog must include song-catalog release video metadata");
+assert.match(releaseCatalogApi, /catalog_promo_video_url/, "release catalog must include song-catalog promo video metadata");
 assert.match(releaseCatalogApi, /const storefront = storefrontStateFor\(row\);[\s\S]*storefront,/, "release catalog must expose sanitized storefront status metadata");
 assert.match(releaseCatalogApi, /Access-Control-Allow-Origin/, "release catalog must emit browser-friendly CORS headers");
 assert.match(musicWorld, /<script src="\/release-artwork\.js"><\/script>/, "music world must load the shared artwork resolver");
@@ -60,6 +62,8 @@ assert.match(musicWorld, /album\s*:\s*release\.albumTitle\s*\|\|\s*release\.coll
 assert.match(musicWorld, /genre\s*:\s*genres\[0\]\s*\|\|\s*details\.genre\s*\|\|\s*''/, "music world player mapping must hydrate genre metadata from catalog fallbacks");
 assert.match(musicWorld, /resolveTrackArtwork=release=>\{[\s\S]*window\.HaloReleaseArtwork\?\.resolve/, "music world storefront cards must use the shared artwork resolver");
 assert.match(musicWorld, /resolveTrackAudio=release=>\{[\s\S]*window\.HaloReleaseArtwork\?\.resolveAudio/, "music world storefront cards must normalize audio with the shared resolver");
+assert.match(musicWorld, /videoUrl=safeHref\(release\.promoVideoUrl\|\|release\.videoUrl\|\|details\.promoVideoUrl\|\|details\.videoUrl\)/, "music world track mapping must surface release and promo video URLs from catalog fallbacks");
+assert.match(musicWorld, /Watch release video/, "music world product cards must expose release video links when available");
 assert.match(musicWorld, /sanitizeDreamweaverExperienceUrl=value=>\{[\s\S]*url\.origin!==location\.origin[\s\S]*\/\^\\\/dreamweaver\\\/\?\$\/i\.test\(url\.pathname\)/, "music world Dreamweaver menu entry must sanitize route assignments to same-origin Dreamweaver paths");
 assert.match(musicWorld, /id="shopFeatureDreamweaverLink"[\s\S]*Open Dreamweaver song lobby[\s\S]*const dreamweaverEntry=track\.dreamweaverUrl/, "music world storefront must expose a visible Dreamweaver song lobby menu-box entry for featured and card releases");
 assert.match(musicWorld, /data-halo-player="audio"/, "music world storefront previews must keep direct audio previews player-safe");

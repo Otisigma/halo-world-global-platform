@@ -266,24 +266,38 @@ function redirectToArtwork(location = DEFAULT_PUBLIC_ARTWORK, cacheControl = "pu
   });
 }
 
-async function serveArtwork(request: Request, db: Awaited<ReturnType<typeof getDatabase>>, ownerMemberId = "") {
+function isOwnerScopedArtworkRequest(request: Request) {
+  const referer = request.headers.get("referer");
+  if (!referer) return false;
+  try {
+    const requestUrl = new URL(request.url);
+    const refererUrl = new URL(referer);
+    return refererUrl.origin === requestUrl.origin && refererUrl.pathname.startsWith("/song-catalog/");
+  } catch {
+    return false;
+  }
+}
+
+async function serveArtwork(
+  request: Request,
+  db: Awaited<ReturnType<typeof getDatabase>>,
+  { ownerMemberId = "", allowPublicFallback = true }: { ownerMemberId?: string; allowPublicFallback?: boolean } = {},
+) {
   const params = new URL(request.url).searchParams;
   const songId = cleanId(params.get("songId"));
   const versionId = cleanId(params.get("versionId"));
   let record: Record<string, unknown> | null = null;
   if (versionId && songId) {
-    record = ownerMemberId
-      ? await ownedVersion(db, ownerMemberId, songId, versionId)
-      : await publicVersion(db, songId, versionId);
+    if (ownerMemberId) record = await ownedVersion(db, ownerMemberId, songId, versionId);
+    if (!record && allowPublicFallback) record = await publicVersion(db, songId, versionId);
   } else if (songId) {
-    record = ownerMemberId
-      ? await ownedSong(db, ownerMemberId, songId)
-      : await publicSong(db, songId);
+    if (ownerMemberId) record = await ownedSong(db, ownerMemberId, songId);
+    if (!record && allowPublicFallback) record = await publicSong(db, songId);
   }
   const fallbackArtwork = cleanPublicArtworkUrl(record?.artwork_url, request) || DEFAULT_PUBLIC_ARTWORK;
-  if (!record) return redirectToArtwork();
+  if (!record) return allowPublicFallback ? redirectToArtwork() : json({ message: "Song artwork was not found" }, 404);
   if (!record.artwork_blob_prefix || !record.artwork_chunk_count || !record.artwork_byte_size) {
-    return redirectToArtwork(fallbackArtwork);
+    return allowPublicFallback ? redirectToArtwork(fallbackArtwork) : json({ message: "Song artwork was not found" }, 404);
   }
   const byteSize = Number(record.artwork_byte_size);
   const range = requestedByteRange(request.headers.get("range"), byteSize);
@@ -291,7 +305,9 @@ async function serveArtwork(request: Request, db: Awaited<ReturnType<typeof getD
   const prefix = String(record.artwork_blob_prefix);
   const chunkCount = Number(record.artwork_chunk_count);
   const stored = await artworkStore.list({ prefix });
-  if (!hasCompleteChunkSet(stored.blobs, prefix, chunkCount)) return redirectToArtwork(fallbackArtwork);
+  if (!hasCompleteChunkSet(stored.blobs, prefix, chunkCount)) {
+    return allowPublicFallback ? redirectToArtwork(fallbackArtwork) : json({ message: "Song artwork was not found" }, 404);
+  }
   const headers: Record<string, string> = {
     "Content-Type": String(record.artwork_content_type || "application/octet-stream"),
     "Content-Length": String(range ? range.end - range.start + 1 : byteSize),
@@ -389,9 +405,10 @@ export default async function songCatalogArtworkHandler(request: Request) {
     const db = await getDatabase();
     if (["GET", "HEAD"].includes(request.method)) {
       const user = await getUser().catch(() => null);
-      if (!user?.id) return serveArtwork(request, db);
+      if (!user?.id || !isOwnerScopedArtworkRequest(request)) return serveArtwork(request, db);
       const membership = await ensureMembership(db, user).catch(() => null);
-      return serveArtwork(request, db, membership?.member_id || "");
+      if (!membership?.member_id) return json({ message: "Join or sign in to use song artwork" }, 401);
+      return serveArtwork(request, db, { ownerMemberId: membership.member_id, allowPublicFallback: false });
     }
     const user = await getUser();
     if (!user?.id) return json({ message: "Join or sign in to use song artwork" }, 401);

@@ -1,9 +1,19 @@
 (() => {
   const DEFAULT_RELEASE_ARTWORK = "/assets/releases/halo-premium-placeholder.svg";
   const DEFAULT_RELEASE_ARTWORK_BADGE = "HALO placeholder cover";
+  const AUDIO_PATH_MATCHERS = [
+    /^\/api\/song-catalog\/audio$/i,
+    /^\/api\/mixes\/audio$/i,
+    /^\/api\/radio\/audio$/i,
+    /^\/api\/stem-vault\/audio$/i,
+  ];
+
+  function safeText(value) {
+    return typeof value === "string" ? value.trim() : "";
+  }
 
   function safeUrl(value, fallback = "") {
-    const raw = typeof value === "string" ? value.trim() : "";
+    const raw = safeText(value);
     if (!raw) return fallback;
     try {
       const url = new URL(raw, window.location.origin);
@@ -15,6 +25,28 @@
 
   function sameUrl(left, right) {
     return safeUrl(left) === safeUrl(right);
+  }
+
+  function isSameOriginUrl(value) {
+    const url = safeUrl(value);
+    if (!url) return false;
+    try {
+      return new URL(url).origin === window.location.origin;
+    } catch {
+      return false;
+    }
+  }
+
+  function candidateEntries(values, source) {
+    return values
+      .map(value => safeUrl(value))
+      .filter(Boolean)
+      .map(url => ({ url, source }));
+  }
+
+  function pickPreferredCandidate(entries) {
+    const candidates = Array.isArray(entries) ? entries.filter(entry => entry?.url) : [];
+    return candidates.find(entry => isSameOriginUrl(entry.url)) || candidates[0] || null;
   }
 
   function ensureBadge(frame) {
@@ -52,12 +84,78 @@
 
   function resolve(release = {}, fallbackArtwork = DEFAULT_RELEASE_ARTWORK) {
     const fallback = safeUrl(fallbackArtwork, DEFAULT_RELEASE_ARTWORK);
-    const artworkOverride = safeUrl(release.artworkOverride || release.artworkOverrideUrl || release.artwork_override_url);
-    const importedArtwork = safeUrl(release.importedArtwork || release.importedArtworkUrl || release.imported_artwork_url);
-    const legacyArtwork = safeUrl(release.artwork || release.artworkUrl || release.artwork_url);
-    const src = artworkOverride || importedArtwork || legacyArtwork || fallback;
-    const source = artworkOverride ? "manual" : importedArtwork ? "imported" : legacyArtwork ? "legacy" : "fallback";
+    const artworkOverrideCandidates = candidateEntries([
+      release.artworkOverride,
+      release.artworkOverrideUrl,
+      release.artwork_override_url,
+    ], "manual");
+    const importedArtworkCandidates = candidateEntries([
+      release.importedArtwork,
+      release.importedArtworkUrl,
+      release.imported_artwork_url,
+    ], "imported");
+    const legacyArtworkCandidates = candidateEntries([
+      release.artwork,
+      release.artworkUrl,
+      release.artwork_url,
+      release.catalog?.artworkUrl,
+      release.catalog?.artwork_url,
+    ], "legacy");
+    const artworkOverride = pickPreferredCandidate(artworkOverrideCandidates)?.url || "";
+    const importedArtwork = pickPreferredCandidate(importedArtworkCandidates)?.url || "";
+    const preferredArtwork = pickPreferredCandidate([
+      ...artworkOverrideCandidates,
+      ...importedArtworkCandidates,
+      ...legacyArtworkCandidates,
+    ]);
+    const src = preferredArtwork?.url || fallback;
+    const source = preferredArtwork?.source || "fallback";
     return { src, source, artworkOverride, importedArtwork, fallback };
+  }
+
+  function isLikelyAudioUrl(value) {
+    const url = safeUrl(value);
+    if (!url) return false;
+    try {
+      const parsed = new URL(url);
+      return /\.(mp3|m4a|aac|ogg|oga|wav|flac|webm)(?:$|[?#])/i.test(`${parsed.pathname}${parsed.search}`)
+        || AUDIO_PATH_MATCHERS.some(pattern => pattern.test(parsed.pathname));
+    } catch {
+      return false;
+    }
+  }
+
+  function resolveAudio(track = {}, options = {}) {
+    const { preferPreview = false, requirePlayable = false } = options;
+    const previewCandidates = candidateEntries([
+      track.previewAudio,
+      track.preview_audio,
+    ], "preview");
+    const primaryCandidates = candidateEntries([
+      track.audioUrl,
+      track.audio_url,
+      track.sourceUrl,
+    ], "primary");
+    const streamCandidates = candidateEntries([
+      track.streamUrl,
+    ], "stream");
+    const orderedCandidates = preferPreview
+      ? [...previewCandidates, ...primaryCandidates, ...streamCandidates]
+      : [...primaryCandidates, ...previewCandidates, ...streamCandidates];
+    const filteredCandidates = requirePlayable
+      ? orderedCandidates.filter(candidate => isLikelyAudioUrl(candidate.url))
+      : orderedCandidates;
+    const selected = pickPreferredCandidate(filteredCandidates);
+    return {
+      src: selected?.url || "",
+      source: selected?.source || "",
+      isPlayable: Boolean(selected?.url && isLikelyAudioUrl(selected.url)),
+      candidates: filteredCandidates.map(candidate => candidate.url),
+    };
+  }
+
+  function resolvePreviewAudio(track = {}, options = {}) {
+    return resolveAudio(track, { ...options, preferPreview: true, requirePlayable: true });
   }
 
   function logArtworkIssue(eventType, brokenUrl, page) {
@@ -108,7 +206,10 @@
   window.HaloReleaseArtwork = {
     DEFAULT_RELEASE_ARTWORK,
     DEFAULT_RELEASE_ARTWORK_BADGE,
+    isLikelyAudioUrl,
     resolve,
+    resolveAudio,
+    resolvePreviewAudio,
     wire
   };
 })();

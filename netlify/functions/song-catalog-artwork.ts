@@ -8,6 +8,7 @@ const ALLOWED_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 const MAX_CHUNK_BYTES = 4 * 1024 * 1024;
 const MAX_UPLOAD_BYTES = 20 * 1024 * 1024;
 const MAX_CHUNKS = Math.ceil(MAX_UPLOAD_BYTES / MAX_CHUNK_BYTES);
+const DEFAULT_PUBLIC_ARTWORK = "/assets/releases/halo-premium-placeholder.svg";
 
 function json(body: unknown, status = 200, headers: Record<string, string> = {}) {
   return Response.json(body, { status, headers: { "Cache-Control": "no-store", ...headers } });
@@ -80,6 +81,30 @@ async function ownedVersion(db: Awaited<ReturnType<typeof getDatabase>>, ownerMe
     FROM halo_song_versions v
     JOIN halo_song_catalog s ON s.id = v.song_id
     WHERE v.id = ${versionId} AND v.song_id = ${songId} AND s.owner_member_id = ${ownerMemberId} AND v.status = 'active' AND s.status = 'active'
+    LIMIT 1
+  `;
+  return rows[0] || null;
+}
+
+async function publicSong(db: Awaited<ReturnType<typeof getDatabase>>, songId: string) {
+  const rows = await db.sql`
+    SELECT song.id, song.artwork_url, song.artwork_blob_prefix, song.artwork_chunk_count, song.artwork_byte_size, song.artwork_content_type, song.artwork_filename
+    FROM halo_song_catalog song
+    JOIN halo_release_campaigns release ON release.id = song.source_release_id
+    WHERE song.id = ${songId} AND song.status = 'active' AND release.status = 'published'
+    LIMIT 1
+  `;
+  return rows[0] || null;
+}
+
+async function publicVersion(db: Awaited<ReturnType<typeof getDatabase>>, songId: string, versionId: string) {
+  const rows = await db.sql`
+    SELECT v.id, v.artwork_url, v.artwork_blob_prefix, v.artwork_chunk_count, v.artwork_byte_size, v.artwork_content_type, v.artwork_filename
+    FROM halo_song_versions v
+    JOIN halo_song_catalog song ON song.id = v.song_id
+    JOIN halo_release_campaigns release ON release.id = song.source_release_id
+    WHERE v.id = ${versionId} AND v.song_id = ${songId}
+      AND v.status = 'active' AND song.status = 'active' AND release.status = 'published'
     LIMIT 1
   `;
   return rows[0] || null;
@@ -215,32 +240,68 @@ async function readArtworkRange(song: Record<string, unknown>, range: { start: n
   return image;
 }
 
-async function serveArtwork(request: Request, db: Awaited<ReturnType<typeof getDatabase>>, ownerMemberId: string) {
+function cleanPublicArtworkUrl(value: unknown, request: Request) {
+  const raw = cleanText(value, 2000);
+  if (!raw) return "";
+  try {
+    const requestUrl = new URL(request.url);
+    const url = new URL(raw, requestUrl);
+    if (!["http:", "https:"].includes(url.protocol) || url.username || url.password) return "";
+    if (url.href === requestUrl.href) return "";
+    return url.origin === requestUrl.origin
+      ? `${url.pathname}${url.search}${url.hash}`
+      : url.href;
+  } catch {
+    return "";
+  }
+}
+
+function redirectToArtwork(location = DEFAULT_PUBLIC_ARTWORK, cacheControl = "public, max-age=3600") {
+  return new Response(null, {
+    status: 302,
+    headers: {
+      Location: location,
+      "Cache-Control": cacheControl,
+    },
+  });
+}
+
+async function serveArtwork(request: Request, db: Awaited<ReturnType<typeof getDatabase>>, ownerMemberId = "") {
   const params = new URL(request.url).searchParams;
   const songId = cleanId(params.get("songId"));
   const versionId = cleanId(params.get("versionId"));
   let record: Record<string, unknown> | null = null;
   if (versionId && songId) {
-    record = await ownedVersion(db, ownerMemberId, songId, versionId);
+    record = ownerMemberId
+      ? await ownedVersion(db, ownerMemberId, songId, versionId)
+      : await publicVersion(db, songId, versionId);
   } else if (songId) {
-    record = await ownedSong(db, ownerMemberId, songId);
+    record = ownerMemberId
+      ? await ownedSong(db, ownerMemberId, songId)
+      : await publicSong(db, songId);
   }
-  if (!record?.artwork_blob_prefix || !record.artwork_chunk_count || !record.artwork_byte_size) return json({ message: "Song artwork was not found" }, 404);
+  const fallbackArtwork = cleanPublicArtworkUrl(record?.artwork_url, request) || DEFAULT_PUBLIC_ARTWORK;
+  if (!record) return redirectToArtwork();
+  if (!record.artwork_blob_prefix || !record.artwork_chunk_count || !record.artwork_byte_size) {
+    return redirectToArtwork(fallbackArtwork);
+  }
   const byteSize = Number(record.artwork_byte_size);
   const range = requestedByteRange(request.headers.get("range"), byteSize);
-  if (range === false) return new Response(null, { status: 416, headers: { "Content-Range": `bytes */${byteSize}`, "Cache-Control": "private, no-store" } });
+  if (range === false) return new Response(null, { status: 416, headers: { "Content-Range": `bytes */${byteSize}`, "Cache-Control": ownerMemberId ? "private, no-store" : "public, max-age=3600" } });
+  const prefix = String(record.artwork_blob_prefix);
+  const chunkCount = Number(record.artwork_chunk_count);
+  const stored = await artworkStore.list({ prefix });
+  if (!hasCompleteChunkSet(stored.blobs, prefix, chunkCount)) return redirectToArtwork(fallbackArtwork);
   const headers: Record<string, string> = {
     "Content-Type": String(record.artwork_content_type || "application/octet-stream"),
     "Content-Length": String(range ? range.end - range.start + 1 : byteSize),
     "Accept-Ranges": "bytes",
-    "Cache-Control": "private, max-age=86400",
+    "Cache-Control": ownerMemberId ? "private, max-age=86400" : "public, max-age=86400",
     "Content-Disposition": `inline; filename="${String(record.artwork_filename || "artwork").replace(/[^a-zA-Z0-9._ -]/g, "")}"`,
   };
   if (range) headers["Content-Range"] = `bytes ${range.start}-${range.end}/${byteSize}`;
   if (request.method === "HEAD") return new Response(null, { status: range ? 206 : 200, headers });
   if (range) return new Response(await readArtworkRange(record, range), { status: 206, headers });
-  const prefix = String(record.artwork_blob_prefix);
-  const chunkCount = Number(record.artwork_chunk_count);
   const image = new ReadableStream({
     async start(controller) {
       try {
@@ -325,10 +386,16 @@ async function reuseSongArtwork(payload: Record<string, unknown>, db: Awaited<Re
 export default async function songCatalogArtworkHandler(request: Request) {
   if (!["GET", "HEAD", "POST", "DELETE"].includes(request.method)) return json({ message: "Method not allowed" }, 405, { Allow: "GET, HEAD, POST, DELETE" });
   try {
-    const [db, user] = await Promise.all([getDatabase(), getUser()]);
+    const db = await getDatabase();
+    if (["GET", "HEAD"].includes(request.method)) {
+      const user = await getUser().catch(() => null);
+      if (!user?.id) return serveArtwork(request, db);
+      const membership = await ensureMembership(db, user).catch(() => null);
+      return serveArtwork(request, db, membership?.member_id || "");
+    }
+    const user = await getUser();
     if (!user?.id) return json({ message: "Join or sign in to use song artwork" }, 401);
     const membership = await ensureMembership(db, user);
-    if (["GET", "HEAD"].includes(request.method)) return serveArtwork(request, db, membership.member_id);
     try { verifyRequestOrigin(request); } catch { return json({ message: "Cross-origin artwork requests are not accepted" }, 403); }
     if (request.method === "DELETE") {
       const payload = await request.json().catch(() => null) as Record<string, unknown> | null;

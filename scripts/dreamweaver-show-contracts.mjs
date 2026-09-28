@@ -1,6 +1,5 @@
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
-import { DREAMWEAVER_STOREFRONT_MIX_ID } from "../lib/dreamweaver-storefront.js";
 
 const root = resolve(import.meta.dirname, "..");
 const read = path => readFile(resolve(root, path), "utf8");
@@ -75,15 +74,15 @@ const checks = [
     "keeps Netlify aligned to the canonical HALO home route and serves /dreamweaver/ directly without reintroducing the legacy alias redirect"
   ],
   [
-    config.includes(`/dreamweaver/?mix=${DREAMWEAVER_STOREFRONT_MIX_ID}&song=:songId&satellite=dreamweaver`)
-      && /from = "\/dreamweaver\/satellite\/:songId"[\s\S]*status = 301/.test(config)
-      && /from = "\/dreamweaver\/satellite\/:songId\/"[\s\S]*status = 301/.test(config)
+    /from = "\/dreamweaver\/satellite\/:songId"[\s\S]*to = "\/dreamweaver\/satellite\/:songId\/"[\s\S]*status = 301/.test(config)
+      && /from = "\/dreamweaver\/satellite\/:songId\/"[\s\S]*to = "\/dreamweaver\/index\.html"[\s\S]*status = 200/.test(config)
       && server.includes("app.get(/^\\/dreamweaver\\/satellite\\/([^/]+)$/")
       && server.includes("app.get(/^\\/dreamweaver\\/satellite\\/([^/]+)\\/$")
-      && server.includes("dreamweaverStorefrontPath")
+      && server.includes("sendFileIfPresent(res, path.join(\"dreamweaver\", \"index.html\"))")
       && server.includes("songIdPattern"),
-    "funnels deterministic Dreamweaver satellite URLs into the storefront route across Netlify and local server"
+    "serves deterministic Dreamweaver satellite URLs as a standalone same-origin route across Netlify and local server"
   ],
+  [page.includes('id="dreamweaverCanonicalLink"') && script.includes("updateCanonicalParentLink") && script.includes("songIdFromSatellitePath") && !script.includes("window.location.replace(canonicalDreamweaverUrl"), "keeps satellite routes standalone while exposing an obvious canonical Dreamweaver parent back-link"],
   [page.includes('id="campaignStudio"') && page.includes('id="campaignCanvas"') && page.includes("Make a Reel / Short"), "adds the Dreamweaver campaign cutting room"],
   [script.includes("renderVerticalClip") && script.includes("captureStream") && script.includes("MediaRecorder"), "renders a downloadable vertical clip in supported browsers"],
   [page.includes('id="downloadClip"') && page.includes('id="renderStatus"') && styles.includes('[hidden] { display: none !important; }'), "shows reliable film progress and keeps hidden overlays out of the preview"],

@@ -105,6 +105,7 @@ import { DREAMWEAVER_STOREFRONT_MIX_ID, buildDreamweaverStorefrontPath } from ".
     storyActIII: document.getElementById("storyActIII"),
     storyActIV: document.getElementById("storyActIV"),
     songLobbyMakeCampaign: document.getElementById("songLobbyMakeCampaign"),
+    canonicalLink: document.getElementById("dreamweaverCanonicalLink"),
     creatorGatewayLink: document.getElementById("dreamweaverCreatorGateway"),
     uploadLabel: document.querySelector(".upload-label"),
     mixFileInput: document.getElementById("mixFileInput"),
@@ -461,7 +462,7 @@ import { DREAMWEAVER_STOREFRONT_MIX_ID, buildDreamweaverStorefrontPath } from ".
   }
 
   function songIdFromSatellitePath(pathname = location.pathname) {
-    const match = String(pathname || "").match(/^\/dreamweaver\/satellite\/([0-9a-f-]{36})\/?$/i);
+    const match = String(pathname || "").match(/^\/dreamweaver\/satellite\/([0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})\/?$/i);
     return cleanSongId(match?.[1] || "");
   }
 
@@ -1323,7 +1324,7 @@ import { DREAMWEAVER_STOREFRONT_MIX_ID, buildDreamweaverStorefrontPath } from ".
   }
 
   function canonicalDreamweaverUrl({
-    includeSatelliteFlag = false,
+    includeSatelliteFlag = null,
     searchParams = location.search,
     fallbackMixId = "",
   } = {}) {
@@ -1332,10 +1333,21 @@ import { DREAMWEAVER_STOREFRONT_MIX_ID, buildDreamweaverStorefrontPath } from ".
       ? new URLSearchParams(searchParams)
       : new URLSearchParams(searchParams);
     if (!cleanText(params.get("mix"), 80) && fallbackMixId) params.set("mix", fallbackMixId);
+    const shouldIncludeSatelliteFlag = typeof includeSatelliteFlag === "boolean"
+      ? includeSatelliteFlag
+      : isSatellitePath() || params.get("satellite") === "dreamweaver";
     return buildDreamweaverStorefrontPath(songId, {
       mixId: params.get("mix"),
-      includeSatelliteFlag: includeSatelliteFlag || isSatellitePath() || params.get("satellite") === "dreamweaver",
+      includeSatelliteFlag: shouldIncludeSatelliteFlag,
       searchParams: params,
+    });
+  }
+
+  function updateCanonicalParentLink() {
+    if (!elements.canonicalLink) return;
+    elements.canonicalLink.href = canonicalDreamweaverUrl({
+      includeSatelliteFlag: false,
+      fallbackMixId: DREAMWEAVER_STOREFRONT_MIX_ID,
     });
   }
 
@@ -1359,6 +1371,7 @@ import { DREAMWEAVER_STOREFRONT_MIX_ID, buildDreamweaverStorefrontPath } from ".
   }
 
   function updatePlatformLinks() {
+    updateCanonicalParentLink();
     const query = rewardSearchQuery();
     if (elements.spotifyLink) elements.spotifyLink.href = unlockPlatforms.spotify.href(query);
     if (elements.appleLink) elements.appleLink.href = unlockPlatforms.apple_music.href(query);
@@ -2612,14 +2625,7 @@ import { DREAMWEAVER_STOREFRONT_MIX_ID, buildDreamweaverStorefrontPath } from ".
   async function initializeDreamweaver() {
     hydrateAudioFeedbackQueue();
     void flushQueuedAudioFeedback();
-    if (isSatellitePath()) {
-      window.location.replace(canonicalDreamweaverUrl({
-        includeSatelliteFlag: true,
-        fallbackMixId: DREAMWEAVER_STOREFRONT_MIX_ID,
-      }));
-      return;
-    }
-    if (isSatelliteFlow() && !new URLSearchParams(location.search).get("mix")) {
+    if (isSatelliteFlow() && !isSatellitePath() && !new URLSearchParams(location.search).get("mix")) {
       history.replaceState(null, "", canonicalDreamweaverUrl({
         includeSatelliteFlag: true,
         fallbackMixId: DREAMWEAVER_STOREFRONT_MIX_ID,

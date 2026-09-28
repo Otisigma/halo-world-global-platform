@@ -9,7 +9,7 @@
   <script>
     (() => {
       const params = new URLSearchParams(window.location.search);
-      const isSatellitePath = /^\/dreamweaver\/satellite\/[^/]+\/?$/.test(window.location.pathname);
+      const isSatellitePath = /^\/dreamweaver\/satellite\/[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\/?$/i.test(window.location.pathname);
       const hasMix = Boolean(params.get("mix"));
       const isSatelliteFlow = isSatellitePath
         || (!(params.get("campaign") || params.get("experience") === "studio") && (!hasMix || params.get("satellite") === "dreamweaver"));
@@ -142,6 +142,7 @@
           <div class="song-lobby__actions">
             <button class="satellite-submit satellite-submit--inline" id="songLobbyMakeCampaign" type="button">MAKE A REEL / SHORT</button>
             <a class="song-lobby__anchor" href="#storyActI">Read the story arc</a>
+            <a class="song-lobby__anchor song-lobby__anchor--subtle" id="dreamweaverCanonicalLink" href="/dreamweaver/" aria-label="Open the canonical Dreamweaver experience">Open canonical Dreamweaver experience</a>
           </div>
         </div>
 

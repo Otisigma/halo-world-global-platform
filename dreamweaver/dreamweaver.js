@@ -678,9 +678,16 @@ import { DREAMWEAVER_STOREFRONT_MIX_ID, buildDreamweaverStorefrontPath } from ".
     }
   }
 
+  function resolvePrimaryAudio(entry = {}, options = {}) {
+    const resolved = window.HaloReleaseArtwork?.resolveAudio(entry, { requirePlayable: true, ...options });
+    if (resolved?.src) return resolved;
+    const candidate = safeMediaUrl(entry?.audioUrl || entry?.audio_url || entry?.sourceUrl || entry?.previewAudio || entry?.preview_audio || entry?.streamUrl);
+    return { src: candidate, source: candidate ? "legacy" : "", isPlayable: Boolean(candidate) };
+  }
+
   function isPlayablePrimaryMix(mix) {
     const source = cleanText(mix?.source, 60).toLowerCase();
-    return Boolean(cleanText(mix?.audioUrl, 1200)) && source !== "youtube";
+    return Boolean(resolvePrimaryAudio(mix).src) && source !== "youtube";
   }
 
   function mixRouteTokens(mix = {}) {
@@ -933,7 +940,8 @@ import { DREAMWEAVER_STOREFRONT_MIX_ID, buildDreamweaverStorefrontPath } from ".
   }
 
   async function bootstrapPrimaryPlayback(mix) {
-    if (!mix?.audioUrl) {
+    const primaryAudio = resolvePrimaryAudio(mix).src;
+    if (!primaryAudio) {
       queueAudioFeedbackIncident("missing_audio", {
         severity: "high",
         title: "Dreamweaver could not find primary audio",
@@ -952,7 +960,7 @@ import { DREAMWEAVER_STOREFRONT_MIX_ID, buildDreamweaverStorefrontPath } from ".
     state.audioSourceMode = "remote";
     elements.audio.pause();
     elements.audio.currentTime = 0;
-    elements.audio.src = mix.audioUrl;
+    elements.audio.src = primaryAudio;
     elements.audio.load?.();
     armRemoteAudioWatchdog();
 
@@ -1387,7 +1395,7 @@ import { DREAMWEAVER_STOREFRONT_MIX_ID, buildDreamweaverStorefrontPath } from ".
       elements.sourceLink.dataset.haloPlayerDuration = state.duration ? formatTime(state.duration) : cleanText(state.release?.duration || "", 24);
       elements.sourceLink.dataset.haloPlayerRelease = cleanText(state.release?.releaseDate || releaseDateLabel(state.release?.publication?.lastReconciledAt) || state.publishedSongId, 40);
       elements.sourceLink.dataset.haloPlayerStatus = activePlayerStatusLabel(state.release);
-      elements.sourceLink.dataset.haloPlayerArtwork = safeMediaUrl(state.release?.artwork || state.release?.artworkOverride || state.release?.importedArtwork || state.release?.catalog?.artworkUrl);
+      elements.sourceLink.dataset.haloPlayerArtwork = releaseArtwork(state.release).src;
       delete elements.sourceLink.dataset.haloPlayer;
     }
     if (elements.songLobbyPlayerSource && elements.sourceLink) {
@@ -2318,7 +2326,7 @@ import { DREAMWEAVER_STOREFRONT_MIX_ID, buildDreamweaverStorefrontPath } from ".
     try {
       exportAudio = new Audio();
       exportAudio.preload = "auto";
-      exportAudio.src = state.mix.audioUrl;
+      exportAudio.src = resolvePrimaryAudio(state.mix).src;
       await new Promise((resolve, reject) => {
         exportAudio.addEventListener("loadedmetadata", resolve, { once: true });
         exportAudio.addEventListener("error", () => reject(new Error("The mix audio could not be prepared for rendering.")), { once: true });

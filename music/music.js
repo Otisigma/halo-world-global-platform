@@ -79,15 +79,15 @@
     };
   }
 
+  function resolvedAudio(release, options = {}) {
+    const resolved = window.HaloReleaseArtwork?.resolveAudio(release, options);
+    if (resolved?.src) return resolved;
+    const candidate = safeUrl(release?.audioUrl || release?.audio_url || release?.sourceUrl || release?.previewAudio || release?.preview_audio || release?.streamUrl || "");
+    return { src: candidate, source: candidate ? "legacy" : "", isPlayable: Boolean(candidate) };
+  }
+
   function directAudioPreviewUrl(release) {
-    const candidate = safeUrl(release?.streamUrl || "");
-    if (!candidate) return "";
-    try {
-      const { pathname } = new URL(candidate);
-      return /\.(mp3|m4a|aac|ogg|wav|flac|webm)$/i.test(pathname) ? candidate : "";
-    } catch {
-      return "";
-    }
+    return resolvedAudio(release, { preferPreview: true, requirePlayable: true }).src;
   }
 
   function availabilitySummary(release) {
@@ -129,7 +129,7 @@
     const catalog = catalogState(release);
     if (release.purchaseUrl && catalog.salePriceCents > 0) return `Buy / support · ${money(catalog.salePriceCents, catalog.currency)}`;
     if (release.purchaseUrl) return "Buy / support";
-    if (release.streamUrl) return "Open stream";
+    if (resolvedAudio(release).src || release.streamUrl) return "Open stream";
     return "";
   }
 
@@ -605,7 +605,7 @@
     const listenAction = listenHref
       ? `<a class="action primary" href="${escapeHtml(listenHref)}" data-stat-event="open_catalog_release" data-stat-target="${escapeHtml(release.id)}">Listen now <span aria-hidden="true">↗</span></a>`
       : `<span class="action primary" aria-disabled="true">Listen link unavailable</span>`;
-    const buyHref = safeUrl(release.purchaseUrl || release.streamUrl);
+    const buyHref = safeUrl(release.purchaseUrl || resolvedAudio(release).src || release.streamUrl);
     const buyAction = buyHref
       ? `<a class="action buy" href="${escapeHtml(buyHref)}" target="_blank" rel="noopener" data-stat-event="buy_release" data-stat-target="${escapeHtml(release.id)}">${escapeHtml(buyActionLabel(release))} <span aria-hidden="true">↗</span></a>`
       : "";

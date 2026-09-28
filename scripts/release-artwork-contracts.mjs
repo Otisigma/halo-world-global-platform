@@ -58,6 +58,9 @@ assert.match(haloPage, /fallbackReleaseArtwork = window\.HaloReleaseArtwork\?\.D
 assert.match(browserHelper, /window\.HaloReleaseArtwork/);
 assert.match(browserHelper, /release-artwork-badge/);
 assert.match(browserHelper, /HALO placeholder cover/);
+assert.match(browserHelper, /resolveAudio/);
+assert.match(browserHelper, /resolvePreviewAudio/);
+assert.match(browserHelper, /isLikelyAudioUrl/);
 assert.match(sharedStyles, /\.release-artwork-frame/);
 assert.match(sharedStyles, /\.release-artwork-badge/);
 assert.match(musicClient, /data-artwork-source/);

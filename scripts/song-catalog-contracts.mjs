@@ -8,7 +8,7 @@ import {
 
 const root = resolve(import.meta.dirname, "..");
 const read = path => readFile(resolve(root, path), "utf8");
-const [page, client, styles, api, audioApi, artworkApi, producerApi, producerLib, satelliteHelper, schema, migration, audioMigration, artworkMigration, versionArtworkMigration, producerMigration, config, home, packageText, uploadHelper, dreamweaverManager] = await Promise.all([
+const [page, client, styles, api, audioApi, artworkApi, producerApi, producerLib, satelliteHelper, schema, migration, audioMigration, artworkMigration, versionArtworkMigration, producerMigration, versionVideoMigration, config, home, packageText, uploadHelper, dreamweaverManager] = await Promise.all([
   read("song-catalog/index.html"),
   read("song-catalog/song-catalog.js"),
   read("song-catalog/song-catalog.css"),
@@ -24,6 +24,7 @@ const [page, client, styles, api, audioApi, artworkApi, producerApi, producerLib
   read("netlify/database/migrations/20260826210000_add_song_artwork/migration.sql"),
   read("netlify/database/migrations/20260826220000_add_version_artwork/migration.sql"),
   read("netlify/database/migrations/20260821183000_create_catalog_producer/migration.sql"),
+  read("netlify/database/migrations/20260928194000_add_song_version_video_fields.sql"),
   read("netlify.toml"),
   read("halo.html"),
   read("package.json"),
@@ -85,6 +86,10 @@ const checks = [
   [page.includes("versionArtworkFile") && page.includes("versionArtworkPreview") && page.includes("versionArtworkHeading"), "adds version artwork upload zone with preview to the version editor dialog"],
   [client.includes("uploadVersionArtwork") && client.includes("deleteVersionArtwork") && client.includes("renderVersionArtwork"), "implements version artwork upload, delete, and preview rendering"],
   [client.includes("resolvedArtwork") && client.includes("versionUsesCustomArtwork") && client.includes("version-row-artwork"), "resolves version artwork consistently with explicit inherit/custom state"],
+  [page.includes('id="versionVideoFile"') && page.includes('id="versionVideoUrl"') && page.includes('id="promoVideoUrl"') && page.includes('id="openVideoStudioButton"'), "adds version video upload and Dreamweaver promo-film routing controls"],
+  [client.includes("uploadVersionVideo") && client.includes("renderVersionVideo") && client.includes("openVideoStudioButton"), "implements version video upload flow and promo-film status messaging in the catalog client"],
+  [api.includes("cleanVideoUrl") && api.includes("videoUrl") && api.includes("promoVideoUrl"), "persists version video and promo-video links through validated catalog actions"],
+  [schema.includes("videoUrl") && schema.includes("promoVideoUrl") && versionVideoMigration.includes("promo_video_url"), "adds version video and promo video fields to schema and migration coverage"],
   [client.includes("queue-song") && client.includes("renderRadioQueue") && client.includes("resolvedArtwork(song,version)"), "uses resolved version artwork in radio queue entries"],
   [client.includes("track.artworkUrl") && client.includes("producer-track-index"), "shows artwork in producer package track rows"],
   [page.includes('id="audioUploadTrack"') && page.includes('id="deleteVersionAudioButton"') && page.includes('id="artworkUploadTrack"') && page.includes('id="versionArtworkTrack"'), "renders visible upload progress tracks and audio delete controls for catalog uploads"],

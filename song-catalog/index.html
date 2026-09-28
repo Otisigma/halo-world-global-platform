@@ -169,6 +169,21 @@
         </div>
         </section>
         <label class="wide-field"><span>External audio source link (optional)</span><input id="audioUrl" type="text" placeholder="https://secure-audio-location.example/song.wav"></label>
+        <section class="wide-field version-video-panel" aria-labelledby="versionVideoHeading">
+          <div>
+            <span class="field-label" id="versionVideoHeading">Release video lane</span>
+            <strong>Upload or link a video for this version.</strong>
+            <p>Upload MP4, WebM, or MOV clips up to 5 MB, or store an existing URL as the release video source.</p>
+          </div>
+          <label class="audio-file-picker"><span>Choose video file</span><input id="versionVideoFile" type="file" accept="video/mp4,video/webm,video/quicktime,.mp4,.webm,.mov"></label>
+          <div class="audio-upload-actions">
+            <button class="quiet-button" id="uploadVersionVideoButton" type="button">Upload selected video</button>
+            <a class="quiet-button" id="openVideoStudioButton" href="/dreamweaver/?experience=studio" target="_blank" rel="noopener noreferrer">Create promo film in Dreamweaver ↗</a>
+          </div>
+          <p class="audio-upload-progress" id="versionVideoState" role="status">No version video linked yet.</p>
+        </section>
+        <label class="wide-field"><span>Version video URL (optional)</span><input id="versionVideoUrl" type="text" placeholder="https://video.example/release.mp4 or /api/videos?media=..."></label>
+        <label class="wide-field"><span>Promo video URL (optional)</span><input id="promoVideoUrl" type="text" placeholder="https://video.example/promo.mp4"></label>
         <section class="wide-field version-artwork-panel" aria-labelledby="versionArtworkHeading">
           <div class="artwork-preview-area"><img class="artwork-preview" id="versionArtworkPreview" src="" alt="Version artwork preview" hidden><div class="artwork-placeholder" id="versionArtworkPlaceholder" aria-hidden="true"></div></div>
           <div class="artwork-upload-body">

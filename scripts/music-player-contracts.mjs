@@ -55,8 +55,12 @@ assert.match(releaseCatalogApi, /catalog_genre/, "release catalog must include s
 assert.match(releaseCatalogApi, /catalog_artwork_url/, "release catalog must include song-catalog artwork metadata for player hydration");
 assert.match(releaseCatalogApi, /const storefront = storefrontStateFor\(row\);[\s\S]*storefront,/, "release catalog must expose sanitized storefront status metadata");
 assert.match(releaseCatalogApi, /Access-Control-Allow-Origin/, "release catalog must emit browser-friendly CORS headers");
+assert.match(musicWorld, /<script src="\/release-artwork\.js"><\/script>/, "music world must load the shared artwork resolver");
 assert.match(musicWorld, /album\s*:\s*release\.albumTitle\s*\|\|\s*release\.collectionTitle\s*\|\|\s*details\.albumTitle\s*\|\|\s*''/, "music world player mapping must hydrate album metadata from catalog fallbacks");
 assert.match(musicWorld, /genre\s*:\s*genres\[0\]\s*\|\|\s*details\.genre\s*\|\|\s*''/, "music world player mapping must hydrate genre metadata from catalog fallbacks");
+assert.match(musicWorld, /resolveTrackArtwork=release=>\{[\s\S]*window\.HaloReleaseArtwork\?\.resolve/, "music world storefront cards must use the shared artwork resolver");
+assert.match(musicWorld, /resolveTrackAudio=release=>\{[\s\S]*window\.HaloReleaseArtwork\?\.resolveAudio/, "music world storefront cards must normalize audio with the shared resolver");
+assert.match(musicWorld, /data-halo-player="audio"/, "music world storefront previews must keep direct audio previews player-safe");
 assert.match(dreamweaver, /dataset\.haloPlayerAlbum\s*=\s*cleanText\(state\.release\?\.albumTitle\s*\|\|\s*state\.release\?\.collectionTitle\s*\|\|\s*state\.release\?\.catalog\?\.albumTitle\s*\|\|\s*""\)/, "dreamweaver source link must hydrate album metadata from catalog fallbacks");
 assert.match(dreamweaver, /dataset\.haloPlayerGenre\s*=\s*Array\.isArray\(state\.release\?\.genres\)\s*&&\s*state\.release\.genres\.length[\s\S]*state\.release\?\.catalog\?\.genre/, "dreamweaver source link must hydrate genre metadata from catalog fallbacks");
 assert.match(dreamweaver, /dataset\.haloPlayerArtwork\s*=\s*releaseArtwork\(state\.release\)\.src/, "dreamweaver source link must hydrate artwork metadata from the shared artwork resolver");

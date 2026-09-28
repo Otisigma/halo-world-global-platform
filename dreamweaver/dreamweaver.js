@@ -549,6 +549,64 @@ import { DREAMWEAVER_STOREFRONT_MIX_ID, buildDreamweaverStorefrontPath } from ".
     } catch {
       return "";
     }
+
+    function pickFirstText(value, alternatives = [], limit = 1200) {
+      const values = [value, ...alternatives];
+      for (const candidate of values) {
+        const text = cleanText(candidate, limit);
+        if (text) return text;
+      }
+      return "";
+    }
+
+    function normalizeCreatorPayload(value = {}) {
+      const creator = value && typeof value === "object" ? value : {};
+      const name = pickFirstText(creator.name, [creator.displayName, creator.display_name, creator.artistName, creator.artist_name], 160);
+      const avatar = safeMediaUrl(pickFirstText(creator.avatar, [creator.avatarUrl, creator.avatar_url, creator.image, creator.imageUrl], 1200));
+      const badge = pickFirstText(creator.badge, [creator.role, creator.label], 80);
+      return { ...creator, name, avatar, badge };
+    }
+
+    function normalizeMixPayload(value = {}) {
+      const mix = value && typeof value === "object" ? value : {};
+      const id = pickFirstText(mix.id, [mix.mixId, mix.mix_id, mix.slug], 160);
+      const source = pickFirstText(mix.source, [mix.sourceType, mix.source_type, mix.platform], 80).toLowerCase();
+      const audioUrl = safeMediaUrl(pickFirstText(mix.audioUrl, [mix.audio_url, mix.sourceUrl, mix.source_url, mix.streamUrl, mix.stream_url], 1200));
+      const artworkUrl = safeMediaUrl(pickFirstText(mix.artworkUrl, [mix.artwork_url, mix.thumbnailUrl, mix.thumbnail_url, mix.coverUrl, mix.cover_url], 1200));
+      return {
+        ...mix,
+        id: id || cleanKey(pickFirstText(mix.title, [mix.name], 160), 160),
+        title: pickFirstText(mix.title, [mix.name, mix.mixTitle, mix.mix_title], 160),
+        description: pickFirstText(mix.description, [mix.summary, mix.caption], 1200),
+        source,
+        audioUrl,
+        artworkUrl: artworkUrl || mix.artworkUrl || "",
+        durationSeconds: Number(mix.durationSeconds ?? mix.duration_seconds ?? mix.duration ?? 0) || 0,
+        creator: normalizeCreatorPayload({
+          ...(mix.creator && typeof mix.creator === "object" ? mix.creator : {}),
+          name: mix.creator?.name ?? mix.creatorName ?? mix.creator_name ?? mix.artist ?? mix.artistName ?? mix.artist_name,
+          avatar: mix.creator?.avatar ?? mix.creatorAvatar ?? mix.creator_avatar ?? mix.avatar,
+          badge: mix.creator?.badge ?? mix.creatorBadge ?? mix.creator_badge
+        })
+      };
+    }
+
+    function normalizeVideoPayload(value = {}) {
+      const video = value && typeof value === "object" ? value : {};
+      const sourceUrl = safeMediaUrl(pickFirstText(video.sourceUrl, [video.source_url, video.url, video.videoUrl, video.video_url], 1200));
+      const embedUrl = safeMediaUrl(pickFirstText(video.embedUrl, [video.embed_url, video.youtubeEmbedUrl, video.youtube_embed_url], 1200));
+      const thumbnailUrl = safeMediaUrl(pickFirstText(video.thumbnailUrl, [video.thumbnail_url, video.posterUrl, video.poster_url, video.image, video.imageUrl, video.image_url], 1200));
+      const sourceType = pickFirstText(video.sourceType, [video.source_type, video.type], 40).toLowerCase();
+      return {
+        ...video,
+        id: pickFirstText(video.id, [video.videoId, video.video_id], 160) || cleanKey(pickFirstText(video.title, [video.name], 160), 160),
+        title: pickFirstText(video.title, [video.name, video.label], 160),
+        sourceType: sourceType || (embedUrl ? "youtube" : "upload"),
+        sourceUrl: sourceUrl || embedUrl || "",
+        embedUrl: embedUrl || "",
+        thumbnailUrl: thumbnailUrl || ""
+      };
+    }
   }
 
   function isHyperfollowUrl(value) {
@@ -746,7 +804,7 @@ import { DREAMWEAVER_STOREFRONT_MIX_ID, buildDreamweaverStorefrontPath } from ".
     const requested = cleanKey(requestedMixId, 160);
     const strictRequested = cleanKey(strictRequestedId, 160);
     const requestedKey = strictRequested || requested;
-    const library = Array.isArray(mixes) ? mixes : [];
+    const library = (Array.isArray(mixes) ? mixes : []).map(normalizeMixPayload);
     const requestedEntry = strictRequested
       ? library.find(item => cleanKey(item?.id, 160) === strictRequested)
       : requested
@@ -1277,7 +1335,7 @@ import { DREAMWEAVER_STOREFRONT_MIX_ID, buildDreamweaverStorefrontPath } from ".
       credentials: "same-origin"
     });
     if (!response.ok) throw new Error(payload.message || "Dreamweaver could not resolve the requested mix.");
-    const mixes = Array.isArray(payload.mixes) ? payload.mixes : [];
+    const mixes = (Array.isArray(payload.mixes) ? payload.mixes : []).map(normalizeMixPayload);
     return mixes.find(item => cleanKey(item?.id, 160) === requested) || null;
   }
 
@@ -2439,7 +2497,7 @@ import { DREAMWEAVER_STOREFRONT_MIX_ID, buildDreamweaverStorefrontPath } from ".
         credentials: "same-origin"
       });
       if (!response.ok) return;
-      state.videos = Array.isArray(payload.videos) ? payload.videos.slice(0, 8) : [];
+      state.videos = (Array.isArray(payload.videos) ? payload.videos : []).map(normalizeVideoPayload).slice(0, 8);
       renderFootageSelector();
       renderArchive();
       renderSongLobbyHero();
@@ -2465,7 +2523,7 @@ import { DREAMWEAVER_STOREFRONT_MIX_ID, buildDreamweaverStorefrontPath } from ".
       renderSongLobbyHero();
       return;
     }
-    elements.archiveReel.innerHTML = state.videos.map(video => `<a class="archive-card" href="${escapeHtml(video.sourceUrl || video.embedUrl || "/artists/")}" ${video.sourceType === "youtube" ? 'target="_blank" rel="noopener noreferrer"' : ""}><img src="${escapeHtml(video.thumbnailUrl || "/assets/halo-logo-mark.webp")}" alt="${escapeHtml(video.title || "Dreamweaver archive video")} thumbnail"><span>${escapeHtml(video.title)}</span></a>`).join("");
+    elements.archiveReel.innerHTML = state.videos.map(video => `<a class="archive-card" href="${escapeHtml(video.sourceUrl || video.embedUrl || "/artists/")}" ${video.sourceType === "youtube" ? 'target="_blank" rel="noopener noreferrer"' : ""}><img src="${escapeHtml(video.thumbnailUrl || "/assets/halo-logo-mark.webp")}" alt="${escapeHtml(video.title || "Dreamweaver archive video")} thumbnail"><span>${escapeHtml(video.title || "Dreamweaver archive video")}</span></a>`).join("");
     renderSongLobbyHero();
   }
 
@@ -2505,7 +2563,7 @@ import { DREAMWEAVER_STOREFRONT_MIX_ID, buildDreamweaverStorefrontPath } from ".
       });
       if (!response.ok) throw new Error(data.message || "The Dreamweaver mix library could not be read.");
       let release = null;
-      const mixLibrary = Array.isArray(data.mixes) ? data.mixes : [];
+      const mixLibrary = (Array.isArray(data.mixes) ? data.mixes : []).map(normalizeMixPayload);
       let mix = resolvePrimaryPlaybackMix(mixLibrary, requestedMix, null, {
         allowFallback: !requestedMix,
         strictRequestedId: requestedMixId

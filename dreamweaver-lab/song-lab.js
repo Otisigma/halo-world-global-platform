@@ -3,12 +3,13 @@
   const elements = {
     form: byId("songForm"), file: byId("songFile"), title: byId("songTitle"), artist: byId("artistName"), brief: byId("creativeBrief"), lyrics: byId("lyrics"), rights: byId("rightsAttested"),
     dropZone: byId("dropZone"), dropTitle: byId("dropTitle"), dropDetail: byId("dropDetail"), analyze: byId("analyzeButton"), status: byId("formStatus"), canvas: byId("waveCanvas"), waveIdle: byId("waveIdle"),
+    coverFile: byId("coverFile"), coverDropZone: byId("coverDropZone"), coverDropTitle: byId("coverDropTitle"), coverDropDetail: byId("coverDropDetail"),
     duration: byId("signalDuration"), audio: byId("audioPreview"), processing: byId("processing"), processingStage: byId("processingStage"), processingTitle: byId("processingTitle"), processingDetail: byId("processingDetail"),
     results: byId("results"), resultTitle: byId("resultTitle"), resultSummary: byId("resultSummary"), cover: byId("coverFrame"), visualConcept: byId("visualConcept"), visualTypography: byId("visualTypography"), visualPalette: byId("visualPalette"),
     moods: byId("moodTags"), genres: byId("genreList"), audience: byId("audienceCopy"), structures: byId("structureList"), mixes: byId("mixList"), tagline: byId("campaignTagline"), releaseCopy: byId("releaseCopy"), captions: byId("captionStack"), rollout: byId("rolloutList"), videos: byId("videoList"), limits: byId("limitsList"), confidence: byId("confidenceNote"), history: byId("historyGrid"), download: byId("downloadPackage"), toast: byId("toast")
   };
   const metrics = { tempo: byId("metricTempo"), key: byId("metricKey"), dynamics: byId("metricDynamics"), brightness: byId("metricBrightness"), peak: byId("metricPeak"), width: byId("metricWidth") };
-  const state = { file: null, audioBuffer: null, objectUrl: "", evidence: null, project: null, pollTimer: 0, projects: [] };
+  const state = { file: null, coverFile: null, audioBuffer: null, objectUrl: "", coverObjectUrl: "", evidence: null, project: null, pollTimer: 0, projects: [] };
   const noteNames = ["C", "C♯", "D", "E♭", "E", "F", "F♯", "G", "A♭", "A", "B♭", "B"];
   const uploadTrustStorageKey = "halo-dreamweaver-upload-trust";
   const uploadTrustTtlMs = 15 * 60 * 1000;
@@ -19,9 +20,22 @@
   function titleFromFile(name) { return name.replace(/\.[a-z0-9]{2,5}$/i, "").replace(/[_-]+/g, " ").replace(/\s+/g, " ").trim(); }
   function showToast(message) { elements.toast.textContent = message; elements.toast.classList.add("show"); clearTimeout(showToast.timer); showToast.timer = setTimeout(() => elements.toast.classList.remove("show"), 3200); }
   function setStatus(message, error = false) { elements.status.textContent = message; elements.status.style.color = error ? "#ff9274" : ""; }
+  function supportedCoverType(type = "", name = "") {
+    const normalized = String(type || "").toLowerCase();
+    if (["image/jpeg", "image/png", "image/webp"].includes(normalized)) return true;
+    return /\.(jpe?g|png|webp)$/i.test(String(name || ""));
+  }
   function list(items) { return (items || []).map(item => `<li>${escapeHtml(item)}</li>`).join(""); }
   function average(values) { return values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : 0; }
   function percentile(values, ratio) { if (!values.length) return 0; const ordered = [...values].sort((a, b) => a - b); return ordered[Math.min(ordered.length - 1, Math.floor(ordered.length * ratio))]; }
+  function resetCoverSelection() {
+    state.coverFile = null;
+    if (state.coverObjectUrl) URL.revokeObjectURL(state.coverObjectUrl);
+    state.coverObjectUrl = "";
+    if (elements.coverFile) elements.coverFile.value = "";
+    if (elements.coverDropTitle) elements.coverDropTitle.textContent = "Optional cover artwork";
+    if (elements.coverDropDetail) elements.coverDropDetail.textContent = "Drop JPG, PNG, or WebP · up to 20 MB";
+  }
 
   function normalizeTrustRoute(value) {
     const route = String(value || "").trim();
@@ -258,6 +272,24 @@
     } catch { state.file = null; setStatus("This browser could not decode that audio file. Try a WAV, MP3, M4A, OGG, or WebM file.", true); }
   }
 
+  function loadCoverFile(file) {
+    if (!file) return resetCoverSelection();
+    if (!supportedCoverType(file.type, file.name)) {
+      resetCoverSelection();
+      return setStatus("Choose cover art in JPG, PNG, or WebP format.", true);
+    }
+    if (file.size > 20 * 1024 * 1024) {
+      resetCoverSelection();
+      return setStatus("Keep cover artwork under 20 MB.", true);
+    }
+    state.coverFile = file;
+    if (state.coverObjectUrl) URL.revokeObjectURL(state.coverObjectUrl);
+    state.coverObjectUrl = URL.createObjectURL(file);
+    if (elements.coverDropTitle) elements.coverDropTitle.textContent = file.name;
+    if (elements.coverDropDetail) elements.coverDropDetail.textContent = `${(file.size / 1024 / 1024).toFixed(1)} MB · ready for upload`;
+    showToast("Cover artwork ready.");
+  }
+
   async function uploadFile(file) {
     const uploadId = crypto.randomUUID(); const chunkSize = 3.5 * 1024 * 1024; const chunkCount = Math.ceil(file.size / chunkSize);
     for (let index = 0; index < chunkCount; index += 1) {
@@ -268,6 +300,31 @@
       const data = await response.json().catch(() => ({})); if (!response.ok) throwApiError(data, "The private audio upload stopped early.");
     }
     return { uploadId, chunkCount };
+  }
+
+  async function uploadCoverFile(file) {
+    if (!file) return null;
+    const coverUploadId = `cover-${crypto.randomUUID()}`;
+    const chunkSize = 3.5 * 1024 * 1024;
+    const chunkCount = Math.ceil(file.size / chunkSize);
+    for (let index = 0; index < chunkCount; index += 1) {
+      elements.processingStage.textContent = `SECURING COVER ART / ${index + 1} OF ${chunkCount}`;
+      elements.processingDetail.textContent = "Uploading optional artwork reference into the private intake flow.";
+      const body = new FormData();
+      body.append("chunk", file.slice(index * chunkSize, Math.min(file.size, (index + 1) * chunkSize), file.type), file.name);
+      body.append("uploadId", coverUploadId);
+      body.append("chunkIndex", String(index));
+      body.append("chunkCount", String(chunkCount));
+      const response = await fetch("/api/dreamweaver-song-lab", { method: "POST", body, credentials: "same-origin", headers: trustedUploadHeaders() });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throwApiError(data, "The optional cover artwork upload stopped early.");
+    }
+    return {
+      coverUploadId,
+      coverFileName: file.name,
+      coverContentType: file.type,
+      coverByteSize: file.size
+    };
   }
 
   async function pollProject(projectId) {
@@ -292,10 +349,20 @@
     elements.analyze.disabled = true; elements.results.hidden = true; elements.processing.hidden = false; elements.processing.scrollIntoView({ behavior: "smooth", block: "center" });
     try {
       const upload = await uploadFile(state.file);
+      let coverUpload = null;
+      if (state.coverFile) {
+        try {
+          coverUpload = await uploadCoverFile(state.coverFile);
+        } catch {
+          setStatus("Audio intake is continuing without the optional cover upload.", true);
+          showToast("Cover upload skipped. Analysis will continue with audio only.");
+        }
+      }
       elements.processingStage.textContent = "STARTING DREAMWEAVER"; elements.processingDetail.textContent = "The waveform evidence and artist context are entering the private creative engine.";
       const response = await fetch("/api/dreamweaver-song-lab", { method: "POST", credentials: "same-origin", headers: trustedUploadHeaders({ "Content-Type": "application/json" }), body: JSON.stringify({
         action: "analyze", ...upload, title: elements.title.value, artistName: elements.artist.value, creativeBrief: elements.brief.value, lyrics: elements.lyrics.value,
-        rightsAttested: elements.rights.checked, fileName: state.file.name, contentType: state.file.type, byteSize: state.file.size, analysis: state.evidence
+        rightsAttested: elements.rights.checked, fileName: state.file.name, contentType: state.file.type, byteSize: state.file.size, analysis: state.evidence,
+        ...(coverUpload || {})
       }) });
       const data = await response.json().catch(() => ({})); if (!response.ok) throwApiError(data, "Dreamweaver could not start the analysis.");
       state.project = data.project; window.haloStats?.track("dreamweaver_song_analysis_started", { project_id: data.project.id }); await pollProject(data.project.id);
@@ -336,9 +403,15 @@
 
   bootstrapUploadTrust();
   elements.file.addEventListener("change", event => loadFile(event.target.files?.[0]));
+  if (elements.coverFile) elements.coverFile.addEventListener("change", event => loadCoverFile(event.target.files?.[0]));
   ["dragenter", "dragover"].forEach(name => elements.dropZone.addEventListener(name, event => { event.preventDefault(); elements.dropZone.classList.add("dragging"); }));
   ["dragleave", "drop"].forEach(name => elements.dropZone.addEventListener(name, event => { event.preventDefault(); elements.dropZone.classList.remove("dragging"); }));
   elements.dropZone.addEventListener("drop", event => { const file = event.dataTransfer?.files?.[0]; if (file) loadFile(file); });
+  if (elements.coverDropZone) {
+    ["dragenter", "dragover"].forEach(name => elements.coverDropZone.addEventListener(name, event => { event.preventDefault(); elements.coverDropZone.classList.add("dragging"); }));
+    ["dragleave", "drop"].forEach(name => elements.coverDropZone.addEventListener(name, event => { event.preventDefault(); elements.coverDropZone.classList.remove("dragging"); }));
+    elements.coverDropZone.addEventListener("drop", event => { const file = event.dataTransfer?.files?.[0]; if (file) loadCoverFile(file); });
+  }
   elements.form.addEventListener("submit", submit); elements.download.addEventListener("click", downloadProject);
   elements.captions.addEventListener("click", async event => { const button = event.target.closest("[data-caption]"); if (!button) return; try { await navigator.clipboard.writeText(button.dataset.caption); showToast("Caption copied."); } catch { showToast("Select the caption and copy it manually."); } });
   elements.history.addEventListener("click", event => { const project = state.projects.find(item => item.id === event.target.closest("[data-project-id]")?.dataset.projectId); if (project?.status === "ready") { state.project = project; showProject(project); } else if (project) { elements.processing.hidden = false; pollProject(project.id).catch(handleFailure); } });

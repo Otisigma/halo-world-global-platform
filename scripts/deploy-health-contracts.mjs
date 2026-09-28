@@ -320,6 +320,11 @@ await runCheck("Adaptive Dreamweaver homepage preview surface", async () => {
     /primaryRoute:\s*'\/dreamweaver\/'/,
     "halo.html must keep the artist CTA pointed at the canonical /dreamweaver/ route."
   );
+  assert.match(
+    haloHtml,
+    /const storefrontSupportRoute = '\/music-world\.html';[\s\S]*supportRoute:\s*storefrontSupportRoute/,
+    "halo.html must keep the homepage shop CTA pointed at Music World."
+  );
   return "Adaptive Dreamweaver preview surface is present and wired";
 });
 

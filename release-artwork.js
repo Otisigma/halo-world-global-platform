@@ -118,7 +118,7 @@
     if (!url) return false;
     try {
       const parsed = new URL(url);
-      return /\.(mp3|m4a|aac|ogg|oga|wav|flac|webm)(?:$|[?#])/i.test(`${parsed.pathname}${parsed.search}`)
+      return /\.(mp3|m4a|m4b|aac|ogg|oga|wav|flac|webm)(?:$|[?#])/i.test(`${parsed.pathname}${parsed.search}`)
         || AUDIO_PATH_MATCHERS.some(pattern => pattern.test(parsed.pathname));
     } catch {
       return false;

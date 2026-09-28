@@ -267,15 +267,7 @@ function redirectToArtwork(location = DEFAULT_PUBLIC_ARTWORK, cacheControl = "pu
 }
 
 function isOwnerScopedArtworkRequest(request: Request) {
-  const referer = request.headers.get("referer");
-  if (!referer) return false;
-  try {
-    const requestUrl = new URL(request.url);
-    const refererUrl = new URL(referer);
-    return refererUrl.origin === requestUrl.origin && refererUrl.pathname.startsWith("/song-catalog/");
-  } catch {
-    return false;
-  }
+  return new URL(request.url).searchParams.get("ownerView") === "1";
 }
 
 async function serveArtwork(

@@ -7,6 +7,14 @@ const state = {
   identityResolved: false,
   activeSongId: "",
   activeSongTitle: "",
+  activeSongRequiresOperator: false,
+  workflow: {
+    autoAdvanceByDefault: true,
+    exceptionOnlyIntervention: true,
+    blockedWhen: "missing, unsafe, or ambiguous inputs",
+    riskyStageRequiresOperator: "published",
+    copy: "HALO auto-advances routine release steps by default and only interrupts the operator when inputs are missing, unsafe, or ambiguous.",
+  },
 };
 
 const $ = selector => document.querySelector(selector);
@@ -132,6 +140,7 @@ async function loadPipeline() {
     state.authenticated = Boolean(data.authenticated);
     state.authState = state.authenticated ? "authenticated" : (state.identityResolved ? "unauthenticated" : "pending");
     state.items = state.authenticated ? (data.items || []) : [];
+    state.workflow = data.workflow || state.workflow;
     render();
   } catch (error) {
     if (error.status === 401 && !state.identityResolved) {
@@ -179,7 +188,9 @@ function renderItem(item) {
       <div class="pipeline-item-radio">${radioHtml}</div>
       <div class="pipeline-item-actions">
         ${stageChip(item.pipelineStatus)}
-        <button class="move-stage-button" type="button" data-song-id="${escapeHtml(item.id)}" data-song-title="${escapeHtml(item.title)}" data-current-stage="${escapeHtml(item.pipelineStatus)}">Move stage</button>
+        <button class="move-stage-button" type="button" data-song-id="${escapeHtml(item.id)}" data-song-title="${escapeHtml(item.title)}" data-current-stage="${escapeHtml(item.pipelineStatus)}" data-requires-operator="${item.operatorGate?.requiresOperator ? "true" : "false"}" data-gate-summary="${escapeHtml(item.operatorGate?.summary || "")}">
+          ${item.operatorGate?.requiresOperator ? "Resolve exception" : "Override stage"}
+        </button>
       </div>
     </article>`;
 }
@@ -275,7 +286,7 @@ function renderInsights() {
     elements.trackTitle.textContent = "No active package yet";
     elements.trackMeta.textContent = "Once uploaded, HALO will stream status updates here and guide each next stage.";
     elements.trustSignal.textContent = "Trust signal: no persistence confirmations yet.";
-    elements.guidanceCopy.textContent = "Start in Music Upload, then return here to guide stage-by-stage progression.";
+    elements.guidanceCopy.textContent = `${state.workflow.copy} Start in Music Upload, then return here to monitor exceptions.`;
     renderTimeline("uploaded");
     renderCounts([]);
     return;
@@ -285,29 +296,35 @@ function renderInsights() {
   const next = nextStage(stage);
   const updated = current?.pipelineUpdatedAt ? new Date(current.pipelineUpdatedAt).toLocaleString() : "just now";
   const linkedCount = Number(current?.radioTracks?.length || 0);
-  const trustMessage = stage === "published" || stage === "dreamweaver_in_progress" || stage === "ready_for_radio"
-    ? "Trust signal: persistence-confirmed package is moving through the shared pipeline."
-    : "Trust signal: wait for persistence-confirmed assets before final lock-in.";
+  const requiresOperator = Boolean(current?.operatorGate?.requiresOperator);
+  const trustMessage = requiresOperator
+    ? `Trust signal: operator intervention required — ${current?.operatorGate?.summary || "review this package"}`
+    : "Trust signal: persistence-confirmed package is auto-advancing through routine shared pipeline stages.";
   elements.storyCopy.textContent = STAGE_GUIDANCE[stage] || "HALO is tracking this package in the unified pipeline.";
   elements.storySignal.className = `story-signal stage-${stage}`;
   elements.trackTitle.textContent = current?.title || "Untitled package";
   elements.trackMeta.textContent = `${current?.artistName || "Unknown artist"} · ${updated} · ${linkedCount} radio link${linkedCount === 1 ? "" : "s"}`;
   elements.trustSignal.textContent = trustMessage;
-  elements.guidanceCopy.textContent = next
-    ? `Next recommended stage: ${STAGE_LABEL[next] || next}. Confirm assets/metadata, then move the stage when ready.`
-    : "This package is at the final stage. Monitor fan-facing performance and downstream actions.";
+  if (requiresOperator) {
+    elements.guidanceCopy.textContent = `${state.workflow.copy} Operator exception: ${current?.operatorGate?.summary || "Resolve required input issues before continuing."}`;
+  } else if (next) {
+    elements.guidanceCopy.textContent = `Next recommended stage: ${STAGE_LABEL[next] || next}. ${state.workflow.copy} Use stage override only when policy requires a manual exception.`;
+  } else {
+    elements.guidanceCopy.textContent = "This package is at the final stage. Monitor fan-facing performance and downstream actions.";
+  }
   renderTimeline(stage);
   renderCounts(state.items);
 }
 
-function openStageDialog(songId, songTitle, currentStage) {
+function openStageDialog(songId, songTitle, currentStage, requiresOperator, gateSummary) {
   state.activeSongId = songId;
   state.activeSongTitle = songTitle;
+  state.activeSongRequiresOperator = Boolean(requiresOperator);
   elements.stageDialogSongName.textContent = songTitle;
   elements.stageSelect.value = currentStage;
-  elements.stageMessage.textContent = "";
+  elements.stageMessage.textContent = gateSummary || "";
   elements.stageSubmitButton.disabled = false;
-  elements.stageSubmitButton.textContent = "Move stage";
+  elements.stageSubmitButton.textContent = state.activeSongRequiresOperator ? "Resolve exception" : "Save override";
   elements.stageDialog.showModal();
 }
 
@@ -339,7 +356,13 @@ async function handleStageSubmit(event) {
 elements.board.addEventListener("click", event => {
   const button = event.target.closest(".move-stage-button");
   if (!button) return;
-  openStageDialog(button.dataset.songId, button.dataset.songTitle, button.dataset.currentStage);
+  openStageDialog(
+    button.dataset.songId,
+    button.dataset.songTitle,
+    button.dataset.currentStage,
+    button.dataset.requiresOperator === "true",
+    button.dataset.gateSummary || "",
+  );
 });
 
 // Department tab switching.

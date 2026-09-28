@@ -279,17 +279,24 @@ async function serveArtwork(
   const songId = cleanId(params.get("songId"));
   const versionId = cleanId(params.get("versionId"));
   let record: Record<string, unknown> | null = null;
+  let resolvedFromPublicRecord = false;
   if (versionId && songId) {
     if (ownerMemberId) record = await ownedVersion(db, ownerMemberId, songId, versionId);
-    if (!record && allowPublicFallback) record = await publicVersion(db, songId, versionId);
+    if (!record && allowPublicFallback) {
+      record = await publicVersion(db, songId, versionId);
+      resolvedFromPublicRecord = Boolean(record);
+    }
   } else if (songId) {
     if (ownerMemberId) record = await ownedSong(db, ownerMemberId, songId);
-    if (!record && allowPublicFallback) record = await publicSong(db, songId);
+    if (!record && allowPublicFallback) {
+      record = await publicSong(db, songId);
+      resolvedFromPublicRecord = Boolean(record);
+    }
   }
   const fallbackArtwork = cleanPublicArtworkUrl(record?.artwork_url, request) || DEFAULT_PUBLIC_ARTWORK;
-  if (!record) return allowPublicFallback ? redirectToArtwork() : json({ message: "Song artwork was not found" }, 404);
+  if (!record) return json({ message: "Song artwork was not found" }, 404);
   if (!record.artwork_blob_prefix || !record.artwork_chunk_count || !record.artwork_byte_size) {
-    return allowPublicFallback ? redirectToArtwork(fallbackArtwork) : json({ message: "Song artwork was not found" }, 404);
+    return allowPublicFallback && resolvedFromPublicRecord ? redirectToArtwork(fallbackArtwork) : json({ message: "Song artwork was not found" }, 404);
   }
   const byteSize = Number(record.artwork_byte_size);
   const range = requestedByteRange(request.headers.get("range"), byteSize);
@@ -298,7 +305,7 @@ async function serveArtwork(
   const chunkCount = Number(record.artwork_chunk_count);
   const stored = await artworkStore.list({ prefix });
   if (!hasCompleteChunkSet(stored.blobs, prefix, chunkCount)) {
-    return allowPublicFallback ? redirectToArtwork(fallbackArtwork) : json({ message: "Song artwork was not found" }, 404);
+    return allowPublicFallback && resolvedFromPublicRecord ? redirectToArtwork(fallbackArtwork) : json({ message: "Song artwork was not found" }, 404);
   }
   const headers: Record<string, string> = {
     "Content-Type": String(record.artwork_content_type || "application/octet-stream"),

@@ -24,6 +24,14 @@ function cleanUploadId(value: unknown) {
   return /^[a-z0-9-]{12,80}$/i.test(id) ? id : "";
 }
 
+function firstParam(params: URLSearchParams, keys: string[]) {
+  for (const key of keys) {
+    const value = params.get(key);
+    if (value) return value;
+  }
+  return "";
+}
+
 function normalizeImageContentType(value: unknown, filename = "") {
   const contentType = cleanText(value, 80).split(";")[0].toLowerCase();
   if (ALLOWED_TYPES.has(contentType)) return contentType;
@@ -267,7 +275,8 @@ function redirectToArtwork(location = DEFAULT_PUBLIC_ARTWORK, cacheControl = "pu
 }
 
 function isOwnerScopedArtworkRequest(request: Request) {
-  return new URL(request.url).searchParams.get("ownerView") === "1";
+  const params = new URL(request.url).searchParams;
+  return firstParam(params, ["ownerView", "owner_view"]) === "1";
 }
 
 async function serveArtwork(
@@ -276,8 +285,8 @@ async function serveArtwork(
   { ownerMemberId = "", allowPublicFallback = true }: { ownerMemberId?: string; allowPublicFallback?: boolean } = {},
 ) {
   const params = new URL(request.url).searchParams;
-  const songId = cleanId(params.get("songId"));
-  const versionId = cleanId(params.get("versionId"));
+  const songId = cleanId(firstParam(params, ["songId", "song_id", "id"]));
+  const versionId = cleanId(firstParam(params, ["versionId", "version_id"]));
   let record: Record<string, unknown> | null = null;
   let resolvedFromPublicRecord = false;
   if (versionId && songId) {

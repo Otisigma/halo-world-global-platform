@@ -98,6 +98,10 @@
       release.artwork,
       release.artworkUrl,
       release.artwork_url,
+      release.coverArt,
+      release.cover_art,
+      release.coverArtUrl,
+      release.cover_art_url,
       release.catalog?.artworkUrl,
       release.catalog?.artwork_url,
     ], "legacy");
@@ -134,7 +138,11 @@
     const primaryCandidates = candidateEntries([
       track.audioUrl,
       track.audio_url,
+      track.audio,
+      track.audioSrc,
+      track.audio_src,
       track.sourceUrl,
+      track.source_url,
     ], "primary");
     const streamCandidates = candidateEntries([
       track.streamUrl,

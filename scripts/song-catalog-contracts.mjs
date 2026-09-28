@@ -1,9 +1,12 @@
+import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
+import { sanitizeDreamweaverAssignedRoute } from "../lib/dreamweaver-storefront.js";
+import { buildDreamweaverSatellite } from "../lib/route-registry.js";
 
 const root = resolve(import.meta.dirname, "..");
 const read = path => readFile(resolve(root, path), "utf8");
-const [page, client, styles, api, audioApi, artworkApi, producerApi, producerLib, schema, migration, audioMigration, artworkMigration, versionArtworkMigration, producerMigration, config, home, packageText, uploadHelper] = await Promise.all([
+const [page, client, styles, api, audioApi, artworkApi, producerApi, producerLib, satelliteHelper, schema, migration, audioMigration, artworkMigration, versionArtworkMigration, producerMigration, versionVideoMigration, config, home, packageText, uploadHelper, dreamweaverManager] = await Promise.all([
   read("song-catalog/index.html"),
   read("song-catalog/song-catalog.js"),
   read("song-catalog/song-catalog.css"),
@@ -12,18 +15,24 @@ const [page, client, styles, api, audioApi, artworkApi, producerApi, producerLib
   read("netlify/functions/song-catalog-artwork.ts"),
   read("netlify/functions/song-catalog-producer.mjs"),
   read("netlify/lib/catalog-producer.mjs"),
+  read("netlify/lib/dreamweaver-satellite.mjs"),
   read("db/schema.ts"),
   read("netlify/database/migrations/20260821035511_complete_pestilence/migration.sql"),
   read("netlify/database/migrations/20260821040411_add_song_version_audio_uploads/migration.sql"),
   read("netlify/database/migrations/20260826210000_add_song_artwork/migration.sql"),
   read("netlify/database/migrations/20260826220000_add_version_artwork/migration.sql"),
   read("netlify/database/migrations/20260821183000_create_catalog_producer/migration.sql"),
+  read("netlify/database/migrations/20260928194000_add_song_version_video_fields.sql"),
   read("netlify.toml"),
   read("halo.html"),
   read("package.json"),
-  read("upload-progress.js")
+  read("upload-progress.js"),
+  read("netlify/lib/dreamweaver-satellite.mjs"),
+  read("netlify/lib/dreamweaver-page-manager.mjs")
 ]);
 const packageJson = JSON.parse(packageText);
+const sampleDreamweaverSatellite = buildDreamweaverSatellite("11111111-1111-4111-8111-111111111111", { includeAgentLoop: true });
+const sampleDreamweaverRoute = sanitizeDreamweaverAssignedRoute(sampleDreamweaverSatellite?.experienceUrl);
 
 const checks = [
   [page.includes("One song · every useful version") && page.includes("Radio mastering queue"), "ships a unified catalog and dedicated broadcast queue"],
@@ -33,16 +42,19 @@ const checks = [
   [api.includes("VERSION_ROUTES") && api.includes("instrumental") && api.includes("stems") && api.includes("extended"), "creates every requested version route for each song"],
   [api.includes("runDreamweaverReview") && api.includes("radio_master") && api.includes("rightsStatus"), "runs Dream Weaver metadata, rights, sale, and radio checks"],
   [api.includes("reconcilePublishedSong") && api.includes('payload.action === "set_pipeline_stage"') && api.includes('stage === "published"'), "reconciles published songs into public release and radio fan-out from catalog stage transitions"],
+  [api.includes("dreamweaverSatellite") && api.includes("../../lib/route-registry.js") && satelliteHelper.includes("resolveDreamweaverPageFlow") && satelliteHelper.includes("buildDreamweaverSatelliteContract"), "exposes deterministic Dreamweaver storefront metadata in song catalog responses while keeping canonical Dreamweaver routing shared"],
+  [Boolean(sampleDreamweaverSatellite?.route) && sampleDreamweaverSatellite.route === "/dreamweaver/satellite/11111111-1111-4111-8111-111111111111/" && sampleDreamweaverSatellite.canonicalUrl === "/dreamweaver/" && sampleDreamweaverSatellite.fallbackUrl === "/dreamweaver/?satellite=dreamweaver&song=11111111-1111-4111-8111-111111111111" && sampleDreamweaverSatellite.experienceUrl === sampleDreamweaverSatellite.route && sampleDreamweaverSatellite.launchUrl === sampleDreamweaverSatellite.route && sampleDreamweaverSatellite.agentLoop?.id === "dreamweaver-satellite-11111111-1111-4111-8111-111111111111", "shared route registry helper returns deterministic Dreamweaver satellite metadata with canonical storefront fallback"],
+  [sampleDreamweaverRoute === sampleDreamweaverSatellite?.experienceUrl && sanitizeDreamweaverAssignedRoute("https://example.com/dreamweaver/satellite/11111111-1111-4111-8111-111111111111/") === "", "Dreamweaver route sanitizer keeps same-origin canonical routes and blocks off-origin assignments"],
   [api.includes("verifyRequestOrigin") && api.includes("ensureMembership") && api.includes('path: "/api/song-catalog"'), "protects catalog records with membership and origin checks"],
   [api.includes("halo_release_campaigns") && api.includes("halo_artist_pages") && api.includes("import_existing"), "loads reusable existing songs from release data with ownership checks"],
-  [api.includes("dreamweaverSatellite: buildDreamweaverSatellite(song.id)") && api.includes("buildDreamweaverSatellite"), "serializes deterministic Dreamweaver satellite metadata with each song"],
+  [api.includes("dreamweaverSatellite: buildDreamweaverSatellite(song.id)") && satelliteHelper.includes("buildDreamweaverSatelliteContract") && satelliteHelper.includes("...metadataContract"), "song-catalog API returns Dreamweaver satellite navigation metadata alongside playback URLs"],
+  [page.includes('id="songSatelliteLink"') && client.includes("resolveDreamweaverExperienceUrl") && client.includes("sanitizeDreamweaverAssignedRoute"), "song-catalog UI exposes an Open satellite entry point and keeps navigation pinned to sanitized Dreamweaver routes"],
   [page.includes('id="audioFile"') && client.includes("AUDIO_CHUNK_BYTES") && client.includes("finalize_upload"), "uploads full song-version audio in browser-safe chunks"],
   [api.includes("cleanAudioUrl") && api.includes("/api/song-catalog/audio?versionId="), "keeps uploaded catalog audio URLs valid when saving version metadata"],
   [page.includes('id="audioUrl" type="text"'), "avoids URL-field validation conflicts for internal uploaded-audio URLs"],
-  [page.includes('id="songDreamweaverLink"') && client.includes('song.dreamweaverSatellite?.experienceUrl') && client.includes('satelliteLink.hidden=!satelliteUrl'), "keeps the catalog's Dreamweaver entry pointed at the song satellite page instead of an audio asset URL"],
   [page.includes('id="audioUploadTrack"') && page.includes('id="artworkUploadTrack"') && page.includes('id="versionArtworkTrack"') && (client.includes("setUploadTrack") || client.includes("uploadUi.")), "shows live upload progress tracks for audio and artwork uploads"],
   [audioApi.includes('getStore({ name: "halo-song-catalog-audio"') && audioApi.includes("verifyRequestOrigin") && audioApi.includes("ownedVersion"), "stores private audio in Netlify Blobs with ownership and origin checks"],
-  [audioApi.includes("requestedByteRange") && audioApi.includes('path: "/api/song-catalog/audio"'), "serves uploaded audio with private range playback"],
+  [audioApi.includes("requestedByteRange") && audioApi.includes('"Access-Control-Allow-Origin"') && audioApi.includes('"Access-Control-Expose-Headers"') && audioApi.includes('path: "/api/song-catalog/audio"'), "serves uploaded audio with private range playback and browser-friendly CORS headers"],
   [page.includes('id="deleteVersionAudioButton"') && client.includes("deleteVersionAudio") && audioApi.includes('request.method === "DELETE"') && audioApi.includes("deleteUpload"), "lets owners delete uploaded version audio while keeping ownership checks server-side"],
   [schema.includes("halo_song_catalog") && schema.includes("halo_song_versions") && schema.includes("halo_dreamweaver_song_reviews"), "defines the persistent catalog with Drizzle ORM"],
   [migration.includes("halo_song_catalog_owner_source_unique") && migration.includes("ON DELETE CASCADE"), "migrates version and review records with duplicate-import protection"],
@@ -55,9 +67,9 @@ const checks = [
   [client.includes("halo-song-catalog-height") && client.includes("parentOrigin") && client.includes("ResizeObserver"), "supports embedded shop/workspace height messaging for shared song catalog panels"],
   [packageJson.peerDependencies?.["@netlify/database"] && !packageJson.dependencies?.["@netlify/database"], "keeps the database SDK installed without repeating preview branch provisioning"],
   [styles.includes("@media(max-width:720px)") && styles.includes("prefers-reduced-motion:reduce"), "provides a responsive catalog layout with reduced-motion support"],
-  [/from = "\/song-catalog\/"[\s\S]*to = "\/song-catalog\/index\.html"/.test(config) && home.includes('href="/song-catalog/"'), "makes the catalog discoverable and serves the canonical /song-catalog/ route directly"],
-  [artworkApi.includes('getStore({ name: "halo-song-catalog-artwork"') && artworkApi.includes("verifyRequestOrigin") && artworkApi.includes("ownedSong"), "stores private artwork in Netlify Blobs with ownership and origin checks"],
-  [artworkApi.includes("requestedByteRange") && artworkApi.includes('path: "/api/song-catalog/artwork"'), "serves uploaded artwork with private range support"],
+  [/from = "\/song-catalog\/"[\s\S]*to = "\/song-catalog\/index\.html"/.test(config) && /Access-Control-Allow-Origin = "\*"/.test(config) && /Access-Control-Expose-Headers = "Content-Length, Content-Range"/.test(config) && home.includes('href="/song-catalog/"'), "makes the catalog discoverable, serves the canonical /song-catalog/ route directly, and keeps API media preload CORS headers in Netlify config"],
+  [artworkApi.includes('getStore({ name: "halo-song-catalog-artwork"') && artworkApi.includes("verifyRequestOrigin") && artworkApi.includes("ownedSong") && artworkApi.includes("halo_release_campaigns") && artworkApi.includes("DEFAULT_PUBLIC_ARTWORK"), "stores artwork in Netlify Blobs with ownership checks and published-release storefront fallback support"],
+  [artworkApi.includes("requestedByteRange") && artworkApi.includes('path: "/api/song-catalog/artwork"') && artworkApi.includes("Location") && artworkApi.includes("public, max-age=3600"), "serves uploaded artwork with range support and redirects safely to fallback artwork when needed"],
   [artworkApi.includes("ALLOWED_TYPES") && artworkApi.includes("image/jpeg") && artworkApi.includes("image/png") && artworkApi.includes("image/webp"), "validates artwork file type allowing only JPEG, PNG, and WebP"],
   [artworkMigration.includes('"artwork_url"') && artworkMigration.includes('"artwork_uploaded_at"') && artworkMigration.includes("IF NOT EXISTS"), "migrates artwork columns idempotently with IF NOT EXISTS checks"],
   [schema.includes("artworkUrl") && schema.includes("artworkUploadedAt"), "adds artwork fields to the Drizzle ORM schema"],
@@ -72,6 +84,10 @@ const checks = [
   [page.includes("versionArtworkFile") && page.includes("versionArtworkPreview") && page.includes("versionArtworkHeading"), "adds version artwork upload zone with preview to the version editor dialog"],
   [client.includes("uploadVersionArtwork") && client.includes("deleteVersionArtwork") && client.includes("renderVersionArtwork"), "implements version artwork upload, delete, and preview rendering"],
   [client.includes("resolvedArtwork") && client.includes("versionUsesCustomArtwork") && client.includes("version-row-artwork"), "resolves version artwork consistently with explicit inherit/custom state"],
+  [page.includes('id="versionVideoFile"') && page.includes('id="versionVideoUrl"') && page.includes('id="promoVideoUrl"') && page.includes('id="openVideoStudioButton"'), "adds version video upload and Dreamweaver promo-film routing controls"],
+  [client.includes("uploadVersionVideo") && client.includes("renderVersionVideo") && client.includes("openVideoStudioButton"), "implements version video upload flow and promo-film status messaging in the catalog client"],
+  [api.includes("cleanVideoUrl") && api.includes("videoUrl") && api.includes("promoVideoUrl"), "persists version video and promo-video links through validated catalog actions"],
+  [schema.includes("videoUrl") && schema.includes("promoVideoUrl") && versionVideoMigration.includes("promo_video_url"), "adds version video and promo video fields to schema and migration coverage"],
   [client.includes("queue-song") && client.includes("renderRadioQueue") && client.includes("resolvedArtwork(song,version)"), "uses resolved version artwork in radio queue entries"],
   [client.includes("track.artworkUrl") && client.includes("producer-track-index"), "shows artwork in producer package track rows"],
   [page.includes('id="audioUploadTrack"') && page.includes('id="deleteVersionAudioButton"') && page.includes('id="artworkUploadTrack"') && page.includes('id="versionArtworkTrack"'), "renders visible upload progress tracks and audio delete controls for catalog uploads"],
@@ -82,5 +98,6 @@ const checks = [
 
 const failures = checks.filter(([passed]) => !passed);
 for (const [passed, description] of checks) console.log(`${passed ? "PASS" : "FAIL"}: ${description}`);
+assert.equal(buildDreamweaverSatellite("not/a-song-id"), null, "shared Dreamweaver satellite helper must reject invalid song IDs");
 if (failures.length) process.exitCode = 1;
 else console.log(`Song catalog contracts: ${checks.length}/${checks.length} checks passed.`);

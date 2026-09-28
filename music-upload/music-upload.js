@@ -1,4 +1,5 @@
 import { normalizeHttpsList } from "/music-upload/link-validation.js";
+import { sanitizeDreamweaverAssignedRoute } from "/lib/dreamweaver-storefront.js";
 
 const $ = selector => document.querySelector(selector);
 let uploadHelperLoadPromise = null;
@@ -48,19 +49,6 @@ function injectUploadRuntimeScript(src) {
     script.addEventListener("error", () => reject(new Error("Upload runtime failed to load.")), { once: true });
     document.head.append(script);
   });
-}
-
-function safeDreamweaverRoute(value) {
-  const text = String(value || "").trim();
-  if (!text) return "";
-  try {
-    const url = new URL(text, window.location.origin);
-    if (url.origin !== window.location.origin) return "";
-    if (!/^\/dreamweaver(?:\/|$)/.test(url.pathname)) return "";
-    return `${url.pathname}${url.search}${url.hash}`;
-  } catch {
-    return "";
-  }
 }
 
 function loadUploadHelperScript() {
@@ -124,7 +112,7 @@ const CONTROLLER_PHASES = [
   {
     id: "transfer",
     label: "Asset transfer",
-    detail: "Audio and artwork uploads go into tracked storage with visible live progress.",
+    detail: "Audio and artwork uploads (plus approved source video links) go into tracked storage with visible live progress.",
   },
   {
     id: "persistence",
@@ -445,19 +433,13 @@ function renderResults() {
       ? `<p class="result-note needs-attention">${escapeHtml(result.needsAttention)}</p>`
       : `<p class="result-note">${escapeHtml(result.summary)}</p>`;
     const nextStepNote = result.nextStep ? `<p class="result-next-step">${escapeHtml(result.nextStep)}</p>` : "";
-    const satelliteRoute = safeDreamweaverRoute(
-      typeof result.dreamweaverSatellite?.experienceUrl === "string"
-        ? result.dreamweaverSatellite.experienceUrl
-        : typeof result.dreamweaverSatellite?.launchUrl === "string"
-          ? result.dreamweaverSatellite.launchUrl
-          : typeof result.dreamweaverSatellite?.route === "string"
-            ? result.dreamweaverSatellite.route
-            : ""
-    );
+    const satelliteRoute = resolveDreamweaverExperienceUrl(result.dreamweaverSatellite);
     const satelliteLoopId = typeof result.dreamweaverSatellite?.agentLoop?.id === "string" ? result.dreamweaverSatellite.agentLoop.id : "";
+    const studioRoute = satelliteRoute ? `${satelliteRoute}${satelliteRoute.includes("?") ? "&" : "?"}experience=studio` : "";
     const satelliteReceipt = satelliteRoute
       ? `<div class="result-satellite">
-          <a href="${escapeHtml(satelliteRoute)}" target="_blank" rel="noopener noreferrer">Open Dreamweaver satellite page ↗</a>
+          <a href="${escapeHtml(satelliteRoute)}" target="_blank" rel="noopener noreferrer">Open Dreamweaver storefront ↗</a>
+          ${studioRoute ? `<a href="${escapeHtml(studioRoute)}" target="_blank" rel="noopener noreferrer">Create promo film ↗</a>` : ""}
           ${satelliteLoopId ? `<small>Agent loop: ${escapeHtml(satelliteLoopId)}</small>` : ""}
         </div>`
       : "";
@@ -483,6 +465,25 @@ function renderResults() {
       </article>
     `;
   }).join("");
+}
+
+function isDreamweaverExperienceUrl(value) {
+  return Boolean(sanitizeDreamweaverAssignedRoute(value, { origin: window.location.origin }));
+}
+
+function resolveDreamweaverExperienceUrl(satellite) {
+  const candidates = [
+    satellite?.experienceUrl,
+    satellite?.launchUrl,
+    satellite?.route,
+    satellite?.fallbackUrl,
+    satellite?.canonicalDreamweaverUrl,
+  ];
+  for (const candidate of candidates) {
+    const safeRoute = sanitizeDreamweaverAssignedRoute(candidate, { origin: window.location.origin });
+    if (safeRoute) return safeRoute;
+  }
+  return "";
 }
 
 function normalizeAudioType(file) {
@@ -764,7 +765,7 @@ async function processPackage({ artistName, title, albumTitle, genre, isrc, upc,
         ? `Needs attention: Dreamweaver review found ${issueCount} blocking item${issueCount === 1 ? "" : "s"} in the catalog package.`
         : "",
     nextStep: finalStage === "dreamweaver_in_progress"
-      ? "Next: Dreamweaver now processes this locked package. Open the song satellite page to experience this release in its own isolated runtime."
+      ? "Next: Dreamweaver now processes this locked package. Open the song satellite page, then launch campaign studio to create a promo film."
       : "Next: Upload remaining assets. This package is saved; remove or replace files only if needed.",
     dreamweaverSatellite: pipeline.dreamweaverSatellite || created.dreamweaverSatellite || null,
     artworkSourceSongId: nextArtworkSourceSongId,

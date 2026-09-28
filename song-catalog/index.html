@@ -59,7 +59,7 @@
           <section class="song-heading">
             <div class="song-heading-art"><img class="song-heading-artwork" id="songHeadingArtwork" src="" alt="" hidden><div><p class="eyebrow" id="songArtist">Artist</p><h2 id="songTitle">Song title</h2><p id="songRouteSummary">0 versions routed</p></div></div>
             <div class="score-stamp"><span>DW score</span><strong id="songScore">0</strong><small id="songStatus">Needs review</small></div>
-            <div class="pipeline-stamp"><span>Pipeline</span><strong id="songPipelineStatus" class="pipeline-badge" data-stage="uploaded">Uploaded</strong><a class="quiet-link" id="songDreamweaverLink" href="/dreamweaver/" title="Open the Dreamweaver satellite page for this song" target="_blank" rel="noopener noreferrer" hidden>Open satellite →</a><a class="quiet-link" href="/upload-pipeline/" title="Open unified pipeline view">View pipeline →</a></div>
+            <div class="pipeline-stamp"><span>Pipeline</span><strong id="songPipelineStatus" class="pipeline-badge" data-stage="uploaded">Uploaded</strong><a class="quiet-link" id="songSatelliteLink" href="/dreamweaver/" target="_blank" rel="noopener noreferrer" aria-label="Open satellite in a new tab" hidden>Open satellite ↗</a><a class="quiet-link" href="/upload-pipeline/" title="Open unified pipeline view">View pipeline →</a></div>
           </section>
 
           <section class="artwork-upload-panel" aria-labelledby="artworkHeading">
@@ -169,6 +169,21 @@
         </div>
         </section>
         <label class="wide-field"><span>External audio source link (optional)</span><input id="audioUrl" type="text" placeholder="https://secure-audio-location.example/song.wav"></label>
+        <section class="wide-field version-video-panel" aria-labelledby="versionVideoHeading">
+          <div>
+            <span class="field-label" id="versionVideoHeading">Release video lane</span>
+            <strong>Upload or link a video for this version.</strong>
+            <p>Upload MP4, WebM, or MOV clips up to 5 MB, or store an existing URL as the release video source.</p>
+          </div>
+          <label class="audio-file-picker"><span>Choose video file</span><input id="versionVideoFile" type="file" accept="video/mp4,video/webm,video/quicktime,.mp4,.webm,.mov"></label>
+          <div class="audio-upload-actions">
+            <button class="quiet-button" id="uploadVersionVideoButton" type="button">Upload selected video</button>
+            <a class="quiet-button" id="openVideoStudioButton" href="/dreamweaver/?experience=studio" target="_blank" rel="noopener noreferrer">Create promo film in Dreamweaver ↗</a>
+          </div>
+          <p class="audio-upload-progress" id="versionVideoState" role="status">No version video linked yet.</p>
+        </section>
+        <label class="wide-field"><span>Version video URL (optional)</span><input id="versionVideoUrl" type="text" placeholder="https://video.example/release.mp4 or /api/videos?media=..."></label>
+        <label class="wide-field"><span>Promo video URL (optional)</span><input id="promoVideoUrl" type="text" placeholder="https://video.example/promo.mp4"></label>
         <section class="wide-field version-artwork-panel" aria-labelledby="versionArtworkHeading">
           <div class="artwork-preview-area"><img class="artwork-preview" id="versionArtworkPreview" src="" alt="Version artwork preview" hidden><div class="artwork-placeholder" id="versionArtworkPlaceholder" aria-hidden="true"></div></div>
           <div class="artwork-upload-body">
@@ -199,6 +214,7 @@
   <script src="/stats.js" defer></script>
   <script src="/site-monitor.js" defer></script>
   <script src="/accessibility.js" defer></script>
+  <script src="/release-artwork.js" defer></script>
   <script type="module" src="/identity.js"></script>
   <script src="/upload-progress.js" defer></script>
   <script type="module" src="/song-catalog/song-catalog.js"></script>

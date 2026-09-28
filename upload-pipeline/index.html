@@ -66,7 +66,7 @@
         </div>
         <div class="insight-card">
           <p class="eyebrow">What to do now</p>
-          <p id="pipelineGuidanceCopy">Choose a department tab to focus reviews, then move each song only after metadata and source assets are confirmed.</p>
+          <p id="pipelineGuidanceCopy">HALO auto-advances routine release stages by default and only interrupts the operator when inputs are missing, unsafe, or ambiguous.</p>
           <ul class="pipeline-counts" id="pipelineCounts" aria-label="Pipeline stage counts"></ul>
         </div>
       </aside>
@@ -75,8 +75,9 @@
 
   <dialog id="stageDialog" aria-labelledby="stageDialogTitle" aria-modal="true">
     <form id="stageForm" method="dialog">
-      <h2 id="stageDialogTitle">Move to next stage</h2>
+      <h2 id="stageDialogTitle">Override pipeline stage</h2>
       <p id="stageDialogSongName" class="dialog-song-name"></p>
+      <p>Routine progression is automatic. Use this override only when policy requires manual intervention.</p>
       <label>
         <span>Pipeline stage</span>
         <select id="stageSelect" name="stage" required>
@@ -92,7 +93,7 @@
       </label>
       <p id="stageMessage" class="stage-message" role="status" aria-live="polite"></p>
       <div class="dialog-actions">
-        <button class="primary-button" type="submit" id="stageSubmitButton">Move stage</button>
+        <button class="primary-button" type="submit" id="stageSubmitButton">Save override</button>
         <button class="quiet-button" type="button" id="stageCloseButton">Cancel</button>
       </div>
     </form>

@@ -54,6 +54,8 @@ export const songVersions = pgTable("halo_song_versions", {
   cleanLyrics: boolean("clean_lyrics").notNull().default(false),
   saleEnabled: boolean("sale_enabled").notNull().default(false),
   notes: text("notes").notNull().default(""),
+  videoUrl: text("video_url").notNull().default(""),
+  promoVideoUrl: text("promo_video_url").notNull().default(""),
   artworkUrl: text("artwork_url"),
   artworkUploadedAt: timestamp("artwork_uploaded_at", { withTimezone: true }),
   artworkBlobPrefix: text("artwork_blob_prefix"),

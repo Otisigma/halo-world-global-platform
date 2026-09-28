@@ -68,15 +68,26 @@
     return release?.catalog && typeof release.catalog === "object" ? release.catalog : {};
   }
 
+  function storefrontState(release) {
+    const storefront = release?.storefront && typeof release.storefront === "object" ? release.storefront : {};
+    const fallback = String(storefront.statusLabel || "").trim().toUpperCase();
+    if (fallback === "READY" || fallback === "PENDING" || fallback === "STANDBY") return storefront;
+    const status = String(release?.publication?.dreamweaverStatus || release?.publication?.releaseStatus || release?.catalog?.saleStatus || "").trim().toLowerCase();
+    return {
+      ...storefront,
+      statusLabel: ["published", "ready", "live", "active"].includes(status) ? "READY" : ["pending", "queued", "processing", "coming_soon"].includes(status) ? "PENDING" : "STANDBY"
+    };
+  }
+
+  function resolvedAudio(release, options = {}) {
+    const resolved = window.HaloReleaseArtwork?.resolveAudio(release, options);
+    if (resolved?.src) return resolved;
+    const candidate = safeUrl(release?.audioUrl || release?.audio_url || release?.sourceUrl || release?.previewAudio || release?.preview_audio || release?.streamUrl || "");
+    return { src: candidate, source: candidate ? "legacy" : "", isPlayable: Boolean(candidate) };
+  }
+
   function directAudioPreviewUrl(release) {
-    const candidate = safeUrl(release?.streamUrl || "");
-    if (!candidate) return "";
-    try {
-      const { pathname } = new URL(candidate);
-      return /\.(mp3|m4a|aac|ogg|wav|flac|webm)$/i.test(pathname) ? candidate : "";
-    } catch {
-      return "";
-    }
+    return resolvedAudio(release, { preferPreview: true, requirePlayable: true }).src;
   }
 
   function availabilitySummary(release) {
@@ -118,7 +129,7 @@
     const catalog = catalogState(release);
     if (release.purchaseUrl && catalog.salePriceCents > 0) return `Buy / support · ${money(catalog.salePriceCents, catalog.currency)}`;
     if (release.purchaseUrl) return "Buy / support";
-    if (release.streamUrl) return "Open stream";
+    if (resolvedAudio(release).src || release.streamUrl) return "Open stream";
     return "";
   }
 
@@ -241,10 +252,9 @@
   }
 
   function releaseDossier(release) {
-    const catalog = catalogState(release);
-    const saleStatus = String(catalog.saleStatus || "").replace(/_/g, " ").trim();
+    const statusLabel = storefrontState(release).statusLabel || "STANDBY";
     return [
-      { label: "Release status", value: saleStatus || availabilitySummary(release).badge },
+      { label: "Release status", value: statusLabel },
       { label: "Chart", value: release.isChartEligible ? "Chart eligible" : "Listening only" },
       { label: "ISRC", value: release.isrc || "Pending" },
       { label: "Support", value: release.purchaseUrl ? "Direct link live" : "Listen link live" }
@@ -329,6 +339,54 @@
     return hasSafeMediaUrl(video.sourceUrl);
   }
 
+  function youtubeEmbedFromUrl(value) {
+    const urlText = safeUrl(value);
+    if (!urlText) return "";
+    try {
+      const url = new URL(urlText);
+      const host = url.hostname.replace(/^www\./, "");
+      const id = host === "youtu.be"
+        ? url.pathname.split("/").filter(Boolean)[0]
+        : url.searchParams.get("v") || url.pathname.split("/").filter(Boolean).pop();
+      return /^[A-Za-z0-9_-]{11}$/.test(id || "") ? `https://www.youtube-nocookie.com/embed/${id}` : "";
+    } catch {
+      return "";
+    }
+  }
+
+  function directVideoForRelease(release) {
+    const candidates = [
+      release?.promoVideoUrl,
+      release?.videoUrl,
+      release?.catalog?.promoVideoUrl,
+      release?.catalog?.videoUrl
+    ].map(value => safeUrl(value)).filter(Boolean);
+    for (const candidate of candidates) {
+      const embedUrl = youtubeEmbedFromUrl(candidate);
+      if (embedUrl) {
+        return {
+          id: `release-video-${release.id}`,
+          title: `${release.title} promo`,
+          sourceType: "youtube",
+          sourceUrl: candidate,
+          embedUrl,
+          thumbnailUrl: releaseArtwork(release).src
+        };
+      }
+      if (/\.(mp4|webm|mov)(?:$|[?#])/i.test(candidate) || /\/api\/videos(?:$|\?)/i.test(candidate)) {
+        return {
+          id: `release-video-${release.id}`,
+          title: `${release.title} promo`,
+          sourceType: "upload",
+          sourceUrl: candidate,
+          embedUrl: "",
+          thumbnailUrl: releaseArtwork(release).src
+        };
+      }
+    }
+    return null;
+  }
+
   function fallbackVideoForRelease(release) {
     if (!satelliteVideoFallbackEnabled) return null;
     return {
@@ -362,6 +420,8 @@
   }
 
   function videoForRelease(release) {
+    const direct = directVideoForRelease(release);
+    if (direct) return direct;
     const video = state.videos.find(videoItem => {
       if (satelliteVideoFallbackEnabled && !isPlayableVideo(videoItem)) return false;
       return releaseMatchesVideoCandidate(release, videoItem);
@@ -595,7 +655,7 @@
     const listenAction = listenHref
       ? `<a class="action primary" href="${escapeHtml(listenHref)}" data-stat-event="open_catalog_release" data-stat-target="${escapeHtml(release.id)}">Listen now <span aria-hidden="true">↗</span></a>`
       : `<span class="action primary" aria-disabled="true">Listen link unavailable</span>`;
-    const buyHref = safeUrl(release.purchaseUrl || release.streamUrl);
+    const buyHref = safeUrl(release.purchaseUrl || resolvedAudio(release).src || release.streamUrl);
     const buyAction = buyHref
       ? `<a class="action buy" href="${escapeHtml(buyHref)}" target="_blank" rel="noopener" data-stat-event="buy_release" data-stat-target="${escapeHtml(release.id)}">${escapeHtml(buyActionLabel(release))} <span aria-hidden="true">↗</span></a>`
       : "";

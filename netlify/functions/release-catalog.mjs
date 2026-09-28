@@ -1,14 +1,75 @@
 import { getDatabase } from "@netlify/database";
 import { resolveReleaseArtworkFields } from "../lib/release-artwork.mjs";
+import { resolveDreamweaverPageFlow } from "../lib/dreamweaver-page-manager.mjs";
+
+const CORS_HEADERS = Object.freeze({
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "Content-Type, Range",
+  "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
+  "Access-Control-Expose-Headers": "Content-Length, Content-Range"
+});
 
 function json(body, status = 200, headers = {}) {
   return Response.json(body, {
     status,
     headers: {
+      ...CORS_HEADERS,
       "Cache-Control": "public, max-age=60, s-maxage=300, stale-while-revalidate=600",
       ...headers
     }
   });
+}
+
+function cleanPublicUrl(value) {
+  try {
+    const raw = String(value || "").trim();
+    if (!/^https?:\/\//i.test(raw)) return "";
+    const url = new URL(raw);
+    if (!["http:", "https:"].includes(url.protocol) || url.username || url.password) return "";
+    return url.href;
+  } catch {
+    return "";
+  }
+}
+
+function hasReachablePublicAudio(value) {
+  const url = cleanPublicUrl(value);
+  if (!url) return false;
+  try {
+    const parsed = new URL(url);
+    return /\.(mp3|m4a|aac|ogg|oga|wav|flac|webm)(?:$|[?#])/i.test(`${parsed.pathname}${parsed.search}`)
+      || ["/api/song-catalog/audio", "/api/mixes/audio", "/api/radio/audio"].includes(parsed.pathname);
+  } catch {
+    return false;
+  }
+}
+
+function normalizedCatalogStatus(value) {
+  return String(value || "").trim().toLowerCase().replace(/[\s-]+/g, "_");
+}
+
+function storefrontStateFor(row) {
+  const statuses = [
+    row.publication_dreamweaver_status,
+    row.publication_release_status,
+    row.catalog_sale_status,
+    row.catalog_metadata_status,
+    row.catalog_rights_status
+  ].map(normalizedCatalogStatus).filter(Boolean);
+  const hasPublicDestination = Boolean(
+    cleanPublicUrl(row.purchase_url)
+    || cleanPublicUrl(row.official_url)
+    || cleanPublicUrl(row.stream_url)
+  );
+  const hasPlayableStream = hasReachablePublicAudio(row.stream_url);
+  const pending = statuses.some(status => ["pending", "processing", "queued", "draft", "review", "coming_soon"].includes(status));
+  const ready = (statuses.some(status => ["published", "ready", "live", "active", "cleared", "for_sale"].includes(status)) || hasPublicDestination)
+    && (hasPlayableStream || hasPublicDestination);
+  return {
+    statusLabel: ready ? "READY" : pending ? "PENDING" : "STANDBY",
+    hasPlayableStream,
+    hasPublicDestination
+  };
 }
 
 function serializeRelease(row) {
@@ -17,6 +78,22 @@ function serializeRelease(row) {
     importedArtworkUrl: row.imported_artwork_url,
     artworkOverrideUrl: row.artwork_override_url
   });
+  const publicUrl = `/music/?song=${encodeURIComponent(row.id)}`;
+  const listenUrl = `/api/release-link?slug=${encodeURIComponent(row.id)}&audience=fan`;
+  const kitUrl = `/release-kit.html?slug=${encodeURIComponent(row.id)}&audience=fan`;
+  const dreamweaverFlow = row.catalog_song_id
+    ? resolveDreamweaverPageFlow(row.catalog_song_id, {
+        mixId: row.id,
+        officialUrl: row.official_url,
+        streamUrl: row.stream_url,
+        publicUrl,
+        relatedUrls: [listenUrl],
+        promoUrls: [kitUrl],
+      })
+    : null;
+  const dreamweaverPage = dreamweaverFlow?.page || null;
+  const dreamweaverHubUrl = dreamweaverFlow?.hubUrl || "";
+  const dreamweaverLoop = dreamweaverFlow?.loop || null;
   const catalogAlbumTitle = row.catalog_album_title || "";
   const catalogGenres = String(row.catalog_genre || "")
     .split(",")
@@ -24,12 +101,17 @@ function serializeRelease(row) {
     .filter(Boolean);
   const catalogGenre = catalogGenres[0] || "";
   const catalogArtworkUrl = row.catalog_artwork_url || "";
+  const catalogVideoUrl = row.catalog_video_url || "";
+  const catalogPromoVideoUrl = row.catalog_promo_video_url || "";
+  const storefront = storefrontStateFor(row);
   const releaseGenres = Array.isArray(row.genres)
     ? row.genres.map(value => String(value || "").trim()).filter(Boolean)
     : [];
   const genres = releaseGenres.length ? releaseGenres : catalogGenres;
   const resolvedArtwork = artwork.artwork || catalogArtworkUrl;
   const artworkSource = artwork.artworkSource || (catalogArtworkUrl ? "song-catalog" : "");
+  const entryExperience = dreamweaverFlow?.routeMode || (row.official_url ? "existing_destination" : "");
+  const entryUrl = dreamweaverFlow?.destinationUrl || row.official_url || "";
   return {
     id: row.id,
     title: row.title,
@@ -52,9 +134,14 @@ function serializeRelease(row) {
     isChartEligible: Boolean(row.is_chart_eligible),
     purchaseUrl: row.purchase_url || "",
     streamUrl: row.stream_url || "",
+    videoUrl: catalogVideoUrl || "",
+    promoVideoUrl: catalogPromoVideoUrl || "",
     featuredType: row.featured_type || "",
     featuredUntil: row.featured_until ? String(row.featured_until).slice(0, 10) : "",
     artistSlug: row.artist_slug || "",
+    officialUrl: row.official_url || "",
+    entryExperience,
+    entryUrl,
     catalog: {
       source: row.catalog_song_id ? "song-catalog" : "release-catalog",
       songId: row.catalog_song_id || "",
@@ -64,6 +151,8 @@ function serializeRelease(row) {
       albumTitle: catalogAlbumTitle,
       genre: catalogGenre,
       artworkUrl: catalogArtworkUrl,
+      videoUrl: catalogVideoUrl,
+      promoVideoUrl: catalogPromoVideoUrl,
       rightsStatus: row.catalog_rights_status || "",
       saleStatus: row.catalog_sale_status || "",
       metadataStatus: row.catalog_metadata_status || "",
@@ -82,19 +171,24 @@ function serializeRelease(row) {
       releaseStatus: row.publication_release_status || "published",
       radioStatus: row.publication_radio_status || "pending",
       dreamweaverStatus: row.publication_dreamweaver_status || "pending",
-      canonicalUrl: row.publication_canonical_url || `/music/?song=${encodeURIComponent(row.id)}`,
+      canonicalUrl: row.publication_canonical_url || publicUrl,
       lastReconciledAt: row.publication_last_reconciled_at
         ? new Date(row.publication_last_reconciled_at).toISOString()
         : ""
     },
-    listenUrl: `/api/release-link?slug=${encodeURIComponent(row.id)}&audience=fan`,
-    kitUrl: `/release-kit.html?slug=${encodeURIComponent(row.id)}&audience=fan`
+    storefront,
+    dreamweaverPage,
+    dreamweaverHubUrl,
+    dreamweaverLoop,
+    listenUrl,
+    kitUrl
   };
 }
 
 export default async function releaseCatalogHandler(request) {
+  if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS_HEADERS });
   if (request.method !== "GET") {
-    return json({ message: "Method not allowed" }, 405, { Allow: "GET" });
+    return json({ message: "Method not allowed" }, 405, { Allow: "GET, OPTIONS" });
   }
 
   try {
@@ -105,6 +199,7 @@ export default async function releaseCatalogHandler(request) {
         release.artist_slug,
         release.title,
         release.artist,
+        release.official_url,
         release.release_date,
         release.duration,
         release.genres,
@@ -136,6 +231,8 @@ export default async function releaseCatalogHandler(request) {
         catalog.catalog_currency,
         catalog_versions.catalog_version_count,
         catalog_versions.catalog_sale_enabled_count,
+        catalog_video.catalog_video_url,
+        catalog_video.catalog_promo_video_url,
         publication.release_status AS publication_release_status,
         publication.radio_status AS publication_radio_status,
         publication.dreamweaver_status AS publication_dreamweaver_status,
@@ -204,6 +301,14 @@ export default async function releaseCatalogHandler(request) {
         WHERE version.song_id = catalog.catalog_song_id
           AND version.status = 'active'
       ) catalog_versions ON TRUE
+      LEFT JOIN LATERAL (
+        SELECT
+          MAX(NULLIF(version.video_url, '')) AS catalog_video_url,
+          MAX(NULLIF(version.promo_video_url, '')) AS catalog_promo_video_url
+        FROM halo_song_versions version
+        WHERE version.song_id = catalog.catalog_song_id
+          AND version.status = 'active'
+      ) catalog_video ON TRUE
       WHERE release.status = 'published'
       ORDER BY release.release_date DESC NULLS LAST, release.updated_at DESC
       LIMIT 200

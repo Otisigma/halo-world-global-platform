@@ -14,6 +14,15 @@ const PIPELINE_STAGES = new Set([
   "approved",
   "published",
 ]);
+const STAGE_ORDER = ["uploaded", "processing", "needs_assets", "dreamweaver_in_progress", "ready_for_radio", "ready_for_sale", "approved", "published"];
+const WORKFLOW_POLICY = Object.freeze({
+  id: "operator-never-the-bottleneck",
+  autoAdvanceByDefault: true,
+  exceptionOnlyIntervention: true,
+  blockedWhen: "missing, unsafe, or ambiguous inputs",
+  riskyStageRequiresOperator: "published",
+  copy: "HALO auto-advances routine release steps by default and only interrupts the operator when inputs are missing, unsafe, or ambiguous.",
+});
 
 function json(body, status = 200) {
   return Response.json(body, { status, headers: { "Cache-Control": "no-store" } });
@@ -30,9 +39,8 @@ function cleanEnum(value, choices, fallback) {
 }
 
 function stageSortOrder(stage) {
-  const order = ["uploaded", "processing", "needs_assets", "dreamweaver_in_progress", "ready_for_radio", "ready_for_sale", "approved", "published"];
-  const idx = order.indexOf(stage);
-  return idx === -1 ? order.length : idx;
+  const idx = STAGE_ORDER.indexOf(stage);
+  return idx === -1 ? STAGE_ORDER.length : idx;
 }
 
 async function loadPipeline(db, ownerMemberId, department) {
@@ -59,12 +67,25 @@ async function loadPipeline(db, ownerMemberId, department) {
       s.metadata_score,
       s.rights_status,
       s.sale_status,
+      s.sale_price_cents,
       s.updated_at,
       s.created_at,
+      COALESCE(version_health.has_sale_master_audio, FALSE) AS has_sale_master_audio,
+      COALESCE(version_health.has_radio_audio, FALSE) AS has_radio_audio,
+      COALESCE(version_health.has_approved_radio_master, FALSE) AS has_approved_radio_master,
       rt.id AS radio_track_id,
       rt.status AS radio_track_status,
       rt.room AS radio_room
     FROM halo_song_catalog s
+    LEFT JOIN LATERAL (
+      SELECT
+        BOOL_OR(version_type = 'sale_master' AND COALESCE(audio_url, '') <> '') AS has_sale_master_audio,
+        BOOL_OR(version_type IN ('radio_edit', 'clean') AND COALESCE(audio_url, '') <> '') AS has_radio_audio,
+        BOOL_OR(version_type IN ('radio_edit', 'clean') AND mastering_status = 'approved') AS has_approved_radio_master
+      FROM halo_song_versions
+      WHERE song_id = s.id
+        AND status = 'active'
+    ) version_health ON TRUE
     LEFT JOIN halo_radio_tracks rt ON rt.master_song_id = s.id AND rt.status NOT IN ('rejected')
     WHERE s.owner_member_id = ${ownerMemberId}
       AND s.status = 'active'
@@ -99,8 +120,12 @@ async function loadPipeline(db, ownerMemberId, department) {
       metadataScore: Number(row.metadata_score || 0),
       rightsStatus: row.rights_status || "needs_review",
       saleStatus: row.sale_status || "for_sale",
+      salePriceCents: Number(row.sale_price_cents || 0),
       updatedAt: new Date(row.updated_at).toISOString(),
       createdAt: new Date(row.created_at).toISOString(),
+      hasSaleMasterAudio: row.has_sale_master_audio === true,
+      hasRadioAudio: row.has_radio_audio === true,
+      hasApprovedRadioMaster: row.has_approved_radio_master === true,
       radioTracks: row.radio_track_id
         ? [{ id: row.radio_track_id, status: row.radio_track_status || "", room: row.radio_room || "" }]
         : [],
@@ -109,9 +134,106 @@ async function loadPipeline(db, ownerMemberId, department) {
   }
 
   const items = [...itemMap.values()];
+  await applyAutoAdvancePolicy(db, ownerMemberId, items);
 
   items.sort((a, b) => stageSortOrder(a.pipelineStatus) - stageSortOrder(b.pipelineStatus) || new Date(b.updatedAt) - new Date(a.updatedAt));
-  return items;
+  return items.map(item => ({
+    id: item.id,
+    artistName: item.artistName,
+    title: item.title,
+    albumTitle: item.albumTitle,
+    genre: item.genre,
+    artworkUrl: item.artworkUrl,
+    pipelineStatus: item.pipelineStatus,
+    pipelineUpdatedAt: item.pipelineUpdatedAt,
+    metadataStatus: item.metadataStatus,
+    metadataScore: item.metadataScore,
+    rightsStatus: item.rightsStatus,
+    saleStatus: item.saleStatus,
+    updatedAt: item.updatedAt,
+    createdAt: item.createdAt,
+    radioTracks: item.radioTracks,
+    workflowMode: item.workflowMode,
+    operatorGate: item.operatorGate,
+    autoAdvancedFrom: item.autoAdvancedFrom || "",
+  }));
+}
+
+function resolveWorkflowDecision(item) {
+  const blockers = [];
+  if (!item.artworkUrl) blockers.push("cover artwork is missing");
+  if (!item.hasSaleMasterAudio) blockers.push("sale master audio is missing");
+  if (!item.hasRadioAudio) blockers.push("radio edit audio is missing");
+  if (item.rightsStatus !== "cleared") blockers.push("rights are not cleared");
+  if (item.metadataStatus === "needs_attention") blockers.push("Dream Weaver found blocking metadata issues");
+  if (item.saleStatus === "for_sale" && item.salePriceCents < 1) blockers.push("sale pricing is missing");
+
+  if (blockers.length) {
+    return {
+      recommendedStage: "needs_assets",
+      requiresOperator: true,
+      summary: `Blocked: ${blockers[0]}. HALO continues automatically once this is resolved.`,
+      blockers,
+    };
+  }
+
+  if (item.metadataStatus === "ready") {
+    return {
+      recommendedStage: "approved",
+      requiresOperator: false,
+      summary: "No blocker detected. HALO auto-advances this package through routine review stages.",
+      blockers: [],
+    };
+  }
+
+  if (!item.hasApprovedRadioMaster) {
+    return {
+      recommendedStage: "dreamweaver_in_progress",
+      requiresOperator: false,
+      summary: "No blocker detected. HALO keeps this package moving while radio mastering finalizes.",
+      blockers: [],
+    };
+  }
+
+  return {
+    recommendedStage: item.saleStatus === "not_for_sale" ? "ready_for_radio" : "ready_for_sale",
+    requiresOperator: false,
+    summary: "No blocker detected. HALO continues this package automatically unless new exceptions appear.",
+    blockers: [],
+  };
+}
+
+async function applyAutoAdvancePolicy(db, ownerMemberId, items) {
+  for (const item of items) {
+    const decision = resolveWorkflowDecision(item);
+    const currentStageIndex = stageSortOrder(item.pipelineStatus);
+    const recommendedStageIndex = stageSortOrder(decision.recommendedStage);
+
+    item.operatorGate = {
+      requiresOperator: decision.requiresOperator,
+      summary: decision.summary,
+      blockers: decision.blockers,
+    };
+    item.workflowMode = decision.requiresOperator ? "exception_only" : "auto_advance";
+
+    if (decision.requiresOperator || decision.recommendedStage === "published" || recommendedStageIndex <= currentStageIndex) {
+      continue;
+    }
+
+    await db.sql`
+      UPDATE halo_song_catalog
+      SET pipeline_status = ${decision.recommendedStage},
+          pipeline_updated_at = NOW(),
+          updated_at = NOW()
+      WHERE id = ${item.id}
+        AND owner_member_id = ${ownerMemberId}
+        AND status = 'active'
+        AND pipeline_status = ${item.pipelineStatus}
+    `;
+    item.autoAdvancedFrom = item.pipelineStatus;
+    item.pipelineStatus = decision.recommendedStage;
+    item.pipelineUpdatedAt = new Date().toISOString();
+  }
 }
 
 async function setStage(db, ownerMemberId, payload) {
@@ -172,7 +294,7 @@ export default async function handler(request) {
       const url = new URL(request.url);
       const department = url.searchParams.get("department") || "all";
       const items = await loadPipeline(db, membership.member_id, department);
-      return json({ authenticated: true, items, stageOrder: [...PIPELINE_STAGES] });
+      return json({ authenticated: true, items, stageOrder: [...PIPELINE_STAGES], workflow: WORKFLOW_POLICY });
     }
 
     try { verifyRequestOrigin(request); } catch { return json({ message: "Cross-origin pipeline actions are not accepted" }, 403); }

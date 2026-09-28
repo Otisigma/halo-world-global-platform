@@ -1,0 +1,3 @@
+ALTER TABLE halo_song_versions
+  ADD COLUMN IF NOT EXISTS video_url TEXT NOT NULL DEFAULT '',
+  ADD COLUMN IF NOT EXISTS promo_video_url TEXT NOT NULL DEFAULT '';

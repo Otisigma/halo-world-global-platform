@@ -82,7 +82,7 @@ const checks = [
       && server.includes("songIdPattern"),
     "serves deterministic Dreamweaver satellite URLs as a standalone same-origin route across Netlify and local server"
   ],
-  [page.includes('id="dreamweaverCanonicalLink"') && script.includes("updateCanonicalParentLink") && !script.includes("window.location.replace(canonicalDreamweaverUrl"), "keeps satellite routes standalone while exposing an obvious canonical Dreamweaver parent back-link"],
+  [page.includes('id="dreamweaverCanonicalLink"') && script.includes("updateCanonicalParentLink") && script.includes("songIdFromSatellitePath") && !script.includes("window.location.replace(canonicalDreamweaverUrl"), "keeps satellite routes standalone while exposing an obvious canonical Dreamweaver parent back-link"],
   [page.includes('id="campaignStudio"') && page.includes('id="campaignCanvas"') && page.includes("Make a Reel / Short"), "adds the Dreamweaver campaign cutting room"],
   [script.includes("renderVerticalClip") && script.includes("captureStream") && script.includes("MediaRecorder"), "renders a downloadable vertical clip in supported browsers"],
   [page.includes('id="downloadClip"') && page.includes('id="renderStatus"') && styles.includes('[hidden] { display: none !important; }'), "shows reliable film progress and keeps hidden overlays out of the preview"],

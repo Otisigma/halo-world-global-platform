@@ -462,7 +462,7 @@ import { DREAMWEAVER_STOREFRONT_MIX_ID, buildDreamweaverStorefrontPath } from ".
   }
 
   function songIdFromSatellitePath(pathname = location.pathname) {
-    const match = String(pathname || "").match(/^\/dreamweaver\/satellite\/([0-9a-f-]{36})\/?$/i);
+    const match = String(pathname || "").match(/^\/dreamweaver\/satellite\/([0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12})\/?$/i);
     return cleanSongId(match?.[1] || "");
   }
 

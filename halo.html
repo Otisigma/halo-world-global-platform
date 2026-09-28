@@ -1306,7 +1306,7 @@
         ]);
         const MENU_ROUTE_STATUS_TARGETS = new Set(MENU_STATUS_GROUP_TARGETS.map(target => target.route));
         const DEFAULT_MENU_ATTENTION_ROUTE = '/dreamweaver/';
-        const BASE_MENU_DESTINATION_COUNT = MENU_STATUS_GROUP_TARGETS.length + 3;
+        const BASE_MENU_DESTINATION_COUNT = MENU_STATUS_GROUP_TARGETS.length + 4;
         const normalizeMenuRoutePath = (route = '') => {
           if (!route) return '/';
           let pathname = route.split('?')[0].split('#')[0] || '/';
@@ -3920,6 +3920,9 @@
                         <a href="/music-world.html" data-stat-event="open_music_world" data-stat-target="header" data-signal="PUBLIC MUSIC WORLD">
                           <Icon name="globe" className="halo-menu-icon" /><span><strong>MUSIC WORLD {renderMenuStatusBadge('/music-world.html', 'Music World')}</strong><small>Shop, radio, charts, and Dreamweaver in one view</small></span>
                         </a>
+                        <a href="/dreamweaver/" data-stat-event="open_dreamweaver_show" data-stat-target="mobile_nav" data-signal="SONG LOBBY">
+                          <Icon name="star" className="halo-menu-icon" /><span><strong>DREAMWEAVER SONG LOBBY {renderMenuStatusBadge('/dreamweaver/', 'Dreamweaver Song Lobby')}</strong><small>Open the same-origin Dreamweaver storefront and fan entry</small></span>
+                        </a>
                         <a href="/stats/" data-stat-event="open_public_stats" data-stat-target="header" data-signal="LIVE SIGNALS">
                           <Icon name="activity" className="halo-menu-icon" /><span><strong>PUBLIC STATS {renderMenuStatusBadge('/stats/', 'Public Stats')}</strong><small>Published catalog and destination health</small></span>
                         </a>
@@ -5979,8 +5982,10 @@
               {/* FOOTER */}
               <footer className="border-t border-purple-950/40 bg-[#07070a] px-4 py-2 flex flex-wrap justify-between items-center gap-2 text-[9px] text-gray-500 font-mono">
                 <span>© 2026 HALO MUSIC WORLD SYSTEMS LLC</span>
-                <nav className="flex items-center gap-3" aria-label="HALO social profiles">
+                <nav className="flex items-center gap-3" aria-label="HALO footer destinations">
                   <a href="/support/" data-stat-event="open_feedback_desk" data-stat-target="footer" className="text-lime-300 transition hover:text-lime-200 focus:outline-none focus:ring-1 focus:ring-lime-300">FEEDBACK</a>
+                  <span aria-hidden="true">·</span>
+                  <a href="/dreamweaver/" data-stat-event="open_dreamweaver_show" data-stat-target="footer" className="text-amber-300 transition hover:text-amber-200 focus:outline-none focus:ring-1 focus:ring-amber-300">DREAMWEAVER SONG LOBBY</a>
                   <span aria-hidden="true">·</span>
                   <a
                     href="https://www.youtube.com/@halo-music-world"

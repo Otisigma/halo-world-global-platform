@@ -57,6 +57,7 @@ for (const { route, file } of directoryRoutes) {
   const canonicalRenderRule = redirectRuleBySource.get(route);
   const renderFileRedirect = redirectRuleBySource.get(renderFilePath);
   const allowsNonSlashDirectRender = route === "/dreamweaver/";
+  const allowsSatelliteCanonicalRedirect = route === "/dreamweaver/satellite/";
   assert.equal(canonicalizeRoutePath(nonSlashAlias), nonSlashAlias, `${nonSlashAlias} must remain non-canonicalized once aliases are removed.`);
 
   const familyCanonicalTargets = new Set(
@@ -75,6 +76,9 @@ for (const { route, file } of directoryRoutes) {
     assert.ok(nonSlashRedirect, `${nonSlashAlias} must render directly to ${renderFilePath} to avoid Dreamweaver route dead-ends.`);
     assert.equal(nonSlashRedirect.status, 200, `${nonSlashAlias} must use a 200 rewrite to ${renderFilePath}.`);
     assert.equal(nonSlashRedirect.to, renderFilePath, `${nonSlashAlias} must rewrite to ${renderFilePath}.`);
+  } else if (allowsSatelliteCanonicalRedirect) {
+    assert.equal(nonSlashRedirect?.status, 301, `${nonSlashAlias} must redirect to the canonical satellite route.`);
+    assert.equal(nonSlashRedirect?.to, route, `${nonSlashAlias} must redirect to ${route}.`);
   } else {
     assert.ok(!nonSlashRedirect, `${nonSlashAlias} alias redirect must be removed for canonical-only routing.`);
   }

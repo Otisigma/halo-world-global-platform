@@ -545,11 +545,9 @@ export async function reconcilePublishedSong(db, {
     const release = await ensureReleaseCampaign(db, song, versions);
     const syncedVersions = await syncReleaseAudioVersions(db, song, versions, release.id);
     const radio = await ensureRadioTrack(db, song, syncedVersions, release);
-    const dreamweaverStatus = release.dreamweaver.routeMode === "dreamweaver_page"
+    const dreamweaverStatus = ["dreamweaver_page", "hyperfollow"].includes(release.dreamweaver.routeMode)
       ? "ready"
-      : release.dreamweaver.routeMode === "hyperfollow"
-        ? "managed_externally"
-        : "pending";
+      : "pending";
     const healthInput = {
       releaseId: release.id,
       radioTrackId: radio.trackId,
@@ -624,6 +622,7 @@ export async function reconcilePublishedSong(db, {
       radioStatus: radio.status,
       radioTrackId: radio.trackId,
       syncedAudioVersionCount: syncedVersions.length,
+      publicationHealth: health,
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : "unknown error";
@@ -632,7 +631,7 @@ export async function reconcilePublishedSong(db, {
     const escalatedAt = String(existingDetails.escalatedAt || (errorStreak >= PUBLICATION_ESCALATION_THRESHOLD ? new Date().toISOString() : ""));
     const fallbackReleaseId = existingSync?.release_id || song.source_release_id || null;
     const fallbackRadioTrackId = existingSync?.radio_track_id || null;
-    const fallbackCanonicalUrl = existingSync?.canonical_url || (fallbackReleaseId ? publicationPath(fallbackReleaseId) : "");
+    const fallbackCanonicalUrl = existingSync?.canonical_url || "";
     const healthInput = {
       releaseId: fallbackReleaseId,
       radioTrackId: fallbackRadioTrackId,
@@ -725,7 +724,7 @@ export async function reconcilePublishedSongs(db, {
             OR sync.dreamweaver_status <> 'ready'
             OR sync.canonical_url = ''
             OR sync.last_reconciled_at IS NULL
-            OR sync.last_reconciled_at < NOW() - INTERVAL '1 day'
+            OR sync.last_reconciled_at < NOW() - INTERVAL '15 minutes'
           )
         ORDER BY song.updated_at DESC
         LIMIT ${limit}

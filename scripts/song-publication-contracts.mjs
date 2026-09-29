@@ -80,6 +80,10 @@ assert.ok(
 assert.match(helper, /buildPublicationHealth/, "publication helper must derive artist-facing health snapshots during reconciliation");
 assert.match(helper, /errorStreak/, "publication helper must track deterministic retry escalation state");
 assert.match(helper, /COALESCE\(sync\.details->>'escalatedAt', ''\) = ''/, "publication batch reconcile must stop auto-retrying escalated rows until the song changes again");
+assert.match(helper, /sync\.last_reconciled_at < NOW\(\) - INTERVAL '15 minutes'/, "healthy published songs must be checked on the monitor cadence");
+assert.match(helper, /fallbackCanonicalUrl = existingSync\?\.canonical_url \|\| ""/, "failures must keep only previously verified canonical routes");
+assert.match(helper, /publicationHealth: health/, "manual reconciliation must return the shared health snapshot");
+assert.match(helper, /routeMode\)\s*\? "ready"/, "managed and HyperFollow sharing must persist a schema-supported readiness status");
 assert.match(healthHelper, /published_and_fully_distributed/, "publication health helper must classify fully distributed songs");
 assert.match(healthHelper, /awaiting_release_propagation/, "publication health helper must classify release propagation waits");
 assert.match(healthHelper, /awaiting_radio_ready_assets/, "publication health helper must classify radio asset waits");
@@ -106,6 +110,8 @@ assert.match(unifiedUpload, /reconcilePublishedSong/, "unified upload pipeline m
 assert.match(uploadPipeline, /reconcilePublishedSong/, "upload pipeline must trigger publication fan-out on publish");
 assert.match(catalogApi, /attachPublicationHealth/, "song catalog API must attach publication health to artist songs");
 assert.match(catalogApi, /attachPublicationHealthToSongs/, "song catalog API must reuse the deterministic publication health helper");
+assert.match(catalogApi, /payload\.action === "recheck_publication"/, "song catalog must offer manual health rechecks");
+assert.match(catalogApi, /eq\(songs\.ownerMemberId, membership\.member_id\)[\s\S]*?eq\(songs\.pipelineStatus, "published"\)/, "manual rechecks must require ownership and published state");
 assert.match(dreamweaver, /new URL\("\/music\/", location\.origin\)/, "Dreamweaver share flow must target the canonical published-song URL");
 assert.match(dreamweaver, /dreamweaverPage\?\.manager/, "Dreamweaver page must use the dedicated page manager metadata when available");
 assert.match(dreamweaver, /preferredReleaseDoorway/, "Dreamweaver page must prefer resolved release doorway metadata");

@@ -108,6 +108,9 @@ assert.equal(sampleSongs[1].publicationHealth?.state, "published_and_fully_distr
 assert.equal(sampleSongs[2].publicationHealth, null, "non-published songs should expose publicationHealth as null");
 
 const checks = [
+  [page.match(/id="publicationHealthPanel"/g)?.length === 1 && page.match(/id="publicationHealthTitle"/g)?.length === 1 && page.includes('id="recheckPublicationButton"'), "keeps a single accessible publication panel with a manual recheck control"],
+  [page.includes('id="distributedCount"') && page.includes('id="actionCount"') && client.includes("renderPublicationTotals()"), "summarizes fully distributed and action-needed published songs"],
+  [client.includes('api({action:"recheck_publication",songId:song.id})') && client.includes("button.disabled=true") && client.includes("await loadCatalog(song.id)"), "rechecks through the same-origin catalog API and refreshes artist guidance even on errors"],
   [page.includes("One song · every useful version") && page.includes("Radio mastering queue"), "ships a unified catalog and dedicated broadcast queue"],
   [page.includes("Sale master") || client.includes("sale_master"), "keeps the customer sale master separate from other versions"],
   [client.includes('"radio_edit","clean"') && client.includes("masteringStatus!==\"approved\""), "shows unfinished radio and clean versions in the mastering queue"],

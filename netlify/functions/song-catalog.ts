@@ -26,6 +26,8 @@ const VERSION_ROUTES = {
 } as const;
 
 type VersionType = keyof typeof VERSION_ROUTES;
+// The sale master is the canonical master copy for every song; uploads labelled "master copy" land here.
+const MASTER_VERSION_TYPE: VersionType = "sale_master";
 type ReviewIssue = { field: string; level: "required" | "warning"; message: string };
 
 function json(body: unknown, status = 200, headers: Record<string, string> = {}) {
@@ -91,6 +93,20 @@ function cleanVersionType(value: unknown): VersionType {
   return VERSION_ROUTES[type] ? type : "alternate";
 }
 
+function serializeMasterCopy(versions: Array<typeof songVersions.$inferSelect>) {
+  const master = versions.find(version => version.versionType === MASTER_VERSION_TYPE);
+  return {
+    versionType: MASTER_VERSION_TYPE,
+    versionId: master?.id || "",
+    uploaded: Boolean(master?.audioUrl),
+    audioUrl: master?.audioUrl || "",
+    audioFilename: master?.audioFilename || "",
+    audioByteSize: master?.audioByteSize || 0,
+    durationSeconds: master?.durationSeconds || 0,
+    masteringStatus: master?.masteringStatus || "not_started",
+  };
+}
+
 function serializeSong(song: typeof songs.$inferSelect, versions: Array<typeof songVersions.$inferSelect>) {
   const songArtworkUrl = song.artworkUrl || "";
   return {
@@ -118,9 +134,11 @@ function serializeSong(song: typeof songs.$inferSelect, versions: Array<typeof s
     pipelineStatus: song.pipelineStatus || "uploaded",
     sourceUploadSurface: song.sourceUploadSurface || "",
     pipelineUpdatedAt: song.pipelineUpdatedAt?.toISOString() || "",
+    masterCopy: serializeMasterCopy(versions),
     versions: versions.map(version => ({
       id: version.id,
       versionType: version.versionType,
+      isCanonicalMaster: version.versionType === MASTER_VERSION_TYPE,
       label: version.label,
       destination: version.destination,
       audioUrl: version.audioUrl,
@@ -280,10 +298,12 @@ export async function runDreamweaverReview(songId: string, ownerMemberId: string
 }
 
 async function createDefaultVersions(songId: string) {
-  await db.insert(songVersions).values((Object.entries(VERSION_ROUTES) as Array<[VersionType, typeof VERSION_ROUTES[VersionType]]>).map(([versionType, route]) => ({
+  const rows = (Object.entries(VERSION_ROUTES) as Array<[VersionType, typeof VERSION_ROUTES[VersionType]]>).map(([versionType, route]) => ({
     id: randomUUID(), songId, versionType, label: route.label, destination: route.destination,
     targetLufs: route.targetLufs, saleEnabled: route.saleEnabled, cleanLyrics: versionType === "clean",
-  })));
+  }));
+  await db.insert(songVersions).values(rows);
+  return Object.fromEntries(rows.map(row => [row.versionType, row.id])) as Record<VersionType, string>;
 }
 
 async function createSong(ownerMemberId: string, payload: Record<string, unknown>) {
@@ -300,9 +320,9 @@ async function createSong(ownerMemberId: string, payload: Record<string, unknown
     salePriceCents: Math.max(0, Math.min(10_000_000, Number.parseInt(String(payload.salePriceCents || "0"), 10) || 0)) || null,
     explicitLyrics: payload.explicitLyrics === true, notes: cleanText(payload.notes, 4000),
   });
-  await createDefaultVersions(id);
+  const versionIds = await createDefaultVersions(id);
   await runDreamweaverReview(id, ownerMemberId);
-  return json({ message: "Song added with every standard version route", songId: id }, 201);
+  return json({ message: "Song added with every standard version route", songId: id, versionIds, masterVersionId: versionIds[MASTER_VERSION_TYPE] }, 201);
 }
 
 async function saveSong(ownerMemberId: string, payload: Record<string, unknown>) {

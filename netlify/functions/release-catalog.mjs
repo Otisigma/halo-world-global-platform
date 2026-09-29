@@ -159,7 +159,15 @@ function serializeRelease(row) {
       salePriceCents: row.catalog_sale_price_cents === null ? null : Number(row.catalog_sale_price_cents),
       currency: row.catalog_currency || "USD",
       versionCount: Number(row.catalog_version_count || 0),
-      saleEnabledVersionCount: Number(row.catalog_sale_enabled_count || 0)
+      saleEnabledVersionCount: Number(row.catalog_sale_enabled_count || 0),
+      masterCopy: {
+        versionType: "sale_master",
+        versionId: row.catalog_master_version_id || "",
+        uploaded: Boolean(row.catalog_master_uploaded),
+        masteringStatus: row.catalog_master_mastering_status || "",
+        durationSeconds: Number(row.catalog_master_duration_seconds || 0),
+        contentType: row.catalog_master_content_type || ""
+      }
     },
     chartActivity: {
       recentOpens: Number(row.recent_opens || 0),
@@ -233,6 +241,11 @@ export default async function releaseCatalogHandler(request) {
         catalog_versions.catalog_sale_enabled_count,
         catalog_video.catalog_video_url,
         catalog_video.catalog_promo_video_url,
+        catalog_master.catalog_master_version_id,
+        catalog_master.catalog_master_uploaded,
+        catalog_master.catalog_master_mastering_status,
+        catalog_master.catalog_master_duration_seconds,
+        catalog_master.catalog_master_content_type,
         publication.release_status AS publication_release_status,
         publication.radio_status AS publication_radio_status,
         publication.dreamweaver_status AS publication_dreamweaver_status,
@@ -309,6 +322,20 @@ export default async function releaseCatalogHandler(request) {
         WHERE version.song_id = catalog.catalog_song_id
           AND version.status = 'active'
       ) catalog_video ON TRUE
+      LEFT JOIN LATERAL (
+        SELECT
+          version.id AS catalog_master_version_id,
+          (COALESCE(version.audio_url, '') <> '') AS catalog_master_uploaded,
+          version.mastering_status AS catalog_master_mastering_status,
+          version.duration_seconds AS catalog_master_duration_seconds,
+          version.audio_content_type AS catalog_master_content_type
+        FROM halo_song_versions version
+        WHERE version.song_id = catalog.catalog_song_id
+          AND version.version_type = 'sale_master'
+          AND version.status = 'active'
+        ORDER BY version.updated_at DESC
+        LIMIT 1
+      ) catalog_master ON TRUE
       WHERE release.status = 'published'
       ORDER BY release.release_date DESC NULLS LAST, release.updated_at DESC
       LIMIT 200

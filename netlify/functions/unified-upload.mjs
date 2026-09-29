@@ -30,6 +30,9 @@ const VERSION_ROUTES = [
   { versionType: "alternate", label: "Alternate version", destination: "storefront" },
 ];
 
+// The sale master version is the canonical master copy of every song.
+const MASTER_VERSION_TYPE = "sale_master";
+
 const UPLOAD_SURFACES = new Set([
   "artist_room",
   "radio_room",
@@ -65,7 +68,21 @@ function serializePipeline(row) {
     genre: row.genre || "",
     updatedAt: new Date(row.updated_at).toISOString(),
     dreamweaverSatellite: buildDreamweaverSatellite(row.id),
+    masterCopy: serializeMasterCopy(row),
     departments: buildDepartmentViews(row),
+  };
+}
+
+function serializeMasterCopy(row) {
+  return {
+    versionType: MASTER_VERSION_TYPE,
+    versionId: row.master_version_id || "",
+    uploaded: Boolean(row.master_audio_url),
+    audioUrl: row.master_audio_url || "",
+    audioFilename: row.master_audio_filename || "",
+    audioByteSize: Number(row.master_audio_byte_size || 0),
+    durationSeconds: Number(row.master_duration_seconds || 0),
+    masteringStatus: row.master_mastering_status || "not_started",
   };
 }
 
@@ -129,7 +146,8 @@ async function createProject(payload, db, membership) {
   `;
   if (existingRows[0]) {
     const row = await getOneSong(db, membership.member_id, existingRows[0].id);
-    return json({ message: "Existing master project returned", ...serializePipeline(row), versionIds: await getSongVersionIds(db, existingRows[0].id), isExisting: true });
+    const versionIds = await getSongVersionIds(db, existingRows[0].id);
+    return json({ message: "Existing master project returned", ...serializePipeline(row), versionIds, masterVersionId: versionIds[MASTER_VERSION_TYPE] || "", isExisting: true });
   }
 
   const id = randomUUID();
@@ -182,7 +200,7 @@ async function createProject(payload, db, membership) {
     pipelineStage: "uploaded",
     outcome: "success",
   }).catch(err => console.error("Ledger create_project entry failed", err instanceof Error ? err.message : err));
-  return json({ message: "Master project created", ...serializePipeline(row), versionIds, isExisting: false }, 201);
+  return json({ message: "Master project created", ...serializePipeline(row), versionIds, masterVersionId: versionIds[MASTER_VERSION_TYPE] || "", isExisting: false }, 201);
 }
 
 /** Advance the pipeline stage for a master project. */
@@ -249,12 +267,22 @@ async function getPipeline(songId, db, membership) {
 /** List all master projects for the current member with their pipeline status. */
 async function listPipeline(db, membership) {
   const rows = await db.sql`
-    SELECT id, title, artist_name, pipeline_status, source_upload_surface,
-      artwork_url, metadata_status, metadata_score, sale_status, rights_status,
-      genre, updated_at
-    FROM halo_song_catalog
-    WHERE owner_member_id = ${membership.member_id} AND status = 'active'
-    ORDER BY updated_at DESC
+    SELECT song.id, song.title, song.artist_name, song.pipeline_status, song.source_upload_surface,
+      song.artwork_url, song.metadata_status, song.metadata_score, song.sale_status, song.rights_status,
+      song.genre, song.updated_at,
+      master.id AS master_version_id, master.audio_url AS master_audio_url,
+      master.audio_filename AS master_audio_filename, master.audio_byte_size AS master_audio_byte_size,
+      master.duration_seconds AS master_duration_seconds, master.mastering_status AS master_mastering_status
+    FROM halo_song_catalog song
+    LEFT JOIN LATERAL (
+      SELECT id, audio_url, audio_filename, audio_byte_size, duration_seconds, mastering_status
+      FROM halo_song_versions
+      WHERE song_id = song.id AND version_type = ${MASTER_VERSION_TYPE} AND status = 'active'
+      ORDER BY updated_at DESC
+      LIMIT 1
+    ) master ON TRUE
+    WHERE song.owner_member_id = ${membership.member_id} AND song.status = 'active'
+    ORDER BY song.updated_at DESC
     LIMIT 100
   `;
   return json({ songs: rows.map(serializePipeline) });
@@ -262,11 +290,21 @@ async function listPipeline(db, membership) {
 
 async function getOneSong(db, ownerMemberId, songId) {
   const rows = await db.sql`
-    SELECT id, title, artist_name, pipeline_status, source_upload_surface,
-      artwork_url, metadata_status, metadata_score, sale_status, rights_status,
-      genre, updated_at
-    FROM halo_song_catalog
-    WHERE id = ${songId} AND owner_member_id = ${ownerMemberId} AND status = 'active'
+    SELECT song.id, song.title, song.artist_name, song.pipeline_status, song.source_upload_surface,
+      song.artwork_url, song.metadata_status, song.metadata_score, song.sale_status, song.rights_status,
+      song.genre, song.updated_at,
+      master.id AS master_version_id, master.audio_url AS master_audio_url,
+      master.audio_filename AS master_audio_filename, master.audio_byte_size AS master_audio_byte_size,
+      master.duration_seconds AS master_duration_seconds, master.mastering_status AS master_mastering_status
+    FROM halo_song_catalog song
+    LEFT JOIN LATERAL (
+      SELECT id, audio_url, audio_filename, audio_byte_size, duration_seconds, mastering_status
+      FROM halo_song_versions
+      WHERE song_id = song.id AND version_type = ${MASTER_VERSION_TYPE} AND status = 'active'
+      ORDER BY updated_at DESC
+      LIMIT 1
+    ) master ON TRUE
+    WHERE song.id = ${songId} AND song.owner_member_id = ${ownerMemberId} AND song.status = 'active'
     LIMIT 1
   `;
   return rows[0] || null;

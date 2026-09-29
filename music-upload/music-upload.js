@@ -720,7 +720,7 @@ async function processPackage({ artistName, title, albumTitle, genre, isrc, upc,
       : "No source files were attached, so HALO is preparing a metadata-first intake package.",
   );
   if (file) {
-    const versionId = created.versionIds?.sale_master || created.versionIds?.radio_edit;
+    const versionId = created.masterVersionId || created.versionIds?.sale_master || created.versionIds?.radio_edit;
     if (!versionId) throw new Error("The intake package did not provision an audio version.");
     await uploadAudio(created.songId, versionId, file, position, total);
   }

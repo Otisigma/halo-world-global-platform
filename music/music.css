@@ -410,18 +410,22 @@ footer a { text-decoration: none; color: var(--paper); }
 .action.play:focus-visible, .chart-play:focus-visible, .halo-player-bar button:focus-visible { outline: 3px solid var(--orange); outline-offset: 2px; }
 body:has(.halo-player-bar:not([hidden])) { padding-bottom: 96px; }
 body:has(.halo-player-bar:not([hidden])) .toast { bottom: 110px; }
-.halo-player-bar { position: fixed; left: 50%; bottom: 16px; z-index: 40; width: min(720px, calc(100% - 28px)); display: grid; grid-template-columns: 56px minmax(0, 1fr) auto auto; align-items: center; gap: 14px; padding: 10px 12px; border: 1px solid var(--line); color: var(--paper); background: rgba(9, 11, 10, 0.94); box-shadow: 0 18px 50px rgba(0, 0, 0, 0.45); backdrop-filter: blur(12px); transform: translateX(-50%); }
+.halo-player-bar { position: fixed; left: 50%; bottom: 16px; z-index: 40; width: min(720px, calc(100% - 28px)); display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 10px 12px; border: 1px solid var(--line); color: var(--paper); background: rgba(9, 11, 10, 0.94); box-shadow: 0 18px 50px rgba(0, 0, 0, 0.45); backdrop-filter: blur(12px); transform: translateX(-50%); }
 .halo-player-bar[hidden] { display: none; }
-.halo-player-cover { width: 56px; height: 56px; object-fit: cover; background: #202520; }
-.halo-player-meta { min-width: 0; display: grid; gap: 4px; }
-.halo-player-meta strong, .halo-player-meta span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.halo-player-meta strong { font-size: 15px; letter-spacing: -0.02em; }
-.halo-player-meta span { color: var(--muted); font: 500 8px/1.3 var(--mono); letter-spacing: 0.08em; text-transform: uppercase; }
-.halo-player-meta small { color: var(--acid); font: 500 7px/1 var(--mono); letter-spacing: 0.12em; text-transform: uppercase; }
-.halo-player-bar.is-error .halo-player-meta small { color: var(--orange); }
-.halo-player-toggle { width: 48px; height: 48px; border: 0; border-radius: 50%; color: var(--ink); background: var(--acid); font: 500 14px/1 var(--mono); cursor: pointer; }
-.halo-player-toggle:disabled { opacity: 0.45; cursor: not-allowed; }
-.halo-player-close { width: 36px; height: 36px; border: 1px solid var(--line); color: var(--paper); background: transparent; font-size: 18px; line-height: 1; cursor: pointer; }
+.halo-player-bar.is-playing { border-color: var(--acid); }
+.player-track-info { min-width: 0; flex: 1; display: flex; align-items: center; gap: 14px; }
+.player-cover-art { flex: none; width: 56px; height: 56px; object-fit: cover; background: #202520; }
+.player-meta { min-width: 0; display: grid; gap: 4px; }
+.player-meta strong, .player-meta span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.player-meta strong { font-size: 15px; letter-spacing: -0.02em; }
+.player-meta span { color: var(--muted); font: 500 8px/1.3 var(--mono); letter-spacing: 0.08em; text-transform: uppercase; }
+.player-meta small { color: var(--acid); font: 500 7px/1 var(--mono); letter-spacing: 0.12em; text-transform: uppercase; }
+.halo-player-bar.is-error .player-meta small { color: var(--orange); }
+.player-controls { flex: none; display: flex; align-items: center; gap: 10px; }
+.player-toggle-btn { width: 48px; height: 48px; border: 0; border-radius: 50%; color: var(--ink); background: var(--acid); font: 500 14px/1 var(--mono); cursor: pointer; }
+.halo-player-bar.is-playing .player-toggle-btn { background: var(--orange); }
+.player-toggle-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.player-close-btn { width: 36px; height: 36px; border: 1px solid var(--line); color: var(--paper); background: transparent; font-size: 18px; line-height: 1; cursor: pointer; }
 @media (max-width: 1100px) {
   .halo-player-bar { bottom: calc(124px + env(safe-area-inset-bottom, 0px)); }
   body:has(.halo-player-bar:not([hidden])) { padding-bottom: 220px; }
@@ -480,8 +484,8 @@ body:has(.halo-player-bar:not([hidden])) .toast { bottom: 110px; }
   .chart-open { display: none; }
   .chart-entry.has-play .chart-row { padding-right: 66px; }
   .chart-play { right: 13px; width: 40px; height: 40px; }
-  .halo-player-bar { grid-template-columns: 44px minmax(0, 1fr) auto auto; gap: 10px; }
-  .halo-player-cover { width: 44px; height: 44px; }
+  .halo-player-bar, .player-track-info { gap: 10px; }
+  .player-cover-art { width: 44px; height: 44px; }
   .chart-track strong { font-size: 16px; }
   .chart-track small { margin-top: 6px; font-size: 6px; }
   .chart-motion small { font-size: 6px; }

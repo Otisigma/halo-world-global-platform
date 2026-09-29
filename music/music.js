@@ -130,7 +130,7 @@
     return `<button class="${compact ? "chart-play" : "action play"}" type="button" data-action="play-track" data-play-track-id="${escapeHtml(release.id)}" data-track-id="${escapeHtml(release.id)}" data-title="${escapeHtml(release.title)}" data-artist="${escapeHtml(release.artist)}" data-audio-url="${escapeHtml(audioUrl)}" data-cover="${escapeHtml(artwork.src)}"${compact ? ' data-play-compact="true"' : ""} aria-pressed="false" aria-label="${escapeHtml(label)}">${compact ? "▶" : "▶ Play"}</button>`;
   }
 
-  class HaloShopPlayer {
+  class HaloGlobalPlayer {
     constructor({ onError } = {}) {
       this.audio = new Audio();
       this.audio.preload = "none";
@@ -138,6 +138,7 @@
       this.status = "idle";
       this.onError = onError;
       this.bar = null;
+      this.delegatedClicks = false;
       this.audio.addEventListener("playing", () => this.setStatus("playing"));
       this.audio.addEventListener("waiting", () => { if (this.status === "playing") this.setStatus("loading"); });
       this.audio.addEventListener("pause", () => { if (this.status !== "error" && this.audio.paused) this.setStatus("paused"); });
@@ -148,8 +149,8 @@
     }
 
     static shared(options) {
-      if (!(window.haloShopPlayer instanceof HaloShopPlayer)) window.haloShopPlayer = new HaloShopPlayer(options);
-      return window.haloShopPlayer;
+      if (!(window.HaloPlayer instanceof HaloGlobalPlayer)) window.HaloPlayer = new HaloGlobalPlayer(options);
+      return window.HaloPlayer;
     }
 
     mount() {
@@ -161,10 +162,14 @@
         bar.className = "halo-player-bar";
         bar.hidden = true;
         bar.setAttribute("aria-label", "HALO shop player");
-        bar.innerHTML = `<img class="halo-player-cover" alt="" data-player-cover>
-          <div class="halo-player-meta"><strong data-player-title></strong><span data-player-artist></span><small data-player-status aria-live="polite"></small></div>
-          <button class="halo-player-toggle" type="button" data-player-toggle aria-label="Play">▶</button>
-          <button class="halo-player-close" type="button" data-player-close aria-label="Close player">×</button>`;
+        bar.innerHTML = `<div class="player-track-info">
+            <img id="haloPlayerCover" class="player-cover-art" alt="" data-player-cover>
+            <div class="player-meta"><strong id="haloPlayerTitle" data-player-title></strong><span id="haloPlayerArtist" data-player-artist></span><small data-player-status aria-live="polite"></small></div>
+          </div>
+          <div class="player-controls">
+            <button id="haloPlayerToggle" class="player-toggle-btn" type="button" data-player-toggle aria-label="Play">▶</button>
+            <button class="player-close-btn" type="button" data-player-close aria-label="Close player">×</button>
+          </div>`;
         document.body.append(bar);
       }
       this.bar = bar;
@@ -270,7 +275,7 @@
     }
   }
 
-  const player = HaloShopPlayer.shared({
+  const player = HaloGlobalPlayer.shared({
     onError(message, track) {
       showToast(message);
       logMusicIssue("music_shop_player_error", "Shop player could not stream audio", { releaseId: track?.id || "", url: track?.src || "" });
@@ -807,6 +812,10 @@
 
 
   function showToast(message) {
+    if (!elements.toast) {
+      window.alert(message);
+      return;
+    }
     elements.toast.textContent = message;
     elements.toast.classList.add("is-visible");
     window.clearTimeout(showToast.timer);
@@ -1115,8 +1124,8 @@
   }
 
   function handlePlayTrackClick(event) {
-    const button = event.target.closest('[data-action="play-track"]');
-    if (!button) return;
+    const button = event.target instanceof Element ? event.target.closest('[data-action="play-track"], [data-play-track-id]') : null;
+    if (!button || button.disabled) return;
     event.preventDefault();
     player.play({
       id: button.dataset.trackId || button.dataset.playTrackId || "",
@@ -1127,9 +1136,10 @@
     });
   }
 
-  [elements.featured, elements.chartBoard, elements.chartStage, elements.grid].forEach(container => {
-    container?.addEventListener("click", handlePlayTrackClick);
-  });
+  if (!player.delegatedClicks) {
+    player.delegatedClicks = true;
+    document.addEventListener("click", handlePlayTrackClick);
+  }
   player.mount();
   elements.address.textContent = `${window.location.host}${shopPath().replace(/\/$/, "")}`;
   window.addEventListener("message", handleSharedCatalogFrameMessage);

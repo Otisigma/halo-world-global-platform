@@ -17,6 +17,10 @@ concurrency:
 jobs:
   telemetry-artifact:
     runs-on: ubuntu-latest
+    # `secrets` is not a valid context in step-level `if:` conditions, so the hook is
+    # surfaced as job-level env and evaluated through `env` instead.
+    env:
+      NETLIFY_BUILD_HOOK: ${{ secrets.NETLIFY_BUILD_HOOK }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -46,11 +50,9 @@ jobs:
           retention-days: 7
 
       - name: Trigger Netlify build hook
-        if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && secrets.NETLIFY_BUILD_HOOK != '' }}
-        env:
-          NETLIFY_BUILD_HOOK: ${{ secrets.NETLIFY_BUILD_HOOK }}
+        if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && env.NETLIFY_BUILD_HOOK != '' }}
         run: curl --fail --show-error --silent --request POST "$NETLIFY_BUILD_HOOK"
 
       - name: Skip Netlify hook when not configured
-        if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && secrets.NETLIFY_BUILD_HOOK == '' }}
+        if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && env.NETLIFY_BUILD_HOOK == '' }}
         run: echo "NETLIFY_BUILD_HOOK is not set; skipping deploy trigger."

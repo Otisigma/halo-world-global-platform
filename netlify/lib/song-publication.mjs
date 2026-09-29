@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { appendLedgerEntry } from "./halo-ledger.mjs";
 import { resolveDreamweaverPageFlow } from "./dreamweaver-page-manager.mjs";
 import { dreamweaverStorefrontPath } from "./dreamweaver-satellite.mjs";
+import { PUBLICATION_ESCALATION_THRESHOLD, buildPublicationHealth } from "./song-publication-health.mjs";
 
 const VERSION_LABELS = {
   sale_master: "Sale master",
@@ -85,6 +86,7 @@ async function loadPublishedSong(db, songId, ownerMemberId) {
       song.notes,
       song.metadata_status,
       song.metadata_score,
+      song.metadata_issues,
       song.artwork_url,
       song.pipeline_status,
       membership.actor_id AS owner_actor_id,
@@ -132,6 +134,43 @@ async function loadPublishedSong(db, songId, ownerMemberId) {
     ORDER BY updated_at DESC
   `;
   return { song: rows[0], versions };
+}
+
+async function loadPublicationSyncRow(db, songId) {
+  const rows = await db.sql`
+    SELECT
+      song_id,
+      release_id,
+      radio_track_id,
+      canonical_url,
+      release_status,
+      radio_status,
+      dreamweaver_status,
+      details,
+      last_error,
+      last_reconciled_at
+    FROM halo_song_publication_sync
+    WHERE song_id = ${songId}
+    LIMIT 1
+  `;
+  return rows[0] || null;
+}
+
+function publicationHealthSong(song, versions) {
+  return {
+    id: song.id,
+    sourceReleaseId: song.source_release_id || "",
+    artistName: song.artist_name,
+    title: song.title,
+    rightsStatus: song.rights_status,
+    metadataStatus: song.metadata_status,
+    metadataIssues: Array.isArray(song.metadata_issues) ? song.metadata_issues : [],
+    versions: versions.map(version => ({
+      versionType: version.version_type,
+      audioUrl: version.audio_url,
+      masteringStatus: version.mastering_status
+    }))
+  };
 }
 
 async function resolveReleaseId(db, song) {
@@ -500,10 +539,34 @@ export async function reconcilePublishedSong(db, {
   const context = await loadPublishedSong(db, songId, ownerMemberId);
   if (!context) return { ok: false, skipped: true, reason: "song_not_published_or_missing" };
   const { song, versions } = context;
+  const existingSync = await loadPublicationSyncRow(db, song.id);
+  const existingDetails = existingSync?.details && typeof existingSync.details === "object" ? existingSync.details : {};
   try {
     const release = await ensureReleaseCampaign(db, song, versions);
     const syncedVersions = await syncReleaseAudioVersions(db, song, versions, release.id);
     const radio = await ensureRadioTrack(db, song, syncedVersions, release);
+    const dreamweaverStatus = release.dreamweaver.routeMode === "dreamweaver_page"
+      ? "ready"
+      : release.dreamweaver.routeMode === "hyperfollow"
+        ? "managed_externally"
+        : "pending";
+    const healthInput = {
+      releaseId: release.id,
+      radioTrackId: radio.trackId,
+      canonicalUrl: release.publicUrl,
+      releaseStatus: "published",
+      radioStatus: radio.status,
+      dreamweaverStatus,
+      details: {
+        ...existingDetails,
+        errorStreak: 0,
+        firstFailureAt: "",
+        escalatedAt: ""
+      },
+      lastError: "",
+      lastReconciledAt: new Date().toISOString()
+    };
+    const health = buildPublicationHealth(publicationHealthSong(song, versions), healthInput);
     const details = {
       availableVersions: versions.map(version => version.version_type),
       syncedAudioVersionCount: syncedVersions.length,
@@ -520,6 +583,11 @@ export async function reconcilePublishedSong(db, {
         routeMode: release.dreamweaver.routeMode || "",
         destinationUrl: release.dreamweaver.destinationUrl || "",
       },
+      errorStreak: 0,
+      firstFailureAt: "",
+      escalatedAt: "",
+      lastSuccessfulReconcileAt: new Date().toISOString(),
+      health,
     };
     await upsertPublicationSync(db, song, {
       releaseId: release.id,
@@ -527,11 +595,7 @@ export async function reconcilePublishedSong(db, {
       canonicalUrl: release.publicUrl,
       releaseStatus: "published",
       radioStatus: radio.status,
-      dreamweaverStatus: release.dreamweaver.routeMode === "dreamweaver_page"
-        ? "ready"
-        : release.dreamweaver.routeMode === "hyperfollow"
-          ? "managed_externally"
-          : "pending",
+      dreamweaverStatus,
       details,
     });
     if (recordLedger) {
@@ -563,14 +627,45 @@ export async function reconcilePublishedSong(db, {
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : "unknown error";
-    await upsertPublicationSync(db, song, {
-      releaseId: song.source_release_id || null,
-      radioTrackId: null,
-      canonicalUrl: song.source_release_id ? publicationPath(song.source_release_id) : "",
+    const errorStreak = Math.max(1, Number.parseInt(String(existingDetails.errorStreak || "0"), 10) + 1 || 1);
+    const firstFailureAt = String(existingDetails.firstFailureAt || new Date().toISOString());
+    const escalatedAt = String(existingDetails.escalatedAt || (errorStreak >= PUBLICATION_ESCALATION_THRESHOLD ? new Date().toISOString() : ""));
+    const fallbackReleaseId = existingSync?.release_id || song.source_release_id || null;
+    const fallbackRadioTrackId = existingSync?.radio_track_id || null;
+    const fallbackCanonicalUrl = existingSync?.canonical_url || (fallbackReleaseId ? publicationPath(fallbackReleaseId) : "");
+    const healthInput = {
+      releaseId: fallbackReleaseId,
+      radioTrackId: fallbackRadioTrackId,
+      canonicalUrl: fallbackCanonicalUrl,
       releaseStatus: "error",
       radioStatus: "error",
       dreamweaverStatus: "error",
-      details: { error: message },
+      details: {
+        ...existingDetails,
+        errorStreak,
+        firstFailureAt,
+        escalatedAt
+      },
+      lastError: message,
+      lastReconciledAt: new Date().toISOString()
+    };
+    const health = buildPublicationHealth(publicationHealthSong(song, versions), healthInput);
+    await upsertPublicationSync(db, song, {
+      releaseId: fallbackReleaseId,
+      radioTrackId: fallbackRadioTrackId,
+      canonicalUrl: fallbackCanonicalUrl,
+      releaseStatus: "error",
+      radioStatus: "error",
+      dreamweaverStatus: "error",
+      details: {
+        ...(existingDetails.dreamweaver ? { dreamweaver: existingDetails.dreamweaver } : {}),
+        error: message,
+        errorStreak,
+        firstFailureAt,
+        escalatedAt,
+        lastFailureAt: new Date().toISOString(),
+        health
+      },
       lastError: message,
     });
     if (recordLedger) {
@@ -615,6 +710,11 @@ export async function reconcilePublishedSongs(db, {
         LEFT JOIN halo_radio_tracks radio ON radio.id = sync.radio_track_id
         WHERE song.status = 'active'
           AND song.pipeline_status = 'published'
+          AND (
+            sync.song_id IS NULL
+            OR COALESCE(sync.details->>'escalatedAt', '') = ''
+            OR song.updated_at > sync.updated_at
+          )
           AND (
             sync.song_id IS NULL
             OR sync.release_id IS NULL

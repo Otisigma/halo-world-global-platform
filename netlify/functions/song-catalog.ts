@@ -9,6 +9,7 @@ import { reconcilePublishedSong } from "../lib/song-publication.mjs";
 import { buildDreamweaverSatellite } from "../../lib/route-registry.js";
 import { cleanDreamweaverSongId } from "../../lib/dreamweaver-storefront.js";
 import { pickCanonicalMaster, serializeMasterCopy } from "../lib/master-copy.mjs";
+import { attachPublicationHealthToSongs } from "../lib/song-publication-health.mjs";
 
 const MAX_BODY_BYTES = 80_000;
 const RIGHTS_STATUSES = new Set(["needs_review", "cleared", "disputed"]);
@@ -211,6 +212,28 @@ async function loadProducer(nativeDb: Awaited<ReturnType<typeof getDatabase>>, o
       tracks: tracksByPackage.get(row.id) || [], createdAt: new Date(row.created_at).toISOString(), updatedAt: new Date(row.updated_at).toISOString(),
     })),
   };
+}
+
+async function attachPublicationHealth(nativeDb: Awaited<ReturnType<typeof getDatabase>>, ownerMemberId: string, catalog: ReturnType<typeof serializeSong>[]) {
+  const publishedSongIds = catalog.filter(song => song.pipelineStatus === "published").map(song => song.id);
+  if (!publishedSongIds.length) return catalog.map(song => ({ ...song, publicationHealth: null }));
+  const syncRows = await nativeDb.sql`
+    SELECT
+      song_id,
+      release_id,
+      radio_track_id,
+      canonical_url,
+      release_status,
+      radio_status,
+      dreamweaver_status,
+      details,
+      last_error,
+      last_reconciled_at
+    FROM halo_song_publication_sync
+    WHERE owner_member_id = ${ownerMemberId}
+      AND song_id = ANY(${publishedSongIds})
+  `;
+  return attachPublicationHealthToSongs(catalog, syncRows);
 }
 
 async function queueProducer(nativeDb: Awaited<ReturnType<typeof getDatabase>>, ownerMemberId: string) {
@@ -426,7 +449,8 @@ export default async function songCatalogHandler(request: Request) {
     const membership = await ensureMembership(nativeDb, user);
     if (request.method === "GET") {
       const [catalog, producer] = await Promise.all([loadCatalog(membership.member_id), loadProducer(nativeDb, membership.member_id)]);
-      return json({ authenticated: true, viewer: { name: membership.display_name }, songs: catalog, producer });
+      const songsWithHealth = await attachPublicationHealth(nativeDb, membership.member_id, catalog);
+      return json({ authenticated: true, viewer: { name: membership.display_name }, songs: songsWithHealth, producer });
     }
 
     try { verifyRequestOrigin(request); } catch { return json({ message: "Cross-origin catalog actions are not accepted" }, 403); }

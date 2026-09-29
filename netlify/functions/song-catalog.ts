@@ -486,6 +486,20 @@ export default async function songCatalogHandler(request: Request) {
       await runDreamweaverReview(songId, membership.member_id);
       return json({ message: "Dream Weaver review completed", songId });
     }
+    if (payload.action === "recheck_publication") {
+      const songId = cleanId(payload.songId);
+      if (!songId) return json({ message: "Choose a valid song" }, 400);
+      const [ownedSong] = await db.select({ id: songs.id }).from(songs)
+        .where(and(eq(songs.id, songId), eq(songs.ownerMemberId, membership.member_id),
+          eq(songs.status, "active"), eq(songs.pipelineStatus, "published"))).limit(1);
+      if (!ownedSong) return json({ message: "Choose a published song you own" }, 404);
+      const result = await reconcilePublishedSong(nativeDb, {
+        songId, ownerMemberId: membership.member_id,
+        actorId: membership.actor_id, actorType: "member",
+      });
+      if (result.skipped) return json({ message: "Song is no longer published" }, 409);
+      return json({ message: "Publication health rechecked", songId, publicationHealth: result.publicationHealth });
+    }
     return json({ message: "Choose a supported catalog action" }, 400);
   } catch (error) {
     console.error("Song catalog request failed", error instanceof Error ? error.message : "unknown error");

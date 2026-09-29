@@ -3,10 +3,11 @@ import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { sanitizeDreamweaverAssignedRoute } from "../lib/dreamweaver-storefront.js";
 import { buildDreamweaverSatellite } from "../lib/route-registry.js";
+import { pickCanonicalMaster, serializeMasterCopy } from "../netlify/lib/master-copy.mjs";
 
 const root = resolve(import.meta.dirname, "..");
 const read = path => readFile(resolve(root, path), "utf8");
-const [page, client, styles, api, unifiedUploadApi, releaseCatalogApi, audioApi, artworkApi, producerApi, producerLib, satelliteHelper, schema, migration, audioMigration, artworkMigration, versionArtworkMigration, producerMigration, versionVideoMigration, config, home, packageText, uploadHelper, dreamweaverManager] = await Promise.all([
+const [page, client, styles, api, unifiedUploadApi, releaseCatalogApi, audioApi, artworkApi, producerApi, producerLib, satelliteHelper, schema, migration, audioMigration, artworkMigration, versionArtworkMigration, producerMigration, versionVideoMigration, config, home, packageText, uploadHelper, dreamweaverManager, singleMasterMigration, masterCopyLib] = await Promise.all([
   read("song-catalog/index.html"),
   read("song-catalog/song-catalog.js"),
   read("song-catalog/song-catalog.css"),
@@ -29,8 +30,9 @@ const [page, client, styles, api, unifiedUploadApi, releaseCatalogApi, audioApi,
   read("halo.html"),
   read("package.json"),
   read("upload-progress.js"),
-  read("netlify/lib/dreamweaver-satellite.mjs"),
-  read("netlify/lib/dreamweaver-page-manager.mjs")
+  read("netlify/lib/dreamweaver-page-manager.mjs"),
+  read("netlify/database/migrations/20260929040000_enforce_single_active_sale_master.sql"),
+  read("netlify/lib/master-copy.mjs")
 ]);
 const packageJson = JSON.parse(packageText);
 const sampleDreamweaverSatellite = buildDreamweaverSatellite("11111111-1111-4111-8111-111111111111", { includeAgentLoop: true });
@@ -100,10 +102,28 @@ const checks = [
   [client.includes('$("#newMasterFile")') && client.includes("data.masterVersionId||data.versionIds?.sale_master") && client.includes("uploadAudioToVersion({file:masterFile,songId:data.songId,versionId:masterVersionId"), "uploads the chosen master copy into the new song's sale master version"],
   [client.includes("audioFileProblem(masterFile)") && client.includes('document.querySelector(".master-copy-panel")') && !page.includes('class="audio-upload-panel master') , "validates master copy files and tracks their upload progress without hijacking the version audio panel"],
   [api.includes('const MASTER_VERSION_TYPE: VersionType = "sale_master"') && api.includes("masterVersionId: versionIds[MASTER_VERSION_TYPE]") && api.includes("versionIds,"), "returns the canonical master version id when a song is created"],
-  [api.includes("masterCopy: serializeMasterCopy(versions)") && api.includes("isCanonicalMaster: version.versionType === MASTER_VERSION_TYPE") && api.includes("audioFilename: master?.audioFilename"), "retains master copy metadata in persisted song catalog records"],
+  [api.includes("masterCopy: serializeMasterCopy(versions)") && api.includes("isCanonicalMaster: version.id === canonicalMaster?.id") && masterCopyLib.includes("audioFilename: master?.audioFilename"), "retains master copy metadata in persisted song catalog records"],
+  [api.includes('import { pickCanonicalMaster, serializeMasterCopy } from "../lib/master-copy.mjs"') && masterCopyLib.includes("export function pickCanonicalMaster(") && !api.includes('versions.find(version => version.versionType === MASTER_VERSION_TYPE)'), "resolves exactly one canonical master copy instead of the most recently updated sale master"],
+  [api.includes("async function demoteOtherMasters(") && api.includes("await demoteOtherMasters(transaction, songId, versionId)") && api.includes('ne(songVersions.id, keepVersionId)'), "demotes any prior active sale master when another version is promoted to the canonical master"],
+  [singleMasterMigration.includes("CREATE UNIQUE INDEX IF NOT EXISTS halo_song_versions_single_active_master_idx") && singleMasterMigration.includes("version_type = 'sale_master' AND status = 'active'") && singleMasterMigration.includes("master_rank > 1") && schema.includes("halo_song_versions_single_active_master_idx"), "guards the database against more than one active sale master per song"],
+  [!unifiedUploadApi.includes("ORDER BY updated_at DESC\n      LIMIT 1") && unifiedUploadApi.includes("ORDER BY (COALESCE(audio_url, '') <> '') DESC, created_at ASC, id ASC") && releaseCatalogApi.includes("ORDER BY (COALESCE(version.audio_url, '') <> '') DESC, version.created_at ASC, version.id ASC"), "selects the canonical master deterministically instead of by recency in the catalog APIs"],
+  [client.includes("canonical-master-badge") && client.includes("version.isCanonicalMaster") && page.includes('id="versionMasterNote"') && styles.includes(".canonical-master-note"), "labels the canonical master copy clearly in the song catalog UI"],
+  [page.includes("Promoting another version to Sale master later demotes this one") && client.includes("only that single canonical master is published"), "explains what happens when a master copy is selected during upload"],
   [unifiedUploadApi.includes('const MASTER_VERSION_TYPE = "sale_master"') && unifiedUploadApi.includes("masterVersionId: versionIds[MASTER_VERSION_TYPE]") && unifiedUploadApi.includes("masterCopy: serializeMasterCopy(row)") && unifiedUploadApi.includes("version_type = ${MASTER_VERSION_TYPE}"), "exposes the canonical master copy through the unified upload pipeline"],
   [releaseCatalogApi.includes("masterCopy: {") && releaseCatalogApi.includes("version.version_type = 'sale_master'") && releaseCatalogApi.includes("catalog_master_uploaded") && !/masterCopy: \{[^}]*audioUrl/.test(releaseCatalogApi), "surfaces public-safe master copy metadata in the release catalog without leaking private audio URLs"]
 ];
+
+const duplicateMasters = [
+  { id: "version-b", versionType: "sale_master", audioUrl: "", createdAt: new Date("2026-02-01T00:00:00Z") },
+  { id: "version-a", versionType: "sale_master", audioUrl: "/api/song-catalog/audio?versionId=version-a", createdAt: new Date("2026-01-01T00:00:00Z"), audioFilename: "master.wav" },
+  { id: "version-c", versionType: "radio_edit", audioUrl: "", createdAt: new Date("2026-03-01T00:00:00Z") },
+];
+assert.equal(pickCanonicalMaster(duplicateMasters)?.id, "version-a", "exactly one canonical master must be returned for a song");
+assert.equal(duplicateMasters.filter(version => version.id === pickCanonicalMaster(duplicateMasters)?.id).length, 1, "canonical master resolution must never return more than one version");
+assert.equal(serializeMasterCopy(duplicateMasters).versionId, "version-a", "masterCopy must serialize the canonical active master");
+assert.equal(serializeMasterCopy(duplicateMasters).uploaded, true, "masterCopy must report the canonical master upload state");
+assert.equal(serializeMasterCopy([]).versionId, "", "masterCopy must stay empty when no sale master exists");
+assert.ok(!/masterCopy: \{[^}]*audio(Url|BlobPrefix|Filename)/.test(releaseCatalogApi), "public release catalog masterCopy must expose only safe metadata");
 
 const failures = checks.filter(([passed]) => !passed);
 for (const [passed, description] of checks) console.log(`${passed ? "PASS" : "FAIL"}: ${description}`);

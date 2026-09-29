@@ -333,7 +333,7 @@ export default async function releaseCatalogHandler(request) {
         WHERE version.song_id = catalog.catalog_song_id
           AND version.version_type = 'sale_master'
           AND version.status = 'active'
-        ORDER BY version.updated_at DESC
+        ORDER BY (COALESCE(version.audio_url, '') <> '') DESC, version.created_at ASC, version.id ASC
         LIMIT 1
       ) catalog_master ON TRUE
       WHERE release.status = 'published'

@@ -217,6 +217,15 @@ app.get("/sw.js", (_req, res) => {
   return sendFileIfPresent(res, "sw.js");
 });
 
+app.get("/public/sw.js", (_req, res) => {
+  res.set("Cache-Control", "no-cache, no-store, must-revalidate");
+  return sendFileIfPresent(res, path.join("public", "sw.js"));
+});
+
+app.get("/public/manifest.json", (_req, res) => {
+  return sendFileIfPresent(res, path.join("public", "manifest.json"));
+});
+
 app.get("*", (req, res, next) => {
   const routePath = decodeURIComponent(req.path);
   const relativePath = routePath.replace(/^\/+/, "");

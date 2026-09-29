@@ -20,7 +20,10 @@
     "@netlify/identity": "^1.2.0",
     "drizzle-orm": "^1.0.0-beta.22",
     "express": "^4.21.2",
-    "openai": "^7.4.0"
+    "mongoose": "^9.10.3",
+    "openai": "^7.4.0",
+    "pdf-lib": "^1.17.1",
+    "stripe": "^22.6.2"
   },
   "peerDependencies": {
     "@netlify/database": "^1.1.0"

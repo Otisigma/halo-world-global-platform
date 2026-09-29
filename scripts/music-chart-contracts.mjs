@@ -33,17 +33,25 @@ assert.match(styles, /\.chart-console/, "chart console must have a dedicated res
 assert.match(styles, /\.chart-row\.is-active/, "chart rows must expose a selected state");
 assert.match(styles, /\.stage-video-fallback-visual/, "chart styles must support fallback visual playback without remote media");
 assert.match(client, /function formatAudioStreamUrl\(rawUrl\)[\s\S]*drive\.google\.com\/uc\?export=download&id=/, "shop player must convert Google Drive share links into direct stream URLs");
-assert.match(client, /class HaloShopPlayer[\s\S]*this\.audio = new Audio\(\)/, "shop player must own a single global Audio instance");
+assert.match(client, /class HaloGlobalPlayer[\s\S]*this\.audio = new Audio\(\)/, "shop player must own a single global Audio instance");
+assert.match(client, /window\.HaloPlayer = new HaloGlobalPlayer\(/, "shop player must be exposed as the window.HaloPlayer singleton");
 assert.equal((client.match(/new Audio\(/g) || []).length, 1, "shop page must not create ad hoc Audio instances");
 assert.match(client, /haloGlobalPlayerBar/, "shop player must mount the floating global player bar");
+for (const id of ["haloPlayerCover", "haloPlayerTitle", "haloPlayerArtist", "haloPlayerToggle"]) {
+  assert.match(client, new RegExp(`id="${id}"`), `floating player bar must render #${id}`);
+}
 assert.match(client, /querySelectorAll\("\[data-play-track-id\]"\)/, "shop player must sync play state across every rendered play button");
-assert.match(client, /closest\('\[data-action="play-track"\]'\)/, "shop play buttons must use delegated click handling");
-assert.match(client, /\[elements\.featured, elements\.chartBoard, elements\.chartStage, elements\.grid\]\.forEach/, "featured, chart, and grid containers must delegate play clicks");
+assert.match(client, /closest\('\[data-action="play-track"\], \[data-play-track-id\]'\)/, "shop play buttons must use delegated click handling");
+assert.match(client, /document\.addEventListener\("click", handlePlayTrackClick\)/, "play clicks must be delegated from the document so dynamically rendered cards work");
+assert.match(client, /function showToast\(message\) \{\s*if \(!elements\.toast\) \{\s*window\.alert\(message\)/, "player errors must fall back to alert when the toast is unavailable");
 assert.match(client, /data-action="play-track" data-play-track-id=[\s\S]*data-track-id=[\s\S]*data-title=[\s\S]*data-artist=[\s\S]*data-audio-url=[\s\S]*data-cover=/, "play buttons must expose track metadata for the delegated player");
 assert.match(client, /No preview audio is available for this release yet\./, "shop player must handle missing audio URLs gracefully");
 assert.match(client, /addEventListener\("error"[\s\S]*This preview could not be streamed right now\./, "shop player must handle failing audio URLs gracefully");
 assert.doesNotMatch(client, /<audio controls/, "featured preview must route through the global player instead of a separate audio element");
 assert.match(styles, /\.halo-player-bar \{ position: fixed;/, "floating player bar must stay fixed at the bottom of the shop");
+for (const selector of ["player-track-info", "player-cover-art", "player-meta", "player-controls", "player-toggle-btn"]) {
+  assert.match(styles, new RegExp(`\\.${selector} \\{`), `floating player bar must style .${selector}`);
+}
 assert.match(styles, /\.chart-play/, "chart rows must style their delegated play control");
 
 console.log("Music chart contracts passed.");

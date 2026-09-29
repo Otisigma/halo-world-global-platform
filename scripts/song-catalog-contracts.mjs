@@ -6,11 +6,13 @@ import { buildDreamweaverSatellite } from "../lib/route-registry.js";
 
 const root = resolve(import.meta.dirname, "..");
 const read = path => readFile(resolve(root, path), "utf8");
-const [page, client, styles, api, audioApi, artworkApi, producerApi, producerLib, satelliteHelper, schema, migration, audioMigration, artworkMigration, versionArtworkMigration, producerMigration, versionVideoMigration, config, home, packageText, uploadHelper, dreamweaverManager] = await Promise.all([
+const [page, client, styles, api, unifiedUploadApi, releaseCatalogApi, audioApi, artworkApi, producerApi, producerLib, satelliteHelper, schema, migration, audioMigration, artworkMigration, versionArtworkMigration, producerMigration, versionVideoMigration, config, home, packageText, uploadHelper, dreamweaverManager] = await Promise.all([
   read("song-catalog/index.html"),
   read("song-catalog/song-catalog.js"),
   read("song-catalog/song-catalog.css"),
   read("netlify/functions/song-catalog.ts"),
+  read("netlify/functions/unified-upload.mjs"),
+  read("netlify/functions/release-catalog.mjs"),
   read("netlify/functions/song-catalog-audio.ts"),
   read("netlify/functions/song-catalog-artwork.ts"),
   read("netlify/functions/song-catalog-producer.mjs"),
@@ -93,7 +95,14 @@ const checks = [
   [page.includes('id="audioUploadTrack"') && page.includes('id="deleteVersionAudioButton"') && page.includes('id="artworkUploadTrack"') && page.includes('id="versionArtworkTrack"'), "renders visible upload progress tracks and audio delete controls for catalog uploads"],
   [client.includes("window.HaloUploadProgress") && client.includes("deleteVersionAudio") && client.includes("uploadHelper.uploadChunkedFile"), "uses the shared upload helper for live progress and version-audio deletion"],
   [audioApi.includes('request.method === "DELETE"') && audioApi.includes("Version audio removed") && audioApi.includes("runDreamweaverReview"), "lets owners delete uploaded version audio and re-run Dream Weaver checks"],
-  [uploadHelper.includes("uploadChunkedFile") && uploadHelper.includes("createUploadUi"), "shares upload progress state and byte-level progress handling across upload views"]
+  [uploadHelper.includes("uploadChunkedFile") && uploadHelper.includes("createUploadUi"), "shares upload progress state and byte-level progress handling across upload views"],
+  [page.includes('id="newMasterFile"') && page.includes('name="masterCopy"') && page.includes('id="newMasterProgress"') && page.includes('id="newMasterTrack"') && page.includes("Sale master"), "lets uploaders attach a master copy when creating a song record"],
+  [client.includes('$("#newMasterFile")') && client.includes("data.masterVersionId||data.versionIds?.sale_master") && client.includes("uploadAudioToVersion({file:masterFile,songId:data.songId,versionId:masterVersionId"), "uploads the chosen master copy into the new song's sale master version"],
+  [client.includes("audioFileProblem(masterFile)") && client.includes('document.querySelector(".master-copy-panel")') && !page.includes('class="audio-upload-panel master') , "validates master copy files and tracks their upload progress without hijacking the version audio panel"],
+  [api.includes('const MASTER_VERSION_TYPE: VersionType = "sale_master"') && api.includes("masterVersionId: versionIds[MASTER_VERSION_TYPE]") && api.includes("versionIds,"), "returns the canonical master version id when a song is created"],
+  [api.includes("masterCopy: serializeMasterCopy(versions)") && api.includes("isCanonicalMaster: version.versionType === MASTER_VERSION_TYPE") && api.includes("audioFilename: master?.audioFilename"), "retains master copy metadata in persisted song catalog records"],
+  [unifiedUploadApi.includes('const MASTER_VERSION_TYPE = "sale_master"') && unifiedUploadApi.includes("masterVersionId: versionIds[MASTER_VERSION_TYPE]") && unifiedUploadApi.includes("masterCopy: serializeMasterCopy(row)") && unifiedUploadApi.includes("version_type = ${MASTER_VERSION_TYPE}"), "exposes the canonical master copy through the unified upload pipeline"],
+  [releaseCatalogApi.includes("masterCopy: {") && releaseCatalogApi.includes("version.version_type = 'sale_master'") && releaseCatalogApi.includes("catalog_master_uploaded") && !/masterCopy: \{[^}]*audioUrl/.test(releaseCatalogApi), "surfaces public-safe master copy metadata in the release catalog without leaking private audio URLs"]
 ];
 
 const failures = checks.filter(([passed]) => !passed);

@@ -140,6 +140,12 @@
       <label><span>Song title</span><input id="newTitle" required maxlength="160"></label>
       <label><span>Genre</span><input id="newGenre" maxlength="80"></label>
       <label><span>Sale price (USD)</span><input id="newSalePrice" type="number" min="0" step="0.01" placeholder="1.29"></label>
+      <section class="master-copy-panel" aria-labelledby="newMasterHeading">
+        <div><span class="field-label" id="newMasterHeading">Master copy (optional)</span><p>Saved as this song's Sale master — the canonical master copy used for release, storefront, and publication. WAV or FLAC recommended · 128 MB maximum.</p></div>
+        <label class="audio-file-picker"><span>Choose master copy</span><input id="newMasterFile" name="masterCopy" type="file" accept="audio/*,.mp3,.m4a,.aac,.ogg,.webm,.wav,.flac"></label>
+        <div class="upload-progress-track" id="newMasterTrack" hidden aria-hidden="true"><span class="upload-progress-fill"></span></div>
+        <p class="audio-upload-progress" id="newMasterProgress" role="status">No master copy selected. You can add it later on the Sale master version.</p>
+      </section>
       <button class="primary-button" type="submit">Create full song record</button>
     </form>
   </dialog>

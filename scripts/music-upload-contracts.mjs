@@ -65,4 +65,8 @@ assert.match(home, /Public song shop for listening, buying, sharing, and artist-
 assert.match(uploadClient, /satellite\?\.experienceUrl/, "upload controller must prefer the Dreamweaver satellite experience URL");
 assert.match(uploadClient, /isDreamweaverExperienceUrl/, "upload controller must guard against non-Dreamweaver navigation targets such as raw audio asset URLs");
 
+assert.match(catalogApi, /masterCopy: \{[\s\S]*versionType: "sale_master"/, "release catalog API must identify the sale master as the canonical master copy");
+assert.match(catalogApi, /catalog_master_uploaded/, "release catalog API must report whether the master copy has been uploaded");
+assert.match(uploadClient, /created\.masterVersionId \|\| created\.versionIds\?\.sale_master/, "upload controller must route source audio into the canonical master copy version");
+
 console.log("Music upload storefront contracts passed.");

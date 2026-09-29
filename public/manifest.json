@@ -1,0 +1,25 @@
+{
+  "short_name": "HALO",
+  "name": "HALO Music World",
+  "description": "Independent Music, DJ Mixes & Direct Sync Licensing Platform",
+  "icons": [
+    {
+      "src": "/assets/halo-app-icon-192.png",
+      "type": "image/png",
+      "sizes": "192x192"
+    },
+    {
+      "src": "/assets/halo-app-icon-512.png",
+      "type": "image/png",
+      "sizes": "512x512",
+      "purpose": "any maskable"
+    }
+  ],
+  "start_url": "/?utm_source=pwa",
+  "scope": "/",
+  "background_color": "#0a0a0a",
+  "theme_color": "#eaff00",
+  "display": "standalone",
+  "orientation": "portrait",
+  "categories": ["music", "entertainment"]
+}

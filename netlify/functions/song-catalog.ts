@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, ne, sql } from "drizzle-orm";
 import { getDatabase } from "@netlify/database";
 import { getUser, verifyRequestOrigin } from "@netlify/identity";
 import { db } from "../../db/index.js";
@@ -8,6 +8,7 @@ import { cleanText, ensureMembership } from "../lib/halo-x.mjs";
 import { reconcilePublishedSong } from "../lib/song-publication.mjs";
 import { buildDreamweaverSatellite } from "../../lib/route-registry.js";
 import { cleanDreamweaverSongId } from "../../lib/dreamweaver-storefront.js";
+import { pickCanonicalMaster, serializeMasterCopy } from "../lib/master-copy.mjs";
 
 const MAX_BODY_BYTES = 80_000;
 const RIGHTS_STATUSES = new Set(["needs_review", "cleared", "disputed"]);
@@ -93,22 +94,9 @@ function cleanVersionType(value: unknown): VersionType {
   return VERSION_ROUTES[type] ? type : "alternate";
 }
 
-function serializeMasterCopy(versions: Array<typeof songVersions.$inferSelect>) {
-  const master = versions.find(version => version.versionType === MASTER_VERSION_TYPE);
-  return {
-    versionType: MASTER_VERSION_TYPE,
-    versionId: master?.id || "",
-    uploaded: Boolean(master?.audioUrl),
-    audioUrl: master?.audioUrl || "",
-    audioFilename: master?.audioFilename || "",
-    audioByteSize: master?.audioByteSize || 0,
-    durationSeconds: master?.durationSeconds || 0,
-    masteringStatus: master?.masteringStatus || "not_started",
-  };
-}
-
 function serializeSong(song: typeof songs.$inferSelect, versions: Array<typeof songVersions.$inferSelect>) {
   const songArtworkUrl = song.artworkUrl || "";
+  const canonicalMaster = pickCanonicalMaster(versions);
   return {
     id: song.id,
     sourceReleaseId: song.sourceReleaseId || "",
@@ -138,7 +126,7 @@ function serializeSong(song: typeof songs.$inferSelect, versions: Array<typeof s
     versions: versions.map(version => ({
       id: version.id,
       versionType: version.versionType,
-      isCanonicalMaster: version.versionType === MASTER_VERSION_TYPE,
+      isCanonicalMaster: version.id === canonicalMaster?.id,
       label: version.label,
       destination: version.destination,
       audioUrl: version.audioUrl,
@@ -297,6 +285,22 @@ export async function runDreamweaverReview(songId: string, ownerMemberId: string
   });
 }
 
+type CatalogExecutor = typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+// Demotes every other active sale master for a song so the promoted version is the only canonical one.
+async function demoteOtherMasters(executor: CatalogExecutor, songId: string, keepVersionId: string) {
+  const fallback = VERSION_ROUTES.alternate;
+  await executor.update(songVersions).set({
+    versionType: "alternate", label: fallback.label, destination: fallback.destination,
+    targetLufs: fallback.targetLufs, updatedAt: new Date(),
+  }).where(and(
+    eq(songVersions.songId, songId),
+    eq(songVersions.versionType, MASTER_VERSION_TYPE),
+    eq(songVersions.status, "active"),
+    ne(songVersions.id, keepVersionId),
+  ));
+}
+
 async function createDefaultVersions(songId: string) {
   const rows = (Object.entries(VERSION_ROUTES) as Array<[VersionType, typeof VERSION_ROUTES[VersionType]]>).map(([versionType, route]) => ({
     id: randomUUID(), songId, versionType, label: route.label, destination: route.destination,
@@ -351,25 +355,40 @@ async function saveVersion(ownerMemberId: string, payload: Record<string, unknow
   const versionType = cleanVersionType(payload.versionType);
   const route = VERSION_ROUTES[versionType];
   const audioUrl = cleanAudioUrl(payload.audioUrl);
-  const rows = await db.update(songVersions).set({
-    versionType, label: cleanText(payload.label, 100) || route.label,
-    destination: route.destination,
-    // Preserve managed upload URLs: only overwrite audioUrl when a valid external https URL or
-    // internal catalog playback path is supplied; if the field is blank and an uploaded file
-    // exists (blob prefix set), keep the stored managed URL.
-    audioUrl: sql`CASE WHEN ${audioUrl} <> '' THEN ${audioUrl} WHEN audio_blob_prefix <> '' THEN audio_url ELSE '' END`,
-    durationSeconds: Math.max(0, Math.min(86_400, Number.parseInt(String(payload.durationSeconds || "0"), 10) || 0)),
-    masteringStatus: cleanEnum(payload.masteringStatus, MASTERING_STATUSES, "not_started"),
-    targetLufs: Math.max(-30, Math.min(-5, Number.parseInt(String(payload.targetLufs || route.targetLufs), 10) || route.targetLufs)),
-    truePeakDbtpTenths: Math.max(-100, Math.min(0, Math.round(Number(payload.truePeakDbtp ?? -1) * 10))),
-    cleanLyrics: payload.cleanLyrics === true, saleEnabled: payload.saleEnabled === true,
-    videoUrl: cleanVideoUrl(payload.videoUrl),
-    promoVideoUrl: cleanVideoUrl(payload.promoVideoUrl),
-    notes: cleanText(payload.notes, 2000), updatedAt: new Date(),
-  }).where(and(eq(songVersions.id, versionId), eq(songVersions.songId, songId))).returning({ id: songVersions.id });
+  const [existingVersion] = await db.select({ id: songVersions.id }).from(songVersions)
+    .where(and(eq(songVersions.id, versionId), eq(songVersions.songId, songId))).limit(1);
+  if (!existingVersion) return json({ message: "That version was not found" }, 404);
+  const rows = await db.transaction(async transaction => {
+    if (versionType === MASTER_VERSION_TYPE) {
+      // A song keeps exactly one active sale master: demote any prior master before promoting this version.
+      await demoteOtherMasters(transaction, songId, versionId);
+    }
+    return transaction.update(songVersions).set({
+      versionType, label: cleanText(payload.label, 100) || route.label,
+      destination: route.destination,
+      // Preserve managed upload URLs: only overwrite audioUrl when a valid external https URL or
+      // internal catalog playback path is supplied; if the field is blank and an uploaded file
+      // exists (blob prefix set), keep the stored managed URL.
+      audioUrl: sql`CASE WHEN ${audioUrl} <> '' THEN ${audioUrl} WHEN audio_blob_prefix <> '' THEN audio_url ELSE '' END`,
+      durationSeconds: Math.max(0, Math.min(86_400, Number.parseInt(String(payload.durationSeconds || "0"), 10) || 0)),
+      masteringStatus: cleanEnum(payload.masteringStatus, MASTERING_STATUSES, "not_started"),
+      targetLufs: Math.max(-30, Math.min(-5, Number.parseInt(String(payload.targetLufs || route.targetLufs), 10) || route.targetLufs)),
+      truePeakDbtpTenths: Math.max(-100, Math.min(0, Math.round(Number(payload.truePeakDbtp ?? -1) * 10))),
+      cleanLyrics: payload.cleanLyrics === true, saleEnabled: payload.saleEnabled === true,
+      videoUrl: cleanVideoUrl(payload.videoUrl),
+      promoVideoUrl: cleanVideoUrl(payload.promoVideoUrl),
+      notes: cleanText(payload.notes, 2000), updatedAt: new Date(),
+    }).where(and(eq(songVersions.id, versionId), eq(songVersions.songId, songId))).returning({ id: songVersions.id });
+  });
   if (!rows.length) return json({ message: "That version was not found" }, 404);
   await runDreamweaverReview(songId, ownerMemberId);
-  return json({ message: "Version routed and Dream Weaver reviewed the song", songId });
+  return json({
+    message: versionType === MASTER_VERSION_TYPE
+      ? "Version saved as the canonical master copy and Dream Weaver reviewed the song"
+      : "Version routed and Dream Weaver reviewed the song",
+    songId,
+    masterVersionId: versionType === MASTER_VERSION_TYPE ? versionId : "",
+  });
 }
 
 async function importExisting(nativeDb: Awaited<ReturnType<typeof getDatabase>>, ownerMemberId: string) {

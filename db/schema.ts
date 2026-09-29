@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import { boolean, index, integer, jsonb, pgTable, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
 
 export const songs = pgTable("halo_song_catalog", {
@@ -69,6 +70,9 @@ export const songVersions = pgTable("halo_song_versions", {
 }, table => [
   index("halo_song_versions_song_updated_idx").on(table.songId, table.updatedAt),
   index("halo_song_versions_mastering_idx").on(table.masteringStatus, table.destination),
+  // Exactly one active sale master (canonical master copy) per song.
+  uniqueIndex("halo_song_versions_single_active_master_idx").on(table.songId)
+    .where(sql`version_type = 'sale_master' AND status = 'active'`),
 ]);
 
 export const dreamweaverSongReviews = pgTable("halo_dreamweaver_song_reviews", {

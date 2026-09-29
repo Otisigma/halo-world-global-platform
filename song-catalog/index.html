@@ -141,10 +141,10 @@
       <label><span>Genre</span><input id="newGenre" maxlength="80"></label>
       <label><span>Sale price (USD)</span><input id="newSalePrice" type="number" min="0" step="0.01" placeholder="1.29"></label>
       <section class="master-copy-panel" aria-labelledby="newMasterHeading">
-        <div><span class="field-label" id="newMasterHeading">Master copy (optional)</span><p>Saved as this song's Sale master — the canonical master copy used for release, storefront, and publication. WAV or FLAC recommended · 128 MB maximum.</p></div>
+        <div><span class="field-label" id="newMasterHeading">Master copy (optional)</span><p>Saved as this song's Sale master — the one canonical master copy used for release, storefront, and publication. Promoting another version to Sale master later demotes this one to an alternate version. WAV or FLAC recommended · 128 MB maximum.</p></div>
         <label class="audio-file-picker"><span>Choose master copy</span><input id="newMasterFile" name="masterCopy" type="file" accept="audio/*,.mp3,.m4a,.aac,.ogg,.webm,.wav,.flac"></label>
         <div class="upload-progress-track" id="newMasterTrack" hidden aria-hidden="true"><span class="upload-progress-fill"></span></div>
-        <p class="audio-upload-progress" id="newMasterProgress" role="status">No master copy selected. You can add it later on the Sale master version.</p>
+        <p class="audio-upload-progress" id="newMasterProgress" role="status">No master copy selected. Upload it here or on the Sale master version — only that single canonical master is published.</p>
       </section>
       <button class="primary-button" type="submit">Create full song record</button>
     </form>
@@ -154,6 +154,7 @@
     <form id="versionForm" class="dialog-card version-dialog-card">
       <button class="dialog-close" type="button" data-close aria-label="Close">×</button>
       <p class="eyebrow" id="versionDestination">Destination</p><h2 id="versionHeading">Edit version</h2>
+      <p class="canonical-master-note" id="versionMasterNote" hidden role="status">Canonical master copy · this single Sale master is what HALO publishes to the storefront and release catalog.</p>
       <input id="versionId" type="hidden"><input id="versionSongId" type="hidden"><input id="versionType" type="hidden">
       <div class="field-grid">
         <label><span>Version label</span><input id="versionLabel" required maxlength="100"></label>

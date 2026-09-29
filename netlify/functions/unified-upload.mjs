@@ -278,7 +278,9 @@ async function listPipeline(db, membership) {
       SELECT id, audio_url, audio_filename, audio_byte_size, duration_seconds, mastering_status
       FROM halo_song_versions
       WHERE song_id = song.id AND version_type = ${MASTER_VERSION_TYPE} AND status = 'active'
-      ORDER BY updated_at DESC
+      -- Exactly one active sale master is expected per song; legacy duplicates resolve
+      -- deterministically (uploaded audio first, then oldest) instead of by recency.
+      ORDER BY (COALESCE(audio_url, '') <> '') DESC, created_at ASC, id ASC
       LIMIT 1
     ) master ON TRUE
     WHERE song.owner_member_id = ${membership.member_id} AND song.status = 'active'
@@ -301,7 +303,9 @@ async function getOneSong(db, ownerMemberId, songId) {
       SELECT id, audio_url, audio_filename, audio_byte_size, duration_seconds, mastering_status
       FROM halo_song_versions
       WHERE song_id = song.id AND version_type = ${MASTER_VERSION_TYPE} AND status = 'active'
-      ORDER BY updated_at DESC
+      -- Exactly one active sale master is expected per song; legacy duplicates resolve
+      -- deterministically (uploaded audio first, then oldest) instead of by recency.
+      ORDER BY (COALESCE(audio_url, '') <> '') DESC, created_at ASC, id ASC
       LIMIT 1
     ) master ON TRUE
     WHERE song.id = ${songId} AND song.owner_member_id = ${ownerMemberId} AND song.status = 'active'
@@ -315,9 +319,11 @@ async function getSongVersionIds(db, songId) {
     SELECT id, version_type
     FROM halo_song_versions
     WHERE song_id = ${songId} AND status = 'active'
+    ORDER BY (COALESCE(audio_url, '') <> '') DESC, created_at ASC, id ASC
   `;
   return rows.reduce((acc, row) => {
-    acc[row.version_type] = row.id;
+    // The first row per type wins so the canonical sale master never changes with recency.
+    if (!acc[row.version_type]) acc[row.version_type] = row.id;
     return acc;
   }, {});
 }

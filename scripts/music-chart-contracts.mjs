@@ -3,11 +3,12 @@ import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
 const root = resolve(import.meta.dirname, "..");
-const [page, client, styles, catalogApi] = await Promise.all([
+const [page, client, styles, catalogApi, netlifyConfig] = await Promise.all([
   readFile(resolve(root, "music/index.html"), "utf8"),
   readFile(resolve(root, "music/music.js"), "utf8"),
   readFile(resolve(root, "music/music.css"), "utf8"),
-  readFile(resolve(root, "netlify/functions/release-catalog.mjs"), "utf8")
+  readFile(resolve(root, "netlify/functions/release-catalog.mjs"), "utf8"),
+  readFile(resolve(root, "netlify.toml"), "utf8")
 ]);
 
 assert.match(page, /The living chart/, "music catalog must identify the live chart");
@@ -35,7 +36,8 @@ assert.match(styles, /\.stage-video-fallback-visual/, "chart styles must support
 assert.match(client, /function formatAudioStreamUrl\(rawUrl\)[\s\S]*drive\.google\.com\/uc\?export=download&id=/, "shop player must convert Google Drive share links into direct stream URLs");
 assert.match(client, /class HaloGlobalPlayer[\s\S]*this\.audio = new Audio\(\)/, "shop player must own a single global Audio instance");
 assert.match(client, /window\.HaloPlayer = new HaloGlobalPlayer\(/, "shop player must be exposed as the window.HaloPlayer singleton");
-assert.equal((client.match(/new Audio\(/g) || []).length, 1, "shop page must not create ad hoc Audio instances");
+assert.equal((client.replace(/this\.warmAudio = new Audio\(\)/, "").match(/new Audio\(/g) || []).length, 1, "shop page must not create ad hoc Audio instances beyond the player's playback and silent warm-up elements");
+assert.doesNotMatch(client.match(/prewarm\(rawSrc\) \{[\s\S]*?\n    \}/)?.[0] || "", /\.play\(/, "audio pre-warming must never start playback");
 assert.match(client, /haloGlobalPlayerBar/, "shop player must mount the floating global player bar");
 for (const id of ["haloPlayerCover", "haloPlayerTitle", "haloPlayerArtist", "haloPlayerToggle"]) {
   assert.match(client, new RegExp(`id="${id}"`), `floating player bar must render #${id}`);
@@ -52,6 +54,15 @@ assert.match(styles, /\.halo-player-bar \{ position: fixed;/, "floating player b
 for (const selector of ["player-track-info", "player-cover-art", "player-meta", "player-controls", "player-toggle-btn"]) {
   assert.match(styles, new RegExp(`\\.${selector} \\{`), `floating player bar must style .${selector}`);
 }
+assert.match(client, /this\.audio\.preload = "metadata";\s*this\.audio\.crossOrigin = "anonymous";/, "shop player audio must preload metadata and request anonymous CORS");
+assert.match(client, /retryWithoutCors\(\) \{[\s\S]*removeAttribute\("crossorigin"\)/, "shop player must fall back to no-cors playback for hosts without CORS headers");
+assert.match(client, /document\.addEventListener\("pointerover", handlePlayTrackWarm[\s\S]*document\.addEventListener\("focusin", handlePlayTrackWarm\)/, "play buttons must pre-warm audio on hover and focus");
+assert.match(client, /prewarm\(rawSrc\) \{[\s\S]*this\.warmAudio = new Audio\(\)/, "pre-warming must use a separate audio element so active playback is untouched");
+assert.match(client, /class="release-artwork-image"[^>]*loading="lazy" decoding="async"/, "catalog artwork must lazy load and decode asynchronously");
+assert.match(client, /INITIAL_GRID_RENDER_COUNT = 12/, "catalog grid must render the first 12 releases before appending the rest");
+assert.match(client, /document\.addEventListener\("DOMContentLoaded", schedule, \{ once: true \}\)/, "remaining releases must append after DOMContentLoaded");
+assert.match(netlifyConfig, /for = "\/assets\/\*"\s*\[headers\.values\]\s*Cache-Control = "public, max-age=/, "netlify.toml must cache /assets/* in the browser");
+assert.match(netlifyConfig, /for = "\/music\/\*"\s*\[headers\.values\]\s*Cache-Control = "public, max-age=/, "netlify.toml must cache /music/* in the browser");
 assert.match(styles, /\.chart-play/, "chart rows must style their delegated play control");
 
 console.log("Music chart contracts passed.");

@@ -18,6 +18,18 @@
     Access-Control-Expose-Headers = "Content-Length, Content-Range"
     X-Robots-Tag = "noindex, nofollow"
 
+# Asset filenames are not content-hashed, so cache for a bounded window and revalidate in the background.
+[[headers]]
+  for = "/assets/*"
+  [headers.values]
+    Cache-Control = "public, max-age=604800, stale-while-revalidate=86400"
+
+# Shop page, script, and styles: short browser cache so deploys propagate within minutes.
+[[headers]]
+  for = "/music/*"
+  [headers.values]
+    Cache-Control = "public, max-age=300, stale-while-revalidate=3600"
+
 [[headers]]
   for = "/sw.js"
   [headers.values]

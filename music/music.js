@@ -133,7 +133,10 @@
   class HaloGlobalPlayer {
     constructor({ onError } = {}) {
       this.audio = new Audio();
-      this.audio.preload = "none";
+      this.audio.preload = "metadata";
+      this.audio.crossOrigin = "anonymous";
+      this.warmAudio = null;
+      this.warmedSources = new Set();
       this.track = null;
       this.status = "idle";
       this.onError = onError;
@@ -144,7 +147,9 @@
       this.audio.addEventListener("pause", () => { if (this.status !== "error" && this.audio.paused) this.setStatus("paused"); });
       this.audio.addEventListener("ended", () => this.setStatus("paused"));
       this.audio.addEventListener("error", () => {
-        if (this.track?.src && this.audio.src === this.track.src) this.fail("This preview could not be streamed right now.");
+        if (!this.audio.error || !this.track?.src || this.audio.src !== this.track.src) return;
+        if (this.retryWithoutCors()) return;
+        this.fail("This preview could not be streamed right now.");
       });
     }
 
@@ -163,7 +168,7 @@
         bar.hidden = true;
         bar.setAttribute("aria-label", "HALO shop player");
         bar.innerHTML = `<div class="player-track-info">
-            <img id="haloPlayerCover" class="player-cover-art" alt="" data-player-cover>
+            <img id="haloPlayerCover" class="player-cover-art" alt="" decoding="async" data-player-cover>
             <div class="player-meta"><strong id="haloPlayerTitle" data-player-title></strong><span id="haloPlayerArtist" data-player-artist></span><small data-player-status aria-live="polite"></small></div>
           </div>
           <div class="player-controls">
@@ -195,6 +200,7 @@
         return;
       }
       this.track = { ...track, src };
+      this.audio.crossOrigin = "anonymous";
       this.audio.src = src;
       this.renderBar();
       this.resume();
@@ -205,11 +211,36 @@
       if (!this.track?.src) return;
       if (this.status === "error") this.audio.src = this.track.src;
       this.setStatus("loading");
+      const attemptCors = this.audio.crossOrigin;
       const attempt = this.audio.play();
       attempt?.catch(error => {
-        if (error?.name === "AbortError") return;
+        if (error?.name === "AbortError" || this.audio.crossOrigin !== attemptCors) return;
+        if (error?.name === "NotSupportedError" && this.retryWithoutCors()) return;
         this.fail(error?.name === "NotAllowedError" ? "Tap play again to start the preview." : "This preview could not be streamed right now.");
       });
+    }
+
+    // Hosts that do not send CORS headers reject crossOrigin="anonymous" loads; retry once in no-cors mode.
+    retryWithoutCors() {
+      if (this.audio.crossOrigin === null || !this.track?.src) return false;
+      this.audio.removeAttribute("crossorigin");
+      this.audio.src = this.track.src;
+      this.resume();
+      return true;
+    }
+
+    // Warm the connection and metadata for a likely next track without touching the active audio element.
+    prewarm(rawSrc) {
+      const src = formatAudioStreamUrl(rawSrc);
+      if (!src || src === this.track?.src || this.warmedSources.has(src) || navigator.connection?.saveData) return;
+      this.warmedSources.add(src);
+      if (!this.warmAudio) {
+        this.warmAudio = new Audio();
+        this.warmAudio.preload = "metadata";
+        this.warmAudio.muted = true;
+        this.warmAudio.crossOrigin = "anonymous";
+      }
+      this.warmAudio.src = src;
     }
 
     toggle() {
@@ -765,7 +796,7 @@
     const activity = release.chartActivity || {};
     const video = videoForRelease(release);
     elements.chartStage.innerHTML = `<article class="stage-card">
-      <div class="stage-art release-artwork-frame" data-artwork-frame><img class="release-artwork-image" src="${escapeHtml(artwork.src)}" alt="${escapeHtml(`${release.title} cover artwork`)}" data-release-artwork data-artwork-fallback="${escapeHtml(artwork.fallback)}" ${artworkAttributes(artwork)}><span class="stage-rank">#${position}</span></div>
+      <div class="stage-art release-artwork-frame" data-artwork-frame><img class="release-artwork-image" src="${escapeHtml(artwork.src)}" alt="${escapeHtml(`${release.title} cover artwork`)}" decoding="async" data-release-artwork data-artwork-fallback="${escapeHtml(artwork.fallback)}" ${artworkAttributes(artwork)}><span class="stage-rank">#${position}</span></div>
       <div class="stage-copy">
         <div class="stage-kicker"><span>${escapeHtml(movement.label)}</span><span>${escapeHtml(release.genres.join(" · ") || "HALO release")}</span></div>
         <h3>${escapeHtml(release.title)}</h3><p class="stage-artist">${escapeHtml(release.artist)}</p>
@@ -799,7 +830,7 @@
       const playButton = playTrackButton(release, { compact: true });
       return `<div class="chart-entry${playButton ? " has-play" : ""}"><button class="chart-row${active ? " is-active" : ""}" type="button" data-chart-release="${escapeHtml(release.id)}" aria-pressed="${active}">
         <span class="chart-position">${String(index + 1).padStart(2, "0")}</span>
-        <span class="chart-art release-artwork-frame" data-artwork-frame><img class="release-artwork-image" src="${escapeHtml(artwork.src)}" alt="" loading="lazy" data-release-artwork data-artwork-fallback="${escapeHtml(artwork.fallback)}" ${artworkAttributes(artwork)}></span>
+        <span class="chart-art release-artwork-frame" data-artwork-frame><img class="release-artwork-image" src="${escapeHtml(artwork.src)}" alt="" loading="lazy" decoding="async" data-release-artwork data-artwork-fallback="${escapeHtml(artwork.fallback)}" ${artworkAttributes(artwork)}></span>
         <span class="chart-track"><strong>${escapeHtml(release.title)}</strong><small>${escapeHtml(release.artist)} · ${escapeHtml(release.genres[0] || "HALO")}</small></span>
         <span class="chart-motion is-${movement.direction}"><b>${escapeHtml(movement.value)}</b><small>${escapeHtml(movement.label)}</small></span>
         <span class="chart-open" aria-hidden="true">OPEN ↗</span>
@@ -958,7 +989,7 @@
     updateShopHead(release);
     const artwork = releaseArtwork(release);
     elements.featured.innerHTML = `<article class="featured-release">
-      <div class="featured-art release-artwork-frame" data-artwork-frame><img class="release-artwork-image" src="${escapeHtml(artwork.src)}" alt="${escapeHtml(`${release.title} cover artwork`)}" width="1200" height="1200" data-release-artwork data-artwork-fallback="${escapeHtml(artwork.fallback)}" ${artworkAttributes(artwork)}></div>
+      <div class="featured-art release-artwork-frame" data-artwork-frame><img class="release-artwork-image" src="${escapeHtml(artwork.src)}" alt="${escapeHtml(`${release.title} cover artwork`)}" width="1200" height="1200" decoding="async" data-release-artwork data-artwork-fallback="${escapeHtml(artwork.fallback)}" ${artworkAttributes(artwork)}></div>
       <div class="featured-copy"><div>${releaseMeta(release)}<h2 data-featured-heading tabindex="-1">${escapeHtml(release.title)}</h2><p class="featured-artist">${escapeHtml(release.artist)}</p><p class="featured-pitch">${escapeHtml(release.pitch || "Open the official release signal, approved listening destination, and campaign room.")}</p>${featuredDetailMarkup(release)}</div>${releaseActions(release, { includeCopy: true })}</div>
     </article>`;
     player.syncButtons(elements.featured);
@@ -994,7 +1025,31 @@
     }).join("");
   }
 
+  const INITIAL_GRID_RENDER_COUNT = 12;
+  let gridRenderToken = 0;
+
+  function afterInitialLoad(callback) {
+    const schedule = () => (window.requestIdleCallback ? window.requestIdleCallback(callback, { timeout: 500 }) : window.setTimeout(callback, 0));
+    if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", schedule, { once: true });
+    else schedule();
+  }
+
+  function releaseCardMarkup(release, index) {
+    const artwork = releaseArtwork(release);
+    const availability = availabilitySummary(release);
+    const dossier = releaseDossier(release).slice(0, 2);
+    const cardKicker = release.featuredType === "week"
+      ? "Song of the Week"
+      : (release.featuredType === "month" ? "Song of the Month" : "Editorial pick");
+    const cardDateLabel = release.releaseDate ? formatReleaseDate(release.releaseDate) : "";
+    return `<article class="release-card">
+      <div class="card-art release-artwork-frame" data-artwork-frame><img class="release-artwork-image" src="${escapeHtml(artwork.src)}" alt="${escapeHtml(`${release.title} cover artwork`)}" loading="lazy" decoding="async" width="900" height="900" data-release-artwork data-artwork-fallback="${escapeHtml(artwork.fallback)}" ${artworkAttributes(artwork)}><span class="card-number">${String(index + 1).padStart(2, "0")}</span></div>
+     <div class="card-copy"><p class="card-kicker"><span>${escapeHtml(cardKicker)}</span>${cardDateLabel ? `<span>${escapeHtml(cardDateLabel)}</span>` : ""}</p>${releaseMeta(release)}<h3>${escapeHtml(release.title)}</h3><p class="card-artist">${escapeHtml(release.artist)}</p><p class="card-availability">${escapeHtml(availability.badge)}</p><p class="card-pitch">${escapeHtml(releaseStoryline(release))}</p><ul class="card-facts">${dossier.map(item => `<li><span>${escapeHtml(item.label)}</span><strong>${escapeHtml(item.value)}</strong></li>`).join("")}</ul>${releaseActions(release, { includeSelect: true })}</div>
+    </article>`;
+  }
+
   function renderGrid() {
+    const token = ++gridRenderToken;
     const releases = filteredReleases();
     elements.count.textContent = `${state.releases.length} ${state.releases.length === 1 ? "release" : "releases"} · one link`;
     if (!releases.length) {
@@ -1008,24 +1063,23 @@
       });
       return;
     }
-    elements.grid.innerHTML = releases.map((release, index) => {
-      const artwork = releaseArtwork(release);
-     const availability = availabilitySummary(release);
-     const dossier = releaseDossier(release).slice(0, 2);
-     const cardKicker = release.featuredType === "week"
-       ? "Song of the Week"
-       : (release.featuredType === "month" ? "Song of the Month" : "Editorial pick");
-     const cardDateLabel = release.releaseDate ? formatReleaseDate(release.releaseDate) : "";
-     return `<article class="release-card">
-      <div class="card-art release-artwork-frame" data-artwork-frame><img class="release-artwork-image" src="${escapeHtml(artwork.src)}" alt="${escapeHtml(`${release.title} cover artwork`)}" loading="lazy" width="900" height="900" data-release-artwork data-artwork-fallback="${escapeHtml(artwork.fallback)}" ${artworkAttributes(artwork)}><span class="card-number">${String(index + 1).padStart(2, "0")}</span></div>
-     <div class="card-copy"><p class="card-kicker"><span>${escapeHtml(cardKicker)}</span>${cardDateLabel ? `<span>${escapeHtml(cardDateLabel)}</span>` : ""}</p>${releaseMeta(release)}<h3>${escapeHtml(release.title)}</h3><p class="card-artist">${escapeHtml(release.artist)}</p><p class="card-availability">${escapeHtml(availability.badge)}</p><p class="card-pitch">${escapeHtml(releaseStoryline(release))}</p><ul class="card-facts">${dossier.map(item => `<li><span>${escapeHtml(item.label)}</span><strong>${escapeHtml(item.value)}</strong></li>`).join("")}</ul>${releaseActions(release, { includeSelect: true })}</div>
-    </article>`;
-    }).join("");
+    elements.grid.innerHTML = releases.slice(0, INITIAL_GRID_RENDER_COUNT).map(releaseCardMarkup).join("");
     player.syncButtons(elements.grid);
     wireArtwork(elements.grid);
+    if (releases.length <= INITIAL_GRID_RENDER_COUNT) return;
+    afterInitialLoad(() => {
+      if (token !== gridRenderToken) return;
+      const template = document.createElement("template");
+      template.innerHTML = releases.slice(INITIAL_GRID_RENDER_COUNT)
+        .map((release, offset) => releaseCardMarkup(release, INITIAL_GRID_RENDER_COUNT + offset)).join("");
+      elements.grid.append(template.content);
+      player.syncButtons(elements.grid);
+      wireArtwork(elements.grid);
+    });
   }
 
   function renderError(message) {
+    gridRenderToken += 1;
     logMusicIssue("music_catalog_error", "Music catalog load failure", { message, page: window.location.pathname });
     const markup = `<div class="catalog-empty"><div><strong>Signal interrupted.</strong><p>${escapeHtml(message)}</p><button type="button" id="retryCatalog">Try again</button></div></div>`;
     elements.featured.innerHTML = markup;
@@ -1136,9 +1190,17 @@
     });
   }
 
+  function handlePlayTrackWarm(event) {
+    const button = event.target instanceof Element ? event.target.closest('[data-action="play-track"], [data-play-track-id]') : null;
+    if (!button || button.disabled || !button.dataset.audioUrl) return;
+    player.prewarm(button.dataset.audioUrl);
+  }
+
   if (!player.delegatedClicks) {
     player.delegatedClicks = true;
     document.addEventListener("click", handlePlayTrackClick);
+    document.addEventListener("pointerover", handlePlayTrackWarm, { passive: true });
+    document.addEventListener("focusin", handlePlayTrackWarm);
   }
   player.mount();
   elements.address.textContent = `${window.location.host}${shopPath().replace(/\/$/, "")}`;

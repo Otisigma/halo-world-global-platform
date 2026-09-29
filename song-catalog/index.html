@@ -89,6 +89,18 @@
             </div>
           </section>
 
+          <form class="drive-master-panel" id="masterUploadForm" aria-labelledby="driveMasterHeading" novalidate>
+            <div class="drive-master-body">
+              <span class="field-label" id="driveMasterHeading">Google Drive master archive</span>
+              <strong>Stream the full WAV master to Drive.</strong>
+              <p>Uploads in 5 MB resumable chunks straight to the HALO masters folder · 2000 MB maximum · the archived file is linked to this song's Sale master.</p>
+              <label class="artwork-file-picker"><span>Choose WAV master</span><input id="masterDriveFile" name="masterFile" type="file" accept="audio/wav,audio/x-wav,.wav,audio/flac,.flac,audio/*"></label>
+              <div class="artwork-upload-actions"><button class="quiet-button" id="masterUploadButton" type="submit">Upload to Google Drive</button></div>
+              <progress class="drive-master-progress" id="masterProgressBar" max="100" value="0" aria-label="Google Drive master upload progress"></progress>
+              <p class="artwork-upload-progress" id="masterStatusLabel" role="status">No master selected.</p>
+            </div>
+          </form>
+
           <div class="workspace-grid">
             <form class="metadata-panel" id="songForm">
               <div class="panel-heading"><div><p class="eyebrow">Master record</p><h3>Song information</h3></div><button class="primary-button" type="submit">Save + review</button></div>
@@ -262,6 +274,8 @@
   <script src="/release-artwork.js" defer></script>
   <script type="module" src="/identity.js"></script>
   <script src="/upload-progress.js" defer></script>
+  <script src="/public/js/chunkedUploader.js" defer></script>
+  <script src="/public/js/uploadUI.js" defer></script>
   <script type="module" src="/song-catalog/song-catalog.js"></script>
 </body>
 </html>

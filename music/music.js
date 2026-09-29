@@ -82,13 +82,200 @@
   function resolvedAudio(release, options = {}) {
     const resolved = window.HaloReleaseArtwork?.resolveAudio(release, options);
     if (resolved?.src) return resolved;
-    const candidate = safeUrl(release?.audioUrl || release?.audio_url || release?.sourceUrl || release?.previewAudio || release?.preview_audio || release?.streamUrl || "");
+    const rawCandidate = String(release?.audioUrl || release?.audio_url || release?.sourceUrl || release?.previewAudio || release?.preview_audio || release?.streamUrl || "").trim();
+    const candidate = rawCandidate ? safeUrl(rawCandidate) : "";
     return { src: candidate, source: candidate ? "legacy" : "", isPlayable: Boolean(candidate) };
   }
 
   function directAudioPreviewUrl(release) {
     return resolvedAudio(release, { preferPreview: true, requirePlayable: true }).src;
   }
+
+  const GOOGLE_DRIVE_HOSTS = new Set(["drive.google.com", "docs.google.com"]);
+
+  function isGoogleDriveUrl(value) {
+    try {
+      return GOOGLE_DRIVE_HOSTS.has(new URL(value).hostname.toLowerCase());
+    } catch {
+      return false;
+    }
+  }
+
+  // Google Drive share links (/file/d/<id>/view, /open?id=<id>, /uc?id=<id>) point at an HTML viewer.
+  // Publicly shared files can be streamed through the direct-download endpoint instead.
+  function formatAudioStreamUrl(rawUrl) {
+    const raw = String(rawUrl ?? "").trim();
+    const url = raw ? safeUrl(raw) : "";
+    if (!url || !isGoogleDriveUrl(url)) return url;
+    const parsed = new URL(url);
+    const fileId = parsed.pathname.match(/\/file\/(?:u\/\d+\/)?d\/([\w-]+)/)?.[1] || parsed.searchParams.get("id") || "";
+    if (!/^[\w-]{10,}$/.test(fileId)) return "";
+    return `https://drive.google.com/uc?export=download&id=${encodeURIComponent(fileId)}`;
+  }
+
+  function trackStreamUrl(release) {
+    const direct = directAudioPreviewUrl(release);
+    const directStream = direct ? formatAudioStreamUrl(direct) : "";
+    if (directStream) return directStream;
+    const resolved = resolvedAudio(release, { preferPreview: true });
+    const driveCandidate = [...(resolved.candidates || []), resolved.src].find(isGoogleDriveUrl);
+    return driveCandidate ? formatAudioStreamUrl(driveCandidate) : "";
+  }
+
+  function playTrackButton(release, { compact = false } = {}) {
+    const audioUrl = trackStreamUrl(release);
+    if (!audioUrl) return "";
+    const artwork = releaseArtwork(release);
+    const label = `Play ${release.title || "this release"}${release.artist ? ` by ${release.artist}` : ""}`;
+    return `<button class="${compact ? "chart-play" : "action play"}" type="button" data-action="play-track" data-play-track-id="${escapeHtml(release.id)}" data-track-id="${escapeHtml(release.id)}" data-title="${escapeHtml(release.title)}" data-artist="${escapeHtml(release.artist)}" data-audio-url="${escapeHtml(audioUrl)}" data-cover="${escapeHtml(artwork.src)}"${compact ? ' data-play-compact="true"' : ""} aria-pressed="false" aria-label="${escapeHtml(label)}">${compact ? "▶" : "▶ Play"}</button>`;
+  }
+
+  class HaloShopPlayer {
+    constructor({ onError } = {}) {
+      this.audio = new Audio();
+      this.audio.preload = "none";
+      this.track = null;
+      this.status = "idle";
+      this.onError = onError;
+      this.bar = null;
+      this.audio.addEventListener("playing", () => this.setStatus("playing"));
+      this.audio.addEventListener("waiting", () => { if (this.status === "playing") this.setStatus("loading"); });
+      this.audio.addEventListener("pause", () => { if (this.status !== "error" && this.audio.paused) this.setStatus("paused"); });
+      this.audio.addEventListener("ended", () => this.setStatus("paused"));
+      this.audio.addEventListener("error", () => {
+        if (this.track?.src && this.audio.src === this.track.src) this.fail("This preview could not be streamed right now.");
+      });
+    }
+
+    static shared(options) {
+      if (!(window.haloShopPlayer instanceof HaloShopPlayer)) window.haloShopPlayer = new HaloShopPlayer(options);
+      return window.haloShopPlayer;
+    }
+
+    mount() {
+      if (this.bar?.isConnected) return this.bar;
+      let bar = document.querySelector("#haloGlobalPlayerBar");
+      if (!bar) {
+        bar = document.createElement("section");
+        bar.id = "haloGlobalPlayerBar";
+        bar.className = "halo-player-bar";
+        bar.hidden = true;
+        bar.setAttribute("aria-label", "HALO shop player");
+        bar.innerHTML = `<img class="halo-player-cover" alt="" data-player-cover>
+          <div class="halo-player-meta"><strong data-player-title></strong><span data-player-artist></span><small data-player-status aria-live="polite"></small></div>
+          <button class="halo-player-toggle" type="button" data-player-toggle aria-label="Play">▶</button>
+          <button class="halo-player-close" type="button" data-player-close aria-label="Close player">×</button>`;
+        document.body.append(bar);
+      }
+      this.bar = bar;
+      if (bar.dataset.playerWired === "true") return bar;
+      bar.dataset.playerWired = "true";
+      bar.querySelector("[data-player-toggle]")?.addEventListener("click", () => this.toggle());
+      bar.querySelector("[data-player-close]")?.addEventListener("click", () => this.close());
+      bar.querySelector("[data-player-cover]")?.addEventListener("error", event => {
+        if (!event.currentTarget.src.endsWith(fallbackArtwork)) event.currentTarget.src = fallbackArtwork;
+      });
+      return bar;
+    }
+
+    play(track) {
+      const src = formatAudioStreamUrl(track?.src);
+      if (!src) {
+        this.track = track?.id ? { ...track, src: "" } : null;
+        this.fail("No preview audio is available for this release yet.");
+        return;
+      }
+      if (this.track?.id === track.id && this.track.src === src && this.status !== "error") {
+        this.toggle();
+        return;
+      }
+      this.track = { ...track, src };
+      this.audio.src = src;
+      this.renderBar();
+      this.resume();
+      window.haloStats?.track("music_playback_start", { target: "shop_player", track: track.id });
+    }
+
+    resume() {
+      if (!this.track?.src) return;
+      if (this.status === "error") this.audio.src = this.track.src;
+      this.setStatus("loading");
+      const attempt = this.audio.play();
+      attempt?.catch(error => {
+        if (error?.name === "AbortError") return;
+        this.fail(error?.name === "NotAllowedError" ? "Tap play again to start the preview." : "This preview could not be streamed right now.");
+      });
+    }
+
+    toggle() {
+      if (!this.track) return;
+      if (this.status === "playing" || this.status === "loading") this.audio.pause();
+      else this.resume();
+    }
+
+    close() {
+      this.audio.pause();
+      this.track = null;
+      this.audio.removeAttribute("src");
+      this.audio.load();
+      this.setStatus("idle");
+      if (this.bar) this.bar.hidden = true;
+    }
+
+    fail(message) {
+      if (!this.track) {
+        this.onError?.(message);
+        return;
+      }
+      this.audio.pause();
+      this.setStatus("error");
+      this.onError?.(message, this.track);
+    }
+
+    setStatus(status) {
+      this.status = status;
+      this.renderBar();
+      this.syncButtons();
+    }
+
+    renderBar() {
+      const bar = this.mount();
+      if (!this.track) return;
+      bar.hidden = false;
+      const cover = bar.querySelector("[data-player-cover]");
+      const coverSrc = safeUrl(this.track.cover, fallbackArtwork);
+      if (cover && cover.getAttribute("src") !== coverSrc) cover.src = coverSrc;
+      bar.querySelector("[data-player-title]").textContent = this.track.title || "Untitled release";
+      bar.querySelector("[data-player-artist]").textContent = this.track.artist || "HALO artist";
+      bar.querySelector("[data-player-status]").textContent = { loading: "Loading preview…", playing: "Now playing", paused: "Paused", error: "Preview unavailable" }[this.status] || "";
+      const toggle = bar.querySelector("[data-player-toggle]");
+      const active = this.status === "playing" || this.status === "loading";
+      toggle.textContent = active ? "❚❚" : "▶";
+      toggle.setAttribute("aria-label", active ? "Pause" : "Play");
+      toggle.disabled = !this.track.src;
+      bar.classList.toggle("is-playing", this.status === "playing");
+      bar.classList.toggle("is-error", this.status === "error");
+    }
+
+    syncButtons(root = document) {
+      root.querySelectorAll("[data-play-track-id]").forEach(button => {
+        const current = Boolean(this.track) && button.dataset.playTrackId === this.track.id;
+        const active = current && (this.status === "playing" || this.status === "loading");
+        const compact = button.dataset.playCompact === "true";
+        button.classList.toggle("is-playing", active);
+        button.classList.toggle("is-error", current && this.status === "error");
+        button.setAttribute("aria-pressed", String(active));
+        button.textContent = active ? (compact ? "❚❚" : "❚❚ Pause") : (compact ? "▶" : "▶ Play");
+      });
+    }
+  }
+
+  const player = HaloShopPlayer.shared({
+    onError(message, track) {
+      showToast(message);
+      logMusicIssue("music_shop_player_error", "Shop player could not stream audio", { releaseId: track?.id || "", url: track?.src || "" });
+    }
+  });
 
   function availabilitySummary(release) {
     const catalog = catalogState(release);
@@ -583,6 +770,7 @@
         ${releaseActions(release)}
       </div>
     </article>`;
+    player.syncButtons(elements.chartStage);
     wireArtwork(elements.chartStage);
   }
 
@@ -603,14 +791,16 @@
       const movement = movementFor(release);
       const active = release.id === state.activeReleaseId;
       const artwork = releaseArtwork(release);
-      return `<button class="chart-row${active ? " is-active" : ""}" type="button" data-chart-release="${escapeHtml(release.id)}" aria-pressed="${active}">
+      const playButton = playTrackButton(release, { compact: true });
+      return `<div class="chart-entry${playButton ? " has-play" : ""}"><button class="chart-row${active ? " is-active" : ""}" type="button" data-chart-release="${escapeHtml(release.id)}" aria-pressed="${active}">
         <span class="chart-position">${String(index + 1).padStart(2, "0")}</span>
         <span class="chart-art release-artwork-frame" data-artwork-frame><img class="release-artwork-image" src="${escapeHtml(artwork.src)}" alt="" loading="lazy" data-release-artwork data-artwork-fallback="${escapeHtml(artwork.fallback)}" ${artworkAttributes(artwork)}></span>
         <span class="chart-track"><strong>${escapeHtml(release.title)}</strong><small>${escapeHtml(release.artist)} · ${escapeHtml(release.genres[0] || "HALO")}</small></span>
         <span class="chart-motion is-${movement.direction}"><b>${escapeHtml(movement.value)}</b><small>${escapeHtml(movement.label)}</small></span>
         <span class="chart-open" aria-hidden="true">OPEN ↗</span>
-      </button>`;
+      </button>${playButton}</div>`;
     }).join("")}`;
+    player.syncButtons(elements.chartBoard);
     wireArtwork(elements.chartBoard);
     renderChartStage(releases.find(release => release.id === state.activeReleaseId), releases.findIndex(release => release.id === state.activeReleaseId) + 1);
   }
@@ -688,7 +878,7 @@
   function featuredDetailMarkup(release) {
     const availability = availabilitySummary(release);
     const catalog = catalogState(release);
-    const previewUrl = directAudioPreviewUrl(release);
+    const previewUrl = trackStreamUrl(release);
     const related = relatedReleases(release);
     const dossier = releaseDossier(release);
     const versionCount = Number(catalog.versionCount || release.availableVersions?.length || 0);
@@ -702,7 +892,7 @@
         <span class="shop-eyebrow">Shop spotlight</span>
         <strong class="shop-badge">${escapeHtml(availability.badge)}</strong>
         <p class="availability-note">${escapeHtml(availability.note)}</p>
-        ${previewUrl ? `<div class="preview-shell" data-preview-url="${encodeURIComponent(previewUrl)}"><span>Direct preview</span><audio controls preload="none"></audio></div>` : `<div class="preview-shell"><span>Public listening</span><p>Use the listen link for the approved public destination. Direct in-page audio appears automatically when the shared catalog points to a preview-safe stream.</p></div>`}
+        ${previewUrl ? `<div class="preview-shell"><span>Direct preview</span><p>Press play to stream this release in the HALO player bar while you keep browsing the shop.</p></div>` : `<div class="preview-shell"><span>Public listening</span><p>Use the listen link for the approved public destination. Direct in-page audio appears automatically when the shared catalog points to a preview-safe stream.</p></div>`}
         <dl class="shop-facts">
           <div><dt>Catalog source</dt><dd>${catalog.source === "song-catalog" ? "Shared song catalog" : "Published release campaign"}</dd></div>
           <div><dt>Versions mapped</dt><dd>${versionCount || "—"}</dd></div>
@@ -735,6 +925,7 @@
     if (!buyHref && release.isChartEligible) logMusicIssue("music_purchase_url_missing", "Music release missing buy/stream link", { releaseId: release.id, title: release.title });
     return `<div class="release-actions">
       ${featuredBadge(release)}
+      ${playTrackButton(release)}
       ${listenAction}
       ${buyAction}
       ${includeSelect ? `<button class="action tertiary" type="button" data-select-release="${escapeHtml(release.id)}">View in shop</button>` : ""}
@@ -761,11 +952,7 @@
       <div class="featured-art release-artwork-frame" data-artwork-frame><img class="release-artwork-image" src="${escapeHtml(artwork.src)}" alt="${escapeHtml(`${release.title} cover artwork`)}" width="1200" height="1200" data-release-artwork data-artwork-fallback="${escapeHtml(artwork.fallback)}" ${artworkAttributes(artwork)}></div>
       <div class="featured-copy"><div>${releaseMeta(release)}<h2 data-featured-heading tabindex="-1">${escapeHtml(release.title)}</h2><p class="featured-artist">${escapeHtml(release.artist)}</p><p class="featured-pitch">${escapeHtml(release.pitch || "Open the official release signal, approved listening destination, and campaign room.")}</p>${featuredDetailMarkup(release)}</div>${releaseActions(release, { includeCopy: true })}</div>
     </article>`;
-    const preview = elements.featured.querySelector("[data-preview-url]");
-    if (preview?.dataset.previewUrl) {
-      const audio = preview.querySelector("audio");
-      if (audio) audio.src = decodeURIComponent(preview.dataset.previewUrl);
-    }
+    player.syncButtons(elements.featured);
     wireArtwork(elements.featured);
     applyLicensingSelection(elements.featured);
     if (focusHeading) elements.featured.querySelector("[data-featured-heading]")?.focus({ preventScroll: true });
@@ -825,6 +1012,7 @@
      <div class="card-copy"><p class="card-kicker"><span>${escapeHtml(cardKicker)}</span>${cardDateLabel ? `<span>${escapeHtml(cardDateLabel)}</span>` : ""}</p>${releaseMeta(release)}<h3>${escapeHtml(release.title)}</h3><p class="card-artist">${escapeHtml(release.artist)}</p><p class="card-availability">${escapeHtml(availability.badge)}</p><p class="card-pitch">${escapeHtml(releaseStoryline(release))}</p><ul class="card-facts">${dossier.map(item => `<li><span>${escapeHtml(item.label)}</span><strong>${escapeHtml(item.value)}</strong></li>`).join("")}</ul>${releaseActions(release, { includeSelect: true })}</div>
     </article>`;
     }).join("");
+    player.syncButtons(elements.grid);
     wireArtwork(elements.grid);
   }
 
@@ -926,6 +1114,23 @@
     }
   }
 
+  function handlePlayTrackClick(event) {
+    const button = event.target.closest('[data-action="play-track"]');
+    if (!button) return;
+    event.preventDefault();
+    player.play({
+      id: button.dataset.trackId || button.dataset.playTrackId || "",
+      title: button.dataset.title || "",
+      artist: button.dataset.artist || "",
+      src: button.dataset.audioUrl || "",
+      cover: button.dataset.cover || ""
+    });
+  }
+
+  [elements.featured, elements.chartBoard, elements.chartStage, elements.grid].forEach(container => {
+    container?.addEventListener("click", handlePlayTrackClick);
+  });
+  player.mount();
   elements.address.textContent = `${window.location.host}${shopPath().replace(/\/$/, "")}`;
   window.addEventListener("message", handleSharedCatalogFrameMessage);
   elements.catalogWorkspace?.addEventListener("toggle", () => {

@@ -4,6 +4,7 @@ import { getDatabase } from "@netlify/database";
 import { getUser, verifyRequestOrigin } from "@netlify/identity";
 import { cleanText, ensureMembership } from "../lib/halo-x.mjs";
 import { runDreamweaverReview } from "./song-catalog.js";
+import { MASTER_PLAYBACK_URL_TTL_SECONDS, deleteStoredObject, directUploadConfig, presignObjectUrl } from "../lib/direct-upload-storage.mjs";
 
 const audioStore = getStore({ name: "halo-song-catalog-audio", consistency: "strong" });
 const radioAudioStore = getStore({ name: "halo-radio-submissions", consistency: "strong" });
@@ -95,7 +96,7 @@ async function ownedVersion(db: Awaited<ReturnType<typeof getDatabase>>, ownerMe
   const rows = songId
     ? await db.sql`
         SELECT version.id, version.song_id, version.audio_blob_prefix, version.audio_chunk_count,
-          version.audio_content_type, version.audio_byte_size, version.audio_filename
+          version.audio_content_type, version.audio_byte_size, version.audio_filename, version.audio_storage_key
         FROM halo_song_versions version
         JOIN halo_song_catalog song ON song.id = version.song_id
         WHERE version.id = ${versionId} AND song.id = ${songId}
@@ -104,7 +105,7 @@ async function ownedVersion(db: Awaited<ReturnType<typeof getDatabase>>, ownerMe
       `
     : await db.sql`
         SELECT version.id, version.song_id, version.audio_blob_prefix, version.audio_chunk_count,
-          version.audio_content_type, version.audio_byte_size, version.audio_filename
+          version.audio_content_type, version.audio_byte_size, version.audio_filename, version.audio_storage_key
         FROM halo_song_versions version
         JOIN halo_song_catalog song ON song.id = version.song_id
         WHERE version.id = ${versionId}
@@ -142,23 +143,30 @@ async function removeUpload(prefix: string) {
   await Promise.all(stored.blobs.map(blob => audioStore.delete(blob.key)));
 }
 
+async function removeStoredMaster(key: unknown) {
+  const storageKey = String(key || "");
+  if (!storageKey) return;
+  await deleteStoredObject(directUploadConfig(), storageKey);
+}
+
 async function deleteUpload(payload: Record<string, unknown>, db: Awaited<ReturnType<typeof getDatabase>>, ownerMemberId: string) {
   const songId = cleanId(payload.songId);
   const versionId = cleanId(payload.versionId);
   if (!songId || !versionId) return json({ message: "A valid song version is required" }, 400);
   const version = await ownedVersion(db, ownerMemberId, versionId, songId);
   if (!version) return json({ message: "That song version was not found" }, 404);
-  if (!version.audio_blob_prefix) return json({ message: "No uploaded version audio was found" }, 404);
+  if (!version.audio_blob_prefix && !version.audio_storage_key) return json({ message: "No uploaded version audio was found" }, 404);
   await db.sql`
     UPDATE halo_song_versions
-    SET audio_url = NULL, audio_blob_prefix = NULL, audio_chunk_count = NULL,
+    SET audio_url = NULL, audio_blob_prefix = NULL, audio_chunk_count = NULL, audio_storage_key = '',
       audio_content_type = NULL, audio_byte_size = NULL, audio_filename = NULL,
       duration_seconds = 0,
       updated_at = NOW()
     WHERE id = ${versionId} AND song_id = ${songId}
   `;
   await runDreamweaverReview(songId, ownerMemberId);
-  await removeUpload(String(version.audio_blob_prefix)).catch(() => undefined);
+  await removeUpload(String(version.audio_blob_prefix || "")).catch(() => undefined);
+  await removeStoredMaster(version.audio_storage_key).catch(() => undefined);
   return json({ message: "Version audio removed", songId, versionId });
 }
 
@@ -183,7 +191,7 @@ async function finalizeUpload(payload: Record<string, unknown>, db: Awaited<Retu
   const audioUrl = `/api/song-catalog/audio?versionId=${encodeURIComponent(versionId)}`;
   await db.sql`
     UPDATE halo_song_versions
-    SET audio_url = ${audioUrl}, audio_blob_prefix = ${prefix}, audio_chunk_count = ${chunkCount},
+    SET audio_url = ${audioUrl}, audio_blob_prefix = ${prefix}, audio_chunk_count = ${chunkCount}, audio_storage_key = '',
       audio_content_type = ${contentType}, audio_byte_size = ${byteSize}, audio_filename = ${filename},
       duration_seconds = CASE WHEN ${durationSeconds} > 0 THEN ${durationSeconds} ELSE duration_seconds END,
       mastering_status = CASE WHEN version_type IN ('radio_edit', 'clean') AND mastering_status = 'not_started' THEN 'queued' ELSE mastering_status END,
@@ -192,6 +200,7 @@ async function finalizeUpload(payload: Record<string, unknown>, db: Awaited<Retu
   `;
   await runDreamweaverReview(songId, ownerMemberId);
   if (version.audio_blob_prefix && version.audio_blob_prefix !== prefix) await removeUpload(version.audio_blob_prefix).catch(() => undefined);
+  await removeStoredMaster(version.audio_storage_key).catch(() => undefined);
   return json({
     message: "Audio is persisted and locked into HALO storage.",
     songId,
@@ -236,6 +245,13 @@ async function readAudioRange(version: Record<string, unknown>, range: { start: 
 async function serveAudio(request: Request, db: Awaited<ReturnType<typeof getDatabase>>, ownerMemberId: string) {
   const versionId = cleanId(new URL(request.url).searchParams.get("versionId"));
   const version = versionId ? await ownedVersion(db, ownerMemberId, versionId) : null;
+  if (version?.audio_storage_key) {
+    // Direct-to-storage masters stream from object storage through a short-lived, owner-only signed URL.
+    const storage = directUploadConfig();
+    if (!storage) return json({ message: "Master storage is not configured" }, 503);
+    const location = presignObjectUrl({ config: storage, method: request.method === "HEAD" ? "HEAD" : "GET", key: String(version.audio_storage_key), expiresIn: MASTER_PLAYBACK_URL_TTL_SECONDS });
+    return new Response(null, { status: 302, headers: { ...MEDIA_CORS_HEADERS, Location: location, "Cache-Control": "private, no-store" } });
+  }
   if (!version?.audio_blob_prefix || !version.audio_chunk_count || !version.audio_byte_size) return json({ message: "Song audio was not found" }, 404);
   const byteSize = Number(version.audio_byte_size);
   const range = requestedByteRange(request.headers.get("range"), byteSize);
@@ -329,7 +345,7 @@ async function importFromRadio(payload: Record<string, unknown>, db: Awaited<Ret
   const audioUrl = `/api/song-catalog/audio?versionId=${encodeURIComponent(versionId)}`;
   await db.sql`
     UPDATE halo_song_versions
-    SET audio_url = ${audioUrl}, audio_blob_prefix = ${newPrefix}, audio_chunk_count = ${chunkCount},
+    SET audio_url = ${audioUrl}, audio_blob_prefix = ${newPrefix}, audio_chunk_count = ${chunkCount}, audio_storage_key = '',
       audio_content_type = ${contentType}, audio_byte_size = ${byteSize}, audio_filename = ${filename},
       duration_seconds = CASE WHEN ${durationSeconds} > 0 THEN ${durationSeconds} ELSE duration_seconds END,
       mastering_status = CASE WHEN version_type IN ('radio_edit', 'clean') AND mastering_status = 'not_started' THEN 'queued' ELSE mastering_status END,
@@ -340,6 +356,7 @@ async function importFromRadio(payload: Record<string, unknown>, db: Awaited<Ret
   if (version.audio_blob_prefix && version.audio_blob_prefix !== newPrefix) {
     removeUpload(String(version.audio_blob_prefix)).catch(() => undefined);
   }
+  removeStoredMaster(version.audio_storage_key).catch(() => undefined);
   return json({ message: `"${track.title}" imported from Radio and connected to this version`, songId, versionId, audioUrl });
 }
 

@@ -141,7 +141,7 @@
       <label><span>Genre</span><input id="newGenre" maxlength="80"></label>
       <label><span>Sale price (USD)</span><input id="newSalePrice" type="number" min="0" step="0.01" placeholder="1.29"></label>
       <section class="master-copy-panel" aria-labelledby="newMasterHeading">
-        <div><span class="field-label" id="newMasterHeading">Master copy (optional)</span><p>Saved as this song's Sale master — the one canonical master copy used for release, storefront, and publication. Promoting another version to Sale master later demotes this one to an alternate version. WAV or FLAC recommended · 128 MB maximum.</p></div>
+        <div><span class="field-label" id="newMasterHeading">Master copy (optional)</span><p>Saved as this song's Sale master — the one canonical master copy used for release, storefront, and publication. Promoting another version to Sale master later demotes this one to an alternate version. WAV, M4A, or FLAC recommended · 200 MB maximum · large masters upload directly to secure storage with live progress.</p></div>
         <label class="audio-file-picker"><span>Choose master copy</span><input id="newMasterFile" name="masterCopy" type="file" accept="audio/*,.mp3,.m4a,.aac,.ogg,.webm,.wav,.flac"></label>
         <div class="upload-progress-track" id="newMasterTrack" hidden aria-hidden="true"><span class="upload-progress-fill"></span></div>
         <p class="audio-upload-progress" id="newMasterProgress" role="status">No master copy selected. Upload it here or on the Sale master version — only that single canonical master is published.</p>
@@ -160,7 +160,7 @@
         <label><span>Version label</span><input id="versionLabel" required maxlength="100"></label>
         <label><span>Mastering status</span><select id="masteringStatus"><option value="not_started">Not started</option><option value="queued">Queued</option><option value="in_progress">In progress</option><option value="review">Ready for review</option><option value="approved">Approved</option></select></label>
         <section class="wide-field audio-upload-panel" aria-labelledby="audioUploadHeading">
-          <div><span class="field-label" id="audioUploadHeading">Upload this version</span><strong>Drop in the actual master.</strong><p>MP3, M4A, AAC, OGG, WebM, WAV, or FLAC · 128 MB maximum.</p></div>
+          <div><span class="field-label" id="audioUploadHeading">Upload this version</span><strong>Drop in the actual master.</strong><p>MP3, M4A, AAC, OGG, WebM, WAV, or FLAC · 128 MB maximum (Sale master: 200 MB, uploaded directly to storage).</p></div>
           <label class="audio-file-picker"><span>Choose audio file</span><input id="audioFile" type="file" accept="audio/*,.mp3,.m4a,.aac,.ogg,.webm,.wav,.flac"></label>
         <div class="audio-upload-actions">
           <button class="quiet-button" id="uploadAudioButton" type="button">Upload selected audio</button>

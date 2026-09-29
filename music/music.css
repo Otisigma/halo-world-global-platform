@@ -123,6 +123,12 @@ h1 em { color: var(--acid); font-family: var(--serif); font-weight: 400; text-tr
 .featured-pitch { max-width: 670px; margin: 30px 0 0; color: #555d55; font-size: 15px; line-height: 1.75; }
 .shop-panel { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; margin-top: 30px; }
 .shop-preview-card, .shop-artist-card { padding: 22px; background: rgba(9, 11, 10, 0.05); border: 1px solid rgba(9, 11, 10, 0.08); }
+.shop-licensing { grid-column: 1 / -1; padding: 22px; background: rgba(9, 11, 10, 0.05); border: 1px solid rgba(9, 11, 10, 0.08); }
+.licensing-selects { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 14px; }
+.licensing-selects label { display: grid; gap: 8px; color: #6e766e; font: 500 7px/1.4 var(--mono); letter-spacing: 0.12em; text-transform: uppercase; }
+.licensing-selects select { min-height: 44px; padding: 0 12px; color: var(--ink); background: rgba(255, 255, 255, 0.34); border: 1px solid rgba(9, 11, 10, 0.16); font: 500 12px/1.4 var(--mono); }
+.licensing-note { margin: 16px 0 0; color: var(--ink); font-size: 13px; line-height: 1.7; }
+.licensing-review { margin: 10px 0 0; color: #5c645c; font-size: 12px; line-height: 1.65; }
 .shop-eyebrow { display: block; color: #667066; font: 500 8px/1 var(--mono); letter-spacing: 0.12em; text-transform: uppercase; }
 .shop-badge, .card-availability { display: inline-flex; align-items: center; gap: 8px; margin-top: 12px; color: var(--ink); font: 700 10px/1.4 var(--mono); letter-spacing: 0.08em; text-transform: uppercase; }
 .availability-note { margin: 14px 0 0; color: #5c645c; font-size: 13px; line-height: 1.7; }
@@ -432,6 +438,7 @@ footer a { text-decoration: none; color: var(--paper); }
   .featured-copy h2 { font-size: clamp(45px, 14vw, 75px); }
   .shop-preview-card, .shop-artist-card { padding: 18px; }
   .shop-facts { grid-template-columns: 1fr; }
+  .licensing-selects { grid-template-columns: 1fr; }
   .release-dossier { grid-template-columns: 1fr; }
   .chart-section { padding-bottom: 90px; }
   .chart-header { padding: 70px 0 32px; }

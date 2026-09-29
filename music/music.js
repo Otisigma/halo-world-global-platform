@@ -133,6 +133,78 @@
     return "";
   }
 
+  function licensingState(release) {
+    const licensing = release?.licensing && typeof release.licensing === "object" ? release.licensing : {};
+    const tiers = (Array.isArray(licensing.tiers) ? licensing.tiers : [])
+      .filter(tier => tier && typeof tier === "object" && tier.id && tier.label);
+    const versions = (Array.isArray(licensing.versions) ? licensing.versions : [])
+      .filter(version => version && typeof version === "object" && version.id && version.label);
+    return {
+      enabled: Boolean(licensing.enabled) && tiers.length > 0,
+      tiers,
+      versions,
+      reviewNote: String(licensing.reviewNote || ""),
+      checkoutMode: String(licensing.checkoutMode || "")
+    };
+  }
+
+  function licensingTierNote(tier, release) {
+    if (!tier) return "";
+    const price = tier.priceCents > 0 ? `${money(tier.priceCents, tier.currency)} · ` : "";
+    const review = tier.requiresRightsReview
+      ? "Rights review and artist approval stay required before this licence is issued."
+      : "";
+    const checkout = release?.purchaseUrl
+      ? "Selections carry through to the artist-approved buy / support link."
+      : "Selections are sent to the artist team for an approval-gated licensing reply.";
+    return `${price}${tier.summary || ""} ${review} ${checkout}`.replace(/\s+/g, " ").trim();
+  }
+
+  function licensingMarkup(release) {
+    const licensing = licensingState(release);
+    if (!licensing.enabled) return "";
+    const versionOptions = licensing.versions.length
+      ? licensing.versions
+      : [{ id: "master", label: "Master copy" }];
+    return `<section class="shop-licensing" aria-label="Version and licence selection" data-licensing-panel data-licensing-release="${escapeHtml(release.id)}">
+      <span class="shop-eyebrow">Licensing</span>
+      <div class="licensing-selects">
+        <label>Version
+          <select data-licensing-version>${versionOptions.map(version => `<option value="${escapeHtml(version.id)}">${escapeHtml(version.label)}</option>`).join("")}</select>
+        </label>
+        <label>Licence
+          <select data-licensing-tier>${licensing.tiers.map(tier => `<option value="${escapeHtml(tier.id)}">${escapeHtml(tier.label)}${tier.priceCents > 0 ? ` · ${escapeHtml(money(tier.priceCents, tier.currency))}` : ""}</option>`).join("")}</select>
+        </label>
+      </div>
+      <p class="licensing-note" data-licensing-note>${escapeHtml(licensingTierNote(licensing.tiers[0], release))}</p>
+      <p class="licensing-review">${escapeHtml(licensing.reviewNote)}</p>
+    </section>`;
+  }
+
+  function applyLicensingSelection(scope) {
+    const panel = scope?.querySelector("[data-licensing-panel]");
+    if (!panel) return;
+    const release = state.releases.find(item => item.id === panel.dataset.licensingRelease);
+    const licensing = licensingState(release);
+    if (!licensing.enabled) return;
+    const versionId = panel.querySelector("[data-licensing-version]")?.value || "";
+    const tierId = panel.querySelector("[data-licensing-tier]")?.value || "";
+    const tier = licensing.tiers.find(item => item.id === tierId) || licensing.tiers[0];
+    const note = panel.querySelector("[data-licensing-note]");
+    if (note) note.textContent = licensingTierNote(tier, release);
+    const buyLink = scope.querySelector("a.action.buy");
+    const baseHref = safeUrl(release?.purchaseUrl || "");
+    if (!buyLink || !baseHref) return;
+    try {
+      const url = new URL(baseHref);
+      if (versionId) url.searchParams.set("version", versionId);
+      if (tier?.id) url.searchParams.set("license", tier.id);
+      buyLink.href = url.href;
+    } catch {
+      /* keep the existing artist-approved link when it cannot be extended */
+    }
+  }
+
   function shareUrlForRelease(release) {
     const url = new URL(shopPath(), window.location.origin);
     url.searchParams.set("song", release.id);
@@ -645,6 +717,7 @@
         <div class="version-pill-row">${availableVersions.length ? availableVersions.map(version => `<span class="version-pill">${escapeHtml(version)}</span>`).join("") : '<span class="version-pill">Artist-controlled release path</span>'}</div>
         <div class="related-release-list">${related.length ? related.map(item => `<button class="related-release" type="button" data-select-release="${escapeHtml(item.id)}">${escapeHtml(item.title)}</button>`).join("") : '<a class="related-release related-release-link" href="/artists/">Browse HALO artist rooms</a>'}</div>
       </section>
+      ${licensingMarkup(release)}
     </div>`;
   }
 
@@ -694,6 +767,7 @@
       if (audio) audio.src = decodeURIComponent(preview.dataset.previewUrl);
     }
     wireArtwork(elements.featured);
+    applyLicensingSelection(elements.featured);
     if (focusHeading) elements.featured.querySelector("[data-featured-heading]")?.focus({ preventScroll: true });
   }
 
@@ -860,6 +934,9 @@
   if (elements.catalogWorkspace?.open) loadSharedCatalogFrame();
   elements.copy.addEventListener("click", copyCatalogAddress);
   elements.share.addEventListener("click", shareCatalog);
+  elements.featured.addEventListener("change", event => {
+    if (event.target.closest("[data-licensing-panel]")) applyLicensingSelection(elements.featured);
+  });
   elements.featured.addEventListener("click", event => {
     handleReleaseActionClick(event).catch(() => showToast("That song link could not be shared yet."));
   });

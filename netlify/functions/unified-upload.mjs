@@ -4,7 +4,7 @@ import { getUser, verifyRequestOrigin } from "@netlify/identity";
 import { cleanText, ensureMembership } from "../lib/halo-x.mjs";
 import { appendLedgerEntry } from "../lib/halo-ledger.mjs";
 import { reconcilePublishedSong } from "../lib/song-publication.mjs";
-import { buildDreamweaverSatellite } from "../lib/dreamweaver-satellite.mjs";
+import { buildDreamweaverSatellite } from "../../lib/route-registry.js";
 import { cleanDreamweaverSongId } from "../../lib/dreamweaver-storefront.js";
 
 // Pipeline stages in order.  Departments can only advance; they cannot regress.
@@ -37,7 +37,6 @@ const UPLOAD_SURFACES = new Set([
   "dreamweaver_lab",
   "music_upload",
 ]);
-const DREAMWEAVER_SATELLITE_REFRESH_MS = 45_000;
 
 function json(body, status = 200) {
   return Response.json(body, { status, headers: { "Cache-Control": "no-store" } });
@@ -45,14 +44,6 @@ function json(body, status = 200) {
 
 function cleanId(value) {
   return cleanDreamweaverSongId(value);
-}
-
-function dreamweaverSatellite(songId) {
-  const id = cleanId(songId);
-  return buildDreamweaverSatellite(id, {
-    includeAgentLoop: true,
-    intervalMs: DREAMWEAVER_SATELLITE_REFRESH_MS,
-  });
 }
 
 function stageIndex(stage) {
@@ -73,7 +64,7 @@ function serializePipeline(row) {
     rightsStatus: row.rights_status || "needs_review",
     genre: row.genre || "",
     updatedAt: new Date(row.updated_at).toISOString(),
-    dreamweaverSatellite: dreamweaverSatellite(row.id),
+    dreamweaverSatellite: buildDreamweaverSatellite(row.id),
     departments: buildDepartmentViews(row),
   };
 }

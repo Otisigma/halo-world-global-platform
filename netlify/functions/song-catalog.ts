@@ -6,7 +6,7 @@ import { db } from "../../db/index.js";
 import { dreamweaverSongReviews, songs, songVersions } from "../../db/schema.js";
 import { cleanText, ensureMembership } from "../lib/halo-x.mjs";
 import { reconcilePublishedSong } from "../lib/song-publication.mjs";
-import { dreamweaverSatellite } from "../lib/dreamweaver-satellite.mjs";
+import { buildDreamweaverSatellite } from "../../lib/route-registry.js";
 import { cleanDreamweaverSongId } from "../../lib/dreamweaver-storefront.js";
 
 const MAX_BODY_BYTES = 80_000;
@@ -114,7 +114,7 @@ function serializeSong(song: typeof songs.$inferSelect, versions: Array<typeof s
     reviewedAt: song.reviewedAt?.toISOString() || "",
     artworkUrl: songArtworkUrl,
     artworkUploadedAt: song.artworkUploadedAt?.toISOString() || "",
-    dreamweaverSatellite: dreamweaverSatellite(song.id),
+    dreamweaverSatellite: buildDreamweaverSatellite(song.id),
     pipelineStatus: song.pipelineStatus || "uploaded",
     sourceUploadSurface: song.sourceUploadSurface || "",
     pipelineUpdatedAt: song.pipelineUpdatedAt?.toISOString() || "",

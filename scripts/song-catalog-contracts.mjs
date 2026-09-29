@@ -1,10 +1,8 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
-import { DREAMWEAVER_STOREFRONT_MIX_ID, sanitizeDreamweaverAssignedRoute } from "../lib/dreamweaver-storefront.js";
-import {
-  dreamweaverSatellite as buildDreamweaverSatellite,
-} from "../netlify/lib/dreamweaver-satellite.mjs";
+import { sanitizeDreamweaverAssignedRoute } from "../lib/dreamweaver-storefront.js";
+import { buildDreamweaverSatellite } from "../lib/route-registry.js";
 
 const root = resolve(import.meta.dirname, "..");
 const read = path => readFile(resolve(root, path), "utf8");
@@ -44,12 +42,12 @@ const checks = [
   [api.includes("VERSION_ROUTES") && api.includes("instrumental") && api.includes("stems") && api.includes("extended"), "creates every requested version route for each song"],
   [api.includes("runDreamweaverReview") && api.includes("radio_master") && api.includes("rightsStatus"), "runs Dream Weaver metadata, rights, sale, and radio checks"],
   [api.includes("reconcilePublishedSong") && api.includes('payload.action === "set_pipeline_stage"') && api.includes('stage === "published"'), "reconciles published songs into public release and radio fan-out from catalog stage transitions"],
-  [api.includes("dreamweaverSatellite") && api.includes("dreamweaver-satellite.mjs") && satelliteHelper.includes("resolveDreamweaverPageFlow") && satelliteHelper.includes("buildDreamweaverSatelliteContract"), "exposes deterministic Dreamweaver storefront metadata in song catalog responses through the canonical storefront routing helper"],
-  [Boolean(sampleDreamweaverSatellite?.route) && sampleDreamweaverSatellite.route === `/dreamweaver/?mix=${DREAMWEAVER_STOREFRONT_MIX_ID}&song=11111111-1111-4111-8111-111111111111&satellite=dreamweaver` && sampleDreamweaverSatellite.canonicalDreamweaverUrl === `/dreamweaver/?mix=${DREAMWEAVER_STOREFRONT_MIX_ID}&song=11111111-1111-4111-8111-111111111111` && sampleDreamweaverSatellite.experienceUrl === sampleDreamweaverSatellite.route && sampleDreamweaverSatellite.launchUrl === sampleDreamweaverSatellite.route && sampleDreamweaverSatellite.satelliteRoute === "/dreamweaver/satellite/11111111-1111-4111-8111-111111111111/" && sampleDreamweaverSatellite.storefrontUrl === sampleDreamweaverSatellite.route && sampleDreamweaverSatellite.pageAgent?.id === "dreamweaver-page-manager-11111111-1111-4111-8111-111111111111" && sampleDreamweaverSatellite.agentLoop?.id === sampleDreamweaverSatellite.pageAgent?.id, "shared Dreamweaver helper returns canonical storefront routing metadata with a stable per-song page-manager identity"],
-  [sampleDreamweaverRoute === sampleDreamweaverSatellite?.experienceUrl && sanitizeDreamweaverAssignedRoute("https://example.com/dreamweaver/?song=11111111-1111-4111-8111-111111111111") === "", "Dreamweaver route sanitizer keeps same-origin canonical routes and blocks off-origin assignments"],
+  [api.includes("dreamweaverSatellite") && api.includes("../../lib/route-registry.js") && satelliteHelper.includes("resolveDreamweaverPageFlow") && satelliteHelper.includes("buildDreamweaverSatelliteContract"), "exposes deterministic Dreamweaver storefront metadata in song catalog responses while keeping canonical Dreamweaver routing shared"],
+  [Boolean(sampleDreamweaverSatellite?.route) && sampleDreamweaverSatellite.route === "/dreamweaver/satellite/11111111-1111-4111-8111-111111111111/" && sampleDreamweaverSatellite.canonicalUrl === "/dreamweaver/" && sampleDreamweaverSatellite.fallbackUrl === "/dreamweaver/?satellite=dreamweaver&song=11111111-1111-4111-8111-111111111111" && sampleDreamweaverSatellite.experienceUrl === sampleDreamweaverSatellite.route && sampleDreamweaverSatellite.launchUrl === sampleDreamweaverSatellite.route && sampleDreamweaverSatellite.agentLoop?.id === "dreamweaver-satellite-11111111-1111-4111-8111-111111111111", "shared route registry helper returns deterministic Dreamweaver satellite metadata with canonical storefront fallback"],
+  [sampleDreamweaverRoute === sampleDreamweaverSatellite?.experienceUrl && sanitizeDreamweaverAssignedRoute("https://example.com/dreamweaver/satellite/11111111-1111-4111-8111-111111111111/") === "", "Dreamweaver route sanitizer keeps same-origin canonical routes and blocks off-origin assignments"],
   [api.includes("verifyRequestOrigin") && api.includes("ensureMembership") && api.includes('path: "/api/song-catalog"'), "protects catalog records with membership and origin checks"],
   [api.includes("halo_release_campaigns") && api.includes("halo_artist_pages") && api.includes("import_existing"), "loads reusable existing songs from release data with ownership checks"],
-  [api.includes("dreamweaverSatellite: dreamweaverSatellite(song.id)") && satelliteHelper.includes("buildDreamweaverSatelliteContract") && satelliteHelper.includes("...metadataContract"), "song-catalog API returns Dreamweaver satellite navigation metadata alongside playback URLs"],
+  [api.includes("dreamweaverSatellite: buildDreamweaverSatellite(song.id)") && satelliteHelper.includes("buildDreamweaverSatelliteContract") && satelliteHelper.includes("...metadataContract"), "song-catalog API returns Dreamweaver satellite navigation metadata alongside playback URLs"],
   [page.includes('id="songSatelliteLink"') && client.includes("resolveDreamweaverExperienceUrl") && client.includes("sanitizeDreamweaverAssignedRoute"), "song-catalog UI exposes an Open satellite entry point and keeps navigation pinned to sanitized Dreamweaver routes"],
   [page.includes('id="audioFile"') && client.includes("AUDIO_CHUNK_BYTES") && client.includes("finalize_upload"), "uploads full song-version audio in browser-safe chunks"],
   [api.includes("cleanAudioUrl") && api.includes("/api/song-catalog/audio?versionId="), "keeps uploaded catalog audio URLs valid when saving version metadata"],
@@ -100,6 +98,6 @@ const checks = [
 
 const failures = checks.filter(([passed]) => !passed);
 for (const [passed, description] of checks) console.log(`${passed ? "PASS" : "FAIL"}: ${description}`);
-assert.equal(buildDreamweaverSatellite("not-a-song-id"), null, "shared Dreamweaver satellite helper must reject invalid song IDs");
+assert.equal(buildDreamweaverSatellite("not/a-song-id"), null, "shared Dreamweaver satellite helper must reject invalid song IDs");
 if (failures.length) process.exitCode = 1;
 else console.log(`Song catalog contracts: ${checks.length}/${checks.length} checks passed.`);

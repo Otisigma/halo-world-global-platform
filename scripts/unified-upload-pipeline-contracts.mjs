@@ -1,31 +1,18 @@
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
-import { pathToFileURL } from "node:url";
-import {
-  DREAMWEAVER_STOREFRONT_MIX_ID,
-  buildDreamweaverSatelliteContract,
-  sanitizeDreamweaverAssignedRoute,
-} from "../lib/dreamweaver-storefront.js";
+import { sanitizeDreamweaverAssignedRoute } from "../lib/dreamweaver-storefront.js";
+import { buildDreamweaverSatellite } from "../lib/route-registry.js";
 
 const root = resolve(import.meta.dirname, "..");
 const read = path => readFile(resolve(root, path), "utf8");
-const { buildDreamweaverSatellite } = await import(pathToFileURL(resolve(root, "netlify/lib/dreamweaver-satellite.mjs")).href);
 const sampleSongId = "123e4567-e89b-42d3-a456-426614174000";
-const sampleSatellite = buildDreamweaverSatellite(sampleSongId, {
-  agentLoop: {
-    id: `dreamweaver-satellite-${sampleSongId}`,
-    updatePath: "/api/release-catalog",
-    intervalMs: 45_000,
-    channels: ["metadata", "artwork", "playback_state", "refinements"],
-  },
-});
-const sampleSatelliteContract = buildDreamweaverSatelliteContract(sampleSongId);
-const invalidSatellite = buildDreamweaverSatellite("not-a-song");
+const sampleSatellite = buildDreamweaverSatellite(sampleSongId);
+const invalidSatellite = buildDreamweaverSatellite("not/a-song");
 
 const [
   migration,
   schema,
-  dreamweaverSatelliteLib,
+  routeRegistry,
   dreamweaverStorefrontLib,
   unifiedUploadFn,
   songCatalogFn,
@@ -40,7 +27,7 @@ const [
 ] = await Promise.all([
   read("netlify/database/migrations/20260829000000_unified_upload_pipeline.sql"),
   read("db/schema.ts"),
-  read("netlify/lib/dreamweaver-satellite.mjs"),
+  read("lib/route-registry.js"),
   read("lib/dreamweaver-storefront.js"),
   read("netlify/functions/unified-upload.mjs"),
   read("netlify/functions/song-catalog.ts"),
@@ -63,23 +50,22 @@ const checks = [
   // Schema
   [schema.includes("pipelineStatus") && schema.includes('"pipeline_status"'), "schema includes pipelineStatus column in songs table"],
   [schema.includes("sourceUploadSurface") && schema.includes('"source_upload_surface"'), "schema includes sourceUploadSurface column in songs table"],
-  [dreamweaverStorefrontLib.includes("buildDreamweaverSatelliteContract") && dreamweaverStorefrontLib.includes("experienceUrl") && dreamweaverStorefrontLib.includes("canonicalDreamweaverUrl") && dreamweaverStorefrontLib.includes("fallbackUrl"), "shared Dreamweaver satellite helper defines explicit navigation metadata for page entry"],
-  [sampleSatellite?.route === `/dreamweaver/?mix=${DREAMWEAVER_STOREFRONT_MIX_ID}&song=${sampleSongId}&satellite=dreamweaver` && sampleSatellite?.experienceUrl === sampleSatellite?.route && sampleSatellite?.storefrontUrl === sampleSatellite?.route && sampleSatellite?.canonicalDreamweaverUrl === `/dreamweaver/?mix=${DREAMWEAVER_STOREFRONT_MIX_ID}&song=${sampleSongId}` && sampleSatellite?.fallbackUrl === sampleSatellite?.route && sampleSatellite?.satelliteRoute === `/dreamweaver/satellite/${sampleSongId}/`, "shared Dreamweaver satellite helper returns deterministic canonical navigation URLs for valid song ids"],
-  [sampleSatelliteContract?.route === sampleSatellite?.route && sampleSatelliteContract?.canonicalDreamweaverUrl === sampleSatellite?.canonicalDreamweaverUrl && sampleSatelliteContract?.fallbackUrl === sampleSatellite?.fallbackUrl, "shared storefront route registry helper emits the same deterministic satellite contract used by API serializers"],
+  [routeRegistry.includes("buildDreamweaverSatellite") && routeRegistry.includes("experienceUrl") && routeRegistry.includes("canonicalUrl") && routeRegistry.includes("fallbackUrl"), "shared route registry helper defines explicit Dreamweaver navigation metadata for serializers"],
+  [sampleSatellite?.route === `/dreamweaver/satellite/${sampleSongId}/` && sampleSatellite?.experienceUrl === sampleSatellite?.route && sampleSatellite?.launchUrl === sampleSatellite?.route && sampleSatellite?.fallbackUrl === `/dreamweaver/?satellite=dreamweaver&song=${sampleSongId}` && sampleSatellite?.canonicalUrl === "/dreamweaver/", "shared route registry helper returns deterministic canonical navigation URLs for valid song ids"],
   [sampleSatellite?.agentLoop?.id === `dreamweaver-satellite-${sampleSongId}` && invalidSatellite === null, "shared Dreamweaver satellite helper preserves optional agent-loop metadata and rejects invalid song ids"],
-  [sanitizeDreamweaverAssignedRoute(sampleSatellite?.experienceUrl) === sampleSatellite?.experienceUrl && sanitizeDreamweaverAssignedRoute("https://example.com/dreamweaver/?song=123e4567-e89b-42d3-a456-426614174000") === "", "assigned route sanitizer only allows same-origin Dreamweaver routes"],
+  [sanitizeDreamweaverAssignedRoute(sampleSatellite?.experienceUrl) === sampleSatellite?.experienceUrl && sanitizeDreamweaverAssignedRoute("https://example.com/dreamweaver/satellite/123e4567-e89b-42d3-a456-426614174000/") === "", "assigned route sanitizer only allows same-origin Dreamweaver routes"],
   // Unified upload function
   [unifiedUploadFn.includes('path: "/api/unified-upload"'), "unified-upload function registers at /api/unified-upload"],
   [unifiedUploadFn.includes("create_project") && unifiedUploadFn.includes("advance_pipeline"), "unified-upload supports create_project and advance_pipeline actions"],
   [unifiedUploadFn.includes("PIPELINE_STAGES") && unifiedUploadFn.includes("uploaded") && unifiedUploadFn.includes("published"), "unified-upload defines the full ordered pipeline stages array"],
   [unifiedUploadFn.includes("buildDepartmentViews") && unifiedUploadFn.includes("artistRoom") && unifiedUploadFn.includes("radioRoom") && unifiedUploadFn.includes("dreamWeaver") && unifiedUploadFn.includes("salesPublishing"), "unified-upload returns department views for all four departments"],
-  [unifiedUploadFn.includes("dreamweaverSatellite") && unifiedUploadFn.includes("buildDreamweaverSatellite") && unifiedUploadFn.includes("includeAgentLoop"), "unified-upload uses the shared Dreamweaver satellite metadata helper for routing output"],
+  [unifiedUploadFn.includes("dreamweaverSatellite: buildDreamweaverSatellite(row.id)") && routeRegistry.includes("dreamweaver-satellite-"), "unified-upload uses the shared Dreamweaver satellite metadata helper for routing output"],
   [unifiedUploadFn.includes("verifyRequestOrigin") && unifiedUploadFn.includes("ensureMembership"), "unified-upload protects mutations with origin and membership checks"],
   [unifiedUploadFn.includes("Cannot move backward") && unifiedUploadFn.includes("stageIndex"), "unified-upload rejects backward pipeline regressions"],
   [unifiedUploadFn.includes("isExisting") && unifiedUploadFn.includes("Existing master project returned"), "unified-upload returns existing project instead of creating a duplicate"],
   // Song catalog serializer
   [songCatalogFn.includes("pipelineStatus") && songCatalogFn.includes("sourceUploadSurface") && songCatalogFn.includes("dreamweaverSatellite"), "song-catalog API serializes pipeline status, source surface, and Dreamweaver satellite metadata"],
-  [unifiedUploadFn.includes("dreamweaverSatellite: dreamweaverSatellite(row.id)") && songCatalogFn.includes("dreamweaverSatellite: dreamweaverSatellite(song.id)"), "both unified upload and song catalog serializers emit Dreamweaver satellite metadata"],
+  [unifiedUploadFn.includes("dreamweaverSatellite: buildDreamweaverSatellite(row.id)") && songCatalogFn.includes("dreamweaverSatellite: buildDreamweaverSatellite(song.id)"), "both unified upload and song catalog serializers emit Dreamweaver satellite metadata"],
   [satelliteHelper.includes("resolveDreamweaverPageFlow") && satelliteHelper.includes("buildDreamweaverSatelliteContract") && dreamweaverManager.includes("buildDreamweaverStorefrontPath") && dreamweaverManager.includes("buildDreamweaverSatellitePath") && dreamweaverManager.includes("pageAgent"), "shared Dreamweaver helper keeps canonical storefront routing while preserving dedicated page-manager metadata"],
   // Song catalog UI
   [songCatalogJs.includes("pipeline-badge") && songCatalogJs.includes("pipelineStatus"), "song-catalog client renders pipeline badge using pipelineStatus"],

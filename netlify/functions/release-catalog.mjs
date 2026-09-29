@@ -1,6 +1,7 @@
 import { getDatabase } from "@netlify/database";
 import { resolveReleaseArtworkFields } from "../lib/release-artwork.mjs";
 import { resolveDreamweaverPageFlow } from "../lib/dreamweaver-page-manager.mjs";
+import { resolveReleaseLicensing } from "../lib/release-licensing.mjs";
 
 const CORS_HEADERS = Object.freeze({
   "Access-Control-Allow-Origin": "*",
@@ -130,6 +131,13 @@ function serializeRelease(row) {
     contentRating: row.content_rating || "unspecified",
     pitch: row.pitch || "",
     availableVersions: Array.isArray(row.available_versions) ? row.available_versions : [],
+    licensing: resolveReleaseLicensing({
+      licensingTiers: row.licensing_tiers,
+      availableVersions: Array.isArray(row.available_versions) ? row.available_versions : [],
+      salePriceCents: row.catalog_sale_price_cents,
+      currency: row.catalog_currency,
+      purchaseUrl: row.purchase_url
+    }),
     isCleanVersion: Boolean(row.is_clean_version),
     isChartEligible: Boolean(row.is_chart_eligible),
     purchaseUrl: row.purchase_url || "",
@@ -219,6 +227,7 @@ export default async function releaseCatalogHandler(request) {
         release.content_rating,
         release.pitch,
         release.available_versions,
+        release.licensing_tiers,
         release.is_clean_version,
         release.is_chart_eligible,
         release.purchase_url,

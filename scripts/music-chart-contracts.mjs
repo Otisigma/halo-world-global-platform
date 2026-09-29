@@ -32,5 +32,18 @@ assert.match(client, /card-art release-artwork-frame[\s\S]*card-copy[\s\S]*relea
 assert.match(styles, /\.chart-console/, "chart console must have a dedicated responsive layout");
 assert.match(styles, /\.chart-row\.is-active/, "chart rows must expose a selected state");
 assert.match(styles, /\.stage-video-fallback-visual/, "chart styles must support fallback visual playback without remote media");
+assert.match(client, /function formatAudioStreamUrl\(rawUrl\)[\s\S]*drive\.google\.com\/uc\?export=download&id=/, "shop player must convert Google Drive share links into direct stream URLs");
+assert.match(client, /class HaloShopPlayer[\s\S]*this\.audio = new Audio\(\)/, "shop player must own a single global Audio instance");
+assert.equal((client.match(/new Audio\(/g) || []).length, 1, "shop page must not create ad hoc Audio instances");
+assert.match(client, /haloGlobalPlayerBar/, "shop player must mount the floating global player bar");
+assert.match(client, /querySelectorAll\("\[data-play-track-id\]"\)/, "shop player must sync play state across every rendered play button");
+assert.match(client, /closest\('\[data-action="play-track"\]'\)/, "shop play buttons must use delegated click handling");
+assert.match(client, /\[elements\.featured, elements\.chartBoard, elements\.chartStage, elements\.grid\]\.forEach/, "featured, chart, and grid containers must delegate play clicks");
+assert.match(client, /data-action="play-track" data-play-track-id=[\s\S]*data-track-id=[\s\S]*data-title=[\s\S]*data-artist=[\s\S]*data-audio-url=[\s\S]*data-cover=/, "play buttons must expose track metadata for the delegated player");
+assert.match(client, /No preview audio is available for this release yet\./, "shop player must handle missing audio URLs gracefully");
+assert.match(client, /addEventListener\("error"[\s\S]*This preview could not be streamed right now\./, "shop player must handle failing audio URLs gracefully");
+assert.doesNotMatch(client, /<audio controls/, "featured preview must route through the global player instead of a separate audio element");
+assert.match(styles, /\.halo-player-bar \{ position: fixed;/, "floating player bar must stay fixed at the bottom of the shop");
+assert.match(styles, /\.chart-play/, "chart rows must style their delegated play control");
 
 console.log("Music chart contracts passed.");

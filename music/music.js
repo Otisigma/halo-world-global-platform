@@ -109,13 +109,14 @@
     if (!url || !isGoogleDriveUrl(url)) return url;
     const parsed = new URL(url);
     const fileId = parsed.pathname.match(/\/file\/(?:u\/\d+\/)?d\/([\w-]+)/)?.[1] || parsed.searchParams.get("id") || "";
-    if (!/^[\w-]{10,}$/.test(fileId)) return url;
+    if (!/^[\w-]{10,}$/.test(fileId)) return "";
     return `https://drive.google.com/uc?export=download&id=${encodeURIComponent(fileId)}`;
   }
 
   function trackStreamUrl(release) {
     const direct = directAudioPreviewUrl(release);
-    if (direct) return formatAudioStreamUrl(direct);
+    const directStream = direct ? formatAudioStreamUrl(direct) : "";
+    if (directStream) return directStream;
     const resolved = resolvedAudio(release, { preferPreview: true });
     const driveCandidate = [...(resolved.candidates || []), resolved.src].find(isGoogleDriveUrl);
     return driveCandidate ? formatAudioStreamUrl(driveCandidate) : "";
@@ -141,7 +142,9 @@
       this.audio.addEventListener("waiting", () => { if (this.status === "playing") this.setStatus("loading"); });
       this.audio.addEventListener("pause", () => { if (this.status !== "error" && this.audio.paused) this.setStatus("paused"); });
       this.audio.addEventListener("ended", () => this.setStatus("paused"));
-      this.audio.addEventListener("error", () => { if (this.track?.src) this.fail("This preview could not be streamed right now."); });
+      this.audio.addEventListener("error", () => {
+        if (this.track?.src && this.audio.src === this.track.src) this.fail("This preview could not be streamed right now.");
+      });
     }
 
     static shared(options) {
@@ -164,12 +167,14 @@
           <button class="halo-player-close" type="button" data-player-close aria-label="Close player">×</button>`;
         document.body.append(bar);
       }
+      this.bar = bar;
+      if (bar.dataset.playerWired === "true") return bar;
+      bar.dataset.playerWired = "true";
       bar.querySelector("[data-player-toggle]")?.addEventListener("click", () => this.toggle());
       bar.querySelector("[data-player-close]")?.addEventListener("click", () => this.close());
       bar.querySelector("[data-player-cover]")?.addEventListener("error", event => {
         if (!event.currentTarget.src.endsWith(fallbackArtwork)) event.currentTarget.src = fallbackArtwork;
       });
-      this.bar = bar;
       return bar;
     }
 
@@ -211,6 +216,8 @@
     close() {
       this.audio.pause();
       this.track = null;
+      this.audio.removeAttribute("src");
+      this.audio.load();
       this.setStatus("idle");
       if (this.bar) this.bar.hidden = true;
     }

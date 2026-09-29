@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { appendLedgerEntry } from "./halo-ledger.mjs";
 import { resolveDreamweaverPageFlow } from "./dreamweaver-page-manager.mjs";
 import { dreamweaverStorefrontPath } from "./dreamweaver-satellite.mjs";
-import { buildPublicationHealth } from "./song-publication-health.mjs";
+import { PUBLICATION_ESCALATION_THRESHOLD, buildPublicationHealth } from "./song-publication-health.mjs";
 
 const VERSION_LABELS = {
   sale_master: "Sale master",
@@ -629,7 +629,7 @@ export async function reconcilePublishedSong(db, {
     const message = error instanceof Error ? error.message : "unknown error";
     const errorStreak = Math.max(1, Number.parseInt(String(existingDetails.errorStreak || "0"), 10) + 1 || 1);
     const firstFailureAt = String(existingDetails.firstFailureAt || new Date().toISOString());
-    const escalatedAt = String(existingDetails.escalatedAt || (errorStreak >= 4 ? new Date().toISOString() : ""));
+    const escalatedAt = String(existingDetails.escalatedAt || (errorStreak >= PUBLICATION_ESCALATION_THRESHOLD ? new Date().toISOString() : ""));
     const fallbackReleaseId = existingSync?.release_id || song.source_release_id || null;
     const fallbackRadioTrackId = existingSync?.radio_track_id || null;
     const fallbackCanonicalUrl = existingSync?.canonical_url || (fallbackReleaseId ? publicationPath(fallbackReleaseId) : "");

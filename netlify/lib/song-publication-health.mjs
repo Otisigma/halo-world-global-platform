@@ -1,4 +1,5 @@
 const READY_RADIO_STATUSES = new Set(["rotation", "preview", "held"]);
+export const PUBLICATION_ESCALATION_THRESHOLD = 4;
 const READY_DREAMWEAVER_STATUSES = new Set(["ready", "managed_externally"]);
 
 function titleCase(value) {
@@ -141,7 +142,7 @@ export function buildPublicationHealth(song, sync = {}, now = new Date()) {
       ],
       ""
     ));
-  } else if (escalatedAt || errorStreak >= 4) {
+  } else if (escalatedAt || errorStreak >= PUBLICATION_ESCALATION_THRESHOLD) {
     state = "escalated";
     summary = "HALO retried the publication loop several times and opened an internal escalation.";
     retryState = "escalated";

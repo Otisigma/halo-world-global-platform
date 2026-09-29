@@ -726,7 +726,7 @@ export async function reconcilePublishedSongs(db, {
             OR sync.last_reconciled_at IS NULL
             OR sync.last_reconciled_at < NOW() - INTERVAL '15 minutes'
           )
-        ORDER BY song.updated_at DESC
+        ORDER BY sync.last_reconciled_at ASC NULLS FIRST, song.updated_at DESC
         LIMIT ${limit}
       `;
   const results = [];

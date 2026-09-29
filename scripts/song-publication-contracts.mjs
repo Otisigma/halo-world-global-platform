@@ -81,6 +81,7 @@ assert.match(helper, /buildPublicationHealth/, "publication helper must derive a
 assert.match(helper, /errorStreak/, "publication helper must track deterministic retry escalation state");
 assert.match(helper, /COALESCE\(sync\.details->>'escalatedAt', ''\) = ''/, "publication batch reconcile must stop auto-retrying escalated rows until the song changes again");
 assert.match(helper, /sync\.last_reconciled_at < NOW\(\) - INTERVAL '15 minutes'/, "healthy published songs must be checked on the monitor cadence");
+assert.match(helper, /ORDER BY sync\.last_reconciled_at ASC NULLS FIRST, song\.updated_at DESC/, "limited monitor batches must check never-reconciled and oldest songs first");
 assert.match(helper, /fallbackCanonicalUrl = existingSync\?\.canonical_url \|\| ""/, "failures must keep only previously verified canonical routes");
 assert.match(helper, /publicationHealth: health/, "manual reconciliation must return the shared health snapshot");
 assert.match(helper, /routeMode\)\s*\? "ready"/, "managed and HyperFollow sharing must persist a schema-supported readiness status");

@@ -138,6 +138,7 @@
       this.status = "idle";
       this.onError = onError;
       this.bar = null;
+      this.delegatedClicks = false;
       this.audio.addEventListener("playing", () => this.setStatus("playing"));
       this.audio.addEventListener("waiting", () => { if (this.status === "playing") this.setStatus("loading"); });
       this.audio.addEventListener("pause", () => { if (this.status !== "error" && this.audio.paused) this.setStatus("paused"); });
@@ -1135,8 +1136,8 @@
     });
   }
 
-  if (!window.HaloPlayer.delegatedClicks) {
-    window.HaloPlayer.delegatedClicks = true;
+  if (!player.delegatedClicks) {
+    player.delegatedClicks = true;
     document.addEventListener("click", handlePlayTrackClick);
   }
   player.mount();

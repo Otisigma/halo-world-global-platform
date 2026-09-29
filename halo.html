@@ -1870,30 +1870,32 @@
           const adaptiveDreamweaverPreview = (() => {
             const dreamweaverStatus = menuStatusForRoute('/dreamweaver/', 'yellow');
             const dreamweaverEntryLabel = 'Start your Halo here — Upload to Dreamweaver';
+            const storefrontSupportRoute = '/music-world.html';
+            const storefrontSupportLabel = 'Open Music World Shop';
             if (dreamweaverStatus.status === 'green') {
               return {
                 primaryRoute: '/dreamweaver/',
                 primaryLabel: dreamweaverEntryLabel,
-                supportRoute: '/dreamweaver-lab/',
-                supportLabel: 'Dreamweaver Song Lab',
-                guidance: 'Dreamweaver is clear. Artists start here to upload a release, shape the build, and send the song to the right listening doors.'
+                supportRoute: storefrontSupportRoute,
+                supportLabel: storefrontSupportLabel,
+                guidance: 'Dreamweaver is clear. Artists can upload straight into the canonical route, and listeners can step into the shop first without losing the clean storefront-to-Dreamweaver path.'
               };
             }
             if (dreamweaverStatus.status === 'yellow') {
               return {
                 primaryRoute: '/dreamweaver/',
                 primaryLabel: dreamweaverEntryLabel,
-                supportRoute: '/music/',
-                supportLabel: 'Continue in Music Home',
-                guidance: 'Dreamweaver is in attention mode. Artists still start here for upload and release shaping, or can continue through the stable music route while updates land.'
+                supportRoute: storefrontSupportRoute,
+                supportLabel: storefrontSupportLabel,
+                guidance: 'Dreamweaver is in attention mode. The same-origin route stays available, and Music World keeps the shop path open while updates land.'
               };
             }
             return {
               primaryRoute: '/dreamweaver/',
               primaryLabel: dreamweaverEntryLabel,
-              supportRoute: '/support/',
-              supportLabel: 'Open Feedback Desk',
-              guidance: 'Dreamweaver is reporting a break. Artists can still try the upload doorway directly, and support is ready if the route needs attention.'
+              supportRoute: storefrontSupportRoute,
+              supportLabel: storefrontSupportLabel,
+              guidance: 'Dreamweaver is reporting a break. The shop in Music World stays open for listening and release discovery while support watches the route.'
             };
           })();
 
@@ -3918,10 +3920,10 @@
                       <section className="halo-menu-lane halo-menu-lane-listen" aria-labelledby="halo-lane-listen">
                         <div className="halo-menu-lane-title"><span>02</span><h3 id="halo-lane-listen">Listen</h3></div>
                         <a href="/music-world.html" data-stat-event="open_music_world" data-stat-target="header" data-signal="PUBLIC MUSIC WORLD">
-                          <Icon name="globe" className="halo-menu-icon" /><span><strong>MUSIC WORLD {renderMenuStatusBadge('/music-world.html', 'Music World')}</strong><small>Shop, radio, charts, and Dreamweaver in one view</small></span>
+                          <Icon name="globe" className="halo-menu-icon" /><span><strong>MUSIC WORLD {renderMenuStatusBadge('/music-world.html', 'Music World')}</strong><small>Open the shop first, then move into Dreamweaver from one view</small></span>
                         </a>
                         <a href="/dreamweaver/" data-stat-event="open_dreamweaver_show" data-stat-target="mobile_nav" data-signal="SONG LOBBY">
-                          <Icon name="star" className="halo-menu-icon" /><span><strong>DREAMWEAVER SONG LOBBY {renderMenuStatusBadge('/dreamweaver/', 'Dreamweaver Song Lobby')}</strong><small>Open the same-origin Dreamweaver storefront and fan entry</small></span>
+                          <Icon name="star" className="halo-menu-icon" /><span><strong>DREAMWEAVER SONG LOBBY {renderMenuStatusBadge('/dreamweaver/', 'Dreamweaver Song Lobby')}</strong><small>Open the same-origin Dreamweaver shop route and fan entry</small></span>
                         </a>
                         <a href="/stats/" data-stat-event="open_public_stats" data-stat-target="header" data-signal="LIVE SIGNALS">
                           <Icon name="activity" className="halo-menu-icon" /><span><strong>PUBLIC STATS {renderMenuStatusBadge('/stats/', 'Public Stats')}</strong><small>Published catalog and destination health</small></span>
@@ -4141,6 +4143,14 @@
                             data-stat-target="homepage_hero"
                           >
                             Start your Halo here — Upload to Dreamweaver
+                          </a>
+                          <a
+                            href="/music-world.html"
+                            className="halo-home-experiment__secondary-action focus:outline-none focus:ring-2 focus:ring-amber-200 focus:ring-offset-2 focus:ring-offset-[#090a0d]"
+                            data-stat-event="open_music_world"
+                            data-stat-target="homepage_hero_shop"
+                          >
+                            See the shop in Music World
                           </a>
                         </div>
 
@@ -5984,6 +5994,8 @@
                 <span>© 2026 HALO MUSIC WORLD SYSTEMS LLC</span>
                 <nav className="flex items-center gap-3" aria-label="HALO footer destinations">
                   <a href="/support/" data-stat-event="open_feedback_desk" data-stat-target="footer" className="text-lime-300 transition hover:text-lime-200 focus:outline-none focus:ring-1 focus:ring-lime-300">FEEDBACK</a>
+                  <span aria-hidden="true">·</span>
+                  <a href="/music-world.html" data-stat-event="open_music_world" data-stat-target="footer" className="text-cyan-200 transition hover:text-cyan-100 focus:outline-none focus:ring-1 focus:ring-cyan-200">MUSIC WORLD SHOP</a>
                   <span aria-hidden="true">·</span>
                   <a href="/dreamweaver/" data-stat-event="open_dreamweaver_show" data-stat-target="footer" className="text-amber-300 transition hover:text-amber-200 focus:outline-none focus:ring-1 focus:ring-amber-300">DREAMWEAVER SONG LOBBY</a>
                   <span aria-hidden="true">·</span>

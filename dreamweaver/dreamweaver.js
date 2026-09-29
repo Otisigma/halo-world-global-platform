@@ -526,7 +526,8 @@ import { DREAMWEAVER_STOREFRONT_MIX_ID, buildDreamweaverStorefrontPath } from ".
   }
 
   function isSatellitePath() {
-    return Boolean(songIdFromSatellitePath());
+    const pathname = String(location.pathname || "");
+    return /^\/dreamweaver\/satellite(?:\/|$)/i.test(pathname);
   }
 
   function releaseDateLabel(value) {
@@ -2592,11 +2593,12 @@ import { DREAMWEAVER_STOREFRONT_MIX_ID, buildDreamweaverStorefrontPath } from ".
       const currentParams = new URLSearchParams(location.search);
       currentParams.set("mix", mix.id);
       if (state.publishedSongId) currentParams.set("song", state.publishedSongId);
-      history.replaceState(null, "", canonicalDreamweaverUrl({
+      const hydratedUrl = canonicalDreamweaverUrl({
         includeSatelliteFlag: isSatelliteFlow(),
         searchParams: currentParams,
         fallbackMixId: DREAMWEAVER_STOREFRONT_MIX_ID,
-      }));
+      });
+      history.replaceState(null, "", isSatellitePath() ? `${location.pathname}${new URL(hydratedUrl, location.origin).search}` : hydratedUrl);
       const playbackBootstrap = await bootstrapPrimaryPlayback(mix);
       await hydrateDreamweaverLoopContent();
       if (!playbackBootstrap?.started || elements.audio.paused || elements.audio.ended) setReleasePlaybackState("ready");

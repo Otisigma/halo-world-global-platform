@@ -368,8 +368,8 @@ async function saveVersion(ownerMemberId: string, payload: Record<string, unknow
       destination: route.destination,
       // Preserve managed upload URLs: only overwrite audioUrl when a valid external https URL or
       // internal catalog playback path is supplied; if the field is blank and an uploaded file
-      // exists (blob prefix set), keep the stored managed URL.
-      audioUrl: sql`CASE WHEN ${audioUrl} <> '' THEN ${audioUrl} WHEN audio_blob_prefix <> '' THEN audio_url ELSE '' END`,
+      // exists (blob prefix or direct-storage key set), keep the stored managed URL.
+      audioUrl: sql`CASE WHEN ${audioUrl} <> '' THEN ${audioUrl} WHEN audio_blob_prefix <> '' OR audio_storage_key <> '' THEN audio_url ELSE '' END`,
       durationSeconds: Math.max(0, Math.min(86_400, Number.parseInt(String(payload.durationSeconds || "0"), 10) || 0)),
       masteringStatus: cleanEnum(payload.masteringStatus, MASTERING_STATUSES, "not_started"),
       targetLufs: Math.max(-30, Math.min(-5, Number.parseInt(String(payload.targetLufs || route.targetLufs), 10) || route.targetLufs)),

@@ -45,6 +45,7 @@ export const songVersions = pgTable("halo_song_versions", {
   audioUrl: text("audio_url").notNull().default(""),
   audioBlobPrefix: text("audio_blob_prefix").notNull().default(""),
   audioChunkCount: integer("audio_chunk_count").notNull().default(0),
+  audioStorageKey: text("audio_storage_key").notNull().default(""),
   audioContentType: text("audio_content_type").notNull().default(""),
   audioByteSize: integer("audio_byte_size").notNull().default(0),
   audioFilename: text("audio_filename").notNull().default(""),

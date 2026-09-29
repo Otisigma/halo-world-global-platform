@@ -4,10 +4,11 @@ import { resolve } from "node:path";
 import { sanitizeDreamweaverAssignedRoute } from "../lib/dreamweaver-storefront.js";
 import { buildDreamweaverSatellite } from "../lib/route-registry.js";
 import { pickCanonicalMaster, serializeMasterCopy } from "../netlify/lib/master-copy.mjs";
+import { MASTER_UPLOAD_MAX_BYTES, MASTER_UPLOAD_URL_TTL_SECONDS, buildMasterObjectKey, directUploadConfig, isOwnedMasterObjectKey, presignObjectUrl, validateMasterUpload } from "../netlify/lib/direct-upload-storage.mjs";
 
 const root = resolve(import.meta.dirname, "..");
 const read = path => readFile(resolve(root, path), "utf8");
-const [page, client, styles, api, unifiedUploadApi, releaseCatalogApi, audioApi, artworkApi, producerApi, producerLib, satelliteHelper, schema, migration, audioMigration, artworkMigration, versionArtworkMigration, producerMigration, versionVideoMigration, config, home, packageText, uploadHelper, dreamweaverManager, singleMasterMigration, masterCopyLib] = await Promise.all([
+const [page, client, styles, api, unifiedUploadApi, releaseCatalogApi, audioApi, artworkApi, producerApi, producerLib, satelliteHelper, schema, migration, audioMigration, artworkMigration, versionArtworkMigration, producerMigration, versionVideoMigration, config, home, packageText, uploadHelper, dreamweaverManager, singleMasterMigration, masterCopyLib, masterUploadApi, directStorageLib, storageKeyMigration] = await Promise.all([
   read("song-catalog/index.html"),
   read("song-catalog/song-catalog.js"),
   read("song-catalog/song-catalog.css"),
@@ -32,7 +33,10 @@ const [page, client, styles, api, unifiedUploadApi, releaseCatalogApi, audioApi,
   read("upload-progress.js"),
   read("netlify/lib/dreamweaver-page-manager.mjs"),
   read("netlify/database/migrations/20260929040000_enforce_single_active_sale_master.sql"),
-  read("netlify/lib/master-copy.mjs")
+  read("netlify/lib/master-copy.mjs"),
+  read("netlify/functions/song-catalog-master-upload.ts"),
+  read("netlify/lib/direct-upload-storage.mjs"),
+  read("netlify/database/migrations/20260929060000_add_song_version_audio_storage_key.sql")
 ]);
 const packageJson = JSON.parse(packageText);
 const sampleDreamweaverSatellite = buildDreamweaverSatellite("11111111-1111-4111-8111-111111111111", { includeAgentLoop: true });
@@ -99,8 +103,8 @@ const checks = [
   [audioApi.includes('request.method === "DELETE"') && audioApi.includes("Version audio removed") && audioApi.includes("runDreamweaverReview"), "lets owners delete uploaded version audio and re-run Dream Weaver checks"],
   [uploadHelper.includes("uploadChunkedFile") && uploadHelper.includes("createUploadUi"), "shares upload progress state and byte-level progress handling across upload views"],
   [page.includes('id="newMasterFile"') && page.includes('name="masterCopy"') && page.includes('id="newMasterProgress"') && page.includes('id="newMasterTrack"') && page.includes("Sale master"), "lets uploaders attach a master copy when creating a song record"],
-  [client.includes('$("#newMasterFile")') && client.includes("data.masterVersionId||data.versionIds?.sale_master") && client.includes("uploadAudioToVersion({file:masterFile,songId:data.songId,versionId:masterVersionId"), "uploads the chosen master copy into the new song's sale master version"],
-  [client.includes("audioFileProblem(masterFile)") && client.includes('document.querySelector(".master-copy-panel")') && !page.includes('class="audio-upload-panel master') , "validates master copy files and tracks their upload progress without hijacking the version audio panel"],
+  [client.includes('$("#newMasterFile")') && client.includes("data.masterVersionId||data.versionIds?.sale_master") && client.includes("uploadMasterToVersion({file:masterFile,songId:data.songId,versionId:masterVersionId"), "uploads the chosen master copy into the new song's sale master version"],
+  [client.includes("masterFileProblem(masterFile)") && client.includes('document.querySelector(".master-copy-panel")') && !page.includes('class="audio-upload-panel master') , "validates master copy files and tracks their upload progress without hijacking the version audio panel"],
   [api.includes('const MASTER_VERSION_TYPE: VersionType = "sale_master"') && api.includes("masterVersionId: versionIds[MASTER_VERSION_TYPE]") && api.includes("versionIds,"), "returns the canonical master version id when a song is created"],
   [api.includes("masterCopy: serializeMasterCopy(versions)") && api.includes("isCanonicalMaster: version.id === canonicalMaster?.id") && masterCopyLib.includes("audioFilename: master?.audioFilename"), "retains master copy metadata in persisted song catalog records"],
   [api.includes('import { pickCanonicalMaster, serializeMasterCopy } from "../lib/master-copy.mjs"') && masterCopyLib.includes("export function pickCanonicalMaster(") && !api.includes('versions.find(version => version.versionType === MASTER_VERSION_TYPE)'), "resolves exactly one canonical master copy instead of the most recently updated sale master"],
@@ -110,7 +114,17 @@ const checks = [
   [client.includes("canonical-master-badge") && client.includes("version.isCanonicalMaster") && page.includes('id="versionMasterNote"') && styles.includes(".canonical-master-note"), "labels the canonical master copy clearly in the song catalog UI"],
   [page.includes("Promoting another version to Sale master later demotes this one") && client.includes("only that single canonical master is published"), "explains what happens when a master copy is selected during upload"],
   [unifiedUploadApi.includes('const MASTER_VERSION_TYPE = "sale_master"') && unifiedUploadApi.includes("masterVersionId: versionIds[MASTER_VERSION_TYPE]") && unifiedUploadApi.includes("masterCopy: serializeMasterCopy(row)") && unifiedUploadApi.includes("version_type = ${MASTER_VERSION_TYPE}"), "exposes the canonical master copy through the unified upload pipeline"],
-  [releaseCatalogApi.includes("masterCopy: {") && releaseCatalogApi.includes("version.version_type = 'sale_master'") && releaseCatalogApi.includes("catalog_master_uploaded") && !/masterCopy: \{[^}]*audioUrl/.test(releaseCatalogApi), "surfaces public-safe master copy metadata in the release catalog without leaking private audio URLs"]
+  [releaseCatalogApi.includes("masterCopy: {") && releaseCatalogApi.includes("version.version_type = 'sale_master'") && releaseCatalogApi.includes("catalog_master_uploaded") && !/masterCopy: \{[^}]*audioUrl/.test(releaseCatalogApi), "surfaces public-safe master copy metadata in the release catalog without leaking private audio URLs"],
+  [masterUploadApi.includes('path: "/api/song-catalog/master-upload"') && masterUploadApi.includes('payload.action === "presign"') && masterUploadApi.includes('payload.action === "register"') && masterUploadApi.includes("verifyRequestOrigin") && masterUploadApi.includes("ensureMembership"), "adds a membership- and origin-protected presigned master upload endpoint"],
+  [masterUploadApi.includes("version.version_type = ${MASTER_VERSION_TYPE}") && masterUploadApi.includes("validateMasterUpload(") && masterUploadApi.includes("MASTER_UPLOAD_URL_TTL_SECONDS") && !masterUploadApi.includes("request.formData()") && !masterUploadApi.includes("arrayBuffer()"), "issues short-lived upload URLs only for the owner's canonical sale master without receiving audio bytes"],
+  [masterUploadApi.includes("isOwnedMasterObjectKey(fileKey") && masterUploadApi.includes("headStoredObject(storage, fileKey)") && masterUploadApi.includes("audio_storage_key = ${fileKey}") && masterUploadApi.includes("audio_url = ${audioUrl}") && masterUploadApi.includes("runDreamweaverReview(songId, ownerMemberId)"), "registers the verified storage key on the sale master and keeps the private playback route authoritative"],
+  [schema.includes('audioStorageKey: text("audio_storage_key")') && storageKeyMigration.includes("ADD COLUMN IF NOT EXISTS audio_storage_key"), "persists direct-storage master object keys idempotently"],
+  [audioApi.includes("version.audio_storage_key") && audioApi.includes("presignObjectUrl({ config: storage") && audioApi.includes('"Cache-Control": "private, no-store"') && audioApi.includes("removeStoredMaster(version.audio_storage_key)"), "serves, replaces, and deletes direct-storage masters through owner-only short-lived URLs"],
+  [api.includes("WHEN audio_blob_prefix <> '' OR audio_storage_key <> '' THEN audio_url"), "keeps direct-storage master playback URLs when version metadata is saved"],
+  [client.includes("uploadMasterToVersion") && client.includes('fetch("/api/song-catalog/master-upload"') && client.includes('method:"PUT"') && client.includes('credentials:"omit"') && client.includes('action:"register"') && client.includes("Uploading master directly to storage"), "uploads master copies straight from the browser to storage with live progress, then registers them"],
+  [client.includes("presign.data?.directUpload===false") && client.includes("return uploadAudioToVersion({file,songId,versionId,ui})") && client.includes("uploadHelper.uploadChunkedFile"), "falls back to the existing chunked upload path when direct storage is not configured"],
+  [directStorageLib.includes("AWS4-HMAC-SHA256") && directStorageLib.includes("HALO_MASTER_STORAGE_BUCKET") && !directStorageLib.includes("@aws-sdk"), "signs S3-compatible direct uploads without adding a storage SDK dependency"],
+  [!releaseCatalogApi.includes("audio_storage_key") && !unifiedUploadApi.includes("audio_storage_key") && !api.includes("audioStorageKey:"), "never exposes private master storage keys through catalog APIs"],
 ];
 
 const duplicateMasters = [
@@ -123,7 +137,33 @@ assert.equal(duplicateMasters.filter(version => version.id === pickCanonicalMast
 assert.equal(serializeMasterCopy(duplicateMasters).versionId, "version-a", "masterCopy must serialize the canonical active master");
 assert.equal(serializeMasterCopy(duplicateMasters).uploaded, true, "masterCopy must report the canonical master upload state");
 assert.equal(serializeMasterCopy([]).versionId, "", "masterCopy must stay empty when no sale master exists");
-assert.ok(!/masterCopy: \{[^}]*audio(Url|BlobPrefix|Filename)/.test(releaseCatalogApi), "public release catalog masterCopy must expose only safe metadata");
+assert.ok(!/masterCopy: \{[^}]*audio(Url|BlobPrefix|Filename|StorageKey)/.test(releaseCatalogApi), "public release catalog masterCopy must expose only safe metadata");
+
+// Direct-to-storage presigned master uploads.
+const awsVectorConfig = { bucket: "examplebucket", region: "us-east-1", accessKeyId: "AKIAIOSFODNN7EXAMPLE", secretAccessKey: "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY", endpoint: "https://s3.amazonaws.com", forcePathStyle: false };
+assert.ok(presignObjectUrl({ config: awsVectorConfig, method: "GET", key: "test.txt", expiresIn: 86400, now: new Date("2013-05-24T00:00:00Z") }).endsWith("X-Amz-Signature=aeeed9bbccd4d02ee5c0109b86d86835f995330da4c265957d157751f604d404"), "presigned URLs must match the published AWS SigV4 query-signing test vector");
+const storageConfig = directUploadConfig({ HALO_MASTER_STORAGE_BUCKET: "halo-masters", HALO_MASTER_STORAGE_REGION: "auto", HALO_MASTER_STORAGE_ACCESS_KEY_ID: "test-access-key", HALO_MASTER_STORAGE_SECRET_ACCESS_KEY: "test-secret-key", HALO_MASTER_STORAGE_ENDPOINT: "https://storage.example.com" });
+assert.equal(directUploadConfig({}), null, "direct uploads must stay disabled until storage credentials are configured");
+assert.equal(directUploadConfig({ HALO_MASTER_STORAGE_BUCKET: "b", HALO_MASTER_STORAGE_ACCESS_KEY_ID: "a", HALO_MASTER_STORAGE_SECRET_ACCESS_KEY: "s", HALO_MASTER_STORAGE_ENDPOINT: "http://insecure.example.com" }), null, "direct storage endpoints must use https");
+const masterScope = { ownerMemberId: "11111111-1111-4111-8111-111111111111", songId: "22222222-2222-4222-8222-222222222222", versionId: "33333333-3333-4333-8333-333333333333" };
+const masterKey = buildMasterObjectKey({ ...masterScope, uploadId: "44444444-4444-4444-8444-444444444444", filename: "Final Master (24-bit).wav" });
+assert.ok(masterKey.startsWith(`masters/${masterScope.ownerMemberId}/${masterScope.songId}/${masterScope.versionId}/`) && masterKey.endsWith(".wav") && !/[()\s]/.test(masterKey), "master object keys must be scoped to the owner, song, and sale master version");
+const putUrl = new URL(presignObjectUrl({ config: storageConfig, method: "PUT", key: masterKey, contentType: "audio/wav", expiresIn: MASTER_UPLOAD_URL_TTL_SECONDS }));
+assert.equal(putUrl.origin, "https://storage.example.com", "presigned uploads go directly to object storage, not a Netlify function");
+assert.equal(putUrl.pathname, `/halo-masters/${masterKey}`, "custom S3-compatible endpoints use path-style object URLs");
+assert.equal(putUrl.searchParams.get("X-Amz-SignedHeaders"), "content-type;host", "presigned PUT URLs must lock the validated content type");
+assert.ok(Number(putUrl.searchParams.get("X-Amz-Expires")) <= 900, "presigned upload URLs must be short-lived");
+assert.ok(/^[0-9a-f]{64}$/.test(putUrl.searchParams.get("X-Amz-Signature") || ""), "presigned upload URLs must carry a SigV4 signature");
+assert.ok(!putUrl.href.includes("test-secret-key"), "presigned URLs must never leak the storage secret");
+assert.ok(isOwnedMasterObjectKey(masterKey, masterScope), "registration accepts keys issued for the same sale master");
+assert.ok(!isOwnedMasterObjectKey(masterKey, { ...masterScope, ownerMemberId: "55555555-5555-4555-8555-555555555555" }), "registration rejects keys issued to another member");
+assert.ok(!isOwnedMasterObjectKey(`${masterKey.split("/").slice(0, 4).join("/")}/../../other/master.wav`, masterScope), "registration rejects path traversal in storage keys");
+const largeWav = validateMasterUpload({ filename: "master.wav", contentType: "audio/x-wav", fileSize: 150 * 1024 * 1024 });
+assert.ok(largeWav.ok && largeWav.contentType === "audio/wav", "150 MB WAV masters are accepted for direct upload");
+assert.equal(validateMasterUpload({ filename: "master.m4a", contentType: "audio/x-m4a", fileSize: 60 * 1024 * 1024 }).contentType, "audio/mp4", "M4A masters normalize to audio/mp4");
+assert.equal(validateMasterUpload({ filename: "master.wav", contentType: "audio/wav", fileSize: MASTER_UPLOAD_MAX_BYTES + 1 }).status, 413, "masters above the size limit are rejected before a URL is issued");
+assert.equal(validateMasterUpload({ filename: "master.wav", contentType: "audio/wav", fileSize: 0 }).status, 400, "empty master uploads are rejected");
+assert.equal(validateMasterUpload({ filename: "cover.png", contentType: "image/png", fileSize: 1024 }).status, 415, "non-audio master uploads are rejected");
 
 const failures = checks.filter(([passed]) => !passed);
 for (const [passed, description] of checks) console.log(`${passed ? "PASS" : "FAIL"}: ${description}`);

@@ -1,0 +1,127 @@
+/* HALO navigation status system — dark luxury tiles and live status badges. */
+:root {
+  --halo-bg-card: rgba(18, 18, 22, 0.75);
+  --halo-border-card: rgba(255, 255, 255, 0.08);
+  --halo-border-hover: rgba(255, 255, 255, 0.2);
+
+  --status-green: #22c55e;
+  --status-green-glow: rgba(34, 197, 94, 0.25);
+
+  --status-amber: #f59e0b;
+  --status-amber-glow: rgba(245, 158, 11, 0.25);
+
+  --status-red: #ef4444;
+  --status-red-glow: rgba(239, 68, 68, 0.25);
+}
+
+.halo-menu-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 1rem;
+  padding: 1rem 0;
+}
+
+.halo-nav-tile {
+  background: var(--halo-bg-card);
+  border: 1px solid var(--halo-border-card);
+  border-radius: 8px;
+  padding: 1rem;
+  text-decoration: none;
+  color: #ffffff;
+  transition: border-color 0.2s cubic-bezier(0.16, 1, 0.3, 1), transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  backdrop-filter: blur(12px);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.halo-nav-tile:hover,
+.halo-nav-tile:focus-visible {
+  border-color: var(--halo-border-hover);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+
+.tile-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.75rem;
+}
+
+.tile-icon {
+  font-size: 1.1rem;
+  line-height: 1;
+}
+
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: "DM Mono", monospace;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  padding: 3px 8px;
+  border-radius: 12px;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex: none;
+}
+
+.status-working {
+  color: var(--status-green);
+  background: rgba(34, 197, 94, 0.12);
+  border: 1px solid rgba(34, 197, 94, 0.3);
+  box-shadow: 0 0 8px var(--status-green-glow);
+}
+.status-working .status-dot { background-color: var(--status-green); }
+
+.status-attention {
+  color: var(--status-amber);
+  background: rgba(245, 158, 11, 0.12);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  box-shadow: 0 0 8px var(--status-amber-glow);
+}
+.status-attention .status-dot { background-color: var(--status-amber); }
+
+.status-broken {
+  color: var(--status-red);
+  background: rgba(239, 68, 68, 0.12);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  box-shadow: 0 0 8px var(--status-red-glow);
+}
+.status-broken .status-dot { background-color: var(--status-red); }
+
+.tile-title {
+  font-size: 0.95rem;
+  font-weight: 600;
+  margin: 0 0 0.25rem 0;
+  letter-spacing: 0.02em;
+}
+
+.tile-description {
+  font-size: 0.78rem;
+  color: #a1a1aa;
+  margin: 0;
+  line-height: 1.35;
+}
+
+/* Inline badge treatment for action buttons and text links. */
+.halo-status-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .halo-nav-tile { transition: none; }
+  .halo-nav-tile:hover,
+  .halo-nav-tile:focus-visible { transform: none; }
+}

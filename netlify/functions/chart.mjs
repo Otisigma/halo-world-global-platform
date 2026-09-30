@@ -1,4 +1,15 @@
 import { getDatabase } from "@netlify/database";
+import {
+  chartVoterKey,
+  isValidReleaseId,
+  normalizeChartSort,
+  rankChartReleases,
+  serializeChartRelease
+} from "../lib/catalog-chart.mjs";
+
+const CHART_PATH = "/api/catalog/chart";
+const VOTE_PATH = "/api/catalog/vote";
+const CHART_LIMIT = 50;
 
 const CORS_HEADERS = Object.freeze({
   "Access-Control-Allow-Origin": "*",
@@ -18,94 +29,115 @@ function json(body, status = 200, headers = {}) {
   });
 }
 
-function normalizeStatus(value) {
-  return String(value || "").trim().toLowerCase();
+async function loadChart(request) {
+  const sort = normalizeChartSort(new URL(request.url).searchParams.get("sort"));
+  const db = getDatabase();
+  const rows = await db.sql`
+    SELECT
+      release.id,
+      release.title,
+      release.artist,
+      release.status,
+      release.release_date,
+      release.genres,
+      release.artist_slug,
+      release.artwork_url,
+      release.imported_artwork_url,
+      release.artwork_override_url,
+      release.stream_url,
+      release.pitch,
+      COALESCE(votes.votes, 0)::int AS votes,
+      COALESCE(engagement.recent_listens, 0)::int AS recent_listens,
+      COALESCE(engagement.recent_opens, 0)::int AS recent_opens
+    FROM halo_release_campaigns release
+    LEFT JOIN LATERAL (
+      SELECT COUNT(*)::int AS votes
+      FROM halo_chart_votes vote
+      WHERE vote.release_id = release.id
+    ) votes ON TRUE
+    LEFT JOIN LATERAL (
+      SELECT
+        COUNT(*) FILTER (WHERE event.event_type = 'outbound_click')::int AS recent_listens,
+        COUNT(*) FILTER (WHERE event.event_type = 'kit_open')::int AS recent_opens
+      FROM halo_release_campaign_events event
+      WHERE event.release_id = release.id
+        AND event.created_at >= NOW() - INTERVAL '7 days'
+    ) engagement ON TRUE
+    WHERE release.status = 'published'
+      AND release.is_chart_eligible = TRUE
+    ORDER BY release.release_date DESC NULLS LAST, release.id ASC
+    LIMIT 200
+  `;
+  const releases = rankChartReleases(rows.map(serializeChartRelease), sort).slice(0, CHART_LIMIT);
+  return json({ sort, releases, count: releases.length });
 }
 
-function signalScore(release) {
-  const votes = Number(release.votes || 0);
-  const listens = Number(release.listens || 0);
-  const opens = Number(release.opens || 0);
-  return votes * 2 + listens + opens;
-}
-
-function serializeRelease(row) {
-  return {
-    id: row.id,
-    title: row.title,
-    artist: row.artist,
-    status: normalizeStatus(row.status),
-    votes: Number(row.votes || 0),
-    listens: Number(row.listens || 0),
-    opens: Number(row.opens || 0),
-    signalScore: signalScore(row),
-    audioUrl: row.audio_url || row.stream_url || "",
-    coverArtUrl: row.cover_art_url || row.artwork_url || "",
-    description: row.description || "",
-    artistSlug: row.artist_slug || "",
-    releaseDate: row.release_date ? String(row.release_date).slice(0, 10) : ""
-  };
-}
-
-export default async function chartHandler(request) {
-  if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS_HEADERS });
-
-  if (request.method === "GET") {
-    try {
-      const db = getDatabase();
-      const rows = await db.sql`
-        SELECT
-          release.id,
-          release.title,
-          release.artist,
-          release.status,
-          release.release_date,
-          release.artist_slug,
-          release.audio_url,
-          release.stream_url,
-          release.artwork_url,
-          release.description,
-          COALESCE(chart.votes, 0)::int AS votes,
-          COALESCE(chart.listens, 0)::int AS listens,
-          COALESCE(chart.opens, 0)::int AS opens
-        FROM halo_release_campaigns release
-        LEFT JOIN halo_chart_votes chart ON chart.release_id = release.id
-        WHERE release.status = 'published'
-        ORDER BY votes DESC, listens DESC, opens DESC, release.release_date DESC NULLS LAST
-        LIMIT 50
-      `;
-      return json({ releases: rows.map(serializeRelease) });
-    } catch (error) {
-      console.error("HALO chart load failed", error instanceof Error ? error.message : error);
-      return json({ message: "The chart is temporarily unavailable" }, 500);
-    }
+async function recordVote(request, context) {
+  if (!String(request.headers.get("content-type") || "").toLowerCase().includes("application/json")) {
+    return json({ message: "Votes must be sent as JSON" }, 415);
   }
+  const body = await request.json().catch(() => ({}));
+  const releaseId = String(body?.releaseId || body?.trackId || "").trim();
+  if (!isValidReleaseId(releaseId)) return json({ message: "A valid releaseId is required" }, 400);
 
-  if (request.method === "POST") {
+  const voterKey = chartVoterKey({
+    ip: context?.ip || request.headers.get("x-nf-client-connection-ip") || "",
+    userAgent: request.headers.get("user-agent") || ""
+  });
+  const db = getDatabase();
+  const inserted = await db.sql`
+    INSERT INTO halo_chart_votes (release_id, voter_key)
+    SELECT release.id, ${voterKey}
+    FROM halo_release_campaigns release
+    WHERE release.id = ${releaseId}
+      AND release.status = 'published'
+      AND release.is_chart_eligible = TRUE
+    ON CONFLICT (release_id, voter_key, vote_day) DO NOTHING
+    RETURNING release_id
+  `;
+  const totals = await db.sql`
+    SELECT release.id, COUNT(vote.release_id)::int AS votes
+    FROM halo_release_campaigns release
+    LEFT JOIN halo_chart_votes vote ON vote.release_id = release.id
+    WHERE release.id = ${releaseId}
+      AND release.status = 'published'
+      AND release.is_chart_eligible = TRUE
+    GROUP BY release.id
+  `;
+  if (!totals.length) return json({ message: "That release is not on the chart" }, 404);
+  const counted = inserted.length > 0;
+  return json({
+    success: true,
+    releaseId,
+    votes: Number(totals[0].votes || 0),
+    counted,
+    alreadyVoted: !counted
+  }, counted ? 201 : 200);
+}
+
+export default async function chartHandler(request, context) {
+  if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS_HEADERS });
+  const { pathname } = new URL(request.url);
+
+  if (pathname === VOTE_PATH) {
+    if (request.method !== "POST") return json({ message: "Method not allowed" }, 405, { Allow: "POST, OPTIONS" });
     try {
-      const body = await request.json().catch(() => ({}));
-      const trackId = String(body.trackId || "").trim();
-      if (!trackId) return json({ message: "Missing trackId" }, 400);
-
-      const db = getDatabase();
-      const result = await db.sql`
-        INSERT INTO halo_chart_votes (release_id, votes, listens, opens, updated_at)
-        VALUES (${trackId}, 1, 0, 0, NOW())
-        ON CONFLICT (release_id)
-        DO UPDATE SET votes = halo_chart_votes.votes + 1, updated_at = NOW()
-        RETURNING release_id AS "releaseId", votes
-      `;
-
-      return json({ success: true, releaseId: result[0]?.releaseId || trackId, votes: Number(result[0]?.votes || 1) });
+      return await recordVote(request, context);
     } catch (error) {
-      console.error("HALO vote update failed", error instanceof Error ? error.message : error);
+      console.error("HALO chart vote failed", error instanceof Error ? error.message : "unknown error");
       return json({ message: "The vote could not be recorded" }, 500);
     }
   }
 
-  return json({ message: "Method not allowed" }, 405, { Allow: "GET, POST, OPTIONS" });
+  if (request.method !== "GET") return json({ message: "Method not allowed" }, 405, { Allow: "GET, OPTIONS" });
+  try {
+    return await loadChart(request);
+  } catch (error) {
+    console.error("HALO chart load failed", error instanceof Error ? error.message : "unknown error");
+    return json({ message: "The chart is temporarily unavailable" }, 500);
+  }
 }
 
 export const config = {
-  path: "/api/catalog/chart"
+  path: [CHART_PATH, VOTE_PATH]
 };

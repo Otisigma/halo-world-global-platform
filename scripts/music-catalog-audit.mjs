@@ -5,7 +5,7 @@ import { resolve } from "node:path";
 const root = resolve(import.meta.dirname, "..");
 const read = path => readFile(resolve(root, path), "utf8");
 
-const [auditLib, scout, catalogApi, cognitiveErasure, illDoItAllAgain, blessed, mySensitivityLikeACrown, mySensitivityArtworkPreservation, mySensitivityImportedArtworkBackfill, requestedReleaseNormalization, worldDarkCampaign] = await Promise.all([
+const [auditLib, scout, catalogApi, cognitiveErasure, illDoItAllAgain, blessed, mySensitivityLikeACrown, mySensitivityArtworkPreservation, mySensitivityImportedArtworkBackfill, requestedReleaseNormalization, worldDarkCampaign, satellite] = await Promise.all([
   read("netlify/lib/music-catalog-audit.mjs"),
   read("netlify/functions/music-catalog-scout.mjs"),
   read("netlify/functions/release-catalog.mjs"),
@@ -16,7 +16,8 @@ const [auditLib, scout, catalogApi, cognitiveErasure, illDoItAllAgain, blessed, 
   read("netlify/database/migrations/20260903120000_preserve_my_sensitivity_artwork.sql"),
   read("netlify/database/migrations/20260909224000_backfill-my-sensitivity-imported-artwork.sql"),
   read("netlify/database/migrations/20260904010000_normalize_requested_music_releases.sql"),
-  read("netlify/database/migrations/20260820200000_launch-when-world-dark-campaign.sql")
+  read("netlify/database/migrations/20260820200000_launch-when-world-dark-campaign.sql"),
+  read("netlify/database/migrations/20260930011700_publish-satellite.sql")
 ]);
 
 assert.match(auditLib, /REQUIRED_RELEASES/, "audit library must define required releases");
@@ -95,6 +96,17 @@ assert.match(requestedReleaseNormalization, /purchase_url/, "Normalization migra
 assert.match(requestedReleaseNormalization, /WHEN NULLIF\(halo_release_campaigns\.purchase_url, ''\) IS NULL THEN EXCLUDED\.is_chart_eligible/, "Normalization migration must only restore chart eligibility when a stale requested release is still missing its normalized buy\/stream link");
 assert.match(requestedReleaseNormalization, /\/assets\/halo-app-icon-512\.png/, "Normalization migration must provide the shared fallback artwork for releases without local cover assets");
 assert.match(requestedReleaseNormalization, /artwork_override_url\s*=\s*COALESCE\(NULLIF\(EXCLUDED\.artwork_override_url, ''\), halo_release_campaigns\.artwork_override_url\)/, "Normalization migration must preserve any manual artwork override");
+assert.match(satellite, /INSERT INTO halo_release_campaigns/, "Satellite must be added to the authoritative release catalog table");
+assert.match(satellite, /'satellite-01',\s*'Satellite',\s*'Owen Anthony'/, "Satellite migration must use the satellite-01 ID, title, and artist");
+assert.match(satellite, /ARRAY\['Dance'/, "Satellite migration must file the release under dance");
+assert.match(satellite, /'https:\/\/drive\.google\.com\/uc\?export=download&id=[\w-]{10,}'/, "Satellite stream_url must use the Google Drive direct-download pattern used by the shop player");
+assert.match(satellite, /'\/assets\/releases\/satellite\.jpg'/, "Satellite migration must set the release cover art path");
+assert.match(satellite, /'UK-AAA-26-00010'/, "Satellite migration must carry its ISRC");
+assert.match(satellite, /"priceCents": 2999, "currency": "GBP"/, "Satellite migration must price the licence at £29.99");
+assert.match(satellite, /'published'\s*\)\s*ON CONFLICT \(id\) DO UPDATE/, "Satellite must be published (the approved state) and idempotent");
+assert.match(catalogApi, /status: normalizedCatalogStatus\(row\.status\)/, "catalog API must expose each release's approval status so the shop can filter unapproved tracks");
+assert.match(catalogApi, /isrc: row\.catalog_isrc \|\| row\.isrc/, "catalog API must fall back to the release campaign ISRC");
+
 // Protect against PR #40 regression: website_url must not duplicate the release HyperFollow URL.
 // website_url is for the artist streaming profile; release_url is for the HyperFollow pre-save page.
 assert.doesNotMatch(

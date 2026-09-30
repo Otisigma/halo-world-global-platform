@@ -23,6 +23,72 @@
     });
   };
 
+  // Delegated navigation targets are resolved on every event so headers that
+  // load late or get replaced via innerHTML keep working without rebinding.
+  const menuToggleSelector = '[data-action="toggle-menu"], #menuToggle';
+  const dropdownToggleSelector = '[data-action="toggle-dropdown"]';
+  const navDrawerSelector = "#mainNav, .nav-drawer";
+
+  const findNavDrawer = () => document.getElementById("mainNav") || document.querySelector(".nav-drawer");
+
+  const findDropdown = trigger => {
+    const controlsId = trigger.getAttribute("aria-controls");
+    return (controlsId && document.getElementById(controlsId)) || trigger.nextElementSibling;
+  };
+
+  const setMenuToggleState = isOpen => {
+    document.querySelectorAll(menuToggleSelector).forEach(toggle => {
+      toggle.setAttribute("aria-expanded", isOpen ? "true" : "false");
+    });
+  };
+
+  const closeNavDrawers = () => {
+    document.querySelectorAll("#mainNav.is-active, .nav-drawer.is-active").forEach(drawer => {
+      drawer.classList.remove("is-active");
+    });
+    setMenuToggleState(false);
+  };
+
+  const closeDropdowns = keep => {
+    document.querySelectorAll(`${dropdownToggleSelector}[aria-expanded="true"]`).forEach(trigger => {
+      const dropdown = findDropdown(trigger);
+      if (keep && dropdown?.contains(keep)) return;
+      dropdown?.classList.remove("show");
+      trigger.setAttribute("aria-expanded", "false");
+    });
+  };
+
+  const handleDelegatedNavigation = event => {
+    const target = event.target;
+    if (!target || typeof target.closest !== "function") return;
+
+    const menuToggle = target.closest(menuToggleSelector);
+    if (menuToggle) {
+      event.preventDefault();
+      const navDrawer = findNavDrawer();
+      if (navDrawer) {
+        const isOpen = navDrawer.classList.toggle("is-active");
+        setMenuToggleState(isOpen);
+      }
+      return;
+    }
+
+    const dropdownTrigger = target.closest(dropdownToggleSelector);
+    if (dropdownTrigger) {
+      event.preventDefault();
+      const dropdown = findDropdown(dropdownTrigger);
+      if (dropdown) {
+        closeDropdowns(dropdown);
+        const isOpen = dropdown.classList.toggle("show");
+        dropdownTrigger.setAttribute("aria-expanded", isOpen ? "true" : "false");
+      }
+      return;
+    }
+
+    closeDropdowns(target);
+    if (!target.closest(navDrawerSelector)) closeNavDrawers();
+  };
+
   const isDismissed = () => {
     try {
       return Number(window.localStorage.getItem(dismissalKey) || 0) > Date.now();
@@ -110,7 +176,9 @@
   });
 
   document.addEventListener("click", event => {
-    const activeMenu = event.target.closest(".halo-mobile-menu");
+    handleDelegatedNavigation(event);
+
+    const activeMenu = event.target.closest?.(".halo-mobile-menu");
     if (!activeMenu) {
       closeNavigationMenus();
       return;
@@ -124,6 +192,8 @@
   document.addEventListener("keydown", event => {
     if (event.key !== "Escape") return;
     closeNavigationMenus();
+    closeDropdowns();
+    closeNavDrawers();
   });
 
   document.addEventListener("toggle", event => {

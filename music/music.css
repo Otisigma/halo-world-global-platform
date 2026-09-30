@@ -426,6 +426,50 @@ body:has(.halo-player-bar:not([hidden])) .toast { bottom: 110px; }
 .halo-player-bar.is-playing .player-toggle-btn { background: var(--orange); }
 .player-toggle-btn:disabled { opacity: 0.45; cursor: not-allowed; }
 .player-close-btn { width: 36px; height: 36px; border: 1px solid var(--line); color: var(--paper); background: transparent; font-size: 18px; line-height: 1; cursor: pointer; }
+
+.featured-hero { margin-bottom: 28px; }
+.featured-hero[hidden] { display: none; }
+.featured-hero-card { display: grid; grid-template-columns: 180px minmax(0, 1fr) minmax(240px, 0.8fr); gap: 28px; align-items: center; padding: 22px; border: 1px solid var(--acid); background: var(--ink-soft); }
+.featured-hero-art { position: relative; aspect-ratio: 1; overflow: hidden; background: #202520; }
+.featured-hero-art img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.featured-hero-rank { position: absolute; left: 10px; bottom: 10px; padding: 6px 9px; color: var(--ink); background: var(--acid); font: 500 11px/1 var(--mono); letter-spacing: 0.1em; }
+.featured-hero-copy { min-width: 0; display: grid; gap: 10px; }
+.featured-hero-kicker { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 0; color: var(--acid); font: 500 9px/1.3 var(--mono); letter-spacing: 0.13em; text-transform: uppercase; }
+.featured-hero-pulse { width: 8px; height: 8px; border-radius: 50%; background: var(--acid); box-shadow: 0 0 0 5px rgba(242, 255, 98, 0.12); }
+.featured-hero-title { margin: 0; font: 400 clamp(34px, 4.6vw, 64px)/0.95 var(--serif); letter-spacing: -0.03em; overflow-wrap: anywhere; }
+.featured-hero-artist { margin: 0; color: var(--muted); font: 500 10px/1.3 var(--mono); letter-spacing: 0.12em; text-transform: uppercase; }
+.featured-hero-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.featured-hero-actions .action { border-color: var(--line); color: var(--paper); }
+.featured-hero-actions .action.play { border-color: var(--acid); color: var(--ink); }
+.featured-hero-actions .action.play.is-playing { border-color: var(--orange); }
+.featured-hero-actions .action.primary { color: var(--acid); background: transparent; border-color: var(--acid); }
+.featured-hero-actions .action.tertiary:hover { background: rgba(242, 238, 227, 0.08); }
+.featured-hero-actions .action:disabled, .featured-hero-actions .action[aria-disabled="true"] { opacity: 0.55; cursor: not-allowed; transform: none; }
+.featured-hero-actions .action:focus-visible { outline: 3px solid var(--orange); outline-offset: 2px; }
+.featured-hero-status { min-height: 1.3em; margin: 0; color: var(--muted); font-size: 13px; }
+.featured-queue-shell { min-width: 0; display: grid; gap: 10px; align-self: stretch; padding-left: 22px; border-left: 1px solid var(--line); }
+.featured-queue-label { color: var(--muted); font: 500 8px/1 var(--mono); letter-spacing: 0.14em; text-transform: uppercase; }
+.featured-queue { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.featured-queue-item { position: relative; min-height: 52px; display: grid; grid-template-columns: 30px minmax(0, 1fr); align-items: center; gap: 10px; padding: 6px 60px 6px 8px; border: 1px solid transparent; }
+.featured-queue-item.is-current { border-color: var(--acid); }
+.featured-queue-rank { color: var(--acid); font: 500 11px/1 var(--mono); }
+.featured-queue-track { min-width: 0; display: grid; gap: 3px; }
+.featured-queue-track strong, .featured-queue-track small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.featured-queue-track strong { font-size: 14px; }
+.featured-queue-track small { color: var(--muted); font: 500 8px/1.3 var(--mono); letter-spacing: 0.08em; text-transform: uppercase; }
+.featured-queue-item .chart-play { right: 8px; width: 40px; height: 40px; }
+@media (prefers-reduced-motion: no-preference) {
+  .featured-hero-pulse { animation: featuredHeroPulse 1.8s ease-in-out infinite; }
+  @keyframes featuredHeroPulse { 50% { box-shadow: 0 0 0 9px rgba(242, 255, 98, 0); } }
+}
+@media (max-width: 980px) {
+  .featured-hero-card { grid-template-columns: 140px minmax(0, 1fr); }
+  .featured-queue-shell { grid-column: 1 / -1; padding: 16px 0 0; border-left: 0; border-top: 1px solid var(--line); }
+}
+@media (max-width: 680px) {
+  .featured-hero-card { grid-template-columns: 1fr; padding: 16px; }
+  .featured-hero-art { max-width: 220px; }
+}
 @media (max-width: 1100px) {
   .halo-player-bar { bottom: calc(124px + env(safe-area-inset-bottom, 0px)); }
   body:has(.halo-player-bar:not([hidden])) { padding-bottom: 220px; }

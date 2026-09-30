@@ -29,6 +29,21 @@ assert.match(client, /isFallbackVisual/, "chart must generate a per-release fall
 assert.match(client, /stage-art release-artwork-frame[\s\S]*release\.title[\s\S]*stage-artist/, "chart stage must keep release artwork paired with the active song and artist");
 assert.match(client, /chart-art release-artwork-frame[\s\S]*chart-track[\s\S]*release\.title[\s\S]*release\.artist/, "chart rows must keep artwork paired with each song entry");
 assert.match(client, /card-art release-artwork-frame[\s\S]*card-copy[\s\S]*release\.title[\s\S]*release\.artist/, "release cards must keep artwork paired with each release card");
+assert.match(client, /APPROVED_RELEASE_STATUSES = new Set\(\["passed", "published"\]\)/, "shop must only treat passed or published releases as approved");
+assert.match(client, /state\.releases = \(Array\.isArray\(data\.releases\) \? data\.releases : \[\]\)\.filter\(isApprovedRelease\)/, "shop must drop unapproved releases before rendering the grid, chart, featured slot, and release count");
+{
+  const source = client.match(/const APPROVED_RELEASE_STATUSES[\s\S]*?function isApprovedRelease\(release\) \{[\s\S]*?\n  \}/)?.[0];
+  assert.ok(source, "shop must define isApprovedRelease");
+  const isApprovedRelease = new Function(`${source}\nreturn isApprovedRelease;`)();
+  const visible = [
+    { id: "satellite-01", status: "passed" },
+    { id: "blessed", status: "published" },
+    { id: "pending-track", status: "pending" },
+    { id: "draft-track", status: "draft" },
+    { id: "unverified-track" }
+  ].filter(isApprovedRelease).map(release => release.id);
+  assert.deepEqual(visible, ["satellite-01", "blessed"], "shop filter must hide pending, draft, and status-less tracks");
+}
 assert.match(styles, /\.chart-console/, "chart console must have a dedicated responsive layout");
 assert.match(styles, /\.chart-row\.is-active/, "chart rows must expose a selected state");
 assert.match(styles, /\.stage-video-fallback-visual/, "chart styles must support fallback visual playback without remote media");

@@ -64,6 +64,13 @@
     }
   }
 
+  // Only verified releases reach the public shop; "published" is the catalog's equivalent approved state.
+  const APPROVED_RELEASE_STATUSES = new Set(["passed", "published"]);
+
+  function isApprovedRelease(release) {
+    return APPROVED_RELEASE_STATUSES.has(String(release?.status || "").trim().toLowerCase());
+  }
+
   function catalogState(release) {
     return release?.catalog && typeof release.catalog === "object" ? release.catalog : {};
   }
@@ -1041,7 +1048,7 @@
       const response = await fetch("/api/release-catalog", { headers: { Accept: "application/json" } });
       const data = await response.json();
       if (!response.ok) throw new Error(data.message || "The catalog could not be loaded.");
-      state.releases = Array.isArray(data.releases) ? data.releases : [];
+      state.releases = (Array.isArray(data.releases) ? data.releases : []).filter(isApprovedRelease);
       if (!state.activeShopId) {
         const preferredId = state.releases.some(release => release.id === requestedReleaseId)
           ? requestedReleaseId

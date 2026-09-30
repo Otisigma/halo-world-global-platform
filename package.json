@@ -8,7 +8,7 @@
     "diagnose": "node deploy/diagnostics.js",
     "deploy:feedback": "node scripts/deploy-health-contracts.mjs",
     "music-upload:watchdog": "node scripts/music-upload-contracts.mjs",
-    "upload-experience:watchdog": "node scripts/upload-pipeline-contracts.mjs && node scripts/music-upload-contracts.mjs",
+    "upload-experience:watchdog": "node scripts/upload-pipeline-contracts.mjs && node scripts/music-upload-contracts.mjs && node scripts/drive-master-upload-contracts.mjs",
     "halo-signal-check": "node scripts/live-connected-satellite-contracts.mjs",
     "redirect-loop-check": "node scripts/redirect-loop-contracts.mjs",
     "satellite:verify": "node scripts/live-connected-satellite-contracts.mjs",

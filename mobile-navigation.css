@@ -1,5 +1,5 @@
 /* Header & navigation drawer stack sits above floating UI such as .halo-player-bar. */
-:where(.main-header, .nav-drawer) {
+:where(.main-header, .nav-drawer, #mainNav) {
   position: relative;
 }
 

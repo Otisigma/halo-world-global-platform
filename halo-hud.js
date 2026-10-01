@@ -6,7 +6,10 @@
  * - `data-halo-guide-action="copy-isrc"` (with `data-isrc`) adds a copy-to-clipboard action.
  * - `data-halo-guide-action="quick-listen"` adds a preview action that reuses the page's own
  *   play-track button (and therefore the shared window.HaloPlayer singleton).
- * - `?` toggles a global quick guide; Escape or an outside click dismisses the HUD.
+ * - `?` toggles a global quick guide spotlight that also lists this page's titled guides
+ *   (`data-halo-guide-title`) as jump targets; Escape or an outside click dismisses the HUD.
+ * - `HaloHud.registerAction(name, factory)` adds future action variants;
+ *   `HaloHud.computePlacement()` is the shared viewport-safe placement helper.
  *
  * All listeners are delegated at document level, so late-loaded and re-rendered content
  * (innerHTML swaps) is covered without re-binding. The engine never cancels or halts
@@ -20,6 +23,7 @@
   const SCOPE_SELECTOR = "[data-halo-guide-scope]";
   const PLAY_SELECTOR = '[data-action="play-track"]';
   const ISRC_PATTERN = /^[A-Z]{2}-?[A-Z0-9]{3}-?\d{2}-?\d{5}$/;
+  const JUMP_LIMIT = 6;
   const QUICK_GUIDE = [
     ["Listen", "Press ▶ on any release or chart row to stream it in the HALO player bar while you keep browsing."],
     ["Vote", "Use Vote ▲ on the featured chart leader to push it up the Living Chart — one vote per listener per day."],
@@ -89,13 +93,16 @@
     const list = el("ul", "halo-hud-list");
     list.hidden = true;
     const actionRow = el("div", "halo-hud-actions");
+    const jumps = el("nav", "halo-hud-jumps");
+    jumps.setAttribute("aria-label", "Guides on this page");
+    jumps.hidden = true;
     const status = el("p", "halo-hud-status");
     status.setAttribute("role", "status");
     status.setAttribute("aria-live", "polite");
-    root.append(header, body, list, actionRow, status);
+    root.append(header, body, list, actionRow, jumps, status);
     document.body.append(root);
     state.root = root;
-    state.parts = { root, badge, close, body, list, actions: actionRow, status };
+    state.parts = { root, badge, close, body, list, actions: actionRow, jumps, status };
     return state.parts;
   }
 
@@ -206,23 +213,39 @@
     };
   }
 
+  // Pure placement helper: prefer below the target, flip above when it fits better,
+  // and always clamp the card fully inside the viewport (with a safe margin).
+  function computePlacement(rect, card, view, { gap = 10, margin = 12 } = {}) {
+    const cardWidth = Number(card?.width) || 320;
+    const cardHeight = Number(card?.height) || 160;
+    const width = Number(view?.width) || 1024;
+    const height = Number(view?.height) || 768;
+    const below = rect.bottom + gap;
+    const above = rect.top - cardHeight - gap;
+    const fitsBelow = below + cardHeight <= height - margin;
+    const fitsAbove = above >= margin;
+    const placement = !fitsBelow && fitsAbove ? "above" : "below";
+    const clamp = (value, max) => Math.round(Math.min(Math.max(value, margin), Math.max(margin, max)));
+    return {
+      placement,
+      top: clamp(placement === "above" ? above : below, height - cardHeight - margin),
+      left: clamp(rect.left, width - cardWidth - margin)
+    };
+  }
+
   function position() {
     const { root } = state.parts;
     if (state.mode !== "guide" || !state.target) {
       root.style.top = "";
       root.style.left = "";
+      root.removeAttribute("data-placement");
       return;
     }
-    const rect = state.target.getBoundingClientRect();
-    const { width, height } = viewport();
-    const card = root.getBoundingClientRect?.() || { width: 320, height: 160 };
-    const cardWidth = card.width || 320;
-    const cardHeight = card.height || 160;
-    let top = rect.bottom + 10;
-    if (top + cardHeight > height - 12 && rect.top - cardHeight - 10 > 12) top = rect.top - cardHeight - 10;
-    const left = Math.min(Math.max(rect.left, 12), Math.max(12, width - cardWidth - 12));
-    root.style.top = `${Math.max(12, Math.round(top))}px`;
-    root.style.left = `${Math.round(left)}px`;
+    const card = root.getBoundingClientRect?.() || {};
+    const { top, left, placement } = computePlacement(state.target.getBoundingClientRect(), card, viewport());
+    root.style.top = `${top}px`;
+    root.style.left = `${left}px`;
+    root.setAttribute("data-placement", placement);
   }
 
   function open(mode) {
@@ -246,6 +269,8 @@
     parts.body.textContent = message;
     parts.list.hidden = true;
     parts.list.replaceChildren();
+    parts.jumps.hidden = true;
+    parts.jumps.replaceChildren();
     setStatus("");
     renderActions(target);
     const describedBy = attr(target, "aria-describedby");
@@ -255,6 +280,44 @@
     }
     open("guide");
     return true;
+  }
+
+  function pageGuides() {
+    const seen = new Set();
+    const found = [];
+    for (const node of document.querySelectorAll?.(GUIDE_SELECTOR) || []) {
+      if (found.length >= JUMP_LIMIT) break;
+      const title = attr(node, "data-halo-guide-title").trim();
+      if (!title || seen.has(title) || node.isConnected === false) continue;
+      if (state.root?.contains(node) || closestFrom(node, "[hidden]")) continue;
+      seen.add(title);
+      found.push([title, node]);
+    }
+    return found;
+  }
+
+  function jumpTo(target) {
+    hide();
+    // Defer until the jump click has finished bubbling, so the outside-click handler
+    // never sees the freshly opened guide.
+    window.setTimeout(() => {
+      if (!target || target.isConnected === false) return;
+      target.scrollIntoView?.({ block: "center", behavior: "smooth" });
+      if (show(target)) {
+        target.focus?.({ preventScroll: true });
+        window.haloStats?.track?.("halo_hud_jump", { target: attr(target, "data-halo-guide-title") });
+      }
+    }, 0);
+  }
+
+  function renderJumps() {
+    const { jumps } = state.parts;
+    const guides = pageGuides();
+    jumps.replaceChildren();
+    jumps.hidden = !guides.length;
+    if (!guides.length) return;
+    jumps.append(el("span", "halo-hud-jumps-label", "On this page"));
+    jumps.append(...guides.map(([title, target]) => button(title, "halo-hud-jump", () => jumpTo(target))));
   }
 
   function detachDescription() {
@@ -282,6 +345,7 @@
     parts.list.hidden = false;
     parts.actions.replaceChildren();
     parts.actions.hidden = true;
+    renderJumps();
     setStatus("");
     open("palette");
     parts.close.focus?.();
@@ -388,6 +452,7 @@
     show,
     hide,
     openGuide,
+    computePlacement,
     toggleGuide,
     registerAction(name, factory) {
       if (typeof name === "string" && name && typeof factory === "function") actions.set(name, factory);

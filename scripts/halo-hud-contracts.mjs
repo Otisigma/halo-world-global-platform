@@ -26,6 +26,9 @@ assert.match(shopClient, /data-halo-guide-action="quick-listen"/, "chart and car
 assert.match(shopClient, /class="chart-entry[^`]*data-halo-guide-scope/, "chart entries scope quick-listen to their play button");
 assert.match(shopClient, /class="shop-licensing"[^>]*data-halo-guide=/, "licensing tiers carry guidance");
 assert.match(featuredClient, /data-featured-vote="[^"]*"[^>]*data-halo-guide=/, "vote button carries guidance");
+assert.match(featuredClient, /class="featured-hero-copy" data-halo-guide-scope/, "hero copy scopes quick-listen to the hero's own play button (not the up-next queue)");
+assert.match(featuredClient, /class="featured-hero-kicker" tabindex="0" data-halo-guide="[^"]+"[^>]*data-halo-guide-action="quick-listen"/, "chart leader kicker offers a focusable quick-listen guide");
+assert.match(styles, /\.halo-hud-card\.is-palette\s*\{[^}]*100vmax/, "quick guide dims the page as a spotlight");
 assert.ok(!/onclick\s*=/i.test(engine), "HUD never uses inline onclick strings");
 assert.ok(!/stopPropagation|stopImmediatePropagation/.test(engine), "HUD never swallows page clicks");
 assert.ok(!/\.innerHTML\s*=/.test(engine), "HUD builds DOM nodes instead of injecting HTML");
@@ -117,6 +120,7 @@ function createDocument() {
     mutated() { document.observers.forEach(callback => callback([])); },
     createElement: tag => new Node(document, tag),
     addEventListener(type, handler) { (document.listeners[type] ||= []).push(handler); },
+    querySelectorAll: selector => document.documentElement.querySelectorAll(selector),
     execCommand: () => false
   };
   document.documentElement = new Node(document, "html");
@@ -316,6 +320,50 @@ const key = (document, keyName, target = document.activeElement) => {
   flush();
   assert.equal(document.body.querySelector("#haloHudText").textContent, "Newest row.", "re-rendered rows are guided without re-binding");
   assert.equal(document.body.querySelectorAll("#haloHud").length, 1, "HUD stays a single shared element");
+}
+
+// 6. Viewport-safe placement helper
+{
+  const { hud } = createDocument();
+  const view = { width: 1280, height: 800 };
+  const card = { width: 320, height: 160 };
+  assert.deepEqual({ ...hud.computePlacement({ top: 100, bottom: 140, left: 40 }, card, view) }, { placement: "below", top: 150, left: 40 });
+  assert.deepEqual({ ...hud.computePlacement({ top: 700, bottom: 740, left: 40 }, card, view) }, { placement: "above", top: 530, left: 40 }, "flips above near the bottom edge");
+  assert.equal(hud.computePlacement({ top: 100, bottom: 140, left: 1200 }, card, view).left, 948, "clamps to the right edge");
+  assert.equal(hud.computePlacement({ top: 100, bottom: 140, left: -50 }, card, view).left, 12, "clamps to the left edge");
+  const cramped = hud.computePlacement({ top: 60, bottom: 260, left: 40 }, card, { width: 400, height: 300 });
+  assert.equal(cramped.top, 128, "never overflows the bottom when neither side fits");
+  assert.equal(hud.computePlacement({ top: 0, bottom: 40, left: 0 }, { width: 900, height: 900 }, { width: 400, height: 300 }).top, 12, "oversized cards pin to the safe margin");
+}
+
+// 7. Quick guide spotlight lists the page's titled guides and jumps to them
+{
+  const { document, flush, hud } = createDocument();
+  const section = guide(document, { "data-halo-guide": "Chart rooms filter the chart.", "data-halo-guide-title": "Chart rooms" }, document.body, "div");
+  guide(document, { "data-halo-guide": "Duplicate title.", "data-halo-guide-title": "Chart rooms" }, document.body, "div");
+  guide(document, { "data-halo-guide": "Untitled guide." }, document.body, "div");
+  const hiddenPanel = guide(document, { hidden: "" }, document.body, "div");
+  guide(document, { "data-halo-guide": "Hidden.", "data-halo-guide-title": "Hidden" }, hiddenPanel, "div");
+  const vote = guide(document, { "data-halo-guide": "Vote for the leader.", "data-halo-guide-title": "Vote" }, document.body, "button");
+  let scrolled = 0;
+  vote.scrollIntoView = () => { scrolled += 1; };
+  hud.openGuide();
+  const jumps = document.body.querySelector(".halo-hud-jumps");
+  assert.equal(jumps.hidden, false, "quick guide shows an 'On this page' jump list");
+  assert.deepEqual(jumps.querySelectorAll(".halo-hud-jump").map(node => node.textContent), ["Chart rooms", "Vote"], "jump list dedupes titles and skips untitled or hidden guides");
+  jumps.querySelectorAll(".halo-hud-jump")[1].click();
+  assert.equal(hud.isOpen(), false, "jumping closes the spotlight first");
+  flush();
+  assert.equal(hud.mode, "guide", "jump opens the target's guide");
+  assert.equal(hud.target, vote);
+  assert.equal(scrolled, 1, "jump scrolls the target into view");
+  assert.equal(document.activeElement, vote, "jump moves keyboard focus to the target");
+  assert.equal(document.body.querySelector(".halo-hud-jumps").hidden, true, "element guides never show the jump list");
+  section.remove();
+  guide(document, { "data-halo-guide": "Licence tiers.", "data-halo-guide-title": "Licensing" }, document.body, "section");
+  hud.hide();
+  hud.openGuide();
+  assert.deepEqual(document.body.querySelector(".halo-hud-jumps").querySelectorAll(".halo-hud-jump").map(node => node.textContent), ["Chart rooms", "Vote", "Licensing"], "jump list is rebuilt from the live DOM on every open");
 }
 
 // Engine is idempotent when loaded twice.

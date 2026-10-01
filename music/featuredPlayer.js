@@ -94,8 +94,8 @@
       : "";
     return `<div class="featured-hero-card">
       <div class="featured-hero-art release-artwork-frame" data-artwork-frame><img class="release-artwork-image" src="${escapeHtml(artworkSrc)}" alt="${escapeHtml(`${hero.title} cover artwork`)}" data-release-artwork data-artwork-fallback="${escapeHtml(fallbackArtwork)}" data-artwork-badge="${escapeHtml(fallbackArtworkBadge)}"><span class="featured-hero-rank">#${escapeHtml(hero.rank || 1)}</span></div>
-      <div class="featured-hero-copy">
-        <p class="featured-hero-kicker"><span class="featured-hero-pulse" aria-hidden="true"></span><span>Chart leader · Signal score</span><span data-featured-hero-votes>${votes} ${votes === 1 ? "vote" : "votes"}</span></p>
+      <div class="featured-hero-copy" data-halo-guide-scope>
+        <p class="featured-hero-kicker" tabindex="0" data-halo-guide="This release leads the Living Chart on live fan signals — listens, votes and release-room opens. Quick listen without leaving the page." data-halo-guide-title="#${escapeHtml(hero.rank || 1)} Fan voted" data-halo-guide-action="quick-listen"><span class="featured-hero-pulse" aria-hidden="true"></span><span>Chart leader · Signal score</span><span data-featured-hero-votes>${votes} ${votes === 1 ? "vote" : "votes"}</span></p>
         <h2 class="featured-hero-title">${escapeHtml(hero.title)}</h2>
         <p class="featured-hero-artist">${escapeHtml(hero.artist)}</p>
         <div class="featured-hero-actions">

@@ -55,6 +55,13 @@ const allowedExtensions = new Set([
   ".mp4",
   ".webm",
 ]);
+const mediaExtensions = new Set([".mp3", ".wav", ".mp4", ".webm"]);
+const mediaCorsHeaders = Object.freeze({
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "Content-Type, Range",
+  "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
+  "Access-Control-Expose-Headers": "Accept-Ranges, Content-Length, Content-Range, Content-Type",
+});
 const canonicalRouteRedirects = new Map(CANONICAL_ROUTE_ALIAS_ENTRIES.map(({ from, to }) => [from, to]));
 const directoryRouteFiles = new Map(
   PUBLIC_ROUTE_REGISTRY
@@ -237,6 +244,7 @@ app.get("*", (req, res, next) => {
 
   const extension = path.extname(relativePath).toLowerCase();
   if (extension && allowedExtensions.has(extension)) {
+    if (mediaExtensions.has(extension)) res.set(mediaCorsHeaders);
     if (sendStaticCandidate(res, relativePath)) return;
     return next();
   }

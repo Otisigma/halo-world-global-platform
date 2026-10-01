@@ -18,6 +18,7 @@ const checks = [
   [api.includes("verifyRequestOrigin") && api.includes("ensureMembership") && api.includes("halo-stem-vault"), "protects stem management with origin checks, identity, and private blob storage"],
   [api.includes("Stem lengths must match within a quarter second") && api.includes("Add at least two synchronized audio stems"), "rejects incomplete or unsynchronized stem packs"],
   [audio.includes("pack.member_id = ${membership.member_id}") && audio.includes('"Cache-Control": "private, no-store"'), "restricts stem playback to the owning signed-in member"],
+  [audio.includes("requestedByteRange") && audio.includes('"Accept-Ranges": "bytes"') && audio.includes("status: 206") && audio.includes("status: 416"), "serves private stems with byte-range partial content for browser seeking"],
   [migration.includes("halo_stem_packs") && migration.includes("halo_stem_files") && migration.includes("rights_attested"), "stores searchable pack metadata and ownership proof in Netlify Database"],
   [migration.includes("status IN ('private', 'archived')") && migration.includes("stem_type IN ('full', 'drums', 'bass', 'music', 'vocals', 'fx')"), "keeps packs private and limits files to supported stem roles"]
 ];

@@ -10,6 +10,45 @@ function json(body, status = 200) {
   return Response.json(body, { status, headers: { "Cache-Control": "private, no-store" } });
 }
 
+function requestedByteRange(value, byteSize) {
+  if (!value) return null;
+  const match = /^bytes=(\d*)-(\d*)$/i.exec(value.trim());
+  if (!match || (!match[1] && !match[2])) return false;
+  let start;
+  let end;
+  if (!match[1]) {
+    const suffixLength = Number(match[2]);
+    if (!Number.isSafeInteger(suffixLength) || suffixLength <= 0) return false;
+    start = Math.max(0, byteSize - suffixLength);
+    end = byteSize - 1;
+  } else {
+    start = Number(match[1]);
+    end = match[2] ? Number(match[2]) : byteSize - 1;
+  }
+  if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end) || start < 0 || start >= byteSize || end < start) return false;
+  return { start, end: Math.min(end, byteSize - 1) };
+}
+
+async function readStemRange(stem, range) {
+  const rangeLength = range.end - range.start + 1;
+  const audio = new Uint8Array(rangeLength);
+  let offset = 0;
+  let written = 0;
+  for (let index = 0; index < Number(stem.chunk_count) && written < rangeLength; index += 1) {
+    const part = await stemStore.get(`${stem.blob_key}${String(index).padStart(3, "0")}`, { type: "arrayBuffer" });
+    if (!part) throw new Error("Stem chunk is missing");
+    const chunk = new Uint8Array(part);
+    const chunkStart = offset;
+    offset += chunk.byteLength;
+    if (offset <= range.start) continue;
+    const slice = chunk.subarray(Math.max(0, range.start - chunkStart), Math.min(chunk.byteLength, range.end - chunkStart + 1));
+    audio.set(slice, written);
+    written += slice.byteLength;
+  }
+  if (written !== rangeLength) throw new Error("Stem range is incomplete");
+  return audio;
+}
+
 export default async function stemVaultAudioHandler(request) {
   if (!["GET", "HEAD"].includes(request.method)) return json({ message: "Method not allowed" }, 405);
   try {
@@ -30,14 +69,22 @@ export default async function stemVaultAudioHandler(request) {
     `;
     const stem = rows[0];
     if (!stem) return json({ message: "Private stem not found" }, 404);
+    const byteSize = Number(stem.byte_size);
+    const range = requestedByteRange(request.headers.get("range"), byteSize);
+    if (range === false) {
+      return new Response(null, { status: 416, headers: { "Accept-Ranges": "bytes", "Content-Range": `bytes */${byteSize}`, "Cache-Control": "private, no-store" } });
+    }
     const headers = {
       "Content-Type": stem.content_type,
-      "Content-Length": String(stem.byte_size),
+      "Content-Length": String(range ? range.end - range.start + 1 : byteSize),
       "Content-Disposition": `inline; filename="${stem.original_filename.replace(/["\\]/g, "")}"`,
+      "Accept-Ranges": "bytes",
       "Cache-Control": "private, no-store",
       "X-Content-Type-Options": "nosniff"
     };
-    if (request.method === "HEAD") return new Response(null, { headers });
+    if (range) headers["Content-Range"] = `bytes ${range.start}-${range.end}/${byteSize}`;
+    if (request.method === "HEAD") return new Response(null, { status: range ? 206 : 200, headers });
+    if (range) return new Response(await readStemRange(stem, range), { status: 206, headers });
     const audio = new ReadableStream({
       async start(controller) {
         try {

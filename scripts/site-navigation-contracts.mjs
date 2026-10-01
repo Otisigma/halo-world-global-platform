@@ -236,4 +236,37 @@ assert.ok(musicHeaderZ > playerBarZ, "the music header must stack above .halo-pl
 assert.ok(sharedNavZ > playerBarZ, ".main-header / .nav-drawer must stack above .halo-player-bar");
 assert.match(musicStyles, /\.halo-player-bar \{ position: fixed;/, "the floating player bar must stay fixed and functional");
 
+// --- Business Hub / Sovereign Label OS in the main site navigation -----------------------
+{
+  const { BUSINESS_HUB_ROUTE, MENU_ROUTE_REGISTRY, PUBLIC_ROUTE_REGISTRY } = await import("../lib/route-registry.js");
+  const [mainSite, netlifyConfig, serverSource] = await Promise.all([read("halo.html"), read("netlify.toml"), read("server.js")]);
+
+  assert.equal(BUSINESS_HUB_ROUTE, "/artist/dashboard");
+  const hubRoute = PUBLIC_ROUTE_REGISTRY.find(({ route }) => route === BUSINESS_HUB_ROUTE);
+  assert.ok(hubRoute, "the route registry must map /artist/dashboard");
+  assert.equal(hubRoute.file, "artist-economy/index.html", "/artist/dashboard must reuse the existing Artist Economy workspace");
+  assert.ok(MENU_ROUTE_REGISTRY.some(({ route, menuLabel }) => route === BUSINESS_HUB_ROUTE && menuLabel === "BUSINESS HUB"), "Business Hub must be a monitored main-menu route");
+  assert.match(netlifyConfig, /from = "\/artist\/dashboard"\s+to = "\/artist-economy\/index\.html"\s+status = 200/, "Netlify must render /artist/dashboard directly with a 200 rewrite");
+  assert.match(serverSource, /app\.get\("\/artist\/dashboard",[\s\S]*?path\.join\("artist-economy", "index\.html"\)/, "the local server must render /artist/dashboard");
+
+  const quickAccess = mainSite.match(/<section className="halo-menu-status-group halo-menu-status-group-working"[\s\S]*?<\/section>/)?.[0] || "";
+  assert.match(quickAccess, /<a href="\/artist\/dashboard" className="halo-menu-status-button halo-menu-business-hub"/, "BUSINESS HUB must be pinned in the 00 All working menu");
+  assert.match(quickAccess, /BUSINESS HUB/);
+  const buildLane = mainSite.match(/<section className="halo-menu-lane halo-menu-lane-build"[\s\S]*?<\/section>/)?.[0] || "";
+  assert.match(buildLane, /<a href="\/artist\/dashboard" className="halo-menu-business-hub"[^>]*data-signal="FINANCIAL OS"/, "the Build lane must lead with the highlighted Business Hub card");
+  assert.match(buildLane, /renderMenuStatusBadge\('\/artist\/dashboard', 'Business Hub'\)/);
+  assert.match(mainSite, /\{ route: '\/artist\/dashboard', label: 'BUSINESS HUB' \}/, "Business Hub must receive live menu status");
+  assert.match(mainSite, /MENU_FILE_BACKED_ROUTES = new Set\(\['\/artist\/dashboard'\]\)/, "menu status lookups must not append a slash to /artist/dashboard");
+
+  for (const route of ["/music/", "/radio/", "/artist-pro/", "/campaign-studio/", "/song-catalog/", "/finish-house/", "/magazine.html", "/support/"]) {
+    assert.match(mainSite, new RegExp(`<a href="${route.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}"`), `existing main-menu item ${route} must still render`);
+  }
+  assert.match(mainSite, /menuStatusGroupedTargets\.working\.map\(target =>/, "status-driven working items must still render");
+
+  assert.match(navigationStyles, /\.halo-menu-status-button\.halo-menu-business-hub,\s*\.halo-menu-lane > a\.halo-menu-business-hub \{[^}]*border: 1px solid rgba\(242, 255, 98, \.6\)/, "Business Hub needs the neon-gold border");
+  assert.match(navigationStyles, /a\.halo-menu-business-hub:hover[\s\S]*?border-color: #f2ff62;[\s\S]*?transform: translateY\(-2px\)/, "Business Hub needs the neon-gold hover state");
+  assert.match(navigationStyles, /a\.halo-menu-business-hub:focus-visible \{\s*outline: 2px solid #f2ff62/, "Business Hub needs a visible keyboard focus ring");
+  assert.match(navigationStyles, /prefers-reduced-motion[\s\S]*\.halo-menu-business-hub:hover/, "Business Hub hover lift must respect reduced motion");
+}
+
 console.log("Site navigation contracts passed.");

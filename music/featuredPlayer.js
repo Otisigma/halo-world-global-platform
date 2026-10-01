@@ -101,7 +101,7 @@
         <div class="featured-hero-actions">
           ${playAction}
           ${listenAction}
-          <button class="action tertiary" type="button" data-featured-vote="${escapeHtml(hero.id)}">Vote ▲</button>
+          <button class="action tertiary" type="button" data-featured-vote="${escapeHtml(hero.id)}" data-halo-guide="One vote per listener per day pushes this release up the Living Chart and toward #1 rotation." data-halo-guide-title="Vote">Vote ▲</button>
         </div>
         <p class="featured-hero-status" data-featured-hero-status role="status" aria-live="polite">${queue.length > 1 && playerReady ? "Press play and the chart keeps playing in order." : ""}</p>
       </div>

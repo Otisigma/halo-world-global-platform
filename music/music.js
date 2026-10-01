@@ -365,7 +365,7 @@
     const versionOptions = licensing.versions.length
       ? licensing.versions
       : [{ id: "master", label: "Master copy" }];
-    return `<section class="shop-licensing" aria-label="Version and licence selection" data-licensing-panel data-licensing-release="${escapeHtml(release.id)}">
+    return `<section class="shop-licensing" aria-label="Version and licence selection" data-halo-guide="Choose a version and licence tier. Commercial selections are sent to the artist team for approval before any rights are granted." data-halo-guide-title="Licensing" data-licensing-panel data-licensing-release="${escapeHtml(release.id)}">
       <span class="shop-eyebrow">Licensing</span>
       <div class="licensing-selects">
         <label>Version
@@ -527,9 +527,18 @@
     return [
       { label: "Release status", value: statusLabel },
       { label: "Chart", value: release.isChartEligible ? "Chart eligible" : "Listening only" },
-      { label: "ISRC", value: release.isrc || "Pending" },
+      release.isrc
+        ? { label: "ISRC", value: release.isrc, guide: "Official ISRC recording identifier for this release. Copy it for licensing, playlist pitches, or rights paperwork.", guideAction: "copy-isrc", isrc: release.isrc }
+        : { label: "ISRC", value: "Pending" },
       { label: "Support", value: release.purchaseUrl ? "Direct link live" : "Listen link live" }
     ];
+  }
+
+  function dossierItemMarkup(item) {
+    const guide = item.guide
+      ? ` tabindex="0" data-halo-guide="${escapeHtml(item.guide)}" data-halo-guide-title="${escapeHtml(item.label)}"${item.guideAction ? ` data-halo-guide-action="${escapeHtml(item.guideAction)}"` : ""}${item.isrc ? ` data-isrc="${escapeHtml(item.isrc)}"` : ""}`
+      : "";
+    return `<li${guide}><span>${escapeHtml(item.label)}</span><strong>${escapeHtml(item.value)}</strong></li>`;
   }
 
   function normalized(value) {
@@ -804,7 +813,10 @@
       const active = release.id === state.activeReleaseId;
       const artwork = releaseArtwork(release);
       const playButton = playTrackButton(release, { compact: true });
-      return `<div class="chart-entry${playButton ? " has-play" : ""}"><button class="chart-row${active ? " is-active" : ""}" type="button" data-chart-release="${escapeHtml(release.id)}" aria-pressed="${active}">
+      const chartGuide = playButton
+        ? ` data-halo-guide="Open #${index + 1} in the chart stage for artwork, story and movement — or quick listen without leaving the chart." data-halo-guide-title="Living Chart" data-halo-guide-action="quick-listen"`
+        : ` data-halo-guide="Open #${index + 1} in the chart stage for artwork, story, movement and the listening link." data-halo-guide-title="Living Chart"`;
+      return `<div class="chart-entry${playButton ? " has-play" : ""}" data-halo-guide-scope><button class="chart-row${active ? " is-active" : ""}" type="button" data-chart-release="${escapeHtml(release.id)}" aria-pressed="${active}"${chartGuide}>
         <span class="chart-position">${String(index + 1).padStart(2, "0")}</span>
         <span class="chart-art release-artwork-frame" data-artwork-frame><img class="release-artwork-image" src="${escapeHtml(artwork.src)}" alt="" loading="lazy" data-release-artwork data-artwork-fallback="${escapeHtml(artwork.fallback)}" ${artworkAttributes(artwork)}></span>
         <span class="chart-track"><strong>${escapeHtml(release.title)}</strong><small>${escapeHtml(release.artist)} · ${escapeHtml(release.genres[0] || "HALO")}</small></span>
@@ -919,7 +931,7 @@
         <span class="shop-eyebrow">Artist context</span>
         <strong>${escapeHtml(release.artist)}</strong>
         <p>${escapeHtml(artistContext)}</p>
-        <ul class="release-dossier">${dossier.map(item => `<li><span>${escapeHtml(item.label)}</span><strong>${escapeHtml(item.value)}</strong></li>`).join("")}</ul>
+        <ul class="release-dossier">${dossier.map(dossierItemMarkup).join("")}</ul>
         <div class="version-pill-row">${availableVersions.length ? availableVersions.map(version => `<span class="version-pill">${escapeHtml(version)}</span>`).join("") : '<span class="version-pill">Artist-controlled release path</span>'}</div>
         <div class="related-release-list">${related.length ? related.map(item => `<button class="related-release" type="button" data-select-release="${escapeHtml(item.id)}">${escapeHtml(item.title)}</button>`).join("") : '<a class="related-release related-release-link" href="/artists/">Browse HALO artist rooms</a>'}</div>
       </section>
@@ -936,7 +948,7 @@
       : `<span class="action primary" aria-disabled="true">Listen link unavailable</span>`;
     const buyHref = safeUrl(release.purchaseUrl || resolvedAudio(release).src || release.streamUrl);
     const buyAction = buyHref
-      ? `<a class="action buy" href="${escapeHtml(buyHref)}" target="_blank" rel="noopener" data-stat-event="buy_release" data-stat-target="${escapeHtml(release.id)}">${escapeHtml(buyActionLabel(release))} <span aria-hidden="true">↗</span></a>`
+      ? `<a class="action buy" href="${escapeHtml(buyHref)}" target="_blank" rel="noopener" data-halo-guide="Opens the artist-approved purchase or streaming destination in a new tab, so you keep your place in the HALO shop." data-halo-guide-title="Buy" data-stat-event="buy_release" data-stat-target="${escapeHtml(release.id)}">${escapeHtml(buyActionLabel(release))} <span aria-hidden="true">↗</span></a>`
       : "";
     if (!buyHref && release.isChartEligible) logMusicIssue("music_purchase_url_missing", "Music release missing buy/stream link", { releaseId: release.id, title: release.title });
     return `<div class="release-actions">
@@ -1023,9 +1035,12 @@
        ? "Song of the Week"
        : (release.featuredType === "month" ? "Song of the Month" : "Editorial pick");
      const cardDateLabel = release.releaseDate ? formatReleaseDate(release.releaseDate) : "";
-     return `<article class="release-card">
-      <div class="card-art release-artwork-frame" data-artwork-frame><img class="release-artwork-image" src="${escapeHtml(artwork.src)}" alt="${escapeHtml(`${release.title} cover artwork`)}" loading="lazy" width="900" height="900" data-release-artwork data-artwork-fallback="${escapeHtml(artwork.fallback)}" ${artworkAttributes(artwork)}><span class="card-number">${String(index + 1).padStart(2, "0")}</span></div>
-     <div class="card-copy"><p class="card-kicker"><span>${escapeHtml(cardKicker)}</span>${cardDateLabel ? `<span>${escapeHtml(cardDateLabel)}</span>` : ""}</p>${releaseMeta(release)}<h3>${escapeHtml(release.title)}</h3><p class="card-artist">${escapeHtml(release.artist)}</p><p class="card-availability">${escapeHtml(availability.badge)}</p><p class="card-pitch">${escapeHtml(releaseStoryline(release))}</p><ul class="card-facts">${dossier.map(item => `<li><span>${escapeHtml(item.label)}</span><strong>${escapeHtml(item.value)}</strong></li>`).join("")}</ul>${releaseActions(release, { includeSelect: true })}</div>
+     const cardGuide = trackStreamUrl(release)
+       ? ` data-halo-guide="Preview ${escapeHtml(release.title)} in the HALO player bar while you keep browsing." data-halo-guide-title="Quick listen" data-halo-guide-action="quick-listen"`
+       : "";
+     return `<article class="release-card" data-halo-guide-scope>
+      <div class="card-art release-artwork-frame" data-artwork-frame${cardGuide}><img class="release-artwork-image" src="${escapeHtml(artwork.src)}" alt="${escapeHtml(`${release.title} cover artwork`)}" loading="lazy" width="900" height="900" data-release-artwork data-artwork-fallback="${escapeHtml(artwork.fallback)}" ${artworkAttributes(artwork)}><span class="card-number">${String(index + 1).padStart(2, "0")}</span></div>
+     <div class="card-copy"><p class="card-kicker"><span>${escapeHtml(cardKicker)}</span>${cardDateLabel ? `<span>${escapeHtml(cardDateLabel)}</span>` : ""}</p>${releaseMeta(release)}<h3>${escapeHtml(release.title)}</h3><p class="card-artist">${escapeHtml(release.artist)}</p><p class="card-availability">${escapeHtml(availability.badge)}</p><p class="card-pitch">${escapeHtml(releaseStoryline(release))}</p><ul class="card-facts">${dossier.map(dossierItemMarkup).join("")}</ul>${releaseActions(release, { includeSelect: true })}</div>
     </article>`;
     }).join("");
     player.syncButtons(elements.grid);

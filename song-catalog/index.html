@@ -10,6 +10,7 @@
   <link rel="stylesheet" href="/accessibility.css">
   <link rel="stylesheet" href="/halo-brand.css">
   <link rel="stylesheet" href="/song-catalog/song-catalog.css">
+  <link rel="stylesheet" href="/halo-hud.css">
 </head>
 <body>
   <header class="catalog-header">
@@ -110,7 +111,7 @@
                 <label><span>Song title</span><input id="title" required maxlength="160"></label>
                 <label><span>Album / project</span><input id="albumTitle" maxlength="160"></label>
                 <label><span>Primary genre</span><input id="genre" maxlength="80"></label>
-                <label><span>ISRC</span><input id="isrc" maxlength="24" value="US-AAA-26-00001" placeholder="US-AAA-26-00001"></label>
+                <label data-halo-guide="ISRC is the official recording identifier (CC-XXX-YY-NNNNN). It follows the master into the shop, chart and licensing — check it before publishing." data-halo-guide-title="ISRC"><span>ISRC</span><input id="isrc" maxlength="24" value="US-AAA-26-00001" placeholder="US-AAA-26-00001"></label>
                 <label><span>UPC</span><input id="upc" maxlength="24"></label>
                 <label><span>Rights</span><select id="rightsStatus"><option value="needs_review">Needs review</option><option value="cleared">Cleared</option><option value="disputed">Disputed</option></select></label>
                 <label><span>Sale status</span><select id="saleStatus"><option value="for_sale">For sale</option><option value="coming_soon">Coming soon</option><option value="not_for_sale">Not for sale</option></select></label>
@@ -271,6 +272,7 @@
   <script src="/stats.js" defer></script>
   <script src="/site-monitor.js" defer></script>
   <script src="/accessibility.js" defer></script>
+  <script src="/halo-hud.js" defer></script>
   <script src="/release-artwork.js" defer></script>
   <script type="module" src="/identity.js"></script>
   <script src="/upload-progress.js" defer></script>

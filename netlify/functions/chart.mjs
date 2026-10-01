@@ -139,5 +139,5 @@ export default async function chartHandler(request, context) {
 }
 
 export const config = {
-  path: [CHART_PATH, VOTE_PATH]
+  path: ["/api/catalog/chart", "/api/catalog/vote"]
 };

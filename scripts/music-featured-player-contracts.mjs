@@ -78,7 +78,7 @@ assert.deepEqual(rankChartReleases([...serialized].reverse(), "signal").map(rele
 assert.ok(rankChartReleases([{ ...leader, status: "passed" }], "signal").length === 1, "passed must be treated as approved");
 
 // --- Chart API wiring -------------------------------------------------------------
-assert.match(chartApi, /path: \[CHART_PATH, VOTE_PATH\]/, "chart function must serve both chart routes");
+assert.match(chartApi, /path: \["\/api\/catalog\/chart", "\/api\/catalog\/vote"\]/, "chart function must declare both routes as string literals for Netlify static configuration parsing");
 assert.match(chartApi, /const CHART_PATH = "\/api\/catalog\/chart"/);
 assert.match(chartApi, /const VOTE_PATH = "\/api\/catalog\/vote"/);
 assert.match(chartApi, /FROM halo_release_campaigns release[\s\S]*WHERE release\.status = 'published'\s+AND release\.is_chart_eligible = TRUE/, "chart must only surface published, chart-eligible releases");

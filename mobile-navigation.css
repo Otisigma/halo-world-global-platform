@@ -349,6 +349,61 @@
   outline: none;
 }
 
+/* Business Hub / Sovereign Label OS: neon-gold accent separates financial tools from listening routes. */
+.halo-menu-status-button.halo-menu-business-hub,
+.halo-menu-lane > a.halo-menu-business-hub {
+  border: 1px solid rgba(242, 255, 98, .6);
+  background: linear-gradient(135deg, rgba(242, 255, 98, .08) 0%, rgba(10, 10, 10, .95) 100%);
+  box-shadow: 0 0 12px rgba(242, 255, 98, .15);
+}
+
+.halo-menu-status-button.halo-menu-business-hub {
+  grid-column: 1 / -1;
+  color: #f2ff62;
+}
+
+.halo-menu-business-hub .halo-menu-status-label small {
+  display: block;
+  margin-top: 2px;
+  color: rgba(242, 255, 98, .7);
+  font-size: 7px;
+  letter-spacing: .14em;
+}
+
+.halo-menu-lane > a.halo-menu-business-hub .halo-menu-icon { color: #f2ff62; }
+.halo-menu-lane > a.halo-menu-business-hub strong { color: #f8ffb8; }
+.halo-menu-lane > a.halo-menu-business-hub::after { color: rgba(242, 255, 98, .55); }
+
+.halo-menu-business-hub-badge {
+  display: inline-block;
+  margin-bottom: 3px;
+  padding: 1px 5px;
+  border: 1px solid rgba(242, 255, 98, .45);
+  border-radius: 999px;
+  color: #f2ff62;
+  font: 700 6px/1.4 "Share Tech Mono", ui-monospace, monospace;
+  font-style: normal;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+}
+
+.halo-menu-status-button.halo-menu-business-hub:hover,
+.halo-menu-status-button.halo-menu-business-hub:focus-visible,
+.halo-menu-lane > a.halo-menu-business-hub:hover,
+.halo-menu-lane > a.halo-menu-business-hub:focus-visible {
+  border-color: #f2ff62;
+  background: linear-gradient(135deg, rgba(242, 255, 98, .14) 0%, rgba(10, 10, 10, .95) 100%);
+  box-shadow: 0 0 20px rgba(242, 255, 98, .35);
+  transform: translateY(-2px);
+  transition: all .2s ease;
+}
+
+.halo-menu-status-button.halo-menu-business-hub:focus-visible,
+.halo-menu-lane > a.halo-menu-business-hub:focus-visible {
+  outline: 2px solid #f2ff62;
+  outline-offset: 2px;
+}
+
 .halo-menu-status-empty {
   margin: 0;
   color: #9c9588;
@@ -889,4 +944,6 @@
   .halo-menu-lane > button,
   .halo-menu-console,
   .halo-floating-action { transition: none !important; }
+  .halo-menu-business-hub:hover,
+  .halo-menu-business-hub:focus-visible { transform: none !important; }
 }

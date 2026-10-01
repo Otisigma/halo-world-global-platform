@@ -181,6 +181,14 @@ app.get("/control-center/", (_req, res) => {
   return res.redirect(301, "/control-center");
 });
 
+app.get("/artist/dashboard", (_req, res) => {
+  return sendFileIfPresent(res, path.join("artist-economy", "index.html"));
+});
+
+app.get("/artist/dashboard/", (_req, res) => {
+  return res.redirect(301, "/artist/dashboard");
+});
+
 app.get("/album-concierge", (_req, res) => {
   return res.redirect(301, "/album-concierge/");
 });

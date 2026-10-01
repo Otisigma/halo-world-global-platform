@@ -58,6 +58,11 @@
   [headers.values]
     X-Robots-Tag = "noindex, nofollow"
 
+[[headers]]
+  for = "/artist/dashboard*"
+  [headers.values]
+    X-Robots-Tag = "noindex, nofollow"
+
 [[redirects]]
   from = "/"
   to = "/halo"
@@ -114,6 +119,12 @@
 
 [[redirects]]
   from = "/artist-economy/"
+  to = "/artist-economy/index.html"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/artist/dashboard"
   to = "/artist-economy/index.html"
   status = 200
   force = true

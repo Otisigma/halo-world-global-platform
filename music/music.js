@@ -1036,7 +1036,7 @@
        : (release.featuredType === "month" ? "Song of the Month" : "Editorial pick");
      const cardDateLabel = release.releaseDate ? formatReleaseDate(release.releaseDate) : "";
      const cardGuide = trackStreamUrl(release)
-       ? ` data-halo-guide="Preview ${escapeHtml(release.title)} in the HALO player bar while you keep browsing." data-halo-guide-title="Quick listen" data-halo-guide-action="quick-listen"`
+       ? ` tabindex="0" data-halo-guide="Preview ${escapeHtml(release.title)} in the HALO player bar while you keep browsing." data-halo-guide-title="Quick listen" data-halo-guide-action="quick-listen"`
        : "";
      return `<article class="release-card" data-halo-guide-scope>
       <div class="card-art release-artwork-frame" data-artwork-frame${cardGuide}><img class="release-artwork-image" src="${escapeHtml(artwork.src)}" alt="${escapeHtml(`${release.title} cover artwork`)}" loading="lazy" width="900" height="900" data-release-artwork data-artwork-fallback="${escapeHtml(artwork.fallback)}" ${artworkAttributes(artwork)}><span class="card-number">${String(index + 1).padStart(2, "0")}</span></div>

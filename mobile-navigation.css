@@ -1,3 +1,14 @@
+/* Header & navigation drawer stack sits above floating UI such as .halo-player-bar. */
+:where(.main-header, .nav-drawer, #mainNav) {
+  position: relative;
+}
+
+.main-header,
+.nav-drawer,
+#mainNav {
+  z-index: 20000;
+}
+
 .halo-mobile-menu {
   position: relative;
   z-index: 10010;

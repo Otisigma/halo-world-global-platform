@@ -53,6 +53,8 @@ button, a { -webkit-tap-highlight-color: transparent; }
   justify-content: space-between;
   gap: 28px;
   border-bottom: 1px solid var(--line);
+  position: relative;
+  z-index: 60; /* keep header navigation above .halo-player-bar (z-index: 40) */
 }
 .brand { display: inline-flex; align-items: center; gap: 12px; text-decoration: none; }
 .brand-mark {

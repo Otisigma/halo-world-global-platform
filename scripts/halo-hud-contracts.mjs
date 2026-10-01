@@ -29,6 +29,9 @@ assert.match(featuredClient, /data-featured-vote="[^"]*"[^>]*data-halo-guide=/, 
 assert.match(featuredClient, /class="featured-hero-copy" data-halo-guide-scope/, "hero copy scopes quick-listen to the hero's own play button (not the up-next queue)");
 assert.match(featuredClient, /class="featured-hero-kicker" tabindex="0" data-halo-guide="[^"]+"[^>]*data-halo-guide-action="quick-listen"/, "chart leader kicker offers a focusable quick-listen guide");
 assert.match(styles, /\.halo-hud-card\.is-palette\s*\{[^}]*100vmax/, "quick guide dims the page as a spotlight");
+assert.match(styles, /\.halo-hud-search-input\s*\{/, "quick guide search field is styled");
+assert.match(styles, /\.halo-hud-jump\.is-active/, "keyboard-selected result is highlighted");
+assert.match(styles, /\.halo-hud-empty\s*\{/, "search empty state is styled");
 assert.ok(!/onclick\s*=/i.test(engine), "HUD never uses inline onclick strings");
 assert.ok(!/stopPropagation|stopImmediatePropagation/.test(engine), "HUD never swallows page clicks");
 assert.ok(!/\.innerHTML\s*=/.test(engine), "HUD builds DOM nodes instead of injecting HTML");
@@ -254,9 +257,23 @@ const key = (document, keyName, target = document.activeElement) => {
   const card = document.body.querySelector("#haloHud");
   assert.ok(card.classList.contains("is-palette"));
   assert.ok(card.querySelectorAll(".halo-hud-list-item").length >= 4, "quick guide lists site shortcuts");
-  assert.equal(document.activeElement, card.querySelector(".halo-hud-close"), "focus moves into the quick guide");
+  const search = card.querySelector("#haloHudSearch");
+  assert.equal(document.activeElement, search, "focus lands on the quick guide search field");
+  assert.equal(search.getAttribute("role"), "combobox", "search is exposed as a combobox");
+  assert.equal(card.querySelector(".halo-hud-search").hidden, false, "search row is shown in the quick guide");
   key(document, "?");
-  assert.equal(hud.isOpen(), false, "? toggles the quick guide closed");
+  assert.equal(hud.isOpen(), false, "? toggles the quick guide closed while the search is empty");
+
+  hud.openGuide();
+  search.value = "vote";
+  const typedInSearch = key(document, "?", search);
+  assert.equal(typedInSearch.defaultPrevented, false, "? is ordinary text once a search query has started");
+  assert.equal(hud.mode, "palette");
+  key(document, "Escape", search);
+  assert.equal(hud.isOpen(), false, "Escape closes the quick guide from the search field");
+  hud.show(guide(document, { "data-halo-guide": "Element guide." }));
+  assert.equal(card.querySelector(".halo-hud-search").hidden, true, "element guides never show the search field");
+  hud.hide();
 
   const input = guide(document, {}, document.body, "input");
   input.focus();
@@ -364,6 +381,123 @@ const key = (document, keyName, target = document.activeElement) => {
   hud.hide();
   hud.openGuide();
   assert.deepEqual(document.body.querySelector(".halo-hud-jumps").querySelectorAll(".halo-hud-jump").map(node => node.textContent), ["Chart rooms", "Vote", "Licensing"], "jump list is rebuilt from the live DOM on every open");
+}
+
+// 8. Quick guide search: filtering, HUD actions, keyboard navigation, activation and empty state
+{
+  const { document, flush, clipboard, hud } = createDocument();
+  const chartRooms = guide(document, { "data-halo-guide": "Chart rooms filter the Living Chart by genre.", "data-halo-guide-title": "Chart rooms" }, document.body, "div");
+  const sort = guide(document, { "data-halo-guide": "Signal score blends listens and momentum.", "data-halo-guide-title": "Signal sort" }, document.body, "div");
+  const vote = guide(document, { "data-halo-guide": "Vote for the leader.", "data-halo-guide-title": "Vote", "data-featured-vote": "rel-1" }, document.body, "button");
+  const licensing = guide(document, { "data-halo-guide": "Choose a licence tier.", "data-halo-guide-title": "Licensing", "data-licensing-panel": "" }, document.body, "section");
+  guide(document, { "data-halo-guide": "ISRC.", "data-halo-guide-title": "ISRC", "data-halo-guide-action": "copy-isrc", "data-isrc": "gb-xyz-26-00042" }, document.body, "span");
+  const play = guide(document, { "data-action": "play-track", "data-title": "Glass House" }, document.body, "button");
+  const hiddenPanel = guide(document, { hidden: "" }, document.body, "div");
+  guide(document, { "data-halo-vault-status": "" }, hiddenPanel, "div");
+  let plays = 0;
+  let votes = 0;
+  play.addEventListener("click", () => { plays += 1; });
+  vote.addEventListener("click", () => { votes += 1; });
+
+  key(document, "?", document.body);
+  const card = document.body.querySelector("#haloHud");
+  const search = card.querySelector("#haloHudSearch");
+  const labels = selector => card.querySelector(selector).querySelectorAll(".halo-hud-jump").map(node => node.textContent);
+  const type = text => { search.value = text; search.dispatchEvent({ type: "input" }); };
+  assert.equal(document.activeElement, search, "opening the overlay focuses the search input");
+  assert.deepEqual(labels(".halo-hud-jumps"), ["Chart rooms", "Signal sort", "Vote", "Licensing", "ISRC"], "empty search keeps the full jump list");
+  assert.deepEqual(labels(".halo-hud-commands"), ["Listen · Glass House", "Vote for the chart leader", "Copy ISRC GB-XYZ-26-00042", "Compare licence tiers"], "HUD actions are suggested only when available on the page");
+  assert.equal(card.querySelector(".halo-hud-list").hidden, false, "quick tips stay visible before searching");
+  assert.ok(card.classList.contains("is-palette"), "spotlight dimming is preserved while searching");
+
+  // Filtering: prefix, word-prefix, keyword and fuzzy matches.
+  type("cha");
+  assert.deepEqual(labels(".halo-hud-jumps"), ["Chart rooms"], "prefix matching filters page guides");
+  type("ch");
+  assert.equal(labels(".halo-hud-jumps")[0], "Chart rooms", "title prefix matches rank above guide-copy keyword matches");
+  assert.equal(card.querySelector(".halo-hud-list").hidden, true, "static tips collapse while a query is active");
+  type("tiers");
+  assert.deepEqual(labels(".halo-hud-commands"), ["Compare licence tiers"], "word-prefix matching finds HUD actions");
+  type("genre");
+  assert.deepEqual(labels(".halo-hud-jumps"), ["Chart rooms"], "guide copy acts as searchable keywords");
+  type("lcns");
+  assert.ok(labels(".halo-hud-jumps").includes("Licensing"), "basic fuzzy matching tolerates missing letters");
+  type("isrc");
+  assert.equal(labels(".halo-hud-jumps")[0], "ISRC");
+  assert.equal(labels(".halo-hud-commands")[0], "Copy ISRC GB-XYZ-26-00042");
+  assert.ok(!labels(".halo-hud-commands").some(label => /Vault/.test(label)), "hidden vault status is not offered");
+
+  // Keyboard navigation through combined results.
+  type("vote");
+  const options = card.querySelector("#haloHudResults").querySelectorAll(".halo-hud-jump");
+  assert.equal(options.length, 2, "page guide and HUD action both match 'vote'");
+  assert.equal(options[0].getAttribute("role"), "option");
+  assert.ok(options[0].classList.contains("is-active"), "first match is selected while typing");
+  assert.equal(search.getAttribute("aria-activedescendant"), options[0].id, "selection is announced via aria-activedescendant");
+  assert.equal(key(document, "ArrowDown", search).defaultPrevented, true, "ArrowDown is handled by the search");
+  assert.ok(options[1].classList.contains("is-active") && !options[0].classList.contains("is-active"), "ArrowDown moves the selection");
+  assert.equal(options[1].getAttribute("aria-selected"), "true");
+  key(document, "ArrowDown", search);
+  assert.ok(options[0].classList.contains("is-active"), "ArrowDown wraps to the first result");
+  key(document, "ArrowUp", search);
+  assert.ok(options[1].classList.contains("is-active"), "ArrowUp wraps to the last result");
+  assert.equal(document.activeElement, search, "focus stays in the search field while navigating");
+
+  // Enter activates the selected HUD action.
+  const enter = key(document, "Enter", search);
+  assert.equal(enter.defaultPrevented, true, "Enter is handled when a result is selected");
+  assert.equal(votes, 1, "Enter activates the selected vote action through the page's own button");
+  assert.equal(hud.isOpen(), false, "running a page action closes the spotlight");
+
+  // Enter on a page guide jumps to it.
+  hud.openGuide();
+  type("chart r");
+  key(document, "Enter", search);
+  assert.equal(hud.isOpen(), false);
+  flush();
+  assert.equal(hud.target, chartRooms, "Enter on a guide jumps to that guide");
+
+  // Listen reuses the page's play button.
+  hud.hide();
+  hud.openGuide();
+  type("listen");
+  const listenOption = card.querySelector(".halo-hud-commands").querySelector(".halo-hud-jump");
+  assert.ok(listenOption.classList.contains("is-active"), "the strongest match is preselected even when weaker guide matches render first");
+  key(document, "Enter", search);
+  assert.equal(plays, 1, "listen action clicks the page's play-track button");
+
+  // Copy ISRC keeps the spotlight open and confirms.
+  hud.openGuide();
+  type("copy");
+  key(document, "Enter", search);
+  await new Promise(resolveTick => setImmediate(resolveTick));
+  assert.deepEqual(clipboard, ["GB-XYZ-26-00042"], "copy ISRC action copies the normalized ISRC");
+  assert.match(card.querySelector(".halo-hud-status").textContent, /copied/);
+  assert.equal(hud.mode, "palette", "copy action keeps the quick guide open");
+
+  // Empty state.
+  type("zzqx");
+  const empty = card.querySelector(".halo-hud-empty");
+  assert.equal(empty.hidden, false, "no matches shows the empty state");
+  assert.match(empty.textContent, /No guides or actions match “zzqx”/);
+  assert.equal(card.querySelector("#haloHudResults").hidden, true, "results are hidden when nothing matches");
+  assert.equal(search.getAttribute("aria-expanded"), "false");
+  assert.equal(search.hasAttribute("aria-activedescendant"), false);
+  assert.equal(key(document, "Enter", search).defaultPrevented, false, "Enter does nothing without a selection");
+  assert.equal(hud.mode, "palette");
+  type("");
+  assert.equal(empty.hidden, true, "clearing the query removes the empty state");
+  assert.equal(search.hasAttribute("aria-activedescendant"), false, "nothing is preselected without a query");
+  key(document, "ArrowDown", search);
+  assert.ok(card.querySelector(".halo-hud-jumps").querySelector(".halo-hud-jump").classList.contains("is-active"), "ArrowDown selects the first result from an empty query");
+
+  // Reopening resets the search.
+  type("vote");
+  hud.hide();
+  hud.openGuide();
+  assert.equal(search.value, "", "reopening the quick guide starts with an empty search");
+  sort.remove();
+  licensing.remove();
 }
 
 // Engine is idempotent when loaded twice.

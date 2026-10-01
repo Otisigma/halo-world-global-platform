@@ -8,6 +8,9 @@
  *   play-track button (and therefore the shared window.HaloPlayer singleton).
  * - `?` toggles a global quick guide spotlight that also lists this page's titled guides
  *   (`data-halo-guide-title`) as jump targets; Escape or an outside click dismisses the HUD.
+ * - The quick guide has a search field that filters those jump targets plus the HUD actions
+ *   available on the page (listen, vote, copy ISRC, compare tiers, vault status via
+ *   `data-halo-vault-status`). Arrow keys move the selection, Enter activates it.
  * - `HaloHud.registerAction(name, factory)` adds future action variants;
  *   `HaloHud.computePlacement()` is the shared viewport-safe placement helper.
  *
@@ -24,6 +27,58 @@
   const PLAY_SELECTOR = '[data-action="play-track"]';
   const ISRC_PATTERN = /^[A-Z]{2}-?[A-Z0-9]{3}-?\d{2}-?\d{5}$/;
   const JUMP_LIMIT = 6;
+  const COMMANDS = [
+    {
+      id: "listen",
+      keywords: "listen play preview stream quick track",
+      find: () => findVisible(PLAY_SELECTOR, node => !node.disabled),
+      label: node => (attr(node, "data-title") ? `Listen · ${attr(node, "data-title")}` : "Listen"),
+      run: node => {
+        hide();
+        node.click();
+      }
+    },
+    {
+      id: "vote",
+      keywords: "vote signal +1 chart leader rotation",
+      find: () => findVisible("[data-featured-vote]", node => !node.disabled),
+      label: () => "Vote for the chart leader",
+      run: node => {
+        hide();
+        node.click();
+      }
+    },
+    {
+      id: "copy-isrc",
+      keywords: "copy isrc recording identifier code",
+      find: () => findVisible("[data-isrc]", node => normalizeIsrc(attr(node, "data-isrc"))),
+      label: node => `Copy ISRC ${normalizeIsrc(attr(node, "data-isrc"))}`,
+      run: async node => {
+        const isrc = normalizeIsrc(attr(node, "data-isrc"));
+        try {
+          await copyText(isrc);
+          setStatus(`ISRC ${isrc} copied.`);
+          window.haloStats?.track?.("halo_hud_copy_isrc", { target: isrc });
+        } catch {
+          setStatus(`Copy blocked — select ${isrc} manually.`);
+        }
+      }
+    },
+    {
+      id: "compare-tiers",
+      keywords: "compare tiers licence license licensing buy commercial sync personal",
+      find: () => findVisible("[data-licensing-panel]"),
+      label: () => "Compare licence tiers",
+      run: node => jumpTo(node)
+    },
+    {
+      id: "vault-status",
+      keywords: "vault status master upload drive stems",
+      find: () => findVisible("[data-halo-vault-status]"),
+      label: () => "Vault status",
+      run: node => jumpTo(node)
+    }
+  ];
   const QUICK_GUIDE = [
     ["Listen", "Press ▶ on any release or chart row to stream it in the HALO player bar while you keep browsing."],
     ["Vote", "Use Vote ▲ on the featured chart leader to push it up the Living Chart — one vote per listener per day."],
@@ -41,8 +96,13 @@
     mode: "closed",
     returnFocus: null,
     root: null,
-    parts: null
+    parts: null,
+    guides: [],
+    commands: [],
+    items: [],
+    active: -1
   };
+  let optionId = 0;
   const actions = new Map();
 
   function attr(element, name) {
@@ -93,16 +153,45 @@
     const list = el("ul", "halo-hud-list");
     list.hidden = true;
     const actionRow = el("div", "halo-hud-actions");
-    const jumps = el("nav", "halo-hud-jumps");
+    const searchRow = el("div", "halo-hud-search");
+    searchRow.hidden = true;
+    const search = el("input", "halo-hud-search-input");
+    search.id = "haloHudSearch";
+    search.setAttribute("type", "text");
+    search.setAttribute("role", "combobox");
+    search.setAttribute("aria-autocomplete", "list");
+    search.setAttribute("aria-controls", "haloHudResults");
+    search.setAttribute("aria-expanded", "false");
+    search.setAttribute("aria-label", "Search HALO guides and actions");
+    search.setAttribute("placeholder", "Search guides & actions…");
+    search.setAttribute("autocomplete", "off");
+    search.setAttribute("spellcheck", "false");
+    search.addEventListener("input", () => renderResults());
+    search.addEventListener("keydown", onSearchKey);
+    searchRow.append(search);
+    const results = el("div", "halo-hud-results");
+    results.id = "haloHudResults";
+    results.setAttribute("role", "listbox");
+    results.setAttribute("aria-label", "Quick guide results");
+    results.hidden = true;
+    const jumps = el("div", "halo-hud-jumps");
+    jumps.setAttribute("role", "group");
     jumps.setAttribute("aria-label", "Guides on this page");
     jumps.hidden = true;
+    const commands = el("div", "halo-hud-commands");
+    commands.setAttribute("role", "group");
+    commands.setAttribute("aria-label", "HUD actions");
+    commands.hidden = true;
+    results.append(jumps, commands);
+    const empty = el("p", "halo-hud-empty");
+    empty.hidden = true;
     const status = el("p", "halo-hud-status");
     status.setAttribute("role", "status");
     status.setAttribute("aria-live", "polite");
-    root.append(header, body, list, actionRow, jumps, status);
+    root.append(header, searchRow, body, list, actionRow, results, empty, status);
     document.body.append(root);
     state.root = root;
-    state.parts = { root, badge, close, body, list, actions: actionRow, jumps, status };
+    state.parts = { root, badge, close, body, list, actions: actionRow, searchRow, search, results, jumps, commands, empty, status };
     return state.parts;
   }
 
@@ -269,8 +358,7 @@
     parts.body.textContent = message;
     parts.list.hidden = true;
     parts.list.replaceChildren();
-    parts.jumps.hidden = true;
-    parts.jumps.replaceChildren();
+    resetSearch(parts);
     setStatus("");
     renderActions(target);
     const describedBy = attr(target, "aria-describedby");
@@ -286,10 +374,9 @@
     const seen = new Set();
     const found = [];
     for (const node of document.querySelectorAll?.(GUIDE_SELECTOR) || []) {
-      if (found.length >= JUMP_LIMIT) break;
       const title = attr(node, "data-halo-guide-title").trim();
       if (!title || seen.has(title) || node.isConnected === false) continue;
-      if (state.root?.contains(node) || closestFrom(node, "[hidden]")) continue;
+      if (!isVisible(node)) continue;
       seen.add(title);
       found.push([title, node]);
     }
@@ -310,14 +397,175 @@
     }, 0);
   }
 
-  function renderJumps() {
-    const { jumps } = state.parts;
-    const guides = pageGuides();
-    jumps.replaceChildren();
-    jumps.hidden = !guides.length;
-    if (!guides.length) return;
-    jumps.append(el("span", "halo-hud-jumps-label", "On this page"));
-    jumps.append(...guides.map(([title, target]) => button(title, "halo-hud-jump", () => jumpTo(target))));
+  function isVisible(node) {
+    return Boolean(node) && node.isConnected !== false && !state.root?.contains(node) && !closestFrom(node, "[hidden]");
+  }
+
+  function findVisible(selector, accept = () => true) {
+    for (const node of document.querySelectorAll?.(selector) || []) {
+      if (isVisible(node) && accept(node)) return node;
+    }
+    return null;
+  }
+
+  function availableCommands() {
+    const found = [];
+    for (const command of COMMANDS) {
+      const target = command.find();
+      if (target) found.push({ command, target, label: command.label(target) });
+    }
+    return found;
+  }
+
+  function normalize(value) {
+    return String(value || "").toLowerCase().replace(/\s+/g, " ").trim();
+  }
+
+  function wordsOf(text) {
+    return text.split(/[^a-z0-9+#]+/).filter(Boolean);
+  }
+
+  function isSubsequence(query, text) {
+    let index = 0;
+    for (const char of text) {
+      if (char === query[index]) index += 1;
+      if (index === query.length) return true;
+    }
+    return false;
+  }
+
+  // Ranks a candidate: 4 = label prefix, 3 = word prefixes, 2 = substring, 1 = keyword or fuzzy hit, 0 = no match.
+  function matchScore(query, label, extra = "") {
+    if (!query) return 1;
+    const text = normalize(label);
+    if (text.startsWith(query)) return 4;
+    const words = wordsOf(text);
+    const tokens = query.split(" ");
+    const prefixed = pool => tokens.every(token => pool.some(word => word.startsWith(token)));
+    if (prefixed(words)) return 3;
+    if (text.includes(query)) return 2;
+    if (prefixed(words.concat(wordsOf(normalize(extra))))) return 1;
+    return query.length >= 2 && isSubsequence(query.replace(/ /g, ""), text.replace(/ /g, "")) ? 1 : 0;
+  }
+
+  function rank(entries, query) {
+    return entries
+      .map((entry, index) => ({ entry, index, score: matchScore(query, entry.label, entry.extra) }))
+      .filter(item => item.score > 0)
+      .sort((a, b) => b.score - a.score || a.index - b.index)
+      .slice(0, JUMP_LIMIT)
+      .map(({ entry, score }) => ({ ...entry, score }));
+  }
+
+  function option(label, className, onClick) {
+    const node = button(label, className, onClick);
+    optionId += 1;
+    node.id = `haloHudOption${optionId}`;
+    node.setAttribute("role", "option");
+    node.setAttribute("tabindex", "-1");
+    node.setAttribute("aria-selected", "false");
+    return node;
+  }
+
+  function renderGroup(container, heading, entries) {
+    container.replaceChildren();
+    container.hidden = !entries.length;
+    if (!entries.length) return [];
+    const label = el("span", "halo-hud-jumps-label", heading);
+    label.setAttribute("aria-hidden", "true");
+    const buttons = entries.map(entry => entry.render());
+    container.append(label, ...buttons);
+    return buttons;
+  }
+
+  function renderResults() {
+    const parts = state.parts;
+    const raw = String(parts.search.value || "");
+    const query = normalize(raw);
+    const guides = rank(state.guides.map(([title, target]) => ({
+      label: title,
+      extra: attr(target, "data-halo-guide"),
+      render: () => option(title, "halo-hud-jump", () => jumpTo(target))
+    })), query);
+    const commands = rank(state.commands.map(({ command, target, label }) => ({
+      label,
+      extra: command.keywords,
+      render: () => option(label, "halo-hud-jump halo-hud-command", () => runCommand(command, target))
+    })), query);
+    const items = [
+      ...renderGroup(parts.jumps, "On this page", guides),
+      ...renderGroup(parts.commands, "HUD actions", commands)
+    ];
+    const scores = guides.concat(commands).map(entry => entry.score);
+    state.items = items;
+    parts.results.hidden = !items.length;
+    parts.search.setAttribute("aria-expanded", String(items.length > 0));
+    parts.list.hidden = Boolean(query);
+    parts.empty.hidden = !(query && !items.length);
+    parts.empty.textContent = parts.empty.hidden ? "" : `No guides or actions match “${raw.trim()}”. Try listen, vote, ISRC or licence.`;
+    // Preselect the strongest match across both groups so Enter runs what the user most likely meant.
+    state.active = query && items.length ? scores.indexOf(Math.max(...scores)) : -1;
+    updateActive();
+  }
+
+  function updateActive() {
+    const { search } = state.parts;
+    state.items.forEach((item, index) => {
+      const on = index === state.active;
+      item.classList.toggle("is-active", on);
+      item.setAttribute("aria-selected", String(on));
+    });
+    const current = state.items[state.active];
+    if (current) {
+      search.setAttribute("aria-activedescendant", current.id);
+      current.scrollIntoView?.({ block: "nearest" });
+    } else {
+      search.removeAttribute("aria-activedescendant");
+    }
+  }
+
+  function onSearchKey(event) {
+    if (event.isComposing) return;
+    const count = state.items.length;
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      event.preventDefault();
+      if (!count) return;
+      const step = event.key === "ArrowDown" ? 1 : -1;
+      state.active = state.active < 0 ? (step > 0 ? 0 : count - 1) : (state.active + step + count) % count;
+      updateActive();
+    } else if (event.key === "Enter") {
+      const current = state.items[state.active];
+      if (!current) return;
+      event.preventDefault();
+      current.click();
+    }
+  }
+
+  function runCommand(command, target) {
+    if (!target || target.isConnected === false) {
+      setStatus("That action is no longer available — the page was refreshed.");
+      return;
+    }
+    window.haloStats?.track?.("halo_hud_command", { target: command.id });
+    command.run(target);
+  }
+
+  function resetSearch(parts) {
+    parts.search.value = "";
+    parts.search.removeAttribute("aria-activedescendant");
+    parts.search.setAttribute("aria-expanded", "false");
+    parts.searchRow.hidden = true;
+    parts.results.hidden = true;
+    parts.jumps.hidden = true;
+    parts.jumps.replaceChildren();
+    parts.commands.hidden = true;
+    parts.commands.replaceChildren();
+    parts.empty.hidden = true;
+    parts.empty.textContent = "";
+    state.guides = [];
+    state.commands = [];
+    state.items = [];
+    state.active = -1;
   }
 
   function detachDescription() {
@@ -345,10 +593,14 @@
     parts.list.hidden = false;
     parts.actions.replaceChildren();
     parts.actions.hidden = true;
-    renderJumps();
+    resetSearch(parts);
+    parts.searchRow.hidden = false;
+    state.guides = pageGuides();
+    state.commands = availableCommands();
+    renderResults();
     setStatus("");
     open("palette");
-    parts.close.focus?.();
+    parts.search.focus?.();
     window.haloStats?.track?.("halo_hud_quick_guide", { target: window.location?.pathname || "" });
   }
 
@@ -410,7 +662,9 @@
     }
     if (event.key !== "?" || event.ctrlKey || event.metaKey || event.altKey || event.defaultPrevented) return;
     const active = document.activeElement;
-    if (isEditable(active) || isEditable(event.target)) return;
+    // An empty quick-guide search keeps `?` as the spotlight toggle; once typing starts it is just text.
+    const emptySearch = state.mode === "palette" && active === state.parts?.search && !active.value;
+    if (!emptySearch && (isEditable(active) || isEditable(event.target))) return;
     event.preventDefault();
     const focusedGuide = closestFrom(active, GUIDE_SELECTOR);
     if (focusedGuide && state.mode === "guide" && state.target === focusedGuide) {

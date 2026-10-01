@@ -76,7 +76,7 @@ assert.doesNotMatch(musicWorld, /createBufferSource|WEB AUDIO SYNTH LOCKED/, "mu
 assert.match(musicWorld, /const REMOTE_AUDIO_WATCHDOG_MS=5000;[\s\S]*function armRemoteAudioWatchdog\(\)\{[\s\S]*readyState<HTMLMediaElement\.HAVE_CURRENT_DATA\)handleStreamUnavailable\(\)/, "music world must guard remote streams with a readiness watchdog");
 assert.match(musicWorld, /el\.addEventListener\('error',[\s\S]*handleStreamUnavailable\(\)/, "music world must turn audio element errors into a friendly standby state");
 assert.match(musicWorld, /audioSourceMode==='unavailable'\|\|!track\?\.previewUrl\)\)\{[\s\S]*openMixFilePicker\(\);return\}/, "music world PLAY STREAM must open the file picker when the stream is unavailable");
-assert.match(musicWorld, /localAudioUrl=URL\.createObjectURL\(file\)[\s\S]*audioSourceMode='local';el\.src=localAudioUrl;el\.load\(\)/, "music world must bind uploaded local mixes to the player through a blob URL");
+assert.match(musicWorld, /safeBlobMediaUrl\(URL\.createObjectURL\(file\)\)[\s\S]*audioSourceMode='local';el\.src=localAudioUrl;el\.load\(\)/, "music world must bind uploaded local mixes to the player through a blob URL");
 assert.match(musicWorld, /'LOCAL ACTIVE'/, "music world must surface LOCAL ACTIVE while a local mix is loaded");
 assert.match(musicWorld, /if\(document\.readyState==='loading'\)document\.addEventListener\('DOMContentLoaded',bindPlayerControls,\{once:true\}\);else bindPlayerControls\(\);/, "music world player controls must bind once after DOMContentLoaded");
 assert.match(musicWorld, /const storefrontStatus=\(value,\{hasStream=false,hasDestination=false\}=\{\}\)=>/, "music world storefront status must depend on stream and destination usability");

@@ -28,6 +28,12 @@ assert.match(shopClient, /class="shop-licensing"[^>]*data-halo-guide=/, "licensi
 assert.match(featuredClient, /data-featured-vote="[^"]*"[^>]*data-halo-guide=/, "vote button carries guidance");
 assert.match(featuredClient, /class="featured-hero-copy" data-halo-guide-scope/, "hero copy scopes quick-listen to the hero's own play button (not the up-next queue)");
 assert.match(featuredClient, /class="featured-hero-kicker" tabindex="0" data-halo-guide="[^"]+"[^>]*data-halo-guide-action="quick-listen"/, "chart leader kicker offers a focusable quick-listen guide");
+assert.match(engine, /"HALO GUID"/, "the guidance card uses Halo Guid branding");
+assert.match(engine, /Dismiss Halo Guid/, "the close control has a Halo Guid accessible name");
+assert.match(engine, /Search Halo Guid and page actions/, "the spotlight search has a Halo Guid accessible name");
+assert.match(engine, /HALO GUID · QUICK GUIDE/, "the quick-guide spotlight carries Halo Guid branding");
+assert.doesNotMatch(engine, /\btooltips?\b|\bhover[- ]tips?\b/i, "guidance UI copy no longer uses tooltip wording");
+assert.match(engine, /window\.HaloGuid = api;\s*window\.HaloHud = api;/, "the branded API retains the legacy HUD alias");
 assert.match(styles, /\.halo-hud-card\.is-palette\s*\{[^}]*100vmax/, "quick guide dims the page as a spotlight");
 assert.match(styles, /\.halo-hud-search-input\s*\{/, "quick guide search field is styled");
 assert.match(styles, /\.halo-hud-jump\.is-active/, "keyboard-selected result is highlighted");
@@ -176,8 +182,9 @@ const key = (document, keyName, target = document.activeElement) => {
 
 // 1. Activation via data-halo-guide after hesitation
 {
-  const { document, flush, timers, hud } = createDocument();
+  const { document, window, flush, timers, hud } = createDocument();
   assert.equal(typeof hud?.show, "function", "engine exposes window.HaloHud");
+  assert.equal(window.HaloGuid, hud, "engine exposes the branded Halo Guid API");
   const target = guide(document, { "data-halo-guide": "Commercial licensing is approval-gated." });
   hover(target);
   assert.equal(timers.size, 1, "hover starts a hesitation timer");
@@ -188,6 +195,7 @@ const key = (document, keyName, target = document.activeElement) => {
   assert.equal(hud.mode, "guide");
   const card = document.body.querySelector("#haloHud");
   assert.ok(card?.classList.contains("is-visible"), "HUD card is visible");
+  assert.match(card.querySelector(".halo-hud-badge").textContent, /^HALO GUID/, "opened element guidance displays Halo Guid branding");
   assert.equal(card.getAttribute("aria-hidden"), "false");
   assert.equal(document.body.querySelector("#haloHudText").textContent, "Commercial licensing is approval-gated.");
   assert.match(target.getAttribute("aria-describedby"), /haloHudText/, "target is described by the HUD for assistive tech");
@@ -255,6 +263,7 @@ const key = (document, keyName, target = document.activeElement) => {
   assert.equal(event.defaultPrevented, true, "? is handled");
   assert.equal(hud.mode, "palette", "? opens the global quick guide");
   const card = document.body.querySelector("#haloHud");
+  assert.match(card.querySelector(".halo-hud-badge").textContent, /^HALO GUID/, "? spotlight displays Halo Guid branding");
   assert.ok(card.classList.contains("is-palette"));
   assert.ok(card.querySelectorAll(".halo-hud-list-item").length >= 4, "quick guide lists site shortcuts");
   const search = card.querySelector("#haloHudSearch");

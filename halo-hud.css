@@ -150,7 +150,58 @@
   border-top: 1px solid rgba(235, 196, 112, 0.18);
 }
 
-.halo-hud-jumps[hidden] { display: none; }
+.halo-hud-jumps[hidden],
+.halo-hud-commands[hidden],
+.halo-hud-results[hidden],
+.halo-hud-search[hidden],
+.halo-hud-empty[hidden] { display: none; }
+
+.halo-hud-search { margin: 0 0 10px; }
+
+.halo-hud-search-input {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 9px 12px;
+  color: #f4f1e6;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(235, 196, 112, 0.3);
+  border-radius: 6px;
+  font: 500 13px/1.4 "Manrope", system-ui, sans-serif;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.halo-hud-search-input::placeholder { color: #7f877f; }
+
+.halo-hud-search-input:focus {
+  outline: none;
+  border-color: rgba(94, 234, 255, 0.65);
+  box-shadow: 0 0 0 1px rgba(94, 234, 255, 0.35), 0 0 16px rgba(94, 234, 255, 0.18);
+}
+
+.halo-hud-results { display: grid; gap: 0; }
+
+.halo-hud-commands {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.halo-hud-command {
+  color: #5eeaff;
+  background: rgba(94, 234, 255, 0.06);
+  border-color: rgba(94, 234, 255, 0.36);
+}
+
+.halo-hud-jump.is-active {
+  color: #090b0a;
+  background: #f2ff62;
+  border-color: #f2ff62;
+  box-shadow: 0 0 14px rgba(242, 255, 98, 0.35);
+}
+
+.halo-hud-empty { margin: 4px 0 0; color: #9da69d; font-size: 12px; }
 
 .halo-hud-jumps-label {
   flex-basis: 100%;
@@ -208,5 +259,6 @@
 @media (prefers-reduced-motion: reduce) {
   .halo-hud-card,
   .halo-hud-btn,
-  .halo-hud-jump { transition: none; }
+  .halo-hud-jump,
+  .halo-hud-search-input { transition: none; }
 }

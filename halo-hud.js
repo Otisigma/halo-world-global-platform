@@ -1,18 +1,18 @@
 /**
- * HALO Autonomous HUD & Proactive Guide Engine
+ * Halo Guid — HALO's proactive guidance layer
  *
  * Additive, sitewide guidance layer:
  * - `data-halo-guide="…"` on any element shows a floating guide after hover/focus hesitation.
  * - `data-halo-guide-action="copy-isrc"` (with `data-isrc`) adds a copy-to-clipboard action.
  * - `data-halo-guide-action="quick-listen"` adds a preview action that reuses the page's own
  *   play-track button (and therefore the shared window.HaloPlayer singleton).
- * - `?` toggles a global quick guide spotlight that also lists this page's titled guides
+ * - `?` toggles the Halo Guid quick-guide spotlight that also lists this page's titled guides
  *   (`data-halo-guide-title`) as jump targets; Escape or an outside click dismisses the HUD.
  * - The quick guide has a search field that filters those jump targets plus the HUD actions
  *   available on the page (listen, vote, copy ISRC, compare tiers, vault status via
  *   `data-halo-vault-status`). Arrow keys move the selection, Enter activates it.
- * - `HaloHud.registerAction(name, factory)` adds future action variants;
- *   `HaloHud.computePlacement()` is the shared viewport-safe placement helper.
+ * - `HaloGuid.registerAction(name, factory)` adds future action variants;
+ *   `HaloGuid.computePlacement()` is the shared viewport-safe placement helper.
  *
  * All listeners are delegated at document level, so late-loaded and re-rendered content
  * (innerHTML swaps) is covered without re-binding. The engine never cancels or halts
@@ -20,7 +20,12 @@
  */
 (() => {
   "use strict";
-  if (window.HaloHud) return;
+  if (window.HaloGuid || window.HaloHud) {
+    const existing = window.HaloGuid || window.HaloHud;
+    window.HaloGuid = existing;
+    window.HaloHud = existing;
+    return;
+  }
 
   const GUIDE_SELECTOR = "[data-halo-guide]";
   const SCOPE_SELECTOR = "[data-halo-guide-scope]";
@@ -83,8 +88,8 @@
     ["Listen", "Press ▶ on any release or chart row to stream it in the HALO player bar while you keep browsing."],
     ["Vote", "Use Vote ▲ on the featured chart leader to push it up the Living Chart — one vote per listener per day."],
     ["Buy & license", "Buy links open the artist-approved destination. Licence selections are approval-gated by the artist team."],
-    ["ISRC", "Hover or focus an ISRC to copy the official recording identifier in one click."],
-    ["Guides", "Hover or focus anything marked for guidance and pause — HALO explains it. Press ? on a focused guide to reach its actions."],
+    ["ISRC", "Pause on or focus an ISRC to copy the official recording identifier in one click."],
+    ["Halo Guid", "Pause on an element marked for Halo Guid to see its guidance. Press ? while focused to open its available action."],
     ["Dismiss", "Press Escape or click anywhere outside the HUD to close it."]
   ];
 
@@ -143,10 +148,10 @@
     root.setAttribute("aria-hidden", "true");
     root.hidden = true;
     const header = el("div", "halo-hud-header");
-    const badge = el("span", "halo-hud-badge", "HALO GUIDE");
+    const badge = el("span", "halo-hud-badge", "HALO GUID");
     badge.id = "haloHudBadge";
     const close = button("×", "halo-hud-close", () => hide({ restoreFocus: true }));
-    close.setAttribute("aria-label", "Dismiss HALO guide");
+    close.setAttribute("aria-label", "Dismiss Halo Guid");
     header.append(badge, close);
     const body = el("p", "halo-hud-body");
     body.id = "haloHudText";
@@ -162,8 +167,8 @@
     search.setAttribute("aria-autocomplete", "list");
     search.setAttribute("aria-controls", "haloHudResults");
     search.setAttribute("aria-expanded", "false");
-    search.setAttribute("aria-label", "Search HALO guides and actions");
-    search.setAttribute("placeholder", "Search guides & actions…");
+    search.setAttribute("aria-label", "Search Halo Guid and page actions");
+    search.setAttribute("placeholder", "Search Halo Guid & actions…");
     search.setAttribute("autocomplete", "off");
     search.setAttribute("spellcheck", "false");
     search.addEventListener("input", () => renderResults());
@@ -172,7 +177,7 @@
     const results = el("div", "halo-hud-results");
     results.id = "haloHudResults";
     results.setAttribute("role", "listbox");
-    results.setAttribute("aria-label", "Quick guide results");
+    results.setAttribute("aria-label", "Halo Guid results");
     results.hidden = true;
     const jumps = el("div", "halo-hud-jumps");
     jumps.setAttribute("role", "group");
@@ -180,7 +185,7 @@
     jumps.hidden = true;
     const commands = el("div", "halo-hud-commands");
     commands.setAttribute("role", "group");
-    commands.setAttribute("aria-label", "HUD actions");
+    commands.setAttribute("aria-label", "Halo Guid actions");
     commands.hidden = true;
     results.append(jumps, commands);
     const empty = el("p", "halo-hud-empty");
@@ -354,7 +359,8 @@
     clearPending();
     detachDescription();
     state.target = target;
-    parts.badge.textContent = attr(target, "data-halo-guide-title") || "HALO GUIDE";
+    const title = attr(target, "data-halo-guide-title").trim();
+    parts.badge.textContent = title ? `HALO GUID · ${title}` : "HALO GUID";
     parts.body.textContent = message;
     parts.list.hidden = true;
     parts.list.replaceChildren();
@@ -494,7 +500,7 @@
     })), query);
     const items = [
       ...renderGroup(parts.jumps, "On this page", guides),
-      ...renderGroup(parts.commands, "HUD actions", commands)
+      ...renderGroup(parts.commands, "Halo Guid actions", commands)
     ];
     const scores = guides.concat(commands).map(entry => entry.score);
     state.items = items;
@@ -583,8 +589,8 @@
     detachDescription();
     state.returnFocus = document.activeElement && document.activeElement !== document.body ? document.activeElement : null;
     state.target = null;
-    parts.badge.textContent = "HALO QUICK GUIDE";
-    parts.body.textContent = "Your HALO concierge. Here's how to move around this page:";
+    parts.badge.textContent = "HALO GUID · QUICK GUIDE";
+    parts.body.textContent = "Halo Guid is your on-page concierge. Here's how to move around this page:";
     parts.list.replaceChildren(...QUICK_GUIDE.map(([label, copy]) => {
       const item = el("li", "halo-hud-list-item");
       item.append(el("strong", "", label), el("span", "", copy));
@@ -702,7 +708,7 @@
     }).observe(document.documentElement || document.body, { childList: true, subtree: true });
   }
 
-  window.HaloHud = {
+  const api = {
     show,
     hide,
     openGuide,
@@ -720,4 +726,6 @@
       if (Number.isFinite(delay) && delay >= 0) state.hesitationDelay = delay;
     }
   };
+  window.HaloGuid = api;
+  window.HaloHud = api;
 })();

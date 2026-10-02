@@ -7,6 +7,7 @@ import {
   DRIVE_MASTER_MAX_BYTES,
   DRIVE_UPLOAD_CHUNK_BYTES,
   buildServiceAccountAssertion,
+  cleanGoogleDriveUrl,
   createResumableUploadSession,
   googleDriveConfig,
   isGoogleUploadUrl,
@@ -16,7 +17,7 @@ import {
 
 const root = resolve(import.meta.dirname, "..");
 const read = path => readFile(resolve(root, path), "utf8");
-const [uploaderSource, uiSource, sessionApi, catalogApi, page, schema, migration, packageText, envExample] = await Promise.all([
+const [uploaderSource, uiSource, sessionApi, catalogApi, page, schema, migration, packageText, envExample, songCatalogApi, songCatalogClient, songCatalogStyles, driveUrlMigration] = await Promise.all([
   read("public/js/chunkedUploader.js"),
   read("public/js/uploadUI.js"),
   read("netlify/functions/upload.mjs"),
@@ -26,6 +27,10 @@ const [uploaderSource, uiSource, sessionApi, catalogApi, page, schema, migration
   read("netlify/database/migrations/20260929200000_add_song_version_drive_master.sql"),
   read("package.json"),
   read(".env.example"),
+  read("netlify/functions/song-catalog.ts"),
+  read("song-catalog/song-catalog.js"),
+  read("song-catalog/song-catalog.css"),
+  read("netlify/database/migrations/20261002040000_add_song_version_drive_url.sql"),
 ]);
 
 // ── Backend: service account config, JWT, session + verification ─────────────
@@ -81,6 +86,17 @@ assert.equal(verifyDriveMasterFile({ ...goodFile, trashed: true }, scope).status
 assert.equal(verifyDriveMasterFile({ ...goodFile, parents: ["other"] }, scope).status, 403);
 assert.equal(verifyDriveMasterFile({ ...goodFile, appProperties: { haloOwnerMemberId: "member-2", haloSongId: "song-1" } }, scope).status, 403);
 assert.equal(verifyDriveMasterFile({ ...goodFile, size: "99" }, scope).status, 409);
+
+// ── Direct Google Drive master link (no API credentials) ──────────────────────
+const shareLink = "https://drive.google.com/file/d/1A2b3C4d5E6f7G8h9/view?usp=sharing";
+assert.equal(cleanGoogleDriveUrl(`  ${shareLink}  `), shareLink, "shareable Drive links are accepted and trimmed");
+assert.equal(cleanGoogleDriveUrl("https://docs.google.com/uc?export=download&id=1A2b3C4d5E6f7G8h9"), "https://docs.google.com/uc?export=download&id=1A2b3C4d5E6f7G8h9");
+assert.equal(cleanGoogleDriveUrl(""), "", "an empty link clears the stored master link");
+assert.equal(cleanGoogleDriveUrl("http://drive.google.com/file/d/abc/view"), "", "plain http links are rejected");
+assert.equal(cleanGoogleDriveUrl("https://drive.google.com.evil.example/file/d/abc/view"), "", "look-alike hosts are rejected");
+assert.equal(cleanGoogleDriveUrl(`https://${"user"}@drive.google.com/file/d/abc/view`), "", "credentialed links are rejected");
+assert.equal(cleanGoogleDriveUrl("javascript:alert(1)"), "", "script URLs are rejected");
+assert.equal(cleanGoogleDriveUrl("not a url"), "");
 
 // ── Frontend: chunked uploader against a simulated Drive resumable endpoint ───
 function runUploader(script) {
@@ -228,6 +244,11 @@ const checks = [
   [page.indexOf('src="/public/js/chunkedUploader.js" defer') > 0 && page.indexOf('src="/public/js/chunkedUploader.js" defer') < page.indexOf('src="/public/js/uploadUI.js" defer'), "uploader script loads before the UI wiring"],
   [schema.includes('driveFileId: text("drive_file_id")') && migration.includes("ADD COLUMN IF NOT EXISTS drive_file_id"), "Drive master reference columns are migrated"],
   [envExample.includes("GOOGLE_DRIVE_MASTERS_FOLDER_ID") && envExample.includes("GOOGLE_SERVICE_ACCOUNT_JSON"), "Drive configuration is documented"],
+  [page.includes('id="driveLinkPanel"') && page.includes('id="googleDriveUrl" name="googleDriveUrl" form="songForm" type="url"') && page.includes('id="saveDriveUrlButton" form="songForm" type="submit"') && page.includes('id="googleDrivePreviewLink"') && page.includes('rel="noopener noreferrer"') && page.indexOf('id="driveLinkPanel"') < page.indexOf('id="songForm"'), "song editor renders the Google Drive master link input, save action, and preview link"],
+  [songCatalogClient.includes('action:"save_song",googleDriveUrl,') && songCatalogClient.includes('setValue("#googleDriveUrl",song.googleDriveUrl)') && songCatalogClient.includes("function driveLinkHref(") && songCatalogClient.includes("Link saved ✓") && songCatalogClient.includes('$("#googleDriveUrl").addEventListener("input",renderDriveLink)'), "song editor saves googleDriveUrl with the song record and previews only Drive links"],
+  [songCatalogApi.includes("cleanGoogleDriveUrl(payload.googleDriveUrl)") && songCatalogApi.includes('googleDriveUrl: canonicalMaster?.driveUrl || ""') && songCatalogApi.includes("set({ driveUrl: googleDriveUrl") && songCatalogApi.includes("eq(songVersions.versionType, MASTER_VERSION_TYPE)"), "save_song persists googleDriveUrl on the canonical sale master and returns it with the song"],
+  [schema.includes('driveUrl: text("drive_url")') && driveUrlMigration.includes("ADD COLUMN IF NOT EXISTS drive_url"), "Drive master link column is migrated idempotently"],
+  [songCatalogStyles.includes(".drive-link-panel{background:#111") && songCatalogStyles.includes("#d4af37"), "Drive master link keeps the gold-on-black archive styling"],
   [JSON.parse(packageText).scripts["upload-experience:watchdog"].includes("scripts/drive-master-upload-contracts.mjs"), "Drive master contracts run in the upload watchdog"],
 ];
 const failures = checks.filter(([ok]) => !ok).map(([, label]) => label);

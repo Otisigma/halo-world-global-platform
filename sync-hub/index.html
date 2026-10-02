@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0a0a0a">
+  <title>HALO Business Hub — Sync Licensing</title>
+  <meta name="description" content="Explore the HALO sync catalog, select stems, and prepare a licensing inquiry.">
+  <link rel="icon" href="/assets/halo-app-icon-192.png" type="image/png">
+  <link rel="stylesheet" href="/halo-brand.css">
+  <link rel="stylesheet" href="/sync-hub/sync-hub.css">
+  <script src="/sync-hub/sync-hub.js" defer></script>
+</head>
+<body>
+  <main class="hub">
+    <nav aria-label="HALO navigation"><a href="/halo">← HALO World</a><a href="/music/">Music catalog</a></nav>
+    <header class="intro">
+      <div class="badges"><span class="badge-gold">ONE-STOP CLEARANCE</span><span class="badge-dark">24-HOUR TURNAROUND</span></div>
+      <h1>HALO BUSINESS HUB</h1>
+      <p class="subtitle">100% master &amp; publishing cleared music for film, television, gaming, and commercial media.</p>
+      <div class="guarantee">
+        <h2>⚡ Direct clearance</h2>
+        <p>HALO presents these recordings for direct sync discussions with Owen Anthony. Master and publishing rights are subject to confirmation for each use; no license is granted until written approval. We aim to respond to inquiries within 24 hours.</p>
+      </div>
+    </header>
+    <section aria-labelledby="catalog-title">
+      <h2 id="catalog-title">Featured Sync Catalog &amp; Stem Audition</h2>
+      <div class="catalog" id="catalog"></div>
+      <div class="player">
+        <div class="player-info"><h3>Auditioning: <span id="selected-title"></span></h3><p>Selected Stem: <strong id="selected-stem"></strong></p></div>
+        <div class="stems" role="group" aria-label="Select stem"><span>Select Stem:</span><div id="stem-options"></div></div>
+        <audio id="audition" controls aria-label="Selected track preview"></audio>
+        <p id="preview-status" role="status"></p>
+        <button class="primary" type="button" id="open-inquiry">REQUEST SYNC LICENSE FOR THIS TRACK →</button>
+      </div>
+    </section>
+    <p id="inquiry-status" role="status"></p>
+  </main>
+  <dialog id="inquiry" aria-labelledby="inquiry-title">
+    <div class="dialog-heading"><h2 id="inquiry-title">Sync License Inquiry</h2><button type="button" id="close-inquiry" aria-label="Close inquiry">×</button></div>
+    <p>Target Track: <strong id="inquiry-track"></strong> (<span id="inquiry-stem"></span>)</p>
+    <form id="inquiry-form">
+      <label>Company / Production Name<input name="company" type="text" maxlength="160" required autocomplete="organization" placeholder="Production or agency name"></label>
+      <label>Business Email<input name="email" type="email" maxlength="200" required autocomplete="email" placeholder="producer@agency.com"></label>
+      <label>Media Type<select name="mediaType"><option>Digital Ad / Commercial</option><option>Television Series / Film</option><option>Video Game</option><option>Corporate / Live Event</option></select></label>
+      <label>Territory<input name="territory" type="text" maxlength="100" required value="Worldwide"></label>
+      <label>Estimated Budget<select name="budget"><option>$1,000 - $5,000</option><option>$5,000 - $15,000</option><option>$15,000+</option></select></label>
+      <label>Project Details &amp; Scene Notes<textarea name="notes" rows="3" maxlength="2000" placeholder="Scene duration, usage terms, target release date..."></textarea></label>
+      <button class="primary" type="submit">PREPARE SYNC INQUIRY</button>
+    </form>
+  </dialog>
+</body>
+</html>

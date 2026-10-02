@@ -23,7 +23,7 @@ const [helper, manager, healthHelper, migration, reconcileFunction, scheduledRec
 ]);
 const sampleSongId = "11111111-1111-4111-8111-111111111111";
 const forcePushApi = await read("netlify/functions/force-push-track.mjs");
-assert.match(forcePushApi, /path: "\/api\/catalog\/force-push-track"/);
+assert.match(forcePushApi, /path: "\/api\/force-push-track"/);
 assert.match(forcePushApi, /getUser\(\)/);
 assert.match(forcePushApi, /verifyRequestOrigin\(request\)/);
 assert.match(forcePushApi, /Buffer\.byteLength\(body, "utf8"\)/, "size checks must not rely only on content-length");
@@ -142,7 +142,8 @@ assert.match(forcePushApi, /Buffer\.byteLength\(body, "utf8"\)/, "size checks mu
   const source = editor.match(/\$\("#pushToShopButton"\)\.addEventListener\("click",async event=>\{[\s\S]*?\n\}\);/)?.[0];
   assert.ok(source, "editor must wire the force-push action");
   const status = { textContent: "" };
-  const button = { disabled: false, setAttribute() {}, removeAttribute() {} };
+  const attributes = {};
+  const button = { disabled: false, setAttribute(name, value) { attributes[name] = value; }, removeAttribute(name) { delete attributes[name]; } };
   let click;
   let track = { id: sampleSongId, title: "Test track", salePriceCents: null, currency: "USD" };
   let fail = false;
@@ -152,6 +153,7 @@ assert.match(forcePushApi, /Buffer\.byteLength\(body, "utf8"\)/, "size checks mu
     () => track,
     async (url, options) => {
       assert.equal(button.disabled, true, "push must be disabled while the request is running");
+      assert.equal(attributes["aria-busy"], "true");
       assert.equal(status.textContent, "Pushing to Shop & Charts…");
       assert.equal(url, "/api/catalog/force-push-track");
       assert.equal(options.credentials, "same-origin");
@@ -161,6 +163,8 @@ assert.match(forcePushApi, /Buffer\.byteLength\(body, "utf8"\)/, "size checks mu
       assert.equal(payload.inChart, true);
       assert.equal(payload.isLiveVisible, true);
       assert.equal(payload.price, "US$1.29");
+      assert.equal(payload.title, track.title, "push must use the selected saved song data");
+      assert.equal(payload.currency, track.currency);
       if (fail) throw new Error("Backend unavailable");
       return { ok: true, json: async () => ({ success: true, message: "Live on Shop & Charts" }) };
     },
@@ -170,12 +174,20 @@ assert.match(forcePushApi, /Buffer\.byteLength\(body, "utf8"\)/, "size checks mu
   assert.equal(refreshed, sampleSongId);
   assert.equal(status.textContent, "Live on Shop & Charts");
   assert.equal(button.disabled, false);
+  assert.equal(attributes["aria-busy"], undefined);
+  for (const invalidPrice of [0, -1, "placeholder", Infinity]) {
+    track = { ...track, salePriceCents: invalidPrice, currency: "EUR" };
+    await click({ currentTarget: button });
+    assert.equal(button.disabled, false);
+    assert.equal(attributes["aria-busy"], undefined);
+  }
   fail = true;
   refreshed = "";
   await click({ currentTarget: button });
   assert.equal(status.textContent, "Backend unavailable", "offline publication must fail visibly");
   assert.equal(refreshed, "", "offline publication must not report a local save as live");
   assert.equal(button.disabled, false);
+  assert.equal(attributes["aria-busy"], undefined);
   track = null;
   await click({ currentTarget: button });
   assert.equal(status.textContent, "Select and save a track first.");

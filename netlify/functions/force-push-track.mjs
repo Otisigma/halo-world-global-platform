@@ -35,4 +35,4 @@ export default async function forcePushTrackHandler(request) {
   }
 }
 
-export const config = { path: "/api/catalog/force-push-track" };
+export const config = { path: "/api/force-push-track" };

@@ -64,16 +64,18 @@ $("#pushToShopButton").addEventListener("click",async event=>{
   button.disabled=true;
   button.setAttribute("aria-busy","true");
   status.textContent="Pushing to Shop & Charts…";
-  const price=Number(track.salePriceCents)>0?Number(track.salePriceCents):129;
+  const cents=Number(track.salePriceCents);
+  const hasPrice=Number.isFinite(cents)&&cents>0;
+  const price=hasPrice?cents:129;
   try{
     const response=await fetch("/api/catalog/force-push-track",{
       method:"POST",credentials:"same-origin",headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({...track,releaseStatus:"PUBLISHED",status:"PUBLISHED",inChart:true,isLiveVisible:true,price:track.currency==="USD"||!track.currency?`US$${(price/100).toFixed(2)}`:`${track.currency} ${(price/100).toFixed(2)}`})
+      body:JSON.stringify({...track,releaseStatus:"PUBLISHED",status:"PUBLISHED",inChart:true,isLiveVisible:true,price:!hasPrice||track.currency==="USD"||!track.currency?`US$${(price/100).toFixed(2)}`:`${track.currency} ${(price/100).toFixed(2)}`})
     });
     const data=await response.json().catch(()=>null);
     if(!response.ok||data?.success!==true)throw new Error(data?.message||"Publication was not confirmed. Please retry.");
     await loadCatalog(track.id);
-    status.textContent=data.message;
+    status.textContent=data.message||"Song is live in the HALO Shop and charts";
   }catch(error){status.textContent=error.message}
   finally{button.disabled=false;button.removeAttribute("aria-busy")}
 });

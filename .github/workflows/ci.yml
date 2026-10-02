@@ -19,6 +19,8 @@ jobs:
           node-version: '20'
       - name: Install dependencies
         run: npm install --ignore-scripts
+      - name: Run database migration contracts
+        run: npm run test:database
       - name: Run AI and maintenance contract suite
         run: npm run contracts:ai-maintenance
       - name: Run deploy health contracts

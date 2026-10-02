@@ -56,6 +56,28 @@ function renderArtwork(song){const preview=$("#artworkPreview");const placeholde
 async function loadCatalog(preferredId=""){elements.shell.setAttribute("aria-busy","true");try{const data=await api();state.authenticated=Boolean(data.authenticated);if(!data.authenticated){state.songs=[];state.producer={jobs:[],packages:[]};render();message("Sign in to load and manage your song catalog.");return}state.songs=data.songs||[];state.producer=data.producer||{jobs:[],packages:[]};state.selectedId=preferredId||state.selectedId||state.songs[0]?.id||"";if(!state.songs.some(song=>song.id===state.selectedId))state.selectedId=state.songs[0]?.id||"";render()}catch(error){message(error.message)}finally{elements.shell.setAttribute("aria-busy","false")}}
 function selectedSong(){return state.songs.find(song=>song.id===state.selectedId)}
 
+$("#pushToShopButton").addEventListener("click",async event=>{
+  const track=selectedSong();
+  const status=$("#pushToShopStatus");
+  if(!track){status.textContent="Select and save a track first.";return}
+  const button=event.currentTarget;
+  button.disabled=true;
+  button.setAttribute("aria-busy","true");
+  status.textContent="Pushing to Shop & Charts…";
+  const price=Number(track.salePriceCents)>0?Number(track.salePriceCents):129;
+  try{
+    const response=await fetch("/api/catalog/force-push-track",{
+      method:"POST",credentials:"same-origin",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({...track,releaseStatus:"PUBLISHED",status:"PUBLISHED",inChart:true,isLiveVisible:true,price:track.currency==="USD"||!track.currency?`US$${(price/100).toFixed(2)}`:`${track.currency} ${(price/100).toFixed(2)}`})
+    });
+    const data=await response.json().catch(()=>null);
+    if(!response.ok||data?.success!==true)throw new Error(data?.message||"Publication was not confirmed. Please retry.");
+    await loadCatalog(track.id);
+    status.textContent=data.message;
+  }catch(error){status.textContent=error.message}
+  finally{button.disabled=false;button.removeAttribute("aria-busy")}
+});
+
 function renderPublicationTotals(){const published=state.songs.filter(song=>song.pipelineStatus==="published");$("#distributedCount").textContent=published.filter(song=>song.publicationHealth?.state==="published_and_fully_distributed").length;$("#actionCount").textContent=published.filter(song=>song.publicationHealth&&song.publicationHealth.state!=="published_and_fully_distributed").length}
 function renderSummary(){const radioQueue=state.songs.flatMap(song=>song.versions.filter(version=>["radio_edit","clean"].includes(version.versionType)&&version.masteringStatus!=="approved"));const ready=state.songs.filter(song=>song.metadataStatus==="ready");const priced=state.songs.filter(song=>song.saleStatus==="for_sale"&&song.salePriceCents>0);const average=state.songs.length?Math.round(state.songs.reduce((sum,song)=>sum+song.metadataScore,0)/state.songs.length):0;$("#songCount").textContent=state.songs.length;$("#saleCount").textContent=priced.length;$("#radioCount").textContent=radioQueue.length;$("#readyCount").textContent=ready.length;$("#overallScore").textContent=state.songs.length?average:"—";$("#overallCopy").textContent=state.songs.length?`${ready.length} of ${state.songs.length} songs fully cleared.`:"Load songs to begin the review."}
 function publicationRetryCopy(health){if(!health)return"No publication check loaded yet.";const checked=health.lastCheckedAt?`Last checked ${new Date(health.lastCheckedAt).toLocaleString()}.`:"Waiting for the first publication check.";const loop=health.escalated?"Escalated for internal follow-up.":health.retrying?"HALO is retrying automatically every 15 minutes.":"No retry is needed right now.";return`${loop} ${checked}`}

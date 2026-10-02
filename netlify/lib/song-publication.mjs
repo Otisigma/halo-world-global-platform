@@ -3,6 +3,7 @@ import { appendLedgerEntry } from "./halo-ledger.mjs";
 import { resolveDreamweaverPageFlow } from "./dreamweaver-page-manager.mjs";
 import { dreamweaverStorefrontPath } from "./dreamweaver-satellite.mjs";
 import { PUBLICATION_ESCALATION_THRESHOLD, buildPublicationHealth } from "./song-publication-health.mjs";
+import { cleanDreamweaverSongId as cleanId } from "../../lib/dreamweaver-storefront.js";
 
 const VERSION_LABELS = {
   sale_master: "Sale master",
@@ -43,16 +44,16 @@ function isLegacySongCatalogAudioUrl(value) {
   } catch {
     return false;
   }
+}
 
-  function isLegacyDreamweaverSatelliteUrl(value) {
-    const url = cleanText(value, 1200);
-    if (!url) return false;
-    try {
-      const parsed = new URL(url, "https://halo.world");
-      return /^\/dreamweaver\/satellite\/[0-9a-f-]+\/?$/i.test(parsed.pathname);
-    } catch {
-      return false;
-    }
+function isLegacyDreamweaverSatelliteUrl(value) {
+  const url = cleanText(value, 1200);
+  if (!url) return false;
+  try {
+    const parsed = new URL(url, "https://halo.world");
+    return /^\/dreamweaver\/satellite\/[0-9a-f-]+\/?$/i.test(parsed.pathname);
+  } catch {
+    return false;
   }
 }
 
@@ -527,6 +528,55 @@ async function upsertPublicationSync(db, song, values) {
       last_reconciled_at = NOW(),
       updated_at = NOW()
   `;
+}
+
+export async function forcePushTrack(db, payload, membership) {
+  const fail = (message, status) => { throw Object.assign(new Error(message), { status }); };
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) fail("Provide a track id or title", 400);
+  const id = cleanId(payload.id);
+  const title = cleanText(payload.title, 180);
+  if (payload.id && !id) fail("Choose a valid track id", 400);
+  if (!id && !title) fail("Provide a track id or title", 400);
+  const matches = id
+    ? await db.sql`SELECT id FROM halo_song_catalog WHERE id = ${id} AND owner_member_id = ${membership.member_id} AND status = 'active'`
+    : await db.sql`SELECT id FROM halo_song_catalog WHERE title = ${title} AND owner_member_id = ${membership.member_id} AND status = 'active' LIMIT 2`;
+  if (!matches.length) fail("That track was not found in your catalog. Save it first.", 404);
+  if (matches.length !== 1) fail("More than one track has this title. Use its id.", 409);
+  const [song] = await db.sql`
+    UPDATE halo_song_catalog
+    SET pipeline_status = 'published',
+        pipeline_updated_at = NOW(),
+        updated_at = NOW(),
+        sale_status = 'for_sale',
+        currency = CASE WHEN sale_price_cents IS NULL OR sale_price_cents <= 0 THEN 'USD' ELSE currency END,
+        sale_price_cents = CASE WHEN sale_price_cents IS NULL OR sale_price_cents <= 0 THEN 129 ELSE sale_price_cents END
+    WHERE id = ${matches[0].id} AND owner_member_id = ${membership.member_id} AND status = 'active'
+    RETURNING id, title, sale_price_cents, currency, pipeline_updated_at
+  `;
+  if (!song) fail("That track was not found", 404);
+  const result = await reconcilePublishedSong(db, {
+    songId: song.id,
+    ownerMemberId: membership.member_id,
+    actorId: membership.actor_id,
+    actorType: "member",
+  });
+  if (!result.ok) fail("Publication could not be confirmed. Retry the push.", 409);
+  return {
+    success: true,
+    message: `"${song.title}" pushed to Shop & Charts`,
+    track: {
+      id: song.id,
+      title: song.title,
+      releaseStatus: "PUBLISHED",
+      status: "PUBLISHED",
+      inChart: true,
+      isLiveVisible: true,
+      salePriceCents: Number(song.sale_price_cents),
+      price: `${song.currency === "USD" ? "US$" : `${song.currency} `}${(Number(song.sale_price_cents) / 100).toFixed(2)}`,
+      pushedToLiveAt: new Date(song.pipeline_updated_at).toISOString(),
+      releaseId: result.releaseId,
+    },
+  };
 }
 
 export async function reconcilePublishedSong(db, {

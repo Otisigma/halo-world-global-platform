@@ -148,7 +148,7 @@ assert.match(forcePushApi, /raw\.length/, "size checks must not rely only on con
   const status = { textContent: "" };
   const button = { disabled: false, setAttribute(name, value) { this[name] = value; }, removeAttribute(name) { delete this[name]; } };
   let click;
-  let track = { id: sampleSongId, title: "Test track", salePriceCents: null, currency: "USD" };
+  let track = { id: sampleSongId, title: "Test track", salePriceCents: null, currency: "USD", notes: "x".repeat(4000), versions: Array.from({ length: 8 }, () => ({ notes: "x".repeat(2000) })) };
   let fail = false;
   let refreshed = "";
   new Function("$", "selectedSong", "fetch", "loadCatalog", source)(
@@ -161,6 +161,10 @@ assert.match(forcePushApi, /raw\.length/, "size checks must not rely only on con
       assert.equal(url, "/api/catalog/force-push-track");
       assert.equal(options.credentials, "same-origin");
       const payload = JSON.parse(options.body);
+      assert.equal(payload.id, sampleSongId);
+      assert.equal(payload.title, "Test track");
+      assert.ok(options.body.length < 20_000, "saved version metadata must not overflow the endpoint's payload limit");
+      assert.equal(payload.versions, undefined, "publish saved database data without resending version metadata");
       assert.equal(payload.releaseStatus, "PUBLISHED");
       assert.equal(payload.status, "PUBLISHED");
       assert.equal(payload.inChart, true);

@@ -69,7 +69,7 @@ $("#pushToShopButton").addEventListener("click",async event=>{
   try{
     const response=await fetch("/api/catalog/force-push-track",{
       method:"POST",credentials:"same-origin",headers:{"Content-Type":"application/json",Accept:"application/json"},
-      body:JSON.stringify({...track,releaseStatus:"PUBLISHED",status:"PUBLISHED",inChart:true,isLiveVisible:true,price:`US$${(price/100).toFixed(2)}`})
+      body:JSON.stringify({id:track.id,title:track.title,releaseStatus:"PUBLISHED",status:"PUBLISHED",inChart:true,isLiveVisible:true,price:`US$${(price/100).toFixed(2)}`})
     });
     const data=await response.json().catch(()=>null);
     if(!response.ok||data?.success!==true)throw new Error(data?.message||"Publication was not confirmed. Please retry.");

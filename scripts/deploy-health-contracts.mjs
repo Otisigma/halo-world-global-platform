@@ -59,6 +59,11 @@ const runCheck = async (name, check) => {
   }
 };
 
+await runCheck("Song schema migration safety", async () => {
+  await import("./database-migration-contracts.mjs");
+  return "no unguarded duplicate song tables, indexes, or added columns";
+});
+
 await runCheck("Migration ordering", async () => {
   const migrationDir = "netlify/database/migrations";
   const entries = await readdir(resolve(root, migrationDir));

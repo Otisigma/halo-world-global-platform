@@ -5,6 +5,7 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node server.js",
+    "test:database-migrations": "node scripts/database-migration-contracts.mjs",
     "diagnose": "node deploy/diagnostics.js",
     "deploy:feedback": "node scripts/deploy-health-contracts.mjs",
     "music-upload:watchdog": "node scripts/music-upload-contracts.mjs",

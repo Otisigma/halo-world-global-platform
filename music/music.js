@@ -583,7 +583,8 @@
 
   function isChartListed(release) {
     if (!release || release.isLiveVisible === false) return false;
-    return release.inChart === true || release.isChartEligible === true || release.releaseStatus === "PUBLISHED";
+    if (release.inChart === true || release.isChartEligible === true) return true;
+    return release.isChartEligible !== false && release.releaseStatus === "PUBLISHED";
   }
 
   function rankedReleases() {

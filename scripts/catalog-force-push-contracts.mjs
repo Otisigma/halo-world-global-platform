@@ -47,15 +47,15 @@ function createFakeDb(songs) {
       const owned = (song, owner) => !owner || song.owner_member_id === owner;
       if (/FROM halo_song_catalog\s+WHERE id = /.test(text)) {
         const [id, owner] = values;
-        return songs.filter(song => song.id === id && active(song) && owned(song, owner)).slice(0, 1);
+        return songs.filter(song => song.id === id && active(song) && owned(song, owner)).slice(0, 1).map(song => ({ ...song }));
       }
       if (/FROM halo_song_catalog\s+WHERE source_release_id = /.test(text)) {
         const [releaseId, owner] = values;
-        return songs.filter(song => song.source_release_id === releaseId && active(song) && owned(song, owner)).slice(0, 1);
+        return songs.filter(song => song.source_release_id === releaseId && active(song) && owned(song, owner)).slice(0, 1).map(song => ({ ...song }));
       }
       if (/FROM halo_song_catalog\s+WHERE LOWER\(title\)/.test(text)) {
         const [title, owner] = values;
-        return songs.filter(song => song.title.toLowerCase() === title.toLowerCase() && active(song) && owned(song, owner)).slice(0, 1);
+        return songs.filter(song => song.title.toLowerCase() === title.toLowerCase() && active(song) && owned(song, owner)).slice(0, 1).map(song => ({ ...song }));
       }
       if (/UPDATE halo_song_catalog/.test(text)) {
         const song = songs.find(item => item.id === values[1] && active(item));
@@ -114,6 +114,7 @@ const otherSong = { ...memberSong, id: "16fd2706-8baf-433b-82eb-8c7fada847da", o
     { releaseStatus: first.body.track.releaseStatus, status: first.body.track.status, inChart: first.body.track.inChart, isLiveVisible: first.body.track.isLiveVisible, price: first.body.track.price },
     { releaseStatus: "PUBLISHED", status: "PUBLISHED", inChart: true, isLiveVisible: true, price: "US$1.29" }
   );
+  assert.equal(first.body.track.priceFallbackApplied, true);
   assert.equal(first.body.track.pushedToLiveAt, "2026-10-02T12:00:00.000Z");
   assert.equal(memberSong.notes, "Keep this note", "unrelated song fields are never overwritten from the browser payload");
   assert.equal(memberSong.sale_price_cents, FALLBACK_PRICE_CENTS, "missing price falls back to US$1.29");
@@ -169,7 +170,8 @@ assert.doesNotMatch(editorClient, /localStorage/, "editor must not fake a succes
     { id: "published", releaseStatus: "PUBLISHED" },
     { id: "hidden", inChart: true, isLiveVisible: false },
     { id: "hidden-published", releaseStatus: "PUBLISHED", isLiveVisible: false },
-    { id: "listening-only", isChartEligible: false }
+    { id: "listening-only", isChartEligible: false },
+    { id: "published-opted-out", releaseStatus: "PUBLISHED", isChartEligible: false }
   ].filter(isChartListed).map(release => release.id);
   assert.deepEqual(listed, ["eligible", "forced", "published"], "chart must include live chart-eligible or published tracks only");
   assert.match(storefrontClient, /if \(!isChartListed\(release\)\) \{\s*logMusicIssue\("music_chart_eligibility_skipped"/, "chart ranking must use the shared chart filter");

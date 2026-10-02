@@ -93,7 +93,6 @@ export async function forcePushTrack(db, payload, { memberId, actorId, isAdmin =
   const song = await findSong(db, parsed, { memberId, isAdmin });
   if (!song) return { status: 404, body: { success: false, message: "That track was not found in your song catalog" } };
 
-  const priceFallbackApplied = !hasRealPriceCents(song.sale_price_cents);
   // Only live/publication fields change; a real price and every other song field are preserved.
   const updated = await db.sql`
     UPDATE halo_song_catalog
@@ -113,6 +112,8 @@ export async function forcePushTrack(db, payload, { memberId, actorId, isAdmin =
     RETURNING id, sale_price_cents, currency, pipeline_updated_at
   `;
   if (!updated[0]) return { status: 404, body: { success: false, message: "That track is no longer active" } };
+  const priceFallbackApplied = !hasRealPriceCents(song.sale_price_cents)
+    && Number(updated[0].sale_price_cents) === FALLBACK_PRICE_CENTS;
   const pushedAt = new Date(updated[0].pipeline_updated_at || now());
   const pushedToLiveAt = Number.isNaN(pushedAt.getTime()) ? now().toISOString() : pushedAt.toISOString();
 

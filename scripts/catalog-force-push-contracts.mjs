@@ -168,6 +168,7 @@ assert.match(publication, /is_chart_eligible = TRUE/);
 {
   const song = { ...savedSong, pipeline_status: "published", explicit_lyrics: false, genre: "Soul" };
   const releases = new Map();
+  let sync = null;
   const queries = [];
   const db = {
     async sql(strings, ...values) {
@@ -177,7 +178,7 @@ assert.match(publication, /is_chart_eligible = TRUE/);
       if (query.includes("FROM halo_song_versions")) {
         return [{ id: otherId, version_type: "sale_master", audio_url: "https://cdn.halo.world/song.mp3" }];
       }
-      if (query.includes("FROM halo_song_publication_sync")) return [];
+      if (query.includes("FROM halo_song_publication_sync")) return sync ? [sync] : [];
       if (query.includes("SELECT id, owner_member_id")) return releases.has(values[0]) ? [releases.get(values[0])] : [];
       if (query.includes("UPDATE halo_release_campaigns")) {
         assert.doesNotMatch(query, /\b(?:title|artist|pitch|stream_url|artwork_url|available_versions|content_rating)\s*=/);
@@ -192,7 +193,10 @@ assert.match(publication, /is_chart_eligible = TRUE/);
         releases.set(id, release);
         return [release];
       }
-      if (query.includes("INSERT INTO halo_song_publication_sync")) return [];
+      if (query.includes("INSERT INTO halo_song_publication_sync")) {
+        sync = { release_id: values[2], details: JSON.parse(values[8]) };
+        return [];
+      }
       throw new Error(`Unexpected publication query: ${query}`);
     },
   };
@@ -203,6 +207,12 @@ assert.match(publication, /is_chart_eligible = TRUE/);
     assert.equal(result.ok, true, "the real publication pipeline must handle external master audio");
     assert.equal(result.releaseId, "existing-release");
   }
+  assert.equal(sync.details.preserveReleaseMetadata, true, "force-push must persist the metadata preservation policy");
+  const scheduledResult = await reconcilePublishedSong(db, {
+    songId, ownerMemberId: "owner", recordLedger: false,
+  });
+  assert.equal(scheduledResult.ok, true);
+  assert.equal(sync.details.preserveReleaseMetadata, true, "normal reconciliation must retain the policy");
   assert.equal(releases.size, 1);
   assert.equal(queries.filter(query => query.includes("INSERT INTO halo_release_campaigns")).length, 1);
   assert.equal(releases.get("existing-release").title, "Curated release title");

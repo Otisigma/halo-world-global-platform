@@ -67,6 +67,7 @@ $("#pushToShopButton").addEventListener("click",async event=>{
   const cents=Number(track.salePriceCents);
   const hasPrice=Number.isFinite(cents)&&cents>0;
   const price=hasPrice?cents:129;
+  let pushed=false;
   try{
     const response=await fetch("/api/catalog/force-push-track",{
       method:"POST",credentials:"same-origin",headers:{"Content-Type":"application/json"},
@@ -74,10 +75,11 @@ $("#pushToShopButton").addEventListener("click",async event=>{
     });
     const data=await response.json().catch(()=>null);
     if(!response.ok||data?.success!==true)throw new Error(data?.message||"Publication was not confirmed. Please retry.");
-    await loadCatalog(track.id);
+    pushed=true;
     status.textContent=data.message||"Song is live in the HALO Shop and charts";
   }catch(error){status.textContent=error.message}
   finally{button.disabled=false;button.removeAttribute("aria-busy")}
+  if(pushed)await loadCatalog(track.id).catch(()=>{});
 });
 
 function renderPublicationTotals(){const published=state.songs.filter(song=>song.pipelineStatus==="published");$("#distributedCount").textContent=published.filter(song=>song.publicationHealth?.state==="published_and_fully_distributed").length;$("#actionCount").textContent=published.filter(song=>song.publicationHealth&&song.publicationHealth.state!=="published_and_fully_distributed").length}

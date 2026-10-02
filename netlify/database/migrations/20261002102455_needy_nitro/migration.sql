@@ -1,0 +1,1 @@
+ALTER TABLE "halo_song_versions" ADD COLUMN "drive_url" text DEFAULT '' NOT NULL;

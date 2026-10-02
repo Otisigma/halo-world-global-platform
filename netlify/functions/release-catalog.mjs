@@ -15,7 +15,7 @@ function json(body, status = 200, headers = {}) {
     status,
     headers: {
       ...CORS_HEADERS,
-      "Cache-Control": "public, max-age=60, s-maxage=300, stale-while-revalidate=600",
+      "Cache-Control": "no-store",
       ...headers
     }
   });
@@ -118,6 +118,9 @@ function serializeRelease(row) {
     title: row.title,
     artist: row.artist,
     status: normalizedCatalogStatus(row.status),
+    releaseStatus: normalizedCatalogStatus(row.status).toUpperCase(),
+    inChart: Boolean(row.is_chart_eligible),
+    isLiveVisible: row.visibility === "public",
     releaseDate: row.release_date ? String(row.release_date).slice(0, 10) : "",
     isrc: row.catalog_isrc || row.isrc || "",
     duration: row.duration || "",
@@ -217,6 +220,7 @@ export default async function releaseCatalogHandler(request) {
         release.title,
         release.artist,
         release.status,
+        release.visibility,
         release.isrc,
         release.official_url,
         release.release_date,

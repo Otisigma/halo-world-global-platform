@@ -44,15 +44,16 @@ function isLegacySongCatalogAudioUrl(value) {
     return false;
   }
 
-  function isLegacyDreamweaverSatelliteUrl(value) {
-    const url = cleanText(value, 1200);
-    if (!url) return false;
-    try {
-      const parsed = new URL(url, "https://halo.world");
-      return /^\/dreamweaver\/satellite\/[0-9a-f-]+\/?$/i.test(parsed.pathname);
-    } catch {
-      return false;
-    }
+}
+
+function isLegacyDreamweaverSatelliteUrl(value) {
+  const url = cleanText(value, 1200);
+  if (!url) return false;
+  try {
+    const parsed = new URL(url, "https://halo.world");
+    return /^\/dreamweaver\/satellite\/[0-9a-f-]+\/?$/i.test(parsed.pathname);
+  } catch {
+    return false;
   }
 }
 

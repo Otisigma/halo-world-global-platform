@@ -72,4 +72,21 @@ for (const selector of ["player-track-info", "player-cover-art", "player-meta", 
 }
 assert.match(styles, /\.chart-play/, "chart rows must style their delegated play control");
 
+{
+  const source = client.match(/function isChartPublished\(release\) \{[\s\S]*?\n  \}/)?.[0];
+  assert.ok(source, "chart must define its publication filter");
+  const isChartPublished = new Function(`${source}\nreturn isChartPublished;`)();
+  assert.equal(isChartPublished({ inChart: true }), true);
+  assert.equal(isChartPublished({ releaseStatus: "PUBLISHED", isChartEligible: true }), true);
+  assert.equal(isChartPublished({ releaseStatus: "PUBLISHED", isLiveVisible: false }), false);
+  assert.equal(isChartPublished({ releaseStatus: "PUBLISHED", isChartEligible: false }), false, "listening-only releases must stay out of charts");
+  assert.equal(isChartPublished({ releaseStatus: "DRAFT" }), false);
+  assert.equal(isChartPublished({}), false);
+  assert.match(client, /if \(!isChartPublished\(release\)\)/, "rankings must use the publication filter");
+  assert.match(catalogApi, /releaseStatus: normalizedCatalogStatus\(row\.status\)\.toUpperCase\(\)/);
+  assert.match(catalogApi, /inChart: Boolean\(row\.is_chart_eligible\)/);
+  assert.match(catalogApi, /isLiveVisible: row\.visibility/);
+  assert.match(catalogApi, /"Cache-Control": "no-store"/, "new publications must not wait on stale catalog caches");
+}
+
 console.log("Music chart contracts passed.");

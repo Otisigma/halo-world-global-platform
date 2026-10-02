@@ -4,7 +4,7 @@ import { getDatabase } from "@netlify/database";
 import { getUser, verifyRequestOrigin } from "@netlify/identity";
 import { db } from "../../db/index.js";
 import { dreamweaverSongReviews, songs, songVersions } from "../../db/schema.js";
-import { cleanText, ensureMembership } from "../lib/halo-x.mjs";
+import { cleanText, ensureMembership, isOwner } from "../lib/halo-x.mjs";
 import { reconcilePublishedSong } from "../lib/song-publication.mjs";
 import { buildDreamweaverSatellite } from "../../lib/route-registry.js";
 import { cleanDreamweaverSongId } from "../../lib/dreamweaver-storefront.js";
@@ -461,7 +461,7 @@ export default async function songCatalogHandler(request: Request) {
     if (request.method === "GET") {
       const [catalog, producer] = await Promise.all([loadCatalog(membership.member_id), loadProducer(nativeDb, membership.member_id)]);
       const songsWithHealth = await attachPublicationHealth(nativeDb, membership.member_id, catalog);
-      return json({ authenticated: true, viewer: { name: membership.display_name }, songs: songsWithHealth, producer });
+      return json({ authenticated: true, viewer: { name: membership.display_name, canForcePush: isOwner(user) }, songs: songsWithHealth, producer });
     }
 
     try { verifyRequestOrigin(request); } catch { return json({ message: "Cross-origin catalog actions are not accepted" }, 403); }

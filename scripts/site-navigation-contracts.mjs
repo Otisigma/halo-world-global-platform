@@ -289,4 +289,44 @@ assert.match(musicStyles, /\.halo-player-bar \{ position: fixed;/, "the floating
   assert.match(client, /no request has been sent/, "the submission state must not claim to deliver an unsent inquiry");
 }
 
+// --- Public asset inventory destination -------------------------------------------------
+{
+  const { MENU_ROUTE_REGISTRY, PUBLIC_ROUTE_REGISTRY } = await import("../lib/route-registry.js");
+  const [mainSite, netlifyConfig, page] = await Promise.all([
+    read("halo.html"), read("netlify.toml"), read("asset-inventory/index.html")
+  ]);
+  assert.equal(PUBLIC_ROUTE_REGISTRY.find(({ route }) => route === "/asset-inventory/")?.file, "asset-inventory/index.html");
+  assert.ok(MENU_ROUTE_REGISTRY.some(({ route, menuLabel }) => route === "/asset-inventory/" && menuLabel === "ASSET INVENTORY"), "the asset inventory must remain in the main menu registry");
+  const buildLane = mainSite.match(/<section className="halo-menu-lane halo-menu-lane-build"[\s\S]*?<\/section>/)?.[0] || "";
+  assert.match(buildLane, /<a href="\/asset-inventory\/"[^>]*data-signal="ASSET INVENTORY"/, "the Build lane must link the asset inventory");
+  assert.match(buildLane, /renderMenuStatusBadge\('\/asset-inventory\/', 'Asset Inventory'\)/);
+  assert.match(mainSite, /\{ route: '\/asset-inventory\/', label: 'ASSET INVENTORY' \}/, "the asset inventory must receive live menu status");
+  assert.match(netlifyConfig, /from = "\/asset-inventory\/"\s+to = "\/asset-inventory\/index\.html"\s+status = 200/);
+  assert.match(page, /href="\/asset-inventory\/asset-inventory\.css"/);
+  assert.match(page, /href="\/halo"/, "the asset inventory must link back to HALO");
+  for (const heading of [
+    "Inventory of Built Assets",
+    "Fair Asset Valuation",
+    "Fair Pricing Model for End Users"
+  ]) {
+    assert.match(page, new RegExp(`<h2 id="[^"]+">${heading}`), `${heading} section must render`);
+  }
+  for (const asset of [
+    "HALO Platform Ecosystem", "Custom Software Infrastructure &amp; Web IP", "HALO Artist Economy / Livelihood System",
+    "HALO Business Hub &amp; One-Stop Sync Portal", "Interactive Fan &amp; Commerce Tools", "SERENA AI Integration",
+    "Music Master &amp; Publishing Catalog", "100% Master &amp; Publishing Control", "Full Stem Availability"
+  ]) {
+    assert.ok(page.includes(asset), `built asset "${asset}" must be listed`);
+  }
+  for (const value of ["$35,000–$60,000", "$50,000–$120,000", "$15,000–$35,000", "$100,000–$215,000"]) {
+    assert.ok(page.includes(value), `valuation ${value} must be listed`);
+  }
+  for (const tier of ["Basic Tier", "HALO Pro", "HALO Studio / Label", "$19 <small>/ month", "$180 / year", "$69 <small>/ month", "$680 / year"]) {
+    assert.ok(page.includes(tier), `pricing detail ${tier} must be listed`);
+  }
+  for (const benefit of ["Rights Passport", "Income Ledger", "transaction fee", "Priority sync placement", "copilot", "Split automation", "White-label pitching pages"]) {
+    assert.ok(page.includes(benefit), `pricing benefit ${benefit} must be listed`);
+  }
+}
+
 console.log("Site navigation contracts passed.");

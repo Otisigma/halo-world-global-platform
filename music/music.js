@@ -583,7 +583,6 @@
 
   function isChartRelease(release) {
     return release.isLiveVisible !== false
-      && release.isChartEligible !== false
       && (release.inChart === true || release.releaseStatus === "PUBLISHED" || release.isChartEligible === true);
   }
 

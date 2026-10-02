@@ -24,14 +24,15 @@ assert.match(catalogApi, /recent_listens/, "catalog API must expose rolling rece
 assert.match(catalogApi, /previous_listens/, "catalog API must expose the comparison window");
 assert.match(client, /rankedReleases/, "client must calculate interactive room rankings");
 {
-  const source = client.match(/function isChartRelease\(release\) \{[\s\S]*?\n  \}/)?.[0];
+  const source = client.match(/function isChartListed\(release\) \{[\s\S]*?\n  \}/)?.[0];
   assert.ok(source, "chart must define a publication-aware eligibility filter");
-  const isChartRelease = new Function(`${source}\nreturn isChartRelease;`)();
+  const isChartRelease = new Function(`${source}\nreturn isChartListed;`)();
   assert.equal(isChartRelease({ inChart: true }), true);
   assert.equal(isChartRelease({ releaseStatus: "PUBLISHED" }), true);
   assert.equal(isChartRelease({ isChartEligible: true, status: "passed" }), true, "legacy eligible releases stay on the chart");
   assert.equal(isChartRelease({ isLiveVisible: false, inChart: true, releaseStatus: "PUBLISHED" }), false);
-  assert.equal(isChartRelease({ isChartEligible: false, releaseStatus: "PUBLISHED" }), false, "explicit non-chart tracks stay excluded");
+  assert.equal(isChartRelease({ isChartEligible: false, releaseStatus: "PUBLISHED" }), true, "published tracks remain included without the legacy chart flag");
+  assert.equal(isChartRelease({ isChartEligible: false, inChart: true }), true, "explicit chart inclusion overrides the legacy chart flag");
   assert.equal(isChartRelease({ releaseStatus: "READY" }), false);
   assert.equal(isChartRelease({}), false);
 }

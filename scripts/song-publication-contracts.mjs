@@ -22,11 +22,14 @@ const [helper, manager, healthHelper, migration, reconcileFunction, scheduledRec
   read("netlify/functions/release-link.mjs"),
 ]);
 const sampleSongId = "11111111-1111-4111-8111-111111111111";
-const forcePushApi = await read("netlify/functions/force-push-track.mjs");
+const forcePushApi = await read("netlify/functions/catalog-force-push.mjs");
+const legacyForcePushApi = await read("netlify/functions/force-push-track.mjs");
+assert.match(legacyForcePushApi, /export \{ default \} from "\.\/catalog-force-push\.mjs"/);
+assert.doesNotMatch(legacyForcePushApi, /export const config/, "only the canonical handler may claim the public route");
 assert.match(forcePushApi, /path: "\/api\/catalog\/force-push-track"/);
 assert.match(forcePushApi, /getUser\(\)/);
 assert.match(forcePushApi, /verifyRequestOrigin\(request\)/);
-assert.match(forcePushApi, /Buffer\.byteLength\(body, "utf8"\)/, "size checks must not rely only on content-length");
+assert.match(forcePushApi, /raw\.length/, "size checks must not rely only on content-length");
 
 {
   const membership = { member_id: "owner", actor_id: "actor" };
@@ -112,12 +115,12 @@ assert.match(forcePushApi, /Buffer\.byteLength\(body, "utf8"\)/, "size checks mu
   let rejectOrigin = false;
   let calls = 0;
   const source = forcePushApi.replace(/^import .*;\n/gm, "").replace("export default ", "").replace(/export const config[\s\S]*$/, "");
-  const handler = new Function("getDatabase", "getUser", "verifyRequestOrigin", "ensureMembership", "forcePushTrack", `${source}\nreturn forcePushTrackHandler;`)(
+  const handler = new Function("getDatabase", "getUser", "verifyRequestOrigin", "ensureMembership", "forcePushTrack", `${source}\nreturn catalogForcePushHandler;`)(
     () => ({}), async () => user, () => { if (rejectOrigin) throw new Error("origin"); },
     async () => ({ member_id: "owner" }), async () => { calls++; return { success: true }; }
   );
   const request = (body = "{}", method = "POST") => new Request("https://halo.world/api/catalog/force-push-track", {
-    method, ...(method === "POST" ? { body } : {}),
+    method, ...(method === "POST" ? { body, headers: { "Content-Type": "application/json" } } : {}),
   });
   assert.equal((await handler(request("", "GET"))).status, 405);
   assert.equal((await handler(request())).status, 401);
@@ -137,12 +140,13 @@ assert.match(forcePushApi, /Buffer\.byteLength\(body, "utf8"\)/, "size checks mu
 {
   const editor = await read("song-catalog/song-catalog.js");
   const page = await read("song-catalog/index.html");
-  assert.match(page, /id="pushToShopButton" type="button">Push to Shop &amp; Charts/);
+  assert.match(page, /class="quiet-button" id="pushToShopButton" type="button"[^>]*>Push to Shop &amp; Charts/);
   assert.match(page, /id="pushToShopStatus" role="status" aria-live="polite"/);
   const source = editor.match(/\$\("#pushToShopButton"\)\.addEventListener\("click",async event=>\{[\s\S]*?\n\}\);/)?.[0];
   assert.ok(source, "editor must wire the force-push action");
+  assert.equal(editor.match(/\$\("#pushToShopButton"\)\.addEventListener/g)?.length, 1, "a click must trigger only one publication request");
   const status = { textContent: "" };
-  const button = { disabled: false, setAttribute() {}, removeAttribute() {} };
+  const button = { disabled: false, setAttribute(name, value) { this[name] = value; }, removeAttribute(name) { delete this[name]; } };
   let click;
   let track = { id: sampleSongId, title: "Test track", salePriceCents: null, currency: "USD" };
   let fail = false;
@@ -152,6 +156,7 @@ assert.match(forcePushApi, /Buffer\.byteLength\(body, "utf8"\)/, "size checks mu
     () => track,
     async (url, options) => {
       assert.equal(button.disabled, true, "push must be disabled while the request is running");
+      assert.equal(button["aria-busy"], "true");
       assert.equal(status.textContent, "Pushing to Shop & Charts…");
       assert.equal(url, "/api/catalog/force-push-track");
       assert.equal(options.credentials, "same-origin");
@@ -170,12 +175,19 @@ assert.match(forcePushApi, /Buffer\.byteLength\(body, "utf8"\)/, "size checks mu
   assert.equal(refreshed, sampleSongId);
   assert.equal(status.textContent, "Live on Shop & Charts");
   assert.equal(button.disabled, false);
+  assert.equal(button["aria-busy"], undefined);
+  for (const price of [0, -1, "invalid", Infinity]) {
+    track.salePriceCents = price;
+    await click({ currentTarget: button });
+    assert.equal(status.textContent, "Live on Shop & Charts", "invalid prices must use the default");
+  }
   fail = true;
   refreshed = "";
   await click({ currentTarget: button });
   assert.equal(status.textContent, "Backend unavailable", "offline publication must fail visibly");
   assert.equal(refreshed, "", "offline publication must not report a local save as live");
   assert.equal(button.disabled, false);
+  assert.equal(button["aria-busy"], undefined);
   track = null;
   await click({ currentTarget: button });
   assert.equal(status.textContent, "Select and save a track first.");

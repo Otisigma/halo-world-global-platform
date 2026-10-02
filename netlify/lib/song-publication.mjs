@@ -553,8 +553,9 @@ export async function reconcilePublishedSong(db, {
   const { song, versions } = context;
   const existingSync = await loadPublicationSyncRow(db, song.id);
   const existingDetails = existingSync?.details && typeof existingSync.details === "object" ? existingSync.details : {};
+  const keepReleaseMetadata = preserveReleaseMetadata || existingDetails.preserveReleaseMetadata === true;
   try {
-    const release = await ensureReleaseCampaign(db, song, versions, preserveReleaseMetadata);
+    const release = await ensureReleaseCampaign(db, song, versions, keepReleaseMetadata);
     const syncedVersions = await syncReleaseAudioVersions(db, song, versions, release.id);
     const radio = await ensureRadioTrack(db, song, syncedVersions, release);
     const dreamweaverStatus = ["dreamweaver_page", "hyperfollow"].includes(release.dreamweaver.routeMode)
@@ -578,6 +579,7 @@ export async function reconcilePublishedSong(db, {
     };
     const health = buildPublicationHealth(publicationHealthSong(song, versions), healthInput);
     const details = {
+      preserveReleaseMetadata: keepReleaseMetadata,
       availableVersions: versions.map(version => version.version_type),
       syncedAudioVersionCount: syncedVersions.length,
       radio: radio.details,
@@ -669,6 +671,7 @@ export async function reconcilePublishedSong(db, {
       radioStatus: "error",
       dreamweaverStatus: "error",
       details: {
+        preserveReleaseMetadata: keepReleaseMetadata,
         ...(existingDetails.dreamweaver ? { dreamweaver: existingDetails.dreamweaver } : {}),
         error: message,
         errorStreak,

@@ -203,7 +203,7 @@ function resolveReleaseDreamweaverFlow(songId, {
   });
 }
 
-async function ensureReleaseCampaign(db, song, versions) {
+async function ensureReleaseCampaign(db, song, versions, preserveReleaseMetadata = false) {
   const releaseId = await resolveReleaseId(db, song);
   const releaseMixId = cleanText(song.source_release_id || releaseId, 120);
   const publicUrl = publicationPath(releaseId);
@@ -227,7 +227,18 @@ async function ensureReleaseCampaign(db, song, versions) {
       .filter(Boolean)
   )];
   const pitch = cleanText(song.notes, 500) || `Open ${song.title} by ${song.artist_name} across HALO.`;
-  const releaseRows = await db.sql`
+  let releaseRows = [];
+  if (preserveReleaseMetadata) {
+    releaseRows = await db.sql`
+      UPDATE halo_release_campaigns
+      SET status = 'published', release_stage = 'released', visibility = 'public',
+        is_chart_eligible = TRUE, updated_at = NOW()
+      WHERE id = ${releaseId}
+        AND (owner_member_id = ${song.owner_member_id} OR owner_member_id IS NULL)
+      RETURNING id, official_url, stream_url
+    `;
+  }
+  if (!releaseRows.length) releaseRows = await db.sql`
     INSERT INTO halo_release_campaigns (
       id,
       owner_member_id,
@@ -585,6 +596,7 @@ export async function reconcilePublishedSong(db, {
   actorId = "system",
   actorType = "system",
   recordLedger = true,
+  preserveReleaseMetadata = false,
 } = {}) {
   const context = await loadPublishedSong(db, songId, ownerMemberId);
   if (!context) return { ok: false, skipped: true, reason: "song_not_published_or_missing" };
@@ -592,7 +604,7 @@ export async function reconcilePublishedSong(db, {
   const existingSync = await loadPublicationSyncRow(db, song.id);
   const existingDetails = existingSync?.details && typeof existingSync.details === "object" ? existingSync.details : {};
   try {
-    const release = await ensureReleaseCampaign(db, song, versions);
+    const release = await ensureReleaseCampaign(db, song, versions, preserveReleaseMetadata);
     const syncedVersions = await syncReleaseAudioVersions(db, song, versions, release.id);
     const radio = await ensureRadioTrack(db, song, syncedVersions, release);
     const dreamweaverStatus = ["dreamweaver_page", "hyperfollow"].includes(release.dreamweaver.routeMode)

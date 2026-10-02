@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { resolveDreamweaverPageFlow } from "../netlify/lib/dreamweaver-page-manager.mjs";
 import { forcePushTrack } from "../netlify/lib/song-publication.mjs";
+import "./catalog-force-push-contracts.mjs";
 
 const root = resolve(import.meta.dirname, "..");
 const read = path => readFile(resolve(root, path), "utf8");
@@ -23,7 +24,7 @@ const [helper, manager, healthHelper, migration, reconcileFunction, scheduledRec
 ]);
 const sampleSongId = "11111111-1111-4111-8111-111111111111";
 const forcePushApi = await read("netlify/functions/force-push-track.mjs");
-assert.match(forcePushApi, /path: "\/api\/catalog\/force-push-track"/);
+assert.doesNotMatch(forcePushApi, /path: "\/api\/catalog\/force-push-track"/, "only the canonical handler may claim the catalog publication route");
 assert.match(forcePushApi, /getUser\(\)/);
 assert.match(forcePushApi, /verifyRequestOrigin\(request\)/);
 assert.match(forcePushApi, /Buffer\.byteLength\(body, "utf8"\)/, "size checks must not rely only on content-length");
@@ -139,20 +140,20 @@ assert.match(forcePushApi, /Buffer\.byteLength\(body, "utf8"\)/, "size checks mu
   const page = await read("song-catalog/index.html");
   assert.match(page, /id="pushToShopButton" type="button">Push to Shop &amp; Charts/);
   assert.match(page, /id="pushToShopStatus" role="status" aria-live="polite"/);
-  const source = editor.match(/\$\("#pushToShopButton"\)\.addEventListener\("click",async event=>\{[\s\S]*?\n\}\);/)?.[0];
+  assert.match(editor, /\$\("#pushToShopButton"\)\.addEventListener\("click",pushToShop\)/);
+  const source = editor.match(/async function pushToShop\(\)\{[\s\S]*?\n\}/)?.[0];
   assert.ok(source, "editor must wire the force-push action");
   const status = { textContent: "" };
   const button = { disabled: false, setAttribute() {}, removeAttribute() {} };
-  let click;
   let track = { id: sampleSongId, title: "Test track", salePriceCents: null, currency: "USD" };
   let fail = false;
   let refreshed = "";
-  new Function("$", "selectedSong", "fetch", "loadCatalog", source)(
-    selector => selector === "#pushToShopStatus" ? status : { addEventListener: (_name, handler) => { click = handler; } },
+  const click = new Function("$", "selectedSong", "fetch", "loadCatalog", "state", "message", "money", `${source}\nreturn pushToShop;`)(
+    selector => selector === "#pushToShopStatus" ? status : button,
     () => track,
     async (url, options) => {
       assert.equal(button.disabled, true, "push must be disabled while the request is running");
-      assert.equal(status.textContent, "Pushing to Shop & Charts…");
+      assert.equal(status.textContent, "Publishing the saved track to Shop & Charts…");
       assert.equal(url, "/api/catalog/force-push-track");
       assert.equal(options.credentials, "same-origin");
       const payload = JSON.parse(options.body);
@@ -164,7 +165,8 @@ assert.match(forcePushApi, /Buffer\.byteLength\(body, "utf8"\)/, "size checks mu
       if (fail) throw new Error("Backend unavailable");
       return { ok: true, json: async () => ({ success: true, message: "Live on Shop & Charts" }) };
     },
-    async id => { refreshed = id; }
+    async id => { refreshed = id; },
+    { authenticated: true }, () => {}, () => "US$1.29"
   );
   await click({ currentTarget: button });
   assert.equal(refreshed, sampleSongId);

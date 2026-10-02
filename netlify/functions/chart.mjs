@@ -7,7 +7,6 @@ import {
   serializeChartRelease
 } from "../lib/catalog-chart.mjs";
 
-const CHART_PATH = "/api/catalog/chart";
 const VOTE_PATH = "/api/catalog/vote";
 const CHART_LIMIT = 50;
 
@@ -139,5 +138,5 @@ export default async function chartHandler(request, context) {
 }
 
 export const config = {
-  path: [CHART_PATH, VOTE_PATH]
+  path: ["/api/catalog/chart", "/api/catalog/vote"]
 };

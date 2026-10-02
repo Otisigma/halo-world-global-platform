@@ -3,12 +3,15 @@ import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
 const root = resolve(import.meta.dirname, "..");
-const [page, client, styles, catalogApi] = await Promise.all([
+const [page, client, styles, catalogApi, chartApi] = await Promise.all([
   readFile(resolve(root, "music/index.html"), "utf8"),
   readFile(resolve(root, "music/music.js"), "utf8"),
   readFile(resolve(root, "music/music.css"), "utf8"),
-  readFile(resolve(root, "netlify/functions/release-catalog.mjs"), "utf8")
+  readFile(resolve(root, "netlify/functions/release-catalog.mjs"), "utf8"),
+  readFile(resolve(root, "netlify/functions/chart.mjs"), "utf8")
 ]);
+
+assert.match(chartApi, /export const config\s*=\s*\{\s*path:\s*\["\/api\/catalog\/chart",\s*"\/api\/catalog\/vote"\]\s*\}/, "chart routes must be literal strings so Netlify can statically parse both endpoints");
 
 assert.match(page, /The living chart/, "music catalog must identify the live chart");
 assert.match(page, /Hip-Hop \/ Rap/, "chart must include a hip-hop room");

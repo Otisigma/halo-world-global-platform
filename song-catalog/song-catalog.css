@@ -30,3 +30,19 @@
 .canonical-master-badge{display:inline-block;padding:1px 6px;border:1px solid var(--gold);background:rgba(191,148,60,.14);color:var(--ink);font:700 9px "DM Mono";letter-spacing:.08em;text-transform:uppercase}.canonical-master-note{margin:6px 0 0;padding:8px 10px;border-left:3px solid var(--gold);background:rgba(191,148,60,.12);font:500 11px "DM Mono";line-height:1.5;color:var(--ink)}
 .master-copy-panel{border:1px solid var(--ink);background:var(--cream);padding:14px;display:grid;gap:10px}.master-copy-panel p{margin:4px 0 0;font-size:11px;line-height:1.5;color:var(--muted)}.master-copy-panel .audio-upload-progress{text-align:left}.master-copy-panel.is-uploading{border-color:var(--gold);box-shadow:inset 4px 0 0 var(--gold)}
 .drive-master-panel{border-bottom:1px solid var(--ink);background:var(--cream)}.drive-master-body{padding:18px 22px;display:grid;gap:10px}.drive-master-body strong{font:700 19px "Syne";margin:0}.drive-master-body p{font-size:11px;line-height:1.5;color:var(--muted);margin:0}.drive-master-progress{width:100%;height:6px;accent-color:var(--rust)}.drive-master-panel[data-upload-state="uploading"]{outline:2px solid var(--gold)}.drive-master-panel[data-upload-state="success"]{border-color:var(--green)}.drive-master-panel[data-upload-state="error"]{border-color:var(--rust)}
+.drive-link-panel{background:#111;color:#fff;border-bottom:1px solid var(--ink);padding:20px 22px}
+.drive-link-header{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+.drive-link-badge{background:#d4af37;color:#000;font:700 10px "DM Mono";text-transform:uppercase;letter-spacing:.1em;padding:2px 8px;border-radius:3px}
+.drive-link-header h4{margin:0;font:700 18px "Syne";color:#fff}
+.drive-link-desc{color:#aaa;font-size:12px;line-height:1.4;margin:0 0 16px}
+.drive-link-input-group{display:flex;gap:10px;flex-wrap:wrap}
+.drive-link-input-group input{flex:1;min-width:min(280px,100%);background:#1a1a1a;border:1px solid #444;color:#fff;padding:10px 14px;border-radius:4px;font-size:13px}
+.drive-link-input-group input:focus-visible{outline:2px solid #d4af37;outline-offset:1px}
+.drive-link-save{background:#d4af37;color:#000;border:0;padding:10px 20px;font:700 11px "DM Mono";text-transform:uppercase;letter-spacing:.05em;border-radius:4px;cursor:pointer}
+.drive-link-save:hover{background:#e3c25a}
+.drive-link-save:disabled{opacity:.6;cursor:wait}
+.drive-link-panel[data-link-state="saved"] .drive-link-save{background:#355f4b;color:#fff}
+.drive-link-panel[data-link-state="invalid"] .drive-link-input-group input{border-color:#a74e32}
+.drive-link-preview{margin:12px 0 0}
+.drive-link-preview a{color:#d4af37;font-size:13px;text-decoration:none}
+.drive-link-preview a:hover{text-decoration:underline}

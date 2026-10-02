@@ -102,6 +102,17 @@
             </div>
           </form>
 
+          <section class="drive-link-panel" id="driveLinkPanel" aria-labelledby="driveLinkHeading">
+            <div class="drive-link-header"><span class="drive-link-badge">Master archive</span><h4 id="driveLinkHeading">Google Drive Master Link</h4></div>
+            <p class="drive-link-desc">Paste the shareable Google Drive link to your full WAV master file (ensure access is set to "Anyone with the link"). No Google Cloud credentials needed — the link is saved to this song's Sale master record.</p>
+            <div class="drive-link-input-group">
+              <label class="sr-only" for="googleDriveUrl">Google Drive master URL</label>
+              <input id="googleDriveUrl" name="googleDriveUrl" form="songForm" type="url" inputmode="url" maxlength="1200" autocomplete="off" spellcheck="false" placeholder="https://drive.google.com/file/d/YOUR_FILE_ID/view?usp=sharing">
+              <button class="drive-link-save" id="saveDriveUrlButton" form="songForm" type="submit">Save drive link</button>
+            </div>
+            <p class="drive-link-preview" id="googleDrivePreview" hidden><a id="googleDrivePreviewLink" href="https://drive.google.com/" target="_blank" rel="noopener noreferrer">↗ Open linked Drive master in new tab</a></p>
+          </section>
+
           <div class="workspace-grid">
             <form class="metadata-panel" id="songForm">
               <div class="panel-heading"><div><p class="eyebrow">Master record</p><h3>Song information</h3></div><button class="primary-button" type="submit">Save + review</button></div>

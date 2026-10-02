@@ -10,6 +10,7 @@ import { buildDreamweaverSatellite } from "../../lib/route-registry.js";
 import { cleanDreamweaverSongId } from "../../lib/dreamweaver-storefront.js";
 import { pickCanonicalMaster, serializeMasterCopy } from "../lib/master-copy.mjs";
 import { attachPublicationHealthToSongs } from "../lib/song-publication-health.mjs";
+import { cleanGoogleDriveUrl } from "../lib/google-drive.mjs";
 
 const MAX_BODY_BYTES = 80_000;
 const RIGHTS_STATUSES = new Set(["needs_review", "cleared", "disputed"]);
@@ -124,6 +125,7 @@ function serializeSong(song: typeof songs.$inferSelect, versions: Array<typeof s
     sourceUploadSurface: song.sourceUploadSurface || "",
     pipelineUpdatedAt: song.pipelineUpdatedAt?.toISOString() || "",
     masterCopy: serializeMasterCopy(versions),
+    googleDriveUrl: canonicalMaster?.driveUrl || "",
     versions: versions.map(version => ({
       id: version.id,
       versionType: version.versionType,
@@ -357,6 +359,11 @@ async function saveSong(ownerMemberId: string, payload: Record<string, unknown>)
   const artistName = cleanText(payload.artistName, 120);
   const title = cleanText(payload.title, 160);
   if (!id || !artistName || !title) return json({ message: "Choose a valid song and add its artist and title" }, 400);
+  const hasDriveUrl = Object.hasOwn(payload, "googleDriveUrl");
+  const googleDriveUrl = hasDriveUrl ? cleanGoogleDriveUrl(payload.googleDriveUrl) : "";
+  if (hasDriveUrl && String(payload.googleDriveUrl ?? "").trim() && !googleDriveUrl) {
+    return json({ message: "Paste a shareable https://drive.google.com link for the master" }, 400);
+  }
   const rows = await db.update(songs).set({
     artistName, title, albumTitle: cleanText(payload.albumTitle, 160), genre: cleanText(payload.genre, 80),
     isrc: cleanText(payload.isrc, 24).toUpperCase(), upc: cleanText(payload.upc, 24),
@@ -366,8 +373,12 @@ async function saveSong(ownerMemberId: string, payload: Record<string, unknown>)
     explicitLyrics: payload.explicitLyrics === true, notes: cleanText(payload.notes, 4000), updatedAt: new Date(),
   }).where(and(eq(songs.id, id), eq(songs.ownerMemberId, ownerMemberId), eq(songs.status, "active"))).returning({ id: songs.id });
   if (!rows.length) return json({ message: "That song was not found" }, 404);
+  if (hasDriveUrl) {
+    await db.update(songVersions).set({ driveUrl: googleDriveUrl, updatedAt: new Date() })
+      .where(and(eq(songVersions.songId, id), eq(songVersions.versionType, MASTER_VERSION_TYPE), eq(songVersions.status, "active")));
+  }
   await runDreamweaverReview(id, ownerMemberId);
-  return json({ message: "Song saved and Dream Weaver reviewed it", songId: id });
+  return json({ message: "Song saved and Dream Weaver reviewed it", songId: id, ...(hasDriveUrl ? { googleDriveUrl } : {}) });
 }
 
 async function saveVersion(ownerMemberId: string, payload: Record<string, unknown>) {

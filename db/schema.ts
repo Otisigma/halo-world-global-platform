@@ -50,6 +50,7 @@ export const songVersions = pgTable("halo_song_versions", {
   driveFileName: text("drive_file_name").notNull().default(""),
   driveByteSize: integer("drive_byte_size").notNull().default(0),
   driveUploadedAt: timestamp("drive_uploaded_at", { withTimezone: true }),
+  driveUrl: text("drive_url").notNull().default(""),
   audioContentType: text("audio_content_type").notNull().default(""),
   audioByteSize: integer("audio_byte_size").notNull().default(0),
   audioFilename: text("audio_filename").notNull().default(""),

@@ -39,6 +39,25 @@ export function isDriveId(value) {
   return DRIVE_ID_PATTERN.test(String(value || ""));
 }
 
+const DRIVE_LINK_HOSTS = new Set(["drive.google.com", "docs.google.com"]);
+
+/**
+ * Normalizes a pasted shareable Google Drive link for a master file. No API credentials are
+ * involved: only https drive.google.com / docs.google.com links are accepted, anything else
+ * returns "" so callers can reject it.
+ */
+export function cleanGoogleDriveUrl(value) {
+  const text = String(value ?? "").trim().slice(0, 1200);
+  if (!text) return "";
+  try {
+    const url = new URL(text);
+    if (url.protocol !== "https:" || url.username || url.password || url.port || !DRIVE_LINK_HOSTS.has(url.hostname)) return "";
+    return url.toString();
+  } catch {
+    return "";
+  }
+}
+
 /** Validates master metadata before a Drive session is opened. */
 export function validateDriveMasterUpload({ fileName, fileType, fileSize } = {}) {
   const name = String(fileName || "").trim();

@@ -269,4 +269,24 @@ assert.match(musicStyles, /\.halo-player-bar \{ position: fixed;/, "the floating
   assert.match(navigationStyles, /prefers-reduced-motion[\s\S]*\.halo-menu-business-hub:hover/, "Business Hub hover lift must respect reduced motion");
 }
 
+// --- Public sync licensing destination --------------------------------------------------
+{
+  const { MENU_ROUTE_REGISTRY, PUBLIC_ROUTE_REGISTRY } = await import("../lib/route-registry.js");
+  const [mainSite, netlifyConfig, page, client] = await Promise.all([
+    read("halo.html"), read("netlify.toml"), read("sync-hub/index.html"), read("sync-hub/sync-hub.js")
+  ]);
+  assert.equal(PUBLIC_ROUTE_REGISTRY.find(({ route }) => route === "/sync-hub/")?.file, "sync-hub/index.html");
+  assert.ok(MENU_ROUTE_REGISTRY.some(({ route }) => route === "/sync-hub/"), "the sync hub must remain in the main menu registry");
+  assert.match(mainSite, /<a href="\/sync-hub\/"[^>]*data-signal="SYNC LICENSING"/);
+  assert.match(mainSite, /\{ route: '\/sync-hub\/', label: 'SYNC LICENSING' \}/);
+  assert.match(netlifyConfig, /from = "\/sync-hub\/"\s+to = "\/sync-hub\/index\.html"\s+status = 200/);
+  assert.match(page, /HALO BUSINESS HUB/);
+  for (const field of ["company", "email", "mediaType", "territory", "budget", "notes"]) {
+    assert.match(page, new RegExp(`name="${field}"`), `${field} must be in the inquiry form`);
+  }
+  assert.match(page, /<audio id="audition" controls/);
+  assert.match(client, /player\.src = src/, "available stems must update the audio source");
+  assert.match(client, /no request has been sent/, "the submission state must not claim to deliver an unsent inquiry");
+}
+
 console.log("Site navigation contracts passed.");

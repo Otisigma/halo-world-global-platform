@@ -239,6 +239,12 @@
   force = true
 
 [[redirects]]
+  from = "/sync-hub/"
+  to = "/sync-hub/index.html"
+  status = 200
+  force = true
+
+[[redirects]]
   from = "/music-upload/"
   to = "/music-upload/index.html"
   status = 200

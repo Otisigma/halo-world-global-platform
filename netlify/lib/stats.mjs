@@ -87,6 +87,7 @@ export const allowedEvents = new Set([
   "open_album_concierge",
   "open_artist_rooms",
   "open_artist_pro",
+  "open_sync_hub",
   "open_bug_report",
   "open_business_hub",
   "open_campaign_studio",

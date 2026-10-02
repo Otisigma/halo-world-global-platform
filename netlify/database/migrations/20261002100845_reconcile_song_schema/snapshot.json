@@ -1,7 +1,7 @@
 {
   "version": "8",
   "dialect": "postgres",
-  "id": "cb8784f4-c7ed-44e7-aad8-fe865bb3b8cc",
+  "id": "5ae6a7ff-de86-47e5-b48d-a3e6d7934fb5",
   "prevIds": [
     "41af6a94-c853-47cf-be19-c43dc4eb3738"
   ],
@@ -915,6 +915,19 @@
       "generated": null,
       "identity": null,
       "name": "drive_uploaded_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "halo_song_versions"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "''",
+      "generated": null,
+      "identity": null,
+      "name": "drive_url",
       "entityType": "columns",
       "schema": "public",
       "table": "halo_song_versions"

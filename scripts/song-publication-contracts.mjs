@@ -23,7 +23,7 @@ const [helper, manager, healthHelper, migration, reconcileFunction, scheduledRec
 ]);
 const sampleSongId = "11111111-1111-4111-8111-111111111111";
 const forcePushApi = await read("netlify/functions/force-push-track.mjs");
-assert.match(forcePushApi, /path: "\/api\/catalog\/force-push-track"/);
+assert.doesNotMatch(forcePushApi, /path: "\/api\/catalog\/force-push-track"/, "legacy handler must not compete with the catalog force-push route");
 assert.match(forcePushApi, /getUser\(\)/);
 assert.match(forcePushApi, /verifyRequestOrigin\(request\)/);
 assert.match(forcePushApi, /Buffer\.byteLength\(body, "utf8"\)/, "size checks must not rely only on content-length");
@@ -170,6 +170,12 @@ assert.match(forcePushApi, /Buffer\.byteLength\(body, "utf8"\)/, "size checks mu
   assert.equal(refreshed, sampleSongId);
   assert.equal(status.textContent, "Live on Shop & Charts");
   assert.equal(button.disabled, false);
+  for (const invalidPrice of [0, -1, "invalid", Infinity]) {
+    track.salePriceCents = invalidPrice;
+    track.currency = "EUR";
+    await click({ currentTarget: button });
+    assert.equal(status.textContent, "Live on Shop & Charts", "invalid prices must use the USD fallback even for foreign currency songs");
+  }
   fail = true;
   refreshed = "";
   await click({ currentTarget: button });

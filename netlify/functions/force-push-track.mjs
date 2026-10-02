@@ -34,5 +34,3 @@ export default async function forcePushTrackHandler(request) {
     return json({ message: "Publication was not confirmed. Please retry or check publication health." }, 500);
   }
 }
-
-export const config = { path: "/api/catalog/force-push-track" };

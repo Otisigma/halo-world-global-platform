@@ -31,7 +31,8 @@ assert.match(client, /rankedReleases/, "client must calculate interactive room r
   assert.equal(isChartRelease({ releaseStatus: "PUBLISHED" }), true);
   assert.equal(isChartRelease({ isChartEligible: true, status: "passed" }), true, "legacy eligible releases stay on the chart");
   assert.equal(isChartRelease({ isLiveVisible: false, inChart: true, releaseStatus: "PUBLISHED" }), false);
-  assert.equal(isChartRelease({ isChartEligible: false, releaseStatus: "PUBLISHED" }), false, "explicit non-chart tracks stay excluded");
+  assert.equal(isChartRelease({ isChartEligible: false, releaseStatus: "PUBLISHED" }), true, "published tracks remain chart-listed without a legacy eligibility flag");
+  assert.equal(isChartRelease({ isChartEligible: false, inChart: true }), true, "explicit chart inclusion overrides a legacy eligibility flag");
   assert.equal(isChartRelease({ releaseStatus: "READY" }), false);
   assert.equal(isChartRelease({}), false);
 }

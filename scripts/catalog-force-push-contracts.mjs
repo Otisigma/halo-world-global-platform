@@ -187,6 +187,57 @@ assert.match(editorJs, /releaseStatus:"PUBLISHED",status:"PUBLISHED",inChart:tru
 assert.match(editorJs, /aria-busy/, "song editor must show loading state while pushing");
 assert.doesNotMatch(editorJs, /localStorage/, "song editor must not persist catalog data in the browser");
 
+{
+  const source = editorJs.match(/\$\("#pushToShopButton"\)\.addEventListener\("click",async event=>\{[\s\S]*?\n\}\);/)?.[0];
+  assert.ok(source, "editor must retain its single force-push handler");
+  const status = { textContent: "" };
+  const attributes = new Map();
+  const button = {
+    disabled: false,
+    setAttribute: (name, value) => attributes.set(name, value),
+    removeAttribute: name => attributes.delete(name)
+  };
+  let click;
+  let requests = 0;
+  let reloads = 0;
+  let success = true;
+  new Function("$", "selectedSong", "fetch", "loadCatalog", source)(
+    selector => selector === "#pushToShopStatus" ? status : { addEventListener: (_event, handler) => { click = handler; } },
+    () => ({ id: songId, title: "Night Drive", salePriceCents: null }),
+    async (url, options) => {
+      requests++;
+      assert.equal(url, "/api/catalog/force-push-track");
+      assert.equal(options.method, "POST");
+      assert.equal(options.credentials, "same-origin");
+      assert.equal(button.disabled, true);
+      assert.equal(attributes.get("aria-busy"), "true");
+      const payload = JSON.parse(options.body);
+      assert.equal(payload.id, songId);
+      assert.equal(payload.inChart, true);
+      assert.equal(payload.price, "US$1.29");
+      return { ok: success, json: async () => ({ success, message: success ? "Published successfully" : "Publication failed" }) };
+    },
+    async id => {
+      reloads++;
+      assert.equal(id, songId);
+      throw new Error("Catalog refresh unavailable");
+    }
+  );
+  await click({ currentTarget: button });
+  assert.equal(requests, 1, "one click must send one publication request");
+  assert.equal(reloads, 1);
+  assert.equal(status.textContent, "Published successfully", "a failed refresh must not report a successful push as failed");
+  assert.equal(button.disabled, false);
+  assert.equal(attributes.has("aria-busy"), false);
+  success = false;
+  await click({ currentTarget: button });
+  assert.equal(requests, 2);
+  assert.equal(reloads, 1, "failed publication must not reload the catalog");
+  assert.equal(status.textContent, "Publication failed");
+  assert.equal(button.disabled, false);
+  assert.equal(attributes.has("aria-busy"), false);
+}
+
 // Storefront chart filter.
 const filterSource = musicClient.match(/function isChartRelease\(release\) \{[\s\S]*?\n  \}/)?.[0];
 assert.ok(filterSource, "music client must define the chart listing filter");

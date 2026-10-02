@@ -3,7 +3,7 @@ import { getUser, verifyRequestOrigin } from "@netlify/identity";
 import { ensureMembership } from "../lib/halo-x.mjs";
 import { ForcePushError, forcePushTrack } from "../lib/catalog-force-push.mjs";
 
-const MAX_BODY_BYTES = 20_000;
+const MAX_BODY_BYTES = 80_000;
 
 function json(body, status = 200, headers = {}) {
   return Response.json(body, { status, headers: { "Cache-Control": "no-store", ...headers } });

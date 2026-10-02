@@ -115,6 +115,24 @@ await assert.rejects(
   forcePushTrack(fakeDb([{ id: songId, owner, title: "X", rights_status: "disputed" }]), { ownerMemberId: owner, payload: { id: songId }, reconcile: fakeReconcile(new Map()) }),
   error => error instanceof ForcePushError && error.status === 409
 );
+{
+  const songs = [{ id: songId, owner, title: "Same title", rights_status: "cleared" }];
+  const db = fakeDb(songs);
+  const releases = new Map();
+  await assert.rejects(
+    forcePushTrack(db, { ownerMemberId: owner, payload: { id: "22222222-2222-4222-8222-222222222222", title: "Same title" }, reconcile: fakeReconcile(releases) }),
+    error => error instanceof ForcePushError && error.status === 404,
+    "a stale id must not fall back to publishing another song with the same title"
+  );
+  songs.push({ ...songs[0], id: "33333333-3333-4333-8333-333333333333" });
+  await assert.rejects(
+    forcePushTrack(db, { ownerMemberId: owner, payload: { title: "Same title" }, reconcile: fakeReconcile(releases) }),
+    error => error instanceof ForcePushError && error.status === 409,
+    "ambiguous titles must require an explicit id"
+  );
+  assert.equal(releases.size, 0);
+  assert.ok(db.queries.every(query => !query.text.startsWith("UPDATE")), "invalid selection must not alter catalog records");
+}
 
 // Server-side route contract.
 assert.match(handler, /path: "\/api\/catalog\/force-push-track"/, "force push must be served at /api/catalog/force-push-track");
@@ -138,7 +156,8 @@ assert.match(handler, /request\.method !== "POST"/, "force push must be POST onl
   assert.equal((await handle(new Request("https://halo.world/api/catalog/force-push-track"))).status, 405);
   assert.equal((await handle(request("{}", "text/plain"))).status, 415);
   assert.equal((await handle(request("{"))).status, 400);
-  assert.equal((await handle(request(JSON.stringify({ title: "é".repeat(11_000) })))).status, 413, "body limit must count UTF-8 bytes without relying on content-length");
+  assert.equal((await handle(request(JSON.stringify({ title: "é".repeat(41_000) })))).status, 413, "body limit must count UTF-8 bytes without relying on content-length");
+  assert.equal((await handle(request(JSON.stringify({ id: songId, notes: "x".repeat(4000), versions: Array.from({ length: 8 }, () => ({ notes: "x".repeat(2000) })) })))).status, 200, "the route must accept saved song data with all standard version notes");
   assert.equal((await handle(request(JSON.stringify({ id: songId })))).status, 200);
   const legacyHandler = await read("netlify/functions/force-push-track.mjs");
   assert.doesNotMatch(legacyHandler, /path: "\/api\/catalog\/force-push-track"/, "only one function may own the force-push route");

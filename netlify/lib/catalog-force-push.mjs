@@ -63,7 +63,7 @@ async function findOwnedSong(db, ownerMemberId, { id, title }) {
       WHERE id = ${id} AND owner_member_id = ${ownerMemberId} AND status = 'active'
       LIMIT 1
     `;
-    if (rows[0]) return rows[0];
+    return rows[0] || null;
   }
   if (!title) return null;
   const rows = await db.sql`
@@ -71,8 +71,9 @@ async function findOwnedSong(db, ownerMemberId, { id, title }) {
     FROM halo_song_catalog
     WHERE LOWER(title) = LOWER(${title}) AND owner_member_id = ${ownerMemberId} AND status = 'active'
     ORDER BY updated_at DESC
-    LIMIT 1
+    LIMIT 2
   `;
+  if (rows.length > 1) throw new ForcePushError("More than one track has this title. Use its id.", 409);
   return rows[0] || null;
 }
 

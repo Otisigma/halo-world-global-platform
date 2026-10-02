@@ -245,6 +245,12 @@
   force = true
 
 [[redirects]]
+  from = "/asset-inventory/"
+  to = "/asset-inventory/index.html"
+  status = 200
+  force = true
+
+[[redirects]]
   from = "/music-upload/"
   to = "/music-upload/index.html"
   status = 200

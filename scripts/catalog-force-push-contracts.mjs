@@ -115,6 +115,24 @@ await assert.rejects(
   forcePushTrack(fakeDb([{ id: songId, owner, title: "X", rights_status: "disputed" }]), { ownerMemberId: owner, payload: { id: songId }, reconcile: fakeReconcile(new Map()) }),
   error => error instanceof ForcePushError && error.status === 409
 );
+{
+  const songs = [
+    { id: songId, owner, title: "Shared title", rights_status: "cleared" },
+    { id: "22222222-2222-4222-8222-222222222222", owner, title: "Shared title", rights_status: "cleared" }
+  ];
+  const db = fakeDb(songs);
+  await assert.rejects(
+    forcePushTrack(db, { ownerMemberId: owner, payload: { id: "33333333-3333-4333-8333-333333333333", title: "Shared title" }, reconcile: fakeReconcile(new Map()) }),
+    error => error instanceof ForcePushError && error.status === 404,
+    "a stale id must not publish a different song with the same title"
+  );
+  await assert.rejects(
+    forcePushTrack(db, { ownerMemberId: owner, payload: { title: "shared title" }, reconcile: fakeReconcile(new Map()) }),
+    error => error instanceof ForcePushError && error.status === 409,
+    "title-only requests must reject ambiguous catalog matches"
+  );
+  assert.ok(!db.queries.some(query => query.text.startsWith("UPDATE")), "ambiguous requests must not modify any song");
+}
 
 // Server-side route contract.
 assert.match(handler, /path: "\/api\/catalog\/force-push-track"/, "force push must be served at /api/catalog/force-push-track");
@@ -149,13 +167,14 @@ assert.doesNotMatch(legacyHandler, /path: "\/api\/catalog\/force-push-track"/, "
   rejectOrigin = false;
   assert.equal((await run(request("{}", "text/plain"))).status, 415);
   assert.equal((await run(request("{"))).status, 400);
-  assert.equal((await run(request(JSON.stringify({ title: "é".repeat(10_000) })))).status, 413, "body limit must count UTF-8 bytes, not characters");
+  assert.equal((await run(request(JSON.stringify({ title: "é".repeat(40_000) })))).status, 413, "body limit must count UTF-8 bytes, not characters");
   assert.equal(calls, 0, "invalid requests must never reach the database publication pipeline");
+  assert.equal((await run(request(JSON.stringify({ notes: "é".repeat(12_000) })))).status, 200, "valid saved records above 20 KB must retain main's request-size allowance");
   const response = await run(request());
   assert.equal(response.status, 200);
   assert.equal(response.headers.get("cache-control"), "no-store");
   assert.equal((await response.json()).success, true);
-  assert.equal(calls, 1);
+  assert.equal(calls, 2);
 }
 
 // Admin editor control.

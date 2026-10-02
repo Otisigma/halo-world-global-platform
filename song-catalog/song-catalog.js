@@ -58,11 +58,13 @@ function selectedSong(){return state.songs.find(song=>song.id===state.selectedId
 
 async function pushToShop(){
   const song=selectedSong();
-  if(!song||!state.authenticated)return;
+  const status=$("#pushToShopStatus");
+  if(!song||!state.authenticated){status.textContent="Select and save a track first.";return}
   const button=$("#pushToShopButton");
   if(button.disabled)return;
   button.disabled=true;button.setAttribute("aria-busy","true");button.textContent="Pushing to Shop & Charts…";
   message("Publishing the saved track to Shop & Charts…");
+  status.textContent="Pushing to Shop & Charts…";
   try{
     const payload={...song,releaseStatus:"PUBLISHED",status:"PUBLISHED",inChart:true,isLiveVisible:true,price:song.salePriceCents>0?money(song.salePriceCents,song.currency):"US$1.29"};
     const response=await fetch("/api/catalog/force-push-track",{method:"POST",credentials:"same-origin",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});
@@ -70,7 +72,8 @@ async function pushToShop(){
     if(!response.ok||data.success!==true)throw new Error(data.message||"The live push could not be confirmed. Try again.");
     await loadCatalog(song.id);
     message(data.message||"Published to Shop & Charts.");
-  }catch(error){message(error.message)}
+    status.textContent=data.message||"Published to Shop & Charts.";
+  }catch(error){message(error.message);status.textContent=error.message}
   finally{button.disabled=false;button.removeAttribute("aria-busy");button.textContent="Push to Shop & Charts"}
 }
 

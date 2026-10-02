@@ -215,9 +215,10 @@ assert.match(publication, /is_chart_eligible = TRUE/);
   for (const success of [true, false]) {
     const button = { disabled: false, attributes: {}, setAttribute(key, value) { this.attributes[key] = value; }, removeAttribute(key) { delete this.attributes[key]; } };
     const messages = [];
+    const status = { textContent: "" };
     let reloads = 0;
     const push = new Function("selectedSong", "state", "$", "message", "fetch", "loadCatalog", "money", `${source}; return pushToShop;`)(
-      () => ({ id: songId, salePriceCents: null }), { authenticated: true }, () => button,
+      () => ({ id: songId, salePriceCents: null }), { authenticated: true }, selector => selector === "#pushToShopStatus" ? status : button,
       text => messages.push(text), async (_url, options) => {
         assert.equal(button.disabled, true);
         assert.equal(button.attributes["aria-busy"], "true");

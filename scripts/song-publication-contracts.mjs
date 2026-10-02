@@ -3,6 +3,8 @@ import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { resolveDreamweaverPageFlow } from "../netlify/lib/dreamweaver-page-manager.mjs";
 import "./catalog-force-push-contracts.mjs";
+import { forcePushTrack } from "../netlify/lib/song-publication.mjs";
+import { createForcePushTrackHandler } from "../netlify/functions/catalog-force-push-track.mjs";
 
 const root = resolve(import.meta.dirname, "..");
 const read = path => readFile(resolve(root, path), "utf8");
@@ -22,6 +24,168 @@ const [helper, manager, healthHelper, migration, reconcileFunction, scheduledRec
   read("netlify/functions/release-link.mjs"),
 ]);
 const sampleSongId = "11111111-1111-4111-8111-111111111111";
+const forcePushApi = await read("netlify/functions/catalog-force-push-track.mjs");
+assert.match(forcePushApi, /path: "\/api\/catalog\/force-push-track"/);
+assert.match(forcePushApi, /currentUser = getUser/);
+assert.match(forcePushApi, /verifyOrigin\(request\)/);
+assert.match(forcePushApi, /new TextEncoder\(\)\.encode\(text\)\.byteLength/, "size checks must not rely only on content-length");
+
+{
+  const membership = { member_id: "owner", actor_id: "actor" };
+  const song = {
+    id: sampleSongId, owner_member_id: "owner", title: "Keep my title", artist_name: "Artist",
+    pipeline_status: "uploaded", sale_price_cents: null, currency: "USD",
+    artwork_url: "https://cdn.halo.world/cover.jpg", notes: "Keep my notes",
+    source_release_id: "existing-release", rights_status: "cleared",
+  };
+  const releases = new Map();
+  const statements = [];
+  let missing = false;
+  let ambiguous = false;
+  let failRelease = false;
+  const db = { sql: async (strings, ...values) => {
+    const query = strings.join("?").replace(/\s+/g, " ").trim();
+    statements.push({ query, values });
+    if (query.startsWith("SELECT id FROM halo_song_catalog")) {
+      assert.equal(values[1], "owner", "lookups must be owner scoped");
+      if (missing) return [];
+      return ambiguous ? [{ id: song.id }, { id: "other" }] : [{ id: song.id }];
+    }
+    if (query.startsWith("UPDATE halo_song_catalog SET pipeline_status")) {
+      assert.equal(values[1], "owner", "writes must be owner scoped");
+      song.pipeline_status = "published";
+      if (!(song.sale_price_cents > 0)) { song.sale_price_cents = 129; song.currency = "USD"; }
+      song.pipeline_updated_at = "2026-10-02T12:00:00.000Z";
+      return [{ ...song }];
+    }
+    if (query.includes("FROM halo_song_catalog song")) return [{ ...song }];
+    if (query.includes("FROM halo_song_versions")) return [];
+    if (query.includes("FROM halo_song_publication_sync")) return [];
+    if (query.startsWith("SELECT id, owner_member_id FROM halo_release_campaigns")) {
+      return [{ id: song.source_release_id, owner_member_id: song.owner_member_id }];
+    }
+    if (query.startsWith("INSERT INTO halo_release_campaigns")) {
+      if (failRelease) throw new Error("Storage unavailable");
+      assert.match(query, /ON CONFLICT \(id\) DO UPDATE/, "release publication must be idempotent");
+      const release = { id: values[0], official_url: values[8], stream_url: values.at(-1) };
+      releases.set(release.id, release);
+      return [release];
+    }
+    if (query.startsWith("INSERT INTO halo_song_publication_sync") || query.startsWith("INSERT INTO halo_ledger")) return [];
+    throw new Error(`Unexpected publication query: ${query}`);
+  }};
+  const result = await forcePushTrack(db, {
+    id: song.id, title: "Do not overwrite", notes: "", owner_member_id: "attacker",
+    price: "US$0.01", releaseStatus: "READY",
+  }, membership);
+  assert.equal(result.success, true);
+  assert.equal(result.track.price, "US$1.29");
+  assert.equal(result.track.pushedToLiveAt, song.pipeline_updated_at);
+  assert.equal(result.track.releaseStatus, "PUBLISHED");
+  assert.equal(result.track.status, "PUBLISHED");
+  assert.equal(result.track.inChart, true);
+  assert.equal(result.track.isLiveVisible, true);
+  assert.equal(song.title, "Keep my title");
+  assert.equal(song.notes, "Keep my notes");
+  assert.equal(song.artwork_url, "https://cdn.halo.world/cover.jpg");
+  assert.equal(song.owner_member_id, "owner");
+  song.sale_price_cents = 249;
+  song.currency = "EUR";
+  assert.equal((await forcePushTrack(db, { title: song.title }, membership)).track.price, "EUR 2.49");
+  assert.equal(releases.size, 1, "repeated pushes must reuse the existing release");
+  for (const invalid of [null, [], {}, { id: "bad-id" }, { title: " " }]) {
+    const count = statements.length;
+    await assert.rejects(forcePushTrack(db, invalid, membership), { status: 400 });
+    assert.equal(statements.length, count, "invalid payloads must not write anything");
+  }
+  missing = true;
+  await assert.rejects(forcePushTrack(db, { id: song.id }, membership), { status: 404 });
+  missing = false;
+  ambiguous = true;
+  await assert.rejects(forcePushTrack(db, { title: song.title }, membership), { status: 409 });
+  ambiguous = false;
+  failRelease = true;
+  await assert.rejects(forcePushTrack(db, { id: song.id }, membership), /Storage unavailable/, "failed sync must not report success");
+  assert.ok(statements.every(({ query }) => !/\bDELETE\b|\bTRUNCATE\b/.test(query)), "force pushes must never delete catalog data");
+}
+
+{
+  let user = null;
+  let rejectOrigin = false;
+  let calls = 0;
+  const handler = createForcePushTrackHandler({
+    database: () => ({ sql: async strings => strings.join("").includes("UPDATE")
+      ? [{ id: sampleSongId, title: "Track", sale_price_cents: 129, currency: "USD", pipeline_updated_at: new Date() }]
+      : [{ id: sampleSongId }] }),
+    currentUser: async () => user,
+    verifyOrigin: () => { if (rejectOrigin) throw new Error("origin"); },
+    membershipFor: async () => ({ member_id: "owner" }),
+    reconcile: async () => { calls++; return { ok: true, releaseId: "release" }; },
+  });
+  const request = (body = "{}", method = "POST") => new Request("https://halo.world/api/catalog/force-push-track", {
+    method, headers: { "Content-Type": "application/json" }, ...(method === "POST" ? { body } : {}),
+  });
+  assert.equal((await handler(request("", "GET"))).status, 405);
+  assert.equal((await handler(request())).status, 401);
+  user = { id: "signed-in" };
+  rejectOrigin = true;
+  assert.equal((await handler(request())).status, 403);
+  rejectOrigin = false;
+  assert.equal((await handler(request("{"))).status, 400);
+  assert.equal((await handler(request(" ".repeat(80_001)))).status, 413);
+  assert.equal(calls, 0, "rejected requests must never publish");
+  const response = await handler(request(JSON.stringify({ id: sampleSongId })));
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get("cache-control"), "no-store");
+  assert.equal((await response.json()).success, true);
+}
+
+{
+  const editor = await read("song-catalog/song-catalog.js");
+  const page = await read("song-catalog/index.html");
+  assert.match(page, /id="pushToShopButton" type="button">Push to Shop &amp; Charts/);
+  assert.match(page, /id="pushToShopStatus" role="status" aria-live="polite"/);
+  const source = editor.match(/async function pushToShop\(\)\{[\s\S]*?\n\}/)?.[0];
+  assert.ok(source, "editor must wire the force-push action");
+  const status = { textContent: "" };
+  const button = { disabled: false, setAttribute() {}, removeAttribute() {} };
+  let click;
+  let track = { id: sampleSongId, title: "Test track", salePriceCents: null, currency: "USD" };
+  let fail = false;
+  let refreshed = "";
+  click = new Function("$", "selectedSong", "fetch", "loadCatalog", "state", "message", "money", `${source};return pushToShop;`)(
+    selector => selector === "#pushToShopStatus" ? status : button,
+    () => track,
+    async (url, options) => {
+      assert.equal(button.disabled, true, "push must be disabled while the request is running");
+      assert.equal(status.textContent, "Pushing to Shop & Charts…");
+      assert.equal(url, "/api/catalog/force-push-track");
+      assert.equal(options.credentials, "same-origin");
+      const payload = JSON.parse(options.body);
+      assert.equal(payload.releaseStatus, "PUBLISHED");
+      assert.equal(payload.status, "PUBLISHED");
+      assert.equal(payload.inChart, true);
+      assert.equal(payload.isLiveVisible, true);
+      assert.equal(payload.price, "US$1.29");
+      if (fail) throw new Error("Backend unavailable");
+      return { ok: true, json: async () => ({ success: true, message: "Live on Shop & Charts" }) };
+    },
+    async id => { refreshed = id; }, { authenticated: true }, () => {}, () => ""
+  );
+  await click({ currentTarget: button });
+  assert.equal(refreshed, sampleSongId);
+  assert.equal(status.textContent, "Live on Shop & Charts");
+  assert.equal(button.disabled, false);
+  fail = true;
+  refreshed = "";
+  await click({ currentTarget: button });
+  assert.equal(status.textContent, "Backend unavailable", "offline publication must fail visibly");
+  assert.equal(refreshed, "", "offline publication must not report a local save as live");
+  assert.equal(button.disabled, false);
+  track = null;
+  await click({ currentTarget: button });
+  assert.equal(status.textContent, "Select and save a track first.");
+}
 const managedDreamweaverFlow = resolveDreamweaverPageFlow(sampleSongId, {
   mixId: "sample-release",
   publicUrl: "/music/?song=sample-release",

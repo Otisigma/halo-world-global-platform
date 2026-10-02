@@ -120,7 +120,7 @@ function serializeRelease(row) {
     status: normalizedCatalogStatus(row.status),
     releaseStatus: normalizedCatalogStatus(row.status).toUpperCase(),
     inChart: row.is_chart_eligible === true,
-    isLiveVisible: row.visibility !== "private",
+    isLiveVisible: !row.visibility || row.visibility === "public",
     releaseDate: row.release_date ? String(row.release_date).slice(0, 10) : "",
     isrc: row.catalog_isrc || row.isrc || "",
     duration: row.duration || "",

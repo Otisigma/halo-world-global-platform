@@ -581,10 +581,17 @@
     return roomGenres.some(roomGenre => genres.some(genre => genre.includes(normalized(roomGenre))));
   }
 
+  function isChartListed(release) {
+    if (release.isLiveVisible === false) return false;
+    return release.isChartEligible === true
+      || release.inChart === true
+      || String(release.releaseStatus || "").toUpperCase() === "PUBLISHED";
+  }
+
   function rankedReleases() {
     const entries = state.releases
       .filter(release => {
-        if (!release.isChartEligible) {
+        if (!isChartListed(release)) {
           logMusicIssue("music_chart_eligibility_skipped", "Release skipped from chart: not chart-eligible", { releaseId: release.id, title: release.title, isCleanVersion: release.isCleanVersion });
           return false;
         }

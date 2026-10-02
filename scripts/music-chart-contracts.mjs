@@ -23,6 +23,18 @@ assert.match(page, /transparent HALO activity chart—not an industry sales char
 assert.match(catalogApi, /recent_listens/, "catalog API must expose rolling recent listening activity");
 assert.match(catalogApi, /previous_listens/, "catalog API must expose the comparison window");
 assert.match(client, /rankedReleases/, "client must calculate interactive room rankings");
+{
+  const source = client.match(/function isChartRelease\(release\) \{[\s\S]*?\n  \}/)?.[0];
+  assert.ok(source, "chart must define a publication-aware eligibility filter");
+  const isChartRelease = new Function(`${source}\nreturn isChartRelease;`)();
+  assert.equal(isChartRelease({ inChart: true }), true);
+  assert.equal(isChartRelease({ releaseStatus: "PUBLISHED" }), true);
+  assert.equal(isChartRelease({ isChartEligible: true, status: "passed" }), true, "legacy eligible releases stay on the chart");
+  assert.equal(isChartRelease({ isLiveVisible: false, inChart: true, releaseStatus: "PUBLISHED" }), false);
+  assert.equal(isChartRelease({ isChartEligible: false, releaseStatus: "PUBLISHED" }), false, "explicit non-chart tracks stay excluded");
+  assert.equal(isChartRelease({ releaseStatus: "READY" }), false);
+  assert.equal(isChartRelease({}), false);
+}
 assert.match(client, /youtube-nocookie\.com/, "chart video must use privacy-enhanced YouTube playback");
 assert.match(client, /data-play-chart-video/, "chart stage must support in-place video playback");
 assert.match(client, /storefrontState\(release\)/, "public release cards must normalize storefront status before rendering");

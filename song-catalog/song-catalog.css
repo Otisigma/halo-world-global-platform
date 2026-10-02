@@ -46,3 +46,8 @@
 .drive-link-preview{margin:12px 0 0}
 .drive-link-preview a{color:#d4af37;font-size:13px;text-decoration:none}
 .drive-link-preview a:hover{text-decoration:underline}
+.editor-actions{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:8px}
+.push-shop-button[aria-busy="true"]{opacity:.7;cursor:progress}
+.push-shop-status{margin:-12px 0 18px;font:500 11px "DM Mono";color:var(--muted)}
+.push-shop-status[data-state="success"]{color:#1f7a3f}
+.push-shop-status[data-state="error"]{color:#a3261b}

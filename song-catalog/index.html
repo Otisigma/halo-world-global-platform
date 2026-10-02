@@ -115,7 +115,8 @@
 
           <div class="workspace-grid">
             <form class="metadata-panel" id="songForm">
-              <div class="panel-heading"><div><p class="eyebrow">Master record</p><h3>Song information</h3></div><button class="primary-button" type="submit">Save + review</button></div>
+              <div class="panel-heading"><div><p class="eyebrow">Master record</p><h3>Song information</h3></div><div class="editor-actions"><button class="primary-button" type="submit">Save + review</button><button class="quiet-button push-shop-button" id="pushToShopButton" type="button" data-halo-guide="Force this song live: publishes it, lists it on the HALO Shop chart and applies a US$1.29 price when none is set. Save first so the latest edits go live." data-halo-guide-title="Push to Shop &amp; Charts">⚡ Push to Shop &amp; Charts</button></div></div>
+              <p class="push-shop-status" id="pushToShopStatus" role="status" aria-live="polite" hidden></p>
               <input id="songId" type="hidden">
               <div class="field-grid">
                 <label><span>Artist</span><input id="artistName" required maxlength="120"></label>

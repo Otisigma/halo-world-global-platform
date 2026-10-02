@@ -43,3 +43,13 @@ Deploy feedback reports four explicit pass/fail contracts:
 - Build Your Album promotion + route health (homepage copy + `/album-concierge/` CTA + local route entrypoint)
 
 When a contract fails, the script prints a `❌` line with the exact fix direction and exits non-zero so internal AI and maintainers can immediately treat the change as incomplete.
+
+## Prebuild release guard
+
+Netlify runs `npm run build`: npm first runs `npm run release-guard`, then the existing music chart contracts. The guard requires a root `shared-catalog.json` containing an array or an object with a `songs` array. This repository does not currently supply that file; provide the real catalog before deploying. A missing, malformed, or unsupported catalog blocks the build without rewriting it.
+
+Each track must have `PUBLISHED` in every supplied `releaseStatus`/`status` field, non-placeholder artwork, a positive USD price, and an HTTP(S) checkout URL. Missing prices default to `US$1.29`; missing checkout routes use the URL-encoded track id or title slug. Remote artwork must pass a bounded HEAD request to a public address; redirects fail closed (supply the final URL). Root-relative artwork must resolve to an existing file inside the catalog root. No database or live publication records are modified.
+
+The approved catalog retains its original array/object shape, top-level metadata, and unrelated track fields. If any track is quarantined, the guard saves the exact original catalog to `.netlify/release-guard/shared-catalog.original.json` and annotated quarantined tracks plus diagnostics to `.netlify/release-guard/quarantine.json` before atomically writing only approved tracks back to `shared-catalog.json`. These recovery files are ignored build-local data, not storefront assets or tracked source. The command exits non-zero, so Netlify does not publish that build.
+
+To recover, restore the original backup to `shared-catalog.json`, repair the reported tracks, and only then remove `.netlify/release-guard/` and rerun `npm run release-guard`. An unresolved backup blocks subsequent runs, preventing a failed audit from silently passing after unsafe tracks were removed. Preserve the backup if writing the sanitized catalog fails. Run `npm run test:release-guard` for isolated audit, networking, and CLI recovery contracts; the script also exports `ReleaseGuardAgent` as an ES module.

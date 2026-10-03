@@ -52,10 +52,15 @@ const allowedExtensions = new Set([
   ".otf",
   ".mp3",
   ".wav",
+  ".m4a",
+  ".aac",
+  ".ogg",
+  ".oga",
+  ".flac",
   ".mp4",
   ".webm",
 ]);
-const mediaExtensions = new Set([".mp3", ".wav", ".mp4", ".webm"]);
+const mediaExtensions = new Set([".mp3", ".wav", ".m4a", ".aac", ".ogg", ".oga", ".flac", ".mp4", ".webm"]);
 const mediaCorsHeaders = Object.freeze({
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "Content-Type, Range",
@@ -136,6 +141,12 @@ function rateLimit(req, res, next) {
 }
 
 app.use(rateLimit);
+app.options("*", (req, res, next) => {
+  if (mediaExtensions.has(path.extname(req.path).toLowerCase())) {
+    return res.set(mediaCorsHeaders).status(204).end();
+  }
+  next();
+});
 app.use((req, _res, next) => {
   console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
   next();

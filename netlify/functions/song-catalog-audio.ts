@@ -255,7 +255,7 @@ async function serveAudio(request: Request, db: Awaited<ReturnType<typeof getDat
   if (!version?.audio_blob_prefix || !version.audio_chunk_count || !version.audio_byte_size) return json({ message: "Song audio was not found" }, 404);
   const byteSize = Number(version.audio_byte_size);
   const range = requestedByteRange(request.headers.get("range"), byteSize);
-  if (range === false) return new Response(null, { status: 416, headers: { ...MEDIA_CORS_HEADERS, "Content-Range": `bytes */${byteSize}`, "Cache-Control": "private, no-store" } });
+  if (range === false) return new Response(null, { status: 416, headers: { ...MEDIA_CORS_HEADERS, "Accept-Ranges": "bytes", "Content-Range": `bytes */${byteSize}`, "Cache-Control": "private, no-store" } });
   const headers: Record<string, string> = {
     ...MEDIA_CORS_HEADERS,
     "Content-Type": String(version.audio_content_type || "application/octet-stream"),

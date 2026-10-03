@@ -823,7 +823,7 @@ import { DREAMWEAVER_STOREFRONT_MIX_ID, buildDreamweaverStorefrontPath } from ".
   function publicReleaseStatus(release = state.release) {
     const raw = cleanText(release?.storefront?.statusLabel || release?.publication?.dreamweaverStatus || release?.publication?.releaseStatus || release?.catalog?.saleStatus || "", 40).toUpperCase();
     const hasStream = Boolean(resolvePrimaryAudio(release || {}).src);
-    if (["PENDING", "COMING SOON", "COMING_SOON", "PROCESSING", "QUEUED"].includes(raw)) return "PENDING";
+    if (["PENDING", "COMING SOON", "COMING_SOON", "PROCESSING", "QUEUED", "DRAFT", "REVIEW"].includes(raw)) return "PENDING";
     if (hasStream) return "READY";
     return "STANDBY";
   }
@@ -873,9 +873,9 @@ import { DREAMWEAVER_STOREFRONT_MIX_ID, buildDreamweaverStorefrontPath } from ".
   }
 
   function armRemoteAudioWatchdog() {
-    clearRemoteAudioWatchdog();
-    if (state.audioSourceMode !== "remote") return;
+    if (state.audioSourceMode !== "remote" || state.remoteAudioWatchdog) return;
     state.remoteAudioWatchdog = window.setTimeout(() => {
+      state.remoteAudioWatchdog = 0;
       if (state.audioSourceMode !== "remote") return;
       if (elements.audio.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
         handleRemoteAudioUnavailable("Stream unavailable — click Upload Mix File or press play to choose a local mix.");
@@ -1736,17 +1736,23 @@ import { DREAMWEAVER_STOREFRONT_MIX_ID, buildDreamweaverStorefrontPath } from ".
       return;
     }
     if (elements.audio.paused) {
+      const source = elements.audio.src;
       try {
         if (state.audioSourceMode === "remote") armRemoteAudioWatchdog();
         await elements.audio.play();
       } catch (error) {
+        if (elements.audio.src !== source || error?.name === "AbortError") return;
         if (state.audioSourceMode === "remote" && error?.name !== "NotAllowedError") {
           handleRemoteAudioUnavailable();
           return;
         }
+        clearRemoteAudioWatchdog();
         showToast("Audio loaded. Press play when your browser is ready.");
       }
-    } else elements.audio.pause();
+    } else {
+      clearRemoteAudioWatchdog();
+      elements.audio.pause();
+    }
   }
 
   function bindPlayerControls() {
@@ -2696,6 +2702,10 @@ import { DREAMWEAVER_STOREFRONT_MIX_ID, buildDreamweaverStorefrontPath } from ".
   elements.audio.addEventListener("waiting", armRemoteAudioWatchdog);
   elements.audio.addEventListener("playing", () => {
     clearRemoteAudioWatchdog();
+    if (["error", "empty"].includes(state.audioSourceMode)) {
+      elements.audio.pause();
+      return;
+    }
     document.body.classList.add("is-playing");
     elements.playButton.setAttribute("aria-label", "Pause show");
     updateHeroPlayButton(true);
@@ -2712,7 +2722,7 @@ import { DREAMWEAVER_STOREFRONT_MIX_ID, buildDreamweaverStorefrontPath } from ".
     elements.playButton.setAttribute("aria-label", "Play show");
     updateHeroPlayButton(false);
     document.body.classList.remove("idle");
-    if (!elements.audio.ended) setReleasePlaybackState("paused");
+    if (!elements.audio.ended && !["error", "empty"].includes(state.audioSourceMode)) setReleasePlaybackState("paused");
   });
   elements.audio.addEventListener("ended", () => {
     clearRemoteAudioWatchdog();

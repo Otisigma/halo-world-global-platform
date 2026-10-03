@@ -122,7 +122,7 @@ export default async function mixAudioHandler(request) {
     if (range === false) {
       return new Response(null, {
         status: 416,
-        headers: { ...MEDIA_CORS_HEADERS, "Content-Range": `bytes */${byteSize}`, "Cache-Control": "no-store" }
+        headers: { ...MEDIA_CORS_HEADERS, "Accept-Ranges": "bytes", "Content-Range": `bytes */${byteSize}`, "Cache-Control": "no-store" }
       });
     }
     const cacheable = mix.visibility === "room";

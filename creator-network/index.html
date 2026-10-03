@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow, noarchive">
+  <title>HALO Creator Network</title>
+  <meta name="description" content="Your member workspace for creator discovery and collaboration inside HALO.">
+  <link rel="stylesheet" href="/halo-brand.css">
+  <link rel="stylesheet" href="/accessibility.css">
+  <link rel="stylesheet" href="/mobile-navigation.css">
+  <link rel="stylesheet" href="/halo-hud.css">
+  <link rel="stylesheet" href="/creator-network/network.css">
+  <script src="/stats.js" defer></script>
+  <script src="/site-monitor.js" defer></script>
+  <script src="/accessibility.js" defer></script>
+  <script src="/mobile-navigation.js" defer></script>
+  <script src="/halo-hud.js" defer></script>
+  <script type="module" src="/identity.js"></script>
+  <script src="/creator-network/network.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to workspace</a>
+  <header>
+    <a href="/halo">HALO</a>
+    <nav aria-label="Creator navigation">
+      <a href="/creators/">Creator World preview</a>
+      <a href="/artists/">Artist rooms + follows</a>
+      <a href="/artist/dashboard">Rights + splits</a>
+      <a href="/song-catalog/">Songs</a>
+      <a href="/dreamweaver-lab/">Song Lab + stem vault</a>
+      <a href="/mixes/">Mixes + reviews</a>
+    </nav>
+    <button id="signOut" type="button" hidden>Sign out</button>
+  </header>
+  <main id="main">
+    <h1>Creator Network</h1>
+    <p>Find the people who help finish the work. One HALO identity, your existing rooms and assets.</p>
+    <p id="status" role="status" aria-live="polite"></p>
+    <section id="locked">
+      <h2>Member workspace</h2>
+      <form id="login">
+        <label>Email<input name="email" type="email" autocomplete="email" required></label>
+        <label>Password<input name="password" type="password" autocomplete="current-password" required></label>
+        <button type="submit">Sign in</button>
+      </form>
+      <p>New to HALO? <a href="/creators/">Join through Creator World</a>.</p>
+    </section>
+    <div id="workspace" hidden>
+      <section aria-labelledby="profileTitle" data-halo-guide="Your Creator Pass uses your HALO membership. Discovery is opt-in; split preferences are not a contract.">
+        <h2 id="profileTitle">Your Creator Pass</h2>
+        <form id="profile">
+          <label>Display name<input name="displayName" maxlength="100" required></label>
+          <label>Bio<textarea name="bio" maxlength="2000"></textarea></label>
+          <label>Owned artist room handle<input name="artistSlug" maxlength="100" placeholder="Optional existing room"></label>
+          <label>Roles (comma separated)<input name="roles" maxlength="972" placeholder="Producer, Vocalist"></label>
+          <label>Genres (comma separated)<input name="genres" maxlength="972"></label>
+          <label>Languages (comma separated)<input name="languages" maxlength="972"></label>
+          <label>DAW / hardware (comma separated)<input name="dawSetup" maxlength="972"></label>
+          <label>Minimum BPM<input name="bpmMin" type="number" min="20" max="300"></label>
+          <label>Maximum BPM<input name="bpmMax" type="number" min="20" max="300"></label>
+          <label>Split preference<input name="splitPreference" maxlength="300" placeholder="Discuss 50/50 master split"></label>
+          <label class="checkbox"><input name="discoverable" type="checkbox">Show this profile to other signed-in members</label>
+          <button type="submit">Save Creator Pass</button>
+        </form>
+      </section>
+      <section aria-labelledby="finderTitle">
+        <h2 id="finderTitle">Find creators + opportunities</h2>
+        <form id="filters">
+          <label>Role<input name="role" maxlength="80"></label>
+          <label>Genre<input name="genre" maxlength="80"></label>
+          <label>Language<input name="language" maxlength="80"></label>
+          <label>BPM<input name="bpm" type="number" min="20" max="300"></label>
+          <label>Key<input name="key" maxlength="20" placeholder="A minor"></label>
+          <button type="submit">Find exact matches</button>
+        </form>
+        <h3>Creator discovery</h3>
+        <div id="creators" class="cards"></div>
+        <h3>Opportunities + your projects</h3>
+        <div id="projects" class="cards"></div>
+      </section>
+      <section aria-labelledby="createTitle" data-halo-guide="Link only your existing HALO assets. A collaboration invite never grants media access or changes rights.">
+        <h2 id="createTitle">Open a collaboration brief</h2>
+        <form id="project">
+          <label>Title<input name="title" maxlength="180" required></label>
+          <label>Brief<textarea name="brief" maxlength="4000"></textarea></label>
+          <label>Type<select name="kind"><option value="audio">Audio / topline</option><option value="visual">Visuals</option><option value="review">Peer review</option></select></label>
+          <label>Role needed<input name="roleNeeded" maxlength="80"></label>
+          <label>Genre<input name="genre" maxlength="80"></label>
+          <label>Language<input name="language" maxlength="80"></label>
+          <label>BPM<input name="bpm" type="number" min="20" max="300"></label>
+          <label>Key<input name="musicalKey" maxlength="20"></label>
+          <label>Existing song ID<input name="songId" maxlength="100"></label>
+          <label>Existing song version ID<input name="songVersionId" maxlength="100"></label>
+          <label>Existing stem pack ID<input name="stemPackId" maxlength="100"></label>
+          <label>Existing rights work ID<input name="rightsWorkId" maxlength="100"></label>
+          <button type="submit">Post opportunity</button>
+        </form>
+        <p>Assets stay in the catalog and stem vault. Private files remain private. Agree rights and splits in <a href="/artist/dashboard">Artist Economy</a> before releasing work.</p>
+      </section>
+      <section aria-labelledby="requestsTitle">
+        <h2 id="requestsTitle">Incoming / outgoing invites + applications</h2>
+        <p>Acceptance adds a project participant, not a license, split agreement, or payout instruction.</p>
+        <div id="requests" class="cards"></div>
+      </section>
+    </div>
+  </main>
+</body>
+</html>

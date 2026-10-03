@@ -42,6 +42,18 @@ The API lives at `/api/artist-economy`. Reads require a signed-in Identity user 
 
 Conscience reviews are visible and writable only to HALO platform owners. The review desk cannot execute the proposal it evaluates.
 
+## Creator Network integration
+
+`/creator-network/` is the first-party member collaboration workspace; `/creators/` remains the public Creator World preview. It uses shared Netlify Identity and membership, and the existing sitewide Companion rather than a separate guide or account system.
+
+Creator Pass discovery is opt-in and visible only to signed-in members. Members can edit their profile, filter creators and opportunities by role, genre, language and BPM (plus key for opportunities), post briefs, invite discoverable creators, and apply to projects. Incoming and outgoing requests retain pending, accepted or declined states. Only invite recipients can answer invitations; only project owners can answer applications or close projects.
+
+`/api/creator-network` provides authenticated GET workspace reads and same-origin POST actions: `save_profile`, `create_project`, `invite`, `apply`, `respond`, and `close_project`. Project briefs can reference an owned `songId`, its `songVersionId`, an owned `stemPackId`, and an owned `rightsWorkId`. Artist room links must also belong to the profile owner. These references do not copy media, grant access to private assets, or change existing catalog, follow, review, Song Lab or rights permissions.
+
+Accepting a collaboration request records participation only. Split preferences are non-binding; rights approval, split participants and release readiness remain in Artist Economy. No automatic contracts, royalties, payouts or AI generation are introduced.
+
+The additive migration `netlify/database/migrations/20261003095500_create_creator_network.sql` creates member-linked profiles, projects and participants during Netlify deployment. Apply it through the existing migration process before using the API. Validate the integration with `npm run test:creator-network`; these contracts also run in `npm test`.
+
 ## Main files
 
 - `artist-economy/index.html` provides the private artist-company workspace.

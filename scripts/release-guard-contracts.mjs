@@ -22,7 +22,7 @@ const options = {
   }
 };
 const audit = (tracks) => ReleaseGuardAgent.auditAndGuard(tracks, options);
-const cli = () => spawnSync(process.execPath, [resolve(fixture, "release-guard-agent.js")], {
+const cli = (...args) => spawnSync(process.execPath, [resolve(fixture, "release-guard-agent.js"), ...args], {
   cwd: tmpdir(), encoding: "utf8"
 });
 const catalogPath = resolve(fixture, "shared-catalog.json");
@@ -143,10 +143,20 @@ try {
 
   await copyFile(resolve(root, "release-guard-agent.js"), resolve(fixture, "release-guard-agent.js"));
   await writeFile(resolve(fixture, "package.json"), '{"type":"module"}');
-  assert.equal(cli().status, 1, "missing catalog blocks builds");
+  assert.equal(cli().status, 1, "missing catalog blocks strict audits");
+  const skipped = cli("--if-present");
+  assert.equal(skipped.status, 0, "prebuild tolerates an absent static catalog");
+  assert.match(skipped.stdout, /skipped; no static shared-catalog\.json supplied/);
+  assert.doesNotMatch(skipped.stdout, /approved/);
+  await assert.rejects(access(catalogPath));
+  await assert.rejects(access(recovery));
+  await mkdir(catalogPath);
+  assert.equal(cli("--if-present").status, 1, "non-missing read errors still block prebuild");
+  await rm(catalogPath, { recursive: true });
   for (const source of ["not json", "{}", '{"songs":{}}', "null"]) {
     await writeFile(catalogPath, source);
     assert.equal(cli().status, 1);
+    assert.equal(cli("--if-present").status, 1, "invalid supplied catalogs still block prebuild");
     assert.equal(await readFile(catalogPath, "utf8"), source, "invalid catalog must stay untouched");
   }
   await writeFile(catalogPath, JSON.stringify([local]));
@@ -158,11 +168,11 @@ try {
   assert.equal(cli().status, 0);
   assert.ok(Array.isArray(await readCatalog()));
   assert.deepEqual((await readCatalog())[0].metadata, good.metadata);
-  assert.equal(cli().status, 0, "clean reruns succeed");
+  assert.equal(cli("--if-present").status, 0, "prebuild audits valid supplied catalogs");
   const unsafe = { ...local, releaseStatus: "READY", privateNotes: "retain source metadata" };
   const source = `${JSON.stringify({ version: 7, extra: { owner: "HALO" }, songs: [local, unsafe] }, null, 2)}\n`;
   await writeFile(catalogPath, source);
-  const failed = cli();
+  const failed = cli("--if-present");
   assert.equal(failed.status, 1);
   assert.match(failed.stdout, /1 approved, 1 quarantined/);
   assert.deepEqual((await readCatalog()).extra, { owner: "HALO" });
@@ -174,7 +184,10 @@ try {
   assert.equal(quarantine.tracks[0].isLiveVisible, false);
   const sanitized = await readFile(catalogPath, "utf8");
   assert.equal(cli().status, 1, "rerun cannot silently approve after dropping quarantine");
+  assert.equal(cli("--if-present").status, 1, "prebuild cannot bypass unresolved quarantine");
   assert.equal(await readFile(catalogPath, "utf8"), sanitized);
+  await rm(catalogPath);
+  assert.equal(cli("--if-present").status, 1, "missing catalog cannot bypass unresolved quarantine");
   await writeFile(catalogPath, source);
   await rm(recovery, { recursive: true });
   await writeFile(catalogPath, JSON.stringify({ version: 7, songs: [local, { ...unsafe, releaseStatus: "PUBLISHED" }] }));
@@ -183,7 +196,7 @@ try {
 
   const pkg = JSON.parse(await readFile(resolve(root, "package.json"), "utf8"));
   assert.equal(pkg.scripts["release-guard"], "node release-guard-agent.js");
-  assert.equal(pkg.scripts.prebuild, "npm run release-guard");
+  assert.equal(pkg.scripts.prebuild, "npm run release-guard -- --if-present");
   assert.equal(pkg.scripts.build, "node scripts/music-chart-contracts.mjs");
   assert.match(await readFile(resolve(root, "netlify.toml"), "utf8"), /command = "npm run build"/);
   console.log("Release guard contracts passed.");

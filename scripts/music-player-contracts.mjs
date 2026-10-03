@@ -279,4 +279,39 @@ for (const [file, handler] of [
   }
 }
 
+const pageNodes = new Map();
+const pageDocument = {
+  readyState: "loading", handlers: {},
+  addEventListener(name, callback) { this.handlers[name] = callback; },
+  createElement() { return { remove() {} }; },
+  querySelectorAll() { return []; },
+  querySelector(selector) {
+    if (!pageNodes.has(selector)) pageNodes.set(selector, {
+      ...control(), dataset: {}, classList: { toggle() {}, add() {}, remove() {} },
+      setAttribute() {}, removeAttribute() {}, append() {}
+    });
+    return pageNodes.get(selector);
+  }
+};
+pageNodes.set("#musicWorldAudio", { ...audio, src: "", paused: true, handlers: {} });
+let catalogRequests = 0;
+const pageContext = vm.createContext({
+  document: pageDocument, window: { addEventListener() {} },
+  location: { origin: "https://halo.test", href: "https://halo.test/music-world.html", hash: "" },
+  history: { replaceState() {} }, URL: MediaURL, URLSearchParams, HTMLMediaElement: playerContext.HTMLMediaElement,
+  setTimeout() { return 1; }, clearTimeout() {},
+  fetch() { catalogRequests++; return new Promise(() => {}); }
+});
+const inlinePlayer = [...musicWorld.matchAll(/<script>([\s\S]*?)<\/script>/g)].at(-1)?.[1];
+assert.ok(inlinePlayer);
+vm.runInContext(inlinePlayer, pageContext);
+assert.equal(catalogRequests, 1, "startup must render the deck and reach live catalog hydration");
+pageDocument.handlers.DOMContentLoaded();
+assert.equal(pageDocument.querySelector("#playButton").disabled, false);
+vm.runInContext("catalog=[];playerTrack=null;", pageContext);
+await pageContext.activateLocalMixFile({ name: "offline.wav", type: "audio/wav" });
+assert.equal(pageDocument.querySelector(".player").dataset.playerState, "local");
+assert.match(pageDocument.querySelector("#playerContext").textContent, /LOCAL ACTIVE/, "empty catalogs must still expose local playback status");
+assert.equal(pageDocument.querySelector("#playerTitle").textContent, "offline.wav");
+
 console.log("Music player contracts passed.");

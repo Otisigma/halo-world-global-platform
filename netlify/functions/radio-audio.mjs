@@ -70,7 +70,7 @@ export default async function radioAudioHandler(request) {
   if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: MEDIA_CORS_HEADERS });
   if (!["GET", "HEAD"].includes(request.method)) return json({ message: "Method not allowed" }, 405, { Allow: "GET, HEAD, OPTIONS" });
   try {
-    const [db, user] = await Promise.all([getDatabase(), getUser()]);
+    const [db, user] = await Promise.all([getDatabase(), getUser().catch(() => null)]);
     const id = cleanText(new URL(request.url).searchParams.get("id"), 80);
     const memberId = user?.id || "";
     const rows = await db.sql`
@@ -90,6 +90,7 @@ export default async function radioAudioHandler(request) {
         headers: {
           ...MEDIA_CORS_HEADERS,
           "Accept-Ranges": "bytes",
+          "Vary": "Range",
           "Content-Range": `bytes */${byteSize}`,
           "Cache-Control": "private, no-store"
         }
@@ -104,6 +105,7 @@ export default async function radioAudioHandler(request) {
       "Cache-Control": cacheable ? "public, max-age=3600" : "private, no-store",
       "Content-Disposition": "inline",
       "Accept-Ranges": "bytes",
+      "Vary": "Range",
       "X-Content-Type-Options": "nosniff"
     };
     if (range) headers["Content-Range"] = `bytes ${range.start}-${range.end}/${byteSize}`;

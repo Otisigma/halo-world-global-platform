@@ -133,7 +133,7 @@ const audio = {
 const input = control(), playButton = control(), uploadLabel = control();
 const track = { id: "test", title: "Test", previewUrl: "https://cdn.example/test.mp3", statusLabel: "READY" };
 const nodes = { "#musicWorldAudio": audio, "#mixFileInput": input, "#playButton": playButton, ".upload-label": uploadLabel };
-let timeoutCallback, timeoutDelay;
+let timeoutCallback, timeoutDelay, timeoutCount = 0;
 const revoked = [];
 class MediaURL extends URL {
   static createObjectURL() { return "blob:https://halo.test/local"; }
@@ -145,7 +145,7 @@ const playerContext = vm.createContext({
   localAudioUrl: "", localAudioName: "", playing: false, URL: MediaURL,
   location: { origin: "https://halo.test", href: "https://halo.test/music-world.html" },
   HTMLMediaElement: { HAVE_CURRENT_DATA: 2 }, toast() {}, setDeck() {}, updateCardStatuses() {},
-  setTimeout(callback, delay) { timeoutCallback = callback; timeoutDelay = delay; return 1; },
+  setTimeout(callback, delay) { timeoutCount++; timeoutCallback = callback; timeoutDelay = delay; return 1; },
   clearTimeout() { timeoutCallback = null; }
 });
 vm.runInContext(section(musicWorld, "function playerAudio()", "if(document.readyState==="), playerContext);
@@ -155,6 +155,12 @@ assert.equal(input.disabled, false);
 assert.equal(playButton.disabled, false);
 await playerContext.togglePlayback();
 assert.equal(timeoutDelay, 5000);
+const firstWatchdog = timeoutCallback;
+const firstTimeoutCount = timeoutCount;
+audio.handlers.waiting();
+audio.handlers.waiting();
+assert.equal(timeoutCount, firstTimeoutCount, "buffering events must not extend the five-second deadline");
+assert.equal(timeoutCallback, firstWatchdog);
 timeoutCallback();
 assert.equal(playerContext.audioSourceMode, "unavailable", "remote audio without current data must fall back");
 await playerContext.togglePlayback();
@@ -181,6 +187,28 @@ audio.readyState = 2;
 playerContext.armRemoteAudioWatchdog();
 timeoutCallback();
 assert.equal(playerContext.audioSourceMode, "remote", "ready audio must not trigger fallback");
+audio.readyState = 0;
+playerContext.armRemoteAudioWatchdog();
+audio.handlers.pause();
+assert.equal(timeoutCallback, null, "pausing must cancel the readiness watchdog");
+audio.paused = true;
+audio.play = async () => { throw { name: "AbortError" }; };
+await playerContext.togglePlayback();
+assert.equal(playerContext.audioSourceMode, "remote", "a cancelled play must not label a valid stream unavailable");
+playerContext.clearRemoteAudioWatchdog();
+let rejectOldPlay;
+audio.play = () => new Promise((_resolve, reject) => { rejectOldPlay = reject; });
+const oldPlayback = playerContext.togglePlayback();
+audio.src = "https://cdn.example/next.mp3";
+rejectOldPlay({ name: "NotSupportedError" });
+await oldPlayback;
+assert.equal(playerContext.audioSourceMode, "remote", "a stale rejection must not discard a replacement source");
+playerContext.handleStreamUnavailable();
+audio.paused = false;
+audio.handlers.playing();
+assert.equal(audio.paused, true, "late playback must not revive a timed-out source");
+assert.equal(playerContext.audioSourceMode, "unavailable");
+audio.play = async () => { audio.paused = false; };
 
 assert.doesNotMatch(musicWorld, /<input id="mixFileInput"[^>]*\bhidden\b/);
 const dreamweaverPage = await readFile(resolve(root, "dreamweaver/index.html"), "utf8");
@@ -201,6 +229,8 @@ playerContext.audioSourceMode = "unavailable";
 track.streamUnavailable = true;
 assert.equal(vm.runInContext("cardStatus(playerTrack)", playerContext), "STANDBY");
 assert.equal(vm.runInContext("storefrontStatus('ERROR')", playerContext), "STANDBY");
+assert.equal(vm.runInContext("storefrontStatus('draft', {hasStream:true})", playerContext), "PENDING");
+assert.equal(vm.runInContext("storefrontStatus('review', {hasStream:true})", playerContext), "PENDING");
 
 const dreamState = { audioSourceMode: "remote", mix: {}, remoteAudioWatchdog: 0, playerControlsBound: false };
 const dreamInput = control(), dreamPlay = control(), dreamUpload = control();
@@ -223,6 +253,10 @@ dreamContext.bindPlayerControls();
 await dreamContext.togglePlayback();
 assert.equal(dreamInput.clicks, 0, "an assigned remote source must be tried even before currentSrc is populated");
 assert.equal(timeoutDelay, 5000);
+const dreamWatchdogCount = timeoutCount;
+dreamContext.armRemoteAudioWatchdog();
+dreamContext.armRemoteAudioWatchdog();
+assert.equal(timeoutCount, dreamWatchdogCount, "Dreamweaver buffering must keep the original deadline");
 timeoutCallback();
 assert.equal(dreamState.audioSourceMode, "error", "Dreamweaver must retain its watchdog until current data is available");
 assert.equal(dreamAudio.paused, true);
@@ -240,9 +274,21 @@ dreamAudio.pause();
 dreamAudio.play = async () => { throw { name: "NotAllowedError" }; };
 await dreamContext.togglePlayback();
 assert.equal(dreamState.audioSourceMode, "remote", "autoplay policy rejection must not discard a valid remote stream");
+assert.equal(dreamState.remoteAudioWatchdog, 0, "a blocked autoplay must cancel the watchdog until the next tap");
+dreamAudio.play = async () => { throw { name: "AbortError" }; };
+await dreamContext.togglePlayback();
+assert.equal(dreamState.audioSourceMode, "remote", "Dreamweaver must ignore cancelled play requests");
+dreamContext.clearRemoteAudioWatchdog();
+dreamAudio.play = () => new Promise((_resolve, reject) => { rejectOldPlay = reject; });
+const oldDreamPlayback = dreamContext.togglePlayback();
+dreamAudio.src = "https://cdn.example/next.mp3";
+rejectOldPlay({ name: "NotSupportedError" });
+await oldDreamPlayback;
+assert.equal(dreamState.audioSourceMode, "remote", "Dreamweaver must ignore obsolete source failures");
 
 for (const [file, handler] of [
   ["netlify/functions/mix-audio.mjs", "mixAudioHandler"],
+  ["netlify/functions/radio-audio.mjs", "radioAudioHandler"],
   ["netlify/functions/stem-vault-audio.mjs", "stemVaultAudioHandler"]
 ]) {
   const source = await readFile(resolve(root, file), "utf8");
@@ -250,7 +296,7 @@ for (const [file, handler] of [
   const context = vm.createContext({
     URL, Response, ReadableStream, console,
     getStore: () => ({ get: async () => bytes.buffer }),
-    getDatabase: () => ({ sql: async () => [{ blob_key: "test", chunk_count: 1, byte_size: 5, content_type: "audio/wav", visibility: "room", original_filename: "mix.wav" }] }),
+    getDatabase: () => ({ sql: async () => [{ blob_key: "test", chunk_count: 1, byte_size: 5, content_type: "audio/wav", visibility: "room", status: "rotation", original_filename: "mix.wav" }] }),
     getUser: async () => ({ id: "test" }), isOwner: () => false,
     ensureMembership: async () => ({ member_id: "test" }), cleanText: value => String(value || "")
   });
@@ -266,11 +312,33 @@ for (const [file, handler] of [
     assert.equal(response.headers.get("Content-Length"), "3");
     assert.equal(response.headers.get("Accept-Ranges"), "bytes");
     assert.equal(response.headers.get("Access-Control-Allow-Origin"), "*");
+    assert.match(response.headers.get("Access-Control-Expose-Headers"), /Content-Length, Content-Range/);
+    if (handler !== "stemVaultAudioHandler") assert.equal(response.headers.get("Vary"), "Range");
     assert.deepEqual([...new Uint8Array(await response.arrayBuffer())], method === "GET" ? [20, 30, 40] : []);
   }
   const invalidRange = await context[handler](new Request(endpoint, { headers: { Range: "bytes=10-" } }));
   assert.equal(invalidRange.status, 416);
   assert.equal(invalidRange.headers.get("Access-Control-Allow-Origin"), "*");
+  assert.equal(invalidRange.headers.get("Content-Range"), "bytes */5");
+  for (const [range, expected, body] of [
+    ["bytes=2-", "bytes 2-4/5", [30, 40, 50]],
+    ["bytes=-2", "bytes 3-4/5", [40, 50]],
+    ["bytes=3-99", "bytes 3-4/5", [40, 50]]
+  ]) {
+    const response = await context[handler](new Request(endpoint, { headers: { Range: range } }));
+    assert.equal(response.status, 206);
+    assert.equal(response.headers.get("Content-Range"), expected);
+    assert.deepEqual([...new Uint8Array(await response.arrayBuffer())], body);
+  }
+  if (handler === "radioAudioHandler") {
+    context.getUser = async () => { throw new Error("No identity session"); };
+    const publicPlayback = await context[handler](new Request(endpoint, { headers: { Range: "bytes=0-1" } }));
+    assert.equal(publicPlayback.status, 206, "public radio must remain playable without an identity session");
+    context.getDatabase = () => ({ sql: async () => [] });
+    const missing = await context[handler](new Request(endpoint));
+    assert.equal(missing.status, 404, "identity fallback must not bypass the public-track query");
+    assert.equal(missing.headers.get("Access-Control-Allow-Origin"), "*");
+  }
   if (handler === "stemVaultAudioHandler") {
     context.getUser = async () => null;
     const unauthorized = await context[handler](new Request(endpoint));
@@ -313,5 +381,10 @@ await pageContext.activateLocalMixFile({ name: "offline.wav", type: "audio/wav" 
 assert.equal(pageDocument.querySelector(".player").dataset.playerState, "local");
 assert.match(pageDocument.querySelector("#playerContext").textContent, /LOCAL ACTIVE/, "empty catalogs must still expose local playback status");
 assert.equal(pageDocument.querySelector("#playerTitle").textContent, "offline.wav");
+pageContext.fetch = async () => { throw new Error("Catalog offline"); };
+await pageContext.loadPublishedCatalog();
+assert.equal(pageDocument.querySelector("#playerTitle").textContent, "offline.wav", "late catalog failures must not replace local file metadata");
+assert.match(pageDocument.querySelector("#playerContext").textContent, /LOCAL ACTIVE/);
+assert.equal(pageDocument.querySelector("#musicWorldAudio").src, "blob:https://halo.test/local");
 
 console.log("Music player contracts passed.");

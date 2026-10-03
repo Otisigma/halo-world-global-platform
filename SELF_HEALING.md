@@ -46,7 +46,7 @@ When a contract fails, the script prints a `❌` line with the exact fix directi
 
 ## Prebuild release guard
 
-Netlify runs `npm run build`: npm first runs `npm run release-guard`, then the existing music chart contracts. The guard requires a root `shared-catalog.json` containing an array or an object with a `songs` array. This repository does not currently supply that file; provide the real catalog before deploying. A missing, malformed, or unsupported catalog blocks the build without rewriting it.
+Netlify runs `npm run build`: npm first runs `npm run release-guard`, then the existing music chart contracts. The guard audits an optional root `shared-catalog.json` containing an array or an object with a `songs` array. This repository does not currently supply that static file. When it is absent, the guard logs an explicit skip warning and succeeds without creating a catalog or validating or changing database-backed releases. When supplied, the catalog must be tracked or generated before the guard runs. A malformed, unsupported, or unreadable catalog still blocks the build without rewriting it, and an unresolved quarantine blocks the build even if the catalog is missing.
 
 Each track must have `PUBLISHED` in every supplied `releaseStatus`/`status` field, non-placeholder artwork, a positive USD price, and an HTTP(S) checkout URL. Missing prices default to `US$1.29`; missing checkout routes use the URL-encoded track id or title slug. Remote artwork must pass a bounded HEAD request to a public address; redirects fail closed (supply the final URL). Root-relative artwork must resolve to an existing file inside the catalog root. No database or live publication records are modified.
 

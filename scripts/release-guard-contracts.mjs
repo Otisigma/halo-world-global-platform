@@ -143,7 +143,23 @@ try {
 
   await copyFile(resolve(root, "release-guard-agent.js"), resolve(fixture, "release-guard-agent.js"));
   await writeFile(resolve(fixture, "package.json"), '{"type":"module"}');
-  assert.equal(cli().status, 1, "missing catalog blocks builds");
+  const missing = cli();
+  assert.equal(missing.status, 0, "missing optional static catalog does not block builds");
+  assert.match(missing.stderr, /shared-catalog\.json not found.*skipping the static catalog audit/);
+  await assert.rejects(access(catalogPath), { code: "ENOENT" });
+  await assert.rejects(access(recovery), { code: "ENOENT" });
+  assert.deepEqual(await ReleaseGuardAgent.run({ catalogPath, recoveryDirectory: recovery }), {
+    passed: true, skipped: true, reason: "Catalog file not found."
+  });
+  await mkdir(catalogPath);
+  assert.equal(cli().status, 1, "non-missing read errors still block builds");
+  await rm(catalogPath, { recursive: true });
+  await mkdir(recovery, { recursive: true });
+  await writeFile(resolve(recovery, "shared-catalog.original.json"), "unresolved source");
+  const unresolved = cli();
+  assert.equal(unresolved.status, 1, "missing catalog cannot bypass unresolved quarantine");
+  assert.match(unresolved.stderr, /Unresolved quarantine/);
+  await rm(recovery, { recursive: true });
   for (const source of ["not json", "{}", '{"songs":{}}', "null"]) {
     await writeFile(catalogPath, source);
     assert.equal(cli().status, 1);

@@ -28,6 +28,7 @@
     <script src="/site-monitor.js" defer></script>
     <link rel="stylesheet" href="/accessibility.css">
     <link rel="stylesheet" href="/halo-brand.css">
+    <link rel="stylesheet" href="/feature-directory.css">
     <link rel="stylesheet" href="/release-artwork.css">
     <script src="/accessibility.js" defer></script>
     <link rel="stylesheet" href="/mobile-navigation.css">
@@ -1139,6 +1140,7 @@
     <div id="root"></div>
 
     <script src="/release-artwork.js"></script>
+    <script src="/feature-directory.js"></script>
     <script id="haloFeaturedReleaseConfig" type="application/json">
       {
         "id": "when-the-world-goes-dark",
@@ -1161,6 +1163,42 @@
     </script>
     <script type="text/babel" crossorigin="anonymous">
         const { useState, useEffect, useRef } = React;
+
+        function FeatureDirectory() {
+          const [query, setQuery] = useState('');
+          const [category, setCategory] = useState('all');
+          const directory = window.HALOFeatureDirectory;
+          const visibleGroups = directory.filter(query, category);
+          const visibleCount = visibleGroups.reduce((total, group) => total + group.entries.length, 0);
+          return (
+            <section id="feature-directory" className="feature-directory" aria-labelledby="feature-directory-title">
+              <div className="feature-directory__heading">
+                <div>
+                  <p className="feature-directory__eyebrow">The complete HALO world map</p>
+                  <h2 id="feature-directory-title">Every room. One front door.</h2>
+                  <p className="feature-directory__intro">Find every existing HALO page and workspace here. Choose a destination to open its full experience. Private tools keep their existing sign-in and access requirements.</p>
+                </div>
+                <span className="feature-directory__total">{directory.count} destinations / {directory.groups.length} pathways</span>
+              </div>
+              <div className="feature-directory__tools">
+                <label htmlFor="feature-directory-search">Find a feature<input id="feature-directory-search" type="search" placeholder="Search music, artwork, campaigns…" value={query} onChange={event => setQuery(event.target.value)} aria-controls="feature-directory-groups" /></label>
+                <label htmlFor="feature-directory-category">Choose a pathway<select id="feature-directory-category" value={category} onChange={event => setCategory(event.target.value)} aria-controls="feature-directory-groups"><option value="all">All pathways</option>{directory.groups.map(group => <option key={group.id} value={group.id}>{group.title}</option>)}</select></label>
+              </div>
+              <p className="feature-directory__results" role="status" aria-live="polite" aria-atomic="true">Showing {visibleCount} of {directory.count} destinations</p>
+              <div id="feature-directory-groups">
+                {visibleGroups.map(group => (
+                  <section key={group.id} className="feature-directory__group" aria-labelledby={`feature-group-${group.id}`}>
+                    <div><span className="feature-directory__number">PATHWAY {String(directory.groups.findIndex(entry => entry.id === group.id) + 1).padStart(2, '0')}</span><h3 id={`feature-group-${group.id}`}>{group.title}</h3><p>{group.description}</p></div>
+                    <nav className="feature-directory__links" aria-label={`${group.title} destinations`}>
+                      {group.entries.map(entry => <a key={entry.href} href={entry.href} className="feature-directory__link" data-stat-event="open_feature_directory_destination" data-stat-target={entry.href}><span><strong>{entry.title}</strong><small>{entry.description}</small></span><span aria-hidden="true">↗</span></a>)}
+                    </nav>
+                  </section>
+                ))}
+                {!visibleCount && <div className="feature-directory__empty"><p>No destinations match these filters. Try a different keyword or pathway.</p><button type="button" className="feature-directory__reset" onClick={() => { setQuery(''); setCategory('all'); }}>Show all destinations</button></div>}
+              </div>
+            </section>
+          );
+        }
 
         // Native React SVG Icon component - 100% immune to DOM crashes
         const Icon = ({ name, className = "h-4 w-4" }) => {
@@ -3924,6 +3962,8 @@
                         )}
                       </section>
 
+                      {viewMode === 'landing' && <a href="#feature-directory" onClick={event => { event.currentTarget.closest('details').open = false; }} data-stat-event="open_feature_directory" data-stat-target="header" className="halo-menu-console"><span><small>The complete world map</small><strong>ALL FEATURES</strong></span><Icon name="arrow-right" className="halo-menu-console-icon" /></a>}
+
                       <section className="halo-menu-lane halo-menu-lane-listen" aria-labelledby="halo-lane-listen">
                         <div className="halo-menu-lane-title"><span>02</span><h3 id="halo-lane-listen">Listen</h3></div>
                         <a href="/music-world.html" data-stat-event="open_music_world" data-stat-target="header" data-signal="PUBLIC MUSIC WORLD">
@@ -4053,6 +4093,8 @@
               {/* VIEW 1: FRONT LANDING SHOWCASE PORTAL */}
               {viewMode === 'landing' && (
                 <main className="flex-1 max-w-6xl mx-auto w-full px-4 py-8 md:py-12 space-y-12 overflow-y-auto">
+
+                  <a href="#feature-directory" data-stat-event="open_feature_directory" data-stat-target="homepage" className="inline-flex items-center gap-3 text-sm text-amber-200 underline underline-offset-4 focus:outline-none focus:ring-2 focus:ring-amber-200">Explore all HALO features <Icon name="arrow-right" /></a>
 
                   <section className="halo-home-experiment" aria-labelledby="halo-home-experiment-title" data-homepage-hero="dreamweaver">
                     <div className="halo-home-experiment__grid">
@@ -5216,6 +5258,7 @@
                     </div>
                   </section>
 
+                  <FeatureDirectory />
                 </main>
               )}
 
@@ -6012,6 +6055,7 @@
               <footer className="border-t border-purple-950/40 bg-[#07070a] px-4 py-2 flex flex-wrap justify-between items-center gap-2 text-[9px] text-gray-500 font-mono">
                 <span>© 2026 HALO MUSIC WORLD SYSTEMS LLC</span>
                 <nav className="flex items-center gap-3" aria-label="HALO footer destinations">
+                  {viewMode === 'landing' && <a href="#feature-directory" data-stat-event="open_feature_directory" data-stat-target="footer" className="text-amber-200 focus:outline-none focus:ring-1 focus:ring-amber-200">ALL FEATURES</a>}
                   <a href="/support/" data-stat-event="open_feedback_desk" data-stat-target="footer" className="text-lime-300 transition hover:text-lime-200 focus:outline-none focus:ring-1 focus:ring-lime-300">FEEDBACK</a>
                   <span aria-hidden="true">·</span>
                   <a href="/music-world.html" data-stat-event="open_music_world" data-stat-target="footer" className="text-cyan-200 transition hover:text-cyan-100 focus:outline-none focus:ring-1 focus:ring-cyan-200">MUSIC WORLD SHOP</a>

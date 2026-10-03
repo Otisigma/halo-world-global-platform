@@ -203,7 +203,7 @@ function resolveReleaseDreamweaverFlow(songId, {
   });
 }
 
-async function ensureReleaseCampaign(db, song, versions) {
+async function ensureReleaseCampaign(db, song, versions, preserveReleaseMetadata = false) {
   const releaseId = await resolveReleaseId(db, song);
   const releaseMixId = cleanText(song.source_release_id || releaseId, 120);
   const publicUrl = publicationPath(releaseId);
@@ -227,7 +227,18 @@ async function ensureReleaseCampaign(db, song, versions) {
       .filter(Boolean)
   )];
   const pitch = cleanText(song.notes, 500) || `Open ${song.title} by ${song.artist_name} across HALO.`;
-  const releaseRows = await db.sql`
+  let releaseRows = [];
+  if (preserveReleaseMetadata) {
+    releaseRows = await db.sql`
+      UPDATE halo_release_campaigns
+      SET status = 'published', release_stage = 'released', visibility = 'public',
+        is_chart_eligible = TRUE, updated_at = NOW()
+      WHERE id = ${releaseId}
+        AND (owner_member_id = ${song.owner_member_id} OR owner_member_id IS NULL)
+      RETURNING id, official_url, stream_url
+    `;
+  }
+  if (!releaseRows.length) releaseRows = await db.sql`
     INSERT INTO halo_release_campaigns (
       id,
       owner_member_id,
@@ -538,10 +549,11 @@ export async function forcePushTrack(db, payload, membership) {
   if (payload.id && !id) fail("Choose a valid track id", 400);
   if (!id && !title) fail("Provide a track id or title", 400);
   const matches = id
-    ? await db.sql`SELECT id FROM halo_song_catalog WHERE id = ${id} AND owner_member_id = ${membership.member_id} AND status = 'active'`
-    : await db.sql`SELECT id FROM halo_song_catalog WHERE title = ${title} AND owner_member_id = ${membership.member_id} AND status = 'active' LIMIT 2`;
+    ? await db.sql`SELECT id, rights_status FROM halo_song_catalog WHERE id = ${id} AND owner_member_id = ${membership.member_id} AND status = 'active'`
+    : await db.sql`SELECT id, rights_status FROM halo_song_catalog WHERE LOWER(title) = LOWER(${title}) AND owner_member_id = ${membership.member_id} AND status = 'active' LIMIT 2`;
   if (!matches.length) fail("That track was not found in your catalog. Save it first.", 404);
   if (matches.length !== 1) fail("More than one track has this title. Use its id.", 409);
+  if (matches[0].rights_status === "disputed") fail("Resolve the rights dispute before pushing this song to the shop", 409);
   const [song] = await db.sql`
     UPDATE halo_song_catalog
     SET pipeline_status = 'published',
@@ -559,6 +571,7 @@ export async function forcePushTrack(db, payload, membership) {
     ownerMemberId: membership.member_id,
     actorId: membership.actor_id,
     actorType: "member",
+    preserveReleaseMetadata: true,
   });
   if (!result.ok) fail("Publication could not be confirmed. Retry the push.", 409);
   return {
@@ -585,14 +598,16 @@ export async function reconcilePublishedSong(db, {
   actorId = "system",
   actorType = "system",
   recordLedger = true,
+  preserveReleaseMetadata = false,
 } = {}) {
   const context = await loadPublishedSong(db, songId, ownerMemberId);
   if (!context) return { ok: false, skipped: true, reason: "song_not_published_or_missing" };
   const { song, versions } = context;
   const existingSync = await loadPublicationSyncRow(db, song.id);
   const existingDetails = existingSync?.details && typeof existingSync.details === "object" ? existingSync.details : {};
+  const keepReleaseMetadata = preserveReleaseMetadata || existingDetails.preserveReleaseMetadata === true;
   try {
-    const release = await ensureReleaseCampaign(db, song, versions);
+    const release = await ensureReleaseCampaign(db, song, versions, keepReleaseMetadata);
     const syncedVersions = await syncReleaseAudioVersions(db, song, versions, release.id);
     const radio = await ensureRadioTrack(db, song, syncedVersions, release);
     const dreamweaverStatus = ["dreamweaver_page", "hyperfollow"].includes(release.dreamweaver.routeMode)
@@ -616,6 +631,7 @@ export async function reconcilePublishedSong(db, {
     };
     const health = buildPublicationHealth(publicationHealthSong(song, versions), healthInput);
     const details = {
+      preserveReleaseMetadata: keepReleaseMetadata,
       availableVersions: versions.map(version => version.version_type),
       syncedAudioVersionCount: syncedVersions.length,
       radio: radio.details,
@@ -707,6 +723,7 @@ export async function reconcilePublishedSong(db, {
       radioStatus: "error",
       dreamweaverStatus: "error",
       details: {
+        preserveReleaseMetadata: keepReleaseMetadata,
         ...(existingDetails.dreamweaver ? { dreamweaver: existingDetails.dreamweaver } : {}),
         error: message,
         errorStreak,

@@ -115,7 +115,7 @@ export async function forcePushTrack(db, {
   `;
   if (!updated.length) throw new ForcePushError("That song was not found", 404);
 
-  const result = await reconcile(db, { songId: song.id, ownerMemberId, actorId, actorType: "member" });
+  const result = await reconcile(db, { songId: song.id, ownerMemberId, actorId, actorType: "member", preserveReleaseMetadata: true });
   if (!result?.ok) throw new ForcePushError("The song could not be published to the shop", 409);
 
   await appendLedgerEntry(db, {

@@ -103,6 +103,8 @@ const restored = sanitizeStoredState({
 assert.deepEqual(restored.posts.map(item => item.id), ["local-1", "local-3"], "Stored posts can only be authored by the local viewer");
 assert.equal(restored.posts[0].track, null, "Protocol-relative audio sources are dropped");
 assert.equal(restored.posts[1].track.src, "/media/a.mp3");
+assert.equal(sanitizeStoredState({ posts: [{ id: "local-4", authorId: "you", body: "Timed", durationSec: 184, track: { src: "/media/b.mp3" } }] }).posts[0].durationSec, 184, "Restored posts keep their preview duration");
+assert.notEqual(createLocalPost({ body: "a" }, { now: 7 }).id, createLocalPost({ body: "b" }, { now: 7 }).id, "Same-millisecond posts get unique ids");
 assert.deepEqual(restored.reactions, { "seed-halo-001": ["fire"] });
 assert.equal(restored.comments["seed-halo-001"].length, 1);
 assert.ok(!("bad" in restored.comments));

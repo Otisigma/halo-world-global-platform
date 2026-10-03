@@ -87,6 +87,13 @@ function waveform(post) {
   button.disabled = !playable(post);
   button.setAttribute("aria-label", playable(post) ? `Play preview: ${post.track.title || "signal"}` : "Audio preview stays in the studio vault");
   button.addEventListener("click", () => togglePlay(post));
+  button.addEventListener("keydown", event => {
+    if (!playable(post) || (event.key !== "ArrowLeft" && event.key !== "ArrowRight")) return;
+    event.preventDefault();
+    const current = playingId === post.id ? audio.currentTime : 0;
+    seek(post, Math.max(0, current + (event.key === "ArrowRight" ? 5 : -5)));
+  });
+  if (playable(post)) button.title = "Play or pause. Left and right arrow keys skip 5 seconds.";
   const bars = waveformBars(post.id, 56);
   const graphic = document.createElementNS(SVG, "svg");
   graphic.setAttribute("viewBox", `0 0 ${bars.length * 6} 60`);
@@ -175,7 +182,8 @@ function commentsBlock(post) {
   form.addEventListener("submit", event => {
     event.preventDefault();
     try {
-      const atSec = stampBox.checked && playingId === post.id ? audio.currentTime : null;
+      if (stampBox.checked && playingId !== post.id) throw new Error("Start this preview first to pin feedback to the playhead.");
+      const atSec = stampBox.checked ? audio.currentTime : null;
       const comment = createComment({ body: input.value, atSec });
       store.comments[post.id] = [...(store.comments[post.id] || []), comment].slice(-SIGNAL_LIMITS.commentsPerPost);
       saveStore();

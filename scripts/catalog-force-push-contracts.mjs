@@ -170,6 +170,9 @@ assert.doesNotMatch(legacyHandler, /path: "\/api\/catalog\/force-push-track"/, "
   assert.equal((await run(request("", "application/json", "GET"))).status, 405);
   assert.equal((await run(request())).status, 401);
   user = { id: "signed-in" };
+  assert.equal((await run(request())).status, 403);
+  assert.equal(calls, 0, "non-admin requests must never publish");
+  user = { id: "signed-in", appMetadata: { roles: ["admin"] } };
   rejectOrigin = true;
   assert.equal((await run(request())).status, 403);
   rejectOrigin = false;
@@ -274,7 +277,7 @@ const savedSong = {
   currency: "USD", status: "active", source_release_id: "existing-release",
 };
 
-function fixture({ user = { id: "owner" }, origin = true, price = null, fail = false, duplicate = false, rights = "cleared" } = {}) {
+function fixture({ user = { id: "owner", appMetadata: { roles: ["admin"] } }, origin = true, price = null, fail = false, duplicate = false, rights = "cleared" } = {}) {
   const songs = [
     { ...savedSong, sale_price_cents: price, rights_status: rights },
     { ...savedSong, id: otherId, owner_member_id: duplicate ? "owner" : "other", notes: "Unrelated data" },
@@ -369,6 +372,7 @@ for (const price of [249, 0, -1]) {
 }
 for (const [options, payload, expected] of [
   [{ user: null }, { id: songId }, 401],
+  [{ user: { id: "owner", userMetadata: { roles: ["admin"] } } }, { id: songId }, 403],
   [{ origin: false }, { id: songId }, 403],
   [{ origin: "throw" }, { id: songId }, 403],
   [{}, {}, 400],
@@ -410,7 +414,9 @@ const [page, client, publication] = await Promise.all([
   readFile(resolve(root, "song-catalog/song-catalog.js"), "utf8"),
   readFile(resolve(root, "netlify/lib/song-publication.mjs"), "utf8"),
 ]);
-assert.match(page, /id="pushToShopButton" type="button">Push to Shop &amp; Charts/);
+assert.match(page, /id="pushToShopButton" type="button" hidden>Push to Shop &amp; Charts/);
+assert.match(client, /\$\("#pushToShopButton"\)\.hidden=!data\.viewer\?\.canForcePush/);
+assert.match(await readFile(resolve(import.meta.dirname, "../netlify/functions/song-catalog.ts"), "utf8"), /canForcePush: isOwner\(user\)/);
 assert.match(client, /fetch\("\/api\/catalog\/force-push-track",\{method:"POST",credentials:"same-origin"/);
 assert.match(client, /price:hasPrice\?money\(cents,song\.currency\):"US\$1\.29"/);
 assert.match(client, /if\(!response\.ok\|\|data\.success!==true\)throw/);

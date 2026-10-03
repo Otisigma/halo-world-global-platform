@@ -1,6 +1,6 @@
 import { getDatabase } from "@netlify/database";
 import { getUser, verifyRequestOrigin } from "@netlify/identity";
-import { cleanText, ensureMembership } from "../lib/halo-x.mjs";
+import { cleanText, ensureMembership, isOwner } from "../lib/halo-x.mjs";
 import { cleanDreamweaverSongId } from "../../lib/dreamweaver-storefront.js";
 import { reconcilePublishedSong } from "../lib/song-publication.mjs";
 
@@ -22,6 +22,7 @@ export function createForcePushTrackHandler({
     try {
       const user = await currentUser();
       if (!user?.id) return json({ message: "Sign in to publish a track" }, 401);
+      if (!isOwner(user)) return json({ message: "Admin access is required to force publication" }, 403);
       try {
         if ((await verifyOrigin(request)) === false) throw new Error("Invalid origin");
       } catch {

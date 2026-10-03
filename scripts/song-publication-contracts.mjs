@@ -133,6 +133,9 @@ assert.match(forcePushApi, /new TextEncoder\(\)\.encode\(text\)\.byteLength/, "s
   assert.equal((await handler(request("", "GET"))).status, 405);
   assert.equal((await handler(request())).status, 401);
   user = { id: "signed-in" };
+  assert.equal((await handler(request(JSON.stringify({ id: sampleSongId })))).status, 403);
+  assert.equal(calls, 0, "non-admin requests must never publish");
+  user = { id: "signed-in", appMetadata: { roles: ["admin"] } };
   rejectOrigin = true;
   assert.equal((await handler(request())).status, 403);
   rejectOrigin = false;
@@ -148,7 +151,7 @@ assert.match(forcePushApi, /new TextEncoder\(\)\.encode\(text\)\.byteLength/, "s
 {
   const editor = await read("song-catalog/song-catalog.js");
   const page = await read("song-catalog/index.html");
-  assert.match(page, /id="pushToShopButton" type="button">Push to Shop &amp; Charts/);
+  assert.match(page, /id="pushToShopButton" type="button" hidden>Push to Shop &amp; Charts/);
   assert.match(page, /id="pushToShopStatus" role="status" aria-live="polite"/);
   const source = editor.match(/async function pushToShop\(\)\{[\s\S]*?\n\}/)?.[0];
   assert.ok(source, "editor must wire the force-push action");

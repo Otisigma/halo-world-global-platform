@@ -24,12 +24,16 @@
   <script src="/halo-hud.js" defer></script>
   <script type="module" src="/identity.js"></script>
   <script src="/creator-network/network.js" defer></script>
+  <script type="module" src="/creator-network/orbits.js"></script>
 </head>
 <body>
   <a class="skip-link" href="#main">Skip to Creator Network</a>
   <header class="creator-header">
     <a class="creator-brand" href="/halo"><span class="brand-mark">H</span><span>HALO <small>CREATOR NETWORK</small></span></a>
     <nav aria-label="Creator navigation">
+      <a href="/signal/">Signal Feed</a>
+      <a href="#orbits">HALO Orbits</a>
+      <a href="#guardian">Studio Guardian</a>
       <a href="/creators/">Creator World</a>
       <a href="/artists/">Artist rooms</a>
       <a href="/signal-network/">Signal Network</a>
@@ -48,6 +52,7 @@
         <div class="hero-actions">
           <a class="button button-gold" href="#locked">Enter your studio</a>
           <a class="button button-quiet" href="#publicDirectory">Discover creators <span aria-hidden="true">↓</span></a>
+          <a class="button button-quiet" href="/signal/">Open Signal Feed <span aria-hidden="true">↗</span></a>
         </div>
       </div>
       <aside class="hero-signal" data-halo-guide="Your Creator Pass is public only when you opt in. Private projects, files, and rights stay private.">
@@ -70,7 +75,66 @@
         <label>BPM<input name="bpm" type="number" min="20" max="300" placeholder="Any tempo"></label>
         <button type="submit">Tune discovery <span aria-hidden="true">↗</span></button>
       </form>
+      <h3 class="directory-subhead">Verified HALO residents</h3>
+      <div id="verifiedCreators" class="creator-cards verified-cards" aria-live="polite" data-halo-guide="Verified HALO residents are seeded house creators. Member Creator Passes appear below once their owners opt in."></div>
+      <h3 class="directory-subhead">Opt-in Creator Passes</h3>
       <div id="publicCreators" class="creator-cards" aria-live="polite"><p class="empty-state">Loading opt-in Creator Passes…</p></div>
+    </section>
+
+    <section id="orbits" class="orbits-section" aria-labelledby="orbitsTitle">
+      <div class="section-heading">
+        <div><p class="eyebrow">HALO Orbits / SERENA Mesh</p><h2 id="orbitsTitle">Your network, in orbit.</h2></div>
+        <a class="text-link" href="/signal/">Read the Public Signal <span aria-hidden="true">↗</span></a>
+      </div>
+      <p class="section-intro">Every collaborator sits on a ring by trust: the Core Studio Vault holds private masters and stems, the Inner Crew shares splits, Network Peers answer briefs, and the Public Signal listens.</p>
+      <div class="orbits-grid">
+        <div class="orbit-canvas" data-halo-guide="Select a creator in orbit to see their tier. Rings describe trust, never ownership or file access.">
+          <svg id="orbitMesh" viewBox="0 0 640 640" role="group" aria-label="HALO Orbits network map"></svg>
+        </div>
+        <aside class="orbit-panel">
+          <div id="orbitDetail" class="orbit-detail" aria-live="polite"><p class="eyebrow">Orbit focus</p><h3>Select a creator</h3><p>Choose any node to see where they sit in your network.</p></div>
+          <ol id="orbitLegend" class="orbit-legend"></ol>
+        </aside>
+      </div>
+    </section>
+
+    <section id="guardian" class="guardian-section" aria-labelledby="guardianTitle">
+      <div class="section-heading">
+        <div><p class="eyebrow">HaloAIService / Studio Guardian</p><h2 id="guardianTitle">Check the project before the council.</h2></div>
+        <a class="text-link" href="/release-house/">Open Release House <span aria-hidden="true">↗</span></a>
+      </div>
+      <p class="section-intro">Studio Guardian scores project health, validates stems, verifies a 50/50 split, and opens a council review. Checks run in your browser; nothing is uploaded or released from here.</p>
+      <div class="guardian-grid">
+        <form id="guardianForm" class="profile-form guardian-form" aria-label="Studio Guardian project">
+          <label>Project title<input name="title" maxlength="180" value="Vault Session 01" required></label>
+          <label>Artist<input name="artist" maxlength="180" value="DJ Halo × DJ Butterfly"></label>
+          <label>BPM<input name="bpm" type="number" min="20" max="300" value="122"></label>
+          <label>Key<input name="musicalKey" maxlength="20" value="A minor"></label>
+          <label>ISRC<input name="isrc" maxlength="20" placeholder="GB-ABC-26-00001"></label>
+          <label>Split policy<select name="splitPolicy"><option value="50/50">50/50 partnership</option><option value="custom">Custom (must total 100%)</option></select></label>
+          <label>Party A<input name="partyA" maxlength="120" value="DJ Halo"></label>
+          <label>Party A share %<input name="shareA" type="number" min="0" max="100" step="0.01" value="50"></label>
+          <label>Party B<input name="partyB" maxlength="120" value="DJ Butterfly"></label>
+          <label>Party B share %<input name="shareB" type="number" min="0" max="100" step="0.01" value="50"></label>
+          <label class="guardian-stems">Stems (one per line: file sampleRate bitDepth seconds)<textarea name="stems" maxlength="6000">Kick.wav 48000 24 212.4
+Bass.wav 48000 24 212.4
+Vocal.wav 48000 24 212.4
+Pads.mp3 44100 16 210.1</textarea></label>
+          <label class="checkbox"><input name="hasMaster" type="checkbox" checked>Sale master uploaded</label>
+          <label class="checkbox"><input name="hasArtwork" type="checkbox">Release artwork ready</label>
+          <button class="button button-gold" type="submit">Run Studio Guardian</button>
+        </form>
+        <div class="guardian-report" aria-live="polite">
+          <div class="guardian-score"><span id="guardianScore">—</span><small>/ 100</small></div>
+          <p id="guardianGrade" class="eyebrow">Health score</p>
+          <p id="guardianNext">Run Studio Guardian to score this project.</p>
+          <ul id="guardianChecks" class="guardian-checks"></ul>
+          <h3>Stem validation</h3><ul id="guardianStems" class="guardian-checks"></ul>
+          <h3>Split verification</h3><p id="guardianSplits">—</p>
+          <button id="councilReview" class="button button-outline" type="button">Request council review</button>
+          <p id="councilTicket" class="council-ticket"></p>
+        </div>
+      </div>
     </section>
 
     <p id="status" role="status" aria-live="polite"></p>

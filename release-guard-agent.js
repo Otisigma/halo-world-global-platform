@@ -201,7 +201,13 @@ export class ReleaseGuardAgent {
     } catch (error) {
       if (error.code !== "ENOENT") throw error;
     }
-    const source = await readFile(catalogPath, "utf8");
+    let source;
+    try {
+      source = await readFile(catalogPath, "utf8");
+    } catch (error) {
+      if (error.code !== "ENOENT") throw error;
+      throw new Error(`Required release catalog is missing: ${catalogPath}. Add the real shared-catalog.json to the repository root or generate it before npm run release-guard. Expected a JSON array of tracks or an object with a songs array. The release guard remains mandatory; no catalog was generated or skipped.`, { cause: error });
+    }
     const catalog = JSON.parse(source);
     const songs = Array.isArray(catalog) ? catalog : catalog?.songs;
     if (!Array.isArray(songs)) throw new Error("Catalog must be an array or an object with a songs array.");

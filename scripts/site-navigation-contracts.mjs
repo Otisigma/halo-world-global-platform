@@ -11,6 +11,20 @@ const [navigationScript, navigationStyles, musicStyles] = await Promise.all([
   read("music/music.css")
 ]);
 
+const networkHomepage = await read("halo.html");
+const networkSection = networkHomepage.match(/<section id="halo-network"[\s\S]*?<\/section>/)?.[0];
+assert.ok(networkSection, "the public homepage must feature HALO Network");
+assert.match(networkSection, /aria-labelledby="halo-network-title"/);
+assert.match(networkSection, /id="halo-network-title"/);
+assert.match(networkSection, /md:grid-cols-2/, "network entry points must adapt to mobile screens");
+for (const network of ["creator", "signal"]) {
+  assert.match(networkSection, new RegExp(`href="/${network}-network/"`), `${network} network must be accessible from the homepage`);
+  assert.match(networkSection, new RegExp(`data-stat-event="open_${network}_network"`));
+  assert.match(networkHomepage, new RegExp(`route: '/${network}-network/'`), `${network} network must participate in menu route status checks`);
+  assert.match(networkHomepage, new RegExp(`href="/${network}-network/" data-stat-event="open_${network}_network" data-stat-target="header"`), `${network} network must be accessible from the main menu`);
+  await read(`${network}-network/index.html`);
+}
+
 // --- Minimal DOM double -----------------------------------------------------------
 // Supports compound selectors (#id, .class, [attr], [attr="value"]) joined by commas,
 // which is everything the delegated navigation engine queries.

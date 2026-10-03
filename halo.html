@@ -1287,6 +1287,8 @@
           { route: '/asset-inventory/', label: 'ASSET INVENTORY' },
           { route: '/artist-pro/', label: 'ARTIST PRO' },
           { route: '/creators/', label: 'CREATOR WORLD' },
+          { route: '/creator-network/', label: 'CREATOR NETWORK' },
+          { route: '/signal-network/', label: 'SIGNAL NETWORK' },
           { route: '/artists/', label: 'ARTIST ROOMS + CHARTS' },
           { route: '/creator-freedom/', label: 'CREATOR FREEDOM' },
           { route: '/campaign-studio/', label: 'CAMPAIGN STUDIO' },
@@ -3978,6 +3980,9 @@
                         <a href="/creator-network/" data-stat-event="open_creator_network" data-stat-target="header" data-signal="MEMBER COLLABORATION">
                           <Icon name="star" className="halo-menu-icon" /><span><strong>CREATOR NETWORK {renderMenuStatusBadge('/creator-network/', 'Creator Network')}</strong><small>Member profiles, opportunities, and invites</small></span>
                         </a>
+                        <a href="/signal-network/" data-stat-event="open_signal_network" data-stat-target="header" data-signal="ARTIST INTELLIGENCE">
+                          <Icon name="activity" className="halo-menu-icon" /><span><strong>SIGNAL NETWORK {renderMenuStatusBadge('/signal-network/', 'Signal Network')}</strong><small>Signals, private messages, campaigns, and network presence</small></span>
+                        </a>
                         <a href="/artists/" data-stat-event="open_artist_rooms" data-stat-target="header" data-signal="ARTIST ROOMS">
                           <Icon name="music" className="halo-menu-icon" /><span><strong>ARTIST ROOMS + CHARTS {renderMenuStatusBadge('/artists/', 'Artist Rooms and Charts')}</strong><small>Browse rooms, charts, and featured drops</small></span>
                         </a>
@@ -4717,6 +4722,30 @@
                           </span>
                         </div>
                       </div>
+                    </div>
+                  </section>
+
+                  <section id="halo-network" className="relative overflow-hidden rounded-[2rem] border border-amber-300/20 bg-[#0e0c09] shadow-[0_30px_90px_rgba(0,0,0,.38)]" aria-labelledby="halo-network-title">
+                    <div className="grid gap-6 border-b border-white/10 p-6 md:p-9 lg:grid-cols-[1.15fr_.85fr] lg:items-end">
+                      <div>
+                        <p className="world-display text-xs font-bold uppercase tracking-[.34em] text-amber-300">HALO Network // People + possibility</p>
+                        <h2 id="halo-network-title" className="world-display mt-4 text-4xl font-black uppercase leading-tight tracking-[-.035em] text-[#f4efe7] md:text-6xl">Find your people.<br/><span className="world-serif font-semibold italic normal-case text-amber-200">Move the work forward.</span></h2>
+                      </div>
+                      <p className="max-w-md text-sm leading-relaxed text-gray-300">Two connected member workspaces. Discover collaborators in Creator Network, then keep conversations and creative momentum moving in Signal Network. Use your existing HALO identity; member access and privacy controls stay in place.</p>
+                    </div>
+                    <div className="grid md:grid-cols-2">
+                      <a href="/creator-network/" data-stat-event="open_creator_network" data-stat-target="homepage_network" className="group flex flex-col p-6 transition hover:bg-amber-300/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-amber-200 md:p-9">
+                        <div className="flex items-center justify-between text-amber-300"><span className="font-mono text-[10px] uppercase tracking-[.22em]">01 // Collaborate</span><Icon name="users" className="h-6 w-6" /></div>
+                        <h3 className="world-display mt-6 text-2xl font-bold uppercase text-white">Creator Network</h3>
+                        <p className="mt-3 text-sm leading-relaxed text-gray-300">Build your Creator Pass, find creators by role and genre, post collaboration briefs, and manage invites and applications.</p>
+                        <span className="mt-6 flex items-center gap-3 font-mono text-xs font-bold uppercase tracking-[.12em] text-amber-200">Open Creator Network <Icon name="arrow-right" className="h-4 w-4 transition-transform group-hover:translate-x-1" /></span>
+                      </a>
+                      <a href="/signal-network/" data-stat-event="open_signal_network" data-stat-target="homepage_network" className="group flex flex-col border-t border-white/10 p-6 transition hover:bg-amber-300/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-amber-200 md:border-l md:border-t-0 md:p-9">
+                        <div className="flex items-center justify-between text-amber-300"><span className="font-mono text-[10px] uppercase tracking-[.22em]">02 // Connect</span><Icon name="activity" className="h-6 w-6" /></div>
+                        <h3 className="world-display mt-6 text-2xl font-bold uppercase text-white">Signal Network</h3>
+                        <p className="mt-3 text-sm leading-relaxed text-gray-300">Discover collaborators, send signals, track campaigns, exchange private messages, and explore opt-in regional network presence.</p>
+                        <span className="mt-6 flex items-center gap-3 font-mono text-xs font-bold uppercase tracking-[.12em] text-amber-200">Open Signal Network <Icon name="arrow-right" className="h-4 w-4 transition-transform group-hover:translate-x-1" /></span>
+                      </a>
                     </div>
                   </section>
 

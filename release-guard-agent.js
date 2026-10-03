@@ -192,7 +192,7 @@ export class ReleaseGuardAgent {
     return { sanitizedCatalog, quarantinedCatalog, report };
   }
 
-  static async run({ catalogPath = CONFIG.CATALOG_INPUT_PATH, recoveryDirectory = resolve(dirname(catalogPath), ".netlify/release-guard") } = {}) {
+  static async run({ catalogPath = CONFIG.CATALOG_INPUT_PATH, recoveryDirectory = resolve(dirname(catalogPath), ".netlify/release-guard"), allowMissingCatalog = false } = {}) {
     const backupPath = resolve(recoveryDirectory, "shared-catalog.original.json");
     // A failed run must not become a successful build merely because it removed unsafe tracks.
     try {
@@ -201,7 +201,14 @@ export class ReleaseGuardAgent {
     } catch (error) {
       if (error.code !== "ENOENT") throw error;
     }
-    const source = await readFile(catalogPath, "utf8");
+    let source;
+    try {
+      source = await readFile(catalogPath, "utf8");
+    } catch (error) {
+      if (error.code !== "ENOENT" || !allowMissingCatalog) throw error;
+      console.log("HALO RELEASE GUARD: No static catalog supplied; the storefront uses the Netlify Database release catalog. Static catalog audit skipped.");
+      return { passed: true, skipped: true, reason: "No static catalog supplied." };
+    }
     const catalog = JSON.parse(source);
     const songs = Array.isArray(catalog) ? catalog : catalog?.songs;
     if (!Array.isArray(songs)) throw new Error("Catalog must be an array or an object with a songs array.");
@@ -235,7 +242,7 @@ export class ReleaseGuardAgent {
 export default ReleaseGuardAgent;
 
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
-  ReleaseGuardAgent.run().then((report) => {
+  ReleaseGuardAgent.run({ allowMissingCatalog: process.argv.includes("--allow-missing-catalog") }).then((report) => {
     process.exitCode = report.passed ? 0 : 1;
   }).catch((error) => {
     console.error(`HALO RELEASE GUARD: ${error.message}`);

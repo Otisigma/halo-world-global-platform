@@ -182,6 +182,7 @@
     byId("signOut").hidden = true;
     for (const id of ["creators", "projects", "requests"]) byId(id).replaceChildren();
     byId("profile").reset();
+    byId("project").reset();
     try {
       const user = await identity.getUser();
       if (version !== sessionVersion) return;

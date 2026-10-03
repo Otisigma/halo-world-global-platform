@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
+import vm from "node:vm";
 import { createCreatorNetworkHandler, profileInput, projectInput, canRespond } from "../netlify/lib/creator-network.mjs";
 import { PUBLIC_ROUTE_REGISTRY, canonicalizeRoutePath } from "../lib/route-registry.js";
 
@@ -26,6 +27,8 @@ assert.match(routes, /from = "\/creator-network\/"\s+to = "\/creator-network\/in
 assert.match(preview, /href="\/creator-network\/"/);
 assert.match(html, /src="\/identity.js"/);
 assert.match(html, /src="\/site-monitor.js"/);
+assert.match(html, /src="\/halo-hud.js"/);
+assert.match(html, /href="\/halo-hud.css"/);
 assert.match(html, /data-halo-guide=/);
 for (const route of ["/artist/dashboard", "/artists/", "/song-catalog/", "/dreamweaver-lab/", "/mixes/"]) {
   assert.ok(html.includes(`href="${route}"`));
@@ -163,6 +166,43 @@ const response = await discovery.request(null, "GET", "?role=Vocalist&genre=Hous
 assert.equal(response.status, 200);
 assert.equal(response.headers.get("Cache-Control"), "no-store");
 assert.equal((await response.json()).memberId, "owner");
-assert.equal(discovery.calls.length, 4);
+assert.equal(discovery.calls.length, 5);
 assert.ok(discovery.calls.some(c => c.params.includes(124) && c.params.includes("Vocalist")));
+const ownedQuery = discovery.calls.find(c => c.query.includes("WHERE p.owner_member_id = ? OR EXISTS"));
+assert.ok(ownedQuery);
+assert.ok(!ownedQuery.query.includes("LIMIT"), "Discovery caps must not hide member projects");
+const crowded = fixture({ sql: query => {
+  if (query.includes("WHERE p.owner_member_id = ? OR EXISTS")) return [{ id: "older-owned", owner_member_id: "owner" }];
+  if (query.includes("WHERE p.status = 'open' AND p.owner_member_id <>")) return Array.from({ length: 100 }, (_, i) => ({ id: `newer-${i}` }));
+  return [];
+} });
+const crowdedState = await (await crowded.request(null, "GET")).json();
+assert.equal(crowdedState.projects.length, 101);
+assert.equal(crowdedState.projects[0].id, "older-owned");
+
+const elements = new Map();
+function element(id) {
+  if (!elements.has(id)) elements.set(id, {
+    hidden: false, textContent: "", draft: "", children: [],
+    addEventListener() {},
+    replaceChildren() { this.children = []; },
+    reset() { this.draft = ""; }
+  });
+  return elements.get(id);
+}
+let authChanged;
+vm.runInNewContext(client, {
+  document: { getElementById: element },
+  window: { haloIdentity: {
+    getUser: async () => null, onAuthChange: callback => { authChanged = callback; }
+  } }
+});
+await new Promise(resolve => setImmediate(resolve));
+element("project").draft = "Private unreleased collaboration brief";
+element("creators").children = ["Previous member's discovery"];
+authChanged();
+await new Promise(resolve => setImmediate(resolve));
+assert.equal(element("project").draft, "", "Account changes must clear unsaved briefs");
+assert.deepEqual(element("creators").children, []);
+assert.equal(element("workspace").hidden, true);
 console.log("Creator Network contracts passed: validation, identity, origin, ownership, discovery and participant lifecycle");

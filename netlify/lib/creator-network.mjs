@@ -95,7 +95,7 @@ async function workspace(db, memberId, url) {
   const language = text(url.searchParams.get("language"), 80);
   const key = text(url.searchParams.get("key"), 20);
   const bpm = tempo(url.searchParams.get("bpm"));
-  const [profiles, creators, projects, participants] = await Promise.all([
+  const [profiles, creators, memberProjects, opportunities, participants] = await Promise.all([
     db.sql`SELECT * FROM halo_creator_profiles WHERE member_id = ${memberId}`,
     db.sql`
       SELECT member_id, display_name, bio, artist_slug, roles, genres, languages, daw_setup,
@@ -110,17 +110,25 @@ async function workspace(db, memberId, url) {
     db.sql`
       SELECT p.*, c.display_name AS creator_name FROM halo_creator_projects p
       LEFT JOIN halo_creator_profiles c ON c.member_id = p.owner_member_id
-      WHERE p.owner_member_id = ${memberId} OR (
-        p.status = 'open'
+      WHERE p.owner_member_id = ${memberId} OR EXISTS (
+        SELECT 1 FROM halo_creator_participants cp
+        WHERE cp.project_id = p.id AND cp.member_id = ${memberId} AND cp.status = 'accepted'
+      )
+      ORDER BY p.updated_at DESC
+    `,
+    db.sql`
+      SELECT p.*, c.display_name AS creator_name FROM halo_creator_projects p
+      LEFT JOIN halo_creator_profiles c ON c.member_id = p.owner_member_id
+      WHERE p.status = 'open' AND p.owner_member_id <> ${memberId}
         AND (${role} = '' OR p.role_needed = ${role})
         AND (${genre} = '' OR p.genre = ${genre})
         AND (${language} = '' OR p.language = ${language})
         AND (${key} = '' OR p.musical_key = ${key})
         AND (${bpm}::int IS NULL OR p.bpm = ${bpm})
-      ) OR EXISTS (
-        SELECT 1 FROM halo_creator_participants cp
-        WHERE cp.project_id = p.id AND cp.member_id = ${memberId} AND cp.status = 'accepted'
-      )
+        AND NOT EXISTS (
+          SELECT 1 FROM halo_creator_participants cp
+          WHERE cp.project_id = p.id AND cp.member_id = ${memberId} AND cp.status = 'accepted'
+        )
       ORDER BY p.updated_at DESC LIMIT 100
     `,
     db.sql`
@@ -134,7 +142,7 @@ async function workspace(db, memberId, url) {
       ORDER BY cp.updated_at DESC LIMIT 100
     `
   ]);
-  return { memberId, profile: profiles[0] || null, creators, projects, participants };
+  return { memberId, profile: profiles[0] || null, creators, projects: [...memberProjects, ...opportunities], participants };
 }
 
 export function createCreatorNetworkHandler({ getDatabase, getUser, ensureMembership, verifyRequestOrigin }) {

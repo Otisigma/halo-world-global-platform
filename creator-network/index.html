@@ -24,6 +24,7 @@
   <script src="/halo-hud.js" defer></script>
   <script type="module" src="/identity.js"></script>
   <script src="/creator-network/network.js" defer></script>
+  <script type="module" src="/creator-network/discovery.js"></script>
 </head>
 <body>
   <a class="skip-link" href="#main">Skip to Creator Network</a>
@@ -47,7 +48,7 @@
         <p class="hero-copy">A private studio for the people behind the music. Find your next collaborator, shape the release, and keep every decision creator-led.</p>
         <div class="hero-actions">
           <a class="button button-gold" href="#locked">Enter your studio</a>
-          <a class="button button-quiet" href="#publicDirectory">Discover creators <span aria-hidden="true">↓</span></a>
+          <a class="button button-quiet" href="#demoDiscovery">Explore sample creators <span aria-hidden="true">↓</span></a>
         </div>
       </div>
       <aside class="hero-signal" data-halo-guide="Your Creator Pass is public only when you opt in. Private projects, files, and rights stay private.">
@@ -56,6 +57,40 @@
         <p>Human taste.<br><strong>Dreamweaver flow.</strong><br>Artist-owned outcomes.</p>
       </aside>
     </section>
+
+    <section id="demoDiscovery" class="demo-discovery" aria-labelledby="demoDiscoveryTitle">
+      <div class="section-heading">
+        <div><p class="eyebrow">The creator constellation / curated demo</p><h2 id="demoDiscoveryTitle">Different sounds.<br>Shared gravity.</h2></div>
+        <a class="text-link" href="#publicDirectory">Real opt-in profiles <span aria-hidden="true">↓</span></a>
+      </div>
+      <p class="section-intro">Explore illustrative sample profiles, not actual verified people. Names, releases, listings, follower counts and tier placements are demonstration data. Your private studio and real opt-in discovery remain separate.</p>
+      <div class="demo-disclosure"><span class="sample-badge">SAMPLE PROFILES</span><p>A “verified” sample badge demonstrates the design only — it is not identity verification or an endorsement. Demo follows are saved on this browser only.</p></div>
+      <form id="demoFilters" class="demo-filter-console" aria-label="Filter sample creators">
+        <label>Find a sound<input id="demoSearch" type="search" maxlength="120" placeholder="Name, role or genre…" autocomplete="off"></label>
+        <label>Genre<select id="demoGenre"><option value="">All genres</option></select></label>
+        <button class="button button-outline" type="reset">Reset filters</button>
+      </form>
+      <p id="demoResultCount" class="demo-result-count" role="status"></p>
+      <div id="demoCreators" class="demo-creator-grid"><p class="empty-state">Sample profiles are loading. Real opt-in profiles are available in the section below.</p></div>
+      <p id="demoDiscoveryStatus" class="demo-status" role="status" aria-live="polite"></p>
+      <noscript><p>Enable JavaScript to explore the sample profiles and HALO Orbits. The studio sign-in and real discovery sections remain separate below.</p></noscript>
+    </section>
+
+    <section id="haloOrbits" class="demo-orbits" aria-labelledby="orbitsTitle">
+      <div class="section-heading">
+        <div><p class="eyebrow">HALO Orbits / SERENA Mesh foundation</p><h2 id="orbitsTitle">Find your creative orbit.</h2></div>
+        <span class="sample-badge">ILLUSTRATIVE TIERS</span>
+      </div>
+      <p class="section-intro">Four creative tiers, one connected constellation. Select a sample creator to explore their profile. These placements are illustrative, not rankings, earned status or membership entitlements.</p>
+      <div id="demoOrbitTiers" class="demo-orbit-grid"><p class="empty-state">The sample constellation is loading.</p></div>
+    </section>
+
+    <dialog id="demoProfileDialog" class="demo-profile-dialog" aria-labelledby="demoProfileTitle" aria-describedby="demoProfileDisclosure">
+      <div class="demo-dialog-topline"><span class="eyebrow">Creator pass / illustrative profile</span><button id="demoProfileClose" class="button button-outline" type="button" autofocus>Close profile</button></div>
+      <p id="demoProfileDisclosure" class="demo-disclosure">Sample profile only. No actual person, identity verification, followers, release or purchasable listing is represented.</p>
+      <div id="demoProfileContent"></div>
+      <p id="demoProfileStatus" class="demo-status" role="status" aria-live="polite"></p>
+    </dialog>
 
     <section id="publicDirectory" class="public-directory" aria-labelledby="directoryTitle">
       <div class="section-heading">

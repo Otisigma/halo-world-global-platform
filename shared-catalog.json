@@ -1,0 +1,51 @@
+{
+  "version": 1,
+  "scope": "Repository-published releases with bundled cover artwork; build input, not a live database export",
+  "pricePolicy": "Release guard default USD price; live storefront prices remain in Netlify Database",
+  "songs": [
+    {
+      "id": "the-cold-is-lasting-longer",
+      "title": "The Cold Is Lasting Longer",
+      "artist": "Owen Anthony",
+      "releaseStatus": "PUBLISHED",
+      "artworkUrl": "/assets/releases/the-cold-is-lasting-longer.jpg",
+      "officialUrl": "https://distrokid.com/hyperfollow/owenanthony/the-cold-is-lasting-longer?ref=release-pack",
+      "price": "US$1.29",
+      "checkoutUrl": "https://halo-world-global-platform.netlify.app/music-upload?song=the-cold-is-lasting-longer",
+      "sourceMigration": "netlify/database/migrations/20260808190000_create-release-campaigns.sql"
+    },
+    {
+      "id": "salty",
+      "title": "Salty",
+      "artist": "Owen Anthony",
+      "releaseStatus": "PUBLISHED",
+      "artworkUrl": "/assets/releases/salty.jpg",
+      "officialUrl": "https://distrokid.com/hyperfollow/owenanthony/salty?ref=release",
+      "price": "US$1.29",
+      "checkoutUrl": "https://halo-world-global-platform.netlify.app/music-upload?song=salty",
+      "sourceMigration": "netlify/database/migrations/20260817170000_publish-salty-release.sql"
+    },
+    {
+      "id": "my-sensitivity-like-a-crown",
+      "title": "My Sensitivity Like a Crown",
+      "artist": "Owen Anthony",
+      "releaseStatus": "PUBLISHED",
+      "artworkUrl": "/assets/releases/my-sensitivity-like-a-crown.jpg",
+      "officialUrl": "https://distrokid.com/hyperfollow/owenanthony/my-sensitivity-like-a-crown",
+      "price": "US$1.29",
+      "checkoutUrl": "https://halo-world-global-platform.netlify.app/music-upload?song=my-sensitivity-like-a-crown",
+      "sourceMigration": "netlify/database/migrations/20260904010000_normalize_requested_music_releases.sql"
+    },
+    {
+      "id": "when-the-world-goes-dark",
+      "title": "When The World Goes Dark",
+      "artist": "Owen Anthony",
+      "releaseStatus": "PUBLISHED",
+      "artworkUrl": "/assets/releases/when-the-world-goes-dark.jpg",
+      "officialUrl": "https://distrokid.com/hyperfollow/owenanthony/when-the-world-goes-dark?ref=release",
+      "price": "US$1.29",
+      "checkoutUrl": "https://halo-world-global-platform.netlify.app/music-upload?song=when-the-world-goes-dark",
+      "sourceMigration": "netlify/database/migrations/20260904010000_normalize_requested_music_releases.sql"
+    }
+  ]
+}

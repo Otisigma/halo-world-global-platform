@@ -30,6 +30,28 @@ const recovery = resolve(fixture, ".netlify/release-guard");
 const readCatalog = async () => JSON.parse(await readFile(catalogPath, "utf8"));
 
 try {
+  const repositoryCatalog = JSON.parse(await readFile(CONFIG.CATALOG_INPUT_PATH, "utf8"));
+  assert.ok(Array.isArray(repositoryCatalog.songs) && repositoryCatalog.songs.length > 0, "the mandatory repository catalog must contain real releases");
+  assert.equal(new Set(repositoryCatalog.songs.map((track) => track.id)).size, repositoryCatalog.songs.length, "repository catalog IDs must be unique");
+  for (const track of repositoryCatalog.songs) {
+    const migration = await readFile(resolve(root, track.sourceMigration), "utf8");
+    for (const value of [track.id, track.title, track.artist, track.artworkUrl, track.officialUrl]) {
+      assert.ok(migration.includes(`'${value.replaceAll("'", "''")}'`), `${track.id} must retain its source release metadata`);
+    }
+    assert.ok(migration.includes("'published'"), `${track.id} must reference a published release migration`);
+    assert.equal(track.releaseStatus, "PUBLISHED");
+    assert.equal(track.price, CONFIG.DEFAULT_PRICE, "build snapshot must identify the existing guard default rather than invent a live price");
+    assert.equal(track.checkoutUrl, `${CONFIG.DEFAULT_CHECKOUT_BASE}${encodeURIComponent(track.id)}`);
+    assert.ok(track.artworkUrl.startsWith("/assets/releases/"), "repository snapshot must use bundled release artwork");
+  }
+  const repositoryAudit = await ReleaseGuardAgent.auditAndGuard(repositoryCatalog.songs, {
+    catalogRoot: root,
+    checkUrl: async () => { throw new Error("Bundled catalog must not depend on remote artwork checks."); }
+  });
+  assert.equal(repositoryAudit.report.passed, true, JSON.stringify(repositoryAudit.report.issues));
+  assert.equal(repositoryAudit.report.approvedCount, repositoryCatalog.songs.length);
+  assert.equal(repositoryAudit.report.issues.length, 0);
+
   const original = structuredClone(good);
   const approved = await audit([good]);
   assert.equal(approved.report.passed, true);
@@ -143,7 +165,24 @@ try {
 
   await copyFile(resolve(root, "release-guard-agent.js"), resolve(fixture, "release-guard-agent.js"));
   await writeFile(resolve(fixture, "package.json"), '{"type":"module"}');
-  assert.equal(cli().status, 1, "missing catalog blocks builds");
+  const missingCatalog = cli();
+  assert.equal(missingCatalog.status, 1, "missing catalog blocks builds");
+  assert.match(missingCatalog.stderr, /Required release catalog is missing:/);
+  assert.ok(missingCatalog.stderr.includes(catalogPath), "diagnostic identifies the script-relative catalog path even from a different working directory");
+  assert.match(missingCatalog.stderr, /generate it before npm run release-guard/);
+  assert.match(missingCatalog.stderr, /release guard remains mandatory/);
+  await assert.rejects(access(catalogPath), { code: "ENOENT" }, "missing input must not be replaced with a fabricated catalog");
+  await assert.rejects(access(recovery), { code: "ENOENT" }, "missing input must not create recovery artifacts");
+  await assert.rejects(ReleaseGuardAgent.run({ catalogPath }), (error) => {
+    assert.match(error.message, /Required release catalog is missing:/);
+    assert.equal(error.cause.code, "ENOENT");
+    return true;
+  });
+  await mkdir(catalogPath);
+  const unreadableCatalog = cli();
+  assert.equal(unreadableCatalog.status, 1, "other filesystem failures must still block builds");
+  assert.doesNotMatch(unreadableCatalog.stderr, /Required release catalog is missing:/);
+  await rm(catalogPath, { recursive: true });
   for (const source of ["not json", "{}", '{"songs":{}}', "null"]) {
     await writeFile(catalogPath, source);
     assert.equal(cli().status, 1);
@@ -180,6 +219,19 @@ try {
   await writeFile(catalogPath, JSON.stringify({ version: 7, songs: [local, { ...unsafe, releaseStatus: "PUBLISHED" }] }));
   assert.equal(cli().status, 0, "restored and repaired source can pass");
   await assert.rejects(access(resolve(recovery, "shared-catalog.original.json")));
+
+  for (const track of repositoryCatalog.songs) {
+    const fixtureArtworkPath = resolve(fixture, track.artworkUrl.slice(1));
+    await mkdir(resolve(fixture, "assets/releases"), { recursive: true });
+    await copyFile(resolve(root, track.artworkUrl.slice(1)), fixtureArtworkPath);
+  }
+  await writeFile(catalogPath, JSON.stringify(repositoryCatalog));
+  const repositoryRun = cli();
+  assert.equal(repositoryRun.status, 0, repositoryRun.stderr);
+  const guardedRepositoryCatalog = await readCatalog();
+  assert.equal(guardedRepositoryCatalog.songs.length, repositoryCatalog.songs.length, "the real catalog must pass without removing releases");
+  assert.equal(guardedRepositoryCatalog.scope, repositoryCatalog.scope);
+  assert.equal(cli().status, 0, "repository catalog must pass repeated prebuild guard runs");
 
   const pkg = JSON.parse(await readFile(resolve(root, "package.json"), "utf8"));
   assert.equal(pkg.scripts["release-guard"], "node release-guard-agent.js");

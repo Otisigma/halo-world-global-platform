@@ -31,8 +31,8 @@ assert.match(client, /rankedReleases/, "client must calculate interactive room r
   assert.equal(isChartRelease({ releaseStatus: "PUBLISHED" }), true);
   assert.equal(isChartRelease({ isChartEligible: true, status: "passed" }), true, "legacy eligible releases stay on the chart");
   assert.equal(isChartRelease({ isLiveVisible: false, inChart: true, releaseStatus: "PUBLISHED" }), false);
-  assert.equal(isChartRelease({ isChartEligible: false, releaseStatus: "PUBLISHED" }), true, "published tracks stay included without an explicit chart flag");
-  assert.equal(isChartRelease({ isChartEligible: false, inChart: true }), true, "an explicit chart listing is sufficient");
+  assert.equal(isChartRelease({ isChartEligible: false, releaseStatus: "PUBLISHED" }), false, "explicitly non-chart published tracks stay excluded");
+  assert.equal(isChartRelease({ isChartEligible: false, inChart: true }), false, "explicit chart exclusion overrides stale listing flags");
   assert.equal(isChartRelease({ releaseStatus: "READY" }), false);
   assert.equal(isChartRelease({}), false);
 }
@@ -61,6 +61,28 @@ assert.match(client, /state\.releases = \(Array\.isArray\(data\.releases\) \? da
   assert.deepEqual(visible, ["satellite-01", "blessed"], "shop filter must hide pending, draft, and status-less tracks");
 }
 assert.match(styles, /\.chart-console/, "chart console must have a dedicated responsive layout");
+{
+  const source = client.match(/function isChartRelease\(release\) \{[\s\S]*?\n  \}/)?.[0];
+  assert.ok(source, "shop must define its chart publication filter");
+  const isChartRelease = new Function(`${source}\nreturn isChartRelease;`)();
+  for (const release of [
+    { inChart: true },
+    { releaseStatus: "PUBLISHED" },
+    { isChartEligible: true },
+    { releaseStatus: "PUBLISHED", isChartEligible: true },
+  ]) assert.equal(isChartRelease(release), true, "published and explicitly chart-eligible tracks must qualify");
+  for (const release of [
+    {},
+    { releaseStatus: "DRAFT" },
+    { releaseStatus: "PUBLISHED", isLiveVisible: false },
+    { inChart: true, isLiveVisible: false },
+    { releaseStatus: "PUBLISHED", isChartEligible: false },
+    { inChart: true, isChartEligible: false },
+  ]) assert.equal(isChartRelease(release), false, "hidden and explicitly non-chart tracks must stay excluded");
+  assert.match(client, /if \(!isChartRelease\(release\)\)/, "ranking must use the publication filter");
+  assert.match(catalogApi, /releaseStatus: normalizedCatalogStatus\(row\.status\)\.toUpperCase\(\)/, "public API must expose normalized publication status");
+  assert.match(catalogApi, /inChart: row\.is_chart_eligible === true/, "public API must expose the canonical chart flag");
+}
 assert.match(styles, /\.chart-row\.is-active/, "chart rows must expose a selected state");
 assert.match(styles, /\.stage-video-fallback-visual/, "chart styles must support fallback visual playback without remote media");
 assert.match(client, /function formatAudioStreamUrl\(rawUrl\)[\s\S]*drive\.google\.com\/uc\?export=download&id=/, "shop player must convert Google Drive share links into direct stream URLs");

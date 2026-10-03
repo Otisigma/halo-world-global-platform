@@ -2,7 +2,9 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { resolveDreamweaverPageFlow } from "../netlify/lib/dreamweaver-page-manager.mjs";
+import "./catalog-force-push-contracts.mjs";
 import { forcePushTrack } from "../netlify/lib/song-publication.mjs";
+import { createForcePushTrackHandler } from "../netlify/functions/catalog-force-push-track.mjs";
 
 const root = resolve(import.meta.dirname, "..");
 const read = path => readFile(resolve(root, path), "utf8");
@@ -22,11 +24,11 @@ const [helper, manager, healthHelper, migration, reconcileFunction, scheduledRec
   read("netlify/functions/release-link.mjs"),
 ]);
 const sampleSongId = "11111111-1111-4111-8111-111111111111";
-const forcePushApi = await read("netlify/functions/force-push-track.mjs");
-assert.match(forcePushApi, /path: "\/api\/force-push-track"/);
-assert.match(forcePushApi, /getUser\(\)/);
-assert.match(forcePushApi, /verifyRequestOrigin\(request\)/);
-assert.match(forcePushApi, /Buffer\.byteLength\(body, "utf8"\)/, "size checks must not rely only on content-length");
+const forcePushApi = await read("netlify/functions/catalog-force-push-track.mjs");
+assert.match(forcePushApi, /path: "\/api\/catalog\/force-push-track"/);
+assert.match(forcePushApi, /currentUser = getUser/);
+assert.match(forcePushApi, /verifyOrigin\(request\)/);
+assert.match(forcePushApi, /new TextEncoder\(\)\.encode\(text\)\.byteLength/, "size checks must not rely only on content-length");
 
 {
   const membership = { member_id: "owner", actor_id: "actor" };
@@ -44,7 +46,7 @@ assert.match(forcePushApi, /Buffer\.byteLength\(body, "utf8"\)/, "size checks mu
   const db = { sql: async (strings, ...values) => {
     const query = strings.join("?").replace(/\s+/g, " ").trim();
     statements.push({ query, values });
-    if (query.startsWith("SELECT id FROM halo_song_catalog")) {
+    if (query.startsWith("SELECT id, rights_status FROM halo_song_catalog")) {
       assert.equal(values[1], "owner", "lookups must be owner scoped");
       if (missing) return [];
       return ambiguous ? [{ id: song.id }, { id: "other" }] : [{ id: song.id }];
@@ -61,6 +63,11 @@ assert.match(forcePushApi, /Buffer\.byteLength\(body, "utf8"\)/, "size checks mu
     if (query.includes("FROM halo_song_publication_sync")) return [];
     if (query.startsWith("SELECT id, owner_member_id FROM halo_release_campaigns")) {
       return [{ id: song.source_release_id, owner_member_id: song.owner_member_id }];
+    }
+    if (query.startsWith("UPDATE halo_release_campaigns")) {
+      if (failRelease) throw new Error("Storage unavailable");
+      assert.equal(values[1], song.owner_member_id, "release updates must preserve owner scoping");
+      return releases.has(values[0]) ? [releases.get(values[0])] : [];
     }
     if (query.startsWith("INSERT INTO halo_release_campaigns")) {
       if (failRelease) throw new Error("Storage unavailable");
@@ -111,13 +118,17 @@ assert.match(forcePushApi, /Buffer\.byteLength\(body, "utf8"\)/, "size checks mu
   let user = null;
   let rejectOrigin = false;
   let calls = 0;
-  const source = forcePushApi.replace(/^import .*;\n/gm, "").replace("export default ", "").replace(/export const config[\s\S]*$/, "");
-  const handler = new Function("getDatabase", "getUser", "verifyRequestOrigin", "ensureMembership", "forcePushTrack", `${source}\nreturn forcePushTrackHandler;`)(
-    () => ({}), async () => user, () => { if (rejectOrigin) throw new Error("origin"); },
-    async () => ({ member_id: "owner" }), async () => { calls++; return { success: true }; }
-  );
+  const handler = createForcePushTrackHandler({
+    database: () => ({ sql: async strings => strings.join("").includes("UPDATE")
+      ? [{ id: sampleSongId, title: "Track", sale_price_cents: 129, currency: "USD", pipeline_updated_at: new Date() }]
+      : [{ id: sampleSongId }] }),
+    currentUser: async () => user,
+    verifyOrigin: () => { if (rejectOrigin) throw new Error("origin"); },
+    membershipFor: async () => ({ member_id: "owner" }),
+    reconcile: async () => { calls++; return { ok: true, releaseId: "release" }; },
+  });
   const request = (body = "{}", method = "POST") => new Request("https://halo.world/api/catalog/force-push-track", {
-    method, ...(method === "POST" ? { body } : {}),
+    method, headers: { "Content-Type": "application/json" }, ...(method === "POST" ? { body } : {}),
   });
   assert.equal((await handler(request("", "GET"))).status, 405);
   assert.equal((await handler(request())).status, 401);
@@ -128,7 +139,7 @@ assert.match(forcePushApi, /Buffer\.byteLength\(body, "utf8"\)/, "size checks mu
   assert.equal((await handler(request("{"))).status, 400);
   assert.equal((await handler(request(" ".repeat(80_001)))).status, 413);
   assert.equal(calls, 0, "rejected requests must never publish");
-  const response = await handler(request('{"id":"track"}'));
+  const response = await handler(request(JSON.stringify({ id: sampleSongId })));
   assert.equal(response.status, 200);
   assert.equal(response.headers.get("cache-control"), "no-store");
   assert.equal((await response.json()).success, true);
@@ -139,7 +150,7 @@ assert.match(forcePushApi, /Buffer\.byteLength\(body, "utf8"\)/, "size checks mu
   const page = await read("song-catalog/index.html");
   assert.match(page, /id="pushToShopButton" type="button">Push to Shop &amp; Charts/);
   assert.match(page, /id="pushToShopStatus" role="status" aria-live="polite"/);
-  const source = editor.match(/\$\("#pushToShopButton"\)\.addEventListener\("click",async event=>\{[\s\S]*?\n\}\);/)?.[0];
+  const source = editor.match(/async function pushToShop\(\)\{[\s\S]*?\n\}/)?.[0];
   assert.ok(source, "editor must wire the force-push action");
   const status = { textContent: "" };
   const attributes = {};
@@ -148,8 +159,8 @@ assert.match(forcePushApi, /Buffer\.byteLength\(body, "utf8"\)/, "size checks mu
   let track = { id: sampleSongId, title: "Test track", salePriceCents: null, currency: "USD" };
   let fail = false;
   let refreshed = "";
-  new Function("$", "selectedSong", "fetch", "loadCatalog", source)(
-    selector => selector === "#pushToShopStatus" ? status : { addEventListener: (_name, handler) => { click = handler; } },
+  click = new Function("$", "selectedSong", "fetch", "loadCatalog", "state", "message", "money", `${source};return pushToShop;`)(
+    selector => selector === "#pushToShopStatus" ? status : button,
     () => track,
     async (url, options) => {
       assert.equal(button.disabled, true, "push must be disabled while the request is running");
@@ -168,7 +179,7 @@ assert.match(forcePushApi, /Buffer\.byteLength\(body, "utf8"\)/, "size checks mu
       if (fail) throw new Error("Backend unavailable");
       return { ok: true, json: async () => ({ success: true, message: "Live on Shop & Charts" }) };
     },
-    async id => { refreshed = id; }
+    async id => { refreshed = id; }, { authenticated: true }, () => {}, () => ""
   );
   await click({ currentTarget: button });
   assert.equal(refreshed, sampleSongId);

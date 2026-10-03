@@ -139,7 +139,7 @@ async function workspace(db, memberId, url) {
       LEFT JOIN halo_creator_profiles c ON c.member_id = cp.member_id
       LEFT JOIN halo_creator_profiles owner ON owner.member_id = p.owner_member_id
       WHERE cp.member_id = ${memberId} OR p.owner_member_id = ${memberId}
-      ORDER BY cp.updated_at DESC LIMIT 100
+      ORDER BY cp.updated_at DESC
     `
   ]);
   return { memberId, profile: profiles[0] || null, creators, projects: [...memberProjects, ...opportunities], participants };

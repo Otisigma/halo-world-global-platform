@@ -171,6 +171,9 @@ assert.ok(discovery.calls.some(c => c.params.includes(124) && c.params.includes(
 const ownedQuery = discovery.calls.find(c => c.query.includes("WHERE p.owner_member_id = ? OR EXISTS"));
 assert.ok(ownedQuery);
 assert.ok(!ownedQuery.query.includes("LIMIT"), "Discovery caps must not hide member projects");
+const requestsQuery = discovery.calls.find(c => c.query.includes("WHERE cp.member_id = ? OR p.owner_member_id = ?"));
+assert.ok(requestsQuery);
+assert.ok(!requestsQuery.query.includes("LIMIT"), "History must not displace actionable requests");
 const crowded = fixture({ sql: query => {
   if (query.includes("WHERE p.owner_member_id = ? OR EXISTS")) return [{ id: "older-owned", owner_member_id: "owner" }];
   if (query.includes("WHERE p.status = 'open' AND p.owner_member_id <>")) return Array.from({ length: 100 }, (_, i) => ({ id: `newer-${i}` }));
@@ -179,6 +182,13 @@ const crowded = fixture({ sql: query => {
 const crowdedState = await (await crowded.request(null, "GET")).json();
 assert.equal(crowdedState.projects.length, 101);
 assert.equal(crowdedState.projects[0].id, "older-owned");
+const busyRequests = fixture({ sql: query => query.includes("WHERE cp.member_id = ? OR p.owner_member_id = ?")
+  ? [...Array.from({ length: 100 }, (_, i) => ({ project_id: `newer-${i}`, status: "accepted" })),
+    { project_id: "older-pending", status: "pending" }]
+  : [] });
+const busyState = await (await busyRequests.request(null, "GET")).json();
+assert.equal(busyState.participants.length, 101);
+assert.equal(busyState.participants.at(-1).status, "pending");
 
 const elements = new Map();
 function element(id) {

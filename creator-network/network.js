@@ -1,6 +1,8 @@
+import { curatedCreators } from "/lib/creator-directory.js";
+
 (() => {
   const byId = id => document.getElementById(id);
-  let identity, state, sessionVersion = 0, loadVersion = 0;
+  let identity, state, sessionVersion = 0, loadVersion = 0, guardianVersion = 0;
   const status = message => { byId("status").textContent = message; };
   const values = form => Object.fromEntries(new FormData(form));
   const tagFields = ["roles", "genres", "languages", "dawSetup"];
@@ -27,6 +29,7 @@
       const card = node("article");
       card.className = "creator-profile-card";
       card.append(node("h3", creator.display_name), node("p", creator.bio));
+      if (creator.verified && creator.curated) card.append(node("p", "✓ Verified HALO seed · curated profile"));
       const tags = [...(creator.roles || []), ...(creator.genres || []), ...(creator.languages || [])];
       if (tags.length) {
         const profileTags = node("p", tags.join(" · "));
@@ -47,6 +50,7 @@
     const query = new URLSearchParams(values(byId("publicFilters")));
     const result = await api(null, `?view=public&${query}`);
     renderPublicCreators(result.creators || []);
+    if (result.directoryUnavailable) byId("publicCreators").prepend(node("p", "Showing HALO-curated profiles. Member discovery is temporarily unavailable."));
   }
 
   async function loadReleaseDeck() {
@@ -128,11 +132,12 @@
     byId("creators").replaceChildren(...state.creators.map(creator => {
       const card = node("article");
       card.append(node("h4", creator.display_name), node("p", creator.bio),
-        node("p", [...creator.roles, ...creator.genres, ...creator.languages, ...creator.daw_setup].join(" · ")),
+        node("p", [...creator.roles, ...creator.genres, ...creator.languages, ...(creator.daw_setup || [])].join(" · ")),
         node("p", creator.bpm_min ? `${creator.bpm_min}–${creator.bpm_max} BPM` : "Tempo flexible"),
         node("p", creator.split_preference));
       if (creator.artist_slug) card.append(roomLink(creator.artist_slug));
-      if (ownProjects.length) {
+      if (creator.verified && creator.curated) card.append(node("p", "✓ Verified HALO seed · curated profile"));
+      if (ownProjects.length && creator.member_id) {
         const select = document.createElement("select");
         select.setAttribute("aria-label", `Project to invite ${creator.display_name} to`);
         ownProjects.forEach(project => {
@@ -192,6 +197,20 @@
     }));
     for (const id of ["creators", "projects", "requests"]) {
       if (!byId(id).children.length) byId(id).append(node("p", "Nothing here yet."));
+    }
+    const reviewable = state.projects.filter(project => project.owner_member_id === state.memberId ||
+      state.participants.some(participant => participant.project_id === project.id && participant.member_id === state.memberId && participant.status === "accepted"));
+    guardianVersion++;
+    byId("guardianReport").replaceChildren();
+    byId("guardianProject").replaceChildren(...reviewable.map(project => {
+      const option = node("option", project.title);
+      option.value = project.id;
+      return option;
+    }));
+    if (!reviewable.length) {
+      const placeholder = node("option", "Create or join a project first");
+      placeholder.value = "";
+      byId("guardianProject").append(placeholder);
     }
   }
 
@@ -260,13 +279,61 @@
   byId("signOut").addEventListener("click", async () => {
     try { await identity.logout(); await refresh(); } catch (error) { status(error.message); }
   });
+  byId("guardianForm").addEventListener("submit", async event => {
+    event.preventDefault();
+    const version = sessionVersion, button = event.submitter;
+    const projectId = byId("guardianProject").value;
+    if (!projectId || !button) return;
+    const latest = ++guardianVersion;
+    const buttons = [...event.currentTarget.querySelectorAll("button")];
+    buttons.forEach(control => { control.disabled = true; });
+    byId("guardianReport").textContent = "Studio Guardian is reviewing the project…";
+    try {
+      const response = await fetch("/api/studio-guardian", {
+        method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: button.value, projectId })
+      });
+      const result = await response.json();
+      if (version !== sessionVersion || latest !== guardianVersion || projectId !== byId("guardianProject").value) return;
+      if (!response.ok) throw new Error(result.message || "Review unavailable");
+      const report = byId("guardianReport");
+      report.replaceChildren();
+      if (result.health) {
+        report.append(node("h3", `${result.health.score}/100 · ${result.health.status.replaceAll("_", " ")}`),
+          node("p", result.health.summary));
+        for (const insight of result.health.audioInsights) report.append(node("p", insight));
+        const steps = node("ul");
+        result.health.actionableNextSteps.forEach(step => steps.append(node("li", step)));
+        report.append(steps);
+      }
+      if (result.review) {
+        for (const agent of result.review.council) report.append(node("h3", agent.agentName), node("p", agent.content));
+        report.append(node("p", result.review.finalVerdict));
+        const steps = node("ul");
+        result.review.recommendedActions.forEach(step => steps.append(node("li", step)));
+        report.append(steps);
+      }
+      report.append(node("p", `Review mode: ${result.health?.provider || result.review?.provider || "checklist"} · Advisory only`));
+    } catch (error) {
+      if (version === sessionVersion && latest === guardianVersion) byId("guardianReport").textContent = error.message;
+    } finally {
+      buttons.forEach(control => { control.disabled = false; });
+    }
+  });
+  byId("guardianProject").addEventListener("change", () => {
+    guardianVersion++;
+    byId("guardianReport").replaceChildren();
+  });
 
   async function refresh() {
     const version = ++sessionVersion;
+    guardianVersion++;
     state = null;
     byId("workspace").hidden = true;
     byId("locked").hidden = false;
     byId("signOut").hidden = true;
+    byId("guardianReport").replaceChildren();
+    byId("guardianProject").replaceChildren();
     for (const id of ["creators", "projects", "requests"]) byId(id).replaceChildren();
     byId("profile").reset();
     byId("project").reset();
@@ -286,7 +353,10 @@
     identity.onAuthChange(() => refresh());
     refresh();
   }
-  loadPublicCreators().catch(() => renderPublicCreators([]));
+  renderPublicCreators(curatedCreators());
+  loadPublicCreators().catch(() => {
+    byId("publicCreators").prepend(node("p", "Showing HALO-curated profiles. Member discovery is temporarily unavailable."));
+  });
   loadReleaseDeck();
   if (window.haloIdentity) ready(window.haloIdentity);
   else window.addEventListener("halo-identity-ready", event => ready(event.detail || window.haloIdentity), { once: true });

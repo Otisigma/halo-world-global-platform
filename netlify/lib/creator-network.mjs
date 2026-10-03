@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { withCuratedCreators } from "../../lib/creator-directory.js";
 
 const json = (body, status = 200) => Response.json(body, {
   status, headers: { "Cache-Control": "no-store" }
@@ -142,14 +143,19 @@ async function workspace(db, memberId, url) {
       ORDER BY cp.updated_at DESC
     `
   ]);
-  return { memberId, profile: profiles[0] || null, creators, projects: [...memberProjects, ...opportunities], participants };
+  return { memberId, profile: profiles[0] || null, creators: withCuratedCreators(creators, { role, genre, language, bpm }), projects: [...memberProjects, ...opportunities], participants };
 }
 
-async function publicCreators(db, url) {
+function publicFilters(url) {
   const role = text(url.searchParams.get("role"), 80);
   const genre = text(url.searchParams.get("genre"), 80);
   const language = text(url.searchParams.get("language"), 80);
   const bpm = tempo(url.searchParams.get("bpm"));
+  return { role, genre, language, bpm };
+}
+
+async function publicCreators(db, url) {
+  const { role, genre, language, bpm } = publicFilters(url);
   const creators = await db.sql`
     SELECT display_name, bio, artist_slug, roles, genres, languages, bpm_min, bpm_max
     FROM halo_creator_profiles
@@ -161,7 +167,7 @@ async function publicCreators(db, url) {
     ORDER BY updated_at DESC
     LIMIT 48
   `;
-  return { creators };
+  return { creators: withCuratedCreators(creators, { role, genre, language, bpm }) };
 }
 
 export function createCreatorNetworkHandler({ getDatabase, getUser, ensureMembership, verifyRequestOrigin }) {
@@ -177,11 +183,16 @@ export function createCreatorNetworkHandler({ getDatabase, getUser, ensureMember
       }
       const url = new URL(request.url);
       if (request.method === "GET" && url.searchParams.get("view") === "public") {
+        let filters;
+        try {
+          filters = publicFilters(url);
+        } catch (error) {
+          return json({ message: error.message }, 400);
+        }
         try {
           return json(await publicCreators(await getDatabase(), url));
-        } catch (error) {
-          if (/Invalid text|BPM must/.test(error.message)) return json({ message: error.message }, 400);
-          throw error;
+        } catch {
+          return json({ creators: withCuratedCreators([], filters), directoryUnavailable: true });
         }
       }
       const user = await getUser();

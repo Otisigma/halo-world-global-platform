@@ -7,6 +7,7 @@
     "prebuild": "npm run release-guard",
     "build": "node scripts/music-chart-contracts.mjs",
     "test:release-guard": "node scripts/release-guard-contracts.mjs",
+    "test:feature-directory": "node scripts/feature-directory-contracts.mjs",
     "start": "node server.js",
     "dev": "node server.js",
     "diagnose": "node deploy/diagnostics.js",

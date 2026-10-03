@@ -95,6 +95,7 @@ export const allowedEvents = new Set([
   "open_catalog_release",
   "open_creator_charter",
   "open_creator_network",
+  "open_signal_feed",
   "open_signal_network",
   "open_creator_world",
   "open_dj_deck",

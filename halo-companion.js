@@ -24,6 +24,7 @@
   const DEFAULT_SETTINGS = {
     voiceEnabled: false,
     voiceStyle: "steady",
+    voiceLocale: "auto",
     guidanceDetail: "detailed",
     promptMode: "proactive",
     guidanceScope: "full-site"
@@ -36,9 +37,16 @@
     sessionId: getSessionId(),
     settings: readSettings(),
     journey: readJourneyState(),
-    voices: [],
+    voiceStatus: "",
+    unread: 0,
+    requestId: 0,
+    requestController: null,
     lastJourneySignature: ""
   };
+  const VOICE_MODULE_SRC = "/halo-guide-voice.js";
+  const REQUEST_TIMEOUT_MS = 25000;
+  const reduceMotion = typeof window.matchMedia === "function" ? window.matchMedia("(prefers-reduced-motion: reduce)") : null;
+  let voiceModulePromise = null;
 
   function randomToken() {
     if (crypto.randomUUID) return crypto.randomUUID().replaceAll("-", "");
@@ -72,6 +80,7 @@
     return {
       voiceEnabled: settings.voiceEnabled === true,
       voiceStyle: ["steady", "warm", "calm", "bright"].includes(settings.voiceStyle) ? settings.voiceStyle : DEFAULT_SETTINGS.voiceStyle,
+      voiceLocale: ["auto", "en-US", "en-GB"].includes(settings.voiceLocale) ? settings.voiceLocale : DEFAULT_SETTINGS.voiceLocale,
       guidanceDetail: ["concise", "detailed"].includes(settings.guidanceDetail) ? settings.guidanceDetail : DEFAULT_SETTINGS.guidanceDetail,
       promptMode: ["proactive", "manual"].includes(settings.promptMode) ? settings.promptMode : DEFAULT_SETTINGS.promptMode,
       guidanceScope: ["deck-only", "full-site"].includes(settings.guidanceScope) ? settings.guidanceScope : DEFAULT_SETTINGS.guidanceScope
@@ -157,43 +166,67 @@
       : [journey.summary, journey.statusNote, journey.nextActionTitle, journey.nextActionCopy].filter(Boolean).join(". ");
   }
 
+  function voiceModule() {
+    return window.HaloGuideVoice || null;
+  }
+
+  function loadVoiceModule() {
+    if (voiceModule()) return Promise.resolve(voiceModule());
+    if (voiceModulePromise) return voiceModulePromise;
+    voiceModulePromise = new Promise(resolve => {
+      const existing = document.querySelector("script[data-halo-guide-voice]");
+      const script = existing || document.createElement("script");
+      script.addEventListener("load", () => resolve(voiceModule()), { once: true });
+      script.addEventListener("error", () => resolve(null), { once: true });
+      if (!existing) {
+        script.src = VOICE_MODULE_SRC;
+        script.defer = true;
+        script.dataset.haloGuideVoice = "true";
+        document.head.appendChild(script);
+      }
+    });
+    return voiceModulePromise;
+  }
+
   function voiceSupported() {
+    const module = voiceModule();
+    if (module) return module.supported();
     return typeof window.speechSynthesis !== "undefined" && typeof window.SpeechSynthesisUtterance !== "undefined";
   }
 
-  function voiceProfile() {
-    return {
-      steady: { rate: 1, pitch: 1, tokens: [] },
-      warm: { rate: 0.96, pitch: 0.95, tokens: ["warm", "samantha", "victoria", "serena"] },
-      calm: { rate: 0.92, pitch: 0.9, tokens: ["calm", "daniel", "serena", "zira"] },
-      bright: { rate: 1.02, pitch: 1.08, tokens: ["bright", "ava", "aria", "luna", "nova"] }
-    }[state.settings.voiceStyle] || { rate: 1, pitch: 1, tokens: [] };
+  function cancelSpeech() {
+    const module = voiceModule();
+    if (module) module.cancel();
+    else if (typeof window.speechSynthesis !== "undefined") {
+      try {
+        window.speechSynthesis.cancel();
+      } catch {}
+    }
   }
 
-  function resolveVoice() {
-    if (!voiceSupported()) return null;
-    const voices = state.voices.length ? state.voices : window.speechSynthesis.getVoices();
-    const englishVoices = voices.filter(voice => /^en(-|_|\b)/i.test(voice.lang || ""));
-    const profile = voiceProfile();
-    const preferred = englishVoices.find(voice => profile.tokens.some(token => String(voice.name || "").toLowerCase().includes(token)));
-    return preferred || englishVoices[0] || voices[0] || null;
+  function setVoiceStatus(result) {
+    if (!result || result.ok || result.reason === "superseded" || result.reason === "empty") state.voiceStatus = "";
+    else if (result.reason === "blocked") state.voiceStatus = "Voice blocked by the browser · tap Speak to play";
+    else if (result.reason === "unsupported") state.voiceStatus = "Voice unavailable in this browser";
+    else state.voiceStatus = "Voice could not play · text guidance continues";
+    updateSettingsDock();
   }
 
-  function speakText(text, options = {}) {
+  async function speakText(text) {
     if (!voiceSupported() || !state.settings.voiceEnabled) return false;
     const message = state.settings.guidanceDetail === "concise" ? conciseCopy(text) : String(text || "").trim();
     if (!message) return false;
+    const module = await loadVoiceModule();
+    if (!module) {
+      setVoiceStatus({ ok: false, reason: "unsupported" });
+      return false;
+    }
     try {
-      if (!options.queue) window.speechSynthesis.cancel();
-      const utterance = new SpeechSynthesisUtterance(message);
-      const selectedVoice = resolveVoice();
-      const profile = voiceProfile();
-      if (selectedVoice) utterance.voice = selectedVoice;
-      utterance.rate = profile.rate;
-      utterance.pitch = profile.pitch;
-      window.speechSynthesis.speak(utterance);
-      return true;
+      const result = await module.speak(message, { locale: state.settings.voiceLocale, style: state.settings.voiceStyle });
+      setVoiceStatus(result);
+      return Boolean(result?.ok);
     } catch {
+      setVoiceStatus({ ok: false, reason: "error" });
       return false;
     }
   }
@@ -220,16 +253,18 @@
     if (!form) return;
     form.elements.haloCompanionVoiceEnabled.checked = state.settings.voiceEnabled;
     form.elements.haloCompanionVoiceStyle.value = state.settings.voiceStyle;
+    form.elements.haloCompanionVoiceLocale.value = state.settings.voiceLocale;
     form.elements.haloCompanionGuidanceDetail.value = state.settings.guidanceDetail;
     form.elements.haloCompanionPromptMode.value = state.settings.promptMode;
     form.elements.haloCompanionGuidanceScope.value = state.settings.guidanceScope;
     const status = root.querySelector("#haloCompanionVoiceStatus");
     if (status) {
-      status.textContent = voiceSupported()
-        ? state.settings.voiceEnabled
-          ? `Voice ready · ${state.settings.voiceStyle} tone`
-          : "Voice available · currently off"
-        : "Voice unavailable in this browser";
+      const accent = { auto: "auto accent", "en-US": "US English", "en-GB": "UK English" }[state.settings.voiceLocale];
+      status.textContent = !voiceSupported()
+        ? "Voice unavailable in this browser"
+        : !state.settings.voiceEnabled
+          ? "Voice available · currently off"
+          : state.voiceStatus || `Voice ready · ${state.settings.voiceStyle} tone · ${accent}`;
     }
     root.querySelectorAll(".halo-companion-voice-action").forEach(button => {
       button.disabled = !voiceSupported() || !state.settings.voiceEnabled;
@@ -240,7 +275,10 @@
   function applySettings(nextSettings) {
     state.settings = normalizeSettings(nextSettings);
     persistSettings();
-    if (!state.settings.voiceEnabled && voiceSupported()) window.speechSynthesis.cancel();
+    if (!state.settings.voiceEnabled) {
+      cancelSpeech();
+      state.voiceStatus = "";
+    }
     updateSettingsDock();
   }
 
@@ -264,20 +302,14 @@
     maybeAnnounceJourney(journey);
   }
 
-  function hydrateVoices() {
-    if (!voiceSupported()) return;
-    state.voices = window.speechSynthesis.getVoices();
-    updateSettingsDock();
-  }
-
   function injectStyles() {
     const style = document.createElement("style");
     style.textContent = `
       @keyframes halo-companion-rise{from{opacity:0;transform:translateY(18px) scale(.97)}to{opacity:1;transform:translateY(0) scale(1)}}
       @keyframes halo-companion-pulse{0%,100%{transform:scale(1);opacity:.7}50%{transform:scale(1.18);opacity:0}}
       @keyframes halo-companion-orbit{to{transform:rotate(360deg)}}
-      .halo-companion{--hc-agent:#d8ff62;position:fixed;left:18px;bottom:18px;z-index:10020;color:#f7f4ec;font-family:"DM Mono","IBM Plex Mono","Space Mono",monospace;letter-spacing:0;line-height:1.45}
-      .halo-companion *{box-sizing:border-box}.halo-companion button,.halo-companion input{font:inherit}
+      .halo-companion{--hc-agent:#d8ff62;--hc-gold:#ebc470;position:fixed;left:18px;bottom:18px;z-index:10020;color:#f7f4ec;font-family:"DM Mono","IBM Plex Mono","Space Mono",monospace;letter-spacing:0;line-height:1.45}
+      .halo-companion *{box-sizing:border-box}.halo-companion button,.halo-companion input,.halo-companion select{font-family:inherit;font-weight:inherit;line-height:inherit;margin:0}.halo-companion .halo-companion-compose{display:block;padding:13px 14px 15px;border-top:1px solid rgba(255,255,255,.1);color:inherit;font:inherit;letter-spacing:0}.halo-companion .halo-companion-input,.halo-companion .halo-companion-setting select{width:100%}.halo-companion .halo-companion-setting input[type="checkbox"]{padding:0}
       .halo-companion-launcher{position:relative;display:grid;grid-template-columns:46px auto;align-items:center;gap:11px;min-height:58px;padding:6px 16px 6px 6px;border:1px solid rgba(255,255,255,.22);border-radius:32px;background:rgba(9,11,10,.93);color:#fff;cursor:pointer;box-shadow:0 18px 55px rgba(0,0,0,.5);backdrop-filter:blur(18px);transition:transform .2s ease,border-color .2s ease}
       .halo-companion-launcher:hover{transform:translateY(-3px);border-color:var(--hc-agent)}.halo-companion-launcher:focus-visible,.halo-companion button:focus-visible,.halo-companion input:focus-visible{outline:2px solid var(--hc-agent);outline-offset:3px}
       .halo-companion-launcher-core{position:relative;display:grid;place-items:center;width:46px;height:46px;border-radius:50%;background:var(--hc-agent);color:#090b0a;font-size:20px;box-shadow:0 0 25px color-mix(in srgb,var(--hc-agent) 40%,transparent)}
@@ -291,6 +323,11 @@
       .halo-companion-suggestions{display:flex;flex-wrap:wrap;gap:7px;margin-top:9px}.halo-companion-suggestion,.halo-companion-route{border:1px solid rgba(255,255,255,.14);background:transparent;color:#d9ddd6;padding:7px 9px;font-size:8px;cursor:pointer;transition:border-color .2s,color .2s}.halo-companion-suggestion:hover,.halo-companion-route:hover{border-color:var(--hc-agent);color:var(--hc-agent)}.halo-companion-route{display:inline-flex;margin-top:9px;text-decoration:none;color:var(--hc-agent);border-color:color-mix(in srgb,var(--hc-agent) 45%,transparent)}
       .halo-companion-thinking{display:flex;align-items:center;gap:8px;color:#858c85;font-size:8px;text-transform:uppercase;letter-spacing:.12em}.halo-companion-thinking::before{content:"";width:15px;height:15px;border:1px solid rgba(255,255,255,.15);border-top-color:var(--hc-agent);border-radius:50%;animation:halo-companion-orbit .7s linear infinite}
       .halo-companion-compose{position:relative;padding:13px 14px 15px;border-top:1px solid rgba(255,255,255,.1);background:#0e110e}.halo-companion-form{display:grid;grid-template-columns:1fr 44px;gap:8px}.halo-companion-input{min-width:0;height:44px;border:1px solid rgba(255,255,255,.16);border-radius:0;background:#070908;color:#fff;padding:0 12px;font-size:10px}.halo-companion-input::placeholder{color:#656b65}.halo-companion-send{display:grid;place-items:center;border:1px solid var(--hc-agent);background:var(--hc-agent);color:#080a08;cursor:pointer;font-size:16px}.halo-companion-send:disabled{cursor:wait;opacity:.55}.halo-companion-foot{display:flex;justify-content:space-between;gap:10px;margin-top:8px;color:#666d66;font-size:7px;letter-spacing:.05em}.halo-companion-memory{color:#8fa178}.halo-companion-memory::before{content:"●";margin-right:5px;color:var(--hc-agent)}.halo-companion-settings{margin-top:12px;border-top:1px solid rgba(255,255,255,.08);padding-top:10px}.halo-companion-settings summary{cursor:pointer;color:#dfe4dd;font-size:8px;letter-spacing:.14em;text-transform:uppercase;list-style:none}.halo-companion-settings summary::-webkit-details-marker{display:none}.halo-companion-settings summary::after{content:"+";float:right;color:var(--hc-agent)}.halo-companion-settings[open] summary::after{content:"–"}.halo-companion-settings-form{display:grid;gap:8px;margin-top:10px}.halo-companion-settings-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.halo-companion-setting{display:grid;gap:5px;color:#9ea49e;font-size:8px;letter-spacing:.06em;text-transform:uppercase}.halo-companion-setting-check{grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;padding:8px 10px;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.025)}.halo-companion-setting select{height:34px;border:1px solid rgba(255,255,255,.14);background:#080a08;color:#fff;padding:0 9px;font-size:9px}.halo-companion-setting input[type="checkbox"]{width:18px;height:18px;accent-color:var(--hc-agent)}.halo-companion-settings-status{margin:2px 0 0;color:#757c75;font-size:8px}
+      @keyframes halo-companion-unread{0%{box-shadow:0 0 0 0 rgba(235,196,112,.55)}70%{box-shadow:0 0 0 12px rgba(235,196,112,0)}100%{box-shadow:0 0 0 0 rgba(235,196,112,0)}}
+      .halo-companion-unread{position:absolute;top:2px;left:36px;display:grid;place-items:center;min-width:19px;height:19px;padding:0 5px;border:2px solid #090b0a;border-radius:10px;background:var(--hc-gold);color:#090b0a;font-size:9px;font-weight:700;line-height:1;animation:halo-companion-unread 2s ease-out infinite}.halo-companion-unread[hidden]{display:none}
+      .halo-companion-launcher[data-unread="true"]{border-color:var(--hc-gold)}.halo-companion-launcher[data-unread="true"] .halo-companion-launcher-copy span{color:var(--hc-gold)}
+      .halo-companion-head{border-bottom-color:rgba(235,196,112,.22)}.halo-companion-setting select:focus-visible,.halo-companion-settings summary:focus-visible,.halo-companion-route:focus-visible{outline:2px solid var(--hc-agent);outline-offset:2px}
+      .halo-companion-sr{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
       @media(max-width:600px){.halo-companion{left:10px;bottom:10px}.halo-companion-launcher{grid-template-columns:42px auto;min-height:52px}.halo-companion-launcher-core{width:42px;height:42px}.halo-companion-panel{bottom:64px;width:calc(100vw - 20px);height:min(690px,calc(100vh - 84px))}.halo-companion-title{font-size:22px}.halo-companion-roster{grid-template-columns:repeat(4,1fr)}.halo-companion-agent span:last-child{display:none}.halo-companion-settings-grid{grid-template-columns:1fr}}
       @media(prefers-reduced-motion:reduce){.halo-companion *{animation:none!important;transition:none!important}}
     `;
@@ -301,12 +338,12 @@
     const guide = pageGuide();
     const root = document.createElement("aside");
     root.className = "halo-companion";
-    root.setAttribute("aria-label", "HALO AI companion team");
+    root.setAttribute("aria-label", "HALO Guide");
     root.innerHTML = `
-      <section class="halo-companion-panel" hidden aria-label="HALO Companion conversation">
+      <section class="halo-companion-panel" id="haloCompanionPanel" hidden role="dialog" aria-modal="false" aria-labelledby="haloCompanionTitle">
         <header class="halo-companion-head">
-          <div><div class="halo-companion-eyebrow">${guide.eyebrow}</div><h2 class="halo-companion-title">Your <em>companion</em> team</h2></div>
-          <button class="halo-companion-close" type="button" aria-label="Close companion">×</button>
+          <div><div class="halo-companion-eyebrow">${guide.eyebrow}</div><h2 class="halo-companion-title" id="haloCompanionTitle">Your <em>companion</em> team</h2></div>
+          <button class="halo-companion-close" type="button" aria-label="Close HALO Guide">×</button>
         </header>
         <div class="halo-companion-roster" aria-label="AI specialist team"></div>
         <section class="halo-companion-journey" id="haloCompanionJourney" aria-label="HALO artist journey guidance" aria-live="polite">
@@ -315,10 +352,10 @@
           <p class="halo-companion-journey-copy" id="haloCompanionJourneyCopy">HALO can carry stage guidance across the site without changing the deck workflow.</p>
           <button class="halo-companion-journey-action" id="haloCompanionJourneySpeak" type="button">Replay latest guidance</button>
         </section>
-        <div class="halo-companion-feed" role="log" aria-live="polite"></div>
+        <div class="halo-companion-feed" role="log" aria-live="polite" aria-busy="false" aria-label="HALO Guide conversation"></div>
         <footer class="halo-companion-compose">
           <form class="halo-companion-form">
-            <input class="halo-companion-input" maxlength="1000" autocomplete="off" aria-label="Ask the HALO companion team" placeholder="Tell us what you need…">
+            <input class="halo-companion-input" maxlength="1000" autocomplete="off" enterkeyhint="send" aria-label="Ask the HALO Guide" placeholder="Ask for guidance…">
             <button class="halo-companion-send" type="submit" aria-label="Send message">↗</button>
           </form>
           <details class="halo-companion-settings">
@@ -326,6 +363,7 @@
             <form class="halo-companion-settings-form">
               <label class="halo-companion-setting halo-companion-setting-check"><span>Voice guidance</span><input id="haloCompanionVoiceEnabled" name="haloCompanionVoiceEnabled" type="checkbox"></label>
               <div class="halo-companion-settings-grid">
+                <label class="halo-companion-setting"><span>Voice accent</span><select id="haloCompanionVoiceLocale" name="haloCompanionVoiceLocale"><option value="auto">Auto</option><option value="en-US">US English</option><option value="en-GB">UK English</option></select></label>
                 <label class="halo-companion-setting"><span>Voice tone</span><select id="haloCompanionVoiceStyle" name="haloCompanionVoiceStyle"><option value="steady">Steady</option><option value="warm">Warm</option><option value="calm">Calm</option><option value="bright">Bright</option></select></label>
                 <label class="halo-companion-setting"><span>Guidance detail</span><select id="haloCompanionGuidanceDetail" name="haloCompanionGuidanceDetail"><option value="concise">Concise</option><option value="detailed">Detailed</option></select></label>
                 <label class="halo-companion-setting"><span>Prompt mode</span><select id="haloCompanionPromptMode" name="haloCompanionPromptMode"><option value="proactive">Proactive</option><option value="manual">Manual</option></select></label>
@@ -337,10 +375,12 @@
           <div class="halo-companion-foot"><span class="halo-companion-memory">Journey memory on</span><span>AI guidance · Human care available</span></div>
         </footer>
       </section>
-      <button class="halo-companion-launcher" type="button" aria-expanded="false" aria-label="Open HALO Companion">
+      <button class="halo-companion-launcher" type="button" aria-expanded="false" aria-controls="haloCompanionPanel" aria-label="Open HALO Guide">
         <span class="halo-companion-launcher-core">${AGENTS[state.agent].glyph}</span>
-        <span class="halo-companion-launcher-copy"><strong>Ask HALO</strong><span>4 companions online</span></span>
-      </button>`;
+        <span class="halo-companion-unread" hidden aria-hidden="true">0</span>
+        <span class="halo-companion-launcher-copy"><strong>Ask HALO</strong><span>HALO Guide · 4 specialists</span></span>
+      </button>
+      <span class="halo-companion-sr" role="status" aria-live="polite"></span>`;
     document.body.appendChild(root);
     return root;
   }
@@ -392,6 +432,30 @@
     }[agentId];
   }
 
+  function scrollFeed(feed) {
+    const top = feed.scrollHeight;
+    if (typeof feed.scrollTo === "function") feed.scrollTo({ top, behavior: reduceMotion?.matches ? "auto" : "smooth" });
+    else feed.scrollTop = top;
+  }
+
+  function updateUnread() {
+    const launcher = root.querySelector(".halo-companion-launcher");
+    const badge = root.querySelector(".halo-companion-unread");
+    const count = state.unread;
+    badge.hidden = count === 0;
+    badge.textContent = count > 9 ? "9+" : String(count);
+    launcher.dataset.unread = String(count > 0);
+    launcher.setAttribute("aria-label", count ? `Open HALO Guide, ${count} new ${count === 1 ? "reply" : "replies"}` : "Open HALO Guide");
+    launcher.querySelector(".halo-companion-launcher-copy span").textContent = count ? `${count} new ${count === 1 ? "reply" : "replies"}` : "HALO Guide · 4 specialists";
+  }
+
+  function noteUnread(agent) {
+    if (state.open) return;
+    state.unread += 1;
+    updateUnread();
+    root.querySelector(".halo-companion-sr").textContent = `New HALO Guide reply from ${agent.name}.`;
+  }
+
   function addMessage(role, text, options = {}) {
     const feed = root.querySelector(".halo-companion-feed");
     const message = document.createElement("article");
@@ -436,35 +500,43 @@
       message.appendChild(voiceAction);
     }
     feed.appendChild(message);
-    feed.scrollTop = feed.scrollHeight;
+    scrollFeed(feed);
+    if (role === "assistant" && !options.initial) noteUnread(agent);
     if (role === "assistant" && options.speak && state.settings.promptMode === "proactive") speakText(text);
   }
 
   function showThinking(show) {
     const feed = root.querySelector(".halo-companion-feed");
     feed.querySelector(".halo-companion-thinking")?.remove();
+    feed.setAttribute("aria-busy", String(show));
     if (!show) return;
     const thinking = document.createElement("div");
     thinking.className = "halo-companion-thinking";
-    thinking.textContent = "Companion team is listening";
+    thinking.textContent = "HALO Guide is listening";
     feed.appendChild(thinking);
-    feed.scrollTop = feed.scrollHeight;
+    scrollFeed(feed);
   }
 
   async function sendMessage(rawMessage) {
     const message = String(rawMessage || "").trim();
     if (!message || state.busy) return;
     state.busy = true;
+    const requestId = ++state.requestId;
+    const controller = typeof AbortController === "function" ? new AbortController() : null;
+    state.requestController = controller;
+    const timeout = controller ? setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS) : null;
     const input = root.querySelector(".halo-companion-input");
     const send = root.querySelector(".halo-companion-send");
     input.value = "";
     send.disabled = true;
+    cancelSpeech();
     addMessage("visitor", message);
     showThinking(true);
     window.haloStats?.track("companion_message_sent", { path: location.pathname, activeAgent: state.agent });
     try {
       const response = await fetch("/api/halo-companion", {
         method: "POST",
+        signal: controller?.signal,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           sessionId: state.sessionId,
@@ -480,6 +552,7 @@
         })
       });
       const data = await response.json().catch(() => ({}));
+      if (requestId !== state.requestId) return;
       if (!response.ok) throw new Error(data.message || "The companion team could not respond.");
       showThinking(false);
       setAgent(data.agent?.id || "nova");
@@ -494,22 +567,38 @@
       }));
       if (data.careRequestCreated) addMessage("assistant", "Your note is saved for the human care team. You can keep talking with me while they review it.", { agent: "sol" });
     } catch (error) {
+      if (requestId !== state.requestId) return;
       showThinking(false);
-      addMessage("assistant", error.message || "The companion team is reconnecting. Please try again.", { agent: "sol", suggestions: ["Try again", "I need a human"] });
+      const copy = error?.name === "AbortError"
+        ? "The HALO Guide is taking too long to answer. Please try again in a moment."
+        : error?.message || "The companion team is reconnecting. Please try again.";
+      addMessage("assistant", copy, { agent: "sol", suggestions: ["Try again", "I need a human"] });
     } finally {
-      state.busy = false;
-      send.disabled = false;
-      input.focus();
+      clearTimeout(timeout);
+      if (requestId === state.requestId) {
+        state.busy = false;
+        state.requestController = null;
+        send.disabled = false;
+        if (state.open && root.contains(document.activeElement)) input.focus();
+      }
     }
   }
 
   function toggle(open = !state.open) {
+    const panel = root.querySelector(".halo-companion-panel");
+    const launcher = root.querySelector(".halo-companion-launcher");
+    const focusInside = panel.contains(document.activeElement);
     state.open = open;
-    root.querySelector(".halo-companion-panel").hidden = !open;
-    root.querySelector(".halo-companion-launcher").setAttribute("aria-expanded", String(open));
+    panel.hidden = !open;
+    launcher.setAttribute("aria-expanded", String(open));
     if (open) {
+      state.unread = 0;
+      updateUnread();
       root.querySelector(".halo-companion-input").focus();
+      scrollFeed(root.querySelector(".halo-companion-feed"));
       window.haloStats?.track("companion_opened", { path: location.pathname });
+    } else if (focusInside) {
+      launcher.focus();
     }
   }
 
@@ -520,7 +609,7 @@
   state.lastJourneySignature = guidanceSignature(state.journey);
   updateSettingsDock();
   const guide = pageGuide();
-  addMessage("assistant", guide.welcome, { agent: state.agent, suggestions: guide.prompts });
+  addMessage("assistant", guide.welcome, { agent: state.agent, suggestions: guide.prompts, initial: true });
 
   root.querySelector(".halo-companion-launcher").addEventListener("click", () => toggle());
   root.querySelector(".halo-companion-close").addEventListener("click", () => toggle(false));
@@ -529,13 +618,15 @@
     sendMessage(root.querySelector(".halo-companion-input").value);
   });
   document.addEventListener("keydown", event => {
-    if (event.key === "Escape" && state.open) toggle(false);
+    if (event.key !== "Escape" || !state.open || event.defaultPrevented || !root.contains(document.activeElement)) return;
+    toggle(false);
   });
   root.querySelector(".halo-companion-settings-form").addEventListener("input", event => {
     const form = event.currentTarget;
     applySettings({
       voiceEnabled: form.elements.haloCompanionVoiceEnabled.checked,
       voiceStyle: form.elements.haloCompanionVoiceStyle.value,
+      voiceLocale: form.elements.haloCompanionVoiceLocale.value,
       guidanceDetail: form.elements.haloCompanionGuidanceDetail.value,
       promptMode: form.elements.haloCompanionPromptMode.value,
       guidanceScope: form.elements.haloCompanionGuidanceScope.value
@@ -572,11 +663,8 @@
       }
     }
   });
-  if (voiceSupported()) {
-    hydrateVoices();
-    if (!window.__haloCompanionVoicesHandler) {
-      window.__haloCompanionVoicesHandler = () => hydrateVoices();
-      window.speechSynthesis.addEventListener?.("voiceschanged", window.__haloCompanionVoicesHandler);
-    }
-  }
+  loadVoiceModule().then(module => {
+    updateSettingsDock();
+    if (module?.browserSupported()) module.ready().then(() => updateSettingsDock());
+  });
 })();

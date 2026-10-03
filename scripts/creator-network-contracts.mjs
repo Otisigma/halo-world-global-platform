@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import vm from "node:vm";
 import { createCreatorNetworkHandler, profileInput, projectInput, canRespond } from "../netlify/lib/creator-network.mjs";
 import { PUBLIC_ROUTE_REGISTRY, canonicalizeRoutePath } from "../lib/route-registry.js";
+import { curatedCreators, withCuratedCreators } from "../lib/creator-directory.js";
 
 const read = path => readFile(new URL(`../${path}`, import.meta.url), "utf8");
 const [migration, api, html, client, routes, preview, home] = await Promise.all([
@@ -39,6 +40,20 @@ assert.match(html, /id="studioTrack"/);
 assert.doesNotMatch(html, /name="robots" content="noindex/);
 assert.match(home, /href="\/creator-network\/"/);
 assert.match(home, /href="\/signal-network\/"/);
+assert.match(html, /id="orbits"/);
+assert.match(html, /Core Studio Vault/);
+assert.match(html, /Inner Crew/);
+assert.match(html, /Network Peers/);
+assert.match(html, /Public Signal/);
+assert.match(html, /id="guardianForm"/);
+assert.match(client, /\/api\/studio-guardian/);
+assert.deepEqual(curatedCreators().map(creator => creator.display_name), ["DJ Halo", "DJ Butterfly", "DJ Romy"]);
+assert.ok(curatedCreators().every(creator => creator.verified && creator.curated && !creator.member_id));
+assert.deepEqual(curatedCreators({ language: "Swahili" })[0].languages, ["English", "Swahili"]);
+assert.equal(curatedCreators({ genre: "Jazz" }).length, 0);
+assert.equal(curatedCreators({ bpm: 124 }).length, 0, "Do not invent tempo ranges for curated artists");
+assert.equal(withCuratedCreators([{ display_name: "DJ Halo" }]).length, 3);
+assert.equal(withCuratedCreators([{ display_name: "DJ Halo" }])[0].verified, undefined, "A matching display name cannot confer verification");
 for (const route of ["/artist/dashboard", "/artists/", "/song-catalog/", "/dreamweaver-lab/", "/mixes/"]) {
   assert.ok(html.includes(`href="${route}"`));
 }
@@ -124,6 +139,12 @@ assert.ok(publicDiscovery.calls[0].query.includes("discoverable = TRUE"));
 assert.ok(!publicDiscovery.calls[0].query.includes("split_preference"), "Public discovery omits private split preferences");
 const invalidPublic = fixture({ authenticated: false });
 assert.equal((await invalidPublic.request(null, "GET", "?view=public&bpm=invalid")).status, 400);
+const offlineDirectory = fixture({ authenticated: false, sql: () => { throw new Error("Database unavailable"); } });
+const offlineState = await (await offlineDirectory.request(null, "GET", "?view=public")).json();
+assert.equal(offlineState.directoryUnavailable, true);
+assert.equal(offlineState.creators.length, 3, "Curated discovery remains available without a database");
+assert.equal(offlineDirectory.membershipCount(), 0);
+assert.equal((await offlineDirectory.request(null, "GET", "?view=public&role=DJ&language=Swahili")).status, 200);
 const invalid = fixture();
 for (const body of ["{", "null", "[]", { action: "unknown" }, { action: "respond", projectId: "project", status: "executed" }]) {
   assert.equal((await invalid.request(body)).status, 400);
@@ -219,18 +240,23 @@ const elements = new Map();
 function element(id) {
   if (!elements.has(id)) elements.set(id, {
     hidden: false, textContent: "", draft: "", children: [], className: "",
-    addEventListener() {},
+    listeners: new Map(),
+    addEventListener(name, callback) { this.listeners.set(name, callback); },
     append(...children) { this.children.push(...children); },
+    prepend(...children) { this.children.unshift(...children); },
     replaceChildren(...children) { this.children = children; },
     setAttribute() {},
     querySelector() { return element("mock-button"); },
+    querySelectorAll() { return [element("health-button"), element("council-button")]; },
     reset() { this.draft = ""; },
     get elements() { return []; }
   });
   return elements.get(id);
 }
 let authChanged;
-vm.runInNewContext(client, {
+const executableClient = client.replace(/^import \{ curatedCreators \} from "\/lib\/creator-directory.js";\s*/, "");
+vm.runInNewContext(executableClient, {
+  curatedCreators,
   document: { getElementById: element, createElement: tag => ({
     tagName: tag.toUpperCase(), textContent: "", children: [], addEventListener() {},
     append(...children) { this.children.push(...children); }, setAttribute() {}
@@ -253,4 +279,47 @@ await new Promise(resolve => setImmediate(resolve));
 assert.equal(element("project").draft, "", "Account changes must clear unsaved briefs");
 assert.deepEqual(element("creators").children, []);
 assert.equal(element("workspace").hidden, true);
+vm.runInNewContext(executableClient, {
+  curatedCreators,
+  document: { getElementById: element, createElement: tag => ({
+    tagName: tag.toUpperCase(), textContent: "", children: [], addEventListener() {},
+    append(...children) { this.children.push(...children); }, setAttribute() {}
+  }) },
+  URLSearchParams,
+  FormData: class { [Symbol.iterator]() { return [][Symbol.iterator](); } },
+  fetch: async url => ({
+    ok: true,
+    json: async () => String(url).includes("release-catalog") ? { releases: [] }
+      : String(url).includes("studio-guardian") ? {
+        health: { score: 50, status: "blocked", summary: "Agreement review needed", provider: "checklist",
+          audioInsights: ["Metadata only; no audio analysis"], actionableNextSteps: ["Review participant consent"] }
+      }
+      : String(url).includes("view=public") ? { creators: [] }
+      : { memberId: "owner", profile: null, creators: curatedCreators(), projects: [], participants: [] }
+  }),
+  window: { haloIdentity: { getUser: async () => ({ id: "owner" }), onAuthChange() {} } }
+});
+await new Promise(resolve => setImmediate(resolve));
+assert.equal(element("workspace").hidden, false);
+assert.equal(element("creators").children.length, 3, "Curated profiles render in the member workspace without fabricated private metadata");
+assert.equal(element("guardianProject").children[0].value, "", "A project is required before requesting a Guardian review");
+assert.ok(element("creators").children.every(card => card.children.every(child => child.textContent !== "Invite to project")));
+element("guardianProject").value = "project";
+await element("guardianForm").listeners.get("submit")({
+  preventDefault() {}, currentTarget: element("guardianForm"), submitter: { value: "health" }
+});
+assert.equal(element("guardianReport").children[0].textContent, "50/100 · blocked");
+assert.equal(element("guardianReport").children.at(-1).textContent, "Review mode: checklist · Advisory only");
+assert.equal(element("health-button").disabled, false, "Review controls recover after the request");
+element("guardianProject").value = "another-project";
+element("guardianProject").listeners.get("change")();
+assert.equal(element("guardianReport").children.length, 0, "Changing projects clears the previous project's review");
+element("guardianProject").value = "project";
+const pendingReview = element("guardianForm").listeners.get("submit")({
+  preventDefault() {}, currentTarget: element("guardianForm"), submitter: { value: "health" }
+});
+element("guardianProject").value = "another-project";
+element("guardianProject").listeners.get("change")();
+await pendingReview;
+assert.equal(element("guardianReport").children.length, 0, "A response for an old project cannot render under a new selection");
 console.log("Creator Network contracts passed: validation, identity, origin, ownership, discovery and participant lifecycle");

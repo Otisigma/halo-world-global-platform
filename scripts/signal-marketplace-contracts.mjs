@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { CREATOR_SEEDS, LISTING_SEEDS, LISTING_TYPES } from "../lib/creator-marketplace.js";
-import { STORAGE_KEY, createLocalDraft, createLocalStore, filterListings, initMarketplace, publicPreviewUrl, sanitizeLocalState } from "../signal-network/marketplace.js";
+import { MAX_STATE_BYTES, STORAGE_KEY, createLocalDraft, createLocalStore, filterListings, initMarketplace, publicPreviewUrl, sanitizeLocalState } from "../signal-network/marketplace.js";
 
 let passed = 0;
 async function check(label, test) {
@@ -24,6 +24,7 @@ const memory = () => {
   const data = new Map();
   return { getItem: key => data.get(key) || null, setItem: (key, value) => data.set(key, value), removeItem: key => data.delete(key) };
 };
+let byteBoundaryState;
 
 await check("public feed is separate from the unchanged member command center", () => {
   assert(page.indexOf('id="signal-feed"') < page.indexOf('id="command-center"'));
@@ -96,6 +97,43 @@ await check("blocked, corrupted and oversized storage cannot break the local fee
   }
   assert.equal(createLocalStore({ getItem: () => "{broken" }).state.drafts.length, 0);
   assert.equal(createLocalStore({ getItem: () => "x".repeat(100001) }).state.drafts.length, 0);
+});
+await check("save and reload enforce the same byte limit without losing existing drafts", () => {
+  const storage = memory();
+  const store = createLocalStore(storage);
+  const initial = { saved: [], liked: [], drafts: [createLocalDraft(input, "draft-initial")] };
+  store.save(initial);
+  const large = {
+    saved: [], liked: [],
+    drafts: Array.from({ length: 20 }, (_, i) => createLocalDraft({
+      ...input, title: "x".repeat(120), description: "x".repeat(2000),
+      licenseType: "x".repeat(120), format: "x".repeat(80),
+      assetPreviewUrl: `https://example.com/${"a".repeat(450)}`
+    }, `draft-large-${i}`))
+  };
+  const bytes = value => new TextEncoder().encode(JSON.stringify(value)).byteLength;
+  assert(bytes(large) > MAX_STATE_BYTES);
+  assert.throws(() => store.save(large), /storage limit reached.*not saved/);
+  assert.deepEqual(store.state, initial);
+  assert.deepEqual(createLocalStore(storage).state, initial);
+  let excess = bytes(large) - MAX_STATE_BYTES;
+  for (const draft of large.drafts) {
+    const remove = Math.min(450, excess);
+    if (remove) draft.listing.assetPreviewUrl = draft.listing.assetPreviewUrl.slice(0, -remove);
+    excess -= remove;
+  }
+  assert.equal(excess, 0);
+  assert.equal(bytes(large), MAX_STATE_BYTES);
+  store.save(large);
+  byteBoundaryState = large;
+  assert.deepEqual(createLocalStore(storage).state, large);
+  const prior = storage.getItem(STORAGE_KEY);
+  assert.throws(() => store.save({ ...large, liked: [LISTING_SEEDS[0].id] }), /storage limit reached/);
+  assert.equal(storage.getItem(STORAGE_KEY), prior);
+  const unicode = { ...large, drafts: large.drafts.map(draft => ({ ...draft, title: draft.title.replace("x", "é") })) };
+  assert.throws(() => store.save(unicode), /storage limit reached/);
+  storage.setItem(STORAGE_KEY, JSON.stringify(unicode));
+  assert.equal(createLocalStore(storage).state.drafts.length, 0);
 });
 
 // Minimal DOM harness exercises the real event handlers without new dependencies.
@@ -211,6 +249,20 @@ await check("clear action resets only marketplace local data", async () => {
   assert.deepEqual(app.store.state, { saved: [], liked: [], drafts: [] });
   assert.equal(globalThis.localStorage.getItem("member"), "untouched");
   assert.equal(globalThis.localStorage.getItem(STORAGE_KEY), null);
+});
+await check("byte-limit errors are announced without falsely changing card reaction state", async () => {
+  globalThis.localStorage = memory();
+  const limitDoc = documentHarness();
+  const limitApp = initMarketplace(limitDoc);
+  limitApp.store.save(byteBoundaryState);
+  limitApp.render();
+  const before = JSON.stringify(limitApp.store.state);
+  const save = buttons(limitDoc.getElementById("marketFeed")).find(item => item.textContent === "Save locally");
+  await save.fire("click");
+  assert(limitDoc.getElementById("marketStatus").textContent.includes("this change was not saved"));
+  assert.equal(save.attributes["aria-pressed"], "false");
+  assert.equal(JSON.stringify(limitApp.store.state), before);
+  assert.deepEqual(createLocalStore(globalThis.localStorage).state, limitApp.store.state);
 });
 await check("denied storage getters do not block initialization or local reactions", async () => {
   Object.defineProperty(globalThis, "localStorage", { configurable: true, get() { throw new Error("denied"); } });

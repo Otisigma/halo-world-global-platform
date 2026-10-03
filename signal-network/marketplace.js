@@ -3,7 +3,7 @@ import { HaloAIService } from "../lib/halo-ai-service.js";
 
 export const STORAGE_KEY = "halo.signal-marketplace.demo.v1";
 const MAX_DRAFTS = 20;
-const MAX_STATE_BYTES = 100000;
+export const MAX_STATE_BYTES = 100000;
 const types = new Set(LISTING_TYPES.map(type => type.id));
 const listingIds = new Set(LISTING_SEEDS.map(listing => listing.id));
 const typeLabel = value => LISTING_TYPES.find(type => type.id === value)?.label || value;
@@ -80,16 +80,23 @@ export function createLocalStore(storage) {
   try {
     const raw = storage?.getItem(STORAGE_KEY);
     if (!storage) available = false;
-    if (raw && raw.length <= MAX_STATE_BYTES) state = sanitizeLocalState(JSON.parse(raw));
+    if (raw && raw.length <= MAX_STATE_BYTES && new TextEncoder().encode(raw).byteLength <= MAX_STATE_BYTES) {
+      state = sanitizeLocalState(JSON.parse(raw));
+    }
   } catch { available = false; }
   return {
     get state() { return state; },
     get available() { return available; },
     save(next) {
-      state = sanitizeLocalState(next);
+      const nextState = sanitizeLocalState(next);
+      const serialized = JSON.stringify(nextState);
+      if (new TextEncoder().encode(serialized).byteLength > MAX_STATE_BYTES) {
+        throw new Error("Local demo storage limit reached. Shorten or delete drafts before saving; this change was not saved.");
+      }
+      state = nextState;
       try {
         if (!storage) throw new Error("Storage unavailable");
-        storage.setItem(STORAGE_KEY, JSON.stringify(state));
+        storage.setItem(STORAGE_KEY, serialized);
         available = true;
       } catch { available = false; }
       return state;
@@ -207,7 +214,12 @@ export function initMarketplace(doc = document) {
       const active = store.state[key].includes(listing.id);
       const control = button(`${active ? (key === "saved" ? "Saved" : "Liked") : label} locally`, () => {
         const current = store.state[key];
-        store.save({ ...store.state, [key]: current.includes(listing.id) ? current.filter(id => id !== listing.id) : [...current, listing.id] });
+        try {
+          store.save({ ...store.state, [key]: current.includes(listing.id) ? current.filter(id => id !== listing.id) : [...current, listing.id] });
+        } catch (error) {
+          announce(error.message || "Local preference was not saved.");
+          return;
+        }
         const nowActive = store.state[key].includes(listing.id);
         root.querySelectorAll(`[data-market-reaction="${key}"]`).forEach(item => {
           if (item.dataset.marketListing !== listing.id) return;

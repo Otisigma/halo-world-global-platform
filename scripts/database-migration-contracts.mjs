@@ -2,10 +2,11 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
 const read = path => readFile(new URL(`../${path}`, import.meta.url), "utf8");
-const [migration, publicationMigration, driveUrlMigration, config] = await Promise.all([
+const [migration, publicationMigration, driveUrlMigration, generatedDriveUrlMigration, config] = await Promise.all([
   read("netlify/database/migrations/20261002013224_faulty_retro_girl/migration.sql"),
   read("netlify/database/migrations/20260919130000_create_song_publication_sync.sql"),
   read("netlify/database/migrations/20261002040000_add_song_version_drive_url.sql"),
+  read("netlify/database/migrations/20261002102455_needy_nitro/migration.sql"),
   read("drizzle.config.ts"),
 ]);
 
@@ -28,5 +29,6 @@ assert.match(migration, /'halo_song_publication_sync_song_id_halo_song_catalog_i
 assert.match(migration, /REFERENCES "halo_song_catalog"\("id"\) ON DELETE CASCADE/, "new publication storage must retain cascading song references");
 assert.doesNotMatch(migration, /(?:^|;\s*)(?:DROP|TRUNCATE|DELETE)\s/im, "reconciliation must not remove existing data or schema objects");
 assert.match(driveUrlMigration, /ADD COLUMN IF NOT EXISTS drive_url/, "the next pending migration must remain retry-safe");
+assert.match(generatedDriveUrlMigration, /^ALTER TABLE "halo_song_versions" ADD COLUMN IF NOT EXISTS "drive_url" text DEFAULT '' NOT NULL;\s*$/, "the generated migration must preserve the drive_url column created by the earlier migration without changing its definition or existing data");
 
 console.log("Database migration contracts passed");

@@ -144,6 +144,13 @@ try {
   await copyFile(resolve(root, "release-guard-agent.js"), resolve(fixture, "release-guard-agent.js"));
   await writeFile(resolve(fixture, "package.json"), '{"type":"module"}');
   assert.equal(cli().status, 1, "missing catalog blocks builds");
+  const staticCatalog = await readFile(CONFIG.CATALOG_INPUT_PATH, "utf8");
+  assert.deepEqual(JSON.parse(staticCatalog), [], "live database releases must not be copied into the static build catalog");
+  await writeFile(catalogPath, staticCatalog);
+  const emptyCatalog = cli();
+  assert.equal(emptyCatalog.status, 0, "the supplied empty static catalog must unblock builds");
+  assert.match(emptyCatalog.stdout, /0 approved, 0 quarantined/);
+  assert.equal(await readFile(catalogPath, "utf8"), staticCatalog, "empty builds must not dirty the tracked catalog");
   for (const source of ["not json", "{}", '{"songs":{}}', "null"]) {
     await writeFile(catalogPath, source);
     assert.equal(cli().status, 1);

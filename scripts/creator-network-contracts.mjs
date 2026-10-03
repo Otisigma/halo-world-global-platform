@@ -5,10 +5,10 @@ import { createCreatorNetworkHandler, profileInput, projectInput, canRespond } f
 import { PUBLIC_ROUTE_REGISTRY, canonicalizeRoutePath } from "../lib/route-registry.js";
 
 const read = path => readFile(new URL(`../${path}`, import.meta.url), "utf8");
-const [migration, api, html, client, routes, preview] = await Promise.all([
+const [migration, api, html, client, routes, preview, home] = await Promise.all([
   read("netlify/database/migrations/20261003095500_create_creator_network.sql"),
   read("netlify/lib/creator-network.mjs"), read("creator-network/index.html"),
-  read("creator-network/network.js"), read("netlify.toml"), read("creators/index.html")
+  read("creator-network/network.js"), read("netlify.toml"), read("creators/index.html"), read("halo.html")
 ]);
 
 for (const table of ["profiles", "projects", "participants"]) {
@@ -30,12 +30,23 @@ assert.match(html, /src="\/site-monitor.js"/);
 assert.match(html, /src="\/halo-hud.js"/);
 assert.match(html, /href="\/halo-hud.css"/);
 assert.match(html, /data-halo-guide=/);
+assert.match(html, /id="publicDirectory"/);
+assert.match(html, /id="publicCreators"/);
+assert.match(html, /id="studioPlayer" controls/);
+assert.match(html, /id="pipelineTitle"/);
+assert.match(html, /Open Dreamweaver/);
+assert.match(html, /id="studioTrack"/);
+assert.doesNotMatch(html, /name="robots" content="noindex/);
+assert.match(home, /href="\/creator-network\/"/);
+assert.match(home, /href="\/signal-network\/"/);
 for (const route of ["/artist/dashboard", "/artists/", "/song-catalog/", "/dreamweaver-lab/", "/mixes/"]) {
   assert.ok(html.includes(`href="${route}"`));
 }
 assert.doesNotMatch(client, /innerHTML|insertAdjacentHTML/);
 assert.match(client, /sessionVersion/);
 assert.match(api, /WHERE discoverable = TRUE AND member_id <>/);
+assert.match(api, /SELECT display_name, bio, artist_slug, roles, genres, languages, bpm_min, bpm_max/);
+assert.match(api, /LIMIT 48/);
 assert.match(api, /WHERE cp.member_id = \$\{memberId\} OR p.owner_member_id = \$\{memberId\}/);
 assert.doesNotMatch(api, /SELECT.*email|halo_artist_rights_participants|@netlify\/blobs/);
 
@@ -99,6 +110,20 @@ const anonymous = fixture({ authenticated: false });
 assert.equal((await anonymous.request(null, "GET")).status, 401);
 assert.equal((await anonymous.request({ action: "apply", projectId: "project" })).status, 401);
 assert.equal(anonymous.calls.length, 0);
+const publicDiscovery = fixture({ authenticated: false, sql: () => [{
+  display_name: "Opt-in Producer", bio: "Available for sessions", artist_slug: "producer-room",
+  roles: ["Producer"], genres: ["House"], languages: ["English"], bpm_min: 118, bpm_max: 126
+}] });
+const publicResponse = await publicDiscovery.request(null, "GET", "?view=public&genre=House");
+assert.equal(publicResponse.status, 200);
+const publicState = await publicResponse.json();
+assert.equal(publicState.creators[0].display_name, "Opt-in Producer");
+assert.equal("member_id" in publicState.creators[0], false, "Public cards never expose member identity");
+assert.equal(publicDiscovery.membershipCount(), 0, "Public discovery does not create a member session");
+assert.ok(publicDiscovery.calls[0].query.includes("discoverable = TRUE"));
+assert.ok(!publicDiscovery.calls[0].query.includes("split_preference"), "Public discovery omits private split preferences");
+const invalidPublic = fixture({ authenticated: false });
+assert.equal((await invalidPublic.request(null, "GET", "?view=public&bpm=invalid")).status, 400);
 const invalid = fixture();
 for (const body of ["{", "null", "[]", { action: "unknown" }, { action: "respond", projectId: "project", status: "executed" }]) {
   assert.equal((await invalid.request(body)).status, 400);
@@ -193,16 +218,29 @@ assert.equal(busyState.participants.at(-1).status, "pending");
 const elements = new Map();
 function element(id) {
   if (!elements.has(id)) elements.set(id, {
-    hidden: false, textContent: "", draft: "", children: [],
+    hidden: false, textContent: "", draft: "", children: [], className: "",
     addEventListener() {},
-    replaceChildren() { this.children = []; },
-    reset() { this.draft = ""; }
+    append(...children) { this.children.push(...children); },
+    replaceChildren(...children) { this.children = children; },
+    setAttribute() {},
+    querySelector() { return element("mock-button"); },
+    reset() { this.draft = ""; },
+    get elements() { return []; }
   });
   return elements.get(id);
 }
 let authChanged;
 vm.runInNewContext(client, {
-  document: { getElementById: element },
+  document: { getElementById: element, createElement: tag => ({
+    tagName: tag.toUpperCase(), textContent: "", children: [], addEventListener() {},
+    append(...children) { this.children.push(...children); }, setAttribute() {}
+  }) },
+  URLSearchParams,
+  FormData: class { [Symbol.iterator]() { return [][Symbol.iterator](); } },
+  fetch: async url => ({
+    ok: true,
+    json: async () => String(url).includes("release-catalog") ? { releases: [] } : { creators: [] }
+  }),
   window: { haloIdentity: {
     getUser: async () => null, onAuthChange: callback => { authChanged = callback; }
   } }

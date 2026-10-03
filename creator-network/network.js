@@ -22,6 +22,78 @@
     return element;
   }
 
+  function renderPublicCreators(creators) {
+    byId("publicCreators").replaceChildren(...creators.map(creator => {
+      const card = node("article");
+      card.className = "creator-profile-card";
+      card.append(node("h3", creator.display_name), node("p", creator.bio));
+      const tags = [...(creator.roles || []), ...(creator.genres || []), ...(creator.languages || [])];
+      if (tags.length) {
+        const profileTags = node("p", tags.join(" · "));
+        profileTags.className = "profile-tags";
+        card.append(profileTags);
+      }
+      card.append(node("p", creator.bpm_min ? `${creator.bpm_min}–${creator.bpm_max} BPM` : "Tempo flexible"));
+      if (creator.artist_slug) card.append(roomLink(creator.artist_slug));
+      const join = node("a", "Sign in to collaborate");
+      join.href = "/creator-network/#locked";
+      card.append(join);
+      return card;
+    }));
+    if (!creators.length) byId("publicCreators").append(node("p", "No public Creator Passes match yet. Try another filter or check back soon."));
+  }
+
+  async function loadPublicCreators() {
+    const query = new URLSearchParams(values(byId("publicFilters")));
+    const result = await api(null, `?view=public&${query}`);
+    renderPublicCreators(result.creators || []);
+  }
+
+  async function loadReleaseDeck() {
+    const select = byId("studioTrack");
+    const audio = byId("studioPlayer");
+    try {
+      const response = await fetch("/api/release-catalog", { headers: { Accept: "application/json" } });
+      if (!response.ok) throw new Error("Release catalog unavailable");
+      const result = await response.json();
+      const releases = (Array.isArray(result.releases) ? result.releases : []).map(release => {
+        const preview = window.HaloReleaseArtwork?.resolveAudio({
+          audioUrl: release.audioUrl,
+          audio_url: release.audio_url,
+          previewAudio: release.previewAudio,
+          preview_audio: release.preview_audio,
+          streamUrl: release.streamUrl
+        }, { preferPreview: true, requirePlayable: true });
+        return preview?.src ? { release, src: preview.src } : null;
+      }).filter(Boolean);
+      select.replaceChildren();
+      if (!releases.length) {
+        select.append(node("option", "No published preview is available"));
+        byId("playerStatus").textContent = "CATALOG / NO PLAYABLE PREVIEW";
+        return;
+      }
+      releases.forEach(({ release }, index) => {
+        const option = node("option", `${release.title || "Untitled release"} · ${release.artist || "HALO artist"}`);
+        option.value = String(index);
+        select.append(option);
+      });
+      function chooseRelease() {
+        const selected = releases[Number(select.value)];
+        if (!selected) return;
+        audio.src = selected.src;
+        byId("trackTitle").textContent = selected.release.title || "Untitled release";
+        byId("trackMeta").textContent = `${selected.release.artist || "HALO artist"} · Published HALO release preview`;
+        byId("trackSpecs").textContent = `BPM ${selected.release.bpm || "—"} · KEY ${selected.release.musicalKey || "—"}`;
+        byId("playerStatus").textContent = "CATALOG SYNC / READY";
+      }
+      select.addEventListener("change", chooseRelease);
+      chooseRelease();
+    } catch {
+      select.replaceChildren(node("option", "Release previews are temporarily unavailable"));
+      byId("playerStatus").textContent = "CATALOG / CONNECTION DELAYED";
+    }
+  }
+
   function action(label, body) {
     const button = node("button", label);
     button.type = "button";
@@ -45,6 +117,13 @@
       if (input.type === "checkbox") input.checked = value === true;
       else input.value = Array.isArray(value) ? value.join(", ") : value ?? "";
     }
+    const displayName = profile?.display_name || "Your artist name";
+    byId("passName").textContent = displayName;
+    byId("passInitial").textContent = displayName.trim().charAt(0).toUpperCase() || "H";
+    byId("passRole").textContent = profile?.roles?.join(" · ") || "Creator / collaborator";
+    byId("passSummary").textContent = profile
+      ? `${profile.discoverable ? "Public discovery is on" : "Your Creator Pass is private"} · ${profile.roles?.length ? profile.roles.join(" / ") : "Creator profile"}`
+      : "Set your Creator Pass and choose what to share.";
     const ownProjects = state.projects.filter(p => p.owner_member_id === state.memberId && p.status === "open");
     byId("creators").replaceChildren(...state.creators.map(creator => {
       const card = node("article");
@@ -158,6 +237,14 @@
     event.preventDefault();
     try { await load(); status("Matches updated"); } catch (error) { status(error.message); }
   });
+  byId("publicFilters").addEventListener("submit", async event => {
+    event.preventDefault();
+    const button = event.currentTarget.querySelector('button[type="submit"]');
+    button.disabled = true;
+    try { await loadPublicCreators(); }
+    catch (error) { status(error.message); }
+    finally { button.disabled = false; }
+  });
   byId("login").addEventListener("submit", async event => {
     event.preventDefault();
     const button = event.currentTarget.querySelector("button");
@@ -199,6 +286,8 @@
     identity.onAuthChange(() => refresh());
     refresh();
   }
+  loadPublicCreators().catch(() => renderPublicCreators([]));
+  loadReleaseDeck();
   if (window.haloIdentity) ready(window.haloIdentity);
   else window.addEventListener("halo-identity-ready", event => ready(event.detail || window.haloIdentity), { once: true });
 })();

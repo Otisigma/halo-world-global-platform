@@ -145,6 +145,25 @@ async function workspace(db, memberId, url) {
   return { memberId, profile: profiles[0] || null, creators, projects: [...memberProjects, ...opportunities], participants };
 }
 
+async function publicCreators(db, url) {
+  const role = text(url.searchParams.get("role"), 80);
+  const genre = text(url.searchParams.get("genre"), 80);
+  const language = text(url.searchParams.get("language"), 80);
+  const bpm = tempo(url.searchParams.get("bpm"));
+  const creators = await db.sql`
+    SELECT display_name, bio, artist_slug, roles, genres, languages, bpm_min, bpm_max
+    FROM halo_creator_profiles
+    WHERE discoverable = TRUE
+      AND (${role} = '' OR ${role} = ANY(roles))
+      AND (${genre} = '' OR ${genre} = ANY(genres))
+      AND (${language} = '' OR ${language} = ANY(languages))
+      AND (${bpm}::int IS NULL OR ${bpm} BETWEEN bpm_min AND bpm_max)
+    ORDER BY updated_at DESC
+    LIMIT 48
+  `;
+  return { creators };
+}
+
 export function createCreatorNetworkHandler({ getDatabase, getUser, ensureMembership, verifyRequestOrigin }) {
   return async request => {
     if (!["GET", "POST"].includes(request.method)) return json({ message: "Method not allowed" }, 405);
@@ -156,12 +175,20 @@ export function createCreatorNetworkHandler({ getDatabase, getUser, ensureMember
           return json({ message: "Cross-origin action rejected" }, 403);
         }
       }
+      const url = new URL(request.url);
+      if (request.method === "GET" && url.searchParams.get("view") === "public") {
+        try {
+          return json(await publicCreators(await getDatabase(), url));
+        } catch (error) {
+          if (/Invalid text|BPM must/.test(error.message)) return json({ message: error.message }, 400);
+          throw error;
+        }
+      }
       const user = await getUser();
       if (!user?.id) return json({ message: "Sign in to open Creator Network" }, 401);
       const db = await getDatabase();
       const membership = await ensureMembership(db, user);
       const memberId = membership.member_id;
-      const url = new URL(request.url);
       if (request.method === "GET") {
         try {
           return json(await workspace(db, memberId, url));

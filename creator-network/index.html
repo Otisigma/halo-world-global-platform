@@ -3,14 +3,20 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="robots" content="noindex, nofollow, noarchive">
-  <title>HALO Creator Network</title>
-  <meta name="description" content="Your member workspace for creator discovery and collaboration inside HALO.">
+  <title>Creator Network — HALO Music</title>
+  <meta name="description" content="Meet opt-in HALO creators, shape releases with Dreamweaver, and move work through a creator-first studio.">
+  <meta name="theme-color" content="#090907">
+  <meta property="og:title" content="Creator Network — HALO Music">
+  <meta property="og:description" content="A creator-first studio for discovery, collaboration, and release momentum.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;700;800&family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&family=Share+Tech+Mono&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/halo-brand.css">
   <link rel="stylesheet" href="/accessibility.css">
   <link rel="stylesheet" href="/mobile-navigation.css">
   <link rel="stylesheet" href="/halo-hud.css">
   <link rel="stylesheet" href="/creator-network/network.css">
+  <script src="/release-artwork.js" defer></script>
   <script src="/stats.js" defer></script>
   <script src="/site-monitor.js" defer></script>
   <script src="/accessibility.js" defer></script>
@@ -20,36 +26,129 @@
   <script src="/creator-network/network.js" defer></script>
 </head>
 <body>
-  <a class="skip-link" href="#main">Skip to workspace</a>
-  <header>
-    <a href="/halo">HALO</a>
+  <a class="skip-link" href="#main">Skip to Creator Network</a>
+  <header class="creator-header">
+    <a class="creator-brand" href="/halo"><span class="brand-mark">H</span><span>HALO <small>CREATOR NETWORK</small></span></a>
     <nav aria-label="Creator navigation">
-      <a href="/creators/">Creator World preview</a>
-      <a href="/artists/">Artist rooms + follows</a>
-      <a href="/artist/dashboard">Rights + splits</a>
-      <a href="/song-catalog/">Songs</a>
-      <a href="/dreamweaver-lab/">Song Lab + stem vault</a>
+      <a href="/creators/">Creator World</a>
+      <a href="/artists/">Artist rooms</a>
+      <a href="/signal-network/">Signal Network</a>
+      <a href="/dreamweaver-lab/">Dreamweaver Lab</a>
       <a href="/mixes/">Mixes + reviews</a>
+      <a href="/artist/dashboard">Rights + splits</a>
     </nav>
     <button id="signOut" type="button" hidden>Sign out</button>
   </header>
-  <main id="main">
-    <h1>Creator Network</h1>
-    <p>Find the people who help finish the work. One HALO identity, your existing rooms and assets.</p>
+  <main id="main" class="creator-shell">
+    <section class="creator-hero" aria-labelledby="heroTitle">
+      <div>
+        <p class="eyebrow">HALO / independent by design</p>
+        <h1 id="heroTitle">Make the next<br><em>move together.</em></h1>
+        <p class="hero-copy">A private studio for the people behind the music. Find your next collaborator, shape the release, and keep every decision creator-led.</p>
+        <div class="hero-actions">
+          <a class="button button-gold" href="#locked">Enter your studio</a>
+          <a class="button button-quiet" href="#publicDirectory">Discover creators <span aria-hidden="true">↓</span></a>
+        </div>
+      </div>
+      <aside class="hero-signal" data-halo-guide="Your Creator Pass is public only when you opt in. Private projects, files, and rights stay private.">
+        <span class="signal-index">CREATOR PASS / 001</span>
+        <div class="signal-orbit" aria-hidden="true"><span>H</span></div>
+        <p>Human taste.<br><strong>Dreamweaver flow.</strong><br>Artist-owned outcomes.</p>
+      </aside>
+    </section>
+
+    <section id="publicDirectory" class="public-directory" aria-labelledby="directoryTitle">
+      <div class="section-heading">
+        <div><p class="eyebrow">Open discovery / opt-in profiles</p><h2 id="directoryTitle">Meet the makers.</h2></div>
+        <a class="text-link" href="#locked">Join the network <span aria-hidden="true">↗</span></a>
+      </div>
+      <p class="section-intro">Explore public Creator Passes. Profile details appear here only when their owner chooses to be discoverable.</p>
+      <form id="publicFilters" class="filter-console" aria-label="Filter public creators">
+        <label>Role<input name="role" maxlength="80" placeholder="Producer, vocalist…"></label>
+        <label>Genre<input name="genre" maxlength="80" placeholder="House, soul…"></label>
+        <label>Language<input name="language" maxlength="80" placeholder="English, Swahili…"></label>
+        <label>BPM<input name="bpm" type="number" min="20" max="300" placeholder="Any tempo"></label>
+        <button type="submit">Tune discovery <span aria-hidden="true">↗</span></button>
+      </form>
+      <div id="publicCreators" class="creator-cards" aria-live="polite"><p class="empty-state">Loading opt-in Creator Passes…</p></div>
+    </section>
+
     <p id="status" role="status" aria-live="polite"></p>
-    <section id="locked">
-      <h2>Member workspace</h2>
+    <section id="locked" class="login-panel" aria-labelledby="loginTitle">
+      <div><p class="eyebrow">Your space / member access</p><h2 id="loginTitle">Enter the studio.</h2><p>Use your HALO identity to access private projects, manage your profile, and collaborate.</p></div>
       <form id="login">
         <label>Email<input name="email" type="email" autocomplete="email" required></label>
         <label>Password<input name="password" type="password" autocomplete="current-password" required></label>
-        <button type="submit">Sign in</button>
+        <button class="button button-gold" type="submit">Sign in</button>
       </form>
-      <p>New to HALO? <a href="/creators/">Join through Creator World</a>.</p>
+      <p class="join-copy">New to HALO? <a href="/creators/">Join through Creator World</a>.</p>
     </section>
+
     <div id="workspace" hidden>
-      <section aria-labelledby="profileTitle" data-halo-guide="Your Creator Pass uses your HALO membership. Discovery is opt-in; split preferences are not a contract.">
-        <h2 id="profileTitle">Your Creator Pass</h2>
-        <form id="profile">
+      <section class="studio-pass" aria-labelledby="profileTitle" data-halo-guide="Your Creator Pass uses your HALO membership. Discovery is opt-in; split preferences are not a contract.">
+        <div class="studio-pass__heading">
+          <div><p class="eyebrow">Workspace / creator pass</p><h2 id="profileTitle">Welcome to your studio.</h2><p id="passSummary">Set your Creator Pass and choose what to share.</p></div>
+          <a class="button button-outline" href="/song-catalog/">Open song catalog <span aria-hidden="true">↗</span></a>
+        </div>
+        <div class="studio-grid">
+          <div class="studio-deck" data-halo-guide="Choose a published HALO release to preview here. Private demos and stems stay in your member workspace.">
+            <div class="deck-topline"><span>HALO RELEASE DECK</span><span id="playerStatus">CATALOG SYNC / WAITING</span></div>
+            <div class="deck-display">
+              <div class="deck-art" aria-hidden="true"><span>H</span><i></i></div>
+              <div class="deck-copy"><p class="eyebrow">Published master preview</p><h3 id="trackTitle">Choose a release to listen</h3><p id="trackMeta">Public HALO catalog · approved previews only</p></div>
+            </div>
+            <label class="track-picker">Select a release<select id="studioTrack" aria-label="Select a published release"><option value="">Loading release catalog…</option></select></label>
+            <audio id="studioPlayer" controls preload="none" aria-label="Published release preview"></audio>
+            <div class="deck-foot"><span>MASTER / PREVIEW</span><span id="trackSpecs">BPM — · KEY —</span></div>
+          </div>
+          <div class="pass-card">
+            <div class="pass-card__top"><span>CREATOR PASS</span><span class="pass-badge">HALO MEMBER</span></div>
+            <div class="pass-avatar" aria-hidden="true" id="passInitial">H</div>
+            <h3 id="passName">Your artist name</h3>
+            <p id="passRole">Creator / collaborator</p>
+            <div class="split-memo"><span>COLLAB MEMO</span><strong>Agree terms before release</strong><small>A profile preference is not a rights or royalty agreement.</small></div>
+            <a href="/artist/dashboard">Review rights + splits <span aria-hidden="true">↗</span></a>
+          </div>
+        </div>
+      </section>
+
+      <section class="pipeline-section" aria-labelledby="pipelineTitle">
+        <div class="section-heading"><div><p class="eyebrow">Dreamweaver / release flow</p><h2 id="pipelineTitle">Move it from idea to impact.</h2></div><a class="text-link" href="/signal-network/">Open release ops <span aria-hidden="true">↗</span></a></div>
+        <div class="pipeline-rail">
+          <a class="pipeline-stage" href="/song-catalog/" data-halo-guide="Start with a song record or open an existing master in your catalog."><span>01 / INTAKE</span><strong>Capture the idea</strong><small>Song Catalog</small></a>
+          <a class="pipeline-stage" href="/dreamweaver-lab/" data-halo-guide="Use Dreamweaver to refine the song, explore stems, and prepare creative assets."><span>02 / DREAMWEAVER</span><strong>Shape the sound</strong><small>Song Lab + stems</small></a>
+          <a class="pipeline-stage" href="#createTitle" data-halo-guide="Bring collaborators in through a brief. Invitations never change access or ownership."><span>03 / COLLAB</span><strong>Build it together</strong><small>Creator Network</small></a>
+          <a class="pipeline-stage" href="/release-house/"><span>04 / RELEASE</span><strong>Prepare the launch</strong><small>Release House</small></a>
+          <a class="pipeline-stage" href="/signal-network/"><span>05 / SIGNAL</span><strong>Read the response</strong><small>Signal Network</small></a>
+        </div>
+      </section>
+
+      <section class="ai-dock" aria-labelledby="aiTitle">
+        <div><p class="eyebrow">HALO GUID / creative co-pilot</p><h2 id="aiTitle">A clear next step, whenever you need one.</h2><p>Use the guide on any marked workspace element, or jump straight into the connected creative tools.</p></div>
+        <div class="ai-actions">
+          <a href="/dreamweaver-lab/" data-halo-guide="Open Dreamweaver Lab for song development and stem workflows.">Open Dreamweaver <span aria-hidden="true">↗</span></a>
+          <a href="#filters" data-halo-guide="Search opt-in creators and active opportunities by role, genre, tempo, and key.">Find a collaborator <span aria-hidden="true">↗</span></a>
+          <a href="/youtube-studio/" data-halo-guide="Open the YouTube Studio workspace to prepare visualizer and video assets.">Build visual assets <span aria-hidden="true">↗</span></a>
+        </div>
+      </section>
+
+      <section class="member-discovery" aria-labelledby="finderTitle">
+        <div class="section-heading"><div><p class="eyebrow">Member workspace / expanded matching</p><h2 id="finderTitle">Find creators + opportunities.</h2></div></div>
+        <form id="filters" class="filter-console">
+          <label>Role<input name="role" maxlength="80"></label>
+          <label>Genre<input name="genre" maxlength="80"></label>
+          <label>Language<input name="language" maxlength="80"></label>
+          <label>BPM<input name="bpm" type="number" min="20" max="300"></label>
+          <label>Key<input name="key" maxlength="20" placeholder="A minor"></label>
+          <button type="submit">Find exact matches</button>
+        </form>
+        <h3>Creator discovery</h3><div id="creators" class="creator-cards"></div>
+        <h3>Opportunities + your projects</h3><div id="projects" class="creator-cards"></div>
+      </section>
+
+      <section class="workspace-panel" aria-labelledby="editPassTitle">
+        <p class="eyebrow">Profile / your controls</p><h2 id="editPassTitle">Tune your Creator Pass.</h2>
+        <form id="profile" class="profile-form">
           <label>Display name<input name="displayName" maxlength="100" required></label>
           <label>Bio<textarea name="bio" maxlength="2000"></textarea></label>
           <label>Owned artist room handle<input name="artistSlug" maxlength="100" placeholder="Optional existing room"></label>
@@ -59,29 +158,15 @@
           <label>DAW / hardware (comma separated)<input name="dawSetup" maxlength="972"></label>
           <label>Minimum BPM<input name="bpmMin" type="number" min="20" max="300"></label>
           <label>Maximum BPM<input name="bpmMax" type="number" min="20" max="300"></label>
-          <label>Split preference<input name="splitPreference" maxlength="300" placeholder="Discuss 50/50 master split"></label>
-          <label class="checkbox"><input name="discoverable" type="checkbox">Show this profile to other signed-in members</label>
-          <button type="submit">Save Creator Pass</button>
+          <label>Split preference<input name="splitPreference" maxlength="300" placeholder="Discuss terms together"></label>
+          <label class="checkbox"><input name="discoverable" type="checkbox">Show my Creator Pass in public discovery</label>
+          <button class="button button-gold" type="submit">Save Creator Pass</button>
         </form>
       </section>
-      <section aria-labelledby="finderTitle">
-        <h2 id="finderTitle">Find creators + opportunities</h2>
-        <form id="filters">
-          <label>Role<input name="role" maxlength="80"></label>
-          <label>Genre<input name="genre" maxlength="80"></label>
-          <label>Language<input name="language" maxlength="80"></label>
-          <label>BPM<input name="bpm" type="number" min="20" max="300"></label>
-          <label>Key<input name="key" maxlength="20" placeholder="A minor"></label>
-          <button type="submit">Find exact matches</button>
-        </form>
-        <h3>Creator discovery</h3>
-        <div id="creators" class="cards"></div>
-        <h3>Opportunities + your projects</h3>
-        <div id="projects" class="cards"></div>
-      </section>
-      <section aria-labelledby="createTitle" data-halo-guide="Link only your existing HALO assets. A collaboration invite never grants media access or changes rights.">
-        <h2 id="createTitle">Open a collaboration brief</h2>
-        <form id="project">
+
+      <section id="collaboration" class="workspace-panel" aria-labelledby="createTitle" data-halo-guide="Link only your existing HALO assets. A collaboration invite never grants media access or changes rights.">
+        <p class="eyebrow">WIP studio / open call</p><h2 id="createTitle">Put a brief into the room.</h2>
+        <form id="project" class="profile-form">
           <label>Title<input name="title" maxlength="180" required></label>
           <label>Brief<textarea name="brief" maxlength="4000"></textarea></label>
           <label>Type<select name="kind"><option value="audio">Audio / topline</option><option value="visual">Visuals</option><option value="review">Peer review</option></select></label>
@@ -94,14 +179,15 @@
           <label>Existing song version ID<input name="songVersionId" maxlength="100"></label>
           <label>Existing stem pack ID<input name="stemPackId" maxlength="100"></label>
           <label>Existing rights work ID<input name="rightsWorkId" maxlength="100"></label>
-          <button type="submit">Post opportunity</button>
+          <button class="button button-gold" type="submit">Drop a collaboration brief</button>
         </form>
         <p>Assets stay in the catalog and stem vault. Private files remain private. Agree rights and splits in <a href="/artist/dashboard">Artist Economy</a> before releasing work.</p>
       </section>
-      <section aria-labelledby="requestsTitle">
-        <h2 id="requestsTitle">Incoming / outgoing invites + applications</h2>
+
+      <section class="workspace-panel" aria-labelledby="requestsTitle">
+        <p class="eyebrow">Collaboration / request ledger</p><h2 id="requestsTitle">Invites + applications.</h2>
         <p>Acceptance adds a project participant, not a license, split agreement, or payout instruction.</p>
-        <div id="requests" class="cards"></div>
+        <div id="requests" class="creator-cards"></div>
       </section>
     </div>
   </main>

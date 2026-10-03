@@ -24,6 +24,7 @@ const hasLegacySignalAliasRedirect = redirectBlocks.some(block =>
 const checks = [
   [page.includes('id="command-center"') && page.includes("signal-network.js") && page.includes("signal-network.css"), "ships the interactive Signal Command Center"],
   [page.includes("Discover collaborators") && page.includes("Your signal queue") && page.includes("Campaign tracker") && page.includes("Private messages") && page.includes("Live network map"), "exposes all five requested member workspaces"],
+  [page.includes('href="/creator-network/"'), "links back to the Creator Studio workspace"],
   [page.includes('/identity.js') && page.includes('id="signalAuthDialog"'), "uses the shared Netlify Identity membership flow"],
   [script.includes('view: "discover"') && script.includes('post("signal"') && script.includes('post("message"'), "connects discovery, signal, and private message actions"],
   [script.includes("requestAnimationFrame(drawMap)") && script.includes("regionPosition") && script.includes("activeNow"), "renders animated aggregate regional presence"],

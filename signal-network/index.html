@@ -807,6 +807,7 @@
         <ul class="site-header__nav">
           <li><a href="#pillars">Pillars</a></li>
           <li><a href="#modules">Modules</a></li>
+          <li><a href="#signal-feed">Signal Feed</a></li>
           <li><a href="#command-center">Network Live</a></li>
           <li><a href="#circles">Circles</a></li>
           <li><a href="#ritual">Ritual Engine</a></li>
@@ -843,9 +844,80 @@
 
         <div class="hero__actions">
           <a class="btn-primary" href="#command-center">Open Signal Network</a>
+          <a class="btn-ghost" href="#signal-feed">Browse Signal Feed</a>
           <a class="btn-ghost" href="#modules">Explore Modules</a>
         </div>
       </div>
+    </section>
+
+    <section class="signal-market" id="signal-feed" aria-labelledby="signalFeedTitle">
+      <div class="container">
+        <header class="signal-market__intro">
+          <div>
+            <p class="signal-market__eyebrow">Public discovery / local demo</p>
+            <h2 id="signalFeedTitle">Signal <em>Feed.</em></h2>
+            <p>Discover creative possibilities. Explore illustrative listings, not live inventory.</p>
+          </div>
+          <a class="signal-market__button" href="#command-center">Member command center ↓</a>
+        </header>
+        <p class="signal-market__notice">Demo only: no purchases, licenses, messages, or server-side publishing. Creator names, verification badges, and prices are illustrative, not ownership or rights claims. Saved items and likes stay in this browser.</p>
+        <div class="signal-market__toolbar">
+          <label for="marketTypeFilter">Listing type
+            <select id="marketTypeFilter"><option value="all">All listing types</option></select>
+          </label>
+          <button class="signal-market__button" id="marketCompose" type="button">Create local draft</button>
+          <button class="signal-market__button" id="marketClear" type="button">Clear local demo state</button>
+        </div>
+        <p id="marketStatus" class="signal-market__status" role="status" aria-live="polite"></p>
+        <h3 class="signal-market__heading">Featured possibilities</h3>
+        <div class="signal-market__grid" id="marketFeatured"></div>
+        <h3 class="signal-market__heading">Explore the feed</h3>
+        <div class="signal-market__grid" id="marketFeed"></div>
+        <h3 class="signal-market__heading">Your local drafts <span>— never published</span></h3>
+        <div class="signal-market__grid" id="marketDrafts"></div>
+      </div>
+      <dialog class="signal-market__dialog" id="marketDetail" aria-labelledby="marketDetailTitle">
+        <button class="signal-market__button signal-market__close" type="button" id="marketDetailClose" autofocus>Close details</button>
+        <p class="signal-market__eyebrow">Illustrative listing / no live inventory</p>
+        <h2 id="marketDetailTitle"></h2>
+        <div id="marketDetailBody"></div>
+        <div class="signal-market__actions">
+          <button class="signal-market__button" type="button" id="marketRequest">Request collaboration (demo)</button>
+          <button class="signal-market__button" type="button" id="marketBuy">Buy / license (unavailable)</button>
+        </div>
+        <p id="marketDetailStatus" role="status" aria-live="polite"></p>
+      </dialog>
+      <dialog class="signal-market__dialog" id="marketComposer" aria-labelledby="marketComposerTitle" aria-describedby="marketComposerNotice">
+        <button class="signal-market__button signal-market__close" type="button" id="marketComposerClose">Close composer</button>
+        <p class="signal-market__eyebrow">Private to this browser / demo draft</p>
+        <h2 id="marketComposerTitle">Shape your next signal.</h2>
+        <p id="marketComposerNotice">Text and collaboration drafts are local only. An optional sale concept is not a published offer or proof of ownership. Do not enter sensitive information or private asset URLs.</p>
+        <form id="marketComposerForm">
+          <label for="marketDraftKind">Draft kind
+            <select id="marketDraftKind" name="kind"><option value="text">Text update</option><option value="collaboration">Collaboration idea</option><option value="listing">Sale listing concept</option></select>
+          </label>
+          <label for="marketTitle">Title<input id="marketTitle" name="title" required maxlength="120" autofocus></label>
+          <label for="marketDescription">Description<textarea id="marketDescription" name="description" required maxlength="2000" rows="4"></textarea></label>
+          <fieldset id="marketSaleFields" hidden disabled>
+            <legend>Optional sale concept — not for sale</legend>
+            <label for="marketListingType">Listing type<select id="marketListingType" name="listingType"></select></label>
+            <div class="signal-market__form-row">
+              <label for="marketPrice">Suggested price<input id="marketPrice" name="price" type="number" min="0" max="1000000" step="0.01" value="0" required></label>
+              <label for="marketCurrency">Currency<select id="marketCurrency" name="currency"><option>USD</option><option>EUR</option><option>GBP</option></select></label>
+            </div>
+            <label for="marketLicense">Proposed license terms<input id="marketLicense" name="licenseType" maxlength="120" required placeholder="Describe intended terms; not a granted license"></label>
+            <label for="marketFormat">Format<input id="marketFormat" name="format" maxlength="80" required placeholder="e.g. WAV 24-bit"></label>
+            <label for="marketPreview">Public preview URL (optional)<input id="marketPreview" name="assetPreviewUrl" type="url" maxlength="500" placeholder="https://…"></label>
+            <p>Use only public, credential-free HTTPS audio URLs. Never paste signed, private, or tokenized asset links. Previews load only when explicitly opened.</p>
+          </fieldset>
+          <div class="signal-market__actions">
+            <button class="signal-market__button" type="button" id="marketGuide">Ask HALO Guide</button>
+            <button class="signal-market__button signal-market__button--gold" type="submit">Save local draft only</button>
+          </div>
+          <p id="marketComposerStatus" role="status" aria-live="polite"></p>
+          <div id="marketGuideResult" aria-live="polite"></div>
+        </form>
+      </dialog>
     </section>
 
     <section class="signal-console" id="command-center" aria-labelledby="command-center-title">
@@ -1374,6 +1446,7 @@
 
   <script type="module" src="/identity.js"></script>
   <script type="module" src="/signal-network/signal-network.js"></script>
+  <script type="module" src="/signal-network/marketplace.js"></script>
 
 </body>
 </html>

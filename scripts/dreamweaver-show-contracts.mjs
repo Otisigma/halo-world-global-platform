@@ -74,9 +74,9 @@ const checks = [
     "keeps Netlify aligned to the canonical HALO home route and serves /dreamweaver/ directly without reintroducing the legacy alias redirect"
   ],
   [
-    /from = "\/dreamweaver\/satellite"[\s\S]*to = "\/dreamweaver\/satellite\/"[\s\S]*status = 301/.test(config)
-      && /from = "\/dreamweaver\/satellite\/"[\s\S]*to = "\/dreamweaver\/index\.html"[\s\S]*status = 200/.test(config)
-      && /from = "\/dreamweaver\/satellite\/:songId"[\s\S]*to = "\/dreamweaver\/satellite\/:songId\/"[\s\S]*status = 301/.test(config)
+    /from = "\/dreamweaver\/satellite\/"\s+to = "\/dreamweaver\/index\.html"\s+status = 200/.test(config)
+      && /from = "\/dreamweaver\/satellite\/:songId\/"\s+to = "\/dreamweaver\/index\.html"\s+status = 200/.test(config)
+      && !/to = "\/dreamweaver\/satellite(?:\/:songId)?\/"\s+status = 30[1278]/.test(config)
       && server.includes("app.get(/^\\/dreamweaver\\/satellite\\/([^/]+)$/")
       && server.includes("app.get(/^\\/dreamweaver\\/satellite\\/([^/]+)\\/$")
       && server.includes('app.get("/dreamweaver/satellite/"')

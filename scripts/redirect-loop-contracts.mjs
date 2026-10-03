@@ -15,7 +15,8 @@ const redirectRules = [...netlifyConfigSource.matchAll(/\[\[redirects\]\]([\s\S]
   .map(([, block]) => ({
     from: block.match(/from\s*=\s*"([^"]+)"/)?.[1] || null,
     to: block.match(/to\s*=\s*"([^"]+)"/)?.[1] || null,
-    status: Number(block.match(/status\s*=\s*(\d+)/)?.[1] || 0)
+    status: Number(block.match(/status\s*=\s*(\d+)/)?.[1] || 0),
+    force: /force\s*=\s*true/.test(block)
   }))
   .filter(rule => rule.from && rule.to);
 
@@ -24,6 +25,65 @@ for (const rule of redirectRules) {
   assert.ok(!redirectRuleBySource.has(rule.from), `Duplicate redirect source detected in netlify.toml: ${rule.from}`);
   redirectRuleBySource.set(rule.from, rule);
 }
+
+function normalizedNetlifyPath(path) {
+  return path.split(/[?#]/)[0].replace(/\/+$/, "") || "/";
+}
+
+function assertNormalizedRedirects(rules) {
+  const firstRuleByPath = new Map();
+  for (const rule of rules) {
+    const source = normalizedNetlifyPath(rule.from);
+    // Netlify matches slash variants alike; the first matching rule wins.
+    if (!firstRuleByPath.has(source)) firstRuleByPath.set(source, rule);
+  }
+  for (const [source, rule] of firstRuleByPath) {
+    if (![301, 302, 303, 307, 308].includes(rule.status)) continue;
+    if (!rule.to.startsWith("/") || rule.to.startsWith("//")) continue;
+    const target = normalizedNetlifyPath(rule.to);
+    assert.notEqual(source, target, `Slash-normalized self-redirect detected: ${rule.from} -> ${rule.to}`);
+    const reverseRule = firstRuleByPath.get(target);
+    if (!reverseRule || ![301, 302, 303, 307, 308].includes(reverseRule.status)) continue;
+    assert.notEqual(
+      normalizedNetlifyPath(reverseRule.to),
+      source,
+      `Slash-normalized two-way redirect loop detected: ${rule.from} <-> ${reverseRule.from}`
+    );
+  }
+  return firstRuleByPath;
+}
+
+for (const status of [301, 302, 303, 307, 308]) {
+  for (const [from, to] of [
+    ["/stats", "/stats/"],
+    ["/stats/", "/stats"],
+    ["/stats/", "/stats/?view=public"],
+    ["/dreamweaver/satellite/:songId", "/dreamweaver/satellite/:songId/"]
+  ]) {
+    assert.throws(() => assertNormalizedRedirects([{ from, to, status }]), /Slash-normalized self-redirect/);
+  }
+}
+assert.throws(() => assertNormalizedRedirects([
+  { from: "/stats/", to: "/login", status: 302 },
+  { from: "/login/", to: "/stats", status: 307 }
+]), /Slash-normalized two-way redirect loop/);
+assert.doesNotThrow(() => assertNormalizedRedirects([
+  { from: "/stats/", to: "/stats/index.html", status: 200 },
+  { from: "/stats", to: "/stats/", status: 301 }
+]));
+assert.doesNotThrow(() => assertNormalizedRedirects([
+  { from: "/", to: "/halo", status: 301 },
+  { from: "/halo", to: "/halo.html", status: 200 }
+]));
+
+const normalizedRules = assertNormalizedRedirects(redirectRules);
+for (const path of ["/stats", "/stats/"]) {
+  const rule = normalizedRules.get(normalizedNetlifyPath(path));
+  assert.equal(rule?.status, 200, `${path} must terminate in a rewrite, not a login or slash redirect.`);
+  assert.equal(rule?.to, "/stats/index.html", `${path} must serve the public stats page.`);
+  assert.equal(rule?.force, true, `${path} must keep its forced public stats rewrite.`);
+}
+assert.ok(!normalizedRules.has("/stats/index.html"), "The stats backing file must not redirect back to its public route.");
 
 for (const rule of redirectRules) {
   assert.notEqual(rule.from, rule.to, `Self-redirect detected in netlify.toml: ${rule.from}`);
@@ -57,7 +117,6 @@ for (const { route, file } of directoryRoutes) {
   const canonicalRenderRule = redirectRuleBySource.get(route);
   const renderFileRedirect = redirectRuleBySource.get(renderFilePath);
   const allowsNonSlashDirectRender = route === "/dreamweaver/";
-  const allowsSatelliteCanonicalRedirect = route === "/dreamweaver/satellite/";
   assert.equal(canonicalizeRoutePath(nonSlashAlias), nonSlashAlias, `${nonSlashAlias} must remain non-canonicalized once aliases are removed.`);
 
   const familyCanonicalTargets = new Set(
@@ -76,9 +135,6 @@ for (const { route, file } of directoryRoutes) {
     assert.ok(nonSlashRedirect, `${nonSlashAlias} must render directly to ${renderFilePath} to avoid Dreamweaver route dead-ends.`);
     assert.equal(nonSlashRedirect.status, 200, `${nonSlashAlias} must use a 200 rewrite to ${renderFilePath}.`);
     assert.equal(nonSlashRedirect.to, renderFilePath, `${nonSlashAlias} must rewrite to ${renderFilePath}.`);
-  } else if (allowsSatelliteCanonicalRedirect) {
-    assert.equal(nonSlashRedirect?.status, 301, `${nonSlashAlias} must redirect to the canonical satellite route.`);
-    assert.equal(nonSlashRedirect?.to, route, `${nonSlashAlias} must redirect to ${route}.`);
   } else {
     assert.ok(!nonSlashRedirect, `${nonSlashAlias} alias redirect must be removed for canonical-only routing.`);
   }

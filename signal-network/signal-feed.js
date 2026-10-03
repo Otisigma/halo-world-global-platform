@@ -76,6 +76,28 @@ function identityControls(memberId) {
 function displayDate(value) {
   return new Date(value).toLocaleString();
 }
+function relativeDate(value) {
+  const seconds = Math.round((Date.now() - new Date(value).getTime()) / 1000);
+  if (!Number.isFinite(seconds)) return displayDate(value);
+  if (seconds < 45) return "just now";
+  for (const [unit, size, limit] of [["minute", 60, 3600], ["hour", 3600, 86400], ["day", 86400, 604800]]) {
+    if (seconds < limit) {
+      const amount = Math.max(1, Math.floor(seconds / size));
+      return `${amount} ${unit}${amount === 1 ? "" : "s"} ago`;
+    }
+  }
+  return new Date(value).toLocaleDateString();
+}
+function monogram(name) {
+  const words = String(name || "").trim().split(/\s+/).filter(Boolean);
+  if (!words.length) return "H";
+  return (words.length > 1 ? words[0][0] + words[words.length - 1][0] : words[0].slice(0, 2)).toUpperCase();
+}
+function auraIndex(value) {
+  let hash = 0;
+  for (const character of String(value || "")) hash = (hash * 31 + character.charCodeAt(0)) >>> 0;
+  return hash % 6;
+}
 function publicCommentForm(post, container, reload) {
   const form = node("form", null, "signal-feed__comment-form");
   const context = node("p", "Add a public comment");
@@ -188,8 +210,11 @@ function renderPost(post) {
   const article = node("article", null, "signal-feed__post");
   article.id = `feed-post-${post.id}`;
   const heading = node("header");
-  heading.append(node("strong", post.authorName), node("span", post.kind), node("time", displayDate(post.createdAt)));
-  heading.lastChild.dateTime = post.createdAt;
+  const avatar = node("span", monogram(post.authorName), `signal-feed__avatar signal-feed__avatar--${auraIndex(post.memberId || post.authorName)}`);
+  avatar.setAttribute("aria-hidden", "true");
+  const when = node("time", relativeDate(post.createdAt));
+  when.dateTime = post.createdAt; when.title = displayDate(post.createdAt);
+  heading.append(avatar, node("strong", post.authorName), node("span", post.kind.replace("_", " "), "signal-feed__kind"), when);
   article.append(heading, node("p", post.body, "signal-feed__body"));
   let audio;
   if (post.kind === "AUDIO") {
@@ -317,9 +342,19 @@ async function loadBlocks() {
     if (generation === feedState.generation && memberId === feedState.memberId) byId("feedBlockedList").replaceChildren(node("p", error.message));
   }
 }
+const kindChips = { TEXT: "feedKindText", AUDIO: "feedKindAudio", VIDEO: "feedKindVideo", BRIEF_LINK: "feedKindBrief" };
+const maxSignal = 1000;
+function updateCharCount() {
+  const length = publishForm.elements.body.value.length;
+  const counter = byId("feedCharCount");
+  counter.textContent = `${length} / ${maxSignal} characters`;
+  counter.setAttribute("data-level", length > maxSignal - 50 ? "limit" : length > maxSignal - 200 ? "near" : "ok");
+}
 async function postType() {
   const session = feedState.session;
   const kind = byId("feedKind").value;
+  for (const [value, id] of Object.entries(kindChips)) byId(id).setAttribute("aria-pressed", String(value === kind));
+  updateCharCount();
   byId("feedReleaseField").hidden = kind !== "AUDIO";
   byId("feedPurchaseField").hidden = kind !== "AUDIO";
   byId("feedLinkField").hidden = !["VIDEO", "BRIEF_LINK"].includes(kind);
@@ -342,6 +377,8 @@ async function postType() {
   } catch (error) { if (session === feedState.session) status.textContent = error.message; }
 }
 byId("feedKind").addEventListener("change", postType);
+for (const [value, id] of Object.entries(kindChips)) byId(id).addEventListener("click", () => { byId("feedKind").value = value; postType(); });
+publishForm.elements.body.addEventListener("input", updateCharCount);
 publishForm.addEventListener("submit", async event => {
   event.preventDefault();
   const origin = mutationOrigin();
@@ -358,6 +395,7 @@ publishForm.addEventListener("submit", async event => {
     byId("feedSaved").setAttribute("aria-pressed", "false"); await loadFeed();
     ensureOrigin(origin, false);
     status.textContent = "Signal deliberately published to the public feed.";
+    if (typeof CustomEvent === "function") window.dispatchEvent?.(new CustomEvent("halo:signal-published"));
   } catch (error) { actionError(error, origin); }
   finally { if (origin.session === feedState.session) submit.disabled = !feedState.memberId; }
 });

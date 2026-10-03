@@ -1,0 +1,152 @@
+/* HALO Welcome Studio — optional, local-only identity + play layer (obsidian / gold). */
+.halo-welcome {
+  --hw-ink: #0b0a08;
+  --hw-panel: #13110d;
+  --hw-line: rgba(214, 173, 105, .26);
+  --hw-gold: #d6ad69;
+  --hw-gold-hi: #f0d59f;
+  --hw-paper: #f2ebde;
+  --hw-muted: #a39a89;
+  position: relative;
+  z-index: 1;
+  margin-block: 1.5rem 2.5rem;
+  border: 1px solid var(--hw-line);
+  background:
+    radial-gradient(ellipse at 12% 0, rgba(214, 173, 105, .16), transparent 26rem),
+    radial-gradient(ellipse at 100% 100%, rgba(120, 72, 160, .12), transparent 22rem),
+    linear-gradient(150deg, #17140f, var(--hw-ink) 70%);
+  color: var(--hw-paper);
+  font: 1rem/1.55 Inter, system-ui, sans-serif;
+  text-align: left;
+}
+.halo-welcome *, .halo-welcome *::before, .halo-welcome *::after { box-sizing: border-box; }
+.halo-welcome [hidden] { display: none !important; }
+.halo-welcome .sr-only, .halo-welcome input[type="file"].sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+.halo-welcome button, .halo-welcome input, .halo-welcome textarea { font: inherit; }
+.halo-welcome :focus-visible { outline: 2px solid var(--hw-gold-hi); outline-offset: 3px; }
+
+.halo-welcome__noscript { margin: 0; padding: 1rem 1.25rem; color: var(--hw-muted); font-size: .85rem; }
+.halo-welcome__bar { display: flex; align-items: center; gap: .85rem; padding: .7rem 1rem; border-bottom: 1px solid var(--hw-line); }
+.halo-welcome.is-collapsed .halo-welcome__bar { border-bottom: 0; }
+.halo-welcome__bar p { display: grid; flex: 1; margin: 0; line-height: 1.25; }
+.halo-welcome__bar strong { color: var(--hw-gold); font: .68rem "Share Tech Mono", monospace; letter-spacing: .16em; text-transform: uppercase; }
+.halo-welcome__bar small { color: var(--hw-muted); font-size: .72rem; }
+.halo-welcome__bar-id { width: 2.1rem; font-size: .8rem; }
+.halo-welcome__toggle { padding: .45rem .75rem; border: 1px solid var(--hw-line); background: transparent; color: var(--hw-paper); font: .6rem "Share Tech Mono", monospace !important; letter-spacing: .1em; text-transform: uppercase; cursor: pointer; }
+.halo-welcome__toggle:hover { border-color: var(--hw-gold); color: var(--hw-gold); }
+
+.halo-welcome__body { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(15rem, .65fr); gap: 1.25rem 2rem; padding: clamp(1.1rem, 3vw, 2rem); }
+.halo-welcome__hero { display: flex; gap: clamp(1rem, 3vw, 1.75rem); align-items: center; }
+.halo-welcome__avatar { width: clamp(5.5rem, 14vw, 8rem); flex: none; font-size: clamp(1.8rem, 5vw, 2.8rem); }
+.halo-welcome__eyebrow { display: block; margin: 0 0 .4rem; color: var(--hw-gold); font: .6rem "Share Tech Mono", monospace; letter-spacing: .16em; text-transform: uppercase; }
+.halo-welcome__title { margin: 0; color: var(--hw-paper); font: 500 clamp(1.9rem, 4.4vw, 3.1rem)/1 "Cormorant Garamond", Georgia, serif; letter-spacing: -.01em; text-transform: none; }
+.halo-welcome__intro { margin: .6rem 0 0; max-width: 38rem; color: #c8bfae; font-size: .9rem; overflow-wrap: anywhere; }
+.halo-welcome__vibes { display: flex; flex-wrap: wrap; gap: .35rem; margin: .7rem 0 0; }
+.halo-welcome__vibes span { padding: .2rem .55rem; border: 1px solid rgba(214, 173, 105, .4); border-radius: 999px; background: rgba(214, 173, 105, .08); color: var(--hw-gold-hi); font: .62rem "Share Tech Mono", monospace; letter-spacing: .06em; text-transform: uppercase; }
+.halo-welcome__cta, .halo-welcome__form-actions { display: flex; flex-wrap: wrap; gap: .55rem; margin-top: 1rem; }
+.halo-welcome__primary, .halo-welcome__ghost {
+  display: inline-flex; min-height: 2.5rem; align-items: center; justify-content: center; gap: .4rem; padding: .55rem 1rem;
+  border: 1px solid var(--hw-gold); border-radius: 999px; font: 700 .62rem "Share Tech Mono", monospace !important; letter-spacing: .12em;
+  text-decoration: none; text-transform: uppercase; cursor: pointer; transition: transform .18s ease, background .18s ease, color .18s ease;
+}
+.halo-welcome__primary { background: var(--hw-gold); color: #18120a; }
+.halo-welcome__primary:hover { background: var(--hw-gold-hi); transform: translateY(-1px); }
+.halo-welcome__ghost { border-color: var(--hw-line); background: transparent; color: var(--hw-paper); }
+.halo-welcome__ghost:hover { border-color: var(--hw-gold); color: var(--hw-gold); }
+.halo-welcome__reset { margin-left: auto; color: var(--hw-muted); }
+
+.halo-welcome__stats { display: grid; gap: .6rem; align-content: start; }
+.halo-welcome__stat { display: flex; gap: .85rem; align-items: center; padding: .75rem .85rem; border: 1px solid var(--hw-line); background: rgba(9, 9, 7, .55); }
+.halo-welcome__stat strong { display: block; color: var(--hw-paper); font: 500 1.35rem/1.1 "Cormorant Garamond", Georgia, serif; }
+.halo-welcome__stat small { color: var(--hw-muted); font-size: .7rem; }
+.halo-welcome__stat .halo-welcome__eyebrow { margin-bottom: .1rem; }
+.halo-welcome__level-ring {
+  --halo-progress: 0deg;
+  display: grid; width: 3.4rem; aspect-ratio: 1; flex: none; place-items: center; border-radius: 50%;
+  background: conic-gradient(var(--hw-gold) var(--halo-progress), rgba(214, 173, 105, .14) 0);
+  transition: background .6s ease;
+}
+.halo-welcome__level-ring span { display: grid; width: 76%; aspect-ratio: 1; place-items: center; border-radius: 50%; background: var(--hw-ink); color: var(--hw-gold-hi); font: 700 1rem "Share Tech Mono", monospace; }
+.halo-welcome__flame { display: grid; width: 3.4rem; aspect-ratio: 1; flex: none; place-items: center; border: 1px solid rgba(214, 173, 105, .4); border-radius: 50%; color: var(--hw-gold-hi); font-size: 1.4rem; text-shadow: 0 0 14px rgba(240, 213, 159, .65); }
+
+.halo-welcome__badges { display: grid; grid-column: 1 / -1; grid-template-columns: repeat(auto-fill, minmax(min(100%, 12rem), 1fr)); gap: .5rem; margin: 0; padding: 0; list-style: none; }
+.halo-welcome__badges li { display: grid; grid-template-columns: auto 1fr; column-gap: .55rem; align-items: center; padding: .55rem .65rem; border: 1px dashed rgba(214, 173, 105, .22); color: var(--hw-muted); opacity: .78; }
+.halo-welcome__badges li.is-earned { border-style: solid; border-color: rgba(214, 173, 105, .55); background: linear-gradient(135deg, rgba(214, 173, 105, .16), rgba(214, 173, 105, .03)); color: var(--hw-paper); opacity: 1; }
+.halo-welcome__badge-icon { display: grid; grid-row: span 2; width: 1.9rem; aspect-ratio: 1; place-items: center; border: 1px solid currentColor; border-radius: 50%; font-size: .85rem; }
+.halo-welcome__badges li.is-earned .halo-welcome__badge-icon { border-color: var(--hw-gold); background: var(--hw-gold); color: #18120a; box-shadow: 0 0 16px rgba(214, 173, 105, .35); }
+.halo-welcome__badge-name { font: 600 .74rem/1.2 Inter, system-ui, sans-serif; }
+.halo-welcome__badges small { font-size: .64rem; line-height: 1.25; }
+
+.halo-welcome__studio { grid-column: 1 / -1; border: 1px solid var(--hw-line); background: rgba(9, 9, 7, .5); }
+.halo-welcome__studio summary { display: flex; flex-wrap: wrap; justify-content: space-between; gap: .5rem; padding: .8rem 1rem; color: var(--hw-gold); font: .66rem "Share Tech Mono", monospace; letter-spacing: .14em; text-transform: uppercase; cursor: pointer; }
+.halo-welcome__studio summary small { color: var(--hw-muted); letter-spacing: .06em; }
+.halo-welcome__form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .9rem 1.2rem; padding: 0 1rem 1rem; }
+.halo-welcome__form label { display: flex; flex-direction: column; gap: .3rem; min-width: 0; color: #c8bda9; font-size: .74rem; }
+.halo-welcome__form input:not([type="file"]), .halo-welcome__form textarea {
+  width: 100%; min-width: 0; padding: .6rem .7rem; border: 1px solid rgba(214, 173, 105, .26); border-radius: 0; background: #0d0d0a; color: var(--hw-paper);
+}
+.halo-welcome__form textarea { min-height: 3.6rem; resize: vertical; }
+.halo-welcome__count { align-self: flex-end; color: var(--hw-muted); font: .6rem "Share Tech Mono", monospace; }
+.halo-welcome__count[data-near-limit] { color: #ff9b8a; }
+.halo-welcome__form fieldset { min-width: 0; margin: 0; padding: 0; border: 0; }
+.halo-welcome__form legend { margin-bottom: .4rem; padding: 0; color: #c8bda9; font-size: .74rem; }
+.halo-welcome__form fieldset:nth-of-type(3), .halo-welcome__media, .halo-welcome__file-status, .halo-welcome__form-actions { grid-column: 1 / -1; }
+.halo-welcome__swatches, .halo-welcome__chips { display: flex; flex-wrap: wrap; gap: .4rem; }
+.halo-welcome__swatch {
+  width: 2.1rem; aspect-ratio: 1; border: 2px solid transparent; border-radius: 50%; cursor: pointer;
+  background: radial-gradient(circle at 30% 25%, var(--halo-aura-from), var(--halo-aura-to));
+  box-shadow: inset 0 0 0 2px rgba(11, 10, 8, .6);
+}
+.halo-welcome__swatch[aria-checked="true"] { border-color: var(--hw-gold-hi); transform: scale(1.08); }
+.halo-welcome__chip { padding: .38rem .7rem; border: 1px solid var(--hw-line); border-radius: 999px; background: transparent; color: #d3c9b6; font-size: .72rem; cursor: pointer; transition: background .15s ease, color .15s ease; }
+.halo-welcome__chip:hover { border-color: var(--hw-gold); }
+.halo-welcome__chip[aria-checked="true"], .halo-welcome__chip[aria-pressed="true"] { border-color: var(--hw-gold); background: var(--hw-gold); color: #18120a; }
+.halo-welcome__media { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
+.halo-welcome__media legend { width: 100%; }
+.halo-welcome__upload { flex-direction: row !important; align-items: center; gap: .45rem !important; padding: .55rem .85rem; border: 1px dashed rgba(214, 173, 105, .5); color: var(--hw-paper) !important; cursor: pointer; }
+.halo-welcome__upload:hover, .halo-welcome__upload:has(+ input:focus-visible) { border-style: solid; border-color: var(--hw-gold); color: var(--hw-gold) !important; }
+.halo-welcome__upload:has(+ input:focus-visible) { outline: 2px solid var(--hw-gold-hi); outline-offset: 3px; }
+.halo-welcome__video { display: grid; width: 100%; gap: .5rem; justify-items: start; }
+.halo-welcome__video video { width: min(100%, 22rem); aspect-ratio: 9 / 12; max-height: 22rem; border: 1px solid var(--hw-line); border-radius: 1rem; background: #000; object-fit: cover; }
+.halo-welcome__file-status { min-height: 1.2em; margin: 0; color: var(--hw-muted); font-size: .76rem; }
+.halo-welcome__note { grid-column: 1 / -1; margin: 0; color: var(--hw-muted); font-size: .72rem; }
+
+.halo-welcome__toast {
+  position: absolute; right: 1rem; bottom: 1rem; z-index: 2; max-width: min(22rem, calc(100% - 2rem)); margin: 0; padding: .65rem .9rem;
+  border: 1px solid var(--hw-gold); border-radius: 999px; background: #1b160d; color: var(--hw-gold-hi);
+  font: 600 .78rem/1.3 Inter, system-ui, sans-serif; box-shadow: 0 12px 40px rgba(0, 0, 0, .45), 0 0 24px rgba(214, 173, 105, .25);
+  opacity: 0; pointer-events: none; transform: translateY(.5rem) scale(.96); transition: opacity .25s ease, transform .25s ease;
+}
+.halo-welcome__toast:empty { display: none; }
+.halo-welcome__toast.is-visible { opacity: 1; transform: none; animation: halo-welcome-pop .5s ease; }
+@keyframes halo-welcome-pop { 0% { transform: scale(.85); } 60% { transform: scale(1.04); } 100% { transform: none; } }
+
+/* ── Shared avatar (any [data-halo-avatar] slot) ── */
+.halo-avatar {
+  --halo-aura-from: #f0d59f;
+  --halo-aura-to: #9a6a22;
+  position: relative; display: grid; aspect-ratio: 1; place-items: center; border-radius: 50%;
+  background: radial-gradient(circle at 30% 25%, var(--halo-aura-from), var(--halo-aura-to) 72%, #120e08);
+  color: #18120a; font-family: "Cormorant Garamond", Georgia, serif; font-weight: 600; line-height: 1;
+  box-shadow: inset 0 0 0 2px rgba(11, 10, 8, .55);
+}
+.halo-avatar > span { letter-spacing: .02em; }
+.halo-avatar > img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; }
+.halo-avatar::after { position: absolute; inset: -6%; border-radius: 50%; content: ""; pointer-events: none; }
+.halo-avatar[data-ring="orbit"]::after { border: 1px dashed var(--halo-aura-from); animation: halo-avatar-spin 18s linear infinite; }
+.halo-avatar[data-ring="pulse"]::after { box-shadow: 0 0 0 0 var(--halo-aura-from); animation: halo-avatar-pulse 2.6s ease-out infinite; }
+.halo-avatar[data-ring="halo"]::after { inset: -10%; border: 1px solid var(--halo-aura-from); box-shadow: 0 0 0 4px rgba(11, 10, 8, .9), 0 0 0 5px var(--halo-aura-to); }
+@keyframes halo-avatar-spin { to { transform: rotate(1turn); } }
+@keyframes halo-avatar-pulse { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--halo-aura-from) 70%, transparent); } 100% { box-shadow: 0 0 0 12px transparent; } }
+
+@media (max-width: 760px) {
+  .halo-welcome__body, .halo-welcome__form { grid-template-columns: 1fr; }
+  .halo-welcome__hero { flex-direction: column; align-items: flex-start; }
+  .halo-welcome__reset { margin-left: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .halo-avatar::after, .halo-welcome__toast.is-visible { animation: none !important; }
+  .halo-welcome * { transition: none !important; }
+}

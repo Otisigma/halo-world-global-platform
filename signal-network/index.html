@@ -789,6 +789,8 @@
       font-family: 'Share Tech Mono', monospace;
     }
   </style>
+  <link rel="stylesheet" href="/halo-welcome.css">
+  <script src="/halo-welcome.js" defer></script>
 </head>
 <body>
 
@@ -849,6 +851,12 @@
       </div>
     </section>
 
+    <div class="container">
+      <section id="welcome" class="halo-welcome" data-halo-welcome="signal" aria-label="HALO Welcome Studio">
+        <p class="halo-welcome__noscript">HALO Welcome Studio — an optional avatar, photo and intro-video corner with playful badges. Enable JavaScript to make your avatar. Local-only; nothing is uploaded.</p>
+      </section>
+    </div>
+
     <section class="signal-feed" id="feed" aria-labelledby="signal-feed-title">
       <div class="container">
         <header class="signal-feed__header">
@@ -866,9 +874,21 @@
         <details class="signal-feed__composer">
           <summary>Publish a public signal</summary>
           <p>Creator Pass identity required. Your display name, post, links and comments will be public. Never share private assets or confidential briefs.</p>
-          <form id="feedPublishForm">
-            <label>Post type <select name="kind" id="feedKind"><option>TEXT</option><option>AUDIO</option><option>VIDEO</option><option>BRIEF_LINK</option></select></label>
-            <label>Your signal (maximum 1000 characters) <textarea name="body" maxlength="1000" rows="4" required></textarea></label>
+          <form id="feedPublishForm" class="signal-composer">
+            <div class="signal-composer__row">
+              <div class="signal-composer__avatar" data-halo-avatar aria-hidden="true" title="Your local HALO Welcome Studio avatar — only visible on this device"><span>H</span></div>
+              <label class="signal-composer__field">Your signal <span class="sr-only">(maximum 1000 characters)</span><textarea name="body" maxlength="1000" rows="4" required placeholder="What are you cooking in the studio today?" aria-describedby="feedCharCount"></textarea></label>
+            </div>
+            <div class="signal-composer__tools">
+              <div class="signal-composer__kinds" role="group" aria-label="Post type">
+                <button type="button" id="feedKindText" aria-pressed="true"><span aria-hidden="true">✎</span> Text</button>
+                <button type="button" id="feedKindAudio" aria-pressed="false"><span aria-hidden="true">♫</span> Release audio</button>
+                <button type="button" id="feedKindVideo" aria-pressed="false"><span aria-hidden="true">▶</span> Video link</button>
+                <button type="button" id="feedKindBrief" aria-pressed="false"><span aria-hidden="true">⌁</span> Brief link</button>
+              </div>
+              <span id="feedCharCount" class="signal-composer__count">0 / 1000 characters</span>
+            </div>
+            <label hidden>Post type <select name="kind" id="feedKind"><option>TEXT</option><option>AUDIO</option><option>VIDEO</option><option>BRIEF_LINK</option></select></label>
             <label id="feedReleaseField" hidden>Published release <select name="releaseId" id="feedRelease"><option value="">Choose a published release</option></select><small>Only verified public catalog audio is accepted. No private uploads or asset URLs.</small></label>
             <label id="feedLinkField" hidden>Public HTTPS video or brief link <input name="linkUrl" type="url" maxlength="1200" placeholder="https://"></label>
             <label id="feedPurchaseField" hidden><input name="includePurchase" type="checkbox"> Include this release's existing purchase link (no checkout here)</label>

@@ -138,7 +138,11 @@ export default async function mixAudioHandler(request) {
     if (cacheable) {
       headers["Netlify-CDN-Cache-Control"] = "public, durable, max-age=3600, stale-while-revalidate=600";
     }
-    if (request.method === "HEAD") return new Response(null, { headers });
+    if (range) {
+      headers["Content-Length"] = String(range.end - range.start + 1);
+      headers["Content-Range"] = `bytes ${range.start}-${range.end}/${byteSize}`;
+    }
+    if (request.method === "HEAD") return new Response(null, { status: range ? 206 : 200, headers });
     if (range) {
       const audio = await readMixRange(mix, range);
       headers["Content-Length"] = String(audio.byteLength);

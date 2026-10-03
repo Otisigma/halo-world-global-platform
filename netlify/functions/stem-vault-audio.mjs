@@ -5,9 +5,15 @@ import { cleanText, ensureMembership } from "../lib/halo-x.mjs";
 
 const stemStore = getStore({ name: "halo-stem-vault", consistency: "strong" });
 const stemTypes = new Set(["full", "drums", "bass", "music", "vocals", "fx"]);
+const MEDIA_CORS_HEADERS = Object.freeze({
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "Content-Type, Range",
+  "Access-Control-Allow-Methods": "GET, HEAD, OPTIONS",
+  "Access-Control-Expose-Headers": "Accept-Ranges, Content-Length, Content-Range, Content-Type"
+});
 
 function json(body, status = 200) {
-  return Response.json(body, { status, headers: { "Cache-Control": "private, no-store" } });
+  return Response.json(body, { status, headers: { ...MEDIA_CORS_HEADERS, "Cache-Control": "private, no-store" } });
 }
 
 function requestedByteRange(value, byteSize) {
@@ -50,6 +56,7 @@ async function readStemRange(stem, range) {
 }
 
 export default async function stemVaultAudioHandler(request) {
+  if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: MEDIA_CORS_HEADERS });
   if (!["GET", "HEAD"].includes(request.method)) return json({ message: "Method not allowed" }, 405);
   try {
     const [db, user] = await Promise.all([getDatabase(), getUser()]);
@@ -72,9 +79,10 @@ export default async function stemVaultAudioHandler(request) {
     const byteSize = Number(stem.byte_size);
     const range = requestedByteRange(request.headers.get("range"), byteSize);
     if (range === false) {
-      return new Response(null, { status: 416, headers: { "Accept-Ranges": "bytes", "Content-Range": `bytes */${byteSize}`, "Cache-Control": "private, no-store" } });
+      return new Response(null, { status: 416, headers: { ...MEDIA_CORS_HEADERS, "Accept-Ranges": "bytes", "Content-Range": `bytes */${byteSize}`, "Cache-Control": "private, no-store" } });
     }
     const headers = {
+      ...MEDIA_CORS_HEADERS,
       "Content-Type": stem.content_type,
       "Content-Length": String(range ? range.end - range.start + 1 : byteSize),
       "Content-Disposition": `inline; filename="${stem.original_filename.replace(/["\\]/g, "")}"`,

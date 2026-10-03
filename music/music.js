@@ -78,17 +78,16 @@
   function storefrontState(release) {
     const storefront = release?.storefront && typeof release.storefront === "object" ? release.storefront : {};
     const fallback = String(storefront.statusLabel || "").trim().toUpperCase();
-    if (fallback === "READY" || fallback === "PENDING" || fallback === "STANDBY") return storefront;
-    const status = String(release?.publication?.dreamweaverStatus || release?.publication?.releaseStatus || release?.catalog?.saleStatus || "").trim().toLowerCase();
+    const status = String(fallback || release?.publication?.dreamweaverStatus || release?.publication?.releaseStatus || release?.catalog?.saleStatus || "").trim().toLowerCase();
     return {
       ...storefront,
-      statusLabel: ["published", "ready", "live", "active"].includes(status) ? "READY" : ["pending", "queued", "processing", "coming_soon"].includes(status) ? "PENDING" : "STANDBY"
+      statusLabel: ["pending", "queued", "processing", "coming_soon"].includes(status) ? "PENDING" : directAudioPreviewUrl(release) ? "READY" : "STANDBY"
     };
   }
 
   function resolvedAudio(release, options = {}) {
     const resolved = window.HaloReleaseArtwork?.resolveAudio(release, options);
-    if (resolved?.src) return resolved;
+    if (resolved) return resolved;
     const rawCandidate = String(release?.audioUrl || release?.audio_url || release?.sourceUrl || release?.previewAudio || release?.preview_audio || release?.streamUrl || "").trim();
     const candidate = rawCandidate ? safeUrl(rawCandidate) : "";
     return { src: candidate, source: candidate ? "legacy" : "", isPlayable: Boolean(candidate) };

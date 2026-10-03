@@ -682,7 +682,7 @@ import { DREAMWEAVER_STOREFRONT_MIX_ID, buildDreamweaverStorefrontPath } from ".
 
   function resolvePrimaryAudio(entry = {}, options = {}) {
     const resolved = window.HaloReleaseArtwork?.resolveAudio(entry, { requirePlayable: true, ...options });
-    if (resolved?.src) return resolved;
+    if (resolved) return resolved;
     const candidate = safeMediaUrl(entry?.audioUrl || entry?.audio_url || entry?.sourceUrl || entry?.previewAudio || entry?.preview_audio || entry?.streamUrl);
     return { src: candidate, source: candidate ? "legacy" : "", isPlayable: Boolean(candidate) };
   }
@@ -822,9 +822,9 @@ import { DREAMWEAVER_STOREFRONT_MIX_ID, buildDreamweaverStorefrontPath } from ".
 
   function publicReleaseStatus(release = state.release) {
     const raw = cleanText(release?.storefront?.statusLabel || release?.publication?.dreamweaverStatus || release?.publication?.releaseStatus || release?.catalog?.saleStatus || "", 40).toUpperCase();
-    if (raw === "READY" || raw === "PENDING" || raw === "STANDBY") return raw;
-    if (raw === "PUBLISHED" || raw === "LIVE" || raw === "ACTIVE") return "READY";
-    if (raw === "COMING SOON" || raw === "COMING_SOON" || raw === "PROCESSING" || raw === "QUEUED") return "PENDING";
+    const hasStream = Boolean(resolvePrimaryAudio(release || {}).src);
+    if (["PENDING", "COMING SOON", "COMING_SOON", "PROCESSING", "QUEUED"].includes(raw)) return "PENDING";
+    if (hasStream) return "READY";
     return "STANDBY";
   }
 
@@ -838,7 +838,7 @@ import { DREAMWEAVER_STOREFRONT_MIX_ID, buildDreamweaverStorefrontPath } from ".
     return state.audioSourceMode === "error"
       || state.audioSourceMode === "empty"
       || (!state.mix && state.audioSourceMode !== "local")
-      || !elements.audio.currentSrc;
+      || !elements.audio.getAttribute("src");
   }
 
   function openMixFilePicker() {
@@ -864,8 +864,10 @@ import { DREAMWEAVER_STOREFRONT_MIX_ID, buildDreamweaverStorefrontPath } from ".
   }
 
   function handleRemoteAudioUnavailable(message = "Stream unavailable — click Upload Mix File or press play to choose a local mix.") {
+    if (state.audioSourceMode === "local") return;
     clearRemoteAudioWatchdog();
-    if (state.audioSourceMode !== "local") state.audioSourceMode = "error";
+    state.audioSourceMode = "error";
+    elements.audio.pause();
     setReleasePlaybackState("unavailable");
     showToast(message);
   }
@@ -942,6 +944,7 @@ import { DREAMWEAVER_STOREFRONT_MIX_ID, buildDreamweaverStorefrontPath } from ".
   }
 
   async function bootstrapPrimaryPlayback(mix) {
+    if (state.audioSourceMode === "local") return { started: !elements.audio.paused, fallback: true };
     const primaryAudio = resolvePrimaryAudio(mix).src;
     if (!primaryAudio) {
       queueAudioFeedbackIncident("missing_audio", {
@@ -977,6 +980,7 @@ import { DREAMWEAVER_STOREFRONT_MIX_ID, buildDreamweaverStorefrontPath } from ".
     }
 
     const readiness = await awaitPrimaryPlaybackReadiness();
+    if (state.audioSourceMode === "local" || elements.audio.getAttribute("src") !== primaryAudio) return { started: false, fallback: true };
     if (!readiness.ok) {
       queueAudioFeedbackIncident(readiness.state === "error" && Number(elements.audio?.error?.code || 0) === 3 ? "corrupted_audio" : "non_playable_audio", {
         severity: "high",
@@ -1728,20 +1732,19 @@ import { DREAMWEAVER_STOREFRONT_MIX_ID, buildDreamweaverStorefrontPath } from ".
     if (shouldPromptLocalUpload()) {
       setReleasePlaybackState("unavailable");
       showToast("Stream unavailable — opening the local upload picker.");
-      window.setTimeout(() => openMixFilePicker(), 120);
+      openMixFilePicker();
       return;
     }
     if (elements.audio.paused) {
       try {
         if (state.audioSourceMode === "remote") armRemoteAudioWatchdog();
         await elements.audio.play();
-      } catch {
-        if (state.audioSourceMode === "remote") {
+      } catch (error) {
+        if (state.audioSourceMode === "remote" && error?.name !== "NotAllowedError") {
           handleRemoteAudioUnavailable();
-          window.setTimeout(() => openMixFilePicker(), 120);
           return;
         }
-        showToast("Local file loaded. Press play when your browser is ready.");
+        showToast("Audio loaded. Press play when your browser is ready.");
       }
     } else elements.audio.pause();
   }
@@ -1755,6 +1758,12 @@ import { DREAMWEAVER_STOREFRONT_MIX_ID, buildDreamweaverStorefrontPath } from ".
       const file = event.target?.files?.[0];
       event.target.value = "";
       if (file) await activateLocalMixFile(file);
+    });
+    elements.uploadLabel?.addEventListener("keydown", event => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        openMixFilePicker();
+      }
     });
     if (elements.playButton) elements.playButton.disabled = false;
     if (elements.songLobbyHeroPlayButton) elements.songLobbyHeroPlayButton.disabled = false;
@@ -2652,6 +2661,8 @@ import { DREAMWEAVER_STOREFRONT_MIX_ID, buildDreamweaverStorefrontPath } from ".
     await loadShow();
   }
 
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", bindPlayerControls, { once: true });
+  else bindPlayerControls();
   if (resumeUploadVerification()) return;
   elements.songLabLink?.addEventListener("click", event => {
     if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
@@ -2662,8 +2673,6 @@ import { DREAMWEAVER_STOREFRONT_MIX_ID, buildDreamweaverStorefrontPath } from ".
   renderReleasePanel();
   renderFootageSelector();
   renderArchive();
-  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", bindPlayerControls, { once: true });
-  else bindPlayerControls();
   elements.progress.addEventListener("input", () => {
     if (!state.duration) return;
     elements.audio.currentTime = Number(elements.progress.value) / 1000 * state.duration;
@@ -2684,7 +2693,8 @@ import { DREAMWEAVER_STOREFRONT_MIX_ID, buildDreamweaverStorefrontPath } from ".
   elements.audio.addEventListener("canplay", clearRemoteAudioWatchdog);
   elements.audio.addEventListener("canplaythrough", clearRemoteAudioWatchdog);
   elements.audio.addEventListener("timeupdate", updateProgress);
-  elements.audio.addEventListener("play", () => {
+  elements.audio.addEventListener("waiting", armRemoteAudioWatchdog);
+  elements.audio.addEventListener("playing", () => {
     clearRemoteAudioWatchdog();
     document.body.classList.add("is-playing");
     elements.playButton.setAttribute("aria-label", "Pause show");

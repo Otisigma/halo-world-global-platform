@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
+import vm from "node:vm";
 import { allowedEvents } from "../netlify/lib/stats.mjs";
 
 const root = resolve(import.meta.dirname, "..");
@@ -93,5 +94,224 @@ assert.match(statsLib, /export async function getStatsDatabase\(\)/, "stats data
 assert.match(statsLib, /await import\("@netlify\/database"\)/, "stats database access must use lazy dynamic import");
 assert.match(summary, /await getStatsDatabase\(\)/, "stats summary must await database initialization");
 assert.match(statsEvent, /await getStatsDatabase\(\)/, "stats event ingestion must await database initialization");
+
+const section = (source, start, end) => {
+  assert.ok(source.includes(start) && source.includes(end), `missing test section ${start}`);
+  return source.slice(source.indexOf(start), source.indexOf(end, source.indexOf(start)));
+};
+const statusContext = vm.createContext({ URL });
+vm.runInContext(section(releaseCatalogApi, "function cleanPublicUrl(", "function serializeRelease("), statusContext);
+for (const [row, expected] of [
+  [{ publication_release_status: "error" }, "STANDBY"],
+  [{ publication_release_status: "published", purchase_url: "https://shop.example/release" }, "STANDBY"],
+  [{ stream_url: "/assets/test.wav", publication_release_status: "error" }, "READY"],
+  [{ stream_url: "/api/mixes/audio?id=test" }, "READY"],
+  [{ stream_url: "https://cdn.example/test.mp3", catalog_metadata_status: "processing" }, "PENDING"],
+  [{ stream_url: "javascript:alert(1)" }, "STANDBY"],
+  [{ stream_url: "https://user@cdn.example/test.mp3" }, "STANDBY"],
+  [{ stream_url: "//cdn.example/test.mp3" }, "STANDBY"],
+  [{ stream_url: "/\\cdn.example/test.mp3" }, "STANDBY"]
+]) {
+  assert.equal(statusContext.storefrontStateFor(row).statusLabel, expected);
+}
+
+function control() {
+  return {
+    handlers: {}, disabled: true, clicks: 0,
+    addEventListener(name, callback) { this.handlers[name] = callback; },
+    click() { this.clicks++; }
+  };
+}
+const audio = {
+  ...control(), src: "", paused: true, readyState: 0, loads: 0,
+  getAttribute(name) { return name === "src" ? this.src : null; },
+  removeAttribute() { this.src = ""; },
+  load() { this.loads++; },
+  async play() { this.paused = false; },
+  pause() { this.paused = true; }
+};
+const input = control(), playButton = control(), uploadLabel = control();
+const track = { id: "test", title: "Test", previewUrl: "https://cdn.example/test.mp3", statusLabel: "READY" };
+const nodes = { "#musicWorldAudio": audio, "#mixFileInput": input, "#playButton": playButton, ".upload-label": uploadLabel };
+let timeoutCallback, timeoutDelay;
+const revoked = [];
+class MediaURL extends URL {
+  static createObjectURL() { return "blob:https://halo.test/local"; }
+  static revokeObjectURL(value) { revoked.push(value); }
+}
+const playerContext = vm.createContext({
+  $: selector => nodes[selector], catalog: [track], playerTrack: track, audioSourceMode: "empty",
+  remoteAudioWatchdog: 0, REMOTE_AUDIO_WATCHDOG_MS: 5000, playerControlsBound: false,
+  localAudioUrl: "", localAudioName: "", playing: false, URL: MediaURL,
+  location: { origin: "https://halo.test", href: "https://halo.test/music-world.html" },
+  HTMLMediaElement: { HAVE_CURRENT_DATA: 2 }, toast() {}, setDeck() {}, updateCardStatuses() {},
+  setTimeout(callback, delay) { timeoutCallback = callback; timeoutDelay = delay; return 1; },
+  clearTimeout() { timeoutCallback = null; }
+});
+vm.runInContext(section(musicWorld, "function playerAudio()", "if(document.readyState==="), playerContext);
+playerContext.bindPlayerControls();
+playerContext.bindPlayerControls();
+assert.equal(input.disabled, false);
+assert.equal(playButton.disabled, false);
+await playerContext.togglePlayback();
+assert.equal(timeoutDelay, 5000);
+timeoutCallback();
+assert.equal(playerContext.audioSourceMode, "unavailable", "remote audio without current data must fall back");
+await playerContext.togglePlayback();
+assert.equal(input.clicks, 1, "standby play must synchronously open the picker");
+uploadLabel.handlers.keydown({ key: "Enter", preventDefault() {} });
+assert.equal(input.clicks, 2, "upload label must support the keyboard");
+await playerContext.activateLocalMixFile({ name: "mix.wav", type: "audio/wav" });
+assert.equal(audio.src, "blob:https://halo.test/local");
+assert.equal(audio.loads, 2, "both remote and local sources must be loaded");
+assert.equal(playerContext.audioSourceMode, "local");
+assert.equal(audio.paused, false);
+playerContext.handleStreamUnavailable();
+assert.equal(playerContext.audioSourceMode, "local", "late remote failures must not replace a local upload");
+await playerContext.activateLocalMixFile({ name: "mix.mp3", type: "" });
+assert.equal(revoked.length, 1, "replaced local blob URLs must be revoked");
+audio.handlers.error();
+assert.equal(playerContext.audioSourceMode, "unavailable", "bad local audio must permit another upload");
+playerContext.audioSourceMode = "remote";
+audio.src = track.previewUrl;
+audio.handlers.error();
+assert.equal(playerContext.audioSourceMode, "unavailable", "media errors must expose fallback controls");
+playerContext.audioSourceMode = "remote";
+audio.readyState = 2;
+playerContext.armRemoteAudioWatchdog();
+timeoutCallback();
+assert.equal(playerContext.audioSourceMode, "remote", "ready audio must not trigger fallback");
+
+assert.doesNotMatch(musicWorld, /<input id="mixFileInput"[^>]*\bhidden\b/);
+const dreamweaverPage = await readFile(resolve(root, "dreamweaver/index.html"), "utf8");
+assert.doesNotMatch(dreamweaverPage, /<input id="mixFileInput"[^>]*\bhidden\b/);
+assert.match(dreamweaverPage, /for="mixFileInput" tabindex="0" role="button"/);
+assert.doesNotMatch(dreamweaver, /setTimeout\(\(\) => openMixFilePicker/);
+assert.match(dreamweaver, /addEventListener\("playing", \(\) => \{\s*clearRemoteAudioWatchdog/);
+assert.doesNotMatch(dreamweaver, /addEventListener\("play", \(\) => \{\s*clearRemoteAudioWatchdog/);
+assert.match(dreamweaver, /addEventListener\("waiting", armRemoteAudioWatchdog\)/);
+assert.ok(dreamweaver.indexOf('document.addEventListener("DOMContentLoaded", bindPlayerControls') < dreamweaver.indexOf("if (resumeUploadVerification()) return"));
+vm.runInContext(section(musicWorld, "const sanitizeStatusLabel=", "const sanitizeRadioStatus="), playerContext);
+vm.runInContext(section(musicWorld, "const cardStatus=", "const resolveTrackArtwork="), playerContext);
+track.streamUnavailable = false;
+assert.equal(vm.runInContext("cardStatus(playerTrack)", playerContext), "READY");
+playerContext.audioSourceMode = "local";
+assert.equal(vm.runInContext("cardStatus(playerTrack)", playerContext), "LOCAL ACTIVE");
+playerContext.audioSourceMode = "unavailable";
+track.streamUnavailable = true;
+assert.equal(vm.runInContext("cardStatus(playerTrack)", playerContext), "STANDBY");
+assert.equal(vm.runInContext("storefrontStatus('ERROR')", playerContext), "STANDBY");
+
+const dreamState = { audioSourceMode: "remote", mix: {}, remoteAudioWatchdog: 0, playerControlsBound: false };
+const dreamInput = control(), dreamPlay = control(), dreamUpload = control();
+const dreamAudio = { ...audio, handlers: {}, readyState: 0, src: track.previewUrl, currentSrc: "", paused: true };
+const dreamContext = vm.createContext({
+  state: dreamState,
+  elements: { audio: dreamAudio, playButton: dreamPlay, songLobbyHeroPlayButton: control(), mixFileInput: dreamInput, uploadLabel: dreamUpload },
+  window: { setTimeout: playerContext.setTimeout, clearTimeout: playerContext.clearTimeout },
+  URL: MediaURL, location: playerContext.location, HTMLMediaElement: playerContext.HTMLMediaElement,
+  REMOTE_AUDIO_WATCHDOG_MS: 5000, cleanText: value => String(value || "").trim(),
+  showToast() {}, setReleasePlaybackState() {}
+});
+vm.runInContext(
+  section(dreamweaver, "function clearRemoteAudioWatchdog()", "function publicReleaseStatus(")
+  + section(dreamweaver, "function shouldPromptLocalUpload()", "async function awaitPrimaryPlaybackReadiness()")
+  + section(dreamweaver, "async function togglePlayback()", "function updateHeroPlayButton("),
+  dreamContext
+);
+dreamContext.bindPlayerControls();
+await dreamContext.togglePlayback();
+assert.equal(dreamInput.clicks, 0, "an assigned remote source must be tried even before currentSrc is populated");
+assert.equal(timeoutDelay, 5000);
+timeoutCallback();
+assert.equal(dreamState.audioSourceMode, "error", "Dreamweaver must retain its watchdog until current data is available");
+assert.equal(dreamAudio.paused, true);
+await dreamContext.togglePlayback();
+assert.equal(dreamInput.clicks, 1);
+dreamUpload.handlers.keydown({ key: " ", preventDefault() {} });
+assert.equal(dreamInput.clicks, 2);
+await dreamContext.activateLocalMixFile({ name: "local.wav", type: "audio/wav" });
+assert.equal(dreamState.audioSourceMode, "local");
+assert.equal(dreamContext.shouldPromptLocalUpload(), false, "local source must stay usable before currentSrc is populated");
+dreamContext.handleRemoteAudioUnavailable();
+assert.equal(dreamState.audioSourceMode, "local");
+dreamState.audioSourceMode = "remote";
+dreamAudio.pause();
+dreamAudio.play = async () => { throw { name: "NotAllowedError" }; };
+await dreamContext.togglePlayback();
+assert.equal(dreamState.audioSourceMode, "remote", "autoplay policy rejection must not discard a valid remote stream");
+
+for (const [file, handler] of [
+  ["netlify/functions/mix-audio.mjs", "mixAudioHandler"],
+  ["netlify/functions/stem-vault-audio.mjs", "stemVaultAudioHandler"]
+]) {
+  const source = await readFile(resolve(root, file), "utf8");
+  const bytes = new Uint8Array([10, 20, 30, 40, 50]);
+  const context = vm.createContext({
+    URL, Response, ReadableStream, console,
+    getStore: () => ({ get: async () => bytes.buffer }),
+    getDatabase: () => ({ sql: async () => [{ blob_key: "test", chunk_count: 1, byte_size: 5, content_type: "audio/wav", visibility: "room", original_filename: "mix.wav" }] }),
+    getUser: async () => ({ id: "test" }), isOwner: () => false,
+    ensureMembership: async () => ({ member_id: "test" }), cleanText: value => String(value || "")
+  });
+  vm.runInContext(source.replace(/^import .*;\n/gm, "").replace(/export default /g, "").replace(/export const /g, "const "), context);
+  const endpoint = "https://halo.test/api/audio?id=test&pack=test&stem=full";
+  const preflight = await context[handler](new Request(endpoint, { method: "OPTIONS" }));
+  assert.equal(preflight.status, 204);
+  assert.equal(preflight.headers.get("Access-Control-Allow-Origin"), "*");
+  for (const method of ["GET", "HEAD"]) {
+    const response = await context[handler](new Request(endpoint, { method, headers: { Range: "bytes=1-3" } }));
+    assert.equal(response.status, 206, `${handler} ${method} must honor byte ranges`);
+    assert.equal(response.headers.get("Content-Range"), "bytes 1-3/5");
+    assert.equal(response.headers.get("Content-Length"), "3");
+    assert.equal(response.headers.get("Accept-Ranges"), "bytes");
+    assert.equal(response.headers.get("Access-Control-Allow-Origin"), "*");
+    assert.deepEqual([...new Uint8Array(await response.arrayBuffer())], method === "GET" ? [20, 30, 40] : []);
+  }
+  const invalidRange = await context[handler](new Request(endpoint, { headers: { Range: "bytes=10-" } }));
+  assert.equal(invalidRange.status, 416);
+  assert.equal(invalidRange.headers.get("Access-Control-Allow-Origin"), "*");
+  if (handler === "stemVaultAudioHandler") {
+    context.getUser = async () => null;
+    const unauthorized = await context[handler](new Request(endpoint));
+    assert.equal(unauthorized.status, 401, "CORS must not weaken private stem authorization");
+    assert.equal(unauthorized.headers.get("Access-Control-Allow-Origin"), "*");
+  }
+}
+
+const pageNodes = new Map();
+const pageDocument = {
+  readyState: "loading", handlers: {},
+  addEventListener(name, callback) { this.handlers[name] = callback; },
+  createElement() { return { remove() {} }; },
+  querySelectorAll() { return []; },
+  querySelector(selector) {
+    if (!pageNodes.has(selector)) pageNodes.set(selector, {
+      ...control(), dataset: {}, classList: { toggle() {}, add() {}, remove() {} },
+      setAttribute() {}, removeAttribute() {}, append() {}
+    });
+    return pageNodes.get(selector);
+  }
+};
+pageNodes.set("#musicWorldAudio", { ...audio, src: "", paused: true, handlers: {} });
+let catalogRequests = 0;
+const pageContext = vm.createContext({
+  document: pageDocument, window: { addEventListener() {} },
+  location: { origin: "https://halo.test", href: "https://halo.test/music-world.html", hash: "" },
+  history: { replaceState() {} }, URL: MediaURL, URLSearchParams, HTMLMediaElement: playerContext.HTMLMediaElement,
+  setTimeout() { return 1; }, clearTimeout() {},
+  fetch() { catalogRequests++; return new Promise(() => {}); }
+});
+const inlinePlayer = [...musicWorld.matchAll(/<script>([\s\S]*?)<\/script>/g)].at(-1)?.[1];
+assert.ok(inlinePlayer);
+vm.runInContext(inlinePlayer, pageContext);
+assert.equal(catalogRequests, 1, "startup must render the deck and reach live catalog hydration");
+pageDocument.handlers.DOMContentLoaded();
+assert.equal(pageDocument.querySelector("#playButton").disabled, false);
+vm.runInContext("catalog=[];playerTrack=null;", pageContext);
+await pageContext.activateLocalMixFile({ name: "offline.wav", type: "audio/wav" });
+assert.equal(pageDocument.querySelector(".player").dataset.playerState, "local");
+assert.match(pageDocument.querySelector("#playerContext").textContent, /LOCAL ACTIVE/, "empty catalogs must still expose local playback status");
+assert.equal(pageDocument.querySelector("#playerTitle").textContent, "offline.wav");
 
 console.log("Music player contracts passed.");

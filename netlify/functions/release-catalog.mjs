@@ -34,12 +34,15 @@ function cleanPublicUrl(value) {
 }
 
 function hasReachablePublicAudio(value) {
-  const url = cleanPublicUrl(value);
-  if (!url) return false;
   try {
+    const raw = String(value || "").trim();
+    const url = raw.startsWith("/") && !raw.startsWith("//") && !raw.includes("\\")
+      ? new URL(raw, "https://halo.local").href
+      : cleanPublicUrl(raw);
+    if (!url) return false;
     const parsed = new URL(url);
     return /\.(mp3|m4a|aac|ogg|oga|wav|flac|webm)(?:$|[?#])/i.test(`${parsed.pathname}${parsed.search}`)
-      || ["/api/song-catalog/audio", "/api/mixes/audio", "/api/radio/audio"].includes(parsed.pathname);
+      || ["/api/song-catalog/audio", "/api/mixes/audio", "/api/radio/audio", "/api/stem-vault/audio"].includes(parsed.pathname);
   } catch {
     return false;
   }
@@ -64,8 +67,7 @@ function storefrontStateFor(row) {
   );
   const hasPlayableStream = hasReachablePublicAudio(row.stream_url);
   const pending = statuses.some(status => ["pending", "processing", "queued", "draft", "review", "coming_soon"].includes(status));
-  const ready = (statuses.some(status => ["published", "ready", "live", "active", "cleared", "for_sale"].includes(status)) || hasPublicDestination)
-    && (hasPlayableStream || hasPublicDestination);
+  const ready = !pending && hasPlayableStream;
   return {
     statusLabel: ready ? "READY" : pending ? "PENDING" : "STANDBY",
     hasPlayableStream,
@@ -207,8 +209,8 @@ function serializeRelease(row) {
 
 export default async function releaseCatalogHandler(request) {
   if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS_HEADERS });
-  if (request.method !== "GET") {
-    return json({ message: "Method not allowed" }, 405, { Allow: "GET, OPTIONS" });
+  if (!["GET", "HEAD"].includes(request.method)) {
+    return json({ message: "Method not allowed" }, 405, { Allow: "GET, HEAD, OPTIONS" });
   }
 
   try {
@@ -357,7 +359,8 @@ export default async function releaseCatalogHandler(request) {
       LIMIT 200
     `;
     const releases = rows.map(serializeRelease);
-    return json({ releases, count: releases.length });
+    const response = json({ releases, count: releases.length });
+    return request.method === "HEAD" ? new Response(null, { status: response.status, headers: response.headers }) : response;
   } catch (error) {
     console.error("HALO release catalog failed", error instanceof Error ? error.message : "unknown error");
     return json(

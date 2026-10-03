@@ -201,7 +201,14 @@ export class ReleaseGuardAgent {
     } catch (error) {
       if (error.code !== "ENOENT") throw error;
     }
-    const source = await readFile(catalogPath, "utf8");
+    let source;
+    try {
+      source = await readFile(catalogPath, "utf8");
+    } catch (error) {
+      if (error.code !== "ENOENT") throw error;
+      console.log("HALO RELEASE GUARD: skipped — shared-catalog.json is absent; no file-based catalog to audit.");
+      return { skipped: true, reason: "catalog_missing" };
+    }
     const catalog = JSON.parse(source);
     const songs = Array.isArray(catalog) ? catalog : catalog?.songs;
     if (!Array.isArray(songs)) throw new Error("Catalog must be an array or an object with a songs array.");
@@ -236,7 +243,7 @@ export default ReleaseGuardAgent;
 
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
   ReleaseGuardAgent.run().then((report) => {
-    process.exitCode = report.passed ? 0 : 1;
+    process.exitCode = report.skipped || report.passed ? 0 : 1;
   }).catch((error) => {
     console.error(`HALO RELEASE GUARD: ${error.message}`);
     process.exitCode = 1;

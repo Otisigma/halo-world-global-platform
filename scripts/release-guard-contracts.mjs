@@ -143,7 +143,16 @@ try {
 
   await copyFile(resolve(root, "release-guard-agent.js"), resolve(fixture, "release-guard-agent.js"));
   await writeFile(resolve(fixture, "package.json"), '{"type":"module"}');
-  assert.equal(cli().status, 1, "missing catalog blocks builds");
+  const missing = cli();
+  assert.equal(missing.status, 0, "an absent file-based catalog must not block deployment");
+  assert.match(missing.stdout, /HALO RELEASE GUARD: skipped/);
+  assert.equal(missing.stderr, "");
+  assert.deepEqual(await ReleaseGuardAgent.run({ catalogPath }), { skipped: true, reason: "catalog_missing" });
+  await assert.rejects(access(catalogPath));
+  await assert.rejects(access(recovery));
+  await mkdir(catalogPath);
+  assert.equal(cli().status, 1, "catalog read errors other than ENOENT must still block deployment");
+  await rm(catalogPath, { recursive: true });
   for (const source of ["not json", "{}", '{"songs":{}}', "null"]) {
     await writeFile(catalogPath, source);
     assert.equal(cli().status, 1);
@@ -175,6 +184,9 @@ try {
   const sanitized = await readFile(catalogPath, "utf8");
   assert.equal(cli().status, 1, "rerun cannot silently approve after dropping quarantine");
   assert.equal(await readFile(catalogPath, "utf8"), sanitized);
+  await rm(catalogPath);
+  assert.equal(cli().status, 1, "an unresolved quarantine must block even when the catalog is missing");
+  assert.equal(await readFile(resolve(recovery, "shared-catalog.original.json"), "utf8"), source);
   await writeFile(catalogPath, source);
   await rm(recovery, { recursive: true });
   await writeFile(catalogPath, JSON.stringify({ version: 7, songs: [local, { ...unsafe, releaseStatus: "PUBLISHED" }] }));

@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "release-guard": "node release-guard-agent.js",
-    "prebuild": "npm run release-guard",
+    "prebuild": "npm run release-guard -- --allow-missing-catalog",
     "build": "node scripts/music-chart-contracts.mjs",
     "test:release-guard": "node scripts/release-guard-contracts.mjs",
     "start": "node server.js",

@@ -63,10 +63,10 @@ input::placeholder { color: #746d60; }
 .empty-state, #status { min-height: 1.5em; color: var(--creator-muted); }
 .orbits-layout { display: grid; grid-template-columns: 1fr 1fr; align-items: center; gap: 2rem; }
 .orbit-map { position: relative; width: min(100%, 32rem); aspect-ratio: 1; margin: auto; }
-.orbit-ring, .orbit-core { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); border: 1px solid var(--creator-line); border-radius: 50%; }
-.orbit-ring--public { width: 94%; height: 94%; }
-.orbit-ring--peers { width: 72%; height: 72%; }
-.orbit-ring--crew { width: 48%; height: 48%; }
+.orbit-map .orbit-ring, .orbit-core { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); border: 1px solid var(--creator-line); border-radius: 50%; }
+.orbit-map .orbit-ring--public { width: 94%; height: 94%; }
+.orbit-map .orbit-ring--peers { width: 72%; height: 72%; }
+.orbit-map .orbit-ring--crew { width: 48%; height: 48%; }
 .orbit-core { display: flex; width: 28%; height: 28%; align-items: center; justify-content: center; flex-direction: column; color: var(--creator-gold); font: 3rem "Cormorant Garamond", serif; background: radial-gradient(circle, #352918, #121212); box-shadow: 0 0 4rem #d6ad691c; }
 .orbit-core span { font: .45rem "Share Tech Mono", monospace; }
 .orbit-satellite { position: absolute; padding: .5rem; background: var(--creator-ink); border: 1px solid var(--creator-gold); border-radius: 1rem; color: var(--creator-gold); font: .65rem "Share Tech Mono", monospace; }
@@ -132,6 +132,50 @@ input::placeholder { color: #746d60; }
 .profile-form > button { justify-self: start; }
 .workspace-panel > p:not(.eyebrow) { color: var(--creator-muted); font-size: .82rem; }
 article button:disabled, button:disabled { opacity: .55; cursor: wait; }
+.directory-subhead { margin: 2rem 0 .25rem; color: var(--creator-paper); font: 500 1.6rem "Cormorant Garamond", serif; }
+.verified-card { border-color: rgba(214, 173, 105, .48) !important; background: radial-gradient(ellipse at 100% 0, rgba(214, 173, 105, .14), transparent 14rem), linear-gradient(140deg, rgba(29, 25, 17, .97), rgba(12, 12, 9, .97)) !important; }
+.verified-card h3 { margin: .8rem 0 .1rem; font: 500 1.9rem/1.05 "Cormorant Garamond", serif; }
+.verified-card__top { display: flex; justify-content: space-between; align-items: center; gap: .6rem; }
+.verified-avatar { display: grid; width: 3rem; aspect-ratio: 1; place-items: center; border: 1px solid var(--creator-gold); border-radius: 50%; color: var(--creator-gold); font: 1.7rem "Cormorant Garamond", serif; }
+.verified-badge { padding: .25rem .45rem; border: 1px solid rgba(214, 173, 105, .5); color: var(--creator-gold); font: .5rem "Share Tech Mono", monospace; letter-spacing: .1em; text-transform: uppercase; }
+.verified-handle { margin: 0; color: var(--creator-gold) !important; font: .62rem "Share Tech Mono", monospace !important; letter-spacing: .08em; }
+.orbits-section, .guardian-section { padding-block: clamp(2.4rem, 5vw, 4.25rem); border-top: 1px solid var(--creator-line); }
+.orbits-grid, .guardian-grid { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(16rem, .65fr); gap: 1rem; margin-top: 1.5rem; }
+.orbit-canvas { padding: clamp(.5rem, 2vw, 1.2rem); border: 1px solid rgba(214, 173, 105, .35); background: radial-gradient(circle at 50% 50%, rgba(94, 67, 31, .28), transparent 60%), #0b0b09; }
+.orbit-canvas svg { display: block; width: 100%; height: auto; }
+.orbit-ring circle { stroke: rgba(214, 173, 105, .32); stroke-dasharray: 2 6; }
+.orbit-ring--core circle { stroke: rgba(240, 213, 159, .7); stroke-dasharray: none; }
+.orbit-ring-label { fill: #8f836e; font: 10px "Share Tech Mono", monospace; letter-spacing: .14em; }
+.orbit-node { cursor: pointer; outline: none; transition: opacity .2s; }
+.orbit-node circle { fill: #15130f; stroke: var(--creator-gold); stroke-width: 1.5; }
+.orbit-node--core circle { fill: #2a2013; stroke: #f0d59f; stroke-width: 2.5; }
+.orbit-node--public circle { stroke: #7f7462; stroke-dasharray: 3 3; }
+.orbit-node text { fill: var(--creator-gold); font: 600 18px "Cormorant Garamond", serif; }
+.orbit-node .orbit-node-name { fill: #c7bda9; font: 10px "Share Tech Mono", monospace; letter-spacing: .06em; text-transform: uppercase; }
+.orbit-node:hover circle, .orbit-node:focus-visible circle { fill: #3a2c17; stroke: #f0d59f; stroke-width: 3; }
+.orbit-panel { display: grid; align-content: start; gap: .8rem; }
+.orbit-detail, .guardian-report { padding: 1.2rem; border: 1px solid var(--creator-line); background: linear-gradient(155deg, #1e1911, #100f0c 72%); }
+.orbit-detail h3, .guardian-report h3 { margin: .2rem 0 .4rem; font: 500 1.6rem/1.1 "Cormorant Garamond", serif; }
+.orbit-detail p:not(.eyebrow) { color: var(--creator-muted); font-size: .82rem; }
+.orbit-detail a { font: .58rem "Share Tech Mono", monospace; text-transform: uppercase; }
+.orbit-legend { display: grid; gap: .45rem; margin: 0; padding: 0; list-style: none; }
+.orbit-legend__item { display: grid; grid-template-columns: 1fr auto; gap: .1rem .6rem; padding: .7rem .8rem; border-left: 2px solid rgba(214, 173, 105, .4); background: rgba(214, 173, 105, .05); }
+.orbit-legend__item--core { border-left-color: #f0d59f; }
+.orbit-legend__item strong { font: 500 1.1rem "Cormorant Garamond", serif; }
+.orbit-legend__item span { color: var(--creator-gold); font: .55rem "Share Tech Mono", monospace; text-transform: uppercase; }
+.orbit-legend__item small { grid-column: 1 / -1; color: var(--creator-muted); font-size: .7rem; }
+.guardian-form { margin-top: 0; padding: 1.2rem; border: 1px solid var(--creator-line); background: rgba(17, 16, 13, .9); }
+.guardian-form .guardian-stems { grid-column: 1 / -1; }
+.guardian-form textarea { font: .78rem/1.5 "Share Tech Mono", monospace; }
+.guardian-score { display: flex; align-items: baseline; gap: .4rem; }
+.guardian-score span { color: var(--creator-gold); font: 700 4.5rem/1 "Barlow Condensed", sans-serif; }
+.guardian-score small { color: var(--creator-muted); font: .7rem "Share Tech Mono", monospace; }
+#guardianNext, #guardianSplits { color: #c0b7a6; font-size: .82rem; }
+.guardian-checks { display: grid; gap: .3rem; margin: .5rem 0 1rem; padding: 0; list-style: none; font-size: .78rem; }
+.guardian-checks li { display: flex; gap: .55rem; color: #c0b7a6; }
+.check-mark { flex: none; width: 1.2rem; color: var(--creator-gold); font-family: "Share Tech Mono", monospace; }
+.is-fail .check-mark, p.is-fail { color: #e59a7a !important; }
+.council-ticket { color: var(--creator-gold); font: .65rem/1.6 "Share Tech Mono", monospace; }
 @media (max-width: 850px) {
   .creator-hero { gap: 2rem; }
   .hero-signal { min-height: 19rem; }
@@ -149,7 +193,7 @@ article button:disabled, button:disabled { opacity: .55; cursor: wait; }
   .creator-hero { grid-template-columns: 1fr; min-height: unset; padding-block: 4rem; }
   .hero-signal { justify-self: stretch; width: 100%; min-height: 17rem; }
   .section-heading, .studio-pass__heading { align-items: flex-start; flex-direction: column; }
-  .filter-console, .login-panel, .studio-grid, .ai-dock { grid-template-columns: 1fr; }
+  .filter-console, .login-panel, .studio-grid, .ai-dock, .orbits-grid, .guardian-grid { grid-template-columns: 1fr; }
   .login-panel .join-copy { grid-column: auto; }
   .deck-display { grid-template-columns: 5.5rem minmax(0, 1fr); }
   .pipeline-rail { grid-template-columns: 1fr; }

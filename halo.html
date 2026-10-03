@@ -1288,6 +1288,7 @@
           { route: '/artist-pro/', label: 'ARTIST PRO' },
           { route: '/creators/', label: 'CREATOR WORLD' },
           { route: '/creator-network/', label: 'CREATOR NETWORK' },
+          { route: '/signal/', label: 'SIGNAL FEED' },
           { route: '/signal-network/', label: 'SIGNAL NETWORK' },
           { route: '/artists/', label: 'ARTIST ROOMS + CHARTS' },
           { route: '/creator-freedom/', label: 'CREATOR FREEDOM' },
@@ -3980,6 +3981,9 @@
                         <a href="/creator-network/" data-stat-event="open_creator_network" data-stat-target="header" data-signal="MEMBER COLLABORATION">
                           <Icon name="star" className="halo-menu-icon" /><span><strong>CREATOR NETWORK {renderMenuStatusBadge('/creator-network/', 'Creator Network')}</strong><small>Member profiles, opportunities, and invites</small></span>
                         </a>
+                        <a href="/signal/" data-stat-event="open_signal_feed" data-stat-target="header" data-signal="BROWSER-LOCAL PLAYGROUND">
+                          <Icon name="radio" className="halo-menu-icon" /><span><strong>SIGNAL FEED {renderMenuStatusBadge('/signal/', 'Signal Feed')}</strong><small>Browser-local drafts, waveform previews, and timestamped feedback</small></span>
+                        </a>
                         <a href="/signal-network/" data-stat-event="open_signal_network" data-stat-target="header" data-signal="ARTIST INTELLIGENCE">
                           <Icon name="activity" className="halo-menu-icon" /><span><strong>SIGNAL NETWORK {renderMenuStatusBadge('/signal-network/', 'Signal Network')}</strong><small>The Signal Feed, public previews, messages, and campaigns</small></span>
                         </a>
@@ -4745,6 +4749,14 @@
                         <h3 className="world-display mt-6 text-2xl font-bold uppercase text-white">The Signal / Signal Network</h3>
                         <p className="mt-3 text-sm leading-relaxed text-gray-300">Share published track previews, reply to the community, and discover releases. Switch to private messages, campaigns, and opt-in regional presence without leaving HALO.</p>
                         <span className="mt-6 flex items-center gap-3 font-mono text-xs font-bold uppercase tracking-[.12em] text-amber-200">Open Signal Network <Icon name="arrow-right" className="h-4 w-4 transition-transform group-hover:translate-x-1" /></span>
+                      </a>
+                      <a href="/signal/" data-stat-event="open_signal_feed" data-stat-target="homepage_network" className="group flex flex-col border-t border-white/10 p-6 transition hover:bg-amber-300/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-amber-200 md:col-span-2 md:flex-row md:items-center md:justify-between md:gap-8 md:p-9">
+                        <div>
+                          <div className="flex items-center gap-4 text-amber-300"><span className="font-mono text-[10px] uppercase tracking-[.22em]">03 // Signal Feed</span><Icon name="radio" className="h-6 w-6" /></div>
+                          <h3 className="world-display mt-4 text-2xl font-bold uppercase text-white">Signal Feed playground</h3>
+                          <p className="mt-3 max-w-2xl text-sm leading-relaxed text-gray-300">Try browser-local drafts, waveform previews, reactions, and feedback pinned to the second. Nothing here is published; use Signal Network for the shared community feed. HALO Orbits and Studio Guardian live inside Creator Network.</p>
+                        </div>
+                        <span className="mt-6 flex flex-none items-center gap-3 font-mono text-xs font-bold uppercase tracking-[.12em] text-amber-200 md:mt-0">Open Signal Feed <Icon name="arrow-right" className="h-4 w-4 transition-transform group-hover:translate-x-1" /></span>
                       </a>
                     </div>
                   </section>

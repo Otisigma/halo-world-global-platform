@@ -177,6 +177,12 @@
   force = true
 
 [[redirects]]
+  from = "/signal/"
+  to = "/signal/index.html"
+  status = 200
+  force = true
+
+[[redirects]]
   from = "/dreamweaver/satellite/:songId"
   to = "/dreamweaver/satellite/:songId/"
   status = 301

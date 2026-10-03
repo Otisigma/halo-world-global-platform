@@ -25,25 +25,29 @@ import { curatedCreators } from "/lib/creator-directory.js";
   }
 
   function renderPublicCreators(creators) {
-    byId("publicCreators").replaceChildren(...creators.map(creator => {
-      const card = node("article");
-      card.className = "creator-profile-card";
-      card.append(node("h3", creator.display_name), node("p", creator.bio));
-      if (creator.verified && creator.curated) card.append(node("p", "✓ Verified HALO seed · curated profile"));
-      const tags = [...(creator.roles || []), ...(creator.genres || []), ...(creator.languages || [])];
-      if (tags.length) {
-        const profileTags = node("p", tags.join(" · "));
-        profileTags.className = "profile-tags";
-        card.append(profileTags);
-      }
-      card.append(node("p", creator.bpm_min ? `${creator.bpm_min}–${creator.bpm_max} BPM` : "Tempo flexible"));
-      if (creator.artist_slug) card.append(roomLink(creator.artist_slug));
-      const join = node("a", "Sign in to collaborate");
-      join.href = "/creator-network/#locked";
-      card.append(join);
-      return card;
-    }));
-    if (!creators.length) byId("publicCreators").append(node("p", "No public Creator Passes match yet. Try another filter or check back soon."));
+    const curated = creators.filter(creator => creator.curated);
+    const members = creators.filter(creator => !creator.curated);
+    for (const [container, entries] of [[byId("verifiedCreators"), curated], [byId("publicCreators"), members]]) {
+      container.replaceChildren(...entries.map(creator => {
+        const card = node("article");
+        card.className = creator.curated ? "creator-profile-card verified-card" : "creator-profile-card";
+        card.append(node("h3", creator.display_name), node("p", creator.bio));
+        if (creator.verified && creator.curated) card.append(node("p", "✓ Verified HALO seed · curated profile"));
+        const tags = [...(creator.roles || []), ...(creator.genres || []), ...(creator.languages || [])];
+        if (tags.length) {
+          const profileTags = node("p", tags.join(" · "));
+          profileTags.className = "profile-tags";
+          card.append(profileTags);
+        }
+        card.append(node("p", creator.bpm_min ? `${creator.bpm_min}–${creator.bpm_max} BPM` : "Tempo flexible"));
+        if (creator.artist_slug) card.append(roomLink(creator.artist_slug));
+        const join = node("a", "Sign in to collaborate");
+        join.href = "/creator-network/#locked";
+        card.append(join);
+        return card;
+      }));
+      if (!entries.length) container.append(node("p", "No public Creator Passes match yet. Try another filter or check back soon."));
+    }
   }
 
   async function loadPublicCreators() {

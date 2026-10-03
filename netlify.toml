@@ -165,6 +165,12 @@
   force = true
 
 [[redirects]]
+  from = "/creator-network/"
+  to = "/creator-network/index.html"
+  status = 200
+  force = true
+
+[[redirects]]
   from = "/creators/"
   to = "/creators/index.html"
   status = 200

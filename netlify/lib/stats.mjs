@@ -94,6 +94,7 @@ export const allowedEvents = new Set([
   "open_campaign_studio",
   "open_catalog_release",
   "open_creator_charter",
+  "open_creator_network",
   "open_creator_world",
   "open_dj_deck",
   "open_dreamweaver_campaign_studio",

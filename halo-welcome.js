@@ -194,7 +194,7 @@
   const vibeLine = h("p", { class: "halo-welcome__vibes" });
   const levelName = h("strong");
   const levelMeta = h("small");
-  const levelRing = h("div", { class: "halo-welcome__level-ring", role: "img" }, h("span", { text: "0" }));
+  const levelRing = h("div", { class: "halo-welcome__level-ring", role: "img" }, h("span", { "aria-hidden": "true", text: "0" }));
   const streakValue = h("strong");
   const streakMeta = h("small");
   const badgeList = h("ul", { class: "halo-welcome__badges", "aria-label": "Badges" });
@@ -276,14 +276,14 @@
   }
 
   function renderPickers() {
-    radio(auraGroup, AURAS, () => state.aura, value => { state.aura = value; renderIdentity(); },
+    radio(auraGroup, AURAS, () => state.aura, value => { state.aura = value; save(); renderIdentity(); },
       (value, aura) => {
         const swatch = h("button", { class: "halo-welcome__swatch", "aria-label": aura.label, title: aura.label });
         swatch.style.setProperty("--halo-aura-from", aura.from);
         swatch.style.setProperty("--halo-aura-to", aura.to);
         return swatch;
       });
-    radio(ringGroup, RINGS, () => state.ring, value => { state.ring = value; renderIdentity(); },
+    radio(ringGroup, RINGS, () => state.ring, value => { state.ring = value; save(); renderIdentity(); },
       (_value, label) => h("button", { class: "halo-welcome__chip", text: label }));
     vibeGroup.replaceChildren(...VIBES.map(vibe => {
       const picked = state.vibes.includes(vibe);
@@ -293,7 +293,7 @@
           if (picked) state.vibes = state.vibes.filter(entry => entry !== vibe);
           else if (state.vibes.length >= MAX_VIBES) { fileStatus.textContent = `Pick up to ${MAX_VIBES} vibes — tap one to swap it out.`; return; }
           else state.vibes = [...state.vibes, vibe];
-          renderPickers(); renderIdentity();
+          save(); renderPickers(); renderIdentity();
         }
       });
     }));
@@ -389,8 +389,8 @@
       h("button", { type: "button", class: "halo-welcome__ghost", text: "Surprise me", onclick: surprise }),
       h("button", { type: "button", class: "halo-welcome__ghost halo-welcome__reset", text: "Reset local studio", onclick: reset })));
 
-  nameInput.addEventListener("input", () => { state.name = nameInput.value.slice(0, 40); renderIdentity(); });
-  introInput.addEventListener("input", () => { state.intro = introInput.value.slice(0, MAX_INTRO); updateIntroCount(); renderIdentity(); });
+  nameInput.addEventListener("input", () => { state.name = nameInput.value.slice(0, 40); save(); renderIdentity(); });
+  introInput.addEventListener("input", () => { state.intro = introInput.value.slice(0, MAX_INTRO); save(); updateIntroCount(); renderIdentity(); });
 
   studioForm.addEventListener("submit", event => {
     event.preventDefault();
@@ -412,8 +412,8 @@
       [pool[index], pool[swap]] = [pool[swap], pool[index]];
     }
     state.vibes = pool.slice(0, 2);
-    renderPickers(); renderIdentity();
-    fileStatus.textContent = "Fresh look shuffled — save it if you like it.";
+    save(); renderPickers(); renderIdentity();
+    fileStatus.textContent = "Fresh look shuffled — hit Save my look to collect your badges.";
   }
 
   function reset() {
@@ -429,7 +429,7 @@
 
   /* ── Layout ── */
   const studio = h("details", { class: "halo-welcome__studio" },
-    h("summary", {}, h("span", { text: "Open avatar studio" }), h("small", { text: "Optional · about 30 seconds" })),
+    h("summary", {}, h("span", { text: "Open avatar studio" }), h("small", { text: "Optional · changes save on this device as you go" })),
     studioForm);
 
   const toggle = h("button", { type: "button", class: "halo-welcome__toggle", "aria-expanded": "true", "aria-controls": `haloWelcomeBody-${surface}` });

@@ -214,7 +214,7 @@ function renderPost(post) {
   avatar.setAttribute("aria-hidden", "true");
   const when = node("time", relativeDate(post.createdAt));
   when.dateTime = post.createdAt; when.title = displayDate(post.createdAt);
-  heading.append(avatar, node("strong", post.authorName), node("span", post.kind.replace("_", " "), "signal-feed__kind"), when);
+  heading.append(avatar, node("strong", post.authorName), node("span", post.kind.replaceAll("_", " "), "signal-feed__kind"), when);
   article.append(heading, node("p", post.body, "signal-feed__body"));
   let audio;
   if (post.kind === "AUDIO") {
@@ -379,6 +379,7 @@ async function postType() {
 byId("feedKind").addEventListener("change", postType);
 for (const [value, id] of Object.entries(kindChips)) byId(id).addEventListener("click", () => { byId("feedKind").value = value; postType(); });
 publishForm.elements.body.addEventListener("input", updateCharCount);
+updateCharCount();
 publishForm.addEventListener("submit", async event => {
   event.preventDefault();
   const origin = mutationOrigin();

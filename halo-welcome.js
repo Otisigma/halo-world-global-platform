@@ -352,7 +352,9 @@
     if (!/^video\/(mp4|webm|quicktime)$/.test(file.type)) { fileStatus.textContent = "Choose an MP4, WebM or MOV intro clip."; return; }
     if (file.size > MAX_VIDEO_BYTES) { fileStatus.textContent = "That clip is too large. Keep intro videos short and under 250 MB."; return; }
     clearVideo();
-    videoUrl = URL.createObjectURL(file);
+    const objectUrl = URL.createObjectURL(file);
+    if (!objectUrl.startsWith("blob:")) { URL.revokeObjectURL(objectUrl); fileStatus.textContent = "That clip could not be previewed."; return; }
+    videoUrl = objectUrl;
     const video = h("video", { controls: true, playsinline: true, preload: "metadata", "aria-label": "Your intro video preview" });
     video.muted = true;
     video.addEventListener("loadedmetadata", () => {
@@ -365,7 +367,7 @@
       unlock("lights-camera");
     });
     video.addEventListener("error", () => { clearVideo(); fileStatus.textContent = "That clip could not be played in this browser."; });
-    video.src = videoUrl;
+    video.src = objectUrl;
     videoFrame.replaceChildren(video, h("button", { type: "button", class: "halo-welcome__ghost", text: "Remove video preview", onclick: () => { clearVideo(); fileStatus.textContent = "Video preview removed."; } }));
     videoFrame.hidden = false;
   });
@@ -404,7 +406,12 @@
     const pick = list => list[Math.floor(Math.random() * list.length)];
     state.aura = pick(Object.keys(AURAS));
     state.ring = pick(Object.keys(RINGS));
-    state.vibes = [...VIBES].sort(() => Math.random() - 0.5).slice(0, 2);
+    const pool = [...VIBES];
+    for (let index = pool.length - 1; index > 0; index--) {
+      const swap = Math.floor(Math.random() * (index + 1));
+      [pool[index], pool[swap]] = [pool[swap], pool[index]];
+    }
+    state.vibes = pool.slice(0, 2);
     renderPickers(); renderIdentity();
     fileStatus.textContent = "Fresh look shuffled — save it if you like it.";
   }

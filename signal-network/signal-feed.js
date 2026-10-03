@@ -343,8 +343,8 @@ async function loadBlocks() {
   }
 }
 const kindChips = { TEXT: "feedKindText", AUDIO: "feedKindAudio", VIDEO: "feedKindVideo", BRIEF_LINK: "feedKindBrief" };
-const maxSignal = 1000;
 function updateCharCount() {
+  const maxSignal = publishForm.elements.body.maxLength > 0 ? publishForm.elements.body.maxLength : 1000;
   const length = publishForm.elements.body.value.length;
   const counter = byId("feedCharCount");
   counter.textContent = `${length} / ${maxSignal} characters`;

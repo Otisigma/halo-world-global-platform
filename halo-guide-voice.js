@@ -154,7 +154,14 @@
           if (error === "canceled" || error === "interrupted") settle({ ok: false, reason: "superseded" });
           else settle({ ok: false, reason: error === "not-allowed" ? "blocked" : "error" });
         };
-        timer = setTimeout(() => settle({ ok: true, pending: true, voice: voice?.name || null }), START_TIMEOUT_MS);
+        timer = setTimeout(() => {
+          const speech = synth();
+          if (speech.speaking || speech.pending) settle({ ok: true, pending: true, voice: voice?.name || null });
+          else {
+            cancelBrowser();
+            settle({ ok: false, reason: "timeout" });
+          }
+        }, options.startTimeoutMs || START_TIMEOUT_MS);
         synth().speak(utterance);
       } catch {
         settle({ ok: false, reason: "error" });
@@ -189,11 +196,11 @@
   }
 
   function registerEngine(engine) {
-    if (engine !== null && (!engine || typeof engine.speak !== "function")) {
+    if (engine != null && typeof engine.speak !== "function") {
       throw new TypeError("A HALO Guide voice engine must provide speak(text, options).");
     }
     cancel();
-    state.engine = engine ? { name: String(engine.name || "custom"), speak: engine.speak.bind(engine), cancel: typeof engine.cancel === "function" ? engine.cancel.bind(engine) : null } : null;
+    state.engine = engine != null ? { name: String(engine.name || "custom"), speak: engine.speak.bind(engine), cancel: typeof engine.cancel === "function" ? engine.cancel.bind(engine) : null } : null;
   }
 
   function engineName() {

@@ -39,8 +39,6 @@
     journey: readJourneyState(),
     voiceStatus: "",
     unread: 0,
-    requestId: 0,
-    requestController: null,
     lastJourneySignature: ""
   };
   const VOICE_MODULE_SRC = "/halo-guide-voice.js";
@@ -521,12 +519,11 @@
     const message = String(rawMessage || "").trim();
     if (!message || state.busy) return;
     state.busy = true;
-    const requestId = ++state.requestId;
     const controller = typeof AbortController === "function" ? new AbortController() : null;
-    state.requestController = controller;
     const timeout = controller ? setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS) : null;
     const input = root.querySelector(".halo-companion-input");
     const send = root.querySelector(".halo-companion-send");
+    const focusWasInside = root.contains(document.activeElement);
     input.value = "";
     send.disabled = true;
     cancelSpeech();
@@ -552,7 +549,6 @@
         })
       });
       const data = await response.json().catch(() => ({}));
-      if (requestId !== state.requestId) return;
       if (!response.ok) throw new Error(data.message || "The companion team could not respond.");
       showThinking(false);
       setAgent(data.agent?.id || "nova");
@@ -567,7 +563,6 @@
       }));
       if (data.careRequestCreated) addMessage("assistant", "Your note is saved for the human care team. You can keep talking with me while they review it.", { agent: "sol" });
     } catch (error) {
-      if (requestId !== state.requestId) return;
       showThinking(false);
       const copy = error?.name === "AbortError"
         ? "The HALO Guide is taking too long to answer. Please try again in a moment."
@@ -575,12 +570,9 @@
       addMessage("assistant", copy, { agent: "sol", suggestions: ["Try again", "I need a human"] });
     } finally {
       clearTimeout(timeout);
-      if (requestId === state.requestId) {
-        state.busy = false;
-        state.requestController = null;
-        send.disabled = false;
-        if (state.open && root.contains(document.activeElement)) input.focus();
-      }
+      state.busy = false;
+      send.disabled = false;
+      if (state.open && (focusWasInside || root.contains(document.activeElement))) input.focus();
     }
   }
 

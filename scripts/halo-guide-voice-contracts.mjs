@@ -129,6 +129,13 @@ const voices = [
   synth.behaviour = "synthesis-failed";
   assert.equal((await api.speak("Broken")).reason, "error");
 
+  synth.behaviour = "silent";
+  const stalled = await api.speak("Stalled", { startTimeoutMs: 10 });
+  assert.equal(stalled.reason, "timeout", "speech that never starts is reported instead of claiming success");
+  synth.speaking = true;
+  assert.equal((await api.speak("Slow start", { startTimeoutMs: 10 })).ok, true, "speech already playing without onstart still counts as success");
+  synth.speaking = false;
+
   synth.speak = () => {
     throw new Error("speech crashed");
   };
@@ -174,6 +181,9 @@ const voices = [
   assert.throws(() => api.registerEngine({ name: "broken" }), { name: "TypeError" });
   api.registerEngine(null);
   assert.equal(api.engineName(), "browser", "engines can be removed to restore the browser fallback");
+  api.registerEngine({ name: "temp", speak: async () => true });
+  api.registerEngine(undefined);
+  assert.equal(api.engineName(), "browser", "any nullish engine removes the premium engine");
 }
 
 // --- Guide wiring -----------------------------------------------------------------

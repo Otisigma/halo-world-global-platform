@@ -3,6 +3,7 @@ import {
   formatListingPrice, safeAssetUrl
 } from "../lib/creator-marketplace.js";
 import { HaloAIService } from "../lib/halo-ai-service.js";
+import { DJ_AI_DISCLOSURE, composeDjSignalDraft, getDjPersona } from "../lib/dj-personas.js";
 
 const FOLLOW_KEY = "halo.creator-demo.follows.v1";
 const ADVISORY_DISCLOSURE = "Local-rules advisory only: no actual audio analysis or AI provider is used. Stem checks inspect sample metadata, not audio files. Rights and split checks are not legal verification.";
@@ -249,6 +250,29 @@ export function initCreatorDiscovery({
     return panel;
   }
 
+  function personaPanel(creator) {
+    const persona = getDjPersona(creator.id);
+    if (!persona) return null;
+    const { musicSpecialization: music, voice, emotionalTone: tone, visualIdentity: visual } = persona;
+    const panel = node("section", undefined, "demo-dj-voice");
+    panel.setAttribute("aria-label", `${persona.displayName} AI DJ persona`);
+    const behaviors = node("ul", undefined, "demo-tags");
+    behaviors.setAttribute("aria-label", "Persona behaviours");
+    for (const tag of persona.behaviorTags) behaviors.append(node("li", tag));
+    const draft = composeDjSignalDraft(persona.id, {
+      type: persona.signatureEvent, title: creator.featuredRelease?.title, artist: persona.displayName,
+      creator: "you", genre: music.genres[0], bpm: Math.round((music.bpmRange[0] + music.bpmRange[1]) / 2)
+    });
+    const sample = node("blockquote", draft?.body || "", "demo-dj-sample");
+    panel.append(node("p", `AI DJ persona / ${persona.archetype}`, "eyebrow"), node("h3", persona.tagline),
+      node("p", `${voice.register}. ${voice.cadence}`),
+      node("p", `Tone: ${tone.primary} · ${tone.secondary} · ${music.lane} (${music.bpmRange[0]}–${music.bpmRange[1]} BPM)`, "demo-location"),
+      behaviors, node("p", `Visual identity: ${visual.imageConcept}`, "demo-caption"),
+      node("p", "Sample Signal post / persona voice", "eyebrow"), sample,
+      node("p", `${DJ_AI_DISCLOSURE}. Illustrative only — nothing is posted from this profile.`, "demo-caption"));
+    return panel;
+  }
+
   function openProfile(creator, opener) {
     profileVersion++;
     lastOpener = opener;
@@ -295,7 +319,7 @@ export function initCreatorDiscovery({
     grid.append(...items.map(listingCard));
     if (!items.length) grid.append(node("p", "No featured sample listings in this orbit yet.", "empty-state"));
     featured.append(grid);
-    byId("demoProfileContent").replaceChildren(heading, about, handoff, release, featured, advisoryPanel(creator));
+    byId("demoProfileContent").replaceChildren(...[heading, about, personaPanel(creator), handoff, release, featured, advisoryPanel(creator)].filter(Boolean));
     byId("demoProfileStatus").textContent = "";
     if (!dialog.open) dialog.showModal();
     byId("demoProfileClose").focus();

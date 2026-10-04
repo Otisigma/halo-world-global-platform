@@ -132,6 +132,10 @@ assert.match(f.get("demoProfileContent").textContent, /illustrative orbit placem
 assert.match(f.get("demoProfileContent").textContent, /no actual audio analysis or AI provider/);
 assert.match(f.get("demoProfileContent").textContent, /not legal verification/);
 assert.match(f.get("demoProfileContent").textContent, /No message is sent, invitation created/);
+assert.match(f.get("demoProfileContent").textContent, /AI DJ persona \/ The Signal Captain/);
+assert.match(f.get("demoProfileContent").textContent, /Sample Signal post \/ persona voice/);
+assert.match(f.get("demoProfileContent").textContent, /requires human approval before anything is posted/);
+assert.ok(descendants(f.get("demoProfileContent")).some(element => element.tagName === "BLOCKQUOTE" && element.textContent.includes("— DJ Halo")), "Persona sample post renders as text");
 const links = descendants(f.get("demoProfileContent")).filter(element => element.tagName === "A");
 assert.equal(links.length, 4, "Seed profiles do not invent preview URLs");
 for (const link of links) {

@@ -85,6 +85,7 @@
       };
       this.timer = 0;
       this.triggeredUntil = 0;
+      this.heldLevel = 0;
       this.state = evaluateRecorderGuard({}, this.config);
     }
 
@@ -95,16 +96,20 @@
     }
 
     tick() {
-      const next = evaluateRecorderGuard(this.callbacks.readInputs() || {}, this.config);
+      const inputs = this.callbacks.readInputs() || {};
+      const next = evaluateRecorderGuard(inputs, this.config);
       const now = this.callbacks.now();
       let resolved = next;
       if (next.state === "triggered") {
         this.triggeredUntil = now + this.config.holdMs;
+        this.heldLevel = next.masterBusLevel;
       } else if (this.state.state === "triggered" && next.isRecording && next.cueBusActive && now < this.triggeredUntil) {
-        // Hold the warning briefly so transient master peaks do not make the indicator flicker.
-        resolved = { ...this.state, masterBusLevel: next.masterBusLevel };
+        // Hold the warning briefly at the last hot peak so transient dips do not make the indicator
+        // flicker, while still reflecting the cue decks that are active right now.
+        resolved = evaluateRecorderGuard({ ...inputs, masterBusLevel: this.heldLevel }, this.config);
       } else {
         this.triggeredUntil = 0;
+        this.heldLevel = 0;
       }
       const changed = resolved.state !== this.state.state
         || resolved.warningMessage !== this.state.warningMessage
@@ -143,6 +148,7 @@
     element.classList?.toggle?.("is-secure", secure);
     element.classList?.toggle?.("is-triggered", !secure);
     element.setAttribute?.("role", secure ? "status" : "alert");
+    element.setAttribute?.("aria-live", secure ? "polite" : "assertive");
     const title = element.querySelector?.("[data-recorder-guard-title]");
     const message = element.querySelector?.("[data-recorder-guard-message]");
     if (title) title.textContent = state.title || (secure ? SECURE_TITLE : TRIGGERED_TITLE);

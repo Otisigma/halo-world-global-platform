@@ -65,6 +65,14 @@ clock = 500;
 inputs = { ...inputs, masterBusLevel: 0.4 };
 guard.tick();
 assert.equal(guard.state.state, "triggered", "Warning is held briefly so transient peaks do not flicker");
+assert.match(guard.state.warningMessage, /90%/, "Held warning keeps the last hot peak");
+
+clock = 700;
+inputs = { ...inputs, activeCueDecks: ["B"] };
+guard.tick();
+assert.equal(statuses.at(-1).state, "triggered");
+assert.match(statuses.at(-1).warningMessage, /Deck B/, "Held warning follows the cue deck that is active now");
+assert.doesNotMatch(statuses.at(-1).warningMessage, /Deck A/);
 
 clock = 2500;
 guard.tick();
@@ -94,11 +102,13 @@ HaloRecorderGuard.renderIndicator(indicator, triggered);
 assert.equal(indicator.dataset.state, "triggered");
 assert.ok(classes.has("is-triggered") && !classes.has("is-secure"), "Indicator switches to the triggered style");
 assert.equal(indicator.attributes.role, "alert", "Triggered indicator is announced as an alert");
+assert.equal(indicator.attributes["aria-live"], "assertive", "Alert live region is assertive");
 assert.equal(title.textContent, "Audio bleed guard triggered");
 assert.equal(message.textContent, triggered.warningMessage);
 HaloRecorderGuard.renderIndicator(indicator, cleanRecording);
 assert.ok(classes.has("is-secure") && !classes.has("is-triggered"), "Indicator returns to the secure style");
 assert.equal(title.textContent, "Recorder isolation secure");
+assert.equal(indicator.attributes["aria-live"], "polite", "Secure status live region is polite");
 
 assert.match(deckPage, /<script src="\/dj-recorder-guard\.js" defer><\/script>/, "DJ deck loads the recorder guard");
 const guardIndex = deckPage.indexOf('id="recorderGuard"');

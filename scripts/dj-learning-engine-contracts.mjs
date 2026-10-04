@@ -91,19 +91,44 @@ assert.equal(tamperedWeights.weights.phrasePrecision, DJ_LEARNING_LIMITS.maxWeig
 assert.equal(tamperedWeights.weights.vocalSeparationStrictness, 1, "Invalid stored weights fall back to baseline");
 assert.equal(tamperedWeights.transitionsEvaluated, 0);
 
+const raceStore = createMemoryLearningStore();
+const racers = await Promise.all(["race:1", "race:2", "race:3"].map(transitionId =>
+  new DJLearningEngine({ store: raceStore, logger, now: fixedNow }).evaluateAndLearn({ ...rough, djName: "DJ Romy", transitionId })));
+assert.ok(racers.every(result => result.persisted), "Concurrent evaluations all persist after retrying");
+assert.equal(raceStore.profiles.get("dj-romy").transitionsEvaluated, 3, "Concurrent evaluations never overwrite each other");
+assert.equal(raceStore.profiles.get("dj-romy").weights.vocalSeparationStrictness, 1.331, "Every concurrent transition contributes to the learned weights");
+assert.ok(logs.some(([level, message]) => level === "warn" && /Concurrent update/.test(message)), "Write conflicts are logged");
+
+const stuckStore = { async read() { return { value: null, version: null }; }, async write() { return false; } };
+await assert.rejects(new DJLearningEngine({ store: stuckStore, logger }).evaluateAndLearn(clean), /changed concurrently/, "Persistent conflicts fail loudly instead of dropping learning silently");
+
 const blobCalls = [];
+const blobEntries = new Map();
 const blobStore = createBlobLearningStore(options => {
   blobCalls.push(["open", options]);
   return {
-    async get(key, options) { blobCalls.push(["get", key, options]); return null; },
-    async setJSON(key, value) { blobCalls.push(["set", key, value.djId]); }
+    async getWithMetadata(key, options) {
+      blobCalls.push(["get", key, options]);
+      return blobEntries.has(key) ? { data: blobEntries.get(key).data, etag: blobEntries.get(key).etag, metadata: {} } : null;
+    },
+    async setJSON(key, value, options) {
+      blobCalls.push(["set", key, value.djId, options]);
+      const current = blobEntries.get(key);
+      if (options?.onlyIfNew && current) return { modified: false };
+      if (options?.onlyIfMatch && current?.etag !== options.onlyIfMatch) return { modified: false };
+      blobEntries.set(key, { data: value, etag: `"${blobCalls.length}"` });
+      return { modified: true, etag: `"${blobCalls.length}"` };
+    }
   };
 });
 const blobEngine = new DJLearningEngine({ store: blobStore, logger, now: fixedNow });
 await blobEngine.evaluateAndLearn({ ...clean, djName: "DJ Butterfly" });
+await blobEngine.evaluateAndLearn({ ...rough, djName: "DJ Butterfly" });
 assert.deepEqual(blobCalls[0], ["open", { name: DJ_LEARNING_STORE_NAME, consistency: "strong" }], "Blob adapter uses a strongly consistent named store");
 assert.deepEqual(blobCalls[1], ["get", "weights/dj-butterfly", { type: "json" }]);
-assert.deepEqual(blobCalls[2], ["set", "weights/dj-butterfly", "dj-butterfly"]);
+assert.deepEqual(blobCalls[2], ["set", "weights/dj-butterfly", "dj-butterfly", { onlyIfNew: true }], "First write only creates a new profile");
+assert.deepEqual(blobCalls[4][3], { onlyIfMatch: '"3"' }, "Later writes are conditional on the ETag that was read");
+assert.equal(blobEntries.get("weights/dj-butterfly").data.transitionsEvaluated, 2, "Blob-backed profiles accumulate across evaluations");
 assert.throws(() => new DJLearningEngine({ store: {} }), TypeError, "Engine requires a persistence adapter");
 
 const [source, docs] = await Promise.all([

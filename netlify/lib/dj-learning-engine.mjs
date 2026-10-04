@@ -7,7 +7,7 @@
 export const DJ_LEARNING_STORE_NAME = "halo-dj-learning";
 export const DJ_LEARNING_WEIGHT_KEYS = Object.freeze(["phrasePrecision", "vocalSeparationStrictness", "eqBlendSmoothness"]);
 export const DJ_LEARNING_DEFAULT_WEIGHTS = Object.freeze({ phrasePrecision: 1, vocalSeparationStrictness: 1, eqBlendSmoothness: 1 });
-export const DJ_LEARNING_LIMITS = Object.freeze({ minWeight: 0.5, maxWeight: 2, historyLimit: 50 });
+export const DJ_LEARNING_LIMITS = Object.freeze({ minWeight: 0.5, maxWeight: 2, historyLimit: 50, writeAttempts: 5 });
 
 const DJ_ID_PATTERN = /^[a-z0-9][a-z0-9-]{0,63}$/;
 const TRANSITION_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9:_-]{0,127}$/;
@@ -160,24 +160,44 @@ function normalizeProfile(djId, stored) {
   };
 }
 
+// Store contract: read(djId) -> { value, version } and write(djId, value, version) -> boolean.
+// write() must only succeed when the stored version still matches (version null = create only),
+// so concurrent evaluations for the same DJ never overwrite each other's learning.
+
 // Repository-backed adapter on Netlify Blobs, consistent with other HALO function stores.
 export function createBlobLearningStore(getStore) {
   if (typeof getStore !== "function") throw new TypeError("getStore is required for the DJ learning store.");
   const store = getStore({ name: DJ_LEARNING_STORE_NAME, consistency: "strong" });
   const key = djId => `weights/${djId}`;
   return {
-    async read(djId) { return (await store.get(key(djId), { type: "json" })) ?? null; },
-    async write(djId, profile) { await store.setJSON(key(djId), profile); }
+    async read(djId) {
+      const entry = await store.getWithMetadata(key(djId), { type: "json" });
+      return entry ? { value: entry.data ?? null, version: entry.etag || null } : { value: null, version: null };
+    },
+    async write(djId, profile, version) {
+      const result = await store.setJSON(key(djId), profile, version ? { onlyIfMatch: version } : { onlyIfNew: true });
+      return result?.modified !== false;
+    }
   };
 }
 
 // In-memory stub for local development and contract tests.
 export function createMemoryLearningStore(initial = {}) {
   const profiles = new Map(Object.entries(initial).map(([djId, profile]) => [djId, structuredClone(profile)]));
+  const versions = new Map([...profiles.keys()].map(djId => [djId, "1"]));
   return {
     profiles,
-    async read(djId) { return profiles.has(djId) ? structuredClone(profiles.get(djId)) : null; },
-    async write(djId, profile) { profiles.set(djId, structuredClone(profile)); }
+    async read(djId) {
+      return profiles.has(djId)
+        ? { value: structuredClone(profiles.get(djId)), version: versions.get(djId) }
+        : { value: null, version: null };
+    },
+    async write(djId, profile, version) {
+      if ((versions.get(djId) ?? null) !== (version ?? null)) return false;
+      profiles.set(djId, structuredClone(profile));
+      versions.set(djId, String(Number(versions.get(djId) || 0) + 1));
+      return true;
+    }
   };
 }
 
@@ -193,7 +213,8 @@ export class DJLearningEngine {
 
   async loadWeights(djName) {
     const djId = normalizeDjId(djName);
-    const profile = normalizeProfile(djId, await this.store.read(djId));
+    const { value } = await this.store.read(djId);
+    const profile = normalizeProfile(djId, value);
     return { djId, weights: profile.weights, transitionsEvaluated: profile.transitionsEvaluated, updatedAt: profile.updatedAt };
   }
 
@@ -208,28 +229,35 @@ export class DJLearningEngine {
       this.logger.warn?.(`[DJ Learning Engine] Vocal collision on transition ${metrics.transitionId}; raising vocal separation strictness.`);
     }
 
-    const profile = normalizeProfile(metrics.djId, await this.store.read(metrics.djId));
     const summary = feedbackSummary(scored);
-    if (profile.recentTransitions.some(entry => entry.transitionId === metrics.transitionId)) {
-      this.logger.info?.(`[DJ Learning Engine] Transition ${metrics.transitionId} already learned; weights unchanged.`);
-      return { djId: metrics.djId, performanceScore, updatedWeights: profile.weights, previousWeights: profile.weights, feedbackSummary: summary, persisted: false, duplicate: true };
+
+    for (let attempt = 1; attempt <= DJ_LEARNING_LIMITS.writeAttempts; attempt += 1) {
+      const { value, version } = await this.store.read(metrics.djId);
+      const profile = normalizeProfile(metrics.djId, value);
+      if (profile.recentTransitions.some(entry => entry.transitionId === metrics.transitionId)) {
+        this.logger.info?.(`[DJ Learning Engine] Transition ${metrics.transitionId} already learned; weights unchanged.`);
+        return { djId: metrics.djId, performanceScore, updatedWeights: profile.weights, previousWeights: profile.weights, feedbackSummary: summary, persisted: false, duplicate: true };
+      }
+
+      const previousWeights = profile.weights;
+      const updatedWeights = adjustWeights(previousWeights, scored);
+      const transitionsEvaluated = profile.transitionsEvaluated + 1;
+      const updatedAt = this.now().toISOString();
+      const nextProfile = {
+        ...profile,
+        weights: updatedWeights,
+        transitionsEvaluated,
+        averagePerformance: round(profile.averagePerformance + (performanceScore - profile.averagePerformance) / transitionsEvaluated, 2),
+        recentTransitions: [...profile.recentTransitions, { transitionId: metrics.transitionId, performanceScore, evaluatedAt: updatedAt }].slice(-DJ_LEARNING_LIMITS.historyLimit),
+        updatedAt
+      };
+
+      if (await this.store.write(metrics.djId, nextProfile, version ?? null)) {
+        this.logger.info?.(`[DJ Learning Engine] Persisted weights for ${metrics.djId}: ${JSON.stringify(updatedWeights)} (performance ${performanceScore}).`);
+        return { djId: metrics.djId, performanceScore, updatedWeights, previousWeights, feedbackSummary: summary, persisted: true, duplicate: false };
+      }
+      this.logger.warn?.(`[DJ Learning Engine] Concurrent update for ${metrics.djId}; retrying (${attempt}/${DJ_LEARNING_LIMITS.writeAttempts}).`);
     }
-
-    const previousWeights = profile.weights;
-    const updatedWeights = adjustWeights(previousWeights, scored);
-    const transitionsEvaluated = profile.transitionsEvaluated + 1;
-    const updatedAt = this.now().toISOString();
-    const nextProfile = {
-      ...profile,
-      weights: updatedWeights,
-      transitionsEvaluated,
-      averagePerformance: round(profile.averagePerformance + (performanceScore - profile.averagePerformance) / transitionsEvaluated, 2),
-      recentTransitions: [...profile.recentTransitions, { transitionId: metrics.transitionId, performanceScore, evaluatedAt: updatedAt }].slice(-DJ_LEARNING_LIMITS.historyLimit),
-      updatedAt
-    };
-
-    await this.store.write(metrics.djId, nextProfile);
-    this.logger.info?.(`[DJ Learning Engine] Persisted weights for ${metrics.djId}: ${JSON.stringify(updatedWeights)} (performance ${performanceScore}).`);
-    return { djId: metrics.djId, performanceScore, updatedWeights, previousWeights, feedbackSummary: summary, persisted: true, duplicate: false };
+    throw new Error(`DJ learning weights for ${metrics.djId} changed concurrently; transition ${metrics.transitionId} was not learned.`);
   }
 }

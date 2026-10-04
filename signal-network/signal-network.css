@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 .signal-market {
   padding: clamp(3rem, 7vw, 6rem) 0;
   color: #f2efe4;
@@ -53,7 +52,8 @@
 }
 @media (prefers-reduced-motion: reduce) {
   .signal-market *, .signal-market__dialog * { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
-=======
+}
+
 .signal-feed {
   padding-block: clamp(3rem, 7vw, 6rem);
   background: #0c1018;
@@ -103,7 +103,6 @@
   .signal-feed__post { padding: .8rem; }
   .signal-feed__post header { gap: .5rem; }
   .signal-feed__reply { margin-left: .3rem; }
->>>>>>> origin/main
 }
 
 .signal-console {

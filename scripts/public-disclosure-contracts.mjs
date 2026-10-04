@@ -24,11 +24,23 @@ const contents = await Promise.all(publicSurfaces.map(async path => ({
   content: (await readFile(resolve(root, path), "utf8")).toLowerCase()
 })));
 
-const [homePage, creatorPage, releaseHouse] = await Promise.all([
-  readFile(resolve(root, "halo.html"), "utf8"),
-  readFile(resolve(root, "creators/index.html"), "utf8"),
-  readFile(resolve(root, "release-house/release-house.js"), "utf8")
-]);
+const ownershipSurfaces = [
+  "halo.html",
+  "creators/index.html",
+  "dj-deck.html",
+  "release-house/release-house.js"
+];
+const ownershipContents = await Promise.all(ownershipSurfaces.map(async path => ({
+  path,
+  content: await readFile(resolve(root, path), "utf8")
+})));
+const ownershipStatements = [
+  "Owen Anthony’s music is owned by Halo Music.",
+  "Other artist-uploaded content remains the uploader’s property unless an explicit split or ownership agreement is configured on HALO.",
+  "Uploading alone transfers no rights.",
+  "HALO software and technical infrastructure are proprietary."
+];
+const copyrightPrompt = "℗ sound-recording rights holder and year / © composition or artwork rights holder and year; enter confirmed rights holders for this release";
 
 for (const phrase of restrictedDisclosures) {
   const exposedBy = contents.filter(file => file.content.includes(phrase)).map(file => file.path);
@@ -38,13 +50,17 @@ for (const phrase of restrictedDisclosures) {
 const dreamweaverPage = contents.find(file => file.path === "dreamweaver/index.html")?.content || "";
 assert.ok(dreamweaverPage.includes("proprietary halo technology"), "Dreamweaver identifies the product as proprietary");
 assert.ok(dreamweaverPage.includes("capabilities and outcomes, not confidential methods"), "Dreamweaver states the public disclosure boundary");
-for (const [path, content] of [["HALO footer", homePage], ["Creator World", creatorPage]]) {
-  assert.match(content, /Owen Anthony’s music is owned by Halo Music\./, `${path} identifies Owen Anthony music ownership`);
-  assert.match(content, /artist-uploaded content remains 100% the uploader’s property/, `${path} preserves artist-upload ownership by default`);
-  assert.match(content, /explicit split or ownership agreement is configured/, `${path} makes ownership changes agreement-dependent`);
-  assert.match(content, /Uploading alone (transfers no rights|does not transfer ownership)/i, `${path} clarifies upload does not transfer rights`);
+for (const { path, content } of ownershipContents) {
+  assert.ok(content.includes(ownershipStatements.join(" ")), `${path} displays the exact ownership policy`);
+  for (const statement of ownershipStatements) {
+    assert.equal(content.split(statement).length - 1, 1, `${path} states each ownership provision only once`);
+  }
+  assert.equal((content.match(/Owen Anthony[’']s music is owned/g) || []).length, 1, `${path} does not repeat the music ownership disclosure`);
+  assert.equal((content.match(/artist-uploaded content remains/g) || []).length, 1, `${path} does not repeat the uploader ownership disclosure`);
+  assert.doesNotMatch(content, /(?:HALO (?:owns|takes ownership of) (?:all |these |the )?(?:uploaded (?:files|content)|artist uploads)|(?:uploaded (?:files|content)|these files) (?:are|is) owned by HALO)/i, `${path} does not claim blanket upload ownership`);
 }
-assert.match(homePage, /HALO software and technical infrastructure are proprietary/, "the public footer identifies platform IP as proprietary");
-assert.match(releaseHouse, /enter confirmed holders for this release/, "copyright metadata asks for release-specific rights holders");
+const releaseHouse = ownershipContents.find(file => file.path === "release-house/release-house.js").content;
+assert.ok(releaseHouse.includes(`placeholder: "${copyrightPrompt}"`), "copyright metadata asks for exact release-specific rights holders");
 
-console.log(`Public disclosure contracts: ${restrictedDisclosures.length + 12}/${restrictedDisclosures.length + 12} checks passed.`);
+const checkCount = restrictedDisclosures.length + 2 + ownershipSurfaces.length * (ownershipStatements.length + 4) + 1;
+console.log(`Public disclosure contracts: ${checkCount}/${checkCount} checks passed.`);

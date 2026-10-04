@@ -1,9 +1,8 @@
-import { getStore } from "@netlify/blobs";
-import { getDatabase } from "@netlify/database";
-import { getUser, verifyRequestOrigin } from "@netlify/identity";
+import { createHash } from "node:crypto";
 import { cleanText, ensureMembership } from "../lib/halo-x.mjs";
+import { loadCreatorPass } from "../lib/creator-pass.mjs";
+import { getVaultCapacityBytes } from "../../lib/creator-pass.js";
 
-const stemStore = getStore({ name: "halo-stem-vault", consistency: "strong" });
 const stemTypes = new Set(["full", "drums", "bass", "music", "vocals", "fx"]);
 const providers = new Set(["suno", "halo", "other"]);
 const allowedTypes = new Set(["audio/wav", "audio/x-wav", "audio/mpeg", "audio/mp4", "audio/aac", "audio/ogg", "audio/webm", "audio/flac", "audio/x-flac"]);
@@ -46,10 +45,11 @@ function packPayload(row, files = []) {
   };
 }
 
+export function createStemVaultHandler({ getDatabase, getUser, verifyRequestOrigin, stemStore, membershipFor = ensureMembership, passFor = loadCreatorPass }) {
 async function authenticatedContext() {
   const [db, user] = await Promise.all([getDatabase(), getUser()]);
   if (!user?.id) return { db, user: null, membership: null };
-  const membership = await ensureMembership(db, user);
+  const membership = await membershipFor(db, user);
   return { db, user, membership };
 }
 
@@ -70,20 +70,40 @@ async function listPacks(db, memberId) {
   return packs.map(pack => packPayload(pack, files.filter(file => file.pack_id === pack.id)));
 }
 
-async function uploadChunk(request, memberId) {
+async function capacityPayload(db, memberId) {
+  const creatorPass = await passFor(db, memberId);
+  const capacityBytes = getVaultCapacityBytes(creatorPass);
+  const rows = await db.sql`SELECT used_bytes FROM halo_stem_vault_usage WHERE member_id = ${memberId}`;
+  const usedBytes = Number(rows[0]?.used_bytes || 0);
+  if (!Number.isSafeInteger(usedBytes) || usedBytes < 0) throw new Error("Invalid vault usage");
+  return { creatorPass, capacity: { usedBytes, capacityBytes: Number.isFinite(capacityBytes) ? capacityBytes : null, unlimited: capacityBytes === Infinity } };
+}
+
+async function uploadChunk(request, db, memberId) {
   const form = await request.formData();
   const uploadId = cleanText(form.get("uploadId"), 50).toLowerCase();
   const stemType = cleanText(form.get("stemType"), 20).toLowerCase();
-  const chunkIndex = Number.parseInt(form.get("chunkIndex"), 10);
-  const chunkCount = Number.parseInt(form.get("chunkCount"), 10);
+  const chunkIndex = Number(form.get("chunkIndex"));
+  const chunkCount = Number(form.get("chunkCount"));
   const chunk = form.get("chunk");
   if (!uploadIdPattern.test(uploadId) || !stemTypes.has(stemType)) return json({ message: "Stem upload identity is invalid" }, 400);
   if (!Number.isInteger(chunkIndex) || !Number.isInteger(chunkCount) || chunkIndex < 0 || chunkCount < 1 || chunkCount > 128 || chunkIndex >= chunkCount) {
     return json({ message: "Stem chunk position is invalid" }, 400);
   }
   if (!(chunk instanceof File) || chunk.size < 1 || chunk.size > maxChunkBytes) return json({ message: "Stem chunk is missing or too large" }, 400);
+  const bytes = await chunk.arrayBuffer();
+  const hash = createHash("sha256").update(new Uint8Array(bytes)).digest("hex");
+  const reservation = await db.sql`
+    SELECT halo_reserve_stem_chunk(
+      ${memberId}, ${uploadId}, ${stemType}, ${chunkIndex}, ${chunkCount}, ${bytes.byteLength}, ${hash}
+    ) AS result
+  `;
+  const result = reservation[0]?.result;
+  if (result === "capacity") return json({ message: "Your 5 GB vault is full. Upgrade to Premium for unlimited vault capacity." }, 413);
+  if (result === "conflict" || result === "finalized") return json({ message: "This chunk conflicts with an existing upload" }, 409);
+  if (!["reserved", "retry"].includes(result)) throw new Error("Vault reservation failed");
   const key = `${memberId}/${uploadId}/${stemType}/${String(chunkIndex).padStart(3, "0")}`;
-  await stemStore.set(key, chunk, { metadata: { memberId, uploadId, stemType, chunkIndex: String(chunkIndex) } });
+  await stemStore.set(key, bytes, { metadata: { memberId, uploadId, stemType, chunkIndex: String(chunkIndex) } });
   return json({ uploaded: true, chunkIndex });
 }
 
@@ -120,6 +140,7 @@ async function finalizePack(db, memberId, body) {
   if (!uploadIdPattern.test(uploadId) || title.length < 2) return json({ message: "Name this stem pack before saving it" }, 400);
   if (body.rightsAttested !== true) return json({ message: "Confirm that HALO owns or controls every uploaded stem" }, 400);
   if (files.length < 2) return json({ message: "Add at least two synchronized audio stems" }, 400);
+  if (files.length !== body.files?.length || files.length > 6) return json({ message: "Every stem must meet the file limits (maximum six files, 512 MiB each)" }, 400);
   const measuredDurations = files.map(file => file.durationSeconds).filter(Boolean);
   if (measuredDurations.length > 1 && Math.max(...measuredDurations) - Math.min(...measuredDurations) > 0.25) {
     return json({ message: "Stem lengths must match within a quarter second" }, 400);
@@ -128,35 +149,35 @@ async function finalizePack(db, memberId, body) {
   for (const file of files) {
     const prefix = `${memberId}/${uploadId}/${file.stemType}/`;
     const uploaded = await stemStore.list({ prefix });
-    if (uploaded.blobs.length !== file.chunkCount) return json({ message: `The ${file.stemType} stem upload is incomplete` }, 409);
-  }
-
-  const existing = await db.sql`SELECT id FROM halo_stem_packs WHERE id = ${uploadId} LIMIT 1`;
-  if (existing.length) return json({ message: "This stem pack was already saved" }, 409);
-
-  const rows = await db.sql`
-    INSERT INTO halo_stem_packs (
-      id, member_id, title, description, source_provider, source_project_url,
-      generation_prompt, bpm, musical_key, genre, mood, rights_attested, rights_attested_at
-    ) VALUES (
-      ${uploadId}, ${memberId}, ${title}, ${cleanText(body.description, 600)}, ${sourceProvider},
-      ${cleanText(body.sourceProjectUrl, 500)}, ${cleanText(body.generationPrompt, 3000)}, ${bpm},
-      ${cleanText(body.key, 12)}, ${cleanText(body.genre, 80)}, ${cleanText(body.mood, 120)}, TRUE, NOW()
-    )
-    RETURNING *
-  `;
-
-  for (const file of files) {
-    const blobKey = `${memberId}/${uploadId}/${file.stemType}/`;
-    await db.sql`
-      INSERT INTO halo_stem_files (
-        pack_id, stem_type, original_filename, blob_key, chunk_count, content_type, byte_size, duration_seconds
-      ) VALUES (
-        ${uploadId}, ${file.stemType}, ${file.filename}, ${blobKey}, ${file.chunkCount},
-        ${file.contentType}, ${file.byteSize}, ${file.durationSeconds}
-      )
+    if (uploaded.blobs.length !== file.chunkCount || uploaded.hasMore) return json({ message: `The ${file.stemType} stem upload is incomplete` }, 409);
+    const reservations = await db.sql`
+      SELECT chunk_index, byte_size, content_hash FROM halo_stem_vault_chunks
+      WHERE member_id = ${memberId} AND upload_id = ${uploadId} AND stem_type = ${file.stemType}
+      ORDER BY chunk_index
     `;
+    if (reservations.length !== file.chunkCount) return json({ message: "Stem byte reservations are incomplete" }, 409);
+    let actualBytes = 0;
+    for (let index = 0; index < file.chunkCount; index += 1) {
+      const bytes = await stemStore.get(`${prefix}${String(index).padStart(3, "0")}`, { type: "arrayBuffer" });
+      const reserved = reservations[index];
+      if (!bytes || Number(reserved.chunk_index) !== index || bytes.byteLength !== Number(reserved.byte_size)
+        || createHash("sha256").update(new Uint8Array(bytes)).digest("hex") !== reserved.content_hash) {
+        return json({ message: "Stem chunk bytes could not be verified" }, 409);
+      }
+      actualBytes += bytes.byteLength;
+    }
+    if (actualBytes !== file.byteSize || actualBytes > maxStemBytes) return json({ message: "Stem file size does not match its uploaded bytes" }, 400);
   }
+
+  const metadata = { title, description: cleanText(body.description, 600), sourceProvider,
+    sourceProjectUrl: cleanText(body.sourceProjectUrl, 500), generationPrompt: cleanText(body.generationPrompt, 3000),
+    bpm, key: cleanText(body.key, 12), genre: cleanText(body.genre, 80), mood: cleanText(body.mood, 120) };
+  const finalized = await db.sql`
+    SELECT halo_finalize_stem_pack(${memberId}, ${uploadId}, ${JSON.stringify(metadata)}::jsonb, ${JSON.stringify(files)}::jsonb) AS result
+  `;
+  if (finalized[0]?.result === "capacity") return json({ message: "Your current Creator Pass capacity is exceeded. Upgrade or remove stored audio before saving." }, 413);
+  if (finalized[0]?.result !== "saved") return json({ message: "Stem reservations changed or are incomplete" }, 409);
+  const rows = await db.sql`SELECT * FROM halo_stem_packs WHERE id = ${uploadId} AND member_id = ${memberId}`;
   const savedFiles = await db.sql`SELECT * FROM halo_stem_files WHERE pack_id = ${uploadId} ORDER BY stem_type`;
   return json({ pack: packPayload(rows[0], savedFiles), message: "Private HALO stem pack saved" }, 201);
 }
@@ -171,24 +192,33 @@ async function archivePack(db, memberId, body) {
   return rows.length ? json({ archived: true }) : json({ message: "Stem pack not found" }, 404);
 }
 
-export default async function stemVaultHandler(request) {
+return async function stemVaultHandler(request) {
   if (!["GET", "POST"].includes(request.method)) return json({ message: "Method not allowed" }, 405, { Allow: "GET, POST" });
   try {
     const { db, user, membership } = await authenticatedContext();
     if (!user?.id || !membership?.member_id) return json({ authenticated: false, packs: [], message: "Sign in to open the private stem vault" }, 401);
-    if (request.method === "GET") return json({ authenticated: true, packs: await listPacks(db, membership.member_id) });
+    if (request.method === "GET") return json({ authenticated: true, packs: await listPacks(db, membership.member_id), ...await capacityPayload(db, membership.member_id) });
     if (!(await verifyRequestOrigin(request))) return json({ message: "Request origin could not be verified" }, 403);
     const contentType = request.headers.get("content-type") || "";
-    if (contentType.startsWith("multipart/form-data")) return uploadChunk(request, membership.member_id);
+    if (contentType.startsWith("multipart/form-data")) return await uploadChunk(request, db, membership.member_id);
     const body = await request.json().catch(() => null);
     if (!body) return json({ message: "Request body must be valid JSON" }, 400);
-    if (body.action === "finalize") return finalizePack(db, membership.member_id, body);
-    if (body.action === "archive") return archivePack(db, membership.member_id, body);
+    if (body.action === "finalize") return await finalizePack(db, membership.member_id, body);
+    if (body.action === "archive") return await archivePack(db, membership.member_id, body);
     return json({ message: "Choose a supported stem-vault action" }, 400);
   } catch (error) {
     console.error("HALO stem vault request failed", error instanceof Error ? error.message : "unknown error");
     return json({ message: "The private stem vault is temporarily unavailable" }, 500);
   }
+};
+}
+
+export default async function stemVaultHandler(request) {
+  const [{ getStore }, { getDatabase }, { getUser, verifyRequestOrigin }] = await Promise.all([
+    import("@netlify/blobs"), import("@netlify/database"), import("@netlify/identity")
+  ]);
+  return createStemVaultHandler({ getDatabase, getUser, verifyRequestOrigin,
+    stemStore: getStore({ name: "halo-stem-vault", consistency: "strong" }) })(request);
 }
 
 export const config = { path: "/api/stem-vault" };

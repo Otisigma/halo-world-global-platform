@@ -45,9 +45,22 @@ Visual identity is concept metadata (description, palette, motifs, wardrobe, lig
 
 Nothing in the persona system publishes, sends messages, changes follower counts or claims releases, rights or bookings. The creator-network demo profile shows each DJ's voice, tone, behaviours, visual concept and one sample draft as text only.
 
+## Premium CreatorPass integration
+
+`lib/creator-pass.js` owns the runtime entitlement policy; `types/creatorPass.ts` describes its JSON-safe contract. Apply the CreatorPass and vault quota database migrations before deploying the premium surfaces. Only trusted server-side billing/operations may write `halo_creator_passes`: no profile, browser metadata, membership tier, or request entitlement flag grants Premium. This change does not add checkout or a billing webhook; provision subscription records through trusted operations until billing synchronization is connected.
+
+Premium requires `subscription_tier = 'PREMIUM'` and either an active subscription with a strictly future expiry, or a trial with a strictly future trial end (and a future subscription expiry if present). Missing, malformed, expired, past-due, canceled, and inactive records receive Standard entitlements. Update status and dates from verified billing events; renewals must extend the expiry. Existing Gold, Backstage, and Founder memberships remain separate and do not imply a Premium subscription.
+
+Standard vault capacity is 5 GiB. Premium vault capacity is uncapped (`vaultCapacityBytes: null` with `unlimitedVault: true` in JSON), but the 4 MiB chunk and 512 MiB per-stem safety limits still apply. Server-side quota reservations count actual uploaded bytes, including archived files and unfinished uploads; archiving is not deletion. Over-capacity downgrades retain their files but cannot add more data.
+
+Discovery ranks eligible Premium creators and open briefs before applying result limits. Verified Premium is a subscription badge, not identity or rights verification; curated/demo creators never acquire it from sample flags. DJ brief promotion remains an AI-labelled draft requiring explicit human approval, not automatic Signal publication.
+
+Studio Guardian and `/api/dreamweaver-smart-splits` enforce Premium on the server. Smart splits draft the owner's recorded master or composition allocations for a linked project; songwriter ownership and optional publisher allocations are separate pools, each totaling 100%. Drafts neither clear rights nor record consent, and must receive contributor consent and human/legal review before use. Custom artist room entitlement is represented but room customization, subdomain provisioning, automated audio indexing, and KPI reporting are not implemented by this wiring.
+
 ## Validation
 
 ```bash
 node scripts/dj-persona-contracts.mjs
 npm run test:network
+npm run test:creator-pass
 ```

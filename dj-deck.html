@@ -3827,10 +3827,12 @@
 
     function recorderGuardInputs() {
       const activeCueDecks = ["A", "B"].filter(deckId => audioEngine.decks[deckId].cueActive);
+      const isRecording = recordingState.recorder?.state === "recording";
+      const cueBusActive = activeCueDecks.length > 0;
       return {
-        isRecording: recordingState.recorder?.state === "recording",
-        masterBusLevel: recorderGuardMasterLevel(),
-        cueBusActive: activeCueDecks.length > 0,
+        isRecording,
+        masterBusLevel: isRecording && cueBusActive ? recorderGuardMasterLevel() : 0,
+        cueBusActive,
         activeCueDecks
       };
     }

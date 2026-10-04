@@ -172,7 +172,9 @@ export function createBlobLearningStore(getStore) {
   return {
     async read(djId) {
       const entry = await store.getWithMetadata(key(djId), { type: "json" });
-      return entry ? { value: entry.data ?? null, version: entry.etag || null } : { value: null, version: null };
+      if (!entry) return { value: null, version: null };
+      if (!entry.etag) throw new Error(`DJ learning profile for ${djId} has no ETag; refusing an unconditional overwrite.`);
+      return { value: entry.data ?? null, version: entry.etag };
     },
     async write(djId, profile, version) {
       const result = await store.setJSON(key(djId), profile, version ? { onlyIfMatch: version } : { onlyIfNew: true });

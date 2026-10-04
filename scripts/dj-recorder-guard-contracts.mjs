@@ -118,9 +118,9 @@ assert.ok(rigIndex > -1 && guardIndex > rigIndex && guardIndex < recorderTitleIn
 assert.match(deckPage, /data-recorder-guard-title/, "Indicator exposes a title slot");
 assert.match(deckPage, /data-recorder-guard-message/, "Indicator exposes a message slot");
 assert.match(deckPage, /function attachRecorderGuardToDeck\(/, "DJ deck wires the recorder guard");
-assert.match(deckPage, /isRecording: recordingState\.recorder\?\.state === "recording"/, "Guard reads the live recorder state");
-assert.match(deckPage, /cueBusActive: activeCueDecks\.length > 0/, "Guard reads cue bus activity");
-assert.match(deckPage, /masterBusLevel: recorderGuardMasterLevel\(\)/, "Guard reads the master bus level");
+assert.match(deckPage, /const isRecording = recordingState\.recorder\?\.state === "recording"/, "Guard reads the live recorder state");
+assert.match(deckPage, /const cueBusActive = activeCueDecks\.length > 0/, "Guard reads cue bus activity");
+assert.match(deckPage, /masterBusLevel: isRecording && cueBusActive \? recorderGuardMasterLevel\(\) : 0/, "Guard reads the master bus level only when it can affect the result");
 assert.match(deckPage, /recorderGuardState\.guard\?\.tick\(\);/, "Cue toggles refresh the guard immediately");
 assert.match(deckPage, /cueGain\.connect\(context\.destination\)/, "CUE monitoring stays on the local output path");
 assert.match(deckPage, /limiter\.connect\(audioEngine\.recordingDestination\)/, "Recorder taps the post-limiter master bus");

@@ -106,6 +106,8 @@ assert.deepEqual(backoffs, [25, 50, 100, 200], "Conflicting writes back off expo
 
 const legacyBlobStore = createBlobLearningStore(() => ({ async getWithMetadata() { return null; }, async setJSON() { return undefined; } }));
 assert.equal(await legacyBlobStore.write("dj-halo", {}, null), false, "Blob writes fail closed when conditional-write support is not confirmed");
+const noEtagStore = createBlobLearningStore(() => ({ async getWithMetadata() { return { data: {}, etag: "" }; }, async setJSON() { return { modified: true }; } }));
+await assert.rejects(noEtagStore.read("dj-halo"), /no ETag/, "Existing blobs without an ETag are rejected instead of overwritten");
 
 const blobCalls = [];
 const blobEntries = new Map();

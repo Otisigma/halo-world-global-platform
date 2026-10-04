@@ -1826,6 +1826,8 @@
   <div class="toast" id="toast" role="status" aria-live="polite"><strong id="toastTitle">System</strong><p id="toastMessage">Ready.</p></div>
 
   <script src="/upload-progress.js"></script>
+  <script src="/services/deckSessionManager.js"></script>
+  <script src="/services/haloAudioEngine.js"></script>
   <script>
     const TRACK_DNA_DEFAULTS = { danceability: 6, emotionalIntensity: 5, darkness: 5, warmth: 5, vocalDensity: 4, percussionDensity: 6, bassWeight: 6, melodicDensity: 5, atmosphere: 6, energyRole: "builder", sonicWeather: "Balanced, groove-led and open enough for a patient blend.", signatureMoment: "Protect the central hook before opening the next phrase." };
     const tracks = [
@@ -2021,6 +2023,9 @@
     let latestPreflightReport = null;
     let currentTransitionObservationId = null;
     const sessionStorageKey = "halo.dj.session.v1";
+    const deckSessionManager = window.HaloDeckSessionManager || null;
+    const freshTakeoverRequested = Boolean(deckSessionManager?.shouldStartFreshTakeover(window.location.search));
+    if (freshTakeoverRequested) deckSessionManager.clearDeckSession({ keys: [sessionStorageKey] });
     const artistJourneyStorageKey = "halo-artist-journey-state.v1";
     const djSessionId = window.crypto?.randomUUID ? window.crypto.randomUUID() : `halo-dj-${Date.now()}-${Math.random().toString(16).slice(2)}`;
     let djMode = "listening";
@@ -2756,6 +2761,7 @@
     }
 
     function restoreLocalSession() {
+      if (freshTakeoverRequested) return null;
       try {
         const saved = JSON.parse(localStorage.getItem(sessionStorageKey) || "null");
         if (applySessionSnapshot(saved)) setSessionSaveStatus("Restored on device", false);
@@ -2766,7 +2772,7 @@
     }
 
     async function restoreCloudSession(localSnapshot) {
-      if (!sessionCloudEnabled) return;
+      if (!sessionCloudEnabled || freshTakeoverRequested) return;
       try {
         const response = await fetch("/api/halo-session");
         const data = await response.json().catch(() => ({}));
@@ -3935,7 +3941,11 @@
           audioEngine.decks[deckId].filters = { lowShelf, vocalBand, highShelf, highPass, lowPass };
           audioEngine.decks[deckId].effects = { echoDelay, echoFeedback, echoWet };
         });
+        audioEngine.halo = window.HaloAudioEngine
+          ? new window.HaloAudioEngine({ context, masterGain, deckAGain: audioEngine.decks.A.gain, deckBGain: audioEngine.decks.B.gain })
+          : null;
         window.__haloAudioContext = context;
+        window.__haloAudioEngine = audioEngine.halo;
         updateAudioCrossfader();
         reportAudioHealth("ready", "Audio engine initialized and is ready for playback.");
       }
@@ -3949,6 +3959,10 @@
     function updateAudioCrossfader() {
       if (!audioEngine.context) return;
       const mix = Number(elements.crossfader.value) / 100;
+      if (audioEngine.halo) {
+        audioEngine.halo.crossfade(mix);
+        return;
+      }
       const now = audioEngine.context.currentTime;
       audioEngine.decks.A.gain.gain.setTargetAtTime(Math.cos(mix * Math.PI / 2), now, .015);
       audioEngine.decks.B.gain.gain.setTargetAtTime(Math.sin(mix * Math.PI / 2), now, .015);
@@ -4053,13 +4067,21 @@
 
     function stopDeckAudio(deckId) {
       const channel = audioEngine.decks[deckId];
+      const envelopes = channel.sourceEnvelopes || new Map();
+      const stopSource = source => {
+        if (audioEngine.halo) audioEngine.halo.stopSourceSmoothly(source, envelopes.get(source));
+        else try { source.stop(); } catch {}
+      };
       if (channel.source) {
-        try { channel.source.stop(); } catch {}
+        stopSource(channel.source);
         channel.source = null;
       }
-      Object.values(channel.stemSources || {}).forEach(source => {
-        try { source.stop(); } catch {}
+      Object.entries(channel.stemSources || {}).forEach(([stemType, source]) => {
+        const stemGain = channel.stemGains?.[stemType];
+        if (stemGain) source.addEventListener?.("ended", () => { try { stemGain.disconnect(); } catch {} }, { once: true });
+        stopSource(source);
       });
+      channel.sourceEnvelopes = new Map();
       channel.stemSources = {};
       channel.stemGains = {};
       if (channel.timer) {
@@ -4103,7 +4125,34 @@
     }
 
     async function startDeckAudio(deckId, beatOffset = 0) {
+      // Mute the room input before any await; repeat once the engine exists on first playback.
+      audioEngine.halo?.setLiveIntelligenceInputState(false);
       const context = await ensureAudio();
+      const halo = audioEngine.halo;
+      halo?.setLiveIntelligenceInputState(false);
+      audioEngine.decks[deckId].stabilizesAt = 0;
+      try {
+        return await startDeckAudioSources(context, deckId, beatOffset);
+      } finally {
+        halo?.scheduleLiveIntelligenceRestore(Math.max(0, (audioEngine.decks[deckId].stabilizesAt || 0) - context.currentTime));
+      }
+    }
+
+    function startDeckSource(context, deckId, source, destination, startAt) {
+      const channel = audioEngine.decks[deckId];
+      if (!audioEngine.halo) {
+        source.connect(destination);
+        source.start(startAt, 0);
+        channel.stabilizesAt = Math.max(channel.stabilizesAt || 0, startAt);
+        return;
+      }
+      const started = audioEngine.halo.startSourceWithFadeIn(source, destination, { when: startAt });
+      if (!channel.sourceEnvelopes) channel.sourceEnvelopes = new Map();
+      channel.sourceEnvelopes.set(source, started.envelope);
+      channel.stabilizesAt = Math.max(channel.stabilizesAt || 0, started.stabilizesAt);
+    }
+
+    async function startDeckAudioSources(context, deckId, beatOffset) {
       const state = deckState[deckId];
       if (!state.audioBuffer && !state.audioAsset?.file && !state.stemAssets) {
         throw new Error("Select the song's audio file to play it in the deck. Library cards provide set-planning details, not the recording itself.");
@@ -4145,8 +4194,7 @@
         source.buffer = state.audioBuffer;
         source.loop = false;
         source.playbackRate.value = Number(state.bpm) / Number(state.originalBpm || state.bpm);
-        source.connect(audioEngine.decks[deckId].input);
-        source.start(startAt, 0);
+        startDeckSource(context, deckId, source, audioEngine.decks[deckId].input, startAt);
         audioEngine.decks[deckId].source = source;
       } else if (state.stemAssets) {
         elements.importStatus.classList.remove("is-error");
@@ -4180,9 +4228,8 @@
           const controlName = stemType === "drums" ? "hats" : stemType;
           const controlled = ["bass", "hats", "vocals"].includes(controlName);
           stemGain.gain.value = controlled && !channel.stems[controlName] ? 0 : 1;
-          source.connect(stemGain);
           stemGain.connect(channel.input);
-          source.start(startAt, 0);
+          startDeckSource(context, deckId, source, stemGain, startAt);
           channel.stemSources[stemType] = source;
           channel.stemGains[stemType] = stemGain;
         }
@@ -4412,6 +4459,7 @@
     function loadTrack(deckId, trackId) {
       const track = tracks.find(item => item.id === trackId);
       if (!track) return;
+      audioEngine.halo?.suppressLiveIntelligence();
       stopDeckAudio(deckId);
       deckState[deckId] = { ...track, originalBpm: Number(track.bpm), pitch: 0, playing: false };
       const slider = document.querySelector(`[data-deck="${deckId}"] .pitch-slider`);
@@ -5020,6 +5068,8 @@
     function animateAutomatedCrossfader(targetValue, duration, curve = "smooth") {
       const startValue = Number(elements.crossfader.value);
       const startedAt = performance.now();
+      // Restore is rescheduled when the fade finishes; the timer is only a fallback if it is cancelled.
+      audioEngine.halo?.suppressLiveIntelligence(Math.max(0, Number(duration) || 0) / 1000 + 1);
       return new Promise(resolve => {
         const moveMix = timestamp => {
           const progress = Math.min(1, (timestamp - startedAt) / duration);
@@ -5036,6 +5086,7 @@
             return;
           }
           recordingState.autoMixFrame = null;
+          audioEngine.halo?.scheduleLiveIntelligenceRestore(0);
           resolve();
         };
         recordingState.autoMixFrame = requestAnimationFrame(moveMix);
@@ -5925,6 +5976,24 @@
     const takeoverSession = [30, 60].includes(requestedMinutes) && takeoverNames[requestedDj]
       ? { minutes: requestedMinutes, dj: requestedDj, name: takeoverNames[requestedDj] }
       : null;
+
+    function startFreshTakeoverSession() {
+      const fresh = deckSessionManager.initializeFreshTakeover({ keys: [sessionStorageKey], playlistContainers: [elements.queueItems] });
+      ["A", "B"].forEach(deckId => {
+        stopDeckAudio(deckId);
+        deckState[deckId] = { ...EMPTY_TRACK, ...(fresh.decks[deckId] || {}) };
+        const slider = document.querySelector(`[data-deck="${deckId}"] .pitch-slider`);
+        slider.value = 0;
+        updateRangeFill(slider);
+        updateDeck(deckId);
+      });
+      trackQueue = fresh.queue.slice();
+      recordingState.takeoverPlan = [];
+      renderTracks(elements.search.value);
+      renderQueue();
+    }
+
+    if (freshTakeoverRequested) startFreshTakeoverSession();
 
     if (takeoverSession) {
       const takeoverModes = { halo: "club", butterfly: "listening", romy: "chill" };

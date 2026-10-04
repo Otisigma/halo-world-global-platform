@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
+import { runInNewContext } from "node:vm";
 import { createStemVaultHandler } from "../netlify/functions/stem-vault.mjs";
 import { STANDARD_VAULT_CAPACITY_BYTES as cap } from "../lib/creator-pass.js";
 
@@ -36,6 +37,11 @@ function fixture({ used = 0, pass = standard, authenticated = true, origin = tru
       return [{ result: "reserved" }];
     }
     if (query.includes("FROM halo_stem_vault_chunks")) {
+      if (query.includes("SUM(byte_size)")) {
+        const [member, upload] = values;
+        assert.equal(member, "owner", "retry reservations are scoped to the authenticated owner");
+        return [{ reserved_bytes: [...state.chunks].filter(([key]) => key.startsWith(`${upload}/`)).reduce((sum, [, chunk]) => sum + chunk.byte_size, 0) }];
+      }
       const [member, upload, stem] = values;
       assert.equal(member, "owner");
       return [...state.chunks].filter(([key]) => key.startsWith(`${upload}/${stem}/`)).map(([, value]) => value).sort((a, b) => a.chunk_index - b.chunk_index);
@@ -133,9 +139,57 @@ assert.equal(f.state.used, 3, "interrupted writes retain reservations conservati
 f.state.failStorage = false;
 assert.equal((await f.handler(chunkRequest())).status, 200);
 assert.equal(f.state.used, 3, "retrying an interrupted write consumes no extra capacity");
+const retryQuota = await (await f.handler(new Request(`https://halo.example/api/stem-vault?uploadId=${uploadId}`))).json();
+assert.equal(retryQuota.capacity.uploadReservedBytes, 3, "batch preflight credits its own durable reservations");
+const otherQuota = await (await f.handler(new Request(`https://halo.example/api/stem-vault?uploadId=${otherId}`))).json();
+assert.equal(otherQuota.capacity.uploadReservedBytes, 0, "other upload IDs receive no reservation credit");
 assert.equal((await fixture({ authenticated: false }).handler(chunkRequest())).status, 401);
 assert.equal((await fixture({ origin: false }).handler(chunkRequest())).status, 403);
 assert.equal((await fixture().handler(jsonRequest(finalizeBody))).status, 409);
+
+const deck = await readFile(new URL("../dj-deck.html", import.meta.url), "utf8");
+const saveSource = deck.slice(deck.indexOf("    async function saveStemPack(event)"), deck.indexOf("    async function archiveStemPack(packId)"));
+const retryListeners = deck.slice(deck.indexOf('    elements.stemVaultForm.addEventListener("change"'), deck.indexOf('    elements.stemVaultForm.addEventListener("reset"'));
+const listeners = new Map();
+const batch = new Map([["drums", new File([new Uint8Array(3)], "drums.wav")], ["bass", new File([new Uint8Array(3)], "bass.wav")]]);
+const attempts = [];
+let nextId = 0;
+let failUpload = true;
+const uiState = { authenticated: true, loading: false, retryUploadId: null, packs: [] };
+const noop = () => {};
+class Input { type = "file"; }
+const uiContext = {
+  stemVaultState: uiState, File, HTMLInputElement: Input,
+  FormData: class {
+    constructor(form) { this.data = form ? batch : new Map(); }
+    get(name) { return this.data.get(name); }
+    append(name, value) { this.data.set(name, value); }
+  },
+  elements: { stemVaultForm: { addEventListener(name, fn) { listeners.set(name, fn); }, reset: noop, elements: { bpm: {} } } },
+  crypto: { randomUUID: () => `retry-${++nextId}` },
+  normalizedAudioType: () => "audio/wav", audioDuration: async () => 1,
+  renderStemVault: noop, setStemVaultStatus: noop, syncStemVaultTracks: noop, showToast: noop,
+  stemVaultUi: { start: noop, progress: noop, fail: noop, success: noop },
+  window: { HaloUploadProgress: { async uploadChunkedFile(options) {
+    attempts.push(options.buildBody({ chunkIndex: 0, chunkCount: 1, start: 0, end: 3 }).get("uploadId"));
+    if (failUpload) throw new Error("Retryable interruption");
+  } } },
+  fetch: async (_url, options) => ({
+    ok: true, json: async () => options?.method === "POST"
+      ? { pack: { title: "Saved", stems: [], sourceProvider: "halo" } }
+      : { capacity: { unlimited: false, usedBytes: cap, capacityBytes: cap, uploadReservedBytes: 6 } }
+  })
+};
+runInNewContext(`${saveSource}\n${retryListeners}\nglobalThis.saveBatch = saveStemPack;`, uiContext);
+await uiContext.saveBatch({ preventDefault: noop });
+await uiContext.saveBatch({ preventDefault: noop });
+assert.deepEqual(attempts, ["retry-1", "retry-1"], "unchanged failed batches retry with the same upload ID, even at capacity");
+listeners.get("change")({ target: new Input() });
+await uiContext.saveBatch({ preventDefault: noop });
+assert.equal(attempts.at(-1), "retry-2", "changing file selection starts a new upload identity");
+failUpload = false;
+await uiContext.saveBatch({ preventDefault: noop });
+assert.equal(uiState.retryUploadId, null, "successful save clears retry identity");
 
 // Optional real PostgreSQL exercises the SQL row locks, rather than the handler's DB stub.
 if (process.env.HALO_VAULT_TEST_DATABASE_URL) {

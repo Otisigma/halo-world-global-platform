@@ -2012,7 +2012,7 @@
     let artistJourneyRenderQueued = false;
     let artistJourneyScheduleHandler = null;
     let artistJourneyUnloadHandler = null;
-    const stemVaultState = { authenticated: false, packs: [], loading: false, capacity: null, creatorPass: null };
+    const stemVaultState = { authenticated: false, packs: [], loading: false, capacity: null, creatorPass: null, retryUploadId: null };
     const stemCollectorState = { authenticated: false, kits: [], current: null, loading: false };
 
     const modeProfiles = {
@@ -3319,16 +3319,18 @@
       const totalBytes = selectedFiles.reduce((sum, item) => sum + item.file.size, 0);
       stemVaultState.loading = true;
       renderStemVault();
-      const uploadId = crypto.randomUUID ? crypto.randomUUID() : `${Date.now().toString(16)}-0000-4000-8000-${Math.random().toString(16).slice(2, 14).padEnd(12, "0")}`;
+      const uploadId = stemVaultState.retryUploadId || (crypto.randomUUID ? crypto.randomUUID() : `${Date.now().toString(16)}-0000-4000-8000-${Math.random().toString(16).slice(2, 14).padEnd(12, "0")}`);
+      stemVaultState.retryUploadId = uploadId;
       const chunkBytes = 4 * 1024 * 1024;
       stemVaultUi.start("Preparing stem files…");
       try {
-        const quotaResponse = await fetch("/api/stem-vault", { credentials: "same-origin" });
+        const quotaResponse = await fetch(`/api/stem-vault?uploadId=${encodeURIComponent(uploadId)}`, { credentials: "same-origin" });
         const quota = await quotaResponse.json();
         if (!quotaResponse.ok || !quota.capacity) throw new Error("Vault capacity could not be verified. Please try again.");
         stemVaultState.capacity = quota.capacity;
         stemVaultState.creatorPass = quota.creatorPass;
-        if (!quota.capacity.unlimited && totalBytes > quota.capacity.capacityBytes - quota.capacity.usedBytes) {
+        const additionalBytes = Math.max(0, totalBytes - quota.capacity.uploadReservedBytes);
+        if (!quota.capacity.unlimited && additionalBytes > quota.capacity.capacityBytes - quota.capacity.usedBytes) {
           throw new Error("This batch exceeds your 5 GiB vault. Upgrade to Premium for unlimited capacity. Archived audio still counts.");
         }
         const files = [];
@@ -3369,6 +3371,7 @@
         const response = await fetch("/api/stem-vault", { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
         const data = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(data.message || "The stem pack could not be saved.");
+        stemVaultState.retryUploadId = null;
         stemVaultState.packs.unshift(data.pack);
         elements.stemVaultForm.reset();
         elements.stemVaultForm.elements.bpm.value = "124";
@@ -5892,6 +5895,10 @@
 
     elements.importForm.addEventListener("submit", importTrack);
     elements.stemVaultForm.addEventListener("submit", saveStemPack);
+    elements.stemVaultForm.addEventListener("change", event => {
+      if (event.target instanceof HTMLInputElement && event.target.type === "file") stemVaultState.retryUploadId = null;
+    });
+    elements.stemVaultForm.addEventListener("reset", () => { stemVaultState.retryUploadId = null; });
     elements.stemPackList.addEventListener("click", event => {
       const loadButton = event.target.closest("[data-vault-load]");
       if (loadButton) {

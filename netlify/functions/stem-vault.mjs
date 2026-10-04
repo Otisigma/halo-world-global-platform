@@ -70,13 +70,22 @@ async function listPacks(db, memberId) {
   return packs.map(pack => packPayload(pack, files.filter(file => file.pack_id === pack.id)));
 }
 
-async function capacityPayload(db, memberId) {
+async function capacityPayload(db, memberId, uploadId) {
   const creatorPass = await passFor(db, memberId);
   const capacityBytes = getVaultCapacityBytes(creatorPass);
   const rows = await db.sql`SELECT used_bytes FROM halo_stem_vault_usage WHERE member_id = ${memberId}`;
   const usedBytes = Number(rows[0]?.used_bytes || 0);
   if (!Number.isSafeInteger(usedBytes) || usedBytes < 0) throw new Error("Invalid vault usage");
-  return { creatorPass, capacity: { usedBytes, capacityBytes: Number.isFinite(capacityBytes) ? capacityBytes : null, unlimited: capacityBytes === Infinity } };
+  let uploadReservedBytes = 0;
+  if (uploadIdPattern.test(uploadId || "")) {
+    const reserved = await db.sql`
+      SELECT COALESCE(SUM(byte_size), 0) AS reserved_bytes FROM halo_stem_vault_chunks
+      WHERE member_id = ${memberId} AND upload_id = ${uploadId}
+    `;
+    uploadReservedBytes = Number(reserved[0]?.reserved_bytes || 0);
+    if (!Number.isSafeInteger(uploadReservedBytes) || uploadReservedBytes < 0) throw new Error("Invalid upload reservation");
+  }
+  return { creatorPass, capacity: { usedBytes, uploadReservedBytes, capacityBytes: Number.isFinite(capacityBytes) ? capacityBytes : null, unlimited: capacityBytes === Infinity } };
 }
 
 async function uploadChunk(request, db, memberId) {
@@ -197,7 +206,7 @@ return async function stemVaultHandler(request) {
   try {
     const { db, user, membership } = await authenticatedContext();
     if (!user?.id || !membership?.member_id) return json({ authenticated: false, packs: [], message: "Sign in to open the private stem vault" }, 401);
-    if (request.method === "GET") return json({ authenticated: true, packs: await listPacks(db, membership.member_id), ...await capacityPayload(db, membership.member_id) });
+    if (request.method === "GET") return json({ authenticated: true, packs: await listPacks(db, membership.member_id), ...await capacityPayload(db, membership.member_id, new URL(request.url).searchParams.get("uploadId")) });
     if (!(await verifyRequestOrigin(request))) return json({ message: "Request origin could not be verified" }, 403);
     const contentType = request.headers.get("content-type") || "";
     if (contentType.startsWith("multipart/form-data")) return await uploadChunk(request, db, membership.member_id);

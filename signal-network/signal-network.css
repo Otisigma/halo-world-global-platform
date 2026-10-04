@@ -489,3 +489,36 @@
 @media (prefers-reduced-motion: reduce) {
   .signal-statusbar__pulse, .signal-skeleton::before, .signal-skeleton::after { animation: none; }
 }
+.signal-social__anchor {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: .75rem;
+  padding-block: .75rem;
+}
+.signal-social__anchor small { flex-basis: 100%; }
+.signal-social__hint {
+  display: block;
+  color: var(--text-dim, #c2c6ce);
+  font-size: .85rem;
+  line-height: 1.5;
+}
+#marketDescription, #feedBody {
+  min-height: 10rem;
+  resize: vertical;
+  font-size: 1.05rem;
+  line-height: 1.6;
+}
+#marketCharacterCount, #feedCharacterCount {
+  display: block;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+#marketAttachmentPreview :is(img, video, audio) {
+  display: block;
+  max-width: 100%;
+  max-height: 20rem;
+  margin-block: 1rem;
+  border-radius: 12px;
+}
+.signal-market__card > p, .signal-feed__body { overflow-wrap: anywhere; white-space: pre-wrap; }

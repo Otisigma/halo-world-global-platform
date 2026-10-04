@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { CREATOR_SEEDS, LISTING_SEEDS, LISTING_TYPES } from "../lib/creator-marketplace.js";
-import { MAX_STATE_BYTES, STORAGE_KEY, createLocalDraft, createLocalStore, filterListings, initMarketplace, publicPreviewUrl, sanitizeLocalState } from "../signal-network/marketplace.js";
+import { MAX_STATE_BYTES, STORAGE_KEY, createLocalDraft, createLocalStore, filterListings, initMarketplace, publicPreviewUrl, sanitizeLocalState, validateAttachment } from "../signal-network/marketplace.js";
 
 let passed = 0;
 async function check(label, test) {
@@ -31,6 +31,8 @@ await check("public feed is separate from the unchanged member command center", 
   assert(page.includes('id="networkGate"') && page.includes('id="signalWorkspace"'));
   assert(page.includes('src="/signal-network/marketplace.js"') && page.includes('src="/signal-network/signal-network.js"'));
   assert(page.includes("not live inventory") && page.includes("not ownership or rights claims"));
+  assert(page.includes('<a href="#signal-feed">Sample marketplace</a>'));
+  assert(page.includes('<a href="/signal-network/#feed">Public feed</a>'));
 });
 await check("all six shared types filter illustrative inventory", () => {
   assert.equal(LISTING_TYPES.length, 6);
@@ -59,6 +61,31 @@ await check("draft validation covers all six types and never asserts sale or own
     const draft = createLocalDraft({ kind, title: "<img src=x onerror=alert(1)>", description: "Text only" });
     assert.equal(draft.listing, undefined);
     assert.equal(draft.title, "<img src=x onerror=alert(1)>");
+  }
+});
+await check("draft timestamps are optional, truthful and validated without persisting media", () => {
+  const createdAt = "2026-01-01T12:00:00.000Z";
+  const draft = createLocalDraft({ ...input, createdAt, attachment: "blob:private", rawMedia: "secret" }, "draft-time");
+  assert.equal(draft.createdAt, createdAt);
+  assert.equal(sanitizeLocalState({ drafts: [draft] }).drafts[0].createdAt, createdAt);
+  assert.equal(draft.attachment, undefined);
+  assert.equal(draft.rawMedia, undefined);
+  assert.equal(createLocalDraft(input).createdAt, undefined);
+  for (const value of ["bad", "2099-01-01T00:00:00.000Z", "2026-02-30T00:00:00.000Z", 123, null]) {
+    assert.equal(createLocalDraft({ ...input, createdAt: value }).createdAt, undefined);
+  }
+});
+await check("optional attachments require real matching Files, bounded size and no SVG", () => {
+  class TestFile { constructor(type, size) { this.type = type; this.size = size; } }
+  for (const kind of ["image", "audio", "video"]) {
+    assert(validateAttachment(new TestFile(`${kind}/${kind === "image" ? "png" : "mp4"}`, 50), kind, TestFile));
+    for (const file of [{ type: `${kind}/mp4`, size: 50 }, new TestFile("text/html", 50), new TestFile(`${kind}/mp4`, 0), new TestFile(`${kind}/mp4`, 25 * 1024 * 1024 + 1)]) {
+      assert.throws(() => validateAttachment(file, kind, TestFile), /optional/);
+    }
+  }
+  assert.throws(() => validateAttachment(new TestFile("image/svg+xml", 50), "image", TestFile));
+  for (const [kind, mime] of [["image", "image/unknown"], ["audio", "audio/unknown"], ["video", "video/unknown"]]) {
+    assert.throws(() => validateAttachment(new TestFile(mime, 50), kind, TestFile));
   }
 });
 await check("private, credentialed, executable and tokenized preview URLs are rejected", () => {
@@ -147,10 +174,14 @@ class Element {
   async fire(type) { for (const listener of this.listeners[type] || []) await listener({ preventDefault() {} }); }
   setAttribute(key, value) { this.attributes[key] = value; }
   removeAttribute(key) { delete this.attributes[key]; }
+  click() { return this.fire("click"); }
+  focus() { this.focused = true; if (this.ownerDocument) this.ownerDocument.activeElement = this; }
+  pause() {}
+  load() {}
   querySelectorAll(selector) {
     const all = this.children.flatMap(child => [child, ...child.querySelectorAll("*")]);
     if (selector === "*") return all;
-    if (selector === "audio") return all.filter(item => item.tagName === "audio");
+    if (selector === "audio" || selector === "audio, video") return all.filter(item => selector.split(", ").includes(item.tagName));
     const match = selector.match(/data-market-reaction="([^"]+)"/);
     return match ? all.filter(item => item.dataset.marketReaction === match[1]) : [];
   }
@@ -163,7 +194,14 @@ function documentHarness() {
   const defaults = { marketTypeFilter: "all", marketDraftKind: "text", marketListingType: "full_track", marketPrice: "0", marketCurrency: "USD" };
   for (const [id, value] of Object.entries(defaults)) elements.get(id).value = value;
   elements.get("signal-feed").append(...[...elements.entries()].filter(([id]) => id !== "signal-feed").map(([, element]) => element));
-  return { getElementById: id => elements.get(id), createElement: tag => new Element(tag) };
+  const events = new Element("document");
+  const doc = { getElementById: id => elements.get(id),
+    createElement: tag => { const element = new Element(tag); element.ownerDocument = doc; return element; },
+    addEventListener: (type, listener) => events.addEventListener(type, listener), fire: type => events.fire(type),
+    dispatchEvent: event => { void events.fire(event.type); return true; },
+    defaultView: new Element("window") };
+  for (const element of elements.values()) element.ownerDocument = doc;
+  return doc;
 }
 const doc = documentHarness();
 const get = id => doc.getElementById(id);
@@ -177,12 +215,168 @@ await check("rendered cards include prices, featured badges and honest disabled 
   assert(get("marketFeed").textContent.includes("Verified (demo)"));
   assert(get("marketFeed").textContent.includes("Format:"));
   assert(get("marketFeed").textContent.includes("Illustrative license:"));
-  const profileLinks = get("marketFeed").querySelectorAll("*").filter(item => item.tagName === "a");
+  const profileLinks = get("marketFeed").querySelectorAll("*").filter(item => item.tagName === "a" && item.href === "/creator-network/");
   assert.equal(profileLinks.length, LISTING_SEEDS.length);
   assert(profileLinks.every(link => link.href === "/creator-network/"));
   assert(buttons(get("marketFeed")).filter(item => item.disabled).length === LISTING_SEEDS.length);
   assert.equal(get("marketListingType").children.length, 6);
   assert(get("marketFeed").textContent.includes("$"));
+});
+await check("social cards distinguish sample, new timed drafts and legacy untimed drafts", async () => {
+  assert(get("marketFeed").textContent.includes("Sample showcase"));
+  assert(get("marketFeed").textContent.includes("@dj-halo"));
+  assert.equal(get("marketFeed").querySelectorAll("*").filter(item => item.tagName === "time").length, 0);
+  assert.equal(get("marketFeed").querySelectorAll("*").filter(item => item.tagName === "img").length, 0);
+  assert.equal(createLocalDraft(input).createdAt, undefined);
+  app.store.save({ ...app.store.state, drafts: [createLocalDraft({ kind: "text", title: "Legacy", description: "Old local text" }, "draft-legacy")] });
+  app.render();
+  assert(get("marketDrafts").textContent.includes("Local draft"));
+  assert.equal(get("marketDrafts").querySelectorAll("*").filter(item => item.tagName === "time").length, 0);
+  app.render();
+  assert.equal(app.store.state.drafts[0].createdAt, undefined);
+  const legacyCard = get("marketDrafts").children[0];
+  const legacyHeader = legacyCard.children[0].children[0];
+  await doc.fire("halo-social-change");
+  assert.equal(get("marketDrafts").children[0], legacyCard);
+  assert.notEqual(legacyCard.children[0].children[0], legacyHeader);
+  app.store.clear(); app.render();
+});
+await check("local identity change refreshes local author anchors without membership or permission gating", async () => {
+  const before = get("marketComposerAuthor").children[0];
+  const sampleAuthor = get("marketFeed").children[0].children.find(element => element.tagName === "header").textContent;
+  await doc.fire("halo-social-change");
+  assert.notEqual(get("marketComposerAuthor").children[0], before);
+  assert.equal(get("marketCompose").disabled, false);
+  assert.equal(get("marketBrief").disabled, false);
+  assert(get("marketComposerAuthor").textContent.includes("not your Creator Pass"));
+  assert.equal(get("marketFeed").children[0].children.find(element => element.tagName === "header").textContent, sampleAuthor);
+  assert(page.indexOf("data-halo-social-welcome") < page.indexOf('id="feed"'));
+  assert(page.indexOf("data-halo-social-welcome") < page.indexOf('id="signal-feed"'));
+});
+await check("synchronous Save milestone events preserve focused seed controls and their toggled state", async () => {
+  const oldDocument = globalThis.document;
+  const oldEvent = globalThis.CustomEvent;
+  globalThis.document = doc;
+  globalThis.CustomEvent ||= class { constructor(type, options) { this.type = type; this.detail = options?.detail; } };
+  try {
+    const save = buttons(get("marketFeed")).find(item => item.textContent === "Save locally");
+    save.focus();
+    const firstCard = get("marketFeed").children[0];
+    await save.fire("click");
+    assert.equal(doc.activeElement, save);
+    assert.equal(get("marketFeed").children[0], firstCard);
+    assert(buttons(get("marketFeed")).includes(save));
+    assert.equal(save.attributes["aria-pressed"], "true");
+    await doc.fire("halo-social-change");
+    assert.equal(doc.activeElement, save);
+    assert.equal(get("marketFeed").children[0], firstCard);
+    assert.equal(save.attributes["aria-pressed"], "true");
+    await save.fire("click");
+    assert.equal(save.attributes["aria-pressed"], "false");
+  } finally {
+    if (oldDocument === undefined) delete globalThis.document; else globalThis.document = oldDocument;
+    if (oldEvent === undefined) delete globalThis.CustomEvent; else globalThis.CustomEvent = oldEvent;
+  }
+});
+await check("actual form reset restores description count and clears the optional session preview", async () => {
+  const resetDoc = documentHarness();
+  initMarketplace(resetDoc);
+  const field = id => resetDoc.getElementById(id);
+  const form = field("marketComposerForm");
+  form.reset = () => {
+    void form.fire("reset");
+    field("marketDescription").value = "";
+    field("marketTitle").value = "";
+    field("marketDraftKind").value = "text";
+  };
+  field("marketDescription").value = "Text before reset";
+  await form.fire("input");
+  assert.equal(field("marketCharacterCount").textContent, "17 / 2000");
+  form.reset();
+  assert.equal(field("marketDescription").value, "");
+  assert.equal(field("marketCharacterCount").textContent, "0 / 2000");
+  assert.equal(field("marketAttachmentPreview").children.length, 0);
+  assert.equal(field("marketAttachmentClear").hidden, true);
+});
+await check("composer counters, brief quick action and session previews are functional and cleared", async () => {
+  class TestFile { constructor(type, size = 50) { this.type = type; this.size = size; } }
+  const oldFile = globalThis.File, oldCreate = URL.createObjectURL, oldRevoke = URL.revokeObjectURL;
+  const revoked = [];
+  let count = 0;
+  globalThis.File = TestFile;
+  URL.createObjectURL = () => `blob:session-${++count}`;
+  URL.revokeObjectURL = value => revoked.push(value);
+  try {
+    assert(get("marketComposerAuthor").textContent.includes("Local draft"));
+    get("marketDescription").value = "A brief";
+    await get("marketComposerForm").fire("input");
+    assert.equal(get("marketCharacterCount").textContent, "7 / 2000");
+    await get("marketBrief").fire("click");
+    assert.equal(get("marketDraftKind").value, "collaboration");
+    assert.equal(get("marketSaleFields").disabled, true);
+    assert(get("marketDescription").focused);
+    for (const [action, type, tag] of [["marketPhoto", "image/png", "img"], ["marketVideo", "video/mp4", "video"], ["marketAudio", "audio/mpeg", "audio"]]) {
+      await get(action).fire("click");
+      get("marketAttachment").files = [new TestFile(type)];
+      await get("marketAttachment").fire("change");
+      assert.equal(get("marketAttachmentPreview").children[0].tagName, tag);
+      assert(get("marketAttachmentStatus").textContent.includes("not included"));
+    }
+    assert.equal(revoked.length, 2);
+    await get("marketComposerForm").fire("reset");
+    assert.equal(revoked.length, 3);
+    assert.equal(get("marketAttachmentPreview").children.length, 0);
+    await get("marketPhoto").fire("click");
+    get("marketAttachment").files = [new TestFile("video/mp4")];
+    await get("marketAttachment").fire("change");
+    assert(get("marketAttachmentStatus").textContent.includes("optional"));
+    assert.equal(get("marketAttachmentPreview").children.length, 0);
+    get("marketAttachment").files = [new TestFile("image/png")];
+    await get("marketAttachment").fire("change");
+    get("marketComposer").close();
+    assert.equal(revoked.length, 4);
+    get("marketAttachment").files = [new TestFile("image/png")];
+    await get("marketAttachment").fire("change");
+    await doc.defaultView.fire("pagehide");
+    assert.equal(revoked.length, 5);
+    get("marketAttachment").files = [new TestFile("image/png")];
+    await get("marketAttachment").fire("change");
+    const stalePreview = get("marketAttachmentPreview").children[0];
+    await get("marketAttachment").fire("change");
+    await stalePreview.fire("error");
+    assert.equal(get("marketAttachmentPreview").children.length, 1);
+    await get("marketComposerForm").fire("submit");
+    assert.equal(get("marketAttachmentPreview").children.length, 0);
+    assert.equal(revoked.length, 7);
+    assert.equal(app.store.state.drafts.length, 0);
+    get("marketTitle").value = "Preview stays private";
+    get("marketDescription").value = "Saved text only";
+    get("marketAttachment").files = [new TestFile("image/png")];
+    await get("marketAttachment").fire("change");
+    await get("marketComposerForm").fire("submit");
+    assert.equal(revoked.length, 8);
+    assert.equal(app.store.state.drafts.length, 1);
+    assert.equal(app.store.state.drafts[0].description, "Saved text only");
+    assert(app.store.state.drafts[0].createdAt);
+    const persisted = globalThis.localStorage.getItem(STORAGE_KEY);
+    assert(!/blob:|attachment|rawMedia|image\/png/.test(persisted));
+    assert(get("marketStatus").textContent.includes("Session media was not saved"));
+    assert(get("marketDrafts").querySelectorAll("*").some(element => element.tagName === "time"));
+    app.store.clear(); app.render();
+  } finally {
+    globalThis.File = oldFile; URL.createObjectURL = oldCreate; URL.revokeObjectURL = oldRevoke;
+    get("marketDraftKind").value = "text"; get("marketDescription").value = ""; get("marketTitle").value = "";
+  }
+});
+await check("repost creates a labeled local draft and comments are an honest LIVE feed handoff", async () => {
+  const handoff = get("marketFeed").querySelectorAll("*").find(item => item.tagName === "a" && item.href === "#feed");
+  await handoff.fire("click");
+  assert(get("marketStatus").textContent.includes("no live comment thread"));
+  await buttons(get("marketFeed")).find(item => item.textContent === "Repost as local sample draft").fire("click");
+  assert.equal(app.store.state.drafts.length, 1);
+  assert(app.store.state.drafts[0].description.includes("Sample showcase"));
+  assert(app.store.state.drafts[0].createdAt);
+  app.store.clear(); app.render();
 });
 await check("real filter, save and like handlers update local state and accessible pressed buttons", async () => {
   const save = buttons(get("marketFeed")).find(item => item.textContent === "Save locally");
@@ -263,6 +457,37 @@ await check("byte-limit errors are announced without falsely changing card react
   assert.equal(save.attributes["aria-pressed"], "false");
   assert.equal(JSON.stringify(limitApp.store.state), before);
   assert.deepEqual(createLocalStore(globalThis.localStorage).state, limitApp.store.state);
+});
+await check("repost respects the draft cap and byte-storage rejection without losing prior state", async () => {
+  globalThis.localStorage = memory();
+  const rejectDoc = documentHarness();
+  const rejectApp = initMarketplace(rejectDoc);
+  const state = { ...byteBoundaryState, drafts: byteBoundaryState.drafts.map(draft => ({ ...draft, listing: { ...draft.listing } })) };
+  rejectApp.store.save(state);
+  rejectApp.render();
+  const repost = () => buttons(rejectDoc.getElementById("marketFeed")).find(item => item.textContent === "Repost as local sample draft");
+  const capped = JSON.stringify(rejectApp.store.state);
+  await repost().fire("click");
+  assert(rejectDoc.getElementById("marketStatus").textContent.includes("limit reached (20)"));
+  assert.equal(JSON.stringify(rejectApp.store.state), capped);
+  state.drafts.pop();
+  const bytes = value => new TextEncoder().encode(JSON.stringify(value)).byteLength;
+  let room = MAX_STATE_BYTES - bytes(state);
+  for (const draft of state.drafts) {
+    const add = Math.min(2048 - draft.listing.assetPreviewUrl.length, room);
+    draft.listing.assetPreviewUrl += "a".repeat(add);
+    room -= add;
+  }
+  assert.equal(room, 0);
+  assert.equal(bytes(state), MAX_STATE_BYTES);
+  rejectApp.store.save(state);
+  rejectApp.render();
+  const full = JSON.stringify(rejectApp.store.state);
+  const persisted = globalThis.localStorage.getItem(STORAGE_KEY);
+  await repost().fire("click");
+  assert(rejectDoc.getElementById("marketStatus").textContent.includes("this change was not saved"));
+  assert.equal(JSON.stringify(rejectApp.store.state), full);
+  assert.equal(globalThis.localStorage.getItem(STORAGE_KEY), persisted);
 });
 await check("denied storage getters do not block initialization or local reactions", async () => {
   Object.defineProperty(globalThis, "localStorage", { configurable: true, get() { throw new Error("denied"); } });

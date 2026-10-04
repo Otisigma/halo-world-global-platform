@@ -22,6 +22,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;700;800;900&family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500;1,600&family=Share+Tech+Mono:wght@400&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/halo-brand.css">
   <link rel="stylesheet" href="/signal-network/signal-network.css">
+  <link rel="stylesheet" href="/creator-social.css">
   <link rel="stylesheet" href="/accessibility.css">
   <script src="/stats.js" defer></script>
   <script src="/accessibility.js" defer></script>
@@ -807,7 +808,7 @@
         <ul class="site-header__nav">
           <li><a href="#pillars">Pillars</a></li>
           <li><a href="#modules">Modules</a></li>
-          <li><a href="#signal-feed">Signal Feed</a></li>
+          <li><a href="#signal-feed">Sample marketplace</a></li>
           <li><a href="#command-center">Network Live</a></li>
           <li><a href="/signal-network/#feed">Public feed</a></li>
           <li><a href="#circles">Circles</a></li>
@@ -852,6 +853,8 @@
       </div>
     </section>
 
+    <section class="container" data-halo-social-welcome aria-label="Your local creator welcome"></section>
+
     <section class="signal-feed" id="feed" aria-labelledby="signal-feed-title">
       <div class="container">
         <header class="signal-feed__header">
@@ -870,8 +873,16 @@
           <summary>Publish a public signal</summary>
           <p>Creator Pass identity required. Your display name, post, links and comments will be public. Never share private assets or confidential briefs.</p>
           <form id="feedPublishForm">
+            <div id="feedComposerAuthor" class="signal-social__anchor"></div>
             <label>Post type <select name="kind" id="feedKind"><option>TEXT</option><option>AUDIO</option><option>VIDEO</option><option>BRIEF_LINK</option></select></label>
-            <label>Your signal (maximum 1000 characters) <textarea name="body" maxlength="1000" rows="4" required></textarea></label>
+            <label>Your signal (maximum 4000 characters) <textarea id="feedBody" name="body" maxlength="4000" rows="6" required aria-describedby="feedCharacterCount"></textarea></label>
+            <output id="feedCharacterCount" for="feedBody">0 / 4000</output>
+            <div class="signal-feed__actions" aria-label="Public signal media kind">
+              <button type="button" id="feedQuickAudio">Audio · published release</button>
+              <button type="button" id="feedQuickVideo">Video · public link</button>
+              <button type="button" id="feedQuickBrief">Brief · public link</button>
+            </div>
+            <p class="signal-social__hint">No photo uploads here. Audio uses published catalog releases; video and briefs use public links.</p>
             <label id="feedReleaseField" hidden>Published release <select name="releaseId" id="feedRelease"><option value="">Choose a published release</option></select><small>Only verified public catalog audio is accepted. No private uploads or asset URLs.</small></label>
             <label id="feedLinkField" hidden>Public HTTPS video or brief link <input name="linkUrl" type="url" maxlength="1200" placeholder="https://"></label>
             <label id="feedPurchaseField" hidden><input name="includePurchase" type="checkbox"> Include this release's existing purchase link (no checkout here)</label>
@@ -939,11 +950,24 @@
         <h2 id="marketComposerTitle">Shape your next signal.</h2>
         <p id="marketComposerNotice">Text and collaboration drafts are local only. An optional sale concept is not a published offer or proof of ownership. Do not enter sensitive information or private asset URLs.</p>
         <form id="marketComposerForm">
+          <div id="marketComposerAuthor" class="signal-social__anchor"></div>
           <label for="marketDraftKind">Draft kind
             <select id="marketDraftKind" name="kind"><option value="text">Text update</option><option value="collaboration">Collaboration idea</option><option value="listing">Sale listing concept</option></select>
           </label>
           <label for="marketTitle">Title<input id="marketTitle" name="title" required maxlength="120" autofocus></label>
-          <label for="marketDescription">Description<textarea id="marketDescription" name="description" required maxlength="2000" rows="4"></textarea></label>
+          <label for="marketDescription">What's taking shape?<textarea id="marketDescription" name="description" required maxlength="2000" rows="7" aria-describedby="marketCharacterCount"></textarea></label>
+          <output id="marketCharacterCount" for="marketDescription">0 / 2000</output>
+          <div class="signal-market__actions" aria-label="Optional local draft additions">
+            <button class="signal-market__button" type="button" id="marketPhoto">Photo preview</button>
+            <button class="signal-market__button" type="button" id="marketVideo">Video preview</button>
+            <button class="signal-market__button" type="button" id="marketAudio">Audio preview</button>
+            <button class="signal-market__button" type="button" id="marketBrief">Collaboration brief</button>
+          </div>
+          <input id="marketAttachment" type="file" hidden aria-label="Choose optional session-only draft media">
+          <p class="signal-social__hint">Optional media is a session-only draft preview, not your welcome avatar. No upload. It is not included in the saved text draft. Maximum 25 MB; image, video or audio only.</p>
+          <div id="marketAttachmentPreview"></div>
+          <p id="marketAttachmentStatus" role="status" aria-live="polite"></p>
+          <button class="signal-market__button" id="marketAttachmentClear" type="button" hidden>Remove session preview</button>
           <fieldset id="marketSaleFields" hidden disabled>
             <legend>Optional sale concept — not for sale</legend>
             <label for="marketListingType">Listing type<select id="marketListingType" name="listingType"></select></label>
@@ -1494,6 +1518,7 @@
   <script type="module" src="/signal-network/signal-network.js"></script>
   <script type="module" src="/signal-network/signal-feed.js"></script>
   <script type="module" src="/signal-network/marketplace.js"></script>
+  <script type="module" src="/lib/creator-social.js"></script>
 
 </body>
 </html>

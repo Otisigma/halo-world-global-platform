@@ -3,6 +3,7 @@ import {
   formatListingPrice, safeAssetUrl
 } from "../lib/creator-marketplace.js";
 import { HaloAIService } from "../lib/halo-ai-service.js";
+import { createAuthorHeader, recordStudioSpark } from "../lib/creator-social.js";
 
 const FOLLOW_KEY = "halo.creator-demo.follows.v1";
 const ADVISORY_DISCLOSURE = "Local-rules advisory only: no actual audio analysis or AI provider is used. Stem checks inspect sample metadata, not audio files. Rights and split checks are not legal verification.";
@@ -39,12 +40,48 @@ export function profileListings(creator, listings = LISTING_SEEDS) {
     creator.featuredListings.includes(listing.id));
 }
 
+export function initBriefComposer({ document: doc = globalThis.document, Observer = globalThis.MutationObserver } = {}) {
+  const byId = id => doc.getElementById(id);
+  const form = byId("project");
+  const brief = byId("collaborationBrief");
+  const kind = byId("briefKind");
+  if (!form || !brief || !kind) return;
+  const choices = [["briefAudio", "audio"], ["briefVisuals", "visual"], ["briefReview", "review"]];
+  const sync = () => {
+    byId("briefCounter").textContent = `${brief.value.length} / 4000`;
+    for (const [id, value] of choices) byId(id).setAttribute("aria-pressed", String(kind.value === value));
+  };
+  const syncAuthor = () => {
+    byId("briefAuthorName").textContent = byId("passName")?.textContent || "Your artist name";
+    byId("briefAuthorInitial").textContent = byId("passInitial")?.textContent || "H";
+  };
+  for (const [id, value] of choices) byId(id).addEventListener("click", () => {
+    kind.value = value;
+    sync();
+  });
+  brief.addEventListener("input", sync);
+  kind.addEventListener("change", sync);
+  form.addEventListener("reset", () => queueMicrotask(sync));
+  // The authenticated client owns these pass values; never substitute the local demo identity.
+  if (Observer) {
+    const observer = new Observer(syncAuthor);
+    for (const id of ["passName", "passInitial"]) {
+      const target = byId(id);
+      if (target) observer.observe(target, { childList: true, characterData: true, subtree: true });
+    }
+  }
+  syncAuthor();
+  sync();
+  return { sync, syncAuthor };
+}
+
 export function initCreatorDiscovery({
   document: doc = globalThis.document,
   storage,
   creators = CREATOR_SEEDS,
   listings = LISTING_SEEDS,
   tiers = ORBIT_TIERS,
+  recordSpark = recordStudioSpark,
   aiService = typeof HaloAIService === "function" ? new HaloAIService() : HaloAIService
 } = {}) {
   const byId = id => doc.getElementById(id);
@@ -91,6 +128,20 @@ export function initCreatorDiscovery({
     return node("span", creator.verified ? "✓ Verified · sample only" : "Sample creator", "sample-badge");
   }
 
+  function authorHeader(creator) {
+    const header = createAuthorHeader(doc, {
+      displayName: creator.displayName,
+      handle: `sample-${creator.id}`,
+      label: "Sample showcase"
+    });
+    header.className += " demo-author-header";
+    const title = header.querySelector("strong");
+    title.textContent = creator.displayName;
+    title.setAttribute("role", "heading");
+    title.setAttribute("aria-level", "3");
+    return header;
+  }
+
   function tags(creator) {
     const list = node("ul", undefined, "demo-tags");
     for (const genre of creator.genres) list.append(node("li", genre));
@@ -101,11 +152,14 @@ export function initCreatorDiscovery({
   function followButton(creator) {
     const control = button("", () => {
       if (followed.has(creator.id)) followed.delete(creator.id);
-      else followed.add(creator.id);
+      else {
+        followed.add(creator.id);
+        recordSpark("follow");
+      }
       const saved = saveDemoFollows(storage, followed);
       storageAvailable = saved;
       syncFollows(creator.id);
-      notify(`${followed.has(creator.id) ? "Following" : "Unfollowed"} ${creator.displayName} in this demo only. ${saved ? "Saved on this browser; no real account or follower count changed." : "Browser storage is unavailable; this choice lasts only for this page visit."}`);
+      notify(`${followed.has(creator.id) ? "Following" : "Unfollowed"} ${creator.displayName} in this demo only. ${saved ? "Saved on this browser; no real account or follower count changed." : "Browser storage is unavailable; this choice lasts only for this page visit."} Local studio progress only — Orbits placement and permissions stay unchanged.`);
     });
     control.setAttribute("aria-label", `Follow ${creator.displayName} in the demo only`);
     if (!followControls.has(creator.id)) followControls.set(creator.id, new Set());
@@ -139,10 +193,9 @@ export function initCreatorDiscovery({
     byId("demoCreators").replaceChildren(...matches.map(creator => {
       const card = node("article", undefined, "demo-creator-card");
       const cover = node("div", undefined, "demo-card-cover");
-      cover.append(node("span", tierLabel(creator), "demo-tier-label"), avatar(creator));
+      cover.append(node("span", tierLabel(creator), "demo-tier-label"));
       const body = node("div", undefined, "demo-card-body");
-      const title = node("h3", creator.displayName);
-      body.append(badge(creator), title, node("p", creator.roles.join(" / "), "demo-roles"),
+      body.append(authorHeader(creator), badge(creator), node("p", creator.roles.join(" / "), "demo-roles"),
         tags(creator), node("p", creator.bio, "demo-bio"),
         node("p", `${creator.location} · ${creator.availability}`, "demo-location"), sampleMetrics(creator));
       const actions = node("div", undefined, "demo-card-actions");
@@ -256,12 +309,15 @@ export function initCreatorDiscovery({
       for (const control of controls) if (dialog.contains(control)) controls.delete(control);
     }
     const heading = node("div", undefined, "demo-profile-heading");
-    const identity = node("div");
-    const title = node("h2", creator.displayName);
+    const identity = node("div", undefined, "demo-profile-identity");
+    const author = authorHeader(creator);
+    const title = author.querySelector("strong");
     title.id = "demoProfileTitle";
-    identity.append(badge(creator), title, node("p", creator.roles.join(" / "), "demo-roles"),
+    title.setAttribute("role", "heading");
+    title.setAttribute("aria-level", "2");
+    identity.append(author, badge(creator), node("p", creator.roles.join(" / "), "demo-roles"),
       tags(creator), node("p", `${creator.location} · ${creator.availability}`, "demo-location"));
-    heading.append(avatar(creator, "demo-profile-avatar"), identity);
+    heading.append(identity);
     const about = node("div", undefined, "demo-profile-about");
     about.append(node("p", creator.bio), sampleMetrics(creator),
       node("p", `${tierLabel(creator)} · illustrative orbit placement`, "demo-tier-label"), followButton(creator));
@@ -326,4 +382,7 @@ export function initCreatorDiscovery({
   return { openProfile, renderCreators, followed };
 }
 
-if (globalThis.document) initCreatorDiscovery();
+if (globalThis.document) {
+  initCreatorDiscovery();
+  initBriefComposer();
+}

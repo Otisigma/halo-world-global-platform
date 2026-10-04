@@ -1,5 +1,6 @@
 import { CREATOR_SEEDS, LISTING_SEEDS, LISTING_TYPES, formatListingPrice, normalizeListing, safeAssetUrl } from "../lib/creator-marketplace.js";
 import { HaloAIService } from "../lib/halo-ai-service.js";
+import { getLocalIdentity, createAuthorHeader, recordStudioSpark } from "../lib/creator-social.js";
 
 export const STORAGE_KEY = "halo.signal-marketplace.demo.v1";
 const MAX_DRAFTS = 20;
@@ -36,6 +37,12 @@ export function createLocalDraft(input, id = `draft-${Date.now()}-${Math.random(
     title: boundedText(input.title, 120, "Title"),
     description: boundedText(input.description, 2000, "Description")
   };
+  if (typeof input.createdAt === "string") {
+    const date = new Date(input.createdAt);
+    if (Number.isFinite(date.getTime()) && date.toISOString() === input.createdAt && date.getTime() <= Date.now()) {
+      draft.createdAt = input.createdAt;
+    }
+  }
   if (draft.kind === "listing") {
     if (!types.has(input.listingType)) throw new Error("Choose one of the six listing types.");
     if (typeof input.price !== "string" && typeof input.price !== "number") throw new Error("Enter a valid price.");
@@ -116,6 +123,19 @@ export function filterListings(listings, type) {
   return type === "all" ? listings : listings.filter(listing => listing.listingType === type);
 }
 
+export function validateAttachment(file, kind, FileType = globalThis.File) {
+  const allowed = {
+    image: ["image/jpeg", "image/png", "image/gif", "image/webp", "image/avif"],
+    video: ["video/mp4", "video/webm", "video/ogg"],
+    audio: ["audio/mpeg", "audio/mp4", "audio/wav", "audio/x-wav", "audio/ogg", "audio/webm", "audio/flac", "audio/x-flac", "audio/aac"]
+  };
+  if (!FileType || !(file instanceof FileType) || !["image", "video", "audio"].includes(kind) ||
+      !allowed[kind].includes(file.type) || !file.size || file.size > 25 * 1024 * 1024) {
+    throw new Error("Choose a nonempty matching photo, video or audio file up to 25 MB (no SVG). This preview is optional.");
+  }
+  return file;
+}
+
 export function initMarketplace(doc = document) {
   const root = doc.getElementById("signal-feed");
   if (!root) return;
@@ -123,6 +143,7 @@ export function initMarketplace(doc = document) {
   let storage;
   try { storage = globalThis.localStorage; } catch { /* Browser privacy settings can deny even access. */ }
   const store = createLocalStore(storage);
+  let localAuthorAnchors = [];
   const node = (tag, text, className) => {
     const element = doc.createElement(tag);
     if (text !== undefined) element.textContent = String(text);
@@ -196,7 +217,12 @@ export function initMarketplace(doc = document) {
     const article = node("article", undefined, "signal-market__card");
     if (listing.isFeatured) article.append(node("p", "Featured demo", "signal-market__eyebrow"));
     article.append(
-      node("p", `${creator?.displayName || "Illustrative creator"}${creator?.verified ? " · Verified (demo)" : ""}`, "signal-market__creator"),
+      createAuthorHeader(doc, {
+        displayName: creator?.displayName || "Illustrative creator", handle: creator?.id || "sample-creator",
+        identity: { displayName: creator?.displayName || "Illustrative creator", handle: creator?.id || "sample-creator" },
+        label: "Sample showcase"
+      }),
+      node("p", creator?.verified ? "Verified (demo)" : "Illustrative creator", "signal-market__creator"),
       node("p", [...(creator?.roles || []), ...(creator?.genres || [])].slice(0, 4).join(" / ")),
       node("h4", listing.title),
       node("p", listing.description),
@@ -221,6 +247,7 @@ export function initMarketplace(doc = document) {
           return;
         }
         const nowActive = store.state[key].includes(listing.id);
+        if (key === "saved" && nowActive) recordStudioSpark("save");
         root.querySelectorAll(`[data-market-reaction="${key}"]`).forEach(item => {
           if (item.dataset.marketListing !== listing.id) return;
           item.textContent = `${nowActive ? (key === "saved" ? "Saved" : "Liked") : label} locally`;
@@ -234,6 +261,25 @@ export function initMarketplace(doc = document) {
       actions.append(control);
     }
     actions.append(button("View listing details", () => detail(listing)));
+    const comment = node("a", "LIVE comments · no sample thread ↗", "signal-market__button");
+    comment.href = "#feed";
+    comment.addEventListener("click", () => {
+      announce("Opening the separate LIVE feed. This sample has no live comment thread; nothing was posted.");
+    });
+    actions.append(comment, button("Repost as local sample draft", () => {
+      try {
+        if (store.state.drafts.length >= MAX_DRAFTS) throw new Error("Local draft limit reached (20). Delete a draft first.");
+        const draft = createLocalDraft({
+          kind: "text", title: `Sample repost: ${listing.title}`.slice(0, 120),
+          description: `Sample showcase — illustrative, not published or offered for sale.\n${listing.description}`.slice(0, 2000),
+          createdAt: new Date().toISOString()
+        });
+        store.save({ ...store.state, drafts: [draft, ...store.state.drafts] });
+        recordStudioSpark("draft");
+        render();
+        announce("Sample copied to a local text draft only. No public repost was made.");
+      } catch (error) { announce(error.message || "Local repost draft was not saved."); }
+    }));
     article.append(actions);
     return article;
   }
@@ -247,9 +293,18 @@ export function initMarketplace(doc = document) {
     }
     const drafts = get("marketDrafts");
     drafts.replaceChildren();
+    localAuthorAnchors = [];
     for (const draft of store.state.drafts) {
       const article = node("article", undefined, "signal-market__card");
+      const author = node("div");
+      const updateAuthor = () => {
+        const identity = getLocalIdentity();
+        author.replaceChildren(createAuthorHeader(doc, { ...identity, identity, createdAt: draft.createdAt, label: draft.createdAt ? "Local only · not published" : "Local draft" }));
+      };
+      updateAuthor();
+      localAuthorAnchors.push(updateAuthor);
       article.append(
+        author,
         node("p", `Local ${draft.kind} draft · not published`, "signal-market__eyebrow"),
         node("h4", draft.title), node("p", draft.description)
       );
@@ -271,6 +326,65 @@ export function initMarketplace(doc = document) {
   const form = get("marketComposerForm");
   const composerStatus = get("marketComposerStatus");
   const guideResult = get("marketGuideResult");
+  const updateAuthor = () => get("marketComposerAuthor").replaceChildren(
+    createAuthorHeader(doc, { ...getLocalIdentity(), identity: getLocalIdentity(), label: "Local draft · not your Creator Pass" })
+  );
+  const updateCount = () => { get("marketCharacterCount").textContent = `${get("marketDescription").value.length} / 2000`; };
+  let attachmentUrl = "";
+  let attachmentKind = "image";
+  const clearAttachment = () => {
+    const previousUrl = attachmentUrl;
+    attachmentUrl = "";
+    get("marketAttachmentPreview").querySelectorAll("audio, video").forEach(media => { media.pause(); media.removeAttribute("src"); media.load(); });
+    get("marketAttachmentPreview").replaceChildren();
+    if (previousUrl) URL.revokeObjectURL(previousUrl);
+    get("marketAttachment").value = "";
+    get("marketAttachmentClear").hidden = true;
+    get("marketAttachmentStatus").textContent = "";
+  };
+  for (const [id, kind] of [["marketPhoto", "image"], ["marketVideo", "video"], ["marketAudio", "audio"]]) {
+    get(id).addEventListener("click", () => {
+      clearAttachment();
+      attachmentKind = kind;
+      get("marketAttachment").accept = {
+        image: "image/jpeg,image/png,image/gif,image/webp,image/avif",
+        video: "video/mp4,video/webm,video/ogg",
+        audio: "audio/mpeg,audio/mp4,audio/wav,audio/x-wav,audio/ogg,audio/webm,audio/flac,audio/x-flac,audio/aac"
+      }[kind];
+      get("marketAttachment").click();
+    });
+  }
+  get("marketAttachment").addEventListener("change", () => {
+    const file = get("marketAttachment").files?.[0];
+    clearAttachment();
+    if (!file) return;
+    try {
+      validateAttachment(file, attachmentKind);
+      attachmentUrl = URL.createObjectURL(file);
+      const previewUrl = attachmentUrl;
+      const media = node(attachmentKind === "image" ? "img" : attachmentKind);
+      if (attachmentKind === "image") media.alt = "Session-only local draft photo preview";
+      else { media.controls = true; media.preload = "metadata"; }
+      media.src = attachmentUrl;
+      media.addEventListener("error", () => {
+        if (attachmentUrl !== previewUrl) return;
+        clearAttachment();
+        get("marketAttachmentStatus").textContent = "This file could not be previewed. You can still save your text draft.";
+      });
+      get("marketAttachmentPreview").append(media);
+      get("marketAttachmentClear").hidden = false;
+      get("marketAttachmentStatus").textContent = "Session-only preview ready. Media is not included in the saved text draft.";
+    } catch (error) { get("marketAttachmentStatus").textContent = error.message || "Preview unavailable. Your text draft can still be saved."; }
+  });
+  get("marketAttachmentClear").addEventListener("click", clearAttachment);
+  get("marketComposer").addEventListener("close", clearAttachment);
+  form.addEventListener("reset", () => { clearAttachment(); get("marketCharacterCount").textContent = "0 / 2000"; });
+  doc.defaultView?.addEventListener("pagehide", clearAttachment);
+  doc.addEventListener("halo-social-change", () => {
+    updateAuthor();
+    localAuthorAnchors.forEach(update => update());
+  });
+  form.addEventListener("input", updateCount);
   let guideVersion = 0;
   const clearGuide = () => { guideVersion++; guideResult.replaceChildren(); };
   form.addEventListener("input", clearGuide);
@@ -281,13 +395,23 @@ export function initMarketplace(doc = document) {
     currency: get("marketCurrency").value, licenseType: get("marketLicense").value,
     format: get("marketFormat").value, assetPreviewUrl: get("marketPreview").value
   });
-  get("marketDraftKind").addEventListener("change", () => {
+  const updateKind = () => {
     const sale = get("marketDraftKind").value === "listing";
     get("marketSaleFields").hidden = !sale;
     get("marketSaleFields").disabled = !sale;
+  };
+  get("marketDraftKind").addEventListener("change", updateKind);
+  get("marketBrief").addEventListener("click", () => {
+    get("marketDraftKind").value = "collaboration";
+    updateKind();
+    clearGuide();
+    composerStatus.textContent = "Collaboration brief selected. Describe your idea; this stays a local draft.";
+    get("marketDescription").focus();
   });
   get("marketCompose").addEventListener("click", () => {
     composerStatus.textContent = "";
+    updateAuthor();
+    updateCount();
     get("marketComposer").showModal();
   });
   for (const [dialog, close] of [["marketDetail", "marketDetailClose"], ["marketComposer", "marketComposerClose"]]) {
@@ -310,6 +434,8 @@ export function initMarketplace(doc = document) {
   get("marketClear").addEventListener("click", () => {
     store.clear();
     form.reset();
+    clearAttachment();
+    updateCount();
     get("marketSaleFields").hidden = true;
     get("marketSaleFields").disabled = true;
     composerStatus.textContent = "";
@@ -319,17 +445,21 @@ export function initMarketplace(doc = document) {
   });
   form.addEventListener("submit", event => {
     event.preventDefault();
+    clearAttachment();
     try {
       if (store.state.drafts.length >= MAX_DRAFTS) throw new Error("Local draft limit reached (20). Delete a draft or clear local demo state.");
-      const draft = createLocalDraft(input());
+      const draft = createLocalDraft({ ...input(), createdAt: new Date().toISOString() });
       store.save({ ...store.state, drafts: [draft, ...store.state.drafts] });
+      recordStudioSpark("draft");
       render();
       form.reset();
+      clearAttachment();
+      updateCount();
       get("marketSaleFields").hidden = true;
       get("marketSaleFields").disabled = true;
       clearGuide();
       get("marketComposer").close();
-      announce("Draft saved locally only. Nothing was published or offered for sale.");
+      announce("Text draft saved locally only. Session media was not saved. Nothing was published or offered for sale.");
     } catch (error) { composerStatus.textContent = error.message || "Draft could not be validated."; }
   });
   get("marketGuide").addEventListener("click", async () => {
@@ -357,6 +487,8 @@ export function initMarketplace(doc = document) {
       if (typeof review.suggestedPrice === "number") guideResult.append(node("p", `Illustrative starting price: ${formatListingPrice({ price: review.suggestedPrice, currency: review.currency || "USD" })}. Not a valuation or guaranteed sale price.`));
     } catch { composerStatus.textContent = "Enter a title and description to get local advisory guidance. No external review was performed."; }
   });
+  updateAuthor();
+  updateCount();
   render();
   announce("Illustrative feed ready. No live inventory or transaction services connected.");
   return { store, render };

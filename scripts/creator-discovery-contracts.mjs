@@ -1,11 +1,12 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import {
-  initCreatorDiscovery, readDemoFollows, saveDemoFollows, filterDemoCreators, profileListings
+  initCreatorDiscovery, initBriefComposer, readDemoFollows, saveDemoFollows, filterDemoCreators, profileListings
 } from "../creator-network/discovery.js";
 import { CREATOR_SEEDS, LISTING_SEEDS, ORBIT_TIERS } from "../lib/creator-marketplace.js";
 import { HaloAIService } from "../lib/halo-ai-service.js";
 import { PUBLIC_ROUTE_REGISTRY } from "../lib/route-registry.js";
+import { createSocialStore } from "../lib/creator-social.js";
 
 const [html, css, client] = await Promise.all([
   readFile(new URL("../creator-network/index.html", import.meta.url), "utf8"),
@@ -19,7 +20,21 @@ assert.match(html, /HALO Orbits \/ SERENA Mesh foundation/);
 assert.match(html, /<dialog[^>]+aria-labelledby="demoProfileTitle"[^>]+aria-describedby="demoProfileDisclosure"/);
 assert.match(html, /id="demoProfileClose"[^>]+autofocus/);
 assert.match(html, /type="module" src="\/creator-network\/discovery.js"/);
-for (const id of ["publicDirectory", "publicCreators", "publicFilters", "locked", "login", "workspace", "collaboration", "studioTrack", "studioPlayer"]) {
+assert.match(html, /href="\/creator-social.css"/);
+assert.match(html, /type="module" src="\/lib\/creator-social.js"/);
+assert.ok(html.indexOf("data-halo-social-welcome") < html.indexOf('id="demoDiscovery"'), "Optional local welcome precedes sample discovery");
+assert.match(html, /data-halo-social-welcome aria-label="Your local creator welcome"/);
+assert.match(html, /<details class="brief-technical">\s*<summary>Optional matching \+ technical details/);
+assert.match(html, /id="collaborationBrief" name="brief" maxlength="4000"/);
+assert.match(html, /id="briefKind" name="kind"/);
+for (const id of ["briefAudio", "briefVisuals", "briefReview"]) {
+  assert.match(html, new RegExp(`id="${id}"[^>]*type="button"`), "Quick type actions cannot submit the real project form");
+}
+const projectForm = html.match(/<form id="project"[\s\S]*?<\/form>/)[0];
+for (const name of ["title", "brief", "kind", "roleNeeded", "genre", "language", "bpm", "musicalKey", "songId", "songVersionId", "stemPackId", "rightsWorkId"]) {
+  assert.equal((projectForm.match(new RegExp(`name="${name}"`, "g")) || []).length, 1, `Preserve project field ${name}`);
+}
+for (const id of ["publicDirectory", "publicCreators", "publicFilters", "locked", "login", "workspace", "collaboration", "studioTrack", "studioPlayer", "passName", "passInitial", "guardianForm", "guardianProject", "guardianReport"]) {
   assert.equal((html.match(new RegExp(`id="${id}"`, "g")) || []).length, 1, `Keep existing ${id} intact`);
 }
 assert.doesNotMatch(client, /innerHTML|outerHTML|insertAdjacentHTML|fetch\s*\(/, "Demo does not inject HTML or call private/payment APIs");
@@ -27,6 +42,7 @@ assert.match(client, /safeAssetUrl\(listing.assetPreviewUrl\)/);
 assert.match(css, /prefers-reduced-motion:\s*reduce/);
 assert.match(css, /@media \(max-width: 620px\)/);
 assert.match(css, /\.demo-profile-dialog::backdrop/);
+assert.match(css, /\.demo-author-header \.halo-social-avatar\s*\{[^}]*flex-basis:\s*4rem;[^}]*width:\s*4rem;[^}]*height:\s*4rem;/, "Shared flex basis matches the creator avatar dimensions so anchors stay circular");
 assert.equal(ORBIT_TIERS.length, 4);
 assert.ok(ORBIT_TIERS.some(tier => !CREATOR_SEEDS.some(creator => creator.tier === tier.id)), "Include an empty sample orbit");
 
@@ -96,7 +112,7 @@ class Element {
 function descendants(element) {
   return element.children.flatMap(child => [child, ...descendants(child)]);
 }
-function fixture({ localStorage = memoryStorage(), aiService = HaloAIService, creators = CREATOR_SEEDS, listings = LISTING_SEEDS } = {}) {
+function fixture({ localStorage = memoryStorage(), aiService = HaloAIService, creators = CREATOR_SEEDS, listings = LISTING_SEEDS, recordSpark = () => {} } = {}) {
   const elements = new Map();
   const document = {
     activeElement: null,
@@ -104,14 +120,19 @@ function fixture({ localStorage = memoryStorage(), aiService = HaloAIService, cr
     getElementById: id => elements.get(id) || [...elements.values()].flatMap(descendants).find(element => element.id === id) || null
   };
   for (const id of ["demoCreators", "demoProfileDialog", "demoProfileContent", "demoProfileClose", "demoProfileStatus",
-    "demoDiscoveryStatus", "demoResultCount", "demoSearch", "demoGenre", "demoOrbitTiers", "demoFilters", "workspace"]) {
+    "demoDiscoveryStatus", "demoResultCount", "demoSearch", "demoGenre", "demoOrbitTiers", "demoFilters", "workspace",
+    "project", "collaborationBrief", "briefKind", "briefCounter", "briefAudio", "briefVisuals", "briefReview",
+    "passName", "passInitial", "briefAuthorName", "briefAuthorInitial"]) {
     const element = document.createElement(id === "demoProfileDialog" ? "dialog" : "div");
     element.id = id;
     elements.set(id, element);
   }
   elements.get("workspace").hidden = true;
   elements.get("demoProfileDialog").append(elements.get("demoProfileContent"), elements.get("demoProfileStatus"), elements.get("demoProfileClose"));
-  const app = initCreatorDiscovery({ document, storage: localStorage, creators, listings, aiService });
+  elements.get("briefKind").value = "audio";
+  elements.get("passName").textContent = "Signed-in member";
+  elements.get("passInitial").textContent = "S";
+  const app = initCreatorDiscovery({ document, storage: localStorage, creators, listings, aiService, recordSpark });
   return { document, elements, app, get: id => document.getElementById(id) };
 }
 const findButton = (root, text) => descendants(root).find(element => element.tagName === "BUTTON" && element.textContent.includes(text));
@@ -120,6 +141,15 @@ const f = fixture();
 assert.equal(f.get("demoCreators").children.length, CREATOR_SEEDS.length);
 assert.match(f.get("demoCreators").textContent, /Verified · sample only/);
 assert.match(f.get("demoCreators").textContent, /sample followers/);
+assert.equal(descendants(f.get("demoCreators")).filter(element => element.className?.includes("demo-author-header")).length, CREATOR_SEEDS.length);
+assert.equal(descendants(f.get("demoCreators")).filter(element => element.className === "halo-social-avatar").length, CREATOR_SEEDS.length, "Each sample card has a shared avatar anchor");
+for (const heading of descendants(f.get("demoCreators")).filter(element => element.tagName === "STRONG")) {
+  assert.equal(heading.getAttribute("role"), "heading");
+  assert.equal(heading.getAttribute("aria-level"), "3");
+}
+for (const creator of CREATOR_SEEDS) assert.match(f.get("demoCreators").textContent, new RegExp(`@sample-${creator.id}`));
+assert.match(f.get("demoCreators").textContent, /Sample showcase/);
+assert.equal(descendants(f.get("demoCreators")).filter(element => element.tagName === "TIME").length, 0, "Sample showcases have no invented timestamps");
 assert.equal(f.get("demoOrbitTiers").children.length, 4);
 assert.match(f.get("demoOrbitTiers").textContent, /Open orbit — no sample creators/);
 assert.equal(descendants(f.get("demoOrbitTiers")).filter(element => element.tagName === "BUTTON").length, CREATOR_SEEDS.length);
@@ -128,6 +158,10 @@ await opener.emit("click");
 assert.equal(f.get("demoProfileDialog").open, true);
 assert.equal(f.document.activeElement, f.get("demoProfileClose"));
 assert.equal(f.get("demoProfileTitle").textContent, CREATOR_SEEDS[0].displayName);
+assert.equal(f.get("demoProfileTitle").getAttribute("aria-level"), "2", "Dialog retains its accessible profile heading");
+assert.match(f.get("demoProfileContent").textContent, /Sample showcase/);
+assert.match(f.get("demoProfileContent").textContent, /@sample-dj-halo/);
+assert.equal(descendants(f.get("demoProfileContent")).filter(element => element.tagName === "TIME").length, 0);
 assert.match(f.get("demoProfileContent").textContent, /illustrative orbit placement/);
 assert.match(f.get("demoProfileContent").textContent, /no actual audio analysis or AI provider/);
 assert.match(f.get("demoProfileContent").textContent, /not legal verification/);
@@ -181,12 +215,37 @@ await signedInLinks[1].emit("click");
 assert.equal(f.get("demoProfileDialog").open, false, "Same-page handoff closes the modal");
 
 const persistentStorage = memoryStorage();
-const firstVisit = fixture({ localStorage: persistentStorage });
+const sparks = [];
+const firstVisit = fixture({ localStorage: persistentStorage, recordSpark: action => sparks.push(action) });
+const unchangedOrbits = firstVisit.get("demoOrbitTiers").textContent;
 await findButton(firstVisit.get("demoCreators"), "Follow · demo").emit("click");
-const secondVisit = fixture({ localStorage: persistentStorage });
+assert.deepEqual(sparks, ["follow"], "First demo follow records local progress");
+assert.equal(firstVisit.get("workspace").hidden, true, "Local progress never unlocks member access");
+assert.equal(firstVisit.get("demoOrbitTiers").textContent, unchangedOrbits, "A local milestone never changes tier placement");
+assert.match(firstVisit.get("demoDiscoveryStatus").textContent, /Orbits placement and permissions stay unchanged/);
+await findButton(firstVisit.get("demoCreators"), "Following · demo").emit("click");
+await findButton(firstVisit.get("demoCreators"), "Follow · demo").emit("click");
+assert.deepEqual(sparks, ["follow", "follow"], "Each transition to followed delegates milestone deduplication to shared state");
+const secondVisit = fixture({ localStorage: persistentStorage, recordSpark: action => sparks.push(action) });
 assert.equal(findButton(secondVisit.get("demoCreators"), "Following · demo").getAttribute("aria-pressed"), "true");
 await findButton(secondVisit.get("demoCreators"), "Following · demo").emit("click");
 assert.equal(readDemoFollows(persistentStorage).ids.size, 0);
+assert.deepEqual(sparks, ["follow", "follow"], "Restoring or removing a saved demo follow does not record progress");
+const progressStore = createSocialStore(memoryStorage());
+const resettableFollow = fixture({ recordSpark: action => progressStore.recordSpark(action) });
+await findButton(resettableFollow.get("demoCreators"), "Follow · demo").emit("click");
+assert.deepEqual(progressStore.get().sparks, ["follow"]);
+await findButton(resettableFollow.get("demoCreators"), "Following · demo").emit("click");
+await findButton(resettableFollow.get("demoCreators"), "Follow · demo").emit("click");
+assert.deepEqual(progressStore.get().sparks, ["follow"], "Shared state deduplicates follow progress");
+for (const reset of [() => progressStore.resetSparks(), () => progressStore.reset()]) {
+  reset();
+  assert.deepEqual(progressStore.get().sparks, []);
+  await findButton(resettableFollow.get("demoCreators"), "Following · demo").emit("click");
+  await findButton(resettableFollow.get("demoCreators"), "Follow · demo").emit("click");
+  assert.deepEqual(progressStore.get().sparks, ["follow"], "Re-following after either shared reset earns the local spark again");
+  assert.equal(resettableFollow.get("workspace").hidden, true, "Resettable progress never grants member access");
+}
 const denied = fixture({ localStorage: brokenStorage });
 assert.match(denied.get("demoDiscoveryStatus").textContent, /storage is unavailable/);
 await findButton(denied.get("demoCreators"), "Follow · demo").emit("click");
@@ -225,4 +284,49 @@ await reviewPromise;
 assert.equal(pending.get("demoProfileTitle").textContent, CREATOR_SEEDS[1].displayName);
 assert.doesNotMatch(pending.get("demoProfileContent").textContent, /0\/100/, "A stale review cannot populate another profile");
 
-console.log("Creator discovery contracts passed: disclosure, isolation, filters, dialog focus, local follows, Orbits, listings and advisory safety.");
+let observedAuthor;
+const observedTargets = [];
+class PassObserver {
+  constructor(callback) { observedAuthor = callback; }
+  observe(target, options) { observedTargets.push(target.id); assert.equal(options.subtree, true); }
+}
+const composer = fixture();
+let projectSubmissions = 0;
+composer.get("project").addEventListener("submit", () => { projectSubmissions++; });
+initBriefComposer({ document: composer.document, Observer: PassObserver });
+assert.deepEqual(observedTargets, ["passName", "passInitial"], "Composer watches the real authenticated Creator Pass only");
+assert.equal(composer.get("briefAuthorName").textContent, "Signed-in member");
+assert.equal(composer.get("briefAuthorInitial").textContent, "S");
+composer.get("passName").textContent = "Another real member";
+composer.get("passInitial").textContent = "A";
+observedAuthor();
+assert.equal(composer.get("briefAuthorName").textContent, "Another real member");
+assert.equal(composer.get("briefAuthorInitial").textContent, "A");
+assert.equal(composer.get("briefCounter").textContent, "0 / 4000");
+composer.get("collaborationBrief").value = "A shared idea";
+await composer.get("collaborationBrief").emit("input");
+assert.equal(composer.get("briefCounter").textContent, "13 / 4000");
+composer.get("collaborationBrief").value = "x".repeat(4000);
+await composer.get("collaborationBrief").emit("input");
+assert.equal(composer.get("briefCounter").textContent, "4000 / 4000");
+for (const [id, kind] of [["briefVisuals", "visual"], ["briefReview", "review"], ["briefAudio", "audio"]]) {
+  await composer.get(id).emit("click");
+  assert.equal(composer.get("briefKind").value, kind);
+  assert.equal(composer.get(id).getAttribute("aria-pressed"), "true");
+  for (const other of ["briefAudio", "briefVisuals", "briefReview"].filter(other => other !== id)) {
+    assert.equal(composer.get(other).getAttribute("aria-pressed"), "false");
+  }
+}
+composer.get("briefKind").value = "review";
+await composer.get("briefKind").emit("change");
+assert.equal(composer.get("briefReview").getAttribute("aria-pressed"), "true");
+composer.get("collaborationBrief").value = "";
+composer.get("briefKind").value = "audio";
+await composer.get("project").emit("reset");
+assert.equal(composer.get("briefCounter").textContent, "0 / 4000");
+assert.equal(composer.get("briefAudio").getAttribute("aria-pressed"), "true");
+assert.equal(projectSubmissions, 0, "Counter and quick actions never invoke authenticated form submission");
+assert.equal(composer.get("workspace").hidden, true, "Initializing the composer leaves authentication gating intact");
+assert.equal(initBriefComposer({ document: { getElementById: () => null } }), undefined);
+
+console.log("Creator discovery contracts passed: social sample headers, local milestones, member composer, disclosure, isolation, filters, dialog focus, Orbits, listings and advisory safety.");

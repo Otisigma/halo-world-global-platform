@@ -15,6 +15,7 @@
   <link rel="stylesheet" href="/accessibility.css">
   <link rel="stylesheet" href="/mobile-navigation.css">
   <link rel="stylesheet" href="/halo-hud.css">
+  <link rel="stylesheet" href="/creator-social.css">
   <link rel="stylesheet" href="/creator-network/network.css">
   <script src="/release-artwork.js" defer></script>
   <script src="/stats.js" defer></script>
@@ -23,6 +24,7 @@
   <script src="/mobile-navigation.js" defer></script>
   <script src="/halo-hud.js" defer></script>
   <script type="module" src="/identity.js"></script>
+  <script type="module" src="/lib/creator-social.js"></script>
   <script type="module" src="/creator-network/network.js"></script>
   <script type="module" src="/creator-network/discovery.js"></script>
 </head>
@@ -58,6 +60,8 @@
         <p>Human taste.<br><strong>Dreamweaver flow.</strong><br>Artist-owned outcomes.</p>
       </aside>
     </section>
+
+    <section data-halo-social-welcome aria-label="Your local creator welcome"></section>
 
     <section id="demoDiscovery" class="demo-discovery" aria-labelledby="demoDiscoveryTitle">
       <div class="section-heading">
@@ -226,19 +230,34 @@
 
       <section id="collaboration" class="workspace-panel" aria-labelledby="createTitle" data-halo-guide="Link only your existing HALO assets. A collaboration invite never grants media access or changes rights.">
         <p class="eyebrow">WIP studio / open call</p><h2 id="createTitle">Put a brief into the room.</h2>
-        <form id="project" class="profile-form">
-          <label>Title<input name="title" maxlength="180" required></label>
-          <label>Brief<textarea name="brief" maxlength="4000"></textarea></label>
-          <label>Type<select name="kind"><option value="audio">Audio / topline</option><option value="visual">Visuals</option><option value="review">Peer review</option></select></label>
-          <label>Role needed<input name="roleNeeded" maxlength="80"></label>
-          <label>Genre<input name="genre" maxlength="80"></label>
-          <label>Language<input name="language" maxlength="80"></label>
-          <label>BPM<input name="bpm" type="number" min="20" max="300"></label>
-          <label>Key<input name="musicalKey" maxlength="20"></label>
-          <label>Existing song ID<input name="songId" maxlength="100"></label>
-          <label>Existing song version ID<input name="songVersionId" maxlength="100"></label>
-          <label>Existing stem pack ID<input name="stemPackId" maxlength="100"></label>
-          <label>Existing rights work ID<input name="rightsWorkId" maxlength="100"></label>
+        <form id="project" class="brief-composer">
+          <div class="brief-author">
+            <span id="briefAuthorInitial" class="brief-avatar" aria-hidden="true">H</span>
+            <div><strong id="briefAuthorName">Your artist name</strong><p>Member Creator Pass · real collaboration brief</p></div>
+          </div>
+          <label>Give your collaboration a title<input name="title" maxlength="180" required placeholder="What are we making together?"></label>
+          <label>Brief<textarea id="collaborationBrief" name="brief" maxlength="4000" aria-describedby="briefCounter briefPrivacy" placeholder="Share the idea, the sound, and who you would love to build with…"></textarea></label>
+          <div class="brief-meta"><p id="briefPrivacy">Posted through your member workspace, not your local demo identity.</p><output id="briefCounter" for="collaborationBrief">0 / 4000</output></div>
+          <div class="brief-quick-actions" role="group" aria-label="Choose collaboration type">
+            <button id="briefAudio" class="button button-outline" type="button" aria-pressed="true">Audio</button>
+            <button id="briefVisuals" class="button button-outline" type="button" aria-pressed="false">Visuals</button>
+            <button id="briefReview" class="button button-outline" type="button" aria-pressed="false">Peer review</button>
+          </div>
+          <label>Type<select id="briefKind" name="kind"><option value="audio">Audio / topline</option><option value="visual">Visuals</option><option value="review">Peer review</option></select></label>
+          <details class="brief-technical">
+            <summary>Optional matching + technical details</summary>
+            <div class="profile-form">
+              <label>Role needed<input name="roleNeeded" maxlength="80"></label>
+              <label>Genre<input name="genre" maxlength="80"></label>
+              <label>Language<input name="language" maxlength="80"></label>
+              <label>BPM<input name="bpm" type="number" min="20" max="300"></label>
+              <label>Key<input name="musicalKey" maxlength="20"></label>
+              <label>Existing song ID<input name="songId" maxlength="100"></label>
+              <label>Existing song version ID<input name="songVersionId" maxlength="100"></label>
+              <label>Existing stem pack ID<input name="stemPackId" maxlength="100"></label>
+              <label>Existing rights work ID<input name="rightsWorkId" maxlength="100"></label>
+            </div>
+          </details>
           <button class="button button-gold" type="submit">Drop a collaboration brief</button>
         </form>
         <p>Assets stay in the catalog and stem vault. Private files remain private. Agree rights and splits in <a href="/artist/dashboard">Artist Economy</a> before releasing work.</p>

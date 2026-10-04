@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { runInNewContext } from "node:vm";
+import { createSocialAvatar, relativeTime } from "../lib/creator-social.js";
 import { createSignalFeedHandler, pageInput, postInput, publicLink, releaseMedia, releaseMusicMetadata } from "../netlify/lib/signal-feed.mjs";
 
 const postId = "11111111-1111-4111-8111-111111111111";
@@ -344,13 +345,16 @@ await check("unsupported methods and unknown views or actions fail closed", asyn
   const h = harness(member); assert.equal((await h.request({ action: "raw_sql" })).status, 400); assert.equal(h.calls.length, 0);
 });
 await check("auth changes clear composer drafts and consent; old mutations cannot change the new session", async () => {
-  const source = await readFile(new URL("../signal-network/signal-feed.js", import.meta.url), "utf8");
+  const source = (await readFile(new URL("../signal-network/signal-feed.js", import.meta.url), "utf8")).replace(/^import .*;\n/gm, "");
   class Element {
-    constructor() { this.children = []; this.handlers = {}; this.value = ""; this.checked = false; this.textContent = ""; this.hidden = false; this.disabled = false; }
+    constructor(tag = "div") { this.tagName = tag; this.children = []; this.handlers = {}; this.value = ""; this.checked = false; this.textContent = ""; this.hidden = false; this.disabled = false; }
     addEventListener(name, handler) { this.handlers[name] = handler; }
     setAttribute() {}
     append(...children) { this.children.push(...children); }
+    prepend(...children) { this.children.unshift(...children); }
     replaceChildren(...children) { this.children = children; }
+    focus() { this.focused = true; }
+    get firstChild() { return this.children[0]; }
     reset() {
       this.resetCount = (this.resetCount || 0) + 1;
       for (const field of Object.values(this.elements || {})) { field.value = ""; field.checked = false; }
@@ -363,18 +367,60 @@ await check("auth changes clear composer drafts and consent; old mutations canno
   form.elements = Object.fromEntries(["kind", "body", "releaseId", "linkUrl", "includePurchase", "publishPublic"].map(name => [name, new Element()]));
   elements.set("feedKind", form.elements.kind); elements.set("feedRelease", form.elements.releaseId);
   form.elements.kind.value = "TEXT";
-  let authChanged, finishMutation, currentMember = "old-member";
+  let authChanged, finishMutation, mutationBody, currentMember = "old-member";
   const context = {
-    document: { getElementById: get, createElement: () => new Element(), addEventListener() {}, hidden: false },
+    document: { getElementById: get, createElement: tag => new Element(tag), addEventListener() {}, hidden: false },
     window: { haloIdentity: { onAuthChange(callback) { authChanged = callback; } } },
-    fetch: async (_url, options) => {
-      if (options.method === "POST") return new Promise(resolve => { finishMutation = () => resolve({ ok: true, json: async () => ({ id: postId }) }); });
+    fetch: async (url, options) => {
+      if (url === "/api/release-catalog") return { ok: true, json: async () => ({ releases: [
+        { id: "public-release", title: "Public music", artist: "Actual Artist", status: "published", isLiveVisible: true },
+        { id: "private-release", title: "Private music", artist: "Private Artist", status: "draft", isLiveVisible: false }
+      ] }) };
+      if (options.method === "POST") return new Promise(resolve => {
+        mutationBody = JSON.parse(options.body);
+        finishMutation = () => resolve({ ok: true, json: async () => ({ id: postId }) });
+      });
       return { ok: true, json: async () => ({ items: [], memberId: currentMember, nextCursor: null }) };
     },
-    AbortController, URLSearchParams, setTimeout, clearTimeout, setInterval() {}, console
+    AbortController, AbortSignal, URLSearchParams, setTimeout, clearTimeout, setInterval() {}, console, createSocialAvatar, relativeTime
   };
-  runInNewContext(`${source}\nglobalThis.testState = feedState; globalThis.testMutate = mutate;`, context);
+  runInNewContext(`${source}\nglobalThis.testState = feedState; globalThis.testMutate = mutate; globalThis.testRenderPost = renderPost;`, context);
   await new Promise(resolve => setImmediate(resolve));
+  assert.equal(get("feedComposerAuthor").children[1].textContent, "Creator Pass member");
+  const livePost = context.testRenderPost({
+    id: postId, memberId: "other", authorName: "Réal Creator", kind: "TEXT", body: "Public body",
+    createdAt: "2026-01-01T12:00:00.000Z", boosts: 0, saved: false, boosted: false
+  });
+  const header = livePost.children[0], metadata = header.children[1];
+  assert.equal(header.children[0].textContent, "RC");
+  assert.equal(metadata.children[0].textContent, "Réal Creator");
+  assert.equal(metadata.children[1].textContent, "@real-creator");
+  assert.match(metadata.children[1].title, /Non-unique display label.*not an account handle/);
+  assert.equal(header.children[0].children.length, 0);
+  assert.equal(metadata.children[3].tagName, "time");
+  assert.equal(metadata.children[3].dateTime, "2026-01-01T12:00:00.000Z");
+  assert.equal(metadata.children[3].title, new Date("2026-01-01T12:00:00.000Z").toLocaleString());
+  assert.match(metadata.children[4].textContent, /not a unique account identity/);
+  form.elements.body.value = "A public idea";
+  form.elements.body.handlers.input();
+  assert.equal(get("feedCharacterCount").textContent, "13 / 4000");
+  get("feedQuickVideo").handlers.click();
+  assert.equal(form.elements.kind.value, "VIDEO");
+  assert.equal(get("feedLinkField").hidden, false);
+  assert.equal(form.elements.linkUrl.required, true);
+  assert.equal(form.elements.body.focused, true);
+  get("feedQuickAudio").handlers.click();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(form.elements.kind.value, "AUDIO");
+  assert.equal(get("feedReleaseField").hidden, false);
+  assert.equal(get("feedLinkField").hidden, true);
+  assert.equal(form.elements.releaseId.required, true);
+  assert.equal(get("feedRelease").children.length, 2);
+  assert.equal(get("feedRelease").children[1].value, "public-release");
+  get("feedQuickBrief").handlers.click();
+  assert.equal(form.elements.kind.value, "BRIEF_LINK");
+  assert.equal(get("feedReleaseField").hidden, true);
+  form.elements.kind.value = "TEXT";
   form.elements.body.value = "Old account draft"; form.elements.linkUrl.value = "https://example.com/old-link";
   form.elements.publishPublic.checked = true; form.elements.includePurchase.checked = true;
   const pendingPublish = form.handlers.submit({ preventDefault() {} });
@@ -383,6 +429,7 @@ await check("auth changes clear composer drafts and consent; old mutations canno
   assert.equal(form.elements.body.value, ""); assert.equal(form.elements.linkUrl.value, "");
   assert.equal(form.elements.publishPublic.checked, false); assert.equal(form.elements.includePurchase.checked, false);
   assert.equal(form.elements.kind.value, "TEXT"); assert.equal(get("feedLinkField").hidden, true);
+  assert.equal(get("feedCharacterCount").textContent, "0 / 4000");
   assert.equal(context.testState.memberId, "new-member");
   const resetCount = form.resetCount, currentStatus = get("feedStatus").textContent;
   form.elements.body.value = "New account draft"; form.elements.linkUrl.value = "https://example.com/new-link";
@@ -392,6 +439,20 @@ await check("auth changes clear composer drafts and consent; old mutations canno
   const pendingToggle = context.testMutate("save", { postId, active: true });
   await new Promise(resolve => setImmediate(resolve)); context.testState.generation++;
   finishMutation(); await assert.rejects(pendingToggle, error => error.name === "FeedSessionChanged");
+  form.elements.body.value = "Published through Creator Pass";
+  form.elements.publishPublic.checked = true;
+  const currentPublish = form.handlers.submit({ preventDefault() {} });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(mutationBody.action, "publish");
+  assert.equal(mutationBody.body, "Published through Creator Pass");
+  assert.equal(mutationBody.publishPublic, true);
+  assert.equal(mutationBody.authorName, undefined);
+  assert.equal(mutationBody.identity, undefined);
+  finishMutation(); await currentPublish;
+  assert.equal(form.elements.body.value, "");
+  assert.equal(form.elements.publishPublic.checked, false);
+  assert.equal(get("feedCharacterCount").textContent, "0 / 4000");
+  assert.equal(get("feedStatus").textContent, "Signal deliberately published to the public feed.");
 });
 await check("public page uses safe DOM, native audio, honest waveform, polling and existing Identity", async () => {
   const root = new URL("../", import.meta.url);
@@ -408,7 +469,14 @@ await check("public page uses safe DOM, native audio, honest waveform, polling a
   assert.match(script, /post.media.bpm.*BPM/); assert.match(script, /post.media.musicalKey/);
   assert.match(script, /signal-feed__music-metadata/);
   assert.match(page, /Polling, not realtime push/); assert.match(migration, /FOREIGN KEY \(post_id, parent_id\)/);
-  assert.match(page, /name="body" maxlength="1000"/); assert.match(migration, /body TEXT NOT NULL CHECK \(char_length\(body\) BETWEEN 1 AND 1000\)/);
+  assert.match(page, /name="body" maxlength="4000"/); assert.match(migration, /body TEXT NOT NULL CHECK \(char_length\(body\) BETWEEN 1 AND 1000\)/);
+  assert.match(page, /id="feedCharacterCount"[^>]*>0 \/ 4000/);
+  assert.match(page, /data-halo-social-welcome/);
+  assert.match(page, /No photo uploads here/);
+  assert.match(script, /Display-only handle from author name; not a unique account identity/);
+  assert.match(script, /time\.title = displayDate\(post\.createdAt\)/);
+  assert.match(script, /relativeTime\(post\.createdAt\)/);
+  assert.ok(!/getLocalIdentity/.test(script));
   assert.match(migration, /parent_id IS NULL/); assert.match(migration, /ON DELETE CASCADE/);
 });
 console.log(`Signal feed contracts: ${passed}/${passed} checks passed.`);

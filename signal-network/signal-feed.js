@@ -1,3 +1,5 @@
+import { createSocialAvatar, relativeTime } from "../lib/creator-social.js";
+
 const endpoint = "/api/signal-feed";
 const byId = id => document.getElementById(id);
 const feedState = { memberId: "", cursor: null, saved: false, generation: 0, session: 0, busy: false, notificationCursor: null };
@@ -72,6 +74,12 @@ function identityControls(memberId) {
   byId("feedPublish").disabled = !feedState.memberId;
   byId("feedSaved").disabled = !feedState.memberId;
   byId("feedSignIn").hidden = Boolean(feedState.memberId);
+  const name = feedState.memberId ? "Creator Pass member" : "Sign in with Creator Pass";
+  byId("feedComposerAuthor").replaceChildren(
+    createSocialAvatar(document, { displayName: name, handle: "", avatar: "" }),
+    node("strong", name),
+    node("small", "Public publishing uses your authenticated member display name, never your local welcome identity.")
+  );
 }
 function displayDate(value) {
   return new Date(value).toLocaleString();
@@ -187,9 +195,21 @@ function safetyButtons(memberId) {
 function renderPost(post) {
   const article = node("article", null, "signal-feed__post");
   article.id = `feed-post-${post.id}`;
-  const heading = node("header");
-  heading.append(node("strong", post.authorName), node("span", post.kind), node("time", displayDate(post.createdAt)));
-  heading.lastChild.dateTime = post.createdAt;
+  const handle = String(post.authorName || "creator").normalize("NFKD").replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 40) || "creator";
+  const heading = node("header", null, "halo-social-author");
+  const avatar = createSocialAvatar(document, { displayName: post.authorName, handle });
+  avatar.textContent = String(post.authorName || "Creator").trim().split(/\s+/).slice(0, 2).map(part => Array.from(part)[0] || "").join("").toUpperCase();
+  const metadata = node("div", null, "halo-social-author-text");
+  const displayHandle = node("span", `@${handle}`, "halo-social-handle");
+  displayHandle.title = "Non-unique display label derived from author name, not an account handle";
+  displayHandle.setAttribute("aria-label", `@${handle} · non-unique display label, not an account handle`);
+  metadata.append(node("strong", post.authorName), displayHandle, node("span", post.kind));
+  const time = node("time", relativeTime(post.createdAt));
+  time.dateTime = post.createdAt;
+  time.title = displayDate(post.createdAt);
+  metadata.append(time, node("small", "Display-only handle from author name; not a unique account identity.", "signal-social__hint"));
+  heading.append(avatar, metadata);
   article.append(heading, node("p", post.body, "signal-feed__body"));
   let audio;
   if (post.kind === "AUDIO") {
@@ -342,6 +362,17 @@ async function postType() {
   } catch (error) { if (session === feedState.session) status.textContent = error.message; }
 }
 byId("feedKind").addEventListener("change", postType);
+const updateCharacterCount = () => { byId("feedCharacterCount").textContent = `${publishForm.elements.body.value.length} / 4000`; };
+publishForm.elements.body.addEventListener("input", updateCharacterCount);
+publishForm.addEventListener("reset", () => { byId("feedCharacterCount").textContent = "0 / 4000"; });
+for (const [id, kind] of [["feedQuickAudio", "AUDIO"], ["feedQuickVideo", "VIDEO"], ["feedQuickBrief", "BRIEF_LINK"]]) {
+  byId(id).addEventListener("click", () => {
+    byId("feedKind").value = kind;
+    postType();
+    publishForm.elements.body.focus();
+  });
+}
+updateCharacterCount();
 publishForm.addEventListener("submit", async event => {
   event.preventDefault();
   const origin = mutationOrigin();
@@ -354,7 +385,7 @@ publishForm.addEventListener("submit", async event => {
       linkUrl: values.linkUrl.value, includePurchase: values.kind.value === "AUDIO" && values.includePurchase.checked,
       publishPublic: values.publishPublic.checked
     }, origin);
-    publishForm.reset(); postType(); feedState.saved = false;
+    publishForm.reset(); updateCharacterCount(); postType(); feedState.saved = false;
     byId("feedSaved").setAttribute("aria-pressed", "false"); await loadFeed();
     ensureOrigin(origin, false);
     status.textContent = "Signal deliberately published to the public feed.";
@@ -373,7 +404,7 @@ byId("feedBlocked").addEventListener("toggle", () => { if (byId("feedBlocked").o
 function connectIdentity() {
   window.haloIdentity.onAuthChange(async () => {
     feedState.session++;
-    publishForm.reset(); postType();
+    publishForm.reset(); updateCharacterCount(); postType();
     identityControls(""); feedState.saved = false;
     byId("feedSaved").setAttribute("aria-pressed", "false");
     byId("feedNotificationList").replaceChildren(node("p", "Sign in to see your notifications."));

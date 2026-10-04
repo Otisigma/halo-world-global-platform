@@ -809,6 +809,7 @@
           <li><a href="#modules">Modules</a></li>
           <li><a href="#signal-feed">Signal Feed</a></li>
           <li><a href="#command-center">Network Live</a></li>
+          <li><a href="/signal-network/#feed">Public feed</a></li>
           <li><a href="#circles">Circles</a></li>
           <li><a href="#ritual">Ritual Engine</a></li>
           <li><a href="/creator-network/">Creator Studio</a></li>
@@ -850,6 +851,7 @@
       </div>
     </section>
 
+<<<<<<< HEAD
     <section class="signal-market" id="signal-feed" aria-labelledby="signalFeedTitle">
       <div class="container">
         <header class="signal-market__intro">
@@ -918,6 +920,50 @@
           <div id="marketGuideResult" aria-live="polite"></div>
         </form>
       </dialog>
+=======
+    <section class="signal-feed" id="feed" aria-labelledby="signal-feed-title">
+      <div class="container">
+        <header class="signal-feed__header">
+          <p class="section-label">The public frequency</p>
+          <h2 class="section-title" id="signal-feed-title">Signal feed</h2>
+          <p>Deliberately published by creators. Read without signing in. Newest posts first; private work stays private.</p>
+          <a href="/creator-network/#aiTitle">Shape your next idea in Creator Studio AI</a>
+        </header>
+        <div class="signal-feed__toolbar">
+          <button type="button" id="feedRefresh">Refresh feed</button>
+          <button type="button" id="feedSaved" aria-pressed="false" disabled>Saved posts</button>
+          <button type="button" id="feedSignIn">Sign in with Creator Pass</button>
+        </div>
+        <p id="feedStatus" role="status" aria-live="polite">Loading public posts…</p>
+        <details class="signal-feed__composer">
+          <summary>Publish a public signal</summary>
+          <p>Creator Pass identity required. Your display name, post, links and comments will be public. Never share private assets or confidential briefs.</p>
+          <form id="feedPublishForm">
+            <label>Post type <select name="kind" id="feedKind"><option>TEXT</option><option>AUDIO</option><option>VIDEO</option><option>BRIEF_LINK</option></select></label>
+            <label>Your signal (maximum 1000 characters) <textarea name="body" maxlength="1000" rows="4" required></textarea></label>
+            <label id="feedReleaseField" hidden>Published release <select name="releaseId" id="feedRelease"><option value="">Choose a published release</option></select><small>Only verified public catalog audio is accepted. No private uploads or asset URLs.</small></label>
+            <label id="feedLinkField" hidden>Public HTTPS video or brief link <input name="linkUrl" type="url" maxlength="1200" placeholder="https://"></label>
+            <label id="feedPurchaseField" hidden><input name="includePurchase" type="checkbox"> Include this release's existing purchase link (no checkout here)</label>
+            <label><input name="publishPublic" type="checkbox" required> I deliberately publish this signal and its links for everyone to see.</label>
+            <button type="submit" id="feedPublish" disabled>Publish publicly</button>
+          </form>
+        </details>
+        <details class="signal-feed__notifications" id="feedNotifications">
+          <summary>Notifications <span id="feedNotificationCount"></span></summary>
+          <p>Member-only updates checked every 30 seconds while this page is visible. Polling, not realtime push.</p>
+          <div id="feedNotificationList"><p>Sign in to see your notifications.</p></div>
+          <button type="button" id="feedMoreNotifications" hidden>Older notifications</button>
+        </details>
+        <details class="signal-feed__notifications" id="feedBlocked">
+          <summary>Safety · blocked members</summary>
+          <p>Blocks apply to signed-in interactions in both directions, not to anonymous public access. Reports go to the existing Signal safety queue.</p>
+          <div id="feedBlockedList"><p>Sign in to manage your blocks.</p></div>
+        </details>
+        <div id="feedPosts" class="signal-feed__posts" aria-busy="true"></div>
+        <button type="button" id="feedMore" hidden>Load older posts</button>
+        <noscript><p>Enable JavaScript to read the persistent public feed. The Command Center remains below.</p></noscript>
+      </div>
+>>>>>>> origin/main
     </section>
 
     <section class="signal-console" id="command-center" aria-labelledby="command-center-title">
@@ -1446,7 +1492,11 @@
 
   <script type="module" src="/identity.js"></script>
   <script type="module" src="/signal-network/signal-network.js"></script>
+<<<<<<< HEAD
   <script type="module" src="/signal-network/marketplace.js"></script>
+=======
+  <script type="module" src="/signal-network/signal-feed.js"></script>
+>>>>>>> origin/main
 
 </body>
 </html>

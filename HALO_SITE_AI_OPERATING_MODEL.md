@@ -21,6 +21,16 @@ Use the same role pattern for each new domain team:
 
 Small teams can combine roles, but the responsibilities should still be covered.
 
+## Creator studio and public Signal
+
+- `/halo` remains the feature-directory front door. `/creator-network/` owns Creator Passes, projects, the release pipeline, and the HALO Orbits tier map. `/signal-network/#feed` is the public community surface; the existing private command center stays separate.
+- DJ Halo, DJ Butterfly, and DJ Romy are curated directory seeds, not fabricated memberships. Seeds cannot receive project invitations. Member discovery remains opt-in, and matching a curated display name does not verify a member.
+- Apply `20261003153000_create_studio_guardian_usage.sql` and `20261003160000_create_signal_public_feed.sql` after the existing creator and Signal migrations. Signal posts, replies, reactions, notifications, and rate limits are database-backed; notifications use polling, not push delivery.
+- Public posting is deliberate. Audio attachments resolve published, public release previews, never private song versions or stem files. Optional purchase links use the release's existing artist-approved destination; the feed is not a new checkout or licensing engine.
+- `/api/studio-guardian` accepts `{ action: "health" | "council", projectId }` for a project owner or accepted participant. `HaloAIService` reads stem metadata and recorded rights allocations on the server. Scores are workflow indicators, not sound-quality analysis, participant consent, legal verification, or permission to release.
+- Health checks work without an AI provider. Optionally configure `GEMINI_API_KEY` in the server environment for Gemini 2.5 Flash council task prioritization. Keys never enter the browser; quota exhaustion, unavailable quota storage, or provider failure falls back to the local advisory checklist. Private titles, files, and participant names are not sent to Gemini.
+- Validate this boundary with `npm run test:network`. Keep `npm run build`'s shared-catalog release guard unchanged.
+
 ## Team charters
 
 ### Site Leadership

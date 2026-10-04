@@ -23,8 +23,12 @@
   <script src="/mobile-navigation.js" defer></script>
   <script src="/halo-hud.js" defer></script>
   <script type="module" src="/identity.js"></script>
+<<<<<<< HEAD
   <script src="/creator-network/network.js" defer></script>
   <script type="module" src="/creator-network/discovery.js"></script>
+=======
+  <script type="module" src="/creator-network/network.js"></script>
+>>>>>>> origin/main
 </head>
 <body>
   <a class="skip-link" href="#main">Skip to Creator Network</a>
@@ -33,7 +37,8 @@
     <nav aria-label="Creator navigation">
       <a href="/creators/">Creator World</a>
       <a href="/artists/">Artist rooms</a>
-      <a href="/signal-network/">Signal Network</a>
+      <a href="/signal-network/#feed">The Signal / public feed</a>
+      <a href="#orbits">HALO Orbits</a>
       <a href="/dreamweaver-lab/">Dreamweaver Lab</a>
       <a href="/mixes/">Mixes + reviews</a>
       <a href="/artist/dashboard">Rights + splits</a>
@@ -97,7 +102,7 @@
         <div><p class="eyebrow">Open discovery / opt-in profiles</p><h2 id="directoryTitle">Meet the makers.</h2></div>
         <a class="text-link" href="#locked">Join the network <span aria-hidden="true">↗</span></a>
       </div>
-      <p class="section-intro">Explore public Creator Passes. Profile details appear here only when their owner chooses to be discoverable.</p>
+      <p class="section-intro">Explore opt-in Creator Passes alongside verified HALO-curated seed profiles. Curated cards are directory entries, not member accounts; they do not grant access to projects or private assets.</p>
       <form id="publicFilters" class="filter-console" aria-label="Filter public creators">
         <label>Role<input name="role" maxlength="80" placeholder="Producer, vocalist…"></label>
         <label>Genre<input name="genre" maxlength="80" placeholder="House, soul…"></label>
@@ -106,6 +111,24 @@
         <button type="submit">Tune discovery <span aria-hidden="true">↗</span></button>
       </form>
       <div id="publicCreators" class="creator-cards" aria-live="polite"><p class="empty-state">Loading opt-in Creator Passes…</p></div>
+    </section>
+
+    <section id="orbits" class="public-directory" aria-labelledby="orbitsTitle">
+      <div class="section-heading"><div><p class="eyebrow">SERENA Mesh / discovery map</p><h2 id="orbitsTitle">HALO Orbits.</h2></div><a class="text-link" href="/signal-network/#feed">Step into The Signal ↗</a></div>
+      <p class="section-intro">One creative world, four circles of trust. Explore a tier to find its workspace. This map never changes permissions or publishes private collaborator identities.</p>
+      <div class="orbits-layout">
+        <div class="orbit-map" role="img" aria-label="Concentric HALO network tiers: Core Studio Vault, Inner Crew, Network Peers, Public Signal">
+          <span class="orbit-ring orbit-ring--public"></span><span class="orbit-ring orbit-ring--peers"></span><span class="orbit-ring orbit-ring--crew"></span>
+          <span class="orbit-core">H<span>STUDIO VAULT</span></span>
+          <span class="orbit-satellite orbit-satellite--halo">DJ Halo</span><span class="orbit-satellite orbit-satellite--butterfly">DJ Butterfly</span><span class="orbit-satellite orbit-satellite--romy">DJ Romy</span>
+        </div>
+        <div class="orbit-tiers">
+          <a href="/dreamweaver-lab/"><span>01 / Core Studio Vault</span><strong>Private assets + stems</strong><small>Your song lab. Asset access stays owner-controlled.</small></a>
+          <a href="#requestsTitle"><span>02 / Inner Crew</span><strong>Direct collaborators</strong><small>Accepted project participants. Agree splits separately.</small></a>
+          <a href="#publicDirectory"><span>03 / Network Peers</span><strong>Creators + brief applicants</strong><small>Discover the makers and open a collaboration brief.</small></a>
+          <a href="/signal-network/#feed"><span>04 / Public Signal</span><strong>Listeners + community</strong><small>Published previews, conversations, and release discovery.</small></a>
+        </div>
+      </div>
     </section>
 
     <p id="status" role="status" aria-live="polite"></p>
@@ -159,7 +182,13 @@
       </section>
 
       <section class="ai-dock" aria-labelledby="aiTitle">
-        <div><p class="eyebrow">HALO GUID / creative co-pilot</p><h2 id="aiTitle">A clear next step, whenever you need one.</h2><p>Use the guide on any marked workspace element, or jump straight into the connected creative tools.</p></div>
+        <div><p class="eyebrow">Studio Guardian / HaloAIService</p><h2 id="aiTitle">A clear next step, whenever you need one.</h2><p>Review your project’s release checklist, stem metadata, and recorded rights allocations. Council guidance is advisory, not an audio audit, legal clearance, or a change to rights.</p>
+          <form id="guardianForm">
+            <label>Project to review<select id="guardianProject" name="projectId" required><option value="">Create or join a project first</option></select></label>
+            <div class="guardian-controls"><button type="submit" name="action" value="health">Check project health</button><button type="submit" name="action" value="council">Run council review</button></div>
+          </form>
+          <div id="guardianReport" role="status" aria-live="polite"></div>
+        </div>
         <div class="ai-actions">
           <a href="/dreamweaver-lab/" data-halo-guide="Open Dreamweaver Lab for song development and stem workflows.">Open Dreamweaver <span aria-hidden="true">↗</span></a>
           <a href="#filters" data-halo-guide="Search opt-in creators and active opportunities by role, genre, tempo, and key.">Find a collaborator <span aria-hidden="true">↗</span></a>
@@ -189,7 +218,7 @@
           <label>Owned artist room handle<input name="artistSlug" maxlength="100" placeholder="Optional existing room"></label>
           <label>Roles (comma separated)<input name="roles" maxlength="972" placeholder="Producer, Vocalist"></label>
           <label>Genres (comma separated)<input name="genres" maxlength="972"></label>
-          <label>Languages (comma separated)<input name="languages" maxlength="972"></label>
+          <label>Languages (comma separated)<input name="languages" maxlength="972" placeholder="English, Swahili"></label>
           <label>DAW / hardware (comma separated)<input name="dawSetup" maxlength="972"></label>
           <label>Minimum BPM<input name="bpmMin" type="number" min="20" max="300"></label>
           <label>Maximum BPM<input name="bpmMax" type="number" min="20" max="300"></label>

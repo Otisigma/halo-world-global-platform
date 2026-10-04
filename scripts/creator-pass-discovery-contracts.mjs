@@ -18,7 +18,10 @@ const profile = {
 const projects = [
   { id: "match", title: "Open House Session", brief: "Human collaborators wanted", status: "open",
     owner_member_id: "other", creator_name: "Another artist", role_needed: "Producer",
-    genre: "House", language: "English", bpm: 124 },
+    genre: "House", language: "English", bpm: 124, premium_promoted: true },
+  { id: "standard-match", title: "Standard Creator Session", brief: "Manual collaboration",
+    status: "open", owner_member_id: "standard-owner", creator_name: "Standard artist",
+    role_needed: "Producer", premium_promoted: false },
   { id: "wrong-role", title: "Vocals", status: "open", owner_member_id: "other", role_needed: "Vocalist" },
   { id: "wrong-genre", title: "Jazz", status: "open", owner_member_id: "other", genre: "Jazz" },
   { id: "wrong-language", title: "French", status: "open", owner_member_id: "other", language: "French" },
@@ -60,7 +63,8 @@ const member = fixture(premiumRow);
 const workspace = await member.get("?memberId=victim&dynamicBriefSurfacing=true");
 assert.equal(workspace.creatorPass.creatorId, "owner", "Own pass is bound to membership");
 assert.equal(workspace.creatorPass.entitlements.priorityDiscovery, true);
-assert.deepEqual(workspace.dynamicBriefs.map(project => project.id), ["match"]);
+assert.deepEqual(workspace.dynamicBriefs.map(project => project.id), ["match", "standard-match"],
+  "Premium viewer matching can suggest both Premium-promoted and Standard-owner briefs");
 assert.equal(workspace.dynamicBriefs[0].personaDraft.requiresHumanApproval, true);
 assert.equal(workspace.dynamicBriefs[0].personaDraft.publishPublic, false);
 assert.equal(workspace.dynamicBriefs[0].personaDraft.demo, true);
@@ -69,6 +73,15 @@ assert.doesNotMatch(JSON.stringify(workspace), /private-customer|private-subscri
 assert.deepEqual(member.calls.find(call => call.query.includes("FROM halo_creator_passes WHERE")).params, ["owner"]);
 assert.ok(member.calls.every(call => call.query.startsWith("SELECT")), "Surfacing never posts or mutates");
 assert.ok(workspace.creators.filter(creator => creator.curated).every(creator => !creator.premium_verified));
+const opportunitiesQuery = member.calls.find(call => call.query.includes("LIMIT 100")).query;
+assert.match(opportunitiesQuery, /LEFT JOIN halo_creator_passes owner_pass ON owner_pass.member_id = p.owner_member_id/);
+assert.match(opportunitiesQuery, /p.status = 'open' AND NULLIF\(BTRIM\(p.brief\), ''\) IS NOT NULL/);
+assert.match(opportunitiesQuery, /owner_pass.subscription_tier = 'PREMIUM'/);
+assert.match(opportunitiesQuery, /owner_pass.subscription_status = 'active' AND owner_pass.subscription_expires_at > NOW\(\)/);
+assert.match(opportunitiesQuery, /owner_pass.subscription_status = 'trialing' AND owner_pass.trial_ends_at > NOW\(\)/);
+assert.match(opportunitiesQuery, /owner_pass.subscription_expires_at IS NULL OR owner_pass.subscription_expires_at > NOW\(\)/);
+assert.match(opportunitiesQuery, /ORDER BY premium_promoted DESC, p.updated_at DESC LIMIT 100/);
+assert.doesNotMatch(opportunitiesQuery.split(" FROM ")[0], /owner_pass\.\*/);
 
 for (const row of [
   null,
@@ -84,11 +97,13 @@ for (const row of [
   assert.deepEqual(state.dynamicBriefs, [], "Client flags and non-current passes cannot surface premium briefs");
   assert.equal(state.creatorPass.entitlements.aiGuardianAccess, false);
   assert.equal(state.projects.length, projects.length);
+  assert.equal(state.projects[0].premium_promoted, true,
+    "Owner-side priority is visible even to Standard viewers, without granting them dynamic matching");
 }
 const trial = await fixture({
   ...premiumRow, subscription_status: "trialing", trial_ends_at: future, subscription_expires_at: null
 }).get();
-assert.equal(trial.dynamicBriefs.length, 1);
+assert.equal(trial.dynamicBriefs.length, 2);
 
 const guest = fixture(premiumRow, { authenticated: false });
 const publicState = await guest.get("?view=public");
@@ -167,6 +182,8 @@ assert.equal(premiumUI.element("health").disabled, false);
 assert.equal(premiumUI.element("guardianProject").disabled, false);
 assert.equal(premiumUI.element("dynamicBriefs").children[0].children.some(child =>
   child.textContent.includes("Human review and approval")), true);
+assert.equal(premiumUI.element("dynamicBriefs").children[0].children.some(child =>
+  child.href === "/signal-network/#feed"), true, "Signal handoff does not send a private title or draft");
 
 const standardPass = {
   subscriptionTier: "STANDARD", subscriptionStatus: "active", subscriptionExpiresAt: future

@@ -128,8 +128,16 @@ async function workspace(db, memberId, url) {
       ORDER BY p.updated_at DESC
     `,
     db.sql`
-      SELECT p.*, c.display_name AS creator_name FROM halo_creator_projects p
+      SELECT p.*, c.display_name AS creator_name,
+        COALESCE(p.status = 'open' AND NULLIF(BTRIM(p.brief), '') IS NOT NULL
+          AND owner_pass.subscription_tier = 'PREMIUM' AND (
+            (owner_pass.subscription_status = 'active' AND owner_pass.subscription_expires_at > NOW()) OR
+            (owner_pass.subscription_status = 'trialing' AND owner_pass.trial_ends_at > NOW()
+              AND (owner_pass.subscription_expires_at IS NULL OR owner_pass.subscription_expires_at > NOW()))
+          ), FALSE) AS premium_promoted
+      FROM halo_creator_projects p
       LEFT JOIN halo_creator_profiles c ON c.member_id = p.owner_member_id
+      LEFT JOIN halo_creator_passes owner_pass ON owner_pass.member_id = p.owner_member_id
       WHERE p.status = 'open' AND p.owner_member_id <> ${memberId}
         AND (${role} = '' OR p.role_needed = ${role})
         AND (${genre} = '' OR p.genre = ${genre})
@@ -140,7 +148,7 @@ async function workspace(db, memberId, url) {
           SELECT 1 FROM halo_creator_participants cp
           WHERE cp.project_id = p.id AND cp.member_id = ${memberId} AND cp.status = 'accepted'
         )
-      ORDER BY p.updated_at DESC LIMIT 100
+      ORDER BY premium_promoted DESC, p.updated_at DESC LIMIT 100
     `,
     db.sql`
       SELECT cp.*, p.title, p.owner_member_id, p.status AS project_status,

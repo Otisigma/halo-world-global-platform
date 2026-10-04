@@ -175,6 +175,7 @@ import { curatedCreators } from "/lib/creator-directory.js";
       card.append(node("h4", project.title), node("p", project.brief),
         node("p", [project.creator_name, project.kind, project.role_needed, project.genre,
           project.language, project.bpm && `${project.bpm} BPM`, project.musical_key, project.status].filter(Boolean).join(" · ")));
+      if (project.premium_promoted === true) card.append(node("p", "Premium creator · open brief"));
       if (project.song_id) {
         const link = node("a", "Open existing song catalog");
         link.href = `/song-catalog/?song=${encodeURIComponent(project.song_id)}`;
@@ -222,6 +223,9 @@ import { curatedCreators } from "/lib/creator-directory.js";
         card.append(node("p", `${project.personaDraft.displayName} · AI persona draft`),
           node("blockquote", project.personaDraft.body),
           node("p", "Private suggestion only. Human review and approval are required before posting; nothing is posted automatically."));
+        const compose = node("a", "Open Signal to compose after review");
+        compose.href = "/signal-network/#feed";
+        card.append(node("p", "These briefs are member-only. Confirm permission and visibility before manually sharing any details."), compose);
       }
       const existing = state.participants.find(participant =>
         participant.project_id === project.id && participant.member_id === state.memberId);

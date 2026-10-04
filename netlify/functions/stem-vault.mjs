@@ -175,7 +175,7 @@ async function finalizePack(db, memberId, body) {
   const finalized = await db.sql`
     SELECT halo_finalize_stem_pack(${memberId}, ${uploadId}, ${JSON.stringify(metadata)}::jsonb, ${JSON.stringify(files)}::jsonb) AS result
   `;
-  if (finalized[0]?.result === "capacity") return json({ message: "Your current Creator Pass capacity is exceeded. Upgrade or remove stored audio before saving." }, 413);
+  if (finalized[0]?.result === "capacity") return json({ message: "Your current Creator Pass capacity is exceeded. Upgrade to Premium before saving; archived and unfinished uploads still count." }, 413);
   if (finalized[0]?.result !== "saved") return json({ message: "Stem reservations changed or are incomplete" }, 409);
   const rows = await db.sql`SELECT * FROM halo_stem_packs WHERE id = ${uploadId} AND member_id = ${memberId}`;
   const savedFiles = await db.sql`SELECT * FROM halo_stem_files WHERE pack_id = ${uploadId} ORDER BY stem_type`;

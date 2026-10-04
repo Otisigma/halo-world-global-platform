@@ -156,6 +156,7 @@ if (process.env.HALO_VAULT_TEST_DATABASE_URL) {
     await sql(`UPDATE halo_stem_vault_usage SET used_bytes=${cap - 3}`);
     const hash = "a".repeat(64);
     const reserve = stem => sql(`SELECT halo_reserve_stem_chunk('owner','${uploadId}','${stem}',0,1,3,'${hash}')`);
+    // Each sql() call launches its own psql process and independent database connection.
     assert.deepEqual((await Promise.all([reserve("drums"), reserve("bass")])).sort(), ["capacity", "reserved"]);
     const storedStem = await sql("SELECT stem_type FROM halo_stem_vault_chunks");
     assert.equal(await reserve(storedStem), "retry");
@@ -172,10 +173,28 @@ if (process.env.HALO_VAULT_TEST_DATABASE_URL) {
     await sql("UPDATE halo_creator_passes SET subscription_expires_at=NULL");
     await sql("UPDATE halo_creator_passes SET subscription_status='trialing', trial_ends_at=NOW()+INTERVAL '1 day'");
     assert.equal(await sql("SELECT halo_stem_vault_capacity('owner') IS NULL"), "t");
+    await sql("UPDATE halo_creator_passes SET subscription_tier='STANDARD'");
+    assert.equal(await sql(`SELECT halo_finalize_stem_pack('owner','${uploadId}','${metadata}'::jsonb,'${files}'::jsonb)`), "capacity", "a tier downgrade denies over-cap finalization");
+    await sql("UPDATE halo_creator_passes SET subscription_tier='PREMIUM'");
     assert.equal(await sql(`SELECT halo_finalize_stem_pack('owner','${uploadId}','${metadata}'::jsonb,'${files}'::jsonb)`), "saved");
     assert.equal(await sql(`SELECT halo_finalize_stem_pack('owner','${uploadId}','${metadata}'::jsonb,'${files}'::jsonb)`), "saved");
     assert.equal(await sql(`SELECT COUNT(*) FROM halo_stem_files WHERE pack_id='${uploadId}'`), "2");
-    console.log("PASS: PostgreSQL concurrency, archived legacy accounting, retries, expiry and atomic finalize");
+    const beforeArchive = await sql("SELECT used_bytes FROM halo_stem_vault_usage");
+    await sql(`UPDATE halo_stem_packs SET status='archived' WHERE id='${uploadId}'`);
+    assert.equal(await sql("SELECT used_bytes FROM halo_stem_vault_usage"), beforeArchive, "archiving a newly finalized pack retains usage");
+    const failedId = "33333333-3333-4333-8333-333333333333";
+    for (const stem of ["drums", "bass"]) {
+      assert.equal(await sql(`SELECT halo_reserve_stem_chunk('owner','${failedId}','${stem}',0,1,3,'${hash}')`), "reserved");
+    }
+    const beforeFailure = await sql("SELECT used_bytes FROM halo_stem_vault_usage");
+    const invalidFiles = JSON.parse(files);
+    invalidFiles[1].contentType = "invalid/audio";
+    await assert.rejects(sql(`SELECT halo_finalize_stem_pack('owner','${failedId}','${metadata}'::jsonb,'${JSON.stringify(invalidFiles)}'::jsonb)`), /halo_stem_files_content_type_check/);
+    assert.equal(await sql(`SELECT COUNT(*) FROM halo_stem_packs WHERE id='${failedId}'`), "0", "file insertion failure rolls back the pack");
+    assert.equal(await sql(`SELECT COUNT(*) FROM halo_stem_files WHERE pack_id='${failedId}'`), "0", "second-file failure rolls back the first file");
+    assert.equal(await sql("SELECT used_bytes FROM halo_stem_vault_usage"), beforeFailure, "failed finalize retains durable reservations");
+    assert.equal(await sql(`SELECT halo_finalize_stem_pack('owner','${failedId}','${metadata}'::jsonb,'${files}'::jsonb)`), "saved", "retry succeeds after an atomic rollback");
+    console.log("PASS: PostgreSQL independent-connection concurrency, archived accounting, retries, expiry/downgrade and atomic finalize rollback");
   } finally {
     await sql(`DROP SCHEMA IF EXISTS ${schema} CASCADE`, false);
   }

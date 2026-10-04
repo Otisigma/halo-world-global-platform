@@ -4,6 +4,7 @@ import vm from "node:vm";
 import { createCreatorNetworkHandler, profileInput, projectInput, canRespond } from "../netlify/lib/creator-network.mjs";
 import { PUBLIC_ROUTE_REGISTRY, canonicalizeRoutePath } from "../lib/route-registry.js";
 import { curatedCreators, withCuratedCreators } from "../lib/creator-directory.js";
+import { creatorPassFromRow } from "../netlify/lib/creator-pass.mjs";
 
 const read = path => readFile(new URL(`../${path}`, import.meta.url), "utf8");
 const [migration, api, html, client, routes, preview, home] = await Promise.all([
@@ -211,8 +212,13 @@ const discovery = fixture();
 const response = await discovery.request(null, "GET", "?role=Vocalist&genre=House&bpm=124&language=English&key=A%20minor");
 assert.equal(response.status, 200);
 assert.equal(response.headers.get("Cache-Control"), "no-store");
-assert.equal((await response.json()).memberId, "owner");
-assert.equal(discovery.calls.length, 5);
+const discoveryState = await response.json();
+assert.equal(discoveryState.memberId, "owner");
+assert.equal(discoveryState.creatorPass.creatorId, "owner");
+assert.equal(discoveryState.creatorPass.entitlements.aiGuardianAccess, false, "Missing authoritative pass denies premium access");
+assert.deepEqual(discoveryState.dynamicBriefs, []);
+assert.equal(discovery.calls.length, 6);
+assert.deepEqual(discovery.calls.find(call => call.query.includes("FROM halo_creator_passes WHERE")).params, ["owner"]);
 assert.ok(discovery.calls.some(c => c.params.includes(124) && c.params.includes("Vocalist")));
 const ownedQuery = discovery.calls.find(c => c.query.includes("WHERE p.owner_member_id = ? OR EXISTS"));
 assert.ok(ownedQuery);
@@ -295,7 +301,11 @@ vm.runInNewContext(executableClient, {
           audioInsights: ["Metadata only; no audio analysis"], actionableNextSteps: ["Review participant consent"] }
       }
       : String(url).includes("view=public") ? { creators: [] }
-      : { memberId: "owner", profile: null, creators: curatedCreators(), projects: [], participants: [] }
+      : { memberId: "owner", profile: null, creators: curatedCreators(), projects: [], participants: [],
+        creatorPass: creatorPassFromRow({
+          member_id: "owner", subscription_tier: "PREMIUM", subscription_status: "active",
+          subscription_expires_at: new Date(Date.now() + 86400000).toISOString()
+        }) }
   }),
   window: { haloIdentity: { getUser: async () => ({ id: "owner" }), onAuthChange() {} } }
 });

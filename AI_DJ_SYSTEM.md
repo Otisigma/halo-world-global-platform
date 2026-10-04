@@ -71,6 +71,14 @@ Vocal-heavy records default to a stem-aware vocal handoff when separated audio i
 
 Every prepared or performed transition can be attached to the active session and preflight. Audience responses update that transition's outcome score, allowing later persona evaluations to compare predicted and observed results.
 
+## Recorder isolation guard
+
+The Takeover recorder captures the post-limiter master bus only; CUE headphone monitoring runs on a separate local output path and is never connected to the recorder. `dj-recorder-guard.js` (`useRecorderGuard` / `HaloRecorderGuard`) samples the recorder state, the master bus peak level and the CUE bus four times per second. When a recording is running, CUE monitoring is active and the master is above 80% of full scale, the indicator directly above the Takeover recorder switches from "Recorder isolation secure" to "Audio bleed guard triggered" and tells the DJ to release CUE or pull the faders down. The guard flags likely bleed and feedback conditions (for example open headphones near a hot master or an external loopback); it reduces risk but does not guarantee absolute silence on the feed. Validate with `node scripts/dj-recorder-guard-contracts.mjs`.
+
+## DJ continuous learning engine
+
+`netlify/lib/dj-learning-engine.mjs` (`DJLearningEngine`) evaluates completed transitions from BPM delta, harmonic match, vocal overlap, phrase alignment score and listener retention delta. It computes a 0–100 performance score and nudges three bounded emphasis weights for the AI DJ transition planner: `phrasePrecision`, `vocalSeparationStrictness` and `eqBlendSmoothness`. A weak dimension raises its emphasis by a small step; clean transitions relax it gently back toward the 1.0 baseline, and every weight is clamped between 0.5 and 2.0. Profiles persist per DJ persona through an injected store — `createBlobLearningStore(getStore)` uses the `halo-dj-learning` Netlify Blobs store, and `createMemoryLearningStore()` is the local/test stub — so learned weights carry into the next session. Replayed transition IDs are ignored. The engine only reads transition metrics and writes these numeric weights; it does not change code, prompts, routing or any behaviour outside DJ transition planning. Validate with `node scripts/dj-learning-engine-contracts.mjs`.
+
 ## Decision pipeline
 
 1. The browser scores every unloaded candidate using tempo, harmonic, energy, queue, and novelty weights.

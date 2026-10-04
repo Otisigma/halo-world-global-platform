@@ -44,6 +44,7 @@ export const allowedEvents = new Set([
   "dj_package_toggle",
   "dj_continuity_filler_started",
   "dj_continuity_preroll",
+  "dj_recorder_bleed_guard_triggered",
   "dreamweaver_campaign_generated",
   "dreamweaver_chapter",
   "dreamweaver_mode",

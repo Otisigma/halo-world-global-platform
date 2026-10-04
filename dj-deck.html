@@ -32,6 +32,7 @@
   <script src="/mobile-navigation.js" defer></script>
   <script src="/halo-companion.js" defer></script>
   <script src="/dj-continuity-guard.js" defer></script>
+  <script src="/dj-recorder-guard.js" defer></script>
   <script type="module" src="/identity.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -375,6 +376,15 @@
     .recording-rig.is-ready, .recording-rig.is-recording, .recording-rig.is-complete, .recording-rig.is-error { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 22px; align-items: center; padding: 20px 22px; }
     .recording-rig::after { content: "REC"; position: absolute; right: 190px; top: -29px; color: rgba(200,255,54,.035); font: 400 86px "Archivo Black", sans-serif; pointer-events: none; }
     .recording-copy, .recording-actions { position: relative; z-index: 1; }
+    .recorder-guard { grid-column: 1 / -1; position: relative; z-index: 1; display: flex; align-items: flex-start; gap: 11px; border: 1px solid rgba(200,255,54,.34); background: rgba(8,10,9,.86); padding: 11px 14px; color: var(--acid); transition: border-color .18s, background .18s, color .18s; }
+    .recorder-guard svg { width: 18px; height: 18px; flex-shrink: 0; margin-top: 1px; }
+    .recorder-guard .recorder-guard-alert, .recorder-guard.is-triggered .recorder-guard-shield { display: none; }
+    .recorder-guard.is-triggered .recorder-guard-alert { display: block; }
+    .recorder-guard h3 { margin: 0; font: 500 9px "DM Mono", monospace; letter-spacing: .12em; text-transform: uppercase; }
+    .recorder-guard p { margin: 4px 0 0; color: #aeb7ab; font-size: 11px; line-height: 1.45; }
+    .recorder-guard.is-triggered { border-color: rgba(255,105,72,.62); background: rgba(255,105,72,.08); color: #ff8b6f; animation: recorderGuardAlert .9s ease-in-out infinite alternate; }
+    .recorder-guard.is-triggered p { color: #ffd2c6; }
+    @media (prefers-reduced-motion: reduce) { .recorder-guard.is-triggered { animation: none; } }
     .recording-heading { display: flex; align-items: center; gap: 10px; }
     .recording-heading h2 { margin: 0; font-size: clamp(19px, 2vw, 27px); letter-spacing: -.04em; }
     .recording-light { width: 9px; height: 9px; border-radius: 50%; background: #626a62; box-shadow: 0 0 0 4px rgba(255,255,255,.035); }
@@ -957,6 +967,7 @@
 
     @keyframes pulse { 70% { box-shadow: 0 0 0 8px rgba(200,255,54,0); } 100% { box-shadow: 0 0 0 0 rgba(200,255,54,0); } }
     @keyframes signalPulse { from { opacity: .45; transform: scale(.82); } to { opacity: 1; transform: scale(1); } }
+    @keyframes recorderGuardAlert { from { box-shadow: 0 0 0 0 rgba(255,105,72,0); } to { box-shadow: 0 0 0 3px rgba(255,105,72,.18); } }
     @keyframes meter { from { opacity: .3; } to { opacity: 1; } }
 
     @media (max-width: 1180px) {
@@ -1269,6 +1280,14 @@
     </section>
 
     <section class="recording-rig panel" id="recordingRig" aria-labelledby="recordingTitle">
+      <div class="recorder-guard is-secure" id="recorderGuard" data-state="secure" role="status" aria-live="polite" aria-label="Recorder isolation and audio bleed guard">
+        <svg class="recorder-guard-shield" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/></svg>
+        <svg class="recorder-guard-alert" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
+        <div>
+          <h3 data-recorder-guard-title>Recorder isolation secure</h3>
+          <p data-recorder-guard-message>The recorder taps the post-limiter master bus only; CUE headphones stay on a separate local path. The guard watches for likely bleed conditions once recording starts.</p>
+        </div>
+      </div>
       <div class="recording-copy">
         <div class="recording-heading"><span class="recording-light" aria-hidden="true"></span><h2 id="recordingTitle">Takeover recorder</h2></div>
         <p class="recording-status" id="recordingStatus" aria-live="polite">Choose a takeover from the global portal to prepare a timed recording.</p>
@@ -1894,6 +1913,7 @@
       breathStages: document.querySelector("#breathStages"),
       setArc: document.querySelector("#setArc"),
       recordingRig: document.querySelector("#recordingRig"),
+      recorderGuard: document.querySelector("#recorderGuard"),
       recordingStatus: document.querySelector("#recordingStatus"),
       recordingProgress: document.querySelector("#recordingProgress"),
       recordingProgressFill: document.querySelector("#recordingProgressFill"),
@@ -2856,6 +2876,10 @@
       fillerNodes: [],
       fillerTimeout: 0
     };
+    const recorderGuardState = {
+      guard: null,
+      status: null
+    };
     const recordingState = {
       recorder: null,
       chunks: [],
@@ -3793,6 +3817,43 @@
       }).init();
     }
 
+    function recorderGuardMasterLevel() {
+      if (!continuityState.analyser || !continuityState.analyserData) return 0;
+      continuityState.analyser.getFloatTimeDomainData(continuityState.analyserData);
+      let peak = 0;
+      for (let index = 0; index < continuityState.analyserData.length; index += 1) peak = Math.max(peak, Math.abs(continuityState.analyserData[index]));
+      return Math.min(1, peak);
+    }
+
+    function recorderGuardInputs() {
+      const activeCueDecks = ["A", "B"].filter(deckId => audioEngine.decks[deckId].cueActive);
+      return {
+        isRecording: recordingState.recorder?.state === "recording",
+        masterBusLevel: recorderGuardMasterLevel(),
+        cueBusActive: activeCueDecks.length > 0,
+        activeCueDecks
+      };
+    }
+
+    function attachRecorderGuardToDeck() {
+      if (recorderGuardState.guard || !window.HaloRecorderGuard || !window.useRecorderGuard) return;
+      recorderGuardState.guard = window.useRecorderGuard({
+        config: { masterLimit: .8, holdMs: 1500 },
+        readInputs: recorderGuardInputs,
+        onStatusChange: status => {
+          const wasTriggered = recorderGuardState.status?.state === "triggered";
+          recorderGuardState.status = status;
+          window.HaloRecorderGuard.renderIndicator(elements.recorderGuard, status);
+          if (status.state === "triggered" && !wasTriggered) {
+            window.haloStats?.track("dj_recorder_bleed_guard_triggered", {
+              cue_decks: status.activeCueDecks.join(","),
+              master_level: Math.round(status.masterBusLevel * 100)
+            });
+          }
+        }
+      });
+    }
+
     async function ensureAudio() {
       if (!audioEngine.context) {
         const AudioContext = window.AudioContext || window.webkitAudioContext;
@@ -3916,6 +3977,7 @@
         rackButton.classList.toggle("is-active", active);
         rackButton.setAttribute("aria-pressed", String(active));
       }
+      recorderGuardState.guard?.tick();
     }
 
     function setStemState(deckId, stem, enabled, automated = false) {
@@ -5849,6 +5911,8 @@
     renderAssistantCrew(currentRecommendation?.assistantTeam);
     renderArtistJourneyGuidance();
     animateAudio();
+    if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", attachRecorderGuardToDeck, { once: true });
+    else attachRecorderGuardToDeck();
     if (window.haloIdentity) connectSessionIdentity();
     else window.addEventListener("halo-identity-ready", connectSessionIdentity, { once: true });
 

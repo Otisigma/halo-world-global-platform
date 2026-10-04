@@ -112,7 +112,7 @@ const rooms = [
       { id: "contentRating", label: "Explicit content", type: "select", required: true, options: ["", "Clean", "Explicit", "Instrumental"] },
       { id: "songwriterCredits", label: "Songwriter credits", type: "textarea", wide: true, required: true },
       { id: "producerCredits", label: "Production and performance credits", type: "textarea", wide: true },
-      { id: "copyrightLines", label: "Copyright lines", type: "textarea", wide: true, placeholder: "℗ master owner and year / © composition or artwork owner and year" },
+      { id: "copyrightLines", label: "Copyright lines", type: "textarea", wide: true, placeholder: "℗ sound-recording rights holder and year / © composition or artwork rights holder and year; enter confirmed holders for this release" },
       { id: "metadataChecked", label: "Names and credits match the agreed rights information", type: "checkbox", wide: true, required: true }
     ]
   },

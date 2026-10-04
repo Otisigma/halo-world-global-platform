@@ -1676,7 +1676,7 @@
         <section class="stem-vault" aria-labelledby="stemVaultTitle">
           <header class="stem-vault-head">
             <div><p class="eyebrow">HALO private source library</p><h4 id="stemVaultTitle">In-house Stem Vault</h4><p>Bring in stems created for HALO, including Suno exports. Packs stay private to the signed-in member and play as synchronized drums, bass, music, vocals, and effects.</p></div>
-            <span class="vault-seal">Owned audio only</span>
+            <span class="vault-seal" id="stemVaultCapacity">Owned audio only / checking capacity</span>
           </header>
           <form class="stem-vault-form" id="stemVaultForm">
             <label>Pack title<input name="title" maxlength="140" placeholder="HALO Sunrise Toolkit 01" required></label>
@@ -2012,7 +2012,7 @@
     let artistJourneyRenderQueued = false;
     let artistJourneyScheduleHandler = null;
     let artistJourneyUnloadHandler = null;
-    const stemVaultState = { authenticated: false, packs: [], loading: false };
+    const stemVaultState = { authenticated: false, packs: [], loading: false, capacity: null, creatorPass: null, retryUploadId: null };
     const stemCollectorState = { authenticated: false, kits: [], current: null, loading: false };
 
     const modeProfiles = {
@@ -3267,6 +3267,11 @@
     }
 
     function renderStemVault() {
+      const capacityLabel = document.querySelector("#stemVaultCapacity");
+      const capacity = stemVaultState.capacity;
+      capacityLabel.textContent = capacity && stemVaultState.authenticated
+        ? `${(capacity.usedBytes / 1024 ** 3).toFixed(2)} GiB used / ${capacity.unlimited ? "Premium unlimited" : "5 GiB Standard"}`
+        : "Owned audio only / sign in for capacity";
       if (!stemVaultState.authenticated) {
         elements.stemPackList.innerHTML = '<p class="vault-empty">Sign in with your HALO account to reveal the private stem library. Nothing in this vault is public.</p>';
         elements.stemVaultSave.disabled = true;
@@ -3289,6 +3294,8 @@
         const data = await response.json().catch(() => ({}));
         stemVaultState.authenticated = Boolean(data.authenticated);
         stemVaultState.packs = Array.isArray(data.packs) ? data.packs : [];
+        stemVaultState.capacity = response.ok ? data.capacity || null : null;
+        stemVaultState.creatorPass = response.ok ? data.creatorPass || null : null;
         renderStemVault();
         syncStemVaultTracks();
         setStemVaultStatus(stemVaultState.authenticated ? `${stemVaultState.packs.length} private pack${stemVaultState.packs.length === 1 ? "" : "s"} ready.` : "Sign in to load or save private stem packs.");
@@ -3307,13 +3314,25 @@
       if (selectedFiles.length < 2) return setStemVaultStatus("Choose at least two synchronized stem files.", true);
       const invalidType = selectedFiles.find(item => !normalizedAudioType(item.file));
       if (invalidType) return setStemVaultStatus(`${invalidType.file.name} is not a supported audio file.`, true);
+      const oversized = selectedFiles.find(item => item.file.size > 512 * 1024 * 1024);
+      if (oversized) return setStemVaultStatus(`${oversized.file.name} exceeds the 512 MiB per-file limit.`, true);
+      const totalBytes = selectedFiles.reduce((sum, item) => sum + item.file.size, 0);
       stemVaultState.loading = true;
       renderStemVault();
-      const uploadId = crypto.randomUUID ? crypto.randomUUID() : `${Date.now().toString(16)}-0000-4000-8000-${Math.random().toString(16).slice(2, 14).padEnd(12, "0")}`;
+      const uploadId = stemVaultState.retryUploadId || (crypto.randomUUID ? crypto.randomUUID() : `${Date.now().toString(16)}-0000-4000-8000-${Math.random().toString(16).slice(2, 14).padEnd(12, "0")}`);
+      stemVaultState.retryUploadId = uploadId;
       const chunkBytes = 4 * 1024 * 1024;
-      const totalBytes = selectedFiles.reduce((sum, item) => sum + item.file.size, 0);
       stemVaultUi.start("Preparing stem files…");
       try {
+        const quotaResponse = await fetch(`/api/stem-vault?uploadId=${encodeURIComponent(uploadId)}`, { credentials: "same-origin" });
+        const quota = await quotaResponse.json();
+        if (!quotaResponse.ok || !quota.capacity) throw new Error("Vault capacity could not be verified. Please try again.");
+        stemVaultState.capacity = quota.capacity;
+        stemVaultState.creatorPass = quota.creatorPass;
+        const additionalBytes = Math.max(0, totalBytes - quota.capacity.uploadReservedBytes);
+        if (!quota.capacity.unlimited && additionalBytes > quota.capacity.capacityBytes - quota.capacity.usedBytes) {
+          throw new Error("This batch exceeds your 5 GiB vault. Upgrade to Premium for unlimited capacity. Archived audio still counts.");
+        }
         const files = [];
         let bytesUploaded = 0;
         for (let fileIndex = 0; fileIndex < selectedFiles.length; fileIndex += 1) {
@@ -3352,6 +3371,7 @@
         const response = await fetch("/api/stem-vault", { method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
         const data = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(data.message || "The stem pack could not be saved.");
+        stemVaultState.retryUploadId = null;
         stemVaultState.packs.unshift(data.pack);
         elements.stemVaultForm.reset();
         elements.stemVaultForm.elements.bpm.value = "124";
@@ -3363,6 +3383,13 @@
       } catch (error) {
         stemVaultUi.fail(error.message || "The stem pack could not be saved.");
       } finally {
+        try {
+          const response = await fetch("/api/stem-vault", { credentials: "same-origin" });
+          const data = await response.json();
+          stemVaultState.capacity = response.ok ? data.capacity || null : null;
+        } catch {
+          stemVaultState.capacity = null;
+        }
         stemVaultState.loading = false;
         renderStemVault();
       }
@@ -5868,6 +5895,10 @@
 
     elements.importForm.addEventListener("submit", importTrack);
     elements.stemVaultForm.addEventListener("submit", saveStemPack);
+    elements.stemVaultForm.addEventListener("change", event => {
+      if (event.target instanceof HTMLInputElement && event.target.type === "file") stemVaultState.retryUploadId = null;
+    });
+    elements.stemVaultForm.addEventListener("reset", () => { stemVaultState.retryUploadId = null; });
     elements.stemPackList.addEventListener("click", event => {
       const loadButton = event.target.closest("[data-vault-load]");
       if (loadButton) {

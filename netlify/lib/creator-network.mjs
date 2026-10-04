@@ -1,5 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { withCuratedCreators } from "../../lib/creator-directory.js";
+import { getCreatorPassEntitlements } from "../../lib/creator-pass.js";
+import { planDjResponse } from "../../lib/dj-personas.js";
+import { loadCreatorPass } from "./creator-pass.mjs";
 
 const json = (body, status = 200) => Response.json(body, {
   status, headers: { "Cache-Control": "no-store" }
@@ -96,17 +99,24 @@ async function workspace(db, memberId, url) {
   const language = text(url.searchParams.get("language"), 80);
   const key = text(url.searchParams.get("key"), 20);
   const bpm = tempo(url.searchParams.get("bpm"));
-  const [profiles, creators, memberProjects, opportunities, participants] = await Promise.all([
+  const [profiles, creators, memberProjects, opportunities, participants, creatorPass] = await Promise.all([
     db.sql`SELECT * FROM halo_creator_profiles WHERE member_id = ${memberId}`,
     db.sql`
       SELECT member_id, display_name, bio, artist_slug, roles, genres, languages, daw_setup,
-        bpm_min, bpm_max, split_preference FROM halo_creator_profiles
+        bpm_min, bpm_max, split_preference,
+        COALESCE(pass.subscription_tier = 'PREMIUM' AND (
+          (pass.subscription_status = 'active' AND pass.subscription_expires_at > NOW()) OR
+          (pass.subscription_status = 'trialing' AND pass.trial_ends_at > NOW()
+            AND (pass.subscription_expires_at IS NULL OR pass.subscription_expires_at > NOW()))
+        ), FALSE) AS premium_verified
+      FROM halo_creator_profiles c
+      LEFT JOIN halo_creator_passes pass USING (member_id)
       WHERE discoverable = TRUE AND member_id <> ${memberId}
         AND (${role} = '' OR ${role} = ANY(roles))
         AND (${genre} = '' OR ${genre} = ANY(genres))
         AND (${language} = '' OR ${language} = ANY(languages))
         AND (${bpm}::int IS NULL OR ${bpm} BETWEEN bpm_min AND bpm_max)
-      ORDER BY updated_at DESC LIMIT 60
+      ORDER BY premium_verified DESC, c.updated_at DESC LIMIT 60
     `,
     db.sql`
       SELECT p.*, c.display_name AS creator_name FROM halo_creator_projects p
@@ -118,8 +128,16 @@ async function workspace(db, memberId, url) {
       ORDER BY p.updated_at DESC
     `,
     db.sql`
-      SELECT p.*, c.display_name AS creator_name FROM halo_creator_projects p
+      SELECT p.*, c.display_name AS creator_name,
+        COALESCE(p.status = 'open' AND NULLIF(BTRIM(p.brief), '') IS NOT NULL
+          AND owner_pass.subscription_tier = 'PREMIUM' AND (
+            (owner_pass.subscription_status = 'active' AND owner_pass.subscription_expires_at > NOW()) OR
+            (owner_pass.subscription_status = 'trialing' AND owner_pass.trial_ends_at > NOW()
+              AND (owner_pass.subscription_expires_at IS NULL OR owner_pass.subscription_expires_at > NOW()))
+          ), FALSE) AS premium_promoted
+      FROM halo_creator_projects p
       LEFT JOIN halo_creator_profiles c ON c.member_id = p.owner_member_id
+      LEFT JOIN halo_creator_passes owner_pass ON owner_pass.member_id = p.owner_member_id
       WHERE p.status = 'open' AND p.owner_member_id <> ${memberId}
         AND (${role} = '' OR p.role_needed = ${role})
         AND (${genre} = '' OR p.genre = ${genre})
@@ -130,7 +148,7 @@ async function workspace(db, memberId, url) {
           SELECT 1 FROM halo_creator_participants cp
           WHERE cp.project_id = p.id AND cp.member_id = ${memberId} AND cp.status = 'accepted'
         )
-      ORDER BY p.updated_at DESC LIMIT 100
+      ORDER BY premium_promoted DESC, p.updated_at DESC LIMIT 100
     `,
     db.sql`
       SELECT cp.*, p.title, p.owner_member_id, p.status AS project_status,
@@ -141,9 +159,31 @@ async function workspace(db, memberId, url) {
       LEFT JOIN halo_creator_profiles owner ON owner.member_id = p.owner_member_id
       WHERE cp.member_id = ${memberId} OR p.owner_member_id = ${memberId}
       ORDER BY cp.updated_at DESC
-    `
+    `,
+    loadCreatorPass(db, memberId)
   ]);
-  return { memberId, profile: profiles[0] || null, creators: withCuratedCreators(creators, { role, genre, language, bpm }), projects: [...memberProjects, ...opportunities], participants };
+  const profile = profiles[0] || null;
+  const dynamicBriefs = getCreatorPassEntitlements(creatorPass).dynamicBriefSurfacing && profile
+    ? opportunities.filter(project =>
+      (!project.role_needed || profile.roles?.includes(project.role_needed)) &&
+      (!project.genre || profile.genres?.includes(project.genre)) &&
+      (!project.language || profile.languages?.includes(project.language)) &&
+      (project.bpm == null || (profile.bpm_min != null && profile.bpm_max != null &&
+        project.bpm >= profile.bpm_min && project.bpm <= profile.bpm_max))
+    ).slice(0, 12).map(project => ({
+      ...project,
+      personaDraft: planDjResponse({
+        type: "collab_request", channel: "post", subjectId: project.id,
+        title: project.title, creator: project.creator_name, genre: project.genre,
+        bpm: project.bpm, key: project.musical_key
+      }).draft
+    }))
+    : [];
+  return {
+    memberId, creatorPass, profile,
+    creators: withCuratedCreators(creators, { role, genre, language, bpm }),
+    projects: [...memberProjects, ...opportunities], participants, dynamicBriefs
+  };
 }
 
 function publicFilters(url) {
@@ -157,14 +197,20 @@ function publicFilters(url) {
 async function publicCreators(db, url) {
   const { role, genre, language, bpm } = publicFilters(url);
   const creators = await db.sql`
-    SELECT display_name, bio, artist_slug, roles, genres, languages, bpm_min, bpm_max
-    FROM halo_creator_profiles
+    SELECT display_name, bio, artist_slug, roles, genres, languages, bpm_min, bpm_max,
+      COALESCE(pass.subscription_tier = 'PREMIUM' AND (
+        (pass.subscription_status = 'active' AND pass.subscription_expires_at > NOW()) OR
+        (pass.subscription_status = 'trialing' AND pass.trial_ends_at > NOW()
+          AND (pass.subscription_expires_at IS NULL OR pass.subscription_expires_at > NOW()))
+      ), FALSE) AS premium_verified
+    FROM halo_creator_profiles c
+    LEFT JOIN halo_creator_passes pass USING (member_id)
     WHERE discoverable = TRUE
       AND (${role} = '' OR ${role} = ANY(roles))
       AND (${genre} = '' OR ${genre} = ANY(genres))
       AND (${language} = '' OR ${language} = ANY(languages))
       AND (${bpm}::int IS NULL OR ${bpm} BETWEEN bpm_min AND bpm_max)
-    ORDER BY updated_at DESC
+    ORDER BY premium_verified DESC, c.updated_at DESC
     LIMIT 48
   `;
   return { creators: withCuratedCreators(creators, { role, genre, language, bpm }) };

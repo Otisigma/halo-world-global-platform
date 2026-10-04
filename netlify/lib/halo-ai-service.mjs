@@ -1,3 +1,5 @@
+import { loadCreatorPass } from "./creator-pass.mjs";
+
 const LIMITATIONS = [
   "Metadata checklist only: no audio was listened to or analyzed.",
   "Recorded rights status and allocations are not legal verification or release approval.",
@@ -262,6 +264,10 @@ export function createStudioGuardianHandler({
       const db = await getDatabase();
       const membership = await ensureMembership(db, user);
       if (!membership?.member_id) return json({ message: "Membership is required" }, 403);
+      const creatorPass = await loadCreatorPass(db, membership.member_id);
+      if (!creatorPass.entitlements.aiGuardianAccess) {
+        return json({ message: "An active Premium CreatorPass is required for Studio Guardian" }, 403);
+      }
       const service = new HaloAIService({ db, memberId: membership.member_id, apiKey: env.GEMINI_API_KEY || "", fetchImpl, timeoutMs });
       if (body.action === "health") {
         const health = await service.analyzeProjectHealth(body.projectId);

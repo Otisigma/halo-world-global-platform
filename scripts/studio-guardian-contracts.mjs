@@ -26,6 +26,10 @@ function fixture(options = {}) {
       const query = parts.join("?").replace(/\s+/g, " ").trim();
       calls.push({ query, params });
       if (options.failDb) throw new Error("PRIVATE DATABASE DETAILS");
+      if (query.includes("FROM halo_creator_passes")) return options.standard ? [] : [{
+        member_id: memberId, subscription_tier: "PREMIUM", subscription_status: "active",
+        subscription_expires_at: "2099-01-01T00:00:00Z"
+      }];
       if (query.includes("FROM halo_creator_projects")) {
         assert.match(query, /p.owner_member_id = \? OR EXISTS/);
         assert.match(query, /cp.status = 'accepted'/);
@@ -142,7 +146,7 @@ assert.equal((await fixture({ project: { kind: "visual" }, noPack: true }).servi
 for (const participantStatus of ["pending", "declined", undefined]) {
   const denied = fixture({ memberId: "stranger", participantStatus, key: "contract-placeholder" });
   assert.equal((await denied.request({ action: "council", projectId: "project" })).status, 404);
-  assert.equal(denied.calls.length, 1);
+  assert.equal(denied.calls.length, 2);
   assert.equal(denied.fetches.length, 0);
 }
 const acceptedResponse = await fixture({ memberId: "collaborator", participantStatus: "accepted" }).request();
@@ -205,6 +209,11 @@ assert.equal((await fixture().request("{}", { headers: {
 const safeError = await fixture({ failDb: true }).request();
 assert.equal(safeError.status, 503);
 assert.doesNotMatch(await safeError.text(), /PRIVATE|DATABASE/);
+const standard = fixture({ standard: true, key: "contract-placeholder" });
+assert.equal((await standard.request()).status, 403);
+assert.equal(standard.fetches.length, 0);
+assert.ok(standard.calls.every(call => call.query.includes("FROM halo_creator_passes")),
+  "Premium denial occurs before private project or provider queries");
 
 const councilBody = { action: "council", projectId: "project" };
 const local = fixture();

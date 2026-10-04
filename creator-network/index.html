@@ -99,6 +99,7 @@
         <a class="text-link" href="#locked">Join the network <span aria-hidden="true">↗</span></a>
       </div>
       <p class="section-intro">Explore opt-in Creator Passes alongside verified HALO-curated seed profiles. Curated cards are directory entries, not member accounts; they do not grant access to projects or private assets.</p>
+      <p class="section-intro">Verified Premium marks a current Premium Creator Pass, not identity or rights verification. Curated sample profiles never receive paid membership badges.</p>
       <form id="publicFilters" class="filter-console" aria-label="Filter public creators">
         <label>Role<input name="role" maxlength="80" placeholder="Producer, vocalist…"></label>
         <label>Genre<input name="genre" maxlength="80" placeholder="House, soul…"></label>
@@ -156,7 +157,7 @@
             <div class="deck-foot"><span>MASTER / PREVIEW</span><span id="trackSpecs">BPM — · KEY —</span></div>
           </div>
           <div class="pass-card">
-            <div class="pass-card__top"><span>CREATOR PASS</span><span class="pass-badge">HALO MEMBER</span></div>
+            <div class="pass-card__top"><span>CREATOR PASS</span><span id="passTier" class="pass-badge">STANDARD MEMBER</span></div>
             <div class="pass-avatar" aria-hidden="true" id="passInitial">H</div>
             <h3 id="passName">Your artist name</h3>
             <p id="passRole">Creator / collaborator</p>
@@ -180,8 +181,9 @@
       <section class="ai-dock" aria-labelledby="aiTitle">
         <div><p class="eyebrow">Studio Guardian / HaloAIService</p><h2 id="aiTitle">A clear next step, whenever you need one.</h2><p>Review your project’s release checklist, stem metadata, and recorded rights allocations. Council guidance is advisory, not an audio audit, legal clearance, or a change to rights.</p>
           <form id="guardianForm">
-            <label>Project to review<select id="guardianProject" name="projectId" required><option value="">Create or join a project first</option></select></label>
-            <div class="guardian-controls"><button type="submit" name="action" value="health">Check project health</button><button type="submit" name="action" value="council">Run council review</button></div>
+            <p id="guardianAccess">An active Premium Creator Pass is required for Studio Guardian reviews.</p>
+            <label>Project to review<select id="guardianProject" name="projectId" required disabled><option value="">Create or join a project first</option></select></label>
+            <div class="guardian-controls"><button type="submit" name="action" value="health" disabled>Check project health</button><button type="submit" name="action" value="council" disabled>Run council review</button></div>
           </form>
           <div id="guardianReport" role="status" aria-live="polite"></div>
         </div>
@@ -203,6 +205,9 @@
           <button type="submit">Find exact matches</button>
         </form>
         <h3>Creator discovery</h3><div id="creators" class="creator-cards"></div>
+        <h3>Premium / briefs for your Creator Pass</h3>
+        <p>Matched open opportunities and private AI persona drafts. Every invitation, application and public post requires a human action.</p>
+        <div id="dynamicBriefs" class="creator-cards" aria-live="polite"></div>
         <h3>Opportunities + your projects</h3><div id="projects" class="creator-cards"></div>
       </section>
 

@@ -6,6 +6,7 @@ import { curatedCreators } from "/lib/creator-directory.js";
   const status = message => { byId("status").textContent = message; };
   const values = form => Object.fromEntries(new FormData(form));
   const tagFields = ["roles", "genres", "languages", "dawSetup"];
+  const guardianAccess = () => state?.creatorPass?.entitlements?.aiGuardianAccess === true;
 
   async function api(body, query = "") {
     const response = await fetch(`/api/creator-network${query}`, {
@@ -24,11 +25,21 @@ import { curatedCreators } from "/lib/creator-directory.js";
     return element;
   }
 
+  function premiumBadge(creator) {
+    if (creator.curated || creator.premium_verified !== true) return null;
+    const badge = node("span", "✓ Verified Premium");
+    badge.className = "premium-badge";
+    badge.title = "An active Premium Creator Pass; not identity or rights verification.";
+    return badge;
+  }
+
   function renderPublicCreators(creators) {
     byId("publicCreators").replaceChildren(...creators.map(creator => {
       const card = node("article");
       card.className = "creator-profile-card";
       card.append(node("h3", creator.display_name), node("p", creator.bio));
+      const badge = premiumBadge(creator);
+      if (badge) card.append(badge);
       if (creator.verified && creator.curated) card.append(node("p", "✓ Verified HALO seed · curated profile"));
       const tags = [...(creator.roles || []), ...(creator.genres || []), ...(creator.languages || [])];
       if (tags.length) {
@@ -125,6 +136,8 @@ import { curatedCreators } from "/lib/creator-directory.js";
     byId("passName").textContent = displayName;
     byId("passInitial").textContent = displayName.trim().charAt(0).toUpperCase() || "H";
     byId("passRole").textContent = profile?.roles?.join(" · ") || "Creator / collaborator";
+    byId("passTier").textContent = state.creatorPass?.entitlements?.verifiedPremiumBadge === true
+      ? "✓ VERIFIED PREMIUM" : "STANDARD MEMBER";
     byId("passSummary").textContent = profile
       ? `${profile.discoverable ? "Public discovery is on" : "Your Creator Pass is private"} · ${profile.roles?.length ? profile.roles.join(" / ") : "Creator profile"}`
       : "Set your Creator Pass and choose what to share.";
@@ -136,6 +149,8 @@ import { curatedCreators } from "/lib/creator-directory.js";
         node("p", creator.bpm_min ? `${creator.bpm_min}–${creator.bpm_max} BPM` : "Tempo flexible"),
         node("p", creator.split_preference));
       if (creator.artist_slug) card.append(roomLink(creator.artist_slug));
+      const badge = premiumBadge(creator);
+      if (badge) card.append(badge);
       if (creator.verified && creator.curated) card.append(node("p", "✓ Verified HALO seed · curated profile"));
       if (ownProjects.length && creator.member_id) {
         const select = document.createElement("select");
@@ -160,6 +175,7 @@ import { curatedCreators } from "/lib/creator-directory.js";
       card.append(node("h4", project.title), node("p", project.brief),
         node("p", [project.creator_name, project.kind, project.role_needed, project.genre,
           project.language, project.bpm && `${project.bpm} BPM`, project.musical_key, project.status].filter(Boolean).join(" · ")));
+      if (project.premium_promoted === true) card.append(node("p", "Premium creator · open brief"));
       if (project.song_id) {
         const link = node("a", "Open existing song catalog");
         link.href = `/song-catalog/?song=${encodeURIComponent(project.song_id)}`;
@@ -198,6 +214,29 @@ import { curatedCreators } from "/lib/creator-directory.js";
     for (const id of ["creators", "projects", "requests"]) {
       if (!byId(id).children.length) byId(id).append(node("p", "Nothing here yet."));
     }
+    const dynamicBriefs = state.creatorPass?.entitlements?.dynamicBriefSurfacing === true
+      ? state.dynamicBriefs || [] : [];
+    byId("dynamicBriefs").replaceChildren(...dynamicBriefs.map(project => {
+      const card = node("article");
+      card.append(node("h4", project.title), node("p", project.brief));
+      if (project.personaDraft?.requiresHumanApproval === true && project.personaDraft.publishPublic === false) {
+        card.append(node("p", `${project.personaDraft.displayName} · AI persona draft`),
+          node("blockquote", project.personaDraft.body),
+          node("p", "Private suggestion only. Human review and approval are required before posting; nothing is posted automatically."));
+        const compose = node("a", "Open Signal to compose after review");
+        compose.href = "/signal-network/#feed";
+        card.append(node("p", "These briefs are member-only. Confirm permission and visibility before manually sharing any details."), compose);
+      }
+      const existing = state.participants.find(participant =>
+        participant.project_id === project.id && participant.member_id === state.memberId);
+      if (existing) card.append(node("p", `Your request: ${existing.status}`));
+      else card.append(action("Apply to collaborate", { action: "apply", projectId: project.id }));
+      return card;
+    }));
+    if (!dynamicBriefs.length) byId("dynamicBriefs").append(node("p",
+      state.creatorPass?.entitlements?.dynamicBriefSurfacing === true
+        ? "No open briefs match your Creator Pass yet. Update your roles, genres, languages and tempo range."
+        : "Dynamic brief matching is available with an active Premium Creator Pass. Standard discovery and collaboration remain available."));
     const reviewable = state.projects.filter(project => project.owner_member_id === state.memberId ||
       state.participants.some(participant => participant.project_id === project.id && participant.member_id === state.memberId && participant.status === "accepted"));
     guardianVersion++;
@@ -212,6 +251,13 @@ import { curatedCreators } from "/lib/creator-directory.js";
       placeholder.value = "";
       byId("guardianProject").append(placeholder);
     }
+    byId("guardianProject").disabled = !guardianAccess();
+    byId("guardianForm").querySelectorAll("button").forEach(button => {
+      button.disabled = !guardianAccess() || !reviewable.length;
+    });
+    byId("guardianAccess").textContent = guardianAccess()
+      ? "Premium Studio Guardian · advisory only"
+      : "An active Premium Creator Pass is required for Studio Guardian reviews.";
   }
 
   async function load() {
@@ -283,6 +329,10 @@ import { curatedCreators } from "/lib/creator-directory.js";
     event.preventDefault();
     const version = sessionVersion, button = event.submitter;
     const projectId = byId("guardianProject").value;
+    if (!guardianAccess()) {
+      byId("guardianReport").textContent = "An active Premium Creator Pass is required for Studio Guardian reviews.";
+      return;
+    }
     if (!projectId || !button) return;
     const latest = ++guardianVersion;
     const buttons = [...event.currentTarget.querySelectorAll("button")];
@@ -317,12 +367,17 @@ import { curatedCreators } from "/lib/creator-directory.js";
     } catch (error) {
       if (version === sessionVersion && latest === guardianVersion) byId("guardianReport").textContent = error.message;
     } finally {
-      buttons.forEach(control => { control.disabled = false; });
+      if (version === sessionVersion && latest === guardianVersion) {
+        buttons.forEach(control => { control.disabled = !guardianAccess() || !byId("guardianProject").value; });
+      }
     }
   });
   byId("guardianProject").addEventListener("change", () => {
     guardianVersion++;
     byId("guardianReport").replaceChildren();
+    byId("guardianForm").querySelectorAll("button").forEach(button => {
+      button.disabled = !guardianAccess() || !byId("guardianProject").value;
+    });
   });
 
   async function refresh() {
@@ -334,7 +389,9 @@ import { curatedCreators } from "/lib/creator-directory.js";
     byId("signOut").hidden = true;
     byId("guardianReport").replaceChildren();
     byId("guardianProject").replaceChildren();
-    for (const id of ["creators", "projects", "requests"]) byId(id).replaceChildren();
+    byId("guardianProject").disabled = true;
+    byId("guardianForm").querySelectorAll("button").forEach(button => { button.disabled = true; });
+    for (const id of ["creators", "projects", "requests", "dynamicBriefs"]) byId(id).replaceChildren();
     byId("profile").reset();
     byId("project").reset();
     try {

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { createMusicHomeHandler } from "../netlify/lib/music-home.mjs";
-import { defaultMusicHomeConfig, MAX_CUSTOM_VIDEO_BYTES } from "../lib/music-home.js";
+import { CURATED_LOOPS, defaultMusicHomeConfig, MAX_CUSTOM_VIDEO_BYTES } from "../lib/music-home.js";
 import { creatorPassFromRow } from "../netlify/lib/creator-pass.mjs";
 
 const owner = "member-owner_123";
@@ -9,11 +9,7 @@ const other = "member-other";
 const customUrl = `/api/music-home?creator=${owner}&asset=background`;
 const premium = { subscriptionTier: "PREMIUM", subscriptionStatus: "active", subscriptionExpiresAt: "2099-01-01T00:00:00Z" };
 const standard = { subscriptionTier: "STANDARD", subscriptionStatus: "inactive" };
-const mp4 = new Uint8Array([
-  0, 0, 0, 16, 102, 116, 121, 112, 105, 115, 111, 109, 0, 0, 0, 0,
-  0, 0, 0, 8, 109, 111, 111, 118,
-  0, 0, 0, 9, 109, 100, 97, 116, 1
-]);
+const mp4 = new Uint8Array(await readFile(new URL(`..${CURATED_LOOPS[0].url}`, import.meta.url)));
 
 function fixture(options = {}) {
   const state = { user: options.anonymous ? null : { id: "identity-not-member" }, origin: true,
@@ -47,6 +43,8 @@ function fixture(options = {}) {
       assert.match(query, /work\.rights_status = 'cleared'/);
       assert.match(query, /project\.owner_member_id = \?/);
       assert.match(query, /project\.rights_work_id = work\.id/);
+      assert.match(query, /work\.work_type = 'recording'\s+AND SUM\(participant\.share_bps\) FILTER \(WHERE participant\.role = 'master_owner'\) = 10000/);
+      assert.match(query, /work\.work_type = 'composition'\s+AND SUM\(participant\.share_bps\) FILTER \(WHERE participant\.role = 'songwriter'\) = 10000/);
       assert.match(query, /FILTER \(WHERE participant\.role = 'master_owner'\) = 10000/);
       assert.match(query, /FILTER \(WHERE participant\.role = 'songwriter'\) = 10000/);
       assert.match(query, /FILTER \(WHERE participant\.role = 'publisher'\) = 10000/);
@@ -151,7 +149,7 @@ f.state.pass = premium;
 assert.equal((await f.handler(saveRequest(uploadHome))).status, 400, "Premium cannot invent owned custom uploads");
 assert.equal((await f.handler(uploadRequest(new Uint8Array([1, 2, 3])))).status, 400);
 const invalidContainer = mp4.slice();
-invalidContainer[3] = 255;
+invalidContainer.fill(0, 0, 4);
 assert.equal((await f.handler(uploadRequest(invalidContainer))).status, 400);
 const unsupportedBrand = mp4.slice();
 unsupportedBrand[8] = 120;
@@ -210,7 +208,7 @@ assert.equal((await response.arrayBuffer()).byteLength, 0);
 response = await f.handler(request(`?creator=${owner}&asset=background`, { headers: { Range: "bytes=-4" } }));
 assert.equal(response.status, 206);
 assert.equal((await response.arrayBuffer()).byteLength, 4);
-for (const range of ["bytes=1000-", "bytes=4-2", "bytes=0-1,4-5", "bytes=-0", "bytes=9007199254740992-"]) {
+for (const range of [`bytes=${mp4.length}-`, "bytes=4-2", "bytes=0-1,4-5", "bytes=-0", "bytes=9007199254740992-"]) {
   assert.equal((await f.handler(request(`?creator=${owner}&asset=background`, { headers: { Range: range } }))).status, 416);
 }
 f.state.downgradeDuringRead = true;
@@ -247,8 +245,9 @@ assert.deepEqual(Object.keys(payload).sort(), ["config", "profile", "milestones"
 assert.deepEqual(payload.profile, { displayName: "Creator", bio: "Public bio" });
 assert.deepEqual(payload.modules.SIGNAL_FEED, []);
 assert.deepEqual(payload.modules.COLLAB_BRIEFS, []);
-assert.deepEqual(payload.modules.SOVEREIGN_VAULT, [{ id: "release", title: "Published release", artist: "Creator",
-  artworkUrl: "/cover.jpg", releaseUrl: "https://example.com/release" }]);
+assert.deepEqual(payload.modules.SOVEREIGN_VAULT, [{ id: "release", title: "Published release",
+  description: "Published release", url: "/music/?song=release" }]);
+assert.ok(payload.modules.SOVEREIGN_VAULT.every(entry => entry.url.startsWith("/") && !entry.url.startsWith("//")));
 assert.doesNotMatch(JSON.stringify(payload), /secret|entitlements|subscriptionStatus|roles/);
 f.state.profile.discoverable = false;
 assert.equal((await f.handler(request(`?creator=${owner}`))).status, 404);

@@ -63,8 +63,10 @@ export async function loadMusicHomeMilestones(db, memberId) {
           SELECT 1 FROM halo_artist_rights_participants participant
           WHERE participant.work_id = work.id
           GROUP BY participant.work_id
-          HAVING SUM(participant.share_bps) FILTER (WHERE participant.role = 'master_owner') = 10000
-            OR (SUM(participant.share_bps) FILTER (WHERE participant.role = 'songwriter') = 10000
+          HAVING (work.work_type = 'recording'
+              AND SUM(participant.share_bps) FILTER (WHERE participant.role = 'master_owner') = 10000)
+            OR (work.work_type = 'composition'
+              AND SUM(participant.share_bps) FILTER (WHERE participant.role = 'songwriter') = 10000
               AND (COUNT(*) FILTER (WHERE participant.role = 'publisher') = 0
                 OR SUM(participant.share_bps) FILTER (WHERE participant.role = 'publisher') = 10000))
         )
@@ -195,7 +197,7 @@ export function createMusicHomeHandler({ getDatabase, getUser, verifyRequestOrig
       if (request.method === "GET") {
         if (!creator) return json(privatePayload(home));
         const releases = await db.sql`
-          SELECT campaign.id, campaign.title, campaign.artist, campaign.artwork_url, campaign.official_url
+          SELECT campaign.id, campaign.title
           FROM halo_release_campaigns campaign JOIN halo_artist_pages page ON page.slug = campaign.artist_slug
           WHERE page.owner_member_id = ${memberId} AND page.status = 'published'
             AND campaign.status = 'published' AND campaign.visibility = 'public'
@@ -203,8 +205,10 @@ export function createMusicHomeHandler({ getDatabase, getUser, verifyRequestOrig
         `;
         return json({ config: home.config, profile: { displayName: home.profile?.display_name || "", bio: home.profile?.bio || "" },
           milestones: home.context.milestones, modules: {
-            SOVEREIGN_VAULT: releases.map(row => ({ id: row.id, title: row.title, artist: row.artist,
-              artworkUrl: row.artwork_url || "", releaseUrl: row.official_url || "" })),
+            SOVEREIGN_VAULT: releases.map(row => ({ id: row.id, title: row.title,
+              description: "Published release", url: `/music/?song=${encodeURIComponent(row.id)}` })),
+            // Intentional empty modules: no verified public Signal source is wired here,
+            // and Creator Network briefs have no explicit public visibility column.
             SIGNAL_FEED: [], COLLAB_BRIEFS: []
           } });
       }

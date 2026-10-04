@@ -1,12 +1,14 @@
 import { curatedCreators } from "/lib/creator-directory.js";
+import { mountMusicHomeCustomizer } from "/music-home/customizer.js";
 
 (() => {
   const byId = id => document.getElementById(id);
-  let identity, state, sessionVersion = 0, loadVersion = 0, guardianVersion = 0;
+  let identity, state, sessionVersion = 0, loadVersion = 0, guardianVersion = 0, musicHomeMemberId;
   const status = message => { byId("status").textContent = message; };
   const values = form => Object.fromEntries(new FormData(form));
   const tagFields = ["roles", "genres", "languages", "dawSetup"];
   const guardianAccess = () => state?.creatorPass?.entitlements?.aiGuardianAccess === true;
+  const musicHome = mountMusicHomeCustomizer(byId("musicHomeCustomizer"));
 
   async function api(body, query = "") {
     const response = await fetch(`/api/creator-network${query}`, {
@@ -49,6 +51,7 @@ import { curatedCreators } from "/lib/creator-directory.js";
       }
       card.append(node("p", creator.bpm_min ? `${creator.bpm_min}–${creator.bpm_max} BPM` : "Tempo flexible"));
       if (creator.artist_slug) card.append(roomLink(creator.artist_slug));
+      if (creator.member_id) card.append(musicHomeLink(creator.member_id));
       const join = node("a", "Sign in to collaborate");
       join.href = "/creator-network/#locked";
       card.append(join);
@@ -119,6 +122,12 @@ import { curatedCreators } from "/lib/creator-directory.js";
   function roomLink(slug) {
     const link = node("a", "Artist room + follows");
     link.href = `/artists/${encodeURIComponent(slug)}/`;
+    return link;
+  }
+
+  function musicHomeLink(memberId) {
+    const link = node("a", "Music Home");
+    link.href = `/music-home/?creator=${encodeURIComponent(memberId)}`;
     return link;
   }
 
@@ -270,6 +279,10 @@ import { curatedCreators } from "/lib/creator-directory.js";
     byId("locked").hidden = true;
     byId("workspace").hidden = false;
     byId("signOut").hidden = false;
+    if (musicHomeMemberId !== state.memberId) {
+      musicHomeMemberId = state.memberId;
+      musicHome.load();
+    }
   }
 
   async function mutate(body, button, form) {
@@ -384,6 +397,8 @@ import { curatedCreators } from "/lib/creator-directory.js";
     const version = ++sessionVersion;
     guardianVersion++;
     state = null;
+    musicHomeMemberId = null;
+    musicHome.clear();
     byId("workspace").hidden = true;
     byId("locked").hidden = false;
     byId("signOut").hidden = true;

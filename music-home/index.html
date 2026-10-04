@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Music Home — HALO Music</title>
+  <meta name="description" content="A creator-owned Music Home: published music, milestones and open collaborations.">
+  <meta name="theme-color" content="#090907">
+  <link rel="stylesheet" href="/creator-network/network.css">
+  <link rel="stylesheet" href="/music-home/music-home.css">
+  <script type="module" src="/music-home/home.js"></script>
+</head>
+<body>
+  <a class="music-home-skip" href="#musicHome">Skip to artist home</a>
+  <header class="creator-header" data-platform-chrome>
+    <a class="creator-brand" href="/halo">HALO Music</a>
+    <nav aria-label="Music Home navigation"><a href="/creator-network/">Creator Network</a><a href="/music/">Music</a></nav>
+  </header>
+  <div class="music-home-atmosphere" aria-hidden="true"><video id="homeBackground" muted loop playsinline preload="none" tabindex="-1"></video></div>
+  <main id="musicHome" class="creator-shell music-home-shell">
+    <p id="homeStatus" role="status" aria-live="polite">Loading Music Home…</p>
+    <h1 id="homeName">Music Home</h1>
+    <p id="homeBio"></p>
+    <div class="music-home-player-controls">
+      <button id="backgroundToggle" class="button button-outline" type="button" hidden>Play background</button>
+      <button id="restoreChrome" class="button button-outline" type="button" hidden>Show HALO navigation</button>
+    </div>
+    <div id="homeModules"></div>
+  </main>
+  <footer class="creator-shell" data-platform-chrome><p><a href="/creator-network/">Create your Music Home</a> · <a href="/creator-freedom/">Creator Freedom</a></p></footer>
+</body>
+</html>

@@ -4076,7 +4076,11 @@
         stopSource(channel.source);
         channel.source = null;
       }
-      Object.values(channel.stemSources || {}).forEach(stopSource);
+      Object.entries(channel.stemSources || {}).forEach(([stemType, source]) => {
+        const stemGain = channel.stemGains?.[stemType];
+        if (stemGain) source.addEventListener?.("ended", () => { try { stemGain.disconnect(); } catch {} }, { once: true });
+        stopSource(source);
+      });
       channel.sourceEnvelopes = new Map();
       channel.stemSources = {};
       channel.stemGains = {};
@@ -4121,6 +4125,7 @@
     }
 
     async function startDeckAudio(deckId, beatOffset = 0) {
+      // Mute the room input before any await; repeat once the engine exists on first playback.
       audioEngine.halo?.setLiveIntelligenceInputState(false);
       const context = await ensureAudio();
       const halo = audioEngine.halo;
@@ -5063,7 +5068,8 @@
     function animateAutomatedCrossfader(targetValue, duration, curve = "smooth") {
       const startValue = Number(elements.crossfader.value);
       const startedAt = performance.now();
-      audioEngine.halo?.suppressLiveIntelligence(Math.max(0, Number(duration) || 0) / 1000);
+      // Restore is rescheduled when the fade finishes; the timer is only a fallback if it is cancelled.
+      audioEngine.halo?.suppressLiveIntelligence(Math.max(0, Number(duration) || 0) / 1000 + 1);
       return new Promise(resolve => {
         const moveMix = timestamp => {
           const progress = Math.min(1, (timestamp - startedAt) / duration);
@@ -5080,6 +5086,7 @@
             return;
           }
           recordingState.autoMixFrame = null;
+          audioEngine.halo?.scheduleLiveIntelligenceRestore(0);
           resolve();
         };
         recordingState.autoMixFrame = requestAnimationFrame(moveMix);

@@ -1826,6 +1826,7 @@
   <div class="toast" id="toast" role="status" aria-live="polite"><strong id="toastTitle">System</strong><p id="toastMessage">Ready.</p></div>
 
   <script src="/upload-progress.js"></script>
+  <script src="/dj-live-intelligence.js"></script>
   <script>
     const TRACK_DNA_DEFAULTS = { danceability: 6, emotionalIntensity: 5, darkness: 5, warmth: 5, vocalDensity: 4, percussionDensity: 6, bassWeight: 6, melodicDensity: 5, atmosphere: 6, energyRole: "builder", sonicWeather: "Balanced, groove-led and open enough for a patient blend.", signatureMoment: "Protect the central hook before opening the next phrase." };
     const tracks = [
@@ -2854,6 +2855,8 @@
       masterGain: null,
       limiter: null,
       recordingDestination: null,
+      systemUiGain: null,
+      systemUiVolume: 0,
       animationFrame: null,
       decks: {
         A: { input: null, trim: null, gain: null, cueGain: null, cueActive: false, analyser: null, filters: null, effects: null, source: null, stemSources: {}, stemGains: {}, timer: null, step: 0, level: 0, startedAt: 0, playRequestedAt: 0, hasSignal: false, signalConfirmed: false, noSignalReported: false, stems: { bass: true, hats: true, vocals: true } },
@@ -2880,6 +2883,25 @@
       guard: null,
       status: null
     };
+    // Live Intelligence search/load runs with the system UI bus held at volume 0. The bus feeds the
+    // local output only, never the master/limiter or the recorder tap. Best-effort, not a silence guarantee.
+    const liveIntelligenceAudioController = {
+      setSystemUIVolume(level) {
+        const volume = Math.max(0, Math.min(1, Number(level) || 0));
+        audioEngine.systemUiVolume = volume;
+        if (audioEngine.context && audioEngine.systemUiGain) audioEngine.systemUiGain.gain.setValueAtTime(volume, audioEngine.context.currentTime);
+        if (volume === 0) {
+          try { window.HaloGuideVoice?.cancel?.(); } catch {}
+        }
+      },
+      async loadTrackSilently(track, { deckId } = {}) {
+        if (!deckState[deckId]) throw new Error("Live Intelligence needs a target deck.");
+        loadTrack(deckId, track.id);
+        if (deckState[deckId].id !== track.id) throw new Error(`Deck ${deckId} did not accept ${track.title || track.id}.`);
+      }
+    };
+    const trackMemory = window.HaloTrackMemoryManager ? new window.HaloTrackMemoryManager() : null;
+    const liveIntelligence = trackMemory && window.HaloLiveIntelligenceSystem ? new window.HaloLiveIntelligenceSystem(liveIntelligenceAudioController, trackMemory) : null;
     const recordingState = {
       recorder: null,
       chunks: [],
@@ -3871,6 +3893,10 @@
         limiter.release.setValueAtTime(.16, context.currentTime);
         masterGain.connect(limiter);
         limiter.connect(context.destination);
+        const systemUiGain = context.createGain();
+        systemUiGain.gain.setValueAtTime(audioEngine.systemUiVolume, context.currentTime);
+        systemUiGain.connect(context.destination);
+        audioEngine.systemUiGain = systemUiGain;
         audioEngine.context = context;
         audioEngine.masterGain = masterGain;
         audioEngine.limiter = limiter;
@@ -4337,6 +4363,7 @@
           };
         }));
         const artworkCount = additions.filter(track => track.artwork).length;
+        trackMemory?.lockUploadBatch(additions);
         tracks.unshift(...additions);
         elements.search.value = "";
         renderTracks();
@@ -4456,6 +4483,7 @@
       const trackIndex = tracks.findIndex(track => track.id === trackId);
       if (trackIndex < 0) return;
       const [removed] = tracks.splice(trackIndex, 1);
+      trackMemory?.release(trackId);
       trackQueue = trackQueue.filter(id => id !== trackId);
       if (currentRecommendation?.trackId === trackId) currentRecommendation = null;
       renderTracks(elements.search.value);
@@ -4609,7 +4637,8 @@
 
     function recommendLocally() {
       const activeId = deckState[activeDeckId()].id;
-      const candidates = tracks.filter(track => track.id !== activeId);
+      const batchTracks = trackMemory?.size && liveIntelligence ? liveIntelligence.silentSearch() : [];
+      const candidates = (batchTracks.length ? batchTracks : tracks).filter(track => track.id !== activeId);
       if (!candidates.length) {
         currentRecommendation = null;
         elements.aiBrief.textContent = "Load more music to create a meaningful next-track recommendation.";
@@ -4697,7 +4726,8 @@
         if (!response.ok) throw new Error(data.message || "Cloud intelligence unavailable");
         const cloudTrack = tracks.find(track => track.id === data.trackId);
         const localTrack = tracks.find(track => track.id === localRecommendation.trackId);
-        if (!trackHasPlayableAudio(cloudTrack) && trackHasPlayableAudio(localTrack)) {
+        const cloudOutsideBatch = Boolean(trackMemory?.size) && !trackMemory.isAuthorized(cloudTrack?.id) && trackMemory.isAuthorized(localTrack?.id);
+        if ((!trackHasPlayableAudio(cloudTrack) || cloudOutsideBatch) && trackHasPlayableAudio(localTrack)) {
           applyRecommendation(localRecommendation, "Local brain · playable audio");
           window.haloStats?.track("analyze_ai_set", { mode: "local_playable_fallback", intent: elements.mixIntent.value });
           return;
@@ -4895,7 +4925,7 @@
       }
     }
 
-    function prepareRecommendedTransition() {
+    async function prepareRecommendedTransition() {
       const recommendation = currentRecommendation || recommendLocally();
       if (!recommendation) return;
       if (recommendation.decision && recommendation.decision !== "mix") {
@@ -4903,7 +4933,16 @@
         return;
       }
       const targetDeck = activeDeckId() === "A" ? "B" : "A";
-      loadTrack(targetDeck, recommendation.trackId);
+      if (!liveIntelligence) {
+        console.error("[Live Intelligence] Silent loader unavailable. Load aborted.");
+        showToast("Live Intelligence load blocked", "The silent loader is unavailable, so HALO did not load the next deck.");
+        return;
+      }
+      const loadResult = await liveIntelligence.silentSearchAndLoad(recommendation.trackId, { deckId: targetDeck });
+      if (!loadResult.ok) {
+        showToast("Live Intelligence load blocked", loadResult.reason === "unauthorized" ? "Only tracks from your latest upload batch can be loaded by HALO. Upload the batch for this set, then prepare again." : loadResult.message);
+        return;
+      }
       const masterDeck = deckState[activeDeckId()];
       deckState[targetDeck].bpm = Number(masterDeck.bpm);
       deckState[targetDeck].pitch = ((Number(masterDeck.bpm) / Number(deckState[targetDeck].originalBpm)) - 1) * 100;

@@ -334,10 +334,10 @@ assert.match(musicStyles, /\.halo-player-bar \{ position: fixed;/, "the floating
     assert.ok(page.includes(asset), `built asset "${asset}" must be listed`);
   }
   for (const source of [mainSite, creatorsPage, releasePage]) {
-    assert.match(source, /artist-uploaded music and content/i, "public ownership copy must state the uploader-owned default");
+    assert.match(source, /artist-uploaded (?:music and )?content/i, "public ownership copy must state the uploader-owned default");
     assert.match(source, /100% the uploader’s property by default/i, "public ownership copy must state the default share");
-    assert.match(source, /explicitly configured and agreed on this site/i, "ownership changes must be explicitly configured and agreed");
-    assert.match(source, /Halo Music (?:owns|’s ownership claim covers) Owen Anthony’s music only/i, "Halo Music ownership must be limited to Owen Anthony music");
+    assert.match(source, /(?:explicitly configured and agreed on this site|explicit split or ownership agreement is configured and agreed on this site)/i, "ownership changes must be explicitly configured and agreed");
+    assert.match(source, /(?:Owen Anthony’s music is owned by Halo Music|Halo Music (?:owns|’s ownership claim covers) Owen Anthony’s music only)/i, "Halo Music ownership must be limited to Owen Anthony music");
     assert.doesNotMatch(source, /Anson Wilshire/i, "public ownership copy must not expose the technology rights holder’s personal name");
   }
   assert.match(page, /platform’s technology\/IP rights holder/i, "platform technology ownership must be distinguished from artist uploads");

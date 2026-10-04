@@ -159,6 +159,9 @@ check("thread replies stay with the DJ who owns the thread", () => {
   const busy = routeDjEvent(reply, { now: 1000, state: markDjActed({}, "halo", "comment", 0) });
   assert.equal(busy.personaId, null, "Another DJ never hijacks a thread");
   assert.equal(busy.reason, "thread-owner-cooldown");
+  const absent = routeDjEvent(reply, { now: 0, personas: DJ_PERSONAS.slice(1) });
+  assert.equal(absent.personaId, null, "A missing thread owner does not fall through to another DJ");
+  assert.equal(absent.reason, "thread-owner-unavailable");
 });
 
 check("memory is bounded, PII-free, persona-scoped and recallable", () => {

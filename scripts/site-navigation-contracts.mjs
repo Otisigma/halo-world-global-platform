@@ -333,11 +333,17 @@ assert.match(musicStyles, /\.halo-player-bar \{ position: fixed;/, "the floating
   ]) {
     assert.ok(page.includes(asset), `built asset "${asset}" must be listed`);
   }
+  for (const source of [mainSite, creatorsPage]) {
+    assert.ok(source.includes("Other artist-uploaded content remains the uploader’s property unless an explicit split or ownership agreement is configured on HALO."), "public ownership copy must preserve uploader rights unless explicitly agreed");
+    assert.ok(source.includes("Owen Anthony’s music is owned by Halo Music."), "public ownership copy must identify Owen Anthony music ownership");
+    assert.ok(source.includes("Uploading alone transfers no rights."), "uploading must not transfer rights");
+    assert.ok(source.includes("HALO software and technical infrastructure are proprietary."), "platform IP must remain separate from upload ownership");
+  }
+  assert.match(releasePage, /artist-uploaded music and content/i, "release ownership copy must state the uploader-owned default");
+  assert.match(releasePage, /100% the uploader’s property by default/i, "release ownership copy must state the default share");
+  assert.match(releasePage, /explicitly configured and agreed on this site/i, "release ownership changes must be explicitly configured and agreed");
+  assert.match(releasePage, /Halo Music (?:owns|’s ownership claim covers) Owen Anthony’s music only/i, "release copy must limit Halo Music ownership to Owen Anthony music");
   for (const source of [mainSite, creatorsPage, releasePage]) {
-    assert.match(source, /artist-uploaded music and content/i, "public ownership copy must state the uploader-owned default");
-    assert.match(source, /100% the uploader’s property by default/i, "public ownership copy must state the default share");
-    assert.match(source, /explicitly configured and agreed on this site/i, "ownership changes must be explicitly configured and agreed");
-    assert.match(source, /Halo Music (?:owns|’s ownership claim covers) Owen Anthony’s music only/i, "Halo Music ownership must be limited to Owen Anthony music");
     assert.doesNotMatch(source, /Anson Wilshire/i, "public ownership copy must not expose the technology rights holder’s personal name");
   }
   assert.match(page, /platform’s technology\/IP rights holder/i, "platform technology ownership must be distinguished from artist uploads");

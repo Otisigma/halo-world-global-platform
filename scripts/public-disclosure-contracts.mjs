@@ -55,8 +55,8 @@ for (const { path, content } of ownershipContents) {
   for (const statement of ownershipStatements) {
     assert.equal(content.split(statement).length - 1, 1, `${path} states each ownership provision only once`);
   }
-  assert.equal((content.match(/Owen Anthony[’']s music is owned/g) || []).length, 1, `${path} does not repeat the music ownership disclosure`);
-  assert.equal((content.match(/artist-uploaded content remains/g) || []).length, 1, `${path} does not repeat the uploader ownership disclosure`);
+  assert.equal((content.match(/(?:Owen Anthony[’']s music is owned|Halo Music owns Owen Anthony[’']s music|Halo Music[’']s ownership claim covers Owen Anthony[’']s music)/gi) || []).length, 1, `${path} does not repeat the music ownership disclosure`);
+  assert.equal((content.match(/(?:artist-uploaded (?:music and )?content remains?|artist uploads remain uploader-owned)/gi) || []).length, 1, `${path} does not repeat the uploader ownership disclosure`);
   assert.doesNotMatch(content, /(?:HALO (?:owns|takes ownership of) (?:all |these |the )?(?:uploaded (?:files|content)|artist uploads)|(?:uploaded (?:files|content)|these files) (?:are|is) owned by HALO)/i, `${path} does not claim blanket upload ownership`);
 }
 const releaseHouse = ownershipContents.find(file => file.path === "release-house/release-house.js").content;

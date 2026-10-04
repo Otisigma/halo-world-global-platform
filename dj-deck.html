@@ -4637,7 +4637,7 @@
 
     function recommendLocally() {
       const activeId = deckState[activeDeckId()].id;
-      const batchTracks = trackMemory?.size && liveIntelligence ? liveIntelligence.silentSearch() : [];
+      const batchTracks = trackMemory?.size ? trackMemory.list() : [];
       const candidates = (batchTracks.length ? batchTracks : tracks).filter(track => track.id !== activeId);
       if (!candidates.length) {
         currentRecommendation = null;
@@ -4726,7 +4726,7 @@
         if (!response.ok) throw new Error(data.message || "Cloud intelligence unavailable");
         const cloudTrack = tracks.find(track => track.id === data.trackId);
         const localTrack = tracks.find(track => track.id === localRecommendation.trackId);
-        const cloudOutsideBatch = Boolean(trackMemory?.size) && !trackMemory.isAuthorized(cloudTrack?.id) && trackMemory.isAuthorized(localTrack?.id);
+        const cloudOutsideBatch = Boolean(trackMemory?.size) && !trackMemory.isAuthorized(cloudTrack?.id);
         if ((!trackHasPlayableAudio(cloudTrack) || cloudOutsideBatch) && trackHasPlayableAudio(localTrack)) {
           applyRecommendation(localRecommendation, "Local brain · playable audio");
           window.haloStats?.track("analyze_ai_set", { mode: "local_playable_fallback", intent: elements.mixIntent.value });

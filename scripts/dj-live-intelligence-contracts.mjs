@@ -138,7 +138,7 @@ assert.match(prepareBody, /await liveIntelligence\.silentSearchAndLoad\(recommen
 assert.doesNotMatch(prepareBody, /loadTrack\(targetDeck/, "Prepare next deck never bypasses the batch guard");
 assert.match(prepareBody, /if \(!liveIntelligence\)[\s\S]*?return;/, "Prepare next deck fails closed without the loader");
 assert.match(prepareBody, /if \(!loadResult\.ok\)[\s\S]*?return;/, "Prepare next deck stops on refused loads");
-assert.match(deckPage, /liveIntelligence\.silentSearch\(\)/, "Recommendations search the active batch silently");
+assert.match(deckPage, /const batchTracks = trackMemory\?\.size \? trackMemory\.list\(\) : \[\];/, "Recommendations draw from the active batch once one is locked");
 assert.match(deckPage, /cloudOutsideBatch/, "Cloud picks outside the batch fall back to the local batch pick");
 
 assert.match(packageJson, /node scripts\/dj-live-intelligence-contracts\.mjs/, "npm test runs the Live Intelligence contracts");

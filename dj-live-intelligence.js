@@ -42,9 +42,7 @@
     // Wipes any previous batch first, then locks in only the freshly uploaded tracks.
     lockUploadBatch(newTracks) {
       const previousSize = this.activeBatch.size;
-      this.activeBatch = new Map();
-      this.batchId = null;
-      this.lockedAt = 0;
+      this.clear();
       if (previousSize) this.logger.info(`${LOG_PREFIX} Past booth memory cleared (${previousSize} track${previousSize === 1 ? "" : "s"}).`);
 
       const list = Array.isArray(newTracks) ? newTracks : [];

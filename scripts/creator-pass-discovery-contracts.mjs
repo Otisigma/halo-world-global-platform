@@ -149,8 +149,9 @@ function uiFixture(state) {
     return elements.get(id);
   };
   const calls = [];
-  vm.runInNewContext(client.replace(/^import \{ curatedCreators \} from "\/lib\/creator-directory.js";\s*/, ""), {
+  vm.runInNewContext(client.replace(/^import .+;\s*/gm, ""), {
     curatedCreators, URLSearchParams,
+    mountMusicHomeCustomizer: () => ({ load() {}, clear() {} }),
     FormData: class { [Symbol.iterator]() { return [][Symbol.iterator](); } },
     document: { getElementById: element, createElement: tag => ({
       tagName: tag.toUpperCase(), textContent: "", children: [],

@@ -46,13 +46,27 @@ Conscience reviews are visible and writable only to HALO platform owners. The re
 
 `/creator-network/` is the first-party member collaboration workspace; `/creators/` remains the public Creator World preview. It uses shared Netlify Identity and membership, and the existing sitewide Companion rather than a separate guide or account system.
 
-Creator Pass discovery is opt-in and visible only to signed-in members. Members can edit their profile, filter creators and opportunities by role, genre, language and BPM (plus key for opportunities), post briefs, invite discoverable creators, and apply to projects. Incoming and outgoing requests retain pending, accepted or declined states. Only invite recipients can answer invitations; only project owners can answer applications or close projects.
+Creator Pass public discovery is opt-in; private workspace data remains visible only to authorised members. Members can edit their profile, filter creators and opportunities by role, genre, language and BPM (plus key for opportunities), post briefs, invite discoverable creators, and apply to projects. Incoming and outgoing requests retain pending, accepted or declined states. Only invite recipients can answer invitations; only project owners can answer applications or close projects.
 
 `/api/creator-network` provides authenticated GET workspace reads and same-origin POST actions: `save_profile`, `create_project`, `invite`, `apply`, `respond`, and `close_project`. Project briefs can reference an owned `songId`, its `songVersionId`, an owned `stemPackId`, and an owned `rightsWorkId`. Artist room links must also belong to the profile owner. These references do not copy media, grant access to private assets, or change existing catalog, follow, review, Song Lab or rights permissions.
 
 Accepting a collaboration request records participation only. Split preferences are non-binding; rights approval, split participants and release readiness remain in Artist Economy. No automatic contracts, royalties, payouts or AI generation are introduced.
 
 The additive migration `netlify/database/migrations/20261003095500_create_creator_network.sql` creates member-linked profiles, projects and participants during Netlify deployment. Apply it through the existing migration process before using the API. Validate the integration with `npm run test:creator-network`; these contracts also run in `npm test`.
+
+## Music Home customization
+
+Music Home Architect lives in the signed-in Creator Network workspace. It publishes an artist hub at `/music-home/?creator=<memberId>`; public access follows the Creator Pass discovery setting. The owner can preview a private home. Private stems, split evidence, member-only briefs and unpublished tracks are never published by customization.
+
+`types/musicHome.ts` defines the versioned config. `lib/music-home.js` centralizes the curated background allowlist, layout validation and earned unlocks: Gold is available immediately, Bronze requires one finalized stem upload, Copper requires five, and Platinum requires five plus one completed split. Split drafts alone do not count as completion. Pearl Hall displays server-derived milestones, not client-supplied badges.
+
+Creators can reorder and hide Pearl Hall, published track drops, Signal and collaboration modules with keyboard-accessible controls. The bundled, original H.264 atmospheric loops are six seconds, 640×360 at 15 fps and under 100 KiB each. Playback is muted, pauses when the page is hidden, respects reduced-motion/data-saving preferences and has an explicit play/pause control. Video errors leave the Obsidian fallback.
+
+Signal and collaboration modules do not copy member-only feed entries or briefs onto the public page. Until those systems provide explicit public-publication controls, the modules link to their existing destinations rather than exposing private content.
+
+Custom MP4 uploads (maximum 4 MiB, one replaceable background per creator) and Sovereign Mode require current server-owned `customArtistRoom` access. `/api/music-home` authenticates writes, verifies request origin and rechecks Premium before serving uploaded media. Saved paid settings fall back safely after expiry. Sovereign Mode only hides designated public-page chrome; “Show HALO navigation” and Escape restore it. It never changes authentication, private workspace access or rights permissions.
+
+Apply the additive `netlify/database/migrations/20261004050000_create_music_homes.sql` migration through the existing deployment process. Netlify Database, Identity and Blobs must be available. Run `npm run test:music-home` for customization and API contracts; these also run through `npm test`.
 
 ## Main files
 

@@ -260,9 +260,10 @@ function element(id) {
   return elements.get(id);
 }
 let authChanged;
-const executableClient = client.replace(/^import \{ curatedCreators \} from "\/lib\/creator-directory.js";\s*/, "");
+const executableClient = client.replace(/^import .+;\s*/gm, "");
 vm.runInNewContext(executableClient, {
   curatedCreators,
+  mountMusicHomeCustomizer: () => ({ load() {}, clear() {} }),
   document: { getElementById: element, createElement: tag => ({
     tagName: tag.toUpperCase(), textContent: "", children: [], addEventListener() {},
     append(...children) { this.children.push(...children); }, setAttribute() {}
@@ -287,6 +288,7 @@ assert.deepEqual(element("creators").children, []);
 assert.equal(element("workspace").hidden, true);
 vm.runInNewContext(executableClient, {
   curatedCreators,
+  mountMusicHomeCustomizer: () => ({ load() {}, clear() {} }),
   document: { getElementById: element, createElement: tag => ({
     tagName: tag.toUpperCase(), textContent: "", children: [], addEventListener() {},
     append(...children) { this.children.push(...children); }, setAttribute() {}

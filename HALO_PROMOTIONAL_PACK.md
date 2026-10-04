@@ -2,7 +2,7 @@
 
 ## The simple idea
 
-HALO Music World is a private, artist-controlled operating system for taking music from unfinished work to a living release ecosystem.
+HALO Music World is a proprietary, artist-first platform for taking music from unfinished work to a living release ecosystem.
 
 It brings release preparation, radio, audience learning, campaign planning, trusted outreach, creator services, commercial opportunities, and owner-controlled intelligence into one connected world. Instead of sending an artist through a collection of disconnected tools, HALO keeps the work, context, decisions, and relationships together.
 
@@ -59,11 +59,17 @@ HALO Music World is an artist-controlled music operating system connecting relea
 
 ### Thirty-second introduction
 
-HALO helps an independent artist do more than upload a track. It provides a connected path for finishing the music, building the release world, programming and testing the signal, learning from audience response, organizing outreach, and turning that evidence into the next human decision. The artist keeps control of the work and the system keeps the context together.
+HALO helps an independent artist do more than upload a track. It provides a connected path for finishing the music, building the release world, programming and testing the signal, learning from audience response, organizing outreach, and turning that evidence into the next human decision. Artists retain ownership of their uploads by default, while the system keeps the context together.
 
 ### Founder-style introduction
 
-We built HALO because artists are repeatedly asked to hand pieces of their world to disconnected platforms. HALO brings those pieces back together. It is a private music operating system where a record can be finished, released, heard, understood, supported, and developed without losing the artist’s ownership of the story.
+We built HALO because artists are repeatedly asked to hand pieces of their world to disconnected platforms. HALO brings those pieces back together. It is a proprietary music platform where a record can be finished, released, heard, understood, supported, and developed while keeping upload ownership terms explicit.
+
+## Ownership and rights
+
+Copyright © 2026 HALO MUSIC WORLD LTD. All Rights Reserved.
+
+Owen Anthony’s music is owned by Halo Music. All other artist-uploaded music, recordings, stems, and releases remain 100% the property of the uploading artist unless an explicit split or ownership agreement is set on the site. Uploading alone does not transfer rights. The platform, software, codebase, and technical infrastructure remain proprietary.
 
 ## Suggested founding offer
 

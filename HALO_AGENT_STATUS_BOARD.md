@@ -1,6 +1,6 @@
 # HALO Agent Status Board
 
-HALO is an artist-owned music and software ecosystem where fans become supporters, supporters are rewarded, and the artist-fan relationship grows over time.
+HALO is a proprietary, artist-first music and software platform; artist uploads remain uploader-owned by default, fans become supporters, supporters are rewarded, and artist-fan relationships grow over time.
 
 ## Safe operating principle
 

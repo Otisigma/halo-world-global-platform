@@ -152,7 +152,7 @@
     const { artist, profile, summary, viewer } = state.dashboard;
     byId("artistName").textContent = artist.name;
     byId("artistRoomLink").href = `/artists/${encodeURIComponent(artist.slug)}`;
-    byId("missionNote").textContent = profile.missionNote || "Ownership stays with the artist. Every recommendation remains explainable and approval-gated.";
+    byId("missionNote").textContent = profile.missionNote || "Artist-uploaded music remains the uploader’s property by default; Owen Anthony’s music is owned by Halo Music. Every recommendation remains explainable and approval-gated.";
     byId("careerStage").textContent = (careerLabels[profile.careerStage] || titleCase(profile.careerStage)).toUpperCase();
     byId("availableMoney").textContent = money(summary.availableMinor);
     byId("receivedGross").textContent = money(summary.receivedGrossMinor);

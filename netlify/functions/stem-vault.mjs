@@ -147,7 +147,7 @@ async function finalizePack(db, memberId, body) {
   const bpm = Math.max(40, Math.min(240, Number(body.bpm) || 124));
   const files = cleanFiles(body.files);
   if (!uploadIdPattern.test(uploadId) || title.length < 2) return json({ message: "Name this stem pack before saving it" }, 400);
-  if (body.rightsAttested !== true) return json({ message: "Confirm that HALO owns or controls every uploaded stem" }, 400);
+  if (body.rightsAttested !== true) return json({ message: "Confirm that you own or control every uploaded stem and have permission to upload it" }, 400);
   if (files.length < 2) return json({ message: "Add at least two synchronized audio stems" }, 400);
   if (files.length !== body.files?.length || files.length > 6) return json({ message: "Every stem must meet the file limits (maximum six files, 512 MiB each)" }, 400);
   const measuredDurations = files.map(file => file.durationSeconds).filter(Boolean);

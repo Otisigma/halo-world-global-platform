@@ -42,7 +42,7 @@ for (const exampleTeam of exampleTeams) {
 assert.match(board, /protects both the artist and the fan/i, "status board must state artist and fan protection");
 assert.match(board, /do not exploit/i, "status board must reject exploitation");
 assert.match(board, /use behavior and engagement data to improve/i, "status board must define ethical data use");
-assert.match(board, /artist-owned music and software ecosystem/i, "status board must preserve HALO brand positioning");
+assert.match(board, /proprietary, artist-first music and software platform/i, "status board must distinguish HALO's proprietary platform from artist-owned uploads");
 assert.match(board, /fans become supporters, supporters are rewarded/i, "status board must preserve supporter reward positioning");
 assert.match(board, /## Recent outcomes loop/, "status board must define a recent outcomes loop");
 assert.match(outcomesLoopGuidance, /Halo Ledger, deploy-health checks, status-board changes, and Builder\/Verifier\/Committee PR evidence/, "status board outcomes loop must stay evidence-first");

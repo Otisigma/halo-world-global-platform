@@ -88,7 +88,7 @@ export async function generateSyncLicensePDF({ licenseId, track, buyer, tier, am
 
   // Background aesthetics & header.
   page.drawRectangle({ x: 0, y: 780, width: PAGE_WIDTH, height: 61.89, color: rgb(0.07, 0.07, 0.07) });
-  page.drawText("HALO MUSIC WORLD - MASTER SYNC LICENSE", {
+  page.drawText("HALO MUSIC WORLD LTD - MASTER SYNC LICENSE", {
     x: 40,
     y: 802,
     size: 16,

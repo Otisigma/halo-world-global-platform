@@ -49,6 +49,62 @@
   .signal-feed__reply { margin-left: .3rem; }
 }
 
+.signal-market {
+  padding: clamp(3rem, 7vw, 6rem) 0;
+  color: #f2efe4;
+  background: radial-gradient(ellipse at 85% 0, #d4a84712, transparent 55%), #08090b;
+  border-top: 1px solid #d4a84740;
+  font-family: 'Inter', sans-serif;
+}
+.signal-market__intro { display: flex; justify-content: space-between; align-items: end; gap: 2rem; }
+.signal-market__intro h2 { font-family: 'Barlow Condensed', sans-serif; font-size: clamp(3rem, 7vw, 6rem); line-height: 1; margin: .5rem 0 1rem; }
+.signal-market__intro h2 em { font-family: 'Cormorant Garamond', serif; color: #e7b34a; }
+.signal-market__eyebrow { color: #e7b34a; font-family: 'Share Tech Mono', monospace; font-size: .75rem; letter-spacing: .1em; text-transform: uppercase; }
+.signal-market p, .signal-market__dialog p { line-height: 1.7; overflow-wrap: anywhere; }
+.signal-market__notice { padding: 1rem 1.25rem; margin: 2rem 0; border: 1px solid #d4a84755; background: #d4a8470a; color: #d0cabb; border-radius: .75rem; }
+.signal-market__toolbar, .signal-market__actions { display: flex; flex-wrap: wrap; align-items: end; gap: .75rem; }
+.signal-market__button { display: inline-flex; justify-content: center; align-items: center; min-height: 44px; padding: .65rem 1rem; border: 1px solid #d4a84766; border-radius: .5rem; background: #18181d; color: #f2efe4; font: inherit; font-size: .82rem; cursor: pointer; text-decoration: none; }
+.signal-market__button:hover, .signal-market__button[aria-pressed="true"] { background: #d4a84720; border-color: #e7b34a; }
+.signal-market__button--gold { background: #e7b34a; color: #08090b; font-weight: 700; }
+.signal-market__button:disabled { cursor: not-allowed; color: #aaa8a1; border-color: #ffffff24; }
+.signal-market :focus-visible, .signal-market__dialog :focus-visible { outline: 3px solid #e7b34a; outline-offset: 3px; }
+.signal-market__heading { margin: 2.5rem 0 1rem; font-size: 1.2rem; }
+.signal-market__heading span { font-size: .85rem; color: #aaa8a1; font-weight: 400; }
+.signal-market__status { min-height: 1.7em; color: #e7b34a; margin: 1rem 0; }
+.signal-market__grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; }
+.signal-market__card { display: flex; flex-direction: column; gap: .8rem; padding: 1.5rem; background: linear-gradient(135deg, #1a1916, #101115); border: 1px solid #d4a84730; border-radius: 1rem; min-width: 0; }
+.signal-market__card p, .signal-market__card h4 { margin: 0; }
+.signal-market__card > p { font-size: .85rem; color: #c7c3b9; }
+.signal-market__card h4 { font-family: 'Barlow Condensed', sans-serif; font-size: 1.65rem; }
+.signal-market__card .signal-market__price, .signal-market__price { color: #e7b34a; font-weight: 600; }
+.signal-market__card .signal-market__creator { color: #f2efe4; font-weight: 600; }
+.signal-market__terms { display: flex; flex-wrap: wrap; gap: .5rem; }
+.signal-market__terms span { padding: .35rem .6rem; border: 1px solid #d4a84740; border-radius: .4rem; color: #d0cabb; font-size: .75rem; line-height: 1.5; overflow-wrap: anywhere; }
+.signal-market__creator-link { color: #e7b34a; font-size: .8rem; text-underline-offset: .2em; }
+.signal-market__card .signal-market__actions { margin-top: auto; padding-top: .5rem; }
+.signal-market__dialog { width: min(42rem, calc(100% - 2rem)); max-height: calc(100dvh - 2rem); margin: auto; padding: clamp(1.25rem, 4vw, 2rem); color: #f2efe4; background: #101115; border: 1px solid #d4a84780; border-radius: 1rem; overflow-y: auto; font-family: 'Inter', sans-serif; }
+.signal-market__dialog::backdrop { background: #000b; backdrop-filter: blur(6px); }
+.signal-market__close { margin: 0 0 1.5rem auto; display: flex; }
+.signal-market__dialog h2 { font-family: 'Barlow Condensed', sans-serif; font-size: 2rem; }
+.signal-market label, .signal-market__dialog label { display: grid; gap: .5rem; font-size: .85rem; margin-bottom: 1rem; }
+.signal-market select, .signal-market__dialog input, .signal-market__dialog select, .signal-market__dialog textarea { width: 100%; min-height: 44px; background: #08090b; color: #f2efe4; border: 1px solid #ffffff38; border-radius: .5rem; padding: .75rem; font: inherit; box-sizing: border-box; }
+.signal-market__dialog textarea { resize: vertical; }
+.signal-market__dialog fieldset { padding: 1rem; margin: 1rem 0; border: 1px solid #d4a84755; border-radius: .5rem; min-width: 0; }
+.signal-market__dialog legend { padding: 0 .5rem; color: #e7b34a; }
+.signal-market__form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+.signal-market audio, .signal-market__dialog audio { max-width: 100%; width: 100%; }
+.signal-market [hidden], .signal-market__dialog [hidden] { display: none !important; }
+@media (max-width: 1000px) { .signal-market__grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 760px) {
+  .signal-market__intro { align-items: start; flex-direction: column; }
+  .signal-market__grid, .signal-market__form-row { grid-template-columns: 1fr; }
+  .signal-market__toolbar > *, .signal-market__toolbar label { width: 100%; }
+  .signal-market__card { padding: 1.25rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .signal-market *, .signal-market__dialog * { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+}
+
 .signal-console {
   --signal-ink: #08090b;
   --signal-panel: #101217;

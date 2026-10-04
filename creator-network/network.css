@@ -159,3 +159,82 @@ article button:disabled, button:disabled { opacity: .55; cursor: wait; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; }
 }
+
+/* Public sample discovery is deliberately scoped away from the member workspace. */
+.demo-discovery, .demo-orbits { padding-block: clamp(2.5rem, 6vw, 5rem); border-top: 1px solid var(--creator-line); }
+.demo-disclosure { display: flex; align-items: center; gap: 1rem; padding: 1rem 1.2rem; border: 1px solid var(--creator-line); background: rgba(214, 173, 105, .055); color: #c8bda9; font-size: .8rem; }
+.demo-disclosure p { margin: 0; }
+.sample-badge { display: inline-flex; flex: none; align-items: center; width: fit-content; max-width: 100%; padding: .3rem .55rem; border: 1px solid rgba(214, 173, 105, .42); color: #edd3a2; font: .6rem/1.6 "Share Tech Mono", monospace; letter-spacing: .04em; }
+.demo-filter-console { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr) auto; gap: .8rem; align-items: end; margin: 1.8rem 0 1rem; }
+.demo-result-count, .demo-status { min-height: 1.6em; color: var(--creator-muted); font-size: .8rem; }
+.demo-status { margin-bottom: 0; }
+.demo-creator-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; }
+.demo-creator-card { min-width: 0; overflow: hidden; border: 1px solid var(--creator-line); background: linear-gradient(150deg, #19160f, #100f0c 70%); transition: border-color .2s, transform .2s; }
+.demo-creator-card:hover { transform: translateY(-3px); border-color: rgba(214, 173, 105, .65); }
+.demo-card-cover { position: relative; display: flex; align-items: center; justify-content: space-between; gap: .5rem; min-height: 9rem; overflow: hidden; padding: 1.4rem; background: radial-gradient(ellipse at 95% 70%, rgba(165, 119, 48, .25), transparent 65%), repeating-radial-gradient(circle at 90% 90%, transparent 0 24px, rgba(214, 173, 105, .09) 25px 26px); border-bottom: 1px solid var(--creator-line); }
+.demo-creator-card:nth-child(3n + 2) .demo-card-cover { background-color: #171916; }
+.demo-creator-card:nth-child(3n) .demo-card-cover { background-color: #1b1316; }
+.demo-tier-label { color: var(--creator-gold); font: .6rem/1.6 "Share Tech Mono", monospace; letter-spacing: .1em; text-transform: uppercase; }
+.demo-avatar, .demo-profile-avatar { display: grid; flex: none; place-items: center; width: 5rem; aspect-ratio: 1; border: 1px solid rgba(214, 173, 105, .65); border-radius: 50%; background: #15120e; color: #edd3a2; font: 2rem "Cormorant Garamond", Georgia, serif; box-shadow: 0 0 0 .55rem rgba(214, 173, 105, .04); }
+.demo-card-body { display: flex; flex-direction: column; align-items: start; gap: .65rem; padding: 1.4rem; }
+.demo-card-body h3 { margin: .25rem 0 0; color: var(--creator-paper); font: 500 2rem/1.1 "Cormorant Garamond", Georgia, serif; }
+.demo-card-body p { margin: 0; }
+.demo-roles { color: #d0c5b2; font-size: .8rem; }
+.demo-tags { display: flex; flex-wrap: wrap; gap: .4rem; padding: 0; margin: .2rem 0; list-style: none; }
+.demo-tags li { padding: .2rem .5rem; border: 1px solid rgba(214, 173, 105, .18); background: rgba(214, 173, 105, .035); color: #d5bc92; font-size: .7rem; }
+.demo-bio { color: #c0b7a6; font-size: .85rem; }
+.demo-location, .demo-metrics, .demo-caption { color: #b7ad9b; font-size: .75rem; line-height: 1.7; }
+.demo-card-actions { display: flex; flex-wrap: wrap; gap: .5rem; width: 100%; margin-top: .6rem; }
+.demo-card-actions .button { font-size: .58rem; letter-spacing: .03em; }
+.demo-card-body .demo-card-actions { margin-top: auto; padding-top: .7rem; }
+.demo-orbit-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .8rem; margin-top: 2rem; }
+.demo-orbit-tier { min-width: 0; padding: 1.2rem; overflow: hidden; border: 1px solid var(--creator-line); background: #100f0c; }
+.demo-orbit-tier h3 { margin: 0; font: 500 1.65rem "Cormorant Garamond", Georgia, serif; }
+.demo-orbit-description { min-height: 5em; color: var(--creator-muted); font-size: .75rem; }
+.demo-constellation { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: .8rem; min-height: 15rem; padding: 1.5rem .25rem; background: repeating-radial-gradient(circle at center, transparent 0 32px, rgba(214, 173, 105, .17) 33px 34px); }
+.demo-orbit-creator { display: inline-flex; align-items: center; gap: .6rem; max-width: 100%; min-height: 3rem; padding: .35rem .65rem .35rem .4rem; border: 1px solid rgba(214, 173, 105, .5); border-radius: 2rem; background: #19160f; color: var(--creator-paper); font-size: .73rem; text-align: left; cursor: pointer; }
+.demo-orbit-avatar { display: grid; flex: none; place-items: center; width: 2rem; height: 2rem; border: 1px solid var(--creator-line); border-radius: 50%; color: var(--creator-gold); font: 1rem "Cormorant Garamond", Georgia, serif; }
+.demo-orbit-creator:hover { border-color: var(--creator-gold); background: #282013; }
+.demo-orbit-empty { max-width: 10rem; padding: .75rem; background: #100f0c; color: #c3b59b; font-size: .8rem; text-align: center; }
+.demo-orbit-tier > .demo-metrics { margin-bottom: 0; text-align: center; }
+.demo-profile-dialog { width: min(900px, calc(100% - 2rem)); max-height: calc(100dvh - 2rem); padding: clamp(1rem, 4vw, 2.25rem); border: 1px solid var(--creator-gold); background: radial-gradient(ellipse at 85% 0, rgba(126, 88, 35, .15), transparent 25rem), #100f0c; color: var(--creator-paper); overflow-wrap: anywhere; }
+.demo-profile-dialog::backdrop { background: rgba(0, 0, 0, .82); backdrop-filter: blur(5px); }
+.demo-dialog-topline { display: flex; justify-content: space-between; align-items: center; gap: .7rem; }
+.demo-dialog-topline .eyebrow { margin: 0; }
+.demo-profile-dialog h2 { margin: .7rem 0 .25rem; font: 500 clamp(2.5rem, 7vw, 4rem)/1 "Cormorant Garamond", Georgia, serif; }
+.demo-profile-dialog h3 { margin: .5rem 0; font: 500 1.8rem/1.1 "Cormorant Garamond", Georgia, serif; }
+.demo-profile-dialog h4 { margin: .5rem 0; font: 500 1.3rem "Cormorant Garamond", Georgia, serif; }
+.demo-profile-heading { display: flex; align-items: center; gap: 1.4rem; margin-top: 1.6rem; }
+.demo-profile-avatar { width: 6rem; font-size: 2.5rem; }
+.demo-profile-about { padding: .5rem 0 1.5rem; }
+.demo-profile-about > p:first-child { color: #c8bda9; }
+.demo-handoff, .demo-featured-release, .demo-featured-listings, .demo-advisory { padding-block: 1.5rem; border-top: 1px solid var(--creator-line); }
+.demo-featured-release { padding: 1.5rem; background: repeating-radial-gradient(circle at 115% 50%, transparent 0 35px, rgba(214, 173, 105, .08) 36px 37px), #19150e; }
+.demo-featured-release > p { max-width: 38rem; }
+.demo-listing-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .75rem; margin-top: 1rem; }
+.demo-listing-card { min-width: 0; padding: 1rem; border: 1px solid var(--creator-line); background: #15130e; }
+.demo-listing-card > p:not(.eyebrow) { color: #c3b9a6; font-size: .8rem; }
+.demo-listing-card > .demo-listing-price { color: var(--creator-gold); }
+.demo-listing-card > a { display: block; margin-bottom: 1rem; }
+.demo-advisory-output { font-size: .85rem; }
+.demo-advisory-output:empty { display: none; }
+.demo-advisory-output .demo-readiness { color: var(--creator-gold); font: 1.4rem "Cormorant Garamond", Georgia, serif; }
+.demo-advisory-output ul { padding-left: 1.2rem; color: #c3b9a6; }
+@media (max-width: 1000px) {
+  .demo-creator-grid, .demo-orbit-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 620px) {
+  .demo-creator-grid, .demo-filter-console, .demo-listing-grid { grid-template-columns: 1fr; }
+  .demo-disclosure { align-items: flex-start; flex-direction: column; gap: .6rem; }
+  .demo-orbit-grid { grid-template-columns: 1fr; }
+  .demo-orbit-description { min-height: unset; }
+  .demo-constellation { min-height: 12rem; }
+  .demo-profile-heading { align-items: flex-start; flex-direction: column; }
+  .demo-dialog-topline { align-items: flex-start; }
+  .demo-dialog-topline .button { font-size: .55rem; padding: .6rem; }
+  .demo-profile-dialog { width: calc(100% - 1rem); max-height: calc(100dvh - 1rem); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .demo-creator-card { transition: none; }
+  .demo-creator-card:hover { transform: none; }
+}

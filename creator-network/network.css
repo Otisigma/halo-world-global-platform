@@ -208,9 +208,10 @@ article button:disabled, button:disabled { opacity: .55; cursor: wait; }
 .demo-profile-avatar { width: 6rem; font-size: 2.5rem; }
 .demo-profile-about { padding: .5rem 0 1.5rem; }
 .demo-profile-about > p:first-child { color: #c8bda9; }
-.demo-handoff, .demo-featured-release, .demo-featured-listings, .demo-advisory { padding-block: 1.5rem; border-top: 1px solid var(--creator-line); }
+.demo-dj-voice, .demo-handoff, .demo-featured-release, .demo-featured-listings, .demo-advisory { padding-block: 1.5rem; border-top: 1px solid var(--creator-line); }
 .demo-featured-release { padding: 1.5rem; background: repeating-radial-gradient(circle at 115% 50%, transparent 0 35px, rgba(214, 173, 105, .08) 36px 37px), #19150e; }
 .demo-featured-release > p { max-width: 38rem; }
+.demo-dj-sample { margin: .75rem 0; padding: 1rem 1.25rem; border-left: 2px solid var(--creator-gold); background: #19150e; white-space: pre-line; }
 .demo-listing-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .75rem; margin-top: 1rem; }
 .demo-listing-card { min-width: 0; padding: 1rem; border: 1px solid var(--creator-line); background: #15130e; }
 .demo-listing-card > p:not(.eyebrow) { color: #c3b9a6; font-size: .8rem; }

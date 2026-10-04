@@ -2,6 +2,8 @@
 
 DJ HALO, DJ BUTTERFLY, and DJ ROMY started as mix styles inside the live deck. They are now station residents: each holds a lane, an earned level, and a set of things it is allowed to do on air. A level is an amount of authority rather than a badge, it is recomputed from what listeners actually did, and it can fall.
 
+Their Signal personalities — voice, tone, memory, visual identity, event routing and post style packs — live in the shared registry described in [AI_DJ_PERSONAS.md](AI_DJ_PERSONAS.md).
+
 The three residents are seeded by the `20260812170000_create-radio-dj-personas` migration with the same lanes, tempo ranges, and transition palettes they already had in `dj-deck.html`, so a resident on air behaves like the version listeners have heard.
 
 | Resident | Lane | Home room | Tempo | Signature |

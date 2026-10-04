@@ -152,7 +152,7 @@
     const { artist, profile, summary, viewer } = state.dashboard;
     byId("artistName").textContent = artist.name;
     byId("artistRoomLink").href = `/artists/${encodeURIComponent(artist.slug)}`;
-    byId("missionNote").textContent = profile.missionNote || "Ownership stays with the artist. Every recommendation remains explainable and approval-gated.";
+    byId("missionNote").textContent = profile.missionNote || "Artist-uploaded content remains with its uploader unless an explicit split or ownership agreement is set. Every recommendation remains explainable and approval-gated.";
     byId("careerStage").textContent = (careerLabels[profile.careerStage] || titleCase(profile.careerStage)).toUpperCase();
     byId("availableMoney").textContent = money(summary.availableMinor);
     byId("receivedGross").textContent = money(summary.receivedGrossMinor);

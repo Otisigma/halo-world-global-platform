@@ -12,7 +12,7 @@ const [deck, api, audio, migration] = await Promise.all([
 
 const checks = [
   [deck.includes("In-house Stem Vault") && deck.includes("Save private stem pack"), "ships the private in-house stem vault inside the DJ Deck"],
-  [deck.includes('name="rightsAttested"') && deck.includes("HALO owns or controls these files"), "requires an explicit rights attestation before upload"],
+  [deck.includes('name="rightsAttested"') && deck.includes("I own or control these files") && deck.includes("This upload does not transfer ownership"), "requires an explicit rights attestation without implying an ownership transfer"],
   [deck.includes("stemAssets") && deck.includes("stemSources") && deck.includes("stemGains"), "plays synchronized source stems through independent gain controls"],
   [deck.includes('stem === "hats" ? "drums" : stem') && deck.includes('data-stem="vocals"') && deck.includes('data-stem="bass"'), "maps the performance pads to real drums, vocals, and bass stems"],
   [api.includes("verifyRequestOrigin") && api.includes("ensureMembership") && api.includes("halo-stem-vault"), "protects stem management with origin checks, identity, and private blob storage"],

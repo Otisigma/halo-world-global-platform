@@ -403,7 +403,7 @@ await check("auth changes clear composer drafts and consent; old mutations canno
   assert.match(metadata.children[4].textContent, /not a unique account identity/);
   form.elements.body.value = "A public idea";
   form.elements.body.handlers.input();
-  assert.equal(get("feedCharacterCount").textContent, "13 / 4000");
+  assert.equal(get("feedCharacterCount").textContent, "13 / 1000");
   get("feedQuickVideo").handlers.click();
   assert.equal(form.elements.kind.value, "VIDEO");
   assert.equal(get("feedLinkField").hidden, false);
@@ -429,7 +429,7 @@ await check("auth changes clear composer drafts and consent; old mutations canno
   assert.equal(form.elements.body.value, ""); assert.equal(form.elements.linkUrl.value, "");
   assert.equal(form.elements.publishPublic.checked, false); assert.equal(form.elements.includePurchase.checked, false);
   assert.equal(form.elements.kind.value, "TEXT"); assert.equal(get("feedLinkField").hidden, true);
-  assert.equal(get("feedCharacterCount").textContent, "0 / 4000");
+  assert.equal(get("feedCharacterCount").textContent, "0 / 1000");
   assert.equal(context.testState.memberId, "new-member");
   const resetCount = form.resetCount, currentStatus = get("feedStatus").textContent;
   form.elements.body.value = "New account draft"; form.elements.linkUrl.value = "https://example.com/new-link";
@@ -451,7 +451,7 @@ await check("auth changes clear composer drafts and consent; old mutations canno
   finishMutation(); await currentPublish;
   assert.equal(form.elements.body.value, "");
   assert.equal(form.elements.publishPublic.checked, false);
-  assert.equal(get("feedCharacterCount").textContent, "0 / 4000");
+  assert.equal(get("feedCharacterCount").textContent, "0 / 1000");
   assert.equal(get("feedStatus").textContent, "Signal deliberately published to the public feed.");
 });
 await check("public page uses safe DOM, native audio, honest waveform, polling and existing Identity", async () => {
@@ -469,8 +469,8 @@ await check("public page uses safe DOM, native audio, honest waveform, polling a
   assert.match(script, /post.media.bpm.*BPM/); assert.match(script, /post.media.musicalKey/);
   assert.match(script, /signal-feed__music-metadata/);
   assert.match(page, /Polling, not realtime push/); assert.match(migration, /FOREIGN KEY \(post_id, parent_id\)/);
-  assert.match(page, /name="body" maxlength="4000"/); assert.match(migration, /body TEXT NOT NULL CHECK \(char_length\(body\) BETWEEN 1 AND 1000\)/);
-  assert.match(page, /id="feedCharacterCount"[^>]*>0 \/ 4000/);
+  assert.match(page, /name="body" maxlength="1000"/); assert.match(migration, /body TEXT NOT NULL CHECK \(char_length\(body\) BETWEEN 1 AND 1000\)/);
+  assert.match(page, /id="feedCharacterCount"[^>]*>0 \/ 1000/);
   assert.match(page, /data-halo-social-welcome/);
   assert.match(page, /No photo uploads here/);
   assert.match(script, /Display-only handle from author name; not a unique account identity/);

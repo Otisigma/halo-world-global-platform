@@ -362,9 +362,9 @@ async function postType() {
   } catch (error) { if (session === feedState.session) status.textContent = error.message; }
 }
 byId("feedKind").addEventListener("change", postType);
-const updateCharacterCount = () => { byId("feedCharacterCount").textContent = `${publishForm.elements.body.value.length} / 4000`; };
+const updateCharacterCount = () => { byId("feedCharacterCount").textContent = `${publishForm.elements.body.value.length} / 1000`; };
 publishForm.elements.body.addEventListener("input", updateCharacterCount);
-publishForm.addEventListener("reset", () => { byId("feedCharacterCount").textContent = "0 / 4000"; });
+publishForm.addEventListener("reset", () => { byId("feedCharacterCount").textContent = "0 / 1000"; });
 for (const [id, kind] of [["feedQuickAudio", "AUDIO"], ["feedQuickVideo", "VIDEO"], ["feedQuickBrief", "BRIEF_LINK"]]) {
   byId(id).addEventListener("click", () => {
     byId("feedKind").value = kind;

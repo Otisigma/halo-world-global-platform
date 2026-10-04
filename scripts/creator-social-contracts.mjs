@@ -246,6 +246,11 @@ await check("welcome lifecycle syncs local avatars, validates media, revokes obj
     assert.equal(social.getLocalIdentity().displayName, "Your studio"); assert.equal(storage.values.size, 0);
     assert.deepEqual(revoked.slice(-2), ["blob:session-6", "blob:session-7"]);
     assert.equal(social.createSocialAvatar(document).children.length, 0);
+    storage.setItem("halo.creator-social.v1", "{corrupt");
+    window.fire("storage", { key: "halo.creator-social.v1" });
+    assert.match(status(), /could not be read.*session-only/);
+    button("Clear local identity and sparks").fire("click");
+    assert.equal(storage.values.size, 0);
   } finally {
     for (const [key, value] of Object.entries(originals)) {
       if (value === undefined) delete globalThis[key]; else globalThis[key] = value;
@@ -304,6 +309,8 @@ await check("shared stylesheet respects reduced motion and the network runner in
   const source = await readFile(new URL("../lib/creator-social.js", import.meta.url), "utf8");
   const pkg = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8"));
   assert.match(css, /prefers-reduced-motion: no-preference/); assert.match(css, /:focus-visible/);
+  assert.match(css, /--social-accent: #d6ad69/); assert.match(css, /#e9c88e/); assert.match(css, /#090907/);
+  assert.doesNotMatch(css, /#(?:b6f2db|171d2b|111521|354967|23493f|d1ffed|293546)/i);
   assert.doesNotMatch(source, /\bfetch\s*\(|FileReader|readAsDataURL|innerHTML|\.autoplay\s*=\s*true/);
   assert.match(pkg.scripts["test:network"], /creator-social-contracts\.mjs/);
 });

@@ -100,7 +100,12 @@ assert.equal(raceStore.profiles.get("dj-romy").weights.vocalSeparationStrictness
 assert.ok(logs.some(([level, message]) => level === "warn" && /Concurrent update/.test(message)), "Write conflicts are logged");
 
 const stuckStore = { async read() { return { value: null, version: null }; }, async write() { return false; } };
-await assert.rejects(new DJLearningEngine({ store: stuckStore, logger }).evaluateAndLearn(clean), /changed concurrently/, "Persistent conflicts fail loudly instead of dropping learning silently");
+const backoffs = [];
+await assert.rejects(new DJLearningEngine({ store: stuckStore, logger, random: () => 0.5, sleep: async ms => { backoffs.push(ms); } }).evaluateAndLearn(clean), /changed concurrently/, "Persistent conflicts fail loudly instead of dropping learning silently");
+assert.deepEqual(backoffs, [25, 50, 100, 200], "Conflicting writes back off exponentially between attempts");
+
+const legacyBlobStore = createBlobLearningStore(() => ({ async getWithMetadata() { return null; }, async setJSON() { return undefined; } }));
+assert.equal(await legacyBlobStore.write("dj-halo", {}, null), false, "Blob writes fail closed when conditional-write support is not confirmed");
 
 const blobCalls = [];
 const blobEntries = new Map();

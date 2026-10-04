@@ -176,7 +176,7 @@ export function createBlobLearningStore(getStore) {
     },
     async write(djId, profile, version) {
       const result = await store.setJSON(key(djId), profile, version ? { onlyIfMatch: version } : { onlyIfNew: true });
-      return result?.modified !== false;
+      return result?.modified === true;
     }
   };
 }
@@ -201,14 +201,19 @@ export function createMemoryLearningStore(initial = {}) {
   };
 }
 
+const RETRY_BASE_MS = 25;
+const defaultSleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+
 export class DJLearningEngine {
-  constructor({ store = createMemoryLearningStore(), logger = console, now = () => new Date() } = {}) {
+  constructor({ store = createMemoryLearningStore(), logger = console, now = () => new Date(), sleep = defaultSleep, random = Math.random } = {}) {
     if (!store || typeof store.read !== "function" || typeof store.write !== "function") {
       throw new TypeError("DJLearningEngine requires a store with read() and write().");
     }
     this.store = store;
     this.logger = logger;
     this.now = now;
+    this.sleep = sleep;
+    this.random = random;
   }
 
   async loadWeights(djName) {
@@ -257,6 +262,7 @@ export class DJLearningEngine {
         return { djId: metrics.djId, performanceScore, updatedWeights, previousWeights, feedbackSummary: summary, persisted: true, duplicate: false };
       }
       this.logger.warn?.(`[DJ Learning Engine] Concurrent update for ${metrics.djId}; retrying (${attempt}/${DJ_LEARNING_LIMITS.writeAttempts}).`);
+      if (attempt < DJ_LEARNING_LIMITS.writeAttempts) await this.sleep(Math.round(RETRY_BASE_MS * 2 ** (attempt - 1) * (0.5 + this.random())));
     }
     throw new Error(`DJ learning weights for ${metrics.djId} changed concurrently; transition ${metrics.transitionId} was not learned.`);
   }

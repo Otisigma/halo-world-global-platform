@@ -140,6 +140,7 @@
     constructor({ onError } = {}) {
       this.audio = new Audio();
       this.audio.preload = "none";
+      this.preloader = window.HaloAudioPreloader ? new window.HaloAudioPreloader(this.audio) : null;
       this.track = null;
       this.status = "idle";
       this.onError = onError;
@@ -200,8 +201,10 @@
         this.toggle();
         return;
       }
+      this.preloader?.claim();
       this.track = { ...track, src };
-      this.audio.src = src;
+      this.audio.preload = "auto";
+      if (this.audio.src !== src || this.audio.error) this.audio.src = src;
       this.renderBar();
       this.resume();
       window.haloStats?.track("music_playback_start", { target: "shop_player", track: track.id });
@@ -225,6 +228,7 @@
     }
 
     close() {
+      this.preloader?.clear();
       this.audio.pause();
       this.track = null;
       this.audio.removeAttribute("src");

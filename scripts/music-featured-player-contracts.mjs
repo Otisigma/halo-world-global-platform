@@ -13,14 +13,15 @@ import {
 
 const root = resolve(import.meta.dirname, "..");
 const read = path => readFile(resolve(root, path), "utf8");
-const [chartApi, migration, featuredClient, shopClient, styles, musicPage, uploadPage] = await Promise.all([
+const [chartApi, migration, featuredClient, shopClient, styles, musicPage, uploadPage, preloaderClient] = await Promise.all([
   read("netlify/functions/chart.mjs"),
   read("netlify/database/migrations/20260930030000_create_chart_votes.sql"),
   read("music/featuredPlayer.js"),
   read("music/music.js"),
   read("music/music.css"),
   read("music/index.html"),
-  read("music-upload/index.html")
+  read("music-upload/index.html"),
+  read("music/audioPreloader.js")
 ]);
 
 // --- Direct audio sources only -------------------------------------------------
@@ -186,13 +187,218 @@ assert.equal(featured.nextQueueIndex(0, 1), -1, "a single-track queue must not l
 // --- Page wiring and shop invariants ------------------------------------------------
 for (const [name, page] of [["music/index.html", musicPage], ["music-upload/index.html", uploadPage]]) {
   assert.match(page, /id="featuredRelease"/, `${name} must keep the #featuredRelease hero mount`);
+  assert.match(page, /<script src="\/music\/audioPreloader\.js" defer><\/script>\s*<script src="\/music\/music\.js" defer><\/script>/, `${name} must load the preloader before the shared player`);
   assert.match(page, /<script src="\/music\/music\.js" defer><\/script>\s*<script src="\/music\/featuredPlayer\.js" defer><\/script>/, `${name} must load featuredPlayer.js after the global player`);
 }
 assert.match(shopClient, /state\.releases = \(Array\.isArray\(data\.releases\) \? data\.releases : \[\]\)\.filter\(isApprovedRelease\)/, "shop must keep filtering unapproved releases");
 assert.match(shopClient, /document\.addEventListener\("click", handlePlayTrackClick\)/, "shop must keep delegated play handling");
 assert.equal((shopClient.match(/new Audio\(/g) || []).length, 1, "shop must keep a single global Audio instance");
+assert.match(featuredClient, /player\?\.preloader\?\.prepare\(state\.queue\.map/, "preloading must use the approved, playable queue");
 for (const selector of ["featured-hero-card", "featured-hero-actions", "featured-queue", "featured-queue-item.is-current"]) {
   assert.match(styles, new RegExp(`\\.${selector.replace(".", "\\.")} \\{`), `music.css must style .${selector}`);
+}
+
+// Preloading uses the real primary element and serial, bounded metadata warming.
+function preloaderHarness({ connection, touch = 0, online = true, idle = true } = {}) {
+  class FakeAudio extends EventTarget {
+    constructor() {
+      super();
+      this.source = "";
+      this.assignments = 0;
+      this.loads = 0;
+      this.plays = 0;
+      this.paused = true;
+      this.error = null;
+      this.networkState = 1;
+      this.readyState = 1;
+    }
+    get src() { return this.source; }
+    set src(value) { this.source = value; this.assignments++; }
+    getAttribute() { return this.source || null; }
+    removeAttribute() { this.source = ""; }
+    load() { this.loads++; }
+    play() { this.plays++; this.paused = false; return Promise.resolve(); }
+    pause() { this.paused = true; }
+  }
+  const primary = new FakeAudio();
+  const created = [];
+  const tasks = new Map();
+  let taskId = 0;
+  const enqueue = (callback, delay = 0) => {
+    const id = ++taskId;
+    tasks.set(id, { callback, delay });
+    return id;
+  };
+  const document = Object.assign(new EventTarget(), {
+    readyState: "loading", hidden: false,
+    createElement() { const audio = new FakeAudio(); created.push(audio); return audio; }
+  });
+  const window = Object.assign(new EventTarget(), {
+    location: { origin: "https://halo.test" },
+    setTimeout: enqueue,
+    clearTimeout: id => tasks.delete(id)
+  });
+  if (idle) {
+    window.requestIdleCallback = callback => enqueue(callback);
+    window.cancelIdleCallback = id => tasks.delete(id);
+  }
+  const navigator = { connection, maxTouchPoints: touch, onLine: online };
+  vm.runInNewContext(preloaderClient, { window, document, navigator, URL });
+  const preloader = new window.HaloAudioPreloader(primary);
+  const run = () => {
+    const [id, task] = tasks.entries().next().value;
+    tasks.delete(id);
+    task.callback();
+    return task.delay;
+  };
+  const loaded = () => {
+    document.readyState = "complete";
+    window.dispatchEvent(new Event("load"));
+  };
+  return { primary, preloader, created, tasks, run, loaded, window, document, navigator, FakeAudio };
+}
+
+const sources = Array.from({ length: 8 }, (_, index) => `https://cdn.example/track-${index}.mp3`);
+{
+  const h = preloaderHarness();
+  h.preloader.prepare(["", "javascript:alert(1)", "//evil.test/audio.mp3", "https://user@cdn.example/audio.mp3", sources[0], ...sources]);
+  assert.equal(h.primary.src, sources[0], "first valid source must be preloaded into the real player");
+  assert.equal(h.primary.preload, "auto");
+  assert.equal(h.primary.loads, 1);
+  assert.equal(h.primary.plays, 0, "preloading must never autoplay");
+  assert.equal(h.tasks.size, 0, "background work must wait for page load");
+  h.loaded();
+  h.run();
+  assert.equal(h.created.length, 1);
+  assert.equal(h.created[0].src, sources[1], "duplicate URLs must only be warmed once");
+  assert.equal(h.created[0].preload, "metadata");
+  assert.equal(h.tasks.size, 1, "only the active request's watchdog should run");
+  for (let index = 1; index < sources.length; index++) {
+    const audio = h.created.at(-1);
+    audio.dispatchEvent(new Event("loadedmetadata"));
+    assert.ok(h.preloader.cache.size <= 4, "retained audio elements must stay bounded");
+    if (index < sources.length - 1) h.run();
+  }
+  assert.equal(h.created.length, 7, "the remaining playlist must warm serially");
+  assert.equal(h.created[0].src, "", "evicted elements must release their sources");
+  assert.equal(h.tasks.size, 0);
+  h.window.dispatchEvent(new Event("pagehide"));
+  assert.equal(h.preloader.cache.size, 0);
+  assert.equal(h.primary.src, "", "page exit must release an unplayed speculative primary");
+}
+{
+  const h = preloaderHarness();
+  h.document.hidden = true;
+  h.preloader.prepare(sources);
+  assert.equal(h.primary.preload, "none", "hidden pages must not start the first speculative download");
+  assert.equal(h.primary.loads, 0);
+  h.document.hidden = false;
+  h.document.dispatchEvent(new Event("visibilitychange"));
+  assert.equal(h.primary.preload, "auto");
+  h.loaded();
+  h.run();
+  h.created[0].networkState = 2;
+  h.created[0].dispatchEvent(new Event("loadedmetadata"));
+  assert.ok(h.preloader.active, "metadata alone must not allow overlapping transfers");
+  assert.equal(h.tasks.size, 1, "watchdog must stay armed until transfer suspension");
+  h.created[0].dispatchEvent(new Event("suspend"));
+  assert.equal(h.preloader.active, null);
+  h.document.hidden = true;
+  h.document.dispatchEvent(new Event("visibilitychange"));
+  assert.equal(h.primary.preload, "none", "hiding must cancel the unplayed primary transfer");
+  assert.equal(h.created[0].src, "", "hiding must also release retained speculative elements");
+  assert.equal(h.tasks.size, 0);
+}
+{
+  const h = preloaderHarness({ connection: Object.assign(new EventTarget(), { effectiveType: "4g" }) });
+  h.preloader.prepare(sources);
+  h.navigator.connection.saveData = true;
+  h.navigator.connection.dispatchEvent(new Event("change"));
+  assert.equal(h.primary.preload, "none", "data saver must cancel an unplayed primary download");
+  h.preloader.claim();
+  h.primary.preload = "auto";
+  h.primary.play();
+  h.document.hidden = true;
+  h.document.dispatchEvent(new Event("visibilitychange"));
+  h.window.dispatchEvent(new Event("pagehide"));
+  assert.equal(h.primary.src, sources[0], "lifecycle cancellation must not interrupt user-initiated playback");
+  assert.equal(h.primary.paused, false);
+}
+for (const [options, expected] of [
+  [{ connection: { saveData: true } }, "none"],
+  [{ connection: { effectiveType: "2g" } }, "metadata"],
+  [{ connection: { effectiveType: "3g" } }, "metadata"],
+  [{ touch: 1 }, "metadata"],
+  [{ online: false }, "none"]
+]) {
+  const h = preloaderHarness(options);
+  h.preloader.prepare(sources);
+  h.loaded();
+  assert.equal(h.primary.preload, expected);
+  assert.equal(h.tasks.size, 0, "constrained networks must not background-load the playlist");
+  assert.equal(h.primary.loads, expected === "none" ? 0 : 1);
+}
+{
+  const h = preloaderHarness({ idle: false, connection: Object.assign(new EventTarget(), { effectiveType: "4g" }) });
+  h.preloader.prepare(sources);
+  h.loaded();
+  assert.equal(h.run(), 1000, "browsers without idle callbacks must use a delayed fallback");
+  h.created[0].dispatchEvent(new Event("error"));
+  assert.equal(h.created[0].src, "", "failed preloads must be released quietly");
+  h.run();
+  assert.equal(h.run(), 8000, "stalled metadata requests must time out and let the queue continue");
+  h.run();
+  h.document.hidden = true;
+  h.document.dispatchEvent(new Event("visibilitychange"));
+  assert.equal(h.tasks.size, 0, "hidden pages must cancel background requests and timers");
+  assert.equal(h.created.at(-1).src, "");
+  h.document.hidden = false;
+  h.document.dispatchEvent(new Event("visibilitychange"));
+  h.run();
+  h.navigator.connection.saveData = true;
+  h.navigator.connection.dispatchEvent(new Event("change"));
+  assert.equal(h.tasks.size, 0, "enabling data saver must stop in-flight background warming");
+  h.preloader.clear();
+  assert.equal(h.preloader.pending.length, 0);
+}
+{
+  const h = preloaderHarness();
+  h.primary.load = () => { throw new Error("Media unavailable"); };
+  assert.doesNotThrow(() => h.preloader.prepare([sources[0]]), "preload failure must not break rendering");
+  assert.equal(h.primary.src, "");
+}
+{
+  const h = preloaderHarness();
+  vm.runInNewContext(
+    `${shopClient.slice(shopClient.indexOf("class HaloGlobalPlayer"), shopClient.indexOf("const player = HaloGlobalPlayer.shared"))}
+     window.TestPlayer = HaloGlobalPlayer;`,
+    { window: h.window, Audio: h.FakeAudio, formatAudioStreamUrl: value => value || "" }
+  );
+  const player = new h.window.TestPlayer();
+  player.renderBar = () => {};
+  player.syncButtons = () => {};
+  player.preloader.prepare(sources);
+  player.play({ id: "first", src: sources[0] });
+  assert.equal(player.audio.assignments, 1, "first play must reuse the preloaded buffer without resetting src");
+  assert.equal(player.audio.plays, 1);
+  player.audio.dispatchEvent(new Event("playing"));
+  player.play({ id: "first", src: sources[0] });
+  assert.equal(player.audio.paused, true, "repeat clicks must still toggle pause");
+  player.play({ id: "next", src: sources[1] });
+  assert.equal(player.audio.src, sources[1]);
+  assert.equal(player.audio.plays, 2, "later tracks must retain normal playback");
+  player.close();
+  assert.equal(player.audio.src, "");
+  assert.equal(player.preloader.pending.length, 0, "closing must cancel remaining speculative loads");
+
+  const fallback = new h.window.TestPlayer();
+  fallback.renderBar = () => {};
+  fallback.syncButtons = () => {};
+  fallback.preloader.prepare([sources[0]]);
+  fallback.audio.error = { code: 4 };
+  fallback.play({ id: "first", src: sources[0] });
+  assert.equal(fallback.audio.assignments, 2, "failed preloads must retry on explicit play");
+  assert.equal(fallback.audio.plays, 1);
 }
 
 console.log("Music featured player contracts passed.");

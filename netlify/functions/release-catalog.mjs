@@ -33,6 +33,81 @@ function cleanPublicUrl(value) {
   }
 }
 
+function cleanPublicRoute(value) {
+  const raw = String(value || "").trim();
+  return raw.startsWith("/") && !raw.startsWith("//") && !raw.includes("\\") ? raw : "";
+}
+
+function cleanPublicMediaUrl(value) {
+  return cleanPublicRoute(value) || cleanPublicUrl(value);
+}
+
+function youtubeId(value) {
+  const input = String(value || "").trim();
+  if (/^[A-Za-z0-9_-]{11}$/.test(input)) return input;
+  try {
+    const url = new URL(input);
+    const host = url.hostname.replace(/^www\./, "").toLowerCase();
+    if (host !== "youtu.be" && !["youtube.com", "m.youtube.com", "youtube-nocookie.com"].includes(host)) return "";
+    const candidate = host === "youtu.be"
+      ? url.pathname.split("/").filter(Boolean)[0]
+      : url.searchParams.get("v") || url.pathname.split("/").filter(Boolean).pop();
+    return /^[A-Za-z0-9_-]{11}$/.test(candidate || "") ? candidate : "";
+  } catch {
+    return "";
+  }
+}
+
+function dreamweaverPayloadFor(row, values = {}) {
+  const title = row.catalog_title || row.title || "Untitled Release";
+  const artist = row.catalog_artist_name || row.artist || "Owen Anthony";
+  const songId = row.catalog_song_id || row.id;
+  const coverArtUrl = cleanPublicMediaUrl(values.artworkUrl) || "/assets/releases/the-cold-is-lasting-longer.jpg";
+  const audioCandidate = cleanPublicMediaUrl(row.stream_url);
+  const audioStreamUrl = audioCandidate && hasReachablePublicAudio(audioCandidate) ? audioCandidate : null;
+  const videoReelUrl = cleanPublicMediaUrl(values.videoUrl) || null;
+  const videoId = youtubeId(videoReelUrl);
+  const shopSalesPageUrl = cleanPublicMediaUrl(row.purchase_url) || `/music/?song=${encodeURIComponent(row.id)}`;
+  const mixPlayerUrl = "/mixes/";
+  const genre = String(row.catalog_genre || (Array.isArray(row.genres) ? row.genres[0] : "") || "").split(",")[0].trim();
+  const bpm = Number(row.bpm) > 0 ? `${Number(row.bpm)} BPM` : "";
+  const handledDegradations = [];
+  if (!values.artworkUrl) handledDegradations.push("cover_art");
+  if (!audioStreamUrl) handledDegradations.push("audio_stream");
+  if (!videoReelUrl) handledDegradations.push("video_reel");
+  if (!cleanPublicMediaUrl(row.purchase_url)) handledDegradations.push("shop_route");
+  if (!row.pitch) handledDegradations.push("story");
+
+  return {
+    songId,
+    title,
+    artist,
+    coverArtUrl,
+    audioStreamUrl,
+    videoReelUrl,
+    youtubeId: videoId || null,
+    shopSalesPageUrl,
+    mixPlayerUrl,
+    acts: {
+      act1Hook: row.pitch || `${title} begins with a feeling before the first detail comes into focus.`,
+      act2Lyrics: [
+        `Listen for the moment ${title} turns toward its central feeling.`,
+        genre ? `Let the ${genre} textures reveal what the words leave unsaid.` : "Notice the detail that stays with you after the first listen.",
+        "Return to the passage that makes the whole song feel personal."
+      ],
+      act3SonicProfile: {
+        mood: genre ? `${genre}, framed with a cinematic late-night hush` : "Cinematic, intimate, and slightly nocturnal",
+        instrumentation: bpm ? `A measured pulse at ${bpm}; listen for the lead textures and space around them.` : "A patient low end, open space, and the details that carry the melody",
+        setting: "Headphones after midnight, a quiet drive, or a listening room with time to spare"
+      },
+      act4UnlockUrl: shopSalesPageUrl
+    },
+    isHydrated: true,
+    systemStatus: handledDegradations.length ? "DEGRADED" : "OPERATIONAL",
+    handledDegradations
+  };
+}
+
 function hasReachablePublicAudio(value) {
   try {
     const raw = String(value || "").trim();
@@ -106,6 +181,7 @@ function serializeRelease(row) {
   const catalogArtworkUrl = row.catalog_artwork_url || "";
   const catalogVideoUrl = row.catalog_video_url || "";
   const catalogPromoVideoUrl = row.catalog_promo_video_url || "";
+  const videoUrl = cleanPublicMediaUrl(catalogPromoVideoUrl) || cleanPublicMediaUrl(catalogVideoUrl);
   const storefront = storefrontStateFor(row);
   const releaseGenres = Array.isArray(row.genres)
     ? row.genres.map(value => String(value || "").trim()).filter(Boolean)
@@ -150,6 +226,10 @@ function serializeRelease(row) {
     streamUrl: row.stream_url || "",
     videoUrl: catalogVideoUrl || "",
     promoVideoUrl: catalogPromoVideoUrl || "",
+    dreamweaverPayload: dreamweaverPayloadFor(row, {
+      artworkUrl: resolvedArtwork,
+      videoUrl,
+    }),
     featuredType: row.featured_type || "",
     featuredUntil: row.featured_until ? String(row.featured_until).slice(0, 10) : "",
     artistSlug: row.artist_slug || "",

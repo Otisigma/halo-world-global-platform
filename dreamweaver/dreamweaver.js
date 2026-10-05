@@ -61,6 +61,8 @@ import { DREAMWEAVER_STOREFRONT_MIX_ID, buildDreamweaverStorefrontPath } from ".
   const approvedUploadReturnPaths = new Set(["/dreamweaver-lab/", "/dreamweaver-lab/index.html"]);
   const MIX_LIBRARY_TIMEOUT_MS = 12000;
   const RELEASE_CONTEXT_TIMEOUT_MS = 8000;
+  const DREAMWEAVER_CATALOG_CACHE_PREFIX = "halo:dreamweaver-catalog:";
+  const DREAMWEAVER_CATALOG_CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
   const VIDEO_LIBRARY_TIMEOUT_MS = 8000;
   const AUDIO_BOOTSTRAP_TIMEOUT_MS = 7000;
   const REMOTE_AUDIO_WATCHDOG_MS = 5000;
@@ -88,6 +90,10 @@ import { DREAMWEAVER_STOREFRONT_MIX_ID, buildDreamweaverStorefrontPath } from ".
     songLobbyPlayerStatePill: document.getElementById("songLobbyPlayerStatePill"),
     songLobbyPlayerDuration: document.getElementById("songLobbyPlayerDuration"),
     songLobbyPlayerSource: document.getElementById("songLobbyPlayerSource"),
+    dreamweaverSystemStatus: document.getElementById("dreamweaverSystemStatus"),
+    dreamweaverShopLink: document.getElementById("dreamweaverShopLink"),
+    dreamweaverMixLink: document.getElementById("dreamweaverMixLink"),
+    dreamweaverAct4UnlockLink: document.getElementById("dreamweaverAct4UnlockLink"),
     songLobbyHeroPlayButton: document.getElementById("playBtn") || document.getElementById("songLobbyHeroPlayButton"),
     songLobbyHeroPlayLabel: document.getElementById("songLobbyHeroPlayLabel"),
     songLobbyHeroElapsed: document.getElementById("songLobbyHeroElapsed"),
@@ -220,6 +226,7 @@ import { DREAMWEAVER_STOREFRONT_MIX_ID, buildDreamweaverStorefrontPath } from ".
   const state = {
     mix: null,
     release: null,
+    dreamweaverPayload: null,
     releaseCatalog: [],
     releasePlaybackState: "loading",
     publishedSongId: resolveSongContextId(),
@@ -293,6 +300,63 @@ import { DREAMWEAVER_STOREFRONT_MIX_ID, buildDreamweaverStorefrontPath } from ".
   function cleanSongId(value) {
     const songId = cleanText(value, 60).toLowerCase();
     return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(songId) ? songId : "";
+  }
+
+  function dreamweaverCatalogCacheKey(value) {
+    const token = cleanText(value, 160).toLowerCase();
+    return /^[a-z0-9-]{1,160}$/.test(token) ? `${DREAMWEAVER_CATALOG_CACHE_PREFIX}${token}` : "";
+  }
+
+  function readCachedDreamweaverRelease(routeContext = resolveDreamweaverRouteContext()) {
+    const keys = [routeContext.requestedSongId, routeContext.requestedMixToken, routeContext.requestedStorySlug, routeContext.requestedMixId]
+      .map(dreamweaverCatalogCacheKey)
+      .filter(Boolean);
+    for (const key of keys) {
+      try {
+        const cached = JSON.parse(localStorage.getItem(key) || "null");
+        const cachedAt = Number(cached?.cachedAt);
+        if (!cached || !Number.isFinite(cachedAt) || Date.now() - cachedAt > DREAMWEAVER_CATALOG_CACHE_TTL_MS) continue;
+        const release = cached.release;
+        const payload = release?.dreamweaverPayload;
+        if (!release || !payload?.isHydrated || !payload.songId || !payload.title) continue;
+        const handledDegradations = Array.isArray(payload.handledDegradations) ? payload.handledDegradations : [];
+        return {
+          ...release,
+          dreamweaverPayload: {
+            ...payload,
+            systemStatus: "DEGRADED",
+            handledDegradations: [...new Set([...handledDegradations, "catalog_cache"])]
+          }
+        };
+      } catch {}
+    }
+    return null;
+  }
+
+  function cacheDreamweaverRelease(release, payload) {
+    const routeContext = resolveDreamweaverRouteContext();
+    const keys = [routeContext.requestedSongId, routeContext.requestedMixToken, routeContext.requestedStorySlug, payload.songId]
+      .map(dreamweaverCatalogCacheKey)
+      .filter(Boolean);
+    if (!keys.length) return;
+    const cachedRelease = {
+      id: release.id,
+      title: release.title,
+      artist: release.artist,
+      albumTitle: release.albumTitle,
+      genres: release.genres,
+      bpm: release.bpm,
+      musicalKey: release.musicalKey,
+      duration: release.duration,
+      pitch: release.pitch,
+      artwork: release.artwork,
+      catalog: release.catalog,
+      dreamweaverPayload: payload
+    };
+    try {
+      const value = JSON.stringify({ cachedAt: Date.now(), release: cachedRelease });
+      keys.forEach(key => localStorage.setItem(key, value));
+    } catch {}
   }
 
   function readAudioFeedbackQueue() {
@@ -572,6 +636,16 @@ import { DREAMWEAVER_STOREFRONT_MIX_ID, buildDreamweaverStorefrontPath } from ".
   }
 
   function preferredHeroVideo() {
+    const linkedVideo = state.dreamweaverPayload;
+    const linkedUrl = safeMediaUrl(linkedVideo?.videoReelUrl);
+    if (linkedUrl) {
+      const videoId = cleanText(linkedVideo.youtubeId, 20);
+      return {
+        title: `${state.release?.title || "Release"} reel`,
+        sourceUrl: linkedUrl,
+        embedUrl: videoId ? `https://www.youtube.com/embed/${encodeURIComponent(videoId)}` : ""
+      };
+    }
     return state.videos.find(video => isMp4HeroSource(video?.sourceUrl))
       || state.videos.find(video => safeMediaUrl(video?.embedUrl))
       || state.videos.find(video => safeMediaUrl(video?.sourceUrl))
@@ -582,9 +656,11 @@ import { DREAMWEAVER_STOREFRONT_MIX_ID, buildDreamweaverStorefrontPath } from ".
     const url = safeMediaUrl(value);
     if (!url) return false;
     try {
-      return /\.mp4$/i.test(new URL(url).pathname);
+      const parsed = new URL(url);
+      return /\.(mp4|m4v|webm|mov)$/i.test(parsed.pathname)
+        || (parsed.pathname === "/api/videos" && Boolean(parsed.searchParams.get("media")));
     } catch {
-      return /\.mp4(?:$|[?#])/i.test(url);
+      return /\.(mp4|m4v|webm|mov)(?:$|[?#])/i.test(url);
     }
   }
 
@@ -1062,6 +1138,8 @@ import { DREAMWEAVER_STOREFRONT_MIX_ID, buildDreamweaverStorefrontPath } from ".
   function buildStoryContent() {
     const release = state.release || {};
     const catalog = release.catalog || {};
+    const dreamweaver = state.dreamweaverPayload || release.dreamweaverPayload || {};
+    const acts = dreamweaver.acts || {};
     const mix = state.mix || {};
     const title = cleanText(release.title || mix.title || featuredTrack.title, 120);
     const artist = cleanText(release.artist || mix.creator?.name || featuredTrack.artist, 120);
@@ -1077,12 +1155,14 @@ import { DREAMWEAVER_STOREFRONT_MIX_ID, buildDreamweaverStorefrontPath } from ".
     const titleArtistLine = [title, artist].filter(Boolean).join(" — ");
     return {
       act1Title: title ? `${title} starts in a feeling, not a feature list.` : "The origin starts in a feeling, not a feature list.",
-      act1Lead: storySeed || `Dreamweaver frames ${titleArtistLine || "the release"} like a late-night confession: the room quiets first, then the record steps forward carrying whatever had to be said before anyone asked for a chorus.`,
+      act1Lead: cleanText(acts.act1Hook, 600) || storySeed || `Dreamweaver frames ${titleArtistLine || "the release"} like a late-night confession: the room quiets first, then the record steps forward carrying whatever had to be said before anyone asked for a chorus.`,
       act1Support: artist
         ? `${artist} stays at the center of the public view so the mix route opens on story, artwork, and listening intent before any slower platform or release links have to catch up.`
         : "The public view stays close to the emotional reason the song exists, so first-time listeners meet the world of the record before any production mechanics or creator tooling enter the frame.",
       act2Title: title ? `${title} leaves one phrase hanging in the room after the first play.` : "Featured lines land like marginal notes in the dark.",
-      act2Notes: [
+      act2Notes: Array.isArray(acts.act2Lyrics) && acts.act2Lyrics.length
+        ? acts.act2Lyrics.slice(0, 3).map(line => `Dreamweaver note: ${cleanText(line, 320)}`)
+        : [
         artist
           ? `Dreamweaver note: ${artist} stays in close focus while the published release context hydrates artwork, source links, and lobby details around the player.`
           : "Dreamweaver note: the line plays like a promise made under pressure, so the typography stays spacious and deliberate.",
@@ -1094,11 +1174,11 @@ import { DREAMWEAVER_STOREFRONT_MIX_ID, buildDreamweaverStorefrontPath } from ".
           : "Dreamweaver note: the lobby treats the phrase like a cue for breath, warmth, and a slower camera move."
       ],
       act3Title: title ? `${title} arrives with a listening environment, not just a file.` : "This is the listening environment before it becomes a playlist tab.",
-      act3Mood: genre ? `${genre.toLowerCase()} filtered through Dreamweaver's cinematic, intimate late-night frame.` : "cinematic, intimate, and slightly nocturnal.",
-      act3Instrumentation: [bpm, musicalKey].filter(Boolean).join(" / ") || "Patient low-end, suspended keys, vocal air, and a rhythm that arrives like weather.",
-      act3Setting: duration
+      act3Mood: cleanText(acts.act3SonicProfile?.mood, 320) || (genre ? `${genre.toLowerCase()} filtered through Dreamweaver's cinematic, intimate late-night frame.` : "cinematic, intimate, and slightly nocturnal."),
+      act3Instrumentation: cleanText(acts.act3SonicProfile?.instrumentation, 320) || [bpm, musicalKey].filter(Boolean).join(" / ") || "Patient low-end, suspended keys, vocal air, and a rhythm that arrives like weather.",
+      act3Setting: cleanText(acts.act3SonicProfile?.setting, 320) || (duration
         ? `Give the ${duration} running time enough room to breathe — headphones after midnight, a quiet drive, or the first five minutes after everyone else leaves.`
-        : "Headphones after midnight, a quiet drive, or the first five minutes after everyone else leaves the room.",
+        : "Headphones after midnight, a quiet drive, or the first five minutes after everyone else leaves the room."),
       act3Support: releaseStatus
         ? `Dreamweaver keeps the sonic description human and story-led while the published release state stays ${releaseStatus.toLowerCase()} in the connected catalog.`
         : "Dreamweaver keeps the sonic description editorial and human so general listeners know how to enter the song, not how the mix bus was wired.",
@@ -1140,6 +1220,8 @@ import { DREAMWEAVER_STOREFRONT_MIX_ID, buildDreamweaverStorefrontPath } from ".
       const lead = elements.storyActIV.querySelector("p:not(.satellite-form-kicker)");
       if (title) title.textContent = story.act4Title;
       if (lead) lead.textContent = story.act4Lead;
+      const unlockUrl = safeMediaUrl((state.dreamweaverPayload || state.release?.dreamweaverPayload)?.acts?.act4UnlockUrl);
+      if (elements.dreamweaverAct4UnlockLink && unlockUrl) elements.dreamweaverAct4UnlockLink.href = unlockUrl;
     }
   }
 
@@ -1244,6 +1326,24 @@ import { DREAMWEAVER_STOREFRONT_MIX_ID, buildDreamweaverStorefrontPath } from ".
     elements.releaseSubtitle.textContent = releaseStateDetail(state.releasePlaybackState, title, artist);
     elements.releaseFacts.innerHTML = rows.map(([label, value]) => `<div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd></div>`).join("");
     elements.releasePanel.dataset.state = state.releasePlaybackState;
+    const dreamweaver = state.dreamweaverPayload || release.dreamweaverPayload;
+    if (dreamweaver) {
+      const degradations = Array.isArray(dreamweaver.handledDegradations) ? dreamweaver.handledDegradations : [];
+      if (elements.dreamweaverSystemStatus) {
+        const systemStatus = dreamweaver.systemStatus === "OPERATIONAL" ? "OPERATIONAL" : "DEGRADED";
+        elements.dreamweaverSystemStatus.textContent = degradations.length
+          ? `SYSTEM / ${systemStatus} · ${degradations.length} FALLBACK${degradations.length === 1 ? "" : "S"} HANDLED`
+          : `SYSTEM / ${systemStatus}`;
+        elements.dreamweaverSystemStatus.dataset.state = systemStatus.toLowerCase();
+      }
+      const shopUrl = safeMediaUrl(dreamweaver.shopSalesPageUrl);
+      if (elements.dreamweaverShopLink && shopUrl) elements.dreamweaverShopLink.href = shopUrl;
+      const mixUrl = safeMediaUrl(dreamweaver.mixPlayerUrl);
+      if (elements.dreamweaverMixLink && mixUrl) elements.dreamweaverMixLink.href = mixUrl;
+    } else if (elements.dreamweaverSystemStatus) {
+      elements.dreamweaverSystemStatus.textContent = "SYSTEM / DEGRADED · CATALOG FALLBACK IN USE";
+      elements.dreamweaverSystemStatus.dataset.state = "degraded";
+    }
 
     elements.releaseArtwork.src = artwork.src;
     elements.releaseArtwork.dataset.artworkFallback = artwork.fallback;
@@ -1295,6 +1395,69 @@ import { DREAMWEAVER_STOREFRONT_MIX_ID, buildDreamweaverStorefrontPath } from ".
     return mixes.find(item => cleanKey(item?.id, 160) === requested) || null;
   }
 
+  function applyDreamweaverPayload(release = {}) {
+    const payload = release.dreamweaverPayload;
+    if (!payload || typeof payload !== "object") return release;
+    state.dreamweaverPayload = payload;
+    if (payload.isHydrated) cacheDreamweaverRelease(release, payload);
+    if (elements.dreamweaverSystemStatus) {
+      const degradations = Array.isArray(payload.handledDegradations) ? payload.handledDegradations : [];
+      const systemStatus = payload.systemStatus === "OPERATIONAL" ? "OPERATIONAL" : "DEGRADED";
+      elements.dreamweaverSystemStatus.textContent = degradations.length
+        ? `SYSTEM / ${systemStatus} · ${degradations.length} FALLBACK${degradations.length === 1 ? "" : "S"} HANDLED`
+        : `SYSTEM / ${systemStatus}`;
+      elements.dreamweaverSystemStatus.dataset.state = systemStatus.toLowerCase();
+    }
+    return {
+      ...release,
+      title: payload.title || release.title,
+      artist: payload.artist || release.artist,
+      artwork: payload.coverArtUrl || release.artwork,
+      streamUrl: payload.audioStreamUrl || release.streamUrl,
+      dreamweaverPayload: payload
+    };
+  }
+
+  function buildFallbackDreamweaverRelease(routeContext = resolveDreamweaverRouteContext()) {
+    const songId = cleanSongId(routeContext.requestedSongId);
+    const token = cleanKey(routeContext.requestedMixToken || songId, 160);
+    const title = cleanText(token.replace(/[-_]+/g, " ").replace(/\b\w/g, character => character.toUpperCase()), 120) || "Untitled Release";
+    const shopSalesPageUrl = songId ? `/music/?song=${encodeURIComponent(songId)}` : "/music/";
+    return {
+      id: songId || token,
+      title,
+      artist: featuredTrack.artist,
+      dreamweaverPayload: {
+        songId: songId || token,
+        title,
+        artist: featuredTrack.artist,
+        coverArtUrl: DREAMWEAVER_RELEASE_FALLBACK_ARTWORK,
+        audioStreamUrl: null,
+        videoReelUrl: null,
+        youtubeId: null,
+        shopSalesPageUrl,
+        mixPlayerUrl: "/mixes/",
+        acts: {
+          act1Hook: `${title} begins with a feeling before the first detail comes into focus.`,
+          act2Lyrics: [
+            `Listen for the moment ${title} turns toward its central feeling.`,
+            "Notice the detail that stays with you after the first listen.",
+            "Return to the passage that makes the whole song feel personal."
+          ],
+          act3SonicProfile: {
+            mood: "Cinematic, intimate, and slightly nocturnal",
+            instrumentation: "A patient low end, open space, and the details that carry the melody",
+            setting: "Headphones after midnight, a quiet drive, or a listening room with time to spare"
+          },
+          act4UnlockUrl: shopSalesPageUrl
+        },
+        isHydrated: false,
+        systemStatus: "DEGRADED",
+        handledDegradations: ["catalog_unavailable", "cover_art", "audio_stream", "video_reel", "story"]
+      }
+    };
+  }
+
   async function loadReleaseContext({ keepCurrentOnFailure = false } = {}) {
     const routeContext = resolveDreamweaverRouteContext();
     if (routeContext.requestedSongId) state.publishedSongId = routeContext.requestedSongId;
@@ -1306,10 +1469,10 @@ import { DREAMWEAVER_STOREFRONT_MIX_ID, buildDreamweaverStorefrontPath } from ".
     try {
       const releases = state.releaseCatalog.length ? state.releaseCatalog : await fetchReleaseCatalog();
       state.releaseCatalog = releases;
-      const release = resolveReleaseFromCatalog(releases, routeContext);
+      const release = resolveReleaseFromCatalog(releases, routeContext) || readCachedDreamweaverRelease(routeContext);
       if (release) {
-        state.release = release;
-        state.publishedSongId = cleanSongId(release.id) || state.publishedSongId;
+        state.release = applyDreamweaverPayload(release);
+        state.publishedSongId = cleanSongId(release.dreamweaverPayload?.songId) || cleanSongId(release.id) || state.publishedSongId;
       } else if (!keepCurrentOnFailure) {
         state.release = null;
       }
@@ -2534,17 +2697,22 @@ import { DREAMWEAVER_STOREFRONT_MIX_ID, buildDreamweaverStorefrontPath } from ".
       const releaseCatalogPromise = requestedMix || routeContext.requestedSongId
         ? fetchReleaseCatalog().catch(() => [])
         : Promise.resolve(state.releaseCatalog);
-      const { response, payload: data } = await fetchJsonWithTimeout("/api/mixes?limit=100", {
-        timeoutMs: MIX_LIBRARY_TIMEOUT_MS,
-        timeoutMessage: "Dreamweaver timed out while loading the mix library. Please try again.",
-        headers: { Accept: "application/json" },
-        credentials: "same-origin"
-      });
-      if (!response.ok) throw new Error(data.message || "The Dreamweaver mix library could not be read.");
+      let mixLibrary = [];
+      try {
+        const { response, payload: data } = await fetchJsonWithTimeout("/api/mixes?limit=100", {
+          timeoutMs: MIX_LIBRARY_TIMEOUT_MS,
+          timeoutMessage: "Dreamweaver timed out while loading the mix library. Please try again.",
+          headers: { Accept: "application/json" },
+          credentials: "same-origin"
+        });
+        if (!response.ok) throw new Error(data.message || "The Dreamweaver mix library could not be read.");
+        mixLibrary = Array.isArray(data.mixes) ? data.mixes : [];
+      } catch (error) {
+        if (!requestedMix && !routeContext.requestedSongId) throw error;
+      }
       let release = null;
-      const mixLibrary = Array.isArray(data.mixes) ? data.mixes : [];
       let mix = resolvePrimaryPlaybackMix(mixLibrary, requestedMix, null, {
-        allowFallback: !requestedMix,
+        allowFallback: !requestedMix && !routeContext.requestedSongId,
         strictRequestedId: requestedMixId
       });
       const hasRequestedMixInLibrary = requestedMixId
@@ -2564,26 +2732,45 @@ import { DREAMWEAVER_STOREFRONT_MIX_ID, buildDreamweaverStorefrontPath } from ".
         const releases = await releaseCatalogPromise;
         if (routeContextFingerprint() !== requestedRouteFingerprint) return;
         if (releases.length) state.releaseCatalog = releases;
-        release = resolveReleaseFromCatalog(releases, routeContext);
+        release = resolveReleaseFromCatalog(releases, routeContext) || readCachedDreamweaverRelease(routeContext);
+        if (!release && (requestedMix || routeContext.requestedSongId)) release = buildFallbackDreamweaverRelease(routeContext);
         if (release) {
-          state.release = release;
-          state.publishedSongId = cleanSongId(release.id) || state.publishedSongId;
+          state.release = applyDreamweaverPayload(release);
+          state.publishedSongId = cleanSongId(release.dreamweaverPayload?.songId) || cleanSongId(release.id) || state.publishedSongId;
           updatePlatformLinks();
           renderReleasePanel();
         }
         mix = resolvePrimaryPlaybackMix(mixLibrary, requestedMix, release, {
-          allowFallback: !requestedMix,
+          allowFallback: !requestedMix && !routeContext.requestedSongId,
           strictRequestedId: requestedMixId
         });
+        if (!mix && release) {
+          const dreamweaverPayload = release.dreamweaverPayload;
+          mix = {
+            id: dreamweaverPayload.songId || release.id,
+            title: dreamweaverPayload.title || release.title,
+            creator: { name: dreamweaverPayload.artist || release.artist },
+            audioUrl: dreamweaverPayload.audioStreamUrl || "",
+            durationSeconds: Number(release.catalog?.masterCopy?.durationSeconds || release.durationSeconds || 0),
+            source: "catalog",
+            isCatalogPlayback: true
+          };
+        }
       } else {
         void releaseCatalogPromise.then((releases) => {
-          if (!releases.length || state.release) return;
+          if (state.release) return;
           if (routeContextFingerprint() !== requestedRouteFingerprint) return;
-          state.releaseCatalog = releases;
-          const resolvedRelease = resolveReleaseFromCatalog(releases, routeContext);
+          if (releases.length) state.releaseCatalog = releases;
+          const resolvedRelease = resolveReleaseFromCatalog(releases, routeContext) || readCachedDreamweaverRelease(routeContext);
           if (!resolvedRelease) return;
-          state.release = resolvedRelease;
-          state.publishedSongId = cleanSongId(resolvedRelease.id) || state.publishedSongId;
+          state.release = applyDreamweaverPayload(resolvedRelease);
+          state.publishedSongId = cleanSongId(resolvedRelease.dreamweaverPayload?.songId) || cleanSongId(resolvedRelease.id) || state.publishedSongId;
+          if (routeContext.requestedMixId) {
+            state.dreamweaverPayload = {
+              ...state.dreamweaverPayload,
+              mixPlayerUrl: `/mixes/?mix=${encodeURIComponent(routeContext.requestedMixId)}`
+            };
+          }
           updatePlatformLinks();
           renderReleasePanel();
           void loadVideos();
@@ -2606,15 +2793,30 @@ import { DREAMWEAVER_STOREFRONT_MIX_ID, buildDreamweaverStorefrontPath } from ".
       elements.duration.textContent = formatTime(Number(mix.durationSeconds || 0));
       document.title = `${mix.title || "Dreamweaver Show"} — HALO`;
       const currentParams = new URLSearchParams(location.search);
-      currentParams.set("mix", mix.id);
-      if (state.publishedSongId) currentParams.set("song", state.publishedSongId);
+      if (mix.isCatalogPlayback) {
+        currentParams.delete("mix");
+        if (state.publishedSongId) currentParams.set("song", state.publishedSongId);
+      } else {
+        currentParams.set("mix", mix.id);
+        if (state.publishedSongId) currentParams.set("song", state.publishedSongId);
+        if (state.dreamweaverPayload) {
+          state.dreamweaverPayload = {
+            ...state.dreamweaverPayload,
+            mixPlayerUrl: `/mixes/?mix=${encodeURIComponent(mix.id)}`
+          };
+        }
+      }
+      renderReleasePanel();
       const hydratedUrl = canonicalDreamweaverUrl({
         includeSatelliteFlag: isSatelliteFlow(),
         searchParams: currentParams,
         fallbackMixId: DREAMWEAVER_STOREFRONT_MIX_ID,
       });
       history.replaceState(null, "", isSatellitePath() ? `${location.pathname}${new URL(hydratedUrl, location.origin).search}` : hydratedUrl);
-      const playbackBootstrap = await bootstrapPrimaryPlayback(mix);
+      const primaryAudioUrl = resolvePrimaryAudio(mix).src;
+      const playbackBootstrap = primaryAudioUrl
+        ? await bootstrapPrimaryPlayback(mix)
+        : (state.mix = mix, { started: false, fallback: true });
       await hydrateDreamweaverLoopContent();
       if (!playbackBootstrap?.started || elements.audio.paused || elements.audio.ended) setReleasePlaybackState("ready");
       setLoadingProgress(100, "Dreamweaver is ready", "Press play and move through the full four-act cinematic edition.");

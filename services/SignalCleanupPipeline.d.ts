@@ -40,6 +40,7 @@ export class SignalCleanupPipeline {
     recorderAnalysers: AnalyserNode[];
   });
   connectSignalChain(inputNode: AudioNode, outputNode: AudioNode): void;
+  prepareForMusic(when?: number): void;
   auditSignal(): SignalCleanupStatus;
   getStatus(): SignalCleanupStatus;
   destroy(): void;

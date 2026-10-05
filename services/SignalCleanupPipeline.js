@@ -67,6 +67,7 @@ export class SignalCleanupPipeline {
     this.connected = false;
     this.timer = null;
     this.lastAudioTime = context.currentTime;
+    this.musicAttackUntil = 0;
     this.status = this.unavailable("Signal audit has not run.");
 
     // Frequency Surgeon: preserve the low end above 35 Hz; widen only detected mains notches.
@@ -139,6 +140,13 @@ export class SignalCleanupPipeline {
     });
   }
 
+  prepareForMusic(when = this.context.currentTime) {
+    if (!Number.isFinite(when)) throw new Error("Invalid music start time.");
+    this.musicAttackUntil = Math.max(this.musicAttackUntil, when + .2);
+    this.expander.gain.cancelScheduledValues(this.context.currentTime);
+    this.expander.gain.setValueAtTime(1, this.context.currentTime);
+  }
+
   /** Egress Auditor checks the guarded post-limiter recorder tap, never the monitor bus.
    * @returns {SignalCleanupStatus}
    */
@@ -154,7 +162,7 @@ export class SignalCleanupPipeline {
       const ingress = frames.slice(0, 2);
       const egress = frames.slice(2);
       const ingressRms = Math.max(...ingress.map(frame => frame.rmsDbfs));
-      const expansion = Math.pow(10, Math.min(0, (ingressRms + 65) * 2) / 20);
+      const expansion = this.context.currentTime <= this.musicAttackUntil ? 1 : Math.pow(10, Math.min(0, (ingressRms + 65) * 2) / 20);
       this.expander.gain.setTargetAtTime(Math.max(.001, expansion), this.context.currentTime, ingressRms > -65 ? .005 : .08);
       this.notches.forEach((notch, index) => {
         const frequency = MAINS[Math.floor(index / 4)];

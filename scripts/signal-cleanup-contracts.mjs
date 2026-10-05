@@ -53,7 +53,12 @@ class Node {
   constructor(context) {
     this.context = context;
     this.edges = [];
-    for (const key of ["gain", "frequency", "Q"]) this[key] = { value: 1, setTargetAtTime(value) { this.value = value; } };
+    for (const key of ["gain", "frequency", "Q"]) this[key] = {
+      value: 1,
+      setTargetAtTime(value) { this.value = value; },
+      setValueAtTime(value) { this.value = value; },
+      cancelScheduledValues() {}
+    };
     this.fftSize = 8192;
     this.samplesValue = 0;
     this.tone = null;
@@ -118,6 +123,12 @@ try {
   context.currentTime += .1;
   assert.equal(pipeline.auditSignal().clean, true, "Valid stereo silence is clean");
   assert.ok(pipeline.expander.gain.value < .01, "Idle-channel noise is expanded downward");
+  pipeline.prepareForMusic(context.currentTime + .2);
+  assert.equal(pipeline.expander.gain.value, 1, "Scheduled music restores gain before the opening transient");
+  context.currentTime += .1;
+  pipeline.auditSignal();
+  assert.equal(pipeline.expander.gain.value, 1, "A silent audit before scheduled playback cannot re-close the gate");
+  context.currentTime += .5;
   pipeline.ingressAnalysers[1].tone = 60;
   pipeline.ingressAnalysers[1].samplesValue = .0001;
   context.currentTime += .1;
@@ -166,7 +177,21 @@ assert.equal(graph.master.edges.length, 0, "Destroy removes only owned master ed
 const page = await readFile(new URL("../dj-deck.html", import.meta.url), "utf8");
 assert.match(page, /type="module" src="\/services\/SignalCleanupPipeline\.js"/);
 assert.match(page, /signalCleanup\.connectSignalChain\(masterGain, limiter\)/);
-assert.doesNotMatch(page, /masterGain\.connect\(limiter\)/, "No raw bypass around cleanup");
+const fallback = page.slice(page.indexOf("// Playback may continue without cleanup"), page.indexOf("audioEngine.halo = window.HaloAudioEngine"));
+assert.match(fallback, /limiter\.disconnect\(audioEngine\.recordingDestination\);[\s\S]*masterGain\.connect\(limiter\)/, "Unclean live-only fallback disconnects capture before bypassing cleanup");
+const liveOnly = setup();
+liveOnly.pipeline.destroy();
+const fallbackBody = fallback.slice(0, fallback.lastIndexOf("}"));
+vm.runInNewContext(fallbackBody, {
+  audioEngine: { recordingDestination: liveOnly.destination },
+  limiter: liveOnly.limiter,
+  masterGain: liveOnly.master
+});
+assert.ok(liveOnly.master.edges.some(edge => edge.node === liveOnly.limiter), "Unavailable cleanup preserves live playback");
+assert.ok(!liveOnly.limiter.edges.some(edge => edge.node === liveOnly.destination), "Unavailable cleanup physically disconnects capture");
+assert.equal(liveOnly.isolation.assertGraph(), true, "Live-only fallback keeps isolation guards intact");
+assert.equal(page.split("masterGain.connect(limiter)").length - 1, 1, "Only the recorder-disconnected fallback bypasses cleanup");
+assert.match(page, /allowMusicSource\(source\);[\s\S]*?signalCleanup\?\.prepareForMusic\(startAt\);[\s\S]*?source\.start\(startAt/, "Music attack is prepared before the approved source starts");
 assert.match(page, /signalAudit: audioEngine\.signalCleanup\?\.getStatus\(\)/);
 assert.match(page, /assertSignalClean: \(\) =>/);
 assert.match(page, /cleanup: recordingState\.signalCleanupAudit/);

@@ -4015,15 +4015,18 @@
             }
           })
           : null;
-        if (!window.HaloSignalCleanupPipeline || !audioEngine.recordingDestination) {
-          throw new Error("Signal cleanup is unavailable. Reload the deck before recording.");
+        if (window.HaloSignalCleanupPipeline && audioEngine.recordingDestination) {
+          audioEngine.signalCleanup = new window.HaloSignalCleanupPipeline(context, {
+            routingGuard: audioEngine.routing,
+            assertIsolation: () => audioEngine.recorderIsolation.assertGraph(),
+            recorderAnalysers: audioEngine.recorderAnalysers
+          });
+          audioEngine.signalCleanup.connectSignalChain(masterGain, limiter);
+        } else {
+          // Playback may continue without cleanup, but the recorder must have no feed.
+          if (audioEngine.recordingDestination) limiter.disconnect(audioEngine.recordingDestination);
+          masterGain.connect(limiter);
         }
-        audioEngine.signalCleanup = new window.HaloSignalCleanupPipeline(context, {
-          routingGuard: audioEngine.routing,
-          assertIsolation: () => audioEngine.recorderIsolation.assertGraph(),
-          recorderAnalysers: audioEngine.recorderAnalysers
-        });
-        audioEngine.signalCleanup.connectSignalChain(masterGain, limiter);
         audioEngine.halo = window.HaloAudioEngine
           ? new window.HaloAudioEngine({ context, masterGain, deckAGain: audioEngine.decks.A.gain, deckBGain: audioEngine.decks.B.gain, routingGuard: audioEngine.routing })
           : null;
@@ -4225,6 +4228,7 @@
     function startDeckSource(context, deckId, source, destination, startAt) {
       const channel = audioEngine.decks[deckId];
       audioEngine.recorderIsolation.allowMusicSource(source);
+      audioEngine.signalCleanup?.prepareForMusic(startAt);
       if (!audioEngine.halo) {
         source.connect(destination);
         source.start(startAt, 0);

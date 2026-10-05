@@ -130,7 +130,7 @@ assert.match(deckPage, /shouldStartFreshTakeover\(window\.location\.search\)/, "
 assert.match(deckPage, /if \(freshTakeoverRequested\) return null;/, "Fresh takeovers skip local session restore");
 assert.match(deckPage, /!sessionCloudEnabled \|\| freshTakeoverRequested/, "Fresh takeovers skip cloud session restore");
 assert.match(deckPage, /if \(freshTakeoverRequested\) startFreshTakeoverSession\(\);/);
-assert.match(deckPage, /new window\.HaloAudioEngine\(\{ context, masterGain, deckAGain: audioEngine\.decks\.A\.gain, deckBGain: audioEngine\.decks\.B\.gain \}\)/, "Deck adopts its existing graph");
+assert.match(deckPage, /new window\.HaloAudioEngine\(\{ context, masterGain, deckAGain: audioEngine\.decks\.A\.gain, deckBGain: audioEngine\.decks\.B\.gain, routingGuard: audioEngine\.routing \}\)/, "Deck adopts its existing graph");
 assert.match(deckPage, /audioEngine\.halo\.crossfade\(mix\)/);
 assert.match(deckPage, /audioEngine\.halo\.startSourceWithFadeIn\(/);
 assert.match(deckPage, /audioEngine\.halo\.stopSourceSmoothly\(/);

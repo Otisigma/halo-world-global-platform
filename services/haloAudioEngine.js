@@ -55,6 +55,8 @@
         clearTimeout: config.clearTimeout || global.clearTimeout.bind(global)
       };
       this.audioCtx = config.context || createAudioContext(config);
+      // Optional HaloAudioRoutingGuard: keeps analysis-only nodes on the muted utility bus.
+      this.routingGuard = config.routingGuard || null;
 
       // Adopt the deck's existing graph when provided so there is a single audio engine.
       this.masterGain = config.masterGain || this.audioCtx.createGain();
@@ -87,16 +89,26 @@
       this.analyzerNode = this.audioCtx.createAnalyser();
       this.micGainNode.gain.setValueAtTime(this.liveInputSuppressed ? SILENCE : this.config.liveInputLevel, this.audioCtx.currentTime);
       this.micStreamNode.connect(this.micGainNode);
-      this.micGainNode.connect(this.analyzerNode);
+      const guard = this.routingGuard;
       // Analysis-only by default: routing the room back to the master path invites feedback.
-      if (options.monitor === true) this.micGainNode.connect(this.masterGain);
+      if (!guard) {
+        this.micGainNode.connect(this.analyzerNode);
+        if (options.monitor === true) this.micGainNode.connect(this.masterGain);
+      } else if (options.monitor === true) {
+        guard.connectLive(this.micGainNode, this.masterGain);
+        guard.tap(this.micGainNode, this.analyzerNode);
+      } else {
+        guard.connectUtility(this.analyzerNode);
+        guard.connectUtility(this.micGainNode, this.analyzerNode);
+      }
       this.isAnalyzing = !this.liveInputSuppressed;
       return this.analyzerNode;
     }
 
     detachLiveIntelligenceInput() {
       for (const node of [this.micStreamNode, this.micGainNode, this.analyzerNode]) {
-        try { node?.disconnect(); } catch {}
+        if (node && this.routingGuard) this.routingGuard.release(node);
+        else try { node?.disconnect(); } catch {}
       }
       this.micStreamNode = null;
       this.micGainNode = null;
@@ -168,7 +180,8 @@
       envelope.gain.setValueAtTime(SILENCE, when);
       envelope.gain.exponentialRampToValueAtTime(positiveNumber(options.level, 1), when + duration);
       sourceNode.connect(envelope);
-      envelope.connect(destinationNode);
+      if (this.routingGuard) this.routingGuard.connectLive(envelope, destinationNode);
+      else envelope.connect(destinationNode);
       sourceNode.start(when, Math.max(0, Number(options.offset) || 0));
       return { envelope, stabilizesAt: when + duration };
     }

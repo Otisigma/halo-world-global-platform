@@ -1827,6 +1827,7 @@
 
   <script src="/upload-progress.js"></script>
   <script src="/services/deckSessionManager.js"></script>
+  <script src="/audio-routing-guard.js"></script>
   <script src="/services/haloAudioEngine.js"></script>
   <script>
     const TRACK_DNA_DEFAULTS = { danceability: 6, emotionalIntensity: 5, darkness: 5, warmth: 5, vocalDensity: 4, percussionDensity: 6, bassWeight: 6, melodicDensity: 5, atmosphere: 6, energyRole: "builder", sonicWeather: "Balanced, groove-led and open enough for a patient blend.", signatureMoment: "Protect the central hook before opening the next phrase." };
@@ -2860,6 +2861,7 @@
       masterGain: null,
       limiter: null,
       recordingDestination: null,
+      routing: null,
       animationFrame: null,
       decks: {
         A: { input: null, trim: null, gain: null, cueGain: null, cueActive: false, analyser: null, filters: null, effects: null, source: null, stemSources: {}, stemGains: {}, timer: null, step: 0, level: 0, startedAt: 0, playRequestedAt: 0, hasSignal: false, signalConfirmed: false, noSignalReported: false, stems: { bass: true, hats: true, vocals: true } },
@@ -3651,7 +3653,8 @@
       if (!continuityState.fillerGain) {
         continuityState.fillerGain = audioEngine.context.createGain();
         continuityState.fillerGain.gain.setValueAtTime(.0001, audioEngine.context.currentTime);
-        continuityState.fillerGain.connect(audioEngine.masterGain);
+        if (audioEngine.routing) audioEngine.routing.connectLive(continuityState.fillerGain, audioEngine.masterGain);
+        else continuityState.fillerGain.connect(audioEngine.masterGain);
       }
       cleanupDeckContinuityFillerNodes();
       clearTimeout(continuityState.fillerTimeout);
@@ -3784,7 +3787,8 @@
       continuityState.analyser.fftSize = 512;
       continuityState.analyser.smoothingTimeConstant = .32;
       continuityState.analyserData = new Float32Array(continuityState.analyser.frequencyBinCount);
-      audioEngine.masterGain.connect(continuityState.analyser);
+      if (audioEngine.routing) audioEngine.routing.tap(audioEngine.masterGain, continuityState.analyser);
+      else audioEngine.masterGain.connect(continuityState.analyser);
       continuityState.guard = new window.HaloContinuityGuard({
         config: {
           silenceThresholdDb: -46,
@@ -3941,9 +3945,21 @@
           audioEngine.decks[deckId].filters = { lowShelf, vocalBand, highShelf, highPass, lowPass };
           audioEngine.decks[deckId].effects = { echoDelay, echoFeedback, echoWet };
         });
-        audioEngine.halo = window.HaloAudioEngine
-          ? new window.HaloAudioEngine({ context, masterGain, deckAGain: audioEngine.decks.A.gain, deckBGain: audioEngine.decks.B.gain })
+        audioEngine.routing = window.HaloAudioRoutingGuard
+          ? window.HaloAudioRoutingGuard.create(context, {
+            liveBus: masterGain,
+            protectedNodes: [limiter, audioEngine.recordingDestination, ...["A", "B"].flatMap(deckId => [audioEngine.decks[deckId].input, audioEngine.decks[deckId].gain, audioEngine.decks[deckId].cueGain])],
+            strict: ["localhost", "127.0.0.1"].includes(window.location.hostname),
+            onViolation: violation => {
+              console.warn(`[HALO audio routing] ${violation.message}`);
+              window.haloStats?.track("dj_audio_routing_violation", { reason: violation.type, target: violation.target || "" });
+            }
+          })
           : null;
+        audioEngine.halo = window.HaloAudioEngine
+          ? new window.HaloAudioEngine({ context, masterGain, deckAGain: audioEngine.decks.A.gain, deckBGain: audioEngine.decks.B.gain, routingGuard: audioEngine.routing })
+          : null;
+        audioEngine.routing?.assertNoUtilityLeak();
         window.__haloAudioContext = context;
         window.__haloAudioEngine = audioEngine.halo;
         updateAudioCrossfader();
@@ -5703,6 +5719,9 @@
         await ensureAudio();
         await buildTakeoverPlan();
         if (!window.MediaRecorder || !audioEngine.recordingDestination) throw new Error("This browser cannot record the live master mix.");
+        let routingIsolated = true;
+        try { routingIsolated = !audioEngine.routing || audioEngine.routing.assertNoUtilityLeak().ok; } catch { routingIsolated = false; }
+        if (!routingIsolated) throw new Error("Background audio routing failed the isolation check. Reload the deck before recording.");
         const missingDecks = ["A", "B"].filter(deckId => !trackHasPlayableAudio(deckState[deckId]));
         if (missingDecks.length) throw new Error(`Load playable audio on Deck ${missingDecks.join(" and Deck ")} before starting the automated set.`);
 

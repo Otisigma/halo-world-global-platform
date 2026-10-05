@@ -797,6 +797,15 @@ body.campaign-open { overflow: hidden; }
 .campaign-field > small { color: var(--smoke); letter-spacing: .05em; text-transform: none; }
 .campaign-field input[type="text"], .campaign-field input:not([type]), .campaign-field select, #campaignHeadline { width: 100%; min-height: 48px; border: 1px solid var(--line); border-radius: 0; outline: none; background: #0d0d0a; color: var(--paper); padding: 0 13px; font: inherit; font-size: 10px; }
 .campaign-field input:focus, .campaign-field select:focus { border-color: var(--acid); }
+.catalog-link-status, .catalog-publish-form { color: var(--smoke); font-size: 11px; line-height: 1.6; }
+.catalog-link-status ul { padding-left: 18px; }
+.catalog-link-status [data-linked="true"] { color: var(--acid); }
+.catalog-link-status [data-linked="false"] { color: var(--gold); }
+.catalog-refresh { margin: 0 0 20px; color: var(--gold); }
+.catalog-publish-form { border-top: 1px solid var(--line); margin-top: 24px; padding-top: 20px; }
+.catalog-publish-form .campaign-field { margin-bottom: 18px; }
+.catalog-publish-form h3 { color: var(--paper); }
+.catalog-publish-form button:disabled { opacity: .5; cursor: not-allowed; }
 .campaign-field input[type="range"] { width: 100%; accent-color: var(--acid); }
 .field-reading { display: flex; align-items: baseline; justify-content: space-between; color: var(--paper); }
 .field-reading strong { font-family: "Cormorant Garamond", serif; font-size: 26px; font-weight: 500; letter-spacing: 0; }

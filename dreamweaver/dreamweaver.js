@@ -148,6 +148,15 @@ import { DREAMWEAVER_STOREFRONT_MIX_ID, buildDreamweaverStorefrontPath } from ".
     campaignForm: document.getElementById("campaignForm"),
     generateCampaign: document.getElementById("generateCampaign"),
     campaignYoutubeUrl: document.getElementById("campaignYoutubeUrl"),
+    campaignCatalogRecord: document.getElementById("campaignCatalogRecord"),
+    catalogLinkStatus: document.getElementById("catalogLinkStatus"),
+    refreshCatalogLinks: document.getElementById("refreshCatalogLinks"),
+    videoPublishForm: document.getElementById("videoPublishForm"),
+    linkedVideoTitle: document.getElementById("linkedVideoTitle"),
+    linkedVideoSource: document.getElementById("linkedVideoSource"),
+    linkedVideoRights: document.getElementById("linkedVideoRights"),
+    publishCatalogVideo: document.getElementById("publishCatalogVideo"),
+    catalogPublishStatus: document.getElementById("catalogPublishStatus"),
     campaignAdvanced: document.getElementById("campaignAdvanced"),
     clipStart: document.getElementById("clipStart"),
     clipStartTime: document.getElementById("clipStartTime"),
@@ -229,6 +238,12 @@ import { DREAMWEAVER_STOREFRONT_MIX_ID, buildDreamweaverStorefrontPath } from ".
     videos: [],
     idleTimer: 0,
     campaign: null,
+    catalogRecords: [],
+    campaignCatalogKey: "",
+    catalogVerifiedKey: "",
+    catalogVerificationNonce: 0,
+    catalogRefreshTimer: 0,
+    publishingCatalogVideo: false,
     campaigns: [],
     activePlatform: "tiktok",
     images: new Map(),
@@ -2133,6 +2148,7 @@ import { DREAMWEAVER_STOREFRONT_MIX_ID, buildDreamweaverStorefrontPath } from ".
   function showCampaignJob(job) {
     state.campaignJob = job;
     if (job.request?.youtubeSource?.url && !elements.campaignYoutubeUrl.value) elements.campaignYoutubeUrl.value = job.request.youtubeSource.url;
+    restoreCampaignCatalogLink(job.request?.catalogLink);
     elements.packageEmpty.hidden = true;
     elements.packageResults.hidden = true;
     elements.campaignBuildActivity.hidden = false;
@@ -2199,6 +2215,7 @@ import { DREAMWEAVER_STOREFRONT_MIX_ID, buildDreamweaverStorefrontPath } from ".
     const templateInput = elements.campaignForm.querySelector(`input[name="template"][value="${campaign.template}"]`);
     if (templateInput) templateInput.checked = true;
     const productionPlan = campaign.package?.productionPlan || {};
+    restoreCampaignCatalogLink(productionPlan.catalogLink);
     if (productionPlan.youtubeSource?.url) elements.campaignYoutubeUrl.value = productionPlan.youtubeSource.url;
     const treatmentInput = elements.campaignForm.querySelector(`input[name="visualTreatment"][value="${productionPlan.visualTreatment || "archive_reel"}"]`);
     if (treatmentInput) treatmentInput.checked = true;
@@ -2227,6 +2244,127 @@ import { DREAMWEAVER_STOREFRONT_MIX_ID, buildDreamweaverStorefrontPath } from ".
     } catch {}
   }
 
+  function selectedCatalogRecord() {
+    return state.catalogRecords.find(record => `${record.type}:${record.id}` === elements.campaignCatalogRecord.value) || null;
+  }
+
+  function restoreCampaignCatalogLink(link) {
+    if (!link?.id || !["song", "mix"].includes(link.type)) return;
+    state.campaignCatalogKey = `${link.type}:${link.id}`;
+    if (state.catalogRecords.some(record => `${record.type}:${record.id}` === state.campaignCatalogKey)) {
+      elements.campaignCatalogRecord.value = state.campaignCatalogKey;
+      void verifyCatalogSelection();
+    }
+  }
+
+  function renderCatalogVerification(record) {
+    const labels = { shop: "Shop sales page", mix: "Mix / DJ deck", artist: "Artist room", gallery: "Global gallery", tv: "HALO TV / Sofa" };
+    elements.catalogLinkStatus.innerHTML = record
+      ? `<strong>${escapeHtml(record.type)} ID: ${escapeHtml(record.id)}</strong><ul>${Object.entries(labels).map(([key, label]) => `<li data-linked="${Boolean(record.destinations?.[key])}">${record.destinations?.[key] ? "✓ Connected" : "○ Not linked"} — ${label}</li>`).join("")}</ul>${record.canPublish ? "" : "<p>Add an active sale master before publishing a video for this song.</p>"}`
+      : "Choose a catalog song or mix to verify its destinations. Campaign generation remains available without a link.";
+    elements.publishCatalogVideo.disabled = state.publishingCatalogVideo || !record?.canPublish
+      || state.catalogVerifiedKey !== elements.campaignCatalogRecord.value;
+  }
+
+  async function loadCatalogRecords() {
+    const nonce = ++state.catalogVerificationNonce;
+    const previous = elements.campaignCatalogRecord.value;
+    state.catalogVerifiedKey = "";
+    elements.publishCatalogVideo.disabled = true;
+    elements.catalogLinkStatus.textContent = "Loading your catalog connections…";
+    try {
+      const { response, payload } = await fetchJsonWithTimeout("/api/videos?catalog=1", {
+        timeoutMs: VIDEO_LIBRARY_TIMEOUT_MS, credentials: "same-origin", headers: { Accept: "application/json" }
+      });
+      if (nonce !== state.catalogVerificationNonce) return;
+      if (!response.ok) throw new Error(payload.message || "Catalog connections could not be loaded.");
+      const firstLoad = !state.catalogRecords.length;
+      state.catalogRecords = Array.isArray(payload.records) ? payload.records : [];
+      elements.campaignCatalogRecord.innerHTML = `<option value="">— Select existing song or mix —</option>${state.catalogRecords.map(record => `<option value="${escapeHtml(`${record.type}:${record.id}`)}">${escapeHtml(`${record.type === "song" ? "Song" : "Mix"} — ${record.title} · ${record.artistName}`)}</option>`).join("")}`;
+      elements.campaignCatalogRecord.disabled = false;
+      const contextRecord = firstLoad ? state.catalogRecords.find(record => record.type === "song" && record.id === resolveSongContextId())
+        || state.catalogRecords.find(record => record.type === "mix" && record.id === state.mix?.id) : null;
+      elements.campaignCatalogRecord.value = state.campaignCatalogKey || previous || (contextRecord ? `${contextRecord.type}:${contextRecord.id}` : "");
+      state.catalogVerifiedKey = elements.campaignCatalogRecord.value;
+      renderCatalogVerification(selectedCatalogRecord());
+      if (!state.catalogRecords.length) elements.catalogLinkStatus.textContent = "No owned songs or mixes found. Add one in Song Catalog or Mix Desk first.";
+    } catch (error) {
+      if (nonce !== state.catalogVerificationNonce) return;
+      elements.campaignCatalogRecord.disabled = true;
+      elements.catalogLinkStatus.textContent = error.message || "Verification unavailable. Refresh connections to retry.";
+    }
+  }
+
+  async function verifyCatalogSelection() {
+    const nonce = ++state.catalogVerificationNonce;
+    const record = selectedCatalogRecord();
+    const key = elements.campaignCatalogRecord.value;
+    state.catalogVerifiedKey = "";
+    elements.publishCatalogVideo.disabled = true;
+    if (!record) return renderCatalogVerification(null);
+    elements.catalogLinkStatus.textContent = "Checking catalog destinations…";
+    try {
+      const { response, payload } = await fetchJsonWithTimeout(`/api/videos?catalog=1&recordType=${encodeURIComponent(record.type)}&recordId=${encodeURIComponent(record.id)}`, {
+        timeoutMs: VIDEO_LIBRARY_TIMEOUT_MS, credentials: "same-origin", headers: { Accept: "application/json" }
+      });
+      if (nonce !== state.catalogVerificationNonce || key !== elements.campaignCatalogRecord.value) return;
+      if (!response.ok || !payload.records?.[0]) throw new Error(payload.message || "This catalog record is no longer available.");
+      const verified = payload.records[0];
+      state.catalogRecords = state.catalogRecords.map(item => item.type === record.type && item.id === record.id ? verified : item);
+      state.catalogVerifiedKey = key;
+      renderCatalogVerification(verified);
+    } catch (error) {
+      if (nonce !== state.catalogVerificationNonce || key !== elements.campaignCatalogRecord.value) return;
+      elements.catalogLinkStatus.textContent = error.message || "Verification unavailable. Refresh connections to retry.";
+    }
+  }
+
+  async function publishCatalogVideo(event) {
+    event.preventDefault();
+    const record = selectedCatalogRecord();
+    if (state.publishingCatalogVideo || !record?.canPublish || state.catalogVerifiedKey !== elements.campaignCatalogRecord.value) return;
+    if (!elements.videoPublishForm.reportValidity()) return;
+    const sourceType = elements.linkedVideoSource.value;
+    const form = new FormData();
+    form.set("linkedRecordId", record.id);
+    form.set("linkedRecordType", record.type);
+    form.set("title", elements.linkedVideoTitle.value.trim());
+    form.set("description", state.campaign?.package?.campaignIdea || "");
+    form.set("sourceType", sourceType);
+    form.set("rightsAttested", "true");
+    if (sourceType === "upload") {
+      if (!state.renderedClip?.blob || state.renderedClip.blob.size > 5_000_000) {
+        elements.catalogPublishStatus.textContent = "Create a vertical film up to 5 MB first, or publish a YouTube video.";
+        return;
+      }
+      form.set("videoFile", state.renderedClip.blob, state.renderedClip.filename);
+    } else {
+      form.set("youtubeUrl", elements.campaignYoutubeUrl.value.trim());
+    }
+    state.publishingCatalogVideo = true;
+    elements.publishCatalogVideo.disabled = true;
+    elements.campaignCatalogRecord.disabled = true;
+    elements.catalogPublishStatus.textContent = "Publishing and syncing by catalog ID…";
+    try {
+      const { response, payload } = await fetchJsonWithTimeout("/api/videos", {
+        method: "POST", body: form, credentials: "same-origin", timeoutMs: 60_000,
+        timeoutMessage: "Publish response timed out. Refresh connections to check whether it completed."
+      });
+      if (!response.ok) throw new Error(payload.message || "Video publishing failed.");
+      elements.catalogPublishStatus.textContent = payload.message || "Video published and synced.";
+      elements.linkedVideoRights.checked = false;
+      await verifyCatalogSelection();
+      void loadVideos();
+    } catch (error) {
+      elements.catalogPublishStatus.textContent = error.message || "Video was not confirmed published. Refresh connections before retrying.";
+    } finally {
+      state.publishingCatalogVideo = false;
+      elements.campaignCatalogRecord.disabled = false;
+      if (state.catalogVerifiedKey) renderCatalogVerification(selectedCatalogRecord());
+      else elements.publishCatalogVideo.disabled = true;
+    }
+  }
+
   async function openCampaignStudio() {
     if (!state.mix) {
       if (isSatelliteFlow()) {
@@ -2246,6 +2384,9 @@ import { DREAMWEAVER_STOREFRONT_MIX_ID, buildDreamweaverStorefrontPath } from ".
     elements.campaignStudio.classList.add("open");
     elements.campaignStudio.setAttribute("aria-hidden", "false");
     document.body.classList.add("campaign-open");
+    void loadCatalogRecords();
+    window.clearInterval(state.catalogRefreshTimer);
+    state.catalogRefreshTimer = window.setInterval(() => verifyCatalogSelection(), 30_000);
     const suggested = Math.max(0, Math.min(state.duration - selectedDuration(), elements.audio.currentTime || chapters[state.activeChapter].start * state.duration));
     elements.clipStart.value = String(Math.floor(suggested));
     await preloadCampaignImages();
@@ -2256,6 +2397,8 @@ import { DREAMWEAVER_STOREFRONT_MIX_ID, buildDreamweaverStorefrontPath } from ".
   }
 
   function closeCampaignStudio() {
+    window.clearInterval(state.catalogRefreshTimer);
+    state.catalogVerificationNonce += 1;
     stopBuildPreview();
     elements.campaignStudio.classList.remove("open");
     elements.campaignStudio.setAttribute("aria-hidden", "true");
@@ -2279,6 +2422,8 @@ import { DREAMWEAVER_STOREFRONT_MIX_ID, buildDreamweaverStorefrontPath } from ".
           action: "start",
           mixId: state.mix.id,
           youtubeUrl,
+          linkedRecordId: selectedCatalogRecord()?.id || "",
+          linkedRecordType: selectedCatalogRecord()?.type || "",
           clipStartSeconds: Number(elements.clipStart.value || 0),
           clipDurationSeconds: selectedDuration(),
           template: selectedTemplate(),
@@ -2476,7 +2621,18 @@ import { DREAMWEAVER_STOREFRONT_MIX_ID, buildDreamweaverStorefrontPath } from ".
         credentials: "same-origin"
       });
       if (!response.ok) return;
-      state.videos = Array.isArray(payload.videos) ? payload.videos.slice(0, 8) : [];
+      const songId = resolveSongContextId() || state.release?.catalog?.songId;
+      const recordType = songId ? "song" : state.mix?.id ? "mix" : "";
+      const recordId = songId || state.mix?.id || "";
+      let linkedVideos = [];
+      if (recordType) {
+        const linked = await fetchJsonWithTimeout(`/api/videos?recordType=${recordType}&recordId=${encodeURIComponent(recordId)}`, {
+          timeoutMs: VIDEO_LIBRARY_TIMEOUT_MS, headers: { Accept: "application/json" }, credentials: "same-origin"
+        }).catch(() => null);
+        if (linked?.response.ok && Array.isArray(linked.payload.videos)) linkedVideos = linked.payload.videos;
+      }
+      state.videos = [...linkedVideos, ...(Array.isArray(payload.videos) ? payload.videos : [])]
+        .filter((video, index, videos) => videos.findIndex(item => item.id === video.id) === index).slice(0, 8);
       renderFootageSelector();
       renderArchive();
       renderSongLobbyHero();
@@ -2773,6 +2929,15 @@ import { DREAMWEAVER_STOREFRONT_MIX_ID, buildDreamweaverStorefrontPath } from ".
   elements.songLobbyMakeCampaign?.addEventListener("click", openCampaignStudio);
   elements.closeCampaign.addEventListener("click", closeCampaignStudio);
   elements.campaignForm.addEventListener("submit", generateCampaign);
+  elements.campaignCatalogRecord.addEventListener("change", () => {
+    state.campaignCatalogKey = elements.campaignCatalogRecord.value;
+    elements.catalogPublishStatus.textContent = "";
+    void verifyCatalogSelection();
+  });
+  elements.refreshCatalogLinks.addEventListener("click", () => {
+    if (!state.publishingCatalogVideo) void loadCatalogRecords();
+  });
+  elements.videoPublishForm.addEventListener("submit", publishCatalogVideo);
   elements.campaignForm.addEventListener("input", updateClipTiming);
   elements.renderClip.addEventListener("click", renderVerticalClip);
   elements.downloadClip.addEventListener("click", downloadRenderedClip);

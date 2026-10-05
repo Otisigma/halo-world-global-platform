@@ -423,9 +423,16 @@
       <aside class="campaign-controls">
         <p class="campaign-step">LOAD IT / SHAPE IT / SEND IT</p>
         <h2 id="campaignStudioTitle">One link.<br>One click.</h2>
-        <p class="campaign-intro">Paste your YouTube page. Dreamweaver quietly gathers your connected HALO gallery, shapes the collage, and prepares the complete campaign in the background.</p>
+        <p class="campaign-intro">Choose your catalog song or mix to link a video by ID. Dreamweaver gathers your approved HALO gallery and prepares the campaign; publishing stays in your hands.</p>
 
         <form id="campaignForm">
+          <label class="campaign-field">Attach video to a catalog song / mix
+            <select id="campaignCatalogRecord" aria-describedby="catalogLinkStatus" disabled>
+              <option value="">Loading your catalog…</option>
+            </select>
+          </label>
+          <div class="catalog-link-status" id="catalogLinkStatus" role="status" aria-live="polite">Open the studio to load your catalog.</div>
+          <button class="catalog-refresh" id="refreshCatalogLinks" type="button">Refresh connections</button>
           <label class="campaign-field campaign-source-field">Your YouTube page
             <input id="campaignYoutubeUrl" name="youtubeUrl" type="url" inputmode="url" autocomplete="url" required placeholder="https://youtube.com/@yourchannel">
             <span class="source-assurance"><i aria-hidden="true"></i>Dreamweaver uses this as the source signal and combines it with your approved HALO media.</span>
@@ -494,6 +501,22 @@
 
           <button class="generate-campaign-button" id="generateCampaign" type="submit"><span>One-click Dreamweaver</span><strong>Load it. Shape it. Send it.</strong></button>
           <p class="campaign-trust">The build continues in the background. Nothing posts without your approval.</p>
+        </form>
+        <form id="videoPublishForm" class="catalog-publish-form">
+          <h3>Publish &amp; sync video</h3>
+          <label class="campaign-field">Video title
+            <input id="linkedVideoTitle" name="title" maxlength="160" required placeholder="Name your video">
+          </label>
+          <label class="campaign-field">Video source
+            <select id="linkedVideoSource">
+              <option value="youtube">YouTube video / Short above</option>
+              <option value="upload">Created vertical film (up to 5 MB)</option>
+            </select>
+          </label>
+          <p class="footage-note">Publishing a YouTube source requires a video or Short, not a channel or playlist. The selected catalog ID connects it to available site destinations; missing sales or artist pages are not created.</p>
+          <label><input id="linkedVideoRights" type="checkbox" required> I have the rights and approvals to publish this video.</label>
+          <button class="generate-campaign-button" id="publishCatalogVideo" type="submit" disabled>Publish &amp; sync video</button>
+          <p id="catalogPublishStatus" role="status" aria-live="polite"></p>
         </form>
       </aside>
 

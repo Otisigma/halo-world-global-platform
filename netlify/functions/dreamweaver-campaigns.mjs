@@ -3,6 +3,7 @@ import { getDatabase } from "@netlify/database";
 import { getUser, verifyRequestOrigin } from "@netlify/identity";
 import { cleanText, ensureMembership } from "../lib/halo-x.mjs";
 import { generateCampaignPackage, reviewCampaignEvidence } from "../lib/dreamweaver-campaigns.mjs";
+import { catalogSelection, loadDreamweaverCatalog } from "../lib/dreamweaver-video-links.mjs";
 
 const MAX_BODY_BYTES = 24_576;
 const templates = new Set(["hook", "story", "invitation"]);
@@ -246,6 +247,7 @@ function productionPlan(input, videos) {
   return {
     visualTreatment: input.visualTreatment,
     youtubeSource: input.youtubeSource || null,
+    catalogLink: input.catalogLink || null,
     sourceVideos: references,
     usableVideoCount: usable.length,
     audioExcerpt: { startSeconds: input.clipStartSeconds, durationSeconds: input.clipDurationSeconds, source: "selected_mix" },
@@ -338,6 +340,11 @@ async function processCampaignJob(jobId) {
 async function startGenerate(db, user, body, context) {
   if (!user?.id) return json({ message: "Sign in to create and save a Dreamweaver campaign" }, 401);
   const membership = await ensureMembership(db, user);
+  const selection = catalogSelection(body.linkedRecordType, body.linkedRecordId);
+  if ((body.linkedRecordId || body.linkedRecordType) && !selection) return json({ message: "Choose a valid catalog song or mix" }, 422);
+  if (selection && !(await loadDreamweaverCatalog(db, membership.member_id, selection)).length) {
+    return json({ message: "Choose a catalog record you own" }, 403);
+  }
   const mixId = cleanText(body.mixId, 80);
   const mix = await loadAccessibleMix(db, membership, mixId);
   if (!mix) return json({ message: "Choose an available Mix Desk recording" }, 404);
@@ -389,6 +396,7 @@ async function startGenerate(db, user, body, context) {
   const destinationUrl = `/dreamweaver/?mix=${encodeURIComponent(mix.id)}&campaign=${encodeURIComponent(campaignId)}`;
   const input = {
     campaignId,
+    catalogLink: selection,
     mixTitle: mix.title,
     mixDescription: cleanText(mix.description, 320),
     artistName: mix.artist_name || "HALO artist",
@@ -478,7 +486,11 @@ export default async function dreamweaverCampaignsHandler(request, context) {
       }
       return json({ campaigns: await listCampaigns(db, user, mixId), jobs: mixId ? await listJobs(db, membership, mixId) : [] });
     }
-    if (!(await verifyRequestOrigin(request))) return json({ message: "Cross-origin campaign updates are not accepted" }, 403);
+    try {
+      if ((await verifyRequestOrigin(request)) === false) return json({ message: "Cross-origin campaign updates are not accepted" }, 403);
+    } catch {
+      return json({ message: "Cross-origin campaign updates are not accepted" }, 403);
+    }
     const contentLength = Number(request.headers.get("content-length") || 0);
     if (contentLength > MAX_BODY_BYTES) return json({ message: "Campaign request is too large" }, 413);
     const body = await request.json().catch(() => null);

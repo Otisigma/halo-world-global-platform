@@ -3,6 +3,7 @@ import { getStore } from "@netlify/blobs";
 import { getDatabase } from "@netlify/database";
 import { getUser, verifyRequestOrigin } from "@netlify/identity";
 import { cleanText, ensureMembership } from "../lib/halo-x.mjs";
+import { catalogSelection, linkedYouTubeVideoId, loadDreamweaverCatalog, saveCatalogVideo } from "../lib/dreamweaver-video-links.mjs";
 
 const MAX_UPLOAD_BYTES = 5_000_000;
 const VIDEO_TYPES = new Set(["video/mp4", "video/webm", "video/quicktime"]);
@@ -18,9 +19,12 @@ function youtubeId(value) {
   try {
     const url = new URL(input);
     const host = url.hostname.replace(/^www\./, "");
+    if (url.protocol !== "https:" || url.username || url.password || !["youtube.com", "m.youtube.com", "youtu.be"].includes(host)) return "";
+    const segments = url.pathname.split("/").filter(Boolean);
     const candidate = host === "youtu.be"
-      ? url.pathname.split("/").filter(Boolean)[0]
-      : url.searchParams.get("v") || url.pathname.split("/").filter(Boolean).pop();
+      ? segments.length === 1 ? segments[0] : ""
+      : url.pathname === "/watch" ? url.searchParams.get("v")
+        : segments.length === 2 && ["shorts", "live", "embed"].includes(segments[0]) ? segments[1] : "";
     return /^[A-Za-z0-9_-]{11}$/.test(candidate || "") ? candidate : "";
   } catch {
     return "";
@@ -42,12 +46,24 @@ function serializeVideo(row) {
     galleryVisible: Boolean(row.gallery_visible),
     sofaVisible: Boolean(row.sofa_visible),
     featured: Boolean(row.featured),
+    linkedSongId: row.linked_song_id || "",
+    linkedMixId: row.linked_mix_id || "",
     createdAt: new Date(row.created_at).toISOString()
   };
 }
 
-async function loadVideos(db, artistSlug = "") {
-  const rows = artistSlug
+async function loadVideos(db, artistSlug = "", selection = null) {
+  const rows = selection ? await db.sql`
+        SELECT video.*, page.artist_name
+        FROM halo_videos video
+        LEFT JOIN halo_artist_pages page ON page.slug = video.artist_slug
+        WHERE video.status = 'published'
+          AND ((${selection.type} = 'song' AND video.linked_song_id = ${selection.id})
+            OR (${selection.type} = 'mix' AND video.linked_mix_id = ${selection.id}))
+          AND (video.gallery_visible = TRUE OR video.sofa_visible = TRUE)
+        ORDER BY video.featured DESC, video.created_at DESC
+        LIMIT 40
+      ` : artistSlug
     ? await db.sql`
         SELECT video.*, page.artist_name
         FROM halo_videos video
@@ -90,19 +106,26 @@ async function serveMedia(db, id) {
   });
 }
 
-async function createVideo(request, db, user) {
+async function createVideo(request, db, user, { verifyOrigin, membershipFor, storeFor }) {
   if (!user?.id) return json({ message: "Join or sign in to add a HALO TV video" }, 401);
   try {
-    verifyRequestOrigin(request);
+    if ((await verifyOrigin(request)) === false) return json({ message: "Cross-origin video uploads are not accepted" }, 403);
   } catch {
     return json({ message: "Cross-origin video uploads are not accepted" }, 403);
   }
 
-  const membership = await ensureMembership(db, user);
+  const membership = await membershipFor(db, user);
   const form = await request.formData();
   const title = cleanText(form.get("title"), 160);
   const description = cleanText(form.get("description"), 1000);
-  const artistSlug = cleanText(form.get("artistSlug"), 80);
+  const selectionRequested = form.has("linkedRecordId") || form.has("linkedRecordType");
+  const selection = catalogSelection(form.get("linkedRecordType"), form.get("linkedRecordId"));
+  if (selectionRequested && !selection) return json({ message: "Choose a valid catalog song or mix" }, 422);
+  if (selection && form.get("rightsAttested") !== "true") return json({ message: "Confirm your video publishing rights" }, 422);
+  const record = selection ? (await loadDreamweaverCatalog(db, membership.member_id, selection))[0] : null;
+  if (selection && !record) return json({ message: "Choose a catalog record you own" }, 403);
+  if (record && !record.canPublish) return json({ message: "Add an active sale master to this song before linking video" }, 422);
+  const artistSlug = record?.artistSlug || cleanText(form.get("artistSlug"), 80);
   const sourceType = form.get("sourceType") === "upload" ? "upload" : "youtube";
   const galleryVisible = form.get("galleryVisible") !== "false";
   const sofaVisible = form.get("sofaVisible") !== "false";
@@ -117,7 +140,7 @@ async function createVideo(request, db, user) {
     if (!owned.length) return json({ message: "Choose an artist room you own" }, 403);
   }
 
-  const id = randomUUID();
+  let id = randomUUID();
   let sourceUrl = "";
   let parsedYouTubeId = "";
   let blobKey = "";
@@ -131,6 +154,7 @@ async function createVideo(request, db, user) {
     if (!parsedYouTubeId) return json({ message: "Paste a valid YouTube video or live stream URL" }, 400);
     sourceUrl = `https://www.youtube.com/watch?v=${parsedYouTubeId}`;
     thumbnailUrl = `https://i.ytimg.com/vi/${parsedYouTubeId}/hqdefault.jpg`;
+    if (selection) id = linkedYouTubeVideoId(membership.member_id, selection, parsedYouTubeId);
   } else {
     const file = form.get("videoFile");
     if (!(file instanceof File) || !file.size) return json({ message: "Choose a video file" }, 400);
@@ -141,7 +165,17 @@ async function createVideo(request, db, user) {
     if (!VIDEO_TYPES.has(file.type) && !inferredContentType) return json({ message: "Upload an MP4, WebM, or MOV video" }, 415);
     contentType = VIDEO_TYPES.has(file.type) ? file.type : inferredContentType;
     blobKey = `videos/${membership.member_id}/${id}`;
-    await getStore("halo-video-gallery").set(blobKey, file);
+    await storeFor("halo-video-gallery").set(blobKey, file);
+  }
+
+  if (selection) {
+    const video = await saveCatalogVideo(db, membership.member_id, selection, {
+      id, artistSlug, title, description, sourceType, sourceUrl, youtubeId: parsedYouTubeId,
+      blobKey, contentType, sourceFilename, thumbnailUrl, galleryVisible, sofaVisible
+    });
+    if (!video) return json({ message: "The catalog record changed. Refresh and try again." }, 409);
+    const verified = (await loadDreamweaverCatalog(db, membership.member_id, selection))[0];
+    return json({ video: serializeVideo(video), record: verified, message: "Video published and linked by catalog ID" }, 201);
   }
 
   const rows = await db.sql`
@@ -159,18 +193,32 @@ async function createVideo(request, db, user) {
   return json({ video: serializeVideo(rows[0]), message: "Video added to HALO TV and its connected rooms" }, 201);
 }
 
-export default async function videosHandler(request) {
+export function createVideosHandler({
+  database = getDatabase, userFor = getUser, verifyOrigin = verifyRequestOrigin,
+  membershipFor = ensureMembership, storeFor = getStore
+} = {}) {
+  return async function videosHandler(request) {
   if (!["GET", "POST"].includes(request.method)) return json({ message: "Method not allowed" }, 405);
   try {
-    const db = getDatabase();
+    const db = await database();
     const url = new URL(request.url);
     if (request.method === "GET" && url.searchParams.get("media")) return serveMedia(db, url.searchParams.get("media"));
 
-    const user = await getUser();
-    if (request.method === "POST") return createVideo(request, db, user);
+    const user = await userFor().catch(() => null);
+    if (request.method === "POST") return await createVideo(request, db, user, { verifyOrigin, membershipFor, storeFor });
 
     const artistSlug = cleanText(url.searchParams.get("artistSlug"), 80);
-    const membership = user?.id ? await ensureMembership(db, user) : null;
+    const membership = user?.id ? await membershipFor(db, user) : null;
+    const selection = catalogSelection(url.searchParams.get("recordType"), url.searchParams.get("recordId"));
+    if ((url.searchParams.has("recordType") || url.searchParams.has("recordId")) && !selection) {
+      return json({ message: "Invalid catalog selection" }, 422);
+    }
+    if (url.searchParams.get("catalog") === "1") {
+      if (!membership) return json({ message: "Sign in to choose a catalog song or mix" }, 401);
+      const records = await loadDreamweaverCatalog(db, membership.member_id, selection);
+      if (selection && !records.length) return json({ message: "Catalog record not found" }, 404);
+      return json({ records });
+    }
     const ownedArtists = membership
       ? await db.sql`
           SELECT slug, artist_name
@@ -181,13 +229,15 @@ export default async function videosHandler(request) {
       : [];
     return json({
       authenticated: Boolean(user?.id),
-      videos: await loadVideos(db, artistSlug),
+      videos: await loadVideos(db, artistSlug, selection),
       ownedArtists: ownedArtists.map(row => ({ slug: row.slug, artistName: row.artist_name }))
     });
   } catch (error) {
     console.error("HALO video gallery request failed", error instanceof Error ? error.message : "unknown error");
     return json({ message: "The HALO video gallery could not be loaded right now" }, 500);
   }
+  };
 }
 
+export default createVideosHandler();
 export const config = { path: "/api/videos" };

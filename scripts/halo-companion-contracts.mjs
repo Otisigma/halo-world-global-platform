@@ -187,4 +187,63 @@ assert.equal(launcher.dataset.dragging, "false");
 assert.equal(panel.style.left, "560px", "a right-edge panel stays on screen");
 assert.equal(panel.style.top, "26px", "a bottom-edge panel opens above the launcher");
 
-console.log("HALO companion contracts: voice, global guide mounting, mouse/touch dragging, bounds, keyboard access, and panel placement are wired.");
+// Dismiss leaves only the "Call HALO" trigger; the trigger restores the guide.
+assert.match(companion, /typeof window === "undefined" \|\| typeof document === "undefined"/, "the guide is inert without a DOM");
+assert.match(companion, /class="halo-companion-dismiss" type="button" aria-label="Minimize HALO Guide"/);
+assert.match(companion, /Call HALO/);
+assert.match(companion, /\.halo-companion-panel\{[^}]*backdrop-filter:blur\(22px\)/, "the expanded panel is frosted glass");
+assert.match(companion, /@supports not \(\(backdrop-filter/, "glass has an opaque fallback");
+assert.match(companion, /prefers-reduced-transparency:reduce/);
+assert.match(companion, /if \(root\.hidden\) return;/, "a dismissed guide is never measured");
+
+const dismissStart = companion.indexOf("  function setupDismissRecall(");
+const dismissEnd = companion.indexOf("  function toggle(", dismissStart);
+assert.ok(dismissStart > 0 && dismissEnd > dismissStart);
+const focusable = (extra = {}) => Object.assign(listeners(), { focused: 0, focus() { this.focused += 1; } }, extra);
+const runDismiss = storedValue => {
+  const storage = new Map(storedValue ? [["halo-companion-dismissed.v1", storedValue]] : []);
+  const guideLauncher = focusable();
+  const dismissButton = focusable();
+  const guideRoot = {
+    hidden: false,
+    querySelector(selector) { return selector === ".halo-companion-dismiss" ? dismissButton : guideLauncher; }
+  };
+  const recall = focusable({ hidden: true });
+  let closed = 0;
+  const dismissContext = vm.createContext({
+    DISMISSED_KEY: "halo-companion-dismissed.v1",
+    localStorage: {
+      getItem: key => storage.get(key) ?? null,
+      setItem: (key, value) => storage.set(key, value),
+      removeItem: key => storage.delete(key)
+    }
+  });
+  vm.runInContext(`${companion.slice(dismissStart, dismissEnd)}this.setup = setupDismissRecall;`, dismissContext);
+  dismissContext.setup(guideRoot, recall, () => { closed += 1; });
+  return { storage, guideLauncher, dismissButton, guideRoot, recall, closed: () => closed };
+};
+
+const fresh = runDismiss();
+assert.equal(fresh.guideRoot.hidden, false, "the guide starts visible");
+assert.equal(fresh.recall.hidden, true, "the recall trigger is hidden while the guide is shown");
+assert.equal(fresh.recall.focused, 0, "mounting never steals focus");
+fresh.dismissButton.emit("click");
+assert.equal(fresh.closed(), 1, "dismissing closes the expanded panel");
+assert.equal(fresh.guideRoot.hidden, true, "dismiss hides the full widget");
+assert.equal(fresh.recall.hidden, false, "only the Call HALO trigger remains");
+assert.equal(fresh.recall.focused, 1, "focus follows the recall trigger");
+assert.equal(fresh.storage.get("halo-companion-dismissed.v1"), "1", "dismissal persists across pages");
+fresh.recall.emit("click");
+assert.equal(fresh.guideRoot.hidden, false, "Call HALO restores the widget");
+assert.equal(fresh.recall.hidden, true);
+assert.equal(fresh.guideLauncher.focused, 1, "focus returns to the Ask HALO pill");
+assert.equal(fresh.storage.has("halo-companion-dismissed.v1"), false);
+
+const remembered = runDismiss("1");
+assert.equal(remembered.guideRoot.hidden, true, "a remembered dismissal shows only the trigger");
+assert.equal(remembered.recall.hidden, false);
+assert.equal(remembered.recall.focused, 0, "restoring dismissed state on load never steals focus");
+remembered.recall.emit("click");
+assert.equal(remembered.guideRoot.hidden, false);
+
+console.log("HALO companion contracts: voice, global guide mounting, mouse/touch dragging, bounds, keyboard access, panel placement, glass styling, and dismiss/recall are wired.");

@@ -1,5 +1,5 @@
 (() => {
-  if (window.__haloCompanionLoaded) return;
+  if (typeof window === "undefined" || typeof document === "undefined" || window.__haloCompanionLoaded) return;
   window.__haloCompanionLoaded = true;
 
   const AGENTS = {
@@ -21,6 +21,7 @@
   };
   const SETTINGS_KEY = "halo-companion-settings.v1";
   const JOURNEY_STATE_KEY = "halo-artist-journey-state.v1";
+  const DISMISSED_KEY = "halo-companion-dismissed.v1";
   const DEFAULT_SETTINGS = {
     voiceEnabled: false,
     voiceStyle: "steady",
@@ -315,7 +316,7 @@
       .halo-companion-launcher:hover{border-color:var(--hc-agent)}.halo-companion-launcher:focus-visible,.halo-companion button:focus-visible,.halo-companion input:focus-visible{outline:2px solid var(--hc-agent);outline-offset:3px}
       .halo-companion-launcher-core{position:relative;display:grid;place-items:center;width:46px;height:46px;border-radius:50%;background:var(--hc-agent);color:#090b0a;font-size:20px;box-shadow:0 0 25px color-mix(in srgb,var(--hc-agent) 40%,transparent)}
       .halo-companion-launcher-core::before{content:"";position:absolute;inset:-5px;border:1px solid var(--hc-agent);border-radius:50%;animation:halo-companion-pulse 2.8s ease-out infinite}.halo-companion-launcher-copy{display:grid;text-align:left;overflow-wrap:anywhere}.halo-companion-launcher-copy strong{font-size:11px;letter-spacing:.12em;text-transform:uppercase}.halo-companion-launcher-copy span{color:#c3cbc3;font-size:8px;letter-spacing:.06em;text-transform:uppercase}
-      .halo-companion-panel{position:absolute;left:0;bottom:72px;display:grid;grid-template-rows:auto auto minmax(180px,1fr) auto;width:min(430px,calc(100vw - 36px));height:min(690px,calc(100vh - 108px));overflow:hidden;border:1px solid rgba(255,255,255,.18);background:#0a0c0b;box-shadow:0 30px 90px rgba(0,0,0,.66);clip-path:polygon(0 0,calc(100% - 24px) 0,100% 24px,100% 100%,24px 100%,0 calc(100% - 24px));animation:halo-companion-rise .28s ease-out both}.halo-companion-panel[hidden]{display:none}
+      .halo-companion-panel{position:absolute;left:0;bottom:72px;display:grid;grid-template-rows:auto auto minmax(180px,1fr) auto;width:min(430px,calc(100vw - 36px));height:min(690px,calc(100vh - 108px));overflow:hidden;border:1px solid rgba(255,255,255,.18);background:linear-gradient(160deg,rgba(24,29,26,.74),rgba(8,10,9,.82));-webkit-backdrop-filter:blur(22px) saturate(150%);backdrop-filter:blur(22px) saturate(150%);box-shadow:0 30px 90px rgba(0,0,0,.66),inset 0 1px 0 rgba(255,255,255,.08);clip-path:polygon(0 0,calc(100% - 24px) 0,100% 24px,100% 100%,24px 100%,0 calc(100% - 24px));animation:halo-companion-rise .28s ease-out both}.halo-companion-panel[hidden]{display:none}
       .halo-companion-panel::before{content:"";position:absolute;inset:0;pointer-events:none;background:radial-gradient(circle at 9% 2%,color-mix(in srgb,var(--hc-agent) 20%,transparent),transparent 29%),linear-gradient(115deg,rgba(255,255,255,.025),transparent 40%)}
       .halo-companion-head{position:relative;display:grid;grid-template-columns:1fr auto;gap:18px;padding:20px 20px 15px;border-bottom:1px solid rgba(255,255,255,.1)}.halo-companion-eyebrow{display:flex;align-items:center;gap:8px;color:var(--hc-agent);font-size:8px;letter-spacing:.2em;text-transform:uppercase}.halo-companion-eyebrow::before{content:"";width:18px;height:1px;background:currentColor}.halo-companion-title{margin:7px 0 0;font-family:Georgia,"Times New Roman",serif;font-size:25px;font-weight:400;line-height:1}.halo-companion-title em{color:var(--hc-agent);font-style:italic}.halo-companion-close{align-self:start;width:32px;height:32px;border:1px solid rgba(255,255,255,.14);border-radius:50%;background:transparent;color:#d4d7d1;cursor:pointer}
       .halo-companion-roster{position:relative;display:grid;grid-template-columns:repeat(4,1fr);border-bottom:1px solid rgba(255,255,255,.1);background:rgba(255,255,255,.025)}.halo-companion-agent{display:grid;place-items:center;gap:2px;padding:11px 4px;border:0;border-right:1px solid rgba(255,255,255,.08);background:transparent;color:#777e77;cursor:pointer;transition:background .2s,color .2s}.halo-companion-agent:last-child{border-right:0}.halo-companion-agent[data-active="true"]{background:color-mix(in srgb,var(--agent-color) 11%,transparent);color:var(--agent-color)}.halo-companion-agent-glyph{font-size:15px}.halo-companion-agent strong{font-size:8px;letter-spacing:.1em;text-transform:uppercase}.halo-companion-agent span:last-child{font-size:7px;text-transform:uppercase}
@@ -323,15 +324,20 @@
       .halo-companion-feed{position:relative;display:flex;flex-direction:column;gap:13px;overflow-y:auto;padding:18px 18px 24px;scrollbar-width:thin;scrollbar-color:var(--hc-agent) #171a17}.halo-companion-message{max-width:88%;animation:halo-companion-rise .24s ease-out both}.halo-companion-message[data-role="visitor"]{align-self:flex-end}.halo-companion-message-label{margin:0 0 5px;color:#767d76;font-size:7px;letter-spacing:.14em;text-transform:uppercase}.halo-companion-message[data-role="visitor"] .halo-companion-message-label{text-align:right}.halo-companion-bubble{padding:12px 14px;border:1px solid rgba(255,255,255,.1);background:#131613;font:400 11px/1.55 "DM Mono","IBM Plex Mono",monospace;white-space:pre-wrap}.halo-companion-message[data-role="visitor"] .halo-companion-bubble{border-color:color-mix(in srgb,var(--hc-agent) 30%,transparent);background:color-mix(in srgb,var(--hc-agent) 9%,#111)}
       .halo-companion-suggestions{display:flex;flex-wrap:wrap;gap:7px;margin-top:9px}.halo-companion-suggestion,.halo-companion-route{border:1px solid rgba(255,255,255,.14);background:transparent;color:#d9ddd6;padding:7px 9px;font-size:8px;cursor:pointer;transition:border-color .2s,color .2s}.halo-companion-suggestion:hover,.halo-companion-route:hover{border-color:var(--hc-agent);color:var(--hc-agent)}.halo-companion-route{display:inline-flex;margin-top:9px;text-decoration:none;color:var(--hc-agent);border-color:color-mix(in srgb,var(--hc-agent) 45%,transparent)}
       .halo-companion-thinking{display:flex;align-items:center;gap:8px;color:#858c85;font-size:8px;text-transform:uppercase;letter-spacing:.12em}.halo-companion-thinking::before{content:"";width:15px;height:15px;border:1px solid rgba(255,255,255,.15);border-top-color:var(--hc-agent);border-radius:50%;animation:halo-companion-orbit .7s linear infinite}
-      .halo-companion-compose{position:relative;padding:13px 14px 15px;border-top:1px solid rgba(255,255,255,.1);background:#0e110e}.halo-companion-form{display:grid;grid-template-columns:1fr 44px;gap:8px}.halo-companion-input{min-width:0;height:44px;border:1px solid rgba(255,255,255,.16);border-radius:0;background:#070908;color:#fff;padding:0 12px;font-size:10px}.halo-companion-input::placeholder{color:#656b65}.halo-companion-send{display:grid;place-items:center;border:1px solid var(--hc-agent);background:var(--hc-agent);color:#080a08;cursor:pointer;font-size:16px}.halo-companion-send:disabled{cursor:wait;opacity:.55}.halo-companion-foot{display:flex;justify-content:space-between;gap:10px;margin-top:8px;color:#666d66;font-size:7px;letter-spacing:.05em}.halo-companion-memory{color:#8fa178}.halo-companion-memory::before{content:"●";margin-right:5px;color:var(--hc-agent)}.halo-companion-settings{margin-top:12px;border-top:1px solid rgba(255,255,255,.08);padding-top:10px}.halo-companion-settings summary{cursor:pointer;color:#dfe4dd;font-size:8px;letter-spacing:.14em;text-transform:uppercase;list-style:none}.halo-companion-settings summary::-webkit-details-marker{display:none}.halo-companion-settings summary::after{content:"+";float:right;color:var(--hc-agent)}.halo-companion-settings[open] summary::after{content:"–"}.halo-companion-settings-form{display:grid;gap:8px;margin-top:10px}.halo-companion-settings-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.halo-companion-setting{display:grid;gap:5px;color:#9ea49e;font-size:8px;letter-spacing:.06em;text-transform:uppercase}.halo-companion-setting-check{grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;padding:8px 10px;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.025)}.halo-companion-setting select{height:34px;border:1px solid rgba(255,255,255,.14);background:#080a08;color:#fff;padding:0 9px;font-size:9px}.halo-companion-setting input[type="checkbox"]{width:18px;height:18px;accent-color:var(--hc-agent)}.halo-companion-settings-status{margin:2px 0 0;color:#757c75;font-size:8px}
+      .halo-companion-compose{position:relative;padding:13px 14px 15px;border-top:1px solid rgba(255,255,255,.1);background:rgba(14,17,14,.55)}.halo-companion-form{display:grid;grid-template-columns:1fr 44px;gap:8px}.halo-companion-input{min-width:0;height:44px;border:1px solid rgba(255,255,255,.16);border-radius:0;background:#070908;color:#fff;padding:0 12px;font-size:10px}.halo-companion-input::placeholder{color:#656b65}.halo-companion-send{display:grid;place-items:center;border:1px solid var(--hc-agent);background:var(--hc-agent);color:#080a08;cursor:pointer;font-size:16px}.halo-companion-send:disabled{cursor:wait;opacity:.55}.halo-companion-foot{display:flex;justify-content:space-between;gap:10px;margin-top:8px;color:#666d66;font-size:7px;letter-spacing:.05em}.halo-companion-memory{color:#8fa178}.halo-companion-memory::before{content:"●";margin-right:5px;color:var(--hc-agent)}.halo-companion-settings{margin-top:12px;border-top:1px solid rgba(255,255,255,.08);padding-top:10px}.halo-companion-settings summary{cursor:pointer;color:#dfe4dd;font-size:8px;letter-spacing:.14em;text-transform:uppercase;list-style:none}.halo-companion-settings summary::-webkit-details-marker{display:none}.halo-companion-settings summary::after{content:"+";float:right;color:var(--hc-agent)}.halo-companion-settings[open] summary::after{content:"–"}.halo-companion-settings-form{display:grid;gap:8px;margin-top:10px}.halo-companion-settings-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.halo-companion-setting{display:grid;gap:5px;color:#9ea49e;font-size:8px;letter-spacing:.06em;text-transform:uppercase}.halo-companion-setting-check{grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;padding:8px 10px;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.025)}.halo-companion-setting select{height:34px;border:1px solid rgba(255,255,255,.14);background:#080a08;color:#fff;padding:0 9px;font-size:9px}.halo-companion-setting input[type="checkbox"]{width:18px;height:18px;accent-color:var(--hc-agent)}.halo-companion-settings-status{margin:2px 0 0;color:#757c75;font-size:8px}
       @keyframes halo-companion-unread{0%{box-shadow:0 0 0 0 rgba(235,196,112,.55)}70%{box-shadow:0 0 0 12px rgba(235,196,112,0)}100%{box-shadow:0 0 0 0 rgba(235,196,112,0)}}
       .halo-companion-unread{position:absolute;top:2px;left:36px;display:grid;place-items:center;min-width:19px;height:19px;padding:0 5px;border:2px solid #090b0a;border-radius:10px;background:var(--hc-gold);color:#090b0a;font-size:9px;font-weight:700;line-height:1;animation:halo-companion-unread 2s ease-out infinite}.halo-companion-unread[hidden]{display:none}
       .halo-companion-launcher[data-unread="true"]{border-color:var(--hc-gold)}.halo-companion-launcher[data-unread="true"] .halo-companion-launcher-copy span{color:var(--hc-gold)}
       .halo-companion-head{border-bottom-color:rgba(235,196,112,.22)}.halo-companion-setting select:focus-visible,.halo-companion-settings summary:focus-visible,.halo-companion-route:focus-visible{outline:2px solid var(--hc-agent);outline-offset:2px}
+      .halo-companion[hidden],.halo-companion-recall[hidden]{display:none}
+      .halo-companion-dismiss{position:absolute;top:-9px;right:-9px;z-index:1;display:grid;place-items:center;width:26px;height:26px;padding:0;border:1px solid rgba(255,255,255,.24);border-radius:50%;background:rgba(9,11,10,.62);color:#d4d7d1;font-size:15px;line-height:1;cursor:pointer;-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);transition:border-color .2s,color .2s}.halo-companion-dismiss:hover{border-color:var(--hc-agent);color:var(--hc-agent)}
+      .halo-companion-recall{position:fixed;left:18px;bottom:18px;z-index:10020;display:inline-flex;align-items:center;gap:8px;min-height:36px;padding:8px 14px;border:1px solid rgba(255,255,255,.2);border-radius:999px;background:rgba(12,14,13,.42);color:#e8ece6;font:500 10px/1 "DM Mono","IBM Plex Mono","Space Mono",monospace;letter-spacing:.14em;text-transform:uppercase;opacity:.72;cursor:pointer;box-shadow:0 6px 20px rgba(0,0,0,.25);-webkit-backdrop-filter:blur(14px) saturate(140%);backdrop-filter:blur(14px) saturate(140%);transition:opacity .2s ease,border-color .2s ease}.halo-companion-recall span{color:#d8ff62}.halo-companion-recall:hover,.halo-companion-recall:focus-visible{opacity:1;border-color:#d8ff62}.halo-companion-recall:focus-visible{outline:2px solid #d8ff62;outline-offset:3px}.halo-companion-recall[data-unread="true"]{opacity:1;border-color:#ebc470}
+      @supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){.halo-companion-panel{background:#0a0c0b}.halo-companion-compose{background:#0e110e}.halo-companion-recall{background:rgba(12,14,13,.9)}}
+      @media(prefers-reduced-transparency:reduce){.halo-companion-panel{background:#0a0c0b}.halo-companion-compose{background:#0e110e}.halo-companion-launcher{background:#141815}.halo-companion-recall{background:#0c0e0d;opacity:1}}
       .halo-companion-sr{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
       .halo-companion-panel{position:fixed;max-height:calc(100vh - 20px);grid-template-rows:auto auto minmax(0,1fr) auto;overflow-y:auto}
-      @media(max-width:600px){.halo-companion{left:10px;bottom:10px}.halo-companion-launcher{grid-template-columns:42px minmax(0,1fr) 6px;min-height:52px}.halo-companion-launcher-core{width:42px;height:42px}.halo-companion-panel{bottom:64px;width:calc(100vw - 20px);height:min(690px,calc(100vh - 84px))}.halo-companion-title{font-size:22px}.halo-companion-roster{grid-template-columns:repeat(4,1fr)}.halo-companion-agent span:last-child{display:none}.halo-companion-settings-grid{grid-template-columns:1fr}}
-      @media(prefers-reduced-motion:reduce){.halo-companion *,.halo-companion *::before{animation:none!important;transition:none!important}}
+      @media(max-width:600px){.halo-companion,.halo-companion-recall{left:10px;bottom:10px}.halo-companion-launcher{grid-template-columns:42px minmax(0,1fr) 6px;min-height:52px}.halo-companion-launcher-core{width:42px;height:42px}.halo-companion-panel{bottom:64px;width:calc(100vw - 20px);height:min(690px,calc(100vh - 84px))}.halo-companion-title{font-size:22px}.halo-companion-roster{grid-template-columns:repeat(4,1fr)}.halo-companion-agent span:last-child{display:none}.halo-companion-settings-grid{grid-template-columns:1fr}}
+      @media(prefers-reduced-motion:reduce){.halo-companion *,.halo-companion *::before,.halo-companion-recall{animation:none!important;transition:none!important}}
     `;
     document.head.appendChild(style);
   }
@@ -340,6 +346,7 @@
     const guide = pageGuide();
     const root = document.createElement("aside");
     root.className = "halo-companion";
+    root.id = "haloCompanion";
     root.setAttribute("aria-label", "HALO Guide");
     root.innerHTML = `
       <section class="halo-companion-panel" id="haloCompanionPanel" hidden role="dialog" aria-modal="false" aria-labelledby="haloCompanionTitle">
@@ -383,10 +390,23 @@
         <span class="halo-companion-launcher-copy"><strong>✦ ASK HALO</strong><span>HALO GUIDE · 4 SPECIALISTS</span></span>
         <span class="halo-companion-status" aria-hidden="true"></span>
       </button>
+      <button class="halo-companion-dismiss" type="button" aria-label="Minimize HALO Guide" title="Minimize">–</button>
       <span class="halo-companion-sr" id="haloCompanionDragHint">Drag to reposition, or use arrow keys while this button is focused.</span>
       <span class="halo-companion-sr" role="status" aria-live="polite"></span>`;
     document.body.appendChild(root);
     return root;
+  }
+
+  function createRecall() {
+    const recall = document.createElement("button");
+    recall.className = "halo-companion-recall";
+    recall.type = "button";
+    recall.hidden = true;
+    recall.setAttribute("aria-controls", "haloCompanion");
+    recall.setAttribute("aria-label", "Call HALO: restore the HALO Guide");
+    recall.innerHTML = `<span aria-hidden="true">✦</span>Call HALO`;
+    document.body.appendChild(recall);
+    return recall;
   }
 
   function setupGuideDrag(root) {
@@ -465,6 +485,7 @@
       place(rect.left + delta[0] * step, rect.top + delta[1] * step);
     });
     const resize = () => {
+      if (root.hidden) return;
       const rect = launcher.getBoundingClientRect();
       place(position?.x ?? rect.left, position?.y ?? rect.top);
     };
@@ -537,6 +558,7 @@
     badge.hidden = count === 0;
     badge.textContent = count > 9 ? "9+" : String(count);
     launcher.dataset.unread = String(count > 0);
+    recall.dataset.unread = String(count > 0);
     launcher.setAttribute("aria-label", count ? `Open HALO Guide, ${count} new ${count === 1 ? "reply" : "replies"}` : "Open HALO Guide");
     launcher.querySelector(".halo-companion-launcher-copy span").textContent = count ? `${count} new ${count === 1 ? "reply" : "replies"}` : "HALO GUIDE · 4 SPECIALISTS";
   }
@@ -670,6 +692,31 @@
     }
   }
 
+  function setupDismissRecall(root, recall, close) {
+    const launcher = root.querySelector(".halo-companion-launcher");
+    const remember = dismissed => {
+      try {
+        if (dismissed) localStorage.setItem(DISMISSED_KEY, "1");
+        else localStorage.removeItem(DISMISSED_KEY);
+      } catch {}
+    };
+    const setDismissed = (dismissed, { focus = true, persist = true } = {}) => {
+      if (dismissed) close();
+      root.hidden = dismissed;
+      recall.hidden = !dismissed;
+      if (persist) remember(dismissed);
+      if (focus) (dismissed ? recall : launcher).focus();
+    };
+    root.querySelector(".halo-companion-dismiss").addEventListener("click", () => setDismissed(true));
+    recall.addEventListener("click", () => setDismissed(false));
+    let stored = false;
+    try {
+      stored = localStorage.getItem(DISMISSED_KEY) === "1";
+    } catch {}
+    if (stored) setDismissed(true, { focus: false, persist: false });
+    return setDismissed;
+  }
+
   function toggle(open = !state.open) {
     const panel = root.querySelector(".halo-companion-panel");
     const launcher = root.querySelector(".halo-companion-launcher");
@@ -691,11 +738,16 @@
 
   injectStyles();
   const root = createShell();
+  const recall = createRecall();
   const placeGuidePanel = setupGuideDrag(root);
   renderRoster();
   setAgent(state.agent);
   state.lastJourneySignature = guidanceSignature(state.journey);
   updateSettingsDock();
+  setupDismissRecall(root, recall, () => {
+    toggle(false);
+    cancelSpeech();
+  });
   const guide = pageGuide();
   addMessage("assistant", guide.welcome, { agent: state.agent, suggestions: guide.prompts, initial: true });
 

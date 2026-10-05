@@ -11,15 +11,16 @@ const root = resolve(import.meta.dirname, "..");
 // Forbidden claims always run against normalized copy so formatting changes cannot hide them.
 const SURFACE_KINDS = new Set(["exact", "normalized", "mixed"]);
 
+const NO_RIGHTS_TRANSFER = "Uploading alone transfers no rights.";
+const SCOPED_HALO_OWNERSHIP = "Halo Music owns Owen Anthony’s music only";
 const OWNERSHIP_STATEMENTS = [
   "Owen Anthony’s music is owned by Halo Music.",
   "Other artist-uploaded content remains the uploader’s property unless an explicit split or ownership agreement is configured on HALO.",
-  "Uploading alone transfers no rights.",
+  NO_RIGHTS_TRANSFER,
   "HALO software and technical infrastructure are proprietary."
 ];
 const OWNERSHIP_POLICY_BLOCK = OWNERSHIP_STATEMENTS.join(" ");
 const COPYRIGHT_PROMPT = "℗ sound-recording rights holder and year / © composition or artwork rights holder and year; enter confirmed rights holders for this release";
-const NO_RIGHTS_TRANSFER = "Uploading alone transfers no rights.";
 
 // Disclosure families that must appear exactly once on a surface, regardless of which approved wording is used.
 const MUSIC_OWNERSHIP_DISCLOSURE = {
@@ -40,7 +41,8 @@ const RESTRICTED_IMPLEMENTATION_PHRASES = [
   "full set history"
 ];
 
-// Forbidden claims table. Patterns run against normalized copy.
+// Forbidden claims table. Patterns run against normalized copy. Restricted phrases intentionally use
+// substring matching (no word boundaries) so forbidden language is caught even inside longer tokens.
 const FORBIDDEN_CLAIMS = [
   {
     id: "blanket-upload-ownership",
@@ -113,7 +115,7 @@ const SURFACE_CONTRACTS = [
     required: [
       "Artist-uploaded music and content remain 100% the uploader’s property by default",
       "explicitly configured and agreed on this site",
-      "Halo Music owns Owen Anthony’s music only",
+      SCOPED_HALO_OWNERSHIP,
       "platform technology rights are separate"
     ],
     uniqueRequired: [NO_RIGHTS_TRANSFER, MUSIC_OWNERSHIP_DISCLOSURE, UPLOADER_OWNERSHIP_DISCLOSURE],
@@ -128,7 +130,7 @@ const SURFACE_CONTRACTS = [
             .find(article => containsPhrase(article, normalizeCopy("Your music remains yours.")));
           return Boolean(promise)
             && containsPhrase(promise, normalizeCopy(NO_RIGHTS_TRANSFER))
-            && containsPhrase(promise, normalizeCopy("Halo Music owns Owen Anthony’s music only"));
+            && containsPhrase(promise, normalizeCopy(SCOPED_HALO_OWNERSHIP));
         }
       }
     ],
@@ -139,7 +141,7 @@ const SURFACE_CONTRACTS = [
     kind: "normalized",
     required: [
       "Owen Anthony music for sync discussions",
-      "Halo Music owns Owen Anthony’s music only",
+      SCOPED_HALO_OWNERSHIP,
       "rights must be confirmed for each track and intended use",
       "no license is granted until written approval"
     ],

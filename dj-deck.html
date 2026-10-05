@@ -33,6 +33,7 @@
   <script src="/halo-companion.js" defer></script>
   <script src="/dj-continuity-guard.js" defer></script>
   <script src="/dj-recorder-guard.js" defer></script>
+  <script src="/desk-noise-cleaner.js" defer></script>
   <script type="module" src="/identity.js"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -3894,7 +3895,7 @@
         audioEngine.recorderIsolation = window.HaloRecorderGuard.createIsolation(context);
         audioEngine.monitorBus = context.createGain();
         audioEngine.recorderIsolation.monitorOnly(audioEngine.monitorBus);
-        audioEngine.monitorBus.connect(context.destination);
+        window.HaloDeskNoiseCleaner.connect(context, audioEngine.monitorBus, audioEngine.recorderIsolation);
         const masterGain = context.createGain();
         const limiter = context.createDynamicsCompressor();
         masterGain.gain.setValueAtTime(.82, context.currentTime);

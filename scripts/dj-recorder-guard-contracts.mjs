@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import vm from "node:vm";
+import "./desk-noise-cleaner-contracts.mjs";
 
 const [guardSource, deckPage] = await Promise.all([
   readFile(new URL("../dj-recorder-guard.js", import.meta.url), "utf8"),
@@ -123,7 +124,7 @@ assert.match(deckPage, /const cueBusActive = activeCueDecks\.length > 0/, "Guard
 assert.match(deckPage, /masterBusLevel: isRecording && cueBusActive \? recorderGuardMasterLevel\(\) : 0/, "Guard reads the master bus level only when it can affect the result");
 assert.match(deckPage, /recorderGuardState\.guard\?\.tick\(\);/, "Cue toggles refresh the guard immediately");
 assert.match(deckPage, /cueGain\.connect\(audioEngine\.monitorBus\)/, "CUE monitoring stays on the isolated monitor path");
-assert.match(deckPage, /audioEngine\.monitorBus\.connect\(context\.destination\)/, "Monitor bus feeds only the local output");
+assert.match(deckPage, /HaloDeskNoiseCleaner\.connect\(context, audioEngine\.monitorBus, audioEngine\.recorderIsolation\)/, "Monitor bus feeds only the cleaned local output");
 assert.match(deckPage, /limiter\.connect\(audioEngine\.recordingDestination\)/, "Recorder taps the post-limiter master bus");
 assert.doesNotMatch(deckPage, /cueGain\.connect\(audioEngine\.recordingDestination\)/, "CUE monitoring is never routed into the recorder");
 

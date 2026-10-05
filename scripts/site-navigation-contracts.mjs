@@ -306,8 +306,9 @@ assert.match(musicStyles, /\.halo-player-bar \{ position: fixed;/, "the floating
 // --- Public asset inventory destination -------------------------------------------------
 {
   const { MENU_ROUTE_REGISTRY, PUBLIC_ROUTE_REGISTRY } = await import("../lib/route-registry.js");
-  const [mainSite, netlifyConfig, page] = await Promise.all([
-    read("halo.html"), read("netlify.toml"), read("asset-inventory/index.html")
+  const [mainSite, netlifyConfig, page, creatorsPage, releasePage, releaseScript, syncPage] = await Promise.all([
+    read("halo.html"), read("netlify.toml"), read("asset-inventory/index.html"), read("creators/index.html"),
+    read("release-house/index.html"), read("release-house/release-house.js"), read("sync-hub/index.html")
   ]);
   assert.equal(PUBLIC_ROUTE_REGISTRY.find(({ route }) => route === "/asset-inventory/")?.file, "asset-inventory/index.html");
   assert.ok(MENU_ROUTE_REGISTRY.some(({ route, menuLabel }) => route === "/asset-inventory/" && menuLabel === "ASSET INVENTORY"), "the asset inventory must remain in the main menu registry");
@@ -328,10 +329,20 @@ assert.match(musicStyles, /\.halo-player-bar \{ position: fixed;/, "the floating
   for (const asset of [
     "HALO Platform Ecosystem", "Custom Software Infrastructure &amp; Web IP", "HALO Artist Economy / Livelihood System",
     "HALO Business Hub &amp; One-Stop Sync Portal", "Interactive Fan &amp; Commerce Tools", "SERENA AI Integration",
-    "Music Master &amp; Publishing Catalog", "100% Master &amp; Publishing Control", "Full Stem Availability"
+    "Owen Anthony Music Catalog", "Owen Anthony Master &amp; Publishing Rights", "Stems for Owen Anthony Releases"
   ]) {
     assert.ok(page.includes(asset), `built asset "${asset}" must be listed`);
   }
+  for (const source of [mainSite, creatorsPage, releasePage]) {
+    assert.match(source, /artist-uploaded music and content/i, "public ownership copy must state the uploader-owned default");
+    assert.match(source, /100% the uploader’s property by default/i, "public ownership copy must state the default share");
+    assert.match(source, /explicitly configured and agreed on this site/i, "ownership changes must be explicitly configured and agreed");
+    assert.match(source, /Halo Music (?:owns|’s ownership claim covers) Owen Anthony’s music only/i, "Halo Music ownership must be limited to Owen Anthony music");
+    assert.doesNotMatch(source, /Anson Wilshire/i, "public ownership copy must not expose the technology rights holder’s personal name");
+  }
+  assert.match(page, /platform’s technology\/IP rights holder/i, "platform technology ownership must be distinguished from artist uploads");
+  assert.match(syncPage, /Owen Anthony music for sync discussions/i, "sync copy must not imply catalog-wide Halo ownership");
+  assert.match(releaseScript, /© 2026 HALO MUSIC WORLD LTD \(Owen Anthony composition\) \/ ℗ 2026 HALO MUSIC WORLD LTD \(Owen Anthony recording\)/, "release metadata must scope composition and recording ownership to Owen Anthony");
   for (const value of ["$35,000–$60,000", "$50,000–$120,000", "$15,000–$35,000", "$100,000–$215,000"]) {
     assert.ok(page.includes(value), `valuation ${value} must be listed`);
   }

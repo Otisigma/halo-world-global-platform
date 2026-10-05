@@ -71,8 +71,8 @@ assert.ok(creatorPage.includes("All other artist-uploaded music, recordings, ste
 assert.ok(creatorPage.includes("unless an explicit split or ownership agreement is configured on the site"), "ownership changes require explicit site configuration");
 assert.ok(creatorPage.includes("Uploading content does not transfer rights unless an explicit agreement is configured."), "uploading alone does not transfer rights");
 assert.ok(creatorPage.includes("platform, software, codebase, and technical infrastructure remain proprietary"), "platform technology remains proprietary");
-assert.ok(releaseHouse.includes("All other artist-uploaded music, recordings, stems, and releases remain 100% the uploader’s property"), "Release House preserves uploader ownership");
-assert.ok(releaseHouseClient.includes("copyrightLines: \"℗ 2026 HALO MUSIC WORLD LTD / © 2026 HALO MUSIC WORLD LTD\""), "Owen Anthony's sample release metadata names HALO MUSIC WORLD LTD");
+assert.ok(releaseHouse.includes("Artist-uploaded music and content remain 100% the uploader’s property by default unless an ownership or split agreement is explicitly configured and agreed on this site."), "Release House preserves the uploader-owned default and explicit-agreement requirement");
+assert.ok(releaseHouseClient.includes("copyrightLines: \"© 2026 HALO MUSIC WORLD LTD (Owen Anthony composition) / ℗ 2026 HALO MUSIC WORLD LTD (Owen Anthony recording)\""), "Owen Anthony's sample release metadata names HALO MUSIC WORLD LTD and distinguishes composition from recording");
 assert.ok(deck.includes("I own or control these files, or have permission to upload them") && deck.includes("Uploading does not transfer ownership"), "stem upload terms reflect uploader ownership");
 assert.ok(stemVault.includes("Confirm that you own or control each uploaded stem or have permission to upload it"), "stem upload errors describe the uploader's rights attestation");
 

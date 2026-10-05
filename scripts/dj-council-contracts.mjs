@@ -256,6 +256,8 @@ check("council metering is read-only and recorder isolation is preserved", () =>
   const meter = deckPage.slice(deckPage.indexOf("function sampleCouncilSignal"), deckPage.indexOf("function councilTrackPayload"));
   assert.match(meter, /getFloatTimeDomainData/);
   assert.doesNotMatch(meter, /\.connect\(|\.disconnect\(/);
+  assert.match(deckPage, /recordingState\.councilTimer = setInterval\(sampleCouncilSignal, 120\);/, "meter samples faster than the analyser window");
+  assert.match(deckPage, /recorder\.addEventListener\("stop", \(\) => \{\n\s+clearInterval\(recordingState\.councilTimer\);/, "meter stops with the recorder");
   assert.match(deckPage, /routingIsolated = Boolean\(audioEngine\.routing\?\.assertNoUtilityLeak\(\)\.ok && audioEngine\.recorderIsolation\?\.assertGraph\(\)\)/);
   assert.match(deckPage, /await audioEngine\.recorderIsolation\.armAndStartRecording\(recorder,/);
   assert.match(deckPage, /window\.HaloDeskNoiseCleaner\.connect\(context, audioEngine\.monitorBus, audioEngine\.recorderIsolation\)/);

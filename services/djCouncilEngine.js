@@ -186,14 +186,14 @@ const loudnessCheck = {
     }
     const deviation = lufs - rules.targetLufs;
     const value = round(lufs);
-    if (Math.abs(deviation) <= rules.lufsTolerance) return pass(`${value} LUFS (target ${rules.targetLufs} ±${rules.lufsTolerance}).`, value);
+    if (Math.abs(deviation) <= rules.lufsTolerance) return pass(`≈${value} LUFS (target ${rules.targetLufs} ±${rules.lufsTolerance}).`, value);
     const direction = deviation > 0 ? "lower" : "raise";
     const recommendation = `${direction === "lower" ? "Lower" : "Raise"} the master by about ${round(Math.abs(deviation))} dB to land near ${rules.targetLufs} LUFS.`;
     if (Math.abs(deviation) <= rules.lufsHardLimit) {
       return warn(1 - (Math.abs(deviation) - rules.lufsTolerance) / (rules.lufsHardLimit - rules.lufsTolerance) * 0.6,
-        `${value} LUFS is outside the ${rules.targetLufs} ±${rules.lufsTolerance} LU window.`, value, recommendation, `${direction}-master-gain`);
+        `≈${value} LUFS is outside the ${rules.targetLufs} ±${rules.lufsTolerance} LU window.`, value, recommendation, `${direction}-master-gain`);
     }
-    return fail(`${value} LUFS is more than ${rules.lufsHardLimit} LU away from the ${rules.targetLufs} LUFS target.`, value, recommendation, `${direction}-master-gain`);
+    return fail(`≈${value} LUFS is more than ${rules.lufsHardLimit} LU away from the ${rules.targetLufs} LUFS target.`, value, recommendation, `${direction}-master-gain`);
   }
 };
 

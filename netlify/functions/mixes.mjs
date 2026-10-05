@@ -383,6 +383,8 @@ async function finalizeMix(payload, db, user) {
   if (uploadSource === "creator_desk" && !rightsAttested) return json({ message: "Confirm the recording and remix rights before posting" }, 400);
   // DJ Council is a binding gate for HALO deck takeovers: re-evaluate server-side with the
   // finalized duration so a failing (or missing) council review can never be delivered.
+  // Audio metrics and track rights fields are measured in the browser deck, so the server
+  // enforces the council rules on those reported values rather than re-measuring the audio.
   let councilVerdict = null;
   if (uploadSource === "halo_deck") {
     if (!payload.council || typeof payload.council !== "object" || Array.isArray(payload.council)) {

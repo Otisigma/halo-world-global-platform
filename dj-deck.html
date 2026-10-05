@@ -2934,6 +2934,7 @@
       councilMeter: null,
       councilMasterBpm: 0,
       playbackFaults: 0,
+      councilTimer: null,
       councilPayload: null,
       councilVerdict: null
     };
@@ -5867,6 +5868,8 @@
           elements.recordingStart.disabled = false;
         });
         recorder.addEventListener("stop", () => {
+          clearInterval(recordingState.councilTimer);
+          recordingState.councilTimer = null;
           if (recordingState.failed) {
             recordingState.chunks = [];
             return;
@@ -5910,7 +5913,7 @@
             elements.recordingDownload.textContent = "Download review copy (not deliverable)";
             elements.recordingRig.className = "recording-rig panel is-complete is-council-blocked";
             elements.recordingStatus.textContent = recordingState.councilVerdict?.summary || "DJ Council review is unavailable, so this mix is not deliverable.";
-            elements.mixReleaseStatus.textContent = "DJ Council blocked delivery. Apply the fixes below and re-record before posting.";
+            elements.mixReleaseStatus.textContent = "DJ Council blocked delivery. Follow the council fixes above and re-record before posting.";
             showToast("DJ Council blocked delivery", recordingState.councilVerdict?.recommendations?.[0]?.message || "Reload the deck and re-record the takeover.");
             return;
           }
@@ -5942,6 +5945,10 @@
         });
         recordingState.recorderPreflightPassed = true;
         recordingState.councilMeter = window.HaloDJCouncil?.createSignalMeter() || null;
+        // Sample faster than the 8192-sample analyser window so consecutive reads overlap and
+        // the peak/hum meter sees every recorded sample.
+        clearInterval(recordingState.councilTimer);
+        recordingState.councilTimer = setInterval(sampleCouncilSignal, 120);
         recordingState.startedAt = Date.now();
         syncDecks();
         recordingState.councilMasterBpm = Number(deckState.A.bpm) || 0;
@@ -5961,13 +5968,14 @@
         recordingState.elapsedTimer = setInterval(() => {
           const elapsedSeconds = (Date.now() - recordingState.startedAt) / 1000;
           updateRecordingProgress(elapsedSeconds);
-          sampleCouncilSignal();
           if (elapsedSeconds >= takeoverSession.minutes * 60) finishTakeoverRecording("complete");
         }, 250);
         showToast("Recording started", `${takeoverSession.name}'s ${takeoverSession.minutes}-minute set is live and mixing now.`);
         window.haloStats?.track("start_dj_takeover_recording", { dj: takeoverSession.dj, minutes: takeoverSession.minutes });
       } catch (error) {
         recordingState.failed = true;
+        clearInterval(recordingState.councilTimer);
+        recordingState.councilTimer = null;
         if (recordingState.recorder && recordingState.recorder.state !== "inactive") recordingState.recorder.stop();
         clearInterval(recordingState.elapsedTimer);
         recordingState.elapsedTimer = null;

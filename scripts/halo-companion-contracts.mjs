@@ -243,7 +243,12 @@ const remembered = runDismiss("1");
 assert.equal(remembered.guideRoot.hidden, true, "a remembered dismissal shows only the trigger");
 assert.equal(remembered.recall.hidden, false);
 assert.equal(remembered.recall.focused, 0, "restoring dismissed state on load never steals focus");
+assert.equal(remembered.closed(), 1, "a remembered dismissal keeps the panel closed");
+assert.equal(remembered.storage.get("halo-companion-dismissed.v1"), "1", "loading saved state does not rewrite storage");
 remembered.recall.emit("click");
 assert.equal(remembered.guideRoot.hidden, false);
+assert.equal(remembered.storage.has("halo-companion-dismissed.v1"), false, "restoring clears the saved dismissal");
+assert.equal(remembered.guideLauncher.focused, 1);
+assert.match(companion, /recall\.setAttribute\("aria-label", count \? `Call HALO: restore the HALO Guide, \$\{count\} new/, "the recall trigger announces unread replies");
 
 console.log("HALO companion contracts: voice, global guide mounting, mouse/touch dragging, bounds, keyboard access, panel placement, glass styling, and dismiss/recall are wired.");

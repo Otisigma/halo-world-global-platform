@@ -559,6 +559,7 @@
     badge.textContent = count > 9 ? "9+" : String(count);
     launcher.dataset.unread = String(count > 0);
     recall.dataset.unread = String(count > 0);
+    recall.setAttribute("aria-label", count ? `Call HALO: restore the HALO Guide, ${count} new ${count === 1 ? "reply" : "replies"}` : "Call HALO: restore the HALO Guide");
     launcher.setAttribute("aria-label", count ? `Open HALO Guide, ${count} new ${count === 1 ? "reply" : "replies"}` : "Open HALO Guide");
     launcher.querySelector(".halo-companion-launcher-copy span").textContent = count ? `${count} new ${count === 1 ? "reply" : "replies"}` : "HALO GUIDE · 4 SPECIALISTS";
   }

@@ -306,12 +306,15 @@
       @keyframes halo-companion-rise{from{opacity:0;transform:translateY(18px) scale(.97)}to{opacity:1;transform:translateY(0) scale(1)}}
       @keyframes halo-companion-pulse{0%,100%{transform:scale(1);opacity:.7}50%{transform:scale(1.18);opacity:0}}
       @keyframes halo-companion-orbit{to{transform:rotate(360deg)}}
-      .halo-companion{--hc-agent:#d8ff62;--hc-gold:#ebc470;position:fixed;left:18px;bottom:18px;z-index:10020;color:#f7f4ec;font-family:"DM Mono","IBM Plex Mono","Space Mono",monospace;letter-spacing:0;line-height:1.45}
+      .halo-companion{--hc-agent:#d8ff62;--hc-gold:#ebc470;position:fixed;left:18px;bottom:18px;max-width:calc(100vw - 20px);z-index:10020;color:#f7f4ec;font-family:"DM Mono","IBM Plex Mono","Space Mono",monospace;letter-spacing:0;line-height:1.45}
       .halo-companion *{box-sizing:border-box}.halo-companion button,.halo-companion input,.halo-companion select{font-family:inherit;font-weight:inherit;line-height:inherit;margin:0}.halo-companion .halo-companion-compose{display:block;padding:13px 14px 15px;border-top:1px solid rgba(255,255,255,.1);color:inherit;font:inherit;letter-spacing:0}.halo-companion .halo-companion-input,.halo-companion .halo-companion-setting select{width:100%}.halo-companion .halo-companion-setting input[type="checkbox"]{padding:0}
-      .halo-companion-launcher{position:relative;display:grid;grid-template-columns:46px auto;align-items:center;gap:11px;min-height:58px;padding:6px 16px 6px 6px;border:1px solid rgba(255,255,255,.22);border-radius:32px;background:rgba(9,11,10,.93);color:#fff;cursor:pointer;box-shadow:0 18px 55px rgba(0,0,0,.5);backdrop-filter:blur(18px);transition:transform .2s ease,border-color .2s ease}
-      .halo-companion-launcher:hover{transform:translateY(-3px);border-color:var(--hc-agent)}.halo-companion-launcher:focus-visible,.halo-companion button:focus-visible,.halo-companion input:focus-visible{outline:2px solid var(--hc-agent);outline-offset:3px}
+      .halo-companion-launcher{position:relative;isolation:isolate;display:grid;grid-template-columns:46px minmax(0,1fr) 6px;align-items:center;gap:11px;width:100%;min-height:58px;padding:6px 16px 6px 6px;border:1px solid rgba(255,255,255,.22);border-radius:32px;background:linear-gradient(135deg,rgba(35,42,37,.78),rgba(9,11,10,.72));color:#fff;cursor:grab;touch-action:none;user-select:none;box-shadow:0 8px 28px rgba(0,0,0,.3);-webkit-backdrop-filter:blur(18px) saturate(140%);backdrop-filter:blur(18px) saturate(140%);transition:border-color .2s ease}
+      @keyframes halo-companion-aura{0%,100%{opacity:.35;transform:scale(1)}50%{opacity:.65;transform:scale(1.04)}}
+      .halo-companion-launcher::before{content:"";position:absolute;inset:-4px;z-index:-1;border:1px solid var(--hc-agent);border-radius:inherit;box-shadow:0 0 16px color-mix(in srgb,var(--hc-agent) 30%,transparent);pointer-events:none;animation:halo-companion-aura 3.6s ease-in-out infinite}
+      .halo-companion-launcher[data-dragging="true"]{cursor:grabbing}.halo-companion-status{width:6px;height:6px;border-radius:50%;background:var(--hc-agent);box-shadow:0 0 8px var(--hc-agent)}
+      .halo-companion-launcher:hover{border-color:var(--hc-agent)}.halo-companion-launcher:focus-visible,.halo-companion button:focus-visible,.halo-companion input:focus-visible{outline:2px solid var(--hc-agent);outline-offset:3px}
       .halo-companion-launcher-core{position:relative;display:grid;place-items:center;width:46px;height:46px;border-radius:50%;background:var(--hc-agent);color:#090b0a;font-size:20px;box-shadow:0 0 25px color-mix(in srgb,var(--hc-agent) 40%,transparent)}
-      .halo-companion-launcher-core::before{content:"";position:absolute;inset:-5px;border:1px solid var(--hc-agent);border-radius:50%;animation:halo-companion-pulse 2.8s ease-out infinite}.halo-companion-launcher-copy{display:grid;text-align:left}.halo-companion-launcher-copy strong{font-size:11px;letter-spacing:.12em;text-transform:uppercase}.halo-companion-launcher-copy span{color:#9ea49e;font-size:8px;letter-spacing:.06em;text-transform:uppercase}
+      .halo-companion-launcher-core::before{content:"";position:absolute;inset:-5px;border:1px solid var(--hc-agent);border-radius:50%;animation:halo-companion-pulse 2.8s ease-out infinite}.halo-companion-launcher-copy{display:grid;text-align:left;overflow-wrap:anywhere}.halo-companion-launcher-copy strong{font-size:11px;letter-spacing:.12em;text-transform:uppercase}.halo-companion-launcher-copy span{color:#c3cbc3;font-size:8px;letter-spacing:.06em;text-transform:uppercase}
       .halo-companion-panel{position:absolute;left:0;bottom:72px;display:grid;grid-template-rows:auto auto minmax(180px,1fr) auto;width:min(430px,calc(100vw - 36px));height:min(690px,calc(100vh - 108px));overflow:hidden;border:1px solid rgba(255,255,255,.18);background:#0a0c0b;box-shadow:0 30px 90px rgba(0,0,0,.66);clip-path:polygon(0 0,calc(100% - 24px) 0,100% 24px,100% 100%,24px 100%,0 calc(100% - 24px));animation:halo-companion-rise .28s ease-out both}.halo-companion-panel[hidden]{display:none}
       .halo-companion-panel::before{content:"";position:absolute;inset:0;pointer-events:none;background:radial-gradient(circle at 9% 2%,color-mix(in srgb,var(--hc-agent) 20%,transparent),transparent 29%),linear-gradient(115deg,rgba(255,255,255,.025),transparent 40%)}
       .halo-companion-head{position:relative;display:grid;grid-template-columns:1fr auto;gap:18px;padding:20px 20px 15px;border-bottom:1px solid rgba(255,255,255,.1)}.halo-companion-eyebrow{display:flex;align-items:center;gap:8px;color:var(--hc-agent);font-size:8px;letter-spacing:.2em;text-transform:uppercase}.halo-companion-eyebrow::before{content:"";width:18px;height:1px;background:currentColor}.halo-companion-title{margin:7px 0 0;font-family:Georgia,"Times New Roman",serif;font-size:25px;font-weight:400;line-height:1}.halo-companion-title em{color:var(--hc-agent);font-style:italic}.halo-companion-close{align-self:start;width:32px;height:32px;border:1px solid rgba(255,255,255,.14);border-radius:50%;background:transparent;color:#d4d7d1;cursor:pointer}
@@ -326,8 +329,9 @@
       .halo-companion-launcher[data-unread="true"]{border-color:var(--hc-gold)}.halo-companion-launcher[data-unread="true"] .halo-companion-launcher-copy span{color:var(--hc-gold)}
       .halo-companion-head{border-bottom-color:rgba(235,196,112,.22)}.halo-companion-setting select:focus-visible,.halo-companion-settings summary:focus-visible,.halo-companion-route:focus-visible{outline:2px solid var(--hc-agent);outline-offset:2px}
       .halo-companion-sr{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
-      @media(max-width:600px){.halo-companion{left:10px;bottom:10px}.halo-companion-launcher{grid-template-columns:42px auto;min-height:52px}.halo-companion-launcher-core{width:42px;height:42px}.halo-companion-panel{bottom:64px;width:calc(100vw - 20px);height:min(690px,calc(100vh - 84px))}.halo-companion-title{font-size:22px}.halo-companion-roster{grid-template-columns:repeat(4,1fr)}.halo-companion-agent span:last-child{display:none}.halo-companion-settings-grid{grid-template-columns:1fr}}
-      @media(prefers-reduced-motion:reduce){.halo-companion *{animation:none!important;transition:none!important}}
+      .halo-companion-panel{position:fixed;max-height:calc(100vh - 20px);grid-template-rows:auto auto minmax(0,1fr) auto;overflow-y:auto}
+      @media(max-width:600px){.halo-companion{left:10px;bottom:10px}.halo-companion-launcher{grid-template-columns:42px minmax(0,1fr) 6px;min-height:52px}.halo-companion-launcher-core{width:42px;height:42px}.halo-companion-panel{bottom:64px;width:calc(100vw - 20px);height:min(690px,calc(100vh - 84px))}.halo-companion-title{font-size:22px}.halo-companion-roster{grid-template-columns:repeat(4,1fr)}.halo-companion-agent span:last-child{display:none}.halo-companion-settings-grid{grid-template-columns:1fr}}
+      @media(prefers-reduced-motion:reduce){.halo-companion *,.halo-companion *::before{animation:none!important;transition:none!important}}
     `;
     document.head.appendChild(style);
   }
@@ -376,11 +380,101 @@
       <button class="halo-companion-launcher" type="button" aria-expanded="false" aria-controls="haloCompanionPanel" aria-label="Open HALO Guide">
         <span class="halo-companion-launcher-core">${AGENTS[state.agent].glyph}</span>
         <span class="halo-companion-unread" hidden aria-hidden="true">0</span>
-        <span class="halo-companion-launcher-copy"><strong>Ask HALO</strong><span>HALO Guide · 4 specialists</span></span>
+        <span class="halo-companion-launcher-copy"><strong>✦ ASK HALO</strong><span>HALO GUIDE · 4 SPECIALISTS</span></span>
+        <span class="halo-companion-status" aria-hidden="true"></span>
       </button>
+      <span class="halo-companion-sr" id="haloCompanionDragHint">Drag to reposition, or use arrow keys while this button is focused.</span>
       <span class="halo-companion-sr" role="status" aria-live="polite"></span>`;
     document.body.appendChild(root);
     return root;
+  }
+
+  function setupGuideDrag(root) {
+    const launcher = root.querySelector(".halo-companion-launcher");
+    const panel = root.querySelector(".halo-companion-panel");
+    let position = null;
+    let drag = null;
+    let suppressClick = false;
+    launcher.setAttribute("aria-describedby", "haloCompanionDragHint");
+
+    const clamp = (value, size, limit) => {
+      const margin = Math.min(10, Math.max(0, (limit - size) / 2));
+      return Math.max(margin, Math.min(value, limit - size - margin));
+    };
+    const placePanel = () => {
+      if (panel.hidden) return;
+      const rect = launcher.getBoundingClientRect();
+      const top = rect.top >= panel.offsetHeight + 24
+        ? rect.top - panel.offsetHeight - 14
+        : rect.bottom + 14;
+      panel.style.left = `${clamp(rect.left, panel.offsetWidth, window.innerWidth)}px`;
+      panel.style.top = `${clamp(top, panel.offsetHeight, window.innerHeight)}px`;
+      panel.style.bottom = "auto";
+    };
+    const place = (x, y) => {
+      const rect = launcher.getBoundingClientRect();
+      position = {
+        x: clamp(x, rect.width, window.innerWidth),
+        y: clamp(y, rect.height, window.innerHeight)
+      };
+      root.style.left = `${position.x}px`;
+      root.style.top = `${position.y}px`;
+      root.style.bottom = "auto";
+      placePanel();
+    };
+    const stop = event => {
+      if (!drag || (event?.pointerId !== undefined && event.pointerId !== drag.id)) return;
+      const id = drag.id;
+      drag = null;
+      launcher.dataset.dragging = "false";
+      if (launcher.hasPointerCapture(id)) launcher.releasePointerCapture(id);
+    };
+
+    launcher.addEventListener("pointerdown", event => {
+      if (event.button !== 0 || !event.isPrimary || drag) return;
+      const rect = launcher.getBoundingClientRect();
+      suppressClick = false;
+      drag = {
+        id: event.pointerId,
+        x: event.clientX,
+        y: event.clientY,
+        offsetX: event.clientX - rect.left,
+        offsetY: event.clientY - rect.top
+      };
+      launcher.setPointerCapture(event.pointerId);
+    });
+    launcher.addEventListener("pointermove", event => {
+      if (!drag || event.pointerId !== drag.id) return;
+      if (!suppressClick && Math.hypot(event.clientX - drag.x, event.clientY - drag.y) < 4) return;
+      suppressClick = true;
+      launcher.dataset.dragging = "true";
+      place(event.clientX - drag.offsetX, event.clientY - drag.offsetY);
+    });
+    for (const type of ["pointerup", "pointercancel", "lostpointercapture"]) {
+      launcher.addEventListener(type, stop);
+    }
+    launcher.addEventListener("click", event => {
+      if (suppressClick && event.detail !== 0) event.preventDefault();
+    }, true);
+    launcher.addEventListener("keydown", event => {
+      const delta = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[event.key];
+      if (!delta) return;
+      event.preventDefault();
+      const rect = launcher.getBoundingClientRect();
+      const step = event.shiftKey ? 40 : 10;
+      place(rect.left + delta[0] * step, rect.top + delta[1] * step);
+    });
+    const resize = () => {
+      const rect = launcher.getBoundingClientRect();
+      place(position?.x ?? rect.left, position?.y ?? rect.top);
+    };
+    window.addEventListener("resize", resize);
+    window.addEventListener("blur", () => stop());
+    const observer = new ResizeObserver(resize);
+    observer.observe(launcher);
+    observer.observe(panel);
+    resize();
+    return placePanel;
   }
 
   function setAgent(agentId) {
@@ -444,7 +538,7 @@
     badge.textContent = count > 9 ? "9+" : String(count);
     launcher.dataset.unread = String(count > 0);
     launcher.setAttribute("aria-label", count ? `Open HALO Guide, ${count} new ${count === 1 ? "reply" : "replies"}` : "Open HALO Guide");
-    launcher.querySelector(".halo-companion-launcher-copy span").textContent = count ? `${count} new ${count === 1 ? "reply" : "replies"}` : "HALO Guide · 4 specialists";
+    launcher.querySelector(".halo-companion-launcher-copy span").textContent = count ? `${count} new ${count === 1 ? "reply" : "replies"}` : "HALO GUIDE · 4 SPECIALISTS";
   }
 
   function noteUnread(agent) {
@@ -584,6 +678,7 @@
     panel.hidden = !open;
     launcher.setAttribute("aria-expanded", String(open));
     if (open) {
+      placeGuidePanel();
       state.unread = 0;
       updateUnread();
       root.querySelector(".halo-companion-input").focus();
@@ -596,6 +691,7 @@
 
   injectStyles();
   const root = createShell();
+  const placeGuidePanel = setupGuideDrag(root);
   renderRoster();
   setAgent(state.agent);
   state.lastJourneySignature = guidanceSignature(state.journey);
@@ -603,7 +699,9 @@
   const guide = pageGuide();
   addMessage("assistant", guide.welcome, { agent: state.agent, suggestions: guide.prompts, initial: true });
 
-  root.querySelector(".halo-companion-launcher").addEventListener("click", () => toggle());
+  root.querySelector(".halo-companion-launcher").addEventListener("click", event => {
+    if (!event.defaultPrevented) toggle();
+  });
   root.querySelector(".halo-companion-close").addEventListener("click", () => toggle(false));
   root.querySelector(".halo-companion-form").addEventListener("submit", event => {
     event.preventDefault();

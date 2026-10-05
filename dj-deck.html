@@ -310,7 +310,7 @@
 
     .topbar {
       display: grid;
-      grid-template-columns: auto minmax(260px, 1fr) auto;
+      grid-template-columns: auto auto minmax(0, 1fr);
       align-items: center;
       min-height: 68px;
       border: 1px solid var(--line);
@@ -330,11 +330,13 @@
     .brand-copy { padding: 12px 18px; min-width: 170px; }
     .brand-copy strong { display: block; font-family: "Archivo Black", sans-serif; font-size: 21px; letter-spacing: -.04em; }
 
-    .now-playing { min-width: 0; padding: 10px 22px; display: flex; align-items: center; gap: 18px; }
+    .topbar > .pulse-dot { margin: 0 18px; }
+    .isolated-deck-strip { margin-top: 12px; padding: 12px 22px; display: flex; align-items: center; gap: 18px; border: 1px solid var(--line-strong); background: var(--panel); }
     .pulse-dot { width: 8px; height: 8px; flex: 0 0 auto; border-radius: 50%; background: var(--acid); box-shadow: 0 0 0 0 rgba(200,255,54,.5); animation: pulse 1.8s infinite; }
-    .now-track { min-width: 0; }
+    .now-track { min-width: 0; flex: 1; }
+    .now-track .eyebrow { margin-bottom: 6px; }
     .now-track strong { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 14px; }
-    .now-track span { color: var(--muted); font: 400 10px "DM Mono", monospace; text-transform: uppercase; }
+    .now-track span { display: block; overflow-wrap: anywhere; color: var(--muted); font: 400 10px "DM Mono", monospace; text-transform: uppercase; }
     .now-track span[data-continuity-state="pre-roll"] { color: #f0c78a; }
     .now-track span[data-continuity-state="bridge-active"] { color: #ff8d68; }
     .now-track span[data-continuity-state="normal"] { color: var(--acid); }
@@ -990,7 +992,8 @@
       .app-shell { padding: 10px; }
       .topbar { top: 6px; grid-template-columns: auto 1fr; }
       .brand-copy { display: none; }
-      .now-playing { padding: 10px 14px; }
+      .topbar > .pulse-dot { justify-self: end; }
+      .isolated-deck-strip { padding: 12px 14px; gap: 12px; }
       .top-actions { display: none; }
       .hero-title { font-size: clamp(48px, 14vw, 86px); }
       .workspace { grid-template-columns: 1fr 1fr; }
@@ -1170,10 +1173,7 @@
         </div>
         <div class="brand-copy"><span class="eyebrow">Live intelligence HALO</span><strong>HALO</strong></div>
       </div>
-      <div class="now-playing">
-        <span class="pulse-dot"></span>
-        <div class="now-track"><strong id="masterTrack">Midnight Circuit — Nia Sol</strong><span id="masterStatus">DECK A READY · MASTER TEMPO 124.0 BPM</span></div>
-      </div>
+      <span class="pulse-dot" role="img" aria-label="System ready"></span>
       <div class="top-actions">
         <!-- Permanent destination: keep the Opportunity Exchange linked across future updates. -->
         <a class="compact-button" href="https://agent-6a6c032a9e80fd--halo-world-global-platform.netlify.app/" target="_blank" rel="noopener noreferrer" data-permanent-destination="opportunity-exchange" data-stat-event="open_opportunity_exchange" data-stat-target="dj-deck-header">Opportunity Exchange</a>
@@ -1182,13 +1182,21 @@
         <a class="compact-button" href="/mixes/" data-stat-event="open_halo_x_mixes" data-stat-target="dj-deck-header">HALO X Mixes</a>
         <a class="compact-button" href="/dreamweaver/" data-stat-event="open_dreamweaver_show" data-stat-target="dj-deck-header">Dreamweaver Show</a>
         <a class="compact-button" href="/halo">Global portal</a>
-        <button class="compact-button" id="openTrackPicker" type="button">Track QR</button>
         <button class="compact-button" id="sessionRevisionButton" type="button">Cloud revision</button>
         <div class="status-pill is-offline" id="sessionSaveStatus"><span class="dot"></span><span>Saved on device</span></div>
         <div class="status-pill" id="cloudStatus"><span class="dot"></span><span>Cloud ready</span></div>
         <button class="compact-button" id="focusMode" type="button" aria-pressed="false" aria-controls="mixOperations recordingRig mixFlightplan musicLibrary boothIntelligence" aria-keyshortcuts="F" title="Hide the support cards and leave only the decks and mixer">Desk only</button>
       </div>
     </header>
+
+    <section id="ambient-deck-bar" class="isolated-deck-strip" aria-labelledby="currentTrackLabel">
+      <div class="now-track">
+        <h2 class="eyebrow" id="currentTrackLabel">Current track</h2>
+        <strong id="masterTrack">Midnight Circuit — Nia Sol</strong>
+        <span id="masterStatus">DECK A READY · MASTER TEMPO 124.0 BPM</span>
+      </div>
+      <button class="compact-button" id="openTrackPicker" type="button">Track QR</button>
+    </section>
 
     <section class="hero-strip" aria-labelledby="pageTitle">
       <h1 class="hero-title" id="pageTitle">Read the room.<br><span>Move the room.</span></h1>

@@ -116,7 +116,7 @@
         else if (typeof args[0] === "object") {
           if (args.length === 1) entry.edges.delete(args[0]);
           else {
-            const remaining = (entry.edges.get(args[0]) || []).filter(ports => ports[0] !== args[1] || (args.length > 2 && ports[1] !== args[2]));
+            const remaining = (entry.edges.get(args[0]) || []).filter(ports => (ports[0] || 0) !== args[1] || (args.length > 2 && (ports[1] || 0) !== args[2]));
             if (remaining.length) entry.edges.set(args[0], remaining);
             else entry.edges.delete(args[0]);
           }

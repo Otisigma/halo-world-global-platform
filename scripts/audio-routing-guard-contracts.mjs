@@ -244,7 +244,7 @@ assert.match(deckPage, /<script src="\/audio-routing-guard\.js"><\/script>\n\s+<
 assert.match(deckPage, /HaloAudioRoutingGuard\.create\(context, \{\s+liveBus: masterGain,\s+protectedNodes: \[limiter, audioEngine\.recordingDestination/, "Master, limiter and recorder are protected");
 assert.match(deckPage, /routingGuard: audioEngine\.routing \}\)/, "Engine receives the guard");
 assert.match(deckPage, /audioEngine\.routing\.tap\(audioEngine\.masterGain, continuityState\.analyser\)/, "Continuity meter is a read-only tap");
-assert.match(deckPage, /audioEngine\.routing\.connectLive\(continuityState\.fillerGain, audioEngine\.masterGain\)/, "Continuity filler joins the live mix explicitly");
-assert.match(deckPage, /try \{ routingIsolated = !audioEngine\.routing \|\| audioEngine\.routing\.assertNoUtilityLeak\(\)\.ok; \} catch \{ routingIsolated = false; \}\n\s+if \(!routingIsolated\) throw new Error\("Background audio routing failed the isolation check/, "Recording is refused with one actionable message when the isolation check fails in any mode");
+assert.match(deckPage, /continuityState\.fillerGain\.connect\(audioEngine\.monitorBus\)/, "Continuity filler is monitor-only");
+assert.match(deckPage, /try \{ routingIsolated = Boolean\(audioEngine\.routing\?\.assertNoUtilityLeak\(\)\.ok && audioEngine\.recorderIsolation\?\.assertGraph\(\)\); \} catch \{ routingIsolated = false; \}\n\s+if \(!routingIsolated\) throw new Error\("Background audio routing failed the isolation check/, "Recording fails closed when either isolation guard is absent or fails");
 
 console.log("Audio routing guard contracts: utility bus isolation, live routing, offline rendering, runtime assertions, and deck wiring behave as expected.");

@@ -36,6 +36,25 @@ assert.match(companion, /pointer-events:none;animation:halo-companion-aura/);
 assert.match(companion, /prefers-reduced-motion:reduce[^`]*\*::before/);
 assert.match(companion, /if \(!event.defaultPrevented\) toggle\(\)/, "a drag must not open the conversation");
 
+const dragHint = { textContent: "Drag to reposition, or use arrow keys while this button is focused." };
+const liveStatus = { textContent: "" };
+const unreadState = { open: false, unread: 0 };
+const unreadContext = vm.createContext({
+  state: unreadState,
+  updateUnread() {},
+  root: {
+    querySelector(selector) {
+      return selector === '.halo-companion-sr[role="status"]' ? liveStatus : dragHint;
+    }
+  }
+});
+const unreadStart = companion.indexOf("  function noteUnread(agent)");
+const unreadEnd = companion.indexOf("  function addMessage(", unreadStart);
+vm.runInContext(`${companion.slice(unreadStart, unreadEnd)}noteUnread({ name: "Nova" });`, unreadContext);
+assert.equal(liveStatus.textContent, "New HALO Guide reply from Nova.", "unread replies still reach the live status region");
+assert.match(dragHint.textContent, /arrow keys/, "reply announcements preserve drag instructions");
+assert.equal(unreadState.unread, 1);
+
 // Exercise the drag initializer with measured geometry and captured pointer events.
 const listeners = () => ({
   events: new Map(),

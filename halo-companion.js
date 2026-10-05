@@ -545,7 +545,7 @@
     if (state.open) return;
     state.unread += 1;
     updateUnread();
-    root.querySelector(".halo-companion-sr").textContent = `New HALO Guide reply from ${agent.name}.`;
+    root.querySelector('.halo-companion-sr[role="status"]').textContent = `New HALO Guide reply from ${agent.name}.`;
   }
 
   function addMessage(role, text, options = {}) {

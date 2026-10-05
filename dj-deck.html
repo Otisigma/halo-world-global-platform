@@ -5719,7 +5719,9 @@
         await ensureAudio();
         await buildTakeoverPlan();
         if (!window.MediaRecorder || !audioEngine.recordingDestination) throw new Error("This browser cannot record the live master mix.");
-        if (audioEngine.routing && !audioEngine.routing.assertNoUtilityLeak().ok) throw new Error("Background audio routing failed the isolation check. Reload the deck before recording.");
+        let routingIsolated = true;
+        try { routingIsolated = !audioEngine.routing || audioEngine.routing.assertNoUtilityLeak().ok; } catch { routingIsolated = false; }
+        if (!routingIsolated) throw new Error("Background audio routing failed the isolation check. Reload the deck before recording.");
         const missingDecks = ["A", "B"].filter(deckId => !trackHasPlayableAudio(deckState[deckId]));
         if (missingDecks.length) throw new Error(`Load playable audio on Deck ${missingDecks.join(" and Deck ")} before starting the automated set.`);
 

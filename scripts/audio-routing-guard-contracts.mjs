@@ -245,6 +245,6 @@ assert.match(deckPage, /HaloAudioRoutingGuard\.create\(context, \{\s+liveBus: ma
 assert.match(deckPage, /routingGuard: audioEngine\.routing \}\)/, "Engine receives the guard");
 assert.match(deckPage, /audioEngine\.routing\.tap\(audioEngine\.masterGain, continuityState\.analyser\)/, "Continuity meter is a read-only tap");
 assert.match(deckPage, /audioEngine\.routing\.connectLive\(continuityState\.fillerGain, audioEngine\.masterGain\)/, "Continuity filler joins the live mix explicitly");
-assert.match(deckPage, /audioEngine\.routing && !audioEngine\.routing\.assertNoUtilityLeak\(\)\.ok\) throw new Error/, "Recording is refused when the isolation check fails");
+assert.match(deckPage, /try \{ routingIsolated = !audioEngine\.routing \|\| audioEngine\.routing\.assertNoUtilityLeak\(\)\.ok; \} catch \{ routingIsolated = false; \}\n\s+if \(!routingIsolated\) throw new Error\("Background audio routing failed the isolation check/, "Recording is refused with one actionable message when the isolation check fails in any mode");
 
 console.log("Audio routing guard contracts: utility bus isolation, live routing, offline rendering, runtime assertions, and deck wiring behave as expected.");

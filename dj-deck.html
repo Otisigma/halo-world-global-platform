@@ -3653,8 +3653,7 @@
       if (!continuityState.fillerGain) {
         continuityState.fillerGain = audioEngine.context.createGain();
         continuityState.fillerGain.gain.setValueAtTime(.0001, audioEngine.context.currentTime);
-        if (audioEngine.routing) audioEngine.routing.connectLive(continuityState.fillerGain, audioEngine.masterGain);
-        else continuityState.fillerGain.connect(audioEngine.masterGain);
+        continuityState.fillerGain.connect(audioEngine.monitorBus);
       }
       cleanupDeckContinuityFillerNodes();
       clearTimeout(continuityState.fillerTimeout);
@@ -3839,8 +3838,15 @@
       const activeCueDecks = ["A", "B"].filter(deckId => audioEngine.decks[deckId].cueActive);
       const isRecording = recordingState.recorder?.state === "recording";
       const cueBusActive = activeCueDecks.length > 0;
+      let graphSecure = !audioEngine.context;
+      if (audioEngine.context) {
+        try {
+          graphSecure = Boolean(audioEngine.recorderIsolation?.assertGraph() && audioEngine.routing?.assertNoUtilityLeak().ok);
+        } catch { graphSecure = false; }
+      }
       return {
         isRecording,
+        graphSecure,
         masterBusLevel: isRecording && cueBusActive ? recorderGuardMasterLevel() : 0,
         cueBusActive,
         activeCueDecks
@@ -3856,6 +3862,16 @@
           const wasTriggered = recorderGuardState.status?.state === "triggered";
           recorderGuardState.status = status;
           window.HaloRecorderGuard.renderIndicator(elements.recorderGuard, status);
+          if (!status.isSecureToRecord && recordingState.recorder?.state === "recording") {
+            recordingState.failed = true;
+            recordingState.recorder.stop();
+            clearInterval(recordingState.elapsedTimer);
+            stopAutomatedMix();
+            stopTakeoverDecks();
+            elements.recordingRig.className = "recording-rig panel is-error";
+            elements.recordingStatus.textContent = status.warningMessage;
+            elements.recordingStart.disabled = false;
+          }
           if (status.state === "triggered" && !wasTriggered) {
             window.haloStats?.track("dj_recorder_bleed_guard_triggered", {
               cue_decks: status.activeCueDecks.join(","),
@@ -3871,6 +3887,14 @@
         const AudioContext = window.AudioContext || window.webkitAudioContext;
         if (!AudioContext) throw new Error("This browser does not support audio playback.");
         const context = new AudioContext();
+        if (!window.HaloRecorderGuard?.createIsolation || !window.HaloAudioRoutingGuard) {
+          await context.close();
+          throw new Error("Recorder isolation guards are unavailable. Reload the deck.");
+        }
+        audioEngine.recorderIsolation = window.HaloRecorderGuard.createIsolation(context);
+        audioEngine.monitorBus = context.createGain();
+        audioEngine.recorderIsolation.monitorOnly(audioEngine.monitorBus);
+        audioEngine.monitorBus.connect(context.destination);
         const masterGain = context.createGain();
         const limiter = context.createDynamicsCompressor();
         masterGain.gain.setValueAtTime(.82, context.currentTime);
@@ -3886,7 +3910,18 @@
         audioEngine.limiter = limiter;
         if (typeof context.createMediaStreamDestination === "function") {
           audioEngine.recordingDestination = context.createMediaStreamDestination();
+          audioEngine.recorderIsolation.setDestination(audioEngine.recordingDestination);
           limiter.connect(audioEngine.recordingDestination);
+          const splitter = context.createChannelSplitter(2);
+          limiter.connect(splitter);
+          audioEngine.recorderAnalysers = [0, 1].map(channel => {
+            const analyser = context.createAnalyser();
+            analyser.fftSize = 8192;
+            analyser.smoothingTimeConstant = 0;
+            analyser.minDecibels = -120;
+            splitter.connect(analyser, channel);
+            return analyser;
+          });
         }
         ["A", "B"].forEach(deckId => {
           const input = context.createGain();
@@ -3935,7 +3970,8 @@
           trim.connect(gain);
           trim.connect(cueGain);
           gain.connect(masterGain);
-          cueGain.connect(context.destination);
+          audioEngine.recorderIsolation.monitorOnly(cueGain);
+          cueGain.connect(audioEngine.monitorBus);
           cueGain.gain.setValueAtTime(0, context.currentTime);
           audioEngine.decks[deckId].input = input;
           audioEngine.decks[deckId].trim = trim;
@@ -3949,7 +3985,7 @@
           ? window.HaloAudioRoutingGuard.create(context, {
             liveBus: masterGain,
             protectedNodes: [limiter, audioEngine.recordingDestination, ...["A", "B"].flatMap(deckId => [audioEngine.decks[deckId].input, audioEngine.decks[deckId].gain, audioEngine.decks[deckId].cueGain])],
-            strict: ["localhost", "127.0.0.1"].includes(window.location.hostname),
+            strict: true,
             onViolation: violation => {
               console.warn(`[HALO audio routing] ${violation.message}`);
               window.haloStats?.track("dj_audio_routing_violation", { reason: violation.type, target: violation.target || "" });
@@ -4121,7 +4157,7 @@
       envelope.gain.setValueAtTime(.72, when);
       envelope.gain.exponentialRampToValueAtTime(.001, when + .22);
       oscillator.connect(envelope);
-      envelope.connect(audioEngine.decks[deckId].input);
+      envelope.connect(audioEngine.monitorBus);
       oscillator.start(when);
       oscillator.stop(when + .23);
     }
@@ -4135,7 +4171,7 @@
       envelope.gain.setValueAtTime(level, when);
       envelope.gain.exponentialRampToValueAtTime(.001, when + duration);
       oscillator.connect(envelope);
-      envelope.connect(audioEngine.decks[deckId].input);
+      envelope.connect(audioEngine.monitorBus);
       oscillator.start(when);
       oscillator.stop(when + duration + .01);
     }
@@ -4156,6 +4192,7 @@
 
     function startDeckSource(context, deckId, source, destination, startAt) {
       const channel = audioEngine.decks[deckId];
+      audioEngine.recorderIsolation.allowMusicSource(source);
       if (!audioEngine.halo) {
         source.connect(destination);
         source.start(startAt, 0);
@@ -5272,8 +5309,7 @@
     }
 
     // Play a HALO bridge synth sweep: outgoing key → neutral → incoming key.
-    // Uses the existing triggerTone infrastructure; outputs to the incoming deck's
-    // input so it blends naturally into the mix.
+    // Synthesized operator feedback is monitor-only, never part of the recorded mix.
     function playBridgeSynth(deckId, durationMs, fromKey, toKey) {
       if (!audioEngine.context) return;
       const ctx = audioEngine.context;
@@ -5311,9 +5347,9 @@
         env5.gain.setValueAtTime(gain * 0.4, t);
         env5.gain.exponentialRampToValueAtTime(0.001, t + stepSecs * 0.9);
         osc.connect(env);
-        env.connect(channel.input);
+        env.connect(audioEngine.monitorBus);
         osc5.connect(env5);
-        env5.connect(channel.input);
+        env5.connect(audioEngine.monitorBus);
         osc.start(t);
         osc.stop(t + stepSecs);
         osc5.start(t);
@@ -5712,6 +5748,8 @@
 
     async function startTakeoverRecording() {
       if (!takeoverSession) return;
+      if (recordingState.arming || recordingState.recorder?.state === "recording") return;
+      recordingState.arming = true;
       elements.recordingStart.disabled = true;
       elements.recordingStatus.textContent = "Building the complete DJ sequence before opening the master channel…";
 
@@ -5719,8 +5757,8 @@
         await ensureAudio();
         await buildTakeoverPlan();
         if (!window.MediaRecorder || !audioEngine.recordingDestination) throw new Error("This browser cannot record the live master mix.");
-        let routingIsolated = true;
-        try { routingIsolated = !audioEngine.routing || audioEngine.routing.assertNoUtilityLeak().ok; } catch { routingIsolated = false; }
+        let routingIsolated = false;
+        try { routingIsolated = Boolean(audioEngine.routing?.assertNoUtilityLeak().ok && audioEngine.recorderIsolation?.assertGraph()); } catch { routingIsolated = false; }
         if (!routingIsolated) throw new Error("Background audio routing failed the isolation check. Reload the deck before recording.");
         const missingDecks = ["A", "B"].filter(deckId => !trackHasPlayableAudio(deckState[deckId]));
         if (missingDecks.length) throw new Error(`Load playable audio on Deck ${missingDecks.join(" and Deck ")} before starting the automated set.`);
@@ -5788,7 +5826,19 @@
           });
         }, { once: true });
 
-        recorder.start(1000);
+        stopAutomatedMix();
+        stopTakeoverDecks();
+        elements.recordingStatus.textContent = "Checking the isolated recorder feed for noise, hum, and cue bleed…";
+        await audioEngine.recorderIsolation.armAndStartRecording(recorder, {
+          context: audioEngine.context,
+          readFrames: () => audioEngine.recorderAnalysers.map(analyser => {
+            const samples = new Float32Array(analyser.fftSize);
+            const spectrum = new Float32Array(analyser.frequencyBinCount);
+            analyser.getFloatTimeDomainData(samples);
+            analyser.getFloatFrequencyData(spectrum);
+            return { samples, spectrum, sampleRate: audioEngine.context.sampleRate };
+          })
+        });
         recordingState.startedAt = Date.now();
         syncDecks();
         deckState.A.playing = true;
@@ -5823,6 +5873,8 @@
         elements.recordingNote.textContent = "Try a current version of Chrome, Edge, Firefox, or Safari.";
         showToast("Recording unavailable", error.message || "The browser could not open the master recorder.");
         elements.recordingStart.disabled = false;
+      } finally {
+        recordingState.arming = false;
       }
     }
 

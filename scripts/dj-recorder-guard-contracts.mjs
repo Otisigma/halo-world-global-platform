@@ -122,8 +122,150 @@ assert.match(deckPage, /const isRecording = recordingState\.recorder\?\.state ==
 assert.match(deckPage, /const cueBusActive = activeCueDecks\.length > 0/, "Guard reads cue bus activity");
 assert.match(deckPage, /masterBusLevel: isRecording && cueBusActive \? recorderGuardMasterLevel\(\) : 0/, "Guard reads the master bus level only when it can affect the result");
 assert.match(deckPage, /recorderGuardState\.guard\?\.tick\(\);/, "Cue toggles refresh the guard immediately");
-assert.match(deckPage, /cueGain\.connect\(context\.destination\)/, "CUE monitoring stays on the local output path");
+assert.match(deckPage, /cueGain\.connect\(audioEngine\.monitorBus\)/, "CUE monitoring stays on the isolated monitor path");
+assert.match(deckPage, /audioEngine\.monitorBus\.connect\(context\.destination\)/, "Monitor bus feeds only the local output");
 assert.match(deckPage, /limiter\.connect\(audioEngine\.recordingDestination\)/, "Recorder taps the post-limiter master bus");
 assert.doesNotMatch(deckPage, /cueGain\.connect\(audioEngine\.recordingDestination\)/, "CUE monitoring is never routed into the recorder");
+
+class MockNode {
+  constructor(context) {
+    this.context = context;
+    this.connections = [];
+    this.gain = { value: 1 };
+  }
+  connect(target, ...ports) { this.connections.push({ target, ports }); return target; }
+  disconnect(target) {
+    this.connections = target ? this.connections.filter(connection => connection.target !== target) : [];
+  }
+}
+function isolatedGraph() {
+  const context = {
+    state: "running", currentTime: 0, destination: {},
+    createGain() { return new MockNode(this); },
+    createBufferSource() { const node = new MockNode(this); node.buffer = null; return node; },
+    createOscillator() { return new MockNode(this); },
+    createMediaStreamSource() { return new MockNode(this); },
+    createMediaStreamDestination() { const node = new MockNode(this); node.stream = {}; return node; }
+  };
+  const isolation = HaloRecorderGuard.createIsolation(context);
+  const master = context.createGain();
+  const destination = context.createMediaStreamDestination();
+  isolation.setDestination(destination);
+  master.connect(destination);
+  const monitor = context.createGain();
+  isolation.monitorOnly(monitor);
+  monitor.connect(context.destination);
+  return { context, isolation, master, destination, monitor };
+}
+const quietFrame = () => ({
+  samples: new Float32Array(8192),
+  spectrum: new Float32Array(4096).fill(-Infinity),
+  sampleRate: 48000
+});
+const quietFrames = () => [quietFrame(), quietFrame()];
+function preflightOptions(graph, readFrames = quietFrames, wait) {
+  return {
+    context: graph.context, readFrames,
+    wait: wait || (async ms => { graph.context.currentTime += ms / 1000; })
+  };
+}
+function mockRecorder(graph) {
+  return { stream: graph.destination.stream, state: "inactive", starts: 0, start(timeslice) { this.starts++; this.state = "recording"; assert.equal(timeslice, 1000); } };
+}
+const graph = isolatedGraph();
+const music = graph.context.createBufferSource();
+music.buffer = { decodedMusic: true };
+graph.isolation.allowMusicSource(music);
+music.connect(graph.master);
+music.connect(graph.monitor);
+const cue = graph.context.createOscillator();
+cue.connect(graph.monitor);
+assert.equal(graph.isolation.assertGraph(), true, "Music and monitor-only cue coexist safely");
+const recorder = mockRecorder(graph);
+await graph.isolation.armAndStartRecording(recorder, preflightOptions(graph));
+assert.equal(recorder.starts, 1, "Clean stereo feed arms and starts successfully");
+assert.equal(evaluate({ isRecording: true, graphSecure: true, cueBusActive: true, masterBusLevel: .99 }).state, "secure", "Allowed live music is not mistaken for cue bleed");
+assert.equal(evaluate({ graphSecure: false }).isSecureToRecord, false, "Graph failure blocks even an idle recorder");
+
+for (const route of ["direct", "indirect", "parameter", "monitor", "microphone", "unapproved-buffer"]) {
+  const bad = isolatedGraph();
+  const source = route === "microphone" ? bad.context.createMediaStreamSource() : route === "unapproved-buffer" ? bad.context.createBufferSource() : bad.context.createOscillator();
+  if (route === "indirect") {
+    const envelope = bad.context.createGain();
+    source.connect(envelope);
+    assert.throws(() => envelope.connect(bad.master), /unapproved/);
+    assert.equal(envelope.connections.length, 0, "Rejected connection never reaches native Web Audio");
+  } else if (route === "monitor") {
+    source.connect(bad.monitor);
+    assert.throws(() => bad.monitor.connect(bad.master), /unapproved/);
+  } else {
+    assert.throws(() => source.connect(route === "parameter" ? bad.master.gain : bad.master), /unapproved/);
+    assert.equal(source.connections.length, 0);
+  }
+  const blockedRecorder = mockRecorder(bad);
+  await assert.rejects(bad.isolation.armAndStartRecording(blockedRecorder, preflightOptions(bad)), /unapproved/);
+  assert.equal(blockedRecorder.starts, 0, `${route} violations permanently interlock the recorder`);
+}
+for (const signal of ["noise", "peak", "hum", "tone", "invalid", "missing-channel"]) {
+  const bad = isolatedGraph();
+  const blockedRecorder = mockRecorder(bad);
+  const frames = () => {
+    const output = quietFrames();
+    if (signal === "noise") output[1].samples.fill(.001);
+    if (signal === "peak") output[0].samples[0] = .01;
+    if (signal === "invalid") output[1].samples[0] = NaN;
+    if (signal === "hum" || signal === "tone") output[1].spectrum[signal === "hum" ? 10 : 170] = -96;
+    if (signal === "missing-channel") output.pop();
+    return output;
+  };
+  await assert.rejects(bad.isolation.armAndStartRecording(blockedRecorder, preflightOptions(bad, frames)), /noise|bleed|Hum|tone|Invalid|channels/);
+  assert.equal(blockedRecorder.starts, 0, `${signal} fails closed before start`);
+}
+const stalled = isolatedGraph();
+await assert.rejects(stalled.isolation.armAndStartRecording(mockRecorder(stalled), preflightOptions(stalled, quietFrames, async () => {})), /clock/);
+const unavailable = isolatedGraph();
+await assert.rejects(unavailable.isolation.armAndStartRecording(mockRecorder(unavailable), { context: unavailable.context }), /unavailable/);
+const changed = isolatedGraph();
+const changedRecorder = mockRecorder(changed);
+let waits = 0;
+await assert.rejects(changed.isolation.armAndStartRecording(changedRecorder, preflightOptions(changed, quietFrames, async ms => {
+  changed.context.currentTime += ms / 1000;
+  if (++waits === 4) changed.master.connect = () => {};
+})), /bypassed/);
+assert.equal(changedRecorder.starts, 0, "Graph tampering during preflight prevents start");
+const wrongStream = isolatedGraph();
+await assert.rejects(wrongStream.isolation.armAndStartRecording({ ...mockRecorder(wrongStream), stream: {} }, preflightOptions(wrongStream)), /stream/);
+const concurrent = isolatedGraph();
+const firstRecorder = mockRecorder(concurrent);
+const pending = concurrent.isolation.armAndStartRecording(firstRecorder, preflightOptions(concurrent));
+await assert.rejects(concurrent.isolation.armAndStartRecording(mockRecorder(concurrent), preflightOptions(concurrent)), /armed/);
+await pending;
+const disconnected = isolatedGraph();
+const disconnectedCue = disconnected.context.createOscillator();
+const disconnectedEnvelope = disconnected.context.createGain();
+disconnectedCue.connect(disconnectedEnvelope);
+disconnectedCue.disconnect(disconnectedEnvelope, 0, 0);
+disconnectedEnvelope.connect(disconnected.master);
+assert.equal(disconnected.isolation.assertGraph(), true, "Explicit zero ports remove edges created with default ports");
+sandbox.AudioNode = MockNode;
+const nativeBypass = isolatedGraph();
+const untracked = new MockNode(nativeBypass.context);
+assert.throws(() => untracked.connect(nativeBypass.master), /Untracked source/, "Constructor-created nodes cannot bypass the factory allowlist");
+assert.equal(untracked.connections.length, 0);
+const parameterBypass = isolatedGraph();
+assert.throws(() => new MockNode(parameterBypass.context).connect(parameterBypass.master.gain), /Untracked source/, "Untracked sources cannot modulate master AudioParams");
+const directNative = isolatedGraph();
+const approved = directNative.context.createBufferSource();
+approved.buffer = {};
+directNative.isolation.allowMusicSource(approved);
+assert.throws(() => MockNode.prototype.connect.call(approved, directNative.master), /native connection bypass/, "Native connect calls cannot bypass graph bookkeeping");
+const factoryBypass = isolatedGraph();
+factoryBypass.context.createGain = () => new MockNode(factoryBypass.context);
+await assert.rejects(factoryBypass.isolation.armAndStartRecording(mockRecorder(factoryBypass), preflightOptions(factoryBypass)), /factory guard/, "Replaced factories fail closed");
+assert.match(deckPage, /await audioEngine\.recorderIsolation\.armAndStartRecording\(recorder,/, "All recorder starts use the preflight gate");
+assert.doesNotMatch(deckPage, /recorder\.start\(/, "Deck has no unguarded start fallback");
+assert.match(deckPage, /recorderIsolation\.allowMusicSource\(source\)/, "Only deck music/stem buffers are allowlisted");
+assert.doesNotMatch(deckPage, /(?:envelope|env5?)\.connect\((?:channel|audioEngine\.decks\[deckId\])\.input\)/, "Synthesized tones do not enter deck music inputs");
+assert.match(deckPage, /if \(!status\.isSecureToRecord && recordingState\.recorder\?\.state === "recording"\)/, "Runtime graph violation stops and discards a take");
 
 console.log("DJ recorder guard contracts: bleed detection, hold window, indicator rendering, and deck wiring behave as expected.");

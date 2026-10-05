@@ -1,16 +1,19 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import vm from "node:vm";
+import { SignalCleanupPipeline } from "../services/SignalCleanupPipeline.js";
 
-const [cleanerSource, guardSource, deckPage] = await Promise.all([
+const [cleanerSource, guardSource, routingSource, deckPage] = await Promise.all([
   readFile(new URL("../desk-noise-cleaner.js", import.meta.url), "utf8"),
   readFile(new URL("../dj-recorder-guard.js", import.meta.url), "utf8"),
+  readFile(new URL("../audio-routing-guard.js", import.meta.url), "utf8"),
   readFile(new URL("../dj-deck.html", import.meta.url), "utf8")
 ]);
 
 class MockParam {
   constructor(value = 0) { this.value = value; }
   setValueAtTime(value) { this.value = value; }
+  setTargetAtTime(value) { this.value = value; }
 }
 class MockNode {
   constructor(context, kind) {
@@ -34,6 +37,7 @@ class MockContext {
   createGain() { return this.node("gain"); }
   createBiquadFilter() { return this.node("filter"); }
   createDynamicsCompressor() { return this.node("limiter"); }
+  createWaveShaper() { return this.node("peak-protector"); }
   createMediaStreamDestination() { return this.node("recorder"); }
   createChannelSplitter() { return this.node("splitter"); }
   createAnalyser() { return this.node("analyser"); }
@@ -58,9 +62,17 @@ async function build(cleaned = true) {
   vm.createContext(sandbox);
   vm.runInContext(guardSource, sandbox);
   vm.runInContext(cleanerSource, sandbox);
-  sandbox.HaloAudioRoutingGuard = {};
+  vm.runInContext(routingSource, sandbox);
   await vm.runInContext(cleaned ? initialization : initialization.replace(cleanupCall, "audioEngine.monitorBus.connect(context.destination);"), sandbox);
   const engine = sandbox.audioEngine;
+  engine.routing = sandbox.HaloAudioRoutingGuard.create(engine.context, { liveBus: engine.masterGain });
+  engine.signalCleanup = new SignalCleanupPipeline(engine.context, {
+    routingGuard: engine.routing,
+    assertIsolation: () => engine.recorderIsolation.assertGraph(),
+    recorderAnalysers: engine.recorderAnalysers
+  });
+  engine.signalCleanup.connectSignalChain(engine.masterGain, engine.limiter);
+  engine.signalCleanup.timer.unref();
   const music = engine.context.createBufferSource();
   engine.recorderIsolation.allowMusicSource(music);
   music.connect(engine.masterGain);
@@ -88,7 +100,7 @@ function recordingGraph(engine) {
 const baseline = await build(false);
 const { engine, music, monitorSource } = await build();
 const context = engine.context;
-const filters = context.nodes.filter(node => node.kind === "filter");
+const filters = context.nodes.filter(node => node.kind === "filter" && reaches(engine.monitorBus, node));
 assert.equal(filters.length, 3);
 assert.deepEqual(filters.map(node => [node.type, node.frequency.value, node.Q.value]), [
   ["highpass", 30, -3], ["notch", 50, 30], ["notch", 60, 30]
@@ -102,7 +114,7 @@ assert.equal(reaches(monitorSource, context.destination), true, "Monitor audio s
 assert.equal(reaches(monitorSource, engine.recordingDestination), false);
 assert.equal(reaches(music, engine.recordingDestination), true, "Approved music still reaches the recorder");
 assert.equal(reaches(music, context.destination), true, "Master speaker output is unchanged");
-assert.deepEqual(recordingGraph(engine), recordingGraph(baseline.engine), "Recorder and preflight analyser graphs/parameters match the pre-cleanup desk exactly");
+assert.deepEqual(recordingGraph(engine), recordingGraph(baseline.engine), "Monitor cleanup does not change the master cleanup, recorder or preflight graphs");
 assert.deepEqual(engine.limiter.connections.map(edge => edge.target.kind), ["speakers", "recorder", "splitter"]);
 assert.equal(engine.recorderIsolation.assertGraph(), true);
 

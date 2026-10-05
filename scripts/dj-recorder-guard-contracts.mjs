@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import vm from "node:vm";
 import "./desk-noise-cleaner-contracts.mjs";
+import "./signal-cleanup-contracts.mjs";
 
 const [guardSource, deckPage] = await Promise.all([
   readFile(new URL("../dj-recorder-guard.js", import.meta.url), "utf8"),
@@ -187,6 +188,17 @@ await graph.isolation.armAndStartRecording(recorder, preflightOptions(graph));
 assert.equal(recorder.starts, 1, "Clean stereo feed arms and starts successfully");
 assert.equal(evaluate({ isRecording: true, graphSecure: true, cueBusActive: true, masterBusLevel: .99 }).state, "secure", "Allowed live music is not mistaken for cue bleed");
 assert.equal(evaluate({ graphSecure: false }).isSecureToRecord, false, "Graph failure blocks even an idle recorder");
+for (const signalAudit of [undefined, {}, { clean: true }, { clean: true, reliable: true, isolationSecure: false }]) {
+  assert.equal(evaluate({ graphSecure: true, signalAudit }).isSecureToRecord, false, "Unavailable or incomplete cleanup audit fails closed");
+}
+assert.equal(evaluate({ graphSecure: true, signalAudit: { clean: true, reliable: true, isolationSecure: true } }).isSecureToRecord, true);
+const failedAuditGraph = isolatedGraph();
+const failedAuditRecorder = mockRecorder(failedAuditGraph);
+await assert.rejects(failedAuditGraph.isolation.armAndStartRecording(failedAuditRecorder, {
+  ...preflightOptions(failedAuditGraph),
+  assertSignalClean() { throw new Error("Signal audit failed."); }
+}), /Signal audit failed/);
+assert.equal(failedAuditRecorder.starts, 0, "Cleanup audit must pass after quiet preflight and before recorder.start");
 
 for (const route of ["direct", "indirect", "parameter", "monitor", "microphone", "unapproved-buffer"]) {
   const bad = isolatedGraph();

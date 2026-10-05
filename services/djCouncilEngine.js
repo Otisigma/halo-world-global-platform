@@ -124,7 +124,17 @@ export function normalizeCouncilMix(mix = {}) {
       humDetected: signal.humDetected === true,
       humFrequency: finite(signal.humFrequency, null),
       integratedLufs: finite(signal.integratedLufs, null),
-      peakDbfs: finite(signal.peakDbfs, null)
+      peakDbfs: finite(signal.peakDbfs, null),
+      cleanup: Object.freeze({
+        clean: signal.cleanup?.clean === true,
+        reliable: signal.cleanup?.reliable === true,
+        isolationSecure: signal.cleanup?.isolationSecure === true,
+        humDetected: signal.cleanup?.humDetected === true,
+        humFrequency: Number.isFinite(signal.cleanup?.humFrequency) ? signal.cleanup.humFrequency : null,
+        humLevelDbfs: Number.isFinite(signal.cleanup?.humLevelDbfs) ? signal.cleanup.humLevelDbfs : null,
+        noiseFloorDbfs: Number.isFinite(signal.cleanup?.noiseFloorDbfs) ? signal.cleanup.noiseFloorDbfs : null,
+        peakDbfs: Number.isFinite(signal.cleanup?.peakDbfs) ? signal.cleanup.peakDbfs : null
+      })
     }),
     attribution: Object.freeze({
       remixer: text(attribution.remixer, 100),
@@ -169,6 +179,22 @@ const humCheck = {
         `Remove the ${hz} ground-loop source feeding the decks, then re-record. Desk-only notch filters cannot clean the recorder bus.`, "remove-hum-source");
     }
     return pass("Recorder preflight passed and no 50/60 Hz hum was measured in quiet passages.", 0);
+  }
+};
+
+const cleanupCheck = {
+  id: "signal.cleanup",
+  pillar: "signal",
+  label: "Signal cleanup audit",
+  severity: "blocking",
+  weight: 3,
+  run(mix) {
+    const audit = mix.signal.cleanup;
+    if (!audit.clean || !audit.reliable || !audit.isolationSecure || audit.humDetected || audit.noiseFloorDbfs === null || audit.peakDbfs === null || audit.peakDbfs >= -.1) {
+      return fail("The signal cleanup audit did not verify a clean, isolated recorder bus.", null,
+        "Restore signal analysis and isolation, remove residual noise, then re-record the mix.", "rerun-signal-audit");
+    }
+    return pass("Signal cleanup verified the isolated recorder bus throughout the recording.", audit.noiseFloorDbfs);
   }
 };
 
@@ -429,7 +455,7 @@ const setDepthCheck = {
 };
 
 export const DEFAULT_COUNCIL_CHECKS = Object.freeze([
-  humCheck, loudnessCheck, peakCheck,
+  humCheck, cleanupCheck, loudnessCheck, peakCheck,
   tempoTargetCheck, tempoAlignmentCheck, keyCompatibilityCheck, continuityCheck,
   catalogRightsCheck, stemPermissionCheck, attributionCheck,
   durationCheck, energyArcCheck, setDepthCheck

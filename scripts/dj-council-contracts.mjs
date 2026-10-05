@@ -44,7 +44,10 @@ function passingMix(overrides = {}) {
       catalogId: `halo:track-${index}`,
       source: "HALO Library"
     })),
-    signal: { preflightPassed: true, humDetected: false, integratedLufs: -14.3, peakDbfs: -1.4 },
+    signal: {
+      preflightPassed: true, humDetected: false, integratedLufs: -14.3, peakDbfs: -1.4,
+      cleanup: { clean: true, reliable: true, isolationSecure: true, humDetected: false, noiseFloorDbfs: -110, peakDbfs: -1.4 }
+    },
     attribution: { remixer: "DJ HALO", credit: "Remix by DJ HALO" },
     ...overrides
   };
@@ -92,6 +95,9 @@ check("vault stems with permission pass", () => {
 
 // ---- Fail paths ------------------------------------------------------------------------------
 check("hum blocks delivery", () => failing(evaluateDJCouncil(passingMix({ signal: { ...passingMix().signal, humDetected: true, humFrequency: 50 } })), "signal.hum"));
+for (const cleanup of [undefined, {}, { clean: true }, { ...passingMix().signal.cleanup, reliable: false }, { ...passingMix().signal.cleanup, clean: false }, { ...passingMix().signal.cleanup, isolationSecure: false }, { ...passingMix().signal.cleanup, humDetected: true }]) {
+  check("missing or failed cleanup audit blocks delivery", () => failing(evaluateDJCouncil(passingMix({ signal: { ...passingMix().signal, cleanup } })), "signal.cleanup"));
+}
 check("missing recorder preflight blocks delivery", () => failing(evaluateDJCouncil(passingMix({ signal: { ...passingMix().signal, preflightPassed: false } })), "signal.hum"));
 check("loudness far from -14 LUFS blocks delivery", () => failing(evaluateDJCouncil(passingMix({ signal: { ...passingMix().signal, integratedLufs: -5 } })), "signal.loudness"));
 check("unmetered loudness blocks delivery", () => failing(evaluateDJCouncil(passingMix({ signal: { preflightPassed: true } })), "signal.loudness"));

@@ -39,6 +39,7 @@ export const allowedEvents = new Set([
   "deck_cue_trigger",
   "deck_play_toggle",
   "delete_track",
+  "dj_audio_routing_violation",
   "dj_booth_video_play",
   "download_dj_takeover_recording",
   "dj_package_toggle",

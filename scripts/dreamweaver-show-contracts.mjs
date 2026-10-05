@@ -3,7 +3,7 @@ import { resolve } from "node:path";
 
 const root = resolve(import.meta.dirname, "..");
 const read = path => readFile(resolve(root, path), "utf8");
-const [page, styles, script, deck, campaign, radio, config, server, artworkHelper, campaignFunction, campaignLibrary, campaignMigration, campaignJobMigration, campaignMonitor, stats, fanSignupFunction, fanSignupMigration, relationsPage, relationsScript, relationsFunction, haloXLib, dailyEmailTemplate, relationshipSignupMigration] = await Promise.all([
+const [page, styles, script, deck, campaign, radio, config, server, artworkHelper, campaignFunction, campaignLibrary, campaignMigration, campaignJobMigration, campaignMonitor, stats, fanSignupFunction, fanSignupMigration, relationsPage, relationsScript, relationsFunction, haloXLib, dailyEmailTemplate, relationshipSignupMigration, releaseCatalog] = await Promise.all([
   read("dreamweaver/index.html"),
   read("dreamweaver/dreamweaver.css"),
   read("dreamweaver/dreamweaver.js"),
@@ -26,7 +26,8 @@ const [page, styles, script, deck, campaign, radio, config, server, artworkHelpe
   read("netlify/functions/halo-relations.mjs"),
   read("netlify/lib/halo-x.mjs"),
   read("emails/halo-daily-summary/index.html"),
-  read("netlify/database/migrations/20260910071500_integrate_dreamweaver_signups_into_relationships.sql")
+  read("netlify/database/migrations/20260910071500_integrate_dreamweaver_signups_into_relationships.sql"),
+  read("netlify/functions/release-catalog.mjs")
 ]);
 
 const checks = [
@@ -63,7 +64,13 @@ const checks = [
   [script.includes("fetchReleaseCatalog") && script.includes("resolveReleaseFromCatalog") && script.includes("RELEASE_CONTEXT_TIMEOUT_MS") && script.includes("VIDEO_LIBRARY_TIMEOUT_MS"), "guards Dreamweaver release-context and video loads with deterministic timeouts"],
   [page.includes('data-release-artwork') && script.includes("HaloReleaseArtwork?.resolve") && artworkHelper.includes("window.HaloReleaseArtwork"), "routes Dreamweaver release artwork through the shared HALO fallback recovery system"],
   [script.includes('label: "The Hook"') && script.includes('label: "Lyric Break"') && script.includes('label: "Sonic World"') && script.includes("activateChapter") && script.includes("elements.audio.currentTime") && script.includes("chapters.length - 1"), "synchronizes the Song Lobby acts with Dreamweaver audio playback"],
-  [script.includes("resolveReleaseFromCatalog(releases, routeContext)") && script.includes("strictRequestedId: requestedMixId") && script.includes("allowFallback: !requestedMix"), "keeps exact requested mix ids deterministic while preserving release-context hydration"],
+  [script.includes("resolveReleaseFromCatalog(releases, routeContext)") && script.includes("strictRequestedId: requestedMixId") && script.includes("allowFallback: !requestedMix && !routeContext.requestedSongId"), "keeps exact requested mix ids deterministic and avoids replacing song-param hydration with an unrelated default mix"],
+  [releaseCatalog.includes("dreamweaverPayloadFor") && releaseCatalog.includes("audioStreamUrl") && releaseCatalog.includes("videoReelUrl") && releaseCatalog.includes("shopSalesPageUrl") && releaseCatalog.includes("mixPlayerUrl") && releaseCatalog.includes("handledDegradations") && releaseCatalog.includes('systemStatus: handledDegradations.length ? "DEGRADED" : "OPERATIONAL"'), "returns catalog-backed Dreamweaver metadata, video linkage, sales routing, fallback acts, and handled degradation status"],
+  [releaseCatalog.includes("cleanPublicMediaUrl(row.stream_url)") && !releaseCatalog.includes("catalog_master_audio_url") && releaseCatalog.includes("catalogPromoVideoUrl") && releaseCatalog.includes("catalogVideoUrl") && releaseCatalog.includes("youtubeId(videoReelUrl)"), "uses only public release audio while binding version-level YouTube or reel URLs to Dreamweaver tracks"],
+  [script.includes("applyDreamweaverPayload") && script.includes("dreamweaverPayload.audioStreamUrl") && script.includes("isCatalogPlayback") && script.includes("SYSTEM / DEGRADED") && script.includes("handledDegradations"), "hydrates song and mix routes from the catalog, plays a catalog stream fallback, and reports handled degradation"],
+  [script.includes("DREAMWEAVER_CATALOG_CACHE_TTL_MS") && script.includes("cacheDreamweaverRelease") && script.includes("readCachedDreamweaverRelease") && script.includes('"catalog_cache"'), "uses a bounded local catalog cache when release hydration is unavailable"],
+  [script.includes("buildFallbackDreamweaverRelease") && script.includes("if (!requestedMix && !routeContext.requestedSongId) throw error") && script.includes("primaryAudioUrl ?") && script.includes('systemStatus: "DEGRADED"'), "keeps song and mix routes renderable with deterministic story fallbacks when catalog or mix APIs fail"],
+  [script.includes("linkedVideo") && script.includes("youtubeId") && script.includes("/api/videos") && script.includes("dreamweaverAct4UnlockLink") && script.includes("acts?.act4UnlockUrl") && page.includes('id="dreamweaverSystemStatus"') && page.includes('id="dreamweaverShopLink"') && page.includes('id="dreamweaverMixLink"') && page.includes('id="dreamweaverAct4UnlockLink"'), "prioritizes catalog-linked video and exposes health, sales, mix-player, and Act IV unlock routes in the lobby"],
   [styles.includes("body.mode-room") && styles.includes("body.mode-explore") && styles.includes("prefers-reduced-motion"), "styles atmospheric modes and reduced-motion behavior"],
   [deck.includes('id="dreamweaverMix"') && deck.includes("/dreamweaver/?mix=${encodeURIComponent(data.id)}&experience=studio"), "moves a newly published mix directly into Dreamweaver"],
   [campaign.includes('href="/dreamweaver/"') && radio.includes('href="/dreamweaver/"'), "links the show from Campaign Studio and Radio"],

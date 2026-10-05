@@ -1842,6 +1842,7 @@
   <script src="/audio-routing-guard.js"></script>
   <script src="/services/haloAudioEngine.js"></script>
   <script type="module" src="/services/djCouncilEngine.js"></script>
+  <script type="module" src="/services/SignalCleanupPipeline.js"></script>
   <script type="module" src="/dj-council-badge.js"></script>
   <script>
     const TRACK_DNA_DEFAULTS = { danceability: 6, emotionalIntensity: 5, darkness: 5, warmth: 5, vocalDensity: 4, percussionDensity: 6, bassWeight: 6, melodicDensity: 5, atmosphere: 6, energyRole: "builder", sonicWeather: "Balanced, groove-led and open enough for a patient blend.", signatureMoment: "Protect the central hook before opening the next phrase." };
@@ -3869,6 +3870,7 @@
       return {
         isRecording,
         graphSecure,
+        ...(audioEngine.context ? { signalAudit: audioEngine.signalCleanup?.getStatus() } : {}),
         masterBusLevel: isRecording && cueBusActive ? recorderGuardMasterLevel() : 0,
         cueBusActive,
         activeCueDecks
@@ -3925,7 +3927,6 @@
         limiter.ratio.setValueAtTime(8, context.currentTime);
         limiter.attack.setValueAtTime(.004, context.currentTime);
         limiter.release.setValueAtTime(.16, context.currentTime);
-        masterGain.connect(limiter);
         limiter.connect(context.destination);
         audioEngine.context = context;
         audioEngine.masterGain = masterGain;
@@ -3938,7 +3939,7 @@
           limiter.connect(splitter);
           audioEngine.recorderAnalysers = [0, 1].map(channel => {
             const analyser = context.createAnalyser();
-            analyser.fftSize = 8192;
+            analyser.fftSize = Math.min(32768, 2 ** Math.ceil(Math.log2(context.sampleRate / 6)));
             analyser.smoothingTimeConstant = 0;
             analyser.minDecibels = -120;
             splitter.connect(analyser, channel);
@@ -4014,6 +4015,18 @@
             }
           })
           : null;
+        if (window.HaloSignalCleanupPipeline && audioEngine.recordingDestination) {
+          audioEngine.signalCleanup = new window.HaloSignalCleanupPipeline(context, {
+            routingGuard: audioEngine.routing,
+            assertIsolation: () => audioEngine.recorderIsolation.assertGraph(),
+            recorderAnalysers: audioEngine.recorderAnalysers
+          });
+          audioEngine.signalCleanup.connectSignalChain(masterGain, limiter);
+        } else {
+          // Playback may continue without cleanup, but the recorder must have no feed.
+          if (audioEngine.recordingDestination) limiter.disconnect(audioEngine.recordingDestination);
+          masterGain.connect(limiter);
+        }
         audioEngine.halo = window.HaloAudioEngine
           ? new window.HaloAudioEngine({ context, masterGain, deckAGain: audioEngine.decks.A.gain, deckBGain: audioEngine.decks.B.gain, routingGuard: audioEngine.routing })
           : null;
@@ -4215,6 +4228,7 @@
     function startDeckSource(context, deckId, source, destination, startAt) {
       const channel = audioEngine.decks[deckId];
       audioEngine.recorderIsolation.allowMusicSource(source);
+      audioEngine.signalCleanup?.prepareForMusic(startAt);
       if (!audioEngine.halo) {
         source.connect(destination);
         source.start(startAt, 0);
@@ -5732,6 +5746,19 @@
     function sampleCouncilSignal() {
       const meter = recordingState.councilMeter;
       if (!meter || !audioEngine.context || !Array.isArray(audioEngine.recorderAnalysers)) return;
+      const audit = audioEngine.signalCleanup?.getStatus();
+      const previous = recordingState.signalCleanupAudit;
+      recordingState.signalCleanupAudit = {
+        ...audit,
+        clean: previous?.clean === true && audit?.clean === true,
+        reliable: previous?.reliable === true && audit?.reliable === true,
+        isolationSecure: previous?.isolationSecure === true && audit?.isolationSecure === true,
+        humDetected: previous?.humDetected === true || audit?.humDetected === true,
+        humFrequency: previous?.humDetected ? previous.humFrequency : audit?.humFrequency,
+        humLevelDbfs: Math.max(previous?.humLevelDbfs ?? -120, audit?.humLevelDbfs ?? -120),
+        noiseFloorDbfs: Math.max(previous?.noiseFloorDbfs ?? -120, audit?.noiseFloorDbfs ?? -120),
+        peakDbfs: Math.max(previous?.peakDbfs ?? -120, audit?.peakDbfs ?? -120)
+      };
       meter.push(audioEngine.recorderAnalysers.map(analyser => {
         const samples = new Float32Array(analyser.fftSize);
         const spectrum = new Float32Array(analyser.frequencyBinCount);
@@ -5771,7 +5798,7 @@
         transitionsCompleted: recordingState.transitionCount,
         playbackFaults: recordingState.playbackFaults,
         tracks: playedTracks.map(councilTrackPayload),
-        signal: { preflightPassed: recordingState.recorderPreflightPassed, ...(recordingState.councilMeter?.result() || {}) },
+        signal: { preflightPassed: recordingState.recorderPreflightPassed, ...(recordingState.councilMeter?.result() || {}), cleanup: recordingState.signalCleanupAudit },
         attribution: { remixer: takeoverSession?.name || "", credit: takeoverSession ? `Remix by ${takeoverSession.name}` : "" }
       };
     }
@@ -5930,11 +5957,18 @@
         resetDJCouncil();
         recordingState.recorderPreflightPassed = false;
         recordingState.councilMeter = null;
+        recordingState.signalCleanupAudit = null;
         recordingState.playbackFaults = 0;
         recordingState.councilProfile = djMode;
         elements.recordingStatus.textContent = "Checking the isolated recorder feed for noise, hum, and cue bleed…";
         await audioEngine.recorderIsolation.armAndStartRecording(recorder, {
           context: audioEngine.context,
+          assertSignalClean: () => {
+            const audit = audioEngine.signalCleanup?.getStatus();
+            if (audit?.clean !== true || audit?.reliable !== true || audit?.isolationSecure !== true) {
+              throw new Error(audit?.reason || "Signal cleanup audit is unavailable.");
+            }
+          },
           readFrames: () => audioEngine.recorderAnalysers.map(analyser => {
             const samples = new Float32Array(analyser.fftSize);
             const spectrum = new Float32Array(analyser.frequencyBinCount);
@@ -5944,8 +5978,9 @@
           })
         });
         recordingState.recorderPreflightPassed = true;
+        recordingState.signalCleanupAudit = audioEngine.signalCleanup.getStatus();
         recordingState.councilMeter = window.HaloDJCouncil?.createSignalMeter() || null;
-        // Sample faster than the 8192-sample analyser window so consecutive reads overlap and
+        // Sample faster than the recorder analyser window so consecutive reads overlap and
         // the peak/hum meter sees every recorded sample.
         clearInterval(recordingState.councilTimer);
         recordingState.councilTimer = setInterval(sampleCouncilSignal, 120);

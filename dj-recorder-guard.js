@@ -168,6 +168,7 @@
           if (recorder.stream !== destination.stream) throw new Error("Recorder stream is not the isolated master.");
           await runPreflight({ ...options, assertGraph });
           assertGraph();
+          options.assertSignalClean?.();
           recorder.start(1000);
         } finally {
           arming = false;
@@ -244,6 +245,15 @@
         isRecording, cueBusActive, masterBusLevel, activeCueDecks,
         title: TRIGGERED_TITLE,
         warningMessage: "Recorder routing isolation failed. Recording is blocked; reload the deck."
+      };
+    }
+
+    if ("signalAudit" in inputs && (inputs.signalAudit?.clean !== true || inputs.signalAudit?.reliable !== true || inputs.signalAudit?.isolationSecure !== true)) {
+      return {
+        state: "triggered", isSecureToRecord: false, bleedDetected: false,
+        isRecording, cueBusActive, masterBusLevel, activeCueDecks,
+        title: TRIGGERED_TITLE,
+        warningMessage: inputs.signalAudit?.reason || "Signal cleanup audit failed or is unavailable. Recording is blocked."
       };
     }
 

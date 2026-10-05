@@ -9,9 +9,12 @@
       this.pending = [];
       this.active = null;
       this.scheduled = null;
+      this.primarySource = "";
       this.connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
       this.onConditionsChange = () => {
         this.cancelBackground();
+        if (document.hidden || this.policy() !== "auto") this.releaseCache();
+        this.syncPrimary();
         this.schedule();
       };
       this.onPageHide = () => this.clear();
@@ -46,16 +49,33 @@
       const first = urls.shift();
       // Warm the real player element so the first click does not discard its buffer.
       if (first && !this.audio.getAttribute("src")) {
-        this.audio.preload = this.policy();
-        this.audio.src = first;
-        try {
-          if (this.audio.preload !== "none") this.audio.load();
-        } catch {
-          this.audio.removeAttribute("src");
-        }
+        this.primarySource = first;
+        this.syncPrimary();
       }
       this.pending = urls;
       this.schedule();
+    }
+
+    syncPrimary() {
+      if (!this.primarySource) return;
+      const policy = document.hidden ? "none" : this.policy();
+      if (this.audio.getAttribute("src") && this.audio.src !== this.primarySource) {
+        this.claim();
+        return;
+      }
+      if (this.audio.src === this.primarySource && this.audio.preload === policy) return;
+      if (this.audio.getAttribute("src")) this.release(this.audio);
+      this.audio.preload = policy;
+      this.audio.src = this.primarySource;
+      try {
+        if (policy !== "none") this.audio.load();
+      } catch {
+        this.audio.removeAttribute("src");
+      }
+    }
+
+    claim() {
+      this.primarySource = "";
     }
 
     schedule() {
@@ -90,6 +110,7 @@
         if (this.active?.audio !== audio) return;
         window.clearTimeout(this.active.timer);
         audio.removeEventListener("loadedmetadata", onReady);
+        audio.removeEventListener("suspend", onSuspend);
         audio.removeEventListener("error", onError);
         this.active = null;
         if (!success) {
@@ -98,14 +119,21 @@
         }
         this.schedule();
       };
-      const onReady = () => finish(true);
+      // Metadata can arrive before the browser stops transferring media.
+      const onReady = () => {
+        if (audio.networkState === 1) finish(true);
+      };
+      const onSuspend = () => {
+        if (audio.readyState >= 1) finish(true);
+      };
       const onError = () => finish(false);
       this.active = {
-        src, audio, onReady, onError,
+        src, audio, onReady, onSuspend, onError,
         timer: window.setTimeout(onError, METADATA_TIMEOUT_MS)
       };
       this.cache.set(src, audio);
       audio.addEventListener("loadedmetadata", onReady);
+      audio.addEventListener("suspend", onSuspend);
       audio.addEventListener("error", onError);
       audio.preload = "metadata";
       audio.src = src;
@@ -129,9 +157,10 @@
         this.scheduled = null;
       }
       if (this.active) {
-        const { src, audio, timer, onReady, onError } = this.active;
+        const { src, audio, timer, onReady, onSuspend, onError } = this.active;
         window.clearTimeout(timer);
         audio.removeEventListener("loadedmetadata", onReady);
+        audio.removeEventListener("suspend", onSuspend);
         audio.removeEventListener("error", onError);
         this.active = null;
         this.cache.delete(src);
@@ -143,6 +172,14 @@
     clear() {
       this.cancelBackground();
       this.pending = [];
+      this.releaseCache();
+      if (this.primarySource) {
+        this.claim();
+        this.release(this.audio);
+      }
+    }
+
+    releaseCache() {
       for (const audio of this.cache.values()) this.release(audio);
       this.cache.clear();
     }

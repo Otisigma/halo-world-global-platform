@@ -201,6 +201,7 @@
         this.toggle();
         return;
       }
+      this.preloader?.claim();
       this.track = { ...track, src };
       this.audio.preload = "auto";
       if (this.audio.src !== src || this.audio.error) this.audio.src = src;

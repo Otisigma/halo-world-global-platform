@@ -209,6 +209,8 @@ function preloaderHarness({ connection, touch = 0, online = true, idle = true } 
       this.plays = 0;
       this.paused = true;
       this.error = null;
+      this.networkState = 1;
+      this.readyState = 1;
     }
     get src() { return this.source; }
     set src(value) { this.source = value; this.assignments++; }
@@ -282,7 +284,45 @@ const sources = Array.from({ length: 8 }, (_, index) => `https://cdn.example/tra
   assert.equal(h.tasks.size, 0);
   h.window.dispatchEvent(new Event("pagehide"));
   assert.equal(h.preloader.cache.size, 0);
-  assert.equal(h.primary.src, sources[0], "cache cleanup must not disturb the shared player");
+  assert.equal(h.primary.src, "", "page exit must release an unplayed speculative primary");
+}
+{
+  const h = preloaderHarness();
+  h.document.hidden = true;
+  h.preloader.prepare(sources);
+  assert.equal(h.primary.preload, "none", "hidden pages must not start the first speculative download");
+  assert.equal(h.primary.loads, 0);
+  h.document.hidden = false;
+  h.document.dispatchEvent(new Event("visibilitychange"));
+  assert.equal(h.primary.preload, "auto");
+  h.loaded();
+  h.run();
+  h.created[0].networkState = 2;
+  h.created[0].dispatchEvent(new Event("loadedmetadata"));
+  assert.ok(h.preloader.active, "metadata alone must not allow overlapping transfers");
+  assert.equal(h.tasks.size, 1, "watchdog must stay armed until transfer suspension");
+  h.created[0].dispatchEvent(new Event("suspend"));
+  assert.equal(h.preloader.active, null);
+  h.document.hidden = true;
+  h.document.dispatchEvent(new Event("visibilitychange"));
+  assert.equal(h.primary.preload, "none", "hiding must cancel the unplayed primary transfer");
+  assert.equal(h.created[0].src, "", "hiding must also release retained speculative elements");
+  assert.equal(h.tasks.size, 0);
+}
+{
+  const h = preloaderHarness({ connection: Object.assign(new EventTarget(), { effectiveType: "4g" }) });
+  h.preloader.prepare(sources);
+  h.navigator.connection.saveData = true;
+  h.navigator.connection.dispatchEvent(new Event("change"));
+  assert.equal(h.primary.preload, "none", "data saver must cancel an unplayed primary download");
+  h.preloader.claim();
+  h.primary.preload = "auto";
+  h.primary.play();
+  h.document.hidden = true;
+  h.document.dispatchEvent(new Event("visibilitychange"));
+  h.window.dispatchEvent(new Event("pagehide"));
+  assert.equal(h.primary.src, sources[0], "lifecycle cancellation must not interrupt user-initiated playback");
+  assert.equal(h.primary.paused, false);
 }
 for (const [options, expected] of [
   [{ connection: { saveData: true } }, "none"],

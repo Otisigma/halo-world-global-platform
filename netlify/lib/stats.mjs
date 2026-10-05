@@ -41,6 +41,7 @@ export const allowedEvents = new Set([
   "delete_track",
   "dj_audio_routing_violation",
   "dj_booth_video_play",
+  "dj_council_verdict",
   "download_dj_takeover_recording",
   "dj_package_toggle",
   "dj_continuity_filler_started",

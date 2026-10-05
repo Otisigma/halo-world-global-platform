@@ -967,6 +967,7 @@ import { DREAMWEAVER_STOREFRONT_MIX_ID, buildDreamweaverStorefrontPath } from ".
     }
     clearRemoteAudioWatchdog();
     revokeLocalAudioUrl();
+    window.HaloAudioPreloader?.clear();
     const localAudioUrl = safeBlobMediaUrl(URL.createObjectURL(file));
     if (!localAudioUrl) {
       showToast("Dreamweaver could not prepare that local file. Try another audio export.");
@@ -1041,9 +1042,11 @@ import { DREAMWEAVER_STOREFRONT_MIX_ID, buildDreamweaverStorefrontPath } from ".
     state.audioSourceMode = "remote";
     elements.audio.pause();
     elements.audio.currentTime = 0;
-    elements.audio.src = primaryAudio;
-    elements.audio.load?.();
-    armRemoteAudioWatchdog();
+    if (!window.HaloAudioPreloader?.prepare(elements.audio, primaryAudio)) {
+      elements.audio.preload = "auto";
+      elements.audio.src = primaryAudio;
+      elements.audio.load?.();
+    }
 
     if (elements.audio.muted || Number(elements.audio.volume) === 0) {
       queueAudioFeedbackIncident("muted_audio", {
@@ -1057,6 +1060,11 @@ import { DREAMWEAVER_STOREFRONT_MIX_ID, buildDreamweaverStorefrontPath } from ".
 
     const readiness = await awaitPrimaryPlaybackReadiness();
     if (state.audioSourceMode === "local" || elements.audio.getAttribute("src") !== primaryAudio) return { started: false, fallback: true };
+    if (readiness.state === "timeout") {
+      clearRemoteAudioWatchdog();
+      showToast("Press play to start the audio experience.");
+      return { started: false };
+    }
     if (!readiness.ok) {
       queueAudioFeedbackIncident(readiness.state === "error" && Number(elements.audio?.error?.code || 0) === 3 ? "corrupted_audio" : "non_playable_audio", {
         severity: "high",
@@ -1095,6 +1103,7 @@ import { DREAMWEAVER_STOREFRONT_MIX_ID, buildDreamweaverStorefrontPath } from ".
   }
 
   function releaseArtwork(release = {}) {
+    release ||= {};
     const fallback = safeMediaUrl(DREAMWEAVER_RELEASE_FALLBACK_ARTWORK) || DREAMWEAVER_RELEASE_FALLBACK_ARTWORK;
     const resolved = window.HaloReleaseArtwork?.resolve(release, fallback);
     if (resolved) return resolved;
@@ -2679,6 +2688,7 @@ import { DREAMWEAVER_STOREFRONT_MIX_ID, buildDreamweaverStorefrontPath } from ".
   }
 
   async function loadShow() {
+    window.HaloAudioPreloader?.clear();
     setReleasePlaybackState("loading");
     setLoadingProgress(8, "Calibrating Dreamweaver stage", "Dreamweaver is staging this edition with artwork, metadata, and the four-act lobby in sync.");
     document.body.classList.remove("show-ready");
@@ -2817,6 +2827,12 @@ import { DREAMWEAVER_STOREFRONT_MIX_ID, buildDreamweaverStorefrontPath } from ".
       const playbackBootstrap = primaryAudioUrl
         ? await bootstrapPrimaryPlayback(mix)
         : (state.mix = mix, { started: false, fallback: true });
+      if (primaryAudioUrl && state.audioSourceMode === "remote") {
+        window.HaloAudioPreloader?.warmPlaylist([
+          primaryAudioUrl,
+          ...mixLibrary.filter(isPlayablePrimaryMix).map(entry => resolvePrimaryAudio(entry).src)
+        ], { primaryAudio: elements.audio });
+      }
       await hydrateDreamweaverLoopContent();
       if (!playbackBootstrap?.started || elements.audio.paused || elements.audio.ended) setReleasePlaybackState("ready");
       setLoadingProgress(100, "Dreamweaver is ready", "Press play and move through the full four-act cinematic edition.");

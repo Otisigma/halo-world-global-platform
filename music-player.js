@@ -380,11 +380,11 @@
 
   function mountAudio(media) {
     stage.className = "halo-listening-room__stage halo-listening-room__audio";
-    const audio = document.createElement("audio");
+    const audio = window.HaloAudioPreloader?.take(media.url) || document.createElement("audio");
     audio.controls = true;
     audio.autoplay = true;
-    audio.preload = "metadata";
-    audio.src = media.url;
+    audio.preload = "auto";
+    if (audio.src !== media.url) audio.src = media.url;
     audio.addEventListener("play", startedPlayback);
     audio.addEventListener("ended", completedPlayback);
     audio.addEventListener("error", () => {
@@ -395,6 +395,10 @@
     });
     stage.append(audio);
     active.audio = audio;
+    audio.play()?.catch(error => {
+      if (active?.audio !== audio || error?.name === "AbortError") return;
+      source.textContent = "Press play in the audio controls to start listening.";
+    });
   }
 
   function openRoom(link, media) {

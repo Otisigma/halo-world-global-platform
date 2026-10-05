@@ -263,6 +263,7 @@
       logIssue("music_featured_chart_unavailable", "Featured chart hero could not load", { message: error instanceof Error ? error.message : "unknown error" });
     }
     const player = sharedPlayer();
+    player?.preloader?.prepare(state.queue.map(release => trackFor(release).src));
     if (player && !state.controller) {
       state.controller = createQueueController(player, () => state.queue, { onAdvance: render });
     } else if (!player && state.queue.length) {

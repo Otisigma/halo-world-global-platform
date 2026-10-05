@@ -174,6 +174,9 @@
     renderFeatured();
     renderMixes();
     renderEdition();
+    state.activeEpisode = 0;
+    renderEpisodes();
+    if (mix && mix.source !== "youtube") void loadLinkedMixVideos(mix.id);
     if (syncUrl) syncMixUrl(state.selectedMix, { historyMode: syncMethod });
   }
 
@@ -742,26 +745,46 @@
     mixUploadForm.elements.description.minLength = saleEnabled ? 20 : 0;
   }
 
+  function episodeVideos() {
+    const linked = state.videos.filter(video => video.linkedMixId === state.selectedMix?.id);
+    return linked.length ? linked : state.videos;
+  }
+
+  async function loadLinkedMixVideos(mixId) {
+    try {
+      const response = await fetch(`/api/videos?recordType=mix&recordId=${encodeURIComponent(mixId)}`, {
+        headers: { Accept: "application/json" }, credentials: "same-origin", signal: AbortSignal.timeout(10_000)
+      });
+      if (!response.ok) return;
+      const data = await response.json();
+      if (state.selectedMix?.id !== mixId || !Array.isArray(data.videos)) return;
+      state.videos = [...data.videos, ...state.videos].filter((video, index, videos) => videos.findIndex(item => item.id === video.id) === index);
+      state.activeEpisode = 0;
+      renderEpisodes();
+    } catch {}
+  }
+
   function renderEpisodes() {
-    if (!state.videos.length) {
+    const videos = episodeVideos();
+    if (!videos.length) {
       episodeStage.innerHTML = `<article class="episode-empty"><strong>Road to the Worlds is entering production.</strong><p>The first Inside the Mix episode appears here when it enters HALO TV. Until then, the full sets remain live in the Mix Cloud.</p><a class="episode-link" href="/halo-live.html">Enter HALO Live ↗</a></article>`;
       return;
     }
-    const episode = state.videos[state.activeEpisode] || state.videos[0];
+    const episode = videos[state.activeEpisode] || videos[0];
     const thumbnail = episode.thumbnailUrl || artworkPool[state.activeEpisode % artworkPool.length];
     const episodeNumber = String(state.activeEpisode + 1).padStart(2, "0");
-    const thumbs = state.videos.slice(0, 3).map((video, index) => `<button class="episode-thumb" type="button" data-episode-index="${index}">
+    const thumbs = videos.slice(0, 3).map((video, index) => `<button class="episode-thumb" type="button" data-episode-index="${index}">
       <img src="${escapeHtml(video.thumbnailUrl || artworkPool[index % artworkPool.length])}" alt="">
       <span><span>Episode ${String(index + 1).padStart(2, "0")}</span><strong>${escapeHtml(video.title)}</strong></span>
     </button>`).join("");
     episodeStage.innerHTML = `<article class="episode-feature">
       <div class="episode-screen"><img src="${escapeHtml(thumbnail)}" alt="${escapeHtml(episode.title)}"><button class="episode-play" type="button" data-open-episode aria-label="Watch ${escapeHtml(episode.title)}"></button></div>
       <div class="episode-details"><div><span>Episode ${episodeNumber} / Road to the Worlds</span><h3>${escapeHtml(episode.title)}</h3><p>${escapeHtml(episode.description || "Enter the room behind the finished performance and see why the version changed.")}</p></div><button class="episode-link" type="button" data-open-episode>Watch full episode ↗</button></div>
-    </article>${state.videos.length > 1 ? `<div class="episode-thumbs">${thumbs}</div>` : ""}`;
+    </article>${videos.length > 1 ? `<div class="episode-thumbs">${thumbs}</div>` : ""}`;
   }
 
   function openEpisode() {
-    const episode = state.videos[state.activeEpisode];
+    const episode = episodeVideos()[state.activeEpisode];
     if (!episode?.sourceUrl) return;
     window.open(episode.sourceUrl, "_blank", "noopener,noreferrer");
     window.haloStats?.track("open_inside_the_mix_episode", { video_id: episode.id, title: episode.title });

@@ -334,8 +334,10 @@ export default async function releaseCatalogHandler(request) {
       ) catalog_versions ON TRUE
       LEFT JOIN LATERAL (
         SELECT
-          MAX(NULLIF(version.video_url, '')) AS catalog_video_url,
-          MAX(NULLIF(version.promo_video_url, '')) AS catalog_promo_video_url
+          (ARRAY_AGG(version.video_url ORDER BY (version.version_type = 'sale_master') DESC, version.updated_at DESC)
+            FILTER (WHERE version.video_url <> ''))[1] AS catalog_video_url,
+          (ARRAY_AGG(version.promo_video_url ORDER BY (version.version_type = 'sale_master') DESC, version.updated_at DESC)
+            FILTER (WHERE version.promo_video_url <> ''))[1] AS catalog_promo_video_url
         FROM halo_song_versions version
         WHERE version.song_id = catalog.catalog_song_id
           AND version.status = 'active'

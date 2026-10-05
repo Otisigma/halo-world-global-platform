@@ -149,6 +149,7 @@ function serializeRelease(row) {
     purchaseUrl: row.purchase_url || "",
     streamUrl: row.stream_url || "",
     videoUrl: catalogVideoUrl || "",
+    linkedVideoUrl: row.catalog_linked_video_url || "",
     promoVideoUrl: catalogPromoVideoUrl || "",
     featuredType: row.featured_type || "",
     featuredUntil: row.featured_until ? String(row.featured_until).slice(0, 10) : "",
@@ -259,6 +260,7 @@ export default async function releaseCatalogHandler(request) {
         catalog_versions.catalog_sale_enabled_count,
         catalog_video.catalog_video_url,
         catalog_video.catalog_promo_video_url,
+        catalog_linked_video.catalog_linked_video_url,
         catalog_master.catalog_master_version_id,
         catalog_master.catalog_master_uploaded,
         catalog_master.catalog_master_mastering_status,
@@ -342,6 +344,15 @@ export default async function releaseCatalogHandler(request) {
         WHERE version.song_id = catalog.catalog_song_id
           AND version.status = 'active'
       ) catalog_video ON TRUE
+      LEFT JOIN LATERAL (
+        SELECT CASE WHEN video.source_type = 'upload'
+          THEN '/api/videos?media=' || video.id::text ELSE video.source_url END AS catalog_linked_video_url
+        FROM halo_videos video
+        WHERE video.linked_song_id = catalog.catalog_song_id
+          AND video.owner_member_id = release.owner_member_id AND video.status = 'published'
+        ORDER BY video.updated_at DESC, video.id ASC
+        LIMIT 1
+      ) catalog_linked_video ON TRUE
       LEFT JOIN LATERAL (
         SELECT
           version.id AS catalog_master_version_id,

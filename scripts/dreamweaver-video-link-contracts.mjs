@@ -128,7 +128,8 @@ assert.equal((await f.handler(publish({ id: otherSongId }))).status, 403);
 assert.equal((await f.handler(publish({ rights: false }))).status, 422);
 assert.equal(f.state.writes, 0);
 for (const url of ["https://evil.example/watch?v=yh7qQGvzmdw", "http://youtube.com/watch?v=yh7qQGvzmdw",
-  "https://viewer@youtube.com/watch?v=yh7qQGvzmdw", "https://youtube.com/@channel", "https://youtube.com/playlist?list=playlist"]) {
+  "https://viewer@youtube.com/watch?v=yh7qQGvzmdw", "https://youtube.com/@channel", "https://youtube.com/playlist?list=playlist",
+  "https://youtube.com/c/abcdefghijk", "https://youtube.com/playlist?v=yh7qQGvzmdw"]) {
   assert.equal((await f.handler(publish({ url }))).status, 400);
 }
 const published = await (await f.handler(publish())).json();
@@ -242,4 +243,30 @@ assert.equal(submitted.get("youtubeUrl"), videoUrl);
 assert.equal(submitted.get("rightsAttested"), "true");
 assert.equal(ui.elements.linkedVideoRights.checked, false);
 assert.equal(ui.elements.catalogPublishStatus.textContent, "Published");
+const episodeState = {
+  selectedMix: { id: mixId }, linkedMixVideos: [],
+  videos: [{ id: "generic" }, { id: "another-mix", linkedMixId: "another" }, { id: "song", linkedSongId: songId }]
+};
+const episodesContext = { state: episodeState };
+const episodeSource = mixes.slice(mixes.indexOf("  function episodeVideos()"), mixes.indexOf("  async function loadLinkedMixVideos("));
+runInNewContext(`${episodeSource}\nglobalThis.episodes = episodeVideos;`, episodesContext);
+assert.deepEqual(Array.from(episodesContext.episodes(), video => video.id), ["generic"], "mix fallback never shows another catalog record's videos");
+episodeState.linkedMixVideos = [{ id: "this-mix", linkedMixId: mixId }];
+assert.deepEqual(Array.from(episodesContext.episodes(), video => video.id), ["this-mix"]);
+episodeState.selectedMix = null;
+assert.equal(episodesContext.episodes().length, 3, "the general episode gallery remains unchanged");
+const storefront = await read("music-world.html");
+const mapperStart = storefront.indexOf("    function releaseToTrack(");
+const mapperSource = storefront.slice(mapperStart, storefront.indexOf("\n", mapperStart));
+const shopContext = {
+  safeHref: value => value || "", releaseDateLabel: () => "", resolveTrackArtwork: () => ({ src: "/cover.jpg" }),
+  resolveTrackAudio: () => ({ src: "" }), storefrontStatus: value => value,
+  resolveDreamweaverExperienceUrl: () => "", formatDuration: () => "", fallbackArtwork: "/cover.jpg"
+};
+runInNewContext(`${mapperSource}\nglobalThis.mapRelease = releaseToTrack;`, shopContext);
+assert.equal(shopContext.mapRelease({ id: "release", linkedVideoUrl: videoUrl, promoVideoUrl: "/old-promo" }).videoUrl, videoUrl);
+assert.equal(shopContext.mapRelease({ id: "release", videoUrl, promoVideoUrl: "/old-promo" }).videoUrl, "/old-promo",
+  "releases without a catalog-linked video retain their existing promo priority");
+assert.match(release, /video\.linked_song_id = catalog\.catalog_song_id/);
+assert.match(release, /video\.owner_member_id = release\.owner_member_id AND video\.status = 'published'/);
 console.log("Dreamweaver catalog video-link contracts passed.");

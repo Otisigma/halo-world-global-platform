@@ -20,9 +20,11 @@ function youtubeId(value) {
     const url = new URL(input);
     const host = url.hostname.replace(/^www\./, "");
     if (url.protocol !== "https:" || url.username || url.password || !["youtube.com", "m.youtube.com", "youtu.be"].includes(host)) return "";
+    const segments = url.pathname.split("/").filter(Boolean);
     const candidate = host === "youtu.be"
-      ? url.pathname.split("/").filter(Boolean)[0]
-      : url.searchParams.get("v") || url.pathname.split("/").filter(Boolean).pop();
+      ? segments.length === 1 ? segments[0] : ""
+      : url.pathname === "/watch" ? url.searchParams.get("v")
+        : segments.length === 2 && ["shorts", "live", "embed"].includes(segments[0]) ? segments[1] : "";
     return /^[A-Za-z0-9_-]{11}$/.test(candidate || "") ? candidate : "";
   } catch {
     return "";

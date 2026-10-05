@@ -1,5 +1,5 @@
 (() => {
-  const state = { mixes: [], mixSort: "newest", videos: [], reviewCycles: [], canReview: false, reviewBreaks: [], selectedReviewCycleId: "", featuredMix: null, selectedMix: null, activeMix: null, activeMixVersion: "mastered", activeEpisode: 0, playlist: [], playlistIndex: 0, visualMixes: [], visualVideos: [], visualProjects: [], selectedVisualProjectId: "", selectedVisualSceneId: "" };
+  const state = { mixes: [], mixSort: "newest", videos: [], linkedMixVideos: [], reviewCycles: [], canReview: false, reviewBreaks: [], selectedReviewCycleId: "", featuredMix: null, selectedMix: null, activeMix: null, activeMixVersion: "mastered", activeEpisode: 0, playlist: [], playlistIndex: 0, visualMixes: [], visualVideos: [], visualProjects: [], selectedVisualProjectId: "", selectedVisualSceneId: "" };
   const audio = document.querySelector("#mixAudio");
   const playerDock = document.querySelector("#playerDock");
   const heroRecord = document.querySelector("#heroRecord");
@@ -171,6 +171,7 @@
   function selectMix(mix, options = {}) {
     const { syncUrl = true, syncMethod = "replace" } = options;
     state.selectedMix = mix || null;
+    state.linkedMixVideos = [];
     renderFeatured();
     renderMixes();
     renderEdition();
@@ -746,8 +747,11 @@
   }
 
   function episodeVideos() {
+    if (!state.selectedMix?.id) return state.videos;
     const linked = state.videos.filter(video => video.linkedMixId === state.selectedMix?.id);
-    return linked.length ? linked : state.videos;
+    const videos = [...state.linkedMixVideos, ...linked]
+      .filter((video, index, items) => items.findIndex(item => item.id === video.id) === index);
+    return videos.length ? videos : state.videos.filter(video => !video.linkedMixId && !video.linkedSongId);
   }
 
   async function loadLinkedMixVideos(mixId) {
@@ -758,7 +762,7 @@
       if (!response.ok) return;
       const data = await response.json();
       if (state.selectedMix?.id !== mixId || !Array.isArray(data.videos)) return;
-      state.videos = [...data.videos, ...state.videos].filter((video, index, videos) => videos.findIndex(item => item.id === video.id) === index);
+      state.linkedMixVideos = data.videos;
       state.activeEpisode = 0;
       renderEpisodes();
     } catch {}

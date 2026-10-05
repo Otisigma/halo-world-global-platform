@@ -131,4 +131,42 @@ assert.deepEqual(sandbox.toastCalls.shift(), {
 assert.match(sandbox.elements.maintenanceDock.title, /10 alerts currently monitored\.$/);
 assert.match(sandbox.elements.maintenanceDockHelp.textContent, /10 alerts currently monitored\.$/);
 
+const searchSandbox = {
+  tracks: [
+    { id: "warm", title: "Warm Groove", artist: "Artist", genre: "House", bpm: 124, platform: "Drive" },
+    { id: "sparse", title: "Sparse", artist: null, genre: undefined, key: null, bpm: 120 },
+    { id: "number", title: 42, bpm: 125 }
+  ],
+  trackQueue: [], selectedPickerDeck: "A",
+  elements: { list: {}, empty: { style: {} }, trackCount: {}, trackPickerList: {} },
+  escapeHTML: value => String(value ?? ""),
+  coverMarkup: () => "", safeUrl: () => "",
+  bindBrokenArtwork() {}, renderArtistJourneyGuidance() {}
+};
+vm.createContext(searchSandbox);
+vm.runInContext([
+  extractFunctionSource("filterLibraryTracks"),
+  extractFunctionSource("renderTracks"),
+  extractFunctionSource("renderTrackPicker")
+].join("\n"), searchSandbox);
+for (const [query, expectedIds] of [
+  [undefined, ["warm", "sparse", "number"]],
+  [null, ["warm", "sparse", "number"]],
+  ["", ["warm", "sparse", "number"]],
+  ["  hOuSe  ", ["warm"]],
+  ["  ARTIST ", ["warm"]],
+  ["DRIVE", ["warm"]],
+  [42, ["number"]],
+  ["undefined", []],
+  ["null", []]
+]) {
+  assert.deepEqual(Array.from(searchSandbox.filterLibraryTracks(query), track => track.id), expectedIds);
+  searchSandbox.renderTracks(query);
+  searchSandbox.renderTrackPicker(query);
+  const libraryIds = [...searchSandbox.elements.list.innerHTML.matchAll(/data-track-id="([^"]+)"/g)].map(match => match[1]);
+  const pickerIds = [...searchSandbox.elements.trackPickerList.innerHTML.matchAll(/data-picker-track="([^"]+)"/g)].map(match => match[1]);
+  assert.deepEqual([...new Set(libraryIds)], expectedIds, "Library renders expected search results");
+  assert.deepEqual(pickerIds, expectedIds, "Picker and library share search semantics");
+}
+
 console.log("DJ deck HUD contracts: artist journey guidance plus cloud revision and maintenance toast actions behave as expected.");

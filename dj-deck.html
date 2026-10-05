@@ -2363,6 +2363,25 @@
       window.haloStats?.track("halo_dj_mode", { mode, curve: elements.energyCurve.value });
     }
 
+    function trackText(value, fallback = "") {
+      return String(value ?? "").trim() || fallback;
+    }
+
+    function normalizeTrackMetadata(track) {
+      return {
+        ...TRACK_DNA_DEFAULTS,
+        ...track,
+        title: trackText(track.title, "Untitled"),
+        artist: trackText(track.artist, "Unknown artist"),
+        key: trackText(track.key, "--"),
+        genre: trackText(track.genre),
+        platform: trackText(track.platform, "HALO Library"),
+        energyRole: trackText(track.energyRole, TRACK_DNA_DEFAULTS.energyRole),
+        sonicWeather: trackText(track.sonicWeather, TRACK_DNA_DEFAULTS.sonicWeather),
+        signatureMoment: trackText(track.signatureMoment, TRACK_DNA_DEFAULTS.signatureMoment)
+      };
+    }
+
     function sessionTrack(track) {
       return {
         id: String(track.id || ""), title: String(track.title || "Untitled"), artist: String(track.artist || "Unknown artist"),
@@ -2744,13 +2763,13 @@
         const knownIds = new Set(tracks.map(track => track.id));
         (Array.isArray(snapshot.library) ? snapshot.library : []).forEach(track => {
           if (!track?.id || knownIds.has(track.id)) return;
-          tracks.push({ ...track, bpm: Number(track.bpm || 124), originalBpm: Number(track.originalBpm || track.bpm || 124), playing: false });
+          tracks.push({ ...normalizeTrackMetadata(track), bpm: Number(track.bpm || 124), originalBpm: Number(track.originalBpm || track.bpm || 124), playing: false });
           knownIds.add(track.id);
         });
         ["A", "B"].forEach(deckId => {
           const saved = snapshot.decks[deckId];
           if (!saved) return;
-          deckState[deckId] = { ...saved, bpm: Number(saved.bpm || 124), originalBpm: Number(saved.originalBpm || saved.bpm || 124), pitch: Number(saved.pitch || 0), playing: false };
+          deckState[deckId] = { ...normalizeTrackMetadata(saved), bpm: Number(saved.bpm || 124), originalBpm: Number(saved.originalBpm || saved.bpm || 124), pitch: Number(saved.pitch || 0), playing: false };
         });
         trackQueue = (Array.isArray(snapshot.queue) ? snapshot.queue : []).filter(id => knownIds.has(id)).slice(0, 80);
         elements.crossfader.value = String(Math.max(0, Math.min(100, Number(snapshot.controls?.crossfader ?? 50))));
@@ -3130,9 +3149,13 @@
       audioEngine.animationFrame = requestAnimationFrame(animateAudio);
     }
 
+    function filterLibraryTracks(filter = "") {
+      const query = String(filter ?? "").trim().toLowerCase();
+      return tracks.filter(track => [track.title, track.artist, track.key, track.genre, track.platform].some(value => String(value ?? "").toLowerCase().includes(query)));
+    }
+
     function renderTracks(filter = "") {
-      const query = filter.trim().toLowerCase();
-      const filtered = tracks.filter(track => [track.title, track.artist, track.key, track.genre, track.platform].some(value => String(value).toLowerCase().includes(query)));
+      const filtered = filterLibraryTracks(filter);
       elements.list.innerHTML = filtered.map(track => `
         <div class="track-row ${trackQueue.includes(track.id) ? "is-queued" : ""}" data-track-id="${escapeHTML(track.id)}">
           ${coverMarkup(track, "track-cover")}
@@ -3157,8 +3180,7 @@
     }
 
     function renderTrackPicker(filter = "") {
-      const query = filter.trim().toLowerCase();
-      const filtered = tracks.filter(track => [track.title, track.artist, track.key, track.genre, track.platform].some(value => String(value).toLowerCase().includes(query)));
+      const filtered = filterLibraryTracks(filter);
       elements.trackPickerList.innerHTML = filtered.length ? filtered.map(track => `
         <button class="picker-track" type="button" data-picker-track="${escapeHTML(track.id)}">
           ${coverMarkup(track, "track-cover")}
@@ -4457,7 +4479,7 @@
       try {
         const additions = await Promise.all(files.map(async (file, index) => {
           const folderPath = file.webkitRelativePath ? file.webkitRelativePath.split("/").slice(0, -1).join("/") : "";
-          return {
+          return normalizeTrackMetadata({
             id: `drive-${Date.now()}-${index}`,
             title: file.name.replace(/\.[^/.]+$/, ""),
             artist: folderPath || "Your Drive",
@@ -4470,7 +4492,7 @@
             artwork: await embeddedArtworkUrl(file),
             audioAsset: { file, buffer: null, promise: null },
             duration: 0
-          };
+          });
         }));
         const artworkCount = additions.filter(track => track.artwork).length;
         tracks.unshift(...additions);
@@ -4757,6 +4779,7 @@
       const playableCandidates = candidates.filter(trackHasPlayableAudio);
       const ranked = (playableCandidates.length ? playableCandidates : candidates).map(track => ({ track, score: scoreTrack(track, intent) })).sort((left, right) => right.score - left.score);
       const winner = ranked[0];
+      const sonicWeather = trackText(winner.track.sonicWeather, TRACK_DNA_DEFAULTS.sonicWeather);
       const active = deckState[activeDeckId()];
       const bpmDelta = Number(winner.track.bpm) - Number(active.bpm);
       const direction = intent === "reset" ? "contrast without losing phrase control" : intent === "hold" ? "groove continuity" : "a controlled energy rise";
@@ -4787,11 +4810,11 @@
         signatureMotif: "none",
         signatureMotifReason: "The local planner keeps the HALO motif selective and leaves this decision to an eligible performance transition.",
         variationNote: "The local planner rotates performance styles and avoids the most recent transition patterns.",
-        whyThisTrack: `${winner.track.title} matches the ${djMode} objective through ${winner.track.sonicWeather.toLowerCase()}`,
+        whyThisTrack: `${winner.track.title} matches the ${djMode} objective through ${sonicWeather.toLowerCase()}`,
         whyNow: `${active.title} has established the current chapter; this move creates ${direction} without abandoning its harmonic language.`,
         transitionReason: decision === "silence" ? "A clean ending gives the room a breath and makes the next opening meaningful." : decision === "hold" ? "Waiting protects both vocal identities and preserves the strongest part of the outgoing record." : `A ${transitionBars}-bar ${modeProfiles[djMode].transition.replaceAll("-", " ")} protects phrasing and keeps the energy change intentional.`,
         feelingNext: djMode === "club" ? "A stronger body response after a controlled breath." : djMode === "chill" ? "More space, warmth and continuity." : "Curiosity and emotional recognition before the next reveal.",
-        sonicWeather: winner.track.sonicWeather,
+        sonicWeather,
         protectMoment: active.signatureMoment || "Let the outgoing hook finish before revealing the next identity.",
         doNotMixReasons: decision === "silence" ? ["The set is closing", "A clean ending carries more emotional weight"] : vocalCollision ? ["Both records are vocal-forward", "Wait for the outgoing lyric to clear"] : [],
         setArc: [...ranked.slice(0, 3), ...Array(3).fill(winner)].slice(0, 3).map(({ track }, index) => ({ trackId: track.id, role: track.energyRole || (index === 2 ? "release" : "builder"), energyTarget: Number(track.energy || 5), purpose: index === 0 ? "Resolve the current transition." : index === 1 ? "Develop the chapter without peaking early." : "Preserve an exit, release or second lift." })),
@@ -4804,13 +4827,10 @@
     async function analyzeSet() {
       elements.analyzeSet.disabled = true;
       elements.analyzeSet.textContent = "Thinking…";
-      const localRecommendation = recommendLocally();
-      if (!localRecommendation) {
-        elements.analyzeSet.disabled = false;
-        elements.analyzeSet.textContent = "Analyze set";
-        return;
-      }
+      let localRecommendation = null;
       try {
+        localRecommendation = recommendLocally();
+        if (!localRecommendation) return;
         const response = await fetch("/api/ai-dj", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -4841,9 +4861,15 @@
         }
         applyRecommendation(data, "Cloud AI");
         window.haloStats?.track("analyze_ai_set", { mode: "cloud", intent: elements.mixIntent.value });
-      } catch {
-        applyRecommendation(localRecommendation, "Local brain");
-        window.haloStats?.track("analyze_ai_set", { mode: "local", intent: elements.mixIntent.value });
+      } catch (error) {
+        if (localRecommendation) {
+          applyRecommendation(localRecommendation, "Local brain");
+          window.haloStats?.track("analyze_ai_set", { mode: "local", intent: elements.mixIntent.value });
+        } else {
+          currentRecommendation = null;
+          elements.aiBrief.textContent = `Local planning failed: ${error.message || "The set could not be analyzed."}`;
+          showToast("Local planning unavailable", elements.aiBrief.textContent);
+        }
       } finally {
         elements.analyzeSet.disabled = false;
         elements.analyzeSet.textContent = "Analyze set";
@@ -5077,7 +5103,7 @@
         const data = await response.json();
         if (!response.ok) throw new Error(data.message || "The song link could not be imported");
 
-        const track = {
+        const track = normalizeTrackMetadata({
           id: `imported-${Date.now()}`,
           title: data.title || "Imported track",
           artist: data.artist || data.platform,
@@ -5088,7 +5114,7 @@
           key: "--",
           genre: "Imported",
           energy: 3
-        };
+        });
 
         tracks.unshift(track);
         elements.search.value = "";

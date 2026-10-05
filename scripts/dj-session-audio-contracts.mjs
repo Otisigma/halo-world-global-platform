@@ -137,4 +137,98 @@ assert.match(deckPage, /audioEngine\.halo\.stopSourceSmoothly\(/);
 assert.match(deckPage, /halo\?\.scheduleLiveIntelligenceRestore\(/);
 assert.match(deckPage, /audioEngine\.halo\?\.suppressLiveIntelligence\(\);\n\s+stopDeckAudio\(deckId\);/, "Loading a track suppresses the room input");
 
+function deckFunction(name, nextName) {
+  const start = deckPage.indexOf(`function ${name}(`);
+  const end = deckPage.indexOf(`function ${nextName}(`, start);
+  assert.ok(start >= 0 && end > start, `Find ${name} in the deck`);
+  return deckPage.slice(start, end).replace(/\s*async\s*$/, "");
+}
+const metadata = {
+  tracks: [], deckState: {}, trackQueue: [], sessionRestoring: false,
+  elements: {
+    crossfader: {}, mixIntent: {}, energyCurve: {}, setPhase: {},
+    driveButton: {}, folderButton: {}, search: {},
+    importButton: {}, musicUrl: { value: "https://example.com/song" },
+    importStatus: { classList: { remove() {}, add() {} } }
+  },
+  document: { querySelector: () => ({}) },
+  modeProfiles: { listening: {} }, energyCurves: {},
+  selectedImportDeck: "A", pendingPlaybackDeck: null,
+  setDjMode() {}, setDeskOnlyMode() {}, updateRangeFill() {},
+  renderTracks() {}, renderQueue() {}, updateDeck() {}, recommendLocally() {},
+  embeddedArtworkUrl: async () => "",
+  loadTrack(deckId, id) { metadata.loaded = { deckId, id }; },
+  showToast() {}, window: {}
+};
+vm.createContext(metadata);
+vm.runInContext([
+  deckPage.match(/const TRACK_DNA_DEFAULTS = .*?;/)[0],
+  deckFunction("trackText", "normalizeTrackMetadata"),
+  deckFunction("normalizeTrackMetadata", "sessionTrack"),
+  deckFunction("applySessionSnapshot", "restoreLocalSession"),
+  `async ${deckPage.slice(deckPage.indexOf("function handleDriveUpload("), deckPage.indexOf("\n    syncMaintenanceDockLabel();"))}`,
+  `async ${deckFunction("importTrack", "syncDecks")}`
+].join("\n"), metadata);
+
+const audioAsset = { file: { name: "song.wav" } };
+const audioBuffer = { decoded: true };
+const stemAssets = { vocals: { url: "/private/vocals" } };
+const original = {
+  id: "preserved", title: "Supplied title", artist: "Supplied artist",
+  sonicWeather: "Warm and patient", audioAsset, audioBuffer, stemAssets,
+  stemPermission: true, vaultPackId: "private-pack"
+};
+const normalized = metadata.normalizeTrackMetadata(original);
+for (const key of Object.keys(original)) assert.equal(normalized[key], original[key], `${key} survives normalization`);
+assert.notEqual(normalized, original, "Normalization does not mutate its input");
+for (const sonicWeather of [undefined, null, "", "   ", 42]) {
+  const track = metadata.normalizeTrackMetadata({ id: "legacy", title: null, artist: undefined, key: null, genre: null, platform: null, energyRole: null, signatureMoment: null, sonicWeather });
+  assert.equal(track.title, "Untitled");
+  assert.equal(track.artist, "Unknown artist");
+  assert.equal(track.key, "--");
+  assert.equal(track.genre, "");
+  assert.equal(track.platform, "HALO Library");
+  assert.equal(track.energyRole, "builder");
+  assert.equal(track.sonicWeather, sonicWeather === 42 ? "42" : "Balanced, groove-led and open enough for a patient blend.");
+  assert.ok(track.signatureMoment.length > 0);
+}
+
+const savedDeck = { ...original, sonicWeather: null, bpm: 124, pitch: 2 };
+assert.equal(metadata.applySessionSnapshot({
+  version: 1,
+  library: [{ id: "legacy", sonicWeather: null, bpm: 120 }, original],
+  decks: { A: savedDeck, B: { id: "empty", empty: true, title: "No track loaded" } },
+  queue: ["legacy", "unknown", "preserved"]
+}), true);
+assert.deepEqual(Array.from(metadata.tracks, track => track.id), ["legacy", "preserved"], "Restore preserves library order");
+assert.deepEqual(Array.from(metadata.trackQueue), ["legacy", "preserved"]);
+assert.equal(metadata.tracks[0].title, "Untitled");
+assert.equal(typeof metadata.deckState.A.sonicWeather, "string");
+assert.equal(metadata.deckState.A.audioAsset, audioAsset);
+assert.equal(metadata.deckState.A.audioBuffer, audioBuffer);
+assert.equal(metadata.deckState.A.stemAssets, stemAssets);
+assert.equal(metadata.deckState.A.stemPermission, true);
+assert.equal(metadata.deckState.A.playing, false, "Restoration never resumes saved playback");
+assert.equal(metadata.deckState.B.empty, true, "An empty restored deck stays empty");
+assert.equal(metadata.sessionRestoring, false);
+
+const upload = { name: "Folder Song.wav", type: "audio/wav", webkitRelativePath: "Album/Folder Song.wav" };
+await metadata.handleDriveUpload({ target: { files: [upload], value: "selected" } });
+const driveTrack = metadata.tracks[0];
+assert.equal(driveTrack.title, "Folder Song");
+assert.equal(driveTrack.artist, "Album");
+assert.equal(driveTrack.audioAsset.file, upload, "Ingestion keeps the original File reference");
+assert.equal(driveTrack.platform, "Private Drive Upload");
+assert.ok(driveTrack.sonicWeather.length > 0);
+assert.equal(metadata.loaded.id, driveTrack.id);
+
+metadata.fetch = async () => ({ ok: true, json: async () => ({ title: null, artist: null, platform: null }) });
+await metadata.importTrack({ preventDefault() {} });
+const imported = metadata.tracks[0];
+assert.equal(imported.title, "Imported track");
+assert.equal(imported.artist, "Unknown artist");
+assert.equal(imported.platform, "Music service");
+assert.equal(imported.sourceUrl, "https://example.com/song");
+assert.ok(imported.sonicWeather.length > 0);
+
 console.log("DJ session + audio engine contracts passed");

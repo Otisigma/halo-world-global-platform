@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
+import vm from "node:vm";
 import { analyzeSetPreflight, analyzeTransition } from "../netlify/lib/dj-preflight.mjs";
 
 const read = path => readFile(new URL(`../${path}`, import.meta.url), "utf8");
@@ -61,6 +62,84 @@ const deduplicatedReport = analyzeSetPreflight({
   ]
 });
 assert.deepEqual(deduplicatedReport.orderedTracks.map(track => track.id).sort(), ["next", "same"]);
+
+const sparseReport = analyzeSetPreflight({
+  tracks: [
+    { id: "upload", title: null, bpm: 124, key: "8A", stemTypes: [null, undefined, " VOCALS "] },
+    { id: "upload", bpm: 124 },
+    { id: "import", artist: null, bpm: 125, key: "9A" }
+  ]
+});
+assert.equal(sparseReport.orderedTracks.length, 2);
+assert.equal(sparseReport.transitions.length, 1);
+assert.ok(Number.isFinite(sparseReport.qualityScore));
+assert.ok(sparseReport.orderedTracks.every(track => typeof track.title === "string" && typeof track.artist === "string"));
+
+function deckFunction(name) {
+  const start = deck.indexOf(`function ${name}(`);
+  assert.notEqual(start, -1, `Missing function ${name}`);
+  const end = deck.slice(start).search(/\n    (?:async )?function /);
+  return deck.slice(start, end < 0 ? deck.length : start + end);
+}
+
+const planning = {
+  tracks: [],
+  deckState: { A: { id: "active", title: "Active", bpm: 124, key: "8A", energy: 5 }, B: {} },
+  elements: {
+    mixIntent: { value: "hold" }, setPhase: { value: "build" },
+    crossfader: { value: "0" }, analyzeSet: {}, aiBrief: {},
+    preflightPersona: { value: "halo" }, energyCurve: { value: "steady" }
+  },
+  djMode: "listening",
+  modeProfiles: { listening: { breathBars: [16, 32], character: "patient", transition: "long-blend" } },
+  trackQueue: [], currentRecommendation: null,
+  takeoverSession: null, djSessionId: "test",
+  audioEngine: { context: null }, recordingState: { transitionHistory: [] },
+  window: {},
+  document: { querySelector: () => ({ textContent: "80" }) },
+  haloBreathPlan: () => ({}),
+  renderArtistJourneyGuidance() {},
+  applyRecommendation(recommendation, mode) { planning.applied = { recommendation, mode }; },
+  showToast(title, message) { planning.toast = { title, message }; }
+};
+vm.createContext(planning);
+vm.runInContext([
+  deck.match(/const TRACK_DNA_DEFAULTS = .*?;/)[0],
+  ...["trackText", "activeDeckId", "trackHasPlayableAudio", "camelotCompatibility", "scoreTrack", "localAssistantTeam", "recommendLocally"].map(deckFunction),
+  `async ${deckFunction("analyzeSet")}`
+].join("\n"), planning);
+
+for (const weather of [undefined, null, "", "   ", 42, false, { description: "Warm" }, "Warm AND Spacious"]) {
+  planning.tracks = [
+    { id: "seeded", title: "Seeded", bpm: 124, key: "8A", sonicWeather: "Seeded weather", energy: 5 },
+    { id: "drive", title: "Folder upload", bpm: 124, key: "--", energy: 3, audioAsset: { file: {} }, sonicWeather: weather }
+  ];
+  const recommendation = planning.recommendLocally();
+  assert.equal(recommendation.trackId, "drive", "Playable uploads win over metadata-only seeds");
+  const expected = String(weather ?? "").trim() || "Balanced, groove-led and open enough for a patient blend.";
+  assert.equal(recommendation.sonicWeather, expected);
+  assert.ok(recommendation.whyThisTrack.endsWith(expected.toLowerCase()));
+}
+planning.tracks = [{ id: "import", title: "Imported link", bpm: 120, key: "--" }];
+assert.equal(planning.recommendLocally().trackId, "import", "Metadata-only imports remain valid local candidates");
+
+const recommend = planning.recommendLocally;
+planning.recommendLocally = () => { throw new Error("Broken local plan"); };
+planning.fetch = () => { assert.fail("Cloud must not run after local planning fails"); };
+await planning.analyzeSet();
+assert.equal(planning.elements.analyzeSet.disabled, false);
+assert.equal(planning.elements.analyzeSet.textContent, "Analyze set");
+assert.match(planning.elements.aiBrief.textContent, /Local planning failed: Broken local plan/);
+assert.equal(planning.toast.title, "Local planning unavailable");
+assert.equal(planning.currentRecommendation, null, "Failed planning clears stale recommendations");
+planning.recommendLocally = () => null;
+await planning.analyzeSet();
+assert.equal(planning.elements.analyzeSet.disabled, false, "No candidates also restores the controls");
+planning.recommendLocally = recommend;
+planning.fetch = async () => { throw new Error("Cloud offline"); };
+await planning.analyzeSet();
+assert.equal(planning.applied.mode, "Local brain", "Cloud failures retain a successful local plan");
+assert.equal(planning.elements.analyzeSet.disabled, false);
 
 const checks = [
   [migration.includes("halo_dj_set_preflights") && migration.includes("halo_dj_transition_observations"), "stores set reports and transition outcomes in Netlify Database"],

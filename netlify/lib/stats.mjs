@@ -28,6 +28,7 @@ export const allowedEvents = new Set([
   "companion_message_sent",
   "companion_opened",
   "complete_dj_takeover_recording",
+  "dj_council_verdict",
   "compare_mix_version",
   "continue_to_toolost",
   "copy_mix_room_link",

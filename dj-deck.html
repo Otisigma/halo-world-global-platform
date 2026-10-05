@@ -27,6 +27,7 @@
   <link rel="stylesheet" href="/accessibility.css">
   <link rel="stylesheet" href="/halo-brand.css">
   <link rel="stylesheet" href="/mix-flightplan.css">
+  <link rel="stylesheet" href="/dj-council-badge.css">
   <script src="/accessibility.js" defer></script>
   <link rel="stylesheet" href="/mobile-navigation.css">
   <script src="/mobile-navigation.js" defer></script>
@@ -393,6 +394,7 @@
     .recording-light { width: 9px; height: 9px; border-radius: 50%; background: #626a62; box-shadow: 0 0 0 4px rgba(255,255,255,.035); }
     .recording-rig.is-recording .recording-light { background: #ff6948; box-shadow: 0 0 0 4px rgba(255,105,72,.12); animation: signalPulse .7s ease-in-out infinite alternate; }
     .recording-rig.is-complete .recording-light { background: var(--acid); box-shadow: 0 0 0 4px rgba(200,255,54,.1); }
+    .recording-rig.is-council-blocked .recording-light { background: var(--red); box-shadow: 0 0 0 4px rgba(255,77,93,.12); }
     .recording-status { margin: 7px 0 0; color: #aeb7ab; font-size: 11px; line-height: 1.45; }
     .recording-progress { margin-top: 15px; height: 11px; border: 1px solid var(--line-strong); background: #080a09; overflow: hidden; position: relative; }
     .recording-progress-fill { position: absolute; inset: 0; transform: scaleX(0); transform-origin: left; background: linear-gradient(90deg, var(--acid), #ebff9f); transition: transform .35s linear; }
@@ -1316,6 +1318,7 @@
         <div class="qc-check" id="qcRepeats"><span>Repeat guard</span><strong id="qcRepeatsValue">Single play only</strong></div>
         <div class="qc-check" id="qcContinuity"><span>Mix continuity</span><strong id="qcContinuityValue">Preflight required</strong></div>
       </div>
+      <div class="dj-council" id="djCouncil" aria-label="DJ Council verdict" aria-live="polite" hidden></div>
       <div class="mix-release" id="mixRelease">
         <div class="mix-release-copy">
           <p class="eyebrow">Finished mix // next move</p>
@@ -1838,6 +1841,8 @@
   <script src="/services/deckSessionManager.js"></script>
   <script src="/audio-routing-guard.js"></script>
   <script src="/services/haloAudioEngine.js"></script>
+  <script type="module" src="/services/djCouncilEngine.js"></script>
+  <script type="module" src="/dj-council-badge.js"></script>
   <script>
     const TRACK_DNA_DEFAULTS = { danceability: 6, emotionalIntensity: 5, darkness: 5, warmth: 5, vocalDensity: 4, percussionDensity: 6, bassWeight: 6, melodicDensity: 5, atmosphere: 6, energyRole: "builder", sonicWeather: "Balanced, groove-led and open enough for a patient blend.", signatureMoment: "Protect the central hook before opening the next phrase." };
     const tracks = [
@@ -1954,6 +1959,7 @@
       copyMixLink: document.querySelector("#copyMixLink"),
       dreamweaverMix: document.querySelector("#dreamweaverMix"),
       newMix: document.querySelector("#newMix"),
+      djCouncil: document.querySelector("#djCouncil"),
       mixReleaseProgress: document.querySelector("#mixReleaseProgress"),
       mixReleaseStatus: document.querySelector("#mixReleaseStatus"),
       mixReleaseProgress: document.querySelector("#mixReleaseProgress"),
@@ -2923,7 +2929,13 @@
       failed: false,
       takeoverPlan: [],
       playedTrackIds: new Set(),
-      qualityScore: 0
+      qualityScore: 0,
+      recorderPreflightPassed: false,
+      councilMeter: null,
+      councilMasterBpm: 0,
+      playbackFaults: 0,
+      councilPayload: null,
+      councilVerdict: null
     };
 
     function escapeHTML(value = "") {
@@ -5617,6 +5629,7 @@
             updateDeck(incomingDeck);
             const recoveryHold = 90000;
             elements.recordingStatus.textContent = `Deck ${incomingDeck} could not enter safely. Quality control kept Deck ${outgoingDeck} live and stopped the sequence instead of improvising an untested handoff.`;
+            recordingState.playbackFaults += 1;
             setQcCheck(elements.qcContinuity, elements.qcContinuityValue, "blocked", "Playback fault · safe stop armed");
             showToast(`Deck ${incomingDeck} stayed out`, error.message || "The incoming track could not start.");
             setPerformancePhase("Quality-control hold", recoveryHold, "The current song stays clean. No untested transition or repeated fallback is allowed.");
@@ -5711,6 +5724,69 @@
         stopDeckAudio(deckId);
         updateDeck(deckId);
       });
+    }
+
+    // DJ Council gate: read-only metering of the isolated recorder analysers plus a binding
+    // verdict before the finished mix can be posted or auto-downloaded as a deliverable.
+    function sampleCouncilSignal() {
+      const meter = recordingState.councilMeter;
+      if (!meter || !audioEngine.context || !Array.isArray(audioEngine.recorderAnalysers)) return;
+      meter.push(audioEngine.recorderAnalysers.map(analyser => {
+        const samples = new Float32Array(analyser.fftSize);
+        const spectrum = new Float32Array(analyser.frequencyBinCount);
+        analyser.getFloatTimeDomainData(samples);
+        analyser.getFloatFrequencyData(spectrum);
+        return { samples, spectrum, sampleRate: audioEngine.context.sampleRate };
+      }));
+    }
+
+    function councilTrackPayload(track) {
+      const platform = String(track.platform || "");
+      const haloCatalog = Boolean(track.vaultPackId) || /^HALO\b/i.test(platform);
+      return {
+        id: track.id,
+        title: track.title,
+        artist: track.artist,
+        bpm: Number(track.originalBpm || track.bpm),
+        key: track.key,
+        energy: Number(track.energy || 0),
+        isrc: track.isrc || "",
+        catalogId: track.catalogId || track.songId || (track.vaultPackId ? `stem-vault:${track.vaultPackId}` : haloCatalog ? `halo:${track.id}` : ""),
+        source: platform,
+        stemsUsed: Boolean(track.vaultPackId || track.stemAssets),
+        stemPermission: Boolean(track.vaultPackId) || track.stemPermission === true
+      };
+    }
+
+    function buildCouncilPayload() {
+      const playedTracks = [...recordingState.playedTrackIds]
+        .map(id => tracks.find(track => track.id === id) || ["A", "B"].map(deckId => deckState[deckId]).find(track => track.id === id))
+        .filter(track => track && !track.empty);
+      return {
+        profile: recordingState.councilProfile || djMode,
+        targetMinutes: takeoverSession?.minutes || 60,
+        durationSeconds: recordingState.durationSeconds,
+        masterBpm: recordingState.councilMasterBpm,
+        transitionsCompleted: recordingState.transitionCount,
+        playbackFaults: recordingState.playbackFaults,
+        tracks: playedTracks.map(councilTrackPayload),
+        signal: { preflightPassed: recordingState.recorderPreflightPassed, ...(recordingState.councilMeter?.result() || {}) },
+        attribution: { remixer: takeoverSession?.name || "", credit: takeoverSession ? `Remix by ${takeoverSession.name}` : "" }
+      };
+    }
+
+    function runDJCouncil() {
+      const council = window.HaloDJCouncil;
+      recordingState.councilPayload = council ? buildCouncilPayload() : null;
+      recordingState.councilVerdict = council ? council.evaluate(recordingState.councilPayload) : null;
+      window.HaloDJCouncilBadge?.render(elements.djCouncil, recordingState.councilVerdict);
+      return Boolean(council?.isMixDeliverable(recordingState.councilVerdict));
+    }
+
+    function resetDJCouncil() {
+      recordingState.councilPayload = null;
+      recordingState.councilVerdict = null;
+      window.HaloDJCouncilBadge?.clear(elements.djCouncil);
     }
 
     function finishTakeoverRecording(reason = "complete") {
@@ -5823,12 +5899,23 @@
           elements.recordingNote.textContent = `${formatRecordingTime(actualSeconds)} captured as ${fileDetails.label}. Preview it here before downloading.`;
           elements.mixTitle.value = `${takeoverSession.name} — Room 01 takeover`;
           elements.mixDescription.value = `A ${formatRecordingTime(actualSeconds)} HALO takeover recorded live from the DJ deck.`;
-          elements.mixReleaseStatus.textContent = "Post it for fans, keep the download, or reset the deck for the next mix.";
-          elements.postMix.disabled = false;
           elements.playlistMix.disabled = true;
           elements.playlistMix.textContent = "Add to playlist";
           elements.recordingStart.disabled = false;
           window.haloStats?.track("complete_dj_takeover_recording", { dj: takeoverSession.dj, minutes: takeoverSession.minutes, recorded_seconds: Math.round(actualSeconds) });
+          const councilPassed = runDJCouncil();
+          window.haloStats?.track("dj_council_verdict", { dj: takeoverSession.dj, pass: councilPassed, score: recordingState.councilVerdict?.score ?? 0 });
+          if (!councilPassed) {
+            elements.postMix.disabled = true;
+            elements.recordingDownload.textContent = "Download review copy (not deliverable)";
+            elements.recordingRig.className = "recording-rig panel is-complete is-council-blocked";
+            elements.recordingStatus.textContent = recordingState.councilVerdict?.summary || "DJ Council review is unavailable, so this mix is not deliverable.";
+            elements.mixReleaseStatus.textContent = "DJ Council blocked delivery. Apply the fixes below and re-record before posting.";
+            showToast("DJ Council blocked delivery", recordingState.councilVerdict?.recommendations?.[0]?.message || "Reload the deck and re-record the takeover.");
+            return;
+          }
+          elements.mixReleaseStatus.textContent = "Post it for fans, keep the download, or reset the deck for the next mix.";
+          elements.postMix.disabled = false;
           requestAnimationFrame(() => {
             elements.recordingDownload.click();
             elements.recordingStatus.textContent = `${takeoverSession.name}'s finished mix download was requested. Use “Download finished set again” if your browser blocked it.`;
@@ -5837,6 +5924,11 @@
 
         stopAutomatedMix();
         stopTakeoverDecks();
+        resetDJCouncil();
+        recordingState.recorderPreflightPassed = false;
+        recordingState.councilMeter = null;
+        recordingState.playbackFaults = 0;
+        recordingState.councilProfile = djMode;
         elements.recordingStatus.textContent = "Checking the isolated recorder feed for noise, hum, and cue bleed…";
         await audioEngine.recorderIsolation.armAndStartRecording(recorder, {
           context: audioEngine.context,
@@ -5848,8 +5940,11 @@
             return { samples, spectrum, sampleRate: audioEngine.context.sampleRate };
           })
         });
+        recordingState.recorderPreflightPassed = true;
+        recordingState.councilMeter = window.HaloDJCouncil?.createSignalMeter() || null;
         recordingState.startedAt = Date.now();
         syncDecks();
+        recordingState.councilMasterBpm = Number(deckState.A.bpm) || 0;
         deckState.A.playing = true;
         deckState.B.playing = false;
         await startDeckAudio("A");
@@ -5866,6 +5961,7 @@
         recordingState.elapsedTimer = setInterval(() => {
           const elapsedSeconds = (Date.now() - recordingState.startedAt) / 1000;
           updateRecordingProgress(elapsedSeconds);
+          sampleCouncilSignal();
           if (elapsedSeconds >= takeoverSession.minutes * 60) finishTakeoverRecording("complete");
         }, 250);
         showToast("Recording started", `${takeoverSession.name}'s ${takeoverSession.minutes}-minute set is live and mixing now.`);
@@ -5891,6 +5987,11 @@
       event.preventDefault();
       if (!recordingState.blob) {
         elements.mixReleaseStatus.textContent = "Finish a recording before posting it.";
+        return;
+      }
+      if (!window.HaloDJCouncil?.isMixDeliverable(recordingState.councilVerdict)) {
+        elements.postMix.disabled = true;
+        elements.mixReleaseStatus.textContent = "DJ Council has not passed this mix, so it cannot be delivered. Apply the council fixes and re-record.";
         return;
       }
       elements.postMix.disabled = true;
@@ -5933,7 +6034,8 @@
             artworkUrl: elements.mixArtwork.value,
             visibility: elements.mixVisibility.value,
             durationSeconds: recordingState.durationSeconds,
-            trackCount: document.querySelector("#tracksPlayed").textContent || "0"
+            trackCount: document.querySelector("#tracksPlayed").textContent || "0",
+            council: recordingState.councilPayload
           })
         });
         const data = await response.json();

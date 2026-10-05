@@ -3,6 +3,7 @@ import { getStore } from "@netlify/blobs";
 import { getDatabase } from "@netlify/database";
 import { getUser, verifyRequestOrigin } from "@netlify/identity";
 import { cleanText, ensureMembership } from "../lib/halo-x.mjs";
+import { evaluateDJCouncil, isMixDeliverable } from "../../services/djCouncilEngine.js";
 
 const audioStore = getStore({ name: "halo-mixes", consistency: "strong" });
 const allowedTypes = new Set(["audio/webm", "audio/ogg", "audio/mp4", "audio/mpeg", "audio/aac", "audio/wav", "audio/x-wav"]);
@@ -380,6 +381,21 @@ async function finalizeMix(payload, db, user) {
   const clientSaleEnabled = visibility === "room" && payload.clientSaleEnabled === true;
   const rightsAttested = uploadSource === "halo_deck" || payload.rightsAttested === true;
   if (uploadSource === "creator_desk" && !rightsAttested) return json({ message: "Confirm the recording and remix rights before posting" }, 400);
+  // DJ Council is a binding gate for HALO deck takeovers: re-evaluate server-side with the
+  // finalized duration so a failing (or missing) council review can never be delivered.
+  let councilVerdict = null;
+  if (uploadSource === "halo_deck") {
+    if (!payload.council || typeof payload.council !== "object" || Array.isArray(payload.council)) {
+      return json({ message: "DJ Council review is required before a HALO deck mix can be delivered." }, 422);
+    }
+    councilVerdict = evaluateDJCouncil({ ...payload.council, durationSeconds });
+    if (!isMixDeliverable(councilVerdict)) {
+      return json({
+        message: `DJ Council blocked delivery (${councilVerdict.score}/100). ${councilVerdict.recommendations[0]?.message || "Resolve the council checks and re-record."}`,
+        council: { score: councilVerdict.score, pass: false, recommendations: councilVerdict.recommendations }
+      }, 422);
+    }
+  }
   const originalArtist = cleanText(payload.originalArtist, 100) || "Independent artist";
   const remixerName = cleanText(payload.remixerName, 100) || membership.display_name;
   const editionFormat = payload.editionFormat === "wav_bundle" ? "wav_bundle" : "mp3";
@@ -417,7 +433,8 @@ async function finalizeMix(payload, db, user) {
     editionFormat,
     priceMinor,
     currency: mixCurrency,
-    productInfoComplete
+    productInfoComplete,
+    ...(councilVerdict ? { djCouncil: { version: councilVerdict.version, profile: councilVerdict.profile, score: councilVerdict.score, pass: councilVerdict.pass } } : {})
   });
 
   await db.sql`

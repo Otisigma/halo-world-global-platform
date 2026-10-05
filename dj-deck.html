@@ -3939,7 +3939,7 @@
           limiter.connect(splitter);
           audioEngine.recorderAnalysers = [0, 1].map(channel => {
             const analyser = context.createAnalyser();
-            analyser.fftSize = 8192;
+            analyser.fftSize = Math.min(32768, 2 ** Math.ceil(Math.log2(context.sampleRate / 6)));
             analyser.smoothingTimeConstant = 0;
             analyser.minDecibels = -120;
             splitter.connect(analyser, channel);
@@ -5748,7 +5748,12 @@
         ...audit,
         clean: previous?.clean === true && audit?.clean === true,
         reliable: previous?.reliable === true && audit?.reliable === true,
-        isolationSecure: previous?.isolationSecure === true && audit?.isolationSecure === true
+        isolationSecure: previous?.isolationSecure === true && audit?.isolationSecure === true,
+        humDetected: previous?.humDetected === true || audit?.humDetected === true,
+        humFrequency: previous?.humDetected ? previous.humFrequency : audit?.humFrequency,
+        humLevelDbfs: Math.max(previous?.humLevelDbfs ?? -120, audit?.humLevelDbfs ?? -120),
+        noiseFloorDbfs: Math.max(previous?.noiseFloorDbfs ?? -120, audit?.noiseFloorDbfs ?? -120),
+        peakDbfs: Math.max(previous?.peakDbfs ?? -120, audit?.peakDbfs ?? -120)
       };
       meter.push(audioEngine.recorderAnalysers.map(analyser => {
         const samples = new Float32Array(analyser.fftSize);
@@ -5971,7 +5976,7 @@
         recordingState.recorderPreflightPassed = true;
         recordingState.signalCleanupAudit = audioEngine.signalCleanup.getStatus();
         recordingState.councilMeter = window.HaloDJCouncil?.createSignalMeter() || null;
-        // Sample faster than the 8192-sample analyser window so consecutive reads overlap and
+        // Sample faster than the recorder analyser window so consecutive reads overlap and
         // the peak/hum meter sees every recorded sample.
         clearInterval(recordingState.councilTimer);
         recordingState.councilTimer = setInterval(sampleCouncilSignal, 120);

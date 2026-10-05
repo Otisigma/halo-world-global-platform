@@ -139,6 +139,7 @@ try {
   pipeline.auditSignal();
   assert.equal(pipeline.expander.gain.value, 1, "Music restores full gain");
   assert.equal(pipeline.auditSignal().reliable, false, "Stalled clock fails closed");
+  assert.equal(pipeline.expander.gain.value, 1, "Analysis faults do not mute live playback");
   context.currentTime += .1;
   recorderAnalysers[0].invalid = true;
   assert.equal(pipeline.auditSignal().reliable, false, "Invalid recorder samples fail closed");
@@ -146,7 +147,9 @@ try {
   context.currentTime += .1;
   pipeline.auditSignal();
   pipeline.status = { ...pipeline.status, auditedAt: Date.now() - 1000 };
+  const gainBeforeStatus = pipeline.expander.gain.value;
   assert.equal(pipeline.getStatus().reliable, false, "Stale telemetry cannot clear the guard");
+  assert.equal(pipeline.expander.gain.value, gainBeforeStatus, "Reading stale status does not change audio gain");
   context.state = "suspended";
   assert.equal(pipeline.getStatus().clean, false, "Suspended context is not clean");
   context.state = "running";

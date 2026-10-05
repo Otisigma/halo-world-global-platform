@@ -30,6 +30,7 @@ class MockNode {
 class MockContext {
   constructor() {
     this.currentTime = 0;
+    this.sampleRate = 48000;
     this.nodes = [];
     this.destination = this.node("speakers");
   }

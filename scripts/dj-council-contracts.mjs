@@ -95,7 +95,7 @@ check("vault stems with permission pass", () => {
 
 // ---- Fail paths ------------------------------------------------------------------------------
 check("hum blocks delivery", () => failing(evaluateDJCouncil(passingMix({ signal: { ...passingMix().signal, humDetected: true, humFrequency: 50 } })), "signal.hum"));
-for (const cleanup of [undefined, {}, { clean: true }, { ...passingMix().signal.cleanup, reliable: false }, { ...passingMix().signal.cleanup, clean: false }, { ...passingMix().signal.cleanup, isolationSecure: false }, { ...passingMix().signal.cleanup, humDetected: true }]) {
+for (const cleanup of [undefined, {}, { clean: true }, { ...passingMix().signal.cleanup, reliable: false }, { ...passingMix().signal.cleanup, clean: false }, { ...passingMix().signal.cleanup, isolationSecure: false }, { ...passingMix().signal.cleanup, humDetected: true }, { ...passingMix().signal.cleanup, noiseFloorDbfs: null }, { ...passingMix().signal.cleanup, peakDbfs: 0 }]) {
   check("missing or failed cleanup audit blocks delivery", () => failing(evaluateDJCouncil(passingMix({ signal: { ...passingMix().signal, cleanup } })), "signal.cleanup"));
 }
 check("missing recorder preflight blocks delivery", () => failing(evaluateDJCouncil(passingMix({ signal: { ...passingMix().signal, preflightPassed: false } })), "signal.hum"));

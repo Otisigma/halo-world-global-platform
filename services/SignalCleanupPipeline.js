@@ -84,7 +84,6 @@ export class SignalCleanupPipeline {
 
     // Spectral Scrubber: downward expansion below -65 dBFS and a sample-wise -1 dBFS ceiling.
     this.expander = context.createGain();
-    this.expander.gain.value = 0;
     this.peakProtector = context.createWaveShaper();
     const ceiling = Math.pow(10, -1 / 20);
     this.peakProtector.curve = Float32Array.from({ length: 65537 }, (_, index) =>
@@ -140,7 +139,9 @@ export class SignalCleanupPipeline {
     });
   }
 
-  /** @returns {SignalCleanupStatus} */
+  /** Egress Auditor checks the guarded post-limiter recorder tap, never the monitor bus.
+   * @returns {SignalCleanupStatus}
+   */
   auditSignal() {
     try {
       if (!this.connected || this.context.state !== "running" || this.context.currentTime <= this.lastAudioTime) {
@@ -174,7 +175,8 @@ export class SignalCleanupPipeline {
         reason: clean ? "" : hum ? "Mains hum remains on the recorder bus." : idleNoise ? "Idle noise remains on the recorder bus." : "Recorder peaks exceed the safety limit."
       });
     } catch (error) {
-      this.expander.gain.setTargetAtTime(0, this.context.currentTime, .005);
+      // Block capture via audit status without muting shared live playback on analysis faults.
+      this.expander.gain.setTargetAtTime(1, this.context.currentTime, .005);
       this.status = this.unavailable(error.message);
     }
     return this.status;
@@ -183,7 +185,6 @@ export class SignalCleanupPipeline {
   /** @returns {SignalCleanupStatus} */
   getStatus() {
     if (!this.connected || this.context.state !== "running" || this.status.auditedAt === null || Date.now() - this.status.auditedAt > 500) {
-      this.expander.gain.setTargetAtTime(0, this.context.currentTime, .005);
       return this.unavailable("Signal audit is unavailable or stale.");
     }
     return this.status;

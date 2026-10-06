@@ -24,13 +24,14 @@
   <script src="/stats.js" defer></script>
   <script src="/site-monitor.js" defer></script>
   <script src="/halo-relations.js" defer></script>
+  <script type="module" src="/master-campaign-workspace.js"></script>
   <script src="/accessibility.js" defer></script>
 </head>
 <body>
   <div class="grain" aria-hidden="true"></div>
   <header class="relations-header">
     <a class="brand" href="/halo" aria-label="HALO World home"><img class="halo-brand-image" src="/assets/halo-logo-mark.webp" alt=""><span><strong>HALO Relations</strong><small>Human connection desk</small></span></a>
-    <nav aria-label="HALO destinations"><a href="/outreach.html">Outreach</a><a href="/halo-x.html">Owner desk</a><a href="/halo">Live room</a><button id="authButton" type="button">Sign in</button></nav>
+    <nav aria-label="HALO destinations"><a href="#masterCampaignWorkspace">Campaigns</a><a href="/outreach.html">Outreach</a><a href="/halo-x.html">Owner desk</a><a href="/halo">Live room</a><button id="authButton" type="button">Sign in</button></nav>
   </header>
 
   <main>
@@ -46,6 +47,42 @@
     </section>
 
     <section id="workspaceView" hidden>
+      <section id="masterCampaignWorkspace" class="campaign-workspace panel" aria-labelledby="masterCampaignTitle">
+        <div class="panel-heading">
+          <div><p class="eyebrow">Dreamweaver · Master Campaign Engine</p><h2 id="masterCampaignTitle">One brief. Distinct channels. Human approval.</h2></div>
+          <button type="button" id="masterCampaignRefresh" class="button light">Refresh campaigns</button>
+        </div>
+        <p>Generation creates drafts only. Review each channel before approving. Signal and lobby publication are public; email and professional outputs remain human-sent exports. Automation acceptance is not a delivery receipt.</p>
+        <p id="masterCampaignStatus" role="status" aria-live="polite">Connecting to the campaign desk…</p>
+        <div id="masterCampaignControls" hidden>
+          <details>
+            <summary>Create or revise a campaign brief</summary>
+            <form id="masterCampaignForm" class="profile-form">
+              <label><span>Source type</span><select name="sourceType"><option value="halo_update">HALO update</option><option value="release">Published release</option><option value="mix">Mix</option><option value="listening_party">Listening party</option></select></label>
+              <label><span>Source ID (not needed for HALO updates)</span><input name="sourceId" maxlength="100"></label>
+              <label><span>Owned source record</span><select name="sourceKind"><option value="release">Release catalog</option><option value="song">Song catalog</option><option value="song_lab">Song Lab package</option><option value="mix">Mix</option><option value="fan_campaign">Listening-party campaign</option></select></label>
+              <label class="consent-field"><input name="inputApproved" type="checkbox"><span>If using Song Lab, I have reviewed its advisory creative package as input. It is not verified release metadata.</span></label>
+              <label class="wide"><span>Title</span><input name="title" required minlength="2" maxlength="160"></label>
+              <label class="wide"><span>Verified factual brief — no private CRM notes</span><textarea name="brief" rows="4" required minlength="2" maxlength="1200"></textarea></label>
+              <label><span>Objective</span><input name="objective" maxlength="120" value="Invite listeners to the approved HALO destination"></label>
+              <label><span>Audience</span><input name="audience" maxlength="320" value="HALO listeners"></label>
+              <label><span>Public HALO destination</span><input name="destinationUrl" required maxlength="500" value="/halo"></label>
+              <label><span>Seasonal theme</span><select name="theme" id="masterCampaignTheme"></select></label>
+              <label><span>Theme locale</span><input name="locale" maxlength="24" value="en"></label>
+              <label><span>Theme region</span><input name="region" maxlength="80" value="Global"></label>
+              <label><span>Theme active from (optional)</span><input name="activeFrom" type="date"></label>
+              <label><span>Theme active until (optional)</span><input name="activeUntil" type="date"></label>
+              <fieldset class="wide"><legend>Channel drafts</legend><div id="masterCampaignChannels" class="campaign-channel-options"></div></fieldset>
+              <label class="consent-field"><input name="rightsConfirmed" type="checkbox" required><span>I have verified the supplied facts, destination, and promotional rights. Generation is not permission to publish.</span></label>
+              <div class="form-footer wide"><button type="submit" class="button dark">Generate new campaign</button><button type="button" id="masterCampaignRevise" class="button light" disabled>Create revised version of selected campaign</button></div>
+            </form>
+          </details>
+          <div class="campaign-desk-grid">
+            <aside aria-label="Campaign history"><h3>Campaigns</h3><div id="masterCampaignList"></div></aside>
+            <section aria-label="Channel review and delivery"><div id="masterCampaignDetail"><p>Select a campaign to review outputs and delivery state.</p></div></section>
+          </div>
+        </div>
+      </section>
       <div id="metricGrid" class="metric-grid" aria-label="Relationship overview"></div>
       <div class="workspace-grid">
         <aside class="member-rail" aria-label="Member directory">

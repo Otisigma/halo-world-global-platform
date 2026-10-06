@@ -7,6 +7,8 @@
   <meta name="description" content="The private operating system for artists. Store, shape, and grow your work without losing ownership, context, or momentum.">
   <meta name="theme-color" content="#070709">
   <meta name="halo-signal-broadcast-webhook" content="">
+  <script type="module" src="/campaign-updates.js"></script>
+  <link rel="stylesheet" href="/campaign-updates.css">
   <meta property="og:title" content="Signal Network — HALO Music World">
   <meta property="og:description" content="Artist sovereignty. Creative intelligence. Release continuity. Direct value.">
   <meta property="og:type" content="website">
@@ -866,6 +868,10 @@
           <button type="button" id="feedSignIn">Sign in with Creator Pass</button>
         </div>
         <p id="feedStatus" role="status" aria-live="polite">Loading public posts…</p>
+        <details class="signal-feed__composer">
+          <summary>Release notes and HALO updates</summary>
+          <section data-campaign-updates aria-label="Release notes and HALO update preferences"></section>
+        </details>
         <details class="signal-feed__composer">
           <summary>Compose a signal</summary>
           <p>Creator Pass identity required. Share only media you have permission to distribute. Visibility protects this post and uploaded clip, not an external link's destination.</p>

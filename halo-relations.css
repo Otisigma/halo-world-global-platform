@@ -122,6 +122,24 @@ input:focus,select:focus,textarea:focus { border-color:var(--rust); box-shadow:i
 .pulse-list { display:grid; margin-top:1.5rem; border-top:1px solid var(--line); }
 .pulse-row { display:grid; grid-template-columns:150px 1fr auto; gap:1rem; width:100%; padding:.9rem 0; border:0; border-bottom:1px solid var(--line); color:inherit; background:transparent; text-align:left; cursor:pointer; }
 .pulse-row time,.pulse-row span:last-child { color:var(--muted); font-family:var(--mono); font-size:.55rem; text-transform:uppercase; }
+.campaign-workspace { margin-bottom:1rem; border:1px solid var(--ink); scroll-margin-top:90px; }
+.campaign-workspace>p { max-width:1000px; line-height:1.6; }
+.campaign-workspace details { margin:1.5rem 0; }
+.campaign-workspace summary { cursor:pointer; font-weight:600; padding:.7rem 0; }
+.campaign-workspace .profile-form { margin:1rem 0; }
+.campaign-channel-options { display:flex; flex-wrap:wrap; gap:.7rem 1.2rem; }
+.campaign-channel-options label { display:flex; align-items:center; gap:.4rem; }
+.campaign-channel-options input { width:18px; min-height:18px; }
+.campaign-desk-grid { display:grid; grid-template-columns:minmax(200px,300px) minmax(0,1fr); gap:1.5rem; margin-top:2rem; }
+.campaign-output { border:1px solid var(--line); padding:1rem; margin:1rem 0; }
+.campaign-output label { display:grid; gap:.5rem; margin:.7rem 0; }
+.campaign-output .consent-field { display:flex; }
+.campaign-deliveries { padding-left:1.2rem; overflow-wrap:anywhere; line-height:1.8; }
+.campaign-output .signal-feed__post { padding:1rem; border:1px solid var(--line); background:rgba(255,255,255,.2); }
+.campaign-output .signal-feed__post header { display:flex; flex-wrap:wrap; gap:1rem; }
+.campaign-output .signal-feed__body { white-space:pre-wrap; overflow-wrap:anywhere; }
+.campaign-snapshot { max-height:400px; overflow:auto; white-space:pre-wrap; overflow-wrap:anywhere; font-size:.75rem; }
+@media (max-width:760px) { .campaign-desk-grid { grid-template-columns:1fr; } .campaign-workspace .panel-heading,.campaign-workspace .form-footer { flex-direction:column; } }
 @media (max-width:1100px) { .metric-grid{grid-template-columns:repeat(2,1fr)} .metric{border-bottom:1px solid var(--line)} .metric:first-child{grid-column:1/-1} .workspace-grid{grid-template-columns:300px minmax(0,1fr)} .detail-columns{grid-template-columns:1fr} .detail-main{border-right:0} .pulse-section{grid-template-columns:1fr} }
 @media (max-width:760px) { .relations-header{position:relative;padding:.8rem 1rem} .relations-header nav a{display:none} main{padding:0 1rem 4rem} .intro{grid-template-columns:1fr;gap:2rem;padding:4rem 0 3rem} .intro h1{font-size:clamp(3.2rem,16vw,6rem)} .metric-grid{grid-template-columns:1fr 1fr} .metric:first-child{grid-column:1/-1} .metric{min-height:120px} .metric span{margin-bottom:1.5rem} .workspace-grid{display:block} .member-rail{border-right:0;border-bottom:1px solid var(--ink)} .member-list{max-height:360px} .person-header{align-items:flex-start;flex-direction:column} .signal-stamp{padding-left:0;border-left:0} .profile-form,.task-form,.inline-form{grid-template-columns:1fr} .profile-form .wide{grid-column:auto} .timeline-item,.pulse-row{grid-template-columns:1fr;gap:.45rem} .panel,.ai-panel,.draft-vault,.event-panel{padding:1.35rem} }
 @media (prefers-reduced-motion:reduce) { html{scroll-behavior:auto} .button,.member-card{transition:none} }

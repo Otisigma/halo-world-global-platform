@@ -21,21 +21,48 @@ const templateHooks = {
   invitation: "Step inside the full Dreamweaver edition."
 };
 
+export function campaignThemeCopy(theme) {
+  if (!theme?.id) return "";
+  const phrases = {
+    en: { evergreen: "An artist-led invitation.", spring: "A fresh opening.", summer: "Warm horizons.", autumn: "A reflective moment.", winter: "A quiet light.", celebration: "An invitation to celebrate together." },
+    fr: { evergreen: "Une invitation de l'artiste.", spring: "Un nouveau départ.", summer: "Des horizons chaleureux.", autumn: "Un moment de réflexion.", winter: "Une lumière paisible.", celebration: "Une invitation à célébrer ensemble." },
+    es: { evergreen: "Una invitación del artista.", spring: "Un nuevo comienzo.", summer: "Horizontes cálidos.", autumn: "Un momento de reflexión.", winter: "Una luz tranquila.", celebration: "Una invitación a celebrar juntos." }
+  };
+  const language = String(theme.locale || "en").split("-")[0];
+  const copy = (phrases[language] || phrases.en)[theme.id] || "";
+  const region = cleanLine(theme.region, 80);
+  const regionLead = { en: "For", fr: "Pour", es: "Para" }[language] || "For";
+  return `${copy}${region && region !== "Global" ? ` ${regionLead} ${region}.` : ""}`.trim();
+}
+
 function cleanLine(value, max = 240) {
   return String(value || "").replace(/\s+/g, " ").trim().slice(0, max);
 }
 
-function safeHashtags(values, artistName) {
+function safeHashtags(values, artistName, isMix = true) {
   const supplied = Array.isArray(values) ? values : [];
   const artistTag = `#${artistName.replace(/[^a-z0-9]/gi, "")}`;
-  return [...new Set([...supplied, artistTag, "#Dreamweaver", "#HALO", "#DJMix"].map(value => {
+  return [...new Set([...supplied, artistTag, "#Dreamweaver", "#HALO", ...(isMix ? ["#DJMix"] : [])].map(value => {
     const tag = String(value || "").replace(/[^#a-z0-9_]/gi, "");
     return tag.startsWith("#") ? tag.slice(0, 48) : `#${tag.slice(0, 47)}`;
   }).filter(tag => tag.length > 1))].slice(0, 8);
 }
 
 function fallbackPlatforms(input) {
-  const hook = cleanLine(input.headline || templateHooks[input.template], 100);
+  if (input.campaignType && input.campaignType !== "mix") {
+    const title = cleanLine(input.campaignTitle, 100);
+    const summary = cleanLine([campaignThemeCopy(input.theme), input.factsSummary].filter(Boolean).join(" "), 500);
+    const cta = input.campaignType === "halo_update" ? "Read the HALO update." : "Explore on HALO.";
+    return Object.fromEntries(Object.entries(platformNames).map(([platform, name]) => {
+      const opening = { tiktok: "A first look", instagram: "Inside the artist world", youtube: "The full story" }[platform];
+      return [platform, {
+        name, title, caption: `${opening}: ${summary}`, description: `${summary} ${cta}`,
+        hashtags: safeHashtags([], input.artistName, false), pinnedComment: cta,
+        altText: `${title} — ${input.artistName}.`, postingNote: "Review the facts, rights, public destination and channel-specific media before posting."
+      }];
+    }));
+  }
+  const hook = cleanLine([campaignThemeCopy(input.theme), input.headline || templateHooks[input.template]].filter(Boolean).join(" "), input.theme ? 180 : 100);
   const cta = goalCopy[input.goal] || goalCopy.full_mix_starts;
   const hashtags = safeHashtags([], input.artistName);
   return Object.fromEntries(Object.entries(platformNames).map(([platform, name]) => {
@@ -56,7 +83,18 @@ function fallbackPlatforms(input) {
   }));
 }
 
-function fallbackPackage(input) {
+export function fallbackPackage(input) {
+  if (input.campaignType && input.campaignType !== "mix") {
+    const title = cleanLine(input.campaignTitle, 160);
+    const summary = cleanLine(input.factsSummary, 320);
+    return {
+      campaignTitle: title, campaignIdea: summary, primaryHook: cleanLine(summary, 120),
+      alternativeHooks: [cleanLine(title, 120), cleanLine(summary, 120)],
+      callToAction: input.campaignType === "halo_update" ? "Read the HALO update." : "Explore on HALO.",
+      rightsChecklist: ["Confirm publication rights for supplied facts and media.", "Review credits and public destinations.", "Approve each channel variant before distribution."],
+      platforms: fallbackPlatforms(input)
+    };
+  }
   const sourceTitle = cleanLine(input.youtubeSourceTitle, 120);
   return {
     campaignTitle: sourceTitle ? `${input.mixTitle} / ${sourceTitle}` : `${input.mixTitle} / Dreamweaver signal`,
@@ -91,6 +129,7 @@ const packageSchema = {
     platforms: {
       type: "object",
       additionalProperties: false,
+      required: Object.keys(platformNames),
       properties: Object.fromEntries(Object.keys(platformNames).map(platform => [platform, {
         type: "object",
         additionalProperties: false,
@@ -120,7 +159,7 @@ function sanitizePackage(value, input) {
       title: cleanLine(proposed.title || safeFallback.title, platform === "youtube" ? 100 : 150),
       caption: cleanLine(proposed.caption || safeFallback.caption, 500),
       description: cleanLine(proposed.description || safeFallback.description, 1_200),
-      hashtags: safeHashtags(proposed.hashtags, input.artistName),
+      hashtags: safeHashtags(proposed.hashtags, input.artistName, !input.campaignType || input.campaignType === "mix"),
       pinnedComment: cleanLine(proposed.pinnedComment || safeFallback.pinnedComment, 300),
       altText: cleanLine(proposed.altText || safeFallback.altText, 300),
       postingNote: cleanLine(proposed.postingNote || safeFallback.postingNote, 300)
@@ -140,7 +179,7 @@ function sanitizePackage(value, input) {
 export async function generateCampaignPackage(input) {
   const fallback = fallbackPackage(input);
   try {
-    const openai = new OpenAI();
+    const openai = new OpenAI({ timeout: 20_000, maxRetries: 0 });
     const completion = await openai.chat.completions.create({
       model: CAMPAIGN_MODEL,
       messages: [
@@ -153,7 +192,7 @@ export async function generateCampaignPackage(input) {
           content: JSON.stringify({
             facts: input,
             requiredPlatforms: Object.keys(platformNames),
-            instruction: "Prepare one complete post-ready package. Do not repeat the destination URL inside captions because HALO attaches it after validation. Hashtags must be relevant and restrained."
+            instruction: "Prepare one complete post-ready package. Honor the supplied theme.locale for writing language and theme.direction for style; use region only as an audience context, never invent local events or achievements. Theme active dates are campaign scheduling windows, not event dates. Do not repeat the destination URL inside captions because HALO attaches it after validation. Hashtags must be relevant and restrained."
           })
         }
       ],

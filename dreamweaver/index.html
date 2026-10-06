@@ -2,6 +2,9 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
+  <script type="module" src="/campaign-updates.js"></script>
+  <script type="module" src="/identity.js"></script>
+  <link rel="stylesheet" href="/campaign-updates.css">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Dreamweaver Show — HALO</title>
   <meta name="description" content="A cinematic artist experience created in HALO and presented through Dreamweaver.">
@@ -70,6 +73,7 @@
       <a href="#storyActII">Act II</a>
       <a href="#storyActIII">Act III</a>
       <a href="#storyActIV">Act IV</a>
+      <a href="/halo-relations.html#masterCampaignWorkspace">Campaign desk</a>
     </nav>
     <div class="header-actions">
       <button class="header-action header-action--campaign" id="makeCampaign" type="button">Make a Reel / Short</button>
@@ -278,6 +282,10 @@
           <button class="satellite-submit" type="submit"><span>Unlock full streaming access</span><b>↘</b></button>
           <p class="satellite-status" id="dreamweaverUnlockStatus" role="status" aria-live="polite"></p>
         </form>
+        <details>
+          <summary>Manage release notes and HALO updates</summary>
+          <section data-campaign-updates aria-label="Release notes and HALO update preferences"></section>
+        </details>
       </aside>
     </div>
   </section>

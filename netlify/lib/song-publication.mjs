@@ -4,6 +4,7 @@ import { resolveDreamweaverPageFlow } from "./dreamweaver-page-manager.mjs";
 import { dreamweaverStorefrontPath } from "./dreamweaver-satellite.mjs";
 import { PUBLICATION_ESCALATION_THRESHOLD, buildPublicationHealth } from "./song-publication-health.mjs";
 import { cleanDreamweaverSongId as cleanId } from "../../lib/dreamweaver-storefront.js";
+import { ensurePublishedSongCampaignDraft } from "./master-campaigns.mjs";
 
 const VERSION_LABELS = {
   sale_master: "Sale master",
@@ -680,6 +681,13 @@ export async function reconcilePublishedSong(db, {
         outcome: "success",
       });
     }
+    let masterCampaignDraft = null;
+    try {
+      masterCampaignDraft = await ensurePublishedSongCampaignDraft(db, song, versions, release);
+    } catch {
+      // Campaign storage is ancillary: a draft failure must never undo verified source publication.
+      console.error("Published song campaign draft unavailable", { songId: song.id });
+    }
     return {
       ok: true,
       songId: song.id,
@@ -689,6 +697,7 @@ export async function reconcilePublishedSong(db, {
       radioTrackId: radio.trackId,
       syncedAudioVersionCount: syncedVersions.length,
       publicationHealth: health,
+      masterCampaignDraftId: masterCampaignDraft?.id || null,
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : "unknown error";

@@ -317,6 +317,46 @@ export async function cleanupSignalMedia(db, store, { now = Date.now(), limit = 
   return { scanned, removed, failed };
 }
 
+// Workers supply a persisted membership, not a simulated browser session.
+export async function publishSignalPost(db, membership, body, { getMediaStore, persist, enforceWriteLimit = false } = {}) {
+  const memberId = membership?.member_id;
+  if (!memberId) throw new FeedError("Creator Pass identity required", 401);
+  const authorName = text(membership.display_name || "Creator", 100, true);
+  const input = postInput(body);
+  if (enforceWriteLimit) await rateLimit(db, memberId, "write");
+  await rateLimit(db, memberId, "publish");
+  if (input.audience.length) {
+    const members = await db.sql`SELECT member_id FROM halo_memberships WHERE member_id = ANY(${input.audience}::text[])
+      AND NOT EXISTS (SELECT 1 FROM halo_signal_blocks b
+        WHERE (b.member_id = ${memberId} AND b.target_member_id = halo_memberships.member_id)
+          OR (b.target_member_id = ${memberId} AND b.member_id = halo_memberships.member_id))`;
+    if (members.length !== input.audience.length) throw new FeedError("Audience includes an unavailable member");
+  }
+  if (input.kind === "AUDIO" && !input.attachment) {
+    const media = await releaseMedia(db, input.releaseId);
+    if (!media?.audioUrl) throw new FeedError("Choose a published release with verified public audio");
+    if (input.includePurchase && !media.purchaseUrl) throw new FeedError("This published release has no public purchase link");
+  }
+  const id = randomUUID();
+  if (persist) {
+    if (input.attachment) throw new FeedError("Worker attachments are not supported");
+    return persist({ id, memberId, authorName, input });
+  }
+  const store = input.attachment ? getMediaStore?.() : null;
+  if (input.attachment && !store) throw new FeedError("Clip storage is unavailable", 503);
+  const attachment = input.attachment ? { name: input.attachment.name, type: input.attachment.type, size: input.attachment.size } : null;
+  const cleanupKey = attachment ? `cleanup/${id}/${randomUUID()}` : null;
+  if (attachment) {
+    await store.setJSON(cleanupKey, { createdAt: Date.now() });
+    await store.set(id, input.attachment.bytes);
+  }
+  await db.sql`INSERT INTO halo_signal_feed_posts (id, member_id, author_name, kind, body, release_id, link_url, include_purchase, visibility, audience, attachment)
+    VALUES (${id}, ${memberId}, ${authorName}, ${input.kind}, ${input.body}, ${input.releaseId}, ${input.linkUrl},
+      ${input.includePurchase}, ${input.visibility}, ${input.audience}::text[], ${attachment ? JSON.stringify(attachment) : null}::jsonb)`;
+  if (attachment) await store.delete(cleanupKey).catch(() => {});
+  return { id };
+}
+
 export function createSignalFeedHandler({ getDatabase, getUser, ensureMembership, verifyRequestOrigin, getMediaStore }) {
   return async request => {
     if (!["GET", "POST"].includes(request.method)) return json({ message: "Method not allowed" }, 405);
@@ -360,34 +400,7 @@ export function createSignalFeedHandler({ getDatabase, getUser, ensureMembership
       await rateLimit(db, memberId, "write");
       const authorName = text(membership.display_name || "Creator", 100, true);
       if (body.action === "publish") {
-        const input = postInput(body);
-        await rateLimit(db, memberId, "publish");
-        if (input.audience.length) {
-          const members = await db.sql`SELECT member_id FROM halo_memberships WHERE member_id = ANY(${input.audience}::text[])
-            AND NOT EXISTS (SELECT 1 FROM halo_signal_blocks b
-              WHERE (b.member_id = ${memberId} AND b.target_member_id = halo_memberships.member_id)
-                OR (b.target_member_id = ${memberId} AND b.member_id = halo_memberships.member_id))`;
-          if (members.length !== input.audience.length) throw new FeedError("Audience includes an unavailable member");
-        }
-        if (input.kind === "AUDIO" && !input.attachment) {
-          const media = await releaseMedia(db, input.releaseId);
-          if (!media?.audioUrl) throw new FeedError("Choose a published release with verified public audio");
-          if (input.includePurchase && !media.purchaseUrl) throw new FeedError("This published release has no public purchase link");
-        }
-        const id = randomUUID();
-        const store = input.attachment ? getMediaStore?.() : null;
-        if (input.attachment && !store) throw new FeedError("Clip storage is unavailable", 503);
-        const attachment = input.attachment ? { name: input.attachment.name, type: input.attachment.type, size: input.attachment.size } : null;
-        const cleanupKey = attachment ? `cleanup/${id}/${randomUUID()}` : null;
-        if (attachment) {
-          await store.setJSON(cleanupKey, { createdAt: Date.now() });
-          await store.set(id, input.attachment.bytes);
-        }
-        await db.sql`INSERT INTO halo_signal_feed_posts (id, member_id, author_name, kind, body, release_id, link_url, include_purchase, visibility, audience, attachment)
-          VALUES (${id}, ${memberId}, ${authorName}, ${input.kind}, ${input.body}, ${input.releaseId}, ${input.linkUrl},
-            ${input.includePurchase}, ${input.visibility}, ${input.audience}::text[], ${attachment ? JSON.stringify(attachment) : null}::jsonb)`;
-        if (attachment) await store.delete(cleanupKey).catch(() => {});
-        return json({ id }, 201);
+        return json(await publishSignalPost(db, membership, body, { getMediaStore }), 201);
       }
       if (body.action === "read_notification") {
         const id = uuid(body.notificationId);

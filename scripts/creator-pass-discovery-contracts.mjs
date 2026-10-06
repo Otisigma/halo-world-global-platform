@@ -71,7 +71,8 @@ assert.equal(workspace.dynamicBriefs[0].personaDraft.demo, true);
 assert.equal(workspace.projects.length, projects.length, "Standard opportunities are unchanged");
 assert.doesNotMatch(JSON.stringify(workspace), /private-customer|private-subscription|stripe_/);
 assert.deepEqual(member.calls.find(call => call.query.includes("FROM halo_creator_passes WHERE")).params, ["owner"]);
-assert.ok(member.calls.every(call => call.query.startsWith("SELECT")), "Surfacing never posts or mutates");
+assert.ok(member.calls.every(call => /^(SELECT|WITH candidates AS)/.test(call.query) &&
+  !/\b(?:INSERT|UPDATE|DELETE)\b/.test(call.query)), "Surfacing never posts or mutates");
 assert.ok(workspace.creators.filter(creator => creator.curated).every(creator => !creator.premium_verified));
 const opportunitiesQuery = member.calls.find(call => call.query.includes("LIMIT 100")).query;
 assert.match(opportunitiesQuery, /LEFT JOIN halo_creator_passes owner_pass ON owner_pass.member_id = p.owner_member_id/);
@@ -111,14 +112,15 @@ assert.equal(publicState.creators[0].premium_verified, true);
 assert.equal(publicState.creatorPass, undefined);
 assert.equal(guest.calls.length, 1, "Public discovery never loads a private member pass");
 assert.doesNotMatch(JSON.stringify(publicState), /member_id|subscription_|trial_ends|stripe_/);
-for (const [call, limit] of [[member.calls.find(call => call.query.includes("LIMIT 60")), 60], [guest.calls[0], 48]]) {
+for (const [call, limit] of [[member.calls.find(call => call.query.includes("AS premium_verified")), 60], [guest.calls[0], 48]]) {
   assert.match(call.query, /LEFT JOIN halo_creator_passes pass USING \(member_id\)/);
   assert.match(call.query, /pass.subscription_tier = 'PREMIUM'/);
   assert.match(call.query, /pass.subscription_status = 'active' AND pass.subscription_expires_at > NOW\(\)/);
   assert.match(call.query, /pass.subscription_status = 'trialing' AND pass.trial_ends_at > NOW\(\)/);
   assert.match(call.query, /pass.subscription_expires_at IS NULL OR pass.subscription_expires_at > NOW\(\)/);
-  assert.match(call.query, new RegExp(`ORDER BY premium_verified DESC, c.updated_at DESC LIMIT ${limit}`),
+  assert.match(call.query, /ORDER BY premium_verified DESC, updated_at DESC, cursor_key DESC LIMIT \?/,
     "Premium ranking happens in SQL before the cap, not after fetching the limited set");
+  assert.equal(call.params.at(-1), limit);
   assert.doesNotMatch(call.query.split(" FROM ")[0], /SELECT \*|pass\.\*/);
 }
 
@@ -152,6 +154,10 @@ function uiFixture(state) {
   vm.runInNewContext(client.replace(/^import .+;\s*/gm, ""), {
     curatedCreators, URLSearchParams,
     mountMusicHomeCustomizer: () => ({ load() {}, clear() {} }),
+    mountCreativeDNAEditor: () => ({ load() {}, clear() {} }),
+    mountDNAFilters: () => ({ addTo: params => params }),
+    renderCreativeDNA() {},
+    location: { search: "" },
     FormData: class { [Symbol.iterator]() { return [][Symbol.iterator](); } },
     document: { getElementById: element, createElement: tag => ({
       tagName: tag.toUpperCase(), textContent: "", children: [],

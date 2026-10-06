@@ -4,7 +4,8 @@ export const MODULE_LABELS = Object.freeze({
   PEARL_HALL: "Pearl Hall milestones",
   SOVEREIGN_VAULT: "Published track drops",
   SIGNAL_FEED: "Signal",
-  COLLAB_BRIEFS: "Open collaboration briefs"
+  COLLAB_BRIEFS: "Open collaboration briefs",
+  CREATIVE_DNA: "Creative DNA"
 });
 
 export async function musicHomeApi(body) {

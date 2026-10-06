@@ -27,7 +27,11 @@ for (const theme of ["PLATINUM", "COPPER", "BRONZE", "__proto__", "INVALID"]) {
 }
 const reordered = moveModule(defaults.layoutModules, "COLLAB_BRIEFS", -1);
 assert.equal(reordered[2].type, "COLLAB_BRIEFS");
-assert.deepEqual(reordered.map(module => module.order), [0, 1, 2, 3]);
+assert.deepEqual(reordered.map(module => module.order), [0, 1, 2, 3, 4]);
+const legacyModules = defaults.layoutModules.slice(0, 4).map((module, order) => ({ ...module, order, isVisible: order !== 1 }));
+const upgradedLegacy = normalizeMusicHomeConfig({ ...defaults, layoutModules: legacyModules }, context, { strict: true });
+assert.deepEqual(upgradedLegacy.layoutModules.slice(0, 4), legacyModules, "Existing module order and visibility survive");
+assert.deepEqual(upgradedLegacy.layoutModules[4], { id: "CREATIVE_DNA", type: "CREATIVE_DNA", order: 4, isVisible: true });
 assert.deepEqual(defaults.layoutModules.map(module => module.type), MODULE_TYPES, "Reordering never mutates saved input");
 assert.deepEqual(moveModule(defaults.layoutModules, "PEARL_HALL", -1), defaults.layoutModules);
 assert.deepEqual(moveModule(defaults.layoutModules, "INVALID", 1), defaults.layoutModules);
@@ -198,7 +202,7 @@ await new Promise(resolve => setImmediate(resolve));
 assert.ok(chrome.every(element => element.hidden));
 assert.equal(shellElement("homeName").textContent, publicResponse.profile.displayName, "Artist text is never interpreted as HTML");
 assert.deepEqual(shellElement("homeModules").children.map(section => section.children[0].textContent),
-  ["Pearl Hall milestones", "Published track drops", "Open collaboration briefs"]);
+  ["Pearl Hall milestones", "Published track drops", "Open collaboration briefs", "Creative DNA"]);
 assert.ok(shellElement("homeModules").querySelectorAll("a").every(link => !link.href.startsWith("//")), "Off-origin module URLs are not rendered as links");
 shellElement("restoreChrome").listeners.get("click")();
 assert.ok(chrome.every(element => !element.hidden));

@@ -21,6 +21,12 @@ function fixture(options = {}) {
     const query = strings.join("?");
     state.queries.push(query);
     if (state.failDb) throw new Error("secret database password and table internals");
+    if (query.includes("halo_creative_dna_projection")) {
+      assert.equal(values[0], owner);
+      assert.equal(values[1], state.user ? state.memberId || owner : null);
+      assert.equal(values[2], "home");
+      return [{ items: state.visibleDNA || [] }];
+    }
     if (query.includes("INSERT INTO halo_music_homes")) {
       const [id, config, url, gated] = values;
       assert.equal(id, owner, "writes derive ownership from the membership");
@@ -245,6 +251,7 @@ assert.deepEqual(Object.keys(payload).sort(), ["config", "profile", "milestones"
 assert.deepEqual(payload.profile, { displayName: "Creator", bio: "Public bio" });
 assert.deepEqual(payload.modules.SIGNAL_FEED, []);
 assert.deepEqual(payload.modules.COLLAB_BRIEFS, []);
+assert.deepEqual(payload.modules.CREATIVE_DNA, []);
 assert.deepEqual(payload.modules.SOVEREIGN_VAULT, [{ id: "release", title: "Published release",
   description: "Published release", url: "/music/?song=release" }]);
 assert.ok(payload.modules.SOVEREIGN_VAULT.every(entry => entry.url.startsWith("/") && !entry.url.startsWith("//")));

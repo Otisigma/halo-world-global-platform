@@ -1,5 +1,6 @@
 import { CURATED_LOOPS, THEMES } from "../lib/music-home.js";
 import { MODULE_LABELS } from "./customizer.js";
+import { renderCreativeDNA } from "../lib/creative-dna-ui.js";
 
 export function applySovereignMode(doc, active) {
   const sovereign = active === true;
@@ -121,6 +122,8 @@ export function mountMusicHome(doc, win) {
       if (module.type === "PEARL_HALL") {
         section.append(node("p", `${milestones.stemUploads} verified stem uploads · ${milestones.completedSplits} completed splits`));
         section.append(node("p", config.unlockedBadges.length ? config.unlockedBadges.map(badge => badge.replaceAll("_", " ")).join(" · ") : "The next milestone starts with your first stem."));
+      } else if (module.type === "CREATIVE_DNA") {
+        renderCreativeDNA(section, modules.CREATIVE_DNA || []);
       } else {
         const entries = Array.isArray(modules[module.type]) ? modules[module.type] : [];
         entries.forEach(entry => {

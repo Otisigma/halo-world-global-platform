@@ -1,6 +1,7 @@
 import { getDatabase } from "@netlify/database";
 import { getUser, verifyRequestOrigin } from "@netlify/identity";
 import { ensureMembership } from "../lib/halo-x.mjs";
+import { dnaFilters, readDNACursor, nextDNACursor } from "../../lib/creative-dna.js";
 
 const MAX_BODY_BYTES = 18_000;
 const listLimits = { roles: 8, genres: 12, skills: 12, lookingFor: 8 };
@@ -65,7 +66,9 @@ function profilePayload(row, own = false) {
     mapVisible: own ? Boolean(row.map_visible) : undefined,
     accent: row.accent || "gold",
     lastSeenAt: iso(row.last_seen_at),
-    updatedAt: iso(row.updated_at)
+    updatedAt: iso(row.updated_at),
+    creativeDNA: row.creative_dna || [],
+    sharedInterests: row.shared_interests || []
   };
 }
 
@@ -271,10 +274,23 @@ async function discover(db, memberId, url) {
   const query = cleanText(url.searchParams.get("q"), 80);
   const availability = availabilityValues.has(url.searchParams.get("availability")) ? url.searchParams.get("availability") : "";
   const pattern = `%${query}%`;
+  const { category, ids, mode } = dnaFilters(url);
+  const cursor = readDNACursor(url);
   const rows = await db.sql`
-    SELECT m.member_id, m.display_name, m.tier, m.last_seen_at, p.*
+    WITH candidates AS (
+    SELECT m.member_id, m.display_name, m.tier, m.last_seen_at, p.*,
+      md5(p.member_id) AS cursor_key,
+      to_char(p.updated_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS cursor_time,
+      halo_creative_dna_projection(p.member_id, ${memberId}, 'signal') AS creative_dna,
+      halo_creative_dna_shared(p.member_id, ${memberId}, 'signal') AS shared_interests,
+      COALESCE(pass.subscription_tier = 'PREMIUM' AND (
+        (pass.subscription_status = 'active' AND pass.subscription_expires_at > NOW()) OR
+        (pass.subscription_status = 'trialing' AND pass.trial_ends_at > NOW()
+          AND (pass.subscription_expires_at IS NULL OR pass.subscription_expires_at > NOW()))
+      ), FALSE) AS premium_verified
     FROM halo_signal_profiles p
     JOIN halo_memberships m ON m.member_id = p.member_id
+    LEFT JOIN halo_creator_passes pass ON pass.member_id = p.member_id
     WHERE p.discoverable = TRUE AND p.member_id <> ${memberId}
       AND (${availability} = '' OR p.availability = ${availability})
       AND (${query} = '' OR m.display_name ILIKE ${pattern} OR p.headline ILIKE ${pattern}
@@ -286,11 +302,15 @@ async function discover(db, memberId, url) {
         WHERE (block.member_id = ${memberId} AND block.target_member_id = p.member_id)
           OR (block.member_id = p.member_id AND block.target_member_id = ${memberId})
       )
-    ORDER BY (m.last_seen_at >= NOW() - INTERVAL '15 minutes') DESC,
-      (p.availability = 'open') DESC, p.updated_at DESC
+      AND halo_creative_dna_matches(p.member_id, ${memberId}, 'signal', ${category}, ${ids}::text[], ${mode})
+    )
+    SELECT * FROM candidates
+    WHERE (premium_verified, updated_at, cursor_key) < (${cursor.premium}, ${cursor.time}::timestamptz, ${cursor.key})
+    ORDER BY premium_verified DESC, updated_at DESC, cursor_key DESC
     LIMIT 30
   `;
-  return rows.map(row => profilePayload(row));
+  return { collaborators: rows.map(row => ({ ...profilePayload(row), premiumVerified: row.premium_verified === true })),
+    nextCursor: nextDNACursor(rows, 30) };
 }
 
 async function loadMessages(db, memberId, conversationId) {
@@ -511,7 +531,7 @@ export default async function signalNetworkHandler(request) {
 
     if (request.method === "GET") {
       const view = url.searchParams.get("view") || "dashboard";
-      if (view === "discover") return json({ collaborators: await discover(db, memberId, url) });
+      if (view === "discover") return json(await discover(db, memberId, url));
       if (view === "messages") {
         const conversationId = cleanUuid(url.searchParams.get("conversation"));
         const result = await loadMessages(db, memberId, conversationId);
@@ -547,6 +567,7 @@ export default async function signalNetworkHandler(request) {
     if (result?.error) return json({ message: result.error[0] }, result.error[1]);
     return json({ ...result, dashboard: await loadDashboard(db, memberId) });
   } catch (error) {
+    if (/Invalid Creative DNA|Invalid discovery cursor/.test(error.message)) return json({ message: error.message }, 400);
     console.error("Signal Network request failed", error instanceof Error ? error.message : "unknown error");
     return json({ message: "Signal Network is temporarily unavailable" }, 500);
   }

@@ -2,6 +2,7 @@ import { getDatabase } from "@netlify/database";
 import { getUser, verifyRequestOrigin } from "@netlify/identity";
 import { ensureMembership, isOwner } from "../lib/halo-x.mjs";
 import { resolveReleaseArtworkFields } from "../lib/release-artwork.mjs";
+import { loadVisibleDNA } from "../lib/creative-dna.mjs";
 
 const allowedStatuses = new Set(["draft", "published"]);
 
@@ -269,6 +270,8 @@ async function loadPage(db, user, slug) {
     createdAt: new Date(mix.created_at).toISOString()
   }));
   const page = serializePage(row, canEdit);
+  page.creativeDNA = row.owner_member_id
+    ? await loadVisibleDNA(db, row.owner_member_id, membership?.member_id, "artist", slug) : [];
   page.releaseId = releaseRows[0]?.id || releaseId;
   page.releaseStage = releaseRows[0]?.release_stage || (page.releaseUrl ? "released" : page.releaseDate ? "scheduled" : "unreleased");
   return {

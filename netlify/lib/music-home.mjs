@@ -1,5 +1,6 @@
 import { ensureMembership } from "./halo-x.mjs";
 import { loadCreatorPass } from "./creator-pass.mjs";
+import { loadVisibleDNA } from "./creative-dna.mjs";
 import { getCreatorPassEntitlements } from "../../lib/creator-pass.js";
 import { defaultMusicHomeConfig, normalizeMusicHomeConfig, getMusicHomeUnlocks,
   MAX_CUSTOM_VIDEO_BYTES, validateCustomVideo } from "../../lib/music-home.js";
@@ -209,7 +210,8 @@ export function createMusicHomeHandler({ getDatabase, getUser, verifyRequestOrig
               description: "Published release", url: `/music/?song=${encodeURIComponent(row.id)}` })),
             // Intentional empty modules: no verified public Signal source is wired here,
             // and Creator Network briefs have no explicit public visibility column.
-            SIGNAL_FEED: [], COLLAB_BRIEFS: []
+            SIGNAL_FEED: [], COLLAB_BRIEFS: [],
+            CREATIVE_DNA: await loadVisibleDNA(db, memberId, membership?.member_id, "home")
           } });
       }
       const mime = (request.headers.get("content-type") || "").split(";")[0].trim().toLowerCase();

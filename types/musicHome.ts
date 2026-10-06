@@ -1,6 +1,6 @@
 export type ColorTheme = 'GOLD' | 'BRONZE' | 'COPPER' | 'PLATINUM';
 export type BackgroundMode = 'CURATED_LOOP' | 'CUSTOM_UPLOAD' | 'SOLID_OBSIDIAN';
-export type MusicHomeModuleType = 'PEARL_HALL' | 'SOVEREIGN_VAULT' | 'SIGNAL_FEED' | 'COLLAB_BRIEFS';
+export type MusicHomeModuleType = 'PEARL_HALL' | 'SOVEREIGN_VAULT' | 'SIGNAL_FEED' | 'COLLAB_BRIEFS' | 'CREATIVE_DNA';
 
 export interface MusicHomeModule {
   id: MusicHomeModuleType;

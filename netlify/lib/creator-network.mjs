@@ -3,6 +3,55 @@ import { withCuratedCreators } from "../../lib/creator-directory.js";
 import { getCreatorPassEntitlements } from "../../lib/creator-pass.js";
 import { planDjResponse } from "../../lib/dj-personas.js";
 import { loadCreatorPass } from "./creator-pass.mjs";
+import { dnaFilters, readDNACursor, nextDNACursor } from "../../lib/creative-dna.js";
+
+async function discoverCreators(db, memberId, url, publicView = false) {
+  const { role, genre, language, bpm } = publicFilters(url);
+  const { category, ids, mode } = dnaFilters(url);
+  const cursor = readDNACursor(url);
+  const destination = publicView ? "public-network" : "network";
+  const limit = publicView ? 48 : 60;
+  const rows = await db.sql`
+    WITH candidates AS (
+      SELECT c.member_id, c.display_name, c.bio, c.artist_slug, c.roles, c.genres, c.languages,
+        c.daw_setup, c.bpm_min, c.bpm_max, c.split_preference, c.updated_at,
+        md5(c.member_id) AS cursor_key,
+        to_char(c.updated_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS cursor_time,
+        halo_creative_dna_projection(c.member_id, ${memberId}, ${destination}) AS creative_dna,
+        halo_creative_dna_shared(c.member_id, ${memberId}, ${destination}) AS shared_interests,
+        COALESCE(pass.subscription_tier = 'PREMIUM' AND (
+          (pass.subscription_status = 'active' AND pass.subscription_expires_at > NOW()) OR
+          (pass.subscription_status = 'trialing' AND pass.trial_ends_at > NOW()
+            AND (pass.subscription_expires_at IS NULL OR pass.subscription_expires_at > NOW()))
+        ), FALSE) AS premium_verified
+      FROM halo_creator_profiles c LEFT JOIN halo_creator_passes pass USING (member_id)
+      WHERE discoverable = TRUE AND (${publicView} OR c.member_id <> ${memberId})
+        AND (${role} = '' OR ${role} = ANY(roles))
+        AND (${genre} = '' OR ${genre} = ANY(genres))
+        AND (${language} = '' OR ${language} = ANY(languages))
+        AND (${bpm}::int IS NULL OR ${bpm} BETWEEN bpm_min AND bpm_max)
+        AND NOT EXISTS (SELECT 1 FROM halo_signal_blocks b
+          WHERE (b.member_id = ${memberId} AND b.target_member_id = c.member_id)
+            OR (b.member_id = c.member_id AND b.target_member_id = ${memberId}))
+        AND halo_creative_dna_matches(c.member_id, ${memberId}, ${destination}, ${category}, ${ids}::text[], ${mode})
+    )
+    SELECT * FROM candidates
+    WHERE (premium_verified, updated_at, cursor_key) < (${cursor.premium}, ${cursor.time}::timestamptz, ${cursor.key})
+    ORDER BY premium_verified DESC, updated_at DESC, cursor_key DESC LIMIT ${limit}
+  `;
+  const nextCursor = nextDNACursor(rows, limit);
+  const creators = rows.map(row => {
+    const { cursor_key, cursor_time, updated_at, ...member } = row;
+    if (!publicView) return member;
+    // Never serialize member identity, workspace preferences or pagination internals to public cards.
+    return { display_name: row.display_name, bio: row.bio, artist_slug: row.artist_slug,
+      roles: row.roles, genres: row.genres, languages: row.languages, bpm_min: row.bpm_min,
+      bpm_max: row.bpm_max, premium_verified: row.premium_verified, creative_dna: row.creative_dna || [] };
+  });
+  // Illustrative profiles have no interests and must not satisfy an interest filter.
+  return { creators: category || ids.length || url.searchParams.has("cursor")
+    ? creators : withCuratedCreators(creators, { role, genre, language, bpm }), nextCursor };
+}
 
 const json = (body, status = 200) => Response.json(body, {
   status, headers: { "Cache-Control": "no-store" }
@@ -101,23 +150,7 @@ async function workspace(db, memberId, url) {
   const bpm = tempo(url.searchParams.get("bpm"));
   const [profiles, creators, memberProjects, opportunities, participants, creatorPass] = await Promise.all([
     db.sql`SELECT * FROM halo_creator_profiles WHERE member_id = ${memberId}`,
-    db.sql`
-      SELECT member_id, display_name, bio, artist_slug, roles, genres, languages, daw_setup,
-        bpm_min, bpm_max, split_preference,
-        COALESCE(pass.subscription_tier = 'PREMIUM' AND (
-          (pass.subscription_status = 'active' AND pass.subscription_expires_at > NOW()) OR
-          (pass.subscription_status = 'trialing' AND pass.trial_ends_at > NOW()
-            AND (pass.subscription_expires_at IS NULL OR pass.subscription_expires_at > NOW()))
-        ), FALSE) AS premium_verified
-      FROM halo_creator_profiles c
-      LEFT JOIN halo_creator_passes pass USING (member_id)
-      WHERE discoverable = TRUE AND member_id <> ${memberId}
-        AND (${role} = '' OR ${role} = ANY(roles))
-        AND (${genre} = '' OR ${genre} = ANY(genres))
-        AND (${language} = '' OR ${language} = ANY(languages))
-        AND (${bpm}::int IS NULL OR ${bpm} BETWEEN bpm_min AND bpm_max)
-      ORDER BY premium_verified DESC, c.updated_at DESC LIMIT 60
-    `,
+    discoverCreators(db, memberId, url),
     db.sql`
       SELECT p.*, c.display_name AS creator_name FROM halo_creator_projects p
       LEFT JOIN halo_creator_profiles c ON c.member_id = p.owner_member_id
@@ -139,6 +172,9 @@ async function workspace(db, memberId, url) {
       LEFT JOIN halo_creator_profiles c ON c.member_id = p.owner_member_id
       LEFT JOIN halo_creator_passes owner_pass ON owner_pass.member_id = p.owner_member_id
       WHERE p.status = 'open' AND p.owner_member_id <> ${memberId}
+        AND NOT EXISTS (SELECT 1 FROM halo_signal_blocks b
+          WHERE (b.member_id = ${memberId} AND b.target_member_id = p.owner_member_id)
+            OR (b.member_id = p.owner_member_id AND b.target_member_id = ${memberId}))
         AND (${role} = '' OR p.role_needed = ${role})
         AND (${genre} = '' OR p.genre = ${genre})
         AND (${language} = '' OR p.language = ${language})
@@ -181,7 +217,7 @@ async function workspace(db, memberId, url) {
     : [];
   return {
     memberId, creatorPass, profile,
-    creators: withCuratedCreators(creators, { role, genre, language, bpm }),
+    creators: creators.creators, nextCursor: creators.nextCursor,
     projects: [...memberProjects, ...opportunities], participants, dynamicBriefs
   };
 }
@@ -192,28 +228,6 @@ function publicFilters(url) {
   const language = text(url.searchParams.get("language"), 80);
   const bpm = tempo(url.searchParams.get("bpm"));
   return { role, genre, language, bpm };
-}
-
-async function publicCreators(db, url) {
-  const { role, genre, language, bpm } = publicFilters(url);
-  const creators = await db.sql`
-    SELECT display_name, bio, artist_slug, roles, genres, languages, bpm_min, bpm_max,
-      COALESCE(pass.subscription_tier = 'PREMIUM' AND (
-        (pass.subscription_status = 'active' AND pass.subscription_expires_at > NOW()) OR
-        (pass.subscription_status = 'trialing' AND pass.trial_ends_at > NOW()
-          AND (pass.subscription_expires_at IS NULL OR pass.subscription_expires_at > NOW()))
-      ), FALSE) AS premium_verified
-    FROM halo_creator_profiles c
-    LEFT JOIN halo_creator_passes pass USING (member_id)
-    WHERE discoverable = TRUE
-      AND (${role} = '' OR ${role} = ANY(roles))
-      AND (${genre} = '' OR ${genre} = ANY(genres))
-      AND (${language} = '' OR ${language} = ANY(languages))
-      AND (${bpm}::int IS NULL OR ${bpm} BETWEEN bpm_min AND bpm_max)
-    ORDER BY premium_verified DESC, c.updated_at DESC
-    LIMIT 48
-  `;
-  return { creators: withCuratedCreators(creators, { role, genre, language, bpm }) };
 }
 
 export function createCreatorNetworkHandler({ getDatabase, getUser, ensureMembership, verifyRequestOrigin }) {
@@ -232,13 +246,19 @@ export function createCreatorNetworkHandler({ getDatabase, getUser, ensureMember
         let filters;
         try {
           filters = publicFilters(url);
+          dnaFilters(url);
+          readDNACursor(url);
         } catch (error) {
           return json({ message: error.message }, 400);
         }
         try {
-          return json(await publicCreators(await getDatabase(), url));
+          const db = await getDatabase();
+          const user = await getUser();
+          const viewer = user?.id ? await ensureMembership(db, user) : null;
+          return json(await discoverCreators(db, viewer?.member_id || null, url, true));
         } catch {
-          return json({ creators: withCuratedCreators([], filters), directoryUnavailable: true });
+          const interest = dnaFilters(url);
+          return json({ creators: interest.category || interest.ids.length ? [] : withCuratedCreators([], filters), directoryUnavailable: true });
         }
       }
       const user = await getUser();
@@ -250,7 +270,7 @@ export function createCreatorNetworkHandler({ getDatabase, getUser, ensureMember
         try {
           return json(await workspace(db, memberId, url));
         } catch (error) {
-          if (/Invalid text|BPM must/.test(error.message)) return json({ message: error.message }, 400);
+          if (/Invalid text|BPM must|Invalid Creative DNA|Invalid discovery cursor/.test(error.message)) return json({ message: error.message }, 400);
           throw error;
         }
       }
@@ -275,18 +295,24 @@ export function createCreatorNetworkHandler({ getDatabase, getUser, ensureMember
       }
       if (body.action === "save_profile") {
         if (!(await ownedLinks(db, memberId, input))) return json({ message: "Linked room must belong to you" }, 403);
-        await db.sql`
+        const saved = await db.sql`
           INSERT INTO halo_creator_profiles (member_id, artist_slug, display_name, bio, roles, genres, languages,
             daw_setup, bpm_min, bpm_max, split_preference, discoverable)
-          VALUES (${memberId}, ${input.artistSlug}, ${input.displayName}, ${input.bio}, ${input.roles},
+          SELECT ${memberId}, ${input.artistSlug}, ${input.displayName}, ${input.bio}, ${input.roles},
             ${input.genres}, ${input.languages}, ${input.dawSetup}, ${input.bpmMin}, ${input.bpmMax},
-            ${input.splitPreference}, ${input.discoverable})
+            ${input.splitPreference}, ${input.discoverable}
+          WHERE ${input.artistSlug}::text IS NULL OR EXISTS (
+            SELECT 1 FROM halo_artist_pages WHERE slug = ${input.artistSlug}
+              AND owner_member_id = ${memberId} FOR SHARE
+          )
           ON CONFLICT (member_id) DO UPDATE SET artist_slug = EXCLUDED.artist_slug,
             display_name = EXCLUDED.display_name, bio = EXCLUDED.bio, roles = EXCLUDED.roles,
             genres = EXCLUDED.genres, languages = EXCLUDED.languages, daw_setup = EXCLUDED.daw_setup,
             bpm_min = EXCLUDED.bpm_min, bpm_max = EXCLUDED.bpm_max, split_preference = EXCLUDED.split_preference,
             discoverable = EXCLUDED.discoverable, updated_at = NOW()
+          RETURNING member_id
         `;
+        if (!saved.length) return json({ message: "Linked room ownership changed. Reload your Creator Pass." }, 403);
       } else if (body.action === "create_project") {
         if (!(await ownedLinks(db, memberId, input))) return json({ message: "Linked assets must belong to you" }, 403);
         await db.sql`
@@ -317,6 +343,9 @@ export function createCreatorNetworkHandler({ getDatabase, getUser, ensureMember
             INSERT INTO halo_creator_participants (project_id, member_id, initiated_by, kind, message)
             SELECT id, ${targetId}, ${memberId}, ${body.action === "apply" ? "application" : "invite"}, ${input.message}
             FROM halo_creator_projects WHERE id = ${project.id} AND status = 'open'
+              AND NOT EXISTS (SELECT 1 FROM halo_signal_blocks b
+                WHERE (b.member_id = ${project.owner_member_id} AND b.target_member_id = ${targetId})
+                  OR (b.member_id = ${targetId} AND b.target_member_id = ${project.owner_member_id}))
             ON CONFLICT (project_id, member_id) DO NOTHING RETURNING member_id
           `;
           if (!created.length) return json({ message: "Already invited/applied, or opportunity closed" }, 409);

@@ -372,6 +372,8 @@
         <p class="section-code">02 / The signal</p>
         <blockquote>“${escapeHtml(page.tagline || "The music is only the beginning of the relationship.")}”</blockquote>
         <p>${escapeHtml(page.bio || "This artist room brings the complete story into one permanent place.")}</p>
+        ${page.creativeDNA?.length ? `<section aria-label="Creative DNA"><h2>Creative DNA</h2><ul>${page.creativeDNA.map(item => `<li>${escapeHtml(item.label)}${item.relationship ? ` — ${escapeHtml(item.relationship)}` : ""}</li>`).join("")}</ul></section>` : ""}
+        ${state.canEdit ? `<a href="/creator-network/?artist=${encodeURIComponent(page.slug)}#creativeDNA">Edit Creative DNA in Creator Network — explicitly link this owned room in your Creator Pass</a>` : ""}
       </section>
 
       ${frequencyMarkup()}

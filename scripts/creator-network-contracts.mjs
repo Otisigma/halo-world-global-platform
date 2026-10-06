@@ -60,9 +60,11 @@ for (const route of ["/artist/dashboard", "/artists/", "/song-catalog/", "/dream
 }
 assert.doesNotMatch(client, /innerHTML|insertAdjacentHTML/);
 assert.match(client, /sessionVersion/);
-assert.match(api, /WHERE discoverable = TRUE AND member_id <>/);
-assert.match(api, /SELECT display_name, bio, artist_slug, roles, genres, languages, bpm_min, bpm_max/);
-assert.match(api, /LIMIT 48/);
+assert.match(api, /WHERE discoverable = TRUE AND \(\$\{publicView\} OR c.member_id <>/);
+assert.match(api, /display_name: row.display_name, bio: row.bio, artist_slug: row.artist_slug/);
+assert.match(api, /const limit = publicView \? 48 : 60/);
+assert.match(api, /halo_creative_dna_matches/);
+assert.match(api, /FROM halo_signal_blocks b/);
 assert.match(api, /WHERE cp.member_id = \$\{memberId\} OR p.owner_member_id = \$\{memberId\}/);
 assert.doesNotMatch(api, /SELECT.*email|halo_artist_rights_participants|@netlify\/blobs/);
 
@@ -92,7 +94,8 @@ assert.equal(canRespond({ ...invite, kind: "application" }, project, "creator"),
 assert.equal(canRespond({ ...invite, status: "accepted" }, project, "creator"), false);
 assert.equal(canRespond(invite, { ...project, status: "closed" }, "creator"), false);
 
-function fixture({ memberId = "owner", origin = async () => true, authenticated = true, sql = () => [] } = {}) {
+function fixture({ memberId = "owner", origin = async () => true, authenticated = true,
+  sql = (query, params) => query.startsWith("INSERT INTO halo_creator_profiles") ? [{ member_id: params[0] }] : [] } = {}) {
   const calls = [];
   let memberships = 0;
   const handler = createCreatorNetworkHandler({
@@ -137,7 +140,7 @@ assert.equal(publicState.creators[0].display_name, "Opt-in Producer");
 assert.equal("member_id" in publicState.creators[0], false, "Public cards never expose member identity");
 assert.equal(publicDiscovery.membershipCount(), 0, "Public discovery does not create a member session");
 assert.ok(publicDiscovery.calls[0].query.includes("discoverable = TRUE"));
-assert.ok(!publicDiscovery.calls[0].query.includes("split_preference"), "Public discovery omits private split preferences");
+assert.ok(!Object.hasOwn(publicState.creators[0], "split_preference"), "Public serializer omits private split preferences");
 const invalidPublic = fixture({ authenticated: false });
 assert.equal((await invalidPublic.request(null, "GET", "?view=public&bpm=invalid")).status, 400);
 const offlineDirectory = fixture({ authenticated: false, sql: () => { throw new Error("Database unavailable"); } });
@@ -264,6 +267,9 @@ const executableClient = client.replace(/^import .+;\s*/gm, "");
 vm.runInNewContext(executableClient, {
   curatedCreators,
   mountMusicHomeCustomizer: () => ({ load() {}, clear() {} }),
+  mountCreativeDNAEditor: () => ({ load() {}, clear() {} }),
+  mountDNAFilters: () => ({ addTo: params => params }),
+  renderCreativeDNA() {},
   document: { getElementById: element, createElement: tag => ({
     tagName: tag.toUpperCase(), textContent: "", children: [], addEventListener() {},
     append(...children) { this.children.push(...children); }, setAttribute() {}
@@ -289,11 +295,15 @@ assert.equal(element("workspace").hidden, true);
 vm.runInNewContext(executableClient, {
   curatedCreators,
   mountMusicHomeCustomizer: () => ({ load() {}, clear() {} }),
+  mountCreativeDNAEditor: () => ({ load() {}, clear() {} }),
+  mountDNAFilters: () => ({ addTo: params => params }),
+  renderCreativeDNA() {},
   document: { getElementById: element, createElement: tag => ({
     tagName: tag.toUpperCase(), textContent: "", children: [], addEventListener() {},
     append(...children) { this.children.push(...children); }, setAttribute() {}
   }) },
   URLSearchParams,
+  location: { search: "" },
   FormData: class { [Symbol.iterator]() { return [][Symbol.iterator](); } },
   fetch: async url => ({
     ok: true,

@@ -1,3 +1,4 @@
+import { mountDNAFilters, renderCreativeDNA } from "../lib/creative-dna-ui.js";
 const API_URL = "/api/signal-network";
 const state = {
   dashboard: null,
@@ -148,6 +149,19 @@ function renderDashboard() {
   if (!dashboard.profile?.updatedAt) openProfileDialog();
 }
 
+const dnaFiltersControl = mountDNAFilters(elements.searchForm);
+const dnaHandoff = document.createElement("a");
+dnaHandoff.href = "/creator-network/#creativeDNA";
+dnaHandoff.textContent = "Edit shared Creative DNA, privacy and matching choices";
+elements.searchForm.after(dnaHandoff);
+const nextCreators = document.createElement("button");
+nextCreators.type = "button";
+nextCreators.textContent = "Next matching collaborators";
+nextCreators.hidden = true;
+elements.collaboratorGrid.after(nextCreators);
+let discoveryCursor = null, discoveryGeneration = 0;
+nextCreators.addEventListener("click", () => loadCollaborators(true));
+
 function renderCollaborators() {
   if (!state.collaborators.length) {
     elements.collaboratorGrid.innerHTML = emptyState("No matching signals", "Try a broader role, genre, skill, or availability filter.", "∅");
@@ -170,6 +184,14 @@ function renderCollaborators() {
         </div>
       </article>`;
   }).join("");
+  [...elements.collaboratorGrid.children].forEach((card, index) => {
+    const person = state.collaborators[index];
+    if (person.premiumVerified) {
+      const badge = document.createElement("p"); badge.textContent = "Verified Premium Creator Pass (not identity or rights verification)"; card.append(badge);
+    }
+    renderCreativeDNA(card, person.creativeDNA);
+    renderCreativeDNA(card, person.sharedInterests, { shared: true });
+  });
 }
 
 function renderSignals() {
@@ -255,20 +277,26 @@ async function loadDashboard() {
   await loadCollaborators();
 }
 
-async function loadCollaborators() {
+async function loadCollaborators(next = false) {
+  const generation = ++discoveryGeneration;
   setLoadingCards(elements.collaboratorGrid);
-  const params = new URLSearchParams({ view: "discover" });
+  const params = dnaFiltersControl.addTo(new URLSearchParams({ view: "discover" }));
+  if (next === true && discoveryCursor) params.set("cursor", discoveryCursor);
+  nextCreators.disabled = true;
   const query = elements.searchInput.value.trim();
   const availability = elements.availabilityFilter.value;
   if (query) params.set("q", query);
   if (availability) params.set("availability", availability);
   try {
     const payload = await api(`?${params}`);
+    if (generation !== discoveryGeneration) return;
     state.collaborators = payload.collaborators || [];
+    discoveryCursor = payload.nextCursor || null;
+    nextCreators.hidden = !discoveryCursor;
     renderCollaborators();
   } catch (error) {
-    elements.collaboratorGrid.innerHTML = emptyState("Discovery is offline", error.message, "!");
-  }
+    if (generation === discoveryGeneration) elements.collaboratorGrid.innerHTML = emptyState("Discovery is offline", error.message, "!");
+  } finally { if (generation === discoveryGeneration) nextCreators.disabled = false; }
 }
 
 function setTab(tab) {
@@ -582,6 +610,8 @@ async function handleMessageSubmit(event) {
 }
 
 function signedOutView() {
+  discoveryGeneration++;
+  discoveryCursor = null; nextCreators.hidden = true;
   cancelAnimationFrame(state.mapFrame);
   state.dashboard = null;
   state.collaborators = [];

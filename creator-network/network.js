@@ -1,5 +1,6 @@
 import { curatedCreators } from "/lib/creator-directory.js";
 import { mountMusicHomeCustomizer } from "/music-home/customizer.js";
+import { mountCreativeDNAEditor, mountDNAFilters, renderCreativeDNA } from "/lib/creative-dna-ui.js";
 
 (() => {
   const byId = id => document.getElementById(id);
@@ -9,6 +10,12 @@ import { mountMusicHomeCustomizer } from "/music-home/customizer.js";
   const tagFields = ["roles", "genres", "languages", "dawSetup"];
   const guardianAccess = () => state?.creatorPass?.entitlements?.aiGuardianAccess === true;
   const musicHome = mountMusicHomeCustomizer(byId("musicHomeCustomizer"));
+  const dnaEditor = mountCreativeDNAEditor(byId("creativeDNAEditor"), {
+    onSaved: async () => { await load(); await loadPublicCreators(); }
+  });
+  const memberDNAFilters = mountDNAFilters(byId("filters"));
+  const publicDNAFilters = mountDNAFilters(byId("publicFilters"));
+  let publicCursor = null, memberCursor = null;
 
   async function api(body, query = "") {
     const response = await fetch(`/api/creator-network${query}`, {
@@ -40,6 +47,7 @@ import { mountMusicHomeCustomizer } from "/music-home/customizer.js";
       const card = node("article");
       card.className = "creator-profile-card";
       card.append(node("h3", creator.display_name), node("p", creator.bio));
+      renderCreativeDNA(card, creator.creative_dna);
       const badge = premiumBadge(creator);
       if (badge) card.append(badge);
       if (creator.verified && creator.curated) card.append(node("p", "✓ Verified HALO seed · curated profile"));
@@ -61,9 +69,11 @@ import { mountMusicHomeCustomizer } from "/music-home/customizer.js";
   }
 
   async function loadPublicCreators() {
-    const query = new URLSearchParams(values(byId("publicFilters")));
+    const query = publicDNAFilters.addTo(new URLSearchParams(values(byId("publicFilters"))));
     const result = await api(null, `?view=public&${query}`);
     renderPublicCreators(result.creators || []);
+    publicCursor = result.nextCursor || null;
+    byId("publicNext").hidden = !publicCursor;
     if (result.directoryUnavailable) byId("publicCreators").prepend(node("p", "Showing HALO-curated profiles. Member discovery is temporarily unavailable."));
   }
 
@@ -141,6 +151,10 @@ import { mountMusicHomeCustomizer } from "/music-home/customizer.js";
       if (input.type === "checkbox") input.checked = value === true;
       else input.value = Array.isArray(value) ? value.join(", ") : value ?? "";
     }
+    const artistHandoff = new URLSearchParams(location.search).get("artist");
+    if (artistHandoff && /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(artistHandoff) && !profile?.artist_slug) {
+      byId("profile").elements.artistSlug.value = artistHandoff;
+    }
     const displayName = profile?.display_name || "Your artist name";
     byId("passName").textContent = displayName;
     byId("passInitial").textContent = displayName.trim().charAt(0).toUpperCase() || "H";
@@ -157,6 +171,8 @@ import { mountMusicHomeCustomizer } from "/music-home/customizer.js";
         node("p", [...creator.roles, ...creator.genres, ...creator.languages, ...(creator.daw_setup || [])].join(" · ")),
         node("p", creator.bpm_min ? `${creator.bpm_min}–${creator.bpm_max} BPM` : "Tempo flexible"),
         node("p", creator.split_preference));
+      renderCreativeDNA(card, creator.creative_dna);
+      renderCreativeDNA(card, creator.shared_interests, { shared: true });
       if (creator.artist_slug) card.append(roomLink(creator.artist_slug));
       const badge = premiumBadge(creator);
       if (badge) card.append(badge);
@@ -271,10 +287,12 @@ import { mountMusicHomeCustomizer } from "/music-home/customizer.js";
 
   async function load() {
     const version = sessionVersion, latest = ++loadVersion;
-    const query = new URLSearchParams(values(byId("filters")));
+    const query = memberDNAFilters.addTo(new URLSearchParams(values(byId("filters"))));
     const result = await api(null, `?${query}`);
     if (version !== sessionVersion || latest !== loadVersion) return;
     state = result;
+    memberCursor = result.nextCursor || null;
+    byId("memberNext").hidden = !memberCursor;
     render();
     byId("locked").hidden = true;
     byId("workspace").hidden = false;
@@ -282,6 +300,7 @@ import { mountMusicHomeCustomizer } from "/music-home/customizer.js";
     if (musicHomeMemberId !== state.memberId) {
       musicHomeMemberId = state.memberId;
       musicHome.load();
+      dnaEditor.load();
     }
   }
 
@@ -322,6 +341,29 @@ import { mountMusicHomeCustomizer } from "/music-home/customizer.js";
     try { await loadPublicCreators(); }
     catch (error) { status(error.message); }
     finally { button.disabled = false; }
+  });
+  byId("publicNext").addEventListener("click", async event => {
+    const button = event.currentTarget;
+    button.disabled = true;
+    try {
+      const params = publicDNAFilters.addTo(new URLSearchParams(values(byId("publicFilters"))));
+      params.set("cursor", publicCursor);
+      const result = await api(null, `?view=public&${params}`);
+      renderPublicCreators(result.creators || []);
+      publicCursor = result.nextCursor || null; button.hidden = !publicCursor;
+    } catch (error) { status(error.message); } finally { button.disabled = false; }
+  });
+  byId("memberNext").addEventListener("click", async event => {
+    const button = event.currentTarget, version = sessionVersion;
+    button.disabled = true;
+    try {
+      const params = memberDNAFilters.addTo(new URLSearchParams(values(byId("filters"))));
+      params.set("cursor", memberCursor);
+      const result = await api(null, `?${params}`);
+      if (version !== sessionVersion) return;
+      state = result; render();
+      memberCursor = result.nextCursor || null; button.hidden = !memberCursor;
+    } catch (error) { status(error.message); } finally { button.disabled = false; }
   });
   byId("login").addEventListener("submit", async event => {
     event.preventDefault();
@@ -399,6 +441,7 @@ import { mountMusicHomeCustomizer } from "/music-home/customizer.js";
     state = null;
     musicHomeMemberId = null;
     musicHome.clear();
+    dnaEditor.clear();
     byId("workspace").hidden = true;
     byId("locked").hidden = false;
     byId("signOut").hidden = true;

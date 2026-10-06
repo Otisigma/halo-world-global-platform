@@ -3,7 +3,8 @@ import { readFile } from "node:fs/promises";
 import { runInNewContext } from "node:vm";
 import { createSignalFeedHandler, cleanupSignalMedia, pageInput, postInput, publicLink, releaseMedia, releaseMusicMetadata } from "../netlify/lib/signal-feed.mjs";
 import { createObjectUrlAttachment, validateSignalMedia, SIGNAL_MEDIA_MAX_BYTES } from "../lib/signal-media.js";
-import { suggestSignal } from "../lib/signal-dreamweaver.js";
+import { formatReleaseCaption, suggestSignal } from "../lib/signal-dreamweaver.js";
+import { createSignalComposerController, readWebhookConfig, resolveWebhookUrl, saveSignalToFeed } from "../signal-network/signal-composer.js";
 
 const postId = "11111111-1111-4111-8111-111111111111";
 const commentId = "22222222-2222-4222-8222-222222222222";
@@ -381,6 +382,7 @@ await check("auth changes clear composer drafts and consent; old mutations canno
     AbortController, URLSearchParams, setTimeout, clearTimeout, setInterval() {}, console
   };
   context.SIGNAL_VISIBILITY = { PUBLIC: "Public Frequency" };
+  context.createSignalComposerController = createSignalComposerController;
   context.createSignalComposer = () => ({
     hasAttachment: false, reset() { context.testPostType?.(); }, lock() {},
     publishData: async () => ({
@@ -388,7 +390,7 @@ await check("auth changes clear composer drafts and consent; old mutations canno
       visibility: "PUBLIC", publishPublic: form.elements.publishPublic.checked
     })
   });
-  runInNewContext(`${source.replace(/^import .*;\n/m, "")}\nglobalThis.testState = feedState; globalThis.testMutate = mutate; globalThis.testPostType = postType;`, context);
+  runInNewContext(`${source.replace(/^import .*;\n/gm, "")}\nglobalThis.testState = feedState; globalThis.testMutate = mutate; globalThis.testPostType = postType;`, context);
   await new Promise(resolve => setImmediate(resolve));
   form.elements.body.value = "Old account draft"; form.elements.linkUrl.value = "https://example.com/old-link";
   form.elements.publishPublic.checked = true; form.elements.includePurchase.checked = true;
@@ -423,7 +425,7 @@ await check("composer pairs required consent with a scoped, accessible publish C
   ]);
   const form = page.match(/<form id="feedPublishForm">([\s\S]*?)<\/form>/)?.[1];
   assert.ok(form, "Existing publish form is present");
-  assert.match(form, /<div class="publish-action-group">\s*<label class="signal-feed__consent checkbox-label"><input name="publishPublic" type="checkbox" required>[\s\S]*?<\/label>\s*<button type="submit" class="btn-publish" id="feedPublish" disabled>Publish to Public Frequency<\/button>\s*<\/div>/);
+  assert.match(form, /<div class="publish-action-group">\s*<label class="signal-feed__consent checkbox-label"><input id="confirm-publish" name="publishPublic" type="checkbox" required>[\s\S]*?<\/label>\s*<button type="submit" class="btn-publish" id="btn-publish-signal" aria-busy="false" disabled>Publish to Public Frequency<\/button>\s*<\/div>/);
   assert.match(styles, /\.signal-feed__composer \.publish-action-group\s*\{[^}]*display: flex;[^}]*flex-wrap: wrap;[^}]*align-items: center;/);
   assert.match(styles, /\.signal-feed__composer \.btn-publish\s*\{[^}]*min-height: 3rem;[^}]*background: var\(--signal-gold, #e7b34a\); color: #0f172a;[^}]*font-size: 1rem; font-weight: 700;/);
   assert.match(styles, /\.btn-publish:hover:not\(:disabled\)\s*\{[^}]*translateY\(-1px\)/);
@@ -612,5 +614,151 @@ await check("Dreamweaver provides honest local suggestions without mutating or p
   assert.match((await suggestSignal("breakdown", { body: "", visibility: "INNER_CIRCLE" })).summary, /only you and your selected members/);
   await assert.rejects(suggestSignal("polish", { body: "" }));
   assert.equal(JSON.stringify(draft), before);
+});
+await check("Dreamweaver release caption is polished, idempotent, bounded and built only from the creator's seed", () => {
+  const caption = formatReleaseCaption("  Let It Ride - 122 BPM Afro House  ");
+  assert.equal(caption, "🎵 Let It Ride\n\n🔥 122 BPM · Afro House\n\n🎧 Listen to full quality audio & release details on the HALO Signal Network.\n\n#LetItRide #AfroHouse #NewMusic");
+  assert.equal(formatReleaseCaption(caption), caption);
+  assert.match(formatReleaseCaption("Night drive\nRecorded at home #studio", { link: "https://halo.example/signal-network/" }), /Recorded at home #studio[\s\S]*details: https:\/\/halo\.example\/signal-network\/[\s\S]*#studio #NightDrive #NewMusic$/);
+  assert.ok(!/saxophone|sub-bass/i.test(caption), "No musical claims are invented");
+  assert.equal(formatReleaseCaption("   "), "");
+  assert.ok(formatReleaseCaption(`Title\n${"long note ".repeat(200)}`).length <= 1000);
+  assert.ok(formatReleaseCaption("x".repeat(2000), { maxLength: 120 }).length <= 120);
+});
+function composerHarness({ save, webhookUrl = "", channels = true, fetchImpl, missing = [] } = {}) {
+  class Field {
+    constructor() { this.value = ""; this.checked = false; this.disabled = false; this.hidden = false; this.textContent = ""; this.attributes = {}; this.handlers = {}; this.events = []; }
+    addEventListener(name, handler) { this.handlers[name] = handler; }
+    setAttribute(name, value) { this.attributes[name] = String(value); }
+    dispatchEvent(event) { this.events.push(event.type); }
+    focus() { this.focused = true; }
+  }
+  const ids = ["btn-publish-signal", "confirm-publish", "signal-content", "btn-generate-caption", "signal-composer-status", "signal-broadcast-options",
+    ...(channels ? ["share-twitter", "share-facebook", "share-discord"] : [])].filter(id => !missing.includes(id));
+  const elements = new Map(ids.map(id => [id, new Field()]));
+  if (elements.has("btn-publish-signal")) elements.get("btn-publish-signal").textContent = "🚀 Publish Signal & Broadcast";
+  if (elements.has("signal-content")) elements.get("signal-content").maxLength = 1000;
+  if (elements.has("signal-broadcast-options")) elements.get("signal-broadcast-options").hidden = true;
+  const root = { getElementById: id => elements.get(id) || null };
+  const controller = createSignalComposerController({ root, win: { location: { origin: "https://halo.example" } }, save, webhookUrl, fetchImpl });
+  return { controller, get: id => elements.get(id) };
+}
+await check("Signal composer controller is null-safe when optional and required elements are absent", async () => {
+  const empty = createSignalComposerController({ root: { getElementById: () => null }, win: {}, save: async () => assert.fail("never saves") });
+  assert.equal(empty.generateCaption(), "");
+  assert.equal((await empty.publish()).reason, "invalid");
+  assert.doesNotThrow(() => createSignalComposerController({ root: null, win: null }));
+  const partial = composerHarness({ channels: false, missing: ["btn-generate-caption", "signal-broadcast-options", "signal-composer-status"], save: async () => ({ id: postId }) });
+  partial.get("confirm-publish").checked = true; partial.get("signal-content").value = "Hello";
+  assert.equal((await partial.controller.publish()).ok, true);
+});
+await check("Signal composer requires confirmation and non-empty content before saving", async () => {
+  let saves = 0;
+  const h = composerHarness({ save: async () => { saves++; return {}; } });
+  h.get("signal-content").value = "Ready";
+  assert.equal((await h.controller.publish({ preventDefault() {} })).reason, "invalid");
+  assert.match(h.get("signal-composer-status").textContent, /confirm the publication checkbox/);
+  assert.equal(h.get("signal-composer-status").attributes["data-tone"], "error"); assert.ok(h.get("confirm-publish").focused);
+  h.get("confirm-publish").checked = true; h.get("signal-content").value = "   ";
+  assert.equal((await h.controller.publish()).reason, "invalid");
+  assert.match(h.get("signal-composer-status").textContent, /enter signal content/); assert.ok(h.get("signal-content").focused);
+  assert.equal(saves, 0);
+});
+await check("Generate caption fills the draft from raw input and reports empty input accessibly", () => {
+  const h = composerHarness({ save: async () => ({}) });
+  h.get("btn-generate-caption").handlers.click();
+  assert.match(h.get("signal-composer-status").textContent, /Enter a track title/); assert.equal(h.get("signal-content").value, "");
+  h.get("signal-content").value = "Let It Ride - 122 BPM Afro House";
+  h.get("btn-generate-caption").handlers.click();
+  assert.equal(h.get("signal-content").value, formatReleaseCaption("Let It Ride - 122 BPM Afro House"));
+  assert.deepEqual(h.get("signal-content").events, ["input"]);
+  assert.equal(h.get("signal-composer-status").attributes["data-tone"], "success");
+});
+await check("Publishing shows loading state, saves once, resets safely and restores the CTA", async () => {
+  let finish, calls = 0;
+  const h = composerHarness({ save: payload => { calls++; assert.deepEqual(payload.channels, { twitter: true, facebook: false, discord: false }); return new Promise(resolve => { finish = resolve; }); } });
+  h.get("confirm-publish").checked = true; h.get("signal-content").value = "  Signal  "; h.get("share-twitter").checked = true;
+  const pending = h.get("btn-publish-signal").handlers.click();
+  assert.equal(h.get("btn-publish-signal").disabled, true); assert.equal(h.get("btn-publish-signal").attributes["aria-busy"], "true");
+  assert.equal(h.get("btn-publish-signal").textContent, "Publishing…"); assert.equal(h.get("btn-generate-caption").disabled, true);
+  assert.equal((await h.controller.publish()).reason, "busy"); assert.equal(calls, 1);
+  finish({ id: postId, message: "Signal published to Public Frequency." });
+  assert.equal((await pending).ok, true);
+  assert.equal(h.get("signal-content").value, ""); assert.equal(h.get("confirm-publish").checked, false); assert.equal(h.get("share-twitter").checked, false);
+  assert.equal(h.get("btn-publish-signal").disabled, false); assert.equal(h.get("btn-publish-signal").textContent, "🚀 Publish Signal & Broadcast");
+  assert.equal(h.get("signal-composer-status").textContent, "Signal published to Public Frequency.");
+  const failing = composerHarness({ save: async () => { throw new Error("Sign in with your Creator Pass to participate."); } });
+  failing.get("confirm-publish").checked = true; failing.get("signal-content").value = "Keep me";
+  assert.equal((await failing.controller.publish()).reason, "error");
+  assert.equal(failing.get("signal-content").value, "Keep me", "Failed saves keep the draft");
+  assert.equal(failing.get("signal-composer-status").textContent, "Sign in with your Creator Pass to participate.");
+  assert.equal(failing.get("btn-publish-signal").disabled, false);
+});
+await check("Webhook broadcast is optional, never uses placeholders and only follows a successful public save", async () => {
+  const credentialHook = new URL("https://hooks.example/a"); credentialHook.username = "fixture-user";
+  for (const value of ["", "YOUR_AUTOMATION_WEBHOOK_URL_HERE", "http://hooks.example/a", "//evil.example/a", "javascript:alert(1)", credentialHook.href, null]) {
+    assert.equal(resolveWebhookUrl(value), "");
+  }
+  assert.equal(resolveWebhookUrl("/api/signal-broadcast"), "/api/signal-broadcast");
+  assert.equal(resolveWebhookUrl("https://hooks.example/catch"), "https://hooks.example/catch");
+  assert.equal(readWebhookConfig({ querySelector: () => ({ getAttribute: () => "YOUR_AUTOMATION_WEBHOOK_URL_HERE" }) }, {}), "");
+  assert.equal(readWebhookConfig(null, { HALO_SIGNAL_CONFIG: { broadcastWebhookUrl: "/api/broadcast" } }), "/api/broadcast");
+  const requests = [];
+  const fetchImpl = async (url, options) => { requests.push({ url, options, body: JSON.parse(options.body) }); return { ok: true, json: async () => ({}) }; };
+  const disabled = composerHarness({ webhookUrl: "YOUR_AUTOMATION_WEBHOOK_URL_HERE", fetchImpl, save: async () => ({ id: postId }) });
+  assert.equal(disabled.get("signal-broadcast-options").hidden, true); assert.equal(disabled.controller.webhookUrl, "");
+  disabled.get("confirm-publish").checked = true; disabled.get("signal-content").value = "Hi"; disabled.get("share-discord").checked = true;
+  assert.equal((await disabled.controller.publish()).broadcast, ""); assert.equal(requests.length, 0);
+  const enabled = () => { const h = composerHarness({ webhookUrl: "/api/broadcast", fetchImpl, save: async () => ({ id: postId, content: "Hi" }) });
+    h.get("confirm-publish").checked = true; h.get("signal-content").value = "Hi"; return h; };
+  const none = enabled(); assert.equal(none.get("signal-broadcast-options").hidden, false);
+  assert.equal((await none.controller.publish()).broadcast, "", "No selected channel means no broadcast"); assert.equal(requests.length, 0);
+  const h = enabled(); h.get("share-discord").checked = true;
+  assert.equal((await h.controller.publish()).broadcast, "queued");
+  assert.equal(requests.length, 1); assert.equal(requests[0].url, "/api/broadcast"); assert.equal(requests[0].options.method, "POST");
+  assert.equal(requests[0].body.permalink, `https://halo.example/signal-network/#feed-post-${postId}`);
+  assert.deepEqual(requests[0].body.channels, { twitter: false, facebook: false, discord: true });
+  assert.match(h.get("signal-composer-status").textContent, /Queued for social broadcasting/);
+  const privatePost = composerHarness({ webhookUrl: "/api/broadcast", fetchImpl, save: async () => ({ id: postId, broadcast: false }) });
+  privatePost.get("confirm-publish").checked = true; privatePost.get("signal-content").value = "Private"; privatePost.get("share-twitter").checked = true;
+  await privatePost.controller.publish(); assert.equal(requests.length, 1, "Private signals are never broadcast");
+  const failedSave = composerHarness({ webhookUrl: "/api/broadcast", fetchImpl, save: async () => { throw new Error("Save failed"); } });
+  failedSave.get("confirm-publish").checked = true; failedSave.get("signal-content").value = "Hi"; failedSave.get("share-twitter").checked = true;
+  await failedSave.controller.publish(); assert.equal(requests.length, 1, "Webhook never runs before a successful save");
+  const broken = composerHarness({ webhookUrl: "/api/broadcast", fetchImpl: async () => ({ ok: false, json: async () => ({}) }), save: async () => ({ id: postId, message: "Signal published." }) });
+  broken.get("confirm-publish").checked = true; broken.get("signal-content").value = "Hi"; broken.get("share-twitter").checked = true;
+  const result = await broken.controller.publish();
+  assert.equal(result.ok, true); assert.equal(result.broadcast, "failed");
+  assert.equal(broken.get("signal-composer-status").attributes["data-tone"], "warning");
+  assert.match(broken.get("signal-composer-status").textContent, /^Signal published\. Social broadcast could not be queued; your signal is saved\.$/);
+});
+await check("default save uses the existing same-origin Signal feed API and stale publishes are cancelled", async () => {
+  let seen;
+  const saved = await saveSignalToFeed({ content: "Hello" }, { fetchImpl: async (url, options) => { seen = { url, options }; return { ok: true, json: async () => ({ id: postId }) }; } });
+  assert.equal(seen.url, "/api/signal-feed"); assert.equal(seen.options.credentials, "same-origin");
+  assert.deepEqual(JSON.parse(seen.options.body), { action: "publish", kind: "TEXT", body: "Hello", visibility: "PUBLIC", audience: [], publishPublic: true });
+  assert.equal(saved.id, postId);
+  await assert.rejects(saveSignalToFeed({ content: "x" }, { fetchImpl: async () => ({ ok: false, json: async () => ({ message: "Cross-origin Signal feed actions are not accepted" }) }) }), /Cross-origin/);
+  let finish;
+  const h = composerHarness({ save: () => new Promise(resolve => { finish = resolve; }) });
+  h.get("confirm-publish").checked = true; h.get("signal-content").value = "Old session";
+  const pending = h.controller.publish();
+  h.controller.cancel();
+  assert.equal(h.get("btn-publish-signal").disabled, false); assert.equal(h.get("signal-composer-status").textContent, "");
+  h.get("signal-content").value = "New session draft"; finish({ id: postId });
+  assert.equal((await pending).reason, "cancelled"); assert.equal(h.get("signal-content").value, "New session draft");
+});
+await check("composer markup exposes the Signal controller hooks without placeholder webhook configuration", async () => {
+  const root = new URL("../signal-network/", import.meta.url);
+  const [page, feed] = await Promise.all([readFile(new URL("index.html", root), "utf8"), readFile(new URL("signal-feed.js", root), "utf8")]);
+  assert.match(page, /<textarea id="signal-content" name="body" maxlength="1000"/);
+  assert.match(page, /<button type="button" id="btn-generate-caption" aria-controls="signal-content">Generate caption<\/button>/);
+  assert.ok(!page.includes('data-dreamweaver-action="caption"'), "Caption is handled once by the controller");
+  assert.match(page, /<fieldset class="social-share-options" id="signal-broadcast-options" hidden>/);
+  for (const id of ["share-twitter", "share-facebook", "share-discord"]) assert.match(page, new RegExp(`type="checkbox" id="${id}"`));
+  assert.match(page, /<p id="signal-composer-status" class="signal-composer__status" role="status" aria-live="polite"><\/p>/);
+  assert.match(page, /<meta name="halo-signal-broadcast-webhook" content="">/);
+  assert.ok(!/YOUR_AUTOMATION_WEBHOOK_URL_HERE/.test(page + feed));
+  assert.match(feed, /createSignalComposerController\(/); assert.match(feed, /publishController\.cancel\(\)/);
 });
 console.log(`Signal feed contracts: ${passed}/${passed} checks passed.`);

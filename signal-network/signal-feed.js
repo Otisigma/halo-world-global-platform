@@ -1,4 +1,5 @@
 import { createFeedCard, createSignalComposer, SIGNAL_VISIBILITY } from "./signal-components.js";
+import { createSignalComposerController } from "./signal-composer.js";
 
 const endpoint = "/api/signal-feed";
 const byId = id => document.getElementById(id);
@@ -72,7 +73,7 @@ function requireMember() {
 }
 function identityControls(memberId) {
   feedState.memberId = memberId || "";
-  byId("feedPublish").disabled = !feedState.memberId;
+  byId("btn-publish-signal").disabled = !feedState.memberId;
   byId("feedSaved").disabled = !feedState.memberId;
   byId("feedSignIn").hidden = Boolean(feedState.memberId);
 }
@@ -337,30 +338,23 @@ byId("feedRelease").addEventListener("change", async () => {
     if (session === feedState.session && byId("feedRelease").value === releaseId) composer.setReleases([media]);
   } catch (error) { if (session === feedState.session) status.textContent = error.message; }
 });
-let publishing = false;
-publishForm.addEventListener("submit", async event => {
-  event.preventDefault();
-  if (publishing) return;
-  publishing = true;
+async function saveSignal() {
   const origin = mutationOrigin();
-  const submit = byId("feedPublish"); submit.disabled = true;
-  try {
-    requireMember();
-    const pendingData = composer.publishData();
-    composer.lock(true);
-    status.textContent = composer.hasAttachment ? "Uploading clip and publishing signal…" : "Publishing signal…";
-    const data = await pendingData;
-    await mutate("publish", data, origin);
-    publishForm.reset(); composer.reset(); feedState.saved = false;
-    byId("feedSaved").setAttribute("aria-pressed", "false"); await loadFeed();
-    ensureOrigin(origin, false);
-    status.textContent = `Signal published to ${SIGNAL_VISIBILITY[data.visibility]}.`;
-  } catch (error) { actionError(error, origin, false); }
-  finally {
-    if (origin.session === feedState.session) {
-      publishing = false; composer.lock(false); submit.disabled = !feedState.memberId;
-    }
-  }
+  requireMember();
+  const data = await composer.publishData();
+  const result = await mutate("publish", data, origin);
+  publishForm.reset(); composer.reset(); feedState.saved = false;
+  byId("feedSaved").setAttribute("aria-pressed", "false"); await loadFeed();
+  ensureOrigin(origin, false);
+  return { id: result?.id || "", content: data.body, broadcast: data.visibility === "PUBLIC",
+    message: `Signal published to ${SIGNAL_VISIBILITY[data.visibility]}.` };
+}
+const publishController = createSignalComposerController({
+  root: document, win: window, form: publishForm, publishButton: byId("btn-publish-signal"),
+  confirm: publishForm.elements.publishPublic, content: publishForm.elements.body,
+  statusElement: byId("signal-composer-status"), captionStatusElement: byId("feedDreamweaverStatus"), save: saveSignal,
+  onBusyChange: value => composer.lock(value), isEnabled: () => Boolean(feedState.memberId),
+  pendingMessage: () => composer.hasAttachment ? "Uploading clip and publishing signal…" : "Publishing signal…"
 });
 byId("feedRefresh").addEventListener("click", async () => { await loadFeed(); loadNotifications(); loadBlocks(); if (!catalogLoaded) postType(); });
 byId("feedMore").addEventListener("click", () => loadFeed(true));
@@ -378,7 +372,7 @@ function connectIdentity() {
       player.pause(); player.removeAttribute("src"); player.load();
     }
     posts.replaceChildren();
-    publishing = false;
+    publishController.cancel();
     publishForm.reset(); composer.reset(); composer.lock(false);
     identityControls(""); feedState.saved = false;
     byId("feedSaved").setAttribute("aria-pressed", "false");

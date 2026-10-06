@@ -415,6 +415,23 @@ await check("auth changes clear composer drafts and consent; old mutations canno
   await new Promise(resolve => setImmediate(resolve)); context.testState.generation++;
   finishMutation(); await assert.rejects(pendingToggle, error => error.name === "FeedSessionChanged");
 });
+await check("composer pairs required consent with a scoped, accessible publish CTA", async () => {
+  const root = new URL("../signal-network/", import.meta.url);
+  const [page, styles] = await Promise.all([
+    readFile(new URL("index.html", root), "utf8"),
+    readFile(new URL("signal-network.css", root), "utf8")
+  ]);
+  const form = page.match(/<form id="feedPublishForm">([\s\S]*?)<\/form>/)?.[1];
+  assert.ok(form, "Existing publish form is present");
+  assert.match(form, /<div class="publish-action-group">\s*<label class="signal-feed__consent checkbox-label"><input name="publishPublic" type="checkbox" required>[\s\S]*?<\/label>\s*<button type="submit" class="btn-publish" id="feedPublish" disabled>Publish to Public Frequency<\/button>\s*<\/div>/);
+  assert.match(styles, /\.signal-feed__composer \.publish-action-group\s*\{[^}]*display: flex;[^}]*flex-wrap: wrap;[^}]*align-items: center;/);
+  assert.match(styles, /\.signal-feed__composer \.btn-publish\s*\{[^}]*min-height: 3rem;[^}]*background: var\(--signal-gold, #e7b34a\); color: #0f172a;[^}]*font-size: 1rem; font-weight: 700;/);
+  assert.match(styles, /\.btn-publish:hover:not\(:disabled\)\s*\{[^}]*translateY\(-1px\)/);
+  assert.match(styles, /\.btn-publish:active:not\(:disabled\)\s*\{[^}]*translateY\(0\)/);
+  assert.match(styles, /\.btn-publish:focus-visible\s*\{[^}]*outline: 3px solid/);
+  assert.match(styles, /\.btn-publish:disabled\s*\{[^}]*box-shadow: none/);
+  assert.match(styles, /@media \(prefers-reduced-motion: reduce\)\s*\{[^}]*\}[^}]*\.btn-publish:hover:not\(:disabled\)\s*\{ transform: none;/);
+});
 await check("public page uses safe DOM, native audio, honest waveform, polling and existing Identity", async () => {
   const root = new URL("../", import.meta.url);
   const [page, script, migration, components] = await Promise.all([

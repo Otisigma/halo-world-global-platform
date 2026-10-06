@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { runInNewContext } from "node:vm";
 import { createSignalFeedHandler, pageInput, postInput, publicLink, releaseMedia, releaseMusicMetadata } from "../netlify/lib/signal-feed.mjs";
+import { createObjectUrlAttachment, validateSignalMedia, SIGNAL_MEDIA_MAX_BYTES } from "../lib/signal-media.js";
+import { suggestSignal } from "../lib/signal-dreamweaver.js";
 
 const postId = "11111111-1111-4111-8111-111111111111";
 const commentId = "22222222-2222-4222-8222-222222222222";
@@ -15,7 +17,7 @@ let passed = 0;
 async function check(name, test) {
   await test(); passed++; console.log(`PASS: ${name}`);
 }
-function harness({ user = null, memberId = "viewer", origin = true, steps = [] } = {}) {
+function harness({ user = null, memberId = "viewer", origin = true, steps = [], mediaStore } = {}) {
   const calls = [];
   let membershipCalls = 0;
   const queue = [...steps];
@@ -32,7 +34,8 @@ function harness({ user = null, memberId = "viewer", origin = true, steps = [] }
   const handler = createSignalFeedHandler({
     getDatabase: () => db, getUser: () => user,
     ensureMembership: () => { membershipCalls++; return { member_id: memberId, display_name: "Creator Pass" }; },
-    verifyRequestOrigin: () => { if (origin instanceof Error) throw origin; return origin; }
+    verifyRequestOrigin: () => { if (origin instanceof Error) throw origin; return origin; },
+    getMediaStore: () => mediaStore
   });
   return {
     db, calls, get membershipCalls() { return membershipCalls; },
@@ -45,7 +48,7 @@ function harness({ user = null, memberId = "viewer", origin = true, steps = [] }
 const rate = { match: /INSERT INTO halo_signal_feed_rate_limits/, rows: [{ attempts: 1 }], inspect(sql) {
   assert.match(sql, /ON CONFLICT .* DO UPDATE/); assert.match(sql, /WHERE halo_signal_feed_rate_limits.attempts/);
 }};
-const visible = { match: /SELECT id, member_id, kind FROM halo_signal_feed_posts/, rows: [{ id: postId, member_id: "author", kind: "AUDIO" }] };
+const visible = { match: /SELECT id, member_id, kind, visibility, attachment FROM halo_signal_feed_posts/, rows: [{ id: postId, member_id: "author", kind: "AUDIO" }] };
 const unblocked = { match: /FROM halo_signal_blocks/, rows: [] };
 const publicRelease = { id: "published-release", title: "Published", artist: "Artist", stream_url: "https://cdn.example/music.mp3", purchase_url: "https://store.example/release" };
 const releaseStep = rows => ({ match: /FROM halo_release_campaigns.*status = 'published'.*visibility/, rows });
@@ -373,7 +376,15 @@ await check("auth changes clear composer drafts and consent; old mutations canno
     },
     AbortController, URLSearchParams, setTimeout, clearTimeout, setInterval() {}, console
   };
-  runInNewContext(`${source}\nglobalThis.testState = feedState; globalThis.testMutate = mutate;`, context);
+  context.SIGNAL_VISIBILITY = { PUBLIC: "Public Frequency" };
+  context.createSignalComposer = () => ({
+    hasAttachment: false, reset() { context.testPostType?.(); }, lock() {},
+    publishData: async () => ({
+      kind: form.elements.kind.value, body: form.elements.body.value, linkUrl: form.elements.linkUrl.value,
+      visibility: "PUBLIC", publishPublic: form.elements.publishPublic.checked
+    })
+  });
+  runInNewContext(`${source.replace(/^import .*;\n/m, "")}\nglobalThis.testState = feedState; globalThis.testMutate = mutate; globalThis.testPostType = postType;`, context);
   await new Promise(resolve => setImmediate(resolve));
   form.elements.body.value = "Old account draft"; form.elements.linkUrl.value = "https://example.com/old-link";
   form.elements.publishPublic.checked = true; form.elements.includePurchase.checked = true;
@@ -395,20 +406,133 @@ await check("auth changes clear composer drafts and consent; old mutations canno
 });
 await check("public page uses safe DOM, native audio, honest waveform, polling and existing Identity", async () => {
   const root = new URL("../", import.meta.url);
-  const [page, script, migration] = await Promise.all([
+  const [page, script, migration, components] = await Promise.all([
     readFile(new URL("signal-network/index.html", root), "utf8"),
     readFile(new URL("signal-network/signal-feed.js", root), "utf8"),
-    readFile(new URL("netlify/database/migrations/20261003160000_create_signal_public_feed.sql", root), "utf8")
+    readFile(new URL("netlify/database/migrations/20261003160000_create_signal_public_feed.sql", root), "utf8"),
+    readFile(new URL("signal-network/signal-components.js", root), "utf8")
   ]);
   assert.match(page, /id="feed"/); assert.match(page, /\/signal-network\/#feed/); assert.match(page, /\/creator-network\/#aiTitle/);
   assert.match(page, /id="command-center"/); assert.match(script, /window.haloIdentity.onAuthChange/);
   assert.ok(!/innerHTML|insertAdjacentHTML|localStorage/.test(script));
-  assert.match(script, /textContent/); assert.match(script, /audio.controls = true/);
-  assert.match(script, /Curated visual waveform — decorative, not analyzed audio/); assert.match(script, /30000/);
-  assert.match(script, /post.media.bpm.*BPM/); assert.match(script, /post.media.musicalKey/);
-  assert.match(script, /signal-feed__music-metadata/);
+  assert.match(script, /textContent/); assert.match(components, /player.controls = true/);
+  assert.match(components, /Curated visual waveform — decorative, not analyzed audio/); assert.match(script, /30000/);
+  assert.match(components, /next.media.bpm.*BPM/); assert.match(components, /next.media.musicalKey/);
+  assert.match(components, /signal-feed__music-metadata/);
   assert.match(page, /Polling, not realtime push/); assert.match(migration, /FOREIGN KEY \(post_id, parent_id\)/);
   assert.match(page, /name="body" maxlength="1000"/); assert.match(migration, /body TEXT NOT NULL CHECK \(char_length\(body\) BETWEEN 1 AND 1000\)/);
   assert.match(migration, /parent_id IS NULL/); assert.match(migration, /ON DELETE CASCADE/);
+});
+
+const clipBytes = Buffer.concat([Buffer.from("RIFF0000WAVE"), Buffer.alloc(20)]);
+const clip = { name: "studio.wav", type: "audio/wav", size: clipBytes.length, data: clipBytes.toString("base64") };
+await check("uploaded clips validate type, extension, size, encoding and file signatures", () => {
+  const input = { kind: "AUDIO", body: "Studio clip", publishPublic: true, attachment: clip };
+  assert.equal(postInput(input).attachment.type, "audio/wav");
+  for (const attachment of [
+    { ...clip, name: "bad.html" }, { ...clip, type: "text/html" }, { ...clip, size: SIGNAL_MEDIA_MAX_BYTES + 1 },
+    { ...clip, size: 1 }, { ...clip, data: "not base64!" }, { ...clip, data: Buffer.alloc(clip.size).toString("base64") }
+  ]) assert.throws(() => postInput({ ...input, attachment }));
+  assert.throws(() => postInput({ ...input, kind: "VIDEO" }));
+  assert.throws(() => postInput({ ...input, includePurchase: true }));
+  assert.throws(() => validateSignalMedia({ name: "fake.mp4", type: "video/mp4", size: 20 }, new Uint8Array(20)));
+  const max = Buffer.alloc(SIGNAL_MEDIA_MAX_BYTES); clipBytes.copy(max);
+  assert.equal(postInput({ ...input, attachment: { ...clip, size: max.length, data: max.toString("base64") } }).attachment.size, max.length);
+});
+await check("object URLs are revoked on replacement and idempotent disposal; invalid files keep the old clip", () => {
+  let count = 0; const revoked = [];
+  const attachments = createObjectUrlAttachment({
+    createObjectURL: () => `blob:clip-${++count}`, revokeObjectURL: url => revoked.push(url)
+  });
+  attachments.set(clip); assert.equal(attachments.current.url, "blob:clip-1");
+  assert.throws(() => attachments.set({ ...clip, size: 0 }));
+  assert.equal(attachments.current.url, "blob:clip-1"); assert.equal(revoked.length, 0);
+  attachments.set(clip); attachments.clear(); attachments.clear();
+  assert.deepEqual(revoked, ["blob:clip-1", "blob:clip-2"]); assert.equal(attachments.current, null);
+});
+await check("private layers require audience consent, bound member IDs and never retain public audiences", () => {
+  for (const visibility of ["INNER_CIRCLE", "COLLABORATOR_VAULT"]) {
+    const draft = { kind: "TEXT", body: "Private", visibility, audience: ["friend", "friend"] };
+    assert.throws(() => postInput({ ...draft, publishPublic: true }));
+    assert.deepEqual(postInput({ ...draft, confirmAudience: true }).audience, ["friend"]);
+  }
+  for (const fields of [{ visibility: "UNKNOWN" }, { audience: [""] }, { audience: Array(21).fill("member") }, { audience: "member" }]) {
+    assert.throws(() => postInput({ kind: "TEXT", body: "Hi", publishPublic: true, ...fields }));
+  }
+  assert.deepEqual(postInput({ kind: "TEXT", body: "Hi", publishPublic: true, audience: ["friend"] }).audience, []);
+});
+await check("private publication checks audience membership and stores visibility with parameterized SQL", async () => {
+  const body = { action: "publish", kind: "TEXT", body: "Private", visibility: "INNER_CIRCLE", audience: ["friend"], confirmAudience: true };
+  const h = harness({ ...member, steps: [rate, rate, {
+    match: /FROM halo_memberships.*ANY.*halo_signal_blocks/, rows: [{ member_id: "friend" }]
+  }, { match: /INSERT INTO halo_signal_feed_posts/, inspect(sql, values) {
+    assert.match(sql, /visibility, audience, attachment/); assert.ok(values.includes("INNER_CIRCLE"));
+    assert.ok(values.some(value => Array.isArray(value) && value[0] === "friend"));
+  } }] });
+  assert.equal((await h.request(body)).status, 201); h.complete();
+  const denied = harness({ ...member, steps: [rate, rate, { rows: [] }] });
+  assert.equal((await denied.request(body)).status, 400); denied.complete();
+});
+await check("clip publication writes a private blob and cleans it up after failed persistence", async () => {
+  for (const fails of [false, true]) {
+    const writes = [], deletes = [];
+    const mediaStore = { set: async (id, bytes) => { writes.push(id); assert.deepEqual(bytes, clipBytes); }, delete: async id => { deletes.push(id); } };
+    const h = harness({ ...member, mediaStore, steps: [rate, rate, {
+      match: /INSERT INTO halo_signal_feed_posts/,
+      ...(fails ? { error: new Error("Unavailable") } : {}),
+      inspect(sql, values) { assert.ok(values.includes(JSON.stringify({ name: clip.name, type: clip.type, size: clip.size }))); }
+    }] });
+    const old = console.error; console.error = () => {};
+    try {
+      const response = await h.request({ action: "publish", kind: "AUDIO", body: "Clip", publishPublic: true, attachment: clip }, "?upload=clip");
+      assert.equal(response.status, fails ? 503 : 201);
+      assert.equal(writes.length, 1); assert.equal(deletes.length, fails ? 1 : 0); h.complete();
+    } finally { console.error = old; }
+  }
+});
+await check("feed, saved views, notifications and direct interactions enforce private visibility in SQL", async () => {
+  for (const view of ["feed", "saved", "notifications"]) {
+    const h = harness({ ...member, steps: [{ rows: [], inspect(sql, values) {
+      assert.match(sql, /p.visibility = 'PUBLIC' OR p.member_id = \?.*ANY\(p.audience\)/);
+      assert.ok(values.includes("viewer"));
+    } }] });
+    assert.equal((await h.request(null, `?view=${view}`)).status, 200); h.complete();
+  }
+  for (const action of ["comment", "boost", "save", "delete_post"]) {
+    const h = harness({ ...member, steps: [rate, { rows: [], inspect(sql) { assert.match(sql, /visibility = 'PUBLIC'.*ANY\(audience\)/); } }] });
+    assert.equal((await h.request({ action, postId, body: "Hi", publishPublic: true, active: true })).status, 404); h.complete();
+  }
+});
+await check("media reads check audience and blocks before blob access and support native player ranges", async () => {
+  for (const [range, expected, length] of [[null, 200, 32], ["bytes=0-11", 206, 12], ["bytes=-4", 206, 4], ["bytes=999-", 416, 0], ["bytes=0-1,3-4", 416, 0]]) {
+    const h = harness({ ...member, mediaStore: { get: async () => clipBytes.buffer.slice(clipBytes.byteOffset, clipBytes.byteOffset + clipBytes.byteLength) },
+      steps: [{ ...visible, rows: [{ ...visible.rows[0], attachment: clip, visibility: "INNER_CIRCLE" }] }, unblocked] });
+    const response = await h.request(null, `?view=media&postId=${postId}`, { headers: range ? { Range: range } : {} });
+    assert.equal(response.status, expected); assert.equal((await response.arrayBuffer()).byteLength, length);
+    assert.equal(response.headers.get("cache-control"), "private, no-store");
+    assert.equal(response.headers.get("content-type"), "audio/wav"); h.complete();
+  }
+  for (const steps of [[{ ...visible, rows: [] }], [visible, { rows: [{ exists: 1 }] }]]) {
+    const h = harness({ ...member, steps, mediaStore: { get: () => { assert.fail("Unauthorized blob read"); } } });
+    assert.equal((await h.request(null, `?view=media&postId=${postId}`)).status, 404); h.complete();
+  }
+});
+await check("private comments use audience consent rather than misleading public consent", async () => {
+  const privatePost = { ...visible, rows: [{ ...visible.rows[0], visibility: "COLLABORATOR_VAULT" }] };
+  const denied = harness({ ...member, steps: [rate, privatePost, unblocked] });
+  assert.equal((await denied.request({ action: "comment", postId, body: "Private", publishPublic: true })).status, 400); denied.complete();
+  const h = harness({ ...member, steps: [rate, privatePost, unblocked, { match: /INSERT INTO halo_signal_feed_comments/ }] });
+  assert.equal((await h.request({ action: "comment", postId, body: "Private", confirmAudience: true })).status, 201); h.complete();
+});
+await check("Dreamweaver provides honest local suggestions without mutating or publishing the draft", async () => {
+  const draft = { body: "  Ambient   studio\n\n\nidea #ambient  ", visibility: "PUBLIC", attachment: clip };
+  const before = JSON.stringify(draft);
+  assert.equal((await suggestSignal("caption", draft)).text, draft.body.trim());
+  assert.deepEqual((await suggestSignal("tags", draft)).tags, ["#ambient", "#studio"]);
+  assert.equal((await suggestSignal("polish", draft)).text, "Ambient studio\n\nidea #ambient");
+  assert.match((await suggestSignal("breakdown", draft)).summary, /audio\/wav/);
+  assert.match((await suggestSignal("breakdown", { body: "", visibility: "INNER_CIRCLE" })).summary, /only you and your selected members/);
+  await assert.rejects(suggestSignal("polish", { body: "" }));
+  assert.equal(JSON.stringify(draft), before);
 });
 console.log(`Signal feed contracts: ${passed}/${passed} checks passed.`);

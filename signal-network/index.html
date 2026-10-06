@@ -856,7 +856,7 @@
         <header class="signal-feed__header">
           <p class="section-label">The public frequency</p>
           <h2 class="section-title" id="signal-feed-title">Signal feed</h2>
-          <p>Deliberately published by creators. Read without signing in. Newest posts first; private work stays private.</p>
+          <p>Media-first signals, deliberately shared. Read Public Frequency without signing in; private signals stay with their selected audience.</p>
           <a href="/creator-network/#aiTitle">Shape your next idea in Creator Studio AI</a>
         </header>
         <div class="signal-feed__toolbar">
@@ -866,17 +866,45 @@
         </div>
         <p id="feedStatus" role="status" aria-live="polite">Loading public posts…</p>
         <details class="signal-feed__composer">
-          <summary>Publish a public signal</summary>
-          <p>Creator Pass identity required. Your display name, post, links and comments will be public. Never share private assets or confidential briefs.</p>
-          <form id="feedPublishForm">
-            <label>Post type <select name="kind" id="feedKind"><option>TEXT</option><option>AUDIO</option><option>VIDEO</option><option>BRIEF_LINK</option></select></label>
-            <label>Your signal (maximum 1000 characters) <textarea name="body" maxlength="1000" rows="4" required></textarea></label>
-            <label id="feedReleaseField" hidden>Published release <select name="releaseId" id="feedRelease"><option value="">Choose a published release</option></select><small>Only verified public catalog audio is accepted. No private uploads or asset URLs.</small></label>
-            <label id="feedLinkField" hidden>Public HTTPS video or brief link <input name="linkUrl" type="url" maxlength="1200" placeholder="https://"></label>
-            <label id="feedPurchaseField" hidden><input name="includePurchase" type="checkbox"> Include this release's existing purchase link (no checkout here)</label>
-            <label><input name="publishPublic" type="checkbox" required> I deliberately publish this signal and its links for everyone to see.</label>
-            <button type="submit" id="feedPublish" disabled>Publish publicly</button>
-          </form>
+          <summary>Compose a signal</summary>
+          <p>Creator Pass identity required. Share only media you have permission to distribute. Visibility protects this post and uploaded clip, not an external link's destination.</p>
+          <div class="signal-feed__workspace">
+            <form id="feedPublishForm">
+              <label>Post type <select name="kind" id="feedKind"><option value="TEXT">Text</option><option value="AUDIO">Audio</option><option value="VIDEO">Video</option><option value="BRIEF_LINK">Brief link</option></select></label>
+              <label>Your signal (maximum 1000 characters) <textarea name="body" maxlength="1000" rows="6" required aria-describedby="feedCaptionHelp"></textarea></label>
+              <small id="feedCaptionHelp">Include lyrics, a transcript or a visual description so everyone can experience your clip. Line breaks appear exactly as written.</small>
+              <div class="signal-feed__dreamweaver" role="group" aria-label="Dreamweaver writing tools">
+                <strong>Dreamweaver</strong>
+                <div class="signal-feed__actions">
+                  <button type="button" data-dreamweaver-action="caption">Generate caption</button>
+                  <button type="button" data-dreamweaver-action="tags">Extract tags</button>
+                  <button type="button" data-dreamweaver-action="polish">Polish</button>
+                  <button type="button" data-dreamweaver-action="breakdown">Breakdown</button>
+                </div>
+                <small id="feedDreamweaverDisclosure"></small>
+                <p id="feedDreamweaverStatus" role="status"></p>
+                <p id="feedDreamweaverResult" class="signal-feed__body" aria-busy="false"></p>
+                <button type="button" id="feedApplySuggestion" hidden>Apply suggestion</button>
+              </div>
+              <label>Audio/video attachment <input id="feedAttachment" type="file" aria-describedby="feedAttachmentHelp feedAttachmentStatus" disabled></label>
+              <small id="feedAttachmentHelp">Choose Audio or Video, then attach one clip up to 4 MB. MP3, WAV, OGG, M4A, MP4 and WebM supported. Larger audio can use a published catalog release; external videos remain links.</small>
+              <p id="feedAttachmentStatus" role="status"></p>
+              <button type="button" id="feedRemoveAttachment" hidden>Remove attachment</button>
+              <label id="feedReleaseField" hidden>Published release <select name="releaseId" id="feedRelease"><option value="">Choose a published release</option></select><small>Only verified public catalog audio is accepted. No private catalog asset URLs.</small></label>
+              <label id="feedLinkField" hidden>Public HTTPS video or brief link <input name="linkUrl" type="url" maxlength="1200" placeholder="https://"></label>
+              <label id="feedPurchaseField" hidden><input name="includePurchase" type="checkbox"> Include this release's existing purchase link (no checkout here)</label>
+              <label>Visibility <select name="visibility" id="feedVisibility"><option value="PUBLIC">Public Frequency</option><option value="INNER_CIRCLE">Inner Circle</option><option value="COLLABORATOR_VAULT">Collaborator Vault</option></select></label>
+              <label id="feedAudienceField" hidden>Selected Creator Pass member IDs <textarea name="audience" rows="2" maxlength="2019" aria-describedby="feedAudienceHelp"></textarea><small id="feedAudienceHelp">Up to 20 member IDs, separated by commas. Both private layers use an explicit per-post allowlist, not automatic Orbit membership. Empty means only you. Comments use the same audience. Recipients can copy shared content.</small></label>
+              <label class="signal-feed__consent"><input name="publishPublic" type="checkbox" required> <span id="feedConsentText">I deliberately publish this signal and its links for everyone to see.</span></label>
+              <button type="submit" id="feedPublish" disabled>Publish to Public Frequency</button>
+            </form>
+            <aside class="signal-feed__preview" aria-labelledby="feedPreviewTitle">
+              <p class="section-label">Live WYSIWYG preview</p>
+              <h3 id="feedPreviewTitle">Your next signal</h3>
+              <p>Preview only — nothing is shared until you publish.</p>
+              <div id="feedPreview"></div>
+            </aside>
+          </div>
         </details>
         <details class="signal-feed__notifications" id="feedNotifications">
           <summary>Notifications <span id="feedNotificationCount"></span></summary>

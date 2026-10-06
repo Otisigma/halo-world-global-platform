@@ -1,6 +1,8 @@
 import { randomUUID } from "node:crypto";
+import { SIGNAL_MEDIA_MAX_BYTES, validateSignalMedia, signalMediaKind } from "../../lib/signal-media.js";
 
 const MAX_BODY_BYTES = 18_000;
+const MAX_MEDIA_BODY_BYTES = Math.ceil(SIGNAL_MEDIA_MAX_BYTES / 3) * 4 + MAX_BODY_BYTES;
 const json = (body, status = 200) => Response.json(body, {
   status, headers: { "Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff" }
 });
@@ -34,16 +36,38 @@ export function publicLink(value) {
 }
 export function postInput(body) {
   if (!["TEXT", "AUDIO", "VIDEO", "BRIEF_LINK"].includes(body.kind)) throw new FeedError("Choose a post type");
-  if (body.publishPublic !== true) throw new FeedError("Confirm deliberate public publication");
+  const visibility = body.visibility ?? "PUBLIC";
+  if (!["PUBLIC", "INNER_CIRCLE", "COLLABORATOR_VAULT"].includes(visibility)) throw new FeedError("Choose a visibility");
+  if (visibility === "PUBLIC" ? body.publishPublic !== true : body.confirmAudience !== true) {
+    throw new FeedError(visibility === "PUBLIC" ? "Confirm deliberate public publication" : "Confirm the selected audience");
+  }
+  const audience = body.audience ?? [];
+  if (!Array.isArray(audience) || audience.length > 20 || audience.some(id => typeof id !== "string" || !id.trim() || id.length > 100)) {
+    throw new FeedError("Choose up to 20 Creator Pass member IDs");
+  }
+  let attachment = null;
+  if (body.attachment != null) {
+    try {
+      const input = body.attachment;
+      if (typeof input.data !== "string" || input.data.length > Math.ceil(SIGNAL_MEDIA_MAX_BYTES / 3) * 4
+        || !/^[A-Za-z0-9+/]*={0,2}$/.test(input.data)) throw new Error("Invalid media encoding");
+      const bytes = Buffer.from(input.data, "base64");
+      if (bytes.toString("base64") !== input.data) throw new Error("Invalid media encoding");
+      attachment = { ...validateSignalMedia(input, bytes), bytes };
+      if (signalMediaKind(attachment.type) !== body.kind) throw new Error("Select the matching audio/video post type");
+    } catch (error) { throw new FeedError(error.message); }
+  }
   const result = {
     kind: body.kind, body: text(body.body, 1000, true),
-    releaseId: body.kind === "AUDIO" ? text(body.releaseId, 100, true) : null,
-    linkUrl: ["VIDEO", "BRIEF_LINK"].includes(body.kind) ? publicLink(body.linkUrl) : "",
-    includePurchase: body.includePurchase === true
+    releaseId: body.kind === "AUDIO" && !attachment ? text(body.releaseId, 100, true) : null,
+    linkUrl: ["VIDEO", "BRIEF_LINK"].includes(body.kind) && !attachment ? publicLink(body.linkUrl) : "",
+    includePurchase: body.includePurchase === true,
+    visibility, audience: visibility === "PUBLIC" ? [] : [...new Set(audience.map(id => id.trim()))], attachment
   };
   if (body.includePurchase != null && typeof body.includePurchase !== "boolean") throw new FeedError("Invalid purchase setting");
   if (result.includePurchase && body.kind !== "AUDIO") throw new FeedError("Only published releases can link to commerce");
-  if (["VIDEO", "BRIEF_LINK"].includes(body.kind) && !result.linkUrl) throw new FeedError("Use a public HTTPS link without credentials");
+  if (result.includePurchase && attachment) throw new FeedError("Only published releases can link to commerce");
+  if (["VIDEO", "BRIEF_LINK"].includes(body.kind) && !attachment && !result.linkUrl) throw new FeedError("Use a public HTTPS link without credentials");
   if (body.audioUrl != null || body.assetUrl != null || body.purchaseUrl != null) throw new FeedError("Select a published release; do not submit asset or purchase URLs");
   return result;
 }
@@ -75,9 +99,9 @@ function paginated(rows, limit, serialize) {
   const items = rows.slice(0, limit);
   return { items: items.map(serialize), nextCursor: rows.length > limit ? cursorFor(items.at(-1)) : null };
 }
-async function readBody(request) {
+async function readBody(request, maxBytes = MAX_BODY_BYTES) {
   if (!request.headers.get("content-type")?.toLowerCase().startsWith("application/json")) throw new FeedError("Use application/json", 415);
-  if (Number(request.headers.get("content-length")) > MAX_BODY_BYTES) throw new FeedError("Request body too large", 413);
+  if (Number(request.headers.get("content-length")) > maxBytes) throw new FeedError("Request body too large", 413);
   const reader = request.body?.getReader();
   if (!reader) throw new FeedError("JSON body required");
   let size = 0;
@@ -87,7 +111,7 @@ async function readBody(request) {
       const { done, value } = await reader.read();
       if (done) break;
       size += value.byteLength;
-      if (size > MAX_BODY_BYTES) { await reader.cancel(); throw new FeedError("Request body too large", 413); }
+      if (size > maxBytes) { await reader.cancel(); throw new FeedError("Request body too large", 413); }
       chunks.push(value);
     }
   } finally { reader.releaseLock(); }
@@ -167,7 +191,9 @@ export async function releaseMedia(db, releaseId) {
   };
 }
 async function visiblePost(db, postId, memberId) {
-  const rows = await db.sql`SELECT id, member_id, kind FROM halo_signal_feed_posts WHERE id = ${postId} LIMIT 1`;
+  const rows = await db.sql`SELECT id, member_id, kind, visibility, attachment FROM halo_signal_feed_posts WHERE id = ${postId}
+    AND (visibility = 'PUBLIC' OR member_id = ${memberId}
+      OR (${memberId} <> '' AND ${memberId} = ANY(audience))) LIMIT 1`;
   if (!rows[0] || await blocked(db, memberId, rows[0].member_id)) throw new FeedError("Post not found", 404);
   return rows[0];
 }
@@ -183,6 +209,8 @@ async function feed(db, memberId, url) {
     FROM halo_signal_feed_posts p
     WHERE (${cursor?.at || null}::timestamptz IS NULL OR (p.created_at, p.id) < (${cursor?.at || null}::timestamptz, ${cursor?.id || null}::uuid))
       AND (NOT ${saved} OR EXISTS (SELECT 1 FROM halo_signal_feed_reactions r WHERE r.post_id = p.id AND r.member_id = ${memberId} AND r.kind = 'save'))
+      AND (p.visibility = 'PUBLIC' OR p.member_id = ${memberId}
+        OR (${memberId} <> '' AND ${memberId} = ANY(p.audience)))
       AND NOT EXISTS (SELECT 1 FROM halo_signal_blocks b
         WHERE (b.member_id = ${memberId} AND b.target_member_id = p.member_id)
           OR (b.target_member_id = ${memberId} AND b.member_id = p.member_id))
@@ -197,6 +225,9 @@ async function feed(db, memberId, url) {
       id: row.id, memberId: row.member_id, authorName: row.author_name, kind: row.kind,
       body: row.body, linkUrl: publicLink(row.link_url), createdAt: iso(row.created_at),
       boosts: Number(row.boosts), boosted: Boolean(row.boosted), saved: Boolean(row.saved),
+      visibility: row.visibility || "PUBLIC",
+      attachment: row.attachment ? { name: row.attachment.name, type: row.attachment.type, size: row.attachment.size,
+        url: `/api/signal-feed?view=media&postId=${encodeURIComponent(row.id)}` } : null,
       media: release ? { ...release, purchaseUrl: row.include_purchase ? release.purchaseUrl : "" } : null
     };
   });
@@ -230,6 +261,7 @@ async function notifications(db, memberId, url) {
     SELECT n.*, n.created_at::text AS cursor_at FROM halo_signal_feed_notifications n
     JOIN halo_signal_feed_posts p ON p.id = n.post_id
     WHERE n.recipient_member_id = ${memberId}
+      AND (p.visibility = 'PUBLIC' OR p.member_id = ${memberId} OR ${memberId} = ANY(p.audience))
       AND (${cursor?.at || null}::timestamptz IS NULL OR (n.created_at, n.id) < (${cursor?.at || null}::timestamptz, ${cursor?.id || null}::uuid))
       AND NOT EXISTS (SELECT 1 FROM halo_signal_blocks b WHERE
         (b.member_id = ${memberId} AND b.target_member_id IN (n.actor_member_id, p.member_id))
@@ -240,7 +272,33 @@ async function notifications(db, memberId, url) {
     readAt: row.read_at ? iso(row.read_at) : null, createdAt: iso(row.created_at)
   }));
 }
-export function createSignalFeedHandler({ getDatabase, getUser, ensureMembership, verifyRequestOrigin }) {
+async function mediaResponse(request, store, post) {
+  if (!post.attachment || !store) throw new FeedError("Media unavailable", 404);
+  const buffer = await store.get(post.id, { type: "arrayBuffer" });
+  if (!buffer) throw new FeedError("Media unavailable", 404);
+  const bytes = new Uint8Array(buffer);
+  const headers = {
+    "Content-Type": post.attachment.type, "Cache-Control": "private, no-store",
+    "X-Content-Type-Options": "nosniff", "Accept-Ranges": "bytes",
+    "Content-Disposition": "inline", "Content-Length": String(bytes.length)
+  };
+  const range = request.headers.get("range");
+  if (!range) return new Response(bytes, { headers });
+  const match = /^bytes=(\d*)-(\d*)$/.exec(range);
+  let start, end;
+  if (match && (match[1] || match[2])) {
+    start = match[1] ? Number(match[1]) : Math.max(0, bytes.length - Number(match[2]));
+    end = match[1] && match[2] ? Math.min(Number(match[2]), bytes.length - 1) : bytes.length - 1;
+  }
+  if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end) || start > end || start >= bytes.length) {
+    return new Response(null, { status: 416, headers: { ...headers, "Content-Length": "0", "Content-Range": `bytes */${bytes.length}` } });
+  }
+  return new Response(bytes.slice(start, end + 1), { status: 206, headers: {
+    ...headers, "Content-Length": String(end - start + 1), "Content-Range": `bytes ${start}-${end}/${bytes.length}`
+  } });
+}
+
+export function createSignalFeedHandler({ getDatabase, getUser, ensureMembership, verifyRequestOrigin, getMediaStore }) {
   return async request => {
     if (!["GET", "POST"].includes(request.method)) return json({ message: "Method not allowed" }, 405);
     try {
@@ -256,6 +314,15 @@ export function createSignalFeedHandler({ getDatabase, getUser, ensureMembership
       const url = new URL(request.url);
       if (request.method === "GET") {
         const view = url.searchParams.get("view") || "feed";
+        if (view === "release") {
+          const media = await releaseMedia(db, text(url.searchParams.get("releaseId"), 100, true));
+          if (!media) throw new FeedError("Public release unavailable", 404);
+          return json(media);
+        }
+        if (view === "media") {
+          const post = await visiblePost(db, uuid(url.searchParams.get("postId")), memberId);
+          return await mediaResponse(request, getMediaStore?.(), post);
+        }
         if (view === "comments") return json(await comments(db, memberId, url));
         if (view === "notifications") return json(await notifications(db, memberId, url));
         if (view === "blocked") {
@@ -269,21 +336,38 @@ export function createSignalFeedHandler({ getDatabase, getUser, ensureMembership
         throw new FeedError("Unknown feed view");
       }
       if (!memberId) throw new FeedError("Sign in with your Creator Pass to participate", 401);
-      const body = await readBody(request);
+      const body = await readBody(request, url.searchParams.get("upload") === "clip" ? MAX_MEDIA_BODY_BYTES : MAX_BODY_BYTES);
       if (!["publish", "comment", "boost", "save", "read_notification", "delete_post", "delete_comment", "block", "unblock", "report"].includes(body.action)) throw new FeedError("Unknown action");
       await rateLimit(db, memberId, "write");
       const authorName = text(membership.display_name || "Creator", 100, true);
       if (body.action === "publish") {
         const input = postInput(body);
         await rateLimit(db, memberId, "publish");
-        if (input.kind === "AUDIO") {
+        if (input.audience.length) {
+          const members = await db.sql`SELECT member_id FROM halo_memberships WHERE member_id = ANY(${input.audience}::text[])
+            AND NOT EXISTS (SELECT 1 FROM halo_signal_blocks b
+              WHERE (b.member_id = ${memberId} AND b.target_member_id = halo_memberships.member_id)
+                OR (b.target_member_id = ${memberId} AND b.member_id = halo_memberships.member_id))`;
+          if (members.length !== input.audience.length) throw new FeedError("Audience includes an unavailable member");
+        }
+        if (input.kind === "AUDIO" && !input.attachment) {
           const media = await releaseMedia(db, input.releaseId);
           if (!media?.audioUrl) throw new FeedError("Choose a published release with verified public audio");
           if (input.includePurchase && !media.purchaseUrl) throw new FeedError("This published release has no public purchase link");
         }
         const id = randomUUID();
-        await db.sql`INSERT INTO halo_signal_feed_posts (id, member_id, author_name, kind, body, release_id, link_url, include_purchase)
-          VALUES (${id}, ${memberId}, ${authorName}, ${input.kind}, ${input.body}, ${input.releaseId}, ${input.linkUrl}, ${input.includePurchase})`;
+        const store = input.attachment ? getMediaStore?.() : null;
+        if (input.attachment && !store) throw new FeedError("Clip storage is unavailable", 503);
+        const attachment = input.attachment ? { name: input.attachment.name, type: input.attachment.type, size: input.attachment.size } : null;
+        if (attachment) await store.set(id, input.attachment.bytes);
+        try {
+          await db.sql`INSERT INTO halo_signal_feed_posts (id, member_id, author_name, kind, body, release_id, link_url, include_purchase, visibility, audience, attachment)
+            VALUES (${id}, ${memberId}, ${authorName}, ${input.kind}, ${input.body}, ${input.releaseId}, ${input.linkUrl},
+              ${input.includePurchase}, ${input.visibility}, ${input.audience}::text[], ${attachment ? JSON.stringify(attachment) : null}::jsonb)`;
+        } catch (error) {
+          if (attachment) await store.delete(id).catch(() => {});
+          throw error;
+        }
         return json({ id }, 201);
       }
       if (body.action === "read_notification") {
@@ -320,10 +404,13 @@ export function createSignalFeedHandler({ getDatabase, getUser, ensureMembership
       if (body.action === "delete_post") {
         if (post.member_id !== memberId) throw new FeedError("Only the author can remove this post", 403);
         await db.sql`DELETE FROM halo_signal_feed_posts WHERE id = ${postId} AND member_id = ${memberId}`;
+        if (post.attachment) await getMediaStore?.().delete(postId).catch(() => {});
         return json({ ok: true });
       }
       if (body.action === "comment") {
-        if (body.publishPublic !== true) throw new FeedError("Confirm deliberate public publication");
+        if ((post.visibility || "PUBLIC") === "PUBLIC" ? body.publishPublic !== true : body.confirmAudience !== true) {
+          throw new FeedError("Confirm publication to this post's audience");
+        }
         const content = text(body.body, 1200, true);
         const parentId = body.parentId ? uuid(body.parentId) : null;
         const seconds = timestamp(body.timestampSeconds);

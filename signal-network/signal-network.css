@@ -100,6 +100,30 @@
 .signal-feed__workspace small, .signal-feed__preview > p { color: #b9c1d1; line-height: 1.6; }
 .signal-feed__workspace .signal-feed__consent { display: flex; align-items: flex-start; gap: .65rem; line-height: 1.6; }
 .signal-feed__consent input { flex: 0 0 auto; width: 1.2rem; height: 1.2rem; accent-color: var(--signal-gold, #e7b34a); }
+.signal-feed__composer .publish-action-group {
+  display: flex; flex-wrap: wrap; align-items: center; gap: .75rem;
+  margin-top: 1.5rem; padding: 1rem; background: rgba(255, 255, 255, .03);
+  border: 1px solid rgba(255, 255, 255, .1); border-radius: .5rem;
+}
+.signal-feed__composer .publish-action-group .checkbox-label {
+  display: flex; flex: 1 1 14rem; min-width: 0; align-items: flex-start; gap: .65rem;
+  color: #d7dce5; font-size: .9rem; line-height: 1.6; overflow-wrap: anywhere;
+}
+.signal-feed__composer .btn-publish {
+  flex: 1 1 14rem; min-height: 3rem; padding: .85rem 1.5rem;
+  border: none; border-radius: .4rem; background: var(--signal-gold, #e7b34a); color: #0f172a;
+  font-size: 1rem; font-weight: 700; line-height: 1.4;
+  box-shadow: 0 4px 12px rgba(231, 179, 74, .3);
+  transition: background-color .2s ease, transform .2s ease, box-shadow .2s ease;
+}
+.signal-feed__composer .btn-publish:hover:not(:disabled) {
+  background: #f3c66b; transform: translateY(-1px); box-shadow: 0 6px 16px rgba(231, 179, 74, .4);
+}
+.signal-feed__composer .btn-publish:active:not(:disabled) {
+  transform: translateY(0); box-shadow: 0 2px 6px rgba(231, 179, 74, .3);
+}
+.signal-feed__composer .btn-publish:focus-visible { outline: 3px solid #7ce6e0; outline-offset: 4px; }
+.signal-feed__composer .btn-publish:disabled { box-shadow: none; }
 .signal-feed__preview { min-width: 0; align-self: start; position: sticky; top: 6rem; }
 .signal-feed__preview .signal-feed__post { border-color: var(--signal-gold, #e7b34a); }
 .signal-feed__dreamweaver { padding: 1rem; border: 1px solid var(--signal-line, #394152); border-radius: .75rem; background: #10121a; }
@@ -119,6 +143,7 @@
 }
 @media (prefers-reduced-motion: reduce) {
   .signal-feed *, .signal-feed *::before, .signal-feed *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+  .signal-feed__composer .btn-publish:hover:not(:disabled) { transform: none; }
 }
 .signal-feed audio { display: block; width: 100%; margin-block: 1rem; }
 .signal-feed__waveform { display: flex; height: 3rem; gap: 3px; align-items: center; overflow: hidden; }

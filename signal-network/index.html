@@ -895,8 +895,10 @@
               <label id="feedPurchaseField" hidden><input name="includePurchase" type="checkbox"> Include this release's existing purchase link (no checkout here)</label>
               <label>Visibility <select name="visibility" id="feedVisibility"><option value="PUBLIC">Public Frequency</option><option value="INNER_CIRCLE">Inner Circle</option><option value="COLLABORATOR_VAULT">Collaborator Vault</option></select></label>
               <label id="feedAudienceField" hidden>Selected Creator Pass member IDs <textarea name="audience" rows="2" maxlength="2019" aria-describedby="feedAudienceHelp"></textarea><small id="feedAudienceHelp">Up to 20 member IDs, separated by commas. Both private layers use an explicit per-post allowlist, not automatic Orbit membership. Empty means only you. Comments use the same audience. Recipients can copy shared content.</small></label>
-              <label class="signal-feed__consent"><input name="publishPublic" type="checkbox" required> <span id="feedConsentText">I deliberately publish this signal and its links for everyone to see.</span></label>
-              <button type="submit" id="feedPublish" disabled>Publish to Public Frequency</button>
+              <div class="publish-action-group">
+                <label class="signal-feed__consent checkbox-label"><input name="publishPublic" type="checkbox" required> <span id="feedConsentText">I deliberately publish this signal and its links for everyone to see.</span></label>
+                <button type="submit" class="btn-publish" id="feedPublish" disabled>Publish to Public Frequency</button>
+              </div>
             </form>
             <aside class="signal-feed__preview" aria-labelledby="feedPreviewTitle">
               <p class="section-label">Live WYSIWYG preview</p>

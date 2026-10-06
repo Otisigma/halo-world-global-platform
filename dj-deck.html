@@ -2878,8 +2878,8 @@
       recordingDestination: null,
       animationFrame: null,
       decks: {
-        A: { input: null, trim: null, gain: null, cueGain: null, cueActive: false, analyser: null, filters: null, effects: null, source: null, stemSources: {}, stemGains: {}, timer: null, step: 0, level: 0, startedAt: 0, playRequestedAt: 0, hasSignal: false, signalConfirmed: false, noSignalReported: false, unexpectedEndRecoveries: 0, stems: { bass: true, hats: true, vocals: true } },
-        B: { input: null, trim: null, gain: null, cueGain: null, cueActive: false, analyser: null, filters: null, effects: null, source: null, stemSources: {}, stemGains: {}, timer: null, step: 0, level: 0, startedAt: 0, playRequestedAt: 0, hasSignal: false, signalConfirmed: false, noSignalReported: false, unexpectedEndRecoveries: 0, stems: { bass: true, hats: true, vocals: true } }
+        A: { input: null, trim: null, gain: null, cueGain: null, cueActive: false, analyser: null, filters: null, effects: null, source: null, stemSources: {}, stemGains: {}, timer: null, step: 0, level: 0, startedAt: 0, playRequestedAt: 0, hasSignal: false, signalConfirmed: false, noSignalReported: false, unexpectedEndRecoveries: 0, playRequestId: 0, stems: { bass: true, hats: true, vocals: true } },
+        B: { input: null, trim: null, gain: null, cueGain: null, cueActive: false, analyser: null, filters: null, effects: null, source: null, stemSources: {}, stemGains: {}, timer: null, step: 0, level: 0, startedAt: 0, playRequestedAt: 0, hasSignal: false, signalConfirmed: false, noSignalReported: false, unexpectedEndRecoveries: 0, playRequestId: 0, stems: { bass: true, hats: true, vocals: true } }
       }
     };
     const audioHealth = {
@@ -4066,8 +4066,9 @@
       channel.filters.lowPass.frequency.exponentialRampToValueAtTime(20000, now + seconds);
     }
 
-    function stopDeckAudio(deckId) {
+    function stopDeckAudio(deckId, { preservePlayRequest = false } = {}) {
       const channel = audioEngine.decks[deckId];
+      if (!preservePlayRequest) channel.playRequestId += 1;
       const envelopes = channel.sourceEnvelopes || new Map();
       const stopSource = source => {
         if (audioEngine.halo) audioEngine.halo.stopSourceSmoothly(source, envelopes.get(source));
@@ -4128,15 +4129,18 @@
     }
 
     async function startDeckAudio(deckId, beatOffset = 0, { recovery = false } = {}) {
-      if (!recovery) audioEngine.decks[deckId].unexpectedEndRecoveries = 0;
+      const channel = audioEngine.decks[deckId];
+      const requestId = ++channel.playRequestId;
+      if (!recovery) channel.unexpectedEndRecoveries = 0;
       // Mute the room input before any await; repeat once the engine exists on first playback.
       audioEngine.halo?.setLiveIntelligenceInputState(false);
       const context = await ensureAudio();
+      if (channel.playRequestId !== requestId || !deckState[deckId].playing) return false;
       const halo = audioEngine.halo;
       halo?.setLiveIntelligenceInputState(false);
       audioEngine.decks[deckId].stabilizesAt = 0;
       try {
-        return await startDeckAudioSources(context, deckId, beatOffset);
+        return await startDeckAudioSources(context, deckId, beatOffset, requestId);
       } finally {
         halo?.scheduleLiveIntelligenceRestore(Math.max(0, (audioEngine.decks[deckId].stabilizesAt || 0) - context.currentTime));
       }
@@ -4211,12 +4215,14 @@
       channel.stabilizesAt = Math.max(channel.stabilizesAt || 0, started.stabilizesAt);
     }
 
-    async function startDeckAudioSources(context, deckId, beatOffset) {
+    async function startDeckAudioSources(context, deckId, beatOffset, requestId) {
       const state = deckState[deckId];
+      const channel = audioEngine.decks[deckId];
       if (!state.audioBuffer && !state.audioAsset?.file && !state.stemAssets) {
         throw new Error("Select the song's audio file to play it in the deck. Library cards provide set-planning details, not the recording itself.");
       }
-      stopDeckAudio(deckId);
+      if (channel.playRequestId !== requestId || !state.playing) return false;
+      stopDeckAudio(deckId, { preservePlayRequest: true });
       if (audioEngine.decks[deckId].trim) audioEngine.decks[deckId].trim.gain.setValueAtTime(1, context.currentTime);
       audioEngine.decks[deckId].startedAt = context.currentTime;
       audioEngine.decks[deckId].playRequestedAt = Date.now();
@@ -4242,6 +4248,7 @@
             .finally(() => { state.audioAsset.promise = null; });
         }
         if (!state.audioBuffer) state.audioBuffer = await state.audioAsset.promise;
+        if (channel.playRequestId !== requestId || !state.playing) return false;
         state.duration = state.audioBuffer.duration;
         elements.importStatus.textContent = `${state.title} is ready. Future plays start immediately.`;
       }
@@ -4274,8 +4281,8 @@
           }
           return [stemType, asset.buffer || await asset.promise];
         }));
+        if (channel.playRequestId !== requestId || !state.playing) return false;
         const startAt = context.currentTime + Math.max(.045, beatOffset);
-        const channel = audioEngine.decks[deckId];
         channel.stemSources = {};
         channel.stemGains = {};
         for (const [stemType, buffer] of preparedStems) {

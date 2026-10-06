@@ -136,5 +136,36 @@ assert.match(deckPage, /audioEngine\.halo\.startSourceWithFadeIn\(/);
 assert.match(deckPage, /audioEngine\.halo\.stopSourceSmoothly\(/);
 assert.match(deckPage, /halo\?\.scheduleLiveIntelligenceRestore\(/);
 assert.match(deckPage, /audioEngine\.halo\?\.suppressLiveIntelligence\(\);\n\s+stopDeckAudio\(deckId\);/, "Loading a track suppresses the room input");
+assert.match(deckPage, /if \(!preservePlayRequest\) channel\.playRequestId \+= 1;/, "Intentional stop invalidates pending playback starts");
+assert.match(deckPage, /channel\.playRequestId !== requestId \|\| !deckState\[deckId\]\.playing/, "A cancelled playback request cannot restart a stopped deck");
+
+function extractStartDeckAudio(source) {
+  const start = source.indexOf("async function startDeckAudio(");
+  assert.notEqual(start, -1);
+  const brace = source.indexOf(") {", start) + 2;
+  let depth = 0;
+  for (let index = brace; index < source.length; index += 1) {
+    if (source[index] === "{") depth += 1;
+    if (source[index] === "}" && --depth === 0) return source.slice(start, index + 1);
+  }
+  throw new Error("Could not extract startDeckAudio");
+}
+
+let finishEnsure;
+let startSourceCalls = 0;
+const cancellationSandbox = {
+  audioEngine: { halo: null, decks: { A: { playRequestId: 0, unexpectedEndRecoveries: 1, stabilizesAt: 0 } } },
+  deckState: { A: { playing: true } },
+  ensureAudio: () => new Promise(resolve => { finishEnsure = resolve; }),
+  startDeckAudioSources: async () => { startSourceCalls += 1; return true; }
+};
+vm.createContext(cancellationSandbox);
+vm.runInContext(extractStartDeckAudio(deckPage), cancellationSandbox);
+const pendingPlayback = cancellationSandbox.startDeckAudio("A", 0, { recovery: true });
+cancellationSandbox.deckState.A.playing = false;
+cancellationSandbox.audioEngine.decks.A.playRequestId += 1;
+finishEnsure({ currentTime: 0 });
+assert.equal(await pendingPlayback, false, "A user stop cancels playback recovery while audio initialization is pending.");
+assert.equal(startSourceCalls, 0, "A cancelled recovery never starts new audio sources.");
 
 console.log("DJ session + audio engine contracts passed");

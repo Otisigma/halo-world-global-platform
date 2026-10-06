@@ -8,14 +8,22 @@ CREATE TABLE IF NOT EXISTS halo_creator_dna (
   workflow_notes TEXT NOT NULL DEFAULT '' CHECK (char_length(workflow_notes) <= 1000),
   visibility TEXT NOT NULL DEFAULT 'private' CHECK (visibility IN ('private', 'members', 'public')),
   revision INTEGER NOT NULL DEFAULT 1 CHECK (revision > 0),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+CREATE OR REPLACE FUNCTION halo_creator_dna_valid_aliases(term_aliases TEXT[]) RETURNS BOOLEAN
+LANGUAGE sql IMMUTABLE AS $$
+  SELECT term_aliases IS NOT NULL AND cardinality(term_aliases) <= 12 AND NOT EXISTS (
+    SELECT 1 FROM unnest(term_aliases) item(value) WHERE item.value IS NULL OR char_length(item.value) NOT BETWEEN 1 AND 80
+  );
+$$;
 CREATE TABLE IF NOT EXISTS halo_creator_dna_terms (
   id TEXT PRIMARY KEY,
   dimension TEXT NOT NULL CHECK (dimension IN ('sonic', 'mood', 'influence', 'skill', 'looking_for', 'collaboration')),
-  key TEXT NOT NULL,
-  label TEXT NOT NULL,
-  aliases TEXT[] NOT NULL DEFAULT '{}',
+  key TEXT NOT NULL CHECK (char_length(key) BETWEEN 1 AND 64 AND key ~ '^[a-z0-9]+(-[a-z0-9]+)*$'),
+  label TEXT NOT NULL CHECK (char_length(label) BETWEEN 1 AND 80 AND BTRIM(label) <> ''),
+  aliases TEXT[] NOT NULL DEFAULT '{}' CHECK (halo_creator_dna_valid_aliases(aliases)),
+  active BOOLEAN NOT NULL DEFAULT TRUE,
   UNIQUE (dimension, key),
   UNIQUE (id, dimension),
   CHECK (id = dimension || ':' || key)
@@ -112,7 +120,7 @@ BEGIN
   IF COALESCE(current_revision, 0) <> expected_revision THEN RETURN; END IF;
   IF selected_terms IS NULL OR cardinality(selected_terms) > 48 OR EXISTS (
     SELECT 1 FROM unnest(selected_terms) selected(id) LEFT JOIN halo_creator_dna_terms t ON t.id = selected.id
-    WHERE t.id IS NULL
+    WHERE t.id IS NULL OR t.active = FALSE
   ) OR EXISTS (
     SELECT 1 FROM halo_creator_dna_terms WHERE id = ANY(selected_terms)
     GROUP BY dimension HAVING count(*) > 8
@@ -126,7 +134,7 @@ BEGIN
     visibility = EXCLUDED.visibility, revision = EXCLUDED.revision, updated_at = NOW();
   DELETE FROM halo_creator_dna_tags WHERE member_id = owner_id;
   INSERT INTO halo_creator_dna_tags(member_id, term_id, dimension)
-  SELECT owner_id, id, dimension FROM halo_creator_dna_terms WHERE id = ANY(selected_terms);
+  SELECT owner_id, id, dimension FROM halo_creator_dna_terms WHERE id = ANY(selected_terms) AND active = TRUE;
   RETURN QUERY SELECT * FROM halo_creator_dna WHERE member_id = owner_id;
 END;
 $$;

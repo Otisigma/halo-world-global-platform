@@ -21,7 +21,7 @@ export async function dnaRequest(query = "", body, signal) {
   if (!response.ok) {
     const error = new Error(data.message || "Creative DNA is unavailable. Please try again.");
     error.status = response.status;
-    error.fields = data.errors || data.fieldErrors;
+    error.fields = data.fieldErrors || data.errors;
     throw error;
   }
   return data;
@@ -79,7 +79,9 @@ export function mountTagEditor(root, { terms = [], selected = [], cap = DNA_LIMI
         return chip;
       }));
       const select = selects.get(dimension);
-      select.replaceChildren(element("option", chosen.length >= cap ? "Tag limit reached" : "Choose a tag"));
+      const placeholder = element("option", chosen.length >= cap ? "Tag limit reached" : "Choose a tag");
+      placeholder.value = "";
+      select.replaceChildren(placeholder);
       for (const term of terms.filter(term => term.dimension === dimension && !ids.includes(term.id))) {
         const option = element("option", term.label);
         option.value = term.id;
@@ -155,7 +157,7 @@ export function mountCreativeDNAEditor(root, { request = dnaRequest, confirmDisc
   const tune = button("Tune Creative DNA", open);
   tune.disabled = true;
   root.replaceChildren(tune, status, summary);
-  let record, generation = 0, controller, dirty = false, saving = false, tags;
+  let record, generation = 0, controller, dirty = false, saving = false, tags, editingRevision = 0;
   const shell = modal("Tune Creative DNA", "Only what you explicitly enter is used. Workflow notes always stay private. No Signal or private project import.");
   const form = element("form"), fields = {}, errors = {}, suggestions = element("div");
   for (const [name, label] of Object.entries({
@@ -163,7 +165,7 @@ export function mountCreativeDNAEditor(root, { request = dnaRequest, confirmDisc
   })) {
     const wrapper = element("label", label), input = element("textarea"), count = element("span"), error = element("span");
     input.name = name;
-    input.maxLength = TEXT_LIMITS[name];
+    input.maxLength = TEXT_LIMITS[name] * 2;
     error.id = `dna-error-${name}`;
     count.id = `dna-count-${name}`;
     input.setAttribute("aria-describedby", `${count.id} ${error.id}`);
@@ -174,19 +176,32 @@ export function mountCreativeDNAEditor(root, { request = dnaRequest, confirmDisc
     errors[name] = error;
     input.addEventListener("input", () => {
       dirty = true;
-      count.textContent = `${input.value.length}/${TEXT_LIMITS[name]}`;
+      count.textContent = `${[...input.value].length}/${TEXT_LIMITS[name]}`;
       if (name === "creativeStatement") suggest();
+      visibilityPreview();
     });
-    input.updateCount = () => { count.textContent = `${input.value.length}/${TEXT_LIMITS[name]}`; };
+    input.updateCount = () => { count.textContent = `${[...input.value].length}/${TEXT_LIMITS[name]}`; };
   }
   const visibilityLabel = element("label", "Visibility"), visibility = element("select"), preview = element("p");
+  const visibilityError = element("span"), tagError = element("p");
+  visibilityError.id = "dna-error-visibility";
+  tagError.id = "dna-error-termIds";
+  visibilityError.className = tagError.className = "dna-error";
+  visibility.setAttribute("aria-describedby", visibilityError.id);
+  const visitorPreview = element("section"), visitorPreviewTitle = element("h3"), visitorPreviewContent = element("div");
+  visitorPreview.setAttribute("aria-label", "Creative DNA visitor preview");
+  visitorPreviewContent.id = "dnaVisitorPreview";
+  visitorPreview.append(visitorPreviewTitle, visitorPreviewContent);
   for (const [value, label] of [["private", "Private — only you"], ["members", "Members — signed-in creators"], ["public", "Public — anyone"]]) {
     const option = element("option", label);
     option.value = value;
     visibility.append(option);
   }
-  visibilityLabel.append(visibility);
+  visibilityLabel.append(visibility, visibilityError);
   const tagRoot = element("div"), feedback = element("p");
+  tagRoot.setAttribute("role", "group");
+  tagRoot.setAttribute("aria-label", "Creative DNA tags");
+  tagRoot.setAttribute("aria-describedby", tagError.id);
   feedback.setAttribute("role", "status");
   const save = element("button", "Save Creative DNA");
   save.type = "submit";
@@ -199,12 +214,22 @@ export function mountCreativeDNAEditor(root, { request = dnaRequest, confirmDisc
     load();
   });
   reload.hidden = true;
-  form.append(visibilityLabel, preview, tagRoot, element("h3", "Local vocabulary suggestions — not AI analysis"), suggestions, feedback, save, cancel, reload);
+  form.append(visibilityLabel, preview, visitorPreview, tagRoot, tagError, element("h3", "Local vocabulary suggestions — not AI analysis"), suggestions, feedback, save, cancel, reload);
   shell.dialog.append(form);
   function visibilityPreview() {
     preview.textContent = visibility.value === "public"
       ? (record?.profile?.discoverable ? "Preview: public statement, goals and tags. Workflow notes remain private." : "Public DNA requires public discovery on your saved Creator Pass.")
-      : `${visibility.value === "members" ? "Signed-in creators" : "Only you"} can see statement, goals and tags. Workflow notes remain private.`;
+      : visibility.value === "members" && !record?.profile?.discoverable
+        ? "Member DNA is not discoverable until you enable public discovery on your saved Creator Pass. Workflow notes remain private."
+        : `${visibility.value === "members" ? "Signed-in creators" : "Only you"} can see statement, goals and tags. Workflow notes remain private.`;
+    visitorPreviewTitle.textContent = visibility.value === "private" || !record?.profile?.discoverable
+      ? "Draft preview — no visitor audience"
+      : `What ${visibility.value === "members" ? "signed-in creators" : "public visitors"} will see`;
+    renderDNASummary(visitorPreviewContent, {
+      creativeStatement: fields.creativeStatement.value,
+      creativeGoals: fields.creativeGoals.value,
+      termIds: tags?.values() || []
+    }, record?.terms || []);
   }
   visibility.addEventListener("change", () => { dirty = true; visibilityPreview(); });
   shell.dialog.addEventListener("cancel", event => { event.preventDefault(); cancelEdit(); });
@@ -224,6 +249,7 @@ export function mountCreativeDNAEditor(root, { request = dnaRequest, confirmDisc
   function open() {
     if (!record?.profile || saving) return;
     const dna = record.dna || {};
+    editingRevision = dna.revision ?? 0;
     for (const [name, input] of Object.entries(fields)) {
       input.value = dna[name] || "";
       input.updateCount();
@@ -231,7 +257,13 @@ export function mountCreativeDNAEditor(root, { request = dnaRequest, confirmDisc
       input.removeAttribute("aria-invalid");
     }
     visibility.value = dna.visibility || "private";
-    tags = mountTagEditor(tagRoot, { terms: record.terms, selected: dna.termIds, onChange() { dirty = true; suggest(); } });
+    visibilityError.textContent = tagError.textContent = "";
+    visibility.removeAttribute("aria-invalid");
+    tagRoot.removeAttribute("aria-invalid");
+    tags = mountTagEditor(tagRoot, {
+      terms: record.terms, selected: dna.termIds,
+      onChange() { dirty = true; suggest(); visibilityPreview(); }
+    });
     feedback.textContent = "";
     reload.hidden = true;
     dirty = false;
@@ -243,6 +275,21 @@ export function mountCreativeDNAEditor(root, { request = dnaRequest, confirmDisc
   form.addEventListener("submit", async event => {
     event.preventDefault();
     if (saving) return;
+    visibilityError.textContent = tagError.textContent = "";
+    visibility.removeAttribute("aria-invalid");
+    tagRoot.removeAttribute("aria-invalid");
+    let invalidField;
+    for (const [name, input] of Object.entries(fields)) {
+      const tooLong = [...input.value].length > TEXT_LIMITS[name];
+      errors[name].textContent = tooLong ? `Use at most ${TEXT_LIMITS[name]} characters.` : "";
+      input.setAttribute("aria-invalid", String(tooLong));
+      if (tooLong && !invalidField) invalidField = input;
+    }
+    if (invalidField) {
+      feedback.textContent = "Check the highlighted fields. Your edits are retained.";
+      invalidField.focus();
+      return;
+    }
     if (visibility.value === "public" && !record.profile.discoverable) {
       feedback.textContent = "Save your Creator Pass with public discovery enabled first.";
       visibility.focus();
@@ -254,12 +301,13 @@ export function mountCreativeDNAEditor(root, { request = dnaRequest, confirmDisc
     saving = true;
     save.disabled = true;
     feedback.textContent = "Saving…";
-    const body = { action: "save_dna", visibility: visibility.value, expectedRevision: record.dna?.revision ?? 0, termIds: tags.values() };
+    const body = { action: "save_dna", visibility: visibility.value, expectedRevision: editingRevision, termIds: tags.values() };
     for (const [name, input] of Object.entries(fields)) body[name] = input.value;
     try {
       const result = await request("", body, controller.signal);
       if (version !== generation) return;
       record.dna = result.dna;
+      editingRevision = result.dna.revision;
       dirty = Object.entries(fields).some(([name, input]) => input.value !== body[name]) ||
         visibility.value !== body.visibility || JSON.stringify(tags.values()) !== JSON.stringify(body.termIds);
       renderDNASummary(summary, record.dna, record.terms);
@@ -276,6 +324,13 @@ export function mountCreativeDNAEditor(root, { request = dnaRequest, confirmDisc
         const message = error.fields?.[name];
         node.textContent = message ? String(message) : "";
         fields[name].setAttribute("aria-invalid", message ? "true" : "false");
+      }
+      for (const [name, control, errorNode] of [
+        ["visibility", visibility, visibilityError], ["termIds", tagRoot, tagError]
+      ]) {
+        const message = error.fields?.[name];
+        errorNode.textContent = message ? String(message) : "";
+        control.setAttribute("aria-invalid", message ? "true" : "false");
       }
     } finally {
       if (version === generation) { saving = false; save.disabled = false; }
@@ -308,6 +363,7 @@ export function mountCreativeDNAEditor(root, { request = dnaRequest, confirmDisc
       generation++;
       controller?.abort();
       record = null;
+      editingRevision = 0;
       dirty = false;
       saving = false;
       save.disabled = false;
@@ -318,8 +374,11 @@ export function mountCreativeDNAEditor(root, { request = dnaRequest, confirmDisc
       suggestions.replaceChildren();
       for (const input of Object.values(fields)) input.value = "";
       for (const error of Object.values(errors)) error.textContent = "";
+      visibilityError.textContent = tagError.textContent = "";
       visibility.value = "private";
       preview.textContent = "";
+      visitorPreviewTitle.textContent = "";
+      visitorPreviewContent.replaceChildren();
       feedback.textContent = "";
       status.textContent = "";
     }

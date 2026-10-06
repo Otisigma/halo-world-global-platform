@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import vm from "node:vm";
 import {
-  DIMENSIONS, element, mountTagEditor, mountCreativeDNAEditor, mountDNAVisitor,
+  DIMENSIONS, element, dnaRequest, mountTagEditor, mountCreativeDNAEditor, mountDNAVisitor,
   localSuggestions, renderDNASummary, safeReleaseURL
 } from "../creator-network/creative-dna.js";
 
@@ -42,6 +42,7 @@ const terms = Object.keys(DIMENSIONS).flatMap(dimension => Array.from({ length: 
 const root = new Node("div");
 let changes = 0;
 const tags = mountTagEditor(root, { terms, onChange: () => changes++ });
+assert.equal(find(root, node => node.tagName === "option").value, "", "Tag placeholder has an explicit empty value");
 for (let i = 0; i < 8; i++) assert.equal(tags.add(`sonic:tag-${i}`), true);
 assert.equal(tags.add("sonic:tag-8"), false, "Owner cap enforced per dimension");
 assert.equal(tags.add("invalid"), false);
@@ -65,6 +66,16 @@ assert.equal(safeReleaseURL(null), null);
 assert.equal(safeReleaseURL(""), null);
 assert.equal(safeReleaseURL("http://example.test/x"), null);
 assert.equal(safeReleaseURL("/music/"), "https://halo.test/music/");
+const originalFetch = globalThis.fetch;
+globalThis.fetch = async () => ({
+  ok: false, status: 400,
+  json: async () => ({ message: "Invalid DNA", errors: {}, fieldErrors: { visibility: "Invalid visibility" } })
+});
+await assert.rejects(dnaRequest("", { action: "save_dna" }), error => {
+  assert.equal(error.fields.visibility, "Invalid visibility", "Canonical backend fieldErrors take precedence");
+  return true;
+});
+globalThis.fetch = originalFetch;
 
 const record = {
   profile: { publicProfileId: "public-id", discoverable: true },
@@ -91,14 +102,46 @@ const dialog = body.children.at(-1), form = find(dialog, node => node.tagName ==
 const statement = find(form, node => node.name === "creativeStatement");
 assert.equal(statement.value, "Saved");
 assert.equal(document.activeElement, statement);
+record.dna = { ...record.dna, creativeStatement: "Concurrent version", revision: 5 };
+await editor.load();
+assert.equal(statement.value, "Saved", "Clean open modal retains its visible snapshot during reload");
+statement.value = "🎵";
+await statement.fire("input");
+assert.equal(find(form, node => node.id === "dna-count-creativeStatement").textContent, "1/600", "Character counts use Unicode code points");
+statement.value = "🎵".repeat(601);
+await statement.fire("input");
+await form.fire("submit");
+assert.equal(saveCalls.length, 0, "Client rejects over-limit Unicode text before sending");
 statement.value = "Unsaved statement";
 await statement.fire("input");
-failure = Object.assign(new Error("Statement rejected"), { fields: { creativeStatement: "Try another statement" } });
+const projectedPreview = find(form, node => node.id === "dnaVisitorPreview");
+assert.ok(text(projectedPreview).includes("Unsaved statement"), "Visitor preview reflects unsaved statement");
+const sonicSelect = find(form, node => node.tagName === "select" && node.children.some(child => child.value === "sonic:tag-0"));
+sonicSelect.value = "sonic:tag-0";
+await sonicSelect.fire("change");
+assert.ok(text(projectedPreview).includes("sonic tag 0"), "Visitor preview reflects unsaved tags");
+const goals = find(form, node => node.name === "creativeGoals");
+goals.value = "Unsaved creative goal";
+await goals.fire("input");
+assert.ok(text(projectedPreview).includes("Unsaved creative goal"), "Visitor preview reflects unsaved goals");
+const notes = find(form, node => node.name === "workflowNotes");
+notes.value = "Owner-only private notes";
+await notes.fire("input");
+assert.ok(!text(projectedPreview).includes("Owner-only private notes"), "Visitor preview never includes workflow notes");
+assert.ok(text(form).includes("Draft preview — no visitor audience"), "Private preview explicitly has no visitor audience");
+find(form, node => node.tagName === "select" && node.children.some(child => child.value === "members")).value = "public";
+await find(form, node => node.tagName === "select" && node.children.some(child => child.value === "members")).fire("change");
+assert.ok(text(form).includes("What public visitors will see"));
+failure = Object.assign(new Error("Statement rejected"), { fields: {
+  creativeStatement: "Try another statement", visibility: "Check visibility", termIds: "Check selected tags"
+} });
 await form.fire("submit");
 assert.equal(statement.value, "Unsaved statement", "Failed save retains edits");
 assert.equal(dialog.open, true);
 assert.equal(statement.attributes["aria-invalid"], "true", "Field error is accessible");
-assert.equal(saveCalls.at(-1).expectedRevision, 4);
+assert.ok(text(form).includes("Check visibility"));
+assert.ok(text(form).includes("Check selected tags"), "Non-text server field errors are shown with retained edits");
+assert.equal(saveCalls.at(-1).expectedRevision, 4, "Open editor binds expected revision to visible snapshot, not unseen reload");
 failure = Object.assign(new Error("Conflict"), { status: 409 });
 await form.fire("submit");
 assert.ok(text(dialog).includes("newer version"));
@@ -106,8 +149,16 @@ assert.equal(statement.value, "Unsaved statement", "Revision conflict retains ed
 await dialog.fire("cancel");
 assert.equal(dialog.open, true, "Escape honors unsaved confirmation");
 await editor.load();
-assert.equal(gets, 2, "Saved Creator Pass reloads owner metadata");
+assert.equal(gets, 3, "Saved Creator Pass reloads owner metadata");
 assert.equal(statement.value, "Unsaved statement", "Reload does not overwrite dirty form");
+record.profile.discoverable = false;
+await editor.load();
+const visibility = find(form, node => node.tagName === "select" && node.children.some(child => child.value === "members"));
+visibility.value = "members";
+await visibility.fire("change");
+assert.ok(text(form).includes("not discoverable until"), "Member visibility previews discovery opt-in requirement");
+record.profile.discoverable = true;
+await editor.load();
 discard = true;
 await dialog.fire("cancel");
 assert.equal(dialog.open, false);

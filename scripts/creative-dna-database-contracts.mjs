@@ -52,7 +52,7 @@ const input = (revision, overrides = {}) => dnaInput({
 try {
   await psql(`CREATE SCHEMA ${schema};
     CREATE TABLE halo_memberships(member_id TEXT PRIMARY KEY);
-    CREATE TABLE halo_artist_pages(slug TEXT PRIMARY KEY);
+    CREATE TABLE halo_artist_pages(slug TEXT PRIMARY KEY, owner_member_id TEXT, status TEXT);
     CREATE TABLE halo_song_catalog(id TEXT PRIMARY KEY);
     CREATE TABLE halo_song_versions(id TEXT PRIMARY KEY);
     CREATE TABLE halo_stem_packs(id TEXT PRIMARY KEY);
@@ -61,17 +61,21 @@ try {
     CREATE TABLE halo_creator_passes(member_id TEXT PRIMARY KEY, subscription_tier TEXT,
       subscription_status TEXT, subscription_expires_at TIMESTAMPTZ, trial_ends_at TIMESTAMPTZ);
     CREATE TABLE halo_release_campaigns(id TEXT PRIMARY KEY, owner_member_id TEXT, title TEXT,
-      official_url TEXT, status TEXT, release_date DATE);
+      official_url TEXT, status TEXT, visibility TEXT DEFAULT 'public', release_date DATE, artist_slug TEXT);
     ${networkMigration}
     ${dnaMigration}`);
   await psql(dnaMigration);
-  const vocabulary = JSON.parse(await psql("SELECT json_agg(t ORDER BY id) FROM halo_creator_dna_terms t"));
+  const vocabulary = JSON.parse(await psql("SELECT json_agg(t ORDER BY id) FROM (SELECT id,dimension,key,label,aliases FROM halo_creator_dna_terms) t"));
   assert.deepEqual(vocabulary, [...DNA_TERMS].sort((a, b) => a.id.localeCompare(b.id)).map(term => ({ ...term })));
   await psql(`
     INSERT INTO halo_memberships VALUES ('public'),('members'),('private'),('hidden'),('premium'),('expired'),('viewer');
     INSERT INTO halo_creator_profiles(member_id, display_name, bio, roles, genres, languages, discoverable)
     SELECT member_id, 'Creator ' || member_id, 'Atmospheric bio', ARRAY['Producer'], ARRAY['House'], ARRAY['English'],
       member_id <> 'hidden' FROM halo_memberships;
+    INSERT INTO halo_artist_pages VALUES('public-room','public','published'),('draft-room','expired','draft'),
+      ('public-draft-room','public','draft');
+    UPDATE halo_creator_profiles SET artist_slug='public-room' WHERE member_id='public';
+    UPDATE halo_creator_profiles SET artist_slug='draft-room' WHERE member_id='expired';
     INSERT INTO halo_creator_passes VALUES
       ('premium','PREMIUM','active',NOW() + INTERVAL '1 day',NULL),
       ('expired','PREMIUM','active',NOW() - INTERVAL '1 second',NULL);`);
@@ -111,6 +115,12 @@ try {
   await assert.rejects(psql(`UPDATE halo_creator_profiles SET public_profile_id = NULL WHERE member_id='hidden';`));
   await assert.rejects(psql(`UPDATE halo_creator_profiles SET public_profile_id =
     (SELECT public_profile_id FROM halo_creator_profiles WHERE member_id='public') WHERE member_id='hidden';`));
+  await assert.rejects(psql(`UPDATE halo_creator_dna_terms SET label=repeat('x',81) WHERE id='sonic:warm';`));
+  await assert.rejects(psql(`UPDATE halo_creator_dna_terms SET key='Bad Key' WHERE id='sonic:warm';`));
+  await assert.rejects(psql(`UPDATE halo_creator_dna_terms SET aliases=ARRAY[repeat('x',81)] WHERE id='sonic:warm';`));
+  await assert.rejects(psql(`UPDATE halo_creator_dna_terms SET aliases=ARRAY[NULL::text] WHERE id='sonic:warm';`));
+  await assert.rejects(psql(`UPDATE halo_creator_dna_terms SET aliases=array_fill('alias'::text,ARRAY[13]) WHERE id='sonic:warm';`));
+  assert.equal(await psql("SELECT count(*) FROM halo_creator_dna WHERE created_at IS NULL"), "0");
   for (const [member, visibility] of [["members", "members"], ["private", "private"], ["premium", "public"], ["expired", "public"]]) {
     await saveDna(db, member, input(0, { visibility }));
   }
@@ -153,17 +163,27 @@ try {
   await assert.rejects(dnaProfile(db, "viewer", ids.private), error => error.status === 404);
   await assert.rejects(dnaProfile(db, "viewer", ids.hidden), error => error.status === 404);
   await psql(`INSERT INTO halo_release_campaigns VALUES
-    ('published','public','Public release','https://example.com/release','published',CURRENT_DATE),
-    ('draft','public','Draft release','https://example.com/draft','draft',CURRENT_DATE),
-    ('unsafe','public','Unsafe link','https://example.com/?token=secret','published',CURRENT_DATE);
+    ('published','public','Public release','https://example.com/release','published','public',CURRENT_DATE,'public-room'),
+    ('draft','public','Draft release','https://example.com/draft','draft','public',CURRENT_DATE,'public-room'),
+    ('unsafe','public','Unsafe link','https://example.com/?token=secret','published','public',CURRENT_DATE,'public-room'),
+    ('private-published','public','Private published release','https://example.com/private-release','published','private',CURRENT_DATE,'public-room'),
+    ('draft-page','expired','Published with draft page','https://example.com/draft-page','published','public',CURRENT_DATE,'draft-room'),
+    ('separate-draft-page','public','Campaign on another draft page','https://example.com/other-draft-page','published','public',CURRENT_DATE,'public-draft-room');
     INSERT INTO halo_creator_projects(id,owner_member_id,title) VALUES('open','public','Open');
     INSERT INTO halo_creator_projects(id,owner_member_id,title,status) VALUES('closed','public','Closed','closed');
     INSERT INTO halo_creator_projects(id,owner_member_id,title) VALUES('viewer-open','viewer','Viewer open');
     INSERT INTO halo_creator_projects(id,owner_member_id,title,status) VALUES('viewer-closed','viewer','Viewer closed','closed');`);
   const visitor = await dnaProfile(db, "viewer", ids.public);
   assert.equal(visitor.releases.length, 1);
+  assert.equal(visitor.releases[0].id, "published", "Owning one published profile room cannot expose a campaign attached to another draft room");
   assert.deepEqual(visitor.projects, [{ id: "viewer-open", title: "Viewer open" }]);
   assert.deepEqual((await dnaProfile(db, null, ids.public)).projects, [], "Anonymous visitors have no invitation choices");
+  assert.deepEqual((await dnaProfile(db, "viewer", ids.expired)).releases, [], "Published release on a draft artist page remains hidden");
+  assert.equal((await dnaProfile(db, "viewer", ids.expired)).profile.artistSlug, null);
+  assert.equal((await search()).creators.find(creator => creator.displayName === "Creator expired").artistSlug, null);
+  assert.equal((await dnaProfile(db, "viewer", ids.public)).profile.artistSlug, "public-room");
+  await psql("UPDATE halo_artist_pages SET owner_member_id='viewer',status='published' WHERE slug='draft-room';");
+  assert.deepEqual((await dnaProfile(db, "viewer", ids.expired)).releases, [], "Linked page must belong to the release owner");
   assert.ok(!JSON.stringify(visitor).includes("PRIVATE WORKFLOW"));
   assert.deepEqual((await dnaProfile(db, "public", ids.public)).projects, [{ id: "open", title: "Open" }]);
   await psql("INSERT INTO halo_signal_blocks VALUES('public','viewer'),('viewer','premium');");
@@ -186,6 +206,29 @@ try {
   assert.equal((await request("viewer", { action: "apply", projectId: "open" })).status, 404);
   assert.equal((await request("viewer", { action: "invite", projectId: "open", publicProfileId: ids.members })).status, 403);
   assert.equal(await psql("SELECT member_id FROM halo_creator_participants WHERE project_id='open'"), "members");
+  await psql("INSERT INTO halo_creator_projects(id,owner_member_id,title) VALUES('legacy-guard','public','Legacy invite gate');");
+  const optOutRaceDb = {
+    sql: async (parts, ...params) => {
+      const rows = await db.sql(parts, ...params);
+      if (parts.join("").includes("SELECT member_id FROM halo_creator_profiles WHERE member_id")) {
+        await psql("UPDATE halo_creator_profiles SET discoverable=FALSE WHERE member_id='members';");
+      }
+      return rows;
+    }
+  };
+  const optOutRaceHandler = createCreatorNetworkHandler({
+    getDatabase: async () => optOutRaceDb, getUser: async () => ({ id: "public" }),
+    ensureMembership: async () => ({ member_id: "public" }), verifyRequestOrigin: () => true
+  });
+  const racedLegacyInvite = await optOutRaceHandler(new Request("https://halo.test/api/creator-network", {
+    method: "POST", headers: { origin: "https://halo.test", "content-type": "application/json" },
+    body: JSON.stringify({ action: "invite", projectId: "legacy-guard", memberId: "members" })
+  }));
+  assert.equal(racedLegacyInvite.status, 409);
+  assert.equal(await psql("SELECT count(*) FROM halo_creator_participants WHERE project_id='legacy-guard'"), "0",
+    "Legacy invite insertion rechecks opt-out after preflight");
+  await psql("UPDATE halo_creator_profiles SET discoverable=TRUE WHERE member_id='members';");
+  assert.equal((await request("public", { action: "invite", projectId: "legacy-guard", memberId: "members" })).status, 200);
   const workspace = await (await request("viewer")).json();
   assert.ok(!workspace.creators.some(row => ["public", "premium"].includes(row.member_id)), "Legacy member workspace also honors bilateral blocks");
   const firstHandlerPage = await (await request("viewer", null, "?view=dna_search&limit=1")).json();
@@ -203,6 +246,16 @@ try {
   const globalQuota = await Promise.allSettled([dnaQuota(db, null, "search"), dnaQuota(db, null, "search")]);
   assert.equal(globalQuota.filter(result => result.status === "fulfilled").length, 1);
   assert.equal(globalQuota.find(result => result.status === "rejected").reason.status, 429);
+  await psql("DELETE FROM halo_creator_dna_rate_limits;");
+  await psql("UPDATE halo_creator_dna_terms SET active=FALSE WHERE id='sonic:atmospheric';");
+  const withoutInactive = await search();
+  assert.ok(!withoutInactive.terms.some(term => term.id === "sonic:atmospheric"));
+  assert.ok(withoutInactive.creators.every(creator => !creator.dna.termIds.includes("sonic:atmospheric")));
+  assert.ok(!(await dnaOwner(db, "public")).dna.termIds.includes("sonic:atmospheric"));
+  assert.ok(!(await dnaProfile(db, "public", ids.public)).profile.dna.termIds.includes("sonic:atmospheric"));
+  await assert.rejects(search("&term=sonic:atmospheric"), error => error.status === 400);
+  await assert.rejects(saveDna(db, "public", input(3)), error => error.status === 400);
+  await assert.rejects(psql(`SELECT * FROM halo_save_creator_dna('public','test','','','public',3,ARRAY['sonic:atmospheric']);`));
   await psql("DELETE FROM halo_creator_profiles WHERE member_id='private';");
   assert.equal(await psql("SELECT count(*) FROM halo_creator_dna WHERE member_id='private'"), "0");
   assert.equal(await psql("SELECT count(*) FROM halo_creator_dna_tags WHERE member_id='private'"), "0");

@@ -247,7 +247,14 @@ export function createCreatorNetworkHandler({ getDatabase, getUser, ensureMember
         let filters;
         try {
           const db = await getDatabase();
-          const membership = user?.id ? await ensureMembership(db, user) : null;
+          let membership = null;
+          if (user?.id) {
+            try { membership = await ensureMembership(db, user); }
+            catch { throw new DnaError("Valid Creator Pass membership required", 403); }
+          }
+          if (user?.id && (typeof membership?.member_id !== "string" || !membership.member_id.trim())) {
+            throw new DnaError("Valid Creator Pass membership required", 403);
+          }
           const memberId = membership?.member_id || null;
           if (view === "dna") return json(await dnaOwner(db, memberId));
           if (view === "dna_profile") return json(await dnaProfile(db, memberId, id));
@@ -275,6 +282,9 @@ export function createCreatorNetworkHandler({ getDatabase, getUser, ensureMember
       if (!user?.id) return json({ message: "Sign in to open Creator Network" }, 401);
       const db = await getDatabase();
       const membership = await ensureMembership(db, user);
+      if (typeof membership?.member_id !== "string" || !membership.member_id.trim()) {
+        return json({ message: "Valid Creator Pass membership required" }, 403);
+      }
       const memberId = membership.member_id;
       if (request.method === "GET") {
         try {
@@ -304,7 +314,10 @@ export function createCreatorNetworkHandler({ getDatabase, getUser, ensureMember
           if (body.action === "respond" && !["accepted", "declined"].includes(input.status)) throw new Error("Choose accept or decline");
         }
       } catch (error) {
-        return json({ message: error instanceof SyntaxError ? "Request body must be valid JSON" : error.message }, error instanceof DnaError ? error.status : 400);
+        return json({
+          message: error instanceof SyntaxError ? "Request body must be valid JSON" : error.message,
+          ...(error.fieldErrors ? { fieldErrors: error.fieldErrors } : {})
+        }, error instanceof DnaError ? error.status : 400);
       }
       if (body.action === "save_dna") {
         return json(await saveDna(db, memberId, input));
@@ -354,9 +367,13 @@ export function createCreatorNetworkHandler({ getDatabase, getUser, ensureMember
             INSERT INTO halo_creator_participants (project_id, member_id, initiated_by, kind, message)
             SELECT id, ${targetId}, ${memberId}, ${body.action === "apply" ? "application" : "invite"}, ${input.message}
             FROM halo_creator_projects WHERE id = ${project.id} AND status = 'open'
+              AND (${body.action !== "invite"} OR owner_member_id = ${memberId})
               AND NOT EXISTS (SELECT 1 FROM halo_signal_blocks b
                 WHERE (b.member_id = owner_member_id AND b.target_member_id = ${targetId})
                   OR (b.member_id = ${targetId} AND b.target_member_id = owner_member_id))
+              AND (${body.action !== "invite"} OR EXISTS (
+                SELECT 1 FROM halo_creator_profiles c WHERE c.member_id = ${targetId} AND c.discoverable = TRUE
+              ))
               AND (${input.publicProfileId === null} OR EXISTS (
                 SELECT 1 FROM halo_creator_profiles c JOIN halo_creator_dna d USING(member_id)
                 WHERE c.member_id = ${targetId} AND c.discoverable = TRUE AND d.visibility IN ('members', 'public')
@@ -380,7 +397,7 @@ export function createCreatorNetworkHandler({ getDatabase, getUser, ensureMember
       }
       return json({ message: "Creator Network updated" });
     } catch (error) {
-      if (error instanceof DnaError) return json({ message: error.message }, error.status);
+      if (error instanceof DnaError) return json({ message: error.message, ...(error.fieldErrors ? { fieldErrors: error.fieldErrors } : {}) }, error.status);
       console.error("HALO Creator Network failed", error instanceof Error ? error.message : "unknown error");
       return json({ message: "Creator Network is unavailable. Please try again." }, 500);
     }

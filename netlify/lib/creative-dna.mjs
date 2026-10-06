@@ -4,29 +4,32 @@ import { curatedCreators } from "../../lib/creator-directory.js";
 import { publicLink } from "./signal-feed.mjs";
 
 export class DnaError extends Error {
-  constructor(message, status = 400) { super(message); this.status = status; }
+  constructor(message, status = 400, fieldErrors = null) {
+    super(message); this.status = status; this.fieldErrors = fieldErrors;
+  }
 }
+const invalidField = (field, message) => new DnaError(message, 400, field ? { [field]: message } : null);
 const canonical = value => value.normalize("NFKC").trim().toLowerCase();
 const termsByInput = new Map(DNA_TERMS.flatMap(term =>
   [term.key, term.label, ...term.aliases].map(value => [`${term.dimension}:${canonical(value)}`, term.id])
     .concat([[term.id, term.id]])
 ));
 
-function text(value, max) {
+function text(value, max, field = null) {
   if (value == null) return "";
-  if (typeof value !== "string") throw new DnaError("Invalid text field");
+  if (typeof value !== "string") throw invalidField(field, "Invalid text field");
   const normalized = value.normalize("NFC").trim();
   if ([...normalized].length > max || /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/u.test(normalized)) {
-    throw new DnaError(`Use up to ${max} characters without control characters`);
+    throw invalidField(field, `Use up to ${max} characters without control characters`);
   }
   return normalized;
 }
 export function canonicalTermIds(values, max = DNA_LIMITS.totalTerms) {
-  if (!Array.isArray(values) || values.length > max) throw new DnaError(`Use up to ${max} terms`);
+  if (!Array.isArray(values) || values.length > max) throw invalidField("termIds", `Use up to ${max} terms`);
   const ids = values.map(value => {
-    if (typeof value !== "string" || value.length > 100) throw new DnaError("Invalid DNA term");
+    if (typeof value !== "string" || value.length > 100) throw invalidField("termIds", "Invalid DNA term");
     const id = termsByInput.get(canonical(value));
-    if (!id) throw new DnaError("Unknown DNA term");
+    if (!id) throw invalidField("termIds", "Unknown DNA term");
     return id;
   });
   return [...new Set(ids)].sort();
@@ -34,21 +37,21 @@ export function canonicalTermIds(values, max = DNA_LIMITS.totalTerms) {
 export function dnaInput(body) {
   const fields = ["action", "creativeStatement", "creativeGoals", "workflowNotes", "visibility", "expectedRevision", "termIds"];
   if (!body || Object.keys(body).some(key => !fields.includes(key))) throw new DnaError("Unknown Creative DNA field");
-  if (!["private", "members", "public"].includes(body.visibility)) throw new DnaError("Choose a DNA visibility");
+  if (!["private", "members", "public"].includes(body.visibility)) throw invalidField("visibility", "Choose a DNA visibility");
   if (!Number.isSafeInteger(body.expectedRevision) || body.expectedRevision < 0 || body.expectedRevision >= 2147483647) {
-    throw new DnaError("Invalid DNA revision");
+    throw invalidField("expectedRevision", "Invalid DNA revision");
   }
   const termIds = canonicalTermIds(body.termIds);
   const counts = {};
   for (const id of termIds) {
     const dimension = id.split(":")[0];
     counts[dimension] = (counts[dimension] || 0) + 1;
-    if (counts[dimension] > DNA_LIMITS.perDimension) throw new DnaError("Use up to 8 terms per dimension");
+    if (counts[dimension] > DNA_LIMITS.perDimension) throw invalidField("termIds", "Use up to 8 terms per dimension");
   }
   return {
-    creativeStatement: text(body.creativeStatement, DNA_LIMITS.creativeStatement),
-    creativeGoals: text(body.creativeGoals, DNA_LIMITS.creativeGoals),
-    workflowNotes: text(body.workflowNotes, DNA_LIMITS.workflowNotes),
+    creativeStatement: text(body.creativeStatement, DNA_LIMITS.creativeStatement, "creativeStatement"),
+    creativeGoals: text(body.creativeGoals, DNA_LIMITS.creativeGoals, "creativeGoals"),
+    workflowNotes: text(body.workflowNotes, DNA_LIMITS.workflowNotes, "workflowNotes"),
     visibility: body.visibility, expectedRevision: body.expectedRevision, termIds
   };
 }
@@ -133,12 +136,23 @@ export function creatorDto(row, memberId = null, reasons = []) {
     dna: dnaDto(row), matchReasons: reasons, canInvite: Boolean(memberId && row.member_id !== memberId)
   };
 }
+export async function activeDnaTerms(db) {
+  const rows = await db.sql`SELECT id, dimension, key, label, aliases FROM halo_creator_dna_terms
+    WHERE active = TRUE ORDER BY dimension, key`;
+  return rows.map(({ id, dimension, key, label, aliases }) => ({ id, dimension, key, label, aliases }));
+}
+function requireActiveTerms(ids, terms) {
+  const active = new Set(terms.map(term => term.id));
+  if (ids.some(id => !active.has(id))) throw invalidField("termIds", "A selected DNA term is no longer available. Refresh the vocabulary.");
+}
 export async function dnaOwner(db, memberId) {
-  const [rows, projects] = await Promise.all([
+  const [rows, projects, terms] = await Promise.all([
     db.sql`SELECT c.*, d.creative_statement, d.creative_goals, d.workflow_notes, d.visibility, d.revision,
-      ARRAY(SELECT term_id FROM halo_creator_dna_tags WHERE member_id = c.member_id ORDER BY term_id) AS term_ids
+      ARRAY(SELECT tag.term_id FROM halo_creator_dna_tags tag JOIN halo_creator_dna_terms term ON term.id = tag.term_id
+        WHERE tag.member_id = c.member_id AND term.active = TRUE ORDER BY tag.term_id) AS term_ids
       FROM halo_creator_profiles c LEFT JOIN halo_creator_dna d USING(member_id) WHERE c.member_id = ${memberId}`,
-    db.sql`SELECT id, title FROM halo_creator_projects WHERE owner_member_id = ${memberId} AND status = 'open' ORDER BY id`
+    db.sql`SELECT id, title FROM halo_creator_projects WHERE owner_member_id = ${memberId} AND status = 'open' ORDER BY id`,
+    activeDnaTerms(db)
   ]);
   const row = rows[0];
   const profile = row ? {
@@ -146,17 +160,19 @@ export async function dnaOwner(db, memberId) {
     bio: row.bio, roles: row.roles, genres: row.genres, languages: row.languages,
     bpmMin: row.bpm_min, bpmMax: row.bpm_max, artistSlug: row.artist_slug
   } : null;
-  return { profile, dna: row ? dnaDto(row, true) : defaultCreativeDna(), terms: DNA_TERMS,
+  return { profile, dna: row ? dnaDto(row, true) : defaultCreativeDna(), terms,
     projects: profile ? projects.map(({ id, title }) => ({ id, title })) : [] };
 }
 export async function saveDna(db, memberId, input) {
   await dnaQuota(db, memberId, "write");
   const profiles = await db.sql`SELECT public_profile_id FROM halo_creator_profiles WHERE member_id = ${memberId}`;
   if (!profiles.length) throw new DnaError("Save your Creator Pass profile first", 409);
+  requireActiveTerms(input.termIds, await activeDnaTerms(db));
   const rows = await db.sql`SELECT * FROM halo_save_creator_dna(
     ${memberId}, ${input.creativeStatement}, ${input.creativeGoals}, ${input.workflowNotes},
     ${input.visibility}, ${input.expectedRevision}, ${input.termIds}::text[])`;
-  if (!rows.length) throw new DnaError("Creative DNA changed. Reload before saving again.", 409);
+  if (!rows.length) throw new DnaError("Creative DNA changed. Reload before saving again.", 409,
+    { expectedRevision: "Reload the latest Creative DNA before saving." });
   return { dna: dnaDto({ ...rows[0], term_ids: input.termIds }, true), message: "Creative DNA saved" };
 }
 
@@ -167,12 +183,13 @@ export async function bilateralBlock(db, memberId, otherId) {
   return rows.length > 0;
 }
 export async function resolveDnaInvite(db, memberId, id) {
+  if (!memberId) throw new DnaError("Sign in to invite creators", 401);
   const validatedId = publicProfileId(id);
   await dnaQuota(db, memberId, "write");
   const rows = await db.sql`SELECT c.member_id FROM halo_creator_profiles c
     JOIN halo_creator_dna d USING(member_id)
     WHERE c.public_profile_id = ${validatedId}::uuid AND c.discoverable = TRUE
-      AND d.visibility IN ('members', 'public')
+      AND (d.visibility = 'public' OR (${memberId}::text IS NOT NULL AND d.visibility = 'members'))
       AND NOT EXISTS (SELECT 1 FROM halo_signal_blocks b
         WHERE (b.member_id = ${memberId} AND b.target_member_id = c.member_id)
           OR (b.member_id = c.member_id AND b.target_member_id = ${memberId}))`;
@@ -227,21 +244,26 @@ export function publishedReleaseLink(value) {
 export async function dnaSearch(db, memberId, input) {
   await dnaQuota(db, memberId, "search");
   const { q, role, genre, language, bpm, termIds, limit, cursor } = input;
+  const terms = await activeDnaTerms(db);
+  requireActiveTerms(termIds, terms);
   const rows = await db.sql`
     WITH eligible AS MATERIALIZED (
-      SELECT c.member_id, c.public_profile_id, c.display_name, c.bio, c.artist_slug,
+      SELECT c.member_id, c.public_profile_id, c.display_name, c.bio,
+        CASE WHEN EXISTS (SELECT 1 FROM halo_artist_pages page WHERE page.slug = c.artist_slug
+          AND page.owner_member_id = c.member_id AND page.status = 'published') THEN c.artist_slug ELSE NULL END AS artist_slug,
         c.roles, c.genres, c.languages, c.bpm_min, c.bpm_max, d.creative_statement, d.creative_goals,
-        ARRAY(SELECT term_id FROM halo_creator_dna_tags WHERE member_id = c.member_id ORDER BY term_id) AS term_ids,
+        ARRAY(SELECT tag.term_id FROM halo_creator_dna_tags tag JOIN halo_creator_dna_terms term ON term.id = tag.term_id
+          WHERE tag.member_id = c.member_id AND term.active = TRUE ORDER BY tag.term_id) AS term_ids,
         COALESCE(pass.subscription_tier = 'PREMIUM' AND (
           (pass.subscription_status = 'active' AND pass.subscription_expires_at > NOW()) OR
           (pass.subscription_status = 'trialing' AND pass.trial_ends_at > NOW()
             AND (pass.subscription_expires_at IS NULL OR pass.subscription_expires_at > NOW()))
         ), FALSE) AS premium_verified,
         CASE WHEN ${q} = '' THEN 0 ELSE
-          floor(100000 * (
+          LEAST(1000000, floor(100000 * (
             ts_rank(to_tsvector('simple', c.display_name || ' ' || c.bio), plainto_tsquery('simple', ${q})) +
             ts_rank(to_tsvector('simple', d.creative_statement || ' ' || d.creative_goals), plainto_tsquery('simple', ${q}))
-          ))::int END AS score
+          )))::int END AS score
       FROM halo_creator_profiles c JOIN halo_creator_dna d USING(member_id)
       LEFT JOIN halo_creator_passes pass USING(member_id)
       WHERE c.discoverable = TRUE AND (d.visibility = 'public' OR (${memberId}::text IS NOT NULL AND d.visibility = 'members'))
@@ -255,7 +277,8 @@ export async function dnaSearch(db, memberId, input) {
         AND (${q} = '' OR to_tsvector('simple', c.display_name || ' ' || c.bio) @@ plainto_tsquery('simple', ${q})
           OR to_tsvector('simple', d.creative_statement || ' ' || d.creative_goals) @@ plainto_tsquery('simple', ${q}))
         AND NOT EXISTS (SELECT 1 FROM unnest(${termIds}::text[]) selected(id)
-          WHERE NOT EXISTS (SELECT 1 FROM halo_creator_dna_tags t WHERE t.member_id = c.member_id AND t.term_id = selected.id))
+          WHERE NOT EXISTS (SELECT 1 FROM halo_creator_dna_tags t JOIN halo_creator_dna_terms term ON term.id = t.term_id
+            WHERE t.member_id = c.member_id AND t.term_id = selected.id AND term.active = TRUE))
     ), page AS (
       SELECT * FROM eligible
       WHERE ${cursor === null} OR score < ${cursor?.score ?? 0}
@@ -270,12 +293,12 @@ export async function dnaSearch(db, memberId, input) {
   const items = page.slice(0, limit);
   return {
     creators: items.map(row => creatorDto(row, memberId, [
-      ...termIds.filter(id => row.term_ids?.includes(id)).map(id => `Shared DNA: ${DNA_TERMS.find(term => term.id === id).label}`),
+      ...termIds.filter(id => row.term_ids?.includes(id)).map(id => `Shared DNA: ${terms.find(term => term.id === id).label}`),
       ...(q ? ["Matches your creative search"] : []),
       ...(role ? [`Role: ${role}`] : []), ...(genre ? [`Genre: ${genre}`] : []),
       ...(language ? [`Language: ${language}`] : []), ...(bpm ? [`BPM: ${bpm}`] : [])
     ])),
-    terms: DNA_TERMS, total: Number(rows[0]?.total || 0), curated: [],
+    terms, total: Number(rows[0]?.total || 0), curated: [],
     nextCursor: page.length > limit ? cursorFor(items.at(-1), input.binding) : null
   };
 }
@@ -283,9 +306,12 @@ export async function dnaSearch(db, memberId, input) {
 export async function dnaProfile(db, memberId, id) {
   await dnaQuota(db, memberId, "search");
   const rows = await db.sql`SELECT c.member_id, c.public_profile_id, c.display_name, c.bio,
-    c.artist_slug, c.roles, c.genres, c.languages, c.bpm_min, c.bpm_max,
+    CASE WHEN EXISTS (SELECT 1 FROM halo_artist_pages page WHERE page.slug = c.artist_slug
+      AND page.owner_member_id = c.member_id AND page.status = 'published') THEN c.artist_slug ELSE NULL END AS artist_slug,
+    c.roles, c.genres, c.languages, c.bpm_min, c.bpm_max,
     d.creative_statement, d.creative_goals,
-    ARRAY(SELECT term_id FROM halo_creator_dna_tags WHERE member_id = c.member_id ORDER BY term_id) AS term_ids,
+    ARRAY(SELECT tag.term_id FROM halo_creator_dna_tags tag JOIN halo_creator_dna_terms term ON term.id = tag.term_id
+      WHERE tag.member_id = c.member_id AND term.active = TRUE ORDER BY tag.term_id) AS term_ids,
     COALESCE(pass.subscription_tier = 'PREMIUM' AND (
       (pass.subscription_status = 'active' AND pass.subscription_expires_at > NOW()) OR
       (pass.subscription_status = 'trialing' AND pass.trial_ends_at > NOW()
@@ -302,8 +328,11 @@ export async function dnaProfile(db, memberId, id) {
   const row = rows[0];
   if (!row) throw new DnaError("Creator not found", 404);
   const [releases, projects] = await Promise.all([
-    db.sql`SELECT id, title, official_url FROM halo_release_campaigns
-      WHERE owner_member_id = ${row.member_id} AND status = 'published' ORDER BY release_date DESC, id LIMIT 24`,
+    db.sql`SELECT release.id, release.title, release.official_url FROM halo_release_campaigns release
+      WHERE release.owner_member_id = ${row.member_id} AND release.status = 'published' AND release.visibility = 'public'
+        AND EXISTS (SELECT 1 FROM halo_artist_pages page
+          WHERE page.slug = release.artist_slug AND page.owner_member_id = release.owner_member_id AND page.status = 'published')
+      ORDER BY release.release_date DESC, release.id LIMIT 24`,
     memberId
       ? db.sql`SELECT id, title FROM halo_creator_projects WHERE owner_member_id = ${memberId} AND status = 'open' ORDER BY id`
       : Promise.resolve([])

@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import { DNA_DIMENSIONS, DNA_LIMITS, DNA_TERMS } from "../lib/creative-dna.js";
 import {
   canonicalTermIds, creatorDto, cursorFor, dnaDto, dnaInput,
-  publishedReleaseLink, searchInput
+  publishedReleaseLink, resolveDnaInvite, searchInput
 } from "../netlify/lib/creative-dna.mjs";
 import { createCreatorNetworkHandler } from "../netlify/lib/creator-network.mjs";
 
@@ -51,6 +51,8 @@ assert.equal(creatorDto(row).canInvite, false);
 assert.equal(creatorDto(row, row.member_id).canInvite, false);
 assert.equal(creatorDto(row, "viewer").canInvite, true);
 assert.equal(creatorDto({ ...row, premium_verified: "true" }).premiumVerified, false);
+await assert.rejects(resolveDnaInvite({ sql: () => { throw new Error("No anonymous database calls"); } }, null, publicId),
+  error => error.status === 401);
 assert.equal(publishedReleaseLink("https://example.com/release"), "https://example.com/release");
 assert.equal(publishedReleaseLink("/music/?song=published-song"), "/music/?song=published-song");
 for (const url of ["javascript:alert(1)", "http://example.com", "https://example.com/private/master",
@@ -58,15 +60,16 @@ for (const url of ["javascript:alert(1)", "http://example.com", "https://example
   assert.equal(publishedReleaseLink(url), "");
 }
 
-function fixture({ user = null, sql = () => [], origin = () => true } = {}) {
+function fixture({ user = null, sql = () => [], origin = () => true, activeTerms = DNA_TERMS, membershipFor = null } = {}) {
   const calls = [], userRequests = [];
   const handler = createCreatorNetworkHandler({
     getUser: async request => { userRequests.push(request); return user; },
-    ensureMembership: async () => ({ member_id: user.id }),
+    ensureMembership: async () => membershipFor ? membershipFor() : ({ member_id: user.id }),
     verifyRequestOrigin: origin,
     getDatabase: async () => ({ sql: async (parts, ...params) => {
       const query = parts.join("?").replace(/\s+/g, " ").trim();
       calls.push({ query, params });
+      if (query.startsWith("SELECT id, dimension, key, label, aliases")) return activeTerms;
       if (query.includes("INSERT INTO halo_creator_dna_rate_limits")) return sql(query, params) ?? [{ attempts: 1 }];
       return sql(query, params) ?? [];
     } })
@@ -81,6 +84,13 @@ function fixture({ user = null, sql = () => [], origin = () => true } = {}) {
 }
 const defaultSql = query => query.includes("INSERT INTO halo_creator_dna_rate_limits") ? [{ attempts: 1 }] : [];
 const absent = fixture({ user: { id: "owner" }, sql: defaultSql });
+for (const membershipFor of [() => null, () => ({}), () => ({ member_id: "" }), () => { throw new Error("Membership lookup failed"); }]) {
+  const missingMembership = fixture({ user: { id: "owner" }, membershipFor });
+  assert.equal((await missingMembership.request("?view=dna")).status, 403);
+  assert.equal((await missingMembership.request("?view=dna_search")).status, 403);
+  assert.equal((await missingMembership.request(`?view=dna_profile&profile=${publicId}`)).status, 403);
+  assert.equal(missingMembership.calls.length, 0);
+}
 const empty = await (await absent.request("?view=dna")).json();
 assert.equal(empty.profile, null);
 assert.equal(empty.dna.revision, 0);
@@ -89,6 +99,15 @@ assert.deepEqual(empty.projects, []);
 assert.equal((await absent.request("", input)).status, 409);
 assert.equal((await fixture().request("?view=dna")).status, 401);
 assert.ok(absent.userRequests.every(request => request instanceof Request), "Use request-aware authentication");
+for (const [field, value] of [
+  ["creativeStatement", "x".repeat(601)], ["creativeGoals", "x".repeat(1001)],
+  ["workflowNotes", "x".repeat(1001)], ["visibility", "invalid"], ["termIds", ["invented:term"]], ["expectedRevision", -1]
+]) {
+  const response = await absent.request("", { ...input, [field]: value });
+  assert.equal(response.status, 400);
+  const result = await response.json();
+  assert.equal(typeof result.fieldErrors?.[field], "string", `Field-specific error for ${field}`);
+}
 
 let revision = 0, savedTerms = [];
 const owner = fixture({ user: { id: "owner" }, sql: (query, params) => {
@@ -118,6 +137,12 @@ for (const headers of [
 assert.equal((await owner.request("", `{"action":"save_dna","creativeStatement":"${"🎵".repeat(5000)}"}`)).status, 413);
 assert.equal((await owner.request("", input, { "content-length": "18001" })).status, 413);
 assert.equal((await owner.request("", "{")).status, 400);
+const inactive = fixture({ user: { id: "owner" }, activeTerms: [], sql: query =>
+  query.includes("halo_creator_dna_rate_limits") ? [{ attempts: 1 }]
+    : query.startsWith("SELECT public_profile_id") ? [{ public_profile_id: publicId }] : [] });
+assert.equal((await inactive.request("", input)).status, 400);
+assert.equal((await inactive.request("?view=dna_search&term=sonic:atmospheric")).status, 400);
+assert.ok(!inactive.calls.some(call => call.query.includes("halo_save_creator_dna")));
 assert.equal((await owner.request("", { action: "save_profile", displayName: "Legacy", ignored: "x".repeat(20000) })).status, 200,
   "The smaller DNA body limit does not change existing profile flows");
 const originDenied = fixture({ user: { id: "owner" }, origin: () => false });
@@ -171,6 +196,7 @@ assert.doesNotMatch(searchQuery, /workflow_notes/);
 assert.match(searchQuery, /NOT EXISTS.*halo_signal_blocks/);
 assert.match(searchQuery, /c.roles @> ARRAY/);
 assert.match(searchQuery, /ORDER BY score DESC, premium_verified DESC, public_profile_id ASC/);
+assert.match(searchQuery, /LEAST\(1000000, floor\(100000/);
 assert.match(searchQuery, /subscription_expires_at > NOW\(\)/);
 assert.match(searchQuery, /trial_ends_at > NOW\(\)/);
 assert.match(searchQuery, /score <.*premium_verified <.*public_profile_id >/);
@@ -198,6 +224,10 @@ const visitor = fixture({ user: { id: "viewer" }, sql: query => {
 } });
 const profileResult = await (await visitor.request(`?view=dna_profile&profile=${publicId}`)).json();
 assert.equal(profileResult.releases.length, 2);
+const visitorReleases = visitor.calls.find(call => call.query.includes("FROM halo_release_campaigns"));
+assert.match(visitorReleases.query, /release.visibility = 'public'/);
+assert.match(visitorReleases.query, /page.slug = release.artist_slug/);
+assert.match(visitorReleases.query, /page.owner_member_id = release.owner_member_id AND page.status = 'published'/);
 assert.deepEqual(profileResult.projects, [{ id: "viewer-open", title: "Viewer's open project" }]);
 const visitorProjects = visitor.calls.find(call => call.query.includes("FROM halo_creator_projects"));
 assert.deepEqual(visitorProjects.params, ["viewer"], "Invitation choices belong to the requesting member, never the visited creator");
@@ -225,11 +255,16 @@ assert.equal((await opaqueInvite.request("", { action: "invite", projectId: "pro
 const inviteWrite = opaqueInvite.calls.find(call => call.query.startsWith("INSERT INTO halo_creator_participants"));
 assert.ok(inviteWrite.params.includes("resolved-target"));
 assert.match(inviteWrite.query, /NOT EXISTS.*halo_signal_blocks/);
+assert.match(inviteWrite.query, /AND \(\? OR EXISTS \( SELECT 1 FROM halo_creator_profiles c WHERE c.member_id = \? AND c.discoverable = TRUE \)\)/);
+assert.match(inviteWrite.query, /AND \(\? OR owner_member_id = \?\)/);
 assert.match(inviteWrite.query, /d.visibility IN \('members', 'public'\)/);
 assert.equal((await opaqueInvite.request("", { action: "invite", projectId: "project", publicProfileId: publicId, memberId: "target" })).status, 400);
 const denyOpaque = fixture({ user: { id: "owner" }, sql: query =>
   query.includes("halo_creator_dna_rate_limits") ? [{ attempts: 1 }]
     : query.startsWith("SELECT * FROM halo_creator_projects") ? [project] : [] });
 assert.equal((await denyOpaque.request("", { action: "invite", projectId: "project", publicProfileId: publicId })).status, 404);
+assert.equal((await opaqueInvite.request("", { action: "invite", projectId: "project", memberId: "resolved-target" })).status, 200);
+const legacyInviteWrite = opaqueInvite.calls.filter(call => call.query.startsWith("INSERT INTO halo_creator_participants")).at(-1);
+assert.match(legacyInviteWrite.query, /SELECT 1 FROM halo_creator_profiles c WHERE c.member_id = \? AND c.discoverable = TRUE/);
 
 console.log("Creative DNA contracts passed: vocabulary, Unicode, redaction, validation, quotas, bounded JSON, origin, revisions, pagination, links and bilateral blocks");

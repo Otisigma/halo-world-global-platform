@@ -9,6 +9,31 @@
   --creator-muted: #a39a89;
 }
 
+.dna-dialog { width: min(48rem, calc(100% - 2rem)); max-height: calc(100dvh - 2rem); padding: clamp(1rem, 4vw, 2rem); border: 1px solid var(--creator-gold); background: var(--creator-panel); color: var(--creator-paper); overflow: auto; }
+.dna-dialog::backdrop { background: rgba(0, 0, 0, .8); }
+.dna-dialog h2 { margin-top: 0; font: 500 2.5rem/1.1 "Cormorant Garamond", serif; }
+.dna-dialog form { display: grid; gap: 1rem; }
+.dna-dialog fieldset, .dna-facets fieldset { min-width: 0; margin: .6rem 0; padding: .8rem; border: 1px solid var(--creator-line); }
+.dna-dialog legend, .dna-facets legend { color: var(--creator-gold); }
+.dna-chips { display: flex; flex-wrap: wrap; gap: .45rem; margin-block: .5rem; }
+.dna-chip, .dna-chips button { max-width: 100%; overflow-wrap: anywhere; padding: .35rem .6rem; border: 1px solid var(--creator-line); border-radius: 1rem; background: var(--creator-panel-raised); color: var(--creator-paper); font-size: .8rem; }
+.dna-dialog a { display: block; margin-block: .65rem; }
+.dna-dialog button, #creativeDNA button, .dna-facets button { cursor: pointer; }
+.dna-dialog button:disabled, .dna-dialog select:disabled { opacity: .55; cursor: not-allowed; }
+.dna-error { color: #ffb8a8; }
+.dna-discovery h1 { font: 700 clamp(2.8rem, 7vw, 6rem)/1 "Barlow Condensed", sans-serif; margin-block: .8rem; }
+.dna-search-fields { display: grid; grid-template-columns: 2fr repeat(4, 1fr); gap: .7rem; margin-block: 1.5rem; }
+.dna-facets { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .7rem; }
+.dna-discovery summary { cursor: pointer; color: var(--creator-gold); }
+#dnaResults[aria-busy="true"] { opacity: .65; }
+#dnaMore { margin-top: 1rem; }
+@media (max-width: 760px) {
+  .dna-search-fields, .dna-facets { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .dna-search-fields > label:first-child { grid-column: 1 / -1; }
+}
+@media (max-width: 420px) { .dna-facets, .dna-search-fields { grid-template-columns: 1fr; } }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } .dna-dialog, .dna-chip, .dna-discovery * { animation: none; transition: none; } }
+
 * { box-sizing: border-box; }
 html { scroll-behavior: smooth; }
 body { margin: 0; background: radial-gradient(ellipse at 80% -15%, #292014 0, transparent 42rem), var(--creator-ink); color: var(--creator-paper); font: 1rem/1.6 Inter, system-ui, sans-serif; }

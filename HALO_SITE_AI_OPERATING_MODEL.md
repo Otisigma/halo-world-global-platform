@@ -31,6 +31,31 @@ Small teams can combine roles, but the responsibilities should still be covered.
 - Health checks work without an AI provider. Optionally configure `GEMINI_API_KEY` in the server environment for Gemini 2.5 Flash council task prioritization. Keys never enter the browser; quota exhaustion, unavailable quota storage, or provider failure falls back to the local advisory checklist. Private titles, files, and participant names are not sent to Gemini.
 - Validate this boundary with `npm run test:network`. Keep `npm run build`'s shared-catalog release guard unchanged.
 
+### Creative DNA
+
+- Creative DNA belongs to Creator Network. Artist names, bios, roles, genres, languages, tempo ranges, artist-room ownership and profile discovery remain in `halo_creator_profiles`; DNA does not copy or synchronize Signal or community profiles.
+- Apply `20261006060000_create_creative_dna.sql` after the Creator Network and Signal migrations. The additive, retry-safe SQL migration owns DNA storage and vocabulary; these tables are not managed by the catalog-only Drizzle schema. Existing Creator Passes receive opaque public profile IDs, but no DNA is inferred or published.
+- DNA is self-declared creative metadata, not a personality assessment, talent ranking, identity verification, rights agreement or release permission. Artist-owned text and selected vocabulary cover sound, moods in the work, influences, skills, desired collaborators and collaboration styles.
+- Visibility defaults to `private`. Non-owner access also requires the Creator Pass's discovery opt-in: `members` permits authenticated HALO members, and `public` permits guests. Workflow notes are always owner-only. Hidden text and tags must not influence visitor search, counts or matching explanations.
+- `/creator-network/discover/` provides server-side search and real profile dialogs. Curated directory entries remain separately labelled and cannot receive invitations. The existing illustrative discovery module and browser-local demo follows are unrelated to real profiles.
+- New `/api/creator-network` views use camelCase, explicit projections rather than raw database rows:
+
+  | Operation | Contract |
+  | --- | --- |
+  | `GET ?view=dna` | Owner profile, full DNA, current revision, vocabulary and owned open projects. A missing Creator Pass must be saved before DNA can be created. |
+  | `GET ?view=dna_search` | Text `q`, canonical `role`, `genre`, `language`, `bpm`, repeated vocabulary `term` IDs, bounded `limit` and opaque `cursor`; returns audience-safe creators, matching explanations, total, next cursor and separate curated fallback entries. |
+  | `GET ?view=dna_profile&profile=PUBLIC_ID` | Audience-safe profile detail, published public releases and the viewer's owned open projects; unavailable or private targets return not found. |
+  | `POST action=save_dna` | `creativeStatement` (600 characters), `creativeGoals` and owner-only `workflowNotes` (1,000 each), `visibility`, `termIds` and `expectedRevision`. Save atomically replaces tags and increments revision; stale updates return conflict without overwriting edits. |
+  | `POST action=invite` | An owned `projectId` and target `publicProfileId`; the server resolves membership and checks current visibility, discovery opt-in and bilateral blocks. Existing membership-based collaboration actions remain supported. |
+
+- Vocabulary tags are controlled IDs with aliases, limited to eight per dimension. Existing role, genre and language fields are not silently rewritten. Profile data is never authoritative in browser storage; drafts remain in memory until an explicit save.
+- Suggestions use only local vocabulary matching against intentionally entered text. They require individual acceptance and do not save or publish. No external AI provider, operational Journal history, private asset analysis or automated Signal posting is introduced. An external provider requires a separate reviewed opt-in design before activation.
+- Paid membership badges describe a current Creator Pass only, not identity, rights or artistic quality. Creative matching explanations describe supplied filters, not a compatibility percentage. Existing Premium project-brief entitlements are unchanged.
+- DNA requests use server-side authorization, bounded JSON, origin checks, durable quota buckets and no-store responses. Public DTOs and cursors must never contain membership/authentication IDs, private notes, billing data or private file references.
+- Quotas are atomic one-minute buckets: 20 DNA writes per member, 60 searches/profile reads per member and 240 anonymous searches/profile reads across the site. Anonymous capacity is shared deliberately; no IP address is retained. Monitor legitimate demand before adjusting limits, and preserve fail-closed behavior when quota storage is unavailable.
+- Deployment target is Netlify Functions plus PostgreSQL. `server.js` serves static files and does not host these APIs; the compatibility shims are not a drop-in DNA API runtime. Do not enable the discovery page in a self-hosted deployment without providing compatible authenticated API hosting.
+- Validate with `npm run test:creative-dna`, `npm run test:creator-network`, and `npm test`. Run the disposable-schema PostgreSQL integration coverage using `npm run test:creative-dna:database` with `CREATIVE_DNA_TEST_DATABASE_URL` set to a dedicated test database; do not use a production database.
+
 ## Team charters
 
 ### Site Leadership

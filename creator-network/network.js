@@ -1,5 +1,6 @@
 import { curatedCreators } from "/lib/creator-directory.js";
 import { mountMusicHomeCustomizer } from "/music-home/customizer.js";
+import { mountCreativeDNAEditor } from "/creator-network/creative-dna.js";
 
 (() => {
   const byId = id => document.getElementById(id);
@@ -9,6 +10,8 @@ import { mountMusicHomeCustomizer } from "/music-home/customizer.js";
   const tagFields = ["roles", "genres", "languages", "dawSetup"];
   const guardianAccess = () => state?.creatorPass?.entitlements?.aiGuardianAccess === true;
   const musicHome = mountMusicHomeCustomizer(byId("musicHomeCustomizer"));
+  const creativeDNA = typeof mountCreativeDNAEditor === "function" && byId("creativeDNA")
+    ? mountCreativeDNAEditor(byId("creativeDNA")) : { load() {}, clear() {} };
 
   async function api(body, query = "") {
     const response = await fetch(`/api/creator-network${query}`, {
@@ -293,6 +296,7 @@ import { mountMusicHomeCustomizer } from "/music-home/customizer.js";
       if (version !== sessionVersion) return;
       if (form?.id === "project") form.reset();
       await load();
+      if (body.action === "save_profile") creativeDNA.load();
       status(result.message);
     } catch (error) {
       if (version === sessionVersion) status(error.message);
@@ -336,6 +340,8 @@ import { mountMusicHomeCustomizer } from "/music-home/customizer.js";
     } catch (error) { status(error.message); } finally { button.disabled = false; }
   });
   byId("signOut").addEventListener("click", async () => {
+    sessionVersion++;
+    creativeDNA.clear();
     try { await identity.logout(); await refresh(); } catch (error) { status(error.message); }
   });
   byId("guardianForm").addEventListener("submit", async event => {
@@ -395,6 +401,7 @@ import { mountMusicHomeCustomizer } from "/music-home/customizer.js";
 
   async function refresh() {
     const version = ++sessionVersion;
+    creativeDNA.clear();
     guardianVersion++;
     state = null;
     musicHomeMemberId = null;
@@ -412,7 +419,7 @@ import { mountMusicHomeCustomizer } from "/music-home/customizer.js";
     try {
       const user = await identity.getUser();
       if (version !== sessionVersion) return;
-      if (user) { await load(); status("Member workspace ready"); }
+      if (user) { await load(); if (version !== sessionVersion) return; creativeDNA.load(); status("Member workspace ready"); }
       else status("Sign in to view profiles and collaboration requests.");
     } catch (error) {
       if (version === sessionVersion) status(error.message);

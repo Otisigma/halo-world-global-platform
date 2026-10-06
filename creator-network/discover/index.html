@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Creative DNA Discovery — HALO Music</title>
+  <meta name="description" content="Discover opt-in creators through their own creative statements, goals and vocabulary tags.">
+  <meta name="theme-color" content="#090907">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;700;800&family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&family=Share+Tech+Mono&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/halo-brand.css">
+  <link rel="stylesheet" href="/accessibility.css">
+  <link rel="stylesheet" href="/mobile-navigation.css">
+  <link rel="stylesheet" href="/halo-hud.css">
+  <link rel="stylesheet" href="/creator-network/network.css">
+  <script src="/stats.js" defer></script>
+  <script src="/site-monitor.js" defer></script>
+  <script src="/accessibility.js" defer></script>
+  <script src="/mobile-navigation.js" defer></script>
+  <script src="/halo-hud.js" defer></script>
+  <script type="module" src="/identity.js"></script>
+  <script type="module" src="/creator-network/discover/discover.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to Creative DNA discovery</a>
+  <header class="creator-header">
+    <a class="creator-brand" href="/halo"><span class="brand-mark">H</span><span>HALO <small>CREATIVE DNA DISCOVERY</small></span></a>
+    <nav aria-label="Creator navigation">
+      <a href="/creator-network/">Creator workspace</a>
+      <a href="/artists/">Artist rooms</a>
+      <a href="/signal-network/#feed">Public Signal</a>
+      <a href="/creator-network/#locked" id="discoverySignIn">Sign in to collaborate</a>
+    </nav>
+  </header>
+  <main id="main" class="creator-shell dna-discovery" data-halo-guide="Search self-described creative identity. Match reasons explain filter matches, not compatibility predictions. Open a profile to choose a project invitation; no messages or rights are sent automatically.">
+    <section class="workspace-panel" aria-labelledby="discoveryTitle">
+      <p class="eyebrow">Creator network / opt-in discovery</p>
+      <h1 id="discoveryTitle">Find your creative orbit.</h1>
+      <p class="section-intro">Search statements, goals and chosen tags. Guests see public DNA; signed-in creators may also see member-shared DNA. Private notes never appear here. Matches are vocabulary and filter matches, not AI analysis.</p>
+      <form id="dnaSearch" role="search" aria-label="Search Creative DNA">
+        <div class="dna-search-fields">
+          <label>Creative search<input name="q" type="search" maxlength="160" placeholder="Atmospheric percussion, multilingual vocals…"></label>
+          <label>Role<input name="role" maxlength="80" placeholder="Producer"></label>
+          <label>Genre<input name="genre" maxlength="80" placeholder="House"></label>
+          <label>Language<input name="language" maxlength="80" placeholder="Swahili"></label>
+          <label>BPM<input name="bpm" type="number" min="20" max="300" step="1"></label>
+        </div>
+        <details open>
+          <summary>Creative vocabulary facets (at most 12 total)</summary>
+          <div id="dnaFacets" class="dna-facets"></div>
+        </details>
+        <p id="facetStatus" role="status"></p>
+        <div class="hero-actions">
+          <button class="button button-gold" type="submit">Search creators</button>
+          <button class="button button-outline" type="reset">Reset filters</button>
+        </div>
+      </form>
+      <p id="discoveryStatus" role="status" aria-live="polite"></p>
+      <p id="resultCount"></p>
+      <div id="dnaResults" class="creator-cards" aria-label="Creator search results"></div>
+      <button id="dnaMore" class="button button-outline" type="button" hidden>Load more creators</button>
+    </section>
+    <section id="curatedFallback" class="workspace-panel" aria-labelledby="curatedTitle" hidden>
+      <p class="eyebrow">Curated / not search results</p>
+      <h2 id="curatedTitle">HALO-curated inspiration.</h2>
+      <p>These seed profiles are not live Creative DNA matches. No project invitations are available for curated profiles.</p>
+      <div id="curatedCreators" class="creator-cards"></div>
+    </section>
+  </main>
+</body>
+</html>

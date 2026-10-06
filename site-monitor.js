@@ -1,15 +1,17 @@
 (() => {
   const SCOUT_NAME = "HALO Maintenance Scout";
   const runtimeIssues = [];
+  const runtimeErrorEvents = [];
   const resourceIssues = [];
   const submittedFindings = new Set();
   const MAX_ISSUES = 8;
   const STATUS_LABEL = { green: "WORKING", yellow: "ATTENTION", red: "BROKEN" };
   const STATUS_RANK = { green: 0, yellow: 1, red: 2 };
   let watcherRegistryPromise;
+  let controlRoomPromise;
 
   function escapeHTML(value = "") {
-    return String(value).replace(/[&<>'"]/g, character => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" })[character]);
+    return String(value ?? "").replace(/[&<>'"]/g, character => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" })[character]);
   }
 
   function safeResource(value = "") {
@@ -17,7 +19,97 @@
       const url = new URL(value, window.location.origin);
       return `${url.origin}${url.pathname}`.slice(0, 500);
     } catch {
-      return String(value).slice(0, 500);
+      return String(value ?? "").slice(0, 500);
+    }
+  }
+
+  function safeStorage(kind) {
+    try {
+      return window[kind] || null;
+    } catch {
+      return null;
+    }
+  }
+
+  function controlRoomSessionId() {
+    const storage = safeStorage("sessionStorage");
+    const key = "halo:control-room:session";
+    try {
+      const existing = storage?.getItem(key);
+      if (existing) return existing;
+    } catch {
+      // Fall through to an in-memory id.
+    }
+    const randomPart = () => {
+      const bytes = new Uint8Array(12);
+      window.crypto?.getRandomValues?.(bytes);
+      return [...bytes].map(byte => byte.toString(16).padStart(2, "0")).join("");
+    };
+    const id = window.crypto?.randomUUID?.() || `deck-${Date.now().toString(36)}-${randomPart()}`;
+    try {
+      storage?.setItem(key, id);
+    } catch {
+      // Session storage may be disabled.
+    }
+    return id;
+  }
+
+  function emitRepairEvent(repairEvent) {
+    window.dispatchEvent(new CustomEvent("halo:control-room-repair", { detail: repairEvent }));
+    window.dispatchEvent(new CustomEvent("halo:journal-event", {
+      detail: {
+        eventType: "auto_repair",
+        category: repairEvent.status === "FAILED" ? "problem" : "maintenance",
+        targetName: repairEvent.details?.issueType,
+        details: {
+          status: repairEvent.status,
+          issueType: repairEvent.details?.issueType,
+          assignedAgent: repairEvent.details?.assignedAgent,
+          actionTaken: repairEvent.details?.actionTaken,
+          targetElement: repairEvent.details?.targetElement,
+          defectId: repairEvent.details?.defectId,
+          surface: repairEvent.surface,
+          attempt: repairEvent.details?.attempt,
+          labels: (repairEvent.labels || []).join(",")
+        }
+      }
+    }));
+  }
+
+  // Background DJ control room: silently repairs broken deck/navigation state
+  // and keeps a structured repair history. Falls back to plain monitoring if
+  // the shared module cannot load.
+  function loadControlRoom() {
+    if (!controlRoomPromise) {
+      controlRoomPromise = import("/lib/dj-control-room.js")
+        .then(module => (typeof module.createControlRoom === "function"
+          ? {
+            module,
+            room: module.createControlRoom({
+              root: document,
+              location: window.location,
+              storage: safeStorage("localStorage"),
+              sessionId: controlRoomSessionId(),
+              isVisible: visible,
+              emit: emitRepairEvent
+            })
+          }
+          : null))
+        .catch(() => null);
+    }
+    return controlRoomPromise;
+  }
+
+  async function runControlRoomCycle() {
+    const controlRoom = await loadControlRoom();
+    if (!controlRoom) return null;
+    try {
+      const cycle = controlRoom.room.cycle({ runtimeErrors: runtimeErrorEvents.slice() });
+      window.__haloControlRoom = cycle.state;
+      window.dispatchEvent(new CustomEvent("halo:control-room-update", { detail: cycle.state }));
+      return { ...cycle, module: controlRoom.module };
+    } catch {
+      return null;
     }
   }
 
@@ -47,13 +139,19 @@
       resourceIssues.splice(MAX_ISSUES);
       return;
     }
-    runtimeIssues.push(event.message || "Unknown JavaScript error");
+    const message = String(event.message || "Unknown JavaScript error");
+    runtimeIssues.push(message);
     runtimeIssues.splice(MAX_ISSUES);
+    runtimeErrorEvents.push({ message, source: safeResource(event.filename || "") });
+    runtimeErrorEvents.splice(MAX_ISSUES);
   }, true);
 
   window.addEventListener("unhandledrejection", event => {
-    runtimeIssues.push(event.reason?.message || String(event.reason || "Unhandled promise rejection"));
+    const message = String(event.reason?.message || event.reason || "Unhandled promise rejection");
+    runtimeIssues.push(message);
     runtimeIssues.splice(MAX_ISSUES);
+    runtimeErrorEvents.push({ message, source: "" });
+    runtimeErrorEvents.splice(MAX_ISSUES);
   });
 
   function injectStyles() {
@@ -80,10 +178,10 @@
     return STATUS_LABEL[status] ? status : "red";
   }
 
-  async function runWatcherChecks() {
+  async function runWatcherChecks(controlRoomResults) {
     const module = await loadWatcherRegistryModule();
-    const expectedWatchers = module.watchersForPage(window.location.pathname) || [];
-    const watcherResults = expectedWatchers.map(watcher => {
+    const expectedWatchers = Array.isArray(controlRoomResults) ? [] : module.watchersForPage(window.location.pathname) || [];
+    const watcherResults = Array.isArray(controlRoomResults) ? controlRoomResults : expectedWatchers.map(watcher => {
       const element = document.querySelector(watcher.selector);
       const expectedTarget = module.canonicalize(watcher.target);
       if (!element) {
@@ -128,23 +226,35 @@
   }
 
   async function runChecks() {
+    const cycle = await runControlRoomCycle();
+    const unsafeHref = cycle?.module?.isUnsafeHref || (href => {
+      const value = String(href ?? "").trim();
+      return !value || value === "#" || /^(javascript|vbscript|data):/i.test(value.replace(/[\u0000-\u0020\u007f]/g, ""));
+    });
     const interactive = [...document.querySelectorAll("button,a,input,select,textarea")].filter(visible);
     const unlabeled = interactive.filter(element => {
       if (element.matches('input[type="hidden"],input[type="file"]')) return false;
+      if (cycle?.module?.hasAccessibleName) return !cycle.module.hasAccessibleName(element, document);
       const text = element.textContent?.trim() || element.value || element.getAttribute("aria-label") || element.getAttribute("title");
       return !text;
     });
-    const invalidLinks = [...document.querySelectorAll("a[href]")].filter(link => {
-      const href = link.getAttribute("href")?.trim();
-      return !href || href === "#" || href.startsWith("javascript:");
-    });
+    const invalidLinks = [...document.querySelectorAll("a[href]")].filter(link => unsafeHref(link.getAttribute("href")));
     const imagesWithoutAlt = [...document.images].filter(image => !image.hasAttribute("alt"));
     const audioContext = window.__haloAudioContext;
     const audioHealth = window.__haloAudioHealth;
     const audioReady = (!audioContext || ["running", "suspended"].includes(audioContext.state)) && audioHealth?.status !== "error";
     const audioDetail = audioHealth?.message || (audioContext ? `Audio engine is ${audioContext.state}. Press play to run a signal check.` : "Audio engine loads on the first playback gesture.");
-    const dash = await runWatcherChecks();
+    const dash = await runWatcherChecks(cycle?.watcherResults);
     const failedWatchers = (dash.watchers || []).filter(watcher => watcher.status !== "green");
+    const controlRoomChecks = cycle ? [{
+      name: "DJ Control Room",
+      category: "self-repair",
+      severity: "medium",
+      ok: true,
+      detail: `${cycle.state.repairs.resolved} silent repair${cycle.state.repairs.resolved === 1 ? "" : "s"} · ${cycle.state.repairs.failed} escalated · ${cycle.state.recurringPatterns.length} recurring pattern${cycle.state.recurringPatterns.length === 1 ? "" : "s"} learned.`,
+      count: 0
+    }] : [];
+    lastControlRoomCycle = cycle;
 
     return [
       { name: "Audio Scout", category: "audio", severity: "high", ok: audioReady, detail: audioDetail, count: audioReady ? 0 : 1 },
@@ -153,7 +263,7 @@
       { name: "Visual Access Tester", category: "accessibility", severity: "medium", ok: imagesWithoutAlt.length === 0, detail: imagesWithoutAlt.length ? `${imagesWithoutAlt.length} image${imagesWithoutAlt.length === 1 ? " is" : "s are"} missing alt text.` : "Images expose alternative text.", count: imagesWithoutAlt.length },
       { name: "Runtime Watcher", category: "runtime", severity: "high", ok: runtimeIssues.length + resourceIssues.length === 0, detail: runtimeIssues[0] || resourceIssues[0] || "No browser errors or failed resources observed.", count: runtimeIssues.length + resourceIssues.length },
       { name: "Dash AI Link Aggregator", category: "navigation", severity: "high", ok: dash.status === "green", detail: `Dash AI reports ${dash.statusLabel} with ${dash.watcherCount} watcher${dash.watcherCount === 1 ? "" : "s"} and ${dash.issueCount} issue${dash.issueCount === 1 ? "" : "s"}.`, count: dash.issueCount }
-    ].concat(failedWatchers.map(watcher => ({
+    ].concat(controlRoomChecks, failedWatchers.map(watcher => ({
       name: `Watcher: ${watcher.label}`,
       category: "navigation",
       severity: watcher.status === "red" ? "high" : "medium",
@@ -162,11 +272,68 @@
       count: 1,
       watcherId: watcher.id,
       watcherTarget: watcher.target,
+      watcherSelector: watcher.selector,
+      watcherStatus: watcher.status,
       ownerAgent: watcher.ownerAgent
     })));
   }
 
+  let lastControlRoomCycle = null;
+
+  function classifyFinding(check) {
+    const module = lastControlRoomCycle?.module;
+    if (!module?.classifyCheck) return null;
+    try {
+      return module.classifyCheck({ ...check, status: check.watcherStatus }, window.location.pathname);
+    } catch {
+      return null;
+    }
+  }
+
+  function postIssue(body) {
+    return fetch("/api/issues", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+      keepalive: true
+    }).then(response => {
+      if (!response.ok) throw new Error(`Issue endpoint returned ${response.status}`);
+      return response.json();
+    });
+  }
+
+  // Learning loop: patterns the control room keeps seeing are escalated once
+  // per page so maintainers can promote them into regression contracts.
+  function reportRecurringPatterns() {
+    const patterns = lastControlRoomCycle?.state?.recurringPatterns || [];
+    patterns.forEach(pattern => {
+      const fingerprint = `control-room|recurring|${pattern.fingerprint}`;
+      if (submittedFindings.has(fingerprint)) return;
+      submittedFindings.add(fingerprint);
+      postIssue({
+        source: "browser",
+        category: "self-repair",
+        severity: "low",
+        title: `DJ Control Room recurring ${pattern.issueType}`,
+        details: `${pattern.attempts} detections (${pattern.resolved} auto-repaired, ${pattern.failed} escalated) on ${pattern.pagePath}. Promote this pattern into a regression contract.`,
+        pagePath: window.location.pathname,
+        fingerprint,
+        metadata: {
+          defectType: pattern.issueType,
+          ownerAgent: pattern.assignedAgent,
+          surface: pattern.surface,
+          attempts: pattern.attempts,
+          resolved: pattern.resolved,
+          failed: pattern.failed,
+          labels: "MACHINE_GENERATED,AUTO_REPAIR",
+          repairStatus: "RECURRING"
+        }
+      }).catch(() => {});
+    });
+  }
+
   async function reportFindings(checks, reportElement) {
+    reportRecurringPatterns();
     const findings = checks.filter(check => !check.ok);
     if (!findings.length) {
       reportElement.dataset.state = "healthy";
@@ -183,6 +350,10 @@
     });
     if (!pending.length) return;
 
+    pending.forEach(check => {
+      check.defect = classifyFinding(check);
+    });
+
     pending.forEach(check => window.dispatchEvent(new CustomEvent("halo:journal-event", {
       detail: {
         eventType: "qa_issue",
@@ -194,7 +365,8 @@
           count: check.count,
           watcherId: check.watcherId || null,
           watcherTarget: check.watcherTarget || null,
-          ownerAgent: check.ownerAgent || null
+          ownerAgent: check.ownerAgent || check.defect?.ownerAgent || null,
+          defectType: check.defect?.type || null
         },
         immediate: true
       }
@@ -202,10 +374,7 @@
 
     reportElement.dataset.state = "sending";
     reportElement.textContent = `Reporting ${pending.length} finding${pending.length === 1 ? "" : "s"} to maintenance…`;
-    const results = await Promise.allSettled(pending.map(check => fetch("/api/issues", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
+    const results = await Promise.allSettled(pending.map(check => postIssue({
         source: "browser",
         category: check.category,
         severity: check.severity,
@@ -217,16 +386,15 @@
           count: check.count,
           watcherId: check.watcherId || null,
           watcherTarget: check.watcherTarget || null,
-          ownerAgent: check.ownerAgent || null,
+          ownerAgent: check.ownerAgent || check.defect?.ownerAgent || null,
+          defectType: check.defect?.type || null,
+          surface: check.defect?.surface || null,
+          labels: "MACHINE_GENERATED,AUTO_REPAIR",
+          repairStatus: "ESCALATED",
           viewport: `${window.innerWidth}x${window.innerHeight}`,
           online: navigator.onLine
         }
-      }),
-      keepalive: true
-    }).then(response => {
-      if (!response.ok) throw new Error(`Issue endpoint returned ${response.status}`);
-      return response.json();
-    })));
+      })));
 
     const failed = results.filter(result => result.status === "rejected").length;
     reportElement.dataset.state = failed ? "failed" : "sent";
@@ -248,7 +416,7 @@
     watcherList.innerHTML = visible.map(watcher => `
       <article class="halo-qa-watcher" data-status="${watcher.status}">
         <b>${escapeHTML(watcher.label)}</b>
-        <small>${escapeHTML(watcher.status.toUpperCase())} · ${escapeHTML(watcher.target)} · ${escapeHTML(watcher.ownerAgent)}</small>
+        <small>${escapeHTML(String(watcher.status || "").toUpperCase())} · ${escapeHTML(watcher.target)} · ${escapeHTML(watcher.ownerAgent)}</small>
       </article>
     `).join("") || `<article class="halo-qa-watcher" data-status="green"><b>No watchers configured for this route.</b><small>Dash AI is waiting for route-specific controls.</small></article>`;
   }

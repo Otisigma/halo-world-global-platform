@@ -25,9 +25,11 @@
     <meta name="twitter:image" content="https://halo-world-global-platform.netlify.app/assets/halo-app-icon-512.png">
     <meta name="twitter:image:alt" content="HALO Music World logo">
     <script src="/stats.js" defer></script>
+    <script type="module" src="/halo-brand-router.js"></script>
     <script src="/site-monitor.js" defer></script>
     <link rel="stylesheet" href="/accessibility.css">
     <link rel="stylesheet" href="/halo-brand.css">
+    <link rel="stylesheet" href="/halo-brand-router.css">
     <link rel="stylesheet" href="/release-artwork.css">
     <script src="/accessibility.js" defer></script>
     <link rel="stylesheet" href="/mobile-navigation.css">
@@ -3800,8 +3802,8 @@
 
               {/* HEADER NAV HUD */}
               <header className="halo-site-header border-b border-purple-950/40 bg-[#0c0c11] px-4 py-3 flex flex-wrap justify-between items-center gap-4 sticky top-0 z-40 font-sans-alt">
-                <div className="halo-site-brand flex items-center gap-3">
-                  <div className="flex items-center gap-2.5 cursor-pointer" onClick={() => setViewMode('landing')}>
+                <div className="halo-site-brand halo-brand-router" data-halo-brand-router>
+                  <a className="halo-logo-link flex items-center gap-2.5" data-halo-logo-link href="/signal-network/#signal-feed" aria-label="HALO logo — open your assigned destination">
                     <img className="halo-brand-image halo-brand-image--small" src="/assets/halo-logo-mark.webp" alt="" />
                     <div>
                       <div className="flex items-center gap-1.5">
@@ -3814,7 +3816,11 @@
                       </div>
                       <p className="halo-site-tagline text-[9px] text-gray-400 uppercase tracking-widest">WORLDWIDE MEDIA BROADCAST & DJ AGENT LAB</p>
                     </div>
-                  </div>
+                  </a>
+                  <a className="halo-teaser-badge" data-halo-teaser-link href="/signal-network/#signal-feed">
+                    <span className="halo-teaser-pulse" aria-hidden="true"></span>
+                    <span data-halo-teaser-text>Discover HALO →</span>
+                  </a>
                 </div>
 
                 <div className="halo-header-signal" aria-hidden="true">
@@ -6040,7 +6046,7 @@
               {/* FOOTER */}
               <footer className="border-t border-purple-950/40 bg-[#07070a] px-4 py-2 flex flex-wrap justify-between items-center gap-2 text-[9px] text-gray-500 font-mono">
                 <span>© 2026 HALO MUSIC WORLD SYSTEMS LLC</span>
-                <span className="basis-full text-[8px] leading-relaxed">Halo Music owns Owen Anthony’s music only. Artist-uploaded music and content remain 100% the uploader’s property by default unless an ownership or split agreement is explicitly configured and agreed on this site. Platform software, code and technical infrastructure are proprietary to the platform’s technology rights holder.</span>
+                <span className="basis-full text-[8px] leading-relaxed">Halo Music owns Owen Anthony’s music only. Artist-uploaded music and content remain 100% the uploader’s property by default unless an ownership or split agreement is explicitly configured and agreed on this site. Creator-uploaded content remains uploader-owned unless a separate written agreement expressly assigns specific rights; uploading alone does not transfer ownership. The HALO logo, wordmark, emblem geometry and visual lockups are proprietary HALO brand assets. Platform software, code and technical infrastructure are proprietary to the platform’s technology rights holder.</span>
                 <nav className="flex items-center gap-3" aria-label="HALO footer destinations">
                   <a href="/support/" data-stat-event="open_feedback_desk" data-stat-target="footer" className="text-lime-300 transition hover:text-lime-200 focus:outline-none focus:ring-1 focus:ring-lime-300">FEEDBACK</a>
                   <span aria-hidden="true">·</span>

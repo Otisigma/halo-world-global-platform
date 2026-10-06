@@ -10,10 +10,14 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Syne:wght@500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/halo-brand.css">
+  <link rel="stylesheet" href="/halo-brand-router.css">
   <link rel="stylesheet" href="/release-context.css">
   <link rel="stylesheet" href="/campaign-studio/campaign-studio.css">
+  <link rel="stylesheet" href="/campaign-studio/fanout-modal.css">
   <link rel="stylesheet" href="/campaign-studio/party-effects.css">
   <script src="/stats.js" defer></script>
+  <script type="module" src="/halo-brand-router.js"></script>
+  <script type="module" src="/campaign-studio/dreamweaver-fanout-modal.js"></script>
   <script src="/accessibility.js" defer></script>
   <script type="module" src="/identity.js"></script>
   <script src="/release-context.js" defer></script>
@@ -22,16 +26,23 @@
 <body>
   <div class="grain" aria-hidden="true"></div>
   <header class="site-header">
-    <a class="brand" href="/halo" aria-label="HALO home">
-      <img class="halo-brand-image" src="/assets/halo-logo-mark.webp" alt="">
-      <span><strong>HALO</strong><small>Campaign Studio // Artist Controls</small></span>
-    </a>
+    <div class="halo-brand-router" data-halo-brand-router>
+      <a class="brand halo-logo-link" data-halo-logo-link href="/signal-network/#signal-feed" aria-label="HALO logo — open your assigned destination">
+        <img class="halo-brand-image" src="/assets/halo-logo-mark.webp" alt="">
+        <span><strong>HALO</strong><small>Campaign Studio // Artist Controls</small></span>
+      </a>
+      <a class="halo-teaser-badge" data-halo-teaser-link href="/signal-network/#signal-feed">
+        <span class="halo-teaser-pulse" aria-hidden="true"></span>
+        <span data-halo-teaser-text>Discover HALO →</span>
+      </a>
+    </div>
     <nav aria-label="Campaign Studio navigation">
       <a href="/youtube-studio/">YouTube Sources</a>
       <a href="/dreamweaver/">Dreamweaver</a>
       <a href="/radio/">Radio + DJ Room</a>
       <a href="/dreamweaver-lab/">Song Lab</a>
       <a href="/release-house/">Release House</a>
+      <button class="account-button" type="button" data-open-dreamweaver-campaign aria-controls="dreamweaverFanoutDialog">Campaign fan-out</button>
       <button class="account-button" id="accountButton" type="button">Team sign in</button>
     </nav>
   </header>
@@ -42,6 +53,31 @@
       <div class="loading-line"><span></span></div>
     </section>
   </main>
+  <footer class="brand-policy">
+    <p><strong>© HALO Music World. All rights reserved.</strong> The HALO logo, wordmark, emblem geometry, and visual lockups are proprietary HALO brand assets; unauthorized alteration or commercial use is not permitted.</p>
+    <p>Creator-uploaded music and content remains owned by its uploader unless a separate written agreement expressly assigns specific rights. Uploading content does not transfer ownership of creator work or HALO brand assets.</p>
+  </footer>
+  <dialog class="fanout-dialog" id="dreamweaverFanoutDialog" aria-labelledby="fanoutTitle">
+    <form class="fanout-shell" data-campaign-form>
+      <div class="fanout-heading">
+        <div><p class="signal-label">DREAMWEAVER / CAMPAIGN REVIEW</p><h2 id="fanoutTitle">Shape one signal. Review every channel.</h2></div>
+        <button class="dialog-close" type="button" data-close-fanout aria-label="Close campaign review">×</button>
+      </div>
+      <p>Generate a themed campaign package, compare channel-specific drafts, and approve the Signal Feed post yourself. Other channel drafts are copied manually; HALO does not auto-post to external services.</p>
+      <div class="fanout-form">
+        <label>Campaign title<input name="title" maxlength="140" value="A new HALO signal" required></label>
+        <label>Artist name<input name="artist" maxlength="100" placeholder="Optional"></label>
+        <label>Campaign theme<select name="theme" data-campaign-theme></select></label>
+        <label>Call to action<input name="callToAction" maxlength="120" value="Explore the signal"></label>
+        <label class="wide">Opening idea<textarea name="hook" maxlength="400" placeholder="Optional — Dreamweaver will write a theme-led invitation."></textarea></label>
+        <button class="primary-button fanout-generate" type="button" data-generate-campaign>Generate channel drafts</button>
+      </div>
+      <div class="fanout-previews" data-channel-previews aria-live="polite" aria-label="Channel previews"></div>
+      <label class="fanout-approval"><input type="checkbox" data-publish-approval><span>I have reviewed and approve the HALO Signal Feed draft for public publication.</span></label>
+      <div class="fanout-actions"><button class="signal-button" type="button" data-publish-signal disabled>Publish approved Signal Feed draft</button></div>
+      <p class="fanout-status" data-fanout-status role="status" aria-live="polite"></p>
+    </form>
+  </dialog>
   <dialog class="auth-dialog" id="authDialog">
     <form id="authForm">
       <button class="dialog-close" type="button" data-close-dialog aria-label="Close">×</button>

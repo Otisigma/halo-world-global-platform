@@ -40,7 +40,12 @@
     } catch {
       // Fall through to an in-memory id.
     }
-    const id = window.crypto?.randomUUID?.() || `deck-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+    const randomPart = () => {
+      const bytes = new Uint8Array(12);
+      window.crypto?.getRandomValues?.(bytes);
+      return [...bytes].map(byte => byte.toString(16).padStart(2, "0")).join("");
+    };
+    const id = window.crypto?.randomUUID?.() || `deck-${Date.now().toString(36)}-${randomPart()}`;
     try {
       storage?.setItem(key, id);
     } catch {
@@ -224,7 +229,7 @@
     const cycle = await runControlRoomCycle();
     const unsafeHref = cycle?.module?.isUnsafeHref || (href => {
       const value = String(href ?? "").trim();
-      return !value || value === "#" || value.toLowerCase().startsWith("javascript:");
+      return !value || value === "#" || /^(javascript|vbscript|data):/i.test(value.replace(/[\u0000-\u0020\u007f]/g, ""));
     });
     const interactive = [...document.querySelectorAll("button,a,input,select,textarea")].filter(visible);
     const unlabeled = interactive.filter(element => {

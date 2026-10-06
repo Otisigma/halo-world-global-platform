@@ -4,6 +4,20 @@ import { fileURLToPath } from "node:url";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const ignoredDirectories = new Set([".git", ".netlify", "node_modules"]);
+const scriptSources = new Map();
+
+async function readScript(file, seen) {
+  const path = relative(root, file);
+  if (path.startsWith("..") || ![".js", ".mjs"].includes(extname(file)) || seen.has(file)) return "";
+  seen.add(file);
+  if (!scriptSources.has(file)) scriptSources.set(file, await readFile(file, "utf8"));
+  const source = scriptSources.get(file);
+  let scripts = source;
+  for (const match of source.matchAll(/^\s*import\s+(?:[^;\n]*?\s+from\s+)?["'](\.[^"']+)["']/gm)) {
+    try { scripts += `\n${await readScript(resolve(dirname(file), match[1]), seen)}`; } catch {}
+  }
+  return scripts;
+}
 
 async function walk(directory) {
   const files = [];
@@ -69,6 +83,7 @@ for (const page of pages) {
   const pageName = relative(root, page);
   const source = await readFile(page, "utf8");
   let scripts = "";
+  const seenScripts = new Set();
 
   for (const match of source.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script\s*>/gi)) {
     const attributes = parseAttributes(match[1]);
@@ -82,7 +97,7 @@ for (const page of pages) {
       ? resolve(root, scriptTarget.slice(1))
       : resolve(dirname(page), scriptTarget);
     try {
-      scripts += `\n${await readFile(scriptFile, "utf8")}`;
+      scripts += `\n${await readScript(scriptFile, seenScripts)}`;
     } catch {}
   }
 

@@ -15,8 +15,8 @@ function ensureOrigin(origin, checkGeneration = true) {
     throw error;
   }
 }
-function actionError(error, origin) {
-  if (origin.session === feedState.session && origin.generation === feedState.generation && error.name !== "FeedSessionChanged") status.textContent = error.message;
+function actionError(error, origin, checkGeneration = true) {
+  if (origin.session === feedState.session && (!checkGeneration || origin.generation === feedState.generation) && error.name !== "FeedSessionChanged") status.textContent = error.message;
 }
 function node(tag, content, className) {
   const result = document.createElement(tag);
@@ -355,7 +355,7 @@ publishForm.addEventListener("submit", async event => {
     byId("feedSaved").setAttribute("aria-pressed", "false"); await loadFeed();
     ensureOrigin(origin, false);
     status.textContent = `Signal published to ${SIGNAL_VISIBILITY[data.visibility]}.`;
-  } catch (error) { actionError(error, origin); }
+  } catch (error) { actionError(error, origin, false); }
   finally {
     if (origin.session === feedState.session) {
       publishing = false; composer.lock(false); submit.disabled = !feedState.memberId;
@@ -374,6 +374,10 @@ byId("feedBlocked").addEventListener("toggle", () => { if (byId("feedBlocked").o
 function connectIdentity() {
   window.haloIdentity.onAuthChange(async () => {
     feedState.session++;
+    for (const player of posts.querySelectorAll("audio, video")) {
+      player.pause(); player.removeAttribute("src"); player.load();
+    }
+    posts.replaceChildren();
     publishing = false;
     publishForm.reset(); composer.reset(); composer.lock(false);
     identityControls(""); feedState.saved = false;

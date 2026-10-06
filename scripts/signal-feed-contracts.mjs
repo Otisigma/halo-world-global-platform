@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { runInNewContext } from "node:vm";
-import { createSignalFeedHandler, pageInput, postInput, publicLink, releaseMedia, releaseMusicMetadata } from "../netlify/lib/signal-feed.mjs";
+import { createSignalFeedHandler, cleanupSignalMedia, pageInput, postInput, publicLink, releaseMedia, releaseMusicMetadata } from "../netlify/lib/signal-feed.mjs";
 import { createObjectUrlAttachment, validateSignalMedia, SIGNAL_MEDIA_MAX_BYTES } from "../lib/signal-media.js";
 import { suggestSignal } from "../lib/signal-dreamweaver.js";
 
@@ -354,6 +354,7 @@ await check("auth changes clear composer drafts and consent; old mutations canno
     setAttribute() {}
     append(...children) { this.children.push(...children); }
     replaceChildren(...children) { this.children = children; }
+    querySelectorAll() { return this.players || []; }
     reset() {
       this.resetCount = (this.resetCount || 0) + 1;
       for (const field of Object.values(this.elements || {})) { field.value = ""; field.checked = false; }
@@ -366,12 +367,15 @@ await check("auth changes clear composer drafts and consent; old mutations canno
   form.elements = Object.fromEntries(["kind", "body", "releaseId", "linkUrl", "includePurchase", "publishPublic"].map(name => [name, new Element()]));
   elements.set("feedKind", form.elements.kind); elements.set("feedRelease", form.elements.releaseId);
   form.elements.kind.value = "TEXT";
-  let authChanged, finishMutation, currentMember = "old-member";
+  let authChanged, finishMutation, finishFeed, delayFeed = false, currentMember = "old-member";
   const context = {
     document: { getElementById: get, createElement: () => new Element(), addEventListener() {}, hidden: false },
     window: { haloIdentity: { onAuthChange(callback) { authChanged = callback; } } },
     fetch: async (_url, options) => {
       if (options.method === "POST") return new Promise(resolve => { finishMutation = () => resolve({ ok: true, json: async () => ({ id: postId }) }); });
+      if (delayFeed && _url.includes("view=feed")) return new Promise(resolve => {
+        finishFeed = () => resolve({ ok: true, json: async () => ({ items: [], memberId: currentMember, nextCursor: null }) });
+      });
       return { ok: true, json: async () => ({ items: [], memberId: currentMember, nextCursor: null }) };
     },
     AbortController, URLSearchParams, setTimeout, clearTimeout, setInterval() {}, console
@@ -390,7 +394,14 @@ await check("auth changes clear composer drafts and consent; old mutations canno
   form.elements.publishPublic.checked = true; form.elements.includePurchase.checked = true;
   const pendingPublish = form.handlers.submit({ preventDefault() {} });
   await new Promise(resolve => setImmediate(resolve)); assert.ok(finishMutation);
-  currentMember = "new-member"; await authChanged();
+  const oldPlayer = { pause() { this.paused = true; }, removeAttribute() { this.srcRemoved = true; }, load() { this.unloaded = true; } };
+  get("feedPosts").players = [oldPlayer]; get("feedPosts").children = [new Element()];
+  currentMember = "new-member"; delayFeed = true;
+  const pendingAuth = authChanged();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.ok(oldPlayer.paused && oldPlayer.srcRemoved && oldPlayer.unloaded);
+  assert.equal(get("feedPosts").children.length, 0, "Private content cleared before the new feed responds");
+  delayFeed = false; finishFeed(); await pendingAuth;
   assert.equal(form.elements.body.value, ""); assert.equal(form.elements.linkUrl.value, "");
   assert.equal(form.elements.publishPublic.checked, false); assert.equal(form.elements.includePurchase.checked, false);
   assert.equal(form.elements.kind.value, "TEXT"); assert.equal(get("feedLinkField").hidden, true);
@@ -473,10 +484,14 @@ await check("private publication checks audience membership and stores visibilit
   const denied = harness({ ...member, steps: [rate, rate, { rows: [] }] });
   assert.equal((await denied.request(body)).status, 400); denied.complete();
 });
-await check("clip publication writes a private blob and cleans it up after failed persistence", async () => {
+await check("clip publication queues cleanup before writing media and preserves work after failed persistence", async () => {
   for (const fails of [false, true]) {
-    const writes = [], deletes = [];
-    const mediaStore = { set: async (id, bytes) => { writes.push(id); assert.deepEqual(bytes, clipBytes); }, delete: async id => { deletes.push(id); } };
+    const writes = [], deletes = [], queued = [];
+    const mediaStore = {
+      setJSON: async (key, value) => { queued.push(key); assert.ok(value.createdAt > 0); },
+      set: async (id, bytes) => { assert.equal(queued[0], `cleanup/${id}`); writes.push(id); assert.deepEqual(bytes, clipBytes); },
+      delete: async id => { deletes.push(id); }
+    };
     const h = harness({ ...member, mediaStore, steps: [rate, rate, {
       match: /INSERT INTO halo_signal_feed_posts/,
       ...(fails ? { error: new Error("Unavailable") } : {}),
@@ -486,9 +501,40 @@ await check("clip publication writes a private blob and cleans it up after faile
     try {
       const response = await h.request({ action: "publish", kind: "AUDIO", body: "Clip", publishPublic: true, attachment: clip }, "?upload=clip");
       assert.equal(response.status, fails ? 503 : 201);
-      assert.equal(writes.length, 1); assert.equal(deletes.length, fails ? 1 : 0); h.complete();
+      assert.equal(writes.length, 1); assert.deepEqual(deletes, fails ? [] : queued); h.complete();
     } finally { console.error = old; }
   }
+});
+await check("cleanup retries failed deletions, preserves committed media and waits for in-flight publication", async () => {
+  const keys = [postId, commentId, notificationId];
+  const deleted = [];
+  const store = {
+    async *list() { yield { blobs: keys.map(id => ({ key: `cleanup/${id}` })) }; },
+    get: async key => ({ createdAt: key.includes(notificationId) ? 3_500_000 : 0 }),
+    delete: async key => { deleted.push(key); }
+  };
+  let checks = 0;
+  const db = { sql: async (_sql, id) => { checks++; return id === commentId ? [{ id }] : []; } };
+  const result = await cleanupSignalMedia(db, store, { now: 4_000_000 });
+  assert.deepEqual(result, { scanned: 3, removed: 1, failed: 0 }); assert.equal(checks, 2);
+  assert.deepEqual(deleted, [postId, `cleanup/${postId}`, `cleanup/${commentId}`]);
+  deleted.length = 0;
+  store.delete = async key => { if (key === postId) throw new Error("Transient storage failure"); deleted.push(key); };
+  assert.equal((await cleanupSignalMedia(db, store, { now: 4_000_000 })).failed, 1);
+  assert.ok(!deleted.includes(`cleanup/${postId}`));
+  assert.equal((await cleanupSignalMedia(db, store, { now: 4_000_000, limit: 1 })).scanned, 1);
+});
+await check("post removal persists cleanup intent before deleting rows and survives transient blob deletion failures", async () => {
+  let queued = false;
+  const mediaStore = {
+    setJSON: async key => { assert.equal(key, `cleanup/${postId}`); queued = true; },
+    delete: async () => { throw new Error("Transient storage failure"); }
+  };
+  const h = harness({ ...member, memberId: "author", mediaStore, steps: [rate,
+    { ...visible, rows: [{ ...visible.rows[0], attachment: clip }] }, unblocked,
+    { match: /DELETE FROM halo_signal_feed_posts/, inspect() { assert.ok(queued); } }
+  ] });
+  assert.equal((await h.request({ action: "delete_post", postId })).status, 200); h.complete();
 });
 await check("feed, saved views, notifications and direct interactions enforce private visibility in SQL", async () => {
   for (const view of ["feed", "saved", "notifications"]) {

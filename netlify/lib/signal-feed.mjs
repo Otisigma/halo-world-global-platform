@@ -307,7 +307,7 @@ export async function cleanupSignalMedia(db, store, { now = Date.now(), limit = 
       try {
         const queued = await store.get(item.key, { type: "json" });
         if (!queued || !Number.isFinite(queued.createdAt) || now - queued.createdAt < 3600000) continue;
-        const id = uuid(item.key.slice("cleanup/".length));
+        const id = uuid(item.key.split("/")[1]);
         const posts = await db.sql`SELECT id FROM halo_signal_feed_posts WHERE id = ${id} LIMIT 1`;
         if (!posts.length) { await store.delete(id); removed++; }
         await store.delete(item.key);
@@ -378,14 +378,15 @@ export function createSignalFeedHandler({ getDatabase, getUser, ensureMembership
         const store = input.attachment ? getMediaStore?.() : null;
         if (input.attachment && !store) throw new FeedError("Clip storage is unavailable", 503);
         const attachment = input.attachment ? { name: input.attachment.name, type: input.attachment.type, size: input.attachment.size } : null;
+        const cleanupKey = attachment ? `cleanup/${id}/${randomUUID()}` : null;
         if (attachment) {
-          await store.setJSON(`cleanup/${id}`, { createdAt: Date.now() });
+          await store.setJSON(cleanupKey, { createdAt: Date.now() });
           await store.set(id, input.attachment.bytes);
         }
         await db.sql`INSERT INTO halo_signal_feed_posts (id, member_id, author_name, kind, body, release_id, link_url, include_purchase, visibility, audience, attachment)
           VALUES (${id}, ${memberId}, ${authorName}, ${input.kind}, ${input.body}, ${input.releaseId}, ${input.linkUrl},
             ${input.includePurchase}, ${input.visibility}, ${input.audience}::text[], ${attachment ? JSON.stringify(attachment) : null}::jsonb)`;
-        if (attachment) await store.delete(`cleanup/${id}`).catch(() => {});
+        if (attachment) await store.delete(cleanupKey).catch(() => {});
         return json({ id }, 201);
       }
       if (body.action === "read_notification") {
@@ -423,10 +424,11 @@ export function createSignalFeedHandler({ getDatabase, getUser, ensureMembership
         if (post.member_id !== memberId) throw new FeedError("Only the author can remove this post", 403);
         const store = post.attachment ? getMediaStore?.() : null;
         if (post.attachment && !store) throw new FeedError("Clip storage is unavailable", 503);
-        if (store) await store.setJSON(`cleanup/${postId}`, { createdAt: Date.now() });
+        const cleanupKey = store ? `cleanup/${postId}/${randomUUID()}` : null;
+        if (store) await store.setJSON(cleanupKey, { createdAt: Date.now() });
         await db.sql`DELETE FROM halo_signal_feed_posts WHERE id = ${postId} AND member_id = ${memberId}`;
         if (store) {
-          try { await store.delete(postId); await store.delete(`cleanup/${postId}`); } catch {}
+          try { await store.delete(postId); await store.delete(cleanupKey); } catch {}
         }
         return json({ ok: true });
       }

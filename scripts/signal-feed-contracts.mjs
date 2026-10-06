@@ -489,7 +489,7 @@ await check("clip publication queues cleanup before writing media and preserves 
     const writes = [], deletes = [], queued = [];
     const mediaStore = {
       setJSON: async (key, value) => { queued.push(key); assert.ok(value.createdAt > 0); },
-      set: async (id, bytes) => { assert.equal(queued[0], `cleanup/${id}`); writes.push(id); assert.deepEqual(bytes, clipBytes); },
+      set: async (id, bytes) => { assert.ok(queued[0].startsWith(`cleanup/${id}/`)); writes.push(id); assert.deepEqual(bytes, clipBytes); },
       delete: async id => { deletes.push(id); }
     };
     const h = harness({ ...member, mediaStore, steps: [rate, rate, {
@@ -527,7 +527,7 @@ await check("cleanup retries failed deletions, preserves committed media and wai
 await check("post removal persists cleanup intent before deleting rows and survives transient blob deletion failures", async () => {
   let queued = false;
   const mediaStore = {
-    setJSON: async key => { assert.equal(key, `cleanup/${postId}`); queued = true; },
+    setJSON: async key => { assert.ok(key.startsWith(`cleanup/${postId}/`)); queued = true; },
     delete: async () => { throw new Error("Transient storage failure"); }
   };
   const h = harness({ ...member, memberId: "author", mediaStore, steps: [rate,
@@ -535,6 +535,21 @@ await check("post removal persists cleanup intent before deleting rows and survi
     { match: /DELETE FROM halo_signal_feed_posts/, inspect() { assert.ok(queued); } }
   ] });
   assert.equal((await h.request({ action: "delete_post", postId })).status, 200); h.complete();
+});
+await check("older cleanup cannot erase a concurrent deletion intent for the same post", async () => {
+  const oldKey = `cleanup/${postId}/${commentId}`, newKey = `cleanup/${postId}/${notificationId}`;
+  const pending = new Map([[oldKey, { createdAt: 0 }]]);
+  const store = {
+    async *list() { yield { blobs: [{ key: oldKey }] }; },
+    get: async key => pending.get(key),
+    delete: async key => { pending.delete(key); }
+  };
+  const db = { sql: async () => {
+    pending.set(newKey, { createdAt: 4_000_000 });
+    return [{ id: postId }];
+  } };
+  assert.deepEqual(await cleanupSignalMedia(db, store, { now: 4_000_000 }), { scanned: 1, removed: 0, failed: 0 });
+  assert.ok(!pending.has(oldKey)); assert.ok(pending.has(newKey));
 });
 await check("feed, saved views, notifications and direct interactions enforce private visibility in SQL", async () => {
   for (const view of ["feed", "saved", "notifications"]) {

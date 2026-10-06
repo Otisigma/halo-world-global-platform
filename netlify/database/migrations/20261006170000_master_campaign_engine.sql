@@ -77,6 +77,22 @@ CREATE TABLE IF NOT EXISTS halo_campaign_receipts (
   nonce TEXT NOT NULL,
   received_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+-- Independent audit IDs preserve history and avoid adding parent-lock inversions to worker claims.
+CREATE TABLE IF NOT EXISTS halo_campaign_activity (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  sequence BIGSERIAL NOT NULL UNIQUE,
+  campaign_id UUID NOT NULL,
+  version INTEGER NOT NULL CHECK (version > 0),
+  channel TEXT NOT NULL DEFAULT '',
+  job_id UUID,
+  kind TEXT NOT NULL CHECK (kind IN ('generated','revised','output_edited','approved','queue_requested','queued','exported',
+    'cancelled','retry_requested','leased','sending','accepted','delivered','suppressed','failed','retry_scheduled','receipt_verified')),
+  actor_member_id TEXT,
+  details JSONB NOT NULL DEFAULT '{}',
+  event_key TEXT UNIQUE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS halo_campaign_activity_history_idx ON halo_campaign_activity(campaign_id, sequence DESC);
 CREATE TABLE IF NOT EXISTS halo_campaign_worker_budget (
   singleton BOOLEAN PRIMARY KEY DEFAULT TRUE CHECK (singleton),
   window_start TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -128,6 +144,8 @@ BEGIN
   INSERT INTO halo_master_campaigns(id, owner_member_id, version, aggregate, source_fingerprint)
     VALUES((p_doc->>'id')::uuid, p_owner, 1, p_doc, p_fingerprint);
   INSERT INTO halo_master_campaign_versions(campaign_id, version, snapshot) VALUES((p_doc->>'id')::uuid, 1, p_doc);
+  INSERT INTO halo_campaign_activity(campaign_id,version,kind,actor_member_id,details,event_key)
+    VALUES((p_doc->>'id')::uuid,1,'generated',p_owner,COALESCE(p_doc->'generation','{}'::jsonb),(p_doc->>'id') || ':generated:1');
   RETURN p_doc;
 END $$;
 
@@ -146,7 +164,7 @@ BEGIN
     END IF;
     UPDATE halo_campaign_outbox SET status = 'cancelled', lease_token = NULL, lease_until = NULL
       WHERE campaign_id = p_id AND status IN ('pending','retry');
-    doc := doc || p_patch || jsonb_build_object('version', c.version + 1, 'status','draft','approval',NULL,'updatedAt',NOW());
+    doc := doc || (p_patch - 'editedChannel') || jsonb_build_object('version', c.version + 1, 'status','draft','approval',NULL,'exports','{}'::jsonb,'updatedAt',NOW());
   ELSIF p_action = 'approve' THEN
     IF doc->>'status' = 'cancelled' THEN RAISE EXCEPTION 'Revise cancelled campaign before approval'; END IF;
     IF p_patch->>'rightsConfirmed' IS DISTINCT FROM 'true' OR p_patch->>'publicConsent' IS DISTINCT FROM 'true' THEN
@@ -164,6 +182,8 @@ BEGIN
       channel_approvals := jsonb_set(channel_approvals,ARRAY[ch],jsonb_build_object(
         'version',c.version,'memberId',p_owner,'approvedAt',NOW(),'rightsConfirmed',TRUE,'publicConsent',TRUE,
         'overwritePin',ch = 'lobby' AND COALESCE(p_patch->>'overwritePin' = 'true',FALSE)),TRUE);
+      INSERT INTO halo_campaign_activity(campaign_id,version,channel,kind,actor_member_id,details)
+        VALUES(p_id,c.version,ch,'approved',p_owner,channel_approvals->ch);
     END LOOP;
     SELECT jsonb_agg(value ORDER BY value) INTO approved_channels FROM
       (SELECT DISTINCT value FROM jsonb_array_elements_text(COALESCE(doc->'approval'->'channels','[]'::jsonb) || selected_channels)) AS approved;
@@ -217,6 +237,10 @@ BEGIN
             VALUES(p_id,c.version,ch,doc->'outputs'->ch) ON CONFLICT DO NOTHING;
         END IF;
       END LOOP;
+      INSERT INTO halo_campaign_activity(campaign_id,version,channel,job_id,kind,actor_member_id,details,event_key)
+        SELECT p_id,c.version,j.channel,j.id,'queued',p_owner,'{}'::jsonb,j.id::text || ':queued'
+        FROM halo_campaign_outbox j WHERE j.campaign_id = p_id AND j.version = c.version AND j.status = 'pending'
+        ON CONFLICT(event_key) DO NOTHING;
     END IF;
     IF (SELECT COUNT(*) FROM halo_campaign_outbox WHERE status IN ('pending','retry','leased','sending')) > 5000
       OR (SELECT COUNT(*) FROM halo_campaign_outbox WHERE created_at > NOW() - INTERVAL '1 day') > 10000 THEN
@@ -226,12 +250,28 @@ BEGIN
       WHERE campaign_id = p_id AND version = c.version AND status IN ('pending','retry')
         AND doc->'theme'->>'activeFrom' IS NOT NULL;
     doc := doc || jsonb_build_object('status','queued');
+  ELSIF p_action = 'export' THEN
+    ch := p_patch->>'channel';
+    IF doc->>'status' = 'cancelled' OR (doc->'approval'->>'version')::integer IS DISTINCT FROM c.version
+      OR NOT COALESCE(doc->'approval'->'channels' ? ch,FALSE)
+      OR doc->'approval'->>'rightsConfirmed' IS DISTINCT FROM 'true'
+      OR doc->'approval'->>'publicConsent' IS DISTINCT FROM 'true' THEN
+      RAISE EXCEPTION 'Selected channel requires approval';
+    END IF;
+    IF NOT (doc->'outputs' ? ch) THEN RAISE EXCEPTION 'Missing approved output'; END IF;
+    doc := jsonb_set(doc,'{exports}',COALESCE(doc->'exports','{}'::jsonb) || jsonb_build_object(ch,jsonb_build_object(
+      'version',c.version,'status','ready','exportedAt',NOW(),'memberId',p_owner,
+      'count',COALESCE((doc->'exports'->ch->>'count')::integer,0) + 1)),TRUE);
   ELSIF p_action = 'cancel' THEN
     doc := doc || jsonb_build_object('status','cancelled');
     UPDATE halo_campaign_outbox SET status = 'cancelled', lease_token = NULL, lease_until = NULL
       WHERE campaign_id = p_id AND status IN ('pending','retry','leased');
     UPDATE halo_campaign_attempts a SET status = 'cancelled',finished_at = NOW() FROM halo_campaign_outbox j
       WHERE a.job_id = j.id AND a.attempt = j.attempts AND j.campaign_id = p_id AND j.status = 'cancelled' AND a.finished_at IS NULL;
+    INSERT INTO halo_campaign_activity(campaign_id,version,channel,job_id,kind,actor_member_id,details,event_key)
+      SELECT p_id,j.version,j.channel,j.id,'cancelled',p_owner,'{}'::jsonb,j.id::text || ':cancelled'
+      FROM halo_campaign_outbox j WHERE j.campaign_id = p_id AND j.status = 'cancelled'
+      ON CONFLICT(event_key) DO NOTHING;
     -- Sending/accepted/delivered are intentionally retained: external acceptance cannot be undone.
   ELSE RAISE EXCEPTION 'Unknown campaign action';
   END IF;
@@ -240,6 +280,21 @@ BEGIN
   INSERT INTO halo_master_campaign_versions(campaign_id,version,snapshot)
     VALUES(p_id,(doc->>'version')::integer,doc)
     ON CONFLICT(campaign_id,version) DO UPDATE SET snapshot = EXCLUDED.snapshot;
+  IF p_action IN ('revise','edit_output','queue','retry','export','cancel') THEN
+    INSERT INTO halo_campaign_activity(campaign_id,version,channel,kind,actor_member_id,details)
+      VALUES(p_id,(doc->>'version')::integer,COALESCE(p_patch->>'channel',p_patch->>'editedChannel',''),
+        CASE p_action WHEN 'revise' THEN 'revised' WHEN 'edit_output' THEN 'output_edited'
+          WHEN 'queue' THEN 'queue_requested' WHEN 'retry' THEN 'retry_requested'
+          WHEN 'export' THEN 'exported' ELSE 'cancelled' END,p_owner,
+        CASE WHEN p_action = 'export' THEN doc->'exports'->(p_patch->>'channel')
+          ELSE jsonb_build_object('channels',p_patch->'channels','deliveryId',p_patch->>'deliveryId',
+            'recipientSubsetRequested',COALESCE(jsonb_array_length(p_patch->'recipientIds'),0) > 0) END);
+  END IF;
+  IF p_action = 'revise' THEN
+    INSERT INTO halo_campaign_activity(campaign_id,version,kind,actor_member_id,details,event_key)
+      VALUES(p_id,(doc->>'version')::integer,'generated',p_owner,COALESCE(doc->'generation','{}'::jsonb),
+        p_id::text || ':generated:' || (doc->>'version'));
+  END IF;
   RETURN doc;
 END $$;
 
@@ -261,12 +316,23 @@ BEGIN
       lease_token = gen_random_uuid(), lease_until = NOW() + INTERVAL '90 seconds'
       WHERE id = j.id RETURNING * INTO j;
     INSERT INTO halo_campaign_attempts(job_id,attempt) VALUES(j.id,j.attempts) ON CONFLICT DO NOTHING;
+    INSERT INTO halo_campaign_activity(campaign_id,version,channel,job_id,kind,details,event_key)
+      VALUES(j.campaign_id,j.version,j.channel,j.id,'leased',jsonb_build_object('attempt',j.attempts),
+        j.id::text || ':leased:' || j.attempts) ON CONFLICT(event_key) DO NOTHING;
     taken := taken + 1;
     RETURN NEXT j;
   END LOOP;
   UPDATE halo_campaign_worker_budget SET claimed = claimed + taken WHERE singleton;
   UPDATE halo_campaign_outbox SET status = 'failed', last_error = 'Lease expired after final attempt'
     WHERE status IN ('leased','sending') AND lease_until < NOW() AND attempts >= max_attempts;
+  UPDATE halo_campaign_attempts a SET status = 'failed',finished_at = NOW(),error = 'Lease expired after final attempt'
+    FROM halo_campaign_outbox j WHERE a.job_id = j.id AND a.attempt = j.attempts
+      AND j.status = 'failed' AND j.last_error = 'Lease expired after final attempt' AND a.finished_at IS NULL;
+  INSERT INTO halo_campaign_activity(campaign_id,version,channel,job_id,kind,details,event_key)
+    SELECT j.campaign_id,j.version,j.channel,j.id,'failed',jsonb_build_object('attempt',j.attempts,'reason','lease_expired'),
+      j.id::text || ':failed:' || j.attempts FROM halo_campaign_outbox j
+      WHERE j.status = 'failed' AND j.last_error = 'Lease expired after final attempt'
+      ON CONFLICT(event_key) DO NOTHING;
 END $$;
 
 CREATE OR REPLACE FUNCTION halo_campaign_preference(p_member TEXT, p_purpose TEXT, p_subscribed BOOLEAN)
@@ -292,6 +358,9 @@ BEGIN
     OR c.aggregate->'approval'->>'rightsConfirmed' IS DISTINCT FROM 'true'
     OR c.aggregate->'approval'->>'publicConsent' IS DISTINCT FROM 'true' THEN
     UPDATE halo_campaign_outbox SET status = 'cancelled', lease_until = NULL WHERE id = j.id;
+    INSERT INTO halo_campaign_activity(campaign_id,version,channel,job_id,kind,details,event_key)
+      VALUES(j.campaign_id,j.version,j.channel,j.id,'cancelled','{"reason":"approval_or_version"}',
+        j.id::text || ':cancelled') ON CONFLICT(event_key) DO NOTHING;
     RETURN jsonb_build_object('status','cancelled');
   END IF;
   SELECT * INTO m FROM halo_memberships WHERE member_id = c.owner_member_id;
@@ -299,6 +368,9 @@ BEGIN
   IF c.aggregate->'theme'->>'activeUntil' IS NOT NULL AND (c.aggregate->'theme'->>'activeUntil')::timestamptz <= NOW() THEN
     UPDATE halo_campaign_outbox SET status = 'suppressed',result = '{"reason":"theme_expired"}',lease_until = NULL WHERE id = j.id;
     UPDATE halo_campaign_attempts SET finished_at = NOW(),status = 'suppressed' WHERE job_id = j.id AND attempt = j.attempts;
+    INSERT INTO halo_campaign_activity(campaign_id,version,channel,job_id,kind,details,event_key)
+      VALUES(j.campaign_id,j.version,j.channel,j.id,'suppressed','{"reason":"theme_expired"}',
+        j.id::text || ':suppressed') ON CONFLICT(event_key) DO NOTHING;
     RETURN jsonb_build_object('status','suppressed');
   END IF;
   IF j.channel = 'inbox' THEN
@@ -312,6 +384,9 @@ BEGIN
       OR (b.member_id = m.member_id AND b.target_member_id = j.recipient)) THEN
       UPDATE halo_campaign_outbox SET status = 'suppressed', result = '{"reason":"preference_or_block"}' WHERE id = j.id;
       UPDATE halo_campaign_attempts SET finished_at = NOW(),status = 'suppressed' WHERE job_id = j.id AND attempt = j.attempts;
+      INSERT INTO halo_campaign_activity(campaign_id,version,channel,job_id,kind,details,event_key)
+        VALUES(j.campaign_id,j.version,j.channel,j.id,'suppressed','{"reason":"preference_or_block"}',
+          j.id::text || ':suppressed') ON CONFLICT(event_key) DO NOTHING;
       RETURN jsonb_build_object('status','suppressed');
     END IF;
     INSERT INTO halo_campaign_inbox(id,job_id,member_id,sender_member_id,purpose,output)
@@ -335,28 +410,39 @@ BEGIN
     v_result := jsonb_build_object('actorId',m.actor_id);
   ELSE
     UPDATE halo_campaign_outbox SET status = 'sending', external_started_at = NOW() WHERE id = j.id;
+    INSERT INTO halo_campaign_activity(campaign_id,version,channel,job_id,kind,details,event_key)
+      VALUES(j.campaign_id,j.version,j.channel,j.id,'sending',jsonb_build_object('attempt',j.attempts),
+        j.id::text || ':sending:' || j.attempts) ON CONFLICT(event_key) DO NOTHING;
     RETURN jsonb_build_object('status','sending');
   END IF;
   UPDATE halo_campaign_outbox SET status = 'delivered', delivered_at = NOW(), result = v_result, lease_until = NULL WHERE id = j.id;
   UPDATE halo_campaign_attempts SET finished_at = NOW(), status = 'delivered' WHERE job_id = j.id AND attempt = j.attempts;
+  INSERT INTO halo_campaign_activity(campaign_id,version,channel,job_id,kind,actor_member_id,details,event_key)
+    VALUES(j.campaign_id,j.version,j.channel,j.id,'delivered',m.member_id,v_result,j.id::text || ':delivered')
+    ON CONFLICT(event_key) DO NOTHING;
   RETURN v_result || jsonb_build_object('status','delivered');
 END $$;
 
 CREATE OR REPLACE FUNCTION halo_campaign_finish(p_job UUID, p_lease UUID, p_success BOOLEAN, p_error TEXT DEFAULT '')
 RETURNS VOID LANGUAGE plpgsql AS $$
-DECLARE j halo_campaign_outbox%ROWTYPE; cancelled BOOLEAN;
+DECLARE j halo_campaign_outbox%ROWTYPE; cancelled BOOLEAN; next_status TEXT;
 BEGIN
   SELECT aggregate->>'status' = 'cancelled' INTO cancelled FROM halo_master_campaigns
     WHERE id = (SELECT campaign_id FROM halo_campaign_outbox WHERE id = p_job) FOR UPDATE;
   SELECT * INTO j FROM halo_campaign_outbox WHERE id = p_job FOR UPDATE;
   IF j.lease_token IS DISTINCT FROM p_lease OR j.status NOT IN ('leased','sending') THEN RETURN; END IF;
+  next_status := CASE WHEN p_success THEN 'accepted' WHEN cancelled THEN 'cancelled' WHEN j.attempts >= j.max_attempts THEN 'failed' ELSE 'retry' END;
   UPDATE halo_campaign_outbox SET
-    status = CASE WHEN p_success THEN 'accepted' WHEN cancelled THEN 'cancelled' WHEN attempts >= max_attempts THEN 'failed' ELSE 'retry' END,
+    status = next_status,
     accepted_at = CASE WHEN p_success THEN NOW() ELSE accepted_at END,
     available_at = NOW() + LEAST(3600,30 * power(2,j.attempts)::integer) * INTERVAL '1 second',
     last_error = LEFT(p_error,240),lease_until = NULL WHERE id = j.id;
   UPDATE halo_campaign_attempts SET finished_at = NOW(), status = CASE WHEN p_success THEN 'accepted' ELSE 'failed' END,
     error = LEFT(p_error,240) WHERE job_id = j.id AND attempt = j.attempts;
+  INSERT INTO halo_campaign_activity(campaign_id,version,channel,job_id,kind,details,event_key)
+    VALUES(j.campaign_id,j.version,j.channel,j.id,CASE WHEN next_status = 'retry' THEN 'retry_scheduled' ELSE next_status END,
+      jsonb_build_object('attempt',j.attempts,'lastError',LEFT(p_error,240)),
+      j.id::text || ':' || next_status || ':' || j.attempts) ON CONFLICT(event_key) DO NOTHING;
 END $$;
 
 CREATE OR REPLACE FUNCTION halo_campaign_receipt(p_job UUID, p_channel TEXT, p_nonce TEXT)
@@ -371,5 +457,11 @@ BEGIN
   UPDATE halo_campaign_outbox SET status = 'delivered',delivered_at = NOW(),lease_until = NULL,
     result = jsonb_build_object('verifiedReceipt',TRUE) WHERE id = p_job;
   UPDATE halo_campaign_attempts SET status = 'delivered',finished_at = NOW() WHERE job_id = j.id AND attempt = j.attempts;
+  INSERT INTO halo_campaign_activity(campaign_id,version,channel,job_id,kind,details,event_key)
+    VALUES(j.campaign_id,j.version,j.channel,j.id,'receipt_verified','{"verifiedReceipt":true}',
+      j.id::text || ':receipt_verified') ON CONFLICT(event_key) DO NOTHING;
+  INSERT INTO halo_campaign_activity(campaign_id,version,channel,job_id,kind,details,event_key)
+    VALUES(j.campaign_id,j.version,j.channel,j.id,'delivered','{"verifiedReceipt":true}',
+      j.id::text || ':delivered') ON CONFLICT(event_key) DO NOTHING;
   RETURN TRUE;
 END $$;

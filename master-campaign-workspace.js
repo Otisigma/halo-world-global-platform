@@ -326,7 +326,12 @@ function renderOutput(container, channel, output) {
   if (approved) actions.append(button("Export approved copy", async () => {
     if ([...state.editors.values()].some(changed => changed())) throw new Error("Save your edits and approve the saved version before exporting.");
     const data = await request(selectedPayload("export", { channel }));
-    const exported = JSON.stringify(data.export || data.output || data, null, 2);
+    const output = data.output || data.export?.output;
+    if (!output) throw new Error("No approved output was returned for export.");
+    const exported = JSON.stringify({
+      campaignId: state.detail.id, version: state.detail.version, channel,
+      status: "ready", autoSent: false, output
+    }, null, 2);
     const blob = new Blob([exported], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const link = node("a");
@@ -385,6 +390,8 @@ function sessionChanged(user) {
   state.abort = new AbortController();
   state.user = user;
   state.detail = null;
+  state.jobs = [];
+  state.metadata = {};
   state.editors.clear();
   state.busy = false;
   byId("masterCampaignControls").hidden = true;

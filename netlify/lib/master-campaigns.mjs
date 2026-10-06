@@ -247,7 +247,7 @@ export async function buildCampaignDraft(input, source, { generate = generateCam
   const now = new Date().toISOString();
   return {
     id: randomUUID(), type: input.type, title, artistName, summary, objective, audience, destinationUrl,
-    source, theme, version: 1, status: "draft", outputs, approval: null,
+    source, theme, version: 1, status: "draft", outputs, approval: null, exports: {},
     generation: { model: generated.model, usedFallback: generated.usedFallback },
     createdAt: now, updatedAt: now
   };
@@ -265,12 +265,25 @@ export async function campaignJobs(db, memberId, id) {
   return {
     jobs: rows.slice(0, 500).map(row => ({
       id: row.id, version: row.version, channel: row.channel, status: row.status,
-      recipientId: row.recipient || "",
+      recipientId: row.recipient || "", recipient: row.recipient || "",
       attempts: row.attempts, maxAttempts: row.max_attempts, availableAt: row.available_at,
       acceptedAt: row.accepted_at, deliveredAt: row.delivered_at, externalStartedAt: row.external_started_at,
       lastError: row.last_error || "", result: row.result || {}, createdAt: row.created_at
     })),
     jobsTruncated: rows.length > 500
+  };
+}
+export async function campaignActivity(db, memberId, id) {
+  const rows = await db.sql`SELECT a.id,a.sequence,a.version,a.channel,a.job_id,a.kind,a.actor_member_id,a.details,a.created_at
+    FROM halo_campaign_activity a JOIN halo_master_campaigns c ON c.id = a.campaign_id
+    WHERE c.id = ${id} AND c.owner_member_id = ${memberId} ORDER BY a.sequence DESC LIMIT 201`;
+  return {
+    activity: rows.slice(0, 200).map(row => ({
+      id: row.id, sequence: row.sequence == null ? null : String(row.sequence),
+      version: row.version, channel: row.channel, jobId: row.job_id,
+      kind: row.kind, actorMemberId: row.actor_member_id, details: row.details || {}, createdAt: row.created_at
+    })),
+    activityTruncated: rows.length > 200
   };
 }
 export function createMasterCampaignHandler({ getDatabase, getUser, ensureMembership, verifyRequestOrigin, generate, readEnv = env }) {
@@ -298,7 +311,8 @@ export function createMasterCampaignHandler({ getDatabase, getUser, ensureMember
             campaign = rows[0].snapshot;
           }
           return campaignJson({ metadata, campaign,
-            ...await campaignJobs(db, membership.member_id, id) });
+            ...await campaignJobs(db, membership.member_id, id),
+            ...await campaignActivity(db, membership.member_id, id) });
         }
         const rows = await db.sql`SELECT aggregate FROM halo_master_campaigns
           WHERE owner_member_id = ${membership.member_id} ORDER BY updated_at DESC,id LIMIT 101`;
@@ -351,6 +365,7 @@ export function createMasterCampaignHandler({ getDatabase, getUser, ensureMember
       } else if (body.action === "edit_output") {
         if (!campaign.outputs[body.channel]) throw new CampaignError("Channel not present in this campaign");
         patch.outputs = { ...campaign.outputs, [body.channel]: sanitizeOutput(body.channel, body.output, campaign.destinationUrl) };
+        patch.editedChannel = body.channel;
       } else if (body.action === "approve") {
         if (body.rightsConfirmed !== true || body.publicConsent !== true) throw new CampaignError("Explicit rights and public consent required");
         if (campaign.source) await resolveCampaignSource(db, membership, campaign.source, campaign.type);
@@ -376,7 +391,11 @@ export function createMasterCampaignHandler({ getDatabase, getUser, ensureMember
         if (campaign.approval?.version !== version || !campaign.approval.channels?.includes(body.channel)
           || campaign.status === "cancelled") throw new CampaignError("Approve this channel for the current version before export", 409);
         if (!campaign.outputs[body.channel]) throw new CampaignError("Unknown output");
-        return campaignJson({ status: "ready", version, channel: body.channel, output: campaign.outputs[body.channel], autoSent: false });
+        const rows = await db.sql`SELECT halo_campaign_mutate(${membership.member_id},${id}::uuid,${version},'export',
+          ${JSON.stringify({ channel: body.channel })}::jsonb) AS campaign`;
+        const persisted = rows[0].campaign;
+        return campaignJson({ status: "ready", version, channel: body.channel, output: persisted.outputs[body.channel],
+          export: persisted.exports[body.channel], campaign: persisted, autoSent: false });
       } else if (body.action === "retry" && body.deliveryId !== undefined) {
         patch.deliveryId = campaignId(body.deliveryId);
       }

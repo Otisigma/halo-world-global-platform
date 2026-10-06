@@ -54,6 +54,7 @@ function management({ user = owner, origin = true, steps = [] } = {}) {
 }
 const load = campaign => ({ match: /SELECT aggregate.*owner_member_id/, rows: [{ aggregate: campaign }] });
 const jobs = { match: /JOIN halo_master_campaigns.*owner_member_id/, rows: [] };
+const activity = { match: /FROM halo_campaign_activity.*owner_member_id.*LIMIT 201/, rows: [] };
 
 await check("revise regenerates review-only channel variants from the updated facts and preserves source/type identity", async () => {
   const h = management({ steps: [load(approved), { match: /halo_campaign_mutate/, rows: [{ campaign: doc }], inspect(sql, values) {
@@ -131,7 +132,7 @@ await check("workspace and detail use authenticated ownership and bounded job pr
   const h = management({ steps: [{ match: /owner_member_id.*LIMIT 101/, rows: [{ aggregate: doc }] }] });
   const response = await h.handler(new Request("https://halo.example/api/master-campaigns"));
   assert.equal(response.status, 200); assert.equal((await response.json()).campaigns[0].id, id); h.db.complete();
-  const d = management({ steps: [load(doc), jobs] });
+  const d = management({ steps: [load(doc), jobs, activity] });
   assert.equal((await d.handler(new Request(`https://halo.example/api/master-campaigns?id=${id}`))).status, 200); d.db.complete();
 });
 await check("detail serializes scoped CRM delivery recipients as camelCase without leaking lease fields", async () => {
@@ -141,11 +142,12 @@ await check("detail serializes scoped CRM delivery recipients as camelCase witho
     last_error: "", result: { postId: id }, created_at: "2026-10-06T12:00:00Z",
     recipient: "private-member", lease_token: "private-lease"
   };
-  const h = management({ steps: [load(doc), { rows: [row] }] });
+  const h = management({ steps: [load(doc), { rows: [row] }, activity] });
   const response = await h.handler(new Request(`https://halo.example/api/master-campaigns?id=${id}`));
   const job = (await response.json()).jobs[0];
   assert.equal(job.maxAttempts, 5); assert.equal(job.deliveredAt, row.delivered_at);
   assert.equal(job.recipientId, row.recipient);
+  assert.equal(job.recipient, row.recipient);
   assert.equal(job.lastError, ""); assert.deepEqual(job.result, { postId: id });
   assert.doesNotMatch(JSON.stringify(job), /max_attempts|delivered_at|lease_token|private-lease/);
   h.db.complete();
@@ -218,9 +220,15 @@ await check("email and professional outputs can never enter the sending queue", 
   assert.equal((await unconfigured.handler(post({ action: "queue", id, version: 1, channels: ["instagram"] }))).status, 409);
 });
 await check("export reports ready, never sent or delivered, and requires approval", async () => {
-  const h = management({ steps: [load(approved)] });
+  const exported = { ...approved, exports: { press: { version: 1, status: "ready", memberId: member.member_id, count: 1 } } };
+  const h = management({ steps: [load(approved), { match: /halo_campaign_mutate.*'export'/, rows: [{ campaign: exported }], inspect(sql, values) {
+    assert.equal(values[2], 1); assert.deepEqual(JSON.parse(values[3]), { channel: "press" });
+  } }] });
   const response = await h.handler(post({ action: "export", id, version: 1, channel: "press" }));
-  assert.equal(response.status, 200); assert.equal((await response.json()).autoSent, false); h.db.complete();
+  assert.equal(response.status, 200);
+  const result = await response.json();
+  assert.equal(result.autoSent, false); assert.equal(result.export.status, "ready");
+  assert.equal(result.campaign.exports.press.count, 1); h.db.complete();
   const unapproved = management({ steps: [load(doc)] });
   assert.equal((await unapproved.handler(post({ action: "export", id, version: 1, channel: "press" }))).status, 409);
 });
@@ -427,5 +435,22 @@ await check("revision accepts an unchanged owned source and validates destinatio
   assert.equal((await unowned.handler(post({ action: "revise", id, version: 1, source: { kind: "mix", id: source.id } }))).status, 403);
   const unsafe = management({ steps: [load(doc)] });
   assert.equal((await unsafe.handler(post({ action: "revise", id, version: 1, source: null, destinationUrl: "//private.example" }))).status, 400);
+});
+await check("detail provides bounded owner-scoped camelCase activity with durable ready metadata", async () => {
+  const h = management({ steps: [load(approved), jobs, {
+    match: /FROM halo_campaign_activity.*owner_member_id.*LIMIT 201/,
+    rows: Array.from({ length: 201 }, () => ({
+      id, version: 1, channel: "press", job_id: null, kind: "exported",
+      actor_member_id: member.member_id, details: { status: "ready" }, created_at: "2026-10-06T12:00:00Z"
+    })),
+    inspect(sql, values) { assert.deepEqual(values, [id, member.member_id]); }
+  }] });
+  const response = await h.handler(new Request(`https://halo.example/api/master-campaigns?id=${id}`));
+  const data = await response.json();
+  assert.equal(data.activity.length, 200); assert.equal(data.activityTruncated, true);
+  assert.equal(data.activity[0].actorMemberId, member.member_id);
+  assert.equal(data.activity[0].details.status, "ready"); assert.equal(data.activity[0].jobId, null);
+  assert.doesNotMatch(JSON.stringify(data.activity), /actor_member_id|created_at|job_id/);
+  h.db.complete();
 });
 console.log(`Master campaign contracts: ${passed} checks passed.`);

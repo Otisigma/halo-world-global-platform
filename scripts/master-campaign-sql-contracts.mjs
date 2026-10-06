@@ -44,6 +44,7 @@ BEGIN
   ASSERT v->>'status' = 'draft';
   ASSERT halo_campaign_create('owner',c,'stable-fingerprint')->>'id' = cid::text;
   ASSERT (SELECT COUNT(*) FROM halo_master_campaigns) = 1, 'Deduplication failed';
+  ASSERT (SELECT COUNT(*) FROM halo_campaign_activity WHERE campaign_id = cid AND kind = 'generated') = 1, 'Repair duplicated generation activity';
   v := c || jsonb_build_object('id',gen_random_uuid());
   v := jsonb_set(v,'{outputs,tiktok,body}',c->'outputs'->'signal'->'body');
   PERFORM halo_campaign_create('owner',v,NULL);
@@ -68,6 +69,17 @@ BEGIN
   ASSERT v->'approval'->>'memberId' = 'owner';
   ASSERT v->'approval'->'channels' = '["signal"]'::jsonb, 'Individual approval silently approved other channels';
   ASSERT v->'approval'->'channelApprovals'->'signal'->>'version' = '1';
+  ASSERT (SELECT COUNT(*) FROM halo_campaign_activity WHERE campaign_id = cid AND kind = 'approved' AND channel = 'signal') = 1;
+  BEGIN
+    PERFORM halo_campaign_mutate('owner',cid,1,'export','{"channel":"inbox"}');
+    RAISE EXCEPTION 'Unapproved output exported';
+  EXCEPTION WHEN OTHERS THEN ASSERT SQLERRM = 'Selected channel requires approval'; END;
+  v := halo_campaign_mutate('owner',cid,1,'export','{"channel":"signal"}');
+  v := halo_campaign_mutate('owner',cid,1,'export','{"channel":"signal"}');
+  ASSERT v->'exports'->'signal'->>'status' = 'ready';
+  ASSERT v->'exports'->'signal'->>'count' = '2';
+  ASSERT (SELECT COUNT(*) FROM halo_campaign_outbox) = 0, 'Export caused a send';
+  ASSERT (SELECT COUNT(*) FROM halo_campaign_activity WHERE campaign_id = cid AND kind = 'exported' AND details->>'status' = 'ready') = 2;
   BEGIN
     PERFORM halo_campaign_mutate('owner',cid,1,'queue','{"channels":["inbox"]}');
     RAISE EXCEPTION 'Unapproved channel queued';
@@ -88,6 +100,7 @@ BEGIN
   PERFORM halo_campaign_mutate('owner',cid,1,'queue','{"channels":["inbox","signal","tiktok"],"recipientIds":["reader","release-only","off","unknown"]}');
   PERFORM halo_campaign_mutate('owner',cid,1,'queue','{"channels":["inbox","signal","tiktok"],"recipientIds":["reader","release-only","off","unknown"]}');
   ASSERT (SELECT COUNT(*) FROM halo_campaign_outbox) = 3, 'Queue idempotency failed';
+  ASSERT (SELECT COUNT(*) FROM halo_campaign_activity WHERE campaign_id = cid AND kind = 'queued') = 3, 'Duplicate queue activity';
   ASSERT (SELECT recipient FROM halo_campaign_outbox WHERE channel = 'inbox') = 'reader', 'Recipient subset or opt-in purpose ignored';
   PERFORM halo_campaign_preference('reader','halo_updates',FALSE);
   SELECT * INTO j FROM halo_campaign_claim(10) WHERE channel = 'inbox';
@@ -101,19 +114,26 @@ BEGIN
   ASSERT r->>'status' = 'delivered';
   ASSERT halo_campaign_deliver(j.id,lease,'{"memberId":"owner"}') IS NULL;
   ASSERT (SELECT COUNT(*) FROM halo_signal_feed_posts) = 1, 'Native Signal duplicated';
+  ASSERT (SELECT COUNT(*) FROM halo_campaign_activity WHERE campaign_id = cid AND channel = 'signal' AND kind = 'delivered') = 1, 'Native delivery audit duplicated';
   SELECT * INTO j FROM halo_campaign_outbox WHERE channel = 'tiktok';
   r := halo_campaign_deliver(j.id,j.lease_token,NULL);
   ASSERT r->>'status' = 'sending';
   PERFORM halo_campaign_finish(j.id,j.lease_token,TRUE,'');
   ASSERT (SELECT status FROM halo_campaign_outbox WHERE id = j.id) = 'accepted';
   ASSERT (SELECT delivered_at FROM halo_campaign_outbox WHERE id = j.id) IS NULL, '2xx incorrectly marked delivered';
+  ASSERT EXISTS(SELECT 1 FROM halo_campaign_activity WHERE job_id = j.id AND kind = 'accepted');
+  ASSERT NOT EXISTS(SELECT 1 FROM halo_campaign_activity WHERE job_id = j.id AND kind = 'delivered'), 'Accepted activity claimed delivery';
   receipt := halo_campaign_receipt(j.id,'instagram','nonce1234567890123456');
   ASSERT receipt = FALSE, 'Cross-channel receipt accepted';
   receipt := halo_campaign_receipt(j.id,'tiktok','nonce1234567890123456');
   ASSERT receipt = TRUE;
   ASSERT halo_campaign_receipt(j.id,'tiktok','nonce1234567890123456') = FALSE, 'Receipt replay accepted';
+  ASSERT (SELECT COUNT(*) FROM halo_campaign_activity WHERE job_id = j.id AND kind = 'receipt_verified') = 1, 'Receipt replay duplicated activity';
   v := halo_campaign_mutate('owner',cid,1,'revise','{"summary":"Updated fact"}');
   ASSERT v->>'version' = '2' AND v->'approval' = 'null'::jsonb AND v->>'status' = 'draft';
+  ASSERT v->'exports' = '{}'::jsonb, 'New revision retained current export status';
+  ASSERT (SELECT snapshot->'exports'->'signal'->>'status' FROM halo_master_campaign_versions WHERE campaign_id = cid AND version = 1) = 'ready', 'Historical export state lost';
+  ASSERT EXISTS(SELECT 1 FROM halo_campaign_activity WHERE campaign_id = cid AND version = 2 AND kind = 'generated');
   ASSERT (SELECT snapshot->'outputs'->'signal'->>'body' FROM halo_master_campaign_versions WHERE campaign_id = cid AND version = 1) = 'Reviewed fact';
   PERFORM halo_campaign_preference('reader','halo_updates',TRUE);
   PERFORM halo_campaign_mutate('owner',cid,2,'approve','{"rightsConfirmed":true,"publicConsent":true}');

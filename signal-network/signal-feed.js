@@ -1,9 +1,12 @@
+import { createFeedCard, createSignalComposer, SIGNAL_VISIBILITY } from "./signal-components.js";
+
 const endpoint = "/api/signal-feed";
 const byId = id => document.getElementById(id);
 const feedState = { memberId: "", cursor: null, saved: false, generation: 0, session: 0, busy: false, notificationCursor: null };
 const posts = byId("feedPosts");
 const status = byId("feedStatus");
 const publishForm = byId("feedPublishForm");
+let composer;
 const mutationOrigin = () => ({ session: feedState.session, generation: feedState.generation });
 function ensureOrigin(origin, checkGeneration = true) {
   if (origin.session !== feedState.session || (checkGeneration && origin.generation !== feedState.generation)) {
@@ -12,8 +15,8 @@ function ensureOrigin(origin, checkGeneration = true) {
     throw error;
   }
 }
-function actionError(error, origin) {
-  if (origin.session === feedState.session && origin.generation === feedState.generation && error.name !== "FeedSessionChanged") status.textContent = error.message;
+function actionError(error, origin, checkGeneration = true) {
+  if (origin.session === feedState.session && (!checkGeneration || origin.generation === feedState.generation) && error.name !== "FeedSessionChanged") status.textContent = error.message;
 }
 function node(tag, content, className) {
   const result = document.createElement(tag);
@@ -42,7 +45,7 @@ function link(label, url) {
 }
 async function request(params = {}, body) {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 12000);
+  const timeout = setTimeout(() => controller.abort(), body?.attachment ? 60000 : 12000);
   try {
     const response = await fetch(`${endpoint}?${new URLSearchParams(params)}`, {
       credentials: "same-origin", signal: controller.signal,
@@ -57,9 +60,9 @@ async function request(params = {}, body) {
   } finally { clearTimeout(timeout); }
 }
 async function mutate(action, data, origin = mutationOrigin()) {
-  ensureOrigin(origin);
-  const result = await request({}, { action, ...data });
-  ensureOrigin(origin);
+  ensureOrigin(origin, action !== "publish");
+  const result = await request(data.attachment ? { upload: "clip" } : {}, { action, ...data });
+  ensureOrigin(origin, action !== "publish");
   return result;
 }
 function requireMember() {
@@ -77,8 +80,9 @@ function displayDate(value) {
   return new Date(value).toLocaleString();
 }
 function publicCommentForm(post, container, reload) {
+  const isPublic = (post.visibility || "PUBLIC") === "PUBLIC";
   const form = node("form", null, "signal-feed__comment-form");
-  const context = node("p", "Add a public comment");
+  const context = node("p", isPublic ? "Add a public comment" : "Comment for this post's selected audience");
   const parent = node("input"); parent.type = "hidden"; parent.name = "parentId";
   const label = node("label", "Comment");
   const input = node("textarea"); input.maxLength = 1200; input.required = true; input.rows = 2;
@@ -90,11 +94,12 @@ function publicCommentForm(post, container, reload) {
     seconds = node("input"); seconds.type = "number"; seconds.min = "0"; seconds.max = "86400"; seconds.step = "1";
     timeLabel.append(seconds); form.append(timeLabel);
   }
-  const consentLabel = node("label", " I deliberately publish this comment for everyone to see.");
+  const consentLabel = node("label", isPublic ? " I deliberately publish this comment for everyone to see." : " I share this comment with this post's selected audience.");
   const consent = node("input"); consent.type = "checkbox"; consent.required = true;
   consentLabel.prepend(consent);
   const submit = node("button", "Publish comment"); submit.type = "submit";
-  form.append(consentLabel, submit, button("Cancel reply", () => { parent.value = ""; context.textContent = "Add a public comment"; }));
+  const commentContext = () => isPublic ? "Add a public comment" : "Comment for this post's selected audience";
+  form.append(consentLabel, submit, button("Cancel reply", () => { parent.value = ""; context.textContent = commentContext(); }));
   form.addEventListener("submit", async event => {
     event.preventDefault();
     const origin = mutationOrigin();
@@ -102,12 +107,13 @@ function publicCommentForm(post, container, reload) {
     try {
       requireMember();
       await mutate("comment", {
-        postId: post.id, body: input.value, parentId: parent.value || null, publishPublic: consent.checked,
+        postId: post.id, body: input.value, parentId: parent.value || null, publishPublic: isPublic && consent.checked,
+        confirmAudience: !isPublic && consent.checked,
         timestampSeconds: seconds?.value ? Number(seconds.value) : null
       }, origin);
-      form.reset(); context.textContent = "Add a public comment"; await reload();
+      form.reset(); context.textContent = commentContext(); await reload();
       ensureOrigin(origin);
-      status.textContent = "Comment published publicly.";
+      status.textContent = isPublic ? "Comment published publicly." : "Comment shared with this post's audience.";
     } catch (error) { actionError(error, origin); }
     finally { if (origin.session === feedState.session) submit.disabled = false; }
   });
@@ -115,7 +121,7 @@ function publicCommentForm(post, container, reload) {
   return comment => {
     requireMember();
     parent.value = comment.id;
-    context.textContent = `Replying publicly to ${comment.authorName} (one level only)`;
+    context.textContent = `Replying ${isPublic ? "publicly" : "within this audience"} to ${comment.authorName} (one level only)`;
     input.focus();
   };
 }
@@ -185,32 +191,9 @@ function safetyButtons(memberId) {
   ];
 }
 function renderPost(post) {
-  const article = node("article", null, "signal-feed__post");
+  const card = createFeedCard(post);
+  const article = card.element;
   article.id = `feed-post-${post.id}`;
-  const heading = node("header");
-  heading.append(node("strong", post.authorName), node("span", post.kind), node("time", displayDate(post.createdAt)));
-  heading.lastChild.dateTime = post.createdAt;
-  article.append(heading, node("p", post.body, "signal-feed__body"));
-  let audio;
-  if (post.kind === "AUDIO") {
-    if (post.media?.audioUrl) {
-      article.append(node("h3", `${post.media.title} — ${post.media.artist}`));
-      const musicDetails = [
-        post.media.bpm != null ? `${post.media.bpm} BPM` : "",
-        post.media.musicalKey ? `Key: ${post.media.musicalKey}` : "",
-        post.media.genres?.length ? post.media.genres.join(" / ") : ""
-      ].filter(Boolean);
-      if (musicDetails.length) article.append(node("p", musicDetails.join(" · "), "signal-feed__music-metadata"));
-      const wave = node("div", null, "signal-feed__waveform");
-      wave.setAttribute("aria-hidden", "true");
-      for (let index = 0; index < 48; index++) wave.append(node("i"));
-      audio = node("audio"); audio.controls = true; audio.preload = "none"; audio.src = post.media.audioUrl;
-      audio.setAttribute("aria-label", `${post.media.title} audio player`);
-      article.append(wave, node("small", "Curated visual waveform — decorative, not analyzed audio."), audio);
-      if (post.media.purchaseUrl) article.append(link("Purchase at the release's existing destination ↗", post.media.purchaseUrl));
-    } else article.append(node("p", "This release's public audio is no longer available. No private asset is exposed."));
-  }
-  if (post.linkUrl) article.append(link(post.kind === "VIDEO" ? "Open public video ↗" : "Open public brief ↗", post.linkUrl));
   const actions = node("div", null, "signal-feed__actions");
   for (const kind of ["boost", "save"]) {
     const key = kind === "boost" ? "boosted" : "saved";
@@ -228,10 +211,10 @@ function renderPost(post) {
   }
   actions.append(...safetyButtons(post.memberId));
   if (post.memberId === feedState.memberId) actions.append(button("Remove post", async () => {
-    if (!window.confirm("Remove this public post and all comments?")) return;
+    if (!window.confirm("Remove this post and all comments?")) return;
     await mutate("delete_post", { postId: post.id }); article.remove();
   }));
-  article.append(actions, commentsPanel(post, audio));
+  article.append(actions, commentsPanel(post, card.player));
   return article;
 }
 async function loadFeed(append = false) {
@@ -240,7 +223,7 @@ async function loadFeed(append = false) {
   const generation = feedState.generation;
   feedState.busy = true; posts.setAttribute("aria-busy", "true");
   byId("feedMore").disabled = true;
-  status.textContent = "Loading public posts…";
+  status.textContent = "Loading signals…";
   try {
     const data = await request({ view: feedState.saved ? "saved" : "feed", ...(append ? { cursor: feedState.cursor } : {}) });
     if (generation !== feedState.generation) return;
@@ -249,7 +232,7 @@ async function loadFeed(append = false) {
     for (const post of data.items) posts.append(renderPost(post));
     if (!posts.children.length) posts.append(node("p", feedState.saved ? "No saved posts yet." : "No public signals yet. Be the first to deliberately publish one."));
     feedState.cursor = data.nextCursor; byId("feedMore").hidden = !data.nextCursor;
-    status.textContent = "Public feed loaded. Newest first.";
+    status.textContent = "Signals loaded. Newest first; private signals are visible only to their selected audience.";
   } catch (error) {
     if (generation === feedState.generation) {
       status.textContent = error.message;
@@ -295,6 +278,7 @@ async function loadNotifications(append = false) {
   finally { notificationBusy = false; }
 }
 let catalogLoaded = false;
+let catalogLoading = false;
 async function loadBlocks() {
   if (!feedState.memberId) return;
   const memberId = feedState.memberId, generation = feedState.generation;
@@ -317,15 +301,16 @@ async function loadBlocks() {
     if (generation === feedState.generation && memberId === feedState.memberId) byId("feedBlockedList").replaceChildren(node("p", error.message));
   }
 }
-async function postType() {
+async function postType(hasAttachment = composer?.hasAttachment || false) {
   const session = feedState.session;
   const kind = byId("feedKind").value;
-  byId("feedReleaseField").hidden = kind !== "AUDIO";
-  byId("feedPurchaseField").hidden = kind !== "AUDIO";
-  byId("feedLinkField").hidden = !["VIDEO", "BRIEF_LINK"].includes(kind);
-  byId("feedRelease").required = kind === "AUDIO";
-  publishForm.elements.linkUrl.required = ["VIDEO", "BRIEF_LINK"].includes(kind);
-  if (kind !== "AUDIO" || catalogLoaded) return;
+  byId("feedReleaseField").hidden = kind !== "AUDIO" || hasAttachment;
+  byId("feedPurchaseField").hidden = kind !== "AUDIO" || hasAttachment;
+  byId("feedLinkField").hidden = !["VIDEO", "BRIEF_LINK"].includes(kind) || hasAttachment;
+  byId("feedRelease").required = kind === "AUDIO" && !hasAttachment;
+  publishForm.elements.linkUrl.required = ["VIDEO", "BRIEF_LINK"].includes(kind) && !hasAttachment;
+  if (kind !== "AUDIO" || hasAttachment || catalogLoaded || catalogLoading) return;
+  catalogLoading = true;
   try {
     const response = await fetch("/api/release-catalog", { credentials: "same-origin", signal: AbortSignal.timeout(12000) });
     if (!response.ok) throw new Error("Published release catalog unavailable. Choose another type or try again.");
@@ -340,26 +325,42 @@ async function postType() {
     }
     catalogLoaded = true;
   } catch (error) { if (session === feedState.session) status.textContent = error.message; }
+  finally { catalogLoading = false; }
 }
-byId("feedKind").addEventListener("change", postType);
+composer = createSignalComposer(publishForm, { onTypeChange: postType });
+byId("feedRelease").addEventListener("change", async () => {
+  const session = feedState.session, releaseId = byId("feedRelease").value;
+  composer.setReleases([]);
+  if (!releaseId) return;
+  try {
+    const media = await request({ view: "release", releaseId });
+    if (session === feedState.session && byId("feedRelease").value === releaseId) composer.setReleases([media]);
+  } catch (error) { if (session === feedState.session) status.textContent = error.message; }
+});
+let publishing = false;
 publishForm.addEventListener("submit", async event => {
   event.preventDefault();
+  if (publishing) return;
+  publishing = true;
   const origin = mutationOrigin();
   const submit = byId("feedPublish"); submit.disabled = true;
   try {
     requireMember();
-    const values = publishForm.elements;
-    await mutate("publish", {
-      kind: values.kind.value, body: values.body.value, releaseId: values.releaseId.value,
-      linkUrl: values.linkUrl.value, includePurchase: values.kind.value === "AUDIO" && values.includePurchase.checked,
-      publishPublic: values.publishPublic.checked
-    }, origin);
-    publishForm.reset(); postType(); feedState.saved = false;
+    const pendingData = composer.publishData();
+    composer.lock(true);
+    status.textContent = composer.hasAttachment ? "Uploading clip and publishing signal…" : "Publishing signal…";
+    const data = await pendingData;
+    await mutate("publish", data, origin);
+    publishForm.reset(); composer.reset(); feedState.saved = false;
     byId("feedSaved").setAttribute("aria-pressed", "false"); await loadFeed();
     ensureOrigin(origin, false);
-    status.textContent = "Signal deliberately published to the public feed.";
-  } catch (error) { actionError(error, origin); }
-  finally { if (origin.session === feedState.session) submit.disabled = !feedState.memberId; }
+    status.textContent = `Signal published to ${SIGNAL_VISIBILITY[data.visibility]}.`;
+  } catch (error) { actionError(error, origin, false); }
+  finally {
+    if (origin.session === feedState.session) {
+      publishing = false; composer.lock(false); submit.disabled = !feedState.memberId;
+    }
+  }
 });
 byId("feedRefresh").addEventListener("click", async () => { await loadFeed(); loadNotifications(); loadBlocks(); if (!catalogLoaded) postType(); });
 byId("feedMore").addEventListener("click", () => loadFeed(true));
@@ -373,7 +374,12 @@ byId("feedBlocked").addEventListener("toggle", () => { if (byId("feedBlocked").o
 function connectIdentity() {
   window.haloIdentity.onAuthChange(async () => {
     feedState.session++;
-    publishForm.reset(); postType();
+    for (const player of posts.querySelectorAll("audio, video")) {
+      player.pause(); player.removeAttribute("src"); player.load();
+    }
+    posts.replaceChildren();
+    publishing = false;
+    publishForm.reset(); composer.reset(); composer.lock(false);
     identityControls(""); feedState.saved = false;
     byId("feedSaved").setAttribute("aria-pressed", "false");
     byId("feedNotificationList").replaceChildren(node("p", "Sign in to see your notifications."));

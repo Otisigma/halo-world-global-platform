@@ -91,7 +91,7 @@ export function createVisibilitySelector(form) {
     document.getElementById("feedConsentText").textContent = isPublic
       ? "I deliberately publish this signal and its links for everyone to see."
       : "I confirm sharing only with myself and the member IDs selected above.";
-    document.getElementById("feedPublish").textContent = `Publish to ${SIGNAL_VISIBILITY[select.value]}`;
+    document.getElementById("btn-publish-signal").textContent = `Publish to ${SIGNAL_VISIBILITY[select.value]}`;
   }
   select.addEventListener("change", () => { consent.checked = false; update(); });
   audience.addEventListener("input", () => { consent.checked = false; });

@@ -242,8 +242,13 @@
     const imagesWithoutAlt = [...document.images].filter(image => !image.hasAttribute("alt"));
     const audioContext = window.__haloAudioContext;
     const audioHealth = window.__haloAudioHealth;
-    const audioReady = (!audioContext || ["running", "suspended"].includes(audioContext.state)) && audioHealth?.status !== "error";
-    const audioDetail = audioHealth?.message || (audioContext ? `Audio engine is ${audioContext.state}. Press play to run a signal check.` : "Audio engine loads on the first playback gesture.");
+    const continuityFailed = audioHealth?.continuity?.state === "bridge-active";
+    const audioReady = (!audioContext || ["running", "suspended"].includes(audioContext.state))
+      && audioHealth?.status !== "error"
+      && !continuityFailed;
+    const audioDetail = continuityFailed
+      ? "Audio output fell silent while playback was expected; the continuity bridge is active."
+      : audioHealth?.message || (audioContext ? `Audio engine is ${audioContext.state}. Press play to run a signal check.` : "Audio engine loads on the first playback gesture.");
     const dash = await runWatcherChecks(cycle?.watcherResults);
     const failedWatchers = (dash.watchers || []).filter(watcher => watcher.status !== "green");
     const controlRoomChecks = cycle ? [{
@@ -299,7 +304,42 @@
     }).then(response => {
       if (!response.ok) throw new Error(`Issue endpoint returned ${response.status}`);
       return response.json();
+    }).then(result => {
+      window.HaloAlertStore?.remove("network:issue-report");
+      return result;
+    }).catch(error => {
+      if (body.fingerprint) submittedFindings.delete(body.fingerprint);
+      window.HaloAlertStore?.upsert({
+        id: "network:issue-report",
+        title: "Maintenance report could not be sent",
+        message: error?.message || "The issue endpoint is unavailable.",
+        category: "network",
+        severity: "warning",
+        retryable: true,
+        fingerprint: body.fingerprint || ""
+      });
+      throw error;
     });
+  }
+
+  function syncMaintenanceAlerts(checks) {
+    const store = window.HaloAlertStore;
+    if (!store) return;
+    const activeIds = new Set();
+    checks.filter(check => !check.ok).forEach(check => {
+      const id = `diagnostic:${check.name}`;
+      activeIds.add(id);
+      store.upsert({
+        id,
+        title: check.name,
+        message: check.detail,
+        category: check.category,
+        severity: check.severity === "high" ? "critical" : "warning",
+        retryable: true,
+        fingerprint: `${window.location.pathname}|${check.name}|${check.detail}`
+      });
+    });
+    store.list().filter(alert => alert.id.startsWith("diagnostic:") && !activeIds.has(alert.id)).forEach(alert => store.remove(alert.id));
   }
 
   // Learning loop: patterns the control room keeps seeing are escalated once
@@ -397,6 +437,19 @@
       })));
 
     const failed = results.filter(result => result.status === "rejected").length;
+    results.forEach((result, index) => {
+      if (result.status !== "rejected") return;
+      submittedFindings.delete(pending[index].fingerprint);
+      window.HaloAlertStore?.upsert({
+        id: "network:issue-report",
+        title: "Maintenance report could not be sent",
+        message: result.reason?.message || "The issue endpoint is unavailable.",
+        category: "network",
+        severity: "warning",
+        retryable: true,
+        fingerprint: pending[index].fingerprint
+      });
+    });
     reportElement.dataset.state = failed ? "failed" : "sent";
     reportElement.textContent = failed
       ? `${pending.length - failed} reported; ${failed} could not be sent and can be retried after reload.`
@@ -441,6 +494,7 @@
       if (activeRender) return activeRender;
       activeRender = (async () => {
         const checks = await runChecks();
+        syncMaintenanceAlerts(checks);
         const issueCount = checks.reduce((total, check) => total + check.count, 0);
         const hasHighSeverityIssue = checks.some(check => !check.ok && check.severity === "high");
         const launcherState = hasHighSeverityIssue ? "broken" : issueCount ? "attention" : "healthy";
@@ -472,6 +526,10 @@
       launcher.focus();
     });
     panel.querySelector(".halo-qa-run").addEventListener("click", () => render());
+    window.addEventListener("halo:maintenance-retry", () => {
+      if (activeRender) activeRender.finally(() => render());
+      else render();
+    });
     window.addEventListener("halo:audio-state", () => render());
     render();
     setInterval(() => render(), 15000);

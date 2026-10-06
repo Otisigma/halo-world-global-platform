@@ -19,6 +19,7 @@
         getBoundaryState: options.getBoundaryState || (() => null),
         onPreroll: options.onPreroll || (() => {}),
         onCriticalBoundary: options.onCriticalBoundary || (() => {}),
+        onSourceEnded: options.onSourceEnded || (() => {}),
         startFiller: options.startFiller || (() => {}),
         stopFiller: options.stopFiller || (() => {}),
         onStatusChange: options.onStatusChange || (() => {}),
@@ -165,6 +166,18 @@
         return;
       }
       if (this.status.state !== "pre-roll") this.setStatus("normal", "Continuity guard locked. No silence exposed.");
+    }
+
+    reportSourceEnded(detail = {}) {
+      if (!this.callbacks.isPlaybackExpected()) return false;
+      const payload = { ...detail, reason: detail.reason || "unexpected_source_end" };
+      this.notifyTelemetry("source_ended", payload);
+      try {
+        this.callbacks.onSourceEnded(payload);
+      } catch {
+        // Recovery and reporting callbacks must not break the watchdog.
+      }
+      return true;
     }
 
     startWatchdog() {

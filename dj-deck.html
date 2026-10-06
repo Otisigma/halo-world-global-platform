@@ -24,6 +24,9 @@
   <meta name="twitter:image:alt" content="HALO Music World logo">
   <script src="/stats.js" defer></script>
   <script src="/site-monitor.js" defer></script>
+  <script src="/halo-alert-store.js" defer></script>
+  <script src="/maintenance-panel.js" defer></script>
+  <link rel="stylesheet" href="/maintenance-panel.css">
   <link rel="stylesheet" href="/accessibility.css">
   <link rel="stylesheet" href="/halo-brand.css">
   <link rel="stylesheet" href="/mix-flightplan.css">
@@ -1822,8 +1825,8 @@
     <footer class="footer"><span>HALO performance system · demo engine</span><nav class="footer-socials" aria-label="HALO social profiles"><a href="https://www.youtube.com/@halo-music-world" target="_blank" rel="noopener noreferrer">YouTube ↗</a><a href="https://www.tiktok.com/@halomusicworldhome" target="_blank" rel="noopener noreferrer">TikTok ↗</a></nav><div class="keyboard-hints"><span><kbd>Space</kbd> Play master</span><span><kbd>S</kbd> Sync tempo</span><span><kbd>F</kbd> Desk only</span></div></footer>
   </main>
 
-  <span class="visually-hidden" id="maintenanceDockHelp">Opens a toast with current booth, cloud revision, upload progress, and audio verification maintenance status.</span>
-  <button class="maintenance-dock" id="maintenanceDock" type="button" aria-label="Show maintenance alerts" aria-describedby="maintenanceDockHelp"><span class="visually-hidden">Show </span><span>Maintenance alerts</span><strong id="maintenanceDockCount">10 alerts</strong></button>
+  <span class="visually-hidden" id="maintenanceDockHelp">Opens the live maintenance alert panel.</span>
+  <button class="maintenance-dock" id="maintenanceDock" type="button" aria-label="Show maintenance alerts, 0 active" aria-describedby="maintenanceDockHelp"><span class="visually-hidden">Show </span><span>Maintenance alerts</span><strong id="maintenanceDockCount">0 alerts</strong></button>
   <div class="toast" id="toast" role="status" aria-live="polite"><strong id="toastTitle">System</strong><p id="toastMessage">Ready.</p></div>
 
   <script src="/halo-safe-text.js"></script>
@@ -1837,6 +1840,11 @@
       upper: (value, fallback = "") => String(value ?? fallback).toUpperCase(),
       eventKey: event => String(event?.key ?? "").toLowerCase()
     };
+    if (status.state === "bridge-active") {
+      reportAudioHealth("error", "Audio output fell silent while playback was expected; continuity bridge engaged.", { error: "continuity_silence" });
+    } else if (status.state === "normal" && audioHealth.lastError === "continuity_silence") {
+      reportAudioHealth("running", "Audio signal recovered; continuity bridge released.");
+    }
     const TRACK_DNA_DEFAULTS = { danceability: 6, emotionalIntensity: 5, darkness: 5, warmth: 5, vocalDensity: 4, percussionDensity: 6, bassWeight: 6, melodicDensity: 5, atmosphere: 6, energyRole: "builder", sonicWeather: "Balanced, groove-led and open enough for a patient blend.", signatureMoment: "Protect the central hook before opening the next phrase." };
     const tracks = [
       { id: "static-bloom", title: "Static Bloom", artist: "Osei Arc", bpm: 125, key: "8B", genre: "Deep house", energy: 7, warmth: 7, atmosphere: 8, percussionDensity: 7, energyRole: "driver", sonicWeather: "Warm, humid and hypnotic; hand percussion gathers beneath a late melodic bloom.", platform: "HALO Library", cover: "linear-gradient(145deg,#243d27,#7aa24f 48%,#d9ff81)" },
@@ -2870,8 +2878,8 @@
       recordingDestination: null,
       animationFrame: null,
       decks: {
-        A: { input: null, trim: null, gain: null, cueGain: null, cueActive: false, analyser: null, filters: null, effects: null, source: null, stemSources: {}, stemGains: {}, timer: null, step: 0, level: 0, startedAt: 0, playRequestedAt: 0, hasSignal: false, signalConfirmed: false, noSignalReported: false, stems: { bass: true, hats: true, vocals: true } },
-        B: { input: null, trim: null, gain: null, cueGain: null, cueActive: false, analyser: null, filters: null, effects: null, source: null, stemSources: {}, stemGains: {}, timer: null, step: 0, level: 0, startedAt: 0, playRequestedAt: 0, hasSignal: false, signalConfirmed: false, noSignalReported: false, stems: { bass: true, hats: true, vocals: true } }
+        A: { input: null, trim: null, gain: null, cueGain: null, cueActive: false, analyser: null, filters: null, effects: null, source: null, stemSources: {}, stemGains: {}, timer: null, step: 0, level: 0, startedAt: 0, playRequestedAt: 0, hasSignal: false, signalConfirmed: false, noSignalReported: false, unexpectedEndRecoveries: 0, stems: { bass: true, hats: true, vocals: true } },
+        B: { input: null, trim: null, gain: null, cueGain: null, cueActive: false, analyser: null, filters: null, effects: null, source: null, stemSources: {}, stemGains: {}, timer: null, step: 0, level: 0, startedAt: 0, playRequestedAt: 0, hasSignal: false, signalConfirmed: false, noSignalReported: false, unexpectedEndRecoveries: 0, stems: { bass: true, hats: true, vocals: true } }
       }
     };
     const audioHealth = {
@@ -3197,18 +3205,6 @@
       showToast.timer = setTimeout(() => elements.toast.classList.remove("is-visible"), 3200);
     }
 
-    function maintenanceAlertCountLabel() {
-      return elements.maintenanceDockCount?.textContent?.trim() || "10 alerts";
-    }
-
-    function syncMaintenanceDockLabel() {
-      if (!elements.maintenanceDock) return;
-      const count = maintenanceAlertCountLabel();
-      const label = `${count} currently monitored.`;
-      elements.maintenanceDock.title = `Show maintenance alerts. ${label}`;
-      if (elements.maintenanceDockHelp) elements.maintenanceDockHelp.textContent = `Opens a toast with current booth, cloud revision, upload progress, and audio verification maintenance status. ${label}`;
-    }
-
     function currentCloudRevisionLabel() {
       const sessionLabel = elements.sessionSaveStatus?.textContent?.trim() || "";
       if (/^Cloud revision/i.test(sessionLabel)) return sessionLabel;
@@ -3218,11 +3214,6 @@
 
     function showCloudRevisionToast() {
       showToast("Cloud revision", currentCloudRevisionLabel());
-    }
-
-    function showMaintenanceAlertsToast() {
-      syncMaintenanceDockLabel();
-      showToast("Maintenance alerts", `${maintenanceAlertCountLabel()} watching booth video, cloud revision, upload progress, and audio verification.`);
     }
 
     function setStemVaultStatus(message, error = false) {
@@ -3605,6 +3596,7 @@
       audioHealth.message = message;
       audioHealth.updatedAt = Date.now();
       if (options.error) audioHealth.lastError = options.error;
+      else if (status !== "error") audioHealth.lastError = "";
       if (options.deckId) {
         audioHealth.decks[options.deckId] = {
           playing: Boolean(deckState[options.deckId].playing),
@@ -3812,6 +3804,7 @@
           });
         },
         onCriticalBoundary: detail => { prepareDeckContinuityPreroll(detail.incomingDeckId); },
+        onSourceEnded: detail => { recoverUnexpectedDeckEnd(detail.deckId, detail); },
         startFiller: startDeckContinuityFiller,
         stopFiller: stopDeckContinuityFiller,
         onTelemetry: () => {},
@@ -4102,6 +4095,8 @@
       channel.hasSignal = false;
       channel.signalConfirmed = false;
       channel.noSignalReported = false;
+      channel.expectedEndAt = 0;
+      channel.endedSources = new Set();
     }
 
     function triggerKick(deckId, when) {
@@ -4132,7 +4127,8 @@
       oscillator.stop(when + duration + .01);
     }
 
-    async function startDeckAudio(deckId, beatOffset = 0) {
+    async function startDeckAudio(deckId, beatOffset = 0, { recovery = false } = {}) {
+      if (!recovery) audioEngine.decks[deckId].unexpectedEndRecoveries = 0;
       // Mute the room input before any await; repeat once the engine exists on first playback.
       audioEngine.halo?.setLiveIntelligenceInputState(false);
       const context = await ensureAudio();
@@ -4146,8 +4142,63 @@
       }
     }
 
+    function finishDeckPlayback(deckId) {
+      const state = deckState[deckId];
+      if (!state.playing) return;
+      state.playing = false;
+      stopDeckAudio(deckId);
+      updateDeck(deckId);
+      const otherDeckPlaying = deckState[deckId === "A" ? "B" : "A"].playing;
+      reportAudioHealth(otherDeckPlaying ? "running" : "ready", `Deck ${deckId} reached the end of its audio.`, { deckId });
+    }
+
+    async function recoverUnexpectedDeckEnd(deckId, detail = {}) {
+      const channel = audioEngine.decks[deckId];
+      const state = deckState[deckId];
+      if (!state?.playing) return;
+      const maxRecoveries = 1;
+      if (channel.unexpectedEndRecoveries < maxRecoveries) {
+        channel.unexpectedEndRecoveries += 1;
+        reportAudioHealth("checking", `Deck ${deckId} stopped unexpectedly. Attempting one playback recovery.`, { deckId });
+        window.haloStats?.track("dj_unexpected_source_end", { deck: deckId, action: "retry", recovery: channel.unexpectedEndRecoveries });
+        try {
+          await startDeckAudio(deckId, 0, { recovery: true });
+          updateDeck(deckId);
+          return;
+        } catch (error) {
+          detail.error = error?.message || "Playback recovery failed.";
+        }
+      }
+      state.playing = false;
+      stopDeckAudio(deckId);
+      updateDeck(deckId);
+      const message = `Deck ${deckId} stopped unexpectedly and could not recover. ${detail.error || "Press play to retry."}`;
+      reportAudioHealth("error", message, { deckId, error: "unexpected_source_end" });
+      window.haloStats?.track("dj_unexpected_source_end", { deck: deckId, action: "failed" });
+      showToast("Playback stopped", message);
+    }
+
+    function handleDeckSourceEnded(deckId, source, expectedEndAt) {
+      const channel = audioEngine.decks[deckId];
+      const sources = [channel.source, ...Object.values(channel.stemSources || {})].filter(Boolean);
+      if (!deckState[deckId].playing || !sources.includes(source)) return;
+      channel.endedSources ||= new Set();
+      channel.endedSources.add(source);
+      const earlyEnd = Number.isFinite(expectedEndAt)
+        && audioEngine.context.currentTime + .25 < expectedEndAt;
+      if (earlyEnd) {
+        const detail = { deckId, track: deckState[deckId].title, expectedEndAt, actualEndAt: audioEngine.context.currentTime };
+        if (!continuityState.guard?.reportSourceEnded(detail)) recoverUnexpectedDeckEnd(deckId, detail);
+        return;
+      }
+      if (sources.every(activeSource => channel.endedSources.has(activeSource))) finishDeckPlayback(deckId);
+    }
+
     function startDeckSource(context, deckId, source, destination, startAt) {
       const channel = audioEngine.decks[deckId];
+      const expectedEndAt = startAt + Number(source.buffer?.duration || 0) / Math.max(.01, Number(source.playbackRate?.value || 1));
+      channel.expectedEndAt = Math.max(channel.expectedEndAt || 0, expectedEndAt);
+      source.addEventListener?.("ended", () => handleDeckSourceEnded(deckId, source, expectedEndAt), { once: true });
       if (!audioEngine.halo) {
         source.connect(destination);
         source.start(startAt, 0);
@@ -4424,12 +4475,7 @@
       }
     }
 
-    syncMaintenanceDockLabel();
-    if (window.MutationObserver && elements.maintenanceDockCount) {
-      new MutationObserver(syncMaintenanceDockLabel).observe(elements.maintenanceDockCount, { childList: true, characterData: true, subtree: true });
-    }
     elements.sessionRevisionButton?.addEventListener("click", showCloudRevisionToast);
-    elements.maintenanceDock?.addEventListener("click", showMaintenanceAlertsToast);
 
     function updateDeck(deckId) {
       const state = deckState[deckId];

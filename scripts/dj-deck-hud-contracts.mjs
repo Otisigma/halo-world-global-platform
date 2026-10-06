@@ -29,7 +29,7 @@ const sandbox = {
     sessionSaveStatus: textNode("Cloud revision 12"),
     cloudStatus: textNode("Cloud ready"),
     maintenanceDock: { title: "" },
-    maintenanceDockCount: { textContent: "10 alerts" },
+    maintenanceDockCount: { textContent: "0 alerts" },
     maintenanceDockHelp: { textContent: "" }
   },
   toastCalls: [],
@@ -40,11 +40,8 @@ const sandbox = {
 
 vm.createContext(sandbox);
 vm.runInContext([
-  extractFunctionSource("maintenanceAlertCountLabel"),
-  extractFunctionSource("syncMaintenanceDockLabel"),
   extractFunctionSource("currentCloudRevisionLabel"),
-  extractFunctionSource("showCloudRevisionToast"),
-  extractFunctionSource("showMaintenanceAlertsToast")
+  extractFunctionSource("showCloudRevisionToast")
 ].join("\n\n"), sandbox);
 
 assert.match(deck, /Upload once\. HALO watches every next step\./);
@@ -73,12 +70,10 @@ sandbox.elements.sessionSaveStatus.textContent = "Saved on device";
 sandbox.showCloudRevisionToast();
 assert.deepEqual(sandbox.toastCalls.shift(), { title: "Cloud revision", message: "Cloud ready · awaiting first revision" });
 
-sandbox.showMaintenanceAlertsToast();
-assert.deepEqual(sandbox.toastCalls.shift(), {
-  title: "Maintenance alerts",
-  message: "10 alerts watching booth video, cloud revision, upload progress, and audio verification."
-});
-assert.match(sandbox.elements.maintenanceDock.title, /10 alerts currently monitored\.$/);
-assert.match(sandbox.elements.maintenanceDockHelp.textContent, /10 alerts currently monitored\.$/);
+assert.match(deck, /id="maintenanceDockCount">0 alerts<\/strong>/);
+assert.match(deck, /src="\/halo-alert-store\.js" defer/);
+assert.match(deck, /src="\/maintenance-panel\.js" defer/);
+assert.match(deck, /href="\/maintenance-panel\.css"/);
+assert.doesNotMatch(deck, /10 alerts/);
 
-console.log("DJ deck HUD contracts: artist journey guidance plus cloud revision and maintenance toast actions behave as expected.");
+console.log("DJ deck HUD contracts: artist journey guidance, cloud revision toast, and live maintenance panel wiring behave as expected.");

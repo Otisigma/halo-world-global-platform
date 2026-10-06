@@ -47,6 +47,7 @@ assert.equal(typeof sandbox.HaloContinuityGuard, "function", "Continuity guard e
 const statuses = [];
 const telemetry = [];
 const filler = [];
+const sourceEndCallbacks = [];
 let playbackExpected = true;
 let levelDb = -12;
 let boundary = null;
@@ -61,6 +62,7 @@ const guard = new sandbox.HaloContinuityGuard({
   getBoundaryState: () => boundary,
   onPreroll: detail => telemetry.push({ type: "preroll-callback", detail }),
   onCriticalBoundary: detail => telemetry.push({ type: "critical-callback", detail }),
+  onSourceEnded: detail => sourceEndCallbacks.push(detail),
   startFiller: detail => filler.push({ type: "start", detail }),
   stopFiller: detail => filler.push({ type: "stop", detail }),
   onTelemetry: detail => telemetry.push(detail),
@@ -105,6 +107,11 @@ levelDb = -12;
 guard.tick();
 assert.equal(guard.fillerActive, false, "Explicit pause behavior is preserved and clears the bridge");
 assert.equal(statuses.at(-1)?.state, "idle", "Idle status is restored when playback is not expected");
+assert.equal(guard.reportSourceEnded({ deckId: "A" }), false, "Intentional pause suppresses source-end recovery");
+playbackExpected = true;
+assert.equal(guard.reportSourceEnded({ deckId: "A", reason: "unexpected_source_end" }), true);
+assert.equal(sourceEndCallbacks.at(-1).deckId, "A");
+assert.equal(sourceEndCallbacks.at(-1).reason, "unexpected_source_end");
 
 assert.match(radioPage, /id="continuityStatus"/, "Radio UI exposes continuity status");
 assert.match(radioPage, /id="continuityTelemetry"/, "Radio UI exposes continuity telemetry");
@@ -114,6 +121,10 @@ assert.match(radioClient, /radio_continuity_bridge/, "Radio telemetry tracks bri
 assert.match(deckPage, /\/dj-continuity-guard\.js/, "DJ deck loads the shared continuity guard");
 assert.match(deckPage, /CONTINUITY BRIDGE ACTIVE/, "DJ deck master status exposes bridge activity");
 assert.match(deckPage, /continuity: \{ \.\.\.audioHealth\.continuity \}/, "DJ deck audio health payload carries continuity state");
+assert.match(deckPage, /function recoverUnexpectedDeckEnd\(/, "DJ deck provides bounded recovery after premature source completion");
+assert.match(deckPage, /maxRecoveries = 1/, "DJ deck retries unexpected source completion only once");
+assert.match(deckPage, /Number\.isFinite\(expectedEndAt\)/, "Expected completion is distinguished from premature source end");
+assert.match(deckPage, /error: "continuity_silence"/, "Silence bridge state is surfaced as an Audio Scout failure");
 assert.match(telemetryApi, /telemetry\.continuity/, "Telemetry API accepts continuity state");
 
 const deckSandbox = {

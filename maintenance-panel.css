@@ -1,0 +1,32 @@
+.maintenance-panel {
+  position: fixed;
+  right: 20px;
+  bottom: 76px;
+  z-index: 10000;
+  width: min(440px, calc(100vw - 32px));
+  max-height: min(70vh, 620px);
+  overflow: auto;
+  color: #edf3e9;
+  background: #101310;
+  border: 1px solid rgba(200, 255, 54, .45);
+  box-shadow: 0 18px 60px rgba(0, 0, 0, .65);
+  font: 12px/1.45 "DM Mono", monospace;
+}
+.maintenance-panel[hidden] { display: none; }
+.maintenance-panel__head, .maintenance-panel__actions, .maintenance-alert {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 12px 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, .1);
+}
+.maintenance-panel__head h2 { margin: 0; font-size: 13px; text-transform: uppercase; }
+.maintenance-panel button { cursor: pointer; color: #c8ff36; background: transparent; border: 1px solid #59624e; padding: 6px 9px; }
+.maintenance-alert strong { display: block; }
+.maintenance-alert p { margin: 4px 0; color: #bac2b5; }
+.maintenance-alert small, .maintenance-panel__empty { color: #8f9a8d; }
+.maintenance-alert[data-severity="critical"] { border-left: 3px solid #ff6b6b; }
+.maintenance-alert[data-severity="warning"] { border-left: 3px solid #ffbd69; }
+.maintenance-alert[data-severity="info"] { border-left: 3px solid #c8ff36; }
+.maintenance-panel__empty { padding: 8px 14px; }

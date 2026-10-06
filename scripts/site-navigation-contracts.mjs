@@ -12,6 +12,34 @@ const [navigationScript, navigationStyles, musicStyles] = await Promise.all([
 ]);
 
 const networkHomepage = await read("halo.html");
+for (const [tag, value, name] of [
+  ["select", "releasePack.release.id", '"Choose a release campaign"'],
+  ["input", "videoDraft.title", '"Video title"'],
+  ["textarea", "videoDraft.description", '"Video description"'],
+  ["input", "videoDraft.youtubeUrl", '"YouTube video or live URL"'],
+  ["select", "videoDraft.artistSlug", '"Attach video to artist room"'],
+  ["input", "roomPostDraft.title", '"Listening party title"'],
+  ["input", "roomPostDraft.videoUrl", '"YouTube video or playlist link"'],
+  ["textarea", "roomPostDraft.description", '"Listening party description"'],
+  ["input", "option", '{`Song choice ${index + 1}`}']
+]) {
+  const valueIndex = networkHomepage.indexOf(`value={${value}}`);
+  assert.ok(valueIndex >= 0, `${value} control must exist`);
+  const control = networkHomepage.slice(0, valueIndex);
+  const tagIndex = control.lastIndexOf(`<${tag} `);
+  assert.ok(tagIndex >= 0, `${value} must use a ${tag} control`);
+  const attributes = control.slice(tagIndex);
+  assert.ok(attributes.includes(`aria-label=${name}`), `${value} must have an accessible name, not just a placeholder or selected option`);
+}
+for (const [tag, id] of [["select", "bug-device"], ["textarea", "bug-description"]]) {
+  assert.match(networkHomepage, new RegExp(`<label htmlFor="${id}"[^>]*>[^<]+</label>\\s*<${tag}\\s+id="${id}"`), `${id} must be associated with its visible feedback label`);
+}
+assert.match(networkHomepage, /onClick=\{togglePlayback\}\s+aria-label=\{isPlaying \? 'Pause audio' : 'Play audio'\}/, "the icon-only playback control must name both states");
+assert.match(networkHomepage, /<input\s+type="text"\s+aria-label=\{activeTab === 'party' \? 'Room message' : 'Comment'\}\s+placeholder=/, "chat must have an accessible name in both room and comment modes");
+assert.match(networkHomepage, /<button type="submit" aria-label=\{activeTab === 'party' \? 'Send room message' : 'Send comment'\}/, "the icon-only send control must name both chat modes");
+assert.match(networkHomepage, /<button[^<]+setShowBugReportModal\(false\)[^<]+aria-label="Close bug report">✕<\/button>/, "the feedback close control must name its action");
+assert.match(networkHomepage, /<button[^<]+setCommunityReply\(null\)[^<]+aria-label="Cancel reply">×<\/button>/, "the reply close control must name its action");
+
 const networkSection = networkHomepage.match(/<section id="halo-network"[\s\S]*?<\/section>/)?.[0];
 assert.ok(networkSection, "the public homepage must feature HALO Network");
 assert.match(networkSection, /aria-labelledby="halo-network-title"/);

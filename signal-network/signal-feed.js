@@ -340,12 +340,15 @@ async function loadNotifications(append = false) {
     for (const item of data.items) {
       const entry = node("div", null, "signal-feed__notification");
       entry.append(node("p", `${item.actorName}: ${item.kind} · ${displayDate(item.createdAt)}`));
-      entry.append(button("Find post in public feed", async (_element, origin) => {
+      entry.append(button("Find post in feed", async (_element, origin) => {
         audience.request("PUBLIC", authenticated, feedState.memberId); filters.clearSession();
         feedState.saved = false; byId("feedSaved").setAttribute("aria-pressed", "false"); await loadFeed();
         ensureOrigin(origin, false);
-        const post = byId(`feed-post-${item.postId}`);
-        if (post) post.scrollIntoView({ behavior: "auto", block: "center" });
+        const target = records.get(item.postId);
+        if (target && audience.request(target.post.visibility || "PUBLIC", authenticated, feedState.memberId)) {
+          applyFilters();
+          if (!target.element.hidden) target.element.scrollIntoView({ behavior: "auto", block: "center" });
+        }
         else status.textContent = "This post is older than the first page. Load older posts to find it.";
       }));
       if (!item.readAt) entry.append(button("Mark read", async element => {

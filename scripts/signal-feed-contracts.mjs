@@ -363,6 +363,7 @@ await check("auth changes clear composer drafts and consent; old mutations canno
     querySelectorAll() { return this.players || []; }
     contains(child) { return this === child || this.children.some(item => item.contains?.(child)); }
     focus() { context.document.activeElement = this; }
+    scrollIntoView() { assert.equal(this.hidden, false, "Notification targets must be visible before scrolling"); this.scrolled = true; }
     remove() { this.parentElement.children = this.parentElement.children.filter(child => child !== this); }
     reset() {
       this.resetCount = (this.resetCount || 0) + 1;
@@ -377,6 +378,8 @@ await check("auth changes clear composer drafts and consent; old mutations canno
   elements.set("feedKind", form.elements.kind); elements.set("feedRelease", form.elements.releaseId);
   form.elements.kind.value = "TEXT";
   let authChanged, finishMutation, finishFeed, delayFeed = false, currentMember = "old-member", loadedPosts = [], currentUser = { id: "old-user" };
+  let loadedNotifications = [], nextCursor = null;
+  const feedRequests = [];
   const windowEvents = {};
   const audienceButtons = ["PUBLIC", "INNER_CIRCLE", "COLLABORATOR_VAULT"].map(value => {
     const item = new Element(); item.dataset = { feedAudience: value }; return item;
@@ -391,10 +394,12 @@ await check("auth changes clear composer drafts and consent; old mutations canno
     createFeedCard: () => ({ element: new Element(), player: null }),
     fetch: async (_url, options) => {
       if (options.method === "POST") return new Promise(resolve => { finishMutation = () => resolve({ ok: true, json: async () => ({ id: postId }) }); });
+      if (_url.includes("view=feed")) feedRequests.push(_url);
       if (delayFeed && _url.includes("view=feed")) return new Promise(resolve => {
         finishFeed = () => resolve({ ok: true, json: async () => ({ items: [], memberId: currentMember, nextCursor: null }) });
       });
-      return { ok: true, json: async () => ({ items: _url.includes("view=feed") ? loadedPosts : [], memberId: currentMember, nextCursor: null }) };
+      return { ok: true, json: async () => ({ items: _url.includes("view=feed") ? loadedPosts : _url.includes("view=notifications") ? loadedNotifications : [],
+        memberId: currentMember, nextCursor: _url.includes("view=feed") ? nextCursor : null }) };
     },
     AbortController, URLSearchParams, CustomEvent, setTimeout, clearTimeout, setInterval() {}, console
   };
@@ -407,7 +412,7 @@ await check("auth changes clear composer drafts and consent; old mutations canno
       visibility: "PUBLIC", publishPublic: form.elements.publishPublic.checked
     })
   });
-  runInNewContext(`${source.replace(/^import .*;\n/gm, "")}\nglobalThis.testState = feedState; globalThis.testMutate = mutate; globalThis.testPostType = postType; globalThis.testAudience = audience; globalThis.testLoadFeed = loadFeed; globalThis.testRecords = records;`, context);
+  runInNewContext(`${source.replace(/^import .*;\n/gm, "")}\nglobalThis.testState = feedState; globalThis.testMutate = mutate; globalThis.testPostType = postType; globalThis.testAudience = audience; globalThis.testLoadFeed = loadFeed; globalThis.testRecords = records; globalThis.testLoadNotifications = loadNotifications;`, context);
   await new Promise(resolve => setImmediate(resolve));
   form.elements.body.value = "Old account draft"; form.elements.linkUrl.value = "https://example.com/old-link";
   form.elements.publishPublic.checked = true; form.elements.includePurchase.checked = true;
@@ -448,9 +453,40 @@ await check("auth changes clear composer drafts and consent; old mutations canno
   get("feedSearchClear").handlers.click();
   audienceButtons[1].handlers.click();
   assert.equal(context.testAudience.audience, "INNER_CIRCLE"); assert.equal(publicCard.hidden, true); assert.equal(privateCard.hidden, false);
+  loadedPosts.push({ id: "vault", memberId: "new-member", authorName: "Vault creator", body: "Private vault", kind: "TEXT", visibility: "COLLABORATOR_VAULT" },
+    { id: "legacy-public", memberId: "other", authorName: "Legacy creator", body: "Public legacy", kind: "TEXT" });
+  nextCursor = "older-page";
+  loadedNotifications = ["private", "vault", "public", "legacy-public", "older"].map(id => ({
+    id: `notification-${id}`, postId: id, actorName: "Creator", kind: "COMMENT", visibility: "PUBLIC", readAt: "read"
+  }));
+  await context.testLoadNotifications();
+  const notificationButtons = get("feedNotificationList").children.map(entry => entry.children[1]);
+  for (const [index, visibility] of ["INNER_CIRCLE", "COLLABORATOR_VAULT", "PUBLIC", "PUBLIC"].entries()) {
+    get("feedSearch").value = "not-found"; get("feedSearch").handlers.input();
+    context.testState.saved = true; get("feedSaved").setAttribute("aria-pressed", "true");
+    assert.equal(notificationButtons[index].textContent, "Find post in feed", "The label covers all authorized audiences");
+    await notificationButtons[index].handlers.click();
+    const target = context.testRecords.get(loadedNotifications[index].postId).element;
+    assert.equal(context.testAudience.audience, visibility, "Use the API-loaded post's canonical visibility, not notification metadata");
+    assert.equal(audienceButtons.find(control => control.dataset.feedAudience === visibility).attributes["aria-pressed"], "true");
+    assert.equal(target.hidden, false); assert.equal(target.scrolled, true);
+    assert.equal(get("feedSearch").value, "", "Notification navigation clears conflicting discovery filters");
+    assert.equal(context.testState.saved, false); assert.equal(get("feedSaved").attributes["aria-pressed"], "false");
+    assert.equal(context.testState.cursor, "older-page"); assert.equal(get("feedMore").hidden, false);
+  }
+  await notificationButtons[4].handlers.click();
+  assert.match(get("feedStatus").textContent, /older than the first page.*Load older posts/);
+  assert.equal(context.testAudience.audience, "PUBLIC", "Missing targets retain the existing public pagination fallback");
+  await context.testLoadFeed(true);
+  assert.match(feedRequests.at(-1), /cursor=older-page/, "Notification navigation leaves normal older-page loading intact");
   currentUser = null; currentMember = ""; loadedPosts = [];
   await authChanged("logout", null);
   assert.equal(context.testAudience.audience, "PUBLIC"); assert.equal(context.testRecords.size, 0);
+  loadedPosts = [{ id: "private", memberId: "new-member", authorName: "Private creator", body: "Private studio", kind: "TEXT", visibility: "INNER_CIRCLE" }];
+  await notificationButtons[0].handlers.click();
+  assert.equal(context.testRecords.size, 0, "A retained notification cannot load or reveal private content after logout");
+  assert.equal(context.testAudience.audience, "PUBLIC");
+  loadedPosts = []; nextCursor = null;
   get("signalAuthButton").click = () => {};
   audienceButtons[1].handlers.click();
   assert.equal(context.testAudience.audience, "PUBLIC"); assert.equal(context.testAudience.requested, "INNER_CIRCLE");
@@ -947,6 +983,60 @@ await check("discovery preferences tolerate corruption and unavailable storage a
     setItem() { throw new Error("quota"); }, removeItem() { throw new Error("remove"); } }), delay: 0 });
   assert.deepEqual(denied.read(), { query: "", tags: [] }); denied.write({ query: "safe", tags: [] });
   await new Promise(resolve => setTimeout(resolve, 10)); denied.reset();
+});
+await check("discovery pills offer only whitelisted filters and every offered choice survives validated storage", async () => {
+  const entries = new Map(), originalStorage = Object.getOwnPropertyDescriptor(globalThis, "localStorage");
+  Object.defineProperty(globalThis, "localStorage", { configurable: true, value: {
+    getItem: key => entries.get(key), setItem: (key, value) => entries.set(key, value), removeItem: key => entries.delete(key)
+  } });
+  const prefs = createDiscoveryPreferences("pill-contract");
+  class Element {
+    constructor() { this.children = []; this.handlers = {}; this.attributes = {}; this.value = ""; this.hidden = false; }
+    addEventListener(name, callback) { this.handlers[name] = callback; }
+    setAttribute(name, value) { this.attributes[name] = String(value); }
+    append(...children) { this.children.push(...children); }
+    replaceChildren(...children) { this.children = children; }
+    querySelectorAll() { return []; }
+    contains() { return false; }
+    focus() {}
+  }
+  const doc = { createElement: () => new Element(), querySelector: () => null };
+  const fixture = options => {
+    const controls = Object.fromEntries(["input", "pills", "count", "reset", "clear"].map(name => [name, new Element()]));
+    return { ...controls, filters: mountDiscoveryControls({ doc, ...controls, namespace: "pill-contract", ...options }) };
+  };
+  const records = [
+    { text: "Producer English Afro House secretproject", tags: ["Afro House", "#AfroHouse", "Producer", "English", "#SecretProject"], element: new Element() },
+    { text: "Vocalist Soul", tags: ["Soul", "Vocalist"], element: new Element() },
+    { text: "Private Jazz", tags: ["Jazz", "#PrivateAudience"], element: new Element(), allowed: () => false }
+  ];
+  const controls = fixture();
+  try {
+    controls.filters.setRecords(records);
+    assert.deepEqual(controls.pills.children.map(control => control.textContent), ["Afro House", "Soul"],
+      "Roles, languages, arbitrary hashtags and inaccessible records cannot offer silently discarded persistent pills");
+    for (const [label, tag] of [["Afro House", "afrohouse"], ["Soul", "soul"]]) {
+      controls.pills.children.find(control => control.textContent === label).handlers.click();
+      await new Promise(resolve => setTimeout(resolve, 280));
+      assert.ok(prefs.read().tags.includes(tag), "Every offered selection passes the unchanged storage whitelist");
+      assert.deepEqual(fixture().filters.state, prefs.read(), "Selected pills restore on the next visit");
+    }
+    assert.deepEqual(JSON.parse(entries.get("halo.discovery.pill-contract.v1")), { version: 1, query: "", tags: ["afrohouse", "soul"] });
+    controls.reset.handlers.click();
+    controls.input.value = "English"; controls.input.handlers.input();
+    assert.equal(records[0].element.hidden, false); assert.equal(records[1].element.hidden, true, "Non-pill metadata remains searchable");
+    const custom = fixture({ allowedTags: ["Soul"], preferences: false });
+    custom.filters.setRecords(records);
+    assert.deepEqual(custom.pills.children.map(control => control.textContent), ["Soul"], "Explicit whitelists govern both offered and validated tags");
+    controls.filters.setPersistence(false);
+    controls.input.value = "private audience"; controls.input.handlers.input();
+    await new Promise(resolve => setTimeout(resolve, 280));
+    assert.equal(entries.size, 0, "Private/session-only filters cancel pending public writes and do not persist");
+  } finally {
+    controls.filters.clearSession();
+    if (originalStorage) Object.defineProperty(globalThis, "localStorage", originalStorage);
+    else delete globalThis.localStorage;
+  }
 });
 await check("one discovery shortcut registration handles uppercase and respects modals and native shortcuts", () => {
   let listener, registrations = 0, modal = false, hidden = false, focused = 0;

@@ -205,6 +205,7 @@ for (const withCache of [true, false]) {
     elements: { audio }, state, HTMLMediaElement: { HAVE_CURRENT_DATA: 2 },
     resolvePrimaryAudio: () => ({ src: urls[0] }),
     setLoadingProgress() {}, revokeLocalAudioUrl() {}, clearRemoteAudioWatchdog() {},
+    setReleasePlaybackState(value) { state.releasePlaybackState = value; },
     showToast() {}, queueAudioFeedbackIncident() {},
     awaitPrimaryPlaybackReadiness: async () => ({ ok: false, state: "timeout" })
   };
@@ -213,6 +214,7 @@ for (const withCache of [true, false]) {
   assert.equal(state.audioSourceMode, "remote", "blocked preload must keep manual playback available");
   assert.equal(audio.src, urls[0]);
   assert.equal(audio.preload, "auto", "cache absence must still prioritize current playback");
+  assert.equal(state.releasePlaybackState, "loading", "bound audio must refresh the player labels immediately");
   assert.equal(audio.plays, 0, "preloading must not bypass browser playback policy");
 }
 

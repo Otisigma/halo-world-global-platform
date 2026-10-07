@@ -815,7 +815,7 @@ import { DREAMWEAVER_STOREFRONT_MIX_ID, buildDreamweaverStorefrontPath } from ".
     if (requestedSongId) {
       const releaseId = cleanSongId(release?.id);
       const catalogSongId = cleanSongId(release?.catalog?.songId);
-      if (releaseId === requestedSongId || catalogSongId === requestedSongId) return true;
+      return releaseId === requestedSongId || catalogSongId === requestedSongId;
     }
     const requestedMixToken = cleanKey(routeContext.requestedMixToken, 160);
     if (!requestedMixToken) return false;
@@ -873,7 +873,7 @@ import { DREAMWEAVER_STOREFRONT_MIX_ID, buildDreamweaverStorefrontPath } from ".
 
     if (requested && (requestedEntry || !allowFallback)) return null;
     if (strictRequested) return null;
-    return library.find(isPlayablePrimaryMix) || null;
+    return allowFallback ? library.find(isPlayablePrimaryMix) || null : null;
   }
 
   function describeAudioElementFailure() {
@@ -1042,6 +1042,7 @@ import { DREAMWEAVER_STOREFRONT_MIX_ID, buildDreamweaverStorefrontPath } from ".
     state.audioSourceMode = "remote";
     elements.audio.pause();
     elements.audio.currentTime = 0;
+    setReleasePlaybackState("loading");
     if (!window.HaloAudioPreloader?.prepare(elements.audio, primaryAudio)) {
       elements.audio.preload = "auto";
       elements.audio.src = primaryAudio;
@@ -2687,36 +2688,42 @@ import { DREAMWEAVER_STOREFRONT_MIX_ID, buildDreamweaverStorefrontPath } from ".
     elements.shell.setAttribute("aria-busy", "false");
   }
 
-  async function loadShow() {
+  async function loadShow({ preserveShell = false } = {}) {
     window.HaloAudioPreloader?.clear();
     setReleasePlaybackState("loading");
     setLoadingProgress(8, "Calibrating Dreamweaver stage", "Dreamweaver is staging this edition with artwork, metadata, and the four-act lobby in sync.");
-    document.body.classList.remove("show-ready");
-    elements.shell.hidden = false;
-    elements.loading.hidden = false;
-    elements.loading.setAttribute("aria-hidden", "false");
-    elements.stage.hidden = true;
-    elements.empty.hidden = true;
-    elements.shell.setAttribute("aria-busy", "true");
+    if (!preserveShell) {
+      document.body.classList.remove("show-ready");
+      elements.shell.hidden = false;
+      elements.loading.hidden = false;
+      elements.loading.setAttribute("aria-hidden", "false");
+      elements.stage.hidden = true;
+      elements.empty.hidden = true;
+      elements.shell.setAttribute("aria-busy", "true");
+    }
     try {
       const routeContext = resolveDreamweaverRouteContext();
       const requestedRouteFingerprint = routeContextFingerprint(routeContext);
-      const requestedMix = routeContext.requestedMixToken;
-      const requestedMixId = cleanKey(routeContext.requestedMixId, 160);
+      const isSongRoute = routeContext.requestedSongId
+        && (!routeContext.requestedMixId || routeContext.requestedMixId === DREAMWEAVER_STOREFRONT_MIX_ID);
+      const requestedMix = isSongRoute ? "" : routeContext.requestedMixToken;
+      const requestedMixId = isSongRoute ? "" : cleanKey(routeContext.requestedMixId, 160);
       const exactMixPromise = requestedMixId ? fetchExactMixById(requestedMixId).catch(() => null) : Promise.resolve(null);
       const releaseCatalogPromise = requestedMix || routeContext.requestedSongId
         ? fetchReleaseCatalog().catch(() => [])
         : Promise.resolve(state.releaseCatalog);
       let mixLibrary = [];
       try {
-        const { response, payload: data } = await fetchJsonWithTimeout("/api/mixes?limit=100", {
-          timeoutMs: MIX_LIBRARY_TIMEOUT_MS,
-          timeoutMessage: "Dreamweaver timed out while loading the mix library. Please try again.",
-          headers: { Accept: "application/json" },
-          credentials: "same-origin"
-        });
-        if (!response.ok) throw new Error(data.message || "The Dreamweaver mix library could not be read.");
-        mixLibrary = Array.isArray(data.mixes) ? data.mixes : [];
+        if (!isSongRoute) {
+          const { response, payload: data } = await fetchJsonWithTimeout("/api/mixes?limit=100", {
+            timeoutMs: MIX_LIBRARY_TIMEOUT_MS,
+            timeoutMessage: "Dreamweaver timed out while loading the mix library. Please try again.",
+            headers: { Accept: "application/json" },
+            credentials: "same-origin"
+          });
+          if (!response.ok) throw new Error(data.message || "The Dreamweaver mix library could not be read.");
+          mixLibrary = Array.isArray(data.mixes) ? data.mixes : [];
+        }
       } catch (error) {
         if (!requestedMix && !routeContext.requestedSongId) throw error;
       }
@@ -2755,12 +2762,12 @@ import { DREAMWEAVER_STOREFRONT_MIX_ID, buildDreamweaverStorefrontPath } from ".
           strictRequestedId: requestedMixId
         });
         if (!mix && release) {
-          const dreamweaverPayload = release.dreamweaverPayload;
+          const dreamweaverPayload = release.dreamweaverPayload || {};
           mix = {
             id: dreamweaverPayload.songId || release.id,
             title: dreamweaverPayload.title || release.title,
             creator: { name: dreamweaverPayload.artist || release.artist },
-            audioUrl: dreamweaverPayload.audioStreamUrl || "",
+            audioUrl: resolvePrimaryAudio(state.release || release).src || "",
             durationSeconds: Number(release.catalog?.masterCopy?.durationSeconds || release.durationSeconds || 0),
             source: "catalog",
             isCatalogPlayback: true
@@ -2793,6 +2800,8 @@ import { DREAMWEAVER_STOREFRONT_MIX_ID, buildDreamweaverStorefrontPath } from ".
           details: "Dreamweaver could not resolve a playable linked song from the current hub request.",
           metadata: { requestedMixId: cleanText(requestedMix, 120), failureState: "missing_audio" }
         });
+        setReleasePlaybackState("unavailable");
+        if (preserveShell) return;
         return showEmpty(requestedMixId
           ? "Dreamweaver could not load the exact mix requested by this link. Confirm the mix is published and playable, then try again."
           : "No playable audio mix is available yet. Post the existing set to the HALO room or sign in to open a private mix.");
@@ -2834,13 +2843,16 @@ import { DREAMWEAVER_STOREFRONT_MIX_ID, buildDreamweaverStorefrontPath } from ".
         ], { primaryAudio: elements.audio });
       }
       await hydrateDreamweaverLoopContent();
-      if (!playbackBootstrap?.started || elements.audio.paused || elements.audio.ended) setReleasePlaybackState("ready");
+      if (playbackBootstrap?.fallback && state.audioSourceMode !== "local") setReleasePlaybackState("unavailable");
+      else if (!playbackBootstrap?.started || elements.audio.paused || elements.audio.ended) setReleasePlaybackState("ready");
       setLoadingProgress(100, "Dreamweaver is ready", "Press play and move through the full four-act cinematic edition.");
-      elements.loading.setAttribute("aria-hidden", "true");
-      elements.stage.hidden = false;
-      window.requestAnimationFrame(() => document.body.classList.add("show-ready"));
-      elements.loading.hidden = true;
-      elements.shell.setAttribute("aria-busy", "false");
+      if (!preserveShell) {
+        elements.loading.setAttribute("aria-hidden", "true");
+        elements.stage.hidden = false;
+        window.requestAnimationFrame(() => document.body.classList.add("show-ready"));
+        elements.loading.hidden = true;
+        elements.shell.setAttribute("aria-busy", "false");
+      }
       if (campaignIdFromUrl() && !state.trackedProgress.has("landing")) {
         state.trackedProgress.add("landing");
         trackCampaignEvent("landing", currentParams.get("source") || "halo");
@@ -2853,11 +2865,12 @@ import { DREAMWEAVER_STOREFRONT_MIX_ID, buildDreamweaverStorefrontPath } from ".
     } catch (error) {
       state.startPlaybackAfterLoad = false;
       setReleasePlaybackState("unavailable");
-      showEmpty(error.message || "Dreamweaver could not open the mix right now.");
+      if (!preserveShell) showEmpty(error.message || "Dreamweaver could not open the mix right now.");
     }
   }
 
   async function initializeDreamweaver() {
+    const routeContext = resolveDreamweaverRouteContext();
     hydrateAudioFeedbackQueue();
     void flushQueuedAudioFeedback();
     if (isSatelliteFlow() && !isSatellitePath() && !new URLSearchParams(location.search).get("mix")) {
@@ -2874,6 +2887,10 @@ import { DREAMWEAVER_STOREFRONT_MIX_ID, buildDreamweaverStorefrontPath } from ".
     if (satelliteFlow && !state.unlock) {
       elements.shell.setAttribute("aria-busy", "false");
       renderSongLobbyHero();
+      if (routeContext.requestedSongId || routeContext.requestedMixId) {
+        await loadShow({ preserveShell: true });
+        return;
+      }
       void Promise.allSettled([
         loadReleaseContext({ keepCurrentOnFailure: true }),
         loadVideos()

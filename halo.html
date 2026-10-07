@@ -61,6 +61,47 @@
         .font-sans-alt {
             font-family: 'Inter', sans-serif;
         }
+        .controller-buttons-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 8px;
+        }
+        .controller-launcher {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 6px;
+            min-width: 0;
+            padding: 10px;
+            border: 1px solid rgba(168, 85, 247, 0.5);
+            border-radius: 4px;
+            background: rgba(45, 20, 75, 0.6);
+            color: #fff;
+            text-decoration: none;
+            transition: background 0.2s, border-color 0.2s, box-shadow 0.2s;
+        }
+        .controller-launcher:hover,
+        .controller-launcher:focus-visible,
+        .controller-launcher[aria-current="page"] {
+            background: rgba(168, 85, 247, 0.3);
+            border-color: #c084fc;
+            box-shadow: 0 0 10px rgba(168, 85, 247, 0.4);
+        }
+        .controller-launcher .btn-main {
+            font-size: 11px;
+            font-weight: bold;
+            letter-spacing: 0.5px;
+            overflow-wrap: anywhere;
+        }
+        .controller-launcher .btn-sub {
+            background: rgba(0, 0, 0, 0.5);
+            color: #c084fc;
+            font-size: 9px;
+            padding: 2px 5px;
+            border-radius: 3px;
+            border: 1px solid rgba(192, 132, 252, 0.3);
+        }
         ::-webkit-scrollbar {
             width: 4px;
             height: 4px;
@@ -3335,9 +3376,15 @@
           useEffect(() => {
             const openCompanionRoute = () => {
               const requestedRoom = new URLSearchParams(window.location.search).get('room');
-              if (window.location.hash !== '#clubhouse' && !['mixes', 'selectors'].includes(requestedRoom)) return;
+              const routeTab = {
+                '/ai-workgroup': 'agent-room',
+                '/halo-tv': 'halo-tv',
+                '/listening-party': 'party',
+                '/radio-dj': 'selectors'
+              }[window.location.pathname];
+              if (!routeTab && window.location.hash !== '#clubhouse' && !['mixes', 'selectors'].includes(requestedRoom)) return;
               setViewMode('console');
-              setActiveTab(requestedRoom === 'selectors' ? 'selectors' : 'party');
+              setActiveTab(routeTab || (requestedRoom === 'selectors' ? 'selectors' : 'party'));
               window.requestAnimationFrame(() => document.getElementById('clubhouse')?.scrollIntoView({ behavior: 'smooth' }));
             };
             openCompanionRoute();
@@ -3440,6 +3487,12 @@
             setViewMode('console');
             setShowFanGuide(false);
             window.scrollTo({ top: 0, behavior: 'smooth' });
+          };
+
+          const selectControllerTab = (event, tab) => {
+            if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+            event.preventDefault();
+            setActiveTab(tab);
           };
 
           const activeWorld = WORLD_ROOMS.find(room => room.id === activeWorldId) || WORLD_ROOMS[0];
@@ -5260,58 +5313,76 @@
 
                   {/* LEFT NAVIGATION PANEL */}
                   <section className="lg:col-span-3 border-r border-purple-950/30 bg-[#09090d] flex flex-col p-4 space-y-4">
-                    <div className="space-y-1">
+                    <div>
                       <span className="text-[10px] text-purple-400 font-bold tracking-widest uppercase block mb-2 px-1">SYSTEM CONTROLLER</span>
 
-                      <button
-                        onClick={() => setActiveTab('agent-room')}
+                      <nav id="system-controller" className="controller-buttons-grid" aria-label="System Controller">
+                      <a
+                        href="/ai-workgroup"
+                        onClick={(event) => selectControllerTab(event, 'agent-room')}
                         data-stat-event="select_console_tab"
                         data-stat-target="agent-room"
-                        className={`w-full flex items-center justify-between px-3 py-2.5 rounded text-xs tracking-wider uppercase transition ${activeTab === 'agent-room' ? 'bg-gradient-to-r from-purple-950/50 to-amber-950/20 border-l-2 border-amber-400 text-white font-bold' : 'text-gray-400 hover:text-white hover:bg-purple-950/10'}`}
+                        aria-current={activeTab === 'agent-room' ? 'page' : undefined}
+                        className="controller-launcher"
                       >
-                        <span className="flex items-center gap-2"><Icon name="cpu" className="h-4 w-4 text-amber-400" />AI Workgroup</span>
-                        <span className="bg-amber-950/80 border border-amber-800/40 text-amber-400 text-[9px] px-1.5 py-0.5 rounded">DAEMONS</span>
-                      </button>
-
-                      <button
-                        onClick={() => setActiveTab('halo-tv')}
-                        data-stat-event="select_console_tab"
-                        data-stat-target="halo-tv"
-                        className={`w-full flex items-center justify-between px-3 py-2.5 rounded text-xs tracking-wider uppercase transition ${activeTab === 'halo-tv' ? 'bg-gradient-to-r from-purple-950/50 to-red-950/20 border-l-2 border-red-400 text-white font-bold' : 'text-gray-400 hover:text-white hover:bg-purple-950/10'}`}
-                      >
-                        <span className="flex items-center gap-2"><Icon name="tv" className="h-4 w-4 text-red-400" />Halo TV Stream</span>
-                        <span className="bg-red-950/80 border border-red-800/40 text-red-400 text-[9px] px-1.5 py-0.5 rounded">YOUTUBE</span>
-                      </button>
-
-                      <button
-                        onClick={() => setActiveTab('party')}
-                        data-stat-event="select_console_tab"
-                        data-stat-target="party"
-                        className={`w-full flex items-center justify-between px-3 py-2.5 rounded text-xs tracking-wider uppercase transition ${activeTab === 'party' ? 'bg-gradient-to-r from-purple-950/50 to-rose-950/20 border-l-2 border-rose-400 text-white font-bold' : 'text-gray-400 hover:text-white hover:bg-purple-950/10'}`}
-                      >
-                        <span className="flex items-center gap-2"><Icon name="users" className="h-4 w-4 text-rose-400" />Listening Party</span>
-                        <span className="bg-rose-950/80 border border-rose-800/40 text-rose-400 text-[9px] px-1.5 py-0.5 rounded">SESSION</span>
-                      </button>
-
-                      <button
-                        onClick={() => setActiveTab('selectors')}
-                        data-stat-event="select_console_tab"
-                        data-stat-target="selectors"
-                        className={`w-full flex items-center justify-between px-3 py-2.5 rounded text-xs tracking-wider uppercase transition ${activeTab === 'selectors' ? 'bg-gradient-to-r from-purple-950/50 to-cyan-950/20 border-l-2 border-cyan-300 text-white font-bold' : 'text-gray-400 hover:text-white hover:bg-purple-950/10'}`}
-                      >
-                        <span className="flex items-center gap-2"><Icon name="radio" className="h-4 w-4 text-cyan-300" />Radio + DJ Room</span>
-                        <span className="bg-cyan-950/80 border border-cyan-800/40 text-cyan-300 text-[9px] px-1.5 py-0.5 rounded">PACK 001</span>
-                      </button>
+                        <span className="btn-main">AI WORKGROUP</span>
+                        <span className="btn-sub">DAEMONS</span>
+                      </a>
 
                       <a
-                        href="/music-upload/"
+                        href="/halo-tv"
+                        onClick={(event) => selectControllerTab(event, 'halo-tv')}
+                        data-stat-event="select_console_tab"
+                        data-stat-target="halo-tv"
+                        aria-current={activeTab === 'halo-tv' ? 'page' : undefined}
+                        className="controller-launcher"
+                      >
+                        <span className="btn-main">HALO TV STREAM</span>
+                        <span className="btn-sub">YOUTUBE</span>
+                      </a>
+
+                      <a
+                        href="/listening-party"
+                        onClick={(event) => selectControllerTab(event, 'party')}
+                        data-stat-event="select_console_tab"
+                        data-stat-target="party"
+                        aria-current={activeTab === 'party' ? 'page' : undefined}
+                        className="controller-launcher"
+                      >
+                        <span className="btn-main">LISTENING PARTY</span>
+                        <span className="btn-sub">SESSION</span>
+                      </a>
+
+                      <a
+                        href="/radio-dj"
+                        onClick={(event) => selectControllerTab(event, 'selectors')}
+                        data-stat-event="select_console_tab"
+                        data-stat-target="selectors"
+                        aria-current={activeTab === 'selectors' ? 'page' : undefined}
+                        className="controller-launcher"
+                      >
+                        <span className="btn-main">RADIO + DJ ROOM</span>
+                        <span className="btn-sub">PACK 001</span>
+                      </a>
+
+                      <a
+                        href="/shop"
                         data-stat-event="open_song_catalog_upload"
                         data-stat-target="system-controller"
-                        className="w-full flex items-center justify-between px-3 py-2.5 rounded text-xs tracking-wider uppercase transition text-gray-400 hover:text-white hover:bg-purple-950/10"
+                        className="controller-launcher"
                       >
-                        <span className="flex items-center gap-2"><Icon name="upload" className="h-4 w-4 text-emerald-300" />HALO Shop</span>
-                        <span className="bg-emerald-950/80 border border-emerald-800/40 text-emerald-300 text-[9px] px-1.5 py-0.5 rounded">SHOP</span>
+                        <span className="btn-main">HALO SHOP</span>
+                        <span className="btn-sub">SHOP</span>
                       </a>
+                      <a href="/signal-network" data-stat-event="open_signal_network" data-stat-target="system-controller" className="controller-launcher">
+                        <span className="btn-main">SIGNAL NETWORK</span>
+                        <span className="btn-sub">ARTIST FEED</span>
+                      </a>
+                      <a href="/creator-network" data-stat-event="open_creator_network" data-stat-target="system-controller" className="controller-launcher">
+                        <span className="btn-main">CREATOR NETWORK</span>
+                        <span className="btn-sub">COLLAB</span>
+                      </a>
+                      </nav>
                     </div>
 
                     {/* SETLIST SELECTOR */}

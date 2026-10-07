@@ -12,6 +12,73 @@ const [navigationScript, navigationStyles, musicStyles] = await Promise.all([
 ]);
 
 const networkHomepage = await read("halo.html");
+const controller = networkHomepage.match(/<nav id="system-controller"[\s\S]*?<\/nav>/)?.[0];
+assert.ok(controller, "the console must retain its System Controller rack");
+assert.match(controller, /className="controller-buttons-grid"/);
+const launchers = [...controller.matchAll(/<a\s+([\s\S]*?)>\s*(<span[\s\S]*?)<\/a>/g)];
+const expectedLaunchers = [
+  ["/ai-workgroup", "AI WORKGROUP", "DAEMONS", "agent-room"],
+  ["/halo-tv", "HALO TV STREAM", "YOUTUBE", "halo-tv"],
+  ["/listening-party", "LISTENING PARTY", "SESSION", "party"],
+  ["/radio-dj", "RADIO + DJ ROOM", "PACK 001", "selectors"],
+  ["/shop", "HALO SHOP", "SHOP"],
+  ["/signal-network", "SIGNAL NETWORK", "ARTIST FEED"],
+  ["/creator-network", "CREATOR NETWORK", "COLLAB"]
+];
+assert.equal(launchers.length, expectedLaunchers.length, "the controller must render exactly seven launchers");
+for (const [index, [route, main, sub, tab]] of expectedLaunchers.entries()) {
+  const [, attributes, content] = launchers[index];
+  assert.ok(attributes.includes(`href="${route}"`), `launcher must link exactly to ${route}`);
+  assert.match(attributes, /className="controller-launcher"/);
+  assert.ok(content.includes(`<span className="btn-main">${main}</span>`));
+  assert.ok(content.includes(`<span className="btn-sub">${sub}</span>`));
+  if (tab) {
+    assert.ok(attributes.includes(`selectControllerTab(event, '${tab}')`), "console tab selection must remain available");
+    assert.ok(attributes.includes(`aria-current={activeTab === '${tab}' ? 'page' : undefined}`));
+    assert.ok(networkHomepage.includes(`'${route}': '${tab}'`), "direct console routes must open the correct tab");
+  }
+}
+assert.match(networkHomepage, /\.controller-buttons-grid\s*\{[^}]*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/);
+assert.match(networkHomepage, /\.controller-launcher:focus-visible/);
+const controllerRouteHandler = networkHomepage.match(/const openCompanionRoute = \(\) => \{([\s\S]*?)\n\s*\};/)?.[1];
+assert.ok(controllerRouteHandler);
+for (const [pathname, search, hash, expectedTab] of [
+  ...expectedLaunchers.filter(([, , , tab]) => tab).map(([route, , , tab]) => [route, "", "", tab]),
+  ["/halo", "?room=selectors", "", "selectors"],
+  ["/halo", "?room=mixes", "", "party"],
+  ["/halo", "", "#clubhouse", "party"],
+  ["/halo", "", "", null]
+]) {
+  let selectedTab = null;
+  let selectedView = null;
+  vm.runInNewContext(`(() => {${controllerRouteHandler}})()`, {
+    URLSearchParams,
+    window: { location: { pathname, search, hash }, requestAnimationFrame() {} },
+    setViewMode(view) { selectedView = view; },
+    setActiveTab(tab) { selectedTab = tab; }
+  });
+  assert.equal(selectedTab, expectedTab, `${pathname}${search}${hash} must initialize the correct room`);
+  assert.equal(selectedView, expectedTab ? "console" : null);
+}
+const controllerHandler = networkHomepage.match(/const selectControllerTab = \(event, tab\) => \{([\s\S]*?)\n\s*\};/)?.[1];
+assert.ok(controllerHandler);
+for (const attributes of [{}, { ctrlKey: true }, { metaKey: true }, { shiftKey: true }, { altKey: true }, { button: 1 }]) {
+  let selectedTab = null;
+  let prevented = false;
+  const event = { button: 0, ...attributes, preventDefault() { prevented = true; } };
+  vm.runInNewContext(`((event, tab) => {${controllerHandler}})(event, 'party')`, {
+    event, setActiveTab(tab) { selectedTab = tab; }
+  });
+  const ordinaryClick = Object.keys(attributes).length === 0;
+  assert.equal(prevented, ordinaryClick, "modified clicks must retain normal link navigation");
+  assert.equal(selectedTab, ordinaryClick ? "party" : null);
+}
+const netlifyConfig = await read("netlify.toml");
+const controllerTargets = ["halo.html", "halo.html", "halo.html", "halo.html", "music-upload/index.html", "signal-network/index.html", "creator-network/index.html"];
+for (const [index, [route]] of expectedLaunchers.entries()) {
+  assert.ok(netlifyConfig.includes(`from = "${route}"\n  to = "/${controllerTargets[index]}"\n  status = 200`), `${route} must render its destination on Netlify`);
+  await read(controllerTargets[index]);
+}
 const networkSection = networkHomepage.match(/<section id="halo-network"[\s\S]*?<\/section>/)?.[0];
 assert.ok(networkSection, "the public homepage must feature HALO Network");
 assert.match(networkSection, /aria-labelledby="halo-network-title"/);

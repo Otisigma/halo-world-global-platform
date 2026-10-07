@@ -184,6 +184,13 @@ app.get("/private", (_req, res) => {
   return sendFileIfPresent(res, "index.html");
 });
 
+app.get(["/ai-workgroup", "/halo-tv", "/listening-party", "/radio-dj"], (_req, res) =>
+  sendFileIfPresent(res, "halo.html")
+);
+app.get("/shop", (_req, res) => sendFileIfPresent(res, "music-upload/index.html"));
+app.get("/signal-network", (_req, res) => sendFileIfPresent(res, "signal-network/index.html"));
+app.get("/creator-network", (_req, res) => sendFileIfPresent(res, "creator-network/index.html"));
+
 app.get("/control-center", (_req, res) => {
   return sendFileIfPresent(res, "halo-command.html");
 });

@@ -81,6 +81,48 @@
   force = true
 
 [[redirects]]
+  from = "/ai-workgroup"
+  to = "/halo.html"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/halo-tv"
+  to = "/halo.html"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/listening-party"
+  to = "/halo.html"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/radio-dj"
+  to = "/halo.html"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/shop"
+  to = "/music-upload/index.html"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/signal-network"
+  to = "/signal-network/index.html"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/creator-network"
+  to = "/creator-network/index.html"
+  status = 200
+  force = true
+
+[[redirects]]
   from = "/stats/"
   to = "/stats/index.html"
   status = 200

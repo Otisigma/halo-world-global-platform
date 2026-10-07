@@ -26,6 +26,7 @@
   <link rel="stylesheet" href="/signal-network/signal-network.css">
   <link rel="stylesheet" href="/campaign-studio/fanout-modal.css">
   <link rel="stylesheet" href="/signal-network/signal-rooms.css">
+  <link rel="stylesheet" href="/signal-network/signal-satellite.css">
   <link rel="stylesheet" href="/accessibility.css">
   <script src="/stats.js" defer></script>
   <script src="/accessibility.js" defer></script>
@@ -1029,7 +1030,7 @@
             <h3>Your network starts after sign-in.</h3>
             <p>Create a private member profile, choose what becomes discoverable, and control whether your region appears on the aggregate map.</p>
           </div>
-          <button class="signal-button signal-button--bright" id="gateAuthButton" type="button">Join or sign in</button>
+          <button class="signal-button signal-button--bright" id="gateAuthButton" type="button" data-halo-search-fallback>Join or sign in</button>
         </div>
 
         <div class="signal-workspace" id="signalWorkspace" hidden>
@@ -1068,7 +1069,7 @@
                 <header class="signal-panel__header">
                   <div><p>People Finder</p><h3>Discover collaborators</h3></div>
                   <form class="signal-search" id="collaboratorSearchForm">
-                    <label><span class="sr-only">Search collaborators</span><input id="collaboratorSearch" type="search" maxlength="80" placeholder="Role, genre, skill, name…"></label>
+                    <label><span class="sr-only">Search collaborators</span><input id="collaboratorSearch" type="search" maxlength="80" placeholder="Role, genre, skill, name…" data-halo-command-search aria-keyshortcuts="Control+K Meta+K"></label>
                     <label><span class="sr-only">Availability</span><select id="availabilityFilter"><option value="">Any availability</option><option value="open">Open now</option><option value="selective">Selective</option></select></label>
                     <button type="submit">Search</button>
                   </form>
@@ -1576,6 +1577,91 @@
     </form>
   </dialog>
 
+  <div class="halo-satellite" data-signal-satellite hidden>
+    <p class="sr-only" id="haloSatelliteStatus" role="status" aria-live="polite"></p>
+    <div class="halo-satellite__dock" role="group" aria-label="HALO Signal satellite">
+      <button class="halo-satellite__dock-btn" id="haloPointsBadgeBtn" type="button" aria-haspopup="dialog" aria-controls="haloRewardsModal" aria-expanded="false">
+        <span aria-hidden="true">✦</span>
+        <span><span id="haloUserPointsDisplay">0</span> HP</span>
+        <span class="halo-satellite__tier-pill" id="haloUserTierDisplay">Initiate</span>
+        <span class="sr-only">— open HALO Points and rewards</span>
+      </button>
+      <button class="halo-satellite__dock-btn" id="haloChatToggleBtn" type="button" aria-controls="haloChatDrawer" aria-expanded="false">
+        <span aria-hidden="true">◉</span>
+        <span>Signal chat</span>
+        <span class="halo-satellite__unread" id="haloChatUnread" aria-hidden="true" hidden>0</span>
+        <span class="sr-only" id="haloChatUnreadLabel"></span>
+      </button>
+    </div>
+
+    <section class="halo-satellite__drawer" id="haloChatDrawer" role="dialog" aria-modal="false" aria-labelledby="haloChatTitle" aria-describedby="haloChatNote" hidden>
+      <header class="halo-satellite__header">
+        <div class="halo-satellite__title">
+          <span class="halo-satellite__status-dot" aria-hidden="true"></span>
+          <h2 id="haloChatTitle">Signal chat</h2>
+        </div>
+        <span class="halo-satellite__earn-hint">+2 HP per message</span>
+        <button class="halo-satellite__close" id="haloCloseChatBtn" type="button" aria-label="Close Signal chat">×</button>
+      </header>
+      <p class="halo-satellite__note" id="haloChatNote">Session notes stay in this browser. Use Messages in the Command Center for private member conversations.</p>
+      <div class="halo-satellite__channels" role="tablist" aria-label="Chat channel">
+        <button type="button" role="tab" aria-selected="true" aria-controls="haloChatMessages" data-satellite-channel="inner_circle">Inner Circle</button>
+        <button type="button" role="tab" aria-selected="false" aria-controls="haloChatMessages" tabindex="-1" data-satellite-channel="collaborator_vault">Collaborator Vault</button>
+      </div>
+      <div class="halo-satellite__messages" id="haloChatMessages" role="log" aria-live="polite" aria-label="Inner Circle messages" tabindex="0"></div>
+      <form class="halo-satellite__form" id="haloChatForm">
+        <label class="sr-only" for="haloChatMessageInput">Message</label>
+        <input id="haloChatMessageInput" type="text" maxlength="500" autocomplete="off" placeholder="Share a thought…" aria-describedby="haloChatStatus">
+        <button class="halo-satellite__send" type="submit">Send</button>
+      </form>
+      <p class="halo-satellite__chat-status" id="haloChatStatus" role="status" aria-live="polite"></p>
+    </section>
+
+    <dialog class="halo-satellite__modal" id="haloRewardsModal" aria-labelledby="haloRewardsTitle" aria-describedby="haloRewardsNote">
+      <header class="halo-satellite__modal-header">
+        <div>
+          <h2 id="haloRewardsTitle">HALO Points &amp; Rewards</h2>
+          <p class="halo-satellite__modal-sub" id="haloRewardsNote">Earn by chatting, publishing, boosting, saving and commenting. Points live in this browser and never grant ownership, licensing rights or paid access; HALO confirms every reward request separately.</p>
+        </div>
+        <button class="halo-satellite__close" id="haloCloseRewardsBtn" type="button" aria-label="Close HALO Points and rewards">×</button>
+      </header>
+      <div class="halo-satellite__tier-banner">
+        <div class="halo-satellite__tier-info">
+          <span class="halo-satellite__label">Balance</span>
+          <strong id="modalPointsBalance">0 HP</strong>
+          <span class="halo-satellite__tier-tag" id="modalCurrentTier">Initiate</span>
+        </div>
+        <div class="halo-satellite__progress-wrap">
+          <div class="halo-satellite__progress-labels"><span id="modalNextTierLabel">Next: Signal Artisan</span><span id="modalNextTierReq">0 / 500 lifetime HP</span></div>
+          <div class="halo-satellite__progress" id="modalTierProgress" role="progressbar" aria-labelledby="modalNextTierLabel" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+            <div class="halo-satellite__progress-fill" id="modalTierProgressBar"></div>
+          </div>
+        </div>
+      </div>
+      <div class="halo-satellite__tabs" role="tablist" aria-label="HALO Points sections">
+        <button type="button" role="tab" id="haloTabRewards" aria-selected="true" aria-controls="haloPanelRewards" data-satellite-tab>Rewards</button>
+        <button type="button" role="tab" id="haloTabTiers" aria-selected="false" aria-controls="haloPanelTiers" tabindex="-1" data-satellite-tab>Tiers</button>
+        <button type="button" role="tab" id="haloTabHistory" aria-selected="false" aria-controls="haloPanelHistory" tabindex="-1" data-satellite-tab>History</button>
+      </div>
+      <div class="halo-satellite__panel" id="haloPanelRewards" role="tabpanel" aria-labelledby="haloTabRewards" tabindex="0">
+        <p class="halo-satellite__reward-status" id="haloRewardStatus" role="status" aria-live="polite" tabindex="-1"></p>
+        <div class="halo-satellite__rewards" id="haloRewardsGrid"></div>
+      </div>
+      <div class="halo-satellite__panel" id="haloPanelTiers" role="tabpanel" aria-labelledby="haloTabTiers" tabindex="0" hidden>
+        <table class="halo-satellite__tiers">
+          <caption class="sr-only">Tiers by lifetime HALO Points</caption>
+          <thead><tr><th scope="col">Tier</th><th scope="col">Lifetime HP</th></tr></thead>
+          <tbody id="haloTiersBody"></tbody>
+        </table>
+        <h3>How to earn</h3>
+        <ul class="halo-satellite__rules" id="haloEarnRules"></ul>
+      </div>
+      <div class="halo-satellite__panel" id="haloPanelHistory" role="tabpanel" aria-labelledby="haloTabHistory" tabindex="0" hidden>
+        <ul class="halo-satellite__history" id="haloEarnHistoryList"></ul>
+      </div>
+    </dialog>
+  </div>
+
   <div class="signal-toast" id="signalToast" role="status" aria-live="polite" hidden></div>
 
   <script type="module" src="/identity.js"></script>
@@ -1584,6 +1670,7 @@
   <script type="module" src="/signal-network/signal-feed.js"></script>
   <script type="module" src="/halo-brand-router.js"></script>
   <script type="module" src="/signal-network/signal-rooms.js"></script>
+  <script type="module" src="/signal-network/signal-satellite.js"></script>
   <script type="module" src="/campaign-studio/dreamweaver-fanout-modal.js"></script>
 
 </body>

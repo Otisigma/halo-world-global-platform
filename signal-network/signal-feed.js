@@ -19,6 +19,10 @@ function ensureOrigin(origin, checkGeneration = true) {
 function actionError(error, origin, checkGeneration = true) {
   if (origin.session === feedState.session && (!checkGeneration || origin.generation === feedState.generation) && error.name !== "FeedSessionChanged") status.textContent = error.message;
 }
+function emitEngagement(kind, detail = {}) {
+  if (typeof CustomEvent !== "function" || typeof document.dispatchEvent !== "function") return;
+  document.dispatchEvent(new CustomEvent("halo:signal-engagement", { detail: { kind, ...detail } }));
+}
 function node(tag, content, className) {
   const result = document.createElement(tag);
   if (content != null) result.textContent = String(content);
@@ -112,6 +116,7 @@ function publicCommentForm(post, container, reload) {
         confirmAudience: !isPublic && consent.checked,
         timestampSeconds: seconds?.value ? Number(seconds.value) : null
       }, origin);
+      emitEngagement("comment", { postId: post.id });
       form.reset(); context.textContent = commentContext(); await reload();
       ensureOrigin(origin);
       status.textContent = isPublic ? "Comment published publicly." : "Comment shared with this post's audience.";
@@ -203,6 +208,7 @@ function renderPost(post) {
       requireMember();
       const active = !post[key];
       await mutate(kind, { postId: post.id, active });
+      emitEngagement(kind, { postId: post.id, active });
       if (kind === "boost") post.boosts = Math.max(0, post.boosts + (active ? 1 : -1));
       post[key] = active; element.textContent = label(); element.setAttribute("aria-pressed", String(active));
       if (kind === "save" && feedState.saved && !active) article.remove();
@@ -343,6 +349,7 @@ async function saveSignal() {
   requireMember();
   const data = await composer.publishData();
   const result = await mutate("publish", data, origin);
+  emitEngagement("publish", { postId: result?.id || "" });
   publishForm.reset(); composer.reset(); feedState.saved = false;
   byId("feedSaved").setAttribute("aria-pressed", "false"); await loadFeed();
   ensureOrigin(origin, false);

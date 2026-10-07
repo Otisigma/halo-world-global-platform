@@ -25,7 +25,7 @@
     "test:audio-preloader": "node scripts/audio-preloader-contracts.mjs",
     "test:creator-pass": "node scripts/creator-pass-contracts.mjs && node scripts/creator-pass-vault-contracts.mjs && node scripts/creator-pass-discovery-contracts.mjs",
     "test:dj-personas": "node scripts/dj-persona-contracts.mjs",
-    "test:network": "node scripts/creator-network-contracts.mjs && node scripts/signal-network-contracts.mjs && node scripts/signal-rooms-contracts.mjs && node scripts/signal-feed-contracts.mjs && node scripts/studio-guardian-contracts.mjs && node scripts/dj-persona-contracts.mjs",
+    "test:network": "node scripts/creator-network-contracts.mjs && node scripts/signal-network-contracts.mjs && node scripts/signal-rooms-contracts.mjs && node scripts/signal-satellite-contracts.mjs && node scripts/signal-feed-contracts.mjs && node scripts/studio-guardian-contracts.mjs && node scripts/dj-persona-contracts.mjs",
     "test:music-home": "node scripts/music-home-contracts.mjs && node scripts/music-home-api-contracts.mjs"
   },
   "dependencies": {

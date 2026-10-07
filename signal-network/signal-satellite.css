@@ -1,0 +1,131 @@
+/* HALO Signal satellite — floating dock, chat drawer and HALO Points dialog. */
+.halo-satellite {
+  --sat-ink: #08090b;
+  --sat-panel: #101115;
+  --sat-raised: #18181d;
+  --sat-line: #d4a84740;
+  --sat-line-soft: #ffffff1f;
+  --sat-gold: #e7b34a;
+  --sat-gold-soft: #d4a84720;
+  --sat-paper: #f2efe4;
+  --sat-muted: #aaa8a1;
+  --sat-lime: #a5e75f;
+  --sat-coral: #ff765e;
+  font-family: 'Inter', sans-serif;
+  color: var(--sat-paper);
+}
+.halo-satellite[hidden], .halo-satellite [hidden] { display: none !important; }
+.halo-satellite :focus-visible { outline: 3px solid var(--sat-gold); outline-offset: 3px; }
+
+.halo-satellite__dock {
+  position: fixed; right: max(1rem, env(safe-area-inset-right)); bottom: max(1rem, env(safe-area-inset-bottom));
+  z-index: 900; display: flex; gap: .6rem;
+}
+.halo-satellite__dock-btn {
+  display: inline-flex; align-items: center; gap: .5rem; min-height: 44px; padding: .55rem 1rem;
+  background: var(--sat-panel); color: var(--sat-paper); border: 1px solid var(--sat-gold); border-radius: 999px;
+  font: inherit; font-size: .85rem; cursor: pointer; box-shadow: 0 6px 20px #0009;
+  transition: background .2s ease, border-color .2s ease, transform .2s ease;
+}
+.halo-satellite__dock-btn:hover, .halo-satellite__dock-btn[aria-expanded="true"] { background: var(--sat-raised); border-color: #f3e5ab; transform: translateY(-2px); }
+.halo-satellite__tier-pill { padding: .1rem .5rem; border-radius: 999px; background: var(--sat-gold-soft); color: var(--sat-gold); font-size: .7rem; font-weight: 700; letter-spacing: .02em; }
+.halo-satellite__unread { min-width: 1.3rem; padding: .1rem .4rem; border-radius: 999px; background: var(--sat-coral); color: var(--sat-ink); font-size: .7rem; font-weight: 700; text-align: center; }
+
+.halo-satellite__drawer {
+  position: fixed; right: max(1rem, env(safe-area-inset-right)); bottom: calc(max(1rem, env(safe-area-inset-bottom)) + 3.75rem);
+  z-index: 899; display: flex; flex-direction: column; width: min(22.5rem, calc(100vw - 2rem)); height: min(32rem, calc(100dvh - 6.5rem));
+  background: var(--sat-panel); border: 1px solid var(--sat-gold); border-radius: 1rem; box-shadow: 0 12px 40px #000c; overflow: hidden;
+}
+.halo-satellite__header, .halo-satellite__modal-header {
+  display: flex; align-items: center; gap: .6rem; padding: .75rem 1rem; background: var(--sat-ink); border-bottom: 1px solid var(--sat-line);
+}
+.halo-satellite__title { display: flex; align-items: center; gap: .5rem; margin-right: auto; }
+.halo-satellite__title h2 { margin: 0; font-family: 'Barlow Condensed', sans-serif; font-size: 1.15rem; letter-spacing: .03em; }
+.halo-satellite__status-dot { width: .5rem; height: .5rem; border-radius: 50%; background: var(--sat-lime); }
+.halo-satellite__earn-hint { padding: .15rem .45rem; border-radius: .3rem; background: var(--sat-gold-soft); color: var(--sat-gold); font-size: .7rem; }
+.halo-satellite__close {
+  display: inline-grid; place-items: center; min-width: 44px; min-height: 44px; margin: -.5rem -.5rem -.5rem 0;
+  background: none; border: 0; border-radius: .5rem; color: var(--sat-muted); font-size: 1.4rem; cursor: pointer;
+}
+.halo-satellite__close:hover { color: var(--sat-paper); background: var(--sat-gold-soft); }
+.halo-satellite__note { margin: 0; padding: .5rem 1rem; font-size: .72rem; line-height: 1.5; color: var(--sat-muted); background: var(--sat-ink); }
+.halo-satellite__channels, .halo-satellite__tabs { display: flex; background: var(--sat-ink); border-bottom: 1px solid var(--sat-line); }
+.halo-satellite__channels button, .halo-satellite__tabs button {
+  flex: 1; min-height: 44px; padding: .5rem; background: none; border: 0; border-bottom: 2px solid transparent;
+  color: var(--sat-muted); font: inherit; font-size: .8rem; font-weight: 600; cursor: pointer;
+}
+.halo-satellite__channels button.is-active, .halo-satellite__tabs button.is-active { color: var(--sat-gold); border-bottom-color: var(--sat-gold); background: #d4a8470d; }
+.halo-satellite__messages { flex: 1; display: flex; flex-direction: column; gap: .6rem; padding: .75rem; overflow-y: auto; }
+.halo-satellite__notice { margin: 0; padding: .4rem; border-radius: .4rem; background: #ffffff08; color: var(--sat-muted); font-size: .7rem; text-align: center; }
+.halo-satellite__bubble { max-width: 82%; padding: .5rem .75rem; border-radius: .65rem; font-size: .82rem; line-height: 1.45; overflow-wrap: anywhere; white-space: pre-wrap; }
+.halo-satellite__bubble.is-me { align-self: flex-end; background: var(--sat-gold); color: var(--sat-ink); font-weight: 500; }
+.halo-satellite__bubble.is-other { align-self: flex-start; background: var(--sat-raised); border: 1px solid var(--sat-line-soft); }
+.halo-satellite__bubble.is-system { align-self: center; background: var(--sat-gold-soft); border: 1px solid var(--sat-line); color: var(--sat-gold); font-size: .75rem; }
+.halo-satellite__meta { display: block; margin-bottom: .15rem; font-size: .65rem; opacity: .75; }
+.halo-satellite__form { display: flex; gap: .5rem; padding: .6rem; background: var(--sat-ink); border-top: 1px solid var(--sat-line); }
+.halo-satellite__form input {
+  flex: 1; min-width: 0; min-height: 44px; padding: .5rem .75rem; box-sizing: border-box;
+  background: var(--sat-panel); color: var(--sat-paper); border: 1px solid #ffffff38; border-radius: .5rem; font: inherit; font-size: .85rem;
+}
+.halo-satellite__form input:focus { border-color: var(--sat-gold); }
+.halo-satellite__send, .halo-satellite__redeem {
+  min-height: 44px; padding: .5rem .9rem; background: var(--sat-gold); color: var(--sat-ink); border: 0; border-radius: .5rem;
+  font: inherit; font-size: .8rem; font-weight: 700; cursor: pointer;
+}
+.halo-satellite__redeem:disabled { background: var(--sat-raised); color: var(--sat-muted); cursor: not-allowed; }
+.halo-satellite__chat-status { min-height: 1.2em; margin: 0; padding: 0 .75rem .5rem; background: var(--sat-ink); color: var(--sat-gold); font-size: .7rem; }
+
+.halo-satellite__modal {
+  width: min(45rem, calc(100% - 2rem)); max-height: min(85dvh, 48rem); padding: 0; margin: auto;
+  color: var(--sat-paper); background: var(--sat-panel); border: 1px solid var(--sat-gold); border-radius: 1rem; box-shadow: 0 16px 48px #000e; overflow: hidden;
+}
+.halo-satellite__modal[open] { display: flex; flex-direction: column; }
+.halo-satellite__modal::backdrop { background: #000d; backdrop-filter: blur(6px); }
+.halo-satellite__modal-header { align-items: flex-start; padding: 1.1rem 1.25rem; }
+.halo-satellite__modal-header > div { margin-right: auto; }
+.halo-satellite__modal-header h2 { margin: 0; font-family: 'Barlow Condensed', sans-serif; font-size: 1.75rem; }
+.halo-satellite__modal-sub { margin: .3rem 0 0; color: var(--sat-muted); font-size: .78rem; line-height: 1.55; }
+.halo-satellite__tier-banner {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 1.5rem; padding: 1rem 1.25rem;
+  background: linear-gradient(135deg, #d4a84726, #0a0b0ecc); border-bottom: 1px solid var(--sat-line);
+}
+.halo-satellite__tier-info { display: grid; gap: .2rem; }
+.halo-satellite__label { color: var(--sat-muted); font-size: .65rem; letter-spacing: .1em; text-transform: uppercase; }
+.halo-satellite__tier-info strong { font-family: 'Barlow Condensed', sans-serif; font-size: 1.9rem; color: var(--sat-gold); line-height: 1; }
+.halo-satellite__tier-tag { justify-self: start; padding: .1rem .45rem; border-radius: .3rem; background: var(--sat-gold); color: var(--sat-ink); font-size: .7rem; font-weight: 700; }
+.halo-satellite__progress-wrap { flex: 1; min-width: 12rem; }
+.halo-satellite__progress-labels { display: flex; justify-content: space-between; gap: .5rem; margin-bottom: .4rem; color: var(--sat-muted); font-size: .72rem; }
+.halo-satellite__progress { height: .5rem; background: var(--sat-ink); border: 1px solid var(--sat-line); border-radius: 999px; overflow: hidden; }
+.halo-satellite__progress-fill { width: 0; height: 100%; background: linear-gradient(90deg, #b8862f, var(--sat-gold)); transition: width .3s ease; }
+.halo-satellite__panel { flex: 1; padding: 1.25rem; overflow-y: auto; }
+.halo-satellite__panel h3 { margin: 1.25rem 0 .5rem; font-size: .95rem; color: var(--sat-gold); }
+.halo-satellite__reward-status { min-height: 1.2em; margin: 0 0 .75rem; color: var(--sat-gold); font-size: .8rem; }
+.halo-satellite__rewards { display: grid; grid-template-columns: repeat(auto-fill, minmax(12.5rem, 1fr)); gap: 1rem; }
+.halo-satellite__reward {
+  display: flex; flex-direction: column; justify-content: space-between; gap: .75rem; padding: 1rem;
+  background: linear-gradient(135deg, #1a1916, var(--sat-ink)); border: 1px solid var(--sat-line); border-radius: .75rem;
+}
+.halo-satellite__reward h4 { margin: 0 0 .35rem; font-size: .9rem; }
+.halo-satellite__reward p { margin: 0; color: var(--sat-muted); font-size: .75rem; line-height: 1.5; }
+.halo-satellite__reward-footer { display: flex; justify-content: space-between; align-items: center; gap: .5rem; }
+.halo-satellite__cost { color: var(--sat-gold); font-weight: 700; font-size: .85rem; }
+.halo-satellite__tiers { width: 100%; border-collapse: collapse; font-size: .8rem; }
+.halo-satellite__tiers th, .halo-satellite__tiers td { padding: .6rem; text-align: left; border-bottom: 1px solid var(--sat-line); }
+.halo-satellite__tiers th { color: var(--sat-gold); }
+.halo-satellite__tiers tr.is-current td { color: var(--sat-gold); background: #d4a84714; font-weight: 600; }
+.halo-satellite__rules { margin: 0; padding-left: 1.1rem; color: #d0cabb; font-size: .78rem; line-height: 1.7; }
+.halo-satellite__history { list-style: none; margin: 0; padding: 0; }
+.halo-satellite__history-item { display: flex; justify-content: space-between; gap: 1rem; padding: .55rem 0; border-bottom: 1px solid var(--sat-line); font-size: .8rem; }
+.halo-satellite__history-item small { color: var(--sat-muted); }
+.halo-satellite__history-item .is-earn { color: var(--sat-lime); font-weight: 700; white-space: nowrap; }
+.halo-satellite__history-item .is-spend { color: var(--sat-coral); font-weight: 700; white-space: nowrap; }
+
+@media (max-width: 560px) {
+  .halo-satellite__dock { left: max(1rem, env(safe-area-inset-left)); justify-content: flex-end; }
+  .halo-satellite__drawer { left: max(.5rem, env(safe-area-inset-left)); right: max(.5rem, env(safe-area-inset-right)); width: auto; }
+  .halo-satellite__modal { width: calc(100% - 1rem); max-height: calc(100dvh - 1rem); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .halo-satellite *, .halo-satellite *::backdrop { transition: none !important; animation: none !important; }
+  .halo-satellite__dock-btn:hover, .halo-satellite__dock-btn[aria-expanded="true"] { transform: none; }
+}

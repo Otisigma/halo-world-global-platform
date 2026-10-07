@@ -4,6 +4,8 @@ import {
 } from "../lib/creator-marketplace.js";
 import { HaloAIService } from "../lib/halo-ai-service.js";
 import { DJ_AI_DISCLOSURE, composeDjSignalDraft, getDjPersona } from "../lib/dj-personas.js";
+import { createDiscoveryPreferences, creatorSearchRecord, discoveryMatches, normalizeTag } from "../lib/network-discovery.js";
+import { creatorPreviewModel, creatorQuickCards } from "../lib/creator-quick-card.js";
 
 const FOLLOW_KEY = "halo.creator-demo.follows.v1";
 const ADVISORY_DISCLOSURE = "Local-rules advisory only: no actual audio analysis or AI provider is used. Stem checks inspect sample metadata, not audio files. Rights and split checks are not legal verification.";
@@ -28,11 +30,11 @@ export function saveDemoFollows(storage, ids) {
   }
 }
 
-export function filterDemoCreators(creators, search = "", genre = "") {
-  const query = search.trim().toLocaleLowerCase();
-  return creators.filter(creator => (!genre || creator.genres.includes(genre)) &&
-    [creator.displayName, creator.bio, creator.location, ...creator.roles, ...creator.genres]
-      .join(" ").toLocaleLowerCase().includes(query));
+export function filterDemoCreators(creators, search = "", genre = "", tags = []) {
+  return creators.filter(creator => {
+    const record = creatorSearchRecord(creator);
+    return discoveryMatches(record.text, creator.genres, { query: search, tags: genre ? [genre] : tags });
+  });
 }
 
 export function profileListings(creator, listings = LISTING_SEEDS) {
@@ -59,6 +61,12 @@ export function initCreatorDiscovery({
   const followed = loaded.ids;
   const followControls = new Map();
   const dialog = byId("demoProfileDialog");
+  const previews = creatorQuickCards(doc);
+  const genres = [...new Set(creators.flatMap(creator => creator.genres))].sort();
+  const preferences = createDiscoveryPreferences("creator-samples", { getStorage: () => storage, allowedTags: genres });
+  const savedFilters = preferences.read();
+  let quickTags = savedFilters.tags;
+  byId("demoSearch").value = savedFilters.query;
   let lastOpener;
   let profileVersion = 0;
 
@@ -100,19 +108,20 @@ export function initCreatorDiscovery({
   }
 
   function followButton(creator) {
-    const control = button("", () => {
-      if (followed.has(creator.id)) followed.delete(creator.id);
-      else followed.add(creator.id);
-      const saved = saveDemoFollows(storage, followed);
-      storageAvailable = saved;
-      syncFollows(creator.id);
-      notify(`${followed.has(creator.id) ? "Following" : "Unfollowed"} ${creator.displayName} in this demo only. ${saved ? "Saved on this browser; no real account or follower count changed." : "Browser storage is unavailable; this choice lasts only for this page visit."}`);
-    });
+    const control = button("", () => toggleDemoFollow(creator));
     control.setAttribute("aria-label", `Follow ${creator.displayName} in the demo only`);
     if (!followControls.has(creator.id)) followControls.set(creator.id, new Set());
     followControls.get(creator.id).add(control);
     syncFollows(creator.id);
     return control;
+  }
+  function toggleDemoFollow(creator) {
+    if (followed.has(creator.id)) followed.delete(creator.id);
+    else followed.add(creator.id);
+    const saved = saveDemoFollows(storage, followed);
+    storageAvailable = saved;
+    syncFollows(creator.id);
+    notify(`${followed.has(creator.id) ? "Following" : "Unfollowed"} ${creator.displayName} in this demo only. ${saved ? "Saved on this browser; no real account or follower count changed." : "Browser storage is unavailable; this choice lasts only for this page visit."}`);
   }
 
   function syncFollows(id) {
@@ -131,18 +140,25 @@ export function initCreatorDiscovery({
   }
 
   function renderCreators() {
+    previews.close();
     // Keep only the open profile's controls when rebuilding the filtered grid.
     for (const controls of followControls.values()) {
       for (const control of controls) if (!dialog.contains(control)) controls.delete(control);
     }
-    const matches = filterDemoCreators(creators, byId("demoSearch").value, byId("demoGenre").value);
+    const matches = filterDemoCreators(creators, byId("demoSearch").value, byId("demoGenre").value, quickTags);
     byId("demoResultCount").textContent = `${matches.length} of ${creators.length} sample creators`;
     byId("demoCreators").replaceChildren(...matches.map(creator => {
       const card = node("article", undefined, "demo-creator-card");
       const cover = node("div", undefined, "demo-card-cover");
       cover.append(node("span", tierLabel(creator), "demo-tier-label"), avatar(creator));
       const body = node("div", undefined, "demo-card-body");
-      const title = node("h3", creator.displayName);
+      const title = node("h3");
+      const trigger = button(creator.displayName, () => {}, "creator-preview-trigger");
+      previews.attach(trigger, creatorPreviewModel(creator, "sample"), [
+        { label: "Explore sample profile", run: opener => openProfile(creator, opener) },
+        { label: () => followed.has(creator.id) ? "Unfollow · demo" : "Follow · demo", run: () => toggleDemoFollow(creator) }
+      ]);
+      title.append(trigger);
       body.append(badge(creator), title, node("p", creator.roles.join(" / "), "demo-roles"),
         tags(creator), node("p", creator.bio, "demo-bio"),
         node("p", `${creator.location} · ${creator.availability}`, "demo-location"), sampleMetrics(creator));
@@ -154,6 +170,34 @@ export function initCreatorDiscovery({
       return card;
     }));
     if (!matches.length) byId("demoCreators").append(node("p", "No sample creators match. Try a different sound or reset the filters.", "empty-state"));
+    renderQuickFilters();
+  }
+  function renderQuickFilters() {
+    const pills = byId("demoSearchPills");
+    if (!pills) return;
+    const focusedLabel = pills.contains(doc.activeElement) ? doc.activeElement.textContent : "";
+    pills.replaceChildren();
+    if (byId("demoSearch").value) pills.append(button(`Search: ${byId("demoSearch").value} ×`, () => {
+      byId("demoSearch").value = ""; updateFilters(); byId("demoSearch").focus();
+    }));
+    const selected = byId("demoGenre").value ? [normalizeTag(byId("demoGenre").value)] : quickTags;
+    for (const tag of selected) pills.append(button(`#${tag} ×`, () => {
+      byId("demoGenre").value = ""; quickTags = selected.filter(item => item !== tag); updateFilters();
+    }));
+    for (const genre of genres) {
+      const tag = normalizeTag(genre);
+      const control = button(genre, () => {
+        byId("demoGenre").value = "";
+        quickTags = selected.includes(tag) ? selected.filter(item => item !== tag) : [...selected, tag];
+        updateFilters();
+      });
+      control.setAttribute("aria-pressed", String(selected.includes(tag))); pills.append(control);
+    }
+    if (focusedLabel && !dialog.open) ([...pills.children].find(control => control.textContent === focusedLabel) || byId("demoSearch")).focus();
+  }
+  function updateFilters() {
+    preferences.write({ query: byId("demoSearch").value, tags: byId("demoGenre").value ? [byId("demoGenre").value] : quickTags });
+    renderCreators();
   }
 
   function renderOrbits() {
@@ -274,6 +318,7 @@ export function initCreatorDiscovery({
   }
 
   function openProfile(creator, opener) {
+    previews.close();
     profileVersion++;
     lastOpener = opener;
     for (const controls of followControls.values()) {
@@ -335,11 +380,13 @@ export function initCreatorDiscovery({
     event.preventDefault();
     byId("demoSearch").value = "";
     byId("demoGenre").value = "";
+    quickTags = []; preferences.reset();
     renderCreators();
   });
-  byId("demoSearch").addEventListener("input", renderCreators);
-  byId("demoGenre").addEventListener("change", renderCreators);
-  for (const genre of [...new Set(creators.flatMap(creator => creator.genres))].sort()) {
+  byId("demoSearch").addEventListener("input", updateFilters);
+  byId("demoGenre").addEventListener("change", () => { quickTags = []; updateFilters(); });
+  byId("demoSearchClear")?.addEventListener("click", () => { byId("demoSearch").value = ""; updateFilters(); byId("demoSearch").focus(); });
+  for (const genre of genres) {
     const option = node("option", genre);
     option.value = genre;
     byId("demoGenre").append(option);

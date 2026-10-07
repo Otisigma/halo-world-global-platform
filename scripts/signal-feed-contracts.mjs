@@ -5,6 +5,10 @@ import { createSignalFeedHandler, cleanupSignalMedia, pageInput, postInput, publ
 import { createObjectUrlAttachment, validateSignalMedia, SIGNAL_MEDIA_MAX_BYTES } from "../lib/signal-media.js";
 import { formatReleaseCaption, suggestSignal } from "../lib/signal-dreamweaver.js";
 import { createSignalComposerController, readWebhookConfig, resolveWebhookUrl, saveSignalToFeed } from "../signal-network/signal-composer.js";
+import { createAudienceSelection, discoveryMatches, feedSearchRecord, createDiscoveryPreferences, normalizeDiscovery,
+  registerDiscoveryShortcut } from "../lib/network-discovery.js";
+import { mountDiscoveryControls } from "../lib/discovery-controls.js";
+import { creatorPreviewModel, sameOriginCreatorLink } from "../lib/creator-quick-card.js";
 
 const postId = "11111111-1111-4111-8111-111111111111";
 const commentId = "22222222-2222-4222-8222-222222222222";
@@ -350,12 +354,16 @@ await check("unsupported methods and unknown views or actions fail closed", asyn
 await check("auth changes clear composer drafts and consent; old mutations cannot change the new session", async () => {
   const source = await readFile(new URL("../signal-network/signal-feed.js", import.meta.url), "utf8");
   class Element {
-    constructor() { this.children = []; this.handlers = {}; this.value = ""; this.checked = false; this.textContent = ""; this.hidden = false; this.disabled = false; }
+    constructor() { this.children = []; this.handlers = {}; this.attributes = {}; this.value = ""; this.checked = false; this.textContent = ""; this.hidden = false; this.disabled = false; }
     addEventListener(name, handler) { this.handlers[name] = handler; }
-    setAttribute() {}
-    append(...children) { this.children.push(...children); }
+    setAttribute(name, value) { this.attributes[name] = String(value); }
+    append(...children) { children.forEach(child => { child.parentElement = this; }); this.children.push(...children); }
+    prepend(...children) { children.forEach(child => { child.parentElement = this; }); this.children.unshift(...children); }
     replaceChildren(...children) { this.children = children; }
     querySelectorAll() { return this.players || []; }
+    contains(child) { return this === child || this.children.some(item => item.contains?.(child)); }
+    focus() { context.document.activeElement = this; }
+    remove() { this.parentElement.children = this.parentElement.children.filter(child => child !== this); }
     reset() {
       this.resetCount = (this.resetCount || 0) + 1;
       for (const field of Object.values(this.elements || {})) { field.value = ""; field.checked = false; }
@@ -368,18 +376,27 @@ await check("auth changes clear composer drafts and consent; old mutations canno
   form.elements = Object.fromEntries(["kind", "body", "releaseId", "linkUrl", "includePurchase", "publishPublic"].map(name => [name, new Element()]));
   elements.set("feedKind", form.elements.kind); elements.set("feedRelease", form.elements.releaseId);
   form.elements.kind.value = "TEXT";
-  let authChanged, finishMutation, finishFeed, delayFeed = false, currentMember = "old-member";
+  let authChanged, finishMutation, finishFeed, delayFeed = false, currentMember = "old-member", loadedPosts = [], currentUser = { id: "old-user" };
+  const windowEvents = {};
+  const audienceButtons = ["PUBLIC", "INNER_CIRCLE", "COLLABORATOR_VAULT"].map(value => {
+    const item = new Element(); item.dataset = { feedAudience: value }; return item;
+  });
   const context = {
-    document: { getElementById: get, createElement: () => new Element(), addEventListener() {}, hidden: false },
-    window: { haloIdentity: { onAuthChange(callback) { authChanged = callback; } } },
+    document: { getElementById: get, createElement: () => new Element(), querySelector: () => null,
+      querySelectorAll: () => audienceButtons, addEventListener() {}, hidden: false },
+    window: { addEventListener(name, callback) { windowEvents[name] = callback; }, dispatchEvent(event) { windowEvents[event.type]?.(event); },
+      haloIdentity: { getUser: async () => currentUser, onAuthChange(callback) { authChanged = callback; } } },
+    createAudienceSelection, feedSearchRecord, mountDiscoveryControls, registerDiscoveryShortcut: () => {},
+    creatorQuickCards: () => ({ attach() {}, close() {} }),
+    createFeedCard: () => ({ element: new Element(), player: null }),
     fetch: async (_url, options) => {
       if (options.method === "POST") return new Promise(resolve => { finishMutation = () => resolve({ ok: true, json: async () => ({ id: postId }) }); });
       if (delayFeed && _url.includes("view=feed")) return new Promise(resolve => {
         finishFeed = () => resolve({ ok: true, json: async () => ({ items: [], memberId: currentMember, nextCursor: null }) });
       });
-      return { ok: true, json: async () => ({ items: [], memberId: currentMember, nextCursor: null }) };
+      return { ok: true, json: async () => ({ items: _url.includes("view=feed") ? loadedPosts : [], memberId: currentMember, nextCursor: null }) };
     },
-    AbortController, URLSearchParams, setTimeout, clearTimeout, setInterval() {}, console
+    AbortController, URLSearchParams, CustomEvent, setTimeout, clearTimeout, setInterval() {}, console
   };
   context.SIGNAL_VISIBILITY = { PUBLIC: "Public Frequency" };
   context.createSignalComposerController = createSignalComposerController;
@@ -390,7 +407,7 @@ await check("auth changes clear composer drafts and consent; old mutations canno
       visibility: "PUBLIC", publishPublic: form.elements.publishPublic.checked
     })
   });
-  runInNewContext(`${source.replace(/^import .*;\n/gm, "")}\nglobalThis.testState = feedState; globalThis.testMutate = mutate; globalThis.testPostType = postType;`, context);
+  runInNewContext(`${source.replace(/^import .*;\n/gm, "")}\nglobalThis.testState = feedState; globalThis.testMutate = mutate; globalThis.testPostType = postType; globalThis.testAudience = audience; globalThis.testLoadFeed = loadFeed; globalThis.testRecords = records;`, context);
   await new Promise(resolve => setImmediate(resolve));
   form.elements.body.value = "Old account draft"; form.elements.linkUrl.value = "https://example.com/old-link";
   form.elements.publishPublic.checked = true; form.elements.includePurchase.checked = true;
@@ -416,6 +433,45 @@ await check("auth changes clear composer drafts and consent; old mutations canno
   const pendingToggle = context.testMutate("save", { postId, active: true });
   await new Promise(resolve => setImmediate(resolve)); context.testState.generation++;
   finishMutation(); await assert.rejects(pendingToggle, error => error.name === "FeedSessionChanged");
+  loadedPosts = [
+    { id: "public", memberId: "other", authorName: "Public creator", body: "Afro House #AfroHouse", kind: "TEXT", visibility: "PUBLIC" },
+    { id: "private", memberId: "new-member", authorName: "Private creator", body: "Private studio", kind: "TEXT", visibility: "INNER_CIRCLE" }
+  ];
+  await context.testLoadFeed();
+  assert.equal(context.testRecords.size, 2, get("feedStatus").textContent);
+  const publicCard = context.testRecords.get("public").element, privateCard = context.testRecords.get("private").element;
+  assert.equal(publicCard.hidden, false); assert.equal(privateCard.hidden, true, "Public tab excludes authorized private posts too");
+  get("feedSearch").value = "not-found"; get("feedSearch").handlers.input();
+  assert.equal(publicCard.hidden, true);
+  get("feedSearch").value = "#afrohouse"; get("feedSearch").handlers.input();
+  assert.equal(publicCard.hidden, false); assert.equal(context.testRecords.get("public").element, publicCard, "Filtering retains the card node");
+  get("feedSearchClear").handlers.click();
+  audienceButtons[1].handlers.click();
+  assert.equal(context.testAudience.audience, "INNER_CIRCLE"); assert.equal(publicCard.hidden, true); assert.equal(privateCard.hidden, false);
+  currentUser = null; currentMember = ""; loadedPosts = [];
+  await authChanged("logout", null);
+  assert.equal(context.testAudience.audience, "PUBLIC"); assert.equal(context.testRecords.size, 0);
+  get("signalAuthButton").click = () => {};
+  audienceButtons[1].handlers.click();
+  assert.equal(context.testAudience.audience, "PUBLIC"); assert.equal(context.testAudience.requested, "INNER_CIRCLE");
+  get("signalAuthDialog").handlers.cancel();
+  currentUser = { id: "next-user" }; currentMember = "next-member";
+  await authChanged("login", currentUser); windowEvents["signal-auth-completed"]();
+  assert.equal(context.testAudience.audience, "PUBLIC", "Cancelled audience is not resumed on later login");
+  currentUser = null; currentMember = ""; await authChanged("logout", null);
+  audienceButtons[2].handlers.click();
+  currentUser = { id: "next-user" }; currentMember = "next-member";
+  const login = authChanged("login", currentUser); const completed = windowEvents["signal-auth-completed"]();
+  get("signalAuthDialog").handlers.close(); await login; await completed;
+  assert.equal(context.testAudience.audience, "COLLABORATOR_VAULT", "Completed auth and server-confirmed membership resume the requested tab");
+  currentUser = { id: "other-user" }; currentMember = "other-member"; await authChanged("login", currentUser);
+  assert.equal(context.testAudience.audience, "PUBLIC", "Account switches reset the audience");
+  assert.equal(audienceButtons[0].attributes["aria-pressed"], "true", "Account reset updates the committed buttons immediately");
+  audienceButtons[1].handlers.click();
+  const beforeExpiry = context.testState.session;
+  currentUser = null; currentMember = "";
+  await context.testLoadFeed();
+  assert.equal(context.testAudience.audience, "PUBLIC"); assert.ok(context.testState.session > beforeExpiry, "Silent session expiry clears caches and invalidates mutations too");
 });
 await check("video feed cards embed only valid YouTube URLs and preserve uploads, fallbacks and other post types", async () => {
   const source = await readFile(new URL("../signal-network/signal-components.js", import.meta.url), "utf8");
@@ -432,6 +488,7 @@ await check("video feed cards embed only valid YouTube URLs and preserve uploads
   }
   const context = {
     document: { createElement: tag => new Element(tag) }, URL,
+    creatorQuickCards: () => ({ attach() {} }), creatorPreviewModel,
     signalMediaKind: type => type.startsWith("video/") ? "VIDEO" : "AUDIO"
   };
   runInNewContext(`${source.replace(/^import .*;\n/gm, "").replace(/^export /gm, "")}\nglobalThis.createFeedCard = createFeedCard;`, context);
@@ -861,5 +918,67 @@ await check("composer markup exposes the Signal controller hooks without placeho
   assert.match(page, /<meta name="halo-signal-broadcast-webhook" content="">/);
   assert.ok(!/YOUR_AUTOMATION_WEBHOOK_URL_HERE/.test(page + feed));
   assert.match(feed, /createSignalComposerController\(/); assert.match(feed, /publishController\.cancel\(\)/);
+});
+await check("loaded discovery normalizes handles, hashtags and genre spellings with AND queries and OR tags", () => {
+  const record = feedSearchRecord({ authorName: "DJ Halo", body: "New studio #AfroHouse #Soul", media: { title: "Night", genres: ["Afro House"] } });
+  assert.equal(normalizeDiscovery("  @DJ   #Afro House  "), "dj afrohouse");
+  assert.equal(discoveryMatches(record.text, record.tags, { query: "@halo   #Afro House", tags: ["#jazz", "#Soul"] }), true);
+  assert.equal(discoveryMatches(record.text, record.tags, { query: "halo missing", tags: ["Soul"] }), false);
+  assert.equal(discoveryMatches(record.text, record.tags, { query: "halo", tags: ["Jazz"] }), false);
+});
+await check("discovery preferences tolerate corruption and unavailable storage and persist only bounded public choices", async () => {
+  const entries = new Map();
+  const storage = { getItem: key => entries.get(key), setItem: (key, value) => entries.set(key, value), removeItem: key => entries.delete(key) };
+  const prefs = createDiscoveryPreferences("contract", { getStorage: () => storage, delay: 0 });
+  const key = "halo.discovery.contract.v1";
+  for (const bad of ["{bad", "[]", "x".repeat(4097), '{"version":2,"query":"","tags":[]}', JSON.stringify({ version: 1, query: "x".repeat(121), tags: [] }),
+    JSON.stringify({ version: 1, query: "", tags: Array(13).fill("Soul") }), JSON.stringify({ version: 1, query: "", tags: [null] })]) {
+    entries.set(key, bad); assert.deepEqual(prefs.read(), { query: "", tags: [] });
+  }
+  prefs.write({ query: "Afro House", tags: ["#AfroHouse", "afro house", "private-unapproved"], audience: "INNER_CIRCLE", memberId: "private-id" });
+  await new Promise(resolve => setTimeout(resolve, 10));
+  assert.deepEqual(JSON.parse(entries.get(key)), { version: 1, query: "Afro House", tags: ["afrohouse"] });
+  prefs.write({ query: "later", tags: [] }); prefs.reset();
+  await new Promise(resolve => setTimeout(resolve, 10)); assert.equal(entries.has(key), false, "Reset also cancels pending writes");
+  const unavailable = createDiscoveryPreferences("blocked", { getStorage() { throw new Error("Getter denied"); }, delay: 0 });
+  assert.deepEqual(unavailable.read(), { query: "", tags: [] }); unavailable.write({ query: "safe", tags: [] });
+  await new Promise(resolve => setTimeout(resolve, 10)); assert.doesNotThrow(() => unavailable.reset());
+  const denied = createDiscoveryPreferences("denied", { getStorage: () => ({ getItem() { throw new Error("read"); },
+    setItem() { throw new Error("quota"); }, removeItem() { throw new Error("remove"); } }), delay: 0 });
+  assert.deepEqual(denied.read(), { query: "", tags: [] }); denied.write({ query: "safe", tags: [] });
+  await new Promise(resolve => setTimeout(resolve, 10)); denied.reset();
+});
+await check("one discovery shortcut registration handles uppercase and respects modals and native shortcuts", () => {
+  let listener, registrations = 0, modal = false, hidden = false, focused = 0;
+  const target = { disabled: false, hidden: false, closest: () => hidden ? {} : null, getClientRects: () => [1], focus() { focused++; } };
+  const doc = { addEventListener(_type, callback) { listener = callback; registrations++; }, querySelector: () => modal ? {} : null };
+  registerDiscoveryShortcut(doc, () => target); registerDiscoveryShortcut(doc, () => target);
+  assert.equal(registrations, 1);
+  const emit = overrides => {
+    const event = { key: "k", ctrlKey: true, metaKey: false, defaultPrevented: false, preventDefault() { this.defaultPrevented = true; }, ...overrides };
+    listener(event); return event.defaultPrevented;
+  };
+  assert.equal(emit({ key: "K" }), true); assert.equal(focused, 1);
+  assert.equal(emit({ ctrlKey: false, metaKey: true }), true);
+  for (const overrides of [{ defaultPrevented: true }, { isComposing: true }, { repeat: true }, { altKey: true }, { shiftKey: true },
+    { ctrlKey: true, metaKey: true }, { ctrlKey: false, metaKey: false }, { key: "j" }]) {
+    const before = focused; emit(overrides); assert.equal(focused, before);
+  }
+  modal = true; assert.equal(emit({}), false); modal = false;
+  hidden = true; assert.equal(emit({}), false); hidden = false;
+  target.disabled = true; assert.equal(emit({}), false);
+});
+await check("audience selection requires completed real auth and confirmed membership and never invents creator identity", () => {
+  const gate = createAudienceSelection();
+  gate.request("INNER_CIRCLE", false, "forged"); gate.complete();
+  assert.equal(gate.confirm(false, "forged"), false); assert.equal(gate.confirm(true, ""), false); assert.equal(gate.audience, "PUBLIC");
+  gate.cancel(); assert.equal(gate.confirm(true, "real"), false);
+  gate.request("COLLABORATOR_VAULT", false, ""); gate.complete(); assert.equal(gate.confirm(true, "real"), true);
+  gate.reset(); assert.equal(gate.audience, "PUBLIC"); assert.equal(gate.requested, "");
+  assert.equal(creatorPreviewModel({ display_name: "Same name" }).id, "");
+  assert.equal(creatorPreviewModel({ display_name: "Same name", member_id: "real-id" }).id, "real:real-id");
+  assert.equal(creatorPreviewModel({ authorName: "Real creator", memberId: "feed-id" }, "feed").bio, "");
+  for (const href of ["javascript:alert(1)", "//evil.example/path", "/\\evil.example/path", "https://evil.example/path"]) assert.equal(sameOriginCreatorLink(href, "https://halo.example"), "");
+  assert.equal(sameOriginCreatorLink("/artists/dj-halo/", "https://halo.example"), "/artists/dj-halo/");
 });
 console.log(`Signal feed contracts: ${passed}/${passed} checks passed.`);

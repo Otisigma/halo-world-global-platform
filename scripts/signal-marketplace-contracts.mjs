@@ -280,4 +280,13 @@ await check("marketplace rendering has no HTML sinks, API calls or member identi
   assert(page.includes('id="marketComposer" aria-labelledby="marketComposerTitle"'));
   assert(css.includes(".signal-market__dialog::backdrop") && css.includes("prefers-reduced-motion") && css.includes("@media (max-width: 760px)"));
 });
+await check("marketplace creator labels use shared sample previews, never guessed real identities", () => {
+  const doc = documentHarness();
+  initMarketplace(doc);
+  const labels = buttons(doc.getElementById("marketFeed")).filter(item => item.className?.includes("creator-preview-trigger"));
+  assert(labels.length > 0);
+  assert(labels.every(item => item.type === "button" && !item.dataset.memberId));
+  assert(source.includes('creatorPreviewModel(creator, "sample")'));
+  assert(source.includes('href: "/creator-network/#demoDiscovery"'));
+});
 console.log(`Signal Marketplace contracts: ${passed}/${passed} checks passed.`);

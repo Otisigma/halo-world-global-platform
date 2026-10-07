@@ -1,0 +1,13 @@
+.discovery-controls { display: grid; gap: .75rem; padding: 1rem; margin: 1rem 0; border: 1px solid var(--creator-line, var(--border, #d4a84755)); border-radius: .75rem; background: var(--creator-panel, var(--panel, #111115)); color: var(--creator-paper, var(--text, #f2efe4)); }
+.discovery-controls label { display: grid; gap: .5rem; }
+.discovery-controls input { width: 100%; min-height: 44px; padding: .7rem; border: 1px solid var(--creator-line, #d4a84755); border-radius: .4rem; background: var(--creator-ink, #08090b); color: inherit; font: inherit; }
+.discovery-actions, .discovery-pills, .discovery-audiences { display: flex; flex-wrap: wrap; gap: .5rem; }
+.discovery-controls button, .creator-quick-card button, .creator-quick-card a { min-height: 44px; padding: .6rem .8rem; border: 1px solid var(--creator-line, #d4a84755); border-radius: .4rem; background: var(--creator-panel-raised, #18181d); color: inherit; font: inherit; cursor: pointer; }
+.discovery-controls [aria-pressed="true"] { border-color: var(--creator-gold, var(--gold, #e7b34a)); background: #d4a84725; }
+.discovery-controls p { margin: 0; font-size: .85rem; }
+.creator-preview-trigger { min-height: 44px; padding: .35rem .25rem; border: 0; background: transparent; color: inherit; font: inherit; font-weight: 600; text-align: left; text-decoration: underline; text-underline-offset: .2em; cursor: pointer; }
+.creator-quick-card { position: fixed; z-index: 100; width: min(22rem, calc(100vw - 16px)); max-height: calc(100dvh - 16px); overflow: auto; box-sizing: border-box; padding: 1rem; border: 1px solid var(--creator-gold, var(--gold, #e7b34a)); border-radius: .75rem; box-shadow: 0 1rem 3rem #0009; background: var(--creator-panel, #111115); color: var(--creator-paper, #f2efe4); font: .95rem/1.5 Inter, system-ui, sans-serif; overflow-wrap: anywhere; }
+.creator-quick-card a, .creator-quick-card button { display: block; margin-top: .5rem; }
+.creator-quick-card[hidden], .discovery-controls [hidden], .signal-feed__post[hidden] { display: none !important; }
+.creator-quick-card :focus-visible, .creator-preview-trigger:focus-visible, .discovery-controls :focus-visible { outline: 3px solid var(--creator-gold, var(--gold, #e7b34a)); outline-offset: 3px; }
+@media (prefers-reduced-motion: reduce) { .creator-quick-card, .discovery-controls { scroll-behavior: auto; transition: none; } }

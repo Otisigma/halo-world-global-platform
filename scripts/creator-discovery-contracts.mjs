@@ -6,6 +6,7 @@ import {
 import { CREATOR_SEEDS, LISTING_SEEDS, ORBIT_TIERS } from "../lib/creator-marketplace.js";
 import { HaloAIService } from "../lib/halo-ai-service.js";
 import { PUBLIC_ROUTE_REGISTRY } from "../lib/route-registry.js";
+import { creatorQuickCards, creatorPreviewModel } from "../lib/creator-quick-card.js";
 
 const [html, css, client] = await Promise.all([
   readFile(new URL("../creator-network/index.html", import.meta.url), "utf8"),
@@ -47,6 +48,9 @@ assert.deepEqual(filterDemoCreators(CREATOR_SEEDS, "  DJ HALO "), [CREATOR_SEEDS
 assert.equal(filterDemoCreators(CREATOR_SEEDS, "not-a-creator").length, 0);
 assert.deepEqual(filterDemoCreators(CREATOR_SEEDS, "", "Soul"), [CREATOR_SEEDS[2]]);
 assert.equal(filterDemoCreators(CREATOR_SEEDS, "Halo", "Soul").length, 0);
+assert.deepEqual(filterDemoCreators(CREATOR_SEEDS, "@HALO #Afro House"), [CREATOR_SEEDS[0]]);
+assert.deepEqual(filterDemoCreators(CREATOR_SEEDS, "", "", ["Soul", "#AfroHouse"]), [CREATOR_SEEDS[0], CREATOR_SEEDS[2]]);
+assert.equal(filterDemoCreators(CREATOR_SEEDS, "Halo missing").length, 0, "Each query word must match");
 assert.ok(profileListings(CREATOR_SEEDS[0]).every(listing => listing.creatorId === CREATOR_SEEDS[0].id));
 const foreignListing = { ...LISTING_SEEDS[0], creatorId: CREATOR_SEEDS[1].id };
 assert.equal(profileListings(CREATOR_SEEDS[0], [foreignListing]).length, 0, "A creator cannot feature another creator's listing");
@@ -62,6 +66,7 @@ class Element {
     this.hidden = false;
     this.open = false;
     this._text = "";
+    this.style = {};
   }
   get textContent() { return this._text + this.children.map(child => child.textContent).join(""); }
   set textContent(value) { this._text = String(value); this.replaceChildren(); }
@@ -90,6 +95,9 @@ class Element {
   }
   querySelector(tag) { return descendants(this).find(child => child.tagName === tag.toUpperCase()) || null; }
   focus() { this.ownerDocument.activeElement = this; }
+  get isConnected() { return Boolean(this.parentElement || this.tagName === "BODY"); }
+  closest() { return this.hidden ? this : this.parentElement?.closest() || null; }
+  getBoundingClientRect() { return { left: 280, top: 50, bottom: 94, width: 260, height: 140 }; }
   showModal() { assert.equal(this.open, false); this.open = true; }
   close() { this.open = false; void this.emit("close"); }
 }
@@ -117,6 +125,7 @@ function fixture({ localStorage = memoryStorage(), aiService = HaloAIService, cr
 const findButton = (root, text) => descendants(root).find(element => element.tagName === "BUTTON" && element.textContent.includes(text));
 
 const f = fixture();
+assert.ok(descendants(f.get("demoCreators")).some(element => element.className === "creator-preview-trigger"), "Sample author labels use the shared preview adapter");
 assert.equal(f.get("demoCreators").children.length, CREATOR_SEEDS.length);
 assert.match(f.get("demoCreators").textContent, /Verified · sample only/);
 assert.match(f.get("demoCreators").textContent, /sample followers/);
@@ -229,4 +238,47 @@ await reviewPromise;
 assert.equal(pending.get("demoProfileTitle").textContent, CREATOR_SEEDS[1].displayName);
 assert.doesNotMatch(pending.get("demoProfileContent").textContent, /0\/100/, "A stale review cannot populate another profile");
 
-console.log("Creator discovery contracts passed: disclosure, isolation, filters, dialog focus, local follows, Orbits, listings and advisory safety.");
+const previewEvents = new Map(), windowEvents = new Map();
+let modalOpen = false, actionCalls = 0;
+const previewDocument = {
+  activeElement: null,
+  createElement: tag => new Element(tag, previewDocument),
+  querySelector: () => modalOpen ? {} : null,
+  addEventListener(type, callback) {
+    if (!previewEvents.has(type)) previewEvents.set(type, []);
+    previewEvents.get(type).push(callback);
+  },
+  defaultView: { innerWidth: 320, innerHeight: 240, location: { origin: "https://halo.example" },
+    addEventListener(type, callback) { windowEvents.set(type, callback); } }
+};
+previewDocument.body = previewDocument.createElement("body");
+const trigger = previewDocument.createElement("button"); trigger.textContent = hostileName;
+previewDocument.body.append(trigger);
+const quickCards = creatorQuickCards(previewDocument);
+assert.equal(creatorQuickCards(previewDocument), quickCards, "A page reuses one preview manager");
+quickCards.attach(trigger, { ...creatorPreviewModel({ id: "sample-id", displayName: hostileName, bio: "<script>bio</script>" }, "sample"),
+  links: [{ label: "Unsafe", href: "javascript:alert(1)" }, { label: "Safe", href: "/creator-network/#demoDiscovery" }] },
+[{ label: "Explore sample profile", run: opener => { actionCalls++; assert.equal(opener, trigger); } }]);
+const panel = previewDocument.body.children.find(element => element.className === "creator-quick-card");
+await trigger.emit("pointerenter");
+assert.equal(panel.hidden, false); assert.equal(panel.attributes.role, "dialog");
+assert.equal(trigger.attributes["aria-expanded"], "true");
+assert.equal(descendants(panel).some(element => ["IMG", "SCRIPT"].includes(element.tagName)), false, "Preview names and bios are text, not HTML");
+assert.deepEqual(descendants(panel).filter(element => element.tagName === "A").map(element => element.href), ["/creator-network/#demoDiscovery"]);
+assert.equal(panel.style.left, "52px"); assert.equal(panel.style.top, "92px", "Preview clamps inside the viewport");
+await trigger.emit("pointerleave"); await panel.emit("pointerenter");
+await new Promise(resolve => setTimeout(resolve, 200)); assert.equal(panel.hidden, false, "Moving into an interactive preview keeps it open");
+await trigger.emit("click"); assert.equal(previewDocument.activeElement, panel.children[0], "Touch/click opens with an accessible close focus");
+const escape = { key: "Escape", preventDefault() { this.defaultPrevented = true; } };
+previewEvents.get("keydown")[0](escape);
+assert.equal(escape.defaultPrevented, true); assert.equal(panel.hidden, true); assert.equal(previewDocument.activeElement, trigger);
+await trigger.emit("focus"); await findButton(panel, "Explore sample").emit("click");
+assert.equal(actionCalls, 1); assert.equal(panel.hidden, true, "Adapter actions close the preview before the existing handoff");
+modalOpen = true; await trigger.emit("click"); assert.equal(panel.hidden, true, "Preview cannot open behind a modal");
+modalOpen = false; await trigger.emit("focus"); trigger.hidden = true; windowEvents.get("scroll")();
+assert.equal(panel.hidden, true, "Filtering a trigger closes stale previews");
+trigger.hidden = false; await trigger.emit("click");
+quickCards.close(); assert.equal(trigger.attributes["aria-expanded"], "false");
+assert.equal(previewEvents.get("keydown").length, 1, "Repeated adapters do not install duplicate preview listeners");
+
+console.log("Creator discovery contracts passed: disclosure, isolation, filters, dialog focus, local follows, Orbits, listings, preview safety and advisory safety.");

@@ -289,7 +289,7 @@ function setTab(tab) {
 function openAuthDialog(mode = "signup") {
   setAuthMode(mode);
   elements.authMessage.textContent = "";
-  elements.authDialog.showModal();
+  if (!elements.authDialog.open) elements.authDialog.showModal();
 }
 
 function setAuthMode(mode) {
@@ -450,7 +450,7 @@ function drawMap() {
 async function handleAuthSubmit(event) {
   event.preventDefault();
   const identity = window.haloIdentity;
-  if (!identity) return;
+  if (!identity) { elements.authMessage.textContent = "Membership is still loading. Please retry."; return; }
   elements.authSubmit.disabled = true;
   elements.authMessage.textContent = state.authMode === "signup" ? "Creating membership…" : "Opening network…";
   try {
@@ -463,6 +463,7 @@ async function handleAuthSubmit(event) {
     } else {
       await identity.login(elements.authEmail.value.trim(), elements.authPassword.value);
     }
+    window.dispatchEvent(new CustomEvent("signal-auth-completed"));
     elements.authDialog.close();
     await loadDashboard();
   } catch (error) {
@@ -592,6 +593,7 @@ function signedOutView() {
 }
 
 function bindEvents() {
+  window.addEventListener("signal-auth-requested", () => openAuthDialog("login"));
   elements.authButton.addEventListener("click", async () => {
     const user = await window.haloIdentity?.getUser();
     if (user) document.getElementById("command-center").scrollIntoView({ behavior: "smooth" });
@@ -633,7 +635,6 @@ function bindEvents() {
 }
 
 async function initialize() {
-  bindEvents();
   const identity = window.haloIdentity;
   if (!identity) return;
   identity.onAuthChange(async (_event, user) => {
@@ -648,5 +649,6 @@ async function initialize() {
   catch (error) { signedOutView(); showToast(error.message, true); }
 }
 
+bindEvents();
 if (window.haloIdentity) initialize();
 else window.addEventListener("halo-identity-ready", initialize, { once: true });

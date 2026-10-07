@@ -868,6 +868,19 @@
           <button type="button" id="feedSaved" aria-pressed="false" disabled>Saved posts</button>
           <button type="button" id="feedSignIn">Sign in with Creator Pass</button>
         </div>
+        <div class="discovery-controls" id="feedDiscovery" aria-label="Filter loaded signals">
+          <div class="discovery-audiences" role="group" aria-label="Signal audience">
+            <button type="button" data-feed-audience="PUBLIC" aria-pressed="true">Public Frequency</button>
+            <button type="button" data-feed-audience="INNER_CIRCLE" aria-pressed="false">Inner Circle</button>
+            <button type="button" data-feed-audience="COLLABORATOR_VAULT" aria-pressed="false">Collaborator Vault</button>
+          </div>
+          <label for="feedSearch">Search loaded signals</label>
+          <input id="feedSearch" type="search" maxlength="120" autocomplete="off" aria-keyshortcuts="Control+k Meta+k" aria-describedby="feedSearchHelp" placeholder="Creator, caption, release or #genre…">
+          <div class="discovery-actions"><button type="button" id="feedSearchClear">Clear search</button><button type="button" id="feedSearchReset">Reset filters</button></div>
+          <div id="feedSearchPills" class="discovery-pills" aria-label="Active filters and quick tags"></div>
+          <p id="feedSearchCount" role="status" aria-live="polite">0 loaded results</p>
+          <p id="feedSearchHelp">Search covers loaded signals only. Load older posts to expand results. Query words all match; selected tags match any. Command/Ctrl K focuses search unless a dialog is open.</p>
+        </div>
         <p id="feedStatus" role="status" aria-live="polite">Loading public posts…</p>
         <details class="signal-feed__composer">
           <summary>Compose a signal</summary>

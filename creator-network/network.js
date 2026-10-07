@@ -1,5 +1,8 @@
 import { curatedCreators } from "/lib/creator-directory.js";
 import { mountMusicHomeCustomizer } from "/music-home/customizer.js";
+import { creatorSearchRecord, registerDiscoveryShortcut } from "../lib/network-discovery.js";
+import { mountDiscoveryControls } from "../lib/discovery-controls.js";
+import { creatorPreviewModel, creatorQuickCards } from "../lib/creator-quick-card.js";
 
 (() => {
   const byId = id => document.getElementById(id);
@@ -9,6 +12,36 @@ import { mountMusicHomeCustomizer } from "/music-home/customizer.js";
   const tagFields = ["roles", "genres", "languages", "dawSetup"];
   const guardianAccess = () => state?.creatorPass?.entitlements?.aiGuardianAccess === true;
   const musicHome = mountMusicHomeCustomizer(byId("musicHomeCustomizer"));
+  const previews = creatorQuickCards();
+  const discovery = (prefix, clearId, resetId) => mountDiscoveryControls({
+    doc: document, root: byId(`${prefix}Discovery`), input: byId(`${prefix}CreatorSearch`), pills: byId(`${prefix}CreatorPills`),
+    count: byId(`${prefix}CreatorCount`), clear: byId(clearId), reset: byId(resetId),
+    namespace: `creator-${prefix}`, preferences: prefix === "public"
+  });
+  const publicDiscovery = discovery("public", "publicCreatorClear", "publicCreatorReset");
+  const memberDiscovery = discovery("member", "memberCreatorClear", "memberCreatorReset");
+  let publicLoadVersion = 0;
+  registerDiscoveryShortcut(document, () => {
+    if (document.activeElement?.closest("#demoDiscovery")) return byId("demoSearch");
+    if (!byId("workspace").hidden && document.activeElement?.closest("#workspace")) return byId("memberCreatorSearch");
+    return byId("publicCreatorSearch");
+  });
+  function creatorHeading(tag, creator) {
+    const heading = node(tag);
+    const trigger = node("button", creator.display_name);
+    trigger.type = "button"; trigger.className = "creator-preview-trigger";
+    const model = creatorPreviewModel(creator);
+    const actions = model.id && creator.member_id && !creator.curated ? [{
+      label: "Collaboration requests",
+      run: () => {
+        const target = byId("workspace").hidden ? byId("locked") : byId("filters");
+        target.scrollIntoView({ block: "center", behavior: "auto" });
+        const input = target.querySelector("input"); input?.focus();
+      }
+    }] : [];
+    previews.attach(trigger, model, actions);
+    heading.append(trigger); return heading;
+  }
 
   async function api(body, query = "") {
     const response = await fetch(`/api/creator-network${query}`, {
@@ -36,10 +69,13 @@ import { mountMusicHomeCustomizer } from "/music-home/customizer.js";
   }
 
   function renderPublicCreators(creators) {
+    previews.close();
+    const records = [];
     byId("publicCreators").replaceChildren(...creators.map(creator => {
       const card = node("article");
       card.className = "creator-profile-card";
-      card.append(node("h3", creator.display_name), node("p", creator.bio));
+      card.append(creatorHeading("h3", creator), node("p", creator.bio));
+      records.push({ ...creatorSearchRecord(creator), element: card });
       const badge = premiumBadge(creator);
       if (badge) card.append(badge);
       if (creator.verified && creator.curated) card.append(node("p", "✓ Verified HALO seed · curated profile"));
@@ -57,12 +93,15 @@ import { mountMusicHomeCustomizer } from "/music-home/customizer.js";
       card.append(join);
       return card;
     }));
+    publicDiscovery.setRecords(records);
     if (!creators.length) byId("publicCreators").append(node("p", "No public Creator Passes match yet. Try another filter or check back soon."));
   }
 
   async function loadPublicCreators() {
+    const version = ++publicLoadVersion;
     const query = new URLSearchParams(values(byId("publicFilters")));
     const result = await api(null, `?view=public&${query}`);
+    if (version !== publicLoadVersion) return;
     renderPublicCreators(result.creators || []);
     if (result.directoryUnavailable) byId("publicCreators").prepend(node("p", "Showing HALO-curated profiles. Member discovery is temporarily unavailable."));
   }
@@ -132,6 +171,7 @@ import { mountMusicHomeCustomizer } from "/music-home/customizer.js";
   }
 
   function render() {
+    previews.close();
     const profile = state.profile;
     const mapping = { displayName: "display_name", artistSlug: "artist_slug", dawSetup: "daw_setup",
       bpmMin: "bpm_min", bpmMax: "bpm_max", splitPreference: "split_preference" };
@@ -151,9 +191,11 @@ import { mountMusicHomeCustomizer } from "/music-home/customizer.js";
       ? `${profile.discoverable ? "Public discovery is on" : "Your Creator Pass is private"} · ${profile.roles?.length ? profile.roles.join(" / ") : "Creator profile"}`
       : "Set your Creator Pass and choose what to share.";
     const ownProjects = state.projects.filter(p => p.owner_member_id === state.memberId && p.status === "open");
+    const creatorRecords = [];
     byId("creators").replaceChildren(...state.creators.map(creator => {
       const card = node("article");
-      card.append(node("h4", creator.display_name), node("p", creator.bio),
+      creatorRecords.push({ ...creatorSearchRecord(creator), element: card });
+      card.append(creatorHeading("h4", creator), node("p", creator.bio),
         node("p", [...creator.roles, ...creator.genres, ...creator.languages, ...(creator.daw_setup || [])].join(" · ")),
         node("p", creator.bpm_min ? `${creator.bpm_min}–${creator.bpm_max} BPM` : "Tempo flexible"),
         node("p", creator.split_preference));
@@ -178,6 +220,7 @@ import { mountMusicHomeCustomizer } from "/music-home/customizer.js";
       }
       return card;
     }));
+    memberDiscovery.setRecords(creatorRecords);
     byId("projects").replaceChildren(...state.projects.map(project => {
       const card = node("article");
       const owns = project.owner_member_id === state.memberId;
@@ -397,6 +440,7 @@ import { mountMusicHomeCustomizer } from "/music-home/customizer.js";
     const version = ++sessionVersion;
     guardianVersion++;
     state = null;
+    previews.close(); memberDiscovery.clearSession();
     musicHomeMemberId = null;
     musicHome.clear();
     byId("workspace").hidden = true;

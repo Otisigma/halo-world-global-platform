@@ -1,3 +1,5 @@
+@import url("/lib/network-discovery.css");
+
 .signal-market {
   padding: clamp(3rem, 7vw, 6rem) 0;
   color: #f2efe4;

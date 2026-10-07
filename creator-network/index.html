@@ -68,10 +68,15 @@
       <p class="section-intro">Explore illustrative sample profiles, not actual verified people. Names, releases, listings, follower counts and tier placements are demonstration data. Your private studio and real opt-in discovery remain separate.</p>
       <div class="demo-disclosure"><span class="sample-badge">SAMPLE PROFILES</span><p>A “verified” sample badge demonstrates the design only — it is not identity verification or an endorsement. Demo follows are saved on this browser only.</p></div>
       <form id="demoFilters" class="demo-filter-console" aria-label="Filter sample creators">
-        <label>Find a sound<input id="demoSearch" type="search" maxlength="120" placeholder="Name, role or genre…" autocomplete="off"></label>
+        <label>Find a sound<input id="demoSearch" type="search" maxlength="120" placeholder="Name, role or genre…" autocomplete="off" aria-keyshortcuts="Control+k Meta+k" aria-describedby="demoSearchHelp"></label>
         <label>Genre<select id="demoGenre"><option value="">All genres</option></select></label>
         <button class="button button-outline" type="reset">Reset filters</button>
       </form>
+      <div class="discovery-controls" aria-label="Sample discovery quick filters">
+        <div class="discovery-actions"><button type="button" id="demoSearchClear">Clear search</button></div>
+        <div id="demoSearchPills" class="discovery-pills" aria-label="Active sample filters and quick genres"></div>
+        <p id="demoSearchHelp">Sample creators only. Query words all match; selected genres match any. Command/Ctrl K searches samples while focus is in this sample section; otherwise it searches the real directory. Dialogs keep focus.</p>
+      </div>
       <p id="demoResultCount" class="demo-result-count" role="status"></p>
       <div id="demoCreators" class="demo-creator-grid"><p class="empty-state">Sample profiles are loading. Real opt-in profiles are available in the section below.</p></div>
       <p id="demoDiscoveryStatus" class="demo-status" role="status" aria-live="polite"></p>
@@ -108,6 +113,14 @@
         <label>BPM<input name="bpm" type="number" min="20" max="300" placeholder="Any tempo"></label>
         <button type="submit">Tune discovery <span aria-hidden="true">↗</span></button>
       </form>
+      <div class="discovery-controls" id="publicDiscovery" aria-label="Search loaded public creators">
+        <label for="publicCreatorSearch">Search loaded Creator Passes</label>
+        <input id="publicCreatorSearch" type="search" maxlength="120" autocomplete="off" aria-keyshortcuts="Control+k Meta+k" aria-describedby="publicCreatorSearchHelp" placeholder="Name, role, bio or genre…">
+        <div class="discovery-actions"><button type="button" id="publicCreatorClear">Clear search</button><button type="button" id="publicCreatorReset">Reset instant filters</button></div>
+        <div id="publicCreatorPills" class="discovery-pills" aria-label="Active filters and quick tags"></div>
+        <p id="publicCreatorCount" role="status" aria-live="polite">0 loaded results</p>
+        <p id="publicCreatorSearchHelp">Search covers loaded profiles only. Use Tune discovery above to request structured API matches. Query words all match; selected tags match any. Command/Ctrl K focuses the relevant search unless a dialog is open.</p>
+      </div>
       <div id="publicCreators" class="creator-cards" aria-live="polite"><p class="empty-state">Loading opt-in Creator Passes…</p></div>
     </section>
 
@@ -212,7 +225,16 @@
           <label>Key<input name="key" maxlength="20" placeholder="A minor"></label>
           <button type="submit">Find exact matches</button>
         </form>
-        <h3>Creator discovery</h3><div id="creators" class="creator-cards"></div>
+        <h3>Creator discovery</h3>
+        <div class="discovery-controls" id="memberDiscovery" aria-label="Search loaded member creators">
+          <label for="memberCreatorSearch">Search loaded member Creator Passes</label>
+          <input id="memberCreatorSearch" type="search" maxlength="120" autocomplete="off" aria-keyshortcuts="Control+k Meta+k" aria-describedby="memberCreatorSearchHelp" placeholder="Name, role, bio or genre…">
+          <div class="discovery-actions"><button type="button" id="memberCreatorClear">Clear search</button><button type="button" id="memberCreatorReset">Reset instant filters</button></div>
+          <div id="memberCreatorPills" class="discovery-pills" aria-label="Active filters and quick tags"></div>
+          <p id="memberCreatorCount" role="status" aria-live="polite">0 loaded results</p>
+          <p id="memberCreatorSearchHelp">Search covers loaded profiles only; Find exact matches above still queries the API. Query words all match; selected tags match any. Command/Ctrl K focuses this search in the member workspace; dialogs keep focus.</p>
+        </div>
+        <div id="creators" class="creator-cards"></div>
         <h3>Premium / briefs for your Creator Pass</h3>
         <p>Matched open opportunities and private AI persona drafts. Every invitation, application and public post requires a human action.</p>
         <div id="dynamicBriefs" class="creator-cards" aria-live="polite"></div>

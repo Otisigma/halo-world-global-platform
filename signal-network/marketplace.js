@@ -1,4 +1,5 @@
 import { CREATOR_SEEDS, LISTING_SEEDS, LISTING_TYPES, formatListingPrice, normalizeListing, safeAssetUrl } from "../lib/creator-marketplace.js";
+import { creatorPreviewModel, creatorQuickCards } from "../lib/creator-quick-card.js";
 import { HaloAIService } from "../lib/halo-ai-service.js";
 
 export const STORAGE_KEY = "halo.signal-marketplace.demo.v1";
@@ -170,6 +171,7 @@ export function initMarketplace(doc = document) {
   }
 
   function detail(listing) {
+    creatorQuickCards(doc).close();
     get("marketDetailTitle").textContent = listing.title;
     const body = get("marketDetailBody");
     body.replaceChildren(
@@ -195,8 +197,14 @@ export function initMarketplace(doc = document) {
     const creator = CREATOR_SEEDS.find(person => person.id === listing.creatorId);
     const article = node("article", undefined, "signal-market__card");
     if (listing.isFeatured) article.append(node("p", "Featured demo", "signal-market__eyebrow"));
+    const label = node(creator ? "button" : "p", `${creator?.displayName || "Illustrative creator"}${creator?.verified ? " · Verified (demo)" : ""}`, creator ? "signal-market__creator creator-preview-trigger" : "signal-market__creator");
+    if (creator) {
+      label.type = "button";
+      creatorQuickCards(doc).attach(label, { ...creatorPreviewModel(creator, "sample"),
+        links: [{ label: "Explore sample creators", href: "/creator-network/#demoDiscovery" }] });
+    }
     article.append(
-      node("p", `${creator?.displayName || "Illustrative creator"}${creator?.verified ? " · Verified (demo)" : ""}`, "signal-market__creator"),
+      label,
       node("p", [...(creator?.roles || []), ...(creator?.genres || [])].slice(0, 4).join(" / ")),
       node("h4", listing.title),
       node("p", listing.description),
@@ -239,6 +247,7 @@ export function initMarketplace(doc = document) {
   }
 
   function render() {
+    creatorQuickCards(doc).close();
     const filtered = filterListings(LISTING_SEEDS, get("marketTypeFilter").value);
     const featured = filtered.filter(listing => listing.isFeatured);
     for (const [id, listings] of [["marketFeatured", featured], ["marketFeed", filtered]]) {

@@ -1,5 +1,6 @@
 import { createObjectUrlAttachment, validateSignalMedia, signalMediaKind, SIGNAL_MEDIA_TYPES } from "../lib/signal-media.js";
 import { suggestSignal, DREAMWEAVER_DISCLOSURE } from "../lib/signal-dreamweaver.js";
+import { creatorPreviewModel, creatorQuickCards } from "../lib/creator-quick-card.js";
 
 export const SIGNAL_VISIBILITY = Object.freeze({
   PUBLIC: "Public Frequency", INNER_CIRCLE: "Inner Circle", COLLABORATOR_VAULT: "Collaborator Vault"
@@ -51,7 +52,11 @@ export function createMediaCard({ url, type, name }, { preview = false } = {}) {
 export function createFeedCard(post, { preview = false } = {}) {
   const element = node("article", null, "signal-feed__post");
   const heading = node("header");
-  const author = node("strong"), kind = node("span"), visibility = node("small");
+  const author = node(preview ? "strong" : "button"), kind = node("span"), visibility = node("small");
+  if (!preview) {
+    author.type = "button"; author.className = "creator-preview-trigger";
+    creatorQuickCards().attach(author, creatorPreviewModel(post, "feed"));
+  }
   const time = node("time");
   heading.append(author, kind, visibility, time);
   const body = node("p", null, "signal-feed__body");

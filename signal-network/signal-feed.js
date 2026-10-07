@@ -1,5 +1,8 @@
 import { createFeedCard, createSignalComposer, SIGNAL_VISIBILITY } from "./signal-components.js";
 import { createSignalComposerController } from "./signal-composer.js";
+import { createAudienceSelection, feedSearchRecord, registerDiscoveryShortcut } from "../lib/network-discovery.js";
+import { mountDiscoveryControls } from "../lib/discovery-controls.js";
+import { creatorQuickCards } from "../lib/creator-quick-card.js";
 
 const endpoint = "/api/signal-feed";
 const byId = id => document.getElementById(id);
@@ -8,6 +11,57 @@ const posts = byId("feedPosts");
 const status = byId("feedStatus");
 const publishForm = byId("feedPublishForm");
 let composer;
+const records = new Map();
+const audience = createAudienceSelection();
+let authenticated = false, authenticatedId = "", successfulAuthClose = false;
+const previews = creatorQuickCards();
+const filters = mountDiscoveryControls({
+  doc: document, root: byId("feedDiscovery"), input: byId("feedSearch"), pills: byId("feedSearchPills"),
+  count: byId("feedSearchCount"), reset: byId("feedSearchReset"), clear: byId("feedSearchClear"),
+  namespace: "signal-public"
+});
+registerDiscoveryShortcut(document, () => byId("feedSearch"));
+function applyFilters() {
+  previews.close();
+  filters.setPersistence(audience.audience === "PUBLIC");
+  document.querySelectorAll("[data-feed-audience]").forEach(control => {
+    control.setAttribute("aria-pressed", String(control.dataset.feedAudience === audience.audience));
+  });
+  filters.setRecords([...records.values()]);
+}
+function removePost(postId) {
+  const record = records.get(postId);
+  for (const media of record?.element.querySelectorAll("audio, video") || []) media.pause();
+  record?.element.remove(); records.delete(postId); applyFilters();
+}
+document.querySelectorAll("[data-feed-audience]").forEach(control => control.addEventListener("click", () => {
+  previews.close();
+  const previous = audience.audience;
+  if (audience.request(control.dataset.feedAudience, authenticated, feedState.memberId)) {
+    if (previous !== "PUBLIC" && audience.audience === "PUBLIC") filters.clearSession();
+    applyFilters();
+    window.haloStats?.track?.("signal_audience_selected", { audience: audience.audience });
+  }
+  else {
+    status.textContent = "Sign in with a confirmed Creator Pass to open this audience. Your current filters stay active.";
+    window.dispatchEvent(new CustomEvent("signal-auth-requested"));
+    window.haloStats?.track?.("signal_audience_auth_requested", {});
+  }
+}));
+byId("signalAuthDialog").addEventListener("cancel", () => audience.cancel());
+byId("signalAuthDialog").addEventListener("close", () => {
+  if (!successfulAuthClose) audience.cancel();
+  successfulAuthClose = false;
+});
+window.addEventListener("signal-auth-completed", async () => {
+  successfulAuthClose = true;
+  audience.complete();
+  if (audience.confirm(authenticated, feedState.memberId)) {
+    applyFilters(); window.haloStats?.track?.("signal_audience_auth_completed", {});
+  } else if (audience.requested) {
+    await loadFeed(); loadNotifications(); loadBlocks();
+  }
+});
 const mutationOrigin = () => ({ session: feedState.session, generation: feedState.generation });
 function ensureOrigin(origin, checkGeneration = true) {
   if (origin.session !== feedState.session || (checkGeneration && origin.generation !== feedState.generation)) {
@@ -72,7 +126,7 @@ function requireMember() {
   throw new Error("Sign in with your Creator Pass to participate.");
 }
 function identityControls(memberId) {
-  feedState.memberId = memberId || "";
+  feedState.memberId = authenticated ? memberId || "" : "";
   byId("btn-publish-signal").disabled = !feedState.memberId;
   byId("feedSaved").disabled = !feedState.memberId;
   byId("feedSignIn").hidden = Boolean(feedState.memberId);
@@ -166,6 +220,7 @@ function commentsPanel(post, audio) {
       if (!list.children.length) list.append(node("p", "No comments yet."));
       cursor = data.nextCursor; more.hidden = !cursor; loaded = true;
     } catch (error) {
+      if (generation !== feedState.generation) return;
       status.textContent = error.message;
       if (!loaded) list.replaceChildren(button("Retry comments", () => load(false)));
     } finally { busy = false; list.setAttribute("aria-busy", "false"); }
@@ -205,7 +260,8 @@ function renderPost(post) {
       await mutate(kind, { postId: post.id, active });
       if (kind === "boost") post.boosts = Math.max(0, post.boosts + (active ? 1 : -1));
       post[key] = active; element.textContent = label(); element.setAttribute("aria-pressed", String(active));
-      if (kind === "save" && feedState.saved && !active) article.remove();
+      if (kind === "save" && feedState.saved && !active) removePost(post.id);
+      else applyFilters();
     });
     toggle.setAttribute("aria-pressed", String(post[key]));
     actions.append(toggle);
@@ -213,7 +269,7 @@ function renderPost(post) {
   actions.append(...safetyButtons(post.memberId));
   if (post.memberId === feedState.memberId) actions.append(button("Remove post", async () => {
     if (!window.confirm("Remove this post and all comments?")) return;
-    await mutate("delete_post", { postId: post.id }); article.remove();
+    await mutate("delete_post", { postId: post.id }); removePost(post.id);
   }));
   article.append(actions, commentsPanel(post, card.player));
   return article;
@@ -221,6 +277,7 @@ function renderPost(post) {
 async function loadFeed(append = false) {
   if (append && (feedState.busy || !feedState.cursor)) return;
   if (!append) feedState.generation++;
+  previews.close();
   const generation = feedState.generation;
   feedState.busy = true; posts.setAttribute("aria-busy", "true");
   byId("feedMore").disabled = true;
@@ -228,16 +285,40 @@ async function loadFeed(append = false) {
   try {
     const data = await request({ view: feedState.saved ? "saved" : "feed", ...(append ? { cursor: feedState.cursor } : {}) });
     if (generation !== feedState.generation) return;
+    const user = await window.haloIdentity?.getUser();
+    if (generation !== feedState.generation) return;
+    const confirmedMember = user ? data.memberId || "" : "";
+    if ((feedState.memberId && feedState.memberId !== confirmedMember) || (authenticatedId && authenticatedId !== (user?.id || ""))) {
+      resetAccount(false, user?.id || "");
+      return loadFeed();
+    }
+    authenticated = Boolean(user);
+    authenticatedId = user?.id || "";
     identityControls(data.memberId);
-    if (!append) posts.replaceChildren();
-    for (const post of data.items) posts.append(renderPost(post));
+    if (!authenticated) audience.reset(true);
+    if (audience.confirm(authenticated, feedState.memberId)) window.haloStats?.track?.("signal_audience_auth_completed", {});
+    if (!append) {
+      for (const media of posts.querySelectorAll("audio, video")) media.pause();
+      records.clear(); posts.replaceChildren();
+    }
+    for (const post of data.items) {
+      if (records.has(post.id)) continue;
+      // Only API-returned posts are considered; a private tab does not discover or authorize anything.
+      if ((post.visibility || "PUBLIC") !== "PUBLIC" && (!authenticated || !feedState.memberId)) continue;
+      const element = renderPost(post);
+      records.set(post.id, { ...feedSearchRecord(post), element, post,
+        allowed: () => (post.visibility || "PUBLIC") === audience.audience &&
+          (audience.audience === "PUBLIC" || (authenticated && Boolean(feedState.memberId))) });
+      posts.append(element);
+    }
     if (!posts.children.length) posts.append(node("p", feedState.saved ? "No saved posts yet." : "No public signals yet. Be the first to deliberately publish one."));
     feedState.cursor = data.nextCursor; byId("feedMore").hidden = !data.nextCursor;
+    applyFilters();
     status.textContent = "Signals loaded. Newest first; private signals are visible only to their selected audience.";
   } catch (error) {
     if (generation === feedState.generation) {
       status.textContent = error.message;
-      if (!append) posts.replaceChildren(button("Retry public feed", () => loadFeed()));
+      if (!append) { records.clear(); posts.replaceChildren(button("Retry public feed", () => loadFeed())); applyFilters(); }
     }
   } finally {
     if (generation === feedState.generation) {
@@ -245,10 +326,11 @@ async function loadFeed(append = false) {
     }
   }
 }
-let notificationBusy = false;
+let notificationBusy = false, notificationLoadVersion = 0;
 async function loadNotifications(append = false) {
   if (!feedState.memberId || notificationBusy) return;
   notificationBusy = true;
+  const version = ++notificationLoadVersion;
   const memberId = feedState.memberId, generation = feedState.generation;
   try {
     const data = await request({ view: "notifications", ...(append && feedState.notificationCursor ? { cursor: feedState.notificationCursor } : {}) });
@@ -259,6 +341,7 @@ async function loadNotifications(append = false) {
       const entry = node("div", null, "signal-feed__notification");
       entry.append(node("p", `${item.actorName}: ${item.kind} · ${displayDate(item.createdAt)}`));
       entry.append(button("Find post in public feed", async (_element, origin) => {
+        audience.request("PUBLIC", authenticated, feedState.memberId); filters.clearSession();
         feedState.saved = false; byId("feedSaved").setAttribute("aria-pressed", "false"); await loadFeed();
         ensureOrigin(origin, false);
         const post = byId(`feed-post-${item.postId}`);
@@ -276,7 +359,7 @@ async function loadNotifications(append = false) {
   } catch (error) {
     if (generation === feedState.generation && memberId === feedState.memberId) byId("feedNotificationList").replaceChildren(node("p", error.message));
   }
-  finally { notificationBusy = false; }
+  finally { if (version === notificationLoadVersion) notificationBusy = false; }
 }
 let catalogLoaded = false;
 let catalogLoading = false;
@@ -365,20 +448,33 @@ byId("feedSignIn").addEventListener("click", () => byId("signalAuthButton").clic
 byId("feedMoreNotifications").addEventListener("click", () => loadNotifications(true));
 byId("feedNotifications").addEventListener("toggle", () => { if (byId("feedNotifications").open) loadNotifications(); });
 byId("feedBlocked").addEventListener("toggle", () => { if (byId("feedBlocked").open) loadBlocks(); });
+function resetAccount(preserveRequest = false, userId = "") {
+  feedState.session++;
+  feedState.generation++;
+  audience.reset(preserveRequest);
+  authenticated = false; authenticatedId = userId;
+  previews.close(); records.clear(); filters.clearSession();
+  feedState.cursor = null; feedState.notificationCursor = null;
+  notificationBusy = false;
+  notificationLoadVersion++;
+  byId("feedMore").hidden = true;
+  for (const player of posts.querySelectorAll("audio, video")) {
+    player.pause(); player.removeAttribute("src"); player.load();
+  }
+  posts.replaceChildren();
+  publishController.cancel();
+  publishForm.reset(); composer.reset(); composer.lock(false);
+  identityControls(""); feedState.saved = false;
+  byId("feedSaved").setAttribute("aria-pressed", "false");
+  byId("feedNotificationList").replaceChildren(node("p", "Sign in to see your notifications."));
+  byId("feedBlockedList").replaceChildren(node("p", "Sign in to manage your blocks."));
+  byId("feedNotificationCount").textContent = ""; byId("feedMoreNotifications").hidden = true;
+  applyFilters();
+}
 function connectIdentity() {
-  window.haloIdentity.onAuthChange(async () => {
-    feedState.session++;
-    for (const player of posts.querySelectorAll("audio, video")) {
-      player.pause(); player.removeAttribute("src"); player.load();
-    }
-    posts.replaceChildren();
-    publishController.cancel();
-    publishForm.reset(); composer.reset(); composer.lock(false);
-    identityControls(""); feedState.saved = false;
-    byId("feedSaved").setAttribute("aria-pressed", "false");
-    byId("feedNotificationList").replaceChildren(node("p", "Sign in to see your notifications."));
-    byId("feedBlockedList").replaceChildren(node("p", "Sign in to manage your blocks."));
-    byId("feedNotificationCount").textContent = ""; byId("feedMoreNotifications").hidden = true;
+  window.haloIdentity.onAuthChange(async (_event, user) => {
+    const preserveRequest = Boolean(user && !authenticatedId && !feedState.memberId && audience.requested);
+    resetAccount(preserveRequest, user?.id || "");
     await loadFeed(); loadNotifications(); loadBlocks();
   });
 }

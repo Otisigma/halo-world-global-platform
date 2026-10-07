@@ -260,8 +260,16 @@ function element(id) {
   return elements.get(id);
 }
 let authChanged;
+const discoveryContracts = {
+  creatorQuickCards: () => ({ attach() {}, close() {} }),
+  creatorPreviewModel: creator => ({ id: creator.member_id || creator.artist_slug || "" }),
+  creatorSearchRecord: creator => ({ text: creator.display_name, tags: creator.genres || [] }),
+  registerDiscoveryShortcut() {},
+  mountDiscoveryControls: () => ({ setRecords() {}, clearSession() {} })
+};
 const executableClient = client.replace(/^import .+;\s*/gm, "");
 vm.runInNewContext(executableClient, {
+  ...discoveryContracts,
   curatedCreators,
   mountMusicHomeCustomizer: () => ({ load() {}, clear() {} }),
   document: { getElementById: element, createElement: tag => ({
@@ -287,6 +295,7 @@ assert.equal(element("project").draft, "", "Account changes must clear unsaved b
 assert.deepEqual(element("creators").children, []);
 assert.equal(element("workspace").hidden, true);
 vm.runInNewContext(executableClient, {
+  ...discoveryContracts,
   curatedCreators,
   mountMusicHomeCustomizer: () => ({ load() {}, clear() {} }),
   document: { getElementById: element, createElement: tag => ({
@@ -334,4 +343,33 @@ element("guardianProject").value = "another-project";
 element("guardianProject").listeners.get("change")();
 await pendingReview;
 assert.equal(element("guardianReport").children.length, 0, "A response for an old project cannot render under a new selection");
-console.log("Creator Network contracts passed: validation, identity, origin, ownership, discovery and participant lifecycle");
+const { mountDiscoveryControls } = await import("../lib/discovery-controls.js");
+const { creatorSearchRecord } = await import("../lib/network-discovery.js");
+const controlsDoc = {
+  querySelector: () => null,
+  createElement: () => ({ textContent: "", addEventListener() {}, setAttribute() {} })
+};
+const search = element("instant-search"), pills = element("instant-pills"), count = element("instant-count");
+search.focus = () => {};
+const instant = mountDiscoveryControls({ doc: controlsDoc, input: search, pills, count,
+  reset: element("instant-reset"), clear: element("instant-clear"), namespace: "contract-member", preferences: false });
+const mediaPlayers = [0, 1].map(() => ({ paused: false, pause() { this.paused = true; } }));
+const loaded = [
+  { display_name: "Live Creator", bio: "Afro House producer", genres: ["Afro House"], roles: ["Producer"] },
+  { display_name: "Other Creator", bio: "Soul vocalist", genres: ["Soul"], roles: ["Vocalist"] }
+].map((creator, index) => ({ ...creatorSearchRecord(creator), element: { hidden: false,
+  querySelectorAll: selector => selector === "audio, video" ? [mediaPlayers[index]] : [], contains: () => false } }));
+instant.setRecords(loaded);
+search.value = "  @LIVE #AfroHouse "; search.listeners.get("input")();
+assert.equal(loaded[0].element.hidden, false); assert.equal(loaded[1].element.hidden, true);
+assert.equal(mediaPlayers[0].paused, false); assert.equal(mediaPlayers[1].paused, true, "Hidden card media is paused without rebuilding cards");
+assert.match(count.textContent, /1 of 2 loaded results/);
+const original = loaded[0].element;
+instant.state.tags = ["Soul"]; instant.apply(); assert.equal(original.hidden, true, "Query and tag state are combined");
+element("instant-reset").listeners.get("click")();
+assert.equal(original.hidden, false); assert.equal(loaded[0].element, original);
+assert.match(count.textContent, /Search covers loaded results only/);
+assert.match(client, /registerDiscoveryShortcut\(document/);
+assert.doesNotMatch(client, /data-feed-audience/, "Creator discovery has no Signal audience tabs");
+
+console.log("Creator Network contracts passed: validation, identity, origin, ownership, loaded-result filtering, discovery and participant lifecycle");

@@ -150,6 +150,11 @@ function uiFixture(state) {
   };
   const calls = [];
   vm.runInNewContext(client.replace(/^import .+;\s*/gm, ""), {
+    creatorQuickCards: () => ({ attach() {}, close() {} }),
+    creatorPreviewModel: creator => ({ id: creator.member_id || creator.artist_slug || "" }),
+    creatorSearchRecord: creator => ({ text: creator.display_name, tags: creator.genres || [] }),
+    registerDiscoveryShortcut() {},
+    mountDiscoveryControls: () => ({ setRecords() {}, clearSession() {} }),
     curatedCreators, URLSearchParams,
     mountMusicHomeCustomizer: () => ({ load() {}, clear() {} }),
     FormData: class { [Symbol.iterator]() { return [][Symbol.iterator](); } },

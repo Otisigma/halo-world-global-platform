@@ -420,11 +420,12 @@ await check("auth changes clear composer drafts and consent; old mutations canno
 await check("video feed cards embed only valid YouTube URLs and preserve uploads, fallbacks and other post types", async () => {
   const source = await readFile(new URL("../signal-network/signal-components.js", import.meta.url), "utf8");
   class Element {
-    constructor(tag) { this.tagName = tag.toUpperCase(); this.children = []; this.attributes = {}; }
+    constructor(tag) { this.tagName = tag.toUpperCase(); this.children = []; this.attributes = {}; this.listeners = {}; }
     append(...children) { this.children.push(...children); }
     replaceChildren(...children) { this.children = children; }
     setAttribute(name, value) { this.attributes[name] = value; }
-    addEventListener() {}
+    addEventListener(type, listener) { (this.listeners[type] ||= []).push(listener); }
+    dispatchEvent(event) { for (const listener of this.listeners[event.type] || []) listener(event); }
     pause() { this.paused = true; }
     removeAttribute(name) { delete this[name]; }
     load() { this.unloaded = true; }
@@ -449,12 +450,35 @@ await check("video feed cards embed only valid YouTube URLs and preserve uploads
     const frames = tags(card, "IFRAME");
     assert.equal(frames.length, 1); assert.equal(frames[0].src, `https://www.youtube.com/embed/${videoId}`);
     assert.equal(frames[0].title, "YouTube video player"); assert.equal(frames[0].loading, "lazy");
-    assert.equal(frames[0].allowFullscreen, true); assert.equal(tags(card, "A").length, 0);
+    assert.equal(frames[0].allowFullscreen, true); assert.ok(!frames[0].hidden);
+    const fallback = tags(card, "A")[0];
+    assert.equal(tags(card, "A").length, 1); assert.equal(fallback.href, linkUrl);
+    assert.equal(fallback.textContent, "Open public video ↗"); assert.ok(!fallback.hidden);
+    assert.equal(fallback.target, "_blank"); assert.equal(fallback.rel, "noopener noreferrer");
+    frames[0].dispatchEvent({ type: "load" });
+    assert.ok(!frames[0].hidden, "A successful iframe load preserves inline playback");
+    assert.equal(tags(card, "A")[0], fallback, "Fallback remains available for player errors inside a loaded cross-origin iframe");
     assert.equal(card.element.children[1].textContent, post.body);
     const frame = frames[0]; card.update({ ...post, linkUrl, body: "New caption" });
     assert.equal(tags(card, "IFRAME")[0], frame, "Caption updates preserve the embedded player");
     card.update({ ...post, linkUrl: "https://example.com/video" });
     assert.equal(tags(card, "IFRAME").length, 0); assert.equal(tags(card, "A").length, 1);
+  }
+  for (const event of [null, "load", "error"]) {
+    const linkUrl = `https://youtu.be/${videoId}`;
+    const card = context.createFeedCard({ ...post, linkUrl });
+    const frame = tags(card, "IFRAME")[0];
+    if (event) frame.dispatchEvent({ type: event });
+    const fallback = tags(card, "A")[0];
+    assert.equal(fallback.href, linkUrl); assert.ok(!fallback.hidden);
+    assert.ok(descendants(card.element).every(element => !element.hidden || element === frame),
+      "The outbound link stays visible when loading stalls, the player reports unavailability, or the iframe errors");
+    assert.equal(Boolean(frame.hidden), event === "error");
+    card.update({ ...post, linkUrl, body: "Updated caption" });
+    assert.equal(tags(card, "A")[0], fallback);
+    card.update({ ...post, linkUrl: `https://youtube.com/shorts/${videoId}` });
+    assert.ok(!tags(card, "IFRAME")[0].hidden, "A new URL attempts inline playback again");
+    assert.equal(tags(card, "A")[0].href, `https://youtube.com/shorts/${videoId}`);
   }
   const credentialUrl = new URL(`https://youtube.com/watch?v=${videoId}`);
   credentialUrl.username = "fixture-user";

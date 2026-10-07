@@ -102,7 +102,9 @@ export function createFeedCard(post, { preview = false } = {}) {
         frame.loading = "lazy";
         frame.allow = "encrypted-media; picture-in-picture; fullscreen";
         frame.allowFullscreen = true;
-        wrapper.append(frame); media.append(wrapper);
+        frame.addEventListener("error", () => { frame.hidden = true; });
+        // Cross-origin embeds can show playback errors without firing an iframe error event.
+        wrapper.append(frame, link("Open public video ↗", next.linkUrl)); media.append(wrapper);
       } else media.append(link(next.kind === "VIDEO" ? "Open public video ↗" : "Open public brief ↗", next.linkUrl));
     }
   }

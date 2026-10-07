@@ -417,6 +417,83 @@ await check("auth changes clear composer drafts and consent; old mutations canno
   await new Promise(resolve => setImmediate(resolve)); context.testState.generation++;
   finishMutation(); await assert.rejects(pendingToggle, error => error.name === "FeedSessionChanged");
 });
+await check("video feed cards embed only valid YouTube URLs and preserve uploads, fallbacks and other post types", async () => {
+  const source = await readFile(new URL("../signal-network/signal-components.js", import.meta.url), "utf8");
+  class Element {
+    constructor(tag) { this.tagName = tag.toUpperCase(); this.children = []; this.attributes = {}; }
+    append(...children) { this.children.push(...children); }
+    replaceChildren(...children) { this.children = children; }
+    setAttribute(name, value) { this.attributes[name] = value; }
+    addEventListener() {}
+    pause() { this.paused = true; }
+    removeAttribute(name) { delete this[name]; }
+    load() { this.unloaded = true; }
+  }
+  const context = {
+    document: { createElement: tag => new Element(tag) }, URL,
+    signalMediaKind: type => type.startsWith("video/") ? "VIDEO" : "AUDIO"
+  };
+  runInNewContext(`${source.replace(/^import .*;\n/gm, "").replace(/^export /gm, "")}\nglobalThis.createFeedCard = createFeedCard;`, context);
+  const descendants = element => [element, ...element.children.flatMap(descendants)];
+  const tags = (card, tag) => descendants(card.element).filter(element => element.tagName === tag);
+  const post = { kind: "VIDEO", body: "<script>caption</script>", createdAt: row.created_at };
+  const videoId = "dQw4w9WgXcQ";
+  for (const linkUrl of [
+    `https://www.youtube.com/watch?v=${videoId}&list=ignored`,
+    `https://youtube.com/watch?v=${videoId}`, `https://m.youtube.com/watch?v=${videoId}`,
+    `https://music.youtube.com/watch?v=${videoId}`, `https://youtu.be/${videoId}?t=30`,
+    `https://www.youtube.com/shorts/${videoId}`, `https://www.youtube.com/embed/${videoId}`,
+    `https://www.youtube.com/live/${videoId}`
+  ]) {
+    const card = context.createFeedCard({ ...post, linkUrl });
+    const frames = tags(card, "IFRAME");
+    assert.equal(frames.length, 1); assert.equal(frames[0].src, `https://www.youtube.com/embed/${videoId}`);
+    assert.equal(frames[0].title, "YouTube video player"); assert.equal(frames[0].loading, "lazy");
+    assert.equal(frames[0].allowFullscreen, true); assert.equal(tags(card, "A").length, 0);
+    assert.equal(card.element.children[1].textContent, post.body);
+    const frame = frames[0]; card.update({ ...post, linkUrl, body: "New caption" });
+    assert.equal(tags(card, "IFRAME")[0], frame, "Caption updates preserve the embedded player");
+    card.update({ ...post, linkUrl: "https://example.com/video" });
+    assert.equal(tags(card, "IFRAME").length, 0); assert.equal(tags(card, "A").length, 1);
+  }
+  const credentialUrl = new URL(`https://youtube.com/watch?v=${videoId}`);
+  credentialUrl.username = "fixture-user";
+  for (const linkUrl of [
+    "https://example.com/video", "not a URL", `https://youtube.com.evil.example/watch?v=${videoId}`,
+    `https://evil.example/watch?v=${videoId}`, `https://evil.example/youtube.com/watch?v=${videoId}`,
+    `https://youtu.be/${videoId}/extra`, "https://youtube.com/playlist?list=public",
+    "https://youtube.com/watch?v=short", "https://youtube.com/watch?v=%22%3E%3Cscript%3E",
+    `https://youtube.com/channel/${videoId}`, `http://youtube.com/watch?v=${videoId}`,
+    `javascript://youtube.com/watch?v=${videoId}`, credentialUrl.href
+  ]) {
+    const card = context.createFeedCard({ ...post, linkUrl });
+    assert.equal(tags(card, "IFRAME").length, 0);
+    const links = tags(card, "A");
+    assert.equal(links.length, 1); assert.equal(links[0].href, linkUrl);
+    assert.equal(links[0].textContent, "Open public video ↗");
+    assert.equal(links[0].target, "_blank"); assert.equal(links[0].rel, "noopener noreferrer");
+  }
+  for (const extension of ["mp4", "webm"]) {
+    const attachment = { url: `/api/signal-media?id=clip.${extension}`, type: `video/${extension}`, name: `Clip.${extension}` };
+    const card = context.createFeedCard({ ...post, attachment });
+    assert.equal(tags(card, "IFRAME").length, 0); assert.equal(tags(card, "VIDEO").length, 1);
+    assert.equal(card.player.src, attachment.url); assert.equal(card.player.controls, true);
+    assert.equal(card.player.playsInline, true); assert.equal(card.player.preload, "none");
+    const player = card.player;
+    card.update({ ...post, linkUrl: `https://youtu.be/${videoId}` });
+    assert.ok(player.paused && player.unloaded); assert.equal(player.src, undefined);
+    assert.equal(tags(card, "VIDEO").length, 0); assert.equal(tags(card, "IFRAME").length, 1);
+  }
+  for (const kind of ["TEXT", "BRIEF_LINK", "AUDIO"]) {
+    const card = context.createFeedCard({ ...post, kind, linkUrl: `https://youtu.be/${videoId}` });
+    assert.equal(tags(card, "IFRAME").length, 0);
+    assert.equal(tags(card, "A")[0].textContent, "Open public brief ↗");
+  }
+  const empty = context.createFeedCard(post);
+  assert.equal(tags(empty, "IFRAME").length, 0); assert.equal(tags(empty, "A").length, 0);
+  const styles = await readFile(new URL("../signal-network/signal-network.css", import.meta.url), "utf8");
+  assert.match(styles, /\.signal-feed__video-embed\s*\{[^}]*width: 100%;[^}]*aspect-ratio: 16 \/ 9;[^}]*border: 0;/);
+});
 await check("composer pairs required consent with a scoped, accessible publish CTA", async () => {
   const root = new URL("../signal-network/", import.meta.url);
   const [page, styles] = await Promise.all([

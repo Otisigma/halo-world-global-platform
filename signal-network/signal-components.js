@@ -16,6 +16,23 @@ function link(text, url) {
   return element;
 }
 
+function youtubeVideoId(value) {
+  try {
+    const url = new URL(value);
+    if (url.protocol !== "https:" || url.username || url.password) return "";
+    const host = url.hostname.replace(/^www\./, "");
+    let id = "";
+    if (host === "youtu.be") id = url.pathname.match(/^\/([A-Za-z0-9_-]{11})\/?$/)?.[1];
+    else if (["youtube.com", "m.youtube.com", "music.youtube.com"].includes(host)) {
+      if (url.pathname === "/watch") id = url.searchParams.get("v");
+      else id = url.pathname.match(/^\/(?:embed|shorts|live)\/([A-Za-z0-9_-]{11})\/?$/)?.[1];
+    }
+    return /^[A-Za-z0-9_-]{11}$/.test(id || "") ? id : "";
+  } catch {
+    return "";
+  }
+}
+
 export function createMediaCard({ url, type, name }, { preview = false } = {}) {
   const element = node("div", null, "signal-feed__media");
   const player = node(signalMediaKind(type) === "VIDEO" ? "video" : "audio");
@@ -75,7 +92,19 @@ export function createFeedCard(post, { preview = false } = {}) {
         if (next.media.purchaseUrl) media.append(link("Purchase at the release's existing destination ↗", next.media.purchaseUrl));
       } else media.append(node("p", preview ? "Choose a published release or attach an audio clip." : "This release's public audio is no longer available. No private asset is exposed."));
     }
-    if (next.linkUrl) media.append(link(next.kind === "VIDEO" ? "Open public video ↗" : "Open public brief ↗", next.linkUrl));
+    if (next.linkUrl) {
+      const videoId = next.kind === "VIDEO" && !next.attachment ? youtubeVideoId(next.linkUrl) : "";
+      if (videoId) {
+        const wrapper = node("div", null, "signal-feed__media");
+        const frame = node("iframe", null, "signal-feed__video-embed");
+        frame.src = `https://www.youtube.com/embed/${videoId}`;
+        frame.title = "YouTube video player";
+        frame.loading = "lazy";
+        frame.allow = "encrypted-media; picture-in-picture; fullscreen";
+        frame.allowFullscreen = true;
+        wrapper.append(frame); media.append(wrapper);
+      } else media.append(link(next.kind === "VIDEO" ? "Open public video ↗" : "Open public brief ↗", next.linkUrl));
+    }
   }
   update(post);
   return { element, update, get player() { return player; } };

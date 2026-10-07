@@ -22,7 +22,10 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;700;800;900&family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500;1,600&family=Share+Tech+Mono:wght@400&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/halo-brand.css">
+  <link rel="stylesheet" href="/halo-brand-router.css">
   <link rel="stylesheet" href="/signal-network/signal-network.css">
+  <link rel="stylesheet" href="/campaign-studio/fanout-modal.css">
+  <link rel="stylesheet" href="/signal-network/signal-rooms.css">
   <link rel="stylesheet" href="/accessibility.css">
   <script src="/stats.js" defer></script>
   <script src="/accessibility.js" defer></script>
@@ -796,7 +799,7 @@
   <!-- ── Header ──────────────────────────────────────────── -->
   <header class="site-header">
     <div class="container site-header__inner">
-      <a class="site-header__brand" href="/halo" aria-label="HALO home">
+      <a class="site-header__brand" data-halo-logo-link href="/signal-network/#signal-feed" aria-label="HALO logo — open your assigned destination">
         <img class="halo-brand-image halo-brand-image--small" src="/assets/halo-logo-mark.webp" alt="">
         <span>
           <strong>HALO</strong>
@@ -1187,7 +1190,7 @@
     </section>
 
     <!-- ── Platform Modules ───────────────────────────────── -->
-    <section class="modules" id="modules" aria-labelledby="modules-title">
+    <section class="modules signal-rooms" id="modules" data-signal-rooms aria-labelledby="modules-title">
       <div class="container">
         <header class="modules__header">
           <p class="section-label">Platform Modules</p>
@@ -1198,10 +1201,19 @@
           </p>
         </header>
 
+        <div class="room-tabs" data-room-tabs aria-label="Signal Network rooms" hidden>
+          <button class="nav-tab" id="room-tab-vault" type="button" data-room-tab aria-controls="sovereign-vault" aria-selected="true">01. Sovereign Vault</button>
+          <button class="nav-tab" id="room-tab-pearl" type="button" data-room-tab aria-controls="pearl-hall" aria-selected="false">02. Pearl Hall</button>
+          <button class="nav-tab" id="room-tab-dreamweaver" type="button" data-room-tab aria-controls="dreamweaver" aria-selected="false">03. Dreamweaver</button>
+          <button class="nav-tab" id="room-tab-ritual" type="button" data-room-tab aria-controls="ritual-engine" aria-selected="false">04. Ritual Engine</button>
+          <button class="nav-tab" id="room-tab-release" type="button" data-room-tab aria-controls="release-desk" aria-selected="false">05. Release Desk</button>
+          <button class="nav-tab" id="room-tab-signal" type="button" data-room-tab aria-controls="signal-network-module" aria-selected="false">06. Signal Network</button>
+        </div>
+        <noscript><p class="section-copy">All six rooms are shown below. Enable JavaScript for room tabs and campaign fan-out, or open <a href="/campaign-studio/">Campaign Studio</a>.</p></noscript>
         <div class="modules__grid">
 
           <!-- Sovereign Vault — featured full-width -->
-          <article class="module-card module-card--featured" id="sovereign-vault">
+          <article class="module-card module-card--featured" id="sovereign-vault" data-room-panel>
             <div class="module-card__body">
               <div>
                 <p class="module-card__eyebrow">Module 01</p>
@@ -1223,10 +1235,11 @@
                 <li>Granular access controls per asset</li>
               </ul>
             </div>
+            <div class="room-actions"><a class="btn-ghost" href="/song-catalog/">Open your catalogue</a></div>
           </article>
 
           <!-- Pearl Hall -->
-          <article class="module-card" id="pearl-hall">
+          <article class="module-card" id="pearl-hall" data-room-panel>
             <p class="module-card__eyebrow">Module 02</p>
             <h3 class="module-card__title">Pearl Hall</h3>
             <p class="module-card__desc">
@@ -1241,10 +1254,11 @@
               <li>Private and shareable Pearl views</li>
             </ul>
             <span class="module-card__badge">Live milestone archive</span>
+            <div class="room-actions"><a class="btn-ghost" href="/creator-network/">Open Creator Studio</a></div>
           </article>
 
           <!-- Dreamweaver -->
-          <article class="module-card" id="dreamweaver">
+          <article class="module-card" id="dreamweaver" data-room-panel>
             <p class="module-card__eyebrow">Module 03</p>
             <h3 class="module-card__title">Dreamweaver</h3>
             <p class="module-card__desc">
@@ -1260,10 +1274,14 @@
               <li>Creative prompts from existing work</li>
             </ul>
             <span class="module-card__badge">AI-assisted, artist-directed</span>
+            <div class="room-actions">
+              <button class="btn-ghost" type="button" data-open-dreamweaver-campaign aria-controls="dreamweaverFanoutDialog">Shape a campaign</button>
+              <a class="btn-ghost" href="/campaign-studio/">Open Campaign Studio</a>
+            </div>
           </article>
 
           <!-- Ritual Engine -->
-          <article class="module-card" id="ritual-engine">
+          <article class="module-card" id="ritual-engine" data-room-panel>
             <p class="module-card__eyebrow">Module 04</p>
             <h3 class="module-card__title">Ritual Engine</h3>
             <p class="module-card__desc">
@@ -1279,10 +1297,11 @@
               <li>Repeat — build the habit</li>
             </ul>
             <span class="module-card__badge">Daily creative practice</span>
+            <div class="room-actions"><a class="btn-ghost" href="#ritual">Explore the daily ritual</a></div>
           </article>
 
           <!-- Release Desk -->
-          <article class="module-card" id="release-desk">
+          <article class="module-card" id="release-desk" data-room-panel>
             <p class="module-card__eyebrow">Module 05</p>
             <h3 class="module-card__title">Release Desk</h3>
             <p class="module-card__desc">
@@ -1297,10 +1316,11 @@
               <li>Distribution routing and launch scheduling</li>
             </ul>
             <span class="module-card__badge">Release-ready checklist</span>
+            <div class="room-actions"><a class="btn-ghost" href="/release-house/">Open Release House</a></div>
           </article>
 
           <!-- Signal Network -->
-          <article class="module-card" id="signal-network-module">
+          <article class="module-card" id="signal-network-module" data-room-panel>
             <p class="module-card__eyebrow">Module 06</p>
             <h3 class="module-card__title">Signal Network</h3>
             <p class="module-card__desc">
@@ -1315,6 +1335,11 @@
               <li>Prioritised next-step recommendations</li>
             </ul>
             <span class="module-card__badge">Live intelligence layer</span>
+            <div class="room-actions">
+              <a class="btn-ghost" href="#command-center">Open Network Live</a>
+              <a class="btn-ghost" href="#feed">Open the public feed</a>
+              <a class="btn-ghost" href="#signal-feed">Browse demo marketplace</a>
+            </div>
           </article>
 
         </div>
@@ -1528,12 +1553,38 @@
     </form>
   </dialog>
 
+  <dialog class="fanout-dialog signal-room-fanout" id="dreamweaverFanoutDialog" aria-labelledby="fanoutTitle">
+    <form class="fanout-shell" data-campaign-form>
+      <div class="fanout-heading">
+        <div><p class="section-label">Dreamweaver / Campaign review</p><h2 id="fanoutTitle">Shape one signal. Review every channel.</h2></div>
+        <button type="button" data-close-fanout aria-label="Close campaign review">×</button>
+      </div>
+      <p>Review themed channel drafts and approve the Signal Feed post yourself. Other channels are copied manually; HALO does not auto-post to external services.</p>
+      <div class="fanout-form">
+        <label>Campaign title<input name="title" maxlength="140" value="A new HALO signal" required></label>
+        <label>Artist name<input name="artist" maxlength="100" placeholder="Optional"></label>
+        <label>Campaign theme<select name="theme" data-campaign-theme></select></label>
+        <label>Call to action<input name="callToAction" maxlength="120" value="Explore the signal"></label>
+        <label class="wide">Opening idea<textarea name="hook" maxlength="400" placeholder="Optional — add your opening idea"></textarea></label>
+        <button class="fanout-generate" type="button" data-generate-campaign>Generate channel drafts</button>
+      </div>
+      <div class="fanout-previews" data-channel-previews aria-live="polite" aria-label="Channel previews"></div>
+      <label class="fanout-approval"><input type="checkbox" data-publish-approval><span>I have reviewed and approve the HALO Signal Feed draft for public publication.</span></label>
+      <div class="fanout-actions"><button type="button" data-publish-signal disabled>Publish approved Signal Feed draft</button></div>
+      <p class="fanout-status" data-fanout-status role="status" aria-live="polite"></p>
+      <p>Creator-uploaded music and content remains owned by its uploader unless a separate written agreement expressly assigns specific rights. Uploading does not transfer creator ownership. The HALO logo, wordmark, emblem geometry, and visual lockups remain proprietary HALO brand assets.</p>
+    </form>
+  </dialog>
+
   <div class="signal-toast" id="signalToast" role="status" aria-live="polite" hidden></div>
 
   <script type="module" src="/identity.js"></script>
   <script type="module" src="/signal-network/signal-network.js"></script>
   <script type="module" src="/signal-network/marketplace.js"></script>
   <script type="module" src="/signal-network/signal-feed.js"></script>
+  <script type="module" src="/halo-brand-router.js"></script>
+  <script type="module" src="/signal-network/signal-rooms.js"></script>
+  <script type="module" src="/campaign-studio/dreamweaver-fanout-modal.js"></script>
 
 </body>
 </html>

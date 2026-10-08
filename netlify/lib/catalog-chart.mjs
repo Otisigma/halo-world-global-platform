@@ -65,6 +65,16 @@ export function chartSignalScore({ votes = 0, recentListens = 0, recentOpens = 0
     + Number(recentOpens || 0) * SIGNAL_WEIGHTS.opens;
 }
 
+// 7-day momentum: this week's listen/open activity against the previous 7 days,
+// weighted the same way the Living Chart board weighs listens and opens.
+export function chartMomentum({ recentListens = 0, recentOpens = 0, previousListens = 0, previousOpens = 0 } = {}) {
+  const weigh = (listens, opens) => Number(listens || 0) * SIGNAL_WEIGHTS.listens + Number(opens || 0) * SIGNAL_WEIGHTS.opens;
+  const delta = weigh(recentListens, recentOpens) - weigh(previousListens, previousOpens);
+  if (delta > 0) return { delta, value: `+${delta}`, label: "Rising", direction: "up" };
+  if (delta < 0) return { delta, value: String(delta), label: "Cooling", direction: "down" };
+  return { delta: 0, value: "—", label: "Holding", direction: "steady" };
+}
+
 export function serializeChartRelease(row) {
   const artwork = resolveReleaseArtworkFields({
     artworkUrl: row.artwork_url,
@@ -74,6 +84,8 @@ export function serializeChartRelease(row) {
   const votes = Number(row.votes || 0);
   const recentListens = Number(row.recent_listens || 0);
   const recentOpens = Number(row.recent_opens || 0);
+  const previousListens = Number(row.previous_listens || 0);
+  const previousOpens = Number(row.previous_opens || 0);
   const audioUrl = directStreamUrl(row.stream_url);
   const id = String(row.id || "");
   return {
@@ -90,7 +102,8 @@ export function serializeChartRelease(row) {
     audioUrl,
     isPlayable: Boolean(audioUrl),
     votes,
-    chartActivity: { recentListens, recentOpens },
+    chartActivity: { recentListens, recentOpens, previousListens, previousOpens },
+    momentum: chartMomentum({ recentListens, recentOpens, previousListens, previousOpens }),
     signalScore: chartSignalScore({ votes, recentListens, recentOpens }),
     shopUrl: `/music/?song=${encodeURIComponent(id)}`,
     listenUrl: `/api/release-link?slug=${encodeURIComponent(id)}&audience=fan`,

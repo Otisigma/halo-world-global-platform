@@ -384,6 +384,22 @@ function connectIdentity() {
 }
 if (window.haloIdentity) connectIdentity();
 else window.addEventListener("halo-identity-ready", connectIdentity, { once: true });
+// System broadcast: the current Living Chart #1, derived from the public chart for every member.
+async function loadChartBroadcast() {
+  const celebration = window.HaloChartCelebration;
+  const container = byId("feedSystemBroadcast");
+  if (!celebration || !container) return;
+  try {
+    const response = await fetch("/api/catalog/chart?sort=signal", { headers: { Accept: "application/json" }, signal: AbortSignal.timeout(12000) });
+    if (!response.ok) return;
+    const data = await response.json();
+    const leader = (data.releases || []).find(release => Number(release.rank) === 1);
+    if (!leader || !(Number(leader.signalScore) > 0)) return;
+    celebration.renderBroadcast(container, celebration.broadcastPayload(celebration.trackFromRelease(leader)));
+  } catch {}
+}
+window.HaloChartCelebration?.subscribeBroadcasts(payload => window.HaloChartCelebration.renderBroadcast(byId("feedSystemBroadcast"), payload));
+loadChartBroadcast();
 loadFeed().then(() => { loadNotifications(); loadBlocks(); });
 setInterval(() => { if (!document.hidden) loadNotifications(); }, 30000);
 document.addEventListener("visibilitychange", () => { if (!document.hidden) loadNotifications(); });

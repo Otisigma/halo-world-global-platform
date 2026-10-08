@@ -259,6 +259,8 @@ h1 em { color: var(--acid); font-family: var(--serif); font-weight: 400; text-tr
 @supports not (backdrop-filter: blur(2px)) {
   .stage-video-fallback-copy { background: rgba(8, 8, 8, .92); }
 }
+.stage-video-open { display: inline-block; margin-top: 8px; color: inherit; font: 500 9px/1.4 var(--mono); letter-spacing: .08em; text-transform: uppercase; }
+.stage-video-fallback-copy .stage-video-open { color: var(--acid); }
 .stage-video-empty { margin-top: 24px; padding: 22px; border: 1px dashed #aaa99f; }
 .stage-video-empty span { color: #b63e15; font: 500 7px/1 var(--mono); letter-spacing: 0.12em; }
 .stage-video-empty strong { display: block; margin-top: 10px; font-size: 17px; }

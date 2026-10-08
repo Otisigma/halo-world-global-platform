@@ -20,6 +20,7 @@
   const state = { releases: [], videos: [], query: "", genre: "all", sort: "newest", chartRoom: "all", chartSort: "signal", activeReleaseId: "", activeShopId: "" };
   const configuredFeaturedReleaseId = elements.featured?.dataset.featuredReleaseId?.trim() || "";
   const requestedReleaseId = new URLSearchParams(window.location.search).get("song")?.trim() || "";
+  const requestedVersionId = new URLSearchParams(window.location.search).get("version")?.trim() || "";
   const fallbackArtwork = window.HaloReleaseArtwork?.DEFAULT_RELEASE_ARTWORK || "/assets/releases/halo-premium-placeholder.svg";
   const fallbackArtworkBadge = window.HaloReleaseArtwork?.DEFAULT_RELEASE_ARTWORK_BADGE || "HALO placeholder cover";
   const satelliteVideoFallbackEnabled = new URLSearchParams(window.location.search).get("satellite") === "music-video-fallback";
@@ -370,7 +371,7 @@
       <span class="shop-eyebrow">Licensing</span>
       <div class="licensing-selects">
         <label>Version
-          <select data-licensing-version>${versionOptions.map(version => `<option value="${escapeHtml(version.id)}">${escapeHtml(version.label)}</option>`).join("")}</select>
+          <select data-licensing-version>${versionOptions.map(version => `<option value="${escapeHtml(version.id)}"${release.id === requestedReleaseId && version.id === requestedVersionId ? " selected" : ""}>${escapeHtml(version.label)}</option>`).join("")}</select>
         </label>
         <label>Licence
           <select data-licensing-tier>${licensing.tiers.map(tier => `<option value="${escapeHtml(tier.id)}">${escapeHtml(tier.label)}${tier.priceCents > 0 ? ` · ${escapeHtml(money(tier.priceCents, tier.currency))}` : ""}</option>`).join("")}</select>

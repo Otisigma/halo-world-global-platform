@@ -1,4 +1,5 @@
 .halo-hud-card.halo-oracle {
+  width: min(400px, calc(100vw - 24px));
   background: linear-gradient(145deg, rgba(56, 43, 16, .88), rgba(7, 9, 12, .94));
   border-color: rgba(212, 175, 55, .6);
   border-top-color: #ebc470;
@@ -7,6 +8,7 @@
 }
 
 .halo-oracle .halo-hud-badge { color: #ebc470; border-color: #d4af37; background: rgba(212, 175, 55, .12); }
+.halo-oracle.is-oracle-stage > :not(.halo-hud-header):not(.halo-oracle__track):not(.halo-oracle__conversation) { display: none; }
 .halo-oracle__track { margin-top: 14px; padding-top: 12px; border-top: 1px solid rgba(212, 175, 55, .3); }
 .halo-oracle__title { margin: 0; font-size: 18px; overflow-wrap: anywhere; }
 .halo-oracle__artist { margin: 4px 0 10px; color: #c5bda9; }
@@ -18,6 +20,25 @@
 .halo-oracle__links a { color: #ebc470; text-underline-offset: 3px; }
 .halo-oracle :focus-visible { outline: 2px solid #fff0b3; outline-offset: 3px; }
 .halo-oracle__confetti { position: fixed; inset: 0; width: 100%; height: 100%; z-index: 10006; pointer-events: none; }
+.halo-oracle__conversation { margin-top: 16px; padding-top: 12px; border-top: 1px solid rgba(212, 175, 55, .3); }
+.halo-oracle__status { color: #fff0b3; font: 700 10px/1.5 "DM Mono", monospace; letter-spacing: .08em; }
+.halo-oracle__response { padding: 12px; border: 1px solid rgba(197, 160, 89, .3); border-radius: 12px; background: rgba(0, 0, 0, .4); }
+.halo-oracle__reply { margin: 0; white-space: pre-line; overflow-wrap: anywhere; }
+.halo-oracle__selection { display: grid; gap: 4px; padding: 10px 0; border-bottom: 1px solid rgba(197, 160, 89, .2); }
+.halo-oracle__selection a, .halo-oracle__gateway { color: #fff0b3; text-underline-offset: 3px; overflow-wrap: anywhere; }
+.halo-oracle__selection small { color: #c5bda9; }
+.halo-oracle__gateway { display: block; margin-top: 10px; }
+.halo-oracle__chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 12px 0; }
+.halo-oracle__chip, .halo-oracle__save { min-height: 44px; color: #fff0b3; background: rgba(56, 43, 16, .7); border-color: #c5a059; }
+.halo-oracle__save { margin-top: 12px; }
+.halo-oracle__form { display: grid; gap: 8px; }
+.halo-oracle__prompt { display: grid; gap: 6px; color: #c5bda9; }
+.halo-oracle__input { box-sizing: border-box; width: 100%; min-height: 44px; padding: 10px; border: 1px solid #c5a059; border-radius: 8px; background: #080808; color: #fff0b3; font: inherit; }
+.halo-oracle__send { min-height: 44px; background: #ebc470; color: #0a0a0c; }
+.halo-oracle__send:disabled { opacity: .6; }
+.halo-oracle__countdown { color: #ebc470; font-variant-numeric: tabular-nums; }
+.halo-oracle__launcher { position: fixed; right: 18px; bottom: 96px; z-index: 10004; min-height: 44px; padding: 12px 18px; border: 1px solid #c5a059; border-radius: 30px; background: rgba(8, 8, 8, .94); color: #fff0b3; box-shadow: 0 10px 30px rgba(0, 0, 0, .6); backdrop-filter: blur(14px); font: 700 12px/1.5 "DM Mono", monospace; cursor: pointer; }
+.halo-oracle__launcher:focus-visible { outline: 2px solid #fff0b3; outline-offset: 3px; }
 
 @media (prefers-reduced-motion: reduce) {
   .halo-oracle__confetti { display: none; }

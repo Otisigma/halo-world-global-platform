@@ -1319,19 +1319,19 @@
         const MENU_ROUTE_STATUS_LABELS = { green: 'WORKING', yellow: 'ATTENTION', red: 'BROKEN' };
         const MENU_ROUTE_STATUS_GLYPHS = { green: 'G', yellow: 'Y', red: 'R' };
         const MENU_STATUS_GROUP_TARGETS = [
+          { route: '/signal-network/', label: 'SIGNAL NETWORK', primaryWorking: true },
+          { route: '/creator-network/', label: 'CREATOR NETWORK', primaryWorking: true },
+          { route: '/artist/dashboard', label: 'BUSINESS HUB' },
+          { route: '/dj-deck.html', label: 'LIVE DJ DECK' },
           { route: '/music/', label: 'ALL MUSIC' },
           { route: '/halo-x.html', label: 'DJ HALO X' },
           { route: '/mixes/', label: 'HALO X MIXES' },
-          { route: '/dj-deck.html', label: 'LIVE DJ DECK' },
           { route: '/halo-live.html', label: 'HALO LIVE' },
           { route: '/radio/', label: 'HALO RADIO' },
-          { route: '/artist/dashboard', label: 'BUSINESS HUB' },
           { route: '/sync-hub/', label: 'SYNC LICENSING' },
           { route: '/asset-inventory/', label: 'ASSET INVENTORY' },
           { route: '/artist-pro/', label: 'ARTIST PRO' },
           { route: '/creators/', label: 'CREATOR WORLD' },
-          { route: '/creator-network/', label: 'CREATOR NETWORK' },
-          { route: '/signal-network/', label: 'SIGNAL NETWORK' },
           { route: '/artists/', label: 'ARTIST ROOMS + CHARTS' },
           { route: '/creator-freedom/', label: 'CREATOR FREEDOM' },
           { route: '/campaign-studio/', label: 'CAMPAIGN STUDIO' },
@@ -1901,8 +1901,8 @@
             for (const target of MENU_STATUS_GROUP_TARGETS) {
               const indicator = menuStatusForRoute(target.route, 'green');
               const entry = { ...target, status: indicator.status };
-              if (MENU_PRIMARY_WORKING_TARGET_ROUTES.has(target.route) && indicator.status === 'green') grouped.working.push(entry);
-              else if (indicator.status !== 'green') grouped.attention.push(entry);
+              if (target.route === '/artist/dashboard' || ((target.primaryWorking || MENU_PRIMARY_WORKING_TARGET_ROUTES.has(target.route)) && indicator.status === 'green')) grouped.working.push(entry);
+              if (indicator.status !== 'green') grouped.attention.push(entry);
             }
             return grouped;
           })();
@@ -3908,14 +3908,10 @@
                           <h3 id="halo-menu-status-working">All working menu</h3>
                         </div>
                         <div className="halo-menu-status-buttons">
-                          <a href="/artist/dashboard" className="halo-menu-status-button halo-menu-business-hub" data-stat-event="open_business_hub" data-stat-target="menu_quick_access">
-                            <span className="halo-menu-status-label">BUSINESS HUB<small>Sovereign Label OS</small></span>
-                            {renderMenuStatusBadge('/artist/dashboard', 'Business Hub', 'green')}
-                          </a>
                           {menuStatusGroupedTargets.working.map(target => (
-                            <a key={`working-${target.route}`} href={target.route} className="halo-menu-status-button">
-                              <span className="halo-menu-status-label">{target.label}</span>
-                              {renderMenuStatusBadge(target.route, target.label, 'green')}
+                            <a key={`working-${target.route}`} href={target.route} className={`halo-menu-status-button${target.route === '/artist/dashboard' ? ' halo-menu-business-hub' : ''}`} data-stat-event={target.route === '/artist/dashboard' ? 'open_business_hub' : undefined} data-stat-target={target.route === '/artist/dashboard' ? 'menu_quick_access' : undefined}>
+                              <span className="halo-menu-status-label">{target.label}{target.route === '/artist/dashboard' && <small>Sovereign Label OS</small>}</span>
+                              {renderMenuStatusBadge(target.route, target.route === '/artist/dashboard' ? 'Business Hub' : target.label, 'green')}
                             </a>
                           ))}
                         </div>

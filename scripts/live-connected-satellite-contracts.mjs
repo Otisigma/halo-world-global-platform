@@ -89,7 +89,7 @@ assert.match(menuSource, /menuDestinationCount/, "Main menu summary must calcula
 assert.match(menuSource, /halo-menu-status-groups/, "Main menu must organize visible satellite buttons into status groups.");
 assert.match(menuSource, /const MENU_PRIMARY_WORKING_TARGET_ROUTES = new Set\(\[\s*'\/halo-x\.html',\s*'\/dj-deck\.html',\s*'\/halo-live\.html',\s*'\/magazine\.html'\s*\]\)/s, "Main menu must define the known working-route set for the top status card.");
 assert.match(menuSource, /new Set\(MENU_STATUS_GROUP_TARGETS\.map\(target => target\.route\)\)/, "Main menu route status targets must derive from the same menu target list.");
-assert.match(menuSource, /MENU_PRIMARY_WORKING_TARGET_ROUTES\.has\(target\.route\) && indicator\.status === 'green'/, "Main menu top status card must only list known working routes when they are green.");
+assert.match(menuSource, /\(target\.primaryWorking \|\| MENU_PRIMARY_WORKING_TARGET_ROUTES\.has\(target\.route\)\) && indicator\.status === 'green'/, "Main menu top status card must only list primary working routes when they are green, apart from the pinned Business Hub.");
 assert.match(menuSource, /ownerControlAccess && \(/, "Main menu must gate ATTENTION status visibility behind owner/team access.");
 assert.match(menuSource, /Attention now/, "Main menu must still include the ATTENTION status group for authorized users.");
 assert.match(menuSource, /attentionStatusCollapsed/, "The ATTENTION status group must keep a collapsible state.");

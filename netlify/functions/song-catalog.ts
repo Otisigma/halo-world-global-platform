@@ -12,6 +12,8 @@ import { normalizeLyricsSource } from "../../lib/dreamweaver-lyrics.js";
 import { pickCanonicalMaster, serializeMasterCopy } from "../lib/master-copy.mjs";
 import { attachPublicationHealthToSongs } from "../lib/song-publication-health.mjs";
 import { cleanGoogleDriveUrl } from "../lib/google-drive.mjs";
+import { processCatalogRelease } from "../lib/release-conveyor-service.mjs";
+import { prepareReleaseAudio } from "../lib/release-conveyor-audio.mjs";
 
 const MAX_BODY_BYTES = 80_000;
 const RIGHTS_STATUSES = new Set(["needs_review", "cleared", "disputed"]);
@@ -310,6 +312,14 @@ export async function runDreamweaverReview(songId: string, ownerMemberId: string
       id: randomUUID(), songId, ownerMemberId, status: "completed", score, issues, summary, completedAt: now,
     });
   });
+  if (saleMaster?.audioUrl) {
+    try {
+      await processCatalogRelease(await getDatabase(), ownerMemberId, songId, prepareReleaseAudio);
+    } catch {
+      // Upload/save success must survive a transient conveyor outage; the console can retry.
+      console.warn("Release conveyor receipt pending; retry from Song Catalog.");
+    }
+  }
 }
 
 type CatalogExecutor = typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0];

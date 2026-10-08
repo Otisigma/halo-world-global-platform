@@ -1,12 +1,12 @@
 /**
- * Halo Guid — HALO's proactive guidance layer
+ * HALO Oracle — HALO's proactive guidance layer
  *
  * Additive, sitewide guidance layer:
  * - `data-halo-guide="…"` on any element shows a floating guide after hover/focus hesitation.
  * - `data-halo-guide-action="copy-isrc"` (with `data-isrc`) adds a copy-to-clipboard action.
  * - `data-halo-guide-action="quick-listen"` adds a preview action that reuses the page's own
  *   play-track button (and therefore the shared window.HaloPlayer singleton).
- * - `?` toggles the Halo Guid quick-guide spotlight that also lists this page's titled guides
+ * - `?` toggles the HALO Oracle quick-guide spotlight that also lists this page's titled guides
  *   (`data-halo-guide-title`) as jump targets; Escape or an outside click dismisses the HUD.
  * - The quick guide has a search field that filters those jump targets plus the HUD actions
  *   available on the page (listen, vote, copy ISRC, compare tiers, vault status via
@@ -89,7 +89,7 @@
     ["Vote", "Use Vote ▲ on the featured chart leader to push it up the Living Chart — one vote per listener per day."],
     ["Buy & license", "Buy links open the artist-approved destination. Licence selections are approval-gated by the artist team."],
     ["ISRC", "Pause on or focus an ISRC to copy the official recording identifier in one click."],
-    ["Halo Guid", "Pause on an element marked for Halo Guid to see its guidance. Press ? while focused to open its available action."],
+    ["HALO Oracle", "Pause on an element marked for HALO Oracle to see its guidance. Press ? while focused to open its available action."],
     ["Dismiss", "Press Escape or click anywhere outside the HUD to close it."]
   ];
 
@@ -148,10 +148,10 @@
     root.setAttribute("aria-hidden", "true");
     root.hidden = true;
     const header = el("div", "halo-hud-header");
-    const badge = el("span", "halo-hud-badge", "HALO GUID");
+    const badge = el("span", "halo-hud-badge", "HALO ORACLE");
     badge.id = "haloHudBadge";
     const close = button("×", "halo-hud-close", () => hide({ restoreFocus: true }));
-    close.setAttribute("aria-label", "Dismiss Halo Guid");
+    close.setAttribute("aria-label", "Dismiss HALO Oracle");
     header.append(badge, close);
     const body = el("p", "halo-hud-body");
     body.id = "haloHudText";
@@ -167,8 +167,8 @@
     search.setAttribute("aria-autocomplete", "list");
     search.setAttribute("aria-controls", "haloHudResults");
     search.setAttribute("aria-expanded", "false");
-    search.setAttribute("aria-label", "Search Halo Guid and page actions");
-    search.setAttribute("placeholder", "Search Halo Guid & actions…");
+    search.setAttribute("aria-label", "Search HALO Oracle and page actions");
+    search.setAttribute("placeholder", "Search HALO Oracle & actions…");
     search.setAttribute("autocomplete", "off");
     search.setAttribute("spellcheck", "false");
     search.addEventListener("input", () => renderResults());
@@ -177,7 +177,7 @@
     const results = el("div", "halo-hud-results");
     results.id = "haloHudResults";
     results.setAttribute("role", "listbox");
-    results.setAttribute("aria-label", "Halo Guid results");
+    results.setAttribute("aria-label", "HALO Oracle results");
     results.hidden = true;
     const jumps = el("div", "halo-hud-jumps");
     jumps.setAttribute("role", "group");
@@ -185,7 +185,7 @@
     jumps.hidden = true;
     const commands = el("div", "halo-hud-commands");
     commands.setAttribute("role", "group");
-    commands.setAttribute("aria-label", "Halo Guid actions");
+    commands.setAttribute("aria-label", "HALO Oracle actions");
     commands.hidden = true;
     results.append(jumps, commands);
     const empty = el("p", "halo-hud-empty");
@@ -197,6 +197,7 @@
     document.body.append(root);
     state.root = root;
     state.parts = { root, badge, close, body, list, actions: actionRow, searchRow, search, results, jumps, commands, empty, status };
+    window.HaloOracle?.attach(root);
     return state.parts;
   }
 
@@ -360,7 +361,8 @@
     detachDescription();
     state.target = target;
     const title = attr(target, "data-halo-guide-title").trim();
-    parts.badge.textContent = title ? `HALO GUID · ${title}` : "HALO GUID";
+    parts.badge.textContent = title ? `HALO ORACLE · ${title}` : "HALO ORACLE";
+    window.HaloOracle?.update(parts.root, resolveTrackButton(target));
     parts.body.textContent = message;
     parts.list.hidden = true;
     parts.list.replaceChildren();
@@ -500,7 +502,7 @@
     })), query);
     const items = [
       ...renderGroup(parts.jumps, "On this page", guides),
-      ...renderGroup(parts.commands, "Halo Guid actions", commands)
+      ...renderGroup(parts.commands, "HALO Oracle actions", commands)
     ];
     const scores = guides.concat(commands).map(entry => entry.score);
     state.items = items;
@@ -589,8 +591,9 @@
     detachDescription();
     state.returnFocus = document.activeElement && document.activeElement !== document.body ? document.activeElement : null;
     state.target = null;
-    parts.badge.textContent = "HALO GUID · QUICK GUIDE";
-    parts.body.textContent = "Halo Guid is your on-page concierge. Here's how to move around this page:";
+    parts.badge.textContent = "HALO ORACLE · QUICK GUIDE";
+    parts.body.textContent = "HALO Oracle is your on-page concierge. Here's how to move around this page:";
+    window.HaloOracle?.update(parts.root, findVisible(PLAY_SELECTOR, node => !node.disabled));
     parts.list.replaceChildren(...QUICK_GUIDE.map(([label, copy]) => {
       const item = el("li", "halo-hud-list-item");
       item.append(el("strong", "", label), el("span", "", copy));

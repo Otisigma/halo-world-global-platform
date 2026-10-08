@@ -5,14 +5,16 @@ import vm from "node:vm";
 
 const root = resolve(import.meta.dirname, "..");
 const read = path => readFile(resolve(root, path), "utf8");
-const [engine, styles, shopClient, featuredClient, musicPage, uploadPage, catalogPage] = await Promise.all([
+const [engine, styles, shopClient, featuredClient, musicPage, uploadPage, catalogPage, oracleEngine, oracleStyles] = await Promise.all([
   read("halo-hud.js"),
   read("halo-hud.css"),
   read("music/music.js"),
   read("music/featuredPlayer.js"),
   read("music/index.html"),
   read("music-upload/index.html"),
-  read("song-catalog/index.html")
+  read("song-catalog/index.html"),
+  read("halo-oracle.js"),
+  read("halo-oracle.css")
 ]);
 
 // --- Static wiring ---------------------------------------------------------------
@@ -28,10 +30,11 @@ assert.match(shopClient, /class="shop-licensing"[^>]*data-halo-guide=/, "licensi
 assert.match(featuredClient, /data-featured-vote="[^"]*"[^>]*data-halo-guide=/, "vote button carries guidance");
 assert.match(featuredClient, /class="featured-hero-copy" data-halo-guide-scope/, "hero copy scopes quick-listen to the hero's own play button (not the up-next queue)");
 assert.match(featuredClient, /class="featured-hero-kicker" tabindex="0" data-halo-guide="[^"]+"[^>]*data-halo-guide-action="quick-listen"/, "chart leader kicker offers a focusable quick-listen guide");
-assert.match(engine, /"HALO GUID"/, "the guidance card uses Halo Guid branding");
-assert.match(engine, /Dismiss Halo Guid/, "the close control has a Halo Guid accessible name");
-assert.match(engine, /Search Halo Guid and page actions/, "the spotlight search has a Halo Guid accessible name");
-assert.match(engine, /HALO GUID · QUICK GUIDE/, "the quick-guide spotlight carries Halo Guid branding");
+assert.match(engine, /"HALO ORACLE"/, "the guidance card uses Oracle branding");
+assert.match(engine, /Dismiss HALO Oracle/, "the close control has an Oracle accessible name");
+assert.match(engine, /Search HALO Oracle and page actions/, "the spotlight search has an Oracle accessible name");
+assert.match(engine, /HALO ORACLE · QUICK GUIDE/, "the quick-guide spotlight carries Oracle branding");
+assert.doesNotMatch(engine, /HALO GUID|Halo Guid/, "old guide labels are replaced");
 assert.doesNotMatch(engine, /\btooltips?\b|\bhover[- ]tips?\b/i, "guidance UI copy no longer uses tooltip wording");
 assert.match(engine, /window\.HaloGuid = api;\s*window\.HaloHud = api;/, "the branded API retains the legacy HUD alias");
 assert.match(styles, /\.halo-hud-card\.is-palette\s*\{[^}]*100vmax/, "quick guide dims the page as a spotlight");
@@ -46,6 +49,13 @@ assert.match(styles, /\.halo-hud-card\s*\{[^}]*pointer-events:\s*none;/, "hidden
 assert.match(styles, /backdrop-filter:\s*blur/, "HUD uses the glassmorphic treatment");
 assert.match(styles, /#f2ff62/i, "HUD uses the HALO gold/acid accent");
 assert.match(styles, /94, 234, 255|#5eeaff/i, "HUD uses the cyan accent line");
+for (const page of [musicPage, uploadPage]) {
+  assert.match(page, /href="\/halo-oracle\.css"/, "chart pages load Oracle glass styles");
+  assert.match(page, /src="\/halo-oracle\.js" defer><\/script>\s*<script src="\/halo-hud\.js"/, "Oracle loads before the guide");
+}
+assert.doesNotMatch(oracleEngine, /innerHTML|onclick|new Audio/, "Oracle uses safe DOM and the shared player");
+assert.match(oracleStyles, /pointer-events:\s*none/, "confetti never blocks controls");
+assert.match(oracleStyles, /prefers-reduced-motion/, "Oracle respects reduced motion");
 
 // --- Minimal DOM for behavioural checks -----------------------------------------
 class ClassList {
@@ -86,6 +96,10 @@ class Node {
     this.disabled = false;
   }
   get id() { return this.getAttribute("id") || ""; }
+  get dataset() {
+    return Object.fromEntries([...this.attributes].filter(([name]) => name.startsWith("data-"))
+      .map(([name, value]) => [name.slice(5).replace(/-([a-z])/g, (_, letter) => letter.toUpperCase()), value]));
+  }
   set id(value) { this.setAttribute("id", value); }
   get hidden() { return this.hasAttribute("hidden"); }
   set hidden(value) { value ? this.setAttribute("hidden", "") : this.removeAttribute("hidden"); }
@@ -120,14 +134,28 @@ class Node {
   getBoundingClientRect() { return { top: 100, bottom: 140, left: 40, right: 240, width: 200, height: 40 }; }
 }
 
-function createDocument() {
+function createDocument({ oracle = false, noCanvas = false } = {}) {
   const timers = new Map();
+  const frames = new Map();
+  const paint = { rectangles: 0, clears: 0, transforms: [] };
+  const canvasContext = {
+    clearRect() { paint.clears += 1; },
+    setTransform(...args) { paint.transforms.push(args); },
+    save() {}, restore() {}, translate() {}, rotate() {},
+    fillRect() { paint.rectangles += 1; }
+  };
+  const motion = { matches: false };
   let timerId = 0;
   const document = {
     listeners: {},
     observers: [],
     mutated() { document.observers.forEach(callback => callback([])); },
-    createElement: tag => new Node(document, tag),
+    createElement: tag => {
+      const node = new Node(document, tag);
+      if (tag === "canvas") node.getContext = () => noCanvas ? null : canvasContext;
+      return node;
+    },
+    readyState: "loading",
     addEventListener(type, handler) { (document.listeners[type] ||= []).push(handler); },
     querySelectorAll: selector => document.documentElement.querySelectorAll(selector),
     execCommand: () => false
@@ -145,6 +173,11 @@ function createDocument() {
     location: { pathname: "/music/" },
     listeners: {},
     addEventListener(type, handler) { (window.listeners[type] ||= []).push(handler); },
+    removeEventListener(type, handler) { window.listeners[type] = (window.listeners[type] || []).filter(item => item !== handler); },
+    devicePixelRatio: 3,
+    matchMedia: () => motion,
+    requestAnimationFrame(fn) { timerId += 1; frames.set(timerId, fn); return timerId; },
+    cancelAnimationFrame(id) { frames.delete(id); },
     setTimeout(fn, ms) { timerId += 1; timers.set(timerId, { fn, ms }); return timerId; },
     clearTimeout(id) { timers.delete(id); },
     HaloPlayer: { play: track => played.push(track) }
@@ -158,12 +191,34 @@ function createDocument() {
     document,
     navigator: { clipboard: { writeText: async text => { clipboard.push(text); } } },
     MutationObserver,
+    Element: Node,
     console
   };
   vm.createContext(context);
+  if (oracle) {
+    const audioListeners = {};
+    context.Audio = class {
+      constructor() { this.paused = true; this.src = ""; }
+      addEventListener(type, handler) { (audioListeners[type] ||= []).push(handler); }
+      play() { this.paused = false; this.emit("playing"); return Promise.resolve(); }
+      pause() { this.paused = true; this.emit("pause"); }
+      emit(type) { (audioListeners[type] || []).forEach(handler => handler()); }
+      removeAttribute() {}
+      load() {}
+    };
+    context.formatAudioStreamUrl = value => value;
+    vm.runInContext(`${shopClient.slice(shopClient.indexOf("  class HaloGlobalPlayer"), shopClient.indexOf("  const player = HaloGlobalPlayer.shared"))}
+      HaloGlobalPlayer.prototype.renderBar = function() {};
+      const player = window.HaloPlayer = new HaloGlobalPlayer();
+      ${shopClient.match(/  function handlePlayTrackClick\(event\) \{[\s\S]*?\n  \}/)[0]}
+      document.addEventListener("click", handlePlayTrackClick);`, context);
+    window.HaloChartCelebration = { subscribeBroadcasts(handler) { window.broadcast = handler; } };
+    vm.runInContext(oracleEngine, context);
+  }
   vm.runInContext(engine, context);
   const flush = () => { const pending = [...timers.entries()]; timers.clear(); pending.forEach(([, { fn }]) => fn()); };
-  return { document, window, clipboard, played, timers, flush, hud: window.HaloHud };
+  const tick = time => { const pending = [...frames.values()]; frames.clear(); pending.forEach(fn => fn(time)); };
+  return { document, window, context, clipboard, played, timers, frames, paint, motion, tick, flush, hud: window.HaloHud };
 }
 
 function guide(document, attrs, parent = document.body, tag = "span") {
@@ -195,7 +250,7 @@ const key = (document, keyName, target = document.activeElement) => {
   assert.equal(hud.mode, "guide");
   const card = document.body.querySelector("#haloHud");
   assert.ok(card?.classList.contains("is-visible"), "HUD card is visible");
-  assert.match(card.querySelector(".halo-hud-badge").textContent, /^HALO GUID/, "opened element guidance displays Halo Guid branding");
+  assert.match(card.querySelector(".halo-hud-badge").textContent, /^HALO ORACLE/, "opened element guidance displays Oracle branding");
   assert.equal(card.getAttribute("aria-hidden"), "false");
   assert.equal(document.body.querySelector("#haloHudText").textContent, "Commercial licensing is approval-gated.");
   assert.match(target.getAttribute("aria-describedby"), /haloHudText/, "target is described by the HUD for assistive tech");
@@ -263,7 +318,7 @@ const key = (document, keyName, target = document.activeElement) => {
   assert.equal(event.defaultPrevented, true, "? is handled");
   assert.equal(hud.mode, "palette", "? opens the global quick guide");
   const card = document.body.querySelector("#haloHud");
-  assert.match(card.querySelector(".halo-hud-badge").textContent, /^HALO GUID/, "? spotlight displays Halo Guid branding");
+  assert.match(card.querySelector(".halo-hud-badge").textContent, /^HALO ORACLE/, "? spotlight displays Oracle branding");
   assert.ok(card.classList.contains("is-palette"));
   assert.ok(card.querySelectorAll(".halo-hud-list-item").length >= 4, "quick guide lists site shortcuts");
   const search = card.querySelector("#haloHudSearch");
@@ -517,4 +572,96 @@ const key = (document, keyName, target = document.activeElement) => {
   assert.equal(window.HaloHud, hud, "loading the engine twice keeps the first instance");
 }
 
-console.log("HALO HUD contracts passed.");
+// Oracle is the existing guide card, with shared playback and a bounded canvas effect.
+{
+  const { document, window, context, hud, frames, tick, paint, motion } = createDocument({ oracle: true });
+  assert.equal(document.body.querySelector(".halo-oracle__confetti"), null, "canvas waits for DOM ready");
+  document.listeners.DOMContentLoaded.forEach(handler => handler());
+  const canvas = document.body.querySelector(".halo-oracle__confetti");
+  assert.ok(canvas, "DOM ready mounts the confetti overlay");
+  assert.equal(canvas.getAttribute("aria-hidden"), "true");
+  assert.equal(frames.size, 0, "loading the page never starts a celebration");
+  assert.equal(canvas.width, 2560, "canvas pixel density is capped at 2");
+  vm.runInContext(oracleEngine, context);
+  assert.equal(document.body.querySelectorAll(".halo-oracle__confetti").length, 1, "loading Oracle twice never duplicates canvas or listeners");
+  const scope = guide(document, { "data-halo-guide-scope": "" }, document.body, "section");
+  const target = guide(document, { "data-halo-guide": "Follow the chart signal.", "data-halo-guide-title": "Living Chart" }, scope);
+  const source = guide(document, {
+    "data-action": "play-track", "data-play-track-id": "revival", "data-track-id": "revival",
+    "data-title": 'THE REVIVAL <img onerror="bad">',
+    "data-artist": "HALO Artist", "data-audio-url": "https://cdn.example.com/revival.mp3",
+    "data-cover": "/cover.jpg", "data-momentum": "+19 Rising"
+  }, scope, "button");
+  hud.show(target);
+  const card = document.body.querySelector("#haloHud");
+  const play = card.querySelector(".halo-oracle__play");
+  assert.ok(card.classList.contains("halo-oracle"), "Oracle upgrades the guide in place");
+  assert.equal(card.querySelector(".halo-oracle__title").textContent, source.dataset.title, "track title is text, not markup");
+  assert.equal(card.querySelector(".halo-oracle__momentum").textContent, "+19 Rising");
+  assert.equal(card.querySelector(".halo-oracle__links").querySelectorAll("a").length, 2);
+  assert.equal(play.getAttribute("aria-pressed"), "false");
+  play.click();
+  assert.equal(window.HaloPlayer.track.id, "revival", "Oracle plays through the existing delegated handler");
+  assert.equal(window.HaloPlayer.status, "playing", "one activation starts playback without double-toggling");
+  assert.equal(play.textContent, "❚❚ Pause");
+  assert.match(play.getAttribute("aria-label"), /^Pause THE REVIVAL/);
+  assert.equal(play.getAttribute("aria-pressed"), "true");
+  assert.equal(hud.isOpen(), true, "Oracle activation keeps the card open");
+  assert.equal(frames.size, 1);
+  tick(100);
+  assert.equal(paint.rectangles, 48, "gold particles render without errors");
+  play.click();
+  assert.equal(window.HaloPlayer.status, "paused");
+  assert.equal(play.textContent, "▶ Play");
+  assert.equal(play.getAttribute("aria-pressed"), "false");
+  for (let index = 0; index < 10; index += 1) play.click();
+  assert.equal(frames.size, 1, "repeated activation replaces rather than multiplies animation loops");
+  tick(200);
+  tick(1900);
+  assert.equal(frames.size, 0, "confetti clears and stops after its bounded lifetime");
+  play.click();
+  window.innerWidth = 600;
+  window.innerHeight = 400;
+  window.listeners.resize.forEach(handler => handler());
+  assert.equal(frames.size, 0, "resize cancels old particle coordinates");
+  assert.equal(canvas.width, 1200);
+  assert.equal(canvas.height, 800);
+  play.click();
+  tick(2000);
+  assert.equal(frames.size, 1, "confetti renders again after resize");
+  window.HaloPlayer.audio.emit("error");
+  assert.equal(play.getAttribute("aria-pressed"), "false", "failed playback never remains pressed");
+  window.HaloPlayer.audio.emit("ended");
+  assert.equal(play.textContent, "▶ Play", "external audio events stay synchronized");
+  motion.matches = true;
+  play.click();
+  assert.equal(frames.size, 0, "reduced motion suppresses confetti, not playback");
+  motion.matches = false;
+  window.broadcast({ type: "living-chart-number-one" });
+  assert.equal(frames.size, 1, "Oracle consumes the existing new-#1 broadcast");
+  tick(3000);
+  tick(4700);
+  hud.hide();
+  window.broadcast({ type: "living-chart-number-one" });
+  assert.equal(frames.size, 0, "a hidden Oracle adds no background celebration");
+  hud.show(guide(document, { "data-halo-guide": "No preview here." }));
+  assert.equal(play.disabled, true);
+  assert.equal(play.textContent, "Preview unavailable");
+  assert.equal(play.classList.contains("is-playing"), false, "an unavailable preview cannot retain the previous track's visual state");
+  assert.equal(play.hasAttribute("data-play-track-id"), false, "unavailable controls cannot enter the player");
+  assert.equal(card.querySelectorAll(".halo-oracle__track").length, 1, "reopening reuses the Oracle card");
+}
+
+{
+  const { document, window, hud, frames } = createDocument({ oracle: true, noCanvas: true });
+  document.listeners.DOMContentLoaded.forEach(handler => handler());
+  hud.openGuide();
+  window.broadcast({ type: "living-chart-number-one" });
+  assert.equal(frames.size, 0, "missing canvas support degrades without throwing");
+  const canvas = document.body.querySelector(".halo-oracle__confetti");
+  const effect = window.HaloOracle.createConfetti(canvas);
+  assert.equal(effect.burst(), false);
+  effect.destroy();
+}
+
+console.log("HALO HUD and Oracle contracts passed.");

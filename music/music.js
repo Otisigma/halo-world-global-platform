@@ -133,7 +133,8 @@
     if (!audioUrl) return "";
     const artwork = releaseArtwork(release);
     const label = `Play ${release.title || "this release"}${release.artist ? ` by ${release.artist}` : ""}`;
-    return `<button class="${compact ? "chart-play" : "action play"}" type="button" data-action="play-track" data-play-track-id="${escapeHtml(release.id)}" data-track-id="${escapeHtml(release.id)}" data-title="${escapeHtml(release.title)}" data-artist="${escapeHtml(release.artist)}" data-audio-url="${escapeHtml(audioUrl)}" data-cover="${escapeHtml(artwork.src)}"${compact ? ' data-play-compact="true"' : ""} aria-pressed="false" aria-label="${escapeHtml(label)}">${compact ? "▶" : "▶ Play"}</button>`;
+    const momentum = window.HaloChartCelebration?.momentumText(release.momentum) || "Holding";
+    return `<button class="${compact ? "chart-play" : "action play"}" type="button" data-action="play-track" data-play-track-id="${escapeHtml(release.id)}" data-track-id="${escapeHtml(release.id)}" data-title="${escapeHtml(release.title)}" data-artist="${escapeHtml(release.artist)}" data-momentum="${escapeHtml(momentum)}" data-audio-url="${escapeHtml(audioUrl)}" data-cover="${escapeHtml(artwork.src)}"${compact ? ' data-play-compact="true"' : ""} aria-pressed="false" aria-label="${escapeHtml(label)}">${compact ? "▶" : "▶ Play"}</button>`;
   }
 
   class HaloGlobalPlayer {
@@ -276,6 +277,7 @@
         button.classList.toggle("is-playing", active);
         button.classList.toggle("is-error", current && this.status === "error");
         button.setAttribute("aria-pressed", String(active));
+        button.setAttribute("aria-label", `${active ? "Pause" : "Play"} ${button.dataset.title || "this release"}${button.dataset.artist ? ` by ${button.dataset.artist}` : ""}`);
         button.textContent = active ? (compact ? "❚❚" : "❚❚ Pause") : (compact ? "▶" : "▶ Play");
       });
     }

@@ -75,7 +75,8 @@
     if (!track.src || !playerReady) {
       return compact ? "" : `<button class="action play" type="button" disabled aria-disabled="true">Player unavailable</button>`;
     }
-    return `<button class="${compact ? "chart-play" : "action play"}" type="button" data-action="play-track" data-play-track-id="${escapeHtml(track.id)}" data-track-id="${escapeHtml(track.id)}" data-title="${escapeHtml(track.title)}" data-artist="${escapeHtml(track.artist)}" data-audio-url="${escapeHtml(track.src)}" data-cover="${escapeHtml(track.cover)}" data-queue-index="${queueIndex}"${compact ? ' data-play-compact="true"' : ""} aria-pressed="false" aria-label="${escapeHtml(label)}">${compact ? "▶" : "▶ Play"}</button>`;
+    const momentum = window.HaloChartCelebration?.momentumText(release.momentum) || "Holding";
+    return `<button class="${compact ? "chart-play" : "action play"}" type="button" data-action="play-track" data-play-track-id="${escapeHtml(track.id)}" data-track-id="${escapeHtml(track.id)}" data-title="${escapeHtml(track.title)}" data-artist="${escapeHtml(track.artist)}" data-momentum="${escapeHtml(momentum)}" data-audio-url="${escapeHtml(track.src)}" data-cover="${escapeHtml(track.cover)}" data-queue-index="${queueIndex}"${compact ? ' data-play-compact="true"' : ""} aria-pressed="false" aria-label="${escapeHtml(label)}">${compact ? "▶" : "▶ Play"}</button>`;
   }
 
   function heroMarkup({ releases = [], queue = buildQueue(releases), activeIndex = -1, playerReady = true } = {}) {

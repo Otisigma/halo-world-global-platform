@@ -1,0 +1,24 @@
+.halo-hud-card.halo-oracle {
+  background: linear-gradient(145deg, rgba(56, 43, 16, .88), rgba(7, 9, 12, .94));
+  border-color: rgba(212, 175, 55, .6);
+  border-top-color: #ebc470;
+  border-radius: 16px;
+  backdrop-filter: blur(20px) saturate(140%);
+}
+
+.halo-oracle .halo-hud-badge { color: #ebc470; border-color: #d4af37; background: rgba(212, 175, 55, .12); }
+.halo-oracle__track { margin-top: 14px; padding-top: 12px; border-top: 1px solid rgba(212, 175, 55, .3); }
+.halo-oracle__title { margin: 0; font-size: 18px; overflow-wrap: anywhere; }
+.halo-oracle__artist { margin: 4px 0 10px; color: #c5bda9; }
+.halo-oracle__momentum { display: inline-block; margin: 0 0 12px; padding: 4px 8px; border: 1px solid #d4af37; border-radius: 20px; color: #fff0b3; }
+.halo-oracle__play { display: block; background: #ebc470; border-color: #d4af37; min-height: 44px; }
+.halo-oracle__play:disabled { opacity: .6; cursor: default; }
+.halo-oracle__play.is-playing { box-shadow: 0 0 16px rgba(212, 175, 55, .4); }
+.halo-oracle__links { display: grid; gap: 8px; margin-top: 12px; }
+.halo-oracle__links a { color: #ebc470; text-underline-offset: 3px; }
+.halo-oracle :focus-visible { outline: 2px solid #fff0b3; outline-offset: 3px; }
+.halo-oracle__confetti { position: fixed; inset: 0; width: 100%; height: 100%; z-index: 10006; pointer-events: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .halo-oracle__confetti { display: none; }
+}

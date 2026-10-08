@@ -417,6 +417,20 @@
     </section>
   </main>
 
+  <section class="dw-lyrics" id="dreamweaverLyrics" aria-labelledby="dreamweaverLyricsTitle" data-lyrics-mode="sync" hidden>
+    <header class="dw-lyrics__header">
+      <div>
+        <p class="dw-lyrics__kicker">Dreamweaver / Lyrics</p>
+        <h2 id="dreamweaverLyricsTitle">Follow the words as the song moves.</h2>
+      </div>
+      <button class="dw-lyrics__mode" id="dreamweaverLyricsMode" type="button" aria-pressed="false" aria-controls="dreamweaverLyricsViewport">Lyric book</button>
+    </header>
+    <p class="dw-lyrics__status" id="dreamweaverLyricsStatus" role="status" aria-live="polite"></p>
+    <div class="dw-lyrics__viewport" id="dreamweaverLyricsViewport" role="region" aria-label="Song lyrics" tabindex="0">
+      <ol class="dw-lyrics__list" id="dreamweaverLyricsList"></ol>
+    </div>
+  </section>
+
   <section class="campaign-cutting-room" id="campaignStudio" role="dialog" aria-modal="true" aria-labelledby="campaignStudioTitle" aria-hidden="true">
     <div class="campaign-studio-bar">
       <div>

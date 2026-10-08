@@ -130,6 +130,7 @@
                 <label><span>Sale price (USD)</span><input id="salePrice" type="number" min="0" step="0.01" placeholder="1.29"></label>
                 <label class="check-label"><input id="explicitLyrics" type="checkbox"><span>Explicit lyrics</span></label>
                 <label class="wide-field"><span>Catalog notes</span><textarea id="songNotes" maxlength="4000" placeholder="Ownership, collaborators, release plan, or anything the team needs to know."></textarea></label>
+                <label class="wide-field lyrics-field"><span>Timestamped lyrics · Dreamweaver</span><textarea id="lyricsText" maxlength="16000" rows="8" aria-describedby="lyricsHelp lyricsSummary" placeholder="[00:15] The room goes quiet || Oracle insight: written the night after the last show&#10;[00:21] Every light still hums your name"></textarea><small id="lyricsHelp">One lyric per line. Start a line with [mm:ss] to sync it to playback and make it a click-to-jump point; add || then a note to attach an optional Oracle insight. Lines without timestamps stay readable in lyric book mode.</small><small id="lyricsSummary" role="status" aria-live="polite"></small></label>
               </div>
             </form>
 

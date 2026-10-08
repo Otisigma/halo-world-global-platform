@@ -255,6 +255,14 @@ assert.equal(created, 0, "A library change during quiet-feed preflight blocks re
 assert.match(buildSandbox.elements.recordingStatus.textContent, /library changed/);
 assert.equal(buildSandbox.recordingState.starting, false, "Failed startup releases its lock");
 
+buildSandbox.recorderGuardState.guard.start = async factory => {
+  buildSandbox.deckState.A.id = "manual-replacement";
+  return factory({});
+};
+await buildSandbox.startTakeoverRecording();
+assert.equal(created, 0, "Manual deck replacement during preflight cannot change the prepared opening songs");
+assert.match(buildSandbox.elements.recordingStatus.textContent, /Prepared decks changed/);
+
 let stoppedDecks = 0;
 buildSandbox.deckState.A.playing = true;
 buildSandbox.stopTakeoverDecks = () => { stoppedDecks += 1; };

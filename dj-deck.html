@@ -5681,6 +5681,9 @@
 
         const recorder = await recorderGuardState.guard.start(stream => {
           if (preparedSignature !== takeoverLibrarySignature()) throw new Error("Song library changed during isolation preflight. Start again to prepare the updated set.");
+          if (deckState.A.id !== recordingState.takeoverPlan[0] || deckState.B.id !== recordingState.takeoverPlan[1]) {
+            throw new Error("Prepared decks changed during isolation preflight. Start again to restore the complete set.");
+          }
           return createCompatibleRecorder(stream);
         }, () => !deckState.A.playing && !deckState.B.playing);
         recordingState.mimeType = recorder.mimeType || "";

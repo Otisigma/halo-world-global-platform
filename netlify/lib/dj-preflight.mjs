@@ -198,7 +198,9 @@ function greedyOrderFromStart(tracks, startIndex) {
 
 function greedyOrder(tracks) {
   if (tracks.length < 3) return tracks;
-  return tracks.map((_track, startIndex) => {
+  // Keep larger full-set builds bounded without dropping songs from the order.
+  const starts = tracks.length > 40 ? tracks.slice(0, 8) : tracks;
+  return starts.map((_track, startIndex) => {
     const ordered = greedyOrderFromStart(tracks, startIndex);
     const scores = ordered.slice(0, -1).map((track, index) => analyzeTransition(track, ordered[index + 1]).score);
     return {
@@ -211,7 +213,9 @@ function greedyOrder(tracks) {
 
 export function analyzeSetPreflight(input = {}) {
   const seenTrackIds = new Set();
-  const tracks = (Array.isArray(input.tracks) ? input.tracks : []).slice(0, 40).map(normalizePreflightTrack).filter(track => {
+  const sourceTracks = Array.isArray(input.tracks) ? input.tracks : [];
+  if (sourceTracks.length > 120) throw new Error("A set supports up to 120 songs. Split this library into smaller sets.");
+  const tracks = sourceTracks.map(normalizePreflightTrack).filter(track => {
     if (seenTrackIds.has(track.id)) return false;
     seenTrackIds.add(track.id);
     return true;

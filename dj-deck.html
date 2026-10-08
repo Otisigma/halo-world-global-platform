@@ -395,13 +395,6 @@
     .recording-progress-fill { position: absolute; inset: 0; transform: scaleX(0); transform-origin: left; background: linear-gradient(90deg, var(--acid), #ebff9f); transition: transform .35s linear; }
     .recording-rig.is-recording .recording-progress-fill::after { content: ""; position: absolute; inset: 0; background: repeating-linear-gradient(90deg, transparent 0 14px, rgba(8,10,9,.2) 14px 15px); }
     .recording-readout { display: flex; justify-content: space-between; gap: 15px; margin-top: 8px; color: var(--muted); font: 500 8px "DM Mono", monospace; letter-spacing: .08em; text-transform: uppercase; }
-    .takeover-qc { display: none; grid-column: 1 / -1; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 7px; border-top: 1px solid var(--line); padding-top: 12px; }
-    .recording-rig.is-ready .takeover-qc, .recording-rig.is-recording .takeover-qc, .recording-rig.is-complete .takeover-qc, .recording-rig.is-error .takeover-qc { display: grid; }
-    .qc-check { border: 1px solid var(--line); background: rgba(0,0,0,.16); padding: 9px; }
-    .qc-check span { display: block; color: var(--muted); font: 500 7px "DM Mono", monospace; letter-spacing: .08em; text-transform: uppercase; }
-    .qc-check strong { display: block; margin-top: 4px; color: var(--acid); font: 600 9px/1.35 "DM Mono", monospace; text-transform: uppercase; }
-    .qc-check.is-review strong { color: var(--orange); }
-    .qc-check.is-blocked strong { color: var(--red); }
     .recording-actions { min-width: 225px; display: grid; gap: 7px; }
     .recording-button, .recording-stop, .recording-download { min-height: 45px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--acid); padding: 0 16px; font: 500 9px "DM Mono", monospace; letter-spacing: .09em; text-transform: uppercase; text-decoration: none; cursor: pointer; }
     .recording-button { background: var(--acid); color: var(--ink); }
@@ -1000,7 +993,6 @@
       .crowd-card { border-bottom: 0; border-right: 1px solid var(--line); }
       .ai-console { grid-column: 1 / -1; }
       .recording-rig.is-ready, .recording-rig.is-recording, .recording-rig.is-complete, .recording-rig.is-error { grid-template-columns: 1fr; }
-      .takeover-qc { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .recording-rig.is-complete .mix-release { grid-template-columns: 1fr; }
       .recording-actions { min-width: 0; grid-template-columns: 1fr; }
       .canopy-rail { grid-template-columns: 1fr 1.7fr; }
@@ -1094,69 +1086,6 @@
       *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; }
     }
 
-    /* ── Deck review summary panel ─────────────────────────────────── */
-    .deck-review-panel { padding: 24px; }
-    .deck-review-panel .drp-head {
-      display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 18px; align-items: end;
-      padding-bottom: 18px; border-bottom: 1px solid var(--line);
-    }
-    .deck-review-panel .drp-kicker { color: var(--acid); font: 500 9px "DM Mono", monospace; letter-spacing: .1em; text-transform: uppercase; }
-    .deck-review-panel .drp-head h2 { margin: 6px 0 0; font: 400 clamp(22px, 3vw, 36px)/.94 "Archivo Black", sans-serif; letter-spacing: -.04em; text-transform: uppercase; }
-    .drp-readiness { min-width: 160px; text-align: right; }
-    .drp-readiness strong { display: block; font: 500 28px/1 "DM Mono", monospace; color: var(--acid); letter-spacing: -.03em; }
-    .drp-readiness span { color: var(--muted); font: 500 9px "DM Mono", monospace; letter-spacing: .1em; text-transform: uppercase; }
-    .drp-readiness-bar { height: 5px; margin-top: 8px; background: rgba(255,255,255,.07); overflow: hidden; }
-    .drp-readiness-bar span { display: block; width: var(--drp-ready, 0%); height: 100%; background: var(--acid); box-shadow: 0 0 8px rgba(200,255,54,.4); transition: width .4s cubic-bezier(.25,.8,.25,1); }
-    .drp-body {
-      display: grid; grid-template-columns: 100px minmax(0, 1fr); gap: 0; margin-top: 18px;
-      border: 1px solid var(--line); background: rgba(0,0,0,.22);
-    }
-    .drp-score-col {
-      display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
-      padding: 20px 12px; border-right: 1px solid var(--line);
-    }
-    .drp-score-ring {
-      position: relative; width: 68px; height: 68px; border-radius: 50%;
-      background: conic-gradient(var(--acid) calc(var(--drp-score, 0) * 1%), rgba(255,255,255,.07) 0);
-    }
-    .drp-score-ring::before { content: ""; position: absolute; inset: 8px; border-radius: 50%; background: var(--panel); }
-    .drp-score-ring strong { position: absolute; inset: 0; display: grid; place-items: center; font: 500 17px/1 "DM Mono", monospace; }
-    .drp-score-col span { color: var(--muted); font: 500 8px "DM Mono", monospace; letter-spacing: .07em; text-transform: uppercase; text-align: center; }
-    .drp-detail { padding: 16px 20px; display: grid; gap: 10px; }
-    .drp-chips { display: flex; flex-wrap: wrap; gap: 6px; }
-    .drp-chip {
-      display: inline-flex; align-items: center; gap: 5px;
-      padding: 4px 8px; border: 1px solid var(--line-strong);
-      font: 500 8px/1.1 "DM Mono", monospace; letter-spacing: .1em; text-transform: uppercase; white-space: nowrap;
-    }
-    .drp-chip::before { content: ""; width: 5px; height: 5px; border-radius: 50%; background: var(--muted); flex: 0 0 auto; }
-    .drp-chip.is-mastered { border-color: rgba(200,255,54,.4); color: var(--acid); }
-    .drp-chip.is-mastered::before { background: var(--acid); }
-    .drp-chip.is-rights { border-color: rgba(255,200,60,.35); color: #ffc83c; }
-    .drp-chip.is-rights::before { background: #ffc83c; }
-    .drp-chip.is-ready { border-color: rgba(72,168,255,.4); color: var(--blue); }
-    .drp-chip.is-ready::before { background: var(--blue); }
-    .drp-chip.is-approved { border-color: rgba(200,255,54,.65); background: rgba(200,255,54,.09); color: var(--acid); font-weight: 700; }
-    .drp-chip.is-approved::before { background: var(--acid); box-shadow: 0 0 5px var(--acid); }
-    .drp-chip.is-hold { border-color: rgba(255,106,50,.4); color: var(--orange); }
-    .drp-chip.is-hold::before { background: var(--orange); }
-    .drp-chip.is-revise { border-color: rgba(255,77,93,.4); color: var(--red); }
-    .drp-chip.is-revise::before { background: var(--red); }
-    .drp-summary { margin: 0; color: #b0bab0; font-size: 11px; line-height: 1.6;
-      display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
-    .drp-next {
-      margin-top: 0; padding: 10px 12px;
-      border-left: 2px solid var(--acid); background: rgba(200,255,54,.05);
-      font-size: 10px; line-height: 1.5;
-    }
-    .drp-next b { display: block; color: var(--acid); font: 500 8px "DM Mono", monospace; letter-spacing: .09em; text-transform: uppercase; margin-bottom: 4px; }
-    .drp-next p { margin: 0; color: #adb6ab; }
-    .drp-empty { grid-column: 1 / -1; padding: 28px; text-align: center; color: var(--muted); font: 400 10px "DM Mono", monospace; line-height: 1.6; }
-    .drp-empty a { color: var(--acid); text-underline-offset: 3px; text-decoration: underline; }
-    @media (max-width: 720px) {
-      .drp-body { grid-template-columns: 1fr; }
-      .drp-score-col { flex-direction: row; justify-content: start; gap: 16px; border-right: 0; border-bottom: 1px solid var(--line); }
-    }
   </style>
 </head>
 <body>
@@ -1262,35 +1191,18 @@
       </footer>
     </section>
 
-    <section class="deck-review-panel panel" id="deckReviewPanel" aria-labelledby="deckReviewTitle">
-      <header class="drp-head">
-        <div>
-          <p class="drp-kicker">Current mix // review &amp; readiness</p>
-          <h2 id="deckReviewTitle">Mix status <span style="color:var(--acid)">at a glance.</span></h2>
-        </div>
-        <div class="drp-readiness" aria-live="polite">
-          <strong id="drpReadyValue">—</strong>
-          <span>readiness</span>
-          <div class="drp-readiness-bar"><span id="drpReadyBar"></span></div>
-        </div>
-      </header>
-      <div class="drp-body" id="drpBody">
-        <p class="drp-empty">Sign in and open the <a href="/mixes/#upload">Mix Desk</a> to see your latest review score, status, and next improvement step here.</p>
-      </div>
-    </section>
-
     <section class="recording-rig panel" id="recordingRig" aria-labelledby="recordingTitle">
-      <div class="recorder-guard" id="recorderGuard" data-state="pending" role="status" aria-live="polite">
+      <div class="recorder-guard" id="recorderGuard" data-state="idle" role="status" aria-live="polite">
         <svg class="recorder-guard-shield" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/></svg>
         <svg class="recorder-guard-alert" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
         <div>
-          <h3 data-recorder-guard-title>Recorder isolation preflight required</h3>
-          <p data-recorder-guard-message>The recorder taps the post-limiter music bus only; CUE stays monitor-only. A quiet-feed isolation preflight is required before recording.</p>
+          <h3 data-recorder-guard-title>Quiet-feed preflight required</h3>
+          <p data-recorder-guard-message>Only post-limiter deck music is recorded. CUE and continuity monitoring stay out of the recording. Both recorder channels must pass a quiet-feed check before each start.</p>
         </div>
       </div>
       <div class="recording-copy">
         <div class="recording-heading"><span class="recording-light" aria-hidden="true"></span><h2 id="recordingTitle">Takeover recorder</h2></div>
-        <p class="recording-status" id="recordingStatus" aria-live="polite">Choose a takeover from the global portal to prepare a timed recording.</p>
+        <p class="recording-status" id="recordingStatus" aria-live="polite">Choose a takeover and load at least two playable songs. The complete set builds automatically; recording starts only when requested.</p>
         <div class="recording-progress" id="recordingProgress" role="progressbar" aria-label="Takeover recording progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span class="recording-progress-fill" id="recordingProgressFill"></span></div>
         <div class="recording-readout"><span id="recordingElapsed">00:00 / 00:00</span><span id="recordingDj">No DJ selected</span></div>
       </div>
@@ -1299,14 +1211,9 @@
         <button class="recording-stop" id="recordingStop" type="button">Finish & prepare download</button>
         <a class="recording-download" id="recordingDownload" download>Download recorded set</a>
         <audio class="recording-preview" id="recordingPreview" controls preload="metadata" aria-label="Preview finished recording"></audio>
-        <span class="recording-note" id="recordingNote">Records the live master mix. CUE monitoring stays local and out of the recording.</span>
+        <span class="recording-note" id="recordingNote">Load songs → automatic set build → quiet-feed check → record.</span>
       </div>
-      <div class="takeover-qc" id="takeoverQc" aria-label="Takeover quality control" aria-live="polite">
-        <div class="qc-check" id="qcSequence"><span>DJ sequence</span><strong id="qcSequenceValue">Waiting for build</strong></div>
-        <div class="qc-check" id="qcVocals"><span>Vocal lock</span><strong id="qcVocalsValue">No overlap allowed</strong></div>
-        <div class="qc-check" id="qcRepeats"><span>Repeat guard</span><strong id="qcRepeatsValue">Single play only</strong></div>
-        <div class="qc-check" id="qcContinuity"><span>Mix continuity</span><strong id="qcContinuityValue">Preflight required</strong></div>
-      </div>
+      <p class="recording-note" id="recordingSongCount" aria-live="polite">No set prepared.</p>
       <div class="mix-release" id="mixRelease">
         <div class="mix-release-copy">
           <p class="eyebrow">Finished mix // next move</p>
@@ -1934,12 +1841,6 @@
       recordingDownload: document.querySelector("#recordingDownload"),
       recordingPreview: document.querySelector("#recordingPreview"),
       recordingNote: document.querySelector("#recordingNote"),
-      qcSequence: document.querySelector("#qcSequence"),
-      qcSequenceValue: document.querySelector("#qcSequenceValue"),
-      qcVocals: document.querySelector("#qcVocals"),
-      qcVocalsValue: document.querySelector("#qcVocalsValue"),
-      qcRepeats: document.querySelector("#qcRepeats"),
-      qcRepeatsValue: document.querySelector("#qcRepeatsValue"),
       qcContinuity: document.querySelector("#qcContinuity"),
       qcContinuityValue: document.querySelector("#qcContinuityValue"),
       mixReleaseForm: document.querySelector("#mixReleaseForm"),
@@ -2868,7 +2769,6 @@
       masterGain: null,
       limiter: null,
       recordingDestination: null,
-      recordingFeed: null,
       animationFrame: null,
       decks: {
         A: { input: null, trim: null, gain: null, cueGain: null, cueActive: false, analyser: null, filters: null, effects: null, source: null, stemSources: {}, stemGains: {}, timer: null, step: 0, level: 0, startedAt: 0, playRequestedAt: 0, hasSignal: false, signalConfirmed: false, noSignalReported: false, stems: { bass: true, hats: true, vocals: true } },
@@ -2896,11 +2796,8 @@
       status: null
     };
     const recordingState = {
-      recorder: null,
       starting: false,
-      preflightPassed: false,
-      preparing: null,
-      preparedKey: "",
+      recorder: null,
       chunks: [],
       startedAt: 0,
       elapsedTimer: null,
@@ -2924,9 +2821,11 @@
       mimeType: "",
       failed: false,
       takeoverPlan: [],
+      takeoverTracks: new Map(),
       playedTrackIds: new Set(),
       qualityScore: 0
     };
+    const takeoverBuildState = { promise: null, signature: "", readySignature: "", revision: 0 };
 
     function escapeHTML(value = "") {
       return String(value).replace(/[&<>'"]/g, character => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" })[character]);
@@ -3307,7 +3206,8 @@
       });
       renderTracks(elements.search.value);
       renderTrackPicker(elements.trackPickerSearch.value);
-      prepareTakeoverSet();
+      takeoverBuildState.revision += 1;
+      autoBuildTakeover();
     }
 
     function renderStemVault() {
@@ -3661,7 +3561,6 @@
     }
 
     function startDeckContinuityFiller(detail = {}) {
-      if (recordingState.starting || recordingState.recorder?.state === "recording") return;
       if (!audioEngine.context || !audioEngine.masterGain) return;
       if (!continuityState.fillerGain) {
         continuityState.fillerGain = audioEngine.context.createGain();
@@ -3735,10 +3634,6 @@
 
     function prepareDeckContinuityPreroll(deckId) {
       const state = deckState[deckId];
-      return prepareTrackAudio(state);
-    }
-
-    function prepareTrackAudio(state) {
       if (!audioEngine.context || !state || state.empty) return Promise.resolve(false);
       const pending = [];
       if (state.audioAsset?.file && !state.audioBuffer && !state.audioAsset.buffer && !state.audioAsset.promise) {
@@ -3773,12 +3668,8 @@
           if (asset.promise) pending.push(asset.promise);
         });
       }
-      if (!pending.length) return Promise.resolve(trackAudioReady(state));
-      return Promise.all(pending).then(() => {
-        const buffer = state.audioBuffer || state.audioAsset?.buffer || Object.values(state.stemAssets || {})[0]?.buffer;
-        if (buffer) state.duration = buffer.duration;
-        return trackAudioReady(state);
-      });
+      if (!pending.length) return Promise.resolve(deckContinuityReady(deckId));
+      return Promise.all(pending).then(() => deckContinuityReady(deckId));
     }
 
     function deckContinuityBoundaryState() {
@@ -3846,34 +3737,23 @@
       }).init();
     }
 
-    function recorderGuardInputs() {
-      const activeCueDecks = ["A", "B"].filter(deckId => audioEngine.decks[deckId].cueActive);
-      const isRecording = recordingState.recorder?.state === "recording";
-      const cueBusActive = activeCueDecks.length > 0;
-      return {
-        isRecording,
-        isolationConfirmed: window.HaloRecorderGuard?.isFeedAvailable(audioEngine.recordingFeed) === true
-          && audioEngine.recordingFeed.musicBus === audioEngine.limiter,
-        preflightPassed: recordingState.preflightPassed,
-        cueBusActive,
-        activeCueDecks
-      };
-    }
-
     function attachRecorderGuardToDeck() {
-      if (recorderGuardState.guard || !window.HaloRecorderGuard || !window.useRecorderGuard) return;
-      recorderGuardState.guard = window.useRecorderGuard({
-        readInputs: recorderGuardInputs,
-        onStatusChange: status => {
-          recorderGuardState.status = status;
-          window.HaloRecorderGuard.renderIndicator(elements.recorderGuard, status);
-          if (!status.isSecureToRecord && recordingState.recorder?.state === "recording") {
-            recordingState.failed = true;
-            finishTakeoverRecording("stopped");
-            elements.recordingStatus.textContent = "Recording stopped: recorder isolation is no longer confirmed.";
+      if (recorderGuardState.guard || !window.HaloRecorderGuard || !audioEngine.context?.createMediaStreamDestination) return;
+      try {
+        recorderGuardState.guard = new window.HaloRecorderGuard({
+          context: audioEngine.context,
+          onStatusChange: status => {
+            recorderGuardState.status = status;
+            window.HaloRecorderGuard.renderIndicator(elements.recorderGuard, status);
           }
-        }
-      });
+        });
+      } catch {
+        recorderGuardState.status = { state: "blocked", title: "Recording blocked", message: "Recorder audio probe is unavailable. Live playback remains available." };
+        window.HaloRecorderGuard.renderIndicator(elements.recorderGuard, recorderGuardState.status);
+        return;
+      }
+      ["A", "B"].forEach(deckId => audioEngine.decks[deckId].gain.connect(recorderGuardState.guard.musicBus));
+      audioEngine.recordingDestination = recorderGuardState.guard.destination;
     }
 
     async function ensureAudio() {
@@ -3961,16 +3841,7 @@
       }
       if (audioEngine.context.state !== "running") await audioEngine.context.resume();
       if (audioEngine.context.state !== "running") throw new Error(`Audio engine remained ${audioEngine.context.state}.`);
-      if (!audioEngine.recordingFeed && window.HaloRecorderGuard
-        && typeof audioEngine.context.createMediaStreamDestination === "function") {
-        try {
-          audioEngine.recordingFeed = window.HaloRecorderGuard.createRecordingFeed(audioEngine.context, audioEngine.limiter);
-          audioEngine.recordingDestination = audioEngine.recordingFeed.destination;
-        } catch {
-          // A missing recorder probe must not prevent normal live playback.
-          audioEngine.recordingFeed = null;
-        }
-      }
+      attachRecorderGuardToDeck();
       attachContinuityGuardToDeck();
       reportAudioHealth("ready", "Audio engine is running and checking deck output.");
       return audioEngine.context;
@@ -4013,7 +3884,6 @@
         rackButton.classList.toggle("is-active", active);
         rackButton.setAttribute("aria-pressed", String(active));
       }
-      recorderGuardState.guard?.tick();
     }
 
     function setStemState(deckId, stem, enabled, automated = false) {
@@ -4157,7 +4027,6 @@
         return await startDeckAudioSources(context, deckId, beatOffset);
       } finally {
         halo?.scheduleLiveIntelligenceRestore(Math.max(0, (audioEngine.decks[deckId].stabilizesAt || 0) - context.currentTime));
-        prepareTakeoverSet();
       }
     }
 
@@ -4410,10 +4279,9 @@
         tracks.unshift(...additions);
         elements.search.value = "";
         renderTracks();
-        if (!deckState[selectedImportDeck].playing && !recordingState.starting && recordingState.recorder?.state !== "recording") {
-          loadTrack(selectedImportDeck, additions[0].id);
-        }
-        if (pendingPlaybackDeck === selectedImportDeck) {
+        const canLoadImport = !deckState[selectedImportDeck].playing && !recordingState.starting && recordingState.recorder?.state !== "recording";
+        if (canLoadImport) loadTrack(selectedImportDeck, additions[0].id);
+        if (canLoadImport && pendingPlaybackDeck === selectedImportDeck) {
           deckState[selectedImportDeck].playing = true;
           await startDeckAudio(selectedImportDeck);
           updateDeck(selectedImportDeck);
@@ -4424,6 +4292,8 @@
           showToast("Drive audio indexed", artworkCount ? "Embedded MP3 cover art is loaded. Press play to prepare the audio." : "Press play to prepare only the loaded track.");
         }
         window.haloStats?.track("upload_drive_audio", { file_count: additions.length, deck: selectedImportDeck });
+        takeoverBuildState.revision += 1;
+        await autoBuildTakeover();
       } catch (error) {
         if (pendingPlaybackDeck) {
           deckState[pendingPlaybackDeck].playing = false;
@@ -4438,7 +4308,6 @@
         elements.driveButton.textContent = "Upload from Drive";
         pendingPlaybackDeck = null;
         event.target.value = "";
-        prepareTakeoverSet();
       }
     }
 
@@ -4482,8 +4351,8 @@
         : `${`DECK ${activeId} ${active.playing ? "LIVE" : "READY"} · MASTER TEMPO ${Number(active.bpm).toFixed(1)} BPM`}${continuity ? ` · ${continuity}` : ""}`;
     }
 
-    function loadTrack(deckId, trackId) {
-      const track = tracks.find(item => item.id === trackId);
+    function loadTrack(deckId, trackId, preparedTrack = null) {
+      const track = preparedTrack || tracks.find(item => item.id === trackId);
       if (!track) return;
       audioEngine.halo?.suppressLiveIntelligence();
       stopDeckAudio(deckId);
@@ -4537,7 +4406,8 @@
       recommendLocally();
       showToast("Track deleted", `${removed.title} was removed from this session library. Loaded deck copies remain safe.`);
       window.haloStats?.track("delete_track", { source_type: removed.platform || "library" });
-      prepareTakeoverSet();
+      takeoverBuildState.revision += 1;
+      autoBuildTakeover();
     }
 
     function toggleQueue(trackId) {
@@ -4569,63 +4439,7 @@
     }
 
     function trackHasPlayableAudio(track) {
-      const stems = Object.values(track?.stemAssets || {});
-      return Boolean(track?.audioBuffer || track?.audioAsset?.buffer || track?.audioAsset?.file
-        || (stems.length && stems.every(asset => asset?.buffer || asset?.url)));
-    }
-
-    function trackAudioReady(track) {
-      const validBuffer = buffer => Number.isFinite(buffer?.duration) && buffer.duration > 0 && buffer.length > 0;
-      const stems = Object.values(track?.stemAssets || {});
-      return validBuffer(track?.audioBuffer || track?.audioAsset?.buffer)
-        || Boolean(stems.length && stems.every(asset => validBuffer(asset?.buffer)));
-    }
-
-    function takeoverLibraryKey() {
-      return JSON.stringify([djMode, tracks.filter(trackHasPlayableAudio).map(track => track.id)]);
-    }
-
-    function updateTakeoverRecorderAvailability() {
-      if (!takeoverSession) return;
-      elements.recordingStart.disabled = recordingState.starting || Boolean(recordingState.preparing)
-        || recordingState.recorder?.state === "recording"
-        || recordingState.preparedKey !== takeoverLibraryKey()
-        || recordingState.takeoverPlan.length < 2
-        || !recordingState.takeoverPlan.every(id => trackAudioReady(tracks.find(track => track.id === id)));
-    }
-
-    async function prepareTakeoverSet() {
-      if (!takeoverSession || recordingState.starting || recordingState.recorder?.state === "recording") return;
-      if (recordingState.preparing) return recordingState.preparing;
-      const key = takeoverLibraryKey();
-      if (recordingState.preparedKey === key && recordingState.takeoverPlan.every(id => trackAudioReady(tracks.find(track => track.id === id)))) {
-        updateTakeoverRecorderAvailability();
-        return;
-      }
-      recordingState.preparedKey = "";
-      recordingState.takeoverPlan = [];
-      if (tracks.filter(trackHasPlayableAudio).length < 2) {
-        elements.recordingStatus.textContent = "Add at least two playable songs. DJ takeover builds the whole set automatically after the audio is loaded.";
-        updateTakeoverRecorderAvailability();
-        return;
-      }
-      recordingState.preparing = (async () => {
-        try {
-          await ensureAudio();
-          if (tracks.filter(trackHasPlayableAudio).length > 40) throw new Error("Takeover preflight supports up to 40 playable songs. Reduce the set before recording.");
-          // Decode sequentially, sharing the existing assets without starting or replacing a live deck.
-          for (const track of tracks.filter(trackHasPlayableAudio)) await prepareTrackAudio(track);
-          await buildTakeoverPlan(key);
-          if (key === takeoverLibraryKey()) recordingState.preparedKey = key;
-        } catch (error) {
-          elements.recordingStatus.textContent = error.message || "The takeover set could not be prepared.";
-        }
-      })();
-      updateTakeoverRecorderAvailability();
-      await recordingState.preparing;
-      recordingState.preparing = null;
-      updateTakeoverRecorderAvailability();
-      if (key !== takeoverLibraryKey()) return prepareTakeoverSet();
+      return Boolean(track?.audioBuffer || track?.audioAsset?.file || track?.stemAssets);
     }
 
     function scoreTrack(track, intent) {
@@ -4875,18 +4689,16 @@
     }
 
     function setQcCheck(container, output, status, message) {
+      if (!container || !output) return;
       container.classList.toggle("is-review", status === "review");
       container.classList.toggle("is-blocked", status === "blocked");
       output.textContent = message;
     }
 
-    function updateTakeoverQualityControl({ transition = null, complete = false } = {}) {
+    function updateTakeoverQualityControl({ complete = false } = {}) {
       const planCount = recordingState.takeoverPlan.length;
       const playedCount = recordingState.playedTrackIds.size;
-      setQcCheck(elements.qcSequence, elements.qcSequenceValue, planCount ? "ready" : "review", planCount ? `${planCount} songs locked in DJ order` : "Waiting for build");
-      setQcCheck(elements.qcRepeats, elements.qcRepeatsValue, playedCount > planCount ? "blocked" : "ready", complete ? `${playedCount} unique songs · zero repeats` : `${playedCount} of ${planCount || "—"} used once`);
-      setQcCheck(elements.qcVocals, elements.qcVocalsValue, transition?.vocalCollision ? "review" : "ready", transition?.vocalCollision ? (transition.style === "clean-break" ? "Hard break · second vocal held" : `Stem handoff · reveal after ${transition.vocalRevealBars} bars`) : "Lead vocals stay separated");
-      setQcCheck(elements.qcContinuity, elements.qcContinuityValue, recordingState.qualityScore >= 72 ? "ready" : "review", recordingState.qualityScore ? `${recordingState.qualityScore}% preflight · live watch` : "Preflight required");
+      document.querySelector("#recordingSongCount").textContent = planCount ? `${planCount} songs prepared · ${playedCount} played${complete ? " · finished" : ""}` : "Load at least two playable songs.";
     }
 
     function renderPreflight(report) {
@@ -4902,9 +4714,76 @@
       renderArtistJourneyGuidance();
     }
 
-    async function buildTakeoverPlan(key = takeoverLibraryKey()) {
-      const playableTracks = tracks.filter(trackAudioReady);
-      if (playableTracks.length < 2) throw new Error("Add at least two playable songs. DJ takeover builds the whole set automatically after the audio is loaded.");
+    async function prepareTakeoverAudio(track) {
+      const context = audioEngine.context;
+      const assets = track.audioBuffer ? [] : track.audioAsset?.file ? [track.audioAsset] : Object.values(track.stemAssets || {});
+      for (const asset of assets) {
+        if (!asset.buffer) {
+          if (!asset.promise) {
+            asset.promise = (asset.file ? asset.file.arrayBuffer() : fetch(asset.url, { credentials: "same-origin" }).then(response => {
+              if (!response.ok) throw new Error("Song audio could not be loaded.");
+              return response.arrayBuffer();
+            })).then(data => context.decodeAudioData(data)).then(buffer => {
+              asset.buffer = buffer;
+              return buffer;
+            }).finally(() => { asset.promise = null; });
+          }
+          await asset.promise;
+        }
+      }
+      if (track.audioAsset?.buffer) track.audioBuffer = track.audioAsset.buffer;
+      const buffers = track.audioBuffer ? [track.audioBuffer] : assets.map(asset => asset.buffer);
+      if (!buffers.length || !buffers.every(buffer => Number.isFinite(buffer?.duration) && buffer.duration > 0)) throw new Error("Song has no playable decoded audio.");
+      track.duration = Math.max(...buffers.map(buffer => buffer.duration));
+      return track;
+    }
+
+    function takeoverLibrarySignature() {
+      return `${takeoverBuildState.revision}:${tracks.filter(trackHasPlayableAudio).map(track => track.id).join("|")}`;
+    }
+
+    async function autoBuildTakeover(forStart = false) {
+      if (!takeoverSession || (recordingState.starting && !forStart) || recordingState.recorder?.state === "recording") return false;
+      if (takeoverBuildState.promise) return takeoverBuildState.promise;
+      if (takeoverBuildState.readySignature === takeoverLibrarySignature() && recordingState.takeoverPlan.length >= 2) return true;
+      elements.recordingStart.disabled = true;
+      takeoverBuildState.promise = (async () => {
+        do {
+          takeoverBuildState.signature = takeoverLibrarySignature();
+          recordingState.takeoverPlan = [];
+          takeoverBuildState.readySignature = "";
+          const candidates = tracks.filter(trackHasPlayableAudio);
+          if (candidates.length < 2) throw new Error("Add at least two playable songs. DJ takeover builds the whole set automatically after the audio is loaded.");
+          await ensureAudio();
+          elements.recordingStatus.textContent = "Loading song audio before building the complete set…";
+          const playableTracks = [];
+          // Decode sequentially to avoid a burst of simultaneous large audio allocations.
+          for (const track of candidates) {
+            try { playableTracks.push(await prepareTakeoverAudio(track)); } catch {}
+          }
+          if (takeoverBuildState.signature !== takeoverLibrarySignature()) continue;
+          await buildTakeoverPlan(playableTracks);
+        } while (takeoverBuildState.signature !== takeoverLibrarySignature());
+        takeoverBuildState.readySignature = takeoverBuildState.signature;
+        elements.recordingRig.className = "recording-rig panel is-ready";
+        elements.recordingStatus.textContent = `${recordingState.takeoverPlan.length} playable songs prepared. Start runs a quiet-feed isolation check before recording.`;
+        return true;
+      })().catch(error => {
+        recordingState.takeoverPlan = [];
+        takeoverBuildState.readySignature = "";
+        elements.recordingStatus.textContent = error.message || "The set could not be prepared.";
+        updateTakeoverQualityControl();
+        return false;
+      }).finally(() => {
+        takeoverBuildState.promise = null;
+        elements.recordingStart.disabled = recordingState.starting;
+      });
+      return takeoverBuildState.promise;
+    }
+
+    async function buildTakeoverPlan(playableTracks) {
+      const playableIds = new Set(playableTracks.map(track => track.id));
+      if (playableIds.size < 2) throw new Error("Add at least two playable songs. DJ takeover builds the whole set automatically after the audio is loaded.");
       elements.recordingStatus.textContent = `${takeoverSession.name} is choosing the complete song order and rehearsing every handoff…`;
       elements.recordingNote.textContent = "Quality control is checking repeats, vocal collisions, tempo, key, bass, and arrangement density.";
       const response = await fetch("/api/set-preflight", {
@@ -4921,17 +4800,16 @@
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data.message || "The takeover set could not be built.");
-      if (key !== takeoverLibraryKey()) return;
-      const order = data.report?.orderedTracks?.map(track => track.id);
-      const expected = new Set(playableTracks.map(track => track.id));
-      if (!order || order.length !== expected.size || new Set(order).size !== expected.size
-        || order.some(id => !expected.has(id))) throw new Error("The takeover preflight did not return the complete playable set.");
+      const ordered = data.report?.orderedTracks;
+      if (!Array.isArray(ordered) || ordered.length !== playableIds.size || new Set(ordered.map(track => track?.id)).size !== playableIds.size || !ordered.every(track => playableIds.has(track?.id)) || !Array.isArray(data.report.transitions) || !["ready", "draft", "blocked"].includes(data.report.status)) {
+        throw new Error("The takeover must include every playable song exactly once.");
+      }
       latestPreflightId = data.preflightId || null;
       latestPreflightReport = data.report;
       renderPreflight(data.report);
       if (data.report.status === "blocked") throw new Error(`Quality control stopped the takeover: ${data.report.summary}`);
 
-      recordingState.takeoverPlan = order;
+      recordingState.takeoverPlan = data.report.orderedTracks.map(track => track.id);
       recordingState.playedTrackIds = new Set();
       recordingState.qualityScore = Number(data.report.qualityScore) || 0;
       recordingState.trackCursor = 2;
@@ -4939,7 +4817,6 @@
       renderTracks(elements.search.value);
       renderQueue();
       updateTakeoverQualityControl();
-      elements.recordingStatus.textContent = `${order.length} playable songs prepared. Quiet-feed isolation will be checked before recording.`;
       window.haloStats?.track("build_dj_takeover", { dj: takeoverSession.dj, tracks: recordingState.takeoverPlan.length, quality_score: recordingState.qualityScore });
     }
 
@@ -5546,7 +5423,7 @@
       while (recordingState.trackCursor < recordingState.takeoverPlan.length) {
         const trackId = recordingState.takeoverPlan[recordingState.trackCursor];
         recordingState.trackCursor += 1;
-        const track = tracks.find(item => item.id === trackId);
+        const track = recordingState.takeoverTracks.get(trackId) || tracks.find(item => item.id === trackId);
         if (track && trackHasPlayableAudio(track) && !loadedIds.has(track.id) && !recordingState.playedTrackIds.has(track.id)) return track;
       }
       return null;
@@ -5554,7 +5431,7 @@
 
     async function prepareAutomatedDeck(deckId, track = nextTakeoverTrack()) {
       if (!track) return false;
-      loadTrack(deckId, track.id);
+      loadTrack(deckId, track.id, track);
       restoreDeckStems(deckId);
       const activeState = deckState[recordingState.activeDeck];
       const state = deckState[deckId];
@@ -5784,33 +5661,34 @@
 
     async function startTakeoverRecording() {
       if (!takeoverSession || recordingState.starting || recordingState.recorder?.state === "recording") return;
-      await prepareTakeoverSet();
-      if (recordingState.starting || recordingState.recorder?.state === "recording") return;
-      if (recordingState.preparedKey !== takeoverLibraryKey() || recordingState.takeoverPlan.length < 2) return;
       recordingState.starting = true;
-      recordingState.preflightPassed = false;
       elements.recordingStart.disabled = true;
-      elements.recordingStatus.textContent = "Checking the quiet recorder feed before opening the music channel…";
+      elements.recordingStatus.textContent = "Building the complete DJ sequence before opening the master channel…";
+      let recordingStarted = false;
 
       try {
         await ensureAudio();
-        if (!window.MediaRecorder || !audioEngine.recordingDestination) throw new Error("This browser cannot record the live master mix.");
-        const isMusicIdle = () => !deckState.A.playing && !deckState.B.playing
-          && !audioEngine.decks.A.source && !audioEngine.decks.B.source
-          && !Object.keys(audioEngine.decks.A.stemSources).length && !Object.keys(audioEngine.decks.B.stemSources).length
-          && !continuityState.fillerNodes.length;
-        await window.HaloRecorderGuard.preflight(audioEngine.recordingFeed, { isMusicIdle });
-        if (!isMusicIdle() || recordingState.preparedKey !== takeoverLibraryKey()) throw new Error("The set changed during recorder isolation preflight. Try again.");
-        loadTrack("A", recordingState.takeoverPlan[0]);
-        loadTrack("B", recordingState.takeoverPlan[1]);
+        if (!await autoBuildTakeover(true)) throw new Error(elements.recordingStatus.textContent);
+        if (!window.MediaRecorder || !recorderGuardState.guard) throw new Error("This browser cannot record the isolated music bus.");
+        if (deckState.A.playing || deckState.B.playing) throw new Error("Stop both decks before the quiet-feed isolation check.");
+        const preparedSignature = takeoverBuildState.readySignature;
+        recordingState.takeoverTracks = new Map(recordingState.takeoverPlan.map(id => [id, tracks.find(track => track.id === id)]));
+        loadTrack("A", recordingState.takeoverPlan[0], recordingState.takeoverTracks.get(recordingState.takeoverPlan[0]));
+        loadTrack("B", recordingState.takeoverPlan[1], recordingState.takeoverTracks.get(recordingState.takeoverPlan[1]));
+        await Promise.all(["A", "B"].map(prepareDeckContinuityPreroll));
         const missingDecks = ["A", "B"].filter(deckId => !trackHasPlayableAudio(deckState[deckId]));
         if (missingDecks.length) throw new Error(`Load playable audio on Deck ${missingDecks.join(" and Deck ")} before starting the automated set.`);
-        recordingState.preflightPassed = true;
-        recorderGuardState.guard?.tick();
 
-        const recorder = createCompatibleRecorder(audioEngine.recordingDestination.stream);
+        const recorder = await recorderGuardState.guard.start(stream => {
+          if (preparedSignature !== takeoverLibrarySignature()) throw new Error("Song library changed during isolation preflight. Start again to prepare the updated set.");
+          if (deckState.A.id !== recordingState.takeoverPlan[0] || deckState.B.id !== recordingState.takeoverPlan[1]) {
+            throw new Error("Prepared decks changed during isolation preflight. Start again to restore the complete set.");
+          }
+          return createCompatibleRecorder(stream);
+        }, () => !deckState.A.playing && !deckState.B.playing);
         recordingState.mimeType = recorder.mimeType || "";
         recordingState.recorder = recorder;
+        recordingStarted = true;
         recordingState.chunks = [];
         recordingState.failed = false;
 
@@ -5819,17 +5697,16 @@
         });
         recorder.addEventListener("error", event => {
           recordingState.failed = true;
+          recorderGuardState.guard.publish("blocked", "Recording stopped", event.error?.message || "The browser stopped recording unexpectedly.");
           clearInterval(recordingState.elapsedTimer);
           stopAutomatedMix();
           stopTakeoverDecks();
           elements.recordingRig.className = "recording-rig panel is-error";
           elements.recordingStatus.textContent = event.error?.message || "The browser stopped the recording unexpectedly.";
-          updateTakeoverRecorderAvailability();
+          elements.recordingStart.disabled = false;
         });
         recorder.addEventListener("stop", () => {
-          recordingState.preflightPassed = false;
-          recorderGuardState.guard?.tick();
-          prepareTakeoverSet();
+          if (!recordingState.failed) recorderGuardState.guard.publish("idle", "Quiet-feed preflight required", "The finished file is available. A new quiet-feed check is required before another recording.");
           if (recordingState.failed) {
             recordingState.chunks = [];
             return;
@@ -5842,7 +5719,7 @@
             elements.recordingRig.className = "recording-rig panel is-error";
             elements.recordingStatus.textContent = "The browser finished without producing an audio file.";
             elements.recordingNote.textContent = "Try the recording again in a current version of Chrome, Edge, Firefox, or Safari.";
-            updateTakeoverRecorderAvailability();
+            elements.recordingStart.disabled = false;
             return;
           }
           recordingState.blob = blob;
@@ -5866,7 +5743,7 @@
           elements.postMix.disabled = false;
           elements.playlistMix.disabled = true;
           elements.playlistMix.textContent = "Add to playlist";
-          updateTakeoverRecorderAvailability();
+          elements.recordingStart.disabled = false;
           window.haloStats?.track("complete_dj_takeover_recording", { dj: takeoverSession.dj, minutes: takeoverSession.minutes, recorded_seconds: Math.round(actualSeconds) });
           requestAnimationFrame(() => {
             elements.recordingDownload.click();
@@ -5874,7 +5751,6 @@
           });
         }, { once: true });
 
-        recorder.start(1000);
         recordingState.startedAt = Date.now();
         syncDecks();
         deckState.A.playing = true;
@@ -5888,9 +5764,18 @@
 
         elements.recordingRig.className = "recording-rig panel is-recording";
         elements.recordingStatus.textContent = `${takeoverSession.name} is live. The preflight order, vocal lock, no-repeat guard, transitions, and recording are automatic.`;
-        elements.recordingNote.textContent = "Keep this tab open. Quality control watches every handoff and the finished file downloads automatically.";
+        elements.recordingNote.textContent = "Keep this tab open. Only deck music is captured; the finished file downloads automatically.";
         updateRecordingProgress(0);
         recordingState.elapsedTimer = setInterval(() => {
+          if (!window.HaloRecorderGuard.isFeedAvailable(recorderGuardState.guard.feed)) {
+            recordingState.failed = true;
+            finishTakeoverRecording("stopped");
+            recorderGuardState.guard.publish("blocked", "Recording stopped", "Recorder audio feed is unavailable.");
+            elements.recordingRig.className = "recording-rig panel is-error";
+            elements.recordingStatus.textContent = "Recording stopped: recorder audio feed is unavailable.";
+            elements.recordingStart.disabled = false;
+            return;
+          }
           const elapsedSeconds = (Date.now() - recordingState.startedAt) / 1000;
           updateRecordingProgress(elapsedSeconds);
           if (elapsedSeconds >= takeoverSession.minutes * 60) finishTakeoverRecording("complete");
@@ -5898,24 +5783,21 @@
         showToast("Recording started", `${takeoverSession.name}'s ${takeoverSession.minutes}-minute set is live and mixing now.`);
         window.haloStats?.track("start_dj_takeover_recording", { dj: takeoverSession.dj, minutes: takeoverSession.minutes });
       } catch (error) {
-        const ownedPlayback = recordingState.recorder?.state === "recording";
         recordingState.failed = true;
-        if (recordingState.recorder && recordingState.recorder.state !== "inactive") recordingState.recorder.stop();
-        clearInterval(recordingState.elapsedTimer);
-        recordingState.elapsedTimer = null;
-        if (ownedPlayback) {
+        if (recordingStarted) {
+          if (recordingState.recorder.state !== "inactive") recordingState.recorder.stop();
+          clearInterval(recordingState.elapsedTimer);
+          recordingState.elapsedTimer = null;
           stopAutomatedMix();
           stopTakeoverDecks();
         }
-        recordingState.preflightPassed = false;
-        recorderGuardState.guard?.tick();
         elements.recordingRig.className = "recording-rig panel is-error";
         elements.recordingStatus.textContent = error.message || "The recording could not start.";
         elements.recordingNote.textContent = "Try a current version of Chrome, Edge, Firefox, or Safari.";
         showToast("Recording unavailable", error.message || "The browser could not open the master recorder.");
+        elements.recordingStart.disabled = false;
       } finally {
         recordingState.starting = false;
-        updateTakeoverRecorderAvailability();
       }
     }
 
@@ -6116,15 +5998,14 @@
       document.querySelector("#tracksPlayed").textContent = "0";
       elements.recordingRig.classList.add("is-ready");
       elements.preflightPersona.value = takeoverSession.dj;
-      elements.recordingStatus.textContent = "Add at least two playable songs. DJ takeover builds the whole set automatically after the audio is loaded.";
+      elements.recordingStatus.textContent = `${takeoverSession.name} is selected. Load at least two playable songs to build the complete set automatically.`;
       elements.recordingDj.textContent = `${takeoverSession.name} · ${takeoverSession.minutes}-minute set`;
-      elements.recordingStart.textContent = `Record ${takeoverSession.name} takeover`;
-      elements.recordingNote.textContent = "The set prepares silently after audio loads. Recording requires a quiet-feed isolation preflight; stop live decks before starting.";
+      elements.recordingStart.textContent = `Check feed + record ${takeoverSession.name}`;
+      elements.recordingNote.textContent = "Audio load builds the set without starting playback. Recording requires a new quiet-feed check every time.";
       updateTakeoverQualityControl();
       updateRecordingProgress(0);
       showToast("Takeover loaded", `${takeoverSession.name} is ready to build, mix, save, and record your ${takeoverSession.minutes}-minute session.`);
       window.haloStats?.track("load_dj_takeover", { dj: takeoverSession.dj, minutes: takeoverSession.minutes });
-      prepareTakeoverSet();
     }
 
     elements.search.addEventListener("input", event => renderTracks(event.target.value));
@@ -6363,10 +6244,7 @@
     elements.mixIntent.addEventListener("change", recommendLocally);
     elements.analyzeSet.addEventListener("click", analyzeSet);
     elements.runPreflight.addEventListener("click", runSetPreflight);
-    document.querySelectorAll("[data-halo-mode]").forEach(button => button.addEventListener("click", () => {
-      setDjMode(button.dataset.haloMode);
-      prepareTakeoverSet();
-    }));
+    document.querySelectorAll("[data-halo-mode]").forEach(button => button.addEventListener("click", () => setDjMode(button.dataset.haloMode)));
     elements.energyCurve.addEventListener("change", () => { renderEnergyArchitecture(); recommendLocally(); saveDjIntelligenceSession(); });
     elements.setPhase.addEventListener("change", () => { recommendLocally(); saveDjIntelligenceSession(); });
     document.querySelectorAll("[data-audience-signal]").forEach(button => button.addEventListener("click", () => recordAudienceSignal(button.dataset.audienceSignal)));
@@ -6460,74 +6338,5 @@
     }, 3200);
   </script>
   <script type="module" src="/mix-flightplan.js"></script>
-  <script>
-    (function initDeckReviewPanel() {
-      const panel = document.getElementById("drpBody");
-      const readyValue = document.getElementById("drpReadyValue");
-      const readyBar = document.getElementById("drpReadyBar");
-      if (!panel) return;
-
-      const STATUS_CLASS = { approved: "is-approved", ready: "is-ready", needs_context: "is-rights", in_review: "is-rights", revise: "is-revise", hold: "is-hold", queued: "" };
-      const STATUS_LABEL = { approved: "Approved", ready: "Ready", needs_context: "Needs context", in_review: "In review", revise: "Revise", hold: "Hold", queued: "Queued" };
-      const MASTERING_CHIP = { mastered: ["is-mastered", "Mastered"], approved: ["is-mastered", "Master approved"], mastering_booked: ["is-rights", "Mastering booked"], mix_review: ["is-rights", "Mix review"] };
-
-      function esc(str) { const n = document.createElement("span"); n.textContent = str || ""; return n.innerHTML; }
-
-      function renderPanel(plan, cycle) {
-        const score = cycle && cycle.overallScore != null ? Math.round(Number(cycle.overallScore)) : null;
-        const status = cycle ? cycle.status : null;
-        const summary = cycle && cycle.finalSummary ? cycle.finalSummary : null;
-        const masterStatus = plan ? plan.masteringStatus : null;
-        const rightsConfirmed = plan ? plan.rightsConfirmed : false;
-        const saleReady = plan ? plan.saleReady : false;
-        const readiness = [plan && plan.demandBrief && plan.demandBrief.theme, plan && ["mastered","approved"].includes(masterStatus), plan && plan.metadata && plan.metadata.djName && plan.metadata.price, rightsConfirmed, plan && plan.metadata && plan.metadata.campaignHook].filter(Boolean).length;
-        const readyPct = readiness * 20;
-
-        readyValue.textContent = `${readiness} / 5`;
-        readyBar.style.setProperty("--drp-ready", `${readyPct}%`);
-
-        const chips = [];
-        if (masterStatus && MASTERING_CHIP[masterStatus]) {
-          const [cls, label] = MASTERING_CHIP[masterStatus];
-          chips.push(`<span class="drp-chip ${esc(cls)}">${esc(label)}</span>`);
-        }
-        if (rightsConfirmed) chips.push(`<span class="drp-chip is-ready">Rights confirmed</span>`);
-        if (saleReady) chips.push(`<span class="drp-chip is-approved">Sale ready</span>`);
-        if (status && STATUS_LABEL[status]) {
-          chips.push(`<span class="drp-chip ${esc(STATUS_CLASS[status] || "")}">${esc(STATUS_LABEL[status])}</span>`);
-        }
-
-        let nextHint = "Follow the flightplan steps to improve this mix and unlock release readiness.";
-        if (status === "approved") nextHint = "Mix is approved. Confirm sale readiness in the flightplan before publishing.";
-        else if (status === "revise") nextHint = "Reviewer requested revision. Read the final summary and address the noted areas.";
-        else if (status === "hold") nextHint = "Mix is on hold for context. Add creative intent and protected moments to unblock review.";
-        else if (!masterStatus || masterStatus === "not_started") nextHint = "Start with mastering — send the final sequence and confirm loudness targets in the flightplan.";
-        else if (!["mastered","approved"].includes(masterStatus)) nextHint = "Mastering is in progress. Confirm it reaches the target LUFS before advancing to release pack.";
-        else if (!rightsConfirmed) nextHint = "Confirm rights and clearances in the flightplan to open the sale gate.";
-        else if (saleReady) nextHint = "All checks passed. Open the flightplan to request a final sale review.";
-
-        panel.innerHTML = `
-          <div class="drp-score-col">
-            <div class="drp-score-ring" style="--drp-score:${score || 0}">
-              <strong>${score !== null ? score : "—"}</strong>
-            </div>
-            <span>Quality<br>score</span>
-          </div>
-          <div class="drp-detail">
-            <div class="drp-chips">${chips.length ? chips.join("") : '<span class="drp-chip">No status yet</span>'}</div>
-            ${summary ? `<p class="drp-summary">${esc(summary)}</p>` : ""}
-            <div class="drp-next"><b>Next improvement</b><p>${esc(nextHint)}</p></div>
-          </div>`;
-      }
-
-      fetch("/api/mix-flightplan", { credentials: "same-origin" })
-        .then(function(r) { return r.ok ? r.json() : null; })
-        .then(function(data) {
-          if (!data) return;
-          renderPanel(data.plan, data.latestCycle || null);
-        })
-        .catch(function() {});
-    }());
-  </script>
 </body>
 </html>

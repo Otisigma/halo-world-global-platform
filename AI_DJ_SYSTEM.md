@@ -54,6 +54,14 @@ The recommendation must answer four questions: why this track, why now, why this
 
 ## Persistent intelligence
 
+### Upload memory and silent preparation
+
+Drive/folder batches index one file at a time and yield every eight files. Embedded cover tags are limited to 2 MiB per file, with a 16 MiB data-URL budget per batch; oversized artwork uses the existing fallback cover without rejecting the audio.
+
+`dj-live-intelligence.js` shares one pending decode per uploaded asset and serializes file reads/decodes across the decks. Only audio loaded on A/B retains decoded buffers. Replacing or ejecting a deck releases its old buffer, and superseded queued/in-flight loads cannot restore it. The two loaded tracks remain pinned even when a new batch arrives or a library entry is deleted, protecting live playback/recording. This bounds retained decoded uploads by the two loaded tracks, not a fixed byte limit: long tracks can still be large. Library file handles and metadata remain available for manual reload; private stem decoding is unchanged.
+
+After an upload, HALO recommendations and **Prepare next deck** use only that batch. Before the first upload, existing library recommendations remain available. Silent preparation uses the normal load/pre-roll path without toasts, new guide speech, playback starts, or live-input suppression. It refuses a playing destination deck and does not change master, CUE, or recorder routing. Manual loading and takeover sequencing remain operator-controlled and are not restricted by batch authorization.
+
 Netlify Database stores four linked layers of learning:
 
 - Track profiles keep confidence-aware DJ DNA without treating subjective analysis as unquestionable fact.

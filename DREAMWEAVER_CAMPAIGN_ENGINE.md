@@ -46,6 +46,20 @@ Gemma operated as a grounded campaign editor and campaign-team coordinator throu
 
 ## Current boundaries
 
+### Song Catalog release conveyor
+
+Song uploads and catalog saves now feed an eight-department conveyor through the existing Dreamweaver song review: intake, audio preflight, metadata/rights, Council, Dreamweaver lyrics, release documents, promotion, and distribution handoff. The catalog song ID remains the release ID and the existing `sale_master` remains the canonical master. In Song Catalog, **Run / retry conveyor** and **Refresh receipt** expose stage outcomes and actionable issues.
+
+Apply `netlify/database/migrations/20261008223000_release_conveyor.sql` before deploying the functions. The migration adds leased run/checkpoint storage and append-only decision events. `/api/release-conveyor` accepts an authenticated, same-origin POST with `{ "action": "process_submission", "songId": "CATALOG_UUID", "humHz": 0 }`; GET with `songId` returns the current receipt and recent audit events. Concurrent attempts return a processing response; expired leases can be reclaimed. Completed stages are reused only for unchanged input, and changed songs invalidate downloads until regenerated.
+
+Stored mono/stereo 16/24/32-bit PCM WAV files up to 128 MB receive a separate downloadable conditioned copy: a 5 ms fade and conservative RMS/sample-peak gain. Optional 50/60 Hz notch filtering requires a creator-confirmed hum selection. Original files are never overwritten. This is not integrated LUFS or true-peak certification or professional mastering: sale and dedicated radio masters still require explicit mastering approval. Approved non-WAV, oversized or link-only masters pass through unchanged when no hum filtering is requested; unsupported stored WAV or inaccessible sources produce review issues rather than fabricated audio reports.
+
+Rights must be explicitly cleared and a valid assigned ISRC must be present. HALO never fabricates ISRCs or clears disputed rights. Council returns pass, repair, block, or escalate; only safe presentation/audio-copy repairs are automatic. Lyric packaging uses the shared Dreamweaver parser, including timed lyrics, the lyric-book fallback and Oracle insights. DJ set-depth/tempo-transition checks remain in DJ preflight rather than being invented for a single recording.
+
+Ready outputs include a JSON manifest/receipt, text release documents and rights/publication checklists, text press/social copy, artwork references, and the conditioned WAV when supported. Downloads are private to the song owner. Promotional text remains a draft for creator review. The handoff prepares the package for existing HALO publication controls; it does not change publication state or claim submission to Spotify, Apple Music or an external distributor. Continue using the existing publication/reconciliation workflow after reviewing the package.
+
+Validate with `npm run test:release-conveyor`, then `npm test` and `npm run build`. No new dependency or distributor credentials are required.
+
 Direct posting to social accounts was not enabled because TikTok, Meta, and YouTube each require separate developer applications, permissions, OAuth connections, token handling, account eligibility, and platform review. The interface therefore delivered honest package and assisted-publishing behavior rather than displaying a non-functional publish button. The API and campaign records were structured so connected publishing could be added platform by platform after those approvals were configured.
 
 External social metrics were not yet imported. The first release measured HALO-owned signals and publication readiness. A campaign score therefore described the evidence HALO could verify—landing visits, show starts, listening depth, and completion—not unverified TikTok, Instagram, or YouTube numbers.

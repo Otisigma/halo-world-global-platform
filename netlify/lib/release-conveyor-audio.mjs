@@ -62,6 +62,14 @@ export async function prepareReleaseAudio(song, versions, inputHash, options) {
     if (options.humHz) report.issues.push(audioIssue("Notch filtering requires a stored PCM WAV; export a compatible WAV."));
     return report;
   }
+  if (approved && !options.humHz && (
+    Number(master.audio_byte_size) > MAX_PREFLIGHT_BYTES
+    || (!master.audio_storage_key && !master.audio_blob_prefix)
+  )) {
+    report.summary = "Approved external WAV master preserved; automatic conditioning is unavailable for this source.";
+    report.conditioning = "external_master";
+    return report;
+  }
   const source = await readSource(song, master);
   if (!source) {
     report.issues.push(audioIssue("Automatic conditioning requires an owned PCM WAV upload within 128 MB; link-only or larger masters need an external mastering review."));

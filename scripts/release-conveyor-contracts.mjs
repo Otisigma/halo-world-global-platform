@@ -4,6 +4,7 @@ import { RELEASE_STAGES, runReleaseConveyor, validateRelease, councilDecision, r
 import { conditionReleaseWav } from "../netlify/lib/release-audio.mjs";
 import { createReleaseConveyorHandler } from "../netlify/lib/release-conveyor-http.mjs";
 import { prepareReleaseAudio } from "../netlify/lib/release-conveyor-audio.mjs";
+import { createReleaseConveyorConsole } from "../lib/release-conveyor-ui.js";
 
 const song = { id: "12345678-1234-4123-8123-123456789012", owner_member_id: "creator",
   title: "A Signal", artist_name: "Artist", genre: "Soul", isrc: "GB-AAA-26-00001",
@@ -120,6 +121,54 @@ const missingAudio = await prepareReleaseAudio(song, [], "revision", { humHz: 0 
 assert(missingAudio.issues.some(item => /Upload the canonical/.test(item.message)));
 const unsupportedHum = await prepareReleaseAudio(song, versions, "revision", { humHz: 60 });
 assert(unsupportedHum.issues.some(item => /requires a stored PCM WAV/.test(item.message)));
+for (const source of [{ audio_byte_size: 150 * 1024 * 1024, audio_storage_key: "stored-master" }, { audio_byte_size: 0 }]) {
+  const externalWavVersions = versions.map(version => ({ ...version, audio_content_type: "audio/wav", ...source }));
+  const externalWav = await prepareReleaseAudio(song, externalWavVersions, "revision", { humHz: 0 });
+  assert.equal(externalWav.conditioning, "external_master", "approved large/link-only WAVs can complete without automatic conditioning");
+  assert.deepEqual(externalWav.issues, []);
+  const needsFilter = await prepareReleaseAudio(song, externalWavVersions, "revision", { humHz: 50 });
+  assert(needsFilter.issues.length > 0, "an unsatisfied filter request must still escalate");
+}
+
+class ConsoleElement extends EventTarget {
+  constructor() { super(); this.children = []; this.value = "0"; this.hidden = false; this.disabled = false; this.textContent = ""; }
+  replaceChildren() { this.children = []; }
+  append(item) { this.children.push(item); }
+  setAttribute() {}
+}
+const consoleNodes = new Map();
+const consoleRoot = new ConsoleElement();
+consoleRoot.querySelector = selector => {
+  if (!consoleNodes.has(selector)) consoleNodes.set(selector, new ConsoleElement());
+  return consoleNodes.get(selector);
+};
+let resolveConsoleRequest;
+const consoleFetch = () => new Promise(resolve => { resolveConsoleRequest = resolve; });
+const controller = createReleaseConveyorConsole({ root: consoleRoot, doc: { createElement: () => new ConsoleElement() }, fetcher: consoleFetch });
+const consoleNode = key => consoleNodes.get(`[data-conveyor-${key}]`);
+const settle = () => new Promise(resolve => setTimeout(resolve, 0));
+controller.select(song.id);
+assert.equal(consoleNode("hum").disabled, true, "filter selection is disabled during a request");
+resolveConsoleRequest({ ok: true, json: async () => ({ ...success, options: { humHz: 0 } }) });
+await settle();
+assert.equal(consoleNode("hum").disabled, false);
+assert.equal(consoleNode("package").hidden, false);
+consoleNode("run").dispatchEvent(new Event("click"));
+assert.equal(consoleNode("hum").disabled, true);
+// Even a programmatic change cannot leave options mismatched with a returned package.
+consoleNode("hum").value = "50";
+resolveConsoleRequest({ ok: true, json: async () => ({ ...success, options: { humHz: 0 } }) });
+await settle();
+assert.equal(consoleNode("hum").value, "0");
+consoleNode("hum").value = "50";
+consoleNode("hum").dispatchEvent(new Event("change"));
+assert.equal(consoleNode("package").hidden, true);
+assert.equal(consoleNode("audio").hidden, true);
+consoleNode("refresh").dispatchEvent(new Event("click"));
+resolveConsoleRequest({ ok: false, json: async () => ({ message: "Connection interrupted." }) });
+await settle();
+assert.equal(consoleNode("package").hidden, true);
+assert.equal(consoleNode("documents").hidden, true);
 
 // Execute the real HTTP/service/storage paths against a tagged-SQL test double.
 let stored = null, events = [], currentSong = structuredClone(song), currentVersions = structuredClone(versions);
@@ -200,6 +249,13 @@ const packageResponse = await handler(request("GET", null, "&artifact=package"))
 assert.equal(packageResponse.status, 200);
 assert.match(packageResponse.headers.get("content-disposition"), /release-package.json/);
 assert.equal((await packageResponse.json()).documents.releaseId, song.id);
+const docsResponse = await handler(request("GET", null, "&artifact=documents"));
+assert.equal(docsResponse.status, 200);
+assert.match(await docsResponse.text(), /RIGHTS CHECKLIST[\s\S]*LYRICS \/ ORACLE INSIGHTS/);
+const promoResponse = await handler(request("GET", null, "&artifact=promotion"));
+assert.equal(promoResponse.status, 200);
+assert.match(await promoResponse.text(), /PRESS WRITEUP[\s\S]*SOCIAL COPY/);
+assert.equal(promoResponse.headers.get("x-content-type-options"), "nosniff");
 assert((await (await handler(request())).json()).events.length > 0);
 currentSong.rights_status = "disputed";
 const staleApi = await (await handler(request())).json();
@@ -237,7 +293,7 @@ const [catalog, html, ui, endpoint] = await Promise.all([
   read("lib/release-conveyor-ui.js"), read("netlify/functions/release-conveyor.mjs"),
 ]);
 assert.match(catalog, /await processCatalogRelease\(await getDatabase\(\), ownerMemberId, songId, prepareReleaseAudio\)/);
-for (const action of ["run", "status", "stages", "issues", "package", "audio", "hum"]) assert(html.includes(`data-conveyor-${action}`));
+for (const action of ["run", "status", "stages", "issues", "package", "documents", "promotion", "audio", "hum"]) assert(html.includes(`data-conveyor-${action}`));
 assert.match(ui, /item\.textContent/);
 assert.doesNotMatch(ui, /\.innerHTML\s*=/);
 assert.match(endpoint, /path: "\/api\/release-conveyor"/);

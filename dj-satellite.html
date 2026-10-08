@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>HALO DJ Satellite — Audio Lab</title>
+  <link rel="stylesheet" href="/dj-satellite/player.css">
+  <script src="/dj-recorder-guard.js" defer></script>
+  <script type="module" src="/dj-satellite/player.js"></script>
+</head>
+<body>
+  <main>
+    <header>
+      <p class="eyebrow">HALO / ISOLATED AUDIO LAB</p>
+      <h1>DJ Satellite</h1>
+      <p>A local-only, two-deck experiment. No main-deck automation, synthesis, microphone, uploads, or cloud services.</p>
+      <a href="/dj-deck.html">Return to the main deck</a>
+    </header>
+    <section aria-labelledby="instructions">
+      <h2 id="instructions">Start quiet. Change one thing at a time.</h2>
+      <p>Load audio you have permission to use. Stop both music decks, enable CUE, then run the quiet-feed check. Compare music, CUE, and recorder meters; record playback or a two-song takeover and listen to the downloaded file separately.</p>
+      <p><strong>CUE is monitor-only, but shares your device output with music.</strong> This prototype does not provide a separate headphone device. Hearing CUE locally is not proof of recorder leakage. Quiet-feed checks cannot detect noise already inside a song or an external hardware fault.</p>
+      <button id="enable" type="button">Enable audio</button>
+      <p id="status" role="status" aria-live="polite">Audio is off. Nothing starts automatically.</p>
+    </section>
+    <div class="decks">
+      <section aria-labelledby="deck-a">
+        <h2 id="deck-a">Deck A</h2>
+        <label>Local audio A <input id="file-a" type="file" accept="audio/*"></label>
+        <p id="track-a">No song loaded</p>
+        <button id="play-a" data-deck-play="a" type="button" disabled>Play A from start</button>
+        <button id="stop-a" data-deck-stop="a" type="button" disabled>Stop A</button>
+        <label><input id="cue-a" type="checkbox" disabled> CUE A from start</label>
+      </section>
+      <section aria-labelledby="deck-b">
+        <h2 id="deck-b">Deck B</h2>
+        <label>Local audio B <input id="file-b" type="file" accept="audio/*"></label>
+        <p id="track-b">No song loaded</p>
+        <button id="play-b" data-deck-play="b" type="button" disabled>Play B from start</button>
+        <button id="stop-b" data-deck-stop="b" type="button" disabled>Stop B</button>
+        <label><input id="cue-b" type="checkbox" disabled> CUE B from start</label>
+      </section>
+    </div>
+    <section aria-labelledby="mixer">
+      <h2 id="mixer">Minimal mixer</h2>
+      <label>A ← Crossfader → B <input id="crossfader" type="range" min="0" max="1" step="0.01" value="0.5"></label>
+      <label>Music monitor volume (not recorded) <input id="monitor" type="range" min="0" max="1" step="0.01" value="0.5"></label>
+      <label>CUE volume (not recorded) <input id="cue-volume" type="range" min="0" max="0.5" step="0.01" value="0.15"></label>
+      <button id="stop-all" type="button">Stop all / cancel</button>
+    </section>
+    <section aria-labelledby="recorder">
+      <h2 id="recorder">Isolated recorder</h2>
+      <p>Music → compressor/limiter → recorder. CUE → device only. Recording always requires a fresh quiet-feed preflight with music stopped. Two-song takeover plays A then B, once each, on the audio clock; it is a sequencing test, not an AI mix.</p>
+      <button id="check" type="button" disabled>Check quiet feed with CUE</button>
+      <button id="record" type="button" disabled>Record manual playback</button>
+      <button id="takeover" type="button" disabled>Record two-song takeover</button>
+      <button id="finish" type="button" disabled>Finish recording</button>
+      <a id="download" hidden>Download recording</a>
+      <p>Files stay in this browser session. Maximum 50 MiB and 10 minutes per song, two channels; recordings stop after 20 minutes or 100 MiB. Reloading clears the session.</p>
+    </section>
+    <section aria-labelledby="diagnostics">
+      <h2 id="diagnostics">Signal diagnostics</h2>
+      <p>Peak / RMS / DC are measured in dBFS. −∞ means digital silence, not a guarantee about speakers or source quality. The recorder probe is analysis-only.</p>
+      <pre id="meters" aria-label="Live signal meters">Enable audio to inspect the graph.</pre>
+      <button id="export" type="button">Download diagnostic JSON</button>
+      <pre id="events" aria-label="Recent audio events"></pre>
+    </section>
+  </main>
+</body>
+</html>

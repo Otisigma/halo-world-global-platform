@@ -62,6 +62,12 @@ const deduplicatedReport = analyzeSetPreflight({
 });
 assert.deepEqual(deduplicatedReport.orderedTracks.map(track => track.id).sort(), ["next", "same"]);
 
+const fullLibrary = Array.from({ length: 41 }, (_, index) => ({ id: `song-${index}`, bpm: 124, key: "8A", vocalDensity: 2 }));
+assert.equal(analyzeSetPreflight({ tracks: fullLibrary }).orderedTracks.length, 41, "Whole sets are not silently truncated at 40 songs");
+const maximumLibrary = Array.from({ length: 120 }, (_, index) => ({ id: `song-${index}`, bpm: 124, key: "8A", vocalDensity: 2 }));
+assert.equal(analyzeSetPreflight({ tracks: maximumLibrary }).orderedTracks.length, 120, "The supported maximum is planned in full");
+assert.throws(() => analyzeSetPreflight({ tracks: Array(121).fill(fullLibrary[0]) }), /up to 120 songs/, "Oversized libraries fail explicitly instead of producing a partial set");
+
 const checks = [
   [migration.includes("halo_dj_set_preflights") && migration.includes("halo_dj_transition_observations"), "stores set reports and transition outcomes in Netlify Database"],
   [migration.includes("halo_dj_external_signals") && migration.includes("authorized_api"), "stores authorized external learning signals without scraping"],
@@ -80,7 +86,7 @@ const checks = [
   [deck.includes("matchDeckLevels") && deck.includes("Math.max(5000") && deck.includes("source.start(startAt, 0)"), "starts incoming records at zero, matches their level, and preserves a five-second vocal gap"],
   [deck.includes("buildTakeoverPlan") && deck.includes("recordingState.takeoverPlan") && deck.includes("playedTrackIds"), "builds one complete DJ takeover order and enforces a no-repeat ledger"],
   [deck.includes('"clean-break"') && deck.includes("plan.hardCut") && deck.includes("setStemState(incomingDeck, \"vocals\", false"), "blocks lead-vocal crossover with stem handoffs or a true clean break"],
-  [deck.includes("Takeover quality control") && deck.includes("updateTakeoverQualityControl"), "shows live sequence, vocal, repeat, and continuity quality control"],
+  [deck.includes('id="recordingSongCount"') && deck.includes("Quiet-feed preflight required") && !deck.includes('id="takeoverQc"'), "shows a minimal recorder flow with song count and required quiet-feed isolation"],
   [deck.includes('/dj-continuity-guard.js') && deck.includes("attachContinuityGuardToDeck") && deck.includes("CONTINUITY BRIDGE ACTIVE"), "arms the shared continuity guard and exposes bridge state in the live master readout"],
   [deck.includes("continuity: { ...audioHealth.continuity }") && deck.includes("continuity: { ...audioHealth.continuity },") && deck.includes("Sync live telemetry"), "includes continuity state in deck health and live telemetry sync payloads"]
 ];

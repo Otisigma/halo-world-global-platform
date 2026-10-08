@@ -312,13 +312,11 @@ export async function runDreamweaverReview(songId: string, ownerMemberId: string
       id: randomUUID(), songId, ownerMemberId, status: "completed", score, issues, summary, completedAt: now,
     });
   });
-  if (saleMaster?.audioUrl) {
-    try {
-      await processCatalogRelease(await getDatabase(), ownerMemberId, songId, prepareReleaseAudio);
-    } catch {
-      // Upload/save success must survive a transient conveyor outage; the console can retry.
-      console.warn("Release conveyor receipt pending; retry from Song Catalog.");
-    }
+  try {
+    await processCatalogRelease(await getDatabase(), ownerMemberId, songId, prepareReleaseAudio);
+  } catch {
+    // Upload/save success must survive an outage; scheduled recovery can resume it.
+    console.warn("Release conveyor receipt pending; automatic recovery will retry.");
   }
 }
 

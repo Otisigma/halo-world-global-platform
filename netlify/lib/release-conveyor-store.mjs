@@ -1,11 +1,15 @@
 import { randomUUID } from "node:crypto";
 import { releaseFingerprint } from "./release-conveyor.mjs";
+import { retryReleaseWork } from "./release-conveyor-retry.mjs";
 
 export async function loadReleaseSubmission(db, ownerMemberId, songId) {
   const songs = await db.sql`
     SELECT id, owner_member_id, source_release_id, title, artist_name, album_title, genre,
       isrc, upc, explicit_lyrics, rights_status, sale_status, sale_price_cents, currency,
-      artwork_url, lyrics_text, notes, metadata_issues
+      artwork_url, lyrics_text, notes, metadata_issues, updated_at,
+      TO_CHAR(GREATEST(updated_at,
+        (SELECT MAX(updated_at) FROM halo_song_versions WHERE song_id = halo_song_catalog.id))
+        AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS source_updated_at
     FROM halo_song_catalog
     WHERE id = ${songId} AND owner_member_id = ${ownerMemberId} AND status = 'active'
   `;
@@ -22,24 +26,25 @@ export async function loadReleaseSubmission(db, ownerMemberId, songId) {
 }
 
 export async function loadConveyorState(db, ownerMemberId, songId) {
-  const rows = await db.sql`
+  const rows = await retryReleaseWork(() => db.sql`
     SELECT state, locked_until FROM halo_release_conveyor
     WHERE song_id = ${songId} AND owner_member_id = ${ownerMemberId}
-  `;
+  `);
   return rows[0] || null;
 }
 
 export async function claimConveyor(db, ownerMemberId, songId) {
   const token = randomUUID();
-  const rows = await db.sql`
+  const rows = await retryReleaseWork(() => db.sql`
     INSERT INTO halo_release_conveyor (song_id, owner_member_id, lease_token, locked_until)
     VALUES (${songId}, ${ownerMemberId}, ${token}, NOW() + INTERVAL '10 minutes')
     ON CONFLICT (song_id) DO UPDATE
       SET lease_token = EXCLUDED.lease_token, locked_until = EXCLUDED.locked_until
       WHERE halo_release_conveyor.owner_member_id = EXCLUDED.owner_member_id
-        AND (halo_release_conveyor.locked_until IS NULL OR halo_release_conveyor.locked_until < NOW())
+        AND (halo_release_conveyor.lease_token = EXCLUDED.lease_token
+          OR halo_release_conveyor.locked_until IS NULL OR halo_release_conveyor.locked_until < NOW())
     RETURNING state
-  `;
+  `);
   return rows[0] ? { token, previous: rows[0].state } : null;
 }
 
@@ -62,7 +67,7 @@ export function conveyorPorts(db, ownerMemberId, songId, token, submission, opti
     const stage = completed ? state.status : state.stages.at(-1).name;
     const details = completed ? state.receipt : state.stages.at(-1);
     // Checkpoint and audit append are one statement: neither can persist alone.
-    const rows = await db.sql`
+    const rows = await retryReleaseWork(() => db.sql`
       WITH checkpoint AS (
         UPDATE halo_release_conveyor
         SET input_hash = ${state.inputHash}, state = ${JSON.stringify(state)}::jsonb,
@@ -74,9 +79,17 @@ export function conveyorPorts(db, ownerMemberId, songId, token, submission, opti
       )
       INSERT INTO halo_release_conveyor_events (id, song_id, owner_member_id, input_hash, stage, details)
       SELECT ${eventId}, song_id, ${ownerMemberId}, ${state.inputHash}, ${stage}, ${JSON.stringify(details)}::jsonb
-      FROM checkpoint RETURNING id
-    `;
-    if (!rows.length) throw new Error("Lease lost");
+      FROM checkpoint
+      ON CONFLICT (id) DO NOTHING RETURNING id
+    `);
+    if (!rows.length) {
+      // A connection may fail after commit, including a finish that released the lease.
+      const committed = await db.sql`
+        SELECT id FROM halo_release_conveyor_events
+        WHERE id = ${eventId} AND song_id = ${songId} AND owner_member_id = ${ownerMemberId}
+      `;
+      if (!committed.length) throw new Error("Lease lost");
+    }
   }
   return {
     prepareAudio, assertCurrent,

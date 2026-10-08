@@ -6,27 +6,53 @@ const sourceStore = () => getStore({ name: "halo-song-catalog-audio", consistenc
 const packageStore = () => getStore({ name: "halo-release-packages", consistency: "strong" });
 const CHUNK_BYTES = 4 * 1024 * 1024;
 const audioIssue = message => ({ field: "sale_master_audio", message, outcome: "escalate" });
+const transientAudioError = message => Object.assign(new Error(message), { retryable: true });
 
-async function readSource(song, master) {
+async function storageIO(work, message) {
+  try {
+    return await work();
+  } catch (cause) {
+    const error = new Error(message);
+    if (Number.isInteger(Number(cause?.status)) && Number(cause?.status) > 0) error.status = Number(cause.status);
+    error.retryable = !error.status || [408, 429].includes(error.status) || error.status >= 500;
+    throw error;
+  }
+}
+
+async function readSource(song, master, readStore) {
   const expectedSize = Number(master.audio_byte_size);
   if (!Number.isSafeInteger(expectedSize) || expectedSize < 1 || expectedSize > MAX_PREFLIGHT_BYTES) return null;
   if (master.audio_storage_key) {
     const config = directUploadConfig();
-    if (!config) throw new Error("Master storage is unavailable");
+    if (!config) throw transientAudioError("Master storage is unavailable");
     if (!isOwnedMasterObjectKey(master.audio_storage_key, {
       ownerMemberId: song.owner_member_id, songId: song.id, versionId: master.id,
     })) return null;
     const url = presignObjectUrl({ config, method: "GET", key: master.audio_storage_key, expiresIn: 60 });
-    const response = await fetch(url, { redirect: "error", signal: AbortSignal.timeout(30_000) });
-    if (!response.ok) throw new Error("Master storage read failed");
+    const response = await storageIO(
+      () => fetch(url, { redirect: "error", signal: AbortSignal.timeout(30_000) }), "Master storage network read failed");
+    if (!response.ok) {
+      const error = new Error("Master storage read failed");
+      error.status = response.status;
+      error.retryable = [408, 429].includes(response.status) || response.status >= 500;
+      throw error;
+    }
+    if (!response.body) throw transientAudioError("Master storage is incomplete");
     const chunks = [];
     let size = 0;
-    for await (const chunk of response.body) {
-      size += chunk.length;
-      if (size > expectedSize || size > MAX_PREFLIGHT_BYTES) throw new Error("Master storage size changed");
-      chunks.push(Buffer.from(chunk));
+    try {
+      for await (const chunk of response.body) {
+        size += chunk.length;
+        if (size > expectedSize || size > MAX_PREFLIGHT_BYTES) {
+          throw Object.assign(new Error("Master storage size changed"), { retryable: false });
+        }
+        chunks.push(Buffer.from(chunk));
+      }
+    } catch (error) {
+      if (error.retryable === false) throw error;
+      throw transientAudioError("Master storage network read failed");
     }
-    if (size !== expectedSize) throw new Error("Master storage is incomplete");
+    if (size !== expectedSize) throw transientAudioError("Master storage is incomplete");
     return Buffer.concat(chunks);
   }
   const prefix = String(master.audio_blob_prefix || "");
@@ -36,17 +62,28 @@ async function readSource(song, master) {
   const chunks = [];
   let size = 0;
   for (let index = 0; index < count; index++) {
-    const bytes = await sourceStore().get(`${prefix}${String(index).padStart(3, "0")}`, { type: "arrayBuffer" });
-    if (!bytes) throw new Error("Master upload chunk is missing");
+    const bytes = await storageIO(
+      () => readStore().get(`${prefix}${String(index).padStart(3, "0")}`, { type: "arrayBuffer" }),
+      "Master upload storage read failed");
+    if (!bytes) throw transientAudioError("Master upload chunk is missing");
     size += bytes.byteLength;
     if (bytes.byteLength > CHUNK_BYTES || size > expectedSize) throw new Error("Master upload size changed");
     chunks.push(Buffer.from(bytes));
   }
-  if (size !== expectedSize) throw new Error("Master upload is incomplete");
+  if (size !== expectedSize) throw transientAudioError("Master upload is incomplete");
   return Buffer.concat(chunks);
 }
 
-export async function prepareReleaseAudio(song, versions, inputHash, options) {
+export function createReleaseAudioPreparer({
+  sourceStore: readStore = sourceStore, packageStore: writeStore = packageStore,
+} = {}) {
+  return (song, versions, inputHash, options = { humHz: 0 }) =>
+    prepareAudio(song, versions, inputHash, options, readStore, writeStore);
+}
+
+export const prepareReleaseAudio = createReleaseAudioPreparer();
+
+async function prepareAudio(song, versions, inputHash, options, readStore, writeStore) {
   const master = versions.find(version => version.version_type === "sale_master");
   const report = { originalPreserved: true, sourceVersionId: master?.id || "",
     sourceAudioUrl: master?.audio_url || "", summary: "Audio needs attention.", issues: [], repairs: [] };
@@ -70,7 +107,14 @@ export async function prepareReleaseAudio(song, versions, inputHash, options) {
     report.conditioning = "external_master";
     return report;
   }
-  const source = await readSource(song, master);
+  let source;
+  try {
+    source = await readSource(song, master, readStore);
+  } catch (error) {
+    if (error.retryable === true || [408, 429].includes(error.status) || error.status >= 500) throw error;
+    report.issues.push(audioIssue(error.message));
+    return report;
+  }
   if (!source) {
     report.issues.push(audioIssue("Automatic conditioning requires an owned PCM WAV upload within 128 MB; link-only or larger masters need an external mastering review."));
     return report;
@@ -85,14 +129,20 @@ export async function prepareReleaseAudio(song, versions, inputHash, options) {
   const prefix = `${song.owner_member_id}/${song.id}/${inputHash}/audio/`;
   const count = Math.ceil(conditioned.bytes.length / CHUNK_BYTES);
   for (let index = 0; index < count; index++) {
-    await packageStore().set(`${prefix}${index}`, conditioned.bytes.subarray(index * CHUNK_BYTES, (index + 1) * CHUNK_BYTES));
+    await storageIO(
+      () => writeStore().set(`${prefix}${index}`, conditioned.bytes.subarray(index * CHUNK_BYTES, (index + 1) * CHUNK_BYTES)),
+      "Conditioned audio storage write failed");
   }
   report.conditioning = conditioned.report;
   report.artifact = { prefix, chunkCount: count, byteSize: conditioned.bytes.length };
   report.downloadUrl = `/api/release-conveyor?songId=${encodeURIComponent(song.id)}&artifact=audio`;
   report.summary = "Separate conditioned WAV prepared; original and canonical master unchanged. Mastering approval remains required.";
-  report.repairs = ["5 ms soft-start applied to a separate WAV copy.", "Conservative RMS/sample-peak gain applied; no LUFS or true-peak certification."];
-  if (options.humHz) report.repairs.push(`${options.humHz} Hz notch applied to the separate copy at the creator's request.`);
+  report.repairs = ["350 ms logarithmic fade-in applied to a separate WAV copy.",
+    conditioned.report.conditionedIntegratedLufs === null
+      ? "Integrated LUFS unavailable; conservative RMS fallback applied. No true-peak certification."
+      : `Target -14 LUFS; measured output ${conditioned.report.achievedIntegratedLufs?.toFixed(2) ?? "unavailable"} LUFS, subject to +3 dB gain cap and -1.5 dBFS sample-peak ceiling. No true-peak certification.`];
+  if (conditioned.report.peakLimited) report.repairs.push("Sample-peak ceiling limited the requested loudness gain; target loudness is not guaranteed.");
+  if (options.humHz) report.repairs.push(`${options.humHz === "both" ? "50 and 60" : options.humHz} Hz notch applied to the separate copy at the creator's request.`);
   return report;
 }
 

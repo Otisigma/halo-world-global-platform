@@ -2821,10 +2821,11 @@
       mimeType: "",
       failed: false,
       takeoverPlan: [],
+      takeoverTracks: new Map(),
       playedTrackIds: new Set(),
       qualityScore: 0
     };
-    const takeoverBuildState = { promise: null, signature: "", readySignature: "" };
+    const takeoverBuildState = { promise: null, signature: "", readySignature: "", revision: 0 };
 
     function escapeHTML(value = "") {
       return String(value).replace(/[&<>'"]/g, character => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" })[character]);
@@ -3205,7 +3206,7 @@
       });
       renderTracks(elements.search.value);
       renderTrackPicker(elements.trackPickerSearch.value);
-      takeoverBuildState.readySignature = "";
+      takeoverBuildState.revision += 1;
       autoBuildTakeover();
     }
 
@@ -4282,6 +4283,7 @@
           showToast("Drive audio indexed", artworkCount ? "Embedded MP3 cover art is loaded. Press play to prepare the audio." : "Press play to prepare only the loaded track.");
         }
         window.haloStats?.track("upload_drive_audio", { file_count: additions.length, deck: selectedImportDeck });
+        takeoverBuildState.revision += 1;
         await autoBuildTakeover();
       } catch (error) {
         if (pendingPlaybackDeck) {
@@ -4340,8 +4342,8 @@
         : `${`DECK ${activeId} ${active.playing ? "LIVE" : "READY"} · MASTER TEMPO ${Number(active.bpm).toFixed(1)} BPM`}${continuity ? ` · ${continuity}` : ""}`;
     }
 
-    function loadTrack(deckId, trackId) {
-      const track = tracks.find(item => item.id === trackId);
+    function loadTrack(deckId, trackId, preparedTrack = null) {
+      const track = preparedTrack || tracks.find(item => item.id === trackId);
       if (!track) return;
       audioEngine.halo?.suppressLiveIntelligence();
       stopDeckAudio(deckId);
@@ -4395,6 +4397,7 @@
       recommendLocally();
       showToast("Track deleted", `${removed.title} was removed from this session library. Loaded deck copies remain safe.`);
       window.haloStats?.track("delete_track", { source_type: removed.platform || "library" });
+      takeoverBuildState.revision += 1;
       autoBuildTakeover();
     }
 
@@ -4727,11 +4730,11 @@
     }
 
     function takeoverLibrarySignature() {
-      return tracks.filter(trackHasPlayableAudio).map(track => track.id).join("|");
+      return `${takeoverBuildState.revision}:${tracks.filter(trackHasPlayableAudio).map(track => track.id).join("|")}`;
     }
 
-    async function autoBuildTakeover() {
-      if (!takeoverSession || recordingState.recorder?.state === "recording") return false;
+    async function autoBuildTakeover(forStart = false) {
+      if (!takeoverSession || (recordingState.starting && !forStart) || recordingState.recorder?.state === "recording") return false;
       if (takeoverBuildState.promise) return takeoverBuildState.promise;
       if (takeoverBuildState.readySignature === takeoverLibrarySignature() && recordingState.takeoverPlan.length >= 2) return true;
       elements.recordingStart.disabled = true;
@@ -5410,7 +5413,7 @@
       while (recordingState.trackCursor < recordingState.takeoverPlan.length) {
         const trackId = recordingState.takeoverPlan[recordingState.trackCursor];
         recordingState.trackCursor += 1;
-        const track = tracks.find(item => item.id === trackId);
+        const track = recordingState.takeoverTracks.get(trackId) || tracks.find(item => item.id === trackId);
         if (track && trackHasPlayableAudio(track) && !loadedIds.has(track.id) && !recordingState.playedTrackIds.has(track.id)) return track;
       }
       return null;
@@ -5418,7 +5421,7 @@
 
     async function prepareAutomatedDeck(deckId, track = nextTakeoverTrack()) {
       if (!track) return false;
-      loadTrack(deckId, track.id);
+      loadTrack(deckId, track.id, track);
       restoreDeckStems(deckId);
       const activeState = deckState[recordingState.activeDeck];
       const state = deckState[deckId];
@@ -5568,7 +5571,7 @@
       };
       const profile = profiles[takeoverSession?.dj] || profiles.halo;
       recordingState.activeDeck = "A";
-      recordingState.trackCursor = Math.max(2, recordingState.trackCursor);
+      recordingState.trackCursor = 2;
       recordingState.transitionCount = 0;
       recordingState.transitionHistory = [];
       recordingState.effectTimers = [];
@@ -5654,15 +5657,20 @@
 
       try {
         await ensureAudio();
-        if (!await autoBuildTakeover()) throw new Error(elements.recordingStatus.textContent);
+        if (!await autoBuildTakeover(true)) throw new Error(elements.recordingStatus.textContent);
         if (!window.MediaRecorder || !recorderGuardState.guard) throw new Error("This browser cannot record the isolated music bus.");
-        loadTrack("A", recordingState.takeoverPlan[0]);
-        loadTrack("B", recordingState.takeoverPlan[1]);
+        const preparedSignature = takeoverBuildState.readySignature;
+        recordingState.takeoverTracks = new Map(recordingState.takeoverPlan.map(id => [id, tracks.find(track => track.id === id)]));
+        loadTrack("A", recordingState.takeoverPlan[0], recordingState.takeoverTracks.get(recordingState.takeoverPlan[0]));
+        loadTrack("B", recordingState.takeoverPlan[1], recordingState.takeoverTracks.get(recordingState.takeoverPlan[1]));
         await Promise.all(["A", "B"].map(prepareDeckContinuityPreroll));
         const missingDecks = ["A", "B"].filter(deckId => !trackHasPlayableAudio(deckState[deckId]));
         if (missingDecks.length) throw new Error(`Load playable audio on Deck ${missingDecks.join(" and Deck ")} before starting the automated set.`);
 
-        const recorder = await recorderGuardState.guard.start(stream => createCompatibleRecorder(stream), () => !deckState.A.playing && !deckState.B.playing);
+        const recorder = await recorderGuardState.guard.start(stream => {
+          if (preparedSignature !== takeoverLibrarySignature()) throw new Error("Song library changed during isolation preflight. Start again to prepare the updated set.");
+          return createCompatibleRecorder(stream);
+        }, () => !deckState.A.playing && !deckState.B.playing);
         recordingState.mimeType = recorder.mimeType || "";
         recordingState.recorder = recorder;
         recordingState.chunks = [];

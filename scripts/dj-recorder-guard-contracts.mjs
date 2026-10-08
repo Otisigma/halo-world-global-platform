@@ -132,7 +132,7 @@ const buildSandbox = {
   console, Set, Number,
   tracks: [],
   takeoverSession: { name: "DJ HALO", minutes: 30, dj: "halo" },
-  takeoverBuildState: { promise: null, signature: "", readySignature: "" },
+  takeoverBuildState: { promise: null, signature: "", readySignature: "", revision: 0 },
   recordingState: { takeoverPlan: [], playedTrackIds: new Set(), starting: false },
   audioEngine: { context: { decodeAudioData: async data => { if (data === "bad") throw new Error("corrupt"); return { duration: 60 }; } } },
   elements: { recordingStart: {}, recordingStatus: {}, recordingNote: {}, recordingRig: {}, search: {} },
@@ -175,5 +175,50 @@ responseMode = "ready";
 buildSandbox.recordingState.recorder = { state: "recording" };
 buildSandbox.tracks.push(song("four"));
 assert.equal(await buildSandbox.autoBuildTakeover(), false, "Uploads during a recording do not rewrite its locked set");
+
+buildSandbox.recordingState.recorder = null;
+buildSandbox.recordingState.starting = true;
+const lockedOrder = Array.from(buildSandbox.recordingState.takeoverPlan);
+assert.equal(await buildSandbox.autoBuildTakeover(), false, "Mutation-triggered builds are also blocked throughout recorder startup");
+assert.deepEqual(Array.from(buildSandbox.recordingState.takeoverPlan), lockedOrder);
+buildSandbox.recordingState.starting = false;
+assert.equal(await buildSandbox.autoBuildTakeover(), true);
+
+buildSandbox.deckState = { A: { id: "one" }, B: { id: "two" } };
+buildSandbox.elements.mixIntent = { value: "hold" };
+buildSandbox.setAutomatedCrossfader = () => {};
+buildSandbox.scheduleAutomatedTransition = () => {};
+buildSandbox.recordingState.takeoverTracks = new Map(buildSandbox.tracks.filter(track => track.audioBuffer).map(track => [track.id, track]));
+const sequencing = deckPage.slice(deckPage.indexOf("    function nextTakeoverTrack("), deckPage.indexOf("    async function prepareAutomatedDeck(")) +
+  deckPage.slice(deckPage.indexOf("    function startAutomatedMix("), deckPage.indexOf("    function stopAutomatedMix("));
+vm.runInContext(sequencing, buildSandbox);
+for (let run = 0; run < 2; run += 1) {
+  buildSandbox.startAutomatedMix();
+  assert.equal(buildSandbox.nextTakeoverTrack().id, "three", "Every recording restarts the prepared song cursor");
+  assert.equal(buildSandbox.nextTakeoverTrack().id, "four");
+  assert.equal(buildSandbox.nextTakeoverTrack(), null);
+}
+buildSandbox.tracks = buildSandbox.tracks.filter(track => track.id !== "three");
+buildSandbox.startAutomatedMix();
+assert.equal(buildSandbox.nextTakeoverTrack().id, "three", "Deleting a library card cannot delete a song from the active recording snapshot");
+
+buildSandbox.window.MediaRecorder = function () {};
+buildSandbox.loadTrack = (deck, id, track) => { buildSandbox.deckState[deck] = { ...track, playing: false }; };
+buildSandbox.prepareDeckContinuityPreroll = async () => true;
+buildSandbox.stopAutomatedMix = () => {};
+buildSandbox.stopTakeoverDecks = () => {};
+buildSandbox.showToast = () => {};
+buildSandbox.clearInterval = () => {};
+let created = 0;
+buildSandbox.createCompatibleRecorder = () => { created += 1; throw new Error("Unexpected recorder construction"); };
+buildSandbox.recorderGuardState = { guard: { start: async factory => {
+  buildSandbox.takeoverBuildState.revision += 1;
+  return factory({});
+} } };
+vm.runInContext(deckPage.slice(deckPage.indexOf("    async function startTakeoverRecording("), deckPage.indexOf("    async function publishFinishedMix(")), buildSandbox);
+await buildSandbox.startTakeoverRecording();
+assert.equal(created, 0, "A library change during quiet-feed preflight blocks recorder construction");
+assert.match(buildSandbox.elements.recordingStatus.textContent, /library changed/);
+assert.equal(buildSandbox.recordingState.starting, false, "Failed startup releases its lock");
 
 console.log("DJ recorder contracts passed: isolated music routing, stereo quiet-feed start gate, and decoded full-set takeover preparation.");

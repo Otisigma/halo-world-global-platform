@@ -1830,7 +1830,6 @@
   <script src="/upload-progress.js"></script>
   <script src="/services/deckSessionManager.js"></script>
   <script src="/services/haloAudioEngine.js"></script>
-  <script src="/dj-live-intelligence.js"></script>
   <script>
     const haloText = window.HaloSafeText || {
       text: (value, fallback = "") => String(value ?? fallback),
@@ -2875,15 +2874,6 @@
         B: { input: null, trim: null, gain: null, cueGain: null, cueActive: false, analyser: null, filters: null, effects: null, source: null, stemSources: {}, stemGains: {}, timer: null, step: 0, level: 0, startedAt: 0, playRequestedAt: 0, hasSignal: false, signalConfirmed: false, noSignalReported: false, stems: { bass: true, hats: true, vocals: true } }
       }
     };
-    const trackMemory = new window.HaloTrackMemoryManager();
-    const liveIntelligence = new window.HaloLiveIntelligenceSystem({
-      canLoad: deckId => ["A", "B"].includes(deckId) && !deckState[deckId].playing,
-      loadTrackSilently: (deckId, trackId) => loadTrack(deckId, trackId, { silent: true })
-    }, trackMemory);
-
-    function syncTrackMemoryPins() {
-      trackMemory.pinAssets([deckState.A.audioAsset, deckState.B.audioAsset]);
-    }
     const audioHealth = {
       status: "idle",
       message: "Audio engine loads on the first playback gesture.",
@@ -3740,17 +3730,19 @@
       const state = deckState[deckId];
       if (!audioEngine.context || !state || state.empty) return Promise.resolve(false);
       const pending = [];
-      if (state.audioAsset?.file && !state.audioBuffer) {
-        const preparation = trackMemory.decode(state.audioAsset, audioEngine.context)
+      if (state.audioAsset?.file && !state.audioBuffer && !state.audioAsset.buffer && !state.audioAsset.promise) {
+        state.audioAsset.promise = state.audioAsset.file.arrayBuffer()
+          .then(buffer => audioEngine.context.decodeAudioData(buffer))
           .then(buffer => {
-            if (!buffer || deckState[deckId] !== state) return null;
+            state.audioAsset.buffer = buffer;
             state.audioBuffer = buffer;
             state.duration = buffer.duration;
             return buffer;
           })
-          .catch(() => null);
-        pending.push(preparation);
+          .catch(() => null)
+          .finally(() => { state.audioAsset.promise = null; });
       }
+      if (state.audioAsset?.promise) pending.push(state.audioAsset.promise);
       if (state.stemAssets) {
         Object.values(state.stemAssets).filter(asset => asset.url && !asset.buffer && !asset.promise).forEach(asset => {
           asset.promise = fetch(asset.url, { credentials: "same-origin" })
@@ -4187,9 +4179,18 @@
       if (!state.audioBuffer && state.audioAsset?.file) {
         elements.importStatus.classList.remove("is-error");
         elements.importStatus.textContent = `Preparing ${state.title} for first playback…`;
-        const buffer = await trackMemory.decode(state.audioAsset, context);
-        if (deckState[deckId] !== state || !buffer) return;
-        state.audioBuffer = buffer;
+        if (state.audioAsset.buffer) {
+          state.audioBuffer = state.audioAsset.buffer;
+        } else if (!state.audioAsset.promise) {
+          state.audioAsset.promise = state.audioAsset.file.arrayBuffer()
+            .then(buffer => context.decodeAudioData(buffer))
+            .then(buffer => {
+              state.audioAsset.buffer = buffer;
+              return buffer;
+            })
+            .finally(() => { state.audioAsset.promise = null; });
+        }
+        if (!state.audioBuffer) state.audioBuffer = await state.audioAsset.promise;
         state.duration = state.audioBuffer.duration;
         elements.importStatus.textContent = `${state.title} is ready. Future plays start immediately.`;
       }
@@ -4343,13 +4344,13 @@
       return null;
     }
 
-    async function embeddedArtworkUrl(file, maxBytes = 2 * 1024 * 1024) {
+    async function embeddedArtworkUrl(file) {
       try {
         if (!/\.mp3$/i.test(file.name) && !/(?:audio\/mpeg|audio\/mp3)/i.test(file.type)) return "";
         const header = new Uint8Array(await file.slice(0, 10).arrayBuffer());
         if (header.length < 10 || String.fromCharCode(...header.slice(0, 3)) !== "ID3") return "";
         const tagSize = 10 + synchsafeInteger(header, 6);
-        if (tagSize <= 10 || tagSize > Math.min(24 * 1024 * 1024, maxBytes)) return "";
+        if (tagSize <= 10 || tagSize > 24 * 1024 * 1024) return "";
         const picture = parseEmbeddedArtwork(await file.slice(0, tagSize).arrayBuffer());
         if (!picture?.bytes?.length) return "";
         const artworkBlob = new Blob([picture.bytes], { type: picture.mime });
@@ -4373,11 +4374,8 @@
       elements.importStatus.classList.remove("is-error");
       elements.importStatus.textContent = `Indexing ${files.length} audio file${files.length === 1 ? "" : "s"}…`;
       try {
-        let artworkBudget = 16 * 1024 * 1024;
-        const additions = await window.HaloIndexUploadBatch(files, async (file, index) => {
+        const additions = await Promise.all(files.map(async (file, index) => {
           const folderPath = file.webkitRelativePath ? file.webkitRelativePath.split("/").slice(0, -1).join("/") : "";
-          const artwork = artworkBudget > 0 ? await embeddedArtworkUrl(file, Math.min(2 * 1024 * 1024, artworkBudget * .75)) : "";
-          artworkBudget = Math.max(0, artworkBudget - artwork.length);
           return {
             id: `drive-${Date.now()}-${index}`,
             title: file.name.replace(/\.[^/.]+$/, ""),
@@ -4388,18 +4386,16 @@
             energy: 3,
             platform: "Private Drive Upload",
             cover: "linear-gradient(145deg,#17313d,#347ea5 52%,#91c9ff)",
-            artwork,
+            artwork: await embeddedArtworkUrl(file),
             audioAsset: { file, buffer: null, promise: null },
             duration: 0
           };
-        });
-        trackMemory.lockUploadBatch(additions);
+        }));
         const artworkCount = additions.filter(track => track.artwork).length;
-        for (let index = additions.length - 1; index >= 0; index -= 1) tracks.unshift(additions[index]);
+        tracks.unshift(...additions);
         elements.search.value = "";
         renderTracks();
         loadTrack(selectedImportDeck, additions[0].id);
-        recommendLocally();
         if (pendingPlaybackDeck === selectedImportDeck) {
           deckState[selectedImportDeck].playing = true;
           await startDeckAudio(selectedImportDeck);
@@ -4468,28 +4464,25 @@
         : `${`DECK ${activeId} ${active.playing ? "LIVE" : "READY"} · MASTER TEMPO ${Number(active.bpm).toFixed(1)} BPM`}${continuity ? ` · ${continuity}` : ""}`;
     }
 
-    function loadTrack(deckId, trackId, options = {}) {
+    function loadTrack(deckId, trackId) {
       const track = tracks.find(item => item.id === trackId);
-      if (!track) return false;
-      if (!options.silent) audioEngine.halo?.suppressLiveIntelligence();
+      if (!track) return;
+      audioEngine.halo?.suppressLiveIntelligence();
       stopDeckAudio(deckId);
       deckState[deckId] = { ...track, originalBpm: Number(track.bpm), pitch: 0, playing: false };
-      syncTrackMemoryPins();
       const slider = document.querySelector(`[data-deck="${deckId}"] .pitch-slider`);
       slider.value = 0;
       updateRangeFill(slider);
       updateDeck(deckId);
-      if (!options.silent) showToast(`Loaded to deck ${deckId}`, `${track.title} by ${track.artist} is ready from ${track.platform || "your library"}.`);
+      showToast(`Loaded to deck ${deckId}`, `${track.title} by ${track.artist} is ready from ${track.platform || "your library"}.`);
       prepareDeckContinuityPreroll(deckId);
       window.haloStats?.track("load_track", { deck: deckId, source_type: track.platform || "library" });
-      return true;
     }
 
     function ejectDeck(deckId) {
       const previous = deckState[deckId];
       stopDeckAudio(deckId);
       deckState[deckId] = { ...EMPTY_TRACK };
-      syncTrackMemoryPins();
       const slider = document.querySelector(`[data-deck="${deckId}"] .pitch-slider`);
       slider.value = 0;
       updateRangeFill(slider);
@@ -4519,7 +4512,6 @@
       const trackIndex = tracks.findIndex(track => track.id === trackId);
       if (trackIndex < 0) return;
       const [removed] = tracks.splice(trackIndex, 1);
-      trackMemory.release(trackId);
       trackQueue = trackQueue.filter(id => id !== trackId);
       if (currentRecommendation?.trackId === trackId) currentRecommendation = null;
       renderTracks(elements.search.value);
@@ -4619,10 +4611,6 @@
     }
 
     function applyRecommendation(recommendation, mode = "Local brain") {
-      if (recommendation?.trackId && !trackMemory.isAuthorized(recommendation.trackId)) {
-        recommendLocally();
-        return;
-      }
       const track = tracks.find(item => item.id === recommendation?.trackId);
       if (!track) return;
       currentRecommendation = { ...recommendation, trackId: track.id, fit: Math.max(1, Math.min(99, Number(recommendation.fit) || 80)) };
@@ -4677,7 +4665,7 @@
 
     function recommendLocally() {
       const activeId = deckState[activeDeckId()].id;
-      const candidates = (trackMemory.list() ?? tracks).filter(track => track.id !== activeId);
+      const candidates = tracks.filter(track => track.id !== activeId);
       if (!candidates.length) {
         currentRecommendation = null;
         elements.aiBrief.textContent = "Load more music to create a meaningful next-track recommendation.";
@@ -4971,11 +4959,7 @@
         return;
       }
       const targetDeck = activeDeckId() === "A" ? "B" : "A";
-      const result = liveIntelligence.silentSearchAndLoad(recommendation.trackId, { deckId: targetDeck });
-      if (!result.ok) {
-        elements.aiBrief.textContent = result.reason === "deck-busy" ? "Both decks are live. HALO will not replace a playing track." : "Choose a track from the current upload batch before preparing the next deck.";
-        return;
-      }
+      loadTrack(targetDeck, recommendation.trackId);
       const masterDeck = deckState[activeDeckId()];
       deckState[targetDeck].bpm = Number(masterDeck.bpm);
       deckState[targetDeck].pitch = ((Number(masterDeck.bpm) / Number(deckState[targetDeck].originalBpm)) - 1) * 100;
@@ -4989,7 +4973,7 @@
       renderTracks(elements.search.value);
       renderQueue();
       recordTransitionObservation(masterDeck, deckState[targetDeck], currentRecommendation || {}, true);
-      elements.aiBrief.textContent = `HALO BREATH prepared on deck ${targetDeck}. ${deckState[targetDeck].title} is tempo-matched; the reveal waits ${recommendation.vocalRevealBars || recommendation.transitionBars || 16} bars.`;
+      showToast(`HALO BREATH prepared on deck ${targetDeck}`, `${deckState[targetDeck].title} is tempo-matched, its identity stays concealed, and the reveal waits ${recommendation.vocalRevealBars || recommendation.transitionBars || 16} bars.`);
       window.haloStats?.track("prepare_ai_transition", { deck: targetDeck, intent: elements.mixIntent.value });
     }
 

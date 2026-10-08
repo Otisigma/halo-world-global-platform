@@ -102,6 +102,7 @@ export class SatelliteAudio {
     if (this.takeover) throw new Error("Crossfader is locked during the sequencing test.");
     const x = Number(value);
     if (!Number.isFinite(x) || x < 0 || x > 1) throw new Error("Invalid crossfader value.");
+    this.crossfader = x;
     this.decks.a.gain.gain.setTargetAtTime(Math.cos(x * Math.PI / 2), this.context.currentTime, 0.01);
     this.decks.b.gain.gain.setTargetAtTime(Math.sin(x * Math.PI / 2), this.context.currentTime, 0.01);
   }
@@ -237,7 +238,7 @@ export class SatelliteAudio {
     if (this.takeover) {
       this.takeover = false;
       for (const handle of this.musicSources) this.stopHandle(handle);
-      this.setCrossfader(0.5);
+      this.setCrossfader(this.crossfader);
     }
     if (this.recorder.state !== "inactive") this.recorder.stop();
   }

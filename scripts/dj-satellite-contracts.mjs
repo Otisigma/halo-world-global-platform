@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
+import vm from "node:vm";
 import "../dj-recorder-guard.js";
 import { SatelliteAudio, measure } from "../dj-satellite/audio.js";
 
@@ -99,6 +100,7 @@ try {
   await assert.rejects(audio.record(), /preflight failed/);
   track.readyState = "live";
 
+  audio.setCrossfader(1);
   await Promise.all([audio.record(true), assert.rejects(audio.record(true), /operation/, "Concurrent recording starts are blocked")]);
   assert.equal(starts, 1);
   assert.equal(audio.recorder.stream, audio.feed.destination.stream);
@@ -114,7 +116,13 @@ try {
   assert.ok(result instanceof Blob && result.size > 0);
   assert.equal(audio.takeover, false);
   assert.equal(audio.recorder, null);
+  assert.equal(audio.crossfader, 1, "Takeover restores the operator's crossfader position");
+  assert.ok(audio.decks.a.gain.gain.value < 0.0001);
+  assert.equal(audio.decks.b.gain.gain.value, 1);
 
+  await audio.record();
+  audio.finish();
+  assert.equal(audio.crossfader, 1, "Finishing manual recording preserves the mix position");
   await audio.record();
   audio.play("b");
   audio.cue("b", true);
@@ -162,4 +170,55 @@ try {
   globalThis.setTimeout = nativeTimeout;
   await audio.destroy();
 }
-console.log("DJ satellite contracts passed: isolated graph, quiet-feed failures, recording lifecycle, CUE, and audio-clock takeover.");
+const elements = new Map([...page.matchAll(/\bid="([^"]+)"/g)].map(([, id]) => [id, {
+  value: id === "crossfader" || id === "monitor" ? "0.5" : "0.15",
+  checked: false, disabled: false, files: [], listeners: {},
+  addEventListener(type, handler) { this.listeners[type] = handler; }
+}]));
+let playerEngine, completeLoad;
+let signalLoad;
+const loadStarted = new Promise(resolve => { signalLoad = resolve; });
+class PlayerEngine {
+  constructor(ctx, options) {
+    playerEngine = this;
+    this.context = ctx;
+    this.options = options;
+    this.decks = { a: { buffer: bufferForUI(), cue: null }, b: { buffer: bufferForUI(), cue: null } };
+    this.events = [];
+    this.output = { gain: new Param() };
+    this.cueBus = { gain: new Param() };
+  }
+  setCrossfader(value) { this.crossfader = Number(value); }
+  cue(id, enabled) { this.decks[id].cue = enabled ? { stopped: false } : null; }
+  load() { return new Promise(resolve => { completeLoad = () => resolve(bufferForUI()); signalLoad(); }); }
+  finish() { this.recorder = null; this.options.onRecording(null); }
+}
+function bufferForUI() { return { duration: 10 }; }
+const ui = vm.createContext({
+  SatelliteAudio: PlayerEngine, console, Blob, URL,
+  window: { AudioContext: class { state = "running"; resume = async () => {}; }, addEventListener() {} },
+  document: { getElementById: id => elements.get(id), querySelectorAll: () => [] },
+  setInterval: () => 1, clearInterval() {}, setTimeout
+});
+const playerSource = await readFile(new URL("../dj-satellite/player.js", import.meta.url), "utf8");
+vm.runInContext(playerSource.replace(/^import[^\n]+\n/, ""), ui);
+await elements.get("enable").listeners.click();
+elements.get("crossfader").value = "1";
+elements.get("crossfader").listeners.input();
+playerEngine.recorder = { state: "recording" };
+elements.get("finish").listeners.click();
+assert.equal(elements.get("crossfader").value, "1", "Recording completion cannot desynchronize the displayed crossfader");
+assert.equal(playerEngine.crossfader, 1);
+elements.get("cue-a").checked = true;
+await elements.get("cue-a").listeners.change();
+assert.ok(playerEngine.decks.a.cue);
+elements.get("file-b").files = [{ name: "test.wav" }];
+const pendingLoad = elements.get("file-b").listeners.change();
+await loadStarted;
+assert.equal(elements.get("cue-a").disabled, false, "Active CUE can be stopped during another deck's decode");
+elements.get("cue-a").checked = false;
+await elements.get("cue-a").listeners.change();
+assert.equal(playerEngine.decks.a.cue, null, "CUE stop is not dropped by the load operation lock");
+completeLoad();
+await pendingLoad;
+console.log("DJ satellite contracts passed: isolated graph, quiet-feed failures, recording lifecycle, CUE, audio-clock takeover, and UI regressions.");

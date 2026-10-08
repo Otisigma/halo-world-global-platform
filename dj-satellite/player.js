@@ -13,7 +13,7 @@ function update() {
     $(`file-${id}`).disabled = Boolean(busy);
     $(`play-${id}`).disabled = !deck?.buffer || busy && !engine?.recorder || Boolean(engine?.takeover) || Boolean(deck?.music);
     $(`stop-${id}`).disabled = !deck?.music;
-    $(`cue-${id}`).disabled = !deck?.buffer;
+    $(`cue-${id}`).disabled = !deck?.buffer || Boolean(operation && !deck?.cue);
     $(`cue-${id}`).checked = Boolean(deck?.cue && !deck.cue.stopped);
   }
   $("enable").disabled = Boolean(busy);
@@ -45,7 +45,6 @@ async function enable() {
             $("download").hidden = false;
             status("Recording finished. Download and listen separately to compare with local monitoring.");
           } else status("Recording discarded: the recorder feed was unavailable or recording failed.");
-          $("crossfader").value = "0.5";
           update();
         }
       });
@@ -89,7 +88,12 @@ for (const id of ["a", "b"]) {
   }));
   $(`cue-${id}`).addEventListener("change", () => {
     const enabled = $(`cue-${id}`).checked;
-    run(async () => { (await enable()).cue(id, enabled); });
+    if (!enabled) {
+      engine?.cue(id, false);
+      update();
+      return;
+    }
+    return run(async () => { (await enable()).cue(id, enabled); });
   });
 }
 document.querySelectorAll("[data-deck-play]").forEach(button => {

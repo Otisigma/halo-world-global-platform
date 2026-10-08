@@ -90,6 +90,31 @@ assert.equal(accidentalRuns, 0, "incidental catalog review must not restart exha
 const manualRecovery = await run({ previous });
 assert.equal(manualRecovery.status, "ready");
 assert.equal(manualRecovery.automaticAttempts, 0);
+let reservedAttempt, timedOutState;
+const timeBound = await run({ automatic: true, ports: {
+  ...ports, deadline: Date.now() + 30,
+  beginAttempt: async state => { reservedAttempt = structuredClone(state); },
+  prepareAudio: async () => new Promise(() => {}),
+  finish: async state => { timedOutState = structuredClone(state); },
+} });
+assert.equal(reservedAttempt.status, "processing");
+assert.equal(reservedAttempt.automaticAttempts, 1, "reserve the attempt before potentially stalled storage");
+assert.equal(timeBound.status, "retryable");
+assert.equal(timedOutState.stages.find(stage => stage.name === "audio_preflight").status, "failed");
+assert.equal(timedOutState.automaticAttempts, 1);
+let interrupted;
+for (let attempt = 1; attempt <= 5; attempt++) {
+  await run({ automatic: true, previous: interrupted, ports: { ...ports,
+    beginAttempt: async state => {
+      interrupted = structuredClone(state);
+      throw new Error("simulate platform termination after the reservation");
+    },
+  } });
+  assert.equal(interrupted.automaticAttempts, attempt);
+}
+const exhausted = await run({ automatic: true, previous: interrupted });
+assert.equal(exhausted.status, "escalated", "platform interruptions consume the same bounded retry budget");
+assert.equal(exhausted.automaticAttempts, 5);
 const edited = { ...song, updated_at: "2026-10-08T11:00:00Z" };
 assert.equal(releaseFingerprint(song, versions), releaseFingerprint(edited, versions));
 assert.equal(releaseFingerprint(song, versions), releaseFingerprint(song, versions.map(version => ({ ...version, updated_at: edited.updated_at }))));
@@ -167,7 +192,7 @@ assert.deepEqual(recovery, { scanned: 1, results: [{ releaseId: song.id, status:
 assert.equal(state.receipt.ready, true);
 assert.equal(state.package.handoff.publicationAction, "existing_catalog_controls");
 assert.equal(state.package.handoff.originalMasterPreserved, true);
-assert.deepEqual(audit, [...RELEASE_STAGES, "ready"]);
+assert.deepEqual(audit, ["intake", "attempt", ...RELEASE_STAGES.slice(1), "ready"]);
 const auditCount = audit.length;
 await recoverCatalogReleases(db, ports.prepareAudio);
 assert.equal(audit.length, auditCount, "unchanged ready inputs do not append redundant audit events");

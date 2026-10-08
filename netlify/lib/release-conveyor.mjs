@@ -132,20 +132,28 @@ export async function runReleaseConveyor({ song, versions, previous, ports, opti
     return current;
   }
   let activeStage = "intake";
+  let attemptReserved = false;
   async function stage(name, work) {
     activeStage = name;
     if (state.stages.some(item => item.name === name && ["passed", "repaired"].includes(item.status))) return;
     const resumed = state.stages.some(item => item.name === name && item.status === "failed");
     state.stages = state.stages.filter(item => item.name !== name);
     let retries = 0;
-    const result = await retryReleaseWork(work, { sleep: ports.sleep, onRetry: () => retries++ });
+    const result = await retryReleaseWork(work, { sleep: ports.sleep, onRetry: () => retries++, deadline: ports.deadline });
     const repairs = [...(result.repairs || []), ...(resumed ? [`${name}: resumed successfully after an interrupted or failed run.`] : []),
       ...(retries ? [`${name}: recovered after ${retries} transient retries.`] : [])];
     state.stages.push({ name, status: result.issues?.length ? "blocked" : repairs.length ? "repaired" : "passed", ...result, repairs, attempts: retries + 1 });
     await ports.checkpoint(state);
   }
   try {
+    if (automatic && state.automaticAttempts >= 5) throw new Error("Automatic recovery exhausted");
     await stage("intake", async () => ({ summary: "Catalog song and canonical versions accepted; release ID preserved." }));
+    if (automatic) {
+      state.automaticAttempts++;
+      state.nextRetryAt = new Date(Date.now() + 2 ** state.automaticAttempts * 60_000).toISOString();
+      attemptReserved = true;
+      await (ports.beginAttempt || ports.checkpoint)(state);
+    }
     await stage("audio_preflight", async () => {
       const audio = await ports.prepareAudio(song, versions, inputHash, options);
       state.package.audio = audio;
@@ -192,11 +200,12 @@ export async function runReleaseConveyor({ song, versions, previous, ports, opti
       });
       await ports.assertCurrent();
       state.status = "ready";
-      state.automaticAttempts = 0;
     }
+    state.automaticAttempts = 0;
+    delete state.nextRetryAt;
   } catch (error) {
     state.status = "retryable";
-    state.automaticAttempts++;
+    if (!attemptReserved && state.automaticAttempts < 5) state.automaticAttempts++;
     state.nextRetryAt = new Date(Date.now() + Math.min(60, 2 ** state.automaticAttempts) * 60_000).toISOString();
     if (state.automaticAttempts >= 5) {
       state.status = "escalated";

@@ -62,10 +62,11 @@ export function conveyorPorts(db, ownerMemberId, songId, token, submission, opti
     `;
     if (!lease.length) throw new Error("Lease expired");
   }
-  async function save(state, completed) {
+  async function save(state, completed, event) {
     const eventId = randomUUID();
-    const stage = completed ? state.status : state.stages.at(-1).name;
-    const details = completed ? state.receipt : state.stages.at(-1);
+    const stage = completed ? state.status : event || state.stages.at(-1).name;
+    const details = completed ? state.receipt : event === "attempt"
+      ? { attempt: state.automaticAttempts, nextRetryAt: state.nextRetryAt } : state.stages.at(-1);
     // Checkpoint and audit append are one statement: neither can persist alone.
     const rows = await retryReleaseWork(() => db.sql`
       WITH checkpoint AS (
@@ -94,6 +95,7 @@ export function conveyorPorts(db, ownerMemberId, songId, token, submission, opti
   return {
     prepareAudio, assertCurrent,
     checkpoint: state => save(state, false),
+    beginAttempt: state => save(state, false, "attempt"),
     finish: state => save(state, true),
     handoff: async () => {
       // Preparation does not publish or alter mastering/rights approvals.

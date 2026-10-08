@@ -8,12 +8,24 @@ export function isTransientReleaseError(error) {
 }
 
 // Only idempotent conveyor work may use this bounded retry policy.
-export async function retryReleaseWork(work, { sleep = ms => new Promise(resolve => setTimeout(resolve, ms)), onRetry = () => {} } = {}) {
+export async function retryReleaseWork(work, { sleep = ms => new Promise(resolve => setTimeout(resolve, ms)), onRetry = () => {}, deadline = Infinity } = {}) {
   for (let attempt = 1; ; attempt++) {
-    try { return await work(); } catch (error) {
-      if (attempt >= 3 || !isTransientReleaseError(error)) throw error;
+    let timer;
+    const timeout = () => Object.assign(new Error("Release processing time budget exhausted"), { retryable: true });
+    try {
+      if (Date.now() >= deadline) throw timeout();
+      const result = await (Number.isFinite(deadline) ? Promise.race([
+        Promise.resolve().then(work),
+        new Promise((_, reject) => { timer = setTimeout(() => reject(timeout()), deadline - Date.now()); }),
+      ]) : work());
+      if (Date.now() >= deadline) throw timeout();
+      return result;
+    } catch (error) {
+      if (Date.now() >= deadline || attempt >= 3 || !isTransientReleaseError(error)) throw error;
       onRetry(attempt);
       await sleep(100 * 2 ** (attempt - 1));
+    } finally {
+      clearTimeout(timer);
     }
   }
 }

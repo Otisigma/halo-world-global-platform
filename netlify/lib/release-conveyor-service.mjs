@@ -2,7 +2,7 @@ import { runReleaseConveyor } from "./release-conveyor.mjs";
 import { claimConveyor, conveyorPorts, loadReleaseSubmission, releaseConveyorLease } from "./release-conveyor-store.mjs";
 import { RELEASE_PIPELINE_VERSION } from "./release-conveyor.mjs";
 
-export async function processCatalogRelease(db, ownerMemberId, songId, prepareAudio, options, { automatic = true } = {}) {
+export async function processCatalogRelease(db, ownerMemberId, songId, prepareAudio, options, { automatic = true, deadline = Infinity } = {}) {
   if (!(await loadReleaseSubmission(db, ownerMemberId, songId))) return null;
   const claim = await claimConveyor(db, ownerMemberId, songId);
   if (!claim) return { status: "processing", busy: true };
@@ -11,13 +11,15 @@ export async function processCatalogRelease(db, ownerMemberId, songId, prepareAu
     if (!submission) return null;
     const settings = options || claim.previous?.options || { humHz: 0 };
     const ports = conveyorPorts(db, ownerMemberId, songId, claim.token, submission, settings, prepareAudio);
+    ports.deadline = deadline;
     return await runReleaseConveyor({ ...submission, previous: claim.previous, ports, options: settings, automatic });
   } finally {
     await releaseConveyorLease(db, ownerMemberId, songId, claim.token).catch(() => {});
   }
 }
 
-export async function recoverCatalogReleases(db, prepareAudio, limit = 10) {
+export async function recoverCatalogReleases(db, prepareAudio, limit = 10, { budgetMilliseconds = 20_000 } = {}) {
+  const deadline = Date.now() + Math.max(1, Math.min(20_000, budgetMilliseconds));
   const boundedLimit = Math.max(1, Math.min(10, Number.parseInt(limit, 10) || 10));
   const candidates = await db.sql`
     SELECT song.id, song.owner_member_id
@@ -46,8 +48,9 @@ export async function recoverCatalogReleases(db, prepareAudio, limit = 10) {
   `;
   const results = [];
   for (const candidate of candidates) {
+    if (Date.now() >= deadline) break;
     try {
-      const state = await processCatalogRelease(db, candidate.owner_member_id, candidate.id, prepareAudio, undefined, { automatic: true });
+      const state = await processCatalogRelease(db, candidate.owner_member_id, candidate.id, prepareAudio, undefined, { automatic: true, deadline });
       results.push({ releaseId: candidate.id, status: state?.status || "not_found" });
     } catch {
       results.push({ releaseId: candidate.id, status: "retryable" });

@@ -78,10 +78,11 @@ const sandbox = {
   elements: {
     sessionSaveStatus: textNode("Cloud revision 12"),
     cloudStatus: textNode("Cloud ready"),
-    maintenanceDock: { title: "" },
-    maintenanceDockCount: { textContent: "10 alerts" },
+    maintenanceDock: { title: "", dataset: {} },
+    maintenanceDockCount: { textContent: "Checking" },
     maintenanceDockHelp: { textContent: "" }
   },
+  window: { location: { pathname: "/dj-deck.html" } },
   toastCalls: [],
   showToast(title, message) {
     sandbox.toastCalls.push({ title, message });
@@ -94,7 +95,8 @@ vm.runInContext([
   extractFunctionSource("syncMaintenanceDockLabel"),
   extractFunctionSource("currentCloudRevisionLabel"),
   extractFunctionSource("showCloudRevisionToast"),
-  extractFunctionSource("showMaintenanceAlertsToast")
+  extractFunctionSource("showMaintenanceAlertsToast"),
+  extractFunctionSource("syncMaintenanceDockFromControlRoom")
 ].join("\n\n"), sandbox);
 
 assert.match(deck, /Upload once\. HALO watches every next step\./);
@@ -125,10 +127,16 @@ assert.deepEqual(sandbox.toastCalls.shift(), { title: "Cloud revision", message:
 
 sandbox.showMaintenanceAlertsToast();
 assert.deepEqual(sandbox.toastCalls.shift(), {
-  title: "Maintenance alerts",
-  message: "10 alerts watching booth video, cloud revision, upload progress, and audio verification."
+  title: "Maintenance control room",
+  message: "Checking · latest scan covers runtime, links, watchers, accessible names, and recorder safety."
 });
-assert.match(sandbox.elements.maintenanceDock.title, /10 alerts currently monitored\.$/);
-assert.match(sandbox.elements.maintenanceDockHelp.textContent, /10 alerts currently monitored\.$/);
+sandbox.syncMaintenanceDockFromControlRoom({
+  detail: { pagePath: "/dj-deck.html", status: "broken", issueCount: 2, healedCount: 1, escalatedCount: 2 }
+});
+assert.equal(sandbox.elements.maintenanceDockCount.textContent, "2 at risk");
+assert.equal(sandbox.elements.maintenanceDock.dataset.status, "broken");
+assert.match(sandbox.elements.maintenanceDock.dataset.summary, /1 auto-repaired and verified · 2 escalated · 2 at risk/);
+assert.match(sandbox.elements.maintenanceDock.title, /Maintenance control room\. 2 at risk\./);
+assert.match(sandbox.elements.maintenanceDockHelp.textContent, /latest maintenance scan/i);
 
 console.log("DJ deck HUD contracts: artist journey guidance plus cloud revision and maintenance toast actions behave as expected.");

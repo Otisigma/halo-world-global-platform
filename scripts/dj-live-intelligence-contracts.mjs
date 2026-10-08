@@ -203,13 +203,15 @@ const oversizedArtwork = {
 assert.equal(await artworkSandbox.embeddedArtworkUrl(oversizedArtwork), "");
 assert.equal(artworkReads, 1, "Oversized cover tags fall back before allocating their contents");
 
-assert.match(deck, /<script src="\/dj-live-intelligence\.js" defer><\/script>/);
+const moduleScript = '<script src="/dj-live-intelligence.js"></script>';
+assert.ok(deck.indexOf(moduleScript) < deck.indexOf("    const trackMemory ="), "The module loads synchronously before deck initialization");
+assert.ok(deck.includes(moduleScript));
 assert.match(deck, /trackMemory\.pinAssets\(\[deckState\.A\.audioAsset, deckState\.B\.audioAsset\]\)/);
 assert.match(deck, /deckState\[deckId\] !== state \|\| !buffer/);
 assert.match(deck, /trackMemory\.lockUploadBatch\(additions\)/);
 assert.match(deck, /artworkBudget = 16 \* 1024 \* 1024/);
 assert.match(deck, /liveIntelligence\.silentSearchAndLoad\(recommendation\.trackId/);
-for (const script of deck.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g)) {
+for (const script of deck.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/gi)) {
   if (script[1].trim()) new vm.Script(script[1]);
 }
 console.log("DJ Live Intelligence contracts passed: bounded indexing, serialized/pinned decoding, batch authorization, and silent idle-deck loading.");

@@ -37,6 +37,28 @@ export const songs = pgTable("halo_song_catalog", {
   uniqueIndex("halo_song_catalog_owner_source_unique").on(table.ownerMemberId, table.sourceReleaseId),
 ]);
 
+export const releaseConveyor = pgTable("halo_release_conveyor", {
+  songId: text("song_id").primaryKey().references(() => songs.id, { onDelete: "cascade" }),
+  ownerMemberId: text("owner_member_id").notNull(),
+  inputHash: text("input_hash").notNull().default(""),
+  state: jsonb("state").notNull().default({}),
+  leaseToken: text("lease_token"),
+  lockedUntil: timestamp("locked_until", { withTimezone: true }),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const releaseConveyorEvents = pgTable("halo_release_conveyor_events", {
+  id: text("id").primaryKey(),
+  songId: text("song_id").notNull().references(() => songs.id, { onDelete: "cascade" }),
+  ownerMemberId: text("owner_member_id").notNull(),
+  inputHash: text("input_hash").notNull(),
+  stage: text("stage").notNull(),
+  details: jsonb("details").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, table => [
+  index("halo_release_conveyor_events_song_idx").on(table.songId, table.createdAt),
+]);
+
 export const songVersions = pgTable("halo_song_versions", {
   id: text("id").primaryKey(),
   songId: text("song_id").notNull().references(() => songs.id, { onDelete: "cascade" }),

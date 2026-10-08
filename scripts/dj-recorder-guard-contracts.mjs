@@ -150,7 +150,7 @@ function pageFunction(name) {
   const next = remainder.search(/^    (?:async )?function \w+\(/m);
   return deckPage.slice(start, next < 0 ? deckPage.length : start + 1 + next);
 }
-for (const match of deckPage.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g)) {
+for (const match of deckPage.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/gi)) {
   if (match[1].trim()) new vm.Script(match[1]);
 }
 const noop = () => {};
@@ -217,7 +217,7 @@ Object.assign(sandbox, {
   recorderGuardState: {},
   elements: {
     recordingStart: startButton, recordingStatus: {}, recordingNote: {},
-    recordingRig: {}, search: { value: "" }
+    recordingRig: {}, search: { value: "" }, mixIntent: { value: "hold" }
   },
   ensureAudio: async () => context,
   fetch: async (url, options) => {
@@ -242,10 +242,13 @@ Object.assign(sandbox, {
   syncDecks: noop, startDeckAudio: async () => {}, stopDeckAudio: noop, updateDeck: noop,
   startAutomatedMix: noop, updateRecordingProgress: noop
 });
+sandbox.setAutomatedCrossfader = noop;
+sandbox.scheduleAutomatedTransition = noop;
 context.decodeAudioData = async () => buffer;
 for (const name of ["trackHasPlayableAudio", "trackAudioReady", "takeoverLibraryKey", "updateTakeoverRecorderAvailability",
   "prepareTrackAudio", "prepareTakeoverSet", "buildTakeoverPlan", "startTakeoverRecording",
-  "triggerKick", "triggerTone", "playBridgeSynth", "startDeckContinuityFiller"]) {
+  "triggerKick", "triggerTone", "playBridgeSynth", "startDeckContinuityFiller",
+  "startAutomatedMix", "nextTakeoverTrack"]) {
   vm.runInContext(pageFunction(name), sandbox);
 }
 await sandbox.prepareTakeoverSet();
@@ -282,6 +285,10 @@ await Promise.all([sandbox.startTakeoverRecording(), sandbox.startTakeoverRecord
 assert.equal(recorderStarts, 1, "Concurrent start requests open only one recorder after isolation");
 assert.equal(loadCalls, 2, "Prepared first two songs load only after isolation passes");
 assert.equal(recording.preflightPassed, true);
+assert.equal(sandbox.nextTakeoverTrack().id, "one", "All remaining songs follow the cached order");
+sandbox.startAutomatedMix();
+assert.equal(recording.trackCursor, 2, "A new recording resets the cached set cursor");
+assert.equal(sandbox.nextTakeoverTrack().id, "one", "A repeated recording does not skip previously consumed songs");
 // These real page functions must return before creating any synthetic source.
 context.createOscillator = () => { throw new Error("Synthetic audio must not enter a recording"); };
 sandbox.triggerKick("A", 0);

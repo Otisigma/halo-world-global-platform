@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import vm from "node:vm";
+import { analyzeSetPreflight } from "../netlify/lib/dj-preflight.mjs";
 
 const [guardSource, deckPage] = await Promise.all([
   readFile(new URL("../dj-recorder-guard.js", import.meta.url), "utf8"),
@@ -128,6 +129,7 @@ assert.match(deckPage, /recordingState\.starting \|\| recordingState\.recorder\?
 const buildSource = deckPage.slice(deckPage.indexOf("    async function prepareTakeoverAudio("), deckPage.indexOf("    async function runSetPreflight("));
 let requests = [];
 let responseMode = "ready";
+let backendReport = null;
 const buildSandbox = {
   console, Set, Number,
   tracks: [],
@@ -146,7 +148,7 @@ const buildSandbox = {
     if (responseMode === "missing") orderedTracks = orderedTracks.slice(0, 1);
     if (responseMode === "duplicate") orderedTracks = orderedTracks.map(() => orderedTracks[0]);
     if (responseMode === "foreign") orderedTracks = [{ id: "foreign" }, ...orderedTracks.slice(1)];
-    return { ok: true, json: async () => ({ report: { status: responseMode, orderedTracks, transitions: [], qualityScore: 90 } }) };
+    return { ok: true, json: async () => ({ report: backendReport || { status: responseMode, orderedTracks, transitions: [], qualityScore: 90 } }) };
   },
   renderPreflight: () => {}, updateTakeoverQualityControl: () => {},
   renderTracks: () => {}, renderQueue: () => {},
@@ -171,6 +173,13 @@ for (const mode of ["blocked", "missing", "duplicate", "foreign"]) {
   await assert.rejects(buildSandbox.buildTakeoverPlan(buildSandbox.tracks.filter(track => track.audioBuffer)), /stopped|every playable song/);
 }
 await assert.rejects(buildSandbox.buildTakeoverPlan([buildSandbox.tracks[0], buildSandbox.tracks[0]]), /at least two playable songs/, "Two copies of one song cannot form a takeover");
+const draftSongs = [{ id: "draft-a", bpm: 124 }, { id: "draft-b", bpm: 130 }];
+backendReport = analyzeSetPreflight({ tracks: draftSongs });
+assert.equal(backendReport.status, "draft");
+await buildSandbox.buildTakeoverPlan(draftSongs);
+assert.deepEqual(Array.from(buildSandbox.recordingState.takeoverPlan).sort(), ["draft-a", "draft-b"], "Complete non-blocked draft sets remain usable");
+backendReport = null;
+buildSandbox.takeoverBuildState.readySignature = "";
 responseMode = "ready";
 buildSandbox.recordingState.recorder = { state: "recording" };
 buildSandbox.tracks.push(song("four"));

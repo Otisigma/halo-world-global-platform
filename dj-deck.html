@@ -4792,7 +4792,7 @@
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data.message || "The takeover set could not be built.");
       const ordered = data.report?.orderedTracks;
-      if (!Array.isArray(ordered) || ordered.length !== playableIds.size || new Set(ordered.map(track => track?.id)).size !== playableIds.size || !ordered.every(track => playableIds.has(track?.id)) || !Array.isArray(data.report.transitions) || !["ready", "review", "blocked"].includes(data.report.status)) {
+      if (!Array.isArray(ordered) || ordered.length !== playableIds.size || new Set(ordered.map(track => track?.id)).size !== playableIds.size || !ordered.every(track => playableIds.has(track?.id)) || !Array.isArray(data.report.transitions) || !["ready", "draft", "blocked"].includes(data.report.status)) {
         throw new Error("The takeover must include every playable song exactly once.");
       }
       latestPreflightId = data.preflightId || null;

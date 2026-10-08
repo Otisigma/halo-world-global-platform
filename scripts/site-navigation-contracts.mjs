@@ -5,6 +5,8 @@ import vm from "node:vm";
 
 const root = resolve(import.meta.dirname, "..");
 const read = path => readFile(resolve(root, path), "utf8");
+const normalizeCopy = value => value.normalize("NFKC").toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, " ").replace(/\s+/g, " ").trim();
+assert.equal(normalizeCopy("Uploading alone transfers no rights."), normalizeCopy("UPLOADING alone — transfers no rights!"), "ownership copy matching ignores punctuation and case");
 const [navigationScript, navigationStyles, musicStyles] = await Promise.all([
   read("mobile-navigation.js"),
   read("mobile-navigation.css"),
@@ -361,22 +363,30 @@ assert.match(musicStyles, /\.halo-player-bar \{ position: fixed;/, "the floating
   ]) {
     assert.ok(page.includes(asset), `built asset "${asset}" must be listed`);
   }
-  for (const source of [mainSite, creatorsPage]) {
-    assert.ok(source.includes("Other artist-uploaded content remains the uploader’s property unless an explicit split or ownership agreement is configured on HALO."), "public ownership copy must preserve uploader rights unless explicitly agreed");
-    assert.ok(source.includes("Owen Anthony’s music is owned by Halo Music."), "public ownership copy must identify Owen Anthony music ownership");
-    assert.ok(source.includes("Uploading alone transfers no rights."), "uploading must not transfer rights");
-    assert.ok(source.includes("HALO software and technical infrastructure are proprietary."), "platform IP must remain separate from upload ownership");
+  for (const source of [mainSite, creatorsPage].map(normalizeCopy)) {
+    assert.ok(source.includes(normalizeCopy("Other artist-uploaded content remains the uploader’s property unless an explicit split or ownership agreement is configured on HALO.")), "public ownership copy must preserve uploader rights unless explicitly agreed");
+    assert.ok(source.includes(normalizeCopy("Owen Anthony’s music is owned by Halo Music.")), "public ownership copy must identify Owen Anthony music ownership");
+    assert.ok(source.includes(normalizeCopy("Uploading alone transfers no rights.")), "uploading must not transfer rights");
+    assert.ok(source.includes(normalizeCopy("HALO software and technical infrastructure are proprietary.")), "platform IP must remain separate from upload ownership");
   }
-  assert.match(releasePage, /artist-uploaded music and content/i, "release ownership copy must state the uploader-owned default");
-  assert.match(releasePage, /100% the uploader’s property by default/i, "release ownership copy must state the default share");
-  assert.match(releasePage, /explicitly configured and agreed on this site/i, "release ownership changes must be explicitly configured and agreed");
-  assert.match(releasePage, /Halo Music (?:owns|’s ownership claim covers) Owen Anthony’s music only/i, "release copy must limit Halo Music ownership to Owen Anthony music");
+  const normalizedReleasePage = normalizeCopy(releasePage);
+  assert.ok(normalizedReleasePage.includes(normalizeCopy("artist-uploaded music and content")), "release ownership copy must state the uploader-owned default");
+  assert.ok(normalizedReleasePage.includes(normalizeCopy("100% the uploader’s property by default")), "release ownership copy must state the default share");
+  assert.ok(normalizedReleasePage.includes(normalizeCopy("explicitly configured and agreed on this site")), "release ownership changes must be explicitly configured and agreed");
+  assert.ok(normalizedReleasePage.includes(normalizeCopy("Halo Music owns Owen Anthony’s music only")), "release copy must limit Halo Music ownership to Owen Anthony music");
+  assert.ok(normalizedReleasePage.includes(normalizeCopy("Uploading alone transfers no rights")), "uploading must not transfer rights in the Release House");
   for (const source of [mainSite, creatorsPage, releasePage]) {
     assert.doesNotMatch(source, /Anson Wilshire/i, "public ownership copy must not expose the technology rights holder’s personal name");
   }
-  assert.match(page, /platform’s technology\/IP rights holder/i, "platform technology ownership must be distinguished from artist uploads");
-  assert.match(syncPage, /Owen Anthony music for sync discussions/i, "sync copy must not imply catalog-wide Halo ownership");
-  assert.match(releaseScript, /© 2026 Halo Music \(Owen Anthony composition\) \/ ℗ 2026 Halo Music \(Owen Anthony recording\)/, "release metadata must scope music ownership to Owen Anthony");
+  const normalizedPage = normalizeCopy(page);
+  assert.ok(normalizedPage.includes(normalizeCopy("platform’s technology/IP rights holder")), "platform technology ownership must be distinguished from artist uploads");
+  assert.ok(normalizedPage.includes(normalizeCopy("Halo Music ownership applies only to Owen Anthony music")), "asset inventory must limit Halo Music ownership to Owen Anthony music");
+  assert.ok(normalizedPage.includes(normalizeCopy("confirm master, publishing, contributor, and clearance status for each release and intended use")), "asset inventory rights must be confirmed per release and use");
+  const normalizedSyncPage = normalizeCopy(syncPage);
+  assert.ok(normalizedSyncPage.includes(normalizeCopy("Owen Anthony music for sync discussions")), "sync copy must not imply catalog-wide Halo ownership");
+  assert.ok(normalizedSyncPage.includes(normalizeCopy("rights must be confirmed for each track and intended use")), "sync rights must be confirmed for each track and use");
+  assert.ok(normalizedSyncPage.includes(normalizeCopy("no license is granted until written approval")), "sync copy must require written approval before licensing");
+  assert.ok(normalizeCopy(releaseScript).includes(normalizeCopy("© 2026 Halo Music (Owen Anthony composition) / ℗ 2026 Halo Music (Owen Anthony recording)")), "release metadata must scope music ownership to Owen Anthony");
   for (const value of ["$35,000–$60,000", "$50,000–$120,000", "$15,000–$35,000", "$100,000–$215,000"]) {
     assert.ok(page.includes(value), `valuation ${value} must be listed`);
   }

@@ -1,162 +1,106 @@
 (function (global) {
   "use strict";
 
-  // Recorder isolation & audio feedback guard for the DJ deck takeover recorder.
-  // The recorder taps the post-limiter master bus while CUE monitoring runs on a separate
-  // local path. This guard watches for the conditions that most often let cue-monitor bleed,
-  // background monitoring audio, or feedback loops reach a direct recording, and raises an
-  // actionable warning. It reduces risk; it does not guarantee absolute silence on the feed.
-
-  const DEFAULT_CONFIG = Object.freeze({
-    checkIntervalMs: 250,
-    masterLimit: 0.8,
-    holdMs: 1500
-  });
-
-  const SECURE_TITLE = "Recorder isolation secure";
-  const TRIGGERED_TITLE = "Audio bleed guard triggered";
-
-  function clampLevel(value) {
-    const number = Number(value);
-    if (!Number.isFinite(number) || number <= 0) return 0;
-    return Math.min(1, number);
-  }
-
-  function deckList(decks) {
-    const list = Array.isArray(decks) ? decks.filter(Boolean).map(String) : [];
-    if (!list.length) return "the cue bus";
-    return `Deck ${list.join(" and Deck ")}`;
-  }
-
-  function evaluateRecorderGuard(inputs = {}, config = {}) {
-    const settings = { ...DEFAULT_CONFIG, ...config };
-    const isRecording = Boolean(inputs.isRecording);
-    const cueBusActive = Boolean(inputs.cueBusActive);
-    const masterBusLevel = clampLevel(inputs.masterBusLevel);
-    const activeCueDecks = Array.isArray(inputs.activeCueDecks) ? inputs.activeCueDecks.slice() : [];
-    const nearLimit = masterBusLevel > settings.masterLimit;
-    const levelPercent = Math.round(masterBusLevel * 100);
-    const bleedRisk = isRecording && cueBusActive && nearLimit;
-
-    if (bleedRisk) {
-      return {
-        state: "triggered",
-        isSecureToRecord: false,
-        bleedDetected: true,
-        isRecording,
-        cueBusActive,
-        masterBusLevel,
-        activeCueDecks,
-        title: TRIGGERED_TITLE,
-        warningMessage: `CUE monitoring on ${deckList(activeCueDecks)} is active while the master bus is near its limit (${levelPercent}%). Release CUE or pull the channel faders down so headphone bleed and feedback stay out of the recording.`
-      };
-    }
-
-    let message;
-    if (!isRecording) {
-      message = "The recorder taps the post-limiter master bus only; CUE headphones stay on a separate local path. The guard watches for likely bleed conditions once recording starts.";
-    } else if (cueBusActive) {
-      message = `Recording the master bus. CUE on ${deckList(activeCueDecks)} stays on the local monitor path — keep the master below its limit to avoid headphone bleed.`;
-    } else {
-      message = "Recording the master bus only. No likely cue-bleed or feedback conditions detected.";
-    }
-
-    return {
-      state: "secure",
-      isSecureToRecord: true,
-      bleedDetected: false,
-      isRecording,
-      cueBusActive,
-      masterBusLevel,
-      activeCueDecks,
-      title: SECURE_TITLE,
-      warningMessage: "",
-      message
-    };
-  }
-
+  // Only deck music enters this graph. Room input, continuity synthesis and CUE
+  // retain their live monitor routes and cannot reach the recorder limiter.
   class HaloRecorderGuard {
     constructor(options = {}) {
-      this.config = { ...DEFAULT_CONFIG, ...(options.config || {}) };
-      this.callbacks = {
-        readInputs: options.readInputs || (() => ({})),
-        onStatusChange: options.onStatusChange || (() => {}),
-        now: options.now || (() => Date.now())
-      };
-      this.timer = 0;
-      this.triggeredUntil = 0;
-      this.heldLevel = 0;
-      this.state = evaluateRecorderGuard({}, this.config);
-    }
-
-    init() {
-      this.callbacks.onStatusChange(this.state);
-      this.startWatchdog();
-      return this;
-    }
-
-    tick() {
-      const inputs = this.callbacks.readInputs() || {};
-      const next = evaluateRecorderGuard(inputs, this.config);
-      const now = this.callbacks.now();
-      let resolved = next;
-      if (next.state === "triggered") {
-        this.triggeredUntil = now + this.config.holdMs;
-        this.heldLevel = next.masterBusLevel;
-      } else if (this.state.state === "triggered" && next.isRecording && next.cueBusActive && now < this.triggeredUntil) {
-        // Hold the warning briefly at the last hot peak so transient dips do not make the indicator
-        // flicker, while still reflecting the cue decks that are active right now.
-        resolved = evaluateRecorderGuard({ ...inputs, masterBusLevel: this.heldLevel }, this.config);
-      } else {
-        this.triggeredUntil = 0;
-        this.heldLevel = 0;
+      this.context = options.context;
+      this.onStatusChange = options.onStatusChange || (() => {});
+      this.wait = options.wait || (ms => new Promise(resolve => global.setTimeout(resolve, ms)));
+      const context = this.context;
+      this.musicBus = context.createGain();
+      this.musicBus.gain.setValueAtTime(.82, context.currentTime);
+      this.limiter = context.createDynamicsCompressor();
+      for (const [name, value] of Object.entries({ threshold: -8, knee: 8, ratio: 8, attack: .004, release: .16 })) {
+        this.limiter[name].setValueAtTime(value, context.currentTime);
       }
-      const changed = resolved.state !== this.state.state
-        || resolved.warningMessage !== this.state.warningMessage
-        || resolved.message !== this.state.message;
-      this.state = resolved;
-      if (changed) this.callbacks.onStatusChange(resolved);
-      return resolved;
+      this.destination = context.createMediaStreamDestination();
+      this.musicBus.connect(this.limiter);
+      this.limiter.connect(this.destination);
+      const splitter = context.createChannelSplitter(2);
+      this.limiter.connect(splitter);
+      this.analysers = [0, 1].map(channel => {
+        const analyser = context.createAnalyser();
+        analyser.fftSize = 2048;
+        splitter.connect(analyser, channel);
+        return analyser;
+      });
+      this.samples = new Float32Array(2048);
+      this.publish("idle", "Quiet-feed preflight required", "Post-limiter music only. CUE stays monitor-only.");
     }
 
-    startWatchdog() {
-      this.stopWatchdog();
-      this.timer = global.setInterval(() => this.tick(), this.config.checkIntervalMs);
+    publish(state, title, message) {
+      this.state = { state, title, message };
+      this.onStatusChange(this.state);
     }
 
-    stopWatchdog() {
-      if (!this.timer) return;
-      global.clearInterval(this.timer);
-      this.timer = 0;
+    async preflight(isQuiet) {
+      this.publish("checking", "Checking recorder isolation", "Measuring both recorder channels before recording.");
+      try {
+        // Do not mute the recorder branch: that would conceal noise or bleed.
+        await this.wait(300);
+        const startedAt = this.context.currentTime;
+        for (let index = 0; index < 8; index += 1) {
+          await this.wait(100);
+          if (this.context.state !== "running" || !isQuiet()) throw new Error("Stop both decks before the quiet-feed isolation check.");
+          if (!this.destination.stream.getAudioTracks().some(track => track.readyState === "live")) throw new Error("Recorder audio feed is unavailable.");
+          for (const analyser of this.analysers) {
+            this.samples.fill(Number.NaN);
+            analyser.getFloatTimeDomainData(this.samples);
+            if (!HaloRecorderGuard.isQuietFrame(this.samples)) throw new Error("Noise or audio remains on the recorder music bus. Quiet-feed isolation did not pass.");
+          }
+        }
+        if (this.context.currentTime - startedAt < .7) throw new Error("Recorder isolation could not measure a running audio feed.");
+        this.publish("ready", "Quiet-feed isolation passed", "Recording is armed for this start only; CUE remains monitor-only.");
+      } catch (error) {
+        this.publish("blocked", "Recording blocked", error.message);
+        throw error;
+      }
     }
 
-    destroy() {
-      this.stopWatchdog();
+    async start(createRecorder, isQuiet) {
+      if (this.starting) throw new Error("Recorder start is already in progress.");
+      this.starting = true;
+      try {
+        await this.preflight(isQuiet);
+        if (!isQuiet() || this.context.state !== "running") throw new Error("Recorder feed changed after preflight.");
+        const recorder = createRecorder(this.destination.stream);
+        recorder.start(1000);
+        this.publish("recording", "Recording isolated music", "Post-limiter deck music only. CUE and continuity monitoring are excluded.");
+        return recorder;
+      } catch (error) {
+        this.publish("blocked", "Recording blocked", error.message);
+        throw error;
+      } finally {
+        this.starting = false;
+      }
     }
-  }
 
-  // Framework-free equivalent of a `useRecorderGuard` hook: subscribes to recording state,
-  // master bus level and cue bus activity and pushes secure/triggered state to the listener.
-  function useRecorderGuard(options = {}) {
-    return new HaloRecorderGuard(options).init();
-  }
+    static isQuietFrame(samples) {
+      if (!samples.length) return false;
+      let total = 0;
+      let peak = 0;
+      for (const sample of samples) {
+        if (!Number.isFinite(sample)) return false;
+        total += sample * sample;
+        peak = Math.max(peak, Math.abs(sample));
+      }
+      return Math.sqrt(total / samples.length) <= .0001 && peak <= .0005;
+    }
 
-  function renderRecorderGuardIndicator(element, state) {
-    if (!element || !state) return;
-    const secure = state.state !== "triggered";
-    element.dataset.state = secure ? "secure" : "triggered";
-    element.classList?.toggle?.("is-secure", secure);
-    element.classList?.toggle?.("is-triggered", !secure);
-    element.setAttribute?.("role", secure ? "status" : "alert");
-    element.setAttribute?.("aria-live", secure ? "polite" : "assertive");
-    const title = element.querySelector?.("[data-recorder-guard-title]");
-    const message = element.querySelector?.("[data-recorder-guard-message]");
-    if (title) title.textContent = state.title || (secure ? SECURE_TITLE : TRIGGERED_TITLE);
-    if (message) message.textContent = secure ? (state.message || "") : state.warningMessage;
+    static renderIndicator(element, state) {
+      if (!element || !state) return;
+      const blocked = state.state === "blocked";
+      element.dataset.state = state.state;
+      element.classList.toggle("is-secure", ["ready", "recording"].includes(state.state));
+      element.classList.toggle("is-triggered", blocked);
+      element.setAttribute("role", blocked ? "alert" : "status");
+      element.setAttribute("aria-live", blocked ? "assertive" : "polite");
+      element.querySelector("[data-recorder-guard-title]").textContent = state.title;
+      element.querySelector("[data-recorder-guard-message]").textContent = state.message;
+    }
   }
 
   global.HaloRecorderGuard = HaloRecorderGuard;
-  global.HaloRecorderGuard.evaluate = evaluateRecorderGuard;
-  global.HaloRecorderGuard.renderIndicator = renderRecorderGuardIndicator;
-  global.useRecorderGuard = useRecorderGuard;
 })(typeof window !== "undefined" ? window : globalThis);

@@ -7,123 +7,173 @@ const [guardSource, deckPage] = await Promise.all([
   readFile(new URL("../dj-deck.html", import.meta.url), "utf8")
 ]);
 
-const sandbox = {
-  console,
-  globalThis: null,
-  setInterval(handler, interval) { sandbox.__interval = interval; sandbox.__handler = handler; return 1; },
-  clearInterval() { sandbox.__cleared = true; }
-};
-sandbox.globalThis = sandbox;
+const sandbox = { console, setTimeout };
 vm.createContext(sandbox);
 vm.runInContext(guardSource, sandbox);
+const { HaloRecorderGuard } = sandbox;
 
-const { HaloRecorderGuard, useRecorderGuard } = sandbox;
-assert.equal(typeof HaloRecorderGuard, "function", "Recorder guard exports a global constructor");
-assert.equal(typeof useRecorderGuard, "function", "Recorder guard exposes a hook-style entry point");
-const evaluate = HaloRecorderGuard.evaluate;
-
-const idle = evaluate({ isRecording: false, masterBusLevel: 0.95, cueBusActive: true, activeCueDecks: ["A"] });
-assert.equal(idle.isSecureToRecord, true, "Guard stays secure while the recorder is not running");
-assert.equal(idle.bleedDetected, false);
-assert.equal(idle.warningMessage, "");
-
-const cleanRecording = evaluate({ isRecording: true, masterBusLevel: 0.95, cueBusActive: false });
-assert.equal(cleanRecording.state, "secure", "Hot master without cue monitoring is not a bleed condition");
-
-const quietCue = evaluate({ isRecording: true, masterBusLevel: 0.5, cueBusActive: true, activeCueDecks: ["B"] });
-assert.equal(quietCue.state, "secure", "Cue monitoring below the master limit stays secure");
-assert.match(quietCue.message, /Deck B/, "Secure copy still names the active cue deck");
-
-const triggered = evaluate({ isRecording: true, masterBusLevel: 0.92, cueBusActive: true, activeCueDecks: ["A", "B"] });
-assert.equal(triggered.state, "triggered", "Recording + active cue + master near limit triggers the guard");
-assert.equal(triggered.isSecureToRecord, false);
-assert.equal(triggered.bleedDetected, true);
-assert.match(triggered.warningMessage, /Deck A and Deck B/, "Warning names the cue decks");
-assert.match(triggered.warningMessage, /92%/, "Warning reports the master level");
-assert.match(triggered.warningMessage, /Release CUE/, "Warning is actionable");
-
-assert.equal(evaluate({ isRecording: true, masterBusLevel: Number.NaN, cueBusActive: true }).state, "secure", "Invalid levels are treated as silence");
-assert.equal(evaluate({ isRecording: true, masterBusLevel: 0.8, cueBusActive: true }).state, "secure", "The configured limit itself is not exceeded");
-assert.equal(evaluate({ isRecording: true, masterBusLevel: 0.7, cueBusActive: true }, { masterLimit: 0.6 }).state, "triggered", "The master limit is configurable");
-
-for (const state of [idle, cleanRecording, quietCue, triggered]) {
-  assert.doesNotMatch(`${state.title} ${state.message || ""} ${state.warningMessage}`, /zero bleed|guarantee|pristine|100% clean/i, "Guard copy never promises absolute silence");
+class Node {
+  constructor() { this.connections = []; }
+  connect(node) { this.connections.push(node); return node; }
 }
+class Param {
+  setValueAtTime(value) { this.value = value; }
+}
+function context() {
+  return {
+    state: "running", currentTime: 0, destination: new Node(),
+    createGain() { return Object.assign(new Node(), { gain: new Param() }); },
+    createDynamicsCompressor() {
+      return Object.assign(new Node(), Object.fromEntries(["threshold", "knee", "ratio", "attack", "release"].map(key => [key, new Param()])));
+    },
+    createMediaStreamDestination() { return Object.assign(new Node(), { stream: { getAudioTracks: () => [{ readyState: "live" }] } }); },
+    createChannelSplitter() { return new Node(); },
+    createAnalyser() { return Object.assign(new Node(), { level: 0, reads: 0, getFloatTimeDomainData(data) { this.reads += 1; data.fill(this.level); } }); }
+  };
+}
+function setup() {
+  const audio = context();
+  const statuses = [];
+  const guard = new HaloRecorderGuard({
+    context: audio,
+    wait: async ms => { audio.currentTime += ms / 1000; },
+    onStatusChange: state => statuses.push(state)
+  });
+  return { audio, guard, statuses };
+}
+function reaches(source, target, seen = new Set()) {
+  if (source === target) return true;
+  if (seen.has(source)) return false;
+  seen.add(source);
+  return source.connections.some(node => reaches(node, target, seen));
+}
+const { guard, audio, statuses } = setup();
+const deckGain = audio.createGain();
+const cue = audio.createGain();
+const liveMaster = audio.createGain();
+const filler = audio.createGain();
+const roomInput = audio.createGain();
+deckGain.connect(liveMaster);
+deckGain.connect(guard.musicBus);
+cue.connect(audio.destination);
+filler.connect(liveMaster);
+roomInput.connect(liveMaster);
+liveMaster.connect(audio.destination);
+assert.equal(reaches(deckGain, guard.destination), true, "Deck music reaches the recorder");
+assert.equal(reaches(guard.musicBus, guard.limiter), true, "Music is limited before recording");
+assert.deepEqual(guard.musicBus.connections, [guard.limiter], "Music cannot bypass the limiter");
+for (const excluded of [cue, filler, roomInput, liveMaster]) {
+  assert.equal(reaches(excluded, guard.destination), false, "Monitor sources cannot reach recording");
+}
+assert.equal(reaches(guard.musicBus, audio.destination), false, "Recorder graph does not double live playback");
+assert.equal(statuses[0].state, "idle", "Idle is not falsely labelled secure");
 
-let clock = 0;
-let inputs = { isRecording: false, masterBusLevel: 0, cueBusActive: false, activeCueDecks: [] };
-const statuses = [];
-const guard = useRecorderGuard({ readInputs: () => inputs, onStatusChange: status => statuses.push(status), now: () => clock });
-assert.equal(sandbox.__interval, 250, "Guard samples the recorder feed four times per second");
-assert.equal(statuses.at(-1).state, "secure", "Guard publishes an initial secure state");
+assert.equal(HaloRecorderGuard.isQuietFrame(new Float32Array(2048)), true);
+for (const value of [.001, .01, Number.NaN, Infinity]) {
+  assert.equal(HaloRecorderGuard.isQuietFrame(new Float32Array(2048).fill(value)), false, "Noise, DC and invalid samples fail closed");
+}
+for (const frequency of [50, 60]) {
+  const hum = Float32Array.from({ length: 2048 }, (_, i) => .001 * Math.sin(2 * Math.PI * frequency * i / 48000));
+  assert.equal(HaloRecorderGuard.isQuietFrame(hum), false, `${frequency} Hz mains hum is not a quiet feed`);
+}
+const transient = new Float32Array(2048);
+transient[1] = .001;
+assert.equal(HaloRecorderGuard.isQuietFrame(transient), false, "A short transient cannot hide below RMS threshold");
 
-inputs = { isRecording: true, masterBusLevel: 0.9, cueBusActive: true, activeCueDecks: ["A"] };
-guard.tick();
-assert.equal(statuses.at(-1).state, "triggered", "Guard publishes the triggered state");
-
-clock = 500;
-inputs = { ...inputs, masterBusLevel: 0.4 };
-guard.tick();
-assert.equal(guard.state.state, "triggered", "Warning is held briefly so transient peaks do not flicker");
-assert.match(guard.state.warningMessage, /90%/, "Held warning keeps the last hot peak");
-
-clock = 700;
-inputs = { ...inputs, activeCueDecks: ["B"] };
-guard.tick();
-assert.equal(statuses.at(-1).state, "triggered");
-assert.match(statuses.at(-1).warningMessage, /Deck B/, "Held warning follows the cue deck that is active now");
-assert.doesNotMatch(statuses.at(-1).warningMessage, /Deck A/);
-
-clock = 2500;
-guard.tick();
-assert.equal(statuses.at(-1).state, "secure", "Guard clears once the hold window passes");
-
-inputs = { isRecording: true, masterBusLevel: 0.9, cueBusActive: true, activeCueDecks: ["A"] };
-clock = 3000;
-guard.tick();
-inputs = { isRecording: true, masterBusLevel: 0.9, cueBusActive: false, activeCueDecks: [] };
-clock = 3100;
-guard.tick();
-assert.equal(statuses.at(-1).state, "secure", "Releasing CUE clears the guard immediately");
-guard.destroy();
-assert.equal(sandbox.__cleared, true, "Guard stops its watchdog on destroy");
-
-const classes = new Set();
-const title = { textContent: "" };
-const message = { textContent: "" };
-const indicator = {
-  dataset: {},
-  attributes: {},
-  classList: { toggle(name, on) { if (on) classes.add(name); else classes.delete(name); } },
-  setAttribute(name, value) { this.attributes[name] = value; },
-  querySelector(selector) { return selector === "[data-recorder-guard-title]" ? title : selector === "[data-recorder-guard-message]" ? message : null; }
+let starts = 0;
+const createRecorder = stream => {
+  assert.equal(stream, guard.destination.stream);
+  return { start(timeslice) { starts += 1; assert.equal(timeslice, 1000); } };
 };
-HaloRecorderGuard.renderIndicator(indicator, triggered);
-assert.equal(indicator.dataset.state, "triggered");
-assert.ok(classes.has("is-triggered") && !classes.has("is-secure"), "Indicator switches to the triggered style");
-assert.equal(indicator.attributes.role, "alert", "Triggered indicator is announced as an alert");
-assert.equal(indicator.attributes["aria-live"], "assertive", "Alert live region is assertive");
-assert.equal(title.textContent, "Audio bleed guard triggered");
-assert.equal(message.textContent, triggered.warningMessage);
-HaloRecorderGuard.renderIndicator(indicator, cleanRecording);
-assert.ok(classes.has("is-secure") && !classes.has("is-triggered"), "Indicator returns to the secure style");
-assert.equal(title.textContent, "Recorder isolation secure");
-assert.equal(indicator.attributes["aria-live"], "polite", "Secure status live region is polite");
+await guard.start(createRecorder, () => true);
+assert.equal(starts, 1);
+assert.equal(guard.analysers[0].reads, 8);
+assert.equal(guard.analysers[1].reads, 8, "Both channels are measured independently, avoiding phase cancellation");
+assert.equal(guard.state.state, "recording");
+guard.analysers[1].level = .001;
+await assert.rejects(guard.start(createRecorder, () => true), /Noise or audio/);
+assert.equal(starts, 1, "Every start requires a new passing preflight");
+assert.equal(guard.state.state, "blocked");
+guard.analysers[1].level = 0;
+await assert.rejects(guard.start(createRecorder, () => false), /Stop both decks/);
+audio.state = "suspended";
+await assert.rejects(guard.start(createRecorder, () => true), /Stop both decks/);
+audio.state = "running";
+guard.destination.stream.getAudioTracks = () => [];
+await assert.rejects(guard.start(createRecorder, () => true), /unavailable/);
 
-assert.match(deckPage, /<script src="\/dj-recorder-guard\.js" defer><\/script>/, "DJ deck loads the recorder guard");
-const guardIndex = deckPage.indexOf('id="recorderGuard"');
-const rigIndex = deckPage.indexOf('id="recordingRig"');
-const recorderTitleIndex = deckPage.indexOf('id="recordingTitle"');
-assert.ok(rigIndex > -1 && guardIndex > rigIndex && guardIndex < recorderTitleIndex, "Indicator sits directly above the Takeover recorder heading");
-assert.match(deckPage, /data-recorder-guard-title/, "Indicator exposes a title slot");
-assert.match(deckPage, /data-recorder-guard-message/, "Indicator exposes a message slot");
-assert.match(deckPage, /function attachRecorderGuardToDeck\(/, "DJ deck wires the recorder guard");
-assert.match(deckPage, /const isRecording = recordingState\.recorder\?\.state === "recording"/, "Guard reads the live recorder state");
-assert.match(deckPage, /const cueBusActive = activeCueDecks\.length > 0/, "Guard reads cue bus activity");
-assert.match(deckPage, /masterBusLevel: isRecording && cueBusActive \? recorderGuardMasterLevel\(\) : 0/, "Guard reads the master bus level only when it can affect the result");
-assert.match(deckPage, /recorderGuardState\.guard\?\.tick\(\);/, "Cue toggles refresh the guard immediately");
-assert.match(deckPage, /cueGain\.connect\(context\.destination\)/, "CUE monitoring stays on the local output path");
-assert.match(deckPage, /limiter\.connect\(audioEngine\.recordingDestination\)/, "Recorder taps the post-limiter master bus");
-assert.doesNotMatch(deckPage, /cueGain\.connect\(audioEngine\.recordingDestination\)/, "CUE monitoring is never routed into the recorder");
+const frozen = setup().guard;
+frozen.wait = async () => {};
+await assert.rejects(frozen.start(() => { throw new Error("must not create"); }, () => true), /running audio feed/);
+const unreadable = setup().guard;
+unreadable.analysers[0].getFloatTimeDomainData = () => {};
+await assert.rejects(unreadable.start(() => {}, () => true), /Noise or audio/);
+const racing = setup().guard;
+let release;
+racing.wait = () => release ? Promise.resolve() : new Promise(resolve => { release = resolve; });
+const pending = racing.start(() => {}, () => false);
+await assert.rejects(racing.start(() => {}, () => true), /already in progress/);
+release();
+await assert.rejects(pending, /Stop both decks/);
 
-console.log("DJ recorder guard contracts: bleed detection, hold window, indicator rendering, and deck wiring behave as expected.");
+assert.doesNotMatch(deckPage, /deckReviewPanel|initDeckReviewPanel|Current mix \/\/ review|id="takeoverQc"/, "Old readiness/review and QC block is removed");
+assert.match(deckPage, /cueGain\.connect\(context\.destination\)/);
+assert.match(deckPage, /gain\.connect\(recorderGuardState\.guard\.musicBus\)/, "Recorder receives only deck music gains");
+assert.doesNotMatch(deckPage, /limiter\.connect\(audioEngine\.recordingDestination\)/, "Live master with continuity audio is not recorded");
+assert.match(deckPage, /await recorderGuardState\.guard\.start\(/, "Recording starts through the measured preflight gate");
+assert.doesNotMatch(deckPage, /recorder\.start\(/, "Deck cannot bypass the isolation start gate");
+assert.match(deckPage, /await autoBuildTakeover\(\)/, "Audio upload triggers automatic full-set preparation");
+assert.match(deckPage, /recordingState\.starting \|\| recordingState\.recorder\?\.state === "recording"/, "Repeated start requests cannot replace an active recorder");
+
+const buildSource = deckPage.slice(deckPage.indexOf("    async function prepareTakeoverAudio("), deckPage.indexOf("    async function runSetPreflight("));
+let requests = [];
+let responseMode = "ready";
+const buildSandbox = {
+  console, Set, Number,
+  tracks: [],
+  takeoverSession: { name: "DJ HALO", minutes: 30, dj: "halo" },
+  takeoverBuildState: { promise: null, signature: "", readySignature: "" },
+  recordingState: { takeoverPlan: [], playedTrackIds: new Set(), starting: false },
+  audioEngine: { context: { decodeAudioData: async data => { if (data === "bad") throw new Error("corrupt"); return { duration: 60 }; } } },
+  elements: { recordingStart: {}, recordingStatus: {}, recordingNote: {}, recordingRig: {}, search: {} },
+  ensureAudio: async () => {},
+  trackHasPlayableAudio: track => Boolean(track.audioBuffer || track.audioAsset?.file || track.stemAssets),
+  preflightTrackPayload: track => ({ id: track.id, title: track.title }),
+  fetch: async (url, options) => {
+    const payload = JSON.parse(options.body);
+    requests.push(payload);
+    let orderedTracks = payload.tracks;
+    if (responseMode === "missing") orderedTracks = orderedTracks.slice(0, 1);
+    if (responseMode === "duplicate") orderedTracks = orderedTracks.map(() => orderedTracks[0]);
+    if (responseMode === "foreign") orderedTracks = [{ id: "foreign" }, ...orderedTracks.slice(1)];
+    return { ok: true, json: async () => ({ report: { status: responseMode, orderedTracks, transitions: [], qualityScore: 90 } }) };
+  },
+  renderPreflight: () => {}, updateTakeoverQualityControl: () => {},
+  renderTracks: () => {}, renderQueue: () => {},
+  window: {}, djMode: "club"
+};
+vm.createContext(buildSandbox);
+vm.runInContext(buildSource, buildSandbox);
+assert.equal(await buildSandbox.autoBuildTakeover(), false, "Empty library cannot build");
+const song = id => ({ id, audioAsset: { file: { arrayBuffer: async () => id === "bad" ? "bad" : "audio" } } });
+buildSandbox.tracks.push(song("one"), song("bad"), { id: "empty-stems", stemAssets: {} });
+assert.equal(await buildSandbox.autoBuildTakeover(), false, "Files and empty stem objects do not count as decoded playable songs");
+assert.equal(requests.length, 0, "Set planner is not called with fewer than two playable songs");
+buildSandbox.tracks.push(song("two"), song("three"));
+assert.equal(await buildSandbox.autoBuildTakeover(), true);
+assert.deepEqual(requests.at(-1).tracks.map(track => track.id), ["one", "two", "three"], "Every decoded playable song enters the full-set build");
+assert.deepEqual(Array.from(buildSandbox.recordingState.takeoverPlan), ["one", "two", "three"]);
+assert.equal(buildSandbox.tracks.find(track => track.id === "three").duration, 60);
+assert.equal(await buildSandbox.autoBuildTakeover(), true);
+assert.equal(requests.length, 1, "Prepared set is reused without rebuilding or starting playback");
+for (const mode of ["blocked", "missing", "duplicate", "foreign"]) {
+  responseMode = mode;
+  await assert.rejects(buildSandbox.buildTakeoverPlan(buildSandbox.tracks.filter(track => track.audioBuffer)), /stopped|every playable song/);
+}
+await assert.rejects(buildSandbox.buildTakeoverPlan([buildSandbox.tracks[0], buildSandbox.tracks[0]]), /at least two playable songs/, "Two copies of one song cannot form a takeover");
+responseMode = "ready";
+buildSandbox.recordingState.recorder = { state: "recording" };
+buildSandbox.tracks.push(song("four"));
+assert.equal(await buildSandbox.autoBuildTakeover(), false, "Uploads during a recording do not rewrite its locked set");
+
+console.log("DJ recorder contracts passed: isolated music routing, stereo quiet-feed start gate, and decoded full-set takeover preparation.");

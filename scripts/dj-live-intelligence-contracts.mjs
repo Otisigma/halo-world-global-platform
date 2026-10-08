@@ -68,6 +68,7 @@ await secondDecode;
 assert.equal(maxDecoding, 1);
 assert.equal(first.buffer, firstBuffer);
 assert.equal(first.promise, null);
+assert.equal(await memory.decodeQueue, null, "The serialization tail never retains a completed AudioBuffer");
 memory.pinAssets([second]);
 assert.equal(first.buffer, null, "Replacing/ejecting a deck releases its library buffer");
 assert.ok(second.buffer, "The other deck's decoded buffer survives");
@@ -100,6 +101,9 @@ await Promise.all(rapidTasks);
 assert.equal(rapidDecodes, 1, "Superseded queued loads skip file reads and decoding");
 assert.equal(rapid.filter(asset => asset.buffer).length, 1, "Rapid deck changes do not accumulate decoded audio");
 assert.ok(failing.buffer, "The live deck stays pinned throughout rapid loads");
+memory.pinAssets([]);
+assert.equal(await memory.decodeQueue, null, "Ejecting both decks leaves no buffer in the decode queue");
+assert.equal(failing.buffer, null);
 
 memory.lockUploadBatch([{ id: "allowed" }]);
 const calls = [];

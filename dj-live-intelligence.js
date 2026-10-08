@@ -47,7 +47,7 @@
         return buffer;
       });
       asset.promise = task.finally(() => { asset.promise = null; });
-      this.decodeQueue = asset.promise.catch(() => null);
+      this.decodeQueue = asset.promise.then(() => null, () => null);
       return asset.promise;
     }
   }

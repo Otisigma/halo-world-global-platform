@@ -745,7 +745,9 @@
     const releaseForFallback = satelliteVideoFallbackEnabled
       ? state.releases.find(release => `fallback-${release.id}` === videoId)
       : null;
-    const matchedVideo = state.videos.find(item => item.id === videoId);
+    const activeRelease = state.releases.find(release => release.id === state.activeReleaseId);
+    const directVideo = activeRelease ? directVideoForRelease(activeRelease) : null;
+    const matchedVideo = directVideo?.id === videoId ? directVideo : state.videos.find(item => item.id === videoId);
     const releaseForMatchedVideoFallback = satelliteVideoFallbackEnabled && matchedVideo && !isPlayableVideo(matchedVideo)
       ? state.releases.find(release => release.id === state.activeReleaseId)
       : null;
@@ -768,14 +770,74 @@
       embedUrl.searchParams.set("rel", "0");
       youtubeEmbed = embedUrl.href;
     } catch {}
-    const player = video.sourceType === "youtube"
-      ? `<iframe src="${escapeHtml(youtubeEmbed)}" title="${escapeHtml(video.title)}" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>`
-      : `<video src="${escapeHtml(source)}" controls autoplay playsinline></video>`;
     const frame = document.createElement("div");
     frame.className = "stage-video-frame";
-    frame.innerHTML = player;
-    poster.replaceWith(frame);
+    if (video.sourceType === "youtube") {
+      frame.innerHTML = `<iframe src="${escapeHtml(youtubeEmbed)}" title="${escapeHtml(video.title)}" allow="autoplay; encrypted-media; picture-in-picture" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>`;
+      poster.replaceWith(frame);
+      const watchUrl = safeUrl(video.sourceUrl) || safeUrl(embed);
+      if (watchUrl) frame.after(videoOpenLink(watchUrl, "Trouble playing? Watch on YouTube"));
+    } else {
+      poster.replaceWith(frame);
+      mountExplicitVideo(frame, video, source);
+    }
     window.haloStats?.track("play_halo_video", { target: video.id, track: state.activeReleaseId });
+  }
+
+  function videoMimeType(source) {
+    const extension = String(source || "").split(/[?#]/)[0].match(/\.(mp4|m4v|webm)$/i)?.[1]?.toLowerCase();
+    return { mp4: "video/mp4", m4v: "video/mp4", webm: "video/webm" }[extension] || "";
+  }
+
+  function videoOpenLink(href, label) {
+    const link = document.createElement("a");
+    link.className = "stage-video-open";
+    link.href = href;
+    link.target = "_blank";
+    link.rel = "noopener noreferrer";
+    link.textContent = `${label} ↗`;
+    return link;
+  }
+
+  function showVideoFallback(frame, video, source) {
+    frame.innerHTML = `<div class="stage-video-fallback-visual">
+      <img src="${escapeHtml(safeUrl(video.thumbnailUrl, fallbackArtwork))}" alt="${escapeHtml(`${video.title} artwork`)}" loading="eager">
+      <div class="stage-video-fallback-copy"><span>HALO TV</span><strong>${escapeHtml(video.title)} could not play in this browser.</strong></div>
+    </div>`;
+    if (source) frame.querySelector(".stage-video-fallback-copy")?.append(videoOpenLink(source, "Open the promo video"));
+    logMusicIssue("music_promo_video_fallback", "Promo video fell back to the artwork card", { videoId: video.id, releaseId: state.activeReleaseId });
+  }
+
+  // Explicit <video>/<source> element: typed source, poster and a visible fallback when playback fails.
+  function mountExplicitVideo(frame, video, source) {
+    if (!source) {
+      showVideoFallback(frame, video, "");
+      return;
+    }
+    const element = document.createElement("video");
+    element.controls = true;
+    element.autoplay = true;
+    element.playsInline = true;
+    element.setAttribute("playsinline", "");
+    element.preload = "metadata";
+    element.setAttribute("aria-label", video.title || "HALO promo video");
+    const posterUrl = safeUrl(video.thumbnailUrl);
+    if (posterUrl) element.poster = posterUrl;
+    const sourceElement = document.createElement("source");
+    sourceElement.src = source;
+    const type = videoMimeType(source);
+    if (type) sourceElement.type = type;
+    element.append(sourceElement, videoOpenLink(source, "Open the promo video"));
+    let failed = false;
+    const fail = () => {
+      if (failed) return;
+      failed = true;
+      showVideoFallback(frame, video, source);
+    };
+    sourceElement.addEventListener("error", fail);
+    element.addEventListener("error", fail);
+    frame.replaceChildren(element);
+    element.play?.()?.catch?.(() => {});
   }
 
   function renderChartStage(release, position) {

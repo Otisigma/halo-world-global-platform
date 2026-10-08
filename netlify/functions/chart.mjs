@@ -47,7 +47,9 @@ async function loadChart(request) {
       release.pitch,
       COALESCE(votes.votes, 0)::int AS votes,
       COALESCE(engagement.recent_listens, 0)::int AS recent_listens,
-      COALESCE(engagement.recent_opens, 0)::int AS recent_opens
+      COALESCE(engagement.recent_opens, 0)::int AS recent_opens,
+      COALESCE(engagement.previous_listens, 0)::int AS previous_listens,
+      COALESCE(engagement.previous_opens, 0)::int AS previous_opens
     FROM halo_release_campaigns release
     LEFT JOIN LATERAL (
       SELECT COUNT(*)::int AS votes
@@ -56,11 +58,13 @@ async function loadChart(request) {
     ) votes ON TRUE
     LEFT JOIN LATERAL (
       SELECT
-        COUNT(*) FILTER (WHERE event.event_type = 'outbound_click')::int AS recent_listens,
-        COUNT(*) FILTER (WHERE event.event_type = 'kit_open')::int AS recent_opens
+        COUNT(*) FILTER (WHERE event.event_type = 'outbound_click' AND event.created_at >= NOW() - INTERVAL '7 days')::int AS recent_listens,
+        COUNT(*) FILTER (WHERE event.event_type = 'kit_open' AND event.created_at >= NOW() - INTERVAL '7 days')::int AS recent_opens,
+        COUNT(*) FILTER (WHERE event.event_type = 'outbound_click' AND event.created_at < NOW() - INTERVAL '7 days')::int AS previous_listens,
+        COUNT(*) FILTER (WHERE event.event_type = 'kit_open' AND event.created_at < NOW() - INTERVAL '7 days')::int AS previous_opens
       FROM halo_release_campaign_events event
       WHERE event.release_id = release.id
-        AND event.created_at >= NOW() - INTERVAL '7 days'
+        AND event.created_at >= NOW() - INTERVAL '14 days'
     ) engagement ON TRUE
     WHERE release.status = 'published'
       AND release.is_chart_eligible = TRUE

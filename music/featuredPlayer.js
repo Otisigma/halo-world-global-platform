@@ -269,6 +269,8 @@
       logIssue("music_featured_player_unavailable", "Featured chart hero could not reach the HALO player", { page: window.location.pathname });
     }
     render();
+    // A new Living Chart leader triggers the #1 celebration and Public Frequency broadcast once.
+    window.HaloChartCelebration?.maybeCelebrate(state.releases[0]);
   }
 
   loadChart();

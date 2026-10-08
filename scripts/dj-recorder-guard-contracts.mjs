@@ -191,6 +191,10 @@ assert.deepEqual(Array.from(buildSandbox.recordingState.takeoverPlan), ["one", "
 assert.equal(buildSandbox.tracks.find(track => track.id === "three").duration, 60);
 assert.equal(await buildSandbox.autoBuildTakeover(), true);
 assert.equal(requests.length, 1, "Prepared set is reused without rebuilding or starting playback");
+buildSandbox.djMode = "chill";
+assert.equal(await buildSandbox.autoBuildTakeover(), true);
+assert.equal(requests.length, 2, "Changing DJ mode rebuilds the prepared recipes");
+assert.equal(requests.at(-1).mode, "chill");
 for (const mode of ["blocked", "missing", "duplicate", "foreign"]) {
   responseMode = mode;
   await assert.rejects(buildSandbox.buildTakeoverPlan(buildSandbox.tracks.filter(track => track.audioBuffer)), /stopped|every playable song/);
@@ -287,5 +291,43 @@ vm.runInContext(deckPage.slice(watchdogStart, deckPage.indexOf('        showToas
 assert.equal(watchdogSandbox.recordingState.failed, true, "Lost recorder feeds mark the recording for discard");
 assert.equal(watchdogSandbox.elements.recordingRig.className, "recording-rig panel is-error");
 assert.match(watchdogSandbox.elements.recordingStatus.textContent, /isolation is no longer confirmed/);
+
+let deckLoads = 0;
+let playbackStarts = 0;
+let automaticBuilds = 0;
+const importSandbox = {
+  tracks: [],
+  elements: {
+    driveButton: {}, folderButton: {}, search: {},
+    importStatus: { classList: { remove() {}, add() {} } }
+  },
+  deckState: { A: { playing: true } },
+  recordingState: { starting: false },
+  selectedImportDeck: "A",
+  pendingPlaybackDeck: "A",
+  takeoverBuildState: { revision: 0 },
+  embeddedArtworkUrl: async () => "",
+  renderTracks: () => {},
+  loadTrack: () => { deckLoads += 1; },
+  startDeckAudio: async () => { playbackStarts += 1; },
+  updateDeck: () => {},
+  showToast: () => {},
+  window: {},
+  autoBuildTakeover: async () => { automaticBuilds += 1; }
+};
+vm.createContext(importSandbox);
+const importStart = deckPage.indexOf("    async function handleDriveUpload(");
+vm.runInContext(deckPage.slice(importStart, deckPage.indexOf("    syncMaintenanceDockLabel();", importStart)), importSandbox);
+for (const state of ["playing", "starting", "recording", "idle"]) {
+  importSandbox.deckState.A.playing = state === "playing";
+  importSandbox.recordingState.starting = state === "starting";
+  importSandbox.recordingState.recorder = state === "recording" ? { state: "recording" } : null;
+  importSandbox.pendingPlaybackDeck = "A";
+  await importSandbox.handleDriveUpload({ target: { files: [{ name: "new.wav", type: "audio/wav" }] } });
+  assert.equal(deckLoads, state === "idle" ? 1 : 0, "Audio imports cannot replace live or locked takeover decks");
+  assert.equal(playbackStarts, state === "idle" ? 1 : 0, "Pending import playback cannot bypass recorder locks");
+}
+assert.equal(importSandbox.tracks.length, 4, "Protected uploads still enter the library for the next set");
+assert.equal(automaticBuilds, 4, "Uploads still request automatic preparation");
 
 console.log("DJ recorder contracts passed: isolated music routing, stereo quiet-feed start gate, and decoded full-set takeover preparation.");

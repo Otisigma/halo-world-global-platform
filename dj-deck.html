@@ -4277,8 +4277,10 @@
         tracks.unshift(...additions);
         elements.search.value = "";
         renderTracks();
-        loadTrack(selectedImportDeck, additions[0].id);
-        if (pendingPlaybackDeck === selectedImportDeck) {
+        const canLoadDeck = !deckState[selectedImportDeck].playing && !recordingState.starting
+          && recordingState.recorder?.state !== "recording";
+        if (canLoadDeck) loadTrack(selectedImportDeck, additions[0].id);
+        if (canLoadDeck && pendingPlaybackDeck === selectedImportDeck) {
           deckState[selectedImportDeck].playing = true;
           await startDeckAudio(selectedImportDeck);
           updateDeck(selectedImportDeck);
@@ -4736,7 +4738,7 @@
     }
 
     function takeoverLibrarySignature() {
-      return `${takeoverBuildState.revision}:${tracks.filter(trackHasPlayableAudio).map(track => track.id).join("|")}`;
+      return `${djMode}:${takeoverBuildState.revision}:${tracks.filter(trackHasPlayableAudio).map(track => track.id).join("|")}`;
     }
 
     async function autoBuildTakeover(forStart = false) {
@@ -6237,7 +6239,10 @@
     elements.mixIntent.addEventListener("change", recommendLocally);
     elements.analyzeSet.addEventListener("click", analyzeSet);
     elements.runPreflight.addEventListener("click", runSetPreflight);
-    document.querySelectorAll("[data-halo-mode]").forEach(button => button.addEventListener("click", () => setDjMode(button.dataset.haloMode)));
+    document.querySelectorAll("[data-halo-mode]").forEach(button => button.addEventListener("click", () => {
+      setDjMode(button.dataset.haloMode);
+      autoBuildTakeover();
+    }));
     elements.energyCurve.addEventListener("change", () => { renderEnergyArchitecture(); recommendLocally(); saveDjIntelligenceSession(); });
     elements.setPhase.addEventListener("change", () => { recommendLocally(); saveDjIntelligenceSession(); });
     document.querySelectorAll("[data-audience-signal]").forEach(button => button.addEventListener("click", () => recordAudienceSignal(button.dataset.audienceSignal)));

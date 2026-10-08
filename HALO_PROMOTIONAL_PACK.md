@@ -22,6 +22,24 @@ HALO is designed around continuity. A release can move through preparation, pres
 
 Bring an idea in and move it through finishing, release readiness, campaign material, release pages, media, and catalog presentation.
 
+### Automated song-to-release conveyor
+
+Song Catalog saves and completed audio uploads start the same auditable conveyor automatically:
+
+`intake → audio preflight → metadata/rights → Council → Dreamweaver → documents → promotion → distribution handoff`
+
+The catalog song ID remains the release ID. Originals and the canonical sale master are never replaced. Stored mono/stereo PCM WAV files up to 128 MB receive a separate conditioned copy: 350 ms logarithmic soft-start, optional 50 Hz/60 Hz (or both) notch filtering, and −14 LUFS loudness targeting bounded by gain and sample-peak safety. The receipt reports achieved levels and limitations; short clips use an RMS fallback. This is not true-peak certification, legal clearance, or automatic mastering approval. Approved external masters remain usable without unsupported processing claims.
+
+Missing metadata produces actionable repair requests. Disputed rights block; missing/ambiguous rights or mastering approvals escalate. No automated repair grants rights, issues an ISRC, or approves mastering. DJ set-depth, duration and transition rules remain in DJ preflight, not the single-song gate.
+
+Transient storage/database failures get up to three safe attempts per operation. A scheduled Netlify worker checks every 15 minutes for new uploads, changed inputs, interrupted runs and due retries, using the existing per-song lease. It processes at most ten songs within a 20-second work budget per run; backoff and a five-failed/interrupted-run limit prevent endless recovery. Each automatic attempt is recorded before heavy work so platform termination cannot bypass escalation. Unchanged blocked/escalated releases wait for corrections or a manual retry. Atomic checkpoints and append-only events retain every Council decision and recovered stage.
+
+In Song Catalog, use **Refresh receipt** to see passed/repaired/blocked stages and the next automatic retry, or **Run / retry conveyor** after resolving an exception. Download the JSON kit, release documents, promotional text, and available conditioned WAV. Dreamweaver routes, timestamped lyrics, lyric-book fallback and Oracle insights use the existing payloads. Share-ready copy uses release metadata, never internal production notes.
+
+“Ready” means prepared for the existing publication controls—not published or delivered to an external distributor. Existing storefront/radio/publication reconciliation is unchanged. No revenue-share contract, payout split or commercial claim is inferred from an upload.
+
+Maintainer checks: `npm run test:release-conveyor` covers all stages, automatic recovery, audio and existing publication boundaries; `npm test` runs the repository-wide contracts.
+
 ### Radio network
 
 Prepare tracks for broadcast, program the signal, run listening experiences, review rotation, and learn from genuine audience behavior.

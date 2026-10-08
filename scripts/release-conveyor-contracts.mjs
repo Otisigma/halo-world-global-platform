@@ -70,7 +70,8 @@ assert.equal(attempts, beforeRetry, "completed audio must not run again");
 assert.deepEqual(recovered.package.promotion, success.package.promotion);
 const changed = await run({ previous: success, song: { ...song, notes: "Updated story" } });
 assert.notEqual(changed.inputHash, success.inputHash);
-assert.match(changed.package.promotion.pressWriteup, /Updated story/);
+assert.equal(changed.package.documents.notes, "Updated story");
+assert.doesNotMatch(changed.package.promotion.pressWriteup, /Updated story/, "internal notes are not public promotion");
 assert.notEqual(releaseFingerprint(song, versions), releaseFingerprint(song, versions, { humHz: 50 }));
 const stale = await run({ ports: { ...ports, assertCurrent: async () => { throw new Error("changed"); } } });
 assert.equal(stale.status, "retryable");
@@ -184,7 +185,7 @@ const db = { async sql(strings, ...values) {
     return [{ state: structuredClone(stored.state) }];
   }
   if (query.includes("WITH checkpoint")) {
-    assert(query.includes("FROM checkpoint RETURNING id"), "checkpoint and audit must be atomic");
+    assert(query.includes("FROM checkpoint") && query.includes("ON CONFLICT (id) DO NOTHING RETURNING id"), "checkpoint and audit must be atomic and retry-safe");
     if (stored?.lease_token !== values[6] || new Date(stored.locked_until) <= new Date()) return [];
     stored.state = JSON.parse(values[1]);
     stored.locked_until = values[2] ? null : new Date(Date.now() + 600_000);
@@ -251,7 +252,7 @@ assert.match(packageResponse.headers.get("content-disposition"), /release-packag
 assert.equal((await packageResponse.json()).documents.releaseId, song.id);
 const docsResponse = await handler(request("GET", null, "&artifact=documents"));
 assert.equal(docsResponse.status, 200);
-assert.match(await docsResponse.text(), /RIGHTS CHECKLIST[\s\S]*LYRICS \/ ORACLE INSIGHTS/);
+assert.match(await docsResponse.text(), /RELEASE RECEIPT[\s\S]*AUDIO PREFLIGHT[\s\S]*VERSION MANIFEST[\s\S]*RIGHTS CHECKLIST[\s\S]*LYRICS \/ ORACLE INSIGHTS/);
 const promoResponse = await handler(request("GET", null, "&artifact=promotion"));
 assert.equal(promoResponse.status, 200);
 assert.match(await promoResponse.text(), /PRESS WRITEUP[\s\S]*SOCIAL COPY/);
@@ -283,6 +284,9 @@ assert.equal((await (await firstRequest).json()).status, "ready");
 stored.locked_until = new Date(Date.now() - 1000);
 stored.lease_token = "expired-worker";
 assert.equal((await (await post()).json()).status, "ready", "expired leases can be safely reclaimed");
+const dualHum = await (await handler(request("POST", { action: "process_submission", songId: song.id, humHz: "both" }))).json();
+assert.equal(dualHum.status, "ready");
+assert.equal(dualHum.options.humHz, "both");
 
 const read = path => readFile(new URL(`../${path}`, import.meta.url), "utf8");
 const migration = await read("netlify/database/migrations/20261008223000_release_conveyor.sql");

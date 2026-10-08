@@ -43,6 +43,15 @@ export function createReleaseConveyorHandler({ getDatabase, getUser, verifyReque
             `ISRC: ${document.isrc}`, `UPC: ${document.upc}`, `Genre: ${document.genre}`,
             `Explicit: ${document.explicitLyrics ? "yes" : "no"}`, `Rights: ${document.rightsStatus}`,
             `Artwork: ${document.artworkUrl}`, `Notes: ${document.notes}`,
+            "", "RELEASE RECEIPT", `Status: ${state.receipt.status}`,
+            `Council: ${state.receipt.council?.outcome || "pending"}`,
+            ...state.receipt.stages.map(stage => `${stage.name}: ${stage.status}`),
+            ...state.receipt.repaired.map(repair => `Repaired: ${repair}`),
+            "", "AUDIO PREFLIGHT", document.audio.summary || "See the JSON audio report.",
+            `Original master: ${document.audio.sourceAudioUrl || ""}`,
+            `Conditioned copy: ${document.audio.downloadUrl || "Not available; approved original preserved."}`,
+            "", "VERSION MANIFEST",
+            ...document.versions.map(version => `${version.type}: ${version.audioUrl} (${version.durationSeconds}s; mastering ${version.masteringStatus})`),
             "", "RIGHTS CHECKLIST", ...document.rightsChecklist, "",
             "PUBLICATION CHECKLIST", ...document.publicationChecklist,
             "", "LYRICS / ORACLE INSIGHTS", document.dreamweaver.lyricsText,
@@ -66,10 +75,10 @@ export function createReleaseConveyorHandler({ getDatabase, getUser, verifyReque
         return json({ ...state, ...(current ? {} : { status: "stale", receipt: { ...state.receipt, ready: false, status: "stale" } }),
           busy: stored.locked_until && new Date(stored.locked_until) > new Date(), events });
       }
-      const humHz = Number(payload.humHz ?? 0);
-      if (![0, 50, 60].includes(humHz)) return json({ message: "Hum filtering must be off, 50 Hz or 60 Hz." }, 400);
+      const humHz = payload.humHz === "both" ? "both" : Number(payload.humHz ?? 0);
+      if (![0, 50, 60, "both"].includes(humHz)) return json({ message: "Hum filtering must be off, 50 Hz, 60 Hz or both." }, 400);
       const options = { humHz };
-      const result = await processCatalogRelease(db, membership.member_id, songId, prepareAudio, options);
+      const result = await processCatalogRelease(db, membership.member_id, songId, prepareAudio, options, { automatic: false });
       if (!result) return json({ message: "Song not found." }, 404);
       if (result.busy) return json({ message: "This song is already processing. Check its status before retrying.", status: "processing" }, 409);
       return json(result);

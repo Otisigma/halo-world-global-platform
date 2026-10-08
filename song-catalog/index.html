@@ -75,13 +75,13 @@
 
           <section class="review-panel" id="releaseConveyorConsole" aria-labelledby="releaseConveyorTitle">
             <div class="panel-heading"><div><p class="eyebrow">HALO release conveyor</p><h3 id="releaseConveyorTitle">One song, every department.</h3></div><button class="primary-button" data-conveyor-run type="button">Run / retry conveyor</button></div>
-            <p>Save your edits first. HALO checks the canonical master, rights and Council requirements, then packages lyrics, release documents and promotional copy. Originals stay unchanged; mastering approval and publication remain explicit.</p>
-            <label><span>Optional hum filter (conditioned WAV copy only)</span><select data-conveyor-hum><option value="0">Off — preserve the spectrum</option><option value="50">50 Hz — confirmed mains hum</option><option value="60">60 Hz — confirmed mains hum</option></select></label>
+            <p>Save metadata and upload your song once. HALO automatically checks the canonical master, rights and Council requirements, then packages lyrics, release documents and promotional copy. Originals stay unchanged; mastering approval and publication remain explicit. Temporary failures are retried automatically.</p>
+            <label><span>Optional hum filter (conditioned WAV copy only)</span><select data-conveyor-hum><option value="0">Off — preserve the spectrum</option><option value="50">50 Hz — confirmed mains hum</option><option value="60">60 Hz — confirmed mains hum</option><option value="both">50 + 60 Hz — confirmed mains hum</option></select></label>
             <p data-conveyor-status role="status" aria-live="polite">Select a song to inspect its release conveyor.</p>
             <ol data-conveyor-stages aria-label="Release departments"></ol>
             <ul data-conveyor-issues aria-label="Required release actions"></ul>
             <div class="artwork-upload-actions"><button class="quiet-button" data-conveyor-refresh type="button">Refresh receipt</button><a class="quiet-button" data-conveyor-package hidden download>Download release package (JSON)</a><a class="quiet-button" data-conveyor-documents hidden download>Release documents (text)</a><a class="quiet-button" data-conveyor-promotion hidden download>Promotion copy (text)</a><a class="quiet-button" data-conveyor-audio hidden download>Download conditioned WAV</a></div>
-            <p>Automatic conditioning supports stored mono/stereo PCM WAV up to 128 MB. Other approved masters are preserved as-is. RMS conditioning is not certified LUFS/true-peak mastering. Promotional copy is a draft for your review; external distributor delivery is not automatic.</p>
+            <p>Automatic conditioning supports stored mono/stereo PCM WAV up to 128 MB: a 350 ms soft-start, optional hum filtering, and loudness targeting −14 LUFS where measurable, bounded by safe gain and sample-peak limits. Short clips use an RMS fallback; this is not true-peak certification or mastering approval. Other approved masters are preserved as-is. Promotional copy is a draft for your review; external distributor delivery is not automatic.</p>
           </section>
 
           <section class="artwork-upload-panel" aria-labelledby="artworkHeading">

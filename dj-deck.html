@@ -4279,8 +4279,9 @@
         tracks.unshift(...additions);
         elements.search.value = "";
         renderTracks();
-        loadTrack(selectedImportDeck, additions[0].id);
-        if (pendingPlaybackDeck === selectedImportDeck) {
+        const canLoadImport = !deckState[selectedImportDeck].playing && !recordingState.starting && recordingState.recorder?.state !== "recording";
+        if (canLoadImport) loadTrack(selectedImportDeck, additions[0].id);
+        if (canLoadImport && pendingPlaybackDeck === selectedImportDeck) {
           deckState[selectedImportDeck].playing = true;
           await startDeckAudio(selectedImportDeck);
           updateDeck(selectedImportDeck);

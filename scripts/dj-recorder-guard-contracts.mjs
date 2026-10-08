@@ -295,4 +295,31 @@ assert.doesNotThrow(() => missingProbeSandbox.attachRecorderGuardToDeck(), "Miss
 assert.equal(missingProbeSandbox.recorderGuardState.guard, null);
 assert.equal(missingProbeSandbox.recorderGuardState.status.state, "blocked");
 
+for (const state of ["idle", "playing", "starting", "recording"]) {
+  for (const pendingPlayback of [null, "A"]) {
+    let loaded = 0;
+    let played = 0;
+    let built = 0;
+    const uploadSandbox = {
+      tracks: [], selectedImportDeck: "A", pendingPlaybackDeck: pendingPlayback,
+      deckState: { A: { playing: state === "playing" } },
+      recordingState: { starting: state === "starting", recorder: { state: state === "recording" ? "recording" : "inactive" } },
+      takeoverBuildState: { revision: 0 },
+      elements: { driveButton: {}, folderButton: {}, search: {}, importStatus: { classList: { remove() {}, add() {} } } },
+      embeddedArtworkUrl: async () => "",
+      renderTracks() {}, updateDeck() {}, showToast() {}, window: {},
+      loadTrack: () => { loaded += 1; },
+      startDeckAudio: async () => { played += 1; },
+      autoBuildTakeover: async () => { built += 1; }
+    };
+    vm.createContext(uploadSandbox);
+    vm.runInContext(deckPage.slice(deckPage.indexOf("    async function handleDriveUpload("), deckPage.indexOf("    syncMaintenanceDockLabel();", deckPage.indexOf("    async function handleDriveUpload("))), uploadSandbox);
+    await uploadSandbox.handleDriveUpload({ target: { files: [{ name: "new.wav", type: "audio/wav" }], value: "file" } });
+    assert.equal(uploadSandbox.tracks.length, 1, "Uploads still index songs in every state");
+    assert.equal(built, 1, "Uploads still request automatic preparation");
+    assert.equal(loaded, state === "idle" ? 1 : 0, "Uploads cannot replace live decks or locked recording decks");
+    assert.equal(played, state === "idle" && pendingPlayback ? 1 : 0, "Pending upload playback cannot bypass recording locks");
+  }
+}
+
 console.log("DJ recorder contracts passed: isolated music routing, stereo quiet-feed start gate, and decoded full-set takeover preparation.");

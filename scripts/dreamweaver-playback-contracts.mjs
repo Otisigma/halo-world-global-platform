@@ -16,7 +16,7 @@ const release = {
 };
 const mix = { id: "linked-mix-id", title: "Linked mix", creator: { name: "Mix artist" }, audioUrl: "https://halo.test/mix.mp3", durationSeconds: 120 };
 
-function fixture(search, { releases = [release], mixes = [mix], blocked = false, failed = false, unlock = null, pathname = "/dreamweaver/" } = {}) {
+function fixture(search, { releases = [release], mixes = [mix], blocked = false, failed = false, unlock = null, pathname = "/dreamweaver/", releaseArtwork = undefined } = {}) {
   class Element extends EventTarget {
     constructor() {
       super();
@@ -66,7 +66,7 @@ function fixture(search, { releases = [release], mixes = [mix], blocked = false,
     document: { getElementById: getElement, querySelector: getElement, body: new Element() },
     localStorage: { getItem: () => null },
     history: { replaceState: (_state, _title, url) => { location.href = new URL(url, location).href; } },
-    window: { clearTimeout() {}, setTimeout: () => 1, requestAnimationFrame: callback => callback() },
+    window: { clearTimeout() {}, setTimeout: () => 1, requestAnimationFrame: callback => callback(), HaloReleaseArtwork: releaseArtwork },
     fixtures: { releases, mixes, unlock, requests }
   };
   vm.runInNewContext(`${declarations}
@@ -170,6 +170,18 @@ for (const options of [{ unlock: { firstName: "Listener", favoritePlatform: "spo
   await f.initializeDreamweaver();
   assert.equal(f.nodes.get("showAudio").loads, 0, "unlinked satellite entry must remain unchanged");
   assert.equal(f.resolvePrimaryPlaybackMix([mix], "", null, { allowFallback: false }), null);
+}
+
+{
+  // The shared artwork helper dereferences its track argument, so song routes must never pass it a missing mix.
+  const artworkWindow = { location: new URL("https://halo.test/") };
+  vm.runInNewContext(await readFile(new URL("../release-artwork.js", import.meta.url), "utf8"), { window: artworkWindow, URL });
+  const releaseArtwork = { ...artworkWindow.HaloReleaseArtwork, wire() {} };
+  const f = fixture(`?song=${songId}&mix=${DREAMWEAVER_STOREFRONT_MIX_ID}&satellite=dreamweaver`, { blocked: true, releaseArtwork });
+  await f.initializeDreamweaver();
+  assert.equal(f.nodes.get("showAudio").src, stream, "song routes hydrate the catalog release when the shared artwork helper is loaded");
+  assert.equal(f.state.release?.id, songId);
+  assert.equal(f.resolvePrimaryPlaybackMix([], "", null, { allowFallback: false }), null);
 }
 
 console.log("Dreamweaver playback contracts: deep links, preload, labels, autoplay blocking, shells, and upload fallback passed.");

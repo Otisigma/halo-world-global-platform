@@ -771,6 +771,7 @@ import { createDreamweaverLyricsEngine } from "../lib/dreamweaver-lyrics.js";
   }
 
   function isPlayablePrimaryMix(mix) {
+    if (!mix || typeof mix !== "object") return false;
     const source = cleanText(mix?.source, 60).toLowerCase();
     return Boolean(resolvePrimaryAudio(mix).src) && source !== "youtube";
   }

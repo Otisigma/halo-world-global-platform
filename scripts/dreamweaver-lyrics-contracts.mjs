@@ -170,7 +170,7 @@ check(() => {
 check(() => {
   const f = createFixture(SONG);
   assert.equal(f.root.hidden, false);
-  assert.equal(f.root.dataset.mode, "sync");
+  assert.equal(f.root.dataset.lyricsMode, "sync");
   f.tick(11);
   const active = f.rows().filter(item => item.classList.contains("is-active"));
   assert.equal(active.length, 1);
@@ -274,7 +274,7 @@ check(() => {
 check(() => {
   const f = createFixture(SONG);
   f.modeToggle.dispatchEvent(new Event("click"));
-  assert.equal(f.root.dataset.mode, "book");
+  assert.equal(f.root.dataset.lyricsMode, "book");
   assert.equal(f.modeToggle.getAttribute("aria-pressed"), "true");
   assert.match(f.status.textContent, /Lyric book/);
   const scrolls = f.viewport.scrolls.length;
@@ -284,12 +284,12 @@ check(() => {
   f.lineOf(f.rows()[2]).dispatchEvent(new Event("click"));
   assert.equal(f.audio.currentTime, 10.5, "lyric book lines still seek");
   f.modeToggle.dispatchEvent(new Event("click"));
-  assert.equal(f.root.dataset.mode, "sync");
+  assert.equal(f.root.dataset.lyricsMode, "sync");
 }, "toggles between synced follow mode and manual lyric book mode");
 
 check(() => {
   const f = createFixture("Line one\nLine two");
-  assert.equal(f.root.dataset.mode, "book", "untimed lyrics fall back to lyric book");
+  assert.equal(f.root.dataset.lyricsMode, "book", "untimed lyrics fall back to lyric book");
   assert.equal(f.modeToggle.disabled, true);
   assert.equal(f.engine.setMode("sync"), "book");
   assert.match(f.status.textContent, /not timestamped/);
@@ -298,7 +298,14 @@ check(() => {
   assert.equal(f.list.children.length, 0);
   f.engine.setSource("[00:03] Back again");
   assert.equal(f.root.hidden, false);
-  assert.equal(f.root.dataset.mode, "book", "the listener's chosen mode is preserved across sources");
+  assert.equal(f.root.dataset.lyricsMode, "sync", "a forced lyric book fallback does not stick once timestamps arrive");
+  f.modeToggle.dispatchEvent(new Event("click"));
+  f.engine.setSource("[00:04] Another song");
+  assert.equal(f.root.dataset.lyricsMode, "book", "the listener's chosen mode is preserved across sources");
+  const late = createFixture("");
+  assert.equal(late.root.hidden, true);
+  late.engine.setSource(SONG);
+  assert.equal(late.root.dataset.lyricsMode, "sync", "lyrics that hydrate after an empty first render start in sync mode");
 }, "falls back to lyric book for untimed lyrics and hides when empty");
 
 check(() => {
@@ -335,8 +342,10 @@ check(() => {
   assert.match(dreamweaverScript, /audio: elements\.audio/);
   assert.match(dreamweaverScript, /state\.audioSourceMode === "local"\) return ""/, "local uploads never inherit catalog timestamps");
   assert.match(dreamweaverScript, /renderStoryActs\(\);\n    syncDreamweaverLyrics\(\);/);
-  assert.match(dreamweaverPage, /<section class="dw-lyrics" id="dreamweaverLyrics" aria-labelledby="dreamweaverLyricsTitle" data-mode="sync" hidden>/);
+  assert.match(dreamweaverPage, /<section class="dw-lyrics" id="dreamweaverLyrics" aria-labelledby="dreamweaverLyricsTitle" data-lyrics-mode="sync" hidden>/);
   assert.match(dreamweaverPage, /id="dreamweaverLyricsMode" type="button" aria-pressed="false"/);
+  assert.doesNotMatch(dreamweaverPage, /<section class="dw-lyrics"[^>]*\sdata-mode=/, "the page-wide [data-mode] switcher must not capture lyric clicks");
+  assert.doesNotMatch(lib, /dataset\.mode\b/);
   assert.match(dreamweaverPage, /id="dreamweaverLyricsStatus" role="status" aria-live="polite"/);
   assert.match(dreamweaverPage, /id="dreamweaverLyricsViewport" role="region" aria-label="Song lyrics" tabindex="0"/);
   assert.match(dreamweaverCss, /\.dw-lyric\.is-active \.dw-lyric__line \{[^}]*text-shadow/);

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { respondOracle, routeOracleIntent, countdownLabel } from "../lib/halo-oracle-engine.js";
 import { createOracleHandler, config } from "../netlify/functions/halo-oracle.mjs";
+import { resolveReleaseLicensing } from "../netlify/lib/release-licensing.mjs";
 
 const catalog = [
   { id: "cinema", title: "Night Signal", artist: "Artist A", status: "published", genres: ["Electronic", "Cinematic"], bpm: 120, pitch: "Artist-provided cinematic liner note.", releaseDate: "2026-10-01", availableVersions: ["Original", { name: "Extended Mix" }] },
@@ -11,6 +12,7 @@ const catalog = [
   { id: "hidden", title: "Hidden Release", status: "published", isLiveVisible: false },
   { id: "focus", title: "Duplicate Signal", status: "published" }
 ];
+catalog[0].licensing = resolveReleaseLicensing({ availableVersions: catalog[0].availableVersions });
 const now = Date.parse("2026-10-08T00:00:00Z");
 const ask = (message, extra = {}) => respondOracle({ message, ...extra }, catalog, now);
 
@@ -33,7 +35,7 @@ assert.ok(story.reply.includes(catalog[0].pitch), "lore is sourced from publishe
 assert.match(ask("Who plays saxophone?", { contextTrackId: "focus" }).reply, /not verified/, "never invent performer credits");
 assert.match(ask("Tell the story", { contextTrackId: "focus" }).reply, /not published liner notes/);
 assert.equal(ask("Show versions", { contextTrackId: "cinema" }).recommendations.length, 2);
-assert.match(ask("Show versions").recommendations[1].actionUrl, /version=Extended%20Mix/);
+assert.match(ask("Show versions").recommendations[1].actionUrl, /version=extended-mix/, "version gateways use the canonical licensing ID");
 assert.equal(ask("Show versions", { contextTrackId: "focus" }).recommendations.length, 0);
 
 const album = ask("Curate my album", { favoriteTrackIds: ["soul", "draft", "invented"] });
@@ -92,8 +94,8 @@ assert.equal(unavailable.status, 503);
 assert.ok(!(await unavailable.text()).includes("private database detail"));
 
 const read = path => readFile(new URL(`../${path}`, import.meta.url), "utf8");
-const [client, css, concierge, releaseLink] = await Promise.all([
-  read("halo-oracle.js"), read("halo-oracle.css"), read("album-concierge/album-concierge.js"), read("netlify/functions/release-link.mjs")
+const [client, css, concierge, releaseLink, musicClient] = await Promise.all([
+  read("halo-oracle.js"), read("halo-oracle.css"), read("album-concierge/album-concierge.js"), read("netlify/functions/release-link.mjs"), read("music/music.js")
 ]);
 assert.doesNotMatch(client, /innerHTML|onclick|new Audio/);
 for (const hook of ["__conversation", "__status", "__response", "__input", "__chips", "__selection"]) assert.ok(css.includes(`.halo-oracle${hook}`));
@@ -105,4 +107,13 @@ assert.match(client, /revision !== card.revision/, "stale replies cannot replace
 assert.match(concierge, /storyInput.value = state.storyInput/, "curator shortlist prefills the existing album story flow");
 assert.match(releaseLink, /accessCodeMatches\(url.searchParams.get\("code"\), row.preview_access_code_hash\)/, "existing private preview gateway verifies the code server-side");
 assert.match(releaseLink, /preview_expires_at/, "preview expiration stays enforced");
+const markupSource = musicClient.match(/  function licensingMarkup\(release\) \{[\s\S]*?\n  \}/)?.[0];
+assert.ok(markupSource);
+const markupFor = versionId => new Function("licensingState", "escapeHtml", "licensingTierNote", "money", "requestedReleaseId", "requestedVersionId", `${markupSource}; return licensingMarkup;`)(
+  () => ({ enabled: true, versions: catalog[0].licensing.versions, tiers: [{ id: "personal", label: "Personal use" }] }),
+  value => String(value), () => "", () => "", "cinema", versionId
+);
+assert.match(markupFor("extended-mix")({ id: "cinema" }), /value="extended-mix" selected/, "Oracle version is preselected before the purchase-link sync");
+assert.doesNotMatch(markupFor("unknown")({ id: "cinema" }), / selected/, "unknown version IDs preserve the default");
+assert.doesNotMatch(markupFor("extended-mix")({ id: "other" }), / selected/, "version selection is scoped to the requested release");
 console.log("HALO Oracle engine, API, gateway, and theme contracts passed.");

@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import "./dj-control-room-contracts.mjs";
 import { access, readFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";

@@ -14,11 +14,40 @@
 
   function safeResource(value = "") {
     try {
-      const url = new URL(value, window.location.origin);
+      const url = new URL(String(value || ""), window.location.origin);
       return `${url.origin}${url.pathname}`.slice(0, 500);
     } catch {
       return String(value).slice(0, 500);
     }
+  }
+
+  function isSafeLinkDestination(value) {
+    const href = String(value ?? "").trim();
+    if (!href || href === "#") return false;
+    try {
+      const url = new URL(href, window.location.origin);
+      return ["http:", "https:", "mailto:", "tel:"].includes(url.protocol)
+        && !url.username && !url.password;
+    } catch {
+      return false;
+    }
+  }
+
+  function quarantineLink(link) {
+    link?.removeAttribute?.("href");
+    link?.setAttribute?.("aria-disabled", "true");
+    link?.setAttribute?.("data-halo-link-quarantined", "true");
+  }
+
+  function hasAccessibleControlName(element) {
+    const clean = value => String(value ?? "").trim();
+    if (clean(element?.getAttribute?.("aria-label"))) return true;
+    const labelledBy = clean(element?.getAttribute?.("aria-labelledby"));
+    if (labelledBy && labelledBy.split(/\s+/).some(id => clean(document.getElementById(id)?.textContent))) return true;
+    if (clean(element?.textContent) || clean(element?.value) || clean(element?.getAttribute?.("title"))) return true;
+    if (element?.labels && [...element.labels].some(label => clean(label.textContent))) return true;
+    const type = clean(element?.getAttribute?.("type")).toLowerCase();
+    return element?.tagName?.toLowerCase() === "input" && ["submit", "reset", "button"].includes(type);
   }
 
   function loadWatcherRegistryModule() {
@@ -26,19 +55,26 @@
       watcherRegistryPromise = import("/lib/watcher-registry.js")
         .then(module => ({
           watchersForPage: typeof module.watchersForPage === "function" ? module.watchersForPage : () => [],
-          canonicalize: typeof module.canonicalizeWatcherTarget === "function" ? module.canonicalizeWatcherTarget : value => String(value || "")
+          canonicalize: typeof module.canonicalizeWatcherTarget === "function" ? module.canonicalizeWatcherTarget : value => String(value || ""),
+          available: typeof module.watchersForPage === "function" && typeof module.canonicalizeWatcherTarget === "function"
         }))
         .catch(() => ({
           watchersForPage: () => [],
-          canonicalize: value => String(value || "")
+          canonicalize: value => String(value || ""),
+          available: false
         }));
     }
     return watcherRegistryPromise;
   }
 
   function visible(element) {
-    const style = getComputedStyle(element);
-    return style.display !== "none" && style.visibility !== "hidden" && element.getClientRects().length > 0;
+    if (!element || typeof element.getClientRects !== "function") return false;
+    try {
+      const style = typeof getComputedStyle === "function" ? getComputedStyle(element) : null;
+      return (!style || style.display !== "none" && style.visibility !== "hidden") && element.getClientRects().length > 0;
+    } catch {
+      return false;
+    }
   }
 
   window.addEventListener("error", event => {
@@ -72,7 +108,10 @@
       .halo-qa-actions{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:13px 15px;border-top:1px solid rgba(255,255,255,.08)}.halo-qa-run{border:1px solid #c8ff36;background:#c8ff36;color:#10140f;padding:9px 12px;font:700 9px "DM Mono","Share Tech Mono",monospace;text-transform:uppercase;cursor:pointer}.halo-qa-time{color:#7f897d;font-size:8px}
       .halo-qa-report{padding:10px 15px;border-top:1px solid rgba(255,255,255,.08);color:#8f9a8d;font-size:8px;line-height:1.45}.halo-qa-report[data-state="sent"]{color:#c8ff36}.halo-qa-report[data-state="failed"]{color:#ff9b78}
       @media(max-width:560px){.halo-qa-launcher{right:10px;bottom:10px}.halo-qa-panel{right:10px;bottom:56px;width:calc(100vw - 20px)}}
+      .has-maintenance-dock .halo-qa-launcher{left:16px;right:auto}.has-maintenance-dock .halo-qa-panel{left:16px;right:auto}
+      @media(max-width:560px){.has-maintenance-dock .halo-qa-launcher{left:10px}.has-maintenance-dock .halo-qa-panel{left:10px;right:auto}}
     `;
+    document.documentElement?.classList?.toggle("has-maintenance-dock", Boolean(document.querySelector("#maintenanceDock")));
     document.head.appendChild(style);
   }
 
@@ -83,30 +122,131 @@
   async function runWatcherChecks() {
     const module = await loadWatcherRegistryModule();
     const expectedWatchers = module.watchersForPage(window.location.pathname) || [];
+    const repairs = [];
     const watcherResults = expectedWatchers.map(watcher => {
-      const element = document.querySelector(watcher.selector);
+      let element = null;
+      let selectorError = "";
+      try {
+        element = watcher.selector ? document.querySelector(watcher.selector) : null;
+      } catch (error) {
+        selectorError = error?.message || "Invalid watcher selector";
+      }
       const expectedTarget = module.canonicalize(watcher.target);
+      let resolvedBy = "selector";
+      if (!element && module.available && expectedTarget.startsWith("/")) {
+        const candidates = [...document.querySelectorAll("a[href]")].filter(link => {
+          if (!isSafeLinkDestination(link.getAttribute("href"))) return false;
+          try {
+            const url = new URL(link.getAttribute("href"), window.location.origin);
+            return url.origin === window.location.origin && module.canonicalize(url.pathname) === expectedTarget;
+          } catch {
+            return false;
+          }
+        });
+        if (candidates.length === 1) {
+          [element] = candidates;
+          resolvedBy = "canonical-target";
+        }
+      }
+      if (!element) {
+        const accessibleLabel = String(watcher.label || "").split("(")[0].trim().toLowerCase();
+        const candidates = [...document.querySelectorAll("a")].filter(link => {
+          const name = String(link.getAttribute("aria-label") || link.textContent || link.getAttribute("title") || "").trim().toLowerCase();
+          return accessibleLabel && name.includes(accessibleLabel);
+        });
+        if (candidates.length === 1) {
+          [element] = candidates;
+          resolvedBy = "accessible-label";
+        }
+      }
       if (!element) {
         return {
           ...watcher,
           status: "red",
-          detail: `Missing expected control. Dash AI routes this to ${watcher.ownerAgent}.`
+          action: "escalated",
+          selectorError,
+          detail: `Missing expected control${selectorError ? ` (${selectorError})` : ""}. Escalated to ${watcher.ownerAgent}.`
         };
       }
-      const linkedTarget = element.matches("a[href]") ? module.canonicalize(element.getAttribute("href") || "") : expectedTarget;
-      if (linkedTarget !== expectedTarget) {
+      if (!module.available) {
         return {
           ...watcher,
-          status: "yellow",
-          detail: `Control resolves to ${linkedTarget || "unknown"} instead of canonical ${expectedTarget}. Dash AI routes this to ${watcher.ownerAgent}.`
+          status: "red",
+          action: "escalated",
+          detail: `Watcher registry is unavailable; target verification was not performed. Escalated to ${watcher.ownerAgent}.`
+        };
+      }
+      if (!expectedTarget.startsWith("/") || !isSafeLinkDestination(expectedTarget)) {
+        return {
+          ...watcher,
+          status: "red",
+          action: "escalated",
+          detail: `Registry target is not a safe local route. Escalated to ${watcher.ownerAgent}.`
+        };
+      }
+      const isAnchor = element.tagName?.toLowerCase() === "a";
+      const href = isAnchor ? element.getAttribute("href") : null;
+      if (isAnchor && !isSafeLinkDestination(href)) {
+        quarantineLink(element);
+        return {
+          ...watcher,
+          status: "red",
+          action: "escalated",
+          observedTarget: String(href ?? "").slice(0, 200),
+          detail: `Unsafe watcher link was disabled instead of repaired. Escalated to ${watcher.ownerAgent}.`
+        };
+      }
+      let linkedTarget = expectedTarget;
+      if (isAnchor) {
+        try {
+          const url = new URL(href, window.location.origin);
+          linkedTarget = url.origin === window.location.origin ? module.canonicalize(url.pathname) : "";
+          if (!linkedTarget) quarantineLink(element);
+        } catch {
+          linkedTarget = "";
+          quarantineLink(element);
+        }
+      }
+      if (linkedTarget !== expectedTarget) {
+        const observedTarget = String(href ?? "").slice(0, 200);
+        if (isAnchor && linkedTarget && element.setAttribute) {
+          element.setAttribute("href", expectedTarget);
+          repairs.push({ watcherId: watcher.id, label: watcher.label, from: observedTarget, to: expectedTarget, resolvedBy });
+          return {
+            ...watcher,
+            status: "green",
+            action: "repaired",
+            observedTarget,
+            detail: `Safe local route mismatch repaired to ${expectedTarget}; verification passed.`
+          };
+        }
+        return {
+          ...watcher,
+          status: "red",
+          action: "escalated",
+          observedTarget,
+          detail: `Control resolves outside its trusted route instead of ${expectedTarget}. Escalated to ${watcher.ownerAgent}.`
         };
       }
       return {
         ...watcher,
         status: "green",
-        detail: `Control is present and points to canonical route ${expectedTarget}. Owner agent: ${watcher.ownerAgent}.`
+        action: resolvedBy === "canonical-target" ? "rebound" : "verified",
+        resolvedBy,
+        detail: `Control is present and points to canonical route ${expectedTarget}${resolvedBy !== "selector" ? ` (resolved by ${resolvedBy})` : ""}.`
       };
     });
+    if (!module.available) {
+      watcherResults.push({
+        id: "watcher-registry-unavailable",
+        label: "Watcher registry",
+        target: "",
+        ownerAgent: "Routing Agent",
+        status: "red",
+        action: "escalated",
+        detail: "Watcher registry could not be loaded; route checks fail closed."
+      });
+    }
     const overall = watcherResults.reduce(
       (worst, watcher) => (STATUS_RANK[watcher.status] > STATUS_RANK[worst] ? watcher.status : worst),
       "green"
@@ -120,7 +260,8 @@
       watcherCount: watcherResults.length,
       issueCount: flagged.length,
       flagged,
-      watchers: watcherResults
+      watchers: watcherResults,
+      repairs
     };
     window.__haloDashAI = dash;
     window.dispatchEvent(new CustomEvent("halo:dash-ai-update", { detail: dash }));
@@ -130,29 +271,36 @@
   async function runChecks() {
     const interactive = [...document.querySelectorAll("button,a,input,select,textarea")].filter(visible);
     const unlabeled = interactive.filter(element => {
-      if (element.matches('input[type="hidden"],input[type="file"]')) return false;
-      const text = element.textContent?.trim() || element.value || element.getAttribute("aria-label") || element.getAttribute("title");
-      return !text;
-    });
-    const invalidLinks = [...document.querySelectorAll("a[href]")].filter(link => {
-      const href = link.getAttribute("href")?.trim();
-      return !href || href === "#" || href.startsWith("javascript:");
+      return element.matches?.('input[type="hidden"]') !== true && !hasAccessibleControlName(element);
     });
     const imagesWithoutAlt = [...document.images].filter(image => !image.hasAttribute("alt"));
     const audioContext = window.__haloAudioContext;
     const audioHealth = window.__haloAudioHealth;
     const audioReady = (!audioContext || ["running", "suspended"].includes(audioContext.state)) && audioHealth?.status !== "error";
     const audioDetail = audioHealth?.message || (audioContext ? `Audio engine is ${audioContext.state}. Press play to run a signal check.` : "Audio engine loads on the first playback gesture.");
+    const recorderState = document.querySelector("#recorderGuard")?.dataset?.state || "";
+    const recorderReady = recorderState !== "triggered";
     const dash = await runWatcherChecks();
+    const invalidLinks = [...document.querySelectorAll("a[href]")].filter(link => !isSafeLinkDestination(link.getAttribute("href")));
+    invalidLinks.forEach(quarantineLink);
     const failedWatchers = (dash.watchers || []).filter(watcher => watcher.status !== "green");
 
-    return [
+    const checks = [
       { name: "Audio Scout", category: "audio", severity: "high", ok: audioReady, detail: audioDetail, count: audioReady ? 0 : 1 },
       { name: "Interaction Tester", category: "accessibility", severity: "medium", ok: unlabeled.length === 0, detail: unlabeled.length ? `${unlabeled.length} visible control${unlabeled.length === 1 ? " needs" : "s need"} an accessible name.` : `${interactive.length} visible controls are identifiable.`, count: unlabeled.length },
-      { name: "Navigation Tester", category: "navigation", severity: "medium", ok: invalidLinks.length === 0, detail: invalidLinks.length ? `${invalidLinks.length} placeholder or unsafe link${invalidLinks.length === 1 ? "" : "s"} found.` : "Page links have usable destinations.", count: invalidLinks.length },
+      { name: "Navigation Tester", category: "navigation", severity: "high", ok: invalidLinks.length === 0, detail: invalidLinks.length ? `${invalidLinks.length} unsafe or placeholder link${invalidLinks.length === 1 ? " was" : "s were"} disabled and escalated.` : "Page links have usable destinations.", count: invalidLinks.length, action: invalidLinks.length ? "escalated" : "verified" },
       { name: "Visual Access Tester", category: "accessibility", severity: "medium", ok: imagesWithoutAlt.length === 0, detail: imagesWithoutAlt.length ? `${imagesWithoutAlt.length} image${imagesWithoutAlt.length === 1 ? " is" : "s are"} missing alt text.` : "Images expose alternative text.", count: imagesWithoutAlt.length },
       { name: "Runtime Watcher", category: "runtime", severity: "high", ok: runtimeIssues.length + resourceIssues.length === 0, detail: runtimeIssues[0] || resourceIssues[0] || "No browser errors or failed resources observed.", count: runtimeIssues.length + resourceIssues.length },
-      { name: "Dash AI Link Aggregator", category: "navigation", severity: "high", ok: dash.status === "green", detail: `Dash AI reports ${dash.statusLabel} with ${dash.watcherCount} watcher${dash.watcherCount === 1 ? "" : "s"} and ${dash.issueCount} issue${dash.issueCount === 1 ? "" : "s"}.`, count: dash.issueCount }
+      ...(window.location.pathname === "/dj-deck.html" ? [{
+        name: "Recorder Safety Guard",
+        category: "audio",
+        severity: "high",
+        ok: recorderReady,
+        detail: recorderReady ? "Recorder bleed guard is not reporting a recording risk." : "Recorder bleed guard is triggered; recording remains blocked until the feed is safe.",
+        count: recorderReady ? 0 : 1,
+        action: recorderReady ? "verified" : "escalated"
+      }] : []),
+      { name: "Dash AI Link Aggregator", category: "navigation", severity: "low", ok: true, detail: `Dash AI reports ${dash.statusLabel} with ${dash.watcherCount} watcher${dash.watcherCount === 1 ? "" : "s"} and ${dash.issueCount} issue${dash.issueCount === 1 ? "" : "s"}.`, count: 0 }
     ].concat(failedWatchers.map(watcher => ({
       name: `Watcher: ${watcher.label}`,
       category: "navigation",
@@ -160,17 +308,59 @@
       ok: false,
       detail: watcher.detail,
       count: 1,
+      action: watcher.action || "escalated",
       watcherId: watcher.id,
+      watcherSelector: watcher.selector || null,
       watcherTarget: watcher.target,
+      observedTarget: watcher.observedTarget || null,
       ownerAgent: watcher.ownerAgent
     })));
+    const issueCount = checks.reduce((total, check) => total + check.count, 0);
+    const highSeverityIssue = checks.some(check => !check.ok && check.severity === "high");
+    if (typeof CustomEvent === "function") {
+      window.dispatchEvent(new CustomEvent("halo:control-room-update", {
+        detail: {
+          pagePath: window.location.pathname,
+          status: highSeverityIssue ? "broken" : issueCount ? "attention" : "healthy",
+          issueCount,
+          escalatedCount: checks.filter(check => !check.ok).length,
+          healedCount: dash.repairs?.length || 0,
+          watcherCount: dash.watcherCount
+        }
+      }));
+    }
+    return checks;
   }
 
-  async function reportFindings(checks, reportElement) {
+  function journalControlRoomEvent(eventType, targetName, details) {
+    if (typeof CustomEvent !== "function" || typeof window.dispatchEvent !== "function") return;
+    window.dispatchEvent(new CustomEvent("halo:journal-event", {
+      detail: { eventType, category: eventType === "qa_repair" ? "maintenance" : "problem", targetName, details, immediate: true }
+    }));
+  }
+
+  async function reportFindings(checks, reportElement, dash) {
     const findings = checks.filter(check => !check.ok);
+    const repairs = dash?.repairs || [];
+    repairs.forEach(repair => {
+      const fingerprint = `${window.location.pathname}|repair|${repair.watcherId}|${repair.from}|${repair.to}`;
+      if (submittedFindings.has(fingerprint)) return;
+      submittedFindings.add(fingerprint);
+      journalControlRoomEvent("qa_repair", repair.label || repair.watcherId, {
+        category: "navigation",
+        outcome: "healed_and_verified",
+        watcherId: repair.watcherId,
+        resolvedBy: repair.resolvedBy,
+        observedTarget: safeResource(repair.from),
+        expectedTarget: repair.to,
+        pagePath: window.location.pathname
+      });
+    });
     if (!findings.length) {
       reportElement.dataset.state = "healthy";
-      reportElement.textContent = "No issues need maintenance attention.";
+      reportElement.textContent = repairs.length
+        ? `${repairs.length} watcher issue${repairs.length === 1 ? "" : "s"} auto-repaired and verified. No remaining risk.`
+        : `Healthy · ${checks.length} checks passed. No maintenance escalation needed.`;
       return;
     }
 
@@ -183,25 +373,21 @@
     });
     if (!pending.length) return;
 
-    pending.forEach(check => window.dispatchEvent(new CustomEvent("halo:journal-event", {
-      detail: {
-        eventType: "qa_issue",
-        category: "problem",
-        targetName: check.name,
-        details: {
-          category: check.category,
-          severity: check.severity,
-          count: check.count,
-          watcherId: check.watcherId || null,
-          watcherTarget: check.watcherTarget || null,
-          ownerAgent: check.ownerAgent || null
-        },
-        immediate: true
-      }
-    })));
+    pending.forEach(check => journalControlRoomEvent("qa_issue", check.name, {
+      category: check.category,
+      severity: check.severity,
+      count: check.count,
+      outcome: check.action || "escalated",
+      watcherId: check.watcherId || null,
+      watcherSelector: check.watcherSelector || null,
+      watcherTarget: check.watcherTarget || null,
+      observedTarget: check.observedTarget ? safeResource(check.observedTarget) : null,
+      ownerAgent: check.ownerAgent || null,
+      pagePath: window.location.pathname
+    }));
 
     reportElement.dataset.state = "sending";
-    reportElement.textContent = `Reporting ${pending.length} finding${pending.length === 1 ? "" : "s"} to maintenance…`;
+    reportElement.textContent = `${repairs.length} healed · ${pending.length} escalated. Reporting to maintenance…`;
     const results = await Promise.allSettled(pending.map(check => fetch("/api/issues", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -215,8 +401,11 @@
         fingerprint: check.fingerprint,
         metadata: {
           count: check.count,
+          controlRoomOutcome: check.action || "escalated",
           watcherId: check.watcherId || null,
+          watcherSelector: check.watcherSelector || null,
           watcherTarget: check.watcherTarget || null,
+          observedTarget: check.observedTarget ? safeResource(check.observedTarget) : null,
           ownerAgent: check.ownerAgent || null,
           viewport: `${window.innerWidth}x${window.innerHeight}`,
           online: navigator.onLine
@@ -231,8 +420,8 @@
     const failed = results.filter(result => result.status === "rejected").length;
     reportElement.dataset.state = failed ? "failed" : "sent";
     reportElement.textContent = failed
-      ? `${pending.length - failed} reported; ${failed} could not be sent and can be retried after reload.`
-      : `${pending.length} finding${pending.length === 1 ? "" : "s"} queued for AI triage and maintenance.`;
+      ? `${repairs.length} healed · ${pending.length - failed} reported · ${failed} could not be sent and can be retried after reload.`
+      : `${repairs.length} healed · ${pending.length} escalated to AI triage and maintenance.`;
   }
 
   function renderDashWatchers(panel, dash) {
@@ -273,20 +462,37 @@
       if (activeRender) return activeRender;
       activeRender = (async () => {
         const checks = await runChecks();
+        const orderedChecks = [...checks].sort((left, right) => {
+          const severityRank = { high: 0, medium: 1, low: 2 };
+          return (severityRank[left.severity] ?? 3) - (severityRank[right.severity] ?? 3) || right.count - left.count;
+        });
         const issueCount = checks.reduce((total, check) => total + check.count, 0);
         const hasHighSeverityIssue = checks.some(check => !check.ok && check.severity === "high");
         const launcherState = hasHighSeverityIssue ? "broken" : issueCount ? "attention" : "healthy";
-        panel.querySelector(".halo-qa-list").innerHTML = checks.map(check => `<article class="halo-qa-card" data-state="${check.ok ? "healthy" : "attention"}"><span class="halo-qa-dot"></span><div class="halo-qa-copy"><strong>${escapeHTML(check.name)}</strong><p>${escapeHTML(check.detail)}</p></div><span class="halo-qa-count">${check.ok ? "PASS" : `${check.count} ISSUE${check.count === 1 ? "" : "S"}`}</span></article>`).join("");
         const dash = window.__haloDashAI || { status: "yellow", statusLabel: "ATTENTION", watchers: [], watcherCount: 0, issueCount: 0, pagePath: window.location.pathname };
+        const repairedChecks = (dash.repairs || []).map(repair => ({
+          name: `Healed: ${repair.label || repair.watcherId}`,
+          severity: "low",
+          ok: true,
+          count: 0,
+          action: "repaired",
+          detail: `Repaired ${safeResource(repair.from)} to ${repair.to} and verified the watcher.`
+        }));
+        panel.querySelector(".halo-qa-list").innerHTML = [...repairedChecks, ...orderedChecks].map(check => {
+          const outcome = check.action === "repaired" ? "HEALED" : check.ok ? "PASS" : check.action === "escalated" ? "ESCALATED" : `${check.count} ISSUE${check.count === 1 ? "" : "S"}`;
+          return `<article class="halo-qa-card" data-state="${check.ok ? "healthy" : "attention"}"><span class="halo-qa-dot"></span><div class="halo-qa-copy"><strong>${escapeHTML(check.name)}</strong><p>${escapeHTML(check.detail)}</p></div><span class="halo-qa-count">${outcome}</span></article>`;
+        }).join("");
         renderDashWatchers(panel, dash);
         launcher.dataset.state = launcherState;
         launcher.textContent = hasHighSeverityIssue
-          ? `Site status: BROKEN (${issueCount} alert${issueCount === 1 ? "" : "s"})`
+          ? `Site status: BROKEN (${issueCount} risk${issueCount === 1 ? "" : "s"})`
           : issueCount
-            ? `Site status: ATTENTION (${issueCount} alert${issueCount === 1 ? "" : "s"})`
-            : "Site status: WORKING";
+            ? `Site status: ATTENTION (${issueCount} risk${issueCount === 1 ? "" : "s"})`
+            : (dash.repairs || []).length
+              ? `Site status: HEALED (${dash.repairs.length} repaired)`
+              : "Site status: WORKING";
         panel.querySelector(".halo-qa-time").textContent = `Last run ${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" })}`;
-        await reportFindings(checks, panel.querySelector(".halo-qa-report"));
+        await reportFindings(checks, panel.querySelector(".halo-qa-report"), dash);
       })().finally(() => {
         activeRender = null;
       });

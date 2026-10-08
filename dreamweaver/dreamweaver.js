@@ -1,4 +1,5 @@
 import { DREAMWEAVER_STOREFRONT_MIX_ID, buildDreamweaverStorefrontPath } from "../lib/dreamweaver-storefront.js";
+import { createDreamweaverLyricsEngine } from "../lib/dreamweaver-lyrics.js";
 
 (() => {
   const chapters = [
@@ -204,7 +205,12 @@ import { DREAMWEAVER_STOREFRONT_MIX_ID, buildDreamweaverStorefrontPath } from ".
     drawerSource: document.getElementById("drawerSource"),
     archiveReel: document.getElementById("archiveReel"),
     retry: document.getElementById("retryShow"),
-    toast: document.getElementById("toast")
+    toast: document.getElementById("toast"),
+    lyricsRoot: document.getElementById("dreamweaverLyrics"),
+    lyricsViewport: document.getElementById("dreamweaverLyricsViewport"),
+    lyricsList: document.getElementById("dreamweaverLyricsList"),
+    lyricsMode: document.getElementById("dreamweaverLyricsMode"),
+    lyricsStatus: document.getElementById("dreamweaverLyricsStatus")
   };
 
   const unlockStorageKey = "halo:dreamweaver-unlock";
@@ -224,6 +230,7 @@ import { DREAMWEAVER_STOREFRONT_MIX_ID, buildDreamweaverStorefrontPath } from ".
   };
 
   const state = {
+    lyricsEngine: null,
     mix: null,
     release: null,
     dreamweaverPayload: null,
@@ -1362,6 +1369,38 @@ import { DREAMWEAVER_STOREFRONT_MIX_ID, buildDreamweaverStorefrontPath } from ".
     window.HaloReleaseArtwork?.wire(elements.releasePanel, DREAMWEAVER_RELEASE_FALLBACK_ARTWORK);
     renderSongLobbyHero();
     renderStoryActs();
+    syncDreamweaverLyrics();
+  }
+
+  function currentLyricsSource() {
+    // Catalog timestamps belong to the published release, never to a listener's local file.
+    if (state.audioSourceMode === "local") return "";
+    const payload = state.dreamweaverPayload || state.release?.dreamweaverPayload || {};
+    return typeof payload.lyricsText === "string" ? payload.lyricsText : "";
+  }
+
+  function syncDreamweaverLyrics() {
+    if (!elements.lyricsRoot || !elements.lyricsList) return;
+    try {
+      if (!state.lyricsEngine) {
+        state.lyricsEngine = createDreamweaverLyricsEngine({
+          root: elements.lyricsRoot,
+          list: elements.lyricsList,
+          viewport: elements.lyricsViewport || elements.lyricsList,
+          audio: elements.audio,
+          modeToggle: elements.lyricsMode,
+          status: elements.lyricsStatus,
+          doc: document,
+          win: window,
+          idPrefix: "dreamweaverLyric",
+          onSeek: () => updateProgress()
+        });
+      }
+      state.lyricsEngine.setSource(currentLyricsSource());
+    } catch (error) {
+      elements.lyricsRoot.hidden = true;
+      console.warn("Dreamweaver lyrics unavailable", error instanceof Error ? error.message : "unknown error");
+    }
   }
 
   function setReleasePlaybackState(nextState) {

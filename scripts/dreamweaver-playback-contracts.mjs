@@ -79,6 +79,7 @@ function fixture(search, { releases = [release], mixes = [mix], blocked = false,
     cacheDreamweaverRelease = () => {};
     preferredHeroVideo = () => null;
     renderStoryActs = () => {};
+    syncDreamweaverLyrics = () => {};
     fetchReleaseCatalog = async () => fixtures.releases;
     fetchExactMixById = async id => fixtures.mixes.find(mix => mix.id === id);
     fetchJsonWithTimeout = async url => {

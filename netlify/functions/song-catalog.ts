@@ -8,6 +8,7 @@ import { cleanText, ensureMembership } from "../lib/halo-x.mjs";
 import { reconcilePublishedSong } from "../lib/song-publication.mjs";
 import { buildDreamweaverSatellite } from "../../lib/route-registry.js";
 import { cleanDreamweaverSongId } from "../../lib/dreamweaver-storefront.js";
+import { normalizeLyricsSource } from "../../lib/dreamweaver-lyrics.js";
 import { pickCanonicalMaster, serializeMasterCopy } from "../lib/master-copy.mjs";
 import { attachPublicationHealthToSongs } from "../lib/song-publication-health.mjs";
 import { cleanGoogleDriveUrl } from "../lib/google-drive.mjs";
@@ -114,6 +115,7 @@ function serializeSong(song: typeof songs.$inferSelect, versions: Array<typeof s
     salePriceCents: song.salePriceCents,
     currency: song.currency,
     notes: song.notes,
+    lyricsText: song.lyricsText || "",
     metadataStatus: song.metadataStatus,
     metadataScore: song.metadataScore,
     metadataIssues: Array.isArray(song.metadataIssues) ? song.metadataIssues : [],
@@ -348,6 +350,7 @@ async function createSong(ownerMemberId: string, payload: Record<string, unknown
     saleStatus: cleanEnum(payload.saleStatus, SALE_STATUSES, "for_sale"),
     salePriceCents: Math.max(0, Math.min(10_000_000, Number.parseInt(String(payload.salePriceCents || "0"), 10) || 0)) || null,
     explicitLyrics: payload.explicitLyrics === true, notes: cleanText(payload.notes, 4000),
+    lyricsText: normalizeLyricsSource(payload.lyricsText),
   });
   const versionIds = await createDefaultVersions(id);
   await runDreamweaverReview(id, ownerMemberId);
@@ -364,6 +367,7 @@ async function saveSong(ownerMemberId: string, payload: Record<string, unknown>)
   if (hasDriveUrl && String(payload.googleDriveUrl ?? "").trim() && !googleDriveUrl) {
     return json({ message: "Paste a shareable https://drive.google.com link for the master" }, 400);
   }
+  const hasLyrics = Object.hasOwn(payload, "lyricsText");
   const rows = await db.update(songs).set({
     artistName, title, albumTitle: cleanText(payload.albumTitle, 160), genre: cleanText(payload.genre, 80),
     isrc: cleanText(payload.isrc, 24).toUpperCase(), upc: cleanText(payload.upc, 24),
@@ -371,6 +375,7 @@ async function saveSong(ownerMemberId: string, payload: Record<string, unknown>)
     saleStatus: cleanEnum(payload.saleStatus, SALE_STATUSES, "for_sale"),
     salePriceCents: Math.max(0, Math.min(10_000_000, Number.parseInt(String(payload.salePriceCents || "0"), 10) || 0)) || null,
     explicitLyrics: payload.explicitLyrics === true, notes: cleanText(payload.notes, 4000), updatedAt: new Date(),
+    ...(hasLyrics ? { lyricsText: normalizeLyricsSource(payload.lyricsText) } : {}),
   }).where(and(eq(songs.id, id), eq(songs.ownerMemberId, ownerMemberId), eq(songs.status, "active"))).returning({ id: songs.id });
   if (!rows.length) return json({ message: "That song was not found" }, 404);
   if (hasDriveUrl) {

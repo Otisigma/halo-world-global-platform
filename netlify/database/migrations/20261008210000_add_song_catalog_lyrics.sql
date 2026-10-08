@@ -1,0 +1,2 @@
+ALTER TABLE halo_song_catalog
+  ADD COLUMN IF NOT EXISTS lyrics_text TEXT NOT NULL DEFAULT '';

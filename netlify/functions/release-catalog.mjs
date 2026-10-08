@@ -2,6 +2,7 @@ import { getDatabase } from "@netlify/database";
 import { resolveReleaseArtworkFields } from "../lib/release-artwork.mjs";
 import { resolveDreamweaverPageFlow } from "../lib/dreamweaver-page-manager.mjs";
 import { resolveReleaseLicensing } from "../lib/release-licensing.mjs";
+import { normalizeLyricsSource } from "../../lib/dreamweaver-lyrics.js";
 
 const CORS_HEADERS = Object.freeze({
   "Access-Control-Allow-Origin": "*",
@@ -88,6 +89,7 @@ function dreamweaverPayloadFor(row, values = {}) {
     youtubeId: videoId || null,
     shopSalesPageUrl,
     mixPlayerUrl,
+    lyricsText: normalizeLyricsSource(row.catalog_lyrics_text),
     acts: {
       act1Hook: row.pitch || `${title} begins with a feeling before the first detail comes into focus.`,
       act2Lyrics: [
@@ -335,6 +337,7 @@ export default async function releaseCatalogHandler(request) {
         catalog.catalog_metadata_status,
         catalog.catalog_sale_price_cents,
         catalog.catalog_currency,
+        catalog.catalog_lyrics_text,
         catalog_versions.catalog_version_count,
         catalog_versions.catalog_sale_enabled_count,
         catalog_video.catalog_video_url,
@@ -395,7 +398,8 @@ export default async function releaseCatalogHandler(request) {
           song.sale_status AS catalog_sale_status,
           song.metadata_status AS catalog_metadata_status,
           song.sale_price_cents AS catalog_sale_price_cents,
-          song.currency AS catalog_currency
+          song.currency AS catalog_currency,
+          song.lyrics_text AS catalog_lyrics_text
         FROM halo_song_catalog song
         WHERE song.source_release_id = release.id
           AND song.status = 'active'

@@ -17,6 +17,7 @@ export const songs = pgTable("halo_song_catalog", {
   salePriceCents: integer("sale_price_cents"),
   currency: text("currency").notNull().default("USD"),
   notes: text("notes").notNull().default(""),
+  lyricsText: text("lyrics_text").notNull().default(""),
   metadataStatus: text("metadata_status").notNull().default("needs_review"),
   metadataScore: integer("metadata_score").notNull().default(0),
   metadataIssues: jsonb("metadata_issues").notNull().default([]),

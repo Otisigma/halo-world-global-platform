@@ -1,78 +1,72 @@
 (function (global) {
   "use strict";
 
-  // Recorder isolation & audio feedback guard for the DJ deck takeover recorder.
-  // The recorder taps the post-limiter master bus while CUE monitoring runs on a separate
-  // local path. This guard watches for the conditions that most often let cue-monitor bleed,
-  // background monitoring audio, or feedback loops reach a direct recording, and raises an
-  // actionable warning. It reduces risk; it does not guarantee absolute silence on the feed.
+  // The feed is owned here and measured from the recorder stream, never the monitor output.
+  const recordingFeeds = new WeakSet();
 
   const DEFAULT_CONFIG = Object.freeze({
     checkIntervalMs: 250,
-    masterLimit: 0.8,
-    holdMs: 1500
+    quietPeak: 0.0001
   });
 
   const SECURE_TITLE = "Recorder isolation secure";
-  const TRIGGERED_TITLE = "Audio bleed guard triggered";
-
-  function clampLevel(value) {
-    const number = Number(value);
-    if (!Number.isFinite(number) || number <= 0) return 0;
-    return Math.min(1, number);
-  }
-
-  function deckList(decks) {
-    const list = Array.isArray(decks) ? decks.filter(Boolean).map(String) : [];
-    if (!list.length) return "the cue bus";
-    return `Deck ${list.join(" and Deck ")}`;
-  }
+  const TRIGGERED_TITLE = "Recorder isolation not confirmed";
 
   function evaluateRecorderGuard(inputs = {}, config = {}) {
-    const settings = { ...DEFAULT_CONFIG, ...config };
     const isRecording = Boolean(inputs.isRecording);
     const cueBusActive = Boolean(inputs.cueBusActive);
-    const masterBusLevel = clampLevel(inputs.masterBusLevel);
     const activeCueDecks = Array.isArray(inputs.activeCueDecks) ? inputs.activeCueDecks.slice() : [];
-    const nearLimit = masterBusLevel > settings.masterLimit;
-    const levelPercent = Math.round(masterBusLevel * 100);
-    const bleedRisk = isRecording && cueBusActive && nearLimit;
-
-    if (bleedRisk) {
-      return {
-        state: "triggered",
-        isSecureToRecord: false,
-        bleedDetected: true,
-        isRecording,
-        cueBusActive,
-        masterBusLevel,
-        activeCueDecks,
-        title: TRIGGERED_TITLE,
-        warningMessage: `CUE monitoring on ${deckList(activeCueDecks)} is active while the master bus is near its limit (${levelPercent}%). Release CUE or pull the channel faders down so headphone bleed and feedback stay out of the recording.`
-      };
-    }
-
-    let message;
-    if (!isRecording) {
-      message = "The recorder taps the post-limiter master bus only; CUE headphones stay on a separate local path. The guard watches for likely bleed conditions once recording starts.";
-    } else if (cueBusActive) {
-      message = `Recording the master bus. CUE on ${deckList(activeCueDecks)} stays on the local monitor path — keep the master below its limit to avoid headphone bleed.`;
-    } else {
-      message = "Recording the master bus only. No likely cue-bleed or feedback conditions detected.";
-    }
-
+    const secure = inputs.isolationConfirmed === true && inputs.preflightPassed === true;
     return {
-      state: "secure",
-      isSecureToRecord: true,
+      state: secure ? "secure" : "triggered",
+      isSecureToRecord: secure,
       bleedDetected: false,
       isRecording,
       cueBusActive,
-      masterBusLevel,
       activeCueDecks,
-      title: SECURE_TITLE,
-      warningMessage: "",
-      message
+      title: secure ? SECURE_TITLE : TRIGGERED_TITLE,
+      warningMessage: secure ? "" : "A quiet-feed isolation preflight is required before recording. Live playback and CUE remain available.",
+      message: secure ? "Recorder captures the post-limiter music bus only. CUE and room input stay monitor-only." : ""
     };
+  }
+
+  function createRecordingFeed(context, postLimiterMusicBus) {
+    const destination = context.createMediaStreamDestination();
+    const analyser = context.createAnalyser();
+    analyser.fftSize = 2048;
+    analyser.smoothingTimeConstant = 0;
+    const probe = context.createMediaStreamSource(destination.stream);
+    probe.connect(analyser);
+    postLimiterMusicBus.connect(destination);
+    const feed = Object.freeze({ context, destination, analyser, probe, musicBus: postLimiterMusicBus });
+    recordingFeeds.add(feed);
+    return feed;
+  }
+
+  function isFeedAvailable(feed) {
+    if (!feed || !recordingFeeds.has(feed) || feed.context.state !== "running") return false;
+    const tracks = feed.destination.stream.getAudioTracks();
+    return tracks.length === 1 && tracks[0].readyState === "live" && tracks[0].enabled && !tracks[0].muted;
+  }
+
+  async function preflight(feed, { isMusicIdle } = {}) {
+    const fail = () => { throw new Error("Recorder isolation preflight failed. Keep the music bus quiet and try again."); };
+    if (typeof isMusicIdle !== "function" || !isFeedAvailable(feed) || !isMusicIdle()) fail();
+    const startedAt = feed.context.currentTime;
+    const samples = new Float32Array(feed.analyser.fftSize);
+    // Let the stream probe warm up, then require multiple quiet frames and an advancing audio clock.
+    await new Promise(resolve => global.setTimeout(resolve, 100));
+    for (let frame = 0; frame < 6; frame += 1) {
+      await new Promise(resolve => global.setTimeout(resolve, 50));
+      if (!isFeedAvailable(feed) || !isMusicIdle()) fail();
+      samples.fill(Number.NaN);
+      feed.analyser.getFloatTimeDomainData(samples);
+      for (const sample of samples) {
+        if (!Number.isFinite(sample) || Math.abs(sample) > DEFAULT_CONFIG.quietPeak) fail();
+      }
+    }
+    if (!(feed.context.currentTime - startedAt >= 0.25)) fail();
+    return true;
   }
 
   class HaloRecorderGuard {
@@ -80,12 +74,9 @@
       this.config = { ...DEFAULT_CONFIG, ...(options.config || {}) };
       this.callbacks = {
         readInputs: options.readInputs || (() => ({})),
-        onStatusChange: options.onStatusChange || (() => {}),
-        now: options.now || (() => Date.now())
+        onStatusChange: options.onStatusChange || (() => {})
       };
       this.timer = 0;
-      this.triggeredUntil = 0;
-      this.heldLevel = 0;
       this.state = evaluateRecorderGuard({}, this.config);
     }
 
@@ -98,25 +89,12 @@
     tick() {
       const inputs = this.callbacks.readInputs() || {};
       const next = evaluateRecorderGuard(inputs, this.config);
-      const now = this.callbacks.now();
-      let resolved = next;
-      if (next.state === "triggered") {
-        this.triggeredUntil = now + this.config.holdMs;
-        this.heldLevel = next.masterBusLevel;
-      } else if (this.state.state === "triggered" && next.isRecording && next.cueBusActive && now < this.triggeredUntil) {
-        // Hold the warning briefly at the last hot peak so transient dips do not make the indicator
-        // flicker, while still reflecting the cue decks that are active right now.
-        resolved = evaluateRecorderGuard({ ...inputs, masterBusLevel: this.heldLevel }, this.config);
-      } else {
-        this.triggeredUntil = 0;
-        this.heldLevel = 0;
-      }
-      const changed = resolved.state !== this.state.state
-        || resolved.warningMessage !== this.state.warningMessage
-        || resolved.message !== this.state.message;
-      this.state = resolved;
-      if (changed) this.callbacks.onStatusChange(resolved);
-      return resolved;
+      const changed = next.state !== this.state.state
+        || next.warningMessage !== this.state.warningMessage
+        || next.message !== this.state.message;
+      this.state = next;
+      if (changed) this.callbacks.onStatusChange(next);
+      return next;
     }
 
     startWatchdog() {
@@ -157,6 +135,9 @@
 
   global.HaloRecorderGuard = HaloRecorderGuard;
   global.HaloRecorderGuard.evaluate = evaluateRecorderGuard;
+  global.HaloRecorderGuard.createRecordingFeed = createRecordingFeed;
+  global.HaloRecorderGuard.isFeedAvailable = isFeedAvailable;
+  global.HaloRecorderGuard.preflight = preflight;
   global.HaloRecorderGuard.renderIndicator = renderRecorderGuardIndicator;
   global.useRecorderGuard = useRecorderGuard;
 })(typeof window !== "undefined" ? window : globalThis);

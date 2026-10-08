@@ -1280,12 +1280,12 @@
     </section>
 
     <section class="recording-rig panel" id="recordingRig" aria-labelledby="recordingTitle">
-      <div class="recorder-guard is-secure" id="recorderGuard" data-state="secure" role="status" aria-live="polite">
+      <div class="recorder-guard" id="recorderGuard" data-state="pending" role="status" aria-live="polite">
         <svg class="recorder-guard-shield" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/></svg>
         <svg class="recorder-guard-alert" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
         <div>
-          <h3 data-recorder-guard-title>Recorder isolation secure</h3>
-          <p data-recorder-guard-message>The recorder taps the post-limiter master bus only; CUE headphones stay on a separate local path. The guard watches for likely bleed conditions once recording starts.</p>
+          <h3 data-recorder-guard-title>Recorder isolation preflight required</h3>
+          <p data-recorder-guard-message>The recorder taps the post-limiter music bus only; CUE stays monitor-only. A quiet-feed isolation preflight is required before recording.</p>
         </div>
       </div>
       <div class="recording-copy">
@@ -2868,6 +2868,7 @@
       masterGain: null,
       limiter: null,
       recordingDestination: null,
+      recordingFeed: null,
       animationFrame: null,
       decks: {
         A: { input: null, trim: null, gain: null, cueGain: null, cueActive: false, analyser: null, filters: null, effects: null, source: null, stemSources: {}, stemGains: {}, timer: null, step: 0, level: 0, startedAt: 0, playRequestedAt: 0, hasSignal: false, signalConfirmed: false, noSignalReported: false, stems: { bass: true, hats: true, vocals: true } },
@@ -2896,6 +2897,10 @@
     };
     const recordingState = {
       recorder: null,
+      starting: false,
+      preflightPassed: false,
+      preparing: null,
+      preparedKey: "",
       chunks: [],
       startedAt: 0,
       elapsedTimer: null,
@@ -3302,6 +3307,7 @@
       });
       renderTracks(elements.search.value);
       renderTrackPicker(elements.trackPickerSearch.value);
+      prepareTakeoverSet();
     }
 
     function renderStemVault() {
@@ -3655,6 +3661,7 @@
     }
 
     function startDeckContinuityFiller(detail = {}) {
+      if (recordingState.starting || recordingState.recorder?.state === "recording") return;
       if (!audioEngine.context || !audioEngine.masterGain) return;
       if (!continuityState.fillerGain) {
         continuityState.fillerGain = audioEngine.context.createGain();
@@ -3728,6 +3735,10 @@
 
     function prepareDeckContinuityPreroll(deckId) {
       const state = deckState[deckId];
+      return prepareTrackAudio(state);
+    }
+
+    function prepareTrackAudio(state) {
       if (!audioEngine.context || !state || state.empty) return Promise.resolve(false);
       const pending = [];
       if (state.audioAsset?.file && !state.audioBuffer && !state.audioAsset.buffer && !state.audioAsset.promise) {
@@ -3762,8 +3773,12 @@
           if (asset.promise) pending.push(asset.promise);
         });
       }
-      if (!pending.length) return Promise.resolve(deckContinuityReady(deckId));
-      return Promise.all(pending).then(() => deckContinuityReady(deckId));
+      if (!pending.length) return Promise.resolve(trackAudioReady(state));
+      return Promise.all(pending).then(() => {
+        const buffer = state.audioBuffer || state.audioAsset?.buffer || Object.values(state.stemAssets || {})[0]?.buffer;
+        if (buffer) state.duration = buffer.duration;
+        return trackAudioReady(state);
+      });
     }
 
     function deckContinuityBoundaryState() {
@@ -3831,21 +3846,15 @@
       }).init();
     }
 
-    function recorderGuardMasterLevel() {
-      if (!continuityState.analyser || !continuityState.analyserData) return 0;
-      continuityState.analyser.getFloatTimeDomainData(continuityState.analyserData);
-      let peak = 0;
-      for (let index = 0; index < continuityState.analyserData.length; index += 1) peak = Math.max(peak, Math.abs(continuityState.analyserData[index]));
-      return Math.min(1, peak);
-    }
-
     function recorderGuardInputs() {
       const activeCueDecks = ["A", "B"].filter(deckId => audioEngine.decks[deckId].cueActive);
       const isRecording = recordingState.recorder?.state === "recording";
       const cueBusActive = activeCueDecks.length > 0;
       return {
         isRecording,
-        masterBusLevel: isRecording && cueBusActive ? recorderGuardMasterLevel() : 0,
+        isolationConfirmed: window.HaloRecorderGuard?.isFeedAvailable(audioEngine.recordingFeed) === true
+          && audioEngine.recordingFeed.musicBus === audioEngine.limiter,
+        preflightPassed: recordingState.preflightPassed,
         cueBusActive,
         activeCueDecks
       };
@@ -3854,17 +3863,14 @@
     function attachRecorderGuardToDeck() {
       if (recorderGuardState.guard || !window.HaloRecorderGuard || !window.useRecorderGuard) return;
       recorderGuardState.guard = window.useRecorderGuard({
-        config: { masterLimit: .8, holdMs: 1500 },
         readInputs: recorderGuardInputs,
         onStatusChange: status => {
-          const wasTriggered = recorderGuardState.status?.state === "triggered";
           recorderGuardState.status = status;
           window.HaloRecorderGuard.renderIndicator(elements.recorderGuard, status);
-          if (status.state === "triggered" && !wasTriggered) {
-            window.haloStats?.track("dj_recorder_bleed_guard_triggered", {
-              cue_decks: status.activeCueDecks.join(","),
-              master_level: Math.round(status.masterBusLevel * 100)
-            });
+          if (!status.isSecureToRecord && recordingState.recorder?.state === "recording") {
+            recordingState.failed = true;
+            finishTakeoverRecording("stopped");
+            elements.recordingStatus.textContent = "Recording stopped: recorder isolation is no longer confirmed.";
           }
         }
       });
@@ -3888,10 +3894,6 @@
         audioEngine.context = context;
         audioEngine.masterGain = masterGain;
         audioEngine.limiter = limiter;
-        if (typeof context.createMediaStreamDestination === "function") {
-          audioEngine.recordingDestination = context.createMediaStreamDestination();
-          limiter.connect(audioEngine.recordingDestination);
-        }
         ["A", "B"].forEach(deckId => {
           const input = context.createGain();
           const trim = context.createGain();
@@ -3959,6 +3961,16 @@
       }
       if (audioEngine.context.state !== "running") await audioEngine.context.resume();
       if (audioEngine.context.state !== "running") throw new Error(`Audio engine remained ${audioEngine.context.state}.`);
+      if (!audioEngine.recordingFeed && window.HaloRecorderGuard
+        && typeof audioEngine.context.createMediaStreamDestination === "function") {
+        try {
+          audioEngine.recordingFeed = window.HaloRecorderGuard.createRecordingFeed(audioEngine.context, audioEngine.limiter);
+          audioEngine.recordingDestination = audioEngine.recordingFeed.destination;
+        } catch {
+          // A missing recorder probe must not prevent normal live playback.
+          audioEngine.recordingFeed = null;
+        }
+      }
       attachContinuityGuardToDeck();
       reportAudioHealth("ready", "Audio engine is running and checking deck output.");
       return audioEngine.context;
@@ -4105,6 +4117,7 @@
     }
 
     function triggerKick(deckId, when) {
+      if (recordingState.starting || recordingState.recorder?.state === "recording") return;
       const context = audioEngine.context;
       const oscillator = context.createOscillator();
       const envelope = context.createGain();
@@ -4119,6 +4132,7 @@
     }
 
     function triggerTone(deckId, when, frequency, type, level, duration) {
+      if (recordingState.starting || recordingState.recorder?.state === "recording") return;
       const context = audioEngine.context;
       const oscillator = context.createOscillator();
       const envelope = context.createGain();
@@ -4143,6 +4157,7 @@
         return await startDeckAudioSources(context, deckId, beatOffset);
       } finally {
         halo?.scheduleLiveIntelligenceRestore(Math.max(0, (audioEngine.decks[deckId].stabilizesAt || 0) - context.currentTime));
+        prepareTakeoverSet();
       }
     }
 
@@ -4395,7 +4410,9 @@
         tracks.unshift(...additions);
         elements.search.value = "";
         renderTracks();
-        loadTrack(selectedImportDeck, additions[0].id);
+        if (!deckState[selectedImportDeck].playing && !recordingState.starting && recordingState.recorder?.state !== "recording") {
+          loadTrack(selectedImportDeck, additions[0].id);
+        }
         if (pendingPlaybackDeck === selectedImportDeck) {
           deckState[selectedImportDeck].playing = true;
           await startDeckAudio(selectedImportDeck);
@@ -4421,6 +4438,7 @@
         elements.driveButton.textContent = "Upload from Drive";
         pendingPlaybackDeck = null;
         event.target.value = "";
+        prepareTakeoverSet();
       }
     }
 
@@ -4519,6 +4537,7 @@
       recommendLocally();
       showToast("Track deleted", `${removed.title} was removed from this session library. Loaded deck copies remain safe.`);
       window.haloStats?.track("delete_track", { source_type: removed.platform || "library" });
+      prepareTakeoverSet();
     }
 
     function toggleQueue(trackId) {
@@ -4550,7 +4569,63 @@
     }
 
     function trackHasPlayableAudio(track) {
-      return Boolean(track?.audioBuffer || track?.audioAsset?.file || track?.stemAssets);
+      const stems = Object.values(track?.stemAssets || {});
+      return Boolean(track?.audioBuffer || track?.audioAsset?.buffer || track?.audioAsset?.file
+        || (stems.length && stems.every(asset => asset?.buffer || asset?.url)));
+    }
+
+    function trackAudioReady(track) {
+      const validBuffer = buffer => Number.isFinite(buffer?.duration) && buffer.duration > 0 && buffer.length > 0;
+      const stems = Object.values(track?.stemAssets || {});
+      return validBuffer(track?.audioBuffer || track?.audioAsset?.buffer)
+        || Boolean(stems.length && stems.every(asset => validBuffer(asset?.buffer)));
+    }
+
+    function takeoverLibraryKey() {
+      return JSON.stringify([djMode, tracks.filter(trackHasPlayableAudio).map(track => track.id)]);
+    }
+
+    function updateTakeoverRecorderAvailability() {
+      if (!takeoverSession) return;
+      elements.recordingStart.disabled = recordingState.starting || Boolean(recordingState.preparing)
+        || recordingState.recorder?.state === "recording"
+        || recordingState.preparedKey !== takeoverLibraryKey()
+        || recordingState.takeoverPlan.length < 2
+        || !recordingState.takeoverPlan.every(id => trackAudioReady(tracks.find(track => track.id === id)));
+    }
+
+    async function prepareTakeoverSet() {
+      if (!takeoverSession || recordingState.starting || recordingState.recorder?.state === "recording") return;
+      if (recordingState.preparing) return recordingState.preparing;
+      const key = takeoverLibraryKey();
+      if (recordingState.preparedKey === key && recordingState.takeoverPlan.every(id => trackAudioReady(tracks.find(track => track.id === id)))) {
+        updateTakeoverRecorderAvailability();
+        return;
+      }
+      recordingState.preparedKey = "";
+      recordingState.takeoverPlan = [];
+      if (tracks.filter(trackHasPlayableAudio).length < 2) {
+        elements.recordingStatus.textContent = "Add at least two playable songs. DJ takeover builds the whole set automatically after the audio is loaded.";
+        updateTakeoverRecorderAvailability();
+        return;
+      }
+      recordingState.preparing = (async () => {
+        try {
+          await ensureAudio();
+          if (tracks.filter(trackHasPlayableAudio).length > 40) throw new Error("Takeover preflight supports up to 40 playable songs. Reduce the set before recording.");
+          // Decode sequentially, sharing the existing assets without starting or replacing a live deck.
+          for (const track of tracks.filter(trackHasPlayableAudio)) await prepareTrackAudio(track);
+          await buildTakeoverPlan(key);
+          if (key === takeoverLibraryKey()) recordingState.preparedKey = key;
+        } catch (error) {
+          elements.recordingStatus.textContent = error.message || "The takeover set could not be prepared.";
+        }
+      })();
+      updateTakeoverRecorderAvailability();
+      await recordingState.preparing;
+      recordingState.preparing = null;
+      updateTakeoverRecorderAvailability();
+      if (key !== takeoverLibraryKey()) return prepareTakeoverSet();
     }
 
     function scoreTrack(track, intent) {
@@ -4827,8 +4902,8 @@
       renderArtistJourneyGuidance();
     }
 
-    async function buildTakeoverPlan() {
-      const playableTracks = tracks.filter(trackHasPlayableAudio);
+    async function buildTakeoverPlan(key = takeoverLibraryKey()) {
+      const playableTracks = tracks.filter(trackAudioReady);
       if (playableTracks.length < 2) throw new Error("Add at least two playable songs. DJ takeover builds the whole set automatically after the audio is loaded.");
       elements.recordingStatus.textContent = `${takeoverSession.name} is choosing the complete song order and rehearsing every handoff…`;
       elements.recordingNote.textContent = "Quality control is checking repeats, vocal collisions, tempo, key, bass, and arrangement density.";
@@ -4846,21 +4921,25 @@
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data.message || "The takeover set could not be built.");
+      if (key !== takeoverLibraryKey()) return;
+      const order = data.report?.orderedTracks?.map(track => track.id);
+      const expected = new Set(playableTracks.map(track => track.id));
+      if (!order || order.length !== expected.size || new Set(order).size !== expected.size
+        || order.some(id => !expected.has(id))) throw new Error("The takeover preflight did not return the complete playable set.");
       latestPreflightId = data.preflightId || null;
       latestPreflightReport = data.report;
       renderPreflight(data.report);
       if (data.report.status === "blocked") throw new Error(`Quality control stopped the takeover: ${data.report.summary}`);
 
-      recordingState.takeoverPlan = data.report.orderedTracks.map(track => track.id);
+      recordingState.takeoverPlan = order;
       recordingState.playedTrackIds = new Set();
       recordingState.qualityScore = Number(data.report.qualityScore) || 0;
       recordingState.trackCursor = 2;
       trackQueue = recordingState.takeoverPlan.slice();
       renderTracks(elements.search.value);
       renderQueue();
-      loadTrack("A", recordingState.takeoverPlan[0]);
-      loadTrack("B", recordingState.takeoverPlan[1]);
       updateTakeoverQualityControl();
+      elements.recordingStatus.textContent = `${order.length} playable songs prepared. Quiet-feed isolation will be checked before recording.`;
       window.haloStats?.track("build_dj_takeover", { dj: takeoverSession.dj, tracks: recordingState.takeoverPlan.length, quality_score: recordingState.qualityScore });
     }
 
@@ -5267,6 +5346,7 @@
     // Uses the existing triggerTone infrastructure; outputs to the incoming deck's
     // input so it blends naturally into the mix.
     function playBridgeSynth(deckId, durationMs, fromKey, toKey) {
+      if (recordingState.starting || recordingState.recorder?.state === "recording") return;
       if (!audioEngine.context) return;
       const ctx = audioEngine.context;
       const now = ctx.currentTime;
@@ -5624,7 +5704,7 @@
       };
       const profile = profiles[takeoverSession?.dj] || profiles.halo;
       recordingState.activeDeck = "A";
-      recordingState.trackCursor = Math.max(2, recordingState.trackCursor);
+      recordingState.trackCursor = 2;
       recordingState.transitionCount = 0;
       recordingState.transitionHistory = [];
       recordingState.effectTimers = [];
@@ -5703,16 +5783,30 @@
     }
 
     async function startTakeoverRecording() {
-      if (!takeoverSession) return;
+      if (!takeoverSession || recordingState.starting || recordingState.recorder?.state === "recording") return;
+      await prepareTakeoverSet();
+      if (recordingState.starting || recordingState.recorder?.state === "recording") return;
+      if (recordingState.preparedKey !== takeoverLibraryKey() || recordingState.takeoverPlan.length < 2) return;
+      recordingState.starting = true;
+      recordingState.preflightPassed = false;
       elements.recordingStart.disabled = true;
-      elements.recordingStatus.textContent = "Building the complete DJ sequence before opening the master channel…";
+      elements.recordingStatus.textContent = "Checking the quiet recorder feed before opening the music channel…";
 
       try {
         await ensureAudio();
-        await buildTakeoverPlan();
         if (!window.MediaRecorder || !audioEngine.recordingDestination) throw new Error("This browser cannot record the live master mix.");
+        const isMusicIdle = () => !deckState.A.playing && !deckState.B.playing
+          && !audioEngine.decks.A.source && !audioEngine.decks.B.source
+          && !Object.keys(audioEngine.decks.A.stemSources).length && !Object.keys(audioEngine.decks.B.stemSources).length
+          && !continuityState.fillerNodes.length;
+        await window.HaloRecorderGuard.preflight(audioEngine.recordingFeed, { isMusicIdle });
+        if (!isMusicIdle() || recordingState.preparedKey !== takeoverLibraryKey()) throw new Error("The set changed during recorder isolation preflight. Try again.");
+        loadTrack("A", recordingState.takeoverPlan[0]);
+        loadTrack("B", recordingState.takeoverPlan[1]);
         const missingDecks = ["A", "B"].filter(deckId => !trackHasPlayableAudio(deckState[deckId]));
         if (missingDecks.length) throw new Error(`Load playable audio on Deck ${missingDecks.join(" and Deck ")} before starting the automated set.`);
+        recordingState.preflightPassed = true;
+        recorderGuardState.guard?.tick();
 
         const recorder = createCompatibleRecorder(audioEngine.recordingDestination.stream);
         recordingState.mimeType = recorder.mimeType || "";
@@ -5730,9 +5824,12 @@
           stopTakeoverDecks();
           elements.recordingRig.className = "recording-rig panel is-error";
           elements.recordingStatus.textContent = event.error?.message || "The browser stopped the recording unexpectedly.";
-          elements.recordingStart.disabled = false;
+          updateTakeoverRecorderAvailability();
         });
         recorder.addEventListener("stop", () => {
+          recordingState.preflightPassed = false;
+          recorderGuardState.guard?.tick();
+          prepareTakeoverSet();
           if (recordingState.failed) {
             recordingState.chunks = [];
             return;
@@ -5745,7 +5842,7 @@
             elements.recordingRig.className = "recording-rig panel is-error";
             elements.recordingStatus.textContent = "The browser finished without producing an audio file.";
             elements.recordingNote.textContent = "Try the recording again in a current version of Chrome, Edge, Firefox, or Safari.";
-            elements.recordingStart.disabled = false;
+            updateTakeoverRecorderAvailability();
             return;
           }
           recordingState.blob = blob;
@@ -5769,7 +5866,7 @@
           elements.postMix.disabled = false;
           elements.playlistMix.disabled = true;
           elements.playlistMix.textContent = "Add to playlist";
-          elements.recordingStart.disabled = false;
+          updateTakeoverRecorderAvailability();
           window.haloStats?.track("complete_dj_takeover_recording", { dj: takeoverSession.dj, minutes: takeoverSession.minutes, recorded_seconds: Math.round(actualSeconds) });
           requestAnimationFrame(() => {
             elements.recordingDownload.click();
@@ -5801,17 +5898,24 @@
         showToast("Recording started", `${takeoverSession.name}'s ${takeoverSession.minutes}-minute set is live and mixing now.`);
         window.haloStats?.track("start_dj_takeover_recording", { dj: takeoverSession.dj, minutes: takeoverSession.minutes });
       } catch (error) {
+        const ownedPlayback = recordingState.recorder?.state === "recording";
         recordingState.failed = true;
         if (recordingState.recorder && recordingState.recorder.state !== "inactive") recordingState.recorder.stop();
         clearInterval(recordingState.elapsedTimer);
         recordingState.elapsedTimer = null;
-        stopAutomatedMix();
-        stopTakeoverDecks();
+        if (ownedPlayback) {
+          stopAutomatedMix();
+          stopTakeoverDecks();
+        }
+        recordingState.preflightPassed = false;
+        recorderGuardState.guard?.tick();
         elements.recordingRig.className = "recording-rig panel is-error";
         elements.recordingStatus.textContent = error.message || "The recording could not start.";
         elements.recordingNote.textContent = "Try a current version of Chrome, Edge, Firefox, or Safari.";
         showToast("Recording unavailable", error.message || "The browser could not open the master recorder.");
-        elements.recordingStart.disabled = false;
+      } finally {
+        recordingState.starting = false;
+        updateTakeoverRecorderAvailability();
       }
     }
 
@@ -6012,14 +6116,15 @@
       document.querySelector("#tracksPlayed").textContent = "0";
       elements.recordingRig.classList.add("is-ready");
       elements.preflightPersona.value = takeoverSession.dj;
-      elements.recordingStatus.textContent = `${takeoverSession.name} is selected. One press runs the decks, track changes, transitions, recording, and finished-file download.`;
+      elements.recordingStatus.textContent = "Add at least two playable songs. DJ takeover builds the whole set automatically after the audio is loaded.";
       elements.recordingDj.textContent = `${takeoverSession.name} · ${takeoverSession.minutes}-minute set`;
-      elements.recordingStart.textContent = `Build + play ${takeoverSession.name} takeover`;
-      elements.recordingNote.textContent = "One press lets the DJ choose every playable song, lock the order, preflight the transitions, and start the recording.";
+      elements.recordingStart.textContent = `Record ${takeoverSession.name} takeover`;
+      elements.recordingNote.textContent = "The set prepares silently after audio loads. Recording requires a quiet-feed isolation preflight; stop live decks before starting.";
       updateTakeoverQualityControl();
       updateRecordingProgress(0);
       showToast("Takeover loaded", `${takeoverSession.name} is ready to build, mix, save, and record your ${takeoverSession.minutes}-minute session.`);
       window.haloStats?.track("load_dj_takeover", { dj: takeoverSession.dj, minutes: takeoverSession.minutes });
+      prepareTakeoverSet();
     }
 
     elements.search.addEventListener("input", event => renderTracks(event.target.value));
@@ -6258,7 +6363,10 @@
     elements.mixIntent.addEventListener("change", recommendLocally);
     elements.analyzeSet.addEventListener("click", analyzeSet);
     elements.runPreflight.addEventListener("click", runSetPreflight);
-    document.querySelectorAll("[data-halo-mode]").forEach(button => button.addEventListener("click", () => setDjMode(button.dataset.haloMode)));
+    document.querySelectorAll("[data-halo-mode]").forEach(button => button.addEventListener("click", () => {
+      setDjMode(button.dataset.haloMode);
+      prepareTakeoverSet();
+    }));
     elements.energyCurve.addEventListener("change", () => { renderEnergyArchitecture(); recommendLocally(); saveDjIntelligenceSession(); });
     elements.setPhase.addEventListener("change", () => { recommendLocally(); saveDjIntelligenceSession(); });
     document.querySelectorAll("[data-audience-signal]").forEach(button => button.addEventListener("click", () => recordAudienceSignal(button.dataset.audienceSignal)));

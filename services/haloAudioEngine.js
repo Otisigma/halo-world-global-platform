@@ -88,8 +88,8 @@
       this.micGainNode.gain.setValueAtTime(this.liveInputSuppressed ? SILENCE : this.config.liveInputLevel, this.audioCtx.currentTime);
       this.micStreamNode.connect(this.micGainNode);
       this.micGainNode.connect(this.analyzerNode);
-      // Analysis-only by default: routing the room back to the master path invites feedback.
-      if (options.monitor === true) this.micGainNode.connect(this.masterGain);
+      // Room monitoring must never enter the music bus or its recorder tap.
+      if (options.monitor === true) this.micGainNode.connect(this.audioCtx.destination);
       this.isAnalyzing = !this.liveInputSuppressed;
       return this.analyzerNode;
     }

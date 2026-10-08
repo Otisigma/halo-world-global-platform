@@ -112,6 +112,9 @@ assert.ok(restore.delay >= 150 + 80 && restore.delay <= 200 + 80, "Mic restore w
 restore.handler();
 assert.equal(engine.isAnalyzing, true, "Room input returns after stabilisation");
 assert.equal(engine.micGainNode.gain.value, 1);
+engine.attachLiveIntelligenceInput({}, { monitor: true });
+assert.ok(engine.micGainNode.connections.includes(engine.context.destination), "Room monitoring goes to local output");
+assert.ok(!engine.micGainNode.connections.includes(engine.masterGain), "Room monitoring cannot enter the music/recorder bus");
 
 engine.suppressLiveIntelligence(1);
 const pending = timers.at(-1);

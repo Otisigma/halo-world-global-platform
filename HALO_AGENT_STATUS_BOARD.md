@@ -136,3 +136,21 @@ Loop reviewed: 2026-09-04 16:30 UTC
 - Open risk: A green deploy check still does not say what HALO should refine next for supporter value or operator trust.
 - Next check: After each deploy-health or support-critical homepage change, record the observed outcome here with the next validation question.
 - Check by: 2026-09-11
+
+## Feature lineage ledger
+
+### HALO Oracle — recorded 2026-10-08
+
+[PR #314](https://github.com/Otisigma/halo-world-global-platform/pull/314) is **not the Oracle feature branch**. It remains the **Release House ownership-disclosure/contracts PR**, unrelated to Oracle feature implementation. Keep its disclosure copy and contract logic separate and unchanged by Oracle tracking work.
+
+Oracle lineage belongs to these merged PRs, in order:
+
+| Merged PR | Scope | Relevant implementation |
+| --- | --- | --- |
+| [PR #353](https://github.com/Otisigma/halo-world-global-platform/pull/353) | Living Chart #1 celebration, social post generator, Public Frequency broadcast and promo video fallback; shared foundation for Oracle | [chart-celebration.js](chart-celebration.js), [signal-network/signal-feed.js](signal-network/signal-feed.js), [music/music.js](music/music.js) |
+| [PR #354](https://github.com/Otisigma/halo-world-global-platform/pull/354) | HALO Oracle stage with shared playback and gold confetti | [halo-hud.js](halo-hud.js), [halo-oracle.js](halo-oracle.js), [halo-oracle.css](halo-oracle.css) |
+| [PR #355](https://github.com/Otisigma/halo-world-global-platform/pull/355) | Immersive HALO Oracle with catalog-backed curation | [lib/halo-oracle-engine.js](lib/halo-oracle-engine.js), [netlify/functions/halo-oracle.mjs](netlify/functions/halo-oracle.mjs), [halo-oracle.js](halo-oracle.js) |
+
+Use PRs #353, #354, and #355—not PR #314—as the feature references for future Oracle issues, ledger entries, and follow-up work. These records establish merged feature history, not deployment status; verify the branch, commit, and deployment when investigating missing UI changes.
+
+Existing verification: `npm run test:oracle`, `node scripts/halo-hud-contracts.mjs`, and `node scripts/chart-celebration-contracts.mjs`. This entry documents existing code; it does not change Oracle behavior or Release House logic.

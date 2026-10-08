@@ -103,4 +103,19 @@ assert.match(pullRequestTemplate, /evidence over claims/i, "PR template must pre
 assert.match(pullRequestTemplate, /no acceptance without Builder evidence and Verifier evidence/i, "PR template must require builder and verifier proof before acceptance");
 assert.match(pullRequestTemplate, /live-state checks/i, "PR template must require live-state checks for user-facing claims when possible");
 
+const oracleLineage = board.match(/### HALO Oracle — recorded \d{4}-\d{2}-\d{2}([\s\S]*?)(?=\n## |$)/)?.[1] || "";
+assert.ok(oracleLineage, "status board must record HALO Oracle feature lineage");
+assert.match(oracleLineage, /PR #314[\s\S]*not the Oracle feature branch/, "Oracle lineage must exclude PR #314");
+assert.match(oracleLineage, /Release House ownership-disclosure\/contracts PR/, "PR #314 must retain its disclosure/contracts scope");
+assert.match(oracleLineage, /these merged PRs, in order/, "Oracle lineage must identify merged feature history");
+for (const number of [314, 353, 354, 355]) {
+  assert.ok(oracleLineage.includes(`[PR #${number}](https://github.com/Otisigma/halo-world-global-platform/pull/${number})`), `Oracle lineage must link PR #${number}`);
+}
+for (const [, label, path] of oracleLineage.matchAll(/\[([^\]]+)\]\(([^)]+)\)/g)) {
+  if (path.startsWith("https://")) continue;
+  assert.equal(label, path, "Oracle implementation links must display their repository paths");
+  await readFile(new URL(`../${path}`, import.meta.url), "utf8");
+}
+assert.match(oracleLineage, /not deployment status/, "Oracle lineage must not equate merge history with deployment");
+
 console.log("HALO agent status board contracts passed.");

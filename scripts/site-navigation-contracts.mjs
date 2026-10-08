@@ -331,8 +331,31 @@ assert.match(musicStyles, /\.halo-player-bar \{ position: fixed;/, "the floating
   assert.match(serverSource, /app\.get\("\/artist\/dashboard",[\s\S]*?path\.join\("artist-economy", "index\.html"\)/, "the local server must render /artist/dashboard");
 
   const quickAccess = mainSite.match(/<section className="halo-menu-status-group halo-menu-status-group-working"[\s\S]*?<\/section>/)?.[0] || "";
-  assert.match(quickAccess, /<a href="\/artist\/dashboard" className="halo-menu-status-button halo-menu-business-hub"/, "BUSINESS HUB must be pinned in the 00 All working menu");
-  assert.match(quickAccess, /BUSINESS HUB/);
+  assert.match(quickAccess, /href=\{target\.route\}/, "working links must use their configured destinations");
+  assert.match(quickAccess, /target\.route === '\/artist\/dashboard' \? ' halo-menu-business-hub' : ''/, "Business Hub must retain its highlighted style");
+  assert.match(quickAccess, /'open_business_hub' : undefined/);
+  assert.match(quickAccess, /'menu_quick_access' : undefined/);
+  assert.match(quickAccess, /<small>Sovereign Label OS<\/small>/);
+  const targetsSource = mainSite.match(/const MENU_STATUS_GROUP_TARGETS = (\[[\s\S]*?\n\s*\]);/)?.[1];
+  const workingRoutesSource = mainSite.match(/const MENU_PRIMARY_WORKING_TARGET_ROUTES = new Set\((\[[\s\S]*?\])\)/)?.[1];
+  const groupingSource = mainSite.match(/const menuStatusGroupedTargets = \(\(\) => \{([\s\S]*?)\n\s*\}\)\(\);/)?.[1];
+  assert.ok(targetsSource && workingRoutesSource && groupingSource, "working menu must use the shared route configuration");
+  const targets = vm.runInNewContext(targetsSource);
+  assert.equal(new Set(targets.map(target => target.route)).size, targets.length, "menu destinations must not be duplicated");
+  for (const statuses of [{}, { '/signal-network/': 'yellow' }, { '/creator-network/': 'red' }, { '/dj-deck.html': 'red' }, { '/artist/dashboard': 'yellow' }]) {
+    const grouped = vm.runInNewContext(`(() => {${groupingSource}})()`, {
+      MENU_STATUS_GROUP_TARGETS: targets,
+      MENU_PRIMARY_WORKING_TARGET_ROUTES: new Set(vm.runInNewContext(workingRoutesSource)),
+      menuStatusForRoute: route => ({ status: statuses[route] || 'green' })
+    });
+    const priorityRoutes = ['/signal-network/', '/creator-network/', '/artist/dashboard', '/dj-deck.html'];
+    assert.deepEqual(
+      Array.from(grouped.working.slice(0, priorityRoutes.filter(route => route === '/artist/dashboard' || !statuses[route]).length), target => target.route),
+      priorityRoutes.filter(route => route === '/artist/dashboard' || !statuses[route]),
+      "working menu must prioritize discovery, engagement, business, then live performance"
+    );
+    assert.deepEqual(Array.from(grouped.attention, target => target.route), Object.keys(statuses), "non-green routes must retain attention status");
+  }
   const buildLane = mainSite.match(/<section className="halo-menu-lane halo-menu-lane-build"[\s\S]*?<\/section>/)?.[0] || "";
   assert.match(buildLane, /<a href="\/artist\/dashboard" className="halo-menu-business-hub"[^>]*data-signal="FINANCIAL OS"/, "the Build lane must lead with the highlighted Business Hub card");
   assert.match(buildLane, /renderMenuStatusBadge\('\/artist\/dashboard', 'Business Hub'\)/);

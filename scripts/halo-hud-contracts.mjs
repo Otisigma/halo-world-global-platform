@@ -194,6 +194,7 @@ function createDocument({ oracle = false, noCanvas = false } = {}) {
     Element: Node,
     console
   };
+  context.AbortController = AbortController;
   vm.createContext(context);
   if (oracle) {
     const audioListeners = {};
@@ -574,12 +575,20 @@ const key = (document, keyName, target = document.activeElement) => {
 
 // Oracle is the existing guide card, with shared playback and a bounded canvas effect.
 {
-  const { document, window, context, hud, frames, tick, paint, motion } = createDocument({ oracle: true });
+  const { document, window, context, hud, frames, tick, paint, motion, flush } = createDocument({ oracle: true });
   assert.equal(document.body.querySelector(".halo-oracle__confetti"), null, "canvas waits for DOM ready");
   document.listeners.DOMContentLoaded.forEach(handler => handler());
   const canvas = document.body.querySelector(".halo-oracle__confetti");
   assert.ok(canvas, "DOM ready mounts the confetti overlay");
   assert.equal(canvas.getAttribute("aria-hidden"), "true");
+  const launcher = document.body.querySelector(".halo-oracle__launcher");
+  assert.equal(launcher.getAttribute("aria-label"), "Open HALO Oracle listening stage");
+  launcher.click();
+  flush();
+  assert.equal(hud.isOpen(), true, "the visible launcher opens the existing Oracle card");
+  assert.equal(document.body.querySelector("#haloHud").classList.contains("is-oracle-stage"), true, "launcher makes the premium stage the primary experience");
+  assert.equal(document.activeElement.className, "halo-oracle__input", "launcher focuses the Oracle prompt");
+  hud.hide();
   assert.equal(frames.size, 0, "loading the page never starts a celebration");
   assert.equal(canvas.width, 2560, "canvas pixel density is capped at 2");
   vm.runInContext(oracleEngine, context);
@@ -594,6 +603,7 @@ const key = (document, keyName, target = document.activeElement) => {
   }, scope, "button");
   hud.show(target);
   const card = document.body.querySelector("#haloHud");
+  assert.equal(card.classList.contains("is-oracle-stage"), false, "contextual guides retain their original actions");
   const play = card.querySelector(".halo-oracle__play");
   assert.ok(card.classList.contains("halo-oracle"), "Oracle upgrades the guide in place");
   assert.equal(card.querySelector(".halo-oracle__title").textContent, source.dataset.title, "track title is text, not markup");
@@ -662,6 +672,59 @@ const key = (document, keyName, target = document.activeElement) => {
   const effect = window.HaloOracle.createConfetti(canvas);
   assert.equal(effect.burst(), false);
   effect.destroy();
+}
+
+// Oracle prompt rendering, saved-signal curation, and recoverable API failure.
+{
+  const { document, context, hud } = createDocument({ oracle: true });
+  const scope = guide(document, { "data-halo-guide-scope": "" }, document.body, "section");
+  const target = guide(document, { "data-halo-guide": "Listen with the Oracle." }, scope);
+  guide(document, { "data-action": "play-track", "data-track-id": "focus", "data-title": "Focus", "data-audio-url": "/focus.mp3" }, scope, "button");
+  hud.show(target);
+  const card = document.body.querySelector("#haloHud");
+  assert.equal(card.querySelector(".halo-oracle__response").getAttribute("aria-live"), "polite");
+  assert.equal(card.querySelector(".halo-oracle__chips").querySelectorAll("button").length, 4);
+  const save = card.querySelector(".halo-oracle__save");
+  save.click();
+  assert.equal(save.getAttribute("aria-pressed"), "true");
+  let sent;
+  let resolveReply;
+  context.fetch = async (_url, options) => {
+    sent = JSON.parse(options.body);
+    return new Promise(resolve => { resolveReply = resolve; });
+  };
+  const input = card.querySelector(".halo-oracle__input");
+  const form = card.querySelector(".halo-oracle__form");
+  input.value = "Help me focus";
+  form.dispatchEvent({ type: "submit" });
+  assert.equal(sent.contextTrackId, "focus");
+  assert.deepEqual(sent.favoriteTrackIds, ["focus"]);
+  assert.equal(card.querySelector(".halo-oracle__send").disabled, true);
+  assert.equal(card.querySelector(".halo-oracle__response").getAttribute("aria-busy"), "true");
+  resolveReply({ ok: true, json: async () => ({
+    intent: "mood", reply: "<img onerror=bad> Focus on this signal.", quickActions: [{ label: "Story", query: "Tell the story" }],
+    recommendations: [{ label: "Focus", type: "122 BPM", actionUrl: "/music-upload/?song=focus" }, { label: "Bad URL", actionUrl: "javascript:alert(1)" }],
+    gateways: [{ label: "Unsafe gateway", actionUrl: "//evil.example/" }]
+  }) });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(card.querySelector(".halo-oracle__reply").textContent, "<img onerror=bad> Focus on this signal.", "responses are text, never HTML");
+  assert.equal(card.querySelector(".halo-oracle__selections").querySelectorAll("a").length, 1, "unsafe destinations never render");
+  assert.equal(card.querySelector(".halo-oracle__send").disabled, false);
+  assert.equal(input.value, "");
+  context.fetch = async () => ({ ok: false });
+  input.value = "Tell the story";
+  form.dispatchEvent({ type: "submit" });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.match(card.querySelector(".halo-oracle__status").textContent, /temporarily offline/);
+  assert.equal(input.value, "Tell the story", "failed requests preserve the prompt for retry");
+  assert.equal(card.querySelector(".halo-oracle__play").disabled, false, "API failure cannot disable playback");
+  assert.equal(card.querySelector(".halo-oracle__send").disabled, false);
+  context.fetch = async () => new Promise(resolve => { resolveReply = resolve; });
+  form.dispatchEvent({ type: "submit" });
+  hud.show(guide(document, { "data-halo-guide": "Different context." }));
+  resolveReply({ ok: true, json: async () => ({ reply: "Stale story", recommendations: [], quickActions: [] }) });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.ok(!card.querySelector(".halo-oracle__reply").textContent.includes("Stale story"), "late replies cannot overwrite a changed listening context");
 }
 
 console.log("HALO HUD and Oracle contracts passed.");

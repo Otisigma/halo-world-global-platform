@@ -251,6 +251,13 @@
     if (step4Generate) step4Generate.disabled = trimmed.length < 20;
   });
 
+  const oracleStory = new URLSearchParams(window.location.search).get("oracleStory");
+  if (oracleStory && storyInput) {
+    state.storyInput = oracleStory.trim().slice(0, 1800);
+    storyInput.value = state.storyInput;
+    if (step4Generate) step4Generate.disabled = state.storyInput.length < 20;
+  }
+
   step4Back?.addEventListener("click", () => showStep(3));
 
   step4Generate?.addEventListener("click", async () => {

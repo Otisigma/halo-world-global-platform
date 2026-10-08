@@ -346,6 +346,7 @@
   function open(mode) {
     const { root } = state.parts;
     state.mode = mode;
+    root.classList.remove("is-oracle-stage");
     root.hidden = false;
     root.setAttribute("aria-hidden", "false");
     root.classList.toggle("is-palette", mode === "palette");

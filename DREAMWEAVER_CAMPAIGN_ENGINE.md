@@ -35,6 +35,92 @@ open its shared lyric book in a signed-out window, and revoke sharing. Audio
 preview availability depends on public, rights-cleared release audio. Production
 database migrations and Netlify deployment must be verified separately.
 
+### PR #361 live-launch readiness
+
+**Status: implemented and locally verified; production activation is not yet
+verified.** The journey API/UI and isolated PostgreSQL contracts passed, including
+retrying the migration, concurrent quotas, atomic ledger rollback, owner-only
+editing, and share revocation. These checks do not establish the state of the
+production database, Identity settings, function secrets, or deployed release.
+With locked dependencies installed, `npm test`, `npm run build`, and
+`npm run test:database` also passed. Dependency installation reported six existing
+audit findings (three moderate, two high, one critical); dependency remediation is
+outside this documentation-only follow-up and still needs maintainer triage.
+
+Already implemented:
+
+- Public `/empath-journey/` navigation, dark-luxury styling, reduced-motion support,
+  and a real quiet/gathering signal from recent voters (not simulated attendance).
+- Authenticated same-origin track/remix/priority votes, per-choice deduplication,
+  account/IP quotas, and public catalog eligibility.
+- Named 1–12-track albums with ordering, preview fades, owner-only updates,
+  private-by-default copies, and revocable sharing.
+- Shared Dreamweaver timestamp/Oracle rendering and opt-in lyric interaction
+  recording; vote/save/lyric ledger writes are atomic with their data changes.
+
+Deployment owner checklist (complete against the actual production site):
+
+- [ ] **Database:** back up the production database and verify the existing release
+  catalog, song/version, radio/audio-version, lyrics, and ledger migrations are
+  applied. In particular, verify
+  `netlify/database/migrations/20261008210000_add_song_catalog_lyrics.sql` and
+  `netlify/database/migrations/20260829020000_create_halo_ledger.sql`.
+  Apply `netlify/database/migrations/20261010040000_empath_journey.sql` to the
+  database used by the deployed Netlify functions, using a transaction and
+  stop-on-error execution. Confirm `journey_poll_enabled`, `halo_journey_catalog`,
+  all five `halo_journey_*` tables, and `halo_journey_allow` exist. Record the
+  migration result; a successful static build is not migration evidence.
+- [ ] **Identity and secret:** enable/configure Netlify Identity on that same site
+  and verify sign-in via `/halo-x.html`. Set a stable, server-only
+  `JOURNEY_IDENTITY_SECRET` in the production Functions environment (generate with
+  `openssl rand -hex 32`); do not publish it in static assets, logs, or the ledger.
+  `JWT_SECRET` is a fallback for the journey HMAC, not a replacement for Netlify
+  Identity configuration. Keep the chosen secret stable: changing it changes
+  voter pseudonyms and allows previously recorded choices to be voted on again.
+- [ ] **Deploy:** deploy the intended commit with Netlify functions and its
+  production database binding. `netlify.toml` publishes the static site and the
+  journey function serves `/api/empath-journey`; `npm start` only serves static
+  files and does not provide this API. If using the existing GitHub deploy hook,
+  configure `NETLIFY_BUILD_HOOK`; the workflow intentionally skips triggering it
+  when absent. Confirm the completed Netlify deploy and commit, not just a green
+  telemetry workflow. Do not change the release/publication conveyor.
+- [ ] **Public reads/content:** verify `/empath-journey/`, its JS/CSS, and
+  `GET /api/empath-journey` return successfully with JSON from the API. Verify
+  published public campaigns appear, private campaigns do not, and upcoming
+  public drafts only appear after explicit `journey_poll_enabled` opt-in.
+  An empty catalog can be valid; do not automatically publish drafts to fill it.
+- [ ] **Authenticated votes:** on the production origin, sign in, vote, refresh,
+  and repeat the same choice. The first vote increments once; the repeat does not.
+  Confirm a signed-out write is rejected and quotas remain enforced. Check the
+  corresponding `journey_vote` ledger event without exposing account/IP data.
+- [ ] **Album ownership/sharing:** save and reload an ordered album with transition
+  settings via **Load my albums**. Test the 12-track limit. Enable sharing and save,
+  then open the link in a signed-out window; another signed-in account must create
+  a private copy rather than edit the original. The owner must reload the original
+  through **Load my albums**, disable sharing, and save; the old link must then
+  return 404 for signed-out/non-owner requests. The owner retains private access.
+- [ ] **Audio/lyrics:** verify a public, rights-cleared preview plays and advances
+  through the ordered sequence, with fades and clickable zero/fractional
+  timestamps plus `||` Oracle notes. Confirm lyric books still open without audio.
+  Recording must be off by default; opt-in signed-in interactions must produce
+  `journey_lyric` ledger entries without private album names or share links.
+- [ ] **Regression/browser sign-off:** run `npm run test:journey`,
+  `npm run test:database`, `npm test`, and `npm run build` with locked dependencies
+  installed. Check desktop/mobile layout and reduced motion in a real browser;
+  smoke-test the existing Dreamweaver show, Council/preflight, release conveyor,
+  publication/reconciliation, and Radio paths before announcing launch.
+
+**Safe pause:** set `JOURNEY_WRITES_DISABLED=true` in the Functions environment and
+redeploy as required by the hosting configuration. Votes, saves, sharing changes,
+and lyric writes then return 503; public reads and already-shared links remain
+available. This switch is not a share-revocation mechanism. Avoid dropping journey
+tables, rotating the identity secret, or changing publication state as rollback.
+
+This session could not resolve the public Netlify hostname from its sandbox, and
+the browser tool was unavailable. No production migration, secret change, deploy,
+or live authenticated action was performed. The deployment owner must retain
+evidence for each unchecked gate before calling this live.
+
 ## What was created
 
 Dreamweaver now includes a campaign cutting room that turns an existing HALO mix into a vertical short-form promotion workflow. The artist can choose a moment from the mix, select a 15, 30, or 45-second format, choose a creative treatment and campaign goal, preview the result in a 9:16 frame, and ask Gemma to prepare the complete publishing package.

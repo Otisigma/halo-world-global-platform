@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import vm from "node:vm";
 import { DREAMWEAVER_STOREFRONT_MIX_ID, buildDreamweaverStorefrontPath } from "../lib/dreamweaver-storefront.js";
+import { createLyricInteractionRecorder } from "../lib/journey-interactions.js";
 
 const script = await readFile(new URL("../dreamweaver/dreamweaver.js", import.meta.url), "utf8");
 const declarations = script.slice(script.indexOf("(() => {"), script.indexOf('  if (document.readyState === "loading")'));
@@ -61,7 +62,7 @@ function fixture(search, { releases = [release], mixes = [mix], blocked = false,
   const location = new URL(`${pathname}${search}`, "https://halo.test");
   const requests = [];
   const context = {
-    URL, URLSearchParams, console, location, DREAMWEAVER_STOREFRONT_MIX_ID, buildDreamweaverStorefrontPath,
+    URL, URLSearchParams, console, location, DREAMWEAVER_STOREFRONT_MIX_ID, buildDreamweaverStorefrontPath, createLyricInteractionRecorder,
     HTMLMediaElement: { HAVE_CURRENT_DATA: 2 },
     document: { getElementById: getElement, querySelector: getElement, body: new Element() },
     localStorage: { getItem: () => null },

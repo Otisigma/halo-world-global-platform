@@ -2,6 +2,11 @@
   command = "npm run build"
   publish = "."
 
+[[redirects]]
+  from = "/empath-journey/"
+  to = "/empath-journey/index.html"
+  status = 200
+
 [[headers]]
   for = "/*"
   [headers.values]

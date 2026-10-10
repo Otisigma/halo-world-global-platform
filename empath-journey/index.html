@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#100e0d">
+  <title>The Empath Journey · HALO Music World</title>
+  <link rel="stylesheet" href="/empath-journey/journey.css">
+  <script type="module" src="/empath-journey/journey.js"></script>
+</head>
+<body>
+  <header><a href="/music/">HALO Music World</a><a href="/halo-x.html">Sign in / your profile</a></header>
+  <main id="journey">
+    <section class="welcome" aria-labelledby="journeyTitle">
+      <p class="eyebrow">A quieter kind of connection</p>
+      <h1 id="journeyTitle">The Empath Journey</h1>
+      <p>Listen at your own pace. Shape the next chapter. Build an arc that feels like home.</p>
+      <p id="presence" class="presence">Quiet presence · a space to breathe</p>
+      <p>No follower counts. No comment pressure. Your votes carry equal weight.</p>
+    </section>
+    <p id="status" role="status" aria-live="polite"></p>
+    <div class="layout">
+      <section aria-labelledby="pollTitle">
+        <h2 id="pollTitle">Journey polls</h2>
+        <p>Choose a track, a remix direction, or a place in the next tracklist. Sign in to vote or save.</p>
+        <button id="refresh" type="button">Refresh community momentum</button>
+        <div id="tracks" class="tracks"></div>
+      </section>
+      <section aria-labelledby="albumTitle">
+        <h2 id="albumTitle">Your 12-track arc</h2>
+        <p>Add up to 12 distinct tracks, then move them into your own sequence.</p>
+        <label for="albumName">Album name</label>
+        <input id="albumName" maxlength="100" placeholder="A place to return to">
+        <ol id="sequence"></ol>
+        <p id="trackCount">0 / 12 tracks</p>
+        <label class="choice"><input id="shared" type="checkbox"> Allow anyone with the link to listen to this sequence</label>
+        <p>Albums are private by default. Uncheck sharing and save again to revoke the link.</p>
+        <button id="save" type="button">Save album</button>
+        <button id="newAlbum" type="button">New album</button>
+        <a id="shareLink" hidden>Open shareable lyric book</a>
+        <h3>Saved on your profile</h3>
+        <button id="loadMine" type="button">Load my albums</button>
+        <div id="albums"></div>
+      </section>
+    </div>
+    <section class="lyric-book" aria-labelledby="lyricTitle">
+      <h2 id="lyricTitle">Dreamweaver lyric book</h2>
+      <p id="nowPlaying">Choose a preview to open its story.</p>
+      <audio id="audio" controls preload="none"></audio>
+      <p>Transition seconds gently fade the preview out and the next one in; they do not change the original recording.</p>
+      <label class="choice"><input id="recordLyrics" type="checkbox"> Record my lyric jumps and Oracle insight opens in the HALO ledger</label>
+      <div id="lyricsRoot" hidden>
+        <button id="lyricsMode" type="button">Lyric book</button>
+        <p id="lyricsStatus" role="status"></p>
+        <div id="lyricsViewport"><ol id="lyricsList"></ol></div>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

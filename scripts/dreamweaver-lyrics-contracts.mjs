@@ -84,13 +84,14 @@ function createFixture(source, { reducedMotion = false, duration = 240 } = {}) {
   audio.duration = duration;
   audio.paused = true;
   const seeks = [];
+  const insights = [];
   const win = { matchMedia: query => ({ matches: reducedMotion && query.includes("reduced-motion") }) };
-  const engine = createDreamweaverLyricsEngine({ root, list, viewport, audio, modeToggle, status, doc, win, idPrefix: "lyric", onSeek: (time, line) => seeks.push({ time, text: line.text }) });
+  const engine = createDreamweaverLyricsEngine({ root, list, viewport, audio, modeToggle, status, doc, win, idPrefix: "lyric", onSeek: (time, line) => seeks.push({ time, text: line.text }), onInsight: line => insights.push(line) });
   engine.setSource(source);
   const rows = () => list.children;
   const lineOf = item => item.children[0];
   const tick = time => { audio.currentTime = time; audio.dispatchEvent(new Event("timeupdate")); };
-  return { doc, root, viewport, list, modeToggle, status, audio, engine, seeks, rows, lineOf, tick };
+  return { doc, root, viewport, list, modeToggle, status, audio, engine, seeks, insights, rows, lineOf, tick };
 }
 
 const SONG = [
@@ -235,6 +236,9 @@ check(() => {
   const f = createFixture("[00:01] One || First note\n[00:02] Two || Second note\nUntimed || Book note");
   const [first, second, third] = f.rows();
   first.dispatchEvent(new Event("mouseenter"));
+  f.lineOf(first).dispatchEvent(new Event("focus"));
+  assert.equal(f.insights.length, 1, "hover then focus reports one Oracle interaction");
+  assert.equal(f.insights[0].insight, "First note");
   assert.equal(first.children[1].hidden, false);
   assert.equal(f.engine.getState().insightOpen, true);
   f.lineOf(second).dispatchEvent(new Event("focus"));

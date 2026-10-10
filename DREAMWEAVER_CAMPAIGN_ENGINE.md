@@ -1,5 +1,40 @@
 # Dreamweaver Campaign Engine
 
+## Empath journey and personal lyric books
+
+`/empath-journey/` adds a calm community poll and personal album surface. Signed-in
+listeners can vote once per release and poll type (track, remix direction, or
+tracklist priority), then save 1–12 distinct tracks in an ordered, named album.
+Transition settings preserve gentle preview fades without altering masters.
+Albums are private by default; enable sharing to create an
+`/empath-journey/?album=…` lyric-book link. Save with sharing disabled to revoke it.
+Opening a shared album lets another listener save their own copy.
+
+Apply `netlify/database/migrations/20261010040000_empath_journey.sql` after the
+existing catalog, radio, lyrics, and ledger migrations. Configure the server-only
+`JOURNEY_IDENTITY_SECRET` (or existing `JWT_SECRET`) before enabling writes. Votes
+use HMAC pseudonyms, database-enforced deduplication, account quotas, and trusted
+Netlify IP quotas; missing identity secrets fail closed. `JOURNEY_WRITES_DISABLED`
+can pause writes for moderation. Presence shows only a quiet/gathering signal.
+Public published campaigns participate; upcoming public draft campaigns require
+explicit maintainer opt-in with `journey_poll_enabled`. Private catalog drafts,
+sale masters, and owner identifiers are not part of public journey responses.
+
+The existing lyric engine supports `[mm:ss]` and fractional timestamps plus
+`|| Oracle insight` annotations. Both Dreamweaver and the album preview reuse
+that renderer and seek within the current audio duration. Lyrics and notes are
+rendered as text, not HTML. Lyric jump/Oracle interaction recording is opt-in and
+signed-in only. Votes, album saves, and opted-in lyric interactions are recorded
+as `system_event` ledger entries with `journey_vote`, `journey_album`, or
+`journey_lyric` details; private album names and share links are excluded.
+
+Run `npm run test:journey` for persistence, abuse-control, and UI contracts, and
+`npm test` for the existing release/publication regressions. For deployment
+verification, sign in, vote, save an ordered arc, reload it from **Load my albums**,
+open its shared lyric book in a signed-out window, and revoke sharing. Audio
+preview availability depends on public, rights-cleared release audio. Production
+database migrations and Netlify deployment must be verified separately.
+
 ## What was created
 
 Dreamweaver now includes a campaign cutting room that turns an existing HALO mix into a vertical short-form promotion workflow. The artist can choose a moment from the mix, select a 15, 30, or 45-second format, choose a creative treatment and campaign goal, preview the result in a 9:16 frame, and ask Gemma to prepare the complete publishing package.

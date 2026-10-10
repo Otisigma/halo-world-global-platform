@@ -1,5 +1,6 @@
 import { DREAMWEAVER_STOREFRONT_MIX_ID, buildDreamweaverStorefrontPath } from "../lib/dreamweaver-storefront.js";
 import { createDreamweaverLyricsEngine } from "../lib/dreamweaver-lyrics.js";
+import { createLyricInteractionRecorder } from "../lib/journey-interactions.js";
 
 (() => {
   const chapters = [
@@ -1380,6 +1381,11 @@ import { createDreamweaverLyricsEngine } from "../lib/dreamweaver-lyrics.js";
     return typeof payload.lyricsText === "string" ? payload.lyricsText : "";
   }
 
+  const recordLyricInteraction = createLyricInteractionRecorder({
+    enabled: () => Boolean(document.getElementById("dreamweaverRecordLyrics")?.checked),
+    releaseId: () => typeof state.release?.id === "string" ? state.release.id : ""
+  });
+
   function syncDreamweaverLyrics() {
     if (!elements.lyricsRoot || !elements.lyricsList) return;
     try {
@@ -1394,7 +1400,8 @@ import { createDreamweaverLyricsEngine } from "../lib/dreamweaver-lyrics.js";
           doc: document,
           win: window,
           idPrefix: "dreamweaverLyric",
-          onSeek: () => updateProgress()
+          onSeek: seconds => { updateProgress(); recordLyricInteraction(seconds); },
+          onInsight: line => recordLyricInteraction(line.time ?? 0)
         });
       }
       state.lyricsEngine.setSource(currentLyricsSource());

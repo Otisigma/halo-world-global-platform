@@ -155,7 +155,7 @@ class Element extends EventTarget {
   removeAttribute(key) { this.attributes.delete(key); }
   play() { return Promise.resolve(); }
 }
-async function uiToHandler(seconds) {
+async function uiToHandler(seconds, actualHandler) {
   const ids = ["journey", "status", "tracks", "presence", "sequence", "trackCount", "albumName",
     "shared", "shareLink", "albums", "audio", "lyricsRoot", "lyricsList", "lyricsViewport",
     "lyricsMode", "lyricsStatus", "recordLyrics", "nowPlaying", "save", "loadMine", "refresh", "newAlbum"];
@@ -163,18 +163,23 @@ async function uiToHandler(seconds) {
   const test = fixture({ preview: "/public.mp3",
     albums: [{ id, name: album.name, tracks: album.tracks, shared: false }] });
   const sent = [];
+  const pending = [];
   let callbacks;
   const controller = createJourneyController({
     doc: { getElementById: key => nodes[key], createElement: () => new Element() },
     win: { location: { href: "https://halo.example/empath-journey/" } },
     lyricsFactory: options => { callbacks = options; return { setSource() {} }; },
-    fetcher: async (url, options) => {
+    fetcher: (url, options) => {
+      const operation = (async () => {
       assert.equal(options.credentials, "same-origin");
       const headers = { ...options.headers, ...(options.method === "POST" ? { Origin: "https://halo.example" } : {}) };
       if (options.body) sent.push(JSON.parse(options.body));
-      const response = await test.handler(new Request(new URL(url, "https://halo.example"), { ...options, headers }));
+      const response = await (actualHandler || test.handler)(new Request(new URL(url, "https://halo.example"), { ...options, headers }));
       assert.equal(response.status, 200, await response.clone().text());
       return response;
+      })();
+      pending.push(operation);
+      return operation;
     }
   });
   const click = async node => {
@@ -187,19 +192,20 @@ async function uiToHandler(seconds) {
   await click(nodes.tracks.children[0].children.at(-1).children[3]);
   nodes.albumName.value = album.name;
   await controller.save();
-  assert.equal(controller.state.albumId, id);
+  if (actualHandler) assert.match(controller.state.albumId, /^[a-f0-9-]{36}$/);
+  else assert.equal(controller.state.albumId, id);
   await controller.loadMine();
   await click(nodes.albums.children[0]);
-  assert.deepEqual(controller.state.sequence, album.tracks);
+  assert.deepEqual(controller.state.sequence, actualHandler ? [{ releaseId: "song-one", transitionSeconds: 0 }] : album.tracks);
   await click(nodes.sequence.children[0].children[0].children[0]);
-  assert.equal(nodes.audio.src, "/public.mp3");
+  assert.equal(nodes.audio.src, actualHandler ? "/api/radio/audio?id=public-radio" : "/public.mp3");
   callbacks.onSeek(seconds);
   assert.equal(sent.filter(body => body.action === "lyric").length, 0);
   nodes.recordLyrics.checked = true;
   callbacks.onInsight({ time: seconds });
-  for (let i = 0; i < 5; i++) await new Promise(resolve => setImmediate(resolve));
+  await Promise.all(pending);
   assert.deepEqual(sent.at(-1), { action: "lyric", releaseId: "song-one", seconds });
-  assert.ok(test.state.queries.some(item => item.query.includes("INSERT INTO halo_journey_lyric_sessions")));
+  if (!actualHandler) assert.ok(test.state.queries.some(item => item.query.includes("INSERT INTO halo_journey_lyric_sessions")));
 }
 await uiToHandler(0);
 await uiToHandler(1.25);
@@ -392,6 +398,18 @@ if (!available) {
       { "X-Forwarded-For": trustedIp, "Client-IP": trustedIp }))).status, 200, "client headers cannot forge trusted IP");
     await sql(`UPDATE halo_journey_rate_limits SET window_start = NOW() - INTERVAL '2 hours'`);
     assert.equal((await handler(request("", { ...vote, kind: "remix" }), { ip: trustedIp })).status, 200);
+    userId = "ui-postgres-owner-zero";
+    await uiToHandler(0, handler);
+    userId = "ui-postgres-owner-fractional";
+    await uiToHandler(1.25, handler);
+    const uiPersisted = await sql(`SELECT album.owner_id, album.tracks, session.seconds
+      FROM halo_journey_albums album JOIN halo_journey_lyric_sessions session
+      ON session.identity_hash = CASE WHEN album.owner_id = 'ui-postgres-owner-zero'
+        THEN '${accountHash("ui-postgres-owner-zero")}' ELSE '${accountHash("ui-postgres-owner-fractional")}' END
+      WHERE album.owner_id IN ('ui-postgres-owner-zero', 'ui-postgres-owner-fractional') ORDER BY album.owner_id`);
+    assert.deepEqual(uiPersisted.map(row => row.seconds), ["1.25", "0"]);
+    assert.ok(uiPersisted.every(row => row.tracks[0].releaseId === "song-one"));
+    console.log("Empath journey UI-to-handler-to-PostgreSQL contracts passed (votes, albums, consent and exact lyric timestamps).");
     assert.deepEqual(await sql("SELECT id,status,visibility,journey_poll_enabled FROM halo_release_campaigns ORDER BY id"), [
       { id: "not-opted", status: "draft", visibility: "public", journey_poll_enabled: false },
       { id: "private-song", status: "published", visibility: "private", journey_poll_enabled: true },

@@ -218,9 +218,9 @@ const available = spawnSync(`${pgBin}/initdb`, ["--version"]).status === 0;
 if (!available) {
   console.log("PostgreSQL persistence contracts skipped: local PostgreSQL binaries unavailable.");
 } else {
-  const directory = `${process.cwd()}/.jpg-${process.pid}`;
+  const directory = `/tmp/halo-jpg-${process.pid}`;
   let server;
-  await mkdir(directory);
+  await mkdir(directory, { recursive: true });
   try {
     await executable(`${pgBin}/initdb`, ["-D", `${directory}/data`, "-A", "trust", "--no-locale"],
       { env: { ...process.env, TMPDIR: directory } });

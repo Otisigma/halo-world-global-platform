@@ -1,5 +1,6 @@
 # Dependencies
 node_modules/
+.journey-npm-cache/
 
 # Netlify build output
 .netlify/

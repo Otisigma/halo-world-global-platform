@@ -231,6 +231,8 @@
       this.preloader?.clear();
       this.audio.pause();
       this.track = null;
+      this.signalTrackId = null;
+      if (window.CustomEvent) window.dispatchEvent?.(new window.CustomEvent("halo:trackchange", { detail: null }));
       this.audio.removeAttribute("src");
       this.audio.load();
       this.setStatus("idle");
@@ -257,6 +259,10 @@
       const bar = this.mount();
       if (!this.track) return;
       bar.hidden = false;
+      if (this.signalTrackId !== this.track.id) {
+        this.signalTrackId = this.track.id;
+        if (window.CustomEvent) window.dispatchEvent?.(new window.CustomEvent("halo:trackchange", { detail: { id: this.track.id, title: this.track.title } }));
+      }
       const cover = bar.querySelector("[data-player-cover]");
       const coverSrc = safeUrl(this.track.cover, fallbackArtwork);
       if (cover && cover.getAttribute("src") !== coverSrc) cover.src = coverSrc;

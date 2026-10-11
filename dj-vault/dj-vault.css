@@ -4,7 +4,7 @@ body { margin: 0; }
 header, main, #vault-auth { max-width: 1200px; margin: auto; padding: 24px; }
 #vault-auth { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
 input { font: inherit; padding: 12px; border: 1px solid #95713a; border-radius: 8px; max-width: 100%; min-width: 0; }
-header, nav, .vault-meta, .vault-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; justify-content: space-between; }
+header, nav { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; justify-content: space-between; }
 main { padding-bottom: 64px; }
 h1 { font-size: clamp(2.5rem, 7vw, 5rem); margin: 12px 0; color: #edca85; }
 p { line-height: 1.6; }
@@ -15,13 +15,57 @@ button:disabled { cursor: not-allowed; opacity: .65; }
 :focus-visible { outline: 3px solid #ffda8f; outline-offset: 4px; }
 [hidden] { display: none !important; }
 #vault-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 20px; margin: 24px 0; }
-.vault-card { min-width: 0; background: #151311; border: 1px solid #614c30; border-radius: 16px; padding: 24px; overflow-wrap: anywhere; }
-.vault-card h2 { color: #fff4de; font-size: 1.3rem; }
-.vault-meta { justify-content: flex-start; color: #edca85; font-weight: 600; }
-.vault-card audio { width: 100%; margin: 20px 0; }
-.vault-actions { border-top: 1px solid #614c30; padding-top: 20px; }
-.vault-price { font: bold 1.2rem ui-monospace, monospace; color: #edca85; }
+.vault-filters { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr)); gap: 12px; margin: 24px 0 8px; }
+.vault-filter { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.vault-filter label { font: 600 .75rem/1.2 "Courier New", ui-monospace, monospace; letter-spacing: .12em; text-transform: uppercase; color: #d1aa65; }
+.vault-filter select { width: 100%; }
+
+/* White-label / test-press card system. Variants only swap custom properties. */
+.vault-card {
+  --ink: #c9a35d; --sleeve: #e6dcc8; --sleeve-shade: #cbbd9f; --label: #f4eee2; --label-ink: #2a2118;
+  position: relative; isolation: isolate; display: flex; flex-direction: column; min-width: 0; padding: 22px; overflow: hidden; overflow-wrap: anywhere;
+  background: radial-gradient(120% 80% at 0% 0%, rgba(237, 202, 133, .06), transparent 60%), linear-gradient(160deg, #1a1714, #100e0c);
+  border: 1px solid #614c30; border-radius: 6px; box-shadow: inset 0 0 0 1px rgba(255, 240, 210, .03), 0 18px 40px rgba(0, 0, 0, .45);
+  font-family: "Courier New", ui-monospace, monospace;
+}
+.vault-card--test-press { --ink: #e08a6b; --label: #f1ebe0; }
+.vault-card--promo-copy { --ink: #b9b2a5; --sleeve: #d8d2c6; --sleeve-shade: #b9b1a2; }
+.vault-card--vault-only { --ink: #edca85; --sleeve: #2a241c; --sleeve-shade: #1c1813; --label: #edca85; --label-ink: #1a140c; }
+.vault-card--selector-exclusive { --ink: #ffda8f; --sleeve: #15120e; --sleeve-shade: #0b0a08; --label: #b8863b; --label-ink: #120d06; border-color: #b8863b; }
+.vault-card__stamp {
+  align-self: flex-start; margin: 0 0 16px; padding: 4px 10px; border: 2px solid var(--ink); border-radius: 3px;
+  color: var(--ink); font: 700 .72rem/1.3 "Courier New", ui-monospace, monospace; letter-spacing: .14em; text-transform: uppercase;
+  transform: rotate(-2deg); opacity: .92;
+}
+.vault-card__sleeve {
+  position: relative; aspect-ratio: 1; width: min(100%, 220px); margin: 0 auto 18px; border-radius: 3px;
+  background: radial-gradient(circle at 50% 50%, #0a0908 0 7%, transparent 7.5%), linear-gradient(135deg, var(--sleeve), var(--sleeve-shade));
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .25), 0 10px 24px rgba(0, 0, 0, .5);
+}
+.vault-card__sleeve::before {
+  content: ""; position: absolute; inset: 6%; border-radius: 50%; z-index: -1;
+  background: repeating-radial-gradient(circle, #0c0b0a 0 2px, #1d1a17 2px 3px);
+  transition: transform .45s ease;
+}
+.vault-card__label {
+  position: absolute; inset: 31%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+  border-radius: 50%; background: var(--label); color: var(--label-ink); text-align: center;
+  box-shadow: 0 0 0 3px rgba(0, 0, 0, .15); font: 700 .62rem/1.2 "Courier New", ui-monospace, monospace; letter-spacing: .08em;
+}
+.vault-card__speed { font-weight: 400; opacity: .75; }
+.vault-card:hover .vault-card__sleeve::before, .vault-card:focus-within .vault-card__sleeve::before { transform: translateX(14%); }
+.vault-card h2 { margin: 0 0 4px; color: #fff4de; font: 700 1.25rem/1.3 "Courier New", ui-monospace, monospace; letter-spacing: .02em; text-transform: uppercase; }
+.vault-card__artist { margin: 0 0 14px; color: #d8cdb8; }
+.vault-meta { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 8px; padding: 0; list-style: none; }
+.vault-chip { padding: 4px 8px; border: 1px dashed #95713a; border-radius: 3px; color: #edca85; font: 700 .75rem/1.3 "Courier New", ui-monospace, monospace; letter-spacing: .08em; text-transform: uppercase; }
+.vault-chip--rarity { border-style: solid; border-color: var(--ink); color: var(--ink); }
+.vault-card__preview-note { margin: 4px 0 0; color: #b9ad97; font-size: .85rem; }
+.vault-card audio { width: 100%; margin: 16px 0; }
+.vault-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px; margin-top: auto; border-top: 1px dashed #614c30; padding-top: 18px; }
+.vault-pricing { display: flex; flex-direction: column; gap: 2px; }
+.vault-price { font: bold 1.3rem ui-monospace, monospace; color: #edca85; }
+.vault-format { color: #b9ad97; letter-spacing: .06em; text-transform: uppercase; }
 .skip-link { position: absolute; left: 16px; top: -100px; }
 .skip-link:focus { top: 16px; background: #090909; padding: 16px; }
-@media (max-width: 480px) { header, main { padding: 16px; } .vault-card { padding: 18px; } }
+@media (max-width: 480px) { header, main { padding: 16px; } .vault-card { padding: 18px; } .vault-card__sleeve { width: min(100%, 180px); } }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; animation: none !important; transition: none !important; } }

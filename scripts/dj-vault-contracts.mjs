@@ -319,6 +319,7 @@ ui.state.nodes["vault-rarity"].value = "all";
 ui.state.nodes["vault-sort"].value = "bpm";
 ui.state.nodes["vault-sort"].listeners.change();
 assert.deepEqual(ui.state.nodes["vault-grid"].querySelectorAll("h2").map(n => n.textContent), ["Mid", "Oldest", "Newest"]);
+assert.match(ui.state.nodes["vault-status"].textContent, /^3 editions loaded\./, "unfiltered sorting reports the full count");
 assert.equal(ui.state.nodes["vault-grid"].children[2].querySelectorAll("button")[0].disabled, true, "filters never unlock acquisition");
 
 const migration = await readFile(new URL("../netlify/database/migrations/20261011040000_dj_vault.sql", import.meta.url), "utf8");

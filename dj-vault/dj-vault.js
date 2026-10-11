@@ -62,12 +62,13 @@ export function createVaultView({ document, fetch, location, identity, history }
     })));
     return visible.length;
   }
-  function describe(shown, filtered) {
+  function describe(shown) {
+    const filtered = [rarityFilter, bpmFilter, keyFilter].some(control => (control.value || "all") !== "all");
     const count = filtered ? `Showing ${shown} of ${tracks.length} editions.` : `${tracks.length} editions loaded.`;
     status.textContent = (tracks.length ? `${count}${shown ? "" : " No editions match these filters."}${authorized ? "" : " Sign in with verified DJ access to acquire."}` : "No DJ Vault editions are available yet.")
       + (paymentError ? ` ${paymentError}` : "");
   }
-  function refilter() { describe(render(), true); }
+  function refilter() { describe(render()); }
   async function load(append = false) {
     const current = ++generation;
     grid.setAttribute("aria-busy", "true");
@@ -102,7 +103,7 @@ export function createVaultView({ document, fetch, location, identity, history }
       tracks = append ? [...tracks, ...data.tracks] : data.tracks;
       nextOffset = Number.isSafeInteger(data.nextOffset) ? data.nextOffset : null;
       syncKeyOptions();
-      describe(render(), false);
+      describe(render());
       more.hidden = nextOffset === null;
     } catch (error) {
       if (current !== generation) return;

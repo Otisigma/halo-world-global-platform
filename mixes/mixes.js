@@ -839,6 +839,17 @@
     ]);
     state.mixes = mixResult.status === "fulfilled" ? mixResult.value.mixes || [] : [];
     state.videos = videoResult.status === "fulfilled" ? videoResult.value.videos || [] : [];
+    const requestedMixId = new URLSearchParams(location.search).get("mix");
+    if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(requestedMixId || "")
+      && !state.mixes.some(mix => mix.id === requestedMixId)) {
+      try {
+        const response = await fetch(`/api/mixes?id=${encodeURIComponent(requestedMixId)}`, { headers: { Accept: "application/json" }, credentials: "same-origin" });
+        if (!response.ok) throw new Error("Mix unavailable");
+        const data = await response.json();
+        const requested = Array.isArray(data.mixes) ? data.mixes.find(mix => mix?.id === requestedMixId) : null;
+        if (requested) state.mixes.unshift(requested);
+      } catch { /* Keep the public catalog available when a shared mix is unavailable. */ }
+    }
     selectMixFromLocation();
     renderEpisodes();
     bindArtworkFallbacks();

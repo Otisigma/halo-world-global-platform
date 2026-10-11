@@ -1,6 +1,8 @@
 import { readFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import assert from "node:assert/strict";
+import { runInNewContext } from "node:vm";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const [page, script, styles, halo, radio, deck, api, paymentLink, migration, uploadMigration, readinessMigration, reviewApi, uploadHelper] = await Promise.all([
@@ -61,6 +63,42 @@ const checks = [
 ];
 
 const failures = checks.filter(([condition]) => !condition);
+const loadDataSource = script.slice(script.indexOf("  async function loadData() {"), script.indexOf('\n  heroPlay.addEventListener'));
+async function loadFixture({ search = "", catalog = [], requested = [], status = 200 } = {}) {
+  const state = {};
+  const calls = [];
+  const context = {
+    state, location: { search }, URLSearchParams,
+    fetch: async (url, options) => {
+      calls.push({ url, options });
+      return { ok: url.includes("?id=") ? status === 200 : true,
+        json: async () => url === "/api/videos" ? { videos: [] } : { mixes: url.includes("?id=") ? requested : catalog } };
+    },
+    selectMixFromLocation: () => { state.selected = state.mixes.find(mix => mix.id === new URLSearchParams(search).get("mix")); },
+    renderEpisodes() {}, bindArtworkFallbacks() {}
+  };
+  await runInNewContext(`${loadDataSource}\nloadData();`, context);
+  return { state, calls };
+}
+const targetMixId = "386f701f-21f9-48fc-beec-a0c25ec04bec";
+const targetMix = { id: targetMixId, title: "Older mix" };
+let loaded = await loadFixture({ search: `?mix=${targetMixId}`, requested: [targetMix] });
+assert.equal(loaded.state.selected, targetMix, "opening an older storefront mix fetches and selects it before rendering editions");
+assert.equal(loaded.calls.at(-1).url, `/api/mixes?id=${targetMixId}`);
+assert.equal(loaded.calls.at(-1).options.credentials, "same-origin");
+loaded = await loadFixture({ search: `?mix=${targetMixId}`, catalog: [targetMix] });
+assert.equal(loaded.calls.length, 2, "recent mix links do not need another lookup");
+assert.equal(loaded.state.selected, targetMix);
+for (const fixture of [
+  { search: `?mix=${targetMixId}`, status: 403 },
+  { search: `?mix=${targetMixId}`, requested: [{ id: "another" }] },
+  { search: "?mix=../invalid" }
+]) {
+  loaded = await loadFixture(fixture);
+  assert.equal(loaded.state.selected, undefined, "unavailable or invalid links never select an unrelated response");
+  assert.equal(loaded.state.videos.length, 0, "partial failure still renders the video catalog");
+}
+assert.equal(loaded.calls.length, 2, "invalid mix links do not reach the API");
 if (failures.length) {
   failures.forEach(([, message]) => console.error(`FAIL: ${message}`));
   process.exitCode = 1;

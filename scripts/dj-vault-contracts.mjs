@@ -254,7 +254,7 @@ class Node {
   querySelectorAll(tag) { return this.children.flatMap(child => [ ...(child.tag === tag ? [child] : []), ...child.querySelectorAll(tag) ]); }
 }
 function uiFixture({ mode = "tracks", authorized = false, failure = false, storage = null } = {}) {
-  const nodes = Object.fromEntries(["vault-grid", "vault-status", "vault-retry", "vault-more", "vault-sort", "vault-rarity", "vault-bpm", "vault-key", "vault-login", "vault-auth", "vault-email", "vault-password", "vault-confirm"].map(name => [name, new Node("div")]));
+  const nodes = Object.fromEntries(["vault-grid", "vault-status", "vault-retry", "vault-more", "vault-sort", "vault-rarity", "vault-bpm", "vault-key", "vault-login", "vault-auth", "vault-email", "vault-password", "vault-confirm", "vault-mixes", "vault-mix-status"].map(name => [name, new Node("div")]));
   for (const name of ["vault-rarity", "vault-bpm", "vault-key"]) nodes[name].value = "all";
   nodes["vault-auth"].append(new Node("button"));
   const state = { nodes, requests: [], destinations: [], history: [], mode, authorized, failure };
@@ -265,6 +265,10 @@ function uiFixture({ mode = "tracks", authorized = false, failure = false, stora
     identity: { login: async (...args) => { state.credentials = args; state.authorized = true; } },
     fetch: async (url, options) => {
       state.requests.push({ url, options });
+      if (url.startsWith("/api/mixes?")) {
+        if (state.mixResponse) return state.mixResponse(url, options);
+        return Response.json({ mixes: url.includes("?id=") ? state.requestedMixes || [] : state.mixes || [] });
+      }
       if (state.failure) return Response.json({}, { status: 500 });
       if (url.endsWith("/session")) return Response.json({ authenticated: state.authorized, authorized: state.authorized });
       if (url.endsWith("/checkout")) return Response.json({ checkoutUrl: "javascript:alert(1)" });
@@ -385,6 +389,76 @@ assert.equal(ui.state.nodes["vault-grid"].children.length, 1, "filters rebuild c
 assert.equal(ui.state.nodes["vault-grid"].querySelectorAll("article").length, 1);
 
 // Community voting + quick-jump layer.
+{
+  const mixId = "386f701f-21f9-48fc-beec-a0c25ec04bec";
+  const mix = { id: mixId, title: '<img src=x onerror="alert(1)"> Mix', creator: { name: "<script>DJ</script>" }, description: "Long play", salesPageUrl: "javascript:alert(1)" };
+  ui = uiFixture({ mode: "crate", authorized: true });
+  ui.state.search = `?mix=${mixId}`;
+  ui.state.requestedMixes = [mix];
+  await ui.view.load();
+  const mixes = ui.state.nodes["vault-mixes"];
+  const selected = mixes.querySelector("article");
+  assert.equal(selected.querySelector("h2").textContent, mix.title, "mix metadata is rendered as text");
+  assert.equal(selected.attributes["aria-current"], "true", "query-selected mix is highlighted");
+  assert.equal(selected.focused, true, "selected mix is cued without autoplay");
+  assert.equal(selected.scrolled.behavior, "auto");
+  assert.equal(selected.querySelector("a").href, `/mixes/?mix=${mixId}`, "mix opens its own listening and edition flow, not an untrusted API URL");
+  assert.equal(selected.querySelectorAll("button").length, 0, "mixes never enter vault voting or checkout");
+  assert.equal(selected.querySelectorAll("audio").length, 0, "mix cue never autoplays");
+  assert.match(ui.state.nodes["vault-mix-status"].textContent, /Selected mix:/);
+  assert.equal(ui.state.nodes["vault-grid"].querySelectorAll("article").length, 3, "edition browsing remains intact");
+  assert.equal(ui.state.nodes["vault-grid"].querySelector("button").disabled, false, "edition acquisition is unchanged");
+  ui.state.nodes["vault-rarity"].value = "test_press";
+  ui.state.nodes["vault-rarity"].listeners.change();
+  assert.equal(mixes.querySelectorAll("article").length, 1, "edition filters do not hide the requested mix");
+
+  ui = uiFixture({ mode: "empty" });
+  ui.state.search = `?mix=${mixId}`;
+  ui.state.mixes = [{ ...mix, id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" }, mix, { ...mix, id: '"><script>' }];
+  await ui.view.load();
+  assert.equal(ui.state.nodes["vault-mixes"].querySelectorAll("article").length, 2, "catalog mixes appear without unsafe IDs");
+  assert.equal(ui.state.nodes["vault-mixes"].querySelector("article").id, `vault-mix-${mixId}`, "selection is placed first");
+  assert.equal(ui.state.requests.filter(r => r.url.includes("/api/mixes?id=")).length, 0, "catalog selection needs no duplicate fetch");
+  ui.state.search = "";
+  await ui.view.load();
+  assert.equal(ui.state.nodes["vault-mixes"].querySelectorAll("article").length, 2, "mix catalog is visible without a query");
+  assert.equal(ui.state.nodes["vault-mixes"].querySelector("article").attributes["aria-current"], undefined);
+
+  ui = uiFixture();
+  ui.state.search = `?mix=${mixId}`;
+  await ui.view.load();
+  assert.match(ui.state.nodes["vault-mix-status"].textContent, /unavailable or private/);
+  assert.equal(ui.state.nodes["vault-mixes"].children.length, 0, "inaccessible mixes are not fabricated");
+  ui.state.search = "?mix=../invalid";
+  await ui.view.load();
+  assert.ok(!ui.state.requests.some(r => r.url.includes("invalid")), "invalid mix identifiers never reach the API");
+  ui.state.mixResponse = () => Response.json({}, { status: 503 });
+  await ui.view.load();
+  assert.match(ui.state.nodes["vault-mix-status"].textContent, /unavailable/);
+  assert.equal(ui.state.nodes["vault-retry"].hidden, false);
+  assert.equal(ui.state.nodes["vault-mixes"].attributes["aria-busy"], "false");
+  assert.equal(ui.state.nodes["vault-grid"].querySelectorAll("article").length, 1, "mix failure does not block editions");
+
+  ui = uiFixture();
+  let resolveMixes;
+  ui.state.mixResponse = () => new Promise(resolve => { resolveMixes = resolve; });
+  const pending = ui.view.load();
+  await ui.view.load(true);
+  resolveMixes(Response.json({ mixes: [mix] }));
+  await pending;
+  assert.equal(ui.state.nodes["vault-mixes"].querySelectorAll("article").length, 1, "edition pagination does not cancel mix loading");
+  assert.equal(ui.state.nodes["vault-mixes"].attributes["aria-busy"], "false");
+
+  ui = uiFixture();
+  ui.state.mixResponse = () => new Promise(resolve => { resolveMixes = resolve; });
+  const stale = ui.view.load();
+  ui.state.mixResponse = () => Response.json({ mixes: [mix] });
+  await ui.view.load();
+  resolveMixes(Response.json({ mixes: [] }));
+  await stale;
+  assert.equal(ui.state.nodes["vault-mixes"].querySelectorAll("article").length, 1, "stale mix responses cannot replace a newer session's catalog");
+}
+
 const memoryStorage = (seed = {}) => ({ data: { ...seed }, getItem(key) { return this.data[key] ?? null; }, setItem(key, value) { this.data[key] = String(value); } });
 const byClass = (node, tag, className) => node.querySelectorAll(tag).find(n => n.className === className);
 {

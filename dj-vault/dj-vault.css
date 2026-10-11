@@ -81,6 +81,7 @@
 .vault-chip--rarity { border-style: solid; border-color: var(--ink); color: var(--ink); }
 .vault-card__preview-note { margin: 4px 0 0; color: #b9ad97; font-size: .85rem; }
 .vault-card audio { width: 100%; margin: 16px 0; }
+.vault-card[aria-current="true"] { outline: 2px solid #dfb974; outline-offset: 4px; }
 .vault-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px; margin-top: auto; border-top: 1px dashed #614c30; padding-top: 18px; }
 .vault-pricing { display: flex; flex-direction: column; gap: 2px; }
 .vault-price { font: bold 1.3rem ui-monospace, monospace; color: #edca85; }

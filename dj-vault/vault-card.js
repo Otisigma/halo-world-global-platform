@@ -50,6 +50,31 @@ export function availableKeys(tracks) {
   return [...new Set(tracks.map(track => String(track.musicalKey || "").trim().toUpperCase()).filter(Boolean))].sort(compareKeys);
 }
 
+export const validMixId = id => typeof id === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+
+export function createMixCard({ document, mix, selected = false }) {
+  const element = (tag, value, className) => {
+    const node = document.createElement(tag);
+    if (value != null) node.textContent = String(value);
+    if (className) node.className = className;
+    return node;
+  };
+  const card = element("article", null, "vault-card");
+  card.id = `vault-mix-${mix.id}`;
+  card.tabIndex = -1;
+  if (selected) card.setAttribute("aria-current", "true");
+  const link = element("a", "Open mix / editions");
+  link.href = `/mixes/?mix=${encodeURIComponent(mix.id)}`;
+  link.setAttribute("aria-label", `Open mix: ${mix.title || "Untitled mix"}`);
+  const actions = element("div", null, "vault-actions");
+  actions.append(link);
+  card.append(element("p", selected ? "DJ Mix // Selected" : "DJ Mix // Long Play", "vault-card__stamp"),
+    element("h2", mix.title || "Untitled mix"),
+    element("p", mix.creator?.name || mix.credits?.remixer || "HALO DJ", "vault-card__artist"),
+    element("p", mix.description || "", "vault-card__preview-note"), actions);
+  return card;
+}
+
 export function createVaultCard({ document, track, authorized, onAcquire, onPreviewPlay, onPreviewError, votes = baseVotes(track), voted = false, onVote, onJump }) {
   const element = (tag, value, className) => {
     const node = document.createElement(tag);

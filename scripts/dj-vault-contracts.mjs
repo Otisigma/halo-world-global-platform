@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { createDjVaultHandler } from "../netlify/functions/dj-vault.mjs";
-import { createVaultView } from "../dj-vault/dj-vault.js";
+import { applyVaultRoute, createVaultView } from "../dj-vault/dj-vault.js";
 import { VAULT_CARD_VARIANTS, availableKeys, filterAndSortTracks, keyOrder } from "../dj-vault/vault-card.js";
 
 const id = "11111111-1111-4111-8111-111111111111";
@@ -355,16 +355,28 @@ assert.match(html, /aria-live="polite"/);
 assert.match(html, /name="viewport"/);
 assert.doesNotMatch(html, /onclick=/);
 assert.match(css, /prefers-reduced-motion/);
-assert.match(html, /<body class="dj-vault-room">/);
+assert.match(html, /<body class="dj-vault-room" data-route="dj-vault">/);
+{
+  const classes = new Set();
+  const body = { classList: { add: name => classes.add(name) }, dataset: {} };
+  assert.equal(applyVaultRoute({ body }), true, "vault route markers are applied at runtime");
+  assert.ok(classes.has("dj-vault-room"), "runtime restores the room class if the shell strips it");
+  assert.equal(body.dataset.route, "dj-vault", "runtime sets the route marker");
+  assert.equal(applyVaultRoute({}), false, "missing body is tolerated");
+}
 assert.match(html, /<section class="vault-console" aria-labelledby="vault-console-title">/);
 assert.ok(html.indexOf('id="vault-status"') < html.indexOf('class="vault-archive-label"'), "live status remains in the command station");
-assert.match(css, /\.dj-vault-room \{[\s\S]*?background: radial-gradient/);
+assert.match(css, /\.dj-vault-room, \[data-route="dj-vault"\] \{[\s\S]*?background: radial-gradient/);
+for (const rule of css.split("}")) {
+  if (rule.includes(".dj-vault-room")) assert.ok(rule.includes('[data-route="dj-vault"]'), `room rule must also match the route marker: ${rule.trim().slice(0, 80)}`);
+}
 assert.doesNotMatch(css, /(?:^|\n)(?::root|body|header|main|input|button|select|p|a|\*|:focus-visible)\s*[{,]/, "room styling must not target global elements");
-assert.match(css, /\.dj-vault-room :focus-visible/);
+assert.match(css, /\.dj-vault-room :focus-visible, \[data-route="dj-vault"\] :focus-visible/);
+assert.match(css, /\[data-route="dj-vault"\] \.skip-link:focus/);
 assert.match(css, /@media \(max-width: 600px\)/);
 for (const path of ["../halo.html", "../music/index.html"]) {
   const page = await readFile(new URL(path, import.meta.url), "utf8");
-  assert.doesNotMatch(page, /dj-vault-room|dj-vault\/dj-vault\.css/, `${path} must not activate the room theme`);
+  assert.doesNotMatch(page, /dj-vault-room|data-route="dj-vault"|dj-vault\/dj-vault\.css/, `${path} must not activate the room theme`);
 }
 for (const control of ["vault-sort", "vault-rarity", "vault-bpm", "vault-key"]) assert.match(html, new RegExp(`<label for="${control}">`));
 for (const variant of ["test-press", "promo-copy", "vault-only", "selector-exclusive"]) assert.match(css, new RegExp(`\\.vault-card--${variant}`));

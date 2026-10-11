@@ -11,7 +11,7 @@
   <script src="/stats.js" defer></script>
   <script src="/site-monitor.js" defer></script>
 </head>
-<body>
+<body class="dj-vault-room">
   <a class="skip-link" href="#vault">Skip to DJ Vault</a>
   <header>
     <nav aria-label="Main navigation"><a href="/halo">HALO home</a><a href="/dj-deck.html">DJ Deck</a></nav>
@@ -25,10 +25,18 @@
     <button type="submit">Sign in to DJ Vault</button>
   </form>
   <main id="vault">
-    <p class="eyebrow">HALO // Pro selectors</p>
+    <div class="vault-sign">
+    <p class="eyebrow">HALO // Record archive</p>
     <h1>DJ Vault</h1>
-    <p>Hardcore mixes. Extended editions. Exclusive drops.</p>
+    <p class="vault-sign__subtitle">Hidden gems. Test presses. After-hours selections.</p>
+    <p class="vault-sign__plate">Private archive / Public listening</p>
+    </div>
     <p>Public previews are open to everyone. Acquisitions and private catalog access require operator-verified DJ access.</p>
+    <section class="vault-console" aria-labelledby="vault-console-title">
+    <div class="vault-console__header">
+      <h2 id="vault-console-title">Selector command station</h2>
+      <span aria-hidden="true" class="vault-console__leds">● ● ●</span>
+    </div>
     <div id="vault-filters" class="vault-filters" role="group" aria-label="Crate-digger filters">
       <div class="vault-filter">
         <label for="vault-sort">Sort editions</label>
@@ -50,8 +58,13 @@
     <p id="vault-status" role="status" aria-live="polite">Loading vault…</p>
     <button id="vault-retry" type="button" hidden>Try again</button>
     <button id="vault-confirm" type="button" hidden>Retry payment confirmation</button>
+    </section>
+    <div class="vault-archive-label">
+      <h2>Dig the crates</h2>
+      <p>White Label / Test Press / Vault Only / Selector Exclusive</p>
+    </div>
     <section id="vault-grid" aria-label="DJ Vault editions" aria-busy="true"></section>
-    <button id="vault-more" type="button" hidden>Load more editions</button>
+    <button id="vault-more" class="vault-crate-loader" type="button" hidden>Open the next crate · Load more editions</button>
   </main>
   <script type="module" src="/dj-vault/dj-vault.js"></script>
 </body>

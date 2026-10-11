@@ -367,8 +367,12 @@ assert.match(html, /<body class="dj-vault-room" data-route="dj-vault">/);
 assert.match(html, /<section class="vault-console" aria-labelledby="vault-console-title">/);
 assert.ok(html.indexOf('id="vault-status"') < html.indexOf('class="vault-archive-label"'), "live status remains in the command station");
 assert.match(css, /\.dj-vault-room, \[data-route="dj-vault"\] \{[\s\S]*?background: radial-gradient/);
-for (const rule of css.split("}")) {
-  if (rule.includes(".dj-vault-room")) assert.ok(rule.includes('[data-route="dj-vault"]'), `room rule must also match the route marker: ${rule.trim().slice(0, 80)}`);
+for (const [, list] of css.matchAll(/([^{}]+)\{/g)) {
+  const selectors = list.split(",").map(selector => selector.trim());
+  for (const selector of selectors.filter(item => item.includes(".dj-vault-room"))) {
+    const routed = selector.replaceAll(".dj-vault-room", '[data-route="dj-vault"]');
+    assert.ok(selectors.includes(routed), `${selector} must also match the route marker as ${routed}`);
+  }
 }
 assert.doesNotMatch(css, /(?:^|\n)(?::root|body|header|main|input|button|select|p|a|\*|:focus-visible)\s*[{,]/, "room styling must not target global elements");
 assert.match(css, /\.dj-vault-room :focus-visible, \[data-route="dj-vault"\] :focus-visible/);

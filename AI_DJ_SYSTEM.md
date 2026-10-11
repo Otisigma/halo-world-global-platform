@@ -2,13 +2,13 @@
 
 ## DJ Vault
 
-`/dj-vault/` is a separate, opt-in curated catalog; normal release uploads and the canonical song `sale_master` are unchanged. Apply `netlify/database/migrations/20261011040000_dj_vault.sql` before enabling the section. Operators provision `dj`, `selector`, or `admin` in `halo_dj_vault_roles` for an existing `halo_memberships.member_id` through trusted database administration. No profile, signup, or browser endpoint grants these roles.
+`/dj-vault/` is a separate, opt-in curated catalog; normal release uploads and the canonical song `sale_master` are unchanged. Apply `netlify/database/migrations/20261011040000_dj_vault.sql` and `20261011060000_dj_vault_rarity.sql` before enabling the section. Operators provision `dj`, `selector`, or `admin` in `halo_dj_vault_roles` for an existing `halo_memberships.member_id` through trusted database administration. No profile, signup, or browser endpoint grants these roles.
 
 Endpoint layout (Netlify functions):
 
 - `GET /api/dj-vault/session`: reports authenticated identity and database-backed permissions.
-- `GET /api/dj-vault/tracks?offset=0`: paginated public metadata; verified roles additionally see member-only editions. Hidden/standard editions and private storage keys never appear.
-- `PATCH /api/dj-vault/routing`: selectors/admins explicitly route editions into/out of `dj_vault` or set `hidden`, `public`, or `members` visibility. Supply `trackId` (new UUID), optional `songId`, `title`, `artist`, `bpm`, `musicalKey`, integer `pricePence`, `deliveryFormat` (`wav`/`flac`), `previewType`, and `previewPackId`/`previewStem`/`deliveryPackId`/`deliveryStem`.
+- `GET /api/dj-vault/tracks?offset=0`: paginated public metadata (including `rarity`, which drives the white-label card variants in `dj-vault/vault-card.js` and client-side crate-digger sort/filters for BPM, Camelot key, price, newest, and exclusivity); verified roles additionally see member-only editions. Hidden/standard editions and private storage keys never appear.
+- `PATCH /api/dj-vault/routing`: selectors/admins explicitly route editions into/out of `dj_vault` or set `hidden`, `public`, or `members` visibility. Supply `trackId` (new UUID), optional `songId`, `title`, `artist`, `bpm`, `musicalKey`, integer `pricePence`, `deliveryFormat` (`wav`/`flac`), `previewType`, optional `rarity` (`white_label` default, `test_press`, `promo_copy`, `vault_only`, `selector_exclusive`; omitted on update keeps the current label), and `previewPackId`/`previewStem`/`deliveryPackId`/`deliveryStem`.
 - `POST /api/dj-vault/checkout`: verified DJs send `{trackId}`; the server records a pending GBP order and creates Stripe Checkout using the database price.
 - `POST /api/dj-vault/confirm`: send `{trackId, sessionId}` after checkout (or retry later). The server retrieves the session directly from Stripe, checking paid/completed status, order ownership, currency, amount, and order metadata before atomically recording payment, a unique entitlement, and audit log. A browser success flag never grants access.
 - `POST /api/dj-vault/entitlements`: admins may grant `{trackId, memberId}` to an operator-verified DJ without payment.

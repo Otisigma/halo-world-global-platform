@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const stems = new Set(["full", "drums", "bass", "music", "vocals", "fx"]);
+const rarities = new Set(["white_label", "test_press", "promo_copy", "vault_only", "selector_exclusive"]);
 const json = (body, status = 200) => Response.json(body, {
   status, headers: { "Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff" }
 });
@@ -17,6 +18,7 @@ function routingValid(body) {
     && Number.isInteger(body.pricePence) && body.pricePence >= 100 && body.pricePence <= 100000
     && ["wav", "flac"].includes(body.deliveryFormat)
     && ["clip", "watermarked", "low_bitrate"].includes(body.previewType)
+    && (body.rarity === undefined || rarities.has(body.rarity))
     && uuid.test(body.previewPackId) && uuid.test(body.deliveryPackId)
     && stems.has(body.previewStem) && stems.has(body.deliveryStem)
     && (body.previewPackId !== body.deliveryPackId || body.previewStem !== body.deliveryStem);
@@ -27,6 +29,7 @@ function catalogTrack(row) {
     id: row.id, title: row.title, artist: row.artist, bpm: row.bpm,
     musicalKey: row.musical_key, pricePence: row.price_pence,
     deliveryFormat: row.delivery_format, previewType: row.preview_type,
+    rarity: rarities.has(row.rarity) ? row.rarity : "white_label",
     previewUrl: `/api/dj-vault/preview?trackId=${encodeURIComponent(row.id)}`,
     entitled: Boolean(row.entitled)
   };
@@ -129,13 +132,13 @@ export function createDjVaultHandler({ getDatabase, getUser, membershipFor, stor
         const rows = await db.sql`
           WITH routed AS (
             INSERT INTO halo_dj_vault_tracks (id, song_id, title, artist, access_tier, visibility, bpm, musical_key,
-              price_pence, delivery_format, preview_type, preview_pack_id, preview_stem, delivery_pack_id, delivery_stem, routed_by)
+              price_pence, delivery_format, preview_type, rarity, preview_pack_id, preview_stem, delivery_pack_id, delivery_stem, routed_by)
             VALUES (${body.trackId}, ${body.songId || null}, ${body.title.trim()}, ${body.artist.trim()}, ${body.accessTier},
               ${body.visibility}, ${body.bpm}, ${body.musicalKey.trim()}, ${body.pricePence}, ${body.deliveryFormat},
-              ${body.previewType}, ${body.previewPackId}, ${body.previewStem}, ${body.deliveryPackId}, ${body.deliveryStem}, ${user.id})
+              ${body.previewType}, ${body.rarity || "white_label"}, ${body.previewPackId}, ${body.previewStem}, ${body.deliveryPackId}, ${body.deliveryStem}, ${user.id})
             ON CONFLICT (id) DO UPDATE SET access_tier = EXCLUDED.access_tier, visibility = EXCLUDED.visibility,
               title = EXCLUDED.title, artist = EXCLUDED.artist, bpm = EXCLUDED.bpm, musical_key = EXCLUDED.musical_key,
-              price_pence = EXCLUDED.price_pence, routed_by = EXCLUDED.routed_by, updated_at = NOW()
+              price_pence = EXCLUDED.price_pence, rarity = COALESCE(${body.rarity || null}::TEXT, halo_dj_vault_tracks.rarity), routed_by = EXCLUDED.routed_by, updated_at = NOW()
             WHERE halo_dj_vault_tracks.song_id IS NOT DISTINCT FROM EXCLUDED.song_id
               AND halo_dj_vault_tracks.preview_pack_id = EXCLUDED.preview_pack_id
               AND halo_dj_vault_tracks.preview_stem = EXCLUDED.preview_stem

@@ -1,4 +1,4 @@
-const price = new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP" });
+import { availableKeys, createVaultCard, filterAndSortTracks } from "./vault-card.js";
 
 export function createVaultView({ document, fetch, location, identity, history }) {
   const grid = document.getElementById("vault-grid");
@@ -6,6 +6,9 @@ export function createVaultView({ document, fetch, location, identity, history }
   const retry = document.getElementById("vault-retry");
   const more = document.getElementById("vault-more");
   const sort = document.getElementById("vault-sort");
+  const rarityFilter = document.getElementById("vault-rarity");
+  const bpmFilter = document.getElementById("vault-bpm");
+  const keyFilter = document.getElementById("vault-key");
   const login = document.getElementById("vault-login");
   const auth = document.getElementById("vault-auth");
   const email = document.getElementById("vault-email");
@@ -41,39 +44,27 @@ export function createVaultView({ document, fetch, location, identity, history }
     } catch (error) { status.textContent = error.message; }
     finally { button.disabled = !authorized; }
   }
+  function syncKeyOptions() {
+    const selected = keyFilter.value || "all";
+    const keys = availableKeys(tracks);
+    const all = element("option", "All keys");
+    all.value = "all";
+    keyFilter.replaceChildren(all, ...keys.map(key => { const option = element("option", key); option.value = key; return option; }));
+    keyFilter.value = keys.includes(selected) ? selected : "all";
+  }
   function render() {
-    grid.replaceChildren();
-    const sorted = [...tracks];
-    if (sort.value === "bpm") sorted.sort((a, b) => a.bpm - b.bpm);
-    if (sort.value === "key") sorted.sort((a, b) => String(a.musicalKey).localeCompare(String(b.musicalKey)));
-    if (sort.value === "price") sorted.sort((a, b) => a.pricePence - b.pricePence);
-    for (const track of sorted) {
-      const card = element("article", null, "vault-card");
-      const metadata = element("div", null, "vault-meta");
-      metadata.append(element("span", `BPM ${track.bpm ?? "N/A"}`), element("span", `KEY ${track.musicalKey || "N/A"}`),
-        element("span", String(track.deliveryFormat || "").toUpperCase()));
-      card.append(metadata, element("h2", track.title), element("p", track.artist), element("p", `DJ Vault · ${track.previewType || "clip"} preview`));
-      if (track.previewUrl === `/api/dj-vault/preview?trackId=${encodeURIComponent(track.id)}`) {
-        const audio = element("audio");
-        audio.controls = true;
-        audio.preload = "none";
-        audio.src = track.previewUrl;
-        audio.setAttribute("aria-label", `Preview ${track.title}`);
-        audio.addEventListener("play", () => grid.querySelectorAll("audio").forEach(other => { if (other !== audio) other.pause(); }));
-        audio.addEventListener("error", () => { status.textContent = "This preview is unavailable."; });
-        card.append(audio);
-      }
-      const actions = element("div", null, "vault-actions");
-      const amount = Number(track.pricePence);
-      const button = element("button", track.entitled ? "Download edition" : `Acquire ${String(track.deliveryFormat || "").toUpperCase()}`);
-      button.type = "button";
-      button.disabled = !authorized || !Number.isInteger(amount) || amount < 100;
-      button.setAttribute("aria-label", `${button.textContent}: ${track.title}`);
-      button.addEventListener("click", () => acquire(track, button));
-      actions.append(element("span", Number.isInteger(amount) && amount >= 100 ? price.format(amount / 100) : "Price unavailable", "vault-price"), button);
-      card.append(actions);
-      grid.append(card);
-    }
+    const visible = filterAndSortTracks(tracks, { sort: sort.value, rarity: rarityFilter.value, bpm: bpmFilter.value, key: keyFilter.value });
+    grid.replaceChildren(...visible.map(track => createVaultCard({
+      document, track, authorized,
+      onAcquire: acquire,
+      onPreviewPlay: audio => grid.querySelectorAll("audio").forEach(other => { if (other !== audio) other.pause(); }),
+      onPreviewError: () => { status.textContent = "This preview is unavailable."; }
+    })));
+    return visible.length;
+  }
+  function refilter() {
+    const shown = render();
+    if (tracks.length) status.textContent = shown ? `Showing ${shown} of ${tracks.length} editions.` : "No editions match these filters.";
   }
   async function load(append = false) {
     const current = ++generation;
@@ -108,8 +99,9 @@ export function createVaultView({ document, fetch, location, identity, history }
       if (data.success !== true || !Array.isArray(data.tracks)) throw new Error("Invalid vault response. Please try again.");
       tracks = append ? [...tracks, ...data.tracks] : data.tracks;
       nextOffset = Number.isSafeInteger(data.nextOffset) ? data.nextOffset : null;
-      render();
-      status.textContent = tracks.length ? `${tracks.length} editions loaded.${authorized ? "" : " Sign in with verified DJ access to acquire."}` : "No DJ Vault editions are available yet.";
+      syncKeyOptions();
+      const shown = render();
+      status.textContent = tracks.length ? `${tracks.length} editions loaded.${shown ? "" : " No editions match these filters."}${authorized ? "" : " Sign in with verified DJ access to acquire."}` : "No DJ Vault editions are available yet.";
       if (paymentError) status.textContent += ` ${paymentError}`;
       more.hidden = nextOffset === null;
     } catch (error) {
@@ -120,7 +112,7 @@ export function createVaultView({ document, fetch, location, identity, history }
   }
   retry.addEventListener("click", () => load());
   more.addEventListener("click", () => load(true));
-  sort.addEventListener("change", render);
+  for (const control of [sort, rarityFilter, bpmFilter, keyFilter]) control.addEventListener("change", refilter);
   confirm.addEventListener("click", () => load());
   login.addEventListener("click", async () => {
     try {

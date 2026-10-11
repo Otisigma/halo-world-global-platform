@@ -2,11 +2,12 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { createDjVaultHandler } from "../netlify/functions/dj-vault.mjs";
 import { createVaultView } from "../dj-vault/dj-vault.js";
+import { VAULT_CARD_VARIANTS, availableKeys, filterAndSortTracks, keyOrder } from "../dj-vault/vault-card.js";
 
 const id = "11111111-1111-4111-8111-111111111111";
 const pack = "22222222-2222-4222-8222-222222222222";
 const track = { id, title: '<img src=x onerror="alert(1)">', artist: "<script>evil</script>",
-  bpm: 140, musical_key: "8A", price_pence: 499, delivery_format: "wav", preview_type: "clip",
+  bpm: 140, musical_key: "8A", price_pence: 499, delivery_format: "wav", preview_type: "clip", rarity: "test_press",
   preview_pack_id: pack, preview_stem: "drums", delivery_pack_id: pack, delivery_stem: "full" };
 function fixture({ user = { id: "member", user_metadata: { role: "admin" } }, role, entitled = false,
   paid = true, amount = 499, unavailable = false, allowed = true, hidden = false } = {}) {
@@ -162,6 +163,10 @@ for (const invalid of [{ status: "public" }, { exists: false }, { rightsAttested
 }
 f = fixture({ role: "selector" });
 assert.equal((await f.handler(request("routing", routeBody))).status, 200);
+assert.ok(f.state.writes.at(-1).values.includes("white_label"), "routing defaults rarity to white_label");
+assert.equal((await f.handler(request("routing", { ...routeBody, rarity: "selector_exclusive" }))).status, 200);
+assert.ok(f.state.writes.at(-1).values.includes("selector_exclusive"));
+assert.equal((await f.handler(request("routing", { ...routeBody, rarity: "<b>mythic</b>" }))).status, 400, "unknown rarity labels are rejected");
 assert.equal((await f.handler(request("routing", { ...routeBody, previewStem: "full" }))).status, 400);
 assert.equal((await f.handler(request("entitlements", { trackId: id, memberId: "member" }))).status, 403);
 f = fixture({ role: "admin" });
@@ -175,6 +180,7 @@ assert.equal((await f.handler(request("preview?trackId=" + id))).status, 404);
 f = fixture({ user: null });
 const catalog = await (await f.handler(request("tracks"))).json();
 assert.equal(catalog.tracks[0].title, track.title);
+assert.equal(catalog.tracks[0].rarity, "test_press");
 assert.ok(!JSON.stringify(catalog).includes("delivery_pack_id") && !JSON.stringify(catalog).includes("blob_key"));
 f.state.visibility = "members";
 assert.deepEqual((await (await f.handler(request("tracks"))).json()).tracks, []);
@@ -206,7 +212,8 @@ class Node {
   querySelectorAll(tag) { return this.children.flatMap(child => [ ...(child.tag === tag ? [child] : []), ...child.querySelectorAll(tag) ]); }
 }
 function uiFixture({ mode = "tracks", authorized = false, failure = false } = {}) {
-  const nodes = Object.fromEntries(["vault-grid", "vault-status", "vault-retry", "vault-more", "vault-sort", "vault-login", "vault-auth", "vault-email", "vault-password", "vault-confirm"].map(name => [name, new Node("div")]));
+  const nodes = Object.fromEntries(["vault-grid", "vault-status", "vault-retry", "vault-more", "vault-sort", "vault-rarity", "vault-bpm", "vault-key", "vault-login", "vault-auth", "vault-email", "vault-password", "vault-confirm"].map(name => [name, new Node("div")]));
+  for (const name of ["vault-rarity", "vault-bpm", "vault-key"]) nodes[name].value = "all";
   nodes["vault-auth"].append(new Node("button"));
   const state = { nodes, requests: [], destinations: [], mode, authorized, failure };
   const view = createVaultView({
@@ -220,7 +227,7 @@ function uiFixture({ mode = "tracks", authorized = false, failure = false } = {}
       if (url.endsWith("/checkout")) return Response.json({ checkoutUrl: "javascript:alert(1)" });
       if (url.endsWith("/confirm")) return Response.json({}, { status: 404 });
       return Response.json(state.mode === "malformed" ? { success: false, tracks: [] }
-        : { success: true, tracks: state.mode === "empty" ? [] : catalog.tracks, nextOffset: null });
+        : { success: true, tracks: state.mode === "empty" ? [] : state.mode === "crate" ? crate : catalog.tracks, nextOffset: null });
     }
   });
   return { view, state };
@@ -236,6 +243,12 @@ assert.equal(grid.querySelectorAll("h2")[0].textContent, track.title, "metadata 
 assert.equal(grid.querySelectorAll("button")[0].disabled, true, "anonymous acquisition is disabled");
 assert.equal(grid.querySelectorAll("audio")[0].preload, "none");
 assert.equal(grid.querySelectorAll("span").find(n => n.className === "vault-price").textContent, "£4.99");
+const card = grid.children[0];
+assert.equal(card.className, "vault-card vault-card--test-press");
+assert.equal(card.attributes["data-rarity"], "test_press");
+assert.equal(card.querySelector("p").textContent, VAULT_CARD_VARIANTS.test_press.stamp);
+assert.equal(card.querySelectorAll("div").find(n => n.className === "vault-card__sleeve").attributes["aria-hidden"], "true");
+assert.deepEqual(card.querySelectorAll("li").map(n => n.textContent), ["Test Press", "BPM 140", "KEY 8A", "WAV"]);
 await ui.state.nodes["vault-login"].listeners.click();
 assert.equal(ui.state.nodes["vault-auth"].hidden, false);
 assert.equal(ui.state.nodes["vault-email"].focused, true);
@@ -269,16 +282,57 @@ assert.equal(ui.state.nodes["vault-confirm"].hidden, false);
 await ui.state.nodes["vault-confirm"].listeners.click();
 assert.equal(ui.state.nodes["vault-grid"].children.length, 1);
 
+const crate = [
+  { id: "a1", title: "Newest", bpm: 174, musicalKey: "12B", pricePence: 299, rarity: "white_label", deliveryFormat: "wav" },
+  { id: "b2", title: "Mid", bpm: 124, musicalKey: "8A", pricePence: 249, rarity: "selector_exclusive", deliveryFormat: "flac" },
+  { id: "c3", title: "Oldest", bpm: 128, musicalKey: "2a", pricePence: 499, rarity: "bogus", deliveryFormat: "wav" }
+];
+const titles = options => filterAndSortTracks(crate, options).map(t => t.title);
+assert.deepEqual(titles({ sort: "newest" }), ["Newest", "Mid", "Oldest"]);
+assert.deepEqual(titles({ sort: "bpm" }), ["Mid", "Oldest", "Newest"]);
+assert.deepEqual(titles({ sort: "key" }), ["Oldest", "Mid", "Newest"], "keys sort in Camelot order");
+assert.deepEqual(titles({ sort: "price" }), ["Mid", "Newest", "Oldest"]);
+assert.deepEqual(titles({ sort: "price-desc" }), ["Oldest", "Newest", "Mid"]);
+assert.deepEqual(titles({ sort: "rarity" }), ["Mid", "Newest", "Oldest"], "unknown rarity falls back to white_label");
+assert.deepEqual(titles({ rarity: "white_label" }), ["Newest", "Oldest"]);
+assert.deepEqual(titles({ bpm: "120-129" }), ["Mid", "Oldest"]);
+assert.deepEqual(titles({ bpm: "160-plus", key: "12b" }), ["Newest"]);
+assert.deepEqual(titles({ bpm: "not-a-range" }), ["Newest", "Mid", "Oldest"]);
+assert.deepEqual(availableKeys(crate), ["2A", "8A", "12B"]);
+assert.equal(keyOrder("Fm"), Infinity);
+ui = uiFixture({ mode: "crate" });
+await ui.view.load();
+assert.deepEqual(ui.state.nodes["vault-key"].children.map(n => n.value), ["all", "2A", "8A", "12B"]);
+assert.ok(ui.state.nodes["vault-key"].children.every(n => n.tag === "option"), "key options are built with text-safe DOM nodes");
+ui.state.nodes["vault-rarity"].value = "selector_exclusive";
+ui.state.nodes["vault-rarity"].listeners.change();
+assert.deepEqual(ui.state.nodes["vault-grid"].querySelectorAll("h2").map(n => n.textContent), ["Mid"]);
+assert.match(ui.state.nodes["vault-status"].textContent, /Showing 1 of 3/);
+ui.state.nodes["vault-rarity"].value = "test_press";
+ui.state.nodes["vault-rarity"].listeners.change();
+assert.equal(ui.state.nodes["vault-grid"].children.length, 0);
+assert.match(ui.state.nodes["vault-status"].textContent, /No editions match/);
+ui.state.nodes["vault-rarity"].value = "all";
+ui.state.nodes["vault-sort"].value = "bpm";
+ui.state.nodes["vault-sort"].listeners.change();
+assert.deepEqual(ui.state.nodes["vault-grid"].querySelectorAll("h2").map(n => n.textContent), ["Mid", "Oldest", "Newest"]);
+assert.equal(ui.state.nodes["vault-grid"].children[2].querySelectorAll("button")[0].disabled, true, "filters never unlock acquisition");
+
 const migration = await readFile(new URL("../netlify/database/migrations/20261011040000_dj_vault.sql", import.meta.url), "utf8");
 assert.match(migration, /PRIMARY KEY \(member_id, track_id\)/);
 assert.match(migration, /stripe_session_id TEXT UNIQUE/);
 assert.match(migration, /FOREIGN KEY \(delivery_pack_id, delivery_stem\) REFERENCES halo_stem_files/);
 assert.match(migration, /CHECK \(preview_pack_id <> delivery_pack_id OR preview_stem <> delivery_stem\)/);
 assert.match(migration, /halo_dj_vault_rate_limit/);
+const rarityMigration = await readFile(new URL("../netlify/database/migrations/20261011060000_dj_vault_rarity.sql", import.meta.url), "utf8");
+assert.match(rarityMigration, /ADD COLUMN IF NOT EXISTS rarity TEXT NOT NULL DEFAULT 'white_label'/);
+for (const rarity of Object.keys(VAULT_CARD_VARIANTS)) assert.ok(rarityMigration.includes(`'${rarity}'`), `${rarity} must be allowed by the schema`);
 const html = await readFile(new URL("../dj-vault/index.html", import.meta.url), "utf8");
 const css = await readFile(new URL("../dj-vault/dj-vault.css", import.meta.url), "utf8");
 assert.match(html, /aria-live="polite"/);
 assert.match(html, /name="viewport"/);
 assert.doesNotMatch(html, /onclick=/);
 assert.match(css, /prefers-reduced-motion/);
+for (const control of ["vault-sort", "vault-rarity", "vault-bpm", "vault-key"]) assert.match(html, new RegExp(`<label for="${control}">`));
+for (const variant of ["test-press", "promo-copy", "vault-only", "selector-exclusive"]) assert.match(css, new RegExp(`\\.vault-card--${variant}`));
 console.log("DJ Vault permission, payment, private delivery, and UI contracts passed");

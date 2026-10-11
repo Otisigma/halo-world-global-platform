@@ -29,8 +29,24 @@
     <h1>DJ Vault</h1>
     <p>Hardcore mixes. Extended editions. Exclusive drops.</p>
     <p>Public previews are open to everyone. Acquisitions and private catalog access require operator-verified DJ access.</p>
-    <label for="vault-sort">Sort editions</label>
-    <select id="vault-sort"><option value="newest">Newest</option><option value="bpm">BPM</option><option value="key">Musical key</option><option value="price">Price</option></select>
+    <div id="vault-filters" class="vault-filters" role="group" aria-label="Crate-digger filters">
+      <div class="vault-filter">
+        <label for="vault-sort">Sort editions</label>
+        <select id="vault-sort"><option value="newest">Newest</option><option value="bpm">BPM (low to high)</option><option value="key">Musical key (Camelot)</option><option value="price">Price (low to high)</option><option value="price-desc">Price (high to low)</option><option value="rarity">Rarity (rarest first)</option></select>
+      </div>
+      <div class="vault-filter">
+        <label for="vault-rarity">Exclusivity</label>
+        <select id="vault-rarity"><option value="all">All pressings</option><option value="white_label">White label</option><option value="test_press">Test press</option><option value="promo_copy">Promo copy</option><option value="vault_only">Vault only</option><option value="selector_exclusive">Selector exclusive</option></select>
+      </div>
+      <div class="vault-filter">
+        <label for="vault-bpm">BPM range</label>
+        <select id="vault-bpm"><option value="all">Any BPM</option><option value="under-120">Under 120</option><option value="120-129">120–129</option><option value="130-139">130–139</option><option value="140-159">140–159</option><option value="160-plus">160+</option></select>
+      </div>
+      <div class="vault-filter">
+        <label for="vault-key">Musical key</label>
+        <select id="vault-key"><option value="all">All keys</option></select>
+      </div>
+    </div>
     <p id="vault-status" role="status" aria-live="polite">Loading vault…</p>
     <button id="vault-retry" type="button" hidden>Try again</button>
     <button id="vault-confirm" type="button" hidden>Retry payment confirmation</button>

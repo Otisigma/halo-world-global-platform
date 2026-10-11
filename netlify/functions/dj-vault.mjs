@@ -31,7 +31,9 @@ function catalogTrack(row) {
     deliveryFormat: row.delivery_format, previewType: row.preview_type,
     rarity: rarities.has(row.rarity) ? row.rarity : "white_label",
     previewUrl: `/api/dj-vault/preview?trackId=${encodeURIComponent(row.id)}`,
-    entitled: Boolean(row.entitled)
+    entitled: Boolean(row.entitled),
+    votes: Number.isSafeInteger(Number(row.votes)) && Number(row.votes) >= 0 ? Number(row.votes) : 0,
+    voted: Boolean(row.voted)
   };
 }
 
@@ -39,7 +41,9 @@ async function purchasableTracks(db, memberId, authorized, trackId = null, offse
   return db.sql`
     SELECT t.*,
       EXISTS (SELECT 1 FROM halo_dj_vault_entitlements e WHERE e.track_id = t.id
-        AND e.member_id = ${memberId} AND e.revoked_at IS NULL) AS entitled
+        AND e.member_id = ${memberId} AND e.revoked_at IS NULL) AS entitled,
+      (SELECT COUNT(*)::INT FROM halo_dj_vault_votes v WHERE v.track_id = t.id) AS votes,
+      EXISTS (SELECT 1 FROM halo_dj_vault_votes v WHERE v.track_id = t.id AND v.member_id = ${memberId}) AS voted
     FROM halo_dj_vault_tracks t
     JOIN halo_stem_files preview ON preview.pack_id = t.preview_pack_id AND preview.stem_type = t.preview_stem
     JOIN halo_stem_packs preview_pack ON preview_pack.id = preview.pack_id
@@ -60,7 +64,7 @@ export function createDjVaultHandler({ getDatabase, getUser, membershipFor, stor
     const url = new URL(request.url);
     const action = url.pathname.split("/").pop();
     const methods = { tracks: "GET", session: "GET", routing: "PATCH", checkout: "POST",
-      confirm: "POST", entitlements: "POST", preview: "GET", download: "GET" };
+      confirm: "POST", vote: "POST", entitlements: "POST", preview: "GET", download: "GET" };
     if (!methods[action]) return json({ message: "Not found" }, 404);
     if (request.method !== methods[action]) return json({ message: "Method not allowed" }, 405);
     try {
@@ -174,6 +178,16 @@ export function createDjVaultHandler({ getDatabase, getUser, membershipFor, stor
           AND (visibility = 'public' OR (${authorized} AND visibility = 'members'))`;
       const track = tracks[0];
       if (!track) return json({ message: "Track unavailable" }, 404);
+      if (action === "vote") {
+        if (typeof body.voted !== "boolean") return json({ message: "Invalid vote" }, 400);
+        // Idempotent: the client sends the desired state, so retries and double-clicks never double count.
+        if (body.voted) await db.sql`INSERT INTO halo_dj_vault_votes (member_id, track_id)
+          VALUES (${user.id}, ${trackId}) ON CONFLICT (member_id, track_id) DO NOTHING`;
+        else await db.sql`DELETE FROM halo_dj_vault_votes WHERE member_id = ${user.id} AND track_id = ${trackId}`;
+        const counted = await db.sql`SELECT COUNT(*)::INT AS votes FROM halo_dj_vault_votes WHERE track_id = ${trackId}`;
+        const votes = Number(counted[0]?.votes);
+        return json({ success: true, trackId, voted: body.voted, votes: Number.isSafeInteger(votes) && votes >= 0 ? votes : 0 });
+      }
       if (["checkout", "confirm"].includes(action)) {
         if (!siteOrigin || new URL(siteOrigin).origin !== url.origin) return json({ message: "Checkout is not configured" }, 503);
         const member = await membershipFor(db, user);
@@ -312,4 +326,4 @@ export default async function handler(request) {
 }
 
 export const config = { path: ["/api/dj-vault/tracks", "/api/dj-vault/session", "/api/dj-vault/routing",
-  "/api/dj-vault/checkout", "/api/dj-vault/confirm", "/api/dj-vault/entitlements", "/api/dj-vault/preview", "/api/dj-vault/download"] };
+  "/api/dj-vault/checkout", "/api/dj-vault/confirm", "/api/dj-vault/vote", "/api/dj-vault/entitlements", "/api/dj-vault/preview", "/api/dj-vault/download"] };

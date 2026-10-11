@@ -10,8 +10,8 @@ const track = { id, title: '<img src=x onerror="alert(1)">', artist: "<script>ev
   bpm: 140, musical_key: "8A", price_pence: 499, delivery_format: "wav", preview_type: "clip", rarity: "test_press",
   preview_pack_id: pack, preview_stem: "drums", delivery_pack_id: pack, delivery_stem: "full" };
 function fixture({ user = { id: "member", user_metadata: { role: "admin" } }, role, entitled = false,
-  paid = true, amount = 499, unavailable = false, allowed = true, hidden = false } = {}) {
-  const state = { writes: [], blobReads: [], paymentCalls: [], orders: [], granted: entitled, visibility: hidden ? "hidden" : "public",
+  paid = true, amount = 499, unavailable = false, allowed = true, hidden = false, voters = new Set() } = {}) {
+  const state = { voters, writes: [], blobReads: [], paymentCalls: [], orders: [], granted: entitled, visibility: hidden ? "hidden" : "public",
     assets: {
       preview: { status: "private", rightsAttested: true, exists: true, blobKey: "preview/", chunkCount: 2, byteSize: 6 },
       delivery: { status: "private", rightsAttested: true, exists: true, blobKey: "delivery/", chunkCount: 2, byteSize: 6 }
@@ -29,7 +29,9 @@ function fixture({ user = { id: "member", user_metadata: { role: "admin" } }, ro
         assert.ok(query.includes(`${name}.blob_key <> ''`) && query.includes(`${name}.chunk_count > 0`) && query.includes(`${name}.byte_size > 0`));
       }
       if (Object.values(state.assets).some(a => a.status !== "private" || !a.rightsAttested || !a.exists || !a.blobKey || a.chunkCount <= 0 || a.byteSize <= 0)) return [];
-      return state.visibility === "hidden" || (state.visibility === "members" && !values[1]) ? [] : [{ ...track, entitled: state.granted }];
+      assert.ok(query.includes("COUNT(*)::INT FROM halo_dj_vault_votes v WHERE v.track_id = t.id"), "catalog counts shared votes");
+      return state.visibility === "hidden" || (state.visibility === "members" && !values[2]) ? []
+        : [{ ...track, entitled: state.granted, votes: state.voters.size, voted: state.voters.has(values[1]) }];
     }
     if (query.includes("SELECT * FROM halo_dj_vault_tracks")) {
       assert.equal(values[0], id);
@@ -50,11 +52,14 @@ function fixture({ user = { id: "member", user_metadata: { role: "admin" } }, ro
       if (!asset.exists || !asset.rightsAttested || !(asset.status === "private" || (values[2] && asset.status === "archived"))) return [];
       return [{ blob_key: asset.blobKey, chunk_count: asset.chunkCount, content_type: "audio/wav", byte_size: asset.byteSize }];
     }
+    if (query.includes("SELECT COUNT(*)::INT AS votes FROM halo_dj_vault_votes")) { assert.equal(values[0], id); return [{ votes: state.voters.size }]; }
     if (query.includes("SELECT * FROM halo_dj_vault_orders")) return state.orders.filter(o => o.stripe_session_id === values[0] && o.member_id === values[1] && o.track_id === values[2]);
     state.writes.push({ query, values });
     if (query.includes("INSERT INTO halo_dj_vault_orders")) state.orders.push({ id: values[0], member_id: values[1], track_id: values[2], price_pence: values[3] });
     if (query.includes("UPDATE halo_dj_vault_orders SET stripe_session_id")) state.orders.find(o => o.id === values[1]).stripe_session_id = values[0];
     if (query.includes("WITH paid")) state.granted = true;
+    if (query.includes("INSERT INTO halo_dj_vault_votes")) { assert.match(query, /ON CONFLICT \(member_id, track_id\) DO NOTHING/); state.voters.add(values[0]); }
+    if (query.includes("DELETE FROM halo_dj_vault_votes")) state.voters.delete(values[0]);
     if (query.includes("WITH routed")) return [{ track_id: id }];
     if (query.includes("WITH granted")) { state.granted = true; return [{ track_id: id }]; }
     return [];
@@ -194,8 +199,44 @@ assert.ok(f.state.blobReads.every(key => key.startsWith("preview/")));
 for (const range of ["bytes=9-", "bytes=-0", "bytes=4-2", "bytes=1-2,4-5", "bytes=-"]) {
   assert.equal((await f.handler(request("preview?trackId=" + id, undefined, { headers: { Range: range } }))).status, 416);
 }
+
+// Shared, server-persisted community votes.
+{
+  const voters = new Set();
+  f = fixture({ user: null, voters });
+  assert.equal((await f.handler(request("vote", { trackId: id, voted: true }))).status, 401, "anonymous visitors cannot persist votes");
+  f = fixture({ voters });
+  assert.equal((await f.handler(request("vote", { trackId: id, voted: true }))).status, 403, "votes require verified DJ access");
+  f = fixture({ role: "dj", voters });
+  assert.equal((await f.handler(request("vote", { trackId: id, voted: true }, { headers: { Origin: "https://evil.example", "Content-Type": "application/json" } }))).status, 403);
+  assert.equal((await f.handler(request("vote", { trackId: "bad", voted: true }))).status, 400);
+  for (const voted of [undefined, "true", 1, null]) assert.equal((await f.handler(request("vote", { trackId: id, voted }))).status, 400);
+  assert.equal((await f.handler(request("vote"))).status, 405);
+  assert.equal(voters.size, 0, "rejected votes never persist");
+  const cast = await f.handler(request("vote", { trackId: id, voted: true, memberId: "victim" }));
+  assert.equal(cast.status, 200);
+  assert.deepEqual(await cast.json(), { success: true, trackId: id, voted: true, votes: 1 });
+  assert.deepEqual([...voters], ["member"], "votes use the authenticated identity, never body memberId");
+  assert.equal((await (await f.handler(request("vote", { trackId: id, voted: true }))).json()).votes, 1, "repeat votes are idempotent");
+  const mine = (await (await f.handler(request("tracks"))).json()).tracks[0];
+  assert.equal(mine.votes, 1);
+  assert.equal(mine.voted, true);
+  const other = fixture({ user: { id: "other" }, role: "selector", voters });
+  assert.equal((await (await other.handler(request("vote", { trackId: id, voted: true }))).json()).votes, 2, "votes are shared across members");
+  const anonymous = (await (await fixture({ user: null, voters }).handler(request("tracks"))).json()).tracks[0];
+  assert.equal(anonymous.votes, 2, "anonymous visitors see shared totals");
+  assert.equal(anonymous.voted, false);
+  assert.deepEqual(await (await f.handler(request("vote", { trackId: id, voted: false }))).json(), { success: true, trackId: id, voted: false, votes: 1 });
+  assert.deepEqual([...voters], ["other"]);
+  f = fixture({ role: "dj", hidden: true, voters });
+  assert.equal((await f.handler(request("vote", { trackId: id, voted: true }))).status, 404, "hidden editions cannot be voted on");
+  f = fixture({ role: "dj", allowed: false, voters });
+  assert.equal((await f.handler(request("vote", { trackId: id, voted: true }))).status, 429, "votes are rate limited");
+  assert.deepEqual([...voters], ["other"]);
+}
 f = fixture({ unavailable: true });
 assert.equal((await f.handler(request("tracks"))).status, 503);
+assert.equal((await f.handler(request("vote", { trackId: id, voted: true }))).status, 503);
 assert.equal((await f.handler(request("no-such-route"))).status, 404);
 assert.equal((await f.handler(request("tracks", {}))).status, 405);
 
@@ -228,6 +269,7 @@ function uiFixture({ mode = "tracks", authorized = false, failure = false, stora
       if (url.endsWith("/session")) return Response.json({ authenticated: state.authorized, authorized: state.authorized });
       if (url.endsWith("/checkout")) return Response.json({ checkoutUrl: "javascript:alert(1)" });
       if (url.endsWith("/confirm")) return Response.json({}, { status: 404 });
+      if (url.endsWith("/vote")) return state.vote(JSON.parse(options.body), options);
       return Response.json(state.mode === "malformed" ? { success: false, tracks: [] }
         : { success: true, tracks: state.tracks || (state.mode === "empty" ? [] : state.mode === "crate" ? crate : catalog.tracks), nextOffset: null });
     }
@@ -421,6 +463,57 @@ const byClass = (node, tag, className) => node.querySelectorAll(tag).find(n => n
   assert.equal(createVoteStore(bounded).has(`t${VOTE_LIMIT}`), true, "the newest vote survives a reload");
 }
 
+{
+  // Verified DJs vote through the API and see shared totals; nothing is written to the browser ledger.
+  const storage = memoryStorage({ [VOTE_STORAGE_KEY]: JSON.stringify(["a1"]) });
+  ui = uiFixture({ mode: "crate", authorized: true, storage });
+  ui.state.tracks = crate.map((t, index) => ({ ...t, votes: [4, 6, 1][index], voted: index === 1 }));
+  const shared = { a1: 4, b2: 6, c3: 1 };
+  ui.state.vote = (body, options) => {
+    assert.equal(options.method, "POST");
+    assert.equal(options.credentials, "same-origin");
+    shared[body.trackId] += body.voted ? 1 : -1;
+    return Response.json({ success: true, trackId: body.trackId, voted: body.voted, votes: shared[body.trackId] + 10 });
+  };
+  await ui.view.load();
+  let cards = ui.state.nodes["vault-grid"].querySelectorAll("article");
+  assert.deepEqual(cards.map(card => byClass(card, "span", "vault-vote__count").textContent), ["4", "6", "1"], "server totals are not inflated by stale browser votes");
+  assert.deepEqual(cards.map(card => byClass(card, "button", "vault-vote__up").attributes["aria-pressed"]), ["false", "true", "false"], "voted state comes from the server");
+  const up = byClass(cards[2], "button", "vault-vote__up");
+  const pending = up.listeners.click();
+  assert.equal(up.disabled, true, "upvote is locked while the shared vote saves");
+  await pending;
+  assert.equal(up.disabled, false);
+  assert.deepEqual(JSON.parse(ui.state.requests.at(-1).options.body), { trackId: "c3", voted: true });
+  assert.equal(byClass(cards[2], "span", "vault-vote__count").textContent, "12", "the card shows the shared total returned by the API");
+  assert.equal(up.attributes["aria-pressed"], "true");
+  assert.deepEqual(JSON.parse(storage.data[VOTE_STORAGE_KEY]), ["a1"], "server votes never touch the browser ledger");
+  ui.state.nodes["vault-sort"].value = "votes";
+  ui.state.nodes["vault-sort"].listeners.change();
+  assert.deepEqual(ui.state.nodes["vault-grid"].querySelectorAll("h2").map(n => n.textContent), ["Oldest", "Mid", "Newest"], "most upvoted ranks by backend counts");
+  cards = ui.state.nodes["vault-grid"].querySelectorAll("article");
+  await byClass(cards[1], "button", "vault-vote__up").listeners.click();
+  assert.deepEqual(JSON.parse(ui.state.requests.at(-1).options.body), { trackId: "b2", voted: false }, "a second click removes the shared vote");
+  assert.equal(byClass(cards[1], "span", "vault-vote__count").textContent, "15");
+  ui.state.vote = () => Response.json({ message: "Too many requests. Try again shortly." }, { status: 429 });
+  const limited = byClass(cards[0], "button", "vault-vote__up");
+  await limited.listeners.click();
+  assert.match(ui.state.nodes["vault-status"].textContent, /Too many requests/);
+  assert.equal(byClass(cards[0], "span", "vault-vote__count").textContent, "12", "failed votes keep the last shared total");
+  assert.equal(limited.disabled, false);
+  ui.state.vote = () => Response.json({ success: true, voted: "yes", votes: "<b>99</b>" });
+  await limited.listeners.click();
+  assert.match(ui.state.nodes["vault-status"].textContent, /Invalid vote response/);
+  assert.equal(byClass(cards[0], "span", "vault-vote__count").textContent, "12");
+  const requests = ui.state.requests.length;
+  ui = uiFixture({ mode: "crate", storage });
+  ui.state.tracks = crate.map(t => ({ ...t, votes: 3 }));
+  ui.state.vote = () => assert.fail("anonymous visitors must not call the vote API");
+  await ui.view.load();
+  byClass(ui.state.nodes["vault-grid"].querySelector("article"), "button", "vault-vote__up").listeners.click();
+  assert.ok(requests > 0 && !ui.state.requests.some(r => r.url.endsWith("/vote")));
+}
+
 const migration = await readFile(new URL("../netlify/database/migrations/20261011040000_dj_vault.sql", import.meta.url), "utf8");
 assert.match(migration, /PRIMARY KEY \(member_id, track_id\)/);
 assert.match(migration, /stripe_session_id TEXT UNIQUE/);
@@ -430,6 +523,12 @@ assert.match(migration, /halo_dj_vault_rate_limit/);
 const rarityMigration = await readFile(new URL("../netlify/database/migrations/20261011060000_dj_vault_rarity.sql", import.meta.url), "utf8");
 assert.match(rarityMigration, /ADD COLUMN IF NOT EXISTS rarity TEXT NOT NULL DEFAULT 'white_label'/);
 for (const rarity of Object.keys(VAULT_CARD_VARIANTS)) assert.ok(rarityMigration.includes(`'${rarity}'`), `${rarity} must be allowed by the schema`);
+const voteMigration = await readFile(new URL("../netlify/database/migrations/20261011080000_dj_vault_votes.sql", import.meta.url), "utf8");
+assert.match(voteMigration, /CREATE TABLE IF NOT EXISTS halo_dj_vault_votes/);
+assert.match(voteMigration, /PRIMARY KEY \(member_id, track_id\)/, "one active vote per member per edition");
+assert.match(voteMigration, /REFERENCES halo_memberships\(member_id\)/);
+assert.match(voteMigration, /REFERENCES halo_dj_vault_tracks\(id\)/);
+assert.match(voteMigration, /ON halo_dj_vault_votes\(track_id\)/, "votes are indexed by edition");
 const html = await readFile(new URL("../dj-vault/index.html", import.meta.url), "utf8");
 const css = await readFile(new URL("../dj-vault/dj-vault.css", import.meta.url), "utf8");
 assert.match(html, /aria-live="polite"/);

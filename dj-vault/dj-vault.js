@@ -3,8 +3,10 @@ import { availableKeys, baseVotes, createVaultCard, filterAndSortTracks } from "
 export const VOTE_STORAGE_KEY = "halo.djVault.votes";
 export const VOTE_LIMIT = 500;
 
-// Per-browser vote ledger. Only short, plain track IDs are kept; unreadable or
-// unavailable storage degrades to in-memory votes for the current visit.
+// Per-browser vote ledger used only as a fallback for visitors without verified DJ
+// access; verified DJs vote through /api/dj-vault/vote and see shared totals.
+// Only short, plain track IDs are kept; unreadable or unavailable storage
+// degrades to in-memory votes for the current visit.
 export function createVoteStore(storage) {
   const valid = id => typeof id === "string" && /^[A-Za-z0-9_-]{1,64}$/.test(id);
   let voted = new Set();
@@ -55,7 +57,10 @@ export function createVaultView({ document, fetch, location, identity, history, 
   let tracks = [], authorized = false, authenticated = false, nextOffset = null, generation = 0;
   let paymentConfirmed = false, paymentError = "", rendered = new Map(), cueHandled = false;
   const votes = createVoteStore(storage);
-  const voteCount = track => baseVotes(track) + (votes.has(track.id) ? 1 : 0);
+  // Verified DJs see shared server totals (which already include their own vote);
+  // other visitors see the shared total plus their browser-local vote.
+  const voteCount = track => baseVotes(track) + (!authorized && votes.has(track.id) ? 1 : 0);
+  const hasVoted = track => authorized ? track.voted === true : votes.has(track.id);
   const reducedMotion = () => document.defaultView?.matchMedia?.("(prefers-reduced-motion: reduce)").matches !== false;
   const element = (tag, value, className) => {
     const node = document.createElement(tag);
@@ -67,7 +72,7 @@ export function createVaultView({ document, fetch, location, identity, history, 
     const response = await fetch(`/api/dj-vault/${path}`, {
       credentials: "same-origin", ...(body ? { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) } : {})
     });
-    if (!response.ok) throw new Error(response.status === 401 ? "Sign in to continue." : response.status === 403 ? "Verified DJ access required." : "DJ Vault is unavailable. Please try again.");
+    if (!response.ok) throw new Error(response.status === 401 ? "Sign in to continue." : response.status === 403 ? "Verified DJ access required." : response.status === 429 ? "Too many requests. Try again shortly." : "DJ Vault is unavailable. Please try again.");
     return response.json();
   };
   async function acquire(track, button) {
@@ -94,8 +99,16 @@ export function createVaultView({ document, fetch, location, identity, history, 
     keyFilter.value = keys.includes(selected) ? selected : "all";
   }
   function vote(track) {
-    const voted = votes.toggle(track.id);
-    return { voted, votes: voteCount(track) };
+    if (!authorized) {
+      const voted = votes.toggle(track.id);
+      return { voted, votes: voteCount(track) };
+    }
+    return api("vote", { trackId: track.id, voted: track.voted !== true }).then(data => {
+      if (data?.success !== true || typeof data.voted !== "boolean" || !Number.isSafeInteger(data.votes) || data.votes < 0) throw new Error("Invalid vote response. Please try again.");
+      track.voted = data.voted;
+      track.votes = data.votes;
+      return { voted: data.voted, votes: data.votes };
+    }).catch(error => { status.textContent = error.message; return null; });
   }
   function focusTrack(card) {
     card.scrollIntoView?.({ block: "center", behavior: reducedMotion() ? "auto" : "smooth" });
@@ -112,7 +125,7 @@ export function createVaultView({ document, fetch, location, identity, history, 
     const visible = filterAndSortTracks(tracks, { sort: sort.value, rarity: rarityFilter.value, bpm: bpmFilter.value, key: keyFilter.value, voteCount });
     const cards = visible.map(track => createVaultCard({
       document, track, authorized,
-      votes: voteCount(track), voted: votes.has(track.id), onVote: vote, onJump: jump,
+      votes: voteCount(track), voted: hasVoted(track), onVote: vote, onJump: jump,
       onAcquire: acquire,
       onPreviewPlay: audio => grid.querySelectorAll("audio").forEach(other => { if (other !== audio) other.pause(); }),
       onPreviewError: () => { status.textContent = "This preview is unavailable."; }

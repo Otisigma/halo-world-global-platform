@@ -227,7 +227,7 @@ function uiFixture({ mode = "tracks", authorized = false, failure = false } = {}
       if (url.endsWith("/checkout")) return Response.json({ checkoutUrl: "javascript:alert(1)" });
       if (url.endsWith("/confirm")) return Response.json({}, { status: 404 });
       return Response.json(state.mode === "malformed" ? { success: false, tracks: [] }
-        : { success: true, tracks: state.mode === "empty" ? [] : state.mode === "crate" ? crate : catalog.tracks, nextOffset: null });
+        : { success: true, tracks: state.tracks || (state.mode === "empty" ? [] : state.mode === "crate" ? crate : catalog.tracks), nextOffset: null });
     }
   });
   return { view, state };
@@ -243,11 +243,14 @@ assert.equal(grid.querySelectorAll("h2")[0].textContent, track.title, "metadata 
 assert.equal(grid.querySelectorAll("button")[0].disabled, true, "anonymous acquisition is disabled");
 assert.equal(grid.querySelectorAll("audio")[0].preload, "none");
 assert.equal(grid.querySelectorAll("span").find(n => n.className === "vault-price").textContent, "£4.99");
-const card = grid.children[0];
+assert.equal(grid.children[0].className, "vault-bin");
+assert.equal(grid.children[0].attributes["aria-label"], "Crate 01");
+const card = grid.querySelector("article");
 assert.equal(card.className, "vault-card vault-card--test-press");
 assert.equal(card.attributes["data-rarity"], "test_press");
 assert.equal(card.querySelector("p").textContent, VAULT_CARD_VARIANTS.test_press.stamp);
 assert.equal(card.querySelectorAll("div").find(n => n.className === "vault-card__sleeve").attributes["aria-hidden"], "true");
+assert.equal(card.querySelectorAll("p").find(n => n.className === "vault-card__index").textContent, "HALO-111111");
 assert.deepEqual(card.querySelectorAll("li").map(n => n.textContent), ["Test Press", "BPM 140", "KEY 8A", "WAV"]);
 await ui.state.nodes["vault-login"].listeners.click();
 assert.equal(ui.state.nodes["vault-auth"].hidden, false);
@@ -320,7 +323,22 @@ ui.state.nodes["vault-sort"].value = "bpm";
 ui.state.nodes["vault-sort"].listeners.change();
 assert.deepEqual(ui.state.nodes["vault-grid"].querySelectorAll("h2").map(n => n.textContent), ["Mid", "Oldest", "Newest"]);
 assert.match(ui.state.nodes["vault-status"].textContent, /^3 editions loaded\./, "unfiltered sorting reports the full count");
-assert.equal(ui.state.nodes["vault-grid"].children[2].querySelectorAll("button")[0].disabled, true, "filters never unlock acquisition");
+assert.equal(ui.state.nodes["vault-grid"].querySelectorAll("article")[2].querySelectorAll("button")[0].disabled, true, "filters never unlock acquisition");
+
+ui = uiFixture({ mode: "crate" });
+ui.state.tracks = [...crate, { ...crate[0], id: "d4", title: "Fourth pressing", bpm: 110 }];
+await ui.view.load();
+const bins = ui.state.nodes["vault-grid"].children;
+assert.deepEqual(bins.map(bin => bin.attributes["aria-label"]), ["Crate 01", "Crate 02"]);
+assert.deepEqual(bins.map(bin => bin.querySelectorAll("article").length), [3, 1]);
+assert.deepEqual(ui.state.nodes["vault-grid"].querySelectorAll("h2").map(n => n.textContent), ["Newest", "Mid", "Oldest", "Fourth pressing"]);
+ui.state.nodes["vault-sort"].value = "bpm";
+ui.state.nodes["vault-sort"].listeners.change();
+assert.deepEqual(ui.state.nodes["vault-grid"].querySelectorAll("h2").map(n => n.textContent), ["Fourth pressing", "Mid", "Oldest", "Newest"], "crate boundaries preserve global sort order");
+ui.state.nodes["vault-rarity"].value = "selector_exclusive";
+ui.state.nodes["vault-rarity"].listeners.change();
+assert.equal(ui.state.nodes["vault-grid"].children.length, 1, "filters rebuild crates without empty bins");
+assert.equal(ui.state.nodes["vault-grid"].querySelectorAll("article").length, 1);
 
 const migration = await readFile(new URL("../netlify/database/migrations/20261011040000_dj_vault.sql", import.meta.url), "utf8");
 assert.match(migration, /PRIMARY KEY \(member_id, track_id\)/);
@@ -337,6 +355,17 @@ assert.match(html, /aria-live="polite"/);
 assert.match(html, /name="viewport"/);
 assert.doesNotMatch(html, /onclick=/);
 assert.match(css, /prefers-reduced-motion/);
+assert.match(html, /<body class="dj-vault-room">/);
+assert.match(html, /<section class="vault-console" aria-labelledby="vault-console-title">/);
+assert.ok(html.indexOf('id="vault-status"') < html.indexOf('class="vault-archive-label"'), "live status remains in the command station");
+assert.match(css, /\.dj-vault-room \{[\s\S]*?background: radial-gradient/);
+assert.doesNotMatch(css, /(?:^|\n)(?::root|body|header|main|input|button|select|p|a|\*|:focus-visible)\s*[{,]/, "room styling must not target global elements");
+assert.match(css, /\.dj-vault-room :focus-visible/);
+assert.match(css, /@media \(max-width: 600px\)/);
+for (const path of ["../halo.html", "../music/index.html"]) {
+  const page = await readFile(new URL(path, import.meta.url), "utf8");
+  assert.doesNotMatch(page, /dj-vault-room|dj-vault\/dj-vault\.css/, `${path} must not activate the room theme`);
+}
 for (const control of ["vault-sort", "vault-rarity", "vault-bpm", "vault-key"]) assert.match(html, new RegExp(`<label for="${control}">`));
 for (const variant of ["test-press", "promo-copy", "vault-only", "selector-exclusive"]) assert.match(css, new RegExp(`\\.vault-card--${variant}`));
 console.log("DJ Vault permission, payment, private delivery, and UI contracts passed");

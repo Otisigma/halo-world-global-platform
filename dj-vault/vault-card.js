@@ -62,7 +62,8 @@ export function createVaultCard({ document, track, authorized, onAcquire, onPrev
   const sleeve = element("div", null, "vault-card__sleeve");
   sleeve.setAttribute("aria-hidden", "true");
   const label = element("div", null, "vault-card__label");
-  label.append(element("span", `HALO-${String(track.id || "").replace(/[^0-9a-f]/gi, "").slice(0, 6).toUpperCase() || "VAULT"}`, "vault-card__catalog"),
+  const catalogNumber = `HALO-${String(track.id || "").replace(/[^0-9a-f]/gi, "").slice(0, 6).toUpperCase() || "VAULT"}`;
+  label.append(element("span", catalogNumber, "vault-card__catalog"),
     element("span", "33⅓ / 45", "vault-card__speed"));
   sleeve.append(label);
 
@@ -73,7 +74,8 @@ export function createVaultCard({ document, track, authorized, onAcquire, onPrev
     chips.append(element("li", text, `vault-chip vault-chip--${modifier}`));
   }
 
-  card.append(stamp, sleeve, element("h2", track.title), element("p", track.artist, "vault-card__artist"), chips,
+  card.append(stamp, sleeve, element("p", catalogNumber, "vault-card__index"),
+    element("h2", track.title), element("p", track.artist, "vault-card__artist"), chips,
     element("p", `DJ Vault · ${track.previewType || "clip"} preview`, "vault-card__preview-note"));
 
   if (track.previewUrl === `/api/dj-vault/preview?trackId=${encodeURIComponent(track.id)}`) {

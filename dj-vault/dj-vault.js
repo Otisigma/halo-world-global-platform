@@ -54,12 +54,24 @@ export function createVaultView({ document, fetch, location, identity, history }
   }
   function render() {
     const visible = filterAndSortTracks(tracks, { sort: sort.value, rarity: rarityFilter.value, bpm: bpmFilter.value, key: keyFilter.value });
-    grid.replaceChildren(...visible.map(track => createVaultCard({
+    const cards = visible.map(track => createVaultCard({
       document, track, authorized,
       onAcquire: acquire,
       onPreviewPlay: audio => grid.querySelectorAll("audio").forEach(other => { if (other !== audio) other.pause(); }),
       onPreviewError: () => { status.textContent = "This preview is unavailable."; }
-    })));
+    }));
+    const bins = [];
+    for (let index = 0; index < cards.length; index += 3) {
+      const name = `Crate ${String(index / 3 + 1).padStart(2, "0")}`;
+      const bin = element("section", null, "vault-bin");
+      bin.setAttribute("aria-label", name);
+      const rail = element("p", `${name} // ${Math.min(3, cards.length - index)} pressings`, "vault-bin__label");
+      const sleeves = element("div", null, "vault-bin__sleeves");
+      sleeves.append(...cards.slice(index, index + 3));
+      bin.append(rail, sleeves);
+      bins.push(bin);
+    }
+    grid.replaceChildren(...bins);
     return visible.length;
   }
   function describe(shown) {

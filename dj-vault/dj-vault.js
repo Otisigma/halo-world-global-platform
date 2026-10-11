@@ -1,5 +1,13 @@
 import { availableKeys, createVaultCard, filterAndSortTracks } from "./vault-card.js";
 
+export function applyVaultRoute(document) {
+  const body = document?.body;
+  if (!body) return false;
+  body.classList.add("dj-vault-room");
+  body.dataset.route = "dj-vault";
+  return true;
+}
+
 export function createVaultView({ document, fetch, location, identity, history }) {
   const grid = document.getElementById("vault-grid");
   const status = document.getElementById("vault-status");
@@ -150,6 +158,7 @@ export function createVaultView({ document, fetch, location, identity, history }
 }
 
 if (typeof window !== "undefined") {
+  applyVaultRoute(window.document);
   const identity = {
     login: async (email, password) => { await import("/identity.js"); return window.haloIdentity.login(email, password); },
     logout: async () => { await import("/identity.js"); return window.haloIdentity.logout(); }

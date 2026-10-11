@@ -1,5 +1,26 @@
 # HALO AI DJ System
 
+## DJ Vault
+
+`/dj-vault/` is a separate, opt-in curated catalog; normal release uploads and the canonical song `sale_master` are unchanged. Apply `netlify/database/migrations/20261011040000_dj_vault.sql` before enabling the section. Operators provision `dj`, `selector`, or `admin` in `halo_dj_vault_roles` for an existing `halo_memberships.member_id` through trusted database administration. No profile, signup, or browser endpoint grants these roles.
+
+Endpoint layout (Netlify functions):
+
+- `GET /api/dj-vault/session`: reports authenticated identity and database-backed permissions.
+- `GET /api/dj-vault/tracks?offset=0`: paginated public metadata; verified roles additionally see member-only editions. Hidden/standard editions and private storage keys never appear.
+- `PATCH /api/dj-vault/routing`: selectors/admins explicitly route editions into/out of `dj_vault` or set `hidden`, `public`, or `members` visibility. Supply `trackId` (new UUID), optional `songId`, `title`, `artist`, `bpm`, `musicalKey`, integer `pricePence`, `deliveryFormat` (`wav`/`flac`), `previewType`, and `previewPackId`/`previewStem`/`deliveryPackId`/`deliveryStem`.
+- `POST /api/dj-vault/checkout`: verified DJs send `{trackId}`; the server records a pending GBP order and creates Stripe Checkout using the database price.
+- `POST /api/dj-vault/confirm`: send `{trackId, sessionId}` after checkout (or retry later). The server retrieves the session directly from Stripe, checking paid/completed status, order ownership, currency, amount, and order metadata before atomically recording payment, a unique entitlement, and audit log. A browser success flag never grants access.
+- `POST /api/dj-vault/entitlements`: admins may grant `{trackId, memberId}` to an operator-verified DJ without payment.
+- `GET /api/dj-vault/preview?trackId=…`: only the separate preview file; public or verified member visibility is enforced.
+- `GET /api/dj-vault/download?trackId=…`: requires current verified role and an unrevoked entitlement; streams private bytes with range support and no-store headers, never a public delivery URL.
+
+Upload the preview and delivery files through the existing private DJ Deck stem-pack workflow, with explicit rights attestation. Linked song assets must belong to its owner; standalone editions use the curator's files. Use distinct files and a preview of 1–90 seconds; the curator must verify clip/watermark quality and WAV/FLAC fidelity before publishing. Do not upload exclusive delivery audio into public song-version URLs. Existing public releases are not retroactively made exclusive. Edition assets are immutable once routed; create a new edition to replace files.
+
+Set `STRIPE_SECRET_KEY` and `DJ_VAULT_SITE_ORIGIN` (the exact canonical HTTPS origin) to enable checkout. Missing configuration fails closed. All mutations require same-origin JSON requests, and sensitive authenticated requests use a database-backed per-member rate limit. Keep blob storage private; apply edge/IP rate limits for public catalog and preview traffic. Refunds/disputes must be handled by operators by setting `halo_dj_vault_entitlements.revoked_at`; automatic refund webhooks are not part of this flow. Payment confirmation is retryable on return to the vault, including on another device using the original session ID.
+
+Schema includes private edition metadata/assets, server-provisioned roles, immutable price snapshots in orders, unique member/edition entitlements, and routing/preview/purchase/grant/download audit logs. Run `npm run test:dj-vault` for permission, payment verification, private delivery, and dependency-free frontend rendering contracts.
+
 HALO treats AI as a four-person booth crew rather than a random autoplay button. The live deck remains operator-controlled while a music director, mix engineer, crowd reader, and quality controller rank candidates, explain their reasoning, prepare the inactive deck, and fall back to a local performance engine whenever cloud analysis is unavailable.
 
 ## Protected song policy

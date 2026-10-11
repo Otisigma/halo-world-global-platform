@@ -279,6 +279,8 @@ await ui.view.load();
 assert.equal(ui.state.nodes["vault-grid"].children.length, 1, "failed confirmation must not block browsing");
 assert.match(ui.state.nodes["vault-status"].textContent, /Payment confirmation needs attention/);
 assert.equal(ui.state.nodes["vault-confirm"].hidden, false);
+ui.state.nodes["vault-sort"].listeners.change();
+assert.match(ui.state.nodes["vault-status"].textContent, /Payment confirmation needs attention/, "filters keep payment errors visible");
 await ui.state.nodes["vault-confirm"].listeners.click();
 assert.equal(ui.state.nodes["vault-grid"].children.length, 1);
 
@@ -297,6 +299,7 @@ assert.deepEqual(titles({ sort: "rarity" }), ["Mid", "Newest", "Oldest"], "unkno
 assert.deepEqual(titles({ rarity: "white_label" }), ["Newest", "Oldest"]);
 assert.deepEqual(titles({ bpm: "120-129" }), ["Mid", "Oldest"]);
 assert.deepEqual(titles({ bpm: "160-plus", key: "12b" }), ["Newest"]);
+assert.deepEqual(filterAndSortTracks([{ title: "Padded", musicalKey: " 8a " }], { key: "8A" }).map(t => t.title), ["Padded"]);
 assert.deepEqual(titles({ bpm: "not-a-range" }), ["Newest", "Mid", "Oldest"]);
 assert.deepEqual(availableKeys(crate), ["2A", "8A", "12B"]);
 assert.equal(keyOrder("Fm"), Infinity);
@@ -307,7 +310,7 @@ assert.ok(ui.state.nodes["vault-key"].children.every(n => n.tag === "option"), "
 ui.state.nodes["vault-rarity"].value = "selector_exclusive";
 ui.state.nodes["vault-rarity"].listeners.change();
 assert.deepEqual(ui.state.nodes["vault-grid"].querySelectorAll("h2").map(n => n.textContent), ["Mid"]);
-assert.match(ui.state.nodes["vault-status"].textContent, /Showing 1 of 3/);
+assert.match(ui.state.nodes["vault-status"].textContent, /Showing 1 of 3.*Sign in with verified DJ access/);
 ui.state.nodes["vault-rarity"].value = "test_press";
 ui.state.nodes["vault-rarity"].listeners.change();
 assert.equal(ui.state.nodes["vault-grid"].children.length, 0);

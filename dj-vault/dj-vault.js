@@ -15,7 +15,7 @@ export function createVaultView({ document, fetch, location, identity, history }
   const password = document.getElementById("vault-password");
   const confirm = document.getElementById("vault-confirm");
   let tracks = [], authorized = false, authenticated = false, nextOffset = null, generation = 0;
-  let paymentConfirmed = false;
+  let paymentConfirmed = false, paymentError = "";
   const element = (tag, value, className) => {
     const node = document.createElement(tag);
     if (value != null) node.textContent = String(value);
@@ -62,10 +62,12 @@ export function createVaultView({ document, fetch, location, identity, history }
     })));
     return visible.length;
   }
-  function refilter() {
-    const shown = render();
-    if (tracks.length) status.textContent = shown ? `Showing ${shown} of ${tracks.length} editions.` : "No editions match these filters.";
+  function describe(shown, filtered) {
+    const count = filtered ? `Showing ${shown} of ${tracks.length} editions.` : `${tracks.length} editions loaded.`;
+    status.textContent = (tracks.length ? `${count}${shown ? "" : " No editions match these filters."}${authorized ? "" : " Sign in with verified DJ access to acquire."}` : "No DJ Vault editions are available yet.")
+      + (paymentError ? ` ${paymentError}` : "");
   }
+  function refilter() { describe(render(), true); }
   async function load(append = false) {
     const current = ++generation;
     grid.setAttribute("aria-busy", "true");
@@ -81,7 +83,7 @@ export function createVaultView({ document, fetch, location, identity, history }
       authenticated = session.authenticated === true;
       login.textContent = session.authenticated ? "Account / sign out" : "Sign in";
       const params = new URLSearchParams(location.search);
-      let paymentError = "";
+      paymentError = "";
       if (!append && authorized && params.has("session_id") && !paymentConfirmed) {
         try {
           await api("confirm", { sessionId: params.get("session_id"), trackId: params.get("trackId") });
@@ -100,9 +102,7 @@ export function createVaultView({ document, fetch, location, identity, history }
       tracks = append ? [...tracks, ...data.tracks] : data.tracks;
       nextOffset = Number.isSafeInteger(data.nextOffset) ? data.nextOffset : null;
       syncKeyOptions();
-      const shown = render();
-      status.textContent = tracks.length ? `${tracks.length} editions loaded.${shown ? "" : " No editions match these filters."}${authorized ? "" : " Sign in with verified DJ access to acquire."}` : "No DJ Vault editions are available yet.";
-      if (paymentError) status.textContent += ` ${paymentError}`;
+      describe(render(), false);
       more.hidden = nextOffset === null;
     } catch (error) {
       if (current !== generation) return;

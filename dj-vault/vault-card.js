@@ -28,7 +28,7 @@ export function filterAndSortTracks(tracks, { sort = "newest", rarity = "all", b
   const list = tracks.map((track, index) => ({ track, index })).filter(({ track }) =>
     (rarity === "all" || variantFor(track.rarity) === rarity)
     && (bpm === "all" || (Number.isFinite(track.bpm) && track.bpm >= low && track.bpm <= high))
-    && (key === "all" || String(track.musicalKey || "").toUpperCase() === key.toUpperCase()));
+    && (key === "all" || String(track.musicalKey || "").trim().toUpperCase() === String(key).trim().toUpperCase()));
   const comparators = {
     bpm: (a, b) => (a.track.bpm ?? Infinity) - (b.track.bpm ?? Infinity),
     key: (a, b) => compareKeys(a.track.musicalKey, b.track.musicalKey),

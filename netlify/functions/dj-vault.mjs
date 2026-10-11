@@ -32,6 +32,26 @@ function catalogTrack(row) {
   };
 }
 
+async function purchasableTracks(db, memberId, authorized, trackId = null, offset = 0) {
+  return db.sql`
+    SELECT t.*,
+      EXISTS (SELECT 1 FROM halo_dj_vault_entitlements e WHERE e.track_id = t.id
+        AND e.member_id = ${memberId} AND e.revoked_at IS NULL) AS entitled
+    FROM halo_dj_vault_tracks t
+    JOIN halo_stem_files preview ON preview.pack_id = t.preview_pack_id AND preview.stem_type = t.preview_stem
+    JOIN halo_stem_packs preview_pack ON preview_pack.id = preview.pack_id
+    JOIN halo_stem_files delivery ON delivery.pack_id = t.delivery_pack_id AND delivery.stem_type = t.delivery_stem
+    JOIN halo_stem_packs delivery_pack ON delivery_pack.id = delivery.pack_id
+    WHERE t.access_tier = 'dj_vault' AND (t.visibility = 'public' OR (${authorized} AND t.visibility = 'members'))
+      AND (${trackId}::TEXT IS NULL OR t.id = ${trackId})
+      AND preview_pack.status = 'private' AND preview_pack.rights_attested = TRUE
+      AND delivery_pack.status = 'private' AND delivery_pack.rights_attested = TRUE
+      AND preview.blob_key <> '' AND preview.chunk_count > 0 AND preview.byte_size > 0
+      AND delivery.blob_key <> '' AND delivery.chunk_count > 0 AND delivery.byte_size > 0
+    ORDER BY t.created_at DESC, t.id LIMIT 25 OFFSET ${offset}
+  `;
+}
+
 export function createDjVaultHandler({ getDatabase, getUser, membershipFor, store, stripeRequest, siteOrigin }) {
   return async function djVault(request) {
     const url = new URL(request.url);
@@ -64,14 +84,7 @@ export function createDjVaultHandler({ getDatabase, getUser, membershipFor, stor
       if (action === "tracks") {
         const offset = Number(url.searchParams.get("offset") || 0);
         if (!Number.isSafeInteger(offset) || offset < 0 || offset > 10000) return json({ message: "Invalid offset" }, 400);
-        const rows = await db.sql`
-          SELECT t.id, t.title, t.artist, t.bpm, t.musical_key, t.price_pence, t.delivery_format, t.preview_type,
-            EXISTS (SELECT 1 FROM halo_dj_vault_entitlements e WHERE e.track_id = t.id
-              AND e.member_id = ${user?.id || ""} AND e.revoked_at IS NULL) AS entitled
-          FROM halo_dj_vault_tracks t
-          WHERE t.access_tier = 'dj_vault' AND (t.visibility = 'public' OR (${authorized} AND t.visibility = 'members'))
-          ORDER BY t.created_at DESC, t.id LIMIT 25 OFFSET ${offset}
-        `;
+        const rows = await purchasableTracks(db, user?.id || "", authorized, null, offset);
         return json({ success: true, tracks: rows.map(catalogTrack), nextOffset: rows.length === 25 ? offset + 25 : null });
       }
       let body = null;
@@ -166,6 +179,8 @@ export function createDjVaultHandler({ getDatabase, getUser, membershipFor, stor
           const existing = await db.sql`SELECT track_id FROM halo_dj_vault_entitlements
             WHERE member_id = ${user.id} AND track_id = ${trackId} AND revoked_at IS NULL`;
           if (existing.length) return json({ entitled: true });
+          const available = await purchasableTracks(db, user.id, authorized, trackId);
+          if (!available.length) return json({ message: "Edition source assets are unavailable for purchase" }, 409);
           const orderId = randomUUID();
           await db.sql`INSERT INTO halo_dj_vault_orders (id, member_id, track_id, price_pence)
             VALUES (${orderId}, ${user.id}, ${trackId}, ${track.price_pence})`;
@@ -196,6 +211,8 @@ export function createDjVaultHandler({ getDatabase, getUser, membershipFor, stor
         const revoked = await db.sql`SELECT revoked_at FROM halo_dj_vault_entitlements
           WHERE member_id = ${user.id} AND track_id = ${trackId} AND revoked_at IS NOT NULL`;
         if (revoked.length) return json({ message: "This entitlement has been revoked" }, 403);
+        const available = await purchasableTracks(db, user.id, authorized, trackId);
+        if (!available.length) return json({ message: "Edition source assets are unavailable for purchase" }, 409);
         await db.sql`
           WITH paid AS (
             UPDATE halo_dj_vault_orders SET status = 'paid'
@@ -219,7 +236,7 @@ export function createDjVaultHandler({ getDatabase, getUser, membershipFor, stor
         SELECT f.* FROM halo_stem_files f JOIN halo_stem_packs p ON p.id = f.pack_id
         WHERE f.pack_id = ${preview ? track.preview_pack_id : track.delivery_pack_id}
           AND f.stem_type = ${preview ? track.preview_stem : track.delivery_stem}
-          AND p.status = 'private' AND p.rights_attested = TRUE
+          AND (p.status = 'private' OR (${!preview} AND p.status = 'archived')) AND p.rights_attested = TRUE
       `;
       const file = files[0];
       if (!file) return json({ message: "Audio unavailable" }, 404);

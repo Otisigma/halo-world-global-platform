@@ -10,14 +10,24 @@ const track = { id, title: '<img src=x onerror="alert(1)">', artist: "<script>ev
   preview_pack_id: pack, preview_stem: "drums", delivery_pack_id: pack, delivery_stem: "full" };
 function fixture({ user = { id: "member", user_metadata: { role: "admin" } }, role, entitled = false,
   paid = true, amount = 499, unavailable = false, allowed = true, hidden = false } = {}) {
-  const state = { writes: [], blobReads: [], paymentCalls: [], orders: [], granted: entitled, visibility: hidden ? "hidden" : "public" };
+  const state = { writes: [], blobReads: [], paymentCalls: [], orders: [], granted: entitled, visibility: hidden ? "hidden" : "public",
+    assets: {
+      preview: { status: "private", rightsAttested: true, exists: true, blobKey: "preview/", chunkCount: 2, byteSize: 6 },
+      delivery: { status: "private", rightsAttested: true, exists: true, blobKey: "delivery/", chunkCount: 2, byteSize: 6 }
+    } };
   const db = { async sql(strings, ...values) {
     const query = strings.join("?");
     if (unavailable) throw new Error("DB offline");
     if (query.includes("halo_dj_vault_roles WHERE")) return role ? [{ role }] : [];
     if (query.includes("halo_dj_vault_rate_limit")) return [{ allowed }];
-    if (query.includes("SELECT t.id")) {
+    if (query.includes("SELECT t.*")) {
       assert.ok(query.includes("t.visibility = 'public'") && query.includes("t.visibility = 'members'"));
+      for (const name of ["preview", "delivery"]) {
+        assert.ok(query.includes(`JOIN halo_stem_files ${name}`) && query.includes(`JOIN halo_stem_packs ${name}_pack`));
+        assert.ok(query.includes(`${name}_pack.status = 'private'`) && query.includes(`${name}_pack.rights_attested = TRUE`));
+        assert.ok(query.includes(`${name}.blob_key <> ''`) && query.includes(`${name}.chunk_count > 0`) && query.includes(`${name}.byte_size > 0`));
+      }
+      if (Object.values(state.assets).some(a => a.status !== "private" || !a.rightsAttested || !a.exists || !a.blobKey || a.chunkCount <= 0 || a.byteSize <= 0)) return [];
       return state.visibility === "hidden" || (state.visibility === "members" && !values[1]) ? [] : [{ ...track, entitled: state.granted }];
     }
     if (query.includes("SELECT * FROM halo_dj_vault_tracks")) {
@@ -34,7 +44,10 @@ function fixture({ user = { id: "member", user_metadata: { role: "admin" } }, ro
       { id: pack, stem_type: "full", content_type: "audio/wav", duration_seconds: 180, blob_key: "delivery/" }
     ];
     if (query.includes("SELECT f.*")) {
-      return [{ blob_key: values[1] === "drums" ? "preview/" : "delivery/", chunk_count: 2, content_type: "audio/wav", byte_size: 6 }];
+      assert.ok(query.includes("p.status = 'private'") && query.includes("p.status = 'archived'") && query.includes("p.rights_attested = TRUE"));
+      const asset = state.assets[values[1] === "drums" ? "preview" : "delivery"];
+      if (!asset.exists || !asset.rightsAttested || !(asset.status === "private" || (values[2] && asset.status === "archived"))) return [];
+      return [{ blob_key: asset.blobKey, chunk_count: asset.chunkCount, content_type: "audio/wav", byte_size: asset.byteSize }];
     }
     if (query.includes("SELECT * FROM halo_dj_vault_orders")) return state.orders.filter(o => o.stripe_session_id === values[0] && o.member_id === values[1] && o.track_id === values[2]);
     state.writes.push({ query, values });
@@ -110,6 +123,42 @@ for (const invalid of [{ paid: false }, { amount: 1 }]) {
   await f.handler(request("checkout", { trackId: id }));
   assert.equal((await f.handler(request("confirm", { trackId: id, sessionId: "cs_test_vault", paid: true }))).status, 409);
   assert.equal(f.state.granted, false);
+}
+for (const source of ["preview", "delivery"]) {
+  for (const invalid of [{ status: "archived" }, { status: "public" }, { exists: false },
+    { rightsAttested: false }, { blobKey: "" }, { chunkCount: 0 }, { byteSize: 0 }]) {
+    f = fixture({ role: "dj" });
+    Object.assign(f.state.assets[source], invalid);
+    assert.deepEqual((await (await f.handler(request("tracks"))).json()).tracks, [], `${source} must not be sold when ${JSON.stringify(invalid)}`);
+    const rejected = await f.handler(request("checkout", { trackId: id }));
+    assert.equal(rejected.status, 409);
+    assert.match((await rejected.json()).message, /source assets are unavailable/);
+    assert.equal(f.state.orders.length, 0, "invalid assets must not create an order");
+    assert.equal(f.state.paymentCalls.length, 0, "invalid assets must not create a Stripe session");
+
+    f = fixture({ role: "dj" });
+    assert.equal((await f.handler(request("checkout", { trackId: id }))).status, 200);
+    Object.assign(f.state.assets[source], invalid);
+    assert.equal((await f.handler(request("confirm", { trackId: id, sessionId: "cs_test_vault" }))).status, 409);
+    assert.equal(f.state.granted, false, "assets invalidated after checkout must not grant entitlement");
+    assert.ok(!f.state.writes.some(w => w.query.includes("WITH paid")), "failed confirmation must not mark the order paid");
+  }
+}
+f = fixture({ role: "dj", entitled: true });
+f.state.assets.preview.status = "archived";
+f.state.assets.delivery.status = "archived";
+const archivedDownload = await f.handler(request("download?trackId=" + id));
+assert.equal(archivedDownload.status, 200, "existing entitlements retain archived private delivery");
+assert.deepEqual([...new Uint8Array(await archivedDownload.arrayBuffer())], [1, 2, 3, 4, 5, 6]);
+assert.equal((await f.handler(request("preview?trackId=" + id))).status, 404);
+assert.equal((await f.handler(request("checkout", { trackId: id }))).status, 200, "existing entitlement must not create a new purchase");
+assert.equal(f.state.orders.length, 0);
+assert.equal(f.state.paymentCalls.length, 0);
+for (const invalid of [{ status: "public" }, { exists: false }, { rightsAttested: false }]) {
+  f = fixture({ role: "dj", entitled: true });
+  Object.assign(f.state.assets.delivery, invalid);
+  assert.equal((await f.handler(request("download?trackId=" + id))).status, 404);
+  assert.equal(f.state.blobReads.length, 0, "entitlements must not bypass private delivery or rights attestation");
 }
 f = fixture({ role: "selector" });
 assert.equal((await f.handler(request("routing", routeBody))).status, 200);

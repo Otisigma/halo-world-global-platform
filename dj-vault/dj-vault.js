@@ -1,4 +1,4 @@
-import { availableKeys, baseVotes, createVaultCard, filterAndSortTracks } from "./vault-card.js";
+import { availableKeys, baseVotes, createMixCard, createVaultCard, filterAndSortTracks, validMixId } from "./vault-card.js";
 
 export const VOTE_STORAGE_KEY = "halo.djVault.votes";
 export const VOTE_LIMIT = 500;
@@ -54,8 +54,11 @@ export function createVaultView({ document, fetch, location, identity, history, 
   const email = document.getElementById("vault-email");
   const password = document.getElementById("vault-password");
   const confirm = document.getElementById("vault-confirm");
+  const mixGrid = document.getElementById("vault-mixes");
+  const mixStatus = document.getElementById("vault-mix-status");
   let tracks = [], authorized = false, authenticated = false, nextOffset = null, generation = 0;
   let paymentConfirmed = false, paymentError = "", rendered = new Map(), cueHandled = false;
+  let mixGeneration = 0;
   const votes = createVoteStore(storage);
   // Verified DJs see shared server totals (which already include their own vote);
   // other visitors see the shared total plus their browser-local vote.
@@ -152,6 +155,38 @@ export function createVaultView({ document, fetch, location, identity, history, 
       + (paymentError ? ` ${paymentError}` : "");
   }
   function refilter() { describe(render()); }
+  async function loadMixes() {
+    const current = ++mixGeneration;
+    mixGrid.replaceChildren();
+    mixGrid.setAttribute("aria-busy", "true");
+    mixStatus.textContent = "Loading mixes…";
+    const target = new URLSearchParams(location.search).get("mix");
+    const getMixes = async path => {
+      const response = await fetch(`/api/mixes${path}`, { credentials: "same-origin" });
+      if (!response.ok) throw new Error("Mixes are unavailable. Try again to reload.");
+      const data = await response.json();
+      if (!Array.isArray(data.mixes)) throw new Error("Invalid mixes response. Try again to reload.");
+      return data.mixes.filter(mix => mix && validMixId(mix.id));
+    };
+    try {
+      const mixes = await getMixes("?limit=18");
+      if (validMixId(target) && !mixes.some(mix => mix.id === target)) {
+        const requested = await getMixes(`?id=${encodeURIComponent(target)}`);
+        mixes.unshift(...requested.filter(mix => mix.id === target));
+      }
+      if (current !== mixGeneration) return;
+      const selected = mixes.find(mix => mix.id === target);
+      const ordered = selected ? [selected, ...mixes.filter(mix => mix.id !== target)] : mixes;
+      const cards = ordered.map(mix => createMixCard({ document, mix, selected: mix.id === target }));
+      mixGrid.replaceChildren(...cards);
+      mixStatus.textContent = `${mixes.length ? `${mixes.length} mixes loaded.` : "No mixes are available yet."}${target ? selected ? ` Selected mix: ${selected.title || "Untitled mix"}.` : " Requested mix is unavailable or private." : ""}`;
+      if (selected) focusTrack(cards[0]);
+    } catch (error) {
+      if (current !== mixGeneration) return;
+      mixStatus.textContent = error.message;
+      retry.hidden = false;
+    } finally { if (current === mixGeneration) mixGrid.setAttribute("aria-busy", "false"); }
+  }
   async function load(append = false) {
     const current = ++generation;
     grid.setAttribute("aria-busy", "true");
@@ -160,6 +195,7 @@ export function createVaultView({ document, fetch, location, identity, history, 
     more.hidden = true;
     confirm.hidden = true;
     if (!append) { tracks = []; authorized = false; grid.replaceChildren(); }
+    const mixesLoaded = !append ? loadMixes() : null;
     try {
       const session = await api("session");
       if (current !== generation) return;
@@ -197,7 +233,10 @@ export function createVaultView({ document, fetch, location, identity, history, 
       if (current !== generation) return;
       status.textContent = error.message;
       retry.hidden = false;
-    } finally { if (current === generation) grid.setAttribute("aria-busy", "false"); }
+    } finally {
+      await mixesLoaded;
+      if (current === generation) grid.setAttribute("aria-busy", "false");
+    }
   }
   retry.addEventListener("click", () => load());
   more.addEventListener("click", () => load(true));

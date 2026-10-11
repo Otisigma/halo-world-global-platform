@@ -1,6 +1,7 @@
 import { availableKeys, baseVotes, createVaultCard, filterAndSortTracks } from "./vault-card.js";
 
 export const VOTE_STORAGE_KEY = "halo.djVault.votes";
+export const VOTE_LIMIT = 500;
 
 // Per-browser vote ledger. Only short, plain track IDs are kept; unreadable or
 // unavailable storage degrades to in-memory votes for the current visit.
@@ -9,7 +10,7 @@ export function createVoteStore(storage) {
   let voted = new Set();
   try {
     const saved = JSON.parse(storage?.getItem(VOTE_STORAGE_KEY) || "[]");
-    if (Array.isArray(saved)) voted = new Set(saved.filter(valid).slice(0, 500));
+    if (Array.isArray(saved)) voted = new Set(saved.filter(valid).slice(-VOTE_LIMIT));
   } catch { voted = new Set(); }
   const save = () => { try { storage?.setItem(VOTE_STORAGE_KEY, JSON.stringify([...voted])); } catch {} };
   return {
@@ -17,7 +18,12 @@ export function createVoteStore(storage) {
     toggle(id) {
       const key = String(id);
       if (!valid(key)) return false;
-      if (voted.has(key)) voted.delete(key); else voted.add(key);
+      if (voted.has(key)) voted.delete(key);
+      else {
+        voted.add(key);
+        // Keep the ledger bounded: the oldest vote makes room for the newest.
+        if (voted.size > VOTE_LIMIT) voted.delete(voted.values().next().value);
+      }
       save();
       return voted.has(key);
     }

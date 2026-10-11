@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { createDjVaultHandler } from "../netlify/functions/dj-vault.mjs";
-import { VOTE_STORAGE_KEY, applyVaultRoute, createVaultView, createVoteStore } from "../dj-vault/dj-vault.js";
+import { VOTE_LIMIT, VOTE_STORAGE_KEY, applyVaultRoute, createVaultView, createVoteStore } from "../dj-vault/dj-vault.js";
 import { VAULT_CARD_VARIANTS, availableKeys, baseVotes, filterAndSortTracks, keyOrder, trackAnchor } from "../dj-vault/vault-card.js";
 
 const id = "11111111-1111-4111-8111-111111111111";
@@ -413,6 +413,12 @@ const byClass = (node, tag, className) => node.querySelectorAll(tag).find(n => n
   assert.equal(baseVotes({ votes: -3 }), 0);
   assert.equal(baseVotes({ votes: 1.5 }), 0);
   assert.equal(trackAnchor('"><script>'), "vault-track-script");
+  const bounded = memoryStorage();
+  const capped = createVoteStore(bounded);
+  for (let index = 0; index <= VOTE_LIMIT; index += 1) capped.toggle(`t${index}`);
+  assert.equal(JSON.parse(bounded.data[VOTE_STORAGE_KEY]).length, VOTE_LIMIT, "the vote ledger stays bounded");
+  assert.equal(capped.has("t0"), false, "the oldest vote is evicted first");
+  assert.equal(createVoteStore(bounded).has(`t${VOTE_LIMIT}`), true, "the newest vote survives a reload");
 }
 
 const migration = await readFile(new URL("../netlify/database/migrations/20261011040000_dj_vault.sql", import.meta.url), "utf8");

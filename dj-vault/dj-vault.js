@@ -1,4 +1,28 @@
-import { availableKeys, createVaultCard, filterAndSortTracks } from "./vault-card.js";
+import { availableKeys, baseVotes, createVaultCard, filterAndSortTracks } from "./vault-card.js";
+
+export const VOTE_STORAGE_KEY = "halo.djVault.votes";
+
+// Per-browser vote ledger. Only short, plain track IDs are kept; unreadable or
+// unavailable storage degrades to in-memory votes for the current visit.
+export function createVoteStore(storage) {
+  const valid = id => typeof id === "string" && /^[A-Za-z0-9_-]{1,64}$/.test(id);
+  let voted = new Set();
+  try {
+    const saved = JSON.parse(storage?.getItem(VOTE_STORAGE_KEY) || "[]");
+    if (Array.isArray(saved)) voted = new Set(saved.filter(valid).slice(0, 500));
+  } catch { voted = new Set(); }
+  const save = () => { try { storage?.setItem(VOTE_STORAGE_KEY, JSON.stringify([...voted])); } catch {} };
+  return {
+    has: id => voted.has(String(id)),
+    toggle(id) {
+      const key = String(id);
+      if (!valid(key)) return false;
+      if (voted.has(key)) voted.delete(key); else voted.add(key);
+      save();
+      return voted.has(key);
+    }
+  };
+}
 
 export function applyVaultRoute(document) {
   const body = document?.body;
@@ -8,7 +32,7 @@ export function applyVaultRoute(document) {
   return true;
 }
 
-export function createVaultView({ document, fetch, location, identity, history }) {
+export function createVaultView({ document, fetch, location, identity, history, storage = null }) {
   const grid = document.getElementById("vault-grid");
   const status = document.getElementById("vault-status");
   const retry = document.getElementById("vault-retry");
@@ -23,7 +47,10 @@ export function createVaultView({ document, fetch, location, identity, history }
   const password = document.getElementById("vault-password");
   const confirm = document.getElementById("vault-confirm");
   let tracks = [], authorized = false, authenticated = false, nextOffset = null, generation = 0;
-  let paymentConfirmed = false, paymentError = "";
+  let paymentConfirmed = false, paymentError = "", rendered = new Map(), cueHandled = false;
+  const votes = createVoteStore(storage);
+  const voteCount = track => baseVotes(track) + (votes.has(track.id) ? 1 : 0);
+  const reducedMotion = () => document.defaultView?.matchMedia?.("(prefers-reduced-motion: reduce)").matches !== false;
   const element = (tag, value, className) => {
     const node = document.createElement(tag);
     if (value != null) node.textContent = String(value);
@@ -60,14 +87,31 @@ export function createVaultView({ document, fetch, location, identity, history }
     keyFilter.replaceChildren(all, ...keys.map(key => { const option = element("option", key); option.value = key; return option; }));
     keyFilter.value = keys.includes(selected) ? selected : "all";
   }
+  function vote(track) {
+    const voted = votes.toggle(track.id);
+    return { voted, votes: voteCount(track) };
+  }
+  function focusTrack(card) {
+    card.scrollIntoView?.({ block: "center", behavior: reducedMotion() ? "auto" : "smooth" });
+    (card.querySelector("audio") || card).focus?.({ preventScroll: true });
+  }
+  function jump(track, card) {
+    const params = new URLSearchParams(location.search);
+    params.set("track", String(track.id));
+    history?.replaceState(null, "", `/dj-vault/?${params}`);
+    focusTrack(card);
+    status.textContent = `Cued ${track.title || "edition"}${card.querySelector("audio") ? " — preview ready on the deck." : "."}`;
+  }
   function render() {
-    const visible = filterAndSortTracks(tracks, { sort: sort.value, rarity: rarityFilter.value, bpm: bpmFilter.value, key: keyFilter.value });
+    const visible = filterAndSortTracks(tracks, { sort: sort.value, rarity: rarityFilter.value, bpm: bpmFilter.value, key: keyFilter.value, voteCount });
     const cards = visible.map(track => createVaultCard({
       document, track, authorized,
+      votes: voteCount(track), voted: votes.has(track.id), onVote: vote, onJump: jump,
       onAcquire: acquire,
       onPreviewPlay: audio => grid.querySelectorAll("audio").forEach(other => { if (other !== audio) other.pause(); }),
       onPreviewError: () => { status.textContent = "This preview is unavailable."; }
     }));
+    rendered = new Map(visible.map((track, index) => [String(track.id), cards[index]]));
     const bins = [];
     for (let index = 0; index < cards.length; index += 3) {
       const name = `Crate ${String(index / 3 + 1).padStart(2, "0")}`;
@@ -125,6 +169,11 @@ export function createVaultView({ document, fetch, location, identity, history }
       syncKeyOptions();
       describe(render());
       more.hidden = nextOffset === null;
+      if (!cueHandled) {
+        cueHandled = true;
+        const cued = rendered.get(new URLSearchParams(location.search).get("track"));
+        if (cued) focusTrack(cued);
+      }
     } catch (error) {
       if (current !== generation) return;
       status.textContent = error.message;
@@ -163,7 +212,9 @@ if (typeof window !== "undefined") {
     login: async (email, password) => { await import("/identity.js"); return window.haloIdentity.login(email, password); },
     logout: async () => { await import("/identity.js"); return window.haloIdentity.logout(); }
   };
-  const view = createVaultView({ document: window.document, fetch: window.fetch.bind(window), location: window.location, identity, history: window.history });
+  let storage = null;
+  try { storage = window.localStorage; } catch {}
+  const view = createVaultView({ document: window.document, fetch: window.fetch.bind(window), location: window.location, identity, history: window.history, storage });
   import("/identity.js").then(() => window.haloIdentity.onAuthChange(() => view.load())).catch(() => {});
   view.load();
 }

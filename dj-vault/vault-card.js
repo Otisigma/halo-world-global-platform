@@ -14,6 +14,10 @@ export const BPM_RANGES = Object.freeze({
   "140-159": [140, 159], "160-plus": [160, Infinity]
 });
 
+// Server-provided community counts are optional; anything that is not a safe non-negative integer counts as zero.
+export const baseVotes = track => Number.isSafeInteger(track?.votes) && track.votes >= 0 ? track.votes : 0;
+export const trackAnchor = id => `vault-track-${String(id || "").replace(/[^A-Za-z0-9_-]/g, "") || "edition"}`;
+
 export const variantFor = rarity => Object.hasOwn(VAULT_CARD_VARIANTS, rarity) ? rarity : "white_label";
 
 // Camelot-aware ordering (1A, 1B, 2A … 12B); non-Camelot keys sort alphabetically afterwards.
@@ -23,7 +27,7 @@ export function keyOrder(value) {
 }
 const compareKeys = (a, b) => (keyOrder(a) - keyOrder(b)) || String(a || "").localeCompare(String(b || ""));
 
-export function filterAndSortTracks(tracks, { sort = "newest", rarity = "all", bpm = "all", key = "all" } = {}) {
+export function filterAndSortTracks(tracks, { sort = "newest", rarity = "all", bpm = "all", key = "all", voteCount = baseVotes } = {}) {
   const [low, high] = BPM_RANGES[bpm] || BPM_RANGES.all;
   const list = tracks.map((track, index) => ({ track, index })).filter(({ track }) =>
     (rarity === "all" || variantFor(track.rarity) === rarity)
@@ -34,6 +38,7 @@ export function filterAndSortTracks(tracks, { sort = "newest", rarity = "all", b
     key: (a, b) => compareKeys(a.track.musicalKey, b.track.musicalKey),
     price: (a, b) => (a.track.pricePence ?? Infinity) - (b.track.pricePence ?? Infinity),
     "price-desc": (a, b) => (b.track.pricePence ?? -Infinity) - (a.track.pricePence ?? -Infinity),
+    votes: (a, b) => voteCount(b.track) - voteCount(a.track),
     rarity: (a, b) => VAULT_CARD_VARIANTS[variantFor(b.track.rarity)].rank - VAULT_CARD_VARIANTS[variantFor(a.track.rarity)].rank
   };
   const compare = comparators[sort];
@@ -45,7 +50,7 @@ export function availableKeys(tracks) {
   return [...new Set(tracks.map(track => String(track.musicalKey || "").trim().toUpperCase()).filter(Boolean))].sort(compareKeys);
 }
 
-export function createVaultCard({ document, track, authorized, onAcquire, onPreviewPlay, onPreviewError }) {
+export function createVaultCard({ document, track, authorized, onAcquire, onPreviewPlay, onPreviewError, votes = baseVotes(track), voted = false, onVote, onJump }) {
   const element = (tag, value, className) => {
     const node = document.createElement(tag);
     if (value != null) node.textContent = String(value);
@@ -57,6 +62,8 @@ export function createVaultCard({ document, track, authorized, onAcquire, onPrev
   const format = String(track.deliveryFormat || "").toUpperCase();
   const card = element("article", null, `vault-card vault-card--${variant.replace(/_/g, "-")}`);
   card.setAttribute("data-rarity", variant);
+  card.id = trackAnchor(track.id);
+  card.tabIndex = -1;
 
   const stamp = element("p", config.stamp, "vault-card__stamp");
   const sleeve = element("div", null, "vault-card__sleeve");
@@ -101,6 +108,33 @@ export function createVaultCard({ document, track, authorized, onAcquire, onPrev
   pricing.append(element("span", priced ? price.format(amount / 100) : "Price unavailable", "vault-price"),
     element("small", format ? `${format} lossless delivery` : "Lossless delivery", "vault-format"));
   actions.append(pricing, button);
-  card.append(actions);
+
+  // Community selector console: vote tally, upvote toggle, and quick jump.
+  const voting = element("div", null, "vault-vote");
+  voting.setAttribute("role", "group");
+  voting.setAttribute("aria-label", `Community votes: ${track.title}`);
+  const tally = element("p", null, "vault-vote__tally");
+  const count = element("span", null, "vault-vote__count");
+  tally.append(count, element("span", "selector votes", "vault-vote__unit"));
+  const upvote = element("button", null, "vault-vote__up");
+  upvote.type = "button";
+  const jump = element("button", "Jump to track", "vault-vote__jump");
+  jump.type = "button";
+  jump.setAttribute("aria-label", `Jump to track: ${track.title}`);
+  const paint = (total, active) => {
+    count.textContent = String(total);
+    upvote.textContent = active ? "▲ Upvoted" : "▲ Upvote";
+    upvote.setAttribute("aria-pressed", active ? "true" : "false");
+    upvote.setAttribute("aria-label", `${active ? "Remove upvote" : "Upvote"}: ${track.title} (${total} ${total === 1 ? "vote" : "votes"})`);
+    card.setAttribute("data-voted", active ? "true" : "false");
+  };
+  paint(votes, voted);
+  upvote.addEventListener("click", () => {
+    const next = onVote?.(track);
+    if (next) paint(next.votes, next.voted);
+  });
+  jump.addEventListener("click", () => onJump?.(track, card));
+  voting.append(tally, upvote, jump);
+  card.append(actions, voting);
   return card;
 }

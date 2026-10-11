@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { createDjVaultHandler } from "../netlify/functions/dj-vault.mjs";
-import { applyVaultRoute, createVaultView } from "../dj-vault/dj-vault.js";
-import { VAULT_CARD_VARIANTS, availableKeys, filterAndSortTracks, keyOrder } from "../dj-vault/vault-card.js";
+import { VOTE_STORAGE_KEY, applyVaultRoute, createVaultView, createVoteStore } from "../dj-vault/dj-vault.js";
+import { VAULT_CARD_VARIANTS, availableKeys, baseVotes, filterAndSortTracks, keyOrder, trackAnchor } from "../dj-vault/vault-card.js";
 
 const id = "11111111-1111-4111-8111-111111111111";
 const pack = "22222222-2222-4222-8222-222222222222";
@@ -208,15 +208,17 @@ class Node {
   setAttribute(name, value) { this.attributes[name] = value; }
   addEventListener(name, callback) { this.listeners[name] = callback; }
   focus() { this.focused = true; }
+  scrollIntoView(options) { this.scrolled = options; }
   querySelector(tag) { return this.querySelectorAll(tag)[0]; }
   querySelectorAll(tag) { return this.children.flatMap(child => [ ...(child.tag === tag ? [child] : []), ...child.querySelectorAll(tag) ]); }
 }
-function uiFixture({ mode = "tracks", authorized = false, failure = false } = {}) {
+function uiFixture({ mode = "tracks", authorized = false, failure = false, storage = null } = {}) {
   const nodes = Object.fromEntries(["vault-grid", "vault-status", "vault-retry", "vault-more", "vault-sort", "vault-rarity", "vault-bpm", "vault-key", "vault-login", "vault-auth", "vault-email", "vault-password", "vault-confirm"].map(name => [name, new Node("div")]));
   for (const name of ["vault-rarity", "vault-bpm", "vault-key"]) nodes[name].value = "all";
   nodes["vault-auth"].append(new Node("button"));
-  const state = { nodes, requests: [], destinations: [], mode, authorized, failure };
+  const state = { nodes, requests: [], destinations: [], history: [], mode, authorized, failure };
   const view = createVaultView({
+    storage, history: { replaceState: (...args) => state.history.push(args) },
     document: { getElementById: name => nodes[name], createElement: tag => new Node(tag) },
     location: { get search() { return state.search || ""; }, assign: url => state.destinations.push(url) },
     identity: { login: async (...args) => { state.credentials = args; state.authorized = true; } },
@@ -340,6 +342,79 @@ ui.state.nodes["vault-rarity"].listeners.change();
 assert.equal(ui.state.nodes["vault-grid"].children.length, 1, "filters rebuild crates without empty bins");
 assert.equal(ui.state.nodes["vault-grid"].querySelectorAll("article").length, 1);
 
+// Community voting + quick-jump layer.
+const memoryStorage = (seed = {}) => ({ data: { ...seed }, getItem(key) { return this.data[key] ?? null; }, setItem(key, value) { this.data[key] = String(value); } });
+const byClass = (node, tag, className) => node.querySelectorAll(tag).find(n => n.className === className);
+{
+  const storage = memoryStorage();
+  ui = uiFixture({ mode: "crate", storage });
+  ui.state.tracks = crate.map((t, index) => ({ ...t, votes: [2, 7, "<b>9</b>"][index] }));
+  await ui.view.load();
+  const cards = ui.state.nodes["vault-grid"].querySelectorAll("article");
+  for (const card of cards) {
+    assert.ok(byClass(card, "span", "vault-vote__count"), "every card shows a vote count");
+    assert.ok(byClass(card, "button", "vault-vote__up"), "every card has an upvote control");
+    assert.ok(byClass(card, "button", "vault-vote__jump"), "every card has a jump control");
+    assert.match(card.querySelectorAll("button")[0].textContent, /^Acquire /, "acquire remains the primary card action");
+    assert.equal(card.querySelectorAll("button").filter(b => b.type === "button").length, 3);
+  }
+  assert.deepEqual(cards.map(card => byClass(card, "span", "vault-vote__count").textContent), ["2", "7", "0"], "server counts are integers only");
+  assert.equal(cards[0].id, "vault-track-a1");
+  const up = byClass(cards[0], "button", "vault-vote__up");
+  assert.equal(up.attributes["aria-pressed"], "false");
+  up.listeners.click();
+  assert.equal(byClass(cards[0], "span", "vault-vote__count").textContent, "3", "upvote increments the displayed count");
+  assert.equal(up.attributes["aria-pressed"], "true");
+  assert.equal(up.textContent, "▲ Upvoted");
+  assert.match(up.attributes["aria-label"], /Remove upvote: Newest \(3 votes\)/);
+  assert.deepEqual(JSON.parse(storage.data[VOTE_STORAGE_KEY]), ["a1"], "vote state persists");
+  ui.state.nodes["vault-sort"].value = "votes";
+  ui.state.nodes["vault-sort"].listeners.change();
+  assert.deepEqual(ui.state.nodes["vault-grid"].querySelectorAll("h2").map(n => n.textContent), ["Mid", "Newest", "Oldest"], "most upvoted ranking includes local votes");
+
+  const again = uiFixture({ mode: "crate", storage });
+  again.state.tracks = ui.state.tracks;
+  await again.view.load();
+  const restored = again.state.nodes["vault-grid"].querySelector("article");
+  assert.equal(byClass(restored, "span", "vault-vote__count").textContent, "3", "persisted vote is restored");
+  byClass(restored, "button", "vault-vote__up").listeners.click();
+  assert.equal(byClass(restored, "span", "vault-vote__count").textContent, "2", "a second click removes the vote");
+  assert.deepEqual(JSON.parse(storage.data[VOTE_STORAGE_KEY]), []);
+
+  ui = uiFixture({ mode: "crate", storage });
+  ui.state.search = "?utm=crate";
+  await ui.view.load();
+  const target = ui.state.nodes["vault-grid"].querySelectorAll("article")[1];
+  byClass(target, "button", "vault-vote__jump").listeners.click();
+  assert.deepEqual(ui.state.history.at(-1), [null, "", "/dj-vault/?utm=crate&track=b2"], "jump writes a shareable track cue");
+  assert.equal(target.scrolled.behavior, "auto", "jump falls back to instant scroll without motion preference support");
+  assert.equal(target.focused, true, "jump focuses the edition when it has no preview");
+  assert.match(ui.state.nodes["vault-status"].textContent, /Cued Mid/);
+
+  ui = uiFixture();
+  ui.state.search = `?track=${id}`;
+  await ui.view.load();
+  const cuedCard = ui.state.nodes["vault-grid"].querySelector("article");
+  assert.equal(cuedCard.querySelector("audio").focused, true, "a ?track= cue focuses that edition's preview on load");
+  assert.equal(cuedCard.querySelector("audio").paused, undefined, "cueing never autoplays");
+  byClass(cuedCard, "button", "vault-vote__jump").listeners.click();
+  assert.equal(ui.state.destinations.length, 0, "jump never navigates away from the vault");
+}
+{
+  const broken = { getItem() { throw new Error("blocked"); }, setItem() { throw new Error("blocked"); } };
+  const store = createVoteStore(broken);
+  assert.equal(store.toggle("a1"), true, "votes still work when storage is blocked");
+  assert.equal(store.has("a1"), true);
+  const tampered = createVoteStore(memoryStorage({ [VOTE_STORAGE_KEY]: JSON.stringify(["ok-1", "<img>", 5, "x".repeat(65)]) }));
+  assert.equal(tampered.has("ok-1"), true);
+  assert.equal(tampered.has("<img>"), false, "tampered vote IDs are discarded");
+  assert.equal(createVoteStore(memoryStorage({ [VOTE_STORAGE_KEY]: "{not json" })).has("a1"), false);
+  assert.equal(store.toggle("../bad"), false, "invalid IDs are never stored");
+  assert.equal(baseVotes({ votes: -3 }), 0);
+  assert.equal(baseVotes({ votes: 1.5 }), 0);
+  assert.equal(trackAnchor('"><script>'), "vault-track-script");
+}
+
 const migration = await readFile(new URL("../netlify/database/migrations/20261011040000_dj_vault.sql", import.meta.url), "utf8");
 assert.match(migration, /PRIMARY KEY \(member_id, track_id\)/);
 assert.match(migration, /stripe_session_id TEXT UNIQUE/);
@@ -384,4 +459,6 @@ for (const path of ["../halo.html", "../music/index.html"]) {
 }
 for (const control of ["vault-sort", "vault-rarity", "vault-bpm", "vault-key"]) assert.match(html, new RegExp(`<label for="${control}">`));
 for (const variant of ["test-press", "promo-copy", "vault-only", "selector-exclusive"]) assert.match(css, new RegExp(`\\.vault-card--${variant}`));
+assert.match(html, /<option value="votes">Most upvoted<\/option>/);
+for (const selector of [".vault-vote {", ".vault-vote__count {", '.vault-vote__up[aria-pressed="true"]', ".vault-vote button:hover"]) assert.ok(css.includes(selector), `${selector} styles the selector console`);
 console.log("DJ Vault permission, payment, private delivery, and UI contracts passed");

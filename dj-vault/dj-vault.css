@@ -85,6 +85,16 @@
 .vault-pricing { display: flex; flex-direction: column; gap: 2px; }
 .vault-price { font: bold 1.3rem ui-monospace, monospace; color: #edca85; }
 .vault-format { color: #b9ad97; letter-spacing: .06em; text-transform: uppercase; }
+/* Community selector console: vote tally + quick jump, scoped to vault cards. */
+.vault-card:focus { outline: none; }
+.vault-card:focus-visible { outline: 3px solid #ffda8f; outline-offset: 4px; }
+.vault-vote { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 14px; padding: 8px 10px; border: 1px solid #3c3022; border-radius: 4px; background: linear-gradient(180deg, #171410, #0d0c0a); box-shadow: inset 0 1px 0 #ffffff08; }
+.vault-vote__tally { display: flex; align-items: baseline; gap: 6px; margin: 0 auto 0 0; color: #b9ad97; font: .72rem/1.2 "Courier New", ui-monospace, monospace; letter-spacing: .1em; text-transform: uppercase; }
+.vault-vote__count { min-width: 3ch; padding: 2px 6px; border-radius: 2px; background: #070605; color: #f4bc66; font: 700 1rem/1.2 ui-monospace, monospace; text-align: right; text-shadow: 0 0 8px #ffb44866; font-variant-numeric: tabular-nums; }
+.vault-card .vault-vote button { min-height: 44px; padding: 8px 12px; border-color: #614c30; background: #1d1711; color: #edca85; font: 700 .75rem/1.2 "Courier New", ui-monospace, monospace; letter-spacing: .1em; text-transform: uppercase; transition: background-color .2s ease, border-color .2s ease, color .2s ease; }
+.vault-card .vault-vote button:hover { border-color: #d1aa65; background: #2a2015; color: #ffda8f; }
+.vault-card .vault-vote__up[aria-pressed="true"] { border-color: #f4bc66; background: #f4bc66; color: #1a140c; box-shadow: 0 0 12px #ffb44855; }
+.vault-card .vault-vote__up[aria-pressed="true"]:hover { background: #ffda8f; }
 .dj-vault-room .skip-link, [data-route="dj-vault"] .skip-link { position: absolute; left: 16px; top: -100px; z-index: 1; }
 .dj-vault-room .skip-link:focus, [data-route="dj-vault"] .skip-link:focus { top: 16px; background: #090909; padding: 16px; }
 @media (max-width: 900px) { .vault-bin__sleeves { grid-template-columns: repeat(2, minmax(0, 1fr)); } }

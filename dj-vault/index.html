@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>DJ Vault — HALO</title>
+  <meta name="description" content="Exclusive club-ready mixes, extended editions, and private DJ delivery.">
+  <link rel="stylesheet" href="/dj-vault/dj-vault.css">
+  <link rel="stylesheet" href="/accessibility.css">
+  <script src="/accessibility.js" defer></script>
+  <script src="/stats.js" defer></script>
+  <script src="/site-monitor.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#vault">Skip to DJ Vault</a>
+  <header>
+    <nav aria-label="Main navigation"><a href="/halo">HALO home</a><a href="/dj-deck.html">DJ Deck</a></nav>
+    <button id="vault-login" type="button">Sign in</button>
+  </header>
+  <main id="vault">
+    <p class="eyebrow">HALO // Pro selectors</p>
+    <h1>DJ Vault</h1>
+    <p>Hardcore mixes. Extended editions. Exclusive drops.</p>
+    <p>Public previews are open to everyone. Acquisitions and private catalog access require operator-verified DJ access.</p>
+    <label for="vault-sort">Sort editions</label>
+    <select id="vault-sort"><option value="newest">Newest</option><option value="bpm">BPM</option><option value="key">Musical key</option><option value="price">Price</option></select>
+    <p id="vault-status" role="status" aria-live="polite">Loading vault…</p>
+    <button id="vault-retry" type="button" hidden>Try again</button>
+    <section id="vault-grid" aria-label="DJ Vault editions" aria-busy="true"></section>
+    <button id="vault-more" type="button" hidden>Load more editions</button>
+  </main>
+  <script type="module" src="/dj-vault/dj-vault.js"></script>
+</body>
+</html>

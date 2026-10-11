@@ -3,6 +3,11 @@
   publish = "."
 
 [[redirects]]
+  from = "/dj-vault"
+  to = "/dj-vault/"
+  status = 301
+
+[[redirects]]
   from = "/empath-journey/"
   to = "/empath-journey/index.html"
   status = 200

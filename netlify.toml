@@ -3,9 +3,9 @@
   publish = "."
 
 [[redirects]]
-  from = "/dj-vault"
-  to = "/dj-vault/"
-  status = 301
+  from = "/dj-vault/"
+  to = "/dj-vault/index.html"
+  status = 200
 
 [[redirects]]
   from = "/empath-journey/"

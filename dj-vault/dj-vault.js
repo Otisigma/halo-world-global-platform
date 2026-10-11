@@ -1,13 +1,18 @@
 const price = new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP" });
 
-export function createVaultView({ document, fetch, location, identity }) {
+export function createVaultView({ document, fetch, location, identity, history }) {
   const grid = document.getElementById("vault-grid");
   const status = document.getElementById("vault-status");
   const retry = document.getElementById("vault-retry");
   const more = document.getElementById("vault-more");
   const sort = document.getElementById("vault-sort");
   const login = document.getElementById("vault-login");
+  const auth = document.getElementById("vault-auth");
+  const email = document.getElementById("vault-email");
+  const password = document.getElementById("vault-password");
+  const confirm = document.getElementById("vault-confirm");
   let tracks = [], authorized = false, authenticated = false, nextOffset = null, generation = 0;
+  let paymentConfirmed = false;
   const element = (tag, value, className) => {
     const node = document.createElement(tag);
     if (value != null) node.textContent = String(value);
@@ -76,6 +81,7 @@ export function createVaultView({ document, fetch, location, identity }) {
     status.textContent = "Loading vault…";
     retry.hidden = true;
     more.hidden = true;
+    confirm.hidden = true;
     if (!append) { tracks = []; authorized = false; grid.replaceChildren(); }
     try {
       const session = await api("session");
@@ -84,8 +90,18 @@ export function createVaultView({ document, fetch, location, identity }) {
       authenticated = session.authenticated === true;
       login.textContent = session.authenticated ? "Account / sign out" : "Sign in";
       const params = new URLSearchParams(location.search);
-      if (!append && authorized && params.has("session_id")) {
-        await api("confirm", { sessionId: params.get("session_id"), trackId: params.get("trackId") });
+      let paymentError = "";
+      if (!append && authorized && params.has("session_id") && !paymentConfirmed) {
+        try {
+          await api("confirm", { sessionId: params.get("session_id"), trackId: params.get("trackId") });
+          paymentConfirmed = true;
+          params.delete("session_id");
+          params.delete("trackId");
+          history?.replaceState(null, "", `/dj-vault/${params.size ? `?${params}` : ""}`);
+        } catch (error) {
+          paymentError = `Payment confirmation needs attention: ${error.message}`;
+          confirm.hidden = false;
+        }
       }
       const data = await api(`tracks?offset=${append ? nextOffset : 0}`);
       if (current !== generation) return;
@@ -94,6 +110,7 @@ export function createVaultView({ document, fetch, location, identity }) {
       nextOffset = Number.isSafeInteger(data.nextOffset) ? data.nextOffset : null;
       render();
       status.textContent = tracks.length ? `${tracks.length} editions loaded.${authorized ? "" : " Sign in with verified DJ access to acquire."}` : "No DJ Vault editions are available yet.";
+      if (paymentError) status.textContent += ` ${paymentError}`;
       more.hidden = nextOffset === null;
     } catch (error) {
       if (current !== generation) return;
@@ -104,19 +121,35 @@ export function createVaultView({ document, fetch, location, identity }) {
   retry.addEventListener("click", () => load());
   more.addEventListener("click", () => load(true));
   sort.addEventListener("change", render);
+  confirm.addEventListener("click", () => load());
   login.addEventListener("click", async () => {
-    try { if (authenticated) await identity.logout(); else await identity.login(); await load(); }
+    try {
+      if (authenticated) { await identity.logout(); await load(); }
+      else { auth.hidden = false; email.focus(); }
+    }
     catch { status.textContent = "Sign-in is unavailable. Please try again."; }
+  });
+  auth.addEventListener("submit", async event => {
+    event.preventDefault();
+    const submit = auth.querySelector("button");
+    submit.disabled = true;
+    try {
+      await identity.login(email.value, password.value);
+      password.value = "";
+      auth.hidden = true;
+      await load();
+    } catch { password.value = ""; status.textContent = "Sign-in failed. Check your credentials and try again."; }
+    finally { submit.disabled = false; }
   });
   return { load };
 }
 
 if (typeof window !== "undefined") {
   const identity = {
-    login: async () => { await import("/identity.js"); return window.haloIdentity.login(); },
+    login: async (email, password) => { await import("/identity.js"); return window.haloIdentity.login(email, password); },
     logout: async () => { await import("/identity.js"); return window.haloIdentity.logout(); }
   };
-  const view = createVaultView({ document: window.document, fetch: window.fetch.bind(window), location: window.location, identity });
+  const view = createVaultView({ document: window.document, fetch: window.fetch.bind(window), location: window.location, identity, history: window.history });
   import("/identity.js").then(() => window.haloIdentity.onAuthChange(() => view.load())).catch(() => {});
   view.load();
 }

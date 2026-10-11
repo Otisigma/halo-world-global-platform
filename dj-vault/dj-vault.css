@@ -1,7 +1,9 @@
 :root { color-scheme: dark; font-family: system-ui, sans-serif; background: #090909; color: #eee8de; }
 * { box-sizing: border-box; }
 body { margin: 0; }
-header, main { max-width: 1200px; margin: auto; padding: 24px; }
+header, main, #vault-auth { max-width: 1200px; margin: auto; padding: 24px; }
+#vault-auth { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+input { font: inherit; padding: 12px; border: 1px solid #95713a; border-radius: 8px; max-width: 100%; min-width: 0; }
 header, nav, .vault-meta, .vault-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; justify-content: space-between; }
 main { padding-bottom: 64px; }
 h1 { font-size: clamp(2.5rem, 7vw, 5rem); margin: 12px 0; color: #edca85; }

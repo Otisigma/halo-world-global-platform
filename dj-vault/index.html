@@ -17,6 +17,13 @@
     <nav aria-label="Main navigation"><a href="/halo">HALO home</a><a href="/dj-deck.html">DJ Deck</a></nav>
     <button id="vault-login" type="button">Sign in</button>
   </header>
+  <form id="vault-auth" hidden>
+    <label for="vault-email">Email</label>
+    <input id="vault-email" type="email" autocomplete="username" required>
+    <label for="vault-password">Password</label>
+    <input id="vault-password" type="password" autocomplete="current-password" required>
+    <button type="submit">Sign in to DJ Vault</button>
+  </form>
   <main id="vault">
     <p class="eyebrow">HALO // Pro selectors</p>
     <h1>DJ Vault</h1>
@@ -26,6 +33,7 @@
     <select id="vault-sort"><option value="newest">Newest</option><option value="bpm">BPM</option><option value="key">Musical key</option><option value="price">Price</option></select>
     <p id="vault-status" role="status" aria-live="polite">Loading vault…</p>
     <button id="vault-retry" type="button" hidden>Try again</button>
+    <button id="vault-confirm" type="button" hidden>Retry payment confirmation</button>
     <section id="vault-grid" aria-label="DJ Vault editions" aria-busy="true"></section>
     <button id="vault-more" type="button" hidden>Load more editions</button>
   </main>

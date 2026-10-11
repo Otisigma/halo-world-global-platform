@@ -152,19 +152,24 @@ class Node {
   replaceChildren(...children) { this.children = children; }
   setAttribute(name, value) { this.attributes[name] = value; }
   addEventListener(name, callback) { this.listeners[name] = callback; }
+  focus() { this.focused = true; }
+  querySelector(tag) { return this.querySelectorAll(tag)[0]; }
   querySelectorAll(tag) { return this.children.flatMap(child => [ ...(child.tag === tag ? [child] : []), ...child.querySelectorAll(tag) ]); }
 }
 function uiFixture({ mode = "tracks", authorized = false, failure = false } = {}) {
-  const nodes = Object.fromEntries(["vault-grid", "vault-status", "vault-retry", "vault-more", "vault-sort", "vault-login"].map(name => [name, new Node("div")]));
+  const nodes = Object.fromEntries(["vault-grid", "vault-status", "vault-retry", "vault-more", "vault-sort", "vault-login", "vault-auth", "vault-email", "vault-password", "vault-confirm"].map(name => [name, new Node("div")]));
+  nodes["vault-auth"].append(new Node("button"));
   const state = { nodes, requests: [], destinations: [], mode, authorized, failure };
   const view = createVaultView({
     document: { getElementById: name => nodes[name], createElement: tag => new Node(tag) },
-    location: { search: "", assign: url => state.destinations.push(url) }, identity: { login: async () => {} },
+    location: { get search() { return state.search || ""; }, assign: url => state.destinations.push(url) },
+    identity: { login: async (...args) => { state.credentials = args; state.authorized = true; } },
     fetch: async (url, options) => {
       state.requests.push({ url, options });
       if (state.failure) return Response.json({}, { status: 500 });
       if (url.endsWith("/session")) return Response.json({ authenticated: state.authorized, authorized: state.authorized });
       if (url.endsWith("/checkout")) return Response.json({ checkoutUrl: "javascript:alert(1)" });
+      if (url.endsWith("/confirm")) return Response.json({}, { status: 404 });
       return Response.json(state.mode === "malformed" ? { success: false, tracks: [] }
         : { success: true, tracks: state.mode === "empty" ? [] : catalog.tracks, nextOffset: null });
     }
@@ -182,6 +187,14 @@ assert.equal(grid.querySelectorAll("h2")[0].textContent, track.title, "metadata 
 assert.equal(grid.querySelectorAll("button")[0].disabled, true, "anonymous acquisition is disabled");
 assert.equal(grid.querySelectorAll("audio")[0].preload, "none");
 assert.equal(grid.querySelectorAll("span").find(n => n.className === "vault-price").textContent, "£4.99");
+await ui.state.nodes["vault-login"].listeners.click();
+assert.equal(ui.state.nodes["vault-auth"].hidden, false);
+assert.equal(ui.state.nodes["vault-email"].focused, true);
+ui.state.nodes["vault-email"].value = "dj@example.test";
+ui.state.nodes["vault-password"].value = "test-only-password";
+await ui.state.nodes["vault-auth"].listeners.submit({ preventDefault() {} });
+assert.deepEqual(ui.state.credentials, ["dj@example.test", "test-only-password"]);
+assert.equal(ui.state.nodes["vault-password"].value, "");
 for (const [options, pattern] of [[{ mode: "empty" }, /No DJ Vault/], [{ failure: true }, /unavailable/], [{ mode: "malformed" }, /Invalid vault response/]]) {
   ui = uiFixture(options);
   await ui.view.load();
@@ -198,6 +211,14 @@ assert.equal(ui.state.destinations.length, 0, "unsafe checkout destinations must
 ui.state.authorized = false;
 await ui.view.load();
 assert.equal(ui.state.nodes["vault-grid"].querySelectorAll("button")[0].disabled, true, "session loss disables acquisition");
+ui = uiFixture({ authorized: true });
+ui.state.search = `?session_id=cs_invalid&trackId=${id}`;
+await ui.view.load();
+assert.equal(ui.state.nodes["vault-grid"].children.length, 1, "failed confirmation must not block browsing");
+assert.match(ui.state.nodes["vault-status"].textContent, /Payment confirmation needs attention/);
+assert.equal(ui.state.nodes["vault-confirm"].hidden, false);
+await ui.state.nodes["vault-confirm"].listeners.click();
+assert.equal(ui.state.nodes["vault-grid"].children.length, 1);
 
 const migration = await readFile(new URL("../netlify/database/migrations/20261011040000_dj_vault.sql", import.meta.url), "utf8");
 assert.match(migration, /PRIMARY KEY \(member_id, track_id\)/);

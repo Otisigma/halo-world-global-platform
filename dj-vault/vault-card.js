@@ -131,7 +131,11 @@ export function createVaultCard({ document, track, authorized, onAcquire, onPrev
   paint(votes, voted);
   upvote.addEventListener("click", () => {
     const next = onVote?.(track);
-    if (next) paint(next.votes, next.voted);
+    if (typeof next?.then !== "function") { if (next) paint(next.votes, next.voted); return; }
+    // Server-backed votes: block repeat clicks until the shared total comes back.
+    upvote.disabled = true;
+    return next.then(result => { if (result) paint(result.votes, result.voted); })
+      .finally(() => { upvote.disabled = false; });
   });
   jump.addEventListener("click", () => onJump?.(track, card));
   voting.append(tally, upvote, jump);

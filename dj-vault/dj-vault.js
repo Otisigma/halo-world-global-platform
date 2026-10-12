@@ -57,6 +57,8 @@ export function createVaultView({ document, fetch, location, identity, history, 
   const mixGrid = document.getElementById("vault-mixes");
   const mixStatus = document.getElementById("vault-mix-status");
   const uploadLink = document.getElementById("vault-upload-link");
+  const featuredContainer = document.getElementById("vault-shop-push-container");
+  const featuredSlot = document.getElementById("vault-shop-push");
   let tracks = [], authorized = false, authenticated = false, nextOffset = null, generation = 0;
   let paymentConfirmed = false, paymentError = "", rendered = new Map(), cueHandled = false;
   let mixGeneration = 0;
@@ -156,6 +158,30 @@ export function createVaultView({ document, fetch, location, identity, history, 
       + (paymentError ? ` ${paymentError}` : "");
   }
   function refilter() { describe(render()); }
+  async function loadFeatured(current) {
+    if (!featuredContainer || !featuredSlot) return;
+    featuredContainer.hidden = true;
+    featuredSlot.replaceChildren();
+    try {
+      const data = await api("featured-push");
+      if (current !== generation || data.success !== true || !validMixId(data.edition?.id)) return;
+      const mix = data.edition;
+      const card = createMixCard({ document, mix });
+      card.id = `vault-featured-${mix.id}`;
+      const tag = { featured: "Featured", white_label: "White label", test_press: "Test press" };
+      card.querySelector("p").textContent = tag[mix.pushPriority] || tag.featured;
+      const amount = mix.commerce?.priceMinor;
+      const currency = mix.commerce?.currency;
+      const free = mix.salesStatus === "stream_only" && mix.commerce?.clientSaleEnabled === false;
+      const price = free ? "Free stream" : Number.isSafeInteger(amount) && amount >= 100 && /^[A-Z]{3}$/.test(currency || "")
+        ? new Intl.NumberFormat("en-GB", { style: "currency", currency }).format(amount / 100) : "Price unavailable";
+      card.append(element("p", price, "vault-price"));
+      featuredSlot.replaceChildren(card);
+      featuredContainer.hidden = false;
+    } catch {
+      // An unavailable banner must not block catalog browsing or checkout.
+    }
+  }
   async function loadMixes() {
     const current = ++mixGeneration;
     mixGrid.replaceChildren();
@@ -197,6 +223,7 @@ export function createVaultView({ document, fetch, location, identity, history, 
     confirm.hidden = true;
     if (!append) { tracks = []; authorized = false; grid.replaceChildren(); }
     const mixesLoaded = !append ? loadMixes() : null;
+    const featuredLoaded = !append ? loadFeatured(current) : null;
     try {
       const session = await api("session");
       if (current !== generation) return;
@@ -237,6 +264,7 @@ export function createVaultView({ document, fetch, location, identity, history, 
       retry.hidden = false;
     } finally {
       await mixesLoaded;
+      await featuredLoaded;
       if (current === generation) grid.setAttribute("aria-busy", "false");
     }
   }

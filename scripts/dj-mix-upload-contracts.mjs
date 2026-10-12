@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import { createUploadMixHandler, sniffAudioType, validateMixMetadata, DEFAULT_BPM, DEFAULT_GENRE } from "../netlify/functions/upload-mix.mjs";
 import { createMixUploadView, validateMixUpload, audioContentType, MIX_CHUNK_BYTES } from "../dj-vault/upload-mix.js";
 import { createVaultView } from "../dj-vault/dj-vault.js";
+import { createDjVaultHandler } from "../netlify/functions/dj-vault.mjs";
 
 const origin = "https://halo.example";
 const uploadId = "33333333-3333-4333-8333-333333333333";
@@ -27,27 +28,41 @@ assert.match(validateMixMetadata({ title: "Ok mix", bpm: 300, rightsAttested: tr
 assert.match(validateMixMetadata({ title: "Ok mix", bpm: 12.5, rightsAttested: true }).error, /BPM/);
 assert.match(validateMixMetadata({ title: "Ok mix" }).error, /rights/);
 assert.deepEqual(validateMixMetadata({ title: "  Read   The Room ", rightsAttested: true }),
-  { title: "Read The Room", bpm: DEFAULT_BPM, genre: DEFAULT_GENRE, durationSeconds: 0 }, "presets default to 122 BPM Deep / Afro House");
+  { title: "Read The Room", bpm: DEFAULT_BPM, genre: DEFAULT_GENRE, durationSeconds: 0, isShopPush: false, pushPriority: "featured" }, "presets default to 122 BPM Deep / Afro House");
+for (const isShopPush of ["true", "false", 1, null]) {
+  assert.match(validateMixMetadata({ title: "Mix", rightsAttested: true, isShopPush }).error, /boolean/);
+}
+assert.match(validateMixMetadata({ title: "Mix", rightsAttested: true, pushPriority: "<script>" }).error, /tag/);
 
 // --- Handler fixture ----------------------------------------------------------------------------
 function fixture({ role = "admin", user = { id: "member-1", email: "dj@halo.example" }, failDb = false } = {}) {
-  const state = { blobs: new Map(), meta: new Map(), mixes: new Map(), plans: [], writes: [] };
+  const state = { blobs: new Map(), meta: new Map(), mixes: new Map(), plans: [], writes: [], featured: null };
   const db = { async sql(strings, ...values) {
     const query = strings.join("?");
     if (failDb) throw new Error("relation halo_mixes does not exist");
     if (query.includes("FROM halo_dj_vault_roles")) return role ? [{ role }] : [];
     if (query.includes("SELECT id, member_id, title FROM halo_mixes")) return state.mixes.has(values[0]) ? [state.mixes.get(values[0])] : [];
+    if (query.includes("FROM halo_dj_shop_featured")) {
+      assert.match(query, /m\.visibility = 'room'/, "private mixes cannot appear in the public banner");
+      const mix = state.mixes.get(state.featured?.id);
+      return mix?.visibility === "room" ? [{ ...mix, push_priority: state.featured.priority }] : [];
+    }
     if (query.includes("INSERT INTO halo_mixes")) {
       state.writes.push({ query, values });
       assert.ok(query.includes("WITH mix AS") && query.includes("INSERT INTO halo_mix_release_plans"), "mix + catalog plan are one atomic statement");
       assert.ok(query.includes("ON CONFLICT DO NOTHING"), "duplicate publishes never raise raw conflict errors");
+      assert.match(query, /INSERT INTO halo_dj_shop_featured[\s\S]*FROM mix[\s\S]*ON CONFLICT \(slot\) DO UPDATE/,
+        "the singleton slot is replaced atomically, only for newly inserted mixes");
+      if (state.failPublish) throw new Error("publish failed");
       assert.ok(query.includes("'room'") && query.includes("'free_stream'") && query.includes("'approved'"), "published straight to the room listing");
       const [id, memberId, , title, description, blobKey, chunkCount, contentType, byteSize, duration] = values;
       if (state.mixes.has(id)) return [];
       const metadata = JSON.parse(values.find(value => typeof value === "string" && value.startsWith("{\"bpm\"")));
       state.mixes.set(id, { id, member_id: memberId, title, description, blob_key: blobKey, chunk_count: chunkCount,
-        content_type: contentType, byte_size: byteSize, duration_seconds: duration, visibility: "room" });
+        content_type: contentType, byte_size: byteSize, duration_seconds: duration, visibility: "room",
+        remixer_name: "DJ HALO X", price_minor: 0, currency: "USD", sales_status: "stream_only", client_sale_enabled: false });
       state.plans.push({ mix_id: id, metadata });
+      if (values.at(-1) === true) state.featured = { id, priority: values.at(-2) };
       return [{ id, title }];
     }
     return [];
@@ -61,7 +76,8 @@ function fixture({ role = "admin", user = { id: "member-1", email: "dj@halo.exam
   };
   const handler = createUploadMixHandler({ getDatabase: async () => db, getUser: async () => user,
     membershipFor: async (_db, member) => ({ member_id: member.id, actor_id: `actor-${member.id}`, display_name: "DJ HALO X" }), store });
-  return { handler, state };
+  const featuredHandler = createDjVaultHandler({ getDatabase: async () => db, getUser: async () => null });
+  return { handler, featuredHandler, state };
 }
 const chunkRequest = (bytes, { index = 0, count = 2, id = uploadId, type = "audio/mpeg", name = "mix.mp3", headers = {} } = {}) => {
   const form = new FormData();
@@ -143,6 +159,7 @@ assert.equal(mix.description, "Deep / Afro House · 122 BPM DJ mix");
 assert.equal(mix.blob_key, `member-1/${uploadId}/master/parts/`);
 assert.equal(mix.duration_seconds, 3540);
 assert.equal(mix.visibility, "room");
+assert.equal(f.state.featured, null, "ordinary uploads do not populate the banner");
 assert.deepEqual(f.state.plans[0].metadata, { bpm: 122, genre: "Deep / Afro House", publicationStatus: "published", uploadSource: "dj_mix_ingest",
   salesPageUrl: `/mixes/?mix=${uploadId}#editions`, vaultUrl: `/dj-vault/?mix=${uploadId}`, rightsAttested: true, clientSaleEnabled: false });
 
@@ -169,6 +186,43 @@ console.error = quiet;
 assert.equal(response.status, 503);
 assert.doesNotMatch(JSON.stringify(await response.json()), /relation|halo_mixes/);
 
+// Featured pushes replace one slot; retries and failed/ordinary publishes leave it alone.
+const featuredRequest = () => new Request(`${origin}/api/dj-vault/featured-push`);
+assert.deepEqual(await (await f.featuredHandler(featuredRequest())).json(), { success: true, edition: null });
+assert.equal((await f.featuredHandler(new Request(`${origin}/api/dj-vault/featured-push`, { method: "POST" }))).status, 405);
+async function publishNext(id, extra = {}) {
+  await f.handler(chunkRequest(mp3, { id, count: 1 }));
+  return f.handler(publishRequest({ ...publishBody, uploadId: id, chunkCount: 1, byteSize: mp3.length, ...extra }));
+}
+const firstFeatured = "55555555-5555-4555-8555-555555555555";
+const nextFeatured = "66666666-6666-4666-8666-666666666666";
+assert.equal((await publishNext(firstFeatured, { isShopPush: true, pushPriority: "white_label" })).status, 201);
+assert.deepEqual(f.state.featured, { id: firstFeatured, priority: "white_label" });
+assert.equal((await publishNext(nextFeatured, { isShopPush: true, pushPriority: "test_press" })).status, 201);
+assert.deepEqual(f.state.featured, { id: nextFeatured, priority: "test_press" });
+assert.equal(f.state.mixes.has(firstFeatured), true, "replaced mixes remain in the catalog");
+await publishNext(firstFeatured, { isShopPush: true });
+assert.equal(f.state.featured.id, nextFeatured, "a delayed retry never reclaims the featured slot");
+assert.equal((await publishNext("77777777-7777-4777-8777-777777777777")).status, 201);
+assert.equal(f.state.featured.id, nextFeatured, "ordinary uploads preserve the current feature");
+f.state.failPublish = true;
+console.error = () => {};
+assert.equal((await publishNext("88888888-8888-4888-8888-888888888888", { isShopPush: true })).status, 503);
+console.error = quiet;
+f.state.failPublish = false;
+assert.equal(f.state.featured.id, nextFeatured, "failed publishes do not clear the prior feature");
+const featuredResponse = await f.featuredHandler(featuredRequest());
+assert.equal(featuredResponse.status, 200, "anonymous visitors can fetch the public feature");
+assert.equal(featuredResponse.headers.get("Cache-Control"), "private, no-store");
+const featured = (await featuredResponse.json()).edition;
+assert.equal(featured.id, nextFeatured);
+assert.equal(featured.pushPriority, "test_press");
+assert.deepEqual(featured.commerce, { priceMinor: 0, currency: "USD", clientSaleEnabled: false });
+assert.doesNotMatch(JSON.stringify(featured), /blob_key|member_id/, "public payload excludes private storage and owner fields");
+f.state.mixes.get(nextFeatured).visibility = "private";
+assert.equal((await (await f.featuredHandler(featuredRequest())).json()).edition, null, "private feature is hidden");
+f.state.mixes.get(nextFeatured).visibility = "room";
+
 // --- Admin UI -----------------------------------------------------------------------------------
 const file = (name, type, size = 1024) => ({ name, type, size, lastModified: 1, slice: () => new Blob(["a"]) });
 assert.equal(audioContentType(file("set.MP3", "")), "audio/mpeg");
@@ -177,7 +231,8 @@ assert.match(validateMixUpload({ title: "Mix", file: file("a.pdf", "application/
 assert.match(validateMixUpload({ title: "Mix", file: file("a.mp3", "audio/mpeg", 129 * 1024 * 1024), rightsAttested: true }).error, /128 MB/);
 assert.match(validateMixUpload({ title: "Mix", file: null, rightsAttested: true }).error, /audio file/);
 assert.deepEqual(validateMixUpload({ title: "Mix", bpm: "", genre: "", file: file("a.wav", "audio/wav"), rightsAttested: true }),
-  { title: "Mix", bpm: 122, genre: "Deep / Afro House" });
+  { title: "Mix", bpm: 122, genre: "Deep / Afro House", isShopPush: false, pushPriority: "featured" });
+assert.match(validateMixUpload({ title: "Mix", file: file("a.mp3", "audio/mpeg"), rightsAttested: true, pushPriority: "bad" }).error, /tag/);
 
 class Node {
   constructor(tag) { this.tag = tag; this.children = []; this.listeners = {}; this.attributes = {}; this.dataset = {}; this.hidden = false; this.value = ""; this.textContent = ""; }
@@ -192,7 +247,7 @@ class Node {
   querySelectorAll(tag) { return this.children.flatMap(child => [...(child.tag === tag ? [child] : []), ...child.querySelectorAll(tag)]); }
 }
 function uploadUi({ session = { authenticated: true, authorized: true, canRoute: true }, publish } = {}) {
-  const ids = ["mix-upload-form", "mix-title", "mix-bpm", "mix-genre", "mix-file", "mix-rights", "mix-submit", "mix-upload-status", "mix-upload-progress", "mix-upload-result", "mix-upload-gate"];
+  const ids = ["mix-upload-form", "mix-title", "mix-bpm", "mix-genre", "mix-file", "mix-rights", "mix-submit", "mix-upload-status", "mix-upload-progress", "mix-upload-result", "mix-upload-gate", "mix-shop-push", "mix-push-priority"];
   const nodes = Object.fromEntries(ids.map(name => [name, new Node("div")]));
   const state = { nodes, chunks: [], publishes: [], ids: 0 };
   const view = createMixUploadView({
@@ -248,11 +303,17 @@ assert.equal(data.status, "published");
 const [firstAttempt, retryAttempt] = ui.state.chunks.map(options => options.buildBody({ chunkIndex: 0, chunkCount: 1, start: 0, end: 1 }).get("uploadId"));
 assert.equal(firstAttempt, retryAttempt, "retrying the same file resumes the same upload ID");
 assert.deepEqual(ui.state.publishes[0], { uploadId: firstAttempt, chunkCount: 1, byteSize: 1024, contentType: "audio/mpeg", title: "Read The Room",
-  bpm: 124, genre: "Afro House", rightsAttested: true, durationSeconds: 3600 });
+  bpm: 124, genre: "Afro House", rightsAttested: true, durationSeconds: 3600, isShopPush: false, pushPriority: "featured" });
 assert.equal(ui.nodes["mix-upload-status"].dataset.state, "success");
 assert.equal(ui.nodes["mix-upload-status"].textContent, "\"<b>Mix</b>\" is published and live in the DJ Vault.", "server text is rendered as text");
 assert.deepEqual(ui.nodes["mix-upload-result"].children.map(link => link.href), [`/dj-vault/?mix=${firstAttempt}`, `/mixes/?mix=${firstAttempt}`]);
 assert.equal(ui.nodes["mix-upload-progress"].value, 100);
+ui.nodes["mix-file"].files = [file("featured.mp3", "audio/mpeg")];
+ui.nodes["mix-shop-push"].checked = true;
+ui.nodes["mix-push-priority"].value = "white_label";
+await ui.view.upload();
+assert.equal(ui.state.publishes.at(-1).isShopPush, true, "toggle reaches the publish endpoint");
+assert.equal(ui.state.publishes.at(-1).pushPriority, "white_label");
 
 ui = uploadUi({ publish: () => Response.json({ message: "Add a mix title between 2 and 100 characters." }, { status: 400 }) });
 await ui.view.init();
@@ -271,16 +332,19 @@ const uploadSource = await readFile(new URL("../netlify/functions/upload-mix.mjs
 assert.match(uploadSource, /getStore\(\{ name: "halo-mixes"/, "ingest writes to the same blob store the mix player streams from");
 assert.match(uploadSource, /path: "\/api\/upload-mix"/);
 
-const vaultIds = ["vault-grid", "vault-status", "vault-retry", "vault-more", "vault-sort", "vault-rarity", "vault-bpm", "vault-key", "vault-login", "vault-auth", "vault-email", "vault-password", "vault-confirm", "vault-mixes", "vault-mix-status", "vault-upload-link"];
+const vaultIds = ["vault-grid", "vault-status", "vault-retry", "vault-more", "vault-sort", "vault-rarity", "vault-bpm", "vault-key", "vault-login", "vault-auth", "vault-email", "vault-password", "vault-confirm", "vault-mixes", "vault-mix-status", "vault-upload-link", "vault-shop-push-container", "vault-shop-push"];
 const vaultNodes = Object.fromEntries(vaultIds.map(name => [name, new Node("div")]));
 for (const name of ["vault-rarity", "vault-bpm", "vault-key"]) vaultNodes[name].value = "all";
 vaultNodes["vault-sort"].value = "newest";
 vaultNodes["vault-upload-link"].hidden = true;
 const listed = { id: uploadId, title: mix.title, description: mix.description, creator: { name: "DJ HALO X" } };
+let banner = { ...featured, title: "<img src=x onerror=alert(1)>", creator: { name: "<script>artist</script>" } };
+let failBanner = false;
 const vault = createVaultView({
   document: { getElementById: name => vaultNodes[name], createElement: tag => new Node(tag) },
   location: { search: `?mix=${uploadId}`, assign() {} }, identity: {}, history: { replaceState() {} },
-  fetch: async url => url.startsWith("/api/mixes") ? Response.json({ mixes: [listed] })
+  fetch: async url => url.endsWith("/featured-push") ? failBanner ? new Response("", { status: 503 }) : Response.json({ success: true, edition: banner })
+    : url.startsWith("/api/mixes") ? Response.json({ mixes: [listed] })
     : url.endsWith("/session") ? Response.json({ authenticated: true, authorized: true, canRoute: true })
       : Response.json({ success: true, tracks: [], nextOffset: null })
 });
@@ -291,16 +355,41 @@ assert.equal(shopCard.attributes["aria-current"], "true");
 assert.equal(shopCard.querySelector("h2").textContent, "Read The Room (DJ Mix)");
 assert.ok(shopCard.querySelectorAll("p").some(node => node.textContent === "Deep / Afro House · 122 BPM DJ mix"), "BPM and genre are visible on the card");
 assert.equal(vaultNodes["vault-upload-link"].hidden, false, "selectors see the upload entry point");
+let bannerCard = vaultNodes["vault-shop-push"].children[0];
+assert.equal(vaultNodes["vault-shop-push-container"].hidden, false);
+assert.equal(bannerCard.querySelector("h2").textContent, banner.title, "untrusted title remains text");
+assert.equal(bannerCard.querySelector("p").textContent, "Test press");
+assert.ok(bannerCard.querySelectorAll("p").some(node => node.textContent === "Free stream"));
+assert.equal(bannerCard.querySelector("a").href, `/mixes/?mix=${nextFeatured}`, "uses the existing player/editions path");
+banner = { ...banner, salesStatus: "ready", commerce: { priceMinor: 1299, currency: "GBP", clientSaleEnabled: true } };
+await vault.load();
+bannerCard = vaultNodes["vault-shop-push"].children[0];
+assert.ok(bannerCard.querySelectorAll("p").some(node => node.textContent === "£12.99"), "price comes from catalog metadata");
+banner = null;
+await vault.load();
+assert.equal(vaultNodes["vault-shop-push-container"].hidden, true, "empty feature leaves no banner");
+failBanner = true;
+await vault.load();
+assert.equal(vaultNodes["vault-shop-push-container"].hidden, true, "feature failure does not leave stale content");
+assert.equal(vaultNodes["vault-mixes"].children.length, 1, "feature failure does not block normal mix listing");
 
 // --- Static wiring ------------------------------------------------------------------------------
 const page = await readFile(new URL("../dj-vault/upload/index.html", import.meta.url), "utf8");
-for (const id of ["mix-title", "mix-bpm", "mix-genre", "mix-file", "mix-rights"]) assert.match(page, new RegExp(`<label[^>]*for="${id}"`), `${id} is labelled`);
+for (const id of ["mix-title", "mix-bpm", "mix-genre", "mix-file", "mix-rights", "mix-shop-push", "mix-push-priority"]) assert.match(page, new RegExp(`<label[^>]*for="${id}"`), `${id} is labelled`);
+assert.match(page, /Push to DJ Shop Featured Banner/);
 assert.match(page, /type="file" accept="audio\/\*/);
 assert.match(page, /<script src="\/upload-progress\.js"><\/script>/);
 assert.match(page, /id="mix-upload-status" role="status" aria-live="polite"/);
 assert.match(page, /name="robots" content="noindex, nofollow"/);
 const vaultHtml = await readFile(new URL("../dj-vault/index.html", import.meta.url), "utf8");
 assert.match(vaultHtml, /<a id="vault-upload-link" href="\/dj-vault\/upload\/" hidden>/);
+assert.match(vaultHtml, /id="vault-shop-push-container"[^>]*aria-labelledby="shop-push-title" hidden/);
+assert.ok(vaultHtml.indexOf('id="vault-shop-push-container"') < vaultHtml.indexOf('id="vault-grid"'), "banner is above the crates");
+const migration = await readFile(new URL("../netlify/database/migrations/20261012040000_dj_shop_featured.sql", import.meta.url), "utf8");
+assert.match(migration, /CREATE TABLE IF NOT EXISTS halo_dj_shop_featured/);
+assert.match(migration, /PRIMARY KEY[^]*CHECK \(slot = 'featured'\)/, "database enforces one banner slot");
+assert.match(migration, /REFERENCES halo_mixes\(id\) ON DELETE CASCADE/, "deleted mixes cannot leave dangling features");
+assert.match(migration, /CHECK \(push_priority IN \('featured', 'white_label', 'test_press'\)\)/);
 const netlifyToml = await readFile(new URL("../netlify.toml", import.meta.url), "utf8");
 assert.match(netlifyToml, /from = "\/dj-vault\/upload\/"\n {2}to = "\/dj-vault\/upload\/index.html"/);
 

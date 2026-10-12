@@ -18,7 +18,7 @@ export function audioContentType(file) {
     : /\.ogg$/i.test(name) ? "audio/ogg" : /\.webm$/i.test(name) ? "audio/webm" : /\.mp3$/i.test(name) ? "audio/mpeg" : "";
 }
 
-export function validateMixUpload({ title, bpm, genre, file, rightsAttested }) {
+export function validateMixUpload({ title, bpm, genre, file, rightsAttested, isShopPush = false, pushPriority = "featured" }) {
   const cleanTitle = String(title || "").trim().replace(/\s+/g, " ");
   if (cleanTitle.length < 2 || cleanTitle.length > 100) return { error: "Add a mix title between 2 and 100 characters." };
   const bpmValue = String(bpm ?? "").trim() === "" ? DEFAULT_BPM : Number(bpm);
@@ -31,7 +31,9 @@ export function validateMixUpload({ title, bpm, genre, file, rightsAttested }) {
   }
   if (file.size > MAX_MIX_BYTES) return { error: "Keep the mix file under 128 MB." };
   if (rightsAttested !== true) return { error: "Confirm you hold the rights to publish this mix." };
-  return { title: cleanTitle, bpm: bpmValue, genre: cleanGenre };
+  if (typeof isShopPush !== "boolean") return { error: "Shop push must be a boolean." };
+  if (!["featured", "white_label", "test_press"].includes(pushPriority)) return { error: "Choose a valid shop push tag." };
+  return { title: cleanTitle, bpm: bpmValue, genre: cleanGenre, isShopPush, pushPriority };
 }
 
 const fingerprint = file => `${file.name}:${file.size}:${file.lastModified || 0}`;
@@ -40,6 +42,7 @@ export function createMixUploadView({ document, fetch, uploadChunks, randomId, r
   const $ = id => document.getElementById(id);
   const form = $("mix-upload-form"), title = $("mix-title"), bpm = $("mix-bpm"), genre = $("mix-genre");
   const file = $("mix-file"), rights = $("mix-rights"), submit = $("mix-submit");
+  const shopPush = $("mix-shop-push"), pushPriority = $("mix-push-priority");
   const status = $("mix-upload-status"), progress = $("mix-upload-progress"), result = $("mix-upload-result"), gate = $("mix-upload-gate");
   // A failed attempt keeps its upload ID so retrying the same file resumes the same catalog record.
   let pending = null, busy = false, allowed = false;
@@ -68,7 +71,8 @@ export function createMixUploadView({ document, fetch, uploadChunks, randomId, r
     event?.preventDefault?.();
     if (busy || !allowed) return null;
     const audio = file.files?.[0];
-    const values = validateMixUpload({ title: title.value, bpm: bpm.value, genre: genre.value, file: audio, rightsAttested: rights.checked === true });
+    const values = validateMixUpload({ title: title.value, bpm: bpm.value, genre: genre.value, file: audio, rightsAttested: rights.checked === true,
+      isShopPush: shopPush?.checked === true, pushPriority: pushPriority?.value || "featured" });
     result.replaceChildren();
     if (values.error) { setStatus(values.error, "error"); return null; }
     busy = true;
@@ -101,7 +105,8 @@ export function createMixUploadView({ document, fetch, uploadChunks, randomId, r
       const response = await fetch("/api/upload-mix", {
         method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ uploadId, chunkCount, byteSize: audio.size, contentType, title: values.title, bpm: values.bpm,
-          genre: values.genre, rightsAttested: true, durationSeconds: await readDuration(audio).catch(() => 0) })
+          genre: values.genre, isShopPush: values.isShopPush, pushPriority: values.pushPriority,
+          rightsAttested: true, durationSeconds: await readDuration(audio).catch(() => 0) })
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(typeof data.message === "string" ? data.message : "The mix could not be published. Try again.");

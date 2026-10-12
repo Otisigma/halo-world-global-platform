@@ -50,9 +50,28 @@
 .industry-wire__post-footer { display: flex; flex-wrap: wrap; justify-content: space-between; gap: .6rem; padding-top: .8rem; border-top: 1px solid var(--signal-line); color: var(--signal-muted); font-size: .72rem; }
 .industry-wire__post-footer span:first-child { color: var(--signal-gold); font-weight: 600; letter-spacing: .04em; }
 
+/* Signal thread: messages bound to the post or track directly above. */
+.signal-thread { display: grid; gap: .6rem; padding-top: .9rem; border-top: 1px solid var(--signal-line); }
+#industryWirePulseBody > .signal-thread { grid-column: 1 / -1; }
+.signal-thread .industry-wire__eyebrow { margin: 0; color: var(--signal-cyan); }
+.signal-thread__list { display: grid; gap: .45rem; max-height: 16rem; margin: 0; padding: 0; overflow-y: auto; list-style: none; }
+.signal-thread__message { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: baseline; gap: .6rem; padding: .55rem .7rem; border: 1px solid var(--signal-line); background: rgba(16, 18, 23, .55); font-size: .8rem; }
+.signal-thread__who { color: var(--signal-gold); font-weight: 600; white-space: nowrap; }
+.signal-thread__text { color: #d6d3c9; overflow-wrap: anywhere; }
+.signal-thread__message time { color: var(--signal-muted); font: 400 .6rem/1 'Share Tech Mono', monospace; }
+.signal-thread__empty { color: var(--signal-muted); font-size: .78rem; }
+.signal-thread__form { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: .5rem; }
+.signal-thread__label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.signal-thread__form input { min-width: 0; padding: .55rem .7rem; border: 1px solid var(--signal-line); color: var(--signal-paper); background: rgba(8, 9, 12, .7); font: inherit; font-size: .82rem; }
+.signal-thread__form input:focus-visible { outline: 1px solid var(--signal-gold); outline-offset: 1px; }
+.signal-thread__status { margin: 0; color: var(--signal-muted); font-size: .74rem; }
+.signal-thread__status:empty { display: none; }
+
 @media (max-width: 760px) {
   #industryWirePulseBody { grid-template-columns: 1fr; }
   .industry-wire__toolbar { align-items: flex-start; flex-direction: column; }
+  .signal-thread__message { grid-template-columns: minmax(0, 1fr) auto; }
+  .signal-thread__text { grid-column: 1 / -1; grid-row: 2; }
 }
 @media (prefers-reduced-motion: reduce) {
   .industry-wire__live { animation: none; }

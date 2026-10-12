@@ -190,7 +190,7 @@ await check("community pulse highlights the busiest live room", async () => {
     { name: "Club", listeners: 9, isLive: true, liveName: "DJ Nova", nowPlaying: { title: "Read The Room", artist: "HALO" } },
     { name: "Empty", listeners: 50, nowPlaying: {} }
   ] });
-  assert.deepEqual(pulse, { roomName: "Club", title: "Read The Room", artist: "Live with DJ Nova", listeners: 9, isLive: true, preview: false });
+  assert.deepEqual(pulse, { roomName: "Club", title: "Read The Room", trackId: "read-the-room", artist: "Live with DJ Nova", listeners: 9, isLive: true, preview: false });
   const html = renderPulse(pulse);
   assert.match(html, /Uniting the room/);
   assert.match(html, /9 members listening/);

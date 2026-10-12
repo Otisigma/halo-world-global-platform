@@ -23,12 +23,10 @@ function memoryDatabase(seed = []) {
     async sql(strings, ...values) {
       const query = strings.join("?");
       queries.push({ query, values });
-      if (query.includes("SELECT COUNT(*)")) {
-        assert.match(query, /sender_member_id = \?/);
-        return [{ total: rows.filter(row => row.sender_member_id === values[0]).length }];
-      }
       if (query.includes("INSERT INTO halo_signal_thread_messages")) {
-        const [target_id, sender_member_id, user_identifier, message] = values;
+        assert.match(query, /SELECT COUNT\(\*\) FROM halo_signal_thread_messages[\s\S]+sender_member_id = \?[\s\S]+< \?/, "rate check is atomic with the insert");
+        const [target_id, sender_member_id, user_identifier, message, rateMember, limit] = values;
+        if (rows.filter(row => row.sender_member_id === rateMember).length >= limit) return [];
         const row = { id: `00000000-0000-4000-8000-${String(++sequence).padStart(12, "0")}`, target_id, sender_member_id, user_identifier, message, hidden: false, created_at: new Date(Date.UTC(2026, 9, 12, 16, sequence)) };
         rows.push(row);
         return [row];

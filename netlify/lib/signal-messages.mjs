@@ -74,17 +74,18 @@ export function createSignalMessagesHandler({ getDatabase, getUser, ensureMember
       const db = await getDatabase();
       const membership = await ensureMembership(db, user);
       const memberId = membership.member_id;
-      const rateRows = await db.sql`
-        SELECT COUNT(*)::int AS total FROM halo_signal_thread_messages
-        WHERE sender_member_id = ${memberId} AND created_at >= NOW() - INTERVAL '5 minutes'
-      `;
-      if (Number(rateRows[0]?.total || 0) >= RATE_LIMIT) return json({ message: "Signal limit reached. Take a short pause." }, 429);
       const userIdentifier = cleanSignalMessage(membership.display_name).slice(0, 80) || "HALO member";
+      // The rate check and insert share one statement so concurrent posts cannot exceed the limit.
       const rows = await db.sql`
         INSERT INTO halo_signal_thread_messages (target_id, sender_member_id, user_identifier, message)
-        VALUES (${targetId}, ${memberId}, ${userIdentifier}, ${message})
+        SELECT ${targetId}, ${memberId}, ${userIdentifier}, ${message}
+        WHERE (
+          SELECT COUNT(*) FROM halo_signal_thread_messages
+          WHERE sender_member_id = ${memberId} AND created_at >= NOW() - INTERVAL '5 minutes'
+        ) < ${RATE_LIMIT}
         RETURNING id, target_id, user_identifier, message, created_at
       `;
+      if (!rows.length) return json({ message: "Signal limit reached. Take a short pause." }, 429);
       return json({ message: signalMessagePayload(rows[0]) }, 201);
     } catch (error) {
       console.error("Signal thread request failed", error instanceof Error ? error.message : "unknown error");

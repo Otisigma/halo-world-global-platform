@@ -195,11 +195,16 @@ function mountIndustryWire(panel) {
     }
   }
 
+  function unwatchThreads(container) {
+    container.querySelectorAll("[data-signal-thread]").forEach(thread => observer?.unobserve(thread));
+  }
+
   function watchThreads(container) {
     container.querySelectorAll("[data-signal-thread]").forEach(thread => observer ? observer.observe(thread) : loadThread(thread));
   }
 
   async function loadPulse() {
+    unwatchThreads(pulseBody);
     try { pulseBody.innerHTML = renderPulse(pickCommunityPulse(await fetchJson(PULSE_API_URL))); }
     catch { pulseBody.innerHTML = '<p class="industry-wire__muted">Live listening is unavailable right now.</p>'; }
     watchThreads(pulseBody);
@@ -207,6 +212,7 @@ function mountIndustryWire(panel) {
 
   async function loadFeed() {
     feed.setAttribute("aria-busy", "true");
+    unwatchThreads(feed);
     feed.innerHTML = '<div class="signal-skeleton" aria-hidden="true"></div><div class="signal-skeleton" aria-hidden="true"></div>';
     status.textContent = "";
     try {

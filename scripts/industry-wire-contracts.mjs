@@ -18,7 +18,8 @@ function memoryStore(seed = {}) {
     data,
     async list({ prefix = "" } = {}) { return { blobs: [...data.keys()].filter(key => key.startsWith(prefix)).map(key => ({ key })) }; },
     async get(key) { return data.has(key) ? structuredClone(data.get(key)) : null; },
-    async setJSON(key, value) { data.set(key, structuredClone(value)); }
+    async setJSON(key, value) { data.set(key, structuredClone(value)); },
+    async delete(key) { data.delete(key); }
   };
 }
 
@@ -135,8 +136,13 @@ await check("members cannot publish; operators create and publish drafts", async
 
   assert.equal((await operator.request({ action: "publish", id: draft.post.id })).status, 422);
   assert.equal((await operator.request({ action: "publish", id: "wire-missing", artist_perspective: "x" })).status, 404);
-  const published = await (await operator.request({ action: "publish", id: draft.post.id, artist_perspective: "My take." })).json();
+  const later = harness({ operator: true, store, now: new Date("2026-10-15T08:00:00.000Z") });
+  const published = await (await later.request({ action: "publish", id: draft.post.id, artist_perspective: "My take." })).json();
   assert.equal(published.post.status, "published");
+  assert.equal(published.post.created_at, "2026-10-15T08:00:00.000Z", "publishing stamps the publish time");
+  assert.equal([...store.data.keys()].filter(key => key.endsWith(`_${draft.post.id}`)).length, 1, "draft is re-keyed, not duplicated");
+  const afterPublish = await (await harness({ user: { id: "identity" }, store }).request()).json();
+  assert.equal(afterPublish.posts[0].id, draft.post.id, "newly published draft leads the feed");
   assert.equal((await operator.request({ action: "unknown" })).status, 400);
 });
 

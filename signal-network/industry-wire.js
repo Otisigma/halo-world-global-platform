@@ -107,6 +107,7 @@ function mountIndustryWire(panel) {
   const pulseBody = document.getElementById("industryWirePulseBody");
   const visibility = document.getElementById("industryWireVisibility");
   let loading = false;
+  let loaded = false;
 
   async function loadPulse() {
     try { pulseBody.innerHTML = renderPulse(pickCommunityPulse(await fetchJson(PULSE_API_URL))); }
@@ -121,6 +122,7 @@ function mountIndustryWire(panel) {
       const payload = await fetchJson(WIRE_API_URL);
       if (payload.visibilityLabel) visibility.textContent = payload.visibilityLabel;
       feed.innerHTML = renderWireFeed(payload.posts);
+      loaded = true;
     } catch (error) {
       feed.innerHTML = "";
       status.textContent = error.status === 401 ? "Sign in to Signal Network to read the Industry Wire." : error.message || "The Industry Wire is unavailable.";
@@ -137,7 +139,7 @@ function mountIndustryWire(panel) {
   }
 
   document.addEventListener("click", event => {
-    if (event.target.closest('[data-signal-tab="wire"]')) load();
+    if (event.target.closest('[data-signal-tab="wire"]') && !loaded) load();
   });
   document.getElementById("industryWireRefresh")?.addEventListener("click", load);
   if (!panel.hidden) load();

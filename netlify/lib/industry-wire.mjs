@@ -13,7 +13,7 @@ export const WIRE_STATUSES = Object.freeze(["draft", "published"]);
 export const WIRE_POST_PREFIX = "posts/";
 export const WIRE_FEED_LIMIT = 30;
 const MAX_BODY_BYTES = 16_000;
-const MAX_STORED_POSTS = 200;
+const MAX_STORED_POSTS = WIRE_FEED_LIMIT * 3;
 const limits = { title: 140, summary: 1200, artist_perspective: 1600, author: 80, on_rotation: 160 };
 
 function cleanText(value, maxLength) {
@@ -219,8 +219,12 @@ export function createIndustryWireHandler({ getDatabase, getUser, ensureMembersh
         if (!existing) return json({ message: "Wire draft not found" }, 404);
         const artistPerspective = cleanText(body.artist_perspective, limits.artist_perspective) || existing.artist_perspective;
         if (!artistPerspective) return json({ message: "Add the artist's take before publishing to the Wire" }, 422);
-        const post = { ...existing, artist_perspective: artistPerspective, visibility: WIRE_VISIBILITY, status: "published" };
-        return json({ post: await saveWirePost(store, post, key) });
+        // Publishing stamps the post with its publish time so the feed stays newest-first.
+        const post = { ...existing, artist_perspective: artistPerspective, visibility: WIRE_VISIBILITY, status: "published", created_at: isoOrNull(now()) };
+        const nextKey = wirePostKey(post);
+        await saveWirePost(store, post, nextKey);
+        if (nextKey !== key) await store.delete(key);
+        return json({ post });
       }
 
       return json({ message: "Choose a supported Industry Wire action" }, 400);

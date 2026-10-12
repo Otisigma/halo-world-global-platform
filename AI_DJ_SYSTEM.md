@@ -21,6 +21,14 @@ Set `STRIPE_SECRET_KEY` and `DJ_VAULT_SITE_ORIGIN` (the exact canonical HTTPS or
 
 Schema includes private edition metadata/assets, server-provisioned roles, immutable price snapshots in orders, unique member/edition entitlements, and routing/preview/purchase/grant/download audit logs. Run `npm run test:dj-vault` for permission, payment verification, private delivery, and dependency-free frontend rendering contracts.
 
+### Featured DJ shop push
+
+Apply `netlify/database/migrations/20261012040000_dj_shop_featured.sql` before deploying the featured upload path. Selectors/admins use `/dj-vault/upload/` and check **Push to DJ Shop Featured Banner**, optionally choosing `featured`, `white_label`, or `test_press`. The JSON publish request to `/api/upload-mix` accepts `isShopPush` (boolean, default `false`) and `pushPriority` (default `featured`).
+
+The mix, release plan, and singleton `halo_dj_shop_featured` slot are saved atomically. A new featured publish replaces the slot without deleting older mixes; ordinary uploads and retries of already-published mixes never change it. The slot is the canonical featured state, rather than separate flags that could disagree. Concurrent pushes leave one active item, and deleting its mix removes the slot.
+
+`GET /api/dj-vault/featured-push` returns `{success: true, edition}` with public catalog metadata, or `edition: null` if there is no public feature. `/dj-vault/` displays it above the crates using text-only rendering and the catalog title, artist, and price. Ingested mixes remain **free streams**; the banner links to the existing mix player/editions page and does not enable sales or bypass checkout/readiness checks. Banner failures do not block catalog browsing. Validate with `npm run test:dj-vault`.
+
 HALO treats AI as a four-person booth crew rather than a random autoplay button. The live deck remains operator-controlled while a music director, mix engineer, crowd reader, and quality controller rank candidates, explain their reasoning, prepare the inactive deck, and fall back to a local performance engine whenever cloud analysis is unavailable.
 
 ## Protected song policy

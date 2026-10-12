@@ -63,7 +63,7 @@ export function createDjVaultHandler({ getDatabase, getUser, membershipFor, stor
   return async function djVault(request) {
     const url = new URL(request.url);
     const action = url.pathname.split("/").pop();
-    const methods = { tracks: "GET", session: "GET", routing: "PATCH", checkout: "POST",
+    const methods = { tracks: "GET", "featured-push": "GET", session: "GET", routing: "PATCH", checkout: "POST",
       confirm: "POST", vote: "POST", entitlements: "POST", preview: "GET", download: "GET" };
     if (!methods[action]) return json({ message: "Not found" }, 404);
     if (request.method !== methods[action]) return json({ message: "Method not allowed" }, 405);
@@ -74,7 +74,7 @@ export function createDjVaultHandler({ getDatabase, getUser, membershipFor, stor
       const role = roles[0]?.role;
       const authorized = ["dj", "selector", "admin"].includes(role);
       if (action === "session") return json({ authenticated: Boolean(user?.id), authorized, canRoute: ["selector", "admin"].includes(role) });
-      if (!["tracks", "preview"].includes(action)) {
+      if (!["tracks", "preview", "featured-push"].includes(action)) {
         if (!user?.id) return json({ message: "Sign in to access DJ Vault" }, 401);
         if (!authorized) return json({ message: "Verified DJ access required" }, 403);
       }
@@ -93,6 +93,20 @@ export function createDjVaultHandler({ getDatabase, getUser, membershipFor, stor
         if (!Number.isSafeInteger(offset) || offset < 0 || offset > 10000) return json({ message: "Invalid offset" }, 400);
         const rows = await purchasableTracks(db, user?.id || "", authorized, null, offset);
         return json({ success: true, tracks: rows.map(catalogTrack), nextOffset: rows.length === 25 ? offset + 25 : null });
+      }
+      if (action === "featured-push") {
+        const rows = await db.sql`
+          SELECT m.id, m.title, m.description, m.remixer_name, m.price_minor, m.currency,
+            m.sales_status, m.client_sale_enabled, f.push_priority
+          FROM halo_dj_shop_featured f JOIN halo_mixes m ON m.id = f.mix_id
+          WHERE f.slot = 'featured' AND m.visibility = 'room'
+        `;
+        const row = rows[0];
+        return json({ success: true, edition: row ? {
+          id: row.id, title: row.title, description: row.description, creator: { name: row.remixer_name },
+          pushPriority: row.push_priority, salesStatus: row.sales_status,
+          commerce: { priceMinor: Number(row.price_minor), currency: row.currency, clientSaleEnabled: Boolean(row.client_sale_enabled) }
+        } : null });
       }
       let body = null;
       if (mutation) {
@@ -325,5 +339,5 @@ export default async function handler(request) {
     siteOrigin: process.env.DJ_VAULT_SITE_ORIGIN })(request);
 }
 
-export const config = { path: ["/api/dj-vault/tracks", "/api/dj-vault/session", "/api/dj-vault/routing",
+export const config = { path: ["/api/dj-vault/tracks", "/api/dj-vault/featured-push", "/api/dj-vault/session", "/api/dj-vault/routing",
   "/api/dj-vault/checkout", "/api/dj-vault/confirm", "/api/dj-vault/vote", "/api/dj-vault/entitlements", "/api/dj-vault/preview", "/api/dj-vault/download"] };

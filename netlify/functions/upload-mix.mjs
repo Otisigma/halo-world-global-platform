@@ -50,9 +50,13 @@ export function validateMixMetadata(body) {
   const genre = clean(body?.genre, 80) || DEFAULT_GENRE;
   if (genre.length > 60) return { error: "Keep the genre under 60 characters." };
   if (body?.rightsAttested !== true) return { error: "Confirm you hold the rights to publish this mix." };
+  if (body.isShopPush !== undefined && typeof body.isShopPush !== "boolean") return { error: "Shop push must be a boolean." };
+  const pushPriority = body.pushPriority === undefined ? "featured" : body.pushPriority;
+  if (!["featured", "white_label", "test_press"].includes(pushPriority)) return { error: "Choose a valid shop push tag." };
   const durationSeconds = Number(body?.durationSeconds || 0);
   return {
     title, bpm: rawBpm, genre,
+    isShopPush: body.isShopPush === true, pushPriority,
     durationSeconds: Number.isFinite(durationSeconds) ? Math.max(0, Math.min(43200, Math.round(durationSeconds))) : 0
   };
 }
@@ -202,6 +206,12 @@ export function createUploadMixHandler({ getDatabase, getUser, membershipFor, st
         SELECT ${randomUUID()}, ${membership.member_id}, mix.id, mix.title, 5, 'free_stream', 'approved',
           -14.0, -1.0, TRUE, FALSE, ${releaseMetadata}::jsonb, '{}'::jsonb
         FROM mix
+        RETURNING mix_id
+      ), featured AS (
+        INSERT INTO halo_dj_shop_featured (slot, mix_id, push_priority)
+        SELECT 'featured', mix.id, ${metadata.pushPriority} FROM mix
+        WHERE ${metadata.isShopPush}
+        ON CONFLICT (slot) DO UPDATE SET mix_id = EXCLUDED.mix_id, push_priority = EXCLUDED.push_priority
         RETURNING mix_id
       )
       SELECT mix.id, mix.title FROM mix JOIN plan ON plan.mix_id = mix.id

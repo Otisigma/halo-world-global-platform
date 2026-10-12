@@ -49,6 +49,12 @@
           <label for="mix-file">Audio file (MP3, WAV, M4A, AAC, OGG, WebM · up to 128 MB)</label>
           <input id="mix-file" name="audio" type="file" accept="audio/*,.mp3,.wav,.m4a,.aac,.ogg,.webm" required>
         </div>
+        <label class="vault-upload__rights" for="mix-shop-push"><input id="mix-shop-push" name="isShopPush" type="checkbox" aria-describedby="mix-shop-push-help"> Push to DJ Shop Featured Banner</label>
+        <p id="mix-shop-push-help">Replaces the current featured mix when published. Mixes remain free streams.</p>
+        <div class="vault-filter">
+          <label for="mix-push-priority">Featured banner tag</label>
+          <select id="mix-push-priority" name="pushPriority"><option value="featured">Featured</option><option value="white_label">White label</option><option value="test_press">Test press</option></select>
+        </div>
         <label class="vault-upload__rights" for="mix-rights"><input id="mix-rights" name="rightsAttested" type="checkbox" required> I hold the rights to publish this mix on HALO.</label>
         <button id="mix-submit" type="submit" disabled>Upload &amp; publish mix</button>
         <progress id="mix-upload-progress" max="100" value="0" aria-label="Upload progress" hidden></progress>

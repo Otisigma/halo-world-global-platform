@@ -114,7 +114,11 @@ export function createUploadMixHandler({ getDatabase, getUser, membershipFor, st
     }
     const prefix = blobPrefixFor(user.id, uploadId);
     // Later chunks only attach to an upload whose verified first chunk already exists.
-    if (chunkIndex > 0 && !(await store.getMetadata(`${prefix}000`))) return json({ message: "Upload the start of the mix first" }, 409);
+    if (chunkIndex > 0) {
+      const first = await store.getMetadata(`${prefix}000`);
+      if (!first) return json({ message: "Upload the start of the mix first" }, 409);
+      if (Number(first.metadata?.chunkCount) !== chunkCount) return json({ message: "This chunk belongs to a different upload; submit again to restart" }, 409);
+    }
     // Keys are deterministic per member/upload/chunk, so retried chunks overwrite instead of duplicating.
     await store.set(`${prefix}${String(chunkIndex).padStart(3, "0")}`, chunk, { metadata: { size: chunk.size, chunkCount } });
     return json({ message: "Mix chunk uploaded", chunkIndex });
@@ -151,14 +155,16 @@ export function createUploadMixHandler({ getDatabase, getUser, membershipFor, st
     const expected = Array.from({ length: chunkCount }, (_, index) => `${blobPrefix}${String(index).padStart(3, "0")}`);
     const stored = await store.list({ prefix: blobPrefix });
     const storedKeys = new Set(stored.blobs.map(blob => blob.key));
-    const sizes = storedKeys.size === chunkCount && expected.every(key => storedKeys.has(key))
-      ? await Promise.all(expected.map(async key => Number((await store.getMetadata(key))?.metadata?.size))) : [];
+    if (!expected.every(key => storedKeys.has(key))) return json({ message: "The mix upload is incomplete. Submit again to resume." }, 409);
+    const parts = await Promise.all(expected.map(async key => (await store.getMetadata(key))?.metadata || {}));
+    const sizes = parts.map(part => Number(part.size));
     const total = sizes.reduce((sum, size) => sum + size, 0);
-    if (!sizes.length || sizes.some((size, index) => !Number.isSafeInteger(size) || size < 1 || (index < chunkCount - 1 && size !== sizes[0]))
+    if (storedKeys.size !== chunkCount || parts.some(part => Number(part.chunkCount) !== chunkCount)
+      || sizes.some((size, index) => !Number.isSafeInteger(size) || size < 1 || (index < chunkCount - 1 && size !== sizes[0]))
       || total !== byteSize) {
       // Stale or mismatched parts are cleared so the client's retry re-uploads a clean set.
       await Promise.all([...storedKeys].map(key => store.delete(key))).catch(() => undefined);
-      return json({ message: "The mix upload is incomplete. Submit again to re-upload it." }, 409);
+      return json({ message: "The uploaded parts do not match this mix. Submit again to re-upload it." }, 409);
     }
     const first = await store.get(`${blobPrefix}000`, { type: "arrayBuffer" });
     const contentType = first ? sniffAudioType(new Uint8Array(first).subarray(0, 16)) : "";

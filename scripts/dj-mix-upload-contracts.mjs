@@ -112,9 +112,14 @@ assert.equal((await f.handler(chunkRequest(new Uint8Array(16).fill(7), { index: 
 assert.equal((await f.handler(publishRequest({ ...publishBody, byteSize: 31 }))).status, 409, "declared size must match stored parts");
 assert.equal(f.state.blobs.size, 0, "mismatched parts are cleared");
 assert.equal((await f.handler(chunkRequest(mp3, { index: 0, count: 3 }))).status, 200);
+assert.equal((await f.handler(chunkRequest(new Uint8Array(4), { index: 1, count: 2 }))).status, 409, "chunks must match the first chunk's declared count");
 assert.equal((await f.handler(chunkRequest(new Uint8Array(4), { index: 2, count: 3 }))).status, 200);
 assert.equal((await f.handler(publishRequest({ ...publishBody, byteSize: 20 }))).status, 409, "parts must be exactly 000..N-1");
-assert.equal(f.state.blobs.size, 0);
+assert.equal(f.state.blobs.size, 2, "missing parts are not cleared, so in-flight uploads can finish");
+assert.equal((await f.handler(publishRequest({ ...publishBody, chunkCount: 3, byteSize: 20 }))).status, 409);
+assert.equal((await f.handler(chunkRequest(new Uint8Array(16).fill(1), { index: 1, count: 3 }))).status, 200);
+assert.equal((await f.handler(publishRequest({ ...publishBody, byteSize: 36 }))).status, 409, "publish chunk count must match stored parts");
+assert.equal(f.state.blobs.size, 0, "mismatched parts are cleared");
 assert.equal(f.state.writes.length, 0);
 
 // Successful chunked upload + publish creates the catalog entry.

@@ -1,0 +1,60 @@
+/* Living Industry Wire — members-only internal feed inside the Signal Network workspace. */
+.industry-wire { display: grid; gap: 1.4rem; align-content: start; }
+.industry-wire .signal-panel__header { margin-bottom: .4rem; }
+.industry-wire__eyebrow { margin: 0 0 .55rem; color: var(--signal-gold); font: 400 .64rem/1.2 'Share Tech Mono', monospace; letter-spacing: .18em; text-transform: uppercase; }
+.industry-wire__muted { margin: 0; color: var(--signal-muted); line-height: 1.6; }
+.industry-wire__muted a { color: var(--signal-gold); }
+
+.industry-wire__pulse {
+  display: grid; gap: 1rem; padding: clamp(1.1rem, 2.4vw, 1.8rem);
+  border: 1px solid rgba(231, 179, 74, .32);
+  background: radial-gradient(circle at 100% 0, rgba(62, 214, 208, .1), transparent 45%), linear-gradient(135deg, rgba(231, 179, 74, .1), rgba(16, 18, 23, .96) 55%);
+  box-shadow: inset 0 1px 0 rgba(242, 239, 228, .06);
+}
+.industry-wire__pulse h4 { margin: 0; font: 500 clamp(1.5rem, 3vw, 2.1rem)/1 'Cormorant Garamond', serif; }
+.industry-wire__pulse .industry-wire__eyebrow { display: flex; align-items: center; gap: .55rem; margin: 0; }
+.industry-wire__live { width: .55rem; height: .55rem; border-radius: 50%; background: var(--signal-lime); box-shadow: 0 0 0 .28rem rgba(165, 231, 95, .12), 0 0 .9rem var(--signal-lime); animation: signal-pulse 2.2s ease-in-out infinite; }
+#industryWirePulseBody { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) auto; align-items: center; gap: 1.2rem; }
+#industryWirePulseBody > .industry-wire__muted { grid-column: 1 / -1; }
+.industry-wire__track { display: grid; gap: .3rem; min-width: 0; }
+.industry-wire__track-label { margin: 0; color: var(--signal-cyan); font: 400 .6rem/1.2 'Share Tech Mono', monospace; letter-spacing: .14em; text-transform: uppercase; }
+.industry-wire__track strong { overflow: hidden; color: var(--signal-paper); font: 700 1.35rem/1.1 'Barlow Condensed', sans-serif; letter-spacing: .02em; text-overflow: ellipsis; text-transform: uppercase; white-space: nowrap; }
+.industry-wire__track span { color: var(--signal-muted); font-size: .82rem; }
+.industry-wire__pulse-meta { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .8rem; margin: 0; }
+.industry-wire__pulse-meta dt { color: #6d707a; font: 400 .56rem/1.2 'Share Tech Mono', monospace; letter-spacing: .14em; text-transform: uppercase; }
+.industry-wire__pulse-meta dd { margin: .25rem 0 0; color: var(--signal-paper); font-size: .78rem; }
+
+.industry-wire__toolbar { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+.industry-wire__badge { display: inline-flex; align-items: center; gap: .4rem; padding: .32rem .6rem; border: 1px solid rgba(231, 179, 74, .4); color: var(--signal-gold); background: rgba(231, 179, 74, .07); font: 400 .58rem/1.2 'Share Tech Mono', monospace; letter-spacing: .12em; text-transform: uppercase; }
+.industry-wire__badge::before { content: "◈"; }
+.industry-wire__status { margin: 0; color: var(--signal-muted); }
+.industry-wire__status:empty { display: none; }
+
+.industry-wire__feed { display: grid; gap: 1.1rem; }
+.industry-wire__post {
+  display: grid; gap: 1rem; padding: clamp(1.2rem, 2.6vw, 2rem);
+  border: 1px solid var(--signal-line); border-left: 3px solid var(--signal-gold);
+  background: linear-gradient(180deg, var(--signal-panel-soft), var(--signal-panel));
+  transition: border-color .2s ease, transform .2s ease;
+}
+.industry-wire__post:hover { border-color: rgba(231, 179, 74, .45); transform: translateY(-1px); }
+.industry-wire__post-header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .6rem; }
+.industry-wire__post-header time { color: var(--signal-muted); font: 400 .64rem/1.2 'Share Tech Mono', monospace; letter-spacing: .08em; }
+.industry-wire__post h4 { margin: 0; color: var(--signal-paper); font: 600 clamp(1.6rem, 3vw, 2.3rem)/1.02 'Cormorant Garamond', serif; }
+.industry-wire__shift p:last-child { margin: 0; color: #c9c6bc; line-height: 1.7; }
+.industry-wire__take { margin: 0; padding: 1rem 1.2rem; border-left: 2px solid var(--signal-cyan); background: rgba(62, 214, 208, .05); }
+.industry-wire__take .industry-wire__eyebrow { color: var(--signal-cyan); }
+.industry-wire__take p:last-child { margin: 0; color: var(--signal-paper); font: italic 500 1.2rem/1.5 'Cormorant Garamond', serif; }
+.industry-wire__rotation { margin: 0; color: #c9c6bc; font-size: .86rem; }
+.industry-wire__rotation span { margin-right: .4rem; color: var(--signal-violet); font: 400 .6rem/1 'Share Tech Mono', monospace; letter-spacing: .14em; text-transform: uppercase; }
+.industry-wire__post-footer { display: flex; flex-wrap: wrap; justify-content: space-between; gap: .6rem; padding-top: .8rem; border-top: 1px solid var(--signal-line); color: var(--signal-muted); font-size: .72rem; }
+.industry-wire__post-footer span:first-child { color: var(--signal-gold); font-weight: 600; letter-spacing: .04em; }
+
+@media (max-width: 760px) {
+  #industryWirePulseBody { grid-template-columns: 1fr; }
+  .industry-wire__toolbar { align-items: flex-start; flex-direction: column; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .industry-wire__live { animation: none; }
+  .industry-wire__post, .industry-wire__post:hover { transition: none; transform: none; }
+}

@@ -29,6 +29,28 @@ The mix, release plan, and singleton `halo_dj_shop_featured` slot are saved atom
 
 `GET /api/dj-vault/featured-push` returns `{success: true, edition}` with public catalog metadata, or `edition: null` if there is no public feature. `/dj-vault/` displays it above the crates using text-only rendering and the catalog title, artist, and price. Ingested mixes remain **free streams**; the banner links to the existing mix player/editions page and does not enable sales or bypass checkout/readiness checks. Banner failures do not block catalog browsing. Validate with `npm run test:dj-vault`.
 
+#### Deployment acceptance and live evidence (PR #373)
+
+Do not mark rollout verified until the deployment owner completes and records the following checks. Local contracts and the read-only probe below do not prove browser rendering, playback, or live upload/storage behavior.
+
+- [ ] Before deploying functions/UI, confirm `20261012040000_dj_shop_featured.sql` succeeded in the **target database**, including its singleton, tag, and foreign-key constraints. The publish SQL references this table even for non-featured uploads; a missing migration can break ordinary publishing too.
+- [ ] Record the environment, canonical site origin, migration confirmation, previous and candidate Netlify deploy IDs/commit SHAs, verifier, and UTC time. Through trusted database administration, record the previous `halo_dj_shop_featured` mix ID/tag (or absent slot), even if its mix is private and the public endpoint returns null.
+- [ ] With an operator-approved, rights-cleared test recording and selector/admin account, publish featured mix A, then featured mix B. Record both IDs. In a signed-out browser, confirm the endpoint returns B, exactly one featured card shows B's title/artist/tag and **Free stream**, and its `/mixes/?mix=…` link opens playable audio. Confirm A still exists in the catalog.
+- [ ] Publish a non-featured mix C; confirm it is catalog-accessible/playable and B remains the feature. Record C's ID and the endpoint result.
+- [ ] Block `/api/dj-vault/featured-push` in browser developer tools and reload `/dj-vault/`. Confirm the banner is hidden while ordinary catalog browsing still works. Unblock and reload to confirm recovery.
+- [ ] Attach the deployment record, probe output, pass/fail results, and banner/player screenshots to PR #373. Keep credentials, private storage keys, and authenticated request headers out of evidence. Any failure leaves acceptance pending.
+
+Read-only endpoint probe (Node.js with built-in fetch; no credentials or database access):
+
+```sh
+node scripts/dj-featured-smoke.mjs --origin https://your-site.example
+node scripts/dj-featured-smoke.mjs --origin https://your-site.example --expected-id MIX_B_UUID --timeout-ms 10000
+```
+
+Replace the origin with the canonical HTTPS origin and `MIX_B_UUID` with the recorded UUID. Repeat the expected-B check after publishing C. Use `--expected-id none` only when an empty public feature is expected. Without an expectation, a valid `edition: null` is a healthy **empty** result, not proof that a featured publish succeeded. The probe performs only an anonymous GET, rejects redirects, validates the public response fields, bounds request/body reading by a timeout, and emits a timestamped JSON record. HTTP, JSON/schema, timeout, and expected-slot failures exit nonzero. It never publishes, replaces a slot, or automatically approves a deployment.
+
+**Rollback:** restore the recorded previous Netlify deploy and retain the additive migration/table. Code rollback does not restore the featured slot. A trusted database operator must separately restore the recorded prior mix ID/tag, or remove only the singleton slot if it was originally absent, without deleting catalog mixes. Before changing the slot, confirm the previous mix still exists and remains suitable for public display, and ensure no newer legitimate push would be overwritten. Recheck ordinary uploads, catalog/playback, and the expected public slot after rollback; retain the evidence and leave rollout acceptance pending.
+
 HALO treats AI as a four-person booth crew rather than a random autoplay button. The live deck remains operator-controlled while a music director, mix engineer, crowd reader, and quality controller rank candidates, explain their reasoning, prepare the inactive deck, and fall back to a local performance engine whenever cloud analysis is unavailable.
 
 ## Protected song policy

@@ -1,9 +1,13 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
+import { execFile } from "node:child_process";
+import { promisify } from "node:util";
+import { fileURLToPath } from "node:url";
 import { createUploadMixHandler, sniffAudioType, validateMixMetadata, DEFAULT_BPM, DEFAULT_GENRE } from "../netlify/functions/upload-mix.mjs";
 import { createMixUploadView, validateMixUpload, audioContentType, MIX_CHUNK_BYTES } from "../dj-vault/upload-mix.js";
 import { createVaultView } from "../dj-vault/dj-vault.js";
 import { createDjVaultHandler } from "../netlify/functions/dj-vault.mjs";
+import { verifyFeaturedPush } from "./dj-featured-smoke.mjs";
 
 const origin = "https://halo.example";
 const uploadId = "33333333-3333-4333-8333-333333333333";
@@ -394,6 +398,75 @@ finishFeature(Response.json({ success: true, edition: featured }));
 await staleLoad;
 assert.equal(vaultNodes["vault-shop-push"].children[0].querySelector("h2").textContent, "Newer feature",
   "a superseded featured request cannot overwrite the newer banner");
+
+// --- Read-only deployment probe -----------------------------------------------------------------
+const probe = (payload, options = {}) => verifyFeaturedPush({
+  origin, fetchImpl: async () => Response.json(payload), ...options
+});
+const publicFeature = { success: true, edition: featured };
+const featureRecord = await probe(publicFeature, { expectedId: featured.id.toUpperCase() });
+assert.equal(featureRecord.state, "featured");
+assert.equal(featureRecord.mixId, featured.id);
+assert.equal(featureRecord.pushPriority, "test_press");
+assert.ok(Number.isFinite(Date.parse(featureRecord.checkedAt)));
+assert.equal((await probe({ success: true, edition: null })).state, "empty");
+assert.equal((await probe({ success: true, edition: null }, { expectedId: null })).mixId, null);
+await assert.rejects(probe({ success: true, edition: null }, { expectedId: featured.id }), /expected/);
+await assert.rejects(probe(publicFeature, { expectedId: uploadId }), /expected/);
+await assert.rejects(probe(publicFeature, { expectedId: null }), /expected/);
+await probe(publicFeature, { fetchImpl: async (url, options) => {
+  assert.equal(url, `${origin}/api/dj-vault/featured-push`);
+  assert.equal(options.method, "GET");
+  assert.equal(options.credentials, "omit");
+  assert.equal(options.redirect, "error");
+  assert.equal(options.cache, "no-store");
+  assert.deepEqual(options.headers, { Accept: "application/json" });
+  assert.equal(options.body, undefined);
+  return Response.json(publicFeature);
+} });
+for (const payload of [
+  {}, { success: true }, { success: false, edition: null }, [],
+  { ...publicFeature, private: "unexpected" },
+  { success: true, edition: {} },
+  { success: true, edition: { ...featured, id: "invalid" } },
+  { success: true, edition: { ...featured, blob_key: "private" } },
+  { success: true, edition: { ...featured, creator: { name: "DJ", member_id: "private" } } },
+  { success: true, edition: { ...featured, pushPriority: "unknown" } },
+  { success: true, edition: { ...featured, commerce: { ...featured.commerce, priceMinor: -1 } } },
+  { success: true, edition: { ...featured, commerce: { ...featured.commerce, currency: ["USD"] } } },
+  { success: true, edition: { ...featured, commerce: { ...featured.commerce, clientSaleEnabled: "false" } } }
+]) await assert.rejects(probe(payload), /schema|fields/);
+await assert.rejects(probe(null, { fetchImpl: async () => new Response("", { status: 503 }) }), /HTTP 503/);
+await assert.rejects(probe(null, { fetchImpl: async () => new Response("<html>fallback</html>") }), /not return JSON/);
+await assert.rejects(probe(null, { fetchImpl: async () => new Response("{", { headers: { "Content-Type": "application/json" } }) }), /invalid JSON/);
+await assert.rejects(probe(null, { fetchImpl: async () => { throw new TypeError("network"); } }), /network or redirect/);
+for (const invalidOrigin of ["http://halo.example", "https://operator@halo.example", `${origin}/dj-vault/`, `${origin}?token=private`, `${origin}#fragment`]) {
+  await assert.rejects(probe(publicFeature, { origin: invalidOrigin }), /HTTPS origin/);
+}
+for (const timeoutMs of [0, -1, 1.5, NaN, 60001]) await assert.rejects(probe(publicFeature, { timeoutMs }), /Timeout/);
+await assert.rejects(probe(publicFeature, { expectedId: "invalid" }), /UUID/);
+// Keep the event loop alive while exercising AbortSignal.timeout's unreferenced timer.
+const keepAlive = setInterval(() => {}, 1000);
+try {
+  const stalled = signal => new Promise((resolve, reject) => {
+    signal.addEventListener("abort", () => reject(signal.reason), { once: true });
+  });
+  await assert.rejects(probe(null, { timeoutMs: 10, fetchImpl: async (url, { signal }) => stalled(signal) }), /timed out/);
+  await assert.rejects(probe(null, { timeoutMs: 10, fetchImpl: async (url, { signal }) => ({
+    status: 200, headers: new Headers({ "Content-Type": "application/json" }), json: () => stalled(signal)
+  }) }), /timed out/);
+} finally { clearInterval(keepAlive); }
+const runProbeCli = args => promisify(execFile)(process.execPath, [
+  fileURLToPath(new URL("./dj-featured-smoke.mjs", import.meta.url)), ...args
+]);
+assert.match((await runProbeCli(["--help"])).stdout, /Usage:/);
+for (const args of [[], ["--origin", origin, "--expected-id", "invalid"], ["--origin", origin, "--timeout-ms", "0"], ["--unknown"]]) {
+  await assert.rejects(runProbeCli(args), error => {
+    assert.equal(error.code, 1);
+    assert.equal(JSON.parse(error.stderr).ok, false);
+    return true;
+  });
+}
 
 // --- Static wiring ------------------------------------------------------------------------------
 const page = await readFile(new URL("../dj-vault/upload/index.html", import.meta.url), "utf8");

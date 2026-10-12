@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { createDjVaultHandler } from "../netlify/functions/dj-vault.mjs";
 import { VOTE_LIMIT, VOTE_STORAGE_KEY, applyVaultRoute, createVaultView, createVoteStore } from "../dj-vault/dj-vault.js";
-import { VAULT_CARD_VARIANTS, availableKeys, baseVotes, filterAndSortTracks, keyOrder, trackAnchor } from "../dj-vault/vault-card.js";
+import { VAULT_CARD_VARIANTS, availableKeys, baseVotes, createVaultCard, filterAndSortTracks, keyOrder, trackAnchor } from "../dj-vault/vault-card.js";
 
 const id = "11111111-1111-4111-8111-111111111111";
 const pack = "22222222-2222-4222-8222-222222222222";
@@ -300,6 +300,14 @@ assert.equal(card.querySelector("p").textContent, VAULT_CARD_VARIANTS.test_press
 assert.equal(card.querySelectorAll("div").find(n => n.className === "vault-card__sleeve").attributes["aria-hidden"], "true");
 assert.equal(card.querySelectorAll("p").find(n => n.className === "vault-card__index").textContent, "HALO-111111");
 assert.deepEqual(card.querySelectorAll("li").map(n => n.textContent), ["Test Press", "BPM 140", "KEY 8A", "WAV"]);
+for (const rarity of [...Object.keys(VAULT_CARD_VARIANTS), "unknown"]) {
+  const edition = createVaultCard({ document: { createElement: tag => new Node(tag) }, track: { ...track, rarity }, authorized: false });
+  const variant = rarity === "unknown" ? "white_label" : rarity;
+  assert.equal(edition.className, `vault-card vault-card--${variant.replaceAll("_", "-")}`, "white-label styling stays tied to the resolved variant");
+  const sleeve = edition.querySelectorAll("div").find(node => node.className === "vault-card__sleeve");
+  assert.equal(sleeve.attributes["aria-hidden"], "true", "decorative vinyl stays hidden from assistive technology");
+  assert.equal(sleeve.children[0].className, "vault-card__label", "variants reuse the existing record label");
+}
 await ui.state.nodes["vault-login"].listeners.click();
 assert.equal(ui.state.nodes["vault-auth"].hidden, false);
 assert.equal(ui.state.nodes["vault-email"].focused, true);
@@ -609,6 +617,12 @@ assert.match(html, /aria-live="polite"/);
 assert.match(html, /name="viewport"/);
 assert.doesNotMatch(html, /onclick=/);
 assert.match(css, /prefers-reduced-motion/);
+assert.match(css, /\.vault-card\s*\{[^}]*--label: #f4eee2;[^}]*--vinyl-peek: 14%;/, "other variants retain their label and reveal defaults");
+assert.match(css, /\.vault-card--white-label\s*\{\s*--label: #fff;\s*--vinyl-peek: 28%;\s*\}/, "only white-label cards receive the pure-white label and partial peek");
+assert.match(css, /\.vault-card__label\s*\{[^}]*background: var\(--label\); color: var\(--label-ink\);/, "white labels retain contrasting text");
+assert.match(css, /\.vault-card__sleeve::before\s*\{[^}]*inset: 6%;[^}]*repeating-radial-gradient[^}]*transition: transform \.45s ease;/, "reuse the inset grooved record and existing animation");
+assert.match(css, /\.vault-card:hover \.vault-card__sleeve::before,\s*\.vault-card:focus-within \.vault-card__sleeve::before\s*\{\s*transform: translateX\(var\(--vinyl-peek\)\);/, "pointer and keyboard interactions reveal the same partial vinyl");
+assert.match(css, /@media \(prefers-reduced-motion: reduce\)\s*\{[^}]*\*::before[^}]*animation: none !important; transition: none !important;/, "reduced motion disables the decorative transition");
 assert.match(html, /<body class="dj-vault-room" data-route="dj-vault">/);
 {
   const classes = new Set();

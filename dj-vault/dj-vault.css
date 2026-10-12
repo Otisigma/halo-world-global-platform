@@ -42,12 +42,13 @@
 
 /* White-label / test-press card system. Variants only swap custom properties. */
 .vault-card {
-  --ink: #c9a35d; --sleeve: #e6dcc8; --sleeve-shade: #cbbd9f; --label: #f4eee2; --label-ink: #2a2118;
+  --ink: #c9a35d; --sleeve: #e6dcc8; --sleeve-shade: #cbbd9f; --label: #f4eee2; --label-ink: #2a2118; --vinyl-peek: 14%;
   position: relative; isolation: isolate; display: flex; flex-direction: column; min-width: 0; padding: 22px; overflow: hidden; overflow-wrap: anywhere;
   background: radial-gradient(120% 80% at 0% 0%, rgba(237, 202, 133, .06), transparent 60%), linear-gradient(160deg, #1a1714, #100e0c);
   border: 1px solid #614c30; border-radius: 6px; box-shadow: inset 0 0 0 1px rgba(255, 240, 210, .03), 0 18px 40px rgba(0, 0, 0, .45);
   font-family: "Courier New", ui-monospace, monospace;
 }
+.vault-card--white-label { --label: #fff; --vinyl-peek: 28%; }
 .vault-card--test-press { --ink: #e08a6b; --label: #f1ebe0; }
 .vault-card--promo-copy { --ink: #b9b2a5; --sleeve: #d8d2c6; --sleeve-shade: #b9b1a2; }
 .vault-card--vault-only { --ink: #edca85; --sleeve: #2a241c; --sleeve-shade: #1c1813; --label: #edca85; --label-ink: #1a140c; }
@@ -73,7 +74,7 @@
   box-shadow: 0 0 0 3px rgba(0, 0, 0, .15); font: 700 .62rem/1.2 "Courier New", ui-monospace, monospace; letter-spacing: .08em;
 }
 .vault-card__speed { font-weight: 400; opacity: .75; }
-.vault-card:hover .vault-card__sleeve::before, .vault-card:focus-within .vault-card__sleeve::before { transform: translateX(14%); }
+.vault-card:hover .vault-card__sleeve::before, .vault-card:focus-within .vault-card__sleeve::before { transform: translateX(var(--vinyl-peek)); }
 .vault-card h2 { margin: 0 0 4px; color: #fff4de; font: 700 1.25rem/1.3 "Courier New", ui-monospace, monospace; letter-spacing: .02em; text-transform: uppercase; }
 .vault-card__artist { margin: 0 0 14px; color: #d8cdb8; }
 .vault-meta { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 8px; padding: 0; list-style: none; }

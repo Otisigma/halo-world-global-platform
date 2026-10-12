@@ -155,6 +155,20 @@
           <section class="versions-panel">
             <div class="panel-heading"><div><p class="eyebrow">Version routing</p><h3>Every version, one clear destination</h3></div><p>Open a row to connect audio and update mastering.</p></div>
             <div class="version-table" id="versionTable"></div>
+            <form class="audio-upload-panel alternate-upload-panel" id="alternateUploadForm" aria-labelledby="alternateUploadHeading">
+              <div>
+                <span class="field-label">Alternate Versions</span>
+                <h4 id="alternateUploadHeading">Upload an alternate version</h4>
+                <p id="alternateUploadContext"></p>
+                <p id="alternateUploadHelp">Create a new mix, stem, or variant without replacing any existing version. MP3, M4A, AAC, OGG, WebM, WAV, or FLAC · 128 MB maximum.</p>
+              </div>
+              <input id="alternateSongId" name="songId" type="hidden">
+              <label class="alternate-title-picker" for="alternateVersionTitle"><span class="field-label">Version title</span><input id="alternateVersionTitle" name="label" required maxlength="100" placeholder="e.g. Midnight club mix" aria-describedby="alternateUploadContext"></label>
+              <label class="audio-file-picker" for="alternateAudioFile"><span class="field-label">Choose audio file</span><input id="alternateAudioFile" name="audio" type="file" required accept="audio/*,.mp3,.m4a,.aac,.ogg,.webm,.wav,.flac" aria-describedby="alternateUploadHelp"></label>
+              <button class="primary-button" id="uploadAlternateButton" type="submit">Upload alternate version</button>
+              <div class="upload-progress-track" id="alternateUploadTrack" hidden aria-hidden="true"><span class="upload-progress-fill"></span></div>
+              <p class="audio-upload-progress" id="alternateUploadProgress" role="status" aria-live="polite">No file selected.</p>
+            </form>
           </section>
 
           <section class="publication-health-panel" id="publicationHealthPanel" hidden aria-labelledby="publicationHealthTitle">

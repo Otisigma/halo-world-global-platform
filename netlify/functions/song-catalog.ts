@@ -394,6 +394,26 @@ async function saveSong(ownerMemberId: string, payload: Record<string, unknown>)
   return json({ message: "Song saved and Dream Weaver reviewed it", songId: id, ...(hasDriveUrl ? { googleDriveUrl } : {}) });
 }
 
+async function createAlternateVersion(ownerMemberId: string, payload: Record<string, unknown>) {
+  const songId = cleanId(payload.songId);
+  const versionId = cleanId(payload.versionId);
+  const label = cleanText(payload.label, 100);
+  if (!songId || !versionId || !label) return json({ message: "Choose a song and add a version title" }, 400);
+  const [ownedSong] = await db.select({ id: songs.id }).from(songs)
+    .where(and(eq(songs.id, songId), eq(songs.ownerMemberId, ownerMemberId), eq(songs.status, "active"))).limit(1);
+  if (!ownedSong) return json({ message: "Choose an active song you own" }, 404);
+  const route = VERSION_ROUTES.alternate;
+  const created = await db.insert(songVersions).values({
+    id: versionId, songId, versionType: "alternate", label,
+    destination: route.destination, targetLufs: route.targetLufs, saleEnabled: route.saleEnabled,
+  }).onConflictDoNothing({ target: songVersions.id }).returning({ id: songVersions.id });
+  const [version] = await db.select({ id: songVersions.id }).from(songVersions)
+    .where(and(eq(songVersions.id, versionId), eq(songVersions.songId, songId),
+      eq(songVersions.versionType, "alternate"), eq(songVersions.status, "active"))).limit(1);
+  if (!version) return json({ message: "That version identifier is already in use" }, 409);
+  return json({ message: "Alternate version ready for audio", songId, versionId: version.id }, created.length ? 201 : 200);
+}
+
 async function saveVersion(ownerMemberId: string, payload: Record<string, unknown>) {
   const songId = cleanId(payload.songId);
   const versionId = cleanId(payload.versionId);
@@ -483,6 +503,7 @@ export default async function songCatalogHandler(request: Request) {
     if (!payload) return json({ message: "Request body must be valid JSON" }, 400);
     if (payload.action === "create_song") return createSong(membership.member_id, payload);
     if (payload.action === "save_song") return saveSong(membership.member_id, payload);
+    if (payload.action === "create_alternate_version") return createAlternateVersion(membership.member_id, payload);
     if (payload.action === "save_version") return saveVersion(membership.member_id, payload);
     if (payload.action === "import_existing") return importExisting(nativeDb, membership.member_id);
     if (payload.action === "queue_catalog_producer") return queueProducer(nativeDb, membership.member_id);

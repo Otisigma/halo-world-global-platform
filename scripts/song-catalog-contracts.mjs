@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
+import { runInNewContext } from "node:vm";
 import { sanitizeDreamweaverAssignedRoute } from "../lib/dreamweaver-storefront.js";
 import { buildDreamweaverSatellite } from "../lib/route-registry.js";
 import { pickCanonicalMaster, serializeMasterCopy } from "../netlify/lib/master-copy.mjs";
@@ -236,6 +237,137 @@ assert.equal(validateMasterUpload({ filename: "master.m4a", contentType: "audio/
 assert.equal(validateMasterUpload({ filename: "master.wav", contentType: "audio/wav", fileSize: MASTER_UPLOAD_MAX_BYTES + 1 }).status, 413, "masters above the size limit are rejected before a URL is issued");
 assert.equal(validateMasterUpload({ filename: "master.wav", contentType: "audio/wav", fileSize: 0 }).status, 400, "empty master uploads are rejected");
 assert.equal(validateMasterUpload({ filename: "cover.png", contentType: "image/png", fileSize: 1024 }).status, 415, "non-audio master uploads are rejected");
+
+assert.match(page, /id="versionTable"><\/div>\s*<form[^>]*id="alternateUploadForm"/, "inline upload lives directly below the unchanged version list");
+assert.match(page, /id="alternateSongId" name="songId" type="hidden"/, "inline uploads carry the current parent song");
+assert.match(page, /for="alternateVersionTitle"/, "version title has a visible label");
+assert.match(page, /for="alternateAudioFile"/, "audio picker has a visible label");
+assert.ok(client.includes('document.querySelector("#versionForm .audio-upload-panel")'), "dialog audio progress stays scoped to its own card");
+
+const inlineElements = Object.fromEntries(["alternateUploadForm", "alternateSongId", "alternateVersionTitle", "alternateAudioFile", "alternateUploadContext", "uploadAlternateButton"].map(id => [id, { value: "", dataset: {}, disabled: false, addEventListener() {} }]));
+const inlineForm = inlineElements.alternateUploadForm;
+const inlineControls = [inlineElements.alternateVersionTitle, inlineElements.alternateAudioFile, inlineElements.uploadAlternateButton];
+inlineForm.querySelectorAll = () => inlineControls;
+inlineForm.reset = () => {
+  inlineElements.alternateSongId.value = "";
+  inlineElements.alternateVersionTitle.value = "";
+  inlineElements.alternateAudioFile.files = [];
+};
+const inlineSongs = [{ id: "song-a", title: "<Original>", artistName: "Artist" }, { id: "song-b", title: "Other track", artistName: "Other artist" }];
+const inlineState = { songs: inlineSongs, selectedId: "song-a", authenticated: true };
+const inlineRequests = [];
+const inlineUploads = [];
+const inlineReloads = [];
+const inlineUi = { idle() {}, start() {}, success(text) { this.message = text; }, fail(text) { this.message = text; } };
+let failInlineUpload = false;
+let failInlineCreation = false;
+let duringInlineUpload = () => {};
+let generatedVersionIds = 0;
+const inline = runInNewContext(`${client.slice(client.indexOf("const alternateUploadUi="), client.indexOf("function message("))}
+({renderAlternateUpload,uploadAlternateVersion})`, {
+  $: selector => inlineElements[selector.slice(1)] || {},
+  uploadHelper: { createUploadUi: () => inlineUi },
+  state: inlineState,
+  crypto: { randomUUID: () => `new-version-${++generatedVersionIds}` },
+  setValue: (selector, value) => { inlineElements[selector.slice(1)].value = value; },
+  audioFileProblem: runInNewContext(`(${client.match(/^function audioFileProblem.*$/m)[0]})`, {
+    MAX_AUDIO_BYTES: 128 * 1024 * 1024,
+    audioContentType: runInNewContext(`(${client.match(/^function audioContentType.*$/m)[0]})`)
+  }),
+  api: async payload => { inlineRequests.push(payload); if (failInlineCreation) throw new Error("Creation unavailable"); return payload; },
+  uploadAudioToVersion: async payload => { inlineUploads.push(payload); await duringInlineUpload(); if (failInlineUpload) throw new Error("Connection stopped"); },
+  loadCatalog: async songId => { inlineReloads.push(songId); }
+});
+const inlineEvent = { preventDefault() {}, currentTarget: inlineForm };
+const chooseInlineUpload = (file = { name: "club.wav", type: "audio/wav", size: 1024 }) => {
+  inlineElements.alternateVersionTitle.value = "Club mix";
+  inlineElements.alternateAudioFile.files = [file];
+};
+inline.renderAlternateUpload(inlineSongs[0]);
+assert.equal(inlineElements.alternateSongId.value, "song-a");
+assert.ok(inlineElements.alternateUploadContext.textContent.includes("<Original>"), "parent title is rendered as text, not HTML");
+for (const file of [undefined, { name: "empty.wav", type: "audio/wav", size: 0 }, { name: "large.wav", type: "audio/wav", size: 128 * 1024 * 1024 + 1 }, { name: "cover.png", type: "image/png", size: 1024 }]) {
+  chooseInlineUpload(file);
+  if (!file) inlineElements.alternateAudioFile.files = [];
+  await inline.uploadAlternateVersion(inlineEvent);
+}
+chooseInlineUpload();
+inlineElements.alternateVersionTitle.value = "   ";
+await inline.uploadAlternateVersion(inlineEvent);
+assert.equal(inlineRequests.length, 0, "invalid files and blank titles create no version");
+chooseInlineUpload();
+inlineState.authenticated = false;
+await inline.uploadAlternateVersion(inlineEvent);
+assert.equal(inlineRequests.length, 0, "signed-out users cannot create a version");
+inlineState.authenticated = true;
+failInlineCreation = true;
+await inline.uploadAlternateVersion(inlineEvent);
+assert.equal(inlineUploads.length, 0, "audio is not uploaded when creation fails");
+failInlineCreation = false;
+failInlineUpload = true;
+await inline.uploadAlternateVersion(inlineEvent);
+assert.ok(inlineUi.message.includes("Retry here"));
+assert.ok(inlineElements.alternateVersionTitle.readOnly, "the created version title stays fixed for retries");
+assert.ok(inlineControls.every(control => !control.disabled), "failed uploads restore usable controls");
+failInlineUpload = false;
+duringInlineUpload = async () => {
+  assert.ok(inlineControls.every(control => control.disabled), "controls are disabled while uploading");
+  await inline.uploadAlternateVersion(inlineEvent);
+};
+await inline.uploadAlternateVersion(inlineEvent);
+assert.equal(inlineRequests.length, 3, "double submission during upload is ignored");
+assert.equal(new Set(inlineRequests.map(request => request.versionId)).size, 1, "creation and audio retries reuse the version ID");
+assert.ok(inlineUploads.every(upload => upload.songId === "song-a" && upload.versionId === inlineRequests[0].versionId), "uploads target the original parent and new version");
+assert.equal(inlineForm.dataset.versionId, undefined, "successful upload resets the next creation ID");
+assert.equal(inlineElements.alternateVersionTitle.value, "", "successful upload clears the form");
+chooseInlineUpload();
+duringInlineUpload = () => {
+  inlineState.selectedId = "song-b";
+  inline.renderAlternateUpload(inlineSongs[1]);
+};
+await inline.uploadAlternateVersion(inlineEvent);
+assert.equal(inlineUploads.at(-1).songId, "song-a", "switching tracks never retargets an in-flight upload");
+assert.equal(inlineElements.alternateSongId.value, "song-b", "the form follows the newly selected song");
+assert.equal(inlineReloads.at(-1), "song-b", "refresh preserves the user's current selection");
+assert.ok(inlineUi.message.includes("<Original>"), "completion names the original parent even after switching");
+
+const createAlternateSource = api.slice(api.indexOf("async function createAlternateVersion("), api.indexOf("async function saveVersion("))
+  .replace("ownerMemberId: string, payload: Record<string, unknown>", "ownerMemberId, payload");
+const versionRows = [];
+const ownedSongRows = [{ id: "song-a", ownerMemberId: "owner", status: "active" }];
+const testSongsTable = { id: "id", ownerMemberId: "ownerMemberId", status: "status" };
+const testVersionsTable = { id: "id", songId: "songId", versionType: "versionType", status: "status" };
+const createAlternate = runInNewContext(`${createAlternateSource}; createAlternateVersion`, {
+  cleanId: value => value === "invalid" ? "" : value,
+  cleanText: (value, limit) => String(value || "").trim().slice(0, limit),
+  json: (body, status = 200) => ({ body, status }),
+  songs: testSongsTable, songVersions: testVersionsTable,
+  eq: (column, value) => row => row[column] === value,
+  and: (...conditions) => row => conditions.every(condition => condition(row)),
+  VERSION_ROUTES: { alternate: { destination: "storefront", targetLufs: -14, saleEnabled: true } },
+  db: {
+    select: () => ({ from: table => ({ where: predicate => ({ limit: async () => (table === testSongsTable ? ownedSongRows : versionRows).filter(predicate) }) }) }),
+    insert: () => ({ values: row => ({ onConflictDoNothing: () => ({ returning: async () => {
+      if (versionRows.some(existing => existing.id === row.id)) return [];
+      versionRows.push({ ...row, status: "active" });
+      return [{ id: row.id }];
+    } }) }) })
+  }
+});
+const alternatePayload = { songId: "song-a", versionId: "version-a", label: "Club mix" };
+assert.equal((await createAlternate("other-owner", alternatePayload)).status, 404, "non-owners cannot create alternate versions");
+assert.equal((await createAlternate("owner", { ...alternatePayload, label: " " })).status, 400, "server rejects blank titles");
+assert.equal((await createAlternate("owner", { ...alternatePayload, songId: "invalid" })).status, 400, "server rejects invalid parent identifiers");
+assert.equal((await createAlternate("owner", alternatePayload)).status, 201);
+assert.equal((await createAlternate("owner", alternatePayload)).status, 200, "server creation is idempotent on retry");
+assert.equal(versionRows.length, 1);
+assert.equal(versionRows[0].versionType, "alternate", "creation never replaces or promotes the canonical master");
+assert.equal((await createAlternate("owner", { ...alternatePayload, versionId: "version-b" })).status, 201, "another upload creates another version");
+ownedSongRows.push({ id: "song-b", ownerMemberId: "owner", status: "active" });
+assert.equal((await createAlternate("owner", { ...alternatePayload, songId: "song-b" })).status, 409, "a reused ID cannot cross parent tracks");
+ownedSongRows[0].status = "archived";
+assert.equal((await createAlternate("owner", { ...alternatePayload, versionId: "version-c" })).status, 404, "archived songs cannot receive uploads");
+console.log("PASS: inline alternate upload placement, validation, ownership, context, progress, retry, and creation behavior");
 
 const failures = checks.filter(([passed]) => !passed);
 for (const [passed, description] of checks) console.log(`${passed ? "PASS" : "FAIL"}: ${description}`);

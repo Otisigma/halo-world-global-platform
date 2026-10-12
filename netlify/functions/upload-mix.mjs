@@ -10,6 +10,7 @@ const typeAliases = {
 };
 const extensionTypes = [[/\.mp3$/i, "audio/mpeg"], [/\.wav$/i, "audio/wav"], [/\.(?:m4a|mp4)$/i, "audio/mp4"],
   [/\.aac$/i, "audio/aac"], [/\.ogg$/i, "audio/ogg"], [/\.webm$/i, "audio/webm"]];
+// Keep in sync with dj-vault/upload-mix.js (client chunk size must stay below MAX_CHUNK_BYTES).
 export const MAX_CHUNK_BYTES = 4 * 1024 * 1024;
 export const MAX_CHUNKS = 64;
 export const MAX_MIX_BYTES = 128 * 1024 * 1024;
@@ -111,8 +112,11 @@ export function createUploadMixHandler({ getDatabase, getUser, membershipFor, st
         ? json({ message: "Mix already published", chunkIndex, alreadyPublished: true })
         : json({ message: "That upload belongs to another account" }, 409);
     }
+    const prefix = blobPrefixFor(user.id, uploadId);
+    // Later chunks only attach to an upload whose verified first chunk already exists.
+    if (chunkIndex > 0 && !(await store.getMetadata(`${prefix}000`))) return json({ message: "Upload the start of the mix first" }, 409);
     // Keys are deterministic per member/upload/chunk, so retried chunks overwrite instead of duplicating.
-    await store.set(`${blobPrefixFor(user.id, uploadId)}${String(chunkIndex).padStart(3, "0")}`, chunk);
+    await store.set(`${prefix}${String(chunkIndex).padStart(3, "0")}`, chunk, { metadata: { size: chunk.size, chunkCount } });
     return json({ message: "Mix chunk uploaded", chunkIndex });
   }
 
@@ -142,8 +146,20 @@ export function createUploadMixHandler({ getDatabase, getUser, membershipFor, st
     const prior = await existingMix(db, id);
     if (prior) return prior.member_id === user.id ? published(prior) : json({ message: "That upload belongs to another account" }, 409);
 
+    // Exactly parts 000..N-1 must exist, every part but the last must share one size (range reads
+    // depend on it), and the stored total must match the declared size.
+    const expected = Array.from({ length: chunkCount }, (_, index) => `${blobPrefix}${String(index).padStart(3, "0")}`);
     const stored = await store.list({ prefix: blobPrefix });
-    if (stored.blobs.length !== chunkCount) return json({ message: "The mix upload is incomplete. Retry the upload to resume." }, 409);
+    const storedKeys = new Set(stored.blobs.map(blob => blob.key));
+    const sizes = storedKeys.size === chunkCount && expected.every(key => storedKeys.has(key))
+      ? await Promise.all(expected.map(async key => Number((await store.getMetadata(key))?.metadata?.size))) : [];
+    const total = sizes.reduce((sum, size) => sum + size, 0);
+    if (!sizes.length || sizes.some((size, index) => !Number.isSafeInteger(size) || size < 1 || (index < chunkCount - 1 && size !== sizes[0]))
+      || total !== byteSize) {
+      // Stale or mismatched parts are cleared so the client's retry re-uploads a clean set.
+      await Promise.all([...storedKeys].map(key => store.delete(key))).catch(() => undefined);
+      return json({ message: "The mix upload is incomplete. Submit again to re-upload it." }, 409);
+    }
     const first = await store.get(`${blobPrefix}000`, { type: "arrayBuffer" });
     const contentType = first ? sniffAudioType(new Uint8Array(first).subarray(0, 16)) : "";
     if (!contentType) return json({ message: "That file does not look like a supported audio recording" }, 415);
@@ -168,7 +184,7 @@ export function createUploadMixHandler({ getDatabase, getUser, membershipFor, st
           ${chunkCount}, ${contentType}, ${byteSize}, ${metadata.durationSeconds}, 0, 'room',
           ${clean(membership.display_name, 100) || "DJ HALO X"}, 'stream_only', 'creator_desk',
           'self_mixed', 'halo_managed', FALSE, FALSE, TRUE,
-          'mp3', 0, 'USD', FALSE, TRUE, 'confirmed'
+          ${contentType === "audio/wav" ? "wav_bundle" : "mp3"}, 0, 'USD', FALSE, TRUE, 'confirmed'
         )
         ON CONFLICT DO NOTHING
         RETURNING id, title

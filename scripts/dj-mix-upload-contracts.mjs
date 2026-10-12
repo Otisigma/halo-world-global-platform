@@ -31,7 +31,7 @@ assert.deepEqual(validateMixMetadata({ title: "  Read   The Room ", rightsAttest
 
 // --- Handler fixture ----------------------------------------------------------------------------
 function fixture({ role = "admin", user = { id: "member-1", email: "dj@halo.example" }, failDb = false } = {}) {
-  const state = { blobs: new Map(), mixes: new Map(), plans: [], writes: [] };
+  const state = { blobs: new Map(), meta: new Map(), mixes: new Map(), plans: [], writes: [] };
   const db = { async sql(strings, ...values) {
     const query = strings.join("?");
     if (failDb) throw new Error("relation halo_mixes does not exist");
@@ -53,7 +53,9 @@ function fixture({ role = "admin", user = { id: "member-1", email: "dj@halo.exam
     return [];
   } };
   const store = {
-    async set(key, value) { state.blobs.set(key, new Uint8Array(await value.arrayBuffer())); },
+    async set(key, value, options) { state.blobs.set(key, new Uint8Array(await value.arrayBuffer())); state.meta.set(key, options?.metadata); },
+    async getMetadata(key) { return state.blobs.has(key) ? { metadata: state.meta.get(key) } : null; },
+    async delete(key) { state.blobs.delete(key); state.meta.delete(key); },
     async list({ prefix }) { return { blobs: [...state.blobs.keys()].filter(key => key.startsWith(prefix)).map(key => ({ key })) }; },
     async get(key) { const value = state.blobs.get(key); return value ? value.buffer.slice(value.byteOffset, value.byteOffset + value.byteLength) : null; }
   };
@@ -99,8 +101,24 @@ assert.equal((await f.handler(publishRequest({ ...publishBody, byteSize: 200 * 1
 assert.equal((await f.handler(publishRequest(publishBody))).status, 409, "publishing before chunks arrive is refused");
 assert.equal(f.state.writes.length, 0);
 
+// Later chunks cannot be parked without a verified first chunk.
+let response = await f.handler(chunkRequest(new Uint8Array(16).fill(7), { index: 1 }));
+assert.equal(response.status, 409);
+assert.equal(f.state.blobs.size, 0);
+
+// Mismatched sizes or stale parts are rejected and cleared so the retry re-uploads cleanly.
+assert.equal((await f.handler(chunkRequest(mp3, { index: 0 }))).status, 200);
+assert.equal((await f.handler(chunkRequest(new Uint8Array(16).fill(7), { index: 1 }))).status, 200);
+assert.equal((await f.handler(publishRequest({ ...publishBody, byteSize: 31 }))).status, 409, "declared size must match stored parts");
+assert.equal(f.state.blobs.size, 0, "mismatched parts are cleared");
+assert.equal((await f.handler(chunkRequest(mp3, { index: 0, count: 3 }))).status, 200);
+assert.equal((await f.handler(chunkRequest(new Uint8Array(4), { index: 2, count: 3 }))).status, 200);
+assert.equal((await f.handler(publishRequest({ ...publishBody, byteSize: 20 }))).status, 409, "parts must be exactly 000..N-1");
+assert.equal(f.state.blobs.size, 0);
+assert.equal(f.state.writes.length, 0);
+
 // Successful chunked upload + publish creates the catalog entry.
-let response = await f.handler(chunkRequest(mp3, { index: 0 }));
+response = await f.handler(chunkRequest(mp3, { index: 0 }));
 assert.equal(response.status, 200);
 response = await f.handler(chunkRequest(new Uint8Array(16).fill(7), { index: 1 }));
 assert.equal(response.status, 200, "later chunks are raw audio continuation bytes");

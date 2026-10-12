@@ -1,5 +1,6 @@
 // DJ Mix ingest portal: title + BPM + genre + one audio file -> /api/upload-mix -> DJ Vault listing.
 // All server-provided text is rendered with textContent only.
+// Mirrors netlify/functions/upload-mix.mjs limits; chunks must stay below its 4 MB MAX_CHUNK_BYTES.
 export const MIX_CHUNK_BYTES = 3.5 * 1024 * 1024;
 export const MAX_MIX_BYTES = 128 * 1024 * 1024;
 export const DEFAULT_BPM = 122;

@@ -44,6 +44,55 @@ Deploy feedback reports four explicit pass/fail contracts:
 
 When a contract fails, the script prints a `❌` line with the exact fix direction and exits non-zero so internal AI and maintainers can immediately treat the change as incomplete.
 
+## Featured DJ shop: deployment verification
+
+### Investigation evidence (2026-10-12)
+
+- PR [#372](https://github.com/Otisigma/halo-world-global-platform/pull/372) merged at 02:54:31 UTC and adds selector/admin audio upload and free-stream publication. PR [#373](https://github.com/Otisigma/halo-world-global-platform/pull/373) merged at 03:17:51 UTC and adds the featured toggle, singleton banner slot, and public featured endpoint. The checked `main` commit is `9f0739a18856da9e25cbd7237321f300b6c06033`.
+- The code path is upload chunks → atomic mix/release-plan/optional featured-slot write → `/api/dj-vault/featured-push` → banner above the crates → `/mixes/?mix=<id>#editions`. Featured retries do not reclaim a newer slot; ordinary uploads preserve it. Private mixes are excluded and public rendering uses text-safe DOM methods. Featuring does **not** enable sales, set a price, or perform audio mastering.
+- `npm run test:dj-vault` passes upload validation, role/origin gates, catalog publication, featured replacement, retry/failure isolation, private filtering, and banner/pagination rendering contracts. `npm run test:database` passes the earlier migration-conflict checks. These are repository checks, not proof of live Netlify storage, migrations, or playback.
+- CI [run 38199196819](https://github.com/Otisigma/halo-world-global-platform/actions/runs/38199196819) passed on the merge commit. The optional deploy [run 38199196652](https://github.com/Otisigma/halo-world-global-platform/actions/runs/38199196652/job/114648568815) explicitly logged `NETLIFY_BUILD_HOOK is not set; skipping deploy trigger.` A successful workflow therefore did **not** trigger Netlify through that hook. Netlify Git integration may deploy independently.
+- Netlify checks on #372/#373 reference deploys, but do not establish which commit is currently published in production or which database branch was migrated. The documented production host, `https://halo-world-global-platform.netlify.app`, and Netlify dashboard could not resolve from the investigation environment; the browser transport was also unavailable. No live response, production commit, database state, or real audio upload was verified.
+- No confirmed code defect was found that warrants changing the flow. The confirmed configuration gap is the absent optional build hook; whether this caused a stale deployment is **unverified**. A missing/failed featured migration and a runtime configuration failure remain alternatives, not established root causes. PRs #263 (literal chart routes) and #295 (retry-safe `drive_url` migration) are merged historical fixes, not evidence of a current production failure.
+
+### Maintainer production checks
+
+1. **Match the published deploy to Git.** In the Netlify project's production deploy view, record the published deploy ID, context, branch, commit SHA, and build/migration outcome. Compare it with `9f0739a18856da9e25cbd7237321f300b6c06033` or a later commit containing both PRs. A successful deploy preview is not a published production deploy. If production is older, inspect the failed/pending deploy logs before redeploying the approved `main` commit. Verify Git auto-publishing is enabled or configure the optional `NETLIFY_BUILD_HOOK` repository secret for the intended production branch; never put the hook URL in source or logs.
+2. **Verify served assets and routes independently.** Open `/dj-vault/upload/` and confirm the “Push to DJ Shop Featured Banner” toggle and tag selector. Compare served `/dj-vault/upload-mix.js` and `/dj-vault/dj-vault.js` with the published commit (including the toggle payload and featured fetch). Bypass browser/service-worker cache during this check. Request these endpoints on the same production origin:
+
+   ```sh
+   SITE=https://halo-world-global-platform.netlify.app
+   curl --silent --show-error --include "$SITE/api/dj-vault/featured-push"
+   curl --silent --show-error --include "$SITE/api/dj-vault/session"
+   curl --silent --show-error --include "$SITE/api/upload-mix"
+   ```
+
+   The first two should return JSON with HTTP 200; an anonymous session should not grant `canRoute`. The last is a non-mutating GET and should return HTTP 405 with JSON because uploads require POST. HTML or 404 indicates an origin/routing/deploy mismatch; compare the published function bundle as well as static assets. The workflow's `public/telemetry.json` is an ephemeral Actions artifact, not a reliable production commit marker.
+3. **Check the production database, not a preview branch.** In an authorized database console for the branch used by production functions, run this read-only query:
+
+   ```sql
+   SELECT to_regclass('public.halo_mixes') AS mixes,
+          to_regclass('public.halo_mix_release_plans') AS release_plans,
+          to_regclass('public.halo_dj_vault_roles') AS roles,
+          to_regclass('public.halo_dj_shop_featured') AS featured;
+   ```
+
+   If `featured` is null, confirm whether `20261012040000_dj_shop_featured.sql` was skipped or failed in that branch's migration logs. Apply the reviewed migration through the authorized migration process after its existing DJ Vault/mix dependencies, then verify its columns, singleton primary key/checks, and cascading mix foreign key. `CREATE TABLE IF NOT EXISTS` does not repair a malformed existing table; inspect schema drift rather than blindly replaying it. Do not reset the database or overwrite catalog rows. This migration is required before deploying #373: even an ordinary new publish references the featured table in its SQL statement.
+
+   Once the table exists, inspect the slot without exposing storage keys or member identities:
+
+   ```sql
+   SELECT f.slot, f.mix_id, f.push_priority, m.title, m.visibility,
+          m.sales_status, m.client_sale_enabled
+   FROM halo_dj_shop_featured f JOIN halo_mixes m ON m.id = f.mix_id;
+   ```
+
+   HTTP 200 with `{"success":true,"edition":null}` is valid when no slot exists or the selected mix is private. A hidden banner alone is not proof of an empty slot: the UI also hides it when the featured API fails, without blocking catalog browsing.
+4. **Separate runtime failures from migration failures.** For HTTP 503, inspect private function logs for the failing request: a missing relation identifies a schema/branch gap; database connection errors require checking the production Netlify Database binding; Identity failures require checking the site's Identity setup; blob errors require checking access to the existing `halo-mixes` store. Confirm the signed-in operator has `selector` or `admin` in `halo_dj_vault_roles` and `/api/dj-vault/session` reports `canRoute:true`. Upload requests must originate from the same site. Do not disable role/origin checks or share tokens to bypass a failure. A standalone static/self-hosted page or a passing `/healthz` check does not verify Netlify functions.
+5. **Run an authorized end-to-end smoke test after migration/deploy verification.** Sign in as a selector/admin and upload a real, rights-attested supported audio file with the featured toggle enabled. Record the returned mix ID and require a successful publish response, the matching public featured API entry, and the banner title/tag/“Free stream” label. Follow both success links; confirm the mix is selected in the Vault and plays in `/mixes/?mix=<id>`, including seeking with a valid audio Range response. Publish a second featured mix to verify replacement without deleting the first catalog entry. Publish an ordinary mix and confirm the featured slot remains unchanged. Repository contracts cover retry safety; do not expect re-publishing the first ID to reclaim the slot. Coordinate any production test content and cleanup with the maintainer.
+
+Close the incident only with the published SHA, successful production migration evidence, endpoint statuses, and real upload/banner/playback results. Until those are captured, report **repository flow validated; production root cause and recovery unconfirmed**, not “live site fixed.”
+
 ## Prebuild release guard
 
 Netlify runs `npm run build`: npm first runs `npm run release-guard -- --allow-missing-catalog`, then the existing music chart contracts. The storefront loads its live catalog from the Netlify Database-backed `/api/release-catalog` endpoint, so the root `shared-catalog.json` is an optional static catalog, not a deployment prerequisite. The prebuild flag skips only an absent static catalog and does not create one or modify live database records. If a static catalog is supplied, it must contain an array or an object with a `songs` array; malformed or unsupported catalogs still block the build without rewriting them. Running `npm run release-guard` directly remains strict and fails if the catalog is missing. An unresolved quarantine blocks both modes even if the catalog has been removed.

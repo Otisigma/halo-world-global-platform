@@ -340,13 +340,14 @@ vaultNodes["vault-upload-link"].hidden = true;
 const listed = { id: uploadId, title: mix.title, description: mix.description, creator: { name: "DJ HALO X" } };
 let banner = { ...featured, title: "<img src=x onerror=alert(1)>", creator: { name: "<script>artist</script>" } };
 let failBanner = false;
+let pendingFeature = null, nextOffset = null;
 const vault = createVaultView({
   document: { getElementById: name => vaultNodes[name], createElement: tag => new Node(tag) },
   location: { search: `?mix=${uploadId}`, assign() {} }, identity: {}, history: { replaceState() {} },
-  fetch: async url => url.endsWith("/featured-push") ? failBanner ? new Response("", { status: 503 }) : Response.json({ success: true, edition: banner })
+  fetch: async url => url.endsWith("/featured-push") ? pendingFeature || (failBanner ? new Response("", { status: 503 }) : Response.json({ success: true, edition: banner }))
     : url.startsWith("/api/mixes") ? Response.json({ mixes: [listed] })
     : url.endsWith("/session") ? Response.json({ authenticated: true, authorized: true, canRoute: true })
-      : Response.json({ success: true, tracks: [], nextOffset: null })
+      : Response.json({ success: true, tracks: [], nextOffset })
 });
 await vault.load();
 const shopCard = vaultNodes["vault-mixes"].children[0];
@@ -372,6 +373,27 @@ failBanner = true;
 await vault.load();
 assert.equal(vaultNodes["vault-shop-push-container"].hidden, true, "feature failure does not leave stale content");
 assert.equal(vaultNodes["vault-mixes"].children.length, 1, "feature failure does not block normal mix listing");
+failBanner = false;
+nextOffset = 25;
+let finishFeature;
+pendingFeature = new Promise(resolve => { finishFeature = resolve; });
+const initialLoad = vault.load();
+await new Promise(resolve => setImmediate(resolve));
+assert.equal(vaultNodes["vault-more"].hidden, false, "pagination is usable while the feature is still loading");
+await vault.load(true);
+finishFeature(Response.json({ success: true, edition: featured }));
+await initialLoad;
+assert.equal(vaultNodes["vault-shop-push-container"].hidden, false, "pagination does not suppress a pending feature");
+pendingFeature = new Promise(resolve => { finishFeature = resolve; });
+const staleLoad = vault.load();
+await new Promise(resolve => setImmediate(resolve));
+pendingFeature = null;
+banner = { ...featured, title: "Newer feature" };
+await vault.load();
+finishFeature(Response.json({ success: true, edition: featured }));
+await staleLoad;
+assert.equal(vaultNodes["vault-shop-push"].children[0].querySelector("h2").textContent, "Newer feature",
+  "a superseded featured request cannot overwrite the newer banner");
 
 // --- Static wiring ------------------------------------------------------------------------------
 const page = await readFile(new URL("../dj-vault/upload/index.html", import.meta.url), "utf8");

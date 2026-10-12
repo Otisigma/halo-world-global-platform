@@ -61,7 +61,7 @@ export function createVaultView({ document, fetch, location, identity, history, 
   const featuredSlot = document.getElementById("vault-shop-push");
   let tracks = [], authorized = false, authenticated = false, nextOffset = null, generation = 0;
   let paymentConfirmed = false, paymentError = "", rendered = new Map(), cueHandled = false;
-  let mixGeneration = 0;
+  let mixGeneration = 0, featuredGeneration = 0;
   const votes = createVoteStore(storage);
   // Verified DJs see shared server totals (which already include their own vote);
   // other visitors see the shared total plus their browser-local vote.
@@ -158,13 +158,14 @@ export function createVaultView({ document, fetch, location, identity, history, 
       + (paymentError ? ` ${paymentError}` : "");
   }
   function refilter() { describe(render()); }
-  async function loadFeatured(current) {
+  async function loadFeatured() {
     if (!featuredContainer || !featuredSlot) return;
+    const current = ++featuredGeneration;
     featuredContainer.hidden = true;
     featuredSlot.replaceChildren();
     try {
       const data = await api("featured-push");
-      if (current !== generation || data.success !== true || !validMixId(data.edition?.id)) return;
+      if (current !== featuredGeneration || data.success !== true || !validMixId(data.edition?.id)) return;
       const mix = data.edition;
       const card = createMixCard({ document, mix });
       card.id = `vault-featured-${mix.id}`;
@@ -223,7 +224,7 @@ export function createVaultView({ document, fetch, location, identity, history, 
     confirm.hidden = true;
     if (!append) { tracks = []; authorized = false; grid.replaceChildren(); }
     const mixesLoaded = !append ? loadMixes() : null;
-    const featuredLoaded = !append ? loadFeatured(current) : null;
+    const featuredLoaded = !append ? loadFeatured() : null;
     try {
       const session = await api("session");
       if (current !== generation) return;

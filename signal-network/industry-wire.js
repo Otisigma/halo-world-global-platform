@@ -139,7 +139,9 @@ function mountIndustryWire(panel) {
   }
 
   document.addEventListener("click", event => {
-    if (event.target.closest('[data-signal-tab="wire"]') && !loaded) load();
+    if (!event.target.closest('[data-signal-tab="wire"]')) return;
+    if (loaded) loadPulse();
+    else load();
   });
   document.getElementById("industryWireRefresh")?.addEventListener("click", load);
   if (!panel.hidden) load();

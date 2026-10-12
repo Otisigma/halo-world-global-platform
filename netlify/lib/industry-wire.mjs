@@ -11,6 +11,7 @@ export const WIRE_VISIBILITY_LABEL = "Internal · HALO community only";
 export const WIRE_AUTHOR = "HALO Network Core";
 export const WIRE_STATUSES = Object.freeze(["draft", "published"]);
 export const WIRE_POST_PREFIX = "posts/";
+export const WIRE_DRAFT_PREFIX = "drafts/";
 export const WIRE_FEED_LIMIT = 30;
 const MAX_BODY_BYTES = 16_000;
 const MAX_STORED_POSTS = WIRE_FEED_LIMIT * 3;
@@ -133,23 +134,29 @@ export function weeklyWireDraft(now = new Date()) {
   });
 }
 
-// Keys start with a compact created_at stamp so lexical order is chronological.
+// Published posts and drafts live under separate prefixes so drafts never crowd the
+// feed's read window. Keys start with a compact created_at stamp so lexical order is chronological.
 export function wirePostKey(post) {
-  return `${WIRE_POST_PREFIX}${post.created_at.replace(/[^0-9]/g, "")}_${post.id}`;
+  const prefix = post.status === "published" ? WIRE_POST_PREFIX : WIRE_DRAFT_PREFIX;
+  return `${prefix}${post.created_at.replace(/[^0-9]/g, "")}_${post.id}`;
 }
 
-async function listWireKeys(store) {
-  const { blobs = [] } = await store.list({ prefix: WIRE_POST_PREFIX });
+async function listWireKeys(store, prefix) {
+  const { blobs = [] } = await store.list({ prefix });
   return blobs.map(blob => blob.key).sort().reverse();
 }
 
 export async function findWirePostKey(store, id) {
-  return (await listWireKeys(store)).find(key => key.endsWith(`_${id}`)) || null;
+  for (const prefix of [WIRE_DRAFT_PREFIX, WIRE_POST_PREFIX]) {
+    const key = (await listWireKeys(store, prefix)).find(candidate => candidate.endsWith(`_${id}`));
+    if (key) return key;
+  }
+  return null;
 }
 
-export async function listStoredWirePosts(store) {
+export async function listStoredWirePosts(store, prefix = WIRE_POST_PREFIX) {
   if (!store) return [];
-  const keys = (await listWireKeys(store)).slice(0, MAX_STORED_POSTS);
+  const keys = (await listWireKeys(store, prefix)).slice(0, MAX_STORED_POSTS);
   const posts = await Promise.all(keys.map(key => store.get(key, { type: "json" }).catch(() => null)));
   return posts.filter(Boolean);
 }
@@ -166,7 +173,10 @@ function json(payload, status = 200, headers = {}) {
 export function createIndustryWireHandler({ getDatabase, getUser, ensureMembership, authorizeOperator, getStore, now = () => new Date() }) {
   async function readPosts(store, includeDrafts) {
     let stored = [];
-    try { stored = await listStoredWirePosts(store); }
+    try {
+      stored = await listStoredWirePosts(store);
+      if (includeDrafts) stored.push(...await listStoredWirePosts(store, WIRE_DRAFT_PREFIX));
+    }
     catch (error) { console.error("Industry Wire store read failed", error instanceof Error ? error.message : "unknown error"); }
     return visibleWirePosts([...stored, ...SEED_WIRE_POSTS], { includeDrafts });
   }
@@ -217,6 +227,7 @@ export function createIndustryWireHandler({ getDatabase, getUser, ensureMembersh
         const key = /^[a-z0-9][a-z0-9-]*$/.test(id) ? await findWirePostKey(store, id) : null;
         const existing = normalizeWirePost(key ? await store.get(key, { type: "json" }) : null);
         if (!existing) return json({ message: "Wire draft not found" }, 404);
+        if (existing.status === "published") return json({ message: "That wire post is already published" }, 409);
         const artistPerspective = cleanText(body.artist_perspective, limits.artist_perspective) || existing.artist_perspective;
         if (!artistPerspective) return json({ message: "Add the artist's take before publishing to the Wire" }, 422);
         // Publishing stamps the post with its publish time so the feed stays newest-first.

@@ -125,6 +125,7 @@ await check("members cannot publish; operators create and publish drafts", async
   const { post: createdPost } = await created.json();
   assert.equal(createdPost.visibility, WIRE_VISIBILITY, "operators cannot override internal visibility");
   assert.ok(store.data.has(`posts/20261012120000000_${createdPost.id}`), "keys sort chronologically");
+  assert.ok(![...store.data.keys()].some(key => key.startsWith("drafts/")));
   const oversized = await operator.request(null, "", { method: "POST", body: JSON.stringify({ action: "create", title: "x", summary: "y".repeat(20_000), artist_perspective: "z" }) });
   assert.equal(oversized.status, 413, "body size is enforced without relying on Content-Length");
 
@@ -140,7 +141,8 @@ await check("members cannot publish; operators create and publish drafts", async
   const published = await (await later.request({ action: "publish", id: draft.post.id, artist_perspective: "My take." })).json();
   assert.equal(published.post.status, "published");
   assert.equal(published.post.created_at, "2026-10-15T08:00:00.000Z", "publishing stamps the publish time");
-  assert.equal([...store.data.keys()].filter(key => key.endsWith(`_${draft.post.id}`)).length, 1, "draft is re-keyed, not duplicated");
+  assert.deepEqual([...store.data.keys()].filter(key => key.endsWith(`_${draft.post.id}`)), [`posts/20261015080000000_${draft.post.id}`], "draft moves from drafts/ to posts/");
+  assert.equal((await later.request({ action: "publish", id: draft.post.id, artist_perspective: "Again." })).status, 409, "re-publishing cannot reorder the feed");
   const afterPublish = await (await harness({ user: { id: "identity" }, store }).request()).json();
   assert.equal(afterPublish.posts[0].id, draft.post.id, "newly published draft leads the feed");
   assert.equal((await operator.request({ action: "unknown" })).status, 400);
@@ -154,6 +156,7 @@ await check("weekly generator queues one deterministic internal draft per ISO we
   const first = await queueWeeklyWireDraft(store, monday);
   assert.equal(first.queued, true);
   assert.equal(first.post.id, "wire-draft-2026-w42");
+  assert.ok(store.data.has("drafts/20261012090000000_wire-draft-2026-w42"), "weekly drafts stay out of the feed's key range");
   assert.equal(first.post.status, "draft");
   assert.equal(first.post.visibility, WIRE_VISIBILITY);
   assert.match(first.post.summary, /Internal community brief/);

@@ -56,6 +56,7 @@ export function createVaultView({ document, fetch, location, identity, history, 
   const confirm = document.getElementById("vault-confirm");
   const mixGrid = document.getElementById("vault-mixes");
   const mixStatus = document.getElementById("vault-mix-status");
+  const uploadLink = document.getElementById("vault-upload-link");
   let tracks = [], authorized = false, authenticated = false, nextOffset = null, generation = 0;
   let paymentConfirmed = false, paymentError = "", rendered = new Map(), cueHandled = false;
   let mixGeneration = 0;
@@ -202,6 +203,7 @@ export function createVaultView({ document, fetch, location, identity, history, 
       authorized = session.authorized === true;
       authenticated = session.authenticated === true;
       login.textContent = session.authenticated ? "Account / sign out" : "Sign in";
+      if (uploadLink) uploadLink.hidden = session.canRoute !== true;
       const params = new URLSearchParams(location.search);
       paymentError = "";
       if (!append && authorized && params.has("session_id") && !paymentConfirmed) {

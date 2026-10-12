@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Upload a DJ mix — HALO DJ Vault</title>
+  <meta name="description" content="Selector and admin ingest portal for publishing a single DJ mix to the HALO DJ Vault.">
+  <meta name="robots" content="noindex, nofollow">
+  <link rel="stylesheet" href="/dj-vault/dj-vault.css">
+  <link rel="stylesheet" href="/accessibility.css">
+  <script src="/accessibility.js" defer></script>
+  <script src="/stats.js" defer></script>
+  <script src="/site-monitor.js" defer></script>
+  <script src="/upload-progress.js"></script>
+</head>
+<body class="dj-vault-room" data-route="dj-vault">
+  <a class="skip-link" href="#mix-upload">Skip to mix upload</a>
+  <header>
+    <nav aria-label="Main navigation"><a href="/halo">HALO home</a><a href="/dj-vault/">DJ Vault</a><a href="/mixes/">Mixes</a></nav>
+  </header>
+  <main id="mix-upload">
+    <div class="vault-sign">
+      <p class="eyebrow">HALO // Selector desk</p>
+      <h1>Upload a DJ mix</h1>
+      <p class="vault-sign__subtitle">Drop the file, name the set, publish to the DJ Vault.</p>
+    </div>
+    <section class="vault-console" aria-labelledby="mix-upload-title">
+      <div class="vault-console__header">
+        <h2 id="mix-upload-title">Mix ingest</h2>
+        <span aria-hidden="true" class="vault-console__leds">● ● ●</span>
+      </div>
+      <p id="mix-upload-gate" class="vault-upload__gate" role="alert" hidden></p>
+      <form id="mix-upload-form" class="vault-upload" aria-busy="false" novalidate>
+        <div class="vault-filter">
+          <label for="mix-title">Mix title</label>
+          <input id="mix-title" name="title" type="text" minlength="2" maxlength="100" required placeholder="Read The Room (DJ Mix)">
+        </div>
+        <div class="vault-filter">
+          <label for="mix-bpm">BPM</label>
+          <input id="mix-bpm" name="bpm" type="number" inputmode="numeric" min="60" max="200" step="1" value="122" list="mix-bpm-presets">
+          <datalist id="mix-bpm-presets"><option value="118"><option value="120"><option value="122"><option value="124"><option value="126"><option value="128"></datalist>
+        </div>
+        <div class="vault-filter">
+          <label for="mix-genre">Genre</label>
+          <input id="mix-genre" name="genre" type="text" maxlength="60" value="Deep / Afro House" list="mix-genre-presets">
+          <datalist id="mix-genre-presets"><option value="Deep / Afro House"><option value="Afro House"><option value="Deep House"><option value="Melodic House"><option value="Tech House"></datalist>
+        </div>
+        <div class="vault-filter">
+          <label for="mix-file">Audio file (MP3, WAV, M4A, AAC, OGG, WebM · up to 128 MB)</label>
+          <input id="mix-file" name="audio" type="file" accept="audio/*,.mp3,.wav,.m4a,.aac,.ogg,.webm" required>
+        </div>
+        <label class="vault-upload__rights" for="mix-rights"><input id="mix-rights" name="rightsAttested" type="checkbox" required> I hold the rights to publish this mix on HALO.</label>
+        <button id="mix-submit" type="submit" disabled>Upload &amp; publish mix</button>
+        <progress id="mix-upload-progress" max="100" value="0" aria-label="Upload progress" hidden></progress>
+      </form>
+      <p id="mix-upload-status" role="status" aria-live="polite">Choose a mix to publish.</p>
+      <div id="mix-upload-result" class="vault-actions"></div>
+    </section>
+  </main>
+  <script type="module" src="/dj-vault/upload-mix.js"></script>
+</body>
+</html>

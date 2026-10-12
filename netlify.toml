@@ -8,6 +8,11 @@
   status = 200
 
 [[redirects]]
+  from = "/dj-vault/upload/"
+  to = "/dj-vault/upload/index.html"
+  status = 200
+
+[[redirects]]
   from = "/empath-journey/"
   to = "/empath-journey/index.html"
   status = 200

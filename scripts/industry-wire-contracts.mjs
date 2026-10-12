@@ -99,7 +99,7 @@ await check("seed post is the internal Draft #1 brief", async () => {
 await check("anonymous readers are rejected; members read the wire", async () => {
   const anonymous = harness();
   assert.equal((await anonymous.request()).status, 401);
-  const store = memoryStore({ "posts/wire-new": post({ id: "wire-new", created_at: "2026-10-12T11:00:00Z" }), "posts/wire-hidden": post({ id: "wire-hidden", visibility: "public" }) });
+  const store = memoryStore({ "posts/20261012110000_wire-new": post({ id: "wire-new", created_at: "2026-10-12T11:00:00Z" }), "posts/20261001000000_wire-hidden": post({ id: "wire-hidden", visibility: "public" }) });
   const member = harness({ user: { id: "identity" }, store });
   const response = await member.request();
   assert.equal(response.status, 200);
@@ -123,7 +123,9 @@ await check("members cannot publish; operators create and publish drafts", async
   assert.equal(created.status, 201);
   const { post: createdPost } = await created.json();
   assert.equal(createdPost.visibility, WIRE_VISIBILITY, "operators cannot override internal visibility");
-  assert.ok(store.data.has(`posts/${createdPost.id}`));
+  assert.ok(store.data.has(`posts/20261012120000000_${createdPost.id}`), "keys sort chronologically");
+  const oversized = await operator.request(null, "", { method: "POST", body: JSON.stringify({ action: "create", title: "x", summary: "y".repeat(20_000), artist_perspective: "z" }) });
+  assert.equal(oversized.status, 413, "body size is enforced without relying on Content-Length");
 
   const draft = await (await operator.request({ action: "create", title: "Draft brief", summary: "Pending.", status: "draft" })).json();
   const memberView = await (await harness({ user: { id: "identity" }, store }).request()).json();

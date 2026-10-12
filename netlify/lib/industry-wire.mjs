@@ -133,16 +133,29 @@ export function weeklyWireDraft(now = new Date()) {
   });
 }
 
+// Keys start with a compact created_at stamp so lexical order is chronological.
+export function wirePostKey(post) {
+  return `${WIRE_POST_PREFIX}${post.created_at.replace(/[^0-9]/g, "")}_${post.id}`;
+}
+
+async function listWireKeys(store) {
+  const { blobs = [] } = await store.list({ prefix: WIRE_POST_PREFIX });
+  return blobs.map(blob => blob.key).sort().reverse();
+}
+
+export async function findWirePostKey(store, id) {
+  return (await listWireKeys(store)).find(key => key.endsWith(`_${id}`)) || null;
+}
+
 export async function listStoredWirePosts(store) {
   if (!store) return [];
-  const { blobs = [] } = await store.list({ prefix: WIRE_POST_PREFIX });
-  const keys = blobs.map(blob => blob.key).sort().reverse().slice(0, MAX_STORED_POSTS);
+  const keys = (await listWireKeys(store)).slice(0, MAX_STORED_POSTS);
   const posts = await Promise.all(keys.map(key => store.get(key, { type: "json" }).catch(() => null)));
   return posts.filter(Boolean);
 }
 
-export async function saveWirePost(store, post) {
-  await store.setJSON(`${WIRE_POST_PREFIX}${post.id}`, post);
+export async function saveWirePost(store, post, key = wirePostKey(post)) {
+  await store.setJSON(key, post);
   return post;
 }
 
@@ -178,7 +191,10 @@ export function createIndustryWireHandler({ getDatabase, getUser, ensureMembersh
 
       if (!operator) return json({ message: "Only HALO operators can publish to the Industry Wire" }, 403);
       if (Number(request.headers.get("content-length") || 0) > MAX_BODY_BYTES) return json({ message: "Wire post is too large" }, 413);
-      const body = await request.json().catch(() => null);
+      const raw = await request.text();
+      if (new TextEncoder().encode(raw).byteLength > MAX_BODY_BYTES) return json({ message: "Wire post is too large" }, 413);
+      let body = null;
+      try { body = JSON.parse(raw); } catch { body = null; }
       if (!body || typeof body !== "object") return json({ message: "Request body must be valid JSON" }, 400);
       const store = getStore();
 
@@ -198,12 +214,13 @@ export function createIndustryWireHandler({ getDatabase, getUser, ensureMembersh
 
       if (body.action === "publish") {
         const id = cleanText(body.id, 120);
-        const existing = normalizeWirePost(/^[a-z0-9][a-z0-9-]*$/.test(id) ? await store.get(`${WIRE_POST_PREFIX}${id}`, { type: "json" }) : null);
+        const key = /^[a-z0-9][a-z0-9-]*$/.test(id) ? await findWirePostKey(store, id) : null;
+        const existing = normalizeWirePost(key ? await store.get(key, { type: "json" }) : null);
         if (!existing) return json({ message: "Wire draft not found" }, 404);
         const artistPerspective = cleanText(body.artist_perspective, limits.artist_perspective) || existing.artist_perspective;
         if (!artistPerspective) return json({ message: "Add the artist's take before publishing to the Wire" }, 422);
         const post = { ...existing, artist_perspective: artistPerspective, visibility: WIRE_VISIBILITY, status: "published" };
-        return json({ post: await saveWirePost(store, post) });
+        return json({ post: await saveWirePost(store, post, key) });
       }
 
       return json({ message: "Choose a supported Industry Wire action" }, 400);
@@ -217,7 +234,8 @@ export function createIndustryWireHandler({ getDatabase, getUser, ensureMembersh
 export async function queueWeeklyWireDraft(store, now = new Date()) {
   const result = weeklyWireDraft(now);
   if (result.error) throw new Error(result.error);
-  const existing = await store.get(`${WIRE_POST_PREFIX}${result.post.id}`, { type: "json" });
+  const existingKey = await findWirePostKey(store, result.post.id);
+  const existing = existingKey ? await store.get(existingKey, { type: "json" }) : null;
   if (existing) return { queued: false, post: normalizeWirePost(existing) };
   return { queued: true, post: await saveWirePost(store, result.post) };
 }

@@ -27,6 +27,7 @@
   <link rel="stylesheet" href="/campaign-studio/fanout-modal.css">
   <link rel="stylesheet" href="/signal-network/signal-rooms.css">
   <link rel="stylesheet" href="/signal-network/signal-satellite.css">
+  <link rel="stylesheet" href="/signal-network/industry-wire.css">
   <link rel="stylesheet" href="/accessibility.css">
   <script src="/stats.js" defer></script>
   <script src="/accessibility.js" defer></script>
@@ -1062,6 +1063,7 @@
               <button type="button" role="tab" aria-selected="false" data-signal-tab="campaigns"><span>03</span> Campaigns</button>
               <button type="button" role="tab" aria-selected="false" data-signal-tab="messages"><span>04</span> Messages <b id="messageTabBadge" hidden>0</b></button>
               <button type="button" role="tab" aria-selected="false" data-signal-tab="map"><span>05</span> Live map</button>
+              <button type="button" role="tab" aria-selected="false" data-signal-tab="wire"><span>06</span> Industry Wire</button>
             </nav>
 
             <div class="signal-panels">
@@ -1109,6 +1111,24 @@
                   </div>
                   <div class="signal-region-list" id="signalRegionList"></div>
                 </div>
+              </section>
+
+              <section class="signal-panel industry-wire" id="signalPanelWire" role="tabpanel" data-signal-panel="wire" data-industry-wire hidden>
+                <header class="signal-panel__header">
+                  <div><p>Members Only · Internal Network Feed</p><h3>Living Industry Wire</h3></div>
+                  <span>Industry shifts, the artist's take and what is uniting the room. Never published to the public site.</span>
+                </header>
+                <aside class="industry-wire__pulse" id="industryWirePulse" aria-labelledby="industryWirePulseTitle" aria-live="polite">
+                  <p class="industry-wire__eyebrow"><span class="industry-wire__live" aria-hidden="true"></span> Community Pulse</p>
+                  <h4 id="industryWirePulseTitle">Who's listening right now</h4>
+                  <div id="industryWirePulseBody"><p class="industry-wire__muted">Tuning into HALO Radio…</p></div>
+                </aside>
+                <div class="industry-wire__toolbar">
+                  <span class="industry-wire__badge" id="industryWireVisibility">Internal · HALO community only</span>
+                  <button class="signal-text-button" type="button" id="industryWireRefresh">Refresh wire</button>
+                </div>
+                <p class="industry-wire__status" id="industryWireStatus" role="status" aria-live="polite"></p>
+                <div class="industry-wire__feed" id="industryWireFeed" aria-busy="false"></div>
               </section>
             </div>
           </div>
@@ -1666,6 +1686,7 @@
 
   <script type="module" src="/identity.js"></script>
   <script type="module" src="/signal-network/signal-network.js"></script>
+  <script type="module" src="/signal-network/industry-wire.js"></script>
   <script type="module" src="/signal-network/marketplace.js"></script>
   <script type="module" src="/signal-network/signal-feed.js"></script>
   <script type="module" src="/halo-brand-router.js"></script>

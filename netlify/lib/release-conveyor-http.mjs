@@ -34,11 +34,16 @@ export function createReleaseConveyorHandler({ getDatabase, getUser, verifyReque
         const artifact = url.searchParams.get("artifact");
         if (artifact && !current) return json({ message: "The song changed. Rerun the conveyor to regenerate this package." }, 409);
         if (artifact === "audio") return downloadAudio({ ...state, ownerMemberId: membership.member_id }, request);
-        if (["package", "documents", "promotion"].includes(artifact)) {
+        if (["package", "documents", "promotion", "visual-manifest", "creative-manifest"].includes(artifact)) {
           if (state.status !== "ready") return json({ message: "Resolve the release receipt before downloading a ready package." }, 409);
           const document = state.package.documents;
           const promo = state.package.promotion;
-          const content = artifact === "documents" ? [
+          const isVisualManifest = ["visual-manifest", "creative-manifest"].includes(artifact);
+          const content = isVisualManifest ? JSON.stringify({
+            releaseId: songId,
+            visualManifest: state.package.visualManifest || promo?.visualManifest || null,
+            alternateVisualManifests: state.package.alternateVisualManifests || promo?.alternateVisualManifests || []
+          }, null, 2) : artifact === "documents" ? [
             `${document.artistName} — ${document.title}`, `HALO release ID: ${document.releaseId}`,
             `ISRC: ${document.isrc}`, `UPC: ${document.upc}`, `Genre: ${document.genre}`,
             `Explicit: ${document.explicitLyrics ? "yes" : "no"}`, `Rights: ${document.rightsStatus}`,
@@ -60,10 +65,15 @@ export function createReleaseConveyorHandler({ getDatabase, getUser, verifyReque
             "", "SOCIAL COPY", promo.socialCopy, "", "ARTWORK ALT TEXT", promo.altText,
             "", "Draft for creator review. Publication and external distribution are not automatic.",
           ].join("\n") : JSON.stringify({ receipt: state.receipt, ...state.package }, null, 2);
+          const filename = isVisualManifest
+            ? `HALO-${songId}-visual-manifest.json`
+            : artifact === "package"
+              ? `HALO-${songId}-release-package.json`
+              : `HALO-${songId}-${artifact}.txt`;
           return new Response(content, { headers: {
-            "Content-Type": artifact === "package" ? "application/json" : "text/plain; charset=utf-8",
+            "Content-Type": (artifact === "package" || isVisualManifest) ? "application/json" : "text/plain; charset=utf-8",
             "Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff",
-            "Content-Disposition": `attachment; filename="HALO-${songId}-${artifact === "package" ? "release-package.json" : `${artifact}.txt`}"`,
+            "Content-Disposition": `attachment; filename="${filename}"`,
           } });
         }
         if (artifact) return json({ message: "Unknown release artifact." }, 400);

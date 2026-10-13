@@ -99,7 +99,7 @@ const rooms = [
   },
   {
     key: "metadata", name: "Metadata Room", short: "Metadata", title: "Make one source of truth.",
-    intro: "Metadata is the information attached to the release. Build it once here so titles, credits, spelling, and ownership lines stay consistent everywhere.",
+    intro: "Metadata is the information attached to the release. Build it once here so titles, credits, spelling, and ownership lines stay consistent everywhere. Owen Anthony’s music is owned by Halo Music. Other artist-uploaded content remains the uploader’s property unless an explicit split or ownership agreement is configured on HALO. Uploading alone transfers no rights. HALO software and technical infrastructure are proprietary.",
     learn: "Store names and credits exactly as they should appear. Version names belong in a version field—not inside the main title unless the distributor specifically asks for that format.",
     example: "Title: The Cold Is Lasting Longer. Artist: Owen Anthony. Version: Original. Genre: Electronic. Content: Clean.",
     next: "Confirm the exact public artist and track names.",
@@ -112,7 +112,7 @@ const rooms = [
       { id: "contentRating", label: "Explicit content", type: "select", required: true, options: ["", "Clean", "Explicit", "Instrumental"] },
       { id: "songwriterCredits", label: "Songwriter credits", type: "textarea", wide: true, required: true },
       { id: "producerCredits", label: "Production and performance credits", type: "textarea", wide: true },
-      { id: "copyrightLines", label: "Copyright lines", type: "textarea", wide: true, placeholder: "℗ sound-recording rights holder and year / © composition or artwork rights holder and year; enter confirmed holders for this release" },
+      { id: "copyrightLines", label: "Copyright lines", type: "textarea", wide: true, placeholder: "℗ sound-recording rights holder and year / © composition or artwork rights holder and year; enter confirmed rights holders for this release" },
       { id: "metadataChecked", label: "Names and credits match the agreed rights information", type: "checkbox", wide: true, required: true }
     ]
   },

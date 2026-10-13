@@ -811,6 +811,7 @@
           <li><a href="/signal-network/#feed">Public feed</a></li>
           <li><a href="#signal-feed">Demo marketplace</a></li>
           <li><a href="#circles">Circles</a></li>
+          <li><a href="#circleDirectory">Members</a></li>
           <li><a href="#ritual">Ritual Engine</a></li>
           <li><a href="/creator-network/">Creator Studio</a></li>
           <li><a href="/halo">Home</a></li>
@@ -1351,6 +1352,58 @@
       </div>
     </section>
 
+    <!-- ── Circle Members Directory ───────────────────────── -->
+    <section class="circle-directory" id="circleDirectory" aria-labelledby="circleDirectoryTitle">
+      <div class="container">
+        <div class="circle-directory__header">
+          <div>
+            <p class="circle-directory__eyebrow">Directory &amp; Access</p>
+            <h2 class="circle-directory__title" id="circleDirectoryTitle">Circle Members</h2>
+            <p class="circle-directory__intro">Manage participants across your three concentric access tiers, so the right people stay in the conversation.</p>
+          </div>
+          <button class="circle-directory__invite" type="button" data-circle-invite="">
+            <svg aria-hidden="true" width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+            Invite Member
+          </button>
+        </div>
+        <p class="circle-directory__status" id="circleDirectoryStatus" role="status" aria-live="polite"></p>
+        <div class="circle-directory__grid">
+          <article class="circle-tier circle-tier--core" aria-labelledby="artistCoreListTitle">
+            <div class="circle-tier__head">
+              <h3 class="circle-tier__title" id="artistCoreListTitle">Artist Core</h3>
+              <span class="circle-tier__badge">Innermost</span>
+            </div>
+            <p class="circle-tier__copy">Full access to the Sovereign Vault, earnings data, and core creative decisions.</p>
+            <p class="circle-tier__count" data-circle-count="artist_core">0 members</p>
+            <ul class="circle-tier__list" id="artistCoreList" aria-label="Artist Core members" aria-live="polite"></ul>
+            <button class="circle-tier__add" type="button" data-circle-invite="artist_core">+ Add to Artist Core</button>
+          </article>
+
+          <article class="circle-tier circle-tier--team" aria-labelledby="creativeTeamListTitle">
+            <div class="circle-tier__head">
+              <h3 class="circle-tier__title" id="creativeTeamListTitle">Creative Team</h3>
+              <span class="circle-tier__badge">Collaborators</span>
+            </div>
+            <p class="circle-tier__copy">Scoped access to specific projects, stems, briefs, and feedback loops.</p>
+            <p class="circle-tier__count" data-circle-count="creative_team">0 members</p>
+            <ul class="circle-tier__list" id="creativeTeamList" aria-label="Creative Team members" aria-live="polite"></ul>
+            <button class="circle-tier__add" type="button" data-circle-invite="creative_team">+ Add to Creative Team</button>
+          </article>
+
+          <article class="circle-tier circle-tier--world" aria-labelledby="extendedWorldListTitle">
+            <div class="circle-tier__head">
+              <h3 class="circle-tier__title" id="extendedWorldListTitle">Extended World</h3>
+              <span class="circle-tier__badge">Partners</span>
+            </div>
+            <p class="circle-tier__copy">Labels, distributors, press contacts, and public community stakeholders.</p>
+            <p class="circle-tier__count" data-circle-count="extended_world">0 members</p>
+            <ul class="circle-tier__list" id="extendedWorldList" aria-label="Extended World members" aria-live="polite"></ul>
+            <button class="circle-tier__add" type="button" data-circle-invite="extended_world">+ Add to Extended World</button>
+          </article>
+        </div>
+      </div>
+    </section>
+
     <!-- ── Ritual Engine detail ───────────────────────────── -->
     <section class="ritual" id="ritual" aria-labelledby="ritual-title">
       <div class="container">
@@ -1487,12 +1540,26 @@
     </form>
   </dialog>
 
+  <dialog class="signal-dialog circle-invite-dialog" id="circleInviteDialog" aria-labelledby="circleInviteTitle">
+    <form class="signal-dialog__form" id="circleInviteForm">
+      <button class="signal-dialog__close" type="button" data-close-dialog aria-label="Close">×</button>
+      <p class="signal-dialog__kicker">Directory &amp; Access</p>
+      <h2 id="circleInviteTitle">Invite a member.</h2>
+      <label>Email<input id="circleInviteEmail" name="email" type="email" autocomplete="off" maxlength="320" required placeholder="collaborator@example.com"></label>
+      <label>Circle<select id="circleInviteCircle" name="circle_name"><option value="artist_core">Artist Core</option><option value="creative_team" selected>Creative Team</option><option value="extended_world">Extended World</option></select></label>
+      <label>Access role<select id="circleInviteRole" name="role"><option value="collaborator" selected>Collaborator</option><option value="viewer">Viewer</option><option value="admin">Admin</option></select></label>
+      <button class="signal-button signal-button--bright" type="submit">Send invite</button>
+      <p class="signal-form-message" id="circleInviteMessage" role="status"></p>
+    </form>
+  </dialog>
+
   <div class="signal-toast" id="signalToast" role="status" aria-live="polite" hidden></div>
 
   <script type="module" src="/identity.js"></script>
   <script type="module" src="/signal-network/signal-network.js"></script>
   <script type="module" src="/signal-network/marketplace.js"></script>
   <script type="module" src="/signal-network/signal-feed.js"></script>
+  <script type="module" src="/signal-network/circle-directory.js"></script>
 
 </body>
 </html>

@@ -1,0 +1,10 @@
+{
+  "name": "catalog-lab",
+  "private": true,
+  "description": "Isolated, read-only HALO catalog visual experiment",
+  "scripts": {
+    "test": "node tests/contracts.mjs",
+    "build": "npm test"
+  },
+  "type": "module"
+}

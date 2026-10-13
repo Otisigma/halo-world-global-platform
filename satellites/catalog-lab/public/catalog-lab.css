@@ -1,0 +1,26 @@
+:root { color-scheme: dark; font-family: system-ui, sans-serif; background: #090d17; color: #f5f5ff; }
+* { box-sizing: border-box; }
+body { margin: 0; --glow: #7df9d5; --accent: #7064e9; }
+body.ember { --glow: #ffca80; --accent: #d45572; }
+body.mono { --glow: #eeeeee; --accent: #596574; }
+main { max-width: 1200px; padding: 48px 24px; margin: auto; }
+header { max-width: 800px; }
+h1 { font-size: clamp(2rem, 5vw, 4rem); line-height: 1.05; margin: 16px 0; }
+.eyebrow { color: var(--glow); text-transform: uppercase; letter-spacing: .15em; }
+.boundary { padding: 16px; border-left: 3px solid var(--glow); background: #151c2d; line-height: 1.6; }
+.controls { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin: 32px 0; }
+input, select, button { font: inherit; border: 1px solid #7e8ba5; border-radius: 8px; padding: 12px; background: #151c2d; color: inherit; }
+input { min-width: 0; max-width: 100%; }
+button { cursor: pointer; }
+button:disabled { opacity: .6; cursor: wait; }
+:focus-visible { outline: 3px solid var(--glow); outline-offset: 3px; }
+#status, .metadata, .study-label { color: #c8d0e0; line-height: 1.5; }
+.releases { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(260px, 100%), 1fr)); gap: 24px; }
+.release { padding: 16px; border: 1px solid #394359; border-radius: 16px; background: #101725; overflow-wrap: anywhere; }
+.release h2 { margin-bottom: 8px; }
+.artist { color: var(--glow); }
+.visual { aspect-ratio: 1; border-radius: 10px; display: grid; place-items: center; font-size: 2.5rem; font-weight: 800; letter-spacing: .2em; color: #fff; text-shadow: 0 2px 8px #000; }
+.visual-0 { background: radial-gradient(ellipse at 20% 10%, var(--glow), transparent 55%), linear-gradient(150deg, #121a2c, var(--accent)); }
+.visual-1 { background: repeating-linear-gradient(135deg, transparent 0 24px, #111827 24px 48px), linear-gradient(45deg, var(--accent), var(--glow)); }
+.visual-2 { background: radial-gradient(circle, #101725 30%, var(--glow) 31%, var(--accent) 38%, #101725 70%); }
+.study-label { font-size: .8rem; border-top: 1px solid #394359; padding-top: 12px; }

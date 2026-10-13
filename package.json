@@ -7,6 +7,7 @@
     "prebuild": "npm run release-guard -- --allow-missing-catalog",
     "build": "node scripts/music-chart-contracts.mjs",
     "test:release-guard": "node scripts/release-guard-contracts.mjs",
+    "test:ownership": "node scripts/public-disclosure-contracts.mjs && node scripts/stem-vault-contracts.mjs && node scripts/release-house-contracts.mjs && node scripts/site-navigation-contracts.mjs",
     "start": "node server.js",
     "dev": "node server.js",
     "diagnose": "node deploy/diagnostics.js",

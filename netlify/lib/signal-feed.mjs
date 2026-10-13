@@ -39,8 +39,13 @@ export function postInput(body) {
     kind: body.kind, body: text(body.body, 1000, true),
     releaseId: body.kind === "AUDIO" ? text(body.releaseId, 100, true) : null,
     linkUrl: ["VIDEO", "BRIEF_LINK"].includes(body.kind) ? publicLink(body.linkUrl) : "",
-    includePurchase: body.includePurchase === true
+    includePurchase: body.includePurchase === true,
+    supporterActivity: body.supporterActivity ?? ""
   };
+  if (!["", "purchase", "presave"].includes(result.supporterActivity)
+    || (result.supporterActivity && !["TEXT", "AUDIO"].includes(body.kind))) {
+    throw new FeedError("Choose a purchase or pre-save supporter update on a text or audio post");
+  }
   if (body.includePurchase != null && typeof body.includePurchase !== "boolean") throw new FeedError("Invalid purchase setting");
   if (result.includePurchase && body.kind !== "AUDIO") throw new FeedError("Only published releases can link to commerce");
   if (["VIDEO", "BRIEF_LINK"].includes(body.kind) && !result.linkUrl) throw new FeedError("Use a public HTTPS link without credentials");
@@ -137,7 +142,7 @@ export function releaseMusicMetadata(release) {
 }
 // Resolve only the public release stream, never a version's owner-only audio_url.
 export async function releaseMedia(db, releaseId) {
-  const rows = await db.sql`SELECT id, title, artist, stream_url, purchase_url, bpm, musical_key, genres
+  const rows = await db.sql`SELECT id, title, artist, stream_url, purchase_url, bpm, musical_key, genres, is_site_exclusive
     FROM halo_release_campaigns WHERE id = ${releaseId} AND status = 'published'
       AND COALESCE(visibility, 'public') = 'public' LIMIT 1`;
   const release = rows[0];
@@ -163,6 +168,7 @@ export async function releaseMedia(db, releaseId) {
   } catch {}
   return {
     id: release.id, title: release.title, artist: release.artist, audioUrl,
+    isSiteExclusive: release.is_site_exclusive === true,
     purchaseUrl: publicLink(release.purchase_url), ...releaseMusicMetadata(release)
   };
 }
@@ -197,6 +203,7 @@ async function feed(db, memberId, url) {
       id: row.id, memberId: row.member_id, authorName: row.author_name, kind: row.kind,
       body: row.body, linkUrl: publicLink(row.link_url), createdAt: iso(row.created_at),
       boosts: Number(row.boosts), boosted: Boolean(row.boosted), saved: Boolean(row.saved),
+      supporterActivity: row.supporter_activity || "",
       media: release ? { ...release, purchaseUrl: row.include_purchase ? release.purchaseUrl : "" } : null
     };
   });
@@ -282,8 +289,8 @@ export function createSignalFeedHandler({ getDatabase, getUser, ensureMembership
           if (input.includePurchase && !media.purchaseUrl) throw new FeedError("This published release has no public purchase link");
         }
         const id = randomUUID();
-        await db.sql`INSERT INTO halo_signal_feed_posts (id, member_id, author_name, kind, body, release_id, link_url, include_purchase)
-          VALUES (${id}, ${memberId}, ${authorName}, ${input.kind}, ${input.body}, ${input.releaseId}, ${input.linkUrl}, ${input.includePurchase})`;
+        await db.sql`INSERT INTO halo_signal_feed_posts (id, member_id, author_name, kind, body, release_id, link_url, include_purchase, supporter_activity)
+          VALUES (${id}, ${memberId}, ${authorName}, ${input.kind}, ${input.body}, ${input.releaseId}, ${input.linkUrl}, ${input.includePurchase}, ${input.supporterActivity})`;
         return json({ id }, 201);
       }
       if (body.action === "read_notification") {

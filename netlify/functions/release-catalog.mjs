@@ -121,6 +121,10 @@ function serializeRelease(row) {
     artist: row.artist,
     status: normalizedCatalogStatus(row.status),
     releaseStatus: normalizedCatalogStatus(row.status).toUpperCase(),
+    isSiteExclusive: row.is_site_exclusive === true,
+    releaseNotice: row.is_site_exclusive === true
+      ? "Thank you for being here. Site supporters always hear site-exclusive drops first, before public distribution. Come back whenever you like to discover what's next."
+      : "",
     inChart: row.is_chart_eligible === true,
     isLiveVisible: !row.visibility || row.visibility === "public",
     releaseDate: row.release_date ? String(row.release_date).slice(0, 10) : "",
@@ -222,6 +226,7 @@ export default async function releaseCatalogHandler(request) {
         release.title,
         release.artist,
         release.status,
+        release.is_site_exclusive,
         release.visibility,
         release.isrc,
         release.official_url,

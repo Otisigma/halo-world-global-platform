@@ -191,10 +191,17 @@ function renderPost(post) {
   heading.append(node("strong", post.authorName), node("span", post.kind), node("time", displayDate(post.createdAt)));
   heading.lastChild.dateTime = post.createdAt;
   article.append(heading, node("p", post.body, "signal-feed__body"));
+  const supporterLabel = post.supporterActivity === "purchase" ? "Purchased · supporter-reported"
+    : post.supporterActivity === "presave" ? "Pre-saved · supporter-reported" : "";
+  if (supporterLabel) article.append(node("span", supporterLabel, "signal-feed__badge"));
   let audio;
   if (post.kind === "AUDIO") {
     if (post.media?.audioUrl) {
       article.append(node("h3", `${post.media.title} — ${post.media.artist}`));
+      if (post.media.isSiteExclusive) {
+        article.append(node("span", "Site exclusive · early access", "signal-feed__badge"),
+          node("p", "Thank you for listening here first. Site supporters hear this drop before public distribution."));
+      }
       const musicDetails = [
         post.media.bpm != null ? `${post.media.bpm} BPM` : "",
         post.media.musicalKey ? `Key: ${post.media.musicalKey}` : "",
@@ -322,6 +329,10 @@ async function postType() {
   const kind = byId("feedKind").value;
   byId("feedReleaseField").hidden = kind !== "AUDIO";
   byId("feedPurchaseField").hidden = kind !== "AUDIO";
+  const canShareSupport = ["TEXT", "AUDIO"].includes(kind);
+  byId("feedSupporterField").hidden = !canShareSupport;
+  byId("feedSupporterActivity").disabled = !canShareSupport;
+  if (!canShareSupport) byId("feedSupporterActivity").value = "";
   byId("feedLinkField").hidden = !["VIDEO", "BRIEF_LINK"].includes(kind);
   byId("feedRelease").required = kind === "AUDIO";
   publishForm.elements.linkUrl.required = ["VIDEO", "BRIEF_LINK"].includes(kind);
@@ -352,12 +363,13 @@ publishForm.addEventListener("submit", async event => {
     await mutate("publish", {
       kind: values.kind.value, body: values.body.value, releaseId: values.releaseId.value,
       linkUrl: values.linkUrl.value, includePurchase: values.kind.value === "AUDIO" && values.includePurchase.checked,
-      publishPublic: values.publishPublic.checked
+      publishPublic: values.publishPublic.checked,
+      supporterActivity: ["TEXT", "AUDIO"].includes(values.kind.value) ? values.supporterActivity.value : ""
     }, origin);
     publishForm.reset(); postType(); feedState.saved = false;
     byId("feedSaved").setAttribute("aria-pressed", "false"); await loadFeed();
     ensureOrigin(origin, false);
-    status.textContent = "Signal deliberately published to the public feed.";
+    status.textContent = "Thank you for sharing. Your signal is now in the public feed.";
   } catch (error) { actionError(error, origin); }
   finally { if (origin.session === feedState.session) submit.disabled = !feedState.memberId; }
 });

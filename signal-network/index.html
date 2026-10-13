@@ -858,6 +858,13 @@
           <p class="section-label">The public frequency</p>
           <h2 class="section-title" id="signal-feed-title">Signal feed</h2>
           <p>Deliberately published by creators. Read without signing in. Newest posts first; private work stays private.</p>
+          <aside class="signal-feed__early-access" aria-labelledby="early-access-title">
+            <p class="section-label">Site exclusive · here first</p>
+            <h3 id="early-access-title">Thanks for being part of the signal.</h3>
+            <p>Your time, listening and support mean a lot. Site supporters always get first access to site-exclusive songs before public distribution. Come back whenever you like — new drops begin here.</p>
+            <p>Listen at your own pace, share your take in the feed, or explore an artist's direct support link if it feels right. Being here is already appreciated.</p>
+            <a href="/music/">Explore the music room</a>
+          </aside>
           <a href="/creator-network/#aiTitle">Shape your next idea in Creator Studio AI</a>
         </header>
         <div class="signal-feed__toolbar">
@@ -875,6 +882,10 @@
             <label id="feedReleaseField" hidden>Published release <select name="releaseId" id="feedRelease"><option value="">Choose a published release</option></select><small>Only verified public catalog audio is accepted. No private uploads or asset URLs.</small></label>
             <label id="feedLinkField" hidden>Public HTTPS video or brief link <input name="linkUrl" type="url" maxlength="1200" placeholder="https://"></label>
             <label id="feedPurchaseField" hidden><input name="includePurchase" type="checkbox"> Include this release's existing purchase link (no checkout here)</label>
+            <label id="feedSupporterField">Optional supporter update
+              <select name="supporterActivity" id="feedSupporterActivity"><option value="">No supporter badge</option><option value="purchase">I purchased a release</option><option value="presave">I pre-saved a release</option></select>
+              <small>Already bought or pre-saved? If you'd like, tell the community which song in your signal. Badges are self-reported, not verified transactions. Nothing is shared automatically; please don't include receipts or payment details.</small>
+            </label>
             <label><input name="publishPublic" type="checkbox" required> I deliberately publish this signal and its links for everyone to see.</label>
             <button type="submit" id="feedPublish" disabled>Publish publicly</button>
           </form>

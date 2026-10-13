@@ -126,6 +126,91 @@ await check("post validation covers all four types and rejects private asset and
     assert.throws(() => postInput({ kind: "TEXT", body: "Valid", publishPublic: true, ...fields }));
   }
 });
+await check("supporter activity is opt-in, bounded, persisted and returned as self-reported data", async () => {
+  const base = { kind: "TEXT", body: "I supported this song", publishPublic: true };
+  assert.equal(postInput(base).supporterActivity, "");
+  for (const activity of ["purchase", "presave"]) {
+    assert.equal(postInput({ ...base, supporterActivity: activity }).supporterActivity, activity);
+    const h = harness({ ...member, steps: [rate, rate, {
+      match: /INSERT INTO halo_signal_feed_posts.*supporter_activity/,
+      inspect(sql, values) { assert.ok(values.includes(activity)); }
+    }] });
+    assert.equal((await h.request({ action: "publish", ...base, supporterActivity: activity })).status, 201);
+    h.complete();
+    const read = harness({ steps: [{ rows: [{ ...row, supporter_activity: activity }] }] });
+    assert.equal((await (await read.request(null)).json()).items[0].supporterActivity, activity);
+    read.complete();
+  }
+  for (const supporterActivity of ["confirmed_purchase", "<script>", true, {}, 1]) {
+    assert.throws(() => postInput({ ...base, supporterActivity }));
+  }
+  assert.throws(() => postInput({ ...base, supporterActivity: "purchase", publishPublic: false }));
+  assert.throws(() => postInput({ ...base, kind: "VIDEO", linkUrl: "https://example.com/video", supporterActivity: "purchase" }));
+});
+await check("site-exclusive audio stays subject to published public release gates", async () => {
+  const h = harness({ steps: [{ rows: [{ ...row, kind: "AUDIO", release_id: publicRelease.id }] },
+    releaseStep([{ ...publicRelease, is_site_exclusive: true }])] });
+  const data = await (await h.request(null)).json();
+  assert.equal(data.items[0].media.isSiteExclusive, true);
+  assert.equal(data.items[0].media.purchaseUrl, "");
+  h.complete();
+  const ordinary = harness({ steps: [releaseStep([publicRelease])] });
+  assert.equal((await releaseMedia(ordinary.db, publicRelease.id)).isSiteExclusive, false);
+  ordinary.complete();
+});
+await check("catalog exposes an optional site-exclusive label without changing publication status or commerce", async () => {
+  const source = await readFile(new URL("../netlify/functions/release-catalog.mjs", import.meta.url), "utf8");
+  const context = {
+    URL, resolveReleaseArtworkFields: () => ({}), resolveReleaseLicensing: () => ({}),
+    resolveDreamweaverPageFlow: () => null
+  };
+  runInNewContext(`${source.replace(/^import .*;\n/gm, "").replace(/export (?:default )?/g, "")}
+    globalThis.serialize = serializeRelease;`, context);
+  const ordinary = context.serialize({ ...publicRelease, status: "published" });
+  const exclusive = context.serialize({ ...publicRelease, status: "published", is_site_exclusive: true });
+  assert.equal(ordinary.isSiteExclusive, false); assert.equal(ordinary.releaseNotice, "");
+  assert.equal(exclusive.isSiteExclusive, true);
+  assert.match(exclusive.releaseNotice, /Thank you.*always.*before public distribution.*Come back/);
+  assert.equal(exclusive.status, ordinary.status);
+  assert.equal(exclusive.purchaseUrl, ordinary.purchaseUrl);
+  const migration = await readFile(new URL("../netlify/database/migrations/20261013211500_site_exclusive_supporter_updates.sql", import.meta.url), "utf8");
+  assert.match(migration, /is_site_exclusive BOOLEAN NOT NULL DEFAULT FALSE/);
+  assert.match(migration, /supporter_activity IN \('', 'purchase', 'presave'\)/);
+  const writer = await readFile(new URL("../netlify/functions/release-pack.mjs", import.meta.url), "utf8");
+  assert.match(writer, /typeof payload.isSiteExclusive !== "boolean"/);
+  assert.match(writer, /ELSE halo_release_campaigns.is_site_exclusive END/);
+});
+await check("rendered supporter badges are truthful, safe and do not appear for ordinary posts", async () => {
+  const source = await readFile(new URL("../signal-network/signal-feed.js", import.meta.url), "utf8");
+  class Element {
+    constructor() { this.children = []; this.textContent = ""; }
+    get lastChild() { return this.children.at(-1); }
+    append(...children) { this.children.push(...children); }
+    prepend(...children) { this.children.unshift(...children); }
+    addEventListener() {}
+    setAttribute() {}
+  }
+  const context = {
+    document: { getElementById: () => new Element(), createElement: () => new Element() }
+  };
+  runInNewContext(`${source.slice(0, source.indexOf('byId("feedKind").addEventListener'))}
+    globalThis.render = renderPost; globalThis.setType = postType;`, context);
+  const labels = element => [element.textContent, ...element.children.flatMap(labels)];
+  const base = { id: postId, authorName: "Supporter", body: "<script>not markup</script>", kind: "TEXT", createdAt: row.created_at };
+  for (const [activity, expected] of [["purchase", "Purchased"], ["presave", "Pre-saved"]]) {
+    const text = labels(context.render({ ...base, supporterActivity: activity }));
+    assert.ok(text.includes(`${expected} · supporter-reported`));
+    assert.ok(text.includes(base.body));
+    assert.ok(!text.some(value => /confirmed|verified transaction/i.test(value)));
+  }
+  for (const supporterActivity of ["", "__proto__", "<script>"]) {
+    assert.ok(!labels(context.render({ ...base, supporterActivity })).some(value => /supporter-reported/.test(value)));
+  }
+  const text = labels(context.render({ ...base, kind: "AUDIO",
+    media: { title: "I Found My Wings", artist: "Artist", audioUrl: "https://cdn.example/preview.mp3", isSiteExclusive: true } }));
+  assert.ok(text.includes("Site exclusive · early access"));
+  assert.ok(text.some(value => /Thank you.*before public distribution/.test(value)));
+});
 await check("standard posts accept exactly 1000 characters and reject 1001 at the handler", async () => {
   const h = harness({ ...member, steps: [rate, rate, { match: /INSERT INTO halo_signal_feed_posts/, inspect(sql, values) {
     assert.ok(values.includes("a".repeat(1000)));
@@ -360,8 +445,9 @@ await check("auth changes clear composer drafts and consent; old mutations canno
   const elements = new Map();
   const get = id => { if (!elements.has(id)) elements.set(id, new Element()); return elements.get(id); };
   const form = get("feedPublishForm");
-  form.elements = Object.fromEntries(["kind", "body", "releaseId", "linkUrl", "includePurchase", "publishPublic"].map(name => [name, new Element()]));
+  form.elements = Object.fromEntries(["kind", "body", "releaseId", "linkUrl", "includePurchase", "publishPublic", "supporterActivity"].map(name => [name, new Element()]));
   elements.set("feedKind", form.elements.kind); elements.set("feedRelease", form.elements.releaseId);
+  elements.set("feedSupporterActivity", form.elements.supporterActivity);
   form.elements.kind.value = "TEXT";
   let authChanged, finishMutation, currentMember = "old-member";
   const context = {
@@ -377,11 +463,13 @@ await check("auth changes clear composer drafts and consent; old mutations canno
   await new Promise(resolve => setImmediate(resolve));
   form.elements.body.value = "Old account draft"; form.elements.linkUrl.value = "https://example.com/old-link";
   form.elements.publishPublic.checked = true; form.elements.includePurchase.checked = true;
+  form.elements.supporterActivity.value = "purchase";
   const pendingPublish = form.handlers.submit({ preventDefault() {} });
   await new Promise(resolve => setImmediate(resolve)); assert.ok(finishMutation);
   currentMember = "new-member"; await authChanged();
   assert.equal(form.elements.body.value, ""); assert.equal(form.elements.linkUrl.value, "");
   assert.equal(form.elements.publishPublic.checked, false); assert.equal(form.elements.includePurchase.checked, false);
+  assert.equal(form.elements.supporterActivity.value, "");
   assert.equal(form.elements.kind.value, "TEXT"); assert.equal(get("feedLinkField").hidden, true);
   assert.equal(context.testState.memberId, "new-member");
   const resetCount = form.resetCount, currentStatus = get("feedStatus").textContent;

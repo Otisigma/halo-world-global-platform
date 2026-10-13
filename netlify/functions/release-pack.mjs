@@ -98,6 +98,7 @@ function serializeRelease(row, includePrivateLinks = false) {
     availableVersions: row.available_versions || [],
     delivery: row.available_versions || [],
     status: row.status,
+    isSiteExclusive: row.is_site_exclusive === true,
     updatedAt: new Date(row.updated_at).toISOString()
   };
 }
@@ -286,6 +287,9 @@ async function saveCampaign(request, db, user) {
   });
 
   const status = allowedCampaignStatuses.has(payload.status) ? payload.status : "draft";
+  if (payload.isSiteExclusive != null && typeof payload.isSiteExclusive !== "boolean") {
+    return json({ message: "Invalid site-exclusive setting" }, 400);
+  }
   const contentRating = allowedRatings.has(payload.contentRating) ? payload.contentRating : "unspecified";
   const bpmValue = Number(payload.bpm);
   const bpm = Number.isInteger(bpmValue) && bpmValue >= 20 && bpmValue <= 300 ? bpmValue : null;
@@ -299,7 +303,7 @@ async function saveCampaign(request, db, user) {
       official_url, dj_url, radio_url, press_url, preview_url, preview_expires_at,
       preview_access_code_hash,
       bpm, musical_key, isrc, content_rating, pitch, press_description, credits,
-      contact_name, contact_email, available_versions, status
+      contact_name, contact_email, available_versions, status, is_site_exclusive
     ) VALUES (
       ${id}, ${membership.member_id}, ${title}, ${artist}, ${cleanDate(payload.releaseDate)},
       ${cleanText(payload.duration, 24)}, ${cleanList(payload.genres, 10, 48)}, ${artwork.artwork},
@@ -309,7 +313,7 @@ async function saveCampaign(request, db, user) {
       ${cleanText(payload.isrc, 32).toUpperCase()}, ${contentRating}, ${cleanLongText(payload.pitch, 500)},
       ${cleanLongText(payload.pressDescription, 4000)}, ${cleanLongText(payload.credits, 2000)},
       ${cleanText(payload.contactName, 120)}, ${cleanText(payload.contactEmail, 320).toLowerCase()},
-      ${cleanList(payload.availableVersions, 16, 100)}, ${status}
+      ${cleanList(payload.availableVersions, 16, 100)}, ${status}, ${payload.isSiteExclusive === true}
     )
     ON CONFLICT (id) DO UPDATE SET
       owner_member_id = COALESCE(halo_release_campaigns.owner_member_id, EXCLUDED.owner_member_id),
@@ -343,6 +347,8 @@ async function saveCampaign(request, db, user) {
       contact_email = EXCLUDED.contact_email,
       available_versions = EXCLUDED.available_versions,
       status = EXCLUDED.status,
+      is_site_exclusive = CASE WHEN ${payload.isSiteExclusive != null}
+        THEN EXCLUDED.is_site_exclusive ELSE halo_release_campaigns.is_site_exclusive END,
       updated_at = NOW()
     WHERE ${platformOwner}
       OR halo_release_campaigns.owner_member_id = ${membership.member_id}

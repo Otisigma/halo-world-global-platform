@@ -957,6 +957,7 @@
       : "";
     if (!buyHref && release.isChartEligible) logMusicIssue("music_purchase_url_missing", "Music release missing buy/stream link", { releaseId: release.id, title: release.title });
     return `<div class="release-actions">
+      ${release.isSiteExclusive ? `<span class="version-pill" title="${escapeHtml(release.releaseNotice)}">Site exclusive · early access</span>` : ""}
       ${featuredBadge(release)}
       ${playTrackButton(release)}
       ${listenAction}
@@ -983,7 +984,7 @@
     const artwork = releaseArtwork(release);
     elements.featured.innerHTML = `<article class="featured-release">
       <div class="featured-art release-artwork-frame" data-artwork-frame><img class="release-artwork-image" src="${escapeHtml(artwork.src)}" alt="${escapeHtml(`${release.title} cover artwork`)}" width="1200" height="1200" data-release-artwork data-artwork-fallback="${escapeHtml(artwork.fallback)}" ${artworkAttributes(artwork)}></div>
-      <div class="featured-copy"><div>${releaseMeta(release)}<h2 data-featured-heading tabindex="-1">${escapeHtml(release.title)}</h2><p class="featured-artist">${escapeHtml(release.artist)}</p><p class="featured-pitch">${escapeHtml(release.pitch || "Open the official release signal, approved listening destination, and campaign room.")}</p>${featuredDetailMarkup(release)}</div>${releaseActions(release, { includeCopy: true })}</div>
+      <div class="featured-copy"><div>${releaseMeta(release)}<h2 data-featured-heading tabindex="-1">${escapeHtml(release.title)}</h2><p class="featured-artist">${escapeHtml(release.artist)}</p><p class="featured-pitch">${escapeHtml(release.pitch || "Open the official release signal, approved listening destination, and campaign room.")}</p>${release.isSiteExclusive ? `<p class="featured-pitch">${escapeHtml(release.releaseNotice)}</p><a class="action secondary" href="/signal-network/#feed">Share your take or an optional supporter update</a>` : ""}${featuredDetailMarkup(release)}</div>${releaseActions(release, { includeCopy: true })}</div>
     </article>`;
     player.syncButtons(elements.featured);
     wireArtwork(elements.featured);

@@ -1,0 +1,44 @@
+HALO Catalog Lab — isolated satellite
+
+This follows HALO's directory-local HTML/CSS/JS mini-site pattern but has its
+own static publish boundary. Core routing, navigation, functions, release
+conveyor, catalog stores, and manifests are not modified.
+
+Independent Netlify site:
+1. Create a separate Netlify site for this repository; do not alter the core site.
+2. Set its base directory AND package directory to satellites/catalog-lab.
+   Netlify discovers the netlify.toml in that package directory.
+3. Confirm build command "npm run build", publish directory "public", and
+   functions directory "disabled-functions" (empty).
+4. Do not copy core environment variables, database access, identity settings,
+   deploy hooks, or secrets. None are required.
+5. Open the new site's root URL. Only public/ is deployed, not the core app.
+
+Test/build from the repository root:
+  npm --prefix satellites/catalog-lab test
+  npm --prefix satellites/catalog-lab run build
+
+Local static preview from the repository root:
+  python3 -m http.server 4173 --directory satellites/catalog-lab/public
+  Open http://localhost:4173/
+Use a separate origin/port, not the core server, to avoid core service workers.
+The HTML CSP also applies on a static preview; Netlify adds response headers.
+
+Read-only contract:
+- One fixed HTTPS endpoint: the stable public /api/release-catalog.
+- GET only, credentials omitted, no auth tokens, no redirects, 10-second timeout.
+- Only published, live-visible releases are shown; no private/admin endpoints.
+- Only display metadata is retained. Server media URLs and HTML are never used.
+- No uploads, forms, telemetry, core helpers, service workers, storage writes,
+  audio conditioning, publication retries, or manifest persistence.
+- Palette changes and search are memory-only; reload resets visual studies.
+- CSP permits connections only to the catalog endpoint, with forms/media blocked.
+- Visuals are explicitly local studies, not official release artwork.
+
+Team acceptance check:
+Verify loading, empty catalog, unavailable/retry, title/artist/genre search,
+palette changes, and mobile layout. Inspect Network: the only API request must
+be GET /api/release-catalog without credentials. Reload resets the palette.
+Do not treat this preview as catalog upload or DJ Council/publication validation.
+Production satellite deployment and live data availability require verification
+on the separate Netlify site; local contracts do not certify production health.

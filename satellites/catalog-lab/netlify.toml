@@ -1,0 +1,17 @@
+[build]
+  base = "satellites/catalog-lab"
+  command = "npm run build"
+  publish = "public"
+
+[functions]
+  directory = "disabled-functions"
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    Content-Security-Policy = "default-src 'none'; script-src 'self'; style-src 'self'; connect-src https://halo-world-global-platform.netlify.app/api/release-catalog; img-src 'none'; media-src 'none'; worker-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "no-referrer"
+    Permissions-Policy = "camera=(), microphone=(), geolocation=()"
+    X-Frame-Options = "DENY"
+    X-Robots-Tag = "noindex, nofollow"

@@ -257,6 +257,14 @@ const promoResponse = await handler(request("GET", null, "&artifact=promotion"))
 assert.equal(promoResponse.status, 200);
 assert.match(await promoResponse.text(), /PRESS WRITEUP[\s\S]*SOCIAL COPY/);
 assert.equal(promoResponse.headers.get("x-content-type-options"), "nosniff");
+const visualResponse = await handler(request("GET", null, "&artifact=visual-manifest"));
+assert.equal(visualResponse.status, 200);
+assert.match(visualResponse.headers.get("content-disposition"), /visual-manifest.json/);
+const visualPayload = await visualResponse.json();
+assert.equal(visualPayload.releaseId, song.id);
+assert.equal(visualPayload.visualManifest.release_title, "A Signal");
+assert.equal(visualPayload.visualManifest.artist, "Artist");
+assert.equal(visualPayload.alternateVisualManifests.length, 1);
 assert((await (await handler(request())).json()).events.length > 0);
 currentSong.rights_status = "disputed";
 const staleApi = await (await handler(request())).json();

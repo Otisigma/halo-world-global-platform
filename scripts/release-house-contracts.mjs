@@ -1,5 +1,7 @@
+import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
+import vm from "node:vm";
 
 const root = resolve(import.meta.dirname, "..");
 const read = path => readFile(resolve(root, path), "utf8");
@@ -21,7 +23,36 @@ const [page, script, styles, api, migration, config, contextScript, contextStyle
   read("netlify/functions/stats-summary.mjs")
 ]);
 
+const rendererElements = new Map();
+const rendererContext = {
+  document: {
+    getElementById(id) {
+      if (!rendererElements.has(id)) rendererElements.set(id, { innerHTML: "", textContent: "", style: {} });
+      return rendererElements.get(id);
+    }
+  }
+};
+const startupOffset = script.indexOf('window.addEventListener("halo-identity-ready"');
+assert.ok(startupOffset > 0, "the room renderers are loaded before browser startup");
+vm.runInNewContext(`${script.slice(0, startupOffset)}\nglobalThis.renderer = { rooms, state, renderRoom, renderBrief };`, rendererContext);
+const { rooms, state, renderRoom, renderBrief } = rendererContext.renderer;
+const ownershipPolicy = "Owen Anthony’s music is owned by Halo Music. Other artist-uploaded content remains the uploader’s property unless an explicit split or ownership agreement is configured on HALO. Uploading alone transfers no rights. HALO software and technical infrastructure are proprietary.";
+let renderedCases = 0;
+for (const completedRooms of [[], [8], rooms.map((_, index) => index + 1)]) {
+  state.current.completedRooms = completedRooms;
+  for (const [index, room] of rooms.entries()) {
+    state.current.currentRoom = index + 1;
+    renderRoom();
+    renderBrief();
+    const renderedCopy = rendererElements.get("roomPanel").innerHTML + rendererElements.get("briefCopy").textContent;
+    assert.equal(renderedCopy.split(ownershipPolicy).length - 1, room.key === "metadata" ? 1 : 0, `${room.name} renders the ownership policy only in Metadata, once, with ${completedRooms.length} rooms completed`);
+    assert.ok(!rendererElements.get("briefCopy").textContent.includes(ownershipPolicy), "the release brief never repeats the ownership policy");
+    renderedCases += 1;
+  }
+}
+
 const checks = [
+  [renderedCases === rooms.length * 3, "renders the Metadata ownership policy once across unfinished, partially complete, and completed projects"],
   [page.includes("Bring an idea in") && page.includes("13") && page.includes("The front-door promise"), "presents the beginner-first Release House promise"],
   [script.includes('key: "idea"') && script.includes('key: "afterRelease"') && script.includes("rooms.map"), "defines all thirteen guided rooms"],
   [script.includes("roomIsValid") && script.includes("completeCurrentRoom") && script.includes("readinessScore"), "enforces readiness gates and visible progress"],

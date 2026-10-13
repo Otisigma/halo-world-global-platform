@@ -99,7 +99,8 @@ const rooms = [
   },
   {
     key: "metadata", name: "Metadata Room", short: "Metadata", title: "Make one source of truth.",
-    intro: "Metadata is the information attached to the release. Build it once here so titles, credits, spelling, and ownership lines stay consistent everywhere. Owen Anthony’s music is owned by Halo Music. Other artist-uploaded content remains the uploader’s property unless an explicit split or ownership agreement is configured on HALO. Uploading alone transfers no rights. HALO software and technical infrastructure are proprietary.",
+    intro: "Metadata is the information attached to the release. Build it once here so titles, credits, spelling, and ownership lines stay consistent everywhere.",
+    ownershipNotice: "Owen Anthony’s music is owned by Halo Music. Other artist-uploaded content remains the uploader’s property unless an explicit split or ownership agreement is configured on HALO. Uploading alone transfers no rights. HALO software and technical infrastructure are proprietary.",
     learn: "Store names and credits exactly as they should appear. Version names belong in a version field—not inside the main title unless the distributor specifically asks for that format.",
     example: "Title: The Cold Is Lasting Longer. Artist: Owen Anthony. Version: Original. Genre: Electronic. Content: Clean.",
     next: "Confirm the exact public artist and track names.",
@@ -343,7 +344,7 @@ function renderRoom() {
   const complete = state.current.completedRooms.includes(roomNumber);
   elements.roomPanel.innerHTML = `<div class="room-panel-inner">
     <header class="room-heading">
-      <div><p class="kicker">Room ${String(roomNumber).padStart(2, "0")} / ${escapeHtml(room.name)}</p><h3>${escapeHtml(room.title)}</h3><p>${escapeHtml(room.intro)}</p></div>
+      <div><p class="kicker">Room ${String(roomNumber).padStart(2, "0")} / ${escapeHtml(room.name)}</p><h3>${escapeHtml(room.title)}</h3><p>${escapeHtml(room.intro)}</p>${room.ownershipNotice ? `<p>${escapeHtml(room.ownershipNotice)}</p>` : ""}</div>
       <div class="room-stamp">${complete ? "READY" : "OPEN"}</div>
     </header>
     <div class="lesson-strip">

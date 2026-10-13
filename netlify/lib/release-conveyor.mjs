@@ -2,7 +2,6 @@ import { createHash } from "node:crypto";
 import { normalizeLyricsSource, parseTimestampedLyrics } from "../../lib/dreamweaver-lyrics.js";
 import { buildDreamweaverSatellite } from "../../lib/route-registry.js";
 import { retryReleaseWork } from "./release-conveyor-retry.mjs";
-import { generateOptimizedVisualManifest } from "../../lib/halo-creative-engine.js";
 
 export const RELEASE_STAGES = Object.freeze([
   "intake", "audio_preflight", "metadata_rights", "council",
@@ -82,34 +81,6 @@ export function buildReleaseDocuments(song, versions, audio, dreamweaver, isrc) 
 export function buildReleasePromotion(song, dreamweaver, versions = []) {
   const title = String(song.title).replace(/[\r\n]/g, " ");
   const artist = String(song.artist_name).replace(/[\r\n]/g, " ");
-  const sourceTimes = [song.updated_at, ...versions.map(version => version.updated_at)]
-    .map(value => new Date(value || 0).getTime()).filter(Number.isFinite);
-  const sourceUpdatedAt = song.source_updated_at || (sourceTimes.length ? new Date(Math.max(0, ...sourceTimes)).toISOString() : "2026-10-13T00:00:00.000Z");
-
-  const visualManifestResult = generateOptimizedVisualManifest({
-    trackTitle: title,
-    artistName: artist,
-    trackId: song.id,
-    versionType: "sale_master",
-    createdAt: sourceUpdatedAt,
-    persist: false
-  });
-  const visualManifest = visualManifestResult.assetPackage;
-
-  const alternateVersions = versions.filter(version => version.version_type && version.version_type !== "sale_master");
-  const alternateVisualManifests = alternateVersions.map(alt => {
-    const altTitle = `${title} (${alt.name || alt.version_type})`;
-    return generateOptimizedVisualManifest({
-      trackTitle: altTitle,
-      artistName: artist,
-      trackId: song.id,
-      versionId: alt.id,
-      versionType: alt.version_type,
-      createdAt: alt.updated_at || sourceUpdatedAt,
-      persist: false
-    }).assetPackage;
-  });
-
   return {
     headline: `${artist} — ${title}`,
     shortCopy: `Discover “${title}” by ${artist}. Explore the song and its story on HALO.`,
@@ -117,8 +88,6 @@ export function buildReleasePromotion(song, dreamweaver, versions = []) {
     socialCopy: `“${title}” — ${artist}\nExplore the release: ${dreamweaver.experienceUrl}`,
     artworkUrl: versions.find(version => version.version_type === "sale_master")?.artwork_url || song.artwork_url || "", sharePath: dreamweaver.experienceUrl,
     altText: `Cover artwork for ${title} by ${artist}`,
-    visualManifest,
-    alternateVisualManifests,
     status: "draft_for_creator_review",
   };
 }
@@ -222,8 +191,6 @@ export async function runReleaseConveyor({ song, versions, previous, ports, opti
       });
       await stage("promotion", async () => {
         state.package.promotion = buildReleasePromotion(song, state.package.dreamweaver, versions);
-        state.package.visualManifest = state.package.promotion.visualManifest;
-        state.package.alternateVisualManifests = state.package.promotion.alternateVisualManifests;
         return { summary: "Deterministic press, social, artwork and share copy generated for creator review." };
       });
       await stage("distribution_handoff", async () => {

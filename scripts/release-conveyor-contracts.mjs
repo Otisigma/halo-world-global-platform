@@ -35,6 +35,10 @@ assert.equal(success.package.documents.isrc, "GBAAA2600001");
 assert.equal(success.package.documents.releaseId, song.id);
 assert.match(success.package.promotion.socialCopy, /song=12345678/);
 assert.doesNotMatch(success.package.promotion.socialCopy, /undefined/);
+for (const field of ["visualManifest", "alternateVisualManifests"]) {
+  assert.equal(Object.hasOwn(success.package, field), false);
+  assert.equal(Object.hasOwn(success.package.promotion, field), false);
+}
 assert.equal(success.package.handoff.externalDistribution, "not_submitted");
 const rerun = await run({ previous: success });
 assert.deepEqual(rerun, success);
@@ -257,14 +261,11 @@ const promoResponse = await handler(request("GET", null, "&artifact=promotion"))
 assert.equal(promoResponse.status, 200);
 assert.match(await promoResponse.text(), /PRESS WRITEUP[\s\S]*SOCIAL COPY/);
 assert.equal(promoResponse.headers.get("x-content-type-options"), "nosniff");
-const visualResponse = await handler(request("GET", null, "&artifact=visual-manifest"));
-assert.equal(visualResponse.status, 200);
-assert.match(visualResponse.headers.get("content-disposition"), /visual-manifest.json/);
-const visualPayload = await visualResponse.json();
-assert.equal(visualPayload.releaseId, song.id);
-assert.equal(visualPayload.visualManifest.release_title, "A Signal");
-assert.equal(visualPayload.visualManifest.artist, "Artist");
-assert.equal(visualPayload.alternateVisualManifests.length, 1);
+for (const artifact of ["visual-manifest", "creative-manifest"]) {
+  const response = await handler(request("GET", null, `&artifact=${artifact}`));
+  assert.equal(response.status, 400);
+  assert.equal((await response.json()).message, "Unknown release artifact.");
+}
 assert((await (await handler(request())).json()).events.length > 0);
 currentSong.rights_status = "disputed";
 const staleApi = await (await handler(request())).json();

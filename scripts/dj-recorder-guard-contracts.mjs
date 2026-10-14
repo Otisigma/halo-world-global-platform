@@ -11,7 +11,8 @@ const sandbox = {
   console,
   globalThis: null,
   setInterval(handler, interval) { sandbox.__interval = interval; sandbox.__handler = handler; return 1; },
-  clearInterval() { sandbox.__cleared = true; }
+  clearInterval() { sandbox.__cleared = true; },
+  setTimeout(handler) { return setTimeout(handler, 0); }
 };
 sandbox.globalThis = sandbox;
 vm.createContext(sandbox);
@@ -23,68 +24,43 @@ assert.equal(typeof useRecorderGuard, "function", "Recorder guard exposes a hook
 const evaluate = HaloRecorderGuard.evaluate;
 
 const idle = evaluate({ isRecording: false, masterBusLevel: 0.95, cueBusActive: true, activeCueDecks: ["A"] });
-assert.equal(idle.isSecureToRecord, true, "Guard stays secure while the recorder is not running");
+assert.equal(idle.isSecureToRecord, false, "An idle recorder cannot claim isolation before preflight");
+assert.equal(idle.state, "pending");
 assert.equal(idle.bleedDetected, false);
 assert.equal(idle.warningMessage, "");
 
-const cleanRecording = evaluate({ isRecording: true, masterBusLevel: 0.95, cueBusActive: false });
-assert.equal(cleanRecording.state, "secure", "Hot master without cue monitoring is not a bleed condition");
+const cleanRecording = evaluate({ isRecording: true, isolationVerified: true, masterBusLevel: 0.95, cueBusActive: false });
+assert.equal(cleanRecording.state, "secure", "A verified recorder can capture music");
 
-const quietCue = evaluate({ isRecording: true, masterBusLevel: 0.5, cueBusActive: true, activeCueDecks: ["B"] });
-assert.equal(quietCue.state, "secure", "Cue monitoring below the master limit stays secure");
-assert.match(quietCue.message, /Deck B/, "Secure copy still names the active cue deck");
+const quietCue = evaluate({ isRecording: true, isolationVerified: true, masterBusLevel: 0.95, cueBusActive: true, activeCueDecks: ["B"] });
+assert.equal(quietCue.state, "secure", "Hot music and monitor-only CUE do not imply capture leakage");
+assert.match(quietCue.message, /CUE stays monitor-only/);
 
-const triggered = evaluate({ isRecording: true, masterBusLevel: 0.92, cueBusActive: true, activeCueDecks: ["A", "B"] });
-assert.equal(triggered.state, "triggered", "Recording + active cue + master near limit triggers the guard");
+const triggered = evaluate({ isolationError: "Recorder quiet-feed preflight detected unexpected audio." });
+assert.equal(triggered.state, "triggered", "Preflight failure triggers the guard before recording");
 assert.equal(triggered.isSecureToRecord, false);
 assert.equal(triggered.bleedDetected, true);
-assert.match(triggered.warningMessage, /Deck A and Deck B/, "Warning names the cue decks");
-assert.match(triggered.warningMessage, /92%/, "Warning reports the master level");
-assert.match(triggered.warningMessage, /Release CUE/, "Warning is actionable");
+assert.match(triggered.warningMessage, /unexpected audio/, "Warning reports the actual isolation failure");
 
-assert.equal(evaluate({ isRecording: true, masterBusLevel: Number.NaN, cueBusActive: true }).state, "secure", "Invalid levels are treated as silence");
-assert.equal(evaluate({ isRecording: true, masterBusLevel: 0.8, cueBusActive: true }).state, "secure", "The configured limit itself is not exceeded");
-assert.equal(evaluate({ isRecording: true, masterBusLevel: 0.7, cueBusActive: true }, { masterLimit: 0.6 }).state, "triggered", "The master limit is configurable");
+assert.equal(evaluate({ isRecording: true, masterBusLevel: Number.NaN, cueBusActive: true }).state, "pending", "Invalid levels cannot establish isolation");
 
 for (const state of [idle, cleanRecording, quietCue, triggered]) {
   assert.doesNotMatch(`${state.title} ${state.message || ""} ${state.warningMessage}`, /zero bleed|guarantee|pristine|100% clean/i, "Guard copy never promises absolute silence");
 }
 
-let clock = 0;
 let inputs = { isRecording: false, masterBusLevel: 0, cueBusActive: false, activeCueDecks: [] };
 const statuses = [];
-const guard = useRecorderGuard({ readInputs: () => inputs, onStatusChange: status => statuses.push(status), now: () => clock });
+const guard = useRecorderGuard({ readInputs: () => inputs, onStatusChange: status => statuses.push(status) });
 assert.equal(sandbox.__interval, 250, "Guard samples the recorder feed four times per second");
-assert.equal(statuses.at(-1).state, "secure", "Guard publishes an initial secure state");
+assert.equal(statuses.at(-1).state, "pending", "Guard publishes an unverified initial state");
 
-inputs = { isRecording: true, masterBusLevel: 0.9, cueBusActive: true, activeCueDecks: ["A"] };
+inputs = { isolationError: "Feed is not quiet." };
 guard.tick();
 assert.equal(statuses.at(-1).state, "triggered", "Guard publishes the triggered state");
 
-clock = 500;
-inputs = { ...inputs, masterBusLevel: 0.4 };
+inputs = { isolationVerified: true, isRecording: true, cueBusActive: true };
 guard.tick();
-assert.equal(guard.state.state, "triggered", "Warning is held briefly so transient peaks do not flicker");
-assert.match(guard.state.warningMessage, /90%/, "Held warning keeps the last hot peak");
-
-clock = 700;
-inputs = { ...inputs, activeCueDecks: ["B"] };
-guard.tick();
-assert.equal(statuses.at(-1).state, "triggered");
-assert.match(statuses.at(-1).warningMessage, /Deck B/, "Held warning follows the cue deck that is active now");
-assert.doesNotMatch(statuses.at(-1).warningMessage, /Deck A/);
-
-clock = 2500;
-guard.tick();
-assert.equal(statuses.at(-1).state, "secure", "Guard clears once the hold window passes");
-
-inputs = { isRecording: true, masterBusLevel: 0.9, cueBusActive: true, activeCueDecks: ["A"] };
-clock = 3000;
-guard.tick();
-inputs = { isRecording: true, masterBusLevel: 0.9, cueBusActive: false, activeCueDecks: [] };
-clock = 3100;
-guard.tick();
-assert.equal(statuses.at(-1).state, "secure", "Releasing CUE clears the guard immediately");
+assert.equal(statuses.at(-1).state, "secure", "Only a successful preflight clears the guard");
 guard.destroy();
 assert.equal(sandbox.__cleared, true, "Guard stops its watchdog on destroy");
 
@@ -120,12 +96,10 @@ assert.match(deckPage, /data-recorder-guard-message/, "Indicator exposes a messa
 assert.match(deckPage, /function attachRecorderGuardToDeck\(/, "DJ deck wires the recorder guard");
 assert.match(deckPage, /const isRecording = recordingState\.recorder\?\.state === "recording"/, "Guard reads the live recorder state");
 assert.match(deckPage, /const cueBusActive = activeCueDecks\.length > 0/, "Guard reads cue bus activity");
-assert.match(deckPage, /masterBusLevel: isRecording && cueBusActive \? recorderGuardMasterLevel\(\) : 0/, "Guard reads the master bus level only when it can affect the result");
+assert.match(deckPage, /isolationVerified: recordingState\.isolationVerified/, "Guard reports the measured preflight result");
 assert.match(deckPage, /recorderGuardState\.guard\?\.tick\(\);/, "Cue toggles refresh the guard immediately");
 assert.match(deckPage, /cueGain\.connect\(context\.destination\)/, "CUE monitoring stays on the local output path");
-assert.match(deckPage, /gain\.connect\(audioEngine\.recordingGain\)/, "Recorder taps only the deck music gains");
-assert.match(deckPage, /recordingGain\.connect\(recordingLimiter\)/, "Music capture retains its own level and limiter");
-assert.match(deckPage, /recordingLimiter\.connect\(audioEngine\.recordingDestination\)/, "Recorder uses a dedicated music destination");
+assert.match(deckPage, /recordingFeed\?\.connectMusicSource\(gain\)/, "Recorder taps only the deck music gains");
 assert.doesNotMatch(deckPage, /(?:masterGain|limiter|cueGain)\.connect\(audioEngine\.recordingDestination\)/, "Master, microphone monitoring and CUE never feed capture");
 assert.doesNotMatch(deckPage, /cueGain\.connect\(audioEngine\.recordingDestination\)/, "CUE monitoring is never routed into the recorder");
 
@@ -144,39 +118,68 @@ function deckFunction(name) {
 }
 
 class AudioNode {
-  constructor() {
+  constructor(context) {
+    this.context = context;
+    context.nodes.push(this);
     this.connections = [];
+    this.outputs = new Map();
+    this.signal = 0;
     for (const parameter of ["gain", "threshold", "knee", "ratio", "attack", "release", "frequency", "Q", "delayTime"]) {
       this[parameter] = { value: 1, setValueAtTime(value) { this.value = value; } };
     }
   }
-  connect(node) { this.connections.push(node); }
+  connect(node, output = 0) { this.connections.push(node); this.outputs.set(node, output); }
+  disconnect(node) {
+    assert.ok(this.connections.includes(node), "Disconnect targets an existing capture edge");
+    this.connections = this.connections.filter(connection => connection !== node);
+  }
+  getFloatTimeDomainData(samples) {
+    this.reads = (this.reads || 0) + 1;
+    const signal = (node, visited = new Set(), channel = 0) => {
+      if (visited.has(node)) return 0;
+      const next = new Set(visited).add(node);
+      const ownSignal = Array.isArray(node.signal) ? node.signal[channel] : node.signal;
+      return ownSignal + (node.streamDestination ? signal(node.streamDestination, next, channel) : 0) + this.context.nodes
+        .filter(source => source.connections.includes(node))
+        .reduce((sum, source) => sum + signal(source, next, source.isSplitter ? source.outputs.get(node) : channel), 0);
+    };
+    samples.fill(this.sampleOverride ?? signal(this));
+  }
 }
 class AudioContext {
-  constructor() { this.destination = new AudioNode(); this.currentTime = 0; this.state = "running"; }
-  createGain() { return new AudioNode(); }
-  createDynamicsCompressor() { return new AudioNode(); }
-  createAnalyser() { return new AudioNode(); }
-  createBiquadFilter() { return new AudioNode(); }
-  createDelay() { return new AudioNode(); }
-  createMediaStreamDestination() { const node = new AudioNode(); node.stream = {}; return node; }
+  constructor() { this.nodes = []; this.destination = new AudioNode(this); this.currentTime = 0; this.sampleRate = 48000; this.state = "running"; }
+  createGain() { return new AudioNode(this); }
+  createDynamicsCompressor() { return new AudioNode(this); }
+  createAnalyser() { return new AudioNode(this); }
+  createBiquadFilter() { return new AudioNode(this); }
+  createDelay() { return new AudioNode(this); }
+  createChannelSplitter() { const node = new AudioNode(this); node.isSplitter = true; return node; }
+  createMediaStreamSource(stream) { const node = new AudioNode(this); node.streamDestination = stream.destination; return node; }
+  createMediaStreamDestination() {
+    const node = new AudioNode(this);
+    node.track = { readyState: "live", enabled: true, muted: false };
+    node.stream = { destination: node, getAudioTracks: () => [node.track] };
+    return node;
+  }
 }
 const readinessTimers = new Map();
 let timerId = 0;
 const rig = {
-  window: { AudioContext },
+  window: { AudioContext, HaloRecorderGuard },
   audioEngine: { context: null, decks: { A: {}, B: {} } },
   deckState: {},
   elements: { importStatus: { classList: { remove() {} } }, recordingStatus: {} },
   updateAudioCrossfader() {},
   reportAudioHealth() {},
   attachRecorderGuardToDeck() {},
+  recorderGuardState: {},
+  recordingState: {},
   setTimeout(handler) { const id = ++timerId; readinessTimers.set(id, handler); return id; },
   clearTimeout(id) { readinessTimers.delete(id); },
   fetch: async () => ({ ok: true, arrayBuffer: async () => new ArrayBuffer(8) })
 };
 vm.createContext(rig);
-for (const name of ["ensureAudio", "prepareDeckAudio", "verifyTakeoverTracksReady"]) {
+for (const name of ["ensureAudio", "prepareDeckAudio", "verifyTakeoverTracksReady", "verifyTakeoverRecorderIsolation"]) {
   vm.runInContext(`async ${deckFunction(name)}`, rig);
 }
 await rig.ensureAudio();
@@ -193,9 +196,9 @@ for (const deck of Object.values(graph.decks)) {
   assert.ok(reaches(deck.cueGain, graph.context.destination), "Local cue playback is unchanged");
   assert.equal(reaches(deck.cueGain, graph.recordingDestination), false, "Cue-only output cannot reach recording");
 }
-const microphone = new AudioNode();
+const microphone = new AudioNode(graph.context);
 microphone.connect(graph.masterGain);
-const uiTone = new AudioNode();
+const uiTone = new AudioNode(graph.context);
 uiTone.connect(graph.context.destination);
 assert.equal(reaches(microphone, graph.recordingDestination), false, "Monitored microphone is excluded from capture");
 assert.equal(reaches(uiTone, graph.recordingDestination), false, "Speaker/UI/system feedback is excluded from capture");
@@ -204,6 +207,67 @@ const destination = graph.recordingDestination;
 await rig.ensureAudio();
 assert.equal(graph.recordingDestination, destination, "Repeated starts reuse one isolated graph without duplicate taps");
 assert.equal(graph.decks.A.gain.connections.length, 2, "Music gain has one speaker tap and one recorder tap");
+
+assert.deepEqual(graph.recordingGain.connections, [graph.recordingFeed.limiter], "Capture cannot bypass the music limiter");
+assert.ok(graph.recordingFeed.limiter.connections.includes(destination), "Only the post-limiter bus feeds the destination");
+assert.equal(graph.recordingGain.gain.value, .82, "Recorder headroom is unchanged");
+for (const parameter of ["threshold", "knee", "ratio", "attack", "release"]) {
+  assert.equal(graph.recordingFeed.limiter[parameter].value, graph.limiter[parameter].value, "Recorder limiter settings are preserved");
+}
+graph.decks.A.gain.signal = .8;
+graph.decks.B.cueGain.signal = .9;
+microphone.signal = .7;
+uiTone.signal = .6;
+const preflight = rig.verifyTakeoverRecorderIsolation();
+assert.equal(reaches(graph.decks.A.gain, destination), false, "Only the capture music tap is detached during quiet-feed measurement");
+assert.equal(reaches(graph.decks.A.gain, graph.context.destination), true, "Preflight does not mute music speakers");
+assert.equal(reaches(graph.decks.B.cueGain, graph.context.destination), true, "Preflight leaves active CUE monitoring untouched");
+assert.equal(rig.recordingState.isolationVerified, false, "Preflight remains unverified while sampling");
+await preflight;
+assert.equal(rig.recordingState.isolationVerified, true);
+assert.equal(graph.recordingFeed.analyser.reads, 4, "Preflight measures multiple full analyser windows");
+assert.equal(graph.decks.A.gain.connections.length, 2, "Preflight restores exactly one capture tap");
+
+const leak = new AudioNode(graph.context);
+leak.signal = .02;
+leak.connect(graph.recordingGain);
+await assert.rejects(rig.verifyTakeoverRecorderIsolation(), /unexpected audio/, "Unexpected feed signal blocks preflight even without music");
+assert.equal(rig.recordingState.isolationVerified, false);
+assert.equal(graph.decks.A.gain.connections.length, 2, "Failed preflight restores capture without duplicating speaker routing");
+leak.disconnect(graph.recordingGain);
+for (const stereoSignal of [[.0002, 0], [0, .0002], [.02, -.02]]) {
+  leak.signal = stereoSignal;
+  leak.connect(destination);
+  await assert.rejects(rig.verifyTakeoverRecorderIsolation(), /unexpected audio/, "Both captured channels detect leakage, including destination bypass and opposite-phase stereo");
+  leak.disconnect(destination);
+}
+leak.signal = .02;
+for (const invalid of [Number.NaN, Infinity]) {
+  graph.recordingFeed.analyser.sampleOverride = invalid;
+  await assert.rejects(rig.verifyTakeoverRecorderIsolation(), /unexpected audio/, "Invalid samples fail closed");
+}
+delete graph.recordingFeed.analyser.sampleOverride;
+destination.track.readyState = "ended";
+await assert.rejects(rig.verifyTakeoverRecorderIsolation(), /isolated state/, "An ended stream cannot arm capture");
+destination.track.readyState = "live";
+graph.context.state = "suspended";
+await assert.rejects(rig.verifyTakeoverRecorderIsolation(), /isolated state/, "A suspended graph cannot establish quietness");
+graph.context.state = "running";
+const musicGain = graph.recordingGain;
+graph.recordingGain = graph.masterGain;
+await assert.rejects(rig.verifyTakeoverRecorderIsolation(), /routing changed/, "Replacing the music bus with the master bus blocks capture");
+graph.recordingGain = musicGain;
+const cueGain = graph.decks.B.cueGain;
+graph.decks.B.cueGain = graph.decks.A.gain;
+await assert.rejects(rig.verifyTakeoverRecorderIsolation(), /isolated state/, "A music source aliased to CUE fails graph validation");
+graph.decks.B.cueGain = cueGain;
+const changingGraph = rig.verifyTakeoverRecorderIsolation();
+const changeAssertion = assert.rejects(changingGraph, /routing changed/, "Routing is revalidated across asynchronous preflight");
+graph.recordingDestination = graph.context.destination;
+await changeAssertion;
+graph.recordingDestination = destination;
+await rig.verifyTakeoverRecorderIsolation();
+assert.equal(graph.decks.A.gain.connections.length, 2, "Repeated success and failure cannot accumulate capture taps");
 
 const decoded = { duration: 120 };
 rig.deckState = { A: { audioBuffer: decoded }, B: { audioBuffer: decoded } };
@@ -330,9 +394,35 @@ assert.equal(captureStarted, false);
 assert.equal(rig.elements.recordingStart.disabled, false, "Readiness failures allow retry");
 assert.match(rig.elements.recordingStatus.textContent, /Decode failed/, "Readiness failures reach the UI");
 
+graph.context.decodeAudioData = async () => decoded;
+rig.deckState.A = { audioBuffer: decoded };
+leak.connect(graph.recordingGain);
+await rig.startTakeoverRecording();
+assert.equal(recorderCount, 1, "A non-quiet feed blocks even MediaRecorder construction");
+assert.equal(captureStarted, false, "No capture starts after failed isolation preflight");
+assert.match(rig.elements.recordingStatus.textContent, /unexpected audio/, "Isolation errors reach the existing recorder status");
+assert.equal(rig.elements.recordingStart.disabled, false, "Isolation failure allows a clean retry");
+leak.disconnect(graph.recordingGain);
+
+const originalRead = graph.recordingFeed.analyser.getFloatTimeDomainData;
+graph.recordingFeed.analyser.getFloatTimeDomainData = function (samples) {
+  originalRead.call(this, samples);
+  rig.deckState.A = { audioBuffer: decoded };
+};
+await rig.startTakeoverRecording();
+assert.equal(recorderCount, 1, "Track replacement during asynchronous preflight cannot arm stale capture");
+assert.match(rig.elements.recordingStatus.textContent, /tracks changed during recorder preflight/);
+graph.recordingFeed.analyser.getFloatTimeDomainData = originalRead;
+await rig.startTakeoverRecording();
+assert.equal(recorderCount, 2, "A retry constructs a recorder only after a new preflight passes");
+assert.equal(captureStarted, true);
+assert.equal(graph.decks.A.gain.connections.length, 2, "Repeated recording starts retain exactly one music capture tap");
+
 assert.ok(startSource.indexOf("await verifyTakeoverTracksReady()") < startSource.indexOf("createCompatibleRecorder("), "Readiness precedes even recorder construction");
 assert.ok(startSource.indexOf("await verifyTakeoverTracksReady()") < startSource.indexOf("recorder.start("), "Readiness precedes capture start");
+assert.ok(startSource.indexOf("await verifyTakeoverRecorderIsolation()") < startSource.indexOf("createCompatibleRecorder("), "Quiet-feed isolation precedes arming");
+assert.ok(startSource.indexOf("await verifyTakeoverRecorderIsolation()") < startSource.indexOf("recorder.start("), "Quiet-feed isolation precedes capture start");
 assert.match(startSource, /recordingState\.starting/, "Concurrent start requests cannot create duplicate recorders");
 assert.match(startSource, /finally\s*\{\s*recordingState\.starting = false/, "Failed starts can be retried");
 
-console.log("DJ recorder guard contracts: isolated graph, decoded readiness, transport gating, bleed detection, and indicator rendering passed.");
+console.log("DJ recorder guard contracts: post-limiter music capture, monitor-only CUE, quiet-feed preflight, fail-closed transport, readiness, and repeat starts passed.");

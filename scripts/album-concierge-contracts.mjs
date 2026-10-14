@@ -16,13 +16,29 @@ const [page, script, styles, fn, migration, config, home, stats] = await Promise
   read("netlify/lib/stats.mjs")
 ]);
 
+const purposePresetMatch = script.match(/const purposePresetMap = \{([\s\S]*?)\n  \};/);
+const purposePresetMap = Object.fromEntries(
+  [...(purposePresetMatch?.[1] ?? "").matchAll(/(\w+):\s*"([^"]+)"/g)]
+    .map(([, preset, purpose]) => [preset, purpose])
+);
+const purposeChoices = new Set(
+  [...page.matchAll(/class="ac-choice" data-value="([^"]+)"/g)].map(([, purpose]) => purpose)
+);
+const expectedPurposePresets = {
+  self: "self",
+  gift: "gift",
+  fans: "fans",
+  collector: "fans",
+  project: "project"
+};
+
 const checks = [
   [page.includes("Album Concierge — HALO World") && page.includes('id="step-1"') && page.includes('id="step-4"') && page.includes('id="acResults"'), "ships a guided multi-step concierge flow with purpose, emotion, sound, story, and results"],
   [script.includes("state.purpose") && script.includes("state.emotions") && script.includes("state.soundDirection") && script.includes("state.storyInput"), "tracks flow state across all four guided steps"],
   [script.includes("/api/album-concierge") && script.includes("action=generate") && script.includes("action=save"), "calls create, generate, and save API actions"],
   [script.includes("renderResults") && script.includes("generatedTitles") && script.includes("generatedTracks") && script.includes("generatedDedication"), "renders album titles, tracklist, and dedication in the results view"],
   [script.includes("showLoading") && script.includes("showStep") && script.includes("showResults") && script.includes("showNotice"), "provides loading, step navigation, result, and error notice states"],
-  [script.includes("URLSearchParams") && script.includes("purposeFromQuery") && script.includes("purposePresetMap") && script.includes("collector"), "supports homepage CTA query presets for concierge purpose"],
+  [script.includes('new URLSearchParams(window.location.search).get("purpose")') && script.includes("preset.click()") && JSON.stringify(purposePresetMap) === JSON.stringify(expectedPurposePresets) && Object.values(purposePresetMap).every(purpose => purposeChoices.has(purpose)), "maps valid homepage purpose presets to existing concierge choices, including collector to fans"],
   [page.includes('id="accountDialog"') && script.includes('accountButton?.addEventListener("click"') && script.includes("identity.login") && script.includes("identity.signup") && script.includes("identity?.logout"), "connects the account button to sign in, signup, and sign out behavior"],
   [fn.includes("verifyRequestOrigin") && fn.includes("ensureMembership") && fn.includes("VALID_PURPOSES"), "protects API with origin verification and membership controls"],
   [fn.includes("handleGenerate") && fn.includes("gpt-5.4-mini") && fn.includes("Never invent credits"), "generates grounded album concepts through supported AI Gateway model"],
@@ -31,8 +47,8 @@ const checks = [
   [styles.includes(".ac-flow") && styles.includes(".ac-choice") && styles.includes(".ac-results") && styles.includes("prefers-reduced-motion"), "ships flow, choice, and results styles with reduced-motion support"],
   [styles.includes(".ac-premium-card") && styles.includes(".btn-premium") && page.includes("Collector Edition"), "ships collector-edition premium upsell styles"],
   [/from = "\/album-concierge\/"[\s\S]*to = "\/album-concierge\/index\.html"/.test(config) && home.includes('href="/album-concierge/"'), "makes Album Concierge discoverable from HALO and serves the canonical /album-concierge/ route directly"],
-  [home.includes("open_album_concierge") && home.includes("CREATE YOUR ALBUM"), "adds a visible \"Create your album\" CTA to HALO Build lane navigation"],
-  [home.includes("Turn your story") && home.includes("worth keeping") && home.includes("Build a gift album") && home.includes("/album-concierge/?purpose=gift") && home.includes("Explore collector edition") && home.includes("/album-concierge/?purpose=collector"), "ships homepage Album Concierge promotion with start, gift, and collector discovery CTAs"],
+  [home.includes('<a href="/album-concierge/" data-stat-event="open_album_concierge" data-stat-target="header" data-signal="CREATE YOUR ALBUM">') && home.includes("CREATE YOUR ALBUM"), "adds a visible \"Create your album\" CTA to HALO Build lane navigation"],
+  [home.includes("Turn your story") && home.includes("worth keeping") && home.includes('href="/album-concierge/"') && home.includes("Start your album") && home.includes('href="/album-concierge/?purpose=gift"') && home.includes("Build a gift album") && home.includes('href="/album-concierge/?purpose=collector"') && home.includes("Explore collector edition"), "ships homepage Album Concierge promotion with start, gift, and collector discovery CTAs"],
   [stats.includes('"open_album_concierge"') && stats.includes('"album_concierge_result_ready"'), "registers Album Concierge product analytics events"]
 ];
 

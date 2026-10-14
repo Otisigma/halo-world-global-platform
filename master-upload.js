@@ -31,8 +31,20 @@
     const id = JSON.stringify([ownerMemberId, songId, versionId, digest]);
     if (active.has(id)) throw new Error("This master upload is already running in this tab.");
     active.add(id);
-    const metadata = { songId, versionId, fingerprint: digest, fileName: file.name, fileType: file.type, fileSize: file.size, durationSeconds };
-    const report = bytes => options.onProgress?.(bytes, file.size);
+    const metadata = { songId, versionId, fingerprint: digest, fileName: file.name, fileType: options.contentType || file.type, fileSize: file.size, durationSeconds };
+    const cacheKey = `halo:master-resume:v1:${id}`;
+    let progressStorage;
+    try { progressStorage = options.progressStorage === false ? null : options.progressStorage || root.localStorage; } catch {}
+    function cacheConfirmed(bytes, registered = false) {
+      try {
+        progressStorage?.setItem(cacheKey, JSON.stringify({
+          songId, versionId, fingerprint: digest, fileSize: file.size, confirmedBytes: bytes,
+          registered, updatedAt: new Date().toISOString(),
+        }));
+      } catch {}
+    }
+    const report = bytes => { cacheConfirmed(bytes); options.onProgress?.(bytes, file.size); };
+    let generationId;
     async function request(url, init, consume = response => response) {
       abort(signal);
       const controller = new AbortController();
@@ -56,7 +68,7 @@
     }
     async function api(action, extra = {}) {
       return request(ENDPOINT, { method: "POST", credentials: "same-origin",
-        headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...metadata, ...extra, action }) }, async response => {
+        headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...metadata, generationId, ...extra, action }) }, async response => {
         let body;
         try { body = await response.json(); } catch {
           throw Object.assign(new Error("Master upload returned an unreadable response."), { status: response.ok ? 503 : response.status });
@@ -64,6 +76,7 @@
         if (!response.ok) throw Object.assign(new Error(body?.message || "Master upload request failed."), { status: response.status, directUpload: body?.directUpload });
         if (!body || typeof body !== "object" || Array.isArray(body)) throw Object.assign(new Error("Master upload returned an invalid response."), { status: 503 });
         if (action === "create" || action === "status") validateStatus(body);
+        if (action !== "create" && body.generationId && generationId && body.generationId !== generationId) throw Object.assign(new Error("The master upload generation changed. Resume with the file again."), { status: 409 });
         if (action === "complete" && (!body.persisted || !body.lockedIn || typeof body.audioUrl !== "string")) throw Object.assign(new Error("Master registration confirmation is missing."), { status: 503 });
         return body;
       });
@@ -91,7 +104,15 @@
       return status;
     }
     try {
+      // This credential-free hint is never used for offsets; storage status remains authoritative.
+      try {
+        const cached = JSON.parse(progressStorage?.getItem(cacheKey) || "null");
+        if (cached?.fingerprint === digest && cached.fileSize === file.size && Number.isSafeInteger(cached.confirmedBytes)
+          && cached.confirmedBytes >= 0 && cached.confirmedBytes <= file.size) options.onCachedProgress?.(cached);
+      } catch {}
       let status = validateStatus(await retry(() => api("create"), () => api("status")));
+      if (!/^[0-9a-f-]{36}$/.test(String(status.generationId || ""))) throw new Error("Invalid master upload generation.");
+      generationId = status.generationId;
       while (status.uploadedBytes < file.size) {
         status = validateStatus(await retry(async () => {
           // Always reconcile before a retry: a lost PUT response may already have committed this part.
@@ -120,6 +141,7 @@
       });
       if (!result.persisted || !result.lockedIn) throw new Error("The master was not confirmed as registered.");
       report(file.size);
+      cacheConfirmed(file.size, true);
       return result;
     } finally {
       active.delete(id);

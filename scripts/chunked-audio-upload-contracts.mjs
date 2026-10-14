@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
-import { createHash, randomBytes } from "node:crypto";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
-import { stripTypeScriptTypes } from "node:module";
 import { join, resolve } from "node:path";
 import vm from "node:vm";
 import * as chunkRules from "../netlify/lib/chunked-audio-upload.mjs";
@@ -186,8 +185,10 @@ function memoryStore(blobs = new Map()) {
 // Execute the deployed handler itself, using independent instances and a shared atomic backing store.
 {
   const store = memoryStore();
-  const version = { id: VERSION_ID, song_id: SONG_ID, audio_blob_prefix: null, audio_storage_key: "" };
+  const version = { id: VERSION_ID, song_id: SONG_ID, audio_blob_prefix: null, audio_storage_key: "", audio_revision: "revision-0" };
   let databaseWrites = 0;
+  let storeUnavailable = false;
+  const handlerErrors = [];
   const db = {
     async sql(strings, ...values) {
       const query = strings.join("?");
@@ -198,25 +199,52 @@ function memoryStore(blobs = new Map()) {
       }
       if (query.includes("UPDATE halo_song_versions")) {
         await Promise.resolve();
-        if (version.audio_blob_prefix !== values.at(-2) || version.audio_storage_key !== values.at(-1)) return [];
+        if (version.audio_blob_prefix !== values.at(-3) || version.audio_storage_key !== values.at(-2)
+          || version.audio_revision !== values.at(-1)) return [];
         databaseWrites += 1;
-        Object.assign(version, {
+        Object.assign(version, query.includes("SET audio_url = NULL") ? {
+          audio_blob_prefix: null, audio_chunk_count: null, audio_byte_size: null, audio_storage_key: "",
+        } : {
           audio_blob_prefix: values[1], audio_chunk_count: values[2], audio_content_type: values[3],
           audio_byte_size: values[4], audio_filename: values[5], audio_storage_key: "",
         });
+        version.audio_revision = `revision-${databaseWrites}`;
         return [{ id: VERSION_ID }];
       }
       throw new Error(`Unexpected query: ${query}`);
     },
   };
-  const source = stripTypeScriptTypes((await read("netlify/functions/song-catalog-audio.ts"))
+  // Remove only this handler's known annotations; the contract runner must support CI's Node 20.
+  const source = (await read("netlify/functions/song-catalog-audio.ts"))
     .replace(/^import[\s\S]*?;\n/gm, "")
     .replace("export default async function", "globalThis.handler = async function")
-    .replace("export const config", "const config"));
+    .replace("export const config", "const config")
+    .replaceAll(": Awaited<ReturnType<typeof getDatabase>>", "")
+    .replaceAll(": Record<string, string>", "")
+    .replaceAll(": Record<string, unknown>", "")
+    .replaceAll(": { start: number; end: number }", "")
+    .replaceAll(": Uint8Array[]", "")
+    .replaceAll(": string | null", "")
+    .replaceAll(": Request", "")
+    .replaceAll(": unknown", "")
+    .replaceAll(": string", "")
+    .replaceAll(": number", "")
+    .replaceAll(" as Record<string, unknown> | null", "");
   const createHandler = () => {
     const context = {
-      ...chunkRules, Blob, Request, Response, ReadableStream, URL, Uint8Array, console,
-      getStore: () => memoryStore(store.blobs), getDatabase: async () => db, getUser: async () => ({ id: "user" }),
+      ...chunkRules, Blob, Request, Response, ReadableStream, URL, Uint8Array, randomUUID,
+      console: { ...console, error: (...args) => handlerErrors.push(args) },
+      getStore: () => {
+        const facade = memoryStore(store.blobs);
+        return {
+          ...facade,
+          async get(...args) {
+            if (storeUnavailable) throw new Error("Durable upload store unavailable");
+            return facade.get(...args);
+          },
+        };
+      },
+      getDatabase: async () => db, getUser: async () => ({ id: "user" }),
       ensureMembership: async () => ({ member_id: "member" }), cleanText: (value, max) => String(value ?? "").trim().slice(0, max),
       verifyRequestOrigin: request => { assert.equal(request.headers.get("origin"), new URL(request.url).origin); },
       runDreamweaverReview: async () => {}, deleteStoredObject: async () => {}, directUploadConfig: () => null,
@@ -227,8 +255,8 @@ function memoryStore(blobs = new Map()) {
   const a = createHandler();
   const b = createHandler();
   const base = { songId: SONG_ID, versionId: VERSION_ID, uploadId: "handler-session-1", chunkCount: 3, byteSize: 10 };
-  const request = (body, isForm = false) => new Request("https://halo.example/api/song-catalog/audio", {
-    method: "POST", headers: { origin: "https://halo.example", ...(isForm ? {} : { "content-type": "application/json" }) },
+  const request = (body, isForm = false, method = "POST") => new Request("https://halo.example/api/song-catalog/audio", {
+    method, headers: { origin: "https://halo.example", ...(isForm ? {} : { "content-type": "application/json" }) },
     body: isForm ? body : JSON.stringify(body),
   });
   const chunkRequest = (index, data, extra = {}) => {
@@ -259,6 +287,16 @@ function memoryStore(blobs = new Map()) {
       assert.equal(response.status, field === "byteSize" ? 413 : 400);
     }
   }
+  storeUnavailable = true;
+  for (const outageRequest of [chunkRequest(0, "aaaa"), statusRequest(), finalizeRequest()]) {
+    const outage = await a(outageRequest);
+    assert.equal(outage.status, 500, "durable store rejections are handled inside the endpoint catch");
+    assert.match(outage.headers.get("content-type"), /application\/json/);
+    assert.equal((await outage.json()).message, "Song audio is temporarily unavailable");
+  }
+  assert.equal(handlerErrors.length, 3);
+  assert.equal(store.blobs.size, 0);
+  storeUnavailable = false;
   assert.equal((await a(chunkRequest(2, "zz", { offset: 8, chunkSize: 4 }))).status, 200);
   let status = await (await a(statusRequest())).json();
   assert.equal(status.confirmedBytes, 0);
@@ -315,12 +353,44 @@ function memoryStore(blobs = new Map()) {
   assert.equal(version.audio_blob_prefix, currentPrefix);
   assert.equal(databaseWrites, writesBeforeSupersededRetry, "superseded finalize only compares against its originally pinned prior pointer");
   for (const uploadId of ["handler-session-2", "handler-session-3"]) {
-    assert.ok(store.blobs.has(audioChunkKey(audioUploadPrefix("member", VERSION_ID, uploadId), 0)));
+    const sessionPrefix = audioUploadPrefix("member", VERSION_ID, uploadId);
+    assert.ok(store.blobs.has(audioChunkKey(sessionPrefix, 0)));
+    if (sessionPrefix !== version.audio_blob_prefix) {
+      assert.ok(store.blobs.has(audioFinalizationKey(sessionPrefix)));
+      const unpublished = await (await a(statusRequest({ uploadId, chunkCount: 1, byteSize: 4 }))).json();
+      assert.equal(unpublished.finalized, false, "a sealed but unpublished session is not finalized");
+      assert.equal(unpublished.persisted, undefined);
+      assert.equal(unpublished.audioUrl, undefined);
+    }
   }
+  const deletedUploadId = version.audio_blob_prefix.split("/").at(-3);
+  const deletedPrefix = version.audio_blob_prefix;
+  const deleted = await a(request({ songId: SONG_ID, versionId: VERSION_ID }, false, "DELETE"));
+  assert.equal(deleted.status, 200);
+  assert.equal(version.audio_blob_prefix, null);
+  assert.equal(version.audio_storage_key, "");
+  const writesAfterDelete = databaseWrites;
+  assert.equal((await a(finalizeRequest({ uploadId: deletedUploadId, chunkCount: 1, byteSize: 4 }))).status, 409, "a deleted session is durably retired");
+  assert.equal((await a(finalizeRequest())).status, 409, "ABA pointer reset cannot resurrect an older session whose original pointers were empty");
+  assert.equal(databaseWrites, writesAfterDelete);
+  assert.equal(version.audio_blob_prefix, null);
+  assert.ok(store.blobs.has(audioChunkKey(deletedPrefix, 0)), "deletion retains immutable chunks for in-flight readers");
+  const retiredStatus = await (await a(statusRequest({ uploadId: deletedUploadId, chunkCount: 1, byteSize: 4 }))).json();
+  assert.equal(retiredStatus.retired, true);
+  assert.equal(retiredStatus.finalized, false);
+  assert.match(retiredStatus.successorUploadId, /^next-[a-f0-9-]{36}$/);
+  const retryStatus = await (await b(statusRequest({ uploadId: deletedUploadId, chunkCount: 1, byteSize: 4 }))).json();
+  assert.equal(retryStatus.successorUploadId, retiredStatus.successorUploadId, "the replacement generation is durable across server instances");
+  const replacement = { uploadId: retiredStatus.successorUploadId, chunkCount: 1, byteSize: 4 };
+  assert.equal((await a(chunkRequest(0, "new!", replacement))).status, 200);
+  assert.equal((await a(finalizeRequest(replacement))).status, 200, "explicit same-file upload succeeds under a fresh successor generation");
+  const replacementStatus = await (await a(statusRequest(replacement))).json();
+  assert.equal(replacementStatus.persisted, true);
+  assert.equal(replacementStatus.finalized, true);
 }
 
 // A fake /api/song-catalog/audio that mirrors the function's auth, origin, chunk, status, and finalize rules.
-function fakeAudioApi({ failures = {} } = {}) {
+function fakeAudioApi({ failures = {}, statusTransform = status => status, competingChunks = [] } = {}) {
   const store = memoryStore();
   const finalized = new Map();
   const calls = [];
@@ -332,7 +402,7 @@ function fakeAudioApi({ failures = {} } = {}) {
     calls.push(label);
     const failure = failures[label]?.shift();
     if (failure === "network") throw new TypeError("fetch failed");
-    if (failure && failure !== "lost" && failure !== "bad-json") return json({ message: "Temporary failure" }, failure);
+    if (failure && !["lost", "bad-json", "finalized-race"].includes(failure)) return json({ message: "Temporary failure" }, failure);
     const acknowledge = body => {
       if (failure === "lost") {
         if (failures.afterLostStatus) {
@@ -350,6 +420,17 @@ function fakeAudioApi({ failures = {} } = {}) {
     if (isForm) {
       const form = init.body;
       const prefix = audioUploadPrefix("member", form.get("versionId"), form.get("uploadId"));
+      if (failure === "finalized-race") {
+        for (const [chunkIndex, bytes] of competingChunks.entries()) {
+          const stored = await storeAudioChunk(store, {
+            prefix, chunkIndex, chunkCount: parseUploadInteger(form.get("chunkCount")),
+            byteSize: parseUploadInteger(form.get("byteSize")), chunkSize: parseUploadInteger(form.get("chunkSize")),
+            chunk: new Blob([bytes]), checksum: sha256(bytes),
+          });
+          assert.equal(stored.ok, true, "competing client commits the same upload");
+        }
+        finalized.set(form.get("versionId"), prefix);
+      }
       if (finalized.get(form.get("versionId")) === prefix) return json({ message: "This upload is already finalized", finalized: true }, 409);
       let chunk = form.get("chunk");
       if (failures.corrupt?.includes(Number(form.get("chunkIndex")))) {
@@ -372,13 +453,16 @@ function fakeAudioApi({ failures = {} } = {}) {
     if (!status.ok) return json({ message: status.message }, status.status);
     if (payload.action === "upload_status") {
       const isFinalized = finalized.get(payload.versionId) === prefix;
-      return json({
+      return json(statusTransform({
         finalized: isFinalized, ...status,
         ...(isFinalized ? { persisted: true, lockedIn: true, audioUrl: `/api/song-catalog/audio?versionId=${payload.versionId}`, message: "Audio is persisted and locked into HALO storage." } : {}),
-      });
+      }));
     }
     if (payload.action === "finalize_upload") {
-      if (finalized.get(payload.versionId) === prefix) return json({ message: "Audio is persisted and locked into HALO storage.", alreadyFinalized: true });
+      if (finalized.get(payload.versionId) === prefix) return json({
+        message: "Audio is persisted and locked into HALO storage.", alreadyFinalized: true,
+        persisted: true, lockedIn: true, audioUrl: `/api/song-catalog/audio?versionId=${payload.versionId}`,
+      });
       if (!status.complete) {
         return json({ message: "The audio upload is incomplete.", missingChunks: status.missingChunks, invalidChunks: status.invalidChunks }, 409);
       }
@@ -444,7 +528,47 @@ try {
     }
   }
 
+  // Another client can finish between our status read and write; only finalized conflicts reconcile.
+  {
+    const competingChunks = Array.from({ length: Math.ceil(audio.length / 4096) }, (_, index) => audio.subarray(index * 4096, (index + 1) * 4096));
+    const api = fakeAudioApi({ failures: { "chunk:0": ["finalized-race"] }, competingChunks });
+    const client = createAudioApiClient({ baseUrl: "https://halo.example", token: TOKEN, fetchImpl: api.fetchImpl, sleepImpl: noSleep, retryDelays: [] });
+    const result = await uploadAudioFile({ filePath: audioPath, songId: SONG_ID, versionId: VERSION_ID, client, chunkSize: 4096 });
+    assert.equal(result.alreadyFinalized, true);
+    assert.equal(result.persisted, true);
+    assert.equal(api.calls.filter(call => call.startsWith("chunk:")).length, 1, "a finalized 409 is reconciled without resending chunks");
+    assert.equal(api.calls[api.calls.indexOf("chunk:0") + 1], "upload_status");
+    assert.equal(Buffer.compare(api.assembled(VERSION_ID), audio), 0);
+  }
+  {
+    const api = fakeAudioApi({ failures: { "chunk:0": [409] } });
+    const client = createAudioApiClient({ baseUrl: "https://halo.example", token: TOKEN, fetchImpl: api.fetchImpl, sleepImpl: noSleep, retryDelays: [] });
+    await assert.rejects(
+      uploadAudioFile({ filePath: audioPath, songId: SONG_ID, versionId: VERSION_ID, client, chunkSize: 4096 }),
+      error => error.status === 409,
+    );
+    assert.equal(api.calls.at(-1), "chunk:0", "genuine conflicts are not retried or converted into success");
+    assert.equal(api.calls.filter(call => call.startsWith("chunk:")).length, 1);
+  }
+
   // An unavailable progress endpoint blocks writes rather than treating unknown progress as zero.
+  for (const statusTransform of [
+    status => ({ ...status, finalized: undefined }),
+    status => ({ ...status, receivedChunks: undefined }),
+    status => ({ ...status, invalidChunks: false }),
+    status => ({ ...status, chunkChecksums: null }),
+    status => ({ ...status, chunkCount: status.chunkCount + 1 }),
+    status => ({ ...status, byteSize: status.byteSize + 1 }),
+  ]) {
+    const api = fakeAudioApi({ statusTransform });
+    const client = createAudioApiClient({ baseUrl: "https://halo.example", token: TOKEN, fetchImpl: api.fetchImpl, sleepImpl: noSleep, retryDelays: [] });
+    await assert.rejects(
+      uploadAudioFile({ filePath: audioPath, songId: SONG_ID, versionId: VERSION_ID, client, chunkSize: 4096 }),
+      /invalid upload progress/,
+    );
+    assert.deepEqual(api.calls, ["upload_status"], "malformed successful status cannot cause chunks to be sent");
+    assert.equal(api.store.blobs.size, 0);
+  }
   {
     const api = fakeAudioApi({ failures: { upload_status: [503, 503] } });
     const client = createAudioApiClient({ baseUrl: "https://halo.example", token: TOKEN, fetchImpl: api.fetchImpl, sleepImpl: noSleep, retryDelays: [0] });

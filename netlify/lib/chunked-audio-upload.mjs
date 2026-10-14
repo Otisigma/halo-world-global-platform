@@ -12,6 +12,22 @@ export const audioChunkKey = (prefix, index) => `${prefix}${String(index).padSta
 export const audioUploadPrefix = (ownerMemberId, versionId, uploadId) => `${ownerMemberId}/${versionId}/${uploadId}/parts/`;
 export const audioSessionKey = prefix => `${prefix}session.json`;
 export const audioFinalizationKey = prefix => `${prefix}finalized.json`;
+export const audioRetirementKey = prefix => `${prefix}retired.json`;
+
+const retired = receipt => ({
+  ok: false, status: 409, retired: true, successorUploadId: receipt.successorUploadId,
+  message: "This upload was deleted. Start a new upload session.",
+});
+
+export async function getAudioUploadRetirement(store, prefix) {
+  return store.get(audioRetirementKey(prefix), { type: "json" });
+}
+
+export async function retireAudioUpload(store, prefix, successorUploadId) {
+  const receipt = { successorUploadId };
+  const result = await store.setJSON(audioRetirementKey(prefix), receipt, { onlyIfNew: true });
+  return result.modified ? receipt : getAudioUploadRetirement(store, prefix);
+}
 
 /** No coercion of booleans, null, fractions, signs, exponents, or numeric prefixes. */
 export function parseUploadInteger(value) {
@@ -76,6 +92,8 @@ export async function storeAudioChunk(store, { prefix, chunkIndex, chunkCount, b
   if (checksum && checksum !== sha256) {
     return { ok: false, status: 422, message: "That audio chunk was corrupted in transit. Retry the chunk." };
   }
+  const retirement = await getAudioUploadRetirement(store, prefix);
+  if (retirement) return retired(retirement);
   if (await store.get(audioFinalizationKey(prefix), { type: "json" })) return finalized();
   const previous = await store.get(audioSessionKey(prefix), { type: "json" });
   let canonicalSize = sequence.chunkSize;
@@ -162,6 +180,8 @@ export async function inspectAudioUpload(store, { prefix, chunkCount, byteSize, 
 
 /** A durable seal pins finalize metadata before the database pointer is published; retries recover it. */
 export async function sealAudioUpload(store, { prefix, chunkCount, byteSize, chunkSize, ...details }) {
+  const retirement = await getAudioUploadRetirement(store, prefix);
+  if (retirement) return retired(retirement);
   const status = await inspectAudioUpload(store, { prefix, chunkCount, byteSize, chunkSize });
   if (!status.ok) return status;
   if (!status.complete) return { ...status, ok: false, status: 409, message: "The audio upload is incomplete. Re-send missing chunks, or start a new session for conflicting chunks." };

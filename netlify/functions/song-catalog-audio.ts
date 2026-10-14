@@ -11,9 +11,11 @@ import {
   AUDIO_UPLOAD_MAX_CHUNKS,
   audioUploadPrefix,
   cleanChunkChecksum,
+  getAudioUploadRetirement,
   inspectAudioUpload,
   parseUploadInteger,
   sealAudioUpload,
+  retireAudioUpload,
   storeAudioChunk,
   validateUploadShape,
 } from "../lib/chunked-audio-upload.mjs";
@@ -95,7 +97,8 @@ async function ownedVersion(db: Awaited<ReturnType<typeof getDatabase>>, ownerMe
   const rows = songId
     ? await db.sql`
         SELECT version.id, version.song_id, version.audio_blob_prefix, version.audio_chunk_count,
-          version.audio_content_type, version.audio_byte_size, version.audio_filename, version.audio_storage_key
+          version.audio_content_type, version.audio_byte_size, version.audio_filename, version.audio_storage_key,
+          version.updated_at::text AS audio_revision
         FROM halo_song_versions version
         JOIN halo_song_catalog song ON song.id = version.song_id
         WHERE version.id = ${versionId} AND song.id = ${songId}
@@ -104,7 +107,8 @@ async function ownedVersion(db: Awaited<ReturnType<typeof getDatabase>>, ownerMe
       `
     : await db.sql`
         SELECT version.id, version.song_id, version.audio_blob_prefix, version.audio_chunk_count,
-          version.audio_content_type, version.audio_byte_size, version.audio_filename, version.audio_storage_key
+          version.audio_content_type, version.audio_byte_size, version.audio_filename, version.audio_storage_key,
+          version.updated_at::text AS audio_revision
         FROM halo_song_versions version
         JOIN halo_song_catalog song ON song.id = version.song_id
         WHERE version.id = ${versionId}
@@ -144,7 +148,10 @@ async function uploadChunk(request: Request, db: Awaited<ReturnType<typeof getDa
   // Finalized parts back live playback, so a late retry can never rewrite them.
   if (version.audio_blob_prefix === prefix) return json({ message: "This upload is already finalized", chunkIndex, finalized: true }, 409);
   const stored = await storeAudioChunk(audioStore, { prefix, chunkIndex, chunkCount, byteSize, chunk, checksum, chunkSize, offset });
-  if (!stored.ok) return json({ message: stored.message, chunkIndex, finalized: stored.finalized === true }, stored.status);
+  if (!stored.ok) return json({
+    message: stored.message, chunkIndex, finalized: stored.finalized === true,
+    ...(stored.retired ? { retired: true, successorUploadId: stored.successorUploadId } : {}),
+  }, stored.status);
   const status = await inspectAudioUpload(audioStore, { prefix, chunkCount, byteSize, chunkSize });
   return json({ message: "Audio chunk uploaded", chunkIndex, chunkSha256: stored.sha256, ...status });
 }
@@ -165,8 +172,10 @@ async function uploadStatus(payload: Record<string, unknown>, db: Awaited<Return
   const prefix = audioUploadPrefix(ownerMemberId, versionId, uploadId);
   const status = await inspectAudioUpload(audioStore, { prefix, chunkCount, byteSize, chunkSize });
   if (!status.ok) return json({ message: status.message }, status.status);
+  const retirement = await getAudioUploadRetirement(audioStore, prefix);
   return json({
-    songId, versionId, uploadId, finalized: version.audio_blob_prefix === prefix, ...status,
+    songId, versionId, uploadId, ...status, finalized: version.audio_blob_prefix === prefix,
+    ...(retirement ? { retired: true, successorUploadId: retirement.successorUploadId } : {}),
     ...(version.audio_blob_prefix === prefix ? {
       persisted: true,
       lockedIn: true,
@@ -189,14 +198,20 @@ async function deleteUpload(payload: Record<string, unknown>, db: Awaited<Return
   const version = await ownedVersion(db, ownerMemberId, versionId, songId);
   if (!version) return json({ message: "That song version was not found" }, 404);
   if (!version.audio_blob_prefix && !version.audio_storage_key) return json({ message: "No uploaded version audio was found" }, 404);
-  await db.sql`
+  if (version.audio_blob_prefix) await retireAudioUpload(audioStore, String(version.audio_blob_prefix), `next-${randomUUID()}`);
+  const deleted = await db.sql`
     UPDATE halo_song_versions
     SET audio_url = NULL, audio_blob_prefix = NULL, audio_chunk_count = NULL, audio_storage_key = '',
       audio_content_type = NULL, audio_byte_size = NULL, audio_filename = NULL,
       duration_seconds = 0,
       updated_at = NOW()
     WHERE id = ${versionId} AND song_id = ${songId}
+      AND audio_blob_prefix IS NOT DISTINCT FROM ${version.audio_blob_prefix}
+      AND audio_storage_key IS NOT DISTINCT FROM ${version.audio_storage_key}
+      AND updated_at IS NOT DISTINCT FROM ${version.audio_revision}::timestamptz
+    RETURNING id
   `;
+  if (!deleted.length) return json({ message: "Version audio changed during deletion. Refresh before trying again." }, 409);
   await runDreamweaverReview(songId, ownerMemberId);
   // Retain immutable parts: another instance may be finalizing this session or streaming playback.
   await removeStoredMaster(version.audio_storage_key).catch(() => undefined);
@@ -223,6 +238,8 @@ async function finalizeUpload(payload: Record<string, unknown>, db: Awaited<Retu
   const audioUrl = `/api/song-catalog/audio?versionId=${encodeURIComponent(versionId)}`;
   const status = await inspectAudioUpload(audioStore, { prefix, chunkCount, byteSize, chunkSize });
   if (!status.ok) return json({ message: status.message }, status.status);
+  const retirement = await getAudioUploadRetirement(audioStore, prefix);
+  if (retirement) return json({ message: "This upload was deleted. Start a new upload session.", retired: true, successorUploadId: retirement.successorUploadId }, 409);
   // Retrying a finalize whose response was lost returns the same confirmation without rewriting anything.
   if (version.audio_blob_prefix === prefix) {
     return json({ message: "Audio is persisted and locked into HALO storage.", songId, versionId, audioUrl, persisted: true, lockedIn: true, alreadyFinalized: true });
@@ -240,6 +257,7 @@ async function finalizeUpload(payload: Record<string, unknown>, db: Awaited<Retu
     prefix, chunkCount, byteSize, chunkSize, filename, contentType, durationSeconds,
     expectedBlobPrefix: version.audio_blob_prefix ?? null,
     expectedStorageKey: version.audio_storage_key ?? null,
+    expectedRevision: version.audio_revision,
   });
   if (!sealed.ok) return json({ message: sealed.message }, sealed.status);
   const receipt = sealed.receipt;
@@ -254,6 +272,7 @@ async function finalizeUpload(payload: Record<string, unknown>, db: Awaited<Retu
     WHERE id = ${versionId} AND song_id = ${songId} AND status = 'active'
       AND audio_blob_prefix IS NOT DISTINCT FROM ${receipt.expectedBlobPrefix}
       AND audio_storage_key IS NOT DISTINCT FROM ${receipt.expectedStorageKey}
+      AND updated_at IS NOT DISTINCT FROM ${receipt.expectedRevision}::timestamptz
     RETURNING id
   `;
   if (!updated.length) {
@@ -431,14 +450,14 @@ export default async function songCatalogAudioHandler(request: Request) {
     try { verifyRequestOrigin(request); } catch { return json({ message: "Cross-origin audio uploads are not accepted" }, 403); }
     if (request.method === "DELETE") {
       const payload = await request.json().catch(() => null) as Record<string, unknown> | null;
-      return payload ? deleteUpload(payload, db, membership.member_id) : json({ message: "Choose a supported audio action" }, 400);
+      return payload ? await deleteUpload(payload, db, membership.member_id) : json({ message: "Choose a supported audio action" }, 400);
     }
     const contentType = request.headers.get("content-type") || "";
-    if (contentType.includes("multipart/form-data")) return uploadChunk(request, db, membership.member_id);
+    if (contentType.includes("multipart/form-data")) return await uploadChunk(request, db, membership.member_id);
     const payload = await request.json().catch(() => null) as Record<string, unknown> | null;
     if (!payload) return json({ message: "Choose a supported audio action" }, 400);
-    if (payload.action === "finalize_upload") return finalizeUpload(payload, db, membership.member_id);
-    if (payload.action === "upload_status") return uploadStatus(payload, db, membership.member_id);
+    if (payload.action === "finalize_upload") return await finalizeUpload(payload, db, membership.member_id);
+    if (payload.action === "upload_status") return await uploadStatus(payload, db, membership.member_id);
     if (payload.action === "list_radio_tracks") return listRadioTracks(db, membership.member_id);
     if (payload.action === "import_from_radio") return importFromRadio(payload, db, membership.member_id);
     return json({ message: "Choose a supported audio action" }, 400);

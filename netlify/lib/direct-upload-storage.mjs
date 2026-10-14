@@ -227,8 +227,13 @@ export async function ensureMasterMultipartSession({ store, storage, scope, fing
   if (renew && saved?.data?.storageUploadId !== renewUploadId) return { sessionKey, session: saved.data, etag: saved.etag };
   if (!saved || renew) {
     if (!create) throw masterUploadError("Create a master upload session first.", 404);
-    if (renew && saved?.data?.state === "completed") throw masterUploadError("The completed master object is no longer available.", 410);
+    if (renew && saved?.data?.state === "completed" && (expectedStorageKey || expectedBlobPrefix)) {
+      throw masterUploadError("The completed master object is no longer available.", 410);
+    }
     const previous = saved;
+    if (previous) {
+      await store.setJSON(`${sessionKey}/generations/${previous.data.objectToken}`, previous.data, { onlyIfNew: true });
+    }
     const objectToken = randomUUID();
     const candidate = {
       ...scope, fingerprint, byteSize: upload.byteSize, filename: upload.filename, contentType: upload.contentType,
@@ -256,16 +261,29 @@ export async function ensureMasterMultipartSession({ store, storage, scope, fing
   return { sessionKey, session: saved.data, etag: saved.etag };
 }
 
-export async function masterMultipartAction({ action, store, storage, scope, fingerprint, upload, startByte, partChecksum, expectedStorageKey = null, expectedBlobPrefix = "", fetchImpl = fetch }) {
+export async function masterMultipartAction({ action, store, storage, scope, fingerprint, upload, generationId, startByte, partChecksum, expectedStorageKey = null, expectedBlobPrefix = "", fetchImpl = fetch }) {
   let saved = await ensureMasterMultipartSession({ store, storage, scope, fingerprint, upload, create: action === "create", expectedStorageKey, expectedBlobPrefix, fetchImpl });
+  if (action === "create" && saved.session.state === "completed" && saved.session.registered && !expectedStorageKey && !expectedBlobPrefix) {
+    saved = await ensureMasterMultipartSession({ store, storage, scope, fingerprint, upload, create: true, renew: true,
+      renewUploadId: saved.session.storageUploadId, expectedStorageKey, expectedBlobPrefix, fetchImpl });
+  }
+  if (action !== "create" && generationId && generationId !== saved.session.objectToken) {
+    if (!/^[0-9a-f-]{36}$/.test(String(generationId))) throw masterUploadError("Invalid master upload generation.", 400);
+    const archiveKey = `${saved.sessionKey}/generations/${generationId}`;
+    const archive = await store.getWithMetadata(archiveKey, { type: "json" });
+    if (!archive) throw masterUploadError("This master upload generation is no longer available.", 410);
+    assertSession(archive.data, scope, fingerprint, upload);
+    throw masterUploadError("This master upload generation has been superseded.", 410);
+  }
+  if (["part", "complete"].includes(action) && generationId !== saved.session.objectToken) throw masterUploadError("A master upload generation is required.", 400);
   let progress;
   try { progress = await masterMultipartProgress(storage, saved.session, fetchImpl); } catch (error) {
-    if (action !== "create" || error.status !== 410 || saved.session.state === "completed") throw error;
+    if (action !== "create" || error.status !== 410) throw error;
     saved = await ensureMasterMultipartSession({ store, storage, scope, fingerprint, upload, create: true, renew: true, renewUploadId: saved.session.storageUploadId, expectedStorageKey, expectedBlobPrefix, fetchImpl });
     progress = await masterMultipartProgress(storage, saved.session, fetchImpl);
   }
   const { session } = saved;
-  const status = { directUpload: true, uploadedBytes: progress.uploadedBytes, chunkSize: session.chunkSize, complete: progress.complete, expiresAt: session.expiresAt };
+  const status = { directUpload: true, generationId: session.objectToken, uploadedBytes: progress.uploadedBytes, chunkSize: session.chunkSize, complete: progress.complete, expiresAt: session.expiresAt };
   if (action === "create" || action === "status") return { ...status, ...(progress.complete ? { fileKey: session.key } : {}) };
   if (action === "part") {
     if (!Number.isSafeInteger(startByte) || startByte !== progress.uploadedBytes || startByte >= session.byteSize || startByte % session.chunkSize || progress.complete) {
@@ -314,4 +332,19 @@ export async function masterMultipartAction({ action, store, storage, scope, fin
     }
   }
   return { ...status, complete: true, fileKey: session.key, expectedStorageKey: session.expectedStorageKey, expectedBlobPrefix: session.expectedBlobPrefix };
+}
+
+export async function markMasterMultipartRegistered({ store, scope, fingerprint, generationId }) {
+  const key = masterSessionKey(scope, fingerprint);
+  const saved = await store.getWithMetadata(key, { type: "json" });
+  if (!saved?.etag || saved.data.objectToken !== generationId || saved.data.state !== "completed") throw masterUploadError("The registered master generation changed. Please retry.");
+  if (saved.data.registered) return;
+  try {
+    await store.setJSON(key, { ...saved.data, registered: true }, { onlyIfMatch: saved.etag });
+  } catch (error) {
+    const current = await store.get(key, { type: "json" });
+    if (current?.objectToken !== generationId || !current.registered) throw error;
+  }
+  const current = await store.get(key, { type: "json" });
+  if (current?.objectToken !== generationId || !current.registered) throw masterUploadError("The registered master generation changed. Please retry.");
 }

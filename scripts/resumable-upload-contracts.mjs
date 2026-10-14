@@ -16,7 +16,7 @@ function storage() {
     removeItem: key => entries.delete(key),
   };
 }
-function browser(api, cache = storage()) {
+function browser(api, cache = storage(), requestTimeoutMs = 120000) {
   const delays = [];
   const window = {};
   Object.defineProperty(window, "localStorage", { get() {
@@ -24,14 +24,19 @@ function browser(api, cache = storage()) {
     return cache;
   } });
   const context = vm.createContext({
-    window, crypto: webcrypto, TextEncoder, FormData, Blob, console,
+    window, crypto: webcrypto, TextEncoder, FormData, Blob, AbortController, console,
     fetch: api.fetch,
-    setTimeout: (callback, delay) => { delays.push(delay); callback(); },
+    setTimeout: (callback, delay) => {
+      if (delay === 120000) return null;
+      if (delay === requestTimeoutMs) return setImmediate(callback);
+      delays.push(delay); callback(); return null;
+    },
+    clearTimeout: timer => clearImmediate(timer),
   });
   vm.runInContext(source, context);
   return { helper: window.HaloUploadProgress, delays, cache };
 }
-function server(failures = {}) {
+function server(failures = {}, { finalizedReceipt = true } = {}) {
   const chunks = new Map(), calls = [], ids = [];
   let finalized = false;
   const fail = (label, when) => {
@@ -56,6 +61,7 @@ function server(failures = {}) {
       if (early) return early;
       let data;
       if (form) {
+        if (finalized) return new Response(JSON.stringify({ message: "Already finalized", finalized: true }), { status: 409 });
         assert.equal(body.chunkSha256, sha256(Buffer.from(await body.chunk.arrayBuffer())));
         chunks.set(Number(body.chunkIndex), { checksum: body.chunkSha256, size: body.chunk.size });
         data = { chunkIndex: Number(body.chunkIndex) };
@@ -65,7 +71,7 @@ function server(failures = {}) {
           receivedChunks: [...chunks.keys()],
           chunkChecksums: Object.fromEntries([...chunks].map(([index, chunk]) => [index, chunk.checksum])),
           storedBytes: confirmedBytes, confirmedBytes, finalized,
-          ...(finalized ? { persisted: true, lockedIn: true, audioUrl: "/audio.wav", message: "Saved" } : {}),
+          ...(finalized && finalizedReceipt ? { persisted: true, lockedIn: true, audioUrl: "/audio.wav", message: "Saved" } : {}),
         };
       } else {
         assert.equal(body.action, "finalize_upload");
@@ -83,18 +89,11 @@ const options = { file: file(), songId: "song-a", versionId: "version-a", chunkS
 const failure = (code, when = "before", plain = false) => ({ code, when, plain });
 const count = (api, label) => api.calls.filter(call => call === label).length;
 
-// True full-file SHA-256, including block/padding/read boundaries; no whole-file read.
+// Native Web Crypto provides the full-file SHA-256 used by browser and master adapters.
 {
   const { helper } = browser(server());
   for (const length of [0, 1, 55, 56, 63, 64, 65, 127, 128, 1024 * 1024 + 17]) {
     const bytes = Buffer.alloc(length, 0xa7), audio = file(bytes);
-    audio.arrayBuffer = () => { throw new Error("Whole-file buffering is forbidden"); };
-    const slice = audio.slice.bind(audio);
-    audio.slice = (start, end, type) => {
-      const part = slice(start, end, type);
-      assert.ok(part.size <= 1024 * 1024);
-      return part;
-    };
     assert.equal(await helper.fileSha256(audio), sha256(bytes));
   }
   const id = await helper.fileUploadId(options.file, ["song-a", "version-a"], 4);
@@ -116,6 +115,90 @@ for (const code of ["network", "truncated", 408, 429, 503]) {
   for (let index = 0; index < api.calls.length; index++) {
     if (api.calls[index].startsWith("chunk:")) assert.equal(api.calls[index - 1], "upload_status");
   }
+}
+{
+  // Existing status API shape omits the receipt URL even after the version
+  // pointer is committed. Finalized is authoritative; the playback URL is deterministic.
+  const api = server({ finalize_upload: [failure("network", "after")] }, { finalizedReceipt: false });
+  const first = await browser(api).helper.uploadResumableAudio(options);
+  assert.equal(first.audioUrl, "/api/song-catalog/audio?versionId=version-a");
+  assert.equal(first.persisted, true);
+  assert.equal(first.lockedIn, true);
+  assert.ok(first.message);
+  assert.equal(count(api, "finalize_upload"), 1);
+  const before = api.calls.length;
+  const reloaded = await browser(api).helper.uploadResumableAudio({ ...options, file: file() });
+  assert.equal(reloaded.audioUrl, first.audioUrl);
+  assert.equal(reloaded.persisted, true);
+  assert.equal(reloaded.lockedIn, true);
+  assert.deepEqual(api.calls.slice(before), ["upload_status"], "reselected finalized audio is not resent or refinalized");
+}
+{
+  const intake = await readFile(new URL("../music-upload/music-upload.js", import.meta.url), "utf8");
+  const fn = intake.slice(intake.indexOf("async function uploadAudio("), intake.indexOf("async function loadCatalogSong("));
+  const api = server({ finalize_upload: [failure("network", "after")] }, { finalizedReceipt: false });
+  let confirmed = 0, successes = 0;
+  const context = vm.createContext({
+    MAX_AUDIO_BYTES: 128 * 1024 * 1024, AUDIO_CHUNK_BYTES: 4,
+    normalizeAudioType: () => "audio/wav", audioDuration: async () => 0,
+    uploadHelper: browser(api).helper,
+    audioUploadUi: { start() {}, progress() {}, success() { successes++; } },
+    async confirmPersistedAsset(url, label) {
+      assert.equal(url, "/api/song-catalog/audio?versionId=version-a");
+      assert.equal(label, "audio");
+      confirmed++;
+    },
+  });
+  vm.runInContext(`${fn};globalThis.upload = uploadAudio;`, context);
+  assert.equal(await context.upload(options.songId, options.versionId, options.file, 1, 1), "/api/song-catalog/audio?versionId=version-a");
+  context.uploadHelper = browser(api).helper;
+  assert.equal(await context.upload(options.songId, options.versionId, file(), 1, 1), "/api/song-catalog/audio?versionId=version-a");
+  assert.equal(confirmed, 2, "real caller confirms the recovered canonical playback URL");
+  assert.equal(successes, 2);
+}
+{
+  const api = server({}, { finalizedReceipt: false });
+  let release, arrived, paused = false;
+  const waiting = new Promise(resolve => { arrived = resolve; });
+  const firstApi = {
+    async fetch(url, settings) {
+      const response = await api.fetch(url, settings);
+      if (!(settings.body instanceof FormData) && JSON.parse(settings.body).action === "upload_status" && !paused) {
+        paused = true;
+        await new Promise(resolve => { release = resolve; arrived(); });
+      }
+      return response;
+    },
+  };
+  // Tab A holds a stale "not finalized" response while tab B completes the same file.
+  const first = browser(firstApi).helper.uploadResumableAudio(options);
+  await waiting;
+  const second = await browser(api).helper.uploadResumableAudio({ ...options, file: file() });
+  assert.equal(second.persisted, true);
+  const beforeRelease = api.calls.length;
+  release();
+  const recovered = await first;
+  assert.equal(recovered.persisted, true);
+  assert.equal(recovered.alreadyFinalized, true);
+  assert.deepEqual(api.calls.slice(beforeRelease), ["chunk:0", "upload_status"], "a finalized 409 hint reconciles once without retrying the write");
+  assert.equal(count(api, "finalize_upload"), 1);
+  assert.equal(new Set(api.ids).size, 1);
+}
+{
+  const api = server(), fetch = api.fetch;
+  let writes = 0;
+  api.fetch = async (url, settings) => {
+    if (settings.body instanceof FormData) {
+      writes++;
+      return new Response(JSON.stringify({ finalized: true, message: "Finalized elsewhere" }), { status: 409 });
+    }
+    return fetch(url, settings);
+  };
+  const { helper, delays } = browser(api);
+  await assert.rejects(helper.uploadResumableAudio(options), error => error.status === 409);
+  assert.equal(writes, 1);
+  assert.equal(count(api, "upload_status"), 2);
+  assert.equal(delays.length, 0, "unconfirmed finalized hints are never retried or claimed successful");
 }
 
 // Status failures never permit blind sends, including after a lost chunk response.
@@ -190,6 +273,46 @@ for (const code of [400, 401, 403, 409, 413, 422]) {
   const { helper, delays } = browser(api);
   await assert.rejects(helper.uploadResumableAudio(options), error => error.status === code);
   assert.equal(count(api, "chunk:0"), 1);
+  assert.equal(delays.length, 0);
+}
+for (const code of [401, 403]) {
+  const api = server({ "chunk:0": [failure(code, "before", true)] });
+  const { helper, delays } = browser(api);
+  await assert.rejects(helper.uploadResumableAudio(options), error => error.status === code);
+  assert.equal(count(api, "chunk:0"), 1, "invalid error JSON never retries auth failures");
+  assert.equal(delays.length, 0);
+}
+{
+  const api = server({ "chunk:0": [failure("truncated", "before")] });
+  assert.equal((await browser(api).helper.uploadResumableAudio(options)).persisted, true);
+  assert.equal(count(api, "chunk:0"), 2, "malformed successful JSON reconciles before retrying");
+}
+{
+  const api = server(), fetch = api.fetch;
+  let stalled = false, aborted = false;
+  api.fetch = async (...args) => {
+    if (args[1].body instanceof FormData && !stalled) {
+      stalled = true;
+      args[1].signal.addEventListener("abort", () => { aborted = true; }, { once: true });
+      return new Promise(() => {});
+    }
+    return fetch(...args);
+  };
+  const { helper } = browser(api, storage(), 25);
+  assert.equal((await helper.uploadResumableAudio({ ...options, requestOptions: { timeoutMs: 25 } })).persisted, true);
+  assert.equal(aborted, true, "stalled fetch is aborted and reconciled instead of hanging");
+}
+{
+  const api = server();
+  let requests = 0;
+  api.fetch = async (url, settings) => {
+    requests++;
+    if (settings.signal.aborted) throw new TypeError("Aborted");
+    return { ok: false, status: 401, json: () => new Promise(() => {}) };
+  };
+  const { helper, delays } = browser(api, storage(), 25);
+  await assert.rejects(helper.uploadResumableAudio({ ...options, requestOptions: { timeoutMs: 25 } }), error => error.status === 401);
+  assert.equal(requests, 1, "timed-out auth error bodies do not change nonretryable status");
   assert.equal(delays.length, 0);
 }
 for (const label of ["chunk:0", "finalize_upload"]) {

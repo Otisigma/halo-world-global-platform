@@ -123,7 +123,216 @@ assert.match(deckPage, /const cueBusActive = activeCueDecks\.length > 0/, "Guard
 assert.match(deckPage, /masterBusLevel: isRecording && cueBusActive \? recorderGuardMasterLevel\(\) : 0/, "Guard reads the master bus level only when it can affect the result");
 assert.match(deckPage, /recorderGuardState\.guard\?\.tick\(\);/, "Cue toggles refresh the guard immediately");
 assert.match(deckPage, /cueGain\.connect\(context\.destination\)/, "CUE monitoring stays on the local output path");
-assert.match(deckPage, /limiter\.connect\(audioEngine\.recordingDestination\)/, "Recorder taps the post-limiter master bus");
+assert.match(deckPage, /gain\.connect\(audioEngine\.recordingGain\)/, "Recorder taps only the deck music gains");
+assert.match(deckPage, /recordingGain\.connect\(recordingLimiter\)/, "Music capture retains its own level and limiter");
+assert.match(deckPage, /recordingLimiter\.connect\(audioEngine\.recordingDestination\)/, "Recorder uses a dedicated music destination");
+assert.doesNotMatch(deckPage, /(?:masterGain|limiter|cueGain)\.connect\(audioEngine\.recordingDestination\)/, "Master, microphone monitoring and CUE never feed capture");
 assert.doesNotMatch(deckPage, /cueGain\.connect\(audioEngine\.recordingDestination\)/, "CUE monitoring is never routed into the recorder");
 
-console.log("DJ recorder guard contracts: bleed detection, hold window, indicator rendering, and deck wiring behave as expected.");
+function deckFunction(name) {
+  const start = deckPage.indexOf(`function ${name}(`);
+  assert.notEqual(start, -1, `Deck defines ${name}`);
+  const brace = deckPage.indexOf("{", start);
+  let depth = 0;
+  for (let index = brace; index < deckPage.length; index += 1) {
+    if (deckPage[index] === "{") depth += 1;
+    if (deckPage[index] === "}" && --depth === 0) {
+      return `${deckPage.slice(start, index + 1)}`;
+    }
+  }
+  throw new Error(`Unclosed function ${name}`);
+}
+
+class AudioNode {
+  constructor() {
+    this.connections = [];
+    for (const parameter of ["gain", "threshold", "knee", "ratio", "attack", "release", "frequency", "Q", "delayTime"]) {
+      this[parameter] = { value: 1, setValueAtTime(value) { this.value = value; } };
+    }
+  }
+  connect(node) { this.connections.push(node); }
+}
+class AudioContext {
+  constructor() { this.destination = new AudioNode(); this.currentTime = 0; this.state = "running"; }
+  createGain() { return new AudioNode(); }
+  createDynamicsCompressor() { return new AudioNode(); }
+  createAnalyser() { return new AudioNode(); }
+  createBiquadFilter() { return new AudioNode(); }
+  createDelay() { return new AudioNode(); }
+  createMediaStreamDestination() { const node = new AudioNode(); node.stream = {}; return node; }
+}
+const readinessTimers = new Map();
+let timerId = 0;
+const rig = {
+  window: { AudioContext },
+  audioEngine: { context: null, decks: { A: {}, B: {} } },
+  deckState: {},
+  elements: { importStatus: { classList: { remove() {} } }, recordingStatus: {} },
+  updateAudioCrossfader() {},
+  reportAudioHealth() {},
+  attachRecorderGuardToDeck() {},
+  setTimeout(handler) { const id = ++timerId; readinessTimers.set(id, handler); return id; },
+  clearTimeout(id) { readinessTimers.delete(id); },
+  fetch: async () => ({ ok: true, arrayBuffer: async () => new ArrayBuffer(8) })
+};
+vm.createContext(rig);
+for (const name of ["ensureAudio", "prepareDeckAudio", "verifyTakeoverTracksReady"]) {
+  vm.runInContext(`async ${deckFunction(name)}`, rig);
+}
+await rig.ensureAudio();
+const { audioEngine: graph } = rig;
+function reaches(source, target, visited = new Set()) {
+  if (source === target) return true;
+  if (!source || visited.has(source)) return false;
+  visited.add(source);
+  return source.connections.some(node => reaches(node, target, visited));
+}
+for (const deck of Object.values(graph.decks)) {
+  assert.ok(reaches(deck.input, graph.recordingDestination), "Track output reaches the isolated recording stream");
+  assert.ok(reaches(deck.gain, graph.context.destination), "Music still reaches speakers");
+  assert.ok(reaches(deck.cueGain, graph.context.destination), "Local cue playback is unchanged");
+  assert.equal(reaches(deck.cueGain, graph.recordingDestination), false, "Cue-only output cannot reach recording");
+}
+const microphone = new AudioNode();
+microphone.connect(graph.masterGain);
+const uiTone = new AudioNode();
+uiTone.connect(graph.context.destination);
+assert.equal(reaches(microphone, graph.recordingDestination), false, "Monitored microphone is excluded from capture");
+assert.equal(reaches(uiTone, graph.recordingDestination), false, "Speaker/UI/system feedback is excluded from capture");
+assert.equal(reaches(graph.masterGain, graph.recordingDestination), false, "Master output has no path to capture");
+const destination = graph.recordingDestination;
+await rig.ensureAudio();
+assert.equal(graph.recordingDestination, destination, "Repeated starts reuse one isolated graph without duplicate taps");
+assert.equal(graph.decks.A.gain.connections.length, 2, "Music gain has one speaker tap and one recorder tap");
+
+const decoded = { duration: 120 };
+rig.deckState = { A: { audioBuffer: decoded }, B: { audioBuffer: decoded } };
+await rig.verifyTakeoverTracksReady();
+assert.equal(readinessTimers.size, 0, "Cached buffers pass readiness and clear the timeout");
+
+let finishDecode;
+let decodeCalls = 0;
+graph.context.decodeAudioData = () => {
+  decodeCalls += 1;
+  return new Promise(resolve => { finishDecode = resolve; });
+};
+const fileTrack = { title: "Opening track", audioAsset: { file: { arrayBuffer: async () => new ArrayBuffer(8) } } };
+rig.deckState.A = fileTrack;
+let ready = false;
+const loading = rig.verifyTakeoverTracksReady().then(() => { ready = true; });
+await new Promise(resolve => setImmediate(resolve));
+assert.equal(ready, false, "Readiness stays pending until decoding completes, not just until a file exists");
+const sameLoad = rig.prepareDeckAudio(graph.context, "A");
+assert.equal(decodeCalls, 1, "Concurrent readiness checks share the decode promise");
+finishDecode(decoded);
+await Promise.all([loading, sameLoad]);
+assert.equal(fileTrack.audioBuffer, decoded, "The decoded buffer is cached for playback");
+assert.equal(readinessTimers.size, 0, "Successful decode removes the timeout");
+
+const stemResolvers = [];
+graph.context.decodeAudioData = () => new Promise(resolve => stemResolvers.push(resolve));
+rig.deckState.A = { stemAssets: { drums: { url: "/drums.wav" }, vocals: { url: "/vocals.wav" } } };
+ready = false;
+const stemLoad = rig.verifyTakeoverTracksReady().then(() => { ready = true; });
+await new Promise(resolve => setImmediate(resolve));
+stemResolvers[0](decoded);
+await new Promise(resolve => setImmediate(resolve));
+assert.equal(ready, false, "Every stem must decode before the recorder is ready");
+stemResolvers[1](decoded);
+await stemLoad;
+assert.equal(ready, true);
+
+graph.context.decodeAudioData = async () => { throw new Error("Decode failed"); };
+rig.deckState.A = { ...fileTrack, audioBuffer: null, audioAsset: { file: fileTrack.audioAsset.file } };
+await assert.rejects(rig.verifyTakeoverTracksReady(), /Decode failed/, "Decode failure blocks capture");
+assert.equal(rig.deckState.A.audioAsset.promise, null, "Failed decoding clears the shared promise for retry");
+assert.equal(readinessTimers.size, 0, "Failed decoding clears the readiness timeout");
+graph.context.decodeAudioData = async () => decoded;
+await rig.verifyTakeoverTracksReady();
+
+rig.deckState.A = { stemAssets: {} };
+await assert.rejects(rig.verifyTakeoverTracksReady(), /no playable stems/, "An empty stem pack cannot pass readiness");
+
+rig.deckState.A = { audioAsset: { file: { arrayBuffer: () => new Promise(() => {}) } } };
+const timedOut = rig.verifyTakeoverTracksReady();
+const timeoutAssertion = assert.rejects(timedOut, /timed out/, "A stalled load blocks recording with actionable feedback");
+readinessTimers.values().next().value();
+await timeoutAssertion;
+assert.equal(readinessTimers.size, 0, "Timeout rejection removes its timer");
+
+let finishFile;
+rig.deckState.A = { audioAsset: { file: { arrayBuffer: () => new Promise(resolve => { finishFile = resolve; }) } } };
+const changedTrack = rig.verifyTakeoverTracksReady();
+rig.deckState.A = { audioBuffer: decoded };
+finishFile(new ArrayBuffer(8));
+await assert.rejects(changedTrack, /changed while loading/, "Replacing a track during decode cannot arm stale capture");
+
+const startSource = deckFunction("startTakeoverRecording");
+let recorderCount = 0;
+let captureStarted = false;
+rig.window.MediaRecorder = class {};
+Object.assign(rig, {
+  takeoverSession: { name: "HALO", dj: "halo", minutes: 1 },
+  recordingState: {},
+  document: { querySelector: () => ({ textContent: "" }) },
+  buildTakeoverPlan: async () => {},
+  trackHasPlayableAudio: () => true,
+  createCompatibleRecorder(stream) {
+    assert.equal(stream, graph.recordingDestination.stream, "Transport uses only the isolated music stream");
+    recorderCount += 1;
+    return {
+      state: "inactive",
+      addEventListener() {},
+      start() { this.state = "recording"; captureStarted = true; },
+      stop() { this.state = "inactive"; }
+    };
+  },
+  syncDecks() {},
+  setAutomatedCrossfader() {},
+  stopDeckAudio() {},
+  startDeckAudio: async () => {},
+  updateDeck() {},
+  startAutomatedMix() {},
+  stopAutomatedMix() {},
+  stopTakeoverDecks() {},
+  updateRecordingProgress() {},
+  showToast() {},
+  setInterval: () => 1,
+  clearInterval() {}
+});
+Object.assign(rig.elements, { recordingStart: {}, recordingRig: {}, recordingNote: {} });
+vm.runInContext(`async ${startSource}`, rig);
+graph.context.decodeAudioData = () => new Promise(resolve => { finishDecode = resolve; });
+rig.deckState = {
+  A: { audioAsset: { file: fileTrack.audioAsset.file } },
+  B: { audioBuffer: decoded }
+};
+const starting = rig.startTakeoverRecording();
+await new Promise(resolve => setImmediate(resolve));
+assert.equal(recorderCount, 0, "A loading track prevents MediaRecorder construction");
+assert.equal(captureStarted, false, "No capture begins while decoding is pending");
+assert.equal(rig.elements.recordingStart.disabled, true, "Start control stays disabled during readiness checks");
+await rig.startTakeoverRecording();
+assert.equal(recorderCount, 0, "A repeated start request cannot bypass readiness");
+finishDecode(decoded);
+await starting;
+assert.equal(recorderCount, 1);
+assert.equal(captureStarted, true, "Transport starts capture after decoding completes");
+assert.equal(rig.recordingState.starting, false);
+
+rig.recordingState.recorder.stop();
+captureStarted = false;
+graph.context.decodeAudioData = async () => { throw new Error("Decode failed"); };
+rig.deckState.A = { audioAsset: { file: fileTrack.audioAsset.file } };
+await rig.startTakeoverRecording();
+assert.equal(recorderCount, 1, "Decode failures never construct another recorder");
+assert.equal(captureStarted, false);
+assert.equal(rig.elements.recordingStart.disabled, false, "Readiness failures allow retry");
+assert.match(rig.elements.recordingStatus.textContent, /Decode failed/, "Readiness failures reach the UI");
+
+assert.ok(startSource.indexOf("await verifyTakeoverTracksReady()") < startSource.indexOf("createCompatibleRecorder("), "Readiness precedes even recorder construction");
+assert.ok(startSource.indexOf("await verifyTakeoverTracksReady()") < startSource.indexOf("recorder.start("), "Readiness precedes capture start");
+assert.match(startSource, /recordingState\.starting/, "Concurrent start requests cannot create duplicate recorders");
+assert.match(startSource, /finally\s*\{\s*recordingState\.starting = false/, "Failed starts can be retried");
+
+console.log("DJ recorder guard contracts: isolated graph, decoded readiness, transport gating, bleed detection, and indicator rendering passed.");

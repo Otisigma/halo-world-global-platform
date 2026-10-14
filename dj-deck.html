@@ -2856,6 +2856,7 @@
       context: null,
       masterGain: null,
       limiter: null,
+      recordingGain: null,
       recordingDestination: null,
       animationFrame: null,
       decks: {
@@ -2878,6 +2879,7 @@
     };
     const recordingState = {
       recorder: null,
+      starting: false,
       chunks: [],
       startedAt: 0,
       elapsedTimer: null,
@@ -3672,8 +3674,16 @@
         audioEngine.masterGain = masterGain;
         audioEngine.limiter = limiter;
         if (typeof context.createMediaStreamDestination === "function") {
+          const recordingGain = context.createGain();
+          const recordingLimiter = context.createDynamicsCompressor();
+          recordingGain.gain.setValueAtTime(.82, context.currentTime);
+          ["threshold", "knee", "ratio", "attack", "release"].forEach(parameter => {
+            recordingLimiter[parameter].setValueAtTime(limiter[parameter].value, context.currentTime);
+          });
+          audioEngine.recordingGain = recordingGain;
           audioEngine.recordingDestination = context.createMediaStreamDestination();
-          limiter.connect(audioEngine.recordingDestination);
+          recordingGain.connect(recordingLimiter);
+          recordingLimiter.connect(audioEngine.recordingDestination);
         }
         ["A", "B"].forEach(deckId => {
           const input = context.createGain();
@@ -3722,6 +3732,8 @@
           trim.connect(gain);
           trim.connect(cueGain);
           gain.connect(masterGain);
+          // Only the music gains feed capture; master/room input and local CUE/UI audio stay out.
+          if (audioEngine.recordingGain) gain.connect(audioEngine.recordingGain);
           cueGain.connect(context.destination);
           cueGain.gain.setValueAtTime(0, context.currentTime);
           audioEngine.decks[deckId].input = input;
@@ -3858,6 +3870,7 @@
 
     function stopDeckAudio(deckId) {
       const channel = audioEngine.decks[deckId];
+      channel.playbackGeneration = (channel.playbackGeneration || 0) + 1;
       const envelopes = channel.sourceEnvelopes || new Map();
       const stopSource = source => {
         if (audioEngine.halo) audioEngine.halo.stopSourceSmoothly(source, envelopes.get(source));
@@ -3943,21 +3956,10 @@
       channel.stabilizesAt = Math.max(channel.stabilizesAt || 0, started.stabilizesAt);
     }
 
-    async function startDeckAudioSources(context, deckId, beatOffset) {
+    async function prepareDeckAudio(context, deckId) {
       const state = deckState[deckId];
       if (!state.audioBuffer && !state.audioAsset?.file && !state.stemAssets) {
         throw new Error("Select the song's audio file to play it in the deck. Library cards provide set-planning details, not the recording itself.");
-      }
-      stopDeckAudio(deckId);
-      if (audioEngine.decks[deckId].trim) audioEngine.decks[deckId].trim.gain.setValueAtTime(1, context.currentTime);
-      audioEngine.decks[deckId].startedAt = context.currentTime;
-      audioEngine.decks[deckId].playRequestedAt = Date.now();
-      reportAudioHealth("checking", `Checking Deck ${deckId} for audio output.`, { deckId });
-      if (state.stemAssets && audioEngine.decks[deckId].filters) {
-        const filters = audioEngine.decks[deckId].filters;
-        filters.lowShelf.gain.setValueAtTime(0, context.currentTime);
-        filters.highShelf.gain.setValueAtTime(0, context.currentTime);
-        filters.vocalBand.gain.setValueAtTime(0, context.currentTime);
       }
       if (!state.audioBuffer && state.audioAsset?.file) {
         elements.importStatus.classList.remove("is-error");
@@ -3977,20 +3979,10 @@
         state.duration = state.audioBuffer.duration;
         elements.importStatus.textContent = `${state.title} is ready. Future plays start immediately.`;
       }
-      // Apply beat-phase offset: delay source.start() by `beatOffset` seconds so
-      // the first beat of the incoming track lands exactly on the outgoing beat grid.
-      const startAt = context.currentTime + Math.max(0, beatOffset);
-      if (state.audioBuffer) {
-        const source = context.createBufferSource();
-        source.buffer = state.audioBuffer;
-        source.loop = false;
-        source.playbackRate.value = Number(state.bpm) / Number(state.originalBpm || state.bpm);
-        startDeckSource(context, deckId, source, audioEngine.decks[deckId].input, startAt);
-        audioEngine.decks[deckId].source = source;
-      } else if (state.stemAssets) {
-        elements.importStatus.classList.remove("is-error");
-        elements.importStatus.textContent = `Preparing ${state.title}'s private stems…`;
-        const preparedStems = await Promise.all(Object.entries(state.stemAssets).map(async ([stemType, asset]) => {
+      if (!state.audioBuffer && state.stemAssets) {
+        const assets = Object.entries(state.stemAssets);
+        if (!assets.length) throw new Error("The selected track has no playable stems.");
+        await Promise.all(assets.map(async ([stemType, asset]) => {
           if (!asset.buffer && !asset.promise) {
             asset.promise = fetch(asset.url, { credentials: "same-origin" })
               .then(response => {
@@ -4004,8 +3996,67 @@
               })
               .finally(() => { asset.promise = null; });
           }
-          return [stemType, asset.buffer || await asset.promise];
+          if (!asset.buffer) asset.buffer = await asset.promise;
         }));
+      }
+      if (deckState[deckId] !== state) throw new Error(`Deck ${deckId} changed while loading. Start the recording again.`);
+      return state;
+    }
+
+    async function verifyTakeoverTracksReady() {
+      const openingTracks = ["A", "B"].map(deckId => deckState[deckId]);
+      let timeout;
+      try {
+        await Promise.race([
+          Promise.all(["A", "B"].map(deckId => prepareDeckAudio(audioEngine.context, deckId))),
+          new Promise((resolve, reject) => {
+            timeout = setTimeout(() => reject(new Error("Track loading timed out. Check the audio source and try again.")), 15000);
+          })
+        ]);
+      } finally {
+        clearTimeout(timeout);
+      }
+      if (["A", "B"].some((deckId, index) => deckState[deckId] !== openingTracks[index])) {
+        throw new Error("The opening tracks changed while loading. Start the recording again.");
+      }
+      elements.recordingStatus.textContent = "Opening tracks decoded and ready. Starting isolated music capture…";
+    }
+
+    async function startDeckAudioSources(context, deckId, beatOffset) {
+      const state = deckState[deckId];
+      stopDeckAudio(deckId);
+      const playbackGeneration = audioEngine.decks[deckId].playbackGeneration;
+      if (audioEngine.decks[deckId].trim) audioEngine.decks[deckId].trim.gain.setValueAtTime(1, context.currentTime);
+      audioEngine.decks[deckId].startedAt = context.currentTime;
+      audioEngine.decks[deckId].playRequestedAt = Date.now();
+      reportAudioHealth("checking", `Checking Deck ${deckId} for audio output.`, { deckId });
+      if (state.stemAssets && audioEngine.decks[deckId].filters) {
+        const filters = audioEngine.decks[deckId].filters;
+        filters.lowShelf.gain.setValueAtTime(0, context.currentTime);
+        filters.highShelf.gain.setValueAtTime(0, context.currentTime);
+        filters.vocalBand.gain.setValueAtTime(0, context.currentTime);
+      }
+      try {
+        await prepareDeckAudio(context, deckId);
+      } catch (error) {
+        if (audioEngine.decks[deckId].playbackGeneration !== playbackGeneration) return;
+        throw error;
+      }
+      if (audioEngine.decks[deckId].playbackGeneration !== playbackGeneration) return;
+      // Apply beat-phase offset: delay source.start() by `beatOffset` seconds so
+      // the first beat of the incoming track lands exactly on the outgoing beat grid.
+      const startAt = context.currentTime + Math.max(0, beatOffset);
+      if (state.audioBuffer) {
+        const source = context.createBufferSource();
+        source.buffer = state.audioBuffer;
+        source.loop = false;
+        source.playbackRate.value = Number(state.bpm) / Number(state.originalBpm || state.bpm);
+        startDeckSource(context, deckId, source, audioEngine.decks[deckId].input, startAt);
+        audioEngine.decks[deckId].source = source;
+      } else if (state.stemAssets) {
+        elements.importStatus.classList.remove("is-error");
+        elements.importStatus.textContent = `Preparing ${state.title}'s private stems…`;
+        const preparedStems = Object.entries(state.stemAssets).map(([stemType, asset]) => [stemType, asset.buffer]);
         const startAt = context.currentTime + Math.max(.045, beatOffset);
         const channel = audioEngine.decks[deckId];
         channel.stemSources = {};
@@ -5483,16 +5534,19 @@
     }
 
     async function startTakeoverRecording() {
-      if (!takeoverSession) return;
+      if (!takeoverSession || recordingState.starting || recordingState.recorder?.state === "recording") return;
+      recordingState.starting = true;
       elements.recordingStart.disabled = true;
       elements.recordingStatus.textContent = "Building the complete DJ sequence before opening the master channel…";
 
       try {
         await ensureAudio();
         await buildTakeoverPlan();
-        if (!window.MediaRecorder || !audioEngine.recordingDestination) throw new Error("This browser cannot record the live master mix.");
+        if (!window.MediaRecorder || !audioEngine.recordingDestination) throw new Error("This browser cannot record the isolated music mix.");
         const missingDecks = ["A", "B"].filter(deckId => !trackHasPlayableAudio(deckState[deckId]));
         if (missingDecks.length) throw new Error(`Load playable audio on Deck ${missingDecks.join(" and Deck ")} before starting the automated set.`);
+        elements.recordingStatus.textContent = "Waiting for the opening tracks to finish loading and decoding…";
+        await verifyTakeoverTracksReady();
 
         const recorder = createCompatibleRecorder(audioEngine.recordingDestination.stream);
         recordingState.mimeType = recorder.mimeType || "";
@@ -5557,9 +5611,11 @@
           });
         }, { once: true });
 
+        syncDecks();
+        setAutomatedCrossfader(0);
+        stopDeckAudio("B");
         recorder.start(1000);
         recordingState.startedAt = Date.now();
-        syncDecks();
         deckState.A.playing = true;
         deckState.B.playing = false;
         await startDeckAudio("A");
@@ -5592,6 +5648,8 @@
         elements.recordingNote.textContent = "Try a current version of Chrome, Edge, Firefox, or Safari.";
         showToast("Recording unavailable", error.message || "The browser could not open the master recorder.");
         elements.recordingStart.disabled = false;
+      } finally {
+        recordingState.starting = false;
       }
     }
 

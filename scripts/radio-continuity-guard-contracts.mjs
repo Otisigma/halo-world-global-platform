@@ -201,12 +201,12 @@ const deckSandbox = {
 };
 vm.createContext(deckSandbox);
 vm.runInContext([
-  "stopDeckAudio", "startDeckSource", "startDeckAudioSources", "scheduleAutomatedTransition",
+  "stopDeckAudio", "startDeckSource", "prepareDeckAudio", "startDeckAudioSources", "scheduleAutomatedTransition",
   "stopAutomatedMix", "stopTakeoverDecks", "finishTakeoverRecording", "updateMasterReadout",
   "recorderGuardMasterLevel", "recorderGuardInputs", "attachRecorderGuardToDeck"
 ].map(name => {
   const source = extractFunctionSource(deckPage, name);
-  return name === "startDeckAudioSources" ? `async ${source}` : source;
+  return ["prepareDeckAudio", "startDeckAudioSources"].includes(name) ? `async ${source}` : source;
 }).join("\n\n"), deckSandbox);
 
 async function runNextTimer() {
@@ -280,5 +280,34 @@ deckSandbox.audioEngine.decks.A.timer = 42;
 deckSandbox.stopTakeoverDecks();
 assert.ok(stopped.includes(42));
 assert.equal(deckSandbox.audioEngine.decks.A.timer, null);
+
+// Readiness yields must not let overlapping transport starts orphan a source.
+const beforeConcurrent = sources.length;
+await Promise.all([deckSandbox.startDeckAudio("A"), deckSandbox.startDeckAudio("A")]);
+assert.equal(sources.length, beforeConcurrent + 1, "Only the latest overlapping start creates a track source");
+deckSandbox.stopTakeoverDecks();
+assert.ok(sources.every(source => source.stopped), "Shutdown stops all sources after concurrent starts");
+
+const beforeCancelled = sources.length;
+const pendingStart = deckSandbox.startDeckAudio("A");
+deckSandbox.stopTakeoverDecks();
+await pendingStart;
+assert.equal(sources.length, beforeCancelled, "Stopping during readiness cancels the pending source start");
+
+let rejectOldLoad;
+deckSandbox.deckState.A = {
+  ...deckSandbox.deckState.A,
+  audioBuffer: null,
+  audioAsset: { file: { arrayBuffer: () => new Promise((resolve, reject) => { rejectOldLoad = reject; }) } }
+};
+const supersededStart = deckSandbox.startDeckAudio("A");
+deckSandbox.deckState.A = { ...deckSandbox.deckState.A, audioBuffer: { duration: 180 } };
+await deckSandbox.startDeckAudio("A");
+const replacement = sources.at(-1);
+rejectOldLoad(new Error("Old track failed to decode"));
+await supersededStart;
+assert.equal(replacement.stopped, undefined, "Superseded decode errors cannot stop the replacement via caller error handling");
+deckSandbox.stopTakeoverDecks();
+assert.ok(sources.every(source => source.stopped));
 
 console.log("HALO continuity contracts: radio guard preserved; DJ rollback transitions, failed replacement, recorder monitoring, and silent shutdown passed.");

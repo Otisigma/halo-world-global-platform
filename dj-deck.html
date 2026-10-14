@@ -3870,6 +3870,7 @@
 
     function stopDeckAudio(deckId) {
       const channel = audioEngine.decks[deckId];
+      channel.playbackGeneration = (channel.playbackGeneration || 0) + 1;
       const envelopes = channel.sourceEnvelopes || new Map();
       const stopSource = source => {
         if (audioEngine.halo) audioEngine.halo.stopSourceSmoothly(source, envelopes.get(source));
@@ -4024,6 +4025,7 @@
     async function startDeckAudioSources(context, deckId, beatOffset) {
       const state = deckState[deckId];
       stopDeckAudio(deckId);
+      const playbackGeneration = audioEngine.decks[deckId].playbackGeneration;
       if (audioEngine.decks[deckId].trim) audioEngine.decks[deckId].trim.gain.setValueAtTime(1, context.currentTime);
       audioEngine.decks[deckId].startedAt = context.currentTime;
       audioEngine.decks[deckId].playRequestedAt = Date.now();
@@ -4035,6 +4037,7 @@
         filters.vocalBand.gain.setValueAtTime(0, context.currentTime);
       }
       await prepareDeckAudio(context, deckId);
+      if (audioEngine.decks[deckId].playbackGeneration !== playbackGeneration) return;
       // Apply beat-phase offset: delay source.start() by `beatOffset` seconds so
       // the first beat of the incoming track lands exactly on the outgoing beat grid.
       const startAt = context.currentTime + Math.max(0, beatOffset);

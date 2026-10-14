@@ -281,4 +281,17 @@ deckSandbox.stopTakeoverDecks();
 assert.ok(stopped.includes(42));
 assert.equal(deckSandbox.audioEngine.decks.A.timer, null);
 
+// Readiness yields must not let overlapping transport starts orphan a source.
+const beforeConcurrent = sources.length;
+await Promise.all([deckSandbox.startDeckAudio("A"), deckSandbox.startDeckAudio("A")]);
+assert.equal(sources.length, beforeConcurrent + 1, "Only the latest overlapping start creates a track source");
+deckSandbox.stopTakeoverDecks();
+assert.ok(sources.every(source => source.stopped), "Shutdown stops all sources after concurrent starts");
+
+const beforeCancelled = sources.length;
+const pendingStart = deckSandbox.startDeckAudio("A");
+deckSandbox.stopTakeoverDecks();
+await pendingStart;
+assert.equal(sources.length, beforeCancelled, "Stopping during readiness cancels the pending source start");
+
 console.log("HALO continuity contracts: radio guard preserved; DJ rollback transitions, failed replacement, recorder monitoring, and silent shutdown passed.");

@@ -5,6 +5,7 @@ import { getUser, verifyRequestOrigin } from "@netlify/identity";
 import { cleanText, ensureMembership } from "../lib/halo-x.mjs";
 import { runDreamweaverReview } from "./song-catalog.js";
 import { MASTER_PLAYBACK_URL_TTL_SECONDS, deleteStoredObject, directUploadConfig, presignObjectUrl } from "../lib/direct-upload-storage.mjs";
+import { appendUploadChunk, confirmedUploadBytes, ensureUploadSession, readUploadChunk, resumableUploadId, uploadSessionKey } from "../lib/resumable-upload.mjs";
 
 const audioStore = getStore({ name: "halo-song-catalog-audio", consistency: "strong" });
 const radioAudioStore = getStore({ name: "halo-radio-submissions", consistency: "strong" });
@@ -133,8 +134,40 @@ async function uploadChunk(request: Request, db: Awaited<ReturnType<typeof getDa
   if (!contentType) return json({ message: "Upload an MP3, M4A, AAC, OGG, WebM, WAV, or FLAC audio file" }, 415);
   if (!(await ownedVersion(db, ownerMemberId, versionId, songId))) return json({ message: "That song version was not found" }, 404);
   const prefix = `${ownerMemberId}/${versionId}/${uploadId}/parts/`;
+  if (await audioStore.get(uploadSessionKey(`${ownerMemberId}/${versionId}/${uploadId}/`), { type: "json" })) {
+    return json({ message: "Use the resumable chunk endpoint for this upload" }, 409);
+  }
   await audioStore.set(`${prefix}${String(chunkIndex).padStart(3, "0")}`, chunk);
   return json({ message: "Audio chunk uploaded", chunkIndex });
+}
+
+async function resumableAudio(request: Request, db: Awaited<ReturnType<typeof getDatabase>>, ownerMemberId: string) {
+  const query = new URL(request.url).searchParams;
+  const raw = request.method === "POST";
+  const field = (name: string) => raw ? request.headers.get(`x-${name}`) : query.get(name);
+  const songId = cleanId(field("songId"));
+  const versionId = cleanId(field("versionId"));
+  const uploadId = resumableUploadId(field("uploadId"));
+  if (!songId || !versionId || !uploadId) return json({ message: "The resumable upload details are invalid" }, 400);
+  if (!(await ownedVersion(db, ownerMemberId, versionId, songId))) return json({ message: "That song version was not found" }, 404);
+  const prefix = `${ownerMemberId}/${versionId}/${uploadId}/`;
+  if (raw) {
+    const session = await audioStore.get(uploadSessionKey(prefix), { type: "json" });
+    if (!session) return json({ message: "Check upload status before sending chunks" }, 409);
+    const offset = request.headers.get("x-start-byte");
+    if (!offset || !/^\d+$/.test(offset)) return json({ message: "A valid start byte is required" }, 400);
+    const bytes = await readUploadChunk(request, MAX_CHUNK_BYTES);
+    const uploadedBytes = await appendUploadChunk(audioStore, prefix, session, Number(offset), bytes);
+    return json({ uploadedBytes });
+  }
+  const byteSize = Number(query.get("byteSize"));
+  const chunkSize = Number(query.get("chunkSize"));
+  const filename = cleanText(query.get("filename"), 180);
+  const contentType = normalizeAudioContentType(query.get("contentType"), filename);
+  if (!Number.isSafeInteger(byteSize) || byteSize < 1 || byteSize > MAX_UPLOAD_BYTES) return json({ message: "Song audio uploads are limited to 128 MB" }, 413);
+  if (chunkSize !== MAX_CHUNK_BYTES || !filename || !contentType) return json({ message: "The resumable audio metadata is invalid" }, 400);
+  const session = await ensureUploadSession(audioStore, prefix, { songId, versionId, byteSize, chunkSize, filename, contentType });
+  return json({ uploadedBytes: await confirmedUploadBytes(audioStore, prefix, session), chunkSize });
 }
 
 async function removeUpload(prefix: string) {
@@ -184,6 +217,12 @@ async function finalizeUpload(payload: Record<string, unknown>, db: Awaited<Retu
   const version = await ownedVersion(db, ownerMemberId, versionId, songId);
   if (!version) return json({ message: "That song version was not found" }, 404);
   const prefix = `${ownerMemberId}/${versionId}/${uploadId}/parts/`;
+  const session = await audioStore.get(uploadSessionKey(`${ownerMemberId}/${versionId}/${uploadId}/`), { type: "json" });
+  if (session && (session.byteSize !== byteSize || session.filename !== filename || session.contentType !== contentType
+    || Math.ceil(byteSize / session.chunkSize) !== chunkCount
+    || await confirmedUploadBytes(audioStore, `${ownerMemberId}/${versionId}/${uploadId}/`, session) !== byteSize)) {
+    return json({ message: "The resumable audio upload is incomplete or its metadata changed" }, 409);
+  }
   const stored = await audioStore.list({ prefix });
   if (!hasCompleteChunkSet(stored.blobs, prefix, chunkCount)) {
     return json({ message: "The audio upload is incomplete. Try it again." }, 409);
@@ -367,6 +406,10 @@ export default async function songCatalogAudioHandler(request: Request) {
     const [db, user] = await Promise.all([getDatabase(), getUser()]);
     if (!user?.id) return json({ message: "Join or sign in to use song audio" }, 401);
     const membership = await ensureMembership(db, user);
+    if (request.method === "GET" && new URL(request.url).searchParams.get("uploadStatus") === "1") {
+      try { verifyRequestOrigin(request); } catch { return json({ message: "Cross-origin audio uploads are not accepted" }, 403); }
+      return await resumableAudio(request, db, membership.member_id);
+    }
     if (["GET", "HEAD"].includes(request.method)) return serveAudio(request, db, membership.member_id);
     try { verifyRequestOrigin(request); } catch { return json({ message: "Cross-origin audio uploads are not accepted" }, 403); }
     if (request.method === "DELETE") {
@@ -374,14 +417,16 @@ export default async function songCatalogAudioHandler(request: Request) {
       return payload ? deleteUpload(payload, db, membership.member_id) : json({ message: "Choose a supported audio action" }, 400);
     }
     const contentType = request.headers.get("content-type") || "";
+    if (contentType.split(";")[0] === "application/octet-stream") return await resumableAudio(request, db, membership.member_id);
     if (contentType.includes("multipart/form-data")) return uploadChunk(request, db, membership.member_id);
     const payload = await request.json().catch(() => null) as Record<string, unknown> | null;
     if (!payload) return json({ message: "Choose a supported audio action" }, 400);
-    if (payload.action === "finalize_upload") return finalizeUpload(payload, db, membership.member_id);
+    if (payload.action === "finalize_upload") return await finalizeUpload(payload, db, membership.member_id);
     if (payload.action === "list_radio_tracks") return listRadioTracks(db, membership.member_id);
     if (payload.action === "import_from_radio") return importFromRadio(payload, db, membership.member_id);
     return json({ message: "Choose a supported audio action" }, 400);
   } catch (error) {
+    if (error instanceof Error && "status" in error) return json({ message: error.message }, Number(error.status));
     console.error("Song catalog audio failed", error instanceof Error ? error.message : "unknown error");
     return json({ message: "Song audio is temporarily unavailable" }, 500);
   }

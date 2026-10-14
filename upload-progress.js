@@ -116,15 +116,83 @@
         ...requestOptions,
         retryDelays,
         onProgress(ratio){
-          const overall=((chunkIndex+ratio)/chunkCount)*100;
+          const overall=(start+ratio*(end-start))/file.size*100;
           onProgress(clampPercent(overall),{chunkIndex,chunkCount});
         }
       });
       if(!response.ok)throw new Error(response.data?.message||"The upload stopped early.");
-      onProgress(clampPercent(((chunkIndex+1)/chunkCount)*100),{chunkIndex,chunkCount});
+      onProgress(clampPercent(end/file.size*100),{chunkIndex,chunkCount});
     }
     return {chunkCount};
   }
 
-  window.HaloUploadProgress={createUploadUi,sendFormData,sendFormDataWithRetry,uploadChunkedFile};
+  async function fileUploadId(file,scope,chunkSize){
+    const hashes=[];
+    for(let start=0;start<file.size;start+=chunkSize){
+      const digest=await crypto.subtle.digest("SHA-256",await file.slice(start,start+chunkSize).arrayBuffer());
+      hashes.push(Array.from(new Uint8Array(digest),byte=>byte.toString(16).padStart(2,"0")).join(""));
+    }
+    const identity=JSON.stringify([scope,file.name,file.size,chunkSize,hashes]);
+    const digest=await crypto.subtle.digest("SHA-256",new TextEncoder().encode(identity));
+    return Array.from(new Uint8Array(digest),byte=>byte.toString(16).padStart(2,"0")).join("");
+  }
+
+  function requireUploadResponse(response){
+    if(response.ok)return response.data;
+    const error=new Error(response.data?.message||`The upload stopped (HTTP ${response.status}).`);
+    error.retryable=response.status===409||response.status===429||response.status>=500;
+    throw error;
+  }
+
+  async function uploadResumableFile({file,chunkSize,getStatus,sendChunk,onProgress=()=>{},retryDelays=[1000,3000,5000]}){
+    if(!Number.isSafeInteger(file.size)||file.size<1||!Number.isSafeInteger(chunkSize)||chunkSize<1)throw new Error("The upload file or chunk size is invalid.");
+    let confirmed=0;
+    let retries=0;
+    while(true){
+      try{
+        // Reconcile before every send, including retries after a lost response.
+        const status=await getStatus();
+        const offset=status.uploadedBytes;
+        if(!Number.isSafeInteger(offset)||offset<confirmed||offset>file.size||(offset!==file.size&&offset%chunkSize)
+          ||(status.chunkSize!=null&&status.chunkSize!==chunkSize)){
+          throw Object.assign(new Error("The server returned an invalid upload offset."),{retryable:false});
+        }
+        if(offset>confirmed)retries=0;
+        confirmed=offset;
+        onProgress(confirmed/file.size*100,{uploadedBytes:confirmed});
+        if(confirmed===file.size)return{chunkCount:Math.ceil(file.size/chunkSize),uploadedBytes:confirmed};
+        const end=Math.min(file.size,confirmed+chunkSize);
+        await sendChunk(file.slice(confirmed,end),confirmed,end);
+        const next=await getStatus();
+        if(!Number.isSafeInteger(next.uploadedBytes)||next.uploadedBytes<end||next.uploadedBytes>file.size
+          ||(next.uploadedBytes!==file.size&&next.uploadedBytes%chunkSize)){
+          throw Object.assign(new Error("The server did not confirm the uploaded chunk."),{retryable:false});
+        }
+        confirmed=next.uploadedBytes;
+        retries=0;
+        onProgress(confirmed/file.size*100,{uploadedBytes:confirmed});
+        if(confirmed===file.size)return{chunkCount:Math.ceil(file.size/chunkSize),uploadedBytes:confirmed};
+      }catch(error){
+        onProgress(confirmed/file.size*100,{uploadedBytes:confirmed});
+        if(error.retryable===false||retries>=retryDelays.length)throw error;
+        await wait(retryDelays[retries++]);
+      }
+    }
+  }
+
+  async function uploadResumableAudio({url="/api/song-catalog/audio",file,songId,versionId,contentType,onProgress,retryDelays}){
+    const chunkSize=4*1024*1024;
+    const uploadId=await fileUploadId(file,[url,songId,versionId,contentType],chunkSize);
+    const query=new URLSearchParams({uploadStatus:"1",songId,versionId,uploadId,byteSize:String(file.size),chunkSize:String(chunkSize),filename:file.name,contentType});
+    const result=await uploadResumableFile({
+      file,chunkSize,onProgress,retryDelays,
+      async getStatus(){return requireUploadResponse(await sendFormData(`${url}?${query}`,null,{method:"GET"}));},
+      async sendChunk(chunk,start){
+        requireUploadResponse(await sendFormData(url,chunk,{headers:{"Content-Type":"application/octet-stream","X-SongId":songId,"X-VersionId":versionId,"X-UploadId":uploadId,"X-Start-Byte":String(start)}}));
+      }
+    });
+    return{...result,uploadId};
+  }
+
+  window.HaloUploadProgress={createUploadUi,sendFormData,sendFormDataWithRetry,uploadChunkedFile,fileUploadId,uploadResumableFile,uploadResumableAudio,requireUploadResponse};
 })();

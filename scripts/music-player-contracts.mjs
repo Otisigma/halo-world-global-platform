@@ -99,6 +99,121 @@ const section = (source, start, end) => {
   assert.ok(source.includes(start) && source.includes(end), `missing test section ${start}`);
   return source.slice(source.indexOf(start), source.indexOf(end, source.indexOf(start)));
 };
+
+function deferredPlayback() {
+  let resolve;
+  const promise = new Promise(done => { resolve = done; });
+  return { promise, resolve };
+}
+
+const homeSources = [];
+const homeDisposal = {};
+const homeAudio = {
+  state: "running", currentTime: 10,
+  createBufferSource() {
+    const source = {
+      connect() {}, disconnect() { this.disconnected = true; },
+      addEventListener(type, handler) { this.onended = handler; },
+      start(time) { this.started = time; },
+      stop(time) { this.stopped = time; }
+    };
+    homeSources.push(source);
+    return source;
+  },
+  createGain() {
+    return {
+      gain: {
+        value: 1, events: [],
+        cancelScheduledValues() {},
+        setValueAtTime(value) { this.events.push(value); },
+        linearRampToValueAtTime(value) { this.events.push(value); }
+      },
+      connect() {}, disconnect() { this.disconnected = true; }
+    };
+  },
+  async decodeAudioData(bytes) { return bytes; }
+};
+const homePlayback = vm.createContext({
+  audioCtxRef: { current: homeAudio },
+  playbackGenerationRef: { current: 0 },
+  pendingPlaybackRef: { current: null },
+  playbackSourcesRef: { current: new Map() },
+  activeSourceNodeRef: { current: null },
+  gainNodeRef: { current: {} },
+  initAudio() {}, addLog() {}, setProcessingStatus() {}, setTracks() {},
+  setIsPlaying(value) { homeDisposal.playing = value; },
+  CustomEvent: class {},
+  window: {
+    dispatchEvent() {},
+    addEventListener(type, handler) { homeDisposal[type] = handler; },
+    removeEventListener() {}
+  },
+  useEffect(callback) { homeDisposal.unmount = callback(); }
+});
+vm.runInContext(`${section(haloHome, "const startHybridPlayback =", "const togglePlayback =")}
+  globalThis.startHome = startHybridPlayback;
+  globalThis.stopHome = stopActiveSource;`, homePlayback);
+const homeTrack = buffer => ({ isBinarySource: true, title: "Local", binaryBuffer: buffer });
+const homePending = pending => ({ ...homeTrack(null), sourceFile: { arrayBuffer: () => pending.promise } });
+
+const stoppedRead = deferredPlayback();
+const stoppedStart = homePlayback.startHome(homePending(stoppedRead));
+homePlayback.stopHome();
+stoppedRead.resolve({ duration: 60 });
+assert.equal(await stoppedStart, false, "Stopping during file preparation invalidates the main-player start");
+assert.equal(homeSources.length, 0, "A stopped pending request cannot create a looping source");
+
+const decoded = deferredPlayback();
+homeAudio.decodeAudioData = () => decoded.promise;
+const stoppedDecode = homePlayback.startHome(homePending({ promise: Promise.resolve({}) }));
+await Promise.resolve();
+homePlayback.stopHome();
+decoded.resolve({ duration: 60 });
+assert.equal(await stoppedDecode, false, "Stopping during decoding prevents source resurrection");
+assert.equal(homeSources.length, 0);
+homeAudio.decodeAudioData = async bytes => bytes;
+
+const resumed = deferredPlayback();
+homeAudio.state = "suspended";
+homeAudio.resume = () => resumed.promise;
+const stoppedResume = homePlayback.startHome(homeTrack({ duration: 60 }));
+homePlayback.stopHome();
+homeAudio.state = "running";
+resumed.resolve();
+assert.equal(await stoppedResume, false, "A stop while the context resumes cancels playback");
+assert.equal(homeSources.length, 0);
+
+assert.equal(await homePlayback.startHome(homeTrack({ duration: 60 })), true);
+const originalHomeSource = homeSources.at(-1);
+await assert.rejects(homePlayback.startHome({ isBinarySource: false }), /Choose an audio file/);
+assert.equal(originalHomeSource.stopped, undefined, "Invalid replacements preserve the current valid source");
+const olderRead = deferredPlayback(), newerRead = deferredPlayback();
+const olderStart = homePlayback.startHome(homePending(olderRead));
+const newerStart = homePlayback.startHome(homePending(newerRead));
+assert.equal(originalHomeSource.stopped, undefined, "Valid outgoing playback continues while replacements prepare");
+newerRead.resolve({ duration: 80 });
+assert.equal(await newerStart, true);
+olderRead.resolve({ duration: 70 });
+assert.equal(await olderStart, false, "Only the latest overlapping main-player start can commit");
+assert.equal(homeSources.length, 2, "Superseded preparation cannot orphan a looping buffer");
+assert.ok(originalHomeSource.stopped > homeAudio.currentTime, "Outgoing audio retires only after replacement starts");
+const originalEnvelope = homePlayback.playbackSourcesRef.current.get(originalHomeSource);
+assert.equal(originalEnvelope.gain.events.at(-1), 0, "Retirement reaches exact zero");
+const replacementHomeSource = homeSources.at(-1);
+originalHomeSource.onended();
+assert.equal(homePlayback.activeSourceNodeRef.current, replacementHomeSource, "Old cleanup cannot clear the new source");
+assert.equal(originalEnvelope.disconnected, true);
+
+const disposalRead = deferredPlayback();
+const disposalStart = homePlayback.startHome(homePending(disposalRead));
+homeDisposal.pagehide();
+disposalRead.resolve({ duration: 90 });
+assert.equal(await disposalStart, false, "Page disposal cancels pending starts");
+assert.equal(replacementHomeSource.disconnected, true, "Disposal disconnects every owned source immediately");
+assert.equal(homePlayback.playbackSourcesRef.current.size, 0);
+assert.equal(homeDisposal.playing, false, "Back-forward cache disposal also resets the playback control state");
+assert.equal(homeAudio.state, "running", "Player disposal does not suspend a context used by valid audio");
+
 const statusContext = vm.createContext({ URL });
 vm.runInContext(section(releaseCatalogApi, "function cleanPublicUrl(", "function serializeRelease("), statusContext);
 for (const [row, expected] of [

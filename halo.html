@@ -1780,6 +1780,9 @@
           const midNodeRef = useRef(null);
           const trebleNodeRef = useRef(null);
           const activeSourceNodeRef = useRef(null);
+          const playbackGenerationRef = useRef(0);
+          const pendingPlaybackRef = useRef(null);
+          const playbackSourcesRef = useRef(new Map());
           const embedIframeTrackedRef = useRef(false);
           const [isFilterActive, setIsFilterActive] = useState(false);
 
@@ -2199,47 +2202,113 @@
           };
 
           const startHybridPlayback = async (track) => {
-            initAudio();
-            const ctx = audioCtxRef.current;
-            if (!ctx) throw new Error('Audio playback is not supported in this browser.');
-            if (ctx.state === 'suspended') {
-              await ctx.resume();
-            }
-            window.dispatchEvent(new CustomEvent('halo:audio-state'));
-
-            stopActiveSource();
-
-            if (track.isBinarySource) {
-              if (!track.binaryBuffer && track.sourceFile) {
-                setProcessingStatus(`Preparing ${track.title} for playback...`);
-                addLog(`ON-DEMAND DECODE: Preparing "${track.title}" for first playback.`);
-                track.binaryBuffer = await ctx.decodeAudioData(await track.sourceFile.arrayBuffer());
-                track.version = `${track.version} • ${Math.round(track.binaryBuffer.duration)} sec`;
-                setTracks(previousTracks => [...previousTracks]);
-                setProcessingStatus(`${track.title} is ready to play.`);
+            const generation = ++playbackGenerationRef.current;
+            pendingPlaybackRef.current = generation;
+            const isCurrent = () => playbackGenerationRef.current === generation;
+            try {
+              initAudio();
+              const ctx = audioCtxRef.current;
+              if (!ctx) throw new Error('Audio playback is not supported in this browser.');
+              if (ctx.state === 'suspended') {
+                await ctx.resume();
+                if (!isCurrent()) return false;
               }
-              if (!track.binaryBuffer) throw new Error('This audio file could not be decoded by the browser.');
-              addLog(`DIRECT MEMORY STREAM: Playing 24-bit binary buffer for "${track.title}"`);
-              const source = ctx.createBufferSource();
-              source.buffer = track.binaryBuffer;
-              source.loop = true;
-              source.connect(gainNodeRef.current);
-              source.start(0);
-              activeSourceNodeRef.current = source;
-            } else {
-              throw new Error('Choose an audio file to hear this track. Catalog entries provide set-planning details, not the recording itself.');
+              if (ctx.state !== 'running') throw new Error('The audio engine is not running.');
+              window.dispatchEvent(new CustomEvent('halo:audio-state'));
+
+              if (track.isBinarySource) {
+                if (!track.binaryBuffer && track.sourceFile) {
+                  setProcessingStatus(`Preparing ${track.title} for playback...`);
+                  addLog(`ON-DEMAND DECODE: Preparing "${track.title}" for first playback.`);
+                  const bytes = await track.sourceFile.arrayBuffer();
+                  if (!isCurrent()) return false;
+                  const buffer = await ctx.decodeAudioData(bytes);
+                  if (!isCurrent()) return false;
+                  track.binaryBuffer = buffer;
+                  track.version = `${track.version} • ${Math.round(track.binaryBuffer.duration)} sec`;
+                  setTracks(previousTracks => [...previousTracks]);
+                  setProcessingStatus(`${track.title} is ready to play.`);
+                }
+                if (!isCurrent()) return false;
+                if (ctx.state !== 'running') throw new Error('The audio engine stopped before playback could start.');
+                if (!track.binaryBuffer) throw new Error('This audio file could not be decoded by the browser.');
+                addLog(`DIRECT MEMORY STREAM: Playing 24-bit binary buffer for "${track.title}"`);
+                const source = ctx.createBufferSource();
+                const envelope = ctx.createGain();
+                const previousSource = activeSourceNodeRef.current;
+                const now = ctx.currentTime;
+                source.buffer = track.binaryBuffer;
+                source.loop = true;
+                envelope.gain.setValueAtTime(0, now);
+                envelope.gain.linearRampToValueAtTime(1, now + 0.05);
+                source.connect(envelope);
+                envelope.connect(gainNodeRef.current);
+                playbackSourcesRef.current.set(source, envelope);
+                source.addEventListener('ended', () => {
+                  try { source.disconnect(); } catch {}
+                  try { envelope.disconnect(); } catch {}
+                  playbackSourcesRef.current.delete(source);
+                }, { once: true });
+                try {
+                  source.start(now);
+                } catch (error) {
+                  retirePlaybackSource(source, true);
+                  throw error;
+                }
+                activeSourceNodeRef.current = source;
+                retirePlaybackSource(previousSource);
+                return true;
+              } else {
+                throw new Error('Choose an audio file to hear this track. Catalog entries provide set-planning details, not the recording itself.');
+              }
+            } catch (error) {
+              if (!isCurrent()) return false;
+              throw error;
+            } finally {
+              if (pendingPlaybackRef.current === generation) pendingPlaybackRef.current = null;
             }
           };
 
-          const stopActiveSource = () => {
-            if (activeSourceNodeRef.current) {
-              try { activeSourceNodeRef.current.stop(); } catch(e) {}
-              activeSourceNodeRef.current = null;
+          const retirePlaybackSource = (source, immediate = false) => {
+            if (!source) return;
+            const envelope = playbackSourcesRef.current.get(source);
+            const ctx = audioCtxRef.current;
+            const now = ctx?.currentTime || 0;
+            const fade = immediate || ctx?.state !== 'running' ? 0 : 0.05;
+            if (envelope) {
+              envelope.gain.cancelScheduledValues(now);
+              envelope.gain.setValueAtTime(envelope.gain.value, now);
+              envelope.gain.linearRampToValueAtTime(0, now + fade);
+            }
+            try { source.stop(now + fade); } catch {}
+            if (!fade) {
+              try { source.disconnect(); } catch {}
+              try { envelope?.disconnect(); } catch {}
+              playbackSourcesRef.current.delete(source);
             }
           };
+
+          const stopActiveSource = (immediate = false) => {
+            playbackGenerationRef.current += 1;
+            pendingPlaybackRef.current = null;
+            for (const source of playbackSourcesRef.current.keys()) retirePlaybackSource(source, immediate);
+            activeSourceNodeRef.current = null;
+          };
+
+          useEffect(() => {
+            const disposePlayback = () => {
+              stopActiveSource(true);
+              setIsPlaying(false);
+            };
+            window.addEventListener('pagehide', disposePlayback);
+            return () => {
+              window.removeEventListener('pagehide', disposePlayback);
+              stopActiveSource(true);
+            };
+          }, []);
 
           const togglePlayback = async () => {
-            if (isPlaying) {
+            if (isPlaying || pendingPlaybackRef.current !== null) {
               stopActiveSource();
               setIsPlaying(false);
               addLog(`Playback paused.`);
@@ -2253,7 +2322,8 @@
               }
               initAudio();
               try {
-                await startHybridPlayback(activeTrack);
+                const started = await startHybridPlayback(activeTrack);
+                if (!started) return;
                 setIsPlaying(true);
                 addLog(`Playback started for "${activeTrack.title}".`);
                 window.haloStats?.track('playback_toggle', {
@@ -2261,7 +2331,7 @@
                   source_type: 'local_audio'
                 });
               } catch (error) {
-                setIsPlaying(false);
+                setIsPlaying(Boolean(activeSourceNodeRef.current));
                 setProcessingStatus(error.message || 'Audio could not start.');
                 addLog(`AUDIO ERROR: ${error.message || 'Playback could not start.'}`);
               }
@@ -2291,7 +2361,9 @@
             setAiDecision(decision);
             if (strategicTrack.id !== activeTrack.id) {
               setActiveTrack(strategicTrack);
-              if (isPlaying) startHybridPlayback(strategicTrack);
+              if (isPlaying) startHybridPlayback(strategicTrack).catch(error => {
+                setProcessingStatus(error.message || 'The next track could not start.');
+              });
             }
 
             addLog(`COLLECTIVE INTELLIGENCE: ${decision.phase} executed with "${strategicTrack.title}".`);
@@ -5387,7 +5459,12 @@
                           <div
                             key={t.id}
                             onClick={() => {
+                              playbackGenerationRef.current += 1;
+                              pendingPlaybackRef.current = null;
                               setActiveTrack(t);
+                              if (activeSourceNodeRef.current) startHybridPlayback(t).catch(error => {
+                                setProcessingStatus(error.message || 'The next track could not start.');
+                              });
                               addLog(`Track swapped to: "${t.title}"`);
                               window.haloStats?.track('select_track', { source_type: t.isBinarySource ? 'local_audio' : 'library' });
                             }}

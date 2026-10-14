@@ -13,14 +13,14 @@ const [guardSource, radioPage, radioClient, deckPage, telemetryApi] = await Prom
 function extractFunctionSource(source, name) {
   const start = source.indexOf(`function ${name}(`);
   assert.notEqual(start, -1, `Missing function ${name}`);
-  const braceStart = source.indexOf("{", start);
+  const braceStart = source.indexOf(") {", start) + 2;
   let depth = 0;
   for (let index = braceStart; index < source.length; index += 1) {
     const character = source[index];
     if (character === "{") depth += 1;
     if (character === "}") {
       depth -= 1;
-      if (depth === 0) return source.slice(start, index + 1);
+      if (depth === 0) return source.slice(source.slice(start - 6, start) === "async " ? start - 6 : start, index + 1);
     }
   }
   throw new Error(`Could not extract function ${name}`);
@@ -126,9 +126,12 @@ const deckSandbox = {
   continuityState: { guard: null, analyser: null, analyserData: null, fillerGain: null, fillerNodes: [], fillerTimeout: 0 },
   audioEngine: {
     context: {
-      createAnalyser() { return { fftSize: 0, smoothingTimeConstant: 0 }; }
+      destination: {},
+      createAnalyser() { return { fftSize: 0, smoothingTimeConstant: 0, connect() {} }; },
+      createGain() { return { gain: { value: 1 }, connect() {} }; }
     },
-    masterGain: { connect() {} }
+    masterGain: { connect() {} },
+    decks: { A: { gain: { connect() {} } }, B: { gain: { connect() {} } } }
   },
   audioHealth: {
     status: "ready",

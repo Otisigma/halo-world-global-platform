@@ -4104,12 +4104,13 @@
       audioEngine.decks.B.gain.gain.setTargetAtTime(Math.sin(mix * Math.PI / 2), now, .015);
     }
 
-    function matchDeckLevels(outgoingDeck, incomingDeck) {
+    function matchDeckLevels(outgoingDeck, incomingDeck, referenceLevel = null) {
       if (!audioEngine.context) return;
       const outgoing = audioEngine.decks[outgoingDeck];
       const incoming = audioEngine.decks[incomingDeck];
-      if (!outgoing.trim || !incoming.trim || outgoing.level < .006 || incoming.level < .006) return;
-      const targetTrim = Math.max(.72, Math.min(1.38, outgoing.level / incoming.level));
+      const outgoingLevel = referenceLevel ?? outgoing.level;
+      if (!outgoing.trim || !incoming.trim || outgoingLevel < .006 || incoming.level < .006) return;
+      const targetTrim = Math.max(.72, Math.min(1.38, outgoingLevel / incoming.level));
       incoming.trim.gain.setTargetAtTime(targetTrim, audioEngine.context.currentTime, .18);
     }
 
@@ -5540,15 +5541,15 @@
       }, Math.min(plan.transition, plan.vocalGap));
     }
 
-    function queuePerformanceMove(callback, delay) {
+    function queuePerformanceMove(callback, delay, isCurrent = null) {
       const generation = recordingState.automationGeneration;
-      const pending = recordingState.pendingHandoff;
+      const pending = isCurrent ? null : recordingState.pendingHandoff;
       const decks = ["A", "B"].map(deckId => ({
         deckId, state: deckState[deckId], generation: audioEngine.decks[deckId].playbackGeneration || 0
       }));
       const timer = setTimeout(() => {
         if (audioEngine.shutdown || recordingState.automationGeneration !== generation) return;
-        if (pending ? !deckHandoffCurrent(pending) : decks.some(owner => deckState[owner.deckId] !== owner.state
+        if (isCurrent ? !isCurrent() : pending ? !deckHandoffCurrent(pending) : decks.some(owner => deckState[owner.deckId] !== owner.state
           || (audioEngine.decks[owner.deckId].playbackGeneration || 0) !== owner.generation)) return;
         recordingState.effectTimers = recordingState.effectTimers.filter(item => item !== timer);
         callback();
@@ -5919,9 +5920,17 @@
             return;
           }
           updateDeck(incomingDeck);
-          queuePerformanceMove(() => matchDeckLevels(outgoingDeck, incomingDeck), 400);
-          queuePerformanceMove(() => matchDeckLevels(outgoingDeck, incomingDeck), 1400);
           if (!deckHandoffCurrent(pending)) return;
+          const incomingState = deckState[incomingDeck];
+          const incomingGeneration = audioEngine.decks[incomingDeck].playbackGeneration;
+          const outgoingLevel = audioEngine.decks[outgoingDeck].level;
+          const matchingCurrent = () => !audioEngine.shutdown && audioEngine.lifecycleGeneration === lifecycle
+            && recordingState.recorder === recorder && recorder?.state === "recording"
+            && deckState[incomingDeck] === incomingState && incomingState.playing
+            && audioEngine.decks[incomingDeck].playbackGeneration === incomingGeneration
+            && audioEngine.context?.state === "running";
+          queuePerformanceMove(() => matchDeckLevels(outgoingDeck, incomingDeck, outgoingLevel), 400, matchingCurrent);
+          queuePerformanceMove(() => matchDeckLevels(outgoingDeck, incomingDeck, outgoingLevel), 1400, matchingCurrent);
           recordingState.pendingHandoff = null;
           recordingState.loopSource = null;
 

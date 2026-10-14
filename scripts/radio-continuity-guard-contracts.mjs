@@ -334,7 +334,7 @@ async function createDeckHarness() {
     "deckContinuityLevelDb", "deckContinuityReady", "deckHandoffConfirmed", "cancelDeckHandoff",
     "waitForDeckHandoff", "deckHandoffCurrent", "deckPlaybackAbort", "deckPlaybackFailureCurrent", "decodeDeckAsset", "prepareDeckContinuityPreroll",
     "deckContinuityBoundaryState", "attachContinuityGuardToDeck", "recorderGuardMasterLevel",
-    "ensureAudio", "updateAudioCrossfader", "stopDeckAudio", "startDeckAudio", "createDeckRecordingTap", "startDeckSource",
+    "ensureAudio", "updateAudioCrossfader", "matchDeckLevels", "stopDeckAudio", "startDeckAudio", "createDeckRecordingTap", "startDeckSource",
     "startDeckAudioSources", "restoreDeckStems", "setStemState", "setCueMonitor", "resetDeckEffects", "loadTrack",
     "ejectDeck", "setAutomatedCrossfader", "animateAutomatedCrossfader", "queuePerformanceMove",
     "loopOutgoingTail", "openTransitionPlan", "moveTransitionPlan", "scheduleAutomatedTransition",
@@ -1189,6 +1189,54 @@ for (const effect of ["percussion", "drum-drop"]) {
   assert.equal(env.audioEngine.decks.A.source, current);
   assert.equal(current.stopped, undefined);
   assert.equal(owner.outgoingSource.loop, false);
+}
+
+// Post-handoff matching owns the incoming playback, not the retired transition.
+for (const action of ["match", "replace", "stop", "cancel", "recorder-stop"]) {
+  const harness = await createDeckHarness();
+  const { env, timers } = harness;
+  await env.startDeckAudio("A");
+  env.audioEngine.decks.A.level = .24;
+  env.audioEngine.decks.B.level = .2;
+  let matches = 0;
+  const realMatch = env.matchDeckLevels;
+  env.matchDeckLevels = (...args) => { matches += 1; return realMatch(...args); };
+  env.prepareAutomatedDeck = async deckId => {
+    env.tracks.push({ id: "prepared-next", title: "Next record", bpm: 125, audioBuffer: { duration: 100, signal: .2 } });
+    env.loadTrack(deckId, "prepared-next");
+    env.audioEngine.decks[deckId].level = 0;
+    return false;
+  };
+  env.scheduleAutomatedTransition({});
+  await harness.nextTimer();
+  await harness.nextTimer();
+  for (let index = 0; env.recordingState.pendingHandoff && index < 12; index += 1) await harness.nextTimer();
+  assert.equal(env.recordingState.pendingHandoff, null);
+  assert.equal(env.recordingState.activeDeck, "B");
+  assert.equal(env.deckState.A.id, "prepared-next", "The outgoing deck has already been reused");
+  const matchingTimers = env.recordingState.effectTimers.filter(timer => [400, 1400].includes(timers.get(timer).delay));
+  assert.equal(matchingTimers.length, 2);
+  if (action === "replace") {
+    env.tracks.push({ id: "manual-new-b", title: "Manual B", bpm: 124, audioBuffer: { duration: 100, signal: .2 } });
+    env.loadTrack("B", "manual-new-b");
+    await env.startDeckAudio("B");
+  }
+  if (action === "stop") env.stopDeckAudio("B");
+  if (action === "cancel") env.stopAutomatedMix();
+  if (action === "recorder-stop") env.recordingState.recorder.state = "inactive";
+  const source = env.audioEngine.decks.B.source;
+  for (const timer of matchingTimers) await harness.runTimer(timer, true);
+  if (action === "match") {
+    assert.equal(matches, 2, "Both 400ms and 1400ms matching callbacks execute after successful handoff");
+    const targets = env.audioEngine.decks.B.trim.gain.events.filter(event => event[0] === "target");
+    assert.equal(targets.length, 2);
+    assert.ok(targets.every(event => Math.abs(event[1] - 1.2) < 1e-9), "Matching uses captured outgoing level, not the reused deck's zero level");
+  } else {
+    assert.equal(matches, 0, `${action} rejects stale post-handoff matching`);
+    assert.equal(env.audioEngine.decks.B.trim.gain.value, 1);
+    assert.equal(env.audioEngine.decks.B.source, source);
+    if (source) assert.equal(source.stopped, undefined, `${action} matching cleanup cannot stop current playback`);
+  }
 }
 
 console.log("DJ continuity lifecycle regressions: program-only recovery, generation ownership, captured cleanup, source-only handoffs, startup recorder cancellation, import ownership, and terminal shutdown passed.");

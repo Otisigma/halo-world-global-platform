@@ -145,4 +145,7 @@ npm run build
 Contracts cover synthetic hook selection, short/silent inputs, platform plans,
 metadata, planned-vs-real artifacts, stage handoffs, publication IDs, analytics,
 rights revocation, lease-loss responses, SQL fencing/atomicity and API boundaries.
-SQL shape is contract-tested with a fake database, not a live PostgreSQL server.
+PostgreSQL contracts also exercise the real migration, concurrent claims,
+atomic rollback, owner isolation, retries and expired/stale worker fencing,
+using the repository's existing local PostgreSQL 16 test pattern. Those checks
+report a skip when local PostgreSQL binaries are unavailable.

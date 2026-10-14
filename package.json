@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test:growth": "node scripts/growth-engine-contracts.mjs",
+    "test:growth": "node scripts/growth-engine-contracts.mjs && node scripts/growth-engine-postgres-contracts.mjs",
     "test:catalog-satellite": "npm --prefix satellites/catalog-lab test",
     "test:dj-vault": "node scripts/dj-vault-contracts.mjs && node scripts/dj-mix-upload-contracts.mjs",
     "release-guard": "node release-guard-agent.js",

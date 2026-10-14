@@ -168,15 +168,18 @@ async function uploadStatus(payload: Record<string, unknown>, db: Awaited<Return
   if (!Number.isSafeInteger(byteSize) || byteSize < 1 || byteSize > MAX_UPLOAD_BYTES) return json({ message: "Song audio uploads are limited to 128 MB" }, 413);
   const shape = validateUploadShape({ chunkCount, byteSize, chunkSize });
   if (!shape.ok) return json({ message: shape.message }, shape.status);
+  if (Object.hasOwn(payload, "startNewGeneration") && typeof payload.startNewGeneration !== "boolean") {
+    return json({ message: "The upload generation handshake is invalid" }, 400);
+  }
   const version = await ownedVersion(db, ownerMemberId, versionId, songId);
   if (!version) return json({ message: "That song version was not found" }, 404);
   const prefix = audioUploadPrefix(ownerMemberId, versionId, uploadId);
   const status = await inspectAudioUpload(audioStore, { prefix, chunkCount, byteSize, chunkSize });
   if (!status.ok) return json({ message: status.message }, status.status);
   let retirement = await getAudioUploadRetirement(audioStore, prefix);
-  if (!retirement && !version.audio_blob_prefix && !version.audio_storage_key) {
+  if (!retirement && payload.startNewGeneration === true && version.audio_blob_prefix !== prefix) {
     const receipt = await audioStore.get(audioFinalizationKey(prefix), { type: "json" });
-    // An older superseded session also needs a fresh generation once the canonical audio is removed.
+    // Only an explicit initial handshake can retire a stale seal and request replacement of live audio.
     if (receipt && receipt.expectedRevision !== version.audio_revision) {
       retirement = await retireAudioUpload(audioStore, prefix, `next-${randomUUID()}`);
     }

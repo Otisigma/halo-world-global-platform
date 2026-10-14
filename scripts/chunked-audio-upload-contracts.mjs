@@ -275,6 +275,7 @@ function memoryStore(blobs = new Map()) {
   assert.deepEqual(fresh.receivedChunks, []);
   assert.deepEqual(fresh.invalidChunks, []);
   assert.deepEqual(fresh.chunkChecksums, {});
+  assert.equal((await a(statusRequest({ startNewGeneration: "true" }))).status, 400, "the initial-generation flag is strictly boolean");
   for (const field of ["chunkIndex", "chunkCount", "byteSize", "chunkSize", "offset"]) {
     for (const value of ["", "1garbage", "1.2", "1e2", " 1", "-1"]) {
       const response = await a(chunkRequest(0, "aaaa", { [field]: value }));
@@ -375,7 +376,7 @@ function memoryStore(blobs = new Map()) {
   assert.equal((await a(finalizeRequest())).status, 409, "ABA pointer reset cannot resurrect an older session whose original pointers were empty");
   assert.equal(databaseWrites, writesAfterDelete);
   assert.equal(version.audio_blob_prefix, null);
-  const olderRetired = await (await a(statusRequest())).json();
+  const olderRetired = await (await a(statusRequest({ startNewGeneration: true }))).json();
   assert.equal(olderRetired.retired, true, "an older superseded session also receives a fresh generation after canonical deletion");
   assert.match(olderRetired.successorUploadId, /^next-[a-f0-9-]{36}$/);
   assert.ok(store.blobs.has(audioChunkKey(deletedPrefix, 0)), "deletion retains immutable chunks for in-flight readers");
@@ -394,19 +395,60 @@ function memoryStore(blobs = new Map()) {
   const replacementStatus = await (await a(statusRequest(replacement))).json();
   assert.equal(replacementStatus.persisted, true);
   assert.equal(replacementStatus.finalized, true);
+  const samePublished = await (await a(statusRequest({ ...replacement, startNewGeneration: true }))).json();
+  assert.equal(samePublished.finalized, true);
+  assert.equal(samePublished.retired, undefined, "explicitly selecting the currently published session remains a confirmed no-op");
+
+  // A -> B -> explicitly select A again must mint a fresh A generation without letting old A publish.
+  const newer = { uploadId: "handler-newer-version", chunkCount: 1, byteSize: 4 };
+  assert.equal((await a(chunkRequest(0, "else", newer))).status, 200);
+  assert.equal((await a(finalizeRequest(newer))).status, 200);
+  const newerPrefix = version.audio_blob_prefix;
+  const ordinaryOldStatus = await (await a(statusRequest(replacement))).json();
+  assert.equal(ordinaryOldStatus.finalized, false);
+  assert.equal(ordinaryOldStatus.retired, undefined, "normal in-flight status cannot retire a superseded seal or initiate a replacement");
+  assert.equal((await a(finalizeRequest(replacement))).status, 409, "old A finalize cannot overwrite published B");
+  assert.equal(version.audio_blob_prefix, newerPrefix);
+  const explicitOldStatus = await (await a(statusRequest({ ...replacement, startNewGeneration: true }))).json();
+  assert.equal(explicitOldStatus.retired, true, "a new explicit invocation can request a fresh generation while B is still canonical");
+  assert.match(explicitOldStatus.successorUploadId, /^next-[a-f0-9-]{36}$/);
+  assert.equal(version.audio_blob_prefix, newerPrefix, "the handshake never publishes or clears canonical B");
+  assert.equal((await a(finalizeRequest(replacement))).status, 409);
+  const freshA = { ...replacement, uploadId: explicitOldStatus.successorUploadId };
+  assert.equal((await a(chunkRequest(0, "new!", freshA))).status, 200);
+  assert.equal((await a(finalizeRequest(freshA))).status, 200, "explicit A -> B -> A replacement succeeds using the fresh successor");
+  assert.equal(version.audio_blob_prefix, audioUploadPrefix("member", VERSION_ID, freshA.uploadId));
+  assert.equal((await (await a(statusRequest(freshA))).json()).persisted, true);
+
+  const pending = { uploadId: "handler-pending-seal", chunkCount: 1, byteSize: 4 };
+  assert.equal((await a(chunkRequest(0, "wait", pending))).status, 200);
+  const pendingPrefix = audioUploadPrefix("member", VERSION_ID, pending.uploadId);
+  assert.equal((await sealAudioUpload(store, {
+    prefix: pendingPrefix, chunkCount: 1, byteSize: 4, filename: "test.wav", contentType: "audio/wav", durationSeconds: 0,
+    expectedBlobPrefix: version.audio_blob_prefix, expectedStorageKey: version.audio_storage_key, expectedRevision: version.audio_revision,
+  })).ok, true);
+  const pendingStatus = await (await a(statusRequest({ ...pending, startNewGeneration: true }))).json();
+  assert.equal(pendingStatus.retired, undefined, "a sealed-but-unpublished session pinned to the current revision must resume");
+  assert.equal(pendingStatus.finalized, false);
+  assert.equal(pendingStatus.complete, true);
+  assert.equal((await a(finalizeRequest(pending))).status, 200);
 }
 
 // A fake /api/song-catalog/audio that mirrors the function's auth, origin, chunk, status, and finalize rules.
 function fakeAudioApi({ failures = {}, statusTransform = status => status, competingChunks = [] } = {}) {
   const store = memoryStore();
   const finalized = new Map();
+  const published = new Set();
   const calls = [];
+  const statusRequests = [];
   const json = (body, status = 200) => new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
   async function fetchImpl(url, init) {
     const headers = new Headers(init.headers);
     const isForm = init.body instanceof FormData;
-    const label = isForm ? `chunk:${init.body.get("chunkIndex")}` : JSON.parse(init.body).action;
+    const jsonPayload = isForm ? null : JSON.parse(init.body);
+    const label = isForm ? `chunk:${init.body.get("chunkIndex")}` : jsonPayload.action;
     calls.push(label);
+    if (label === "upload_status") statusRequests.push(jsonPayload);
     const failure = failures[label]?.shift();
     if (failure === "network") throw new TypeError("fetch failed");
     if (failure && !["lost", "bad-json", "finalized-race"].includes(failure)) return json({ message: "Temporary failure" }, failure);
@@ -442,6 +484,7 @@ function fakeAudioApi({ failures = {}, statusTransform = status => status, compe
           assert.equal(stored.ok, true, "competing client commits the same upload");
         }
         finalized.set(form.get("versionId"), prefix);
+        published.add(prefix);
       }
       if (finalized.get(form.get("versionId")) === prefix) return json({ message: "This upload is already finalized", finalized: true }, 409);
       let chunk = form.get("chunk");
@@ -459,11 +502,15 @@ function fakeAudioApi({ failures = {}, statusTransform = status => status, compe
       });
       return result.ok ? acknowledge({ message: "Audio chunk uploaded", chunkIndex: result.chunkIndex }) : json({ message: result.message }, result.status);
     }
-    const payload = JSON.parse(init.body);
+    const payload = jsonPayload;
     const prefix = audioUploadPrefix("member", payload.versionId, payload.uploadId);
     const status = await inspectAudioUpload(store, { prefix, chunkCount: payload.chunkCount, byteSize: payload.byteSize, chunkSize: payload.chunkSize });
     if (!status.ok) return json({ message: status.message }, status.status);
-    const retirement = await chunkRules.getAudioUploadRetirement(store, prefix);
+    let retirement = await chunkRules.getAudioUploadRetirement(store, prefix);
+    if (!retirement && payload.action === "upload_status" && payload.startNewGeneration === true
+      && published.has(prefix) && finalized.get(payload.versionId) !== prefix) {
+      retirement = await chunkRules.retireAudioUpload(store, prefix, `next-${randomUUID()}`);
+    }
     if (payload.action === "upload_status") {
       const isFinalized = finalized.get(payload.versionId) === prefix;
       return json(statusTransform({
@@ -478,10 +525,12 @@ function fakeAudioApi({ failures = {}, statusTransform = status => status, compe
         message: "Audio is persisted and locked into HALO storage.", alreadyFinalized: true,
         persisted: true, lockedIn: true, audioUrl: `/api/song-catalog/audio?versionId=${payload.versionId}`,
       });
+      if (published.has(prefix)) return json({ message: "This upload was superseded. Start an explicit new upload." }, 409);
       if (!status.complete) {
         return json({ message: "The audio upload is incomplete.", missingChunks: status.missingChunks, invalidChunks: status.invalidChunks }, 409);
       }
       finalized.set(payload.versionId, prefix);
+      published.add(prefix);
       return acknowledge({ message: "Audio is persisted and locked into HALO storage.", audioUrl: `/api/song-catalog/audio?versionId=${payload.versionId}`, persisted: true });
     }
     return json({ message: "Choose a supported audio action" }, 400);
@@ -492,7 +541,7 @@ function fakeAudioApi({ failures = {}, statusTransform = status => status, compe
     return Buffer.concat(keys.map(key => store.blobs.get(key).data));
   };
   return {
-    fetchImpl, calls, store, assembled,
+    fetchImpl, calls, statusRequests, store, assembled,
     async retireSession(uploadId, successorUploadId = `next-${randomUUID()}`) {
       return chunkRules.retireAudioUpload(store, audioUploadPrefix("member", VERSION_ID, uploadId), successorUploadId);
     },
@@ -582,7 +631,40 @@ try {
   {
     const api = fakeAudioApi();
     const client = createAudioApiClient({ baseUrl: "https://halo.example", token: TOKEN, fetchImpl: api.fetchImpl, sleepImpl: noSleep });
+    const firstA = await uploadAudioFile({ filePath: audioPath, songId: SONG_ID, versionId: VERSION_ID, client, chunkSize: 4096 });
+    const otherAudio = Buffer.from(audio);
+    otherAudio[100] ^= 0xff;
+    const otherPath = join(workDir, "track_other_mix.wav");
+    await writeFile(otherPath, otherAudio);
+    const publishedB = await uploadAudioFile({ filePath: otherPath, songId: SONG_ID, versionId: VERSION_ID, client, chunkSize: 4096 });
+    assert.notEqual(firstA.uploadId, publishedB.uploadId);
+    const ordinaryOldA = await client.json({ action: "upload_status", ...firstA }, "ordinary old A status");
+    assert.equal(ordinaryOldA.retired, undefined, "normal reads do not request a replacement generation");
+    await assert.rejects(
+      client.json({ action: "finalize_upload", ...firstA }, "stale A finalize"),
+      error => error.status === 409,
+    );
+    assert.equal(Buffer.compare(api.assembled(VERSION_ID), otherAudio), 0, "old A cannot overwrite canonical B");
+    const beforeExplicitReselection = api.statusRequests.length;
+    const freshA = await uploadAudioFile({ filePath: audioPath, songId: SONG_ID, versionId: VERSION_ID, client, chunkSize: 4096 });
+    assert.notEqual(freshA.uploadId, firstA.uploadId, "new explicit A invocation sends startNewGeneration and follows its durable successor");
+    assert.equal(freshA.persisted, true);
+    assert.equal(freshA.skippedChunks, 0);
+    assert.equal(freshA.uploadedChunks, freshA.chunkCount);
+    assert.equal(Buffer.compare(api.assembled(VERSION_ID), audio), 0, "normal A -> B -> A flow succeeds without deleting B first");
+    const explicitReads = api.statusRequests.slice(beforeExplicitReselection);
+    assert.equal(explicitReads[0].startNewGeneration, true);
+    assert.equal(explicitReads[0].uploadId, firstA.uploadId);
+    assert.equal(explicitReads[1].startNewGeneration, true);
+    assert.equal(explicitReads[1].uploadId, freshA.uploadId);
+    assert.ok(explicitReads.slice(2).every(request => request.startNewGeneration === false), "transfer and reconciliation reads never request a new generation");
+  }
+  {
+    const api = fakeAudioApi();
+    const client = createAudioApiClient({ baseUrl: "https://halo.example", token: TOKEN, fetchImpl: api.fetchImpl, sleepImpl: noSleep });
     const first = await uploadAudioFile({ filePath: audioPath, songId: SONG_ID, versionId: VERSION_ID, client, chunkSize: 4096 });
+    assert.equal(api.statusRequests[0].startNewGeneration, true);
+    assert.ok(api.statusRequests.slice(1).every(request => request.startNewGeneration === false));
     const originalKey = audioChunkKey(audioUploadPrefix("member", VERSION_ID, first.uploadId), 0);
     const originalChunk = api.store.blobs.get(originalKey);
     const retirement = await api.deleteAudio();
@@ -605,6 +687,7 @@ try {
     );
     assert.equal(api.calls.filter(call => call.startsWith("chunk:")).length, 1);
     assert.equal(api.calls.filter(call => call === "finalize_upload").length, 0);
+    assert.deepEqual(api.statusRequests.map(request => request.startNewGeneration), [true, false, false], "initial handshake is allowed but ambiguous chunk reconciliation cannot request replacement");
     const fresh = await uploadAudioFile({ filePath: audioPath, songId: SONG_ID, versionId: VERSION_ID, client, chunkSize: 4096 });
     assert.equal(fresh.persisted, true);
     assert.equal(fresh.skippedChunks, 0);

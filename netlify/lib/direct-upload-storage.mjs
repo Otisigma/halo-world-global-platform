@@ -103,7 +103,7 @@ function objectLocation(config, key) {
  * Creates an AWS SigV4 presigned URL for an S3-compatible object.
  * PUT URLs also sign Content-Type so the browser must upload exactly the validated type.
  */
-export function presignObjectUrl({ config, method = "GET", key, contentType = "", expiresIn = MASTER_UPLOAD_URL_TTL_SECONDS, now = new Date() }) {
+export function presignObjectUrl({ config, method = "GET", key, contentType = "", queryParams = {}, expiresIn = MASTER_UPLOAD_URL_TTL_SECONDS, now = new Date() }) {
   if (!config) throw new Error("Direct storage is not configured");
   const verb = String(method).toUpperCase();
   const amzDate = now.toISOString().replace(/[:-]|\.\d{3}/g, "");
@@ -111,9 +111,10 @@ export function presignObjectUrl({ config, method = "GET", key, contentType = ""
   const scope = `${dateStamp}/${config.region}/s3/aws4_request`;
   const { origin, host, path } = objectLocation(config, key);
   const headers = { host };
-  if (verb === "PUT" && contentType) headers["content-type"] = contentType;
+  if (["PUT", "POST"].includes(verb) && contentType) headers["content-type"] = contentType;
   const signedHeaders = Object.keys(headers).sort().join(";");
   const query = {
+    ...queryParams,
     "X-Amz-Algorithm": "AWS4-HMAC-SHA256",
     "X-Amz-Credential": `${config.accessKeyId}/${scope}`,
     "X-Amz-Date": amzDate,

@@ -33,10 +33,40 @@ function audioContentType(file){const aliases={"audio/mp3":"audio/mpeg","audio/x
 function audioDuration(file){return new Promise(resolve=>{const audio=document.createElement("audio");const url=URL.createObjectURL(file);const finish=value=>{URL.revokeObjectURL(url);resolve(Number.isFinite(value)?Math.round(value):0)};audio.preload="metadata";audio.addEventListener("loadedmetadata",()=>finish(audio.duration),{once:true});audio.addEventListener("error",()=>finish(0),{once:true});audio.src=url})}
 const uploadReadyLabel=file=>`${file.name} · ${Math.max(1,Math.round(file.size/1024/1024))} MB ready to upload`;
 function audioFileProblem(file){if(!audioContentType(file))return"Choose an MP3, M4A, AAC, OGG, WebM, WAV, or FLAC file.";if(file.size>MAX_AUDIO_BYTES)return"Song audio uploads are limited to 128 MB.";return""}
-async function uploadAudioToVersion({file,songId,versionId,ui}){const contentType=audioContentType(file);const uploadId=crypto.randomUUID();ui.start(`Uploading 0% · ${file.name}`);const durationSeconds=await audioDuration(file);const {chunkCount}=await uploadHelper.uploadChunkedFile({url:"/api/song-catalog/audio",file,chunkSize:AUDIO_CHUNK_BYTES,buildBody({chunkIndex,chunkCount,start,end}){const form=new FormData();form.append("songId",songId);form.append("versionId",versionId);form.append("uploadId",uploadId);form.append("chunkIndex",String(chunkIndex));form.append("chunkCount",String(chunkCount));form.append("byteSize",String(file.size));form.append("filename",file.name);form.append("contentType",contentType);form.append("chunk",file.slice(start,end,contentType),file.name);return form;},onProgress(percent){ui.progress(percent,`Uploading ${Math.round(percent)}% · ${file.name}`);}});ui.progress(100,"Finishing upload and running Dream Weaver…");return audioApi({method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"finalize_upload",songId,versionId,uploadId,chunkCount,byteSize:file.size,filename:file.name,contentType,durationSeconds})})}
+async function uploadAudioToVersion({file,songId,versionId,ui}){const contentType=audioContentType(file);ui.start(`Checking saved upload · ${file.name}`);const durationSeconds=await audioDuration(file);const {uploadId,chunkCount}=await uploadHelper.uploadResumableAudio({file,songId,versionId,contentType,onProgress(percent){ui.progress(percent,`Uploading ${Math.round(percent)}% · ${file.name}`);}});ui.progress(100,"Finishing upload and running Dream Weaver…");return audioApi({method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"finalize_upload",songId,versionId,uploadId,chunkCount,byteSize:file.size,filename:file.name,contentType,durationSeconds})})}
 function masterFileProblem(file){if(!audioContentType(file))return"Choose a WAV, M4A, FLAC, AAC, MP3, OGG, or WebM master file.";if(file.size>MAX_MASTER_BYTES)return"Master copies are limited to 200 MB.";return""}
 async function masterUploadApi(payload){const response=await fetch("/api/song-catalog/master-upload",{method:"POST",credentials:"same-origin",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});const data=await response.json().catch(()=>({message:"Master upload response could not be read"}));return{ok:response.ok,status:response.status,data}}
-async function uploadMasterToVersion({file,songId,versionId,ui}){const contentType=audioContentType(file);ui.start(`Requesting a secure upload link · ${file.name}`);const presign=await masterUploadApi({action:"presign",songId,versionId,fileName:file.name,fileType:contentType,fileSize:file.size});if(!presign.ok){if(presign.status===503&&presign.data?.directUpload===false){if(file.size>MAX_AUDIO_BYTES)throw new Error("Direct master storage is not configured yet, and standard uploads are limited to 128 MB.");return uploadAudioToVersion({file,songId,versionId,ui})}throw new Error(presign.data?.message||"The master upload link could not be prepared.")}const durationSeconds=await audioDuration(file);ui.progress(0,`Uploading master directly to storage 0% · ${file.name}`);const put=await uploadHelper.sendFormData(presign.data.uploadUrl,file,{method:"PUT",headers:presign.data.headers||{"Content-Type":contentType},credentials:"omit",timeoutMs:60*60*1000,onProgress(ratio){const percent=ratio*100;ui.progress(percent,`Uploading master directly to storage ${Math.round(percent)}% · ${file.name}`)}});if(!put.ok)throw new Error(`Storage rejected the master upload (HTTP ${put.status}). Check your connection and try again.`);ui.progress(100,"Upload complete. Registering the canonical sale master…");const registered=await masterUploadApi({action:"register",songId,versionId,fileKey:presign.data.fileKey,originalName:file.name,fileType:contentType,fileSize:file.size,durationSeconds});if(!registered.ok)throw new Error(registered.data?.message||"The master uploaded but could not be registered. Try again.");return registered.data}
+async function uploadMasterToVersion({file,songId,versionId,ui}){
+  const contentType=audioContentType(file);
+  const chunkSize=8*1024*1024;
+  ui.start(`Checking saved master upload · ${file.name}`);
+  const uploadId=await uploadHelper.fileUploadId(file,["master",songId,versionId,contentType],chunkSize);
+  const details={songId,versionId,uploadId,fileName:file.name,fileType:contentType,fileSize:file.size};
+  const presign=await masterUploadApi({action:"status",...details});
+  if(!presign.ok&&presign.status===503&&presign.data?.directUpload===false){
+    if(file.size>MAX_AUDIO_BYTES)throw new Error("Direct master storage is not configured yet, and standard uploads are limited to 128 MB.");
+    return uploadAudioToVersion({file,songId,versionId,ui});
+  }
+  let initialStatus=presign;
+  const durationSeconds=await audioDuration(file);
+  await uploadHelper.uploadResumableFile({
+    file,chunkSize,
+    async getStatus(){
+      const response=initialStatus||await masterUploadApi({action:"status",...details});
+      initialStatus=null;
+      return uploadHelper.requireUploadResponse(response);
+    },
+    async sendChunk(chunk,startByte){
+      const part=uploadHelper.requireUploadResponse(await masterUploadApi({action:"part",...details,startByte}));
+      uploadHelper.requireUploadResponse(await uploadHelper.sendFormData(part.uploadUrl,chunk,{method:"PUT",headers:{"Content-Type":"application/octet-stream"},credentials:"omit",timeoutMs:120000}));
+    },
+    onProgress(percent){ui.progress(percent,`Uploading master directly to storage ${Math.round(percent)}% · ${file.name}`)}
+  });
+  ui.progress(100,"Upload complete. Registering the canonical sale master…");
+  const registered=await masterUploadApi({action:"complete",...details,durationSeconds});
+  if(!registered.ok)throw new Error(registered.data?.message||"The master uploaded but could not be registered. Try again to resume registration.");
+  return registered.data;
+}
 const isMasterVersion=(songId,versionId)=>state.songs.find(song=>song.id===songId)?.versions.find(version=>version.id===versionId)?.versionType==="sale_master";
 async function uploadVersionAudio(){const file=$("#audioFile").files?.[0];const songId=$("#versionSongId").value;const versionId=$("#versionId").value;const button=$("#uploadAudioButton");if(!file){message("Choose an audio file first.");return}const master=isMasterVersion(songId,versionId);const problem=master?masterFileProblem(file):audioFileProblem(file);if(problem){message(problem);return}button.disabled=true;button.textContent="Uploading…";try{const data=await(master?uploadMasterToVersion:uploadAudioToVersion)({file,songId,versionId,ui:uploadUi.audio});uploadUi.audio.success("Audio uploaded and saved.",true);message(data.message);await loadCatalog(songId);openVersion(versionId,songId)}catch(error){uploadUi.audio.fail(error.message);message(error.message)}finally{button.disabled=false;button.textContent="Upload selected audio"}}
 

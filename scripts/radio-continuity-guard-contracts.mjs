@@ -201,12 +201,12 @@ const deckSandbox = {
 };
 vm.createContext(deckSandbox);
 vm.runInContext([
-  "stopDeckAudio", "startDeckSource", "startDeckAudioSources", "scheduleAutomatedTransition",
+  "stopDeckAudio", "startDeckSource", "prepareDeckAudio", "startDeckAudioSources", "scheduleAutomatedTransition",
   "stopAutomatedMix", "stopTakeoverDecks", "finishTakeoverRecording", "updateMasterReadout",
   "recorderGuardMasterLevel", "recorderGuardInputs", "attachRecorderGuardToDeck"
 ].map(name => {
   const source = extractFunctionSource(deckPage, name);
-  return name === "startDeckAudioSources" ? `async ${source}` : source;
+  return ["prepareDeckAudio", "startDeckAudioSources"].includes(name) ? `async ${source}` : source;
 }).join("\n\n"), deckSandbox);
 
 async function runNextTimer() {

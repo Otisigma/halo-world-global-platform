@@ -3762,10 +3762,16 @@
       try { if (pending.outgoingSource) pending.outgoingSource.loop = false; } catch {}
       if (recordingState.pendingHandoff === pending) {
         recordingState.pendingHandoff = null;
-        if (!audioEngine.shutdown) setAutomatedCrossfader(pending.startFader);
+        if (!audioEngine.shutdown) {
+          setAutomatedCrossfader(pending.startFader);
+          if (audioEngine.decks[pending.outgoingDeck].source === pending.outgoingSource) {
+            restoreDeckStems(pending.outgoingDeck);
+            resetDeckEffects(pending.outgoingDeck);
+          }
+        }
+        recordingState.cancelFade?.();
       }
       pending.cancelWait?.();
-      recordingState.cancelFade?.();
     }
 
     function waitForDeckHandoff(deckId, pending, requireRoute = true) {
@@ -4164,17 +4170,25 @@
       const pending = recordingState.pendingHandoff;
       if (pending && (pending.incomingDeck === deckId || pending.outgoingDeck === deckId)) cancelDeckHandoff(pending);
       const envelopes = channel.sourceEnvelopes || new Map();
-      const stopSource = source => {
+      if (!channel.retiringSources) channel.retiringSources = new Map();
+      const retiring = channel.retiringSources;
+      const stopSource = (source, stemGain = null) => {
+        const envelope = envelopes.get(source);
         try {
-          if (audioEngine.halo && !audioEngine.shutdown) audioEngine.halo.stopSourceSmoothly(source, envelopes.get(source));
+          if (audioEngine.halo && !audioEngine.shutdown) audioEngine.halo.stopSourceSmoothly(source, envelope);
           else source.stop();
         } catch {}
         const disconnect = () => {
           try { source.disconnect(); } catch {}
-          try { envelopes.get(source)?.disconnect(); } catch {}
+          try { envelope?.disconnect(); } catch {}
+          try { stemGain?.disconnect(); } catch {}
+          retiring.delete(source);
         };
         if (audioEngine.shutdown || !audioEngine.halo) disconnect();
-        else source.addEventListener?.("ended", disconnect, { once: true });
+        else {
+          retiring.set(source, { envelope, stemGain });
+          source.addEventListener?.("ended", disconnect, { once: true });
+        }
       };
       if (channel.source) {
         stopSource(channel.source);
@@ -4182,10 +4196,17 @@
       }
       Object.entries(channel.stemSources || {}).forEach(([stemType, source]) => {
         const stemGain = channel.stemGains?.[stemType];
-        if (stemGain) source.addEventListener?.("ended", () => { try { stemGain.disconnect(); } catch {} }, { once: true });
-        stopSource(source);
-        if (audioEngine.shutdown) try { stemGain?.disconnect(); } catch {}
+        stopSource(source, stemGain);
       });
+      if (audioEngine.shutdown) {
+        for (const [source, nodes] of retiring) {
+          try { source.stop(); } catch {}
+          try { source.disconnect(); } catch {}
+          try { nodes.envelope?.disconnect(); } catch {}
+          try { nodes.stemGain?.disconnect(); } catch {}
+        }
+        retiring.clear();
+      }
       for (const [source, envelope] of channel.auxiliarySources || []) {
         try { source.stop(); } catch {}
         try { source.disconnect(); } catch {}
@@ -4521,7 +4542,11 @@
         loadTrack(selectedImportDeck, additions[0].id);
         if (pendingPlaybackDeck === selectedImportDeck) {
           const playbackDeck = selectedImportDeck;
-          if (!await startDeckAudio(playbackDeck)) return;
+          const playbackState = deckState[playbackDeck];
+          const starting = startDeckAudio(playbackDeck);
+          const generation = audioEngine.decks[playbackDeck].playbackGeneration;
+          if (!await starting || deckState[playbackDeck] !== playbackState
+            || audioEngine.decks[playbackDeck].playbackGeneration !== generation) return;
           updateDeck(playbackDeck);
           elements.importStatus.textContent = `${additions[0].title} is playing on deck ${playbackDeck}.`;
           showToast("Audio playing", `${additions[0].title} is now live on deck ${playbackDeck}.`);
@@ -5200,20 +5225,29 @@
     }
 
     function animateAutomatedCrossfader(targetValue, duration, curve = "smooth", isCurrent = () => !audioEngine.shutdown) {
+      recordingState.cancelFade?.();
       const startValue = Number(elements.crossfader.value);
       const startedAt = performance.now();
       // Restore is rescheduled when the fade finishes; the timer is only a fallback if it is cancelled.
       audioEngine.halo?.suppressLiveIntelligence(Math.max(0, Number(duration) || 0) / 1000 + 1);
       return new Promise(resolve => {
+        let frame;
+        let finished = false;
         const finish = result => {
-          if (recordingState.autoMixFrame) cancelAnimationFrame(recordingState.autoMixFrame);
-          recordingState.autoMixFrame = null;
-          recordingState.cancelFade = null;
+          if (finished) return;
+          finished = true;
+          if (frame) cancelAnimationFrame(frame);
+          if (recordingState.cancelFade === cancel) {
+            recordingState.autoMixFrame = null;
+            recordingState.cancelFade = null;
+          }
           resolve(result);
         };
-        recordingState.cancelFade = () => finish(false);
+        const cancel = () => finish(false);
+        recordingState.cancelFade = cancel;
         const moveMix = timestamp => {
-          if (!isCurrent()) return finish(false);
+          if (finished) return;
+          if (!isCurrent() || recordingState.cancelFade !== cancel) return finish(false);
           const progress = Math.min(1, (timestamp - startedAt) / duration);
           const easedProgress = curve === "late-cut"
             ? progress < .68 ? progress * .16 : .1088 + Math.pow((progress - .68) / .32, 1.45) * .8912
@@ -5224,14 +5258,16 @@
                 : progress < .5 ? 2 * progress * progress : 1 - Math.pow(-2 * progress + 2, 2) / 2;
           setAutomatedCrossfader(startValue + (targetValue - startValue) * easedProgress);
           if (progress < 1) {
-            recordingState.autoMixFrame = requestAnimationFrame(moveMix);
+            frame = requestAnimationFrame(moveMix);
+            recordingState.autoMixFrame = frame;
             return;
           }
           recordingState.autoMixFrame = null;
           audioEngine.halo?.scheduleLiveIntelligenceRestore(0);
           finish(true);
         };
-        recordingState.autoMixFrame = requestAnimationFrame(moveMix);
+        frame = requestAnimationFrame(moveMix);
+        recordingState.autoMixFrame = frame;
       });
     }
 
@@ -5811,6 +5847,13 @@
       recordingState.effectTimers = [];
       recordingState.currentPlan = null;
       ["A", "B"].forEach(deckId => {
+        const channel = audioEngine.decks[deckId];
+        for (const [source, envelope] of channel.auxiliarySources || []) {
+          try { source.stop(); } catch {}
+          try { source.disconnect(); } catch {}
+          try { envelope.disconnect(); } catch {}
+        }
+        channel.auxiliarySources = new Map();
         restoreDeckStems(deckId);
         resetDeckEffects(deckId);
       });
@@ -5975,8 +6018,12 @@
         syncDecks();
         deckState.A.playing = true;
         deckState.B.playing = false;
-        const started = await startDeckAudio("A");
-        if (!isCurrent() || !started) return;
+        const playbackState = deckState.A;
+        const starting = startDeckAudio("A");
+        const generation = audioEngine.decks.A.playbackGeneration;
+        const started = await starting;
+        if (!isCurrent() || !started || deckState.A !== playbackState
+          || audioEngine.decks.A.playbackGeneration !== generation) return;
         stopDeckAudio("B");
         updateDeck("A");
         updateDeck("B");
@@ -6320,7 +6367,11 @@
               audioEngine.shutdown = false;
               audioEngine.lifecycleGeneration += 1;
             }
-            if (!await startDeckAudio(deckId)) return;
+            const playbackState = deckState[deckId];
+            const starting = startDeckAudio(deckId);
+            const generation = audioEngine.decks[deckId].playbackGeneration;
+            if (!await starting || deckState[deckId] !== playbackState
+              || audioEngine.decks[deckId].playbackGeneration !== generation) return;
           } else stopDeckAudio(deckId);
         } catch (error) {
           deckState[deckId].playing = false;

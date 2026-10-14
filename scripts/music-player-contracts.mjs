@@ -114,7 +114,10 @@ const homeAudio = {
     const source = {
       connect() {}, disconnect() { this.disconnected = true; },
       addEventListener(type, handler) { this.onended = handler; },
-      start(time) { this.started = time; },
+      start(time) {
+        if (homeAudio.failStart) throw new Error("Source start failed");
+        this.started = time;
+      },
       stop(time) { this.stopped = time; }
     };
     homeSources.push(source);
@@ -203,6 +206,13 @@ const replacementHomeSource = homeSources.at(-1);
 originalHomeSource.onended();
 assert.equal(homePlayback.activeSourceNodeRef.current, replacementHomeSource, "Old cleanup cannot clear the new source");
 assert.equal(originalEnvelope.disconnected, true);
+
+homeAudio.failStart = true;
+await assert.rejects(homePlayback.startHome(homeTrack({ duration: 90 })), /Source start failed/);
+homeAudio.failStart = false;
+assert.equal(homeSources.at(-1).disconnected, true, "A failed start disconnects its own source");
+assert.equal(replacementHomeSource.stopped, undefined, "A failed source start cannot retire valid outgoing playback");
+assert.equal(homePlayback.playbackSourcesRef.current.size, 1, "A failed start leaves no untracked source or envelope");
 
 const disposalRead = deferredPlayback();
 const disposalStart = homePlayback.startHome(homePending(disposalRead));

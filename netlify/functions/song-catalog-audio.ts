@@ -11,9 +11,11 @@ import {
   AUDIO_UPLOAD_MAX_CHUNKS,
   audioUploadPrefix,
   cleanChunkChecksum,
-  discardAudioChunks,
   inspectAudioUpload,
+  parseUploadInteger,
+  sealAudioUpload,
   storeAudioChunk,
+  validateUploadShape,
 } from "../lib/chunked-audio-upload.mjs";
 
 const audioStore = getStore({ name: "halo-song-catalog-audio", consistency: "strong" });
@@ -117,15 +119,20 @@ async function uploadChunk(request: Request, db: Awaited<ReturnType<typeof getDa
   const songId = cleanId(form.get("songId"));
   const versionId = cleanId(form.get("versionId"));
   const uploadId = cleanUploadId(form.get("uploadId"));
-  const chunkIndex = Number.parseInt(String(form.get("chunkIndex") || ""), 10);
-  const chunkCount = Number.parseInt(String(form.get("chunkCount") || ""), 10);
-  const byteSize = Number.parseInt(String(form.get("byteSize") || ""), 10);
+  const chunkIndex = parseUploadInteger(form.get("chunkIndex"));
+  const chunkCount = parseUploadInteger(form.get("chunkCount"));
+  const byteSize = parseUploadInteger(form.get("byteSize"));
+  const chunkSize = form.has("chunkSize") ? parseUploadInteger(form.get("chunkSize")) : undefined;
+  const offset = form.has("offset") ? parseUploadInteger(form.get("offset")) : undefined;
   const filename = cleanText(form.get("filename"), 180);
   const chunk = form.get("chunk");
   if (!songId || !versionId || !uploadId || !Number.isInteger(chunkIndex) || !Number.isInteger(chunkCount)) return json({ message: "The audio upload sequence is invalid" }, 400);
   if (chunkIndex < 0 || chunkIndex >= chunkCount || chunkCount < 1 || chunkCount > MAX_CHUNKS) return json({ message: "The audio upload sequence is invalid" }, 400);
   if (!Number.isSafeInteger(byteSize) || byteSize < 1 || byteSize > MAX_UPLOAD_BYTES) return json({ message: "Song audio uploads are limited to 128 MB" }, 413);
   if (!(chunk instanceof Blob) || !chunk.size || chunk.size > MAX_CHUNK_BYTES) return json({ message: "That audio upload chunk is invalid" }, 413);
+  const shape = validateUploadShape({ chunkCount, byteSize, chunkSize });
+  if (!shape.ok) return json({ message: shape.message }, shape.status);
+  if (offset !== undefined && !Number.isSafeInteger(offset)) return json({ message: "That chunk offset is invalid" }, 400);
   const contentType = normalizeAudioContentType(form.get("contentType") || chunk.type, filename);
   if (!contentType) return json({ message: "Upload an MP3, M4A, AAC, OGG, WebM, WAV, or FLAC audio file" }, 415);
   const checksumField = form.get("chunkSha256");
@@ -136,30 +143,37 @@ async function uploadChunk(request: Request, db: Awaited<ReturnType<typeof getDa
   const prefix = audioUploadPrefix(ownerMemberId, versionId, uploadId);
   // Finalized parts back live playback, so a late retry can never rewrite them.
   if (version.audio_blob_prefix === prefix) return json({ message: "This upload is already finalized", chunkIndex, finalized: true }, 409);
-  const stored = await storeAudioChunk(audioStore, { prefix, chunkIndex, chunkCount, byteSize, chunk, checksum });
-  if (!stored.ok) return json({ message: stored.message, chunkIndex }, stored.status);
-  return json({ message: "Audio chunk uploaded", chunkIndex, chunkSha256: stored.sha256 });
+  const stored = await storeAudioChunk(audioStore, { prefix, chunkIndex, chunkCount, byteSize, chunk, checksum, chunkSize, offset });
+  if (!stored.ok) return json({ message: stored.message, chunkIndex, finalized: stored.finalized === true }, stored.status);
+  const status = await inspectAudioUpload(audioStore, { prefix, chunkCount, byteSize, chunkSize });
+  return json({ message: "Audio chunk uploaded", chunkIndex, chunkSha256: stored.sha256, ...status });
 }
 
 async function uploadStatus(payload: Record<string, unknown>, db: Awaited<ReturnType<typeof getDatabase>>, ownerMemberId: string) {
   const songId = cleanId(payload.songId);
   const versionId = cleanId(payload.versionId);
   const uploadId = cleanUploadId(payload.uploadId);
-  const chunkCount = Number.parseInt(String(payload.chunkCount || ""), 10);
-  const byteSize = Number.parseInt(String(payload.byteSize || ""), 10);
+  const chunkCount = parseUploadInteger(payload.chunkCount);
+  const byteSize = parseUploadInteger(payload.byteSize);
+  const chunkSize = Object.hasOwn(payload, "chunkSize") ? parseUploadInteger(payload.chunkSize) : undefined;
   if (!songId || !versionId || !uploadId || !Number.isInteger(chunkCount) || chunkCount < 1 || chunkCount > MAX_CHUNKS) return json({ message: "The audio upload details are incomplete" }, 400);
   if (!Number.isSafeInteger(byteSize) || byteSize < 1 || byteSize > MAX_UPLOAD_BYTES) return json({ message: "Song audio uploads are limited to 128 MB" }, 413);
+  const shape = validateUploadShape({ chunkCount, byteSize, chunkSize });
+  if (!shape.ok) return json({ message: shape.message }, shape.status);
   const version = await ownedVersion(db, ownerMemberId, versionId, songId);
   if (!version) return json({ message: "That song version was not found" }, 404);
   const prefix = audioUploadPrefix(ownerMemberId, versionId, uploadId);
-  const status = await inspectAudioUpload(audioStore, { prefix, chunkCount, byteSize });
-  return json({ songId, versionId, uploadId, finalized: version.audio_blob_prefix === prefix, ...status });
-}
-
-async function removeUpload(prefix: string) {
-  if (!prefix) return;
-  const stored = await audioStore.list({ prefix });
-  await Promise.all(stored.blobs.map(blob => audioStore.delete(blob.key)));
+  const status = await inspectAudioUpload(audioStore, { prefix, chunkCount, byteSize, chunkSize });
+  if (!status.ok) return json({ message: status.message }, status.status);
+  return json({
+    songId, versionId, uploadId, finalized: version.audio_blob_prefix === prefix, ...status,
+    ...(version.audio_blob_prefix === prefix ? {
+      persisted: true,
+      lockedIn: true,
+      audioUrl: `/api/song-catalog/audio?versionId=${encodeURIComponent(versionId)}`,
+      message: "Audio is persisted and locked into HALO storage.",
+    } : {}),
+  });
 }
 
 async function removeStoredMaster(key: unknown) {
@@ -184,7 +198,7 @@ async function deleteUpload(payload: Record<string, unknown>, db: Awaited<Return
     WHERE id = ${versionId} AND song_id = ${songId}
   `;
   await runDreamweaverReview(songId, ownerMemberId);
-  await removeUpload(String(version.audio_blob_prefix || "")).catch(() => undefined);
+  // Retain immutable parts: another instance may be finalizing this session or streaming playback.
   await removeStoredMaster(version.audio_storage_key).catch(() => undefined);
   return json({ message: "Version audio removed", songId, versionId });
 }
@@ -193,43 +207,62 @@ async function finalizeUpload(payload: Record<string, unknown>, db: Awaited<Retu
   const songId = cleanId(payload.songId);
   const versionId = cleanId(payload.versionId);
   const uploadId = cleanUploadId(payload.uploadId);
-  const chunkCount = Number.parseInt(String(payload.chunkCount || ""), 10);
-  const byteSize = Number.parseInt(String(payload.byteSize || ""), 10);
+  const chunkCount = parseUploadInteger(payload.chunkCount);
+  const byteSize = parseUploadInteger(payload.byteSize);
+  const chunkSize = Object.hasOwn(payload, "chunkSize") ? parseUploadInteger(payload.chunkSize) : undefined;
   const durationSeconds = Math.max(0, Math.min(86_400, Math.round(Number(payload.durationSeconds) || 0)));
   const filename = cleanText(payload.filename, 180) || "song-audio";
   const contentType = normalizeAudioContentType(payload.contentType, filename);
   if (!songId || !versionId || !uploadId || !contentType || !Number.isInteger(chunkCount) || chunkCount < 1 || chunkCount > MAX_CHUNKS) return json({ message: "The finished audio details are incomplete" }, 400);
   if (!Number.isSafeInteger(byteSize) || byteSize < 1 || byteSize > MAX_UPLOAD_BYTES) return json({ message: "Song audio uploads are limited to 128 MB" }, 413);
+  const shape = validateUploadShape({ chunkCount, byteSize, chunkSize });
+  if (!shape.ok) return json({ message: shape.message }, shape.status);
   const version = await ownedVersion(db, ownerMemberId, versionId, songId);
   if (!version) return json({ message: "That song version was not found" }, 404);
   const prefix = audioUploadPrefix(ownerMemberId, versionId, uploadId);
   const audioUrl = `/api/song-catalog/audio?versionId=${encodeURIComponent(versionId)}`;
+  const status = await inspectAudioUpload(audioStore, { prefix, chunkCount, byteSize, chunkSize });
+  if (!status.ok) return json({ message: status.message }, status.status);
   // Retrying a finalize whose response was lost returns the same confirmation without rewriting anything.
   if (version.audio_blob_prefix === prefix) {
     return json({ message: "Audio is persisted and locked into HALO storage.", songId, versionId, audioUrl, persisted: true, lockedIn: true, alreadyFinalized: true });
   }
-  const status = await inspectAudioUpload(audioStore, { prefix, chunkCount, byteSize });
   if (!status.complete) {
-    await discardAudioChunks(audioStore, prefix, status.invalidChunks).catch(() => undefined);
     return json({
-      message: "The audio upload is incomplete. Re-send the listed chunks, then finalize again.",
+      message: "The audio upload is incomplete. Re-send missing chunks, or start a new session for conflicting chunks.",
       missingChunks: status.missingChunks,
       invalidChunks: status.invalidChunks,
       storedBytes: status.storedBytes,
+      confirmedBytes: status.confirmedBytes,
     }, 409);
   }
-  await db.sql`
+  const sealed = await sealAudioUpload(audioStore, {
+    prefix, chunkCount, byteSize, chunkSize, filename, contentType, durationSeconds,
+    expectedBlobPrefix: version.audio_blob_prefix ?? null,
+    expectedStorageKey: version.audio_storage_key ?? null,
+  });
+  if (!sealed.ok) return json({ message: sealed.message }, sealed.status);
+  const receipt = sealed.receipt;
+  // Compare-and-swap the version pointer; concurrent sessions cannot silently replace each other.
+  const updated = await db.sql`
     UPDATE halo_song_versions
     SET audio_url = ${audioUrl}, audio_blob_prefix = ${prefix}, audio_chunk_count = ${chunkCount}, audio_storage_key = '',
-      audio_content_type = ${contentType}, audio_byte_size = ${byteSize}, audio_filename = ${filename},
-      duration_seconds = CASE WHEN ${durationSeconds} > 0 THEN ${durationSeconds} ELSE duration_seconds END,
+      audio_content_type = ${receipt.contentType}, audio_byte_size = ${byteSize}, audio_filename = ${receipt.filename},
+      duration_seconds = CASE WHEN ${receipt.durationSeconds} > 0 THEN ${receipt.durationSeconds} ELSE duration_seconds END,
       mastering_status = CASE WHEN version_type IN ('radio_edit', 'clean') AND mastering_status = 'not_started' THEN 'queued' ELSE mastering_status END,
       updated_at = NOW()
-    WHERE id = ${versionId}
+    WHERE id = ${versionId} AND song_id = ${songId} AND status = 'active'
+      AND audio_blob_prefix IS NOT DISTINCT FROM ${receipt.expectedBlobPrefix}
+      AND audio_storage_key IS NOT DISTINCT FROM ${receipt.expectedStorageKey}
+    RETURNING id
   `;
+  if (!updated.length) {
+    const current = await ownedVersion(db, ownerMemberId, versionId, songId);
+    if (current?.audio_blob_prefix === prefix) return json({ message: "Audio is persisted and locked into HALO storage.", songId, versionId, audioUrl, persisted: true, lockedIn: true, alreadyFinalized: true });
+    return json({ message: "Version audio changed during finalization. Refresh before trying again." }, 409);
+  }
   await runDreamweaverReview(songId, ownerMemberId);
-  if (version.audio_blob_prefix && version.audio_blob_prefix !== prefix) await removeUpload(version.audio_blob_prefix).catch(() => undefined);
-  await removeStoredMaster(version.audio_storage_key).catch(() => undefined);
+  // Cleanup here can delete audio another finalize publishes, or an active reader still needs.
   return json({
     message: "Audio is persisted and locked into HALO storage.",
     songId,
@@ -382,9 +415,7 @@ async function importFromRadio(payload: Record<string, unknown>, db: Awaited<Ret
     WHERE id = ${versionId}
   `;
   await runDreamweaverReview(songId, ownerMemberId);
-  if (version.audio_blob_prefix && version.audio_blob_prefix !== newPrefix) {
-    removeUpload(String(version.audio_blob_prefix)).catch(() => undefined);
-  }
+  // Keep prior chunk sessions available to in-flight playback and finalization.
   removeStoredMaster(version.audio_storage_key).catch(() => undefined);
   return json({ message: `"${track.title}" imported from Radio and connected to this version`, songId, versionId, audioUrl });
 }

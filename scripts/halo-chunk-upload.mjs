@@ -62,40 +62,57 @@ export function createAudioApiClient({ baseUrl, token, fetchImpl = fetch, timeou
   const authScheme = "Bearer";
   const headers = { Authorization: [authScheme, String(token).trim()].join(" "), Origin: origin, Accept: "application/json" };
 
-  async function send(buildInit, label) {
+  async function send(buildInit, label, reconcile) {
     for (let attempt = 0; ; attempt += 1) {
       let response;
+      let data;
+      let failure;
       try {
         const init = buildInit();
         response = await fetchImpl(endpoint, { method: "POST", ...init, headers: { ...headers, ...init.headers }, signal: AbortSignal.timeout(timeoutMs) });
+        try {
+          data = await response.json();
+        } catch (error) {
+          if (response.ok) throw error;
+          data = {};
+        }
       } catch (error) {
-        if (attempt >= retryDelays.length) throw new UploadError(`${label} failed: ${error instanceof Error ? error.message : "network error"}`);
-        log(`${label}: connection dropped, retrying in ${retryDelays[attempt]} ms`);
-        await sleepImpl(retryDelays[attempt]);
-        continue;
+        failure = new UploadError(`${label} failed: ${error instanceof Error ? error.message : "network error"}`);
       }
-      const data = await response.json().catch(() => ({}));
-      if (response.ok) return data;
-      if (RETRYABLE_STATUSES.has(response.status) && attempt < retryDelays.length) {
-        log(`${label}: HTTP ${response.status}, retrying in ${retryDelays[attempt]} ms`);
-        await sleepImpl(retryDelays[attempt]);
-        continue;
+      if (!failure && response.ok) return data;
+      if (!failure) {
+        failure = new UploadError(data?.message || `${label} failed with HTTP ${response.status}`, response.status, data);
+        if (!RETRYABLE_STATUSES.has(response.status)) {
+          if (response.status === 409 && data?.finalized === true && reconcile) {
+            const recovered = await reconcile();
+            if (recovered) return recovered;
+          }
+          throw failure;
+        }
       }
-      throw new UploadError(data?.message || `${label} failed with HTTP ${response.status}`, response.status, data);
+      if (attempt < retryDelays.length) {
+        log(`${label}: reconciling before retry in ${retryDelays[attempt]} ms`);
+        await sleepImpl(retryDelays[attempt]);
+      }
+      // A failed acknowledgement does not mean the write failed. Never repeat a write
+      // without a fresh status read, including after the final allowed attempt.
+      const recovered = reconcile ? await reconcile() : null;
+      if (recovered) return recovered;
+      if (attempt >= retryDelays.length) throw failure;
     }
   }
 
   return {
     endpoint,
-    json: (payload, label = String(payload?.action || "request")) => send(() => ({ headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) }), label),
-    form: (fields, label = "chunk") => send(() => {
+    json: (payload, label = String(payload?.action || "request"), reconcile) => send(() => ({ headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) }), label, reconcile),
+    form: (fields, label = "chunk", reconcile) => send(() => {
       const form = new FormData();
       for (const [name, value] of Object.entries(fields)) {
         if (value instanceof Blob) form.append(name, value, fields.filename || "audio");
         else form.append(name, String(value));
       }
       return { body: form };
-    }, label),
+    }, label, reconcile),
   };
 }
 
@@ -122,8 +139,17 @@ export async function uploadAudioFile({ filePath, songId, versionId, client, chu
   const filename = basename(filePath);
   const chunkCount = Math.ceil(byteSize / chunkSize);
   const uploadId = deterministicUploadId({ versionId, fileSha256: await sha256File(filePath), chunkSize });
-  const session = { songId, versionId, uploadId, chunkCount, byteSize };
-  const status = await client.json({ action: "upload_status", ...session }, "upload status");
+  const session = { songId, versionId, uploadId, chunkCount, byteSize, chunkSize };
+  const readStatus = async () => {
+    const current = await client.json({ action: "upload_status", ...session }, "upload status");
+    if (!current || typeof current.finalized !== "boolean" || !Array.isArray(current.receivedChunks)
+      || !Array.isArray(current.invalidChunks) || !current.chunkChecksums || typeof current.chunkChecksums !== "object"
+      || current.chunkCount !== chunkCount || current.byteSize !== byteSize) {
+      throw new UploadError("The server returned invalid upload progress. No chunks were sent.");
+    }
+    return current;
+  };
+  const status = await readStatus();
   if (status.finalized) {
     log(`${filename} is already uploaded and finalized`);
     return { ...session, alreadyFinalized: true, uploadedChunks: 0, skippedChunks: chunkCount };
@@ -141,11 +167,19 @@ export async function uploadAudioFile({ filePath, songId, versionId, client, chu
       return buffer;
     };
     const sendChunk = async (index, buffer) => {
+      const checksum = sha256(buffer);
+      const reconcileChunk = async () => {
+        const current = await readStatus();
+        const storedChecksum = current.chunkChecksums?.[index];
+        if (storedChecksum && storedChecksum !== checksum) throw new UploadError("The stored chunk conflicts with this file. Start a new upload.", 409);
+        return storedChecksum === checksum && !(current.invalidChunks || []).includes(index) ? { confirmed: true } : null;
+      };
+      if (await reconcileChunk()) return;
       await client.form({
         songId, versionId, uploadId, filename, contentType,
-        chunkIndex: index, chunkCount, byteSize, chunkSha256: sha256(buffer),
+        chunkIndex: index, chunkCount, byteSize, chunkSize, offset: index * chunkSize, chunkSha256: checksum,
         chunk: new Blob([buffer], { type: contentType }),
-      }, `chunk ${index + 1}/${chunkCount}`);
+      }, `chunk ${index + 1}/${chunkCount}`, reconcileChunk);
       uploadedChunks += 1;
       log(`uploaded chunk ${index + 1}/${chunkCount} (${Math.round(((index + 1) / chunkCount) * 100)}%)`);
     };
@@ -158,7 +192,12 @@ export async function uploadAudioFile({ filePath, songId, versionId, client, chu
       await sendChunk(index, buffer);
     }
 
-    const finalize = () => client.json({ action: "finalize_upload", ...session, filename, contentType, durationSeconds }, "finalize");
+    const finalize = () => client.json({ action: "finalize_upload", ...session, filename, contentType, durationSeconds }, "finalize", async () => {
+      const current = await readStatus();
+      return current.finalized ? {
+        alreadyFinalized: true, persisted: true, audioUrl: `/api/song-catalog/audio?versionId=${encodeURIComponent(versionId)}`,
+      } : null;
+    });
     for (let round = 0; ; round += 1) {
       try {
         const result = await finalize();

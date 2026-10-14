@@ -88,6 +88,7 @@ const AUDIO_CHUNK_BYTES = 4 * 1024 * 1024;
 const MAX_AUDIO_BYTES = 128 * 1024 * 1024;
 const ARTWORK_CHUNK_BYTES = 4 * 1024 * 1024;
 const MAX_ARTWORK_BYTES = 20 * 1024 * 1024;
+const pendingPackageUploads = new Map();
 const STAGE_LABEL = {
   uploaded: "Received",
   processing: "Validated",
@@ -313,7 +314,7 @@ if (!uploadHelper) {
 }
 
 async function ensureUploadRuntime() {
-  if (uploadHelper?.uploadChunkedFile && audioUploadUi && artworkUploadUi) return uploadHelper;
+  if (uploadHelper?.uploadResumableAudio && audioUploadUi && artworkUploadUi) return uploadHelper;
   setRuntimeStatus("pending", "HALO is re-checking the shared upload runtime and progress surface before accepting new packages.");
   try {
     uploadHelper = await loadUploadHelperScript();
@@ -634,40 +635,17 @@ async function uploadAudio(songId, versionId, file, position, total) {
   const contentType = normalizeAudioType(file);
   if (!contentType) throw new Error("Choose an MP3, M4A, AAC, OGG, WebM, WAV, or FLAC audio file.");
   if (file.size > MAX_AUDIO_BYTES) throw new Error("Music uploads are limited to 128 MB per file.");
-  const uploadId = crypto.randomUUID();
-  audioUploadUi.start(`Uploading ${position} of ${total} · ${file.name}`);
-  const { chunkCount } = await uploadHelper.uploadChunkedFile({
-    url: "/api/song-catalog/audio",
+  audioUploadUi.start(`Checking saved upload ${position} of ${total} · ${file.name}`);
+  const finalized = await uploadHelper.uploadResumableAudio({
     file,
+    songId,
+    versionId,
+    contentType,
     chunkSize: AUDIO_CHUNK_BYTES,
-    buildBody({ chunkIndex, chunkCount, start, end }) {
-      const form = new FormData();
-      form.append("songId", songId);
-      form.append("versionId", versionId);
-      form.append("uploadId", uploadId);
-      form.append("chunkIndex", String(chunkIndex));
-      form.append("chunkCount", String(chunkCount));
-      form.append("byteSize", String(file.size));
-      form.append("filename", file.name);
-      form.append("contentType", contentType);
-      form.append("chunk", file.slice(start, end, contentType), file.name);
-      return form;
-    },
+    durationSeconds: await audioDuration(file),
     onProgress(percent) {
       audioUploadUi.progress(percent, `Uploading ${position} of ${total} · ${Math.round(percent)}% · ${file.name}`);
     },
-  });
-  audioUploadUi.progress(100, `Finishing ${file.name}…`);
-  const finalized = await apiJson("/api/song-catalog/audio", {
-    action: "finalize_upload",
-    songId,
-    versionId,
-    uploadId,
-    chunkCount,
-    byteSize: file.size,
-    filename: file.name,
-    contentType,
-    durationSeconds: await audioDuration(file),
   });
   if (!finalized.persisted || !finalized.lockedIn || !finalized.audioUrl) throw new Error(`HALO could not confirm persistence for ${file.name}. Please retry.`);
   await confirmPersistedAsset(finalized.audioUrl, "audio");
@@ -683,7 +661,20 @@ async function loadCatalogSong(songId) {
 async function processPackage({ artistName, title, albumTitle, genre, isrc, upc, rightsStatus, saleStatus, explicitLyrics, artworkFile, artworkSourceSongId = "", file, position, total }) {
   setControllerPhase("package", `Creating the master package for ${title} and validating metadata, rights, and route targets.`);
   const notes = buildNotes(title, file);
-  const created = await apiJson("/api/unified-upload", {
+  // Form metadata and file names can reset after reload; only pending content identifies the retry.
+  const resumeKey = file ? `halo-intake:${await uploadHelper.fileUploadId(file, ["music-upload", "pending-package"], AUDIO_CHUNK_BYTES)}` : "";
+  let created = pendingPackageUploads.get(resumeKey);
+  if (resumeKey && !created) {
+    try { created = JSON.parse(sessionStorage.getItem(resumeKey) || "null"); } catch {}
+  }
+  // A cached ID is only a hint; the owner-only catalog must confirm the target.
+  if (created) {
+    const ownedSong = await loadCatalogSong(created.songId);
+    const versionId = created.masterVersionId || created.versionIds?.sale_master || created.versionIds?.radio_edit;
+    if (!ownedSong || !ownedSong.versions?.some(version => version.id === versionId)) created = null;
+  }
+  const resumed = Boolean(created);
+  created ||= await apiJson("/api/unified-upload", {
     action: "create_project",
     title,
     artistName,
@@ -697,8 +688,13 @@ async function processPackage({ artistName, title, albumTitle, genre, isrc, upc,
     notes,
     surface: "music_upload",
   });
+  if (resumeKey) {
+    const target = { songId: created.songId, masterVersionId: created.masterVersionId, versionIds: created.versionIds };
+    pendingPackageUploads.set(resumeKey, target);
+    try { sessionStorage.setItem(resumeKey, JSON.stringify(target)); } catch {}
+  }
   setMessage(`Received ${title}. Validating the handoff package…`);
-  await apiJson("/api/unified-upload", { action: "advance_pipeline", songId: created.songId, toStage: "processing" });
+  if (!resumed) await apiJson("/api/unified-upload", { action: "advance_pipeline", songId: created.songId, toStage: "processing" });
   await apiJson("/api/song-catalog", {
     action: "save_song",
     songId: created.songId,
@@ -743,6 +739,10 @@ async function processPackage({ artistName, title, albumTitle, genre, isrc, upc,
   const pipeline = await apiJson("/api/unified-upload", { action: "advance_pipeline", songId: created.songId, toStage: finalStage });
   const song = await loadCatalogSong(created.songId).catch(() => null);
   const issueCount = Array.isArray(song?.metadataIssues) ? song.metadataIssues.filter(issue => issue.level === "required").length : 0;
+  if (resumeKey) {
+    pendingPackageUploads.delete(resumeKey);
+    try { sessionStorage.removeItem(resumeKey); } catch {}
+  }
   return {
     songId: created.songId,
     title,

@@ -104,6 +104,41 @@ export const songVersions = pgTable("halo_song_versions", {
     .where(sql`version_type = 'sale_master' AND status = 'active'`),
 ]);
 
+export const growthCampaigns = pgTable("halo_growth_campaigns", {
+  id: text("id").primaryKey(),
+  songId: text("song_id").notNull().references(() => songs.id, { onDelete: "cascade" }),
+  ownerMemberId: text("owner_member_id").notNull(),
+  requestKey: text("request_key").notNull(),
+  snapshot: jsonb("snapshot").notNull(),
+  settings: jsonb("settings").notNull(),
+  rights: jsonb("rights").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, table => [
+  uniqueIndex("halo_growth_campaigns_request_idx").on(table.ownerMemberId, table.songId, table.requestKey),
+  index("halo_growth_campaigns_owner_idx").on(table.ownerMemberId, table.createdAt),
+]);
+
+export const growthJobs = pgTable("halo_growth_jobs", {
+  id: text("id").primaryKey(),
+  campaignId: text("campaign_id").notNull().references(() => growthCampaigns.id, { onDelete: "cascade" }),
+  kind: text("kind").notNull(),
+  jobKey: text("job_key").notNull(),
+  payload: jsonb("payload").notNull().default({}),
+  status: text("status").notNull().default("queued"),
+  attempts: integer("attempts").notNull().default(0),
+  result: jsonb("result"),
+  lastError: text("last_error").notNull().default(""),
+  audit: jsonb("audit").notNull().default([]),
+  leaseToken: text("lease_token"),
+  lockedUntil: timestamp("locked_until", { withTimezone: true }),
+  availableAt: timestamp("available_at", { withTimezone: true }).notNull().defaultNow(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+}, table => [
+  uniqueIndex("halo_growth_jobs_key_idx").on(table.campaignId, table.jobKey),
+  index("halo_growth_jobs_queue_idx").on(table.campaignId, table.status, table.availableAt),
+]);
+
 export const dreamweaverSongReviews = pgTable("halo_dreamweaver_song_reviews", {
   id: text("id").primaryKey(),
   songId: text("song_id").notNull().references(() => songs.id, { onDelete: "cascade" }),

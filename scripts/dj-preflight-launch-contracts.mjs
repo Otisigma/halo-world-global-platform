@@ -81,8 +81,8 @@ const checks = [
   [deck.includes("buildTakeoverPlan") && deck.includes("recordingState.takeoverPlan") && deck.includes("playedTrackIds"), "builds one complete DJ takeover order and enforces a no-repeat ledger"],
   [deck.includes('"clean-break"') && deck.includes("plan.hardCut") && deck.includes("setStemState(incomingDeck, \"vocals\", false"), "blocks lead-vocal crossover with stem handoffs or a true clean break"],
   [deck.includes("Takeover quality control") && deck.includes("updateTakeoverQualityControl"), "shows live sequence, vocal, repeat, and continuity quality control"],
-  [deck.includes('/dj-continuity-guard.js') && deck.includes("attachContinuityGuardToDeck") && deck.includes("CONTINUITY BRIDGE ACTIVE"), "arms the shared continuity guard and exposes bridge state in the live master readout"],
-  [deck.includes("continuity: { ...audioHealth.continuity }") && deck.includes("continuity: { ...audioHealth.continuity },") && deck.includes("Sync live telemetry"), "includes continuity state in deck health and live telemetry sync payloads"]
+  [!deck.includes('/dj-continuity-guard.js') && !deck.includes("attachContinuityGuardToDeck") && !deck.includes("CONTINUITY BRIDGE ACTIVE"), "keeps synthetic continuity failover off the stable DJ deck"],
+  [!deck.includes("audioHealth.continuity") && deck.includes("Sync live telemetry") && deck.includes("window.__haloAudioHealth"), "preserves live deck telemetry without the rolled-back bridge state"]
 ];
 
 const failures = checks.filter(([passed]) => !passed);

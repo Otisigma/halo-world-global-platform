@@ -111,103 +111,174 @@ assert.match(radioPage, /id="continuityTelemetry"/, "Radio UI exposes continuity
 assert.match(radioClient, /window\.__haloRadioContinuity/, "Radio client exports continuity monitor state");
 assert.match(radioClient, /Continuity Guard/, "Radio monitoring rail names the continuity guard");
 assert.match(radioClient, /radio_continuity_bridge/, "Radio telemetry tracks bridge activation");
-assert.match(deckPage, /\/dj-continuity-guard\.js/, "DJ deck loads the shared continuity guard");
-assert.match(deckPage, /CONTINUITY BRIDGE ACTIVE/, "DJ deck master status exposes bridge activity");
-assert.match(deckPage, /continuity: \{ \.\.\.audioHealth\.continuity \}/, "DJ deck audio health payload carries continuity state");
+assert.doesNotMatch(deckPage, /dj-continuity-guard\.js|HaloContinuityGuard|continuityState|audioHealth\.continuity/, "DJ deck no longer runs the synthetic continuity failover");
+assert.doesNotMatch(deckPage, /DeckContinuity|CONTINUITY BRIDGE ACTIVE|data-continuity-state/, "Rolled-back bridge callbacks and status hooks are absent");
 assert.match(telemetryApi, /telemetry\.continuity/, "Telemetry API accepts continuity state");
 
+const timers = new Map();
+let timerId = 0;
+const sources = [];
+const stopped = [];
+function channel() {
+  return { input: {}, trim: { gain: { setValueAtTime() {} } }, stemSources: {}, stemGains: {}, sourceEnvelopes: new Map() };
+}
 const deckSandbox = {
-  guardOptions: null,
-  startFillerCalls: 0,
-  stopFillerCalls: 0,
-  qcCalls: [],
-  reportCalls: [],
-  updateTakeoverQualityControlCalls: 0,
-  continuityState: { guard: null, analyser: null, analyserData: null, fillerGain: null, fillerNodes: [], fillerTimeout: 0 },
+  console,
+  Date,
+  Map,
+  Float32Array,
+  recorderGuardState: { guard: null, analyser: null, analyserData: null },
   audioEngine: {
     context: {
-      createAnalyser() { return { fftSize: 0, smoothingTimeConstant: 0 }; }
+      currentTime: 10,
+      createOscillator() { assert.fail("Stalls and shutdown must never create synthetic filler"); },
+      createBufferSource() {
+        const source = {
+          playbackRate: { value: 1 },
+          connect() {},
+          start(when) { this.startedAt = when; },
+          stop() { this.stopped = true; },
+          disconnect() {}
+        };
+        sources.push(source);
+        return source;
+      },
+      createAnalyser() {
+        return { frequencyBinCount: 256, getFloatTimeDomainData(data) { data.fill(.9); } };
+      }
     },
-    masterGain: { connect() {} }
+    masterGain: { connect(node) { deckSandbox.masterAnalyser = node; } },
+    decks: { A: channel(), B: channel() }
   },
-  audioHealth: {
-    status: "ready",
-    message: "Audio engine is running and checking deck output.",
-    continuity: { state: "idle", message: "Continuity guard standing by.", fillerActive: false, recoveries: 0 }
+  recordingState: {
+    recorder: { state: "recording", stop() { this.state = "inactive"; } },
+    activeDeck: "A", transitionHistory: [], effectTimers: [], playedTrackIds: new Set(), transitionCount: 0
   },
-  recordingState: { takeoverPlan: [], playedTrackIds: new Set(), qualityScore: 88 },
+  takeoverSession: { name: "Test DJ", dj: "halo" },
+  modeProfiles: { club: { policy: "Clean playback" } },
+  djMode: "club",
   deckState: {
-    A: { title: "Alpha", artist: "Artist A", bpm: 124, playing: true, empty: false },
-    B: { title: "Beta", artist: "Artist B", bpm: 125, playing: false, empty: false }
+    A: { id: "a", title: "Alpha", artist: "Artist A", bpm: 124, playing: true, empty: false, audioBuffer: { duration: 180 } },
+    B: { id: "b", title: "Beta", artist: "Artist B", bpm: 125, playing: false, empty: false, audioBuffer: { duration: 180 } }
   },
   elements: {
-    qcContinuity: { classList: { toggle() {} } },
-    qcContinuityValue: { textContent: "" },
+    importStatus: { classList: { remove() {} } },
+    recordingStatus: {}, recordingNote: {}, performancePolicyCopy: {},
+    mixIntent: { value: "peak" },
+    qcContinuity: {}, qcContinuityValue: {},
     masterBpm: { textContent: "" },
     masterTrack: { textContent: "" },
     masterStatus: { dataset: {}, textContent: "" }
   },
+  document: { querySelector() { return {}; } },
   window: {
-    HaloContinuityGuard: class {
-      constructor(options) { deckSandbox.guardOptions = options; }
-      init() { return this; }
-    },
+    HaloRecorderGuard: { renderIndicator() {} },
+    useRecorderGuard(options) { deckSandbox.recorderInputs = options.readInputs; return {}; },
     haloStats: { track() {} }
   },
-  setQcCheck(container, output, status, message) {
-    output.textContent = message;
-    deckSandbox.qcCalls.push({ status, message });
+  setTimeout(handler, delay) { timers.set(++timerId, { handler, delay }); return timerId; },
+  clearTimeout(id) { timers.delete(id); },
+  clearInterval(id) { stopped.push(id); },
+  cancelAnimationFrame() {},
+  createTransitionPlan() {
+    return { style: "drop-swap", hardCut: true, cleanPlay: 100, effectWindow: 50, breathPlan: {}, name: "Test transition", effectMove: "cut" };
   },
-  updateTakeoverQualityControl() {
-    deckSandbox.updateTakeoverQualityControlCalls += 1;
+  updateTakeoverQualityControl() {},
+  formatRecordingTime(seconds) { return String(seconds); },
+  setQcCheck() {},
+  renderBreathPlan() {}, setPerformancePhase() {}, openTransitionPlan() {}, setActiveBreathStage() {},
+  showToast() {}, scheduleBreathStages() {}, setStemState() {}, updateDeck() {},
+  queuePerformanceMove() {}, restoreDeckStems() {}, resetDeckEffects() {}, recordTransitionObservation() {},
+  async prepareAutomatedDeck() { return false; },
+  setAutomatedCrossfader(value) {
+    assert.ok(sources.at(-1).startedAt >= 10, "Incoming audio starts before the crossfader moves");
+    deckSandbox.crossfader = value;
   },
-  reportAudioHealth(status, message) {
-    deckSandbox.reportCalls.push({ status, message });
-  },
-  activeDeckId() {
-    return deckSandbox.deckState.A.playing ? "A" : "B";
-  },
-  startDeckContinuityFiller() {
-    deckSandbox.startFillerCalls += 1;
-  },
-  stopDeckContinuityFiller() {
-    deckSandbox.stopFillerCalls += 1;
-  },
-  prepareDeckContinuityPreroll() {},
-  deckContinuityLevelDb() { return -24; },
-  deckContinuityBoundaryState() {
-    return { activeDeckId: "A", incomingDeckId: "B", remainingSec: 3, incomingReady: false };
+  reportAudioHealth() {},
+  async startDeckAudio(deckId, offset = 0) {
+    return deckSandbox.startDeckAudioSources(deckSandbox.audioEngine.context, deckId, offset);
   }
 };
 vm.createContext(deckSandbox);
 vm.runInContext([
-  extractFunctionSource(deckPage, "continuityStatusLabel"),
-  extractFunctionSource(deckPage, "updateMasterReadout"),
-  extractFunctionSource(deckPage, "attachContinuityGuardToDeck")
-].join("\n\n"), deckSandbox);
+  "stopDeckAudio", "startDeckSource", "startDeckAudioSources", "scheduleAutomatedTransition",
+  "stopAutomatedMix", "stopTakeoverDecks", "finishTakeoverRecording", "updateMasterReadout",
+  "recorderGuardMasterLevel", "recorderGuardInputs", "attachRecorderGuardToDeck"
+].map(name => {
+  const source = extractFunctionSource(deckPage, name);
+  return name === "startDeckAudioSources" ? `async ${source}` : source;
+}).join("\n\n"), deckSandbox);
 
-deckSandbox.attachContinuityGuardToDeck();
-assert.equal(typeof deckSandbox.guardOptions?.onStatusChange, "function", "DJ deck wiring registers continuity status callbacks");
-deckSandbox.guardOptions.startFiller({ reason: "silence_watchdog" });
-assert.equal(deckSandbox.startFillerCalls, 1, "DJ deck wiring forwards filler activation to the deck bridge");
-deckSandbox.guardOptions.stopFiller({ reason: "audio_recovered" });
-assert.equal(deckSandbox.stopFillerCalls, 1, "DJ deck wiring forwards filler release to the deck bridge");
-deckSandbox.guardOptions.onStatusChange({
-  state: "bridge-active",
-  message: "Continuity guard active. Audible bridge engaged.",
-  fillerActive: true,
-  recoveries: 2
-});
-assert.equal(deckSandbox.audioHealth.continuity.state, "bridge-active", "DJ deck stores continuity state in audio health");
-assert.match(deckSandbox.elements.masterStatus.textContent, /CONTINUITY BRIDGE ACTIVE/, "DJ master readout shows bridge state");
-assert.equal(deckSandbox.elements.masterStatus.dataset.continuityState, "bridge-active", "DJ master readout publishes continuity state for UI hooks");
-deckSandbox.guardOptions.onStatusChange({
-  state: "normal",
-  message: "Continuity guard locked. Audio recovered.",
-  fillerActive: false,
-  recoveries: 2
-});
-assert.ok(deckSandbox.updateTakeoverQualityControlCalls > 0, "DJ deck returns continuity control to the standard quality monitor after recovery");
-assert.ok(deckSandbox.reportCalls.length >= 2, "DJ deck republishes continuity updates through audio health events");
+async function runNextTimer() {
+  const [id, timer] = timers.entries().next().value;
+  timers.delete(id);
+  await timer.handler();
+}
 
-console.log("HALO continuity guard contracts: predictive pre-roll, silence watchdog, filler bridge, and monitoring hooks behave as expected.");
+// The recorder keeps its read-only master analyser without the bridge watchdog.
+const audioContext = deckSandbox.audioEngine.context;
+deckSandbox.audioEngine.context = null;
+deckSandbox.attachRecorderGuardToDeck();
+assert.equal(deckSandbox.recorderGuardState.analyser, null, "Initial page load does not require an AudioContext");
+assert.equal(deckSandbox.recorderInputs().masterBusLevel, 0);
+deckSandbox.audioEngine.context = audioContext;
+deckSandbox.attachRecorderGuardToDeck();
+const analyser = deckSandbox.recorderGuardState.analyser;
+deckSandbox.attachRecorderGuardToDeck();
+assert.equal(deckSandbox.recorderGuardState.analyser, analyser, "Repeated playback does not allocate another analyser");
+assert.equal(deckSandbox.masterAnalyser, deckSandbox.recorderGuardState.analyser);
+assert.match(extractFunctionSource(deckPage, "ensureAudio"), /attachRecorderGuardToDeck\(\)/, "Audio initialization attaches the lazy recorder analyser");
+deckSandbox.audioEngine.decks.A.cueActive = true;
+assert.ok(Math.abs(deckSandbox.recorderInputs().masterBusLevel - .9) < 1e-6, "Recorder bleed guard still samples the master bus");
+
+// A successful hard-cut starts the incoming track before stopping the outgoing.
+await deckSandbox.startDeckAudio("A");
+const outgoing = sources.at(-1);
+deckSandbox.scheduleAutomatedTransition({});
+await runNextTimer();
+await runNextTimer();
+assert.equal(deckSandbox.recordingState.activeDeck, "B");
+assert.equal(outgoing.stopped, true);
+assert.equal(sources.at(-1).stopped, undefined, "Incoming audio stays live");
+assert.equal(deckSandbox.crossfader, 100);
+assert.equal(deckSandbox.recordingState.transitionCount, 1);
+assert.equal(timers.size, 1, "No next track schedules only the final clean shutdown, not a bridge");
+await runNextTimer();
+assert.equal(deckSandbox.recordingState.recorder.state, "inactive");
+assert.ok(sources.every(source => source.stopped), "Final shutdown stops every track source");
+
+// Failed incoming playback preserves the outgoing song and ends silently.
+deckSandbox.recordingState.recorder.state = "recording";
+deckSandbox.recordingState.activeDeck = "A";
+deckSandbox.deckState.A.playing = true;
+deckSandbox.deckState.B.audioBuffer = null;
+deckSandbox.deckState.B.audioAsset = { file: { arrayBuffer: async () => { throw new Error("Decode failed"); } } };
+await deckSandbox.startDeckAudio("A");
+const held = sources.at(-1);
+const sourceCount = sources.length;
+deckSandbox.scheduleAutomatedTransition({});
+await runNextTimer();
+await runNextTimer();
+assert.equal(sources.length, sourceCount, "Failed replacement produces no audio source");
+assert.equal(held.stopped, undefined, "Outgoing track is not cut on a failed handoff");
+assert.equal(deckSandbox.deckState.B.playing, false);
+assert.equal(deckSandbox.deckState.B.audioAsset.promise, null, "Failed decode can be retried");
+assert.equal(timers.size, 1);
+assert.equal(timers.values().next().value.delay, 90000, "Pre-bridge safe-stop hold is preserved");
+await runNextTimer();
+assert.equal(held.stopped, true, "Safe stop silences the held source");
+assert.equal(deckSandbox.deckState.A.playing, false);
+assert.equal(deckSandbox.deckState.B.playing, false);
+assert.equal(timers.size, 0, "Shutdown leaves no recovery or effect timer running");
+deckSandbox.finishTakeoverRecording("stopped");
+assert.equal(timers.size, 0, "Repeated shutdown is harmless");
+deckSandbox.updateMasterReadout();
+assert.doesNotMatch(deckSandbox.elements.masterStatus.textContent, /CONTINUITY|BRIDGE/, "Status shows only real deck playback");
+
+// Manual stop also clears the deck scheduler.
+deckSandbox.audioEngine.decks.A.timer = 42;
+deckSandbox.stopTakeoverDecks();
+assert.ok(stopped.includes(42));
+assert.equal(deckSandbox.audioEngine.decks.A.timer, null);
+
+console.log("HALO continuity contracts: radio guard preserved; DJ rollback transitions, failed replacement, recorder monitoring, and silent shutdown passed.");

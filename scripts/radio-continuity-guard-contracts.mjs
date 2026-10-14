@@ -177,7 +177,7 @@ const deckSandbox = {
   stopDeckContinuityFiller() {
     deckSandbox.stopFillerCalls += 1;
   },
-  prepareDeckContinuityPreroll() {},
+  prepareDeckContinuityPreroll() { return Promise.resolve(); },
   deckContinuityLevelDb() { return -24; },
   deckContinuityBoundaryState() {
     return { activeDeckId: "A", incomingDeckId: "B", remainingSec: 3, incomingReady: false };
@@ -293,23 +293,31 @@ async function createDeckHarness() {
       automationGeneration: 0, pendingHandoff: null, cancelFade: null, effectTimers: [],
       recorder: { state: "recording" }, activeDeck: "A", playedTrackIds: new Set(), transitionHistory: [], takeoverPlan: [], transitionCount: 0
     },
+    recorderGuardState: { guard: null },
+    selectedImportDeck: "A", pendingPlaybackDeck: null, pendingAudioRequest: null,
+    audioImportGeneration: 0, trackImportGeneration: 0,
     deckState: {
       A: { id: "a", title: "A", bpm: 120, originalBpm: 120, duration: 100, playing: false, audioBuffer: { duration: 100, signal: .2 } },
       B: { id: "b", title: "B", bpm: 120, originalBpm: 120, duration: 100, playing: false, audioBuffer: { duration: 100, signal: .2 } }
     },
     audioHealth: { status: "ready", message: "", continuity: {} },
     elements: {
-      crossfader: { value: "0" }, importStatus: { classList: { remove() {} }, textContent: "" },
-      recordingStatus: { textContent: "" }, performancePolicyCopy: { textContent: "" }
+      crossfader: { value: "0" }, importStatus: { classList: { remove() {}, add() {} }, textContent: "" },
+      driveButton: { disabled: false, textContent: "" }, folderButton: { disabled: false },
+      importButton: { disabled: false, textContent: "" }, musicUrl: { value: "" },
+      driveUpload: { click() {} }, folderUpload: { click() {} }, search: { value: "" },
+      recordingStatus: { textContent: "" }, recordingNote: { textContent: "" },
+      recordingStart: { disabled: false }, recordingRig: { className: "" },
+      performancePolicyCopy: { textContent: "" }
     },
-    document: { querySelector: () => ({ value: 0, style: {}, textContent: "", classList: { toggle() {} }, setAttribute() {} }) },
+    document: { querySelectorAll: () => [], querySelector: () => ({ value: 0, style: {}, textContent: "", classList: { toggle() {} }, setAttribute() {} }) },
     window: { AudioContext: Context, haloStats: { track() {} } },
     setTimeout(callback, delay) { const id = ++timerId; timers.set(id, { callback, delay, at: clock + delay, cleared: false }); return id; },
     clearTimeout(id) { if (timers.has(id)) timers.get(id).cleared = true; },
     setInterval() { return ++timerId; }, clearInterval() {},
     requestAnimationFrame(callback) { return env.setTimeout(() => callback(clock), 16); },
     cancelAnimationFrame(id) { env.clearTimeout(id); },
-    reportAudioHealth() {}, updateTakeoverQualityControl() {}, updateMasterReadout() {}, updateDeck() {}, updateBoothDisplay() {},
+    reportAudioHealth() {}, updateTakeoverQualityControl() {}, updateMasterReadout() {}, updateDeck() {}, updateBoothDisplay() {}, renderTracks() {},
     setQcCheck() {}, showToast() {}, updateRangeFill() {},
     activeDeckId: () => "A", renderBreathPlan() {}, setActiveBreathStage() {}, setPerformancePhase() {},
     scheduleBreathStages() {}, recordTransitionObservation() {}, prepareAutomatedDeck: async () => true, formatRecordingTime: String,
@@ -324,13 +332,17 @@ async function createDeckHarness() {
   const functions = [
     "cleanupDeckContinuityFillerNodes", "stopDeckContinuityFiller", "startDeckContinuityFiller",
     "deckContinuityLevelDb", "deckContinuityReady", "deckHandoffConfirmed", "cancelDeckHandoff",
-    "waitForDeckHandoff", "deckHandoffCurrent", "decodeDeckAsset", "prepareDeckContinuityPreroll",
+    "waitForDeckHandoff", "deckHandoffCurrent", "deckPlaybackAbort", "deckPlaybackFailureCurrent", "decodeDeckAsset", "prepareDeckContinuityPreroll",
     "deckContinuityBoundaryState", "attachContinuityGuardToDeck", "recorderGuardMasterLevel",
-    "ensureAudio", "updateAudioCrossfader", "stopDeckAudio", "startDeckAudio", "startDeckSource",
-    "startDeckAudioSources", "restoreDeckStems", "setStemState", "resetDeckEffects", "loadTrack",
+    "ensureAudio", "updateAudioCrossfader", "stopDeckAudio", "startDeckAudio", "createDeckRecordingTap", "startDeckSource",
+    "startDeckAudioSources", "restoreDeckStems", "setStemState", "setCueMonitor", "resetDeckEffects", "loadTrack",
     "ejectDeck", "setAutomatedCrossfader", "animateAutomatedCrossfader", "queuePerformanceMove",
     "loopOutgoingTail", "openTransitionPlan", "moveTransitionPlan", "scheduleAutomatedTransition",
-    "stopAutomatedMix", "stopTakeoverDecks"
+    "playPercussionBridge", "dropDrumsBridge", "triggerKick",
+    "stopAutomatedMix", "stopTakeoverDecks", "shutdownDeckPage", "finishTakeoverRecording",
+    "trackDeckAuxiliarySource", "triggerTone", "cancelTakeoverStartupRecorder", "startTakeoverRecording",
+    "captureDeckImportTarget", "deckImportTargetCurrent", "selectDeckAudioFiles", "requestTrackAudio",
+    "handleDriveUpload", "importTrack"
   ];
   vm.runInContext(functions.map(name => extractFunctionSource(deckPage, name)).join("\n\n"), env);
   await env.ensureAudio();
@@ -395,7 +407,7 @@ for (const action of ["stop", "eject", "replace"]) {
     env.loadTrack("B", "replacement");
   }
   decode.resolve({ duration: 60 });
-  assert.equal(await playing, false);
+  await assert.rejects(playing, { name: "AbortError" });
   assert.equal(sources.length, 0, `${action} prevents late source creation`);
   assert.equal(state.audioBuffer, undefined, `${action} prevents stale deck buffer writes`);
   assert.equal(state.audioAsset.buffer, undefined, `${action} prevents stale asset cache writes`);
@@ -416,9 +428,32 @@ for (const stage of ["fetch", "body", "decode"]) {
   await settle();
   env.stopDeckAudio("B");
   pending.resolve(stage === "fetch" ? { ok: true, arrayBuffer: async () => ({ duration: 60 }) } : { duration: 60 });
-  assert.equal(await playing, false);
+  await assert.rejects(playing, { name: "AbortError" });
   assert.equal(sources.length, 0, `Stopping at the stem ${stage} await prevents late sources`);
   assert.equal(asset.buffer, undefined);
+}
+
+// Pre-roll owns captured assets, not a later state.audioAsset reached through a callback.
+for (const action of ["replace-state", "replace-asset", "eject"]) {
+  const { env, sources } = await createDeckHarness();
+  const decode = deferred();
+  env.audioEngine.context.decodeAudioData = () => decode.promise;
+  const asset = { file: { arrayBuffer: async () => new ArrayBuffer(4) } };
+  const state = { id: "pre-roll", title: "Pre-roll", bpm: 120, audioAsset: asset };
+  env.deckState.B = state;
+  const preparing = env.prepareDeckContinuityPreroll("B");
+  await settle();
+  const replacement = { file: { arrayBuffer: async () => new ArrayBuffer(8) } };
+  if (action === "replace-state") env.deckState.B = { id: "new", title: "New", bpm: 125, audioAsset: replacement };
+  if (action === "replace-asset") state.audioAsset = replacement;
+  if (action === "eject") env.ejectDeck("B");
+  decode.resolve({ duration: 45 });
+  await assert.rejects(preparing, { name: "AbortError" });
+  assert.equal(asset.buffer, undefined);
+  assert.equal(replacement.buffer, undefined, "Old pre-roll callbacks cannot write into the replacement asset");
+  assert.equal(state.audioBuffer, undefined);
+  assert.equal(env.deckState.B.audioBuffer, undefined);
+  assert.equal(sources.length, 0);
 }
 
 // Overlapping starts and even rejected stale resumes belong only to the latest generation.
@@ -434,7 +469,7 @@ for (const stage of ["fetch", "body", "decode"]) {
   assert.equal(await latest, true);
   const currentSource = env.audioEngine.decks.B.source;
   first.resolve({ duration: 30 });
-  assert.equal(await stale, false);
+  await assert.rejects(stale, { name: "AbortError" });
   assert.equal(sources.length, 1);
   assert.equal(env.audioEngine.decks.B.source, currentSource);
   assert.equal(env.deckState.B.duration, 70);
@@ -444,7 +479,7 @@ for (const stage of ["fetch", "body", "decode"]) {
   const resuming = env.startDeckAudio("A");
   env.ejectDeck("A");
   resume.reject(new Error("Old resume failed"));
-  assert.equal(await resuming, false, "Stale resume errors cannot reach callers that overwrite replacement state");
+  await assert.rejects(resuming, { name: "AbortError" }, "Stale resume errors propagate cancellation, not playback faults");
 }
 
 // Captured filler cleanup cannot stop a replacement, even if stop itself throws.
@@ -550,6 +585,50 @@ for (const action of ["fail", "cancel"]) {
   assert.equal(env.deckState.B.playing, false);
 }
 
+// Auxiliary percussion can light the deck meter but cannot confirm the recording itself.
+{
+  const harness = await createDeckHarness();
+  const { env } = harness;
+  await env.startDeckAudio("A");
+  const outgoing = env.audioEngine.decks.A.source;
+  env.deckState.B.audioBuffer.signal = 0;
+  env.scheduleAutomatedTransition({});
+  await harness.nextTimer();
+  await harness.nextTimer();
+  harness.advance(300);
+  env.triggerTone("B", env.audioEngine.context.currentTime, 880, "triangle", .4, 6);
+  const auxiliaryEnvelope = [...env.audioEngine.decks.B.auxiliarySources.values()][0];
+  auxiliaryEnvelope.gain.value = .4;
+  env.setAutomatedCrossfader(100);
+  const sharedSamples = new Float32Array(512);
+  env.audioEngine.decks.B.analyser.getFloatTimeDomainData(sharedSamples);
+  assert.ok(sharedSamples[0] > .005, "Generated percussion is present in the shared deck analyser");
+  assert.equal(env.deckHandoffConfirmed("B", false), false, "Muted-preparation readiness requires recording-only signal");
+  assert.equal(env.deckHandoffConfirmed("B"), false, "Audible auxiliary signal cannot authorize recording retirement");
+  for (let index = 0; env.recordingState.pendingHandoff && index < 100; index += 1) await harness.nextTimer();
+  assert.equal(outgoing.stopped, undefined, "Silent incoming recording with auxiliary percussion cannot retire outgoing");
+  assert.equal(env.deckState.B.playing, false);
+  assert.equal(env.audioEngine.decks.B.recordingTap, null, "Failed incoming source tap is fully disposed");
+}
+
+// Recording-only stem taps still honor current stem gain routing.
+{
+  const harness = await createDeckHarness();
+  const { env } = harness;
+  delete env.deckState.B.audioBuffer;
+  env.deckState.B.stemAssets = {
+    vocals: { buffer: { duration: 100, signal: .2 } },
+    drums: { buffer: { duration: 100, signal: 0 } }
+  };
+  env.audioEngine.decks.B.stems.vocals = false;
+  await env.startDeckAudio("B");
+  harness.advance(100);
+  env.setAutomatedCrossfader(100);
+  assert.equal(env.deckHandoffConfirmed("B"), false, "Muted source stems cannot confirm a handoff");
+  env.setStemState("B", "vocals", true, true);
+  assert.equal(env.deckHandoffConfirmed("B"), true, "An audible owned recording stem confirms the handoff");
+}
+
 // Replacement during an in-flight fade invalidates both its continuation and late RAF.
 {
   const harness = await createDeckHarness();
@@ -599,7 +678,7 @@ for (const action of ["fail", "cancel"]) {
   assert.equal(guardOfflineBeforeStop, true, "Guard is disabled before deck sources stop");
   const count = sources.length;
   resume.resolve();
-  assert.equal(await pendingStart, false);
+  await assert.rejects(pendingStart, { name: "AbortError" });
   assert.equal(sources.length, count, "Late context resume cannot resurrect playback");
   assert.equal(env.continuityState.fillerInstances.size, 0);
   assert.equal(fillerInstance.gain.gain.value, 0, "Terminal filler stop is exact zero");
@@ -651,11 +730,467 @@ for (const action of ["fail", "cancel"]) {
   assert.equal(await env.startDeckAudio("B"), true);
   const current = env.audioEngine.decks.B.source;
   resume.resolve();
-  assert.equal(await old, false);
+  await assert.rejects(old, { name: "AbortError" });
   assert.equal(sources.length, 1);
   assert.equal(env.audioEngine.decks.B.source, current);
 }
 
-console.log("DJ continuity lifecycle regressions: program-only recovery, generation ownership, captured filler cleanup, confirmed/cancelled handoffs, and terminal shutdown passed.");
+// A real failure delivered after newer manual playback must not clean up that generation.
+for (const caller of ["manual", "transition"]) {
+  const harness = await createDeckHarness();
+  const { env } = harness;
+  if (caller === "transition") await env.startDeckAudio("A");
+  env.deckState.B = {
+    id: "same-card", title: "Same card", bpm: 120,
+    audioAsset: { file: { arrayBuffer: async () => { throw new Error("Old decode failure"); } } }
+  };
+  const originalStart = env.startDeckAudio;
+  let lateError;
+  env.startDeckAudio = async (deckId, offset, owner) => {
+    try { return await originalStart(deckId, offset, owner); }
+    catch (error) {
+      lateError = error;
+      assert.equal(env.deckPlaybackFailureCurrent(error, deckId), true, "The failure initially owns its cleaned-up generation");
+      env.deckState[deckId].audioBuffer = { duration: 100, signal: .2 };
+      await originalStart(deckId);
+      env.setAutomatedCrossfader(42);
+      throw error;
+    }
+  };
+  if (caller === "manual") {
+    const button = { closest: () => ({ dataset: { deck: "B" } }), addEventListener(type, callback) { this.click = callback; } };
+    env.document.querySelectorAll = () => [button];
+    const start = deckPage.indexOf('document.querySelectorAll(".play-button").forEach');
+    const end = deckPage.indexOf('document.querySelectorAll(".pitch-slider").forEach', start);
+    vm.runInContext(deckPage.slice(start, end), env);
+    await button.click();
+  } else {
+    env.scheduleAutomatedTransition({});
+    await harness.nextTimer();
+    await harness.nextTimer();
+    await settle();
+  }
+  assert.ok(lateError?.playbackOwner);
+  assert.equal(env.deckPlaybackFailureCurrent(lateError, "B"), false, "State identity alone cannot authorize a stale failure");
+  assert.equal(env.deckState.B.playing, true, `${caller} error handler preserves newer manual playback`);
+  assert.equal(env.audioEngine.decks.B.source.stopped, undefined);
+  assert.equal(Number(env.elements.crossfader.value), 42, `${caller} failure cannot restore a stale fader`);
+}
+
+// Retiring source cleanup is captured, bounded, and cannot touch the replacement.
+{
+  const { env } = await createDeckHarness();
+  await env.startDeckAudio("A");
+  const retired = env.audioEngine.decks.A.source;
+  const retiredTap = env.audioEngine.decks.A.recordingTap;
+  env.stopDeckAudio("A");
+  assert.equal(retiredTap.analyser.disconnected, true);
+  assert.equal(retiredTap.sink.disconnected, true);
+  await env.startDeckAudio("A");
+  const current = env.audioEngine.decks.A.source;
+  const currentTap = env.audioEngine.decks.A.recordingTap;
+  retired.handlers.forEach(callback => callback());
+  assert.equal(env.audioEngine.decks.A.retiringSources.size, 0);
+  assert.equal(env.audioEngine.decks.A.source, current);
+  assert.equal(env.audioEngine.decks.A.recordingTap, currentTap);
+  assert.notEqual(currentTap.analyser.disconnected, true, "Retiring source cleanup cannot disconnect the replacement recording tap");
+  assert.equal(current.stopped, undefined);
+  current.handlers.forEach(callback => callback());
+  env.stopDeckAudio("A");
+  assert.equal(env.audioEngine.decks.A.retiringSources.size, 0, "Already-ended sources are disconnected immediately, never retained awaiting an event that already fired");
+}
+
+// Pagehide reconciles playback/cue/recording UI for a later bfcache restore.
+{
+  const { env, timers } = await createDeckHarness();
+  await env.startDeckAudio("A");
+  const restore = env.audioEngine.halo.restoreTimer;
+  env.stopAutomatedMix();
+  assert.equal(timers.get(restore).cleared, true, "Stopping automation clears the obsolete Live Intelligence restore");
+  assert.equal(env.audioEngine.halo.restoreTimer, null);
+  env.setCueMonitor("A", true);
+  env.recordingState.recorder = { state: "recording", stop() { this.state = "inactive"; } };
+  env.recordingState.elapsedTimer = 999;
+  env.elements.recordingStart.disabled = true;
+  env.shutdownDeckPage();
+  assert.equal(env.deckState.A.playing, false);
+  assert.equal(env.deckState.B.playing, false);
+  assert.equal(env.audioEngine.decks.A.cueActive, false);
+  assert.equal(env.audioEngine.decks.A.cueGain.gain.value, 0);
+  assert.equal(env.recordingState.elapsedTimer, null);
+  assert.equal(env.recordingState.recorder.state, "inactive");
+  assert.equal(env.elements.recordingStart.disabled, false);
+  assert.match(env.elements.recordingStatus.textContent, /Preparing the master recording/);
+}
+
+// Cancelled initial playback closes only the recorder captured by that startup.
+for (const action of ["eject", "replace", "post-start-replacement", "newer-session"]) {
+  const { env } = await createDeckHarness();
+  const decode = deferred();
+  env.audioEngine.context.decodeAudioData = () => decode.promise;
+  env.deckState.A = {
+    id: "startup", title: "Startup", bpm: 120,
+    audioAsset: { file: { arrayBuffer: async () => new ArrayBuffer(4) } }
+  };
+  const recorders = [];
+  class StartupRecorder {
+    constructor() { this.state = "inactive"; this.events = new Map(); this.stopCalls = 0; this.mimeType = "audio/webm"; }
+    addEventListener(name, callback) {
+      if (!this.events.has(name)) this.events.set(name, []);
+      this.events.get(name).push(callback);
+    }
+    start() { this.state = "recording"; }
+    stop() {
+      this.stopCalls += 1;
+      this.state = "inactive";
+      for (const callback of this.events.get("stop") || []) callback();
+    }
+  }
+  env.window.MediaRecorder = StartupRecorder;
+  env.createCompatibleRecorder = () => {
+    const recorder = new StartupRecorder();
+    recorders.push(recorder);
+    return recorder;
+  };
+  env.buildTakeoverPlan = async () => true;
+  env.trackHasPlayableAudio = state => Boolean(state.audioBuffer || state.audioAsset?.file || state.stemAssets);
+  env.syncDecks = () => {};
+  env.startAutomatedMix = () => { throw new Error("Cancelled startup must not start automation"); };
+  env.recordingState.recorder = null;
+  env.recordingState.elapsedTimer = null;
+  const originalStart = env.startDeckAudio;
+  if (action === "post-start-replacement") {
+    env.startDeckAudio = async (deckId, offset) => {
+      const started = await originalStart(deckId, offset);
+      await originalStart(deckId);
+      return started;
+    };
+  }
+  const startup = env.startTakeoverRecording();
+  await settle();
+  const captured = recorders[0];
+  assert.ok(captured);
+  assert.equal(captured.state, "recording", "The recorder has started before pending initial decode");
+  assert.equal(env.recordingState.elapsedTimer, null);
+  assert.equal(env.elements.recordingStart.disabled, true);
+  let newerRecorder;
+  let replacementSource;
+  if (action === "eject") env.ejectDeck("A");
+  if (action === "replace") {
+    env.tracks.push({ id: "replacement", title: "Replacement", bpm: 128, audioBuffer: { duration: 100, signal: .2 } });
+    env.loadTrack("A", "replacement");
+    await originalStart("A");
+    replacementSource = env.audioEngine.decks.A.source;
+  }
+  if (action === "newer-session") {
+    env.audioEngine.lifecycleGeneration += 1;
+    newerRecorder = new StartupRecorder();
+    newerRecorder.start();
+    env.recordingState.recorder = newerRecorder;
+    env.recordingState.chunks = ["newer-session-chunk"];
+    env.recordingState.elapsedTimer = 881;
+    env.elements.recordingRig.className = "newer-recording";
+    env.elements.recordingStatus.textContent = "Newer session live";
+    env.deckState.A.audioBuffer = { duration: 100, signal: .2 };
+    await originalStart("A");
+    replacementSource = env.audioEngine.decks.A.source;
+  }
+  decode.resolve({ duration: 100, signal: .2 });
+  await startup;
+  assert.equal(captured.state, "inactive", `${action} stops the captured recorder`);
+  assert.equal(captured.stopCalls, 1);
+  assert.equal(captured.takeoverCancelled, true);
+  if (action === "post-start-replacement") replacementSource = env.audioEngine.decks.A.source;
+  if (replacementSource) {
+    assert.equal(env.audioEngine.decks.A.source, replacementSource);
+    assert.equal(replacementSource.stopped, undefined, `${action} preserves valid replacement playback`);
+    assert.equal(env.deckState.A.playing, true);
+  }
+  for (const callback of captured.events.get("dataavailable")) callback({ data: { size: 1 } });
+  for (const callback of captured.events.get("error")) callback({ error: new Error("Stale recorder error") });
+  for (const callback of captured.events.get("stop")) callback();
+  if (newerRecorder) {
+    // Isolate recorder identity protection from the cancellation flag as well.
+    captured.takeoverCancelled = false;
+    for (const callback of captured.events.get("dataavailable")) callback({ data: { size: 1 } });
+    for (const callback of captured.events.get("error")) callback({ error: new Error("Retired recorder error") });
+    for (const callback of captured.events.get("stop")) callback();
+    captured.takeoverCancelled = true;
+    assert.equal(newerRecorder.state, "recording", "Older cancelled startup cannot stop a newer recorder");
+    assert.equal(newerRecorder.stopCalls, 0);
+    assert.equal(env.recordingState.recorder, newerRecorder);
+    assert.deepEqual(env.recordingState.chunks, ["newer-session-chunk"]);
+    assert.equal(env.recordingState.elapsedTimer, 881);
+    assert.equal(env.elements.recordingRig.className, "newer-recording");
+    assert.equal(env.elements.recordingStatus.textContent, "Newer session live");
+    assert.equal(env.elements.recordingStart.disabled, true, "Older cleanup cannot re-enable a newer session's controls");
+  } else {
+    assert.equal(env.recordingState.recorder, null);
+    assert.equal(env.recordingState.chunks.length, 0);
+    assert.equal(env.recordingState.elapsedTimer, null);
+    assert.equal(env.elements.recordingStart.disabled, false);
+    assert.match(env.elements.recordingStatus.textContent, /startup cancelled/);
+  }
+  if (replacementSource) {
+    assert.equal(env.audioEngine.decks.A.source, replacementSource, "Queued recorder events cannot stop replacement playback");
+    assert.equal(replacementSource.stopped, undefined);
+    assert.equal(env.deckState.A.playing, true);
+  }
+}
+
+function localAudioFile(name = "Imported.wav") {
+  return { name, type: "audio/wav", arrayBuffer: async () => ({ duration: 100, signal: .2 }) };
+}
+
+// Artwork preparation can keep library entries, never take back a newer deck generation.
+for (const action of ["stop", "eject", "replace", "same-state-play", "reopen", "before-picker"]) {
+  const { env } = await createDeckHarness();
+  const artwork = deferred();
+  env.embeddedArtworkUrl = () => artwork.promise;
+  env.requestTrackAudio("A");
+  if (action === "before-picker") await env.startDeckAudio("A");
+  const input = { files: [localAudioFile()], value: "old-selection" };
+  const importing = env.handleDriveUpload({ target: input });
+  await settle();
+  if (action === "stop") env.stopDeckAudio("A");
+  if (action === "eject") env.ejectDeck("A");
+  if (action === "replace") {
+    env.tracks.push({ id: "manual-new", title: "Manual new", bpm: 125, audioBuffer: { duration: 100, signal: .2 } });
+    env.loadTrack("A", "manual-new");
+    await env.startDeckAudio("A");
+  }
+  if (action === "same-state-play") await env.startDeckAudio("A");
+  if (action === "reopen") {
+    env.stopTakeoverDecks();
+    env.audioEngine.shutdown = false;
+    env.audioEngine.lifecycleGeneration += 1;
+    await env.startDeckAudio("A");
+  }
+  const currentState = env.deckState.A;
+  const currentGeneration = env.audioEngine.decks.A.playbackGeneration;
+  const currentSource = env.audioEngine.decks.A.source;
+  env.elements.importStatus.textContent = "Newer manual status";
+  env.elements.search.value = "newer filter";
+  artwork.resolve("data:image/png;base64,owned");
+  await importing;
+  assert.ok(env.tracks.some(track => track.title === "Imported"), `${action} retains library additions`);
+  assert.equal(env.deckState.A, currentState, `${action} prevents stale artwork from replacing deck state`);
+  assert.equal(env.audioEngine.decks.A.playbackGeneration, currentGeneration);
+  assert.equal(env.audioEngine.decks.A.source, currentSource);
+  if (currentSource) assert.equal(currentSource.stopped, undefined);
+  assert.equal(env.elements.importStatus.textContent, "Newer manual status", `${action} preserves newer import UI`);
+  assert.equal(env.elements.search.value, "newer filter");
+}
+
+// Play's file picker is tied to its original deck, not later mutable picker selection.
+{
+  const { env } = await createDeckHarness();
+  const artwork = deferred();
+  env.embeddedArtworkUrl = () => artwork.promise;
+  const originalB = env.deckState.B;
+  env.requestTrackAudio("A");
+  env.selectedImportDeck = "B";
+  const importing = env.handleDriveUpload({ target: { files: [localAudioFile("For-A.wav")], value: "picked" } });
+  await settle();
+  env.selectedImportDeck = "B";
+  env.pendingPlaybackDeck = "B";
+  artwork.resolve("");
+  await importing;
+  assert.equal(env.deckState.A.title, "For-A");
+  assert.equal(env.deckState.A.playing, true, "Autoplay intent is captured in the request");
+  assert.equal(env.deckState.B, originalB, "Picker selection drift cannot redirect loading to B");
+}
+
+// Old upload completion/error/finally cannot clear a newer picker request or UI.
+for (const outcome of ["complete", "error"]) {
+  const { env } = await createDeckHarness();
+  const artwork = deferred();
+  env.embeddedArtworkUrl = () => artwork.promise;
+  env.requestTrackAudio("A");
+  const importing = env.handleDriveUpload({ target: { files: [localAudioFile()], value: "old" } });
+  await settle();
+  env.requestTrackAudio("B");
+  const newerRequest = env.pendingAudioRequest;
+  const status = env.elements.importStatus.textContent;
+  if (outcome === "complete") artwork.resolve("");
+  else artwork.reject(new Error("Old artwork error"));
+  await importing;
+  assert.equal(env.pendingAudioRequest, newerRequest);
+  assert.equal(env.pendingPlaybackDeck, "B");
+  assert.equal(env.elements.importStatus.textContent, status);
+  assert.equal(env.deckState.A.id, "a");
+  assert.equal(env.deckState.B.id, "b");
+}
+
+// Overlapping uploads keep both library additions; only the latest owns loading and UI.
+{
+  const { env } = await createDeckHarness();
+  const firstArtwork = deferred();
+  const secondArtwork = deferred();
+  env.embeddedArtworkUrl = file => file.name === "First.wav" ? firstArtwork.promise : secondArtwork.promise;
+  env.selectedImportDeck = "A";
+  env.selectDeckAudioFiles(env.elements.driveUpload);
+  const first = env.handleDriveUpload({ target: { files: [localAudioFile("First.wav")], value: "first" } });
+  await settle();
+  env.selectedImportDeck = "B";
+  env.selectDeckAudioFiles(env.elements.folderUpload);
+  const second = env.handleDriveUpload({ target: { files: [localAudioFile("Second.wav")], value: "second" } });
+  secondArtwork.resolve("");
+  await second;
+  const currentB = env.deckState.B;
+  const status = env.elements.importStatus.textContent;
+  firstArtwork.resolve("");
+  await first;
+  assert.equal(env.deckState.A.id, "a");
+  assert.equal(env.deckState.B, currentB);
+  assert.equal(env.deckState.B.title, "Second");
+  assert.equal(env.elements.importStatus.textContent, status);
+  assert.equal(env.elements.driveButton.disabled, false);
+  const imported = env.tracks.filter(track => track.platform === "Private Drive Upload");
+  assert.equal(imported.length, 2);
+  assert.equal(new Set(imported.map(track => track.id)).size, 2);
+}
+
+// Stale preparation errors cannot stop a newer manual playback or rewrite its status.
+{
+  const { env } = await createDeckHarness();
+  const artwork = deferred();
+  env.embeddedArtworkUrl = () => artwork.promise;
+  env.requestTrackAudio("A");
+  const importing = env.handleDriveUpload({ target: { files: [localAudioFile()], value: "old" } });
+  await settle();
+  await env.startDeckAudio("A");
+  const current = env.audioEngine.decks.A.source;
+  env.elements.importStatus.textContent = "New manual playback";
+  artwork.reject(new Error("Late artwork failure"));
+  await importing;
+  assert.equal(env.audioEngine.decks.A.source, current);
+  assert.equal(current.stopped, undefined);
+  assert.equal(env.deckState.A.playing, true);
+  assert.equal(env.elements.importStatus.textContent, "New manual playback");
+}
+
+// The adjacent async URL import uses the same captured deck ownership boundary.
+for (const action of ["replace", "selection-drift"]) {
+  const { env } = await createDeckHarness();
+  const response = deferred();
+  env.fetch = () => response.promise;
+  env.elements.musicUrl.value = "https://example.com/owned-track";
+  const importing = env.importTrack({ preventDefault() {} });
+  await settle();
+  let manual;
+  if (action === "replace") {
+    await env.startDeckAudio("A");
+    manual = env.audioEngine.decks.A.source;
+    env.elements.importStatus.textContent = "New manual URL-import status";
+  } else env.selectedImportDeck = "B";
+  response.resolve({ ok: true, json: async () => ({ title: "Resolved track", artist: "Owned artist", platform: "Owned catalog" }) });
+  await importing;
+  assert.ok(env.tracks.some(track => track.title === "Resolved track"));
+  if (manual) {
+    assert.equal(env.audioEngine.decks.A.source, manual);
+    assert.equal(manual.stopped, undefined);
+    assert.equal(env.elements.importStatus.textContent, "New manual URL-import status");
+  } else {
+    assert.equal(env.deckState.A.title, "Resolved track");
+    assert.equal(env.deckState.B.id, "b");
+  }
+}
+
+// Pre-handoff effects belong to both decks before openTransitionPlan queues any work.
+for (const effect of ["percussion", "drum-drop"]) {
+  for (const replacedDeck of ["A", "B"]) {
+    const harness = await createDeckHarness();
+    const { env, sources } = harness;
+    await env.startDeckAudio("A");
+    const makePlan = env.createTransitionPlan;
+    env.createTransitionPlan = () => ({
+      ...makePlan(), loopLock: false, hardCut: false, effectWindow: 500, transition: 2000, beatSeconds: .5,
+      percussion: effect === "percussion", drumDrop: effect === "drum-drop"
+    });
+    env.scheduleAutomatedTransition({});
+    const owner = env.recordingState.pendingHandoff;
+    assert.ok(owner, "Transition owner exists before pre-handoff effects are opened");
+    await harness.nextTimer();
+    const earlyEffects = env.recordingState.effectTimers.slice();
+    const lateStart = env.recordingState.autoMixTimer;
+    assert.ok(earlyEffects.length > 0);
+    const automationGeneration = env.recordingState.automationGeneration;
+    env.tracks.push({ id: "effect-replacement", title: "Replacement", bpm: 125, audioBuffer: { duration: 100, signal: .2 } });
+    env.loadTrack(replacedDeck, "effect-replacement");
+    await env.startDeckAudio(replacedDeck);
+    if (replacedDeck === "A") await env.startDeckAudio("B");
+    env.setStemState("B", "hats", false, true);
+    const replacement = env.audioEngine.decks[replacedDeck].source;
+    const count = sources.length;
+    assert.equal(owner.cancelled, true);
+    assert.equal(env.recordingState.pendingHandoff, null);
+    assert.equal(env.recordingState.automationGeneration, automationGeneration, "The regression does not rely on stopping all automation");
+    for (const timer of earlyEffects) await harness.runTimer(timer, true);
+    await harness.runTimer(lateStart, true);
+    assert.equal(sources.length, count, `Stale pre-handoff ${effect} cannot generate audio after Deck ${replacedDeck} replacement`);
+    assert.equal(env.audioEngine.decks.B.stems.hats, false, `Stale pre-handoff ${effect} cannot restore drums on replacement playback`);
+    assert.equal(env.audioEngine.decks.B.filters.highShelf.gain.value, -26);
+    assert.equal(env.audioEngine.decks[replacedDeck].source, replacement);
+    assert.equal(replacement.stopped, undefined);
+  }
+}
+
+// Authorized incoming startup advances the same owner without dropping its queued effects.
+{
+  const harness = await createDeckHarness();
+  const { env, sources, timers } = harness;
+  await env.startDeckAudio("A");
+  const makePlan = env.createTransitionPlan;
+  env.createTransitionPlan = () => ({
+    ...makePlan(), loopLock: false, hardCut: false, percussion: true, effectWindow: 1, transition: 1000, beatSeconds: .5
+  });
+  env.scheduleAutomatedTransition({});
+  const owner = env.recordingState.pendingHandoff;
+  const preparedGeneration = owner.incomingGeneration;
+  await harness.nextTimer();
+  const percussion = env.recordingState.effectTimers.find(timer => timers.get(timer).delay === 250);
+  assert.ok(percussion);
+  await harness.runTimer(env.recordingState.autoMixTimer);
+  assert.equal(env.recordingState.pendingHandoff, owner);
+  assert.equal(owner.cancelled, false);
+  assert.ok(owner.incomingGeneration > preparedGeneration);
+  assert.equal(owner.incomingGeneration, env.audioEngine.decks.B.playbackGeneration);
+  const count = sources.length;
+  await harness.runTimer(percussion);
+  assert.ok(sources.length > count, "Owned percussion remains authorized across normal incoming startup");
+  env.stopAutomatedMix();
+  await settle();
+}
+
+// Replacing outgoing during pending incoming decode cancels that decode as well.
+{
+  const harness = await createDeckHarness();
+  const { env, sources } = harness;
+  await env.startDeckAudio("A");
+  const decode = deferred();
+  env.audioEngine.context.decodeAudioData = () => decode.promise;
+  env.deckState.B = { id: "pending-incoming", title: "Pending", bpm: 120, audioAsset: { file: { arrayBuffer: async () => new ArrayBuffer(4) } } };
+  env.scheduleAutomatedTransition({});
+  await harness.nextTimer();
+  await harness.nextTimer();
+  const owner = env.recordingState.pendingHandoff;
+  assert.equal(owner.outgoingSource.loop, true);
+  env.tracks.push({ id: "outgoing-replacement", title: "Manual A", bpm: 125, audioBuffer: { duration: 100, signal: .2 } });
+  env.loadTrack("A", "outgoing-replacement");
+  await env.startDeckAudio("A");
+  const current = env.audioEngine.decks.A.source;
+  decode.resolve({ duration: 100, signal: .2 });
+  await settle();
+  assert.equal(env.recordingState.pendingHandoff, null);
+  assert.equal(env.deckState.B.playing, false);
+  assert.equal(env.audioEngine.decks.B.source, null);
+  assert.equal(sources.length, 2, "Incoming decode cannot create late audio after outgoing ownership was replaced");
+  assert.equal(env.audioEngine.decks.A.source, current);
+  assert.equal(current.stopped, undefined);
+  assert.equal(owner.outgoingSource.loop, false);
+}
+
+console.log("DJ continuity lifecycle regressions: program-only recovery, generation ownership, captured cleanup, source-only handoffs, startup recorder cancellation, import ownership, and terminal shutdown passed.");
 
 console.log("HALO continuity guard contracts: predictive pre-roll, silence watchdog, filler bridge, and monitoring hooks behave as expected.");

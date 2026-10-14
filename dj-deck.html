@@ -2017,6 +2017,9 @@
 
     let selectedImportDeck = "A";
     let pendingPlaybackDeck = null;
+    let pendingAudioRequest = null;
+    let audioImportGeneration = 0;
+    let trackImportGeneration = 0;
     let selectedPickerDeck = "A";
     let trackQueue = [];
     let currentRecommendation = null;
@@ -3745,11 +3748,13 @@
       const context = audioEngine.context;
       const channel = audioEngine.decks[deckId];
       const sources = channel ? [channel.source, ...Object.values(channel.stemSources || {})].filter(Boolean) : [];
+      const tap = channel?.recordingTap;
       if (audioEngine.shutdown || context?.state !== "running" || !deckState[deckId]?.playing
-        || !sources.some(source => !source.deckEnded) || channel.sourceStartAt == null
-        || context.currentTime < channel.sourceStartAt || !channel.analyser) return false;
-      const samples = new Float32Array(channel.analyser.fftSize);
-      channel.analyser.getFloatTimeDomainData(samples);
+        || !tap || tap.generation !== channel.playbackGeneration || tap.state !== deckState[deckId]
+        || !sources.some(source => tap.sources.has(source) && !source.deckEnded) || channel.sourceStartAt == null
+        || context.currentTime < channel.sourceStartAt) return false;
+      const samples = tap.data;
+      tap.analyser.getFloatTimeDomainData(samples);
       const rms = Math.sqrt(samples.reduce((sum, value) => sum + value * value, 0) / samples.length);
       if (rms < .005) return false;
       return !requireRoute || (channel.gain?.gain.value > .05 && channel.trim?.gain.value > .05
@@ -3770,6 +3775,11 @@
           }
         }
         recordingState.cancelFade?.();
+        if (deckState[pending.incomingDeck] === pending.incomingState
+          && (audioEngine.decks[pending.incomingDeck].playbackGeneration || 0) === pending.incomingGeneration) {
+          stopDeckAudio(pending.incomingDeck);
+          updateDeck(pending.incomingDeck);
+        }
       }
       pending.cancelWait?.();
     }
@@ -3796,28 +3806,47 @@
 
     function deckHandoffCurrent(pending) {
       return !audioEngine.shutdown && !pending.cancelled
+        && recordingState.pendingHandoff === pending
+        && audioEngine.lifecycleGeneration === pending.lifecycle
         && recordingState.automationGeneration === pending.automationGeneration
+        && recordingState.recorder === pending.recorder
         && deckState[pending.incomingDeck] === pending.incomingState
-        && audioEngine.decks[pending.incomingDeck].playbackGeneration === pending.incomingGeneration
-        && audioEngine.decks[pending.outgoingDeck].playbackGeneration === pending.outgoingGeneration
+        && deckState[pending.outgoingDeck] === pending.outgoingState
+        && (audioEngine.decks[pending.incomingDeck].playbackGeneration || 0) === pending.incomingGeneration
+        && (audioEngine.decks[pending.outgoingDeck].playbackGeneration || 0) === pending.outgoingGeneration
         && recordingState.recorder?.state === "recording";
     }
 
+    function deckPlaybackAbort() {
+      const error = new Error("Deck playback was cancelled.");
+      error.name = "AbortError";
+      return error;
+    }
+
+    function deckPlaybackFailureCurrent(error, deckId = error.playbackOwner?.deckId) {
+      const owner = error.playbackOwner;
+      return Boolean(owner && owner.deckId === deckId && !audioEngine.shutdown
+        && owner.lifecycle === audioEngine.lifecycleGeneration
+        && owner.state === deckState[deckId]
+        && owner.generation === audioEngine.decks[deckId].playbackGeneration);
+    }
+
     async function decodeDeckAsset(asset, context, isCurrent) {
+      if (!isCurrent()) throw deckPlaybackAbort();
       if (asset.buffer) return asset.buffer;
       let bytes;
       if (asset.file) {
         bytes = await asset.file.arrayBuffer();
-        if (!isCurrent()) return null;
+        if (!isCurrent()) throw deckPlaybackAbort();
       } else {
         const response = await fetch(asset.url, { credentials: "same-origin" });
-        if (!isCurrent()) return null;
+        if (!isCurrent()) throw deckPlaybackAbort();
         if (!response.ok) throw new Error("Stem pre-roll failed.");
         bytes = await response.arrayBuffer();
-        if (!isCurrent()) return null;
+        if (!isCurrent()) throw deckPlaybackAbort();
       }
       const buffer = await context.decodeAudioData(bytes);
-      if (!isCurrent()) return null;
+      if (!isCurrent()) throw deckPlaybackAbort();
       asset.buffer = buffer;
       return buffer;
     }
@@ -3825,22 +3854,31 @@
     async function prepareDeckContinuityPreroll(deckId) {
       const state = deckState[deckId];
       if (audioEngine.shutdown || !audioEngine.context || !state || state.empty) return false;
+      const audioAsset = state.audioAsset;
+      const stemAssets = state.stemAssets;
+      const lifecycle = audioEngine.lifecycleGeneration;
       const generation = audioEngine.decks[deckId].playbackGeneration || 0;
       const isCurrent = () => !audioEngine.shutdown && deckState[deckId] === state
+        && audioEngine.lifecycleGeneration === lifecycle
+        && state.audioAsset === audioAsset && state.stemAssets === stemAssets
         && (audioEngine.decks[deckId].playbackGeneration || 0) === generation;
       try {
-        if (state.audioAsset && !state.audioBuffer) {
-          const buffer = await decodeDeckAsset(state.audioAsset, audioEngine.context, isCurrent);
-          if (!isCurrent()) return false;
+        if (audioAsset && !state.audioBuffer) {
+          const buffer = await decodeDeckAsset(audioAsset, audioEngine.context, isCurrent);
+          if (!isCurrent()) throw deckPlaybackAbort();
           state.audioBuffer = buffer;
           if (buffer) state.duration = buffer.duration;
         }
-        if (state.stemAssets) {
-          await Promise.all(Object.values(state.stemAssets).map(asset => decodeDeckAsset(asset, audioEngine.context, isCurrent)));
-          if (!isCurrent()) return false;
+        if (stemAssets) {
+          await Promise.all(Object.values(stemAssets).map(asset => decodeDeckAsset(asset, audioEngine.context, isCurrent)));
+          if (!isCurrent()) throw deckPlaybackAbort();
         }
         return deckContinuityReady(deckId);
-      } catch { return false; }
+      } catch (error) {
+        if (!isCurrent()) throw deckPlaybackAbort();
+        if (error.name === "AbortError") throw error;
+        return false;
+      }
     }
 
     function deckContinuityBoundaryState() {
@@ -3892,14 +3930,14 @@
         getLevelDb: deckContinuityLevelDb,
         getBoundaryState: deckContinuityBoundaryState,
         onPreroll: detail => {
-          prepareDeckContinuityPreroll(detail.incomingDeckId);
+          prepareDeckContinuityPreroll(detail.incomingDeckId).catch(() => {});
           window.haloStats?.track("dj_continuity_preroll", {
             deck: detail.activeDeckId,
             incoming: detail.incomingDeckId,
             remainingSec: Number(detail.remainingSec || 0)
           });
         },
-        onCriticalBoundary: detail => { prepareDeckContinuityPreroll(detail.incomingDeckId); },
+        onCriticalBoundary: detail => { prepareDeckContinuityPreroll(detail.incomingDeckId).catch(() => {}); },
         startFiller: startDeckContinuityFiller,
         stopFiller: stopDeckContinuityFiller,
         onTelemetry: () => {},
@@ -4163,12 +4201,26 @@
       channel.filters.lowPass.frequency.exponentialRampToValueAtTime(20000, now + seconds);
     }
 
-    function stopDeckAudio(deckId) {
+    function stopDeckAudio(deckId, authorizedHandoff = null) {
       const channel = audioEngine.decks[deckId];
+      audioEngine.halo?.clearLiveIntelligenceRestore();
+      const pending = recordingState.pendingHandoff;
+      // Only the transition's own incoming start may advance its captured generation.
+      const authorizedStart = authorizedHandoff && pending === authorizedHandoff
+        && pending.incomingDeck === deckId && deckHandoffCurrent(pending);
       channel.playbackGeneration = (channel.playbackGeneration || 0) + 1;
       deckState[deckId].playing = false;
-      const pending = recordingState.pendingHandoff;
-      if (pending && (pending.incomingDeck === deckId || pending.outgoingDeck === deckId)) cancelDeckHandoff(pending);
+      if (authorizedStart) pending.incomingGeneration = channel.playbackGeneration;
+      else if (pending && (pending.incomingDeck === deckId || pending.outgoingDeck === deckId)) cancelDeckHandoff(pending);
+      const tap = channel.recordingTap;
+      if (tap) {
+        for (const node of tap.inputs) {
+          try { node.disconnect(tap.analyser); } catch {}
+        }
+        try { tap.analyser.disconnect(); } catch {}
+        try { tap.sink.disconnect(); } catch {}
+        channel.recordingTap = null;
+      }
       const envelopes = channel.sourceEnvelopes || new Map();
       if (!channel.retiringSources) channel.retiringSources = new Map();
       const retiring = channel.retiringSources;
@@ -4184,7 +4236,7 @@
           try { stemGain?.disconnect(); } catch {}
           retiring.delete(source);
         };
-        if (audioEngine.shutdown || !audioEngine.halo) disconnect();
+        if (source.deckEnded || audioEngine.shutdown || !audioEngine.halo) disconnect();
         else {
           retiring.set(source, { envelope, stemGain });
           source.addEventListener?.("ended", disconnect, { once: true });
@@ -4273,15 +4325,20 @@
       oscillator.stop(when + duration + .01);
     }
 
-    async function startDeckAudio(deckId, beatOffset = 0) {
-      if (audioEngine.shutdown) return false;
-      stopDeckAudio(deckId);
+    async function startDeckAudio(deckId, beatOffset = 0, handoffOwner = null) {
+      if (audioEngine.shutdown) throw deckPlaybackAbort();
+      if (handoffOwner && !deckHandoffCurrent(handoffOwner)) throw deckPlaybackAbort();
+      stopDeckAudio(deckId, handoffOwner);
       const channel = audioEngine.decks[deckId];
       const state = deckState[deckId];
+      const audioAsset = state.audioAsset;
+      const stemAssets = state.stemAssets;
       const generation = channel.playbackGeneration;
       const lifecycle = audioEngine.lifecycleGeneration;
       const isCurrent = () => !audioEngine.shutdown && audioEngine.lifecycleGeneration === lifecycle
-        && channel.playbackGeneration === generation && deckState[deckId] === state;
+        && channel.playbackGeneration === generation && deckState[deckId] === state
+        && state.audioAsset === audioAsset && state.stemAssets === stemAssets
+        && (!handoffOwner || deckHandoffCurrent(handoffOwner));
       state.playing = true;
       // Mute the room input before any await; repeat once the engine exists on first playback.
       audioEngine.halo?.setLiveIntelligenceInputState(false);
@@ -4289,34 +4346,64 @@
       let halo;
       try {
         context = await ensureAudio(isCurrent);
-        if (!isCurrent() || !context) return false;
+        if (!isCurrent() || !context) throw deckPlaybackAbort();
         halo = audioEngine.halo;
         halo?.setLiveIntelligenceInputState(false);
         channel.stabilizesAt = 0;
         const started = await startDeckAudioSources(context, deckId, beatOffset, isCurrent);
-        if (!isCurrent()) return false;
+        if (!isCurrent()) throw deckPlaybackAbort();
         return started;
       } catch (error) {
-        if (!isCurrent()) return false;
+        if (!isCurrent()) throw deckPlaybackAbort();
+        if (error.name === "AbortError") throw error;
         stopDeckAudio(deckId);
-        throw error;
+        const failure = new Error(error.message || "The deck could not start.");
+        failure.name = error.name || "Error";
+        failure.playbackOwner = { deckId, state, lifecycle, generation: channel.playbackGeneration };
+        throw failure;
       } finally {
         if (isCurrent() && context) halo?.scheduleLiveIntelligenceRestore(Math.max(0, (channel.stabilizesAt || 0) - context.currentTime));
       }
     }
 
+    function createDeckRecordingTap(context, deckId) {
+      const channel = audioEngine.decks[deckId];
+      const analyser = context.createAnalyser();
+      const sink = context.createGain();
+      analyser.fftSize = 512;
+      analyser.smoothingTimeConstant = 0;
+      sink.gain.value = 0;
+      analyser.connect(sink);
+      sink.connect(context.destination);
+      const tap = {
+        analyser, sink, data: new Float32Array(analyser.fftSize), sources: new Set(), inputs: new Set(),
+        generation: channel.playbackGeneration, state: deckState[deckId]
+      };
+      channel.recordingTap = tap;
+      return tap;
+    }
+
     function startDeckSource(context, deckId, source, destination, startAt) {
       const channel = audioEngine.decks[deckId];
+      const tap = channel.recordingTap || createDeckRecordingTap(context, deckId);
       channel.sourceStartAt = startAt;
       channel.startedAt = startAt;
       source.addEventListener?.("ended", () => { source.deckEnded = true; }, { once: true });
       if (!audioEngine.halo) {
         source.connect(destination);
         source.start(startAt, 0);
+        const signalNode = destination === channel.input ? source : destination;
+        signalNode.connect(tap.analyser);
+        tap.inputs.add(signalNode);
+        tap.sources.add(source);
         channel.stabilizesAt = Math.max(channel.stabilizesAt || 0, startAt);
         return;
       }
       const started = audioEngine.halo.startSourceWithFadeIn(source, destination, { when: startAt });
+      const signalNode = destination === channel.input ? started.envelope : destination;
+      signalNode.connect(tap.analyser);
+      tap.inputs.add(signalNode);
+      tap.sources.add(source);
       if (!channel.sourceEnvelopes) channel.sourceEnvelopes = new Map();
       channel.sourceEnvelopes.set(source, started.envelope);
       channel.stabilizesAt = Math.max(channel.stabilizesAt || 0, started.stabilizesAt);
@@ -4324,7 +4411,7 @@
 
     async function startDeckAudioSources(context, deckId, beatOffset, isCurrent) {
       const state = deckState[deckId];
-      if (!isCurrent()) return false;
+      if (!isCurrent()) throw deckPlaybackAbort();
       if (!state.audioBuffer && !state.audioAsset?.file && !state.stemAssets) {
         throw new Error("Select the song's audio file to play it in the deck. Library cards provide set-planning details, not the recording itself.");
       }
@@ -4342,7 +4429,7 @@
         elements.importStatus.classList.remove("is-error");
         elements.importStatus.textContent = `Preparing ${state.title} for first playback…`;
         const buffer = await decodeDeckAsset(state.audioAsset, context, isCurrent);
-        if (!isCurrent()) return false;
+        if (!isCurrent()) throw deckPlaybackAbort();
         state.audioBuffer = buffer;
         state.duration = state.audioBuffer.duration;
         elements.importStatus.textContent = `${state.title} is ready. Future plays start immediately.`;
@@ -4362,10 +4449,10 @@
         elements.importStatus.textContent = `Preparing ${state.title}'s private stems…`;
         const preparedStems = await Promise.all(Object.entries(state.stemAssets).map(async ([stemType, asset]) => {
           const buffer = await decodeDeckAsset(asset, context, isCurrent);
-          if (!isCurrent()) return null;
+          if (!isCurrent()) throw deckPlaybackAbort();
           return [stemType, buffer];
         }));
-        if (!isCurrent()) return false;
+        if (!isCurrent()) throw deckPlaybackAbort();
         const startAt = context.currentTime + Math.max(.045, beatOffset);
         const channel = audioEngine.decks[deckId];
         channel.stemSources = {};
@@ -4391,9 +4478,43 @@
       return true;
     }
 
+    function captureDeckImportTarget(deckId, autoPlay = false) {
+      return {
+        deckId, autoPlay, state: deckState[deckId],
+        generation: audioEngine.decks[deckId].playbackGeneration || 0,
+        lifecycle: audioEngine.lifecycleGeneration
+      };
+    }
+
+    function deckImportTargetCurrent(target) {
+      return !audioEngine.shutdown && audioEngine.lifecycleGeneration === target.lifecycle
+        && deckState[target.deckId] === target.state
+        && (audioEngine.decks[target.deckId].playbackGeneration || 0) === target.generation;
+    }
+
+    function selectDeckAudioFiles(input) {
+      if (audioEngine.shutdown) {
+        audioEngine.shutdown = false;
+        audioEngine.lifecycleGeneration += 1;
+      }
+      audioImportGeneration += 1;
+      pendingAudioRequest = captureDeckImportTarget(selectedImportDeck);
+      pendingPlaybackDeck = null;
+      input.click();
+    }
+
     function requestTrackAudio(deckId) {
+      if (audioEngine.shutdown) {
+        audioEngine.shutdown = false;
+        audioEngine.lifecycleGeneration += 1;
+      }
+      audioImportGeneration += 1;
       selectedImportDeck = deckId;
       pendingPlaybackDeck = deckId;
+      pendingAudioRequest = captureDeckImportTarget(deckId, true);
+      elements.driveButton.disabled = false;
+      elements.folderButton.disabled = false;
+      elements.driveButton.textContent = "Upload from Drive";
       document.querySelectorAll("[data-import-deck]").forEach(option => {
         option.setAttribute("aria-pressed", String(option.dataset.importDeck === deckId));
       });
@@ -4512,16 +4633,24 @@
     async function handleDriveUpload(event) {
       const files = [...event.target.files].filter(file => file.type.startsWith("audio/") || /\.(wav|mp3|m4a|aac|ogg|flac)$/i.test(file.name));
       if (!files.length) return;
-      elements.driveButton.disabled = true;
-      elements.folderButton.disabled = true;
-      elements.driveButton.textContent = "Indexing audio…";
-      elements.importStatus.classList.remove("is-error");
-      elements.importStatus.textContent = `Indexing ${files.length} audio file${files.length === 1 ? "" : "s"}…`;
+      const request = pendingAudioRequest || captureDeckImportTarget(selectedImportDeck, pendingPlaybackDeck === selectedImportDeck);
+      pendingAudioRequest = request;
+      const importGeneration = ++audioImportGeneration;
+      const requestCurrent = () => audioImportGeneration === importGeneration;
+      let deckOwner = request;
+      const showUi = deckImportTargetCurrent(deckOwner);
+      if (showUi) {
+        elements.driveButton.disabled = true;
+        elements.folderButton.disabled = true;
+        elements.driveButton.textContent = "Indexing audio…";
+        elements.importStatus.classList.remove("is-error");
+        elements.importStatus.textContent = `Indexing ${files.length} audio file${files.length === 1 ? "" : "s"}…`;
+      }
       try {
         const additions = await Promise.all(files.map(async (file, index) => {
           const folderPath = file.webkitRelativePath ? file.webkitRelativePath.split("/").slice(0, -1).join("/") : "";
           return {
-            id: `drive-${Date.now()}-${index}`,
+            id: `drive-${Date.now()}-${importGeneration}-${index}`,
             title: file.name.replace(/\.[^/.]+$/, ""),
             artist: folderPath || "Your Drive",
             bpm: 124,
@@ -4537,38 +4666,43 @@
         }));
         const artworkCount = additions.filter(track => track.artwork).length;
         tracks.unshift(...additions);
-        elements.search.value = "";
-        renderTracks();
-        loadTrack(selectedImportDeck, additions[0].id);
-        if (pendingPlaybackDeck === selectedImportDeck) {
-          const playbackDeck = selectedImportDeck;
-          const playbackState = deckState[playbackDeck];
-          const starting = startDeckAudio(playbackDeck);
-          const generation = audioEngine.decks[playbackDeck].playbackGeneration;
-          if (!await starting || deckState[playbackDeck] !== playbackState
-            || audioEngine.decks[playbackDeck].playbackGeneration !== generation) return;
-          updateDeck(playbackDeck);
-          elements.importStatus.textContent = `${additions[0].title} is playing on deck ${playbackDeck}.`;
-          showToast("Audio playing", `${additions[0].title} is now live on deck ${playbackDeck}.`);
+        renderTracks(elements.search.value);
+        window.haloStats?.track("upload_drive_audio", { file_count: additions.length, deck: request.deckId });
+        if (!requestCurrent() || !deckImportTargetCurrent(deckOwner)) return;
+        loadTrack(request.deckId, additions[0].id);
+        deckOwner = captureDeckImportTarget(request.deckId, request.autoPlay);
+        if (request.autoPlay) {
+          const starting = startDeckAudio(request.deckId);
+          deckOwner = captureDeckImportTarget(request.deckId, true);
+          if (!await starting || !requestCurrent() || !deckImportTargetCurrent(deckOwner)) return;
+          updateDeck(request.deckId);
+          elements.importStatus.textContent = `${additions[0].title} is playing on deck ${request.deckId}.`;
+          showToast("Audio playing", `${additions[0].title} is now live on deck ${request.deckId}.`);
         } else {
           elements.importStatus.textContent = `${additions.length} file${additions.length === 1 ? " is" : "s are"} indexed${artworkCount ? ` with ${artworkCount} embedded cover image${artworkCount === 1 ? "" : "s"}` : ""}. Audio prepares only when played.`;
           showToast("Drive audio indexed", artworkCount ? "Embedded MP3 cover art is loaded. Press play to prepare the audio." : "Press play to prepare only the loaded track.");
         }
-        window.haloStats?.track("upload_drive_audio", { file_count: additions.length, deck: selectedImportDeck });
       } catch (error) {
-        if (pendingPlaybackDeck) {
-          deckState[pendingPlaybackDeck].playing = false;
-          stopDeckAudio(pendingPlaybackDeck);
-          updateDeck(pendingPlaybackDeck);
-        }
+        if (!requestCurrent() || error.name === "AbortError") return;
+        if (error.playbackOwner) {
+          if (!deckPlaybackFailureCurrent(error, request.deckId)) return;
+          updateDeck(error.playbackOwner.deckId);
+        } else if (!deckImportTargetCurrent(deckOwner)) return;
         elements.importStatus.classList.add("is-error");
         elements.importStatus.textContent = "That file could not be decoded. Try WAV, MP3, M4A, AAC, OGG, or FLAC.";
       } finally {
-        elements.driveButton.disabled = false;
-        elements.folderButton.disabled = false;
-        elements.driveButton.textContent = "Upload from Drive";
-        pendingPlaybackDeck = null;
-        event.target.value = "";
+        if (pendingAudioRequest === request) {
+          pendingAudioRequest = null;
+          if (pendingPlaybackDeck === request.deckId) pendingPlaybackDeck = null;
+        }
+        if (requestCurrent()) {
+          if (showUi) {
+            elements.driveButton.disabled = false;
+            elements.folderButton.disabled = false;
+            elements.driveButton.textContent = "Upload from Drive";
+          }
+          event.target.value = "";
+        }
       }
     }
 
@@ -4623,7 +4757,7 @@
       updateRangeFill(slider);
       updateDeck(deckId);
       showToast(`Loaded to deck ${deckId}`, `${track.title} by ${track.artist} is ready from ${track.platform || "your library"}.`);
-      prepareDeckContinuityPreroll(deckId);
+      prepareDeckContinuityPreroll(deckId).catch(() => {});
       window.haloStats?.track("load_track", { deck: deckId, source_type: track.platform || "library" });
     }
 
@@ -5132,6 +5266,13 @@
       event.preventDefault();
       const url = elements.musicUrl.value.trim();
       if (!url) return;
+      const target = captureDeckImportTarget(selectedImportDeck);
+      const requestGeneration = ++audioImportGeneration;
+      const uiGeneration = ++trackImportGeneration;
+      const requestCurrent = () => audioImportGeneration === requestGeneration && deckImportTargetCurrent(target);
+      elements.driveButton.disabled = false;
+      elements.folderButton.disabled = false;
+      elements.driveButton.textContent = "Upload from Drive";
 
       elements.importButton.disabled = true;
       elements.importButton.textContent = "Reading song details…";
@@ -5148,7 +5289,7 @@
         if (!response.ok) throw new Error(data.message || "The song link could not be imported");
 
         const track = {
-          id: `imported-${Date.now()}`,
+          id: `imported-${Date.now()}-${uiGeneration}`,
           title: data.title || "Imported track",
           artist: data.artist || data.platform,
           artwork: data.artwork || "",
@@ -5161,20 +5302,23 @@
         };
 
         tracks.unshift(track);
-        elements.search.value = "";
-        renderTracks();
-        loadTrack(selectedImportDeck, track.id);
-        elements.musicUrl.value = "";
-        elements.importStatus.textContent = `${track.title} details are loaded to deck ${selectedImportDeck}. Press Play and select the audio file for in-deck playback.`;
-        showToast(`${data.platform} track imported`, "Cover art and credits are ready. Press Play to choose the song audio.");
+        renderTracks(elements.search.value);
         window.haloStats?.track("import_track", { success: true, source_type: data.platform || "music_service" });
+        if (!requestCurrent()) return;
+        loadTrack(target.deckId, track.id);
+        elements.musicUrl.value = "";
+        elements.importStatus.textContent = `${track.title} details are loaded to deck ${target.deckId}. Press Play and select the audio file for in-deck playback.`;
+        showToast(`${data.platform} track imported`, "Cover art and credits are ready. Press Play to choose the song audio.");
       } catch (error) {
+        if (!requestCurrent()) return;
         elements.importStatus.classList.add("is-error");
         elements.importStatus.textContent = error.message;
         window.haloStats?.track("import_track", { success: false });
       } finally {
-        elements.importButton.disabled = false;
-        elements.importButton.textContent = "Find cover + load song";
+        if (trackImportGeneration === uiGeneration) {
+          elements.importButton.disabled = false;
+          elements.importButton.textContent = "Find cover + load song";
+        }
       }
     }
 
@@ -5187,7 +5331,9 @@
         slider.value = 0;
         updateRangeFill(slider);
         updateDeck(deckId);
-        if (deckState[deckId].playing) startDeckAudio(deckId);
+        if (deckState[deckId].playing) startDeckAudio(deckId).catch(error => {
+          if (deckPlaybackFailureCurrent(error, deckId)) reportAudioHealth("error", error.message, { deckId });
+        });
       });
       showToast("Tempo locked", `Deck A and B are synchronized at ${Number(master).toFixed(1)} BPM.`);
       window.haloStats?.track("sync_decks");
@@ -5397,10 +5543,13 @@
     function queuePerformanceMove(callback, delay) {
       const generation = recordingState.automationGeneration;
       const pending = recordingState.pendingHandoff;
+      const decks = ["A", "B"].map(deckId => ({
+        deckId, state: deckState[deckId], generation: audioEngine.decks[deckId].playbackGeneration || 0
+      }));
       const timer = setTimeout(() => {
         if (audioEngine.shutdown || recordingState.automationGeneration !== generation) return;
-        if (pending && (pending.cancelled || deckState[pending.incomingDeck] !== pending.incomingState
-          || audioEngine.decks[pending.incomingDeck].playbackGeneration !== pending.incomingGeneration)) return;
+        if (pending ? !deckHandoffCurrent(pending) : decks.some(owner => deckState[owner.deckId] !== owner.state
+          || (audioEngine.decks[owner.deckId].playbackGeneration || 0) !== owner.generation)) return;
         recordingState.effectTimers = recordingState.effectTimers.filter(item => item !== timer);
         callback();
       }, Math.max(0, delay));
@@ -5686,19 +5835,31 @@
     }
 
     function scheduleAutomatedTransition(profile) {
+      cancelDeckHandoff();
       const automationGeneration = recordingState.automationGeneration;
+      const lifecycle = audioEngine.lifecycleGeneration;
+      const recorder = recordingState.recorder;
       const automationCurrent = () => !audioEngine.shutdown && recordingState.automationGeneration === automationGeneration
-        && recordingState.recorder?.state === "recording";
+        && audioEngine.lifecycleGeneration === lifecycle && recordingState.recorder === recorder && recorder?.state === "recording";
       const plan = createTransitionPlan(profile);
+      const outgoingDeck = recordingState.activeDeck;
+      const incomingDeck = outgoingDeck === "A" ? "B" : "A";
+      const pending = {
+        automationGeneration, lifecycle, recorder, incomingDeck, outgoingDeck,
+        incomingState: deckState[incomingDeck], outgoingState: deckState[outgoingDeck],
+        incomingGeneration: audioEngine.decks[incomingDeck].playbackGeneration || 0,
+        outgoingGeneration: audioEngine.decks[outgoingDeck].playbackGeneration || 0,
+        outgoingSource: audioEngine.decks[outgoingDeck].source,
+        startFader: Number(elements.crossfader.value), cancelled: false
+      };
+      recordingState.pendingHandoff = pending;
       recordingState.currentPlan = plan;
       recordingState.transitionHistory.push(plan.style);
       updateTakeoverQualityControl({ transition: plan.recipe });
       renderBreathPlan({ transitionBars: plan.bars, vocalRevealBars: plan.bars, bridgeElement: plan.bridgeElement, transitionCharacter: plan.character, breathPlan: plan.breathPlan });
       setPerformancePhase("Protected groove", plan.cleanPlay, `${modeProfiles[djMode].policy} ${plan.name} is prepared but cannot begin until the record earns its exit.`);
       recordingState.autoMixTimer = setTimeout(async () => {
-        if (!automationCurrent()) return;
-        const outgoingDeck = recordingState.activeDeck;
-        const incomingDeck = outgoingDeck === "A" ? "B" : "A";
+        if (!automationCurrent() || !deckHandoffCurrent(pending)) return;
         openTransitionPlan(plan, outgoingDeck, incomingDeck);
         recordingState.loopSource = plan.loopLock ? audioEngine.decks[outgoingDeck].source : null;
         setActiveBreathStage("release");
@@ -5708,25 +5869,15 @@
         window.haloStats?.track("perform_ai_transition", { dj: takeoverSession.dj, style: plan.style, bars: plan.bars, curve: plan.curve });
 
         recordingState.autoMixTimer = setTimeout(async () => {
-          if (!automationCurrent()) return;
+          if (!automationCurrent() || !deckHandoffCurrent(pending)) return;
           const targetValue = incomingDeck === "A" ? 0 : 100;
-          let pending;
           try {
             // Compute beat-phase offset for strategies that need phase-locked starts.
             const offset = (plan.beatMatch || plan.loopLock)
               ? beatPhaseOffset(outgoingDeck, deckState[incomingDeck].bpm)
               : 0;
             if (plan.hardCut) setStemState(incomingDeck, "vocals", true, true);
-            const starting = startDeckAudio(incomingDeck, offset);
-            pending = {
-              automationGeneration, incomingDeck, outgoingDeck,
-              incomingState: deckState[incomingDeck],
-              incomingGeneration: audioEngine.decks[incomingDeck].playbackGeneration,
-              outgoingGeneration: audioEngine.decks[outgoingDeck].playbackGeneration,
-              outgoingSource: audioEngine.decks[outgoingDeck].source,
-              startFader: Number(elements.crossfader.value), cancelled: false
-            };
-            recordingState.pendingHandoff = pending;
+            const starting = startDeckAudio(incomingDeck, offset, pending);
             scheduleBreathStages(plan);
             const started = await starting;
             if (!deckHandoffCurrent(pending)) return;
@@ -5747,7 +5898,12 @@
             if (!deckHandoffCurrent(pending)) return;
             if (!routed) throw new Error("The incoming master route could not be confirmed.");
           } catch (error) {
+            if (error.name === "AbortError") {
+              if (recordingState.pendingHandoff === pending) cancelDeckHandoff(pending);
+              return;
+            }
             if (!automationCurrent() || (pending && deckState[incomingDeck] !== pending.incomingState)) return;
+            if (error.playbackOwner ? !deckPlaybackFailureCurrent(error, incomingDeck) : !pending || !deckHandoffCurrent(pending)) return;
             cancelDeckHandoff(pending);
             try { if (recordingState.loopSource) recordingState.loopSource.loop = false; } catch {}
             recordingState.loopSource = null;
@@ -5783,11 +5939,18 @@
           document.querySelector("#tracksPlayed").textContent = String(recordingState.playedTrackIds.size);
 
           let nextTrackPrepared = false;
+          let preparedState;
+          let preparedGeneration;
           try {
-            nextTrackPrepared = await prepareAutomatedDeck(outgoingDeck);
-            if (!automationCurrent()) return;
+            const preparing = prepareAutomatedDeck(outgoingDeck);
+            preparedState = deckState[outgoingDeck];
+            preparedGeneration = audioEngine.decks[outgoingDeck].playbackGeneration;
+            nextTrackPrepared = await preparing;
+            if (!automationCurrent() || deckState[outgoingDeck] !== preparedState
+              || audioEngine.decks[outgoingDeck].playbackGeneration !== preparedGeneration) return;
           } catch (error) {
-            if (!automationCurrent()) return;
+            if (!automationCurrent() || deckState[outgoingDeck] !== preparedState
+              || audioEngine.decks[outgoingDeck].playbackGeneration !== preparedGeneration) return;
             deckState[outgoingDeck].playing = false;
             stopDeckAudio(outgoingDeck);
             updateDeck(outgoingDeck);
@@ -5830,6 +5993,7 @@
 
     function stopAutomatedMix() {
       recordingState.automationGeneration = (recordingState.automationGeneration || 0) + 1;
+      audioEngine.halo?.clearLiveIntelligenceRestore();
       const pending = recordingState.pendingHandoff;
       cancelDeckHandoff(pending);
       if (pending && audioEngine.decks[pending.incomingDeck].playbackGeneration === pending.incomingGeneration) {
@@ -5864,6 +6028,20 @@
     function stopTakeoverDecks() {
       audioEngine.shutdown = true;
       audioEngine.lifecycleGeneration = (audioEngine.lifecycleGeneration || 0) + 1;
+      audioImportGeneration += 1;
+      trackImportGeneration += 1;
+      pendingPlaybackDeck = null;
+      if (pendingAudioRequest || elements.driveButton.disabled || elements.importButton.disabled) {
+        elements.importStatus.textContent = "Pending deck loads cancelled. Choose audio again when ready.";
+      }
+      elements.driveButton.disabled = false;
+      elements.folderButton.disabled = false;
+      elements.driveButton.textContent = "Upload from Drive";
+      elements.importButton.disabled = false;
+      elements.importButton.textContent = "Find cover + load song";
+      clearInterval(recordingState.elapsedTimer);
+      recordingState.elapsedTimer = null;
+      elements.recordingStart.disabled = false;
       continuityState.guard?.destroy();
       continuityState.guard = null;
       stopAutomatedMix();
@@ -5889,8 +6067,14 @@
       ["A", "B"].forEach(deckId => {
         deckState[deckId].playing = false;
         stopDeckAudio(deckId);
+        setCueMonitor(deckId, false);
         updateDeck(deckId);
       });
+    }
+
+    function shutdownDeckPage() {
+      if (recordingState.recorder && recordingState.recorder.state !== "inactive") finishTakeoverRecording("stopped");
+      else stopTakeoverDecks();
     }
 
     function finishTakeoverRecording(reason = "complete") {
@@ -5934,11 +6118,28 @@
       return { extension: "webm", label: "WebM/Opus" };
     }
 
+    function cancelTakeoverStartupRecorder(recorder, lifecycle) {
+      if (!recorder) return;
+      recorder.takeoverCancelled = true;
+      try { if (recorder.state !== "inactive") recorder.stop(); } catch {}
+      if (recordingState.recorder !== recorder || audioEngine.lifecycleGeneration !== lifecycle) return;
+      recordingState.recorder = null;
+      recordingState.chunks = [];
+      recordingState.startedAt = 0;
+      clearInterval(recordingState.elapsedTimer);
+      recordingState.elapsedTimer = null;
+      elements.recordingStart.disabled = false;
+      elements.recordingRig.className = "recording-rig panel is-ready";
+      elements.recordingStatus.textContent = "Recording startup cancelled. Start a new set when the decks are ready.";
+      elements.recordingNote.textContent = "Replacement playback was preserved.";
+    }
+
     async function startTakeoverRecording() {
       if (!takeoverSession) return;
       audioEngine.shutdown = false;
       const lifecycle = ++audioEngine.lifecycleGeneration;
       const isCurrent = () => !audioEngine.shutdown && audioEngine.lifecycleGeneration === lifecycle;
+      let startingRecorder = null;
       elements.recordingStart.disabled = true;
       elements.recordingStatus.textContent = "Building the complete DJ sequence before opening the master channel…";
 
@@ -5952,15 +6153,18 @@
         if (missingDecks.length) throw new Error(`Load playable audio on Deck ${missingDecks.join(" and Deck ")} before starting the automated set.`);
 
         const recorder = createCompatibleRecorder(audioEngine.recordingDestination.stream);
+        startingRecorder = recorder;
         recordingState.mimeType = recorder.mimeType || "";
         recordingState.recorder = recorder;
         recordingState.chunks = [];
         recordingState.failed = false;
 
         recorder.addEventListener("dataavailable", event => {
+          if (recorder.takeoverCancelled || recordingState.recorder !== recorder) return;
           if (event.data.size) recordingState.chunks.push(event.data);
         });
         recorder.addEventListener("error", event => {
+          if (recorder.takeoverCancelled || recordingState.recorder !== recorder || !isCurrent()) return;
           recordingState.failed = true;
           clearInterval(recordingState.elapsedTimer);
           stopTakeoverDecks();
@@ -5969,6 +6173,7 @@
           elements.recordingStart.disabled = false;
         });
         recorder.addEventListener("stop", () => {
+          if (recorder.takeoverCancelled || recordingState.recorder !== recorder) return;
           if (recordingState.failed) {
             recordingState.chunks = [];
             return;
@@ -6007,7 +6212,10 @@
           elements.playlistMix.textContent = "Add to playlist";
           elements.recordingStart.disabled = false;
           window.haloStats?.track("complete_dj_takeover_recording", { dj: takeoverSession.dj, minutes: takeoverSession.minutes, recorded_seconds: Math.round(actualSeconds) });
+          const completionLifecycle = audioEngine.lifecycleGeneration;
           requestAnimationFrame(() => {
+            if (recorder.takeoverCancelled || recordingState.recorder !== recorder
+              || audioEngine.lifecycleGeneration !== completionLifecycle) return;
             elements.recordingDownload.click();
             elements.recordingStatus.textContent = `${takeoverSession.name}'s finished mix download was requested. Use “Download finished set again” if your browser blocked it.`;
           });
@@ -6023,7 +6231,10 @@
         const generation = audioEngine.decks.A.playbackGeneration;
         const started = await starting;
         if (!isCurrent() || !started || deckState.A !== playbackState
-          || audioEngine.decks.A.playbackGeneration !== generation) return;
+          || audioEngine.decks.A.playbackGeneration !== generation) {
+          cancelTakeoverStartupRecorder(recorder, lifecycle);
+          return;
+        }
         stopDeckAudio("B");
         updateDeck("A");
         updateDeck("B");
@@ -6042,9 +6253,13 @@
         showToast("Recording started", `${takeoverSession.name}'s ${takeoverSession.minutes}-minute set is live and mixing now.`);
         window.haloStats?.track("start_dj_takeover_recording", { dj: takeoverSession.dj, minutes: takeoverSession.minutes });
       } catch (error) {
-        if (!isCurrent()) return;
+        if (!isCurrent() || error.name === "AbortError"
+          || (error.playbackOwner && !deckPlaybackFailureCurrent(error))) {
+          cancelTakeoverStartupRecorder(startingRecorder, lifecycle);
+          return;
+        }
         recordingState.failed = true;
-        if (recordingState.recorder && recordingState.recorder.state !== "inactive") recordingState.recorder.stop();
+        if (startingRecorder && startingRecorder.state !== "inactive") startingRecorder.stop();
         clearInterval(recordingState.elapsedTimer);
         recordingState.elapsedTimer = null;
         stopTakeoverDecks();
@@ -6305,8 +6520,8 @@
       if (openButton) renderCollectorBlueprint(stemCollectorState.kits.find(kit => kit.id === openButton.dataset.collectorOpen));
       if (archiveButton) archiveCollectorKit(archiveButton.dataset.collectorArchive);
     });
-    elements.driveButton.addEventListener("click", () => elements.driveUpload.click());
-    elements.folderButton.addEventListener("click", () => elements.folderUpload.click());
+    elements.driveButton.addEventListener("click", () => selectDeckAudioFiles(elements.driveUpload));
+    elements.folderButton.addEventListener("click", () => selectDeckAudioFiles(elements.folderUpload));
     elements.driveUpload.addEventListener("change", handleDriveUpload);
     elements.folderUpload.addEventListener("change", handleDriveUpload);
     elements.openTrackPicker.addEventListener("click", () => openTrackPicker("header"));
@@ -6374,6 +6589,8 @@
               || audioEngine.decks[deckId].playbackGeneration !== generation) return;
           } else stopDeckAudio(deckId);
         } catch (error) {
+          if (error.name === "AbortError") return;
+          if (!deckPlaybackFailureCurrent(error, deckId)) return;
           deckState[deckId].playing = false;
           stopDeckAudio(deckId);
           const message = error.message || "The browser could not start the audio engine.";
@@ -6397,7 +6614,9 @@
         deckState[deckId].bpm = original * (1 + deckState[deckId].pitch / 100);
         updateRangeFill(slider);
         updateDeck(deckId);
-        if (deckState[deckId].playing) startDeckAudio(deckId);
+        if (deckState[deckId].playing) startDeckAudio(deckId).catch(error => {
+          if (deckPlaybackFailureCurrent(error, deckId)) reportAudioHealth("error", error.message, { deckId });
+        });
       });
     });
 
@@ -6584,7 +6803,7 @@
       if (localBoothVideoUrl) URL.revokeObjectURL(localBoothVideoUrl);
       localArtworkUrls.forEach(url => URL.revokeObjectURL(url));
     });
-    window.addEventListener("pagehide", () => stopTakeoverDecks());
+    window.addEventListener("pagehide", shutdownDeckPage);
 
     setInterval(() => {
       updatePerformancePolicy();

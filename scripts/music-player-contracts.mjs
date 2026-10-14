@@ -108,6 +108,7 @@ function deferredPlayback() {
 
 const homeSources = [];
 const homeDisposal = {};
+const homeImportFrames = [];
 const homeAudio = {
   state: "running", currentTime: 10,
   createBufferSource() {
@@ -145,6 +146,10 @@ const homePlayback = vm.createContext({
   gainNodeRef: { current: {} },
   initAudio() {}, addLog() {}, setProcessingStatus() {}, setTracks() {},
   setIsPlaying(value) { homeDisposal.playing = value; },
+  setIsProcessing() {}, setUploadProgress() {},
+  setActiveTrack(value) { homeDisposal.selection = value; },
+  FALLBACK_ARTWORK: "/artwork.svg",
+  requestAnimationFrame(callback) { homeImportFrames.push(callback); },
   CustomEvent: class {},
   window: {
     dispatchEvent() {},
@@ -154,8 +159,10 @@ const homePlayback = vm.createContext({
   useEffect(callback) { homeDisposal.unmount = callback(); }
 });
 vm.runInContext(`${section(haloHome, "const startHybridPlayback =", "const togglePlayback =")}
+  ${section(haloHome, "const isSupportedAudioFile =", "const handleFileInput =")}
   globalThis.startHome = startHybridPlayback;
-  globalThis.stopHome = stopActiveSource;`, homePlayback);
+  globalThis.stopHome = stopActiveSource;
+  globalThis.importHome = ingestLocalFiles;`, homePlayback);
 const homeTrack = buffer => ({ isBinarySource: true, title: "Local", binaryBuffer: buffer });
 const homePending = pending => ({ ...homeTrack(null), sourceFile: { arrayBuffer: () => pending.promise } });
 
@@ -213,6 +220,18 @@ homeAudio.failStart = false;
 assert.equal(homeSources.at(-1).disconnected, true, "A failed start disconnects its own source");
 assert.equal(replacementHomeSource.stopped, undefined, "A failed source start cannot retire valid outgoing playback");
 assert.equal(homePlayback.playbackSourcesRef.current.size, 1, "A failed start leaves no untracked source or envelope");
+
+const indexing = homePlayback.importHome([{ name: "Imported.mp3", type: "audio/mpeg", size: 1024 }], "file");
+assert.equal(homeImportFrames.length, 1);
+await homePlayback.startHome(homeTrack({ duration: 100 }));
+const duringImport = homePlayback.activeSourceNodeRef.current;
+homeImportFrames.shift()();
+await Promise.resolve();
+homeImportFrames.shift()();
+await indexing;
+assert.equal(homePlayback.activeSourceNodeRef.current, duringImport, "Late file indexing cannot replace newer playback");
+assert.equal(duringImport.stopped, undefined);
+assert.equal(homeDisposal.selection, undefined, "A superseded import cannot select an older track");
 
 const disposalRead = deferredPlayback();
 const disposalStart = homePlayback.startHome(homePending(disposalRead));

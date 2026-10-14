@@ -2120,6 +2120,8 @@
               return;
             }
 
+            const importGeneration = ++playbackGenerationRef.current;
+            pendingPlaybackRef.current = null;
             setIsProcessing(true);
             setUploadProgress(0);
             setProcessingStatus(`Indexing ${audioFiles.length} audio file${audioFiles.length === 1 ? '' : 's'}...`);
@@ -2161,10 +2163,12 @@
             await new Promise(resolve => requestAnimationFrame(resolve));
 
             if (indexedTracks.length) {
-              stopActiveSource();
-              setIsPlaying(false);
               setTracks(previousTracks => [...indexedTracks, ...previousTracks]);
-              setActiveTrack(indexedTracks[0]);
+              if (playbackGenerationRef.current === importGeneration) {
+                stopActiveSource();
+                setIsPlaying(false);
+                setActiveTrack(indexedTracks[0]);
+              }
               setProcessingStatus(`${indexedTracks.length} file${indexedTracks.length === 1 ? '' : 's'} ready${skippedCount ? ` · ${skippedCount} skipped (unsupported format)` : ''}. Press play to start.`);
               addLog(`LOCAL DRIVE READY: Indexed ${indexedTracks.length} audio file${indexedTracks.length === 1 ? '' : 's'} without pre-decoding.`);
               window.haloStats?.track('load_local_audio', {

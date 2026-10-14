@@ -186,7 +186,7 @@
     const query=new URLSearchParams({uploadStatus:"1",songId,versionId,uploadId,byteSize:String(file.size),chunkSize:String(chunkSize),filename:file.name,contentType});
     const result=await uploadResumableFile({
       file,chunkSize,onProgress,retryDelays,
-      async getStatus(){return requireUploadResponse(await sendFormData(`${url}?${query}`,null,{method:"GET"}));},
+      async getStatus(){return requireUploadResponse(await sendFormData(`${url}?${query}`,null,{method:"GET",headers:{"X-Upload-Status":"1"}}));},
       async sendChunk(chunk,start){
         requireUploadResponse(await sendFormData(url,chunk,{headers:{"Content-Type":"application/octet-stream","X-SongId":songId,"X-VersionId":versionId,"X-UploadId":uploadId,"X-Start-Byte":String(start)}}));
       }

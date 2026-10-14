@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import { webcrypto } from "node:crypto";
 import vm from "node:vm";
 import { stripTypeScriptTypes } from "node:module";
+import { verifyRequestOrigin } from "@netlify/identity";
 import { appendUploadChunk, confirmedUploadBytes, ensureUploadSession, readUploadChunk } from "../netlify/lib/resumable-upload.mjs";
 import * as resumable from "../netlify/lib/resumable-upload.mjs";
 import * as multipart from "../netlify/lib/multipart-master-upload.mjs";
@@ -248,21 +249,21 @@ const endpoint = vm.runInNewContext(`${audioSource}\nsongCatalogAudioHandler;`, 
   getStore: () => endpointStore, getDatabase: async () => db, getUser: async () => user,
   ensureMembership: async () => ({ member_id: "owner" }),
   cleanText: (value, max) => String(value || "").trim().slice(0, max),
-  verifyRequestOrigin: () => { if (rejectOrigin) throw new Error("origin"); },
+  verifyRequestOrigin: request => { if (rejectOrigin) throw new Error("origin"); verifyRequestOrigin(request); },
   runDreamweaverReview: async () => {},
 });
 const params = new URLSearchParams({ uploadStatus: "1", songId, versionId, uploadId: id, byteSize: "5", chunkSize: String(4 * 1024 * 1024), filename: "master.wav", contentType: "audio/wav" });
-const statusRequest = () => new Request(`https://halo.test/api/song-catalog/audio?${params}`);
+const statusRequest = (headers = { "X-Upload-Status": "1" }) => new Request(`https://halo.test/api/song-catalog/audio?${params}`, { headers });
 assert.equal((await (await endpoint(statusRequest())).json()).uploadedBytes, 0);
 const rawRequest = (offset = "0", body = bytes(1, 2, 3, 4, 5)) => new Request("https://halo.test/api/song-catalog/audio", {
-  method: "POST", headers: { "Content-Type": "application/octet-stream", "X-SongId": songId, "X-VersionId": versionId, "X-UploadId": id, "X-Start-Byte": offset }, body,
+  method: "POST", headers: { Origin: "https://halo.test", "Content-Type": "application/octet-stream", "X-SongId": songId, "X-VersionId": versionId, "X-UploadId": id, "X-Start-Byte": offset }, body,
 });
 assert.equal((await endpoint(rawRequest("1"))).status, 400);
 assert.equal((await endpoint(rawRequest("0", bytes(1)))).status, 400);
 assert.equal((await (await endpoint(rawRequest())).json()).uploadedBytes, 5);
 assert.equal((await (await endpoint(statusRequest())).json()).uploadedBytes, 5);
 const finalize = () => new Request("https://halo.test/api/song-catalog/audio", {
-  method: "POST", headers: { "Content-Type": "application/json" },
+  method: "POST", headers: { Origin: "https://halo.test", "Content-Type": "application/json" },
   body: JSON.stringify({ action: "finalize_upload", songId, versionId, uploadId: id, chunkCount: 1, byteSize: 5, filename: "master.wav", contentType: "audio/wav" }),
 });
 assert.equal((await endpoint(finalize())).status, 200);
@@ -271,8 +272,12 @@ assert.equal((await endpoint(statusRequest())).status, 404);
 ownsVersion = true;
 rejectOrigin = true;
 assert.equal((await endpoint(rawRequest())).status, 403);
-assert.equal((await endpoint(statusRequest())).status, 403);
+assert.equal((await endpoint(statusRequest({ Origin: "https://halo.test" }))).status, 403);
 rejectOrigin = false;
+assert.equal((await endpoint(statusRequest({}))).status, 403);
+assert.equal((await endpoint(statusRequest({ Origin: "https://other.test" }))).status, 403);
+assert.equal((await endpoint(statusRequest({ "X-Upload-Status": "1", "Sec-Fetch-Site": "cross-site" }))).status, 403);
+assert.equal((await endpoint(statusRequest())).status, 200);
 user = null;
 assert.equal((await endpoint(statusRequest())).status, 401);
 const masterEndpointStore = new MemoryStore();
@@ -293,11 +298,11 @@ const masterEndpoint = vm.runInNewContext(`${masterSource}\nsongCatalogMasterUpl
   getDatabase: async () => db, getUser: async () => user,
   ensureMembership: async () => ({ member_id: "owner" }),
   cleanText: (value, max) => String(value || "").trim().slice(0, max),
-  verifyRequestOrigin: () => { if (rejectOrigin) throw new Error("origin"); },
+  verifyRequestOrigin: request => { if (rejectOrigin) throw new Error("origin"); verifyRequestOrigin(request); },
   runDreamweaverReview: async () => {},
 });
 const masterRequest = (action, extra = {}) => new Request("https://halo.test/api/song-catalog/master-upload", {
-  method: "POST", headers: { "Content-Type": "application/json" },
+  method: "POST", headers: { Origin: "https://halo.test", "Content-Type": "application/json" },
   body: JSON.stringify({ action, songId, versionId, uploadId: id, fileName: "master.wav", fileType: "audio/wav", fileSize: masterBytes, ...extra }),
 });
 user = { id: "user" };

@@ -407,7 +407,11 @@ export default async function songCatalogAudioHandler(request: Request) {
     if (!user?.id) return json({ message: "Join or sign in to use song audio" }, 401);
     const membership = await ensureMembership(db, user);
     if (request.method === "GET" && new URL(request.url).searchParams.get("uploadStatus") === "1") {
-      try { verifyRequestOrigin(request); } catch { return json({ message: "Cross-origin audio uploads are not accepted" }, 403); }
+      try {
+        if (request.headers.get("origin")) verifyRequestOrigin(request);
+        // Browsers omit Origin on same-origin GETs; a non-simple header prevents cross-site CSRF.
+        else if (request.headers.get("x-upload-status") !== "1" || request.headers.get("sec-fetch-site") === "cross-site") throw new Error("Invalid upload status request");
+      } catch { return json({ message: "Cross-origin audio uploads are not accepted" }, 403); }
       return await resumableAudio(request, db, membership.member_id);
     }
     if (["GET", "HEAD"].includes(request.method)) return serveAudio(request, db, membership.member_id);

@@ -244,9 +244,6 @@ export async function ensureMasterMultipartSession({ store, storage, scope, fing
   if (renew && saved?.data?.storageUploadId !== renewUploadId) return { sessionKey, session: saved.data, etag: saved.etag };
   if (!saved || renew) {
     if (!create) throw masterUploadError("Create a master upload session first.", 404);
-    if (renew && saved?.data?.state === "completed" && (expectedStorageKey || expectedBlobPrefix)) {
-      throw masterUploadError("The completed master object is no longer available.", 410);
-    }
     const previous = saved;
     if (previous) {
       await store.setJSON(`${sessionKey}/generations/${previous.data.objectToken}`, previous.data, { onlyIfNew: true });
@@ -280,7 +277,9 @@ export async function ensureMasterMultipartSession({ store, storage, scope, fing
 
 export async function masterMultipartAction({ action, store, storage, scope, fingerprint, upload, generationId, startByte, partChecksum, expectedStorageKey = null, expectedBlobPrefix = "", expectedRevision = "", fetchImpl = fetch }) {
   let saved = await ensureMasterMultipartSession({ store, storage, scope, fingerprint, upload, create: action === "create", expectedStorageKey, expectedBlobPrefix, expectedRevision, fetchImpl });
-  if (action === "create" && saved.session.state === "completed" && (saved.session.registered || saved.session.expectedRevision !== expectedRevision) && !expectedStorageKey && !expectedBlobPrefix) {
+  if (action === "create" && saved.session.state === "completed"
+    && (saved.session.registered || saved.session.expectedRevision !== expectedRevision)
+    && (expectedStorageKey !== saved.session.key || expectedBlobPrefix)) {
     saved = await ensureMasterMultipartSession({ store, storage, scope, fingerprint, upload, create: true, renew: true,
       renewUploadId: saved.session.storageUploadId, expectedStorageKey, expectedBlobPrefix, expectedRevision, fetchImpl });
   }

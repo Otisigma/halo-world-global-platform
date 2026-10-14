@@ -481,6 +481,31 @@ assert.match(endpoint, /payload\.action === "register"/);
   assert.equal((await call("status", { generationId: oldGeneration })).status, 410);
   assert.equal(currentKey, latestKey);
   assert.equal(f.blobs.size, 3, "the prior generation receipt and replacement session remain preserved when the session pointer renews");
+  async function explicitlyUploadAgain(nextFingerprint, fill) {
+    const created = await call("create", { fingerprint: nextFingerprint });
+    assert.equal(created.status, 200);
+    const generationId = (await created.json()).generationId;
+    for (const startByte of [0, CHUNK]) {
+      const body = new Blob([new Uint8Array(Math.min(CHUNK, upload.byteSize - startByte)).fill(fill)]);
+      const part = await f.action("part", { ...params, fingerprint: nextFingerprint, generationId, startByte, partChecksum: await checksum(body) });
+      await f.fetchImpl(part.uploadUrl, { method: "PUT", headers: part.headers, body });
+    }
+    assert.equal((await call("complete", { fingerprint: nextFingerprint, generationId })).status, 200);
+    return generationId;
+  }
+  const replacedGenerationA = metadata.generationId;
+  const newGenerationB = await explicitlyUploadAgain(fingerprintB, 1);
+  assert.notEqual(newGenerationB, generationB, "explicit B selection renews its superseded receipt while A remains canonical");
+  const canonicalBKey = currentKey;
+  metadata.generationId = await explicitlyUploadAgain(fingerprint, 0);
+  assert.notEqual(metadata.generationId, replacedGenerationA, "A -> B -> explicit A uses a fresh A generation");
+  assert.notEqual(currentKey, canonicalBKey, "explicit A selection successfully replaces the still-canonical B master");
+  assert.equal((await call("complete", { generationId: replacedGenerationA })).status, 410);
+  assert.equal((await call("status", { generationId: replacedGenerationA })).status, 410);
+  assert.equal((await call("part", { generationId: replacedGenerationA, startByte: 0 })).status, 410,
+    "old status/part/complete generations never renew or follow the new A intent");
+  assert.equal((await call("complete", { fingerprint: fingerprintB, generationId: newGenerationB })).status, 409,
+    "B's delayed completion cannot undo the explicit new A publication");
   const secondGeneration = metadata.generationId;
   currentKey = ""; currentPrefix = ""; currentRevision = `deleted-${++revision}`;
   const secondSessionKey = masterSessionKey(params.scope, fingerprint);

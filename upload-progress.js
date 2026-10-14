@@ -193,23 +193,28 @@
       }
       try{return await Promise.race([perform(),deadline]);}finally{clearTimeout(timer);}
     }
-    async function getStatus({allowRetired=false}={}){
+    async function getStatus(allowSuccessor=false){
+      let startNewGeneration=allowSuccessor;
       for(let attempt=0;;attempt++){
         try{
-          const status=await request({action:"upload_status",...details});
+          const start=startNewGeneration;
+          startNewGeneration=false;
+          const status=await request({action:"upload_status",...details,startNewGeneration:start});
           if(typeof status.finalized!=="boolean"||!Array.isArray(status.receivedChunks)||!status.chunkChecksums||
             status.receivedChunks.some(index=>!Number.isSafeInteger(index)||index<0||index>=chunkCount)||
             !Number.isSafeInteger(status.confirmedBytes)||status.confirmedBytes<0||status.confirmedBytes>file.size)
             throw new Error("The server returned an invalid upload status. No audio was sent.");
           if(status.retired===true){
-            if(!allowRetired)throw Object.assign(new Error("This upload was deleted. Reselect the same audio file to start a fresh upload."),{status:409,retired:true,retryable:false});
+            if(!allowSuccessor)throw Object.assign(new Error("This upload was deleted. Reselect the same audio file to start a fresh upload."),{status:409,retired:true,retryable:false});
             const next=status.successorUploadId;
-            if(typeof next!=="string"||!/^[-_a-zA-Z0-9]{8,160}$/.test(next)||generations.has(next)||generations.size>=32)
+            if(typeof next!=="string"||!/^[a-z0-9-]{12,80}$/i.test(next)||generations.has(next)||generations.size>=32)
               throw new Error("The server returned an invalid replacement upload session. No audio was sent.");
             generations.add(next);
             uploadId=next;
             details.uploadId=next;
             cache({confirmedBytes:0});
+            // Renew each initial lineage candidate once, never a transport retry.
+            startNewGeneration=allowSuccessor;
             attempt=-1;
             continue;
           }
@@ -245,7 +250,7 @@
     };
     cache({confirmedBytes:0});
     // Only a new invocation may follow retirement; an active transfer must not undo DELETE.
-    const initial=await getStatus({allowRetired:true});
+    const initial=await getStatus(true);
     if(initial.finalized)return result(initial);
     async function transfer(){
       for(let chunkIndex=0;chunkIndex<chunkCount;chunkIndex++){

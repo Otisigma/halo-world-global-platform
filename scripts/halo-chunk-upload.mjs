@@ -141,7 +141,7 @@ export async function uploadAudioFile({ filePath, songId, versionId, client, chu
   let uploadId = deterministicUploadId({ versionId, fileSha256: await sha256File(filePath), chunkSize });
   const session = { songId, versionId, uploadId, chunkCount, byteSize, chunkSize };
   const readStatus = async (allowRetired = false) => {
-    const current = await client.json({ action: "upload_status", ...session }, "upload status");
+    const current = await client.json({ action: "upload_status", ...session, startNewGeneration: allowRetired }, "upload status");
     if (!current || typeof current.finalized !== "boolean" || !Array.isArray(current.receivedChunks)
       || !Array.isArray(current.invalidChunks) || !current.chunkChecksums || typeof current.chunkChecksums !== "object"
       || current.chunkCount !== chunkCount || current.byteSize !== byteSize) {

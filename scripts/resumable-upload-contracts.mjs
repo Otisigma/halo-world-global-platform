@@ -37,7 +37,7 @@ function browser(api, cache = storage(), requestTimeoutMs = 120000) {
   return { helper: window.HaloUploadProgress, delays, cache };
 }
 function server(failures = {}, { finalizedReceipt = true } = {}) {
-  const chunks = new Map(), calls = [], ids = [];
+  const chunks = new Map(), calls = [], ids = [], statuses = [];
   let finalized = false;
   const fail = (label, when) => {
     const failure = failures[label]?.[0];
@@ -48,7 +48,7 @@ function server(failures = {}, { finalizedReceipt = true } = {}) {
     return new Response(failure.plain ? "Unavailable" : JSON.stringify({ message: "Rejected" }), { status: failure.code });
   };
   return {
-    chunks, calls, ids,
+    chunks, calls, ids, statuses,
     async fetch(url, options) {
       assert.equal(url, "/api/song-catalog/audio");
       assert.equal(options.credentials, "same-origin");
@@ -57,6 +57,7 @@ function server(failures = {}, { finalizedReceipt = true } = {}) {
       const label = form ? `chunk:${body.chunkIndex}` : body.action;
       calls.push(label);
       ids.push(body.uploadId);
+      if (body.action === "upload_status") statuses.push(body.startNewGeneration);
       const early = fail(label, "before");
       if (early) return early;
       let data;
@@ -90,13 +91,19 @@ function server(failures = {}, { finalizedReceipt = true } = {}) {
 }
 function generationServer() {
   const sessions = new Map(), retired = new Map(), calls = [];
+  const completed = new Set();
+  let canonical = "", nextNumber = 0;
   return {
     sessions, retired, calls,
+    get canonical() { return canonical; },
     retire(id, next) { retired.set(id, next); },
     async fetch(url, settings) {
       const form = settings.body instanceof FormData;
       const body = form ? Object.fromEntries(settings.body) : JSON.parse(settings.body);
-      calls.push({ id: body.uploadId, action: form ? `chunk:${body.chunkIndex}` : body.action });
+      calls.push({ id: body.uploadId, action: form ? `chunk:${body.chunkIndex}` : body.action, ...(body.action === "upload_status" ? { startNewGeneration: body.startNewGeneration } : {}) });
+      if (body.action === "upload_status" && body.startNewGeneration === true && completed.has(body.uploadId) && canonical !== body.uploadId && !retired.has(body.uploadId)) {
+        retired.set(body.uploadId, `next-44444444-4444-4444-8444-${String(++nextNumber).padStart(12, "0")}`);
+      }
       if (retired.has(body.uploadId)) {
         const retirement = { retired: true, successorUploadId: retired.get(body.uploadId), finalized: false };
         if (body.action === "upload_status") {
@@ -111,7 +118,19 @@ function generationServer() {
         return new Response(JSON.stringify({ ...retirement, message: "Upload was retired" }), { status: 409 });
       }
       if (!sessions.has(body.uploadId)) sessions.set(body.uploadId, server());
-      return sessions.get(body.uploadId).fetch(url, settings);
+      if (body.action === "finalize_upload" && completed.has(body.uploadId) && canonical !== body.uploadId) {
+        return new Response(JSON.stringify({ message: "Superseded upload cannot be republished" }), { status: 409 });
+      }
+      const response = await sessions.get(body.uploadId).fetch(url, settings);
+      if (body.action === "finalize_upload" && response.ok) {
+        completed.add(body.uploadId);
+        canonical = body.uploadId;
+      }
+      if (body.action === "upload_status" && completed.has(body.uploadId) && canonical !== body.uploadId) {
+        const { persisted, lockedIn, audioUrl, message, ...status } = await response.json();
+        return new Response(JSON.stringify({ ...status, finalized: false }));
+      }
+      return response;
     },
   };
 }
@@ -133,6 +152,12 @@ const count = (api, label) => api.calls.filter(call => call === label).length;
 }
 
 // Ambiguous chunk and finalize responses reconcile without blindly replaying writes.
+for (const failureAtHandshake of [false, true]) {
+  const api = server(failureAtHandshake ? { upload_status: [failure("network")] } : {});
+  await browser(api).helper.uploadResumableAudio(options);
+  assert.equal(api.statuses[0], true, "a new explicit invocation enables generation discovery");
+  assert.ok(api.statuses.slice(1).every(flag => flag === false), "all subsequent and retry status reads disable generation creation");
+}
 for (const code of ["network", "truncated", 408, 429, 503]) {
   const api = server({ "chunk:0": [failure(code, "after")], finalize_upload: [failure(code, "after")] });
   const { helper, cache } = browser(api);
@@ -255,7 +280,50 @@ for (const code of ["network", "truncated", 408, 429, 503]) {
   assert.equal(again.uploadId, secondNext, "reload discovers multiple retirement generations without storage");
   assert.equal(api.sessions.get(secondNext).chunks.size, 3);
 }
-for (const retireAt of ["chunk:1-after", "chunk:1-before", "finalize_upload-before"]) {
+{
+  const api = generationServer();
+  let arrived, release, checks = 0;
+  const waiting = new Promise(resolve => { arrived = resolve; });
+  const oldApi = {
+    async fetch(url, settings) {
+      const response = await api.fetch(url, settings);
+      if (!(settings.body instanceof FormData) && JSON.parse(settings.body).action === "upload_status" && ++checks === 2) {
+        await new Promise(resolve => { release = resolve; arrived(); });
+      }
+      return response;
+    },
+  };
+  const oldClient = browser(oldApi).helper.uploadResumableAudio(options);
+  await waiting;
+  const firstA = await browser(api).helper.uploadResumableAudio(options);
+  const b = await browser(api).helper.uploadResumableAudio({ ...options, file: file("ABCDEFGHIJ") });
+  assert.notEqual(b.uploadId, firstA.uploadId);
+  assert.equal(api.canonical, b.uploadId);
+  const beforeNewA = api.calls.length;
+  const newA = await browser(api).helper.uploadResumableAudio({ ...options, file: file() });
+  assert.notEqual(newA.uploadId, firstA.uploadId, "explicit A → B → A uses a durable fresh successor");
+  assert.equal(api.canonical, newA.uploadId);
+  assert.deepEqual([...api.sessions.get(newA.uploadId).chunks.keys()], [0, 1, 2]);
+  const reads = api.calls.slice(beforeNewA).filter(call => call.action === "upload_status");
+  assert.deepEqual(reads.filter(call => call.startNewGeneration).map(call => call.id), [firstA.uploadId, newA.uploadId]);
+  assert.ok(reads.slice(reads.findIndex(call => call.startNewGeneration === false)).every(call => call.startNewGeneration === false));
+  const nextB = await browser(api).helper.uploadResumableAudio({ ...options, file: file("ABCDEFGHIJ") });
+  assert.notEqual(nextB.uploadId, b.uploadId);
+  const beforeRestore = api.calls.length;
+  const restoredA = await browser(api).helper.uploadResumableAudio({ ...options, file: file() });
+  assert.notEqual(restoredA.uploadId, newA.uploadId, "repeated A → B → A → B → A restores the superseded lineage tail");
+  assert.equal(api.canonical, restoredA.uploadId);
+  const restoreReads = api.calls.slice(beforeRestore).filter(call => call.action === "upload_status");
+  assert.deepEqual(restoreReads.filter(call => call.startNewGeneration).map(call => call.id), [firstA.uploadId, newA.uploadId, restoredA.uploadId], "each initial lineage candidate gets explicit generation discovery");
+  assert.ok(restoreReads.slice(restoreReads.findIndex(call => call.startNewGeneration === false)).every(call => call.startNewGeneration === false), "active status reads never enable generation discovery");
+  assert.deepEqual([...api.sessions.get(restoredA.uploadId).chunks.keys()], [0, 1, 2]);
+  const beforeRelease = api.calls.length;
+  release();
+  await assert.rejects(oldClient, error => error.status === 409 && error.retired === true);
+  assert.ok(api.calls.slice(beforeRelease).every(call => call.id === firstA.uploadId), "old in-flight client never follows the new generation");
+  assert.equal(api.canonical, restoredA.uploadId);
+}
+for (const retireAt of ["chunk:0-after", "chunk:0-lost", "chunk:1-after", "chunk:1-before", "chunk:1-lost", "finalize_upload-before"]) {
   const api = generationServer(), fetch = api.fetch;
   const next = "next-33333333-3333-4333-8333-333333333333";
   let retiredOnce = false, rootId;
@@ -270,13 +338,14 @@ for (const retireAt of ["chunk:1-after", "chunk:1-before", "finalize_upload-befo
       api.retire(rootId, next);
     }
     const response = await fetch(url, settings);
-    if (trigger && retireAt.endsWith("-after")) {
+    if (trigger && (retireAt.endsWith("-after") || retireAt.endsWith("-lost"))) {
       retiredOnce = true;
       api.retire(rootId, next);
+      if (retireAt.endsWith("-lost")) throw new TypeError("Chunk response lost after deletion");
     }
     return response;
   };
-  await assert.rejects(browser(api).helper.uploadResumableAudio(options), /upload was deleted/);
+  await assert.rejects(browser(api).helper.uploadResumableAudio(options), error => error.status === 409 && error.retired === true && /upload was deleted/.test(error.message));
   assert.ok(!api.calls.some(call => call.id === next), `${retireAt} never silently resurrects deleted audio`);
   const result = await browser(api).helper.uploadResumableAudio({ ...options, file: file() });
   assert.equal(result.uploadId, next);
@@ -290,6 +359,13 @@ for (const retireAt of ["chunk:1-after", "chunk:1-before", "finalize_upload-befo
   api.retire(rootId, rootId);
   await assert.rejects(helper.uploadResumableAudio(options), /invalid replacement upload session/);
   assert.ok(api.calls.every(call => call.action === "upload_status"), "cyclic retirement cannot cause writes");
+}
+for (const next of ["next_bad_upload", "next-123", `next-${"a".repeat(80)}`]) {
+  const api = generationServer(), { helper } = browser(api);
+  const rootId = await helper.fileUploadId(options.file, ["/api/song-catalog/audio", options.songId, options.versionId, "audio/wav"], 4);
+  api.retire(rootId, next);
+  await assert.rejects(helper.uploadResumableAudio(options), /invalid replacement upload session/);
+  assert.deepEqual(api.calls, [{ id: rootId, action: "upload_status", startNewGeneration: true }], "server-invalid successor IDs are rejected before requesting them");
 }
 
 // Status failures never permit blind sends, including after a lost chunk response.

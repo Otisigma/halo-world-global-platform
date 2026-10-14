@@ -1276,12 +1276,12 @@
     </section>
 
     <section class="recording-rig panel" id="recordingRig" aria-labelledby="recordingTitle">
-      <div class="recorder-guard is-secure" id="recorderGuard" data-state="secure" role="status" aria-live="polite">
+      <div class="recorder-guard" id="recorderGuard" data-state="pending" role="status" aria-live="polite">
         <svg class="recorder-guard-shield" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/></svg>
         <svg class="recorder-guard-alert" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>
         <div>
-          <h3 data-recorder-guard-title>Recorder isolation secure</h3>
-          <p data-recorder-guard-message>The recorder taps the post-limiter master bus only; CUE headphones stay on a separate local path. The guard watches for likely bleed conditions once recording starts.</p>
+          <h3 data-recorder-guard-title>Recorder isolation pending</h3>
+          <p data-recorder-guard-message>Recording requires a quiet-feed isolation preflight. The recorder taps only the post-limiter music bus; CUE stays monitor-only.</p>
         </div>
       </div>
       <div class="recording-copy">
@@ -2857,6 +2857,7 @@
       masterGain: null,
       limiter: null,
       recordingGain: null,
+      recordingFeed: null,
       recordingDestination: null,
       animationFrame: null,
       decks: {
@@ -2880,6 +2881,8 @@
     const recordingState = {
       recorder: null,
       starting: false,
+      isolationVerified: false,
+      isolationError: "",
       chunks: [],
       startedAt: 0,
       elapsedTimer: null,
@@ -3623,23 +3626,21 @@
       const cueBusActive = activeCueDecks.length > 0;
       return {
         isRecording,
-        masterBusLevel: isRecording && cueBusActive ? recorderGuardMasterLevel() : 0,
+        masterBusLevel: isRecording ? recorderGuardMasterLevel() : 0,
+        isolationVerified: recordingState.isolationVerified,
+        isolationError: recordingState.isolationError,
         cueBusActive,
         activeCueDecks
       };
     }
 
     function attachRecorderGuardToDeck() {
-      if (!recorderGuardState.analyser && audioEngine.context && audioEngine.masterGain) {
-        recorderGuardState.analyser = audioEngine.context.createAnalyser();
-        recorderGuardState.analyser.fftSize = 512;
-        recorderGuardState.analyser.smoothingTimeConstant = .32;
-        recorderGuardState.analyserData = new Float32Array(recorderGuardState.analyser.frequencyBinCount);
-        audioEngine.masterGain.connect(recorderGuardState.analyser);
+      if (!recorderGuardState.analyser && audioEngine.recordingFeed) {
+        recorderGuardState.analyser = audioEngine.recordingFeed.analyser;
+        recorderGuardState.analyserData = new Float32Array(recorderGuardState.analyser.fftSize);
       }
       if (recorderGuardState.guard || !window.HaloRecorderGuard || !window.useRecorderGuard) return;
       recorderGuardState.guard = window.useRecorderGuard({
-        config: { masterLimit: .8, holdMs: 1500 },
         readInputs: recorderGuardInputs,
         onStatusChange: status => {
           const wasTriggered = recorderGuardState.status?.state === "triggered";
@@ -3673,17 +3674,10 @@
         audioEngine.context = context;
         audioEngine.masterGain = masterGain;
         audioEngine.limiter = limiter;
-        if (typeof context.createMediaStreamDestination === "function") {
-          const recordingGain = context.createGain();
-          const recordingLimiter = context.createDynamicsCompressor();
-          recordingGain.gain.setValueAtTime(.82, context.currentTime);
-          ["threshold", "knee", "ratio", "attack", "release"].forEach(parameter => {
-            recordingLimiter[parameter].setValueAtTime(limiter[parameter].value, context.currentTime);
-          });
-          audioEngine.recordingGain = recordingGain;
-          audioEngine.recordingDestination = context.createMediaStreamDestination();
-          recordingGain.connect(recordingLimiter);
-          recordingLimiter.connect(audioEngine.recordingDestination);
+        if (typeof context.createMediaStreamDestination === "function" && window.HaloRecorderGuard?.IsolatedFeed) {
+          audioEngine.recordingFeed = new window.HaloRecorderGuard.IsolatedFeed(context, limiter);
+          audioEngine.recordingGain = audioEngine.recordingFeed.gain;
+          audioEngine.recordingDestination = audioEngine.recordingFeed.destination;
         }
         ["A", "B"].forEach(deckId => {
           const input = context.createGain();
@@ -3733,7 +3727,7 @@
           trim.connect(cueGain);
           gain.connect(masterGain);
           // Only the music gains feed capture; master/room input and local CUE/UI audio stay out.
-          if (audioEngine.recordingGain) gain.connect(audioEngine.recordingGain);
+          audioEngine.recordingFeed?.connectMusicSource(gain);
           cueGain.connect(context.destination);
           cueGain.gain.setValueAtTime(0, context.currentTime);
           audioEngine.decks[deckId].input = input;
@@ -5536,6 +5530,9 @@
     async function startTakeoverRecording() {
       if (!takeoverSession || recordingState.starting || recordingState.recorder?.state === "recording") return;
       recordingState.starting = true;
+      recordingState.isolationVerified = false;
+      recordingState.isolationError = "";
+      recorderGuardState.guard?.tick();
       elements.recordingStart.disabled = true;
       elements.recordingStatus.textContent = "Building the complete DJ sequence before opening the master channel…";
 
@@ -5547,6 +5544,13 @@
         if (missingDecks.length) throw new Error(`Load playable audio on Deck ${missingDecks.join(" and Deck ")} before starting the automated set.`);
         elements.recordingStatus.textContent = "Waiting for the opening tracks to finish loading and decoding…";
         await verifyTakeoverTracksReady();
+        const openingTracks = ["A", "B"].map(deckId => deckState[deckId]);
+        elements.recordingStatus.textContent = "Checking the isolated recorder feed for unexpected audio…";
+        await verifyTakeoverRecorderIsolation();
+        if (["A", "B"].some((deckId, index) => deckState[deckId] !== openingTracks[index])) {
+          recordingState.isolationVerified = false;
+          throw new Error("The opening tracks changed during recorder preflight. Try recording again.");
+        }
 
         const recorder = createCompatibleRecorder(audioEngine.recordingDestination.stream);
         recordingState.mimeType = recorder.mimeType || "";
@@ -5637,6 +5641,8 @@
         showToast("Recording started", `${takeoverSession.name}'s ${takeoverSession.minutes}-minute set is live and mixing now.`);
         window.haloStats?.track("start_dj_takeover_recording", { dj: takeoverSession.dj, minutes: takeoverSession.minutes });
       } catch (error) {
+        recordingState.isolationVerified = false;
+        recorderGuardState.guard?.tick();
         recordingState.failed = true;
         if (recordingState.recorder && recordingState.recorder.state !== "inactive") recordingState.recorder.stop();
         clearInterval(recordingState.elapsedTimer);
@@ -5650,6 +5656,34 @@
         elements.recordingStart.disabled = false;
       } finally {
         recordingState.starting = false;
+      }
+    }
+
+    async function verifyTakeoverRecorderIsolation() {
+      const feed = audioEngine.recordingFeed;
+      recordingState.isolationVerified = false;
+      recordingState.isolationError = "";
+      recorderGuardState.guard?.tick();
+      try {
+        if (!feed) throw new Error("The isolated recorder feed is unavailable.");
+        await feed.preflight(() => {
+          if (audioEngine.recordingFeed !== feed || audioEngine.recordingGain !== feed.gain
+            || audioEngine.recordingDestination !== feed.destination) {
+            throw new Error("Recorder routing changed during isolation preflight.");
+          }
+          return {
+            sources: ["A", "B"].map(deckId => audioEngine.decks[deckId].gain),
+            forbiddenNodes: [audioEngine.masterGain, audioEngine.limiter, audioEngine.context.destination,
+              ...["A", "B"].map(deckId => audioEngine.decks[deckId].cueGain)]
+          };
+        });
+        recordingState.isolationVerified = true;
+      } catch (error) {
+        recordingState.isolationVerified = false;
+        recordingState.isolationError = error.message || "Recorder isolation preflight failed.";
+        throw error;
+      } finally {
+        recorderGuardState.guard?.tick();
       }
     }
 

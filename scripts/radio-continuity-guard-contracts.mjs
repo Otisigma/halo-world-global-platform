@@ -215,21 +215,24 @@ async function runNextTimer() {
   await timer.handler();
 }
 
-// The recorder keeps its read-only master analyser without the bridge watchdog.
+// The recorder observes its isolated capture stream without the bridge watchdog.
 const audioContext = deckSandbox.audioEngine.context;
 deckSandbox.audioEngine.context = null;
 deckSandbox.attachRecorderGuardToDeck();
 assert.equal(deckSandbox.recorderGuardState.analyser, null, "Initial page load does not require an AudioContext");
 assert.equal(deckSandbox.recorderInputs().masterBusLevel, 0);
 deckSandbox.audioEngine.context = audioContext;
+const captureAnalyser = { fftSize: 2048, getFloatTimeDomainData(data) { data.fill(.9); } };
+deckSandbox.audioEngine.recordingFeed = { analyser: captureAnalyser };
 deckSandbox.attachRecorderGuardToDeck();
 const analyser = deckSandbox.recorderGuardState.analyser;
 deckSandbox.attachRecorderGuardToDeck();
 assert.equal(deckSandbox.recorderGuardState.analyser, analyser, "Repeated playback does not allocate another analyser");
-assert.equal(deckSandbox.masterAnalyser, deckSandbox.recorderGuardState.analyser);
+assert.equal(captureAnalyser, deckSandbox.recorderGuardState.analyser, "Recorder reuses its capture-stream analyser");
+assert.equal(deckSandbox.masterAnalyser, undefined, "Recorder isolation never adds a master-bus tap");
 assert.match(extractFunctionSource(deckPage, "ensureAudio"), /attachRecorderGuardToDeck\(\)/, "Audio initialization attaches the lazy recorder analyser");
 deckSandbox.audioEngine.decks.A.cueActive = true;
-assert.ok(Math.abs(deckSandbox.recorderInputs().masterBusLevel - .9) < 1e-6, "Recorder bleed guard still samples the master bus");
+assert.ok(Math.abs(deckSandbox.recorderInputs().masterBusLevel - .9) < 1e-6, "Recorder guard samples the isolated capture stream");
 
 // A successful hard-cut starts the incoming track before stopping the outgoing.
 await deckSandbox.startDeckAudio("A");

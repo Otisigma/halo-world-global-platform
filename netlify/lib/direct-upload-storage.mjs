@@ -137,6 +137,16 @@ export async function headStoredObject(config, key, fetchImpl = fetch) {
   return Number(response.headers.get("content-length") || 0);
 }
 
+/** Multipart registration must distinguish missing objects from retryable storage failures. */
+export async function headStoredObjectStrict(config, key, fetchImpl = fetch) {
+  const response = await fetchImpl(presignObjectUrl({ config, method: "HEAD", key, expiresIn: 60 }), { method: "HEAD" });
+  if (response.status === 404) return 0;
+  if (!response.ok) throw masterUploadError("Master storage could not verify registration. Please retry.", 503);
+  const byteSize = Number(response.headers.get("content-length"));
+  if (!Number.isSafeInteger(byteSize) || byteSize < 1) throw masterUploadError("Master storage returned an invalid registration response. Please retry.", 503);
+  return byteSize;
+}
+
 export async function deleteStoredObject(config, key, fetchImpl = fetch) {
   if (!config || !key) return;
   await fetchImpl(presignObjectUrl({ config, method: "DELETE", key, expiresIn: 60 }), { method: "DELETE" });
@@ -189,7 +199,7 @@ async function verifiedMultipartObject(storage, session, fetchImpl) {
   return true;
 }
 
-export async function masterMultipartProgress(storage, session, fetchImpl = fetch) {
+export async function masterMultipartProgress(storage, session, fetchImpl = fetch, readSession) {
   if (await verifiedMultipartObject(storage, session, fetchImpl)) return { uploadedBytes: session.byteSize, complete: true, parts: [] };
   if (session.state === "completed") throw masterUploadError("The completed master object is no longer available.", 410);
   if (Date.parse(session.expiresAt) <= Date.now()) throw masterUploadError("This master upload session has expired.", 410);
@@ -201,6 +211,13 @@ export async function masterMultipartProgress(storage, session, fetchImpl = fetc
     // Completion may win between HEAD and ListParts.
     if (await verifiedMultipartObject(storage, session, fetchImpl)) return { uploadedBytes: session.byteSize, complete: true, parts: [] };
     throw masterUploadError("This master upload session has expired.", 410);
+  }
+  if (readSession) {
+    const current = await readSession();
+    if (current?.storageUploadId !== session.storageUploadId || current.objectToken !== session.objectToken) {
+      throw masterUploadError("The master upload generation changed. Recheck its status.");
+    }
+    session = current;
   }
   if (xmlValue(xml, "IsTruncated") === "true") throw masterUploadError("Unexpected truncated master part list.");
   const parts = [...xml.matchAll(/<Part>([\s\S]*?)<\/Part>/g)].map(match => ({
@@ -219,7 +236,7 @@ export async function masterMultipartProgress(storage, session, fetchImpl = fetc
   return { uploadedBytes, complete: false, parts };
 }
 
-export async function ensureMasterMultipartSession({ store, storage, scope, fingerprint, upload, create = false, renew = false, renewUploadId = "", expectedStorageKey = null, expectedBlobPrefix = "", fetchImpl = fetch }) {
+export async function ensureMasterMultipartSession({ store, storage, scope, fingerprint, upload, create = false, renew = false, renewUploadId = "", expectedStorageKey = null, expectedBlobPrefix = "", expectedRevision = "", fetchImpl = fetch }) {
   const sessionKey = masterSessionKey(scope, fingerprint);
   let saved = await store.getWithMetadata(sessionKey, { type: "json" });
   if (saved) assertSession(saved.data, scope, fingerprint, upload);
@@ -237,7 +254,7 @@ export async function ensureMasterMultipartSession({ store, storage, scope, fing
     const objectToken = randomUUID();
     const candidate = {
       ...scope, fingerprint, byteSize: upload.byteSize, filename: upload.filename, contentType: upload.contentType,
-      chunkSize: MASTER_MULTIPART_CHUNK_BYTES, objectToken, state: "active", expectedStorageKey, expectedBlobPrefix, partChecksums: {},
+      chunkSize: MASTER_MULTIPART_CHUNK_BYTES, objectToken, state: "active", expectedStorageKey, expectedBlobPrefix, expectedRevision, partChecksums: {},
       key: buildMasterObjectKey({ ...scope, uploadId: objectToken, filename: upload.filename }),
       createdAt: new Date().toISOString(), expiresAt: new Date(Date.now() + SESSION_LIFETIME_MS).toISOString(),
     };
@@ -261,11 +278,11 @@ export async function ensureMasterMultipartSession({ store, storage, scope, fing
   return { sessionKey, session: saved.data, etag: saved.etag };
 }
 
-export async function masterMultipartAction({ action, store, storage, scope, fingerprint, upload, generationId, startByte, partChecksum, expectedStorageKey = null, expectedBlobPrefix = "", fetchImpl = fetch }) {
-  let saved = await ensureMasterMultipartSession({ store, storage, scope, fingerprint, upload, create: action === "create", expectedStorageKey, expectedBlobPrefix, fetchImpl });
-  if (action === "create" && saved.session.state === "completed" && saved.session.registered && !expectedStorageKey && !expectedBlobPrefix) {
+export async function masterMultipartAction({ action, store, storage, scope, fingerprint, upload, generationId, startByte, partChecksum, expectedStorageKey = null, expectedBlobPrefix = "", expectedRevision = "", fetchImpl = fetch }) {
+  let saved = await ensureMasterMultipartSession({ store, storage, scope, fingerprint, upload, create: action === "create", expectedStorageKey, expectedBlobPrefix, expectedRevision, fetchImpl });
+  if (action === "create" && saved.session.state === "completed" && (saved.session.registered || saved.session.expectedRevision !== expectedRevision) && !expectedStorageKey && !expectedBlobPrefix) {
     saved = await ensureMasterMultipartSession({ store, storage, scope, fingerprint, upload, create: true, renew: true,
-      renewUploadId: saved.session.storageUploadId, expectedStorageKey, expectedBlobPrefix, fetchImpl });
+      renewUploadId: saved.session.storageUploadId, expectedStorageKey, expectedBlobPrefix, expectedRevision, fetchImpl });
   }
   if (action !== "create" && generationId && generationId !== saved.session.objectToken) {
     if (!/^[0-9a-f-]{36}$/.test(String(generationId))) throw masterUploadError("Invalid master upload generation.", 400);
@@ -277,11 +294,17 @@ export async function masterMultipartAction({ action, store, storage, scope, fin
   }
   if (["part", "complete"].includes(action) && generationId !== saved.session.objectToken) throw masterUploadError("A master upload generation is required.", 400);
   let progress;
-  try { progress = await masterMultipartProgress(storage, saved.session, fetchImpl); } catch (error) {
+  const readSession = () => store.get(saved.sessionKey, { type: "json" });
+  try { progress = await masterMultipartProgress(storage, saved.session, fetchImpl, readSession); } catch (error) {
     if (action !== "create" || error.status !== 410) throw error;
-    saved = await ensureMasterMultipartSession({ store, storage, scope, fingerprint, upload, create: true, renew: true, renewUploadId: saved.session.storageUploadId, expectedStorageKey, expectedBlobPrefix, fetchImpl });
-    progress = await masterMultipartProgress(storage, saved.session, fetchImpl);
+    saved = await ensureMasterMultipartSession({ store, storage, scope, fingerprint, upload, create: true, renew: true, renewUploadId: saved.session.storageUploadId, expectedStorageKey, expectedBlobPrefix, expectedRevision, fetchImpl });
+    progress = await masterMultipartProgress(storage, saved.session, fetchImpl, readSession);
   }
+  const refreshed = await store.getWithMetadata(saved.sessionKey, { type: "json" });
+  if (refreshed?.data?.storageUploadId !== saved.session.storageUploadId || refreshed.data.objectToken !== saved.session.objectToken) {
+    throw masterUploadError("The master upload generation changed. Recheck its status.");
+  }
+  saved = { ...saved, session: refreshed.data, etag: refreshed.etag };
   const { session } = saved;
   const status = { directUpload: true, generationId: session.objectToken, uploadedBytes: progress.uploadedBytes, chunkSize: session.chunkSize, complete: progress.complete, expiresAt: session.expiresAt };
   if (action === "create" || action === "status") return { ...status, ...(progress.complete ? { fileKey: session.key } : {}) };
@@ -331,7 +354,7 @@ export async function masterMultipartAction({ action, store, storage, scope, fin
       if (current?.state !== "completed" || current.storageUploadId !== session.storageUploadId) throw error;
     }
   }
-  return { ...status, complete: true, fileKey: session.key, expectedStorageKey: session.expectedStorageKey, expectedBlobPrefix: session.expectedBlobPrefix };
+  return { ...status, complete: true, fileKey: session.key, expectedStorageKey: session.expectedStorageKey, expectedBlobPrefix: session.expectedBlobPrefix, expectedRevision: session.expectedRevision };
 }
 
 export async function markMasterMultipartRegistered({ store, scope, fingerprint, generationId }) {

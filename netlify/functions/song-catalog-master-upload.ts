@@ -10,6 +10,7 @@ import {
   deleteStoredObject,
   directUploadConfig,
   headStoredObject,
+  headStoredObjectStrict,
   isOwnedMasterObjectKey,
   masterMultipartAction,
   markMasterMultipartRegistered,
@@ -29,6 +30,19 @@ function json(body: unknown, status = 200) {
   return Response.json(body, { status, headers: { "Cache-Control": "no-store" } });
 }
 
+function registeredMasterResponse(songId: string, versionId: string) {
+  return json({
+    message: "Master copy uploaded directly to storage and registered as the canonical sale master.",
+    songId,
+    versionId,
+    audioUrl: `/api/song-catalog/audio?versionId=${encodeURIComponent(versionId)}`,
+    storage: "direct",
+    persisted: true,
+    lockedIn: true,
+    confirmedAt: new Date().toISOString(),
+  });
+}
+
 function cleanId(value: unknown) {
   const id = String(value || "").trim().toLowerCase();
   return /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(id) ? id : "";
@@ -36,7 +50,8 @@ function cleanId(value: unknown) {
 
 async function ownedMasterVersion(db: Awaited<ReturnType<typeof getDatabase>>, ownerMemberId: string, songId: string, versionId: string) {
   const rows = await db.sql`
-    SELECT version.id, version.song_id, version.audio_blob_prefix, version.audio_storage_key
+    SELECT version.id, version.song_id, version.audio_blob_prefix, version.audio_storage_key,
+      version.updated_at::text AS audio_revision
     FROM halo_song_versions version
     JOIN halo_song_catalog song ON song.id = version.song_id
     WHERE version.id = ${versionId} AND song.id = ${songId}
@@ -89,14 +104,20 @@ async function registerMasterUpload(payload: Record<string, unknown>, db: Awaite
     }
   }
   if (multipart && version.audio_storage_key !== fileKey && ((version.audio_storage_key || null) !== (payload.expectedStorageKey || null)
-    || (version.audio_blob_prefix || "") !== (payload.expectedBlobPrefix || ""))) {
+    || (version.audio_blob_prefix || "") !== (payload.expectedBlobPrefix || "")
+    || version.audio_revision !== payload.expectedRevision)) {
     return json({ message: "Another master was registered while uploading. Start a new master upload." }, 409);
   }
-  const storedBytes = await headStoredObject(storage, fileKey);
+  const storedBytes = await (multipart ? headStoredObjectStrict(storage, fileKey) : headStoredObject(storage, fileKey));
   if (!storedBytes) return json({ message: "The master file was not found in storage. Upload it again." }, 409);
   if (storedBytes !== upload.byteSize || storedBytes > MASTER_UPLOAD_MAX_BYTES) {
     await deleteStoredObject(storage, fileKey).catch(() => undefined);
     return json({ message: "The stored master file size does not match the upload. Upload it again." }, 409);
+  }
+  if (multipart && version.audio_storage_key === fileKey) {
+    const current = await ownedMasterVersion(db, ownerMemberId, songId, versionId);
+    if (current?.audio_storage_key !== fileKey) return json({ message: "This master was removed or superseded. Start a new upload." }, 409);
+    return registeredMasterResponse(songId, versionId);
   }
   const durationSeconds = Math.max(0, Math.min(86_400, Math.round(Number(payload.durationSeconds) || 0)));
   const audioUrl = `/api/song-catalog/audio?versionId=${encodeURIComponent(versionId)}`;
@@ -109,6 +130,7 @@ async function registerMasterUpload(payload: Record<string, unknown>, db: Awaite
     WHERE id = ${versionId} AND song_id = ${songId} AND version_type = ${MASTER_VERSION_TYPE} AND status = 'active'
       AND audio_storage_key IS NOT DISTINCT FROM ${version.audio_storage_key}
       AND audio_blob_prefix IS NOT DISTINCT FROM ${version.audio_blob_prefix}
+      AND updated_at::text IS NOT DISTINCT FROM ${version.audio_revision}
       AND EXISTS (SELECT 1 FROM halo_song_catalog song WHERE song.id = ${songId}
         AND song.owner_member_id = ${ownerMemberId} AND song.status = 'active')
     RETURNING id
@@ -117,16 +139,7 @@ async function registerMasterUpload(payload: Record<string, unknown>, db: Awaite
   await runDreamweaverReview(songId, ownerMemberId);
   // Multipart sessions retain their immutable object for safe, idempotent completion retries.
   if (!multipart && version.audio_storage_key && version.audio_storage_key !== fileKey) await deleteStoredObject(storage, String(version.audio_storage_key)).catch(() => undefined);
-  return json({
-    message: "Master copy uploaded directly to storage and registered as the canonical sale master.",
-    songId,
-    versionId,
-    audioUrl,
-    storage: "direct",
-    persisted: true,
-    lockedIn: true,
-    confirmedAt: new Date().toISOString(),
-  });
+  return registeredMasterResponse(songId, versionId);
 }
 
 async function resumableMasterUpload(payload: Record<string, unknown>, db: Awaited<ReturnType<typeof getDatabase>>, ownerMemberId: string) {
@@ -143,7 +156,7 @@ async function resumableMasterUpload(payload: Record<string, unknown>, db: Await
     action: String(payload.action), store: uploadSessions, storage, scope: { ownerMemberId, songId, versionId },
     fingerprint: String(payload.fingerprint || ""), upload, generationId: payload.generationId,
     startByte: payload.startByte, partChecksum: payload.partChecksum,
-    expectedStorageKey: version.audio_storage_key || null, expectedBlobPrefix: version.audio_blob_prefix || "",
+    expectedStorageKey: version.audio_storage_key || null, expectedBlobPrefix: version.audio_blob_prefix || "", expectedRevision: version.audio_revision,
   });
   if (payload.action !== "complete") {
     if (result.complete && version.audio_storage_key === result.fileKey) return json({
@@ -153,7 +166,7 @@ async function resumableMasterUpload(payload: Record<string, unknown>, db: Await
     return json(result);
   }
   const registered = await registerMasterUpload({ ...payload, generationId: result.generationId, fileKey: result.fileKey, expectedStorageKey: result.expectedStorageKey,
-    expectedBlobPrefix: result.expectedBlobPrefix, originalName: upload.filename }, db, ownerMemberId, true);
+    expectedBlobPrefix: result.expectedBlobPrefix, expectedRevision: result.expectedRevision, originalName: upload.filename }, db, ownerMemberId, true);
   if (registered.ok) await markMasterMultipartRegistered({
     store: uploadSessions, scope: { ownerMemberId, songId, versionId }, fingerprint: String(payload.fingerprint || ""), generationId: result.generationId,
   });

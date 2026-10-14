@@ -52,14 +52,20 @@
       const stopped = new Promise((_, reject) => { rejectStopped = reject; });
       const paused = () => { controller.abort(); rejectStopped(new DOMException("Master upload paused", "AbortError")); };
       let timedOut = false;
+      let responseStatus;
       const timeoutMs = Math.max(1, Math.min(600000, Number(options.requestTimeoutMs) || 180000));
       const timer = setTimeout(() => { timedOut = true; controller.abort(); rejectStopped(new Error("Request timed out")); }, timeoutMs);
       signal?.addEventListener("abort", paused, { once: true });
       try {
-        return await Promise.race([root.fetch(url, { ...init, signal: controller.signal }).then(consume), stopped]);
+        return await Promise.race([root.fetch(url, { ...init, signal: controller.signal }).then(response => {
+          responseStatus = response.status;
+          return consume(response);
+        }), stopped]);
       } catch (error) {
         abort(signal);
-        if (timedOut) throw Object.assign(new Error("Master upload request timed out. Retrying from confirmed storage."), { name: "TimeoutError", status: 503 });
+        if (timedOut) throw Object.assign(new Error("Master upload request timed out."), {
+          name: "TimeoutError", status: responseStatus >= 400 && !transient(responseStatus) ? responseStatus : 503,
+        });
         throw error;
       } finally {
         clearTimeout(timer);

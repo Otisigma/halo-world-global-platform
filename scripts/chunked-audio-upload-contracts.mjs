@@ -19,6 +19,7 @@ import {
 } from "../netlify/lib/chunked-audio-upload.mjs";
 import {
   createAudioApiClient,
+  deterministicUploadId,
   isCandidateAudioFile,
   resolveBaseUrl,
   uploadAudioFile,
@@ -374,11 +375,17 @@ function memoryStore(blobs = new Map()) {
   assert.equal((await a(finalizeRequest())).status, 409, "ABA pointer reset cannot resurrect an older session whose original pointers were empty");
   assert.equal(databaseWrites, writesAfterDelete);
   assert.equal(version.audio_blob_prefix, null);
+  const olderRetired = await (await a(statusRequest())).json();
+  assert.equal(olderRetired.retired, true, "an older superseded session also receives a fresh generation after canonical deletion");
+  assert.match(olderRetired.successorUploadId, /^next-[a-f0-9-]{36}$/);
   assert.ok(store.blobs.has(audioChunkKey(deletedPrefix, 0)), "deletion retains immutable chunks for in-flight readers");
   const retiredStatus = await (await a(statusRequest({ uploadId: deletedUploadId, chunkCount: 1, byteSize: 4 }))).json();
   assert.equal(retiredStatus.retired, true);
   assert.equal(retiredStatus.finalized, false);
   assert.match(retiredStatus.successorUploadId, /^next-[a-f0-9-]{36}$/);
+  const rejectedChunk = await a(chunkRequest(0, "new!", { uploadId: deletedUploadId, chunkCount: 1, byteSize: 4 }));
+  assert.equal(rejectedChunk.status, 409);
+  assert.equal((await rejectedChunk.json()).retired, true, "retirement blocks late chunk retries too");
   const retryStatus = await (await b(statusRequest({ uploadId: deletedUploadId, chunkCount: 1, byteSize: 4 }))).json();
   assert.equal(retryStatus.successorUploadId, retiredStatus.successorUploadId, "the replacement generation is durable across server instances");
   const replacement = { uploadId: retiredStatus.successorUploadId, chunkCount: 1, byteSize: 4 };
@@ -403,11 +410,16 @@ function fakeAudioApi({ failures = {}, statusTransform = status => status, compe
     const failure = failures[label]?.shift();
     if (failure === "network") throw new TypeError("fetch failed");
     if (failure && !["lost", "bad-json", "finalized-race"].includes(failure)) return json({ message: "Temporary failure" }, failure);
-    const acknowledge = body => {
+    const acknowledge = async body => {
       if (failure === "lost") {
         if (failures.afterLostStatus) {
           failures.upload_status = [...failures.afterLostStatus];
           delete failures.afterLostStatus;
+        }
+        if (failures.retireAfterLost) {
+          const fields = isForm ? Object.fromEntries(init.body) : JSON.parse(init.body);
+          await chunkRules.retireAudioUpload(store, audioUploadPrefix("member", fields.versionId, fields.uploadId), `next-${randomUUID()}`);
+          delete failures.retireAfterLost;
         }
         throw new TypeError("acknowledgement lost after commit");
       }
@@ -451,14 +463,17 @@ function fakeAudioApi({ failures = {}, statusTransform = status => status, compe
     const prefix = audioUploadPrefix("member", payload.versionId, payload.uploadId);
     const status = await inspectAudioUpload(store, { prefix, chunkCount: payload.chunkCount, byteSize: payload.byteSize, chunkSize: payload.chunkSize });
     if (!status.ok) return json({ message: status.message }, status.status);
+    const retirement = await chunkRules.getAudioUploadRetirement(store, prefix);
     if (payload.action === "upload_status") {
       const isFinalized = finalized.get(payload.versionId) === prefix;
       return json(statusTransform({
         finalized: isFinalized, ...status,
+        ...(retirement ? { retired: true, successorUploadId: retirement.successorUploadId } : {}),
         ...(isFinalized ? { persisted: true, lockedIn: true, audioUrl: `/api/song-catalog/audio?versionId=${payload.versionId}`, message: "Audio is persisted and locked into HALO storage." } : {}),
       }));
     }
     if (payload.action === "finalize_upload") {
+      if (retirement) return json({ message: "This upload was deleted", retired: true, successorUploadId: retirement.successorUploadId }, 409);
       if (finalized.get(payload.versionId) === prefix) return json({
         message: "Audio is persisted and locked into HALO storage.", alreadyFinalized: true,
         persisted: true, lockedIn: true, audioUrl: `/api/song-catalog/audio?versionId=${payload.versionId}`,
@@ -476,7 +491,19 @@ function fakeAudioApi({ failures = {}, statusTransform = status => status, compe
     const keys = [...store.blobs.keys()].filter(key => key.startsWith(prefix) && store.blobs.get(key).data).sort();
     return Buffer.concat(keys.map(key => store.blobs.get(key).data));
   };
-  return { fetchImpl, calls, store, assembled };
+  return {
+    fetchImpl, calls, store, assembled,
+    async retireSession(uploadId, successorUploadId = `next-${randomUUID()}`) {
+      return chunkRules.retireAudioUpload(store, audioUploadPrefix("member", VERSION_ID, uploadId), successorUploadId);
+    },
+    async deleteAudio() {
+      const prefix = finalized.get(VERSION_ID);
+      assert.ok(prefix, "fake deletion requires finalized audio");
+      const receipt = await chunkRules.retireAudioUpload(store, prefix, `next-${randomUUID()}`);
+      finalized.delete(VERSION_ID);
+      return receipt;
+    },
+  };
 }
 
 const workDir = await mkdtemp(join(root, ".halo-chunk-upload-contracts-"));
@@ -549,6 +576,59 @@ try {
     );
     assert.equal(api.calls.at(-1), "chunk:0", "genuine conflicts are not retried or converted into success");
     assert.equal(api.calls.filter(call => call.startsWith("chunk:")).length, 1);
+  }
+
+  // Deleted files get a fresh durable generation only when the user explicitly starts again.
+  {
+    const api = fakeAudioApi();
+    const client = createAudioApiClient({ baseUrl: "https://halo.example", token: TOKEN, fetchImpl: api.fetchImpl, sleepImpl: noSleep });
+    const first = await uploadAudioFile({ filePath: audioPath, songId: SONG_ID, versionId: VERSION_ID, client, chunkSize: 4096 });
+    const originalKey = audioChunkKey(audioUploadPrefix("member", VERSION_ID, first.uploadId), 0);
+    const originalChunk = api.store.blobs.get(originalKey);
+    const retirement = await api.deleteAudio();
+    const second = await uploadAudioFile({ filePath: audioPath, songId: SONG_ID, versionId: VERSION_ID, client, chunkSize: 4096 });
+    assert.equal(second.uploadId, retirement.successorUploadId);
+    assert.notEqual(second.uploadId, first.uploadId);
+    assert.equal(second.skippedChunks, 0, "retained deleted bytes are not reused as fresh upload progress");
+    assert.equal(second.uploadedChunks, second.chunkCount);
+    assert.equal(second.persisted, true);
+    assert.equal(api.store.blobs.get(originalKey), originalChunk, "fresh uploads never overwrite retired generation bytes");
+    assert.equal(Buffer.compare(api.assembled(VERSION_ID), audio), 0);
+  }
+  {
+    const api = fakeAudioApi({ failures: { "chunk:0": ["lost"], retireAfterLost: true } });
+    const client = createAudioApiClient({ baseUrl: "https://halo.example", token: TOKEN, fetchImpl: api.fetchImpl, sleepImpl: noSleep, retryDelays: [] });
+    await assert.rejects(
+      uploadAudioFile({ filePath: audioPath, songId: SONG_ID, versionId: VERSION_ID, client, chunkSize: 4096 }),
+      error => error.status === 409 && error.data.retired === true,
+      "retirement discovered mid-flight aborts instead of following a fresh generation",
+    );
+    assert.equal(api.calls.filter(call => call.startsWith("chunk:")).length, 1);
+    assert.equal(api.calls.filter(call => call === "finalize_upload").length, 0);
+    const fresh = await uploadAudioFile({ filePath: audioPath, songId: SONG_ID, versionId: VERSION_ID, client, chunkSize: 4096 });
+    assert.equal(fresh.persisted, true);
+    assert.equal(fresh.skippedChunks, 0);
+    assert.equal(Buffer.compare(api.assembled(VERSION_ID), audio), 0);
+  }
+  {
+    const rootUploadId = deterministicUploadId({ versionId: VERSION_ID, fileSha256: sha256(audio), chunkSize: 4096 });
+    const api = fakeAudioApi();
+    await api.retireSession(rootUploadId, "next-lineage-middle");
+    await api.retireSession("next-lineage-middle", "next-lineage-current");
+    const client = createAudioApiClient({ baseUrl: "https://halo.example", token: TOKEN, fetchImpl: api.fetchImpl, sleepImpl: noSleep });
+    const result = await uploadAudioFile({ filePath: audioPath, songId: SONG_ID, versionId: VERSION_ID, client, chunkSize: 4096 });
+    assert.equal(result.uploadId, "next-lineage-current", "explicit invocation follows durable generation lineage");
+    assert.equal(result.persisted, true);
+    for (const successor of [rootUploadId, "invalid/next"]) {
+      const broken = fakeAudioApi();
+      await broken.retireSession(rootUploadId, successor);
+      const brokenClient = createAudioApiClient({ baseUrl: "https://halo.example", token: TOKEN, fetchImpl: broken.fetchImpl, sleepImpl: noSleep });
+      await assert.rejects(
+        uploadAudioFile({ filePath: audioPath, songId: SONG_ID, versionId: VERSION_ID, client: brokenClient, chunkSize: 4096 }),
+        /invalid upload generation/,
+      );
+      assert.ok(broken.calls.every(call => call === "upload_status"), "invalid or cyclic successors cannot cause upload writes");
+    }
   }
 
   // An unavailable progress endpoint blocks writes rather than treating unknown progress as zero.

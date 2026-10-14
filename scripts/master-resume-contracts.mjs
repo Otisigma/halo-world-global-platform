@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { webcrypto } from "node:crypto";
-import { stripTypeScriptTypes } from "node:module";
 import vm from "node:vm";
 import * as storageHelpers from "../netlify/lib/direct-upload-storage.mjs";
 import {
@@ -21,7 +20,7 @@ const checksum = async blob => Buffer.from(await webcrypto.subtle.digest("SHA-25
 
 function fixture() {
   const blobs = new Map(), multipart = new Map(), objects = new Map(), writes = [], requests = [];
-  let sequence = 0, lostWrite = false, lostComplete = false, badHead = false;
+  let sequence = 0, lostWrite = false, lostComplete = false, badHead = false, listPartsHook;
   const store = {
     async getWithMetadata(key) { return structuredClone(blobs.get(key) || null); },
     async get(key) { return structuredClone(blobs.get(key)?.data || null); },
@@ -63,8 +62,13 @@ function fixture() {
       session.parts.sort((a, b) => a.number - b.number);
       return new Response(null);
     }
-    if (method === "GET") return new Response(`<ListPartsResult><IsTruncated>false</IsTruncated>${session.parts.map(part =>
-      `<Part><PartNumber>${part.number}</PartNumber><Size>${part.size}</Size><ETag>${part.etag}</ETag><ChecksumSHA256>${part.checksum}</ChecksumSHA256></Part>`).join("")}</ListPartsResult>`);
+    if (method === "GET") {
+      const hook = listPartsHook;
+      listPartsHook = null;
+      await hook?.();
+      return new Response(`<ListPartsResult><IsTruncated>false</IsTruncated>${session.parts.map(part =>
+        `<Part><PartNumber>${part.number}</PartNumber><Size>${part.size}</Size><ETag>${part.etag}</ETag><ChecksumSHA256>${part.checksum}</ChecksumSHA256></Part>`).join("")}</ListPartsResult>`);
+    }
     assert.equal(method, "POST");
     assert.match(init.body, /<CompleteMultipartUpload>/);
     assert.match(init.body, /&quot;etag-1&quot;/);
@@ -74,7 +78,7 @@ function fixture() {
     return new Response("<CompleteMultipartUploadResult/>");
   };
   const action = async (action, extra = {}) => {
-    const saved = await store.get(masterSessionKey(extra.scope || scope, fingerprint));
+    const saved = await store.get(masterSessionKey(extra.scope || scope, extra.fingerprint || fingerprint));
     return masterMultipartAction({ action, store, storage, scope, fingerprint, upload, fetchImpl, generationId: saved?.objectToken, ...extra });
   };
   const addPart = async startByte => {
@@ -84,7 +88,8 @@ function fixture() {
     return part;
   };
   return { store, blobs, multipart, objects, writes, requests, action, addPart, fetchImpl,
-    loseWrite: () => { lostWrite = true; }, loseComplete: () => { lostComplete = true; }, corruptHead: () => { badHead = true; } };
+    loseWrite: () => { lostWrite = true; }, loseComplete: () => { lostComplete = true; }, corruptHead: () => { badHead = true; },
+    interleaveListParts: hook => { listPartsHook = hook; } };
 }
 
 assert.notEqual(masterSessionKey(scope, fingerprint), masterSessionKey({ ...scope, ownerMemberId: "member-2" }, fingerprint));
@@ -93,6 +98,11 @@ assert.throws(() => masterSessionKey(scope, "filename-only"), /SHA-256/);
 const signed = new URL(presignObjectUrl({ config: storage, method: "POST", key: "key", queryParams: { uploads: "" }, requestHeaders: { "x-amz-meta-halo-session": "identity" }, contentType: "audio/wav" }));
 assert.equal(signed.searchParams.get("X-Amz-SignedHeaders"), "content-type;host;x-amz-meta-halo-session");
 assert.equal(signed.searchParams.get("uploads"), "");
+assert.equal(await storageHelpers.headStoredObject(storage, "key", async () => new Response(null, { status: 503 })), 0, "legacy HEAD behavior remains compatible");
+for (const status of [429, 503]) {
+  await assert.rejects(storageHelpers.headStoredObjectStrict(storage, "key", async () => new Response(null, { status })), error => error.status === 503);
+}
+assert.equal(await storageHelpers.headStoredObjectStrict(storage, "key", async () => new Response(null, { status: 404 })), 0);
 
 {
   const f = fixture();
@@ -156,6 +166,19 @@ assert.equal(signed.searchParams.get("uploads"), "");
   f.loseWrite();
   const completed = await f.action("complete");
   assert.equal(completed.complete, true, "lost completion-state writes are resolved by durable readback");
+}
+{
+  const f = fixture();
+  await f.action("create");
+  f.interleaveListParts(() => f.addPart(0));
+  assert.equal((await f.action("status")).uploadedBytes, CHUNK,
+    "status refreshes checksum bindings when a concurrent upload wins between the session snapshot and ListParts");
+  const body = new Blob([new Uint8Array(123)]), partChecksum = await checksum(body);
+  f.interleaveListParts(() => f.action("part", { startByte: CHUNK, partChecksum }));
+  const part = await f.action("part", { startByte: CHUNK, partChecksum });
+  assert.equal((await f.fetchImpl(part.uploadUrl, { method: "PUT", headers: part.headers, body })).status, 200,
+    "a concurrent identical checksum binding does not cause a stale-etag presign failure");
+  assert.equal((await f.action("complete")).complete, true);
 }
 
 // Execute the real browser adapter against server actions + storage, including a lost part reply.
@@ -317,12 +340,24 @@ function registration(result) {
   assert.equal(saved.fingerprint, fingerprint);
   assert.ok(!/uploadUrl|storageUploadId|fileKey|token|credential|signature/i.test([...cache.values()][0]), "progress cache contains no credentials or storage capabilities");
 }
+for (const status of [401, 403]) {
+  for (const hanging of [false, true]) {
+    let requests = 0;
+    const adapter = browser(async () => {
+      requests++;
+      return hanging ? { status, ok: false, json: () => new Promise(() => {}) } : new Response("<html>Access denied</html>", { status });
+    });
+    await assert.rejects(adapter.upload(browserFile, { ...browserOptions, requestTimeoutMs: 25 }), error => error.status === status);
+    assert.equal(requests, 1, "malformed or hanging error bodies cannot turn known authorization failures into retryable timeouts");
+  }
+}
 const endpoint = await readFile(new URL("../netlify/functions/song-catalog-master-upload.ts", import.meta.url), "utf8");
 assert.match(endpoint, /name: "halo-master-upload-sessions", consistency: "strong"/);
 assert.match(endpoint, /verifyRequestOrigin\(request\)/);
 assert.match(endpoint, /version_type = \$\{MASTER_VERSION_TYPE\}/);
 assert.match(endpoint, /audio_storage_key IS NOT DISTINCT FROM/);
 assert.match(endpoint, /audio_blob_prefix IS NOT DISTINCT FROM/);
+assert.match(endpoint, /updated_at::text IS NOT DISTINCT FROM/);
 assert.ok(!endpoint.includes("audioStore.delete"), "master registration retains immutable fallback chunks for finalization retries");
 assert.match(endpoint, /payload\.action === "presign"/);
 assert.match(endpoint, /payload\.action === "register"/);
@@ -330,14 +365,19 @@ assert.match(endpoint, /payload\.action === "register"/);
   const f = fixture();
   const songId = "11111111-1111-4111-8111-111111111111", versionId = "22222222-2222-4222-8222-222222222222";
   let authorized = true, originAllowed = true, ownerAllowed = true, updateCount = 0;
-  let currentKey = null, currentPrefix = "";
+  const registrationHeadFailures = [503, 429];
+  let currentKey = null, currentPrefix = "", currentRevision = "2026-10-14 23:00:00.123456+00", revision = 0, changeRevisionAfterHead = false;
   const db = { sql: async (strings, ...values) => {
     const query = strings.join("?");
-    if (query.includes("SELECT version.id")) return ownerAllowed ? [{ id: versionId, song_id: songId, audio_storage_key: currentKey, audio_blob_prefix: currentPrefix }] : [];
+    if (query.includes("SELECT version.id")) return ownerAllowed ? [{ id: versionId, song_id: songId, audio_storage_key: currentKey, audio_blob_prefix: currentPrefix, audio_revision: currentRevision }] : [];
     assert.match(query, /UPDATE halo_song_versions/);
     assert.match(query, /version_type = \?/);
     assert.match(query, /owner_member_id = \?/);
+    const revisionIndex = strings.findIndex(part => part.includes("AND updated_at::text IS NOT DISTINCT FROM"));
+    assert.ok(revisionIndex >= 0);
+    if (values[revisionIndex] !== currentRevision) return [];
     currentKey = values[1];
+    currentRevision = `revision-${++revision}`;
     updateCount++;
     return [{ id: versionId }];
   } };
@@ -351,10 +391,20 @@ assert.match(endpoint, /payload\.action === "register"/);
     runDreamweaverReview: async () => {},
     directUploadConfig: () => storage,
     headStoredObject: (config, key) => storageHelpers.headStoredObject(config, key, f.fetchImpl),
+    headStoredObjectStrict: async (config, key) => {
+      const bytes = await storageHelpers.headStoredObjectStrict(config, key, (...args) =>
+        registrationHeadFailures.length ? Promise.resolve(new Response(null, { status: registrationHeadFailures.shift() })) : f.fetchImpl(...args));
+      if (changeRevisionAfterHead) { changeRevisionAfterHead = false; currentRevision = `retired-${++revision}`; }
+      return bytes;
+    },
     masterMultipartAction: options => storageHelpers.masterMultipartAction({ ...options, fetchImpl: f.fetchImpl }),
   };
-  const runnable = stripTypeScriptTypes(endpoint.replace(/^import[\s\S]*?from "[^"]+";\n/gm, "")
-    .replace("export default async function", "async function").replace("export const config", "const config"));
+  const runnable = endpoint.replace(/^import[\s\S]*?from "[^"]+";\n/gm, "")
+    .replace("export default async function", "async function").replace("export const config", "const config")
+    .replace(/ as Record<string, unknown> \| null/g, "")
+    .replace(/: Awaited<ReturnType<typeof getDatabase>>/g, "")
+    .replace(/: Record<string, unknown>/g, "")
+    .replace(/: (?:unknown|string|Request)(?=[,)])/g, "");
   vm.runInNewContext(runnable, context);
   const metadata = { songId, versionId, fingerprint, fileName: "master.wav", fileType: "audio/wav", fileSize: upload.byteSize };
   const call = (action, extra = {}) => context.songCatalogMasterUploadHandler(new Request("https://halo.example/api/song-catalog/master-upload", {
@@ -377,20 +427,43 @@ assert.match(endpoint, /payload\.action === "register"/);
     await f.fetchImpl(part.uploadUrl, { method: "PUT", headers: part.headers, body });
   }
   f.loseComplete();
+  for (let attempt = 0; attempt < 2; attempt++) {
+    assert.equal((await call("complete")).status, 503, "registration HEAD throttling/outage stays retryable after successful multipart completion");
+    assert.equal(updateCount, 0, "a transient registration HEAD does not publish or discard the completed object");
+  }
   const completed = await call("complete");
   assert.equal(completed.status, 200);
   assert.equal((await completed.json()).persisted, true);
+  const firstKey = currentKey;
   assert.equal((await (await call("status")).json()).persisted, true, "status confirms canonical registration after a lost completion response");
   assert.equal(updateCount, 1);
   assert.equal((await call("complete")).status, 200, "lost endpoint responses are safe to retry after registration");
+  assert.equal(updateCount, 1, "an already canonical session confirms as a no-op without changing the audio revision");
   currentKey = "masters/a/newer-master.wav";
   assert.equal((await call("complete")).status, 409, "an old completed session cannot replace a newer canonical master");
-  assert.equal(updateCount, 2);
+  assert.equal(updateCount, 1);
   currentKey = null; currentPrefix = "immutable/newer-chunked-master/";
   assert.equal((await call("complete")).status, 409, "a newer blob prefix is pinned even when the direct storage key remains null");
-  assert.equal(updateCount, 2);
+  assert.equal(updateCount, 1);
   const oldGeneration = metadata.generationId;
-  currentKey = ""; currentPrefix = "";
+  currentKey = firstKey; currentPrefix = "";
+  const fingerprintB = "b".repeat(64);
+  const createdB = await call("create", { fingerprint: fingerprintB });
+  assert.equal(createdB.status, 200);
+  const generationB = (await createdB.json()).generationId;
+  for (const startByte of [0, CHUNK]) {
+    const body = new Blob([new Uint8Array(Math.min(CHUNK, upload.byteSize - startByte)).fill(1)]);
+    const part = await f.action("part", { ...params, fingerprint: fingerprintB, generationId: generationB, startByte, partChecksum: await checksum(body) });
+    await f.fetchImpl(part.uploadUrl, { method: "PUT", headers: part.headers, body });
+  }
+  assert.equal((await call("complete", { fingerprint: fingerprintB, generationId: generationB })).status, 200);
+  assert.notEqual(currentKey, firstKey);
+  currentKey = ""; currentRevision = `deleted-B-${++revision}`;
+  f.blobs.get(masterSessionKey(params.scope, fingerprint)).data.registered = false;
+  assert.equal((await call("complete", { generationId: oldGeneration })).status, 409,
+    "A -> B -> DELETE -> retry A cannot resurrect retained A even if its post-SQL receipt write was lost");
+  assert.equal(updateCount, 2);
+  currentKey = ""; currentPrefix = ""; currentRevision = `deleted-${++revision}`;
   f.objects.clear(); // DELETE clears the canonical pointers and removes the old object.
   assert.equal((await call("complete", { generationId: oldGeneration })).status, 410, "completion cannot resurrect an intentionally deleted master");
   const reupload = await call("create");
@@ -407,14 +480,30 @@ assert.match(endpoint, /payload\.action === "register"/);
   assert.equal((await call("complete", { generationId: oldGeneration })).status, 410, "a delayed old completion cannot publish a new generation");
   assert.equal((await call("status", { generationId: oldGeneration })).status, 410);
   assert.equal(currentKey, latestKey);
-  assert.equal(f.blobs.size, 2, "the prior generation receipt is preserved when the session pointer renews");
+  assert.equal(f.blobs.size, 3, "the prior generation receipt and replacement session remain preserved when the session pointer renews");
   const secondGeneration = metadata.generationId;
-  currentKey = ""; currentPrefix = "";
+  currentKey = ""; currentPrefix = ""; currentRevision = `deleted-${++revision}`;
+  const secondSessionKey = masterSessionKey(params.scope, fingerprint);
+  const savedSecond = f.blobs.get(secondSessionKey);
+  savedSecond.data.registered = false; // The canonical DB write succeeded but its receipt response was lost.
+  assert.equal((await call("complete", { generationId: secondGeneration })).status, 409,
+    "exact prior audio revision blocks DELETE pointer-ABA even when the registration marker was lost and object cleanup failed");
   const retainedObjectReupload = await call("create");
   assert.equal(retainedObjectReupload.status, 200, "intentional pointer removal renews even when physical object cleanup failed");
   const thirdGeneration = (await retainedObjectReupload.json()).generationId;
   assert.notEqual(thirdGeneration, secondGeneration);
   assert.equal((await call("complete", { generationId: secondGeneration })).status, 410, "retained old objects cannot be republished by an archived receipt");
   assert.equal((await call("complete", { generationId: undefined })).status, 400, "publication requires an explicit generation");
+  metadata.generationId = thirdGeneration;
+  for (const startByte of [0, CHUNK]) {
+    const body = new Blob([new Uint8Array(Math.min(CHUNK, upload.byteSize - startByte))]);
+    const part = await f.action("part", { ...params, generationId: thirdGeneration, startByte, partChecksum: await checksum(body) });
+    await f.fetchImpl(part.uploadUrl, { method: "PUT", headers: part.headers, body });
+  }
+  changeRevisionAfterHead = true;
+  const updatesBeforeRace = updateCount;
+  assert.equal((await call("complete")).status, 409, "DB revision CAS blocks DELETE/edit after storage verification and before publication");
+  assert.equal(updateCount, updatesBeforeRace);
+  assert.equal(currentKey, "", "a racing revision change cannot resurrect the removed audio pointer");
 }
 console.log("Master multipart resume contracts passed.");

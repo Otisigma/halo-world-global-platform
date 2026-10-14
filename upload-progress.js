@@ -146,9 +146,10 @@
       !songId||!versionId)throw new Error("The audio file or upload target is invalid.");
     const retryLimit=Math.min(8,Math.max(0,Number.isSafeInteger(maxRetries)?maxRetries:3));
     const chunkCount=Math.ceil(file.size/chunkSize);
-    const uploadId=await fileUploadId(file,[url,songId,versionId,contentType],chunkSize);
+    let uploadId=await fileUploadId(file,[url,songId,versionId,contentType],chunkSize);
     const details={songId,versionId,uploadId,chunkCount,chunkSize,byteSize:file.size,filename:file.name,contentType};
     const cacheKey=`halo-audio-resume:${uploadId}`;
+    const generations=new Set([uploadId]);
     function cache(status){
       try{
         if(status.finalized)window.localStorage.removeItem(cacheKey);
@@ -186,13 +187,13 @@
           throw Object.assign(new Error("The audio response could not be read. Reselect the same file to resume."),{retryable:true,ambiguous:true,cause:error});
         }
         if(!response.ok)throw Object.assign(new Error(data?.message||`Audio upload failed (HTTP ${response.status}).`),{
-          status:response.status,retryable:retryable(response.status),finalized:data?.finalized===true
+          status:response.status,retryable:retryable(response.status),finalized:data?.finalized===true,retired:data?.retired===true
         });
         return data;
       }
       try{return await Promise.race([perform(),deadline]);}finally{clearTimeout(timer);}
     }
-    async function getStatus(){
+    async function getStatus({allowRetired=false}={}){
       for(let attempt=0;;attempt++){
         try{
           const status=await request({action:"upload_status",...details});
@@ -200,6 +201,18 @@
             status.receivedChunks.some(index=>!Number.isSafeInteger(index)||index<0||index>=chunkCount)||
             !Number.isSafeInteger(status.confirmedBytes)||status.confirmedBytes<0||status.confirmedBytes>file.size)
             throw new Error("The server returned an invalid upload status. No audio was sent.");
+          if(status.retired===true){
+            if(!allowRetired)throw Object.assign(new Error("This upload was deleted. Reselect the same audio file to start a fresh upload."),{status:409,retired:true,retryable:false});
+            const next=status.successorUploadId;
+            if(typeof next!=="string"||!/^[-_a-zA-Z0-9]{8,160}$/.test(next)||generations.has(next)||generations.size>=32)
+              throw new Error("The server returned an invalid replacement upload session. No audio was sent.");
+            generations.add(next);
+            uploadId=next;
+            details.uploadId=next;
+            cache({confirmedBytes:0});
+            attempt=-1;
+            continue;
+          }
           cache(status);
           onProgress(clampPercent((status.confirmedBytes||0)/file.size*100),{...status,uploadId,chunkCount});
           return status;
@@ -219,7 +232,7 @@
     const result=(status,alreadyFinalized=true)=>{
       if(status.finalized===true){
         status={
-          ...status,persisted:true,lockedIn:true,
+          ...status,
           audioUrl:status.audioUrl||`${url}${url.includes("?")?"&":"?"}versionId=${encodeURIComponent(versionId)}`,
           message:status.message||"Audio is persisted and locked into HALO storage."
         };
@@ -231,53 +244,61 @@
       return {...status,...details,alreadyFinalized};
     };
     cache({confirmedBytes:0});
-    for(let chunkIndex=0;chunkIndex<chunkCount;chunkIndex++){
-      const chunk=file.slice(chunkIndex*chunkSize,Math.min(file.size,(chunkIndex+1)*chunkSize),contentType);
-      checksums[chunkIndex]=hex(new Uint8Array(await crypto.subtle.digest("SHA-256",await chunk.arrayBuffer())));
+    // Only a new invocation may follow retirement; an active transfer must not undo DELETE.
+    const initial=await getStatus({allowRetired:true});
+    if(initial.finalized)return result(initial);
+    async function transfer(){
+      for(let chunkIndex=0;chunkIndex<chunkCount;chunkIndex++){
+        const chunk=file.slice(chunkIndex*chunkSize,Math.min(file.size,(chunkIndex+1)*chunkSize),contentType);
+        checksums[chunkIndex]=hex(new Uint8Array(await crypto.subtle.digest("SHA-256",await chunk.arrayBuffer())));
+        for(let attempt=0;;attempt++){
+          const status=await getStatus();
+          if(status.finalized)return result(status);
+          if(matches(status,chunkIndex))break;
+          const form=new FormData();
+          Object.entries({...details,chunkIndex,offset:chunkIndex*chunkSize,chunkSha256:checksums[chunkIndex]}).forEach(([key,value])=>form.append(key,String(value)));
+          form.append("chunk",chunk,file.name);
+          try{
+            await request(form);
+          }catch(error){
+            const finalizedHint=error.status===409&&error.finalized===true;
+            const retiredHint=error.status===409&&error.retired===true;
+            if(!error.retryable&&!error.ambiguous&&!finalizedHint&&!retiredHint)throw error;
+            const reconciled=await getStatus();
+            if(reconciled.finalized)return result(reconciled);
+            if(finalizedHint||retiredHint)throw error;
+            if(matches(reconciled,chunkIndex))break;
+            if(!error.retryable||attempt>=retryLimit)throw error;
+            await pause(attempt);
+            continue;
+          }
+          const confirmed=await getStatus();
+          if(confirmed.finalized)return result(confirmed);
+          if(!matches(confirmed,chunkIndex))throw new Error("The server did not confirm this audio chunk. Reselect the same file to resume.");
+          break;
+        }
+      }
       for(let attempt=0;;attempt++){
         const status=await getStatus();
         if(status.finalized)return result(status);
-        if(matches(status,chunkIndex))break;
-        const form=new FormData();
-        Object.entries({...details,chunkIndex,offset:chunkIndex*chunkSize,chunkSha256:checksums[chunkIndex]}).forEach(([key,value])=>form.append(key,String(value)));
-        form.append("chunk",chunk,file.name);
+        for(let index=0;index<chunkCount;index++){
+          if(!matches(status,index))throw new Error("The audio upload is incomplete. Reselect the same file to resume.");
+        }
         try{
-          await request(form);
+          const finalized=await request({action:"finalize_upload",...details,durationSeconds});
+          return result(finalized,Boolean(finalized.alreadyFinalized));
         }catch(error){
           const finalizedHint=error.status===409&&error.finalized===true;
-          if(!error.retryable&&!error.ambiguous&&!finalizedHint)throw error;
+          const retiredHint=error.status===409&&error.retired===true;
+          if(!error.retryable&&!error.ambiguous&&!finalizedHint&&!retiredHint)throw error;
           const reconciled=await getStatus();
           if(reconciled.finalized)return result(reconciled);
-          if(finalizedHint)throw error;
-          if(matches(reconciled,chunkIndex))break;
           if(!error.retryable||attempt>=retryLimit)throw error;
           await pause(attempt);
-          continue;
         }
-        const confirmed=await getStatus();
-        if(confirmed.finalized)return result(confirmed);
-        if(!matches(confirmed,chunkIndex))throw new Error("The server did not confirm this audio chunk. Reselect the same file to resume.");
-        break;
       }
     }
-    for(let attempt=0;;attempt++){
-      const status=await getStatus();
-      if(status.finalized)return result(status);
-      for(let index=0;index<chunkCount;index++){
-        if(!matches(status,index))throw new Error("The audio upload is incomplete. Reselect the same file to resume.");
-      }
-      try{
-        const finalized=await request({action:"finalize_upload",...details,durationSeconds});
-        return result(finalized,Boolean(finalized.alreadyFinalized));
-      }catch(error){
-        const finalizedHint=error.status===409&&error.finalized===true;
-        if(!error.retryable&&!error.ambiguous&&!finalizedHint)throw error;
-        const reconciled=await getStatus();
-        if(reconciled.finalized)return result(reconciled);
-        if(!error.retryable||attempt>=retryLimit)throw error;
-        await pause(attempt);
-      }
-    }
+    return transfer();
   }
 
   window.HaloUploadProgress={createUploadUi,sendFormData,sendFormDataWithRetry,uploadChunkedFile,fileSha256,fileUploadId,uploadResumableAudio};

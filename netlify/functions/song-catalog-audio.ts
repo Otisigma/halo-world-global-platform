@@ -9,6 +9,7 @@ import {
   AUDIO_CHUNK_MAX_BYTES,
   AUDIO_UPLOAD_MAX_BYTES,
   AUDIO_UPLOAD_MAX_CHUNKS,
+  audioFinalizationKey,
   audioUploadPrefix,
   cleanChunkChecksum,
   getAudioUploadRetirement,
@@ -172,7 +173,14 @@ async function uploadStatus(payload: Record<string, unknown>, db: Awaited<Return
   const prefix = audioUploadPrefix(ownerMemberId, versionId, uploadId);
   const status = await inspectAudioUpload(audioStore, { prefix, chunkCount, byteSize, chunkSize });
   if (!status.ok) return json({ message: status.message }, status.status);
-  const retirement = await getAudioUploadRetirement(audioStore, prefix);
+  let retirement = await getAudioUploadRetirement(audioStore, prefix);
+  if (!retirement && !version.audio_blob_prefix && !version.audio_storage_key) {
+    const receipt = await audioStore.get(audioFinalizationKey(prefix), { type: "json" });
+    // An older superseded session also needs a fresh generation once the canonical audio is removed.
+    if (receipt && receipt.expectedRevision !== version.audio_revision) {
+      retirement = await retireAudioUpload(audioStore, prefix, `next-${randomUUID()}`);
+    }
+  }
   return json({
     songId, versionId, uploadId, ...status, finalized: version.audio_blob_prefix === prefix,
     ...(retirement ? { retired: true, successorUploadId: retirement.successorUploadId } : {}),
@@ -259,7 +267,10 @@ async function finalizeUpload(payload: Record<string, unknown>, db: Awaited<Retu
     expectedStorageKey: version.audio_storage_key ?? null,
     expectedRevision: version.audio_revision,
   });
-  if (!sealed.ok) return json({ message: sealed.message }, sealed.status);
+  if (!sealed.ok) return json({
+    message: sealed.message,
+    ...(sealed.retired ? { retired: true, successorUploadId: sealed.successorUploadId } : {}),
+  }, sealed.status);
   const receipt = sealed.receipt;
   // Compare-and-swap the version pointer; concurrent sessions cannot silently replace each other.
   const updated = await db.sql`

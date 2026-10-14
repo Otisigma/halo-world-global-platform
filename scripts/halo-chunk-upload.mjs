@@ -138,18 +138,30 @@ export async function uploadAudioFile({ filePath, songId, versionId, client, chu
 
   const filename = basename(filePath);
   const chunkCount = Math.ceil(byteSize / chunkSize);
-  const uploadId = deterministicUploadId({ versionId, fileSha256: await sha256File(filePath), chunkSize });
+  let uploadId = deterministicUploadId({ versionId, fileSha256: await sha256File(filePath), chunkSize });
   const session = { songId, versionId, uploadId, chunkCount, byteSize, chunkSize };
-  const readStatus = async () => {
+  const readStatus = async (allowRetired = false) => {
     const current = await client.json({ action: "upload_status", ...session }, "upload status");
     if (!current || typeof current.finalized !== "boolean" || !Array.isArray(current.receivedChunks)
       || !Array.isArray(current.invalidChunks) || !current.chunkChecksums || typeof current.chunkChecksums !== "object"
       || current.chunkCount !== chunkCount || current.byteSize !== byteSize) {
       throw new UploadError("The server returned invalid upload progress. No chunks were sent.");
     }
+    if (current.retired && !allowRetired) throw new UploadError("This upload was removed. Start the uploader again to create a fresh upload.", 409, current);
     return current;
   };
-  const status = await readStatus();
+  let status = await readStatus(true);
+  const generations = new Set([uploadId]);
+  while (status.retired) {
+    const successor = status.successorUploadId;
+    if (!/^[a-z0-9-]{12,80}$/i.test(String(successor || "")) || generations.has(successor) || generations.size >= 128) {
+      throw new UploadError("The server returned an invalid upload generation. No chunks were sent.");
+    }
+    generations.add(successor);
+    uploadId = successor;
+    session.uploadId = uploadId;
+    status = await readStatus(true);
+  }
   if (status.finalized) {
     log(`${filename} is already uploaded and finalized`);
     return { ...session, alreadyFinalized: true, uploadedChunks: 0, skippedChunks: chunkCount };

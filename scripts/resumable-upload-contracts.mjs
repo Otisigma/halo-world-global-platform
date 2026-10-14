@@ -71,7 +71,10 @@ function server(failures = {}, { finalizedReceipt = true } = {}) {
           receivedChunks: [...chunks.keys()],
           chunkChecksums: Object.fromEntries([...chunks].map(([index, chunk]) => [index, chunk.checksum])),
           storedBytes: confirmedBytes, confirmedBytes, finalized,
-          ...(finalized && finalizedReceipt ? { persisted: true, lockedIn: true, audioUrl: "/audio.wav", message: "Saved" } : {}),
+          ...(finalized && finalizedReceipt ? {
+            persisted: true, lockedIn: true, message: "Saved",
+            ...(finalizedReceipt === "missingUrl" ? {} : { audioUrl: "/audio.wav" }),
+          } : {}),
         };
       } else {
         assert.equal(body.action, "finalize_upload");
@@ -82,6 +85,33 @@ function server(failures = {}, { finalizedReceipt = true } = {}) {
       const late = fail(label, "after");
       if (late) return late;
       return new Response(JSON.stringify(data));
+    },
+  };
+}
+function generationServer() {
+  const sessions = new Map(), retired = new Map(), calls = [];
+  return {
+    sessions, retired, calls,
+    retire(id, next) { retired.set(id, next); },
+    async fetch(url, settings) {
+      const form = settings.body instanceof FormData;
+      const body = form ? Object.fromEntries(settings.body) : JSON.parse(settings.body);
+      calls.push({ id: body.uploadId, action: form ? `chunk:${body.chunkIndex}` : body.action });
+      if (retired.has(body.uploadId)) {
+        const retirement = { retired: true, successorUploadId: retired.get(body.uploadId), finalized: false };
+        if (body.action === "upload_status") {
+          const chunks = sessions.get(body.uploadId)?.chunks || new Map();
+          const confirmedBytes = [...chunks.values()].reduce((sum, chunk) => sum + chunk.size, 0);
+          return new Response(JSON.stringify({
+            ...retirement, receivedChunks: [...chunks.keys()],
+            chunkChecksums: Object.fromEntries([...chunks].map(([index, chunk]) => [index, chunk.checksum])),
+            confirmedBytes, storedBytes: confirmedBytes,
+          }));
+        }
+        return new Response(JSON.stringify({ ...retirement, message: "Upload was retired" }), { status: 409 });
+      }
+      if (!sessions.has(body.uploadId)) sessions.set(body.uploadId, server());
+      return sessions.get(body.uploadId).fetch(url, settings);
     },
   };
 }
@@ -117,9 +147,8 @@ for (const code of ["network", "truncated", 408, 429, 503]) {
   }
 }
 {
-  // Existing status API shape omits the receipt URL even after the version
-  // pointer is committed. Finalized is authoritative; the playback URL is deterministic.
-  const api = server({ finalize_upload: [failure("network", "after")] }, { finalizedReceipt: false });
+  // A confirmed receipt's playback URL is deterministic if older status responses omit it.
+  const api = server({ finalize_upload: [failure("network", "after")] }, { finalizedReceipt: "missingUrl" });
   const first = await browser(api).helper.uploadResumableAudio(options);
   assert.equal(first.audioUrl, "/api/song-catalog/audio?versionId=version-a");
   assert.equal(first.persisted, true);
@@ -134,9 +163,14 @@ for (const code of ["network", "truncated", 408, 429, 503]) {
   assert.deepEqual(api.calls.slice(before), ["upload_status"], "reselected finalized audio is not resent or refinalized");
 }
 {
+  const api = server({ finalize_upload: [failure("network", "after")] }, { finalizedReceipt: false });
+  await assert.rejects(browser(api).helper.uploadResumableAudio(options), /did not confirm audio persistence/);
+  assert.equal(count(api, "finalize_upload"), 1, "finalized alone never invents persisted or lockedIn confirmations");
+}
+{
   const intake = await readFile(new URL("../music-upload/music-upload.js", import.meta.url), "utf8");
   const fn = intake.slice(intake.indexOf("async function uploadAudio("), intake.indexOf("async function loadCatalogSong("));
-  const api = server({ finalize_upload: [failure("network", "after")] }, { finalizedReceipt: false });
+  const api = server({ finalize_upload: [failure("network", "after")] }, { finalizedReceipt: "missingUrl" });
   let confirmed = 0, successes = 0;
   const context = vm.createContext({
     MAX_AUDIO_BYTES: 128 * 1024 * 1024, AUDIO_CHUNK_BYTES: 4,
@@ -157,13 +191,13 @@ for (const code of ["network", "truncated", 408, 429, 503]) {
   assert.equal(successes, 2);
 }
 {
-  const api = server({}, { finalizedReceipt: false });
-  let release, arrived, paused = false;
+  const api = server({}, { finalizedReceipt: "missingUrl" });
+  let release, arrived, paused = false, statusChecks = 0;
   const waiting = new Promise(resolve => { arrived = resolve; });
   const firstApi = {
     async fetch(url, settings) {
       const response = await api.fetch(url, settings);
-      if (!(settings.body instanceof FormData) && JSON.parse(settings.body).action === "upload_status" && !paused) {
+      if (!(settings.body instanceof FormData) && JSON.parse(settings.body).action === "upload_status" && ++statusChecks === 2 && !paused) {
         paused = true;
         await new Promise(resolve => { release = resolve; arrived(); });
       }
@@ -197,8 +231,65 @@ for (const code of ["network", "truncated", 408, 429, 503]) {
   const { helper, delays } = browser(api);
   await assert.rejects(helper.uploadResumableAudio(options), error => error.status === 409);
   assert.equal(writes, 1);
-  assert.equal(count(api, "upload_status"), 2);
+  assert.equal(count(api, "upload_status"), 3);
   assert.equal(delays.length, 0, "unconfirmed finalized hints are never retried or claimed successful");
+}
+
+// DELETE retires immutable sessions. Reselecting the same file discovers the
+// server's successor through the stable root identity, not a browser cache.
+{
+  const api = generationServer(), cache = storage();
+  const first = await browser(api, cache).helper.uploadResumableAudio(options);
+  const rootId = first.uploadId;
+  const next = "next-11111111-1111-4111-8111-111111111111";
+  api.retire(rootId, next);
+  const before = api.calls.length;
+  const resumed = await browser(api, cache).helper.uploadResumableAudio({ ...options, file: file() });
+  assert.equal(resumed.uploadId, next);
+  assert.equal(api.sessions.get(rootId).chunks.size, 3, "old retained bytes remain immutable");
+  assert.equal(api.sessions.get(next).chunks.size, 3, "successor uploads every chunk rather than reusing retired parts");
+  assert.ok(api.calls.slice(before).filter(call => call.id === rootId).every(call => call.action === "upload_status"));
+  const secondNext = "next-22222222-2222-4222-8222-222222222222";
+  api.retire(next, secondNext);
+  const again = await browser(api, null).helper.uploadResumableAudio({ ...options, file: file() });
+  assert.equal(again.uploadId, secondNext, "reload discovers multiple retirement generations without storage");
+  assert.equal(api.sessions.get(secondNext).chunks.size, 3);
+}
+for (const retireAt of ["chunk:1-after", "chunk:1-before", "finalize_upload-before"]) {
+  const api = generationServer(), fetch = api.fetch;
+  const next = "next-33333333-3333-4333-8333-333333333333";
+  let retiredOnce = false, rootId;
+  api.fetch = async (url, settings) => {
+    const form = settings.body instanceof FormData;
+    const body = form ? Object.fromEntries(settings.body) : JSON.parse(settings.body);
+    const action = form ? `chunk:${body.chunkIndex}` : body.action;
+    rootId ||= body.uploadId;
+    const trigger = body.uploadId === rootId && !retiredOnce && retireAt.startsWith(`${action}-`);
+    if (trigger && retireAt.endsWith("-before")) {
+      retiredOnce = true;
+      api.retire(rootId, next);
+    }
+    const response = await fetch(url, settings);
+    if (trigger && retireAt.endsWith("-after")) {
+      retiredOnce = true;
+      api.retire(rootId, next);
+    }
+    return response;
+  };
+  await assert.rejects(browser(api).helper.uploadResumableAudio(options), /upload was deleted/);
+  assert.ok(!api.calls.some(call => call.id === next), `${retireAt} never silently resurrects deleted audio`);
+  const result = await browser(api).helper.uploadResumableAudio({ ...options, file: file() });
+  assert.equal(result.uploadId, next);
+  assert.equal(result.persisted, true);
+  assert.deepEqual([...api.sessions.get(next).chunks.keys()], [0, 1, 2], `${retireAt} explicit reselection starts the entire successor sequence`);
+  assert.ok(api.calls.filter(call => call.id === rootId && call.action === "finalize_upload").length <= 1);
+}
+{
+  const api = generationServer(), { helper } = browser(api);
+  const rootId = await helper.fileUploadId(options.file, ["/api/song-catalog/audio", options.songId, options.versionId, "audio/wav"], 4);
+  api.retire(rootId, rootId);
+  await assert.rejects(helper.uploadResumableAudio(options), /invalid replacement upload session/);
+  assert.ok(api.calls.every(call => call.action === "upload_status"), "cyclic retirement cannot cause writes");
 }
 
 // Status failures never permit blind sends, including after a lost chunk response.
@@ -264,7 +355,7 @@ for (const code of ["network", "truncated", 408, 429, 503]) {
   api.chunks.get(0).checksum = "conflicting";
   const before = api.calls.length;
   await assert.rejects(browser(api).helper.uploadResumableAudio(options), /conflicts/);
-  assert.deepEqual(api.calls.slice(before), ["upload_status"]);
+  assert.deepEqual(api.calls.slice(before), ["upload_status", "upload_status"]);
 }
 
 // Only network, 408, 429 and 5xx are retried; retries and backoff are bounded.

@@ -68,7 +68,9 @@ Adapter contracts
 decodeAudio(campaign) -> {samples, sampleRate}
   Resolve campaign.source's owned canonical master through existing storage
   helpers. Decode/downmix to finite mono PCM in [-1,1], covering the stored
-  duration (maximum two hours, maximum 100M samples). Downsample if needed.
+  duration (within 0.501 seconds to allow catalog rounding; maximum two hours,
+  maximum 100M samples). Hook timestamps use actual decoded duration.
+  Downsample if needed.
   Missing adapter blocks analysis explicitly. No placeholder hooks are invented.
   Actual sound decoding is NOT included; RMS extraction/scoring is implemented.
 

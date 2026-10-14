@@ -5,6 +5,10 @@ export async function loadGrowthSource(db, ownerMemberId, songId) {
   const rows = await db.sql`
     SELECT song.id, song.owner_member_id, song.title, song.artist_name, song.genre, song.rights_status,
       COALESCE(NULLIF(version.artwork_url, ''), song.artwork_url) AS artwork_url,
+      CASE WHEN NULLIF(version.artwork_url, '') IS NOT NULL
+        THEN version.artwork_blob_prefix ELSE song.artwork_blob_prefix END AS artwork_blob_prefix,
+      CASE WHEN NULLIF(version.artwork_url, '') IS NOT NULL
+        THEN version.artwork_uploaded_at ELSE song.artwork_uploaded_at END AS artwork_uploaded_at,
       version.id AS master_version_id, version.audio_url, version.audio_storage_key,
       version.audio_blob_prefix, version.audio_chunk_count, version.drive_file_id,
       version.video_url, version.duration_seconds,

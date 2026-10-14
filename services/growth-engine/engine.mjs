@@ -48,10 +48,13 @@ export async function executeJob(job, campaign, adapters = {}) {
     if (!adapters.decodeAudio) throw new GrowthBlocked("Install a trusted audio decoder adapter");
     const pcm = await adapters.decodeAudio(campaign);
     const frames = energyFrames(pcm.samples, pcm.sampleRate);
-    const hooks = selectHooks(frames, { durationSeconds: snapshot.durationSeconds });
+    const durationSeconds = frames.at(-1).end;
+    // Catalog uploads round duration to whole seconds; teaser bounds use actual decoded audio.
+    if (Math.abs(durationSeconds - snapshot.durationSeconds) > 0.501) throw new Error("Decoded audio does not match the catalog duration");
+    const hooks = selectHooks(frames, { durationSeconds });
     const next = settings.targets.flatMap(target => hooks.map(hook =>
       nextJob("render", `render:${target}:${hook.rank}`, { target, hook })));
-    return { result: { hooks, model: "rms-window-v1" }, next };
+    return { result: { hooks, durationSeconds, model: "rms-window-v1" }, next };
   }
   if (job.kind === "render") {
     const plan = renderPlan(job.payload.hook, job.payload.target, job.id, snapshot.visualKind);
@@ -81,9 +84,9 @@ export async function executeJob(job, campaign, adapters = {}) {
     return { result, next: [nextJob("analytics", `analytics:${job.key}`, { target: job.payload.target, publishId: result.publishId })] };
   }
   if (job.kind === "analytics") {
-    const collector = adapters.publishers?.[job.payload.target]?.analytics;
-    if (!collector) throw new GrowthBlocked("Platform analytics adapter is not configured");
-    const result = await collector(job.payload.publishId);
+    const publisher = adapters.publishers?.[job.payload.target];
+    if (!publisher?.analytics) throw new GrowthBlocked("Platform analytics adapter is not configured");
+    const result = await publisher.analytics(job.payload.publishId);
     if (!result || !Number.isFinite(result.views) || result.views < 0) throw new Error("Analytics must include non-negative views");
     return { result: { ...result, collectedAt: new Date().toISOString() }, next: [] };
   }

@@ -67,6 +67,16 @@ for (const target of ["youtube_shorts", "tiktok", "instagram_reels"]) {
 }
 assert.ok(renderPlan(hooks[0], "youtube_shorts", "variant", "artwork").args.includes("-loop"));
 assert.throws(() => renderPlan(hooks[0], "youtube_shorts", "../../output"), /Invalid/);
+for (const duration of [59.8, 60.2]) {
+  const decoded = await executeJob({ kind: "analysis" }, campaign, {
+    decodeAudio: async () => ({ samples: new Float32Array(duration * 10).fill(0.5), sampleRate: 10 }),
+  });
+  assert.equal(decoded.result.durationSeconds, duration);
+  assert.ok(decoded.result.hooks.every(hook => hook.end <= duration));
+}
+await assert.rejects(() => executeJob({ kind: "analysis" }, campaign, {
+  decodeAudio: async () => ({ samples: new Float32Array(100), sampleRate: 10 }),
+}), /duration/);
 
 function memoryQueue() {
   const jobs = [{ id: "ingest", kind: "ingest", key: "ingest", payload: {}, status: "queued", attempts: 0 }];
@@ -122,13 +132,14 @@ const adapters = {
   },
   publishers: {
     youtube_shorts: {
+      views: 42,
       publish: async request => {
         assert.ok(request.artifactId);
         assert.ok(request.idempotencyKey);
         publishKeys.push(request.idempotencyKey);
         return { publishId: `platform:${request.idempotencyKey}`, uploadId: "upload-id", status: "published" };
       },
-      analytics: async publishId => ({ views: 42, watchTimeSeconds: 300, publishId }),
+      async analytics(publishId) { return { views: this.views, watchTimeSeconds: 300, publishId }; },
     },
   },
 };

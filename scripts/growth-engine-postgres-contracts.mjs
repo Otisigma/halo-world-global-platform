@@ -45,12 +45,14 @@ if (spawnSync(`${pgBin}/initdb`, ["--version"]).status !== 0) {
     assert.ok(ready, errors);
     await sql(`
       CREATE TABLE halo_song_catalog (id text PRIMARY KEY, owner_member_id text, title text,
-        artist_name text, genre text, rights_status text, artwork_url text, status text);
+        artist_name text, genre text, rights_status text, artwork_url text, status text,
+        artwork_blob_prefix text, artwork_uploaded_at timestamptz);
       CREATE TABLE halo_song_versions (id text PRIMARY KEY, song_id text, version_type text,
         status text, artwork_url text, audio_url text, audio_storage_key text, audio_blob_prefix text,
-        audio_chunk_count integer, drive_file_id text, video_url text, duration_seconds integer, updated_at timestamptz);
-      INSERT INTO halo_song_catalog VALUES ('song', 'owner', 'Track', 'Artist', 'House', 'cleared', '/cover.jpg', 'active');
-      INSERT INTO halo_song_versions VALUES ('master', 'song', 'sale_master', 'active', '', '/master.wav', '', '', 0, '', '', 60, NOW());
+        audio_chunk_count integer, drive_file_id text, video_url text, duration_seconds integer, updated_at timestamptz,
+        artwork_blob_prefix text, artwork_uploaded_at timestamptz);
+      INSERT INTO halo_song_catalog VALUES ('song', 'owner', 'Track', 'Artist', 'House', 'cleared', '/cover.jpg', 'active', 'cover/1', NOW());
+      INSERT INTO halo_song_versions VALUES ('master', 'song', 'sale_master', 'active', '', '/master.wav', '', '', 0, '', '', 60, NOW(), '', NULL);
     `);
     const migration = await readFile(new URL("../netlify/database/migrations/20261014120000_growth_engine.sql", import.meta.url), "utf8");
     await sql(migration);
@@ -94,11 +96,15 @@ if (spawnSync(`${pgBin}/initdb`, ["--version"]).status !== 0) {
     assert.equal(final.status, "failed", "expired final attempt becomes a terminal failure");
     assert.ok(final.audit.some(event => event.event === "exhausted"));
     assert.equal(await store.retry("owner", campaign.id, final.id), false);
+    await sql("UPDATE halo_song_catalog SET artwork_blob_prefix = 'cover/2', artwork_uploaded_at = NOW() WHERE id = 'song'");
+    assert.equal(await store.loadAuthorizedCampaign("owner", campaign.id), null, "same-URL artwork replacement invalidates prior rights attestation");
+    const updated = await store.ingest("owner", "song", { ...input, requestKey: "new-artwork" });
+    assert.ok(await store.loadAuthorizedCampaign("owner", updated.id));
     await sql("UPDATE halo_song_catalog SET rights_status = 'disputed' WHERE id = 'song'");
-    assert.equal(await store.loadAuthorizedCampaign("owner", campaign.id), null);
+    assert.equal(await store.loadAuthorizedCampaign("owner", updated.id), null);
     await sql("UPDATE halo_song_catalog SET rights_status = 'cleared' WHERE id = 'song'");
     await sql("UPDATE halo_song_versions SET audio_url = '/replacement.wav' WHERE id = 'master'");
-    assert.equal(await store.loadAuthorizedCampaign("owner", campaign.id), null, "master changes invalidate the campaign");
+    assert.equal(await store.loadAuthorizedCampaign("owner", updated.id), null, "master changes invalidate the campaign");
 
     // Invalid downstream inserts must roll back the successful parent checkpoint.
     const second = await store.ingest("owner", "song", { ...input, requestKey: "two" });

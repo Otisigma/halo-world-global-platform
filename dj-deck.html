@@ -4036,7 +4036,12 @@
         filters.highShelf.gain.setValueAtTime(0, context.currentTime);
         filters.vocalBand.gain.setValueAtTime(0, context.currentTime);
       }
-      await prepareDeckAudio(context, deckId);
+      try {
+        await prepareDeckAudio(context, deckId);
+      } catch (error) {
+        if (audioEngine.decks[deckId].playbackGeneration !== playbackGeneration) return;
+        throw error;
+      }
       if (audioEngine.decks[deckId].playbackGeneration !== playbackGeneration) return;
       // Apply beat-phase offset: delay source.start() by `beatOffset` seconds so
       // the first beat of the incoming track lands exactly on the outgoing beat grid.

@@ -294,4 +294,20 @@ deckSandbox.stopTakeoverDecks();
 await pendingStart;
 assert.equal(sources.length, beforeCancelled, "Stopping during readiness cancels the pending source start");
 
+let rejectOldLoad;
+deckSandbox.deckState.A = {
+  ...deckSandbox.deckState.A,
+  audioBuffer: null,
+  audioAsset: { file: { arrayBuffer: () => new Promise((resolve, reject) => { rejectOldLoad = reject; }) } }
+};
+const supersededStart = deckSandbox.startDeckAudio("A");
+deckSandbox.deckState.A = { ...deckSandbox.deckState.A, audioBuffer: { duration: 180 } };
+await deckSandbox.startDeckAudio("A");
+const replacement = sources.at(-1);
+rejectOldLoad(new Error("Old track failed to decode"));
+await supersededStart;
+assert.equal(replacement.stopped, undefined, "Superseded decode errors cannot stop the replacement via caller error handling");
+deckSandbox.stopTakeoverDecks();
+assert.ok(sources.every(source => source.stopped));
+
 console.log("HALO continuity contracts: radio guard preserved; DJ rollback transitions, failed replacement, recorder monitoring, and silent shutdown passed.");

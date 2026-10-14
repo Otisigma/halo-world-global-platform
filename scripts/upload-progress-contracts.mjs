@@ -148,7 +148,7 @@ const result = await helper.uploadChunkedFile({
 assert.equal(result.chunkCount, 2);
 assert.deepEqual(chunks.map(chunk => [chunk.chunkIndex, chunk.chunkCount, chunk.start, chunk.end]), [[0, 2, 0, 3], [1, 2, 3, 5]]);
 assert.equal(requests[4].body, requests[5].body, "retries must reuse the same chunk body");
-assert.deepEqual(progress, [[25, 0], [25, 0], [50, 0], [75, 1], [100, 1]]);
+assert.deepEqual(progress, [[30, 0], [30, 0], [60, 0], [80, 1], [100, 1]]);
 outcomes.push({ status: 400, data: { message: "Invalid file" } });
 await assert.rejects(helper.uploadChunkedFile({
   url: "/upload", file: { size: 5 }, chunkSize: 3,

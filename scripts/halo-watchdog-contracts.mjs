@@ -154,7 +154,8 @@ const db = { sql: async (strings, ...values) => {
 } };
 await persistWatchdog(db, song.owner_member_id, song.id, "lease", { song, versions }, initial);
 for (const contract of ["FOR UPDATE", "lease_token =", "locked_until > NOW()", "radio_update AS", "metadata_update AS",
-  "INSERT INTO halo_release_conveyor_events", "'watchdog_pulse'", "mastering_status = 'not_started'", "BTRIM(isrc) = ''"]) assert(query.includes(contract));
+  "INSERT INTO halo_release_conveyor_events", "'watchdog_pulse'", "'{receipt,watchdog}'",
+  "mastering_status = 'not_started'", "BTRIM(isrc) = ''"]) assert(query.includes(contract));
 assert(!query.includes("rights_status ="), "the repair writer cannot grant clearance");
 assert(!query.includes("audio_url ="), "queueing cannot replace audio");
 await assert.rejects(persistWatchdog({ sql: async () => [] }, song.owner_member_id, song.id, "lost", { song, versions }, initial));

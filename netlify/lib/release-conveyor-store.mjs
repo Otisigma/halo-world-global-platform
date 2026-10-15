@@ -148,7 +148,8 @@ export async function persistWatchdog(db, ownerMemberId, songId, token, submissi
       RETURNING id
     ), checkpoint AS (
       UPDATE halo_release_conveyor
-      SET state = jsonb_set(state, '{watchdog}', ${JSON.stringify(watchdog)}::jsonb), updated_at = NOW()
+      SET state = jsonb_set(jsonb_set(state, '{watchdog}', ${JSON.stringify(watchdog)}::jsonb),
+        '{receipt,watchdog}', ${JSON.stringify(watchdog)}::jsonb), updated_at = NOW()
       WHERE song_id IN (SELECT id FROM current)
       RETURNING song_id
     )

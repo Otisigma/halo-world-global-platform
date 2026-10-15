@@ -148,6 +148,7 @@ const db = { async sql(strings, ...values) {
       }
     }
     stored.state.watchdog = watchdog;
+    if (stored.state.receipt) stored.state.receipt.watchdog = structuredClone(watchdog);
     events.push({ stage: "watchdog_pulse", details: watchdog });
     return [{ id: "audit" }];
   }
@@ -234,10 +235,19 @@ assert.equal(state.watchdog.assetGraph.locked, true, "visuals bind even while Co
 assert(state.watchdog.actions.some(action => action.type === "lock_dreamweaver_graph"));
 assert(state.receipt.blocked.some(issue => issue.field === "radio_master"));
 assert.equal(stored.lease_token, null);
-const eventCount = events.filter(event => event.stage !== "watchdog_pulse").length;
+const stageEvents = () => events.filter(event => RELEASE_STAGES.includes(event.stage));
+const eventCount = stageEvents().length;
 await processCatalogRelease(db, song.owner_member_id, song.id, prepareAudio);
-assert.equal(events.filter(event => event.stage !== "watchdog_pulse").length, eventCount,
-  "incidental unchanged calls audit the watchdog without duplicating conveyor checkpoints");
+assert.equal(stageEvents().length, eventCount,
+  "incidental unchanged calls persist watchdog receipts without reprocessing completed stages");
+assert.deepEqual(stored.state.receipt.watchdog, stored.state.watchdog);
+const healthyPulse = await auditHaloInfrastructure("https://halo.test", {
+  fetcher: async () => new Response(null, { status: 200 }),
+});
+await processCatalogRelease(db, song.owner_member_id, song.id, prepareAudio, undefined, { infrastructure: healthyPulse, assetAuditor });
+assert(!stored.state.receipt.watchdog.findings.some(finding => finding.field === "infrastructure"),
+  "infrastructure-only changes persist in receipts without rerunning completed stages");
+assert.equal(stageEvents().length, eventCount);
 reset({ readyRadio: true });
 state = await processCatalogRelease(db, song.owner_member_id, song.id, prepareAudio, undefined, { infrastructure, assetAuditor });
 assert.equal(state.status, "ready");

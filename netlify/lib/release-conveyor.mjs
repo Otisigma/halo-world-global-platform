@@ -3,7 +3,7 @@ import { normalizeLyricsSource, parseTimestampedLyrics } from "../../lib/dreamwe
 import { buildDreamweaverSatellite } from "../../lib/route-registry.js";
 import { retryReleaseWork } from "./release-conveyor-retry.mjs";
 import { RELEASE_STAGES } from "../../lib/release-conveyor-stages.js";
-import { metadataTemplate } from "./release-conveyor-watchdog.mjs";
+import { masterSourceIdentity } from "./halo-watchdog.mjs";
 
 export { RELEASE_STAGES };
 export const RELEASE_PIPELINE_VERSION = 3;
@@ -111,30 +111,33 @@ function receipt(state) {
 }
 
 // Ports isolate durable storage and audio work from the deterministic release stages.
-export async function runReleaseConveyor({ song, versions, previous, ports, options = { humHz: 0 }, automatic = false }) {
+export async function runReleaseConveyor({ song, versions, previous, watchdog = previous?.watchdog, ports, options = { humHz: 0 }, automatic = false }) {
   const inputHash = releaseFingerprint(song, versions, options);
   const reuse = previous?.inputHash === inputHash;
   const sourceTimes = [song.updated_at, ...versions.map(version => version.updated_at)]
     .map(value => new Date(value || 0).getTime()).filter(Number.isFinite);
   const sourceUpdatedAt = Math.max(0, ...sourceTimes);
-  const state = { releaseId: song.id, inputHash, options, status: "processing",
+  const state = { releaseId: song.id, inputHash, options, status: "processing", watchdog,
     pipelineVersion: RELEASE_PIPELINE_VERSION,
     sourceUpdatedAt: song.source_updated_at || (sourceUpdatedAt ? new Date(sourceUpdatedAt).toISOString() : null),
     stages: reuse ? [...previous.stages] : [], package: reuse ? { ...previous.package } : {},
     automaticAttempts: automatic && reuse ? Number(previous.automaticAttempts || 0) : 0 };
-  state.watchdog = ports.watchdog || previous?.watchdog || null;
+  const graphChanged = reuse && state.package.dreamweaver
+    && state.package.dreamweaver.assetGraph?.revision !== watchdog?.assetGraph?.revision;
+  if (graphChanged) {
+    const dreamweaver = { ...state.package.dreamweaver, assetGraph: watchdog?.assetGraph || null };
+    state.package.dreamweaver = dreamweaver;
+    if (state.package.documents) state.package.documents = { ...state.package.documents, dreamweaver };
+  }
   const waiting = automatic && (["blocked", "escalated"].includes(previous?.status)
     || (previous?.status === "retryable" && new Date(previous.nextRetryAt).getTime() > Date.now()));
   if (reuse && (previous.status === "ready" || waiting)) {
     await ports.assertCurrent();
-    if (previous.sourceUpdatedAt === state.sourceUpdatedAt && !ports.watchdog) return { ...previous, receipt: receipt(previous) };
-    const current = { ...previous, sourceUpdatedAt: state.sourceUpdatedAt, watchdog: state.watchdog };
-    if (current.package.dreamweaver && state.watchdog) {
-      const dreamweaver = { ...current.package.dreamweaver, assetGraph: state.watchdog.graph };
-      current.package = { ...current.package, dreamweaver,
-        ...(current.package.documents ? { documents: { ...current.package.documents, dreamweaver } } : {}) };
-    }
+    const current = { ...previous, watchdog, package: state.package,
+      sourceUpdatedAt: state.sourceUpdatedAt };
     current.receipt = receipt(current);
+    if (watchdog) watchdog.departments = current.receipt.stages.map(({ name, status }) => ({ name, status }));
+    if (previous.sourceUpdatedAt === state.sourceUpdatedAt && !graphChanged) return current;
     await ports.finish(current);
     return current;
   }
@@ -163,6 +166,7 @@ export async function runReleaseConveyor({ song, versions, previous, ports, opti
     }
     await stage("audio_preflight", async () => {
       const audio = await ports.prepareAudio(song, versions, inputHash, options);
+      audio.sourceIdentity = masterSourceIdentity(versions.find(version => version.version_type === "sale_master"));
       state.package.audio = audio;
       return { summary: audio.summary, issues: audio.issues || [], repairs: audio.repairs || [] };
     });
@@ -171,7 +175,7 @@ export async function runReleaseConveyor({ song, versions, previous, ports, opti
       state.package.isrc = validation.isrc;
       const repairs = validation.issues.some(item => item.field === "isrc") || song.isrc === validation.isrc
         ? [] : ["ISRC formatting normalized in the release package; identifier unchanged."];
-      return { issues: validation.issues, repairs, template: metadataTemplate(song, versions) };
+      return { issues: validation.issues, repairs };
     });
     await stage("council", async () => {
       const issues = state.stages.flatMap(item => item.issues || []);
@@ -188,7 +192,7 @@ export async function runReleaseConveyor({ song, versions, previous, ports, opti
         const lyricsText = normalizeLyricsSource(song.lyrics_text);
         const lyrics = parseTimestampedLyrics(lyricsText);
         state.package.dreamweaver = { ...buildDreamweaverSatellite(song.id), songId: song.id,
-          lyricsText, lyrics, mode: lyrics.timed ? "sync" : "book", assetGraph: state.watchdog?.graph || null };
+          lyricsText, lyrics, mode: lyrics.timed ? "sync" : "book", assetGraph: watchdog?.assetGraph || null };
         return { summary: "Existing Dreamweaver route, synced lyrics, lyric-book fallback and Oracle insights packaged." };
       });
       await stage("documents", async () => {
@@ -226,6 +230,7 @@ export async function runReleaseConveyor({ song, versions, previous, ports, opti
     ] });
   }
   state.receipt = receipt(state);
+  if (watchdog) watchdog.departments = state.receipt.stages.map(({ name, status }) => ({ name, status }));
   await ports.finish(state);
   return state;
 }

@@ -3,6 +3,7 @@ import { RELEASE_AGENT_INTENT, RELEASE_STAGES } from "../lib/release-conveyor-st
 import { metadataTemplate, planReleaseRepairs, inspectReleaseAssets, createInfrastructureChecker,
   healCatalogRelease, releaseWatchdogDiagnostics, WATCHDOG_ROUTES } from "../netlify/lib/release-conveyor-watchdog.mjs";
 import { processCatalogRelease } from "../netlify/lib/release-conveyor-service.mjs";
+import { auditHaloAssets, auditHaloInfrastructure } from "../netlify/lib/halo-watchdog.mjs";
 import { serveMedia } from "../netlify/functions/videos.mjs";
 
 const song = { id: "song", owner_member_id: "creator", title: "Signal", artist_name: "Artist", genre: "Soul",
@@ -129,6 +130,20 @@ function reset({ metadataMissing = false, readyRadio = false } = {}) {
 reset();
 const db = { async sql(strings, ...values) {
   const query = strings.join("?");
+  if (query.includes("WITH lease AS")) {
+    if (!leaseValid || !allowMutation) return [];
+    const watchdog = JSON.parse(values.find(value => typeof value === "string" && value.startsWith('{"schemaVersion":')));
+    for (const action of watchdog.actions) {
+      if (action.type === "auto_queue_radio") {
+        currentVersions.find(version => version.id === action.versionId).mastering_status = "queued";
+      } else if (action.type === "restore_isrc") {
+        currentSong.isrc = action.isrc;
+      }
+    }
+    stored.state.watchdog = watchdog;
+    events.push({ stage: "watchdog_pulse", details: watchdog });
+    return [{ id: "audit" }];
+  }
   if (query.includes("SELECT details->'template'")) return [{ template }];
   if (query.includes("WITH guarded")) {
     assert.match(query, /FOR UPDATE OF song, conveyor/);
@@ -201,37 +216,46 @@ assert.equal(currentVersions[1].id, createdLane);
 
 reset();
 const prepareAudio = async () => ({ summary: "Approved original preserved.", issues: [], repairs: [], originalPreserved: true });
-let state = await processCatalogRelease(db, song.owner_member_id, song.id, prepareAudio, undefined, { check, routes });
+const pulseFetcher = async url => new Response(null, {
+  status: url.pathname.includes("finish-house") ? 500 : 200,
+  headers: { "Content-Type": url.pathname.endsWith(".jpg") ? "image/jpeg" : "video/mp4" },
+});
+const pulse = {
+  infrastructure: await auditHaloInfrastructure("https://halo.test", { fetcher: pulseFetcher }),
+  assetAuditor: submission => auditHaloAssets(submission, "https://halo.test", { fetcher: pulseFetcher }),
+};
+let state = await processCatalogRelease(db, song.owner_member_id, song.id, prepareAudio, undefined, pulse);
 assert.equal(state.status, "escalated", "queued radio is not approved or broadcast-ready");
-assert.equal(state.watchdog.graph.locked, true, "visuals bind even while Council waits for mastering");
-assert(state.watchdog.repairs.includes("lock_dreamweaver_graph"));
+assert.equal(state.watchdog.assetGraph.locked, true, "visuals bind even while Council waits for mastering");
+assert(state.watchdog.actions.some(action => action.type === "lock_dreamweaver_graph"));
 assert(state.receipt.blocked.some(issue => issue.field === "radio_master"));
 assert.equal(stored.lease_token, null);
 const eventCount = events.length;
 await processCatalogRelease(db, song.owner_member_id, song.id, prepareAudio);
-assert.equal(events.length, eventCount, "incidental unchanged calls do not duplicate checkpoints");
+assert.equal(events.length, eventCount + 1, "unchanged calls persist only the watchdog pulse, not duplicate stage checkpoints");
 reset({ readyRadio: true });
-state = await processCatalogRelease(db, song.owner_member_id, song.id, prepareAudio, undefined, { check, routes });
+state = await processCatalogRelease(db, song.owner_member_id, song.id, prepareAudio, undefined, pulse);
 assert.equal(state.status, "ready");
 assert.equal(state.package.dreamweaver.assetGraph.locked, true);
 assert.equal(state.package.documents.dreamweaver.assetGraph.locked, true);
-assert(events.some(event => event.stage === "metadata_rights" && event.details.template.isrc === template.isrc));
+assert(events.some(event => event.stage === "metadata_rights" && event.details.issues.length === 0));
 currentSong.notes = "Updated release note";
 state = await processCatalogRelease(db, song.owner_member_id, song.id, prepareAudio);
-assert(state.watchdog.issues.some(issue => issue.field === "route"), "catalog edits without network checks cannot clear a known broken route");
-assert.equal(state.watchdog.graph.locked, true, "metadata edits can reuse verified, unchanged visuals");
+assert(state.watchdog.findings.some(issue => issue.field === "infrastructure"), "catalog edits without network checks cannot clear a known broken route");
+assert.equal(state.watchdog.assetGraph.locked, true, "metadata edits can reuse verified, unchanged visuals");
 currentVersions[1].artwork_url = "javascript:alert(1)";
 state = await processCatalogRelease(db, song.owner_member_id, song.id, prepareAudio);
-assert.equal(state.watchdog.graph.locked, false, "invalid new version URLs cannot reuse a locked graph through inheritance");
+assert.equal(state.watchdog.assetGraph.locked, false, "invalid new version URLs cannot reuse a locked graph through inheritance");
 delete currentVersions[1].artwork_url;
 stored.state.watchdog.checkedAt = "2026-01-01T00:00:00Z";
-const healthyCheck = createInfrastructureChecker("https://halo.test", async () => ({ ok: true, status: 200 }));
 state = await processCatalogRelease(db, song.owner_member_id, song.id, prepareAudio, undefined,
-  { check: healthyCheck, routes: await Promise.all(WATCHDOG_ROUTES.map(healthyCheck)) });
-assert.equal(state.watchdog.issues.length, 0, "later pulses clear recovered infrastructure alerts");
+  { ...pulse, infrastructure: await auditHaloInfrastructure("https://halo.test", {
+    fetcher: async () => new Response(null, { status: 200 }),
+  }) });
+assert.equal(state.watchdog.findings.length, 0, "later pulses clear recovered infrastructure alerts");
 assert.equal(state.package.dreamweaver.assetGraph.locked, true);
 currentVersions[0].mastering_status = "review";
 state = await processCatalogRelease(db, song.owner_member_id, song.id, prepareAudio);
-assert.equal(state.watchdog.graph.locked, false, "withdrawing mastering approval cannot reuse a locked graph");
+assert.equal(state.watchdog.assetGraph.locked, false, "withdrawing mastering approval cannot reuse a locked graph");
 assert.equal(state.receipt.ready, false);
 console.log("Release watchdog radio, trusted metadata, immersive graph, route safety and durable pulse contracts passed");

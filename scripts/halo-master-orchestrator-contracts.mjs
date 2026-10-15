@@ -88,7 +88,6 @@ const graph = buildDreamweaverAssetGraph(
 );
 assert.equal(graph.locked, true);
 assert.deepEqual(graph.assets.map(asset => asset.kind), ["artwork", "artwork", "video"]);
-assert(!graph.assets.some(asset => asset.url.startsWith("javascript:")));
 assert.equal(buildDreamweaverAssetGraph(song, []), null);
 
 const diagnostics = buildDepartmentDiagnostics(

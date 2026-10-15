@@ -3,9 +3,10 @@ import { normalizeLyricsSource, parseTimestampedLyrics } from "../../lib/dreamwe
 import { buildDreamweaverSatellite } from "../../lib/route-registry.js";
 import { retryReleaseWork } from "./release-conveyor-retry.mjs";
 import { RELEASE_STAGES } from "../../lib/release-conveyor-stages.js";
+import { metadataTemplate } from "./release-conveyor-watchdog.mjs";
 
 export { RELEASE_STAGES };
-export const RELEASE_PIPELINE_VERSION = 2;
+export const RELEASE_PIPELINE_VERSION = 3;
 
 export function releaseFingerprint(song, versions, options = { humHz: 0 }) {
   const { updated_at, source_updated_at, ...metadata } = song;
@@ -99,6 +100,7 @@ function receipt(state) {
     blocked: state.stages.flatMap(stage => stage.issues || []),
     nextRetryAt: state.nextRetryAt || null,
     automaticAttempts: state.automaticAttempts || 0,
+    watchdog: state.watchdog || null,
     nextSteps: state.status === "ready"
       ? ["Download the release kit and review the conditioned copy.", "Use existing publication controls; external distribution is not submitted."]
       : state.stages.flatMap(stage => stage.issues || []).map(item => item.message),
@@ -120,12 +122,19 @@ export async function runReleaseConveyor({ song, versions, previous, ports, opti
     sourceUpdatedAt: song.source_updated_at || (sourceUpdatedAt ? new Date(sourceUpdatedAt).toISOString() : null),
     stages: reuse ? [...previous.stages] : [], package: reuse ? { ...previous.package } : {},
     automaticAttempts: automatic && reuse ? Number(previous.automaticAttempts || 0) : 0 };
+  state.watchdog = ports.watchdog || previous?.watchdog || null;
   const waiting = automatic && (["blocked", "escalated"].includes(previous?.status)
     || (previous?.status === "retryable" && new Date(previous.nextRetryAt).getTime() > Date.now()));
   if (reuse && (previous.status === "ready" || waiting)) {
     await ports.assertCurrent();
-    if (previous.sourceUpdatedAt === state.sourceUpdatedAt) return { ...previous, receipt: receipt(previous) };
-    const current = { ...previous, sourceUpdatedAt: state.sourceUpdatedAt, receipt: receipt(previous) };
+    if (previous.sourceUpdatedAt === state.sourceUpdatedAt && !ports.watchdog) return { ...previous, receipt: receipt(previous) };
+    const current = { ...previous, sourceUpdatedAt: state.sourceUpdatedAt, watchdog: state.watchdog };
+    if (current.package.dreamweaver && state.watchdog) {
+      const dreamweaver = { ...current.package.dreamweaver, assetGraph: state.watchdog.graph };
+      current.package = { ...current.package, dreamweaver,
+        ...(current.package.documents ? { documents: { ...current.package.documents, dreamweaver } } : {}) };
+    }
+    current.receipt = receipt(current);
     await ports.finish(current);
     return current;
   }
@@ -162,7 +171,7 @@ export async function runReleaseConveyor({ song, versions, previous, ports, opti
       state.package.isrc = validation.isrc;
       const repairs = validation.issues.some(item => item.field === "isrc") || song.isrc === validation.isrc
         ? [] : ["ISRC formatting normalized in the release package; identifier unchanged."];
-      return { issues: validation.issues, repairs };
+      return { issues: validation.issues, repairs, template: metadataTemplate(song, versions) };
     });
     await stage("council", async () => {
       const issues = state.stages.flatMap(item => item.issues || []);
@@ -179,7 +188,7 @@ export async function runReleaseConveyor({ song, versions, previous, ports, opti
         const lyricsText = normalizeLyricsSource(song.lyrics_text);
         const lyrics = parseTimestampedLyrics(lyricsText);
         state.package.dreamweaver = { ...buildDreamweaverSatellite(song.id), songId: song.id,
-          lyricsText, lyrics, mode: lyrics.timed ? "sync" : "book" };
+          lyricsText, lyrics, mode: lyrics.timed ? "sync" : "book", assetGraph: state.watchdog?.graph || null };
         return { summary: "Existing Dreamweaver route, synced lyrics, lyric-book fallback and Oracle insights packaged." };
       });
       await stage("documents", async () => {

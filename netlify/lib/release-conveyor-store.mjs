@@ -17,7 +17,7 @@ export async function loadReleaseSubmission(db, ownerMemberId, songId) {
   const versions = await db.sql`
     SELECT id, song_id, version_type, audio_url, audio_blob_prefix, audio_chunk_count,
       audio_storage_key, audio_content_type, audio_byte_size, audio_filename,
-      duration_seconds, mastering_status, artwork_url, updated_at
+      duration_seconds, mastering_status, artwork_url, video_url, promo_video_url, updated_at
     FROM halo_song_versions
     WHERE song_id = ${songId} AND status = 'active'
     ORDER BY id

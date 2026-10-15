@@ -9,6 +9,14 @@ This workflow adds a skeptical verification loop for AI-delivered work. No singl
 - Prevent unverified "done" reports from moving work forward.
 - Preserve HALO's supporter-first and trust-first operating posture.
 
+## Halo Music safety architecture
+
+See [HALO Music safety architecture](HALO_MUSIC_SAFETY_ARCHITECTURE.txt) for the
+domain-brain/council/arbiter design, issue lifecycle, rollout and recovery gates,
+and phased engineering handoff. Its offline transition contract is checked with
+`npm run test:music-safety`; it does not authorize production changes or replace
+the Builder, Verifier, and Committee review below.
+
 ## Roles and responsibilities
 
 ### Builder

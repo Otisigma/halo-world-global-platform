@@ -120,15 +120,18 @@ const unconfiguredRoutes = await auditInfrastructureRoutes({
 });
 assert.equal(unconfiguredRoutes[0].status, "not_configured");
 
-const [schedule, migration, releaseApi] = await Promise.all([
+const [schedule, migration, releaseApi, releaseCatalog] = await Promise.all([
   readFile(new URL("../netlify/functions/halo-master-orchestrator.mjs", import.meta.url), "utf8"),
   readFile(new URL("../netlify/database/migrations/20261015133000_create_halo_master_orchestrator.sql", import.meta.url), "utf8"),
   readFile(new URL("../netlify/lib/release-conveyor-http.mjs", import.meta.url), "utf8"),
+  readFile(new URL("../netlify/functions/release-catalog.mjs", import.meta.url), "utf8"),
 ]);
 assert.match(schedule, /schedule:\s*"\*\/15 \* \* \* \*"/);
 assert.match(schedule, /runHaloMasterPulse/);
 assert.match(migration, /CREATE TABLE IF NOT EXISTS halo_master_orchestrator_state/);
 assert.match(migration, /CREATE TABLE IF NOT EXISTS halo_master_orchestrator_events/);
 assert.match(releaseApi, /infrastructure:\s*infrastructureState\?\.state/);
+assert.match(releaseCatalog, /orchestrator\.state->'dreamweaverAssetGraph'/);
+assert.match(releaseCatalog, /assetGraph:\s*values\.assetGraph\?\.locked === true/);
 
 console.log("HALO master orchestrator contracts passed");

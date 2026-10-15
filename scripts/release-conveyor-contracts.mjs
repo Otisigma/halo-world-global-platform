@@ -165,7 +165,11 @@ controller.select(song.id);
 assert.equal(consoleNode("percent-text").textContent, "0% Completed (0/8 stages)");
 assert.equal(consoleNode("stages").children.length, RELEASE_STAGES.length);
 assert.equal(consoleNode("hum").disabled, true, "filter selection is disabled during a request");
-resolveConsoleRequest({ ok: true, json: async () => ({ ...success, options: { humHz: 0 } }) });
+resolveConsoleRequest({ ok: true, json: async () => ({ ...success, options: { humHz: 0 }, orchestrator: {
+  state: { status: "needs_review", lastPulseAt: "2026-10-15T00:00:00.000Z", departments: { metadata_rights: "needs_review" },
+    actions: [{ action: "radio_lane_queued" }], findings: ["Rights clearance requires creator review."] },
+  infrastructure: { status: "degraded", brokenRoutes: [{ name: "Radio", route: "/radio/", httpStatus: 404 }] },
+} }) });
 await settle();
 assert.equal(consoleNode("hum").disabled, false);
 assert.equal(consoleNode("package").hidden, false);
@@ -175,6 +179,9 @@ assert.equal(consoleNode("progress").attributes.get("aria-valuenow"), "100");
 assert.equal(consoleNode("current-step").textContent, "Active Dept: Complete");
 assert.equal(consoleNode("status-badge").textContent, "FULLY CLEARED");
 assert(consoleNode("stages").children.every(item => item.attributes.get("data-state") === "passed"));
+assert.match(consoleNode("watchdog-status").textContent, /Shared watchdog: needs_review/);
+assert(consoleNode("watchdog-findings").children.some(item => /Repair recorded: radio_lane_queued/.test(item.textContent)));
+assert(consoleNode("watchdog-findings").children.some(item => /Broken route: Radio \(\/radio\/\) — HTTP 404/.test(item.textContent)));
 let poll = consoleTimer();
 resolveConsoleRequest({ ok: true, json: async () => missing });
 await poll;
@@ -323,7 +330,9 @@ memberId = "creator";
 assert.equal((await handler(request("DELETE"))).status, 405);
 assert.equal((await handler(request("POST", { action: "process_submission", songId: song.id, humHz: 70 }))).status, 400);
 assert.equal((await handler(request("POST", { action: "bad" }))).status, 400);
-assert.equal((await handler(request())).status, 200);
+const initialStateResponse = await handler(request());
+assert.equal(initialStateResponse.status, 200);
+assert.equal((await initialStateResponse.json()).orchestrator.infrastructure, null);
 storageOutage = true;
 const apiFailed = await (await post()).json();
 assert.equal(apiFailed.status, "retryable");

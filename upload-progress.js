@@ -19,21 +19,26 @@
   function updateUi(ui,state){
     if(!ui)return;
     if(ui.panel){
-      ui.panel.classList.toggle(ui.busyClass,state.uploading);
-      ui.panel.setAttribute("aria-busy",state.uploading?"true":"false");
-      ui.panel.dataset.uploadState=state.error?"error":state.success?"success":state.uploading?"uploading":"idle";
+      if(ui.panel.classList.contains(ui.busyClass)!==state.uploading)ui.panel.classList.toggle(ui.busyClass,state.uploading);
+      const busy=state.uploading?"true":"false";
+      if(ui.panel.getAttribute("aria-busy")!==busy)ui.panel.setAttribute("aria-busy",busy);
+      const uploadState=state.error?"error":state.success?"success":state.uploading?"uploading":"idle";
+      if(ui.panel.dataset.uploadState!==uploadState)ui.panel.dataset.uploadState=uploadState;
     }
     if(ui.track){
-      ui.track.hidden=!state.showTrack;
-      ui.track.setAttribute("aria-hidden",state.showTrack?"false":"true");
+      if(ui.track.hidden!==!state.showTrack)ui.track.hidden=!state.showTrack;
+      const hidden=state.showTrack?"false":"true";
+      if(ui.track.getAttribute("aria-hidden")!==hidden)ui.track.setAttribute("aria-hidden",hidden);
     }
     if(ui.fill){
       const progress=clampPercent(state.progress);
       const visualProgress=state.uploading&&progress===0?3:progress;
-      ui.fill.style.width=`${visualProgress}%`;
+      const width=`${visualProgress}%`;
+      if(ui.fill.style.width!==width)ui.fill.style.width=width;
     }
     if(ui.status&&state.message){
-      ui.status.textContent=state.message;
+      const message=String(state.message);
+      if(ui.status.textContent!==message)ui.status.textContent=message;
     }
   }
 

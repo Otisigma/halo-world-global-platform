@@ -16,6 +16,7 @@ import {
 } from "../lib/direct-upload-storage.mjs";
 import { MASTER_VERSION_TYPE } from "../lib/master-copy.mjs";
 import { runDreamweaverReview } from "./song-catalog.js";
+import { runConfirmedUploadJobs } from "../lib/confirmed-upload-jobs.mjs";
 
 // Large master copies bypass Netlify function payload limits: this endpoint only exchanges small
 // JSON metadata. `presign` issues a short-lived PUT URL the browser uploads to directly, and
@@ -82,12 +83,12 @@ async function registerMasterUpload(payload: Record<string, unknown>, db: Awaite
   const storedBytes = await headStoredObject(storage, fileKey);
   if (!storedBytes) return json({ message: "The master file was not found in storage. Upload it again." }, 409);
   if (storedBytes !== upload.byteSize || storedBytes > MASTER_UPLOAD_MAX_BYTES) {
-    await deleteStoredObject(storage, fileKey).catch(() => undefined);
+    if (version.audio_storage_key !== fileKey) await deleteStoredObject(storage, fileKey).catch(() => undefined);
     return json({ message: "The stored master file size does not match the upload. Upload it again." }, 409);
   }
   const durationSeconds = Math.max(0, Math.min(86_400, Math.round(Number(payload.durationSeconds) || 0)));
   const audioUrl = `/api/song-catalog/audio?versionId=${encodeURIComponent(versionId)}`;
-  await db.sql`
+  if (version.audio_storage_key !== fileKey) await db.sql`
     UPDATE halo_song_versions
     SET audio_url = ${audioUrl}, audio_storage_key = ${fileKey}, audio_blob_prefix = '', audio_chunk_count = 0,
       audio_content_type = ${upload.contentType}, audio_byte_size = ${storedBytes}, audio_filename = ${upload.filename},
@@ -95,12 +96,16 @@ async function registerMasterUpload(payload: Record<string, unknown>, db: Awaite
       updated_at = NOW()
     WHERE id = ${versionId} AND song_id = ${songId}
   `;
-  await runDreamweaverReview(songId, ownerMemberId);
-  if (version.audio_storage_key && version.audio_storage_key !== fileKey) await deleteStoredObject(storage, String(version.audio_storage_key)).catch(() => undefined);
-  if (version.audio_blob_prefix) {
-    const stored = await audioStore.list({ prefix: String(version.audio_blob_prefix) }).catch(() => ({ blobs: [] }));
-    await Promise.all(stored.blobs.map(blob => audioStore.delete(blob.key))).catch(() => undefined);
-  }
+  await runConfirmedUploadJobs([
+    { name: "review", run: () => runDreamweaverReview(songId, ownerMemberId) },
+    { name: "superseded_master", required: false, run: () => version.audio_storage_key && version.audio_storage_key !== fileKey
+      ? deleteStoredObject(storage, String(version.audio_storage_key)) : undefined },
+    { name: "superseded_audio", required: false, run: async () => {
+      if (!version.audio_blob_prefix) return;
+      const stored = await audioStore.list({ prefix: String(version.audio_blob_prefix) });
+      await runConfirmedUploadJobs(stored.blobs.map(blob => ({ name: blob.key, run: () => audioStore.delete(blob.key) })));
+    } },
+  ]);
   return json({
     message: "Master copy uploaded directly to storage and registered as the canonical sale master.",
     songId,

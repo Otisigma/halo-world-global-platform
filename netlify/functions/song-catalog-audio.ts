@@ -4,6 +4,7 @@ import { getDatabase } from "@netlify/database";
 import { getUser, verifyRequestOrigin } from "@netlify/identity";
 import { cleanText, ensureMembership } from "../lib/halo-x.mjs";
 import { runDreamweaverReview } from "./song-catalog.js";
+import { runConfirmedUploadJobs } from "../lib/confirmed-upload-jobs.mjs";
 import { MASTER_PLAYBACK_URL_TTL_SECONDS, deleteStoredObject, directUploadConfig, presignObjectUrl } from "../lib/direct-upload-storage.mjs";
 import {
   AUDIO_CHUNK_MAX_BYTES,
@@ -159,7 +160,7 @@ async function uploadStatus(payload: Record<string, unknown>, db: Awaited<Return
 async function removeUpload(prefix: string) {
   if (!prefix) return;
   const stored = await audioStore.list({ prefix });
-  await Promise.all(stored.blobs.map(blob => audioStore.delete(blob.key)));
+  await runConfirmedUploadJobs(stored.blobs.map(blob => ({ name: blob.key, run: () => audioStore.delete(blob.key) })));
 }
 
 async function removeStoredMaster(key: unknown) {
@@ -183,9 +184,11 @@ async function deleteUpload(payload: Record<string, unknown>, db: Awaited<Return
       updated_at = NOW()
     WHERE id = ${versionId} AND song_id = ${songId}
   `;
-  await runDreamweaverReview(songId, ownerMemberId);
-  await removeUpload(String(version.audio_blob_prefix || "")).catch(() => undefined);
-  await removeStoredMaster(version.audio_storage_key).catch(() => undefined);
+  await runConfirmedUploadJobs([
+    { name: "review", run: () => runDreamweaverReview(songId, ownerMemberId) },
+    { name: "superseded_audio", required: false, run: () => removeUpload(String(version.audio_blob_prefix || "")) },
+    { name: "superseded_master", required: false, run: () => removeStoredMaster(version.audio_storage_key) },
+  ]);
   return json({ message: "Version audio removed", songId, versionId });
 }
 
@@ -206,6 +209,7 @@ async function finalizeUpload(payload: Record<string, unknown>, db: Awaited<Retu
   const audioUrl = `/api/song-catalog/audio?versionId=${encodeURIComponent(versionId)}`;
   // Retrying a finalize whose response was lost returns the same confirmation without rewriting anything.
   if (version.audio_blob_prefix === prefix) {
+    await runConfirmedUploadJobs([{ name: "review", run: () => runDreamweaverReview(songId, ownerMemberId) }]);
     return json({ message: "Audio is persisted and locked into HALO storage.", songId, versionId, audioUrl, persisted: true, lockedIn: true, alreadyFinalized: true });
   }
   const status = await inspectAudioUpload(audioStore, { prefix, chunkCount, byteSize });
@@ -227,9 +231,12 @@ async function finalizeUpload(payload: Record<string, unknown>, db: Awaited<Retu
       updated_at = NOW()
     WHERE id = ${versionId}
   `;
-  await runDreamweaverReview(songId, ownerMemberId);
-  if (version.audio_blob_prefix && version.audio_blob_prefix !== prefix) await removeUpload(version.audio_blob_prefix).catch(() => undefined);
-  await removeStoredMaster(version.audio_storage_key).catch(() => undefined);
+  await runConfirmedUploadJobs([
+    { name: "review", run: () => runDreamweaverReview(songId, ownerMemberId) },
+    { name: "superseded_audio", required: false, run: () => version.audio_blob_prefix && version.audio_blob_prefix !== prefix
+      ? removeUpload(version.audio_blob_prefix) : undefined },
+    { name: "superseded_master", required: false, run: () => removeStoredMaster(version.audio_storage_key) },
+  ]);
   return json({
     message: "Audio is persisted and locked into HALO storage.",
     songId,

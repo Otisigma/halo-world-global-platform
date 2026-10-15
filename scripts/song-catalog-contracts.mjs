@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { runInNewContext } from "node:vm";
+import { stripTypeScriptTypes } from "node:module";
+import { runConfirmedUploadJobs } from "../netlify/lib/confirmed-upload-jobs.mjs";
 import { sanitizeDreamweaverAssignedRoute } from "../lib/dreamweaver-storefront.js";
 import { buildDreamweaverSatellite } from "../lib/route-registry.js";
 import { pickCanonicalMaster, serializeMasterCopy } from "../netlify/lib/master-copy.mjs";
@@ -42,6 +44,180 @@ const [page, client, styles, api, unifiedUploadApi, releaseCatalogApi, publicati
   read("netlify/database/migrations/20260929060000_add_song_version_audio_storage_key.sql")
 ]);
 const packageJson = JSON.parse(packageText);
+
+// Exercise actual backend functions without storage credentials or ingesting a second file.
+const deferred = () => {
+  let resolve;
+  const promise = new Promise(done => { resolve = done; });
+  return { promise, resolve };
+};
+const tick = () => new Promise(resolve => setImmediate(resolve));
+{
+  const drain = deferred();
+  const invoked = [];
+  let finished = false;
+  const result = runConfirmedUploadJobs([
+    { name: "required", run: () => { invoked.push("required"); throw new Error("review unavailable"); } },
+    { name: "cleanup", required: false, run: async () => { invoked.push("cleanup"); await drain.promise; throw new Error("cleanup unavailable"); } },
+  ]).catch(error => { finished = true; return error; });
+  await tick();
+  assert.deepEqual(invoked, ["required", "cleanup"], "a synchronous failure does not prevent other lazy jobs starting exactly once");
+  assert.equal(finished, false, "required failure waits for optional work to drain");
+  drain.resolve();
+  const error = await result;
+  assert(error instanceof AggregateError);
+  assert.equal(error.errors.length, 1, "only required failures reject confirmed work");
+  assert.match(error.message, /required/);
+  await assert.rejects(runConfirmedUploadJobs([
+    { name: "duplicate", run: () => assert.fail("invalid job batch must not start") },
+    { name: "duplicate", run: () => assert.fail("invalid job batch must not start") },
+  ]), /unique names/);
+}
+
+const backendFunction = (source, start, end, name, context) => runInNewContext(
+  `${stripTypeScriptTypes(source.slice(source.indexOf(start), source.indexOf(end)))}\n${name}`,
+  { runConfirmedUploadJobs, ...context },
+);
+const backendPayload = { songId: "song", versionId: "version", uploadId: "upload", chunkCount: 1,
+  byteSize: 4, filename: "song.wav", contentType: "audio/wav", fileKey: "new-master",
+  originalName: "song.wav", fileType: "audio/wav", fileSize: 4 };
+const backendDefaults = {
+  cleanId: value => value || "", cleanUploadId: value => value || "", cleanText: value => value || "",
+  normalizeAudioContentType: value => value, normalizeImageContentType: value => value,
+  MAX_CHUNKS: 100, MAX_UPLOAD_BYTES: 1000, MASTER_UPLOAD_MAX_BYTES: 1000,
+  json: (body, status = 200) => ({ body, status }),
+};
+for (const storage of ["audio", "direct"]) {
+  const events = [];
+  const review = deferred(), cleanup = deferred();
+  const version = { audio_blob_prefix: "old-audio", audio_storage_key: "old-master" };
+  let writes = 0, inspections = 0, rejectReview = false, rejectCleanup = false;
+  const dbMock = { sql: async () => {
+    events.push("confirmed");
+    writes++;
+    version.audio_blob_prefix = storage === "audio" ? "new-audio" : "";
+    version.audio_storage_key = storage === "direct" ? "new-master" : "";
+  } };
+  // Return a snapshot just like the database SDK, not a live reference to the mock row.
+  const context = {
+    ...backendDefaults,
+    ownedVersion: async () => ({ ...version }), ownedMasterVersion: async () => ({ ...version }),
+    audioUploadPrefix: () => "new-audio",
+    inspectAudioUpload: async () => { inspections++; return { complete: true }; },
+    discardAudioChunks: () => assert.fail("confirmed upload must not discard parts"),
+    directUploadConfig: () => ({}), isOwnedMasterObjectKey: () => true,
+    validateMasterUpload: () => ({ ok: true, byteSize: 4, contentType: "audio/wav", filename: "song.wav" }),
+    headStoredObject: async () => 4,
+    runDreamweaverReview: async () => {
+      assert(writes > 0, "review starts after persistence");
+      events.push("review");
+      await review.promise;
+      if (rejectReview) throw new Error("review unavailable");
+    },
+    removeUpload: async prefix => { if (!prefix) return; events.push("cleanup_audio"); await cleanup.promise; },
+    removeStoredMaster: async key => { if (!key) return; events.push("cleanup_master"); await cleanup.promise; if (rejectCleanup) throw new Error("object unavailable"); },
+    deleteStoredObject: async () => { events.push("cleanup_master"); await cleanup.promise; if (rejectCleanup) throw new Error("object unavailable"); },
+    audioStore: {
+      list: async () => { events.push("cleanup_audio"); return { blobs: [{ key: "old-audio/000" }, { key: "old-audio/001" }] }; },
+      delete: async () => { await cleanup.promise; },
+    },
+  };
+  const finish = storage === "audio"
+    ? backendFunction(audioApi, "async function finalizeUpload(", "async function readAudioRange(", "finalizeUpload", context)
+    : backendFunction(masterUploadApi, "async function registerMasterUpload(", "export default async function", "registerMasterUpload", context);
+  let returned = false;
+  rejectCleanup = true;
+  const pending = finish(backendPayload, dbMock, "owner").then(value => { returned = true; return value; });
+  await tick();
+  assert.deepEqual(events.slice(0, 2), ["confirmed", "review"]);
+  assert(events.includes("cleanup_audio") && events.includes("cleanup_master"), `${storage} starts independent review and cleanup concurrently`);
+  assert.equal(returned, false);
+  review.resolve();
+  await tick();
+  assert.equal(returned, false, `${storage} must await cleanup even after review finishes`);
+  cleanup.resolve();
+  assert.equal((await pending).body.persisted, true, `${storage} optional cleanup failure cannot fail a persisted upload`);
+  const cleanupCalls = events.filter(event => event.startsWith("cleanup")).length;
+  rejectReview = true;
+  await assert.rejects(finish(backendPayload, dbMock, "owner"), /review/, `${storage} still surfaces required review failures on replay`);
+  rejectReview = false;
+  assert.equal((await finish(backendPayload, dbMock, "owner")).body.persisted, true);
+  assert.equal(writes, 1, `${storage} retries do not finalize the same upload twice`);
+  assert.equal(inspections, storage === "audio" ? 1 : 0, "audio replay does not inspect or ingest parts again");
+  assert.equal(events.filter(event => event.startsWith("cleanup")).length, cleanupCalls, "replay never removes live uploaded media");
+  version.audio_blob_prefix = "older-audio";
+  version.audio_storage_key = "older-master";
+  const beforeFailure = events.length;
+  await assert.rejects(finish(backendPayload, { sql: async () => { throw new Error("confirmation unavailable"); } }, "owner"),
+    /confirmation unavailable/);
+  assert.equal(events.length, beforeFailure, "a failed confirmation starts no downstream jobs");
+}
+for (const versionArtwork of [false, true]) {
+  const cleanup = deferred();
+  const events = [];
+  const record = { artwork_blob_prefix: "old" };
+  const finishArtwork = backendFunction(artworkApi, "async function finalizeUpload(", "async function readArtworkRange(", "finalizeUpload", {
+    ...backendDefaults,
+    ownedSong: async () => ({ ...record }),
+    ownedVersion: async () => ({ ...record }),
+    artworkStore: { list: async () => ({ blobs: [] }) }, hasCompleteChunkSet: () => true,
+    removeArtwork: async () => { events.push("cleanup"); await cleanup.promise; throw new Error("optional cleanup unavailable"); },
+  });
+  let returned = false;
+  const dbMock = { sql: async () => {
+    events.push("confirmed");
+    record.artwork_blob_prefix = versionArtwork ? "owner/song/version/upload/parts/" : "owner/song/upload/parts/";
+  } };
+  const pending = finishArtwork({ ...backendPayload, versionId: versionArtwork ? "version" : "" },
+    dbMock, "owner").then(value => { returned = true; return value; });
+  await tick();
+  assert.deepEqual(events, ["confirmed", "cleanup"], "song/version artwork cleanup starts only after confirmation");
+  assert.equal(returned, false);
+  cleanup.resolve();
+  assert.equal((await pending).body.persisted, true, "artwork confirmation survives optional cleanup failure");
+  assert.equal((await finishArtwork({ ...backendPayload, versionId: versionArtwork ? "version" : "" }, dbMock, "owner")).body.alreadyFinalized, true);
+  assert.deepEqual(events, ["confirmed", "cleanup"], "artwork replay does not rewrite confirmation or repeat cleanup");
+  const uploadArtworkChunk = backendFunction(artworkApi, "async function uploadChunk(", "async function finalizeUpload(", "uploadChunk", {
+    ...backendDefaults, Blob, MAX_CHUNK_BYTES: 1000,
+    ownedSong: async () => ({ ...record }), ownedVersion: async () => ({ ...record }),
+    artworkStore: { set: () => assert.fail("late chunk retries must never overwrite live artwork") },
+  });
+  const fields = { ...backendPayload, versionId: versionArtwork ? "version" : "", chunkIndex: "0",
+    chunk: new Blob(["art"], { type: "image/png" }) };
+  assert.equal((await uploadArtworkChunk({ formData: async () => ({ get: key => fields[key] }) }, dbMock, "owner")).status, 409);
+}
+for (const [source, name, end, storeName] of [
+  [audioApi, "removeUpload", "async function removeStoredMaster(", "audioStore"],
+  [artworkApi, "removeArtwork", "async function uploadChunk(", "artworkStore"],
+]) {
+  const drain = deferred();
+  let returned = false, deletes = 0;
+  const remove = backendFunction(source, `async function ${name}(`, end, name, {
+    [storeName]: {
+      list: async () => ({ blobs: [{ key: "old/000" }, { key: "old/001" }] }),
+      delete: async key => {
+        deletes++;
+        if (key.endsWith("000")) throw new Error("first deletion failed");
+        await drain.promise;
+      },
+    },
+  });
+  const pending = remove("old/").catch(error => { returned = true; return error; });
+  await tick();
+  assert.equal(deletes, 2);
+  assert.equal(returned, false, `${name} drains all blob deletions even if one rejects immediately`);
+  drain.resolve();
+  assert((await pending) instanceof AggregateError);
+}
+// Drive registration archives a reference only; metadata saves must finish their dependent writes
+// before review. Neither path has independent cleanup to parallelize or needs another ingest.
+const driveRegistration = await read("netlify/functions/catalog-tracks.mjs");
+assert(driveRegistration.indexOf("verifyDriveMasterFile(file") < driveRegistration.indexOf("UPDATE halo_song_versions"));
+assert(!driveRegistration.includes("deleteStoredObject") && !driveRegistration.includes("runDreamweaverReview"),
+  "Drive archive registration must not delete archives or start audio publication");
+assert(api.indexOf("driveUrl: googleDriveUrl") < api.indexOf("await runDreamweaverReview(id, ownerMemberId);", api.indexOf("async function saveSong(")),
+  "metadata review observes the confirmed Drive link as well as song metadata");
+console.log("PASS: confirmed backend fan-out starts after persistence, drains all jobs, isolates cleanup, and replays without duplicate ingest");
 const sampleDreamweaverSatellite = buildDreamweaverSatellite("11111111-1111-4111-8111-111111111111", { includeAgentLoop: true });
 const sampleDreamweaverRoute = sanitizeDreamweaverAssignedRoute(sampleDreamweaverSatellite?.experienceUrl);
 const sampleSongs = attachPublicationHealthToSongs([

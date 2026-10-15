@@ -1,4 +1,5 @@
 import { getStore } from "@netlify/blobs";
+import { runConfirmedUploadJobs } from "../lib/confirmed-upload-jobs.mjs";
 import { getDatabase } from "@netlify/database";
 import { getUser, verifyRequestOrigin } from "@netlify/identity";
 import { cleanText, ensureMembership } from "../lib/halo-x.mjs";
@@ -113,7 +114,7 @@ async function publicVersion(db: Awaited<ReturnType<typeof getDatabase>>, songId
 async function removeArtwork(prefix: string) {
   if (!prefix) return;
   const stored = await artworkStore.list({ prefix });
-  await Promise.all(stored.blobs.map(blob => artworkStore.delete(blob.key)));
+  await runConfirmedUploadJobs(stored.blobs.map(blob => ({ name: blob.key, run: () => artworkStore.delete(blob.key) })));
 }
 
 async function uploadChunk(request: Request, db: Awaited<ReturnType<typeof getDatabase>>, ownerMemberId: string) {
@@ -132,12 +133,12 @@ async function uploadChunk(request: Request, db: Awaited<ReturnType<typeof getDa
   if (!(chunk instanceof Blob) || !chunk.size || chunk.size > MAX_CHUNK_BYTES) return json({ message: "That artwork chunk is invalid" }, 413);
   const contentType = normalizeImageContentType(form.get("contentType") || chunk.type, filename);
   if (!contentType) return json({ message: "Upload a JPEG, PNG, or WebP image file" }, 415);
-  if (versionId) {
-    if (!(await ownedVersion(db, ownerMemberId, songId, versionId))) return json({ message: "That version was not found" }, 404);
-  } else {
-    if (!(await ownedSong(db, ownerMemberId, songId))) return json({ message: "That song was not found" }, 404);
-  }
+  const record = versionId
+    ? await ownedVersion(db, ownerMemberId, songId, versionId)
+    : await ownedSong(db, ownerMemberId, songId);
+  if (!record) return json({ message: versionId ? "That version was not found" : "That song was not found" }, 404);
   const prefix = versionId ? `${ownerMemberId}/${songId}/${versionId}/${uploadId}/parts/` : `${ownerMemberId}/${songId}/${uploadId}/parts/`;
+  if (record.artwork_blob_prefix === prefix) return json({ message: "This upload is already finalized", chunkIndex, finalized: true }, 409);
   await artworkStore.set(`${prefix}${String(chunkIndex).padStart(3, "0")}`, chunk);
   return json({ message: "Artwork chunk uploaded", chunkIndex });
 }
@@ -156,11 +157,14 @@ async function finalizeUpload(payload: Record<string, unknown>, db: Awaited<Retu
     const version = await ownedVersion(db, ownerMemberId, songId, versionId);
     if (!version) return json({ message: "That version was not found" }, 404);
     const prefix = `${ownerMemberId}/${songId}/${versionId}/${uploadId}/parts/`;
+    const artworkUrl = `/api/song-catalog/artwork?songId=${encodeURIComponent(songId)}&versionId=${encodeURIComponent(versionId)}`;
+    if (version.artwork_blob_prefix === prefix) {
+      return json({ artwork_url: artworkUrl, persisted: true, lockedIn: true, alreadyFinalized: true });
+    }
     const stored = await artworkStore.list({ prefix });
     if (!hasCompleteChunkSet(stored.blobs, prefix, chunkCount)) {
       return json({ message: "The artwork upload is incomplete. Try it again." }, 409);
     }
-    const artworkUrl = `/api/song-catalog/artwork?songId=${encodeURIComponent(songId)}&versionId=${encodeURIComponent(versionId)}`;
     await db.sql`
       UPDATE halo_song_versions
       SET artwork_url = ${artworkUrl},
@@ -173,7 +177,10 @@ async function finalizeUpload(payload: Record<string, unknown>, db: Awaited<Retu
           updated_at = NOW()
       WHERE id = ${versionId} AND song_id = ${songId}
     `;
-    if (version.artwork_blob_prefix && version.artwork_blob_prefix !== prefix) await removeArtwork(String(version.artwork_blob_prefix)).catch(() => undefined);
+    await runConfirmedUploadJobs([
+      { name: "superseded_artwork", required: false, run: () => version.artwork_blob_prefix && version.artwork_blob_prefix !== prefix
+        ? removeArtwork(String(version.artwork_blob_prefix)) : undefined },
+    ]);
     return json({
       artwork_url: artworkUrl,
       message: "Artwork is persisted and locked into HALO storage.",
@@ -185,11 +192,14 @@ async function finalizeUpload(payload: Record<string, unknown>, db: Awaited<Retu
   const song = await ownedSong(db, ownerMemberId, songId);
   if (!song) return json({ message: "That song was not found" }, 404);
   const prefix = `${ownerMemberId}/${songId}/${uploadId}/parts/`;
+  const artworkUrl = `/api/song-catalog/artwork?songId=${encodeURIComponent(songId)}`;
+  if (song.artwork_blob_prefix === prefix) {
+    return json({ artwork_url: artworkUrl, persisted: true, lockedIn: true, alreadyFinalized: true });
+  }
   const stored = await artworkStore.list({ prefix });
   if (!hasCompleteChunkSet(stored.blobs, prefix, chunkCount)) {
     return json({ message: "The artwork upload is incomplete. Try it again." }, 409);
   }
-  const artworkUrl = `/api/song-catalog/artwork?songId=${encodeURIComponent(songId)}`;
   await db.sql`
     UPDATE halo_song_catalog
     SET artwork_url = ${artworkUrl},
@@ -202,7 +212,10 @@ async function finalizeUpload(payload: Record<string, unknown>, db: Awaited<Retu
         updated_at = NOW()
     WHERE id = ${songId} AND owner_member_id = ${ownerMemberId}
   `;
-  if (song.artwork_blob_prefix && song.artwork_blob_prefix !== prefix) await removeArtwork(String(song.artwork_blob_prefix)).catch(() => undefined);
+  await runConfirmedUploadJobs([
+    { name: "superseded_artwork", required: false, run: () => song.artwork_blob_prefix && song.artwork_blob_prefix !== prefix
+      ? removeArtwork(String(song.artwork_blob_prefix)) : undefined },
+  ]);
   return json({
     artwork_url: artworkUrl,
     message: "Artwork is persisted and locked into HALO storage.",

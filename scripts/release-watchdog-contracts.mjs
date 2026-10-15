@@ -216,6 +216,14 @@ assert.equal(state.status, "ready");
 assert.equal(state.package.dreamweaver.assetGraph.locked, true);
 assert.equal(state.package.documents.dreamweaver.assetGraph.locked, true);
 assert(events.some(event => event.stage === "metadata_rights" && event.details.template.isrc === template.isrc));
+currentSong.notes = "Updated release note";
+state = await processCatalogRelease(db, song.owner_member_id, song.id, prepareAudio);
+assert(state.watchdog.issues.some(issue => issue.field === "route"), "catalog edits without network checks cannot clear a known broken route");
+assert.equal(state.watchdog.graph.locked, true, "metadata edits can reuse verified, unchanged visuals");
+currentVersions[1].artwork_url = "javascript:alert(1)";
+state = await processCatalogRelease(db, song.owner_member_id, song.id, prepareAudio);
+assert.equal(state.watchdog.graph.locked, false, "invalid new version URLs cannot reuse a locked graph through inheritance");
+delete currentVersions[1].artwork_url;
 stored.state.watchdog.checkedAt = "2026-01-01T00:00:00Z";
 const healthyCheck = createInfrastructureChecker("https://halo.test", async () => ({ ok: true, status: 200 }));
 state = await processCatalogRelease(db, song.owner_member_id, song.id, prepareAudio, undefined,

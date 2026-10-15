@@ -17,13 +17,13 @@ export async function processCatalogRelease(db, ownerMemberId, songId, prepareAu
       ? await healCatalogRelease(db, ownerMemberId, songId, claim.token, submission, settings) : null;
     if (healing?.repairs.length) submission = await loadReleaseSubmission(db, ownerMemberId, songId);
     if (!submission) return null;
-    const watchdog = watchdogDue ? await releaseWatchdogDiagnostics(submission, healing, check, routes) : null;
+    const diagnosticRoutes = routes.length ? routes : claim.previous?.watchdog?.routes || [];
+    const watchdog = watchdogDue ? await releaseWatchdogDiagnostics(submission, healing, check, diagnosticRoutes) : null;
     if (watchdog && !check && claim.previous?.watchdog?.graph?.locked
-      && watchdog.graph.revision === claim.previous.watchdog.graph.revision) {
+      && watchdog.graph.revision === claim.previous.watchdog.graph.revision
+      && !watchdog.issues.some(issue => ["asset", "artwork", "video", "sale_master_audio"].includes(issue.field))) {
       watchdog.graph = claim.previous.watchdog.graph;
-      watchdog.routes = claim.previous.watchdog.routes;
       watchdog.issues = watchdog.issues.filter(issue => issue.field !== "asset_verification");
-      watchdog.issues.push(...claim.previous.watchdog.issues.filter(issue => issue.field === "route"));
     }
     if (watchdog?.graph.locked && (!claim.previous?.watchdog?.graph?.locked
       || watchdog.graph.revision !== claim.previous.watchdog.graph.revision)) {

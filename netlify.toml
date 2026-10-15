@@ -1,5 +1,5 @@
 [build]
-  command = "npm run build"
+  command = '''npm run build && node --input-type=module -e 'import { writeFileSync } from "node:fs"; const revision = process.env.COMMIT_REF; if (!/^[a-f0-9]{40}$/i.test(revision || "")) throw new Error("Upload build requires a valid COMMIT_REF"); writeFileSync("upload-build.js", "window.HaloUploadBuild=" + JSON.stringify({protocolVersion:2,revision}) + ";\n");' '''
   publish = "."
 
 [[headers]]
@@ -40,6 +40,11 @@
 
 [[headers]]
   for = "/upload-pipeline/*"
+  [headers.values]
+    Cache-Control = "no-cache, no-store, must-revalidate"
+
+[[headers]]
+  for = "/upload-build.js"
   [headers.values]
     Cache-Control = "no-cache, no-store, must-revalidate"
 

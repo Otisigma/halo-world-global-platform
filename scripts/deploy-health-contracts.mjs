@@ -25,8 +25,11 @@
  */
 
 import assert from "node:assert/strict";
-import { readdir, readFile } from "node:fs/promises";
+import { readdir, readFile, mkdtemp, rm } from "node:fs/promises";
 import { resolve } from "node:path";
+import { tmpdir } from "node:os";
+import { spawnSync } from "node:child_process";
+import { runInNewContext } from "node:vm";
 import { ROUTE_RENDER_INDEX_TARGETS } from "../lib/page-link-ledger.js";
 import { CANONICAL_HOME_ROUTE, CANONICAL_ROUTE_ALIAS_ENTRIES } from "../lib/route-registry.js";
 
@@ -58,6 +61,35 @@ const runCheck = async (name, check) => {
     reportFail(name, error);
   }
 };
+
+await runCheck("Upload deployment revision", async () => {
+  const config = await read("netlify.toml");
+  const source = /node --input-type=module -e '([^']+)'/.exec(config)?.[1];
+  assert.ok(source, "Netlify must stamp the upload client from the build commit.");
+  assert.match(config, /for = "\/upload-build\.js"[\s\S]*?Cache-Control = "no-cache, no-store, must-revalidate"/);
+  const page = await read("song-catalog/index.html");
+  assert.match(page, /src="\/upload-build\.js"/);
+  assert.ok(page.indexOf('src="/upload-build.js"') < page.indexOf('src="/upload-progress.js"'));
+  const fixture = await mkdtemp(resolve(tmpdir(), "halo-upload-build-"));
+  try {
+    const revision = "a".repeat(40);
+    const result = spawnSync(process.execPath, ["--input-type=module", "-e", source], {
+      cwd: fixture, env: { ...process.env, COMMIT_REF: revision }, encoding: "utf8",
+    });
+    assert.equal(result.status, 0, result.stderr);
+    const window = {};
+    runInNewContext(await readFile(resolve(fixture, "upload-build.js"), "utf8"), { window });
+    assert.equal(window.HaloUploadBuild.revision, revision);
+    assert.equal(window.HaloUploadBuild.protocolVersion, 2);
+    const invalid = spawnSync(process.execPath, ["--input-type=module", "-e", source], {
+      cwd: fixture, env: { ...process.env, COMMIT_REF: "" }, encoding: "utf8",
+    });
+    assert.notEqual(invalid.status, 0, "A deployment without an identifiable commit must fail closed.");
+  } finally {
+    await rm(fixture, { recursive: true, force: true });
+  }
+  return "build stamp is ephemeral, uncached, and tied to COMMIT_REF";
+});
 
 await runCheck("Migration ordering", async () => {
   const migrationDir = "netlify/database/migrations";

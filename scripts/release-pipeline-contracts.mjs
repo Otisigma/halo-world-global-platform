@@ -202,7 +202,7 @@ assert.match(selector, /sourceUpdatedAt/);
 assert(!selector.includes("'blocked', 'escalated'"), "unchanged blocked/escalated releases are not automatic candidates");
 assert.equal(candidateCalls, 2);
 const read = path => readFile(new URL(`../${path}`, import.meta.url), "utf8");
-assert.match(await read("netlify/functions/release-conveyor-recover.mjs"), /schedule: "\*\/15 \* \* \* \*"/);
+assert.match(await read("netlify/functions/release-conveyor-recover.mjs"), /schedule: "\*\/5 \* \* \* \*"/);
 assert.match(await read("netlify/functions/song-catalog.ts"), /automatic recovery will retry/);
 assert.match(await read("song-catalog/index.html"), /option value="both"/);
 console.log("Automated release pipeline, gates, bounded recovery, durable audit and publication preservation contracts passed");

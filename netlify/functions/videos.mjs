@@ -67,7 +67,7 @@ async function loadVideos(db, artistSlug = "") {
   return rows.map(serializeVideo);
 }
 
-async function serveMedia(db, id) {
+export async function serveMedia(db, id, method = "GET", getVideoStore = () => getStore("halo-video-gallery")) {
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(id || ""))) {
     return json({ message: "Video not found" }, 404);
   }
@@ -79,9 +79,11 @@ async function serveMedia(db, id) {
   `;
   const video = rows[0];
   if (!video) return json({ message: "Video not found" }, 404);
-  const blob = await getStore("halo-video-gallery").get(video.blob_key, { type: "blob" });
+  const store = getVideoStore();
+  const blob = method === "HEAD" ? await store.getMetadata(video.blob_key)
+    : await store.get(video.blob_key, { type: "blob" });
   if (!blob) return json({ message: "Video file is unavailable" }, 404);
-  return new Response(blob, {
+  return new Response(method === "HEAD" ? null : blob, {
     headers: {
       "Cache-Control": "public, max-age=3600",
       "Content-Type": video.content_type || "application/octet-stream",
@@ -160,11 +162,12 @@ async function createVideo(request, db, user) {
 }
 
 export default async function videosHandler(request) {
-  if (!["GET", "POST"].includes(request.method)) return json({ message: "Method not allowed" }, 405);
+  if (!["GET", "HEAD", "POST"].includes(request.method)) return json({ message: "Method not allowed" }, 405);
   try {
     const db = getDatabase();
     const url = new URL(request.url);
-    if (request.method === "GET" && url.searchParams.get("media")) return serveMedia(db, url.searchParams.get("media"));
+    if (["GET", "HEAD"].includes(request.method) && url.searchParams.get("media")) return serveMedia(db, url.searchParams.get("media"), request.method);
+    if (request.method === "HEAD") return new Response(null, { status: 405 });
 
     const user = await getUser();
     if (request.method === "POST") return createVideo(request, db, user);

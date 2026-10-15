@@ -209,7 +209,6 @@ async function finalizeUpload(payload: Record<string, unknown>, db: Awaited<Retu
   const audioUrl = `/api/song-catalog/audio?versionId=${encodeURIComponent(versionId)}`;
   // Retrying a finalize whose response was lost returns the same confirmation without rewriting anything.
   if (version.audio_blob_prefix === prefix) {
-    await runConfirmedUploadJobs([{ name: "review", run: () => runDreamweaverReview(songId, ownerMemberId) }]);
     return json({ message: "Audio is persisted and locked into HALO storage.", songId, versionId, audioUrl, persisted: true, lockedIn: true, alreadyFinalized: true });
   }
   const status = await inspectAudioUpload(audioStore, { prefix, chunkCount, byteSize });

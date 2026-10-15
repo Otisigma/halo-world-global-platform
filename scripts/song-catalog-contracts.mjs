@@ -138,8 +138,16 @@ for (const storage of ["audio", "direct"]) {
   cleanup.resolve();
   assert.equal((await pending).body.persisted, true, `${storage} optional cleanup failure cannot fail a persisted upload`);
   const cleanupCalls = events.filter(event => event.startsWith("cleanup")).length;
+  const reviewsBeforeReplay = events.filter(event => event === "review").length;
   rejectReview = true;
-  await assert.rejects(finish(backendPayload, dbMock, "owner"), /review/, `${storage} still surfaces required review failures on replay`);
+  if (storage === "audio") {
+    assert.equal((await finish(backendPayload, dbMock, "owner")).body.alreadyFinalized, true,
+      "audio replay returns its persisted confirmation even while review is unavailable");
+    assert.equal(events.filter(event => event === "review").length, reviewsBeforeReplay,
+      "audio replay keeps the original fast path without new review writes; recovery remains separate");
+  } else {
+    await assert.rejects(finish(backendPayload, dbMock, "owner"), /review/, "direct registration preserves its required review behavior");
+  }
   rejectReview = false;
   assert.equal((await finish(backendPayload, dbMock, "owner")).body.persisted, true);
   assert.equal(writes, 1, `${storage} retries do not finalize the same upload twice`);

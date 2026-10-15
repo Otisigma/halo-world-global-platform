@@ -195,13 +195,14 @@ poll = consoleTimer();
 assert.equal(consoleRequests.at(-1).options.credentials, "same-origin");
 assert.equal(consoleRequests.at(-1).options.method, undefined, "polling only reads status");
 resolveConsoleRequest({ ok: true, json: async () => ({
-  status: "processing", busy: true, stages: [{ name: "intake", status: "passed" }],
+  status: "processing", busy: true, stages: [{ name: "intake", status: "passed" }], options: { humHz: 60 },
 }) });
 await poll;
 assert.equal(consoleNode("percent-text").textContent, "13% Completed (1/8 stages)", "partial checkpoints retain the full denominator");
 assert.match(consoleNode("current-step").textContent, /AUDIO PREFLIGHT \(pending\)/);
 assert.equal(consoleNode("status-badge").textContent, "PROCESSING");
 assert.equal(consoleNode("hum").disabled, true, "live reads do not unlock processing controls");
+assert.equal(consoleNode("hum").value, "0", "live reads cannot change the filter during a foreground request");
 // Even a programmatic change cannot leave options mismatched with a returned package.
 consoleNode("hum").value = "50";
 poll = consoleTimer();
@@ -247,6 +248,15 @@ resolveConsoleRequest({ ok: true, json: async () => ({ status: "not_started", re
 await settle();
 assert.equal(consoleNode("status-badge").textContent, "PENDING", "pending is not blocked");
 assert.equal(consoleNode("percent-text").textContent, "0% Completed (0/8 stages)");
+consoleNode("hum").value = "0";
+consoleNode("refresh").dispatchEvent(new Event("click"));
+resolveConsoleRequest({ ok: true, json: async () => ({ status: "processing", busy: true, options: { humHz: 50 } }) });
+await settle();
+assert.equal(consoleNode("hum").value, "0");
+poll = consoleTimer();
+resolveConsoleRequest({ ok: true, json: async () => ({ ...success, options: { humHz: 50 } }) });
+await poll;
+assert.equal(consoleNode("hum").value, "50", "completed background runs synchronize the filter with the displayed package");
 controller.dispose();
 assert.equal(consoleTimer, null, "disposing stops polling");
 

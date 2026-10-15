@@ -8,6 +8,7 @@ import {
   HALO_MASTER_INTENT,
   prefillMetadataFromHistory,
   queueRadioLane,
+  reconcileDreamweaverAssetGraph,
   RADIO_BROADCAST_DEFAULTS,
 } from "../netlify/lib/halo-master-orchestrator.mjs";
 
@@ -81,14 +82,25 @@ const noHistoryDb = taggedSql(() => []);
 assert.equal(await prefillMetadataFromHistory(noHistoryDb, song), null);
 assert.equal(noHistoryDb.calls.length, 1);
 
-const graph = buildDreamweaverAssetGraph(
-  { ...song, artwork_url: "/covers/a-signal.jpg" },
-  [{ id: "version-1", artwork_url: "https://cdn.example/a-signal-alt.jpg", video_url: "https://cdn.example/loop.mp4" },
-    { id: "bad", video_url: "javascript:alert(1)" }],
-);
+const graphVersions = [
+  { id: "version-1", artwork_url: "https://cdn.example/a-signal-alt.jpg", video_url: "https://cdn.example/loop.mp4" },
+  { id: "bad", video_url: "javascript:alert(1)" },
+];
+const graph = buildDreamweaverAssetGraph({ ...song, artwork_url: "/covers/a-signal.jpg" }, graphVersions);
 assert.equal(graph.locked, true);
 assert.deepEqual(graph.assets.map(asset => asset.kind), ["artwork", "artwork", "video"]);
 assert.equal(buildDreamweaverAssetGraph(song, []), null);
+const unchangedGraph = reconcileDreamweaverAssetGraph(buildDreamweaverAssetGraph(
+  { ...song, artwork_url: "/covers/a-signal.jpg" },
+  graphVersions,
+), graph);
+assert.equal(unchangedGraph.action, null, "a locked graph remains stable when its assets have not changed");
+const changedGraph = reconcileDreamweaverAssetGraph(buildDreamweaverAssetGraph(
+  { ...song, artwork_url: "/covers/a-signal-new.jpg" }, [],
+), graph);
+assert.equal(changedGraph.action, "dreamweaver_asset_graph_updated");
+assert.equal(changedGraph.graph.assets[0].url, "/covers/a-signal-new.jpg");
+assert.equal(reconcileDreamweaverAssetGraph(null, graph).action, "dreamweaver_asset_graph_unlocked");
 
 const diagnostics = buildDepartmentDiagnostics(
   { ...song, pipeline_status: "ready_for_radio", rights_status: "cleared", isrc: "GB-AAA-26-00001" },

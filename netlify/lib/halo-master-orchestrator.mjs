@@ -42,7 +42,7 @@ export function buildDreamweaverAssetGraph(song, versions = []) {
   if (cover) assets.push({ kind: "artwork", url: cover, source: "catalog" });
   for (const version of versions) {
     const artwork = safeAssetUrl(version.artwork_url);
-    const video = safeAssetUrl(version.video_url || version.promo_video_url);
+    const video = safeAssetUrl(version.video_url) || safeAssetUrl(version.promo_video_url);
     if (artwork) assets.push({ kind: "artwork", url: artwork, versionId: version.id });
     if (video) assets.push({ kind: "video", url: video, versionId: version.id });
   }
@@ -54,6 +54,22 @@ export function buildDreamweaverAssetGraph(song, versions = []) {
     versionIds: versions.map(version => version.id),
     lockedAt: new Date().toISOString(),
   };
+}
+
+export function reconcileDreamweaverAssetGraph(currentGraph, existingGraph) {
+  if (!currentGraph) {
+    if (!existingGraph?.locked) return { graph: existingGraph || { locked: false, assets: [] }, action: null };
+    return {
+      graph: { locked: false, songId: existingGraph.songId, assets: [], versionIds: [], lockedAt: new Date().toISOString() },
+      action: "dreamweaver_asset_graph_unlocked",
+    };
+  }
+  if (!existingGraph?.locked) return { graph: currentGraph, action: "dreamweaver_asset_graph_locked" };
+  const unchanged = JSON.stringify(currentGraph.assets) === JSON.stringify(existingGraph.assets)
+    && JSON.stringify(currentGraph.versionIds) === JSON.stringify(existingGraph.versionIds);
+  return unchanged
+    ? { graph: existingGraph, action: null }
+    : { graph: currentGraph, action: "dreamweaver_asset_graph_updated" };
 }
 
 export function buildDepartmentDiagnostics(song, versions, conveyorState, graph) {
@@ -256,10 +272,12 @@ export async function runHaloMasterPulse(db, options = {}) {
       const versions = await loadVersions(db, song.id);
       const prior = await loadSharedOrchestratorState(db, song.id);
       const existingGraph = prior?.state?.dreamweaverAssetGraph;
-      const graph = existingGraph?.locked ? existingGraph : buildDreamweaverAssetGraph(song, versions);
-      if (graph && !existingGraph?.locked) {
-        actions.push({ action: "dreamweaver_asset_graph_locked", details: graph });
-        await recordEvent(db, song.id, song.owner_member_id, "dreamweaver_asset_graph_locked", graph);
+      const { graph, action: graphAction } = reconcileDreamweaverAssetGraph(
+        buildDreamweaverAssetGraph(song, versions), existingGraph,
+      );
+      if (graphAction) {
+        actions.push({ action: graphAction, details: graph });
+        await recordEvent(db, song.id, song.owner_member_id, graphAction, graph);
       }
       const conveyor = await db.sql`
         SELECT state FROM halo_release_conveyor

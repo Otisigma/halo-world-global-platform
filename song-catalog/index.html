@@ -83,6 +83,11 @@
             <p data-conveyor-current-step aria-live="polite">Active Dept: Select a song</p>
             <ol data-conveyor-stages aria-label="Release departments"></ol>
             <ul data-conveyor-issues aria-label="Required release actions"></ul>
+            <section class="conveyor-watchdog" aria-labelledby="conveyorWatchdogTitle">
+              <h4 id="conveyorWatchdogTitle">Shared watchdog diagnostics</h4>
+              <p data-conveyor-watchdog-status role="status" aria-live="polite">Shared watchdog diagnostics are not available yet.</p>
+              <ul data-conveyor-watchdog-findings aria-label="Watchdog department and infrastructure findings"></ul>
+            </section>
             <div class="artwork-upload-actions"><button class="quiet-button" data-conveyor-refresh type="button">Refresh receipt</button><a class="quiet-button" data-conveyor-package hidden download>Download release package (JSON)</a><a class="quiet-button" data-conveyor-documents hidden download>Release documents (text)</a><a class="quiet-button" data-conveyor-promotion hidden download>Promotion copy (text)</a><a class="quiet-button" data-conveyor-audio hidden download>Download conditioned WAV</a></div>
             <p>Automatic conditioning supports stored mono/stereo PCM WAV up to 128 MB: a 350 ms soft-start, optional hum filtering, and loudness targeting −14 LUFS where measurable, bounded by safe gain and sample-peak limits. Short clips use an RMS fallback; this is not true-peak certification or mastering approval. Other approved masters are preserved as-is. Promotional copy is a draft for your review; external distributor delivery is not automatic.</p>
           </section>

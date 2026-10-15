@@ -189,6 +189,9 @@
     if(response.ok)return response.data;
     const error=new Error(response.data?.message||`The upload stopped (HTTP ${response.status}).`);
     error.retryable=response.status===0||response.status===408||response.status===409||response.status===429||response.status>=500;
+    if(response.data?.resetReason==="upload_replaced")error.retryable=false;
+    error.status=response.status;
+    error.data=response.data;
     error.retryAfterMs=response.retryAfterMs;
     throw error;
   }

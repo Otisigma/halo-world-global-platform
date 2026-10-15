@@ -209,6 +209,16 @@ await assert.rejects(helper.uploadResumableFile({
   onProgress: (percent, detail) => paused.push(detail.state),
 }), /Reselect the same file and retry/);
 assert.equal(paused.at(-1), "paused");
+let replacedReads = 0;
+await assert.rejects(helper.uploadResumableFile({
+  file, chunkSize: 4, retryDelays: [0, 0],
+  getStatus: async () => {
+    replacedReads++;
+    return helper.requireUploadResponse({ ok: false, status: 409, data: v2(0, { resetReason: "upload_replaced", replacementToken: "current-reference", message: "This upload was replaced." }) });
+  },
+  sendChunk: async () => assert.fail("replaced uploads must not replay chunks automatically"),
+}), error => error.retryable === false && error.status === 409 && error.data.replacementToken === "current-reference");
+assert.equal(replacedReads, 1, "replaced status requires explicit intent, not transient retry polling");
 let completions = 0;
 const registered = { persisted: true, audioUrl: "/saved" };
 assert.equal(await helper.completeResumableUpload({

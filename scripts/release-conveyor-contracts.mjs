@@ -5,6 +5,7 @@ import { conditionReleaseWav } from "../netlify/lib/release-audio.mjs";
 import { createReleaseConveyorHandler } from "../netlify/lib/release-conveyor-http.mjs";
 import { prepareReleaseAudio } from "../netlify/lib/release-conveyor-audio.mjs";
 import { createReleaseConveyorConsole } from "../lib/release-conveyor-ui.js";
+import "./halo-watchdog-contracts.mjs";
 
 const song = { id: "12345678-1234-4123-8123-123456789012", owner_member_id: "creator",
   title: "A Signal", artist_name: "Artist", genre: "Soul", isrc: "GB-AAA-26-00001",

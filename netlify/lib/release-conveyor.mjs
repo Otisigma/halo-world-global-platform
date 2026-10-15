@@ -2,11 +2,9 @@ import { createHash } from "node:crypto";
 import { normalizeLyricsSource, parseTimestampedLyrics } from "../../lib/dreamweaver-lyrics.js";
 import { buildDreamweaverSatellite } from "../../lib/route-registry.js";
 import { retryReleaseWork } from "./release-conveyor-retry.mjs";
+import { RELEASE_STAGES } from "../../lib/release-conveyor-stages.js";
 
-export const RELEASE_STAGES = Object.freeze([
-  "intake", "audio_preflight", "metadata_rights", "council",
-  "dreamweaver", "documents", "promotion", "distribution_handoff",
-]);
+export { RELEASE_STAGES };
 export const RELEASE_PIPELINE_VERSION = 2;
 
 export function releaseFingerprint(song, versions, options = { humHz: 0 }) {

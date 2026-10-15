@@ -136,10 +136,10 @@ for (const source of [{ audio_byte_size: 150 * 1024 * 1024, audio_storage_key: "
 }
 
 class ConsoleElement extends EventTarget {
-  constructor() { super(); this.children = []; this.value = "0"; this.hidden = false; this.disabled = false; this.textContent = ""; }
+  constructor() { super(); this.children = []; this.value = "0"; this.hidden = false; this.disabled = false; this.textContent = ""; this.style = {}; this.attributes = new Map(); }
   replaceChildren() { this.children = []; }
   append(item) { this.children.push(item); }
-  setAttribute() {}
+  setAttribute(name, value) { this.attributes.set(name, value); }
 }
 const consoleNodes = new Map();
 const consoleRoot = new ConsoleElement();
@@ -148,32 +148,117 @@ consoleRoot.querySelector = selector => {
   return consoleNodes.get(selector);
 };
 let resolveConsoleRequest;
-const consoleFetch = () => new Promise(resolve => { resolveConsoleRequest = resolve; });
-const controller = createReleaseConveyorConsole({ root: consoleRoot, doc: { createElement: () => new ConsoleElement() }, fetcher: consoleFetch });
+const consoleRequests = [];
+const consoleFetch = (url, options) => {
+  consoleRequests.push({ url, options });
+  return new Promise(resolve => { resolveConsoleRequest = resolve; });
+};
+let consoleTimer;
+const controller = createReleaseConveyorConsole({
+  root: consoleRoot, doc: { createElement: () => new ConsoleElement() }, fetcher: consoleFetch,
+  setTimer: callback => { consoleTimer = callback; return callback; },
+  clearTimer: callback => { if (consoleTimer === callback) consoleTimer = null; },
+});
 const consoleNode = key => consoleNodes.get(`[data-conveyor-${key}]`);
 const settle = () => new Promise(resolve => setTimeout(resolve, 0));
 controller.select(song.id);
+assert.equal(consoleNode("percent-text").textContent, "0% Completed (0/8 stages)");
+assert.equal(consoleNode("stages").children.length, RELEASE_STAGES.length);
 assert.equal(consoleNode("hum").disabled, true, "filter selection is disabled during a request");
 resolveConsoleRequest({ ok: true, json: async () => ({ ...success, options: { humHz: 0 } }) });
 await settle();
 assert.equal(consoleNode("hum").disabled, false);
 assert.equal(consoleNode("package").hidden, false);
+assert.equal(consoleNode("percent-text").textContent, "100% Completed (8/8 stages)", "repaired stages count as passed");
+assert.equal(consoleNode("progress-bar").style.width, "100%");
+assert.equal(consoleNode("progress").attributes.get("aria-valuenow"), "100");
+assert.equal(consoleNode("current-step").textContent, "Active Dept: Complete");
+assert.equal(consoleNode("status-badge").textContent, "FULLY CLEARED");
+assert(consoleNode("stages").children.every(item => item.attributes.get("data-state") === "passed"));
+let poll = consoleTimer();
+resolveConsoleRequest({ ok: true, json: async () => missing });
+await poll;
+assert.equal(consoleNode("percent-text").textContent, "25% Completed (2/8 stages)");
+assert.match(consoleNode("current-step").textContent, /METADATA RIGHTS \(blocked\)/);
+assert.equal(consoleNode("status-badge").textContent, "ESCALATED / BLOCKED");
+assert.deepEqual(consoleNode("stages").children.map(item => item.attributes.get("data-state")),
+  ["passed", "passed", "blocked", "blocked", "pending", "pending", "pending", "pending"]);
+poll = consoleTimer();
+resolveConsoleRequest({ ok: true, json: async () => failed });
+await poll;
+assert.match(consoleNode("current-step").textContent, /DISTRIBUTION HANDOFF \(blocked\)/, "failed departments render as blocked");
+assert.equal(consoleNode("progress-bar").style.width, "88%");
 consoleNode("run").dispatchEvent(new Event("click"));
 assert.equal(consoleNode("hum").disabled, true);
+const resolveProcessing = resolveConsoleRequest;
+poll = consoleTimer();
+assert.equal(consoleRequests.at(-1).options.credentials, "same-origin");
+assert.equal(consoleRequests.at(-1).options.method, undefined, "polling only reads status");
+resolveConsoleRequest({ ok: true, json: async () => ({
+  status: "processing", busy: true, stages: [{ name: "intake", status: "passed" }], options: { humHz: 60 },
+}) });
+await poll;
+assert.equal(consoleNode("percent-text").textContent, "13% Completed (1/8 stages)", "partial checkpoints retain the full denominator");
+assert.match(consoleNode("current-step").textContent, /AUDIO PREFLIGHT \(pending\)/);
+assert.equal(consoleNode("status-badge").textContent, "PROCESSING");
+assert.equal(consoleNode("hum").disabled, true, "live reads do not unlock processing controls");
+assert.equal(consoleNode("hum").value, "0", "live reads cannot change the filter during a foreground request");
 // Even a programmatic change cannot leave options mismatched with a returned package.
 consoleNode("hum").value = "50";
-resolveConsoleRequest({ ok: true, json: async () => ({ ...success, options: { humHz: 0 } }) });
+poll = consoleTimer();
+const resolveOlderPoll = resolveConsoleRequest;
+resolveProcessing({ ok: true, json: async () => ({ ...success, options: { humHz: 0 } }) });
 await settle();
+resolveOlderPoll({ ok: true, json: async () => ({ status: "processing", stages: [] }) });
+await poll;
+assert.equal(consoleNode("status-badge").textContent, "FULLY CLEARED", "late checkpoints cannot overwrite a completed request");
 assert.equal(consoleNode("hum").value, "0");
 consoleNode("hum").value = "50";
 consoleNode("hum").dispatchEvent(new Event("change"));
 assert.equal(consoleNode("package").hidden, true);
 assert.equal(consoleNode("audio").hidden, true);
+assert.equal(consoleNode("percent-text").textContent, "0% Completed (0/8 stages)");
+assert.equal(consoleNode("status-badge").textContent, "NEEDS RERUN");
+assert.equal(consoleTimer, null, "automatic refresh cannot clear unsaved filter changes");
 consoleNode("refresh").dispatchEvent(new Event("click"));
 resolveConsoleRequest({ ok: false, json: async () => ({ message: "Connection interrupted." }) });
 await settle();
 assert.equal(consoleNode("package").hidden, true);
 assert.equal(consoleNode("documents").hidden, true);
+assert.equal(consoleNode("progress-bar").style.width, "0%");
+assert.equal(consoleNode("status-badge").textContent, "RETRY SCHEDULED");
+poll = consoleTimer();
+resolveConsoleRequest({ ok: true, json: async () => ({
+  status: "processing", stages: [null, { name: "intake", status: "unknown" },
+    { name: "<img src=x onerror=alert(1)>", status: "passed" },
+    { name: "audio_preflight", status: "pending", detail: "<b>Untrusted detail</b>" }],
+}) });
+await poll;
+assert.equal(consoleNode("percent-text").textContent, "0% Completed (0/8 stages)");
+assert.match(consoleNode("stages").children[1].textContent, /<b>Untrusted detail<\/b>/, "details remain text, never HTML");
+poll = consoleTimer();
+controller.select("");
+resolveConsoleRequest({ ok: true, json: async () => success });
+await poll;
+assert.equal(consoleNode("progress-bar").style.width, "0%", "late responses cannot leak another song's progress");
+assert.equal(consoleNode("current-step").textContent, "Active Dept: Select a song");
+assert.equal(consoleTimer, null, "deselecting stops polling");
+controller.select(song.id);
+resolveConsoleRequest({ ok: true, json: async () => ({ status: "not_started", receipt: null }) });
+await settle();
+assert.equal(consoleNode("status-badge").textContent, "PENDING", "pending is not blocked");
+assert.equal(consoleNode("percent-text").textContent, "0% Completed (0/8 stages)");
+consoleNode("hum").value = "0";
+consoleNode("refresh").dispatchEvent(new Event("click"));
+resolveConsoleRequest({ ok: true, json: async () => ({ status: "processing", busy: true, options: { humHz: 50 } }) });
+await settle();
+assert.equal(consoleNode("hum").value, "0");
+poll = consoleTimer();
+resolveConsoleRequest({ ok: true, json: async () => ({ ...success, options: { humHz: 50 } }) });
+await poll;
+assert.equal(consoleNode("hum").value, "50", "completed background runs synchronize the filter with the displayed package");
+controller.dispose();
+assert.equal(consoleTimer, null, "disposing stops polling");
 
 // Execute the real HTTP/service/storage paths against a tagged-SQL test double.
 let stored = null, events = [], currentSong = structuredClone(song), currentVersions = structuredClone(versions);
@@ -306,7 +391,10 @@ const [catalog, html, ui, endpoint] = await Promise.all([
   read("lib/release-conveyor-ui.js"), read("netlify/functions/release-conveyor.mjs"),
 ]);
 assert.match(catalog, /await processCatalogRelease\(await getDatabase\(\), ownerMemberId, songId, prepareReleaseAudio\)/);
-for (const action of ["run", "status", "stages", "issues", "package", "documents", "promotion", "audio", "hum"]) assert(html.includes(`data-conveyor-${action}`));
+for (const action of ["run", "status", "stages", "issues", "package", "documents", "promotion", "audio", "hum",
+  "progress", "progress-bar", "percent-text", "current-step", "status-badge"]) assert(html.includes(`data-conveyor-${action}`));
+assert.match(html, /id="conveyor-percent-text"/);
+assert.doesNotMatch(html + ui, /conveyor-percent-text<\/u>/);
 assert.match(ui, /item\.textContent/);
 assert.doesNotMatch(ui, /\.innerHTML\s*=/);
 assert.match(endpoint, /path: "\/api\/release-conveyor"/);

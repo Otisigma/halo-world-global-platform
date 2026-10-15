@@ -93,18 +93,27 @@ let creates = 0;
 let transfers = 0;
 let ownerAllowsTarget = true;
 let rejectTransfer = true;
+let rejectPipelineAck = false;
+const createdTargets = new Map();
 const identityScopes = [];
 const context = {
   uploadHelper: { fileUploadId: async (file, scope) => { identityScopes.push(Array.from(scope)); return "content-hash"; } },
   AUDIO_CHUNK_BYTES: 4, pendingPackageUploads: new Map(),
-  localStorage: { getItem: key => targets.get(key), setItem: (key, value) => targets.set(key, value) },
-  sessionStorage: { getItem: key => sessionTargets.get(key), setItem: (key, value) => sessionTargets.set(key, value) },
+  localStorage: { getItem: key => targets.get(key), setItem: (key, value) => targets.set(key, value), removeItem: key => targets.delete(key) },
+  sessionStorage: { getItem: key => sessionTargets.get(key), setItem: (key, value) => sessionTargets.set(key, value), removeItem: key => sessionTargets.delete(key) },
   setControllerPhase() {}, setMessage() {}, buildNotes: title => `editable ${title}`,
   apiJson: async (url, payload) => {
-    if (payload.action === "create_project") { creates++; return { songId: "song", masterVersionId: "version", privateToken: "never-store-this" }; }
+    if (payload.action === "create_project") {
+      creates++;
+      const suffix = creates === 1 ? "" : `-${creates}`;
+      const target = { songId: `song${suffix}`, masterVersionId: `version${suffix}` };
+      createdTargets.set(target.songId, target);
+      return { ...target, privateToken: "never-store-this" };
+    }
+    if (payload.action === "advance_pipeline" && payload.toStage === "needs_assets" && rejectPipelineAck) throw new Error("Pipeline acknowledgement lost");
     return { pipelineStatus: "needs_assets", departments: [] };
   },
-  loadCatalogSong: async () => ownerAllowsTarget ? { id: "song", versions: [{ id: "version" }] } : { id: "song", versions: [{ id: "different-owner-target" }] },
+  loadCatalogSong: async songId => ownerAllowsTarget ? { id: songId, versions: [{ id: createdTargets.get(songId)?.masterVersionId }] } : { id: songId, versions: [{ id: "different-owner-target" }] },
   uploadAudio: async () => { transfers++; if (rejectTransfer) throw new Error("Connection interrupted"); },
   reuseArtwork() {}, uploadArtwork() {},
 };
@@ -119,15 +128,35 @@ assert.equal((await processPackage({ ...input, title: "Edited title", artistName
 assert.equal(creates, 1, "metadata edits and reload must reuse the owner-validated content target");
 assert.deepEqual(identityScopes, [["intake-audio"], ["intake-audio"]]);
 assert.equal(transfers, 2);
+assert.equal(targets.size, 0, "acknowledged completion must clear the durable recovery target");
+assert.equal(context.pendingPackageUploads.size, 0);
+assert.equal((await processPackage({ ...input, title: "Intentional new release" })).songId, "song-2");
+assert.equal(creates, 2, "a new acknowledged submission with identical audio must create a distinct release rather than overwrite old metadata");
+targets.set("halo-intake:content-hash", JSON.stringify({ songId: "song", masterVersionId: "version" }));
 ownerAllowsTarget = false;
 await processPackage(input);
-assert.equal(creates, 2, "cached version IDs must be validated against the owner's catalog");
+assert.equal(creates, 3, "cached version IDs must be validated against the owner's catalog");
 context.pendingPackageUploads.clear();
 targets.clear();
 context.localStorage = { getItem() { throw new Error("Storage denied"); }, setItem() { throw new Error("Storage denied"); } };
-await processPackage(input);
+rejectTransfer = true;
+await assert.rejects(processPackage(input), /Connection interrupted/);
 assert.ok(sessionTargets.has("halo-intake:content-hash"), "sessionStorage must support browsers that deny durable local storage");
-assert.deepEqual(JSON.parse(sessionTargets.get("halo-intake:content-hash")), { songId: "song", masterVersionId: "version" });
+assert.deepEqual(JSON.parse(sessionTargets.get("halo-intake:content-hash")), { songId: "song-4", masterVersionId: "version-4" });
+ownerAllowsTarget = true;
+rejectTransfer = false;
+context.pendingPackageUploads.clear();
+await processPackage(input);
+assert.equal(creates, 4, "failed fallback-storage uploads must still resume their owner-validated target");
+assert.equal(sessionTargets.size, 0, "successful fallback-storage completion must clear its target too");
+rejectPipelineAck = true;
+await assert.rejects(processPackage(input), /Pipeline acknowledgement lost/);
+assert.equal(sessionTargets.size, 1, "lost final pipeline acknowledgement must retain the target for reconciliation");
+context.pendingPackageUploads.clear();
+rejectPipelineAck = false;
+await processPackage(input);
+assert.equal(creates, 5, "retrying a lost final acknowledgement must not create a new release");
+assert.equal(sessionTargets.size, 0);
 
 const durationSource = /function audioDuration\([\s\S]*?\n}/.exec(uploadClient)?.[0];
 assert.ok(durationSource);

@@ -10,7 +10,7 @@ export function requireUploadProtocol(request) {
   if (protocol && protocol !== "2") throw uploadError("This upload protocol is incompatible. Reload the page.", 409);
   const revision = request.headers.get("x-upload-revision");
   const serverRevision = uploadProtocol().revision;
-  if (revision && serverRevision && revision !== serverRevision) {
+  if (revision && revision !== serverRevision) {
     throw uploadError("The upload page and server are running different builds. Refresh the page before retrying.", 409);
   }
 }
@@ -22,39 +22,9 @@ export function uploadStatusFields(session, uploadedBytes) {
     result: session.result ? { ...session.result, ...uploadProtocol() } : null };
 }
 
-export function uploadPartsPrefix(prefix, session) {
-  return session.partsPrefix || `${prefix}parts/`;
-}
-
 export function requireUploadGeneration(session, generation) {
-  if ((generation || session.resetFromGeneration) && generation !== uploadStatusFields(session, 0).generation) {
+  if (generation && generation !== uploadStatusFields(session, 0).generation) {
     throw uploadError("This request belongs to an older upload attempt. Check status before retrying.", 409);
-  }
-}
-
-export async function restartUploadSession(store, prefix, expectedGeneration, state = {}, create = async () => ({}), discard = async () => {}) {
-  const key = uploadSessionKey(prefix);
-  const saved = await store.getWithMetadata(key, { type: "json" });
-  if (!saved?.etag) throw uploadError("Upload state could not be checked safely. Please retry.", 503);
-  if (!expectedGeneration || uploadStatusFields(saved.data, 0).generation !== expectedGeneration) {
-    throw uploadError("The upload attempt changed. Check status before restarting.");
-  }
-  const generation = randomUUID();
-  const candidate = { ...saved.data, ...state, ...await create(generation), generation,
-    resetFromGeneration: expectedGeneration, resetReason: "user_restart", phase: "transferring", result: null,
-    createdAt: new Date().toISOString() };
-  try {
-    const result = await store.setJSON(key, candidate, { onlyIfMatch: saved.etag });
-    const confirmed = await store.get(key, { type: "json" });
-    if (!result.modified || confirmed?.generation !== generation) {
-      throw uploadError("The upload attempt changed. Check status before restarting.");
-    }
-    return confirmed;
-  } catch (error) {
-    const confirmed = await store.get(key, { type: "json" });
-    if (confirmed?.generation === generation) return confirmed;
-    await discard(candidate);
-    throw error;
   }
 }
 
@@ -141,7 +111,7 @@ export async function confirmedUploadBytes(store, prefix, session) {
   let uploadedBytes = 0;
   const chunkCount = Math.ceil(session.byteSize / session.chunkSize);
   for (let index = 0; index < chunkCount; index += 1) {
-    const part = await store.getMetadata(`${uploadPartsPrefix(prefix, session)}${String(index).padStart(3, "0")}`);
+    const part = await store.getMetadata(`${prefix}parts/${String(index).padStart(3, "0")}`);
     if (!part) break;
     const expected = Math.min(session.chunkSize, session.byteSize - uploadedBytes);
     if (part.metadata?.byteSize !== expected || !part.metadata?.sha256) {
@@ -160,7 +130,7 @@ export async function appendUploadChunk(store, prefix, session, start, bytes) {
   if (bytes.byteLength !== expected) throw uploadError("The upload chunk size is invalid.", 400);
   const uploadedBytes = await confirmedUploadBytes(store, prefix, session);
   if (start > uploadedBytes) throw uploadError("Upload chunks must be sent in order.");
-  const key = `${uploadPartsPrefix(prefix, session)}${String(start / session.chunkSize).padStart(3, "0")}`;
+  const key = `${prefix}parts/${String(start / session.chunkSize).padStart(3, "0")}`;
   const sha256 = createHash("sha256").update(new Uint8Array(bytes)).digest("hex");
   // Immutable parts make simultaneous retries safe across serverless instances.
   const result = await store.set(key, bytes, { onlyIfNew: true, metadata: { byteSize: expected, sha256 } });

@@ -209,11 +209,11 @@
     }finally{clearTimeout(timer);}
   }
 
-  async function uploadResumableFile({file,chunkSize,getStatus,sendChunk,onProgress=()=>{},retryDelays=[1000,3000,5000]}){
+  async function uploadResumableFile({file,chunkSize,getStatus,sendChunk,generation:initialGeneration,onProgress=()=>{},retryDelays=[1000,3000,5000]}){
     if(!Number.isSafeInteger(file.size)||file.size<1||!Number.isSafeInteger(chunkSize)||chunkSize<1)throw new Error("The upload file or chunk size is invalid.");
     let confirmed=0;
     let sent=0;
-    let generation;
+    let generation=initialGeneration;
     let retries=0;
     let resets=0;
     let hasStatus=false;
@@ -243,13 +243,13 @@
     while(true){
       try{
         // Reconcile before every send, including retries after a lost response.
-        const status=reconcile(await getStatus());
+        const status=reconcile(await getStatus(generation));
         if(confirmed===file.size)return result(status);
         const end=Math.min(file.size,confirmed+chunkSize);
         const sendingGeneration=generation;
-        await sendChunk(file.slice(confirmed,end),confirmed,end,ratio=>{sent=Math.max(confirmed,confirmed+clampPercent(ratio*100)/100*(end-confirmed));progress();});
+        await sendChunk(file.slice(confirmed,end),confirmed,end,ratio=>{sent=Math.max(confirmed,confirmed+clampPercent(ratio*100)/100*(end-confirmed));progress();},generation);
         sent=end;
-        const next=reconcile(await getStatus());
+        const next=reconcile(await getStatus(generation));
         if(generation!==sendingGeneration)continue;
         if(confirmed<end)throw new Error("The server has not yet confirmed the uploaded chunk.");
         if(confirmed===file.size)return result(next);
@@ -272,7 +272,7 @@
     for(let attempt=0;;attempt++){
       let completing=false;
       try{
-        const status=validateUploadStatus(await getStatus());
+        const status=validateUploadStatus(await getStatus(activeGeneration));
         if(byteSize!=null&&(!Number.isSafeInteger(status.uploadedBytes)||status.uploadedBytes<0||status.uploadedBytes>byteSize))throw Object.assign(new Error("The server returned an invalid registration offset."),{retryable:false});
         if(persistedResult(status))return status.result;
         if(terminalPhases.includes(status.phase))throw protocolError(status);
@@ -285,7 +285,7 @@
           resetGeneration=status.generation;
           activeGeneration=status.generation;
           onProgress(status.uploadedBytes/byteSize*100,{state:"resuming",confirmedPercent:status.uploadedBytes/byteSize*100,sentPercent:status.uploadedBytes/byteSize*100});
-          const resumed=await resume();
+          const resumed=await resume(activeGeneration);
           if(resumed.uploadedBytes!==byteSize)throw new Error("The renewed upload has not yet been confirmed.");
           activeGeneration=resumed.generation||status.generation;
           resetGeneration=null;
@@ -295,7 +295,7 @@
         if(["finalizing","registering"].includes(status.phase))throw new Error("Registration is still processing.");
         // The server's completing checkpoint is durable recovery state, not a lock.
         completing=true;
-        const completed=await complete();
+        const completed=await complete(activeGeneration);
         if(completed?.protocolVersion!=null){
           if(completed.protocolVersion!==protocolVersion||completed.persisted!==true)throw protocolError(completed);
           validateUploadRevision(completed);
@@ -307,7 +307,7 @@
           // Even the last request may have succeeded after its acknowledgement was lost.
           if(completing){
             try{
-              const status=validateUploadStatus(await getStatus());
+              const status=validateUploadStatus(await getStatus(activeGeneration));
               if(persistedResult(status))return status.result;
             }catch(reconciliationError){if(reconciliationError.retryable===false)throw reconciliationError;}
           }
@@ -320,20 +320,20 @@
     }
   }
 
-  async function getAudioUploadStatus({url="/api/song-catalog/audio",file,songId,versionId,uploadId,contentType}){
+  async function getAudioUploadStatus({url="/api/song-catalog/audio",file,songId,versionId,uploadId,contentType,generation}){
     const chunkSize=4*1024*1024;
     const query=new URLSearchParams({uploadStatus:"1",songId,versionId,uploadId,byteSize:String(file.size),chunkSize:String(chunkSize),filename:file.name,contentType});
-    return validateUploadStatus(requireUploadResponse(await fetchJsonWithTimeout(`${url}?${query}`,{headers:{"X-Upload-Status":"1","X-Upload-Protocol":"2"}})),true);
+    return validateUploadStatus(requireUploadResponse(await fetchJsonWithTimeout(`${url}?${query}`,{headers:{"X-Upload-Status":"1","X-Upload-Protocol":"2",...(generation?{"X-Upload-Generation":generation}:{})}})),true);
   }
 
-  async function uploadResumableAudio({url="/api/song-catalog/audio",file,songId,versionId,contentType,onProgress,retryDelays}){
+  async function uploadResumableAudio({url="/api/song-catalog/audio",file,songId,versionId,contentType,generation,onProgress,retryDelays}){
     const chunkSize=4*1024*1024;
     const uploadId=await fileUploadId(file,[url,songId,versionId,contentType],chunkSize);
     const result=await uploadResumableFile({
-      file,chunkSize,onProgress,retryDelays,
-      async getStatus(){return getAudioUploadStatus({url,file,songId,versionId,uploadId,contentType});},
-      async sendChunk(chunk,start,end,onSent){
-        requireUploadResponse(await sendFormData(url,chunk,{timeoutMs:600000,onProgress:onSent,headers:{"Content-Type":"application/octet-stream","X-Upload-Protocol":"2","X-SongId":songId,"X-VersionId":versionId,"X-UploadId":uploadId,"X-Start-Byte":String(start)}}));
+      file,chunkSize,generation,onProgress,retryDelays,
+      async getStatus(generation){return getAudioUploadStatus({url,file,songId,versionId,uploadId,contentType,generation});},
+      async sendChunk(chunk,start,end,onSent,generation){
+        requireUploadResponse(await sendFormData(url,chunk,{timeoutMs:600000,onProgress:onSent,headers:{"Content-Type":"application/octet-stream","X-Upload-Protocol":"2","X-Upload-Generation":generation,"X-SongId":songId,"X-VersionId":versionId,"X-UploadId":uploadId,"X-Start-Byte":String(start)}}));
       }
     });
     return{...result,uploadId};

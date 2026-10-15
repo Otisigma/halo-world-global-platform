@@ -166,14 +166,16 @@ const statusSequence = (...statuses) => async () => {
   return statuses.shift();
 };
 let sends = [];
+const chunkGenerations = [];
 const transferEvents = [];
 await helper.uploadResumableFile({
   file, chunkSize: 4, retryDelays: [0, 0],
   getStatus: statusSequence(v2(0), v2(4), v2(4, { generation: "renewed", resetReason: "Storage session expired" }), v2(8, { generation: "renewed" })),
-  sendChunk: async (chunk, start, end, onSent) => { sends.push([start, end]); onSent(1); },
+  sendChunk: async (chunk, start, end, onSent, generation) => { sends.push([start, end]); chunkGenerations.push(generation); onSent(1); },
   onProgress: (percent, detail) => transferEvents.push(detail),
 });
 assert.deepEqual(sends, [[0, 4], [4, 8]], "active-loop session renewal must retain confirmed bytes");
+assert.deepEqual(chunkGenerations, ["initial", "renewed"], "chunks must carry the generation confirmed by their status read");
 assert.ok(transferEvents.some(event => event.sentBytes > event.confirmedBytes), "sent bytes must not be represented as confirmed bytes");
 sends = [];
 await helper.uploadResumableFile({
@@ -247,8 +249,8 @@ let resetCompletions = 0;
 assert.equal(await helper.completeResumableUpload({
   byteSize: 8, generation: "initial",
   getStatus: statusSequence(v2(0, { generation: "renewed", resetReason: "storage_session_expired" }), v2(8, { generation: "renewed", phase: "completing" })),
-  resume: async () => { resetTransfers++; return { uploadedBytes: 8, generation: "renewed" }; },
-  complete: async () => { resetCompletions++; return registered; }, retryDelays: [0],
+  resume: async generation => { assert.equal(generation, "renewed"); resetTransfers++; return { uploadedBytes: 8, generation: "renewed" }; },
+  complete: async generation => { assert.equal(generation, "renewed"); resetCompletions++; return registered; }, retryDelays: [0],
 }), registered, "an explicit expiry reset during finalization must resume transfer before registration");
 assert.equal(resetTransfers, 1);
 assert.equal(resetCompletions, 1);
@@ -329,6 +331,8 @@ Object.defineProperty(audio, "name", { value: "test.mp3" });
 await networkWindow.HaloUploadProgress.uploadResumableAudio({ file: audio, songId: "song", versionId: "version", contentType: "audio/mpeg" });
 assert.ok(fetchRequests.every(request => request.options.headers["X-Upload-Protocol"] === "2"));
 assert.equal(requests.at(-1).headers["X-Upload-Protocol"], "2");
+assert.equal(requests.at(-1).headers["X-Upload-Generation"], "initial");
+assert.equal(fetchRequests.at(-1).options.headers["X-Upload-Generation"], "initial");
 assert.equal(requests.at(-1).timeout, 600000, "slow audio chunks must have a ten-minute timeout");
 const buildRevision = "1234567890abcdef1234567890abcdef12345678";
 networkWindow.HaloUploadBuild = { protocolVersion: 2, revision: buildRevision };

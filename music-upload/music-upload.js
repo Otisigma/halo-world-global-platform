@@ -648,11 +648,12 @@ async function uploadAudio(songId, versionId, file, position, total) {
   if (!contentType) throw new Error("Choose an MP3, M4A, AAC, OGG, WebM, WAV, or FLAC audio file.");
   if (file.size > MAX_AUDIO_BYTES) throw new Error("Music uploads are limited to 128 MB per file.");
   audioUploadUi.start(`Uploading ${position} of ${total} · ${file.name}`);
-  const transfer = () => uploadHelper.uploadResumableAudio({
+  const transfer = generation => uploadHelper.uploadResumableAudio({
     file,
     songId,
     versionId,
     contentType,
+    generation,
     onProgress(percent, details) {
       audioUploadUi.transfer(percent, details);
     },
@@ -662,13 +663,14 @@ async function uploadAudio(songId, versionId, file, position, total) {
   const durationSeconds = await audioDuration(file);
   const finalized = await uploadHelper.completeResumableUpload({
     byteSize: file.size, generation, resume: transfer,
-    getStatus: () => uploadHelper.getAudioUploadStatus({ file, songId, versionId, uploadId, contentType }),
+    getStatus: generation => uploadHelper.getAudioUploadStatus({ file, songId, versionId, uploadId, contentType, generation }),
     onProgress: (percent, details) => audioUploadUi.transfer(percent, details),
-    complete: () => apiJson("/api/song-catalog/audio", {
+    complete: generation => apiJson("/api/song-catalog/audio", {
     action: "finalize_upload",
     songId,
     versionId,
     uploadId,
+    generation,
     chunkCount,
     byteSize: file.size,
     filename: file.name,
@@ -769,6 +771,11 @@ async function processPackage({ artistName, title, albumTitle, genre, isrc, upc,
   const pipeline = await apiJson("/api/unified-upload", { action: "advance_pipeline", songId: created.songId, toStage: finalStage });
   const song = await loadCatalogSong(created.songId).catch(() => null);
   const issueCount = Array.isArray(song?.metadataIssues) ? song.metadataIssues.filter(issue => issue.level === "required").length : 0;
+  if (resumeKey) {
+    pendingPackageUploads.delete(resumeKey);
+    try { localStorage.removeItem(resumeKey); } catch {}
+    try { sessionStorage.removeItem(resumeKey); } catch {}
+  }
   return {
     songId: created.songId,
     title,

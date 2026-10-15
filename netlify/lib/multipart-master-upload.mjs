@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { boundedStorageRequest, buildMasterObjectKey, headStoredObject, presignObjectUrl } from "./direct-upload-storage.mjs";
-import { ensureUploadSession, MASTER_UPLOAD_CHUNK_BYTES, requireUploadGeneration, restartUploadSession, saveUploadPhase, uploadError, uploadSessionKey, uploadStatusFields } from "./resumable-upload.mjs";
+import { ensureUploadSession, MASTER_UPLOAD_CHUNK_BYTES, requireUploadGeneration, saveUploadPhase, uploadError, uploadSessionKey, uploadStatusFields } from "./resumable-upload.mjs";
 
 const escapeXml = value => String(value).replace(/[<>&"']/g, char => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;", '"': "&quot;", "'": "&apos;" }[char]));
 const xmlValue = (xml, tag) => {
@@ -48,19 +48,19 @@ async function storageRequest(storage, key, method, queryParams, { contentType =
   return xml;
 }
 
-export async function masterUploadStatus({ store, prefix, storage, scope, uploadId, upload, fetchImpl = fetch }) {
+export async function masterUploadStatus({ store, prefix, storage, scope, uploadId, upload, catalogBefore, fetchImpl = fetch }) {
   const details = { byteSize: upload.byteSize, chunkSize: MASTER_UPLOAD_CHUNK_BYTES, filename: upload.filename, contentType: upload.contentType };
   const key = buildMasterObjectKey({ ...scope, uploadId, filename: upload.filename });
-  const create = async () => {
-    const xml = await storageRequest(storage, key, "POST", { uploads: "" }, { contentType: upload.contentType, fetchImpl, expectedRoot: "InitiateMultipartUploadResult" });
+  const createForKey = async objectKey => {
+    const xml = await storageRequest(storage, objectKey, "POST", { uploads: "" }, { contentType: upload.contentType, fetchImpl, expectedRoot: "InitiateMultipartUploadResult" });
     const storageUploadId = xmlValue(xml, "UploadId");
     if (!storageUploadId) throw uploadError("Master storage did not create an upload session.", 503);
-    return { key, storageUploadId };
+    return { key: objectKey, storageUploadId, ...(catalogBefore ? { catalogBefore } : {}) };
   };
   const discard = async candidate => {
     await storageRequest(storage, candidate.key, "DELETE", { uploadId: candidate.storageUploadId }, { fetchImpl }).catch(() => undefined);
   };
-  let session = await ensureUploadSession(store, prefix, details, create, discard);
+  let session = await ensureUploadSession(store, prefix, details, () => createForKey(key), discard);
   try {
     return { session, ...await masterUploadProgress(storage, session, fetchImpl) };
   } catch (error) {
@@ -74,7 +74,7 @@ export async function masterUploadStatus({ store, prefix, storage, scope, upload
         return { session, uploadedBytes: session.byteSize, complete: true, parts: [] };
       }
       if (["registered", "review_pending"].includes(saved.data.phase)) throw error;
-      const candidate = { ...saved.data, ...await create(), generation: randomUUID(), resetReason: "storage_session_expired",
+      const candidate = { ...saved.data, ...await createForKey(saved.data.key), generation: randomUUID(), resetReason: "storage_session_expired",
         phase: "transferring", result: null, createdAt: new Date().toISOString() };
       try {
         const result = await store.setJSON(uploadSessionKey(prefix), candidate, { onlyIfMatch: saved.etag });
@@ -116,17 +116,6 @@ export async function masterUploadProgress(storage, session, fetchImpl = fetch) 
     uploadedBytes += part.size;
   }
   return { uploadedBytes, complete: false, parts };
-}
-
-export async function restartMasterUpload({ store, prefix, storage, scope, uploadId, upload, expectedGeneration, catalogBefore, fetchImpl = fetch }) {
-  return restartUploadSession(store, prefix, expectedGeneration, { catalogBefore }, async generation => {
-    const key = buildMasterObjectKey({ ...scope, uploadId: `${uploadId.slice(0, 24)}-${generation}`, filename: upload.filename });
-    const xml = await storageRequest(storage, key, "POST", { uploads: "" },
-      { contentType: upload.contentType, fetchImpl, expectedRoot: "InitiateMultipartUploadResult" });
-    const storageUploadId = xmlValue(xml, "UploadId");
-    if (!storageUploadId) throw uploadError("Master storage did not create an upload session.", 503);
-    return { key, storageUploadId };
-  }, candidate => storageRequest(storage, candidate.key, "DELETE", { uploadId: candidate.storageUploadId }, { fetchImpl }).catch(() => undefined));
 }
 
 export async function masterPartUrl({ store, prefix, storage, start, generation, fetchImpl = fetch }) {

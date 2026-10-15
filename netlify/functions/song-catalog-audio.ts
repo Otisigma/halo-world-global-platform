@@ -5,7 +5,7 @@ import { getUser, verifyRequestOrigin } from "@netlify/identity";
 import { cleanText, ensureMembership } from "../lib/halo-x.mjs";
 import { runDreamweaverReview } from "./song-catalog.js";
 import { MASTER_PLAYBACK_URL_TTL_SECONDS, deleteStoredObject, directUploadConfig, presignObjectUrl } from "../lib/direct-upload-storage.mjs";
-import { appendUploadChunk, confirmedUploadBytes, ensureUploadSession, readUploadChunk, resumableUploadId, uploadSessionKey, uploadProtocol, requireUploadProtocol, saveUploadPhase, uploadStatusFields, uploadWasReplaced, uploadPartsPrefix, requireUploadGeneration, restartUploadSession, uploadReplacementToken } from "../lib/resumable-upload.mjs";
+import { appendUploadChunk, confirmedUploadBytes, ensureUploadSession, readUploadChunk, resumableUploadId, uploadSessionKey, uploadProtocol, requireUploadProtocol, saveUploadPhase, uploadStatusFields, uploadWasReplaced, requireUploadGeneration, uploadReplacementToken } from "../lib/resumable-upload.mjs";
 
 const audioStore = getStore({ name: "halo-song-catalog-audio", consistency: "strong" });
 const radioAudioStore = getStore({ name: "halo-radio-submissions", consistency: "strong" });
@@ -157,7 +157,7 @@ async function resumableAudio(request: Request, db: Awaited<ReturnType<typeof ge
     const session = await audioStore.get(uploadSessionKey(prefix), { type: "json" });
     if (!session) return json({ message: "Check upload status before sending chunks" }, 409);
     requireUploadGeneration(session, request.headers.get("x-upload-generation"));
-    if (uploadWasReplaced(session, version, version.audio_blob_prefix === uploadPartsPrefix(prefix, session) && !version.audio_storage_key)) {
+    if (uploadWasReplaced(session, version, version.audio_blob_prefix === `${prefix}parts/` && !version.audio_storage_key)) {
       return json({ ...uploadStatusFields(session, 0), result: null, message: "This upload was replaced by another file.",
         resetReason: "upload_replaced", replacementToken: uploadReplacementToken(version) }, 409);
     }
@@ -173,8 +173,9 @@ async function resumableAudio(request: Request, db: Awaited<ReturnType<typeof ge
   const contentType = normalizeAudioContentType(query.get("contentType"), filename);
   if (!Number.isSafeInteger(byteSize) || byteSize < 1 || byteSize > MAX_UPLOAD_BYTES) return json({ message: "Song audio uploads are limited to 128 MB" }, 413);
   if (chunkSize !== MAX_CHUNK_BYTES || !filename || !contentType) return json({ message: "The resumable audio metadata is invalid" }, 400);
-  let session = await ensureUploadSession(audioStore, prefix, { songId, versionId, byteSize, chunkSize, filename, contentType });
-  const registered = version.audio_blob_prefix === uploadPartsPrefix(prefix, session) && !version.audio_storage_key;
+  let session = await ensureUploadSession(audioStore, prefix, { songId, versionId, byteSize, chunkSize, filename, contentType },
+    async () => ({ catalogBefore: { blobPrefix: String(version.audio_blob_prefix || ""), storageKey: String(version.audio_storage_key || "") } }));
+  const registered = version.audio_blob_prefix === `${prefix}parts/` && !version.audio_storage_key;
   if (uploadWasReplaced(session, version, registered)) {
     return json({ ...uploadStatusFields(session, 0), result: null, message: "This upload was replaced by another file.",
       resetReason: "upload_replaced", replacementToken: uploadReplacementToken(version) }, 409);
@@ -234,12 +235,11 @@ async function finalizeUpload(payload: Record<string, unknown>, db: Awaited<Retu
   if (!Number.isSafeInteger(byteSize) || byteSize < 1 || byteSize > MAX_UPLOAD_BYTES) return json({ message: "Song audio uploads are limited to 128 MB" }, 413);
   const version = await ownedVersion(db, ownerMemberId, versionId, songId);
   if (!version) return json({ message: "That song version was not found" }, 404);
-  let prefix = `${ownerMemberId}/${versionId}/${uploadId}/parts/`;
+  const prefix = `${ownerMemberId}/${versionId}/${uploadId}/parts/`;
   const sessionPrefix = `${ownerMemberId}/${versionId}/${uploadId}/`;
   let session = await audioStore.get(uploadSessionKey(sessionPrefix), { type: "json" });
   if (session) {
     requireUploadGeneration(session, payload.generation);
-    prefix = uploadPartsPrefix(sessionPrefix, session);
   }
   const alreadyRegistered = version.audio_blob_prefix === prefix && !version.audio_storage_key;
   if (session && uploadWasReplaced(session, version, alreadyRegistered)) {
@@ -295,30 +295,6 @@ async function finalizeUpload(payload: Record<string, unknown>, db: Awaited<Retu
   if (version.audio_blob_prefix && version.audio_blob_prefix !== prefix) await removeUpload(version.audio_blob_prefix).catch(() => undefined);
   await removeStoredMaster(version.audio_storage_key).catch(() => undefined);
   return json(result);
-}
-
-async function restartAudioUpload(payload: Record<string, unknown>, db: Awaited<ReturnType<typeof getDatabase>>, ownerMemberId: string) {
-  const songId = cleanId(payload.songId);
-  const versionId = cleanId(payload.versionId);
-  const uploadId = resumableUploadId(payload.uploadId);
-  if (!songId || !versionId || !uploadId) return json({ message: "The resumable upload details are invalid" }, 400);
-  const version = await ownedVersion(db, ownerMemberId, versionId, songId);
-  if (!version) return json({ message: "That song version was not found" }, 404);
-  const prefix = `${ownerMemberId}/${versionId}/${uploadId}/`;
-  const session = await audioStore.get(uploadSessionKey(prefix), { type: "json" });
-  if (!session || session.byteSize !== Number(payload.byteSize) || session.filename !== cleanText(payload.filename, 180)
-    || session.contentType !== normalizeAudioContentType(payload.contentType, session.filename)) {
-    return json({ message: "The restart metadata does not match this upload." }, 409);
-  }
-  const registered = version.audio_blob_prefix === uploadPartsPrefix(prefix, session) && !version.audio_storage_key;
-  if (!uploadWasReplaced(session, version, registered)) return json({ message: "Only a replaced upload can be restarted explicitly." }, 409);
-  if (payload.expectedReplacement !== uploadReplacementToken(version)) {
-    return json({ message: "The current audio changed. Check status and confirm the replacement again." }, 409);
-  }
-  const restarted = await restartUploadSession(audioStore, prefix, payload.expectedGeneration, {
-    catalogBefore: { blobPrefix: String(version.audio_blob_prefix || ""), storageKey: String(version.audio_storage_key || "") },
-  }, async generation => ({ partsPrefix: `${prefix}generations/${generation}/parts/` }));
-  return json(uploadStatusFields(restarted, 0));
 }
 
 async function readAudioRange(version: Record<string, unknown>, range: { start: number; end: number }) {
@@ -497,7 +473,6 @@ export default async function songCatalogAudioHandler(request: Request) {
     const payload = await request.json().catch(() => null) as Record<string, unknown> | null;
     if (!payload) return json({ message: "Choose a supported audio action" }, 400);
     if (payload.action === "finalize_upload") return await finalizeUpload(payload, db, membership.member_id);
-    if (payload.action === "restart_upload") return await restartAudioUpload(payload, db, membership.member_id);
     if (payload.action === "list_radio_tracks") return listRadioTracks(db, membership.member_id);
     if (payload.action === "import_from_radio") return importFromRadio(payload, db, membership.member_id);
     return json({ message: "Choose a supported audio action" }, 400);

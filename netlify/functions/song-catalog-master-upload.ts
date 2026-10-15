@@ -16,7 +16,7 @@ import {
 } from "../lib/direct-upload-storage.mjs";
 import { MASTER_VERSION_TYPE } from "../lib/master-copy.mjs";
 import { runDreamweaverReview } from "./song-catalog.js";
-import { completeMasterUpload, masterPartUrl, masterUploadStatus, restartMasterUpload } from "../lib/multipart-master-upload.mjs";
+import { completeMasterUpload, masterPartUrl, masterUploadStatus } from "../lib/multipart-master-upload.mjs";
 import { ensureUploadSession, resumableUploadId, uploadProtocol, requireUploadProtocol, saveUploadPhase, uploadSessionKey, uploadStatusFields, uploadWasReplaced, requireUploadGeneration, uploadReplacementToken } from "../lib/resumable-upload.mjs";
 
 // Large master copies bypass Netlify function payload limits: this endpoint only exchanges small
@@ -161,18 +161,6 @@ async function resumableMasterUpload(payload: Record<string, unknown>, db: Await
   if (session && (session.byteSize !== upload.byteSize || session.filename !== upload.filename || session.contentType !== upload.contentType)) {
     return json({ message: "The master upload metadata does not match this session." }, 409);
   }
-  if (payload.action === "restart") {
-    if (!session || !uploadWasReplaced(session, version, version.audio_storage_key === session.key)) {
-      return json({ message: "Only a replaced upload can be restarted explicitly." }, 409);
-    }
-    if (payload.expectedReplacement !== uploadReplacementToken(version)) {
-      return json({ message: "The current audio changed. Check status and confirm the replacement again." }, 409);
-    }
-    const restarted = await restartMasterUpload({ ...options, scope: { ownerMemberId, songId, versionId }, uploadId, upload,
-      expectedGeneration: payload.expectedGeneration,
-      catalogBefore: { blobPrefix: String(version.audio_blob_prefix || ""), storageKey: String(version.audio_storage_key || "") } });
-    return json({ directUpload: true, ...uploadStatusFields(restarted, 0) });
-  }
   if (session && payload.action !== "status") requireUploadGeneration(session, payload.generation);
   if (session && uploadWasReplaced(session, version, version.audio_storage_key === session.key)) {
     return json({ ...uploadStatusFields(session, 0), result: null, message: "This upload was replaced by another file.",
@@ -188,7 +176,8 @@ async function resumableMasterUpload(payload: Record<string, unknown>, db: Await
     if (payload.action === "complete") return json(session.result);
   }
   if (payload.action === "status") {
-    const status = await masterUploadStatus({ ...options, scope: { ownerMemberId, songId, versionId }, uploadId, upload });
+    const status = await masterUploadStatus({ ...options, scope: { ownerMemberId, songId, versionId }, uploadId, upload,
+      catalogBefore: { blobPrefix: String(version.audio_blob_prefix || ""), storageKey: String(version.audio_storage_key || "") } });
     return json({ directUpload: true, ...uploadStatusFields(status.session, status.uploadedBytes) });
   }
   if (payload.action === "part") {
@@ -208,7 +197,7 @@ export default async function songCatalogMasterUploadHandler(request: Request) {
     const payload = await request.json().catch(() => null) as Record<string, unknown> | null;
     if (!payload) return json({ message: "Choose a supported master upload action" }, 400);
     const membership = await ensureMembership(db, user);
-    if (["status", "part", "complete", "restart"].includes(String(payload.action))) return await resumableMasterUpload(payload, db, membership.member_id);
+    if (["status", "part", "complete"].includes(String(payload.action))) return await resumableMasterUpload(payload, db, membership.member_id);
     if (payload.action === "presign") return await presignMasterUpload(payload, db, membership.member_id);
     if (payload.action === "register") return await registerMasterUpload(payload, db, membership.member_id);
     return json({ message: "Choose a supported master upload action" }, 400);

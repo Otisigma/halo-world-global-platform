@@ -38,7 +38,7 @@ function audioContentType(file){const aliases={"audio/mp3":"audio/mpeg","audio/x
 function audioDuration(file){return new Promise(resolve=>{const audio=document.createElement("audio");const url=URL.createObjectURL(file);let finished=false;const finish=value=>{if(finished)return;finished=true;clearTimeout(timer);URL.revokeObjectURL(url);audio.removeAttribute("src");audio.load();resolve(Number.isFinite(value)?Math.round(value):0)};const timer=setTimeout(()=>finish(0),10000);audio.preload="metadata";audio.addEventListener("loadedmetadata",()=>finish(audio.duration),{once:true});audio.addEventListener("error",()=>finish(0),{once:true});audio.src=url})}
 const uploadReadyLabel=file=>`${file.name} · ${Math.max(1,Math.round(file.size/1024/1024))} MB ready to upload`;
 function audioFileProblem(file){if(!audioContentType(file))return"Choose an MP3, M4A, AAC, OGG, WebM, WAV, or FLAC file.";if(file.size>MAX_AUDIO_BYTES)return"Song audio uploads are limited to 128 MB.";return""}
-async function uploadAudioToVersion({file,songId,versionId,ui}){const contentType=audioContentType(file);ui.start(`Checking saved upload · ${file.name}`);const durationSeconds=await audioDuration(file);const onProgress=(percent,details)=>ui.transfer(percent,details);const transfer=()=>uploadHelper.uploadResumableAudio({file,songId,versionId,contentType,onProgress});const {uploadId,chunkCount,generation}=await transfer();ui.progress(100,"Finishing upload and running Dream Weaver…");return uploadHelper.completeResumableUpload({byteSize:file.size,generation,resume:transfer,getStatus:()=>uploadHelper.getAudioUploadStatus({file,songId,versionId,uploadId,contentType}),onProgress,complete:()=>audioApi({method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"finalize_upload",songId,versionId,uploadId,chunkCount,byteSize:file.size,filename:file.name,contentType,durationSeconds})})})}
+async function uploadAudioToVersion({file,songId,versionId,ui}){const contentType=audioContentType(file);ui.start(`Checking saved upload · ${file.name}`);const durationSeconds=await audioDuration(file);const onProgress=(percent,details)=>ui.transfer(percent,details);const transfer=generation=>uploadHelper.uploadResumableAudio({file,songId,versionId,contentType,generation,onProgress});const {uploadId,chunkCount,generation}=await transfer();ui.progress(100,"Finishing upload and running Dream Weaver…");return uploadHelper.completeResumableUpload({byteSize:file.size,generation,resume:transfer,getStatus:generation=>uploadHelper.getAudioUploadStatus({file,songId,versionId,uploadId,contentType,generation}),onProgress,complete:generation=>audioApi({method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"finalize_upload",songId,versionId,uploadId,chunkCount,generation,byteSize:file.size,filename:file.name,contentType,durationSeconds})})})}
 function masterFileProblem(file){if(!audioContentType(file))return"Choose a WAV, M4A, FLAC, AAC, MP3, OGG, or WebM master file.";if(file.size>MAX_MASTER_BYTES)return"Master copies are limited to 200 MB.";return""}
 async function masterUploadApi(payload){return uploadHelper.fetchJsonWithTimeout("/api/song-catalog/master-upload",{method:"POST",headers:{"Content-Type":"application/json","X-Upload-Protocol":"2"},body:JSON.stringify(payload)})}
 async function uploadMasterToVersion({file,songId,versionId,ui}){
@@ -54,15 +54,15 @@ async function uploadMasterToVersion({file,songId,versionId,ui}){
   }
   let initialStatus=presign;
   const durationSeconds=await audioDuration(file);
-  const transfer=()=>uploadHelper.uploadResumableFile({
-    file,chunkSize,
-    async getStatus(){
-      const response=initialStatus||await masterUploadApi({action:"status",...details});
+  const transfer=generation=>uploadHelper.uploadResumableFile({
+    file,chunkSize,generation,
+    async getStatus(generation){
+      const response=initialStatus||await masterUploadApi({action:"status",...details,generation});
       initialStatus=null;
       return uploadHelper.validateUploadStatus(uploadHelper.requireUploadResponse(response),true);
     },
-    async sendChunk(chunk,startByte,end,onSent){
-      const part=uploadHelper.requireUploadResponse(await masterUploadApi({action:"part",...details,startByte}));
+    async sendChunk(chunk,startByte,end,onSent,generation){
+      const part=uploadHelper.requireUploadResponse(await masterUploadApi({action:"part",...details,startByte,generation}));
       uploadHelper.requireUploadResponse(await uploadHelper.sendFormData(part.uploadUrl,chunk,{method:"PUT",headers:{"Content-Type":"application/octet-stream"},credentials:"omit",timeoutMs:600000,onProgress:onSent}));
     },
     onProgress(percent,details){ui.transfer(percent,details)}
@@ -71,8 +71,8 @@ async function uploadMasterToVersion({file,songId,versionId,ui}){
   ui.progress(100,"Upload complete. Registering the canonical sale master…");
   return uploadHelper.completeResumableUpload({
     byteSize:file.size,generation:transferred.generation,resume:transfer,
-    getStatus:async()=>uploadHelper.validateUploadStatus(uploadHelper.requireUploadResponse(await masterUploadApi({action:"status",...details})),true),
-    complete:async()=>uploadHelper.requireUploadResponse(await masterUploadApi({action:"complete",...details,durationSeconds})),
+    getStatus:async generation=>uploadHelper.validateUploadStatus(uploadHelper.requireUploadResponse(await masterUploadApi({action:"status",...details,generation})),true),
+    complete:async generation=>uploadHelper.requireUploadResponse(await masterUploadApi({action:"complete",...details,generation,durationSeconds})),
     onProgress:(percent,progress)=>ui.transfer(percent,progress)
   });
 }

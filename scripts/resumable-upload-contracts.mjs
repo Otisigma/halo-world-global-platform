@@ -23,6 +23,14 @@ assert.throws(() => bundledProtocol.requireUploadProtocol(new Request("https://h
 assert.doesNotThrow(() => bundledProtocol.requireUploadProtocol(new Request("https://halo.test", {
   headers: { "x-upload-revision": "bundled-build" },
 })));
+const unknownRevisionProtocol = vm.runInNewContext(`${bundledProtocolSource}\n({ uploadProtocol, requireUploadProtocol });`, {
+  uploadBuildRevision: null, process: { env: {} }, Error,
+});
+assert.equal(unknownRevisionProtocol.uploadProtocol().revision, null);
+assert.throws(() => unknownRevisionProtocol.requireUploadProtocol(new Request("https://halo.test", {
+  headers: { "x-upload-revision": "known-client-build" },
+})), { status: 409 });
+assert.doesNotThrow(() => unknownRevisionProtocol.requireUploadProtocol(new Request("https://halo.test")));
 class MemoryStore {
   entries = new Map();
   revision = 0;
@@ -87,14 +95,6 @@ await assert.rejects(ensureUploadSession(sdkStore, "denied/", details), { status
 await assert.rejects(resumable.saveUploadPhase(sdkStore, "sdk/", sdkSession, "completing", null,
   { catalogBefore: { blobPrefix: "", storageKey: "" } }), { status: 503 });
 sdkDenied = false;
-const concurrentRestartStore = new MemoryStore();
-const beforeRestart = await ensureUploadSession(concurrentRestartStore, "restart/", details);
-const restartRaces = await Promise.allSettled([
-  resumable.restartUploadSession(concurrentRestartStore, "restart/", beforeRestart.generation),
-  resumable.restartUploadSession(concurrentRestartStore, "restart/", beforeRestart.generation),
-]);
-assert.equal(restartRaces.filter(result => result.status === "fulfilled").length, 1);
-assert.equal(restartRaces.filter(result => result.status === "rejected" && result.reason.status === 409).length, 1);
 assert.equal(await confirmedUploadBytes(store, prefix, session), 0);
 await assert.rejects(appendUploadChunk(store, prefix, session, 4, bytes(5, 6, 7, 8)), { status: 409 });
 await assert.rejects(appendUploadChunk(store, prefix, session, -1, bytes(1, 2, 3, 4)), { status: 400 });
@@ -354,7 +354,10 @@ assert.equal(storedTargets.size, 1);
 packageContext.pendingPackageUploads.clear();
 assert.equal((await processPackage(packageInput)).songId, "song");
 assert.equal(projectsCreated, 1);
-assert.equal(storedTargets.size, 1);
+assert.equal(storedTargets.size, 0);
+assert.equal((await processPackage(packageInput)).songId, "song");
+assert.equal(projectsCreated, 2);
+assert.equal(storedTargets.size, 0);
 
 // Exercise the real handler with injected platform adapters, including access controls.
 const endpointStore = new MemoryStore();
@@ -453,7 +456,6 @@ const masterEndpoint = vm.runInNewContext(`${masterSource}\nsongCatalogMasterUpl
   masterUploadStatus: options => multipart.masterUploadStatus({ ...options, fetchImpl: storageFetch }),
   masterPartUrl: options => multipart.masterPartUrl({ ...options, fetchImpl: storageFetch }),
   completeMasterUpload: options => multipart.completeMasterUpload({ ...options, fetchImpl: storageFetch }),
-  restartMasterUpload: options => multipart.restartMasterUpload({ ...options, fetchImpl: storageFetch }),
   getStore: ({ name }) => name === "halo-master-upload-sessions" ? masterEndpointStore : endpointStore,
   getDatabase: async () => db, getUser: async () => user,
   ensureMembership: async () => ({ member_id: "owner" }),
@@ -545,26 +547,19 @@ try {
   if (originalRevision === undefined) delete process.env.COMMIT_REF;
   else process.env.COMMIT_REF = originalRevision;
 }
-// Explicit A -> B -> A restoration creates a new attempt; delayed A mutations cannot replace B.
+// Confirmed restoration uses a distinct attempt ID; old sessions remain tombstoned.
 const oldAudioGeneration = pendingAudioStatus.generation;
 versionRow = { ...versionRow, audio_blob_prefix: "replacement-B/parts/", audio_storage_key: "" };
 const replacedAudioStatus = await (await endpoint(statusRequest())).json();
 assert.equal(replacedAudioStatus.resetReason, "upload_replaced");
 assert.equal(replacedAudioStatus.generation, oldAudioGeneration);
-const audioRestartRequest = (expectedGeneration, expectedReplacement = resumable.uploadReplacementToken(versionRow)) => new Request("https://halo.test/api/song-catalog/audio", {
-  method: "POST", headers: { Origin: "https://halo.test", "Content-Type": "application/json" },
-  body: JSON.stringify({ action: "restart_upload", songId, versionId, uploadId: pendingAudioId,
-    byteSize: 5, filename: "master.wav", contentType: "audio/wav", expectedGeneration, expectedReplacement }),
-});
-versionRow.audio_blob_prefix = "replacement-C/parts/";
-assert.equal((await endpoint(audioRestartRequest(oldAudioGeneration, replacedAudioStatus.replacementToken))).status, 409);
-assert.equal(versionRow.audio_blob_prefix, "replacement-C/parts/");
-versionRow.audio_blob_prefix = "replacement-B/parts/";
-const audioRestart = await (await endpoint(audioRestartRequest(oldAudioGeneration))).json();
-assert.equal(audioRestart.phase, "transferring");
-assert.equal(audioRestart.resetReason, "user_restart");
-assert.notEqual(audioRestart.generation, oldAudioGeneration);
-assert.equal((await endpoint(audioRestartRequest(oldAudioGeneration))).status, 409);
+assert.equal(replacedAudioStatus.replacementToken, resumable.uploadReplacementToken(versionRow));
+const restoredAudioId = "d".repeat(64);
+params.set("uploadId", restoredAudioId);
+const restoredAudioStatus = await (await endpoint(statusRequest())).json();
+assert.equal(restoredAudioStatus.phase, "transferring");
+assert.equal(restoredAudioStatus.uploadedBytes, 0);
+assert.notEqual(restoredAudioStatus.generation, oldAudioGeneration);
 const staleAudioChunk = rawRequest();
 staleAudioChunk.headers.set("x-uploadid", pendingAudioId);
 staleAudioChunk.headers.set("x-upload-generation", oldAudioGeneration);
@@ -573,22 +568,26 @@ const generationlessAudioChunk = rawRequest();
 generationlessAudioChunk.headers.set("x-uploadid", pendingAudioId);
 assert.equal((await endpoint(generationlessAudioChunk)).status, 409);
 assert.equal((await endpoint(finalize(pendingAudioId))).status, 409);
-const generationFinalize = generation => {
-  const request = finalize(pendingAudioId);
+const generationFinalize = (uploadIdentifier, generation) => {
+  const request = finalize(uploadIdentifier);
   return request.json().then(payload => new Request(request.url, {
     method: "POST", headers: request.headers, body: JSON.stringify({ ...payload, generation }),
   }));
 };
-assert.equal((await endpoint(await generationFinalize(oldAudioGeneration))).status, 409);
+assert.equal((await endpoint(await generationFinalize(pendingAudioId, oldAudioGeneration))).status, 409);
 assert.equal(versionRow.audio_blob_prefix, "replacement-B/parts/");
 const restoredAudioChunk = rawRequest();
-restoredAudioChunk.headers.set("x-uploadid", pendingAudioId);
-restoredAudioChunk.headers.set("x-upload-generation", audioRestart.generation);
+restoredAudioChunk.headers.set("x-uploadid", restoredAudioId);
+restoredAudioChunk.headers.set("x-upload-generation", restoredAudioStatus.generation);
 assert.equal((await endpoint(restoredAudioChunk)).status, 200);
 assert.equal((await (await endpoint(statusRequest())).json()).uploadedBytes, 5);
-assert.equal((await endpoint(await generationFinalize(audioRestart.generation))).status, 200);
-assert.equal(versionRow.audio_blob_prefix, `owner/${versionId}/${pendingAudioId}/generations/${audioRestart.generation}/parts/`);
-assert.equal((await endpoint(await generationFinalize(oldAudioGeneration))).status, 409);
+versionRow.audio_blob_prefix = "replacement-C/parts/";
+assert.equal((await endpoint(await generationFinalize(restoredAudioId, restoredAudioStatus.generation))).status, 409);
+assert.equal(versionRow.audio_blob_prefix, "replacement-C/parts/");
+versionRow.audio_blob_prefix = "replacement-B/parts/";
+assert.equal((await endpoint(await generationFinalize(restoredAudioId, restoredAudioStatus.generation))).status, 200);
+assert.equal(versionRow.audio_blob_prefix, `owner/${versionId}/${restoredAudioId}/parts/`);
+assert.equal((await endpoint(await generationFinalize(pendingAudioId, oldAudioGeneration))).status, 409);
 // Delayed B cleanup of the old A chunks must not delete the restored generation's chunks.
 const oldAudioParts = await endpointStore.list({ prefix: `owner/${versionId}/${pendingAudioId}/parts/` });
 await Promise.all(oldAudioParts.blobs.map(blob => endpointStore.delete(blob.key)));
@@ -601,15 +600,18 @@ reviewFails = false;
 assert.equal((await endpoint(deleteAudioRequest())).status, 200);
 assert.equal(versionRow.audio_blob_prefix, "");
 assert.equal((await endpoint(statusRequest())).status, 409);
-const deletedAudioRestart = await (await endpoint(audioRestartRequest(audioRestart.generation))).json();
-assert.equal(deletedAudioRestart.resetReason, "user_restart");
-assert.notEqual(deletedAudioRestart.generation, audioRestart.generation);
+const undeletedAudioId = "e".repeat(64);
+params.set("uploadId", undeletedAudioId);
+const undeletedAudioStatus = await (await endpoint(statusRequest())).json();
+assert.equal(undeletedAudioStatus.uploadedBytes, 0);
+assert.notEqual(undeletedAudioStatus.generation, restoredAudioStatus.generation);
 const undeletedAudioChunk = rawRequest();
-undeletedAudioChunk.headers.set("x-uploadid", pendingAudioId);
-undeletedAudioChunk.headers.set("x-upload-generation", deletedAudioRestart.generation);
+undeletedAudioChunk.headers.set("x-uploadid", undeletedAudioId);
+undeletedAudioChunk.headers.set("x-upload-generation", undeletedAudioStatus.generation);
 assert.equal((await endpoint(undeletedAudioChunk)).status, 200);
-assert.equal((await endpoint(await generationFinalize(deletedAudioRestart.generation))).status, 200);
-assert.equal(versionRow.audio_blob_prefix, `owner/${versionId}/${pendingAudioId}/generations/${deletedAudioRestart.generation}/parts/`);
+assert.equal((await endpoint(await generationFinalize(undeletedAudioId, undeletedAudioStatus.generation))).status, 200);
+assert.equal(versionRow.audio_blob_prefix, `owner/${versionId}/${undeletedAudioId}/parts/`);
+assert.equal((await endpoint(await generationFinalize(restoredAudioId, restoredAudioStatus.generation))).status, 409);
 
 configured = true;
 objectBytes = 0;
@@ -617,25 +619,34 @@ parts = [];
 versionRow = { ...versionRow, audio_storage_key: "replacement-B.wav", audio_blob_prefix: "" };
 const oldMasterSession = await masterEndpointStore.get(resumable.uploadSessionKey(`owner/${versionId}/${id}/`));
 const oldMasterGeneration = oldMasterSession.generation;
-assert.equal((await masterEndpoint(masterRequest("restart", {
-  expectedGeneration: oldMasterGeneration, expectedReplacement: "stale-canonical-token",
-}))).status, 409);
-const masterRestartResponse = await masterEndpoint(masterRequest("restart", {
-  expectedGeneration: oldMasterGeneration, expectedReplacement: resumable.uploadReplacementToken(versionRow),
-}));
-assert.equal(masterRestartResponse.status, 200);
-const masterRestart = await masterRestartResponse.json();
-assert.equal(masterRestart.resetReason, "user_restart");
-assert.notEqual(masterRestart.generation, oldMasterGeneration);
-const restoredMasterSession = await masterEndpointStore.get(resumable.uploadSessionKey(`owner/${versionId}/${id}/`));
+assert.equal((await masterEndpoint(masterRequest("status"))).status, 409);
+const restoredMasterId = "f".repeat(64);
+let restoredMasterStatus = await (await masterEndpoint(masterRequest("status", { uploadId: restoredMasterId }))).json();
+assert.equal(restoredMasterStatus.uploadedBytes, 0);
+assert.notEqual(restoredMasterStatus.generation, oldMasterGeneration);
+const restoredMasterSession = await masterEndpointStore.get(resumable.uploadSessionKey(`owner/${versionId}/${restoredMasterId}/`));
 assert.notEqual(restoredMasterSession.key, oldMasterSession.key);
+const restoredRenewal = await multipart.masterUploadStatus({
+  store: masterEndpointStore, prefix: `owner/${versionId}/${restoredMasterId}/`, storage: config,
+  scope: { ownerMemberId: "owner", songId, versionId }, uploadId: restoredMasterId, upload,
+  fetchImpl: async (url, options) => {
+    if (options.method === "GET" && new URL(url).searchParams.get("uploadId") === restoredMasterSession.storageUploadId) {
+      return new Response("<Error><Code>NoSuchUpload</Code></Error>", { status: 404 });
+    }
+    return storageFetch(url, options);
+  },
+});
+assert.equal(restoredRenewal.session.key, restoredMasterSession.key);
+assert.notEqual(restoredRenewal.session.key, oldMasterSession.key);
+assert.notEqual(restoredRenewal.session.generation, restoredMasterStatus.generation);
+restoredMasterStatus = resumable.uploadStatusFields(restoredRenewal.session, restoredRenewal.uploadedBytes);
 assert.equal((await masterEndpoint(masterRequest("complete", { generation: oldMasterGeneration }))).status, 409);
 assert.equal((await masterEndpoint(masterRequest("complete"))).status, 409);
 assert.equal((await masterEndpoint(masterRequest("part", { startByte: 0, generation: oldMasterGeneration }))).status, 409);
 assert.equal(versionRow.audio_storage_key, "replacement-B.wav");
-assert.equal((await masterEndpoint(masterRequest("part", { startByte: 0, generation: masterRestart.generation }))).status, 200);
+assert.equal((await masterEndpoint(masterRequest("part", { uploadId: restoredMasterId, startByte: 0, generation: restoredMasterStatus.generation }))).status, 200);
 parts = [{ number: 1, size: 8 * 1024 * 1024 }, { number: 2, size: 2 }];
-assert.equal((await masterEndpoint(masterRequest("complete", { generation: masterRestart.generation }))).status, 200);
+assert.equal((await masterEndpoint(masterRequest("complete", { uploadId: restoredMasterId, generation: restoredMasterStatus.generation }))).status, 200);
 assert.equal(versionRow.audio_storage_key, restoredMasterSession.key);
 assert.equal((await masterEndpoint(masterRequest("complete", { generation: oldMasterGeneration }))).status, 409);
 let delayedDeletionKey;
@@ -647,16 +658,18 @@ await storage.deleteStoredObject(config, oldMasterSession.key, async url => {
 assert.equal(delayedDeletionKey, oldMasterSession.key);
 assert.notEqual(delayedDeletionKey, restoredMasterSession.key);
 assert.equal(objectBytes, masterBytes);
-assert.equal((await (await masterEndpoint(masterRequest("status"))).json()).uploadedBytes, masterBytes);
+assert.equal((await (await masterEndpoint(masterRequest("status", { uploadId: restoredMasterId }))).json()).uploadedBytes, masterBytes);
 assert.equal((await endpoint(deleteAudioRequest())).status, 200);
 assert.equal(versionRow.audio_storage_key, "");
 assert.equal((await masterEndpoint(masterRequest("status"))).status, 409);
-const deletedMasterRestart = await (await masterEndpoint(masterRequest("restart", {
-  expectedGeneration: masterRestart.generation, expectedReplacement: resumable.uploadReplacementToken(versionRow),
-}))).json();
-assert.notEqual(deletedMasterRestart.generation, masterRestart.generation);
+const undeletedMasterId = "a".repeat(64);
 objectBytes = 0;
+parts = [];
+const undeletedMasterStatus = await (await masterEndpoint(masterRequest("status", { uploadId: undeletedMasterId }))).json();
+assert.equal(undeletedMasterStatus.uploadedBytes, 0);
+assert.notEqual(undeletedMasterStatus.generation, restoredMasterStatus.generation);
 parts = [{ number: 1, size: 8 * 1024 * 1024 }, { number: 2, size: 2 }];
-assert.equal((await masterEndpoint(masterRequest("complete", { generation: deletedMasterRestart.generation }))).status, 200);
-assert.equal(versionRow.audio_storage_key, (await masterEndpointStore.get(resumable.uploadSessionKey(`owner/${versionId}/${id}/`))).key);
+assert.equal((await masterEndpoint(masterRequest("complete", { uploadId: undeletedMasterId, generation: undeletedMasterStatus.generation }))).status, 200);
+assert.equal(versionRow.audio_storage_key, (await masterEndpointStore.get(resumable.uploadSessionKey(`owner/${versionId}/${undeletedMasterId}/`))).key);
+assert.equal((await masterEndpoint(masterRequest("complete", { uploadId: restoredMasterId, generation: restoredMasterStatus.generation }))).status, 409);
 console.log("Resumable upload contracts passed (recovery, ordering, concurrency, multipart storage, progress, and access controls).");

@@ -267,6 +267,7 @@ const db = { async sql(strings, ...values) {
   if (databaseOutage) throw new Error("internal database credentials");
   const query = strings.join("?");
   if (query.includes("FROM halo_song_catalog")) return currentSong && values[0] === currentSong.id && values[1] === currentSong.owner_member_id ? [structuredClone(currentSong)] : [];
+  if (query.includes("FROM halo_master_orchestrator_state")) return [];
   if (query.includes("FROM halo_song_versions")) return structuredClone(currentVersions);
   if (query.includes("INSERT INTO halo_release_conveyor (")) {
     if (stored?.locked_until && new Date(stored.locked_until) > new Date()) return [];

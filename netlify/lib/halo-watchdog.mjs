@@ -32,21 +32,25 @@ export function safeAssetUrl(value) {
 
 // History is trusted only for the exact same owned recording, never a title/artist match.
 export function trustedMetadataHistory(song, versions, previous) {
-  const master = versions.find(version => version.version_type === "sale_master");
+  const masters = versions.filter(version => version.version_type === "sale_master" && version.song_id === song.id);
+  const master = masters.length === 1 ? masters[0] : null;
+  if (!master?.audio_url) return null;
   const documents = previous?.package?.documents;
   const saved = previous?.watchdog?.metadataHistory;
+  if (previous?.status === "ready" && previous.package?.council?.passed
+    && documents?.releaseId === song.id && documents.rightsStatus === "cleared"
+    && validIsrc(documents.isrc)
+    && previous.package?.audio?.sourceIdentity === masterSourceIdentity(master)
+    && previous.package?.audio?.sourceVersionId === master.id
+    && previous.package?.audio?.sourceAudioUrl === master.audio_url) {
+    return { songId: song.id, ownerMemberId: song.owner_member_id, sourceVersionId: master.id,
+      sourceAudioUrl: master.audio_url, sourceRevision: previous.inputHash,
+      sourceIdentity: masterSourceIdentity(master), isrc: normalizeIsrc(documents.isrc), rightsStatus: "cleared" };
+  }
   if (saved?.songId === song.id && saved.ownerMemberId === song.owner_member_id
     && saved.sourceIdentity === masterSourceIdentity(master) && validIsrc(saved.isrc)
     && saved.rightsStatus === "cleared") return saved;
-  if (previous?.status !== "ready" || !previous.package?.council?.passed
-    || documents?.releaseId !== song.id || documents.rightsStatus !== "cleared"
-    || !validIsrc(documents.isrc) || !master?.audio_url
-    || previous.package?.audio?.sourceIdentity !== masterSourceIdentity(master)
-    || previous.package?.audio?.sourceVersionId !== master.id
-    || previous.package?.audio?.sourceAudioUrl !== master.audio_url) return null;
-  return { songId: song.id, ownerMemberId: song.owner_member_id, sourceVersionId: master.id,
-    sourceAudioUrl: master.audio_url, sourceRevision: previous.inputHash,
-    sourceIdentity: masterSourceIdentity(master), isrc: normalizeIsrc(documents.isrc), rightsStatus: "cleared" };
+  return null;
 }
 
 export function inspectHaloRelease({ song, versions, previous, infrastructure = [], assetChecks = [], now = new Date() }) {
@@ -81,18 +85,25 @@ export function inspectHaloRelease({ song, versions, previous, infrastructure = 
   const boundVersions = versions.map(version => ({ versionId: version.id,
     artworkUrl: safeAssetUrl(version.artwork_url) || artworkUrl,
     videoUrl: safeAssetUrl(version.video_url || version.promo_video_url) || videoUrl }));
-  const boundUrls = [...new Set([artworkUrl, videoUrl,
-    ...boundVersions.flatMap(version => [version.artworkUrl, version.videoUrl])].filter(Boolean))];
-  for (const url of boundUrls) {
-    if (!assetChecks.some(check => check.url === url && check.status === "passed")) {
-      findings.push({ field: "dreamweaver_assets", message: `${url}: asset missing or not yet verified; graph remains unlocked.` });
+  const bindings = [
+    { url: artworkUrl, type: "image/" }, { url: videoUrl, type: "video/" },
+    ...boundVersions.flatMap(version => [
+      { url: version.artworkUrl, type: "image/" }, { url: version.videoUrl, type: "video/" },
+    ]),
+  ].filter(binding => binding.url);
+  const boundAssets = [...new Map(bindings.map(binding => [`${binding.type}:${binding.url}`, binding])).values()];
+  const verified = binding => assetChecks.some(check => check.url === binding.url
+    && check.type === binding.type && check.status === "passed");
+  for (const binding of boundAssets) {
+    if (!verified(binding)) {
+      findings.push({ field: "dreamweaver_assets", message: `${binding.url}: asset missing or not yet verified; graph remains unlocked.` });
     }
   }
   const graph = { songId: song.id, ...buildDreamweaverSatellite(song.id),
     artworkUrl, videoUrl, lyrics: parseTimestampedLyrics(normalizeLyricsSource(song.lyrics_text)),
     versions: boundVersions,
     locked: Boolean(master && artworkUrl && videoUrl
-      && boundUrls.every(url => assetChecks.some(check => check.url === url && check.status === "passed"))) };
+      && boundAssets.every(verified)) };
   graph.revision = digest(graph);
   if (graph.locked && previous?.watchdog?.assetGraph?.revision !== graph.revision) {
     actions.push({ type: "lock_dreamweaver_graph", revision: graph.revision });
@@ -147,13 +158,13 @@ export async function auditHaloAssets({ song, versions }, baseUrl, { fetcher = f
   ].filter(asset => asset.url);
   const assets = [...new Map(candidates.map(asset => [`${asset.type}:${asset.url}`, asset])).values()];
   return Promise.all(assets.map(async (asset, index) => {
-    if (index >= 20) return { url: asset.url, status: "unverified" };
+    if (index >= 20) return { ...asset, status: "unverified" };
     try {
       const base = new URL(baseUrl);
       const url = new URL(asset.url, base);
       if (base.protocol !== "https:" || url.origin !== base.origin || url.username || url.password
         || (url.pathname.startsWith("/api/") && !["/api/song-catalog/artwork", "/api/videos"].includes(url.pathname))) {
-        return { url: asset.url, status: "unverified" };
+        return { ...asset, status: "unverified" };
       }
       const options = { method: "HEAD", redirect: "manual", signal: AbortSignal.timeout(2000) };
       let response = await fetcher(url, options);
@@ -162,8 +173,8 @@ export async function auditHaloAssets({ song, versions }, baseUrl, { fetcher = f
           headers: { Range: "bytes=0-0" }, signal: AbortSignal.timeout(2000) });
       }
       await response.body?.cancel();
-      return { url: asset.url, status: response.ok && response.headers.get("content-type")?.startsWith(asset.type)
+      return { ...asset, status: response.ok && response.headers.get("content-type")?.startsWith(asset.type)
         ? "passed" : "broken", httpStatus: response.status };
-    } catch { return { url: asset.url, status: "unavailable" }; }
+    } catch { return { ...asset, status: "unavailable" }; }
   }));
 }

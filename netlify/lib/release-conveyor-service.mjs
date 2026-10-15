@@ -1,6 +1,6 @@
 import { runReleaseConveyor } from "./release-conveyor.mjs";
 import { claimConveyor, conveyorPorts, loadReleaseSubmission, releaseConveyorLease, persistWatchdog } from "./release-conveyor-store.mjs";
-import { RELEASE_PIPELINE_VERSION } from "./release-conveyor.mjs";
+import { RELEASE_PIPELINE_VERSION, releaseFingerprint } from "./release-conveyor.mjs";
 import { inspectHaloRelease } from "./halo-watchdog.mjs";
 
 export async function processCatalogRelease(db, ownerMemberId, songId, prepareAudio, options, { automatic = true, deadline = Infinity, infrastructure, assetAuditor } = {}) {
@@ -15,9 +15,18 @@ export async function processCatalogRelease(db, ownerMemberId, songId, prepareAu
     const watchdog = inspectHaloRelease({ ...submission, previous: claim.previous,
       assetChecks,
       infrastructure: infrastructure || claim.previous?.watchdog?.infrastructure || [] });
+    const metadata = watchdog.actions.find(action => action.type === "restore_isrc");
+    const radio = watchdog.actions.find(action => action.type === "auto_queue_radio");
+    const expected = releaseFingerprint(
+      metadata ? { ...submission.song, isrc: metadata.isrc } : submission.song,
+      submission.versions.map(version => version.id === radio?.versionId ? { ...version, mastering_status: "queued" } : version),
+      settings);
     await persistWatchdog(db, ownerMemberId, songId, claim.token, submission, watchdog);
     submission = await loadReleaseSubmission(db, ownerMemberId, songId);
     if (!submission) return null;
+    if (releaseFingerprint(submission.song, submission.versions, settings) !== expected) {
+      throw new Error("Submission changed during watchdog repair");
+    }
     const ports = conveyorPorts(db, ownerMemberId, songId, claim.token, submission, settings, prepareAudio);
     ports.deadline = deadline;
     return await runReleaseConveyor({ ...submission, previous: claim.previous, watchdog, ports, options: settings, automatic });

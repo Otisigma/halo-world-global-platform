@@ -121,19 +121,20 @@ export async function runReleaseConveyor({ song, versions, previous, watchdog = 
     sourceUpdatedAt: song.source_updated_at || (sourceUpdatedAt ? new Date(sourceUpdatedAt).toISOString() : null),
     stages: reuse ? [...previous.stages] : [], package: reuse ? { ...previous.package } : {},
     automaticAttempts: automatic && reuse ? Number(previous.automaticAttempts || 0) : 0 };
+  const graphChanged = reuse && state.package.dreamweaver
+    && state.package.dreamweaver.assetGraph?.revision !== watchdog?.assetGraph?.revision;
+  if (graphChanged) {
+    const dreamweaver = { ...state.package.dreamweaver, assetGraph: watchdog?.assetGraph || null };
+    state.package.dreamweaver = dreamweaver;
+    if (state.package.documents) state.package.documents = { ...state.package.documents, dreamweaver };
+  }
   const waiting = automatic && (["blocked", "escalated"].includes(previous?.status)
     || (previous?.status === "retryable" && new Date(previous.nextRetryAt).getTime() > Date.now()));
   if (reuse && (previous.status === "ready" || waiting)) {
     await ports.assertCurrent();
-    const graphChanged = previous.package?.dreamweaver
-      && previous.package.dreamweaver.assetGraph?.revision !== watchdog?.assetGraph?.revision;
-    const current = { ...previous, watchdog, sourceUpdatedAt: state.sourceUpdatedAt, receipt: receipt(previous) };
+    const current = { ...previous, watchdog, package: state.package,
+      sourceUpdatedAt: state.sourceUpdatedAt, receipt: receipt(previous) };
     if (watchdog) watchdog.departments = current.receipt.stages.map(({ name, status }) => ({ name, status }));
-    if (graphChanged) {
-      const dreamweaver = { ...previous.package.dreamweaver, assetGraph: watchdog.assetGraph };
-      current.package = { ...previous.package, dreamweaver,
-        documents: { ...previous.package.documents, dreamweaver } };
-    }
     if (previous.sourceUpdatedAt === state.sourceUpdatedAt && !graphChanged) return current;
     await ports.finish(current);
     return current;

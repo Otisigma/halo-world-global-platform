@@ -4,6 +4,7 @@ import { HALO_SHARED_INTENT, WATCHDOG_ROUTES, inspectHaloRelease, auditHaloInfra
   auditHaloAssets, masterSourceIdentity, safeAssetUrl } from "../netlify/lib/halo-watchdog.mjs";
 import { runReleaseConveyor, RELEASE_STAGES } from "../netlify/lib/release-conveyor.mjs";
 import { persistWatchdog } from "../netlify/lib/release-conveyor-store.mjs";
+import { processCatalogRelease } from "../netlify/lib/release-conveyor-service.mjs";
 
 const song = { id: "12345678-1234-4123-8123-123456789012", owner_member_id: "creator",
   title: "Signal", artist_name: "Artist", genre: "Soul", isrc: "GBAAA2600001",
@@ -15,7 +16,8 @@ const master = { id: "master", song_id: song.id, version_type: "sale_master",
 const radio = { id: "radio", song_id: song.id, version_type: "radio_edit",
   mastering_status: "not_started", audio_url: "" };
 const versions = [master, radio];
-const assetChecks = ["/cover.jpg", "/video.mp4"].map(url => ({ url, status: "passed" }));
+const assetChecks = [{ url: "/cover.jpg", type: "image/", status: "passed" },
+  { url: "/video.mp4", type: "video/", status: "passed" }];
 const inspect = changes => inspectHaloRelease({ song, versions, assetChecks, ...changes });
 const initial = inspect();
 assert.deepEqual(initial.intent, HALO_SHARED_INTENT);
@@ -62,6 +64,9 @@ assert.deepEqual(repaired.actions.find(action => action.type === "restore_isrc")
 assert.equal(repaired.metadataPrefill.reviewRequired, true);
 assert.equal(repaired.metadataPrefill.appliedRightsClearance, false);
 assert.equal(missing.rights_status, "needs_review");
+const corrected = inspect({ song: missing, previous: { ...history, watchdog: repaired,
+  package: { ...history.package, documents: { ...history.package.documents, isrc: "GBAAA2600099" } } } });
+assert.equal(corrected.metadataHistory.isrc, "GBAAA2600099", "latest reviewed metadata supersedes saved history");
 assert(inspect({ song: missing, previous: { status: "blocked", watchdog: repaired } })
   .actions.some(action => action.type === "restore_isrc"), "trusted history survives blocked inspections");
 assert(!inspect({ song: missing, versions: [{ ...master, audio_blob_prefix: "replacement/parts/" }, radio],
@@ -88,6 +93,8 @@ assert(calls.some(([url, options]) => url.endsWith("/dreamweaver/") && options.m
 assert(calls.every(([url, options]) => url.startsWith("https://halo.example/") && options.redirect === "manual"));
 assert(inspect({ infrastructure }).findings.some(finding => finding.field === "infrastructure"));
 assert((await auditHaloInfrastructure(undefined)).every(route => route.status === "unavailable"));
+assert.deepEqual(WATCHDOG_ROUTES.map(route => route.route).sort(),
+  ["/dreamweaver/", "/finish-house/", "/radio/", "/release-house/", "/song-catalog/"]);
 for (const route of WATCHDOG_ROUTES) await access(new URL(`../${route.file}`, import.meta.url));
 
 calls = [];
@@ -105,6 +112,10 @@ const soft404 = await auditHaloAssets({ song, versions }, "https://halo.example"
   fetcher: async () => new Response(null, { headers: { "Content-Type": "text/html" } }),
 });
 assert(soft404.every(asset => asset.status === "broken"), "HTML fallbacks are not valid assets");
+const imageAsVideo = await auditHaloAssets({ song, versions: [{ ...master, video_url: "/cover.jpg" }, radio] },
+  "https://halo.example", { fetcher: async () => new Response(null, { headers: { "Content-Type": "image/jpeg" } }) });
+assert(!inspect({ versions: [{ ...master, video_url: "/cover.jpg" }, radio], assetChecks: imageAsVideo }).assetGraph.locked,
+  "a passing image check cannot satisfy a failing video check at the same URL");
 
 const ports = { prepareAudio: async () => ({ sourceVersionId: master.id, sourceAudioUrl: master.audio_url, issues: [] }),
   checkpoint: async () => {}, assertCurrent: async () => {}, finish: async () => {},
@@ -116,6 +127,14 @@ assert.equal(ready.package.documents.dreamweaver.assetGraph, ready.watchdog.asse
 const unlocked = inspect({ versions: approvedVersions, previous: ready, assetChecks: soft404 });
 const refreshed = await runReleaseConveyor({ song, versions: approvedVersions, ports, previous: ready, watchdog: unlocked, automatic: true });
 assert(!refreshed.package.dreamweaver.assetGraph.locked, "new failures invalidate previously locked packages");
+const failedHandoff = await runReleaseConveyor({ song, versions: approvedVersions, watchdog: initial,
+  ports: { ...ports, handoff: async () => { throw new Error("interrupted handoff"); } } });
+assert.equal(failedHandoff.status, "retryable");
+const resumed = await runReleaseConveyor({ song, versions: approvedVersions, ports,
+  previous: { ...failedHandoff, nextRetryAt: "2026-01-01T00:00:00Z" }, watchdog: unlocked, automatic: true });
+assert.equal(resumed.status, "ready");
+assert(!resumed.package.dreamweaver.assetGraph.locked, "resumed stages cannot preserve an invalidated graph");
+assert(!resumed.package.documents.dreamweaver.assetGraph.locked);
 const blocked = await runReleaseConveyor({ song: missing, versions, ports, watchdog: repaired });
 assert.equal(blocked.receipt.ready, false, "watchdog prefill cannot bypass Council or mastering approval");
 
@@ -132,6 +151,19 @@ for (const contract of ["FOR UPDATE", "lease_token =", "locked_until > NOW()", "
 assert(!query.includes("rights_status ="), "the repair writer cannot grant clearance");
 assert(!query.includes("audio_url ="), "queueing cannot replace audio");
 await assert.rejects(persistWatchdog({ sql: async () => [] }, song.owner_member_id, song.id, "lost", { song, versions }, initial));
+let reads = 0, prepared = false;
+const racingDb = { sql: async strings => {
+  const query = strings.join("?");
+  if (query.includes("WITH lease AS")) return [{ id: "event" }];
+  if (query.includes("INSERT INTO halo_release_conveyor (")) return [{ state: ready }];
+  if (query.includes("FROM halo_song_catalog")) return [{ ...song, title: ++reads >= 3 ? "Concurrent edit" : song.title }];
+  if (query.includes("FROM halo_song_versions")) return approvedVersions;
+  if (query.includes("SET lease_token = NULL")) return [];
+  throw new Error(`Unexpected query: ${query}`);
+} };
+await assert.rejects(processCatalogRelease(racingDb, song.owner_member_id, song.id, async () => { prepared = true; }),
+  /Submission changed during watchdog repair/);
+assert.equal(prepared, false, "a post-repair concurrent edit requires fresh inspection, not stale graph reuse");
 const service = await readFile(new URL("../netlify/lib/release-conveyor-service.mjs", import.meta.url), "utf8");
 assert.match(service, /INTERVAL '5 minutes'/);
 assert.match(service, /persistWatchdog/);

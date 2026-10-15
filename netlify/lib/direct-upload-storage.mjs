@@ -130,14 +130,47 @@ export function presignObjectUrl({ config, method = "GET", key, contentType = ""
   return `${origin}${path}?${canonicalQuery}&X-Amz-Signature=${signature}`;
 }
 
-/** Confirms the uploaded object exists server-side without downloading it. Returns its byte size or 0. */
+export const STORAGE_REQUEST_TIMEOUT_MS = 15_000;
+
+export async function boundedStorageRequest(url, options, fetchImpl = fetch, consume = response => response, timeoutMs = STORAGE_REQUEST_TIMEOUT_MS) {
+  const controller = new AbortController();
+  let timer;
+  try {
+    return await Promise.race([
+      (async () => consume(await fetchImpl(url, { ...options, signal: controller.signal })))(),
+      new Promise((_, reject) => {
+        timer = setTimeout(() => {
+          controller.abort();
+          reject(Object.assign(new Error("Master storage request timed out. Please retry."), { status: 503, storageCode: "Timeout" }));
+        }, Math.min(STORAGE_REQUEST_TIMEOUT_MS, Math.max(1, timeoutMs)));
+      }),
+    ]);
+  } catch (error) {
+    if (error?.status) throw error;
+    throw Object.assign(new Error("Master storage could not be reached. Please retry."),
+      { status: 503, storageCode: "NetworkError", cause: error });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/** Only a 404 means absence; authorization and service failures must not reset uploads. */
 export async function headStoredObject(config, key, fetchImpl = fetch) {
-  const response = await fetchImpl(presignObjectUrl({ config, method: "HEAD", key, expiresIn: 60 }), { method: "HEAD" });
-  if (!response.ok) return 0;
-  return Number(response.headers.get("content-length") || 0);
+  const response = await boundedStorageRequest(presignObjectUrl({ config, method: "HEAD", key, expiresIn: 60 }), { method: "HEAD" }, fetchImpl);
+  if (response.status === 404) return 0;
+  if (!response.ok) {
+    throw Object.assign(new Error(`Master storage HEAD failed (${response.status}). Please retry.`),
+      { status: 503, storageStatus: response.status, storageCode: response.status === 403 ? "AccessDenied" : response.status === 429 ? "SlowDown" : "StorageUnavailable" });
+  }
+  const length = response.headers.get("content-length");
+  const byteSize = Number(length);
+  if (!length || !/^\d+$/.test(length) || !Number.isSafeInteger(byteSize) || byteSize <= 0) {
+    throw Object.assign(new Error("Master storage returned an invalid object size."), { status: 503, storageCode: "InvalidResponse" });
+  }
+  return byteSize;
 }
 
 export async function deleteStoredObject(config, key, fetchImpl = fetch) {
   if (!config || !key) return;
-  await fetchImpl(presignObjectUrl({ config, method: "DELETE", key, expiresIn: 60 }), { method: "DELETE" });
+  await boundedStorageRequest(presignObjectUrl({ config, method: "DELETE", key, expiresIn: 60 }), { method: "DELETE" }, fetchImpl);
 }

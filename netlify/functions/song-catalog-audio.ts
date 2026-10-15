@@ -5,7 +5,7 @@ import { getUser, verifyRequestOrigin } from "@netlify/identity";
 import { cleanText, ensureMembership } from "../lib/halo-x.mjs";
 import { runDreamweaverReview } from "./song-catalog.js";
 import { MASTER_PLAYBACK_URL_TTL_SECONDS, deleteStoredObject, directUploadConfig, presignObjectUrl } from "../lib/direct-upload-storage.mjs";
-import { appendUploadChunk, confirmedUploadBytes, ensureUploadSession, readUploadChunk, resumableUploadId, uploadSessionKey } from "../lib/resumable-upload.mjs";
+import { appendUploadChunk, confirmedUploadBytes, ensureUploadSession, readUploadChunk, resumableUploadId, uploadSessionKey, uploadProtocol, requireUploadProtocol, saveUploadPhase, uploadStatusFields, uploadWasReplaced } from "../lib/resumable-upload.mjs";
 
 const audioStore = getStore({ name: "halo-song-catalog-audio", consistency: "strong" });
 const radioAudioStore = getStore({ name: "halo-radio-submissions", consistency: "strong" });
@@ -21,7 +21,7 @@ const MEDIA_CORS_HEADERS = Object.freeze({
 });
 
 function json(body: unknown, status = 200, headers: Record<string, string> = {}) {
-  return Response.json(body, { status, headers: { ...MEDIA_CORS_HEADERS, "Cache-Control": "no-store", ...headers } });
+  return Response.json({ ...body as object, ...uploadProtocol() }, { status, headers: { ...MEDIA_CORS_HEADERS, "Cache-Control": "no-store", ...headers } });
 }
 
 function cleanId(value: unknown) {
@@ -132,7 +132,8 @@ async function uploadChunk(request: Request, db: Awaited<ReturnType<typeof getDa
   if (!(chunk instanceof Blob) || !chunk.size || chunk.size > MAX_CHUNK_BYTES) return json({ message: "That audio upload chunk is invalid" }, 413);
   const contentType = normalizeAudioContentType(form.get("contentType") || chunk.type, filename);
   if (!contentType) return json({ message: "Upload an MP3, M4A, AAC, OGG, WebM, WAV, or FLAC audio file" }, 415);
-  if (!(await ownedVersion(db, ownerMemberId, versionId, songId))) return json({ message: "That song version was not found" }, 404);
+  const version = await ownedVersion(db, ownerMemberId, versionId, songId);
+  if (!version) return json({ message: "That song version was not found" }, 404);
   const prefix = `${ownerMemberId}/${versionId}/${uploadId}/parts/`;
   if (await audioStore.get(uploadSessionKey(`${ownerMemberId}/${versionId}/${uploadId}/`), { type: "json" })) {
     return json({ message: "Use the resumable chunk endpoint for this upload" }, 409);
@@ -149,16 +150,20 @@ async function resumableAudio(request: Request, db: Awaited<ReturnType<typeof ge
   const versionId = cleanId(field("versionId"));
   const uploadId = resumableUploadId(field("uploadId"));
   if (!songId || !versionId || !uploadId) return json({ message: "The resumable upload details are invalid" }, 400);
-  if (!(await ownedVersion(db, ownerMemberId, versionId, songId))) return json({ message: "That song version was not found" }, 404);
+  const version = await ownedVersion(db, ownerMemberId, versionId, songId);
+  if (!version) return json({ message: "That song version was not found" }, 404);
   const prefix = `${ownerMemberId}/${versionId}/${uploadId}/`;
   if (raw) {
     const session = await audioStore.get(uploadSessionKey(prefix), { type: "json" });
     if (!session) return json({ message: "Check upload status before sending chunks" }, 409);
+    if (uploadWasReplaced(session, version, version.audio_blob_prefix === `${prefix}parts/` && !version.audio_storage_key)) {
+      return json({ message: "This upload was replaced by another file.", resetReason: "upload_replaced" }, 409);
+    }
     const offset = request.headers.get("x-start-byte");
     if (!offset || !/^\d+$/.test(offset)) return json({ message: "A valid start byte is required" }, 400);
     const bytes = await readUploadChunk(request, MAX_CHUNK_BYTES);
     const uploadedBytes = await appendUploadChunk(audioStore, prefix, session, Number(offset), bytes);
-    return json({ uploadedBytes });
+    return json(uploadStatusFields(session, uploadedBytes));
   }
   const byteSize = Number(query.get("byteSize"));
   const chunkSize = Number(query.get("chunkSize"));
@@ -166,8 +171,18 @@ async function resumableAudio(request: Request, db: Awaited<ReturnType<typeof ge
   const contentType = normalizeAudioContentType(query.get("contentType"), filename);
   if (!Number.isSafeInteger(byteSize) || byteSize < 1 || byteSize > MAX_UPLOAD_BYTES) return json({ message: "Song audio uploads are limited to 128 MB" }, 413);
   if (chunkSize !== MAX_CHUNK_BYTES || !filename || !contentType) return json({ message: "The resumable audio metadata is invalid" }, 400);
-  const session = await ensureUploadSession(audioStore, prefix, { songId, versionId, byteSize, chunkSize, filename, contentType });
-  return json({ uploadedBytes: await confirmedUploadBytes(audioStore, prefix, session), chunkSize });
+  let session = await ensureUploadSession(audioStore, prefix, { songId, versionId, byteSize, chunkSize, filename, contentType });
+  const registered = version.audio_blob_prefix === `${prefix}parts/` && !version.audio_storage_key;
+  if (uploadWasReplaced(session, version, registered)) {
+    return json({ message: "This upload was replaced by another file.", resetReason: "upload_replaced" }, 409);
+  }
+  if (registered && !session.result) {
+    const result = { message: "Audio is persisted and locked into HALO storage.", songId, versionId,
+      audioUrl: `/api/song-catalog/audio?versionId=${encodeURIComponent(versionId)}`,
+      persisted: true, lockedIn: true, confirmedAt: new Date().toISOString(), phase: "review_pending", ...uploadProtocol() };
+    session = await saveUploadPhase(audioStore, prefix, session, "review_pending", result);
+  }
+  return json(uploadStatusFields(session, await confirmedUploadBytes(audioStore, prefix, session)));
 }
 
 async function removeUpload(prefix: string) {
@@ -217,10 +232,21 @@ async function finalizeUpload(payload: Record<string, unknown>, db: Awaited<Retu
   const version = await ownedVersion(db, ownerMemberId, versionId, songId);
   if (!version) return json({ message: "That song version was not found" }, 404);
   const prefix = `${ownerMemberId}/${versionId}/${uploadId}/parts/`;
-  const session = await audioStore.get(uploadSessionKey(`${ownerMemberId}/${versionId}/${uploadId}/`), { type: "json" });
+  const sessionPrefix = `${ownerMemberId}/${versionId}/${uploadId}/`;
+  let session = await audioStore.get(uploadSessionKey(sessionPrefix), { type: "json" });
+  const alreadyRegistered = version.audio_blob_prefix === prefix && !version.audio_storage_key;
+  if (session && uploadWasReplaced(session, version, alreadyRegistered)) {
+    return json({ message: "This upload was replaced by another file.", resetReason: "upload_replaced" }, 409);
+  }
   if (session && (session.byteSize !== byteSize || session.filename !== filename || session.contentType !== contentType
-    || Math.ceil(byteSize / session.chunkSize) !== chunkCount
-    || await confirmedUploadBytes(audioStore, `${ownerMemberId}/${versionId}/${uploadId}/`, session) !== byteSize)) {
+    || Math.ceil(byteSize / session.chunkSize) !== chunkCount)) {
+    return json({ message: "The resumable audio upload metadata changed" }, 409);
+  }
+  if (session && ["registered", "review_pending"].includes(session.phase)) {
+    if (!alreadyRegistered) return json({ message: "This upload was replaced by another file.", resetReason: "upload_replaced" }, 409);
+    return json(session.result);
+  }
+  if (session && await confirmedUploadBytes(audioStore, sessionPrefix, session) !== byteSize) {
     return json({ message: "The resumable audio upload is incomplete or its metadata changed" }, 409);
   }
   const stored = await audioStore.list({ prefix });
@@ -228,27 +254,40 @@ async function finalizeUpload(payload: Record<string, unknown>, db: Awaited<Retu
     return json({ message: "The audio upload is incomplete. Try it again." }, 409);
   }
   const audioUrl = `/api/song-catalog/audio?versionId=${encodeURIComponent(versionId)}`;
-  await db.sql`
+  if (session) session = await saveUploadPhase(audioStore, sessionPrefix, session, "completing", null, {
+    catalogBefore: session.catalogBefore || { blobPrefix: String(version.audio_blob_prefix || ""), storageKey: String(version.audio_storage_key || "") },
+  });
+  if (!alreadyRegistered) {
+    const updated = await db.sql`
     UPDATE halo_song_versions
     SET audio_url = ${audioUrl}, audio_blob_prefix = ${prefix}, audio_chunk_count = ${chunkCount}, audio_storage_key = '',
       audio_content_type = ${contentType}, audio_byte_size = ${byteSize}, audio_filename = ${filename},
       duration_seconds = CASE WHEN ${durationSeconds} > 0 THEN ${durationSeconds} ELSE duration_seconds END,
       mastering_status = CASE WHEN version_type IN ('radio_edit', 'clean') AND mastering_status = 'not_started' THEN 'queued' ELSE mastering_status END,
       updated_at = NOW()
-    WHERE id = ${versionId}
+    WHERE id = ${versionId} AND song_id = ${songId}
+      AND COALESCE(audio_blob_prefix, '') = ${String(version.audio_blob_prefix || "")}
+      AND COALESCE(audio_storage_key, '') = ${String(version.audio_storage_key || "")}
+    RETURNING id
   `;
-  await runDreamweaverReview(songId, ownerMemberId);
+    if (!updated.length) return json({ message: "Another upload replaced this version. Check status before retrying." }, 409);
+  }
+  let result = {
+    message: "Audio is persisted and locked into HALO storage.", songId, versionId, audioUrl,
+    persisted: true, lockedIn: true, confirmedAt: new Date().toISOString(), phase: "review_pending", ...uploadProtocol(),
+  };
+  if (session) session = await saveUploadPhase(audioStore, sessionPrefix, session, "review_pending", result);
+  try {
+    await runDreamweaverReview(songId, ownerMemberId);
+    const reviewed = { ...result, phase: "registered" };
+    if (session) await saveUploadPhase(audioStore, sessionPrefix, session, "registered", reviewed);
+    result = reviewed;
+  } catch {
+    // Review is downstream of the persisted transfer and can be retried independently.
+  }
   if (version.audio_blob_prefix && version.audio_blob_prefix !== prefix) await removeUpload(version.audio_blob_prefix).catch(() => undefined);
   await removeStoredMaster(version.audio_storage_key).catch(() => undefined);
-  return json({
-    message: "Audio is persisted and locked into HALO storage.",
-    songId,
-    versionId,
-    audioUrl,
-    persisted: true,
-    lockedIn: true,
-    confirmedAt: new Date().toISOString(),
-  });
+  return json(result);
 }
 
 async function readAudioRange(version: Record<string, unknown>, range: { start: number; end: number }) {
@@ -403,6 +442,7 @@ export default async function songCatalogAudioHandler(request: Request) {
   if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: MEDIA_CORS_HEADERS });
   if (!["GET", "HEAD", "POST", "DELETE"].includes(request.method)) return json({ message: "Method not allowed" }, 405, { Allow: "GET, HEAD, POST, DELETE, OPTIONS" });
   try {
+    requireUploadProtocol(request);
     const [db, user] = await Promise.all([getDatabase(), getUser()]);
     if (!user?.id) return json({ message: "Join or sign in to use song audio" }, 401);
     const membership = await ensureMembership(db, user);
@@ -430,7 +470,9 @@ export default async function songCatalogAudioHandler(request: Request) {
     if (payload.action === "import_from_radio") return importFromRadio(payload, db, membership.member_id);
     return json({ message: "Choose a supported audio action" }, 400);
   } catch (error) {
-    if (error instanceof Error && "status" in error) return json({ message: error.message }, Number(error.status));
+    if (error instanceof Error && "status" in error) return json({ message: error.message,
+      storageCode: "storageCode" in error ? error.storageCode : undefined,
+      storageStatus: "storageStatus" in error ? error.storageStatus : undefined }, Number(error.status));
     console.error("Song catalog audio failed", error instanceof Error ? error.message : "unknown error");
     return json({ message: "Song audio is temporarily unavailable" }, 500);
   }

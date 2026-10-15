@@ -1,7 +1,54 @@
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 
 export const AUDIO_UPLOAD_CHUNK_BYTES = 4 * 1024 * 1024;
 export const MASTER_UPLOAD_CHUNK_BYTES = 8 * 1024 * 1024;
+export const uploadProtocol = () => ({ protocolVersion: 2, revision: process.env.COMMIT_REF || null });
+
+export function requireUploadProtocol(request) {
+  const protocol = request.headers.get("x-upload-protocol");
+  if (protocol && protocol !== "2") throw uploadError("This upload protocol is incompatible. Reload the page.", 409);
+}
+
+export function uploadStatusFields(session, uploadedBytes) {
+  return { ...uploadProtocol(), uploadedBytes, chunkSize: session.chunkSize,
+    generation: String(session.generation || session.storageUploadId || session.createdAt),
+    resetReason: session.resetReason || null, phase: session.phase || "transferring",
+    result: session.result ? { ...session.result, ...uploadProtocol() } : null };
+}
+
+export async function saveUploadPhase(store, prefix, session, phase, result = null, state = {}) {
+  const key = uploadSessionKey(prefix);
+  const saved = await store.getWithMetadata(key, { type: "json" });
+  if (!saved || (saved.data.generation || saved.data.storageUploadId || saved.data.createdAt)
+    !== (session.generation || session.storageUploadId || session.createdAt)) {
+    throw uploadError("The upload session changed. Check status before retrying.");
+  }
+  const candidate = { ...saved.data, ...state, phase, result };
+  const matches = value => value && JSON.stringify(value) === JSON.stringify(candidate);
+  if (["registered", "review_pending"].includes(saved.data.phase) && phase === "completing") return saved.data;
+  try {
+    const written = await store.setJSON(key, candidate, { onlyIfMatch: saved.etag });
+    if (written.modified) {
+      const confirmed = await store.get(key, { type: "json" });
+      if (matches(confirmed)) return confirmed;
+      throw uploadError("Upload state could not be confirmed. Please retry.", 503);
+    }
+  } catch (error) {
+    const confirmed = await store.get(key, { type: "json" });
+    if (matches(confirmed)) return confirmed;
+    throw error;
+  }
+  throw uploadError("The upload session changed. Check status before retrying.");
+}
+
+export function uploadWasReplaced(session, version, registered) {
+  if (registered) return false;
+  if (["registered", "review_pending"].includes(session.phase)) return true;
+  return Boolean(session.catalogBefore && (
+    session.catalogBefore.blobPrefix !== String(version.audio_blob_prefix || "")
+    || session.catalogBefore.storageKey !== String(version.audio_storage_key || "")
+  ));
+}
 
 export function uploadError(message, status = 409) {
   return Object.assign(new Error(message), { status });
@@ -19,11 +66,15 @@ export async function ensureUploadSession(store, prefix, details, create = async
   const key = uploadSessionKey(prefix);
   let session = await store.get(key, { type: "json" });
   if (!session) {
-    const candidate = { ...details, ...await create(), createdAt: new Date().toISOString() };
+    const candidate = { ...details, ...await create(), generation: randomUUID(), phase: "transferring",
+      resetReason: null, result: null, createdAt: new Date().toISOString() };
     try {
       const result = await store.setJSON(key, candidate, { onlyIfNew: true });
-      session = result.modified ? candidate : await store.get(key, { type: "json" });
-      if (!result.modified) await discard(candidate);
+      // Conditional writes in the installed SDK report modified without verifying HTTP errors.
+      // Confirm durable state rather than treating that flag as proof of persistence.
+      session = await store.get(key, { type: "json" });
+      if (result.modified && !session) throw uploadError("Upload session could not be confirmed. Please retry.", 503);
+      if (session?.generation !== candidate.generation) await discard(candidate);
     } catch (error) {
       // A lost write response may still have committed the session.
       session = await store.get(key, { type: "json" });

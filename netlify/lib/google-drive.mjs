@@ -3,7 +3,8 @@
 // node:crypto, so no Google SDK dependency is required), pre-generates the Drive file id, and
 // opens a resumable upload session. The browser then streams the file straight to Google in
 // 5 MB chunks, so multi-hundred-megabyte WAV masters never pass through Netlify functions.
-import { createSign } from "node:crypto";
+import { createSign, createHash } from "node:crypto";
+import { getStore } from "@netlify/blobs";
 import { normalizeMasterContentType, safeMasterFilename } from "./direct-upload-storage.mjs";
 import { MASTER_VERSION_TYPE } from "./master-copy.mjs";
 
@@ -14,6 +15,48 @@ const TOKEN_URL = "https://oauth2.googleapis.com/token";
 const DRIVE_API = "https://www.googleapis.com/drive/v3";
 const DRIVE_UPLOAD_API = "https://www.googleapis.com/upload/drive/v3/files";
 const DRIVE_ID_PATTERN = /^[A-Za-z0-9_-]{10,200}$/;
+
+export function driveSessionStore() {
+  return getStore({ name: "halo-drive-upload-sessions", consistency: "strong" });
+}
+
+export function driveSessionKey(ownerMemberId, songId, uploadId) {
+  if (!/^[a-f0-9]{64}$/.test(String(uploadId || ""))) throw new Error("Invalid Drive upload identity");
+  return createHash("sha256").update(JSON.stringify([ownerMemberId, songId, uploadId])).digest("hex");
+}
+
+export async function saveDriveSession(store, key, changes) {
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const saved = await store.getWithMetadata(key, { type: "json" });
+    if (!saved) throw new Error("Drive upload session was not found");
+    const session = saved.data;
+    // A late checkpoint must never undo a completed registration.
+    if (session.phase === "registered" || session.phase === "review_pending") return session;
+    const next = { ...session, ...changes, confirmedOffset: Math.max(session.confirmedOffset || 0, changes.confirmedOffset || 0) };
+    if (session.phase === "completing" && changes.phase === "transferring") next.phase = "completing";
+    const result = await store.setJSON(key, next, { onlyIfMatch: saved.etag });
+    if (result.modified) return next;
+  }
+  throw new Error("Drive upload checkpoint is busy. Retry shortly.");
+}
+
+// Bound both connection and response-body reads, including uncooperative test transports.
+export async function driveFetch(url, init = {}, fetchImpl = fetch, timeoutMs = 20000) {
+  const controller = new AbortController();
+  let timer;
+  try {
+    return await Promise.race([
+      (async () => {
+        const response = await fetchImpl(url, { ...init, signal: controller.signal });
+        const bytes = await response.arrayBuffer();
+        return new Response(bytes.byteLength ? bytes : null, { status: response.status, headers: response.headers });
+      })(),
+      new Promise((_, reject) => {
+        timer = setTimeout(() => { controller.abort(); reject(new Error("Google Drive request timed out. Retry the saved upload.")); }, timeoutMs);
+      }),
+    ]);
+  } finally { clearTimeout(timer); }
+}
 
 /** Reads service-account + folder settings; returns null when the Drive archive is not configured. */
 export function googleDriveConfig(env = process.env) {
@@ -88,11 +131,11 @@ async function readGoogleError(response) {
 }
 
 export async function getDriveAccessToken(config, { fetchImpl = fetch } = {}) {
-  const response = await fetchImpl(TOKEN_URL, {
+  const response = await driveFetch(TOKEN_URL, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({ grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer", assertion: buildServiceAccountAssertion(config) }).toString(),
-  });
+  }, fetchImpl);
   if (!response.ok) throw new Error(`Google service account authentication failed: ${await readGoogleError(response)}`);
   const data = await response.json();
   if (!data?.access_token) throw new Error("Google service account authentication returned no access token");
@@ -100,7 +143,7 @@ export async function getDriveAccessToken(config, { fetchImpl = fetch } = {}) {
 }
 
 async function generateDriveFileId(accessToken, fetchImpl) {
-  const response = await fetchImpl(`${DRIVE_API}/files/generateIds?count=1&space=drive&type=files`, { headers: { Authorization: bearer(accessToken) } });
+  const response = await driveFetch(`${DRIVE_API}/files/generateIds?count=1&space=drive&type=files`, { headers: { Authorization: bearer(accessToken) } }, fetchImpl);
   if (!response.ok) throw new Error(`Drive file id generation failed: ${await readGoogleError(response)}`);
   const data = await response.json();
   const id = data?.ids?.[0];
@@ -123,11 +166,11 @@ export async function createResumableUploadSession(config, { fileName, contentTy
     "X-Upload-Content-Length": String(byteSize),
   };
   if (origin) headers.Origin = origin;
-  const response = await fetchImpl(`${DRIVE_UPLOAD_API}?uploadType=resumable&supportsAllDrives=true&fields=id,name,size,mimeType`, {
+  const response = await driveFetch(`${DRIVE_UPLOAD_API}?uploadType=resumable&supportsAllDrives=true&fields=id,name,size,mimeType`, {
     method: "POST",
     headers,
     body: JSON.stringify({ id: fileId, name: fileName, mimeType: contentType, parents: [config.folderId], description: String(description || "").slice(0, 500), appProperties }),
-  });
+  }, fetchImpl);
   if (!response.ok) throw new Error(`Drive resumable session could not be created: ${await readGoogleError(response)}`);
   const uploadUrl = response.headers.get("location") || "";
   if (!isGoogleUploadUrl(uploadUrl)) throw new Error("Drive did not return a resumable upload URL");
@@ -147,20 +190,21 @@ export function isGoogleUploadUrl(value) {
 export async function getDriveFile(config, fileId, { fetchImpl = fetch } = {}) {
   if (!isDriveId(fileId)) return null;
   const accessToken = await getDriveAccessToken(config, { fetchImpl });
-  const response = await fetchImpl(`${DRIVE_API}/files/${encodeURIComponent(fileId)}?supportsAllDrives=true&fields=id,name,size,mimeType,parents,trashed,appProperties,webViewLink`, {
+  const response = await driveFetch(`${DRIVE_API}/files/${encodeURIComponent(fileId)}?supportsAllDrives=true&fields=id,name,size,mimeType,parents,trashed,appProperties,webViewLink`, {
     headers: { Authorization: bearer(accessToken) },
-  });
+  }, fetchImpl);
   if (response.status === 404) return null;
   if (!response.ok) throw new Error(`Drive file lookup failed: ${await readGoogleError(response)}`);
   return response.json();
 }
 
 /** Confirms a Drive file is a complete master in the masters folder, owned by this member and song. */
-export function verifyDriveMasterFile(file, { folderId, ownerMemberId, songId, byteSize }) {
+export function verifyDriveMasterFile(file, { folderId, ownerMemberId, songId, byteSize, versionId, uploadId, fileId }) {
   if (!file || file.trashed) return { ok: false, status: 404, message: "The uploaded master was not found in Google Drive" };
   if (!Array.isArray(file.parents) || !file.parents.includes(folderId)) return { ok: false, status: 403, message: "That Drive file is not in the HALO masters folder" };
   const props = file.appProperties || {};
   if (props.haloOwnerMemberId !== ownerMemberId || props.haloSongId !== songId) return { ok: false, status: 403, message: "That Drive master does not belong to this song" };
+  if ((versionId && props.haloVersionId !== String(versionId)) || (uploadId && props.haloUploadId !== uploadId) || (fileId && file.id !== fileId)) return { ok: false, status: 409, message: "That Drive master does not match the saved upload session/version" };
   const storedBytes = Number(file.size);
   if (!Number.isSafeInteger(storedBytes) || storedBytes < 1) return { ok: false, status: 409, message: "The Drive master upload is incomplete. Upload it again." };
   if (byteSize && storedBytes !== Number(byteSize)) return { ok: false, status: 409, message: "The Drive master size does not match the selected file. Upload it again." };

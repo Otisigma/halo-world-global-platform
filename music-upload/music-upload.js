@@ -8,7 +8,11 @@ const RUNTIME_LOAD_TIMEOUT_MS = 6000;
 const RUNTIME_LOAD_ATTEMPTS = 3;
 const RUNTIME_RETRY_DELAY_MS = 400;
 const PERSISTENCE_CHECK_TIMEOUT_MS = 10000;
-const RUNTIME_UNAVAILABLE_MESSAGE = "HALO upload runtime did not load. Refresh this page and try again.";
+const RUNTIME_UNAVAILABLE_MESSAGE = "Upload protocol/runtime mismatch or unavailable runtime. Refresh this page and retry.";
+
+function isUploadRuntimeReady(helper) {
+  return (!window.HaloUploadBuild || window.HaloUploadBuild.protocolVersion === 2) && helper?.protocolVersion === 2 && ["createUploadUi", "uploadChunkedFile", "uploadResumableFile", "uploadResumableAudio", "completeResumableUpload", "getAudioUploadStatus", "fetchJsonWithTimeout", "requireUploadResponse", "validateUploadStatus", "fileUploadId"].every(name => typeof helper[name] === "function");
+}
 
 function wait(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
@@ -23,11 +27,11 @@ function logMusicUploadError(context, error) {
 }
 
 function waitForUploadRuntime(timeoutMs = RUNTIME_LOAD_TIMEOUT_MS) {
-  if (window.HaloUploadProgress) return Promise.resolve(window.HaloUploadProgress);
+  if (isUploadRuntimeReady(window.HaloUploadProgress)) return Promise.resolve(window.HaloUploadProgress);
   return new Promise((resolve, reject) => {
     const start = Date.now();
     const check = () => {
-      if (window.HaloUploadProgress) {
+      if (isUploadRuntimeReady(window.HaloUploadProgress)) {
         resolve(window.HaloUploadProgress);
         return;
       }
@@ -44,9 +48,10 @@ function waitForUploadRuntime(timeoutMs = RUNTIME_LOAD_TIMEOUT_MS) {
 function injectUploadRuntimeScript(src) {
   return new Promise((resolve, reject) => {
     const script = document.createElement("script");
+    const timer = setTimeout(() => reject(new Error(RUNTIME_UNAVAILABLE_MESSAGE)), RUNTIME_LOAD_TIMEOUT_MS);
     script.src = src;
-    script.addEventListener("load", resolve, { once: true });
-    script.addEventListener("error", () => reject(new Error("Upload runtime failed to load.")), { once: true });
+    script.addEventListener("load", () => { clearTimeout(timer); resolve(); }, { once: true });
+    script.addEventListener("error", () => { clearTimeout(timer); reject(new Error(RUNTIME_UNAVAILABLE_MESSAGE)); }, { once: true });
     document.head.append(script);
   });
 }
@@ -56,7 +61,7 @@ function loadUploadHelperScript() {
   uploadHelperLoadPromise = (async () => {
     for (let attempt = 0; attempt < RUNTIME_LOAD_ATTEMPTS; attempt += 1) {
       try {
-        if (window.HaloUploadProgress) return window.HaloUploadProgress;
+        if (isUploadRuntimeReady(window.HaloUploadProgress)) return window.HaloUploadProgress;
         const existingScript = document.querySelector(RUNTIME_SCRIPT_SELECTOR);
         if (existingScript && attempt === 0) {
           return await waitForUploadRuntime();
@@ -77,7 +82,7 @@ function loadUploadHelperScript() {
 }
 
 let uploadHelper = window.HaloUploadProgress;
-if (!uploadHelper) {
+if (!isUploadRuntimeReady(uploadHelper)) {
   try {
     uploadHelper = await loadUploadHelperScript();
   } catch (error) {
@@ -300,7 +305,7 @@ function setRuntimeUnavailable(error, message = RUNTIME_UNAVAILABLE_MESSAGE) {
   setMessage(message);
 }
 
-if (!uploadHelper) {
+if (!isUploadRuntimeReady(uploadHelper)) {
   setRuntimeUnavailable();
 } else {
   const bound = bindUploadUi();
@@ -314,7 +319,7 @@ if (!uploadHelper) {
 }
 
 async function ensureUploadRuntime() {
-  if (uploadHelper?.uploadChunkedFile && audioUploadUi && artworkUploadUi) return uploadHelper;
+  if (isUploadRuntimeReady(uploadHelper) && audioUploadUi && artworkUploadUi) return uploadHelper;
   setRuntimeStatus("pending", "HALO is re-checking the shared upload runtime and progress surface before accepting new packages.");
   try {
     uploadHelper = await loadUploadHelperScript();
@@ -322,7 +327,7 @@ async function ensureUploadRuntime() {
     setRuntimeUnavailable(error);
     throw new Error(RUNTIME_UNAVAILABLE_MESSAGE, { cause: error });
   }
-  if (!uploadHelper || !bindUploadUi()) {
+  if (!isUploadRuntimeReady(uploadHelper) || !bindUploadUi()) {
     const message = "HALO upload progress UI failed to initialize. Refresh this page and try again.";
     setRuntimeUnavailable(undefined, message);
     throw new Error(message);
@@ -516,10 +521,17 @@ function audioDuration(file) {
   return new Promise(resolve => {
     const audio = document.createElement("audio");
     const url = URL.createObjectURL(file);
+    let finished = false;
     const finish = value => {
+      if (finished) return;
+      finished = true;
+      clearTimeout(timer);
       URL.revokeObjectURL(url);
+      audio.removeAttribute("src");
+      audio.load();
       resolve(Number.isFinite(value) ? Math.round(value) : 0);
     };
+    const timer = setTimeout(() => finish(0), 10000);
     audio.preload = "metadata";
     audio.addEventListener("loadedmetadata", () => finish(audio.duration), { once: true });
     audio.addEventListener("error", () => finish(0), { once: true });
@@ -528,19 +540,17 @@ function audioDuration(file) {
 }
 
 async function apiJson(url, payload, method = "POST") {
-  const response = await fetch(url, payload ? {
+  const response = await uploadHelper.fetchJsonWithTimeout(url, payload ? {
     method,
     credentials: "same-origin",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", "X-Upload-Protocol": "2" },
     body: JSON.stringify(payload),
   } : {
     method,
     credentials: "same-origin",
-    headers: { Accept: "application/json" },
+    headers: { Accept: "application/json", "X-Upload-Protocol": "2" },
   });
-  const data = await response.json().catch(() => ({ message: "Response could not be read" }));
-  if (!response.ok) throw new Error(data.message || "Request failed");
-  return data;
+  return uploadHelper.requireUploadResponse(response);
 }
 
 async function confirmPersistedAsset(url, label) {
@@ -641,12 +651,16 @@ async function uploadAudio(songId, versionId, file, position, total) {
     songId,
     versionId,
     contentType,
-    onProgress(percent) {
-      audioUploadUi.progress(percent, `Uploading ${position} of ${total} · ${Math.round(percent)}% · ${file.name}`);
+    onProgress(percent, details) {
+      audioUploadUi.transfer(percent, details);
     },
   });
   audioUploadUi.progress(100, `Finishing ${file.name}…`);
-  const finalized = await apiJson("/api/song-catalog/audio", {
+  const durationSeconds = await audioDuration(file);
+  const finalized = await uploadHelper.completeResumableUpload({
+    getStatus: () => uploadHelper.getAudioUploadStatus({ file, songId, versionId, uploadId, contentType }),
+    onProgress: (percent, details) => audioUploadUi.transfer(percent, details),
+    complete: () => apiJson("/api/song-catalog/audio", {
     action: "finalize_upload",
     songId,
     versionId,
@@ -655,7 +669,8 @@ async function uploadAudio(songId, versionId, file, position, total) {
     byteSize: file.size,
     filename: file.name,
     contentType,
-    durationSeconds: await audioDuration(file),
+    durationSeconds,
+    }),
   });
   if (!finalized.persisted || !finalized.lockedIn || !finalized.audioUrl) throw new Error(`HALO could not confirm persistence for ${file.name}. Please retry.`);
   await confirmPersistedAsset(finalized.audioUrl, "audio");
@@ -671,13 +686,18 @@ async function loadCatalogSong(songId) {
 async function processPackage({ artistName, title, albumTitle, genre, isrc, upc, rightsStatus, saleStatus, explicitLyrics, artworkFile, artworkSourceSongId = "", file, position, total }) {
   setControllerPhase("package", `Creating the master package for ${title} and validating metadata, rights, and route targets.`);
   const notes = buildNotes(title, file);
-  const resumeKey = file ? `halo-intake:${await uploadHelper.fileUploadId(file, [artistName, title, albumTitle, genre, isrc, upc, rightsStatus, saleStatus, explicitLyrics, notes], AUDIO_CHUNK_BYTES)}` : "";
+  const resumeKey = file ? `halo-intake:${await uploadHelper.fileUploadId(file, ["intake-audio"], AUDIO_CHUNK_BYTES)}` : "";
   let created = pendingPackageUploads.get(resumeKey);
   if (resumeKey && !created) {
-    try { created = JSON.parse(sessionStorage.getItem(resumeKey) || "null"); } catch {}
+    try { created = JSON.parse(localStorage.getItem(resumeKey) || "null"); } catch {}
+    if (!created) { try { created = JSON.parse(sessionStorage.getItem(resumeKey) || "null"); } catch {} }
   }
   // Revalidate the cached target through the owner-only catalog before reusing it.
-  if (created && !(await loadCatalogSong(created.songId))) created = null;
+  if (created) {
+    const ownedSong = await loadCatalogSong(created.songId);
+    const versionId = created.masterVersionId || created.versionIds?.sale_master || created.versionIds?.radio_edit;
+    if (!ownedSong || !versionId || !ownedSong.versions?.some(version => version.id === versionId)) created = null;
+  }
   const resumed = Boolean(created);
   created ||= await apiJson("/api/unified-upload", {
     action: "create_project",
@@ -694,8 +714,10 @@ async function processPackage({ artistName, title, albumTitle, genre, isrc, upc,
     surface: "music_upload",
   });
   if (resumeKey) {
-    pendingPackageUploads.set(resumeKey, created);
-    try { sessionStorage.setItem(resumeKey, JSON.stringify(created)); } catch {}
+    const target = { songId: created.songId, masterVersionId: created.masterVersionId || created.versionIds?.sale_master || created.versionIds?.radio_edit };
+    pendingPackageUploads.set(resumeKey, target);
+    try { localStorage.setItem(resumeKey, JSON.stringify(target)); }
+    catch { try { sessionStorage.setItem(resumeKey, JSON.stringify(target)); } catch {} }
   }
   setMessage(`Received ${title}. Validating the handoff package…`);
   if (!resumed) await apiJson("/api/unified-upload", { action: "advance_pipeline", songId: created.songId, toStage: "processing" });
@@ -743,10 +765,6 @@ async function processPackage({ artistName, title, albumTitle, genre, isrc, upc,
   const pipeline = await apiJson("/api/unified-upload", { action: "advance_pipeline", songId: created.songId, toStage: finalStage });
   const song = await loadCatalogSong(created.songId).catch(() => null);
   const issueCount = Array.isArray(song?.metadataIssues) ? song.metadataIssues.filter(issue => issue.level === "required").length : 0;
-  if (resumeKey) {
-    pendingPackageUploads.delete(resumeKey);
-    try { sessionStorage.removeItem(resumeKey); } catch {}
-  }
   return {
     songId: created.songId,
     title,

@@ -81,6 +81,9 @@ await runCheck("Upload deployment revision", async () => {
     runInNewContext(await readFile(resolve(fixture, "upload-build.js"), "utf8"), { window });
     assert.equal(window.HaloUploadBuild.revision, revision);
     assert.equal(window.HaloUploadBuild.protocolVersion, 2);
+    assert.equal(await readFile(resolve(fixture, "netlify/lib/upload-build.mjs"), "utf8"),
+      `export const uploadBuildRevision = "${revision}";\n`,
+      "Functions must bundle the same revision without relying on runtime build environment variables.");
     const invalid = spawnSync(process.execPath, ["--input-type=module", "-e", source], {
       cwd: fixture, env: { ...process.env, COMMIT_REF: "" }, encoding: "utf8",
     });

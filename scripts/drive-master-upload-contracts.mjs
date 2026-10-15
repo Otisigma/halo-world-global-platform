@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { generateKeyPairSync, createVerify } from "node:crypto";
+import { generateKeyPairSync, createVerify, webcrypto } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import vm from "node:vm";
@@ -13,6 +13,9 @@ import {
   isGoogleUploadUrl,
   validateDriveMasterUpload,
   verifyDriveMasterFile,
+  driveFetch,
+  driveSessionKey,
+  saveDriveSession,
 } from "../netlify/lib/google-drive.mjs";
 
 const root = resolve(import.meta.dirname, "..");
@@ -99,7 +102,7 @@ assert.equal(cleanGoogleDriveUrl("javascript:alert(1)"), "", "script URLs are re
 assert.equal(cleanGoogleDriveUrl("not a url"), "");
 
 // ── Frontend: chunked uploader against a simulated Drive resumable endpoint ───
-function runUploader(script) {
+function runUploader(script, extra = {}) {
   const puts = [];
   class FakeXhr {
     constructor() { this.headers = {}; this.upload = {}; }
@@ -113,6 +116,8 @@ function runUploader(script) {
       const reply = script.shift();
       assert.ok(reply, `unexpected PUT ${request.range}`);
       queueMicrotask(() => {
+        if (reply.hang) return;
+        if (reply.timeout) return this.ontimeout();
         if (reply.status === 0) return this.onerror();
         if (body) this.upload.onprogress?.({ lengthComputable: true, loaded: body.size });
         this.status = reply.status;
@@ -122,11 +127,12 @@ function runUploader(script) {
       });
     }
   }
-  const context = { XMLHttpRequest: FakeXhr, setTimeout, clearTimeout, JSON, Math, Number, String, Promise, Error };
+  const context = { XMLHttpRequest: FakeXhr, setTimeout, clearTimeout, JSON, Math, Number, String, Promise, Error, AbortController, TextEncoder, Uint8Array };
   context.fetch = async (url, init) => {
     context.sessionRequest = { url, body: JSON.parse(init.body) };
     return new Response(JSON.stringify({ uploadUrl: sessionUrl, fileId: "1GeneratedDriveFileId", songId: "song-1", versionId: "v-1", fileName: "master.wav" }), { status: 200 });
   };
+  Object.assign(context, extra);
   context.globalThis = context;
   vm.runInNewContext(uploaderSource, context);
   return { context, puts };
@@ -176,8 +182,115 @@ const bigFile = new File([new Uint8Array(12 * MB)], "master.wav", { type: "audio
   await assert.rejects(context.HaloMasterUploader.upload(new File([new Uint8Array(10)], "m.wav"), { songId: "song-1", maxRetries: 2 }), /stopped accepting/, "a stalled session fails instead of looping forever");
 }
 
+// Partial acknowledgements align the next non-final end, not the start offset.
+{
+  const file = new File([new Uint8Array(6 * MB)], "partial.wav");
+  const checkpoint = 1_000_001;
+  const nextEnd = Math.floor((checkpoint + 5 * MB) / (256 * 1024)) * 256 * 1024;
+  const { context, puts } = runUploader([
+    { status: 308, headers: { Range: `bytes=0-${checkpoint - 1}` } },
+    { status: 308, headers: { Range: `bytes=0-${nextEnd - 1}` } },
+    { status: 200 },
+  ]);
+  const progress = [];
+  await context.HaloMasterUploader.upload(file, { onProgress: (ratio, detail) => progress.push({ ratio, ...detail }) });
+  assert.equal(puts[1].range, `bytes ${checkpoint}-${nextEnd - 1}/${file.size}`);
+  assert.equal(puts[1].size, nextEnd - checkpoint);
+  assert.ok(progress.some(detail => detail.sent > detail.confirmed && detail.ratio === detail.confirmed / file.size), "sent progress never masquerades as confirmed progress");
+}
+{
+  const { context, puts } = runUploader([
+    { status: 308, headers: { Range: `bytes=0-${5 * MB - 1}` } },
+    { status: 308 }, { status: 308 }, { status: 308 },
+  ]);
+  await assert.rejects(context.HaloMasterUploader.upload(bigFile, { retryDelayMs: 0, maxRetries: 2 }), /CORS exposes Range/);
+  assert.equal(puts.filter(put => put.range.startsWith("bytes 0-")).length, 1, "missing exposed Range never rewinds confirmed bytes");
+  assert.ok(puts.slice(2).every(put => put.range.startsWith("bytes */")), "missing Range triggers bounded status recovery, not more data");
+}
+{
+  const { context } = runUploader([]);
+  const parse = context.HaloMasterUploader.nextOffsetFromRange;
+  for (const range of ["bytes=1-10", "bytes=0--1", "bytes=0-9007199254740991", "bytes=0-100 trailing", "bytes=0-100, bytes=0-200"]) assert.throws(() => parse(range, 1000), /invalid|impossible/);
+  assert.throws(() => parse("bytes=0-1000", 1000), /impossible/);
+  assert.throws(() => parse("bytes=0-9", 1000, 20), /impossible/);
+  assert.throws(() => parse("bytes=0-99", 1000, 0, 50), /impossible/);
+  assert.throws(() => parse(null, 1000, 20), /CORS/);
+  assert.equal(parse("bytes=0-99", 1000, 20, 100), 100);
+}
+{
+  const { context, puts } = runUploader([
+    { hang: true }, { timeout: true }, { status: 503, headers: { "Retry-After": "0" } },
+    { status: 308, headers: { Range: `bytes=0-${5 * MB - 1}` } }, { status: 200 },
+  ]);
+  const states = [];
+  await context.HaloMasterUploader.upload(new File([new Uint8Array(6 * MB)], "timeout.wav"), { requestTimeoutMs: 5, statusTimeoutMs: 5, retryDelayMs: 0, onState: state => states.push(state) });
+  assert.equal(puts.length, 5);
+  assert.ok(puts.slice(1, 4).every(put => put.range === `bytes */${6 * MB}`), "timeouts keep querying status until a valid checkpoint is recovered");
+  assert.ok(states.includes("reconnecting"));
+}
+{
+  const { context } = runUploader([], { fetch: () => new Promise(() => {}) });
+  await assert.rejects(context.HaloMasterUploader.requestSession(bigFile, { requestTimeoutMs: 5, maxRetries: 0 }), /timed out/);
+  const metadata = runUploader([], { fetch: async () => ({ ok: true, text: () => new Promise(() => {}) }) });
+  await assert.rejects(metadata.context.HaloMasterUploader.requestSession(bigFile, { requestTimeoutMs: 5, maxRetries: 0 }), /timed out/, "response body reads are bounded too");
+}
+{
+  const delays = [];
+  let calls = 0;
+  const { context } = runUploader([], {
+    setTimeout: (callback, ms) => {
+      if (ms < 30000) { delays.push(ms); return setTimeout(callback, 0); }
+      return setTimeout(callback, ms);
+    },
+    fetch: async () => ++calls === 1 ? Response.json({ message: "Busy" }, { status: 429, headers: { "Retry-After": "2" } }) : Response.json({ uploadUrl: sessionUrl }),
+  });
+  await context.HaloMasterUploader.requestSession(bigFile, { retryDelayMs: 0 });
+  assert.equal(calls, 2);
+  assert.equal(delays[0], 2000, "Retry-After is a minimum wait even with zero base backoff");
+}
+
+// Reload recovers identity, target, file ID and checkpoint from the server, not a bearer URL in browser storage.
+{
+  const storage = new Map();
+  const requests = [];
+  let saved;
+  const extra = {
+    crypto: webcrypto,
+    localStorage: { getItem: key => storage.get(key), setItem: (key, value) => storage.set(key, value) },
+    fetch: async (_url, init) => {
+      const payload = JSON.parse(init.body);
+      requests.push(payload);
+      saved ||= { uploadUrl: sessionUrl, fileId: "1GeneratedDriveFileId", songId: "song-1", versionId: "v-1", fileSize: bigFile.size, fileName: bigFile.name, protocolVersion: 2, confirmedOffset: 5 * MB, phase: "transferring", resumed: true };
+      if (payload.action === "checkpoint") {
+        saved.confirmedOffset = payload.confirmedOffset;
+        if (saved.confirmedOffset === bigFile.size) saved.phase = "completing";
+      }
+      return Response.json(saved);
+    },
+  };
+  const first = runUploader([{ status: 0 }], extra);
+  await assert.rejects(first.context.HaloMasterUploader.upload(bigFile, { songId: "song-1", maxRetries: 0 }), /kept failing/);
+  const reloaded = runUploader([
+    { status: 308, headers: { Range: `bytes=0-${5 * MB - 1}` } },
+    { status: 308, headers: { Range: `bytes=0-${10 * MB - 1}` } },
+    { status: 200 },
+  ], extra);
+  const result = await reloaded.context.HaloMasterUploader.upload(bigFile, { songId: "song-1", retryDelayMs: 0 });
+  assert.equal(reloaded.puts[0].range, `bytes */${bigFile.size}`);
+  assert.equal(reloaded.puts[1].range, `bytes ${5 * MB}-${10 * MB - 1}/${bigFile.size}`);
+  assert.equal(result.fileId, "1GeneratedDriveFileId");
+  assert.equal(result.phase, "completing");
+  assert.equal(requests[0].uploadId, requests[1].uploadId, "identity is stable across a fresh browser context");
+  assert.equal(requests[1].versionId, "v-1");
+  assert.ok(/^[a-f0-9]{64}$/.test(result.uploadId));
+  assert.ok(!JSON.stringify([...storage]).includes("googleapis") && !JSON.stringify([...storage]).includes("uploadUrl"), "localStorage contains non-secret identity/target only");
+  const completed = runUploader([], { ...extra, fetch: async () => Response.json({ ...saved, phase: "registered", registeredResult: { persisted: true } }) });
+  assert.equal((await completed.context.HaloMasterUploader.upload(bigFile, { songId: "song-1" })).registeredResult.persisted, true);
+  assert.equal(completed.puts.length, 0, "a registered reload skips transfer entirely");
+}
+
 // ── Frontend: upload form wiring against a minimal DOM stub ───────────────────
-async function runUploadUi({ uploader, file, songId = "song-1", catalogStatus = 201 }) {
+async function runUploadUi({ uploader, file, songId = "song-1", catalogStatus = 201, catalogFetch, repeat = false }) {
   const element = extra => ({ dataset: {}, textContent: "", style: {}, setAttribute() {}, ...extra });
   const listeners = {};
   const input = element({ files: file ? [file] : [], value: "x" });
@@ -200,13 +313,14 @@ async function runUploadUi({ uploader, file, songId = "song-1", catalogStatus = 
   const context = {
     document: { readyState: "complete", getElementById: id => nodes[id] || null, dispatchEvent: event => events.push(event) },
     CustomEvent: class { constructor(type, init) { this.type = type; this.detail = init?.detail; } },
-    fetch: async (url, init) => { posts.push({ url, body: JSON.parse(init.body) }); return new Response(JSON.stringify({ message: catalogStatus < 300 ? "Saved." : "Nope" }), { status: catalogStatus }); },
-    JSON, Math, String, Promise, Error,
+    fetch: async (url, init) => { posts.push({ url, body: JSON.parse(init.body) }); return catalogFetch ? catalogFetch() : new Response(JSON.stringify({ message: catalogStatus < 300 ? "Saved." : "Nope" }), { status: catalogStatus }); },
+    JSON, Math, String, Promise, Error, setTimeout, clearTimeout, AbortController,
   };
   context.window = context;
   if (uploader) context.HaloMasterUploader = uploader;
   vm.runInNewContext(uiSource, context);
   await listeners.submit({ preventDefault() {}, currentTarget: form });
+  if (repeat) await listeners.submit({ preventDefault() {}, currentTarget: form });
   return { nodes, form, submit, posts, events };
 }
 {
@@ -232,6 +346,114 @@ async function runUploadUi({ uploader, file, songId = "song-1", catalogStatus = 
   assert.equal(failed.nodes.masterStatusLabel.textContent, "Nope");
   assert.equal(failed.form.dataset.uploadState, "error");
 }
+{
+  let uploads = 0;
+  let acknowledgements = 0;
+  const recovered = await runUploadUi({
+    file: bigFile, repeat: true,
+    uploader: { upload: async () => { uploads++; return { fileId: "1GeneratedDriveFileId", fileName: "m.wav", fileSize: 12 * MB, songId: "song-1" }; } },
+    catalogFetch: async () => {
+      if (++acknowledgements === 1) throw new Error("Registration response lost");
+      return Response.json({ message: "Saved." });
+    },
+  });
+  assert.equal(uploads, 1, "retry after lost registration acknowledgement never reuploads");
+  assert.equal(recovered.posts[0].body.masterFileId, recovered.posts[1].body.masterFileId);
+  assert.equal(recovered.form.dataset.uploadState, "success");
+}
+
+// Durable server session and idempotent registration across function invocations.
+{
+  const records = new Map();
+  let etag = 0;
+  const store = {
+    get: async key => records.has(key) ? structuredClone(records.get(key).data) : null,
+    getWithMetadata: async key => records.has(key) ? structuredClone(records.get(key)) : null,
+    setJSON: async (key, data, options = {}) => {
+      const old = records.get(key);
+      if ((options.onlyIfNew && old) || (options.onlyIfMatch && options.onlyIfMatch !== old?.etag)) return { modified: false };
+      records.set(key, { data: structuredClone(data), etag: String(++etag) });
+      return { modified: true };
+    },
+  };
+  const songId = "11111111-1111-4111-8111-111111111111";
+  const uploadId = "a".repeat(64);
+  let master = { id: "version-1", title: "Master", artist_name: "Artist", drive_file_id: "1PreviousDriveFileId" };
+  let file = null;
+  let opens = 0;
+  let updates = 0;
+  let loseSqlAck = true;
+  const dependencies = {
+    Response, URL, console, process: { env: { COMMIT_REF: "revision-1" } },
+    getUser: async () => ({ id: "user-1" }), verifyRequestOrigin: () => {},
+    getDatabase: async () => ({ sql: async (_strings, ...values) => {
+      updates++;
+      master.drive_file_id = values[0];
+      if (loseSqlAck) { loseSqlAck = false; throw new Error("SQL registration acknowledgement lost"); }
+      return [];
+    } }),
+    ensureMembership: async () => ({ member_id: "member-1" }),
+    cleanText: value => String(value || ""), cleanSongId: value => value === songId ? value : "",
+    googleDriveConfig: () => config, validateDriveMasterUpload, DRIVE_MASTER_MAX_BYTES, DRIVE_UPLOAD_CHUNK_BYTES,
+    findOwnedSaleMaster: async () => ({ ...master }),
+    createResumableUploadSession: async () => { opens++; return { uploadUrl: sessionUrl, fileId: "1GeneratedDriveFileId" }; },
+    driveSessionStore: () => store, driveSessionKey, saveDriveSession, getDriveFile: async () => file, verifyDriveMasterFile,
+    isDriveId: value => /^[A-Za-z0-9_-]{10,200}$/.test(value),
+  };
+  function handler(source, name) {
+    const context = { ...dependencies };
+    const stripped = source.replace(/^import[\s\S]*?;\n/gm, "").replace("export default async function", "async function").replace(/^export const config.*$/m, "");
+    vm.runInNewContext(stripped + `\nglobalThis.handler = ${name};`, context);
+    return context.handler;
+  }
+  const open = () => handler(sessionApi, "uploadHandler");
+  const register = () => handler(catalogApi, "catalogTracksHandler");
+  const payload = { songId, uploadId, protocolVersion: 2, fileName: "master.wav", fileType: "audio/wav", fileSize: 100 };
+  const request = body => new Request("https://halo.example/api/upload/drive-session", { method: "POST", body: JSON.stringify(body), headers: { Origin: "https://halo.example", "Content-Type": "application/json" } });
+  const first = await (await open()(request(payload))).json();
+  const second = await (await open()(request(payload))).json();
+  assert.equal(opens, 1, "fresh function/reload returns the same durable session");
+  assert.equal(first.fileId, second.fileId);
+  assert.equal(second.protocolVersion, 2);
+  assert.equal(second.revision, "revision-1");
+  await open()(request({ ...payload, action: "checkpoint", confirmedOffset: 40 }));
+  const key = driveSessionKey("member-1", songId, uploadId);
+  assert.notEqual(key, driveSessionKey("member-2", songId, uploadId), "session identities are owner scoped");
+  assert.equal((await store.get(key)).confirmedOffset, 40);
+  assert.equal((await open()(request({ ...payload, action: "checkpoint", confirmedOffset: 39 }))).status, 400);
+  assert.equal((await open()(request({ ...payload, action: "checkpoint", confirmedOffset: 101 }))).status, 400);
+  assert.equal((await open()(request({ ...payload, versionId: "other" }))).status, 409);
+  file = { ...goodFile, size: "40", appProperties: { haloOwnerMemberId: "member-1", haloSongId: songId, haloVersionId: "version-1", haloUploadId: uploadId } };
+  assert.equal((await (await open()(request(payload))).json()).phase, "transferring", "partial metadata never masquerades as completion or prevents resuming");
+  file.size = "100";
+  const completion = await (await open()(request(payload))).json();
+  assert.equal(completion.phase, "completing");
+  const reference = { songId, masterFileId: first.fileId, uploadId, versionId: "version-1", protocolVersion: 2, fileSize: 100 };
+  const interruptedRegistration = await register()(request(reference));
+  assert.equal(interruptedRegistration.status, 502);
+  assert.equal((await store.get(key)).phase, "completing");
+  const lostAck = await (await register()(request(reference))).json();
+  const retried = await (await register()(request(reference))).json();
+  assert.deepEqual(retried, lostAck, "lost registration response returns the durable registered result");
+  assert.equal(retried.replacedFileId, "1PreviousDriveFileId", "a lost SQL acknowledgement preserves the exact registration result");
+  assert.equal(updates, 1);
+  assert.equal((await store.get(key)).phase, "registered");
+  await saveDriveSession(store, key, { phase: "transferring", confirmedOffset: 1 });
+  assert.equal((await store.get(key)).phase, "registered", "late checkpoints cannot undo registration");
+  assert.equal((await store.get(key)).confirmedOffset, 100);
+  // Another session completed against a target that changed while transferring.
+  const changedId = "b".repeat(64);
+  await store.setJSON(driveSessionKey("member-1", songId, changedId), { ...completion, uploadId: changedId });
+  file.appProperties.haloUploadId = changedId;
+  master.id = "version-2";
+  const review = await register()(request({ ...reference, uploadId: changedId }));
+  assert.equal(review.status, 409);
+  assert.equal((await review.json()).phase, "review_pending");
+  assert.equal(updates, 1, "a changed target never silently receives the uploaded file");
+  assert.equal(verifyDriveMasterFile(file, { ...scope, songId, versionId: "version-2", uploadId: changedId }).status, 409);
+}
+await assert.rejects(driveFetch("https://google.example", {}, () => new Promise(() => {}), 5), /timed out/);
+await assert.rejects(driveFetch("https://google.example", {}, async () => ({ arrayBuffer: () => new Promise(() => {}) }), 5), /timed out/, "server metadata body reads are bounded");
 
 // ── Wiring contracts ──────────────────────────────────────────────────────────
 const checks = [

@@ -17,7 +17,7 @@ import {
 import { MASTER_VERSION_TYPE } from "../lib/master-copy.mjs";
 import { runDreamweaverReview } from "./song-catalog.js";
 import { completeMasterUpload, masterPartUrl, masterUploadStatus } from "../lib/multipart-master-upload.mjs";
-import { resumableUploadId } from "../lib/resumable-upload.mjs";
+import { ensureUploadSession, resumableUploadId, uploadProtocol, requireUploadProtocol, saveUploadPhase, uploadSessionKey, uploadStatusFields, uploadWasReplaced } from "../lib/resumable-upload.mjs";
 
 // Large master copies bypass Netlify function payload limits: this endpoint only exchanges small
 // JSON metadata. `presign` issues a short-lived PUT URL the browser uploads to directly, and
@@ -25,8 +25,8 @@ import { resumableUploadId } from "../lib/resumable-upload.mjs";
 const audioStore = getStore({ name: "halo-song-catalog-audio", consistency: "strong" });
 const uploadSessions = getStore({ name: "halo-master-upload-sessions", consistency: "strong" });
 
-function json(body: unknown, status = 200) {
-  return Response.json(body, { status, headers: { "Cache-Control": "no-store" } });
+function json(body: unknown, status = 200, headers: Record<string, string> = {}) {
+  return Response.json({ ...body as object, ...uploadProtocol() }, { status, headers: { "Cache-Control": "no-store", ...headers } });
 }
 
 function cleanId(value: unknown) {
@@ -70,7 +70,7 @@ async function presignMasterUpload(payload: Record<string, unknown>, db: Awaited
   });
 }
 
-async function registerMasterUpload(payload: Record<string, unknown>, db: Awaited<ReturnType<typeof getDatabase>>, ownerMemberId: string) {
+async function registerMasterUpload(payload: Record<string, unknown>, db: Awaited<ReturnType<typeof getDatabase>>, ownerMemberId: string, resumablePrefix = "") {
   const storage = directUploadConfig();
   if (!storage) return json({ directUpload: false, message: "Direct master storage is not configured" }, 503);
   const songId = cleanId(payload.songId);
@@ -82,6 +82,18 @@ async function registerMasterUpload(payload: Record<string, unknown>, db: Awaite
   if (!upload.ok) return json({ message: upload.message, maxBytes: MASTER_UPLOAD_MAX_BYTES }, upload.status);
   const version = await ownedMasterVersion(db, ownerMemberId, songId, versionId);
   if (!version) return json({ message: "That sale master version was not found" }, 404);
+  const prefix = resumablePrefix || `${ownerMemberId}/${versionId}/direct/${fileKey}/`;
+  let session = await ensureUploadSession(uploadSessions, prefix, {
+    byteSize: upload.byteSize, filename: upload.filename, contentType: upload.contentType,
+  }, async () => ({ key: fileKey }));
+  const alreadyRegistered = version.audio_storage_key === fileKey;
+  if (uploadWasReplaced(session, version, alreadyRegistered)) {
+    return json({ message: "This upload was replaced by another file.", resetReason: "upload_replaced" }, 409);
+  }
+  if (["registered", "review_pending"].includes(session.phase)) {
+    if (!alreadyRegistered) return json({ message: "This upload was replaced by another file.", resetReason: "upload_replaced" }, 409);
+    return json(session.result);
+  }
   const storedBytes = await headStoredObject(storage, fileKey);
   if (!storedBytes) return json({ message: "The master file was not found in storage. Upload it again." }, 409);
   if (storedBytes !== upload.byteSize || storedBytes > MASTER_UPLOAD_MAX_BYTES) {
@@ -91,30 +103,43 @@ async function registerMasterUpload(payload: Record<string, unknown>, db: Awaite
 
   const durationSeconds = Math.max(0, Math.min(86_400, Math.round(Number(payload.durationSeconds) || 0)));
   const audioUrl = `/api/song-catalog/audio?versionId=${encodeURIComponent(versionId)}`;
-  await db.sql`
+  session = await saveUploadPhase(uploadSessions, prefix, session, "completing", null, {
+    catalogBefore: session.catalogBefore || { blobPrefix: String(version.audio_blob_prefix || ""), storageKey: String(version.audio_storage_key || "") },
+  });
+  if (!alreadyRegistered) {
+    const updated = await db.sql`
     UPDATE halo_song_versions
     SET audio_url = ${audioUrl}, audio_storage_key = ${fileKey}, audio_blob_prefix = '', audio_chunk_count = 0,
       audio_content_type = ${upload.contentType}, audio_byte_size = ${storedBytes}, audio_filename = ${upload.filename},
       duration_seconds = CASE WHEN ${durationSeconds} > 0 THEN ${durationSeconds} ELSE duration_seconds END,
       updated_at = NOW()
     WHERE id = ${versionId} AND song_id = ${songId}
+      AND COALESCE(audio_blob_prefix, '') = ${String(version.audio_blob_prefix || "")}
+      AND COALESCE(audio_storage_key, '') = ${String(version.audio_storage_key || "")}
+    RETURNING id
   `;
-  await runDreamweaverReview(songId, ownerMemberId);
+    if (!updated.length) return json({ message: "Another upload replaced this version. Check status before retrying." }, 409);
+  }
+  let result = {
+    message: "Master copy uploaded directly to storage and registered as the canonical sale master.",
+    songId, versionId, audioUrl, storage: "direct", persisted: true, lockedIn: true,
+    confirmedAt: new Date().toISOString(), phase: "review_pending", ...uploadProtocol(),
+  };
+  session = await saveUploadPhase(uploadSessions, prefix, session, "review_pending", result);
+  try {
+    await runDreamweaverReview(songId, ownerMemberId);
+    const reviewed = { ...result, phase: "registered" };
+    await saveUploadPhase(uploadSessions, prefix, session, "registered", reviewed);
+    result = reviewed;
+  } catch {
+    // A review outage must not turn a persisted master into a failed transfer.
+  }
   if (version.audio_storage_key && version.audio_storage_key !== fileKey) await deleteStoredObject(storage, String(version.audio_storage_key)).catch(() => undefined);
   if (version.audio_blob_prefix) {
     const stored = await audioStore.list({ prefix: String(version.audio_blob_prefix) }).catch(() => ({ blobs: [] }));
     await Promise.all(stored.blobs.map(blob => audioStore.delete(blob.key))).catch(() => undefined);
   }
-  return json({
-    message: "Master copy uploaded directly to storage and registered as the canonical sale master.",
-    songId,
-    versionId,
-    audioUrl,
-    storage: "direct",
-    persisted: true,
-    lockedIn: true,
-    confirmedAt: new Date().toISOString(),
-  });
+  return json(result);
 }
 
 async function resumableMasterUpload(payload: Record<string, unknown>, db: Awaited<ReturnType<typeof getDatabase>>, ownerMemberId: string) {
@@ -126,23 +151,41 @@ async function resumableMasterUpload(payload: Record<string, unknown>, db: Await
   if (!songId || !versionId || !uploadId) return json({ message: "The resumable master details are invalid" }, 400);
   const upload = validateMasterUpload({ filename: payload.fileName, contentType: payload.fileType, fileSize: payload.fileSize });
   if (!upload.ok) return json({ message: upload.message }, upload.status);
-  if (!(await ownedMasterVersion(db, ownerMemberId, songId, versionId))) return json({ message: "That sale master version was not found" }, 404);
+  const version = await ownedMasterVersion(db, ownerMemberId, songId, versionId);
+  if (!version) return json({ message: "That sale master version was not found" }, 404);
   const prefix = `${ownerMemberId}/${versionId}/${uploadId}/`;
   const options = { store: uploadSessions, prefix, storage };
+  let session = await uploadSessions.get(uploadSessionKey(prefix), { type: "json" });
+  if (session && (session.byteSize !== upload.byteSize || session.filename !== upload.filename || session.contentType !== upload.contentType)) {
+    return json({ message: "The master upload metadata does not match this session." }, 409);
+  }
+  if (session && uploadWasReplaced(session, version, version.audio_storage_key === session.key)) {
+    return json({ message: "This upload was replaced by another file.", resetReason: "upload_replaced" }, 409);
+  }
+  if (session && version.audio_storage_key === session.key) {
+    if (!session.result) {
+      const result = { songId, versionId, audioUrl: `/api/song-catalog/audio?versionId=${encodeURIComponent(versionId)}`,
+        storage: "direct", persisted: true, lockedIn: true, phase: "review_pending", confirmedAt: new Date().toISOString(), ...uploadProtocol() };
+      session = await saveUploadPhase(uploadSessions, prefix, session, "review_pending", result);
+    }
+    if (payload.action === "status") return json({ directUpload: true, ...uploadStatusFields(session, session.byteSize) });
+    if (payload.action === "complete") return json(session.result);
+  }
   if (payload.action === "status") {
     const status = await masterUploadStatus({ ...options, scope: { ownerMemberId, songId, versionId }, uploadId, upload });
-    return json({ directUpload: true, uploadedBytes: status.uploadedBytes, chunkSize: status.session.chunkSize });
+    return json({ directUpload: true, ...uploadStatusFields(status.session, status.uploadedBytes) });
   }
   if (payload.action === "part") {
     return json(await masterPartUrl({ ...options, start: typeof payload.startByte === "number" ? payload.startByte : NaN }));
   }
   const fileKey = await completeMasterUpload({ ...options, upload });
-  return await registerMasterUpload({ ...payload, fileKey, originalName: upload.filename }, db, ownerMemberId);
+  return await registerMasterUpload({ ...payload, fileKey, originalName: upload.filename }, db, ownerMemberId, prefix);
 }
 
 export default async function songCatalogMasterUploadHandler(request: Request) {
-  if (request.method !== "POST") return Response.json({ message: "Method not allowed" }, { status: 405, headers: { Allow: "POST" } });
+  if (request.method !== "POST") return json({ message: "Method not allowed" }, 405, { Allow: "POST" });
   try {
+    requireUploadProtocol(request);
     const [db, user] = await Promise.all([getDatabase(), getUser()]);
     if (!user?.id) return json({ message: "Join or sign in to upload a master copy" }, 401);
     try { verifyRequestOrigin(request); } catch { return json({ message: "Cross-origin master uploads are not accepted" }, 403); }
@@ -150,11 +193,13 @@ export default async function songCatalogMasterUploadHandler(request: Request) {
     if (!payload) return json({ message: "Choose a supported master upload action" }, 400);
     const membership = await ensureMembership(db, user);
     if (["status", "part", "complete"].includes(String(payload.action))) return await resumableMasterUpload(payload, db, membership.member_id);
-    if (payload.action === "presign") return presignMasterUpload(payload, db, membership.member_id);
-    if (payload.action === "register") return registerMasterUpload(payload, db, membership.member_id);
+    if (payload.action === "presign") return await presignMasterUpload(payload, db, membership.member_id);
+    if (payload.action === "register") return await registerMasterUpload(payload, db, membership.member_id);
     return json({ message: "Choose a supported master upload action" }, 400);
   } catch (error) {
-    if (error instanceof Error && "status" in error) return json({ message: error.message }, Number(error.status));
+    if (error instanceof Error && "status" in error) return json({ message: error.message,
+      storageCode: "storageCode" in error ? error.storageCode : undefined,
+      storageStatus: "storageStatus" in error ? error.storageStatus : undefined }, Number(error.status));
     console.error("Master upload failed", error instanceof Error ? error.message : "unknown error");
     return json({ message: "Master uploads are temporarily unavailable" }, 500);
   }

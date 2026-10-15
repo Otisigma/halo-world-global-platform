@@ -195,7 +195,7 @@ try {
   assert.equal(pkg.scripts["release-guard"], "node release-guard-agent.js");
   assert.equal(pkg.scripts.prebuild, "npm run release-guard -- --allow-missing-catalog");
   assert.equal(pkg.scripts.build, "node scripts/music-chart-contracts.mjs");
-  assert.match(await readFile(resolve(root, "netlify.toml"), "utf8"), /command = "npm run build"/);
+  assert.match(await readFile(resolve(root, "netlify.toml"), "utf8"), /command = '''npm run build && node --input-type=module -e /);
   console.log("Release guard contracts passed.");
 } finally {
   await rm(fixture, { recursive: true, force: true });

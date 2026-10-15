@@ -4,6 +4,11 @@ const state={songs:[],selectedId:"",filter:"",authenticated:false,producer:{jobs
 const $=selector=>document.querySelector(selector);
 const elements={shell:$("#catalogShell"),songList:$("#songList"),empty:$("#emptyState"),workspace:$("#songWorkspace"),search:$("#searchInput"),status:$("#statusMessage"),songDialog:$("#songDialog"),versionDialog:$("#versionDialog")};
 const uploadHelper=window.HaloUploadProgress;
+if((window.HaloUploadBuild&&window.HaloUploadBuild.protocolVersion!==2)||uploadHelper?.protocolVersion!==2||!["createUploadUi","uploadResumableFile","uploadResumableAudio","completeResumableUpload","getAudioUploadStatus","fetchJsonWithTimeout","validateUploadStatus","requireUploadResponse"].every(name=>typeof uploadHelper[name]==="function")){
+  if(elements.status){elements.status.textContent="Upload protocol/runtime mismatch. Refresh this page before uploading.";elements.status.classList.add("is-visible");}
+  document.querySelectorAll('button[id*="upload"],button[id*="Upload"]').forEach(button=>{button.disabled=true;});
+  throw new Error("Upload protocol/runtime mismatch. Refresh this page before uploading.");
+}
 const embeddedParentOrigin=(()=>{if(window.parent===window)return"";const explicitParentOrigin=new URLSearchParams(window.location.search).get("parentOrigin");if(explicitParentOrigin){try{return new URL(explicitParentOrigin).origin}catch{}}return window.location.origin})();
 const measureEmbeddedHeight=()=>Math.max(document.documentElement?.scrollHeight||0,document.body?.scrollHeight||0,document.documentElement?.offsetHeight||0,document.body?.offsetHeight||0,document.documentElement?.clientHeight||0,document.body?.clientHeight||0);
 const postEmbeddedHeight=()=>{if(window.parent===window||!embeddedParentOrigin)return;window.parent.postMessage({type:"halo-song-catalog-height",height:measureEmbeddedHeight()},embeddedParentOrigin)};
@@ -27,15 +32,15 @@ const uploadUi={audio:uploadHelper.createUploadUi({panel:document.querySelector(
 function message(text){elements.status.textContent=text;elements.status.classList.add("is-visible");clearTimeout(message.timer);message.timer=setTimeout(()=>elements.status.classList.remove("is-visible"),3200)}
 function resolveDreamweaverExperienceUrl(satellite){const candidates=[satellite?.experienceUrl,satellite?.satelliteRoute,satellite?.launchUrl,satellite?.route,satellite?.fallbackUrl,satellite?.canonicalDreamweaverUrl];for(const candidate of candidates){const safeRoute=sanitizeDreamweaverAssignedRoute(candidate,{origin:window.location.origin});if(safeRoute)return safeRoute}return""}
 async function api(payload){const options=payload?{method:"POST",headers:{"Content-Type":"application/json"},credentials:"same-origin",body:JSON.stringify(payload)}:{credentials:"same-origin",headers:{Accept:"application/json"}};const response=await fetch("/api/song-catalog",options);const data=await response.json().catch(()=>({message:"Catalog response could not be read"}));if(!response.ok)throw new Error(data.message||"Catalog request failed");return data}
-async function audioApi(options){const response=await fetch("/api/song-catalog/audio",{credentials:"same-origin",...options});const data=await response.json().catch(()=>({message:"Audio response could not be read"}));if(!response.ok)throw new Error(data.message||"Audio upload failed");return data}
+async function audioApi(options){return uploadHelper.requireUploadResponse(await uploadHelper.fetchJsonWithTimeout("/api/song-catalog/audio",{...options,headers:{...options?.headers,"X-Upload-Protocol":"2"}}))}
 async function artworkApi(options){const response=await fetch("/api/song-catalog/artwork",{credentials:"same-origin",...options});const data=await response.json().catch(()=>({message:"Artwork response could not be read"}));if(!response.ok)throw new Error(data.message||"Artwork request failed");return data}
 function audioContentType(file){const aliases={"audio/mp3":"audio/mpeg","audio/x-mp3":"audio/mpeg","audio/m4a":"audio/mp4","audio/x-m4a":"audio/mp4","video/mp4":"audio/mp4","audio/x-aac":"audio/aac","application/ogg":"audio/ogg","audio/wave":"audio/wav","audio/vnd.wave":"audio/wav","audio/x-flac":"audio/flac","application/x-flac":"audio/flac"};if(aliases[file.type])return aliases[file.type];if(file.type?.startsWith("audio/"))return file.type;const extension=file.name.split(".").pop()?.toLowerCase();return{mp3:"audio/mpeg",m4a:"audio/mp4",mp4:"audio/mp4",aac:"audio/aac",ogg:"audio/ogg",webm:"audio/webm",wav:"audio/wav",flac:"audio/flac"}[extension]||""}
-function audioDuration(file){return new Promise(resolve=>{const audio=document.createElement("audio");const url=URL.createObjectURL(file);const finish=value=>{URL.revokeObjectURL(url);resolve(Number.isFinite(value)?Math.round(value):0)};audio.preload="metadata";audio.addEventListener("loadedmetadata",()=>finish(audio.duration),{once:true});audio.addEventListener("error",()=>finish(0),{once:true});audio.src=url})}
+function audioDuration(file){return new Promise(resolve=>{const audio=document.createElement("audio");const url=URL.createObjectURL(file);let finished=false;const finish=value=>{if(finished)return;finished=true;clearTimeout(timer);URL.revokeObjectURL(url);audio.removeAttribute("src");audio.load();resolve(Number.isFinite(value)?Math.round(value):0)};const timer=setTimeout(()=>finish(0),10000);audio.preload="metadata";audio.addEventListener("loadedmetadata",()=>finish(audio.duration),{once:true});audio.addEventListener("error",()=>finish(0),{once:true});audio.src=url})}
 const uploadReadyLabel=file=>`${file.name} · ${Math.max(1,Math.round(file.size/1024/1024))} MB ready to upload`;
 function audioFileProblem(file){if(!audioContentType(file))return"Choose an MP3, M4A, AAC, OGG, WebM, WAV, or FLAC file.";if(file.size>MAX_AUDIO_BYTES)return"Song audio uploads are limited to 128 MB.";return""}
-async function uploadAudioToVersion({file,songId,versionId,ui}){const contentType=audioContentType(file);ui.start(`Checking saved upload · ${file.name}`);const durationSeconds=await audioDuration(file);const {uploadId,chunkCount}=await uploadHelper.uploadResumableAudio({file,songId,versionId,contentType,onProgress(percent){ui.progress(percent,`Uploading ${Math.round(percent)}% · ${file.name}`);}});ui.progress(100,"Finishing upload and running Dream Weaver…");return audioApi({method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"finalize_upload",songId,versionId,uploadId,chunkCount,byteSize:file.size,filename:file.name,contentType,durationSeconds})})}
+async function uploadAudioToVersion({file,songId,versionId,ui}){const contentType=audioContentType(file);ui.start(`Checking saved upload · ${file.name}`);const durationSeconds=await audioDuration(file);const onProgress=(percent,details)=>ui.transfer(percent,details);const {uploadId,chunkCount}=await uploadHelper.uploadResumableAudio({file,songId,versionId,contentType,onProgress});ui.progress(100,"Finishing upload and running Dream Weaver…");return uploadHelper.completeResumableUpload({getStatus:()=>uploadHelper.getAudioUploadStatus({file,songId,versionId,uploadId,contentType}),onProgress,complete:()=>audioApi({method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"finalize_upload",songId,versionId,uploadId,chunkCount,byteSize:file.size,filename:file.name,contentType,durationSeconds})})})}
 function masterFileProblem(file){if(!audioContentType(file))return"Choose a WAV, M4A, FLAC, AAC, MP3, OGG, or WebM master file.";if(file.size>MAX_MASTER_BYTES)return"Master copies are limited to 200 MB.";return""}
-async function masterUploadApi(payload){const response=await fetch("/api/song-catalog/master-upload",{method:"POST",credentials:"same-origin",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});const data=await response.json().catch(()=>({message:"Master upload response could not be read"}));return{ok:response.ok,status:response.status,data}}
+async function masterUploadApi(payload){return uploadHelper.fetchJsonWithTimeout("/api/song-catalog/master-upload",{method:"POST",headers:{"Content-Type":"application/json","X-Upload-Protocol":"2"},body:JSON.stringify(payload)})}
 async function uploadMasterToVersion({file,songId,versionId,ui}){
   const contentType=audioContentType(file);
   const chunkSize=8*1024*1024;
@@ -54,18 +59,20 @@ async function uploadMasterToVersion({file,songId,versionId,ui}){
     async getStatus(){
       const response=initialStatus||await masterUploadApi({action:"status",...details});
       initialStatus=null;
-      return uploadHelper.requireUploadResponse(response);
+      return uploadHelper.validateUploadStatus(uploadHelper.requireUploadResponse(response),true);
     },
-    async sendChunk(chunk,startByte){
+    async sendChunk(chunk,startByte,end,onSent){
       const part=uploadHelper.requireUploadResponse(await masterUploadApi({action:"part",...details,startByte}));
-      uploadHelper.requireUploadResponse(await uploadHelper.sendFormData(part.uploadUrl,chunk,{method:"PUT",headers:{"Content-Type":"application/octet-stream"},credentials:"omit",timeoutMs:120000}));
+      uploadHelper.requireUploadResponse(await uploadHelper.sendFormData(part.uploadUrl,chunk,{method:"PUT",headers:{"Content-Type":"application/octet-stream"},credentials:"omit",timeoutMs:600000,onProgress:onSent}));
     },
-    onProgress(percent){ui.progress(percent,`Uploading master directly to storage ${Math.round(percent)}% · ${file.name}`)}
+    onProgress(percent,details){ui.transfer(percent,details)}
   });
   ui.progress(100,"Upload complete. Registering the canonical sale master…");
-  const registered=await masterUploadApi({action:"complete",...details,durationSeconds});
-  if(!registered.ok)throw new Error(registered.data?.message||"The master uploaded but could not be registered. Try again to resume registration.");
-  return registered.data;
+  return uploadHelper.completeResumableUpload({
+    getStatus:async()=>uploadHelper.validateUploadStatus(uploadHelper.requireUploadResponse(await masterUploadApi({action:"status",...details})),true),
+    complete:async()=>uploadHelper.requireUploadResponse(await masterUploadApi({action:"complete",...details,durationSeconds})),
+    onProgress:(percent,progress)=>ui.transfer(percent,progress)
+  });
 }
 const isMasterVersion=(songId,versionId)=>state.songs.find(song=>song.id===songId)?.versions.find(version=>version.id===versionId)?.versionType==="sale_master";
 async function uploadVersionAudio(){const file=$("#audioFile").files?.[0];const songId=$("#versionSongId").value;const versionId=$("#versionId").value;const button=$("#uploadAudioButton");if(!file){message("Choose an audio file first.");return}const master=isMasterVersion(songId,versionId);const problem=master?masterFileProblem(file):audioFileProblem(file);if(problem){message(problem);return}button.disabled=true;button.textContent="Uploading…";try{const data=await(master?uploadMasterToVersion:uploadAudioToVersion)({file,songId,versionId,ui:uploadUi.audio});uploadUi.audio.success("Audio uploaded and saved.",true);message(data.message);await loadCatalog(songId);openVersion(versionId,songId)}catch(error){uploadUi.audio.fail(error.message);message(error.message)}finally{button.disabled=false;button.textContent="Upload selected audio"}}

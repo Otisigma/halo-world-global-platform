@@ -4,6 +4,7 @@ import { webcrypto } from "node:crypto";
 import vm from "node:vm";
 import { stripTypeScriptTypes } from "node:module";
 import { verifyRequestOrigin } from "@netlify/identity";
+import { getStore } from "@netlify/blobs";
 import { appendUploadChunk, confirmedUploadBytes, ensureUploadSession, readUploadChunk } from "../netlify/lib/resumable-upload.mjs";
 import * as resumable from "../netlify/lib/resumable-upload.mjs";
 import * as multipart from "../netlify/lib/multipart-master-upload.mjs";
@@ -38,6 +39,38 @@ const prefix = "owner/version/file/";
 const details = { byteSize: 10, chunkSize: 4, filename: "master.wav", contentType: "audio/wav" };
 const session = await ensureUploadSession(store, prefix, details);
 const bytes = (...values) => Uint8Array.from(values).buffer;
+// Exercise the installed SDK instead of assuming our MemoryStore matches its response shape.
+const sdkEntries = new Map();
+let sdkRevision = 0;
+let sdkDenied = false;
+const sdkStore = getStore({ name: "upload-contract", siteID: "contract-site", token: "contract-fixture",
+  edgeURL: "https://blobs.test", uncachedEdgeURL: "https://blobs.test", consistency: "strong",
+  async fetch(url, options) {
+    const key = new URL(url).pathname;
+    const entry = sdkEntries.get(key);
+    if (options.method === "put") {
+      if (sdkDenied) return new Response(null, { status: 403 });
+      if (options.headers["if-none-match"] === "*" && entry
+        || options.headers["if-match"] && options.headers["if-match"] !== entry?.etag) {
+        return new Response(null, { status: 412 });
+      }
+      const etag = String(++sdkRevision);
+      sdkEntries.set(key, { data: options.body, etag });
+      return new Response(null, { headers: { etag } });
+    }
+    return entry ? new Response(entry.data, { headers: { etag: entry.etag } }) : new Response(null, { status: 404 });
+  },
+});
+assert.deepEqual(await sdkStore.setJSON("shape", { fixture: true }, { onlyIfNew: true }), { modified: true, etag: "1" });
+assert.deepEqual(await sdkStore.setJSON("shape", {}, { onlyIfNew: true }), { modified: false });
+assert.deepEqual((await sdkStore.getWithMetadata("shape", { type: "json" })).data, { fixture: true });
+const sdkSession = await ensureUploadSession(sdkStore, "sdk/", details);
+assert.equal((await resumable.saveUploadPhase(sdkStore, "sdk/", sdkSession, "completing")).phase, "completing");
+sdkDenied = true;
+await assert.rejects(ensureUploadSession(sdkStore, "denied/", details), { status: 503 });
+await assert.rejects(resumable.saveUploadPhase(sdkStore, "sdk/", sdkSession, "completing", null,
+  { catalogBefore: { blobPrefix: "", storageKey: "" } }), { status: 503 });
+sdkDenied = false;
 assert.equal(await confirmedUploadBytes(store, prefix, session), 0);
 await assert.rejects(appendUploadChunk(store, prefix, session, 4, bytes(5, 6, 7, 8)), { status: 409 });
 await assert.rejects(appendUploadChunk(store, prefix, session, -1, bytes(1, 2, 3, 4)), { status: 400 });
@@ -132,6 +165,26 @@ await helper.uploadChunkedFile({
 assert.deepEqual(legacyProgress, [20, 40, 60, 80, 90, 100]);
 
 const config = { bucket: "test", region: "us-east-1", accessKeyId: "example", secretAccessKey: "example", endpoint: "https://storage.test", forcePathStyle: true };
+assert.equal(await storage.headStoredObject(config, "missing", async () => new Response(null, { status: 404 })), 0);
+for (const status of [403, 429, 500, 503]) {
+  await assert.rejects(storage.headStoredObject(config, "diagnostic", async () => new Response(null, { status })), { status: 503, storageStatus: status });
+}
+await assert.rejects(storage.headStoredObject(config, "invalid", async () => new Response(null)), { storageCode: "InvalidResponse" });
+await assert.rejects(storage.headStoredObject(config, "empty", async () => new Response(null, { headers: { "content-length": "0" } })), { storageCode: "InvalidResponse" });
+assert.equal(await storage.headStoredObject(config, "present", async () => new Response(null, { headers: { "content-length": "5" } })), 5);
+let timedOutSignal;
+await assert.rejects(storage.boundedStorageRequest("https://storage.test", {}, async (url, options) => {
+  timedOutSignal = options.signal;
+  return new Promise(() => {});
+}, response => response, 5), { storageCode: "Timeout", status: 503 });
+assert.equal(timedOutSignal.aborted, true);
+await assert.rejects(storage.headStoredObject(config, "offline", async () => { throw new Error("Offline"); }), { storageCode: "NetworkError", status: 503 });
+for (const document of ["", "<html>Bad gateway</html>", "<Wrong><UploadId>misleading</UploadId></Wrong>", "<InitiateMultipartUploadResult>",
+  "<InitiateMultipartUploadResult><UploadId>id</UploadId><Unclosed></InitiateMultipartUploadResult>"]) {
+  await assert.rejects(multipart.masterUploadStatus({ store: new MemoryStore(), prefix: "invalid/", storage: config,
+    scope: {}, uploadId: id, upload: { byteSize: 5, filename: "master.wav", contentType: "audio/wav" },
+    fetchImpl: async () => new Response(document) }), { storageCode: "InvalidResponse" });
+}
 const masterStore = new MemoryStore();
 const masterBytes = 8 * 1024 * 1024 + 2;
 const upload = { byteSize: masterBytes, filename: "master.wav", contentType: "audio/wav" };
@@ -155,7 +208,8 @@ async function storageFetch(url, options) {
     completionBody = options.body;
     completed = true;
     objectBytes = masterBytes;
-    return new Response("<CompleteMultipartUploadResult/>");
+    const objectKey = decodeURIComponent(new URL(url).pathname).replace(/^\/test\//, "");
+    return new Response(`<CompleteMultipartUploadResult><Key>${objectKey}</Key><ETag>&quot;complete&quot;</ETag></CompleteMultipartUploadResult>`);
   }
   assert.fail(`Unexpected storage request: ${options.method}`);
 }
@@ -165,6 +219,11 @@ assert.equal(simultaneous[0].session.storageUploadId, simultaneous[1].session.st
 assert.equal(createdCount, 2);
 assert.equal(discarded, 1);
 assert.equal(simultaneous[0].uploadedBytes, 0);
+for (const document of ["<html/>", "<ListPartsResult/>",
+  "<ListPartsResult><IsTruncated>false</IsTruncated><Part></ListPartsResult>"]) {
+  await assert.rejects(multipart.masterUploadProgress(config, simultaneous[0].session, async (url, options) =>
+    options.method === "HEAD" ? new Response(null, { status: 404 }) : new Response(document)), { status: 503 });
+}
 await assert.rejects(multipart.masterPartUrl({ ...masterOptions, start: 8 * 1024 * 1024 }), { status: 409 });
 const part = await multipart.masterPartUrl({ ...masterOptions, start: 0 });
 const signed = new URL(part.uploadUrl);
@@ -189,9 +248,26 @@ await assert.rejects(multipart.masterUploadStatus(masterOptions), { status: 409 
 parts = [{ number: 1, size: 8 * 1024 * 1024 }, { number: 2, size: 2 }];
 await assert.rejects(multipart.completeMasterUpload({ ...masterOptions, fetchImpl: async (url, options) =>
   options.method === "POST" ? new Response("<Error><Code>InternalError</Code></Error>") : storageFetch(url, options) }), { status: 503 });
-const expiredId = simultaneous[0].session.storageUploadId;
+// NoSuchUpload alone is insufficient: recheck HEAD after a racing completion.
+let recoveryHeads = 0;
+const racingCompletion = await multipart.masterUploadStatus({ ...masterOptions, fetchImpl: async (url, options) => {
+  if (options.method === "HEAD") {
+    recoveryHeads += 1;
+    return recoveryHeads === 1 ? new Response(null, { status: 404 })
+      : new Response(null, { headers: { "content-length": String(masterBytes) } });
+  }
+  if (options.method === "GET") return new Response("<Error><Code>NoSuchUpload</Code></Error>", { status: 404 });
+  assert.fail("A racing completed object must not create another multipart session.");
+} });
+assert.equal(racingCompletion.uploadedBytes, masterBytes);
+assert.equal(racingCompletion.session.generation, simultaneous[0].session.generation);
+const expiringOptions = { ...masterOptions, prefix: "expiring/" };
 parts = [];
-const renewed = await multipart.masterUploadStatus({ ...masterOptions, fetchImpl: async (url, options) => {
+const expiring = await multipart.masterUploadStatus(expiringOptions);
+await resumable.saveUploadPhase(masterStore, expiringOptions.prefix, expiring.session, "completing");
+const expiredId = expiring.session.storageUploadId;
+parts = [];
+const renewed = await multipart.masterUploadStatus({ ...expiringOptions, fetchImpl: async (url, options) => {
   if (options.method === "GET" && new URL(url).searchParams.get("uploadId") === expiredId) {
     return new Response("<Error><Code>NoSuchUpload</Code></Error>", { status: 404 });
   }
@@ -199,6 +275,20 @@ const renewed = await multipart.masterUploadStatus({ ...masterOptions, fetchImpl
 } });
 assert.notEqual(renewed.session.storageUploadId, expiredId);
 assert.equal(renewed.uploadedBytes, 0);
+assert.notEqual(renewed.session.generation, expiring.session.generation);
+assert.equal(renewed.session.resetReason, "storage_session_expired");
+parts = [{ number: 1, size: 8 * 1024 * 1024 }, { number: 2, size: 2 }];
+assert.equal(await multipart.completeMasterUpload({ ...expiringOptions, fetchImpl: async (url, options) => {
+  const response = await storageFetch(url, options);
+  if (options.method === "POST" && !new URL(url).searchParams.has("uploads")) throw new Error("Completion response lost");
+  return response;
+} }), renewed.session.key);
+const completedStatus = await multipart.masterUploadStatus({ ...expiringOptions, fetchImpl: async (url, options) => {
+  if (options.method === "GET") assert.fail("Completed object must not query expired multipart session");
+  return storageFetch(url, options);
+} });
+assert.equal(completedStatus.uploadedBytes, masterBytes);
+assert.equal(completedStatus.session.generation, renewed.session.generation);
 
 // The intake page must retain the target version after a failed transfer, not create a new song.
 const musicSource = await read("music-upload/music-upload.js");
@@ -215,7 +305,7 @@ const packageContext = {
     if (payload.action === "create_project") { projectsCreated += 1; return { songId: "song", masterVersionId: "version" }; }
     return { pipelineStatus: payload.toStage };
   },
-  async loadCatalogSong() { return { metadataIssues: [] }; },
+  async loadCatalogSong() { return { metadataIssues: [], versions: [{ id: "version" }] }; },
   async uploadAudio(song, version) {
     assert.equal(song, "song");
     assert.equal(version, "version");
@@ -230,7 +320,7 @@ assert.equal(storedTargets.size, 1);
 packageContext.pendingPackageUploads.clear();
 assert.equal((await processPackage(packageInput)).songId, "song");
 assert.equal(projectsCreated, 1);
-assert.equal(storedTargets.size, 0);
+assert.equal(storedTargets.size, 1);
 
 // Exercise the real handler with injected platform adapters, including access controls.
 const endpointStore = new MemoryStore();
@@ -239,7 +329,23 @@ const versionId = "22222222-2222-4222-8222-222222222222";
 let user = { id: "user" };
 let ownsVersion = true;
 let rejectOrigin = false;
-const db = { async sql() { return ownsVersion ? [{ id: versionId, song_id: songId }] : []; } };
+let versionRow = { id: versionId, song_id: songId, audio_blob_prefix: "", audio_storage_key: "" };
+let updates = 0;
+let loseDatabaseResponse = false;
+let reviewFails = false;
+const db = { async sql(strings, ...values) {
+  if (!ownsVersion) return [];
+  if (strings.join("").includes("UPDATE halo_song_versions")) {
+    updates += 1;
+    if (strings.join("").includes("audio_blob_prefix = ''")) {
+      versionRow = { ...versionRow, audio_storage_key: values[1], audio_blob_prefix: "" };
+    } else {
+      versionRow = { ...versionRow, audio_blob_prefix: values[1], audio_storage_key: "" };
+    }
+    if (loseDatabaseResponse) { loseDatabaseResponse = false; throw new Error("Database response lost"); }
+  }
+  return [{ ...versionRow }];
+} };
 const audioSource = stripTypeScriptTypes(await read("netlify/functions/song-catalog-audio.ts"))
   .replace(/^import .*?;\n/gm, "")
   .replace("export default async function", "async function")
@@ -250,11 +356,17 @@ const endpoint = vm.runInNewContext(`${audioSource}\nsongCatalogAudioHandler;`, 
   ensureMembership: async () => ({ member_id: "owner" }),
   cleanText: (value, max) => String(value || "").trim().slice(0, max),
   verifyRequestOrigin: request => { if (rejectOrigin) throw new Error("origin"); verifyRequestOrigin(request); },
-  runDreamweaverReview: async () => {},
+  runDreamweaverReview: async () => { if (reviewFails) throw new Error("Review offline"); },
 });
 const params = new URLSearchParams({ uploadStatus: "1", songId, versionId, uploadId: id, byteSize: "5", chunkSize: String(4 * 1024 * 1024), filename: "master.wav", contentType: "audio/wav" });
 const statusRequest = (headers = { "X-Upload-Status": "1" }) => new Request(`https://halo.test/api/song-catalog/audio?${params}`, { headers });
-assert.equal((await (await endpoint(statusRequest())).json()).uploadedBytes, 0);
+const initialStatus = await (await endpoint(statusRequest())).json();
+assert.equal(initialStatus.uploadedBytes, 0);
+assert.equal(initialStatus.protocolVersion, 2);
+assert.equal(typeof initialStatus.generation, "string");
+assert.equal(initialStatus.phase, "transferring");
+assert.equal(initialStatus.result, null);
+assert.equal(initialStatus.resetReason, null);
 const rawRequest = (offset = "0", body = bytes(1, 2, 3, 4, 5)) => new Request("https://halo.test/api/song-catalog/audio", {
   method: "POST", headers: { Origin: "https://halo.test", "Content-Type": "application/octet-stream", "X-SongId": songId, "X-VersionId": versionId, "X-UploadId": id, "X-Start-Byte": offset }, body,
 });
@@ -262,11 +374,22 @@ assert.equal((await endpoint(rawRequest("1"))).status, 400);
 assert.equal((await endpoint(rawRequest("0", bytes(1)))).status, 400);
 assert.equal((await (await endpoint(rawRequest())).json()).uploadedBytes, 5);
 assert.equal((await (await endpoint(statusRequest())).json()).uploadedBytes, 5);
-const finalize = () => new Request("https://halo.test/api/song-catalog/audio", {
+const finalize = (uploadIdentifier = id) => new Request("https://halo.test/api/song-catalog/audio", {
   method: "POST", headers: { Origin: "https://halo.test", "Content-Type": "application/json" },
-  body: JSON.stringify({ action: "finalize_upload", songId, versionId, uploadId: id, chunkCount: 1, byteSize: 5, filename: "master.wav", contentType: "audio/wav" }),
+  body: JSON.stringify({ action: "finalize_upload", songId, versionId, uploadId: uploadIdentifier, chunkCount: 1, byteSize: 5, filename: "master.wav", contentType: "audio/wav" }),
 });
+loseDatabaseResponse = true;
+assert.equal((await endpoint(finalize())).status, 500);
+const reconciled = await (await endpoint(statusRequest())).json();
+assert.equal(reconciled.result.persisted, true);
+assert.equal(reconciled.phase, "review_pending");
+const updateCount = updates;
 assert.equal((await endpoint(finalize())).status, 200);
+assert.equal(updates, updateCount);
+versionRow.audio_blob_prefix = "replacement/parts/";
+assert.equal((await endpoint(finalize())).status, 409);
+assert.equal((await endpoint(statusRequest())).status, 409);
+versionRow.audio_blob_prefix = `owner/${versionId}/${id}/parts/`;
 ownsVersion = false;
 assert.equal((await endpoint(statusRequest())).status, 404);
 ownsVersion = true;
@@ -299,7 +422,7 @@ const masterEndpoint = vm.runInNewContext(`${masterSource}\nsongCatalogMasterUpl
   ensureMembership: async () => ({ member_id: "owner" }),
   cleanText: (value, max) => String(value || "").trim().slice(0, max),
   verifyRequestOrigin: request => { if (rejectOrigin) throw new Error("origin"); verifyRequestOrigin(request); },
-  runDreamweaverReview: async () => {},
+  runDreamweaverReview: async () => { if (reviewFails) throw new Error("Review offline"); },
 });
 const masterRequest = (action, extra = {}) => new Request("https://halo.test/api/song-catalog/master-upload", {
   method: "POST", headers: { Origin: "https://halo.test", "Content-Type": "application/json" },
@@ -313,10 +436,21 @@ assert.equal((await masterEndpoint(masterRequest("part", { startByte: 0 }))).sta
 assert.equal((await masterEndpoint(masterRequest("part", { startByte: 1 }))).status, 409);
 assert.equal((await masterEndpoint(masterRequest("complete"))).status, 409);
 parts = [{ number: 1, size: 8 * 1024 * 1024 }, { number: 2, size: 2 }];
+reviewFails = true;
 const registered = await masterEndpoint(masterRequest("complete"));
 assert.equal(registered.status, 200);
-assert.equal((await registered.json()).persisted, true);
+const registeredResult = await registered.json();
+assert.equal(registeredResult.persisted, true);
+assert.equal(registeredResult.phase, "review_pending");
 assert.equal((await masterEndpoint(masterRequest("complete"))).status, 200);
+const registeredStatus = await (await masterEndpoint(masterRequest("status"))).json();
+assert.equal(registeredStatus.phase, "review_pending");
+assert.equal(registeredStatus.result.persisted, true);
+versionRow.audio_storage_key = "replacement.wav";
+assert.equal((await masterEndpoint(masterRequest("complete"))).status, 409);
+assert.equal((await masterEndpoint(masterRequest("status"))).status, 409);
+versionRow.audio_storage_key = (await masterEndpointStore.get(resumable.uploadSessionKey(`owner/${versionId}/${id}/`))).key;
+reviewFails = false;
 ownsVersion = false;
 assert.equal((await masterEndpoint(masterRequest("status"))).status, 404);
 ownsVersion = true;
@@ -330,4 +464,24 @@ configured = false;
 const fallback = await masterEndpoint(masterRequest("status"));
 assert.equal(fallback.status, 503);
 assert.equal((await fallback.json()).directUpload, false);
+// Audio review failures also preserve the catalog commit and expose the durable result.
+const pendingAudioId = "c".repeat(64);
+params.set("uploadId", pendingAudioId);
+await endpoint(statusRequest());
+const pendingChunk = rawRequest();
+pendingChunk.headers.set("x-uploadid", pendingAudioId);
+assert.equal((await endpoint(pendingChunk)).status, 200);
+reviewFails = true;
+const pendingAudio = await (await endpoint(finalize(pendingAudioId))).json();
+assert.equal(pendingAudio.persisted, true);
+assert.equal(pendingAudio.phase, "review_pending");
+const pendingAudioStatus = await (await endpoint(statusRequest())).json();
+assert.deepEqual(pendingAudioStatus.result, pendingAudio);
+const pendingUpdateCount = updates;
+assert.deepEqual(await (await endpoint(finalize(pendingAudioId))).json(), pendingAudio);
+assert.equal(updates, pendingUpdateCount);
+const incompatibleRequest = statusRequest();
+incompatibleRequest.headers.set("x-upload-protocol", "1");
+assert.equal((await endpoint(incompatibleRequest)).status, 409);
+assert.equal((await (await endpoint(incompatibleRequest)).json()).protocolVersion, 2);
 console.log("Resumable upload contracts passed (recovery, ordering, concurrency, multipart storage, progress, and access controls).");

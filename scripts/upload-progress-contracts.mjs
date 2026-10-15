@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { runInNewContext } from "node:vm";
+import { webcrypto } from "node:crypto";
 
 const source = await readFile(new URL("../upload-progress.js", import.meta.url), "utf8");
 const writes = [];
@@ -157,4 +158,156 @@ await assert.rejects(helper.uploadChunkedFile({
 outcomes.push("timeout");
 await assert.rejects(helper.sendFormData("/upload", body), /took too long/);
 assert.equal(outcomes.length, 0);
+assert.equal(helper.protocolVersion, 2);
+const file = { size: 8, slice: (start, end) => ({ start, end }) };
+const v2 = (uploadedBytes, extra = {}) => ({ protocolVersion: 2, generation: "initial", chunkSize: 4, uploadedBytes, phase: "uploading", ...extra });
+const statusSequence = (...statuses) => async () => {
+  assert.ok(statuses.length, "status reconciliation must stay bounded");
+  return statuses.shift();
+};
+let sends = [];
+const transferEvents = [];
+await helper.uploadResumableFile({
+  file, chunkSize: 4, retryDelays: [0, 0],
+  getStatus: statusSequence(v2(0), v2(4), v2(4, { generation: "renewed", resetReason: "Storage session expired" }), v2(8, { generation: "renewed" })),
+  sendChunk: async (chunk, start, end, onSent) => { sends.push([start, end]); onSent(1); },
+  onProgress: (percent, detail) => transferEvents.push(detail),
+});
+assert.deepEqual(sends, [[0, 4], [4, 8]], "active-loop session renewal must retain confirmed bytes");
+assert.ok(transferEvents.some(event => event.sentBytes > event.confirmedBytes), "sent bytes must not be represented as confirmed bytes");
+sends = [];
+await helper.uploadResumableFile({
+  file, chunkSize: 4, retryDelays: [0, 0],
+  getStatus: statusSequence(v2(4), v2(0, { generation: "reset", resetReason: "Object was evicted" }), v2(0, { generation: "reset" }), v2(4, { generation: "reset" }), v2(4, { generation: "reset" }), v2(8, { generation: "reset" })),
+  sendChunk: async (chunk, start) => { sends.push(start); },
+});
+assert.deepEqual(sends, [4, 0, 4], "explicit new-generation reset must replay from the server's offset");
+await assert.rejects(helper.uploadResumableFile({
+  file, chunkSize: 4, getStatus: statusSequence(v2(4), v2(0)), sendChunk: async () => {},
+}), /unexplained generation regression/);
+await assert.rejects(helper.uploadResumableFile({
+  file, chunkSize: 4, getStatus: async () => v2(0, { protocolVersion: 1, revision: "diagnostic-only" }), sendChunk: async () => {},
+}), /protocol\/runtime mismatch.*diagnostic-only/);
+await assert.rejects(helper.uploadResumableFile({
+  file, chunkSize: 4, getStatus: async () => v2(0, { generation: null }), sendChunk: async () => {},
+}), /protocol\/runtime mismatch/);
+const transientProgress = [];
+sends = [];
+await helper.uploadResumableFile({
+  file: { size: 4, slice: file.slice }, chunkSize: 4, retryDelays: [0],
+  getStatus: statusSequence({ uploadedBytes: 0 }, { uploadedBytes: 0 }, { uploadedBytes: 4 }),
+  sendChunk: async (chunk, start) => sends.push(start),
+  onProgress: (percent, detail) => transientProgress.push(detail.state),
+});
+assert.deepEqual(sends, [0], "transient unconfirmed status must be reconciled before replaying bytes");
+assert.ok(transientProgress.includes("reconnecting"));
+const paused = [];
+await assert.rejects(helper.uploadResumableFile({
+  file, chunkSize: 4, retryDelays: [0], getStatus: async () => { throw new Error("Offline"); }, sendChunk: async () => {},
+  onProgress: (percent, detail) => paused.push(detail.state),
+}), /Reselect the same file and retry/);
+assert.equal(paused.at(-1), "paused");
+let completions = 0;
+const registered = { persisted: true, audioUrl: "/saved" };
+assert.equal(await helper.completeResumableUpload({
+  getStatus: statusSequence(v2(8), v2(8, { phase: "complete", result: registered })),
+  complete: async () => { completions++; throw new Error("Acknowledgement lost"); },
+  retryDelays: [0],
+}), registered);
+assert.equal(completions, 1, "lost finalization acknowledgement must reconcile instead of registering twice");
+assert.equal(await helper.completeResumableUpload({
+  getStatus: statusSequence(v2(8), v2(8, { phase: "complete", result: registered })),
+  complete: async () => { throw new Error("Last acknowledgement lost"); }, retryDelays: [],
+}), registered, "the exhausted retry budget must still reconcile its last finalization request");
+assert.equal(await helper.completeResumableUpload({
+  getStatus: statusSequence(v2(8, { phase: "finalizing" }), v2(8, { phase: "complete", result: registered })),
+  complete: async () => { throw new Error("must not finalize while already processing"); }, retryDelays: [0],
+}), registered);
+assert.equal(await helper.completeResumableUpload({
+  getStatus: statusSequence(v2(8, { phase: "completing" }), v2(8, { phase: "registered", result: registered })),
+  complete: async () => { throw new Error("must not complete twice while the server is completing"); }, retryDelays: [0],
+}), registered, "backend completing phase must poll for its registered result");
+assert.equal(await helper.completeResumableUpload({
+  getStatus: async () => v2(8, { phase: "review_pending", result: registered }),
+  complete: async () => { throw new Error("must not re-register a persisted review-pending upload"); }, retryDelays: [],
+}), registered);
+for (const httpStatus of [408, 429, 503]) {
+  const before = delays.length;
+  let attempts = 0;
+  await helper.completeResumableUpload({
+    getStatus: async () => v2(8),
+    complete: async () => {
+      if (!attempts++) helper.requireUploadResponse({ ok: false, status: httpStatus, retryAfterMs: 999999 });
+      return registered;
+    }, retryDelays: [10],
+  });
+  assert.equal(attempts, 2);
+  assert.equal(delays[before], 30000, "Retry-After must be bounded");
+}
+const jitterStart = delays.length;
+let jitterAttempts = 0;
+await helper.completeResumableUpload({
+  getStatus: async () => v2(8), retryDelays: [100],
+  complete: async () => { if (!jitterAttempts++) throw new Error("Offline"); return registered; },
+});
+assert.ok(delays[jitterStart] >= 75 && delays[jitterStart] <= 125, "resumable retries must use jitter");
+ui.transfer(25, { confirmedPercent: 25, sentPercent: 50 });
+assert.equal(fill.style.width, "25%");
+assert.equal(status.textContent, "50% sent · 25% confirmed");
+ui.transfer(25, { state: "reconnecting", confirmedPercent: 25 });
+assert.equal(panel.dataset.uploadState, "reconnecting");
+ui.transfer(25, { state: "paused", confirmedPercent: 25 });
+assert.equal(panel.dataset.uploadState, "paused");
+assert.match(status.textContent, /Reselect the same file/);
+ui.transfer(25, { state: "resuming", confirmedPercent: 25 });
+assert.equal(panel.dataset.uploadState, "resuming");
+assert.match(status.textContent, /Resuming saved upload/);
+
+const networkWindow = {};
+const fetchRequests = [];
+let fetchStatuses = [v2(0, { chunkSize: 4 * 1024 * 1024 }), v2(4, { chunkSize: 4 * 1024 * 1024 })];
+runInNewContext(source, {
+  window: networkWindow, console, XMLHttpRequest, crypto: webcrypto, TextEncoder, URLSearchParams,
+  AbortController, setTimeout, clearTimeout,
+  fetch: async (url, options) => {
+    fetchRequests.push({ url, options });
+    return { ok: true, status: 200, headers: { get: () => null }, json: async () => fetchStatuses.shift() };
+  },
+});
+outcomes.push({ status: 200, data: {} });
+const audio = new Blob(["data"]);
+Object.defineProperty(audio, "name", { value: "test.mp3" });
+await networkWindow.HaloUploadProgress.uploadResumableAudio({ file: audio, songId: "song", versionId: "version", contentType: "audio/mpeg" });
+assert.ok(fetchRequests.every(request => request.options.headers["X-Upload-Protocol"] === "2"));
+assert.equal(requests.at(-1).headers["X-Upload-Protocol"], "2");
+assert.equal(requests.at(-1).timeout, 600000, "slow audio chunks must have a ten-minute timeout");
+const buildRevision = "1234567890abcdef1234567890abcdef12345678";
+networkWindow.HaloUploadBuild = { protocolVersion: 2, revision: buildRevision };
+fetchStatuses = [v2(0, { chunkSize: 4 * 1024 * 1024, revision: buildRevision }), v2(4, { chunkSize: 4 * 1024 * 1024, revision: buildRevision })];
+outcomes.push({ status: 200, data: { protocolVersion: 2, revision: buildRevision } });
+await networkWindow.HaloUploadProgress.uploadResumableAudio({ file: audio, songId: "song", versionId: "version", contentType: "audio/mpeg" });
+assert.equal(requests.at(-1).headers["X-Upload-Revision"], buildRevision);
+assert.equal(fetchRequests.at(-1).options.headers["X-Upload-Revision"], buildRevision);
+assert.equal(fetchRequests.at(-1).options.headers["X-Upload-Protocol"], "2");
+outcomes.push({ status: 200, data: {} });
+await networkWindow.HaloUploadProgress.sendFormData("https://storage.example.test/presigned", audio, { method: "PUT", credentials: "omit" });
+assert.equal(requests.at(-1).headers["X-Upload-Revision"], undefined, "build revision must never be sent to storage");
+assert.equal(requests.at(-1).headers["X-Upload-Protocol"], undefined, "storage requests must not receive owned API protocol headers");
+fetchStatuses = [v2(0, { chunkSize: 4 * 1024 * 1024, revision: "different-server-revision" })];
+await assert.rejects(networkWindow.HaloUploadProgress.getAudioUploadStatus({ file: audio, songId: "song", versionId: "version", uploadId: "id", contentType: "audio/mpeg" }), /protocol\/runtime mismatch.*different-server-revision/);
+fetchStatuses = [v2(0, { chunkSize: 4 * 1024 * 1024, revision: null })];
+await assert.rejects(networkWindow.HaloUploadProgress.getAudioUploadStatus({ file: audio, songId: "song", versionId: "version", uploadId: "id", contentType: "audio/mpeg" }), /protocol\/runtime mismatch/);
+assert.throws(() => networkWindow.HaloUploadProgress.requireUploadResponse({ ok: true, data: { protocolVersion: 2, revision: "other-result-revision" } }), /protocol\/runtime mismatch/);
+networkWindow.HaloUploadBuild = { protocolVersion: 1, revision: buildRevision };
+await assert.rejects(networkWindow.HaloUploadProgress.sendFormData("/api/song-catalog/audio", audio), /protocol\/runtime mismatch/);
+const renamedAudio = new Blob(["data"]);
+Object.defineProperty(renamedAudio, "name", { value: "renamed.mp3" });
+assert.equal(await networkWindow.HaloUploadProgress.fileUploadId(audio, ["intake-audio"], 4),
+  await networkWindow.HaloUploadProgress.fileUploadId(renamedAudio, ["intake-audio"], 4), "intake identity must depend on content, not editable names");
+const timeoutWindow = {};
+runInNewContext(source, {
+  window: timeoutWindow, console, AbortController, setTimeout, clearTimeout,
+  fetch: (url, { signal }) => new Promise((resolve, reject) => signal.addEventListener("abort", () => reject(Object.assign(new Error("Aborted"), { name: "AbortError" })))),
+});
+await assert.rejects(timeoutWindow.HaloUploadProgress.fetchJsonWithTimeout("/status", {}, 5), /timed out/);
 console.log("Upload progress contracts passed: 100 DOM writes for 100 progress events (previously 700); retries, recovery, and chunk ordering preserved.");

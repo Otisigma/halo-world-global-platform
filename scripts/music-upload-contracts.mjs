@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
+import { runInNewContext } from "node:vm";
 
 const root = resolve(import.meta.dirname, "..");
 const read = path => readFile(resolve(root, path), "utf8");
@@ -68,5 +69,79 @@ assert.match(uploadClient, /isDreamweaverExperienceUrl/, "upload controller must
 assert.match(catalogApi, /masterCopy: \{[\s\S]*versionType: "sale_master"/, "release catalog API must identify the sale master as the canonical master copy");
 assert.match(catalogApi, /catalog_master_uploaded/, "release catalog API must report whether the master copy has been uploaded");
 assert.match(uploadClient, /created\.masterVersionId \|\| created\.versionIds\?\.sale_master/, "upload controller must route source audio into the canonical master copy version");
+
+const readiness = /function isUploadRuntimeReady\([\s\S]*?\n}/.exec(uploadClient)?.[0];
+assert.ok(readiness);
+const readinessWindow = {};
+const isReady = runInNewContext(`${readiness}\nisUploadRuntimeReady`, { window: readinessWindow });
+assert.equal(isReady({ uploadChunkedFile() {}, createUploadUi() {} }), false, "legacy helper presence must not imply runtime readiness");
+const runtime = { protocolVersion: 2 };
+for (const name of ["createUploadUi", "uploadChunkedFile", "uploadResumableFile", "uploadResumableAudio", "completeResumableUpload", "getAudioUploadStatus", "fetchJsonWithTimeout", "requireUploadResponse", "validateUploadStatus", "fileUploadId"]) runtime[name] = () => {};
+assert.equal(isReady(runtime), true);
+assert.equal(isReady({ ...runtime, protocolVersion: 1 }), false);
+assert.equal(isReady({ ...runtime, completeResumableUpload: undefined }), false);
+readinessWindow.HaloUploadBuild = { protocolVersion: 1, revision: "wrong-build" };
+assert.equal(isReady(runtime), false, "build protocol mismatch must block even a compatible runtime");
+assert.match(uploadClient, /protocol\/runtime mismatch/);
+
+const processSource = /async function processPackage\([\s\S]*?\n}\n/.exec(uploadClient)?.[0];
+assert.ok(processSource);
+const targets = new Map();
+const sessionTargets = new Map();
+let creates = 0;
+let transfers = 0;
+let ownerAllowsTarget = true;
+let rejectTransfer = true;
+const identityScopes = [];
+const context = {
+  uploadHelper: { fileUploadId: async (file, scope) => { identityScopes.push(Array.from(scope)); return "content-hash"; } },
+  AUDIO_CHUNK_BYTES: 4, pendingPackageUploads: new Map(),
+  localStorage: { getItem: key => targets.get(key), setItem: (key, value) => targets.set(key, value) },
+  sessionStorage: { getItem: key => sessionTargets.get(key), setItem: (key, value) => sessionTargets.set(key, value) },
+  setControllerPhase() {}, setMessage() {}, buildNotes: title => `editable ${title}`,
+  apiJson: async (url, payload) => {
+    if (payload.action === "create_project") { creates++; return { songId: "song", masterVersionId: "version", privateToken: "never-store-this" }; }
+    return { pipelineStatus: "needs_assets", departments: [] };
+  },
+  loadCatalogSong: async () => ownerAllowsTarget ? { id: "song", versions: [{ id: "version" }] } : { id: "song", versions: [{ id: "different-owner-target" }] },
+  uploadAudio: async () => { transfers++; if (rejectTransfer) throw new Error("Connection interrupted"); },
+  reuseArtwork() {}, uploadArtwork() {},
+};
+const processPackage = runInNewContext(`${processSource}\nprocessPackage`, context);
+const input = { artistName: "Artist", title: "Initial title", file: { size: 8 }, position: 1, total: 1 };
+await assert.rejects(processPackage(input), /Connection interrupted/);
+assert.equal(creates, 1);
+assert.deepEqual(JSON.parse(targets.get("halo-intake:content-hash")), { songId: "song", masterVersionId: "version" }, "durable state must contain target IDs only");
+context.pendingPackageUploads.clear();
+rejectTransfer = false;
+assert.equal((await processPackage({ ...input, title: "Edited title", artistName: "Edited artist" })).songId, "song");
+assert.equal(creates, 1, "metadata edits and reload must reuse the owner-validated content target");
+assert.deepEqual(identityScopes, [["intake-audio"], ["intake-audio"]]);
+assert.equal(transfers, 2);
+ownerAllowsTarget = false;
+await processPackage(input);
+assert.equal(creates, 2, "cached version IDs must be validated against the owner's catalog");
+context.pendingPackageUploads.clear();
+targets.clear();
+context.localStorage = { getItem() { throw new Error("Storage denied"); }, setItem() { throw new Error("Storage denied"); } };
+await processPackage(input);
+assert.ok(sessionTargets.has("halo-intake:content-hash"), "sessionStorage must support browsers that deny durable local storage");
+assert.deepEqual(JSON.parse(sessionTargets.get("halo-intake:content-hash")), { songId: "song", masterVersionId: "version" });
+
+const durationSource = /function audioDuration\([\s\S]*?\n}/.exec(uploadClient)?.[0];
+assert.ok(durationSource);
+let revokeCount = 0;
+let cleanupCount = 0;
+let metadataTimer;
+const duration = runInNewContext(`${durationSource}\naudioDuration`, {
+  document: { createElement: () => ({ addEventListener() {}, removeAttribute() { cleanupCount++; }, load() {} }) },
+  URL: { createObjectURL: () => "blob:metadata-test", revokeObjectURL() { revokeCount++; } },
+  setTimeout(callback, timeout) { assert.equal(timeout, 10000); metadataTimer = callback; return 1; }, clearTimeout() {},
+});
+const probing = duration({});
+metadataTimer();
+assert.equal(await probing, 0);
+assert.equal(revokeCount, 1);
+assert.equal(cleanupCount, 1, "bounded metadata probing must release the detached media element");
 
 console.log("Music upload storefront contracts passed.");

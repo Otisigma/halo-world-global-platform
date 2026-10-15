@@ -46,17 +46,37 @@
   }
 
   async function storeMasterReference(payload) {
-    var response = await fetch(CATALOG_ENDPOINT, {
-      method: "POST",
-      credentials: "same-origin",
-      headers: { "Content-Type": "application/json", Accept: "application/json" },
-      body: JSON.stringify(payload),
+    var uploader = window.HaloMasterUploader;
+    if (typeof uploader.requestJson === "function") return uploader.requestJson(CATALOG_ENDPOINT, payload, {
+      requestTimeoutMs: 30000,
+      onState: function () { setStatus("Reconnecting to save the master… The uploaded file is preserved.", "reconnecting"); },
     });
-    var text = await response.text().catch(function () { return ""; });
-    var data = {};
-    try { data = text ? JSON.parse(text) : {}; } catch (_error) { data = {}; }
-    if (!response.ok) throw new Error(data.message || "The master uploaded but could not be saved to the catalog (HTTP " + response.status + ").");
-    return data;
+    // Legacy embedders without the shared request helper still get a bounded request.
+    var controller = typeof AbortController !== "undefined" ? new AbortController() : null;
+    var timer;
+    try {
+      return await Promise.race([(async function () {
+        var response = await fetch(CATALOG_ENDPOINT, {
+          method: "POST",
+          credentials: "same-origin",
+          headers: { "Content-Type": "application/json", Accept: "application/json" },
+          body: JSON.stringify(payload),
+          signal: controller ? controller.signal : undefined,
+        });
+        var text = await response.text().catch(function () { return ""; });
+        var data = {};
+        try { data = text ? JSON.parse(text) : {}; } catch (_error) { data = {}; }
+        if (!response.ok) {
+          var error = new Error(data.message || "The master uploaded but could not be saved to the catalog (HTTP " + response.status + ").");
+          error.status = response.status;
+          error.phase = data.phase;
+          throw error;
+        }
+        return data;
+      })(), new Promise(function (_resolve, reject) {
+        timer = setTimeout(function () { if (controller) controller.abort(); reject(new Error("Saving the master timed out. Retry; the uploaded file is preserved.")); }, 30000);
+      })]);
+    } finally { clearTimeout(timer); }
   }
 
   async function handleSubmit(event) {
@@ -70,11 +90,20 @@
     }
     var input = form.querySelector('input[type="file"]');
     var file = input && input.files && input.files[0];
-    if (!file) {
+    var pending = form.masterUploadReference;
+    if (!file && !pending) {
       setStatus("Choose a WAV master file first.", "error");
       return;
     }
     var songId = fieldValue(form, "songId", "songId");
+    if (pending && (pending.songId !== songId || (file && form.masterUploadFile !== file))) {
+      pending = null;
+      form.masterUploadReference = null;
+    }
+    if (!file && !pending) {
+      setStatus("Choose the same master file to reconnect to its saved upload.", "paused");
+      return;
+    }
     if (!songId) {
       setStatus("Open a song in the catalog before uploading its master.", "error");
       return;
@@ -83,30 +112,49 @@
     form.dataset.busy = "true";
     if (submit) submit.disabled = true;
     setProgress(0);
-    setStatus("Opening a secure Google Drive upload · " + file.name, "uploading");
+    setStatus(pending ? "Retrying catalog save · the master is already uploaded." : "Opening a secure Google Drive upload · " + file.name, "uploading");
     try {
-      var uploaded = await uploader.upload(file, {
+      var transferState = "transferring";
+      var uploaded = pending || await uploader.upload(file, {
         songId: songId,
         title: fieldValue(form, "title", "title"),
         artist: fieldValue(form, "artist", "artistName"),
+        onState: function (state) {
+          transferState = state;
+          if (state === "reconnecting") setStatus("Reconnecting to Google Drive… Confirmed bytes are preserved.", "reconnecting");
+          else if (state === "completing") setStatus("Verifying the uploaded master…", "completing");
+        },
         onProgress: function (ratio, detail) {
           setProgress(ratio * 100);
-          setStatus("Uploading to Google Drive " + Math.round(ratio * 100) + "% · " + formatMb(detail.uploaded) + " of " + formatMb(detail.total), "uploading");
+          if (transferState === "transferring") setStatus("Google Drive confirmed " + Math.round(ratio * 100) + "% · " + formatMb(detail.confirmed == null ? detail.uploaded : detail.confirmed) + " of " + formatMb(detail.total) + (detail.sent != null ? " · sent " + formatMb(detail.sent) : ""), "uploading");
         },
       });
+      form.masterUploadReference = uploaded;
+      form.masterUploadFile = file;
       setProgress(100);
       setStatus("Upload complete. Saving the master to the catalog…", "uploading");
-      var saved = await storeMasterReference({
+      if (uploaded.phase === "review_pending") {
+        var reviewError = new Error(uploaded.registeredResult && uploaded.registeredResult.message || "The master is preserved for review because its target version changed.");
+        reviewError.phase = "review_pending";
+        throw reviewError;
+      }
+      var saved = uploaded.phase === "registered" ? uploaded.registeredResult : await storeMasterReference({
         songId: uploaded.songId || songId,
         masterFileId: uploaded.fileId,
         fileName: uploaded.fileName,
         fileSize: uploaded.fileSize,
+        ...(uploaded.uploadId ? { uploadId: uploaded.uploadId, versionId: uploaded.versionId, protocolVersion: 2 } : {}),
       });
       setStatus(saved.message || "Master saved to the catalog.", "success");
       if (input) input.value = "";
+      form.masterUploadReference = null;
+      form.masterUploadFile = null;
+      if (submit) submit.textContent = "Upload master";
       document.dispatchEvent(new CustomEvent("halo:master-uploaded", { detail: saved }));
     } catch (error) {
-      setStatus((error && error.message) || "The master upload failed. Try again.", "error");
+      var state = error && error.phase === "review_pending" ? "review_pending" : error && error.status >= 400 && error.status < 500 && error.status !== 429 ? "error" : "paused";
+      setStatus(((error && error.message) || "The master upload failed.") + (state === "paused" ? " Retry to reconnect to the saved upload." : ""), state);
+      if (submit) submit.textContent = form.masterUploadReference ? "Retry catalog save" : "Retry upload";
     } finally {
       form.dataset.busy = "false";
       if (submit) submit.disabled = false;

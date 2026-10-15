@@ -433,6 +433,9 @@ function renderResults() {
       ? `<p class="result-note needs-attention">${escapeHtml(result.needsAttention)}</p>`
       : `<p class="result-note">${escapeHtml(result.summary)}</p>`;
     const nextStepNote = result.nextStep ? `<p class="result-next-step">${escapeHtml(result.nextStep)}</p>` : "";
+    const radioHandoffNote = result.radioHandoffSteps?.length
+      ? `<p class="result-note needs-attention">Radio handoff: ${escapeHtml(result.radioHandoffSteps.join(" "))}</p>`
+      : "";
     const satelliteRoute = resolveDreamweaverExperienceUrl(result.dreamweaverSatellite);
     const satelliteLoopId = typeof result.dreamweaverSatellite?.agentLoop?.id === "string" ? result.dreamweaverSatellite.agentLoop.id : "";
     const studioRoute = satelliteRoute ? `${satelliteRoute}${satelliteRoute.includes("?") ? "&" : "?"}experience=studio` : "";
@@ -457,8 +460,10 @@ function renderResults() {
           <p><span>Master record</span><strong>${escapeHtml(result.songId)}</strong></p>
           <p><span>Locked assets</span><strong>${escapeHtml(result.lockedAssets)}</strong></p>
           <p><span>Pipeline handoff</span><strong>${escapeHtml(result.handoffLabel)}</strong></p>
+          ${result.radioHandoffLabel ? `<p><span>Radio handoff</span><strong>${escapeHtml(result.radioHandoffLabel)}</strong></p>` : ""}
         </div>
         ${attentionNote}
+        ${radioHandoffNote}
         ${nextStepNote}
         ${satelliteReceipt}
         <div class="route-grid">${routeGrid}</div>
@@ -672,7 +677,7 @@ async function uploadAudio(songId, versionId, file, position, total) {
   if (!finalized.persisted || !finalized.lockedIn || !finalized.audioUrl) throw new Error(`HALO could not confirm persistence for ${file.name}. Please retry.`);
   await confirmPersistedAsset(finalized.audioUrl, "audio");
   audioUploadUi.success(`${file.name} is locked into HALO storage.`, true);
-  return finalized.audioUrl;
+  return { audioUrl: finalized.audioUrl, radioHandoff: finalized.radioHandoff || null };
 }
 
 async function loadCatalogSong(songId) {
@@ -719,10 +724,11 @@ async function processPackage({ artistName, title, albumTitle, genre, isrc, upc,
       ? "Uploading source assets into the tracked HALO package with live transfer progress."
       : "No source files were attached, so HALO is preparing a metadata-first intake package.",
   );
+  let radioHandoff = null;
   if (file) {
     const versionId = created.masterVersionId || created.versionIds?.sale_master || created.versionIds?.radio_edit;
     if (!versionId) throw new Error("The intake package did not provision an audio version.");
-    await uploadAudio(created.songId, versionId, file, position, total);
+    ({ radioHandoff } = await uploadAudio(created.songId, versionId, file, position, total));
   }
 
   let nextArtworkSourceSongId = artworkSourceSongId;
@@ -769,6 +775,8 @@ async function processPackage({ artistName, title, albumTitle, genre, isrc, upc,
       : "Next: Upload remaining assets. This package is saved; remove or replace files only if needed.",
     dreamweaverSatellite: pipeline.dreamweaverSatellite || created.dreamweaverSatellite || null,
     artworkSourceSongId: nextArtworkSourceSongId,
+    radioHandoffLabel: radioHandoff?.message || "",
+    radioHandoffSteps: Array.isArray(radioHandoff?.manualSteps) ? radioHandoff.manualSteps.filter(step => typeof step === "string") : [],
   };
 }
 

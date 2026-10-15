@@ -5,6 +5,7 @@ import { getUser, verifyRequestOrigin } from "@netlify/identity";
 import { cleanText, ensureMembership } from "../lib/halo-x.mjs";
 import { runDreamweaverReview } from "./song-catalog.js";
 import { MASTER_PLAYBACK_URL_TTL_SECONDS, deleteStoredObject, directUploadConfig, presignObjectUrl } from "../lib/direct-upload-storage.mjs";
+import { runRadioHandoff } from "../lib/radio-handoff.mjs";
 
 const audioStore = getStore({ name: "halo-song-catalog-audio", consistency: "strong" });
 const radioAudioStore = getStore({ name: "halo-radio-submissions", consistency: "strong" });
@@ -170,7 +171,7 @@ async function deleteUpload(payload: Record<string, unknown>, db: Awaited<Return
   return json({ message: "Version audio removed", songId, versionId });
 }
 
-async function finalizeUpload(payload: Record<string, unknown>, db: Awaited<ReturnType<typeof getDatabase>>, ownerMemberId: string) {
+async function finalizeUpload(payload: Record<string, unknown>, db: Awaited<ReturnType<typeof getDatabase>>, ownerMemberId: string, actorId = "system") {
   const songId = cleanId(payload.songId);
   const versionId = cleanId(payload.versionId);
   const uploadId = cleanUploadId(payload.uploadId);
@@ -201,6 +202,7 @@ async function finalizeUpload(payload: Record<string, unknown>, db: Awaited<Retu
   await runDreamweaverReview(songId, ownerMemberId);
   if (version.audio_blob_prefix && version.audio_blob_prefix !== prefix) await removeUpload(version.audio_blob_prefix).catch(() => undefined);
   await removeStoredMaster(version.audio_storage_key).catch(() => undefined);
+  const radioHandoff = await runRadioHandoff(db, { songId, ownerMemberId, actorId });
   return json({
     message: "Audio is persisted and locked into HALO storage.",
     songId,
@@ -209,6 +211,7 @@ async function finalizeUpload(payload: Record<string, unknown>, db: Awaited<Retu
     persisted: true,
     lockedIn: true,
     confirmedAt: new Date().toISOString(),
+    radioHandoff,
   });
 }
 
@@ -377,7 +380,7 @@ export default async function songCatalogAudioHandler(request: Request) {
     if (contentType.includes("multipart/form-data")) return uploadChunk(request, db, membership.member_id);
     const payload = await request.json().catch(() => null) as Record<string, unknown> | null;
     if (!payload) return json({ message: "Choose a supported audio action" }, 400);
-    if (payload.action === "finalize_upload") return finalizeUpload(payload, db, membership.member_id);
+    if (payload.action === "finalize_upload") return finalizeUpload(payload, db, membership.member_id, membership.actor_id);
     if (payload.action === "list_radio_tracks") return listRadioTracks(db, membership.member_id);
     if (payload.action === "import_from_radio") return importFromRadio(payload, db, membership.member_id);
     return json({ message: "Choose a supported audio action" }, 400);

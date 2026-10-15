@@ -4,7 +4,11 @@ import { getUser } from "@netlify/identity";
 import { cleanText } from "../lib/halo-x.mjs";
 
 const audioStore = getStore({ name: "halo-radio-submissions", consistency: "strong" });
+// Published catalog songs fan out into rotation with blob keys from the song catalog store
+// (see ensureRadioTrack in netlify/lib/song-publication.mjs), so those tracks must stream from there.
+const catalogAudioStore = getStore({ name: "halo-song-catalog-audio", consistency: "strong" });
 const uploadChunkBytes = 3 * 1024 * 1024;
+
 const MEDIA_CORS_HEADERS = Object.freeze({
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "Content-Type, Range",
@@ -14,6 +18,16 @@ const MEDIA_CORS_HEADERS = Object.freeze({
 
 function json(body, status = 200, headers = {}) {
   return Response.json(body, { status, headers: { ...MEDIA_CORS_HEADERS, "Cache-Control": "no-store", ...headers } });
+}
+
+async function resolveTrackSource(track) {
+  if (!track.master_song_id) return { store: audioStore, chunkBytes: uploadChunkBytes };
+  const radioFirstPart = await audioStore.get(`${track.blob_key}000`, { type: "arrayBuffer" });
+  if (radioFirstPart) return { store: audioStore, chunkBytes: uploadChunkBytes };
+  const catalogFirstPart = await catalogAudioStore.get(`${track.blob_key}000`, { type: "arrayBuffer" });
+  if (!catalogFirstPart?.byteLength) throw new Error("Radio track chunk is missing");
+  // Catalog chunks are 4 MB from catalog uploads or 3 MB when imported from radio; derive from the first part.
+  return { store: catalogAudioStore, chunkBytes: catalogFirstPart.byteLength };
 }
 
 function requestedByteRange(value, byteSize) {
@@ -37,15 +51,16 @@ function requestedByteRange(value, byteSize) {
   return { start, end: Math.min(end, byteSize - 1) };
 }
 
-async function readAudioRange(track, range) {
-  const firstChunk = Math.floor(range.start / uploadChunkBytes);
-  const lastChunk = Math.floor(range.end / uploadChunkBytes);
+async function readAudioRange(track, range, source) {
+  const { store, chunkBytes } = source;
+  const firstChunk = Math.floor(range.start / chunkBytes);
+  const lastChunk = Math.floor(range.end / chunkBytes);
   if (firstChunk >= Number(track.chunk_count) || lastChunk >= Number(track.chunk_count)) throw new Error("Radio track range exceeds stored chunks");
 
   const chunks = [];
   for (let index = firstChunk; index <= lastChunk; index += 1) {
     const key = `${track.blob_key}${String(index).padStart(3, "0")}`;
-    const part = await audioStore.get(key, { type: "arrayBuffer" });
+    const part = await store.get(key, { type: "arrayBuffer" });
     if (!part) throw new Error("Radio track chunk is missing");
     chunks.push(new Uint8Array(part));
   }
@@ -55,7 +70,7 @@ async function readAudioRange(track, range) {
   let written = 0;
   for (let index = 0; index < chunks.length && written < rangeLength; index += 1) {
     const chunkNumber = firstChunk + index;
-    const chunkStart = chunkNumber * uploadChunkBytes;
+    const chunkStart = chunkNumber * chunkBytes;
     const sourceStart = Math.max(0, range.start - chunkStart);
     const sourceEnd = Math.min(chunks[index].byteLength, range.end - chunkStart + 1);
     const slice = chunks[index].subarray(sourceStart, sourceEnd);
@@ -74,7 +89,7 @@ export default async function radioAudioHandler(request) {
     const id = cleanText(new URL(request.url).searchParams.get("id"), 80);
     const memberId = user?.id || "";
     const rows = await db.sql`
-      SELECT blob_key, chunk_count, content_type, byte_size, status
+      SELECT blob_key, chunk_count, content_type, byte_size, status, master_song_id
       FROM halo_radio_tracks
       WHERE id = ${id} AND (status IN ('preview', 'rotation') OR member_id = ${memberId})
       LIMIT 1
@@ -114,8 +129,9 @@ export default async function radioAudioHandler(request) {
     }
     if (request.method === "HEAD") return new Response(null, { status: range ? 206 : 200, headers });
 
+    const source = await resolveTrackSource(track);
     if (range) {
-      const audio = await readAudioRange(track, range);
+      const audio = await readAudioRange(track, range, source);
       if (range.start === 0) await db.sql`UPDATE halo_radio_tracks SET play_count = play_count + 1 WHERE id = ${id}`;
       return new Response(audio, { status: 206, headers });
     }
@@ -125,7 +141,7 @@ export default async function radioAudioHandler(request) {
         try {
           for (let index = 0; index < Number(track.chunk_count || 1); index += 1) {
             const key = `${track.blob_key}${String(index).padStart(3, "0")}`;
-            const part = await audioStore.get(key, { type: "arrayBuffer" });
+            const part = await source.store.get(key, { type: "arrayBuffer" });
             if (!part) throw new Error("Radio track chunk is missing");
             controller.enqueue(new Uint8Array(part));
           }

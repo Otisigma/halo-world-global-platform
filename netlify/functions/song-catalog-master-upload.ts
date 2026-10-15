@@ -16,6 +16,7 @@ import {
 } from "../lib/direct-upload-storage.mjs";
 import { MASTER_VERSION_TYPE } from "../lib/master-copy.mjs";
 import { runDreamweaverReview } from "./song-catalog.js";
+import { runRadioHandoff } from "../lib/radio-handoff.mjs";
 
 // Large master copies bypass Netlify function payload limits: this endpoint only exchanges small
 // JSON metadata. `presign` issues a short-lived PUT URL the browser uploads to directly, and
@@ -67,7 +68,7 @@ async function presignMasterUpload(payload: Record<string, unknown>, db: Awaited
   });
 }
 
-async function registerMasterUpload(payload: Record<string, unknown>, db: Awaited<ReturnType<typeof getDatabase>>, ownerMemberId: string) {
+async function registerMasterUpload(payload: Record<string, unknown>, db: Awaited<ReturnType<typeof getDatabase>>, ownerMemberId: string, actorId = "system") {
   const storage = directUploadConfig();
   if (!storage) return json({ directUpload: false, message: "Direct master storage is not configured" }, 503);
   const songId = cleanId(payload.songId);
@@ -101,6 +102,7 @@ async function registerMasterUpload(payload: Record<string, unknown>, db: Awaite
     const stored = await audioStore.list({ prefix: String(version.audio_blob_prefix) }).catch(() => ({ blobs: [] }));
     await Promise.all(stored.blobs.map(blob => audioStore.delete(blob.key))).catch(() => undefined);
   }
+  const radioHandoff = await runRadioHandoff(db, { songId, ownerMemberId, actorId });
   return json({
     message: "Master copy uploaded directly to storage and registered as the canonical sale master.",
     songId,
@@ -110,6 +112,7 @@ async function registerMasterUpload(payload: Record<string, unknown>, db: Awaite
     persisted: true,
     lockedIn: true,
     confirmedAt: new Date().toISOString(),
+    radioHandoff,
   });
 }
 
@@ -123,7 +126,7 @@ export default async function songCatalogMasterUploadHandler(request: Request) {
     if (!payload) return json({ message: "Choose a supported master upload action" }, 400);
     const membership = await ensureMembership(db, user);
     if (payload.action === "presign") return presignMasterUpload(payload, db, membership.member_id);
-    if (payload.action === "register") return registerMasterUpload(payload, db, membership.member_id);
+    if (payload.action === "register") return registerMasterUpload(payload, db, membership.member_id, membership.actor_id);
     return json({ message: "Choose a supported master upload action" }, 400);
   } catch (error) {
     console.error("Master upload failed", error instanceof Error ? error.message : "unknown error");

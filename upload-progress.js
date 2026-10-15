@@ -56,7 +56,9 @@
         api.set({uploading:true,progress:0,error:"",success:"",message,showTrack:true});
       },
       progress(percent,message=api.state.message){
-        api.set({uploading:true,progress:percent,error:"",success:"",message,showTrack:true});
+        const progress=Math.floor(clampPercent(percent));
+        if(api.state.uploading&&api.state.progress===progress&&api.state.message===message)return;
+        api.set({uploading:true,progress,error:"",success:"",message,showTrack:true});
       },
       success(message,keepTrackVisible=false){
         api.set({uploading:false,progress:100,error:"",success:message||"",message:message||api.state.message,showTrack:keepTrackVisible});
@@ -106,23 +108,47 @@
     throw lastError||new Error("The upload connection stopped. Please try again.");
   }
 
-  async function uploadChunkedFile({url,file,chunkSize,buildBody,retryDelays=[],onProgress=()=>{},requestOptions={}}){
+  async function uploadChunkedFile({url,file,chunkSize,buildBody,retryDelays=[],onProgress=()=>{},requestOptions={},concurrency=1}){
+    if(!Number.isSafeInteger(chunkSize)||chunkSize<1||!Number.isSafeInteger(file?.size)||file.size<1)throw new Error("Choose a non-empty file and a valid chunk size.");
+    if(!Number.isInteger(concurrency)||concurrency<1||concurrency>3)throw new Error("Upload concurrency must be between 1 and 3.");
     const chunkCount=Math.ceil(file.size/chunkSize);
-    for(let chunkIndex=0;chunkIndex<chunkCount;chunkIndex+=1){
-      const start=chunkIndex*chunkSize;
-      const end=Math.min(file.size,start+chunkSize);
-      const body=buildBody({chunkIndex,chunkCount,start,end});
-      const response=await sendFormDataWithRetry(url,body,{
-        ...requestOptions,
-        retryDelays,
-        onProgress(ratio){
-          const overall=((chunkIndex+ratio)/chunkCount)*100;
-          onProgress(clampPercent(overall),{chunkIndex,chunkCount});
-        }
-      });
-      if(!response.ok)throw new Error(response.data?.message||"The upload stopped early.");
-      onProgress(clampPercent(((chunkIndex+1)/chunkCount)*100),{chunkIndex,chunkCount});
+    const transferred=new Array(chunkCount).fill(0);
+    const confirmed=new Set();
+    let nextIndex=0;
+    let failure;
+    function report(chunkIndex){
+      if(failure)return;
+      const bytes=transferred.reduce((total,value)=>total+value,0);
+      const percent=confirmed.size===chunkCount?100:Math.min(99,bytes/file.size*100);
+      onProgress(clampPercent(percent),{chunkIndex,chunkCount});
     }
+    async function worker(){
+      while(!failure&&nextIndex<chunkCount){
+        const chunkIndex=nextIndex++;
+        const start=chunkIndex*chunkSize;
+        const end=Math.min(file.size,start+chunkSize);
+        try{
+          const body=buildBody({chunkIndex,chunkCount,start,end});
+          const response=await sendFormDataWithRetry(url,body,{
+            ...requestOptions,
+            retryDelays,
+            onProgress(ratio){
+              transferred[chunkIndex]=Math.max(transferred[chunkIndex],Math.max(0,Math.min(1,ratio))*(end-start));
+              report(chunkIndex);
+            }
+          });
+          if(!response.ok)throw new Error(response.data?.message||"The upload stopped early.");
+          transferred[chunkIndex]=end-start;
+          confirmed.add(chunkIndex);
+          report(chunkIndex);
+        }catch(error){
+          failure=error;
+        }
+      }
+    }
+    // Opt in only for numbered-part endpoints; range-based resumable streams stay sequential.
+    await Promise.all(Array.from({length:Math.min(concurrency,chunkCount)},()=>worker()));
+    if(failure)throw failure;
     return {chunkCount};
   }
 

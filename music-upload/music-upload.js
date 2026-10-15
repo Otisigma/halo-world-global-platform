@@ -640,6 +640,7 @@ async function uploadAudio(songId, versionId, file, position, total) {
     url: "/api/song-catalog/audio",
     file,
     chunkSize: AUDIO_CHUNK_BYTES,
+    concurrency: 2,
     buildBody({ chunkIndex, chunkCount, start, end }) {
       const form = new FormData();
       form.append("songId", songId);

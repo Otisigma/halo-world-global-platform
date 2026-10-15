@@ -3,6 +3,7 @@ import { createHash, randomBytes } from "node:crypto";
 import { mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import vm from "node:vm";
 import {
   AUDIO_CHUNK_MAX_BYTES,
   AUDIO_UPLOAD_MAX_CHUNKS,
@@ -27,6 +28,90 @@ const sha256 = data => createHash("sha256").update(data).digest("hex");
 const SONG_ID = "11111111-1111-4111-8111-111111111111";
 const VERSION_ID = "22222222-2222-4222-8222-222222222222";
 const TOKEN = "test-access-token";
+
+// Shared browser transport: bounded, non-overlapping numbered parts; drain failures before retry.
+{
+  const pending = [];
+  const requests = [];
+  let active = 0;
+  let peak = 0;
+  class FakeXHR {
+    upload = {};
+    open() {}
+    setRequestHeader() {}
+    send(body) {
+      active++;
+      peak = Math.max(peak, active);
+      requests.push(body);
+      pending.push(() => {
+        this.upload.onprogress?.({ lengthComputable: true, loaded: 1, total: 1 });
+        active--;
+        this.status = body.fail ? 500 : 200;
+        this.responseText = body.fail ? '{"message":"Temporary failure"}' : "{}";
+        this.onload();
+      });
+    }
+  }
+  const context = { window: {}, XMLHttpRequest: FakeXHR, console, setTimeout };
+  vm.runInNewContext(await read("upload-progress.js"), context);
+  const helper = context.window.HaloUploadProgress;
+  const progress = [];
+  const options = {
+    url: "/api/song-catalog/audio", file: { size: 10 }, chunkSize: 4, concurrency: 2,
+    buildBody: part => part, onProgress: value => progress.push(value),
+  };
+  const uploading = helper.uploadChunkedFile(options);
+  assert.equal(requests.length, 2);
+  pending.pop()();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(requests.length, 3, "a confirmed part frees one worker slot");
+  pending.pop()();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.ok(progress.every(value => value < 100), "100% waits for all acknowledgements");
+  pending.pop()();
+  assert.equal((await uploading).chunkCount, 3);
+  assert.equal(peak, 2);
+  assert.deepEqual(requests.map(({ start, end }) => [start, end]), [[0, 4], [4, 8], [8, 10]]);
+  assert.ok(progress.every((value, index) => index === 0 || value >= progress[index - 1]));
+  assert.equal(progress.at(-1), 100);
+
+  requests.length = 0;
+  let rejected = false;
+  const failed = helper.uploadChunkedFile({
+    ...options, buildBody: part => ({ ...part, fail: part.chunkIndex === 0 }),
+  }).catch(() => { rejected = true; });
+  pending.shift()();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(rejected, false, "failure waits for already-started requests to settle");
+  assert.equal(requests.length, 2, "no new parts start after failure");
+  pending.shift()();
+  await failed;
+  assert.equal(rejected, true);
+  requests.length = 0;
+  const sequential = helper.uploadChunkedFile({ ...options, url: "/api/song-catalog/artwork", concurrency: undefined });
+  assert.equal(requests.length, 1, "other transports stay sequential unless explicitly enabled");
+  for (let index = 0; index < 3; index++) {
+    pending.shift()();
+    await new Promise(resolve => setImmediate(resolve));
+  }
+  await sequential;
+  assert.equal(requests.length, 3);
+  await assert.rejects(helper.uploadChunkedFile({ ...options, concurrency: 4 }), /concurrency/);
+  await assert.rejects(helper.uploadChunkedFile({ ...options, chunkSize: 0 }), /chunk size/);
+
+  let renders = 0;
+  const ui = helper.createUploadUi({
+    panel: { classList: { toggle() { renders++; } }, setAttribute() {}, dataset: {} },
+    status: {}, track: { setAttribute() {} }, fill: { style: {} },
+  });
+  ui.start();
+  ui.progress(20.1, "Uploading 20%");
+  const before = renders;
+  ui.progress(20.4, "Uploading 20%");
+  assert.equal(renders, before, "same-percent progress avoids redundant DOM updates");
+  ui.success("Saved");
+  assert.equal(ui.state.uploading, false);
+}
 
 function memoryStore() {
   const blobs = new Map();

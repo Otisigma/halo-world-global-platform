@@ -16,8 +16,8 @@ import {
 } from "../lib/direct-upload-storage.mjs";
 import { MASTER_VERSION_TYPE } from "../lib/master-copy.mjs";
 import { runDreamweaverReview } from "./song-catalog.js";
-import { completeMasterUpload, masterPartUrl, masterUploadStatus } from "../lib/multipart-master-upload.mjs";
-import { ensureUploadSession, resumableUploadId, uploadProtocol, requireUploadProtocol, saveUploadPhase, uploadSessionKey, uploadStatusFields, uploadWasReplaced } from "../lib/resumable-upload.mjs";
+import { completeMasterUpload, masterPartUrl, masterUploadStatus, restartMasterUpload } from "../lib/multipart-master-upload.mjs";
+import { ensureUploadSession, resumableUploadId, uploadProtocol, requireUploadProtocol, saveUploadPhase, uploadSessionKey, uploadStatusFields, uploadWasReplaced, requireUploadGeneration, uploadReplacementToken } from "../lib/resumable-upload.mjs";
 
 // Large master copies bypass Netlify function payload limits: this endpoint only exchanges small
 // JSON metadata. `presign` issues a short-lived PUT URL the browser uploads to directly, and
@@ -86,6 +86,8 @@ async function registerMasterUpload(payload: Record<string, unknown>, db: Awaite
   let session = await ensureUploadSession(uploadSessions, prefix, {
     byteSize: upload.byteSize, filename: upload.filename, contentType: upload.contentType,
   }, async () => ({ key: fileKey }));
+  requireUploadGeneration(session, payload.generation);
+  if (session.key !== fileKey) return json({ message: "This completion belongs to an older upload attempt." }, 409);
   const alreadyRegistered = version.audio_storage_key === fileKey;
   if (uploadWasReplaced(session, version, alreadyRegistered)) {
     return json({ message: "This upload was replaced by another file.", resetReason: "upload_replaced" }, 409);
@@ -159,8 +161,22 @@ async function resumableMasterUpload(payload: Record<string, unknown>, db: Await
   if (session && (session.byteSize !== upload.byteSize || session.filename !== upload.filename || session.contentType !== upload.contentType)) {
     return json({ message: "The master upload metadata does not match this session." }, 409);
   }
+  if (payload.action === "restart") {
+    if (!session || !uploadWasReplaced(session, version, version.audio_storage_key === session.key)) {
+      return json({ message: "Only a replaced upload can be restarted explicitly." }, 409);
+    }
+    if (payload.expectedReplacement !== uploadReplacementToken(version)) {
+      return json({ message: "The current audio changed. Check status and confirm the replacement again." }, 409);
+    }
+    const restarted = await restartMasterUpload({ ...options, scope: { ownerMemberId, songId, versionId }, uploadId, upload,
+      expectedGeneration: payload.expectedGeneration,
+      catalogBefore: { blobPrefix: String(version.audio_blob_prefix || ""), storageKey: String(version.audio_storage_key || "") } });
+    return json({ directUpload: true, ...uploadStatusFields(restarted, 0) });
+  }
+  if (session && payload.action !== "status") requireUploadGeneration(session, payload.generation);
   if (session && uploadWasReplaced(session, version, version.audio_storage_key === session.key)) {
-    return json({ message: "This upload was replaced by another file.", resetReason: "upload_replaced" }, 409);
+    return json({ ...uploadStatusFields(session, 0), result: null, message: "This upload was replaced by another file.",
+      resetReason: "upload_replaced", replacementToken: uploadReplacementToken(version) }, 409);
   }
   if (session && version.audio_storage_key === session.key) {
     if (!session.result) {
@@ -176,9 +192,9 @@ async function resumableMasterUpload(payload: Record<string, unknown>, db: Await
     return json({ directUpload: true, ...uploadStatusFields(status.session, status.uploadedBytes) });
   }
   if (payload.action === "part") {
-    return json(await masterPartUrl({ ...options, start: typeof payload.startByte === "number" ? payload.startByte : NaN }));
+    return json(await masterPartUrl({ ...options, generation: payload.generation, start: typeof payload.startByte === "number" ? payload.startByte : NaN }));
   }
-  const fileKey = await completeMasterUpload({ ...options, upload });
+  const fileKey = await completeMasterUpload({ ...options, upload, generation: payload.generation });
   return await registerMasterUpload({ ...payload, fileKey, originalName: upload.filename }, db, ownerMemberId, prefix);
 }
 
@@ -192,7 +208,7 @@ export default async function songCatalogMasterUploadHandler(request: Request) {
     const payload = await request.json().catch(() => null) as Record<string, unknown> | null;
     if (!payload) return json({ message: "Choose a supported master upload action" }, 400);
     const membership = await ensureMembership(db, user);
-    if (["status", "part", "complete"].includes(String(payload.action))) return await resumableMasterUpload(payload, db, membership.member_id);
+    if (["status", "part", "complete", "restart"].includes(String(payload.action))) return await resumableMasterUpload(payload, db, membership.member_id);
     if (payload.action === "presign") return await presignMasterUpload(payload, db, membership.member_id);
     if (payload.action === "register") return await registerMasterUpload(payload, db, membership.member_id);
     return json({ message: "Choose a supported master upload action" }, 400);

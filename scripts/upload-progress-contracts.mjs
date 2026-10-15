@@ -223,14 +223,63 @@ assert.equal(await helper.completeResumableUpload({
   getStatus: statusSequence(v2(8, { phase: "finalizing" }), v2(8, { phase: "complete", result: registered })),
   complete: async () => { throw new Error("must not finalize while already processing"); }, retryDelays: [0],
 }), registered);
+let completingRetries = 0;
 assert.equal(await helper.completeResumableUpload({
   getStatus: statusSequence(v2(8, { phase: "completing" }), v2(8, { phase: "registered", result: registered })),
-  complete: async () => { throw new Error("must not complete twice while the server is completing"); }, retryDelays: [0],
-}), registered, "backend completing phase must poll for its registered result");
+  complete: async () => { completingRetries++; throw new Error("Completing acknowledgement lost"); }, retryDelays: [0],
+}), registered, "backend completing phase must retry completion idempotently and reconcile acknowledgement loss");
+assert.equal(completingRetries, 1);
+assert.equal(await helper.completeResumableUpload({
+  getStatus: async () => v2(8, { phase: "completing" }),
+  complete: async () => registered, retryDelays: [],
+}), registered, "a stranded completing phase must recover through idempotent completion rather than polling forever");
+let checkpointPhase = "completing";
+let checkpointCompletions = 0;
+assert.equal(await helper.completeResumableUpload({
+  getStatus: async () => ({ phase: "completing" }),
+  complete: async () => { checkpointCompletions++; checkpointPhase = "registered"; return registered; },
+  retryDelays: [],
+}), registered, "a persistent completing checkpoint must invoke the idempotent registration operation");
+assert.equal(checkpointCompletions, 1);
+assert.equal(checkpointPhase, "registered");
+let resetTransfers = 0;
+let resetCompletions = 0;
+assert.equal(await helper.completeResumableUpload({
+  byteSize: 8, generation: "initial",
+  getStatus: statusSequence(v2(0, { generation: "renewed", resetReason: "storage_session_expired" }), v2(8, { generation: "renewed", phase: "completing" })),
+  resume: async () => { resetTransfers++; return { uploadedBytes: 8, generation: "renewed" }; },
+  complete: async () => { resetCompletions++; return registered; }, retryDelays: [0],
+}), registered, "an explicit expiry reset during finalization must resume transfer before registration");
+assert.equal(resetTransfers, 1);
+assert.equal(resetCompletions, 1);
+await assert.rejects(helper.completeResumableUpload({
+  byteSize: 8, generation: "initial", getStatus: async () => v2(0),
+  resume: async () => { throw new Error("must not resume an unexplained regression"); },
+  complete: async () => registered, retryDelays: [],
+}), /unexplained upload regression/);
+let renewalCount = 0;
+await assert.rejects(helper.completeResumableUpload({
+  byteSize: 8, generation: "initial",
+  getStatus: async () => v2(0, { generation: `reset-${++renewalCount}`, resetReason: "storage_session_expired" }),
+  resume: async () => ({ uploadedBytes: 8, generation: `reset-${renewalCount}` }),
+  complete: async () => { throw new Error("must not finalize while reset bytes are missing"); }, retryDelays: [],
+}), /Reselect the same file and retry/);
+assert.equal(renewalCount, 2, "active finalization resets must have a bounded renewal budget");
 assert.equal(await helper.completeResumableUpload({
   getStatus: async () => v2(8, { phase: "review_pending", result: registered }),
   complete: async () => { throw new Error("must not re-register a persisted review-pending upload"); }, retryDelays: [],
 }), registered);
+await assert.rejects(helper.completeResumableUpload({
+  getStatus: async () => v2(8, { phase: "review_pending", result: { persisted: false } }),
+  complete: async () => { throw new Error("must not claim unpersisted review-pending success"); }, retryDelays: [],
+}), /protocol\/runtime mismatch/);
+await assert.rejects(helper.completeResumableUpload({
+  getStatus: async () => v2(8), complete: async () => ({ protocolVersion: 2, persisted: false }), retryDelays: [],
+}), /protocol\/runtime mismatch/);
+const legacyCompleted = { saved: true };
+assert.equal(await helper.completeResumableUpload({
+  getStatus: async () => ({ phase: "transferring" }), complete: async () => legacyCompleted,
+}), legacyCompleted, "generic completion helpers that omit protocol remain compatible");
 for (const httpStatus of [408, 429, 503]) {
   const before = delays.length;
   let attempts = 0;

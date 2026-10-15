@@ -263,17 +263,44 @@
     }
   }
 
-  async function completeResumableUpload({getStatus,complete,onProgress=()=>{},retryDelays=[1000,3000,5000]}){
+  async function completeResumableUpload({getStatus,complete,resume,byteSize,generation,onProgress=()=>{},retryDelays=[1000,3000,5000]}){
     const terminalPhases=["complete","completed","registered","finalized","review_pending"];
+    const persistedResult=status=>terminalPhases.includes(status.phase)&&status.result&&(status.protocolVersion==null||status.result.persisted===true);
+    let activeGeneration=generation;
+    let resetGeneration;
+    let renewals=0;
     for(let attempt=0;;attempt++){
       let completing=false;
       try{
         const status=validateUploadStatus(await getStatus());
-        if(status.result&&terminalPhases.includes(status.phase))return status.result;
+        if(byteSize!=null&&(!Number.isSafeInteger(status.uploadedBytes)||status.uploadedBytes<0||status.uploadedBytes>byteSize))throw Object.assign(new Error("The server returned an invalid registration offset."),{retryable:false});
+        if(persistedResult(status))return status.result;
         if(terminalPhases.includes(status.phase))throw protocolError(status);
-        if(["finalizing","registering","completing"].includes(status.phase))throw new Error("Registration is still processing.");
+        if(byteSize!=null&&status.uploadedBytes<byteSize){
+          const continuingReset=typeof resetGeneration==="string"&&Boolean(resetGeneration)&&resetGeneration===status.generation;
+          if(!continuingReset&&(!status.generation||!activeGeneration||status.generation===activeGeneration||typeof status.resetReason!=="string"||!status.resetReason)){
+            throw Object.assign(new Error("The server returned an unexplained upload regression during registration."),{retryable:false});
+          }
+          if(typeof resume!=="function"||(!continuingReset&&++renewals>retryDelays.length+1))throw Object.assign(new Error(resumeMessage),{retryable:false});
+          resetGeneration=status.generation;
+          activeGeneration=status.generation;
+          onProgress(status.uploadedBytes/byteSize*100,{state:"resuming",confirmedPercent:status.uploadedBytes/byteSize*100,sentPercent:status.uploadedBytes/byteSize*100});
+          const resumed=await resume();
+          if(resumed.uploadedBytes!==byteSize)throw new Error("The renewed upload has not yet been confirmed.");
+          activeGeneration=resumed.generation||status.generation;
+          resetGeneration=null;
+          continue;
+        }
+        activeGeneration=status.generation||activeGeneration;
+        if(["finalizing","registering"].includes(status.phase))throw new Error("Registration is still processing.");
+        // The server's completing checkpoint is durable recovery state, not a lock.
         completing=true;
-        return await complete();
+        const completed=await complete();
+        if(completed?.protocolVersion!=null){
+          if(completed.protocolVersion!==protocolVersion||completed.persisted!==true)throw protocolError(completed);
+          validateUploadRevision(completed);
+        }
+        return completed;
       }catch(error){
         if(error.retryable===false)throw error;
         if(attempt>=retryDelays.length){
@@ -281,7 +308,7 @@
           if(completing){
             try{
               const status=validateUploadStatus(await getStatus());
-              if(status.result&&terminalPhases.includes(status.phase))return status.result;
+              if(persistedResult(status))return status.result;
             }catch(reconciliationError){if(reconciliationError.retryable===false)throw reconciliationError;}
           }
           onProgress(100,{state:"paused",confirmedPercent:100,sentPercent:100});

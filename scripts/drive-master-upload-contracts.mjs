@@ -16,6 +16,7 @@ import {
   driveFetch,
   driveSessionKey,
   saveDriveSession,
+  driveReviewResult,
 } from "../netlify/lib/google-drive.mjs";
 
 const root = resolve(import.meta.dirname, "..");
@@ -111,7 +112,7 @@ function runUploader(script, extra = {}) {
     getResponseHeader(name) { return (this.responseHeaders || {})[name] ?? null; }
     abort() { this.onabort?.(); }
     send(body) {
-      const request = { range: this.headers["Content-Range"], size: body ? body.size : 0 };
+      const request = { range: this.headers["Content-Range"], size: body ? body.size : 0, headers: { ...this.headers } };
       puts.push(request);
       const reply = script.shift();
       assert.ok(reply, `unexpected PUT ${request.range}`);
@@ -219,13 +220,13 @@ const bigFile = new File([new Uint8Array(12 * MB)], "master.wav", { type: "audio
 }
 {
   const { context, puts } = runUploader([
-    { hang: true }, { timeout: true }, { status: 503, headers: { "Retry-After": "0" } },
+    { hang: true }, { timeout: true }, { status: 408 }, { status: 503, headers: { "Retry-After": "0" } },
     { status: 308, headers: { Range: `bytes=0-${5 * MB - 1}` } }, { status: 200 },
   ]);
   const states = [];
   await context.HaloMasterUploader.upload(new File([new Uint8Array(6 * MB)], "timeout.wav"), { requestTimeoutMs: 5, statusTimeoutMs: 5, retryDelayMs: 0, onState: state => states.push(state) });
-  assert.equal(puts.length, 5);
-  assert.ok(puts.slice(1, 4).every(put => put.range === `bytes */${6 * MB}`), "timeouts keep querying status until a valid checkpoint is recovered");
+  assert.equal(puts.length, 6);
+  assert.ok(puts.slice(1, 5).every(put => put.range === `bytes */${6 * MB}`), "timeouts and HTTP408 keep querying status until a valid checkpoint is recovered");
   assert.ok(states.includes("reconnecting"));
 }
 {
@@ -247,6 +248,41 @@ const bigFile = new File([new Uint8Array(12 * MB)], "master.wav", { type: "audio
   await context.HaloMasterUploader.requestSession(bigFile, { retryDelayMs: 0 });
   assert.equal(calls, 2);
   assert.equal(delays[0], 2000, "Retry-After is a minimum wait even with zero base backoff");
+}
+{
+  let headers;
+  const { context, puts } = runUploader([{ status: 200 }], {
+    HaloUploadBuild: { protocolVersion: 2, revision: "revision-2" },
+    fetch: async (_url, init) => {
+      headers = init.headers;
+      return Response.json({ uploadUrl: sessionUrl, fileId: "1GeneratedDriveFileId", revision: "revision-2" });
+    },
+  });
+  await context.HaloMasterUploader.upload(new File([new Uint8Array(10)], "m.wav"));
+  assert.equal(headers["X-Upload-Revision"], "revision-2");
+  assert.equal(headers["X-Upload-Protocol"], "2");
+  assert.ok(puts.every(put => !put.headers["X-Upload-Revision"]), "revision headers go only to owned APIs, never Drive storage");
+  await context.HaloMasterUploader.requestJson("https://storage.example/upload", {});
+  assert.ok(!headers["X-Upload-Protocol"] && !headers["X-Upload-Revision"], "the JSON helper also isolates upload handshake headers from non-API requests");
+  for (const revision of ["old-revision", undefined]) {
+    let calls = 0;
+    const stale = runUploader([], {
+      HaloUploadBuild: { revision: "revision-2" },
+      fetch: async () => { calls++; return Response.json({ uploadUrl: sessionUrl, revision }); },
+    });
+    await assert.rejects(stale.context.HaloMasterUploader.requestSession(bigFile), /build\/runtime revision mismatch/);
+    assert.equal(calls, 1, "stale runtime is actionable, not retried against the same deployment");
+  }
+  let sharedCalls = 0;
+  const sharedMismatch = runUploader([], {
+    HaloUploadProgress: {
+      uploadRequestHeaders: (_url, headers) => ({ ...headers, "X-Upload-Protocol": "2" }),
+      validateUploadRevision: () => { throw Object.assign(new Error("Upload protocol/runtime mismatch. Refresh this page."), { retryable: false }); },
+    },
+    fetch: async () => { sharedCalls++; return Response.json({ uploadUrl: sessionUrl }); },
+  });
+  await assert.rejects(sharedMismatch.context.HaloMasterUploader.requestSession(bigFile), /protocol\/runtime mismatch/);
+  assert.equal(sharedCalls, 1, "shared non-retryable protocol diagnostics retain their semantics");
 }
 
 // Reload recovers identity, target, file ID and checkpoint from the server, not a bearer URL in browser storage.
@@ -287,6 +323,44 @@ const bigFile = new File([new Uint8Array(12 * MB)], "master.wav", { type: "audio
   const completed = runUploader([], { ...extra, fetch: async () => Response.json({ ...saved, phase: "registered", registeredResult: { persisted: true } }) });
   assert.equal((await completed.context.HaloMasterUploader.upload(bigFile, { songId: "song-1" })).registeredResult.persisted, true);
   assert.equal(completed.puts.length, 0, "a registered reload skips transfer entirely");
+}
+{
+  const file = new File([new Uint8Array(6 * MB)], "expired.wav");
+  async function exercise(replies, completeBeforeRenewal = false) {
+    let renewals = 0;
+    let saved = { uploadUrl: sessionUrl, fileId: "1GeneratedDriveFileId", versionId: "v-1", songId: "song-1", fileSize: file.size, protocolVersion: 2, generation: 0, confirmedOffset: 5 * MB, phase: "transferring", resumed: true };
+    const { context, puts } = runUploader(replies, {
+      crypto: webcrypto,
+      fetch: async (_url, init) => {
+        const payload = JSON.parse(init.body);
+        if (payload.action === "renew") {
+          renewals++;
+          assert.equal(payload.generation, 0);
+          assert.equal(payload.resetReason, "expired_404");
+          saved = completeBeforeRenewal ? { ...saved, phase: "completing", confirmedOffset: file.size } : { ...saved, uploadUrl: sessionUrl + "_renewed", fileId: "1ReplacementDriveFileId", generation: 1, confirmedOffset: 0, resetReason: payload.resetReason, resumed: false };
+        }
+        if (payload.action === "checkpoint") {
+          assert.equal(payload.generation, saved.generation);
+          saved = { ...saved, confirmedOffset: payload.confirmedOffset, phase: payload.confirmedOffset === file.size ? "completing" : "transferring" };
+        }
+        return Response.json(saved);
+      },
+    });
+    return { run: context.HaloMasterUploader.upload(file, { songId: "song-1", retryDelayMs: 0 }), puts, renewals: () => renewals };
+  }
+  const resumed = await exercise([
+    { status: 404 }, { status: 308, headers: { Range: `bytes=0-${5 * MB - 1}` } }, { status: 200 },
+  ]);
+  const result = await resumed.run;
+  assert.equal(result.fileId, "1ReplacementDriveFileId");
+  assert.equal(resumed.renewals(), 1);
+  assert.equal(resumed.puts[1].range, `bytes 0-${5 * MB - 1}/${file.size}`, "only a new verified generation safely resets the offset");
+  const complete = await exercise([{ status: 404 }], true);
+  assert.equal((await complete.run).fileId, "1GeneratedDriveFileId", "an already complete file is kept instead of creating a replacement");
+  assert.equal(complete.puts.length, 1);
+  const twiceExpired = await exercise([{ status: 404 }, { status: 410 }]);
+  await assert.rejects(twiceExpired.run, /expired again/);
+  assert.equal(twiceExpired.renewals(), 1, "renewal is bounded to one per upload invocation");
 }
 
 // ── Frontend: upload form wiring against a minimal DOM stub ───────────────────
@@ -345,6 +419,9 @@ async function runUploadUi({ uploader, file, songId = "song-1", catalogStatus = 
   const failed = await runUploadUi({ file: bigFile, catalogStatus: 403, uploader: { upload: async () => ({ fileId: "1GeneratedDriveFileId", fileName: "m.wav", fileSize: 1 }) } });
   assert.equal(failed.nodes.masterStatusLabel.textContent, "Nope");
   assert.equal(failed.form.dataset.uploadState, "error");
+  const paused = await runUploadUi({ file: bigFile, catalogStatus: 408, uploader: { upload: async () => ({ fileId: "1GeneratedDriveFileId", fileName: "m.wav", fileSize: 1, songId: "song-1" }) } });
+  assert.equal(paused.form.dataset.uploadState, "paused");
+  assert.equal(paused.submit.textContent, "Retry catalog save");
 }
 {
   let uploads = 0;
@@ -366,13 +443,16 @@ async function runUploadUi({ uploader, file, songId = "song-1", catalogStatus = 
 {
   const records = new Map();
   let etag = 0;
+  let writeFailure = "";
   const store = {
     get: async key => records.has(key) ? structuredClone(records.get(key).data) : null,
     getWithMetadata: async key => records.has(key) ? structuredClone(records.get(key)) : null,
     setJSON: async (key, data, options = {}) => {
       const old = records.get(key);
       if ((options.onlyIfNew && old) || (options.onlyIfMatch && options.onlyIfMatch !== old?.etag)) return { modified: false };
+      if (writeFailure === "false_ack") { writeFailure = ""; return { modified: true }; }
       records.set(key, { data: structuredClone(data), etag: String(++etag) });
+      if (writeFailure === "lost_ack") { writeFailure = ""; throw new Error("Blobs acknowledgement lost"); }
       return { modified: true };
     },
   };
@@ -383,22 +463,32 @@ async function runUploadUi({ uploader, file, songId = "song-1", catalogStatus = 
   let opens = 0;
   let updates = 0;
   let loseSqlAck = true;
+  let memberships = 0;
+  let casConflict = false;
   const dependencies = {
     Response, URL, console, process: { env: { COMMIT_REF: "revision-1" } },
+    uploadProtocol: () => ({ protocolVersion: 2, revision: "revision-1" }),
+    requireUploadProtocol: request => {
+      const revision = request.headers.get("X-Upload-Revision");
+      if (revision && revision !== "revision-1") throw Object.assign(new Error("The upload page and server are running different builds. Refresh the page before retrying."), { status: 409 });
+    },
     getUser: async () => ({ id: "user-1" }), verifyRequestOrigin: () => {},
     getDatabase: async () => ({ sql: async (_strings, ...values) => {
+      assert.ok(_strings.join("").includes("COALESCE(drive_file_id, '')") && _strings.join("").includes("RETURNING id"), "catalog update compares expected canonical state and confirms the update");
+      if (casConflict) { casConflict = false; master.drive_file_id = "1NewerMasterFileId"; return []; }
       updates++;
-      master.drive_file_id = values[0];
+      master.drive_file_id = values[3];
       if (loseSqlAck) { loseSqlAck = false; throw new Error("SQL registration acknowledgement lost"); }
-      return [];
+      return [{ id: master.id }];
     } }),
-    ensureMembership: async () => ({ member_id: "member-1" }),
+    ensureMembership: async () => { memberships++; return { member_id: "member-1" }; },
     cleanText: value => String(value || ""), cleanSongId: value => value === songId ? value : "",
     googleDriveConfig: () => config, validateDriveMasterUpload, DRIVE_MASTER_MAX_BYTES, DRIVE_UPLOAD_CHUNK_BYTES,
     findOwnedSaleMaster: async () => ({ ...master }),
-    createResumableUploadSession: async () => { opens++; return { uploadUrl: sessionUrl, fileId: "1GeneratedDriveFileId" }; },
-    driveSessionStore: () => store, driveSessionKey, saveDriveSession, getDriveFile: async () => file, verifyDriveMasterFile,
+    createResumableUploadSession: async () => { opens++; return { uploadUrl: sessionUrl + (opens > 1 ? `_${opens}` : ""), fileId: "1GeneratedDriveFileId" + (opens > 1 ? `_${opens}` : "") }; },
+    driveSessionStore: () => store, driveSessionKey, saveDriveSession, driveReviewResult, getDriveFile: async () => file, verifyDriveMasterFile,
     isDriveId: value => /^[A-Za-z0-9_-]{10,200}$/.test(value),
+    MASTER_VERSION_TYPE: "sale_master",
   };
   function handler(source, name) {
     const context = { ...dependencies };
@@ -409,9 +499,20 @@ async function runUploadUi({ uploader, file, songId = "song-1", catalogStatus = 
   const open = () => handler(sessionApi, "uploadHandler");
   const register = () => handler(catalogApi, "catalogTracksHandler");
   const payload = { songId, uploadId, protocolVersion: 2, fileName: "master.wav", fileType: "audio/wav", fileSize: 100 };
-  const request = body => new Request("https://halo.example/api/upload/drive-session", { method: "POST", body: JSON.stringify(body), headers: { Origin: "https://halo.example", "Content-Type": "application/json" } });
+  const request = (body, revision) => new Request("https://halo.example/api/upload/drive-session", { method: "POST", body: JSON.stringify(body), headers: { Origin: "https://halo.example", "Content-Type": "application/json", ...(revision ? { "X-Upload-Revision": revision } : {}) } });
+  for (const route of [open(), register()]) {
+    const mismatch = await route(request(payload, "old-revision"));
+    assert.equal(mismatch.status, 409);
+    const body = await mismatch.json();
+    assert.match(body.message, /different builds.*Refresh/);
+    assert.equal(body.protocolVersion, 2);
+    assert.equal(body.revision, "revision-1");
+  }
+  assert.equal(memberships, 0, "revision mismatch is rejected before membership or upload mutations");
+  assert.equal(opens, 0);
+  assert.equal(updates, 0);
   const first = await (await open()(request(payload))).json();
-  const second = await (await open()(request(payload))).json();
+  const second = await (await open()(request(payload, "revision-1"))).json();
   assert.equal(opens, 1, "fresh function/reload returns the same durable session");
   assert.equal(first.fileId, second.fileId);
   assert.equal(second.protocolVersion, 2);
@@ -441,6 +542,73 @@ async function runUploadUi({ uploader, file, songId = "song-1", catalogStatus = 
   await saveDriveSession(store, key, { phase: "transferring", confirmedOffset: 1 });
   assert.equal((await store.get(key)).phase, "registered", "late checkpoints cannot undo registration");
   assert.equal((await store.get(key)).confirmedOffset, 100);
+  const staleResultKey = driveSessionKey("member-1", songId, "e".repeat(64));
+  await store.setJSON(staleResultKey, { ...await store.get(key), uploadId: "e".repeat(64) });
+  master.drive_file_id = "1NewerMasterFileId";
+  writeFailure = "false_ack";
+  assert.equal((await register()(request(reference))).status, 502, "failed review invalidation stays a bounded JSON retry, never stale success");
+  const staleRegistration = await register()(request(reference));
+  assert.equal(staleRegistration.status, 409, "registered result replay first revalidates the current canonical master");
+  assert.equal((await staleRegistration.json()).persisted, false);
+  assert.equal(updates, 1);
+  const staleSession = await (await open()(request({ ...payload, uploadId: "e".repeat(64) }))).json();
+  assert.equal(staleSession.phase, "review_pending", "session reload also invalidates obsolete registered success");
+  assert.equal(staleSession.registeredResult.persisted, false);
+  const conflictId = "f".repeat(64);
+  const conflictKey = driveSessionKey("member-1", songId, conflictId);
+  await store.setJSON(conflictKey, { ...first, uploadId: conflictId, confirmedOffset: 100, phase: "completing" });
+  file = { ...goodFile, appProperties: { haloOwnerMemberId: "member-1", haloSongId: songId, haloVersionId: "version-1", haloUploadId: conflictId } };
+  master.drive_file_id = "1PreviousDriveFileId";
+  casConflict = true;
+  const conflicted = await register()(request({ ...reference, uploadId: conflictId }));
+  assert.equal(conflicted.status, 409);
+  assert.equal((await store.get(conflictKey)).phase, "review_pending");
+  assert.equal(master.drive_file_id, "1NewerMasterFileId", "an asynchronous registration never overwrites a newer master");
+  assert.equal(updates, 1);
+  const durableKey = driveSessionKey("member-1", songId, "9".repeat(64));
+  await store.setJSON(durableKey, { ...first, uploadId: "9".repeat(64) });
+  writeFailure = "false_ack";
+  await assert.rejects(saveDriveSession(store, durableKey, { phase: "completing", confirmedOffset: 100 }), /could not be confirmed/);
+  assert.equal((await store.get(durableKey)).phase, "transferring", "an SDK modified:true response is not proof of a durable write");
+  writeFailure = "lost_ack";
+  assert.equal((await saveDriveSession(store, durableKey, { phase: "completing", confirmedOffset: 100 })).phase, "completing", "an ambiguous write recovers only after the exact durable state is reread");
+  await assert.rejects(saveDriveSession({
+    getWithMetadata: async () => ({ data: await store.get(durableKey) }),
+    setJSON: async () => assert.fail("missing-etag writes must never run"),
+  }, durableKey, { phase: "registered" }), /checked safely/);
+  const renewId = "c".repeat(64);
+  const renewKey = driveSessionKey("member-1", songId, renewId);
+  await store.setJSON(renewKey, { ...first, uploadId: renewId, confirmedOffset: 40, generation: 0 });
+  file = null;
+  const expiredPayload = { ...payload, uploadId: renewId, action: "renew", generation: 0, resetReason: "expired_410" };
+  const renewed = await (await open()(request(expiredPayload))).json();
+  assert.equal(renewed.generation, 1);
+  assert.equal(renewed.confirmedOffset, 0);
+  assert.equal(renewed.resetReason, "expired_410");
+  assert.equal(renewed.resumed, false);
+  assert.notEqual(renewed.fileId, first.fileId);
+  assert.equal(renewed.versionId, first.versionId, "renewal preserves the original target version");
+  const repeatedRenewal = await (await open()(request(expiredPayload))).json();
+  assert.equal(repeatedRenewal.fileId, renewed.fileId);
+  assert.equal(opens, 2, "lost renewal acknowledgements never create another generation");
+  const failedRenewId = "8".repeat(64);
+  await store.setJSON(driveSessionKey("member-1", songId, failedRenewId), { ...first, uploadId: failedRenewId });
+  writeFailure = "false_ack";
+  const failedRenewal = await open()(request({ ...expiredPayload, uploadId: failedRenewId }));
+  assert.equal(failedRenewal.status, 502, "a false successful renewal write cannot expose an unpersisted replacement URL");
+  assert.equal((await store.get(driveSessionKey("member-1", songId, failedRenewId))).generation, 0);
+  assert.equal((await open()(request({ ...payload, uploadId: renewId, action: "checkpoint", generation: 0, confirmedOffset: 40 }))).status, 409, "old generations cannot checkpoint a replacement session");
+  await assert.rejects(saveDriveSession(store, renewKey, { confirmedOffset: 40 }, { generation: 0 }), /generation changed/, "CAS retries also reject a checkpoint raced by renewal");
+  // A verified complete file wins over a caller's reset request.
+  const completedRenewId = "d".repeat(64);
+  const completedRenewKey = driveSessionKey("member-1", songId, completedRenewId);
+  await store.setJSON(completedRenewKey, { ...first, uploadId: completedRenewId, confirmedOffset: 40 });
+  file = { ...goodFile, appProperties: { haloOwnerMemberId: "member-1", haloSongId: songId, haloVersionId: "version-1", haloUploadId: completedRenewId } };
+  const completedRenewal = await (await open()(request({ ...expiredPayload, uploadId: completedRenewId }))).json();
+  assert.equal(completedRenewal.phase, "completing");
+  assert.equal(completedRenewal.fileId, first.fileId);
+  assert.equal(opens, 3);
+  file = { ...goodFile, appProperties: { haloOwnerMemberId: "member-1", haloSongId: songId, haloVersionId: "version-1", haloUploadId: uploadId } };
   // Another session completed against a target that changed while transferring.
   const changedId = "b".repeat(64);
   await store.setJSON(driveSessionKey("member-1", songId, changedId), { ...completion, uploadId: changedId });
@@ -451,12 +619,19 @@ async function runUploadUi({ uploader, file, songId = "song-1", catalogStatus = 
   assert.equal((await review.json()).phase, "review_pending");
   assert.equal(updates, 1, "a changed target never silently receives the uploaded file");
   assert.equal(verifyDriveMasterFile(file, { ...scope, songId, versionId: "version-2", uploadId: changedId }).status, 409);
+  const creationId = "7".repeat(64);
+  writeFailure = "false_ack";
+  assert.equal((await open()(request({ ...payload, uploadId: creationId }))).status, 502, "a false successful creation acknowledgement exposes no unpersisted session");
+  writeFailure = "lost_ack";
+  const creation = await (await open()(request({ ...payload, uploadId: creationId }))).json();
+  assert.equal(creation.fileId, (await store.get(driveSessionKey("member-1", songId, creationId))).fileId, "lost creation acknowledgement resolves only from the durable winning record");
 }
 await assert.rejects(driveFetch("https://google.example", {}, () => new Promise(() => {}), 5), /timed out/);
 await assert.rejects(driveFetch("https://google.example", {}, async () => ({ arrayBuffer: () => new Promise(() => {}) }), 5), /timed out/, "server metadata body reads are bounded");
 
 // ── Wiring contracts ──────────────────────────────────────────────────────────
 const checks = [
+  [sessionApi.includes("...uploadProtocol()") && catalogApi.includes("...uploadProtocol()") && sessionApi.indexOf("requireUploadProtocol(request)") < sessionApi.indexOf("await getDatabase()") && catalogApi.indexOf("requireUploadProtocol(request)") < catalogApi.indexOf("await getDatabase()") && !sessionApi.includes("process.env.COMMIT_REF") && !catalogApi.includes("process.env.COMMIT_REF"), "Drive handlers share stamped protocol/revision diagnostics and reject runtime mismatch before mutation"],
   [sessionApi.includes('export const config = { path: "/api/upload/drive-session" }') && sessionApi.includes("validateDriveMasterUpload") && sessionApi.includes("verifyRequestOrigin(request)") && sessionApi.includes("getUser()"), "session endpoint authenticates, validates, and is routed"],
   [sessionApi.includes("uploadUrl,") && sessionApi.includes("fileId,") && sessionApi.includes("}, 502);") && sessionApi.includes("}, 503);"), "session endpoint returns uploadUrl + fileId and JSON failures"],
   [catalogApi.includes('export const config = { path: "/api/catalog/tracks" }') && catalogApi.includes("verifyDriveMasterFile") && catalogApi.includes("UPDATE halo_song_versions") && catalogApi.includes("drive_file_id = ${fileId}"), "catalog endpoint verifies and stores the master reference on the sale master"],

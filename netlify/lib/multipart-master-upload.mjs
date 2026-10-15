@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { boundedStorageRequest, buildMasterObjectKey, headStoredObject, presignObjectUrl } from "./direct-upload-storage.mjs";
-import { ensureUploadSession, MASTER_UPLOAD_CHUNK_BYTES, saveUploadPhase, uploadError, uploadSessionKey, uploadStatusFields } from "./resumable-upload.mjs";
+import { ensureUploadSession, MASTER_UPLOAD_CHUNK_BYTES, requireUploadGeneration, restartUploadSession, saveUploadPhase, uploadError, uploadSessionKey, uploadStatusFields } from "./resumable-upload.mjs";
 
 const escapeXml = value => String(value).replace(/[<>&"']/g, char => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;", '"': "&quot;", "'": "&apos;" }[char]));
 const xmlValue = (xml, tag) => {
@@ -118,9 +118,21 @@ export async function masterUploadProgress(storage, session, fetchImpl = fetch) 
   return { uploadedBytes, complete: false, parts };
 }
 
-export async function masterPartUrl({ store, prefix, storage, start, fetchImpl = fetch }) {
+export async function restartMasterUpload({ store, prefix, storage, scope, uploadId, upload, expectedGeneration, catalogBefore, fetchImpl = fetch }) {
+  return restartUploadSession(store, prefix, expectedGeneration, { catalogBefore }, async generation => {
+    const key = buildMasterObjectKey({ ...scope, uploadId: `${uploadId.slice(0, 24)}-${generation}`, filename: upload.filename });
+    const xml = await storageRequest(storage, key, "POST", { uploads: "" },
+      { contentType: upload.contentType, fetchImpl, expectedRoot: "InitiateMultipartUploadResult" });
+    const storageUploadId = xmlValue(xml, "UploadId");
+    if (!storageUploadId) throw uploadError("Master storage did not create an upload session.", 503);
+    return { key, storageUploadId };
+  }, candidate => storageRequest(storage, candidate.key, "DELETE", { uploadId: candidate.storageUploadId }, { fetchImpl }).catch(() => undefined));
+}
+
+export async function masterPartUrl({ store, prefix, storage, start, generation, fetchImpl = fetch }) {
   const session = await store.get(uploadSessionKey(prefix), { type: "json" });
   if (!session) throw uploadError("Check master upload status before sending chunks.");
+  requireUploadGeneration(session, generation);
   const progress = await masterUploadProgress(storage, session, fetchImpl);
   if (!Number.isSafeInteger(start) || start !== progress.uploadedBytes || start >= session.byteSize || start % session.chunkSize) {
     throw uploadError("The master upload offset does not match storage.");
@@ -132,11 +144,12 @@ export async function masterPartUrl({ store, prefix, storage, start, fetchImpl =
   };
 }
 
-export async function completeMasterUpload({ store, prefix, storage, upload, fetchImpl = fetch }) {
+export async function completeMasterUpload({ store, prefix, storage, upload, generation, fetchImpl = fetch }) {
   let session = await store.get(uploadSessionKey(prefix), { type: "json" });
   if (!session || session.byteSize !== upload.byteSize || session.filename !== upload.filename || session.contentType !== upload.contentType) {
     throw uploadError("The master upload metadata does not match this session.");
   }
+  requireUploadGeneration(session, generation);
   const progress = await masterUploadProgress(storage, session, fetchImpl);
   if (progress.uploadedBytes !== session.byteSize) throw uploadError("The master upload is incomplete.");
   if (!progress.complete) {

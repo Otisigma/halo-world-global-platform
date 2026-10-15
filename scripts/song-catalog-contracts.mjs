@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
+import { runInNewContext } from "node:vm";
 import { sanitizeDreamweaverAssignedRoute } from "../lib/dreamweaver-storefront.js";
 import { buildDreamweaverSatellite } from "../lib/route-registry.js";
 import { pickCanonicalMaster, serializeMasterCopy } from "../netlify/lib/master-copy.mjs";
@@ -236,6 +237,22 @@ assert.equal(validateMasterUpload({ filename: "master.m4a", contentType: "audio/
 assert.equal(validateMasterUpload({ filename: "master.wav", contentType: "audio/wav", fileSize: MASTER_UPLOAD_MAX_BYTES + 1 }).status, 413, "masters above the size limit are rejected before a URL is issued");
 assert.equal(validateMasterUpload({ filename: "master.wav", contentType: "audio/wav", fileSize: 0 }).status, 400, "empty master uploads are rejected");
 assert.equal(validateMasterUpload({ filename: "cover.png", contentType: "image/png", fileSize: 1024 }).status, 415, "non-audio master uploads are rejected");
+
+const uploadVersionSource = /async function uploadVersionAudio\(\)\{[^\n]*\}/.exec(client)?.[0];
+assert.ok(uploadVersionSource);
+const uploadButton = {};
+const uploadNotices = [];
+const uploadFields = { "#audioFile": { files: [{}] }, "#versionSongId": { value: "song" }, "#versionId": { value: "version" }, "#uploadAudioButton": uploadButton };
+const reviewPendingUpload = runInNewContext(`${uploadVersionSource}\nuploadVersionAudio`, {
+  $: selector => uploadFields[selector],
+  isMasterVersion: () => true, masterFileProblem: () => "",
+  uploadMasterToVersion: async () => ({ phase: "review_pending", persisted: true }),
+  uploadUi: { audio: { success: text => uploadNotices.push(text), fail: text => assert.fail(text) } },
+  message: text => uploadNotices.push(text), loadCatalog: async () => {}, openVersion() {},
+});
+await reviewPendingUpload();
+assert.ok(uploadNotices.every(text => /saved.*review is pending/i.test(text)), "persisted review outages must surface success-with-review-pending rather than generic upload failure");
+assert.equal(uploadButton.disabled, false);
 
 const failures = checks.filter(([passed]) => !passed);
 for (const [passed, description] of checks) console.log(`${passed ? "PASS" : "FAIL"}: ${description}`);

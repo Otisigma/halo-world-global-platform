@@ -25,19 +25,39 @@ export function driveSessionKey(ownerMemberId, songId, uploadId) {
   return createHash("sha256").update(JSON.stringify([ownerMemberId, songId, uploadId])).digest("hex");
 }
 
-export async function saveDriveSession(store, key, changes) {
+export async function saveDriveSession(store, key, changes, expected = {}) {
   for (let attempt = 0; attempt < 5; attempt += 1) {
     const saved = await store.getWithMetadata(key, { type: "json" });
     if (!saved) throw new Error("Drive upload session was not found");
+    if (!saved.etag) throw Object.assign(new Error("The Drive upload state could not be checked safely. Retry shortly."), { status: 503 });
     const session = saved.data;
+    if ((expected.generation != null && (session.generation || 0) !== expected.generation) || (expected.fileId && session.fileId !== expected.fileId)) throw Object.assign(new Error("The Drive session generation changed. Retry to reconnect to the current session."), { status: 409 });
     // A late checkpoint must never undo a completed registration.
-    if (session.phase === "registered" || session.phase === "review_pending") return session;
+    if ((session.phase === "registered" || session.phase === "review_pending") && changes.phase !== "review_pending") return session;
     const next = { ...session, ...changes, confirmedOffset: Math.max(session.confirmedOffset || 0, changes.confirmedOffset || 0) };
     if (session.phase === "completing" && changes.phase === "transferring") next.phase = "completing";
-    const result = await store.setJSON(key, next, { onlyIfMatch: saved.etag });
-    if (result.modified) return next;
+    const matches = value => value && Object.keys(next).every(field => JSON.stringify(value[field]) === JSON.stringify(next[field]));
+    try {
+      const result = await store.setJSON(key, next, { onlyIfMatch: saved.etag });
+      const confirmed = await store.get(key, { type: "json" });
+      if (matches(confirmed)) return confirmed;
+      if (result.modified) throw Object.assign(new Error("The Drive upload state could not be confirmed. Retry the saved upload."), { status: 503 });
+    } catch (error) {
+      const confirmed = await store.get(key, { type: "json" });
+      if (matches(confirmed)) return confirmed;
+      throw error;
+    }
   }
+
   throw new Error("Drive upload checkpoint is busy. Retry shortly.");
+}
+
+export function driveReviewResult(session) {
+  return {
+    message: "The canonical Sale master changed. This uploaded file is preserved for review and was not attached over the newer master.",
+    phase: "review_pending", masterFileId: session.fileId, songId: session.songId,
+    versionId: session.versionId, persisted: false,
+  };
 }
 
 // Bound both connection and response-body reads, including uncooperative test transports.

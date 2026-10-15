@@ -11,7 +11,8 @@ const PERSISTENCE_CHECK_TIMEOUT_MS = 10000;
 const RUNTIME_UNAVAILABLE_MESSAGE = "Upload protocol/runtime mismatch or unavailable runtime. Refresh this page and retry.";
 
 function isUploadRuntimeReady(helper) {
-  return (!window.HaloUploadBuild || window.HaloUploadBuild.protocolVersion === 2) && helper?.protocolVersion === 2 && ["createUploadUi", "uploadChunkedFile", "uploadResumableFile", "uploadResumableAudio", "completeResumableUpload", "getAudioUploadStatus", "fetchJsonWithTimeout", "requireUploadResponse", "validateUploadStatus", "fileUploadId"].every(name => typeof helper[name] === "function");
+  const build = typeof window === "undefined" ? null : window.HaloUploadBuild;
+  return (!build || build.protocolVersion === 2) && helper?.protocolVersion === 2 && ["createUploadUi", "uploadChunkedFile", "uploadResumableFile", "uploadResumableAudio", "completeResumableUpload", "getAudioUploadStatus", "fetchJsonWithTimeout", "requireUploadResponse", "validateUploadStatus", "uploadRequestHeaders", "validateUploadRevision", "fileUploadId"].every(name => typeof helper[name] === "function");
 }
 
 function wait(ms) {
@@ -345,6 +346,7 @@ async function fetchWithTimeout(url, options = {}, timeoutMs = PERSISTENCE_CHECK
   try {
     return await fetch(url, {
       ...options,
+      headers: uploadHelper.uploadRequestHeaders(url, options.headers),
       signal: controller.signal,
     });
   } catch (error) {
@@ -646,7 +648,7 @@ async function uploadAudio(songId, versionId, file, position, total) {
   if (!contentType) throw new Error("Choose an MP3, M4A, AAC, OGG, WebM, WAV, or FLAC audio file.");
   if (file.size > MAX_AUDIO_BYTES) throw new Error("Music uploads are limited to 128 MB per file.");
   audioUploadUi.start(`Uploading ${position} of ${total} · ${file.name}`);
-  const { uploadId, chunkCount } = await uploadHelper.uploadResumableAudio({
+  const transfer = () => uploadHelper.uploadResumableAudio({
     file,
     songId,
     versionId,
@@ -655,9 +657,11 @@ async function uploadAudio(songId, versionId, file, position, total) {
       audioUploadUi.transfer(percent, details);
     },
   });
+  const { uploadId, chunkCount, generation } = await transfer();
   audioUploadUi.progress(100, `Finishing ${file.name}…`);
   const durationSeconds = await audioDuration(file);
   const finalized = await uploadHelper.completeResumableUpload({
+    byteSize: file.size, generation, resume: transfer,
     getStatus: () => uploadHelper.getAudioUploadStatus({ file, songId, versionId, uploadId, contentType }),
     onProgress: (percent, details) => audioUploadUi.transfer(percent, details),
     complete: () => apiJson("/api/song-catalog/audio", {
@@ -674,7 +678,7 @@ async function uploadAudio(songId, versionId, file, position, total) {
   });
   if (!finalized.persisted || !finalized.lockedIn || !finalized.audioUrl) throw new Error(`HALO could not confirm persistence for ${file.name}. Please retry.`);
   await confirmPersistedAsset(finalized.audioUrl, "audio");
-  audioUploadUi.success(`${file.name} is locked into HALO storage.`, true);
+  audioUploadUi.success(finalized.phase === "review_pending" ? `${file.name} is locked into HALO storage. Dreamweaver review is pending.` : `${file.name} is locked into HALO storage.`, true);
   return finalized.audioUrl;
 }
 

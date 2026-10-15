@@ -53,19 +53,25 @@
     });
     // Legacy embedders without the shared request helper still get a bounded request.
     var controller = typeof AbortController !== "undefined" ? new AbortController() : null;
+    var buildRevision = window.HaloUploadBuild && window.HaloUploadBuild.revision || "";
     var timer;
     try {
       return await Promise.race([(async function () {
         var response = await fetch(CATALOG_ENDPOINT, {
           method: "POST",
           credentials: "same-origin",
-          headers: { "Content-Type": "application/json", Accept: "application/json" },
+          headers: { "Content-Type": "application/json", Accept: "application/json", "X-Upload-Protocol": "2", ...(buildRevision ? { "X-Upload-Revision": buildRevision } : {}) },
           body: JSON.stringify(payload),
           signal: controller ? controller.signal : undefined,
         });
         var text = await response.text().catch(function () { return ""; });
         var data = {};
         try { data = text ? JSON.parse(text) : {}; } catch (_error) { data = {}; }
+        if (buildRevision && data.revision !== buildRevision) {
+          var mismatch = new Error("Upload build/runtime revision mismatch. Refresh after deployment completes, then retry catalog registration; the uploaded file is preserved.");
+          mismatch.status = 409;
+          throw mismatch;
+        }
         if (!response.ok) {
           var error = new Error(data.message || "The master uploaded but could not be saved to the catalog (HTTP " + response.status + ").");
           error.status = response.status;
@@ -152,7 +158,7 @@
       if (submit) submit.textContent = "Upload master";
       document.dispatchEvent(new CustomEvent("halo:master-uploaded", { detail: saved }));
     } catch (error) {
-      var state = error && error.phase === "review_pending" ? "review_pending" : error && error.status >= 400 && error.status < 500 && error.status !== 429 ? "error" : "paused";
+      var state = error && error.phase === "review_pending" ? "review_pending" : error && (error.retryable === false || (error.status >= 400 && error.status < 500 && error.status !== 408 && error.status !== 429)) ? "error" : "paused";
       setStatus(((error && error.message) || "The master upload failed.") + (state === "paused" ? " Retry to reconnect to the saved upload." : ""), state);
       if (submit) submit.textContent = form.masterUploadReference ? "Retry catalog save" : "Retry upload";
     } finally {

@@ -64,6 +64,15 @@
   async function requestJson(url, payload, options) {
     options = options || {};
     var maxRetries = options.maxRetries == null ? MAX_RETRIES : options.maxRetries;
+    var buildRevision = root.HaloUploadBuild && root.HaloUploadBuild.revision || "";
+    var ownedApi = /^\/api\//.test(String(url));
+    var shared = root.HaloUploadProgress;
+    var headers = { "Content-Type": "application/json", Accept: "application/json" };
+    if (shared && typeof shared.uploadRequestHeaders === "function") headers = shared.uploadRequestHeaders(url, headers);
+    else if (ownedApi) {
+      headers["X-Upload-Protocol"] = "2";
+      if (buildRevision) headers["X-Upload-Revision"] = buildRevision;
+    }
     if (!Number.isSafeInteger(maxRetries) || maxRetries < 0 || maxRetries > 10) throw uploadError("Invalid upload retry limit.");
     for (var attempt = 0; ; attempt++) {
       let controller = root.AbortController ? new root.AbortController() : null;
@@ -77,7 +86,7 @@
           (async function () {
             response = await root.fetch(url, {
               method: "POST", credentials: "same-origin",
-              headers: { "Content-Type": "application/json", Accept: "application/json" },
+              headers: headers,
               body: JSON.stringify(payload), signal: controller ? controller.signal : options.signal,
             });
             return parseJson(await response.text()) || {};
@@ -86,6 +95,8 @@
             timer = setTimeout(function () { abort(); reject(uploadError("The request timed out. Retry the saved upload.", 0)); }, options.requestTimeoutMs || REQUEST_TIMEOUT);
           }),
         ]);
+        if (ownedApi && shared && typeof shared.validateUploadRevision === "function") shared.validateUploadRevision(data);
+        else if (ownedApi && buildRevision && data.revision !== buildRevision) throw uploadError("Upload build/runtime revision mismatch. Refresh after deployment completes, then retry the saved upload.", 409);
         if (response.ok) return data;
         error = uploadError(data.message || "The upload request failed (HTTP " + response.status + ").", response.status);
         error.phase = data.phase;
@@ -93,7 +104,7 @@
       } catch (caught) {
         error = caught;
         if (options.signal && options.signal.aborted) throw uploadError("Upload cancelled");
-        if (error.status && !isRetryable(error.status)) throw error;
+        if (error.retryable === false || (error.status && !isRetryable(error.status))) throw error;
       } finally {
         clearTimeout(timer);
         if (options.signal) options.signal.removeEventListener("abort", abort);
@@ -126,7 +137,7 @@
         songId: options.songId || "",
         title: options.title || "",
         artist: options.artist || "",
-        ...(options.uploadId ? { protocolVersion: 2, uploadId: options.uploadId, versionId: options.versionId || "", ...(options.action ? { action: options.action, confirmedOffset: options.confirmedOffset } : {}) } : {}),
+        ...(options.uploadId ? { protocolVersion: 2, uploadId: options.uploadId, versionId: options.versionId || "", ...(options.action ? { action: options.action, confirmedOffset: options.confirmedOffset, generation: options.generation || 0, ...(options.resetReason ? { resetReason: options.resetReason } : {}) } : {}) } : {}),
       }, options);
     if (options.uploadId && data.protocolVersion !== 2) throw uploadError("The Drive upload server protocol is out of date. Reload after deployment (revision " + (data.revision || "unknown") + ").");
     if (!data.uploadUrl) throw uploadError("The upload session response did not include an upload URL.");
@@ -169,7 +180,7 @@
   }
 
   function isRetryable(status) {
-    return status === 0 || status === 429 || status >= 500;
+    return status === 0 || status === 408 || status === 429 || status >= 500;
   }
 
   async function upload(file, options) {
@@ -190,6 +201,7 @@
     }
     var session = await requestSession(file, options);
     options.versionId = session.versionId;
+    options.generation = session.generation || 0;
     if (storageKey && root.localStorage) {
       try { root.localStorage.setItem(storageKey, JSON.stringify({ uploadId: options.uploadId, songId: session.songId, versionId: session.versionId })); } catch (_error) {}
     }
@@ -200,6 +212,7 @@
     var result = /^(completing|registered|review_pending)$/.test(session.phase || "") ? {} : null;
     var attemptedEnd = session.resumed ? total : offset;
     var missingRanges = 0;
+    var renewed = false;
     var sent = offset;
     var onState = typeof options.onState === "function" ? options.onState : function () {};
 
@@ -254,7 +267,25 @@
         report(offset);
         continue;
       }
-      if (response.status === 404 || response.status === 410) throw uploadError("The upload session expired. Start the upload again.", response.status);
+      if (response.status === 404 || response.status === 410) {
+        if (!options.uploadId || renewed) throw uploadError("The Drive upload session expired" + (renewed ? " again" : "") + ". Retry to reconnect or renew the saved upload.", response.status);
+        renewed = true;
+        onState("reconnecting");
+        var oldGeneration = options.generation;
+        session = await requestSession(file, Object.assign({}, options, { action: "renew", resetReason: "expired_" + response.status }));
+        if (/^(completing|registered|review_pending)$/.test(session.phase || "")) { result = {}; break; }
+        if (!Number.isSafeInteger(session.generation) || session.generation <= oldGeneration) throw uploadError("The expired Drive session could not be renewed. Retry the saved upload.");
+        offset = session.confirmedOffset;
+        if (!Number.isSafeInteger(offset) || offset < 0 || offset > total) throw uploadError("The renewed Drive checkpoint is invalid.");
+        options.generation = session.generation;
+        sent = offset;
+        attemptedEnd = session.resumed ? total : offset;
+        recovering = !!session.resumed;
+        retries = 0;
+        missingRanges = 0;
+        report(offset);
+        continue;
+      }
       if (!isRetryable(response.status)) {
         var data = parseJson(response.body);
         throw uploadError((data && data.error && data.error.message) || "Google Drive rejected the upload (HTTP " + response.status + ").", response.status);

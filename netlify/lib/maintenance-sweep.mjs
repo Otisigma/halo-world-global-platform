@@ -6,7 +6,7 @@ import { CANONICAL_HOME_ROUTE, SATELLITE_STATUS_TARGETS, canonicalizeRoutePath }
 export { SATELLITE_STATUS_TARGETS };
 
 const CORE_PAGES = [
-  "/", "/magazine.html", "/dj-deck.html", "/vip_launchpad.html", "/halo-live.html",
+  "/", CANONICAL_HOME_ROUTE, "/music-world.html", "/stats/", "/magazine.html", "/dj-deck.html", "/vip_launchpad.html", "/halo-live.html",
   "/halo-x.html", "/halo-relations.html", "/halo-command.html", "/creators/",
   "/creators/gear-guide.html", "/music/", "/radio/", "/dreamweaver/", "/dreamweaver-lab/",
   "/campaign-studio/", "/release-house/", "/finish-house/", "/artists/", "/mixes/"
@@ -47,7 +47,8 @@ const OUTPUT_CHECKS = [
 ];
 
 const SIGNAL_CHECK_COMMAND = "halo-signal-check";
-const DEFAULT_SATELLITE_ATTENTION_ROUTE = "/dreamweaver/";
+// No route is held in manual attention by default; set HALO_ACTIVE_ATTENTION_ROUTE to hold one.
+const DEFAULT_SATELLITE_ATTENTION_ROUTE = "";
 const SATELLITE_ATTENTION_REASON = "Manual attention while the selected satellite page is being fixed.";
 const SATELLITE_STATUS_ROUTES = new Set(SATELLITE_STATUS_TARGETS.map(target => normalizeRoute(target.route)));
 
@@ -56,15 +57,14 @@ function cleanDetail(value, maximum = 600) {
 }
 
 function resolveManualAttentionRoute() {
-  const configuredRoute = normalizeRoute(cleanDetail(
-    process.env.HALO_ACTIVE_ATTENTION_ROUTE || DEFAULT_SATELLITE_ATTENTION_ROUTE,
-    160
-  ));
+  const configuredValue = cleanDetail(process.env.HALO_ACTIVE_ATTENTION_ROUTE || DEFAULT_SATELLITE_ATTENTION_ROUTE, 160);
+  if (!configuredValue) return DEFAULT_SATELLITE_ATTENTION_ROUTE;
+  const configuredRoute = normalizeRoute(configuredValue);
   return SATELLITE_STATUS_ROUTES.has(configuredRoute) ? configuredRoute : DEFAULT_SATELLITE_ATTENTION_ROUTE;
 }
 
 function applyManualAttentionStatus(statusRecord, manualAttentionRoute) {
-  if (statusRecord.route !== manualAttentionRoute) return statusRecord;
+  if (!manualAttentionRoute || statusRecord.route !== manualAttentionRoute) return statusRecord;
   return {
     ...statusRecord,
     verified: false,
@@ -240,7 +240,10 @@ export async function runMaintenanceSweep(db, baseUrl, { triggerType = "schedule
     pagesChecked += 1;
     if (!passed) continue;
 
+    const isMainMenuPage = normalizeRoute(pageUrl.pathname) === CANONICAL_HOME_ROUTE
+      || normalizeRoute(request.response?.url || "") === CANONICAL_HOME_ROUTE;
     for (const connectionUrl of extractConnections(pageUrl, request.body)) {
+      if (isMainMenuPage) connectedRoutesFromMainMenu.add(normalizeRoute(connectionUrl.pathname));
       if (checkedConnections.has(connectionUrl.href) || connectionsChecked >= 160) continue;
       checkedConnections.add(connectionUrl.href);
       const connectionRequest = await requestTarget(connectionUrl);
@@ -255,9 +258,6 @@ export async function runMaintenanceSweep(db, baseUrl, { triggerType = "schedule
       checks.push(connectionCheck);
       await persistCheck(db, sweepId, connectionCheck);
       connectionsChecked += 1;
-      if (normalizeRoute(pageUrl.pathname) === CANONICAL_HOME_ROUTE) {
-        connectedRoutesFromMainMenu.add(normalizeRoute(connectionUrl.pathname));
-      }
       if (connectionPassed && isHtml(connectionRequest.response, connectionRequest.body) && !queuedPages.has(connectionUrl.href)) {
         queuedPages.set(connectionUrl.href, connectionUrl);
       }
@@ -415,7 +415,7 @@ export async function runMaintenanceSweep(db, baseUrl, { triggerType = "schedule
         target: check.target,
         detail: check.detail
       })),
-      notes: `Red requires a missing or broken route. Yellow means built/live but not fully menu-connected or smoke-verified, or the selected attention route (${manualAttentionRoute}) is being held in manual attention. Green means built, connected, live, and verified by the deployed smoke check used by ${SIGNAL_CHECK_COMMAND}.`,
+      notes: `Red requires a missing or broken route. Yellow means built/live but not fully menu-connected or smoke-verified, or the selected attention route (${manualAttentionRoute || "none selected"}) is being held in manual attention. Green means built, connected, live, and verified by the deployed smoke check used by ${SIGNAL_CHECK_COMMAND}.`,
       satelliteStatuses
     },
     body: `${failedChecks.length} failed checks across ${ledgerCommandName}.`,

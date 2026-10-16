@@ -220,6 +220,20 @@ for (const [file, source] of publicPageSourceByFile) {
   }
 }
 
+for (const route of ["/music-world.html", "/stats/", "/dreamweaver/"]) {
+  assert.ok(menuRouteTargets.has(route), `${route} must be a monitored menu route so the deployed sweep reports its health.`);
+}
+const menuStatusTargetRoutes = new Set([...(menuSource.match(/const MENU_STATUS_GROUP_TARGETS = \[([\s\S]*?)\n\s*\];/)?.[1] || "").matchAll(/route: '([^']+)'/g)].map(([, route]) => route));
+for (const [, badgeRoute] of menuSource.matchAll(/renderMenuStatusBadge\('([^']+)'/g)) {
+  const route = canonicalizeRoutePath(badgeRoute);
+  assert.ok(menuStatusTargetRoutes.has(route), `Menu badge route ${route} must be listed in MENU_STATUS_GROUP_TARGETS or it stays BROKEN awaiting a route check.`);
+  assert.ok(menuRouteTargets.has(route), `Menu badge route ${route} must be registered in MENU_ROUTE_REGISTRY so the deployed sweep reports it.`);
+}
+assert.match(menuSource, /const DEFAULT_MENU_ATTENTION_ROUTE = '';/, "Main menu must not hold a route in manual attention by default.");
+assert.match(sweepSource, /const DEFAULT_SATELLITE_ATTENTION_ROUTE = "";/, "The maintenance sweep must not hold a route in manual attention unless HALO_ACTIVE_ATTENTION_ROUTE selects one.");
+assert.match(sweepSource, /const CORE_PAGES = \[\s*"\/", CANONICAL_HOME_ROUTE, "\/music-world\.html", "\/stats\/"/, "The maintenance sweep must always crawl /halo, Music World, and Public Stats.");
+assert.match(sweepSource, /if \(isMainMenuPage\) connectedRoutesFromMainMenu\.add\([\s\S]*?\);\s*if \(checkedConnections\.has/, "Main-menu connections must be recorded before deduplicating connections already checked from the / redirect.");
+
 const failures = [];
 for (const satellite of satellites) {
   const built = await pathExists(satellite.file);

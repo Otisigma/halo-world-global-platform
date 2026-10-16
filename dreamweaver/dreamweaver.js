@@ -765,10 +765,46 @@ import { createLyricInteractionRecorder } from "../lib/journey-interactions.js";
   }
 
   function resolvePrimaryAudio(entry = {}, options = {}) {
+    if (entry.isCatalogPlayback && entry.canonicalBinding) {
+      const src = safeMediaUrl(entry.canonicalBinding.audioSource);
+      return { src, source: "canonical-master", isPlayable: Boolean(src) };
+    }
     const resolved = window.HaloReleaseArtwork?.resolveAudio(entry, { requirePlayable: true, ...options });
     if (resolved) return resolved;
     const candidate = safeMediaUrl(entry?.audioUrl || entry?.audio_url || entry?.sourceUrl || entry?.previewAudio || entry?.preview_audio || entry?.streamUrl);
     return { src: candidate, source: candidate ? "legacy" : "", isPlayable: Boolean(candidate) };
+  }
+
+  async function bindCanonicalAssets(mix, songId) {
+    const fingerprint = routeContextFingerprint();
+    const { response, payload } = await fetchJsonWithTimeout(`/api/dreamweaver-assets?songId=${encodeURIComponent(songId)}`, {
+      timeoutMs: RELEASE_CONTEXT_TIMEOUT_MS,
+      timeoutMessage: "Dreamweaver timed out while binding the canonical master.",
+      headers: { Accept: "application/json" },
+      credentials: "same-origin"
+    });
+    const binding = payload.binding;
+    if (!response.ok || binding?.status !== "ready" || binding.songId !== songId || !safeMediaUrl(binding.audioSource)
+      || !Array.isArray(binding.visualActs) || binding.visualActs.length !== 4) {
+      throw new Error(payload.message || "The canonical master and four visual acts are not ready.");
+    }
+    const images = binding.visualActs.map((visual, index) => {
+      const uri = visual?.uri;
+      const generated = visual?.sourceType === "generated" && typeof uri === "string"
+        && uri.length < 8192 && /^data:image\/svg\+xml;base64,[A-Za-z0-9+/]+=*$/.test(uri);
+      if (visual?.act !== index + 1 || (!generated && !safeMediaUrl(uri))) throw new Error("Dreamweaver received an invalid visual act.");
+      return generated ? uri : safeMediaUrl(uri);
+    });
+    if (routeContextFingerprint() !== fingerprint) return;
+    mix.canonicalBinding = binding;
+    mix.audioUrl = binding.audioSource;
+    chapters.forEach((chapter, index) => { chapter.image = images[index]; });
+    elements.visualStack.querySelectorAll("[data-visual]").forEach((layer, index) => {
+      layer.style.setProperty("--visual-image", `url("${images[index]}")`);
+    });
+    if (elements.dreamweaverSystemStatus) {
+      elements.dreamweaverSystemStatus.dataset.assetStatus = binding.status;
+    }
   }
 
   function isPlayablePrimaryMix(mix) {
@@ -1886,7 +1922,11 @@ import { createLyricInteractionRecorder } from "../lib/journey-interactions.js";
   }
 
   function buildExperience() {
-    elements.visualStack.innerHTML = chapters.map((chapter, index) => `<div class="visual-layer ${index === 0 ? "active" : ""}" data-visual="${index}" style="--visual-image:url('${chapter.image}');--visual-wash:${chapter.wash}"></div>`).join("");
+    elements.visualStack.innerHTML = chapters.map((chapter, index) => `<div class="visual-layer ${index === 0 ? "active" : ""}" data-visual="${index}"></div>`).join("");
+    elements.visualStack.querySelectorAll("[data-visual]").forEach((layer, index) => {
+      layer.style.setProperty("--visual-image", `url("${chapters[index].image}")`);
+      layer.style.setProperty("--visual-wash", chapters[index].wash);
+    });
     elements.chapterList.innerHTML = chapters.map((chapter, index) => `<button class="chapter-button ${index === 0 ? "active" : ""}" type="button" data-chapter="${index}" aria-label="Open act ${chapter.number}: ${escapeHtml(chapter.label)}"><span>${chapter.number}</span><strong>${escapeHtml(chapter.label)}</strong></button>`).join("");
     elements.progressMarkers.innerHTML = chapters.slice(1).map(chapter => `<i style="left:${chapter.start * 100}%"></i>`).join("");
     elements.chapterList.querySelectorAll("[data-chapter]").forEach(button => button.addEventListener("click", () => activateChapter(Number(button.dataset.chapter), true)));
@@ -2852,6 +2892,12 @@ import { createLyricInteractionRecorder } from "../lib/journey-interactions.js";
         return showEmpty(requestedMixId
           ? "Dreamweaver could not load the exact mix requested by this link. Confirm the mix is published and playable, then try again."
           : "No playable audio mix is available yet. Post the existing set to the HALO room or sign in to open a private mix.");
+      }
+      if (mix.isCatalogPlayback) {
+        const bindingSong = cleanSongId(release?.catalog?.songId) || cleanSongId(state.publishedSongId);
+        if (!bindingSong) throw new Error("A catalog song is required to bind the canonical master.");
+        await bindCanonicalAssets(mix, bindingSong);
+        if (routeContextFingerprint() !== requestedRouteFingerprint) return;
       }
       setLoadingProgress(34, "Selecting tonight’s signal", "A published Dreamweaver mix has been selected and the room is shifting to match its pace.");
       elements.mixTitle.textContent = mix.title || "Untitled HALO mix";

@@ -8,6 +8,11 @@ const script = await readFile(new URL("../dreamweaver/dreamweaver.js", import.me
 const declarations = script.slice(script.indexOf("(() => {"), script.indexOf('  if (document.readyState === "loading")'));
 const songId = "11111111-1111-4111-8111-111111111111";
 const stream = "https://halo.test/song.mp3";
+const masterStream = "https://halo.test/canonical-master.wav";
+const binding = {
+  songId, status: "ready", audioSource: masterStream,
+  visualActs: Array.from({ length: 4 }, (_, index) => ({ act: index + 1, sourceType: "upload", uri: `https://halo.test/act-${index + 1}.jpg` }))
+};
 const release = {
   id: songId, title: "Linked song", artist: "Linked artist", streamUrl: stream,
   dreamweaverPayload: {
@@ -17,7 +22,7 @@ const release = {
 };
 const mix = { id: "linked-mix-id", title: "Linked mix", creator: { name: "Mix artist" }, audioUrl: "https://halo.test/mix.mp3", durationSeconds: 120 };
 
-function fixture(search, { releases = [release], mixes = [mix], blocked = false, failed = false, unlock = null, pathname = "/dreamweaver/", releaseArtwork = undefined } = {}) {
+function fixture(search, { releases = [release], mixes = [mix], blocked = false, failed = false, unlock = null, pathname = "/dreamweaver/", releaseArtwork = undefined, assetBinding = binding } = {}) {
   class Element extends EventTarget {
     constructor() {
       super();
@@ -39,6 +44,7 @@ function fixture(search, { releases = [release], mixes = [mix], blocked = false,
     hasAttribute(name) { return this.attributes.has(name); }
     removeAttribute(name) { this.attributes.delete(name); }
     closest() { return null; }
+    querySelectorAll() { return []; }
     pause() { this.paused = true; }
     load() {
       this.loads++;
@@ -68,7 +74,7 @@ function fixture(search, { releases = [release], mixes = [mix], blocked = false,
     localStorage: { getItem: () => null },
     history: { replaceState: (_state, _title, url) => { location.href = new URL(url, location).href; } },
     window: { clearTimeout() {}, setTimeout: () => 1, requestAnimationFrame: callback => callback(), HaloReleaseArtwork: releaseArtwork },
-    fixtures: { releases, mixes, unlock, requests }
+    fixtures: { releases, mixes, unlock, requests, assetBinding }
   };
   vm.runInNewContext(`${declarations}
     hydrateAudioFeedbackQueue = () => {};
@@ -85,11 +91,14 @@ function fixture(search, { releases = [release], mixes = [mix], blocked = false,
     fetchExactMixById = async id => fixtures.mixes.find(mix => mix.id === id);
     fetchJsonWithTimeout = async url => {
       fixtures.requests.push(url);
+      if (url.startsWith("/api/dreamweaver-assets?")) {
+        return { response: { ok: Boolean(fixtures.assetBinding) }, payload: { binding: fixtures.assetBinding } };
+      }
       return { response: { ok: true }, payload: { mixes: fixtures.mixes } };
     };
     state.unlock = fixtures.unlock;
     elements.audio.addEventListener("playing", () => setReleasePlaybackState("playing"));
-    globalThis.player = { state, initializeDreamweaver, shouldPromptLocalUpload, resolvePrimaryPlaybackMix };
+    globalThis.player = { state, chapters, initializeDreamweaver, shouldPromptLocalUpload, resolvePrimaryPlaybackMix };
   })();`, context);
   return { ...context.player, nodes, requests };
 }
@@ -106,7 +115,7 @@ for (const search of [
   };
   const f = fixture(search, { blocked: true, releases: [unrelatedRelease, release] });
   await f.initializeDreamweaver();
-  assert.equal(f.nodes.get("showAudio").src, stream);
+  assert.equal(f.nodes.get("showAudio").src, masterStream);
   assert.equal(f.nodes.get("showAudio").preload, "auto");
   assert.equal(f.nodes.get("showAudio").loads, 1);
   assert.equal(f.nodes.get("showAudio").plays, 1);
@@ -116,8 +125,10 @@ for (const search of [
   assert.match(f.nodes.get("songLobbyPlayerStatus").textContent, /Linked song.*ready/);
   assert.match(f.nodes.get("songLobbyPlayerSource").textContent, /Linked song/);
   assert.equal(f.nodes.get("dreamweaverSystemStatus").textContent, "SYSTEM / OPERATIONAL");
+  assert.equal(f.nodes.get("dreamweaverSystemStatus").dataset.assetStatus, "ready");
   assert.equal(f.shouldPromptLocalUpload(), false, "autoplay blocking must not require an upload");
-  assert.equal(f.requests.length, 0, "song preload must not wait for the unrelated mix library");
+  assert.deepEqual(f.requests, [`/api/dreamweaver-assets?songId=${songId}`], "song preload binds the master without fetching unrelated mixes");
+  assert.deepEqual(Array.from(f.chapters, chapter => chapter.image), binding.visualActs.map(visual => visual.uri));
   assert.equal(f.nodes.get("showShell").hidden, !search.includes("experience=studio"));
 }
 
@@ -135,7 +146,7 @@ for (const search of ["?mix=linked-mix-id", `?mix=linked-mix-id&song=${songId}`,
 }
 
 for (const releases of [[], [{ ...release, streamUrl: "", dreamweaverPayload: { ...release.dreamweaverPayload, audioStreamUrl: null } }]]) {
-  const f = fixture(`?song=${songId}`, { releases });
+  const f = fixture(`?song=${songId}`, { releases, assetBinding: null });
   await f.initializeDreamweaver();
   assert.equal(f.nodes.get("showAudio").loads, 0);
   assert.equal(f.shouldPromptLocalUpload(), true);
@@ -146,7 +157,7 @@ for (const releases of [[], [{ ...release, streamUrl: "", dreamweaverPayload: { 
 for (const options of [{ unlock: { firstName: "Listener", favoritePlatform: "spotify" } }, { pathname: `/dreamweaver/satellite/${songId}/` }]) {
   const f = fixture(`?song=${songId}`, { ...options, blocked: true });
   await f.initializeDreamweaver();
-  assert.equal(f.nodes.get("showAudio").src, stream);
+  assert.equal(f.nodes.get("showAudio").src, masterStream);
   assert.equal(f.nodes.get("showShell").hidden, !options.unlock);
 }
 
@@ -162,7 +173,7 @@ for (const options of [{ unlock: { firstName: "Listener", favoritePlatform: "spo
 {
   const f = fixture(`?song=${songId}`, { releases: [{ ...release, dreamweaverPayload: undefined }], blocked: true });
   await f.initializeDreamweaver();
-  assert.equal(f.nodes.get("showAudio").src, stream, "legacy releases must resolve their public stream without a payload");
+  assert.equal(f.nodes.get("showAudio").src, masterStream, "legacy releases must also consume the backend master binding");
   assert.equal(f.shouldPromptLocalUpload(), false);
 }
 
@@ -180,9 +191,22 @@ for (const options of [{ unlock: { firstName: "Listener", favoritePlatform: "spo
   const releaseArtwork = { ...artworkWindow.HaloReleaseArtwork, wire() {} };
   const f = fixture(`?song=${songId}&mix=${DREAMWEAVER_STOREFRONT_MIX_ID}&satellite=dreamweaver`, { blocked: true, releaseArtwork });
   await f.initializeDreamweaver();
-  assert.equal(f.nodes.get("showAudio").src, stream, "song routes hydrate the catalog release when the shared artwork helper is loaded");
+  assert.equal(f.nodes.get("showAudio").src, masterStream, "the shared artwork helper cannot override the canonical master");
   assert.equal(f.state.release?.id, songId);
   assert.equal(f.resolvePrimaryPlaybackMix([], "", null, { allowFallback: false }), null);
 }
 
-console.log("Dreamweaver playback contracts: deep links, preload, labels, autoplay blocking, shells, and upload fallback passed.");
+for (const assetBinding of [
+  null,
+  { ...binding, visualActs: binding.visualActs.slice(0, 3) },
+  { ...binding, songId: "22222222-2222-4222-8222-222222222222" },
+  { ...binding, audioSource: "javascript:alert(1)" },
+  { ...binding, visualActs: binding.visualActs.map(visual => ({ ...visual, uri: "javascript:alert(1)" })) }
+]) {
+  const f = fixture(`?song=${songId}`, { assetBinding });
+  await f.initializeDreamweaver();
+  assert.equal(f.nodes.get("showAudio").loads, 0, "invalid bindings must never fall back to preview audio");
+  assert.equal(f.state.releasePlaybackState, "unavailable");
+}
+
+console.log("Dreamweaver playback contracts: canonical binding, four acts, deep links, preload, shells, and upload fallback passed.");

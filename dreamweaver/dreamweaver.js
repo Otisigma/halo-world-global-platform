@@ -2125,6 +2125,7 @@ import { createLyricInteractionRecorder } from "../lib/journey-interactions.js";
     if (state.images.has(source)) return Promise.resolve(state.images.get(source));
     return new Promise(resolve => {
       const image = new Image();
+      image.crossOrigin = "anonymous";
       image.onload = () => { state.images.set(source, image); resolve(image); };
       image.onerror = () => resolve(null);
       image.src = source;

@@ -154,6 +154,9 @@ rights. Uploaded positions are preserved; null slots are generated. Omit trailin
 slots to generate them. An empty array resets to the catalog cover (if present)
 plus generated companions. Mix IDs are deliberately not accepted: this API binds
 catalog songs, while standalone DJ mixes retain their existing playback flow.
+External image hosts must allow anonymous CORS to participate in canvas/film
+exports; images that fail that check are omitted from exports instead of
+tainting the canvas.
 
 Missing visuals use deterministic procedural SVG artwork seeded by bounded title,
 artist, genre, and lyric input in dark gold/obsidian. No lyrics are embedded in

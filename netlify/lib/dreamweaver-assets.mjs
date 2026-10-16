@@ -15,16 +15,16 @@ export function bindingSongId(value) {
 }
 
 function mediaUrl(value) {
-  if (typeof value !== "string" || !value || value.length > 2048 || /[\s\\<>"'`]/.test(value)) return "";
+  if (typeof value !== "string" || !value || value.length > 1200 || /[\s\\<>"'`]/.test(value)) return "";
   try {
     if (value.startsWith("/")) {
       const url = new URL(value, "https://halo.invalid");
       if (url.origin !== "https://halo.invalid") return "";
-      return url.pathname.startsWith("/assets/") || url.pathname === "/api/song-catalog/artwork"
+      return url.href.length <= 1200 && (url.pathname.startsWith("/assets/") || url.pathname === "/api/song-catalog/artwork")
         ? `${url.pathname}${url.search}` : "";
     }
     const url = new URL(value);
-    return url.protocol === "https:" && !url.username && !url.password ? url.href : "";
+    return url.protocol === "https:" && !url.username && !url.password && url.href.length <= 1200 ? url.href : "";
   } catch {
     return "";
   }
@@ -97,7 +97,7 @@ export function buildBinding(song, master, customImages = []) {
     return { act: index + 1, sourceType: supplied ? "upload" : "generated", uri: supplied || generateActVisual(song, index + 1), status: "ready" };
   });
   const audioSource = canonicalMasterUrl(song, master);
-  const revision = createHash("sha256").update(JSON.stringify([master.id, audioSource, visuals])).digest("hex");
+  const revision = createHash("sha256").update(JSON.stringify([master.id, audioSource, images, visuals])).digest("hex");
   return { songId: song.id, masterVersionId: master.id, audioSource, visualActs: visuals, revision, status: "ready" };
 }
 

@@ -41,7 +41,7 @@ function fakeDb({ visible = true, masters = [master], stored = null, conflicts =
 
 assert.equal(bindingSongId(songId.toUpperCase()), songId);
 for (const id of ["", "not-an-id", `${songId}'`, null]) assert.throws(() => bindingSongId(id));
-for (const images of [null, {}, Array(5).fill("https://halo.test/art.jpg"), ["javascript:alert(1)"], ["data:image/svg+xml,unsafe"], ["//evil.test/art"], ["http://halo.test/art"], ["/assets/../../api/private"], ["/api/song-catalog/audio?versionId=x"], ["/other-page"]]) {
+for (const images of [null, {}, Array(5).fill("https://halo.test/art.jpg"), ["javascript:alert(1)"], ["data:image/svg+xml,unsafe"], ["//evil.test/art"], ["http://halo.test/art"], ["/assets/../../api/private"], ["/api/song-catalog/audio?versionId=x"], ["/other-page"], [`https://halo.test/${"x".repeat(1200)}`]]) {
   assert.throws(() => validateCustomImages(images));
 }
 assert.deepEqual(validateCustomImages(["/assets/cover.jpg", null]), ["/assets/cover.jpg", null]);
@@ -60,6 +60,9 @@ const sparse = buildBinding(song, master, ["https://halo.test/one.jpg", null, "h
 assert.equal(sparse.visualActs[1].sourceType, "generated");
 assert.equal(sparse.visualActs[2].uri, "https://halo.test/three.jpg");
 assert.equal(buildBinding({ ...song, artwork_url: "/assets/cover.jpg" }, master).visualActs[0].uri, "/assets/cover.jpg");
+assert.notEqual(buildBinding({ ...song, artwork_url: "/assets/cover.jpg" }, master).revision,
+  buildBinding({ ...song, artwork_url: "/assets/cover.jpg" }, master, ["/assets/cover.jpg"]).revision,
+  "an explicitly selected image must be persisted even when it matches today's default cover");
 assert.notEqual(generateActVisual(song, 1), generateActVisual(song, 2));
 assert.notEqual(generateActVisual(song, 1), generateActVisual({ ...song, lyrics_text: "different lyrics" }, 1));
 const svg = Buffer.from(generateActVisual(song, 1).split(",")[1], "base64").toString();

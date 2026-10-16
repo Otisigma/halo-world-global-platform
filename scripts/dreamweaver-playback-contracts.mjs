@@ -69,6 +69,12 @@ function fixture(search, { releases = [release], mixes = [mix], blocked = false,
   const requests = [];
   const context = {
     URL, URLSearchParams, console, location, DREAMWEAVER_STOREFRONT_MIX_ID, buildDreamweaverStorefrontPath, createLyricInteractionRecorder,
+    Image: class {
+      set src(value) {
+        assert.equal(this.crossOrigin, "anonymous", "CORS must be set before requesting campaign artwork");
+        queueMicrotask(() => value.includes("no-cors") ? this.onerror() : this.onload());
+      }
+    },
     HTMLMediaElement: { HAVE_CURRENT_DATA: 2 },
     document: { getElementById: getElement, querySelector: getElement, body: new Element() },
     localStorage: { getItem: () => null },
@@ -98,7 +104,7 @@ function fixture(search, { releases = [release], mixes = [mix], blocked = false,
     };
     state.unlock = fixtures.unlock;
     elements.audio.addEventListener("playing", () => setReleasePlaybackState("playing"));
-    globalThis.player = { state, chapters, initializeDreamweaver, shouldPromptLocalUpload, resolvePrimaryPlaybackMix };
+    globalThis.player = { state, chapters, initializeDreamweaver, shouldPromptLocalUpload, resolvePrimaryPlaybackMix, loadImage };
   })();`, context);
   return { ...context.player, nodes, requests };
 }
@@ -209,4 +215,16 @@ for (const assetBinding of [
   assert.equal(f.state.releasePlaybackState, "unavailable");
 }
 
-console.log("Dreamweaver playback contracts: canonical binding, four acts, deep links, preload, shells, and upload fallback passed.");
+{
+  const f = fixture(`?song=${songId}`);
+  const source = "https://images.halo.test/custom.jpg";
+  const image = await f.loadImage(source);
+  assert.equal(image.crossOrigin, "anonymous");
+  assert.equal(f.state.images.get(source), image);
+  assert.equal(await f.loadImage(source), image, "approved images are cached");
+  const blockedSource = "https://images.halo.test/no-cors.jpg";
+  assert.equal(await f.loadImage(blockedSource), null, "non-CORS hosts must not taint export canvases");
+  assert.equal(f.state.images.has(blockedSource), false);
+}
+
+console.log("Dreamweaver playback contracts: canonical binding, four acts, CORS-safe images, deep links, preload, shells, and upload fallback passed.");

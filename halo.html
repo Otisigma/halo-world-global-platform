@@ -1323,7 +1323,10 @@
           { route: '/creator-network/', label: 'CREATOR NETWORK', primaryWorking: true },
           { route: '/artist/dashboard', label: 'BUSINESS HUB' },
           { route: '/dj-deck.html', label: 'LIVE DJ DECK' },
+          { route: '/dj-vault/', label: 'DJ VAULT' },
           { route: '/music/', label: 'ALL MUSIC' },
+          { route: '/music-world.html', label: 'MUSIC WORLD' },
+          { route: '/stats/', label: 'PUBLIC STATS' },
           { route: '/halo-x.html', label: 'DJ HALO X' },
           { route: '/mixes/', label: 'HALO X MIXES' },
           { route: '/halo-live.html', label: 'HALO LIVE' },
@@ -1354,8 +1357,8 @@
           '/magazine.html'
         ]);
         const MENU_ROUTE_STATUS_TARGETS = new Set(MENU_STATUS_GROUP_TARGETS.map(target => target.route));
-        const DEFAULT_MENU_ATTENTION_ROUTE = '/dreamweaver/';
-        const BASE_MENU_DESTINATION_COUNT = MENU_STATUS_GROUP_TARGETS.length + 4;
+        const DEFAULT_MENU_ATTENTION_ROUTE = '';
+        const BASE_MENU_DESTINATION_COUNT = MENU_STATUS_GROUP_TARGETS.length + 1;
         const MENU_FILE_BACKED_ROUTES = new Set(['/artist/dashboard']);
         const normalizeMenuRoutePath = (route = '') => {
           if (!route) return '/';

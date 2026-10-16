@@ -104,6 +104,20 @@ export const songVersions = pgTable("halo_song_versions", {
     .where(sql`version_type = 'sale_master' AND status = 'active'`),
 ]);
 
+export const releaseAssets = pgTable("halo_release_assets", {
+  songId: text("song_id").primaryKey().references(() => songs.id, { onDelete: "cascade" }),
+  masterVersionId: text("master_version_id").notNull().references(() => songVersions.id, { onDelete: "cascade" }),
+  canonicalMasterUrl: text("canonical_master_url").notNull(),
+  visualAct1: text("visual_act_1").notNull(),
+  visualAct2: text("visual_act_2").notNull(),
+  visualAct3: text("visual_act_3").notNull(),
+  visualAct4: text("visual_act_4").notNull(),
+  customImages: jsonb("custom_images").notNull().default([]),
+  revision: text("revision").notNull(),
+  status: text("status").notNull().default("ready"),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 export const dreamweaverSongReviews = pgTable("halo_dreamweaver_song_reviews", {
   id: text("id").primaryKey(),
   songId: text("song_id").notNull().references(() => songs.id, { onDelete: "cascade" }),

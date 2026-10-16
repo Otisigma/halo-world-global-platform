@@ -4,6 +4,7 @@ import { getDatabase } from "@netlify/database";
 import { getUser, verifyRequestOrigin } from "@netlify/identity";
 import { cleanText, ensureMembership } from "../lib/halo-x.mjs";
 import { runDreamweaverReview } from "./song-catalog.js";
+import { BindingError, bindingSongId, loadDreamweaverSong } from "../lib/dreamweaver-assets.mjs";
 import { MASTER_PLAYBACK_URL_TTL_SECONDS, deleteStoredObject, directUploadConfig, presignObjectUrl } from "../lib/direct-upload-storage.mjs";
 import {
   AUDIO_CHUNK_MAX_BYTES,
@@ -272,10 +273,22 @@ async function readAudioRange(version: Record<string, unknown>, range: { start: 
 }
 
 async function serveAudio(request: Request, db: Awaited<ReturnType<typeof getDatabase>>, ownerMemberId: string) {
-  const versionId = cleanId(new URL(request.url).searchParams.get("versionId"));
-  const version = versionId ? await ownedVersion(db, ownerMemberId, versionId) : null;
+  const params = new URL(request.url).searchParams;
+  const versionId = cleanId(params.get("versionId"));
+  let version;
+  if (params.get("dreamweaver") === "1") {
+    try {
+      const resolved = await loadDreamweaverSong(db, bindingSongId(params.get("songId")), ownerMemberId);
+      version = resolved.master.id === versionId ? resolved.master : null;
+    } catch (error) {
+      if (error instanceof BindingError) return json({ message: error.message }, error.status);
+      throw error;
+    }
+  } else {
+    version = versionId ? await ownedVersion(db, ownerMemberId, versionId) : null;
+  }
   if (version?.audio_storage_key) {
-    // Direct-to-storage masters stream from object storage through a short-lived, owner-only signed URL.
+    // Resolve access before issuing a short-lived storage URL; never persist the signed URL.
     const storage = directUploadConfig();
     if (!storage) return json({ message: "Master storage is not configured" }, 503);
     const location = presignObjectUrl({ config: storage, method: request.method === "HEAD" ? "HEAD" : "GET", key: String(version.audio_storage_key), expiresIn: MASTER_PLAYBACK_URL_TTL_SECONDS });
@@ -394,6 +407,9 @@ export default async function songCatalogAudioHandler(request: Request) {
   if (!["GET", "HEAD", "POST", "DELETE"].includes(request.method)) return json({ message: "Method not allowed" }, 405, { Allow: "GET, HEAD, POST, DELETE, OPTIONS" });
   try {
     const [db, user] = await Promise.all([getDatabase(), getUser()]);
+    if (["GET", "HEAD"].includes(request.method) && new URL(request.url).searchParams.get("dreamweaver") === "1") {
+      return serveAudio(request, db, user?.id || "");
+    }
     if (!user?.id) return json({ message: "Join or sign in to use song audio" }, 401);
     const membership = await ensureMembership(db, user);
     if (["GET", "HEAD"].includes(request.method)) return serveAudio(request, db, membership.member_id);

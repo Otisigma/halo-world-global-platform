@@ -170,6 +170,12 @@ const db = { async sql(strings, ...values) {
     assert.equal(values.at(-1), 10, "worker batch must be bounded");
     return [{ id: song.id, owner_member_id: song.owner_member_id }];
   }
+  if (sql.includes("WITH lease AS")) {
+    const watchdog = JSON.parse(values.find(value => typeof value === "string" && value.startsWith('{"schemaVersion":')));
+    state = { ...(state || {}), watchdog };
+    audit.push("watchdog_pulse");
+    return [{ id: "pulse" }];
+  }
   if (sql.includes("FROM halo_song_catalog")) return [structuredClone(song)];
   if (sql.includes("FROM halo_song_versions")) return structuredClone(versions);
   if (sql.includes("INSERT INTO halo_release_conveyor (")) {
@@ -192,13 +198,17 @@ assert.deepEqual(recovery, { scanned: 1, results: [{ releaseId: song.id, status:
 assert.equal(state.receipt.ready, true);
 assert.equal(state.package.handoff.publicationAction, "existing_catalog_controls");
 assert.equal(state.package.handoff.originalMasterPreserved, true);
-assert.deepEqual(audit, ["intake", "attempt", ...RELEASE_STAGES.slice(1), "ready"]);
+assert.deepEqual(audit, ["watchdog_pulse", "intake", "attempt", ...RELEASE_STAGES.slice(1), "ready"]);
 const auditCount = audit.length;
 await recoverCatalogReleases(db, ports.prepareAudio);
 assert.equal(audit.length, auditCount, "unchanged ready inputs do not append redundant audit events");
 assert.match(selector, /nextRetryAt/);
 assert.match(selector, /locked_until < NOW/);
 assert.match(selector, /sourceUpdatedAt/);
+assert.match(selector, /watchdog'->>'checkedAt'/);
+assert.match(selector, /INTERVAL '5 minutes'/);
+assert.match(selector, /AND \(\([\s\S]*nextRetryAt[\s\S]*OR conveyor\.state->'watchdog'/,
+  "watchdog pulses and pipeline retries share the active-song and lease guards");
 assert(!selector.includes("'blocked', 'escalated'"), "unchanged blocked/escalated releases are not automatic candidates");
 assert.equal(candidateCalls, 2);
 const read = path => readFile(new URL(`../${path}`, import.meta.url), "utf8");

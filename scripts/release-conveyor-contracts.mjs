@@ -5,6 +5,7 @@ import { conditionReleaseWav } from "../netlify/lib/release-audio.mjs";
 import { createReleaseConveyorHandler } from "../netlify/lib/release-conveyor-http.mjs";
 import { prepareReleaseAudio } from "../netlify/lib/release-conveyor-audio.mjs";
 import { createReleaseConveyorConsole } from "../lib/release-conveyor-ui.js";
+import "./halo-watchdog-contracts.mjs";
 
 const song = { id: "12345678-1234-4123-8123-123456789012", owner_member_id: "creator",
   title: "A Signal", artist_name: "Artist", genre: "Soul", isrc: "GB-AAA-26-00001",
@@ -165,7 +166,12 @@ controller.select(song.id);
 assert.equal(consoleNode("percent-text").textContent, "0% Completed (0/8 stages)");
 assert.equal(consoleNode("stages").children.length, RELEASE_STAGES.length);
 assert.equal(consoleNode("hum").disabled, true, "filter selection is disabled during a request");
-resolveConsoleRequest({ ok: true, json: async () => ({ ...success, options: { humHz: 0 } }) });
+resolveConsoleRequest({ ok: true, json: async () => ({ ...success, options: { humHz: 0 },
+  watchdog: {
+    issues: [{ field: "route", message: "/toolost/: unavailable" }],
+    findings: [{ field: "infrastructure", message: "/radio/: broken <b>route</b>" }],
+  },
+  receipt: { ...success.receipt, blocked: [{ field: "isrc", message: "Creator review required" }] } }) });
 await settle();
 assert.equal(consoleNode("hum").disabled, false);
 assert.equal(consoleNode("package").hidden, false);
@@ -174,6 +180,11 @@ assert.equal(consoleNode("progress-bar").style.width, "100%");
 assert.equal(consoleNode("progress").attributes.get("aria-valuenow"), "100");
 assert.equal(consoleNode("current-step").textContent, "Active Dept: Complete");
 assert.equal(consoleNode("status-badge").textContent, "FULLY CLEARED");
+assert.deepEqual(consoleNode("issues").children.map(item => item.textContent), [
+  "isrc: Creator review required",
+  "route: /toolost/: unavailable",
+  "infrastructure: /radio/: broken <b>route</b>",
+], "blocked issues and both watchdog diagnostic formats remain visible as text");
 assert(consoleNode("stages").children.every(item => item.attributes.get("data-state") === "passed"));
 let poll = consoleTimer();
 resolveConsoleRequest({ ok: true, json: async () => missing });

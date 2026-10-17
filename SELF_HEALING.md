@@ -33,6 +33,19 @@ Public reports are same-origin only, payload-limited, sanitized, deduplicated, a
 
 ## Instant deploy feedback loop
 
+### HALO release watchdog
+
+The existing `release-conveyor-recover` Netlify function runs every five minutes, inspecting up to ten active catalog songs per invocation within the conveyor's bounded recovery budget. Oldest watchdog checks run first, including blocked releases; existing audio retry limits and backoff still apply. Catalog saves/uploads continue through the same leased conveyor.
+
+`netlify/lib/halo-watchdog.mjs` defines the shared intent and versioned watchdog state. Signed-in owners read it as `watchdog` in `GET /api/release-conveyor?songId=...`; findings render in the existing conveyor console. State and `watchdog_pulse` events use the existing conveyor tables, with owner, lease, and source-revision checks. Repairs and their audit append commit atomically.
+
+- An approved canonical sale master can queue an empty, not-started radio lane with targets of **-16 LUFS / -1 dBTP**. This creates preparation work in the existing catalog mastering queue, not mastered audio or radio rotation. Originals, existing edits, clean-content declarations, and approvals remain unchanged.
+- Missing ISRCs can be restored only from a previously Council-passed release package for the same owned recording/source identity. Existing values are never replaced. Historical rights declarations are review-only suggestions: no automatic rights clearance, dispute resolution, mastering approval, or publication occurs.
+- Dreamweaver graphs bind inherited artwork, version-specific visuals, video, and parsed lyrics into the release package. Graphs lock only after all bound assets pass same-origin availability/content-type checks, and unlock when those checks fail. Custom version assets remain intact.
+- The scheduled pulse checks the registry's Song Catalog, Release House, Finish House, Radio, and Dreamweaver console routes against Netlify's configured HTTPS `URL`. Requests are bounded and do not follow redirects. Asset checks are limited to that origin (and supported media API paths), at most twenty probes per song; external assets remain explicitly unverified/unlocked. Missing configuration, redirects, private/unavailable media, and failed probes are surfaced rather than silently certified or repaired.
+
+Run `node scripts/halo-watchdog-contracts.mjs` for focused guard/audit contracts, or `npm run test:release-conveyor` for conveyor compatibility. Both are included in `npm test`. These checks do not prove that a production deploy, private storage, or scheduled function has run successfully.
+
 Run `npm run -s deploy:feedback` for a focused readiness check, or `npm test` for the full contract suite (which now includes the same deploy feedback step).
 
 Deploy feedback reports four explicit pass/fail contracts:

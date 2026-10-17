@@ -778,6 +778,7 @@ import { googleDriveFallbackSources, isGoogleDriveUrl, normalizeGoogleDriveAudio
   // Direct sources always win; a Google Drive link is only used (normalized) when nothing direct is playable.
   function resolvePrimaryAudio(entry = {}, options = {}) {
     if (entry.isCatalogPlayback && entry.canonicalBinding) {
+      // The server-side binding is authoritative; a Drive-hosted master is only normalized so it can stream.
       const binding = entry.canonicalBinding.audioSource;
       const src = isGoogleDriveUrl(binding) ? normalizeGoogleDriveAudioUrl(binding) : safeMediaUrl(binding);
       return { src, source: "canonical-master", isPlayable: Boolean(src) };
@@ -807,18 +808,24 @@ import { googleDriveFallbackSources, isGoogleDriveUrl, normalizeGoogleDriveAudio
 
   // Explicit user gesture only: never called from timers or autoplay paths.
   async function handleSoundUnlock() {
-    state.autoplayMuted = false;
-    state.soundUnlockedByUser = true;
-    renderSoundUnlock("");
-    if (shouldPromptLocalUpload()) return togglePlayback();
+    const previousMode = state.soundUnlockMode;
+    if (shouldPromptLocalUpload()) {
+      state.autoplayMuted = false;
+      renderSoundUnlock("");
+      return togglePlayback();
+    }
     try {
       if (state.audioSourceMode === "remote") armRemoteAudioWatchdog();
       await unlockDreamweaverAudio(elements.audio);
+      state.autoplayMuted = false;
+      state.soundUnlockedByUser = true;
+      renderSoundUnlock("");
       if (elements.muteButton) elements.muteButton.setAttribute("aria-label", "Mute show");
       renderReleasePanel();
     } catch (error) {
-      if (error?.name === "AbortError") return;
-      renderSoundUnlock("blocked");
+      state.autoplayMuted = Boolean(elements.audio.muted) && previousMode === "muted";
+      if (error?.name === "AbortError") return renderSoundUnlock(previousMode);
+      renderSoundUnlock(state.autoplayMuted ? "muted" : "blocked");
       showToast("Your browser is still blocking audio. Press play again to start the Dreamweaver sound.");
     }
   }

@@ -266,6 +266,12 @@ for (const assetBinding of [
   assert.equal(f.resolvePrimaryAudio({ audioUrl: "https://halo.test/direct.mp3", streamUrl: `https://drive.google.com/file/d/${id}/view` }).src, "https://halo.test/direct.mp3");
   assert.deepEqual({ ...f.resolvePrimaryAudio({ audioUrl: `https://drive.google.com/file/d/${id}/view` }) }, { src: direct, source: "google-drive-fallback", isPlayable: true });
   assert.equal(f.resolvePrimaryAudio({ isCatalogPlayback: true, canonicalBinding: { audioSource: masterStream } }).src, masterStream);
+  assert.equal(f.resolvePrimaryAudio({ isCatalogPlayback: true, canonicalBinding: { audioSource: `https://drive.google.com/file/d/${id}/view` } }).src, direct, "a Drive-hosted canonical master is normalized, never replaced");
+
+  // A rejected gesture unlock restores the prior mute state rather than leaving a silent, unmuted element.
+  const rejected = { muted: true, paused: true, play: async () => { throw Object.assign(new Error("blocked"), { name: "NotAllowedError" }); } };
+  await assert.rejects(playback.unlockDreamweaverAudio(rejected), { name: "NotAllowedError" });
+  assert.equal(rejected.muted, true);
 }
 
 // Autoplay starts muted, never unmutes on its own, and exposes an explicit unmute control.

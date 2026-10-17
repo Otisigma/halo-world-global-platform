@@ -168,6 +168,13 @@ const db = { async sql(strings, ...values) {
     events.push({ stage: values[10], details: JSON.parse(values[11]) });
     return [{ id: values[7] }];
   }
+  if (query.includes("WITH lease AS")) {
+    assert.match(query, /FOR UPDATE/);
+    const watchdog = JSON.parse(values.find(value => typeof value === "string" && value.startsWith('{"schemaVersion":')));
+    stored.state.watchdog = watchdog;
+    events.push({ stage: "watchdog_pulse", details: watchdog });
+    return [{ id: "pulse" }];
+  }
   if (query.includes("SELECT song_id FROM halo_release_conveyor")) return leaseValid ? [{ song_id: song.id }] : [];
   if (query.includes("SET lease_token = NULL")) { stored.lease_token = null; return []; }
   throw new Error(`Unexpected watchdog query: ${query}`);
@@ -201,7 +208,11 @@ assert.equal(currentVersions[1].id, createdLane);
 
 reset();
 const prepareAudio = async () => ({ summary: "Approved original preserved.", issues: [], repairs: [], originalPreserved: true });
-let state = await processCatalogRelease(db, song.owner_member_id, song.id, prepareAudio, undefined, { check, routes });
+const assetAuditor = async () => [
+  { url: "/cover.jpg", type: "image/", status: "passed" },
+  { url: "/loop.mp4", type: "video/", status: "passed" },
+];
+let state = await processCatalogRelease(db, song.owner_member_id, song.id, prepareAudio, undefined, { check, routes, assetAuditor });
 assert.equal(state.status, "escalated", "queued radio is not approved or broadcast-ready");
 assert.equal(state.watchdog.graph.locked, true, "visuals bind even while Council waits for mastering");
 assert(state.watchdog.repairs.includes("lock_dreamweaver_graph"));
@@ -211,10 +222,13 @@ const eventCount = events.length;
 await processCatalogRelease(db, song.owner_member_id, song.id, prepareAudio);
 assert.equal(events.length, eventCount, "incidental unchanged calls do not duplicate checkpoints");
 reset({ readyRadio: true });
-state = await processCatalogRelease(db, song.owner_member_id, song.id, prepareAudio, undefined, { check, routes });
+state = await processCatalogRelease(db, song.owner_member_id, song.id, prepareAudio, undefined, { check, routes, assetAuditor });
 assert.equal(state.status, "ready");
 assert.equal(state.package.dreamweaver.assetGraph.locked, true);
 assert.equal(state.package.documents.dreamweaver.assetGraph.locked, true);
+assert.equal(state.package.dreamweaver.assetGraph, state.watchdog.assetGraph);
+assert.equal(state.receipt.watchdog, state.watchdog);
+assert(state.watchdog.findings.some(issue => issue.field === "isrc") === false);
 assert(events.some(event => event.stage === "metadata_rights" && event.details.template.isrc === template.isrc));
 currentSong.notes = "Updated release note";
 state = await processCatalogRelease(db, song.owner_member_id, song.id, prepareAudio);

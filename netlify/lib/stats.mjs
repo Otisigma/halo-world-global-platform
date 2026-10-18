@@ -108,6 +108,7 @@ export const allowedEvents = new Set([
   "open_fan_guide",
   "open_featured_release",
   "open_feedback_desk",
+  "open_halo_shield",
   "open_pricing",
   "open_finish_house",
   "open_halo_live",

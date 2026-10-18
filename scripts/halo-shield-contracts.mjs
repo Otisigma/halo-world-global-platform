@@ -3,7 +3,7 @@ import { randomBytes } from "node:crypto";
 import fs from "node:fs";
 import vm from "node:vm";
 import { createShieldHandler, publicShieldStatus } from "../netlify/lib/halo-shield.mjs";
-import { authorizeStatsAdmin } from "../netlify/lib/stats.mjs";
+import { allowedEvents, authorizeStatsAdmin } from "../netlify/lib/stats.mjs";
 import { PUBLIC_ROUTE_REGISTRY } from "../lib/route-registry.js";
 
 const now = Date.parse("2026-10-18T06:00:00Z");
@@ -113,13 +113,28 @@ assert.match(css, /--shield-panel: #211a16/);
 assert.match(css, /--shield-cold: #a5c4cf/);
 assert.match(css, /:focus-visible/);
 assert.match(read("music/index.html"), /href="\/halo-shield\/"/);
-assert.ok(PUBLIC_ROUTE_REGISTRY.some(({ route, file }) => route === "/halo-shield/" && file === "halo-shield/index.html"));
+assert.ok(PUBLIC_ROUTE_REGISTRY.some(({ route, file, menuLabel }) =>
+  route === "/halo-shield/" && file === "halo-shield/index.html" && menuLabel === "HALO SHIELD"
+), "Halo Shield must participate in menu health checks");
 assert.match(read("netlify.toml"), /from = "\/netlify\/\*"\s+to = "\/404.html"\s+status = 404\s+force = true/);
 const homePromotion = home.match(/<section(?=[^>]*aria-labelledby="halo-shield-promo-title")[\s\S]*?<\/section>/)?.[0];
 assert.ok(homePromotion, "homepage must include an accessible Halo Shield promotion card");
 assert.match(homePromotion, /href="\/halo-shield\/"/, "homepage promotion must link to Halo Shield");
 assert.match(homePromotion, /current protection status and verified outcomes/i, "homepage promotion must focus on visible results");
 assert.doesNotMatch(homePromotion, /fingerprint|splinter|tarpit|scoring|recursive|telemetry|internal/i, "homepage promotion must not disclose internal mechanics");
+const careMenu = home.match(/<section[^>]*aria-labelledby="halo-lane-care"[\s\S]*?<\/section>/)?.[0];
+assert.ok(careMenu, "homepage must retain its Care menu");
+const shieldMenuLink = careMenu.match(/<a href="\/halo-shield\/"[\s\S]*?<\/a>/)?.[0];
+assert.ok(shieldMenuLink, "Care must link directly to public Halo Shield");
+for (const surface of [shieldMenuLink, homePromotion]) {
+  assert.match(surface, /View protection status/, "Shield entry points must use a consistent CTA");
+  assert.match(surface, /data-stat-event="open_halo_shield"/);
+  assert.doesNotMatch(surface, /\/admin|\/api\/|DistroKid|affiliate|referral/i);
+}
+assert.match(shieldMenuLink, /renderMenuStatusBadge\('\/halo-shield\/', 'Halo Shield'\)/);
+const statusTargets = home.match(/const MENU_STATUS_GROUP_TARGETS = \[([\s\S]*?)\];/)?.[1];
+assert.match(statusTargets, /route: '\/halo-shield\/', label: 'HALO SHIELD'/);
+assert.ok(allowedEvents.has("open_halo_shield"), "Shield discovery analytics must be allowlisted");
 
 const elements = new Map();
 const element = id => {

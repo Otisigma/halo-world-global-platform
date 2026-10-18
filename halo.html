@@ -1348,6 +1348,7 @@
           { route: '/toolost/', label: 'HALO DISTRIBUTION' },
           { route: '/finish-house/', label: 'FINISH HOUSE' },
           { route: '/magazine.html', label: 'HALO SIGNAL' },
+          { route: '/pricing/', label: 'PRICING' },
           { route: '/support/', label: 'FEEDBACK DESK' }
         ];
         const MENU_PRIMARY_WORKING_TARGET_ROUTES = new Set([
@@ -4096,6 +4097,9 @@
 
                       <section className="halo-menu-lane halo-menu-lane-care" aria-labelledby="halo-lane-care">
                         <div className="halo-menu-lane-title"><span>04</span><h3 id="halo-lane-care">Care</h3></div>
+                        <a href="/pricing/" data-stat-event="open_pricing" data-stat-target="header" data-signal="GROW ON TRUST">
+                          <Icon name="arrow-right" className="halo-menu-icon" /><span><strong>PRICING {renderMenuStatusBadge('/pricing/', 'Pricing')}</strong><small>Explore Halo Music + Halo Shield plans</small></span>
+                        </a>
                         <a href="/support/" data-stat-event="open_feedback_desk" data-stat-target="header" data-signal="SYSTEM CARE">
                           <Icon name="bug" className="halo-menu-icon" /><span><strong>FEEDBACK DESK {renderMenuStatusBadge('/support/', 'Feedback Desk')}</strong><small>Report bugs, request features, get help</small></span>
                         </a>

@@ -103,6 +103,7 @@ const read = path => fs.readFileSync(new URL(`../${path}`, import.meta.url), "ut
 const html = read("halo-shield/index.html");
 const css = read("halo-shield/shield.css");
 const js = read("halo-shield/shield.js");
+const home = read("halo.html");
 assert.match(html, /Halo Shield/);
 assert.match(html, /Halo Music/);
 assert.match(html, /Awaiting verification/);
@@ -114,6 +115,11 @@ assert.match(css, /:focus-visible/);
 assert.match(read("music/index.html"), /href="\/halo-shield\/"/);
 assert.ok(PUBLIC_ROUTE_REGISTRY.some(({ route, file }) => route === "/halo-shield/" && file === "halo-shield/index.html"));
 assert.match(read("netlify.toml"), /from = "\/netlify\/\*"\s+to = "\/404.html"\s+status = 404\s+force = true/);
+const homePromotion = home.match(/<section(?=[^>]*aria-labelledby="halo-shield-promo-title")[\s\S]*?<\/section>/)?.[0];
+assert.ok(homePromotion, "homepage must include an accessible Halo Shield promotion card");
+assert.match(homePromotion, /href="\/halo-shield\/"/, "homepage promotion must link to Halo Shield");
+assert.match(homePromotion, /current protection status and verified outcomes/i, "homepage promotion must focus on visible results");
+assert.doesNotMatch(homePromotion, /fingerprint|splinter|tarpit|scoring|recursive|telemetry|internal/i, "homepage promotion must not disclose internal mechanics");
 
 const elements = new Map();
 const element = id => {

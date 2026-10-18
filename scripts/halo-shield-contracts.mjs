@@ -107,6 +107,9 @@ const home = read("halo.html");
 assert.match(html, /Halo Shield/);
 assert.match(html, /Halo Music/);
 assert.match(html, /Awaiting verification/);
+assert.match(html, /Clear protection status\.<br>Verified results, at a glance\./);
+assert.match(html, /<dt>Threats contained<\/dt>/);
+assert.doesNotMatch(html, /in-house defense|operational details|technology behind them/i);
 assert.doesNotMatch(html + js, /fingerprint|splinter|tarpit|scoring|recursive|Bearer|internal|telemetry/i);
 assert.match(css, /--shield-bg: #100d0b/);
 assert.match(css, /--shield-panel: #211a16/);
@@ -120,7 +123,7 @@ assert.match(read("netlify.toml"), /from = "\/netlify\/\*"\s+to = "\/404.html"\s
 const homePromotion = home.match(/<section(?=[^>]*aria-labelledby="halo-shield-promo-title")[\s\S]*?<\/section>/)?.[0];
 assert.ok(homePromotion, "homepage must include an accessible Halo Shield promotion card");
 assert.match(homePromotion, /href="\/halo-shield\/"/, "homepage promotion must link to Halo Shield");
-assert.match(homePromotion, /current protection status and verified outcomes/i, "homepage promotion must focus on visible results");
+assert.match(homePromotion, /current protection status and verified results/i, "homepage promotion must focus on visible results");
 assert.doesNotMatch(homePromotion, /fingerprint|splinter|tarpit|scoring|recursive|telemetry|internal/i, "homepage promotion must not disclose internal mechanics");
 const careMenu = home.match(/<section[^>]*aria-labelledby="halo-lane-care"[\s\S]*?<\/section>/)?.[0];
 assert.ok(careMenu, "homepage must retain its Care menu");

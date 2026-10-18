@@ -380,6 +380,12 @@
   force = true
 
 [[redirects]]
+  from = "/pricing/"
+  to = "/pricing/index.html"
+  status = 200
+  force = true
+
+[[redirects]]
   from = "/support/"
   to = "/support/index.html"
   status = 200

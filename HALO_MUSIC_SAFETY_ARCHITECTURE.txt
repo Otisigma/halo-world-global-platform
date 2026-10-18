@@ -3,13 +3,43 @@ Specification v1 | Status: proposed architecture + offline executable contract
 
 1. SCOPE AND HONEST SAFETY CLAIM
 
+Halo Shield presentation integration:
+- /halo-shield/ is an outcome-only Halo Music status surface. It does not enable
+  a defense engine or change the Dreamweaver/release-conveyor safeguards below.
+  PR #406 supplied no Porcupine Edge implementation; connecting that producer
+  remains a deployment prerequisite, not a claim made by this UI.
+- GET /api/halo-shield returns only fixed brand/service labels, verification,
+  windowStart, observedAt and outcomes (protected/healthy booleans and
+  blocked/isolated non-negative integer counts). Missing, invalid, future-dated
+  or older-than-five-minute reports yield unavailable status and null outcomes.
+- A trusted server-side producer can POST /api/halo-shield/internal using the
+  existing STATS_ADMIN_TOKEN bearer credential over HTTPS. Never embed this
+  credential in an edge/public bundle. Keep production credentials in the
+  deployment secret store, not URLs, source files or reports.
+- Report contract: windowStart and observedAt are ISO timestamps describing the
+  same reporting window; outcomes contains protected, healthy, blocked, isolated.
+  Additional forensic fields such as telemetry are retained privately, not
+  copied into the public response. The report body is limited to 64 KiB.
+  Publish measured outcomes only; maintenance repairs are not blocked attacks.
+- The Netlify Blobs store halo-shield-private retains the latest report only.
+  Producers must retain their existing forensic history; this is not a replacement
+  for their audit ledger. Public "verified" means a current authenticated producer
+  report, not independent certification of its contents.
+- GET /api/halo-shield/internal requires the same operator authentication and
+  returns the complete latest report, including forensic fields. The optional
+  /halo-shield/admin.html shell loads no telemetry until the server authenticates.
+  Its token is not persisted, and reports clear on hiding/leaving the page.
+- Netlify runs these APIs; the local Express static preview has no Shield data
+  adapter and deliberately shows awaiting verification, never synthetic success.
+  Run npm run test:halo-shield for boundary, validation, theme and UI contracts.
+
 Protect artist masters, rights/consent, private metadata, payments, catalog
 publication and playback continuity. "No unfixed faults" means no invisible,
 unowned or falsely closed faults; it cannot mean zero defects, zero data loss
 or instantaneous failover under every partition. Containment is not a fix.
 Availability never justifies publishing without rights or discarding a master.
 
-This PR does NOT enable a production council, autonomous repairs, redundant
+The workflow planner below does NOT enable a production council, autonomous repairs, redundant
 storage, a new API, or a deployment controller. Existing endpoints retain their
 behavior. netlify/lib/music-safety-contract.mjs is a pure transition planner;
 scripts/music-safety-contracts.mjs exercises it with synthetic attestations.

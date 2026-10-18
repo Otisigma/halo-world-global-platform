@@ -1,0 +1,193 @@
+import assert from "node:assert/strict";
+import { randomBytes } from "node:crypto";
+import fs from "node:fs";
+import vm from "node:vm";
+import { createShieldHandler, publicShieldStatus } from "../netlify/lib/halo-shield.mjs";
+import { authorizeStatsAdmin } from "../netlify/lib/stats.mjs";
+import { PUBLIC_ROUTE_REGISTRY } from "../lib/route-registry.js";
+
+const now = Date.parse("2026-10-18T06:00:00Z");
+const snapshot = {
+  windowStart: "2026-10-18T05:59:00Z",
+  observedAt: "2026-10-18T06:00:00Z",
+  outcomes: { protected: true, healthy: true, blocked: 12, isolated: 3, privateRule: "not public" },
+  telemetry: { trace: ["private-route"], score: 99, fingerprint: "synthetic-private-marker" },
+  unexpected: "must not leak"
+};
+let stored = structuredClone(snapshot);
+let reads = 0;
+let writes = 0;
+const store = {
+  async get() { reads++; return stored; },
+  async setJSON(key, value) { assert.equal(key, "latest"); writes++; stored = value; }
+};
+const publicHandler = createShieldHandler({ getStore: () => store, now: () => now });
+const previousToken = process.env.STATS_ADMIN_TOKEN;
+const credential = randomBytes(32).toString("hex");
+process.env.STATS_ADMIN_TOKEN = credential;
+const internalHandler = createShieldHandler({
+  getStore: () => store, authorize: authorizeStatsAdmin, internal: true, now: () => now
+});
+const request = (path = "", options = {}) => new Request(`https://halo.test/api/halo-shield${path}`, options);
+const auth = { Authorization: ["Bearer", credential].join(" ") };
+
+try {
+  const response = await publicHandler(request("?admin=true&include=telemetry", { headers: auth }));
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get("cache-control"), "no-store");
+  const result = await response.json();
+  assert.deepEqual(result, {
+    brand: "Halo Shield", service: "Halo Music", verification: "verified",
+    windowStart: new Date(snapshot.windowStart).toISOString(), observedAt: new Date(snapshot.observedAt).toISOString(),
+    outcomes: { protected: true, healthy: true, blocked: 12, isolated: 3 }
+  });
+  assert.doesNotMatch(JSON.stringify(result), /private|score|fingerprint|unexpected|trace/);
+  const before = reads;
+  for (const headers of [{}, { Authorization: "******" }]) {
+    for (const method of ["GET", "POST"]) {
+      const denied = await internalHandler(request("/internal", { method, headers }));
+      assert.equal(denied.status, 401);
+      assert.equal(denied.headers.get("cache-control"), "no-store");
+    }
+  }
+  delete process.env.STATS_ADMIN_TOKEN;
+  assert.equal((await internalHandler(request("/internal", { headers: auth }))).status, 401);
+  assert.equal(reads, before);
+  assert.equal(writes, 0);
+  process.env.STATS_ADMIN_TOKEN = credential;
+  const privateResponse = await internalHandler(request("/internal", { headers: auth }));
+  assert.deepEqual((await privateResponse.json()).snapshot, snapshot);
+  assert.equal(privateResponse.headers.get("cache-control"), "no-store");
+  assert.equal((await publicHandler(request("", { method: "POST" }))).status, 405);
+  assert.equal((await internalHandler(request("/internal", { method: "DELETE", headers: auth }))).status, 405);
+
+  async function post(body, expected) {
+    const response = await internalHandler(request("/internal", {
+      method: "POST", headers: auth, body: typeof body === "string" ? body : JSON.stringify(body)
+    }));
+    assert.equal(response.status, expected);
+  }
+  await post(snapshot, 202);
+  assert.deepEqual(stored.telemetry, snapshot.telemetry);
+  for (const body of [
+    "{", null, {}, { ...snapshot, observedAt: "not a date" },
+    { ...snapshot, windowStart: "2026-10-18T07:00:00Z" },
+    { ...snapshot, observedAt: "2026-10-18T06:01:00Z" },
+    { ...snapshot, observedAt: "2026-10-18T05:50:00Z", windowStart: "2026-10-18T05:49:00Z" },
+    ...[-1, 1.5, "12", Number.MAX_SAFE_INTEGER + 1].map(blocked => ({
+      ...snapshot, outcomes: { ...snapshot.outcomes, blocked }
+    })),
+    { ...snapshot, outcomes: { ...snapshot.outcomes, protected: "true" } }
+  ]) await post(body, 400);
+  await post("x".repeat(65537), 413);
+  assert.equal(writes, 1);
+
+  for (const value of [null, {}, { ...snapshot, observedAt: "bad" }]) {
+    assert.equal(publicShieldStatus(value, now).verification, "unavailable");
+  }
+  const expired = publicShieldStatus(snapshot, now + 300001);
+  assert.equal(expired.verification, "unavailable");
+  assert.deepEqual(expired.outcomes, { protected: null, healthy: null, blocked: null, isolated: null });
+  const negative = publicShieldStatus({ ...snapshot, outcomes: { protected: false, healthy: false, blocked: 0, isolated: 0 } }, now);
+  assert.deepEqual(negative.outcomes, { protected: false, healthy: false, blocked: 0, isolated: 0 });
+  const failure = createShieldHandler({ getStore() { throw new Error("private storage detail"); } });
+  const unavailable = await failure(request());
+  assert.equal(unavailable.status, 503);
+  assert.doesNotMatch(JSON.stringify(await unavailable.json()), /storage|detail/);
+} finally {
+  if (previousToken === undefined) delete process.env.STATS_ADMIN_TOKEN;
+  else process.env.STATS_ADMIN_TOKEN = previousToken;
+}
+
+const read = path => fs.readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
+const html = read("halo-shield/index.html");
+const css = read("halo-shield/shield.css");
+const js = read("halo-shield/shield.js");
+assert.match(html, /Halo Shield/);
+assert.match(html, /Halo Music/);
+assert.match(html, /Awaiting verification/);
+assert.doesNotMatch(html + js, /fingerprint|splinter|tarpit|scoring|recursive|Bearer|internal|telemetry/i);
+assert.match(css, /--shield-bg: #100d0b/);
+assert.match(css, /--shield-panel: #211a16/);
+assert.match(css, /--shield-cold: #a5c4cf/);
+assert.match(css, /:focus-visible/);
+assert.match(read("music/index.html"), /href="\/halo-shield\/"/);
+assert.ok(PUBLIC_ROUTE_REGISTRY.some(({ route, file }) => route === "/halo-shield/" && file === "halo-shield/index.html"));
+assert.match(read("netlify.toml"), /from = "\/netlify\/\*"\s+to = "\/404.html"\s+status = 404\s+force = true/);
+
+const elements = new Map();
+const element = id => {
+  if (!elements.has(id)) elements.set(id, { textContent: "", addEventListener() {} });
+  return elements.get(id);
+};
+let payload = publicShieldStatus(snapshot, Date.now());
+let expiryCallback;
+const browser = {
+  document: { getElementById: element },
+  fetch: async () => ({ ok: true, json: async () => payload }),
+  AbortSignal, Date, setInterval() {},
+  setTimeout(callback) { expiryCallback = callback; }, clearTimeout() {}
+};
+vm.createContext(browser);
+vm.runInContext(js, browser);
+await vm.runInContext("loadStatus()", browser);
+assert.equal(element("protected").textContent, "Awaiting verification");
+payload = publicShieldStatus({ ...snapshot, windowStart: new Date(Date.now() - 60000).toISOString(), observedAt: new Date().toISOString() });
+await vm.runInContext("loadStatus()", browser);
+assert.equal(element("protected").textContent, "Protected");
+assert.equal(element("healthy").textContent, "Healthy");
+assert.equal(element("blocked").textContent, "12");
+expiryCallback();
+assert.equal(element("protected").textContent, "Awaiting verification");
+browser.fetch = async () => { throw new Error("Offline"); };
+await vm.runInContext("loadStatus()", browser);
+assert.equal(element("blocked").textContent, "—");
+assert.equal(element("refresh").disabled, false);
+assert.doesNotMatch(read("halo-shield/admin.js"), /localStorage|sessionStorage|innerHTML/);
+assert.match(read("netlify/functions/halo-shield.mjs"), /path: "\/api\/halo-shield"/);
+assert.match(read("netlify/functions/halo-shield-internal.mjs"), /authorize: authorizeStatsAdmin/);
+assert.match(read("netlify/functions/halo-shield-internal.mjs"), /internal: true/);
+
+const operatorElements = new Map();
+const operatorElement = id => {
+  if (!operatorElements.has(id)) operatorElements.set(id, { value: "", textContent: "", hidden: true, addEventListener() {} });
+  return operatorElements.get(id);
+};
+const handlers = {};
+operatorElement("operator-form").addEventListener = (name, callback) => { handlers[name] = callback; };
+operatorElement("clear-report").addEventListener = (name, callback) => { handlers.clear = callback; };
+let operatorFetch;
+const operatorBrowser = {
+  document: { getElementById: operatorElement, addEventListener(name, callback) { handlers[name] = callback; } },
+  window: { addEventListener() {} }, AbortController,
+  fetch: (...args) => operatorFetch(...args),
+  setTimeout() {}, clearTimeout() {}
+};
+vm.createContext(operatorBrowser);
+vm.runInContext(read("halo-shield/admin.js"), operatorBrowser);
+operatorElement("operator-token").value = credential;
+operatorFetch = async (url, options) => {
+  assert.equal(url, "/api/halo-shield/internal");
+  assert.equal(options.headers.Authorization, ["Bearer", credential].join(" "));
+  assert.equal(operatorElement("operator-token").value, "");
+  return { ok: true, json: async () => ({ snapshot }) };
+};
+await handlers.submit({ preventDefault() {} });
+assert.equal(operatorElement("operator-report").hidden, false);
+assert.deepEqual(JSON.parse(operatorElement("operator-report").textContent), snapshot);
+handlers.clear();
+assert.equal(operatorElement("operator-report").textContent, "");
+assert.equal(operatorElement("operator-report").hidden, true);
+operatorFetch = async () => ({ ok: false });
+await handlers.submit({ preventDefault() {} });
+assert.equal(operatorElement("operator-report").hidden, true);
+assert.match(operatorElement("operator-status").textContent, /Access denied/);
+let finishRead;
+operatorFetch = () => new Promise(resolve => { finishRead = resolve; });
+const pendingRead = handlers.submit({ preventDefault() {} });
+handlers.clear();
+finishRead({ ok: true, json: async () => ({ snapshot }) });
+await pendingRead;
+assert.equal(operatorElement("operator-report").textContent, "");
+assert.equal(operatorElement("operator-report").hidden, true);
+console.log("Halo Shield contracts passed: public allowlist, authenticated telemetry, validation, stale/failure states, UI and theme.");

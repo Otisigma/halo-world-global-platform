@@ -1,0 +1,45 @@
+:root {
+  color-scheme: dark;
+  --shield-bg: #100d0b;
+  --shield-panel: #211a16;
+  --shield-border: #50575e;
+  --shield-text: #eeeae6;
+  --shield-muted: #b3bac1;
+  --shield-cold: #a5c4cf;
+  --shield-alert: #d5af83;
+  font-family: system-ui, sans-serif;
+  background: var(--shield-bg);
+  color: var(--shield-text);
+}
+* { box-sizing: border-box; }
+body { margin: 0; }
+header, main, footer { width: min(1100px, 90%); margin: auto; }
+header, footer { display: flex; justify-content: space-between; gap: 1rem; padding: 1.5rem 0; }
+header { border-bottom: 1px solid var(--shield-border); }
+a { color: var(--shield-cold); text-underline-offset: .25em; }
+main { padding: 5rem 0 3rem; }
+.eyebrow { letter-spacing: .18em; font-size: .75rem; color: var(--shield-muted); }
+h1 { font-size: clamp(3rem, 8vw, 6rem); letter-spacing: -.06em; margin: 1rem 0; }
+h1 span { color: var(--shield-cold); }
+.intro { font-size: clamp(1.5rem, 4vw, 2.4rem); line-height: 1.3; }
+.description, aside p { max-width: 65ch; line-height: 1.7; color: var(--shield-muted); }
+section { margin: 3rem 0; }
+.section-heading { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
+h2 { font-size: 1.1rem; }
+button { border: 1px solid var(--shield-border); background: var(--shield-panel); color: var(--shield-cold); padding: .8rem 1rem; cursor: pointer; font: inherit; }
+button:disabled { cursor: wait; opacity: .7; }
+:focus-visible { outline: 2px solid var(--shield-cold); outline-offset: 4px; }
+#verification, .caption { color: var(--shield-muted); font-size: .9rem; line-height: 1.6; }
+.outcomes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
+.outcomes div { background: var(--shield-panel); border: 1px solid var(--shield-border); padding: 1.5rem; }
+dt { font-size: .9rem; color: var(--shield-muted); }
+dd { margin: 1rem 0 0; font-size: clamp(1.25rem, 3vw, 2rem); color: var(--shield-cold); overflow-wrap: anywhere; }
+aside { padding: 1rem 0; border-top: 1px solid var(--shield-border); }
+form { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; }
+input { background: var(--shield-panel); color: var(--shield-text); border: 1px solid var(--shield-border); padding: .8rem; max-width: 100%; font: inherit; }
+pre { background: var(--shield-panel); border: 1px solid var(--shield-border); padding: 1.5rem; white-space: pre-wrap; overflow-wrap: anywhere; }
+footer { color: var(--shield-muted); font-size: .85rem; flex-wrap: wrap; }
+@media (max-width: 540px) {
+  main { padding-top: 3rem; }
+  .outcomes { grid-template-columns: 1fr; }
+}

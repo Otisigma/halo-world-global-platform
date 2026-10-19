@@ -331,8 +331,9 @@ assert.equal((publication.match(/announceDrop: true/g) || []).length, 1, "only t
   const unconfigured = await dispatchTrackDropEmails(db, { settings: { secret: "", siteUrl: SITE, from: "" }, send: async () => { sends++; } });
   assert.deepEqual(unconfigured, { configured: false, sent: 0, failed: 0 });
   assert.equal(sends, 0, "nothing is sent without the Netlify Email Integration");
-  assert.equal(updates.length, 1, "unconfigured runs only expire stale cards");
-  assert.match(updates[0].text, /status = 'skipped', last_error = 'expired'/, "stale cards expire instead of sending late");
+  assert.equal(updates.length, 2, "unconfigured runs only recover abandoned claims and expire stale cards");
+  assert.match(updates[1].text, /status = 'skipped', last_error = 'expired'/, "stale cards expire instead of sending late");
+  updates.length = 0;
 
   const sent = [];
   const result = await dispatchTrackDropEmails(db, {
@@ -350,7 +351,12 @@ assert.equal((publication.match(/announceDrop: true/g) || []).length, 1, "only t
   assert.equal(sent[1].body.parameters.showRewards, false);
   assert.equal(sent.length, 2, "members without an email are skipped, not sent");
   assert.ok(updates.some(update => /last_error = 'no_email'/.test(update.text)));
-  assert.ok(updates.some(update => /WHERE status = 'sending' AND claimed_at </.test(update.text)), "abandoned claims return to the queue");
+  const requeueIndex = updates.findIndex(update => /WHERE status = 'sending' AND claimed_at </.test(update.text));
+  const expiryIndex = updates.findIndex(update => /last_error = 'expired'/.test(update.text));
+  assert.ok(requeueIndex >= 0, "abandoned claims return to the queue");
+  assert.match(updates[requeueIndex].text, /attempts = attempts \+ 1/, "abandoned claims count as an attempt");
+  assert.match(updates[requeueIndex].text, /THEN 'failed' ELSE 'queued'/, "abandoned claims stop at the attempt limit");
+  assert.ok(requeueIndex < expiryIndex, "requeued stale claims are expired in the same run");
   assertPublicSafe(sent[0].body.parameters, "dispatched email parameters");
   assert.ok(updates.some(update => /status = 'sent'/.test(update.text)));
   for (const update of updates.filter(entry => /status = 'sent'|last_error = 'delivery_failed'|last_error = 'no_email'/.test(entry.text))) {

@@ -258,6 +258,14 @@ export async function dispatchTrackDropEmails(db, {
   send = fetch,
   limit = TRACK_DROP_EMAIL_BATCH_SIZE
 } = {}) {
+  // Abandoned claims count as an attempt so a send that keeps crashing cannot retry forever.
+  await db.sql`
+    UPDATE halo_track_drop_deliveries
+    SET attempts = attempts + 1,
+      status = CASE WHEN attempts + 1 >= ${TRACK_DROP_MAX_ATTEMPTS} THEN 'failed' ELSE 'queued' END,
+      last_error = 'claim_abandoned'
+    WHERE status = 'sending' AND claimed_at < NOW() - INTERVAL '30 minutes'
+  `;
   await db.sql`
     UPDATE halo_track_drop_deliveries
     SET status = 'skipped', last_error = 'expired'
@@ -266,11 +274,6 @@ export async function dispatchTrackDropEmails(db, {
   const endpoint = absoluteSiteUrl(`/.netlify/functions/emails/${TRACK_DROP_EMAIL_TEMPLATE}`, settings.siteUrl);
   if (!settings.secret || !settings.from || !endpoint) return { configured: false, sent: 0, failed: 0 };
 
-  await db.sql`
-    UPDATE halo_track_drop_deliveries
-    SET status = 'queued'
-    WHERE status = 'sending' AND claimed_at < NOW() - INTERVAL '30 minutes'
-  `;
   const rows = await db.sql`
     WITH claimed AS (
       UPDATE halo_track_drop_deliveries delivery

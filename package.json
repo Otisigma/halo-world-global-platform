@@ -7,7 +7,7 @@
     "posttest": "npm run -s test:music-safety && npm run -s test:dreamweaver-assets && npm run -s test:halo-shield && npm run -s test:pricing",
     "test:pricing": "node scripts/pricing-contracts.mjs",
     "test:halo-shield": "node scripts/halo-shield-contracts.mjs",
-    "test:dreamweaver-assets": "node scripts/dreamweaver-assets-contracts.mjs && node scripts/dreamweaver-playback-contracts.mjs",
+    "test:dreamweaver-assets": "node scripts/dreamweaver-assets-contracts.mjs && node scripts/dreamweaver-playback-contracts.mjs && node scripts/dreamweaver-deck-contracts.mjs",
     "test:catalog-satellite": "npm --prefix satellites/catalog-lab test",
     "test:dj-vault": "node scripts/dj-vault-contracts.mjs && node scripts/dj-mix-upload-contracts.mjs",
     "release-guard": "node release-guard-agent.js",

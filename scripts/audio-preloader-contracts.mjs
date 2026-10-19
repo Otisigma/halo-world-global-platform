@@ -206,15 +206,21 @@ for (const withCache of [true, false]) {
     resolvePrimaryAudio: () => ({ src: urls[0] }),
     setLoadingProgress() {}, revokeLocalAudioUrl() {}, clearRemoteAudioWatchdog() {},
     setReleasePlaybackState(value) { state.releasePlaybackState = value; },
+    handleRemoteAudioUnavailable() {
+      state.audioSourceMode = "error";
+      state.releasePlaybackState = "unavailable";
+      audio.pause();
+    },
     showToast() {}, queueAudioFeedbackIncident() {},
     awaitPrimaryPlaybackReadiness: async () => ({ ok: false, state: "timeout" })
   };
   vm.runInNewContext(bootstrap, context);
-  await context.bootstrapPrimaryPlayback({ id: "primary" });
-  assert.equal(state.audioSourceMode, "remote", "blocked preload must keep manual playback available");
+  const result = await context.bootstrapPrimaryPlayback({ id: "primary" });
+  assert.equal(state.audioSourceMode, "error", "timed-out preload must offer local upload fallback");
+  assert.equal(result.fallback, true);
   assert.equal(audio.src, urls[0]);
   assert.equal(audio.preload, "auto", "cache absence must still prioritize current playback");
-  assert.equal(state.releasePlaybackState, "loading", "bound audio must refresh the player labels immediately");
+  assert.equal(state.releasePlaybackState, "unavailable", "timeout must replace loading labels with upload guidance");
   assert.equal(audio.plays, 0, "preloading must not bypass browser playback policy");
 }
 

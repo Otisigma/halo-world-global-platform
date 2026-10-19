@@ -115,6 +115,15 @@ assert.match(css, /--shield-bg: #100d0b/);
 assert.match(css, /--shield-panel: #211a16/);
 assert.match(css, /--shield-cold: #a5c4cf/);
 assert.match(css, /:focus-visible/);
+assert.match(html, /class="shield-public" data-motion="paused"/);
+assert.match(html, /class="shield-art" aria-hidden="true"/);
+assert.match(html, /href="#main">Skip to content/);
+assert.match(html, /id="motion-toggle"[^>]*aria-pressed="false" hidden>Ambient motion/);
+assert.match(html, /<noscript>[\s\S]*No current protection status has been verified/);
+assert.match(css, /prefers-reduced-motion: reduce/);
+assert.match(css, /animation: none !important; transition: none !important/);
+assert.match(css, /\[data-motion="paused"\][^{]*\{ animation-play-state: paused/);
+assert.doesNotMatch(js, /Math\.random|innerHTML|requestAnimationFrame/, "presentation must not fabricate or interpolate verified counts");
 assert.match(read("music/index.html"), /href="\/halo-shield\/"/);
 assert.ok(PUBLIC_ROUTE_REGISTRY.some(({ route, file, menuLabel }) =>
   route === "/halo-shield/" && file === "halo-shield/index.html" && menuLabel === "HALO SHIELD"
@@ -140,29 +149,87 @@ assert.match(statusTargets, /route: '\/halo-shield\/', label: 'HALO SHIELD'/);
 assert.ok(allowedEvents.has("open_halo_shield"), "Shield discovery analytics must be allowlisted");
 
 const elements = new Map();
+const publicHandlers = {};
 const element = id => {
-  if (!elements.has(id)) elements.set(id, { textContent: "", addEventListener() {} });
+  if (!elements.has(id)) elements.set(id, {
+    textContent: "", dataset: {}, attributes: {},
+    getAttribute(name) { return this.attributes[name]; },
+    setAttribute(name, value) { this.attributes[name] = value; },
+    addEventListener(name, callback) { publicHandlers[`${id}:${name}`] = callback; }
+  });
   return elements.get(id);
 };
 let payload = publicShieldStatus(snapshot, Date.now());
 let expiryCallback;
+const motionPreference = {
+  matches: false,
+  addEventListener(name, callback) { publicHandlers[`motion:${name}`] = callback; }
+};
 const browser = {
-  document: { getElementById: element },
-  fetch: async () => ({ ok: true, json: async () => payload }),
+  document: { getElementById: element, body: { dataset: {} } },
+  window: { matchMedia: () => motionPreference },
+  fetch: async (url, options) => {
+    assert.equal(url, "/api/halo-shield");
+    assert.equal(options.cache, "no-store");
+    return { ok: true, json: async () => payload };
+  },
   AbortSignal, Date, setInterval() {},
   setTimeout(callback) { expiryCallback = callback; }, clearTimeout() {}
 };
 vm.createContext(browser);
 vm.runInContext(js, browser);
+await new Promise(resolve => setImmediate(resolve));
+assert.equal(element("motion-toggle").hidden, false);
+assert.equal(element("motion-toggle").getAttribute("aria-pressed"), "true");
+publicHandlers["motion-toggle:click"]();
+assert.equal(browser.document.body.dataset.motion, "paused");
+assert.equal(element("motion-toggle").getAttribute("aria-pressed"), "false");
+publicHandlers["motion-toggle:click"]();
+assert.equal(browser.document.body.dataset.motion, "playing");
+motionPreference.matches = true;
+publicHandlers["motion:change"]();
+assert.equal(browser.document.body.dataset.motion, "paused");
+assert.equal(element("motion-toggle").getAttribute("aria-pressed"), "false");
 await vm.runInContext("loadStatus()", browser);
 assert.equal(element("protected").textContent, "Awaiting verification");
+assert.equal(element("status-panel").dataset.state, "awaiting");
 payload = publicShieldStatus({ ...snapshot, windowStart: new Date(Date.now() - 60000).toISOString(), observedAt: new Date().toISOString() });
 await vm.runInContext("loadStatus()", browser);
 assert.equal(element("protected").textContent, "Protected");
 assert.equal(element("healthy").textContent, "Healthy");
 assert.equal(element("blocked").textContent, "12");
+assert.equal(element("status-panel").dataset.state, "verified");
+assert.equal(element("status-panel").getAttribute("aria-busy"), "false");
 expiryCallback();
 assert.equal(element("protected").textContent, "Awaiting verification");
+assert.equal(element("status-panel").dataset.state, "awaiting");
+assert.equal(element("blocked").textContent, "—");
+for (const outcomes of [
+  { protected: false, healthy: false, blocked: 0, isolated: 0 },
+  { protected: true, healthy: true, blocked: -1, isolated: 0 },
+  { protected: true, healthy: true, blocked: 1.5, isolated: 0 }
+]) {
+  payload = { ...payload, outcomes };
+  await vm.runInContext("loadStatus()", browser);
+  assert.equal(element("protected").textContent, outcomes.blocked === 0 ? "Not confirmed" : "Awaiting verification");
+  assert.equal(element("blocked").textContent, outcomes.blocked === 0 ? "0" : "—");
+}
+let finishStatus;
+let statusRequests = 0;
+browser.fetch = () => {
+  statusRequests++;
+  return new Promise(resolve => { finishStatus = resolve; });
+};
+const pendingStatus = vm.runInContext("loadStatus()", browser);
+assert.equal(element("refresh").disabled, true);
+assert.equal(element("refresh-label").textContent, "Checking status…");
+assert.equal(element("status-panel").getAttribute("aria-busy"), "true");
+await vm.runInContext("loadStatus()", browser);
+assert.equal(statusRequests, 1, "refresh and polling must not overlap");
+finishStatus({ ok: false });
+await pendingStatus;
+assert.equal(element("refresh-label").textContent, "Refresh status");
+assert.equal(element("status-panel").getAttribute("aria-busy"), "false");
 browser.fetch = async () => { throw new Error("Offline"); };
 await vm.runInContext("loadStatus()", browser);
 assert.equal(element("blocked").textContent, "—");

@@ -90,7 +90,7 @@ async function updatePreferences(db, memberId, payload) {
     await db.sql`
       UPDATE halo_track_drop_deliveries
       SET status = 'skipped', last_error = 'opted_out'
-      WHERE member_id = ${memberId} AND status = 'queued'
+      WHERE member_id = ${memberId} AND status IN ('queued', 'sending')
     `;
   }
   let rewardGranted = false;
@@ -115,8 +115,11 @@ async function openDrop(db, memberId, payload) {
     return json({ message: "Turn on track drop alerts first" }, 409);
   }
   // Rewards only cover drops announced after the member opted in.
-  const optedInAt = new Date(Math.min(...[preference.enabled_at, preference.email_consent_at]
-    .filter(Boolean).map(value => new Date(value).getTime())));
+  const optedInAt = new Date(Math.min(...[
+    preference.track_drops_in_app ? preference.enabled_at : null,
+    preference.track_drops_email ? preference.email_consent_at : null
+  ].filter(Boolean).map(value => new Date(value).getTime())));
+  if (Number.isNaN(optedInAt.getTime())) return json({ message: "Turn on track drop alerts first" }, 409);
   const rows = await db.sql`
     SELECT id, release_id, title, artist, artwork_url, created_at
     FROM halo_track_drop_events

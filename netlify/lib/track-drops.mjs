@@ -80,16 +80,11 @@ export function safeTrackDropArtwork(value) {
   }
 }
 
-/** Builds an absolute HTTPS URL on the HALO site for email links; returns "" when the site URL is unusable. */
+/** Builds an absolute same-origin HTTPS URL on the HALO site; external or unusable URLs return "". */
 export function absoluteSiteUrl(path, siteUrl) {
   try {
     const base = new URL(String(siteUrl || "").trim());
     if (base.protocol !== "https:" || base.username || base.password) return "";
-    if (/^https:\/\//i.test(path)) {
-      // External artwork has already passed safeTrackDropArtwork; re-check it before it reaches an inbox.
-      const external = new URL(path);
-      return external.protocol === "https:" && !external.username && !external.password ? external.toString() : "";
-    }
     const url = new URL(path, base.origin);
     return url.origin === base.origin ? url.toString() : "";
   } catch {
@@ -143,7 +138,10 @@ export function trackDropCard(drop, { unread = false } = {}) {
 /** Netlify Email Integration parameters for the Dreamweaver-style track drop card. */
 export function trackDropEmailParameters(drop, { siteUrl, recipientName = "", rewards = null } = {}) {
   const card = trackDropCard(drop);
-  const artwork = absoluteSiteUrl(card.artworkUrl, siteUrl) || absoluteSiteUrl(DEFAULT_RELEASE_ARTWORK, siteUrl);
+  // Only artwork may be external, and only after passing safeTrackDropArtwork; every link stays on HALO.
+  const artwork = card.artworkUrl.startsWith("https://")
+    ? card.artworkUrl
+    : absoluteSiteUrl(card.artworkUrl, siteUrl) || absoluteSiteUrl(DEFAULT_RELEASE_ARTWORK, siteUrl);
   const rewardsSummary = rewards?.enabled ? rewards : null;
   return {
     eyebrow: card.eyebrow,
@@ -278,12 +276,14 @@ export async function dispatchTrackDropEmails(db, {
       UPDATE halo_track_drop_deliveries delivery
       SET status = 'sending', claimed_at = NOW()
       WHERE (delivery.drop_id, delivery.member_id, delivery.channel) IN (
-        SELECT drop_id, member_id, channel
-        FROM halo_track_drop_deliveries
-        WHERE status = 'queued' AND channel = 'email'
-        ORDER BY created_at ASC
+        SELECT queued.drop_id, queued.member_id, queued.channel
+        FROM halo_track_drop_deliveries queued
+        JOIN halo_member_notification_preferences consent ON consent.member_id = queued.member_id
+        WHERE queued.status = 'queued' AND queued.channel = 'email'
+          AND consent.track_drops_email = TRUE AND consent.email_consent_at IS NOT NULL
+        ORDER BY queued.created_at ASC
         LIMIT ${limit}
-        FOR UPDATE SKIP LOCKED
+        FOR UPDATE OF queued SKIP LOCKED
       )
       RETURNING delivery.drop_id, delivery.member_id, delivery.attempts
     )

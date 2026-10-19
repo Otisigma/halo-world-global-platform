@@ -4,6 +4,7 @@ import { resolve } from "node:path";
 import {
   MEMBER_REWARDS,
   REWARD_TIERS,
+  absoluteSiteUrl,
   TRACK_DROP_COPY,
   announceTrackDrop,
   dispatchTrackDropEmails,
@@ -112,6 +113,9 @@ assert.equal(noRewards.rewardMessage, "");
 assert.equal(noRewards.greeting, "Hi,");
 assert.equal(trackDropEmailParameters(drop, { siteUrl: "http://halo.world" }).ctaUrl, "", "email links require an HTTPS site");
 assert.equal(trackDropEmailParameters({ ...drop, artwork_url: "https://cdn.example.com/cover.jpg" }, { siteUrl: SITE }).artworkUrl, "https://cdn.example.com/cover.jpg");
+assert.equal(absoluteSiteUrl("https://evil.example/phish", SITE), "", "email links must stay on the HALO site");
+assert.equal(absoluteSiteUrl("//evil.example/phish", SITE), "");
+assert.equal(absoluteSiteUrl("/music/", SITE), `${SITE}/music/`);
 assert.equal(trackDropEmailSubject(drop), "New on HALO: Satellite script alert(1) /script by Owen Anthony");
 for (const key of Object.keys(emailParams)) {
   if (key === "showRewards") continue;
@@ -221,7 +225,11 @@ assert.equal((publication.match(/announceDrop: true/g) || []).length, 1, "only t
       state.prefs = { track_drops_in_app: inApp, track_drops_email: email, rewards_enabled: rewards, email_consent_at: email ? new Date("2026-10-01T00:00:00.000Z") : null, enabled_at: new Date("2026-10-01T00:00:00.000Z"), last_seen_at: new Date(0) };
       return [];
     }
-    if (text.startsWith("UPDATE halo_track_drop_deliveries")) { state.skippedQueued = true; return []; }
+    if (text.startsWith("UPDATE halo_track_drop_deliveries")) {
+      assert.match(text, /status IN \('queued', 'sending'\)/, "opting out withdraws in-flight cards too");
+      state.skippedQueued = true;
+      return [];
+    }
     if (text.startsWith("UPDATE halo_member_notification_preferences")) return [];
     if (text.startsWith("SELECT COALESCE(SUM(points)")) return [{ points: [...state.rewards.values()].reduce((sum, points) => sum + points, 0) }];
     if (text.startsWith("INSERT INTO halo_member_reward_events")) {
@@ -287,6 +295,11 @@ assert.equal((publication.match(/announceDrop: true/g) || []).length, 1, "only t
   assert.equal((await post({ action: "open-drop", dropId: "../../etc" })).status, 400);
   assert.equal((await post({ action: "open-drop", dropId: "44444444-4444-4444-8444-444444444444" })).status, 404);
 
+  // Email-only members are measured from email consent, never from a stale in-app opt-in.
+  const current = state.prefs;
+  state.prefs = { ...current, track_drops_in_app: false, track_drops_email: true, enabled_at: new Date("2019-01-01T00:00:00.000Z"), email_consent_at: new Date("2026-10-10T00:00:00.000Z") };
+  assert.equal((await post({ action: "open-drop", dropId: olderDrop.id })).status, 404, "a stale in-app opt-in must not widen reward eligibility");
+  state.prefs = current;
   await post(prefs({ trackDropsEmail: false, rewardsEnabled: false }));
   assert.equal(state.skippedQueued, true, "turning email off withdraws unsent cards");
   const off = await (await handler(new Request(`${SITE}/api/track-drops`))).json();
@@ -303,7 +316,8 @@ assert.equal((publication.match(/announceDrop: true/g) || []).length, 1, "only t
     if (text.startsWith("UPDATE halo_track_drop_deliveries")) { updates.push({ text, values }); return []; }
     if (text.startsWith("WITH claimed AS")) {
       assert.match(text, /SET status = 'sending'/, "rows are claimed before sending");
-      assert.match(text, /FOR UPDATE SKIP LOCKED/, "overlapping runs never claim the same card");
+      assert.match(text, /FOR UPDATE OF queued SKIP LOCKED/, "overlapping runs never claim the same card");
+      assert.match(text, /consent\.track_drops_email = TRUE AND consent\.email_consent_at IS NOT NULL/, "consent is re-checked when claiming");
       assert.match(text, /status = 'queued'/);
       return [
         { ...drop, drop_id: drop.id, member_id: "fan-1", attempts: 0, email: "fan@example.com", display_name: "Ava", rewards_enabled: true, reward_points: 60 },

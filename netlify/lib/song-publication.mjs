@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { appendLedgerEntry } from "./halo-ledger.mjs";
+import { announceTrackDrop } from "./track-drops.mjs";
 import { resolveDreamweaverPageFlow } from "./dreamweaver-page-manager.mjs";
 import { dreamweaverStorefrontPath } from "./dreamweaver-satellite.mjs";
 import { PUBLICATION_ESCALATION_THRESHOLD, buildPublicationHealth } from "./song-publication-health.mjs";
@@ -332,6 +333,7 @@ async function ensureReleaseCampaign(db, song, versions, preserveReleaseMetadata
     officialUrl: releaseRows[0]?.official_url || officialUrl,
     streamUrl: releaseRows[0]?.stream_url || streamUrl,
     publicUrl,
+    artworkUrl,
     dreamweaver: resolveReleaseDreamweaverFlow(song.id, {
       releaseId,
       publicUrl,
@@ -572,6 +574,7 @@ export async function forcePushTrack(db, payload, membership) {
     actorId: membership.actor_id,
     actorType: "member",
     preserveReleaseMetadata: true,
+    announceDrop: true,
   });
   if (!result.ok) fail("Publication could not be confirmed. Retry the push.", 409);
   return {
@@ -592,6 +595,15 @@ export async function forcePushTrack(db, payload, membership) {
   };
 }
 
+async function announceTrackDropSafely(db, input) {
+  try {
+    return await announceTrackDrop(db, input);
+  } catch (error) {
+    console.warn("HALO track drop announcement deferred", error instanceof Error ? error.message : "unknown error");
+    return { announced: false, reason: "unavailable" };
+  }
+}
+
 export async function reconcilePublishedSong(db, {
   songId,
   ownerMemberId,
@@ -599,6 +611,7 @@ export async function reconcilePublishedSong(db, {
   actorType = "system",
   recordLedger = true,
   preserveReleaseMetadata = false,
+  announceDrop = false,
 } = {}) {
   const context = await loadPublishedSong(db, songId, ownerMemberId);
   if (!context) return { ok: false, skipped: true, reason: "song_not_published_or_missing" };
@@ -680,6 +693,8 @@ export async function reconcilePublishedSong(db, {
         outcome: "success",
       });
     }
+    // Only explicit publish actions announce a new shop entry; scheduled repairs never re-notify.
+    const trackDrop = announceDrop ? await announceTrackDropSafely(db, { song, release, actorId, actorType }) : null;
     return {
       ok: true,
       songId: song.id,
@@ -689,6 +704,7 @@ export async function reconcilePublishedSong(db, {
       radioTrackId: radio.trackId,
       syncedAudioVersionCount: syncedVersions.length,
       publicationHealth: health,
+      ...(trackDrop ? { trackDrop } : {}),
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : "unknown error";

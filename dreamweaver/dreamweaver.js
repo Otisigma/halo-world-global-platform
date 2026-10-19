@@ -2,6 +2,8 @@ import { DREAMWEAVER_STOREFRONT_MIX_ID, buildDreamweaverStorefrontPath } from ".
 import { createDreamweaverLyricsEngine } from "../lib/dreamweaver-lyrics.js";
 import { createLyricInteractionRecorder } from "../lib/journey-interactions.js";
 import { googleDriveFallbackSources, isGoogleDriveUrl, normalizeGoogleDriveAudioUrl, startDreamweaverMutedAutoplay, unlockDreamweaverAudio } from "../lib/dreamweaver-playback.js";
+import { catalogAudioUrl, generateAutomatedSet } from "../lib/catalog-curator.js";
+import { readRecentTrackIds, recordPlayedTrack } from "../lib/catalog-session.js";
 
 (() => {
   const chapters = [
@@ -129,6 +131,11 @@ import { googleDriveFallbackSources, isGoogleDriveUrl, normalizeGoogleDriveAudio
     empty: document.getElementById("emptyShow"),
     emptyMessage: document.getElementById("emptyMessage"),
     audio: document.getElementById("showAudio"),
+    catalogDuration: document.getElementById("catalogSetDuration"),
+    catalogGenerate: document.getElementById("generateCatalogSet"),
+    catalogAllowRecent: document.getElementById("catalogAllowRecent"),
+    catalogStatus: document.getElementById("catalogSetStatus"),
+    catalogSetlist: document.getElementById("catalogSetlist"),
     visualStack: document.getElementById("visualStack"),
     chapterList: document.getElementById("chapterList"),
     progressMarkers: document.getElementById("progressMarkers"),
@@ -264,6 +271,12 @@ import { googleDriveFallbackSources, isGoogleDriveUrl, normalizeGoogleDriveAudio
     soundUnlockedByUser: false,
     soundUnlockMode: "",
     primaryBootstrapActive: false,
+    driveCatalog: null,
+    catalogUnavailable: false,
+    catalogSet: null,
+    catalogIndex: -1,
+    catalogAdvancing: false,
+    catalogFallbackActive: false,
     localAudioName: "",
     localAudioUrl: "",
     remoteAudioWatchdog: 0,
@@ -777,6 +790,10 @@ import { googleDriveFallbackSources, isGoogleDriveUrl, normalizeGoogleDriveAudio
 
   // Direct sources always win; a Google Drive link is only used (normalized) when nothing direct is playable.
   function resolvePrimaryAudio(entry = {}, options = {}) {
+    if (entry.isDriveCatalogPlayback) {
+      const src = playableCatalogUrl(entry.streamUrl);
+      return { src, source: "drive-catalog", isPlayable: Boolean(src) };
+    }
     if (entry.isCatalogPlayback && entry.canonicalBinding) {
       // The server-side binding is authoritative; a Drive-hosted master is only normalized so it can stream.
       const binding = entry.canonicalBinding.audioSource;
@@ -796,6 +813,10 @@ import { googleDriveFallbackSources, isGoogleDriveUrl, normalizeGoogleDriveAudio
 
   // Drive fallbacks only come from the same song's published release (catalog routes) or the mix itself.
   function dreamweaverDriveFallbacks(mix, primaryAudio) {
+    if (mix?.isDriveCatalogPlayback) {
+      const fallback = playableCatalogUrl(mix.fallbackUrl);
+      return fallback && fallback !== primaryAudio ? [fallback] : [];
+    }
     if (!mix) return [];
     if (mix.isCatalogPlayback) {
       const release = state.release || {};
@@ -1077,6 +1098,11 @@ import { googleDriveFallbackSources, isGoogleDriveUrl, normalizeGoogleDriveAudio
   }
 
   function handleRemoteAudioUnavailable(message = "Stream unavailable — click Upload Mix File or press play to choose a local mix.") {
+    if (!state.primaryBootstrapActive && !state.catalogFallbackActive && state.mix?.isDriveCatalogPlayback
+      && dreamweaverDriveFallbacks(state.mix, elements.audio.src).length) {
+      void retryCatalogProxy();
+      return;
+    }
     if (state.audioSourceMode === "local") return;
     clearRemoteAudioWatchdog();
     state.audioSourceMode = "error";
@@ -1114,6 +1140,7 @@ import { googleDriveFallbackSources, isGoogleDriveUrl, normalizeGoogleDriveAudio
     state.localAudioUrl = localAudioUrl;
     state.localAudioName = cleanText(file.name || "Uploaded mix", 160) || "Uploaded mix";
     state.audioSourceMode = "local";
+    state.catalogSet = null;
     elements.audio.pause();
     if (state.autoplayMuted) elements.audio.muted = false;
     state.autoplayMuted = false;
@@ -1207,7 +1234,7 @@ import { googleDriveFallbackSources, isGoogleDriveUrl, normalizeGoogleDriveAudio
       readiness = await awaitPrimaryPlaybackReadiness();
       if (state.audioSourceMode === "local" || elements.audio.getAttribute("src") !== activeAudio) return { started: false, fallback: true };
       // Google Drive is a fallback only: it is tried once the canonical/direct source fails to load.
-      for (const fallbackAudio of readiness.state === "error" ? dreamweaverDriveFallbacks(mix, primaryAudio) : []) {
+      for (const fallbackAudio of (readiness.state === "error" || (mix.isDriveCatalogPlayback && readiness.state === "timeout")) ? dreamweaverDriveFallbacks(mix, primaryAudio) : []) {
         queueAudioFeedbackIncident("non_playable_audio", {
           severity: "medium",
           title: "Dreamweaver switched to the Google Drive fallback",
@@ -3093,10 +3120,150 @@ import { googleDriveFallbackSources, isGoogleDriveUrl, normalizeGoogleDriveAudio
     }
   }
 
+  function playableCatalogUrl(value) {
+    const validated = catalogAudioUrl(value);
+    return validated ? safeMediaUrl(validated) : "";
+  }
+
+  async function loadDriveCatalog() {
+    try {
+      const { response, payload } = await fetchJsonWithTimeout("/api/drive-catalog", {
+        timeoutMs: RELEASE_CONTEXT_TIMEOUT_MS,
+        headers: { Accept: "application/json" }, credentials: "same-origin"
+      });
+      if (!response.ok || typeof payload.configured !== "boolean") throw new Error("Catalog unavailable");
+      state.catalogUnavailable = false;
+      state.driveCatalog = payload.configured ? payload : null;
+      elements.catalogStatus.textContent = payload.configured
+        ? "Choose 20 or 60 minutes to curate the canonical catalog."
+        : "Catalog curator is on standby. Existing song and mix playback remains available.";
+      return payload.configured;
+    } catch {
+      state.catalogUnavailable = true;
+      state.driveCatalog = { configured: true, tracks: [] };
+      elements.catalogStatus.textContent = "Catalog temporarily unavailable — no substitute catalog loaded. Try again or upload a local mix.";
+      setReleasePlaybackState("unavailable");
+      return true;
+    }
+  }
+
+  function catalogStorage() {
+    try {
+      return localStorage;
+    } catch {
+      return null;
+    }
+  }
+
+  async function generateCatalogSet() {
+    if (state.catalogAdvancing) return;
+    if ((!state.driveCatalog || state.catalogUnavailable) && !await loadDriveCatalog()) return;
+    if (state.catalogUnavailable) return;
+    const tracks = (state.driveCatalog?.tracks || []).filter(track => playableCatalogUrl(track.streamUrl));
+    const minutes = elements.catalogDuration.value === "20" ? 20 : 60;
+    state.catalogSet = generateAutomatedSet(tracks, minutes, {
+      recentTrackIds: readRecentTrackIds(catalogStorage()),
+      allowRecent: Boolean(elements.catalogAllowRecent.checked)
+    });
+    state.catalogIndex = -1;
+    elements.catalogSetlist.innerHTML = state.catalogSet.tracks.map(track =>
+      `<li>${escapeHtml(track.title)} — ${escapeHtml(track.artist)} · ${escapeHtml(track.role)} · ${formatTime(track.playDurationSeconds)}</li>`
+    ).join("");
+    elements.catalogStatus.textContent = `${formatTime(state.catalogSet.durationSeconds)} / ${minutes} minutes scheduled.${
+      state.catalogSet.complete ? " Set ready." : ` Short by ${formatTime(state.catalogSet.shortfallSeconds)}. Add tracks or explicitly allow recent reuse.`}`;
+    if (!state.catalogSet.tracks.length) {
+      if (state.mix?.isDriveCatalogPlayback) {
+        elements.audio.pause();
+        state.mix = null;
+        state.audioSourceMode = "empty";
+        setReleasePlaybackState("unavailable");
+      }
+      return;
+    }
+    if (state.audioSourceMode === "local") {
+      elements.audio.pause();
+      state.audioSourceMode = "empty";
+    }
+    await advanceCatalogTrack();
+  }
+
+  async function advanceCatalogTrack() {
+    if (state.catalogAdvancing || !state.catalogSet || state.audioSourceMode === "local") return;
+    state.catalogAdvancing = true;
+    try {
+      const track = state.catalogSet.tracks[++state.catalogIndex];
+      if (!track) {
+        elements.audio.pause();
+        state.catalogSet = null;
+        setReleasePlaybackState("ready");
+        elements.catalogStatus.textContent += " Playback finished.";
+        return;
+      }
+      clearRemoteAudioWatchdog();
+      state.release = null;
+      state.dreamweaverPayload = null;
+      state.publishedSongId = "";
+      const mix = { ...track, audioUrl: track.streamUrl, creator: { name: track.artist }, isDriveCatalogPlayback: true };
+      const result = await bootstrapPrimaryPlayback(mix);
+      elements.mixTitle.textContent = track.title;
+      elements.mixCreator.textContent = track.artist;
+      if (result.fallback) setReleasePlaybackState("unavailable");
+      else if (!result.started) setReleasePlaybackState("ready");
+    } finally {
+      state.catalogAdvancing = false;
+    }
+  }
+
+  function handleCatalogPlaying() {
+    if (state.mix?.isDriveCatalogPlayback && state.audioSourceMode === "remote") {
+      recordPlayedTrack(state.mix.id, catalogStorage());
+    }
+  }
+
+  function handleCatalogTimeupdate() {
+    const track = state.catalogSet?.tracks[state.catalogIndex];
+    if (track && state.mix?.isDriveCatalogPlayback && state.audioSourceMode === "remote"
+      && elements.audio.currentTime >= track.playDurationSeconds) void advanceCatalogTrack();
+  }
+
+  function handleCatalogEnded() {
+    if (!state.catalogSet || !state.mix?.isDriveCatalogPlayback || state.audioSourceMode !== "remote") return false;
+    void advanceCatalogTrack();
+    return true;
+  }
+
+  async function retryCatalogProxy() {
+    if (!state.mix?.isDriveCatalogPlayback || state.audioSourceMode !== "remote" || state.catalogFallbackActive) return false;
+    const fallback = dreamweaverDriveFallbacks(state.mix, elements.audio.src)[0];
+    if (!fallback) return false;
+    state.catalogFallbackActive = true;
+    try {
+      const offset = elements.audio.currentTime || 0;
+      const result = await bootstrapPrimaryPlayback({ ...state.mix, streamUrl: fallback, fallbackUrl: "" });
+      if (!result.fallback) elements.audio.currentTime = offset;
+      return true;
+    } finally {
+      state.catalogFallbackActive = false;
+    }
+  }
+
   async function initializeDreamweaver() {
     const routeContext = resolveDreamweaverRouteContext();
     hydrateAudioFeedbackQueue();
     void flushQueuedAudioFeedback();
+    const hasLegacyLink = Boolean(routeContext.requestedSongId || routeContext.requestedMixToken || routeContext.requestedStorySlug);
+    const catalogAvailable = !hasLegacyLink && await loadDriveCatalog();
+    if (hasLegacyLink) elements.catalogStatus.textContent = "Generate a set to switch from this linked song or mix to the catalog curator.";
+    if (!hasLegacyLink && catalogAvailable) {
+      const minutes = new URLSearchParams(location.search).get("curate");
+      if (minutes === "20" || minutes === "60") {
+        elements.catalogDuration.value = minutes;
+        await generateCatalogSet();
+      } else if (!state.catalogUnavailable) {
+        setReleasePlaybackState("ready");
+      }
+      return;
+    }
     if (isSatelliteFlow() && !isSatellitePath() && !new URLSearchParams(location.search).get("mix")) {
       history.replaceState(null, "", canonicalDreamweaverUrl({
         includeSatelliteFlag: true,
@@ -3128,6 +3295,9 @@ import { googleDriveFallbackSources, isGoogleDriveUrl, normalizeGoogleDriveAudio
 
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", bindPlayerControls, { once: true });
   else bindPlayerControls();
+  elements.catalogGenerate?.addEventListener("click", () => { void generateCatalogSet(); });
+  elements.audio.addEventListener("playing", handleCatalogPlaying);
+  elements.audio.addEventListener("timeupdate", handleCatalogTimeupdate);
   if (resumeUploadVerification()) return;
   elements.songLabLink?.addEventListener("click", event => {
     if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
@@ -3185,6 +3355,7 @@ import { googleDriveFallbackSources, isGoogleDriveUrl, normalizeGoogleDriveAudio
     if (!elements.audio.ended && !["error", "empty"].includes(state.audioSourceMode)) setReleasePlaybackState("paused");
   });
   elements.audio.addEventListener("ended", () => {
+    if (handleCatalogEnded()) return;
     clearRemoteAudioWatchdog();
     activateChapter(chapters.length - 1, false);
     updateHeroPlayButton(false);
@@ -3194,10 +3365,11 @@ import { googleDriveFallbackSources, isGoogleDriveUrl, normalizeGoogleDriveAudio
     }
     setReleasePlaybackState("ready");
   });
-  elements.audio.addEventListener("error", () => {
+  elements.audio.addEventListener("error", async () => {
     clearRemoteAudioWatchdog();
     // bootstrapPrimaryPlayback owns load errors (including the Google Drive fallback) while it is preparing audio.
     if (state.primaryBootstrapActive && state.audioSourceMode === "remote") return;
+    if (await retryCatalogProxy()) return;
     queueAudioFeedbackIncident(Number(elements.audio?.error?.code || 0) === 3 ? "corrupted_audio" : "non_playable_audio", {
       severity: "high",
       title: "Dreamweaver audio playback failed",

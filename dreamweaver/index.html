@@ -123,7 +123,15 @@
       </div>
     </section>
   </noscript>
-
+    <section class="song-lobby__player" aria-labelledby="catalogCuratorTitle">
+      <h2 id="catalogCuratorTitle">Dreamweaver catalog curator</h2>
+      <label for="catalogSetDuration">Set duration</label>
+      <select id="catalogSetDuration"><option value="20">20 minutes</option><option value="60" selected>60 minutes</option></select>
+      <button class="satellite-submit satellite-submit--inline" id="generateCatalogSet" type="button">Generate &amp; play set</button>
+      <p><label><input id="catalogAllowRecent" type="checkbox"> Allow recently played tracks when the catalog is insufficient</label></p>
+      <p id="catalogSetStatus" role="status" aria-live="polite">Loading catalog availability…</p>
+      <ol id="catalogSetlist" aria-label="Generated setlist"></ol>
+    </section>
   <section class="satellite-landing" id="dreamweaverSatellite" aria-labelledby="dreamweaverSatelliteTitle" aria-hidden="true" hidden>
     <script>
       const params = new URLSearchParams(window.location.search);

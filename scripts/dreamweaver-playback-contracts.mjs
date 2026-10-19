@@ -4,11 +4,12 @@ import vm from "node:vm";
 import { DREAMWEAVER_STOREFRONT_MIX_ID, buildDreamweaverStorefrontPath } from "../lib/dreamweaver-storefront.js";
 import { createLyricInteractionRecorder } from "../lib/journey-interactions.js";
 import * as playback from "../lib/dreamweaver-playback.js";
-import { generateAutomatedSet } from "../lib/catalog-curator.js";
+import { catalogAudioUrl, generateAutomatedSet } from "../lib/catalog-curator.js";
 import { readRecentTrackIds, recordPlayedTrack } from "../lib/catalog-session.js";
 
 const script = await readFile(new URL("../dreamweaver/dreamweaver.js", import.meta.url), "utf8");
 const declarations = script.slice(script.indexOf("(() => {"), script.indexOf('  if (document.readyState === "loading")'));
+const catalogControlBindings = script.slice(script.indexOf('  elements.catalogGenerate?.addEventListener'), script.indexOf('  if (resumeUploadVerification()'));
 const songId = "11111111-1111-4111-8111-111111111111";
 const stream = "https://halo.test/song.mp3";
 const masterStream = "https://halo.test/canonical-master.wav";
@@ -25,7 +26,7 @@ const release = {
 };
 const mix = { id: "linked-mix-id", title: "Linked mix", creator: { name: "Mix artist" }, audioUrl: "https://halo.test/mix.mp3", durationSeconds: 120 };
 
-export function fixture(search, { releases = [release], mixes = [mix], blocked = false, failed = false, failingSources = [], unlock = null, pathname = "/dreamweaver/", releaseArtwork = undefined, assetBinding = binding, driveCatalog = { configured: false, tracks: [] }, catalogError = false, storage = { getItem: () => null } } = {}) {
+export function fixture(search, { releases = [release], mixes = [mix], blocked = false, failed = false, failingSources = [], unlock = null, pathname = "/dreamweaver/", releaseArtwork = undefined, assetBinding = binding, driveCatalog = { configured: false, tracks: [] }, catalogError = false, storage = { getItem: () => null }, storageGetterError = false } = {}) {
   class Element extends EventTarget {
     constructor() {
       super();
@@ -76,7 +77,7 @@ export function fixture(search, { releases = [release], mixes = [mix], blocked =
   const location = new URL(`${pathname}${search}`, "https://halo.test");
   const requests = [];
   const context = {
-    URL, URLSearchParams, console, location, DREAMWEAVER_STOREFRONT_MIX_ID, buildDreamweaverStorefrontPath, createLyricInteractionRecorder, generateAutomatedSet, readRecentTrackIds, recordPlayedTrack, ...playback,
+    URL, URLSearchParams, console, location, DREAMWEAVER_STOREFRONT_MIX_ID, buildDreamweaverStorefrontPath, createLyricInteractionRecorder, catalogAudioUrl, generateAutomatedSet, readRecentTrackIds, recordPlayedTrack, ...playback,
     Image: class {
       set src(value) {
         assert.equal(this.crossOrigin, "anonymous", "CORS must be set before requesting campaign artwork");
@@ -90,6 +91,7 @@ export function fixture(search, { releases = [release], mixes = [mix], blocked =
     window: { clearTimeout() {}, setTimeout: () => 1, requestAnimationFrame: callback => callback(), HaloReleaseArtwork: releaseArtwork },
     fixtures: { releases, mixes, unlock, requests, assetBinding, driveCatalog, catalogError }
   };
+  if (storageGetterError) Object.defineProperty(context, "localStorage", { get() { throw new Error("SecurityError"); } });
   vm.runInNewContext(`${declarations}
     hydrateAudioFeedbackQueue = () => {};
     flushQueuedAudioFeedback = async () => {};
@@ -115,8 +117,7 @@ export function fixture(search, { releases = [release], mixes = [mix], blocked =
     };
     state.unlock = fixtures.unlock;
     elements.audio.addEventListener("playing", () => setReleasePlaybackState("playing"));
-    elements.audio.addEventListener("playing", handleCatalogPlaying);
-    elements.audio.addEventListener("timeupdate", handleCatalogTimeupdate);
+    ${catalogControlBindings}
     elements.audio.addEventListener("ended", handleCatalogEnded);
     globalThis.player = { state, chapters, initializeDreamweaver, generateCatalogSet, advanceCatalogTrack, retryCatalogProxy, shouldPromptLocalUpload, resolvePrimaryPlaybackMix, resolvePrimaryAudio, handleSoundUnlock, togglePlayback, loadImage };
   })();`, context);

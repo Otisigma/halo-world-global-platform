@@ -2,7 +2,7 @@ import { DREAMWEAVER_STOREFRONT_MIX_ID, buildDreamweaverStorefrontPath } from ".
 import { createDreamweaverLyricsEngine } from "../lib/dreamweaver-lyrics.js";
 import { createLyricInteractionRecorder } from "../lib/journey-interactions.js";
 import { googleDriveFallbackSources, isGoogleDriveUrl, normalizeGoogleDriveAudioUrl, startDreamweaverMutedAutoplay, unlockDreamweaverAudio } from "../lib/dreamweaver-playback.js";
-import { generateAutomatedSet } from "../lib/catalog-curator.js";
+import { catalogAudioUrl, generateAutomatedSet } from "../lib/catalog-curator.js";
 import { readRecentTrackIds, recordPlayedTrack } from "../lib/catalog-session.js";
 
 (() => {
@@ -272,6 +272,7 @@ import { readRecentTrackIds, recordPlayedTrack } from "../lib/catalog-session.js
     soundUnlockMode: "",
     primaryBootstrapActive: false,
     driveCatalog: null,
+    catalogUnavailable: false,
     catalogSet: null,
     catalogIndex: -1,
     catalogAdvancing: false,
@@ -3120,12 +3121,8 @@ import { readRecentTrackIds, recordPlayedTrack } from "../lib/catalog-session.js
   }
 
   function playableCatalogUrl(value) {
-    const src = safeMediaUrl(value);
-    if (!src) return "";
-    const url = new URL(src);
-    if (url.username || url.password) return "";
-    return /\.(mp3|m4a|m4b|aac|ogg|oga|wav|flac|webm)$/i.test(url.pathname)
-      || (url.origin === location.origin && url.pathname === "/api/drive-catalog/audio" && url.searchParams.has("track")) ? src : "";
+    const validated = catalogAudioUrl(value);
+    return validated ? safeMediaUrl(validated) : "";
   }
 
   async function loadDriveCatalog() {
@@ -3135,12 +3132,14 @@ import { readRecentTrackIds, recordPlayedTrack } from "../lib/catalog-session.js
         headers: { Accept: "application/json" }, credentials: "same-origin"
       });
       if (!response.ok || typeof payload.configured !== "boolean") throw new Error("Catalog unavailable");
+      state.catalogUnavailable = false;
       state.driveCatalog = payload.configured ? payload : null;
       elements.catalogStatus.textContent = payload.configured
         ? "Choose 20 or 60 minutes to curate the canonical catalog."
         : "Catalog curator is on standby. Existing song and mix playback remains available.";
       return payload.configured;
     } catch {
+      state.catalogUnavailable = true;
       state.driveCatalog = { configured: true, tracks: [] };
       elements.catalogStatus.textContent = "Catalog temporarily unavailable — no substitute catalog loaded. Try again or upload a local mix.";
       setReleasePlaybackState("unavailable");
@@ -3148,13 +3147,22 @@ import { readRecentTrackIds, recordPlayedTrack } from "../lib/catalog-session.js
     }
   }
 
+  function catalogStorage() {
+    try {
+      return localStorage;
+    } catch {
+      return null;
+    }
+  }
+
   async function generateCatalogSet() {
     if (state.catalogAdvancing) return;
-    if (!state.driveCatalog && !await loadDriveCatalog()) return;
+    if ((!state.driveCatalog || state.catalogUnavailable) && !await loadDriveCatalog()) return;
+    if (state.catalogUnavailable) return;
     const tracks = (state.driveCatalog?.tracks || []).filter(track => playableCatalogUrl(track.streamUrl));
     const minutes = elements.catalogDuration.value === "20" ? 20 : 60;
     state.catalogSet = generateAutomatedSet(tracks, minutes, {
-      recentTrackIds: readRecentTrackIds(typeof localStorage === "undefined" ? null : localStorage),
+      recentTrackIds: readRecentTrackIds(catalogStorage()),
       allowRecent: Boolean(elements.catalogAllowRecent.checked)
     });
     state.catalogIndex = -1;
@@ -3208,7 +3216,7 @@ import { readRecentTrackIds, recordPlayedTrack } from "../lib/catalog-session.js
 
   function handleCatalogPlaying() {
     if (state.mix?.isDriveCatalogPlayback && state.audioSourceMode === "remote") {
-      recordPlayedTrack(state.mix.id, typeof localStorage === "undefined" ? null : localStorage);
+      recordPlayedTrack(state.mix.id, catalogStorage());
     }
   }
 
@@ -3251,7 +3259,7 @@ import { readRecentTrackIds, recordPlayedTrack } from "../lib/catalog-session.js
       if (minutes === "20" || minutes === "60") {
         elements.catalogDuration.value = minutes;
         await generateCatalogSet();
-      } else {
+      } else if (!state.catalogUnavailable) {
         setReleasePlaybackState("ready");
       }
       return;

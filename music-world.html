@@ -159,9 +159,9 @@
     }
     function retryCanonicalStream(){
       const track=playerTrack,el=playerAudio();
-      if(!track?.canonical||audioSourceMode!=='remote'||!track.fallbackUrl||el.src===track.fallbackUrl)return false;
+      if(!track?.canonical||audioSourceMode!=='remote'||!safeHref(track.fallbackUrl)||safeHref(el.src)===safeHref(track.fallbackUrl))return false;
       const offset=el.currentTime||0;
-      track.previewUrl=track.fallbackUrl;
+      track.previewUrl=safeHref(track.fallbackUrl);
       clearRemoteAudioWatchdog();el.pause();el.src=track.previewUrl;el.load();armRemoteAudioWatchdog();
       const source=el.src;
       el.play().then(()=>{if(el.src===source&&audioSourceMode==='remote')el.currentTime=offset}).catch(error=>{if(el.src!==source||audioSourceMode!=='remote')return;if(error?.name==='NotAllowedError'){clearRemoteAudioWatchdog();setDeck(track,'ready')}else handleStreamUnavailable()});

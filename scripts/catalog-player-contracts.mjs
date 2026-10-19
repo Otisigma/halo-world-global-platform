@@ -14,13 +14,23 @@ const tracks = Array.from({ length: 4 }, (_, i) => ({
   streamUrl: `/audio/canonical-${i}.mp3`, fallbackUrl: `/api/drive-catalog/audio?track=drive-track-${i}`
 }));
 const driveCatalog = { configured: true, version: 1, tracks };
+for (const endpoint of ["song-catalog", "mixes", "radio", "stem-vault"]) {
+  const primaryAudioPath = `/api/${endpoint}/audio?id=canonical-master`;
+  const canonicalTrack = { ...tracks[0], primaryAudioPath, streamUrl: primaryAudioPath };
+  const f = fixture("?curate=20", { driveCatalog: { configured: true, version: 1, tracks: [canonicalTrack] } });
+  await f.initializeDreamweaver();
+  assert.equal(f.nodes.get("showAudio").src, `https://halo.test${primaryAudioPath}`, `${endpoint} extensionless canonical audio must play`);
+  assert.equal(f.state.catalogSet.tracks.length, 1, "valid extensionless primaries cannot be silently dropped");
+  assert.deepEqual(f.requests, ["/api/drive-catalog"], "extensionless canonical entries never use legacy UUID bindings");
+}
 {
   const f = fixture("", { driveCatalog, storage });
   await f.initializeDreamweaver();
   assert.equal(f.state.mix, null);
   assert.equal(records.size, 0, "loading or generating must not count as played");
   f.nodes.get("catalogSetDuration").value = "20";
-  await f.generateCatalogSet();
+  f.nodes.get("generateCatalogSet").dispatchEvent(new Event("click"));
+  await new Promise(resolve => setImmediate(resolve));
   assert.ok(f.state.catalogSet.tracks.length > 1);
   assert.equal(f.state.mix.isDriveCatalogPlayback, true);
   assert.match(f.nodes.get("catalogSetlist").innerHTML, /Canonical/);
@@ -56,6 +66,11 @@ const driveCatalog = { configured: true, version: 1, tracks };
   await f.initializeDreamweaver();
   assert.deepEqual(f.requests, ["/api/drive-catalog"]);
   assert.match(f.nodes.get("catalogSetStatus").textContent, /no substitute catalog/i);
+  assert.equal(f.state.releasePlaybackState, "unavailable", "initialization must not overwrite configured ingestion failure with ready");
+  await f.generateCatalogSet();
+  assert.deepEqual(f.requests, ["/api/drive-catalog", "/api/drive-catalog"], "generate retries failed ingestion despite the truthy empty catalog marker");
+  assert.equal(f.state.catalogSet, null, "a failed ingestion retry cannot be presented as an empty generated set");
+  assert.match(f.nodes.get("catalogSetStatus").textContent, /temporarily unavailable/i);
 }
 {
   records.set(CATALOG_HISTORY_KEY, JSON.stringify(tracks.map(track => track.id)));
@@ -74,8 +89,18 @@ recordPlayedTrack("test", denied);
   await f.initializeDreamweaver();
   assert.ok(f.state.mix);
 }
+{
+  const f = fixture("?curate=20", { driveCatalog, storageGetterError: true });
+  await f.initializeDreamweaver();
+  assert.ok(f.state.mix, "a SecurityError accessing the storage getter must not prevent generating or playing");
+  assert.equal(f.state.releasePlaybackState, "playing");
+}
 
 const html = await readFile(new URL("../music-world.html", import.meta.url), "utf8");
+const dreamweaverHtml = await readFile(new URL("../dreamweaver/index.html", import.meta.url), "utf8");
+assert.ok(dreamweaverHtml.indexOf('id="generateCatalogSet"') > dreamweaverHtml.indexOf("</noscript>", dreamweaverHtml.indexOf("<body")), "curator controls must be visible script-enabled DOM, not noscript content");
+assert.match(dreamweaverHtml, /<select id="catalogSetDuration"><option value="20">20 minutes<\/option><option value="60" selected>60 minutes<\/option><\/select>/);
+assert.match(dreamweaverHtml, /<button[^>]*id="generateCatalogSet"[^>]*type="button"/);
 const section = (start, end) => html.slice(html.indexOf(start), html.indexOf(end, html.indexOf(start)));
 async function storefront(payload, ok = true) {
   const requests = [], nodes = new Map();
@@ -96,18 +121,20 @@ assert.deepEqual((await storefront({ configured: false, tracks: [] })).requests,
 assert.equal((await storefront({}, false)).context.catalog.length, 0, "configured failure cannot substitute legacy releases");
 assert.equal((await storefront({ configured: true, tracks: [] })).context.catalog.length, 0);
 {
-  const audio = { src: "https://halo.test/audio/canonical.mp3", currentTime: 12, paused: false,
+  let mediaSrc = "https://halo.test/audio/canonical.mp3";
+  const audio = { get src() { return mediaSrc; }, set src(value) { mediaSrc = new URL(value, "https://halo.test").href; }, currentTime: 12, paused: false,
     pause() { this.paused = true; }, load() {}, async play() { this.paused = false; } };
-  const track = { id: "canonical", canonical: true, previewUrl: audio.src, fallbackUrl: "https://halo.test/api/drive-catalog/audio?track=canonical" };
+  const track = { id: "canonical", canonical: true, previewUrl: audio.src, fallbackUrl: "/api/drive-catalog/audio?track=canonical" };
   const context = vm.createContext({
     playerTrack: track, audioSourceMode: "remote", playerAudio: () => audio,
+    safeHref: value => new URL(value, "https://halo.test").href,
     clearRemoteAudioWatchdog() {}, armRemoteAudioWatchdog() {}, setDeck() {},
     handleStreamUnavailable() { throw new Error("unexpected failure"); }
   });
   vm.runInContext(section("function retryCanonicalStream()", "async function loadPublishedCatalog()"), context);
   assert.equal(context.retryCanonicalStream(), true);
   await new Promise(resolve => setImmediate(resolve));
-  assert.equal(audio.src, track.fallbackUrl, "Music World retries the same track's proxy before local standby");
+  assert.equal(audio.src, `https://halo.test${track.fallbackUrl}`, "Music World retries the same track's proxy before local standby");
   assert.equal(audio.currentTime, 12);
   assert.equal(context.retryCanonicalStream(), false, "the proxy must not retry itself");
   context.audioSourceMode = "local";

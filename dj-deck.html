@@ -27,6 +27,8 @@
   <link rel="stylesheet" href="/accessibility.css">
   <link rel="stylesheet" href="/halo-brand.css">
   <link rel="stylesheet" href="/mix-flightplan.css">
+  <link rel="stylesheet" href="/dreamweaver/deck-companion.css">
+  <script type="module" src="/dreamweaver/deck-companion.js"></script>
   <link rel="stylesheet" href="/dj-council-badge.css">
   <script src="/accessibility.js" defer></script>
   <link rel="stylesheet" href="/mobile-navigation.css">
@@ -1347,6 +1349,8 @@
       </div>
     </section>
 
+    <aside class="dw-deck-companion" id="dreamweaverDeckCompanion" data-surface="deck" aria-label="Dreamweaver V2 deck companion" hidden></aside>
+
     <section class="mix-flightplan panel" id="mixFlightplan" aria-labelledby="flightplanTitle">
       <header class="flightplan-head">
         <div>
@@ -2401,6 +2405,35 @@
         }
       };
     }
+
+    window.haloDreamweaverDeckSnapshot = () => {
+      const projectTrack = track => track && ({
+        id: track.id, title: track.title, artist: track.artist, bpm: track.bpm,
+        key: track.key, energy: track.energy, sonicWeather: track.sonicWeather,
+        empty: Boolean(track.empty), playing: Boolean(track.playing)
+      });
+      return {
+        decks: { A: projectTrack(deckState.A), B: projectTrack(deckState.B) },
+        crossfader: Number(elements.crossfader.value),
+        curve: elements.energyCurve.value,
+        energyCurve: [...(energyCurves[elements.energyCurve.value] || energyCurves.journey)],
+        phase: elements.setPhase.value,
+        personaId: new URLSearchParams(window.location.search).get("dj") || "halo",
+        nextTrack: projectTrack(tracks.find(track => track.id === currentRecommendation?.trackId)),
+        recommendation: currentRecommendation && {
+          decision: currentRecommendation.decision, summary: currentRecommendation.summary,
+          transitionStyle: currentRecommendation.transitionStyle,
+          setArc: (currentRecommendation.setArc || []).slice(0, 3).map(step => ({
+            title: tracks.find(track => track.id === step.trackId)?.title || step.trackId,
+            purpose: step.purpose
+          }))
+        },
+        recordingId: String(recordingState.startedAt || ""),
+        publishedRecordingId: String(recordingState.publishedRecordingId || ""),
+        recordingActive: recordingState.recorder?.state === "recording",
+        mixId: recordingState.publishedMixId
+      };
+    };
 
     function setSessionSaveStatus(label, cloud = false) {
       elements.sessionSaveStatus.classList.toggle("is-offline", !cloud);
@@ -4235,7 +4268,14 @@
       halo?.setLiveIntelligenceInputState(false);
       audioEngine.decks[deckId].stabilizesAt = 0;
       try {
-        return await startDeckAudioSources(context, deckId, beatOffset);
+        const result = await startDeckAudioSources(context, deckId, beatOffset);
+        const track = deckState[deckId];
+        window.dispatchEvent(new CustomEvent("halo:deck-playback-started", { detail: {
+          deck: deckId,
+          recordingId: recordingState.recorder?.state === "recording" ? String(recordingState.startedAt || "") : "",
+          track: { id: track.id, title: track.title, artist: track.artist, bpm: track.bpm, key: track.key, energy: track.energy }
+        } }));
+        return result;
       } finally {
         halo?.scheduleLiveIntelligenceRestore(Math.max(0, (audioEngine.decks[deckId].stabilizesAt || 0) - context.currentTime));
       }
@@ -6057,6 +6097,7 @@
       elements.postMix.disabled = true;
       elements.postMix.textContent = "Posting mix…";
       mixReleaseUi.start("Preparing the finished master for upload…");
+      const releaseRecordingId = recordingState.startedAt;
       try {
         const chunkSize = 3.5 * 1024 * 1024;
         const chunkCount = Math.ceil(recordingState.blob.size / chunkSize);
@@ -6101,6 +6142,7 @@
         const data = await response.json();
         if (!response.ok) throw new Error(data.message || "The mix could not be posted.");
         recordingState.publishedMixId = data.id;
+        recordingState.publishedRecordingId = releaseRecordingId;
         elements.postMix.textContent = elements.mixVisibility.value === "room" ? "Posted to room" : "Saved privately";
         elements.playlistMix.disabled = false;
         elements.dreamweaverMix.href = `/dreamweaver/?mix=${encodeURIComponent(data.id)}&experience=studio`;

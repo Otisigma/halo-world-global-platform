@@ -118,7 +118,7 @@ function hasReachablePublicAudio(value) {
       : cleanPublicUrl(raw);
     if (!url) return false;
     const parsed = new URL(url);
-    return /\.(mp3|m4a|aac|ogg|oga|wav|flac|webm)(?:$|[?#])/i.test(`${parsed.pathname}${parsed.search}`)
+    return /\.(mp3|m4a|m4b|aac|ogg|oga|wav|flac|webm)$/i.test(parsed.pathname)
       || ["/api/song-catalog/audio", "/api/mixes/audio", "/api/radio/audio", "/api/stem-vault/audio"].includes(parsed.pathname);
   } catch {
     return false;

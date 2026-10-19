@@ -1227,9 +1227,8 @@ import { googleDriveFallbackSources, isGoogleDriveUrl, normalizeGoogleDriveAudio
     }
     state.audioSourceKind = activeAudio === primaryAudio ? "primary" : "google-drive-fallback";
     if (readiness.state === "timeout") {
-      clearRemoteAudioWatchdog();
-      showToast("Press play to start the audio experience.");
-      return { started: false };
+      handleRemoteAudioUnavailable(readiness.detail);
+      return { started: false, fallback: true };
     }
     if (!readiness.ok) {
       queueAudioFeedbackIncident(readiness.state === "error" && Number(elements.audio?.error?.code || 0) === 3 ? "corrupted_audio" : "non_playable_audio", {
@@ -3160,6 +3159,7 @@ import { googleDriveFallbackSources, isGoogleDriveUrl, normalizeGoogleDriveAudio
   elements.audio.addEventListener("canplaythrough", clearRemoteAudioWatchdog);
   elements.audio.addEventListener("timeupdate", updateProgress);
   elements.audio.addEventListener("waiting", armRemoteAudioWatchdog);
+  elements.audio.addEventListener("stalled", armRemoteAudioWatchdog);
   elements.audio.addEventListener("playing", () => {
     clearRemoteAudioWatchdog();
     if (["error", "empty"].includes(state.audioSourceMode)) {

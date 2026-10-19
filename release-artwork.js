@@ -6,6 +6,7 @@
     /^\/api\/mixes\/audio$/i,
     /^\/api\/radio\/audio$/i,
     /^\/api\/stem-vault\/audio$/i,
+    /^\/api\/drive-catalog\/audio$/i,
   ];
 
   function safeText(value) {

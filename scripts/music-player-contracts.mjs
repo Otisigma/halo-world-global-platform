@@ -153,6 +153,7 @@ const playerContext = vm.createContext({
   clearTimeout() { timeoutCallback = null; }
 });
 vm.runInContext(section(musicWorld, "function playerAudio()", "if(document.readyState==="), playerContext);
+vm.runInContext(section(musicWorld, "function retryCanonicalStream()", "async function loadPublishedCatalog()"), playerContext);
 playerContext.bindPlayerControls();
 playerContext.bindPlayerControls();
 assert.equal(input.disabled, false);

@@ -114,10 +114,15 @@ async function openDrop(db, memberId, payload) {
   if (!preference?.track_drops_in_app && !preference?.track_drops_email) {
     return json({ message: "Turn on track drop alerts first" }, 409);
   }
+  // Rewards only cover drops announced after the member opted in.
+  const optedInAt = new Date(Math.min(...[preference.enabled_at, preference.email_consent_at]
+    .filter(Boolean).map(value => new Date(value).getTime())));
   const rows = await db.sql`
     SELECT id, release_id, title, artist, artwork_url, created_at
     FROM halo_track_drop_events
-    WHERE id = ${dropId} AND owner_member_id IS DISTINCT FROM ${memberId}
+    WHERE id = ${dropId}
+      AND owner_member_id IS DISTINCT FROM ${memberId}
+      AND created_at >= ${optedInAt.toISOString()}::timestamptz
     LIMIT 1
   `;
   if (!rows[0]) return json({ message: "That track drop is no longer available" }, 404);

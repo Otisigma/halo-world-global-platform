@@ -111,6 +111,7 @@ assert.equal(noRewards.showRewards, false);
 assert.equal(noRewards.rewardMessage, "");
 assert.equal(noRewards.greeting, "Hi,");
 assert.equal(trackDropEmailParameters(drop, { siteUrl: "http://halo.world" }).ctaUrl, "", "email links require an HTTPS site");
+assert.equal(trackDropEmailParameters({ ...drop, artwork_url: "https://cdn.example.com/cover.jpg" }, { siteUrl: SITE }).artworkUrl, "https://cdn.example.com/cover.jpg");
 assert.equal(trackDropEmailSubject(drop), "New on HALO: Satellite script alert(1) /script by Owen Anthony");
 for (const key of Object.keys(emailParams)) {
   if (key === "showRewards") continue;
@@ -209,6 +210,7 @@ assert.equal((publication.match(/announceDrop: true/g) || []).length, 1, "only t
 // Member API: sign-in, origin, consent and rewards are respected.
 {
   const state = { prefs: null, rewards: new Map(), skippedQueued: false };
+  const olderDrop = { ...drop, id: "66666666-6666-4666-8666-666666666666", created_at: "2020-01-01T00:00:00.000Z" };
   let user = { id: "fan-1" };
   let rejectOrigin = false;
   const db = { sql: async (strings, ...values) => {
@@ -216,7 +218,7 @@ assert.equal((publication.match(/announceDrop: true/g) || []).length, 1, "only t
     if (text.startsWith("SELECT track_drops_in_app")) return state.prefs ? [state.prefs] : [];
     if (text.startsWith("INSERT INTO halo_member_notification_preferences")) {
       const [, inApp, email, rewards] = values;
-      state.prefs = { track_drops_in_app: inApp, track_drops_email: email, rewards_enabled: rewards, email_consent_at: email ? new Date() : null, enabled_at: new Date(0), last_seen_at: new Date(0) };
+      state.prefs = { track_drops_in_app: inApp, track_drops_email: email, rewards_enabled: rewards, email_consent_at: email ? new Date("2026-10-01T00:00:00.000Z") : null, enabled_at: new Date("2026-10-01T00:00:00.000Z"), last_seen_at: new Date(0) };
       return [];
     }
     if (text.startsWith("UPDATE halo_track_drop_deliveries")) { state.skippedQueued = true; return []; }
@@ -232,7 +234,9 @@ assert.equal((publication.match(/announceDrop: true/g) || []).length, 1, "only t
       return [{ ...drop, unread: true }];
     }
     if (text.startsWith("SELECT id, release_id, title, artist, artwork_url, created_at FROM halo_track_drop_events")) {
-      return values[0] === drop.id ? [drop] : [];
+      assert.match(text, /created_at >= \?::timestamptz/, "open rewards only cover drops after opt-in");
+      const eligible = [drop, olderDrop].filter(entry => new Date(entry.created_at) >= new Date(values[2]));
+      return eligible.filter(entry => entry.id === values[0]);
     }
     throw new Error(`Unexpected API query: ${text}`);
   } };
@@ -279,6 +283,7 @@ assert.equal((publication.match(/announceDrop: true/g) || []).length, 1, "only t
   assert.equal(opened.rewards.points, 60);
   assert.equal(opened.message, "+10 points. You're 40 points from Insider.");
   assert.equal((await (await post({ action: "open-drop", dropId: drop.id })).json()).rewardGranted, false, "each drop rewards once");
+  assert.equal((await post({ action: "open-drop", dropId: olderDrop.id })).status, 404, "drops from before opting in earn no rewards");
   assert.equal((await post({ action: "open-drop", dropId: "../../etc" })).status, 400);
   assert.equal((await post({ action: "open-drop", dropId: "44444444-4444-4444-8444-444444444444" })).status, 404);
 
@@ -296,20 +301,23 @@ assert.equal((publication.match(/announceDrop: true/g) || []).length, 1, "only t
   const db = { sql: async (strings, ...values) => {
     const text = strings.join("?").replace(/\s+/g, " ").trim();
     if (text.startsWith("UPDATE halo_track_drop_deliveries")) { updates.push({ text, values }); return []; }
-    if (text.startsWith("SELECT delivery.drop_id")) {
-      assert.match(text, /delivery\.status = 'queued'/);
+    if (text.startsWith("WITH claimed AS")) {
+      assert.match(text, /SET status = 'sending'/, "rows are claimed before sending");
+      assert.match(text, /FOR UPDATE SKIP LOCKED/, "overlapping runs never claim the same card");
+      assert.match(text, /status = 'queued'/);
       return [
-        { ...drop, drop_id: drop.id, member_id: "fan-1", attempts: 0, email: "fan@example.com", display_name: "Ava", rewards_enabled: true },
-        { ...drop, drop_id: drop.id, member_id: "fan-2", attempts: 2, email: "fan2@example.com", display_name: "", rewards_enabled: false }
+        { ...drop, drop_id: drop.id, member_id: "fan-1", attempts: 0, email: "fan@example.com", display_name: "Ava", rewards_enabled: true, reward_points: 60 },
+        { ...drop, drop_id: drop.id, member_id: "fan-2", attempts: 2, email: "fan2@example.com", display_name: "", rewards_enabled: false, reward_points: 60 },
+        { ...drop, drop_id: drop.id, member_id: "fan-3", attempts: 0, email: null, display_name: "", rewards_enabled: false, reward_points: 0 }
       ];
     }
-    if (text.startsWith("SELECT COALESCE(SUM(points)")) return [{ points: 60 }];
     throw new Error(`Unexpected dispatch query: ${text}`);
   } };
   let sends = 0;
   const unconfigured = await dispatchTrackDropEmails(db, { settings: { secret: "", siteUrl: SITE, from: "" }, send: async () => { sends++; } });
   assert.deepEqual(unconfigured, { configured: false, sent: 0, failed: 0 });
   assert.equal(sends, 0, "nothing is sent without the Netlify Email Integration");
+  assert.equal(updates.length, 1, "unconfigured runs only expire stale cards");
   assert.match(updates[0].text, /status = 'skipped', last_error = 'expired'/, "stale cards expire instead of sending late");
 
   const sent = [];
@@ -326,6 +334,9 @@ assert.equal((publication.match(/announceDrop: true/g) || []).length, 1, "only t
   assert.equal(sent[0].body.to, "fan@example.com");
   assert.equal(sent[0].body.parameters.showRewards, true);
   assert.equal(sent[1].body.parameters.showRewards, false);
+  assert.equal(sent.length, 2, "members without an email are skipped, not sent");
+  assert.ok(updates.some(update => /last_error = 'no_email'/.test(update.text)));
+  assert.ok(updates.some(update => /WHERE status = 'sending' AND claimed_at </.test(update.text)), "abandoned claims return to the queue");
   assertPublicSafe(sent[0].body.parameters, "dispatched email parameters");
   assert.ok(updates.some(update => /status = 'sent'/.test(update.text)));
   assert.ok(updates.some(update => update.values[0] === "failed"), "deliveries stop retrying after the attempt limit");
@@ -336,6 +347,7 @@ for (const table of ["halo_member_notification_preferences", "halo_track_drop_ev
   assert.match(migration, new RegExp(`CREATE TABLE IF NOT EXISTS ${table}`), `${table} must be created retry-safely`);
 }
 assert.match(migration, /song_id TEXT NOT NULL UNIQUE/, "one announcement per song");
+assert.match(migration, /'queued', 'sending', 'sent', 'skipped', 'failed'/, "deliveries are claimed before sending");
 assert.match(migration, /PRIMARY KEY \(member_id, reward_key\)/, "rewards are granted once per key");
 assert.match(migration, /track_drops_email BOOLEAN NOT NULL DEFAULT FALSE/, "email alerts are off until a member opts in");
 assert.doesNotMatch(migration, /(?:^|;\s*)(?:DROP|TRUNCATE|DELETE)\s/im);

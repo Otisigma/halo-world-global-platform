@@ -34,10 +34,11 @@ CREATE TABLE IF NOT EXISTS halo_track_drop_deliveries (
   drop_id TEXT NOT NULL REFERENCES halo_track_drop_events(id) ON DELETE CASCADE,
   member_id TEXT NOT NULL REFERENCES halo_memberships(member_id) ON DELETE CASCADE,
   channel TEXT NOT NULL DEFAULT 'email' CHECK (channel IN ('email')),
-  status TEXT NOT NULL DEFAULT 'queued' CHECK (status IN ('queued', 'sent', 'skipped', 'failed')),
+  status TEXT NOT NULL DEFAULT 'queued' CHECK (status IN ('queued', 'sending', 'sent', 'skipped', 'failed')),
   attempts INTEGER NOT NULL DEFAULT 0,
   last_error TEXT NOT NULL DEFAULT '',
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  claimed_at TIMESTAMPTZ,
   sent_at TIMESTAMPTZ,
   PRIMARY KEY (drop_id, member_id, channel)
 );

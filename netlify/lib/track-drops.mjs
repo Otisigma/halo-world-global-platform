@@ -85,7 +85,11 @@ export function absoluteSiteUrl(path, siteUrl) {
   try {
     const base = new URL(String(siteUrl || "").trim());
     if (base.protocol !== "https:" || base.username || base.password) return "";
-    if (/^https:\/\//i.test(path)) return path;
+    if (/^https:\/\//i.test(path)) {
+      // External artwork has already passed safeTrackDropArtwork; re-check it before it reaches an inbox.
+      const external = new URL(path);
+      return external.protocol === "https:" && !external.username && !external.password ? external.toString() : "";
+    }
     const url = new URL(path, base.origin);
     return url.origin === base.origin ? url.toString() : "";
   } catch {
@@ -247,8 +251,9 @@ function emailSettings() {
 }
 
 /**
- * Sends queued track drop cards through the Netlify Email Integration. When email delivery is
- * not configured the queue is left untouched (stale cards expire), so nothing is sent by accident.
+ * Sends queued track drop cards through the Netlify Email Integration. Stale cards always expire;
+ * queued cards are only claimed and sent when the integration and sender are configured.
+ * Rows are claimed atomically so overlapping runs never email the same member twice.
  */
 export async function dispatchTrackDropEmails(db, {
   settings = emailSettings(),
@@ -263,18 +268,39 @@ export async function dispatchTrackDropEmails(db, {
   const endpoint = absoluteSiteUrl(`/.netlify/functions/emails/${TRACK_DROP_EMAIL_TEMPLATE}`, settings.siteUrl);
   if (!settings.secret || !settings.from || !endpoint) return { configured: false, sent: 0, failed: 0 };
 
+  await db.sql`
+    UPDATE halo_track_drop_deliveries
+    SET status = 'queued'
+    WHERE status = 'sending' AND claimed_at < NOW() - INTERVAL '30 minutes'
+  `;
   const rows = await db.sql`
-    SELECT delivery.drop_id, delivery.member_id, delivery.attempts,
+    WITH claimed AS (
+      UPDATE halo_track_drop_deliveries delivery
+      SET status = 'sending', claimed_at = NOW()
+      WHERE (delivery.drop_id, delivery.member_id, delivery.channel) IN (
+        SELECT drop_id, member_id, channel
+        FROM halo_track_drop_deliveries
+        WHERE status = 'queued' AND channel = 'email'
+        ORDER BY created_at ASC
+        LIMIT ${limit}
+        FOR UPDATE SKIP LOCKED
+      )
+      RETURNING delivery.drop_id, delivery.member_id, delivery.attempts
+    )
+    SELECT claimed.drop_id, claimed.member_id, claimed.attempts,
       track_drop.id, track_drop.release_id, track_drop.title, track_drop.artist, track_drop.artwork_url, track_drop.created_at,
       membership.email, membership.display_name,
-      preference.rewards_enabled
-    FROM halo_track_drop_deliveries delivery
-    JOIN halo_track_drop_events track_drop ON track_drop.id = delivery.drop_id
-    JOIN halo_memberships membership ON membership.member_id = delivery.member_id
-    JOIN halo_member_notification_preferences preference ON preference.member_id = delivery.member_id
-    WHERE delivery.status = 'queued' AND delivery.channel = 'email'
-    ORDER BY delivery.created_at ASC
-    LIMIT ${limit}
+      COALESCE(preference.rewards_enabled, FALSE) AS rewards_enabled,
+      reward_totals.points AS reward_points
+    FROM claimed
+    JOIN halo_track_drop_events track_drop ON track_drop.id = claimed.drop_id
+    LEFT JOIN halo_memberships membership ON membership.member_id = claimed.member_id
+    LEFT JOIN halo_member_notification_preferences preference ON preference.member_id = claimed.member_id
+    LEFT JOIN LATERAL (
+      SELECT COALESCE(SUM(points), 0)::int AS points
+      FROM halo_member_reward_events reward
+      WHERE reward.member_id = claimed.member_id
+    ) reward_totals ON TRUE
   `;
   let sent = 0;
   let failed = 0;
@@ -283,7 +309,7 @@ export async function dispatchTrackDropEmails(db, {
       await db.sql`UPDATE halo_track_drop_deliveries SET status = 'skipped', last_error = 'no_email' WHERE drop_id = ${row.drop_id} AND member_id = ${row.member_id} AND channel = 'email'`;
       continue;
     }
-    const rewards = await loadMemberRewards(db, row.member_id, Boolean(row.rewards_enabled));
+    const rewards = rewardProgress(row.reward_points, Boolean(row.rewards_enabled));
     let ok = false;
     try {
       const response = await send(endpoint, {

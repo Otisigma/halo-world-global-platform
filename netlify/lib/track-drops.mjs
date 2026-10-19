@@ -306,7 +306,7 @@ export async function dispatchTrackDropEmails(db, {
   let failed = 0;
   for (const row of rows) {
     if (!row.email) {
-      await db.sql`UPDATE halo_track_drop_deliveries SET status = 'skipped', last_error = 'no_email' WHERE drop_id = ${row.drop_id} AND member_id = ${row.member_id} AND channel = 'email'`;
+      await db.sql`UPDATE halo_track_drop_deliveries SET status = 'skipped', last_error = 'no_email' WHERE drop_id = ${row.drop_id} AND member_id = ${row.member_id} AND channel = 'email' AND status = 'sending'`;
       continue;
     }
     const rewards = rewardProgress(row.reward_points, Boolean(row.rewards_enabled));
@@ -329,11 +329,11 @@ export async function dispatchTrackDropEmails(db, {
     }
     if (ok) {
       sent++;
-      await db.sql`UPDATE halo_track_drop_deliveries SET status = 'sent', attempts = attempts + 1, last_error = '', sent_at = NOW() WHERE drop_id = ${row.drop_id} AND member_id = ${row.member_id} AND channel = 'email'`;
+      await db.sql`UPDATE halo_track_drop_deliveries SET status = 'sent', attempts = attempts + 1, last_error = '', sent_at = NOW() WHERE drop_id = ${row.drop_id} AND member_id = ${row.member_id} AND channel = 'email' AND status = 'sending'`;
     } else {
       failed++;
       const exhausted = Number(row.attempts || 0) + 1 >= TRACK_DROP_MAX_ATTEMPTS;
-      await db.sql`UPDATE halo_track_drop_deliveries SET status = ${exhausted ? "failed" : "queued"}, attempts = attempts + 1, last_error = 'delivery_failed' WHERE drop_id = ${row.drop_id} AND member_id = ${row.member_id} AND channel = 'email'`;
+      await db.sql`UPDATE halo_track_drop_deliveries SET status = ${exhausted ? "failed" : "queued"}, attempts = attempts + 1, last_error = 'delivery_failed' WHERE drop_id = ${row.drop_id} AND member_id = ${row.member_id} AND channel = 'email' AND status = 'sending'`;
     }
   }
   return { configured: true, sent, failed };

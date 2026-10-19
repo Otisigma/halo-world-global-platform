@@ -20,7 +20,7 @@ The scheduled job also sends the summary to the configured owner inbox through t
 
 When a song is explicitly published to the shop (Push to Shop & Charts, the unified upload pipeline, or the catalog publish stage), HALO records one track drop for that song. Members choose their alerts at `/track-drops/`: in-app track drop cards, Dreamweaver email cards (which require explicit email consent), and member rewards. The scheduled 15-minute publication repair never announces drops, so the existing catalog is not re-announced.
 
-Email cards use the same Netlify Email Integration with the `emails/halo-track-drop` template. Set `HALO_TRACK_DROP_FROM_EMAIL` to an authorized sender. Until it, `NETLIFY_EMAILS_SECRET`, and an HTTPS site `URL` are configured, cards stay queued and are not sent. Cards are also withheld from anyone who has since turned email off. Cards older than seven days expire rather than arriving late. Members collect reward points once for joining track drops and once for each drop they open. They only ever see their own points and tier.
+Email cards use the same Netlify Email Integration with the `emails/halo-track-drop` template. Set `HALO_TRACK_DROP_FROM_EMAIL` to an authorized sender. Until this sender, `NETLIFY_EMAILS_SECRET`, and an HTTPS site `URL` are all configured, cards stay queued and are not sent. Cards are also withheld from anyone who has since turned email off. Cards older than seven days expire rather than arriving late. Members collect reward points once for joining track drops and once for each drop they open. They only ever see their own points and tier.
 
 ## Passes
 

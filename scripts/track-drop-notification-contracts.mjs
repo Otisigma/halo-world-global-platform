@@ -353,6 +353,9 @@ assert.equal((publication.match(/announceDrop: true/g) || []).length, 1, "only t
   assert.ok(updates.some(update => /WHERE status = 'sending' AND claimed_at </.test(update.text)), "abandoned claims return to the queue");
   assertPublicSafe(sent[0].body.parameters, "dispatched email parameters");
   assert.ok(updates.some(update => /status = 'sent'/.test(update.text)));
+  for (const update of updates.filter(entry => /status = 'sent'|last_error = 'delivery_failed'|last_error = 'no_email'/.test(entry.text))) {
+    assert.match(update.text, /AND status = 'sending'$/, "an opt-out recorded mid-send must not be overwritten");
+  }
   assert.ok(updates.some(update => update.values[0] === "failed"), "deliveries stop retrying after the attempt limit");
 }
 

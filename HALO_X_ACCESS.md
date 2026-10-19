@@ -16,6 +16,12 @@ The report includes total membership, new joins, active members, current online 
 
 The scheduled job also sends the summary to the configured owner inbox through the Netlify Email Integration. Enable the integration with Mailgun, Postmark, or SendGrid, then set `HALO_DAILY_REPORT_FROM_EMAIL` to an authorized sender address. Delivery is skipped safely when the email integration or sender is not configured. To additionally deliver the report to an external automation service, set `HALO_DAILY_REPORT_WEBHOOK_URL` to a secure HTTPS webhook endpoint.
 
+## Track drop alerts and member rewards
+
+When a song is explicitly published to the shop (Push to Shop & Charts, the unified upload pipeline, or the catalog publish stage), HALO records one track drop for that song. Members choose their alerts at `/track-drops/`: in-app track drop cards, Dreamweaver email cards (which require explicit email consent), and member rewards. The scheduled 15-minute publication repair never announces drops, so the existing catalog is not re-announced.
+
+Email cards use the same Netlify Email Integration with the `emails/halo-track-drop` template. Set `HALO_TRACK_DROP_FROM_EMAIL` to an authorized sender. Until it and `NETLIFY_EMAILS_SECRET` are configured, cards stay queued and are not sent. Cards older than seven days expire rather than arriving late. Members collect reward points once for joining track drops and once for each drop they open. They only ever see their own points and tier.
+
 ## Passes
 
 Owners can create Gold Tickets, Backstage Passes, permanent Founders Keys, and one-day Event Passes. A generated code is shown only once; the database stores its secure hash and final four-character hint.

@@ -257,6 +257,7 @@ async function setStage(db, ownerMemberId, payload) {
       ownerMemberId,
       actorId: payload.actorId || "system",
       actorType: "member",
+      announceDrop: true,
     });
   }
   return json({ message: `Song moved to ${stage.replace(/_/g, " ")}`, songId, stage });

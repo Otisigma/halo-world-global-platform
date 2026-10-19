@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#050507">
+  <title>Track Drops | HALO</title>
+  <meta name="description" content="Choose how HALO lets you know when a new track enters the shop, and follow your member rewards.">
+  <link rel="icon" href="/assets/halo-app-icon-192.png">
+  <link rel="stylesheet" href="/accessibility.css">
+  <link rel="stylesheet" href="/track-drops/track-drops.css">
+  <script src="/accessibility.js" defer></script>
+  <script src="/stats.js" defer></script>
+  <script src="/site-monitor.js" defer></script>
+  <script type="module" src="/track-drops/track-drops.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="drops-header">
+    <a class="wordmark" href="/halo" aria-label="HALO home">HALO</a>
+    <nav aria-label="Track drops pathways"><a href="/music/">HALO shop ↗</a><a href="/halo">Home ↗</a></nav>
+  </header>
+  <main id="main" tabindex="-1">
+    <section class="drops-hero" aria-labelledby="drops-title">
+      <p class="eyebrow">Members · New on HALO</p>
+      <h1 id="drops-title">Hear it first when a track drops.</h1>
+      <p class="intro">Choose how HALO tells you a new release has entered the shop: an in-app card, a Dreamweaver email card, or both. Turn on member rewards to collect points as you explore new drops.</p>
+    </section>
+
+    <p id="drops-status" class="drops-status" role="status" aria-live="polite">Loading your alert settings…</p>
+    <p id="drops-signin" class="drops-signin" hidden>Sign in to your HALO membership to choose track drop alerts. <a href="/halo">Sign in on HALO</a></p>
+
+    <form id="drops-preferences" class="drops-panel" aria-labelledby="prefs-title" hidden>
+      <h2 id="prefs-title">Your alert settings</h2>
+      <label class="toggle"><input type="checkbox" name="trackDropsInApp"><span><strong>In-app track drop cards</strong><small>New releases appear below while you browse HALO.</small></span></label>
+      <label class="toggle"><input type="checkbox" name="trackDropsEmail"><span><strong>Dreamweaver email cards</strong><small>A card with the track, artwork and a link to the shop, sent to your membership email.</small></span></label>
+      <label class="toggle consent" id="email-consent-row" hidden><input type="checkbox" name="emailConsent"><span><strong>Yes, email me track drops</strong><small>You can turn emails off here at any time. Your email is never shown to artists.</small></span></label>
+      <label class="toggle"><input type="checkbox" name="rewardsEnabled"><span><strong>Member rewards</strong><small>Collect points for joining track drops and opening new releases.</small></span></label>
+      <button type="submit" id="save-preferences">Save alert settings</button>
+    </form>
+
+    <section id="drops-rewards" class="drops-panel rewards" aria-labelledby="rewards-title" hidden>
+      <h2 id="rewards-title">Member rewards</h2>
+      <p class="tier"><span id="reward-tier">Listener</span> · <span id="reward-points">0</span> points</p>
+      <p id="reward-message"></p>
+    </section>
+
+    <section id="drops-inbox" class="drops-panel" aria-labelledby="inbox-title" hidden>
+      <div class="inbox-heading"><h2 id="inbox-title">Recent track drops</h2><button type="button" id="mark-seen">Mark all seen</button></div>
+      <ul id="drops-list" class="drops-list"></ul>
+      <p id="drops-empty" class="empty">Turn on in-app cards and new releases will appear here.</p>
+    </section>
+  </main>
+  <footer class="drops-footer"><span>HALO Track Drops</span><a href="/support/">Contact HALO</a></footer>
+</body>
+</html>

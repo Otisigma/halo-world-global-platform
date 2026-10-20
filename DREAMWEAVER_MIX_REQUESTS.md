@@ -68,8 +68,55 @@ In `catalog-index.json`, the optional `genre` and `tags` fields give Dreamweaver
 
 ## Tests
 
+### Owner-only approach comparison (HALO Guard)
+
+Sign into the existing `/control-center`, then open its **HALO Guard** link
+(`/halo-shield/preflight.html`) on the same owner-reviewed preview origin.
+This is a static locked shell; the server must authorize the owner through the
+existing Control Center before its private request report or diagnostic is enabled.
+The local Express preview deliberately has no owner Identity/Control Center adapter;
+it must report blocked rather than simulate authorization. Do not deploy just to
+obtain this test without owner approval.
+
+1. Enter the original request and the six explicit intent/approach/acceptance fields.
+   Check the request. No AI calls, catalog writes or deployments occur.
+2. Select **Load canonical candidate**. One fixed same-origin `/api/drive-catalog`
+   GET is bounded to 8 seconds / 1 MiB, with redirects refused. Only a valid
+   `configured: true`, public canonical entry is eligible. No arbitrary URL,
+   track ID, credential or response-body input is accepted. Unavailable, empty,
+   unconfigured or invalid responses block the comparison.
+3. Compare **requested Drive preview iframe**, **existing primary audio path**,
+   and **authorized proxy audio path**, one at a time. Each is an explicit click;
+   audio controls require another listener play gesture. There is no autoplay,
+   automatic fallback, automatic deployment or public setlist change. The iframe
+   contacts only `https://drive.google.com/file/d/{catalog-derived-id}/preview`.
+   Primary media is restricted to the same origin; an external primary host is a
+   concrete blocker for the primary probe only, not fetched or silently substituted.
+   The requested iframe and authorized-proxy probes remain available.
+4. Record browser/device, audible sound, controls/seek, network observations
+   (200/206, content type/ranges, policy/CORS errors), and failures privately.
+   Do not paste raw IDs/URLs, credentials, catalog bodies or network response
+   bodies into public reports. Preview references exist only in runtime DOM/memory,
+   never generated setlist HTML or storage. Stop/clear, hiding/leaving the page,
+   or 60 seconds of preview time removes the references and observations.
+5. Independently check the actual shared Dreamweaver player via a genuine catalog
+   card. The preview's audio element checks transport in isolation, **not** the
+   full show/player integration or recovery logic. Repeat on desktop and mobile.
+   Review evidence with the owner before choosing any production approach.
+
+`public: true` in the publishing manifest does not prove anonymous Google sharing.
+An iframe load event does not prove its audio or controls work; same-origin policy
+prevents inspecting the cross-origin Google UI. Static fixtures establish neither
+playback, controls, CORS, autoplay nor mobile compatibility. When catalog/browser
+access is missing, report **blocked / not tested** and request access to an
+owner-reviewed preview with a genuine eligible catalog entry—not a fake file ID.
+Live Drive playback requires configured catalog access **and** a real
+browser/device check; do not claim the original no-sound issue is solved without
+audible live playback verification.
+
 ```sh
 npm run -s test:drive-catalog   # curator, mix-intent, Drive catalog and Dreamweaver player contracts
+npm run -s test:guard-preflight # synthetic fixtures / stubbed owner identity, not live playback
 ```
 
 Manual smoke test still required against the deployed Drive catalog: test desktop and mobile playback, per-slot playback and advancement, blocked streams and proxy/local-upload fallback, keyboard controls and screen-reader announcements. Local contracts cannot verify real device autoplay policies or live Drive availability.

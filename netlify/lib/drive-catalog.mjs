@@ -1,5 +1,6 @@
 import { normalizeCatalog } from "../../lib/catalog-curator.js";
 import { getDriveAccessToken, googleDriveConfig, isDriveId } from "./google-drive.mjs";
+import { googleDriveFileId } from "../../lib/dreamweaver-playback.js";
 
 const DRIVE_API = "https://www.googleapis.com/drive/v3/files";
 const MAX_INDEX_BYTES = 1024 * 1024;
@@ -260,7 +261,19 @@ export function createDriveCatalogService({
     }
   }
 
-  return { catalogHandler, audioHandler };
+  async function resolveAudioProxy(candidates = []) {
+    const fileIds = candidates.map(googleDriveFileId).filter(Boolean);
+    if (!fileIds.length) return "";
+    const loaded = await load();
+    if (!loaded) return "";
+    for (const fileId of fileIds) {
+      const track = [...loaded.allowlist].find(([, allowedFile]) => allowedFile === fileId);
+      if (track) return `/api/drive-catalog/audio?track=${encodeURIComponent(track[0])}`;
+    }
+    return "";
+  }
+
+  return { catalogHandler, audioHandler, resolveAudioProxy };
 }
 
 export const driveCatalogService = createDriveCatalogService();

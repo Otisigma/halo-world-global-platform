@@ -1,12 +1,13 @@
 import { getDatabase } from "@netlify/database";
 import { getUser, verifyRequestOrigin } from "@netlify/identity";
 import { BindingError, bindingSongId, resolveDreamweaverBinding, validateCustomImages } from "../lib/dreamweaver-assets.mjs";
+import { driveCatalogService } from "../lib/drive-catalog.mjs";
 
 const json = (body, status = 200, headers = {}) => Response.json(body, {
   status, headers: { "Cache-Control": "no-store", ...headers }
 });
 
-export async function handleDreamweaverAssets(request, { database, user = null, verifyOrigin = verifyRequestOrigin }) {
+export async function handleDreamweaverAssets(request, { database, user = null, verifyOrigin = verifyRequestOrigin, resolveAudioProxy = driveCatalogService.resolveAudioProxy }) {
   if (!["GET", "POST"].includes(request.method)) return json({ status: "failed", message: "Method not allowed" }, 405, { Allow: "GET, POST" });
   try {
     let songId;
@@ -40,7 +41,7 @@ export async function handleDreamweaverAssets(request, { database, user = null, 
     } else {
       songId = bindingSongId(new URL(request.url).searchParams.get("songId"));
     }
-    const binding = await resolveDreamweaverBinding(database, { songId, memberId: user?.id || "", customImages });
+    const binding = await resolveDreamweaverBinding(database, { songId, memberId: user?.id || "", customImages, resolveAudioProxy });
     return json({ binding });
   } catch (error) {
     if (error instanceof BindingError) return json({ status: "failed", message: error.message }, error.status);

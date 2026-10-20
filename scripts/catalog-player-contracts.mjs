@@ -126,7 +126,7 @@ for (const driveCatalog of [
   assert.equal(audio.src, previous.src);
   assert.equal(audio.plays, previous.plays);
   assert.equal(audio.loads, previous.loads);
-  assert.equal(audio.paused, false, "catalog failure never interrupts a linked mix");
+  assert.equal(audio.paused, true, "catalog failure never starts or interrupts a linked mix");
   assert.equal(f.state.mix, previous.mix);
   assert.equal(f.state.releasePlaybackState, previous.status);
 }
@@ -300,7 +300,7 @@ for (const event of ["ended", "error"]) {
   assert.equal(audio.muted, true, `${event}: automatic advancement or recovery preserves the listener's mute choice`);
   assert.equal(audio.playLog.at(-1).muted, true);
   await playCatalogSlot(f);
-  assert.equal(audio.muted, false, "an explicit Play gesture restores sound");
+  assert.equal(audio.muted, true, "an explicit Play preserves a deliberate mute choice");
 }
 for (const loadingSources of [[], ["https://halo.test/audio/canonical-0.mp3"]]) {
   const f = fixture("?curate=20", { driveCatalog, blocked: true, loadingSources });
@@ -625,7 +625,7 @@ assert.equal((await storefront({ configured: true, tracks: [] })).context.catalo
   await f.advanceCatalogTrack();
   await playCatalogSlot(f, f.state.catalogSet.tracks.length);
   assert.equal(f.state.mix, linkedMix, "neither an unstarted sequence nor an out-of-range Play action replaces the linked song");
-  assert.equal(f.nodes.get("showAudio").paused, false);
+  assert.equal(f.nodes.get("showAudio").paused, true, "linked preload remains paused until the listener starts it");
   await playCatalogSlot(f);
   assert.notEqual(f.state.mix, linkedMix);
   assert.equal(f.state.mix.isDriveCatalogPlayback, true, "choosing a track explicitly replaces a linked item");

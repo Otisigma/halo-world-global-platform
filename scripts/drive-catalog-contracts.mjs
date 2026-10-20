@@ -87,6 +87,20 @@ test("actual paginated ingestion, verification, canonical stream URLs and 60-sec
   assert.equal(service.calls.length, 8);
 });
 
+test("linked-song proxy resolution only accepts an already allowlisted Drive asset", async () => {
+  const service = fixture();
+  assert.equal(await service.resolveAudioProxy(["https://unrelated.test/song.mp3"]), "");
+  assert.equal(service.calls.length, 0, "non-Drive sources do not initiate catalog transport");
+  const share = `https://drive.google.com/file/d/${fileId}/view`;
+  const proxy = await service.resolveAudioProxy([share]);
+  assert.equal(proxy, `/api/drive-catalog/audio?track=${track.id}`);
+  assert.ok(!proxy.includes(fileId), "a binding exposes only the public catalog key, never the raw Drive identifier");
+  assert.equal(await service.resolveAudioProxy(["https://drive.google.com/file/d/unapproved_file_123/view"]), "");
+  assert.equal((await service.audioHandler(request(proxy))).status, 200);
+  const privateCatalog = fixture({ index: { version: 1, tracks: [{ ...track, public: false }] } });
+  assert.equal(await privateCatalog.resolveAudioProxy([share]), "", "a private manifest record cannot authorize a linked release");
+});
+
 test("partial or invalid Drive configuration is configured failure, not legacy fallback", async () => {
   assert.equal(driveCatalogConfig({}), null);
   for (const env of [

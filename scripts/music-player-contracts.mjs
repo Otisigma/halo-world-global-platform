@@ -267,7 +267,9 @@ const dreamContext = vm.createContext({
   window: { setTimeout: playerContext.setTimeout, clearTimeout: playerContext.clearTimeout },
   URL: MediaURL, location: playerContext.location, HTMLMediaElement: playerContext.HTMLMediaElement,
   REMOTE_AUDIO_WATCHDOG_MS: 5000, cleanText: value => String(value || "").trim(),
-  showToast() {}, setReleasePlaybackState() {}
+  showToast() {}, setReleasePlaybackState() {},
+  notePlaybackClick() { dreamState.playbackRequested = true; },
+  dreamweaverDriveFallbacks: () => [], renderSoundUnlock() {}
 });
 vm.runInContext(
   section(dreamweaver, "function clearRemoteAudioWatchdog()", "function publicReleaseStatus(")
@@ -318,11 +320,11 @@ Object.assign(dreamContext, {
   setLoadingProgress() {},
   queueAudioFeedbackIncident() {},
   awaitPrimaryPlaybackReadiness: async () => ({ ok: false, state: "timeout" }),
-  dreamweaverDriveFallbacks: () => [],
-  startPrimaryAutoplay: async () => { throw new Error("Timed-out streams must not autoplay"); }
+  dreamweaverDriveFallbacks: () => []
 });
 dreamState.audioSourceMode = "empty";
-const timedOutBootstrap = await dreamContext.bootstrapPrimaryPlayback({});
+dreamAudio.play = async () => {};
+const timedOutBootstrap = await dreamContext.bootstrapPrimaryPlayback({}, { userInitiated: true });
 assert.equal(timedOutBootstrap.fallback, true, "bootstrap timeout must offer the local upload fallback");
 assert.equal(dreamState.audioSourceMode, "error");
 await dreamContext.togglePlayback();

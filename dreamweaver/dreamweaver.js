@@ -1,7 +1,7 @@
 import { DREAMWEAVER_STOREFRONT_MIX_ID, buildDreamweaverStorefrontPath } from "../lib/dreamweaver-storefront.js";
 import { createDreamweaverLyricsEngine } from "../lib/dreamweaver-lyrics.js";
 import { createLyricInteractionRecorder } from "../lib/journey-interactions.js";
-import { googleDriveFallbackSources, isGoogleDriveUrl, normalizeGoogleDriveAudioUrl, startDreamweaverMutedAutoplay, unlockDreamweaverAudio } from "../lib/dreamweaver-playback.js";
+import { isGoogleDriveUrl, unlockDreamweaverAudio } from "../lib/dreamweaver-playback.js";
 import { catalogAudioUrl, generateAutomatedSet, normalizeCatalog } from "../lib/catalog-curator.js";
 import { readRecentTrackIds, recordPlayedTrack } from "../lib/catalog-session.js";
 import { MIX_PRESETS, createMixSeed, deleteUserPreset, describeMixIntent, normalizeMixSeed, parseMixPrompt, readUserPresets, saveUserPreset } from "../lib/mix-intent.js";
@@ -823,24 +823,22 @@ import { MIX_PRESETS, createMixSeed, deleteUserPreset, describeMixIntent, normal
     if (entry.isCatalogPlayback && entry.canonicalBinding) {
       // The server-side binding is authoritative; a Drive-hosted master is only normalized so it can stream.
       const binding = entry.canonicalBinding.audioSource;
-      const src = isGoogleDriveUrl(binding) ? normalizeGoogleDriveAudioUrl(binding) : safeMediaUrl(binding);
+      const src = isGoogleDriveUrl(binding) ? "" : safeMediaUrl(binding);
       return { src, source: "canonical-master", isPlayable: Boolean(src) };
     }
     const resolved = window.HaloReleaseArtwork?.resolveAudio(entry, { requirePlayable: true, ...options });
-    if (resolved?.src) return resolved;
+    if (resolved?.src && !isGoogleDriveUrl(resolved.src)) return resolved;
     if (!resolved) {
       const candidate = safeMediaUrl(primaryAudioCandidates(entry).find(Boolean));
       if (candidate && !isGoogleDriveUrl(candidate)) return { src: candidate, source: "legacy", isPlayable: true };
     }
-    const [driveFallback = ""] = googleDriveFallbackSources(primaryAudioCandidates(entry));
-    if (driveFallback) return { src: driveFallback, source: "google-drive-fallback", isPlayable: true };
-    return resolved || { src: "", source: "", isPlayable: false };
+    return { src: "", source: "", isPlayable: false };
   }
 
   // Drive fallbacks only come from the same song's published release (catalog routes) or the mix itself.
   function dreamweaverDriveFallbacks(mix, primaryAudio) {
     if (mix?.isDriveCatalogPlayback) {
-      const fallback = playableCatalogUrl(mix.fallbackUrl);
+      const fallback = siteAudioProxy(mix.fallbackUrl);
       return fallback && fallback !== primaryAudio ? [fallback] : [];
     }
     if (!mix) return [];
@@ -848,14 +846,41 @@ import { MIX_PRESETS, createMixSeed, deleteUserPreset, describeMixIntent, normal
       const release = state.release || {};
       const releaseSongId = cleanSongId(release.dreamweaverPayload?.songId) || cleanSongId(release.catalog?.songId) || cleanSongId(release.id);
       if (!mix.canonicalBinding || !releaseSongId || releaseSongId !== cleanSongId(mix.canonicalBinding.songId)) return [];
-      return googleDriveFallbackSources([release.dreamweaverPayload?.audioStreamUrl, release.streamUrl, release.audioUrl], primaryAudio);
+      const candidates = [mix.canonicalBinding.fallbackAudioSource, release.dreamweaverPayload?.audioStreamUrl, release.streamUrl];
+      return [...new Set(candidates.map(siteAudioProxy).filter(src => src && src !== primaryAudio))];
     }
-    return googleDriveFallbackSources(primaryAudioCandidates(mix), primaryAudio);
+    return [...new Set(primaryAudioCandidates(mix).map(siteAudioProxy).filter(src => src && src !== primaryAudio))];
+  }
+
+  function siteAudioProxy(value) {
+    if (!value) return "";
+    try {
+      const url = new URL(value, location.href);
+      return url.origin === location.origin && !url.username && !url.password
+        && url.pathname === "/api/drive-catalog/audio" && url.searchParams.getAll("track").length === 1
+        && url.searchParams.get("track") ? url.href : "";
+    } catch { return ""; }
+  }
+
+  function notePlaybackClick() {
+    state.playbackRequested = true;
+    state.playbackClickAt = window.performance?.now?.() ?? Date.now();
+  }
+
+  function measurePlaybackStart() {
+    if (state.playbackClickAt == null) return;
+    const elapsed = (window.performance?.now?.() ?? Date.now()) - state.playbackClickAt;
+    state.playbackClickAt = null;
+    if (elapsed >= 0 && elapsed <= 120000) {
+      // Local, last-start diagnostic only: no URLs, song identifiers, or listener data.
+      elements.audio.dataset.clickToPlayingMs = String(Math.round(elapsed));
+    }
   }
 
   // Explicit user gesture only: never called from timers or autoplay paths.
   async function handleSoundUnlock() {
     const previousMode = state.soundUnlockMode;
+    if (elements.audio.paused) notePlaybackClick();
     if (shouldPromptLocalUpload()) {
       state.autoplayMuted = false;
       renderSoundUnlock("");
@@ -872,35 +897,13 @@ import { MIX_PRESETS, createMixSeed, deleteUserPreset, describeMixIntent, normal
     } catch (error) {
       state.autoplayMuted = Boolean(elements.audio.muted) && previousMode === "muted";
       if (error?.name === "AbortError") return renderSoundUnlock(previousMode);
+      if (error?.name !== "NotAllowedError" && state.audioSourceMode === "remote") {
+        handleRemoteAudioUnavailable();
+        return;
+      }
       renderSoundUnlock(state.autoplayMuted ? "muted" : "blocked");
       showToast("Your browser is still blocking audio. Press play again to start the Dreamweaver sound.");
     }
-  }
-
-  async function startPrimaryAutoplay() {
-    renderSoundUnlock("");
-    // Once the listener has explicitly unmuted, later songs keep their sound instead of re-muting.
-    if (state.soundUnlockedByUser && !elements.audio.muted) {
-      try {
-        await elements.audio.play();
-        state.autoplayMuted = false;
-        renderReleasePanel();
-        return { started: true, muted: false, blocked: false };
-      } catch (error) {
-        if (error?.name === "AbortError") return { started: false, blocked: false, reason: "aborted" };
-      }
-    }
-    const result = await startDreamweaverMutedAutoplay(elements.audio);
-    state.autoplayMuted = result.started;
-    if (result.started) {
-      renderSoundUnlock("muted");
-      showToast("Dreamweaver started muted. Tap to unmute for sound.");
-    } else if (result.blocked) {
-      elements.audio.muted = false;
-      renderSoundUnlock("blocked");
-    }
-    renderReleasePanel();
-    return result;
   }
 
   async function bindCanonicalAssets(mix, songId) {
@@ -1124,7 +1127,7 @@ import { MIX_PRESETS, createMixSeed, deleteUserPreset, describeMixIntent, normal
   }
 
   function handleRemoteAudioUnavailable(message = "Stream unavailable — click Upload Mix File or press play to choose a local mix.") {
-    if (!state.primaryBootstrapActive && !state.catalogFallbackActive && state.mix?.isDriveCatalogPlayback
+    if (!state.primaryBootstrapActive && !state.catalogFallbackActive && state.mix
       && dreamweaverDriveFallbacks(state.mix, elements.audio.src).length) {
       void retryCatalogProxy();
       return;
@@ -1143,7 +1146,7 @@ import { MIX_PRESETS, createMixSeed, deleteUserPreset, describeMixIntent, normal
     state.remoteAudioWatchdog = window.setTimeout(() => {
       state.remoteAudioWatchdog = 0;
       if (state.audioSourceMode !== "remote") return;
-      if (elements.audio.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
+      if (state.playbackRequested || elements.audio.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
         handleRemoteAudioUnavailable("Stream unavailable — click Upload Mix File or press play to choose a local mix.");
       }
     }, REMOTE_AUDIO_WATCHDOG_MS);
@@ -1222,7 +1225,7 @@ import { MIX_PRESETS, createMixSeed, deleteUserPreset, describeMixIntent, normal
     });
   }
 
-  async function bootstrapPrimaryPlayback(mix, { userInitiated = false } = {}) {
+  async function bootstrapPrimaryPlayback(mix, { userInitiated = false, resume = false, offset = 0 } = {}) {
     if (state.audioSourceMode === "local") return { started: !elements.audio.paused, fallback: true };
     const primaryAudio = resolvePrimaryAudio(mix).src;
     if (!primaryAudio) {
@@ -1242,20 +1245,34 @@ import { MIX_PRESETS, createMixSeed, deleteUserPreset, describeMixIntent, normal
     revokeLocalAudioUrl();
     state.localAudioName = "";
     state.audioSourceMode = "remote";
+    const requestPlayback = userInitiated || resume;
+    if (userInitiated) notePlaybackClick();
+    if (!requestPlayback) state.playbackRequested = false;
     elements.audio.pause();
-    elements.audio.currentTime = 0;
     setReleasePlaybackState("loading");
-    if (!window.HaloAudioPreloader?.prepare(elements.audio, primaryAudio)) {
+    if (!requestPlayback && window.HaloAudioPreloader) {
+      window.HaloAudioPreloader.warmPlaylist([primaryAudio, ...dreamweaverDriveFallbacks(mix, primaryAudio)], {
+        primaryAudio: elements.audio, respectPolicy: true
+      });
+    } else if (!window.HaloAudioPreloader?.prepare(elements.audio, primaryAudio)) {
       elements.audio.preload = "auto";
       elements.audio.src = primaryAudio;
       elements.audio.load?.();
     }
+    const restorePosition = () => {
+      if (state.audioSourceMode !== "remote" || state.mix !== mix) return;
+      try { elements.audio.currentTime = offset; } catch {}
+    };
+    if (elements.audio.readyState >= 1) restorePosition();
+    else elements.audio.addEventListener("loadedmetadata", restorePosition, { once: true });
+    if (!requestPlayback) {
+      setReleasePlaybackState("ready");
+      return { started: false };
+    }
     let userPlayback;
-    const requestPlayback = userInitiated || mix.isDriveCatalogPlayback;
     const requestUserPlayback = () => {
       if (userInitiated) {
         state.autoplayMuted = false;
-        elements.audio.muted = false;
         renderSoundUnlock("");
       }
       try {
@@ -1274,7 +1291,11 @@ import { MIX_PRESETS, createMixSeed, deleteUserPreset, describeMixIntent, normal
     const preparePlayback = async () => {
       const readiness = await awaitPrimaryPlaybackReadiness(userPlayback);
       if (!readiness.ok || !userPlayback) return readiness;
-      const playback = await userPlayback;
+      let timer;
+      const playback = await Promise.race([userPlayback, new Promise(resolve => {
+        timer = window.setTimeout(() => resolve({ error: { name: "TimeoutError" } }), REMOTE_AUDIO_WATCHDOG_MS);
+      })]);
+      window.clearTimeout(timer);
       if (playback.error && !["NotAllowedError", "AbortError"].includes(playback.error.name)) {
         return { ok: false, state: "error", detail: "The audio stream could not start." };
       }
@@ -1298,7 +1319,7 @@ import { MIX_PRESETS, createMixSeed, deleteUserPreset, describeMixIntent, normal
       readiness = await preparePlayback();
       if (state.audioSourceMode === "local" || elements.audio.getAttribute("src") !== activeAudio) return { started: false, fallback: true };
       // Google Drive is a fallback only: it is tried once the canonical/direct source fails to load.
-      for (const fallbackAudio of (readiness.state === "error" || (mix.isDriveCatalogPlayback && readiness.state === "timeout")) ? dreamweaverDriveFallbacks(mix, primaryAudio) : []) {
+      for (const fallbackAudio of ["error", "timeout"].includes(readiness.state) ? dreamweaverDriveFallbacks(mix, primaryAudio) : []) {
         queueAudioFeedbackIncident("non_playable_audio", {
           severity: "medium",
           title: "Dreamweaver switched to the Google Drive fallback",
@@ -1307,8 +1328,12 @@ import { MIX_PRESETS, createMixSeed, deleteUserPreset, describeMixIntent, normal
           metadata: { failureState: "non_playable_audio", reason: "google-drive-fallback" }
         });
         activeAudio = fallbackAudio;
-        elements.audio.src = fallbackAudio;
-        elements.audio.load?.();
+        if (!window.HaloAudioPreloader?.prepare(elements.audio, fallbackAudio)) {
+          elements.audio.src = fallbackAudio;
+          elements.audio.load?.();
+        }
+        if (elements.audio.readyState >= 1) restorePosition();
+        else elements.audio.addEventListener("loadedmetadata", restorePosition, { once: true });
         if (requestPlayback) userPlayback = requestUserPlayback();
         readiness = await preparePlayback();
         if (state.audioSourceMode === "local" || elements.audio.getAttribute("src") !== activeAudio) return { started: false, fallback: true };
@@ -1342,19 +1367,6 @@ import { MIX_PRESETS, createMixSeed, deleteUserPreset, describeMixIntent, normal
         showToast("Playback was blocked by your browser. Click Play again or tap Play with sound.");
       }
       return { started: false };
-    }
-    const autoplay = await startPrimaryAutoplay();
-    if (autoplay.started) return { started: true, muted: autoplay.muted };
-    if (autoplay.reason !== "aborted") {
-      const error = autoplay.error;
-      queueAudioFeedbackIncident("non_playable_audio", {
-        severity: "medium",
-        title: "Dreamweaver primary audio could not start",
-        details: cleanText(error instanceof Error ? error.message : "Playback was blocked before Dreamweaver could start the linked song.", 1200, "Playback was blocked before Dreamweaver could start the linked song."),
-        mix,
-        metadata: { failureState: "non_playable_audio", reason: autoplay.reason || "play-rejected" }
-      });
-      showToast("Autoplay was blocked. Tap to play with sound.");
     }
     return { started: false };
   }
@@ -2062,14 +2074,20 @@ import { MIX_PRESETS, createMixSeed, deleteUserPreset, describeMixIntent, normal
   }
 
   async function startUnlockedShow() {
-    state.startPlaybackAfterLoad = true;
+    if (!shouldPromptLocalUpload()) {
+      const playback = elements.audio.paused ? togglePlayback() : Promise.resolve();
+      if (elements.shell.hidden) renderSatelliteState();
+      elements.shell.hidden = false;
+      await playback;
+      elements.shell.scrollIntoView({ behavior: "smooth", block: "start" });
+      return;
+    }
+    state.startPlaybackAfterLoad = false;
     if (elements.shell.hidden) {
       renderSatelliteState();
       await loadShow();
-    } else if ((elements.audio.paused || state.autoplayMuted) && !shouldPromptLocalUpload()) {
-      await handleSoundUnlock();
-      state.startPlaybackAfterLoad = false;
     }
+    showToast("The song is still preparing or unavailable. Tap Play when ready, or configure its canonical master and authorized Drive catalog entry.");
     elements.shell.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
@@ -2221,13 +2239,13 @@ import { MIX_PRESETS, createMixSeed, deleteUserPreset, describeMixIntent, normal
       return;
     }
     if (elements.audio.paused) {
+      notePlaybackClick();
       const source = elements.audio.src;
       try {
         if (state.audioSourceMode === "remote") armRemoteAudioWatchdog();
         if (state.autoplayMuted || state.soundUnlockMode) {
           state.autoplayMuted = false;
           state.soundUnlockedByUser = true;
-          elements.audio.muted = false;
           renderSoundUnlock("");
         }
         await elements.audio.play();
@@ -2238,9 +2256,11 @@ import { MIX_PRESETS, createMixSeed, deleteUserPreset, describeMixIntent, normal
           return;
         }
         clearRemoteAudioWatchdog();
+        renderSoundUnlock("blocked");
         showToast("Audio loaded. Press play when your browser is ready.");
       }
     } else {
+      state.playbackRequested = false;
       clearRemoteAudioWatchdog();
       elements.audio.pause();
     }
@@ -3162,15 +3182,9 @@ import { MIX_PRESETS, createMixSeed, deleteUserPreset, describeMixIntent, normal
       const playbackBootstrap = primaryAudioUrl
         ? await bootstrapPrimaryPlayback(mix)
         : (state.mix = mix, { started: false, fallback: true });
-      if (primaryAudioUrl && state.audioSourceMode === "remote") {
-        window.HaloAudioPreloader?.warmPlaylist([
-          primaryAudioUrl,
-          ...mixLibrary.filter(isPlayablePrimaryMix).map(entry => resolvePrimaryAudio(entry).src)
-        ], { primaryAudio: elements.audio });
-      }
       await hydrateDreamweaverLoopContent();
-      if (playbackBootstrap?.fallback && state.audioSourceMode !== "local") setReleasePlaybackState("unavailable");
-      else if (!playbackBootstrap?.started || elements.audio.paused || elements.audio.ended) setReleasePlaybackState("ready");
+      if ((playbackBootstrap?.fallback || state.audioSourceMode === "error") && state.audioSourceMode !== "local") setReleasePlaybackState("unavailable");
+      else if (state.releasePlaybackState !== "playing") setReleasePlaybackState("ready");
       setLoadingProgress(100, "Dreamweaver is ready", "Press play and move through the full four-act cinematic edition.");
       if (!preserveShell) {
         elements.loading.setAttribute("aria-hidden", "true");
@@ -3461,7 +3475,7 @@ import { MIX_PRESETS, createMixSeed, deleteUserPreset, describeMixIntent, normal
       state.dreamweaverPayload = null;
       state.publishedSongId = "";
       const mix = { ...track, audioUrl: track.streamUrl, creator: { name: track.artist }, isDriveCatalogPlayback: true };
-      const result = await bootstrapPrimaryPlayback(mix, { userInitiated });
+      const result = await bootstrapPrimaryPlayback(mix, { userInitiated, resume: state.catalogPlaybackStarted });
       elements.mixTitle.textContent = track.title;
       elements.mixCreator.textContent = track.artist;
       if (result.fallback) setReleasePlaybackState("unavailable");
@@ -3491,14 +3505,15 @@ import { MIX_PRESETS, createMixSeed, deleteUserPreset, describeMixIntent, normal
   }
 
   async function retryCatalogProxy() {
-    if (!state.mix?.isDriveCatalogPlayback || state.audioSourceMode !== "remote" || state.catalogFallbackActive) return false;
+    if (!state.mix || state.audioSourceMode !== "remote" || state.catalogFallbackActive) return false;
     const fallback = dreamweaverDriveFallbacks(state.mix, elements.audio.src)[0];
     if (!fallback) return false;
     state.catalogFallbackActive = true;
     try {
       const offset = elements.audio.currentTime || 0;
-      const result = await bootstrapPrimaryPlayback({ ...state.mix, streamUrl: fallback, fallbackUrl: "" });
-      if (!result.fallback) elements.audio.currentTime = offset;
+      const mix = { ...state.mix, audioUrl: fallback, streamUrl: fallback, fallbackUrl: "",
+        ...(state.mix.canonicalBinding ? { canonicalBinding: { ...state.mix.canonicalBinding, audioSource: fallback } } : {}) };
+      await bootstrapPrimaryPlayback(mix, { resume: Boolean(state.playbackRequested), offset });
       return true;
     } finally {
       state.catalogFallbackActive = false;
@@ -3598,9 +3613,12 @@ import { MIX_PRESETS, createMixSeed, deleteUserPreset, describeMixIntent, normal
     renderReleasePanel();
     if (state.releasePlaybackState === "loading") setReleasePlaybackState("ready");
   });
-  elements.audio.addEventListener("loadeddata", clearRemoteAudioWatchdog);
-  elements.audio.addEventListener("canplay", clearRemoteAudioWatchdog);
-  elements.audio.addEventListener("canplaythrough", clearRemoteAudioWatchdog);
+  const clearPreloadWatchdog = () => {
+    if (!state.playbackRequested) clearRemoteAudioWatchdog();
+  };
+  elements.audio.addEventListener("loadeddata", clearPreloadWatchdog);
+  elements.audio.addEventListener("canplay", clearPreloadWatchdog);
+  elements.audio.addEventListener("canplaythrough", clearPreloadWatchdog);
   elements.audio.addEventListener("timeupdate", updateProgress);
   elements.audio.addEventListener("waiting", armRemoteAudioWatchdog);
   elements.audio.addEventListener("stalled", armRemoteAudioWatchdog);
@@ -3610,6 +3628,7 @@ import { MIX_PRESETS, createMixSeed, deleteUserPreset, describeMixIntent, normal
       elements.audio.pause();
       return;
     }
+    measurePlaybackStart();
     document.body.classList.add("is-playing");
     elements.playButton.setAttribute("aria-label", "Pause show");
     updateHeroPlayButton(true);

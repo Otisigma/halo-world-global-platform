@@ -150,6 +150,10 @@ import { MIX_PRESETS, createMixSeed, deleteUserPreset, describeMixIntent, normal
     catalogPresetSave: document.getElementById("saveCatalogPreset"),
     catalogPresetDelete: document.getElementById("deleteCatalogPreset"),
     catalogPresetStatus: document.getElementById("catalogPresetStatus"),
+    catalogSteps: ["Request", "Catalog", "Rank", "Sequence"].map(step => ({
+      item: document.getElementById(`catalogStep${step}`),
+      status: document.getElementById(`catalogStep${step}Status`)
+    })),
     visualStack: document.getElementById("visualStack"),
     chapterList: document.getElementById("chapterList"),
     progressMarkers: document.getElementById("progressMarkers"),
@@ -3226,6 +3230,18 @@ import { MIX_PRESETS, createMixSeed, deleteUserPreset, describeMixIntent, normal
     if (elements.catalogGenerate) elements.catalogGenerate.disabled = busy;
   }
 
+  function setCatalogProgress(activeStep, blockedMessage = "") {
+    elements.catalogSteps.forEach(({ item, status }, index) => {
+      const phase = index < activeStep ? "done" : index > activeStep ? "pending" : blockedMessage ? "blocked" : "active";
+      if (item) {
+        item.dataset.state = phase;
+        if (phase === "active") item.setAttribute("aria-current", "step");
+        else item.removeAttribute("aria-current");
+      }
+      if (status) status.textContent = phase === "done" ? "Done" : phase === "pending" ? "Waiting" : blockedMessage || "In progress";
+    });
+  }
+
   async function generateCatalogSet() {
     if (state.catalogAdvancing || state.catalogGenerating) return;
     state.catalogGenerating = true;
@@ -3239,14 +3255,23 @@ import { MIX_PRESETS, createMixSeed, deleteUserPreset, describeMixIntent, normal
   }
 
   async function curateCatalogSet() {
+    setCatalogProgress(0);
     elements.catalogStatus.textContent = "Analyzing mood & style profile…";
     await new Promise(resolve => window.requestAnimationFrame(resolve));
     const parsed = parseMixPrompt(String(elements.catalogPrompt?.value ?? ""), {
       presetId: String(elements.catalogPreset?.value ?? ""), userPresets: readUserPresets(catalogStorage())
     });
     if (parsed.intent.durationMinutes && elements.catalogDuration) elements.catalogDuration.value = String(parsed.intent.durationMinutes);
-    if ((!state.driveCatalog || state.catalogUnavailable) && !await loadDriveCatalog()) return;
-    if (state.catalogUnavailable) return;
+    setCatalogProgress(1);
+    if ((!state.driveCatalog || state.catalogUnavailable) && !await loadDriveCatalog()) {
+      setCatalogProgress(1, "Standby");
+      return;
+    }
+    if (state.catalogUnavailable) {
+      setCatalogProgress(1, "Unavailable");
+      return;
+    }
+    setCatalogProgress(2);
     elements.catalogStatus.textContent = "Ranking tracks by BPM, energy curve and rotation status…";
     await new Promise(resolve => window.requestAnimationFrame(resolve));
     const tracks = (state.driveCatalog?.tracks || []).filter(track => playableCatalogUrl(track.streamUrl));
@@ -3260,12 +3285,14 @@ import { MIX_PRESETS, createMixSeed, deleteUserPreset, describeMixIntent, normal
       });
     } catch {
       state.catalogSet = null;
+      setCatalogProgress(2, "Could not curate");
       elements.catalogStatus.textContent = "Dreamweaver couldn't curate this set right now. Try again or upload a local mix.";
       return;
     }
     state.catalogIndex = -1;
     if (elements.catalogIntent) elements.catalogIntent.textContent = `${describeMixIntent(intent)} · Variation code: ${seed}`;
     if (elements.catalogNotes) elements.catalogNotes.textContent = parsed.notes.join(" ");
+    setCatalogProgress(3);
     elements.catalogStatus.textContent = "Finalizing set sequence with existing stream / proxy fallback routing…";
     elements.catalogSetlist.innerHTML = state.catalogSet.tracks.map((track, index) =>
       `<li><span class="catalog-curator__slot">#${String(index + 1).padStart(2, "0")}</span><div><strong>${escapeHtml(track.title)}</strong><span>${escapeHtml(track.artist)}</span><small>${escapeHtml(String(track.bpm))} BPM · ${escapeHtml(track.role)} · ${escapeHtml(track.energyLevel)} · ${formatTime(track.playDurationSeconds)}</small></div><button type="button" data-catalog-slot="${index}" aria-label="Play stream: ${escapeHtml(track.title)}">Play stream</button></li>`
@@ -3274,6 +3301,7 @@ import { MIX_PRESETS, createMixSeed, deleteUserPreset, describeMixIntent, normal
     elements.catalogStatus.textContent = `${formatTime(state.catalogSet.durationSeconds)} / ${minutes} minutes scheduled.${
       state.catalogSet.complete ? " Set ready — curated sequence, played back-to-back." : ` Short by ${formatTime(state.catalogSet.shortfallSeconds)}. Add tracks or explicitly allow recent reuse.`}${avoided}`;
     if (!state.catalogSet.tracks.length) {
+      setCatalogProgress(3, "No eligible tracks");
       if (state.mix?.isDriveCatalogPlayback) {
         elements.audio.pause();
         state.mix = null;
@@ -3282,6 +3310,7 @@ import { MIX_PRESETS, createMixSeed, deleteUserPreset, describeMixIntent, normal
       }
       return;
     }
+    setCatalogProgress(4);
     if (state.audioSourceMode === "local") {
       elements.audio.pause();
       state.audioSourceMode = "empty";

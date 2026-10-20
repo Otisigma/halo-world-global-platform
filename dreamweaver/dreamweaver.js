@@ -1253,13 +1253,15 @@ import { MIX_PRESETS, createMixSeed, deleteUserPreset, describeMixIntent, normal
     let userPlayback;
     const requestPlayback = userInitiated || mix.isDriveCatalogPlayback;
     const requestUserPlayback = () => {
-      state.autoplayMuted = false;
-      elements.audio.muted = false;
-      renderSoundUnlock("");
+      if (userInitiated) {
+        state.autoplayMuted = false;
+        elements.audio.muted = false;
+        renderSoundUnlock("");
+      }
       try {
         return elements.audio.play().then(
           () => {
-            state.soundUnlockedByUser = true;
+            if (userInitiated) state.soundUnlockedByUser = true;
             return { started: !elements.audio.paused };
           },
           error => ({ started: false, error })
@@ -1334,7 +1336,7 @@ import { MIX_PRESETS, createMixSeed, deleteUserPreset, describeMixIntent, normal
 
     if (requestPlayback) {
       const playback = await userPlayback;
-      if (playback.started) return { started: true, muted: false };
+      if (playback.started) return { started: true, muted: elements.audio.muted };
       if (playback.error?.name !== "AbortError") {
         renderSoundUnlock("blocked");
         showToast("Playback was blocked by your browser. Click Play again or tap Play with sound.");

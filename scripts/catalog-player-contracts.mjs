@@ -289,6 +289,19 @@ for (const endpoint of ["song-catalog", "mixes", "radio", "stem-vault"]) {
   await playCatalogSlot(f);
   assert.equal(f.nodes.get("catalogTrackRoute0").textContent, "HALO proxy · playing", "proxy-only sources are not described as fallback");
 }
+for (const event of ["ended", "error"]) {
+  const f = fixture("?curate=20", { driveCatalog });
+  await f.initializeDreamweaver();
+  await playCatalogSlot(f);
+  const audio = f.nodes.get("showAudio");
+  audio.muted = true;
+  audio.dispatchEvent(new Event(event));
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(audio.muted, true, `${event}: automatic advancement or recovery preserves the listener's mute choice`);
+  assert.equal(audio.playLog.at(-1).muted, true);
+  await playCatalogSlot(f);
+  assert.equal(audio.muted, false, "an explicit Play gesture restores sound");
+}
 for (const loadingSources of [[], ["https://halo.test/audio/canonical-0.mp3"]]) {
   const f = fixture("?curate=20", { driveCatalog, blocked: true, loadingSources });
   await f.initializeDreamweaver();

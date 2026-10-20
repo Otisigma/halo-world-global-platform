@@ -69,6 +69,7 @@ export function fixture(search, { releases = [release], mixes = [mix], blocked =
       this.plays++;
       this.playLog.push({ src: this.src, muted: this.muted });
       if (blocked) throw Object.assign(new Error("Autoplay blocked"), { name: "NotAllowedError" });
+      if (failed || failingSources.includes(this.src)) throw Object.assign(new Error("Stream unavailable"), { name: "NotSupportedError" });
       this.paused = false;
       this.dispatchEvent(new Event("playing"));
     }

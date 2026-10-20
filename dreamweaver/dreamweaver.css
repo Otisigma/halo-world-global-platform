@@ -291,6 +291,57 @@ body.show-ready .show-stage { opacity: 1; transform: scale(1); transition: opaci
   box-shadow: 0 28px 80px rgba(0, 0, 0, .28);
   padding: clamp(18px, 2.8vw, 26px);
 }
+
+.catalog-curator {
+  background: #07090e;
+  color: #e2e8f0;
+  padding: clamp(20px, 4vw, 56px);
+  padding-top: 110px;
+  font: 400 16px/1.6 system-ui, sans-serif;
+}
+.catalog-curator__header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px; margin: 0 auto 24px; max-width: 1200px; }
+.catalog-curator h2 { margin: 8px 0; font-size: clamp(26px, 4vw, 42px); line-height: 1.2; letter-spacing: -.03em; }
+.catalog-curator p { margin: 8px 0; color: #b6c2d4; }
+.catalog-curator .catalog-curator__eyebrow { color: #f59e0b; font: 500 12px/1.6 var(--mono); letter-spacing: .1em; text-transform: uppercase; }
+.catalog-curator .catalog-curator__badge { border: 1px solid #1e293b; border-radius: 999px; padding: 8px 14px; color: #f59e0b; font: 500 12px/1.6 var(--mono); }
+.catalog-curator__badge::before { content: "●"; margin-right: 8px; }
+.catalog-curator .catalog-curator__badge[data-state="synced"] { color: #10b981; }
+.catalog-curator .catalog-curator__badge[data-state="error"] { color: #fbbf24; }
+.catalog-curator__card { max-width: 1200px; margin: 0 auto 20px; padding: clamp(18px, 3vw, 32px); border: 1px solid #1e293b; border-radius: 16px; background: #0f141d; }
+.catalog-curator label { display: block; margin: 12px 0 8px; font-weight: 600; }
+.catalog-curator :is(textarea, select, input[type="text"]) { width: 100%; min-width: 0; padding: 12px; border: 1px solid #475569; border-radius: 8px; background: #07090e; color: #e2e8f0; font: inherit; }
+.catalog-curator textarea { min-height: 144px; resize: vertical; }
+.catalog-curator ::placeholder { color: #94a3b8; opacity: 1; }
+.catalog-curator__controls { display: grid; grid-template-columns: 2fr 1fr 2fr; gap: 20px; }
+.catalog-curator__controls > div { min-width: 0; }
+.catalog-curator :is(#catalogReplayHelp, #catalogMixPresetDescription) { font-size: 13px; }
+.catalog-curator input[type="checkbox"] { accent-color: #06b6d4; width: 18px; height: 18px; vertical-align: middle; }
+.catalog-curator details { margin: 20px 0; padding: 16px; border: 1px solid #1e293b; border-radius: 8px; }
+.catalog-curator summary { color: #67e8f9; cursor: pointer; }
+.catalog-curator button { min-height: 44px; border: 1px solid #475569; border-radius: 8px; padding: 10px 16px; background: #131b2e; color: #e2e8f0; font: 600 14px/1.5 system-ui, sans-serif; cursor: pointer; }
+.catalog-curator button:hover { border-color: #06b6d4; background: #1e293b; }
+.catalog-curator .catalog-curator__generate { width: 100%; margin-top: 12px; border: 0; background: linear-gradient(110deg, #06b6d4, #f59e0b); color: #07090e; font-size: 17px; }
+.catalog-curator button:disabled { opacity: .6; cursor: wait; }
+.catalog-curator :is(button, input, select, textarea, summary):focus-visible { outline: 3px solid #67e8f9; outline-offset: 4px; }
+.catalog-curator__output h3 { margin-top: 0; font-size: 22px; }
+.catalog-curator :is(#catalogSetStatus, #catalogMixIntent, #catalogMixNotes, #catalogLinkedNotice) { font: 400 13px/1.7 var(--mono); overflow-wrap: anywhere; }
+.catalog-curator #catalogSetStatus { color: #67e8f9; }
+.catalog-curator ol { list-style: none; margin: 24px 0 0; padding: 0; }
+.catalog-curator li { display: flex; align-items: center; gap: 18px; padding: 18px 0; border-top: 1px solid #1e293b; }
+.catalog-curator li:hover { background: #131b2e; }
+.catalog-curator li > div { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.catalog-curator li :is(strong, span, small) { display: block; }
+.catalog-curator li :is(small, .catalog-curator__slot) { font: 400 12px/1.7 var(--mono); color: #b6c2d4; }
+.catalog-curator li .catalog-curator__slot { color: #f59e0b; }
+@media (max-width: 760px) {
+  .catalog-curator__controls { grid-template-columns: 1fr; gap: 4px; }
+  .catalog-curator li { flex-wrap: wrap; }
+  .catalog-curator li > div { flex-basis: 70%; }
+  .catalog-curator li button { width: 100%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .catalog-curator, .catalog-curator * { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+}
 .song-lobby__player::after {
   content: "";
   position: absolute;

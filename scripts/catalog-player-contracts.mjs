@@ -27,6 +27,8 @@ for (const endpoint of ["song-catalog", "mixes", "radio", "stem-vault"]) {
   const f = fixture("", { driveCatalog, storage });
   await f.initializeDreamweaver();
   assert.equal(f.state.mix, null);
+  assert.equal(f.nodes.get("catalogSyncStatus").textContent, "CATALOG SYNCED");
+  assert.equal(f.nodes.get("catalogSyncStatus").dataset.state, "synced");
   assert.equal(records.size, 0, "loading or generating must not count as played");
   f.nodes.get("catalogSetDuration").value = "20";
   f.nodes.get("generateCatalogSet").dispatchEvent(new Event("click"));
@@ -46,7 +48,7 @@ for (const endpoint of ["song-catalog", "mixes", "radio", "stem-vault"]) {
   const currentId = f.state.mix.id;
   f.nodes.get("showAudio").dispatchEvent(new Event("ended"));
   await new Promise(resolve => setImmediate(resolve));
-  assert.ok(!f.state.catalogSet || f.state.mix.id !== currentId, "ended advances or finishes the canonical set");
+  assert.ok(f.state.catalogIndex >= f.state.catalogSet.tracks.length || f.state.mix.id !== currentId, "ended advances or finishes the canonical set");
 }
 {
   const f = fixture("?curate=20", { driveCatalog, failingSources: ["https://halo.test/audio/canonical-0.mp3"] });
@@ -59,6 +61,7 @@ for (const endpoint of ["song-catalog", "mixes", "radio", "stem-vault"]) {
   await f.initializeDreamweaver();
   assert.equal(f.nodes.get("showAudio").loads, 0);
   assert.match(f.nodes.get("catalogSetStatus").textContent, /Short by 1:00:00/);
+  assert.equal(f.nodes.get("catalogSyncStatus").textContent, "CATALOG EMPTY");
   assert.deepEqual(f.requests, ["/api/drive-catalog"]);
 }
 {
@@ -66,11 +69,20 @@ for (const endpoint of ["song-catalog", "mixes", "radio", "stem-vault"]) {
   await f.initializeDreamweaver();
   assert.deepEqual(f.requests, ["/api/drive-catalog"]);
   assert.match(f.nodes.get("catalogSetStatus").textContent, /no substitute catalog/i);
+  assert.equal(f.nodes.get("catalogSyncStatus").dataset.state, "error");
+  assert.doesNotMatch(f.nodes.get("catalogSyncStatus").textContent, /SYNCED/);
+  assert.equal(f.state.driveCatalog, null, "failed loading must not leave a configured catalog marker");
   assert.equal(f.state.releasePlaybackState, "unavailable", "initialization must not overwrite configured ingestion failure with ready");
   await f.generateCatalogSet();
-  assert.deepEqual(f.requests, ["/api/drive-catalog", "/api/drive-catalog"], "generate retries failed ingestion despite the truthy empty catalog marker");
+  assert.deepEqual(f.requests, ["/api/drive-catalog", "/api/drive-catalog"], "generate retries failed ingestion");
   assert.equal(f.state.catalogSet, null, "a failed ingestion retry cannot be presented as an empty generated set");
   assert.match(f.nodes.get("catalogSetStatus").textContent, /temporarily unavailable/i);
+}
+for (const payload of [{ configured: false, tracks: [] }, { configured: true }, { configured: true, tracks: null }]) {
+  const f = fixture("", { driveCatalog: payload });
+  await f.initializeDreamweaver();
+  assert.equal(f.nodes.get("catalogSyncStatus").dataset.state, payload.configured ? "error" : "standby");
+  assert.doesNotMatch(f.nodes.get("catalogSyncStatus").textContent, /SYNCED/);
 }
 {
   records.set(CATALOG_HISTORY_KEY, JSON.stringify(tracks.map(track => track.id)));
@@ -101,13 +113,15 @@ recordPlayedTrack("test", denied);
   const promptRecords = new Map();
   const promptStorage = { getItem: key => promptRecords.get(key) ?? null, setItem: (key, value) => promptRecords.set(key, value) };
   const styled = Array.from({ length: 12 }, (_, i) => ({
-    ...tracks[i % 4], id: `styled-${i}`, title: i === 5 ? "<img src=x onerror=alert(1)>" : `Styled ${i}`,
+    ...tracks[i % 4], id: `styled-${i}`, title: `<img src=x onerror=alert(1)> Styled ${i}`, artist: 'Artist " <svg onload=alert(1)>',
     genre: i % 2 ? "Deep House" : "Techno", bpm: 122 + (i % 4), durationSeconds: 300, streamUrl: `/audio/styled-${i}.mp3`,
     primaryAudioPath: `/audio/styled-${i}.mp3`, fallbackUrl: `/api/drive-catalog/audio?track=styled-${i}`
   }));
   const f = fixture("", { driveCatalog: { configured: true, version: 1, tracks: styled }, storage: promptStorage });
   await f.initializeDreamweaver();
   assert.match(f.nodes.get("catalogMixPreset").innerHTML, /HALO · Halo X/, "HALO presets are offered");
+  assert.match(f.nodes.get("catalogMixPreset").innerHTML, /The French Connection \(Deep \/ Hypnotic\)/);
+  assert.match(f.nodes.get("catalogMixPreset").innerHTML, /Halo X Club Anthem Sprint/);
   assert.equal(promptRecords.size, 0, "rendering presets and loading never records plays");
   f.nodes.get("catalogMixPrompt").value = "Create a 20-minute Halo X mix: warm cinematic opening, deep house build, finish with a big lifter, with a kazoo solo";
   f.nodes.get("catalogMixSeed").value = "Replay-1";
@@ -123,10 +137,39 @@ recordPlayedTrack("test", denied);
   assert.match(f.nodes.get("catalogMixNotes").textContent, /Not understood, so ignored: “kazoo solo”/);
   assert.match(f.nodes.get("catalogSetStatus").textContent, /curated sequence/);
   assert.match(f.nodes.get("catalogSetlist").innerHTML, /BPM/);
-  assert.doesNotMatch(f.nodes.get("catalogSetlist").innerHTML, /<img/, "track text is escaped");
+  const setlist = f.nodes.get("catalogSetlist").innerHTML;
+  assert.match(setlist, /#01/);
+  assert.match(setlist, /&lt;img/);
+  assert.match(setlist, /&quot; &lt;svg/);
+  assert.match(setlist, /data-catalog-slot="0" aria-label="Play stream: &lt;img/);
+  assert.doesNotMatch(setlist, /<img|<svg|drive\.google|drive-file-id|href=|https:\/\//, "metadata and playback labels are escaped; no raw media URLs are rendered");
   assert.equal(f.nodes.get("generateCatalogSet").disabled, false, "generate re-enables after curation");
   assert.equal(f.nodes.get("catalogCurator").getAttribute("aria-busy"), "false");
   assert.equal(f.state.mix.isDriveCatalogPlayback, true);
+  const playSlot = slot => {
+    const click = new Event("click");
+    Object.defineProperty(click, "target", { value: { closest: () => ({ dataset: { catalogSlot: String(slot) } }) } });
+    f.nodes.get("catalogSetlist").dispatchEvent(click);
+  };
+  playSlot(1);
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(f.state.mix.id, f.state.catalogSet.tracks[1].id, "setlist actions use the existing sequential player");
+  assert.equal(f.nodes.get("showAudio").src, `https://halo.test${f.state.catalogSet.tracks[1].streamUrl}`);
+  const currentId = f.state.mix.id;
+  playSlot(-1);
+  playSlot(1.5);
+  playSlot(9999);
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(f.state.mix.id, currentId, "invalid slot actions cannot change playback");
+  for (let i = f.state.catalogIndex; i < f.state.catalogSet.tracks.length; i++) {
+    f.nodes.get("showAudio").dispatchEvent(new Event("ended"));
+    await new Promise(resolve => setImmediate(resolve));
+  }
+  assert.match(f.nodes.get("catalogSetStatus").textContent, /Playback finished/);
+  assert.equal(f.nodes.get("showAudio").paused, true);
+  playSlot(0);
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(f.state.mix.id, f.state.catalogSet.tracks[0].id, "stream actions can replay a completed set");
   const firstOrder = f.state.catalogSet.tracks.map(track => track.id).join();
   promptRecords.clear();
   await f.generateCatalogSet();
@@ -134,11 +177,14 @@ recordPlayedTrack("test", denied);
   f.nodes.get("catalogMixSeed").value = "";
   await f.generateCatalogSet();
   assert.match(f.state.catalogSet.seed, /^[0-9a-f]{8}$/, "an empty code draws a fresh session nonce");
-  f.nodes.get("catalogPresetName").value = "Night Drive";
+  f.nodes.get("catalogPresetName").value = " Night <Drive> ";
   f.nodes.get("saveCatalogPreset").dispatchEvent(new Event("click"));
   assert.match(f.nodes.get("catalogPresetStatus").textContent, /Saved “Night Drive”/);
   assert.match(f.nodes.get("catalogMixPreset").innerHTML, /My preset · Night Drive/);
   assert.equal(f.nodes.get("catalogMixPreset").value, "user-night-drive");
+  f.nodes.get("catalogPresetName").value = "Halo X Club Anthem Sprint";
+  f.nodes.get("saveCatalogPreset").dispatchEvent(new Event("click"));
+  assert.match(f.nodes.get("catalogPresetStatus").textContent, /not a HALO preset name/);
   f.nodes.get("deleteCatalogPreset").dispatchEvent(new Event("click"));
   assert.doesNotMatch(f.nodes.get("catalogMixPreset").innerHTML, /Night Drive/);
 }
@@ -160,6 +206,21 @@ assert.match(dreamweaverHtml, /<label for="catalogMixPrompt">[^<]+<\/label>\s*<t
 assert.match(dreamweaverHtml, /<label for="catalogMixPreset">[^<]+<\/label>\s*<select id="catalogMixPreset">/);
 assert.match(dreamweaverHtml, /id="catalogSetStatus" role="status" aria-live="polite"/);
 assert.match(dreamweaverHtml, /curated sequence \(not a rendered, beatmatched DJ mix\)/, "the UI never claims a rendered DJ mix");
+assert.match(dreamweaverHtml, /id="catalogCuratorTitle">Dreamweaver Catalog Curator/);
+assert.match(dreamweaverHtml, /Natural prompt curation linked to Google Drive Master Vault/);
+assert.match(dreamweaverHtml, /id="catalogSyncStatus" role="status" aria-live="polite" data-state="loading">CATALOG LOADING/);
+for (const id of ["catalogSetDuration", "catalogMixSeed", "catalogPresetName"]) {
+  assert.match(dreamweaverHtml, new RegExp(`<label for="${id}">`), `${id} has an explicit accessible label`);
+}
+assert.match(dreamweaverHtml, /<label><input id="catalogAllowRecent" type="checkbox">/);
+assert.match(dreamweaverHtml, /<summary>Save this request as my preset<\/summary>/);
+assert.match(dreamweaverHtml, /id="catalogMixPrompt"[^>]+aria-describedby="catalogMixPromptHelp"/);
+assert.match(dreamweaverHtml, /id="catalogMixSeed"[^>]+aria-describedby="catalogReplayHelp"/);
+assert.match(dreamweaverHtml, /id="generateCatalogSet"[^>]+aria-describedby="catalogMixPromptHelp catalogLinkedNotice"/);
+const curatorCss = await readFile(new URL("../dreamweaver/dreamweaver.css", import.meta.url), "utf8");
+assert.match(curatorCss, /@media \(max-width: 760px\)/);
+assert.match(curatorCss, /\.catalog-curator :is\(button, input, select, textarea, summary\):focus-visible/);
+assert.match(curatorCss, /prefers-reduced-motion: reduce[^}]+\.catalog-curator/s);
 const section = (start, end) => html.slice(html.indexOf(start), html.indexOf(end, html.indexOf(start)));
 async function storefront(payload, ok = true) {
   const requests = [], nodes = new Map();
@@ -204,5 +265,22 @@ assert.equal((await storefront({ configured: true, tracks: [] })).context.catalo
   const f = fixture("?song=11111111-1111-4111-8111-111111111111", { driveCatalog });
   await f.initializeDreamweaver();
   assert.equal(f.requests.some(url => url === "/api/drive-catalog"), false, "explicit legacy links cannot be replaced by curator initialization");
+  assert.equal(f.nodes.get("catalogSyncStatus").dataset.state, "standby");
+  assert.equal(f.nodes.get("catalogLinkedNotice").hidden, false);
+  const linkedMix = f.state.mix;
+  await f.generateCatalogSet();
+  assert.notEqual(f.state.mix, linkedMix);
+  assert.equal(f.state.mix.isDriveCatalogPlayback, true, "only an explicit generate action replaces a linked item");
+  assert.equal(f.nodes.get("catalogLinkedNotice").hidden, true);
+}
+{
+  const f = fixture("?song=11111111-1111-4111-8111-111111111111", { catalogError: true });
+  await f.initializeDreamweaver();
+  const linkedMix = f.state.mix;
+  const linkedSource = f.nodes.get("showAudio").src;
+  await f.generateCatalogSet();
+  assert.equal(f.state.mix, linkedMix, "catalog failure cannot replace linked playback");
+  assert.equal(f.nodes.get("showAudio").src, linkedSource);
+  assert.equal(f.nodes.get("catalogLinkedNotice").hidden, false);
 }
 console.log("Catalog player contracts: canonical routing, real playback, advancement, proxy fallback, shortage, safe played history, and storefront selection passed.");

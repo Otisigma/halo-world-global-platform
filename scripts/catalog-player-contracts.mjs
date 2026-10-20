@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import vm from "node:vm";
 import { fixture } from "./dreamweaver-playback-contracts.mjs";
 import { CATALOG_HISTORY_KEY, readRecentTrackIds, recordPlayedTrack } from "../lib/catalog-session.js";
+import { createDriveCatalogService } from "../netlify/lib/drive-catalog.mjs";
 
 const records = new Map();
 const storage = { getItem: key => records.get(key) || null, setItem: (key, value) => records.set(key, value) };
@@ -29,6 +30,120 @@ const assertDisclosure = (f, expanded) => {
   assert.equal(f.nodes.get("catalogCuratorToggleLabel").textContent, expanded ? "Collapse curator" : "Expand curator");
   assert.equal(f.nodes.get("catalogCuratorToggleIcon").textContent, expanded ? "−" : "+");
 };
+{
+  const sourceTrack = { ...tracks[0] };
+  delete sourceTrack.streamUrl;
+  delete sourceTrack.fallbackUrl;
+  const folderId = "contract_folder";
+  const indexId = "contract_index";
+  const service = createDriveCatalogService({
+    config: { folderId, clientEmail: "catalog@example.test", privateKey: "test-key" },
+    getAccessToken: async () => "test-access",
+    fetchImpl: async input => {
+      const url = new URL(input);
+      const metadata = { parents: [folderId], trashed: false, size: "1000" };
+      if (url.pathname === "/drive/v3/files") return Response.json({ files: [{ ...metadata, id: indexId, name: "catalog-index.json" }] });
+      if (url.pathname.endsWith(`/${indexId}`)) return Response.json({ version: 1, tracks: [sourceTrack, { id: "private-draft", public: false }] });
+      assert.equal(url.pathname, `/drive/v3/files/${sourceTrack.driveFileId}`);
+      if (url.searchParams.get("alt") === "media") return new Response(new Uint8Array([73, 68, 51, 0]), { headers: { "Content-Type": "audio/mpeg" } });
+      return Response.json({ ...metadata, id: sourceTrack.driveFileId, mimeType: "audio/mpeg" });
+    }
+  });
+  const canonical = await (await service.catalogHandler(new Request("https://halo.test/api/drive-catalog"))).json();
+  assert.equal(canonical.tracks.length, 1, "only genuinely public manifest records reach the player");
+  const primary = `https://halo.test${canonical.tracks[0].streamUrl}`;
+  const proxy = `https://halo.test${canonical.tracks[0].fallbackUrl}`;
+  for (const rejectedPlaySources of [[], [primary], [primary, proxy]]) {
+    const history = new Map();
+    const f = fixture("?curate=20", {
+      driveCatalog: canonical, rejectedPlaySources,
+      storage: { getItem: key => history.get(key) || null, setItem: (key, value) => history.set(key, value) }
+    });
+    await f.initializeDreamweaver();
+    const audio = f.nodes.get("showAudio");
+    assert.equal(audio.loads, 0);
+    assert.equal(audio.plays, 0);
+    assert.match(f.nodes.get("catalogSetlist").innerHTML, /Canonical 0/);
+    const click = new Event("click");
+    Object.defineProperty(click, "target", { value: { closest: () => ({ dataset: { catalogSlot: "0" } }) } });
+    f.nodes.get("catalogSetlist").dispatchEvent(click);
+    assert.equal(audio.loads, 1, "the explicit card click loads the shared player synchronously");
+    assert.equal(audio.plays, 1, "play is invoked in the click stack, before any await");
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(audio.src, rejectedPlaySources.length ? proxy : primary);
+    assert.ok(audio.playLog.every(attempt => !attempt.muted), "catalog recovery never attempts muted autoplay");
+    if (rejectedPlaySources.length === 2) {
+      assert.equal(f.state.audioSourceMode, "error", "a rejected media promise is not a browser-policy denial");
+      assert.equal(history.size, 0, "rejected playback never records listening history");
+      assert.equal(f.nodes.get("catalogUploadLocal").hidden, false);
+      assert.match(f.nodes.get("catalogTrackStatus").textContent, /Upload a local mix/);
+    } else {
+      assert.equal(f.state.releasePlaybackState, "playing");
+      assert.deepEqual(readRecentTrackIds({ getItem: key => history.get(key) || null }), [sourceTrack.id]);
+    }
+  }
+  const stream = await service.audioHandler(new Request(proxy));
+  assert.equal(stream.status, 200, "fallback resolves through the actual catalog allowlist");
+  assert.equal(stream.headers.get("Content-Type"), "audio/mpeg");
+}
+for (const payload of [
+  { configured: true, version: 1, tracks: [null] },
+  { configured: true, version: 2, tracks },
+]) {
+  const f = fixture("?curate=20", { driveCatalog: payload });
+  await f.initializeDreamweaver();
+  assert.equal(f.nodes.get("catalogSyncStatus").textContent, "CATALOG UNAVAILABLE");
+  assert.equal(f.nodes.get("showAudio").plays, 0);
+}
+for (const emptyTracks of [[], [{ ...tracks[0], public: false }]]) {
+  const f = fixture("?curate=20", { driveCatalog: { configured: true, version: 1, tracks: emptyTracks } });
+  await f.initializeDreamweaver();
+  assert.match(f.nodes.get("catalogSetStatus").textContent, /No eligible public tracks.*catalog-index\.json.*local mix/i);
+  assert.equal(f.nodes.get("showAudio").plays, 0);
+}
+{
+  const history = new Map();
+  const f = fixture("?curate=20", {
+    driveCatalog, deferPlaying: true,
+    storage: { getItem: key => history.get(key) || null, setItem: (key, value) => history.set(key, value) }
+  });
+  await f.initializeDreamweaver();
+  await playCatalogSlot(f);
+  assert.equal(history.size, 0, "a resolved play promise is not proof of a playing event");
+  f.nodes.get("showAudio").dispatchEvent(new Event("playing"));
+  assert.deepEqual(readRecentTrackIds({ getItem: key => history.get(key) || null }), [f.state.mix.id]);
+}
+for (const driveCatalog of [
+  { configured: false, tracks: [] },
+  { configured: true, version: 1, tracks: [] },
+  { configured: true, version: 1, tracks: [null] }
+]) {
+  const f = fixture("?mix=linked-mix-id", { driveCatalog });
+  await f.initializeDreamweaver();
+  const audio = f.nodes.get("showAudio");
+  const previous = { src: audio.src, plays: audio.plays, loads: audio.loads, mix: f.state.mix, status: f.state.releasePlaybackState };
+  await f.generateCatalogSet();
+  assert.equal(audio.src, previous.src);
+  assert.equal(audio.plays, previous.plays);
+  assert.equal(audio.loads, previous.loads);
+  assert.equal(audio.paused, false, "catalog failure never interrupts a linked mix");
+  assert.equal(f.state.mix, previous.mix);
+  assert.equal(f.state.releasePlaybackState, previous.status);
+}
+{
+  const f = fixture("", { driveCatalog });
+  await f.initializeDreamweaver();
+  const local = Object.assign(new Blob(["local audio"], { type: "audio/wav" }), { name: "Local mix.wav" });
+  await f.activateLocalMixFile(local);
+  const audio = f.nodes.get("showAudio");
+  const localSource = audio.src;
+  await f.generateCatalogSet();
+  assert.equal(audio.src, localSource);
+  assert.equal(audio.paused, false, "generating cards leaves the local recovery playing");
+  await playCatalogSlot(f);
+  assert.equal(f.state.audioSourceMode, "remote", "only an explicit catalog Play replaces local recovery");
+  assert.equal(audio.src, `https://halo.test${f.state.catalogSet.tracks[0].streamUrl}`);
+}
 for (const saved of [null, "false", "true", "invalid"]) {
   const preferences = new Map(saved === null ? [] : [[disclosureKey, saved]]);
   const storage = { getItem: key => preferences.get(key) ?? null, setItem: (key, value) => preferences.set(key, value) };
@@ -174,13 +289,15 @@ for (const endpoint of ["song-catalog", "mixes", "radio", "stem-vault"]) {
   await playCatalogSlot(f);
   assert.equal(f.nodes.get("catalogTrackRoute0").textContent, "HALO proxy · playing", "proxy-only sources are not described as fallback");
 }
-{
-  const f = fixture("?curate=20", { driveCatalog, blocked: true });
+for (const loadingSources of [[], ["https://halo.test/audio/canonical-0.mp3"]]) {
+  const f = fixture("?curate=20", { driveCatalog, blocked: true, loadingSources });
   await f.initializeDreamweaver();
   assert.equal(f.nodes.get("showAudio").plays, 0, "catalog loading does not issue a play request");
   await playCatalogSlot(f);
   assert.equal(f.nodes.get("showAudio").plays, 1, "an explicit Play action may request playback");
   assert.equal(f.nodes.get("catalogTrackRoute0").textContent, "Primary audio · ready");
+  assert.match(f.nodes.get("catalogTrackStatus").textContent, /blocked by your browser.*Click Play again/);
+  assert.equal(f.nodes.get("dreamweaverSoundUnlock").hidden, false);
   assert.equal(f.nodes.get("catalogUploadLocal").hidden, true, "playback denial is not a stream failure");
 }
 for (const failure of ["load", "error", "watchdog"]) {
@@ -204,7 +321,7 @@ for (const failure of ["load", "error", "watchdog"]) {
   assert.equal(audio.src, proxy, `${failure}: primary failure tries only the existing proxy`);
   assert.equal(f.state.audioSourceMode, "error");
   assert.equal(f.shouldPromptLocalUpload(), true);
-  assert.equal(f.nodes.get("catalogTrackRoute0").textContent, "HALO proxy fallback · unavailable");
+  assert.equal(f.nodes.get("catalogTrackRoute0").textContent, "HALO proxy fallback · unavailable", `${failure}: failed fallback card status`);
   assert.match(f.nodes.get("catalogTrackStatus").textContent, /Upload a local mix or choose another track/);
   assert.equal(f.nodes.get("catalogUploadLocal").hidden, false);
   if (failure === "load") assert.deepEqual(readRecentTrackIds({ getItem: key => failedHistory.get(key) || null }), [], "failed primary and proxy attempts are never counted as played");
@@ -384,9 +501,10 @@ recordPlayedTrack("test", denied);
   await f.initializeDreamweaver();
   await f.generateCatalogSet();
   assert.equal(f.state.catalogSet, null);
-  assert.match(f.nodes.get("catalogSetStatus").textContent, /couldn't curate this set right now/, "invalid catalog data shows a friendly message, not raw errors");
+  assert.match(f.nodes.get("catalogSetStatus").textContent, /Catalog temporarily unavailable/, "invalid catalog data shows a friendly message, not raw errors");
   assert.equal(f.nodes.get("generateCatalogSet").disabled, false);
-  assert.equal(f.nodes.get("catalogStepRankStatus").textContent, "Could not curate");
+  assert.equal(f.nodes.get("catalogStepCatalogStatus").textContent, "Unavailable");
+  assert.equal(f.nodes.get("catalogStepRankStatus").textContent, "Waiting");
   assert.equal(f.nodes.get("catalogStepSequenceStatus").textContent, "Waiting");
 }
 
@@ -491,6 +609,10 @@ assert.equal((await storefront({ configured: true, tracks: [] })).context.catalo
   assert.equal(f.state.mix, linkedMix, "generating cards alone preserves linked playback");
   assert.equal(f.nodes.get("showAudio").src, linkedSource);
   assert.equal(f.nodes.get("catalogLinkedNotice").hidden, false);
+  await f.advanceCatalogTrack();
+  await playCatalogSlot(f, f.state.catalogSet.tracks.length);
+  assert.equal(f.state.mix, linkedMix, "neither an unstarted sequence nor an out-of-range Play action replaces the linked song");
+  assert.equal(f.nodes.get("showAudio").paused, false);
   await playCatalogSlot(f);
   assert.notEqual(f.state.mix, linkedMix);
   assert.equal(f.state.mix.isDriveCatalogPlayback, true, "choosing a track explicitly replaces a linked item");

@@ -11,9 +11,10 @@ Dreamweaver can curate a 20- or 60-minute set from the published Google Drive ca
    > Create a 20-minute Halo X mix: warm, cinematic opening; deep-house build; finish with a big lifter. Avoid tracks from last week.
 3. Optionally pick a **HALO profile preset**. Your request text is applied on top of the preset.
 4. Choose **20 minutes** or **60 minutes**. If the request includes "20 minutes", "60 minutes" or "1 hour", that setting updates the selector.
-5. Select **Generate & play set**. The progress steps follow request parsing, canonical catalog availability, track ranking and sequence preparation, without simulated delays. An unavailable catalog or empty result leaves the remaining work incomplete. Completed steps mean a sequence was prepared, not that live streams were verified. Before playback starts, Dreamweaver lists the generated tracks and shows a summary of how it read your request. It also lists any parts of the request it didn't understand.
+5. Select **Generate set**. The progress steps follow request parsing, canonical catalog availability, track ranking and sequence preparation, without simulated delays. An unavailable catalog or empty result leaves the remaining work incomplete. Completed steps mean a sequence was prepared, not that live streams were verified. Dreamweaver lists the generated tracks and shows a summary of how it read your request, including any parts it didn't understand. Generation never starts audio.
+6. Click a track's **Play** button to start the shared player directly from your gesture.
 
-The catalog badge reports **loading**, **standby** (unconfigured or a linked item hasn't requested the catalog yet), **empty**, or **unavailable** as appropriate. **Catalog synced** means the canonical response was successfully loaded with tracks; it doesn't guarantee that every stream is currently playable. Loading failures never substitute another catalog. On a linked song/mix route, generating a playable set explicitly switches playback to the curator; a failed or empty result leaves the linked item in place.
+The catalog badge reports **loading**, **standby** (unconfigured or a linked item hasn't requested the catalog yet), **empty**, or **unavailable** as appropriate. **Catalog synced** means the canonical response was successfully loaded with tracks; it doesn't guarantee that every stream is currently playable. Loading failures never substitute another catalog. A linked song/mix or local upload stays in place until you click Play on a valid catalog track.
 
 Each setlist row includes its slot, title, artist, BPM, energy role and scheduled duration. **Play stream** starts that slot through the existing player and continues the sequence, using the allowlisted proxy fallback when available. No raw Drive URLs or preview iframes are used.
 
@@ -38,7 +39,7 @@ Names such as **Halo X** or **DJ Butterfly** refer to HALO profiles: house-defin
 
 ### Variation and replaying a set
 
-Each **Generate & play set** creates a new random **variation code**, shown in the summary, so the same request can produce different sets. To replay a set, enter its code in **Variation code**. Dreamweaver produces the same set when the catalog, request, code and listening history are unchanged. Variation only changes which of the similarly well-matched tracks are chosen and in what order. It never adds duplicates, ignores the BPM or energy rules, or pads a short set.
+Each **Generate set** creates a new random **variation code**, shown in the summary, so the same request can produce different sets. To replay a set, enter its code in **Variation code**. Dreamweaver produces the same set when the catalog, request, code and listening history are unchanged. Variation only changes which of the similarly well-matched tracks are chosen and in what order. It never adds duplicates, ignores the BPM or energy rules, or pads a short set.
 
 If the eligible catalog can't fill the selected duration, Dreamweaver shows **Short by mm:ss** instead of claiming a full set. To fill the gap, add tracks to `catalog-index.json` or allow recent tracks to be reused.
 
@@ -72,3 +73,11 @@ npm run -s test:drive-catalog   # curator, mix-intent, Drive catalog and Dreamwe
 ```
 
 Manual smoke test still required against the deployed Drive catalog: test desktop and mobile playback, per-slot playback and advancement, blocked streams and proxy/local-upload fallback, keyboard controls and screen-reader announcements. Local contracts cannot verify real device autoplay policies or live Drive availability.
+
+### Diagnosing no sound
+
+- Inspect `/api/drive-catalog` on the deployed origin. `configured: false` requires the site owner to configure `GOOGLE_DRIVE_MASTERS_FOLDER_ID` and either `GOOGLE_SERVICE_ACCOUNT_JSON` or the service-account email/private-key settings. Keep credentials in deployment secrets, never in client code.
+- A 503 requires checking service-account access to the folder, exactly one `catalog-index.json`, valid manifest metadata, and nonempty audio files in that folder. A successful empty catalog requires publishing eligible `public: true` entries; recent-play/avoid filters can also leave a generated set empty.
+- Generate a set and verify no media starts. Click Play on a real card; confirm the shared `#showAudio` requests that record's `streamUrl` and emits `playing`. History must change only on that event.
+- A browser `NotAllowedError` exposes **Play with sound**; retry with a direct gesture. A media rejection or load failure must try only that same record's authorized proxy, never an unrelated track or Drive preview. Verify a successful proxy response is audio (200/206), including seek/range behavior.
+- If primary and proxy both fail, confirm the unavailable card offers **Upload a local mix**, and test the file picker. Repeat on desktop and a mobile browser; contract fixtures are not evidence of real Drive decoding or device-policy success.

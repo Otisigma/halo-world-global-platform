@@ -2,7 +2,7 @@ import { DREAMWEAVER_STOREFRONT_MIX_ID, buildDreamweaverStorefrontPath } from ".
 import { createDreamweaverLyricsEngine } from "../lib/dreamweaver-lyrics.js";
 import { createLyricInteractionRecorder } from "../lib/journey-interactions.js";
 import { googleDriveFallbackSources, isGoogleDriveUrl, normalizeGoogleDriveAudioUrl, startDreamweaverMutedAutoplay, unlockDreamweaverAudio } from "../lib/dreamweaver-playback.js";
-import { catalogAudioUrl, generateAutomatedSet } from "../lib/catalog-curator.js";
+import { catalogAudioUrl, generateAutomatedSet, normalizeCatalog } from "../lib/catalog-curator.js";
 import { readRecentTrackIds, recordPlayedTrack } from "../lib/catalog-session.js";
 import { MIX_PRESETS, createMixSeed, deleteUserPreset, describeMixIntent, normalizeMixSeed, parseMixPrompt, readUserPresets, saveUserPreset } from "../lib/mix-intent.js";
 
@@ -1186,7 +1186,7 @@ import { MIX_PRESETS, createMixSeed, deleteUserPreset, describeMixIntent, normal
     }
   }
 
-  async function awaitPrimaryPlaybackReadiness() {
+  async function awaitPrimaryPlaybackReadiness(playback) {
     if (elements.audio.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) return { ok: true, state: "ready" };
     return new Promise(resolve => {
       let settled = false;
@@ -1214,6 +1214,11 @@ import { MIX_PRESETS, createMixSeed, deleteUserPreset, describeMixIntent, normal
       elements.audio.addEventListener("canplay", handleReady, { once: true });
       elements.audio.addEventListener("canplaythrough", handleReady, { once: true });
       elements.audio.addEventListener("error", handleError, { once: true });
+      playback?.then(result => {
+        if (!result.error) return;
+        const blocked = ["NotAllowedError", "AbortError"].includes(result.error.name);
+        settle({ ok: blocked, state: blocked ? "blocked" : "error", detail: "The audio stream could not start." });
+      });
     });
   }
 
@@ -1246,6 +1251,7 @@ import { MIX_PRESETS, createMixSeed, deleteUserPreset, describeMixIntent, normal
       elements.audio.load?.();
     }
     let userPlayback;
+    const requestPlayback = userInitiated || mix.isDriveCatalogPlayback;
     const requestUserPlayback = () => {
       state.autoplayMuted = false;
       elements.audio.muted = false;
@@ -1262,7 +1268,16 @@ import { MIX_PRESETS, createMixSeed, deleteUserPreset, describeMixIntent, normal
         return Promise.resolve({ started: false, error });
       }
     };
-    if (userInitiated) userPlayback = requestUserPlayback();
+    if (requestPlayback) userPlayback = requestUserPlayback();
+    const preparePlayback = async () => {
+      const readiness = await awaitPrimaryPlaybackReadiness(userPlayback);
+      if (!readiness.ok || !userPlayback) return readiness;
+      const playback = await userPlayback;
+      if (playback.error && !["NotAllowedError", "AbortError"].includes(playback.error.name)) {
+        return { ok: false, state: "error", detail: "The audio stream could not start." };
+      }
+      return readiness;
+    };
 
     if ((elements.audio.muted && !state.autoplayMuted) || Number(elements.audio.volume) === 0) {
       queueAudioFeedbackIncident("muted_audio", {
@@ -1278,7 +1293,7 @@ import { MIX_PRESETS, createMixSeed, deleteUserPreset, describeMixIntent, normal
     let activeAudio = primaryAudio;
     let readiness;
     try {
-      readiness = await awaitPrimaryPlaybackReadiness();
+      readiness = await preparePlayback();
       if (state.audioSourceMode === "local" || elements.audio.getAttribute("src") !== activeAudio) return { started: false, fallback: true };
       // Google Drive is a fallback only: it is tried once the canonical/direct source fails to load.
       for (const fallbackAudio of (readiness.state === "error" || (mix.isDriveCatalogPlayback && readiness.state === "timeout")) ? dreamweaverDriveFallbacks(mix, primaryAudio) : []) {
@@ -1292,8 +1307,8 @@ import { MIX_PRESETS, createMixSeed, deleteUserPreset, describeMixIntent, normal
         activeAudio = fallbackAudio;
         elements.audio.src = fallbackAudio;
         elements.audio.load?.();
-        if (userInitiated) userPlayback = requestUserPlayback();
-        readiness = await awaitPrimaryPlaybackReadiness();
+        if (requestPlayback) userPlayback = requestUserPlayback();
+        readiness = await preparePlayback();
         if (state.audioSourceMode === "local" || elements.audio.getAttribute("src") !== activeAudio) return { started: false, fallback: true };
         if (readiness.state !== "error") break;
       }
@@ -1317,10 +1332,13 @@ import { MIX_PRESETS, createMixSeed, deleteUserPreset, describeMixIntent, normal
       return { started: false, fallback: true };
     }
 
-    if (userInitiated) {
+    if (requestPlayback) {
       const playback = await userPlayback;
       if (playback.started) return { started: true, muted: false };
-      if (playback.error?.name !== "AbortError") showToast("Audio is ready. Press play when your browser is ready.");
+      if (playback.error?.name !== "AbortError") {
+        renderSoundUnlock("blocked");
+        showToast("Playback was blocked by your browser. Click Play again or tap Play with sound.");
+      }
       return { started: false };
     }
     const autoplay = await startPrimaryAutoplay();
@@ -3195,20 +3213,23 @@ import { MIX_PRESETS, createMixSeed, deleteUserPreset, describeMixIntent, normal
         headers: { Accept: "application/json" }, credentials: "same-origin"
       });
       if (!response.ok || typeof payload.configured !== "boolean" || !Array.isArray(payload.tracks)) throw new Error("Catalog unavailable");
+      if (payload.configured) normalizeCatalog(payload);
       state.catalogUnavailable = false;
       state.driveCatalog = payload.configured ? payload : null;
       setCatalogSyncStatus(!payload.configured ? "standby" : payload.tracks.length ? "synced" : "empty",
         !payload.configured ? "CATALOG STANDBY" : payload.tracks.length ? "CATALOG SYNCED" : "CATALOG EMPTY");
       elements.catalogStatus.textContent = payload.configured
-        ? "Choose 20 or 60 minutes to curate the canonical catalog."
-        : "Catalog curator is on standby. Existing song and mix playback remains available.";
+        ? payload.tracks.some(track => track.public === true)
+          ? "Choose 20 or 60 minutes to curate the canonical catalog."
+          : "No eligible public tracks. Ask the catalog owner to publish valid tracks in catalog-index.json, or upload a local mix."
+        : "Catalog is not configured. Ask the site owner to configure the Drive catalog folder and service account, or upload a local mix. Existing song and mix playback remains available.";
       return payload.configured;
     } catch {
       state.catalogUnavailable = true;
       state.driveCatalog = null;
       setCatalogSyncStatus("error", "CATALOG UNAVAILABLE");
       elements.catalogStatus.textContent = "Catalog temporarily unavailable — no substitute catalog loaded. Try again or upload a local mix.";
-      setReleasePlaybackState("unavailable");
+      if (!state.mix) setReleasePlaybackState("unavailable");
       return true;
     }
   }
@@ -3366,19 +3387,12 @@ import { MIX_PRESETS, createMixSeed, deleteUserPreset, describeMixIntent, normal
       state.catalogSet.complete ? " Set ready — curated sequence, played back-to-back." : ` Short by ${formatTime(state.catalogSet.shortfallSeconds)}. Add tracks or explicitly allow recent reuse.`}${avoided}`;
     if (!state.catalogSet.tracks.length) {
       setCatalogProgress(3, "No eligible tracks");
-      if (state.mix?.isDriveCatalogPlayback) {
-        elements.audio.pause();
-        state.mix = null;
-        state.audioSourceMode = "empty";
-        setReleasePlaybackState("unavailable");
-      }
+      elements.catalogStatus.textContent += tracks.some(track => track.public === true)
+        ? " No tracks match this request or recent-play rules. Change the request, allow recent reuse, add public tracks, or upload a local mix."
+        : " No eligible public tracks. Ask the catalog owner to publish valid tracks in catalog-index.json, or upload a local mix.";
       return;
     }
     setCatalogProgress(4);
-    if (state.audioSourceMode === "local") {
-      elements.audio.pause();
-      state.audioSourceMode = "empty";
-    }
     if (elements.catalogTrackStatus) elements.catalogTrackStatus.textContent = "Choose Play on a track to begin the curated sequence.";
   }
 
@@ -3405,7 +3419,7 @@ import { MIX_PRESETS, createMixSeed, deleteUserPreset, describeMixIntent, normal
         label = state.audioSourceMode === "error" ? `${route} · unavailable`
           : status === "loading" ? "Loading stream…"
           : `${route} · ${status === "playing" && elements.audio.muted ? "playing muted" : status}`;
-        if (elements.catalogTrackStatus) elements.catalogTrackStatus.textContent = `Slot ${index + 1}: ${track.title} — ${label}.${state.audioSourceMode === "error" ? " Upload a local mix or choose another track." : ""}`;
+        if (elements.catalogTrackStatus) elements.catalogTrackStatus.textContent = `Slot ${index + 1}: ${track.title} — ${label}.${state.audioSourceMode === "error" ? " Upload a local mix or choose another track." : state.soundUnlockMode === "blocked" ? " Playback was blocked by your browser. Click Play again or tap Play with sound." : ""}`;
       }
       if (card) card.dataset.state = selected ? state.audioSourceMode === "error" ? "unavailable" : "selected" : "scheduled";
       if (badge) badge.textContent = label;
@@ -3422,8 +3436,10 @@ import { MIX_PRESETS, createMixSeed, deleteUserPreset, describeMixIntent, normal
   }
 
   async function advanceCatalogTrack(slot = state.catalogIndex + 1, { userInitiated = false } = {}) {
-    if (state.catalogAdvancing || !state.catalogSet || state.audioSourceMode === "local"
-      || !Number.isInteger(slot) || slot < 0 || slot > state.catalogSet.tracks.length) return;
+    if (state.catalogAdvancing || !state.catalogSet || (state.audioSourceMode === "local" && !userInitiated)
+      || (!userInitiated && !state.catalogPlaybackStarted)
+      || !Number.isInteger(slot) || slot < 0 || slot > state.catalogSet.tracks.length
+      || (userInitiated && slot === state.catalogSet.tracks.length)) return;
     state.catalogAdvancing = true;
     try {
       state.catalogIndex = slot;
@@ -3437,6 +3453,7 @@ import { MIX_PRESETS, createMixSeed, deleteUserPreset, describeMixIntent, normal
         return;
       }
       if (userInitiated) state.catalogPlaybackStarted = true;
+      if (userInitiated && state.audioSourceMode === "local") state.audioSourceMode = "empty";
       clearRemoteAudioWatchdog();
       state.release = null;
       state.dreamweaverPayload = null;

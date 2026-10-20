@@ -4,7 +4,7 @@ import vm from "node:vm";
 import { DREAMWEAVER_STOREFRONT_MIX_ID, buildDreamweaverStorefrontPath } from "../lib/dreamweaver-storefront.js";
 import { createLyricInteractionRecorder } from "../lib/journey-interactions.js";
 import * as playback from "../lib/dreamweaver-playback.js";
-import { catalogAudioUrl, generateAutomatedSet } from "../lib/catalog-curator.js";
+import { catalogAudioUrl, generateAutomatedSet, normalizeCatalog } from "../lib/catalog-curator.js";
 import { readRecentTrackIds, recordPlayedTrack } from "../lib/catalog-session.js";
 import * as mixIntent from "../lib/mix-intent.js";
 
@@ -28,7 +28,7 @@ const release = {
 };
 const mix = { id: "linked-mix-id", title: "Linked mix", creator: { name: "Mix artist" }, audioUrl: "https://halo.test/mix.mp3", durationSeconds: 120 };
 
-export function fixture(search, { releases = [release], mixes = [mix], blocked = false, failed = false, failingSources = [], unlock = null, pathname = "/dreamweaver/", releaseArtwork = undefined, assetBinding = binding, driveCatalog = { configured: false, tracks: [] }, catalogError = false, storage = { getItem: () => null }, storageGetterError = false } = {}) {
+export function fixture(search, { releases = [release], mixes = [mix], blocked = false, failed = false, failingSources = [], rejectedPlaySources = [], loadingSources = [], deferPlaying = false, unlock = null, pathname = "/dreamweaver/", releaseArtwork = undefined, assetBinding = binding, driveCatalog = { configured: false, tracks: [] }, catalogError = false, storage = { getItem: () => null }, storageGetterError = false } = {}) {
   class Element extends EventTarget {
     constructor() {
       super();
@@ -59,7 +59,7 @@ export function fixture(search, { releases = [release], mixes = [mix], blocked =
     load() {
       this.loads++;
       const failing = failed || failingSources.includes(this.src);
-      this.readyState = failing ? 0 : 2;
+      this.readyState = failing || loadingSources.includes(this.src) ? 0 : 2;
       if (failing) queueMicrotask(() => {
         this.error = { code: 2 };
         this.dispatchEvent(new Event("error"));
@@ -69,9 +69,9 @@ export function fixture(search, { releases = [release], mixes = [mix], blocked =
       this.plays++;
       this.playLog.push({ src: this.src, muted: this.muted });
       if (blocked) throw Object.assign(new Error("Autoplay blocked"), { name: "NotAllowedError" });
-      if (failed || failingSources.includes(this.src)) throw Object.assign(new Error("Stream unavailable"), { name: "NotSupportedError" });
+      if (failed || failingSources.includes(this.src) || rejectedPlaySources.includes(this.src)) throw Object.assign(new Error("Stream unavailable"), { name: "NotSupportedError" });
       this.paused = false;
-      this.dispatchEvent(new Event("playing"));
+      if (!deferPlaying) this.dispatchEvent(new Event("playing"));
     }
   }
   const nodes = new Map();
@@ -84,7 +84,7 @@ export function fixture(search, { releases = [release], mixes = [mix], blocked =
   const timers = new Map();
   let timerId = 0;
   const context = {
-    URL, URLSearchParams, console, location, DREAMWEAVER_STOREFRONT_MIX_ID, buildDreamweaverStorefrontPath, createLyricInteractionRecorder, catalogAudioUrl, generateAutomatedSet, readRecentTrackIds, recordPlayedTrack, ...mixIntent, ...playback,
+    URL, URLSearchParams, console, location, DREAMWEAVER_STOREFRONT_MIX_ID, buildDreamweaverStorefrontPath, createLyricInteractionRecorder, catalogAudioUrl, generateAutomatedSet, normalizeCatalog, readRecentTrackIds, recordPlayedTrack, ...mixIntent, ...playback,
     Image: class {
       set src(value) {
         assert.equal(this.crossOrigin, "anonymous", "CORS must be set before requesting campaign artwork");

@@ -100,16 +100,28 @@ export function buildBinding(song, master, customImages = [], audioSource = cano
   return { songId: song.id, masterVersionId: master.id, audioSource, visualActs: visuals, revision, status: "ready" };
 }
 
-export async function resolveDreamweaverBinding(db, { songId, memberId = "", customImages, resolveAudioProxy }) {
+export async function resolveDreamweaverBinding(db, { songId, memberId = "", customImages, resolveAudioProxy, proxyTimeoutMs = 1500 }) {
   const { song, master } = await loadDreamweaverSong(db, songId, memberId, customImages !== undefined);
   let fallbackAudioSource = "";
   if (resolveAudioProxy) {
-    const [release] = song.source_release_id ? await db.sql`
-      SELECT stream_url FROM halo_release_campaigns
-      WHERE id = ${song.source_release_id} AND status = 'published' AND visibility = 'public'
-      LIMIT 1
-    ` : [];
-    fallbackAudioSource = await resolveAudioProxy([master.audio_url, release?.stream_url]).catch(() => "");
+    let timer;
+    try {
+      fallbackAudioSource = await Promise.race([
+        (async () => {
+          const [release] = song.source_release_id ? await db.sql`
+            SELECT stream_url FROM halo_release_campaigns
+            WHERE id = ${song.source_release_id} AND status = 'published' AND visibility = 'public'
+            LIMIT 1
+          ` : [];
+          return resolveAudioProxy([master.audio_url, release?.stream_url]);
+        })(),
+        new Promise(resolve => { timer = setTimeout(() => resolve(""), proxyTimeoutMs); })
+      ]);
+    } catch {
+      fallbackAudioSource = "";
+    } finally {
+      clearTimeout(timer);
+    }
   }
   let audioSource;
   try { audioSource = canonicalMasterUrl(song, master); } catch (error) {

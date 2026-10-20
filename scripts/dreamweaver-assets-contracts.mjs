@@ -126,6 +126,11 @@ await assert.rejects(resolveDreamweaverBinding(fakeDb({ conflicts: 3 }), { songI
     songId, resolveAudioProxy: async () => { throw new Error("offline"); }
   });
   assert.equal(noProxy.audioSource, master.audio_url, "proxy transport failure cannot discard an uploaded primary");
+  const slowProxy = await resolveDreamweaverBinding(fakeDb(), {
+    songId, resolveAudioProxy: () => new Promise(() => {}), proxyTimeoutMs: 1
+  });
+  assert.equal(slowProxy.audioSource, master.audio_url, "optional Drive lookup has a bounded budget, below the client binding deadline");
+  assert.equal(slowProxy.fallbackAudioSource, undefined);
 }
 
 const request = (method = "GET", body, headers = {}) => new Request(`https://halo.test/api/dreamweaver-assets?songId=${songId}`, {

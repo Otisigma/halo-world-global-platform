@@ -288,7 +288,6 @@ import { MIX_PRESETS, createMixSeed, deleteUserPreset, describeMixIntent, normal
     buildPreviewFrame: 0,
     buildPreviewStartedAt: 0,
     trackedProgress: new Set(),
-    startPlaybackAfterLoad: false,
     audioSourceMode: "empty",
     audioSourceKind: "",
     autoplayMuted: false,
@@ -814,14 +813,14 @@ import { MIX_PRESETS, createMixSeed, deleteUserPreset, describeMixIntent, normal
     return [entry?.audioUrl, entry?.audio_url, entry?.sourceUrl, entry?.previewAudio, entry?.preview_audio, entry?.streamUrl];
   }
 
-  // Direct sources always win; a Google Drive link is only used (normalized) when nothing direct is playable.
+  // Published direct audio is primary; Drive audio must use an authorized site route.
   function resolvePrimaryAudio(entry = {}, options = {}) {
     if (entry.isDriveCatalogPlayback) {
       const src = playableCatalogUrl(entry.streamUrl);
       return { src, source: "drive-catalog", isPlayable: Boolean(src) };
     }
     if (entry.isCatalogPlayback && entry.canonicalBinding) {
-      // The server-side binding is authoritative; a Drive-hosted master is only normalized so it can stream.
+      // The server binding already resolves Drive masters through the site's allowlist.
       const binding = entry.canonicalBinding.audioSource;
       const src = isGoogleDriveUrl(binding) ? "" : safeMediaUrl(binding);
       return { src, source: "canonical-master", isPlayable: Boolean(src) };
@@ -1143,9 +1142,14 @@ import { MIX_PRESETS, createMixSeed, deleteUserPreset, describeMixIntent, normal
 
   function armRemoteAudioWatchdog() {
     if (state.audioSourceMode !== "remote" || state.remoteAudioWatchdog) return;
+    const position = Number(elements.audio.currentTime) || 0;
     state.remoteAudioWatchdog = window.setTimeout(() => {
       state.remoteAudioWatchdog = 0;
       if (state.audioSourceMode !== "remote") return;
+      if (!elements.audio.paused && Number(elements.audio.currentTime) > position + 0.05) {
+        armRemoteAudioWatchdog();
+        return;
+      }
       if (state.playbackRequested || elements.audio.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
         handleRemoteAudioUnavailable("Stream unavailable — click Upload Mix File or press play to choose a local mix.");
       }
@@ -2082,7 +2086,6 @@ import { MIX_PRESETS, createMixSeed, deleteUserPreset, describeMixIntent, normal
       elements.shell.scrollIntoView({ behavior: "smooth", block: "start" });
       return;
     }
-    state.startPlaybackAfterLoad = false;
     if (elements.shell.hidden) {
       renderSatelliteState();
       await loadShow();
@@ -3198,12 +3201,7 @@ import { MIX_PRESETS, createMixSeed, deleteUserPreset, describeMixIntent, normal
         trackCampaignEvent("landing", currentParams.get("source") || "halo");
       }
       window.haloStats?.track("open_dreamweaver_show", { mix_id: mix.id, mix_title: mix.title || "" });
-      if (state.startPlaybackAfterLoad) {
-        state.startPlaybackAfterLoad = false;
-        if (!shouldPromptLocalUpload()) await handleSoundUnlock();
-      }
     } catch (error) {
-      state.startPlaybackAfterLoad = false;
       setReleasePlaybackState("unavailable");
       if (!preserveShell) showEmpty(error.message || "Dreamweaver could not open the mix right now.");
     }

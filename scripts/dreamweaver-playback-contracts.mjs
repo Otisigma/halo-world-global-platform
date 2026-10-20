@@ -124,7 +124,7 @@ export function fixture(search, { releases = [release], mixes = [mix], blocked =
       return { response: { ok: true }, payload: { mixes: fixtures.mixes } };
     };
     state.unlock = fixtures.unlock;
-    elements.audio.addEventListener("playing", () => { measurePlaybackStart(); setReleasePlaybackState("playing"); });
+    elements.audio.addEventListener("playing", () => { clearRemoteAudioWatchdog(); measurePlaybackStart(); setReleasePlaybackState("playing"); });
     ${catalogControlBindings}
     ${audioErrorBinding}
     elements.audio.addEventListener("ended", handleCatalogEnded);
@@ -421,6 +421,22 @@ for (const failure of ["promise", "late-error", "stall"]) {
     else {
       f.armRemoteAudioWatchdog();
       f.timers.get(f.state.remoteAudioWatchdog)();
+    }
+    {
+      const f = fixture(`?song=${songId}`, { assetBinding: { ...binding, fallbackAudioSource: proxy } });
+      await f.initializeDreamweaver();
+      await f.togglePlayback();
+      const audio = f.nodes.get("showAudio");
+      audio.currentTime = 10;
+      f.armRemoteAudioWatchdog();
+      audio.currentTime = 15;
+      f.timers.get(f.state.remoteAudioWatchdog)();
+      assert.equal(audio.src, masterStream, "a download stall must not replace healthy buffered playback");
+      assert.equal(audio.paused, false);
+      assert.ok(f.state.remoteAudioWatchdog, "partial progress must not permanently disable stall recovery");
+      f.timers.get(f.state.remoteAudioWatchdog)();
+      await new Promise(resolve => setImmediate(resolve));
+      assert.equal(audio.src, proxy, "if buffered progress subsequently stops, the watchdog still recovers");
     }
   }
   await new Promise(resolve => setImmediate(resolve));

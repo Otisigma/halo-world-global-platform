@@ -67,7 +67,7 @@ assert.equal(closestThingResult.draft.releaseTitle, "Closest Thing To Heaven. DJ
 assert.equal(closestThingResult.draft.releaseUrl, closestThingUrl);
 assert.match(closestThingResult.draft.reviewNote, /HALO crew release/);
 
-const [artistPageFunction, artistScoutFunction, releasePackFunction, radioSubmissionsFunction, artistStudio, artistScript, mainStudio, roomDemoMigration, requestedReleaseMigration, requestedTrackCatalogMigration, starterMigration, releaseAudioMigration, artistReviewMigration] = await Promise.all([
+const [artistPageFunction, artistScoutFunction, releasePackFunction, radioSubmissionsFunction, artistStudio, artistScript, mainStudio, roomDemoMigration, requestedReleaseMigration, requestedTrackCatalogMigration, starterMigration, releaseAudioMigration, artistReviewMigration, spotifyProfileMigration, dreamweaverIndex, dreamweaverScript] = await Promise.all([
   readFile(new URL("../netlify/functions/artist-pages.mjs", import.meta.url), "utf8"),
   readFile(new URL("../netlify/functions/artist-page-scout.mjs", import.meta.url), "utf8"),
   readFile(new URL("../netlify/functions/release-pack.mjs", import.meta.url), "utf8"),
@@ -80,7 +80,10 @@ const [artistPageFunction, artistScoutFunction, releasePackFunction, radioSubmis
   readFile(new URL("../netlify/database/migrations/20260812235900_publish-requested-track-catalog.sql", import.meta.url), "utf8"),
   readFile(new URL("../netlify/database/migrations/20260812180000_enable-self-service-starter-promotion.sql", import.meta.url), "utf8"),
   readFile(new URL("../netlify/database/migrations/20260812234500_link-release-audio-versions.sql", import.meta.url), "utf8"),
-  readFile(new URL("../netlify/database/migrations/20260812235000_add-radio-artist-review-updates.sql", import.meta.url), "utf8")
+  readFile(new URL("../netlify/database/migrations/20260812235000_add-radio-artist-review-updates.sql", import.meta.url), "utf8"),
+  readFile(new URL("../netlify/database/migrations/20261020090000_set_owen_anthony_spotify_artist_profile.sql", import.meta.url), "utf8"),
+  readFile(new URL("../dreamweaver/index.html", import.meta.url), "utf8"),
+  readFile(new URL("../dreamweaver/dreamweaver.js", import.meta.url), "utf8")
 ]);
 assert.match(artistPageFunction, /syncCatalogRelease/);
 assert.match(artistPageFunction, /INSERT INTO halo_release_campaigns/);
@@ -171,5 +174,16 @@ assert.match(radioSubmissionsFunction, /page\.slug = track\.artist_slug/);
 assert.match(radioSubmissionsFunction, /page\.owner_member_id = \$\{membership\.member_id\}/);
 assert.match(mainStudio, /Campaign studio \/\/ Artist controls/);
 assert.match(mainStudio, /Every signed-in artist can start a release campaign/);
+
+const spotifyArtistUrl = new URL("https://open.spotify.com/artist/29qNEHDlQPZsVFxNLeQ3U1");
+assert.equal(spotifyArtistUrl.protocol, "https:");
+assert.equal(spotifyArtistUrl.hostname, "open.spotify.com");
+assert.equal(spotifyArtistUrl.pathname, "/artist/29qNEHDlQPZsVFxNLeQ3U1");
+assert.equal(spotifyArtistUrl.search, "");
+assert.match(spotifyProfileMigration, /UPDATE halo_artist_pages\s+SET\s+website_url = 'https:\/\/open\.spotify\.com\/artist\/29qNEHDlQPZsVFxNLeQ3U1',\s+updated_at = NOW\(\)\s+WHERE slug = 'owen-anthony';/);
+assert.doesNotMatch(spotifyProfileMigration, /release_url|halo_release_campaigns/);
+assert.match(dreamweaverIndex, /id="dreamweaverSpotifyLink" href="https:\/\/open\.spotify\.com\/search\/owen%20anthony" target="_blank" rel="noopener noreferrer"/);
+assert.match(dreamweaverIndex, /id="dreamweaverSpotifyArtistProfileLink" href="https:\/\/open\.spotify\.com\/artist\/29qNEHDlQPZsVFxNLeQ3U1" target="_blank" rel="noopener noreferrer">Spotify artist profile/);
+assert.match(dreamweaverScript, /href: query => `https:\/\/open\.spotify\.com\/search\/\$\{encodeURIComponent\(query\)\}`/);
 
 console.log("Artist page contracts passed");

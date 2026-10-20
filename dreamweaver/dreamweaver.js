@@ -3047,8 +3047,7 @@ import { MIX_PRESETS, createMixSeed, deleteUserPreset, describeMixIntent, normal
     try {
       const routeContext = resolveDreamweaverRouteContext();
       const requestedRouteFingerprint = routeContextFingerprint(routeContext);
-      const isSongRoute = routeContext.requestedSongId
-        && (!routeContext.requestedMixId || routeContext.requestedMixId === DREAMWEAVER_STOREFRONT_MIX_ID);
+      const isSongRoute = Boolean(routeContext.requestedSongId);
       const requestedMix = isSongRoute ? "" : routeContext.requestedMixToken;
       const requestedMixId = isSongRoute ? "" : cleanKey(routeContext.requestedMixId, 160);
       const exactMixPromise = requestedMixId ? fetchExactMixById(requestedMixId).catch(() => null) : Promise.resolve(null);
@@ -3162,7 +3161,7 @@ import { MIX_PRESETS, createMixSeed, deleteUserPreset, describeMixIntent, normal
       document.title = `${mix.title || "Dreamweaver Show"} — HALO`;
       const currentParams = new URLSearchParams(location.search);
       if (mix.isCatalogPlayback) {
-        currentParams.delete("mix");
+        if (routeContext.requestedMixId) currentParams.set("mix", routeContext.requestedMixId);
         if (state.publishedSongId) currentParams.set("song", state.publishedSongId);
       } else {
         currentParams.set("mix", mix.id);

@@ -299,6 +299,7 @@ import { MIX_PRESETS, createMixSeed, deleteUserPreset, describeMixIntent, normal
     catalogUnavailable: false,
     catalogSet: null,
     catalogIndex: -1,
+    catalogPlaybackStarted: false,
     catalogAdvancing: false,
     catalogGenerating: false,
     catalogFallbackActive: false,
@@ -1166,6 +1167,7 @@ import { MIX_PRESETS, createMixSeed, deleteUserPreset, describeMixIntent, normal
     state.localAudioName = cleanText(file.name || "Uploaded mix", 160) || "Uploaded mix";
     state.audioSourceMode = "local";
     state.catalogSet = null;
+    state.catalogPlaybackStarted = false;
     if (elements.catalogSetlist) elements.catalogSetlist.innerHTML = "";
     if (elements.catalogTrackStatus) elements.catalogTrackStatus.textContent = "Local mix selected in the shared player. Generate a new set to return to the catalog.";
     elements.audio.pause();
@@ -1215,7 +1217,7 @@ import { MIX_PRESETS, createMixSeed, deleteUserPreset, describeMixIntent, normal
     });
   }
 
-  async function bootstrapPrimaryPlayback(mix) {
+  async function bootstrapPrimaryPlayback(mix, { userInitiated = false } = {}) {
     if (state.audioSourceMode === "local") return { started: !elements.audio.paused, fallback: true };
     const primaryAudio = resolvePrimaryAudio(mix).src;
     if (!primaryAudio) {
@@ -1243,6 +1245,24 @@ import { MIX_PRESETS, createMixSeed, deleteUserPreset, describeMixIntent, normal
       elements.audio.src = primaryAudio;
       elements.audio.load?.();
     }
+    let userPlayback;
+    const requestUserPlayback = () => {
+      state.autoplayMuted = false;
+      elements.audio.muted = false;
+      renderSoundUnlock("");
+      try {
+        return elements.audio.play().then(
+          () => {
+            state.soundUnlockedByUser = true;
+            return { started: !elements.audio.paused };
+          },
+          error => ({ started: false, error })
+        );
+      } catch (error) {
+        return Promise.resolve({ started: false, error });
+      }
+    };
+    if (userInitiated) userPlayback = requestUserPlayback();
 
     if ((elements.audio.muted && !state.autoplayMuted) || Number(elements.audio.volume) === 0) {
       queueAudioFeedbackIncident("muted_audio", {
@@ -1272,6 +1292,7 @@ import { MIX_PRESETS, createMixSeed, deleteUserPreset, describeMixIntent, normal
         activeAudio = fallbackAudio;
         elements.audio.src = fallbackAudio;
         elements.audio.load?.();
+        if (userInitiated) userPlayback = requestUserPlayback();
         readiness = await awaitPrimaryPlaybackReadiness();
         if (state.audioSourceMode === "local" || elements.audio.getAttribute("src") !== activeAudio) return { started: false, fallback: true };
         if (readiness.state !== "error") break;
@@ -1296,6 +1317,12 @@ import { MIX_PRESETS, createMixSeed, deleteUserPreset, describeMixIntent, normal
       return { started: false, fallback: true };
     }
 
+    if (userInitiated) {
+      const playback = await userPlayback;
+      if (playback.started) return { started: true, muted: false };
+      if (playback.error?.name !== "AbortError") showToast("Audio is ready. Press play when your browser is ready.");
+      return { started: false };
+    }
     const autoplay = await startPrimaryAutoplay();
     if (autoplay.started) return { started: true, muted: autoplay.muted };
     if (autoplay.reason !== "aborted") {
@@ -3325,12 +3352,13 @@ import { MIX_PRESETS, createMixSeed, deleteUserPreset, describeMixIntent, normal
       return;
     }
     state.catalogIndex = -1;
+    state.catalogPlaybackStarted = false;
     if (elements.catalogIntent) elements.catalogIntent.textContent = `${describeMixIntent(intent)} · Variation code: ${seed}`;
     if (elements.catalogNotes) elements.catalogNotes.textContent = parsed.notes.join(" ");
     setCatalogProgress(3);
     elements.catalogStatus.textContent = "Finalizing set sequence with existing stream / proxy fallback routing…";
     elements.catalogSetlist.innerHTML = state.catalogSet.tracks.map((track, index) =>
-      `<li id="catalogTrack${index}"><span class="catalog-curator__slot">#${String(index + 1).padStart(2, "0")}</span><div><strong>${escapeHtml(track.title)}</strong><span>${escapeHtml(track.artist)}</span><small>${escapeHtml(String(track.bpm))} BPM · ${escapeHtml(track.role)} · ${escapeHtml(track.energyLevel)}</small><small>Scheduled ${formatTime(track.playDurationSeconds)} · starts ${formatTime(track.startSeconds)}</small><span class="catalog-curator__route" id="catalogTrackRoute${index}">${escapeHtml(catalogTrackRoute(track.streamUrl))} · scheduled</span></div><button id="catalogTrackPlay${index}" type="button" data-catalog-slot="${index}" aria-label="Play stream: ${escapeHtml(track.title)} by ${escapeHtml(track.artist)}, slot ${index + 1}" aria-describedby="catalogTrackRoute${index}">Play stream</button></li>`
+      `<li id="catalogTrack${index}"><span class="catalog-curator__slot">#${String(index + 1).padStart(2, "0")}</span><div><strong>${escapeHtml(track.title)}</strong><span>${escapeHtml(track.artist)}</span><small>${escapeHtml(String(track.bpm))} BPM · ${escapeHtml(track.role)} · ${escapeHtml(track.energyLevel)}</small><small>Scheduled ${formatTime(track.playDurationSeconds)} · starts ${formatTime(track.startSeconds)}</small><span class="catalog-curator__route" id="catalogTrackRoute${index}">${escapeHtml(catalogTrackRoute(track.streamUrl))} · scheduled</span></div><button id="catalogTrackPlay${index}" type="button" data-catalog-slot="${index}" aria-label="Play stream: ${escapeHtml(track.title)} by ${escapeHtml(track.artist)}, slot ${index + 1}" aria-describedby="catalogTrackRoute${index}">Play</button></li>`
     ).join("");
     updateCatalogPlaybackCards();
     const avoided = state.catalogSet.avoidedTrackCount ? ` ${state.catalogSet.avoidedTrackCount} track(s) skipped by your avoid list.` : "";
@@ -3351,8 +3379,7 @@ import { MIX_PRESETS, createMixSeed, deleteUserPreset, describeMixIntent, normal
       elements.audio.pause();
       state.audioSourceMode = "empty";
     }
-    if (elements.catalogLinkedNotice) elements.catalogLinkedNotice.hidden = true;
-    await advanceCatalogTrack();
+    if (elements.catalogTrackStatus) elements.catalogTrackStatus.textContent = "Choose Play on a track to begin the curated sequence.";
   }
 
   function catalogTrackRoute(source) {
@@ -3375,7 +3402,7 @@ import { MIX_PRESETS, createMixSeed, deleteUserPreset, describeMixIntent, normal
         const fallback = track.fallbackUrl && elements.audio.src === playableCatalogUrl(track.fallbackUrl);
         const route = fallback ? "HALO proxy fallback" : catalogTrackRoute(track.streamUrl);
         const status = state.releasePlaybackState;
-        label = state.audioSourceMode === "error" ? "Stream unavailable"
+        label = state.audioSourceMode === "error" ? `${route} · unavailable`
           : status === "loading" ? "Loading stream…"
           : `${route} · ${status === "playing" && elements.audio.muted ? "playing muted" : status}`;
         if (elements.catalogTrackStatus) elements.catalogTrackStatus.textContent = `Slot ${index + 1}: ${track.title} — ${label}.${state.audioSourceMode === "error" ? " Upload a local mix or choose another track." : ""}`;
@@ -3394,25 +3421,28 @@ import { MIX_PRESETS, createMixSeed, deleteUserPreset, describeMixIntent, normal
     }
   }
 
-  async function advanceCatalogTrack(slot = state.catalogIndex + 1) {
+  async function advanceCatalogTrack(slot = state.catalogIndex + 1, { userInitiated = false } = {}) {
     if (state.catalogAdvancing || !state.catalogSet || state.audioSourceMode === "local"
       || !Number.isInteger(slot) || slot < 0 || slot > state.catalogSet.tracks.length) return;
     state.catalogAdvancing = true;
     try {
       state.catalogIndex = slot;
       const track = state.catalogSet.tracks[slot];
+      if (elements.catalogLinkedNotice) elements.catalogLinkedNotice.hidden = true;
       if (!track) {
         elements.audio.pause();
+        state.catalogPlaybackStarted = false;
         setReleasePlaybackState("ready");
         elements.catalogStatus.textContent += " Playback finished.";
         return;
       }
+      if (userInitiated) state.catalogPlaybackStarted = true;
       clearRemoteAudioWatchdog();
       state.release = null;
       state.dreamweaverPayload = null;
       state.publishedSongId = "";
       const mix = { ...track, audioUrl: track.streamUrl, creator: { name: track.artist }, isDriveCatalogPlayback: true };
-      const result = await bootstrapPrimaryPlayback(mix);
+      const result = await bootstrapPrimaryPlayback(mix, { userInitiated });
       elements.mixTitle.textContent = track.title;
       elements.mixCreator.textContent = track.artist;
       if (result.fallback) setReleasePlaybackState("unavailable");
@@ -3429,13 +3459,14 @@ import { MIX_PRESETS, createMixSeed, deleteUserPreset, describeMixIntent, normal
   }
 
   function handleCatalogTimeupdate() {
+    if (!state.catalogPlaybackStarted) return;
     const track = state.catalogSet?.tracks[state.catalogIndex];
     if (track && state.mix?.isDriveCatalogPlayback && state.audioSourceMode === "remote"
       && elements.audio.currentTime >= track.playDurationSeconds) void advanceCatalogTrack();
   }
 
   function handleCatalogEnded() {
-    if (!state.catalogSet || !state.mix?.isDriveCatalogPlayback || state.audioSourceMode !== "remote") return false;
+    if (!state.catalogPlaybackStarted || !state.catalogSet || !state.mix?.isDriveCatalogPlayback || state.audioSourceMode !== "remote") return false;
     void advanceCatalogTrack();
     return true;
   }
@@ -3516,7 +3547,7 @@ import { MIX_PRESETS, createMixSeed, deleteUserPreset, describeMixIntent, normal
   elements.catalogSetlist?.addEventListener("click", event => {
     const button = event.target.closest("button[data-catalog-slot]");
     if (!button || state.catalogGenerating || state.catalogAdvancing) return;
-    void advanceCatalogTrack(Number(button.dataset.catalogSlot));
+    void advanceCatalogTrack(Number(button.dataset.catalogSlot), { userInitiated: true });
   });
   renderCatalogPresets();
   elements.audio.addEventListener("playing", handleCatalogPlaying);

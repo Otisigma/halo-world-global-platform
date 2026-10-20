@@ -10,7 +10,7 @@ const versionId = "22222222-2222-4222-8222-222222222222";
 const song = { id: songId, owner_member_id: "owner", title: "Celebration", artist_name: "Artist", genre: "house", lyrics_text: "<script>never embed lyrics</script>", status: "active", pipeline_status: "published", rights_status: "cleared" };
 const master = { id: versionId, audio_url: "https://archive.halo.test/master.wav" };
 
-function fakeDb({ visible = true, masters = [master], stored = null, conflicts = 0, onConflict = null } = {}) {
+function fakeDb({ visible = true, masters = [master], stored = null, conflicts = 0, onConflict = null, songRecord = song, releaseUrl = "" } = {}) {
   const queries = [];
   return {
     queries,
@@ -20,8 +20,9 @@ function fakeDb({ visible = true, masters = [master], stored = null, conflicts =
       queries.push({ query, values });
       if (query.includes("FROM halo_song_catalog")) {
         const [id, memberId, publicAllowed] = values;
-        return id === song.id && (memberId === song.owner_member_id || (publicAllowed && visible)) ? [song] : [];
+        return id === songRecord.id && (memberId === songRecord.owner_member_id || (publicAllowed && visible)) ? [songRecord] : [];
       }
+      if (query.includes("SELECT stream_url FROM halo_release_campaigns")) return [{ stream_url: releaseUrl }];
       if (query.includes("FROM halo_song_versions")) return masters;
       if (query.includes("SELECT * FROM halo_release_assets")) return stored ? [{ ...stored }] : [];
       if (query.includes("INSERT INTO halo_release_assets")) {
@@ -93,6 +94,44 @@ assert.equal(db.queries.filter(item => item.query.includes("INSERT INTO")).lengt
 const racing = fakeDb({ conflicts: 1, onConflict: { ...db.stored, revision: "new-owner-revision", custom_images: ["https://halo.test/new.jpg"] } });
 assert.equal((await resolveDreamweaverBinding(racing, { songId })).visualActs[0].uri, "https://halo.test/new.jpg", "a stale reader must retry with the newest uploaded visuals");
 await assert.rejects(resolveDreamweaverBinding(fakeDb({ conflicts: 3 }), { songId }), { status: 409 });
+
+{
+  const share = "https://drive.google.com/file/d/authorized_master_123/view";
+  const proxy = "/api/drive-catalog/audio?track=canonical-song";
+  const sourceSong = { ...song, source_release_id: "published-release" };
+  const database = fakeDb({ songRecord: sourceSong, releaseUrl: share });
+  const binding = await resolveDreamweaverBinding(database, {
+    songId, resolveAudioProxy: async candidates => {
+      assert.deepEqual(candidates, [master.audio_url, share], "only the master and its exact linked release are considered");
+      return proxy;
+    }
+  });
+  assert.equal(binding.audioSource, master.audio_url);
+  assert.equal(binding.fallbackAudioSource, proxy);
+  assert.equal(database.stored.canonical_master_url, master.audio_url, "proxy lookup never replaces a healthy persisted master");
+  const releaseQuery = database.queries.find(({ query }) => query.includes("SELECT stream_url"));
+  assert.deepEqual(releaseQuery.values, [sourceSong.source_release_id]);
+  assert.match(releaseQuery.query, /status = 'published' AND visibility = 'public'/);
+  for (const audio_url of ["", "javascript:invalid", share]) {
+    const fallback = await resolveDreamweaverBinding(fakeDb({ masters: [{ ...master, audio_url }] }), {
+      songId, resolveAudioProxy: async () => proxy
+    });
+    assert.equal(fallback.audioSource, proxy, "an absent, invalid, or Drive-hosted primary uses only the authorized same-song proxy");
+    assert.ok(!JSON.stringify(fallback).includes("authorized_master_123"));
+  }
+  await assert.rejects(resolveDreamweaverBinding(fakeDb({ masters: [{ ...master, audio_url: share }] }), {
+    songId, resolveAudioProxy: async () => ""
+  }), { status: 409 }, "an unallowlisted Drive master cannot leak into a binding");
+  const noProxy = await resolveDreamweaverBinding(fakeDb(), {
+    songId, resolveAudioProxy: async () => { throw new Error("offline"); }
+  });
+  assert.equal(noProxy.audioSource, master.audio_url, "proxy transport failure cannot discard an uploaded primary");
+  const slowProxy = await resolveDreamweaverBinding(fakeDb(), {
+    songId, resolveAudioProxy: () => new Promise(() => {}), proxyTimeoutMs: 1
+  });
+  assert.equal(slowProxy.audioSource, master.audio_url, "optional Drive lookup has a bounded budget, below the client binding deadline");
+  assert.equal(slowProxy.fallbackAudioSource, undefined);
+}
 
 const request = (method = "GET", body, headers = {}) => new Request(`https://halo.test/api/dreamweaver-assets?songId=${songId}`, {
   method, ...(body !== undefined ? { body: typeof body === "string" ? body : JSON.stringify(body) } : {}),

@@ -89,25 +89,55 @@ export function generateActVisual(song, act) {
   return `data:image/svg+xml;base64,${Buffer.from(svg).toString("base64")}`;
 }
 
-export function buildBinding(song, master, customImages = []) {
+export function buildBinding(song, master, customImages = [], audioSource = canonicalMasterUrl(song, master)) {
   const images = validateCustomImages(customImages);
   const cover = mediaUrl(master.artwork_url || song.artwork_url);
   const visuals = Array.from({ length: 4 }, (_, index) => {
     const supplied = images[index] || (index === 0 && images.length === 0 ? cover : "");
     return { act: index + 1, sourceType: supplied ? "upload" : "generated", uri: supplied || generateActVisual(song, index + 1), status: "ready" };
   });
-  const audioSource = canonicalMasterUrl(song, master);
   const revision = createHash("sha256").update(JSON.stringify([master.id, audioSource, images, visuals])).digest("hex");
   return { songId: song.id, masterVersionId: master.id, audioSource, visualActs: visuals, revision, status: "ready" };
 }
 
-export async function resolveDreamweaverBinding(db, { songId, memberId = "", customImages }) {
+export async function resolveDreamweaverBinding(db, { songId, memberId = "", customImages, resolveAudioProxy, proxyTimeoutMs = 1500 }) {
   const { song, master } = await loadDreamweaverSong(db, songId, memberId, customImages !== undefined);
+  let fallbackAudioSource = "";
+  if (resolveAudioProxy) {
+    let timer;
+    try {
+      fallbackAudioSource = await Promise.race([
+        (async () => {
+          const [release] = song.source_release_id ? await db.sql`
+            SELECT stream_url FROM halo_release_campaigns
+            WHERE id = ${song.source_release_id} AND status = 'published' AND visibility = 'public'
+            LIMIT 1
+          ` : [];
+          return resolveAudioProxy([master.audio_url, release?.stream_url]);
+        })(),
+        new Promise(resolve => { timer = setTimeout(() => resolve(""), proxyTimeoutMs); })
+      ]);
+    } catch {
+      fallbackAudioSource = "";
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+  let audioSource;
+  try { audioSource = canonicalMasterUrl(song, master); } catch (error) {
+    if (!fallbackAudioSource) throw error;
+    audioSource = fallbackAudioSource;
+  }
+  if (/^https:\/\/(?:drive\.google\.com|docs\.google\.com|drive\.usercontent\.google\.com)\//i.test(audioSource)) {
+    if (!fallbackAudioSource) throw new BindingError("Publish this song in the authorized Drive catalog before opening Dreamweaver", 409);
+    audioSource = fallbackAudioSource;
+  }
   // Compare-and-swap prevents a concurrent reader from overwriting newly uploaded visuals.
   for (let attempt = 0; attempt < 3; attempt++) {
     const [existing] = await db.sql`SELECT * FROM halo_release_assets WHERE song_id = ${song.id}`;
     const images = customImages === undefined ? existing?.custom_images || [] : customImages;
-    const binding = buildBinding(song, master, images);
+    const binding = buildBinding(song, master, images, audioSource);
+    if (fallbackAudioSource && fallbackAudioSource !== audioSource) binding.fallbackAudioSource = fallbackAudioSource;
     if (existing?.revision === binding.revision && existing.status === "ready") return binding;
     const [saved] = await db.sql`
       INSERT INTO halo_release_assets (

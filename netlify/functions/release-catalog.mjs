@@ -3,6 +3,7 @@ import { resolveReleaseArtworkFields } from "../lib/release-artwork.mjs";
 import { resolveDreamweaverPageFlow } from "../lib/dreamweaver-page-manager.mjs";
 import { resolveReleaseLicensing } from "../lib/release-licensing.mjs";
 import { normalizeLyricsSource } from "../../lib/dreamweaver-lyrics.js";
+import { cleanDreamweaverSongId } from "../../lib/dreamweaver-storefront.js";
 
 const CORS_HEADERS = Object.freeze({
   "Access-Control-Allow-Origin": "*",
@@ -294,6 +295,9 @@ export default async function releaseCatalogHandler(request) {
   if (!["GET", "HEAD"].includes(request.method)) {
     return json({ message: "Method not allowed" }, 405, { Allow: "GET, HEAD, OPTIONS" });
   }
+  const params = new URL(request.url).searchParams;
+  const songId = cleanDreamweaverSongId(params.get("songId"));
+  if (params.has("songId") && !songId) return json({ message: "A valid songId is required" }, 400);
 
   try {
     const db = getDatabase();
@@ -439,6 +443,7 @@ export default async function releaseCatalogHandler(request) {
         LIMIT 1
       ) catalog_master ON TRUE
       WHERE release.status = 'published'
+        AND (${songId} = '' OR catalog.catalog_song_id = ${songId})
       ORDER BY release.release_date DESC NULLS LAST, release.updated_at DESC
       LIMIT 200
     `;

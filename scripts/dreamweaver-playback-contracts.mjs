@@ -28,6 +28,29 @@ const release = {
 };
 const mix = { id: "linked-mix-id", title: "Linked mix", creator: { name: "Mix artist" }, audioUrl: "https://halo.test/mix.mp3", durationSeconds: 120 };
 
+{
+  let requestedSongId = songId;
+  const paths = [];
+  const context = {
+    URLSearchParams,
+    RELEASE_CONTEXT_TIMEOUT_MS: 1000,
+    resolveDreamweaverRouteContext: () => ({ requestedSongId }),
+    fetchJsonWithTimeout: async path => {
+      paths.push(path);
+      return { response: { ok: true }, payload: { releases: [release] } };
+    },
+  };
+  vm.createContext(context);
+  vm.runInContext(script.slice(script.indexOf("  async function fetchReleaseCatalog("),
+    script.indexOf("  async function fetchExactMixById(")), context);
+  await context.fetchReleaseCatalog();
+  assert.equal(new URL(paths[0], "https://halo.test").searchParams.get("songId"), songId,
+    "song routes must resolve the exact published song even outside the newest 200 releases");
+  requestedSongId = "";
+  await context.fetchReleaseCatalog();
+  assert.equal(paths[1], "/api/release-catalog", "mix-only routes retain the existing feed lookup");
+}
+
 export function fixture(search, { releases = [release], mixes = [mix], blocked = false, failed = false, failingSources = [], rejectedPlaySources = [], loadingSources = [], deferPlaying = false, unlock = null, pathname = "/dreamweaver/", releaseArtwork = undefined, assetBinding = binding, driveCatalog = { configured: false, tracks: [] }, catalogError = false, storage = { getItem: () => null }, storageGetterError = false, preloader } = {}) {
   class Element extends EventTarget {
     constructor() {

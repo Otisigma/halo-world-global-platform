@@ -1701,7 +1701,9 @@ import { MIX_PRESETS, createMixSeed, deleteUserPreset, describeMixIntent, normal
   }
 
   async function fetchReleaseCatalog() {
-    const { response, payload } = await fetchJsonWithTimeout("/api/release-catalog", {
+    const songId = resolveDreamweaverRouteContext().requestedSongId;
+    const path = songId ? `/api/release-catalog?${new URLSearchParams({ songId })}` : "/api/release-catalog";
+    const { response, payload } = await fetchJsonWithTimeout(path, {
       timeoutMs: RELEASE_CONTEXT_TIMEOUT_MS,
       timeoutMessage: "Dreamweaver timed out while loading release context.",
       headers: { Accept: "application/json" },

@@ -4,7 +4,7 @@ import { resolve } from "node:path";
 import { randomUUID } from "node:crypto";
 import vm from "node:vm";
 import { loadDreamweaverUploadShow, pendingDreamweaverUploadShow } from "../lib/dreamweaver-upload.js";
-import { buildDreamweaverStorefrontPath } from "../lib/dreamweaver-storefront.js";
+import { buildDreamweaverStorefrontPath, cleanDreamweaverSongId } from "../lib/dreamweaver-storefront.js";
 
 const root = resolve(import.meta.dirname, "..");
 const read = path => readFile(resolve(root, path), "utf8");
@@ -34,7 +34,7 @@ assert.match(musicPage, /artist-controlled songs from the shared catalog/i, "sho
 assert.match(musicPage, /<details class="catalog-workspace-details" id="catalogWorkspaceDetails">/, "shop page must expose the shared song catalog inside a native collapsible details panel");
 assert.match(musicPage, /data-src="\/song-catalog\/\?embed=shop"/, "shop page must keep the shared song catalog workspace embeddable beneath the storefront");
 for (const page of [musicPage, uploadPage]) {
-  assert.match(page, /sandbox="allow-same-origin allow-scripts allow-forms allow-modals allow-popups"/, "shop workspace must allow the user-clicked Dreamweaver tab while retaining its sandbox");
+  assert.match(page, /sandbox="allow-same-origin allow-scripts allow-forms allow-modals allow-popups allow-popups-to-escape-sandbox"/, "shop workspace must retain its sandbox but let user-opened Dreamweaver tabs run independently for media exports");
 }
 
 assert.match(musicClient, /\/api\/release-catalog/, "shop client must load the shared release catalog API");
@@ -99,7 +99,7 @@ function publicApi({ releases = [publicRelease], binding = publicBinding, unavai
       requests.push(url);
       assert.equal(options.credentials, "omit", "owner cookies must not authorize public readiness");
       assert.equal(options.cache, "no-store", "publication refresh must not reuse stale responses");
-      return { ok: !unavailable, json: async () => url === "/api/release-catalog" ? { releases } : { binding } };
+      return { ok: !unavailable, json: async () => url.startsWith("/api/release-catalog?") ? { releases } : { binding } };
     },
   };
 }
@@ -130,13 +130,43 @@ for (const [record, api] of [
   assert.equal(show.ready, false);
   assert.equal(show.route, "", "never offer a default or unrelated show when public readiness fails");
 }
-const readyShow = await loadDreamweaverUploadShow(song, publicApi());
+const readyApi = publicApi();
+const readyShow = await loadDreamweaverUploadShow(song, readyApi);
+assert.equal(new URL(readyApi.requests[0], "https://halo.test").searchParams.get("songId"), songId,
+  "public readiness must look up the exact song outside the limited newest-release feed");
 assert.equal(readyShow.ready, true);
 assert.equal(readyShow.route, buildDreamweaverStorefrontPath(songId, { mixId, includeSatelliteFlag: true }));
 const intendedMix = randomUUID();
 const assignedSong = { ...song, dreamweaverSatellite: { route: buildDreamweaverStorefrontPath(songId, { mixId: intendedMix }) } };
 assert.equal((await loadDreamweaverUploadShow(assignedSong, publicApi())).route,
   buildDreamweaverStorefrontPath(songId, { mixId: intendedMix }));
+
+let lookupSql = "";
+let lookupValues = [];
+const releaseHandlerFixture = {
+  URL, cleanDreamweaverSongId, console,
+  json: (body, status = 200) => Response.json(body, { status }),
+  serializeRelease: row => row,
+  getDatabase: () => ({
+    sql: async (strings, ...values) => {
+      lookupSql = strings.join("?");
+      lookupValues = values;
+      // Simulate a song older than the default feed's latest 200 records.
+      return values.includes(songId) ? [publicRelease] : Array.from({ length: 200 }, () => ({ id: randomUUID() }));
+    },
+  }),
+};
+vm.createContext(releaseHandlerFixture);
+vm.runInContext(catalogApi.slice(catalogApi.indexOf("export default async function releaseCatalogHandler("),
+  catalogApi.indexOf("export const config")).replace("export default ", ""), releaseHandlerFixture);
+const exactResponse = await releaseHandlerFixture.releaseCatalogHandler(
+  new Request(`https://halo.test/api/release-catalog?${new URLSearchParams({ songId })}`));
+assert.deepEqual((await exactResponse.json()).releases, [publicRelease]);
+assert.ok(lookupValues.includes(songId));
+assert.match(lookupSql, /WHERE release\.status = 'published'\s+AND \(\? = '' OR catalog\.catalog_song_id = \?\)[\s\S]*LIMIT 200/,
+  "exact-song filtering must precede the feed limit and retain publication gating");
+assert.equal((await releaseHandlerFixture.releaseCatalogHandler(
+  new Request("https://halo.test/api/release-catalog?songId=invalid"))).status, 400);
 
 // Exercise the upload orchestration with IDs actually returned by its API fixture.
 const calls = [];

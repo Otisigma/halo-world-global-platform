@@ -1,7 +1,7 @@
 {
   "name": "catalog-lab",
   "private": true,
-  "description": "Isolated, read-only HALO catalog visual experiment",
+  "description": "Isolated public HALO chart dashboard with memory-only preview annotations",
   "scripts": {
     "test": "node tests/contracts.mjs",
     "build": "npm test"

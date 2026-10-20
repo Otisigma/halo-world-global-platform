@@ -1,8 +1,32 @@
-HALO Catalog Lab — isolated satellite
+HALO Catalog Lab — isolated Living Chart satellite
 
 This follows HALO's directory-local HTML/CSS/JS mini-site pattern but has its
 own static publish boundary. Core routing, navigation, functions, release
 conveyor, catalog stores, and manifests are not modified.
+
+Purpose and working model:
+Transparent public chart metadata lets fans explore participation and creators
+preview peer curation without risking production data. The working UI includes
+search, signal/votes/newest sorting, public/preview ranks, seven-day public
+engagement, a public chart-derived dashboard, an inventory table, and JSON/CSV
+browser downloads. No fake tracks, artist identities, or seeded votes are used.
+
+Votes and nominations are simulated, memory-only annotations:
+- "Preview votes — not submitted to HALO"; each toggle adds/removes one local
+  preview vote and five preview signal points. Original public counts stay intact.
+- Nomination selects an existing published chart entry only. It is an unsaved
+  draft: "Not submitted / no artist verification in this satellite".
+- Reload, Refresh, or Reset preview clears both. No browser storage is used.
+- No artist API key is requested. No verified artist account is implied.
+- The player is a non-playing concept. No media URL is retained or requested.
+
+The existing production vote backend is separate: persistent votes use an
+anonymous hash of network identity (IP and user agent), one per release/day.
+That is not verified registered-listener identity, and votes are not reversible.
+This satellite never invokes that write endpoint; the deployed backend is not
+mutated. Sync-to-Drive/database and secure artist nomination require a separately
+authorized backend feature. This is not a master vault sync or a fraud guarantee.
+PR #429's song upload/Dreamweaver behavior is untouched.
 
 Independent Netlify site:
 1. Create a separate Netlify site for this repository; do not alter the core site.
@@ -13,6 +37,8 @@ Independent Netlify site:
 4. Do not copy core environment variables, database access, identity settings,
    deploy hooks, or secrets. None are required.
 5. Open the new site's root URL. Only public/ is deployed, not the core app.
+These are preview instructions, not a deployment performed by this change.
+Do not deploy or connect this model to the production site's configuration.
 
 Test/build from the repository root:
   npm --prefix satellites/catalog-lab test
@@ -25,20 +51,48 @@ Use a separate origin/port, not the core server, to avoid core service workers.
 The HTML CSP also applies on a static preview; Netlify adds response headers.
 
 Read-only contract:
-- One fixed HTTPS endpoint: the stable public /api/release-catalog.
+- One fixed HTTPS endpoint:
+  https://halo-world-global-platform.netlify.app/api/catalog/chart
 - GET only, credentials omitted, no auth tokens, no redirects, 10-second timeout.
-- Only published, live-visible releases are shown; no private/admin endpoints.
-- Only display metadata is retained. Server media URLs and HTML are never used.
-- No uploads, forms, telemetry, core helpers, service workers, storage writes,
+- The chart endpoint enforces published and chart-eligible releases server-side.
+  Its response omits the eligibility flag; normalization rejects non-published
+  entries and any explicit non-true eligibility/live-visibility flag.
+- The API returns up to 50 chart entries from up to 200 eligible candidates.
+  One default signal snapshot is fetched; sorting/search are local to that
+  returned snapshot, not the full global catalog. Public ranks remain the API's
+  signal ranks. Preview ranks follow the selected local sort and annotations.
+- Source URL and client fetch time are visible; no auto-polling.
+- Seven-day listen telemetry means outbound clicks, not confirmed audio plays;
+  kit opens are separate. Missing metrics are "Not reported", not invented zeros.
+- Dashboard totals cover only returned entries, not private artist analytics.
+- Only allowlisted public display metadata is retained. Server media URLs,
+  artwork, raw Drive/source fields, and HTML are never used.
+- Exports include all returned entries (regardless of search), public counts,
+  source/fetch context, and clearly marked current preview annotations. CSV cells
+  are quoted with quotes escaped; formula/control-leading cells are prefixed
+  with an apostrophe. Object URLs are revoked after browser download.
+- No uploads, forms, telemetry writes, core helpers, service workers, storage writes,
   audio conditioning, publication retries, or manifest persistence.
-- Palette changes and search are memory-only; reload resets visual studies.
-- CSP permits connections only to the catalog endpoint, with forms/media blocked.
+- Palette/search/sort changes are memory-only; reload resets the page.
+- CSP permits connections only to the chart endpoint, with forms/media blocked.
 - Visuals are explicitly local studies, not official release artwork.
 
 Team acceptance check:
-Verify loading, empty catalog, unavailable/retry, title/artist/genre search,
-palette changes, and mobile layout. Inspect Network: the only API request must
-be GET /api/release-catalog without credentials. Reload resets the palette.
+Verify loading, empty chart, unavailable/retry, title/artist/genre search, all
+three sorts, public/preview ranks, vote toggle/reorder/reset, nomination draft
+and clear, JSON/CSV download, palette changes, keyboard controls, and mobile
+layout. Inspect Network: the only API request must be GET /api/catalog/chart
+without credentials. All other interactions must be local (except downloads).
+Reload must clear votes and drafts. Missing/error data must never be replaced
+with demonstration tracks. No audio should load.
+
+Automated coverage (tests/contracts.mjs, dependency-free DOM/fetch doubles):
+Normalization/filtering, safe text rendering, public count immutability, preview
+vote count/reordering, unsaved nomination, reset/refresh, export allowlist and
+formula escaping, loading/empty/error/retry, timeout/redirect handling, no
+credentials/storage/writes, restrictive CSP, and disabled functions.
+Root npm test already includes the isolated satellite suite in pretest.
+
 Do not treat this preview as catalog upload or DJ Council/publication validation.
 Production satellite deployment and live data availability require verification
 on the separate Netlify site; local contracts do not certify production health.

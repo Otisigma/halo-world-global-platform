@@ -4,9 +4,9 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="robots" content="noindex, nofollow">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; connect-src https://halo-world-global-platform.netlify.app/api/release-catalog; img-src 'none'; media-src 'none'; worker-src 'none'; base-uri 'none'; form-action 'none'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; connect-src https://halo-world-global-platform.netlify.app/api/catalog/chart; img-src 'none'; media-src 'none'; worker-src 'none'; base-uri 'none'; form-action 'none'">
   <meta name="referrer" content="no-referrer">
-  <title>HALO Catalog Lab — Satellite Preview</title>
+  <title>HALO Living Chart — Satellite Preview</title>
   <link rel="stylesheet" href="./catalog-lab.css">
   <script type="module" src="./catalog-lab.js"></script>
 </head>
@@ -14,10 +14,11 @@
   <main>
     <header>
       <p class="eyebrow">HALO / Satellite preview</p>
-      <h1>A new light on the catalog.</h1>
-      <p>Explore public release metadata in a visual listening-room preview.</p>
-      <p class="boundary">Read-only connection. No uploads, publishing, audio processing, or changes to core.
-        Visual studies stay here and reset when you reload.</p>
+      <h1>Global Living Chart</h1>
+      <p>Transparent fan participation and creator curation — an isolated working model.</p>
+      <p class="boundary">Read-only connection. <strong>Preview votes — not submitted to HALO.</strong>
+        Votes and nomination drafts exist only in this page's memory; reload resets them.
+        No uploads, publishing, or changes to core.</p>
     </header>
     <section class="controls" aria-label="Preview controls">
       <label for="palette">Visual study</label>
@@ -28,11 +29,59 @@
       </select>
       <label for="search">Find a release</label>
       <input id="search" type="search" placeholder="Title, artist, or genre">
-      <button id="refresh" type="button">Refresh public catalog</button>
+      <label for="sort">Rank snapshot by</label>
+      <select id="sort">
+        <option value="signal">Signal</option>
+        <option value="votes">Votes</option>
+        <option value="newest">Newest</option>
+      </select>
+      <button id="refresh" type="button">Refresh public chart</button>
+      <button id="reset" type="button" disabled>Reset preview</button>
     </section>
-    <p id="status" role="status" aria-live="polite">Connecting to the public catalog…</p>
-    <section id="releases" class="releases" aria-label="Public release visual studies" aria-busy="true"></section>
-    <noscript>This read-only preview needs JavaScript to load public release metadata.</noscript>
+    <p id="source" class="metadata">Source: https://halo-world-global-platform.netlify.app/api/catalog/chart · Not fetched yet</p>
+    <p class="metadata">One public snapshot (up to 50 entries, default signal order). Search and sorting apply only to returned entries, not the entire catalog.
+      Preview signal adds 5 per preview vote. Seven-day “listens” are outbound clicks, not confirmed plays; opens are kit opens.
+      Missing metrics are marked “Not reported”. No automatic polling.</p>
+    <p id="status" role="status" aria-live="polite">Connecting to the public chart…</p>
+    <section aria-labelledby="dashboard-title">
+      <h2 id="dashboard-title">Artist dashboard concept</h2>
+      <p>Public chart-derived summary only — not private artist account analytics. All totals cover this returned snapshot.</p>
+      <p id="summary" class="boundary">No public snapshot loaded.</p>
+      <label for="nomination">Select a published peer track</label>
+      <select id="nomination" disabled aria-describedby="nomination-boundary"><option value="">Choose a track</option></select>
+      <button id="nominate" type="button" disabled>Preview nomination draft</button>
+      <button id="clear-nomination" type="button" disabled>Clear draft</button>
+      <p id="nomination-boundary">Not submitted / no artist verification in this satellite. No API key is requested.</p>
+      <p id="draft" role="status" aria-live="polite">No unsaved nomination draft.</p>
+    </section>
+    <section aria-labelledby="chart-title">
+      <h2 id="chart-title">Living chart · preview ranking</h2>
+      <p>Public rank is the API's signal rank; preview rank follows the selected sort and local toggles.</p>
+      <section id="releases" class="releases" aria-label="Public chart entries" aria-busy="true"></section>
+    </section>
+    <section aria-labelledby="inventory-title">
+      <h2 id="inventory-title">Catalog inventory / export</h2>
+      <p>Public metadata only, not a master vault or a Drive inventory. Downloads include the full returned snapshot and current preview annotations, regardless of search.</p>
+      <button id="export-json" type="button" disabled>Download JSON</button>
+      <button id="export-csv" type="button" disabled>Download CSV</button>
+      <div class="table-scroll" role="region" aria-label="Public chart inventory" tabindex="0">
+        <table>
+          <caption>Returned public chart metadata and local preview annotations</caption>
+          <thead><tr><th scope="col">Preview / public rank</th><th scope="col">Track / artist</th><th scope="col">Genres</th><th scope="col">Release date</th><th scope="col">Public / preview votes</th><th scope="col">Unsaved nomination</th></tr></thead>
+          <tbody id="inventory"></tbody>
+        </table>
+      </div>
+      <p>Sync-to-Drive/database and secure artist nomination require a separately authorized backend feature.</p>
+    </section>
+    <section aria-labelledby="player-title">
+      <h2 id="player-title">Player concept · non-playing preview</h2>
+      <p>No audio is loaded or played. Media and embedded players remain blocked by this satellite's security policy.</p>
+    </section>
+    <footer>
+      <p>The separate production vote API uses an anonymous hashed network identity with one vote per release per day.
+        It is persistent and not reversible; it is not verified registered-listener voting. This satellite never calls it.</p>
+    </footer>
+    <noscript>This read-only preview needs JavaScript to load public chart metadata.</noscript>
   </main>
 </body>
 </html>

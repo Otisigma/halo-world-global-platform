@@ -1,6 +1,6 @@
 :root { color-scheme: dark; font-family: system-ui, sans-serif; background: #090d17; color: #f5f5ff; }
 * { box-sizing: border-box; }
-body { margin: 0; --glow: #7df9d5; --accent: #7064e9; }
+body { margin: 0; --glow: #6ee7f2; --accent: #059669; }
 body.ember { --glow: #ffca80; --accent: #d45572; }
 body.mono { --glow: #eeeeee; --accent: #596574; }
 main { max-width: 1200px; padding: 48px 24px; margin: auto; }
@@ -13,11 +13,22 @@ input, select, button { font: inherit; border: 1px solid #7e8ba5; border-radius:
 input { min-width: 0; max-width: 100%; }
 button { cursor: pointer; }
 button:disabled { opacity: .6; cursor: wait; }
+button[aria-pressed="true"] { border-color: #6ee7b7; color: #6ee7b7; }
 :focus-visible { outline: 3px solid var(--glow); outline-offset: 3px; }
 #status, .metadata, .study-label { color: #c8d0e0; line-height: 1.5; }
 .releases { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(260px, 100%), 1fr)); gap: 24px; }
 .release { padding: 16px; border: 1px solid #394359; border-radius: 16px; background: #101725; overflow-wrap: anywhere; }
 .release h2 { margin-bottom: 8px; }
+.release h3 { font-size: 1.3rem; margin-bottom: 8px; }
+.rank { color: #ffd18a; font-weight: 700; }
+main > section { margin-block: 32px; }
+#nomination { max-width: 100%; }
+.table-scroll { overflow-x: auto; margin-top: 20px; }
+table { border-collapse: collapse; width: 100%; text-align: left; }
+caption { text-align: left; padding-bottom: 12px; color: #c8d0e0; }
+th, td { padding: 12px; border-bottom: 1px solid #394359; min-width: 120px; overflow-wrap: anywhere; }
+td:nth-child(2) { min-width: 220px; }
+footer { border-top: 1px solid #394359; color: #c8d0e0; margin-top: 32px; }
 .artist { color: var(--glow); }
 .visual { aspect-ratio: 1; border-radius: 10px; display: grid; place-items: center; font-size: 2.5rem; font-weight: 800; letter-spacing: .2em; color: #fff; text-shadow: 0 2px 8px #000; }
 .visual-0 { background: radial-gradient(ellipse at 20% 10%, var(--glow), transparent 55%), linear-gradient(150deg, #121a2c, var(--accent)); }

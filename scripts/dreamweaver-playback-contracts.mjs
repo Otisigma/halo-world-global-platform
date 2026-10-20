@@ -28,6 +28,29 @@ const release = {
 };
 const mix = { id: "linked-mix-id", title: "Linked mix", creator: { name: "Mix artist" }, audioUrl: "https://halo.test/mix.mp3", durationSeconds: 120 };
 
+{
+  let requestedSongId = songId;
+  const paths = [];
+  const context = {
+    URLSearchParams,
+    RELEASE_CONTEXT_TIMEOUT_MS: 1000,
+    resolveDreamweaverRouteContext: () => ({ requestedSongId }),
+    fetchJsonWithTimeout: async path => {
+      paths.push(path);
+      return { response: { ok: true }, payload: { releases: [release] } };
+    },
+  };
+  vm.createContext(context);
+  vm.runInContext(script.slice(script.indexOf("  async function fetchReleaseCatalog("),
+    script.indexOf("  async function fetchExactMixById(")), context);
+  await context.fetchReleaseCatalog();
+  assert.equal(new URL(paths[0], "https://halo.test").searchParams.get("songId"), songId,
+    "song routes must resolve the exact published song even outside the newest 200 releases");
+  requestedSongId = "";
+  await context.fetchReleaseCatalog();
+  assert.equal(paths[1], "/api/release-catalog", "mix-only routes retain the existing feed lookup");
+}
+
 export function fixture(search, { releases = [release], mixes = [mix], blocked = false, failed = false, failingSources = [], rejectedPlaySources = [], loadingSources = [], deferPlaying = false, unlock = null, pathname = "/dreamweaver/", releaseArtwork = undefined, assetBinding = binding, driveCatalog = { configured: false, tracks: [] }, catalogError = false, storage = { getItem: () => null }, storageGetterError = false, preloader } = {}) {
   class Element extends EventTarget {
     constructor() {
@@ -130,12 +153,13 @@ export function fixture(search, { releases = [release], mixes = [mix], blocked =
     elements.audio.addEventListener("ended", handleCatalogEnded);
     globalThis.player = { state, chapters, initializeDreamweaver, generateCatalogSet, advanceCatalogTrack, retryCatalogProxy, shouldPromptLocalUpload, resolvePrimaryPlaybackMix, resolvePrimaryAudio, handleSoundUnlock, togglePlayback, startUnlockedShow, loadImage, activateLocalMixFile, armRemoteAudioWatchdog };
   })();`, context);
-  return { ...context.player, nodes, requests, timers };
+  return { ...context.player, nodes, requests, timers, location };
 }
 
 for (const search of [
   `?song=${songId}`,
   `?song=${songId}&mix=${DREAMWEAVER_STOREFRONT_MIX_ID}&satellite=dreamweaver`,
+  `?song=${songId}&mix=linked-mix-id&satellite=dreamweaver`,
   `?song=${songId}&experience=studio`
 ]) {
   const unrelatedRelease = {
@@ -160,9 +184,14 @@ for (const search of [
   assert.deepEqual(f.requests, [`/api/dreamweaver-assets?songId=${songId}`], "song preload binds the master without fetching unrelated mixes");
   assert.deepEqual(Array.from(f.chapters, chapter => chapter.image), binding.visualActs.map(visual => visual.uri));
   assert.equal(f.nodes.get("showShell").hidden, !search.includes("experience=studio"));
+  const params = f.location.searchParams;
+  assert.equal(params.get("song"), songId);
+  const requestedParams = new URLSearchParams(search);
+  if (requestedParams.has("mix")) assert.equal(params.get("mix"), requestedParams.get("mix"));
+  if (requestedParams.has("satellite")) assert.equal(params.get("satellite"), "dreamweaver");
 }
 
-for (const search of ["?mix=linked-mix-id", `?mix=linked-mix-id&song=${songId}`, "?mix=linked-mix-id&satellite=dreamweaver"]) {
+for (const search of ["?mix=linked-mix-id", "?mix=linked-mix-id&satellite=dreamweaver"]) {
   const f = fixture(search, { releases: [] });
   await f.initializeDreamweaver();
   assert.equal(f.nodes.get("showAudio").src, mix.audioUrl);
@@ -176,7 +205,7 @@ for (const search of ["?mix=linked-mix-id", `?mix=linked-mix-id&song=${songId}`,
 }
 
 for (const releases of [[], [{ ...release, streamUrl: "", dreamweaverPayload: { ...release.dreamweaverPayload, audioStreamUrl: null } }]]) {
-  const f = fixture(`?song=${songId}`, { releases, assetBinding: null });
+  const f = fixture(`?song=${songId}&mix=linked-mix-id&satellite=dreamweaver`, { releases, assetBinding: null });
   await f.initializeDreamweaver();
   assert.equal(f.nodes.get("showAudio").loads, 0);
   assert.equal(f.shouldPromptLocalUpload(), true);

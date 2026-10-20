@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
+import { randomUUID } from "node:crypto";
+import vm from "node:vm";
+import { loadDreamweaverUploadShow, pendingDreamweaverUploadShow } from "../lib/dreamweaver-upload.js";
+import { buildDreamweaverStorefrontPath, cleanDreamweaverSongId } from "../lib/dreamweaver-storefront.js";
 
 const root = resolve(import.meta.dirname, "..");
 const read = path => readFile(resolve(root, path), "utf8");
@@ -29,7 +33,9 @@ assert.match(musicPage, /Listen\. Buy\.[\s\S]*Share\./, "shop page must headline
 assert.match(musicPage, /artist-controlled songs from the shared catalog/i, "shop page must keep the shared catalog as the public source-of-truth copy");
 assert.match(musicPage, /<details class="catalog-workspace-details" id="catalogWorkspaceDetails">/, "shop page must expose the shared song catalog inside a native collapsible details panel");
 assert.match(musicPage, /data-src="\/song-catalog\/\?embed=shop"/, "shop page must keep the shared song catalog workspace embeddable beneath the storefront");
-assert.match(musicPage, /sandbox="allow-same-origin allow-scripts allow-forms allow-modals"/, "shop page must sandbox the embedded shared song catalog workspace explicitly");
+for (const page of [musicPage, uploadPage]) {
+  assert.match(page, /sandbox="allow-same-origin allow-scripts allow-forms allow-modals allow-popups allow-popups-to-escape-sandbox"/, "shop workspace must retain its sandbox but let user-opened Dreamweaver tabs run independently for media exports");
+}
 
 assert.match(musicClient, /\/api\/release-catalog/, "shop client must load the shared release catalog API");
 assert.match(musicClient, /release\.catalog/, "shop client must read shared song-catalog metadata from the release API");
@@ -70,3 +76,177 @@ assert.match(catalogApi, /catalog_master_uploaded/, "release catalog API must re
 assert.match(uploadClient, /created\.masterVersionId \|\| created\.versionIds\?\.sale_master/, "upload controller must route source audio into the canonical master copy version");
 
 console.log("Music upload storefront contracts passed.");
+
+const songId = randomUUID();
+const mixId = randomUUID();
+const masterVersionId = randomUUID();
+const song = { id: songId, pipelineStatus: "published", rightsStatus: "cleared" };
+const publicRelease = {
+  id: mixId, status: "published", isLiveVisible: true,
+  catalog: { songId, masterCopy: { uploaded: true, versionId: masterVersionId } },
+  dreamweaverHubUrl: buildDreamweaverStorefrontPath(songId, { mixId }),
+};
+const publicBinding = {
+  songId, masterVersionId, status: "ready",
+  audioSource: `/api/song-catalog/audio?versionId=${masterVersionId}&dreamweaver=1&songId=${songId}`,
+  visualActs: Array.from({ length: 4 }, () => ({ uri: "/assets/cover.jpg" })),
+};
+function publicApi({ releases = [publicRelease], binding = publicBinding, unavailable = false } = {}) {
+  const requests = [];
+  return {
+    requests,
+    fetchImpl: async (url, options) => {
+      requests.push(url);
+      assert.equal(options.credentials, "omit", "owner cookies must not authorize public readiness");
+      assert.equal(options.cache, "no-store", "publication refresh must not reuse stale responses");
+      return { ok: !unavailable, json: async () => url.startsWith("/api/release-catalog?") ? { releases } : { binding } };
+    },
+  };
+}
+for (const pipelineStatus of ["uploaded", "needs_assets", "dreamweaver_in_progress", "approved"]) {
+  const api = publicApi();
+  const show = await loadDreamweaverUploadShow({ ...song, pipelineStatus }, api);
+  assert.equal(show.ready, false);
+  assert.equal(show.route, "");
+  assert.match(show.message, /Processing.*rights and review/);
+  assert.equal(api.requests.length, 0, "build-active and approved are not publication");
+}
+for (const [record, api] of [
+  [{ ...song, id: "invalid" }, publicApi()],
+  [{ ...song, rightsStatus: "needs_review" }, publicApi()],
+  [song, publicApi({ releases: [] })],
+  [song, publicApi({ releases: [{ ...publicRelease, catalog: { ...publicRelease.catalog, songId: randomUUID() } }] })],
+  [song, publicApi({ releases: [{ ...publicRelease, isLiveVisible: false }] })],
+  [song, publicApi({ releases: [{ ...publicRelease, status: "draft" }] })],
+  [song, publicApi({ releases: [{ ...publicRelease, catalog: { songId, masterCopy: { uploaded: false } } }] })],
+  [song, publicApi({ binding: { ...publicBinding, songId: randomUUID() } })],
+  [song, publicApi({ binding: { ...publicBinding, masterVersionId: randomUUID() } })],
+  [song, publicApi({ binding: { ...publicBinding, status: "pending" } })],
+  [song, publicApi({ binding: { ...publicBinding, audioSource: "" } })],
+  [song, publicApi({ unavailable: true })],
+  [song, { fetchImpl: async () => { throw new Error("Network unavailable"); } }],
+]) {
+  const show = await loadDreamweaverUploadShow(record, api);
+  assert.equal(show.ready, false);
+  assert.equal(show.route, "", "never offer a default or unrelated show when public readiness fails");
+}
+const readyApi = publicApi();
+const readyShow = await loadDreamweaverUploadShow(song, readyApi);
+assert.equal(new URL(readyApi.requests[0], "https://halo.test").searchParams.get("songId"), songId,
+  "public readiness must look up the exact song outside the limited newest-release feed");
+assert.equal(readyShow.ready, true);
+assert.equal(readyShow.route, buildDreamweaverStorefrontPath(songId, { mixId, includeSatelliteFlag: true }));
+const intendedMix = randomUUID();
+const assignedSong = { ...song, dreamweaverSatellite: { route: buildDreamweaverStorefrontPath(songId, { mixId: intendedMix }) } };
+assert.equal((await loadDreamweaverUploadShow(assignedSong, publicApi())).route,
+  buildDreamweaverStorefrontPath(songId, { mixId: intendedMix }));
+
+let lookupSql = "";
+let lookupValues = [];
+const releaseHandlerFixture = {
+  URL, cleanDreamweaverSongId, console,
+  json: (body, status = 200) => Response.json(body, { status }),
+  serializeRelease: row => row,
+  getDatabase: () => ({
+    sql: async (strings, ...values) => {
+      lookupSql = strings.join("?");
+      lookupValues = values;
+      // Simulate a song older than the default feed's latest 200 records.
+      return values.includes(songId) ? [publicRelease] : Array.from({ length: 200 }, () => ({ id: randomUUID() }));
+    },
+  }),
+};
+vm.createContext(releaseHandlerFixture);
+vm.runInContext(catalogApi.slice(catalogApi.indexOf("export default async function releaseCatalogHandler("),
+  catalogApi.indexOf("export const config")).replace("export default ", ""), releaseHandlerFixture);
+const exactResponse = await releaseHandlerFixture.releaseCatalogHandler(
+  new Request(`https://halo.test/api/release-catalog?${new URLSearchParams({ songId })}`));
+assert.deepEqual((await exactResponse.json()).releases, [publicRelease]);
+assert.ok(lookupValues.includes(songId));
+assert.match(lookupSql, /WHERE release\.status = 'published'\s+AND \(\? = '' OR catalog\.catalog_song_id = \?\)[\s\S]*LIMIT 200/,
+  "exact-song filtering must precede the feed limit and retain publication gating");
+assert.equal((await releaseHandlerFixture.releaseCatalogHandler(
+  new Request("https://halo.test/api/release-catalog?songId=invalid"))).status, 400);
+
+// Exercise the upload orchestration with IDs actually returned by its API fixture.
+const calls = [];
+const uploadFixture = {
+  pendingDreamweaverUploadShow, loadDreamweaverUploadShow,
+  setControllerPhase() {}, buildNotes: () => "", setMessage() {},
+  apiJson: async (url, payload) => {
+    calls.push({ url, payload });
+    if (payload.action === "create_project") return { songId, masterVersionId };
+    return { pipelineStatus: "dreamweaver_in_progress", departments: {} };
+  },
+  uploadAudio: async (id, versionId) => { assert.equal(id, songId); assert.equal(versionId, masterVersionId); },
+  uploadArtwork: async id => assert.equal(id, songId),
+  loadCatalogSong: async () => ({ ...song, pipelineStatus: "dreamweaver_in_progress" }),
+};
+vm.createContext(uploadFixture);
+vm.runInContext(uploadClient.slice(uploadClient.indexOf("async function processPackage("), uploadClient.indexOf("async function handleRuntimeRetry(")), uploadFixture);
+const result = await uploadFixture.processPackage({
+  artistName: "Contract artist", title: "Returned upload", file: { name: "master.wav" },
+  artworkFile: { name: "cover.jpg" }, position: 1, total: 1,
+});
+assert.equal(result.songId, songId);
+assert.equal(result.dreamweaverShow.ready, false);
+assert.equal(calls.at(-1).payload.toStage, "dreamweaver_in_progress");
+assert.ok(!calls.some(call => call.payload.toStage === "published"), "upload must not auto-publish");
+const resultNodes = { resultsList: { innerHTML: "" } };
+const renderFixture = {
+  state: { results: [result] }, elements: resultNodes,
+  pendingDreamweaverUploadShow,
+  escapeHtml: value => String(value ?? "").replaceAll("&", "&amp;").replaceAll('"', "&quot;"),
+  stageChip: () => "",
+};
+vm.createContext(renderFixture);
+vm.runInContext(uploadClient.slice(uploadClient.indexOf("function renderResults("), uploadClient.indexOf("function isDreamweaverExperienceUrl(")), renderFixture);
+renderFixture.renderResults();
+assert.match(resultNodes.resultsList.innerHTML, /disabled>Open this song in Dreamweaver — not ready/);
+assert.doesNotMatch(resultNodes.resultsList.innerHTML, /href="\/dreamweaver/);
+result.dreamweaverShow = readyShow;
+renderFixture.renderResults();
+assert.match(resultNodes.resultsList.innerHTML, /Open this song in Dreamweaver ↗/);
+const renderedRoute = resultNodes.resultsList.innerHTML.match(/href="([^"]+)"[^>]*>Open this song/)[1].replaceAll("&amp;", "&");
+assert.equal(renderedRoute, buildDreamweaverStorefrontPath(songId, { mixId }));
+assert.deepEqual(Object.fromEntries(new URL(renderedRoute, "https://halo.test").searchParams),
+  { mix: mixId, song: songId, satellite: "dreamweaver" });
+const catalogClient = await read("song-catalog/song-catalog.js");
+const catalogPage = await read("song-catalog/index.html");
+assert.match(catalogClient, /loadDreamweaverUploadShow\(song\)/, "active upload workspace must use the same public readiness check");
+assert.match(catalogClient, /revision !== dreamweaverShowRevision/, "stale checks must not enable another song's action");
+assert.match(catalogPage, /id="songShowStatus" role="status"/);
+assert.match(catalogPage, /id="checkSongShow"/);
+const showNodes = new Map();
+const getShowNode = selector => {
+  if (!showNodes.has(selector)) showNodes.set(selector, {
+    hidden: false, textContent: "", href: "",
+    removeAttribute(name) { if (name === "href") this.href = ""; },
+  });
+  return showNodes.get(selector);
+};
+let selected = song;
+let resolveOldCheck;
+const workspaceFixture = {
+  $: getShowNode, pendingDreamweaverUploadShow, selectedSong: () => selected,
+  postEmbeddedHeight() {},
+  loadDreamweaverUploadShow: () => new Promise(resolve => { resolveOldCheck = resolve; }),
+};
+vm.createContext(workspaceFixture);
+vm.runInContext(catalogClient.slice(catalogClient.indexOf("let dreamweaverShowRevision"), catalogClient.indexOf("async function requestSignIn(")), workspaceFixture);
+const oldCheck = workspaceFixture.renderDreamweaverShow(song);
+assert.equal(getShowNode("#songSatelliteLink").hidden, true);
+selected = { ...song, id: randomUUID(), pipelineStatus: "dreamweaver_in_progress" };
+workspaceFixture.loadDreamweaverUploadShow = async record => pendingDreamweaverUploadShow(record);
+await workspaceFixture.renderDreamweaverShow(selected);
+resolveOldCheck(readyShow);
+await oldCheck;
+assert.equal(getShowNode("#songSatelliteLink").hidden, true, "a stale successful check must not enable a different selected song");
+assert.equal(getShowNode("#songSatelliteLink").href, "");
+selected = song;
+workspaceFixture.loadDreamweaverUploadShow = async () => readyShow;
+await workspaceFixture.renderDreamweaverShow(song);
+assert.equal(getShowNode("#songSatelliteLink").hidden, false);
+assert.equal(getShowNode("#songSatelliteLink").href, readyShow.route);
+assert.equal(getShowNode("#songShowNotReady").hidden, true);
+console.log("Upload-to-Dreamweaver lifecycle, anonymous readiness, returned-ID CTA and canonical route contracts passed (mocked APIs).");

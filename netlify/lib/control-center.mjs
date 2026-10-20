@@ -1,6 +1,7 @@
 import OpenAI from "openai";
 import { actorIdFor } from "./halo-x.mjs";
 import { AGENT_MODEL, AGENT_ROLES } from "./agent-team.mjs";
+import { requestPreflight } from "../../lib/request-preflight.js";
 
 const TARGETS = new Set(["council", ...Object.keys(AGENT_ROLES), "mirror"]);
 const CATEGORIES = new Set(["strategy", "growth", "creator", "community", "product", "operations", "risk"]);
@@ -90,7 +91,7 @@ async function loadCommandContext(db) {
   };
 }
 
-async function generateReply(db, target, message, requestProposal) {
+async function generateReply(db, target, message, requestProposal, request) {
   const context = await loadCommandContext(db);
   const role = target === "council"
     ? "You are Mirror speaking for the full HALO specialist council. Coordinate distinct perspectives and identify the next evidence-backed move."
@@ -103,11 +104,11 @@ async function generateReply(db, target, message, requestProposal) {
     messages: [
       {
         role: "system",
-        content: `${role} Respond directly to the owner using only the supplied operational context. Be concise, candid, and specific about uncertainty. You may propose one measurable action when useful, but never claim an external action has already happened. Money, publishing, contracts, account changes, messages to people, and production changes always require explicit human approval. Return JSON only.`
+        content: `${role} Respond directly to the owner using only the supplied operational context. Preserve the supplied requested approach; never reject or substitute it without a concrete blocker and asking the owner. Static checks and mocks do not establish live behavior. Be concise, candid, and specific about uncertainty. You may propose one measurable action when useful, but never claim an external action has already happened. Money, publishing, contracts, account changes, messages to people, and production changes always require explicit human approval. Return JSON only.`
       },
       {
         role: "user",
-        content: JSON.stringify({ ownerInstruction: message, actionProposalRequested: requestProposal, operationalContext: context })
+        content: JSON.stringify({ ownerInstruction: message, request, actionProposalRequested: requestProposal, operationalContext: context })
       }
     ],
     response_format: {
@@ -143,9 +144,12 @@ function serializeCommand(row) {
 
 export async function createAgentCommand(db, user, payload) {
   const target = TARGETS.has(payload?.targetAgent) ? payload.targetAgent : "council";
-  const message = cleanText(payload?.message, 3000);
+  const message = typeof payload?.message === "string" ? payload.message : "";
   const requestProposal = payload?.requestProposal !== false;
   if (message.length < 2) return null;
+  const preflight = requestPreflight({ ...payload?.request, originalRequest: message }, {
+    proposedApproach: payload?.proposedApproach
+  });
 
   const inserted = await db.sql`
     INSERT INTO halo_agent_commands (requester_key, target_agent, message)
@@ -155,12 +159,20 @@ export async function createAgentCommand(db, user, payload) {
   const commandId = Number(inserted[0].id);
   let result;
   try {
-    result = await generateReply(db, target, message, requestProposal);
-    if (!result.response) throw new Error("empty_response");
+    if (payload?.approvePaidCalls !== true || preflight.status === "blocked") {
+      result = fallbackReply(target, message, requestProposal);
+      result.response = `${preflight.status}: ${preflight.nextStep} Requested approach: ${preflight.request.requestedApproach || "Awaiting owner clarification"}. No paid synthesis or implementation was run.`;
+    } else {
+      preflight.paidCalls = 1;
+      preflight.expectedCost = "Owner opted into one advisory synthesis attempt; provider charges may apply.";
+      result = await generateReply(db, target, message, requestProposal, preflight.request);
+      if (!result.response) throw new Error("empty_response");
+    }
   } catch (error) {
     console.error("HALO control center synthesis failed", error instanceof Error ? error.message : "unknown error");
     result = fallbackReply(target, message, requestProposal);
   }
+  result.assessment = JSON.stringify({ preflight, synthesis: result.assessment });
 
   let actionId = null;
   if (result.action) {

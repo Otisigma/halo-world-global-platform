@@ -79,7 +79,7 @@ The system cannot initiate a new ChatGPT conversation or proactively message the
 
 ## Private control center
 
-The owner observatory at `/control-center` now includes a persistent command channel for the full council or any individual specialist. Each instruction is stored in Netlify Database, answered using the latest council report, unresolved issue signals, action state, and team memory, and shown in the private thread with a timestamp and accountable specialist.
+The owner observatory at `/control-center` now includes a persistent command channel for the full council or any individual specialist. Each instruction is stored in Netlify Database and shown in the private thread with a timestamp and accountable specialist. HALO Guard runs deterministic request preflight first, preserving the original request and requested approach and surfacing missing acceptance fields. Direct-command paid synthesis is off by default; an explicit authenticated-owner `approvePaidCalls: true` on a complete structured request opts into advisory synthesis using the latest council report, unresolved issues, action state, and team memory. It grants no implementation/deployment authority. See `HALO_AI_COMMITTEE_WORKFLOW.md` for the pre-Builder gate and `/halo-shield/preflight.html` for the isolated owner request/Drive comparison.
 
 When a response identifies useful work, the system can create a linked proposal in the existing human decision queue. The proposal remains blocked behind owner approval and records its status back into the command thread. The same screen combines council runs, maintenance sweeps, unresolved issues, and action changes into a live operations feed that refreshes every 45 seconds while the page is visible.
 

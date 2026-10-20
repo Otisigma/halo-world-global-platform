@@ -136,6 +136,8 @@ import { MIX_PRESETS, createMixSeed, deleteUserPreset, describeMixIntent, normal
     catalogGenerate: document.getElementById("generateCatalogSet"),
     catalogAllowRecent: document.getElementById("catalogAllowRecent"),
     catalogStatus: document.getElementById("catalogSetStatus"),
+    catalogSyncStatus: document.getElementById("catalogSyncStatus"),
+    catalogLinkedNotice: document.getElementById("catalogLinkedNotice"),
     catalogSetlist: document.getElementById("catalogSetlist"),
     catalogCurator: document.getElementById("catalogCurator"),
     catalogPrompt: document.getElementById("catalogMixPrompt"),
@@ -3138,22 +3140,33 @@ import { MIX_PRESETS, createMixSeed, deleteUserPreset, describeMixIntent, normal
     return validated ? safeMediaUrl(validated) : "";
   }
 
+  function setCatalogSyncStatus(status, message) {
+    if (!elements.catalogSyncStatus) return;
+    elements.catalogSyncStatus.dataset.state = status;
+    elements.catalogSyncStatus.textContent = message;
+  }
+
   async function loadDriveCatalog() {
+    setCatalogSyncStatus("loading", "CATALOG LOADING");
+    elements.catalogStatus.textContent = "Loading the canonical Google Drive Vault catalog…";
     try {
       const { response, payload } = await fetchJsonWithTimeout("/api/drive-catalog", {
         timeoutMs: RELEASE_CONTEXT_TIMEOUT_MS,
         headers: { Accept: "application/json" }, credentials: "same-origin"
       });
-      if (!response.ok || typeof payload.configured !== "boolean") throw new Error("Catalog unavailable");
+      if (!response.ok || typeof payload.configured !== "boolean" || !Array.isArray(payload.tracks)) throw new Error("Catalog unavailable");
       state.catalogUnavailable = false;
       state.driveCatalog = payload.configured ? payload : null;
+      setCatalogSyncStatus(!payload.configured ? "standby" : payload.tracks.length ? "synced" : "empty",
+        !payload.configured ? "CATALOG STANDBY" : payload.tracks.length ? "CATALOG SYNCED" : "CATALOG EMPTY");
       elements.catalogStatus.textContent = payload.configured
         ? "Choose 20 or 60 minutes to curate the canonical catalog."
         : "Catalog curator is on standby. Existing song and mix playback remains available.";
       return payload.configured;
     } catch {
       state.catalogUnavailable = true;
-      state.driveCatalog = { configured: true, tracks: [] };
+      state.driveCatalog = null;
+      setCatalogSyncStatus("error", "CATALOG UNAVAILABLE");
       elements.catalogStatus.textContent = "Catalog temporarily unavailable — no substitute catalog loaded. Try again or upload a local mix.";
       setReleasePlaybackState("unavailable");
       return true;
@@ -3226,14 +3239,16 @@ import { MIX_PRESETS, createMixSeed, deleteUserPreset, describeMixIntent, normal
   }
 
   async function curateCatalogSet() {
-    elements.catalogStatus.textContent = "Reading your mix request…";
+    elements.catalogStatus.textContent = "Analyzing mood & style profile…";
+    await new Promise(resolve => window.requestAnimationFrame(resolve));
     const parsed = parseMixPrompt(String(elements.catalogPrompt?.value ?? ""), {
       presetId: String(elements.catalogPreset?.value ?? ""), userPresets: readUserPresets(catalogStorage())
     });
     if (parsed.intent.durationMinutes && elements.catalogDuration) elements.catalogDuration.value = String(parsed.intent.durationMinutes);
     if ((!state.driveCatalog || state.catalogUnavailable) && !await loadDriveCatalog()) return;
     if (state.catalogUnavailable) return;
-    elements.catalogStatus.textContent = "Curating tracks from the catalog…";
+    elements.catalogStatus.textContent = "Ranking tracks by BPM, energy curve and rotation status…";
+    await new Promise(resolve => window.requestAnimationFrame(resolve));
     const tracks = (state.driveCatalog?.tracks || []).filter(track => playableCatalogUrl(track.streamUrl));
     const minutes = elements.catalogDuration.value === "20" ? 20 : 60;
     const seed = normalizeMixSeed(String(elements.catalogSeed?.value ?? "")) || createMixSeed();
@@ -3251,8 +3266,9 @@ import { MIX_PRESETS, createMixSeed, deleteUserPreset, describeMixIntent, normal
     state.catalogIndex = -1;
     if (elements.catalogIntent) elements.catalogIntent.textContent = `${describeMixIntent(intent)} · Variation code: ${seed}`;
     if (elements.catalogNotes) elements.catalogNotes.textContent = parsed.notes.join(" ");
-    elements.catalogSetlist.innerHTML = state.catalogSet.tracks.map(track =>
-      `<li>${escapeHtml(track.title)} — ${escapeHtml(track.artist)} · ${escapeHtml(track.role)} · ${escapeHtml(String(track.bpm))} BPM · ${escapeHtml(track.energyLevel)} · ${formatTime(track.playDurationSeconds)}</li>`
+    elements.catalogStatus.textContent = "Finalizing set sequence with existing stream / proxy fallback routing…";
+    elements.catalogSetlist.innerHTML = state.catalogSet.tracks.map((track, index) =>
+      `<li><span class="catalog-curator__slot">#${String(index + 1).padStart(2, "0")}</span><div><strong>${escapeHtml(track.title)}</strong><span>${escapeHtml(track.artist)}</span><small>${escapeHtml(String(track.bpm))} BPM · ${escapeHtml(track.role)} · ${escapeHtml(track.energyLevel)} · ${formatTime(track.playDurationSeconds)}</small></div><button type="button" data-catalog-slot="${index}" aria-label="Play stream: ${escapeHtml(track.title)}">Play stream</button></li>`
     ).join("");
     const avoided = state.catalogSet.avoidedTrackCount ? ` ${state.catalogSet.avoidedTrackCount} track(s) skipped by your avoid list.` : "";
     elements.catalogStatus.textContent = `${formatTime(state.catalogSet.durationSeconds)} / ${minutes} minutes scheduled.${
@@ -3270,17 +3286,19 @@ import { MIX_PRESETS, createMixSeed, deleteUserPreset, describeMixIntent, normal
       elements.audio.pause();
       state.audioSourceMode = "empty";
     }
+    if (elements.catalogLinkedNotice) elements.catalogLinkedNotice.hidden = true;
     await advanceCatalogTrack();
   }
 
-  async function advanceCatalogTrack() {
-    if (state.catalogAdvancing || !state.catalogSet || state.audioSourceMode === "local") return;
+  async function advanceCatalogTrack(slot = state.catalogIndex + 1) {
+    if (state.catalogAdvancing || !state.catalogSet || state.audioSourceMode === "local"
+      || !Number.isInteger(slot) || slot < 0 || slot > state.catalogSet.tracks.length) return;
     state.catalogAdvancing = true;
     try {
-      const track = state.catalogSet.tracks[++state.catalogIndex];
+      state.catalogIndex = slot;
+      const track = state.catalogSet.tracks[slot];
       if (!track) {
         elements.audio.pause();
-        state.catalogSet = null;
         setReleasePlaybackState("ready");
         elements.catalogStatus.textContent += " Playback finished.";
         return;
@@ -3339,7 +3357,11 @@ import { MIX_PRESETS, createMixSeed, deleteUserPreset, describeMixIntent, normal
     void flushQueuedAudioFeedback();
     const hasLegacyLink = Boolean(routeContext.requestedSongId || routeContext.requestedMixToken || routeContext.requestedStorySlug);
     const catalogAvailable = !hasLegacyLink && await loadDriveCatalog();
-    if (hasLegacyLink) elements.catalogStatus.textContent = "Generate a set to switch from this linked song or mix to the catalog curator.";
+    if (hasLegacyLink) {
+      setCatalogSyncStatus("standby", "CATALOG STANDBY");
+      if (elements.catalogLinkedNotice) elements.catalogLinkedNotice.hidden = false;
+      elements.catalogStatus.textContent = "Generate a set to switch from this linked song or mix to the catalog curator.";
+    }
     if (!hasLegacyLink && catalogAvailable) {
       const minutes = new URLSearchParams(location.search).get("curate");
       if (minutes === "20" || minutes === "60") {
@@ -3385,6 +3407,11 @@ import { MIX_PRESETS, createMixSeed, deleteUserPreset, describeMixIntent, normal
   elements.catalogPreset?.addEventListener("change", describeSelectedPreset);
   elements.catalogPresetSave?.addEventListener("click", saveCatalogPreset);
   elements.catalogPresetDelete?.addEventListener("click", deleteCatalogPreset);
+  elements.catalogSetlist?.addEventListener("click", event => {
+    const button = event.target.closest("button[data-catalog-slot]");
+    if (!button || state.catalogGenerating || state.catalogAdvancing) return;
+    void advanceCatalogTrack(Number(button.dataset.catalogSlot));
+  });
   renderCatalogPresets();
   elements.audio.addEventListener("playing", handleCatalogPlaying);
   elements.audio.addEventListener("timeupdate", handleCatalogTimeupdate);

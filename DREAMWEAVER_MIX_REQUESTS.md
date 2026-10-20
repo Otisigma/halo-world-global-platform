@@ -13,6 +13,10 @@ Dreamweaver can curate a 20- or 60-minute set from the published Google Drive ca
 4. Choose **20 minutes** or **60 minutes**. If the request includes "20 minutes", "60 minutes" or "1 hour", that setting updates the selector.
 5. Select **Generate & play set**. The status line shows progress. Before playback starts, Dreamweaver lists the generated tracks and shows a summary of how it read your request. It also lists any parts of the request it didn't understand.
 
+The catalog badge reports **loading**, **standby** (unconfigured or a linked item hasn't requested the catalog yet), **empty**, or **unavailable** as appropriate. **Catalog synced** means the canonical response was successfully loaded with tracks; it doesn't guarantee that every stream is currently playable. Loading failures never substitute another catalog. On a linked song/mix route, generating a playable set explicitly switches playback to the curator; a failed or empty result leaves the linked item in place.
+
+Each setlist row includes its slot, title, artist, BPM, energy role and scheduled duration. **Play stream** starts that slot through the existing player and continues the sequence, using the allowlisted proxy fallback when available. No raw Drive URLs or preview iframes are used.
+
 ### What the request understands
 
 The parser is local and rule-based (`lib/mix-intent.js`). No request text, catalog data or audio is sent to an external AI service. It recognizes:
@@ -46,6 +50,13 @@ A track counts as played only after its audio actually starts. Generating or loa
 
 Built-in presets are defined in `MIX_PRESETS` in `lib/mix-intent.js`. Each preset has an `id`, `label`, `aliases`, `description`, and settings for `moods`, `genres`, `bpmRange` and `arc` (energy levels 1–4 for `opening`, `build`, `peak` and `closing`; the levels can't go down), plus `preferFresh`. Use only words from `MOOD_VOCABULARY` or `GENRE_VOCABULARY` in a preset. To add or change a preset, edit that list, open a pull request and run `node scripts/mix-intent-contracts.mjs`.
 
+Two dashboard profiles are HALO-defined settings, not third-party artist imitations:
+
+| Profile | Genre / mood | BPM | Opening → build → peak → closing |
+| --- | --- | --- | --- |
+| The French Connection (Deep / Hypnotic) | Deep / melodic house; hypnotic, groovy, late night | 118–124 | 1 → 2 → 2 → 3 |
+| Halo X Club Anthem Sprint | House, tech house, afro house; uplifting, euphoric; prefer fresh | 124–132 | 2 → 3 → 4 → 4 |
+
 ### Your presets (browser)
 
 Open **Save this request as my preset**, enter a name and select **Save preset**. Saving another request under the same name updates that preset. To delete a saved preset, select it and choose **Delete selected preset**. Saved presets are request text stored in this browser (`localStorage` key `halo:dreamweaver-mix-presets`, maximum 12). They can't contain markup and can't use the name of a HALO preset. To use a preset, choose it from **Style / mood preset** or mention its name in a request.
@@ -59,3 +70,5 @@ In `catalog-index.json`, the optional `genre` and `tags` fields give Dreamweaver
 ```sh
 npm run -s test:drive-catalog   # curator, mix-intent, Drive catalog and Dreamweaver player contracts
 ```
+
+Manual smoke test still required against the deployed Drive catalog: test desktop and mobile playback, per-slot playback and advancement, blocked streams and proxy/local-upload fallback, keyboard controls and screen-reader announcements. Local contracts cannot verify real device autoplay policies or live Drive availability.

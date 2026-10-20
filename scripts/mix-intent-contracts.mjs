@@ -53,6 +53,23 @@ assert.ok(!/[<>]/.test(describeMixIntent(hostile.intent)));
 
 // Presets: built-in HALO profiles and validated user presets.
 assert.ok(MIX_PRESETS.length >= 4 && MIX_PRESETS.every(preset => preset.source === "halo" && Object.isFrozen(preset)));
+for (const [id, label, moods, genres, bpmRange, arc] of [
+  ["french-connection", "The French Connection (Deep / Hypnotic)", ["hypnotic", "groovy", "late night"], ["deep house", "melodic house"],
+    { min: 118, max: 124 }, { opening: 1, build: 2, peak: 2, closing: 3 }],
+  ["halo-x-club-anthem-sprint", "Halo X Club Anthem Sprint", ["uplifting", "euphoric"], ["house", "tech house", "afro house"],
+    { min: 124, max: 132 }, { opening: 2, build: 3, peak: 4, closing: 4 }]
+]) {
+  const selected = parseMixPrompt("", { presetId: id });
+  assert.equal(selected.intent.profileId, id);
+  assert.equal(selected.intent.profileLabel, id === "french-connection" ? "The French Connection Deep Hypnotic" : label);
+  assert.deepEqual(selected.intent.moods, moods);
+  assert.deepEqual(selected.intent.genres, genres);
+  assert.deepEqual(selected.intent.bpmRange, bpmRange);
+  assert.deepEqual(selected.intent.arc, arc);
+  assert.equal(parseMixPrompt(label).intent.profileId, id, "profile labels also work in prompts");
+  assert.equal(normalizeUserPreset({ label, prompt: "house" }), null, "sanitized built-in labels cannot be shadowed");
+  assert.ok(selected.notes.some(note => /doesn't imitate any artist/.test(note)));
+}
 assert.equal(parseMixPrompt("", { presetId: "dj-romy" }).intent.profileId, "dj-romy");
 assert.ok(parseMixPrompt("", { presetId: "missing" }).notes.some(note => /no longer available/.test(note)));
 const records = new Map();

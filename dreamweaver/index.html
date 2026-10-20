@@ -123,13 +123,31 @@
       </div>
     </section>
   </noscript>
-    <section class="song-lobby__player" aria-labelledby="catalogCuratorTitle">
+    <section class="song-lobby__player" id="catalogCurator" aria-labelledby="catalogCuratorTitle">
       <h2 id="catalogCuratorTitle">Dreamweaver catalog curator</h2>
+      <p id="catalogMixPromptHelp">Describe the set you want — mood, genres, energy for the opening, build and closer, an approximate BPM, and anything to avoid. Dreamweaver curates published catalog tracks and plays them back-to-back as a curated sequence (not a rendered, beatmatched DJ mix).</p>
+      <label for="catalogMixPrompt">Mix request</label>
+      <textarea id="catalogMixPrompt" rows="3" maxlength="500" aria-describedby="catalogMixPromptHelp" placeholder="Create a 20-minute Halo X mix: warm, cinematic opening; deep-house build; finish with a big lifter. Avoid tracks from last week."></textarea>
+      <label for="catalogMixPreset">Style / mood preset</label>
+      <select id="catalogMixPreset"><option value="">No preset — use my request</option></select>
+      <p id="catalogMixPresetDescription" aria-live="polite"></p>
       <label for="catalogSetDuration">Set duration</label>
       <select id="catalogSetDuration"><option value="20">20 minutes</option><option value="60" selected>60 minutes</option></select>
+      <label for="catalogMixSeed">Variation code (optional — reuse a code to replay the same set)</label>
+      <input id="catalogMixSeed" type="text" maxlength="32" autocomplete="off" spellcheck="false" pattern="[A-Za-z0-9-]{1,32}">
       <button class="satellite-submit satellite-submit--inline" id="generateCatalogSet" type="button">Generate &amp; play set</button>
       <p><label><input id="catalogAllowRecent" type="checkbox"> Allow recently played tracks when the catalog is insufficient</label></p>
+      <details id="catalogPresetEditor">
+        <summary>Save this request as my preset</summary>
+        <label for="catalogPresetName">Preset name</label>
+        <input id="catalogPresetName" type="text" maxlength="40" autocomplete="off">
+        <button class="satellite-submit satellite-submit--inline" id="saveCatalogPreset" type="button">Save preset</button>
+        <button class="satellite-submit satellite-submit--inline" id="deleteCatalogPreset" type="button">Delete selected preset</button>
+        <p id="catalogPresetStatus" role="status" aria-live="polite"></p>
+      </details>
       <p id="catalogSetStatus" role="status" aria-live="polite">Loading catalog availability…</p>
+      <p id="catalogMixIntent" aria-live="polite"></p>
+      <p id="catalogMixNotes" aria-live="polite"></p>
       <ol id="catalogSetlist" aria-label="Generated setlist"></ol>
     </section>
   <section class="satellite-landing" id="dreamweaverSatellite" aria-labelledby="dreamweaverSatelliteTitle" aria-hidden="true" hidden>

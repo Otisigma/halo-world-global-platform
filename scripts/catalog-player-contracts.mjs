@@ -96,11 +96,70 @@ recordPlayedTrack("test", denied);
   assert.equal(f.state.releasePlaybackState, "playing");
 }
 
+{
+  // Prompt-driven curation through the real Dreamweaver UI bindings.
+  const promptRecords = new Map();
+  const promptStorage = { getItem: key => promptRecords.get(key) ?? null, setItem: (key, value) => promptRecords.set(key, value) };
+  const styled = Array.from({ length: 12 }, (_, i) => ({
+    ...tracks[i % 4], id: `styled-${i}`, title: i === 5 ? "<img src=x onerror=alert(1)>" : `Styled ${i}`,
+    genre: i % 2 ? "Deep House" : "Techno", bpm: 122 + (i % 4), durationSeconds: 300, streamUrl: `/audio/styled-${i}.mp3`,
+    primaryAudioPath: `/audio/styled-${i}.mp3`, fallbackUrl: `/api/drive-catalog/audio?track=styled-${i}`
+  }));
+  const f = fixture("", { driveCatalog: { configured: true, version: 1, tracks: styled }, storage: promptStorage });
+  await f.initializeDreamweaver();
+  assert.match(f.nodes.get("catalogMixPreset").innerHTML, /HALO · Halo X/, "HALO presets are offered");
+  assert.equal(promptRecords.size, 0, "rendering presets and loading never records plays");
+  f.nodes.get("catalogMixPrompt").value = "Create a 20-minute Halo X mix: warm cinematic opening, deep house build, finish with a big lifter, with a kazoo solo";
+  f.nodes.get("catalogMixSeed").value = "Replay-1";
+  f.nodes.get("catalogSetDuration").value = "60";
+  f.nodes.get("generateCatalogSet").dispatchEvent(new Event("click"));
+  await new Promise(resolve => setImmediate(resolve));
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(f.nodes.get("catalogSetDuration").value, "20", "a supported duration in the request drives the selector");
+  assert.equal(f.state.catalogSet.targetDurationSeconds, 1200);
+  assert.equal(f.state.catalogSet.seed, "replay-1");
+  assert.match(f.nodes.get("catalogMixIntent").textContent, /Profile: Halo X/);
+  assert.match(f.nodes.get("catalogMixIntent").textContent, /Variation code: replay-1/);
+  assert.match(f.nodes.get("catalogMixNotes").textContent, /Not understood, so ignored: “kazoo solo”/);
+  assert.match(f.nodes.get("catalogSetStatus").textContent, /curated sequence/);
+  assert.match(f.nodes.get("catalogSetlist").innerHTML, /BPM/);
+  assert.doesNotMatch(f.nodes.get("catalogSetlist").innerHTML, /<img/, "track text is escaped");
+  assert.equal(f.nodes.get("generateCatalogSet").disabled, false, "generate re-enables after curation");
+  assert.equal(f.nodes.get("catalogCurator").getAttribute("aria-busy"), "false");
+  assert.equal(f.state.mix.isDriveCatalogPlayback, true);
+  const firstOrder = f.state.catalogSet.tracks.map(track => track.id).join();
+  promptRecords.clear();
+  await f.generateCatalogSet();
+  assert.equal(f.state.catalogSet.tracks.map(track => track.id).join(), firstOrder, "the same variation code and history replay the same set");
+  f.nodes.get("catalogMixSeed").value = "";
+  await f.generateCatalogSet();
+  assert.match(f.state.catalogSet.seed, /^[0-9a-f]{8}$/, "an empty code draws a fresh session nonce");
+  f.nodes.get("catalogPresetName").value = "Night Drive";
+  f.nodes.get("saveCatalogPreset").dispatchEvent(new Event("click"));
+  assert.match(f.nodes.get("catalogPresetStatus").textContent, /Saved “Night Drive”/);
+  assert.match(f.nodes.get("catalogMixPreset").innerHTML, /My preset · Night Drive/);
+  assert.equal(f.nodes.get("catalogMixPreset").value, "user-night-drive");
+  f.nodes.get("deleteCatalogPreset").dispatchEvent(new Event("click"));
+  assert.doesNotMatch(f.nodes.get("catalogMixPreset").innerHTML, /Night Drive/);
+}
+{
+  const f = fixture("", { driveCatalog: { configured: true, version: 1, tracks: [{ ...tracks[0], bpm: "fast" }] } });
+  await f.initializeDreamweaver();
+  await f.generateCatalogSet();
+  assert.equal(f.state.catalogSet, null);
+  assert.match(f.nodes.get("catalogSetStatus").textContent, /couldn't curate this set right now/, "invalid catalog data shows a friendly message, not raw errors");
+  assert.equal(f.nodes.get("generateCatalogSet").disabled, false);
+}
+
 const html = await readFile(new URL("../music-world.html", import.meta.url), "utf8");
 const dreamweaverHtml = await readFile(new URL("../dreamweaver/index.html", import.meta.url), "utf8");
 assert.ok(dreamweaverHtml.indexOf('id="generateCatalogSet"') > dreamweaverHtml.indexOf("</noscript>", dreamweaverHtml.indexOf("<body")), "curator controls must be visible script-enabled DOM, not noscript content");
 assert.match(dreamweaverHtml, /<select id="catalogSetDuration"><option value="20">20 minutes<\/option><option value="60" selected>60 minutes<\/option><\/select>/);
 assert.match(dreamweaverHtml, /<button[^>]*id="generateCatalogSet"[^>]*type="button"/);
+assert.match(dreamweaverHtml, /<label for="catalogMixPrompt">[^<]+<\/label>\s*<textarea id="catalogMixPrompt"[^>]*maxlength="500"/, "the mix request field is labelled and bounded");
+assert.match(dreamweaverHtml, /<label for="catalogMixPreset">[^<]+<\/label>\s*<select id="catalogMixPreset">/);
+assert.match(dreamweaverHtml, /id="catalogSetStatus" role="status" aria-live="polite"/);
+assert.match(dreamweaverHtml, /curated sequence \(not a rendered, beatmatched DJ mix\)/, "the UI never claims a rendered DJ mix");
 const section = (start, end) => html.slice(html.indexOf(start), html.indexOf(end, html.indexOf(start)));
 async function storefront(payload, ok = true) {
   const requests = [], nodes = new Map();

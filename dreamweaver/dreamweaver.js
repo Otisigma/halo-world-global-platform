@@ -4,6 +4,7 @@ import { createLyricInteractionRecorder } from "../lib/journey-interactions.js";
 import { googleDriveFallbackSources, isGoogleDriveUrl, normalizeGoogleDriveAudioUrl, startDreamweaverMutedAutoplay, unlockDreamweaverAudio } from "../lib/dreamweaver-playback.js";
 import { catalogAudioUrl, generateAutomatedSet } from "../lib/catalog-curator.js";
 import { readRecentTrackIds, recordPlayedTrack } from "../lib/catalog-session.js";
+import { MIX_PRESETS, createMixSeed, deleteUserPreset, describeMixIntent, normalizeMixSeed, parseMixPrompt, readUserPresets, saveUserPreset } from "../lib/mix-intent.js";
 
 (() => {
   const chapters = [
@@ -136,6 +137,17 @@ import { readRecentTrackIds, recordPlayedTrack } from "../lib/catalog-session.js
     catalogAllowRecent: document.getElementById("catalogAllowRecent"),
     catalogStatus: document.getElementById("catalogSetStatus"),
     catalogSetlist: document.getElementById("catalogSetlist"),
+    catalogCurator: document.getElementById("catalogCurator"),
+    catalogPrompt: document.getElementById("catalogMixPrompt"),
+    catalogPreset: document.getElementById("catalogMixPreset"),
+    catalogPresetDescription: document.getElementById("catalogMixPresetDescription"),
+    catalogSeed: document.getElementById("catalogMixSeed"),
+    catalogIntent: document.getElementById("catalogMixIntent"),
+    catalogNotes: document.getElementById("catalogMixNotes"),
+    catalogPresetName: document.getElementById("catalogPresetName"),
+    catalogPresetSave: document.getElementById("saveCatalogPreset"),
+    catalogPresetDelete: document.getElementById("deleteCatalogPreset"),
+    catalogPresetStatus: document.getElementById("catalogPresetStatus"),
     visualStack: document.getElementById("visualStack"),
     chapterList: document.getElementById("chapterList"),
     progressMarkers: document.getElementById("progressMarkers"),
@@ -276,6 +288,7 @@ import { readRecentTrackIds, recordPlayedTrack } from "../lib/catalog-session.js
     catalogSet: null,
     catalogIndex: -1,
     catalogAdvancing: false,
+    catalogGenerating: false,
     catalogFallbackActive: false,
     localAudioName: "",
     localAudioUrl: "",
@@ -3155,22 +3168,95 @@ import { readRecentTrackIds, recordPlayedTrack } from "../lib/catalog-session.js
     }
   }
 
+  function renderCatalogPresets(selectedId = elements.catalogPreset?.value || "") {
+    if (!elements.catalogPreset) return;
+    const option = (preset, prefix) => `<option value="${escapeHtml(preset.id)}">${escapeHtml(prefix + preset.label)}</option>`;
+    const userPresets = readUserPresets(catalogStorage());
+    elements.catalogPreset.innerHTML = '<option value="">No preset — use my request</option>' +
+      MIX_PRESETS.map(preset => option(preset, "HALO · ")).join("") +
+      userPresets.map(preset => option(preset, "My preset · ")).join("");
+    elements.catalogPreset.value = [...MIX_PRESETS, ...userPresets].some(preset => preset.id === selectedId) ? selectedId : "";
+    describeSelectedPreset();
+  }
+
+  function describeSelectedPreset() {
+    if (!elements.catalogPresetDescription) return;
+    const id = elements.catalogPreset?.value || "";
+    const preset = [...MIX_PRESETS, ...readUserPresets(catalogStorage())].find(item => item.id === id);
+    elements.catalogPresetDescription.textContent = !preset ? ""
+      : preset.source === "user" ? `Your saved request: ${preset.prompt}` : preset.description;
+  }
+
+  function saveCatalogPreset() {
+    const result = saveUserPreset({ label: String(elements.catalogPresetName?.value ?? ""), prompt: String(elements.catalogPrompt?.value ?? "") }, catalogStorage());
+    elements.catalogPresetStatus.textContent = result.ok
+      ? `Saved “${result.preset.label}”. Mention its name in a request or pick it from the presets.`
+      : result.reason === "limit" ? "You already have 12 saved presets. Delete one before saving another."
+      : result.reason === "storage" ? "This browser isn't allowing presets to be saved. Your request still works for this session."
+      : "Enter a preset name (letters or numbers, not a HALO preset name) and a mix request to save.";
+    if (result.ok) renderCatalogPresets(result.preset.id);
+  }
+
+  function deleteCatalogPreset() {
+    const id = elements.catalogPreset?.value || "";
+    if (!id.startsWith("user-")) {
+      elements.catalogPresetStatus.textContent = "Select one of your saved presets to delete it. HALO presets can't be deleted.";
+      return;
+    }
+    deleteUserPreset(id, catalogStorage());
+    elements.catalogPresetStatus.textContent = "Preset deleted.";
+    renderCatalogPresets("");
+  }
+
+  function setCatalogBusy(busy) {
+    elements.catalogCurator?.setAttribute("aria-busy", busy ? "true" : "false");
+    if (elements.catalogGenerate) elements.catalogGenerate.disabled = busy;
+  }
+
   async function generateCatalogSet() {
-    if (state.catalogAdvancing) return;
+    if (state.catalogAdvancing || state.catalogGenerating) return;
+    state.catalogGenerating = true;
+    setCatalogBusy(true);
+    try {
+      await curateCatalogSet();
+    } finally {
+      state.catalogGenerating = false;
+      setCatalogBusy(false);
+    }
+  }
+
+  async function curateCatalogSet() {
+    elements.catalogStatus.textContent = "Reading your mix request…";
+    const parsed = parseMixPrompt(String(elements.catalogPrompt?.value ?? ""), {
+      presetId: String(elements.catalogPreset?.value ?? ""), userPresets: readUserPresets(catalogStorage())
+    });
+    if (parsed.intent.durationMinutes && elements.catalogDuration) elements.catalogDuration.value = String(parsed.intent.durationMinutes);
     if ((!state.driveCatalog || state.catalogUnavailable) && !await loadDriveCatalog()) return;
     if (state.catalogUnavailable) return;
+    elements.catalogStatus.textContent = "Curating tracks from the catalog…";
     const tracks = (state.driveCatalog?.tracks || []).filter(track => playableCatalogUrl(track.streamUrl));
     const minutes = elements.catalogDuration.value === "20" ? 20 : 60;
-    state.catalogSet = generateAutomatedSet(tracks, minutes, {
-      recentTrackIds: readRecentTrackIds(catalogStorage()),
-      allowRecent: Boolean(elements.catalogAllowRecent.checked)
-    });
+    const seed = normalizeMixSeed(String(elements.catalogSeed?.value ?? "")) || createMixSeed();
+    const allowRecent = parsed.intent.allowRecent ?? Boolean(elements.catalogAllowRecent.checked);
+    const intent = { ...parsed.intent, allowRecent };
+    try {
+      state.catalogSet = generateAutomatedSet(tracks, minutes, {
+        recentTrackIds: readRecentTrackIds(catalogStorage()), allowRecent, intent, seed
+      });
+    } catch {
+      state.catalogSet = null;
+      elements.catalogStatus.textContent = "Dreamweaver couldn't curate this set right now. Try again or upload a local mix.";
+      return;
+    }
     state.catalogIndex = -1;
+    if (elements.catalogIntent) elements.catalogIntent.textContent = `${describeMixIntent(intent)} · Variation code: ${seed}`;
+    if (elements.catalogNotes) elements.catalogNotes.textContent = parsed.notes.join(" ");
     elements.catalogSetlist.innerHTML = state.catalogSet.tracks.map(track =>
-      `<li>${escapeHtml(track.title)} — ${escapeHtml(track.artist)} · ${escapeHtml(track.role)} · ${formatTime(track.playDurationSeconds)}</li>`
+      `<li>${escapeHtml(track.title)} — ${escapeHtml(track.artist)} · ${escapeHtml(track.role)} · ${escapeHtml(String(track.bpm))} BPM · ${escapeHtml(track.energyLevel)} · ${formatTime(track.playDurationSeconds)}</li>`
     ).join("");
+    const avoided = state.catalogSet.avoidedTrackCount ? ` ${state.catalogSet.avoidedTrackCount} track(s) skipped by your avoid list.` : "";
     elements.catalogStatus.textContent = `${formatTime(state.catalogSet.durationSeconds)} / ${minutes} minutes scheduled.${
-      state.catalogSet.complete ? " Set ready." : ` Short by ${formatTime(state.catalogSet.shortfallSeconds)}. Add tracks or explicitly allow recent reuse.`}`;
+      state.catalogSet.complete ? " Set ready — curated sequence, played back-to-back." : ` Short by ${formatTime(state.catalogSet.shortfallSeconds)}. Add tracks or explicitly allow recent reuse.`}${avoided}`;
     if (!state.catalogSet.tracks.length) {
       if (state.mix?.isDriveCatalogPlayback) {
         elements.audio.pause();
@@ -3296,6 +3382,10 @@ import { readRecentTrackIds, recordPlayedTrack } from "../lib/catalog-session.js
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", bindPlayerControls, { once: true });
   else bindPlayerControls();
   elements.catalogGenerate?.addEventListener("click", () => { void generateCatalogSet(); });
+  elements.catalogPreset?.addEventListener("change", describeSelectedPreset);
+  elements.catalogPresetSave?.addEventListener("click", saveCatalogPreset);
+  elements.catalogPresetDelete?.addEventListener("click", deleteCatalogPreset);
+  renderCatalogPresets();
   elements.audio.addEventListener("playing", handleCatalogPlaying);
   elements.audio.addEventListener("timeupdate", handleCatalogTimeupdate);
   if (resumeUploadVerification()) return;

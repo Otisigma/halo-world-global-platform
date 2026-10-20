@@ -6,6 +6,7 @@ import { createLyricInteractionRecorder } from "../lib/journey-interactions.js";
 import * as playback from "../lib/dreamweaver-playback.js";
 import { catalogAudioUrl, generateAutomatedSet } from "../lib/catalog-curator.js";
 import { readRecentTrackIds, recordPlayedTrack } from "../lib/catalog-session.js";
+import * as mixIntent from "../lib/mix-intent.js";
 
 const script = await readFile(new URL("../dreamweaver/dreamweaver.js", import.meta.url), "utf8");
 const declarations = script.slice(script.indexOf("(() => {"), script.indexOf('  if (document.readyState === "loading")'));
@@ -77,7 +78,7 @@ export function fixture(search, { releases = [release], mixes = [mix], blocked =
   const location = new URL(`${pathname}${search}`, "https://halo.test");
   const requests = [];
   const context = {
-    URL, URLSearchParams, console, location, DREAMWEAVER_STOREFRONT_MIX_ID, buildDreamweaverStorefrontPath, createLyricInteractionRecorder, catalogAudioUrl, generateAutomatedSet, readRecentTrackIds, recordPlayedTrack, ...playback,
+    URL, URLSearchParams, console, location, DREAMWEAVER_STOREFRONT_MIX_ID, buildDreamweaverStorefrontPath, createLyricInteractionRecorder, catalogAudioUrl, generateAutomatedSet, readRecentTrackIds, recordPlayedTrack, ...mixIntent, ...playback,
     Image: class {
       set src(value) {
         assert.equal(this.crossOrigin, "anonymous", "CORS must be set before requesting campaign artwork");

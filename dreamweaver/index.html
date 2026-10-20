@@ -132,14 +132,16 @@
         </div>
         <p class="catalog-curator__badge" id="catalogSyncStatus" role="status" aria-live="polite" data-state="loading">CATALOG LOADING</p>
       </header>
+      <div class="catalog-curator__workspace">
       <div class="catalog-curator__card">
-      <p id="catalogMixPromptHelp">Describe the set you want — mood, genres, energy for the opening, build and closer, an approximate BPM, and anything to avoid. Dreamweaver curates published catalog tracks and plays them back-to-back as a curated sequence (not a rendered, beatmatched DJ mix). No crossfades or rendered audio file.</p>
+      <p class="catalog-curator__eyebrow">01 / Shape your set</p>
+      <p id="catalogMixPromptHelp">Describe the mood, genres, opening, build and closer, approximate BPM, and anything to avoid.</p>
       <label for="catalogMixPrompt">Mix request</label>
       <textarea id="catalogMixPrompt" rows="3" maxlength="500" aria-describedby="catalogMixPromptHelp" placeholder="Create a 20-minute Halo X mix: warm, cinematic opening; deep-house build; finish with a big lifter. Avoid tracks from last week."></textarea>
       <div class="catalog-curator__controls">
       <div>
-      <label for="catalogMixPreset">Style / mood preset</label>
-      <select id="catalogMixPreset"><option value="">No preset — use my request</option></select>
+      <label for="catalogMixPreset">HALO profile preset</label>
+      <select id="catalogMixPreset" aria-describedby="catalogMixPresetDescription"><option value="">No preset — use my request</option></select>
       <p id="catalogMixPresetDescription" aria-live="polite"></p>
       </div>
       <div>
@@ -147,11 +149,11 @@
       <select id="catalogSetDuration"><option value="20">20 minutes</option><option value="60" selected>60 minutes</option></select>
       </div>
       <div>
-      <label for="catalogMixSeed">Variation code (optional — reuse a code to replay the same set)</label>
+      <label for="catalogMixSeed">Variation code (optional)</label>
       <input id="catalogMixSeed" type="text" maxlength="32" autocomplete="off" spellcheck="false" pattern="[A-Za-z0-9-]{1,32}" placeholder="Reuse code to replay set" aria-describedby="catalogReplayHelp">
       </div>
       </div>
-      <p id="catalogReplayHelp">A code replays the same sequence only while the request, catalog and listening history are unchanged.</p>
+      <p id="catalogReplayHelp">Reuse a code to replay the sequence when the request, catalog and listening history are unchanged.</p>
       <p><label><input id="catalogAllowRecent" type="checkbox"> Allow recently played tracks when the catalog is insufficient</label></p>
       <details id="catalogPresetEditor">
         <summary>Save this request as my preset</summary>
@@ -161,15 +163,24 @@
         <button class="satellite-submit satellite-submit--inline" id="deleteCatalogPreset" type="button">Delete selected preset</button>
         <p id="catalogPresetStatus" role="status" aria-live="polite"></p>
       </details>
-      <p id="catalogLinkedNotice" hidden>Generate a set to switch from this linked song or mix to the catalog curator. Your linked item keeps playing until a playable set is ready.</p>
-      <button class="catalog-curator__generate" id="generateCatalogSet" type="button" aria-describedby="catalogMixPromptHelp catalogLinkedNotice">Generate &amp; play set</button>
+      <p id="catalogLinkedNotice" hidden>Your linked song or mix stays in place unless a playable set is generated.</p>
+      <p id="catalogPlaybackHelp">Published tracks play back-to-back as a curated sequence (not a rendered, beatmatched DJ mix). No crossfades or rendered audio file.</p>
+      <button class="catalog-curator__generate" id="generateCatalogSet" type="button" aria-describedby="catalogPlaybackHelp catalogLinkedNotice">Generate &amp; play set</button>
       </div>
-      <div class="catalog-curator__card catalog-curator__output">
-      <h3>Your curated sequence</h3>
+      <div class="catalog-curator__card catalog-curator__output" aria-labelledby="catalogSequenceTitle">
+      <p class="catalog-curator__eyebrow">02 / Listen to the journey</p>
+      <h3 id="catalogSequenceTitle">Your curated sequence</h3>
+      <ol class="catalog-curator__steps" aria-label="Set generation progress">
+        <li id="catalogStepRequest" data-state="pending"><span>Read mood &amp; profile</span><small id="catalogStepRequestStatus">Waiting</small></li>
+        <li id="catalogStepCatalog" data-state="pending"><span>Check canonical catalog</span><small id="catalogStepCatalogStatus">Waiting</small></li>
+        <li id="catalogStepRank" data-state="pending"><span>Rank BPM, energy &amp; rotation</span><small id="catalogStepRankStatus">Waiting</small></li>
+        <li id="catalogStepSequence" data-state="pending"><span>Prepare sequence &amp; stream routes</span><small id="catalogStepSequenceStatus">Waiting</small></li>
+      </ol>
       <p id="catalogSetStatus" role="status" aria-live="polite">Loading catalog availability…</p>
       <p id="catalogMixIntent" aria-live="polite"></p>
       <p id="catalogMixNotes" aria-live="polite"></p>
       <ol id="catalogSetlist" aria-label="Generated setlist"></ol>
+      </div>
       </div>
     </section>
   <section class="satellite-landing" id="dreamweaverSatellite" aria-labelledby="dreamweaverSatelliteTitle" aria-hidden="true" hidden>

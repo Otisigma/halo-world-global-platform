@@ -9,9 +9,9 @@ Dreamweaver can curate a 20- or 60-minute set from the published Google Drive ca
 1. Open **Dreamweaver** (`/dreamweaver/`).
 2. Type a request in **Mix request**, for example:
    > Create a 20-minute Halo X mix: warm, cinematic opening; deep-house build; finish with a big lifter. Avoid tracks from last week.
-3. Optionally pick a **Style / mood preset**. Your request text is applied on top of the preset.
+3. Optionally pick a **HALO profile preset**. Your request text is applied on top of the preset.
 4. Choose **20 minutes** or **60 minutes**. If the request includes "20 minutes", "60 minutes" or "1 hour", that setting updates the selector.
-5. Select **Generate & play set**. The status line shows progress. Before playback starts, Dreamweaver lists the generated tracks and shows a summary of how it read your request. It also lists any parts of the request it didn't understand.
+5. Select **Generate & play set**. The progress steps follow request parsing, canonical catalog availability, track ranking and sequence preparation, without simulated delays. An unavailable catalog or empty result leaves the remaining work incomplete. Completed steps mean a sequence was prepared, not that live streams were verified. Before playback starts, Dreamweaver lists the generated tracks and shows a summary of how it read your request. It also lists any parts of the request it didn't understand.
 
 The catalog badge reports **loading**, **standby** (unconfigured or a linked item hasn't requested the catalog yet), **empty**, or **unavailable** as appropriate. **Catalog synced** means the canonical response was successfully loaded with tracks; it doesn't guarantee that every stream is currently playable. Loading failures never substitute another catalog. On a linked song/mix route, generating a playable set explicitly switches playback to the curator; a failed or empty result leaves the linked item in place.
 
@@ -59,7 +59,7 @@ Two dashboard profiles are HALO-defined settings, not third-party artist imitati
 
 ### Your presets (browser)
 
-Open **Save this request as my preset**, enter a name and select **Save preset**. Saving another request under the same name updates that preset. To delete a saved preset, select it and choose **Delete selected preset**. Saved presets are request text stored in this browser (`localStorage` key `halo:dreamweaver-mix-presets`, maximum 12). They can't contain markup and can't use the name of a HALO preset. To use a preset, choose it from **Style / mood preset** or mention its name in a request.
+Open **Save this request as my preset**, enter a name and select **Save preset**. Saving another request under the same name updates that preset. To delete a saved preset, select it and choose **Delete selected preset**. Saved presets are request text stored in this browser (`localStorage` key `halo:dreamweaver-mix-presets`, maximum 12). They can't contain markup and can't use the name of a HALO preset. To use a preset, choose it from **HALO profile preset** or mention its name in a request.
 
 ## Catalog metadata that improves results
 

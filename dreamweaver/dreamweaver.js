@@ -3191,7 +3191,9 @@ import { MIX_PRESETS, createMixSeed, deleteUserPreset, describeMixIntent, normal
     const result = saveUserPreset({ label: String(elements.catalogPresetName?.value ?? ""), prompt: String(elements.catalogPrompt?.value ?? "") }, catalogStorage());
     elements.catalogPresetStatus.textContent = result.ok
       ? `Saved “${result.preset.label}”. Mention its name in a request or pick it from the presets.`
-      : "Enter a new preset name (not a HALO preset name) and a request to save. Up to 12 presets are kept in this browser.";
+      : result.reason === "limit" ? "You already have 12 saved presets. Delete one before saving another."
+      : result.reason === "storage" ? "This browser isn't allowing presets to be saved. Your request still works for this session."
+      : "Enter a preset name (letters or numbers, not a HALO preset name) and a mix request to save.";
     if (result.ok) renderCatalogPresets(result.preset.id);
   }
 

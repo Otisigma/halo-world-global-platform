@@ -42,7 +42,7 @@ assert.ok(odd.notes.some(note => /Cool-down endings aren't supported/.test(note)
 assert.deepEqual(odd.intent.arc, { opening: 1, build: 1, peak: 2, closing: 2 });
 assert.equal(parseMixPrompt("skip anything played last month").intent.recentWindowDays, 30);
 assert.equal(parseMixPrompt("high energy at 128 bpm then halo x").intent.bpmRange.min, 124, "explicit tempo beats profile defaults");
-assert.deepEqual(parseMixPrompt("open with peak energy then end with chill").intent.arc.closing >= 4, true, "energy arc never descends");
+assert.equal(parseMixPrompt("open with peak energy then end with chill").intent.arc.closing, 4, "energy arc never descends");
 const defaults = parseMixPrompt("");
 assert.deepEqual(defaults.intent.arc, { opening: 1, build: 2, peak: 3, closing: 4 });
 assert.ok(defaults.notes.some(note => /default/.test(note)));
@@ -77,7 +77,13 @@ assert.deepEqual(deleteUserPreset("user-night-drive", storage), []);
 records.set(MIX_PRESET_STORAGE_KEY, "not json");
 assert.deepEqual(readUserPresets(storage), []);
 assert.deepEqual(readUserPresets(null), []);
-assert.equal(saveUserPreset({ label: "X1", prompt: "house" }, { getItem() { throw new Error("denied"); }, setItem() { throw new Error("denied"); } }).ok, false);
+assert.equal(saveUserPreset({ label: "X1", prompt: "house" }, { getItem() { throw new Error("denied"); }, setItem() { throw new Error("denied"); } }).reason, "storage");
+assert.equal(saveUserPreset({ label: "", prompt: "house" }, storage).reason, "invalid");
+records.clear();
+for (let i = 0; i < 12; i++) assert.ok(saveUserPreset({ label: `Preset ${i}`, prompt: "house" }, storage).ok);
+assert.equal(saveUserPreset({ label: "Preset 12", prompt: "house" }, storage).reason, "limit");
+assert.ok(saveUserPreset({ label: "Preset 3", prompt: "techno" }, storage).ok, "editing an existing preset works at the limit");
+records.clear();
 
 // Seeds: safe, bounded, deterministic.
 assert.equal(normalizeMixSeed(" AbC-12 "), "abc-12");

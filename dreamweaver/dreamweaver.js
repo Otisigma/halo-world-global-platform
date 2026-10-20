@@ -142,6 +142,10 @@ import { MIX_PRESETS, createMixSeed, deleteUserPreset, describeMixIntent, normal
     catalogTrackStatus: document.getElementById("catalogTrackStatus"),
     catalogUploadLocal: document.getElementById("catalogUploadLocal"),
     catalogCurator: document.getElementById("catalogCurator"),
+    catalogCuratorToggle: document.getElementById("catalogCuratorToggle"),
+    catalogCuratorContent: document.getElementById("catalogCuratorContent"),
+    catalogCuratorToggleLabel: document.getElementById("catalogCuratorToggleLabel"),
+    catalogCuratorToggleIcon: document.getElementById("catalogCuratorToggleIcon"),
     catalogPrompt: document.getElementById("catalogMixPrompt"),
     catalogPreset: document.getElementById("catalogMixPreset"),
     catalogPresetDescription: document.getElementById("catalogMixPresetDescription"),
@@ -3182,6 +3186,32 @@ import { MIX_PRESETS, createMixSeed, deleteUserPreset, describeMixIntent, normal
     }
   }
 
+  function initializeCatalogDisclosure() {
+    const button = elements.catalogCuratorToggle;
+    const content = elements.catalogCuratorContent;
+    if (!button || !content) return;
+    const storageKey = "halo:dreamweaver-curator-expanded";
+    const setExpanded = expanded => {
+      content.hidden = !expanded;
+      button.setAttribute("aria-expanded", String(expanded));
+      button.setAttribute("aria-label", `${expanded ? "Collapse" : "Expand"} Dreamweaver Catalog Curator`);
+      elements.catalogCuratorToggleLabel.textContent = expanded ? "Collapse curator" : "Expand curator";
+      elements.catalogCuratorToggleIcon.textContent = expanded ? "−" : "+";
+    };
+    let expanded = false;
+    try {
+      expanded = catalogStorage()?.getItem(storageKey) === "true";
+    } catch {}
+    setExpanded(expanded);
+    button.addEventListener("click", () => {
+      const expanded = content.hidden;
+      setExpanded(expanded);
+      try {
+        catalogStorage()?.setItem(storageKey, String(expanded));
+      } catch {}
+    });
+  }
+
   function catalogStorage() {
     try {
       return localStorage;
@@ -3475,6 +3505,7 @@ import { MIX_PRESETS, createMixSeed, deleteUserPreset, describeMixIntent, normal
     await loadShow();
   }
 
+  initializeCatalogDisclosure();
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", bindPlayerControls, { once: true });
   else bindPlayerControls();
   elements.catalogGenerate?.addEventListener("click", () => { void generateCatalogSet(); });

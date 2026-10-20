@@ -14,6 +14,80 @@ const tracks = Array.from({ length: 4 }, (_, i) => ({
   streamUrl: `/audio/canonical-${i}.mp3`, fallbackUrl: `/api/drive-catalog/audio?track=drive-track-${i}`
 }));
 const driveCatalog = { configured: true, version: 1, tracks };
+const disclosureKey = "halo:dreamweaver-curator-expanded";
+const toggleCurator = f => f.nodes.get("catalogCuratorToggle").dispatchEvent(new Event("click"));
+const assertDisclosure = (f, expanded) => {
+  assert.equal(f.nodes.get("catalogCuratorContent").hidden, !expanded);
+  assert.equal(f.nodes.get("catalogCuratorToggle").getAttribute("aria-expanded"), String(expanded));
+  assert.equal(f.nodes.get("catalogCuratorToggle").getAttribute("aria-label"), `${expanded ? "Collapse" : "Expand"} Dreamweaver Catalog Curator`);
+  assert.equal(f.nodes.get("catalogCuratorToggleLabel").textContent, expanded ? "Collapse curator" : "Expand curator");
+  assert.equal(f.nodes.get("catalogCuratorToggleIcon").textContent, expanded ? "−" : "+");
+};
+for (const saved of [null, "false", "true", "invalid"]) {
+  const preferences = new Map(saved === null ? [] : [[disclosureKey, saved]]);
+  const storage = { getItem: key => preferences.get(key) ?? null, setItem: (key, value) => preferences.set(key, value) };
+  const f = fixture("", { storage });
+  assertDisclosure(f, saved === "true");
+  toggleCurator(f);
+  assertDisclosure(f, saved !== "true");
+  assert.equal(preferences.get(disclosureKey), String(saved !== "true"));
+  assertDisclosure(fixture("", { storage }), saved !== "true");
+  toggleCurator(f);
+  assertDisclosure(f, saved === "true");
+}
+for (const options of [
+  { storageGetterError: true },
+  { storage: { getItem() { throw new Error("SecurityError"); }, setItem() { throw new Error("QuotaExceededError"); } } },
+  { storage: { getItem: () => "true", setItem() { throw new Error("QuotaExceededError"); } } }
+]) {
+  const f = fixture("", options);
+  const expanded = f.nodes.get("catalogCuratorToggle").getAttribute("aria-expanded") === "true";
+  toggleCurator(f);
+  assertDisclosure(f, !expanded);
+  toggleCurator(f);
+  assertDisclosure(f, expanded);
+}
+for (const [options, expected] of [
+  [{ driveCatalog }, "CATALOG SYNCED"],
+  [{ driveCatalog: { configured: true, version: 1, tracks: [] } }, "CATALOG EMPTY"],
+  [{}, "CATALOG STANDBY"],
+  [{ catalogError: true }, "CATALOG UNAVAILABLE"]
+]) {
+  const f = fixture("", options);
+  const initialization = f.initializeDreamweaver();
+  assert.equal(f.nodes.get("catalogSyncStatus").textContent, "CATALOG LOADING");
+  assertDisclosure(f, false);
+  await initialization;
+  assert.equal(f.nodes.get("catalogSyncStatus").textContent, expected);
+  assertDisclosure(f, false);
+}
+{
+  const f = fixture("", { driveCatalog });
+  await f.initializeDreamweaver();
+  toggleCurator(f);
+  const prompt = f.nodes.get("catalogMixPrompt");
+  prompt.value = "Warm opening, deep-house build";
+  f.nodes.get("catalogSetDuration").value = "20";
+  await f.generateCatalogSet();
+  const setlist = f.nodes.get("catalogSetlist");
+  const results = setlist.innerHTML;
+  const mix = f.state.mix;
+  const audio = f.nodes.get("showAudio");
+  const plays = audio.plays;
+  assert.match(results, /Canonical/);
+  toggleCurator(f);
+  assertDisclosure(f, false);
+  toggleCurator(f);
+  assertDisclosure(f, true);
+  assert.equal(f.nodes.get("catalogMixPrompt"), prompt);
+  assert.equal(prompt.value, "Warm opening, deep-house build");
+  assert.equal(f.nodes.get("catalogSetDuration").value, "20");
+  assert.equal(f.nodes.get("catalogSetlist"), setlist);
+  assert.equal(setlist.innerHTML, results);
+  assert.equal(f.state.mix, mix);
+  assert.equal(audio.plays, plays, "disclosure never starts or interrupts playback");
+  assert.equal(audio.paused, false);
+}
 for (const endpoint of ["song-catalog", "mixes", "radio", "stem-vault"]) {
   const primaryAudioPath = `/api/${endpoint}/audio?id=canonical-master`;
   const canonicalTrack = { ...tracks[0], primaryAudioPath, streamUrl: primaryAudioPath };
@@ -306,6 +380,13 @@ for (const step of ["Request", "Catalog", "Rank", "Sequence"]) {
 }
 assert.doesNotMatch(dreamweaverHtml.slice(dreamweaverHtml.indexOf('id="catalogCurator"'), dreamweaverHtml.indexOf('id="dreamweaverSatellite"')), /<iframe|masterVaultCatalog|onclick=|<details[^>]*id="catalogCurator"/);
 assert.match(dreamweaverHtml, /id="catalogSyncStatus" role="status" aria-live="polite" data-state="loading">CATALOG LOADING/);
+assert.match(dreamweaverHtml, /<button id="catalogCuratorToggle" type="button" aria-expanded="false" aria-controls="catalogCuratorContent" aria-label="Expand Dreamweaver Catalog Curator">/);
+assert.match(dreamweaverHtml, /id="catalogCuratorToggleIcon" aria-hidden="true">\+<\/span>/);
+assert.match(dreamweaverHtml, /<div class="catalog-curator__workspace" id="catalogCuratorContent" hidden>/);
+const curatorHeader = dreamweaverHtml.slice(dreamweaverHtml.indexOf('<section class="catalog-curator"'), dreamweaverHtml.indexOf('id="catalogCuratorContent"'));
+assert.match(curatorHeader, /id="catalogCuratorTitle"/);
+assert.match(curatorHeader, /id="catalogSyncStatus" role="status" aria-live="polite"/);
+assert.doesNotMatch(curatorHeader, /\bhidden(?:\s|>)/, "the heading, toggle and live catalog status stay outside the hidden workspace");
 for (const id of ["catalogSetDuration", "catalogMixSeed", "catalogPresetName"]) {
   assert.match(dreamweaverHtml, new RegExp(`<label for="${id}">`), `${id} has an explicit accessible label`);
 }
@@ -320,6 +401,7 @@ assert.match(curatorCss, /\.catalog-curator :is\(button, input, select, textarea
 assert.match(curatorCss, /prefers-reduced-motion: reduce[^}]+\.catalog-curator/s);
 assert.match(curatorCss, /\.catalog-curator h2[^}]+var\(--serif\)/);
 assert.match(curatorCss, /\.catalog-curator__workspace[^}]+grid-template-columns/);
+assert.match(curatorCss, /\.catalog-curator__workspace\[hidden\]\s*\{\s*display: none;/, "hidden must override the workspace grid display");
 assert.match(curatorCss, /@media \(max-width: 1100px\)[^}]+\.catalog-curator__workspace[^}]+grid-template-columns: 1fr/s);
 const section = (start, end) => html.slice(html.indexOf(start), html.indexOf(end, html.indexOf(start)));
 async function storefront(payload, ok = true) {

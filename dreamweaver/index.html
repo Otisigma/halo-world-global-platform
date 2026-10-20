@@ -131,8 +131,12 @@
           <p>Natural prompt curation linked to Google Drive Master Vault</p>
         </div>
         <p class="catalog-curator__badge" id="catalogSyncStatus" role="status" aria-live="polite" data-state="loading">CATALOG LOADING</p>
+        <button id="catalogCuratorToggle" type="button" aria-expanded="false" aria-controls="catalogCuratorContent" aria-label="Expand Dreamweaver Catalog Curator">
+          <span id="catalogCuratorToggleLabel">Expand curator</span>
+          <span id="catalogCuratorToggleIcon" aria-hidden="true">+</span>
+        </button>
       </header>
-      <div class="catalog-curator__workspace">
+      <div class="catalog-curator__workspace" id="catalogCuratorContent" hidden>
       <div class="catalog-curator__card">
       <p class="catalog-curator__eyebrow">01 / Shape your set</p>
       <p id="catalogMixPromptHelp">Describe the mood, genres, opening, build and closer, approximate BPM, and anything to avoid.</p>

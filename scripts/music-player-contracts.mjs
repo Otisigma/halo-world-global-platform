@@ -271,7 +271,7 @@ const dreamContext = vm.createContext({
 });
 vm.runInContext(
   section(dreamweaver, "function clearRemoteAudioWatchdog()", "function publicReleaseStatus(")
-  + section(dreamweaver, "function shouldPromptLocalUpload()", "async function awaitPrimaryPlaybackReadiness()")
+  + section(dreamweaver, "function shouldPromptLocalUpload()", "async function awaitPrimaryPlaybackReadiness(")
   + section(dreamweaver, "async function togglePlayback()", "function updateHeroPlayButton("),
   dreamContext
 );

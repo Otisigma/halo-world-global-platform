@@ -139,6 +139,8 @@ import { MIX_PRESETS, createMixSeed, deleteUserPreset, describeMixIntent, normal
     catalogSyncStatus: document.getElementById("catalogSyncStatus"),
     catalogLinkedNotice: document.getElementById("catalogLinkedNotice"),
     catalogSetlist: document.getElementById("catalogSetlist"),
+    catalogTrackStatus: document.getElementById("catalogTrackStatus"),
+    catalogUploadLocal: document.getElementById("catalogUploadLocal"),
     catalogCurator: document.getElementById("catalogCurator"),
     catalogPrompt: document.getElementById("catalogMixPrompt"),
     catalogPreset: document.getElementById("catalogMixPreset"),
@@ -1160,6 +1162,8 @@ import { MIX_PRESETS, createMixSeed, deleteUserPreset, describeMixIntent, normal
     state.localAudioName = cleanText(file.name || "Uploaded mix", 160) || "Uploaded mix";
     state.audioSourceMode = "local";
     state.catalogSet = null;
+    if (elements.catalogSetlist) elements.catalogSetlist.innerHTML = "";
+    if (elements.catalogTrackStatus) elements.catalogTrackStatus.textContent = "Local mix selected in the shared player. Generate a new set to return to the catalog.";
     elements.audio.pause();
     if (state.autoplayMuted) elements.audio.muted = false;
     state.autoplayMuted = false;
@@ -1615,6 +1619,7 @@ import { MIX_PRESETS, createMixSeed, deleteUserPreset, describeMixIntent, normal
   function setReleasePlaybackState(nextState) {
     state.releasePlaybackState = nextState;
     renderReleasePanel();
+    updateCatalogPlaybackCards();
   }
 
   function setLoadingProgress(percent = 0, phase = "", subtitle = "") {
@@ -3295,8 +3300,9 @@ import { MIX_PRESETS, createMixSeed, deleteUserPreset, describeMixIntent, normal
     setCatalogProgress(3);
     elements.catalogStatus.textContent = "Finalizing set sequence with existing stream / proxy fallback routing…";
     elements.catalogSetlist.innerHTML = state.catalogSet.tracks.map((track, index) =>
-      `<li><span class="catalog-curator__slot">#${String(index + 1).padStart(2, "0")}</span><div><strong>${escapeHtml(track.title)}</strong><span>${escapeHtml(track.artist)}</span><small>${escapeHtml(String(track.bpm))} BPM · ${escapeHtml(track.role)} · ${escapeHtml(track.energyLevel)} · ${formatTime(track.playDurationSeconds)}</small></div><button type="button" data-catalog-slot="${index}" aria-label="Play stream: ${escapeHtml(track.title)}">Play stream</button></li>`
+      `<li id="catalogTrack${index}"><span class="catalog-curator__slot">#${String(index + 1).padStart(2, "0")}</span><div><strong>${escapeHtml(track.title)}</strong><span>${escapeHtml(track.artist)}</span><small>${escapeHtml(String(track.bpm))} BPM · ${escapeHtml(track.role)} · ${escapeHtml(track.energyLevel)}</small><small>Scheduled ${formatTime(track.playDurationSeconds)} · starts ${formatTime(track.startSeconds)}</small><span class="catalog-curator__route" id="catalogTrackRoute${index}">${escapeHtml(catalogTrackRoute(track.streamUrl))} · scheduled</span></div><button id="catalogTrackPlay${index}" type="button" data-catalog-slot="${index}" aria-label="Play stream: ${escapeHtml(track.title)} by ${escapeHtml(track.artist)}, slot ${index + 1}" aria-describedby="catalogTrackRoute${index}">Play stream</button></li>`
     ).join("");
+    updateCatalogPlaybackCards();
     const avoided = state.catalogSet.avoidedTrackCount ? ` ${state.catalogSet.avoidedTrackCount} track(s) skipped by your avoid list.` : "";
     elements.catalogStatus.textContent = `${formatTime(state.catalogSet.durationSeconds)} / ${minutes} minutes scheduled.${
       state.catalogSet.complete ? " Set ready — curated sequence, played back-to-back." : ` Short by ${formatTime(state.catalogSet.shortfallSeconds)}. Add tracks or explicitly allow recent reuse.`}${avoided}`;
@@ -3317,6 +3323,45 @@ import { MIX_PRESETS, createMixSeed, deleteUserPreset, describeMixIntent, normal
     }
     if (elements.catalogLinkedNotice) elements.catalogLinkedNotice.hidden = true;
     await advanceCatalogTrack();
+  }
+
+  function catalogTrackRoute(source) {
+    const url = new URL(source, location.href);
+    return url.origin === location.origin && url.pathname === "/api/drive-catalog/audio" ? "HALO proxy" : "Primary audio";
+  }
+
+  function updateCatalogPlaybackCards() {
+    const active = state.mix?.isDriveCatalogPlayback
+      && ["remote", "error"].includes(state.audioSourceMode)
+      && state.catalogSet?.tracks[state.catalogIndex]?.id === state.mix.id;
+    if (elements.catalogUploadLocal) elements.catalogUploadLocal.hidden = !(active && state.audioSourceMode === "error");
+    state.catalogSet?.tracks.forEach((track, index) => {
+      const selected = active && index === state.catalogIndex;
+      const card = document.getElementById(`catalogTrack${index}`);
+      const badge = document.getElementById(`catalogTrackRoute${index}`);
+      const button = document.getElementById(`catalogTrackPlay${index}`);
+      let label = `${catalogTrackRoute(track.streamUrl)} · scheduled`;
+      if (selected) {
+        const fallback = track.fallbackUrl && elements.audio.src === playableCatalogUrl(track.fallbackUrl);
+        const route = fallback ? "HALO proxy fallback" : catalogTrackRoute(track.streamUrl);
+        const status = state.releasePlaybackState;
+        label = state.audioSourceMode === "error" ? "Stream unavailable"
+          : status === "loading" ? "Loading stream…"
+          : `${route} · ${status === "playing" && elements.audio.muted ? "playing muted" : status}`;
+        if (elements.catalogTrackStatus) elements.catalogTrackStatus.textContent = `Slot ${index + 1}: ${track.title} — ${label}.${state.audioSourceMode === "error" ? " Upload a local mix or choose another track." : ""}`;
+      }
+      if (card) card.dataset.state = selected ? state.audioSourceMode === "error" ? "unavailable" : "selected" : "scheduled";
+      if (badge) badge.textContent = label;
+      if (button) {
+        if (selected) button.setAttribute("aria-current", "true");
+        else button.removeAttribute("aria-current");
+      }
+    });
+    if (state.catalogSet && !active && elements.catalogTrackStatus) {
+      elements.catalogTrackStatus.textContent = state.catalogIndex >= state.catalogSet.tracks.length && state.catalogSet.tracks.length
+        ? "Playback finished. Select any track to replay the sequence."
+        : "";
+    }
   }
 
   async function advanceCatalogTrack(slot = state.catalogIndex + 1) {
@@ -3436,6 +3481,7 @@ import { MIX_PRESETS, createMixSeed, deleteUserPreset, describeMixIntent, normal
   elements.catalogPreset?.addEventListener("change", describeSelectedPreset);
   elements.catalogPresetSave?.addEventListener("click", saveCatalogPreset);
   elements.catalogPresetDelete?.addEventListener("click", deleteCatalogPreset);
+  elements.catalogUploadLocal?.addEventListener("click", openMixFilePicker);
   elements.catalogSetlist?.addEventListener("click", event => {
     const button = event.target.closest("button[data-catalog-slot]");
     if (!button || state.catalogGenerating || state.catalogAdvancing) return;
@@ -3444,6 +3490,7 @@ import { MIX_PRESETS, createMixSeed, deleteUserPreset, describeMixIntent, normal
   renderCatalogPresets();
   elements.audio.addEventListener("playing", handleCatalogPlaying);
   elements.audio.addEventListener("timeupdate", handleCatalogTimeupdate);
+  elements.audio.addEventListener("volumechange", updateCatalogPlaybackCards);
   if (resumeUploadVerification()) return;
   elements.songLabLink?.addEventListener("click", event => {
     if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;

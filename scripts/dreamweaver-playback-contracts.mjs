@@ -11,6 +11,7 @@ import * as mixIntent from "../lib/mix-intent.js";
 const script = await readFile(new URL("../dreamweaver/dreamweaver.js", import.meta.url), "utf8");
 const declarations = script.slice(script.indexOf("(() => {"), script.indexOf('  if (document.readyState === "loading")'));
 const catalogControlBindings = script.slice(script.indexOf('  elements.catalogGenerate?.addEventListener'), script.indexOf('  if (resumeUploadVerification()'));
+const audioErrorBinding = script.slice(script.indexOf('  elements.audio.addEventListener("error", async'), script.indexOf('  elements.muteButton.addEventListener'));
 const songId = "11111111-1111-4111-8111-111111111111";
 const stream = "https://halo.test/song.mp3";
 const masterStream = "https://halo.test/canonical-master.wav";
@@ -51,6 +52,8 @@ export function fixture(search, { releases = [release], mixes = [mix], blocked =
     hasAttribute(name) { return this.attributes.has(name); }
     removeAttribute(name) { this.attributes.delete(name); }
     closest() { return null; }
+    click() { this.clicks = (this.clicks || 0) + 1; }
+    get currentSrc() { return this.src; }
     querySelectorAll() { return []; }
     pause() { this.paused = true; }
     load() {
@@ -77,6 +80,8 @@ export function fixture(search, { releases = [release], mixes = [mix], blocked =
   };
   const location = new URL(`${pathname}${search}`, "https://halo.test");
   const requests = [];
+  const timers = new Map();
+  let timerId = 0;
   const context = {
     URL, URLSearchParams, console, location, DREAMWEAVER_STOREFRONT_MIX_ID, buildDreamweaverStorefrontPath, createLyricInteractionRecorder, catalogAudioUrl, generateAutomatedSet, readRecentTrackIds, recordPlayedTrack, ...mixIntent, ...playback,
     Image: class {
@@ -89,7 +94,7 @@ export function fixture(search, { releases = [release], mixes = [mix], blocked =
     document: { getElementById: getElement, querySelector: getElement, body: new Element() },
     localStorage: storage,
     history: { replaceState: (_state, _title, url) => { location.href = new URL(url, location).href; } },
-    window: { clearTimeout() {}, setTimeout: () => 1, requestAnimationFrame: callback => callback(), HaloReleaseArtwork: releaseArtwork },
+    window: { clearTimeout: id => timers.delete(id), setTimeout: callback => { timers.set(++timerId, callback); return timerId; }, requestAnimationFrame: callback => callback(), HaloReleaseArtwork: releaseArtwork },
     fixtures: { releases, mixes, unlock, requests, assetBinding, driveCatalog, catalogError }
   };
   if (storageGetterError) Object.defineProperty(context, "localStorage", { get() { throw new Error("SecurityError"); } });
@@ -119,10 +124,11 @@ export function fixture(search, { releases = [release], mixes = [mix], blocked =
     state.unlock = fixtures.unlock;
     elements.audio.addEventListener("playing", () => setReleasePlaybackState("playing"));
     ${catalogControlBindings}
+    ${audioErrorBinding}
     elements.audio.addEventListener("ended", handleCatalogEnded);
-    globalThis.player = { state, chapters, initializeDreamweaver, generateCatalogSet, advanceCatalogTrack, retryCatalogProxy, shouldPromptLocalUpload, resolvePrimaryPlaybackMix, resolvePrimaryAudio, handleSoundUnlock, togglePlayback, loadImage };
+    globalThis.player = { state, chapters, initializeDreamweaver, generateCatalogSet, advanceCatalogTrack, retryCatalogProxy, shouldPromptLocalUpload, resolvePrimaryPlaybackMix, resolvePrimaryAudio, handleSoundUnlock, togglePlayback, loadImage, activateLocalMixFile, armRemoteAudioWatchdog };
   })();`, context);
-  return { ...context.player, nodes, requests };
+  return { ...context.player, nodes, requests, timers };
 }
 
 for (const search of [

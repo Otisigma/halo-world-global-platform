@@ -69,7 +69,7 @@ byId("load-candidate").addEventListener("click", async () => {
     if (revision !== current) return;
     candidate = result.candidate;
     byId("preview-report").textContent = JSON.stringify(result.evidence, null, 2);
-    for (const id of ["try-iframe", "try-primary", "try-proxy"]) byId(id).disabled = !candidate;
+    for (const mode of ["iframe", "primary", "proxy"]) byId(`try-${mode}`).disabled = !candidate?.[mode];
     timer = setTimeout(clear, 60_000);
   } finally {
     pending = false;
@@ -79,7 +79,7 @@ byId("load-candidate").addEventListener("click", async () => {
 
 for (const mode of ["iframe", "primary", "proxy"]) {
   byId(`try-${mode}`).addEventListener("click", () => {
-    if (!authorized || !candidate) return;
+    if (!authorized || !candidate?.[mode]) return;
     stopMedia();
     const current = revision;
     const media = document.createElement(mode === "iframe" ? "iframe" : "audio");

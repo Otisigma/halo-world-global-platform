@@ -91,7 +91,8 @@ obtain this test without owner approval.
    automatic fallback, automatic deployment or public setlist change. The iframe
    contacts only `https://drive.google.com/file/d/{catalog-derived-id}/preview`.
    Primary media is restricted to the same origin; an external primary host is a
-   concrete blocker, not fetched or silently substituted.
+   concrete blocker for the primary probe only, not fetched or silently substituted.
+   The requested iframe and authorized-proxy probes remain available.
 4. Record browser/device, audible sound, controls/seek, network observations
    (200/206, content type/ranges, policy/CORS errors), and failures privately.
    Do not paste raw IDs/URLs, credentials, catalog bodies or network response

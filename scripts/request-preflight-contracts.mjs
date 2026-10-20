@@ -47,7 +47,11 @@ assert.equal(candidate.proxy, `${origin}/api/drive-catalog/audio?track=fixture-t
 assert.throws(() => previewCandidate({ ...catalog, configured: false }, origin), /unconfigured/);
 assert.throws(() => previewCandidate({ ...catalog, tracks: [] }, origin), /no eligible/);
 assert.throws(() => previewCandidate({ ...catalog, tracks: [{ ...track, public: false }] }, origin), /no eligible/);
-assert.throws(() => previewCandidate({ ...catalog, tracks: [{ ...track, primaryAudioPath: "https://other.example/song.mp3" }] }, origin), /not same-origin/);
+const externalPrimaryCatalog = { ...catalog, tracks: [{ ...track, primaryAudioPath: "https://other.example/song.mp3" }] };
+const externalPrimary = previewCandidate(externalPrimaryCatalog, origin);
+assert.equal(externalPrimary.primary, "", "unreviewed primary host must not be fetched");
+assert.equal(externalPrimary.iframe, candidate.iframe, "primary host restrictions must not silently reject the requested iframe");
+assert.equal(externalPrimary.proxy, candidate.proxy);
 for (const bad of [
   "http://169.254.169.254", "https://evil.example", `${origin}.evil.example`,
   "https://halo-world-global-platform.netlify.app@evil.example",
@@ -74,6 +78,9 @@ assert.equal(fixture.evidence.source, "fixture");
 assert.equal(fixture.evidence.playback, "not tested");
 assert.match(fixture.evidence.observation, /Mocked/);
 assert.doesNotMatch(JSON.stringify(fixture.evidence), /fixture_drive_only|fixture-track|Fixture only/);
+const externalReport = await loadPreviewCandidate({ origin, source: "fixture", fetchImpl: async () => Response.json(externalPrimaryCatalog) });
+assert.match(externalReport.evidence.observation, /only that probe is blocked/);
+assert.equal(externalReport.candidate.iframe, candidate.iframe);
 // Even an HTTP-shaped response labeled live-catalog cannot establish browser playback.
 const liveShape = await loadPreviewCandidate({ origin, fetchImpl: fetchFixture });
 assert.equal(liveShape.evidence.status, "partially feasible");

@@ -98,7 +98,7 @@ async function generateReply(db, target, message, requestProposal, request) {
     : target === "mirror"
       ? "You are Mirror, the HALO reflection and synthesis lead. Challenge assumptions and compare instructions with recorded outcomes."
       : `You are ${AGENT_ROLES[target].name}, HALO's ${AGENT_ROLES[target].title} specialist. Your mission is to ${AGENT_ROLES[target].mission.toLowerCase()}`;
-  const openai = new OpenAI();
+  const openai = new OpenAI({ maxRetries: 0 });
   const completion = await openai.chat.completions.create({
     model: AGENT_MODEL,
     messages: [

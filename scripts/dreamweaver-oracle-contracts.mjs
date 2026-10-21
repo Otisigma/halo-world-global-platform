@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
+import { runInNewContext } from "node:vm";
 import { createOracleHandler, oracleAdvice, ORACLE_SYSTEM_PROMPT } from "../netlify/lib/dreamweaver-oracle.mjs";
 import { loadOracleTelemetry } from "../netlify/lib/dreamweaver-telemetry.mjs";
 
@@ -201,4 +202,89 @@ assert.match(api, /AI_MODELS\.council/);
 assert.match(api, /AbortSignal\.timeout\(12_000\)/);
 assert.match(api, /max_completion_tokens: 2400/);
 assert.equal(JSON.parse(pkg).scripts["test:dreamweaver-oracle"], "node scripts/dreamweaver-oracle-contracts.mjs");
+
+// Exercise the actual browser module with a minimal text-only DOM and mocked API.
+class Element {
+  constructor(tag) { this.tagName = tag; this.children = []; this.listeners = {}; this.attrs = {}; this.value = ""; this.textContent = ""; }
+  append(...children) { this.children.push(...children); children.forEach(child => { child.parent = this; }); }
+  replaceChildren(...children) { this.children = []; this.append(...children); }
+  setAttribute(name, value) { this.attrs[name] = value; }
+  addEventListener(name, listener) { this.listeners[name] = listener; }
+  querySelectorAll() { return []; }
+  get firstElementChild() { return this.children[0]; }
+  remove() { this.parent.children.splice(this.parent.children.indexOf(this), 1); }
+  set innerHTML(_) { throw new Error("Unsafe HTML rendering"); }
+}
+const elements = Object.fromEntries(["dreamweaverOracle", "oracleMessage", "oracleThread", "oracleTelemetry",
+  "oracleUseAI", "oracleSend", "oracleRefresh", "oracleStatus", "oracleForm"].map(id => [id, new Element("div")]));
+elements.dreamweaverOracle.hidden = true;
+const listeners = {};
+const browserRequests = [];
+const timers = [];
+let reply;
+let copied;
+runInNewContext(client, {
+  document: { getElementById: id => elements[id], createElement: tag => new Element(tag), visibilityState: "visible" },
+  window: { addEventListener: (name, listener) => { listeners[name] = listener; }, setInterval: callback => timers.push(callback) },
+  navigator: { clipboard: { writeText: async value => { copied = value; } } },
+  fetch: async (url, options) => { browserRequests.push({ url, options }); return reply(); },
+  AbortController, setTimeout: () => 1, clearTimeout: () => {}
+});
+const settle = () => new Promise(resolve => setImmediate(resolve));
+const browserData = { telemetry, answer: "<img src=x onerror=alert(1)>", notice: "Nothing deployed", usedFallback: false,
+  suggestions: [{ language: "html", code: "<script>untrusted()</script>", rationale: "Review only",
+    verification: "Do not execute", evidence: ["publication"] }] };
+assert.equal(browserRequests.length, 0, "locked UI does not fetch private telemetry");
+reply = async () => Response.json(browserData);
+listeners["halo-owner-operations"]({ detail: { authorized: true } });
+await settle();
+assert.equal(elements.dreamweaverOracle.hidden, false);
+assert.equal(elements.oracleTelemetry.children.length, 5);
+assert.equal(browserRequests[0].options.credentials, "same-origin");
+elements.oracleMessage.value = "Explain";
+elements.oracleUseAI.checked = true;
+elements.oracleForm.listeners.submit({ preventDefault() {} });
+await settle();
+assert.equal(elements.oracleThread.children.length, 2);
+assert.equal(elements.oracleThread.children[1].children[1].textContent, "<img src=x onerror=alert(1)>\n\nNothing deployed");
+const codeBlock = elements.oracleThread.children[1].children.find(child => child.tagName === "pre");
+assert.equal(codeBlock.children[0].tagName, "code");
+assert.equal(codeBlock.children[0].textContent, "<script>untrusted()</script>");
+await elements.oracleThread.children[1].children.find(child => child.tagName === "button").listeners.click();
+assert.equal(copied, "<script>untrusted()</script>");
+for (let i = 0; i < 12; i++) {
+  elements.oracleMessage.value = `Question ${i}`;
+  elements.oracleForm.listeners.submit({ preventDefault() {} });
+  await settle();
+}
+assert.equal(elements.oracleThread.children.length, 20, "displayed conversation is bounded");
+assert.equal(JSON.parse(browserRequests.at(-1).options.body).history.length, 6);
+assert.equal(JSON.parse(browserRequests.at(-1).options.body).useAI, true);
+reply = async () => { throw new Error("offline"); };
+elements.oracleRefresh.listeners.click();
+await settle();
+assert.match(elements.oracleStatus.textContent, /may be stale/);
+assert.equal(elements.oracleSend.disabled, false);
+let resolveStale;
+reply = () => new Promise(resolve => { resolveStale = resolve; });
+elements.oracleRefresh.listeners.click();
+const staleSignal = browserRequests.at(-1).options.signal;
+listeners["halo-owner-operations"]({ detail: { authorized: false } });
+assert.equal(staleSignal.aborted, true);
+assert.equal(elements.dreamweaverOracle.hidden, true);
+assert.equal(elements.oracleThread.children.length, 0);
+assert.equal(elements.oracleTelemetry.children.length, 0);
+assert.equal(elements.oracleMessage.value, "");
+resolveStale(Response.json(browserData));
+await settle();
+assert.equal(elements.dreamweaverOracle.hidden, true, "late replies cannot restore signed-out data");
+assert.equal(elements.oracleTelemetry.children.length, 0);
+const requestsBeforeTimer = browserRequests.length;
+timers[0]();
+assert.equal(browserRequests.length, requestsBeforeTimer, "hidden panel must not poll");
+reply = async () => Response.json({ message: "Owner only" }, { status: 403 });
+listeners["halo-owner-operations"]({ detail: { authorized: true } });
+await settle();
+assert.equal(elements.dreamweaverOracle.hidden, true);
+assert.equal(elements.oracleSend.disabled, false);
 console.log("Dreamweaver oracle contracts passed.");

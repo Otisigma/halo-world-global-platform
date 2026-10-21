@@ -75,8 +75,9 @@
     if (busy) return;
     busy = true;
     const current = generation;
-    controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 25_000);
+    const activeController = new AbortController();
+    controller = activeController;
+    const timeout = setTimeout(() => activeController.abort(), 25_000);
     byId("oracleSend").disabled = true;
     byId("oracleRefresh").disabled = true;
     panel.setAttribute("aria-busy", "true");
@@ -88,7 +89,7 @@
         cache: "no-store",
         headers: body ? { "Content-Type": "application/json" } : undefined,
         body: body ? JSON.stringify(body) : undefined,
-        signal: controller.signal
+        signal: activeController.signal
       });
       const data = await response.json();
       if (current !== generation) return;

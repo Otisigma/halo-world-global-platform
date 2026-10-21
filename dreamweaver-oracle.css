@@ -1,0 +1,44 @@
+.oracle-panel {
+  margin: 2rem 0;
+  padding: clamp(1rem, 3vw, 2rem);
+  background: #07090e;
+  color: #e5e7eb;
+  border: 1px solid #f59e0b;
+  border-radius: 1rem;
+}
+.oracle-panel[hidden] { display: none; }
+.oracle-panel h2, .oracle-panel h3 { color: #f59e0b; }
+.oracle-panel p, .oracle-panel small { line-height: 1.6; }
+.oracle-panel button {
+  color: #07090e;
+  background: #f59e0b;
+  border: 1px solid #f59e0b;
+  padding: .65rem 1rem;
+  border-radius: .4rem;
+  cursor: pointer;
+}
+.oracle-panel button:disabled { opacity: .6; cursor: wait; }
+.oracle-panel :focus-visible { outline: 3px solid #06b6d4; outline-offset: 3px; }
+.oracle-telemetry {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+  gap: 1rem;
+  margin: 1rem 0;
+}
+.oracle-telemetry article, .oracle-thread article {
+  min-width: 0;
+  padding: 1rem;
+  border: 1px solid #28515b;
+  border-radius: .5rem;
+}
+.oracle-telemetry h3 { margin-top: 0; }
+.oracle-telemetry ul { padding-left: 1.25rem; }
+.oracle-thread { max-height: 36rem; overflow-y: auto; display: grid; gap: 1rem; }
+.oracle-thread p { white-space: pre-wrap; overflow-wrap: anywhere; }
+.oracle-thread h3 { color: #06b6d4; }
+.oracle-thread pre { white-space: pre-wrap; overflow-wrap: anywhere; background: #101620; padding: 1rem; }
+.oracle-prompts { display: flex; flex-wrap: wrap; gap: .6rem; margin: 1rem 0; }
+.oracle-panel .oracle-prompts button { color: #06b6d4; border-color: #06b6d4; background: transparent; }
+.oracle-panel form { display: grid; gap: .8rem; }
+.oracle-panel textarea { box-sizing: border-box; width: 100%; resize: vertical; color: #e5e7eb; background: #101620; padding: .8rem; border: 1px solid #06b6d4; }
+.oracle-panel .oracle-ai-toggle { display: flex; align-items: center; gap: .6rem; }

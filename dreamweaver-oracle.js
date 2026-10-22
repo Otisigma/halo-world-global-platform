@@ -71,6 +71,25 @@
     thread.scrollTop = thread.scrollHeight;
   }
 
+  function appendCatalog(catalog) {
+    const thread = byId("oracleThread");
+    for (const result of catalog.results) {
+      const details = [
+        `Artist: ${result.artistName || "not recorded"}`,
+        `Album: ${result.albumTitle || "not recorded"}`,
+        `ISRC: ${result.isrc || "not recorded"}`,
+        `Genre: ${result.genre || "not recorded"}`,
+        `Rights: ${result.rightsStatus || "not recorded"} · metadata: ${result.metadataStatus || "not recorded"} · pipeline: ${result.pipelineStatus || "not recorded"}`,
+        `Versions: ${result.versions.map(version => `${version.type} (${version.audioAvailable ? "audio recorded" : "audio unavailable"}${version.masteringStatus === "approved" ? ", approved" : ""})`).join(", ") || "none recorded"}`,
+        `Approved fallback suggestions: ${result.approvedFallbacks.map(version => version.type).join(", ") || "none recorded"}`
+      ];
+      const article = node("article");
+      article.append(node("h3", result.title), node("p", details.join("\n")));
+      thread.append(article);
+    }
+    appendMessage("assistant", `${catalog.notice}\n\n${catalog.results.length ? "" : "No matching active catalog records were found."}`);
+  }
+
   async function request(body) {
     if (busy) return;
     busy = true;
@@ -98,14 +117,21 @@
         throw new Error("Dreamweaver request failed. Confirm owner access and retry.");
       }
       panel.hidden = false;
-      renderTelemetry(data.telemetry);
-      byId("oracleStatus").textContent = `Snapshot ${data.telemetry.generatedAt}${body ? data.usedFallback ? " · deterministic advice" : " · AI advisory response" : ""}`;
+      if (data.telemetry) renderTelemetry(data.telemetry);
+      byId("oracleStatus").textContent = data.mode === "catalog"
+        ? `Catalog search complete · ${data.catalog.results.length} match${data.catalog.results.length === 1 ? "" : "es"}`
+        : `Snapshot ${data.telemetry.generatedAt}${body ? data.usedFallback ? " · deterministic advice" : " · AI advisory response" : ""}`;
       if (body) {
-        appendMessage("user", body.message);
-        appendMessage("assistant", `${data.answer}\n\n${data.notice}`, data.suggestions);
-        history.push({ role: "user", content: body.message.slice(0, 1000) },
-          { role: "assistant", content: data.answer.slice(0, 1000) });
-        history.splice(0, Math.max(0, history.length - 6));
+        if (data.mode === "catalog") {
+          appendMessage("user", `Catalog search: ${body.query}`);
+          appendCatalog(data.catalog);
+        } else {
+          appendMessage("user", body.message);
+          appendMessage("assistant", `${data.answer}\n\n${data.notice}`, data.suggestions);
+          history.push({ role: "user", content: body.message.slice(0, 1000) },
+            { role: "assistant", content: data.answer.slice(0, 1000) });
+          history.splice(0, Math.max(0, history.length - 6));
+        }
         byId("oracleMessage").value = "";
       }
     } catch {
@@ -125,7 +151,10 @@
   byId("oracleForm").addEventListener("submit", event => {
     event.preventDefault();
     const message = byId("oracleMessage").value.trim();
-    if (message) request({ mode: "chat", message, history: history.slice(-6), useAI: byId("oracleUseAI").checked });
+    if (!message) return;
+    const catalogQuery = /^catalog:\s*(.+)$/i.exec(message);
+    if (catalogQuery) request({ mode: "catalog", query: catalogQuery[1].trim() });
+    else request({ mode: "chat", message, history: history.slice(-6), useAI: byId("oracleUseAI").checked });
   });
   panel.querySelectorAll("[data-oracle-prompt]").forEach(button => button.addEventListener("click", () => {
     byId("oracleMessage").value = button.textContent;

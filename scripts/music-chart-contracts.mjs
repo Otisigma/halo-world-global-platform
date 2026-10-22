@@ -186,7 +186,7 @@ assert.match(styles, /\.chart-play/, "chart rows must style their delegated play
   assert.match(context.elements.grid.innerHTML, /<h3>&lt;script&gt;unsafe&lt;\/script&gt;<\/h3>/);
   assert.match(context.elements.grid.innerHTML, /Collection name/);
   assert.match(context.elements.grid.innerHTML, /In-page preview unavailable/);
-  assert.doesNotMatch(context.elements.grid.innerHTML, /<script>|src=""|Editorial pick|card-number/);
+  assert.doesNotMatch(context.elements.grid.innerHTML, /<script>|src=""|Editorial pick|card-number/i);
   assert.equal(context.elements.results.textContent, "Showing 1 of 1 releases");
   assert.equal(context.elements.reset.hidden, true);
 }

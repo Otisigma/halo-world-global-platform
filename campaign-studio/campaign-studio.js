@@ -8,6 +8,7 @@
     studio: null,
     campaign: null,
     selected: new Set(),
+    releaseSelected: new Set(),
     tracksLoaded: false,
     authMode: "login",
     initialized: false,
@@ -216,6 +217,42 @@
     return `<section class="studio-hero"><div class="hero-copy"><p class="signal-label">CAMPAIGN STUDIO // ARTIST CONTROLS</p><h1>One release.<br><em>Five purpose-built links.</em></h1><p>Start from the approved HALO upload flow, define the release once, then manage destination-ready copy for fans, DJs, radio, press, and advance listeners.</p></div><aside class="hero-ticket"><span>Available listening tracks</span><strong>${trackCount}</strong><small>Choose up to 20. The latest 14 are selected when the list opens.</small></aside></section>`;
   }
 
+  const RELEASE_POLL_PURPOSE = "release_consideration";
+  const isReleasePoll = campaign => campaign?.purpose === RELEASE_POLL_PURPOSE;
+  const RELEASE_POLL_FALLBACK_RULES = [
+    "Eligibility: Insider (100 earned points) or higher, with HALO member rewards turned on.",
+    "One vote per signed-in member. You can change your choice until the poll closes; only your latest choice counts.",
+    "Every eligible vote counts once. A higher reward tier unlocks voting but never adds weight.",
+    "Voting does not earn reward points.",
+    "The result advises the artist and team. It does not publish the song, release it, or send it to Spotify, Apple Music, or any other service.",
+    "Ties are not broken automatically; the artist team reviews them."
+  ];
+  const releaseRulesList = (rules, id = "releasePollRules") => `<ul class="release-poll-rules" id="${id}">${(Array.isArray(rules) && rules.length ? rules : RELEASE_POLL_FALLBACK_RULES).map(rule => `<li>${escapeHtml(rule)}</li>`).join("")}</ul>`;
+
+  function renderRecommendation(recommendation) {
+    if (!recommendation) return "";
+    const leaders = recommendation.leaders || [];
+    const summary = recommendation.outcome === "tie"
+      ? `Tie between ${leaders.map(leader => `“${escapeHtml(leader.title)}”`).join(" and ")} (${leaders[0]?.votes || 0} votes each).`
+      : recommendation.outcome === "leader"
+        ? `“${escapeHtml(leaders[0]?.title)}” by ${escapeHtml(leaders[0]?.artist)} (${leaders[0]?.votes || 0} of ${recommendation.totalVotes} votes).`
+        : "No eligible votes were cast.";
+    return `<section class="release-poll-result" aria-labelledby="releasePollResultTitle"><p class="signal-label">RESULT</p><h2 id="releasePollResultTitle">${escapeHtml(recommendation.label || "Fan recommendation / awaiting artist-team decision")}</h2><p>${summary}</p><p>${escapeHtml(recommendation.note || "")}</p><p><strong>Status:</strong> awaiting artist-team decision. Nothing has been published or distributed.</p></section>`;
+  }
+
+  function renderReleasePollBuilder() {
+    const candidates = state.studio.releaseCandidates || [];
+    const deadline = new Date(Date.now() + 7 * 86400000);
+    deadline.setMinutes(deadline.getMinutes() - deadline.getTimezoneOffset());
+    return `<section class="release-poll-builder" aria-labelledby="releasePollBuilderTitle"><div class="step-heading"><div><p class="signal-label">RELEASE CONSIDERATION / ADVISORY FAN POLL</p><h2 id="releasePollBuilderTitle">Ask ranked fans which song to consider next.</h2></div><div class="track-count">${state.releaseSelected.size}<small>selected</small></div></div>
+      <p>This is separate from listening-party votes. Only your own catalog songs (or any song, for HALO owners) that are active, rights-cleared, free of metadata blockers, backed by an approved sale master, and not already published can be candidates. The shortlist is locked once created and stays private until you publish.</p>
+      ${releaseRulesList(state.studio.releasePollRules, "releasePollBuilderRules")}
+      ${candidates.length ? `<fieldset class="release-candidate-picker"><legend>Eligible candidates</legend>${candidates.map(song => `<label class="picker-track"><input type="checkbox" value="${escapeHtml(song.id)}" data-release-choice ${state.releaseSelected.has(song.id) ? "checked" : ""}><span class="picker-copy"><strong>${escapeHtml(song.title)}</strong><small>${escapeHtml(song.artist)} · ${escapeHtml(song.genre || formatDuration(song.durationSeconds))}</small></span><span class="picker-mark">✓</span></label>`).join("")}</fieldset>
+      <form class="campaign-form" id="releasePollForm"><label class="wide">Poll title<input name="title" maxlength="140" value="Fan release recommendation" required></label><label class="wide">Invitation line<input name="subtitle" maxlength="240" value="Recommend which song the artist team should consider next. The team makes the final decision."></label><label>Voting closes<input name="endsAt" type="datetime-local" value="${deadline.toISOString().slice(0, 16)}" required></label><p class="status-message" id="releasePollMessage" role="status" aria-live="polite"></p><div class="form-actions"><button class="signal-button" type="submit" ${state.releaseSelected.size < 2 ? "disabled" : ""}>Draft release-consideration poll</button></div></form>`
+      : `<p class="history-card">No catalog songs are eligible yet. Clear rights, resolve metadata blockers, and approve the sale master in the <a href="/song-catalog/">Song Catalog</a> first.</p>`}
+    </section>`;
+  }
+
   function renderStudio() {
     if (!state.studio?.authenticated) return authGate();
     const tracks = state.studio.tracks || [];
@@ -224,15 +261,53 @@
     deadline.setMinutes(deadline.getMinutes() - deadline.getTimezoneOffset());
     app.innerHTML = `${studioHero(tracks.length)}
       <section class="studio-shell"><aside class="studio-rail"><p class="signal-label">CAMPAIGN ARCHIVE</p><h2>Your signals.</h2><p>Open a draft, share a live vote, or check the community unlock.</p><div class="campaign-history">
-      ${campaigns.length ? campaigns.map(campaign => `<a class="history-card" href="/campaign-studio/?campaign=${encodeURIComponent(campaign.slug)}"><span>${escapeHtml(campaign.status)} / ${campaign.votes} votes</span><strong>${escapeHtml(campaign.title)}</strong><small>${campaign.trackCount} tracks · ends ${escapeHtml(formatDate(campaign.endsAt))}</small></a>`).join("") : '<p class="history-card">No campaigns yet. This first signal starts the archive.</p>'}
+      ${campaigns.length ? campaigns.map(campaign => `<a class="history-card" href="/campaign-studio/?campaign=${encodeURIComponent(campaign.slug)}"><span>${isReleasePoll(campaign) ? "release poll · " : ""}${escapeHtml(campaign.status)} / ${campaign.votes} votes</span><strong>${escapeHtml(campaign.title)}</strong><small>${campaign.trackCount} tracks · ends ${escapeHtml(formatDate(campaign.endsAt))}</small></a>`).join("") : '<p class="history-card">No campaigns yet. This first signal starts the archive.</p>'}
       </div></aside><div class="studio-work"><div class="step-heading"><div><p class="signal-label">01 / LOAD THE ROOM</p><h2>Choose the tracks fans hear before they vote.</h2></div><div class="track-count">${state.selected.size}<small>selected</small></div></div>
       ${tracks.length ? `<button class="primary-button" type="button" data-load-tracks>${state.tracksLoaded ? "Reset to latest 14" : "Load listening-party tracks"}</button>
       ${state.tracksLoaded ? `<div class="track-picker">${tracks.map((track, index) => `<label class="picker-track"><input type="checkbox" value="${escapeHtml(track.id)}" data-track-choice ${state.selected.has(track.id) ? "checked" : ""}><span class="picker-number">${String(index + 1).padStart(2, "0")}</span><span class="picker-copy"><strong>${escapeHtml(track.title)}</strong><small>${escapeHtml(track.artist)} · ${escapeHtml(track.genre || formatDuration(track.durationSeconds))}</small></span><span class="picker-mark">✓</span></label>`).join("")}</div>
       <form class="campaign-form" id="campaignForm"><label class="wide">Campaign title<input name="title" maxlength="140" value="The First Listening Party" required></label><label class="wide">Invitation line<input name="subtitle" maxlength="240" value="Hear the full shortlist and choose what HALO releases next."></label><label>Host persona<select name="hostPersonaId">${selectOptions(state.requestedPersona, [["halo","DJ HALO · peak hour"],["butterfly","DJ BUTTERFLY · melodic host"],["romy","DJ ROMY · afterhours"]])}</select></label><label>Room atmosphere<select name="atmosphere">${selectOptions("midnight", [["midnight","Midnight signal"],["sunset","Sunset terrace"],["butterfly","Butterfly garden"],["electric","Electric room"]])}</select></label><label>Celebration<select name="celebration">${selectOptions("confetti", [["confetti","Confetti burst"],["streamers","Slow streamers"],["starlight","Starlight"],["none","No celebration"]])}</select></label><label>Motion<select name="motion">${selectOptions("gentle", [["gentle","Gentle"],["full","Full atmosphere"],["reduced","Reduced motion"]])}</select></label><label>Community vote goal<input name="voteGoal" type="number" min="10" max="100000" value="100" required></label><label>Voting closes<input name="endsAt" type="datetime-local" value="${deadline.toISOString().slice(0, 16)}" required></label><label class="wide">Community unlock<input name="rewardTitle" maxlength="140" value="Exclusive 60-minute DJ mix" required></label><label class="wide">Reward note<textarea name="rewardDescription" maxlength="500">Every participating fan receives access when the community reaches the vote goal.</textarea></label><label class="wide">Room note<textarea name="roomNote" maxlength="300">Come early. Hear every song in full. Stay for the reveal.</textarea></label><p class="status-message" id="createMessage"></p><div class="form-actions"><button class="signal-button" type="submit" ${state.selected.size < 2 ? "disabled" : ""}>Build the Dreamweaver campaign</button></div></form>` : ""}` : `<div class="empty-state"><h1>No tracks in the room yet.</h1><p>Add tracks to HALO Radio first, then return here to build the listening-party campaign.</p><a class="primary-button" href="/radio/">Open HALO Radio</a></div>`}
+      ${renderReleasePollBuilder()}
       </div></section>`;
   }
 
+  function renderReleasePollEditor() {
+    const campaign = state.campaign;
+    const poll = campaign.releasePoll || {};
+    const deadline = new Date(new Date(campaign.endsAt).valueOf() - new Date(campaign.endsAt).getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+    const closed = campaign.status === "closed";
+    app.innerHTML = `<section class="campaign-editor release-poll-editor"><div class="editor-main"><div class="step-heading"><div><p class="signal-label">RELEASE CONSIDERATION / ${escapeHtml(campaign.status.toUpperCase())}</p><h2>${escapeHtml(campaign.title)}</h2></div><div class="track-count">${campaign.totalVotes}<small>votes</small></div></div>
+      <p class="release-poll-notice"><strong>Advisory only.</strong> A winning song is a fan recommendation for the artist team. It is never published, scheduled, made chart-eligible, or sent to any third-party service by this poll.</p>
+      ${releaseRulesList(poll.rules, "releasePollEditorRules")}
+      <h3>Locked candidates</h3><ol class="release-poll-standings">${campaign.tracks.map(track => `<li><strong>${escapeHtml(track.title)}</strong> · ${escapeHtml(track.artist)} — ${track.votes} ${track.votes === 1 ? "vote" : "votes"}</li>`).join("")}</ol>
+      <p><small>To change the shortlist, close this poll and draft a new one.</small></p>
+      ${renderRecommendation(poll.recommendation)}
+      ${closed ? "" : `<form class="editor-form" id="editorForm"><label class="wide">Poll title<input name="title" maxlength="140" value="${escapeHtml(campaign.title)}" required></label><label class="wide">Invitation line<input name="subtitle" maxlength="240" value="${escapeHtml(campaign.subtitle)}"></label><label>Voting closes<input name="endsAt" type="datetime-local" value="${deadline}"></label><p class="status-message" id="editorMessage" role="status" aria-live="polite">${campaign.status === "published" ? "Live poll · eligible members can vote." : "Draft poll · candidates stay private until you publish."}</p><div class="form-actions"><button class="ghost-button" type="submit">Save edits</button>${campaign.status === "draft" ? '<button class="primary-button" type="button" data-publish>Publish poll</button>' : '<button class="primary-button" type="button" data-close-poll>Close poll + record recommendation</button>'}</div></form>`}
+      </div><aside class="editor-aside"><p class="signal-label">ARTIST-TEAM DECISION</p><h3>Release decisions stay with you.</h3><p>Review rights, consent, metadata, and release readiness in your authorized release controls before deciding anything.</p><div class="asset-actions">${poll.reviewPath ? `<a href="${escapeHtml(poll.reviewPath)}">Open Song Catalog release controls</a>` : ""}<a href="/campaign-studio/?campaign=${encodeURIComponent(campaign.slug)}&view=fan" target="_blank" rel="noopener">Open fan view</a><button type="button" data-copy-link>Copy poll link</button></div></aside></section>`;
+  }
+
+  function renderReleasePoll() {
+    const campaign = state.campaign;
+    const poll = campaign.releasePoll || {};
+    const viewer = poll.viewerEligibility;
+    const canVote = Boolean(campaign.acceptingVotes && viewer?.eligible);
+    const signedOut = !state.user;
+    const status = !campaign.acceptingVotes
+      ? "Voting is closed."
+      : viewer?.message || "Sign in with your HALO account to check eligibility.";
+    app.innerHTML = `<section class="vote-hero release-poll-hero"><div class="hero-copy"><p class="signal-label">${escapeHtml(campaign.promotion?.eyebrow || "HALO RELEASE CONSIDERATION POLL")}</p><h1>${escapeHtml(campaign.title)}</h1><p>${escapeHtml(campaign.subtitle)}</p></div><aside class="vote-progress"><strong>${campaign.totalVotes}</strong><span>eligible member votes · closes ${escapeHtml(formatDate(campaign.endsAt))}</span></aside></section>
+      <section class="release-poll-disclosure" aria-labelledby="releasePollRulesTitle"><h2 id="releasePollRulesTitle">Who can vote and what it means</h2>${releaseRulesList(poll.rules)}</section>
+      ${renderRecommendation(poll.recommendation)}
+      <p class="vote-message" id="voteMessage" role="status" aria-live="polite">${escapeHtml(status)}</p>
+      ${signedOut && campaign.acceptingVotes ? '<div class="form-actions"><button class="primary-button" type="button" data-open-auth>Sign in to vote</button><a class="ghost-button" href="/track-drops/">Turn on member rewards</a></div>' : ""}
+      ${viewer && !viewer.rankEligible && !signedOut ? '<div class="form-actions"><a class="ghost-button" href="/track-drops/">Check member rewards</a></div>' : ""}
+      <section class="release-poll-candidates" aria-label="Release candidates">${campaign.tracks.map(track => {
+        const selected = campaign.viewerVote === track.id;
+        return `<article class="vote-track release-candidate ${selected ? "is-selected" : ""}"><div class="track-content"><span class="track-index">CANDIDATE ${String(track.position).padStart(2, "0")}${track.genre ? ` / ${escapeHtml(track.genre)}` : ""}</span><h2 id="candidate-${track.id}">${escapeHtml(track.title)}</h2><span class="artist">${escapeHtml(track.artist)}</span><div class="vote-row"><button class="vote-button" type="button" data-vote="${track.id}" aria-pressed="${selected}" aria-describedby="candidate-${track.id} releasePollRules" ${canVote ? "" : "disabled"}>${selected ? "Your recommendation" : "Recommend this song"}</button><span class="vote-total">${track.votes} ${track.votes === 1 ? "vote" : "votes"}</span></div></div></article>`;
+      }).join("")}</section>`;
+  }
+
   function renderCampaignEditor() {
+    if (isReleasePoll(state.campaign)) return renderReleasePollEditor();
     const campaign = state.campaign;
     const promotion = campaign.promotion || {};
     const visualAsset = normalizeVisualAsset(promotion);
@@ -247,6 +322,7 @@
   }
 
   function renderPublicCampaign() {
+    if (isReleasePoll(state.campaign)) return renderReleasePoll();
     const campaign = state.campaign;
     const promotion = campaign.promotion || {};
     const partyTheme = campaign.partyTheme || {};
@@ -280,7 +356,7 @@
       const data = await api("GET", `/api/fan-campaigns?slug=${encodeURIComponent(state.publicSlug)}`);
       state.campaign = data.campaign;
       const savedVote = Number(localStorage.getItem(`halo-fan-vote:${state.campaign.slug}`));
-      if (!state.campaign.viewerVote && state.campaign.tracks.some(track => track.id === savedVote)) state.campaign.viewerVote = savedVote;
+      if (!isReleasePoll(state.campaign) && !state.campaign.viewerVote && state.campaign.tracks.some(track => track.id === savedVote)) state.campaign.viewerVote = savedVote;
       if (state.campaign.owner && state.user && !state.forceFanView) renderCampaignEditor(); else renderPublicCampaign();
       document.title = `${state.campaign.title} — HALO Fan Vote`;
     } catch (error) { app.innerHTML = `<section class="empty-state"><p class="signal-label">CAMPAIGN NOT FOUND</p><h1>This signal is off air.</h1><p>${escapeHtml(error.message)}</p><a href="/campaign-studio/">Open Dreamweaver Studio</a></section>`; }
@@ -337,12 +413,25 @@
 
   async function saveEditor(action) {
     const message = document.getElementById("editorMessage");
-    message.textContent = action === "launch" ? "Creating the page, links, atmosphere, and launch pack…" : action === "publish" ? "Publishing the fan vote…" : "Saving the team draft…";
+    message.textContent = action === "launch" ? "Creating the page, links, atmosphere, and launch pack…" : action === "publish" ? "Publishing the fan vote…" : action === "close" ? "Closing the poll and recording the fan recommendation…" : "Saving the team draft…";
     try { const data = await api("POST", "/api/fan-campaigns", { action, ...campaignPayload(document.getElementById("editorForm")) }); state.campaign = data.campaign; renderCampaignEditor(); }
     catch (error) { message.textContent = error.message; }
   }
 
+  async function releasePollVote(trackId) {
+    const message = document.getElementById("voteMessage");
+    message.textContent = "Sending your recommendation…";
+    try {
+      const data = await api("POST", "/api/fan-campaigns", { action: "vote", slug: state.campaign.slug, trackId });
+      state.campaign = data.campaign;
+      renderReleasePoll();
+      document.getElementById("voteMessage").textContent = data.message || "Your recommendation is in.";
+      document.querySelector(`[data-vote="${trackId}"]`)?.focus();
+    } catch (error) { message.textContent = error.message; }
+  }
+
   async function vote(trackId) {
+    if (isReleasePoll(state.campaign)) return releasePollVote(trackId);
     const message = document.getElementById("voteMessage");
     message.textContent = "Sending your signal…";
     let voterToken = localStorage.getItem("halo-fan-voter-token");
@@ -384,6 +473,7 @@
     if (event.target.closest("[data-open-auth]")) return authDialog.showModal();
     if (event.target.closest("[data-load-tracks]")) { state.tracksLoaded = true; state.selected = new Set(state.studio.tracks.slice(0, 14).map(track => track.id)); return renderStudio(); }
     if (event.target.closest("[data-publish]")) return saveEditor("publish");
+    if (event.target.closest("[data-close-poll]")) return saveEditor("close");
     if (event.target.closest("[data-launch]")) return saveEditor("launch");
     if (event.target.closest("[data-share-party]")) {
       const share = { title: state.campaign.title, text: state.campaign.promotion?.caption || state.campaign.subtitle, url: shareUrl(state.campaign) };
@@ -407,6 +497,12 @@
   });
 
   app.addEventListener("change", async event => {
+    if (event.target.matches("[data-release-choice]")) {
+      if (event.target.checked) state.releaseSelected.add(event.target.value); else state.releaseSelected.delete(event.target.value);
+      renderStudio();
+      document.querySelector(`[data-release-choice][value="${CSS.escape(event.target.value)}"]`)?.focus();
+      return;
+    }
     if (event.target.matches("[data-track-choice]")) {
       if (event.target.checked) state.selected.add(event.target.value); else state.selected.delete(event.target.value);
       renderStudio();
@@ -452,6 +548,25 @@
       } catch (error) {
         message.textContent = error.message;
         submitButton.disabled = state.selected.size < 2;
+        submitButton.removeAttribute("aria-busy");
+      }
+    }
+    if (event.target.id === "releasePollForm") {
+      event.preventDefault();
+      const message = document.getElementById("releasePollMessage");
+      const submitButton = event.target.querySelector('button[type="submit"]');
+      message.textContent = "Checking candidate eligibility…";
+      submitButton.disabled = true;
+      submitButton.setAttribute("aria-busy", "true");
+      const data = new FormData(event.target);
+      try {
+        const response = await api("POST", "/api/fan-campaigns", { action: "create", purpose: RELEASE_POLL_PURPOSE, songIds: [...state.releaseSelected], title: data.get("title"), subtitle: data.get("subtitle"), endsAt: new Date(data.get("endsAt")).toISOString() });
+        state.campaign = response.campaign; state.publicSlug = state.campaign.slug;
+        history.replaceState({}, "", `/campaign-studio/?campaign=${encodeURIComponent(state.campaign.slug)}`);
+        renderCampaignEditor();
+      } catch (error) {
+        message.textContent = error.message;
+        submitButton.disabled = state.releaseSelected.size < 2;
         submitButton.removeAttribute("aria-busy");
       }
     }

@@ -5,6 +5,7 @@ import { conditionReleaseWav } from "../netlify/lib/release-audio.mjs";
 import { createReleaseConveyorHandler } from "../netlify/lib/release-conveyor-http.mjs";
 import { prepareReleaseAudio } from "../netlify/lib/release-conveyor-audio.mjs";
 import { createReleaseConveyorConsole } from "../lib/release-conveyor-ui.js";
+import "./halo-watchdog-contracts.mjs";
 
 const song = { id: "12345678-1234-4123-8123-123456789012", owner_member_id: "creator",
   title: "A Signal", artist_name: "Artist", genre: "Soul", isrc: "GB-AAA-26-00001",
@@ -169,7 +170,12 @@ resolveConsoleRequest({ ok: true, json: async () => ({ ...success, options: { hu
   state: { status: "needs_review", lastPulseAt: "2026-10-15T00:00:00.000Z", departments: { metadata_rights: "needs_review" },
     actions: [{ action: "radio_lane_queued" }], findings: ["Rights clearance requires creator review."] },
   infrastructure: { status: "degraded", brokenRoutes: [{ name: "Radio", route: "/radio/", httpStatus: 404 }] },
-} }) });
+},
+  watchdog: {
+    issues: [{ field: "route", message: "/toolost/: unavailable" }],
+    findings: [{ field: "infrastructure", message: "/radio/: broken <b>route</b>" }],
+  },
+  receipt: { ...success.receipt, blocked: [{ field: "isrc", message: "Creator review required" }] } }) });
 await settle();
 assert.equal(consoleNode("hum").disabled, false);
 assert.equal(consoleNode("package").hidden, false);
@@ -178,6 +184,11 @@ assert.equal(consoleNode("progress-bar").style.width, "100%");
 assert.equal(consoleNode("progress").attributes.get("aria-valuenow"), "100");
 assert.equal(consoleNode("current-step").textContent, "Active Dept: Complete");
 assert.equal(consoleNode("status-badge").textContent, "FULLY CLEARED");
+assert.deepEqual(consoleNode("issues").children.map(item => item.textContent), [
+  "isrc: Creator review required",
+  "route: /toolost/: unavailable",
+  "infrastructure: /radio/: broken <b>route</b>",
+], "blocked issues and both watchdog diagnostic formats remain visible as text");
 assert(consoleNode("stages").children.every(item => item.attributes.get("data-state") === "passed"));
 assert.match(consoleNode("watchdog-status").textContent, /Shared watchdog: needs_review/);
 assert(consoleNode("watchdog-findings").children.some(item => /Repair recorded: radio_lane_queued/.test(item.textContent)));

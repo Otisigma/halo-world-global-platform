@@ -126,3 +126,51 @@ Final film encoding remained a foreground browser task and downloaded the result
 ## Best next step
 
 The strongest next release would connect one approved social platform end to end. It should add account authorization, draft or scheduled upload, publication ID storage, metric snapshots, and a clear disconnect control. Completing one platform reliably would be more valuable than partially connecting all three.
+## Canonical master and four-act binding
+
+Apply `netlify/database/migrations/20261016010000_dreamweaver_release_assets.sql`
+before deploying the updated functions. `halo_release_assets` is keyed by catalog
+song ID, not a release title or an arbitrary mix ID. The active `sale_master`
+version remains the only canonical master; `canonical_master_url` stores its
+stable delivery URL, never an expiring object-storage signature.
+
+`GET /api/dreamweaver-assets?songId=<catalog UUID>` returns
+`{ binding: { songId, masterVersionId, audioSource, visualActs, revision, status } }`.
+The four ordered `visualActs` contain `act`, `uri`, `sourceType` (`upload` or
+`generated`), and `status`. Owners can resolve private songs. Public resolution
+and managed master delivery require an active, rights-cleared, published song
+linked to a published, explicitly public release. Publishing such a song makes
+its full canonical master stream available in Dreamweaver; do not publish masters
+that should remain private. Other versions and ordinary catalog audio requests
+remain owner-only. Storage delivery retains short-lived signatures, byte ranges,
+and HEAD support.
+
+Owners can use same-origin, authenticated
+`POST /api/dreamweaver-assets` with
+`{ "songId": "<catalog UUID>", "customImages": ["https://…/cover.jpg", null, "https://…/act3.jpg"] }`.
+Supply at most four HTTPS/platform image URLs, already uploaded and approved for
+use. URL validation does not inspect external file contents or establish image
+rights. Uploaded positions are preserved; null slots are generated. Omit trailing
+slots to generate them. An empty array resets to the catalog cover (if present)
+plus generated companions. Mix IDs are deliberately not accepted: this API binds
+catalog songs, while standalone DJ mixes retain their existing playback flow.
+External image hosts must allow anonymous CORS to participate in canvas/film
+exports; images that fail that check are omitted from exports instead of
+tainting the canvas.
+
+Missing visuals use deterministic procedural SVG artwork seeded by bounded title,
+artist, genre, and lyric input in dark gold/obsidian. No lyrics are embedded in
+the artwork or sent to a third party. This is **not AI illustration**: generation
+is capped at four small, local frames with no network calls or model latency,
+so it safely runs synchronously rather than requiring a new job queue. The
+generator is also usable from a worker if a future art provider is added.
+Persisted revisions and compare-and-swap updates prevent stale readers from
+overwriting custom visuals; unchanged reads do not rewrite the asset row.
+
+Success has `status: "ready"`; errors have `status: "failed"` and a safe message
+(400/413/415 invalid inputs, 401/403 authorization/origin, 404 unavailable song,
+409 unavailable master or concurrent update, 503 infrastructure failure).
+The client consumes the backend binding and never falls back to preview audio
+when a catalog binding fails. Existing local-file recovery remains available.
+
+Validate with `npm run test:dreamweaver-assets`.

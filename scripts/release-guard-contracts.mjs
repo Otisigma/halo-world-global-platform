@@ -142,6 +142,8 @@ try {
   }
 
   await copyFile(resolve(root, "release-guard-agent.js"), resolve(fixture, "release-guard-agent.js"));
+  await mkdir(resolve(fixture, "lib"), { recursive: true });
+  await copyFile(resolve(root, "lib/request-preflight.js"), resolve(fixture, "lib/request-preflight.js"));
   await writeFile(resolve(fixture, "package.json"), '{"type":"module"}');
   assert.equal(cli().status, 1, "missing catalog blocks builds");
   const missingStaticCatalog = cli("--allow-missing-catalog");

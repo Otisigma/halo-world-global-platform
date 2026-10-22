@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow, noarchive">
+  <meta name="referrer" content="no-referrer">
+  <title>HALO Guard · Owner request preflight</title>
+  <link rel="stylesheet" href="/halo-shield/shield.css">
+  <script type="module" src="/halo-shield/preflight.js"></script>
+</head>
+<body>
+  <header><a href="/halo-command.html">Owner Control Center</a><span>HALO Guard / no paid AI</span></header>
+  <main>
+    <h1>Check the requested approach first.</h1>
+    <p>Sign in through the existing owner Control Center first. This shell contains no private data. No deployment, credentials changes, production writes or paid calls are performed.</p>
+    <form id="preflight-form">
+      <label for="originalRequest">Original request (verbatim; do not include secrets)</label>
+      <textarea id="originalRequest" rows="4" maxlength="3000" required></textarea>
+      <label for="intent">User intent</label><textarea id="intent" maxlength="500" required></textarea>
+      <label for="requestedApproach">Requested implementation / approach</label><textarea id="requestedApproach" maxlength="500" required></textarea>
+      <label for="expectedBehavior">Expected behavior</label><textarea id="expectedBehavior" maxlength="500" required></textarea>
+      <label for="affectedSurface">Affected surface</label><textarea id="affectedSurface" maxlength="500" required></textarea>
+      <label for="acceptanceCriteria">Acceptance criteria</label><textarea id="acceptanceCriteria" maxlength="500" required></textarea>
+      <label for="constraints">Constraints</label><textarea id="constraints" maxlength="500" required></textarea>
+      <button type="submit">Check request — no model calls</button>
+    </form>
+    <pre id="preflight-report" role="status">Locked. No checks run.</pre>
+    <section aria-labelledby="preview-title">
+      <h2 id="preview-title">Isolated Dreamweaver diagnostic — not production playback</h2>
+      <p>After owner authorization, load one eligible entry from this site's canonical catalog. No file URL input is accepted. Nothing plays automatically. Each preview expires after 60 seconds. Public manifest eligibility does not prove Google anonymous sharing.</p>
+      <button id="load-candidate" type="button" disabled>Load canonical candidate (one bounded request)</button>
+      <button id="try-iframe" type="button" disabled>Try requested Drive preview iframe</button>
+      <button id="try-primary" type="button" disabled>Try existing primary audio path</button>
+      <button id="try-proxy" type="button" disabled>Try authorized proxy audio path</button>
+      <button id="clear-preview" type="button">Stop and clear private preview</button>
+      <div id="preview-container"></div>
+      <pre id="preview-report" role="status">not tested — no actual catalog entry or browser observations yet.</pre>
+      <p>An iframe load event is not playback evidence. Cross-origin policy prevents inspecting Google's controls or hearing sound programmatically. Record audible playback, controls/seek, browser/device, CORS observations and policy behavior separately. This audio-element diagnostic does not exercise the full Dreamweaver shared-player integration; verify that separately after this comparison. Autoplay and mobile compatibility remain untested until explicitly checked on real devices.</p>
+      <label for="owner-observation">Owner browser/device observations (private, in memory only)</label>
+      <textarea id="owner-observation" maxlength="2000"></textarea>
+    </section>
+  </main>
+</body>
+</html>

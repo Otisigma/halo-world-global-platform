@@ -2,7 +2,10 @@ import express from "express";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { Readable } from "node:stream";
 import { CANONICAL_ROUTE_ALIAS_ENTRIES, PUBLIC_ROUTE_REGISTRY } from "./lib/route-registry.js";
+import driveCatalogHandler from "./netlify/functions/drive-catalog.mjs";
+import driveCatalogAudioHandler from "./netlify/functions/drive-catalog-audio.mjs";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -138,6 +141,30 @@ function rateLimit(req, res, next) {
   }
   bucket.count += 1;
   return next();
+}
+
+for (const [route, handler] of [
+  ["/api/drive-catalog", driveCatalogHandler],
+  ["/api/drive-catalog/audio", driveCatalogAudioHandler],
+]) {
+  app.all(route, async (req, res, next) => {
+    try {
+      const request = new Request(new URL(req.originalUrl, "http://localhost"), {
+        method: req.method,
+        headers: req.headers,
+      });
+      const response = await handler(request);
+      res.status(response.status);
+      response.headers.forEach((value, name) => res.setHeader(name, value));
+      if (!response.body || req.method === "HEAD") return res.end();
+      const body = Readable.fromWeb(response.body);
+      res.on("close", () => body.destroy());
+      body.on("error", () => res.destroy());
+      body.pipe(res);
+    } catch (error) {
+      next(error);
+    }
+  });
 }
 
 app.use(rateLimit);

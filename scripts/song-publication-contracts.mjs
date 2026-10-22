@@ -77,6 +77,7 @@ assert.match(forcePushApi, /new TextEncoder\(\)\.encode\(text\)\.byteLength/, "s
       return [release];
     }
     if (query.startsWith("INSERT INTO halo_song_publication_sync") || query.startsWith("INSERT INTO halo_ledger")) return [];
+    if (query.startsWith("INSERT INTO halo_track_drop_events")) return [];
     throw new Error(`Unexpected publication query: ${query}`);
   }};
   const result = await forcePushTrack(db, {

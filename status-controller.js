@@ -27,7 +27,7 @@ export const ROUTE_CONFIG = [
   { id: "halo-radio", path: "/radio/", status: "WORKING" },
   { id: "song-catalog", path: "/song-catalog/", status: "WORKING" },
   { id: "public-stats", path: "/stats/", status: "WORKING" },
-  { id: "dreamweaver", path: "/dreamweaver/", status: "ATTENTION", activeTarget: true, resolvedStatus: "WORKING" }
+  { id: "dreamweaver", path: "/dreamweaver/", status: "WORKING" }
 ];
 
 export function normalizeStatus(status) {

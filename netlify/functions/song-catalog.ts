@@ -521,6 +521,7 @@ export default async function songCatalogHandler(request: Request) {
           ownerMemberId: membership.member_id,
           actorId: membership.actor_id,
           actorType: "member",
+          announceDrop: true,
         });
       }
       return json({ message: `Song moved to ${stage.replace(/_/g, " ")}`, songId, stage });

@@ -238,6 +238,7 @@ async function advancePipeline(payload, db, membership) {
       ownerMemberId: membership.member_id,
       actorId: membership.actor_id,
       actorType: "member",
+      announceDrop: true,
     });
   }
 

@@ -2,6 +2,24 @@ import { createHash, randomUUID } from "node:crypto";
 import { getDatabase } from "@netlify/database";
 import { getUser, verifyRequestOrigin } from "@netlify/identity";
 import { cleanText, ensureMembership, isOwner } from "../lib/halo-x.mjs";
+import {
+  RELEASE_POLL_MIN_POINTS,
+  RELEASE_POLL_MIN_TIER,
+  RELEASE_POLL_PURPOSE,
+  RELEASE_POLL_RESULT_LABEL,
+  RELEASE_POLL_REVIEW_PATH,
+  RELEASE_POLL_RULES,
+  castReleasePollVote,
+  defaultReleasePollPromotion,
+  isReleasePoll,
+  loadReleaseCandidates,
+  loadReleasePollEligibility,
+  publicRecommendation,
+  recordReleasePollRecommendation,
+  releasePollEligibilityMessage,
+  releasePollMinPoints,
+  releasePollRecommendation
+} from "../lib/fan-release-polls.mjs";
 
 const MAX_BODY_BYTES = 32_000;
 const PROMOTION_FIELDS = new Set([
@@ -139,14 +157,41 @@ function serializeTrack(row) {
   };
 }
 
-function serializeCampaign(row, tracks, viewerVote = null, owner = false) {
+function serializeReleasePoll(row, tracks, { owner = false, eligibility = null, acceptingVotes = false, ended = false } = {}) {
+  const recommendation = row.recommendation || (ended || row.status === "closed" ? releasePollRecommendation(tracks.map(serializeTrack)) : null);
+  return {
+    advisory: true,
+    rules: RELEASE_POLL_RULES,
+    minimumTier: { id: RELEASE_POLL_MIN_TIER.id, label: RELEASE_POLL_MIN_TIER.label, minPoints: releasePollMinPoints(row) },
+    oneVotePerMember: true,
+    weightedByRank: false,
+    grantsRewardPoints: false,
+    publishesRelease: false,
+    resultLabel: RELEASE_POLL_RESULT_LABEL,
+    recommendation: recommendation ? publicRecommendation(recommendation) : null,
+    recommendationRecorded: Boolean(row.recommendation_recorded_at),
+    viewerEligibility: eligibility ? {
+      eligible: Boolean(eligibility.eligible) && acceptingVotes,
+      rankEligible: Boolean(eligibility.eligible),
+      reason: eligibility.reason,
+      tier: eligibility.tier ? eligibility.tier.label : null,
+      message: releasePollEligibilityMessage(eligibility)
+    } : null,
+    reviewPath: owner ? RELEASE_POLL_REVIEW_PATH : null
+  };
+}
+
+function serializeCampaign(row, tracks, viewerVote = null, owner = false, eligibility = null) {
   const totalVotes = tracks.reduce((sum, track) => sum + Number(track.votes || 0), 0);
   const goal = Number(row.vote_goal);
   const now = Date.now();
   const startsAt = new Date(row.starts_at).toISOString();
   const endsAt = new Date(row.ends_at).toISOString();
+  const releasePoll = isReleasePoll(row);
+  const acceptingVotes = row.status === "published" && now >= new Date(startsAt).valueOf() && now < new Date(endsAt).valueOf();
   return {
     id: row.id,
+    purpose: releasePoll ? RELEASE_POLL_PURPOSE : "listening_party",
     slug: row.slug,
     title: row.title,
     subtitle: row.subtitle || "",
@@ -164,10 +209,13 @@ function serializeCampaign(row, tracks, viewerVote = null, owner = false) {
     tracks: tracks.map(serializeTrack),
     totalVotes,
     progress: Math.min(100, Math.round((totalVotes / goal) * 100)),
-    rewardUnlocked: totalVotes >= goal,
-    acceptingVotes: row.status === "published" && now >= new Date(startsAt).valueOf() && now < new Date(endsAt).valueOf(),
+    rewardUnlocked: !releasePoll && totalVotes >= goal,
+    acceptingVotes,
     viewerVote: viewerVote ? Number(viewerVote) : null,
-    owner
+    owner,
+    ...(releasePoll ? {
+      releasePoll: serializeReleasePoll(row, tracks, { owner, eligibility, acceptingVotes, ended: now >= new Date(endsAt).valueOf() })
+    } : {})
   };
 }
 
@@ -202,7 +250,13 @@ async function loadCampaign(db, slug, user) {
     `;
     viewerVote = voteRows[0]?.campaign_track_id || null;
   }
-  return serializeCampaign(campaign, await campaignRows(db, campaign.id), viewerVote, owner);
+  let eligibility = null;
+  if (isReleasePoll(campaign)) {
+    eligibility = membership
+      ? await loadReleasePollEligibility(db, membership.member_id, releasePollMinPoints(campaign))
+      : await loadReleasePollEligibility(db, null);
+  }
+  return serializeCampaign(campaign, await campaignRows(db, campaign.id), viewerVote, owner, eligibility);
 }
 
 async function loadStudio(db, user) {
@@ -221,8 +275,9 @@ async function loadStudio(db, user) {
         WHERE member_id = ${membership.member_id} AND status IN ('preview', 'rotation')
         ORDER BY created_at DESC LIMIT 50
       `;
+  const releaseCandidates = await loadReleaseCandidates(db, { memberId: membership.member_id, owner });
   const campaigns = await db.sql`
-    SELECT slug, title, status, vote_goal, ends_at, updated_at,
+    SELECT slug, title, status, vote_goal, ends_at, updated_at, purpose,
       (SELECT COUNT(*)::int FROM halo_fan_vote_campaign_votes vote WHERE vote.campaign_id = campaign.id) AS votes,
       (SELECT COUNT(*)::int FROM halo_fan_vote_campaign_tracks track WHERE track.campaign_id = campaign.id) AS track_count
     FROM halo_fan_vote_campaigns campaign
@@ -242,9 +297,12 @@ async function loadStudio(db, user) {
       artworkUrl: `/api/radio/artwork?id=${encodeURIComponent(track.id)}`,
       audioUrl: `/api/radio/audio?id=${encodeURIComponent(track.id)}`
     })),
+    releaseCandidates,
+    releasePollRules: RELEASE_POLL_RULES,
     campaigns: campaigns.map(campaign => ({
       slug: campaign.slug,
       title: campaign.title,
+      purpose: campaign.purpose === RELEASE_POLL_PURPOSE ? RELEASE_POLL_PURPOSE : "listening_party",
       status: campaign.status,
       voteGoal: Number(campaign.vote_goal),
       votes: Number(campaign.votes),
@@ -254,9 +312,60 @@ async function loadStudio(db, user) {
   });
 }
 
+async function createReleasePoll(db, user, membership, body) {
+  const songIds = cleanTrackIds(body.songIds);
+  if (songIds.length < 2) return json({ message: "Choose at least two eligible catalog songs for the release poll" }, 400);
+  const candidates = await loadReleaseCandidates(db, { memberId: membership.member_id, owner: isOwner(user), songIds });
+  if (candidates.length !== songIds.length) {
+    return json({ message: "One or more songs are not eligible: each must be your active catalog song with cleared rights, no metadata blockers, an approved sale master, and not already published" }, 403);
+  }
+  const title = cleanText(body.title, 140) || "Fan release recommendation";
+  const subtitle = cleanText(body.subtitle, 240) || "Recommend which song the artist team should consider next. The team makes the final decision.";
+  const endsAt = cleanDateTime(body.endsAt) || new Date(Date.now() + 7 * 86400000);
+  if (endsAt.valueOf() <= Date.now() + 3600000) return json({ message: "Choose a poll deadline at least one hour from now" }, 400);
+
+  const id = randomUUID();
+  const slug = `${slugify(title) || "release-poll"}-${id.slice(0, 6)}`;
+  const promotion = defaultReleasePollPromotion({ title, candidateCount: songIds.length });
+  const byId = new Map(candidates.map(song => [song.id, song]));
+  const candidateValues = songIds.map((songId, index) => {
+    const song = byId.get(songId);
+    return [song.id, cleanText(song.title, 140) || "Untitled", cleanText(song.artist, 140) || "HALO artist", cleanText(song.genre, 80), song.durationSeconds, index + 1];
+  });
+  const rows = await db.sql`
+    WITH candidate_input (source_song_id, title, artist_name, genre, duration_seconds, position) AS (
+      VALUES ${db.sql.values(candidateValues)}
+    ), inserted_campaign AS (
+      INSERT INTO halo_fan_vote_campaigns (
+        id, slug, owner_member_id, title, subtitle, reward_title, reward_description, vote_goal, ends_at,
+        promotion, purpose, voter_min_reward_points
+      ) VALUES (
+        ${id}, ${slug}, ${membership.member_id}, ${title}, ${subtitle}, ${"Advisory fan recommendation"},
+        ${"Release-poll votes do not earn reward points and do not publish or distribute any song."},
+        ${100}, ${endsAt.toISOString()}, ${JSON.stringify(promotion)}::jsonb, ${RELEASE_POLL_PURPOSE}, ${RELEASE_POLL_MIN_POINTS}
+      )
+      RETURNING *
+    ), inserted_tracks AS (
+      INSERT INTO halo_fan_vote_campaign_tracks (
+        campaign_id, source_song_id, title, artist_name, description, genre, duration_seconds, position
+      )
+      SELECT campaign.id, candidate.source_song_id, candidate.title, candidate.artist_name, '',
+        candidate.genre, candidate.duration_seconds::int, candidate.position::smallint
+      FROM candidate_input AS candidate
+      CROSS JOIN inserted_campaign AS campaign
+      RETURNING campaign_id
+    )
+    SELECT campaign.*, (SELECT COUNT(*)::int FROM inserted_tracks) AS inserted_track_count
+    FROM inserted_campaign AS campaign
+  `;
+  if (Number(rows[0]?.inserted_track_count || 0) !== songIds.length) throw new Error("Release poll candidates were not saved together");
+  return json({ campaign: serializeCampaign(rows[0], await campaignRows(db, id), null, true), message: "Release-consideration poll drafted. Candidates stay private until you publish." }, 201);
+}
+
 async function createCampaign(db, user, body) {
   if (!user?.id) return json({ message: "Sign in to build a listening-party campaign" }, 401);
   const membership = await ensureMembership(db, user);
+  if (body.purpose === RELEASE_POLL_PURPOSE) return createReleasePoll(db, user, membership, body);
   const trackIds = cleanTrackIds(body.trackIds);
   if (trackIds.length < 2) return json({ message: "Choose at least two listening-party tracks" }, 400);
 
@@ -324,6 +433,43 @@ async function createCampaign(db, user, body) {
   return json({ campaign: serializeCampaign(rows[0], await campaignRows(db, id), null, true), message: "Dreamweaver campaign created" }, 201);
 }
 
+async function updateReleasePoll(db, membership, current, body, status, launch) {
+  if (launch) return json({ message: "Release-consideration polls are published from Campaign Studio, not launched as listening parties" }, 400);
+  if (current.status === "closed" && status !== "closed") return json({ message: "This release poll is closed. Create a new poll to ask fans again." }, 409);
+  const title = cleanText(body.title, 140) || current.title;
+  const subtitle = cleanText(body.subtitle, 240);
+  const endsAt = cleanDateTime(body.endsAt) || new Date(current.ends_at);
+  const nextStatus = status || current.status;
+  if (endsAt.valueOf() <= new Date(current.starts_at).valueOf()) return json({ message: "The deadline must follow the poll start" }, 400);
+  if (nextStatus === "published" && current.status === "draft" && endsAt.valueOf() <= Date.now() + 3600000) {
+    return json({ message: "Choose a poll deadline at least one hour from now before publishing" }, 400);
+  }
+  // Only title, invitation, deadline, and status are editable; the shortlist, threshold, and purpose are locked.
+  const rows = await db.sql`
+    UPDATE halo_fan_vote_campaigns SET
+      title = ${title}, subtitle = ${subtitle}, ends_at = ${endsAt.toISOString()}, status = ${nextStatus}, updated_at = NOW()
+    WHERE id = ${current.id}
+    RETURNING *
+  `;
+  let row = rows[0];
+  if (nextStatus === "closed") {
+    const recorded = await recordReleasePollRecommendation(db, {
+      campaignId: row.id,
+      tracks: (await campaignRows(db, row.id)).map(serializeTrack),
+      actorId: membership.actor_id || membership.member_id
+    });
+    if (recorded) row = recorded;
+  }
+  const campaign = serializeCampaign(row, await campaignRows(db, row.id), null, true);
+  return json({
+    campaign,
+    launchPack: null,
+    message: nextStatus === "closed"
+      ? `Poll closed. ${RELEASE_POLL_RESULT_LABEL}. Nothing was published.`
+      : nextStatus === "published" ? "Release poll published. Eligible members can now vote." : "Release poll saved"
+  });
+}
+
 async function updateCampaign(db, user, body, status, launch = false) {
   if (!user?.id) return json({ message: "Sign in to update this campaign" }, 401);
   const membership = await ensureMembership(db, user);
@@ -331,6 +477,7 @@ async function updateCampaign(db, user, body, status, launch = false) {
   const current = await db.sql`SELECT * FROM halo_fan_vote_campaigns WHERE slug = ${slug} LIMIT 1`;
   if (!current.length) return json({ message: "Campaign not found" }, 404);
   if (current[0].owner_member_id !== membership.member_id && !isOwner(user)) return json({ message: "This campaign belongs to another team" }, 403);
+  if (isReleasePoll(current[0])) return updateReleasePoll(db, membership, current[0], body, status, launch);
 
   const title = cleanText(body.title, 140) || current[0].title;
   const subtitle = cleanText(body.subtitle, 240);
@@ -383,6 +530,19 @@ async function vote(db, user, body) {
   `;
   if (!trackRows.length) return json({ message: "Choose a track from this campaign" }, 400);
 
+  // Release-consideration polls never accept device tokens: a signed-in, rank-eligible member is required.
+  if (isReleasePoll(campaign)) {
+    if (!user?.id) return json({ message: "Sign in with your HALO account to vote in release-consideration polls" }, 401);
+    const membership = await ensureMembership(db, user);
+    const result = await castReleasePollVote(db, { campaign, memberId: membership.member_id, trackId });
+    if (result.status !== 200) return json(result.body, result.status);
+    const owner = campaign.owner_member_id === membership.member_id || isOwner(user);
+    return json({
+      campaign: serializeCampaign(campaign, await campaignRows(db, campaign.id), result.trackId, owner, result.eligibility),
+      message: "Your recommendation is in. It advises the artist team and does not publish the song."
+    });
+  }
+
   let memberId = null;
   let voterKey;
   if (user?.id) {
@@ -429,8 +589,11 @@ export default async function fanCampaignsHandler(request) {
     if (!(await verifyRequestOrigin(request))) return json({ message: "Request origin could not be verified" }, 403);
     const contentLength = Number(request.headers.get("content-length") || 0);
     if (contentLength > MAX_BODY_BYTES) return json({ message: "Campaign request is too large" }, 413);
-    const body = await request.json().catch(() => null);
-    if (!body) return json({ message: "Request body must be valid JSON" }, 400);
+    const raw = await request.text().catch(() => "");
+    if (Buffer.byteLength(raw) > MAX_BODY_BYTES) return json({ message: "Campaign request is too large" }, 413);
+    let body = null;
+    try { body = JSON.parse(raw); } catch { body = null; }
+    if (!body || typeof body !== "object" || Array.isArray(body)) return json({ message: "Request body must be valid JSON" }, 400);
     if (body.action === "create") return createCampaign(db, user, body);
     if (body.action === "save") return updateCampaign(db, user, body);
     if (body.action === "publish") return updateCampaign(db, user, body, "published");

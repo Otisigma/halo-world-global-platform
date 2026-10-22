@@ -29,8 +29,14 @@ assert.equal(normalizeRoutePath("/music-world.html#telemetry"), "/music-world.ht
 assert.equal(normalizeRoutePath(""), "/");
 
 const amberNodes = ROUTE_CONFIG.filter(route => normalizeStatus(route.status) === "ATTENTION");
-assert.equal(amberNodes.length, 1, "the shipped route config must obey the one-amber-node rule");
-assert.equal(amberNodes[0].path, "/dreamweaver/");
+assert.ok(amberNodes.length <= 1, "the shipped route config must obey the one-amber-node rule");
+for (const path of ["/music-world.html", "/dreamweaver/", "/stats/"]) {
+  assert.equal(
+    normalizeStatus(ROUTE_CONFIG.find(route => route.path === path)?.status),
+    "WORKING",
+    `${path} must ship as a verified WORKING route in the status map`
+  );
+}
 
 const enforced = enforceSingleAmberNode([
   { id: "dreamweaver", path: "/dreamweaver/", status: "ATTENTION", activeTarget: true },
@@ -82,7 +88,7 @@ assert.ok(!badge.classList.contains("status-working"));
 assert.equal(badge.getAttribute("data-status"), "BROKEN");
 assert.equal(badge.textContent, "R BROKEN");
 
-const tileBadge = new FakeElement("status-badge status-working");
+const tileBadge = new FakeElement("status-badge status-attention");
 const title = new FakeElement("tile-title");
 title.textContent = "DREAMWEAVER EXPERIENCE";
 const tile = new FakeElement("halo-nav-tile", { href: "/dreamweaver" });
@@ -90,11 +96,12 @@ tile.append(tileBadge, title);
 const fakeRoot = { querySelectorAll: () => [tile] };
 
 const applied = updateMenuStatuses(ROUTE_CONFIG, fakeRoot);
-assert.deepEqual(applied, [{ id: "dreamweaver", path: "/dreamweaver/", status: "ATTENTION" }]);
-assert.equal(tile.getAttribute("data-status"), "ATTENTION");
-assert.ok(tileBadge.classList.contains("status-attention"));
-assert.equal(tileBadge.textContent, "Y ATTENTION");
-assert.equal(tileBadge.getAttribute("title"), "DREAMWEAVER EXPERIENCE: ATTENTION");
+assert.deepEqual(applied, [{ id: "dreamweaver", path: "/dreamweaver/", status: "WORKING" }]);
+assert.equal(tile.getAttribute("data-status"), "WORKING");
+assert.ok(tileBadge.classList.contains("status-working"));
+assert.ok(!tileBadge.classList.contains("status-attention"));
+assert.equal(tileBadge.textContent, "G WORKING");
+assert.equal(tileBadge.getAttribute("title"), "DREAMWEAVER EXPERIENCE: WORKING");
 assert.deepEqual(updateMenuStatuses(ROUTE_CONFIG, null), []);
 
 assert.match(controller, /DOMContentLoaded/, "the controller must run on DOMContentLoaded");
@@ -117,6 +124,6 @@ assert.match(statsPage, /class="halo-menu-grid"/);
 for (const route of ["/music-world.html", "/music/", "/dreamweaver/", "/radio/"]) {
   assert.match(statsPage, new RegExp(`href="${route.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}" class="halo-nav-tile"`), `the status map must surface ${route}`);
 }
-assert.equal((statsPage.match(/status-badge status-attention/g) || []).length, 1, "only one amber node may ship in the markup");
+assert.ok((statsPage.match(/status-badge status-attention/g) || []).length <= 1, "at most one amber node may ship in the markup");
 
 console.log("Navigation status contracts passed");

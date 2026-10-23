@@ -16,8 +16,6 @@
     copy: document.querySelector("#copyCatalog"),
     share: document.querySelector("#shareCatalog"),
     toast: document.querySelector("#catalogToast"),
-    catalogWorkspace: document.querySelector("#catalogWorkspaceDetails"),
-    sharedCatalogFrame: document.querySelector("#sharedCatalogFrame")
   };
   const state = { releases: [], videos: [], query: "", genre: "all", sort: "newest", chartRoom: "all", chartSort: "signal", activeReleaseId: "", activeShopId: "" };
   const configuredFeaturedReleaseId = elements.featured?.dataset.featuredReleaseId?.trim() || "";
@@ -450,36 +448,6 @@
     const artwork = releaseArtwork(release);
     setHeadMeta('meta[property="og:image"]', artwork.src);
     setHeadMeta('meta[name="twitter:image"]', artwork.src);
-  }
-
-  const CATALOG_FRAME_MIN_HEIGHT = 960;
-
-  function sharedCatalogFrameUrl() {
-    const url = new URL("/song-catalog/", window.location.origin);
-    url.searchParams.set("embed", "shop");
-    url.searchParams.set("parentOrigin", window.location.origin);
-    return url.toString();
-  }
-
-  function syncSharedCatalogFrameHeight(nextHeight) {
-    if (!elements.sharedCatalogFrame) return;
-    const safeHeight = Number(nextHeight);
-    if (!Number.isFinite(safeHeight) || safeHeight < 0) return;
-    elements.sharedCatalogFrame.style.height = `${Math.max(CATALOG_FRAME_MIN_HEIGHT, Math.ceil(safeHeight))}px`;
-  }
-
-  function handleSharedCatalogFrameMessage(event) {
-    if (event.origin !== window.location.origin) return;
-    if (!event.data || event.data.type !== "halo-song-catalog-height") return;
-    if (event.source !== elements.sharedCatalogFrame?.contentWindow) return;
-    syncSharedCatalogFrameHeight(event.data.height);
-  }
-
-  function loadSharedCatalogFrame() {
-    const frame = elements.sharedCatalogFrame;
-    if (!frame || frame.dataset.loaded === "true") return;
-    frame.src = frame.dataset.src || sharedCatalogFrameUrl();
-    frame.dataset.loaded = "true";
   }
 
   function releaseArtwork(release) {
@@ -955,8 +923,6 @@
     const previewUrl = trackStreamUrl(release);
     const related = relatedReleases(release);
     const dossier = releaseDossier(release);
-    const versionCount = Number(catalog.versionCount || release.availableVersions?.length || 0);
-    const saleEnabledCount = Number(catalog.saleEnabledVersionCount || 0);
     const availableVersions = (release.availableVersions || []).filter(Boolean).slice(0, 4);
     const artistContext = related.length
       ? `Related songs by ${release.artist} stay grouped here so the artist controls one public listening and support surface.`
@@ -967,11 +933,6 @@
         <strong class="shop-badge">${escapeHtml(availability.badge)}</strong>
         <p class="availability-note">${escapeHtml(availability.note)}</p>
         ${previewUrl ? `<div class="preview-shell"><span>Direct preview</span><p>Press play to stream this release in the HALO player bar while you keep browsing the shop.</p></div>` : `<div class="preview-shell"><span>Public listening</span><p>Use the listen link for the approved public destination. Direct in-page audio appears automatically when the shared catalog points to a preview-safe stream.</p></div>`}
-        <dl class="shop-facts">
-          <div><dt>Catalog source</dt><dd>${catalog.source === "song-catalog" ? "Shared song catalog" : "Published release campaign"}</dd></div>
-          <div><dt>Versions mapped</dt><dd>${versionCount || "—"}</dd></div>
-          <div><dt>Sale-enabled versions</dt><dd>${saleEnabledCount || "—"}</dd></div>
-        </dl>
       </section>
       <section class="shop-artist-card" aria-label="Artist context and related songs">
         <span class="shop-eyebrow">Artist context</span>
@@ -1219,11 +1180,6 @@
   }
   player.mount();
   elements.address.textContent = `${window.location.host}${shopPath().replace(/\/$/, "")}`;
-  window.addEventListener("message", handleSharedCatalogFrameMessage);
-  elements.catalogWorkspace?.addEventListener("toggle", () => {
-    if (elements.catalogWorkspace.open) loadSharedCatalogFrame();
-  });
-  if (elements.catalogWorkspace?.open) loadSharedCatalogFrame();
   elements.copy.addEventListener("click", copyCatalogAddress);
   elements.share.addEventListener("click", shareCatalog);
   elements.featured.addEventListener("change", event => {

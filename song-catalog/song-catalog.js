@@ -2,6 +2,7 @@ import { sanitizeDreamweaverAssignedRoute } from "/lib/dreamweaver-storefront.js
 import { parseTimestampedLyrics, summarizeLyrics } from "/lib/dreamweaver-lyrics.js";
 import { createReleaseConveyorConsole } from "/lib/release-conveyor-ui.js";
 import { loadDreamweaverUploadShow, pendingDreamweaverUploadShow } from "/lib/dreamweaver-upload.js";
+import { renderCatalogSignals } from "/song-catalog/catalog-signals.js";
 
 const state={songs:[],selectedId:"",filter:"",authenticated:false,producer:{jobs:[],packages:[]},producerTimer:null};
 const $=selector=>document.querySelector(selector);
@@ -103,7 +104,44 @@ function renderVersionVideo(version){const videoUrl=String(version?.videoUrl||""
 function renderVersionArtwork(version){const preview=$("#versionArtworkPreview");const placeholder=$("#versionArtworkPlaceholder");const deleteBtn=$("#deleteVersionArtworkButton");const customArtworkUrl=version?.customArtworkUrl||"";if(customArtworkUrl){preview.src=customArtworkUrl;preview.alt="Version artwork";preview.hidden=false;placeholder.hidden=true;if(deleteBtn)deleteBtn.hidden=false;uploadUi.versionArtwork.idle(`Artwork uploaded${version.artworkUploadedAt?" · "+new Date(version.artworkUploadedAt).toLocaleDateString():""}.`)}else{preview.src="";preview.hidden=true;placeholder.hidden=false;if(deleteBtn)deleteBtn.hidden=true;uploadUi.versionArtwork.idle("No version artwork uploaded. Uses the song cover by default.")}}
 function renderArtwork(song){const preview=$("#artworkPreview");const placeholder=$("#artworkPlaceholder");const deleteBtn=$("#deleteArtworkButton");const headingArt=$("#songHeadingArtwork");const hasArtwork=Boolean(song?.artworkUrl||song?.artwork_url);const artworkUrl=resolvedArtwork(song);if(artworkUrl){preview.src=artworkUrl;preview.alt=`${song.title} album artwork`;preview.hidden=false;placeholder.hidden=true;if(deleteBtn)deleteBtn.hidden=!hasArtwork;if(headingArt){headingArt.src=artworkUrl;headingArt.alt=`${song.title} artwork`;headingArt.hidden=false}uploadUi.artwork.idle(hasArtwork?`Artwork uploaded${song.artworkUploadedAt?" · "+new Date(song.artworkUploadedAt).toLocaleDateString():""}.`:"No artwork uploaded yet.")}else{preview.src="";preview.hidden=true;placeholder.hidden=false;if(deleteBtn)deleteBtn.hidden=true;if(headingArt)headingArt.hidden=true;uploadUi.artwork.idle("No artwork uploaded yet.")}}
 
-async function loadCatalog(preferredId=""){elements.shell.setAttribute("aria-busy","true");try{const data=await api();state.authenticated=Boolean(data.authenticated);if(!data.authenticated){state.songs=[];state.producer={jobs:[],packages:[]};render();message("Sign in to load and manage your song catalog.");return}state.songs=data.songs||[];state.producer=data.producer||{jobs:[],packages:[]};state.selectedId=preferredId||state.selectedId||state.songs[0]?.id||"";if(!state.songs.some(song=>song.id===state.selectedId))state.selectedId=state.songs[0]?.id||"";render()}catch(error){message(error.message)}finally{elements.shell.setAttribute("aria-busy","false")}}
+let catalogRequest=0;
+async function loadCatalog(preferredId=""){
+  const request=++catalogRequest;
+  elements.shell.setAttribute("aria-busy","true");
+  try{
+    const data=await api();
+    if(request!==catalogRequest)return;
+    state.authenticated=Boolean(data.authenticated);
+    state.catalogSignals=data.catalogSignals||null;
+    if(!data.authenticated){state.songs=[];state.producer={jobs:[],packages:[]};render();message("Sign in to load and manage your song catalog.");return}
+    state.songs=data.songs||[];
+    state.producer=data.producer||{jobs:[],packages:[]};
+    state.selectedId=preferredId||state.selectedId||state.songs[0]?.id||"";
+    if(!state.songs.some(song=>song.id===state.selectedId))state.selectedId=state.songs[0]?.id||"";
+    render();
+  }catch(error){
+    if(request!==catalogRequest)return;
+    state.authenticated=false;state.songs=[];state.catalogSignals=null;state.producer={jobs:[],packages:[]};
+    render();message(error.message);
+  }finally{
+    if(request===catalogRequest)elements.shell.setAttribute("aria-busy","false");
+  }
+}
+let catalogIdentity;
+function watchCatalogIdentity(identity){
+  if(!identity||identity===catalogIdentity)return;
+  catalogIdentity=identity;
+  identity.onAuthChange(event=>{
+    if(event==="token_refresh"||event==="user_updated")return;
+    ++catalogRequest;
+    state.authenticated=false;state.songs=[];state.catalogSignals=null;state.selectedId="";state.producer={jobs:[],packages:[]};
+    elements.songDialog.close();elements.versionDialog.close();
+    render();
+    void loadCatalog();
+  });
+}
+window.addEventListener("halo-identity-ready",event=>watchCatalogIdentity(event.detail));
+watchCatalogIdentity(window.haloIdentity);
 function selectedSong(){return state.songs.find(song=>song.id===state.selectedId)}
 
 async function pushToShop(){
@@ -112,11 +150,12 @@ async function pushToShop(){
   if(!song||!state.authenticated){status.textContent="Select and save a track first.";return}
   const button=$("#pushToShopButton");
   if(button.disabled)return;
+  const cents=Number(song.salePriceCents);
+  const hasPrice=Number.isFinite(cents)&&cents>0;
+  if(!window.confirm(`Publish “${song.title}” to the public Shop & Charts? This may also distribute eligible audio to radio. ${hasPrice?`The saved price is ${money(cents,song.currency)}.`:"A default sale price of US$1.29 will be applied."} Fan votes do not authorize this action.`))return;
   button.disabled=true;button.setAttribute("aria-busy","true");button.textContent="Pushing to Shop & Charts…";
   message("Publishing the saved track to Shop & Charts…");
   status.textContent="Pushing to Shop & Charts…";
-  const cents=Number(song.salePriceCents);
-  const hasPrice=Number.isFinite(cents)&&cents>0;
   let pushed=false;
   try{
     const payload={...song,releaseStatus:"PUBLISHED",status:"PUBLISHED",inChart:true,isLiveVisible:true,price:hasPrice?money(cents,song.currency):"US$1.29"};
@@ -162,7 +201,7 @@ function renderPublicationBoard(){
         <div class="publication-fact-wide"><dt>Reached surfaces</dt><dd>${escapeHtml(reached?reached.map(surface=>surface.label).join(", ")||"None confirmed":"Not reported")}</dd></div>
         <div class="publication-fact-wide"><dt>Missing surfaces</dt><dd>${escapeHtml(missing?missing.map(surface=>surface.label).join(", ")||"None reported":"Not reported")}</dd></div>
       </dl>
-      <p class="publication-card-metrics">Engagement, listens and opens: not reported by this catalog.</p>
+      <p class="publication-card-metrics">Review recorded link activity in Private catalog signals above; distribution health is not audience engagement.</p>
     </article>`;
   }).join(""):`<p class="publication-empty">Move a song to Published and HALO will start tracking its distribution health here.</p>`;
   window.HaloReleaseArtwork?.wire(board,fallbackArtwork);
@@ -178,7 +217,7 @@ function renderWorkspace(){const song=selectedSong();elements.empty.hidden=Boole
 function renderIssues(song){const issues=Array.isArray(song.metadataIssues)?song.metadataIssues:[];$("#reviewIntro").textContent=song.reviewedAt?`Last checked ${new Date(song.reviewedAt).toLocaleString()}. Dreamweaver checks again after every save.`:"Dreamweaver checks the information and version routing after every save.";$("#issueList").innerHTML=issues.length?issues.map(issue=>`<article class="review-issue${issue.level==="warning"?" is-warning":""}"><i></i><div><strong>${escapeHtml(issue.level)} · ${escapeHtml(titleCase(issue.field))}</strong><p>${escapeHtml(issue.message)}</p></div></article>`).join(""):`<div class="review-clear">All catalog and routing checks passed.</div>`}
 function renderVersions(song){renderAlternateUpload(song);const order=["sale_master","radio_edit","clean","instrumental","stems","extended","demo","alternate"];const versions=[...song.versions].sort((a,b)=>order.indexOf(a.versionType)-order.indexOf(b.versionType));$("#versionTable").innerHTML=versions.map(version=>{const art=resolvedArtwork(song,version);const audioUrl=resolvedAudio(version);const hasVideo=Boolean(version?.videoUrl||version?.promoVideoUrl);const thumb=artworkThumb(art,"version-row-artwork","version-row-artwork-placeholder");const artworkMode=versionUsesCustomArtwork(version)?"custom art":version?.inheritsArtwork?"inherits art":"no art";return`<button class="version-row" type="button" data-version-id="${version.id}">${thumb}<span><strong>${escapeHtml(version.label)}</strong><small>${escapeHtml(titleCase(version.versionType))}${version.isCanonicalMaster?' · <b class="canonical-master-badge">Canonical master</b>':""} · ${artworkMode}</small></span><span class="version-destination">${escapeHtml(titleCase(version.destination))}</span><span class="version-audio${audioUrl?" is-connected":""}">${audioUrl?"▶ Audio ready":"Needs audio"}</span><span class="version-audio${hasVideo?" is-connected":""}">${hasVideo?"▣ Video linked":"Needs video"}</span><span class="status-pill${version.masteringStatus==="approved"?" is-approved":""}">${escapeHtml(titleCase(version.masteringStatus))}</span><b>→</b></button>`}).join("")}
 function renderRadioQueue(){const queue=state.songs.flatMap(song=>song.versions.filter(version=>["radio_edit","clean"].includes(version.versionType)&&version.masteringStatus!=="approved").map(version=>({song,version})));$("#radioQueue").innerHTML=queue.length?queue.map(({song,version})=>`<article class="queue-row"><span class="queue-song">${artworkThumb(resolvedArtwork(song,version),"version-row-artwork","version-row-artwork-placeholder")}<span><strong>${escapeHtml(song.title)}</strong><small>${escapeHtml(song.artistName)}</small></span></span><span class="queue-version">${escapeHtml(version.label)}</span><span class="queue-target">${version.targetLufs} LUFS · ${version.truePeakDbtp} dBTP</span><span>${escapeHtml(titleCase(version.masteringStatus))}</span><button class="quiet-button" type="button" data-queue-song="${song.id}" data-queue-version="${version.id}">Open</button></article>`).join(""):`<p class="queue-empty">Every radio version is approved. Nothing is waiting in the mastering queue.</p>`}
-function render(){renderSummary();renderPublicationTotals();renderPublicationBoard();renderSongList();renderWorkspace();renderProducer();renderRadioQueue();releaseConveyor.select(selectedSong()?.id||"");void renderDreamweaverShow(selectedSong())}
+function render(){ $("#artistWorkspace").hidden=!state.authenticated;$("#catalogSignIn").hidden=state.authenticated;renderCatalogSignals({root:$("#catalogSignals"),songs:state.songs,snapshot:state.catalogSignals,authenticated:state.authenticated,onReview:id=>{state.selectedId=id;render();$("#songTitle").scrollIntoView({block:"start",behavior:"auto"})}});renderSummary();renderPublicationTotals();renderPublicationBoard();renderSongList();renderWorkspace();renderProducer();renderRadioQueue();releaseConveyor.select(selectedSong()?.id||"");void renderDreamweaverShow(selectedSong())}
 
 let dreamweaverShowRevision = 0;
 async function renderDreamweaverShow(song) {
@@ -201,13 +240,15 @@ async function renderDreamweaverShow(song) {
 }
 
 async function requestSignIn(){try{if(!window.haloIdentity){message("The sign-in service is still loading. Try again in a moment.");return false}await window.haloIdentity.login();await loadCatalog();return state.authenticated}catch{message("Sign-in was not completed.");return false}}
+$("#catalogSignInButton").addEventListener("click",requestSignIn);
+$("#refreshCatalogSignals").addEventListener("click",async event=>{const button=event.currentTarget;button.disabled=true;try{await loadCatalog(state.selectedId)}finally{button.disabled=false}});
 async function openSongDialog(){if(!state.authenticated&&!(await requestSignIn()))return;elements.songDialog.showModal();$("#newArtistName").focus()}
 function openVersion(versionId,songId=state.selectedId){const song=state.songs.find(item=>item.id===songId);const version=song?.versions.find(item=>item.id===versionId);if(!song||!version)return;state.selectedId=song.id;render();setValue("#versionId",version.id);setValue("#versionSongId",song.id);setValue("#versionType",version.versionType);setValue("#versionLabel",version.label);setValue("#masteringStatus",version.masteringStatus);setValue("#audioUrl",version.audioUrl?.startsWith("https://")?version.audioUrl:"");setValue("#versionVideoUrl",version.videoUrl||"");setValue("#promoVideoUrl",version.promoVideoUrl||"");setValue("#durationSeconds",version.durationSeconds||"");setValue("#targetLufs",version.targetLufs);setValue("#truePeakDbtp",version.truePeakDbtp);$("#cleanLyrics").checked=version.cleanLyrics;$("#saleEnabled").checked=version.saleEnabled;setValue("#versionNotes",version.notes);$("#audioFile").value="";const versionVideoFile=$("#versionVideoFile");if(versionVideoFile)versionVideoFile.value="";renderVersionAudio(version);renderVersionVideo(version);$("#versionDestination").textContent=titleCase(version.destination);$("#versionHeading").textContent=`${song.title} · ${version.label}`;const masterNote=$("#versionMasterNote");if(masterNote)masterNote.hidden=!version.isCanonicalMaster;const studioButton=$("#openVideoStudioButton");if(studioButton){const params=new URLSearchParams({song:song.id,experience:"studio"});studioButton.href=`/dreamweaver/?${params.toString()}`}const versionArtFile=$("#versionArtworkFile");if(versionArtFile)versionArtFile.value="";renderVersionArtwork(version);if(!elements.versionDialog.open)elements.versionDialog.showModal()}
 async function importExisting(){if(!state.authenticated&&!(await requestSignIn()))return;try{message("Loading existing HALO releases…");const data=await api({action:"import_existing"});message(data.message);await loadCatalog()}catch(error){message(error.message)}}
 
 function renderProducer(){const latest=state.producer.jobs?.[0];const packages=state.producer.packages||[];const status=$("#producerStatus");const runButton=$("#runProducerButton");const active=latest&&["queued","working"].includes(latest.status);runButton.disabled=Boolean(active);runButton.textContent=active?`Working · ${latest.progress}%`:"Build album + mix ideas";status.textContent=latest?latest.status==="ready"?(latest.packageCount?`${latest.packageCount} packages ready for review`:latest.errorMessage||"No sale-ready songs found"):latest.status==="failed"?latest.errorMessage||"The last run needs attention":`${titleCase(latest.stage)} · ${latest.progress}%`:"Waiting for a catalog run";$("#producerGrid").innerHTML=packages.length?packages.map(item=>{const visibleTracks=item.tracks.slice(0,6);const remaining=item.tracks.length-visibleTracks.length;return`<article class="producer-card"><header><div><span class="package-type">${escapeHtml(item.packageType)} · ${item.trackCount} tracks</span><h3>${escapeHtml(item.title)}</h3></div><div class="package-price"><strong>${money(item.priceCents,item.currency)}</strong><small>${money(item.projectedMonthlyNetCents,item.currency)} net / month at 100 sales</small></div></header><p>${escapeHtml(item.description)}</p><div class="producer-tracks">${visibleTracks.map(track=>`<div class="producer-track">${artworkThumb(track.artworkUrl,"version-row-artwork","version-row-artwork-placeholder")}<span class="producer-track-index">${String(track.position).padStart(2,"0")}</span><strong>${escapeHtml(track.title)}</strong><small>${escapeHtml(track.artistName)}</small></div>`).join("")}${remaining?`<div class="producer-track producer-track-more"><span class="producer-track-index">+</span><strong>${remaining} more song${remaining===1?"":"s"}</strong><small>inside package</small></div>`:""}</div><p>${escapeHtml(item.rationale)}</p><footer><span>${escapeHtml(titleCase(item.status))}</span><div class="package-buttons">${item.status==="draft"?`<button class="primary-button" type="button" data-package-status="approved" data-package-id="${item.id}">Approve</button>`:""}${item.status==="approved"?`<button class="primary-button" type="button" data-package-status="published" data-package-id="${item.id}">Mark published</button>`:""}<button class="quiet-button" type="button" data-package-status="archived" data-package-id="${item.id}">Archive</button></div></footer></article>`}).join(""):`<div class="producer-empty"><strong>No packages yet.</strong><span>Run Dreamweaver after songs have cleared rights, pricing, audio, and mastering.</span></div>`;if(active&&!state.producerTimer)state.producerTimer=setTimeout(async()=>{state.producerTimer=null;await loadCatalog()},2200);if(!active&&state.producerTimer){clearTimeout(state.producerTimer);state.producerTimer=null}}
 async function runProducer(){if(!state.authenticated&&!(await requestSignIn()))return;try{const data=await api({action:"queue_catalog_producer"});message(data.message);await fetch("/api/song-catalog/producer",{method:"POST",headers:{"Content-Type":"application/json"},credentials:"same-origin",body:JSON.stringify({jobId:data.jobId})});await loadCatalog()}catch(error){message(error.message)}}
-async function setPackageStatus(packageId,status){try{const data=await api({action:"set_package_status",packageId,status});message(data.message);await loadCatalog()}catch(error){message(error.message)}}
+async function setPackageStatus(packageId,status){if(!state.authenticated)return;const item=state.producer.packages.find(item=>item.id===packageId);if(!item||!window.confirm(`${titleCase(status)} package “${item.title}”? This changes its artist review status, not fan votes.`))return;try{const data=await api({action:"set_package_status",packageId,status});message(data.message);await loadCatalog()}catch(error){message(error.message)}}
 
 elements.songList.addEventListener("click",event=>{const button=event.target.closest("[data-song-id]");if(!button)return;state.selectedId=button.dataset.songId;render()});
 const publicationBoard=$("#publicationBoard");if(publicationBoard)publicationBoard.addEventListener("click",event=>{const button=event.target.closest("[data-publication-song]");if(!button)return;state.selectedId=button.dataset.publicationSong;render();$("#publicationHealthTitle")?.focus()});

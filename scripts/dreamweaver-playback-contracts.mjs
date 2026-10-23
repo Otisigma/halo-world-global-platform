@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import vm from "node:vm";
+import { resolveObjectURL } from "node:buffer";
 import { DREAMWEAVER_STOREFRONT_MIX_ID, buildDreamweaverStorefrontPath } from "../lib/dreamweaver-storefront.js";
 import { createLyricInteractionRecorder } from "../lib/journey-interactions.js";
 import * as playback from "../lib/dreamweaver-playback.js";
@@ -151,7 +152,7 @@ export function fixture(search, { releases = [release], mixes = [mix], blocked =
     ${catalogControlBindings}
     ${audioErrorBinding}
     elements.audio.addEventListener("ended", handleCatalogEnded);
-    globalThis.player = { state, chapters, initializeDreamweaver, generateCatalogSet, advanceCatalogTrack, retryCatalogProxy, shouldPromptLocalUpload, resolvePrimaryPlaybackMix, resolvePrimaryAudio, handleSoundUnlock, togglePlayback, startUnlockedShow, loadImage, activateLocalMixFile, armRemoteAudioWatchdog };
+    globalThis.player = { state, chapters, initializeDreamweaver, generateCatalogSet, advanceCatalogTrack, retryCatalogProxy, shouldPromptLocalUpload, resolvePrimaryPlaybackMix, resolvePrimaryAudio, handleSoundUnlock, togglePlayback, startUnlockedShow, loadImage, activateLocalMixFile, armRemoteAudioWatchdog, handleLobbyPageHide };
   })();`, context);
   return { ...context.player, nodes, requests, timers, location };
 }
@@ -486,4 +487,81 @@ for (const failure of ["promise", "late-error", "stall"]) {
   assert.equal(f.state.releasePlaybackState, "unavailable");
 }
 
-console.log("Dreamweaver playback contracts: canonical binding, route semantics, click-only warm handoff, policy recovery, mute preservation, and same-song site proxy passed (mocked media).");
+{
+  const audioFile = (name, type = "audio/mp4") => Object.assign(new Blob(["local audio"], { type }), { name });
+  const f = fixture(`?song=${songId}`, {
+    assetBinding: { ...binding, fallbackAudioSource: proxy }, rejectedPlaySources: [masterStream, proxy]
+  });
+  await f.initializeDreamweaver();
+  await f.togglePlayback();
+  await new Promise(resolve => setImmediate(resolve));
+  const audio = f.nodes.get("showAudio");
+  const status = f.nodes.get("mixFileStatus");
+  const standbySource = audio.src;
+  assert.equal(f.shouldPromptLocalUpload(), true, "an unavailable linked stream leaves the song lobby on standby");
+  assert.match(f.nodes.get("songLobbyPlayerStatus").textContent, /Preview a local file in this lobby/);
+  assert.equal(f.nodes.get("songLobbyPlayerStatePill").textContent, "Preview a local file");
+
+  await f.activateLocalMixFile(undefined);
+  assert.equal(status.dataset.state, "error");
+  assert.match(status.textContent, /No file selected/);
+  await f.activateLocalMixFile(audioFile("notes.txt", "text/plain"));
+  assert.equal(status.dataset.state, "error");
+  assert.match(status.textContent, /MP3, WAV, M4A, AAC, OGG, FLAC, or WebM/);
+  assert.equal(audio.src, standbySource, "rejected files never replace the shared player source");
+  assert.equal(f.state.localAudioUrl, "");
+
+  await f.activateLocalMixFile(audioFile("My Place of Peace.m4a"));
+  const firstUrl = audio.src;
+  assert.equal(f.state.audioSourceMode, "local");
+  assert.match(firstUrl, /^blob:/);
+  assert.ok(resolveObjectURL(firstUrl), "the active local preview URL stays alive while playing");
+  assert.equal(audio.paused, false);
+  assert.equal(status.dataset.state, "active");
+  assert.match(status.textContent, /My Place of Peace\.m4a plays only in this browser tab/);
+  assert.match(status.textContent, /not uploaded, saved, published, or shared with other listeners/);
+  assert.match(status.textContent, /Linked song — Linked artist/);
+  assert.equal(f.nodes.get("songLobbyPlayerTitle").textContent, release.title, "local preview keeps the linked song identity");
+  assert.equal(f.nodes.get("songLobbyPlayerArtist").textContent, release.artist);
+  assert.equal(f.nodes.get("songLobbyPlayerStatePill").textContent, "Local preview");
+  assert.match(f.nodes.get("songLobbyPlayerStatus").textContent, /this browser only.*Linked song — Linked artist/);
+  assert.equal(f.state.publishedSongId, songId, "local preview never rebinds the canonical song");
+
+  await f.activateLocalMixFile(audioFile("Second take.wav", "audio/wav"));
+  assert.equal(resolveObjectURL(firstUrl), undefined, "replacing a local preview revokes the previous object URL");
+  const secondUrl = audio.src;
+  assert.notEqual(secondUrl, firstUrl);
+  f.handleLobbyPageHide({ persisted: true });
+  assert.ok(resolveObjectURL(secondUrl), "back/forward cache restores keep the preview playable");
+  f.handleLobbyPageHide({ persisted: false });
+  assert.equal(resolveObjectURL(secondUrl), undefined, "leaving the page revokes the local preview URL");
+  assert.equal(f.state.localAudioUrl, "");
+}
+{
+  const f = fixture(`?song=${songId}`, { blocked: true });
+  await f.initializeDreamweaver();
+  await f.activateLocalMixFile(Object.assign(new Blob(["local audio"], { type: "audio/mpeg" }), { name: "Blocked.mp3" }));
+  const status = f.nodes.get("mixFileStatus");
+  assert.equal(f.state.audioSourceMode, "local", "autoplay policy keeps the local preview loaded");
+  assert.equal(f.nodes.get("showAudio").paused, true);
+  assert.equal(status.dataset.state, "ready");
+  assert.match(status.textContent, /press Play to listen/);
+  assert.equal(f.nodes.get("dreamweaverSoundUnlock").dataset.soundUnlock, "blocked");
+  assert.equal(f.nodes.get("songLobbyPlayerStatePill").textContent, "Local preview ready");
+}
+{
+  const f = fixture(`?song=${songId}`);
+  await f.initializeDreamweaver();
+  const audio = f.nodes.get("showAudio");
+  audio.play = async () => { throw Object.assign(new Error("Undecodable"), { name: "NotSupportedError" }); };
+  await f.activateLocalMixFile(Object.assign(new Blob(["bad"], { type: "audio/wav" }), { name: "Broken.wav" }));
+  const failedUrl = audio.src;
+  assert.equal(f.state.audioSourceMode, "error");
+  assert.equal(f.state.localAudioUrl, "");
+  assert.equal(resolveObjectURL(failedUrl), undefined, "failed local previews release their object URL");
+  assert.equal(f.nodes.get("mixFileStatus").dataset.state, "error");
+  assert.match(f.nodes.get("mixFileStatus").textContent, /could not play that file/);
+  assert.equal(f.shouldPromptLocalUpload(), true);
+}
+
+console.log("Dreamweaver playback contracts: canonical binding, route semantics, click-only warm handoff, policy recovery, mute preservation, and same-song site proxy, local-only song lobby preview passed (mocked media).");

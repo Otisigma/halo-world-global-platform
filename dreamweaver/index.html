@@ -185,7 +185,7 @@
       <p id="catalogMixIntent" aria-live="polite"></p>
       <p id="catalogMixNotes" aria-live="polite"></p>
       <p id="catalogTrackStatus" role="status" aria-live="polite"></p>
-      <button id="catalogUploadLocal" type="button" hidden>Stream unavailable — upload a local mix</button>
+      <button id="catalogUploadLocal" type="button" hidden>Stream unavailable — preview a local file</button>
       <ol id="catalogSetlist" aria-label="Generated setlist"></ol>
       </div>
       </div>
@@ -246,13 +246,15 @@
           </div>
           <button class="song-lobby__sound-unlock" id="dreamweaverSoundUnlock" type="button" data-sound-unlock="" hidden>🔇 Tap to unmute</button>
           <div class="song-lobby__player-actions">
-            <label class="song-lobby__upload-label upload-label" for="mixFileInput" tabindex="0" role="button">Upload mix file</label>
-            <input id="mixFileInput" type="file" accept="audio/*,.mp3,.wav,.m4a,.aac,.ogg,.flac,.webm">
+            <label class="song-lobby__upload-label upload-label" for="mixFileInput" tabindex="0" role="button">Preview a local file in this lobby</label>
+            <input id="mixFileInput" type="file" accept="audio/*,.mp3,.wav,.m4a,.aac,.ogg,.flac,.webm" aria-describedby="mixFileHint mixFileStatus">
             <a id="songLobbyPlayerSource" class="song-lobby__source" href="https://distrokid.com/hyperfollow/owenanthony/blessed" target="_blank" rel="noopener noreferrer">Blessed — Owen Anthony ↗</a>
             <a id="dreamweaverShopLink" class="song-lobby__source" href="/music/">Shop this release ↗</a>
             <a id="dreamweaverMixLink" class="song-lobby__source" href="/mixes/">Open mix player ↗</a>
             <a class="song-lobby__anchor song-lobby__anchor--subtle" href="/dj-deck.html">Creator gateway /dj-deck</a>
           </div>
+          <p class="song-lobby__local-hint" id="mixFileHint">Stream unavailable? Choose an MP3, WAV, M4A, AAC, OGG, FLAC, or WebM file from this device to load and play it in this lobby. Local preview only: it plays in this browser tab and is not uploaded, saved, published, or shared with other listeners.</p>
+          <p class="song-lobby__local-status" id="mixFileStatus" role="status" aria-live="polite" data-state="idle"></p>
         </section>
       </div>
 

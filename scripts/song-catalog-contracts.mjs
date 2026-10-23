@@ -369,6 +369,94 @@ ownedSongRows[0].status = "archived";
 assert.equal((await createAlternate("owner", { ...alternatePayload, versionId: "version-c" })).status, 404, "archived songs cannot receive uploads");
 console.log("PASS: inline alternate upload placement, validation, ownership, context, progress, retry, and creation behavior");
 
+const watchBoard = { innerHTML: "" };
+const watchState = { songs: [], selectedId: "" };
+const artworkWindow = { location: { origin: "https://halo.test", pathname: "/song-catalog/" } };
+runInNewContext(await read("release-artwork.js"), { window: artworkWindow, URL, console: { warn() {} }, CustomEvent: class {} });
+const sharedArtworkWire = artworkWindow.HaloReleaseArtwork.wire;
+let wiredBoard = null;
+artworkWindow.HaloReleaseArtwork.wire = board => { wiredBoard = board; };
+const renderWatchBoard = runInNewContext(`
+${client.slice(client.indexOf("const escapeHtml="), client.indexOf("const resolvedAudio="))}
+${client.slice(client.indexOf("function renderPublicationBoard("), client.indexOf("function renderPublicationHealth("))}
+renderPublicationBoard`, {
+  $: selector => selector === "#publicationBoard" ? watchBoard : null,
+  state: watchState, window: artworkWindow, URL
+});
+watchState.songs = structuredClone(sampleSongs);
+watchState.songs[0].title = '<Song & "cover">';
+watchState.songs[0].artworkUrl = "/api/song-catalog/artwork?songId=published-song";
+watchState.selectedId = "published-song";
+renderWatchBoard();
+assert.equal((watchBoard.innerHTML.match(/<article class="publication-card/g) || []).length, 2, "only published songs from the owner's response enter the watch board");
+assert.ok(!watchBoard.innerHTML.includes("Draft song"), "draft catalog entries stay off the published watch board");
+assert.match(watchBoard.innerHTML, /<article class="publication-card is-active">/, "selected song remains highlighted");
+assert.match(watchBoard.innerHTML, /songId=published-song&amp;ownerView=1/, "cover requests retain owner artwork access");
+assert.match(watchBoard.innerHTML, /alt="Cover art for &lt;Song &amp; &quot;cover&quot;&gt; by HALO"/, "covers have meaningful escaped alt text");
+assert.match(watchBoard.innerHTML, /<button[^>]*type="button"[^>]*data-publication-song="published-song"/, "health selection uses a native keyboard-accessible button");
+assert.match(watchBoard.innerHTML, /<dt>Surfaces reached<\/dt><dd>3 \/ 3<\/dd>/, "surface counts derive from actual health checks, not hardcoded totals");
+assert.match(watchBoard.innerHTML, /<time datetime="2026-09-19T16:00:00.000Z">/, "stored check timestamp is rendered as a semantic time");
+assert.match(watchBoard.innerHTML, /<dt>Reached surfaces<\/dt><dd>Public release page, HALO Radio, Dreamweaver share<\/dd>/);
+assert.match(watchBoard.innerHTML, /<dt>Missing surfaces<\/dt><dd>None reported<\/dd>/);
+assert.match(watchBoard.innerHTML, /Engagement, listens and opens: not reported by this catalog\./, "unavailable audience statistics are explicit, never zero-filled");
+assert.equal(wiredBoard, watchBoard, "shared artwork error recovery is wired after rendering");
+
+watchState.songs = [{
+  id: 'song"><img src=x>', title: "Needs repair", artistName: "Artist",
+  pipelineStatus: "published", artworkUrl: "/song-cover.jpg",
+  versions: [
+    { id: "alternate", versionType: "alternate", customArtworkUrl: "/alternate-cover.jpg" },
+    { id: "old-master", versionType: "sale_master", customArtworkUrl: "/old-master-cover.jpg" },
+    { id: "master", versionType: "sale_master", isCanonicalMaster: true, customArtworkUrl: "/master-cover.jpg" }
+  ],
+  publicationHealth: {
+    label: "Waiting on repair", state: "waiting_on_internal_repair", retryState: "retrying",
+    surfaces: [{ label: "Release", reached: true }, { label: "Radio <pending>", reached: false }],
+    lastCheckedAt: "invalid-date"
+  }
+}];
+renderWatchBoard();
+assert.match(watchBoard.innerHTML, /src="https:\/\/halo.test\/master-cover.jpg"/, "canonical master override wins over song and alternate-version artwork");
+assert.match(watchBoard.innerHTML, /data-publication-song="song&quot;&gt;&lt;img src=x&gt;"/, "song identifiers cannot inject markup");
+assert.match(watchBoard.innerHTML, /<dt>Surfaces reached<\/dt><dd>1 \/ 2<\/dd>/);
+assert.match(watchBoard.innerHTML, /<dt>Missing surfaces<\/dt><dd>Radio &lt;pending&gt;<\/dd>/);
+assert.match(watchBoard.innerHTML, /<dt>Monitoring<\/dt><dd>Retrying<\/dd>/);
+assert.match(watchBoard.innerHTML, /<dt>Last checked<\/dt><dd>Not reported<\/dd>/, "invalid timestamps do not produce Invalid Date");
+watchState.songs[0].versions = [];
+renderWatchBoard();
+assert.match(watchBoard.innerHTML, /src="https:\/\/halo.test\/song-cover.jpg"/, "song-level art is used when no master override is available");
+watchState.songs[0].artworkUrl = "javascript:alert(1)";
+watchState.songs[0].publicationHealth = null;
+renderWatchBoard();
+assert.match(watchBoard.innerHTML, /src="https:\/\/halo.test\/assets\/releases\/halo-premium-placeholder.svg"/, "unsafe or missing covers use the shared safe placeholder");
+watchState.songs[0].artworkUrl = "";
+renderWatchBoard();
+assert.match(watchBoard.innerHTML, /src="https:\/\/halo.test\/assets\/releases\/halo-premium-placeholder.svg"/, "missing covers also use the placeholder");
+for (const label of ["Surfaces reached", "Reached surfaces", "Missing surfaces", "Last checked", "Monitoring"]) {
+  assert.ok(watchBoard.innerHTML.includes(`<dt>${label}</dt><dd>Not reported</dd>`), `${label} must not imply health when absent`);
+}
+watchState.songs[0].publicationHealth = { surfaces: [], lastCheckedAt: "" };
+renderWatchBoard();
+assert.match(watchBoard.innerHTML, /<dt>Surfaces reached<\/dt><dd>Not reported<\/dd>/, "an empty snapshot is not a healthy 0/0 check");
+watchState.songs = [];
+renderWatchBoard();
+assert.match(watchBoard.innerHTML, /Move a song to Published/, "empty and unauthenticated catalogs disclose no songs");
+assert.match(styles, /\.publication-card-select:focus-visible/, "watch board has a visible keyboard focus indicator");
+assert.match(styles, /@media\(max-width:720px\)\{\.publication-board-list,\.publication-health-grid\{grid-template-columns:1fr\}/, "watch board collapses to one column on mobile");
+
+let recoverArtwork;
+const brokenCover = {
+  dataset: {}, complete: false, src: "https://halo.test/broken.jpg",
+  getAttribute(name) { return name === "src" ? this.src : "Cover art for Needs repair by Artist"; },
+  closest() { return null; },
+  addEventListener(event, handler) { if (event === "error") recoverArtwork = handler; }
+};
+artworkWindow.dispatchEvent = () => {};
+sharedArtworkWire({ querySelectorAll: () => [brokenCover] });
+recoverArtwork();
+assert.equal(brokenCover.src, "https://halo.test/assets/releases/halo-premium-placeholder.svg", "a broken resolved cover recovers to the shared placeholder");
+console.log("PASS: owner watch board covers, safe fallback, factual health statistics, unavailable metrics, and accessible selection");
+
 const failures = checks.filter(([passed]) => !passed);
 for (const [passed, description] of checks) console.log(`${passed ? "PASS" : "FAIL"}: ${description}`);
 assert.equal(buildDreamweaverSatellite("not/a-song-id"), null, "shared Dreamweaver satellite helper must reject invalid song IDs");

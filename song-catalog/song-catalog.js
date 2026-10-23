@@ -134,7 +134,39 @@ async function pushToShop(){
 function renderPublicationTotals(){const published=state.songs.filter(song=>song.pipelineStatus==="published");$("#distributedCount").textContent=published.filter(song=>song.publicationHealth?.state==="published_and_fully_distributed").length;$("#actionCount").textContent=published.filter(song=>song.publicationHealth&&song.publicationHealth.state!=="published_and_fully_distributed").length}
 function renderSummary(){const radioQueue=state.songs.flatMap(song=>song.versions.filter(version=>["radio_edit","clean"].includes(version.versionType)&&version.masteringStatus!=="approved"));const ready=state.songs.filter(song=>song.metadataStatus==="ready");const priced=state.songs.filter(song=>song.saleStatus==="for_sale"&&song.salePriceCents>0);const average=state.songs.length?Math.round(state.songs.reduce((sum,song)=>sum+song.metadataScore,0)/state.songs.length):0;$("#songCount").textContent=state.songs.length;$("#saleCount").textContent=priced.length;$("#radioCount").textContent=radioQueue.length;$("#readyCount").textContent=ready.length;$("#overallScore").textContent=state.songs.length?average:"—";$("#overallCopy").textContent=state.songs.length?`${ready.length} of ${state.songs.length} songs fully cleared.`:"Load songs to begin the review."}
 function publicationRetryCopy(health){if(!health)return"No publication check loaded yet.";const checked=health.lastCheckedAt?`Last checked ${new Date(health.lastCheckedAt).toLocaleString()}.`:"Waiting for the first publication check.";const loop=health.escalated?"Escalated for internal follow-up.":health.retrying?"HALO is retrying automatically every 15 minutes.":"No retry is needed right now.";return`${loop} ${checked}`}
-function renderPublicationBoard(){const board=$("#publicationBoard");if(!board)return;const published=state.songs.filter(song=>song.pipelineStatus==="published");board.innerHTML=published.length?published.map(song=>{const health=song.publicationHealth;const retry=!health?"Pending":health.escalated?"Escalated":health.retrying?"Retrying":"Stable";const missing=!health?"Awaiting first check":health.missingSurfaces?.length?health.missingSurfaces.join(", "):"All tracked surfaces reached";return`<button class="publication-card${song.id===state.selectedId?" is-active":""}" type="button" data-publication-song="${song.id}"><span><strong>${escapeHtml(song.title)}</strong><small>${escapeHtml(song.artistName)}</small></span><em class="publication-state-badge" data-state="${escapeHtml(health?.state||"idle")}">${escapeHtml(health?.label||"Checking publication")}</em><p>${escapeHtml(health?.summary||"HALO is preparing the publication health check.")}</p><div class="publication-card-meta"><span>${escapeHtml(retry)}</span><span>${escapeHtml(missing)}</span></div></button>`}).join(""):`<p class="publication-empty">Move a song to Published and HALO will start tracking its distribution health here.</p>`}
+function renderPublicationBoard(){
+  const board=$("#publicationBoard");
+  if(!board)return;
+  const published=state.songs.filter(song=>song.pipelineStatus==="published");
+  board.innerHTML=published.length?published.map(song=>{
+    const health=song.publicationHealth;
+    const surfaces=Array.isArray(health?.surfaces)&&health.surfaces.length?health.surfaces:null;
+    const reached=surfaces?.filter(surface=>surface.reached===true);
+    const missing=surfaces?.filter(surface=>surface.reached===false);
+    const checked=health?.lastCheckedAt?new Date(health.lastCheckedAt):null;
+    const checkedTime=checked&&!Number.isNaN(checked.getTime())?`<time datetime="${escapeHtml(checked.toISOString())}">${escapeHtml(checked.toLocaleString())}</time>`:"Not reported";
+    const master=song.versions?.find(version=>version.isCanonicalMaster)||song.versions?.find(version=>version.versionType==="sale_master");
+    const cover=resolvedArtwork(song,master)||fallbackArtwork;
+    return`<article class="publication-card${song.id===state.selectedId?" is-active":""}">
+      <button class="publication-card-select" type="button" data-publication-song="${escapeHtml(song.id)}" aria-label="${escapeHtml(`View publication health for ${song.title} by ${song.artistName}`)}">
+        <span class="publication-cover" data-artwork-frame><img src="${escapeHtml(cover)}" alt="${escapeHtml(`Cover art for ${song.title} by ${song.artistName}`)}" data-release-artwork loading="lazy" width="96" height="96"></span>
+        <span><strong>${escapeHtml(song.title)}</strong><small>${escapeHtml(song.artistName)}</small><span class="publication-card-action">View publication health</span></span>
+      </button>
+      <span class="publication-state-badge" data-state="${escapeHtml(health?.state||"idle")}">${escapeHtml(health?.label||"Checking publication")}</span>
+      <p>${escapeHtml(health?.summary||"HALO is preparing the publication health check.")}</p>
+      <dl class="publication-card-facts">
+        <div><dt>Catalog stage</dt><dd>Published</dd></div>
+        <div><dt>Surfaces reached</dt><dd>${surfaces?`${reached.length} / ${surfaces.length}`:"Not reported"}</dd></div>
+        <div class="publication-fact-wide"><dt>Monitoring</dt><dd>${escapeHtml(health?.retryState?titleCase(health.retryState):"Not reported")}</dd></div>
+        <div class="publication-fact-wide"><dt>Last checked</dt><dd>${checkedTime}</dd></div>
+        <div class="publication-fact-wide"><dt>Reached surfaces</dt><dd>${escapeHtml(reached?reached.map(surface=>surface.label).join(", ")||"None confirmed":"Not reported")}</dd></div>
+        <div class="publication-fact-wide"><dt>Missing surfaces</dt><dd>${escapeHtml(missing?missing.map(surface=>surface.label).join(", ")||"None reported":"Not reported")}</dd></div>
+      </dl>
+      <p class="publication-card-metrics">Engagement, listens and opens: not reported by this catalog.</p>
+    </article>`;
+  }).join(""):`<p class="publication-empty">Move a song to Published and HALO will start tracking its distribution health here.</p>`;
+  window.HaloReleaseArtwork?.wire(board,fallbackArtwork);
+}
 function renderSongList(){const query=state.filter.trim().toLowerCase();const songs=state.songs.filter(song=>`${song.artistName} ${song.title}`.toLowerCase().includes(query));elements.songList.innerHTML=songs.length?songs.map(song=>`<button class="song-card${song.id===state.selectedId?" is-active":""}" type="button" data-song-id="${song.id}">${artworkThumb(resolvedArtwork(song),"song-card-artwork","song-card-artwork-placeholder")}<span><strong>${escapeHtml(song.title)}</strong><small>${escapeHtml(song.artistName)}</small><em class="pipeline-badge" data-stage="${escapeHtml(song.pipelineStatus||"uploaded")}">${escapeHtml(titleCase(song.pipelineStatus||"uploaded"))}</em></span><i class="${song.metadataStatus==="ready"?"is-ready":""}" aria-label="${escapeHtml(titleCase(song.metadataStatus))}"></i></button>`).join(""):`<div class="song-card"><span><strong>No songs found</strong><small>Try another search</small></span></div>`}
 function setValue(id,value){const element=$(id);if(element)element.value=value??""}
 const DRIVE_LINK_HOSTS=new Set(["drive.google.com","docs.google.com"]);

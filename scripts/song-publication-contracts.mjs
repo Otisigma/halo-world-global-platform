@@ -160,7 +160,7 @@ assert.match(forcePushApi, /new TextEncoder\(\)\.encode\(text\)\.byteLength/, "s
   let track = { id: sampleSongId, title: "Test track", salePriceCents: null, currency: "USD" };
   let fail = false;
   let refreshed = "";
-  click = new Function("$", "selectedSong", "fetch", "loadCatalog", "state", "message", "money", `${source};return pushToShop;`)(
+  click = new Function("$", "selectedSong", "fetch", "loadCatalog", "state", "message", "money", "window", `${source};return pushToShop;`)(
     selector => selector === "#pushToShopStatus" ? status : button,
     () => track,
     async (url, options) => {
@@ -180,7 +180,7 @@ assert.match(forcePushApi, /new TextEncoder\(\)\.encode\(text\)\.byteLength/, "s
       if (fail) throw new Error("Backend unavailable");
       return { ok: true, json: async () => ({ success: true, message: "Live on Shop & Charts" }) };
     },
-    async id => { refreshed = id; }, { authenticated: true }, () => {}, () => ""
+    async id => { refreshed = id; }, { authenticated: true }, () => {}, () => "", { confirm: () => true }
   );
   await click({ currentTarget: button });
   assert.equal(refreshed, sampleSongId);

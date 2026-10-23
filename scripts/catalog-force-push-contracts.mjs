@@ -209,7 +209,7 @@ assert.doesNotMatch(editorJs, /localStorage/, "song editor must not persist cata
   let requests = 0;
   let reloads = 0;
   let success = true;
-  click = new Function("$", "selectedSong", "fetch", "loadCatalog", "state", "message", "money", `${source};return pushToShop;`)(
+  click = new Function("$", "selectedSong", "fetch", "loadCatalog", "state", "message", "money", "window", `${source};return pushToShop;`)(
     selector => selector === "#pushToShopStatus" ? status : button,
     () => ({ id: songId, title: "Night Drive", salePriceCents: null }),
     async (url, options) => {
@@ -229,7 +229,11 @@ assert.doesNotMatch(editorJs, /localStorage/, "song editor must not persist cata
       reloads++;
       assert.equal(id, songId);
       throw new Error("Catalog refresh unavailable");
-    }, { authenticated: true }, () => {}, () => ""
+    }, { authenticated: true }, () => {}, () => "", { confirm: text => {
+      assert.match(text, /Night Drive/);
+      assert.match(text, /default sale price of US\$1\.29/);
+      return true;
+    } }
   );
   await click({ currentTarget: button });
   assert.equal(requests, 1, "one click must send one publication request");
@@ -480,7 +484,7 @@ assert.match(publication, /is_chart_eligible = TRUE/);
     const messages = [];
     const status = { textContent: "" };
     let reloads = 0;
-    const push = new Function("selectedSong", "state", "$", "message", "fetch", "loadCatalog", "money", `${source}; return pushToShop;`)(
+    const push = new Function("selectedSong", "state", "$", "message", "fetch", "loadCatalog", "money", "window", `${source}; return pushToShop;`)(
       () => ({ id: songId, salePriceCents: null }), { authenticated: true }, selector => selector === "#pushToShopStatus" ? status : button,
       text => messages.push(text), async (_url, options) => {
         assert.equal(button.disabled, true);
@@ -490,7 +494,7 @@ assert.match(publication, /is_chart_eligible = TRUE/);
           releaseStatus: "PUBLISHED", status: "PUBLISHED", inChart: true, isLiveVisible: true,
         });
         return Response.json({ success, message: success ? "Published" : "Unavailable" }, { status: success ? 200 : 503 });
-      }, async () => { reloads++; }, () => "",
+      }, async () => { reloads++; }, () => "", { confirm: () => true },
     );
     await push();
     assert.equal(button.disabled, false);

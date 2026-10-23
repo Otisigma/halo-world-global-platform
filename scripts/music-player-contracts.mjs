@@ -5,79 +5,9 @@ import vm from "node:vm";
 import { allowedEvents } from "../netlify/lib/stats.mjs";
 
 const root = resolve(import.meta.dirname, "..");
-const localVaultClient = await readFile(resolve(root, "music/local-vault-catalog.js"), "utf8");
 const musicPage = await readFile(resolve(root, "music/index.html"), "utf8");
-assert.match(musicPage, /id="localVaultCatalog"[^>]*hidden/);
-assert.match(musicPage, /<script src="\/music\/local-vault-catalog\.js" defer><\/script>/);
-assert.match(musicPage, /not verified or published releases/);
-
-function localVaultFixture(raw, { readyState = "complete", blockedStorage = false, missingSurface = false } = {}) {
-  const node = () => ({
-    hidden: true, children: [], textContent: "",
-    append(...children) { this.children.push(...children); },
-    replaceChildren(...children) { this.children = children; }
-  });
-  const surface = node();
-  const grid = node();
-  let onReady;
-  const document = {
-    readyState,
-    getElementById(id) {
-      if (missingSurface) return null;
-      assert.ok(["localVaultCatalog", "localVaultTracks"].includes(id), "hydration must not touch public UI");
-      return id === "localVaultCatalog" ? surface : grid;
-    },
-    createElement: node,
-    addEventListener(event, handler, options) {
-      assert.equal(event, "DOMContentLoaded");
-      assert.equal(options.once, true);
-      onReady = handler;
-    }
-  };
-  vm.runInNewContext(localVaultClient, {
-    document,
-    window: {
-      get localStorage() {
-        if (blockedStorage) throw new Error("Storage blocked");
-        return { getItem(key) { assert.equal(key, "halo_master_vault_catalog"); return raw; } };
-      }
-    }
-  });
-  return { surface, grid, ready: () => onReady?.() };
-}
-
-for (const raw of [null, "", "{broken", "null", "{}", "42", '"text"', "[]",
-  '[null,4,[],{},{"title":false},{"title":"   "}]',
-  JSON.stringify(Array.from({ length: 1001 }, () => ({ title: "Too many" }))),
-  " ".repeat(1024 * 1024 + 1)]) {
-  const f = localVaultFixture(raw);
-  assert.equal(f.surface.hidden, true, "absent or invalid inventory leaves the page unchanged");
-  assert.equal(f.grid.children.length, 0);
-}
-assert.equal(localVaultFixture("[]", { blockedStorage: true }).surface.hidden, true);
-localVaultFixture('[{"title":"No target"}]', { missingSurface: true });
-for (const readyState of ["loading", "interactive", "complete"]) {
-  const f = localVaultFixture(JSON.stringify([
-    null, { title: " " },
-    { title: " <img src=x onerror=alert(1)> ", artist: "<script>bad()</script>",
-      audioUrl: "javascript:alert(1)", votes: 999, status: "published" },
-    { title: "Second track", artist: 42 },
-    { title: "x".repeat(201) }
-  ]), { readyState });
-  if (readyState === "loading") {
-    assert.equal(f.surface.hidden, true, "wait for the target markup");
-    f.ready();
-  }
-  assert.equal(f.surface.hidden, false);
-  assert.equal(f.grid.children.length, 3);
-  const copies = f.grid.children.map(card => card.children[0]);
-  assert.equal(copies[0].children[0].textContent, "<img src=x onerror=alert(1)>", "render markup as literal text");
-  assert.equal(copies[0].children[1].textContent, "<script>bad()</script>");
-  assert.equal(copies[1].children[0].textContent, "Second track");
-  assert.equal(copies[1].children[1].textContent, "Artist not supplied");
-  assert.equal(copies[2].children[0].textContent.length, 200);
-  assert.ok(copies.every(copy => copy.children.length === 2), "local data cannot add media, votes, or commerce controls");
-}
+assert.doesNotMatch(musicPage, /localVault|sharedCatalogFrame|embed=shop/, "fans must not receive browser inventory or embedded management");
+assert.match(musicPage, /Votes do not publish music or approve radio rotation/);
 
 const [client, styles, stats, summary, statsLib, statsEvent, haloHome, releaseCatalogApi, musicWorld, dreamweaver] = await Promise.all([
   readFile(resolve(root, "music-player.js"), "utf8"),

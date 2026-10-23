@@ -14,6 +14,7 @@ import { attachPublicationHealthToSongs } from "../lib/song-publication-health.m
 import { cleanGoogleDriveUrl } from "../lib/google-drive.mjs";
 import { processCatalogRelease } from "../lib/release-conveyor-service.mjs";
 import { prepareReleaseAudio } from "../lib/release-conveyor-audio.mjs";
+import { loadCatalogSignals } from "../lib/catalog-signals.mjs";
 
 const MAX_BODY_BYTES = 80_000;
 const RIGHTS_STATUSES = new Set(["needs_review", "cleared", "disputed"]);
@@ -492,9 +493,9 @@ export default async function songCatalogHandler(request: Request) {
     if (!user?.id) return request.method === "GET" ? json({ authenticated: false, songs: [] }) : json({ message: "Join or sign in to manage the song catalog" }, 401);
     const membership = await ensureMembership(nativeDb, user);
     if (request.method === "GET") {
-      const [catalog, producer] = await Promise.all([loadCatalog(membership.member_id), loadProducer(nativeDb, membership.member_id)]);
+      const [catalog, producer, catalogSignals] = await Promise.all([loadCatalog(membership.member_id), loadProducer(nativeDb, membership.member_id), loadCatalogSignals(nativeDb, membership.member_id)]);
       const songsWithHealth = await attachPublicationHealth(nativeDb, membership.member_id, catalog);
-      return json({ authenticated: true, viewer: { name: membership.display_name }, songs: songsWithHealth, producer });
+      return json({ authenticated: true, viewer: { name: membership.display_name }, songs: songsWithHealth, producer, catalogSignals });
     }
 
     try { verifyRequestOrigin(request); } catch { return json({ message: "Cross-origin catalog actions are not accepted" }, 403); }

@@ -31,10 +31,11 @@ assert.doesNotMatch(uploadPage, /Halo Music Upload|sharedSongCatalog|musicUpload
 assert.match(musicPage, /public HALO shop front/i, "shop page must describe the public storefront role");
 assert.match(musicPage, /Listen\. Buy\.[\s\S]*Share\./, "shop page must headline listening, buying, and sharing");
 assert.match(musicPage, /artist-controlled songs from the shared catalog/i, "shop page must keep the shared catalog as the public source-of-truth copy");
-assert.match(musicPage, /<details class="catalog-workspace-details" id="catalogWorkspaceDetails">/, "shop page must expose the shared song catalog inside a native collapsible details panel");
-assert.match(musicPage, /data-src="\/song-catalog\/\?embed=shop"/, "shop page must keep the shared song catalog workspace embeddable beneath the storefront");
+assert.doesNotMatch(musicPage, /catalogWorkspaceDetails|sharedCatalogFrame|embed=shop/, "public shop must not embed artist management");
+assert.match(musicPage, /Artist\? Sign in to your private workspace/, "artists retain a dedicated sign-in path");
 for (const page of [musicPage, uploadPage]) {
-  assert.match(page, /sandbox="allow-same-origin allow-scripts allow-forms allow-modals allow-popups allow-popups-to-escape-sandbox"/, "shop workspace must retain its sandbox but let user-opened Dreamweaver tabs run independently for media exports");
+  assert.doesNotMatch(page, /catalogWorkspaceDetails|sharedCatalogFrame|embed=shop|localVault/, "both public storefronts exclude local inventory and artist controls");
+  assert.match(page, /Votes do not publish music or approve radio rotation/);
 }
 
 assert.match(musicClient, /\/api\/release-catalog/, "shop client must load the shared release catalog API");
@@ -48,8 +49,8 @@ assert.match(musicClient, /history\.replaceState/, "shop client must keep spotli
 assert.match(musicClient, /relatedReleases/, "shop client must expose related songs from the shared catalog feed");
 assert.match(musicClient, /availabilitySummary/, "shop client must render public-safe rights and availability messaging");
 assert.match(musicClient, /data-featured-heading/, "shop client must move focus to the updated spotlight heading for accessibility");
-assert.match(musicClient, /catalogWorkspaceDetails/, "shop client must wire the shared song catalog panel");
-assert.match(musicClient, /halo-song-catalog-height/, "shop client must resize the embedded song catalog when the shared workspace reports its height");
+assert.doesNotMatch(musicClient, /catalogWorkspaceDetails|sharedCatalogFrame/, "public client must not load artist management");
+assert.doesNotMatch(musicClient, /halo-song-catalog-height/, "public client no longer accepts artist-workspace messages");
 
 assert.match(musicStyles, /\.shop-panel/, "shop styles must include the storefront detail layout");
 assert.match(musicStyles, /\.availability-note/, "shop styles must expose rights-aware availability messaging");

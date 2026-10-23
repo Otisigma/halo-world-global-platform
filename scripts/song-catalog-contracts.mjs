@@ -57,6 +57,33 @@ assert.match(client, /state\.authenticated=false;state\.songs=\[\];state\.catalo
 assert.match(client, /if\(request!==catalogRequest\)return/, "stale responses cannot restore private data after an account change");
 assert.match(client, /identity\.onAuthChange/, "private workspace responds to logout and account changes");
 {
+  const watchSource = client.slice(client.indexOf("let catalogIdentity;"), client.indexOf('window.addEventListener("halo-identity-ready"'));
+  const privateState = { authenticated: true, songs: [{ id: "owned" }], catalogSignals: { status: "available" } };
+  let handler;
+  let closed = 0;
+  let loaded = 0;
+  const watch = runInNewContext(`let catalogRequest=0;\n${watchSource}\nwatchCatalogIdentity;`, {
+    state: privateState, elements: { songDialog: { close() { closed++; } }, versionDialog: { close() { closed++; } } },
+    render() {}, loadCatalog() { loaded++; },
+  });
+  const identity = { onAuthChange(callback) { handler = callback; } };
+  watch(identity);
+  watch(identity);
+  handler("token_refresh");
+  handler("user_updated");
+  assert.equal(closed, 0, "routine auth maintenance must not discard unsaved edits");
+  assert.equal(loaded, 0);
+  assert.equal(privateState.authenticated, true);
+  handler("logout");
+  assert.equal(closed, 2, "logout closes private editing dialogs");
+  assert.equal(loaded, 1);
+  assert.equal(privateState.authenticated, false);
+  assert.equal(privateState.songs.length, 0);
+  assert.equal(privateState.catalogSignals, null);
+  handler("login");
+  assert.equal(loaded, 2, "login or an account switch reloads the owner-scoped catalog");
+}
+{
   const pending = [];
   const privateState = { songs: [], producer: {}, authenticated: false };
   const loadSource = client.slice(client.indexOf("let catalogRequest=0;"), client.indexOf("let catalogIdentity;"));

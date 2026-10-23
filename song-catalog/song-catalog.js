@@ -131,7 +131,8 @@ let catalogIdentity;
 function watchCatalogIdentity(identity){
   if(!identity||identity===catalogIdentity)return;
   catalogIdentity=identity;
-  identity.onAuthChange(()=>{
+  identity.onAuthChange(event=>{
+    if(event==="token_refresh"||event==="user_updated")return;
     ++catalogRequest;
     state.authenticated=false;state.songs=[];state.catalogSignals=null;state.selectedId="";state.producer={jobs:[],packages:[]};
     elements.songDialog.close();elements.versionDialog.close();

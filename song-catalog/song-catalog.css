@@ -45,6 +45,7 @@
 .drive-link-save:disabled{opacity:.6;cursor:wait}
 .drive-link-panel[data-link-state="saved"] .drive-link-save{background:#355f4b;color:#fff}
 .drive-link-panel[data-link-state="invalid"] .drive-link-input-group input{border-color:#a74e32}
+.catalog-disclosure>summary{cursor:pointer;align-items:center}.catalog-disclosure>summary:focus-visible{outline:3px solid var(--rust);outline-offset:4px}.disclosure-label{font:500 11px "DM Mono",monospace;text-transform:uppercase;white-space:nowrap}.catalog-disclosure:not([open])>summary .disclosure-collapse,.catalog-disclosure[open]>summary .disclosure-expand{display:none}.disclosure-actions{padding:16px 28px 0}
 .drive-link-preview{margin:12px 0 0}
 .drive-link-preview a{color:#d4af37;font-size:13px;text-decoration:none}
 .drive-link-preview a:hover{text-decoration:underline}

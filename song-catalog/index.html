@@ -42,13 +42,18 @@
 
     <div id="artistWorkspace" hidden>
     <section class="publication-board" aria-labelledby="catalogSignalsTitle">
-      <div class="publication-board-heading">
+      <details class="catalog-disclosure" id="catalogSignalsDisclosure" open>
+      <summary class="publication-board-heading">
         <div><p class="eyebrow">Private catalog signals</p><h2 id="catalogSignalsTitle">What might be worth promoting?</h2></div>
+        <span class="disclosure-label"><span class="disclosure-expand">Expand</span><span class="disclosure-collapse">Collapse</span></span>
+      </summary>
+      <div class="disclosure-actions">
         <button class="quiet-button" id="refreshCatalogSignals" type="button">Refresh signals</button>
       </div>
       <p>Sorted by recorded outbound link clicks in the last 7 days. Clicks are not verified streams or unique listeners; room opens are recorded kit opens. These totals include all release-link audiences, not only fans. Missing recording is not proof of no interest. No invented momentum score or automatic promotion.</p>
       <div class="publication-board-list" id="catalogSignals" aria-live="polite"></div>
       <p>Review these snapshots weekly alongside existing fan votes and voluntary feedback via <a href="/support/">Support</a>. Note which songs you promoted and when, then compare the next full week. These signals cannot establish causation or tell us how users feel; ask artists and fans to test the experience.</p>
+      </details>
     </section>
 
     <section class="summary-strip" aria-label="Catalog totals">
@@ -61,11 +66,16 @@
     </section>
 
     <section class="publication-board" aria-labelledby="publicationBoardTitle">
-      <div class="publication-board-heading">
+      <details class="catalog-disclosure" id="publicationHealthDisclosure" open>
+      <summary class="publication-board-heading">
         <div><p class="eyebrow">Publication health desk</p><h2 id="publicationBoardTitle">Published songs stay under watch.</h2></div>
+        <span class="disclosure-label"><span class="disclosure-expand">Expand</span><span class="disclosure-collapse">Collapse</span></span>
+      </summary>
+      <div class="publication-board-heading">
         <p>HALO keeps checking every published song until the public release page, Dreamweaver share, and radio route are confirmed or the issue is escalated.</p>
       </div>
       <div class="publication-board-list" id="publicationBoard"><p class="publication-empty">Move a song to Published and HALO will start tracking its distribution health here.</p></div>
+      </details>
     </section>
 
     <section class="catalog-shell" id="catalogShell" aria-busy="true">

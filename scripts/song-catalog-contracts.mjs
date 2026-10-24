@@ -50,6 +50,46 @@ const publicClient = await read("music/music.js");
 assert.doesNotMatch(publicPage, /localVault|sharedCatalogFrame|embed=shop/);
 assert.doesNotMatch(publicClient, /Versions mapped|Sale-enabled versions|force-push-track|set_pipeline_stage/);
 assert.match(page, /id="artistWorkspace" hidden/);
+{
+  const workspaceStart = page.indexOf('<div id="artistWorkspace" hidden>');
+  let workspaceDepth = 0;
+  let workspace = "";
+  for (const tag of page.slice(workspaceStart).matchAll(/<\/?div\b[^>]*>/g)) {
+    workspaceDepth += tag[0].startsWith("</") ? -1 : 1;
+    if (workspaceDepth === 0) {
+      workspace = page.slice(workspaceStart, workspaceStart + tag.index + tag[0].length);
+      break;
+    }
+  }
+  assert.ok(workspace, "artist workspace has a matching closing boundary");
+  const privateBoards = [
+    ["catalogSignalsDisclosure", "catalogSignalsTitle", "Private catalog signals", ["refreshCatalogSignals", "catalogSignals"]],
+    ["publicationHealthDisclosure", "publicationBoardTitle", "Publication health desk", ["publicationBoard"]],
+  ];
+  for (const [id, titleId, label, surfaces] of privateBoards) {
+    const section = page.match(new RegExp(`<section class="publication-board" aria-labelledby="${titleId}">([\\s\\S]*?)</section>`));
+    assert.ok(section, `${label} retains its labelled section`);
+    const disclosure = section[1].match(new RegExp(`^\\s*<details class="catalog-disclosure" id="${id}" open>\\s*<summary class="publication-board-heading">([\\s\\S]*?)</summary>([\\s\\S]*?)</details>\\s*$`));
+    assert.ok(disclosure, `${label} has its own initially open native keyboard disclosure`);
+    assert.match(disclosure[1], new RegExp(`<h2 id="${titleId}">`));
+    assert.ok(disclosure[1].includes(label), `${label} names its own summary`);
+    assert.match(disclosure[1], /class="disclosure-expand">Expand<\/span>/);
+    assert.match(disclosure[1], /class="disclosure-collapse">Collapse<\/span>/);
+    assert.doesNotMatch(disclosure[1], /<button|<a\b|onclick=|tabindex=|role=/, "summary keeps native semantics without nested controls");
+    assert.doesNotMatch(section[1], /<details[^>]*\bname=|onclick=/, "disclosures are independent, not an exclusive accordion");
+    for (const surface of [id, ...surfaces]) {
+      assert.equal(page.split(`id="${surface}"`).length - 1, 1, `${surface} is not duplicated`);
+      assert.ok(workspace.includes(`id="${surface}"`), `${surface} remains inside the artist workspace`);
+    }
+    for (const surface of surfaces) {
+      assert.ok(disclosure[2].includes(`id="${surface}"`), `${surface} remains in the collapsible body`);
+    }
+  }
+  assert.match(styles, /\.catalog-disclosure>summary:focus-visible\{[^}]*outline:3px solid var\(--rust\)/);
+  assert.match(styles, /\.catalog-disclosure:not\(\[open\]\)>summary \.disclosure-collapse,\.catalog-disclosure\[open\]>summary \.disclosure-expand\{display:none\}/);
+  assert.match(page, /id="refreshCatalogSignals" type="button">Refresh signals/);
+  assert.match(page, /id="catalogSignals" aria-live="polite"/);
+}
 assert.match(client, /hidden=!state\.authenticated/);
 assert.match(api, /"Cache-Control": "no-store"/);
 assert.ok(api.indexOf("if (!user?.id)") < api.indexOf("loadCatalogSignals(nativeDb, membership.member_id)"), "authenticate before loading private signals");

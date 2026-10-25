@@ -38,9 +38,30 @@
       <h2>Private artist workspace</h2>
       <p>Sign in to view only the songs you own. Fan votes do not publish songs or approve rotation.</p>
       <button class="primary-button" id="catalogSignInButton" type="button">Sign in</button>
+      <div id="catalogUnavailable" hidden>
+        <p role="status">Catalog service unavailable. Readiness could not be checked; this does not indicate missing audio or an unpublished song.</p>
+        <button class="quiet-button" id="retryCatalogButton" type="button">Retry catalog</button>
+      </div>
     </section>
 
     <div id="artistWorkspace" hidden>
+    <section class="publication-board mission-control" id="catalogGuidance" aria-labelledby="catalogGuidanceTitle" hidden>
+      <div class="publication-board-heading">
+        <div><p class="eyebrow">Artist Mission Control</p><h2 id="catalogGuidanceTitle">What happens next?</h2></div>
+      </div>
+      <div class="mission-control-body">
+        <div role="status" aria-live="polite" aria-atomic="true">
+          <p class="eyebrow" id="guidanceSong"></p>
+          <h3 data-guidance-title></h3>
+          <p data-guidance-detail></p>
+          <p data-guidance-next></p>
+        </div>
+        <a class="primary-button" data-guidance-action></a>
+        <button class="primary-button" type="button" data-guidance-add data-add-song hidden>Add a song</button>
+        <p class="mission-control-boundary">Guidance reflects saved catalog checks. Uploads and browser-local previews do not authorize publication or rotation.</p>
+      </div>
+    </section>
+
     <section class="publication-board" aria-labelledby="catalogSignalsTitle">
       <details class="catalog-disclosure" id="catalogSignalsDisclosure" open>
       <summary class="publication-board-heading">
@@ -81,7 +102,7 @@
     <section class="catalog-shell" id="catalogShell" aria-busy="true">
       <aside class="song-rail" aria-label="Songs">
         <div class="rail-heading"><div><p class="eyebrow">The catalog</p><h2>All songs</h2></div><label><span class="sr-only">Search songs</span><input id="searchInput" type="search" placeholder="Search title or artist"></label></div>
-        <div class="song-list" id="songList"><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div></div>
+        <div class="song-list" id="songList" tabindex="-1"><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div></div>
       </aside>
 
       <div class="workspace" id="workspace">
@@ -162,7 +183,7 @@
           </section>
 
           <div class="workspace-grid">
-            <form class="metadata-panel" id="songForm">
+            <form class="metadata-panel" id="songForm" tabindex="-1">
               <div class="panel-heading"><div><p class="eyebrow">Master record</p><h3>Song information</h3></div><button class="primary-button" type="submit">Save + review</button><button class="quiet-button" id="pushToShopButton" type="button">Push to Shop &amp; Charts</button></div>
               <p id="pushToShopStatus" role="status" aria-live="polite">Save any edits before pushing this track.</p>
               <input id="songId" type="hidden">
@@ -182,7 +203,7 @@
               </div>
             </form>
 
-            <aside class="review-panel">
+            <aside class="review-panel" id="songReview" tabindex="-1">
               <div class="panel-heading"><div><p class="eyebrow">Automatic check</p><h3>Dreamweaver review</h3></div><button class="text-button" id="reviewButton" type="button">Run again</button></div>
               <p class="review-intro" id="reviewIntro">Dreamweaver checks the information and version routing after every save.</p>
               <div class="issue-list" id="issueList"></div>
@@ -191,7 +212,7 @@
 
           <section class="versions-panel">
             <div class="panel-heading"><div><p class="eyebrow">Version routing</p><h3>Every version, one clear destination</h3></div><p>Open a row to connect audio and update mastering.</p></div>
-            <div class="version-table" id="versionTable"></div>
+            <div class="version-table" id="versionTable" tabindex="-1"></div>
             <form class="audio-upload-panel alternate-upload-panel" id="alternateUploadForm" aria-labelledby="alternateUploadHeading">
               <div>
                 <span class="field-label">Alternate Versions</span>
@@ -208,7 +229,7 @@
             </form>
           </section>
 
-          <section class="publication-health-panel" id="publicationHealthPanel" hidden aria-labelledby="publicationHealthTitle">
+          <section class="publication-health-panel" id="publicationHealthPanel" tabindex="-1" hidden aria-labelledby="publicationHealthTitle">
             <div class="panel-heading"><div><p class="eyebrow">Distributor team</p><h3 id="publicationHealthTitle" tabindex="-1">Publication health</h3></div><div><button class="quiet-button" id="recheckPublicationButton" type="button" aria-label="Recheck publication health for the selected song">Recheck now</button> <a class="quiet-link" id="publicationCanonicalLink" href="/music/" target="_blank" rel="noopener" hidden>Open live song ↗</a></div></div>
             <div class="publication-health-grid">
               <article class="publication-health-card publication-health-summary-card" role="status" aria-live="polite" aria-atomic="true">

@@ -9,6 +9,7 @@ import { pickCanonicalMaster, serializeMasterCopy } from "../netlify/lib/master-
 import { attachPublicationHealthToSongs } from "../netlify/lib/song-publication-health.mjs";
 import { MASTER_UPLOAD_MAX_BYTES, MASTER_UPLOAD_URL_TTL_SECONDS, buildMasterObjectKey, directUploadConfig, isOwnedMasterObjectKey, presignObjectUrl, validateMasterUpload } from "../netlify/lib/direct-upload-storage.mjs";
 import { loadCatalogSignals } from "../netlify/lib/catalog-signals.mjs";
+import { catalogGuidance, renderCatalogGuidance } from "../song-catalog/catalog-guidance.js";
 
 const root = resolve(import.meta.dirname, "..");
 const read = path => readFile(resolve(root, path), "utf8");
@@ -62,6 +63,7 @@ assert.match(page, /id="artistWorkspace" hidden/);
     }
   }
   assert.ok(workspace, "artist workspace has a matching closing boundary");
+  assert.ok(workspace.includes('id="catalogGuidance"'), "Mission Control stays inside the authenticated workspace");
   const privateBoards = [
     ["catalogSignalsDisclosure", "catalogSignalsTitle", "Private catalog signals", ["refreshCatalogSignals", "catalogSignals"]],
     ["publicationHealthDisclosure", "publicationBoardTitle", "Publication health desk", ["publicationBoard"]],
@@ -124,12 +126,76 @@ assert.match(client, /identity\.onAuthChange/, "private workspace responds to lo
   assert.equal(loaded, 2, "login or an account switch reloads the owner-scoped catalog");
 }
 {
+  const context = { authenticated: true, songCount: 1 };
+  const ready = { title: "Private title", metadataStatus: "ready", metadataIssues: [], pipelineStatus: "draft" };
+  assert.equal(catalogGuidance({ ...context, authenticated: false, song: ready }), null);
+  const cases = [
+    [{ ...context, songCount: 0 }, "Start your catalog", "addSongButton"],
+    [context, "Choose a song", "songList"],
+    [{ ...context, song: { ...ready, metadataStatus: "draft" } }, "Catalog review needed", "songReview"],
+    [{ ...context, song: { ...ready, metadataStatus: "reviewed", metadataIssues: [{ level: "warning", field: "stems" }] } }, "Review recommendations", "songReview"],
+    [{ ...context, song: ready }, "Ready for publication review", "songForm"],
+    [{ ...context, song: { ...ready, metadataIssues: [{ level: "required", field: "rightsStatus", message: "Confirm rights." }] } }, "Release information needs attention", "songForm"],
+  ];
+  for (const field of ["sale_master", "sale_master_audio", "radio_edit", "radio_audio", "radio_master"]) {
+    cases.push([{ ...context, song: { ...ready, metadataIssues: [{ level: "required", field, message: `Check ${field}.` }] } }, "Required version work", "versionTable"]);
+  }
+  for (const state of ["published_and_fully_distributed", "awaiting_release_propagation", "awaiting_radio_ready_assets", "awaiting_dreamweaver_share_readiness", "waiting_on_artist_action", "waiting_on_internal_repair", "escalated"]) {
+    cases.push([{ ...context, song: { ...ready, pipelineStatus: "published", publicationHealth: { state, label: state, summary: `Recorded ${state}` } } }, state, "publicationHealthPanel"]);
+  }
+  cases.push([{ ...context, song: { ...ready, pipelineStatus: "published" } }, "Published · checks pending", "publicationHealthPanel"]);
+  const nodes = new Map();
+  const guidanceRoot = { hidden: true, querySelector(selector) {
+    if (!nodes.has(selector)) nodes.set(selector, { textContent: "", hidden: false, setAttribute(key, value) { this[key] = value; }, removeAttribute(key) { delete this[key]; } });
+    return nodes.get(selector);
+  } };
+  for (const [input, title, target] of cases) {
+    const result = catalogGuidance(input);
+    assert.equal(result.title, title);
+    assert.equal(result.target, target);
+    assert.ok(page.includes(`id="${target}"`), `${target} is a real existing workflow target`);
+    assert.ok(result.next && result.detail && result.action);
+    renderCatalogGuidance({ root: guidanceRoot, ...input });
+    assert.equal(guidanceRoot.hidden, false);
+    assert.equal(nodes.get("[data-guidance-title]").textContent, title);
+    assert.equal(nodes.get("[data-guidance-add]").hidden, target !== "addSongButton");
+    assert.equal(nodes.get("[data-guidance-action]").href, target === "addSongButton" ? undefined : `#${target}`);
+  }
+  const malicious = { ...ready, metadataIssues: [{ level: "required", field: "unknown", message: "<img src=x onerror=alert(1)>" }] };
+  renderCatalogGuidance({ root: guidanceRoot, ...context, song: malicious });
+  assert.equal(nodes.get("[data-guidance-detail]").textContent, malicious.metadataIssues[0].message, "dynamic guidance uses text, not HTML");
+  renderCatalogGuidance({ root: guidanceRoot, authenticated: false, song: ready });
+  assert.equal(guidanceRoot.hidden, true);
+  for (const key of ["title", "detail", "next"]) assert.equal(nodes.get(`[data-guidance-${key}]`).textContent, "", "logout clears private guidance");
+  assert.equal(nodes.get("[data-guidance-action]").href, undefined);
+  const dreamweaver = await read("dreamweaver/index.html");
+  const dreamweaverClient = await read("dreamweaver/dreamweaver.js");
+  for (const source of [dreamweaver, dreamweaverClient, publicPage, publicClient]) {
+    assert.doesNotMatch(source, /catalog-guidance|catalogGuidance|Artist Mission Control|dreamweaverAudioInput/, "public listeners receive no private guidance or invented upload control");
+  }
+  assert.match(dreamweaver, /id="mixFileInput"/);
+  assert.match(dreamweaver, /Local preview only:.*not uploaded, saved, published, or shared/);
+  const guidanceSource = await read("song-catalog/catalog-guidance.js");
+  assert.doesNotMatch(guidanceSource, /innerHTML|force-push-track|\.click\(|fetch\(/, "guidance cannot publish or inject HTML");
+  const guidanceSection = page.match(/<section[^>]+id="catalogGuidance"[\s\S]*?<\/section>/)[0];
+  assert.doesNotMatch(guidanceSection, /style=|onclick=/);
+  assert.match(guidanceSection, /role="status" aria-live="polite" aria-atomic="true"/);
+  assert.match(guidanceSection, /type="button" data-guidance-add data-add-song/);
+  assert.match(styles, /\.mission-control \[hidden\]\{display:none\}/, "hidden guidance actions cannot be made visible by button display rules");
+  assert.match(client, /renderCatalogGuidance\(\{root:\$\("#catalogGuidance"\),authenticated:state\.authenticated,song:selectedSong\(\)/);
+  assert.match(client, /\$\("#retryCatalogButton"\)\.addEventListener\("click"/);
+  assert.match(page, /Catalog service unavailable\. Readiness could not be checked/);
+}
+{
   const pending = [];
   const privateState = { songs: [], producer: {}, authenticated: false };
   const loadSource = client.slice(client.indexOf("let catalogRequest=0;"), client.indexOf("let catalogIdentity;"));
+  const availability = { hidden: true };
+  const signIn = { hidden: false };
   const context = {
     state: privateState, api: () => new Promise((resolve, reject) => pending.push({ resolve, reject })),
     elements: { shell: { setAttribute() {} } }, render() {}, message() {},
+    $: selector => ({ "#catalogUnavailable": availability, "#catalogSignInButton": signIn })[selector],
   };
   const load = runInNewContext(`${loadSource}\nloadCatalog;`, context);
   const older = load();
@@ -145,6 +211,14 @@ assert.match(client, /identity\.onAuthChange/, "private workspace responds to lo
   await failed;
   assert.equal(privateState.authenticated, false);
   assert.equal(privateState.catalogSignals, null, "a failed refresh does not leave stale signals visible");
+  assert.equal(availability.hidden, false, "a failed catalog check shows generic service guidance");
+  assert.equal(signIn.hidden, true, "service failure is not misrepresented as a sign-in requirement");
+  const recovered = load();
+  pending[3].resolve({ authenticated: true, songs: [{ id: "current-owner" }] });
+  await recovered;
+  assert.equal(availability.hidden, true, "successful retry removes the service warning");
+  assert.equal(signIn.hidden, false);
+  assert.equal(privateState.selectedId, "current-owner");
 }
 {
   const handlerSource = stripTypeScriptTypes(api.slice(api.indexOf("export default async function songCatalogHandler"), api.indexOf("export const config")).replace("export default ", ""));
@@ -434,7 +508,7 @@ assert.equal(validateMasterUpload({ filename: "master.wav", contentType: "audio/
 assert.equal(validateMasterUpload({ filename: "master.wav", contentType: "audio/wav", fileSize: 0 }).status, 400, "empty master uploads are rejected");
 assert.equal(validateMasterUpload({ filename: "cover.png", contentType: "image/png", fileSize: 1024 }).status, 415, "non-audio master uploads are rejected");
 
-assert.match(page, /id="versionTable"><\/div>\s*<form[^>]*id="alternateUploadForm"/, "inline upload lives directly below the unchanged version list");
+assert.match(page, /id="versionTable" tabindex="-1"><\/div>\s*<form[^>]*id="alternateUploadForm"/, "inline upload lives directly below the focusable version list");
 assert.match(page, /id="alternateSongId" name="songId" type="hidden"/, "inline uploads carry the current parent song");
 assert.match(page, /for="alternateVersionTitle"/, "version title has a visible label");
 assert.match(page, /for="alternateAudioFile"/, "audio picker has a visible label");

@@ -16,6 +16,7 @@ const versions = [
   { id: "master", song_id: song.id, version_type: "sale_master", audio_url: "/master.wav", mastering_status: "approved", duration_seconds: 180 },
   { id: "radio", song_id: song.id, version_type: "radio_edit", audio_url: "/radio.wav", mastering_status: "approved", duration_seconds: 180 },
 ];
+const approvedMasterStatus = { uploaded: true, durationValid: true, masteringStatus: "approved" };
 const audio = { summary: "Original preserved.", originalPreserved: true, issues: [], repairs: ["5 ms micro-fade applied to a separate copy."] };
 let checkpoints = [], handoffs = 0, attempts = 0;
 const ports = {
@@ -166,7 +167,7 @@ controller.select(song.id);
 assert.equal(consoleNode("percent-text").textContent, "0% Completed (0/8 stages)");
 assert.equal(consoleNode("stages").children.length, RELEASE_STAGES.length);
 assert.equal(consoleNode("hum").disabled, true, "filter selection is disabled during a request");
-resolveConsoleRequest({ ok: true, json: async () => ({ ...success, options: { humHz: 0 },
+resolveConsoleRequest({ ok: true, json: async () => ({ ...success, masterStatus: approvedMasterStatus, options: { humHz: 0 },
   watchdog: {
     issues: [{ field: "route", message: "/toolost/: unavailable" }],
     findings: [{ field: "infrastructure", message: "/radio/: broken <b>route</b>" }],
@@ -180,6 +181,8 @@ assert.equal(consoleNode("progress-bar").style.width, "100%");
 assert.equal(consoleNode("progress").attributes.get("aria-valuenow"), "100");
 assert.equal(consoleNode("current-step").textContent, "Active Dept: Complete");
 assert.equal(consoleNode("status-badge").textContent, "FULLY CLEARED");
+assert.equal(consoleNode("master-status").textContent, "Sale master uploaded · Mastering approved (saved)");
+assert.equal(consoleNode("master-status").attributes.get("data-state"), "passed");
 assert.deepEqual(consoleNode("issues").children.map(item => item.textContent), [
   "isrc: Creator review required",
   "route: /toolost/: unavailable",
@@ -230,6 +233,8 @@ assert.equal(consoleNode("package").hidden, true);
 assert.equal(consoleNode("audio").hidden, true);
 assert.equal(consoleNode("percent-text").textContent, "0% Completed (0/8 stages)");
 assert.equal(consoleNode("status-badge").textContent, "NEEDS RERUN");
+assert.match(consoleNode("master-status").textContent, /needs refresh/);
+assert.equal(consoleNode("master-status").attributes.get("data-state"), "pending");
 assert.equal(consoleTimer, null, "automatic refresh cannot clear unsaved filter changes");
 consoleNode("refresh").dispatchEvent(new Event("click"));
 resolveConsoleRequest({ ok: false, json: async () => ({ message: "Connection interrupted." }) });
@@ -238,6 +243,8 @@ assert.equal(consoleNode("package").hidden, true);
 assert.equal(consoleNode("documents").hidden, true);
 assert.equal(consoleNode("progress-bar").style.width, "0%");
 assert.equal(consoleNode("status-badge").textContent, "RETRY SCHEDULED");
+assert.match(consoleNode("master-status").textContent, /status unavailable/);
+assert.equal(consoleNode("master-status").attributes.get("data-state"), "pending");
 poll = consoleTimer();
 resolveConsoleRequest({ ok: true, json: async () => ({
   status: "processing", stages: [null, { name: "intake", status: "unknown" },
@@ -249,10 +256,11 @@ assert.equal(consoleNode("percent-text").textContent, "0% Completed (0/8 stages)
 assert.match(consoleNode("stages").children[1].textContent, /<b>Untrusted detail<\/b>/, "details remain text, never HTML");
 poll = consoleTimer();
 controller.select("");
-resolveConsoleRequest({ ok: true, json: async () => success });
+resolveConsoleRequest({ ok: true, json: async () => ({ ...success, masterStatus: approvedMasterStatus }) });
 await poll;
 assert.equal(consoleNode("progress-bar").style.width, "0%", "late responses cannot leak another song's progress");
 assert.equal(consoleNode("current-step").textContent, "Active Dept: Select a song");
+assert.equal(consoleNode("master-status").textContent, "Sale master status: select a song.");
 assert.equal(consoleTimer, null, "deselecting stops polling");
 controller.select(song.id);
 resolveConsoleRequest({ ok: true, json: async () => ({ status: "not_started", receipt: null }) });
@@ -268,6 +276,40 @@ poll = consoleTimer();
 resolveConsoleRequest({ ok: true, json: async () => ({ ...success, options: { humHz: 50 } }) });
 await poll;
 assert.equal(consoleNode("hum").value, "50", "completed background runs synchronize the filter with the displayed package");
+for (const [masterStatus, text, color] of [
+  [approvedMasterStatus, "Sale master uploaded · Mastering approved (saved)", "passed"],
+  [{ ...approvedMasterStatus, masteringStatus: "review" }, "Sale master uploaded · Mastering in review (saved)", "blocked"],
+  [{ ...approvedMasterStatus, masteringStatus: "not_started" }, "Sale master uploaded · Mastering unfinished (not started) (saved)", "blocked"],
+  [{ ...approvedMasterStatus, masteringStatus: "queued" }, "Sale master uploaded · Mastering unfinished (queued) (saved)", "blocked"],
+  [{ ...approvedMasterStatus, masteringStatus: "in_progress" }, "Sale master uploaded · Mastering unfinished (in progress) (saved)", "blocked"],
+  [{ uploaded: false, durationValid: false, masteringStatus: "unknown" }, "Sale master missing · Mastering status unavailable", "blocked"],
+  [{ ...approvedMasterStatus, durationValid: false }, "Sale master uploaded · Valid duration missing · Mastering approved (saved)", "blocked"],
+  [{ ...approvedMasterStatus, uploaded: false }, "Sale master missing · Mastering approved (saved)", "blocked"],
+  [{ ...approvedMasterStatus, masteringStatus: "<b>approved</b>" }, "Sale master uploaded · Mastering status unavailable", "pending"],
+  [{ ...approvedMasterStatus, masteringStatus: "__proto__" }, "Sale master uploaded · Mastering status unavailable", "pending"],
+  [undefined, "Sale master / mastering status unavailable · Refresh to check.", "pending"],
+]) {
+  poll = consoleTimer();
+  resolveConsoleRequest({ ok: true, json: async () => ({ status: "not_started", masterStatus }) });
+  await poll;
+  assert.equal(consoleNode("master-status").textContent, text, "master status is accessible text, not color alone");
+  assert.equal(consoleNode("master-status").attributes.get("data-state"), color);
+  assert.equal(consoleNode("progress-bar").style.width, "0%", "master approval alone never completes pipeline stages");
+  assert.equal(consoleNode("status-badge").textContent, "PENDING");
+  assert.equal(consoleNode("package").hidden, true);
+}
+for (const response of [
+  { ok: true, json: async () => ({ ...success, status: "stale", masterStatus: approvedMasterStatus }) },
+  { ok: true, json: async () => ({ status: "retryable", masterStatus: approvedMasterStatus }) },
+  { ok: false, json: async () => ({ ...success, masterStatus: approvedMasterStatus }) },
+  { ok: true, json: async () => { throw new Error("Connection lost"); } },
+]) {
+  poll = consoleTimer();
+  resolveConsoleRequest(response);
+  await poll;
+  assert.equal(consoleNode("master-status").attributes.get("data-state"), "pending", "stale/unavailable data must never remain green");
+  assert.doesNotMatch(consoleNode("master-status").textContent, /uploaded|approved/);
+}
 controller.dispose();
 assert.equal(consoleTimer, null, "disposing stops polling");
 
@@ -324,16 +366,47 @@ const request = (method = "GET", body, query = "") => new Request(`https://halo.
 const post = () => handler(request("POST", { action: "process_submission", songId: song.id }));
 user = null;
 assert.equal((await post()).status, 401);
+const signedOut = await handler(request());
+assert.equal(signedOut.status, 401);
+assert.equal(Object.hasOwn(await signedOut.json(), "masterStatus"), false);
 user = { id: "creator" }; crossOrigin = true;
 assert.equal((await post()).status, 403);
 assert.equal(stored, null);
 crossOrigin = false; memberId = "someone-else";
 assert.equal((await post()).status, 404);
+const otherOwner = await handler(request());
+assert.equal(otherOwner.status, 404);
+assert.equal(Object.hasOwn(await otherOwner.json(), "masterStatus"), false);
 memberId = "creator";
 assert.equal((await handler(request("DELETE"))).status, 405);
 assert.equal((await handler(request("POST", { action: "process_submission", songId: song.id, humHz: 70 }))).status, 400);
 assert.equal((await handler(request("POST", { action: "bad" }))).status, 400);
-assert.equal((await handler(request())).status, 200);
+const initialResponse = await handler(request());
+assert.equal(initialResponse.status, 200);
+assert.equal(initialResponse.headers.get("cache-control"), "private, no-store");
+const initialState = await initialResponse.json();
+assert.equal(initialState.status, "not_started");
+assert.deepEqual(initialState.masterStatus, approvedMasterStatus);
+assert.doesNotMatch(JSON.stringify(initialState), /master\.wav|radio\.wav|audio_url|audio_storage_key/);
+for (const [master, expected] of [
+  [null, { uploaded: false, durationValid: false, masteringStatus: "unknown" }],
+  [{ audio_url: "" }, { ...approvedMasterStatus, uploaded: false }],
+  [{ duration_seconds: null }, { ...approvedMasterStatus, durationValid: false }],
+  [{ duration_seconds: 0 }, { ...approvedMasterStatus, durationValid: false }],
+  [{ duration_seconds: -1 }, { ...approvedMasterStatus, durationValid: false }],
+  [{ duration_seconds: "unknown" }, { ...approvedMasterStatus, durationValid: false }],
+  [{ mastering_status: "review" }, { ...approvedMasterStatus, masteringStatus: "review" }],
+  [{ mastering_status: "in_progress" }, { ...approvedMasterStatus, masteringStatus: "in_progress" }],
+  [{ mastering_status: "queued" }, { ...approvedMasterStatus, masteringStatus: "queued" }],
+  [{ mastering_status: "not_started", audio_filename: "mastered-approved.wav" }, { ...approvedMasterStatus, masteringStatus: "not_started" }],
+  [{ mastering_status: "private unexpected value" }, { ...approvedMasterStatus, masteringStatus: "unknown" }],
+]) {
+  currentVersions = master ? [{ ...versions[0], ...master }, versions[1]] : [versions[1]];
+  const state = await (await handler(request())).json();
+  assert.deepEqual(state.masterStatus, expected, "only canonical Sale-master facts are exposed; radio approval and filenames do not count");
+  assert.doesNotMatch(JSON.stringify(state.masterStatus), /private|wav|audio_url|filename|storage/);
+}
+currentVersions = structuredClone(versions);
 storageOutage = true;
 const apiFailed = await (await post()).json();
 assert.equal(apiFailed.status, "retryable");
@@ -343,6 +416,7 @@ assert(events.some(event => event.stage === "retryable"));
 storageOutage = false;
 const apiSuccess = await (await post()).json();
 assert.equal(apiSuccess.status, "ready");
+assert.deepEqual(apiSuccess.masterStatus, approvedMasterStatus, "POST responses also carry safe saved status");
 const callsBefore = adapterCalls;
 assert.equal((await (await post()).json()).status, "ready");
 assert.equal(adapterCalls, callsBefore);
@@ -364,9 +438,12 @@ for (const artifact of ["visual-manifest", "creative-manifest"]) {
 }
 assert((await (await handler(request())).json()).events.length > 0);
 currentSong.rights_status = "disputed";
+currentVersions[0].mastering_status = "review";
 const staleApi = await (await handler(request())).json();
 assert.equal(staleApi.status, "stale");
 assert.equal(staleApi.receipt.ready, false);
+assert.deepEqual(staleApi.masterStatus, { ...approvedMasterStatus, masteringStatus: "review" }, "stale receipts use current catalog facts, not old package data");
+currentVersions = structuredClone(versions);
 assert.equal((await handler(request("GET", null, "&artifact=package"))).status, 409);
 assert.equal((await handler(request("GET", null, "&artifact=audio"))).status, 409);
 const blockedApi = await (await post()).json();
@@ -402,9 +479,15 @@ const [catalog, html, ui, endpoint] = await Promise.all([
   read("lib/release-conveyor-ui.js"), read("netlify/functions/release-conveyor.mjs"),
 ]);
 assert.match(catalog, /await processCatalogRelease\(await getDatabase\(\), ownerMemberId, songId, prepareReleaseAudio\)/);
-for (const action of ["run", "status", "stages", "issues", "package", "documents", "promotion", "audio", "hum",
+for (const action of ["run", "status", "stages", "issues", "package", "documents", "promotion", "audio", "hum", "master-status",
   "progress", "progress-bar", "percent-text", "current-step", "status-badge"]) assert(html.includes(`data-conveyor-${action}`));
 assert.match(html, /id="conveyor-percent-text"/);
+assert.match(html, /data-conveyor-master-status[^>]*role="status"[^>]*aria-live="polite"/);
+assert.match(html, /not acoustic mastering verification or release clearance/);
+const css = await read("song-catalog/song-catalog.css");
+assert.match(css, /#releaseConveyorConsole \[data-state="passed"\]\{color:var\(--green\)\}/);
+assert.match(css, /#releaseConveyorConsole \[data-state="blocked"\]\{color:var\(--rust\)\}/);
+assert.match(css, /#releaseConveyorConsole \[data-state="pending"\]\{color:var\(--muted\)\}/);
 assert.doesNotMatch(html + ui, /conveyor-percent-text<\/u>/);
 assert.match(ui, /item\.textContent/);
 assert.doesNotMatch(ui, /\.innerHTML\s*=/);

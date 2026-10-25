@@ -385,7 +385,8 @@ for (const type of ["radio_edit", "clean"]) {
   fixture.releases.get("release").official_url = "https://distrokid.com/hyperfollow/artist/reviewed-song?signature=secret";
   await fixture.reconcile({ preserveReleaseMetadata: true });
   assert.equal(fixture.releases.get("release").artwork_url, "");
-  assert.ok(!fixture.releases.get("release").official_url.includes("distrokid.com"), "signed navigation is not reviewed public HyperFollow");
+  assert.equal(new URL(fixture.releases.get("release").official_url, "https://halo.world").hostname, "halo.world",
+    "signed navigation must fall back to the canonical internal destination");
 }
 {
   const artworkApi = await read("netlify/functions/song-catalog-artwork.ts");

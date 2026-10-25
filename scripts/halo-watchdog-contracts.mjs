@@ -8,10 +8,11 @@ import { processCatalogRelease } from "../netlify/lib/release-conveyor-service.m
 
 const song = { id: "12345678-1234-4123-8123-123456789012", owner_member_id: "creator",
   title: "Signal", artist_name: "Artist", genre: "Soul", isrc: "GBAAA2600001",
-  rights_status: "cleared", artwork_url: "/cover.jpg", lyrics_text: "[00:01] Signal",
+  rights_status: "cleared", broadcast_requested: true, artwork_url: "/cover.jpg", lyrics_text: "[00:01] Signal",
   source_updated_at: "2026-10-15T10:00:00.000000Z" };
 const master = { id: "master", song_id: song.id, version_type: "sale_master",
-  audio_url: "/master.wav", audio_blob_prefix: "creator/master/revision/parts/",
+  audio_url: "/api/song-catalog/audio?versionId=master", audio_blob_prefix: "creator/master/revision/parts/",
+  audio_byte_size: 123, audio_chunk_count: 1, audio_content_type: "audio/wav", status: "active",
   mastering_status: "approved", duration_seconds: 180, video_url: "/video.mp4" };
 const radio = { id: "radio", song_id: song.id, version_type: "radio_edit",
   mastering_status: "not_started", audio_url: "" };
@@ -24,10 +25,13 @@ assert.deepEqual(initial.intent, HALO_SHARED_INTENT);
 assert.deepEqual(initial.departments.map(department => department.name), RELEASE_STAGES);
 assert.deepEqual(initial.actions.find(action => action.type === "auto_queue_radio"), {
   type: "auto_queue_radio", versionId: "radio", sourceVersionId: "master",
-  sourceAudioUrl: "/master.wav", targetLufs: -16, targetTruePeak: -1,
+  sourceAudioUrl: master.audio_url, targetLufs: -16, targetTruePeak: -1,
   approvalRequired: true, originalPreserved: true,
 });
 for (const changes of [
+  { song: { ...song, broadcast_requested: false } },
+  { song: { ...song, broadcast_requested: undefined } },
+  { song: { ...song, rights_status: "needs_review" } },
   { versions: [{ ...master, mastering_status: "review" }, radio] },
   { versions: [{ ...master, audio_url: "" }, radio] },
   { versions: [master, { ...master, id: "duplicate" }, radio] },

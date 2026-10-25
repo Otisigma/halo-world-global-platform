@@ -48,6 +48,38 @@ const packageJson = JSON.parse(packageText);
 const signalsClient = await read("song-catalog/catalog-signals.js");
 const publicPage = await read("music/index.html");
 const publicClient = await read("music/music.js");
+{
+  const intentMigration = await read("netlify/database/migrations/20261025150000_song_broadcast_intent.sql");
+  assert.match(intentMigration, /ADD COLUMN IF NOT EXISTS broadcast_requested BOOLEAN NOT NULL DEFAULT FALSE/);
+  assert.match(schema, /broadcastRequested: boolean\("broadcast_requested"\)\.notNull\(\)\.default\(false\)/);
+  assert.match(api, /broadcastRequested: song\.broadcastRequested/);
+  assert.match(page, /id="broadcastRequested" type="checkbox"/);
+  assert.match(client, /broadcastRequested:\$\("#broadcastRequested"\)\.checked/);
+  assert.match(client, /\$\("#broadcastRequested"\)\.checked=song\.broadcastRequested===true/);
+  const review = api.slice(api.indexOf("export async function runDreamweaverReview("), api.indexOf("type CatalogExecutor"));
+  assert.match(review, /await reconcilePublishedSong\(await getDatabase\(\), \{ songId, ownerMemberId \}\)/,
+    "catalog confirmations promptly reconcile published links using canonical owner-scoped records");
+  assert.match(review, /Publication links pending; scheduled recovery will retry/,
+    "publication outages do not fail a saved catalog confirmation");
+  const source = stripTypeScriptTypes(api.slice(api.indexOf("async function saveSong("), api.indexOf("async function createAlternateVersion(")));
+  let saved;
+  const save = runInNewContext(`${source}\nsaveSong;`, {
+    db: { update: () => ({ set: values => {
+      saved = values;
+      return { where: () => ({ returning: async () => [{ id: "song" }] }) };
+    } }) },
+    songs: {}, songVersions: {}, cleanId: value => value, cleanText: value => value || "",
+    cleanEnum: (value, allowed, fallback) => value || fallback, RIGHTS_STATUSES: new Set(), SALE_STATUSES: new Set(),
+    and: (...values) => values, eq: (...values) => values, runDreamweaverReview: async () => {},
+    json: body => body, Date,
+  });
+  for (const requested of [true, false, "true", 1]) {
+    await save("owner", { songId: "song", artistName: "Artist", title: "Song", broadcastRequested: requested });
+    assert.equal(saved.broadcastRequested, requested === true, "only a boolean records explicit broadcast intent");
+  }
+  await save("owner", { songId: "song", artistName: "Artist", title: "Song" });
+  assert.equal(Object.hasOwn(saved, "broadcastRequested"), false, "partial saves preserve existing intent");
+}
 assert.doesNotMatch(publicPage, /localVault|sharedCatalogFrame|embed=shop/);
 assert.doesNotMatch(publicClient, /Versions mapped|Sale-enabled versions|force-push-track|set_pipeline_stage/);
 assert.match(page, /id="artistWorkspace" hidden/);
@@ -321,10 +353,13 @@ const sampleSongs = attachPublicationHealthToSongs([
     artistName: "HALO",
     pipelineStatus: "published",
     rightsStatus: "cleared",
+    broadcastRequested: true,
     metadataIssues: [],
     versions: [
-      { versionType: "sale_master", audioUrl: "https://example.com/sale.mp3", masteringStatus: "approved" },
-      { versionType: "radio_edit", audioUrl: "https://example.com/radio.mp3", masteringStatus: "approved" }
+      { id: "sale-version", versionType: "sale_master", audioUrl: "/api/song-catalog/audio?versionId=sale-version",
+        masteringStatus: "approved", status: "active", persistedAudio: true, durationSeconds: 180, updatedAt: "2026-09-19T16:00:00.000Z" },
+      { id: "radio-version", versionType: "radio_edit", audioUrl: "/api/song-catalog/audio?versionId=radio-version",
+        masteringStatus: "approved", status: "active", persistedAudio: true, durationSeconds: 180, updatedAt: "2026-09-19T16:00:00.000Z" }
     ]
   },
   {
@@ -333,10 +368,13 @@ const sampleSongs = attachPublicationHealthToSongs([
     artistName: "HALO",
     pipelineStatus: "published",
     rightsStatus: "cleared",
+    broadcastRequested: true,
     metadataIssues: [],
     versions: [
-      { versionType: "sale_master", audioUrl: "https://example.com/sale.mp3", masteringStatus: "approved" },
-      { versionType: "radio_edit", audioUrl: "https://example.com/radio.mp3", masteringStatus: "approved" }
+      { id: "hyperfollow-sale", versionType: "sale_master", audioUrl: "/api/song-catalog/audio?versionId=hyperfollow-sale",
+        masteringStatus: "approved", status: "active", persistedAudio: true, durationSeconds: 180, updatedAt: "2026-09-19T16:00:00.000Z" },
+      { id: "hyperfollow-radio", versionType: "radio_edit", audioUrl: "/api/song-catalog/audio?versionId=hyperfollow-radio",
+        masteringStatus: "approved", status: "active", persistedAudio: true, durationSeconds: 180, updatedAt: "2026-09-19T16:00:00.000Z" }
     ]
   },
   {
@@ -357,7 +395,11 @@ const sampleSongs = attachPublicationHealthToSongs([
     release_status: "published",
     radio_status: "rotation",
     dreamweaver_status: "ready",
-    details: {},
+    details: {
+      releaseVerified: true, radioVerified: true, dreamweaverConfirmed: true,
+      masterVersionId: "sale-version", masterUpdatedAt: "2026-09-19T16:00:00.000Z",
+      radio: { operatorReviewed: true, sourceVersionId: "radio-version", sourceUpdatedAt: "2026-09-19T16:00:00.000Z" },
+    },
     last_error: "",
     last_reconciled_at: "2026-09-19T16:00:00.000Z"
   },
@@ -369,7 +411,11 @@ const sampleSongs = attachPublicationHealthToSongs([
     release_status: "published",
     radio_status: "rotation",
     dreamweaver_status: "managed_externally",
-    details: {},
+    details: {
+      releaseVerified: true, radioVerified: true, dreamweaverConfirmed: true,
+      masterVersionId: "hyperfollow-sale", masterUpdatedAt: "2026-09-19T16:00:00.000Z",
+      radio: { operatorReviewed: true, sourceVersionId: "hyperfollow-radio", sourceUpdatedAt: "2026-09-19T16:00:00.000Z" },
+    },
     last_error: "",
     last_reconciled_at: "2026-09-19T16:00:00.000Z"
   }

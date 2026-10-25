@@ -2,17 +2,13 @@ import { releaseFingerprint } from "./release-conveyor.mjs";
 import { loadConveyorState, loadReleaseSubmission } from "./release-conveyor-store.mjs";
 import { processCatalogRelease } from "./release-conveyor-service.mjs";
 import { cleanDreamweaverSongId } from "../../lib/dreamweaver-storefront.js";
+import { catalogMasterReadiness } from "./release-conveyor-audio.mjs";
 
 const json = (body, status = 200) => Response.json(body, { status, headers: { "Cache-Control": "private, no-store" } });
 
-function masterStatus({ versions }) {
-  const master = versions.find(version => version.version_type === "sale_master");
-  return {
-    uploaded: Boolean(master?.audio_url),
-    durationValid: Number(master?.duration_seconds) > 0,
-    masteringStatus: ["not_started", "queued", "in_progress", "review", "approved"].includes(master?.mastering_status)
-      ? master.mastering_status : "unknown",
-  };
+function masterStatus({ song, versions }) {
+  const { uploaded, durationValid, masteringStatus } = catalogMasterReadiness(song, versions);
+  return { uploaded, durationValid, masteringStatus };
 }
 
 export function createReleaseConveyorHandler({ getDatabase, getUser, verifyRequestOrigin, ensureMembership, prepareAudio, downloadAudio }) {
@@ -82,7 +78,9 @@ export function createReleaseConveyorHandler({ getDatabase, getUser, verifyReque
           WHERE song_id = ${songId} AND owner_member_id = ${membership.member_id}
           ORDER BY created_at DESC LIMIT 50
         `;
-        return json({ ...state, ...(current ? {} : { status: "stale", receipt: { ...state.receipt, ready: false, status: "stale" } }),
+        return json({ ...state, ...(current ? {} : { status: "stale",
+          message: "Saved catalog data changed. Rerun the conveyor to re-evaluate audio and independent council gates; do not upload the master again.",
+          receipt: { ...state.receipt, ready: false, status: "stale" } }),
           busy: stored.locked_until && new Date(stored.locked_until) > new Date(), events, masterStatus: masterStatus(submission) });
       }
       const humHz = payload.humHz === "both" ? "both" : Number(payload.humHz ?? 0);

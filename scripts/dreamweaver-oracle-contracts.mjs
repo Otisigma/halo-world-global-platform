@@ -153,10 +153,11 @@ assert.equal(response.status, 200);
 assert.equal(response.headers.get("cache-control"), "no-store");
 let payload = await response.json();
 const metrics = payload.telemetry.sources.publication.metrics;
+// Aggregate status flags do not prove owned persisted audio, version revisions, opt-in, or share delivery.
 assert.deepEqual(metrics, {
-  published: 7, incomplete: 5, escalated: 3, releaseReady: 6, radioReady: 2,
-  shareReady: 6, missingSync: 1, stale: 4, states: {
-    published_and_fully_distributed: 2, escalated: 3, awaiting_radio_ready_assets: 1, awaiting_release_propagation: 1
+  published: 7, incomplete: 7, escalated: 3, releaseReady: 0, radioReady: 0,
+  shareReady: 0, missingSync: 1, stale: 4, states: {
+    awaiting_radio_ready_assets: 4, escalated: 3
   }
 });
 assert.equal(payload.telemetry.sources.radio.metrics.roomsWithoutRotation, 2);

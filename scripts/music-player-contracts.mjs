@@ -344,7 +344,11 @@ for (const [file, handler] of [
   const context = vm.createContext({
     URL, Response, ReadableStream, console,
     getStore: () => ({ get: async () => bytes.buffer }),
-    getDatabase: () => ({ sql: async () => [{ blob_key: "test", chunk_count: 1, byte_size: 5, content_type: "audio/wav", visibility: "room", status: "rotation", original_filename: "mix.wav" }] }),
+    getDatabase: () => ({ sql: async () => [{
+      blob_key: handler === "radioAudioHandler" ? "test/manual-upload-123/parts/" : "test",
+      member_id: "test", chunk_count: 1, byte_size: 5, content_type: "audio/wav",
+      visibility: "room", status: "rotation", original_filename: "mix.wav",
+    }] }),
     getUser: async () => ({ id: "test" }), isOwner: () => false,
     ensureMembership: async () => ({ member_id: "test" }), cleanText: value => String(value || "")
   });

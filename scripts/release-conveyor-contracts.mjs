@@ -125,10 +125,10 @@ assert.deepEqual(approvedExternal.issues, []);
 const pendingMaster = await prepareReleaseAudio(song, versions.map(version => ({ ...version, mastering_status: "review" })), "revision", { humHz: 0 });
 assert(pendingMaster.issues.some(item => /approve sale-master/.test(item.message)));
 const missingAudio = await prepareReleaseAudio(song, [], "revision", { humHz: 0 });
-assert(missingAudio.issues.some(item => /Upload the canonical/.test(item.message)));
+assert(missingAudio.issues.some(item => /exactly one active canonical/.test(item.message)));
 const unsupportedHum = await prepareReleaseAudio(song, versions, "revision", { humHz: 60 });
 assert(unsupportedHum.issues.some(item => /requires a stored PCM WAV/.test(item.message)));
-for (const source of [{ audio_byte_size: 150 * 1024 * 1024, audio_storage_key: "stored-master" }, { audio_byte_size: 0 }]) {
+for (const source of [{ audio_byte_size: 150 * 1024 * 1024, audio_storage_key: `masters/${song.owner_member_id}/${song.id}/master/upload/master.wav` }, { audio_byte_size: 0 }]) {
   const externalWavVersions = versions.map(version => ({ ...version, audio_content_type: "audio/wav", ...source }));
   const externalWav = await prepareReleaseAudio(song, externalWavVersions, "revision", { humHz: 0 });
   assert.equal(externalWav.conditioning, "external_master", "approved large/link-only WAVs can complete without automatic conditioning");
@@ -391,10 +391,15 @@ assert.doesNotMatch(JSON.stringify(initialState), /master\.wav|radio\.wav|audio_
 for (const [master, expected] of [
   [null, { uploaded: false, durationValid: false, masteringStatus: "unknown" }],
   [{ audio_url: "" }, { ...approvedMasterStatus, uploaded: false }],
+  [{ audio_url: "blob:https://halo.test/local-preview" }, { ...approvedMasterStatus, uploaded: false }],
+  [{ audio_url: "https://drive.google.com/file/d/archive/view" }, { ...approvedMasterStatus, uploaded: false }],
+  [{ audio_url: "/api/song-catalog/audio?versionId=other" }, { ...approvedMasterStatus, uploaded: false }],
+  [{ song_id: "foreign" }, { uploaded: false, durationValid: false, masteringStatus: "unknown" }],
   [{ duration_seconds: null }, { ...approvedMasterStatus, durationValid: false }],
   [{ duration_seconds: 0 }, { ...approvedMasterStatus, durationValid: false }],
   [{ duration_seconds: -1 }, { ...approvedMasterStatus, durationValid: false }],
   [{ duration_seconds: "unknown" }, { ...approvedMasterStatus, durationValid: false }],
+  [{ duration_seconds: Infinity }, { ...approvedMasterStatus, durationValid: false }],
   [{ mastering_status: "review" }, { ...approvedMasterStatus, masteringStatus: "review" }],
   [{ mastering_status: "in_progress" }, { ...approvedMasterStatus, masteringStatus: "in_progress" }],
   [{ mastering_status: "queued" }, { ...approvedMasterStatus, masteringStatus: "queued" }],
@@ -442,6 +447,7 @@ currentVersions[0].mastering_status = "review";
 const staleApi = await (await handler(request())).json();
 assert.equal(staleApi.status, "stale");
 assert.equal(staleApi.receipt.ready, false);
+assert.match(staleApi.message, /Rerun the conveyor to re-evaluate audio and independent council gates/);
 assert.deepEqual(staleApi.masterStatus, { ...approvedMasterStatus, masteringStatus: "review" }, "stale receipts use current catalog facts, not old package data");
 currentVersions = structuredClone(versions);
 assert.equal((await handler(request("GET", null, "&artifact=package"))).status, 409);

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { conditionReleaseWav, MAX_PREFLIGHT_BYTES } from "../netlify/lib/release-audio.mjs";
 import { createReleaseAudioPreparer } from "../netlify/lib/release-conveyor-audio.mjs";
+import { RELEASE_STAGES, runReleaseConveyor } from "../netlify/lib/release-conveyor.mjs";
 
 const stores = {
   source: { get: async () => null },
@@ -182,8 +183,9 @@ invalidFormat.writeUInt16LE(3, 20);
 assert.throws(() => conditionReleaseWav(invalidFormat), /16, 24 or 32-bit PCM/);
 assert.equal(MAX_PREFLIGHT_BYTES, 128 * 1024 * 1024);
 
-const song = { id: "song", owner_member_id: "owner" };
-const external = [{ id: "master", version_type: "sale_master", audio_url: "/master.wav",
+const song = { id: "song", owner_member_id: "owner", title: "Signal", artist_name: "Artist",
+  genre: "Soul", isrc: "GBAAA2600001", rights_status: "cleared", artwork_url: "/cover.jpg", metadata_issues: [] };
+const external = [{ id: "master", song_id: song.id, version_type: "sale_master", audio_url: "/master.wav",
   duration_seconds: 180, mastering_status: "approved" }];
 const approved = await prepareReleaseAudio(song, external, "revision");
 assert.equal(approved.conditioning, "external_master");
@@ -197,19 +199,102 @@ assert(externalHum.issues.some(issue => /requires a stored PCM WAV/.test(issue.m
 
 const sourceWav = wav({ seconds: 0.6 });
 const storedMaster = [{ ...external[0], audio_content_type: "audio/wav", audio_byte_size: sourceWav.length,
-  audio_blob_prefix: "owner/master/upload/parts/", audio_chunk_count: 1 }];
+  audio_blob_prefix: "owner/master/upload/parts/", audio_chunk_count: 1, mastering_status: "review" }];
 let outputBytes;
 stores.source.get = async () => sourceWav.buffer.slice(sourceWav.byteOffset, sourceWav.byteOffset + sourceWav.byteLength);
 stores.output.set = async (key, bytes) => { outputBytes = Buffer.from(bytes); };
 const storedReport = await prepareReleaseAudio(song, storedMaster, "revision");
 assert.equal(storedReport.conditioning.humHz, 0, "worker default must keep hum filtering opt-in");
-assert.deepEqual(storedReport.issues, []);
+assert.deepEqual(storedReport.issues.map(issue => issue.field), ["mastering"], "conditioning never grants approval");
 assert(outputBytes);
 assert.match(storedReport.repairs.join(" "), /350 ms logarithmic/);
 assert.match(storedReport.repairs.join(" "), /measured output/);
 const bothReport = await prepareReleaseAudio(song, storedMaster, "revision", { humHz: "both" });
 assert.equal(bothReport.conditioning.humHz, "both");
 assert.match(bothReport.repairs.join(" "), /50 and 60 Hz/);
+
+// A persisted approved floating-point WAV is playable, but outside the automatic PCM conditioner.
+const floatWav = wav({ bits: 32, seconds: 1 });
+for (let offset = 44; offset < floatWav.length; offset += 4) {
+  floatWav.writeFloatLE(floatWav.readInt32LE(offset) / 2 ** 31, offset);
+}
+floatWav.writeUInt16LE(3, 20);
+const mastered = [{ ...storedMaster[0], mastering_status: "approved", audio_byte_size: floatWav.length }];
+stores.source.get = async () => floatWav;
+stores.output.set = async () => assert.fail("Routine processing must not recondition an approved master");
+const savedMaster = structuredClone(mastered);
+const radio = { ...external[0], id: "radio", version_type: "radio_edit", audio_url: "/radio.wav" };
+const ports = { prepareAudio: prepareReleaseAudio, checkpoint: async () => {}, finish: async () => {},
+  assertCurrent: async () => {}, handoff: async () => ({ status: "ready_for_publication", externalDistribution: "not_submitted" }) };
+const run = changes => runReleaseConveyor({ song, versions: [...mastered, radio], ports, ...changes });
+const masteredReady = await run();
+assert.equal(masteredReady.status, "ready");
+assert.deepEqual(masteredReady.receipt.passed, RELEASE_STAGES);
+assert.equal(masteredReady.package.audio.conditioning, "approved_master");
+assert.equal(masteredReady.package.audio.downloadUrl, undefined);
+assert.match(masteredReady.package.audio.summary, /Saved Sale-master mastering approval recognized/);
+assert.equal(masteredReady.package.handoff.externalDistribution, "not_submitted");
+assert.deepEqual(mastered, savedMaster, "routine processing cannot mutate approval or the source");
+const filterRequested = await run({ options: { humHz: 50 } });
+assert.equal(filterRequested.status, "escalated", "an explicit unsupported conditioning request still needs review");
+assert(filterRequested.receipt.blocked.some(issue => /PCM WAV/.test(issue.message)));
+const reviewVersions = [...mastered.map(master => ({ ...master, mastering_status: "review" })), radio];
+const reviewBlocked = await run({ versions: reviewVersions });
+assert.equal(reviewBlocked.status, "escalated");
+assert(reviewBlocked.receipt.blocked.some(issue => issue.field === "mastering"));
+const approvalSaved = await run({ previous: reviewBlocked, automatic: true });
+assert.equal(approvalSaved.status, "ready", "saving approval changes the fingerprint and automatically re-evaluates council and downstream stages");
+const oldPipeline = { ...masteredReady, pipelineVersion: 4, inputHash: "pre-fix-revision", status: "escalated" };
+assert.equal((await run({ previous: oldPipeline, automatic: true })).status, "ready", "old false escalations are invalidated by the pipeline revision");
+for (const [change, field] of [
+  [{ audio_url: "", drive_url: "https://drive.google.com/file/d/archive/view" }, "sale_master_audio"],
+  [{ audio_url: "blob:https://halo.invalid/local-preview" }, "sale_master_audio"],
+  [{ audio_url: "https://drive.google.com/file/d/archive/view" }, "sale_master_audio"],
+  [{ audio_url: "/api/song-catalog/audio?versionId=another-version" }, "sale_master_audio"],
+  [{ audio_url: "javascript:alert(1)" }, "sale_master_audio"],
+  [{ duration_seconds: 0 }, "sale_master_duration"],
+  [{ duration_seconds: null }, "sale_master_duration"],
+  [{ duration_seconds: Infinity }, "sale_master_duration"],
+  [{ duration_seconds: "NaN" }, "sale_master_duration"],
+  [{ song_id: "foreign" }, "catalog"],
+  [{ status: "archived" }, "catalog"],
+  [{ audio_blob_prefix: "other/master/upload/parts/" }, "sale_master_storage"],
+  [{ audio_storage_key: "masters/other/song/master/upload/master.wav" }, "sale_master_storage"],
+]) {
+  const blocked = await run({ versions: [{ ...mastered[0], ...change }, radio] });
+  assert.notEqual(blocked.status, "ready", JSON.stringify(change));
+  assert(blocked.receipt.blocked.some(issue => issue.field === field), JSON.stringify(change));
+  assert.equal(blocked.package.handoff, undefined);
+}
+for (const status of ["not_started", "queued", "in_progress", "review", "unknown"]) {
+  const blocked = await run({ versions: [{ ...mastered[0], mastering_status: status, audio_filename: "APPROVED_MASTER.wav" }, radio] });
+  assert(blocked.receipt.blocked.some(issue => issue.field === "mastering"), "filename and audio presence never grant approval");
+}
+const duplicate = await run({ versions: [...mastered, { ...mastered[0], id: "duplicate" }, radio] });
+assert.equal(duplicate.status, "blocked");
+assert(duplicate.receipt.blocked.some(issue => issue.field === "catalog"));
+for (const changes of [
+  { song: { ...song, rights_status: "disputed" } },
+  { song: { ...song, rights_status: "needs_review" } },
+  { song: { ...song, metadata_issues: [{ field: "operator_review", level: "required", message: "Operator review required." }] } },
+  { versions: mastered },
+  { versions: [...mastered, { ...radio, mastering_status: "review" }] },
+  { versions: [...mastered, { ...radio, duration_seconds: Infinity }] },
+]) {
+  const gated = await run(changes);
+  assert.equal(gated.stages.find(stage => stage.name === "audio_preflight").status, "passed");
+  assert.equal(gated.stages.find(stage => stage.name === "council").status, "blocked");
+  assert.match(gated.stages.find(stage => stage.name === "council").summary, /Resolve:/);
+  assert.equal(gated.package.handoff, undefined, "a saved master cannot bypass independent council gates");
+}
+stores.source.get = async () => { throw new TypeError("private storage outage"); };
+const unavailable = await run({ ports: { ...ports, sleep: async () => {} }, automatic: true });
+assert.equal(unavailable.status, "retryable");
+assert.match(unavailable.receipt.nextSteps.join(" "), /storage is unavailable or incomplete/);
+assert.doesNotMatch(JSON.stringify(unavailable), /private storage outage/);
+stores.source.get = async () => floatWav;
+const storageRecovered = await run({ previous: { ...unavailable, nextRetryAt: "2026-01-01T00:00:00Z" }, automatic: true });
+assert.equal(storageRecovered.status, "ready", "same catalog data retries safely after storage recovers");
 
 stores.source.get = async () => null;
 await assert.rejects(() => prepareReleaseAudio(song, storedMaster, "revision"),

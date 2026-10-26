@@ -328,6 +328,9 @@ function renderCreationAssist(room) {
 }
 
 function renderAssetEditorAction(room) {
+  if (room.key === "campaign") {
+    return `<div class="room-editor-action"><p>Check an existing catalog release for a 15-second vertical teaser. Rendering is not deployed yet; no preview or download is generated.</p><a class="button button-paper" href="/song-catalog/#social-teaser">Check teaser readiness in Song Catalog</a></div>`;
+  }
   if (room.key === "identity") {
     return `<div class="room-editor-action"><p>Need the shared artwork workspace?</p><a class="button button-paper" href="/asset-editor/?surface=release-house-artwork" target="_blank" rel="noopener">Edit in Asset Editor</a></div>`;
   }

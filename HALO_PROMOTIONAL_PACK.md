@@ -24,6 +24,23 @@ Bring an idea in and move it through finishing, release readiness, campaign mate
 
 ### Automated song-to-release conveyor
 
+#### Vertical video teaser readiness (deployment-gated)
+
+Release House's Campaign Room links to the **15-second vertical teaser** panel in Song Catalog. Select an existing song and choose **Check teaser readiness**. This is a readiness check, not a video renderer: generation stays disabled, with no preview/download link, queue entry, stored consent, or automatic processing on upload.
+
+`GET /api/release-teaser?songId=<catalog UUID>&startSeconds=0` uses the existing Netlify Identity membership and owner-scoped catalog loader. Readiness requires the current ready conveyor/Council receipt, cleared rights, approved canonical sale master, at least 15 seconds remaining, an owned WAV/MP3 upload of known size up to 128 MB, and catalog-uploaded cover art. It does not verify media bytes or certify promotional rights. The intended output is a 1080×1920 MP4 with waveform, HALO wordmark, title/artist text and “Vote on HALO Living Chart” CTA.
+
+`POST /api/release-teaser` accepts only `{ "songId": "<catalog UUID>", "startSeconds": 0, "consent": true }`, with same-origin verification and a 2 KB request limit. Consent confirms permission for both audio and visual promotional use; release/mastering approval alone does not supply it. Invalid/ineligible requests fail with 400/409, other owners' songs return 404, and eligible requests return **503 unavailable**, not a pretend job or asset. Repeated/concurrent checks have no media or job side effects. Transient database failures are retryable; no teaser data is persisted and no conveyor/watchdog state is modified.
+
+**Deployment prerequisites before enabling generation:** neither the current Netlify setup nor the Node Alpine Docker image bundles FFmpeg/FFprobe, video codecs or fonts. A separate, verified rendering runtime (or a tested equivalent) is required; installing a binary only in the development environment or Docker image does not enable Netlify rendering. Do not enable the button through an environment flag alone.
+
+- Bundle and verify the renderer, H.264/AAC support and licensed fonts within a supported CPU/memory/time budget. Probe actual media types, durations, audio stream and image dimensions; bound downloads, decoded pixels, input/output bytes and rendering time. Resolve owned catalog storage server-side, never arbitrary URLs or paths. Artwork must be read through its owner-scoped storage metadata and limited to supported JPEG/PNG/WebP up to 20 MB.
+- Add durable owner/song/revision/template/clip-keyed jobs, atomic leases, capped retries, a concurrency/rate budget and an explicit consent record. Recheck ownership, approvals and the source fingerprint before rendering, saving or serving; changed sources must invalidate old output. Do not attach video work to automatic conveyor/upload recovery.
+- Render only the selected 15 seconds. Use fixed branding/CTA, safely rendered title/artist text (no shell interpolation or unsanitized FFmpeg drawtext), bounded temporary storage and guaranteed cleanup on success, failure or timeout.
+- Store validated output privately using the repository's Netlify Blobs or configured object storage conventions. Persist a private reference, never media in the public publish directory. Add owner-authenticated streaming/download endpoints (or short-lived authorized URLs), preview/download UI, expired/stale asset handling, and tests for real output, persistence, cancellation and retry races before reporting generation as available.
+
+No social publishing integration is included or authorized by teaser generation. Run `npm run test:release-teaser` for the supported readiness/API/UI contracts.
+
 Song Catalog saves and completed audio uploads start the same auditable conveyor automatically:
 
 `intake → audio preflight → metadata/rights → Council → Dreamweaver → documents → promotion → distribution handoff`

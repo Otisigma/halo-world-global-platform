@@ -44,11 +44,8 @@ export function createReleaseConveyorHandler({ getDatabase, getUser, verifyReque
           infrastructure: infrastructureState?.state || null,
         };
         const stored = await loadConveyorState(db, membership.member_id, songId);
-<<<<<<< HEAD
-        if (!stored?.state?.inputHash) return json({ status: "not_started", releaseId: songId, receipt: null, orchestrator });
-=======
-        if (!stored?.state?.inputHash) return json({ status: "not_started", releaseId: songId, receipt: null, masterStatus: masterStatus(submission) });
->>>>>>> origin/main
+        if (!stored?.state?.inputHash) return json({ status: "not_started", releaseId: songId, receipt: null,
+          orchestrator, masterStatus: masterStatus(submission) });
         const state = stored.state;
         const current = releaseFingerprint(submission.song, submission.versions, state.options) === state.inputHash;
         const artifact = url.searchParams.get("artifact");
@@ -92,15 +89,11 @@ export function createReleaseConveyorHandler({ getDatabase, getUser, verifyReque
           WHERE song_id = ${songId} AND owner_member_id = ${membership.member_id}
           ORDER BY created_at DESC LIMIT 50
         `;
-<<<<<<< HEAD
-        return json({ ...state, ...(current ? {} : { status: "stale", receipt: { ...state.receipt, ready: false, status: "stale" } }),
-          busy: stored.locked_until && new Date(stored.locked_until) > new Date(), events, orchestrator });
-=======
         return json({ ...state, ...(current ? {} : { status: "stale",
           message: "Saved catalog data changed. Rerun the conveyor to re-evaluate audio and independent council gates; do not upload the master again.",
           receipt: { ...state.receipt, ready: false, status: "stale" } }),
-          busy: stored.locked_until && new Date(stored.locked_until) > new Date(), events, masterStatus: masterStatus(submission) });
->>>>>>> origin/main
+          busy: stored.locked_until && new Date(stored.locked_until) > new Date(), events,
+          orchestrator, masterStatus: masterStatus(submission) });
       }
       const humHz = payload.humHz === "both" ? "both" : Number(payload.humHz ?? 0);
       if (![0, 50, 60, "both"].includes(humHz)) return json({ message: "Hum filtering must be off, 50 Hz, 60 Hz or both." }, 400);

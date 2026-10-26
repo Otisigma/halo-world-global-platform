@@ -167,20 +167,17 @@ controller.select(song.id);
 assert.equal(consoleNode("percent-text").textContent, "0% Completed (0/8 stages)");
 assert.equal(consoleNode("stages").children.length, RELEASE_STAGES.length);
 assert.equal(consoleNode("hum").disabled, true, "filter selection is disabled during a request");
-<<<<<<< HEAD
-resolveConsoleRequest({ ok: true, json: async () => ({ ...success, options: { humHz: 0 }, orchestrator: {
-  state: { status: "needs_review", lastPulseAt: "2026-10-15T00:00:00.000Z", departments: { metadata_rights: "needs_review" },
-    actions: [{ action: "radio_lane_queued" }], findings: ["Rights clearance requires creator review."] },
-  infrastructure: { status: "degraded", brokenRoutes: [{ name: "Radio", route: "/radio/", httpStatus: 404 }] },
-} }) });
-=======
 resolveConsoleRequest({ ok: true, json: async () => ({ ...success, masterStatus: approvedMasterStatus, options: { humHz: 0 },
+  orchestrator: {
+    state: { status: "needs_review", lastPulseAt: "2026-10-15T00:00:00.000Z", departments: { metadata_rights: "needs_review" },
+      actions: [{ action: "radio_lane_queued" }], findings: ["Rights clearance requires creator review."] },
+    infrastructure: { status: "degraded", brokenRoutes: [{ name: "Radio", route: "/radio/", httpStatus: 404 }] },
+  },
   watchdog: {
     issues: [{ field: "route", message: "/toolost/: unavailable" }],
     findings: [{ field: "infrastructure", message: "/radio/: broken <b>route</b>" }],
   },
   receipt: { ...success.receipt, blocked: [{ field: "isrc", message: "Creator review required" }] } }) });
->>>>>>> origin/main
 await settle();
 assert.equal(consoleNode("hum").disabled, false);
 assert.equal(consoleNode("package").hidden, false);
@@ -393,17 +390,13 @@ memberId = "creator";
 assert.equal((await handler(request("DELETE"))).status, 405);
 assert.equal((await handler(request("POST", { action: "process_submission", songId: song.id, humHz: 70 }))).status, 400);
 assert.equal((await handler(request("POST", { action: "bad" }))).status, 400);
-<<<<<<< HEAD
-const initialStateResponse = await handler(request());
-assert.equal(initialStateResponse.status, 200);
-assert.equal((await initialStateResponse.json()).orchestrator.infrastructure, null);
-=======
 const initialResponse = await handler(request());
 assert.equal(initialResponse.status, 200);
 assert.equal(initialResponse.headers.get("cache-control"), "private, no-store");
 const initialState = await initialResponse.json();
 assert.equal(initialState.status, "not_started");
 assert.deepEqual(initialState.masterStatus, approvedMasterStatus);
+assert.equal(initialState.orchestrator.infrastructure, null);
 assert.doesNotMatch(JSON.stringify(initialState), /master\.wav|radio\.wav|audio_url|audio_storage_key/);
 for (const [master, expected] of [
   [null, { uploaded: false, durationValid: false, masteringStatus: "unknown" }],
@@ -429,7 +422,6 @@ for (const [master, expected] of [
   assert.doesNotMatch(JSON.stringify(state.masterStatus), /private|wav|audio_url|filename|storage/);
 }
 currentVersions = structuredClone(versions);
->>>>>>> origin/main
 storageOutage = true;
 const apiFailed = await (await post()).json();
 assert.equal(apiFailed.status, "retryable");

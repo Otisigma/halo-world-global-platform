@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import qs from "qs";
 import aiDjHandler from "../netlify/functions/ai-dj.mjs";
 import resolveTrackHandler from "../netlify/functions/resolve-track.mjs";
 import releasePackHandler from "../netlify/functions/release-pack.mjs";
@@ -58,4 +59,14 @@ try {
   globalThis.fetch = originalFetch;
 }
 
-console.log("HALO security contracts: 7/7 checks passed.");
+const hostileQuery = "x%5Bconstructor%5D%5BisBuffer%5D=y";
+for (const options of [{ plainObjects: true }, { allowPrototypes: true }]) {
+  const parsed = qs.parse(hostileQuery, options);
+  assert.equal(parsed.x.constructor.isBuffer, "y");
+  assert.doesNotThrow(() => qs.stringify(parsed));
+}
+
+assert.deepEqual(qs.parse("tags%5B%5D=music&tags%5B%5D=radio"), { tags: ["music", "radio"] });
+assert.equal(qs.stringify({ page: 2, search: "halo world" }), "page=2&search=halo%20world");
+
+console.log("HALO security contracts passed, including qs parser/stringifier regression checks.");

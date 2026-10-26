@@ -87,6 +87,7 @@ function dreamweaverPayloadFor(row, values = {}) {
     coverArtUrl,
     audioStreamUrl,
     videoReelUrl,
+    assetGraph: values.assetGraph?.locked === true ? values.assetGraph : null,
     youtubeId: videoId || null,
     shopSalesPageUrl,
     mixPlayerUrl,
@@ -232,6 +233,7 @@ function serializeRelease(row) {
     dreamweaverPayload: dreamweaverPayloadFor(row, {
       artworkUrl: resolvedArtwork,
       videoUrl,
+      assetGraph: row.catalog_asset_graph,
     }),
     featuredType: row.featured_type || "",
     featuredUntil: row.featured_until ? String(row.featured_until).slice(0, 10) : "",
@@ -342,6 +344,7 @@ export default async function releaseCatalogHandler(request) {
         catalog.catalog_sale_price_cents,
         catalog.catalog_currency,
         catalog.catalog_lyrics_text,
+        orchestrator.state->'dreamweaverAssetGraph' AS catalog_asset_graph,
         catalog_versions.catalog_version_count,
         catalog_versions.catalog_sale_enabled_count,
         catalog_video.catalog_video_url,
@@ -410,6 +413,8 @@ export default async function releaseCatalogHandler(request) {
         ORDER BY song.updated_at DESC
         LIMIT 1
       ) catalog ON TRUE
+      LEFT JOIN halo_master_orchestrator_state orchestrator
+        ON orchestrator.scope_id = catalog.catalog_song_id
       LEFT JOIN LATERAL (
         SELECT
           COUNT(*)::int AS catalog_version_count,

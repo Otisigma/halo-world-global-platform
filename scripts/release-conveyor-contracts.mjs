@@ -168,6 +168,11 @@ assert.equal(consoleNode("percent-text").textContent, "0% Completed (0/8 stages)
 assert.equal(consoleNode("stages").children.length, RELEASE_STAGES.length);
 assert.equal(consoleNode("hum").disabled, true, "filter selection is disabled during a request");
 resolveConsoleRequest({ ok: true, json: async () => ({ ...success, masterStatus: approvedMasterStatus, options: { humHz: 0 },
+  orchestrator: {
+    state: { status: "needs_review", lastPulseAt: "2026-10-15T00:00:00.000Z", departments: { metadata_rights: "needs_review" },
+      actions: [{ action: "radio_lane_queued" }], findings: ["Rights clearance requires creator review."] },
+    infrastructure: { status: "degraded", brokenRoutes: [{ name: "Radio", route: "/radio/", httpStatus: 404 }] },
+  },
   watchdog: {
     issues: [{ field: "route", message: "/toolost/: unavailable" }],
     findings: [{ field: "infrastructure", message: "/radio/: broken <b>route</b>" }],
@@ -189,6 +194,9 @@ assert.deepEqual(consoleNode("issues").children.map(item => item.textContent), [
   "infrastructure: /radio/: broken <b>route</b>",
 ], "blocked issues and both watchdog diagnostic formats remain visible as text");
 assert(consoleNode("stages").children.every(item => item.attributes.get("data-state") === "passed"));
+assert.match(consoleNode("watchdog-status").textContent, /Shared watchdog: needs_review/);
+assert(consoleNode("watchdog-findings").children.some(item => /Repair recorded: radio_lane_queued/.test(item.textContent)));
+assert(consoleNode("watchdog-findings").children.some(item => /Broken route: Radio \(\/radio\/\) — HTTP 404/.test(item.textContent)));
 let poll = consoleTimer();
 resolveConsoleRequest({ ok: true, json: async () => missing });
 await poll;
@@ -320,6 +328,7 @@ const db = { async sql(strings, ...values) {
   if (databaseOutage) throw new Error("internal database credentials");
   const query = strings.join("?");
   if (query.includes("FROM halo_song_catalog")) return currentSong && values[0] === currentSong.id && values[1] === currentSong.owner_member_id ? [structuredClone(currentSong)] : [];
+  if (query.includes("FROM halo_master_orchestrator_state")) return [];
   if (query.includes("FROM halo_song_versions")) return structuredClone(currentVersions);
   if (query.includes("INSERT INTO halo_release_conveyor (")) {
     if (stored?.locked_until && new Date(stored.locked_until) > new Date()) return [];
@@ -387,6 +396,7 @@ assert.equal(initialResponse.headers.get("cache-control"), "private, no-store");
 const initialState = await initialResponse.json();
 assert.equal(initialState.status, "not_started");
 assert.deepEqual(initialState.masterStatus, approvedMasterStatus);
+assert.equal(initialState.orchestrator.infrastructure, null);
 assert.doesNotMatch(JSON.stringify(initialState), /master\.wav|radio\.wav|audio_url|audio_storage_key/);
 for (const [master, expected] of [
   [null, { uploaded: false, durationValid: false, masteringStatus: "unknown" }],

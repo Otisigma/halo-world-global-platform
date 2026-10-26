@@ -1,6 +1,7 @@
 import { releaseFingerprint } from "./release-conveyor.mjs";
 import { loadConveyorState, loadReleaseSubmission } from "./release-conveyor-store.mjs";
 import { processCatalogRelease } from "./release-conveyor-service.mjs";
+import { loadSharedOrchestratorState } from "./halo-master-orchestrator.mjs";
 import { cleanDreamweaverSongId } from "../../lib/dreamweaver-storefront.js";
 import { catalogMasterReadiness } from "./release-conveyor-audio.mjs";
 
@@ -33,8 +34,18 @@ export function createReleaseConveyorHandler({ getDatabase, getUser, verifyReque
       const submission = await loadReleaseSubmission(db, membership.member_id, songId);
       if (!submission) return json({ message: "Song not found." }, 404);
       if (request.method === "GET") {
+        const [orchestratorState, infrastructureState] = await Promise.all([
+          loadSharedOrchestratorState(db, songId),
+          loadSharedOrchestratorState(db, "global"),
+        ]);
+        const orchestrator = {
+          intent: orchestratorState?.intent || infrastructureState?.intent || null,
+          state: orchestratorState?.state || null,
+          infrastructure: infrastructureState?.state || null,
+        };
         const stored = await loadConveyorState(db, membership.member_id, songId);
-        if (!stored?.state?.inputHash) return json({ status: "not_started", releaseId: songId, receipt: null, masterStatus: masterStatus(submission) });
+        if (!stored?.state?.inputHash) return json({ status: "not_started", releaseId: songId, receipt: null,
+          orchestrator, masterStatus: masterStatus(submission) });
         const state = stored.state;
         const current = releaseFingerprint(submission.song, submission.versions, state.options) === state.inputHash;
         const artifact = url.searchParams.get("artifact");
@@ -81,7 +92,8 @@ export function createReleaseConveyorHandler({ getDatabase, getUser, verifyReque
         return json({ ...state, ...(current ? {} : { status: "stale",
           message: "Saved catalog data changed. Rerun the conveyor to re-evaluate audio and independent council gates; do not upload the master again.",
           receipt: { ...state.receipt, ready: false, status: "stale" } }),
-          busy: stored.locked_until && new Date(stored.locked_until) > new Date(), events, masterStatus: masterStatus(submission) });
+          busy: stored.locked_until && new Date(stored.locked_until) > new Date(), events,
+          orchestrator, masterStatus: masterStatus(submission) });
       }
       const humHz = payload.humHz === "both" ? "both" : Number(payload.humHz ?? 0);
       if (![0, 50, 60, "both"].includes(humHz)) return json({ message: "Hum filtering must be off, 50 Hz, 60 Hz or both." }, 400);

@@ -4104,18 +4104,21 @@
                             <Icon name="lock" className="halo-menu-icon" /><span><strong>PRIVATE CONTROL ROOM {renderLocalMenuStatusBadge('green', 'private control room')}</strong><small>Your protected command center</small></span>
                           </a>
                         )}
-                        <a href="/halo-shield/" data-stat-event="open_halo_shield" data-stat-target="header" data-signal="GROW ON TRUST">
-                          <Icon name="shield-check" className="halo-menu-icon" /><span><strong>HALO SHIELD {renderMenuStatusBadge('/halo-shield/', 'Halo Shield')}</strong><small>View protection status</small></span>
-                        </a>
-                        <a href="/pricing/" data-stat-event="open_pricing" data-stat-target="header" data-signal="GROW ON TRUST">
-                          <Icon name="arrow-right" className="halo-menu-icon" /><span><strong>PRICING {renderMenuStatusBadge('/pricing/', 'Pricing')}</strong><small>Explore pricing preview · proposed plans</small></span>
-                        </a>
-                        <a href="/support/" data-stat-event="open_feedback_desk" data-stat-target="header" data-signal="SYSTEM CARE">
-                          <Icon name="bug" className="halo-menu-icon" /><span><strong>FEEDBACK DESK {renderMenuStatusBadge('/support/', 'Feedback Desk')}</strong><small>Report bugs, request features, get help</small></span>
-                        </a>
-                        <button type="button" onClick={() => { setPaymentError(''); setShowPaymentModal(true); }} data-stat-event="open_payment" data-stat-target="header" data-signal="DIRECT SUPPORT">
-                          <Icon name="credit-card" className="halo-menu-icon" /><span><strong>SUPPORT HALO {renderLocalMenuStatusBadge('green', 'direct support')}</strong><small>Fuel independent infrastructure</small></span>
-                        </button>
+                        <section className="halo-menu-lane-care" aria-labelledby="halo-lane-care">
+                          <div className="halo-menu-lane-title"><span>+</span><h3 id="halo-lane-care">Care</h3></div>
+                          <a href="/halo-shield/" data-stat-event="open_halo_shield" data-stat-target="header" data-signal="GROW ON TRUST">
+                            <Icon name="shield-check" className="halo-menu-icon" /><span><strong>HALO SHIELD {renderMenuStatusBadge('/halo-shield/', 'Halo Shield')}</strong><small>View protection status</small></span>
+                          </a>
+                          <a href="/pricing/" data-stat-event="open_pricing" data-stat-target="header" data-signal="GROW ON TRUST">
+                            <Icon name="arrow-right" className="halo-menu-icon" /><span><strong>PRICING {renderMenuStatusBadge('/pricing/', 'Pricing')}</strong><small>Explore pricing preview · proposed plans</small></span>
+                          </a>
+                          <a href="/support/" data-stat-event="open_feedback_desk" data-stat-target="header" data-signal="SYSTEM CARE">
+                            <Icon name="bug" className="halo-menu-icon" /><span><strong>FEEDBACK DESK {renderMenuStatusBadge('/support/', 'Feedback Desk')}</strong><small>Report bugs, request features, get help</small></span>
+                          </a>
+                          <button type="button" onClick={() => { setPaymentError(''); setShowPaymentModal(true); }} data-stat-event="open_payment" data-stat-target="header" data-signal="DIRECT SUPPORT">
+                            <Icon name="credit-card" className="halo-menu-icon" /><span><strong>SUPPORT HALO {renderLocalMenuStatusBadge('green', 'direct support')}</strong><small>Fuel independent infrastructure</small></span>
+                          </button>
+                        </section>
                       </section>
                     </div>
 

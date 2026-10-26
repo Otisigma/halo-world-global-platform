@@ -4007,6 +4007,9 @@
                         <a href="/music/" aria-current={menuStatusForRoute('/music/', 'green').isCurrent ? 'page' : undefined} data-stat-event="open_music_catalog" data-stat-target="header" data-signal="CATALOG">
                           <Icon name="music" className="halo-menu-icon" /><span><strong>ALL MUSIC {renderMenuStatusBadge('/music/', 'All Music')}</strong><small>The permanent catalog</small></span>
                         </a>
+                        <a href="/artists/" data-stat-event="open_artist_rooms" data-stat-target="header" data-signal="ARTIST ROOMS">
+                          <Icon name="music" className="halo-menu-icon" /><span><strong>ARTIST ROOMS + CHARTS {renderMenuStatusBadge('/artists/', 'Artist Rooms and Charts')}</strong><small>Browse rooms, charts, and featured drops</small></span>
+                        </a>
                         <a href="/halo-x.html" data-stat-event="open_halo_x" data-stat-target="header" data-signal="ARTIST ROOM">
                           <Icon name="star" className="halo-menu-icon" /><span><strong>DJ HALO X {renderMenuStatusBadge('/halo-x.html', 'DJ Halo X')}</strong><small>Enter the artist universe</small></span>
                         </a>

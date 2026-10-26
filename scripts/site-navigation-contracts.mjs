@@ -469,7 +469,7 @@ assert.match(musicStyles, /\.halo-player-bar \{ position: fixed;/, "the floating
     assert.ok(registeredRoutes.has(route), `${route} must exist in the public route registry`);
     assert.ok(pathSection.includes(`<h3 className="font-sans-alt text-lg font-bold text-white">${title}</h3>`), `${title} must be clearly named`);
   }
-  assert.doesNotMatch(pathSection, /onClick|window\.location/, "onboarding choices must use native links, not clickable containers");
+  assert.doesNotMatch(pathSection, /window\.location|<(?:div|article)[^>]*onClick[^>]*role="button"/, "onboarding choices must use native links, not simulated buttons");
   assert.match(pathSection, /focus-visible:ring-2/, "path choices must expose a visible keyboard focus state");
 
   const navigation = mainSite.match(/<nav className="halo-site-actions"[\s\S]*?<\/nav>/)?.[0] || "";

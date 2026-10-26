@@ -1182,6 +1182,7 @@
     <div id="root"></div>
 
     <script src="/release-artwork.js"></script>
+    <script src="/onboarding.js"></script>
     <script id="haloFeaturedReleaseConfig" type="application/json">
       {
         "id": "when-the-world-goes-dark",
@@ -1273,6 +1274,49 @@
             default:
               return <svg {...props}><circle cx="12" cy="12" r="10"/></svg>;
           }
+        };
+
+        const OnboardingWizard = ({ onComplete, onDismiss }) => {
+          const quiz = window.HaloOnboarding;
+          const [state, setState] = useState(quiz.initialState);
+          const heading = useRef(null);
+          const question = quiz.questions[state.step];
+          const selected = state.answers[state.step];
+          useEffect(() => { heading.current?.focus(); }, [state.step]);
+          const act = action => setState(current => quiz.transition(current, action));
+          const next = event => {
+            event.preventDefault();
+            if (selected === undefined) return;
+            if (state.step === quiz.questions.length - 1) onComplete(quiz.score(state.answers));
+            else act({ type: 'next' });
+          };
+          return (
+            <form onSubmit={next} onKeyDown={event => {
+              if (event.key === 'Escape') { event.preventDefault(); onDismiss(); }
+            }} className="mb-6 rounded-2xl border border-amber-200/30 bg-black/30 p-5 font-sans-alt" aria-labelledby="onboarding-question">
+              <p className="text-xs text-amber-100" aria-live="polite">Step {state.step + 1} of {quiz.questions.length}</p>
+              <progress className="mt-2 w-full accent-amber-200" value={state.step + 1} max={quiz.questions.length} aria-label="Quiz progress" />
+              <h3 id="onboarding-question" ref={heading} tabIndex="-1" className="my-4 text-lg font-bold text-white focus:outline-none">{question.title}</h3>
+              <fieldset>
+                <legend className="mb-3 text-sm text-gray-300">Choose one answer</legend>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {question.options.map((option, index) => (
+                    <label key={`${state.step}-${index}`} className={`flex cursor-pointer items-start gap-3 rounded-xl border p-4 text-sm focus-within:ring-2 focus-within:ring-amber-200 ${selected === index ? 'border-amber-200 bg-amber-200/10 text-white' : 'border-white/20 text-gray-300 hover:border-amber-200/50'}`}>
+                      <input type="radio" name={`onboarding-${state.step}`} value={index} checked={selected === index} onChange={() => act({ type: 'select', answer: index })} className="mt-1 accent-amber-200" />
+                      {option.label}
+                    </label>
+                  ))}
+                </div>
+              </fieldset>
+              <p className="mt-4 text-xs leading-5 text-gray-400">One vote per answer. Ties follow your primary goal. Only completion or skipping is saved on this browser, not your answers.</p>
+              <div className="mt-4 flex flex-wrap items-center gap-4 text-sm">
+                <button type="button" disabled={state.step === 0} onClick={() => act({ type: 'back' })} className="rounded px-2 py-2 text-amber-100 focus-visible:ring-2 focus-visible:ring-amber-200 disabled:opacity-40">Back</button>
+                <button type="button" onClick={() => { act({ type: 'restart' }); heading.current?.focus(); }} className="rounded px-2 py-2 text-amber-100 focus-visible:ring-2 focus-visible:ring-amber-200">Restart</button>
+                <button type="button" onClick={onDismiss} className="rounded px-2 py-2 text-gray-300 focus-visible:ring-2 focus-visible:ring-amber-200">Skip / cancel</button>
+                <button type="submit" disabled={selected === undefined} className="rounded-xl bg-amber-100 px-5 py-3 font-bold text-black focus-visible:ring-2 focus-visible:ring-white disabled:opacity-40">{state.step === quiz.questions.length - 1 ? 'Open my workspace' : 'Next'}</button>
+              </div>
+            </form>
+          );
         };
 
         const DEFAULT_FEATURED_RELEASE = {
@@ -1668,6 +1712,43 @@
 
         function App() {
           const [viewMode, setViewMode] = useState('landing'); // 'landing' or 'console'
+          const [showOnboarding, setShowOnboarding] = useState(() => window.HaloOnboarding.isHome(window.location) && !window.HaloOnboarding.isDismissed());
+          const [pathWorkspace, setPathWorkspace] = useState(null);
+          const [pathExplanation, setPathExplanation] = useState('');
+          const pathQuizButton = useRef(null);
+          const workspaceHeading = useRef(null);
+          const closeOnboarding = () => {
+            window.HaloOnboarding.dismiss('skipped');
+            setShowOnboarding(false);
+            window.requestAnimationFrame(() => pathQuizButton.current?.focus());
+          };
+          const openPathWorkspace = (path, explanation = '') => {
+            window.HaloOnboarding.dismiss('completed');
+            setShowOnboarding(false);
+            window.HaloOnboarding.navigate(path);
+            setPathExplanation(explanation);
+          };
+          const selectPathWorkspace = event => {
+            if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+            const link = event.target.closest('a[data-path-mode]');
+            if (!link) return;
+            event.preventDefault();
+            openPathWorkspace(link.dataset.pathMode);
+          };
+          useEffect(() => {
+            const syncWorkspace = () => {
+              setPathWorkspace(window.HaloOnboarding.workspaceForLocation(window.location));
+              setPathExplanation('');
+              setShowOnboarding(false);
+              setViewMode('landing');
+            };
+            window.addEventListener('popstate', syncWorkspace);
+            return () => window.removeEventListener('popstate', syncWorkspace);
+          }, []);
+          useEffect(() => {
+            if (pathWorkspace) workspaceHeading.current?.focus();
+            else if (window.HaloOnboarding.isDismissed()) pathQuizButton.current?.focus();
+          }, [pathWorkspace]);
 
           const [showFanGuide, setShowFanGuide] = useState(false);
           const [showVipBriefing, setShowVipBriefing] = useState(false);
@@ -3395,7 +3476,11 @@
             };
             openCompanionRoute();
             window.addEventListener('hashchange', openCompanionRoute);
-            return () => window.removeEventListener('hashchange', openCompanionRoute);
+            window.addEventListener('popstate', openCompanionRoute);
+            return () => {
+              window.removeEventListener('hashchange', openCompanionRoute);
+              window.removeEventListener('popstate', openCompanionRoute);
+            };
           }, []);
 
           useEffect(() => {
@@ -3489,6 +3574,7 @@
           }, [isAdaptiveMode, isPlaying, activeTrack]);
 
           const openConsoleArea = (tab) => {
+            if (pathWorkspace) window.HaloOnboarding.navigateApp('/ai-workgroup');
             setActiveTab(tab);
             setViewMode('console');
             setShowFanGuide(false);
@@ -3757,7 +3843,7 @@
                       </button>
 
                       <button
-                        onClick={() => { setShowVipBriefing(false); setViewMode('console'); }}
+                        onClick={() => { setShowVipBriefing(false); openConsoleArea('agent-room'); }}
                         className="w-full sm:w-auto bg-gradient-to-r from-amber-500 to-amber-600 hover:brightness-110 text-black font-black text-xs uppercase px-6 py-3 rounded-xl transition shadow-[0_0_20px_rgba(217,119,6,0.4)] flex items-center justify-center gap-2"
                       >
                         <span>START TESTING CONSOLE</span>
@@ -4123,12 +4209,12 @@
                     </div>
 
                     {viewMode === 'landing' ? (
-                      <button type="button" onClick={() => setViewMode('console')} data-stat-event="enter_console" data-stat-target="header" className="halo-menu-console">
+                      <button type="button" onClick={() => openConsoleArea('agent-room')} data-stat-event="enter_console" data-stat-target="header" className="halo-menu-console">
                         <span><small>Primary passage</small><strong>ENTER SHOW CONSOLE</strong></span>
                         <Icon name="arrow-right" className="halo-menu-console-icon" />
                       </button>
                     ) : (
-                      <button type="button" onClick={() => setViewMode('landing')} className="halo-menu-console">
+                      <button type="button" onClick={() => { window.HaloOnboarding.navigateApp('/halo'); setViewMode('landing'); }} className="halo-menu-console">
                         <span><small>Return passage</small><strong>PORTAL HOMEPAGE</strong></span>
                         <Icon name="arrow-right" className="halo-menu-console-icon halo-menu-console-icon-back" />
                       </button>
@@ -4138,7 +4224,19 @@
               </header>
 
               {/* VIEW 1: FRONT LANDING SHOWCASE PORTAL */}
-              {viewMode === 'landing' && (
+              {pathWorkspace && (
+                <main className="flex-1 w-full p-4">
+                  <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <h2 ref={workspaceHeading} tabIndex="-1" className="text-xl font-bold text-amber-100">{window.HaloOnboarding.paths[pathWorkspace].title}</h2>
+                      <p className="text-sm text-gray-300" role="status">{pathExplanation || 'Your workspace is ready below. You can change paths at any time.'}</p>
+                    </div>
+                    <button type="button" className="rounded-xl border border-amber-200/40 px-4 py-3 text-amber-100 focus-visible:ring-2 focus-visible:ring-amber-200" onClick={() => window.HaloOnboarding.navigateApp('/halo')}>Change path / revisit quiz</button>
+                  </div>
+                  <iframe key={pathWorkspace} src={window.HaloOnboarding.paths[pathWorkspace].route} title={`${window.HaloOnboarding.paths[pathWorkspace].title} workspace`} onLoad={event => window.HaloOnboarding.connectWorkspace(event.currentTarget)} className="w-full rounded-2xl border border-white/20 bg-black" style={{height: '80vh'}} />
+                </main>
+              )}
+              {!pathWorkspace && viewMode === 'landing' && (
                 <main className="flex-1 max-w-6xl mx-auto w-full px-4 py-8 md:py-12 space-y-12 overflow-y-auto">
 
                   <section className="rounded-3xl border border-amber-200/15 bg-[radial-gradient(circle_at_90%_0%,rgba(217,188,124,.12),transparent_32%),linear-gradient(145deg,rgba(18,18,22,.98),rgba(8,9,12,.98))] p-5 shadow-[0_24px_70px_rgba(0,0,0,.28)] sm:p-8" aria-labelledby="find-your-path-title">
@@ -4149,7 +4247,9 @@
                       </div>
                       <p className="max-w-xl font-sans-alt text-xs leading-6 text-gray-400 sm:text-right">Choose a workspace that fits your music and your next move.</p>
                     </div>
-                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                    <button ref={pathQuizButton} type="button" onClick={() => setShowOnboarding(true)} className="mb-5 rounded-xl border border-amber-200/40 px-4 py-3 font-sans-alt text-sm font-bold text-amber-100 focus-visible:ring-2 focus-visible:ring-amber-200">Take / retake the 3-question quiz</button>
+                    {showOnboarding && <OnboardingWizard onDismiss={closeOnboarding} onComplete={result => openPathWorkspace(result.path, result.explanation)} />}
+                    <div onClick={selectPathWorkspace} className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
                       <a href="/release-house/?mode=solo" data-path-mode="solo" aria-current={menuStatusForRoute('/release-house/', 'green').isCurrent ? 'page' : undefined} className="group flex min-h-full flex-col rounded-2xl border border-white/10 bg-black/25 p-5 text-left transition duration-200 hover:-translate-y-1 hover:border-amber-200/40 hover:bg-white/[.04] focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-200 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0a0b0e] motion-reduce:transform-none">
                         <span className="mb-5 inline-flex w-fit rounded-full border border-amber-200/20 bg-amber-200/[.07] px-3 py-1 font-sans-alt text-[9px] font-bold uppercase tracking-[.16em] text-amber-100">Quick Launch</span>
                         <h3 className="font-sans-alt text-lg font-bold text-white">Solo Builder</h3>
@@ -5383,7 +5483,7 @@
               )}
 
               {/* VIEW 2: GLOBAL CONSOLE WORKSPACE */}
-              {viewMode === 'console' && (
+              {!pathWorkspace && viewMode === 'console' && (
                 <div id="clubhouse" className="flex-1 grid grid-cols-1 lg:grid-cols-12 overflow-hidden">
 
                   {/* LEFT NAVIGATION PANEL */}

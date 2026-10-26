@@ -120,6 +120,18 @@ for (const connection of [{ saveData: true }, { effectiveType: "2g" }, { effecti
   assert.equal(f.audios.length, 1, "data saver/slow connections must only load the selected track");
   assert.equal(f.timers.size, 0);
 }
+for (const options of [{ connection: { saveData: true } }, { connection: { effectiveType: "3g" } }, { hidden: true }]) {
+  const f = fixture(options);
+  f.document.hidden = Boolean(options.hidden);
+  const audio = new FakeAudio();
+  f.cache.warmPlaylist(urls.slice(0, 2), { primaryAudio: audio, respectPolicy: true });
+  assert.equal(audio.preload, "none", "speculative selected-song loading respects visibility and connection policy");
+  assert.equal(audio.loads, 0);
+  assert.equal(audio.plays, 0);
+  assert.equal(f.audios.length, 0);
+  assert.equal(f.cache.prepare(audio, urls[0]), true, "explicit playback can prepare the selected source");
+  assert.equal(audio.preload, "auto");
+}
 {
   const f = fixture();
   const audio = new FakeAudio();
@@ -204,21 +216,28 @@ for (const withCache of [true, false]) {
     window: { HaloAudioPreloader: withCache ? f.cache : undefined },
     elements: { audio }, state, HTMLMediaElement: { HAVE_CURRENT_DATA: 2 },
     resolvePrimaryAudio: () => ({ src: urls[0] }),
+    dreamweaverDriveFallbacks: () => [],
     setLoadingProgress() {}, revokeLocalAudioUrl() {}, clearRemoteAudioWatchdog() {},
     setReleasePlaybackState(value) { state.releasePlaybackState = value; },
+    handleRemoteAudioUnavailable() {
+      state.audioSourceMode = "error";
+      state.releasePlaybackState = "unavailable";
+      audio.pause();
+    },
     showToast() {}, queueAudioFeedbackIncident() {},
     awaitPrimaryPlaybackReadiness: async () => ({ ok: false, state: "timeout" })
   };
   vm.runInNewContext(bootstrap, context);
-  await context.bootstrapPrimaryPlayback({ id: "primary" });
-  assert.equal(state.audioSourceMode, "remote", "blocked preload must keep manual playback available");
+  const result = await context.bootstrapPrimaryPlayback({ id: "primary" });
+  assert.equal(state.audioSourceMode, "remote", "preload does not wait for media readiness or attempt autoplay");
+  assert.equal(result.started, false);
   assert.equal(audio.src, urls[0]);
   assert.equal(audio.preload, "auto", "cache absence must still prioritize current playback");
-  assert.equal(state.releasePlaybackState, "loading", "bound audio must refresh the player labels immediately");
+  assert.equal(state.releasePlaybackState, "ready");
   assert.equal(audio.plays, 0, "preloading must not bypass browser playback policy");
 }
 
 assert.match(page, /audio-preloader\.js[\s\S]*dreamweaver\/dreamweaver\.js/);
 assert.match(page, /<audio id="showAudio" preload="auto">/);
-assert.match(dreamweaver, /warmPlaylist\([\s\S]*mixLibrary\.filter\(isPlayablePrimaryMix\)/);
+assert.match(dreamweaver, /warmPlaylist\(\[primaryAudio, \.\.\.dreamweaverDriveFallbacks/);
 console.log("Audio preloader contracts passed.");

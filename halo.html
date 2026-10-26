@@ -1323,7 +1323,10 @@
           { route: '/creator-network/', label: 'CREATOR NETWORK', primaryWorking: true },
           { route: '/artist/dashboard', label: 'BUSINESS HUB' },
           { route: '/dj-deck.html', label: 'LIVE DJ DECK' },
+          { route: '/dj-vault/', label: 'DJ VAULT' },
           { route: '/music/', label: 'ALL MUSIC' },
+          { route: '/music-world.html', label: 'MUSIC WORLD' },
+          { route: '/stats/', label: 'PUBLIC STATS' },
           { route: '/halo-x.html', label: 'DJ HALO X' },
           { route: '/mixes/', label: 'HALO X MIXES' },
           { route: '/halo-live.html', label: 'HALO LIVE' },
@@ -1345,6 +1348,8 @@
           { route: '/toolost/', label: 'HALO DISTRIBUTION' },
           { route: '/finish-house/', label: 'FINISH HOUSE' },
           { route: '/magazine.html', label: 'HALO SIGNAL' },
+          { route: '/halo-shield/', label: 'HALO SHIELD' },
+          { route: '/pricing/', label: 'PRICING' },
           { route: '/support/', label: 'FEEDBACK DESK' }
         ];
         const MENU_PRIMARY_WORKING_TARGET_ROUTES = new Set([
@@ -1354,8 +1359,8 @@
           '/magazine.html'
         ]);
         const MENU_ROUTE_STATUS_TARGETS = new Set(MENU_STATUS_GROUP_TARGETS.map(target => target.route));
-        const DEFAULT_MENU_ATTENTION_ROUTE = '/dreamweaver/';
-        const BASE_MENU_DESTINATION_COUNT = MENU_STATUS_GROUP_TARGETS.length + 4;
+        const DEFAULT_MENU_ATTENTION_ROUTE = '';
+        const BASE_MENU_DESTINATION_COUNT = MENU_STATUS_GROUP_TARGETS.length + 1;
         const MENU_FILE_BACKED_ROUTES = new Set(['/artist/dashboard']);
         const normalizeMenuRoutePath = (route = '') => {
           if (!route) return '/';
@@ -3583,6 +3588,7 @@
                     <p className="text-[10px] font-black uppercase tracking-[0.28em] text-cyan-300">New music signal</p>
                     <h2 id="upload-alerts-title" className="mt-3 pr-10 text-3xl font-black tracking-tight text-white">Ping me when a mix lands.</h2>
                     <p className="mt-3 text-sm leading-6 text-gray-400">Alerts stay with your HALO membership. Open HALO on your phone and enable browser notifications there for phone pings—no phone number is stored.</p>
+                    <a href="/track-drops/" className="mt-3 inline-block text-[10px] font-black uppercase tracking-[0.2em] text-amber-200 hover:text-white">New in the shop? Set up track drop cards &amp; member rewards ↗</a>
 
                     {uploadAlertsError && <div role="alert" className="mt-4 rounded-xl border border-red-400/35 bg-red-500/10 px-3 py-2 text-xs leading-5 text-red-200">{uploadAlertsError}</div>}
 
@@ -4093,6 +4099,12 @@
 
                       <section className="halo-menu-lane halo-menu-lane-care" aria-labelledby="halo-lane-care">
                         <div className="halo-menu-lane-title"><span>04</span><h3 id="halo-lane-care">Care</h3></div>
+                        <a href="/halo-shield/" data-stat-event="open_halo_shield" data-stat-target="header" data-signal="GROW ON TRUST">
+                          <Icon name="shield-check" className="halo-menu-icon" /><span><strong>HALO SHIELD {renderMenuStatusBadge('/halo-shield/', 'Halo Shield')}</strong><small>View protection status</small></span>
+                        </a>
+                        <a href="/pricing/" data-stat-event="open_pricing" data-stat-target="header" data-signal="GROW ON TRUST">
+                          <Icon name="arrow-right" className="halo-menu-icon" /><span><strong>PRICING {renderMenuStatusBadge('/pricing/', 'Pricing')}</strong><small>Explore pricing preview · proposed plans</small></span>
+                        </a>
                         <a href="/support/" data-stat-event="open_feedback_desk" data-stat-target="header" data-signal="SYSTEM CARE">
                           <Icon name="bug" className="halo-menu-icon" /><span><strong>FEEDBACK DESK {renderMenuStatusBadge('/support/', 'Feedback Desk')}</strong><small>Report bugs, request features, get help</small></span>
                         </a>
@@ -4512,6 +4524,22 @@
                             <p className="text-[11px] leading-5 text-[#90a4b7]">{desc}</p>
                           </div>
                         ))}
+                      </div>
+                    </div>
+                  </section>
+
+                  <section className="relative overflow-hidden rounded-[2rem] border border-[#a5c4cf]/20 bg-[#100d0b] shadow-[0_30px_90px_rgba(0,0,0,.38)]" aria-labelledby="halo-shield-promo-title">
+                    <div className="flex flex-col gap-6 p-7 sm:flex-row sm:items-center sm:justify-between md:p-10">
+                      <div>
+                        <p className="text-[9px] font-black uppercase tracking-[.3em] text-[#a5c4cf]">Built for creators. Open to fans.</p>
+                        <h2 id="halo-shield-promo-title" className="mt-4 font-sans-alt text-3xl font-black uppercase tracking-[-.03em] text-[#f1ede4] md:text-5xl">Halo Shield</h2>
+                        <p className="mt-4 max-w-2xl text-sm leading-7 text-[#a6a096]">Check Halo Music’s current protection status and verified results, clearly and at a glance.</p>
+                      </div>
+                      <div className="flex shrink-0 flex-col items-start gap-4 sm:items-center">
+                        <a href="/halo-shield/" data-stat-event="open_halo_shield" data-stat-target="homepage" className="inline-flex items-center justify-center gap-2 rounded-full border border-[#a5c4cf]/30 bg-[#211a16] px-6 py-3 text-[10px] font-black uppercase tracking-[.16em] text-[#a5c4cf] transition hover:border-[#a5c4cf]/60 hover:bg-[#211a16]/80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#a5c4cf]">
+                          View protection status <span aria-hidden="true">↗</span>
+                        </a>
+                        <a href="/pricing/" data-stat-event="open_pricing" data-stat-target="homepage" className="text-[10px] font-black uppercase tracking-[.12em] text-[#a5c4cf] underline underline-offset-4 hover:text-[#f1ede4] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#a5c4cf]">Explore pricing preview <span aria-hidden="true">↗</span></a>
                       </div>
                     </div>
                   </section>

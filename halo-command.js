@@ -29,6 +29,7 @@
   }
 
   function showLocked(message) {
+    window.dispatchEvent(new CustomEvent("halo-owner-operations", { detail: { authorized: false } }));
     byId("commandView").hidden = true;
     byId("lockedView").hidden = false;
     byId("lockedMessage").textContent = message;
@@ -377,6 +378,9 @@
 
   async function loadAll() {
     await Promise.all([loadDashboard(), loadControlCenter()]);
+    if (!byId("commandView").hidden) {
+      window.dispatchEvent(new CustomEvent("halo-owner-operations", { detail: { authorized: true } }));
+    }
   }
 
   async function runCouncil() {

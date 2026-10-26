@@ -17,7 +17,7 @@ assert.match(migration, /CREATE TABLE IF NOT EXISTS halo_agent_commands/, "owner
 assert.match(migration, /source_command_id/, "command proposals must link to the existing action queue");
 assert.match(migration, /ALTER COLUMN run_id DROP NOT NULL/, "direct owner commands must create actions without inventing a council run");
 
-assert.match(library, /new OpenAI\(\)/, "command responses must use Netlify AI Gateway's zero-config OpenAI client");
+assert.match(library, /new OpenAI\(\{ maxRetries: 0 \}\)/, "optional paid command responses use the gateway client without automatic retries");
 assert.match(library, /AGENT_MODEL/, "command responses must use the council's supported model");
 assert.match(library, /needs_approval|TRUE/, "command-created work must preserve human approval");
 assert.match(library, /fallbackReply/, "the owner channel must retain a deterministic fallback");

@@ -5,6 +5,10 @@ import vm from "node:vm";
 import { allowedEvents } from "../netlify/lib/stats.mjs";
 
 const root = resolve(import.meta.dirname, "..");
+const musicPage = await readFile(resolve(root, "music/index.html"), "utf8");
+assert.doesNotMatch(musicPage, /localVault|sharedCatalogFrame|embed=shop/, "fans must not receive browser inventory or embedded management");
+assert.match(musicPage, /Votes do not publish music or approve radio rotation/);
+
 const [client, styles, stats, summary, statsLib, statsEvent, haloHome, releaseCatalogApi, musicWorld, dreamweaver] = await Promise.all([
   readFile(resolve(root, "music-player.js"), "utf8"),
   readFile(resolve(root, "music-player.css"), "utf8"),
@@ -110,7 +114,11 @@ for (const [row, expected] of [
   [{ stream_url: "javascript:alert(1)" }, "STANDBY"],
   [{ stream_url: "https://user@cdn.example/test.mp3" }, "STANDBY"],
   [{ stream_url: "//cdn.example/test.mp3" }, "STANDBY"],
-  [{ stream_url: "/\\cdn.example/test.mp3" }, "STANDBY"]
+  [{ stream_url: "/\\cdn.example/test.mp3" }, "STANDBY"],
+  [{ stream_url: "https://cdn.example/listen?file=missing.mp3" }, "STANDBY"],
+  [{ stream_url: "/listen?file=missing.wav" }, "STANDBY"],
+  [{ stream_url: "https://cdn.example/master.wav?token=test" }, "READY"],
+  [{ stream_url: "/audio/master.m4b" }, "READY"]
 ]) {
   assert.equal(statusContext.storefrontStateFor(row).statusLabel, expected);
 }
@@ -149,6 +157,7 @@ const playerContext = vm.createContext({
   clearTimeout() { timeoutCallback = null; }
 });
 vm.runInContext(section(musicWorld, "function playerAudio()", "if(document.readyState==="), playerContext);
+vm.runInContext(section(musicWorld, "function retryCanonicalStream()", "async function loadPublishedCatalog()"), playerContext);
 playerContext.bindPlayerControls();
 playerContext.bindPlayerControls();
 assert.equal(input.disabled, false);
@@ -159,6 +168,7 @@ const firstWatchdog = timeoutCallback;
 const firstTimeoutCount = timeoutCount;
 audio.handlers.waiting();
 audio.handlers.waiting();
+audio.handlers.stalled();
 assert.equal(timeoutCount, firstTimeoutCount, "buffering events must not extend the five-second deadline");
 assert.equal(timeoutCallback, firstWatchdog);
 timeoutCallback();
@@ -231,6 +241,26 @@ assert.equal(vm.runInContext("cardStatus(playerTrack)", playerContext), "STANDBY
 assert.equal(vm.runInContext("storefrontStatus('ERROR')", playerContext), "STANDBY");
 assert.equal(vm.runInContext("storefrontStatus('draft', {hasStream:true})", playerContext), "PENDING");
 assert.equal(vm.runInContext("storefrontStatus('review', {hasStream:true})", playerContext), "PENDING");
+const artworkContext = vm.createContext({ window: { location: playerContext.location }, URL });
+vm.runInContext(await readFile(resolve(root, "release-artwork.js"), "utf8"), artworkContext);
+const audioValidator = artworkContext.window.HaloReleaseArtwork.isLikelyAudioUrl;
+const credentialUrl = new URL("https://cdn.example/master.mp3");
+credentialUrl.username = "listener";
+for (const [url, expected] of [
+  ["https://cdn.example/master.mp3?token=test", true],
+  ["/audio/master.wav", true],
+  ["/api/mixes/audio?id=test", true],
+  ["https://cdn.example/listen?file=missing.mp3", false],
+  [credentialUrl.href, false],
+  ["javascript:missing.mp3", false]
+]) {
+  assert.equal(audioValidator(url), expected, url);
+}
+const fallbackContext = vm.createContext({ window: {}, URL, location: playerContext.location });
+vm.runInContext(section(musicWorld, "const safeHref=", "const dreamweaverDefaultMixId=")
+  + section(musicWorld, "const isLikelyAudioUrl=", "const fallbackArtwork="), fallbackContext);
+assert.equal(vm.runInContext("isLikelyAudioUrl('/listen?file=missing.mp3')", fallbackContext), false);
+assert.equal(vm.runInContext("isLikelyAudioUrl('https://user@cdn.example/master.mp3')", fallbackContext), false);
 
 const dreamState = { audioSourceMode: "remote", mix: {}, remoteAudioWatchdog: 0, playerControlsBound: false };
 const dreamInput = control(), dreamPlay = control(), dreamUpload = control();
@@ -240,12 +270,14 @@ const dreamContext = vm.createContext({
   elements: { audio: dreamAudio, playButton: dreamPlay, songLobbyHeroPlayButton: control(), mixFileInput: dreamInput, uploadLabel: dreamUpload },
   window: { setTimeout: playerContext.setTimeout, clearTimeout: playerContext.clearTimeout },
   URL: MediaURL, location: playerContext.location, HTMLMediaElement: playerContext.HTMLMediaElement,
-  REMOTE_AUDIO_WATCHDOG_MS: 5000, cleanText: value => String(value || "").trim(),
-  showToast() {}, setReleasePlaybackState() {}
+  REMOTE_AUDIO_WATCHDOG_MS: 5000, LOCAL_PREVIEW_PROMPT: "Stream unavailable", cleanText: value => String(value || "").trim(),
+  showToast() {}, setReleasePlaybackState() {},
+  notePlaybackClick() { dreamState.playbackRequested = true; },
+  dreamweaverDriveFallbacks: () => [], renderSoundUnlock() {}
 });
 vm.runInContext(
   section(dreamweaver, "function clearRemoteAudioWatchdog()", "function publicReleaseStatus(")
-  + section(dreamweaver, "function shouldPromptLocalUpload()", "async function awaitPrimaryPlaybackReadiness()")
+  + section(dreamweaver, "function shouldPromptLocalUpload()", "async function awaitPrimaryPlaybackReadiness(")
   + section(dreamweaver, "async function togglePlayback()", "function updateHeroPlayButton("),
   dreamContext
 );
@@ -286,6 +318,22 @@ rejectOldPlay({ name: "NotSupportedError" });
 await oldDreamPlayback;
 assert.equal(dreamState.audioSourceMode, "remote", "Dreamweaver must ignore obsolete source failures");
 
+vm.runInContext(section(dreamweaver, "async function bootstrapPrimaryPlayback(", "async function hydrateDreamweaverLoopContent("), dreamContext);
+Object.assign(dreamContext, {
+  resolvePrimaryAudio: () => ({ src: track.previewUrl }),
+  setLoadingProgress() {},
+  queueAudioFeedbackIncident() {},
+  awaitPrimaryPlaybackReadiness: async () => ({ ok: false, state: "timeout" }),
+  dreamweaverDriveFallbacks: () => []
+});
+dreamState.audioSourceMode = "empty";
+dreamAudio.play = async () => {};
+const timedOutBootstrap = await dreamContext.bootstrapPrimaryPlayback({}, { userInitiated: true });
+assert.equal(timedOutBootstrap.fallback, true, "bootstrap timeout must offer the local upload fallback");
+assert.equal(dreamState.audioSourceMode, "error");
+await dreamContext.togglePlayback();
+assert.equal(dreamInput.clicks, 3, "play after a bootstrap timeout must open the picker");
+
 for (const [file, handler] of [
   ["netlify/functions/mix-audio.mjs", "mixAudioHandler"],
   ["netlify/functions/radio-audio.mjs", "radioAudioHandler"],
@@ -296,7 +344,11 @@ for (const [file, handler] of [
   const context = vm.createContext({
     URL, Response, ReadableStream, console,
     getStore: () => ({ get: async () => bytes.buffer }),
-    getDatabase: () => ({ sql: async () => [{ blob_key: "test", chunk_count: 1, byte_size: 5, content_type: "audio/wav", visibility: "room", status: "rotation", original_filename: "mix.wav" }] }),
+    getDatabase: () => ({ sql: async () => [{
+      blob_key: handler === "radioAudioHandler" ? "test/manual-upload-123/parts/" : "test",
+      member_id: "test", chunk_count: 1, byte_size: 5, content_type: "audio/wav",
+      visibility: "room", status: "rotation", original_filename: "mix.wav",
+    }] }),
     getUser: async () => ({ id: "test" }), isOwner: () => false,
     ensureMembership: async () => ({ member_id: "test" }), cleanText: value => String(value || "")
   });

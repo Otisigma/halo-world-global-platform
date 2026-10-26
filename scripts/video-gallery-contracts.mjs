@@ -25,6 +25,8 @@ const checks = [
   [djDeck.includes("Clip format could not play") && djDeck.includes("extensionAllowed"), "reports local booth file and browser decode failures"],
   [mainStudio.includes("reportHaloTvHealth") && mainStudio.includes("Media check passed"), "reports HALO TV playback health to the site monitor"],
   [videoApi.includes('getStore("halo-video-gallery")') && videoApi.includes("MAX_UPLOAD_BYTES"), "stores uploaded media in Netlify Blobs with a bounded payload"],
+  [videoApi.includes('["GET", "HEAD"].includes(request.method)') && videoApi.includes('method === "HEAD" ? await store.getMetadata')
+    && videoApi.includes('new Response(method === "HEAD" ? null : blob'), "supports read-only watchdog video HEAD checks without downloading media"],
   [videoApi.includes("VIDEO_EXTENSION_TYPES") && videoApi.includes("inferredContentType"), "accepts valid video extensions when browsers omit MIME metadata"],
   [videoApi.includes("verifyRequestOrigin") && videoApi.includes("ensureMembership"), "protects video publishing with origin and identity checks"],
   [videoApi.includes("Choose an artist room you own"), "limits artist attachment to owned artist rooms"],

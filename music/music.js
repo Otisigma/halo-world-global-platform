@@ -6,6 +6,8 @@
     search: document.querySelector("#catalogSearch"),
     sort: document.querySelector("#catalogSort"),
     count: document.querySelector("#releaseCount"),
+    results: document.querySelector("#catalogResults"),
+    reset: document.querySelector("#resetCatalogFilters"),
     chartBoard: document.querySelector("#chartBoard"),
     chartRooms: document.querySelector("#chartRooms"),
     chartSortButtons: document.querySelector("#chartSortButtons"),
@@ -14,8 +16,6 @@
     copy: document.querySelector("#copyCatalog"),
     share: document.querySelector("#shareCatalog"),
     toast: document.querySelector("#catalogToast"),
-    catalogWorkspace: document.querySelector("#catalogWorkspaceDetails"),
-    sharedCatalogFrame: document.querySelector("#sharedCatalogFrame")
   };
   const state = { releases: [], videos: [], query: "", genre: "all", sort: "newest", chartRoom: "all", chartSort: "signal", activeReleaseId: "", activeShopId: "" };
   const configuredFeaturedReleaseId = elements.featured?.dataset.featuredReleaseId?.trim() || "";
@@ -39,9 +39,10 @@
   }
 
   function safeUrl(value, fallback = "") {
+    if (typeof value !== "string" || !value.trim()) return fallback;
     try {
       const url = new URL(value, window.location.origin);
-      return ["http:", "https:"].includes(url.protocol) ? url.href : fallback;
+      return ["http:", "https:"].includes(url.protocol) && !url.username && !url.password ? url.href : fallback;
     } catch {
       return fallback;
     }
@@ -68,7 +69,8 @@
   const APPROVED_RELEASE_STATUSES = new Set(["passed", "published"]);
 
   function isApprovedRelease(release) {
-    return APPROVED_RELEASE_STATUSES.has(String(release?.status || "").trim().toLowerCase());
+    return release?.isLiveVisible !== false
+      && APPROVED_RELEASE_STATUSES.has(String(release?.status || "").trim().toLowerCase());
   }
 
   function catalogState(release) {
@@ -448,36 +450,6 @@
     setHeadMeta('meta[name="twitter:image"]', artwork.src);
   }
 
-  const CATALOG_FRAME_MIN_HEIGHT = 960;
-
-  function sharedCatalogFrameUrl() {
-    const url = new URL("/song-catalog/", window.location.origin);
-    url.searchParams.set("embed", "shop");
-    url.searchParams.set("parentOrigin", window.location.origin);
-    return url.toString();
-  }
-
-  function syncSharedCatalogFrameHeight(nextHeight) {
-    if (!elements.sharedCatalogFrame) return;
-    const safeHeight = Number(nextHeight);
-    if (!Number.isFinite(safeHeight) || safeHeight < 0) return;
-    elements.sharedCatalogFrame.style.height = `${Math.max(CATALOG_FRAME_MIN_HEIGHT, Math.ceil(safeHeight))}px`;
-  }
-
-  function handleSharedCatalogFrameMessage(event) {
-    if (event.origin !== window.location.origin) return;
-    if (!event.data || event.data.type !== "halo-song-catalog-height") return;
-    if (event.source !== elements.sharedCatalogFrame?.contentWindow) return;
-    syncSharedCatalogFrameHeight(event.data.height);
-  }
-
-  function loadSharedCatalogFrame() {
-    const frame = elements.sharedCatalogFrame;
-    if (!frame || frame.dataset.loaded === "true") return;
-    frame.src = frame.dataset.src || sharedCatalogFrameUrl();
-    frame.dataset.loaded = "true";
-  }
-
   function releaseArtwork(release) {
     const src = safeUrl(release?.artwork, fallbackArtwork);
     const fallbackSrc = safeUrl(fallbackArtwork, fallbackArtwork);
@@ -521,6 +493,34 @@
     return [release.duration, release.bpm ? `${release.bpm} BPM` : "", release.musicalKey]
       .filter(Boolean)
       .join(" · ");
+  }
+
+  function catalogMetadataMarkup(release) {
+    const catalog = catalogState(release);
+    const genres = Array.isArray(release.genres) ? release.genres.filter(Boolean).join(" · ") : "";
+    const bpm = Number(release.bpm);
+    const facts = [
+      ["Collection", release.albumTitle || catalog.albumTitle || "Not supplied"],
+      ["Label", "Not supplied"],
+      ["Genre", genres || catalog.genre || "Not supplied"],
+      ["Duration", release.duration || "Not supplied"],
+      ["Tempo", Number.isFinite(bpm) && bpm > 0 ? `${bpm} BPM` : "Not supplied"],
+      ["Key", release.musicalKey || "Not supplied"]
+    ];
+    return `<dl class="catalog-metadata">${facts.map(([label, value]) => `<div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd></div>`).join("")}</dl>`;
+  }
+
+  function hasChartActivity(release) {
+    const activity = release.chartActivity;
+    const values = ["recentListens", "recentOpens", "previousListens", "previousOpens"].map(key => activity?.[key]);
+    return values.every(value => typeof value === "number" && Number.isSafeInteger(value) && value >= 0)
+      && values.some(value => value > 0);
+  }
+
+  function catalogFeedbackMarkup(release) {
+    if (!hasChartActivity(release)) return '<p class="catalog-feedback">No recorded chart activity available.</p>';
+    const activity = release.chartActivity;
+    return `<p class="catalog-feedback"><span>Recorded activity · last 7 days</span><strong>${activity.recentListens} listen exits · ${activity.recentOpens} release-room opens</strong></p>`;
   }
 
   function releaseStoryline(release) {
@@ -570,8 +570,7 @@
     const activity = release.chartActivity || {};
     const recent = Number(activity.recentListens || 0) * 8 + Number(activity.recentOpens || 0) * 3;
     const previous = Number(activity.previousListens || 0) * 8 + Number(activity.previousOpens || 0) * 3;
-    const freshness = Math.max(0, 30 - releaseAgeInDays(release)) / 3;
-    return { recent, previous, score: recent * 2 + previous + freshness };
+    return { recent, previous, score: recent * 2 + previous };
   }
 
   function movementFor(release) {
@@ -603,13 +602,13 @@
           logMusicIssue("music_chart_eligibility_skipped", "Release skipped from chart: not chart-eligible", { releaseId: release.id, title: release.title, isCleanVersion: release.isCleanVersion });
           return false;
         }
-        return releaseMatchesRoom(release);
+        return hasChartActivity(release) && releaseMatchesRoom(release);
       })
       .map(release => ({ release, signal: chartSignal(release) }));
     if (state.chartSort === "newest") {
       entries.sort((a, b) => new Date(b.release.releaseDate).getTime() - new Date(a.release.releaseDate).getTime());
     } else if (state.chartSort === "listens") {
-      entries.sort((a, b) => b.signal.recent - a.signal.recent || new Date(b.release.releaseDate).getTime() - new Date(a.release.releaseDate).getTime());
+      entries.sort((a, b) => b.release.chartActivity.recentListens - a.release.chartActivity.recentListens || new Date(b.release.releaseDate).getTime() - new Date(a.release.releaseDate).getTime());
     } else if (state.chartSort === "opens") {
       entries.sort((a, b) => (b.release.chartActivity?.recentOpens || 0) - (a.release.chartActivity?.recentOpens || 0) || new Date(b.release.releaseDate).getTime() - new Date(a.release.releaseDate).getTime());
     } else {
@@ -818,8 +817,8 @@
     renderChartSort();
     if (!releases.length) {
       state.activeReleaseId = "";
-      elements.chartBoard.innerHTML = `<div class="chart-empty"><strong>This room is waiting for its first signal.</strong><p>Tag a published release with this room’s genre and it enters the live ranking automatically.</p></div>`;
-      elements.chartStage.innerHTML = `<div class="stage-empty"><span class="stage-number">0</span><p>No qualifying releases are published in this chart room yet.</p></div>`;
+      elements.chartBoard.innerHTML = `<div class="chart-empty"><strong>No recorded chart activity in this room yet.</strong><p>Rankings appear only for eligible published releases with recorded listening clicks or release-room opens.</p></div>`;
+      elements.chartStage.innerHTML = `<div class="stage-empty"><span class="stage-number">—</span><p>Browse the song catalog below. Releases without activity remain available there.</p></div>`;
       return;
     }
     if (!releases.some(release => release.id === state.activeReleaseId)) state.activeReleaseId = releases[0].id;
@@ -924,8 +923,6 @@
     const previewUrl = trackStreamUrl(release);
     const related = relatedReleases(release);
     const dossier = releaseDossier(release);
-    const versionCount = Number(catalog.versionCount || release.availableVersions?.length || 0);
-    const saleEnabledCount = Number(catalog.saleEnabledVersionCount || 0);
     const availableVersions = (release.availableVersions || []).filter(Boolean).slice(0, 4);
     const artistContext = related.length
       ? `Related songs by ${release.artist} stay grouped here so the artist controls one public listening and support surface.`
@@ -936,16 +933,12 @@
         <strong class="shop-badge">${escapeHtml(availability.badge)}</strong>
         <p class="availability-note">${escapeHtml(availability.note)}</p>
         ${previewUrl ? `<div class="preview-shell"><span>Direct preview</span><p>Press play to stream this release in the HALO player bar while you keep browsing the shop.</p></div>` : `<div class="preview-shell"><span>Public listening</span><p>Use the listen link for the approved public destination. Direct in-page audio appears automatically when the shared catalog points to a preview-safe stream.</p></div>`}
-        <dl class="shop-facts">
-          <div><dt>Catalog source</dt><dd>${catalog.source === "song-catalog" ? "Shared song catalog" : "Published release campaign"}</dd></div>
-          <div><dt>Versions mapped</dt><dd>${versionCount || "—"}</dd></div>
-          <div><dt>Sale-enabled versions</dt><dd>${saleEnabledCount || "—"}</dd></div>
-        </dl>
       </section>
       <section class="shop-artist-card" aria-label="Artist context and related songs">
         <span class="shop-eyebrow">Artist context</span>
         <strong>${escapeHtml(release.artist)}</strong>
         <p>${escapeHtml(artistContext)}</p>
+        ${catalogMetadataMarkup(release)}
         <ul class="release-dossier">${dossier.map(dossierItemMarkup).join("")}</ul>
         <div class="version-pill-row">${availableVersions.length ? availableVersions.map(version => `<span class="version-pill">${escapeHtml(version)}</span>`).join("") : '<span class="version-pill">Artist-controlled release path</span>'}</div>
         <div class="related-release-list">${related.length ? related.map(item => `<button class="related-release" type="button" data-select-release="${escapeHtml(item.id)}">${escapeHtml(item.title)}</button>`).join("") : '<a class="related-release related-release-link" href="/artists/">Browse HALO artist rooms</a>'}</div>
@@ -1005,7 +998,7 @@
     const query = state.query.toLowerCase();
     const filtered = state.releases.filter(release => {
       const matchesGenre = state.genre === "all" || release.genres.some(genre => genre.toLowerCase() === state.genre);
-      const haystack = [release.title, release.artist, release.pitch, ...release.genres].join(" ").toLowerCase();
+      const haystack = [release.title, release.artist, release.albumTitle, catalogState(release).albumTitle, release.pitch, ...release.genres].join(" ").toLowerCase();
       return matchesGenre && (!query || haystack.includes(query));
     });
     if (state.sort === "oldest") {
@@ -1031,31 +1024,29 @@
   function renderGrid() {
     const releases = filteredReleases();
     elements.count.textContent = `${state.releases.length} ${state.releases.length === 1 ? "release" : "releases"} · one link`;
+    if (elements.results) elements.results.textContent = `Showing ${releases.length} of ${state.releases.length} releases`;
+    if (elements.reset) elements.reset.hidden = !state.query && state.genre === "all";
     if (!releases.length) {
-      elements.grid.innerHTML = `<div class="catalog-empty"><div><strong>No signal found.</strong><p>Try another title, artist, or genre to restore the full transmission.</p><button type="button" id="clearCatalogFilters">Clear filters</button></div></div>`;
-      document.querySelector("#clearCatalogFilters")?.addEventListener("click", () => {
-        state.query = "";
-        state.genre = "all";
-        elements.search.value = "";
-        renderGenres();
-        renderGrid();
-      });
+      elements.grid.innerHTML = state.releases.length
+        ? `<div class="catalog-empty"><div><strong>No matching releases.</strong><p>Try another title, artist, collection, or genre.</p><button type="button" id="clearCatalogFilters">Clear filters</button></div></div>`
+        : `<div class="catalog-empty"><div><strong>No published releases available yet.</strong><p>Approved public releases will appear here when they are published.</p></div></div>`;
+      document.querySelector("#clearCatalogFilters")?.addEventListener("click", resetCatalogFilters);
       return;
     }
-    elements.grid.innerHTML = releases.map((release, index) => {
+    elements.grid.innerHTML = releases.map(release => {
       const artwork = releaseArtwork(release);
      const availability = availabilitySummary(release);
      const dossier = releaseDossier(release).slice(0, 2);
      const cardKicker = release.featuredType === "week"
        ? "Song of the Week"
-       : (release.featuredType === "month" ? "Song of the Month" : "Editorial pick");
+       : (release.featuredType === "month" ? "Song of the Month" : "Published release");
      const cardDateLabel = release.releaseDate ? formatReleaseDate(release.releaseDate) : "";
      const cardGuide = trackStreamUrl(release)
        ? ` tabindex="0" data-halo-guide="Preview ${escapeHtml(release.title)} in the HALO player bar while you keep browsing." data-halo-guide-title="Quick listen" data-halo-guide-action="quick-listen"`
        : "";
      return `<article class="release-card" data-halo-guide-scope>
-      <div class="card-art release-artwork-frame" data-artwork-frame${cardGuide}><img class="release-artwork-image" src="${escapeHtml(artwork.src)}" alt="${escapeHtml(`${release.title} cover artwork`)}" loading="lazy" width="900" height="900" data-release-artwork data-artwork-fallback="${escapeHtml(artwork.fallback)}" ${artworkAttributes(artwork)}><span class="card-number">${String(index + 1).padStart(2, "0")}</span></div>
-     <div class="card-copy"><p class="card-kicker"><span>${escapeHtml(cardKicker)}</span>${cardDateLabel ? `<span>${escapeHtml(cardDateLabel)}</span>` : ""}</p>${releaseMeta(release)}<h3>${escapeHtml(release.title)}</h3><p class="card-artist">${escapeHtml(release.artist)}</p><p class="card-availability">${escapeHtml(availability.badge)}</p><p class="card-pitch">${escapeHtml(releaseStoryline(release))}</p><ul class="card-facts">${dossier.map(dossierItemMarkup).join("")}</ul>${releaseActions(release, { includeSelect: true })}</div>
+      <div class="card-art release-artwork-frame" data-artwork-frame${cardGuide}><img class="release-artwork-image" src="${escapeHtml(artwork.src)}" alt="${escapeHtml(`${release.title} cover artwork`)}" loading="lazy" width="900" height="900" data-release-artwork data-artwork-fallback="${escapeHtml(artwork.fallback)}" ${artworkAttributes(artwork)}></div>
+     <div class="card-copy"><p class="card-kicker"><span>${escapeHtml(cardKicker)}</span>${cardDateLabel ? `<span>${escapeHtml(cardDateLabel)}</span>` : ""}</p>${releaseMeta(release)}<h3>${escapeHtml(release.title)}</h3><p class="card-artist">${escapeHtml(release.artist)}</p><p class="card-availability">${escapeHtml(availability.badge)}</p><p class="card-pitch">${escapeHtml(releaseStoryline(release))}</p>${catalogMetadataMarkup(release)}${catalogFeedbackMarkup(release)}${trackStreamUrl(release) ? "" : '<p class="catalog-preview-note">In-page preview unavailable. Use an approved listening link if provided.</p>'}<ul class="card-facts">${dossier.map(dossierItemMarkup).join("")}</ul>${releaseActions(release, { includeSelect: true })}</div>
     </article>`;
     }).join("");
     player.syncButtons(elements.grid);
@@ -1071,6 +1062,16 @@
     elements.grid.innerHTML = markup;
     document.querySelectorAll("#retryCatalog").forEach(button => button.addEventListener("click", loadCatalog));
     elements.count.textContent = "Catalog unavailable";
+    if (elements.results) elements.results.textContent = "Releases could not be loaded. Try again.";
+  }
+
+  function resetCatalogFilters() {
+    state.query = "";
+    state.genre = "all";
+    elements.search.value = "";
+    renderGenres();
+    renderGrid();
+    elements.search.focus();
   }
 
   async function loadCatalog() {
@@ -1179,11 +1180,6 @@
   }
   player.mount();
   elements.address.textContent = `${window.location.host}${shopPath().replace(/\/$/, "")}`;
-  window.addEventListener("message", handleSharedCatalogFrameMessage);
-  elements.catalogWorkspace?.addEventListener("toggle", () => {
-    if (elements.catalogWorkspace.open) loadSharedCatalogFrame();
-  });
-  if (elements.catalogWorkspace?.open) loadSharedCatalogFrame();
   elements.copy.addEventListener("click", copyCatalogAddress);
   elements.share.addEventListener("click", shareCatalog);
   elements.featured.addEventListener("change", event => {
@@ -1196,6 +1192,7 @@
     handleReleaseActionClick(event).catch(() => showToast("That song link could not be shared yet."));
   });
   elements.search.addEventListener("input", event => { state.query = event.target.value.trim(); renderGrid(); });
+  elements.reset?.addEventListener("click", resetCatalogFilters);
   elements.sort?.addEventListener("change", event => { state.sort = event.target.value; renderGrid(); });
   elements.genres.addEventListener("click", event => {
     const button = event.target.closest("[data-genre]");

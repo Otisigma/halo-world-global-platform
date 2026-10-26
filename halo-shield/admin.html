@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow, noarchive">
+  <meta name="referrer" content="no-referrer">
+  <title>Halo Shield · Operator telemetry</title>
+  <link rel="stylesheet" href="/halo-shield/shield.css">
+  <script src="/halo-shield/admin.js" defer></script>
+</head>
+<body>
+  <header><a href="/halo-shield/">Halo Shield</a><span>Operator access</span></header>
+  <main>
+    <p class="eyebrow">PRIVATE TELEMETRY / AUTHENTICATION REQUIRED</p>
+    <h1>Shield operations<span aria-hidden="true">.</span></h1>
+    <p class="description">Read the latest internal report. Access is checked on the server. Credentials are not saved; clear the report when finished.</p>
+    <form id="operator-form">
+      <label for="operator-token">Operator token</label>
+      <input id="operator-token" type="password" autocomplete="off" required>
+      <button type="submit">Read telemetry</button>
+      <button id="clear-report" type="button">Clear report</button>
+    </form>
+    <p id="operator-status" role="status" aria-live="polite">Locked. No telemetry loaded.</p>
+    <pre id="operator-report" hidden></pre>
+  </main>
+</body>
+</html>

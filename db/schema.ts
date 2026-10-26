@@ -12,6 +12,7 @@ export const songs = pgTable("halo_song_catalog", {
   upc: text("upc").notNull().default(""),
   genre: text("genre").notNull().default(""),
   explicitLyrics: boolean("explicit_lyrics").notNull().default(false),
+  broadcastRequested: boolean("broadcast_requested").notNull().default(false),
   rightsStatus: text("rights_status").notNull().default("needs_review"),
   saleStatus: text("sale_status").notNull().default("for_sale"),
   salePriceCents: integer("sale_price_cents"),
@@ -103,6 +104,20 @@ export const songVersions = pgTable("halo_song_versions", {
   uniqueIndex("halo_song_versions_single_active_master_idx").on(table.songId)
     .where(sql`version_type = 'sale_master' AND status = 'active'`),
 ]);
+
+export const releaseAssets = pgTable("halo_release_assets", {
+  songId: text("song_id").primaryKey().references(() => songs.id, { onDelete: "cascade" }),
+  masterVersionId: text("master_version_id").notNull().references(() => songVersions.id, { onDelete: "cascade" }),
+  canonicalMasterUrl: text("canonical_master_url").notNull(),
+  visualAct1: text("visual_act_1").notNull(),
+  visualAct2: text("visual_act_2").notNull(),
+  visualAct3: text("visual_act_3").notNull(),
+  visualAct4: text("visual_act_4").notNull(),
+  customImages: jsonb("custom_images").notNull().default([]),
+  revision: text("revision").notNull(),
+  status: text("status").notNull().default("ready"),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
 
 export const dreamweaverSongReviews = pgTable("halo_dreamweaver_song_reviews", {
   id: text("id").primaryKey(),

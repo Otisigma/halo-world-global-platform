@@ -3,9 +3,37 @@
   publish = "."
 
 [[redirects]]
+  from = "/netlify/*"
+  to = "/404.html"
+  status = 404
+  force = true
+
+[[redirects]]
+  from = "/halo-shield/"
+  to = "/halo-shield/index.html"
+  status = 200
+  force = true
+
+[[headers]]
+  for = "/halo-shield/admin*"
+  [headers.values]
+    Cache-Control = "no-store"
+    X-Robots-Tag = "noindex, nofollow, noarchive"
+    Referrer-Policy = "no-referrer"
+    Content-Security-Policy = "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'"
+
+[[redirects]]
   from = "/dj-vault/"
   to = "/dj-vault/index.html"
   status = 200
+
+[[headers]]
+  for = "/halo-shield/preflight*"
+  [headers.values]
+    Cache-Control = "no-store"
+    X-Robots-Tag = "noindex, nofollow, noarchive"
+    Referrer-Policy = "no-referrer"
+    Content-Security-Policy = "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; media-src 'self'; frame-src https://drive.google.com; base-uri 'none'; frame-ancestors 'none'; form-action 'none'"
 
 [[redirects]]
   from = "/dj-vault/upload/"
@@ -356,6 +384,12 @@
 [[redirects]]
   from = "/song-catalog/"
   to = "/song-catalog/index.html"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/pricing/"
+  to = "/pricing/index.html"
   status = 200
   force = true
 

@@ -1,5 +1,6 @@
 import { normalizeHttpsList } from "/music-upload/link-validation.js";
 import { sanitizeDreamweaverAssignedRoute } from "/lib/dreamweaver-storefront.js";
+import { loadDreamweaverUploadShow, pendingDreamweaverUploadShow } from "/lib/dreamweaver-upload.js";
 
 const $ = selector => document.querySelector(selector);
 let uploadHelperLoadPromise = null;
@@ -92,7 +93,7 @@ const STAGE_LABEL = {
   uploaded: "Received",
   processing: "Validated",
   needs_assets: "Needs attention",
-  dreamweaver_in_progress: "Built",
+  dreamweaver_in_progress: "Processing",
   ready_for_radio: "Routed",
   ready_for_sale: "Ready for sale",
   approved: "Approved",
@@ -433,16 +434,20 @@ function renderResults() {
       ? `<p class="result-note needs-attention">${escapeHtml(result.needsAttention)}</p>`
       : `<p class="result-note">${escapeHtml(result.summary)}</p>`;
     const nextStepNote = result.nextStep ? `<p class="result-next-step">${escapeHtml(result.nextStep)}</p>` : "";
-    const satelliteRoute = resolveDreamweaverExperienceUrl(result.dreamweaverSatellite);
+    const show = result.dreamweaverShow || pendingDreamweaverUploadShow(result);
+    const satelliteRoute = show.ready ? show.route : "";
     const satelliteLoopId = typeof result.dreamweaverSatellite?.agentLoop?.id === "string" ? result.dreamweaverSatellite.agentLoop.id : "";
     const studioRoute = satelliteRoute ? `${satelliteRoute}${satelliteRoute.includes("?") ? "&" : "?"}experience=studio` : "";
-    const satelliteReceipt = satelliteRoute
-      ? `<div class="result-satellite">
-          <a href="${escapeHtml(satelliteRoute)}" target="_blank" rel="noopener noreferrer">Open Dreamweaver storefront ↗</a>
+    const satelliteReceipt = `<div class="result-satellite">
+          <p role="status">${escapeHtml(show.message)}</p>
+          ${satelliteRoute
+            ? `<a class="quiet-button" href="${escapeHtml(satelliteRoute)}" target="_blank" rel="noopener noreferrer">Open this song in Dreamweaver ↗</a>`
+            : '<button class="quiet-button" type="button" disabled>Open this song in Dreamweaver — not ready</button>'}
           ${studioRoute ? `<a href="${escapeHtml(studioRoute)}" target="_blank" rel="noopener noreferrer">Create promo film ↗</a>` : ""}
+          <a href="/song-catalog/" target="_blank" rel="noopener noreferrer">Manage assets, review and publication ↗</a>
+          <button class="quiet-button" type="button" data-check-dreamweaver="${escapeHtml(result.songId)}">Check readiness</button>
           ${satelliteLoopId ? `<small>Agent loop: ${escapeHtml(satelliteLoopId)}</small>` : ""}
-        </div>`
-      : "";
+        </div>`;
     return `
       <article class="result-card">
         <div class="result-topline">
@@ -742,9 +747,11 @@ async function processPackage({ artistName, title, albumTitle, genre, isrc, upc,
   );
   const pipeline = await apiJson("/api/unified-upload", { action: "advance_pipeline", songId: created.songId, toStage: finalStage });
   const song = await loadCatalogSong(created.songId).catch(() => null);
+  const dreamweaverShow = await loadDreamweaverUploadShow(song || { songId: created.songId, pipelineStatus: pipeline.pipelineStatus });
   const issueCount = Array.isArray(song?.metadataIssues) ? song.metadataIssues.filter(issue => issue.level === "required").length : 0;
   return {
     songId: created.songId,
+    dreamweaverShow,
     title,
     artistName,
     surfaceLabel: "Halo Music Upload",
@@ -765,7 +772,7 @@ async function processPackage({ artistName, title, albumTitle, genre, isrc, upc,
         ? `Needs attention: Dreamweaver review found ${issueCount} blocking item${issueCount === 1 ? "" : "s"} in the catalog package.`
         : "",
     nextStep: finalStage === "dreamweaver_in_progress"
-      ? "Next: Dreamweaver now processes this locked package. Open the song satellite page, then launch campaign studio to create a promo film."
+      ? "Next: Complete rights and review in Song Catalog, then publish when you choose. Check readiness here after publication."
       : "Next: Upload remaining assets. This package is saved; remove or replace files only if needed.",
     dreamweaverSatellite: pipeline.dreamweaverSatellite || created.dreamweaverSatellite || null,
     artworkSourceSongId: nextArtworkSourceSongId,
@@ -891,6 +898,21 @@ elements.form.querySelectorAll('input[name="routeTargets"], #officialLink, #vide
 });
 elements.runtimeRetryButton.addEventListener("click", handleRuntimeRetry);
 elements.form.addEventListener("submit", handleSubmit);
+elements.resultsList.addEventListener("click", async event => {
+  const button = event.target.closest("[data-check-dreamweaver]");
+  if (!button) return;
+  const result = state.results.find(item => item.songId === button.dataset.checkDreamweaver);
+  if (!result) return;
+  button.disabled = true;
+  try {
+    const song = await loadCatalogSong(result.songId);
+    result.dreamweaverShow = await loadDreamweaverUploadShow(song || result);
+    if (song) result.pipelineStatus = song.pipelineStatus;
+  } catch {
+    result.dreamweaverShow = pendingDreamweaverUploadShow(result);
+  }
+  renderResults();
+});
 window.addEventListener("message", handleSharedCatalogFrameMessage);
 renderControllerTimeline();
 renderQueue();

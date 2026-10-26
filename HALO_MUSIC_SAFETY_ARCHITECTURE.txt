@@ -1,0 +1,350 @@
+HALO MUSIC: GOVERNED, AUDITED, REVERSIBLE WORKFLOW
+Specification v1 | Status: proposed architecture + offline executable contract
+
+1. SCOPE AND HONEST SAFETY CLAIM
+
+Halo Shield presentation integration:
+- /halo-shield/ is an outcome-only Halo Music status surface. It does not enable
+  a defense engine or change the Dreamweaver/release-conveyor safeguards below.
+  PR #406 supplied no Porcupine Edge implementation; connecting that producer
+  remains a deployment prerequisite, not a claim made by this UI.
+- GET /api/halo-shield returns only fixed brand/service labels, verification,
+  windowStart, observedAt and outcomes (protected/healthy booleans and
+  blocked/isolated non-negative integer counts). Missing, invalid, future-dated
+  or older-than-five-minute reports yield unavailable status and null outcomes.
+- A trusted server-side producer can POST /api/halo-shield/internal using the
+  existing STATS_ADMIN_TOKEN bearer credential over HTTPS. Never embed this
+  credential in an edge/public bundle. Keep production credentials in the
+  deployment secret store, not URLs, source files or reports.
+- Report contract: windowStart and observedAt are ISO timestamps describing the
+  same reporting window; outcomes contains protected, healthy, blocked, isolated.
+  Additional forensic fields such as telemetry are retained privately, not
+  copied into the public response. The report body is limited to 64 KiB.
+  Publish measured outcomes only; maintenance repairs are not blocked attacks.
+- The Netlify Blobs store halo-shield-private retains the latest report only.
+  Producers must retain their existing forensic history; this is not a replacement
+  for their audit ledger. Public "verified" means a current authenticated producer
+  report, not independent certification of its contents.
+- GET /api/halo-shield/internal requires the same operator authentication and
+  returns the complete latest report, including forensic fields. The optional
+  /halo-shield/admin.html shell loads no telemetry until the server authenticates.
+  Its token is not persisted, and reports clear on hiding/leaving the page.
+- Netlify runs these APIs; the local Express static preview has no Shield data
+  adapter and deliberately shows awaiting verification, never synthetic success.
+  Run npm run test:halo-shield for boundary, validation, theme and UI contracts.
+
+Protect artist masters, rights/consent, private metadata, payments, catalog
+publication and playback continuity. "No unfixed faults" means no invisible,
+unowned or falsely closed faults; it cannot mean zero defects, zero data loss
+or instantaneous failover under every partition. Containment is not a fix.
+Availability never justifies publishing without rights or discarding a master.
+
+The workflow planner below does NOT enable a production council, autonomous repairs, redundant
+storage, a new API, or a deployment controller. Existing endpoints retain their
+behavior. netlify/lib/music-safety-contract.mjs is a pure transition planner;
+scripts/music-safety-contracts.mjs exercises it with synthetic attestations.
+Run npm run test:music-safety; npm test also runs it through posttest.
+Do not import the planner into a mutating endpoint until section 10 is met.
+
+2. EXISTING SYSTEM AND BOUNDARY
+
+HALO_AI_COMMITTEE_WORKFLOW.md defines Builder, Verifier and Committee evidence
+roles. Retain its PR review and human acceptance process.
+services/djCouncilEngine.js is a deterministic DJ mix quality gate, not an
+authorization service or a general-purpose governance quorum.
+netlify/functions/maintenance-issues.mjs and
+netlify/lib/maintenance-issues-validation.mjs track maintenance status.
+The latter permits healed with verificationUnavailableReason: that is NOT
+sufficient for this specification's verified/closed states.
+netlify/lib/halo-ledger.mjs and netlify/functions/halo-ledger.mjs are existing
+ledger integration points, not proof of atomic governance audit persistence.
+netlify/functions/unified-upload.mjs and netlify/functions/upload-pipeline.mjs
+are upload integration boundaries; release-conveyor functions and
+netlify/lib/release-conveyor-service.mjs are release orchestration boundaries.
+netlify/lib/release-conveyor.mjs already has a single-song councilDecision gate;
+the conveyor's leases and events should be reused, not confused with independent
+multi-brain authorization or a cross-system audit transaction.
+Future adapters reference existing song, upload and issue IDs; do not create a
+competing catalog, rewrite upload states or replace existing DJ quality gates.
+
+3. LAYERS, AUTHORITY AND TRUST
+
+Artist/request -> domain recommendations -> council -> safety arbiter
+              -> transactional orchestrator/outbox -> bounded execution adapter
+              -> independent verification -> audit/repair reconciliation
+Human operators may freeze/isolate/restore through a separate audited channel.
+
+Local domain brains:
+- Ingestion/storage: resumability, checksums, replica lag and durable completion.
+- Audio: format/preflight, derivative quality, loudness and playback health.
+- Catalog/rights: metadata consistency, territory/consent, publication eligibility.
+- Delivery/commerce: availability, entitlement and settlement consistency.
+- Support/operations: artist communication, incident severity and ownership.
+Brains receive least-privilege read snapshots and produce proposals, never
+storage credentials, direct writes, deployment permissions or final approval.
+Uploaded text, tags and model output are untrusted data, not instructions.
+
+Council: three registered, separately authenticated seats using distinct paths:
+deterministic domain rules, adversarial reasoning, and independent replay/runtime
+validation. Different prompts to the same model are not sufficient diversity.
+For v1 all THREE must approve with evidence: 3-of-3 quorum. Missing response,
+abstention, veto, stale evidence or disagreement blocks progression, even if
+two approve. The fix owner cannot vote. Confidence is advisory, not authority.
+Conflicts produce a decision record naming disputed assumptions, requested
+experiments and a deadline. Owner revises proposal, independent validators rerun,
+then council votes again; no loop may silently weaken requirements.
+
+Top-level safety arbiter: deterministic policy enforcement outside the reasoning
+models; separate identity from owner and all council seats. Checks rights,
+blast radius, approvals, rollback, compatibility, audit and freeze status.
+It may deny or escalate, never invent evidence or bypass a failed council.
+High/critical risk also requires an authenticated human release approval distinct
+from the council and arbiter. Unknown risk is classified high until reviewed.
+
+Audit & repair: durable issue register, evidence store, append-only decision log,
+deadline sweeper, drift detection and reconciliation. At least one independent
+monitor uses raw storage/queue/catalog observations rather than brain summaries.
+Audit writers cannot erase history; a repair creates a new event.
+
+Human override: scoped freeze, isolate a brain, stop promotion, revoke execution
+leases and restore known-good state. Require identity, reason, ticket, scope,
+expiry and notification. Two human operators approve destructive recovery,
+rights/payment changes or unfreezing a high-risk incident. Override is never an
+unlogged policy bypass: consent, evidence and audit remain mandatory. Emergency
+containment can stop writes immediately; durable local emergency logging and
+operator notification must exist when the central audit store is unavailable.
+Reconcile that log before restart. The starter planner intentionally implements
+no override, freeze writer, emergency logger or recovery transition.
+
+4. ISSUE AND CHANGE LIFECYCLE
+
+Every incident AND upgrade follows these normal forward states. Each transition
+has actor, time, expected revision, request ID, proposal digest and audit event.
+Blocked work remains in its current state with a reason and escalation timer;
+blocked/contained is never treated as closed.
+
+State        Entry evidence / accountable role / exit condition
+detected     Durable signal + correlation ID; operations on-call is initial owner.
+classified   Domain + severity + affected artists/assets/territories; triage owner.
+assigned     Named accountable principal, backup rotation, deadline and acknowledgement.
+planned      Immutable proposal: artifact, policy, environment, target scope,
+             rollback procedure and independent verification procedure; fix owner.
+simulated    Sandbox/replay results, mixed-version compatibility and successful
+             rollback rehearsal on representative data; validation team.
+reviewed     Three independent approvals, arbiter permit, high-risk human approval;
+             unresolved dissent blocks; release manager owns the decision.
+limited      Shadow (no writes or public output) or bounded canary; release operator
+             uses a scoped execution lease and a predeclared observation window.
+verified     Independent verifier, not fix owner, confirms limited health and
+             expected behavior against the proposal; no "verification unavailable".
+expanded     Controlled promotion through predeclared cohorts; release operator.
+closed       Expanded observation AND catalog/rights/replica reconciliation pass,
+             artist impact resolved, evidence retained; issue owner + verifier.
+
+Detection must atomically assign the on-call owner; if routing fails use the
+incident commander fallback. Provisional classification/owner at detection avoids
+an unowned interval. A later reassignment is acknowledged and audited, never
+clears ownership. Initial response targets (operational policy, not claims about
+current automation): critical page immediately, acknowledge within 5 minutes,
+contain within 15 minutes; high acknowledge within 30 minutes, plan within 4 hours;
+medium/low acknowledge within one business day, agree a dated remediation plan.
+Missed deadline pages backup then incident commander after 5 further minutes.
+Overdue issues stay open and visible; no automatic downgrade or risk acceptance
+closes a critical issue. Report every unresolved fault, next check and owner.
+
+Failures at any stage record evidence, stop forward promotion and open/retain a
+repair incident. Rollback/containment are separate audited emergency commands,
+NOT backwards normal transitions or a shortcut to closed. After rollback start a
+new proposal attempt linked to the incident; old evidence and decisions persist.
+Any material proposal change invalidates old attestations and requires a new
+digest and re-review. Production revision/attempt handling is an adapter task.
+
+5. GUARANTEES AND ENFORCEMENT POINTS
+
+No critical issue unowned: mandatory owner/deadline on every planner transition;
+production detection transaction, on-call fallback and ownership sweeper required.
+No high-risk deploy without approval: council + independent arbiter + human proof
+bound to the exact proposal; missing/expired proof fails closed.
+No silent override: separate audited human command with expiry and notification;
+starter has no bypass flag or override execution.
+No rollout without rollback: plan plus successful rehearsal required before
+simulation/review and every later transition.
+No fix without verification: limited independent verification before expansion;
+expanded observation and reconciliation before closure.
+No state change without audit: planner requires audit readiness and returns an
+audit INTENT only; production transaction must commit state + append-only event +
+outbox together, or none. A log call after a write is insufficient.
+No partial upgrade without compatibility: attestations and runtime version
+fencing required; incompatibility pauses consumers, not silently drops jobs.
+
+6. INTERFACES AND ORCHESTRATION CONTRACT
+
+All remote messages: schemaVersion, requestId/idempotencyKey, correlationId,
+issueId, proposalDigest, policyVersion, sender identity, timestamp, expiry.
+Authenticate the transport and producer. Reject unknown schemas, oversized input,
+replayed requests, stale snapshots and unauthorized roles server-side.
+
+DomainSnapshot -> Recommendation:
+  input: immutable snapshot refs/checksums, domain, supported versions, scope.
+  output: brain/version, recommendation, risk, confidence, evidence refs,
+          assumptions, dissent, validationPath, proposed bounded actions.
+CouncilRequest -> CouncilDecision:
+  input: immutable proposal + authenticated recommendations + registered seats.
+  output: per-seat vote/evidence, dissent, decision rationale, expiry.
+SafetyRequest -> Permit/Denial:
+  input: proposal, council decision, policy, live freeze/audit/rights state.
+  output: scoped single-use permit or reasons/escalation; no direct execution.
+Execute -> ExecutionReceipt:
+  input: permit, expected revision, idempotency key, bounded cohort, deadline.
+  output: job/attempt IDs, side-effect refs, checksums, observed version, failures.
+Verify -> Attestation:
+  input: independent observations + expected acceptance thresholds.
+  output: passed, actorId, evidenceRef, proposalDigest, checkedAt, expiresAt.
+AuditAppend -> durable event sequence:
+  actor, role, issue, from/to, revision, proposal/policy/artifact versions,
+  evidence refs, votes/dissent/rationale, scope, override and rollback references.
+
+Starter API: planMusicSafetyTransition({
+  record: { id, state, revision, severity, owner, dueAt, proposalDigest,
+            plan: { rollbackRef, verificationRef, mode: "shadow" | "canary" } },
+  to, expectedRevision, actorId, requestId, now,
+  checks: { auditReady, simulation, compatibility, rollback, votes, safety,
+            human, frozen, limitedHealth, verification, expandedHealth,
+            reconciliation }
+}) -> { ok: false, errors } OR { ok: true, auditIntent }.
+All proof objects use the Verify attestation shape; votes additionally carry a
+validationPath. now comes from the trusted server clock, not a caller timestamp.
+Digest is SHA-256 of canonical immutable proposal content including issue ID,
+artifact checksum, plan, severity, policy version, environment and rollout scope.
+Proof references identify retained immutable reports, not arbitrary URLs to fetch.
+
+The planner checks shape, binding, freshness, identity separation and stage gates.
+It does NOT verify signatures, council registration, truth of passed booleans,
+actual diversity, report content, hash canonicalization, RBAC, audit durability,
+replay protection, database locking or actual rollback/observability thresholds.
+Never accept checks from a browser, uploaded metadata or unauthenticated agent.
+Adapters must load an authoritative record, resolve identities against a fixed
+registry, validate evidence and assemble checks server-side. Retain full signed
+attestations alongside the intent's evidence refs.
+
+In one database transaction: lock/CAS expected revision; enforce requestId
+uniqueness; validate permit and fresh authoritative proofs; append audit event;
+update state/revision; insert execution outbox item. Outbox consumers use fenced
+leases and idempotent effects, never assume exactly-once network delivery.
+On uncertain outcome query receipt and reconcile before retry. Dispatch only after
+commit. Recheck freeze, scope, expiry and rights at execution, not only planning.
+Audit outage denies new mutations and promotions; known-good read-only playback
+may continue. No model or council can grant itself additional permissions.
+
+7. UPGRADE, ROLLOUT AND RECOVERY RUNBOOK
+
+Release plan must declare cohort IDs, max assets/jobs, error budget, observation
+duration, minimum samples, stop thresholds, owner and tested rollback artifact.
+Default pilot for reversible internal changes: shadow for at least 24h and 100
+representative jobs, then canary <=1% of eligible internal jobs for 30 minutes and
+100 jobs, then <=10%, <=50%, 100%, each with equivalent health gates. Low traffic
+waits or adds representative replay; it does not waive evidence. Rights, money,
+master deletion or irreversible changes require separately approved manual plans;
+never randomly expose artists to unsafe experiments.
+
+Before shadow: pin policy/model/artifact versions; test current and previous
+producer/consumer schemas, feature flags, queued job replay, database backups,
+restore and regional failover. Upgrade one brain/failure domain at a time.
+Use expand/contract migrations: additive fields first, dual-readable old/new jobs,
+old readers retained until queues drain and rollback window closes. Fence unknown
+job versions into a visible owned quarantine. Never roll all three seats and
+arbiter together. Keep previous known-good binaries and policy available.
+
+Shadow has no publish, payment, notification or storage mutation capability.
+Compare candidate and baseline using independent deterministic rights/checksum
+rules and replay fixtures; disagreement is an incident, not a vote to ignore it.
+Canary uses explicit allowlisted scope, bounded queue concurrency and kill switch.
+Expand only after independent health evidence. Critical rights/consent leak,
+master checksum mismatch, duplicate charge or audit loss: immediate stop, page
+and isolate. Example availability stop: error rate >1% OR >2x baseline for 5
+minutes, or p95 latency >2x baseline for 5 minutes. Insufficient telemetry blocks
+promotion. Product/SRE must approve service-specific thresholds before production.
+
+Recovery: freeze writes/promotions; preserve receipts and evidence; isolate bad
+worker; restore known-good artifact/config; drain or quarantine incompatible jobs;
+verify checksums/rights and replay only idempotent work; independently reconcile
+catalog and replicas; inform affected artists; two-person approval to unfreeze.
+Do not "rollback" irreversible artist exposure or payments by deleting evidence:
+use explicit compensation, notify rights/finance owners and keep incident open.
+Exercise restore and failover quarterly and before risky infrastructure upgrades.
+Set and demonstrate per-service RPO/RTO before launch; do not promise subsecond
+failover or zero loss without measured durability and disaster-recovery evidence.
+
+Music upload safety: retain the original until durable checksum-verified
+completion; resume by upload/session + chunk identity; verify full-object hashes.
+Replica acknowledgement is separate from local/network success. If a required
+replica is unavailable, retain the source, queue bounded retry and show pending
+durability; do not publish or claim redundancy. Derivative jobs consume immutable
+object/version references only after completion. No split-stream success claim
+can replace durable acknowledgements. Workers use idempotency, bounded backoff,
+leases, poison-job quarantine and an owned dead-letter queue.
+
+8. OBSERVABILITY AND COLLECTIVE FAILURE
+
+Measure upload completion/checksum errors, replica lag, queue age/retries/DLQ,
+catalog divergence, rights violations, playback success/latency, audit/outbox lag,
+quorum availability/dissent, approval age, open issues/overdue ownership and
+rollback success. Correlate request -> upload -> job -> song -> decision -> release.
+Separate restricted decision evidence from redacted operational metrics; never
+log raw audio, credentials, payment data or private artist metadata. Proposed
+retention: redacted operational logs 30 days; restricted governance evidence
+365 days, subject to legal/privacy review, access control and deletion policy.
+
+Page on any safety invariant violation or unowned critical signal. Alert owner on
+threshold drift, unexpected agreement/behavior changes or missing telemetry for
+5 minutes; freeze promotions if audit heartbeat or quorum is unavailable.
+Use an out-of-band monitor and manual drill so an unhealthy council cannot report
+itself healthy. Diverse data sources, deterministic checks, adversarial fixtures,
+independent humans and separate provider/failure domains mitigate common-mode
+errors; identical model votes are not independent proof. A single compromised
+reviewer cannot write, suppress dissent or override a safety veto.
+
+Artist-facing status distinguishes receiving, retrying, pending durability,
+processing, quarantined and complete. Notify on material incident, planned upgrade,
+containment, rollback and verified resolution; include impact/next update, never
+private decision evidence. Upgrade notification does not substitute for consent.
+
+9. ENGINEERING HANDOFF (SEPARATE REVIEWED WORK PACKAGES)
+
+Accountable roles below must be assigned to named maintainers before work starts.
+Builder/Verifier/Committee remain separate as in the existing committee workflow.
+No agent receives deployment authority merely by accepting a work package.
+
+A. Operations + data owner: issue register, on-call fallback, deadlines and audit
+   transaction/outbox. Accept when crash injection proves no unaudited state,
+   replay is idempotent, and every critical issue has acknowledged ownership.
+B. Security/policy owner: authenticated registry, proposal hashing, RBAC, evidence
+   retention/signatures, safety arbiter, freeze/override commands. Accept when
+   forged/expired proofs, duplicate identities and silent overrides are denied.
+C. Ingestion/release owner: shadow-only adapter around existing pipeline, then
+   bounded canary/rollback. Accept when worker crash, network loss, duplicate
+   delivery, corrupt chunks and unavailable replica cannot publish unsafe output.
+D. Independent verification/SRE owner: dashboards, chaos/replay, reconciliation,
+   mixed-version and restore drills. Accept when quorum loss, correlated-model
+   error, partial upgrade, audit outage and rollback failure stop promotion and
+   page a human with evidence. Verify canary and expanded windows independently.
+
+Each handoff PR includes scope/non-goals, owner/deadline, fixtures, reproducible
+commands, rollback, Builder evidence, independent Verifier findings and Committee
+decision using .github/pull_request_template.md. Send-back retains ownership.
+Implement A/B before enabling C; D validates each stage. No autonomous repair
+until shadow results and an explicit human production-readiness review pass.
+
+10. PRODUCTION READINESS CHECKLIST (NOT IMPLEMENTED BY THIS PR)
+
+[ ] Named on-call owners, backup rotation, incident severity and deadlines agreed.
+[ ] Atomic issue/audit/outbox persistence, evidence access controls and retention.
+[ ] Authenticated fixed council, independent arbiter, RBAC and replay protection.
+[ ] Human approval, emergency logging, freeze/isolation and dual-control recovery.
+[ ] Version compatibility, fenced jobs, real rollback and tested restore evidence.
+[ ] Independent telemetry, service thresholds, representative shadow/canary data.
+[ ] Existing upload/release adapters tested for bounded idempotent side effects.
+[ ] Artist communications, rights/privacy review, RPO/RTO and human acceptance.
+
+Until all are proven, this is a specification and offline contract, not a claim
+that the live Halo Music platform already enforces these safety guarantees.

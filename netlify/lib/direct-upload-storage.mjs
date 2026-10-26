@@ -4,6 +4,7 @@
 // masters never pass through Netlify function request payloads. Signing uses AWS SigV4 query
 // authentication implemented with node:crypto, so no storage SDK dependency is required.
 import { createHash, createHmac } from "node:crypto";
+import { RESILIENCE_TIERS, createCircuitBreaker, httpStatusError, retryWithBackoff } from "./resilience.mjs";
 
 export const MASTER_UPLOAD_MAX_BYTES = 200 * 1024 * 1024;
 export const MASTER_UPLOAD_URL_TTL_SECONDS = 900;
@@ -129,14 +130,42 @@ export function presignObjectUrl({ config, method = "GET", key, contentType = ""
   return `${origin}${path}?${canonicalQuery}&X-Amz-Signature=${signature}`;
 }
 
-/** Confirms the uploaded object exists server-side without downloading it. Returns its byte size or 0. */
-export async function headStoredObject(config, key, fetchImpl = fetch) {
-  const response = await fetchImpl(presignObjectUrl({ config, method: "HEAD", key, expiresIn: 60 }), { method: "HEAD" });
+// Storage-tier resilience: durability/replication is the object store's job (enable cross-region
+// replication on the bucket); the app bounds latency, retries idempotent HEAD/DELETE calls, and trips
+// a breaker so a storage outage fails fast and new uploads are steered to the backup (Blobs) path.
+export const masterStorageBreaker = createCircuitBreaker({
+  name: "master-storage",
+  failureThreshold: RESILIENCE_TIERS.storage.failureThreshold,
+  resetTimeoutMs: RESILIENCE_TIERS.storage.resetTimeoutMs,
+  onStateChange: ({ name, from, to, failures }) => console.warn(JSON.stringify({ event: "circuit_state_change", breaker: name, from, to, failures })),
+});
+
+/** Health signal used by the presign step to decide whether direct storage should take new uploads. */
+export function masterStorageAvailable(breaker = masterStorageBreaker) {
+  return breaker.isAvailable();
+}
+
+async function storageRequest(config, method, key, fetchImpl, { breaker = masterStorageBreaker, sleep } = {}) {
+  const tier = RESILIENCE_TIERS.storage;
+  return breaker.execute(() => retryWithBackoff(async (_attempt, signal) => {
+    const response = await fetchImpl(presignObjectUrl({ config, method, key, expiresIn: 60 }), { method, signal });
+    if (!response.ok && httpStatusError(response).retryable) throw httpStatusError(response, `Master storage ${method}`);
+    return response;
+  }, { retries: tier.retries, timeoutMs: tier.timeoutMs, baseDelayMs: tier.baseDelayMs, maxDelayMs: tier.maxDelayMs, label: `Master storage ${method}`, ...(sleep ? { sleep } : {}) }));
+}
+
+/**
+ * Confirms the uploaded object exists server-side without downloading it. Returns its byte size, or 0
+ * when storage definitively reports the object missing. Throws a transient error when storage itself
+ * is unreachable so callers never mistake an outage for a missing upload.
+ */
+export async function headStoredObject(config, key, fetchImpl = fetch, options = {}) {
+  const response = await storageRequest(config, "HEAD", key, fetchImpl, options);
   if (!response.ok) return 0;
   return Number(response.headers.get("content-length") || 0);
 }
 
-export async function deleteStoredObject(config, key, fetchImpl = fetch) {
+export async function deleteStoredObject(config, key, fetchImpl = fetch, options = {}) {
   if (!config || !key) return;
-  await fetchImpl(presignObjectUrl({ config, method: "DELETE", key, expiresIn: 60 }), { method: "DELETE" });
+  await storageRequest(config, "DELETE", key, fetchImpl, options);
 }

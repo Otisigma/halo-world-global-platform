@@ -11,10 +11,12 @@ import {
   directUploadConfig,
   headStoredObject,
   isOwnedMasterObjectKey,
+  masterStorageAvailable,
   presignObjectUrl,
   validateMasterUpload,
 } from "../lib/direct-upload-storage.mjs";
 import { MASTER_VERSION_TYPE } from "../lib/master-copy.mjs";
+import { isTransientError } from "../lib/resilience.mjs";
 import { runDreamweaverReview } from "./song-catalog.js";
 
 // Large master copies bypass Netlify function payload limits: this endpoint only exchanges small
@@ -47,6 +49,9 @@ async function ownedMasterVersion(db: Awaited<ReturnType<typeof getDatabase>>, o
 async function presignMasterUpload(payload: Record<string, unknown>, db: Awaited<ReturnType<typeof getDatabase>>, ownerMemberId: string) {
   const storage = directUploadConfig();
   if (!storage) return json({ directUpload: false, message: "Direct master storage is not configured; use the standard upload." }, 503);
+  // Health gate: while the storage breaker is open, steer new masters to the backup chunked path
+  // instead of handing out upload links to a store that is currently failing.
+  if (!masterStorageAvailable()) return json({ directUpload: false, degraded: true, retryable: true, message: "Direct master storage is temporarily degraded; using the backup upload path." }, 503);
   const songId = cleanId(payload.songId);
   const versionId = cleanId(payload.versionId);
   if (!songId || !versionId) return json({ message: "A valid song and sale master version are required" }, 400);
@@ -79,7 +84,13 @@ async function registerMasterUpload(payload: Record<string, unknown>, db: Awaite
   if (!upload.ok) return json({ message: upload.message, maxBytes: MASTER_UPLOAD_MAX_BYTES }, upload.status);
   const version = await ownedMasterVersion(db, ownerMemberId, songId, versionId);
   if (!version) return json({ message: "That sale master version was not found" }, 404);
-  const storedBytes = await headStoredObject(storage, fileKey);
+  let storedBytes = 0;
+  try {
+    storedBytes = await headStoredObject(storage, fileKey);
+  } catch (error) {
+    if (!isTransientError(error) && !(error as { circuitOpen?: boolean })?.circuitOpen) throw error;
+    return json({ retryable: true, message: "Master storage is temporarily unreachable, so the upload could not be verified yet. Your file is safe; retry in a moment." }, 503);
+  }
   if (!storedBytes) return json({ message: "The master file was not found in storage. Upload it again." }, 409);
   if (storedBytes !== upload.byteSize || storedBytes > MASTER_UPLOAD_MAX_BYTES) {
     await deleteStoredObject(storage, fileKey).catch(() => undefined);

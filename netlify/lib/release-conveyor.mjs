@@ -3,9 +3,11 @@ import { normalizeLyricsSource, parseTimestampedLyrics } from "../../lib/dreamwe
 import { buildDreamweaverSatellite } from "../../lib/route-registry.js";
 import { retryReleaseWork } from "./release-conveyor-retry.mjs";
 import { RELEASE_STAGES } from "../../lib/release-conveyor-stages.js";
+import { metadataTemplate } from "./release-conveyor-watchdog.mjs";
+import { masterSourceIdentity } from "./halo-watchdog.mjs";
 
 export { RELEASE_STAGES };
-export const RELEASE_PIPELINE_VERSION = 2;
+export const RELEASE_PIPELINE_VERSION = 5;
 
 export function releaseFingerprint(song, versions, options = { humHz: 0 }) {
   const { updated_at, source_updated_at, ...metadata } = song;
@@ -38,7 +40,8 @@ export function validateRelease(song, versions) {
   if (!(master?.artwork_url || song.artwork_url)) issues.push(issue("artwork", "Upload final cover artwork."));
   if (song.sale_status === "for_sale" && !(Number(song.sale_price_cents) > 0)) issues.push(issue("price", "Set a sale price before the storefront handoff."));
   const radio = versions.find(version => ["radio_edit", "clean"].includes(version.version_type)
-    && version.song_id === song.id && version.audio_url && version.mastering_status === "approved" && Number(version.duration_seconds) > 0);
+    && version.song_id === song.id && version.audio_url && version.mastering_status === "approved"
+    && Number.isFinite(Number(version.duration_seconds)) && Number(version.duration_seconds) > 0);
   if (!radio) issues.push(issue("radio_master", "Upload a dedicated radio/clean edit, add its duration and approve its mastering.", "escalate"));
   for (const existing of Array.isArray(song.metadata_issues) ? song.metadata_issues : []) {
     if (existing.level === "required" && !issues.some(item => item.field === existing.field)) {
@@ -99,6 +102,7 @@ function receipt(state) {
     blocked: state.stages.flatMap(stage => stage.issues || []),
     nextRetryAt: state.nextRetryAt || null,
     automaticAttempts: state.automaticAttempts || 0,
+    watchdog: state.watchdog || null,
     nextSteps: state.status === "ready"
       ? ["Download the release kit and review the conditioned copy.", "Use existing publication controls; external distribution is not submitted."]
       : state.stages.flatMap(stage => stage.issues || []).map(item => item.message),
@@ -109,23 +113,34 @@ function receipt(state) {
 }
 
 // Ports isolate durable storage and audio work from the deterministic release stages.
-export async function runReleaseConveyor({ song, versions, previous, ports, options = { humHz: 0 }, automatic = false }) {
+export async function runReleaseConveyor({ song, versions, previous, watchdog = previous?.watchdog, ports, options = { humHz: 0 }, automatic = false }) {
   const inputHash = releaseFingerprint(song, versions, options);
   const reuse = previous?.inputHash === inputHash;
   const sourceTimes = [song.updated_at, ...versions.map(version => version.updated_at)]
     .map(value => new Date(value || 0).getTime()).filter(Number.isFinite);
   const sourceUpdatedAt = Math.max(0, ...sourceTimes);
-  const state = { releaseId: song.id, inputHash, options, status: "processing",
+  const state = { releaseId: song.id, inputHash, options, status: "processing", watchdog,
     pipelineVersion: RELEASE_PIPELINE_VERSION,
     sourceUpdatedAt: song.source_updated_at || (sourceUpdatedAt ? new Date(sourceUpdatedAt).toISOString() : null),
     stages: reuse ? [...previous.stages] : [], package: reuse ? { ...previous.package } : {},
     automaticAttempts: automatic && reuse ? Number(previous.automaticAttempts || 0) : 0 };
+  state.watchdog = ports.watchdog || watchdog || null;
+  const assetGraph = state.watchdog?.assetGraph || state.watchdog?.graph || null;
+  const graphChanged = reuse && state.package.dreamweaver
+    && state.package.dreamweaver.assetGraph?.revision !== assetGraph?.revision;
+  if (graphChanged) {
+    const dreamweaver = { ...state.package.dreamweaver, assetGraph };
+    state.package.dreamweaver = dreamweaver;
+    if (state.package.documents) state.package.documents = { ...state.package.documents, dreamweaver };
+  }
   const waiting = automatic && (["blocked", "escalated"].includes(previous?.status)
     || (previous?.status === "retryable" && new Date(previous.nextRetryAt).getTime() > Date.now()));
   if (reuse && (previous.status === "ready" || waiting)) {
     await ports.assertCurrent();
-    if (previous.sourceUpdatedAt === state.sourceUpdatedAt) return { ...previous, receipt: receipt(previous) };
-    const current = { ...previous, sourceUpdatedAt: state.sourceUpdatedAt, receipt: receipt(previous) };
+    const current = { ...previous, sourceUpdatedAt: state.sourceUpdatedAt, watchdog: state.watchdog, package: state.package };
+    current.receipt = receipt(current);
+    if (current.watchdog) current.watchdog.departments = current.receipt.stages.map(({ name, status }) => ({ name, status }));
+    if (previous.sourceUpdatedAt === state.sourceUpdatedAt && !graphChanged && !ports.watchdog) return current;
     await ports.finish(current);
     return current;
   }
@@ -154,22 +169,25 @@ export async function runReleaseConveyor({ song, versions, previous, ports, opti
     }
     await stage("audio_preflight", async () => {
       const audio = await ports.prepareAudio(song, versions, inputHash, options);
+      audio.sourceIdentity = masterSourceIdentity(versions.find(version => version.version_type === "sale_master"));
       state.package.audio = audio;
-      return { summary: audio.summary, issues: audio.issues || [], repairs: audio.repairs || [] };
+      return { summary: audio.issues?.length ? audio.issues.map(item => item.message).join(" ") : audio.summary,
+        issues: audio.issues || [], repairs: audio.repairs || [] };
     });
     await stage("metadata_rights", async () => {
       const validation = validateRelease(song, versions);
       state.package.isrc = validation.isrc;
       const repairs = validation.issues.some(item => item.field === "isrc") || song.isrc === validation.isrc
         ? [] : ["ISRC formatting normalized in the release package; identifier unchanged."];
-      return { issues: validation.issues, repairs };
+      return { issues: validation.issues, repairs, template: metadataTemplate(song, versions) };
     });
     await stage("council", async () => {
       const issues = state.stages.flatMap(item => item.issues || []);
       const repairs = state.stages.flatMap(item => item.repairs || []);
       const council = councilDecision(issues, repairs);
       state.package.council = council;
-      return { summary: `Council: ${council.outcome}`, issues: [], outcome: council.outcome,
+      return { summary: `Council: ${council.outcome}${issues.length ? ` — Resolve: ${[...new Set(issues.map(item => item.field))].join(", ")}. See blocker actions below.` : ""}`,
+        issues: [], outcome: council.outcome,
         status: council.passed ? (repairs.length ? "repaired" : "passed") : "blocked" };
     });
     if (!state.package.council.passed) {
@@ -179,7 +197,7 @@ export async function runReleaseConveyor({ song, versions, previous, ports, opti
         const lyricsText = normalizeLyricsSource(song.lyrics_text);
         const lyrics = parseTimestampedLyrics(lyricsText);
         state.package.dreamweaver = { ...buildDreamweaverSatellite(song.id), songId: song.id,
-          lyricsText, lyrics, mode: lyrics.timed ? "sync" : "book" };
+          lyricsText, lyrics, mode: lyrics.timed ? "sync" : "book", assetGraph };
         return { summary: "Existing Dreamweaver route, synced lyrics, lyric-book fallback and Oracle insights packaged." };
       });
       await stage("documents", async () => {
@@ -213,10 +231,13 @@ export async function runReleaseConveyor({ song, versions, previous, ports, opti
     state.stages.push({ name: activeStage, status: "failed", issues: [
       issue(activeStage, state.status === "escalated"
         ? "Automatic recovery reached its limit. Check storage/database health, then retry from Song Catalog; your master is preserved."
-        : "This department is temporarily unavailable or the song changed. Automatic recovery is scheduled; you can also retry from Song Catalog.", state.status === "escalated" ? "escalate" : "retry"),
+        : activeStage === "audio_preflight"
+          ? "Sale-master storage is unavailable or incomplete. Check storage health; automatic recovery is scheduled, or retry from Song Catalog. A duplicate upload is not required."
+          : "This department is temporarily unavailable or the song changed. Automatic recovery is scheduled; you can also retry from Song Catalog.", state.status === "escalated" ? "escalate" : "retry"),
     ] });
   }
   state.receipt = receipt(state);
+  if (state.watchdog) state.watchdog.departments = state.receipt.stages.map(({ name, status }) => ({ name, status }));
   await ports.finish(state);
   return state;
 }

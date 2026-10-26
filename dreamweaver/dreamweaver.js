@@ -1,6 +1,10 @@
 import { DREAMWEAVER_STOREFRONT_MIX_ID, buildDreamweaverStorefrontPath } from "../lib/dreamweaver-storefront.js";
 import { createDreamweaverLyricsEngine } from "../lib/dreamweaver-lyrics.js";
 import { createLyricInteractionRecorder } from "../lib/journey-interactions.js";
+import { isGoogleDriveUrl, unlockDreamweaverAudio } from "../lib/dreamweaver-playback.js";
+import { catalogAudioUrl, generateAutomatedSet, normalizeCatalog } from "../lib/catalog-curator.js";
+import { readRecentTrackIds, recordPlayedTrack } from "../lib/catalog-session.js";
+import { MIX_PRESETS, createMixSeed, deleteUserPreset, describeMixIntent, normalizeMixSeed, parseMixPrompt, readUserPresets, saveUserPreset } from "../lib/mix-intent.js";
 
 (() => {
   const chapters = [
@@ -68,6 +72,7 @@ import { createLyricInteractionRecorder } from "../lib/journey-interactions.js";
   const VIDEO_LIBRARY_TIMEOUT_MS = 8000;
   const AUDIO_BOOTSTRAP_TIMEOUT_MS = 7000;
   const REMOTE_AUDIO_WATCHDOG_MS = 5000;
+  const LOCAL_PREVIEW_PROMPT = "Stream unavailable — choose “Preview a local file in this lobby” or press play to pick audio from this device. Local previews stay in this browser only.";
   const HERO_REEL_LOAD_TIMEOUT_MS = 3500;
   const MAX_AUDIO_FEEDBACK_RECORDS = 24;
   const SATELLITE_AGENT_REFRESH_MS = 45_000;
@@ -98,6 +103,7 @@ import { createLyricInteractionRecorder } from "../lib/journey-interactions.js";
     dreamweaverAct4UnlockLink: document.getElementById("dreamweaverAct4UnlockLink"),
     songLobbyHeroPlayButton: document.getElementById("playBtn") || document.getElementById("songLobbyHeroPlayButton"),
     songLobbyHeroPlayLabel: document.getElementById("songLobbyHeroPlayLabel"),
+    soundUnlockButton: document.getElementById("dreamweaverSoundUnlock"),
     songLobbyHeroElapsed: document.getElementById("songLobbyHeroElapsed"),
     songLobbyHeroChapter: document.getElementById("songLobbyHeroChapter"),
     songLobbyHeroProgress: document.getElementById("songLobbyHeroProgress"),
@@ -117,6 +123,7 @@ import { createLyricInteractionRecorder } from "../lib/journey-interactions.js";
     creatorGatewayLink: document.getElementById("dreamweaverCreatorGateway"),
     uploadLabel: document.querySelector(".upload-label"),
     mixFileInput: document.getElementById("mixFileInput"),
+    mixFileStatus: document.getElementById("mixFileStatus"),
     shell: document.getElementById("showShell"),
     loading: document.getElementById("loadingShow"),
     loadingPhase: document.getElementById("loadingPhase"),
@@ -127,6 +134,34 @@ import { createLyricInteractionRecorder } from "../lib/journey-interactions.js";
     empty: document.getElementById("emptyShow"),
     emptyMessage: document.getElementById("emptyMessage"),
     audio: document.getElementById("showAudio"),
+    catalogDuration: document.getElementById("catalogSetDuration"),
+    catalogGenerate: document.getElementById("generateCatalogSet"),
+    catalogAllowRecent: document.getElementById("catalogAllowRecent"),
+    catalogStatus: document.getElementById("catalogSetStatus"),
+    catalogSyncStatus: document.getElementById("catalogSyncStatus"),
+    catalogLinkedNotice: document.getElementById("catalogLinkedNotice"),
+    catalogSetlist: document.getElementById("catalogSetlist"),
+    catalogTrackStatus: document.getElementById("catalogTrackStatus"),
+    catalogUploadLocal: document.getElementById("catalogUploadLocal"),
+    catalogCurator: document.getElementById("catalogCurator"),
+    catalogCuratorToggle: document.getElementById("catalogCuratorToggle"),
+    catalogCuratorContent: document.getElementById("catalogCuratorContent"),
+    catalogCuratorToggleLabel: document.getElementById("catalogCuratorToggleLabel"),
+    catalogCuratorToggleIcon: document.getElementById("catalogCuratorToggleIcon"),
+    catalogPrompt: document.getElementById("catalogMixPrompt"),
+    catalogPreset: document.getElementById("catalogMixPreset"),
+    catalogPresetDescription: document.getElementById("catalogMixPresetDescription"),
+    catalogSeed: document.getElementById("catalogMixSeed"),
+    catalogIntent: document.getElementById("catalogMixIntent"),
+    catalogNotes: document.getElementById("catalogMixNotes"),
+    catalogPresetName: document.getElementById("catalogPresetName"),
+    catalogPresetSave: document.getElementById("saveCatalogPreset"),
+    catalogPresetDelete: document.getElementById("deleteCatalogPreset"),
+    catalogPresetStatus: document.getElementById("catalogPresetStatus"),
+    catalogSteps: ["Request", "Catalog", "Rank", "Sequence"].map(step => ({
+      item: document.getElementById(`catalogStep${step}`),
+      status: document.getElementById(`catalogStep${step}Status`)
+    })),
     visualStack: document.getElementById("visualStack"),
     chapterList: document.getElementById("chapterList"),
     progressMarkers: document.getElementById("progressMarkers"),
@@ -255,8 +290,20 @@ import { createLyricInteractionRecorder } from "../lib/journey-interactions.js";
     buildPreviewFrame: 0,
     buildPreviewStartedAt: 0,
     trackedProgress: new Set(),
-    startPlaybackAfterLoad: false,
     audioSourceMode: "empty",
+    audioSourceKind: "",
+    autoplayMuted: false,
+    soundUnlockedByUser: false,
+    soundUnlockMode: "",
+    primaryBootstrapActive: false,
+    driveCatalog: null,
+    catalogUnavailable: false,
+    catalogSet: null,
+    catalogIndex: -1,
+    catalogPlaybackStarted: false,
+    catalogAdvancing: false,
+    catalogGenerating: false,
+    catalogFallbackActive: false,
     localAudioName: "",
     localAudioUrl: "",
     remoteAudioWatchdog: 0,
@@ -764,11 +811,132 @@ import { createLyricInteractionRecorder } from "../lib/journey-interactions.js";
     }
   }
 
+  function primaryAudioCandidates(entry = {}) {
+    return [entry?.audioUrl, entry?.audio_url, entry?.sourceUrl, entry?.previewAudio, entry?.preview_audio, entry?.streamUrl];
+  }
+
+  // Published direct audio is primary; Drive audio must use an authorized site route.
   function resolvePrimaryAudio(entry = {}, options = {}) {
+    if (entry.isDriveCatalogPlayback) {
+      const src = playableCatalogUrl(entry.streamUrl);
+      return { src, source: "drive-catalog", isPlayable: Boolean(src) };
+    }
+    if (entry.isCatalogPlayback && entry.canonicalBinding) {
+      // The server binding already resolves Drive masters through the site's allowlist.
+      const binding = entry.canonicalBinding.audioSource;
+      const src = isGoogleDriveUrl(binding) ? "" : safeMediaUrl(binding);
+      return { src, source: "canonical-master", isPlayable: Boolean(src) };
+    }
     const resolved = window.HaloReleaseArtwork?.resolveAudio(entry, { requirePlayable: true, ...options });
-    if (resolved) return resolved;
-    const candidate = safeMediaUrl(entry?.audioUrl || entry?.audio_url || entry?.sourceUrl || entry?.previewAudio || entry?.preview_audio || entry?.streamUrl);
-    return { src: candidate, source: candidate ? "legacy" : "", isPlayable: Boolean(candidate) };
+    if (resolved?.src && !isGoogleDriveUrl(resolved.src)) return resolved;
+    if (!resolved) {
+      const candidate = safeMediaUrl(primaryAudioCandidates(entry).find(Boolean));
+      if (candidate && !isGoogleDriveUrl(candidate)) return { src: candidate, source: "legacy", isPlayable: true };
+    }
+    return { src: "", source: "", isPlayable: false };
+  }
+
+  // Drive fallbacks only come from the same song's published release (catalog routes) or the mix itself.
+  function dreamweaverDriveFallbacks(mix, primaryAudio) {
+    if (mix?.isDriveCatalogPlayback) {
+      const fallback = siteAudioProxy(mix.fallbackUrl);
+      return fallback && fallback !== primaryAudio ? [fallback] : [];
+    }
+    if (!mix) return [];
+    if (mix.isCatalogPlayback) {
+      const release = state.release || {};
+      const releaseSongId = cleanSongId(release.dreamweaverPayload?.songId) || cleanSongId(release.catalog?.songId) || cleanSongId(release.id);
+      if (!mix.canonicalBinding || !releaseSongId || releaseSongId !== cleanSongId(mix.canonicalBinding.songId)) return [];
+      const candidates = [mix.canonicalBinding.fallbackAudioSource, release.dreamweaverPayload?.audioStreamUrl, release.streamUrl];
+      return [...new Set(candidates.map(siteAudioProxy).filter(src => src && src !== primaryAudio))];
+    }
+    return [...new Set(primaryAudioCandidates(mix).map(siteAudioProxy).filter(src => src && src !== primaryAudio))];
+  }
+
+  function siteAudioProxy(value) {
+    if (!value) return "";
+    try {
+      const url = new URL(value, location.href);
+      return url.origin === location.origin && !url.username && !url.password
+        && url.pathname === "/api/drive-catalog/audio" && url.searchParams.getAll("track").length === 1
+        && url.searchParams.get("track") ? url.href : "";
+    } catch { return ""; }
+  }
+
+  function notePlaybackClick() {
+    state.playbackRequested = true;
+    state.playbackClickAt = window.performance?.now?.() ?? Date.now();
+  }
+
+  function measurePlaybackStart() {
+    if (state.playbackClickAt == null) return;
+    const elapsed = (window.performance?.now?.() ?? Date.now()) - state.playbackClickAt;
+    state.playbackClickAt = null;
+    if (elapsed >= 0 && elapsed <= 120000) {
+      // Local, last-start diagnostic only: no URLs, song identifiers, or listener data.
+      elements.audio.dataset.clickToPlayingMs = String(Math.round(elapsed));
+    }
+  }
+
+  // Explicit user gesture only: never called from timers or autoplay paths.
+  async function handleSoundUnlock() {
+    const previousMode = state.soundUnlockMode;
+    if (elements.audio.paused) notePlaybackClick();
+    if (shouldPromptLocalUpload()) {
+      state.autoplayMuted = false;
+      renderSoundUnlock("");
+      return togglePlayback();
+    }
+    try {
+      if (state.audioSourceMode === "remote") armRemoteAudioWatchdog();
+      await unlockDreamweaverAudio(elements.audio);
+      state.autoplayMuted = false;
+      state.soundUnlockedByUser = true;
+      renderSoundUnlock("");
+      if (elements.muteButton) elements.muteButton.setAttribute("aria-label", "Mute show");
+      renderReleasePanel();
+    } catch (error) {
+      state.autoplayMuted = Boolean(elements.audio.muted) && previousMode === "muted";
+      if (error?.name === "AbortError") return renderSoundUnlock(previousMode);
+      if (error?.name !== "NotAllowedError" && state.audioSourceMode === "remote") {
+        handleRemoteAudioUnavailable();
+        return;
+      }
+      renderSoundUnlock(state.autoplayMuted ? "muted" : "blocked");
+      showToast("Your browser is still blocking audio. Press play again to start the Dreamweaver sound.");
+    }
+  }
+
+  async function bindCanonicalAssets(mix, songId) {
+    const fingerprint = routeContextFingerprint();
+    const { response, payload } = await fetchJsonWithTimeout(`/api/dreamweaver-assets?songId=${encodeURIComponent(songId)}`, {
+      timeoutMs: RELEASE_CONTEXT_TIMEOUT_MS,
+      timeoutMessage: "Dreamweaver timed out while binding the canonical master.",
+      headers: { Accept: "application/json" },
+      credentials: "same-origin"
+    });
+    const binding = payload.binding;
+    if (!response.ok || binding?.status !== "ready" || binding.songId !== songId || !safeMediaUrl(binding.audioSource)
+      || !Array.isArray(binding.visualActs) || binding.visualActs.length !== 4) {
+      throw new Error(payload.message || "The canonical master and four visual acts are not ready.");
+    }
+    const images = binding.visualActs.map((visual, index) => {
+      const uri = visual?.uri;
+      const generated = visual?.sourceType === "generated" && typeof uri === "string"
+        && uri.length < 8192 && /^data:image\/svg\+xml;base64,[A-Za-z0-9+/]+=*$/.test(uri);
+      if (visual?.act !== index + 1 || (!generated && !safeMediaUrl(uri))) throw new Error("Dreamweaver received an invalid visual act.");
+      return generated ? uri : safeMediaUrl(uri);
+    });
+    if (routeContextFingerprint() !== fingerprint) return;
+    mix.canonicalBinding = binding;
+    mix.audioUrl = binding.audioSource;
+    chapters.forEach((chapter, index) => { chapter.image = images[index]; });
+    elements.visualStack.querySelectorAll("[data-visual]").forEach((layer, index) => {
+      layer.style.setProperty("--visual-image", `url("${images[index]}")`);
+    });
+    if (elements.dreamweaverSystemStatus) {
+      elements.dreamweaverSystemStatus.dataset.assetStatus = binding.status;
+    }
   }
 
   function isPlayablePrimaryMix(mix) {
@@ -905,6 +1073,37 @@ import { createLyricInteractionRecorder } from "../lib/journey-interactions.js";
     state.localAudioUrl = "";
   }
 
+  function setLocalPreviewStatus(message = "", tone = "idle") {
+    if (!elements.mixFileStatus) return;
+    elements.mixFileStatus.textContent = message;
+    elements.mixFileStatus.dataset.state = message ? tone : "idle";
+  }
+
+  function linkedReleaseLabel() {
+    const title = cleanText(state.release?.title || state.mix?.title || "", 120);
+    const artist = cleanText(state.release?.artist || state.mix?.creator?.name || "", 120);
+    return [title, artist].filter(Boolean).join(" — ");
+  }
+
+  function localPreviewNotice(name) {
+    const linked = linkedReleaseLabel();
+    return `Local preview: ${name} plays only in this browser tab. It is not uploaded, saved, published, or shared with other listeners${linked ? `, and does not replace the linked release ${linked}` : ""}.`;
+  }
+
+  function failLocalPreview(message) {
+    state.audioSourceMode = "error";
+    state.localAudioName = "";
+    revokeLocalAudioUrl();
+    setReleasePlaybackState("unavailable");
+    setLocalPreviewStatus(message, "error");
+    showToast(message);
+  }
+
+  function handleLobbyPageHide(event) {
+    if (event?.persisted) return;
+    revokeLocalAudioUrl();
+  }
+
   function publicReleaseStatus(release = state.release) {
     const raw = cleanText(release?.storefront?.statusLabel || release?.publication?.dreamweaverStatus || release?.publication?.releaseStatus || release?.catalog?.saleStatus || "", 40).toUpperCase();
     const hasStream = Boolean(resolvePrimaryAudio(release || {}).src);
@@ -948,30 +1147,58 @@ import { createLyricInteractionRecorder } from "../lib/journey-interactions.js";
     }
   }
 
-  function handleRemoteAudioUnavailable(message = "Stream unavailable — click Upload Mix File or press play to choose a local mix.") {
+  function renderSoundUnlock(mode = "") {
+    state.soundUnlockMode = mode;
+    const button = elements.soundUnlockButton;
+    if (!button) return;
+    button.hidden = !mode;
+    button.dataset.soundUnlock = mode;
+    const label = mode === "muted" ? "Tap to unmute" : "Tap to play with sound";
+    button.textContent = mode === "muted" ? `🔇 ${label}` : `▶ ${label}`;
+    button.setAttribute("aria-label", mode === "muted" ? "Unmute the Dreamweaver audio" : "Play the Dreamweaver audio with sound");
+  }
+
+  function handleRemoteAudioUnavailable(message = LOCAL_PREVIEW_PROMPT) {
+    if (!state.primaryBootstrapActive && !state.catalogFallbackActive && state.mix
+      && dreamweaverDriveFallbacks(state.mix, elements.audio.src).length) {
+      void retryCatalogProxy();
+      return;
+    }
     if (state.audioSourceMode === "local") return;
     clearRemoteAudioWatchdog();
     state.audioSourceMode = "error";
     elements.audio.pause();
+    renderSoundUnlock("");
     setReleasePlaybackState("unavailable");
     showToast(message);
   }
 
   function armRemoteAudioWatchdog() {
     if (state.audioSourceMode !== "remote" || state.remoteAudioWatchdog) return;
+    const position = Number(elements.audio.currentTime) || 0;
     state.remoteAudioWatchdog = window.setTimeout(() => {
       state.remoteAudioWatchdog = 0;
       if (state.audioSourceMode !== "remote") return;
-      if (elements.audio.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
-        handleRemoteAudioUnavailable("Stream unavailable — click Upload Mix File or press play to choose a local mix.");
+      if (!elements.audio.paused && Number(elements.audio.currentTime) > position + 0.05) {
+        armRemoteAudioWatchdog();
+        return;
+      }
+      if (state.playbackRequested || elements.audio.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
+        handleRemoteAudioUnavailable(LOCAL_PREVIEW_PROMPT);
       }
     }, REMOTE_AUDIO_WATCHDOG_MS);
   }
 
   async function activateLocalMixFile(file) {
-    if (!file || !elements.audio) return;
+    if (!elements.audio) return;
+    if (!file) {
+      setLocalPreviewStatus("No file selected. Choose an audio file from this device to preview it in this lobby.", "error");
+      return;
+    }
     if (!isSupportedLocalAudioFile(file)) {
-      showToast("Choose an audio file in MP3, WAV, M4A, AAC, OGG, FLAC, or WebM format.");
+      const message = "That file can't be previewed. Choose an audio file in MP3, WAV, M4A, AAC, OGG, FLAC, or WebM format.";
+      setLocalPreviewStatus(message, "error");
+      showToast(message);
       return;
     }
     clearRemoteAudioWatchdog();
@@ -979,26 +1206,43 @@ import { createLyricInteractionRecorder } from "../lib/journey-interactions.js";
     window.HaloAudioPreloader?.clear();
     const localAudioUrl = safeBlobMediaUrl(URL.createObjectURL(file));
     if (!localAudioUrl) {
-      showToast("Dreamweaver could not prepare that local file. Try another audio export.");
+      failLocalPreview("Dreamweaver could not prepare that local file. Try another audio export.");
       return;
     }
     state.localAudioUrl = localAudioUrl;
     state.localAudioName = cleanText(file.name || "Uploaded mix", 160) || "Uploaded mix";
     state.audioSourceMode = "local";
+    state.catalogSet = null;
+    state.catalogPlaybackStarted = false;
+    if (elements.catalogSetlist) elements.catalogSetlist.innerHTML = "";
+    if (elements.catalogTrackStatus) elements.catalogTrackStatus.textContent = "Local mix selected in the shared player. Generate a new set to return to the catalog.";
     elements.audio.pause();
+    if (state.autoplayMuted) elements.audio.muted = false;
+    state.autoplayMuted = false;
+    renderSoundUnlock("");
     elements.audio.currentTime = 0;
     elements.audio.src = localAudioUrl;
     elements.audio.load?.();
     setReleasePlaybackState("ready");
+    setLocalPreviewStatus(`Loading ${state.localAudioName}… ${localPreviewNotice(state.localAudioName)}`, "ready");
     try {
       await elements.audio.play();
-      showToast(`Local mix active: ${state.localAudioName}.`);
-    } catch {
-      showToast("Local file loaded. Press play when your browser is ready.");
+      if (state.localAudioUrl !== localAudioUrl) return;
+      setLocalPreviewStatus(`Playing. ${localPreviewNotice(state.localAudioName)}`, "active");
+      showToast(`Local preview playing: ${state.localAudioName} (this browser only).`);
+    } catch (error) {
+      if (state.localAudioUrl !== localAudioUrl || error?.name === "AbortError") return;
+      if (error?.name === "NotAllowedError") {
+        renderSoundUnlock("blocked");
+        setLocalPreviewStatus(`Ready — your browser blocked autoplay, so press Play to listen. ${localPreviewNotice(state.localAudioName)}`, "ready");
+        showToast("Local preview loaded. Press Play to listen.");
+        return;
+      }
+      failLocalPreview("This browser could not play that file. Try another MP3, WAV, M4A, AAC, OGG, FLAC, or WebM export.");
     }
   }
 
-  async function awaitPrimaryPlaybackReadiness() {
+  async function awaitPrimaryPlaybackReadiness(playback) {
     if (elements.audio.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) return { ok: true, state: "ready" };
     return new Promise(resolve => {
       let settled = false;
@@ -1020,16 +1264,21 @@ import { createLyricInteractionRecorder } from "../lib/journey-interactions.js";
       const timeoutId = window.setTimeout(() => settle({
         ok: false,
         state: "timeout",
-        detail: "Stream unavailable — click Upload Mix File or press play to choose a local mix."
+        detail: LOCAL_PREVIEW_PROMPT
       }), REMOTE_AUDIO_WATCHDOG_MS);
       elements.audio.addEventListener("loadeddata", handleReady, { once: true });
       elements.audio.addEventListener("canplay", handleReady, { once: true });
       elements.audio.addEventListener("canplaythrough", handleReady, { once: true });
       elements.audio.addEventListener("error", handleError, { once: true });
+      playback?.then(result => {
+        if (!result.error) return;
+        const blocked = ["NotAllowedError", "AbortError"].includes(result.error.name);
+        settle({ ok: blocked, state: blocked ? "blocked" : "error", detail: "The audio stream could not start." });
+      });
     });
   }
 
-  async function bootstrapPrimaryPlayback(mix) {
+  async function bootstrapPrimaryPlayback(mix, { userInitiated = false, resume = false, offset = 0 } = {}) {
     if (state.audioSourceMode === "local") return { started: !elements.audio.paused, fallback: true };
     const primaryAudio = resolvePrimaryAudio(mix).src;
     if (!primaryAudio) {
@@ -1048,17 +1297,69 @@ import { createLyricInteractionRecorder } from "../lib/journey-interactions.js";
     state.duration = Number(mix.durationSeconds || 0);
     revokeLocalAudioUrl();
     state.localAudioName = "";
+    if (elements.mixFileStatus) {
+      elements.mixFileStatus.textContent = "";
+      elements.mixFileStatus.dataset.state = "idle";
+    }
     state.audioSourceMode = "remote";
+    const requestPlayback = userInitiated || resume;
+    if (userInitiated) notePlaybackClick();
+    if (!requestPlayback) state.playbackRequested = false;
     elements.audio.pause();
-    elements.audio.currentTime = 0;
     setReleasePlaybackState("loading");
-    if (!window.HaloAudioPreloader?.prepare(elements.audio, primaryAudio)) {
+    if (!requestPlayback && window.HaloAudioPreloader) {
+      window.HaloAudioPreloader.warmPlaylist([primaryAudio, ...dreamweaverDriveFallbacks(mix, primaryAudio)], {
+        primaryAudio: elements.audio, respectPolicy: true
+      });
+    } else if (!window.HaloAudioPreloader?.prepare(elements.audio, primaryAudio)) {
       elements.audio.preload = "auto";
       elements.audio.src = primaryAudio;
       elements.audio.load?.();
     }
+    const restorePosition = () => {
+      if (state.audioSourceMode !== "remote" || state.mix !== mix) return;
+      try { elements.audio.currentTime = offset; } catch {}
+    };
+    if (elements.audio.readyState >= 1) restorePosition();
+    else elements.audio.addEventListener("loadedmetadata", restorePosition, { once: true });
+    if (!requestPlayback) {
+      setReleasePlaybackState("ready");
+      return { started: false };
+    }
+    let userPlayback;
+    const requestUserPlayback = () => {
+      if (userInitiated) {
+        state.autoplayMuted = false;
+        renderSoundUnlock("");
+      }
+      try {
+        return elements.audio.play().then(
+          () => {
+            if (userInitiated) state.soundUnlockedByUser = true;
+            return { started: !elements.audio.paused };
+          },
+          error => ({ started: false, error })
+        );
+      } catch (error) {
+        return Promise.resolve({ started: false, error });
+      }
+    };
+    if (requestPlayback) userPlayback = requestUserPlayback();
+    const preparePlayback = async () => {
+      const readiness = await awaitPrimaryPlaybackReadiness(userPlayback);
+      if (!readiness.ok || !userPlayback) return readiness;
+      let timer;
+      const playback = await Promise.race([userPlayback, new Promise(resolve => {
+        timer = window.setTimeout(() => resolve({ error: { name: "TimeoutError" } }), REMOTE_AUDIO_WATCHDOG_MS);
+      })]);
+      window.clearTimeout(timer);
+      if (playback.error && !["NotAllowedError", "AbortError"].includes(playback.error.name)) {
+        return { ok: false, state: "error", detail: "The audio stream could not start." };
+      }
+      return readiness;
+    };
 
-    if (elements.audio.muted || Number(elements.audio.volume) === 0) {
+    if ((elements.audio.muted && !state.autoplayMuted) || Number(elements.audio.volume) === 0) {
       queueAudioFeedbackIncident("muted_audio", {
         severity: "medium",
         title: "Dreamweaver primary audio initialized muted",
@@ -1068,12 +1369,40 @@ import { createLyricInteractionRecorder } from "../lib/journey-interactions.js";
       });
     }
 
-    const readiness = await awaitPrimaryPlaybackReadiness();
-    if (state.audioSourceMode === "local" || elements.audio.getAttribute("src") !== primaryAudio) return { started: false, fallback: true };
+    state.primaryBootstrapActive = true;
+    let activeAudio = primaryAudio;
+    let readiness;
+    try {
+      readiness = await preparePlayback();
+      if (state.audioSourceMode === "local" || elements.audio.getAttribute("src") !== activeAudio) return { started: false, fallback: true };
+      // Google Drive is a fallback only: it is tried once the canonical/direct source fails to load.
+      for (const fallbackAudio of ["error", "timeout"].includes(readiness.state) ? dreamweaverDriveFallbacks(mix, primaryAudio) : []) {
+        queueAudioFeedbackIncident("non_playable_audio", {
+          severity: "medium",
+          title: "Dreamweaver switched to the Google Drive fallback",
+          details: readiness.detail || describeAudioElementFailure(),
+          mix,
+          metadata: { failureState: "non_playable_audio", reason: "google-drive-fallback" }
+        });
+        activeAudio = fallbackAudio;
+        if (!window.HaloAudioPreloader?.prepare(elements.audio, fallbackAudio)) {
+          elements.audio.src = fallbackAudio;
+          elements.audio.load?.();
+        }
+        if (elements.audio.readyState >= 1) restorePosition();
+        else elements.audio.addEventListener("loadedmetadata", restorePosition, { once: true });
+        if (requestPlayback) userPlayback = requestUserPlayback();
+        readiness = await preparePlayback();
+        if (state.audioSourceMode === "local" || elements.audio.getAttribute("src") !== activeAudio) return { started: false, fallback: true };
+        if (readiness.state !== "error") break;
+      }
+    } finally {
+      state.primaryBootstrapActive = false;
+    }
+    state.audioSourceKind = activeAudio === primaryAudio ? "primary" : "google-drive-fallback";
     if (readiness.state === "timeout") {
-      clearRemoteAudioWatchdog();
-      showToast("Press play to start the audio experience.");
-      return { started: false };
+      handleRemoteAudioUnavailable(readiness.detail);
+      return { started: false, fallback: true };
     }
     if (!readiness.ok) {
       queueAudioFeedbackIncident(readiness.state === "error" && Number(elements.audio?.error?.code || 0) === 3 ? "corrupted_audio" : "non_playable_audio", {
@@ -1087,20 +1416,16 @@ import { createLyricInteractionRecorder } from "../lib/journey-interactions.js";
       return { started: false, fallback: true };
     }
 
-    try {
-      await elements.audio.play();
-      return { started: true };
-    } catch (error) {
-      queueAudioFeedbackIncident("non_playable_audio", {
-        severity: "medium",
-        title: "Dreamweaver primary audio could not start",
-        details: cleanText(error instanceof Error ? error.message : "Playback was blocked before Dreamweaver could start the linked song.", 1200, "Playback was blocked before Dreamweaver could start the linked song."),
-        mix,
-        metadata: { failureState: "non_playable_audio", reason: "play-rejected" }
-      });
-      showToast("Press play again to start the audio experience.");
+    if (requestPlayback) {
+      const playback = await userPlayback;
+      if (playback.started) return { started: true, muted: elements.audio.muted };
+      if (playback.error?.name !== "AbortError") {
+        renderSoundUnlock("blocked");
+        showToast("Playback was blocked by your browser. Click Play again or tap Play with sound.");
+      }
       return { started: false };
     }
+    return { started: false };
   }
 
   async function hydrateDreamweaverLoopContent() {
@@ -1126,11 +1451,11 @@ import { createLyricInteractionRecorder } from "../lib/journey-interactions.js";
   }
 
   function releaseStateLabel(status) {
-    if (state.audioSourceMode === "local") return elements.audio.paused ? "Local ready" : "Local active";
-    if (state.audioSourceMode === "error") return "Upload mix";
+    if (state.audioSourceMode === "local") return elements.audio.paused ? "Local preview ready" : "Local preview";
+    if (state.audioSourceMode === "error") return "Preview a local file";
     if (state.audioSourceMode === "empty" && status !== "loading") return "Standby";
     if (status === "loading") return "Loading signal";
-    if (status === "playing") return "Playing now";
+    if (status === "playing") return state.autoplayMuted && elements.audio.muted ? "Playing muted" : "Playing now";
     if (status === "ready") return "Ready";
     if (status === "unavailable") return "Stream unavailable";
     return "Paused";
@@ -1139,10 +1464,10 @@ import { createLyricInteractionRecorder } from "../lib/journey-interactions.js";
   function releaseStateDetail(status, title, artist) {
     const releaseLine = [title, artist].filter(Boolean).join(" — ");
     if (state.audioSourceMode === "local") return state.localAudioName
-      ? `Playing local file: ${state.localAudioName}.`
-      : "A local mix file is active in Dreamweaver.";
-    if (state.audioSourceMode === "error" || status === "unavailable") return "Stream unavailable — click Upload Mix File or press play to choose a local mix.";
-    if (state.audioSourceMode === "empty" && status !== "loading") return "No active stream is loaded yet. Press play or upload a local mix to continue.";
+      ? `Local preview in this browser only: ${state.localAudioName}.${releaseLine ? ` The linked release (${releaseLine}) is unchanged.` : ""}`
+      : "A local preview file is active in this browser only.";
+    if (state.audioSourceMode === "error" || status === "unavailable") return LOCAL_PREVIEW_PROMPT;
+    if (state.audioSourceMode === "empty" && status !== "loading") return "No active stream is loaded yet. Press play or preview a local file in this lobby to continue.";
     if (status === "loading") return "Dreamweaver is preparing the audio and release context.";
     if (status === "playing") return releaseLine ? `${releaseLine} is live across the Dreamweaver lobby.` : "Live playback is active across the Dreamweaver lobby.";
     if (status === "ready") return releaseLine ? `${releaseLine} is ready. Press play to move through the four-act listening arc.` : "Audio is ready. Press play to move through the four-act listening arc.";
@@ -1414,6 +1739,7 @@ import { createLyricInteractionRecorder } from "../lib/journey-interactions.js";
   function setReleasePlaybackState(nextState) {
     state.releasePlaybackState = nextState;
     renderReleasePanel();
+    updateCatalogPlaybackCards();
   }
 
   function setLoadingProgress(percent = 0, phase = "", subtitle = "") {
@@ -1428,7 +1754,9 @@ import { createLyricInteractionRecorder } from "../lib/journey-interactions.js";
   }
 
   async function fetchReleaseCatalog() {
-    const { response, payload } = await fetchJsonWithTimeout("/api/release-catalog", {
+    const songId = resolveDreamweaverRouteContext().requestedSongId;
+    const path = songId ? `/api/release-catalog?${new URLSearchParams({ songId })}` : "/api/release-catalog";
+    const { response, payload } = await fetchJsonWithTimeout(path, {
       timeoutMs: RELEASE_CONTEXT_TIMEOUT_MS,
       timeoutMessage: "Dreamweaver timed out while loading release context.",
       headers: { Accept: "application/json" },
@@ -1805,14 +2133,19 @@ import { createLyricInteractionRecorder } from "../lib/journey-interactions.js";
   }
 
   async function startUnlockedShow() {
-    state.startPlaybackAfterLoad = true;
+    if (!shouldPromptLocalUpload()) {
+      const playback = elements.audio.paused ? togglePlayback() : Promise.resolve();
+      if (elements.shell.hidden) renderSatelliteState();
+      elements.shell.hidden = false;
+      await playback;
+      elements.shell.scrollIntoView({ behavior: "smooth", block: "start" });
+      return;
+    }
     if (elements.shell.hidden) {
       renderSatelliteState();
       await loadShow();
-    } else if (elements.audio.paused) {
-      try { await elements.audio.play(); } catch {}
-      state.startPlaybackAfterLoad = false;
     }
+    showToast("The song is still preparing or unavailable. Tap Play when ready, or configure its canonical master and authorized Drive catalog entry.");
     elements.shell.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
@@ -1886,7 +2219,11 @@ import { createLyricInteractionRecorder } from "../lib/journey-interactions.js";
   }
 
   function buildExperience() {
-    elements.visualStack.innerHTML = chapters.map((chapter, index) => `<div class="visual-layer ${index === 0 ? "active" : ""}" data-visual="${index}" style="--visual-image:url('${chapter.image}');--visual-wash:${chapter.wash}"></div>`).join("");
+    elements.visualStack.innerHTML = chapters.map((chapter, index) => `<div class="visual-layer ${index === 0 ? "active" : ""}" data-visual="${index}"></div>`).join("");
+    elements.visualStack.querySelectorAll("[data-visual]").forEach((layer, index) => {
+      layer.style.setProperty("--visual-image", `url("${chapters[index].image}")`);
+      layer.style.setProperty("--visual-wash", chapters[index].wash);
+    });
     elements.chapterList.innerHTML = chapters.map((chapter, index) => `<button class="chapter-button ${index === 0 ? "active" : ""}" type="button" data-chapter="${index}" aria-label="Open act ${chapter.number}: ${escapeHtml(chapter.label)}"><span>${chapter.number}</span><strong>${escapeHtml(chapter.label)}</strong></button>`).join("");
     elements.progressMarkers.innerHTML = chapters.slice(1).map(chapter => `<i style="left:${chapter.start * 100}%"></i>`).join("");
     elements.chapterList.querySelectorAll("[data-chapter]").forEach(button => button.addEventListener("click", () => activateChapter(Number(button.dataset.chapter), true)));
@@ -1955,10 +2292,20 @@ import { createLyricInteractionRecorder } from "../lib/journey-interactions.js";
       openMixFilePicker();
       return;
     }
+    if (state.autoplayMuted && !elements.audio.paused) {
+      await handleSoundUnlock();
+      return;
+    }
     if (elements.audio.paused) {
+      notePlaybackClick();
       const source = elements.audio.src;
       try {
         if (state.audioSourceMode === "remote") armRemoteAudioWatchdog();
+        if (state.autoplayMuted || state.soundUnlockMode) {
+          state.autoplayMuted = false;
+          state.soundUnlockedByUser = true;
+          renderSoundUnlock("");
+        }
         await elements.audio.play();
       } catch (error) {
         if (elements.audio.src !== source || error?.name === "AbortError") return;
@@ -1967,9 +2314,11 @@ import { createLyricInteractionRecorder } from "../lib/journey-interactions.js";
           return;
         }
         clearRemoteAudioWatchdog();
+        renderSoundUnlock("blocked");
         showToast("Audio loaded. Press play when your browser is ready.");
       }
     } else {
+      state.playbackRequested = false;
       clearRemoteAudioWatchdog();
       elements.audio.pause();
     }
@@ -1980,10 +2329,11 @@ import { createLyricInteractionRecorder } from "../lib/journey-interactions.js";
     state.playerControlsBound = true;
     elements.playButton.addEventListener("click", togglePlayback);
     elements.songLobbyHeroPlayButton?.addEventListener("click", togglePlayback);
+    elements.soundUnlockButton?.addEventListener("click", handleSoundUnlock);
     elements.mixFileInput?.addEventListener("change", async event => {
       const file = event.target?.files?.[0];
       event.target.value = "";
-      if (file) await activateLocalMixFile(file);
+      await activateLocalMixFile(file);
     });
     elements.uploadLabel?.addEventListener("keydown", event => {
       if (event.key === "Enter" || event.key === " ") {
@@ -2085,6 +2435,7 @@ import { createLyricInteractionRecorder } from "../lib/journey-interactions.js";
     if (state.images.has(source)) return Promise.resolve(state.images.get(source));
     return new Promise(resolve => {
       const image = new Image();
+      image.crossOrigin = "anonymous";
       image.onload = () => { state.images.set(source, image); resolve(image); };
       image.onerror = () => resolve(null);
       image.src = source;
@@ -2751,8 +3102,7 @@ import { createLyricInteractionRecorder } from "../lib/journey-interactions.js";
     try {
       const routeContext = resolveDreamweaverRouteContext();
       const requestedRouteFingerprint = routeContextFingerprint(routeContext);
-      const isSongRoute = routeContext.requestedSongId
-        && (!routeContext.requestedMixId || routeContext.requestedMixId === DREAMWEAVER_STOREFRONT_MIX_ID);
+      const isSongRoute = Boolean(routeContext.requestedSongId);
       const requestedMix = isSongRoute ? "" : routeContext.requestedMixToken;
       const requestedMixId = isSongRoute ? "" : cleanKey(routeContext.requestedMixId, 160);
       const exactMixPromise = requestedMixId ? fetchExactMixById(requestedMixId).catch(() => null) : Promise.resolve(null);
@@ -2853,6 +3203,12 @@ import { createLyricInteractionRecorder } from "../lib/journey-interactions.js";
           ? "Dreamweaver could not load the exact mix requested by this link. Confirm the mix is published and playable, then try again."
           : "No playable audio mix is available yet. Post the existing set to the HALO room or sign in to open a private mix.");
       }
+      if (mix.isCatalogPlayback) {
+        const bindingSong = cleanSongId(release?.catalog?.songId) || cleanSongId(state.publishedSongId);
+        if (!bindingSong) throw new Error("A catalog song is required to bind the canonical master.");
+        await bindCanonicalAssets(mix, bindingSong);
+        if (routeContextFingerprint() !== requestedRouteFingerprint) return;
+      }
       setLoadingProgress(34, "Selecting tonight’s signal", "A published Dreamweaver mix has been selected and the room is shifting to match its pace.");
       elements.mixTitle.textContent = mix.title || "Untitled HALO mix";
       elements.mixCreator.textContent = `${mix.creator?.name || "Owen Anthony"} / ${mix.trackCount || "DJ"} ${mix.trackCount === 1 ? "track" : "tracks"}`;
@@ -2860,7 +3216,7 @@ import { createLyricInteractionRecorder } from "../lib/journey-interactions.js";
       document.title = `${mix.title || "Dreamweaver Show"} — HALO`;
       const currentParams = new URLSearchParams(location.search);
       if (mix.isCatalogPlayback) {
-        currentParams.delete("mix");
+        if (routeContext.requestedMixId) currentParams.set("mix", routeContext.requestedMixId);
         if (state.publishedSongId) currentParams.set("song", state.publishedSongId);
       } else {
         currentParams.set("mix", mix.id);
@@ -2883,15 +3239,9 @@ import { createLyricInteractionRecorder } from "../lib/journey-interactions.js";
       const playbackBootstrap = primaryAudioUrl
         ? await bootstrapPrimaryPlayback(mix)
         : (state.mix = mix, { started: false, fallback: true });
-      if (primaryAudioUrl && state.audioSourceMode === "remote") {
-        window.HaloAudioPreloader?.warmPlaylist([
-          primaryAudioUrl,
-          ...mixLibrary.filter(isPlayablePrimaryMix).map(entry => resolvePrimaryAudio(entry).src)
-        ], { primaryAudio: elements.audio });
-      }
       await hydrateDreamweaverLoopContent();
-      if (playbackBootstrap?.fallback && state.audioSourceMode !== "local") setReleasePlaybackState("unavailable");
-      else if (!playbackBootstrap?.started || elements.audio.paused || elements.audio.ended) setReleasePlaybackState("ready");
+      if ((playbackBootstrap?.fallback || state.audioSourceMode === "error") && state.audioSourceMode !== "local") setReleasePlaybackState("unavailable");
+      else if (state.releasePlaybackState !== "playing") setReleasePlaybackState("ready");
       setLoadingProgress(100, "Dreamweaver is ready", "Press play and move through the full four-act cinematic edition.");
       if (!preserveShell) {
         elements.loading.setAttribute("aria-hidden", "true");
@@ -2905,14 +3255,320 @@ import { createLyricInteractionRecorder } from "../lib/journey-interactions.js";
         trackCampaignEvent("landing", currentParams.get("source") || "halo");
       }
       window.haloStats?.track("open_dreamweaver_show", { mix_id: mix.id, mix_title: mix.title || "" });
-      if (state.startPlaybackAfterLoad) {
-        state.startPlaybackAfterLoad = false;
-        try { await elements.audio.play(); } catch {}
-      }
     } catch (error) {
-      state.startPlaybackAfterLoad = false;
       setReleasePlaybackState("unavailable");
       if (!preserveShell) showEmpty(error.message || "Dreamweaver could not open the mix right now.");
+    }
+  }
+
+  function playableCatalogUrl(value) {
+    const validated = catalogAudioUrl(value);
+    return validated ? safeMediaUrl(validated) : "";
+  }
+
+  function setCatalogSyncStatus(status, message) {
+    if (!elements.catalogSyncStatus) return;
+    elements.catalogSyncStatus.dataset.state = status;
+    elements.catalogSyncStatus.textContent = message;
+  }
+
+  async function loadDriveCatalog() {
+    setCatalogSyncStatus("loading", "CATALOG LOADING");
+    elements.catalogStatus.textContent = "Loading the canonical Google Drive Vault catalog…";
+    try {
+      const { response, payload } = await fetchJsonWithTimeout("/api/drive-catalog", {
+        timeoutMs: RELEASE_CONTEXT_TIMEOUT_MS,
+        headers: { Accept: "application/json" }, credentials: "same-origin"
+      });
+      if (!response.ok || typeof payload.configured !== "boolean" || !Array.isArray(payload.tracks)) throw new Error("Catalog unavailable");
+      if (payload.configured) normalizeCatalog(payload);
+      state.catalogUnavailable = false;
+      state.driveCatalog = payload.configured ? payload : null;
+      setCatalogSyncStatus(!payload.configured ? "standby" : payload.tracks.length ? "synced" : "empty",
+        !payload.configured ? "CATALOG STANDBY" : payload.tracks.length ? "CATALOG SYNCED" : "CATALOG EMPTY");
+      elements.catalogStatus.textContent = payload.configured
+        ? payload.tracks.some(track => track.public === true)
+          ? "Choose 20 or 60 minutes to curate the canonical catalog."
+          : "No eligible public tracks. Ask the catalog owner to publish valid tracks in catalog-index.json, or upload a local mix."
+        : "Catalog is not configured. Ask the site owner to configure the Drive catalog folder and service account, or upload a local mix. Existing song and mix playback remains available.";
+      return payload.configured;
+    } catch {
+      state.catalogUnavailable = true;
+      state.driveCatalog = null;
+      setCatalogSyncStatus("error", "CATALOG UNAVAILABLE");
+      elements.catalogStatus.textContent = "Catalog temporarily unavailable — no substitute catalog loaded. Try again or upload a local mix.";
+      if (!state.mix) setReleasePlaybackState("unavailable");
+      return true;
+    }
+  }
+
+  function initializeCatalogDisclosure() {
+    const button = elements.catalogCuratorToggle;
+    const content = elements.catalogCuratorContent;
+    if (!button || !content) return;
+    const storageKey = "halo:dreamweaver-curator-expanded";
+    const setExpanded = expanded => {
+      content.hidden = !expanded;
+      button.setAttribute("aria-expanded", String(expanded));
+      button.setAttribute("aria-label", `${expanded ? "Collapse" : "Expand"} Dreamweaver Catalog Curator`);
+      elements.catalogCuratorToggleLabel.textContent = expanded ? "Collapse curator" : "Expand curator";
+      elements.catalogCuratorToggleIcon.textContent = expanded ? "−" : "+";
+    };
+    let expanded = false;
+    try {
+      expanded = catalogStorage()?.getItem(storageKey) === "true";
+    } catch {}
+    setExpanded(expanded);
+    button.addEventListener("click", () => {
+      const expanded = content.hidden;
+      setExpanded(expanded);
+      try {
+        catalogStorage()?.setItem(storageKey, String(expanded));
+      } catch {}
+    });
+  }
+
+  function catalogStorage() {
+    try {
+      return localStorage;
+    } catch {
+      return null;
+    }
+  }
+
+  function renderCatalogPresets(selectedId = elements.catalogPreset?.value || "") {
+    if (!elements.catalogPreset) return;
+    const option = (preset, prefix) => `<option value="${escapeHtml(preset.id)}">${escapeHtml(prefix + preset.label)}</option>`;
+    const userPresets = readUserPresets(catalogStorage());
+    elements.catalogPreset.innerHTML = '<option value="">No preset — use my request</option>' +
+      MIX_PRESETS.map(preset => option(preset, "HALO · ")).join("") +
+      userPresets.map(preset => option(preset, "My preset · ")).join("");
+    elements.catalogPreset.value = [...MIX_PRESETS, ...userPresets].some(preset => preset.id === selectedId) ? selectedId : "";
+    describeSelectedPreset();
+  }
+
+  function describeSelectedPreset() {
+    if (!elements.catalogPresetDescription) return;
+    const id = elements.catalogPreset?.value || "";
+    const preset = [...MIX_PRESETS, ...readUserPresets(catalogStorage())].find(item => item.id === id);
+    elements.catalogPresetDescription.textContent = !preset ? ""
+      : preset.source === "user" ? `Your saved request: ${preset.prompt}` : preset.description;
+  }
+
+  function saveCatalogPreset() {
+    const result = saveUserPreset({ label: String(elements.catalogPresetName?.value ?? ""), prompt: String(elements.catalogPrompt?.value ?? "") }, catalogStorage());
+    elements.catalogPresetStatus.textContent = result.ok
+      ? `Saved “${result.preset.label}”. Mention its name in a request or pick it from the presets.`
+      : result.reason === "limit" ? "You already have 12 saved presets. Delete one before saving another."
+      : result.reason === "storage" ? "This browser isn't allowing presets to be saved. Your request still works for this session."
+      : "Enter a preset name (letters or numbers, not a HALO preset name) and a mix request to save.";
+    if (result.ok) renderCatalogPresets(result.preset.id);
+  }
+
+  function deleteCatalogPreset() {
+    const id = elements.catalogPreset?.value || "";
+    if (!id.startsWith("user-")) {
+      elements.catalogPresetStatus.textContent = "Select one of your saved presets to delete it. HALO presets can't be deleted.";
+      return;
+    }
+    deleteUserPreset(id, catalogStorage());
+    elements.catalogPresetStatus.textContent = "Preset deleted.";
+    renderCatalogPresets("");
+  }
+
+  function setCatalogBusy(busy) {
+    elements.catalogCurator?.setAttribute("aria-busy", busy ? "true" : "false");
+    if (elements.catalogGenerate) elements.catalogGenerate.disabled = busy;
+  }
+
+  function setCatalogProgress(activeStep, blockedMessage = "") {
+    elements.catalogSteps.forEach(({ item, status }, index) => {
+      const phase = index < activeStep ? "done" : index > activeStep ? "pending" : blockedMessage ? "blocked" : "active";
+      if (item) {
+        item.dataset.state = phase;
+        if (phase === "active") item.setAttribute("aria-current", "step");
+        else item.removeAttribute("aria-current");
+      }
+      if (status) status.textContent = phase === "done" ? "Done" : phase === "pending" ? "Waiting" : blockedMessage || "In progress";
+    });
+  }
+
+  async function generateCatalogSet() {
+    if (state.catalogAdvancing || state.catalogGenerating) return;
+    state.catalogGenerating = true;
+    setCatalogBusy(true);
+    try {
+      await curateCatalogSet();
+    } finally {
+      state.catalogGenerating = false;
+      setCatalogBusy(false);
+    }
+  }
+
+  async function curateCatalogSet() {
+    setCatalogProgress(0);
+    elements.catalogStatus.textContent = "Analyzing mood & style profile…";
+    await new Promise(resolve => window.requestAnimationFrame(resolve));
+    const parsed = parseMixPrompt(String(elements.catalogPrompt?.value ?? ""), {
+      presetId: String(elements.catalogPreset?.value ?? ""), userPresets: readUserPresets(catalogStorage())
+    });
+    if (parsed.intent.durationMinutes && elements.catalogDuration) elements.catalogDuration.value = String(parsed.intent.durationMinutes);
+    setCatalogProgress(1);
+    if ((!state.driveCatalog || state.catalogUnavailable) && !await loadDriveCatalog()) {
+      setCatalogProgress(1, "Standby");
+      return;
+    }
+    if (state.catalogUnavailable) {
+      setCatalogProgress(1, "Unavailable");
+      return;
+    }
+    setCatalogProgress(2);
+    elements.catalogStatus.textContent = "Ranking tracks by BPM, energy curve and rotation status…";
+    await new Promise(resolve => window.requestAnimationFrame(resolve));
+    const tracks = (state.driveCatalog?.tracks || []).filter(track => playableCatalogUrl(track.streamUrl));
+    const minutes = elements.catalogDuration.value === "20" ? 20 : 60;
+    const seed = normalizeMixSeed(String(elements.catalogSeed?.value ?? "")) || createMixSeed();
+    const allowRecent = parsed.intent.allowRecent ?? Boolean(elements.catalogAllowRecent.checked);
+    const intent = { ...parsed.intent, allowRecent };
+    try {
+      state.catalogSet = generateAutomatedSet(tracks, minutes, {
+        recentTrackIds: readRecentTrackIds(catalogStorage()), allowRecent, intent, seed
+      });
+    } catch {
+      state.catalogSet = null;
+      setCatalogProgress(2, "Could not curate");
+      elements.catalogStatus.textContent = "Dreamweaver couldn't curate this set right now. Try again or upload a local mix.";
+      return;
+    }
+    state.catalogIndex = -1;
+    state.catalogPlaybackStarted = false;
+    if (elements.catalogIntent) elements.catalogIntent.textContent = `${describeMixIntent(intent)} · Variation code: ${seed}`;
+    if (elements.catalogNotes) elements.catalogNotes.textContent = parsed.notes.join(" ");
+    setCatalogProgress(3);
+    elements.catalogStatus.textContent = "Finalizing set sequence with existing stream / proxy fallback routing…";
+    elements.catalogSetlist.innerHTML = state.catalogSet.tracks.map((track, index) =>
+      `<li id="catalogTrack${index}"><span class="catalog-curator__slot">#${String(index + 1).padStart(2, "0")}</span><div><strong>${escapeHtml(track.title)}</strong><span>${escapeHtml(track.artist)}</span><small>${escapeHtml(String(track.bpm))} BPM · ${escapeHtml(track.role)} · ${escapeHtml(track.energyLevel)}</small><small>Scheduled ${formatTime(track.playDurationSeconds)} · starts ${formatTime(track.startSeconds)}</small><span class="catalog-curator__route" id="catalogTrackRoute${index}">${escapeHtml(catalogTrackRoute(track.streamUrl))} · scheduled</span></div><button id="catalogTrackPlay${index}" type="button" data-catalog-slot="${index}" aria-label="Play stream: ${escapeHtml(track.title)} by ${escapeHtml(track.artist)}, slot ${index + 1}" aria-describedby="catalogTrackRoute${index}">Play</button></li>`
+    ).join("");
+    updateCatalogPlaybackCards();
+    const avoided = state.catalogSet.avoidedTrackCount ? ` ${state.catalogSet.avoidedTrackCount} track(s) skipped by your avoid list.` : "";
+    elements.catalogStatus.textContent = `${formatTime(state.catalogSet.durationSeconds)} / ${minutes} minutes scheduled.${
+      state.catalogSet.complete ? " Set ready — curated sequence, played back-to-back." : ` Short by ${formatTime(state.catalogSet.shortfallSeconds)}. Add tracks or explicitly allow recent reuse.`}${avoided}`;
+    if (!state.catalogSet.tracks.length) {
+      setCatalogProgress(3, "No eligible tracks");
+      elements.catalogStatus.textContent += tracks.some(track => track.public === true)
+        ? " No tracks match this request or recent-play rules. Change the request, allow recent reuse, add public tracks, or upload a local mix."
+        : " No eligible public tracks. Ask the catalog owner to publish valid tracks in catalog-index.json, or upload a local mix.";
+      return;
+    }
+    setCatalogProgress(4);
+    if (elements.catalogTrackStatus) elements.catalogTrackStatus.textContent = "Choose Play on a track to begin the curated sequence.";
+  }
+
+  function catalogTrackRoute(source) {
+    const url = new URL(source, location.href);
+    return url.origin === location.origin && url.pathname === "/api/drive-catalog/audio" ? "HALO proxy" : "Primary audio";
+  }
+
+  function updateCatalogPlaybackCards() {
+    const active = state.mix?.isDriveCatalogPlayback
+      && ["remote", "error"].includes(state.audioSourceMode)
+      && state.catalogSet?.tracks[state.catalogIndex]?.id === state.mix.id;
+    if (elements.catalogUploadLocal) elements.catalogUploadLocal.hidden = !(active && state.audioSourceMode === "error");
+    state.catalogSet?.tracks.forEach((track, index) => {
+      const selected = active && index === state.catalogIndex;
+      const card = document.getElementById(`catalogTrack${index}`);
+      const badge = document.getElementById(`catalogTrackRoute${index}`);
+      const button = document.getElementById(`catalogTrackPlay${index}`);
+      let label = `${catalogTrackRoute(track.streamUrl)} · scheduled`;
+      if (selected) {
+        const fallback = track.fallbackUrl && elements.audio.src === playableCatalogUrl(track.fallbackUrl);
+        const route = fallback ? "HALO proxy fallback" : catalogTrackRoute(track.streamUrl);
+        const status = state.releasePlaybackState;
+        label = state.audioSourceMode === "error" ? `${route} · unavailable`
+          : status === "loading" ? "Loading stream…"
+          : `${route} · ${status === "playing" && elements.audio.muted ? "playing muted" : status}`;
+        if (elements.catalogTrackStatus) elements.catalogTrackStatus.textContent = `Slot ${index + 1}: ${track.title} — ${label}.${state.audioSourceMode === "error" ? " Upload a local mix or choose another track." : state.soundUnlockMode === "blocked" ? " Playback was blocked by your browser. Click Play again or tap Play with sound." : ""}`;
+      }
+      if (card) card.dataset.state = selected ? state.audioSourceMode === "error" ? "unavailable" : "selected" : "scheduled";
+      if (badge) badge.textContent = label;
+      if (button) {
+        if (selected) button.setAttribute("aria-current", "true");
+        else button.removeAttribute("aria-current");
+      }
+    });
+    if (state.catalogSet && !active && elements.catalogTrackStatus) {
+      elements.catalogTrackStatus.textContent = state.catalogIndex >= state.catalogSet.tracks.length && state.catalogSet.tracks.length
+        ? "Playback finished. Select any track to replay the sequence."
+        : "";
+    }
+  }
+
+  async function advanceCatalogTrack(slot = state.catalogIndex + 1, { userInitiated = false } = {}) {
+    if (state.catalogAdvancing || !state.catalogSet || (state.audioSourceMode === "local" && !userInitiated)
+      || (!userInitiated && !state.catalogPlaybackStarted)
+      || !Number.isInteger(slot) || slot < 0 || slot > state.catalogSet.tracks.length
+      || (userInitiated && slot === state.catalogSet.tracks.length)) return;
+    state.catalogAdvancing = true;
+    try {
+      state.catalogIndex = slot;
+      const track = state.catalogSet.tracks[slot];
+      if (elements.catalogLinkedNotice) elements.catalogLinkedNotice.hidden = true;
+      if (!track) {
+        elements.audio.pause();
+        state.catalogPlaybackStarted = false;
+        setReleasePlaybackState("ready");
+        elements.catalogStatus.textContent += " Playback finished.";
+        return;
+      }
+      if (userInitiated) state.catalogPlaybackStarted = true;
+      if (userInitiated && state.audioSourceMode === "local") state.audioSourceMode = "empty";
+      clearRemoteAudioWatchdog();
+      state.release = null;
+      state.dreamweaverPayload = null;
+      state.publishedSongId = "";
+      const mix = { ...track, audioUrl: track.streamUrl, creator: { name: track.artist }, isDriveCatalogPlayback: true };
+      const result = await bootstrapPrimaryPlayback(mix, { userInitiated, resume: state.catalogPlaybackStarted });
+      elements.mixTitle.textContent = track.title;
+      elements.mixCreator.textContent = track.artist;
+      if (result.fallback) setReleasePlaybackState("unavailable");
+      else if (!result.started) setReleasePlaybackState("ready");
+    } finally {
+      state.catalogAdvancing = false;
+    }
+  }
+
+  function handleCatalogPlaying() {
+    if (state.mix?.isDriveCatalogPlayback && state.audioSourceMode === "remote") {
+      recordPlayedTrack(state.mix.id, catalogStorage());
+    }
+  }
+
+  function handleCatalogTimeupdate() {
+    if (!state.catalogPlaybackStarted) return;
+    const track = state.catalogSet?.tracks[state.catalogIndex];
+    if (track && state.mix?.isDriveCatalogPlayback && state.audioSourceMode === "remote"
+      && elements.audio.currentTime >= track.playDurationSeconds) void advanceCatalogTrack();
+  }
+
+  function handleCatalogEnded() {
+    if (!state.catalogPlaybackStarted || !state.catalogSet || !state.mix?.isDriveCatalogPlayback || state.audioSourceMode !== "remote") return false;
+    void advanceCatalogTrack();
+    return true;
+  }
+
+  async function retryCatalogProxy() {
+    if (!state.mix || state.audioSourceMode !== "remote" || state.catalogFallbackActive) return false;
+    const fallback = dreamweaverDriveFallbacks(state.mix, elements.audio.src)[0];
+    if (!fallback) return false;
+    state.catalogFallbackActive = true;
+    try {
+      const offset = elements.audio.currentTime || 0;
+      const mix = { ...state.mix, audioUrl: fallback, streamUrl: fallback, fallbackUrl: "",
+        ...(state.mix.canonicalBinding ? { canonicalBinding: { ...state.mix.canonicalBinding, audioSource: fallback } } : {}) };
+      await bootstrapPrimaryPlayback(mix, { resume: Boolean(state.playbackRequested), offset });
+      return true;
+    } finally {
+      state.catalogFallbackActive = false;
     }
   }
 
@@ -2920,6 +3576,23 @@ import { createLyricInteractionRecorder } from "../lib/journey-interactions.js";
     const routeContext = resolveDreamweaverRouteContext();
     hydrateAudioFeedbackQueue();
     void flushQueuedAudioFeedback();
+    const hasLegacyLink = Boolean(routeContext.requestedSongId || routeContext.requestedMixToken || routeContext.requestedStorySlug);
+    const catalogAvailable = !hasLegacyLink && await loadDriveCatalog();
+    if (hasLegacyLink) {
+      setCatalogSyncStatus("standby", "CATALOG STANDBY");
+      if (elements.catalogLinkedNotice) elements.catalogLinkedNotice.hidden = false;
+      elements.catalogStatus.textContent = "Generate a set to switch from this linked song or mix to the catalog curator.";
+    }
+    if (!hasLegacyLink && catalogAvailable) {
+      const minutes = new URLSearchParams(location.search).get("curate");
+      if (minutes === "20" || minutes === "60") {
+        elements.catalogDuration.value = minutes;
+        await generateCatalogSet();
+      } else if (!state.catalogUnavailable) {
+        setReleasePlaybackState("ready");
+      }
+      return;
+    }
     if (isSatelliteFlow() && !isSatellitePath() && !new URLSearchParams(location.search).get("mix")) {
       history.replaceState(null, "", canonicalDreamweaverUrl({
         includeSatelliteFlag: true,
@@ -2949,8 +3622,23 @@ import { createLyricInteractionRecorder } from "../lib/journey-interactions.js";
     await loadShow();
   }
 
+  initializeCatalogDisclosure();
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", bindPlayerControls, { once: true });
   else bindPlayerControls();
+  elements.catalogGenerate?.addEventListener("click", () => { void generateCatalogSet(); });
+  elements.catalogPreset?.addEventListener("change", describeSelectedPreset);
+  elements.catalogPresetSave?.addEventListener("click", saveCatalogPreset);
+  elements.catalogPresetDelete?.addEventListener("click", deleteCatalogPreset);
+  elements.catalogUploadLocal?.addEventListener("click", openMixFilePicker);
+  elements.catalogSetlist?.addEventListener("click", event => {
+    const button = event.target.closest("button[data-catalog-slot]");
+    if (!button || state.catalogGenerating || state.catalogAdvancing) return;
+    void advanceCatalogTrack(Number(button.dataset.catalogSlot), { userInitiated: true });
+  });
+  renderCatalogPresets();
+  elements.audio.addEventListener("playing", handleCatalogPlaying);
+  elements.audio.addEventListener("timeupdate", handleCatalogTimeupdate);
+  elements.audio.addEventListener("volumechange", updateCatalogPlaybackCards);
   if (resumeUploadVerification()) return;
   elements.songLabLink?.addEventListener("click", event => {
     if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
@@ -2977,17 +3665,22 @@ import { createLyricInteractionRecorder } from "../lib/journey-interactions.js";
     renderReleasePanel();
     if (state.releasePlaybackState === "loading") setReleasePlaybackState("ready");
   });
-  elements.audio.addEventListener("loadeddata", clearRemoteAudioWatchdog);
-  elements.audio.addEventListener("canplay", clearRemoteAudioWatchdog);
-  elements.audio.addEventListener("canplaythrough", clearRemoteAudioWatchdog);
+  const clearPreloadWatchdog = () => {
+    if (!state.playbackRequested) clearRemoteAudioWatchdog();
+  };
+  elements.audio.addEventListener("loadeddata", clearPreloadWatchdog);
+  elements.audio.addEventListener("canplay", clearPreloadWatchdog);
+  elements.audio.addEventListener("canplaythrough", clearPreloadWatchdog);
   elements.audio.addEventListener("timeupdate", updateProgress);
   elements.audio.addEventListener("waiting", armRemoteAudioWatchdog);
+  elements.audio.addEventListener("stalled", armRemoteAudioWatchdog);
   elements.audio.addEventListener("playing", () => {
     clearRemoteAudioWatchdog();
     if (["error", "empty"].includes(state.audioSourceMode)) {
       elements.audio.pause();
       return;
     }
+    measurePlaybackStart();
     document.body.classList.add("is-playing");
     elements.playButton.setAttribute("aria-label", "Pause show");
     updateHeroPlayButton(true);
@@ -3007,6 +3700,7 @@ import { createLyricInteractionRecorder } from "../lib/journey-interactions.js";
     if (!elements.audio.ended && !["error", "empty"].includes(state.audioSourceMode)) setReleasePlaybackState("paused");
   });
   elements.audio.addEventListener("ended", () => {
+    if (handleCatalogEnded()) return;
     clearRemoteAudioWatchdog();
     activateChapter(chapters.length - 1, false);
     updateHeroPlayButton(false);
@@ -3016,8 +3710,11 @@ import { createLyricInteractionRecorder } from "../lib/journey-interactions.js";
     }
     setReleasePlaybackState("ready");
   });
-  elements.audio.addEventListener("error", () => {
+  elements.audio.addEventListener("error", async () => {
     clearRemoteAudioWatchdog();
+    // bootstrapPrimaryPlayback owns load errors (including the Google Drive fallback) while it is preparing audio.
+    if (state.primaryBootstrapActive && state.audioSourceMode === "remote") return;
+    if (await retryCatalogProxy()) return;
     queueAudioFeedbackIncident(Number(elements.audio?.error?.code || 0) === 3 ? "corrupted_audio" : "non_playable_audio", {
       severity: "high",
       title: "Dreamweaver audio playback failed",
@@ -3025,16 +3722,12 @@ import { createLyricInteractionRecorder } from "../lib/journey-interactions.js";
       metadata: { failureState: Number(elements.audio?.error?.code || 0) === 3 ? "corrupted_audio" : "non_playable_audio" }
     });
     if (state.audioSourceMode === "local" || elements.audio.currentSrc.startsWith("blob:")) {
-      state.audioSourceMode = "error";
-      state.localAudioName = "";
-      revokeLocalAudioUrl();
-      setReleasePlaybackState("unavailable");
-      showToast("The local file could not be loaded. Choose another mix file.");
+      failLocalPreview("The local file could not be loaded. Choose another audio file to preview.");
       return;
     }
-    handleRemoteAudioUnavailable("Stream unavailable — click Upload Mix File or press play to choose a local mix.");
+    handleRemoteAudioUnavailable(LOCAL_PREVIEW_PROMPT);
   });
-  elements.muteButton.addEventListener("click", () => { elements.audio.muted = !elements.audio.muted; elements.muteButton.setAttribute("aria-label", elements.audio.muted ? "Unmute show" : "Mute show"); showToast(elements.audio.muted ? "Show muted" : "Sound restored"); });
+  elements.muteButton.addEventListener("click", () => { state.autoplayMuted = false; renderSoundUnlock(""); elements.audio.muted = !elements.audio.muted; elements.muteButton.setAttribute("aria-label", elements.audio.muted ? "Unmute show" : "Mute show"); showToast(elements.audio.muted ? "Show muted" : "Sound restored"); });
   window.addEventListener("online", () => { void flushQueuedAudioFeedback(); });
   elements.fullScreenButton.addEventListener("click", async () => { try { if (document.fullscreenElement) await document.exitFullscreen(); else await elements.stage.requestFullscreen(); } catch { showToast("Full screen is not available in this browser."); } });
   elements.shareShow.addEventListener("click", async () => {
@@ -3105,6 +3798,7 @@ import { createLyricInteractionRecorder } from "../lib/journey-interactions.js";
   document.querySelectorAll("[data-mode]").forEach(button => button.addEventListener("click", () => setMode(button.dataset.mode)));
   ["mousemove", "pointerdown", "touchstart", "keydown"].forEach(eventName => document.addEventListener(eventName, resetIdle, { passive: true }));
   window.addEventListener("beforeunload", stopSatelliteAgentLoop);
+  window.addEventListener("pagehide", handleLobbyPageHide);
   document.addEventListener("keydown", event => {
     if (event.key === "Escape" && elements.campaignStudio.classList.contains("open")) return closeCampaignStudio();
     if (event.key === "Escape" && elements.drawer.classList.contains("open")) closeStory();

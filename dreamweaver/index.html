@@ -56,6 +56,8 @@
   <script src="/release-artwork.js" defer></script>
   <script src="/audio-preloader.js" defer></script>
   <script type="module" src="/dreamweaver/dreamweaver.js" defer></script>
+  <link rel="stylesheet" href="/dreamweaver/deck-companion.css">
+  <script type="module" src="/dreamweaver/deck-companion.js"></script>
 </head>
 <body>
   <div class="paper-grain" aria-hidden="true"></div>
@@ -121,7 +123,73 @@
       </div>
     </section>
   </noscript>
-
+    <section class="catalog-curator" id="catalogCurator" aria-labelledby="catalogCuratorTitle">
+      <header class="catalog-curator__header">
+        <div>
+          <p class="catalog-curator__eyebrow">HALO Music World · Master Vault</p>
+          <h2 id="catalogCuratorTitle">Dreamweaver Catalog Curator</h2>
+          <p>Natural prompt curation linked to Google Drive Master Vault</p>
+        </div>
+        <p class="catalog-curator__badge" id="catalogSyncStatus" role="status" aria-live="polite" data-state="loading">CATALOG LOADING</p>
+        <button id="catalogCuratorToggle" type="button" aria-expanded="false" aria-controls="catalogCuratorContent" aria-label="Expand Dreamweaver Catalog Curator">
+          <span id="catalogCuratorToggleLabel">Expand curator</span>
+          <span id="catalogCuratorToggleIcon" aria-hidden="true">+</span>
+        </button>
+      </header>
+      <div class="catalog-curator__workspace" id="catalogCuratorContent" hidden>
+      <div class="catalog-curator__card">
+      <p class="catalog-curator__eyebrow">01 / Shape your set</p>
+      <p id="catalogMixPromptHelp">Describe the mood, genres, opening, build and closer, approximate BPM, and anything to avoid.</p>
+      <label for="catalogMixPrompt">Mix request</label>
+      <textarea id="catalogMixPrompt" rows="3" maxlength="500" aria-describedby="catalogMixPromptHelp" placeholder="Create a 20-minute Halo X mix: warm, cinematic opening; deep-house build; finish with a big lifter. Avoid tracks from last week."></textarea>
+      <div class="catalog-curator__controls">
+      <div>
+      <label for="catalogMixPreset">HALO profile preset</label>
+      <select id="catalogMixPreset" aria-describedby="catalogMixPresetDescription"><option value="">No preset — use my request</option></select>
+      <p id="catalogMixPresetDescription" aria-live="polite"></p>
+      </div>
+      <div>
+      <label for="catalogSetDuration">Set duration</label>
+      <select id="catalogSetDuration"><option value="20">20 minutes</option><option value="60" selected>60 minutes</option></select>
+      </div>
+      <div>
+      <label for="catalogMixSeed">Variation code (optional)</label>
+      <input id="catalogMixSeed" type="text" maxlength="32" autocomplete="off" spellcheck="false" pattern="[A-Za-z0-9-]{1,32}" placeholder="Reuse code to replay set" aria-describedby="catalogReplayHelp">
+      </div>
+      </div>
+      <p id="catalogReplayHelp">Reuse a code to replay the sequence when the request, catalog and listening history are unchanged.</p>
+      <p><label><input id="catalogAllowRecent" type="checkbox"> Allow recently played tracks when the catalog is insufficient</label></p>
+      <details id="catalogPresetEditor">
+        <summary>Save this request as my preset</summary>
+        <label for="catalogPresetName">Preset name</label>
+        <input id="catalogPresetName" type="text" maxlength="40" autocomplete="off">
+        <button class="satellite-submit satellite-submit--inline" id="saveCatalogPreset" type="button">Save preset</button>
+        <button class="satellite-submit satellite-submit--inline" id="deleteCatalogPreset" type="button">Delete selected preset</button>
+        <p id="catalogPresetStatus" role="status" aria-live="polite"></p>
+      </details>
+      <p id="catalogLinkedNotice" hidden>Your linked song or mix remains active until you choose a track from a generated set.</p>
+      <p id="catalogPlaybackHelp">Published tracks play back-to-back as a curated sequence (not a rendered, beatmatched DJ mix). No crossfades or rendered audio file.</p>
+      <button class="catalog-curator__generate" id="generateCatalogSet" type="button" aria-describedby="catalogPlaybackHelp catalogLinkedNotice">Generate set</button>
+      </div>
+      <div class="catalog-curator__card catalog-curator__output" aria-labelledby="catalogSequenceTitle">
+      <p class="catalog-curator__eyebrow">02 / Listen to the journey</p>
+      <h3 id="catalogSequenceTitle">Curated Sequence &amp; Vault Players</h3>
+      <p>Choose a track to play in the shared Dreamweaver player. The remaining sequence follows automatically.</p>
+      <ol class="catalog-curator__steps" aria-label="Set generation progress">
+        <li id="catalogStepRequest" data-state="pending"><span>Read mood &amp; profile</span><small id="catalogStepRequestStatus">Waiting</small></li>
+        <li id="catalogStepCatalog" data-state="pending"><span>Check canonical catalog</span><small id="catalogStepCatalogStatus">Waiting</small></li>
+        <li id="catalogStepRank" data-state="pending"><span>Rank BPM, energy &amp; rotation</span><small id="catalogStepRankStatus">Waiting</small></li>
+        <li id="catalogStepSequence" data-state="pending"><span>Prepare sequence &amp; stream routes</span><small id="catalogStepSequenceStatus">Waiting</small></li>
+      </ol>
+      <p id="catalogSetStatus" role="status" aria-live="polite">Loading catalog availability…</p>
+      <p id="catalogMixIntent" aria-live="polite"></p>
+      <p id="catalogMixNotes" aria-live="polite"></p>
+      <p id="catalogTrackStatus" role="status" aria-live="polite"></p>
+      <button id="catalogUploadLocal" type="button" hidden>Stream unavailable — preview a local file</button>
+      <ol id="catalogSetlist" aria-label="Generated setlist"></ol>
+      </div>
+      </div>
+    </section>
   <section class="satellite-landing" id="dreamweaverSatellite" aria-labelledby="dreamweaverSatelliteTitle" aria-hidden="true" hidden>
     <script>
       const params = new URLSearchParams(window.location.search);
@@ -176,14 +244,17 @@
               <input class="song-lobby__transport-progress" id="songLobbyHeroProgress" type="range" min="0" max="1000" value="0" aria-label="Dreamweaver mix progress">
             </div>
           </div>
+          <button class="song-lobby__sound-unlock" id="dreamweaverSoundUnlock" type="button" data-sound-unlock="" hidden>🔇 Tap to unmute</button>
           <div class="song-lobby__player-actions">
-            <label class="song-lobby__upload-label upload-label" for="mixFileInput" tabindex="0" role="button">Upload mix file</label>
-            <input id="mixFileInput" type="file" accept="audio/*,.mp3,.wav,.m4a,.aac,.ogg,.flac,.webm">
+            <label class="song-lobby__upload-label upload-label" for="mixFileInput" tabindex="0" role="button">Preview a local file in this lobby</label>
+            <input id="mixFileInput" type="file" accept="audio/*,.mp3,.wav,.m4a,.aac,.ogg,.flac,.webm" aria-describedby="mixFileHint mixFileStatus">
             <a id="songLobbyPlayerSource" class="song-lobby__source" href="https://distrokid.com/hyperfollow/owenanthony/blessed" target="_blank" rel="noopener noreferrer">Blessed — Owen Anthony ↗</a>
             <a id="dreamweaverShopLink" class="song-lobby__source" href="/music/">Shop this release ↗</a>
             <a id="dreamweaverMixLink" class="song-lobby__source" href="/mixes/">Open mix player ↗</a>
             <a class="song-lobby__anchor song-lobby__anchor--subtle" href="/dj-deck.html">Creator gateway /dj-deck</a>
           </div>
+          <p class="song-lobby__local-hint" id="mixFileHint">Stream unavailable? Choose an MP3, WAV, M4A, AAC, OGG, FLAC, or WebM file from this device to load and play it in this lobby. Local preview only: it plays in this browser tab and is not uploaded, saved, published, or shared with other listeners.</p>
+          <p class="song-lobby__local-status" id="mixFileStatus" role="status" aria-live="polite" data-state="idle"></p>
         </section>
       </div>
 
@@ -306,6 +377,7 @@
         <h3>Take the release into your own listening world.</h3>
         <div class="platform-links" aria-label="Streaming platforms">
           <a id="dreamweaverSpotifyLink" href="https://open.spotify.com/search/owen%20anthony" target="_blank" rel="noopener noreferrer">Spotify ↗</a>
+          <a id="dreamweaverSpotifyArtistProfileLink" href="https://open.spotify.com/artist/29qNEHDlQPZsVFxNLeQ3U1" target="_blank" rel="noopener noreferrer">Spotify artist profile ↗</a>
           <a id="dreamweaverAppleLink" href="https://music.apple.com/us/search?term=owen%20anthony" target="_blank" rel="noopener noreferrer">Apple Music ↗</a>
           <a id="dreamweaverYouTubeLink" href="https://www.youtube.com/@halo-music-world" target="_blank" rel="noopener noreferrer">YouTube ↗</a>
         </div>
@@ -416,6 +488,7 @@
       <div><a href="/dj-deck.html">Open the creator deck</a><button id="retryShow" type="button">Read the room again</button></div>
     </section>
   </main>
+  <aside class="dw-deck-companion" id="dreamweaverDeckCompanion" data-surface="dreamweaver" aria-label="Deck release kit draft" hidden></aside>
 
   <section class="dw-lyrics" id="dreamweaverLyrics" aria-labelledby="dreamweaverLyricsTitle" data-lyrics-mode="sync" hidden>
     <header class="dw-lyrics__header">

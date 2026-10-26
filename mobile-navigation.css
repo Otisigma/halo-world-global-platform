@@ -224,10 +224,86 @@
   text-transform: uppercase;
 }
 
+.halo-menu-intro-actions {
+  display: grid;
+  justify-items: end;
+  gap: 10px;
+}
+
+.halo-menu-intro-actions > a {
+  display: inline-flex;
+  min-height: 40px;
+  align-items: center;
+  gap: 9px;
+  padding: 0 13px;
+  border: 1px solid rgba(245, 158, 11, .35);
+  border-radius: 999px;
+  color: #f4d79a;
+  font: 800 9px/1 "Barlow Condensed", sans-serif;
+  letter-spacing: .12em;
+  text-decoration: none;
+  text-transform: uppercase;
+  transition: background .18s ease, border-color .18s ease, color .18s ease;
+}
+
+.halo-menu-intro-actions > a:hover,
+.halo-menu-intro-actions > a:focus-visible,
+.halo-menu-intro-actions > a[aria-current="page"] {
+  border-color: #f6c45f;
+  background: rgba(245, 158, 11, .1);
+  color: #fff2cf;
+}
+
+.halo-menu-intro-actions > a:focus-visible {
+  outline: 2px solid #f6c45f;
+  outline-offset: 3px;
+}
+
+.halo-menu-status-disclosure {
+  position: relative;
+  z-index: 1;
+  margin-top: 12px;
+  border: 1px solid rgba(255, 255, 255, .08);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, .025);
+}
+
+.halo-menu-status-disclosure > summary {
+  display: flex;
+  min-height: 42px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 12px;
+  color: #d7aa5e;
+  cursor: pointer;
+  font: 800 9px/1.3 "Barlow Condensed", sans-serif;
+  letter-spacing: .15em;
+  list-style: none;
+  text-transform: uppercase;
+}
+
+.halo-menu-status-disclosure > summary::-webkit-details-marker { display: none; }
+.halo-menu-status-disclosure > summary::after { content: "+"; font-size: 14px; }
+.halo-menu-status-disclosure[open] > summary::after { content: "−"; }
+
+.halo-menu-status-disclosure > summary:focus-visible {
+  border-radius: inherit;
+  outline: 2px solid #f6c45f;
+  outline-offset: 2px;
+}
+
+.halo-menu-status-disclosure > summary span {
+  margin-left: auto;
+  color: #817b71;
+  font: 400 8px/1.3 "Share Tech Mono", ui-monospace, monospace;
+  letter-spacing: .05em;
+}
+
 .halo-menu-status-groups {
   display: grid;
   gap: 10px;
-  margin: 12px 0 4px;
+  padding: 0 10px 10px;
 }
 
 .halo-menu-status-group {
@@ -414,7 +490,7 @@
 
 .halo-menu-lanes {
   display: grid;
-  grid-template-columns: .95fr 1.25fr .95fr .95fr;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
   padding: 14px 0;
 }
@@ -434,6 +510,17 @@
   flex-direction: column;
   gap: 6px;
   padding: 0 5px;
+}
+
+.halo-menu-lane .halo-menu-lane-title small {
+  margin: 0 0 0 auto;
+  color: #817b71;
+  font: 400 7px/1.3 "Share Tech Mono", ui-monospace, monospace;
+  letter-spacing: .04em;
+  overflow: visible;
+  text-align: right;
+  text-transform: none;
+  white-space: nowrap;
 }
 
 .halo-menu-lane:not(:last-child)::after {
@@ -468,7 +555,9 @@
 }
 
 .halo-menu-lane > a,
-.halo-menu-lane > button {
+.halo-menu-lane > button,
+.halo-menu-lane > details > a,
+.halo-menu-lane > details > button {
   position: relative;
   display: grid;
   min-height: 52px;
@@ -488,7 +577,9 @@
 }
 
 .halo-menu-lane > a::after,
-.halo-menu-lane > button::after {
+.halo-menu-lane > button::after,
+.halo-menu-lane > details > a::after,
+.halo-menu-lane > details > button::after {
   position: absolute;
   right: 7px;
   bottom: 5px;
@@ -502,7 +593,13 @@
 .halo-menu-lane > a:hover,
 .halo-menu-lane > button:hover,
 .halo-menu-lane > a:focus-visible,
-.halo-menu-lane > button:focus-visible {
+.halo-menu-lane > button:focus-visible,
+.halo-menu-lane > a[aria-current="page"],
+.halo-menu-lane > details > a:hover,
+.halo-menu-lane > details > button:hover,
+.halo-menu-lane > details > a:focus-visible,
+.halo-menu-lane > details > button:focus-visible,
+.halo-menu-lane > details > a[aria-current="page"] {
   border-color: rgba(245, 158, 11, .38);
   background: rgba(245, 158, 11, .08);
   outline: none;
@@ -512,7 +609,11 @@
 .halo-menu-lane > a:hover::after,
 .halo-menu-lane > button:hover::after,
 .halo-menu-lane > a:focus-visible::after,
-.halo-menu-lane > button:focus-visible::after {
+.halo-menu-lane > button:focus-visible::after,
+.halo-menu-lane > details > a:hover::after,
+.halo-menu-lane > details > button:hover::after,
+.halo-menu-lane > details > a:focus-visible::after,
+.halo-menu-lane > details > button:focus-visible::after {
   color: rgba(232, 184, 101, .55);
 }
 
@@ -757,17 +858,22 @@
     align-items: start;
   }
 
+  .halo-menu-intro-actions {
+    justify-items: start;
+  }
+
   .halo-menu-intro h2 {
     font-size: 22px;
   }
 
   .halo-menu-intro p {
-    max-width: 150px;
+    max-width: 280px;
     font-size: 7px;
+    text-align: left;
   }
 
   .halo-menu-lanes {
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 1fr;
     gap: 12px 6px;
     max-height: none;
     overflow: visible;
@@ -942,6 +1048,9 @@
   .halo-mobile-menu > summary,
   .halo-menu-lane > a,
   .halo-menu-lane > button,
+  .halo-menu-lane > details > a,
+  .halo-menu-lane > details > button,
+  .halo-menu-intro-actions > a,
   .halo-menu-console,
   .halo-floating-action { transition: none !important; }
   .halo-menu-business-hub:hover,

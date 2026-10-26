@@ -3905,66 +3905,72 @@
                         <span className="halo-menu-kicker">HALO WORLD MAP / 01</span>
                         <h2>Choose your signal.</h2>
                       </div>
-                      <p>Listen, build, broadcast, or step behind the console.</p>
+                      <div className="halo-menu-intro-actions">
+                        <p>Listen, build, broadcast, or step behind the console.</p>
+                        <a href="/vip_launchpad.html" aria-current={menuStatusForRoute('/vip_launchpad.html', 'green').isCurrent ? 'page' : undefined} data-stat-event="open_vip_workspace" data-stat-target="header">VIP Workspace <span aria-hidden="true">↗</span></a>
+                      </div>
                     </div>
 
-                    <div className="halo-menu-status-groups" aria-label="Satellite route status groups">
-                      <section className="halo-menu-status-group halo-menu-status-group-working" aria-labelledby="halo-menu-status-working">
-                        <div className="halo-menu-status-group-title">
-                          <span>00</span>
-                          <h3 id="halo-menu-status-working">All working menu</h3>
-                        </div>
-                        <div className="halo-menu-status-buttons">
-                          {menuStatusGroupedTargets.working.map(target => (
-                            <a key={`working-${target.route}`} href={target.route} className={`halo-menu-status-button${target.route === '/artist/dashboard' ? ' halo-menu-business-hub' : ''}`} data-stat-event={target.route === '/artist/dashboard' ? 'open_business_hub' : undefined} data-stat-target={target.route === '/artist/dashboard' ? 'menu_quick_access' : undefined}>
-                              <span className="halo-menu-status-label">{target.label}{target.route === '/artist/dashboard' && <small>Sovereign Label OS</small>}</span>
-                              {renderMenuStatusBadge(target.route, target.route === '/artist/dashboard' ? 'Business Hub' : target.label, 'green')}
-                            </a>
-                          ))}
-                        </div>
-                        {!menuStatusGroupedTargets.working.length && (
-                          <p className="halo-menu-status-empty">Working routes appear here as soon as the live check completes.</p>
-                        )}
-                        {menuRouteStatusesUnavailable && (
-                          <p className="halo-menu-status-empty">Live status is refreshing. The public route map stays visible while fresh checks publish.</p>
-                        )}
-                      </section>
-                      {ownerControlAccess && (
-                        <section className="halo-menu-status-group halo-menu-status-group-attention" aria-labelledby="halo-menu-status-attention">
-                          <button
-                            type="button"
-                            className="halo-menu-status-group-title halo-menu-status-group-toggle"
-                            aria-expanded={!attentionStatusCollapsed}
-                            aria-controls="halo-menu-status-attention-content"
-                            onClick={() => setAttentionStatusCollapsed(collapsed => !collapsed)}
-                          >
-                            <span>01</span>
-                            <h3 id="halo-menu-status-attention">Attention now</h3>
-                            <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
-                              <path d="m5 7.5 5 5 5-5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-                            </svg>
-                          </button>
-                          <div id="halo-menu-status-attention-content" hidden={attentionStatusCollapsed}>
-                            {menuStatusGroupedTargets.attention.length ? (
-                              <div className="halo-menu-status-buttons">
-                                {menuStatusGroupedTargets.attention.map(target => (
-                                  <a key={`attention-${target.route}`} href={target.route} className="halo-menu-status-button">
-                                    <span className="halo-menu-status-label">{target.label}</span>
-                                    {renderMenuStatusBadge(target.route, target.label, 'yellow')}
-                                  </a>
-                                ))}
-                              </div>
-                            ) : (
-                              <p className="halo-menu-status-empty">No active amber satellites. All monitored routes are currently working.</p>
-                            )}
+                    <details className="halo-menu-status-disclosure">
+                      <summary>Live route health <span>{menuDestinationCount} monitored destinations</span></summary>
+                      <div className="halo-menu-status-groups" aria-label="Satellite route status groups">
+                        <section className="halo-menu-status-group halo-menu-status-group-working" aria-labelledby="halo-menu-status-working">
+                          <div className="halo-menu-status-group-title">
+                            <span>00</span>
+                            <h3 id="halo-menu-status-working">All working menu</h3>
                           </div>
+                          <div className="halo-menu-status-buttons">
+                            {menuStatusGroupedTargets.working.map(target => (
+                              <a key={`working-${target.route}`} href={target.route} aria-current={menuStatusForRoute(target.route, 'green').isCurrent ? 'page' : undefined} className={`halo-menu-status-button${target.route === '/artist/dashboard' ? ' halo-menu-business-hub' : ''}`} data-stat-event={target.route === '/artist/dashboard' ? 'open_business_hub' : undefined} data-stat-target={target.route === '/artist/dashboard' ? 'menu_quick_access' : undefined}>
+                                <span className="halo-menu-status-label">{target.label}{target.route === '/artist/dashboard' && <small>Sovereign Label OS</small>}</span>
+                                {renderMenuStatusBadge(target.route, target.route === '/artist/dashboard' ? 'Business Hub' : target.label, 'green')}
+                              </a>
+                            ))}
+                          </div>
+                          {!menuStatusGroupedTargets.working.length && (
+                            <p className="halo-menu-status-empty">Working routes appear here as soon as the live check completes.</p>
+                          )}
+                          {menuRouteStatusesUnavailable && (
+                            <p className="halo-menu-status-empty">Live status is refreshing. The public route map stays visible while fresh checks publish.</p>
+                          )}
                         </section>
-                      )}
-                    </div>
+                        {ownerControlAccess && (
+                          <section className="halo-menu-status-group halo-menu-status-group-attention" aria-labelledby="halo-menu-status-attention">
+                            <button
+                              type="button"
+                              className="halo-menu-status-group-title halo-menu-status-group-toggle"
+                              aria-expanded={!attentionStatusCollapsed}
+                              aria-controls="halo-menu-status-attention-content"
+                              onClick={() => setAttentionStatusCollapsed(collapsed => !collapsed)}
+                            >
+                              <span>01</span>
+                              <h3 id="halo-menu-status-attention">Attention now</h3>
+                              <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
+                                <path d="m5 7.5 5 5 5-5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                              </svg>
+                            </button>
+                            <div id="halo-menu-status-attention-content" hidden={attentionStatusCollapsed}>
+                              {menuStatusGroupedTargets.attention.length ? (
+                                <div className="halo-menu-status-buttons">
+                                  {menuStatusGroupedTargets.attention.map(target => (
+                                    <a key={`attention-${target.route}`} href={target.route} aria-current={menuStatusForRoute(target.route, 'yellow').isCurrent ? 'page' : undefined} className="halo-menu-status-button">
+                                      <span className="halo-menu-status-label">{target.label}</span>
+                                      {renderMenuStatusBadge(target.route, target.label, 'yellow')}
+                                    </a>
+                                  ))}
+                                </div>
+                              ) : (
+                                <p className="halo-menu-status-empty">No active amber satellites. All monitored routes are currently working.</p>
+                              )}
+                            </div>
+                          </section>
+                        )}
+                      </div>
+                    </details>
 
                     <div className="halo-menu-lanes">
-                      <section className="halo-menu-lane halo-menu-lane-start" aria-labelledby="halo-lane-start">
-                        <div className="halo-menu-lane-title"><span>01</span><h3 id="halo-lane-start">Arrive</h3></div>
+                      <section className="halo-menu-lane halo-menu-lane-listen" aria-labelledby="halo-lane-listen">
+                        <div className="halo-menu-lane-title"><span>01</span><h3 id="halo-lane-listen">Listen &amp; Vote</h3><small>Fans &amp; Discovery</small></div>
                         <button type="button" onClick={() => setShowFanGuide(true)} data-stat-event="open_fan_guide" data-stat-target="header" data-signal="ORIENTATION">
                           <Icon name="users" className="halo-menu-icon" />
                           <span><strong>NEW HERE? START HERE {renderLocalMenuStatusBadge('green', 'fan guide')}</strong><small>A two-minute map of the world</small></span>
@@ -3986,11 +3992,7 @@
                             <span><strong>JOIN / SIGN IN {renderLocalMenuStatusBadge('green', 'member access')}</strong><small>Keep your place in the world</small></span>
                           </button>
                         )}
-                      </section>
-
-                      <section className="halo-menu-lane halo-menu-lane-listen" aria-labelledby="halo-lane-listen">
-                        <div className="halo-menu-lane-title"><span>02</span><h3 id="halo-lane-listen">Listen</h3></div>
-                        <a href="/music-world.html" data-stat-event="open_music_world" data-stat-target="header" data-signal="PUBLIC MUSIC WORLD">
+                        <a href="/music-world.html" aria-current={menuStatusForRoute('/music-world.html', 'green').isCurrent ? 'page' : undefined} data-stat-event="open_music_world" data-stat-target="header" data-signal="PUBLIC MUSIC WORLD">
                           <Icon name="globe" className="halo-menu-icon" /><span><strong>MUSIC WORLD {renderMenuStatusBadge('/music-world.html', 'Music World')}</strong><small>Open the shop first, then move into Dreamweaver from one view</small></span>
                         </a>
                         <a href="/dreamweaver/" data-stat-event="open_dreamweaver_show" data-stat-target="mobile_nav" data-signal="SONG LOBBY">
@@ -4002,7 +4004,7 @@
                         <a href="/music-world.html#telemetry" data-stat-event="open_music_world_telemetry" data-stat-target="header" data-signal="TELEMETRY">
                           <Icon name="radio" className="halo-menu-icon" /><span><strong>MUSIC WORLD TELEMETRY {renderMenuStatusBadge('/music-world.html', 'Music World Telemetry')}</strong><small>Audience radar and commercial signals</small></span>
                         </a>
-                        <a href="/music/" data-stat-event="open_music_catalog" data-stat-target="header" data-signal="CATALOG">
+                        <a href="/music/" aria-current={menuStatusForRoute('/music/', 'green').isCurrent ? 'page' : undefined} data-stat-event="open_music_catalog" data-stat-target="header" data-signal="CATALOG">
                           <Icon name="music" className="halo-menu-icon" /><span><strong>ALL MUSIC {renderMenuStatusBadge('/music/', 'All Music')}</strong><small>The permanent catalog</small></span>
                         </a>
                         <a href="/halo-x.html" data-stat-event="open_halo_x" data-stat-target="header" data-signal="ARTIST ROOM">
@@ -4025,17 +4027,8 @@
                         </a>
                       </section>
 
-                      <section className="halo-menu-lane halo-menu-lane-build" aria-labelledby="halo-lane-build">
-                        <div className="halo-menu-lane-title"><span>03</span><h3 id="halo-lane-build">Build</h3></div>
-                        <a href="/artist/dashboard" className="halo-menu-business-hub" data-stat-event="open_business_hub" data-stat-target="header" data-signal="FINANCIAL OS">
-                          <Icon name="credit-card" className="halo-menu-icon" /><span><em className="halo-menu-business-hub-badge">Financial OS</em><strong>BUSINESS HUB {renderMenuStatusBadge('/artist/dashboard', 'Business Hub')}</strong><small>Sovereign Label OS: income, tax reserve, obligations, and allocation in one private workspace</small></span>
-                        </a>
-                        <a href="/sync-hub/" data-stat-event="open_sync_hub" data-stat-target="header" data-signal="SYNC LICENSING">
-                          <Icon name="music" className="halo-menu-icon" /><span><strong>SYNC LICENSING {renderMenuStatusBadge('/sync-hub/', 'Sync Licensing')}</strong><small>Explore HALO tracks, stems, and licensing inquiries</small></span>
-                        </a>
-                        <a href="/asset-inventory/" data-stat-event="open_asset_inventory" data-stat-target="header" data-signal="ASSET INVENTORY">
-                          <Icon name="folder" className="halo-menu-icon" /><span><strong>ASSET INVENTORY {renderMenuStatusBadge('/asset-inventory/', 'Asset Inventory')}</strong><small>Built assets, fair valuation, and HALO pricing tiers</small></span>
-                        </a>
+                      <section className="halo-menu-lane halo-menu-lane-create" aria-labelledby="halo-lane-create">
+                        <div className="halo-menu-lane-title"><span>02</span><h3 id="halo-lane-create">Create &amp; Release</h3><small>Artists &amp; Production</small></div>
                         <a href="/artist-pro/" data-stat-event="open_artist_pro" data-stat-target="header" data-signal="FOUNDING ARTIST OFFER">
                           <Icon name="arrow-right" className="halo-menu-icon" /><span><strong>ARTIST PRO {renderMenuStatusBadge('/artist-pro/', 'Artist Pro')}</strong><small>One release. One command system.</small></span>
                         </a>
@@ -4045,11 +4038,11 @@
                         <a href="/creator-network/" data-stat-event="open_creator_network" data-stat-target="header" data-signal="MEMBER COLLABORATION">
                           <Icon name="star" className="halo-menu-icon" /><span><strong>CREATOR NETWORK {renderMenuStatusBadge('/creator-network/', 'Creator Network')}</strong><small>Member profiles, opportunities, and invites</small></span>
                         </a>
+                        <a href="/artist-team.html" data-stat-event="open_artist_team" data-stat-target="header" data-signal="COLLABORATORS">
+                          <Icon name="users" className="halo-menu-icon" /><span><strong>COLLABORATOR WORKSPACE</strong><small>Coordinate artist teams, production, and release work</small></span>
+                        </a>
                         <a href="/signal-network/" data-stat-event="open_signal_network" data-stat-target="header" data-signal="ARTIST INTELLIGENCE">
                           <Icon name="activity" className="halo-menu-icon" /><span><strong>SIGNAL NETWORK {renderMenuStatusBadge('/signal-network/', 'Signal Network')}</strong><small>The Signal Feed, public previews, messages, and campaigns</small></span>
-                        </a>
-                        <a href="/artists/" data-stat-event="open_artist_rooms" data-stat-target="header" data-signal="ARTIST ROOMS">
-                          <Icon name="music" className="halo-menu-icon" /><span><strong>ARTIST ROOMS + CHARTS {renderMenuStatusBadge('/artists/', 'Artist Rooms and Charts')}</strong><small>Browse rooms, charts, and featured drops</small></span>
                         </a>
                         <a href="/creator-freedom/" data-stat-event="open_creator_charter" data-stat-target="header" data-signal="PUBLIC POLICY">
                           <Icon name="book-open" className="halo-menu-icon" /><span><strong>CREATOR FREEDOM {renderMenuStatusBadge('/creator-freedom/', 'Creator Freedom')}</strong><small>White paper, seven-point charter, and public room</small></span>
@@ -4057,20 +4050,14 @@
                         <a href="/campaign-studio/" data-stat-event="open_campaign_studio" data-stat-target="header" data-signal="CAMPAIGN STUDIO">
                           <Icon name="check-circle" className="halo-menu-icon" /><span><strong>CAMPAIGN STUDIO // ARTIST CONTROLS {renderMenuStatusBadge('/campaign-studio/', 'Campaign Studio')}</strong><small>One release. Five purpose-built links for every destination.</small></span>
                         </a>
-                        <a href="/release-house/" data-stat-event="open_release_house" data-stat-target="header" data-signal="FIRST RELEASE">
+                        <a href="/release-house/" aria-current={menuStatusForRoute('/release-house/', 'green').isCurrent ? 'page' : undefined} data-stat-event="open_release_house" data-stat-target="header" data-signal="FIRST RELEASE">
                           <Icon name="disc" className="halo-menu-icon" /><span><strong>RELEASE HOUSE {renderMenuStatusBadge('/release-house/', 'Release House')}</strong><small>Idea to release, one guided room at a time</small></span>
-                        </a>
-                        <a href="/song-catalog/" data-stat-event="open_song_catalog" data-stat-target="header" data-signal="MASTERS + VERSIONS">
-                          <Icon name="list-music" className="halo-menu-icon" /><span><strong>SONG CATALOG {renderMenuStatusBadge('/song-catalog/', 'Song Catalog')}</strong><small>Sale masters, radio edits, stems, and metadata review</small></span>
                         </a>
                         <a href="/asset-editor/" data-stat-event="open_sitewide_asset_editor" data-stat-target="header" data-signal="EDIT ANYWHERE">
                           <Icon name="check-circle" className="halo-menu-icon" /><span><strong>SITEWIDE ASSET EDITOR {renderLocalMenuStatusBadge('green', 'sitewide asset editor')}</strong><small>Edit songs, release metadata, and artwork from one shared hub</small></span>
                         </a>
                         <a href="/music-upload/" data-stat-event="open_song_catalog_upload" data-stat-target="header" data-signal="HALO SHOP">
                           <Icon name="upload" className="halo-menu-icon" /><span><strong>HALO SHOP {renderMenuStatusBadge('/music-upload/', 'HALO Shop')}</strong><small>Public song shop for listening, buying, sharing, and artist-controlled release context</small></span>
-                        </a>
-                        <a href="/dreamweaver/" data-stat-event="open_dreamweaver_show" data-stat-target="header" data-signal="FAN JOURNEY">
-                          <Icon name="star" className="halo-menu-icon" /><span><strong>DREAMWEAVER EXPERIENCE {renderMenuStatusBadge('/dreamweaver/', 'Dreamweaver Experience')}</strong><small>Start your Halo here — upload to Dreamweaver</small></span>
                         </a>
                         <a href="/dreamweaver-lab/" data-stat-event="open_dreamweaver_song_lab" data-stat-target="header" data-signal="AUDIO TO CAMPAIGN">
                           <Icon name="music" className="halo-menu-icon" /><span><strong>DREAMWEAVER SONG LAB {renderMenuStatusBadge('/dreamweaver-lab/', 'Dreamweaver Song Lab')}</strong><small>Load a recording. Analyze the wave. Build the release world.</small></span>
@@ -4081,24 +4068,36 @@
                         <a href="/empath-journey/" data-signal="YOUR QUIET JOURNEY">
                           <Icon name="heart" className="halo-menu-icon" /><span><strong>YOUR QUIET JOURNEY {renderMenuStatusBadge('/empath-journey/', 'Empath Journey')}</strong><small>Journey polls, personal album arcs, and Dreamweaver lyric books</small></span>
                         </a>
-                        <a href="/toolost/" data-stat-event="open_toolost_partner" data-stat-target="header" data-signal="HALO DISTRIBUTION">
-                          <Icon name="arrow-right" className="halo-menu-icon" /><span><strong>HALO DISTRIBUTION {renderMenuStatusBadge('/toolost/', 'HALO Distribution')}</strong><small>Toolost-powered partner route for release delivery</small></span>
-                        </a>
                         <a href="/finish-house/" data-stat-event="open_finish_house" data-stat-target="header" data-signal="MASTER + LICENSE">
                           <Icon name="check-circle" className="halo-menu-icon" /><span><strong>FINISH HOUSE {renderMenuStatusBadge('/finish-house/', 'Finish House')}</strong><small>Mix to master to licensing-ready package</small></span>
                         </a>
                         <a href="/magazine.html" data-stat-event="open_halo_signal" data-stat-target="header" data-signal="EDITORIAL">
                           <Icon name="book-open" className="halo-menu-icon" /><span><strong>HALO SIGNAL {renderMenuStatusBadge('/magazine.html', 'HALO Signal')}</strong><small>Stories from inside the world</small></span>
                         </a>
+                      </section>
+
+                      <section className="halo-menu-lane halo-menu-lane-build" aria-labelledby="halo-lane-business">
+                        <div className="halo-menu-lane-title"><span>03</span><h3 id="halo-lane-business">Business &amp; Catalog</h3><small>Label &amp; Sync</small></div>
+                        <a href="/artist/dashboard" aria-current={menuStatusForRoute('/artist/dashboard', 'green').isCurrent ? 'page' : undefined} className="halo-menu-business-hub" data-stat-event="open_business_hub" data-stat-target="header" data-signal="FINANCIAL OS">
+                          <Icon name="credit-card" className="halo-menu-icon" /><span><em className="halo-menu-business-hub-badge">Financial OS</em><strong>BUSINESS HUB {renderMenuStatusBadge('/artist/dashboard', 'Business Hub')}</strong><small>Sovereign Label OS: income, tax reserve, obligations, and allocation in one private workspace</small></span>
+                        </a>
+                        <a href="/sync-hub/" aria-current={menuStatusForRoute('/sync-hub/', 'green').isCurrent ? 'page' : undefined} data-stat-event="open_sync_hub" data-stat-target="header" data-signal="SYNC LICENSING">
+                          <Icon name="music" className="halo-menu-icon" /><span><strong>SYNC LICENSING {renderMenuStatusBadge('/sync-hub/', 'Sync Licensing')}</strong><small>Explore HALO tracks, stems, and licensing inquiries</small></span>
+                        </a>
+                        <a href="/song-catalog/" data-stat-event="open_song_catalog" data-stat-target="header" data-signal="MASTERS + VERSIONS">
+                          <Icon name="list-music" className="halo-menu-icon" /><span><strong>SONG CATALOG {renderMenuStatusBadge('/song-catalog/', 'Song Catalog')}</strong><small>Sale masters, radio edits, stems, and metadata review</small></span>
+                        </a>
+                        <a href="/asset-inventory/" data-stat-event="open_asset_inventory" data-stat-target="header" data-signal="ASSET INVENTORY">
+                          <Icon name="folder" className="halo-menu-icon" /><span><strong>ASSET INVENTORY {renderMenuStatusBadge('/asset-inventory/', 'Asset Inventory')}</strong><small>Built assets, fair valuation, and HALO pricing tiers</small></span>
+                        </a>
+                        <a href="/toolost/" data-stat-event="open_toolost_partner" data-stat-target="header" data-signal="HALO DISTRIBUTION">
+                          <Icon name="arrow-right" className="halo-menu-icon" /><span><strong>HALO DISTRIBUTION {renderMenuStatusBadge('/toolost/', 'HALO Distribution')}</strong><small>Toolost-powered partner route for release delivery</small></span>
+                        </a>
                         {ownerControlAccess && (
                           <a href="/control-center" data-stat-event="open_owner_control_room" data-stat-target="header" data-signal="OWNER ONLY">
                             <Icon name="lock" className="halo-menu-icon" /><span><strong>PRIVATE CONTROL ROOM {renderLocalMenuStatusBadge('green', 'private control room')}</strong><small>Your protected command center</small></span>
                           </a>
                         )}
-                      </section>
-
-                      <section className="halo-menu-lane halo-menu-lane-care" aria-labelledby="halo-lane-care">
-                        <div className="halo-menu-lane-title"><span>04</span><h3 id="halo-lane-care">Care</h3></div>
                         <a href="/halo-shield/" data-stat-event="open_halo_shield" data-stat-target="header" data-signal="GROW ON TRUST">
                           <Icon name="shield-check" className="halo-menu-icon" /><span><strong>HALO SHIELD {renderMenuStatusBadge('/halo-shield/', 'Halo Shield')}</strong><small>View protection status</small></span>
                         </a>
@@ -4132,6 +4131,42 @@
               {/* VIEW 1: FRONT LANDING SHOWCASE PORTAL */}
               {viewMode === 'landing' && (
                 <main className="flex-1 max-w-6xl mx-auto w-full px-4 py-8 md:py-12 space-y-12 overflow-y-auto">
+
+                  <section className="rounded-3xl border border-amber-200/15 bg-[radial-gradient(circle_at_90%_0%,rgba(217,188,124,.12),transparent_32%),linear-gradient(145deg,rgba(18,18,22,.98),rgba(8,9,12,.98))] p-5 shadow-[0_24px_70px_rgba(0,0,0,.28)] sm:p-8" aria-labelledby="find-your-path-title">
+                    <div className="mb-6 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+                      <div>
+                        <p className="font-sans-alt text-[9px] font-black uppercase tracking-[.24em] text-amber-200/70">A clearer way into HALO</p>
+                        <h2 id="find-your-path-title" className="mt-2 font-sans-alt text-2xl font-black tracking-tight text-[#f4eee3] sm:text-3xl">Find Your Path</h2>
+                      </div>
+                      <p className="max-w-xl font-sans-alt text-xs leading-6 text-gray-400 sm:text-right">Choose a workspace that fits your music and your next move.</p>
+                    </div>
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                      <a href="/release-house/?mode=solo" data-path-mode="solo" aria-current={menuStatusForRoute('/release-house/', 'green').isCurrent ? 'page' : undefined} className="group flex min-h-full flex-col rounded-2xl border border-white/10 bg-black/25 p-5 text-left transition duration-200 hover:-translate-y-1 hover:border-amber-200/40 hover:bg-white/[.04] focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-200 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0a0b0e] motion-reduce:transform-none">
+                        <span className="mb-5 inline-flex w-fit rounded-full border border-amber-200/20 bg-amber-200/[.07] px-3 py-1 font-sans-alt text-[9px] font-bold uppercase tracking-[.16em] text-amber-100">Quick Launch</span>
+                        <h3 className="font-sans-alt text-lg font-bold text-white">Solo Builder</h3>
+                        <p className="mt-2 flex-1 font-sans-alt text-xs leading-6 text-gray-400">Perfect if you have 1–5 tracks. Fast-track your masters into release rotation and test the living chart.</p>
+                        <span className="mt-5 inline-flex items-center gap-2 font-sans-alt text-[10px] font-bold uppercase tracking-[.14em] text-amber-100">Open Release House <span aria-hidden="true" className="transition-transform group-hover:translate-x-1">→</span></span>
+                      </a>
+                      <a href="/song-catalog/?mode=coop" data-path-mode="coop" aria-current={menuStatusForRoute('/song-catalog/', 'green').isCurrent ? 'page' : undefined} className="group flex min-h-full flex-col rounded-2xl border border-white/10 bg-black/25 p-5 text-left transition duration-200 hover:-translate-y-1 hover:border-amber-200/40 hover:bg-white/[.04] focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-200 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0a0b0e] motion-reduce:transform-none">
+                        <span className="mb-5 inline-flex w-fit rounded-full border border-amber-200/20 bg-amber-200/[.07] px-3 py-1 font-sans-alt text-[9px] font-bold uppercase tracking-[.16em] text-amber-100">Library Scale</span>
+                        <h3 className="font-sans-alt text-lg font-bold text-white">Catalog Co-Op</h3>
+                        <p className="mt-2 flex-1 font-sans-alt text-xs leading-6 text-gray-400">Managing a deep library (10+ tracks)? Bulk import, automated metadata mapping, and shared revenue pipelines.</p>
+                        <span className="mt-5 inline-flex items-center gap-2 font-sans-alt text-[10px] font-bold uppercase tracking-[.14em] text-amber-100">Open Song Catalog <span aria-hidden="true" className="transition-transform group-hover:translate-x-1">→</span></span>
+                      </a>
+                      <a href="/artist-team.html?mode=collab" data-path-mode="collab" aria-current={menuStatusForRoute('/artist-team.html', 'green').isCurrent ? 'page' : undefined} className="group flex min-h-full flex-col rounded-2xl border border-white/10 bg-black/25 p-5 text-left transition duration-200 hover:-translate-y-1 hover:border-amber-200/40 hover:bg-white/[.04] focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-200 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0a0b0e] motion-reduce:transform-none">
+                        <span className="mb-5 inline-flex w-fit rounded-full border border-amber-200/20 bg-amber-200/[.07] px-3 py-1 font-sans-alt text-[9px] font-bold uppercase tracking-[.16em] text-amber-100">Multi-Creator</span>
+                        <h3 className="font-sans-alt text-lg font-bold text-white">Collaborator &amp; Performer</h3>
+                        <p className="mt-2 flex-1 font-sans-alt text-xs leading-6 text-gray-400">Co-producers, featured artists, and remixers can coordinate their work and credits in one shared space.</p>
+                        <span className="mt-5 inline-flex items-center gap-2 font-sans-alt text-[10px] font-bold uppercase tracking-[.14em] text-amber-100">Open Collaborator Workspace <span aria-hidden="true" className="transition-transform group-hover:translate-x-1">→</span></span>
+                      </a>
+                      <a href="/music/?mode=testing" data-path-mode="testing" aria-current={menuStatusForRoute('/music/', 'green').isCurrent ? 'page' : undefined} className="group flex min-h-full flex-col rounded-2xl border border-white/10 bg-black/25 p-5 text-left transition duration-200 hover:-translate-y-1 hover:border-amber-200/40 hover:bg-white/[.04] focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-200 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0a0b0e] motion-reduce:transform-none">
+                        <span className="mb-5 inline-flex w-fit rounded-full border border-amber-200/20 bg-amber-200/[.07] px-3 py-1 font-sans-alt text-[9px] font-bold uppercase tracking-[.16em] text-amber-100">Live Data</span>
+                        <h3 className="font-sans-alt text-lg font-bold text-white">Market Testing</h3>
+                        <p className="mt-2 flex-1 font-sans-alt text-xs leading-6 text-gray-400">Take unreleased ideas to the living-chart listening community and gauge fan momentum before full distribution.</p>
+                        <span className="mt-5 inline-flex items-center gap-2 font-sans-alt text-[10px] font-bold uppercase tracking-[.14em] text-amber-100">Open Living Chart <span aria-hidden="true" className="transition-transform group-hover:translate-x-1">→</span></span>
+                      </a>
+                    </div>
+                  </section>
 
                   <section className="halo-home-experiment" aria-labelledby="halo-home-experiment-title" data-homepage-hero="dreamweaver">
                     <div className="halo-home-experiment__grid">

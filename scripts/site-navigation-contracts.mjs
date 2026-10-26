@@ -357,7 +357,7 @@ assert.match(musicStyles, /\.halo-player-bar \{ position: fixed;/, "the floating
     assert.deepEqual(Array.from(grouped.attention, target => target.route), Object.keys(statuses), "non-green routes must retain attention status");
   }
   const buildLane = mainSite.match(/<section className="halo-menu-lane halo-menu-lane-build"[\s\S]*?<\/section>/)?.[0] || "";
-  assert.match(buildLane, /<a href="\/artist\/dashboard" className="halo-menu-business-hub"[^>]*data-signal="FINANCIAL OS"/, "the Build lane must lead with the highlighted Business Hub card");
+  assert.match(buildLane, /<a href="\/artist\/dashboard"[^>]*className="halo-menu-business-hub"[^>]*data-signal="FINANCIAL OS"/, "the Business & Catalog area must lead with the highlighted Business Hub card");
   assert.match(buildLane, /renderMenuStatusBadge\('\/artist\/dashboard', 'Business Hub'\)/);
   assert.match(mainSite, /\{ route: '\/artist\/dashboard', label: 'BUSINESS HUB' \}/, "Business Hub must receive live menu status");
   assert.match(mainSite, /MENU_FILE_BACKED_ROUTES = new Set\(\['\/artist\/dashboard'\]\)/, "menu status lookups must not append a slash to /artist/dashboard");
@@ -442,6 +442,52 @@ assert.match(musicStyles, /\.halo-player-bar \{ position: fixed;/, "the floating
   for (const benefit of ["Rights Passport", "Income Ledger", "transaction fee", "Priority sync placement", "copilot", "Split automation", "White-label pitching pages"]) {
     assert.ok(page.includes(benefit), `pricing benefit ${benefit} must be listed`);
   }
+}
+
+// --- Workspace pathways and home onboarding --------------------------------------------
+{
+  const [mainSite, navigationStyles] = await Promise.all([
+    read("halo.html"), read("mobile-navigation.css")
+  ]);
+  const pathSection = mainSite.match(/<section[^>]*aria-labelledby="find-your-path-title"[\s\S]*?<\/section>/)?.[0] || "";
+  assert.ok(pathSection, "the home landing page must expose the Find Your Path section");
+  assert.match(pathSection, /<h2 id="find-your-path-title"[^>]*>Find Your Path<\/h2>/);
+  const { PUBLIC_ROUTE_REGISTRY } = await import("../lib/route-registry.js");
+  const registeredRoutes = new Set(PUBLIC_ROUTE_REGISTRY.map(({ route }) => route));
+  const expectedPaths = [
+    ["solo", "/release-house/", "Solo Builder"],
+    ["coop", "/song-catalog/", "Catalog Co-Op"],
+    ["collab", "/artist-team.html", "Collaborator &amp; Performer"],
+    ["testing", "/music/", "Market Testing"]
+  ];
+  for (const [mode, route, title] of expectedPaths) {
+    const link = pathSection.match(new RegExp(`<a href="([^"]+)" data-path-mode="${mode}"`))?.[1];
+    assert.ok(link, `${title} must be an accessible link carrying its ${mode} mode`);
+    const destination = new URL(link, "https://halo.test");
+    assert.equal(destination.pathname, route, `${title} must use the existing ${route} workspace`);
+    assert.equal(destination.searchParams.get("mode"), mode, `${title} must preserve its mode query`);
+    assert.ok(registeredRoutes.has(route), `${route} must exist in the public route registry`);
+    assert.ok(pathSection.includes(`<h3 className="font-sans-alt text-lg font-bold text-white">${title}</h3>`), `${title} must be clearly named`);
+  }
+  assert.doesNotMatch(pathSection, /onClick|window\.location/, "onboarding choices must use native links, not clickable containers");
+  assert.match(pathSection, /focus-visible:ring-2/, "path choices must expose a visible keyboard focus state");
+
+  const navigation = mainSite.match(/<nav className="halo-site-actions"[\s\S]*?<\/nav>/)?.[0] || "";
+  for (const [heading, route, label] of [
+    ["Listen &amp; Vote", "/music-world.html", "Fans &amp; Discovery"],
+    ["Create &amp; Release", "/release-house/", "Artists &amp; Production"],
+    ["Business &amp; Catalog", "/artist/dashboard", "Label &amp; Sync"]
+  ]) {
+    assert.ok(navigation.includes(`<h3 id="halo-lane-${heading.startsWith("Listen") ? "listen" : heading.startsWith("Create") ? "create" : "business"}">${heading}</h3>`), `${heading} must be a primary navigation area`);
+    assert.ok(navigation.includes(label), `${heading} must explain its audience`);
+    assert.match(navigation, new RegExp(`<a href="${route.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}"[^>]*aria-current=\\{menuStatusForRoute`), `${route} must expose its active route state`);
+  }
+  assert.equal((navigation.match(/className="halo-menu-lane halo-menu-lane-/g) || []).length, 3, "primary navigation must have exactly three pillars");
+  assert.match(navigation, /href="\/vip_launchpad\.html"/, "the supported VIP workspace must remain directly available");
+  assert.match(navigation, /<details className="halo-menu-status-disclosure">/, "live route status should not crowd the primary navigation");
+  assert.match(navigationStyles, /grid-template-columns:\s*repeat\(3,\s*minmax\(0,\s*1fr\)\)/, "desktop navigation should give the three pillars balanced space");
+  assert.match(navigationStyles, /@media \(max-width: 767px\)[\s\S]*?\.halo-menu-lanes\s*\{\s*grid-template-columns: 1fr;/, "the three pillars should stack on narrow screens");
+  assert.match(navigationStyles, /\.halo-menu-lane > a\[aria-current="page"\]/, "the current workspace must be visibly distinguished");
 }
 
 console.log("Site navigation contracts passed.");

@@ -5,17 +5,32 @@ import { runStageMonitor } from "./upload-experience-stage-monitor.mjs";
 const root = resolve(import.meta.dirname, "..");
 const read = path => readFile(resolve(root, path), "utf8");
 
-const [page, client, styles, api, netlifyConfig] = await Promise.all([
+const [page, client, styles, api, netlifyConfig, showReadiness] = await Promise.all([
   read("upload-pipeline/index.html"),
   read("upload-pipeline/upload-pipeline.js"),
   read("upload-pipeline/upload-pipeline.css"),
   read("netlify/functions/upload-pipeline.mjs"),
   read("netlify.toml"),
+  read("lib/dreamweaver-upload.js"),
 ]);
 
-const sources = { page, client, styles, api, netlifyConfig };
+const sources = { page, client, styles, api, netlifyConfig, showReadiness };
 
 const checks = [
+  {
+    stage: "public show handoff",
+    source: "showReadiness",
+    description: "public Dreamweaver handoff requires publication, anonymous access, exact song and canonical master matching",
+    signals: [
+      'song.pipelineStatus !== "published"',
+      'song.rightsStatus !== "cleared"',
+      'credentials: "omit"',
+      'entry.catalog?.songId === songId',
+      'binding.masterVersionId !== release.catalog.masterCopy.versionId',
+      'buildDreamweaverStorefrontPath(songId',
+    ],
+    diagnose: "Public show handoff must not mistake processing or private owner access for public readiness.",
+  },
   {
     stage: "auth hydration / access control",
     source: "client",

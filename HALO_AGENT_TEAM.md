@@ -79,11 +79,28 @@ The system cannot initiate a new ChatGPT conversation or proactively message the
 
 ## Private control center
 
-The owner observatory at `/control-center` now includes a persistent command channel for the full council or any individual specialist. Each instruction is stored in Netlify Database, answered using the latest council report, unresolved issue signals, action state, and team memory, and shown in the private thread with a timestamp and accountable specialist.
+The owner observatory at `/control-center` now includes a persistent command channel for the full council or any individual specialist. Each instruction is stored in Netlify Database and shown in the private thread with a timestamp and accountable specialist. HALO Guard runs deterministic request preflight first, preserving the original request and requested approach and surfacing missing acceptance fields. Direct-command paid synthesis is off by default; an explicit authenticated-owner `approvePaidCalls: true` on a complete structured request opts into advisory synthesis using the latest council report, unresolved issues, action state, and team memory. It grants no implementation/deployment authority. See `HALO_AI_COMMITTEE_WORKFLOW.md` for the pre-Builder gate and `/halo-shield/preflight.html` for the isolated owner request/Drive comparison.
 
 When a response identifies useful work, the system can create a linked proposal in the existing human decision queue. The proposal remains blocked behind owner approval and records its status back into the command thread. The same screen combines council runs, maintenance sweeps, unresolved issues, and action changes into a live operations feed that refreshes every 45 seconds while the page is visible.
 
 The command channel does not grant autonomous authority. It can run the existing council and maintenance monitoring tools, organize evidence, and propose measurable work. External communications, production changes, publishing, spending, contracts, account changes, and people decisions still require explicit human execution and review.
+
+## Dreamweaver AI operations oracle
+
+The owner-only `/control-center` includes a separate read-only Dreamweaver AI panel. It uses the existing Netlify Identity session and server-side `isOwner(user)` authorization; no individual email is hardcoded. GET `/api/dreamweaver/oracle` reads telemetry, HEAD checks access, and POST accepts JSON `{ "mode": "chat", "message": "...", "history": [], "useAI": false }`. POST requires a same-origin Origin header and Identity origin verification. Responses are never cached.
+
+Requests are capped at 12,000 streamed bytes, questions at 2,000 characters, and history at six 1,000-character user/assistant entries. The panel refreshes every 45 seconds while visible, keeps up to 20 displayed messages in tab memory, and clears its state on sign-out. Do not paste credentials, private member data, or sensitive logs into questions. No conversations are persisted by this feature.
+
+Telemetry sources fail independently and are labelled unavailable rather than zero:
+
+- All active published `halo_song_catalog` records and `halo_song_publication_sync`, with active version readiness facts evaluated through the existing publication-health helper. Counts include missing sync rows and checks older than 30 minutes. This is recorded readiness, not live public-page verification.
+- `halo_radio_tracks` room/status aggregates, including rooms without rotation tracks. No stream URLs are fetched; playback availability remains unverified.
+- `halo_dreamweaver_campaign_events` copy/download/publish-ready counts over 30 days. These measure share preparation, not external delivery. Publication telemetry separately reports canonical Dreamweaver share readiness.
+- `halo_social_snippet_feedback` signal counts and `halo_chart_votes` vote counts over 30 days. These are community signals, **not verified subscriber-only sentiment or unique-person counts**. Raw feedback, voter keys, member identifiers, URLs, and error text are not returned or sent as model context.
+
+Deterministic evidence summaries and read-only diagnostic SQL remain available without AI configuration. Checking the paid-AI option explicitly opts into one server-only OpenAI call using the existing `OPENAI_API_KEY`/gateway configuration and `AI_MODELS.council`. No new keys, database migrations, or dependencies are required. The call has no automatic retries, a 12-second timeout, bounded context/output, and no tools or arbitrary URL fetching. Provider failures or malformed responses fall back safely.
+
+Suggestions are **unverified proposals**, with evidence keys, rationale, verification steps and copyable JavaScript/SQL/HTML text. Aggregates cannot diagnose a particular track or prove a missing sync loop; inspect Song Catalog publication health and review the scheduled reconciler before proposing a repair. Nothing is executed, queued for execution, or deployed. Validate this feature with `npm run test:dreamweaver-oracle`; live Identity/database/provider behavior still requires an authenticated Netlify deployment.
 
 ## Living memory
 

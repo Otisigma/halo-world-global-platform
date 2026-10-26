@@ -81,6 +81,7 @@ export function createForcePushTrackHandler({
         songId: song.id, ownerMemberId: membership.member_id,
         actorId: membership.actor_id, actorType: "member",
         preserveReleaseMetadata: true,
+        announceDrop: true,
       });
       if (!publication.ok) return json({ message: "Publication was not completed. Refresh the catalog and retry." }, 409);
       return json({

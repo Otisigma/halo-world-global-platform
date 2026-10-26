@@ -5,6 +5,7 @@ import https from "node:https";
 import { BlockList, isIP } from "node:net";
 import { dirname, resolve, relative, isAbsolute } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
+import { requestPreflight } from "./lib/request-preflight.js";
 
 const root = dirname(fileURLToPath(import.meta.url));
 export const CONFIG = Object.freeze({
@@ -128,6 +129,10 @@ async function checkArtwork(value, catalogRoot, checkUrl) {
 const isMissing = (value) => value == null || (typeof value === "string" && ["", "—"].includes(value.trim()));
 
 export class ReleaseGuardAgent {
+  static preflightRequest(input, options) {
+    return requestPreflight(input, options);
+  }
+
   static async auditAndGuard(catalogItems, { catalogRoot = root, checkUrl = pingUrl } = {}) {
     if (!Array.isArray(catalogItems)) throw new Error("Catalog songs must be an array.");
     const sanitizedCatalog = [];
@@ -242,7 +247,25 @@ export class ReleaseGuardAgent {
 export default ReleaseGuardAgent;
 
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
-  ReleaseGuardAgent.run({ allowMissingCatalog: process.argv.includes("--allow-missing-catalog") }).then((report) => {
+  const preflightIndex = process.argv.indexOf("--request-preflight");
+  const run = async () => {
+    if (preflightIndex !== -1) {
+      const filename = process.argv[preflightIndex + 1];
+      if (!filename) throw new Error("--request-preflight requires a local JSON request file");
+      if ((await stat(filename)).size > 12_000) throw new Error("Request file too large");
+      const report = ReleaseGuardAgent.preflightRequest(JSON.parse(await readFile(filename, "utf8")));
+      for (const file of report.grounding) await access(resolve(root, file));
+      report.checks.push({
+        command: "ReleaseGuardAgent: access grounded repository files",
+        source: "static", mocked: false, outcome: "passed",
+        observation: "Grounding files exist; suggested test commands have NOT been executed by this command."
+      });
+      console.log(JSON.stringify(report, null, 2));
+      return { passed: report.status !== "blocked" };
+    }
+    return ReleaseGuardAgent.run({ allowMissingCatalog: process.argv.includes("--allow-missing-catalog") });
+  };
+  run().then((report) => {
     process.exitCode = report.passed ? 0 : 1;
   }).catch((error) => {
     console.error(`HALO RELEASE GUARD: ${error.message}`);

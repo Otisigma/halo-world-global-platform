@@ -60,7 +60,7 @@
 
     function backgroundAllowed() {
       const connection = window.navigator?.connection;
-      return !connection?.saveData && !["slow-2g", "2g", "3g"].includes(connection?.effectiveType);
+      return !document.hidden && !connection?.saveData && !["slow-2g", "2g", "3g"].includes(connection?.effectiveType);
     }
 
     function schedule() {
@@ -131,7 +131,7 @@
       cache.clear();
     }
 
-    function warmPlaylist(values, { primaryAudio } = {}) {
+    function warmPlaylist(values, { primaryAudio, respectPolicy = false } = {}) {
       if (disposed) return;
       clear();
       const urls = [...new Set(values.map(mediaUrl).filter(Boolean))].slice(0, MAX_TRACKS);
@@ -166,7 +166,10 @@
       primary.detach = start;
       audio.addEventListener("canplay", start);
       audio.addEventListener("error", start);
-      if (!prepare(audio, urls[0]) || audio.readyState >= 3 || audio.error) start();
+      if (respectPolicy && !backgroundAllowed()) {
+        audio.preload = "none";
+        if (mediaUrl(audio.getAttribute("src")) !== urls[0]) audio.src = urls[0];
+      } else if (!prepare(audio, urls[0]) || audio.readyState >= 3 || audio.error) start();
     }
 
     // Transfer ownership to playback so cache cleanup cannot pause an active listening room.

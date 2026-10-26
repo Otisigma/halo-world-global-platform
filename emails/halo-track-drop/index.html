@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="dark">
+    <title>{{trackTitle}} · New on HALO</title>
+  </head>
+  <body style="margin: 0; padding: 0; background: #050507; color: #f5f1e6; font-family: Georgia, 'Times New Roman', serif;">
+    <span style="display: none; max-height: 0; overflow: hidden; opacity: 0;">{{trackTitle}} by {{artistName}} is now in the HALO shop.</span>
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background: #050507;">
+      <tr>
+        <td align="center" style="padding: 32px 16px;">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width: 560px; border: 1px solid #3a3020; border-radius: 22px; overflow: hidden; background: #0b0a0d;">
+            <tr>
+              <td style="padding: 28px 28px 0;">
+                <p style="margin: 0; color: #d4af6a; font-family: Arial, Helvetica, sans-serif; font-size: 11px; font-weight: 700; letter-spacing: 0.28em; text-transform: uppercase;">{{eyebrow}} · Dreamweaver card</p>
+                <h1 style="margin: 12px 0 0; color: #f5f1e6; font-size: 28px; line-height: 1.2; font-weight: 400;">{{headline}}</h1>
+                <p style="margin: 10px 0 0; color: #a59f92; font-family: Arial, Helvetica, sans-serif; font-size: 14px; line-height: 1.6;">{{greeting}} a new track just entered the HALO shop.</p>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding: 24px 28px 0;">
+                <img src="{{artworkUrl}}" alt="{{artworkAlt}}" width="504" style="display: block; width: 100%; max-width: 504px; height: auto; border-radius: 16px; border: 1px solid #2a2418;">
+              </td>
+            </tr>
+            <tr>
+              <td style="padding: 22px 28px 0;">
+                <p style="margin: 0; color: #f5f1e6; font-size: 24px; line-height: 1.25;">{{trackTitle}}</p>
+                <p style="margin: 6px 0 0; color: #d4af6a; font-family: Arial, Helvetica, sans-serif; font-size: 13px; letter-spacing: 0.12em; text-transform: uppercase;">{{artistName}}</p>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding: 24px 28px 0;">
+                <a href="{{ctaUrl}}" style="display: inline-block; padding: 14px 26px; border-radius: 999px; background: #d4af6a; color: #0b0a08; font-family: Arial, Helvetica, sans-serif; font-size: 13px; font-weight: 700; letter-spacing: 0.14em; text-decoration: none; text-transform: uppercase;">{{ctaLabel}}</a>
+                <p style="margin: 14px 0 0; font-family: Arial, Helvetica, sans-serif; font-size: 12px; color: #8a8478;">Link not opening? <a href="{{fallbackUrl}}" style="color: #d4af6a;">{{fallbackLabel}}</a></p>
+              </td>
+            </tr>
+            {{#if showRewards}}
+            <tr>
+              <td style="padding: 24px 28px 0;">
+                <div style="border: 1px solid #3a3020; border-radius: 14px; padding: 16px 18px; background: #0d0c0a;">
+                  <p style="margin: 0; color: #d4af6a; font-family: Arial, Helvetica, sans-serif; font-size: 11px; font-weight: 700; letter-spacing: 0.22em; text-transform: uppercase;">Member rewards · {{rewardTier}}</p>
+                  <p style="margin: 8px 0 0; color: #f5f1e6; font-family: Arial, Helvetica, sans-serif; font-size: 14px; line-height: 1.6;">{{rewardPoints}} points. {{rewardMessage}}</p>
+                </div>
+              </td>
+            </tr>
+            {{/if}}
+            <tr>
+              <td style="padding: 28px;">
+                <p style="margin: 0; color: #6f6a60; font-family: Arial, Helvetica, sans-serif; font-size: 11px; line-height: 1.6;">You're receiving this because you turned on track drop emails for your HALO membership. <a href="{{manageUrl}}" style="color: #a59f92;">{{manageLabel}}</a> or turn them off at any time.</p>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>

@@ -3,8 +3,14 @@ import { loadConveyorState, loadReleaseSubmission } from "./release-conveyor-sto
 import { processCatalogRelease } from "./release-conveyor-service.mjs";
 import { loadSharedOrchestratorState } from "./halo-master-orchestrator.mjs";
 import { cleanDreamweaverSongId } from "../../lib/dreamweaver-storefront.js";
+import { catalogMasterReadiness } from "./release-conveyor-audio.mjs";
 
 const json = (body, status = 200) => Response.json(body, { status, headers: { "Cache-Control": "private, no-store" } });
+
+function masterStatus({ song, versions }) {
+  const { uploaded, durationValid, masteringStatus } = catalogMasterReadiness(song, versions);
+  return { uploaded, durationValid, masteringStatus };
+}
 
 export function createReleaseConveyorHandler({ getDatabase, getUser, verifyRequestOrigin, ensureMembership, prepareAudio, downloadAudio }) {
   return async request => {
@@ -38,7 +44,8 @@ export function createReleaseConveyorHandler({ getDatabase, getUser, verifyReque
           infrastructure: infrastructureState?.state || null,
         };
         const stored = await loadConveyorState(db, membership.member_id, songId);
-        if (!stored?.state?.inputHash) return json({ status: "not_started", releaseId: songId, receipt: null, orchestrator });
+        if (!stored?.state?.inputHash) return json({ status: "not_started", releaseId: songId, receipt: null,
+          orchestrator, masterStatus: masterStatus(submission) });
         const state = stored.state;
         const current = releaseFingerprint(submission.song, submission.versions, state.options) === state.inputHash;
         const artifact = url.searchParams.get("artifact");
@@ -82,8 +89,11 @@ export function createReleaseConveyorHandler({ getDatabase, getUser, verifyReque
           WHERE song_id = ${songId} AND owner_member_id = ${membership.member_id}
           ORDER BY created_at DESC LIMIT 50
         `;
-        return json({ ...state, ...(current ? {} : { status: "stale", receipt: { ...state.receipt, ready: false, status: "stale" } }),
-          busy: stored.locked_until && new Date(stored.locked_until) > new Date(), events, orchestrator });
+        return json({ ...state, ...(current ? {} : { status: "stale",
+          message: "Saved catalog data changed. Rerun the conveyor to re-evaluate audio and independent council gates; do not upload the master again.",
+          receipt: { ...state.receipt, ready: false, status: "stale" } }),
+          busy: stored.locked_until && new Date(stored.locked_until) > new Date(), events,
+          orchestrator, masterStatus: masterStatus(submission) });
       }
       const humHz = payload.humHz === "both" ? "both" : Number(payload.humHz ?? 0);
       if (![0, 50, 60, "both"].includes(humHz)) return json({ message: "Hum filtering must be off, 50 Hz, 60 Hz or both." }, 400);
@@ -91,7 +101,9 @@ export function createReleaseConveyorHandler({ getDatabase, getUser, verifyReque
       const result = await processCatalogRelease(db, membership.member_id, songId, prepareAudio, options, { automatic: false });
       if (!result) return json({ message: "Song not found." }, 404);
       if (result.busy) return json({ message: "This song is already processing. Check its status before retrying.", status: "processing" }, 409);
-      return json(result);
+      const latest = await loadReleaseSubmission(db, membership.member_id, songId);
+      if (!latest) return json({ message: "Song not found." }, 404);
+      return json({ ...result, masterStatus: masterStatus(latest) });
     } catch (error) {
       // Provider/database exception text is never sent back to a creator.
       return json({ message: "The release conveyor is temporarily unavailable. Your catalog song is safe; retry shortly.", retryable: true }, 503);

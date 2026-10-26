@@ -47,6 +47,8 @@
     <section class="view" id="shop">
       <div class="panel shop-top"><div><div class="eyebrow">Commerce destination</div><h2>HALO Direct Song &amp; Stem Store</h2><p>A curated storefront for fans, selectors, and tastemakers. Every release keeps artist-controlled access and full-fidelity story context.</p></div><div class="cart-box"><small>Cart balance</small><strong id="cartBalance">£0.00</strong><br><button class="btn primary" id="checkoutButton">Checkout (<span id="cartCount">0</span>)</button></div></div>
       <article class="panel shop-stage" aria-label="Featured release spotlight"><figure class="shop-stage-art" id="shopFeatureFigure" aria-label="Featured release artwork" data-artwork-frame><img id="shopFeatureArtwork" alt="" loading="lazy" data-release-artwork hidden><span id="shopFeatureArtworkFallback">HW</span></figure><div class="shop-stage-copy"><div class="eyebrow">Featured release</div><h3 id="shopFeatureTitle">HALO spotlight loading</h3><p id="shopFeatureStory">The shop spotlight loads from the same published catalog powering release links and playback metadata.</p><p class="shop-stage-meta" id="shopFeatureMeta">Artist-controlled signal · direct support</p><div class="product-actions"><a class="btn primary" id="shopFeatureDreamweaverLink" href="/dreamweaver/" hidden>Open Dreamweaver song lobby</a></div></div></article>
+      <nav class="product-actions" aria-label="Dreamweaver curator"><a class="btn primary" href="/dreamweaver/?curate=20">Open Dreamweaver · 20 minute set</a><a class="btn" href="/dreamweaver/?curate=60">Open Dreamweaver · 60 minute set</a></nav>
+      <p id="canonicalCatalogStatus" role="status" aria-live="polite"></p>
       <div class="products" id="shopProducts"></div>
     </section>
     <section class="view" id="telemetry"><div class="telemetry-grid">
@@ -81,7 +83,7 @@
     const resolveDreamweaverExperienceUrl=release=>{const candidates=[release?.dreamweaverPage?.storefrontUrl,release?.dreamweaverPage?.experienceUrl,release?.dreamweaverPage?.route,release?.entryUrl,fallbackDreamweaverExperienceUrl(release)];for(const candidate of candidates){const route=sanitizeDreamweaverExperienceUrl(candidate);if(route)return route}return''};
     const externalLinkAttrs=value=>{try{return new URL(String(value||''),location.origin).origin===location.origin?'':' target="_blank" rel="noopener noreferrer"'}catch{return ''}};
     const clearArtworkDataset=image=>{if(!image)return;delete image.dataset.artworkFallback;delete image.dataset.artworkSource;delete image.dataset.artworkBadge};
-    const isLikelyAudioUrl=value=>{if(window.HaloReleaseArtwork?.isLikelyAudioUrl)return window.HaloReleaseArtwork.isLikelyAudioUrl(value);try{const url=new URL(String(value||''),location.origin);return /\.(mp3|m4a|m4b|aac|ogg|oga|wav|flac|webm)(?:$|[?#])/i.test(`${url.pathname}${url.search}`)||/^\/api\/(?:song-catalog|mixes|radio|stem-vault)\/audio$/i.test(url.pathname)}catch{return false}};
+    const isLikelyAudioUrl=value=>{if(window.HaloReleaseArtwork?.isLikelyAudioUrl)return window.HaloReleaseArtwork.isLikelyAudioUrl(value);try{const src=safeHref(value);if(!src)return false;const url=new URL(src);return /\.(mp3|m4a|m4b|aac|ogg|oga|wav|flac|webm)$/i.test(url.pathname)||/^\/api\/(?:song-catalog|mixes|radio|stem-vault)\/audio$/i.test(url.pathname)}catch{return false}};
     const fallbackArtwork=window.HaloReleaseArtwork?.DEFAULT_RELEASE_ARTWORK||'/assets/releases/halo-premium-placeholder.svg';
     const fallbackArtworkBadge=window.HaloReleaseArtwork?.DEFAULT_RELEASE_ARTWORK_BADGE||'HALO placeholder cover';
     const money=(amount,currency='GBP')=>new Intl.NumberFormat('en-GB',{style:'currency',currency:currency||'GBP'}).format(Number(amount)||0);
@@ -133,7 +135,7 @@
     function clearRemoteAudioWatchdog(){if(remoteAudioWatchdog){clearTimeout(remoteAudioWatchdog);remoteAudioWatchdog=0}}
     function revokeLocalAudioUrl(){if(localAudioUrl){try{URL.revokeObjectURL(localAudioUrl)}catch{}}localAudioUrl='';localAudioName=''}
     function openMixFilePicker(){const input=$('#mixFileInput');if(!input)return;input.disabled=false;input.click()}
-    function handleStreamUnavailable(message='Stream unavailable — press play or upload a local mix to keep listening.'){clearRemoteAudioWatchdog();if(audioSourceMode==='local')return;audioSourceMode='unavailable';if(playerTrack)playerTrack.streamUnavailable=true;playerAudio().pause();playing=false;setPlayLabel(false);setDeck(playerTrack||catalog[0],'unavailable');toast('Stream on standby',message)}
+    function handleStreamUnavailable(message='Stream unavailable — press play or upload a local mix to keep listening.'){if(retryCanonicalStream())return;clearRemoteAudioWatchdog();if(audioSourceMode==='local')return;audioSourceMode='unavailable';if(playerTrack)playerTrack.streamUnavailable=true;playerAudio().pause();playing=false;setPlayLabel(false);setDeck(playerTrack||catalog[0],'unavailable');toast('Stream on standby',message)}
     function armRemoteAudioWatchdog(){if(audioSourceMode!=='remote'||remoteAudioWatchdog)return;remoteAudioWatchdog=setTimeout(()=>{remoteAudioWatchdog=0;if(audioSourceMode==='remote'&&playerAudio().readyState<HTMLMediaElement.HAVE_CURRENT_DATA)handleStreamUnavailable()},REMOTE_AUDIO_WATCHDOG_MS)}
     function resetDeckAudio(){const el=playerAudio();clearRemoteAudioWatchdog();el.pause();revokeLocalAudioUrl();el.removeAttribute('src');el.load();audioSourceMode='empty';playing=false;setPlayLabel(false)}
     function selectDeckTrack(track){if(!track)return;if(track!==playerTrack||audioSourceMode==='local')resetDeckAudio();setDeck(track,deckStateFor(track))}
@@ -141,10 +143,53 @@
     const isSupportedLocalAudioFile=file=>Boolean(file)&&(String(file.type||'').toLowerCase().startsWith('audio/')||/\.(mp3|wav|m4a|aac|ogg|flac|webm)$/i.test(String(file.name||'')));
     async function activateLocalMixFile(file){if(!isSupportedLocalAudioFile(file)){toast('Unsupported file','Choose an MP3, WAV, M4A, AAC, OGG, FLAC, or WebM audio file.');return}const el=playerAudio();clearRemoteAudioWatchdog();el.pause();revokeLocalAudioUrl();const blobUrl=safeBlobMediaUrl(URL.createObjectURL(file));if(!blobUrl){toast('Local file unavailable','Try another audio export.');return}localAudioUrl=blobUrl;localAudioName=String(file.name||'').trim().slice(0,160)||'Uploaded mix';audioSourceMode='local';el.src=localAudioUrl;el.load();setDeck(playerTrack||catalog[0],'ready');updateCardStatuses();try{await el.play();toast('Local mix active',`${localAudioName} is playing from this device.`)}catch{toast('Local file loaded','Press play when your browser is ready.')}}
     async function togglePlayback(){const el=playerAudio(),track=playerTrack||catalog[0];if(!el.paused){clearRemoteAudioWatchdog();el.pause();return}if(audioSourceMode!=='local'&&(audioSourceMode==='unavailable'||!track?.previewUrl)){setDeck(track,'unavailable');toast('Choose a local mix','Stream unavailable — opening the local upload picker.');openMixFilePicker();return}if(audioSourceMode!=='local'&&el.src!==track.previewUrl){el.src=track.previewUrl;el.load()}if(audioSourceMode!=='local')audioSourceMode='remote';const source=el.src;setDeck(track,'loading');if(audioSourceMode==='remote')armRemoteAudioWatchdog();try{await el.play()}catch(error){if(el.src!==source||error?.name==='AbortError'||audioSourceMode==='unavailable')return;if(audioSourceMode==='remote'&&error?.name!=='NotAllowedError'){handleStreamUnavailable();return}clearRemoteAudioWatchdog();setDeck(track,'ready');toast('Press play again','Your browser is waiting for another tap before audio can start.')}}
-    function bindPlayerControls(){if(playerControlsBound)return;playerControlsBound=true;const el=playerAudio(),input=$('#mixFileInput'),uploadLabel=$('.upload-label');$('#playButton').addEventListener('click',togglePlayback);input.addEventListener('change',async event=>{const file=event.target?.files?.[0];event.target.value='';if(file)await activateLocalMixFile(file)});uploadLabel.addEventListener('keydown',event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();openMixFilePicker()}});el.addEventListener('playing',()=>{clearRemoteAudioWatchdog();if(audioSourceMode==='unavailable'||audioSourceMode==='empty'){el.pause();return}if(playerTrack)playerTrack.streamUnavailable=false;playing=true;setPlayLabel(true);setDeck(playerTrack||catalog[0],'playing')});el.addEventListener('loadeddata',clearRemoteAudioWatchdog);el.addEventListener('waiting',armRemoteAudioWatchdog);el.addEventListener('pause',()=>{clearRemoteAudioWatchdog();playing=false;setPlayLabel(false);if(audioSourceMode!=='unavailable'){const track=playerTrack||catalog[0];setDeck(track,audioSourceMode==='local'?'ready':deckStateFor(track))}});el.addEventListener('ended',()=>{clearRemoteAudioWatchdog();playing=false;setPlayLabel(false)});el.addEventListener('error',()=>{if(!el.getAttribute('src'))return;if(audioSourceMode==='local'){revokeLocalAudioUrl();el.removeAttribute('src');audioSourceMode='unavailable';playing=false;setPlayLabel(false);setDeck(playerTrack||catalog[0],'unavailable');toast('Local file could not play','Choose another audio export to keep listening.');return}if(audioSourceMode==='remote')handleStreamUnavailable()});$('#playButton').disabled=false;input.disabled=false}
+    function bindPlayerControls(){if(playerControlsBound)return;playerControlsBound=true;const el=playerAudio(),input=$('#mixFileInput'),uploadLabel=$('.upload-label');$('#playButton').addEventListener('click',togglePlayback);input.addEventListener('change',async event=>{const file=event.target?.files?.[0];event.target.value='';if(file)await activateLocalMixFile(file)});uploadLabel.addEventListener('keydown',event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();openMixFilePicker()}});el.addEventListener('playing',()=>{clearRemoteAudioWatchdog();if(audioSourceMode==='unavailable'||audioSourceMode==='empty'){el.pause();return}if(playerTrack)playerTrack.streamUnavailable=false;playing=true;setPlayLabel(true);setDeck(playerTrack||catalog[0],'playing')});el.addEventListener('loadeddata',clearRemoteAudioWatchdog);el.addEventListener('waiting',armRemoteAudioWatchdog);el.addEventListener('stalled',armRemoteAudioWatchdog);el.addEventListener('pause',()=>{clearRemoteAudioWatchdog();playing=false;setPlayLabel(false);if(audioSourceMode!=='unavailable'){const track=playerTrack||catalog[0];setDeck(track,audioSourceMode==='local'?'ready':deckStateFor(track))}});el.addEventListener('ended',()=>{clearRemoteAudioWatchdog();playing=false;setPlayLabel(false)});el.addEventListener('error',()=>{if(!el.getAttribute('src'))return;if(audioSourceMode==='local'){revokeLocalAudioUrl();el.removeAttribute('src');audioSourceMode='unavailable';playing=false;setPlayLabel(false);setDeck(playerTrack||catalog[0],'unavailable');toast('Local file could not play','Choose another audio export to keep listening.');return}if(audioSourceMode==='remote')handleStreamUnavailable()});$('#playButton').disabled=false;input.disabled=false}
     if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',bindPlayerControls,{once:true});else bindPlayerControls();
+    playerAudio().addEventListener('playing',rememberCanonicalPlayback);
     window.addEventListener('pagehide',()=>{clearRemoteAudioWatchdog();revokeLocalAudioUrl()});
-    async function loadPublishedCatalog(){try{const response=await fetch('/api/release-catalog',{headers:{Accept:'application/json'}});if(!response.ok)throw new Error('catalog unavailable');const data=await response.json();catalog=(Array.isArray(data.releases)?data.releases:[]).map(releaseToTrack);catalogMode='live';render();if(catalog[0]&&audioSourceMode!=='local'&&!playing)setDeck(catalog[0],deckStateFor(catalog[0]))}catch(error){catalog=[...fallbackCatalog];catalogMode='fallback';render();if(catalog[0]&&audioSourceMode!=='local'&&!playing)setDeck(catalog[0],'unavailable');toast('Catalog connection delayed','Showing the preserved Music World preview while the live catalog reconnects.')}}
+    function canonicalToTrack(track){
+      const preview=resolveTrackAudio({streamUrl:track.streamUrl}),fallback=resolveTrackAudio({streamUrl:track.fallbackUrl});
+      return {...releaseToTrack({...track,duration:track.durationSeconds,releaseDate:track.releasedAt,publication:{radioStatus:track.rotationStatus}}),
+        canonical:true,previewUrl:preview.src,fallbackUrl:fallback.src,listenUrl:preview.src,
+        dreamweaverUrl:'/dreamweaver/?curate=20',statusLabel:preview.src?'READY':'STANDBY'};
+    }
+    function rememberCanonicalPlayback(){
+      if(!playerTrack?.canonical||audioSourceMode!=='remote')return;
+      try{const key='halo:catalog-recently-played',stored=JSON.parse(localStorage.getItem(key)||'[]'),ids=Array.isArray(stored)?stored.filter(id=>typeof id==='string'&&id!==playerTrack.id):[];localStorage.setItem(key,JSON.stringify([playerTrack.id,...ids].slice(0,100)))}catch{}
+    }
+    function retryCanonicalStream(){
+      const track=playerTrack,el=playerAudio();
+      if(!track?.canonical||audioSourceMode!=='remote'||!safeHref(track.fallbackUrl)||safeHref(el.src)===safeHref(track.fallbackUrl))return false;
+      const offset=el.currentTime||0;
+      track.previewUrl=safeHref(track.fallbackUrl);
+      clearRemoteAudioWatchdog();el.pause();el.src=track.previewUrl;el.load();armRemoteAudioWatchdog();
+      const source=el.src;
+      el.play().then(()=>{if(el.src===source&&audioSourceMode==='remote')el.currentTime=offset}).catch(error=>{if(el.src!==source||audioSourceMode!=='remote')return;if(error?.name==='NotAllowedError'){clearRemoteAudioWatchdog();setDeck(track,'ready')}else handleStreamUnavailable()});
+      return true;
+    }
+    async function loadPublishedCatalog(){
+      let legacy=false;
+      try{
+        const response=await fetch('/api/drive-catalog',{headers:{Accept:'application/json'}});
+        if(!response.ok)throw new Error('canonical catalog unavailable');
+        const data=await response.json();
+        if(typeof data.configured!=='boolean')throw new Error('invalid canonical catalog');
+        legacy=!data.configured;
+        if(data.configured){
+          catalog=(Array.isArray(data.tracks)?data.tracks:[]).map(canonicalToTrack);catalogMode='live';
+          $('#canonicalCatalogStatus').textContent=catalog.length?'Canonical catalog · shared with Dreamweaver.':'Canonical catalog is empty. No substitute releases loaded.';
+        }else{
+          const response=await fetch('/api/release-catalog',{headers:{Accept:'application/json'}});
+          if(!response.ok)throw new Error('catalog unavailable');
+          const data=await response.json();catalog=(Array.isArray(data.releases)?data.releases:[]).map(releaseToTrack);catalogMode='live';
+        }
+      }catch(error){
+        catalog=legacy?[...fallbackCatalog]:[];catalogMode=legacy?'fallback':'unavailable';
+        $('#canonicalCatalogStatus').textContent=legacy?'Published catalog reconnecting.':'Canonical catalog temporarily unavailable. No substitute releases loaded.';
+        toast('Catalog on standby',legacy?'Showing the preserved Music World preview while the live catalog reconnects.':'Try again later or upload a local mix.');
+      }
+      render();if(catalog[0]&&audioSourceMode!=='local'&&!playing)setDeck(catalog[0],deckStateFor(catalog[0]));
+    }
     $('#watchdog').onclick=()=>toast('Watchdog ping','Zero-dead-air monitor healthy at -18dB.');document.querySelectorAll('.room').forEach(b=>b.onclick=()=>toast('Room switched',b.dataset.room));document.querySelectorAll('.blip').forEach(b=>b.onclick=()=>toast('Node locked',b.dataset.region));document.querySelectorAll('.modal').forEach(m=>m.onclick=e=>{if(e.target===m)m.classList.remove('open')});document.addEventListener('keydown',e=>{if(e.key==='Escape')document.querySelectorAll('.modal.open').forEach(m=>m.classList.remove('open'))});window.addEventListener('hashchange',()=>activateTab(location.hash.slice(1)||'pipeline'));render();activateTab(location.hash.slice(1)||'pipeline');loadPublishedCatalog();
   </script>
 </body>

@@ -24,6 +24,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:opsz,wght@6..96,600;6..96,800&family=DM+Mono:wght@300;400;500&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/halo-brand.css">
   <link rel="stylesheet" href="/halo-command.css">
+  <link rel="stylesheet" href="/dreamweaver-oracle.css">
   <link rel="stylesheet" href="/accessibility.css">
   <link rel="stylesheet" href="/mobile-navigation.css">
   <script src="/stats.js" defer></script>
@@ -32,6 +33,7 @@
   <script src="/mobile-navigation.js" defer></script>
   <script type="module" src="/identity.js"></script>
   <script src="/halo-command.js" defer></script>
+  <script src="/dreamweaver-oracle.js" defer></script>
 </head>
 <body>
   <div class="grain" aria-hidden="true"></div>
@@ -71,6 +73,7 @@
           <h1 id="pageTitle">A living system<br><em>that learns from truth.</em></h1>
           <p class="hero-intro">Five specialist agents monitor privacy-safe operating signals. Mirror challenges their assumptions, while this private room lets you direct the team, review feedback, approve work, and track outcomes.</p>
           <div class="hero-actions">
+            <a href="/halo-shield/preflight.html">HALO Guard — check a request / Drive preview (no paid AI)</a>
             <button id="runCouncilButton" class="primary-action" type="button">Run the council now</button>
             <span id="runStatus" class="run-status" aria-live="polite">Scheduled daily at 07:30 UTC</span>
           </div>
@@ -142,6 +145,31 @@
             </div>
           </form>
         </div>
+      </section>
+
+      <section id="dreamweaverOracle" class="oracle-panel" aria-labelledby="oracleTitle" hidden>
+        <header>
+          <p class="section-label">OWNER-ONLY / READ-ONLY</p>
+          <h2 id="oracleTitle">Dreamweaver AI</h2>
+          <p>Live distribution evidence and reviewable advice. No code is executed, no platform changes are made, and no fixes are deployed.</p>
+          <p>Search active song metadata with <code>catalog: song title, artist, album, or ISRC</code>. Results never include private audio URLs. Only existing active, approved radio/clean audio variants are suggested; no playback is started.</p>
+          <button id="oracleRefresh" type="button">Refresh telemetry</button>
+        </header>
+        <p id="oracleStatus" role="status">Confirming owner access…</p>
+        <div id="oracleTelemetry" class="oracle-telemetry" aria-label="Aggregate platform telemetry"></div>
+        <div id="oracleThread" class="oracle-thread" role="log" aria-label="Dreamweaver conversation" aria-live="polite"></div>
+        <div class="oracle-prompts" aria-label="Suggested questions">
+          <button type="button" data-oracle-prompt>Why is this track escalated?</button>
+          <button type="button" data-oracle-prompt>Give me the code to fix the radio sync loop</button>
+          <button type="button" data-oracle-prompt>Summarize feedback and votes</button>
+        </div>
+        <form id="oracleForm">
+          <label for="oracleMessage">Ask Dreamweaver (do not paste secrets or private member data)</label>
+          <textarea id="oracleMessage" rows="3" maxlength="2000" required></textarea>
+          <label class="oracle-ai-toggle"><input id="oracleUseAI" type="checkbox"> Use optional paid AI synthesis for this question</label>
+          <button id="oracleSend" type="submit">Ask Dreamweaver</button>
+        </form>
+        <p>History stays in this tab’s memory and is cleared on sign-out. Feedback/votes are aggregate community signals, not verified subscriber-only sentiment. Recorded routing readiness is not a live playback test. DAW state sync, stems, and linked-document retrieval are unavailable; playback and publishing are never changed here.</p>
       </section>
 
       <section class="council-section" aria-labelledby="councilTitle">

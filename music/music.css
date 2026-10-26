@@ -44,6 +44,34 @@ a { color: inherit; }
 button, input { font: inherit; }
 button, a { -webkit-tap-highlight-color: transparent; }
 
+.catalog-skip-link { position: fixed; top: 12px; left: 12px; z-index: 100; padding: 14px 20px; color: var(--ink); background: var(--acid); transform: translateY(-200%); }
+.catalog-skip-link:focus { transform: translateY(0); }
+.catalog-jump { display: inline-flex; gap: 24px; align-items: center; min-height: 48px; margin-top: 24px; color: var(--acid); font: 500 12px/1.5 var(--mono); text-underline-offset: 6px; }
+.catalog-description { max-width: 520px; margin: 18px 0 0; color: var(--muted); font-size: 14px; line-height: 1.7; }
+.catalog-results-bar { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin: 20px 0 12px; }
+.catalog-results-bar p { margin: 0; color: var(--acid); font: 500 12px/1.6 var(--mono); }
+.catalog-results-bar button { min-height: 44px; padding: 8px 16px; border: 1px solid var(--line); color: var(--paper); background: var(--ink-soft); cursor: pointer; }
+.catalog-data-note { max-width: 850px; margin: 0 0 28px; color: var(--muted); font-size: 12px; line-height: 1.7; }
+.catalog-metadata { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 18px; margin: 24px 0 0; }
+.catalog-metadata div { min-width: 0; border-top: 1px solid var(--line); padding-top: 12px; }
+.catalog-metadata dt { color: var(--muted); font: 500 10px/1.5 var(--mono); text-transform: uppercase; letter-spacing: .08em; }
+.catalog-metadata dd { margin: 6px 0 0; font-size: 14px; line-height: 1.5; overflow-wrap: anywhere; }
+.shop-artist-card .catalog-metadata div { border-color: rgba(9, 11, 10, .16); }
+.shop-artist-card .catalog-metadata dt { color: #50584f; }
+.catalog-feedback, .catalog-preview-note { padding: 14px 0; margin: 18px 0 0; border-top: 1px solid var(--line); color: var(--muted); font-size: 12px; line-height: 1.7; overflow-wrap: anywhere; }
+.catalog-feedback span, .catalog-feedback strong { display: block; }
+.catalog-feedback strong { margin-top: 4px; color: var(--paper); font-weight: 600; }
+.release-card h3, .card-artist { overflow-wrap: anywhere; }
+.catalog-section :is(a, button, input, select):focus-visible, .catalog-jump:focus-visible { outline: 3px solid var(--orange); outline-offset: 4px; }
+#allReleasesTitle { scroll-margin-top: 32px; }
+@media (max-width: 420px) {
+  .catalog-metadata { grid-template-columns: 1fr; }
+}
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  .release-card .card-art img { transition: none; }
+}
+
 .site-header {
   width: min(1480px, calc(100% - 48px));
   margin: 0 auto;
@@ -296,7 +324,6 @@ h1 em { color: var(--acid); font-family: var(--serif); font-weight: 400; text-tr
 .stage-art.release-artwork-frame::before,
 .card-art.release-artwork-frame::before { inset: 16px; }
 .release-card:hover .card-art img { transform: scale(1.035); filter: saturate(1); }
-.card-number { position: absolute; right: 12px; top: 12px; z-index: 2; display: grid; place-items: center; width: 38px; height: 38px; color: var(--ink); background: var(--paper); font: 500 9px/1 var(--mono); }
 .card-copy { display: flex; flex: 1; flex-direction: column; padding: 24px; }
 .card-art.artwork-fallback + .card-copy .card-kicker span:first-child { color: var(--paper); }
 .card-art.artwork-fallback + .card-copy .card-availability { color: #f2eee3; }

@@ -34,6 +34,49 @@
       </div>
     </section>
 
+    <section class="review-panel" id="catalogSignIn">
+      <h2>Private artist workspace</h2>
+      <p>Sign in to view only the songs you own. Fan votes do not publish songs or approve rotation.</p>
+      <button class="primary-button" id="catalogSignInButton" type="button">Sign in</button>
+      <div id="catalogUnavailable" hidden>
+        <p role="status">Catalog service unavailable. Readiness could not be checked; this does not indicate missing audio or an unpublished song.</p>
+        <button class="quiet-button" id="retryCatalogButton" type="button">Retry catalog</button>
+      </div>
+    </section>
+
+    <div id="artistWorkspace" hidden>
+    <section class="publication-board mission-control" id="catalogGuidance" aria-labelledby="catalogGuidanceTitle" hidden>
+      <div class="publication-board-heading">
+        <div><p class="eyebrow">Artist Mission Control</p><h2 id="catalogGuidanceTitle">What happens next?</h2></div>
+      </div>
+      <div class="mission-control-body">
+        <div role="status" aria-live="polite" aria-atomic="true">
+          <p class="eyebrow" id="guidanceSong"></p>
+          <h3 data-guidance-title></h3>
+          <p data-guidance-detail></p>
+          <p data-guidance-next></p>
+        </div>
+        <a class="primary-button" data-guidance-action></a>
+        <button class="primary-button" type="button" data-guidance-add data-add-song hidden>Add a song</button>
+        <p class="mission-control-boundary">Guidance reflects saved catalog checks. Uploads and browser-local previews do not authorize publication or rotation.</p>
+      </div>
+    </section>
+
+    <section class="publication-board" aria-labelledby="catalogSignalsTitle">
+      <details class="catalog-disclosure" id="catalogSignalsDisclosure" open>
+      <summary class="publication-board-heading">
+        <div><p class="eyebrow">Private catalog signals</p><h2 id="catalogSignalsTitle">What might be worth promoting?</h2></div>
+        <span class="disclosure-label"><span class="disclosure-expand">Expand</span><span class="disclosure-collapse">Collapse</span></span>
+      </summary>
+      <div class="disclosure-actions">
+        <button class="quiet-button" id="refreshCatalogSignals" type="button">Refresh signals</button>
+      </div>
+      <p>Sorted by recorded outbound link clicks in the last 7 days. Clicks are not verified streams or unique listeners; room opens are recorded kit opens. These totals include all release-link audiences, not only fans. Missing recording is not proof of no interest. No invented momentum score or automatic promotion.</p>
+      <div class="publication-board-list" id="catalogSignals" aria-live="polite"></div>
+      <p>Review these snapshots weekly alongside existing fan votes and voluntary feedback via <a href="/support/">Support</a>. Note which songs you promoted and when, then compare the next full week. These signals cannot establish causation or tell us how users feel; ask artists and fans to test the experience.</p>
+      </details>
+    </section>
+
     <section class="summary-strip" aria-label="Catalog totals">
       <article><span>Catalog</span><strong id="songCount">0</strong><small>active songs</small></article>
       <article><span>For sale</span><strong id="saleCount">0</strong><small>priced releases</small></article>
@@ -44,17 +87,22 @@
     </section>
 
     <section class="publication-board" aria-labelledby="publicationBoardTitle">
-      <div class="publication-board-heading">
+      <details class="catalog-disclosure" id="publicationHealthDisclosure" open>
+      <summary class="publication-board-heading">
         <div><p class="eyebrow">Publication health desk</p><h2 id="publicationBoardTitle">Published songs stay under watch.</h2></div>
+        <span class="disclosure-label"><span class="disclosure-expand">Expand</span><span class="disclosure-collapse">Collapse</span></span>
+      </summary>
+      <div class="publication-board-heading">
         <p>HALO keeps checking every published song until the public release page, Dreamweaver share, and radio route are confirmed or the issue is escalated.</p>
       </div>
       <div class="publication-board-list" id="publicationBoard"><p class="publication-empty">Move a song to Published and HALO will start tracking its distribution health here.</p></div>
+      </details>
     </section>
 
     <section class="catalog-shell" id="catalogShell" aria-busy="true">
       <aside class="song-rail" aria-label="Songs">
         <div class="rail-heading"><div><p class="eyebrow">The catalog</p><h2>All songs</h2></div><label><span class="sr-only">Search songs</span><input id="searchInput" type="search" placeholder="Search title or artist"></label></div>
-        <div class="song-list" id="songList"><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div></div>
+        <div class="song-list" id="songList" tabindex="-1"><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div></div>
       </aside>
 
       <div class="workspace" id="workspace">
@@ -70,7 +118,14 @@
           <section class="song-heading">
             <div class="song-heading-art"><img class="song-heading-artwork" id="songHeadingArtwork" src="" alt="" hidden><div><p class="eyebrow" id="songArtist">Artist</p><h2 id="songTitle">Song title</h2><p id="songRouteSummary">0 versions routed</p></div></div>
             <div class="score-stamp"><span>DW score</span><strong id="songScore">0</strong><small id="songStatus">Needs review</small></div>
-            <div class="pipeline-stamp"><span>Pipeline</span><strong id="songPipelineStatus" class="pipeline-badge" data-stage="uploaded">Uploaded</strong><a class="quiet-link" id="songSatelliteLink" href="/dreamweaver/" target="_blank" rel="noopener noreferrer" aria-label="Open satellite in a new tab" hidden>Open satellite ↗</a><a class="quiet-link" href="/upload-pipeline/" title="Open unified pipeline view">View pipeline →</a></div>
+            <div class="pipeline-stamp"><span>Pipeline</span><strong id="songPipelineStatus" class="pipeline-badge" data-stage="uploaded">Uploaded</strong><a class="quiet-link" href="/upload-pipeline/" title="Open unified pipeline view">View pipeline →</a></div>
+          </section>
+
+          <section class="review-panel" aria-label="Song-specific Dreamweaver show">
+            <p id="songShowStatus" role="status">Processing / not ready.</p>
+            <a class="primary-button" id="songSatelliteLink" target="_blank" rel="noopener noreferrer" aria-label="Open this song in Dreamweaver in a new tab" hidden>Open this song in Dreamweaver ↗</a>
+            <button class="quiet-button" id="songShowNotReady" type="button" disabled>Open this song in Dreamweaver — not ready</button>
+            <button class="quiet-button" id="checkSongShow" type="button" aria-describedby="songShowStatus">Check readiness</button>
           </section>
 
           <section class="review-panel" id="releaseConveyorConsole" aria-labelledby="releaseConveyorTitle">
@@ -80,6 +135,8 @@
             <p data-conveyor-status role="status" aria-live="polite">Select a song to inspect its release conveyor.</p>
             <div class="conveyor-progress-heading"><span class="status-pill" data-conveyor-status-badge data-state="pending">PENDING</span><span id="conveyor-percent-text" data-conveyor-percent-text aria-live="polite">0% Completed (0/8 stages)</span></div>
             <div class="conveyor-progress-track" data-conveyor-progress role="progressbar" aria-label="Release departments cleared" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span data-conveyor-progress-bar></span></div>
+            <p class="status-pill" data-conveyor-master-status data-state="pending" role="status" aria-live="polite">Sale master status: select a song.</p>
+            <p class="form-help">Saved catalog status only, not acoustic mastering verification or release clearance. Audio checks and human publication/rotation gates still apply.</p>
             <p data-conveyor-current-step aria-live="polite">Active Dept: Select a song</p>
             <ol data-conveyor-stages aria-label="Release departments"></ol>
             <ul data-conveyor-issues aria-label="Required release actions"></ul>
@@ -133,7 +190,7 @@
           </section>
 
           <div class="workspace-grid">
-            <form class="metadata-panel" id="songForm">
+            <form class="metadata-panel" id="songForm" tabindex="-1">
               <div class="panel-heading"><div><p class="eyebrow">Master record</p><h3>Song information</h3></div><button class="primary-button" type="submit">Save + review</button><button class="quiet-button" id="pushToShopButton" type="button">Push to Shop &amp; Charts</button></div>
               <p id="pushToShopStatus" role="status" aria-live="polite">Save any edits before pushing this track.</p>
               <input id="songId" type="hidden">
@@ -148,12 +205,13 @@
                 <label><span>Sale status</span><select id="saleStatus"><option value="for_sale">For sale</option><option value="coming_soon">Coming soon</option><option value="not_for_sale">Not for sale</option></select></label>
                 <label><span>Sale price (USD)</span><input id="salePrice" type="number" min="0" step="0.01" placeholder="1.29"></label>
                 <label class="check-label"><input id="explicitLyrics" type="checkbox"><span>Explicit lyrics</span></label>
+                <label class="check-label"><input id="broadcastRequested" type="checkbox"><span>Prepare for HALO Radio broadcast — separate radio/clean edit and operator approval still required</span></label>
                 <label class="wide-field"><span>Catalog notes</span><textarea id="songNotes" maxlength="4000" placeholder="Ownership, collaborators, release plan, or anything the team needs to know."></textarea></label>
                 <label class="wide-field lyrics-field"><span>Timestamped lyrics · Dreamweaver</span><textarea id="lyricsText" maxlength="16000" rows="8" aria-describedby="lyricsHelp lyricsSummary" placeholder="[00:15] The room goes quiet || Oracle insight: written the night after the last show&#10;[00:21] Every light still hums your name"></textarea><small id="lyricsHelp">One lyric per line. Start a line with [mm:ss] to sync it to playback and make it a click-to-jump point; add || then a note to attach an optional Oracle insight. Lines without timestamps stay readable in lyric book mode.</small><small id="lyricsSummary" role="status" aria-live="polite"></small></label>
               </div>
             </form>
 
-            <aside class="review-panel">
+            <aside class="review-panel" id="songReview" tabindex="-1">
               <div class="panel-heading"><div><p class="eyebrow">Automatic check</p><h3>Dreamweaver review</h3></div><button class="text-button" id="reviewButton" type="button">Run again</button></div>
               <p class="review-intro" id="reviewIntro">Dreamweaver checks the information and version routing after every save.</p>
               <div class="issue-list" id="issueList"></div>
@@ -162,7 +220,7 @@
 
           <section class="versions-panel">
             <div class="panel-heading"><div><p class="eyebrow">Version routing</p><h3>Every version, one clear destination</h3></div><p>Open a row to connect audio and update mastering.</p></div>
-            <div class="version-table" id="versionTable"></div>
+            <div class="version-table" id="versionTable" tabindex="-1"></div>
             <form class="audio-upload-panel alternate-upload-panel" id="alternateUploadForm" aria-labelledby="alternateUploadHeading">
               <div>
                 <span class="field-label">Alternate Versions</span>
@@ -179,7 +237,7 @@
             </form>
           </section>
 
-          <section class="publication-health-panel" id="publicationHealthPanel" hidden aria-labelledby="publicationHealthTitle">
+          <section class="publication-health-panel" id="publicationHealthPanel" tabindex="-1" hidden aria-labelledby="publicationHealthTitle">
             <div class="panel-heading"><div><p class="eyebrow">Distributor team</p><h3 id="publicationHealthTitle" tabindex="-1">Publication health</h3></div><div><button class="quiet-button" id="recheckPublicationButton" type="button" aria-label="Recheck publication health for the selected song">Recheck now</button> <a class="quiet-link" id="publicationCanonicalLink" href="/music/" target="_blank" rel="noopener" hidden>Open live song ↗</a></div></div>
             <div class="publication-health-grid">
               <article class="publication-health-card publication-health-summary-card" role="status" aria-live="polite" aria-atomic="true">
@@ -227,6 +285,7 @@
       <div class="queue-list" id="radioQueue"><p class="queue-empty">Load the catalog to see radio work.</p></div>
     </section>
     <p class="toast" id="statusMessage" role="status"></p>
+    </div>
   </main>
 
   <dialog id="songDialog">

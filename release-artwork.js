@@ -6,6 +6,7 @@
     /^\/api\/mixes\/audio$/i,
     /^\/api\/radio\/audio$/i,
     /^\/api\/stem-vault\/audio$/i,
+    /^\/api\/drive-catalog\/audio$/i,
   ];
 
   function safeText(value) {
@@ -118,7 +119,8 @@
     if (!url) return false;
     try {
       const parsed = new URL(url);
-      return /\.(mp3|m4a|m4b|aac|ogg|oga|wav|flac|webm)(?:$|[?#])/i.test(`${parsed.pathname}${parsed.search}`)
+      if (parsed.username || parsed.password) return false;
+      return /\.(mp3|m4a|m4b|aac|ogg|oga|wav|flac|webm)$/i.test(parsed.pathname)
         || AUDIO_PATH_MATCHERS.some(pattern => pattern.test(parsed.pathname));
     } catch {
       return false;

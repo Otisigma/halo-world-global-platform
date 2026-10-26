@@ -5,8 +5,9 @@ import { retryReleaseWork } from "./release-conveyor-retry.mjs";
 export async function loadReleaseSubmission(db, ownerMemberId, songId) {
   const songs = await db.sql`
     SELECT id, owner_member_id, source_release_id, title, artist_name, album_title, genre,
-      isrc, upc, explicit_lyrics, rights_status, sale_status, sale_price_cents, currency,
-      artwork_url, lyrics_text, notes, metadata_issues, updated_at,
+      isrc, upc, explicit_lyrics, broadcast_requested, rights_status, sale_status, sale_price_cents, currency,
+      artwork_url, lyrics_text, notes, metadata_issues,
+      TO_CHAR(updated_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS updated_at,
       TO_CHAR(GREATEST(updated_at,
         (SELECT MAX(updated_at) FROM halo_song_versions WHERE song_id = halo_song_catalog.id))
         AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS source_updated_at
@@ -17,7 +18,7 @@ export async function loadReleaseSubmission(db, ownerMemberId, songId) {
   const versions = await db.sql`
     SELECT id, song_id, version_type, audio_url, audio_blob_prefix, audio_chunk_count,
       audio_storage_key, audio_content_type, audio_byte_size, audio_filename,
-      duration_seconds, mastering_status, artwork_url, updated_at
+      duration_seconds, mastering_status, clean_lyrics, status, artwork_url, video_url, promo_video_url, updated_at
     FROM halo_song_versions
     WHERE song_id = ${songId} AND status = 'active'
     ORDER BY id
@@ -110,4 +111,54 @@ export async function releaseConveyorLease(db, ownerMemberId, songId, token) {
     UPDATE halo_release_conveyor SET lease_token = NULL, locked_until = NULL
     WHERE song_id = ${songId} AND owner_member_id = ${ownerMemberId} AND lease_token = ${token}
   `;
+}
+
+export async function persistWatchdog(db, ownerMemberId, songId, token, submission, watchdog) {
+  const radio = watchdog.actions.find(action => action.type === "auto_queue_radio");
+  const metadata = watchdog.actions.find(action => action.type === "restore_isrc");
+  const eventId = randomUUID();
+  const rows = await db.sql`
+    WITH lease AS MATERIALIZED (
+      SELECT song_id FROM halo_release_conveyor
+      WHERE song_id = ${songId} AND owner_member_id = ${ownerMemberId}
+        AND lease_token = ${token} AND locked_until > NOW()
+      FOR UPDATE
+    ), catalog AS MATERIALIZED (
+      SELECT song.* FROM halo_song_catalog song JOIN lease ON lease.song_id = song.id
+      WHERE song.owner_member_id = ${ownerMemberId} AND song.status = 'active'
+      FOR UPDATE OF song
+    ), versions AS MATERIALIZED (
+      SELECT version.* FROM halo_song_versions version JOIN catalog ON catalog.id = version.song_id
+      FOR UPDATE OF version
+    ), current AS MATERIALIZED (
+      SELECT catalog.id FROM catalog
+      WHERE TO_CHAR(GREATEST(catalog.updated_at, (SELECT MAX(updated_at) FROM versions))
+        AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') = ${submission.song.source_updated_at}
+    ), radio_update AS (
+      UPDATE halo_song_versions SET mastering_status = 'queued', destination = 'radio',
+        target_lufs = -16, true_peak_dbtp_tenths = -10,
+        notes = CONCAT_WS(E'\\n', NULLIF(notes, ''), ${radio ? `HALO watchdog: prepare from sale master ${radio.sourceVersionId}; -16 LUFS / -1 dBTP targets only. Dedicated edit, clean-content review and mastering approval required.` : ""}::text),
+        updated_at = NOW()
+      WHERE id = ${radio?.versionId || ""} AND song_id IN (SELECT id FROM current)
+        AND version_type IN ('radio_edit', 'clean') AND status = 'active'
+        AND mastering_status = 'not_started' AND COALESCE(audio_url, '') = ''
+      RETURNING id
+    ), metadata_update AS (
+      UPDATE halo_song_catalog SET isrc = ${metadata?.isrc || ""}, updated_at = NOW()
+      WHERE id IN (SELECT id FROM current) AND ${Boolean(metadata)} AND BTRIM(isrc) = ''
+      RETURNING id
+    ), checkpoint AS (
+      UPDATE halo_release_conveyor
+      SET state = jsonb_set(state, '{watchdog}', ${JSON.stringify(watchdog)}::jsonb), updated_at = NOW()
+      WHERE song_id IN (SELECT id FROM current)
+      RETURNING song_id
+    )
+    INSERT INTO halo_release_conveyor_events (id, song_id, owner_member_id, input_hash, stage, details)
+    SELECT ${eventId}, song_id, ${ownerMemberId}, '', 'watchdog_pulse',
+      ${JSON.stringify(watchdog)}::jsonb || jsonb_build_object(
+        'appliedRadioVersionIds', (SELECT COALESCE(jsonb_agg(id), '[]'::jsonb) FROM radio_update),
+        'appliedMetadataSongIds', (SELECT COALESCE(jsonb_agg(id), '[]'::jsonb) FROM metadata_update))
+    FROM checkpoint RETURNING id
+  `;
+  if (!rows.length) throw new Error("Watchdog lease or submission changed");
 }

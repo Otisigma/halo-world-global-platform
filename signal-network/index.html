@@ -1647,15 +1647,39 @@
         </div>
         <button class="halo-satellite__close" id="haloCloseRewardsBtn" type="button" aria-label="Close HALO Points and rewards">×</button>
       </header>
+      <section class="halo-satellite__fan-tracker" id="fanSignalTracker" aria-labelledby="fanSignalTitle">
+        <h3 id="fanSignalTitle">Fan Signal Points</h3>
+        <p>Verified member rewards from Track Drops, separate from browser-local HALO Points.</p>
+        <p data-points-status role="status" aria-live="polite">Open Points &amp; Rewards to load your verified member rewards.</p>
+        <progress data-points-progress aria-label="Verified member rewards toward next tier" hidden></progress>
+        <ul data-points-breakdown></ul>
+        <a class="halo-satellite__concept-link" href="/track-drops/">Manage member rewards and track drop alerts</a>
+        <dl class="halo-satellite__verification">
+          <div><dt>Album reward threshold</dt><dd>Not configured on the server</dd></div>
+          <div><dt>Album Concierge points unlock</dt><dd>Unavailable — no entitlement or claim service</dd></div>
+        </dl>
+        <p>Member reward tiers do not unlock an album. Browser-local HALO Points below are an engagement preview, not verified Fan Signal Points. No album entitlement or already-claimed status can be determined from either balance.</p>
+        <details>
+          <summary>Local activity breakdown and unlock prerequisites</summary>
+          <ul id="fanSignalLocalBreakdown"></ul>
+          <p>Today’s local activity excludes the welcome bonus and reward requests. Balance is spendable local HP; tier progress uses lifetime local HP. Browser data can be edited or cleared and is not account-specific.</p>
+          <p>A real album unlock needs a product decision linking the existing member reward ledger to Album Concierge, a server-configured album reward threshold, atomic duplicate-safe claims, and server checks for entitlement, catalog visibility, track eligibility, selection limits, and ownership. No album threshold, bonus tracks, minting, or catalog-track selection is offered here.</p>
+        </details>
+        <h3>Album Concierge concepts</h3>
+        <p>The existing tool supports purpose, emotion, sound, story, and saved AI-generated song ideas — not catalog recordings or a points reward. Its “premium” option is not proof of a paid entitlement.</p>
+        <p data-concierge-status role="status" aria-live="polite">Open Points &amp; Rewards to check your recent album concepts.</p>
+        <button class="halo-satellite__redeem" data-concierge-retry type="button" hidden>Retry loading rewards and concepts</button>
+        <a class="halo-satellite__concept-link" href="/album-concierge/">Open Album Concierge concept tool</a>
+      </section>
       <div class="halo-satellite__tier-banner">
         <div class="halo-satellite__tier-info">
-          <span class="halo-satellite__label">Balance</span>
+          <span class="halo-satellite__label">Browser-local preview balance</span>
           <strong id="modalPointsBalance">0 HP</strong>
           <span class="halo-satellite__tier-tag" id="modalCurrentTier">Initiate</span>
         </div>
         <div class="halo-satellite__progress-wrap">
           <div class="halo-satellite__progress-labels"><span id="modalNextTierLabel">Next: Signal Artisan</span><span id="modalNextTierReq">0 / 500 lifetime HP</span></div>
-          <div class="halo-satellite__progress" id="modalTierProgress" role="progressbar" aria-labelledby="modalNextTierLabel" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+          <div class="halo-satellite__progress" id="modalTierProgress" role="progressbar" aria-label="Browser-local lifetime HP tier progress, not reward eligibility" aria-describedby="modalNextTierReq" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
             <div class="halo-satellite__progress-fill" id="modalTierProgressBar"></div>
           </div>
         </div>

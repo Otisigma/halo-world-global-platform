@@ -12,7 +12,7 @@ const read = path => readFile(new URL(`../${path}`, import.meta.url), "utf8");
 let checks = 0;
 async function check(name, run) { await run(); checks++; console.log(`PASS: ${name}`); }
 
-function harness({ user = { id: "fan" }, member = "fan", origin = true, available = true, quota = 0 } = {}) {
+function harness({ user = { id: "fan" }, member = "fan", origin = true, available = true, quota = 0, milestone = null } = {}) {
   const posts = new Map([
     [room, { id: room, member_id: "artist", visibility: "INNER_CIRCLE", audience: ["fan"] }],
     [otherRoom, { id: otherRoom, member_id: "outsider", visibility: "PUBLIC", audience: [] }]
@@ -61,10 +61,13 @@ function harness({ user = { id: "fan" }, member = "fan", origin = true, availabl
       }
       if (sql.includes("halo_release_milestones")) {
         assert.match(sql, /release.status = 'published'/);
+        assert.match(sql, /COALESCE\(release.visibility, 'public'\) = 'public'/);
+        assert.match(sql, /JOIN halo_release_milestones milestone/);
+        assert.match(sql, /track.status = 'rotation'/);
         assert.match(sql, /track.reviewed_at IS NOT NULL AND track.reviewed_by_member_id IS NOT NULL/);
         assert.match(sql, /p.id = \?/);
         assert.ok(!sql.includes("discoverer_rank"));
-        return [];
+        return milestone ? [milestone] : [];
       }
       if (sql.includes("INSERT INTO halo_signal_reports") || sql.includes("INSERT INTO halo_signal_blocks")) return [];
       throw new Error(`Unexpected SQL: ${sql}`);
@@ -152,6 +155,24 @@ await check("shared atomic write quotas reject overflow and room safety actions 
   assert.ok(!JSON.stringify(await (await harness({ available: false }).request()).json()).includes("private database"));
 });
 
+await check("authorized persisted milestone exposes only public release fields and resolved artwork", async () => {
+  const milestone = {
+    release_id: "real-release", title: "<b>Real release</b>", artist: "Real artist",
+    reached_at: "2026-10-01T10:00:00.000Z",
+    artwork_url: "/legacy.jpg", imported_artwork_url: "/imported.jpg", artwork_override_url: "/override.jpg",
+    discoverer_rank: 1, member_id: "private-supporter"
+  };
+  const api = harness({ milestone });
+  const data = await (await api.request()).json();
+  assert.deepEqual(data.milestone, {
+    kind: "reviewed-radio-rotation", releaseId: "real-release", title: milestone.title,
+    artist: "Real artist", reachedAt: milestone.reached_at, artwork: "/override.jpg"
+  });
+  const outsider = harness({ member: "stranger", milestone });
+  assert.equal((await outsider.request()).status, 404);
+  assert.ok(!outsider.queries.some(q => q.sql.includes("halo_release_milestones")));
+});
+
 function sessionHarness(fetch) {
   let next = 0;
   const timers = new Map(), states = [];
@@ -222,10 +243,13 @@ await check("switch, logout, hidden page and late requests cannot leak a previou
 });
 
 class Element {
-  constructor(tag) { this.tag = tag; this.children = []; this.events = new Map(); this.attributes = {}; this.value = ""; }
+  constructor(tag) { this.tag = tag; this.children = []; this.events = new Map(); this.attributes = {}; this.value = ""; this.style = { setProperty() {} }; }
   append(...items) { this.children.push(...items); }
   replaceChildren(...items) { this.children = items; }
   setAttribute(key, value) { this.attributes[key] = value; }
+  getAttribute(key) { return this.attributes[key]; }
+  contains(element) { return this === element || this.children.some(child => child.contains(element)); }
+  remove() {}
   addEventListener(type, fn) { this.events.set(type, fn); }
   removeEventListener(type) { this.events.delete(type); }
   focus() {}
@@ -234,6 +258,7 @@ class Element {
 await check("accessible UI distinguishes idle/loading/empty/error and cleans up listeners", async () => {
   const document = new Element("document"), window = new Element("window"), root = new Element("section");
   document.createElement = tag => new Element(tag);
+  window.clearTimeout = () => {};
   let resolve;
   const timers = new Map();
   const ui = createHypeRoom(root, { document, window, fetch: () => new Promise(r => { resolve = r; }),
@@ -290,7 +315,8 @@ if (databaseUrl) {
   try {
     await sql(`
       CREATE TABLE halo_memberships (member_id TEXT PRIMARY KEY);
-      CREATE TABLE halo_release_campaigns (id TEXT PRIMARY KEY, title TEXT, artist TEXT, status TEXT, visibility TEXT);
+      CREATE TABLE halo_release_campaigns (id TEXT PRIMARY KEY, title TEXT, artist TEXT, status TEXT, visibility TEXT,
+        artwork_url TEXT, imported_artwork_url TEXT, artwork_override_url TEXT);
       CREATE TABLE halo_radio_tracks (id TEXT PRIMARY KEY, status TEXT, reviewed_at TIMESTAMPTZ, reviewed_by_member_id TEXT);
       CREATE TABLE halo_release_milestones (release_id TEXT PRIMARY KEY REFERENCES halo_release_campaigns(id),
         track_id TEXT REFERENCES halo_radio_tracks(id), reached_at TIMESTAMPTZ DEFAULT NOW());
@@ -298,7 +324,8 @@ if (databaseUrl) {
       ${await read("netlify/database/migrations/20261003160000_create_signal_public_feed.sql")}
       ${await read("netlify/database/migrations/20261006080000_signal_feed_media.sql")}
       INSERT INTO halo_memberships VALUES ('fan'), ('artist'), ('stranger');
-      INSERT INTO halo_release_campaigns VALUES ('release-one', 'Real release', 'Real artist', 'published', 'public');
+      INSERT INTO halo_release_campaigns (id, title, artist, status, visibility)
+        VALUES ('release-one', 'Real release', 'Real artist', 'published', 'public');
       INSERT INTO halo_radio_tracks VALUES ('track-one', 'rotation', NOW(), 'artist');
       INSERT INTO halo_release_milestones (release_id, track_id) VALUES ('release-one', 'track-one');
       INSERT INTO halo_signal_feed_posts (id, member_id, author_name, kind, body, release_id, visibility, audience)

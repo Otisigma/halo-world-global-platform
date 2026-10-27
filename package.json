@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "test:listening-telemetry": "node scripts/listening-telemetry-contracts.mjs",
-    "test:hype-room": "node scripts/hype-room-contracts.mjs",
+    "test:hype-room": "node scripts/hype-room-contracts.mjs && node scripts/milestone-celebration-contracts.mjs",
     "test:discoverer": "node scripts/discoverer-milestone-contracts.mjs",
     "test:onboarding": "node --check onboarding.js && node scripts/onboarding-contracts.mjs",
     "test:release-teaser": "node scripts/release-teaser-contracts.mjs",

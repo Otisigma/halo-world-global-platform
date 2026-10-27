@@ -134,7 +134,7 @@ await check("unauthenticated, disabled, failed, malformed, retry and saved-conce
     await h.ui.refresh();
     assert.equal(h.elements["points-progress"].hidden, true);
     assert.match(h.elements["concierge-status"].textContent, /Recent album concepts: 1.*not reward claims/);
-    assert.doesNotMatch(h.elements["concierge-status"].textContent, /<script>|unlocked|granted/);
+    assert.equal(h.elements["concierge-status"].textContent, "Recent album concepts: 1 (latest 20). These are saved creative sessions, not reward claims or owned recordings.");
   }
   let fail = true;
   const h = harness(async path => {

@@ -18,7 +18,7 @@
     try {
       return await fetch(endpoint, {
         method: payload ? "POST" : "GET",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...(!payload ? { "X-Halo-Listening": "1" } : {}) },
         credentials: "same-origin", mode: "same-origin", cache: "no-store",
         ...(typeof globalThis.AbortSignal?.timeout === "function" ? { signal: AbortSignal.timeout(4000) } : {}),
         ...(payload ? { body: JSON.stringify(payload), keepalive: true } : {})

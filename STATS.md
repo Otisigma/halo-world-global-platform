@@ -10,7 +10,8 @@ The visible “Optional listening reports” setting defaults off; Netlify Ident
 cookies supply verified identity. Guests are not recorded and no new anonymous
 IDs, localStorage IDs, fingerprinting, or third-party services are used.
 
-- `GET` returns only the current member's effective `{ enabled }` preference.
+- `GET` with `X-Halo-Listening: 1` returns only the current member's effective
+  `{ enabled }` preference; the custom header prevents cross-site simple requests.
 - `POST { action: "consent", enabled: true|false }` records an explicit choice.
   Disabling atomically deletes that member's listening rows, even at the rate limit.
 - `POST { action: "listen_start", releaseId }` accepts only a persisted, published,
@@ -57,7 +58,8 @@ dashboard integration needs authorized, privacy-thresholded aggregate queries
 and clear separation from verified chart/milestone data; never infer identity,
 listening duration, track ownership, or full-stream completion from these reports.
 
-Run `npm run test:listening-telemetry` for API/client contracts. SQL integration
+Run `npm run test:listening-telemetry` for API/client contracts and automatic
+handler-to-PostgreSQL concurrency tests when local PostgreSQL 16 is installed. SQL integration
 contracts can be run with `psql -X -v ON_ERROR_STOP=1 -f scripts/listening-telemetry-db-contracts.sql`
 against a disposable PostgreSQL database; the fixture rolls back all changes.
 

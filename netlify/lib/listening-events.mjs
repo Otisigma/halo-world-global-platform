@@ -13,7 +13,8 @@ export function createListeningEventsHandler({ getDatabase, getUser, ensureMembe
     try {
       const url = new URL(request.url);
       const origin = request.headers.get("origin");
-      if (url.search || (origin && origin !== url.origin) || request.headers.get("sec-fetch-site") === "cross-site") {
+      if (url.search || (origin && origin !== url.origin) || request.headers.get("sec-fetch-site") === "cross-site"
+        || (request.method === "GET" && request.headers.get("x-halo-listening") !== "1")) {
         throw new FeedError("Unsupported listening request", 403);
       }
       if (request.method === "POST") {
@@ -33,7 +34,7 @@ export function createListeningEventsHandler({ getDatabase, getUser, ensureMembe
           listen_complete: ["action", "receipt"],
           listen_abandon: ["action", "receipt"]
         };
-        const keys = Object.hasOwn(fields, payload.action) ? fields[payload.action] : null;
+        const keys = typeof payload.action === "string" && Object.hasOwn(fields, payload.action) ? fields[payload.action] : null;
         if (!keys || Object.keys(payload).length !== keys.length || Object.keys(payload).some(key => !keys.includes(key))) {
           throw new FeedError("Unsupported event or property");
         }

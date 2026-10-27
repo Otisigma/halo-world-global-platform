@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { execFile, spawnSync } from "node:child_process";
+import { promisify } from "node:util";
 import vm from "node:vm";
 import { createListeningEventsHandler } from "../netlify/lib/listening-events.mjs";
 
@@ -26,7 +28,7 @@ function server({ user = { id: "verified-member" }, origin = true, result = "ok"
   });
   const request = (body, { headers = {}, method = body === undefined ? "GET" : "POST", query = "" } = {}) =>
     handler(new Request(`https://halo.example/api/listening-events${query}`, {
-      method, headers: { Origin: "https://halo.example", "Content-Type": "application/json", ...headers },
+      method, headers: { Origin: "https://halo.example", "Content-Type": "application/json", "X-Halo-Listening": "1", ...headers },
       ...(body === undefined ? {} : { body: typeof body === "string" ? body : JSON.stringify(body) })
     }));
   return { request, queries, memberships: () => memberships };
@@ -42,13 +44,14 @@ await check("guests, unverified origins, CSRF and query spoofing fail closed", a
     assert.equal((await server().request(start, { headers })).status, 403);
   }
   assert.equal((await server().request(start, { query: "?user_id=victim" })).status, 403);
+  assert.equal((await server().request(undefined, { headers: { "X-Halo-Listening": "" } })).status, 403);
   assert.equal((await server().request(undefined, { method: "DELETE" })).status, 405);
 });
 
 await check("strict allowlist rejects identities, timestamps, event IDs, claims, arbitrary properties and injection", async () => {
   const api = server();
   for (const body of [null, [], "{bad", { action: "toString" }, { action: "milestone" },
-    { action: "consent", enabled: "true" }, { action: "listen_start" },
+    { action: { toString: null } }, { action: "consent", enabled: "true" }, { action: "listen_start" },
     { ...start, releaseId: "x".repeat(101) }, { ...start, releaseId: "'; DROP TABLE users;--" },
     { action: "listen_complete", receipt: "forged" }]) {
     assert.equal((await api.request(body)).status, 400);
@@ -164,6 +167,7 @@ await check("native playing only, no buffering/resume duplicates, completion onc
   assert.deepEqual(h.events().map(c => c.payload.action), ["listen_start", "listen_complete", "listen_start", "listen_abandon"]);
   assert.deepEqual(h.events()[1].payload, { action: "listen_complete", receipt });
   assert.equal(h.events()[0].init.credentials, "same-origin");
+  assert.equal(h.calls[0].init.headers["X-Halo-Listening"], "1");
 });
 
 await check("unload uses typed JSON beacon, with safe fetch fallback for false/throw", async () => {
@@ -211,7 +215,7 @@ await check("opt-out clears in-flight reports; stale failures cannot undo newer 
 });
 
 await check("SQL enforces serialization, trusted releases, expiry, server IDs, quotas, deletion and first-terminal-wins", async () => {
-  const migration = await read("netlify/database/migrations/20261027060000_listening_telemetry.sql");
+  const migration = await read("netlify/database/migrations/20261027070000_listening_telemetry.sql");
   for (const pattern of [/DEFAULT gen_random_uuid\(\)/, /FOR UPDATE/, /preference\.consent_at IS NULL/,
     /status = 'published'/, /COALESCE\(visibility, 'public'\) = 'public'/, /s\.member_id = p_member/,
     /INTERVAL '4 hours'/, /preference\.attempts >= 60/, />= 200/, /AND outcome IS NULL/,
@@ -224,3 +228,56 @@ await check("SQL enforces serialization, trusted releases, expiry, server IDs, q
 });
 
 console.log(`Listening telemetry contracts passed (${checks} groups).`);
+
+// Follow the existing journey contracts: use a disposable real database when installed.
+const pgBin = "/usr/lib/postgresql/16/bin";
+if (spawnSync(`${pgBin}/initdb`, ["--version"]).status !== 0) {
+  console.log("Listening telemetry PostgreSQL contracts skipped: local PostgreSQL binaries unavailable.");
+} else {
+  const exec = promisify(execFile);
+  const directory = await mkdtemp("/tmp/halo-listening-contracts-");
+  let running = false;
+  try {
+    await exec(`${pgBin}/initdb`, ["-D", `${directory}/data`, "-A", "trust", "--no-locale"]);
+    await exec(`${pgBin}/pg_ctl`, ["-D", `${directory}/data`, "-o", `-k ${directory} -h '' -p 5432`,
+      "-l", `${directory}/postgres.log`, "-w", "start"]);
+    running = true;
+    const args = ["-X", "-qAt", "-h", directory, "-d", "postgres", "-v", "ON_ERROR_STOP=1"];
+    const execute = async query => (await exec("psql", [...args, "-c", query])).stdout.trim();
+    await exec("psql", [...args, "-f", new URL("./listening-telemetry-db-contracts.sql", import.meta.url).pathname]);
+    await execute(`
+      CREATE TABLE halo_memberships (member_id TEXT PRIMARY KEY);
+      CREATE TABLE halo_release_campaigns (id TEXT PRIMARY KEY, status TEXT, visibility TEXT);
+      ${await read("netlify/database/migrations/20261027070000_listening_telemetry.sql")}
+      INSERT INTO halo_memberships VALUES ('verified-member'), ('other-member');
+      INSERT INTO halo_release_campaigns VALUES ('public-track', 'published', 'public');
+    `);
+    const db = { sql: async (strings, ...values) => {
+      const literal = value => value === null ? "NULL" : typeof value === "boolean" ? String(value) : `'${value.replaceAll("'", "''")}'`;
+      const query = strings.reduce((sql, part, index) => sql + (index ? literal(values[index - 1]) : "") + part, "");
+      return JSON.parse(await execute(`SELECT COALESCE(json_agg(row), '[]'::json) FROM (${query}) row`));
+    } };
+    const handler = createListeningEventsHandler({
+      getDatabase: () => db, getUser: () => ({ id: "verified-member" }),
+      ensureMembership: () => {}, verifyRequestOrigin: () => true
+    });
+    const send = body => handler(new Request("https://halo.example/api/listening-events", {
+      method: "POST", headers: { Origin: "https://halo.example", "Content-Type": "application/json" }, body: JSON.stringify(body)
+    }));
+    assert.equal((await send({ action: "consent", enabled: true })).status, 202);
+    const starts = await Promise.all(Array.from({ length: 10 }, () => send(start).then(r => r.json())));
+    assert.equal(new Set(starts.map(s => s.receipt)).size, 1, "concurrent starts share one server receipt");
+    assert.ok(starts.every(s => s.accepted));
+    assert.equal(await execute("SELECT COUNT(*) FROM halo_listening_sessions"), "1");
+    await execute("UPDATE halo_listening_preferences SET attempts = 59");
+    assert.deepEqual((await Promise.all([send(start), send(start)])).map(r => r.status).sort(), [202, 429]);
+    await execute("UPDATE halo_listening_preferences SET attempts = 0");
+    await Promise.all([send(start), send({ action: "consent", enabled: false }), send(start)]);
+    assert.equal(await execute("SELECT COUNT(*) FROM halo_listening_sessions"), "0", "revocation races leave no rows");
+    assert.equal((await send(start)).status, 403);
+    console.log("Listening telemetry handler-to-PostgreSQL contracts passed: concurrent receipts, atomic quotas and revocation.");
+  } finally {
+    if (running) await exec(`${pgBin}/pg_ctl`, ["-D", `${directory}/data`, "-m", "immediate", "-w", "stop"]);
+    await rm(directory, { recursive: true, force: true });
+  }
+}

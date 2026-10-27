@@ -7,8 +7,8 @@ CREATE TABLE halo_memberships (member_id TEXT PRIMARY KEY);
 CREATE TABLE halo_release_campaigns (
   id TEXT PRIMARY KEY, status TEXT, visibility TEXT, owner_member_id TEXT
 );
-\ir ../netlify/database/migrations/20261027060000_listening_telemetry.sql
-\ir ../netlify/database/migrations/20261027060000_listening_telemetry.sql
+\ir ../netlify/database/migrations/20261027070000_listening_telemetry.sql
+\ir ../netlify/database/migrations/20261027070000_listening_telemetry.sql
 INSERT INTO halo_memberships VALUES ('fan'), ('other'), ('daily-limit');
 INSERT INTO halo_release_campaigns VALUES
   ('published', 'published', 'public', 'artist'), ('private', 'published', 'private', 'artist'),
@@ -49,7 +49,11 @@ BEGIN
   PERFORM * FROM halo_ingest_listening('fan', 'consent', NULL, NULL, FALSE);
   ASSERT (SELECT COUNT(*) = 0 FROM halo_listening_sessions WHERE member_id = 'fan');
   ASSERT (SELECT enabled = FALSE AND consent_at IS NULL FROM halo_listening_preferences WHERE member_id = 'fan');
+  ASSERT (SELECT result = 'rate_limited' FROM halo_ingest_listening('fan', 'consent', NULL, NULL, FALSE));
+  ASSERT (SELECT result = 'rate_limited' FROM halo_ingest_listening('fan', 'listen_start', 'published', NULL, NULL));
+  UPDATE halo_listening_preferences SET attempts = 0 WHERE member_id = 'fan';
   ASSERT (SELECT result = 'consent_required' FROM halo_ingest_listening('fan', 'listen_start', 'published', NULL, NULL));
+  ASSERT (SELECT attempts = 1 FROM halo_listening_preferences WHERE member_id = 'fan');
   UPDATE halo_listening_preferences SET window_start = NOW() - INTERVAL '2 minutes' WHERE member_id = 'fan';
   ASSERT (SELECT result = 'ok' FROM halo_ingest_listening('fan', 'consent', NULL, NULL, TRUE));
   ASSERT (SELECT attempts = 1 FROM halo_listening_preferences WHERE member_id = 'fan');

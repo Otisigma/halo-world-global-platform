@@ -31,6 +31,17 @@ BEGIN
   INSERT INTO halo_listening_preferences(member_id) VALUES (p_member) ON CONFLICT DO NOTHING;
   SELECT * INTO preference FROM halo_listening_preferences WHERE member_id = p_member FOR UPDATE;
 
+  -- Effective revocation must remain possible at quota; repeated disabled writes do not bypass it.
+  IF preference.window_start > NOW() - INTERVAL '1 minute' AND preference.attempts >= 60
+    AND NOT (p_action = 'consent' AND p_enabled = FALSE AND preference.enabled) THEN
+    RETURN QUERY SELECT NULL::uuid, 'rate_limited'::text;
+    RETURN;
+  END IF;
+  UPDATE halo_listening_preferences SET
+    attempts = CASE WHEN window_start <= NOW() - INTERVAL '1 minute' THEN 1 ELSE attempts + 1 END,
+    window_start = CASE WHEN window_start <= NOW() - INTERVAL '1 minute' THEN NOW() ELSE window_start END
+    WHERE member_id = p_member;
+
   IF p_action = 'consent' AND p_enabled = FALSE THEN
     UPDATE halo_listening_preferences SET enabled = FALSE, consent_at = NULL WHERE member_id = p_member;
     DELETE FROM halo_listening_sessions WHERE member_id = p_member;
@@ -41,15 +52,6 @@ BEGIN
     RETURN QUERY SELECT NULL::uuid, 'consent_required'::text;
     RETURN;
   END IF;
-  IF preference.window_start > NOW() - INTERVAL '1 minute' AND preference.attempts >= 60 THEN
-    RETURN QUERY SELECT NULL::uuid, 'rate_limited'::text;
-    RETURN;
-  END IF;
-  UPDATE halo_listening_preferences SET
-    attempts = CASE WHEN window_start <= NOW() - INTERVAL '1 minute' THEN 1 ELSE attempts + 1 END,
-    window_start = CASE WHEN window_start <= NOW() - INTERVAL '1 minute' THEN NOW() ELSE window_start END
-    WHERE member_id = p_member;
-
   IF p_action = 'consent' AND p_enabled = TRUE THEN
     UPDATE halo_listening_preferences SET enabled = TRUE, consent_at = COALESCE(consent_at, NOW())
       WHERE member_id = p_member;

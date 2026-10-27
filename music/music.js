@@ -141,6 +141,7 @@
   class HaloGlobalPlayer {
     constructor({ onError } = {}) {
       this.audio = new Audio();
+      this.playAttempt = 0;
       this.audio.preload = "none";
       this.telemetry = window.HaloListeningTelemetry?.bindAudio(this.audio, () => this.track?.id);
       this.preloader = window.HaloAudioPreloader ? new window.HaloAudioPreloader(this.audio) : null;
@@ -194,6 +195,7 @@
     }
 
     play(track) {
+      this.playAttempt++;
       const src = formatAudioStreamUrl(track?.src);
       if (!src) {
         this.track = track?.id ? { ...track, src: "" } : null;
@@ -215,11 +217,12 @@
 
     resume() {
       if (!this.track?.src) return;
+      const attemptId = ++this.playAttempt;
       if (this.status === "error") this.audio.src = this.track.src;
       this.setStatus("loading");
       const attempt = this.audio.play();
       attempt?.catch(error => {
-        if (error?.name === "AbortError") return;
+        if (attemptId !== this.playAttempt || error?.name === "AbortError") return;
         this.fail(error?.name === "NotAllowedError" ? "Tap play again to start the preview." : "This preview could not be streamed right now.");
       });
     }
@@ -231,6 +234,7 @@
     }
 
     close() {
+      this.playAttempt++;
       this.telemetry?.reset();
       this.preloader?.clear();
       this.audio.pause();

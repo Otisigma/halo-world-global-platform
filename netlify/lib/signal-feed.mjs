@@ -6,7 +6,7 @@ const MAX_MEDIA_BODY_BYTES = Math.ceil(SIGNAL_MEDIA_MAX_BYTES / 3) * 4 + MAX_BOD
 const json = (body, status = 200) => Response.json(body, {
   status, headers: { "Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff" }
 });
-class FeedError extends Error {
+export class FeedError extends Error {
   constructor(message, status = 400) { super(message); this.status = status; }
 }
 function text(value, max, required = false) {
@@ -16,7 +16,7 @@ function text(value, max, required = false) {
   }
   return value.trim();
 }
-function uuid(value) {
+export function uuid(value) {
   if (typeof value !== "string" || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)) {
     throw new FeedError("Invalid identifier");
   }
@@ -99,7 +99,7 @@ function paginated(rows, limit, serialize) {
   const items = rows.slice(0, limit);
   return { items: items.map(serialize), nextCursor: rows.length > limit ? cursorFor(items.at(-1)) : null };
 }
-async function readBody(request, maxBytes = MAX_BODY_BYTES) {
+export async function readBody(request, maxBytes = MAX_BODY_BYTES) {
   if (!request.headers.get("content-type")?.toLowerCase().startsWith("application/json")) throw new FeedError("Use application/json", 415);
   if (Number(request.headers.get("content-length")) > maxBytes) throw new FeedError("Request body too large", 413);
   const reader = request.body?.getReader();
@@ -128,7 +128,7 @@ async function blocked(db, memberId, otherId) {
        OR (member_id = ${otherId} AND target_member_id = ${memberId}) LIMIT 1`;
   return rows.length > 0;
 }
-async function rateLimit(db, memberId, bucket) {
+export async function rateLimit(db, memberId, bucket) {
   const seconds = bucket === "publish" ? 3600 : 60;
   const max = bucket === "publish" ? 10 : 30;
   const rows = await db.sql`
@@ -190,7 +190,7 @@ export async function releaseMedia(db, releaseId) {
     purchaseUrl: publicLink(release.purchase_url), ...releaseMusicMetadata(release)
   };
 }
-async function visiblePost(db, postId, memberId) {
+export async function visiblePost(db, postId, memberId) {
   const rows = await db.sql`SELECT id, member_id, kind, visibility, attachment FROM halo_signal_feed_posts WHERE id = ${postId}
     AND (visibility = 'PUBLIC' OR member_id = ${memberId}
       OR (${memberId} <> '' AND ${memberId} = ANY(audience))) LIMIT 1`;

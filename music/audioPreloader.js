@@ -36,7 +36,7 @@
           return "";
         }
       }).find(Boolean);
-      if (first === this.primarySource) return;
+      if (first === this.primarySource && !this.audio.error) return;
       if (this.audio.getAttribute("src") && !this.primarySource) return;
       this.clear();
       // Only known public static audio may be requested before a play gesture.

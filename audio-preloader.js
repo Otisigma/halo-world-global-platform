@@ -82,14 +82,15 @@
         const allowed = backgroundAllowed() && eligible(url);
         const sameSource = mediaUrl(audio.getAttribute("src")) === url;
         const previousPreload = audio.preload;
-        if (sameSource && audio.preload === (allowed ? "metadata" : "none")) return;
+        const failed = Boolean(audio.error);
+        if (sameSource && !failed && audio.preload === (allowed ? "metadata" : "none")) return;
         if (sameSource && !allowed) {
           audio.removeAttribute("src");
           audio.load();
         }
         audio.preload = allowed ? "metadata" : "none";
-        if (mediaUrl(audio.getAttribute("src")) !== url) audio.src = url;
-        if (allowed && (!sameSource || previousPreload === "none")) {
+        if (mediaUrl(audio.getAttribute("src")) !== url || (allowed && failed)) audio.src = url;
+        if (allowed && (!sameSource || previousPreload === "none" || failed)) {
           try { audio.load(); } catch {}
         }
       };

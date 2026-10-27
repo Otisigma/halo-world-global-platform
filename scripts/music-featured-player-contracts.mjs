@@ -271,6 +271,9 @@ const sources = Array.from({ length: 8 }, (_, index) => `https://halo.test/audio
   assert.equal(h.created.length, 0, "no secondary Audio objects or playlist requests");
   h.preloader.prepare(sources);
   assert.equal(h.primary.loads, 1, "repeat queue hydration must not reload the selected source");
+  h.primary.error = { code: 4 };
+  h.preloader.prepare(sources);
+  assert.equal(h.primary.loads, 3, "reselecting failed metadata must abort the failed resource and load again");
   assert.equal(h.tasks.size, 0);
   h.window.dispatchEvent(new Event("pagehide"));
   assert.equal(h.primary.src, "", "page exit must release an unplayed speculative primary");

@@ -75,6 +75,10 @@ const urls = Array.from({ length: 12 }, (_, index) => `https://halo.test/audio/t
   assert.equal(f.timers.size, 0);
   f.cache.warmPlaylist(urls, { primaryAudio: primary });
   assert.equal(primary.loads, 1, "repeated selection must preserve metadata and avoid duplicate requests");
+  primary.error = { code: 4 };
+  f.cache.warmPlaylist(urls, { primaryAudio: primary });
+  assert.equal(primary.loads, 2, "reselecting a failed borrowed source must reload instead of preserving its media error");
+  primary.error = null;
   assert.equal(f.cache.take(urls[1]), null);
   f.cache.clear();
   assert.equal(primary.src, urls[0], "cleanup must not unload Dreamweaver's borrowed element");

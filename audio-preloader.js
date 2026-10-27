@@ -1,13 +1,8 @@
 (() => {
   function createAudioPreloader() {
     const cache = new Map();
-    const timers = new Set();
-    let queue = [];
     let primary = null;
-    let busy = false;
     let disposed = false;
-    let waitingForLoad = null;
-    const MAX_TRACKS = 6;
 
     function mediaUrl(value) {
       try {
@@ -16,20 +11,6 @@
       } catch {
         return "";
       }
-    }
-
-    function later(callback, delay) {
-      const timer = window.setTimeout(() => {
-        timers.delete(timer);
-        callback();
-      }, delay);
-      timers.add(timer);
-      return timer;
-    }
-
-    function cancel(timer) {
-      window.clearTimeout(timer);
-      timers.delete(timer);
     }
 
     function release(entry) {
@@ -47,6 +28,7 @@
       const url = mediaUrl(value);
       if (!audio || !url) return false;
       try {
+        cache.get(url)?.cleanup?.();
         audio.preload = "auto";
         if (mediaUrl(audio.getAttribute("src")) !== url || audio.error) {
           audio.src = value;
@@ -60,82 +42,32 @@
 
     function backgroundAllowed() {
       const connection = window.navigator?.connection;
-      return !document.hidden && !connection?.saveData && !["slow-2g", "2g", "3g"].includes(connection?.effectiveType);
+      return !document.hidden && window.navigator?.onLine !== false && !connection?.saveData
+        && !(window.navigator?.deviceMemory <= 2) && !(window.navigator?.hardwareConcurrency <= 2)
+        && !(window.navigator?.maxTouchPoints > 0 && !connection)
+        && !["slow-2g", "2g", "3g"].includes(connection?.effectiveType);
     }
 
-    function schedule() {
-      if (disposed || busy || !queue.length || !backgroundAllowed()) return;
-      busy = true;
-      later(warmNext, 250);
-    }
-
-    function warmNext() {
-      if (disposed || !backgroundAllowed()) {
-        busy = false;
-        return;
-      }
-      const url = queue.shift();
-      if (!url) {
-        busy = false;
-        return;
-      }
-      let entry;
-      try {
-        const audio = new Audio();
-        entry = { audio, owned: true, cleanup: null };
-        cache.set(url, entry);
-        let settled = false;
-        const finish = failed => {
-          if (settled) return;
-          settled = true;
-          entry.cleanup();
-          if (failed) {
-            cache.delete(url);
-            release(entry);
-          }
-          busy = false;
-          schedule();
-        };
-        const ready = () => finish(false);
-        const failed = () => finish(true);
-        const timer = later(failed, 5000);
-        entry.cleanup = () => {
-          cancel(timer);
-          audio.removeEventListener("loadedmetadata", ready);
-          audio.removeEventListener("error", failed);
-        };
-        entry.detach = () => finish(false);
-        audio.addEventListener("loadedmetadata", ready);
-        audio.addEventListener("error", failed);
-        audio.preload = "metadata";
-        audio.src = url;
-        audio.load();
-      } catch {
-        if (entry) release(entry);
-        cache.delete(url);
-        busy = false;
-        schedule();
-      }
+    function eligible(value) {
+      const url = new URL(value);
+      return url.origin === window.location.origin && !url.search && !url.hash
+        && /^\/audio\/[\w/-]+\.(?:mp3|m4a|aac|ogg|wav|flac|webm)$/i.test(url.pathname);
     }
 
     function clear() {
-      queue = [];
-      busy = false;
-      for (const timer of timers) window.clearTimeout(timer);
-      timers.clear();
-      if (waitingForLoad) window.removeEventListener("load", waitingForLoad);
-      waitingForLoad = null;
       primary?.cleanup?.();
       primary = null;
       for (const entry of cache.values()) release(entry);
       cache.clear();
     }
 
-    function warmPlaylist(values, { primaryAudio, respectPolicy = false } = {}) {
+    function warmPlaylist(values, { primaryAudio } = {}) {
       if (disposed) return;
+      const url = values.map(mediaUrl).find(Boolean);
+      if ((primary?.audio === primaryAudio || (!primaryAudio && primary?.owned))
+        && cache.has(url) && !primary?.audio.error) return;
       clear();
-      const urls = [...new Set(values.map(mediaUrl).filter(Boolean))].slice(0, MAX_TRACKS);
-      if (!urls.length) return;
+      if (!url) return;
       let audio;
       try {
         audio = primaryAudio || new Audio();
@@ -143,33 +75,39 @@
         return;
       }
       primary = { audio, owned: !primaryAudio, cleanup: null };
-      cache.set(urls[0], primary);
-      queue = urls.slice(1);
-      let started = false;
-      const start = () => {
-        if (started) return;
-        started = true;
-        primary?.cleanup?.();
-        if (document.readyState === "complete") schedule();
-        else {
-          waitingForLoad = () => {
-            waitingForLoad = null;
-            schedule();
-          };
-          window.addEventListener("load", waitingForLoad, { once: true });
+      cache.set(url, primary);
+      let claimed = false;
+      const sync = () => {
+        if (claimed) return;
+        const allowed = backgroundAllowed() && eligible(url);
+        const sameSource = mediaUrl(audio.getAttribute("src")) === url;
+        const previousPreload = audio.preload;
+        if (sameSource && audio.preload === (allowed ? "metadata" : "none")) return;
+        if (sameSource && !allowed) {
+          audio.removeAttribute("src");
+          audio.load();
+        }
+        audio.preload = allowed ? "metadata" : "none";
+        if (mediaUrl(audio.getAttribute("src")) !== url) audio.src = url;
+        if (allowed && (!sameSource || previousPreload === "none")) {
+          try { audio.load(); } catch {}
         }
       };
+      const claim = () => { claimed = true; primary?.cleanup?.(); };
+      const connection = window.navigator?.connection;
       primary.cleanup = () => {
-        audio.removeEventListener("canplay", start);
-        audio.removeEventListener("error", start);
+        audio.removeEventListener("play", claim);
+        document.removeEventListener?.("visibilitychange", sync);
+        connection?.removeEventListener?.("change", sync);
+        window.removeEventListener("online", sync);
+        window.removeEventListener("offline", sync);
       };
-      primary.detach = start;
-      audio.addEventListener("canplay", start);
-      audio.addEventListener("error", start);
-      if (respectPolicy && !backgroundAllowed()) {
-        audio.preload = "none";
-        if (mediaUrl(audio.getAttribute("src")) !== urls[0]) audio.src = urls[0];
-      } else if (!prepare(audio, urls[0]) || audio.readyState >= 3 || audio.error) start();
+      audio.addEventListener("play", claim);
+      document.addEventListener?.("visibilitychange", sync);
+      connection?.addEventListener?.("change", sync);
+      window.addEventListener("online", sync);
+      window.addEventListener("offline", sync);
+      sync();
     }
 
     // Transfer ownership to playback so cache cleanup cannot pause an active listening room.
@@ -178,7 +116,6 @@
       const entry = cache.get(url);
       if (!entry?.owned || entry.audio.error) return null;
       cache.delete(url);
-      entry.detach?.();
       entry.cleanup?.();
       return entry.audio;
     }

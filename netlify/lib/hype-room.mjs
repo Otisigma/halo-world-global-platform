@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { FeedError, uuid, readBody, rateLimit, visiblePost } from "./signal-feed.mjs";
+import { resolveReleaseArtworkFields } from "./release-artwork.mjs";
 
 export const HYPE_HISTORY_LIMIT = 50;
 export const HYPE_MESSAGE_LIMIT = 500;
@@ -103,7 +104,8 @@ export function createHypeRoomHandler({ getDatabase, getUser, ensureMembership, 
         ORDER BY c.created_at DESC, c.id DESC LIMIT ${HYPE_HISTORY_LIMIT}
       `;
       const events = await db.sql`
-        SELECT release.title, release.artist, milestone.reached_at
+        SELECT release.id AS release_id, release.title, release.artist, milestone.reached_at,
+          release.artwork_url, release.imported_artwork_url, release.artwork_override_url
         FROM halo_signal_feed_posts p
         JOIN halo_release_campaigns release ON release.id = p.release_id
         JOIN halo_release_milestones milestone ON milestone.release_id = release.id
@@ -120,7 +122,12 @@ export function createHypeRoomHandler({ getDatabase, getUser, ensureMembership, 
           createdAt: new Date(row.created_at).toISOString()
         })),
         milestone: events[0] ? {
-          title: events[0].title, artist: events[0].artist, reachedAt: new Date(events[0].reached_at).toISOString()
+          kind: "reviewed-radio-rotation", releaseId: events[0].release_id,
+          title: events[0].title, artist: events[0].artist, reachedAt: new Date(events[0].reached_at).toISOString(),
+          artwork: resolveReleaseArtworkFields({
+            artworkUrl: events[0].artwork_url, importedArtworkUrl: events[0].imported_artwork_url,
+            artworkOverrideUrl: events[0].artwork_override_url
+          }).artwork
         } : null
       });
     } catch (error) {

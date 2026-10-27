@@ -1,3 +1,5 @@
+import { createMilestoneCelebration } from "./milestone-celebration.js";
+
 export function createRoomSession({
   fetch = globalThis.fetch, onState, isVisible = () => !globalThis.document?.hidden,
   setTimeout = globalThis.setTimeout, clearTimeout = globalThis.clearTimeout
@@ -119,6 +121,7 @@ export function createHypeRoom(root, { document = globalThis.document, window = 
   close.type = "button";
   const radio = node("a", "Open HALO Radio"); radio.href = "/radio/";
   root.append(title, status, context, event, list, form, retry, close, radio);
+  const celebration = createMilestoneCelebration(root, { document, window });
   let previous = "", sending = false, disposed = false, epoch = 0;
   const session = createRoomSession({
     ...options, isVisible: () => !document.hidden,
@@ -132,6 +135,7 @@ export function createHypeRoom(root, { document = globalThis.document, window = 
       retry.disabled = state.busy || state.phase === "idle";
       close.disabled = state.phase === "idle";
       const data = state.snapshot;
+      celebration.update(data);
       context.textContent = data ? data.visibility === "PUBLIC"
         ? "Public post: these messages also appear as public Signal comments. Use only a display name you wish to share."
         : "Selected audience: messages are shared with this post's author and authorized audience." : "";
@@ -184,7 +188,7 @@ export function createHypeRoom(root, { document = globalThis.document, window = 
     session.refresh();
   };
   const refresh = () => session.refresh();
-  const leave = () => { epoch++; sending = false; input.value = ""; consent.checked = false; notice.textContent = ""; session.leave(); };
+  const leave = () => { epoch++; celebration.reset(); sending = false; input.value = ""; consent.checked = false; notice.textContent = ""; session.leave(); };
   const visibility = () => session.visibilityChanged();
   form.addEventListener("submit", submit);
   retry.addEventListener("click", refresh);
@@ -197,6 +201,7 @@ export function createHypeRoom(root, { document = globalThis.document, window = 
     reset: leave,
     destroy() {
       leave(); disposed = true;
+      celebration.destroy();
       form.removeEventListener("submit", submit);
       retry.removeEventListener("click", refresh);
       close.removeEventListener("click", leave);

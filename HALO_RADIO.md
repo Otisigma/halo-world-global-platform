@@ -24,6 +24,44 @@ Netlify remains responsible for the parts that belong to the Halo product:
 
 This separation keeps the streaming layer replaceable. A managed provider can be connected later without redesigning the listener experience.
 
+## Reviewed rotation celebration
+
+An existing, authorized Signal Hype Room can present a **reviewed radio rotation**
+celebration for its linked public, published release. The source is
+`halo_release_milestones`: the database trigger records the first reviewed,
+rights-confirmed transition from a non-rotation status into `rotation`, once per
+release. The room API additionally checks that the linked track is still in
+reviewed rotation. Computed chart sort positions and optional listening telemetry
+do not trigger it. This is not a #1 chart award.
+
+The room's “Celebrate reviewed radio milestones once in this browser” checkbox
+defaults off. Opting in allows presentation when the room next receives a persisted
+milestone, including an existing milestone on opening the room. The choice and up
+to 200 public release/timestamp keys are saved locally, before presentation, with
+no identity, rank, supporter details, telemetry, or server write. History is shared
+by accounts using that browser, not synchronized across devices. Clearing browser
+storage resets it; full, unavailable, or invalid storage fails closed rather than
+replaying celebrations. DNT/GPC disables this optional presentation.
+
+The non-modal HALO card includes existing release artwork (or the HALO placeholder),
+title/artist, a truthful rotation badge, Escape/button dismissal, and a silent,
+2.4-second maximum confetti effect. It does not steal focus or trap keyboard
+navigation, cover the whole page, alter playback, or automatically close the card.
+Reduced-motion and Safe Space preferences suppress confetti. Sharing requires a
+click and uses native browser sharing, then clipboard, then a selectable public
+`/music/?song=…` link; private room URLs and Discoverer information are never shared.
+Native sharing/clipboard availability depends on browser permissions and secure
+context; native cancellation does not copy or post anything.
+
+Delivery is the existing authenticated 10-second polling, not WebSockets or a
+synchronized platform-wide broadcast. Leaving, hiding, signing out, or receiving
+an unavailable/unauthorized room response clears the card. Access changes are
+noticed on the next request. No rooms, pinned messages, expiration windows, voice
+actions, external integrations, or automatic posts are created.
+
+Run `npm run test:hype-room` for room/API and celebration contracts. Optional
+PostgreSQL room integration uses `HYPE_ROOM_TEST_DATABASE_URL`.
+
 ## Environment variables
 
 Set the public base URL and station short names:

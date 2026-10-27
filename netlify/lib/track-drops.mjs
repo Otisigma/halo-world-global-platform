@@ -222,11 +222,26 @@ export async function announceTrackDrop(db, { song, release, actorId = "system",
 export async function loadMemberRewards(db, memberId, enabled) {
   if (!enabled) return rewardProgress(0, false);
   const rows = await db.sql`
-    SELECT COALESCE(SUM(points), 0)::int AS points
+    SELECT COALESCE(SUM(points), 0)::int AS points,
+      COALESCE(SUM(points) FILTER (WHERE reward_key = 'track-drops-opt-in'), 0)::int AS opt_in_points,
+      COALESCE(SUM(points) FILTER (WHERE reward_key LIKE 'track-drop-open:%'), 0)::int AS open_drop_points
     FROM halo_member_reward_events
     WHERE member_id = ${memberId}
   `;
-  return rewardProgress(rows[0]?.points || 0, true);
+  const points = Number(rows[0]?.points || 0);
+  const optIn = Number(rows[0]?.opt_in_points || 0);
+  const opened = Number(rows[0]?.open_drop_points || 0);
+  const summary = rewardProgress(points, true);
+  const next = REWARD_TIERS.find(tier => tier.minPoints > points);
+  return {
+    ...summary,
+    breakdown: [
+      { label: "Track drop opt-in", points: optIn },
+      { label: "Opened track drops", points: opened },
+      { label: "Other member rewards", points: points - optIn - opened }
+    ],
+    progress: next ? { value: points, max: next.minPoints, label: next.label } : null
+  };
 }
 
 /** Grants a reward once per member and key; returns true only when new points were added. */

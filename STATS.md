@@ -2,6 +2,65 @@
 
 The stats backend records anonymous product events in Netlify Database and exposes a protected aggregate report.
 
+## Optional shop/chart listening reports
+
+`/music/` uses a separate, authenticated `GET/POST /api/listening-events` endpoint.
+It does not replace the legacy site-wide stats or DJ `/api/telemetry` diagnostics.
+The visible “Optional listening reports” setting defaults off; Netlify Identity
+cookies supply verified identity. Guests are not recorded and no new anonymous
+IDs, localStorage IDs, fingerprinting, or third-party services are used.
+
+- `GET` returns only the current member's effective `{ enabled }` preference.
+- `POST { action: "consent", enabled: true|false }` records an explicit choice.
+  Disabling atomically deletes that member's listening rows, even at the rate limit.
+- `POST { action: "listen_start", releaseId }` accepts only a persisted, published,
+  public release and returns a server-generated `receipt`.
+- `POST { action: "listen_complete"|"listen_abandon", receipt }` requires that
+  receipt to belong to the authenticated member and a still-public release.
+  Receipts expire after four hours. First terminal report wins; retries cannot
+  increment counts. Concurrent/retried starts for the same member/release share
+  an unfinished receipt within this window, so they may undercount separate tabs.
+
+All other properties are rejected, including identities, client timestamps,
+positions, durations, owner/milestone claims, and caller-selected event IDs.
+Requests require same-origin checks and JSON with a streamed 1 KiB limit.
+Member-row locking serializes consent, retries and quotas across serverless
+instances: 60 attempts/minute and 200 new listening rows/day per member.
+Browser DNT and GPC override consent on both client and server. Opting out in
+another tab immediately blocks further writes server-side. A failed preference
+save disables local dispatch but does not claim that server deletion succeeded.
+
+Only real audio `playing`/`ended` signals in the shop/chart player generate
+start/completion reports. Pauses/resumes and buffering do not create new starts.
+Switching/closing, an audio error, or leaving the page reports abandonment only
+after a start; blocked or failed playback does not fabricate a start. Reports are
+best-effort and non-blocking, with bounded retries and no durable browser queue.
+Unload uses an `application/json` Blob with `sendBeacon`, falling back to
+same-origin keepalive fetch if unavailable or refused. Legacy click-based
+`music_playback_start` is no longer emitted by this player.
+
+The scoped migration stores member/release references, a random receipt, optional
+terminal outcome, and a server start timestamp for expiry/retention. No terminal
+timestamp or precise playback history is collected. An hourly scheduled function
+deletes rows older than 30 days (up to one additional hour between cleanups);
+membership/release deletion cascades. The explicit preference remains until
+membership deletion or a changed choice. No event payloads, identifiers, or raw
+database errors are logged. Deploy the migration before enabling the endpoint;
+storage failures fail closed without affecting playback.
+
+These are **consented client playback reports, not verified streams**: seeking,
+automation, missing unload delivery and shared receipts limit their meaning.
+They do not grant votes, rewards, Discoverer ranks, or radio milestones. No new
+artist dashboard is added and no listener-level data is exposed to artists.
+Existing artist/operator summaries still use legacy aggregates. Any future
+dashboard integration needs authorized, privacy-thresholded aggregate queries
+and clear separation from verified chart/milestone data; never infer identity,
+listening duration, track ownership, or full-stream completion from these reports.
+
+Run `npm run test:listening-telemetry` for API/client contracts. SQL integration
+contracts can be run with `psql -X -v ON_ERROR_STOP=1 -f scripts/listening-telemetry-db-contracts.sql`
+against a disposable PostgreSQL database; the fixture rolls back all changes.
+
 ## Privacy
 
 - Visitor and browser-session identifiers are random anonymous values stored in the browser.

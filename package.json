@@ -3,6 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "test:hype-room": "node scripts/hype-room-contracts.mjs",
     "test:discoverer": "node scripts/discoverer-milestone-contracts.mjs",
     "test:onboarding": "node --check onboarding.js && node scripts/onboarding-contracts.mjs",
     "test:release-teaser": "node scripts/release-teaser-contracts.mjs",
@@ -40,7 +41,7 @@
     "test:audio-preloader": "node scripts/audio-preloader-contracts.mjs",
     "test:creator-pass": "node scripts/creator-pass-contracts.mjs && node scripts/creator-pass-vault-contracts.mjs && node scripts/creator-pass-discovery-contracts.mjs",
     "test:dj-personas": "node scripts/dj-persona-contracts.mjs",
-    "test:network": "node scripts/creator-network-contracts.mjs && node scripts/signal-network-contracts.mjs && node scripts/signal-rooms-contracts.mjs && node scripts/signal-satellite-contracts.mjs && node scripts/signal-feed-contracts.mjs && node scripts/industry-wire-contracts.mjs && node scripts/signal-messages-contracts.mjs && node scripts/studio-guardian-contracts.mjs && node scripts/dj-persona-contracts.mjs",
+    "test:network": "node scripts/creator-network-contracts.mjs && node scripts/signal-network-contracts.mjs && node scripts/signal-rooms-contracts.mjs && node scripts/signal-satellite-contracts.mjs && node scripts/signal-feed-contracts.mjs && npm run -s test:hype-room && node scripts/industry-wire-contracts.mjs && node scripts/signal-messages-contracts.mjs && node scripts/studio-guardian-contracts.mjs && node scripts/dj-persona-contracts.mjs",
     "test:music-home": "node scripts/music-home-contracts.mjs && node scripts/music-home-api-contracts.mjs",
     "test:release-conveyor": "node scripts/release-watchdog-contracts.mjs && node scripts/release-conveyor-contracts.mjs && node scripts/release-pipeline-contracts.mjs && node scripts/release-audio-contracts.mjs && npm run -s test:release-teaser",
     "test:guard-preflight": "node scripts/request-preflight-contracts.mjs"

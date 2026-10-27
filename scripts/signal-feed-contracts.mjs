@@ -382,6 +382,8 @@ await check("auth changes clear composer drafts and consent; old mutations canno
     AbortController, URLSearchParams, setTimeout, clearTimeout, setInterval() {}, console
   };
   context.SIGNAL_VISIBILITY = { PUBLIC: "Public Frequency" };
+  let roomResets = 0;
+  context.createHypeRoom = () => ({ open() {}, reset() { roomResets++; } });
   context.createSignalComposerController = createSignalComposerController;
   context.createSignalComposer = () => ({
     hasAttachment: false, reset() { context.testPostType?.(); }, lock() {},
@@ -400,6 +402,7 @@ await check("auth changes clear composer drafts and consent; old mutations canno
   get("feedPosts").players = [oldPlayer]; get("feedPosts").children = [new Element()];
   currentMember = "new-member"; delayFeed = true;
   const pendingAuth = authChanged();
+  assert.equal(roomResets, 1, "Hype Room content and pending requests are cleared on auth changes");
   await new Promise(resolve => setImmediate(resolve));
   assert.ok(oldPlayer.paused && oldPlayer.srcRemoved && oldPlayer.unloaded);
   assert.equal(get("feedPosts").children.length, 0, "Private content cleared before the new feed responds");

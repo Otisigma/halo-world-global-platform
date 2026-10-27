@@ -142,6 +142,7 @@
     constructor({ onError } = {}) {
       this.audio = new Audio();
       this.audio.preload = "none";
+      this.telemetry = window.HaloListeningTelemetry?.bindAudio(this.audio, () => this.track?.id);
       this.preloader = window.HaloAudioPreloader ? new window.HaloAudioPreloader(this.audio) : null;
       this.track = null;
       this.status = "idle";
@@ -204,12 +205,12 @@
         return;
       }
       this.preloader?.claim();
+      this.telemetry?.reset();
       this.track = { ...track, src };
       this.audio.preload = "auto";
       if (this.audio.src !== src || this.audio.error) this.audio.src = src;
       this.renderBar();
       this.resume();
-      window.haloStats?.track("music_playback_start", { target: "shop_player", track: track.id });
     }
 
     resume() {
@@ -230,6 +231,7 @@
     }
 
     close() {
+      this.telemetry?.reset();
       this.preloader?.clear();
       this.audio.pause();
       this.track = null;

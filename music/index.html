@@ -151,6 +151,13 @@
     </section>
 
     <p class="catalog-data-note">Support a release with the featured-song vote, listening, or sharing. Votes do not publish music or approve radio rotation. <a href="/song-catalog/">Artist? Sign in to your private workspace.</a></p>
+    <section class="catalog-data-note" aria-labelledby="listeningPrivacyTitle">
+      <h2 id="listeningPrivacyTitle">Optional listening reports</h2>
+      <p>Off by default. Signed-in members can share which public releases they start, finish, or leave in this shop/chart player. Reports are linked to your member account for up to 30 days, not shared with artists, and never count as verified streams or earn rewards. No playhead positions, audio URLs, or guest identifiers are collected. Browser Do Not Track and Global Privacy Control override this choice.</p>
+      <label><input id="listeningAnalytics" type="checkbox" disabled> Allow optional listening reports</label>
+      <p>Turn this off to delete your stored listening reports. This control does not change legacy site-wide anonymous stats.</p>
+      <p id="listeningAnalyticsStatus" role="status">Listening reports are off until your saved choice is checked.</p>
+    </section>
   </main>
 
   <footer>
@@ -165,6 +172,7 @@
   <script src="/stats.js" defer></script>
   <script src="/accessibility.js" defer></script>
   <script src="/release-artwork.js"></script>
+  <script src="/listening-telemetry.js" defer></script>
   <script src="/music/audioPreloader.js" defer></script>
   <script src="/music/music.js" defer></script>
   <script src="/music/featuredPlayer.js" defer></script>

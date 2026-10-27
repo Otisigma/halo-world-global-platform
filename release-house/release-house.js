@@ -701,6 +701,7 @@ function setReleaseContext(project) {
 }
 
 function updateAccount() {
+  window.dispatchEvent(new CustomEvent("halo-release-auth-changed", { detail: state.authenticated }));
   const name = state.user?.name || state.user?.userMetadata?.full_name || state.user?.user_metadata?.full_name;
   elements.accountButton.textContent = state.authenticated ? `${name || "HALO member"} · Sign out` : "Join / sign in";
 }

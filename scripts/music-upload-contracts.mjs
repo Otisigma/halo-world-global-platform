@@ -164,7 +164,7 @@ const exactResponse = await releaseHandlerFixture.releaseCatalogHandler(
   new Request(`https://halo.test/api/release-catalog?${new URLSearchParams({ songId })}`));
 assert.deepEqual((await exactResponse.json()).releases, [publicRelease]);
 assert.ok(lookupValues.includes(songId));
-assert.match(lookupSql, /WHERE release\.status = 'published'\s+AND \(\? = '' OR catalog\.catalog_song_id = \?\)[\s\S]*LIMIT 200/,
+assert.match(lookupSql, /WHERE release\.status = 'published'\s+AND release\.visibility = 'public'\s+AND \(\? = '' OR catalog\.catalog_song_id = \?\)[\s\S]*LIMIT 200/,
   "exact-song filtering must precede the feed limit and retain publication gating");
 assert.equal((await releaseHandlerFixture.releaseCatalogHandler(
   new Request("https://halo.test/api/release-catalog?songId=invalid"))).status, 400);

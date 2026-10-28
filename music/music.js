@@ -968,6 +968,7 @@
     return `<div class="release-actions">
       ${featuredBadge(release)}
       ${playTrackButton(release)}
+      ${window.HaloDistributionLinks?.action(release) || ""}
       ${listenAction}
       ${buyAction}
       ${includeSelect ? `<button class="action tertiary" type="button" data-select-release="${escapeHtml(release.id)}">View in shop</button>` : ""}

@@ -1829,6 +1829,7 @@
           const [releasePackNotice, setReleasePackNotice] = useState('');
           const [campaignEditorOpen, setCampaignEditorOpen] = useState(false);
           const [campaignSaving, setCampaignSaving] = useState(false);
+          const [distributionSaving, setDistributionSaving] = useState(false);
           const [campaignDraft, setCampaignDraft] = useState(null);
           const [selectorDraft, setSelectorDraft] = useState({ selectorType: 'dj', outletName: '', notes: '' });
           const [socialCaption, setSocialCaption] = useState('');
@@ -2690,6 +2691,29 @@
               setReleasePackError(error.message || 'The release campaign could not be saved.');
             } finally {
               setCampaignSaving(false);
+            }
+          };
+
+          const saveDistributionLink = async () => {
+            if (!campaignDraft?.id) return;
+            setDistributionSaving(true);
+            setReleasePackError('');
+            try {
+              const response = await fetch('/api/release-pack', {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ releaseId: campaignDraft.id, purchaseUrl: campaignDraft.purchaseUrl || '' })
+              });
+              const data = await response.json();
+              if (!response.ok) throw new Error(data.message || 'The distribution destination could not be saved.');
+              applyReleasePackState(data);
+              setCampaignDraft(previous => ({ ...previous, purchaseUrl: data.release.purchaseUrl }));
+              setReleasePackNotice(data.message);
+              window.setTimeout(() => setReleasePackNotice(''), 3400);
+            } catch (error) {
+              setReleasePackError(error.message || 'The distribution destination could not be saved.');
+            } finally {
+              setDistributionSaving(false);
             }
           };
 
@@ -5735,7 +5759,7 @@
                                 </div>
                                 <div className="grid min-w-64 gap-2 sm:grid-cols-[1fr_auto_auto]">
                                   {releasePack.canEdit && releasePack.campaigns.length > 0 && <select value={releasePack.release.id} onChange={event => { setCampaignEditorOpen(false); loadReleasePack(event.target.value); }} className="rounded-xl border border-white/10 bg-[#101719] px-3 py-2.5 text-[9px] font-bold text-white outline-none focus:border-lime-300/50">
-                                    {releasePack.campaigns.map(campaign => <option key={campaign.id} value={campaign.id}>{campaign.title} · {campaign.status}</option>)}
+                                    {releasePack.campaigns.map(campaign => <option key={campaign.id} value={campaign.id}>{campaign.title} · {campaign.status} · {campaign.distributionStatus === 'public' ? 'link ready' : campaign.distributionStatus === 'private' ? 'link private' : campaign.distributionStatus === 'invalid' ? 'link needs correction' : 'no destination'}</option>)}
                                   </select>}
                                   {releasePack.canEdit && <button type="button" onClick={() => setCampaignEditorOpen(open => !open)} className="rounded-xl border border-lime-300/35 px-3 py-2.5 text-[8px] font-black uppercase tracking-wider text-lime-200 hover:bg-lime-300/10">{campaignEditorOpen ? 'Close editor' : 'Edit campaign'}</button>}
                                   <button type="button" onClick={newCampaignDraft} className="rounded-xl bg-lime-300 px-3 py-2.5 text-[8px] font-black uppercase tracking-wider text-[#15200d] hover:bg-lime-200">New release</button>
@@ -5765,12 +5789,18 @@
                                 <p className="mt-2 text-[9px] leading-4 text-gray-500">Live artwork uses manual override → imported DistroKid artwork → HALO fallback. Re-syncing the imported image will not replace a manual override.</p>
 
                                 <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-5">{[
-                                  ['officialUrl', 'Primary / HyperFollow', 'https://distrokid.com/hyperfollow/...'],
+                                  ['officialUrl', 'Artist listening / official link', 'https://distrokid.com/hyperfollow/...'],
                                   ['djUrl', 'DJ delivery', 'Private WAV or request link'],
                                   ['radioUrl', 'Radio delivery', 'Clean edit or broadcast pack'],
                                   ['pressUrl', 'Press assets', 'Photos, one-sheet, approved copy'],
                                   ['previewUrl', 'Private preview', 'Advance listening destination']
                                 ].map(([field, label, placeholder]) => <label key={field} className="text-[7px] font-black uppercase tracking-wider text-gray-500">{label}<input type="url" value={campaignDraft[field] || ''} maxLength="1000" onChange={event => updateCampaignDraft(field, event.target.value)} placeholder={placeholder} className="mt-2 w-full rounded-xl border border-white/10 bg-black/40 px-3 py-3 text-[9px] normal-case text-white outline-none placeholder:text-gray-700 focus:border-lime-300/50" /></label>)}</div>
+                                {campaignDraft.id && <div className="mt-3 rounded-xl border border-cyan-300/20 bg-cyan-300/[.04] p-3">
+                                  <label className="block text-[7px] font-black uppercase tracking-wider text-cyan-100">Public catalog distribution / streaming destination<input type="url" value={campaignDraft.purchaseUrl || ''} maxLength="500" onChange={event => updateCampaignDraft('purchaseUrl', event.target.value)} placeholder="https://distrokid.com/hyperfollow/..." className="mt-2 w-full rounded-xl border border-white/10 bg-black/40 px-3 py-3 text-[9px] normal-case text-white outline-none placeholder:text-gray-700 focus:border-cyan-300/50" /></label>
+                                  <p className="mt-2 text-[9px] leading-4 text-gray-400">Use an HTTPS distributor smart link from the approved hosts: DistroKid/HyperFollow, FFM.to, lnk.to, found.ee, or Linktree. This is separate from the artist listening/official link. Saving changes only this destination; private or draft releases stay out of public cards. The URL is a user-supplied reference, not proof of distribution or rights.</p>
+                                  <div className="mt-3 flex flex-wrap items-center justify-between gap-3"><span className="text-[8px] font-bold uppercase tracking-wider text-gray-400">Link status: {campaignDraft.distributionStatus === 'public' ? 'public-card eligible' : campaignDraft.distributionStatus === 'private' ? 'private until release is public' : campaignDraft.distributionStatus === 'invalid' ? 'existing link needs correction' : 'missing'}</span><button type="button" disabled={distributionSaving} onClick={saveDistributionLink} className="rounded-lg border border-cyan-300/35 px-4 py-2 text-[8px] font-black uppercase tracking-widest text-cyan-100 hover:bg-cyan-300/10 disabled:opacity-40">{distributionSaving ? 'Saving…' : campaignDraft.purchaseUrl ? 'Save destination' : 'Clear destination'}</button></div>
+                                </div>}
+                                {!campaignDraft.id && <p className="mt-3 rounded-xl border border-cyan-300/20 bg-cyan-300/[.04] p-3 text-[9px] leading-4 text-gray-400">Save this release first, then add its public catalog distribution destination separately. The artist listening/official link above does not populate that card action.</p>}
 
                                 <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
                                   <label className="text-[7px] font-black uppercase tracking-wider text-gray-500">Genres<input value={campaignDraft.genresText || ''} onChange={event => updateCampaignDraft('genresText', event.target.value)} placeholder="Electronic, Afrobeat" className="mt-2 w-full rounded-xl border border-white/10 bg-black/40 px-3 py-3 text-[9px] normal-case text-white outline-none placeholder:text-gray-700 focus:border-lime-300/50" /></label>

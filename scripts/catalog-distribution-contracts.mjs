@@ -4,9 +4,10 @@ import vm from "node:vm";
 import { SMART_LINK_HOSTS, validateSmartLink } from "../netlify/lib/release-house-submission.mjs";
 
 const read = path => readFile(new URL(`../${path}`, import.meta.url), "utf8");
-const [helper, api, client, world, styles] = await Promise.all([
+const [helper, api, client, world, styles, releasePackSource] = await Promise.all([
   read("distribution-links.js"), read("netlify/functions/release-catalog.mjs"),
-  read("music/music.js"), read("music-world.html"), read("music/music.css")
+  read("music/music.js"), read("music-world.html"), read("music/music.css"),
+  read("netlify/functions/release-pack.mjs")
 ]);
 const browser = vm.createContext({ window: {}, URL });
 vm.runInContext(helper, browser);
@@ -127,4 +128,117 @@ assert.doesNotMatch(worldUi.renderProductCard(worldUi.releaseToTrack({ ...releas
 for (const path of ["music/index.html", "music-upload/index.html", "music-world.html"]) {
   assert.match(await read(path), /<script src="\/distribution-links\.js"><\/script>/);
 }
+
+function createReleasePackHarness({ user, allowUpdate = true, status = "published", visibility = "public", purchaseUrl = "" } = {}) {
+  const releaseRow = {
+    id: "public-track", owner_member_id: "member-1", title: "Contract track", artist: "HALO Artist",
+    status, visibility, purchase_url: purchaseUrl, updated_at: new Date(), genres: [], available_versions: []
+  };
+  const queries = [];
+  const context = vm.createContext({
+    URL, Response, console, validateSmartLink,
+    getUser: async () => user,
+    getDatabase: async () => ({ sql: async (strings, ...values) => {
+      const query = strings.join("?");
+      queries.push({ query, values });
+      if (/UPDATE halo_release_campaigns/.test(query)) {
+        if (!allowUpdate || values[1] !== releaseRow.id) return [];
+        releaseRow.purchase_url = values[0];
+        return [{ id: releaseRow.id }];
+      }
+      if (/SELECT \* FROM halo_release_campaigns/.test(query)) {
+        return user?.id && (user.role === "platform-owner" || releaseRow.owner_member_id === "member-1") ? [releaseRow] : [];
+      }
+      if (/FROM halo_release_campaigns/.test(query)) return [releaseRow];
+      if (/COUNT\(\*\)/.test(query)) return [{}];
+      return [];
+    } }),
+    ensureMembership: async () => ({ member_id: "member-1" }),
+    isOwner: candidate => candidate?.role === "platform-owner",
+    verifyRequestOrigin: request => {
+      if (request.headers.get("origin") !== new URL(request.url).origin) throw new Error("origin mismatch");
+    },
+    resolveReleaseArtworkFields: () => ({})
+  });
+  vm.runInContext(releasePackSource
+    .replace(/^import .+;\n/gm, "")
+    .replace("export default async function", "async function")
+    .replace("export const config", "const config"), context);
+  return { context, queries, releaseRow };
+}
+
+async function patchDistribution(harness, body, origin = "https://halo.test") {
+  const request = new Request("https://halo.test/api/release-pack", {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", Origin: origin },
+    body: JSON.stringify(body)
+  });
+  return harness.context.releasePackHandler(request);
+}
+
+const owner = { id: "artist-user" };
+const smartDestination = "https://distrokid.com/hyperfollow/contract/track";
+const ownerHarness = createReleasePackHarness({ user: owner });
+const ownerResponse = await patchDistribution(ownerHarness, { releaseId: "public-track", purchaseUrl: smartDestination });
+const ownerPayload = await ownerResponse.json();
+assert.equal(ownerResponse.status, 200);
+assert.equal(ownerPayload.release.purchaseUrl, smartDestination);
+assert.equal(ownerPayload.release.distributionStatus, "public");
+assert.equal(ownerPayload.release.distributionSource, "halo_release_campaigns.purchase_url");
+assert.deepEqual(ownerPayload.release.distributionVisibility, { releaseStatus: "published", visibility: "public" });
+const updateQuery = ownerHarness.queries.find(({ query }) => /UPDATE halo_release_campaigns/.test(query));
+assert.ok(updateQuery);
+assert.match(updateQuery.query, /SET purchase_url = \?\, updated_at = NOW\(\)/);
+assert.match(updateQuery.query, /WHERE id = \?\s+AND \(\? OR owner_member_id = \?\)/);
+const updateSetClause = updateQuery.query.match(/SET([\s\S]*?)WHERE/)?.[1] || "";
+assert.match(updateSetClause, /^\s*purchase_url = \?, updated_at = NOW\(\)\s*$/);
+assert.doesNotMatch(updateSetClause, /status|owner_member_id|rights|visibility|radio|publication/i);
+assert.deepEqual(updateQuery.values.slice(0, 2), [smartDestination, "public-track"]);
+assert.doesNotMatch(releasePackSource, /\bfetch\s*\(/i, "saving a link must not fetch or scrape it");
+
+const clearHarness = createReleasePackHarness({ user: owner, purchaseUrl: smartDestination });
+const clearResponse = await patchDistribution(clearHarness, { releaseId: "public-track", purchaseUrl: "" });
+assert.equal(clearResponse.status, 200);
+assert.equal((await clearResponse.json()).release.distributionStatus, "missing");
+assert.equal(clearHarness.releaseRow.purchase_url, "");
+
+const draftHarness = createReleasePackHarness({ user: owner, status: "draft", visibility: "private" });
+const draftResponse = await patchDistribution(draftHarness, { releaseId: "public-track", purchaseUrl: smartDestination });
+const draftPayload = await draftResponse.json();
+assert.equal(draftResponse.status, 200);
+assert.equal(draftPayload.release.distributionStatus, "private");
+assert.equal(draftPayload.release.status, "draft");
+assert.equal(draftPayload.campaigns[0].distributionStatus, "private");
+
+for (const user of [null, { id: "other-user" }]) {
+  const deniedHarness = createReleasePackHarness({ user, allowUpdate: false });
+  const denied = await patchDistribution(deniedHarness, { releaseId: "public-track", purchaseUrl: smartDestination });
+  assert.ok([401, 404].includes(denied.status));
+  assert.equal(deniedHarness.releaseRow.purchase_url, "");
+}
+const originHarness = createReleasePackHarness({ user: owner });
+assert.equal((await patchDistribution(originHarness, { releaseId: "public-track", purchaseUrl: smartDestination }, "https://evil.test")).status, 403);
+assert.equal(originHarness.queries.length, 0);
+
+for (const purchaseUrl of [
+  "http://hyperfollow.com/track", "https://hyperfollow.com.evil.test/track",
+  "https://hyperfollow.com:444/track", "https://distrokid.com/track"
+]) {
+  const invalidHarness = createReleasePackHarness({ user: owner });
+  const invalid = await patchDistribution(invalidHarness, { releaseId: "public-track", purchaseUrl });
+  assert.equal(invalid.status, 400, purchaseUrl);
+  assert.equal(invalidHarness.queries.length, 0, purchaseUrl);
+}
+const missingUrlHarness = createReleasePackHarness({ user: owner });
+assert.equal((await patchDistribution(missingUrlHarness, { releaseId: "public-track" })).status, 400);
+assert.equal(missingUrlHarness.queries.length, 0);
+
+const [artistEditor, catalogDoc] = await Promise.all([
+  read("artists/index.html"), read("MUSIC_CATALOG_CONTRACT.md")
+]);
+assert.match(artistEditor, /Artist listening \/ official link/);
+assert.match(artistEditor, /separate from the public catalog’s Stream \/ DSPs destination/);
+assert.match(await read("halo.html"), /method: 'PATCH'[\s\S]*purchaseUrl: campaignDraft\.purchaseUrl/);
+assert.match(catalogDoc, /halo_release_campaigns\.purchase_url/);
+assert.match(catalogDoc, /pending submission's `smart_link_url` is not a/);
 console.log("Catalog distribution contracts passed");

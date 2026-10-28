@@ -101,8 +101,8 @@ export function validateSubmission(payload, { terms = SUBMISSION_TERMS } = {}) {
   }
 
   let termsVersion = null;
-  if (terms?.status === "approved" && terms.version) {
-    if (source.termsVersion !== terms.version) errors.terms = "Review and accept the current submission terms.";
+  if (terms?.status === "approved") {
+    if (!terms.version || !terms.url || source.termsVersion !== terms.version) errors.terms = "Review and accept the current submission terms.";
     else termsVersion = terms.version;
   } else if (source.termsVersion !== undefined && source.termsVersion !== null && source.termsVersion !== "") {
     errors.terms = "No approved submission terms are available to accept yet.";

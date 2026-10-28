@@ -825,7 +825,7 @@ function submissionAvailability() {
   if (!state.policyLoaded) return { ready: false, message: "Checking whether submissions can be recorded…" };
   if (!state.policy) return { ready: false, message: "The submission service could not be reached. Nothing can be submitted right now." };
   if (!state.authenticated) return { ready: false, message: "Join or sign in, then save this project, to submit it for HALO review." };
-  if (state.policy.available === false) return { ready: false, message: "Release submissions are not set up on this deployment yet. Nothing can be recorded until setup is complete." };
+  if (state.policy.available !== true) return { ready: false, message: "Release submissions are not set up on this deployment yet. Nothing can be recorded until setup is complete and availability is confirmed." };
   if (["guest", "sample"].includes(state.current.id)) return { ready: false, message: "Save this release project first. Submissions are attached to a saved project." };
   return { ready: true, message: "" };
 }
@@ -855,7 +855,7 @@ function renderSubmissionRecord(record) {
       <dt>Reference</dt><dd>${escapeHtml(record.id)}</dd>
     </dl>
     <p>${pending
-      ? "This records a review request only. No rights were transferred and nothing was published or distributed. Upload, rights clearance, mastering and publication approvals still apply."
+      ? "This records a pending review request only, not entry into active signal or radio rotation. No rights were transferred and nothing was published or distributed. Upload, rights clearance, mastering and publication approvals still apply."
       : "This submission was withdrawn. You can submit again below."}</p>
     ${pending ? `<button type="button" data-withdraw-submission="${escapeHtml(record.id)}">Withdraw submission</button>` : ""}`;
   submission.submissionRecord.hidden = false;

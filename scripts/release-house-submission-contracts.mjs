@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
+import { runInNewContext } from "node:vm";
 import { createReleaseHouseHandler } from "../netlify/functions/release-house.mjs";
+import { createReleaseHouseReviewHandler } from "../netlify/functions/release-house-review.mjs";
 import {
   RIGHTS_ATTESTATION, SUBMISSION_PATHWAYS, SUBMISSION_TERMS, submissionPolicy, validateSmartLink, validateSubmission
 } from "../netlify/lib/release-house-submission.mjs";
@@ -129,7 +131,53 @@ await check("unapproved terms are never fabricated as accepted", async () => {
   const approved = { status: "approved", version: "v1", url: "/terms/" };
   assert.ok(validateSubmission(validSubmission(), { terms: approved }).errors.terms, "approved terms require explicit acceptance");
   assert.equal(validateSubmission(validSubmission({ termsVersion: "v1" }), { terms: approved }).value.termsVersion, "v1");
+  assert.ok(validateSubmission(validSubmission({ termsVersion: "old" }), { terms: approved }).errors.terms);
+  for (const terms of [{ ...approved, version: null }, { ...approved, url: null }]) {
+    assert.equal(validateSubmission(validSubmission({ termsVersion: terms.version }), { terms }).ok, false,
+      "an incomplete approved terms policy must fail closed");
+  }
+  assert.ok(validateSubmission(validSubmission({ termsVersion: "v1" }), {
+    terms: { ...approved, status: "counsel_review_required" }
+  }).errors.terms, "a version alone is not counsel approval");
   assert.ok(script.includes("Submission terms: awaiting legal review.") && script.includes("termsAreApproved"));
+});
+
+await check("UI requires confirmed storage availability and never enables unapproved terms", async () => {
+  const controls = [{ disabled: false }, { disabled: false }];
+  const submission = Object.fromEntries([
+    "submissionAvailability", "submissionForm", "submissionRecord", "submissionPathwayOptions",
+    "submissionArtist", "submissionTrack", "submissionSmartLink", "submissionAttest",
+    "submissionAttestText", "submissionTerms"
+  ].map(id => [id, {}]));
+  submission.submissionSubmit = controls[1];
+  submission.submissionForm.querySelectorAll = () => controls;
+  const state = {
+    policyLoaded: true, authenticated: true, submitting: false,
+    current: { id: PROJECT_ID }, policy: { ...submissionPolicy() }
+  };
+  const context = {
+    state, submission, escapeHtml: value => String(value),
+    submissionDraftFor: () => ({ artistName: "Artist", trackTitle: "Track", smartLinkUrl: "", attested: false })
+  };
+  const ui = script.slice(script.indexOf("function termsAreApproved()"), script.indexOf("function formatDateTime("));
+  runInNewContext(ui, context);
+  for (const available of [undefined, null, false, "true", true]) {
+    state.policy.available = available;
+    const ready = runInNewContext("renderSubmission(); submissionAvailability().ready", context);
+    assert.equal(ready, available === true);
+    assert.ok(controls.every(control => control.disabled === !ready));
+    assert.doesNotMatch(submission.submissionTerms.innerHTML, /data-submission-terms|type="checkbox"/);
+    assert.match(submission.submissionTerms.innerHTML, /awaiting legal review/);
+  }
+  for (const overrides of [
+    { policyLoaded: false }, { authenticated: false }, { current: { id: "guest" } }, { current: { id: "sample" } }
+  ]) {
+    const original = { ...state };
+    Object.assign(state, overrides);
+    assert.equal(runInNewContext("renderSubmission(); submissionAvailability().ready", context), false);
+    assert.ok(controls.every(control => control.disabled));
+    Object.assign(state, original);
+  }
 });
 
 await check("smart links are HTTPS allowlisted references and suspicious URLs are rejected", async () => {
@@ -220,6 +268,35 @@ await check("valid submissions persist through the authenticated API and return 
   assert.equal((await handler(post(validSubmission()))).status, 201, "a withdrawn submission can be resubmitted");
 });
 
+await check("both pathways store only review metadata without fetching links or accepting client privileges", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = () => { throw new Error("Submission links must never be fetched"); };
+  try {
+    for (const pathway of Object.keys(SUBMISSION_PATHWAYS)) {
+      const db = fakeDatabase();
+      const response = await handlerFor(db)(post(validSubmission({
+        pathway, ownerMemberId: "member-b", status: "approved", role: "admin",
+        isrc: "unverified", upc: "unverified", masterRights: "halo", publish: true
+      })));
+      assert.equal(response.status, 201);
+      const { submission } = await response.json();
+      assert.equal(submission.status, "pending_review");
+      assert.equal(db.submissions[0].owner_member_id, membership.member_id);
+      assert.equal(submission.termsVersion, null);
+      for (const field of ["isrc", "upc", "masterRights", "publish", "role"]) {
+        assert.equal(Object.hasOwn(submission, field), false);
+      }
+      assert.equal(db.queries.filter(({ text }) => /INSERT INTO|UPDATE/i.test(text)).length, 1);
+      assert.match(db.queries.find(({ text }) => /INSERT INTO/i.test(text)).text, /INSERT INTO halo_release_house_submissions/);
+      const forbidden = await handlerFor(db)(post({ action: "approveSubmission", submissionId: submission.id, role: "admin" }));
+      assert.equal(forbidden.status, 400, "client claims must not enable an unsupported staff action");
+      assert.equal(db.submissions[0].status, "pending_review");
+    }
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 await check("invalid submissions and other members' projects are not recorded", async () => {
   const db = fakeDatabase();
   const handler = handlerFor(db);
@@ -245,6 +322,9 @@ await check("an unmigrated deployment discloses that nothing was recorded", asyn
   assert.equal(data.submission, undefined);
   const listed = await (await handler(new Request("https://halo.example/api/release-house"))).json();
   assert.equal(listed.submissionPolicy.available, false);
+  const withdrawn = await handler(post({ action: "withdrawSubmission", submissionId: PROJECT_ID }));
+  assert.equal(withdrawn.status, 503);
+  assert.equal((await withdrawn.json()).code, "submissions_unavailable");
   assert.ok(script.includes("Release submissions are not set up on this deployment yet"));
 });
 
@@ -255,6 +335,11 @@ await check("UI success state follows the persisted API response only", async ()
   assert.ok(script.includes("No rights were transferred and nothing was published or distributed"));
   assert.ok(page.includes('id="submissionStatus" role="status"') && page.includes('aria-describedby="submissionSmartLinkHelp submissionSmartLinkError"'));
   assert.ok(page.includes("<legend>Submission pathway</legend>"));
+  assert.ok(page.includes("ISRC and UPC are not extracted or assigned from this link."));
+  assert.ok(page.includes("unverified reference only"));
+  for (const copy of [page, script]) assert.ok(copy.includes("not entry into active signal or radio rotation") ||
+    copy.includes("not approval, a discovery listing, or entry into active signal or radio rotation"));
+  assert.ok(page.includes("No review timeframe is promised."));
   assert.ok(script.includes('setAttribute("aria-invalid"'));
   assert.ok(styles.includes(".submission-desk") && styles.includes(".submission-fields { grid-template-columns: 1fr; }"));
 });
@@ -267,6 +352,104 @@ await check("submissions never bypass existing release approvals", async () => {
   const policy = submissionPolicy();
   assert.deepEqual(policy.smartLinkHosts, ["distrokid.com", "hyperfollow.com", "ffm.to", "lnk.to", "found.ee", "linktr.ee"]);
   assert.ok(packageJson.includes("node scripts/release-house-submission-contracts.mjs"));
+});
+
+await check("staff review refuses guests, members and client-controlled roles before database access", async () => {
+  for (const user of [null, { id: "member" }, { id: "member", userMetadata: { roles: ["admin"] } }]) {
+    const handler = createReleaseHouseReviewHandler({
+      currentUser: async () => user,
+      database: async () => { throw new Error("Unauthorized database access"); }
+    });
+    for (const request of [new Request("https://halo.example/api/release-house-review"), post({ role: "admin" })]) {
+      const response = await handler(request);
+      assert.equal(response.status, user ? 403 : 401);
+      assert.equal(response.headers.get("Cache-Control"), "no-store");
+    }
+  }
+  const handler = createReleaseHouseReviewHandler({
+    currentUser: async () => ({ id: "staff", appMetadata: { roles: ["admin"] } }),
+    verifyOrigin: () => { throw new Error("Cross-origin"); },
+    database: async () => { throw new Error("Cross-origin database access"); }
+  });
+  assert.equal((await handler(post({ action: "note" }))).status, 403);
+});
+
+await check("staff notes are authenticated append-only audit entries, never approval or publication", async () => {
+  const submissionDb = fakeDatabase();
+  await handlerFor(submissionDb)(post(validSubmission()));
+  const record = submissionDb.submissions[0];
+  const notes = [];
+  const queries = [];
+  let missing = false;
+  const db = { sql: async (strings, ...values) => {
+    const text = strings.join("?");
+    queries.push(text);
+    assert.doesNotMatch(text, /\bUPDATE\b|\bDELETE\b|halo_song|halo_radio|halo_release_campaigns/i);
+    if (missing) throw Object.assign(new Error("Missing review storage"), { code: "42P01" });
+    if (text.includes("INSERT INTO halo_release_house_review_notes")) {
+      const [id, reviewer, action, note, submissionId] = values;
+      assert.match(text, /status = 'pending_review'/);
+      if (submissionId !== record.id || record.status !== "pending_review") return [];
+      const row = { id, submission_id: submissionId, reviewer_member_id: reviewer, action, note, created_at: new Date().toISOString() };
+      notes.push(row);
+      return [row];
+    }
+    assert.match(text, /LIMIT 20/);
+    assert.match(text, /LIMIT 50/);
+    assert.match(text, /submission.status = 'pending_review'/);
+    return [{ ...record, review_history: notes }];
+  }};
+  const handler = createReleaseHouseReviewHandler({
+    currentUser: async () => ({ id: "staff", app_metadata: { roles: ["owner"] } }),
+    verifyOrigin: () => {}, database: async () => db,
+    membershipFor: async () => ({ member_id: "staff-member" })
+  });
+  const request = overrides => post({ submissionId: record.id, action: "note", note: "Check supporting credits.", ...overrides });
+  for (const overrides of [
+    { action: "approve" }, { action: "publish" }, { action: "license" }, { note: "" },
+    { note: "x".repeat(2001) }, { submissionId: "../other" }
+  ]) assert.equal((await handler(request(overrides))).status, 400);
+  assert.equal((await handler(request({ note: "x".repeat(13000) }))).status, 413);
+  assert.equal(queries.length, 0, "invalid requests do not touch storage");
+  for (const action of ["note", "follow_up_needed"]) {
+    const response = await handler(request({ action, reviewerMemberId: "spoofed", status: "approved" }));
+    assert.equal(response.status, 201);
+    const body = await response.json();
+    assert.equal(body.review.reviewer_member_id, "staff-member");
+    assert.match(body.message, /no artist notification was sent/);
+    assert.equal(record.status, "pending_review");
+  }
+  const listed = await (await handler(new Request("https://halo.example/api/release-house-review"))).json();
+  assert.equal(listed.submissions[0].reviews.length, 2);
+  assert.equal(listed.submissions[0].status, "pending_review");
+  record.status = "withdrawn";
+  assert.equal((await handler(request({}))).status, 404);
+  assert.equal(notes.length, 2);
+  missing = true;
+  for (const req of [new Request("https://halo.example/api/release-house-review"), request({})]) {
+    const response = await handler(req);
+    assert.equal(response.status, 503);
+    assert.equal((await response.json()).code, "review_unavailable");
+  }
+});
+
+await check("staff migration and UI preserve restricted internal-only review boundaries", async () => {
+  const [reviewMigration, reviewApi, reviewPage, reviewScript] = await Promise.all([
+    read("netlify/database/migrations/20261028020000_release_house_review_notes.sql"),
+    read("netlify/functions/release-house-review.mjs"), read("release-house/review.html"), read("release-house/review.js")
+  ]);
+  assert.match(reviewMigration, /CREATE TABLE IF NOT EXISTS halo_release_house_review_notes/);
+  assert.match(reviewMigration, /reviewer_member_id TEXT NOT NULL REFERENCES halo_memberships/);
+  assert.match(reviewMigration, /CHECK \(action IN \('note', 'follow_up_needed'\)\)/);
+  assert.match(reviewMigration, /created_at TIMESTAMPTZ NOT NULL DEFAULT NOW\(\)/);
+  assert.doesNotMatch(`${reviewMigration}\n${reviewApi}`, /\b(?:UPDATE|DELETE|TRUNCATE|DROP)\s|halo_release_campaigns|halo_song_catalog|halo_radio_tracks|halo_song_publication/i);
+  assert.doesNotMatch(reviewApi, /\bfetch\s*\(/);
+  assert.ok(reviewPage.includes('id="reviewForm" hidden'));
+  assert.ok(reviewPage.includes("apply the submission migration, then the review-note migration"));
+  assert.ok(reviewPage.includes("Legal terms remain blocked on qualified counsel"));
+  assert.match(reviewScript, /response.status === 201 && data.review\?\.id/);
+  assert.doesNotMatch(reviewScript, /innerHTML|window\.open|location\.href/);
+  assert.match(reviewScript, /\[401, 403, 503\]/);
 });
 
 console.log(`Release House submission contracts: ${checks}/${checks} checks passed.`);

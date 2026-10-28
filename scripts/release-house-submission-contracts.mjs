@@ -265,7 +265,7 @@ await check("submissions never bypass existing release approvals", async () => {
   assert.match(migration, /CREATE TABLE IF NOT EXISTS halo_release_house_submissions/);
   assert.match(migration, /CREATE UNIQUE INDEX IF NOT EXISTS halo_release_house_submissions_pending_idx/);
   const policy = submissionPolicy();
-  assert.deepEqual(policy.smartLinkHosts.includes("distrokid.com"), true);
+  assert.deepEqual(policy.smartLinkHosts, ["distrokid.com", "hyperfollow.com", "ffm.to", "lnk.to", "found.ee", "linktr.ee"]);
   assert.ok(packageJson.includes("node scripts/release-house-submission-contracts.mjs"));
 });
 

@@ -4,6 +4,7 @@ import { resolveDreamweaverPageFlow } from "../lib/dreamweaver-page-manager.mjs"
 import { resolveReleaseLicensing } from "../lib/release-licensing.mjs";
 import { normalizeLyricsSource } from "../../lib/dreamweaver-lyrics.js";
 import { cleanDreamweaverSongId } from "../../lib/dreamweaver-storefront.js";
+import { validateSmartLink } from "../lib/release-house-submission.mjs";
 
 const CORS_HEADERS = Object.freeze({
   "Access-Control-Allow-Origin": "*",
@@ -154,6 +155,10 @@ function storefrontStateFor(row) {
 }
 
 function serializeRelease(row) {
+  // Only the existing published catalog buy/stream field is public, never submission references.
+  const distribution = row.status === "published" && row.visibility === "public"
+    ? validateSmartLink(row.purchase_url)
+    : { ok: false };
   const artwork = resolveReleaseArtworkFields({
     artworkUrl: row.artwork_url,
     importedArtworkUrl: row.imported_artwork_url,
@@ -226,6 +231,7 @@ function serializeRelease(row) {
     isCleanVersion: Boolean(row.is_clean_version),
     isChartEligible: Boolean(row.is_chart_eligible),
     purchaseUrl: row.purchase_url || "",
+    distributionUrl: distribution.ok ? distribution.url : "",
     streamUrl: row.stream_url || "",
     videoUrl: catalogVideoUrl || "",
     promoVideoUrl: catalogPromoVideoUrl || "",
@@ -443,6 +449,7 @@ export default async function releaseCatalogHandler(request) {
         LIMIT 1
       ) catalog_master ON TRUE
       WHERE release.status = 'published'
+        AND release.visibility = 'public'
         AND (${songId} = '' OR catalog.catalog_song_id = ${songId})
       ORDER BY release.release_date DESC NULLS LAST, release.updated_at DESC
       LIMIT 200

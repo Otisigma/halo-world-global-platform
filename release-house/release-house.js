@@ -235,7 +235,11 @@ const state = {
   authMode: "signup",
   pendingSave: false,
   saveTimer: null,
-  dirty: false
+  dirty: false,
+  policy: null,
+  policyLoaded: false,
+  submissionDraft: null,
+  submitting: false
 };
 
 const passportStages = [
@@ -476,6 +480,7 @@ function renderAll() {
   renderRoom();
   renderBrief();
   renderPassport();
+  renderSubmission();
   document.querySelector(".workspace")?.removeAttribute("data-loading");
 }
 
@@ -615,8 +620,10 @@ async function saveCurrentProject(quiet = false) {
     elements.saveButton.disabled = true;
     if (!quiet) elements.saveStatus.textContent = "Saving your release house…";
     const connections = state.current.connections || {};
+    const submission = state.current.submission || null;
     const data = await apiAction(projectPayload("save"));
     data.project.connections = connections;
+    data.project.submission = submission;
     state.current = data.project;
     const index = state.projects.findIndex(project => project.id === data.project.id);
     if (index >= 0) state.projects[index] = data.project;
@@ -675,6 +682,8 @@ async function loadProjects() {
     state.authenticated = Boolean(data.authenticated);
     if (data.viewer?.name) state.user = { name: data.viewer.name };
     state.projects = data.projects || [];
+    state.policy = data.submissionPolicy || null;
+    state.policyLoaded = true;
     const requestedProject = new URL(window.location.href).searchParams.get("releaseProject") || sessionStorage.getItem("halo-release-project") || "";
     if (state.projects.length) state.current = state.projects.find(project => project.id === requestedProject) || state.projects[0];
     if (state.projects.length) {
@@ -687,6 +696,8 @@ async function loadProjects() {
       ? (state.projects.length ? "Your most recent release project is open." : "Start a project and your progress saves to your HALO membership.")
       : "This draft is temporary until you join or sign in and save it.";
   } catch {
+    state.policy = null;
+    state.policyLoaded = true;
     renderAll();
     elements.saveStatus.textContent = "The saved-project service is unavailable. You can still explore the full house.";
   }
@@ -780,6 +791,283 @@ function tourSample() {
   elements.saveStatus.textContent = "You are touring a completed example. Choose Save progress to make your own copy.";
 }
 
+const submission = Object.fromEntries([
+  "submissionAvailability", "submissionForm", "submissionPathwayOptions", "submissionPathwayError", "submissionArtist",
+  "submissionArtistError", "submissionTrack", "submissionTrackError", "submissionSmartLink", "submissionSmartLinkError",
+  "submissionTerms", "submissionAttest", "submissionAttestText", "submissionAttestError", "submissionSubmit",
+  "submissionStatus", "submissionRecord"
+].map(id => [id, document.getElementById(id)]));
+
+const SUBMISSION_STATUS_LABELS = { pending_review: "Recorded — awaiting HALO review", withdrawn: "Withdrawn" };
+
+function submissionDraftFor(project) {
+  if (state.submissionDraft?.projectId === project.id) return state.submissionDraft;
+  const identity = releaseIdentity(project);
+  const metadata = project.roomData?.metadata || {};
+  state.submissionDraft = {
+    projectId: project.id,
+    pathway: "",
+    artistName: metadata.artistName || project.artistName || "",
+    trackTitle: metadata.officialTitle || project.trackTitle || (identity.track === "Untitled release" ? "" : identity.track),
+    smartLinkUrl: project.roomData?.upload?.distributorUrl || "",
+    attested: false,
+    termsAccepted: false
+  };
+  return state.submissionDraft;
+}
+
+function termsAreApproved() {
+  const terms = state.policy?.terms;
+  return terms?.status === "approved" && Boolean(terms.version) && Boolean(terms.url);
+}
+
+function submissionAvailability() {
+  if (!state.policyLoaded) return { ready: false, message: "Checking whether submissions can be recorded…" };
+  if (!state.policy) return { ready: false, message: "The submission service could not be reached. Nothing can be submitted right now." };
+  if (!state.authenticated) return { ready: false, message: "Join or sign in, then save this project, to submit it for HALO review." };
+  if (state.policy.available === false) return { ready: false, message: "Release submissions are not set up on this deployment yet. Nothing can be recorded until setup is complete." };
+  if (["guest", "sample"].includes(state.current.id)) return { ready: false, message: "Save this release project first. Submissions are attached to a saved project." };
+  return { ready: true, message: "" };
+}
+
+function renderSubmissionTerms() {
+  const terms = state.policy?.terms;
+  if (termsAreApproved()) {
+    submission.submissionTerms.innerHTML = `<p><strong>Submission terms (version ${escapeHtml(terms.version)})</strong></p>
+      <p><a href="${escapeHtml(terms.url)}" target="_blank" rel="noopener">Read the submission terms</a> before continuing.</p>
+      <label class="check-field"><input type="checkbox" data-submission-terms ${state.submissionDraft?.termsAccepted ? "checked" : ""}><span>I have read and accept these submission terms.</span></label>`;
+    return;
+  }
+  submission.submissionTerms.innerHTML = `<p><strong>Submission terms: awaiting legal review.</strong></p>
+    <p>${escapeHtml(terms?.note || "No approved submission terms are available, and none will be recorded as accepted.")}</p>`;
+}
+
+function renderSubmissionRecord(record) {
+  const pending = record.status === "pending_review";
+  submission.submissionRecord.innerHTML = `<p class="kicker">${escapeHtml(SUBMISSION_STATUS_LABELS[record.status] || record.status)}</p>
+    <dl>
+      <dt>Pathway</dt><dd>${escapeHtml(record.pathwayLabel || record.pathway)}</dd>
+      <dt>Artist</dt><dd>${escapeHtml(record.artistName)}</dd>
+      <dt>Track</dt><dd>${escapeHtml(record.trackTitle)}</dd>
+      <dt>Smart link</dt><dd>${record.smartLinkUrl ? escapeHtml(record.smartLinkUrl) : "None supplied"}</dd>
+      <dt>Rights statement</dt><dd>Confirmed ${escapeHtml(formatDateTime(record.attestedAt))} (${escapeHtml(record.attestationVersion)})</dd>
+      <dt>Terms</dt><dd>${record.termsVersion ? `Accepted version ${escapeHtml(record.termsVersion)}` : "None accepted — terms awaiting legal review"}</dd>
+      <dt>Reference</dt><dd>${escapeHtml(record.id)}</dd>
+    </dl>
+    <p>${pending
+      ? "This records a review request only. No rights were transferred and nothing was published or distributed. Upload, rights clearance, mastering and publication approvals still apply."
+      : "This submission was withdrawn. You can submit again below."}</p>
+    ${pending ? `<button type="button" data-withdraw-submission="${escapeHtml(record.id)}">Withdraw submission</button>` : ""}`;
+  submission.submissionRecord.hidden = false;
+}
+
+function renderSubmission() {
+  if (!submission.submissionForm) return;
+  const availability = submissionAvailability();
+  const record = state.current.submission || null;
+  submission.submissionAvailability.textContent = availability.message;
+  if (record) renderSubmissionRecord(record);
+  else submission.submissionRecord.hidden = true;
+  const pending = record?.status === "pending_review";
+  submission.submissionForm.hidden = !state.policy || pending;
+  if (!state.policy) return;
+
+  const draft = submissionDraftFor(state.current);
+  submission.submissionPathwayOptions.innerHTML = state.policy.pathways.map(pathway => `
+    <label class="pathway-option">
+      <input type="radio" name="submissionPathway" value="${escapeHtml(pathway.id)}" ${draft.pathway === pathway.id ? "checked" : ""}>
+      <strong>${escapeHtml(pathway.label)}</strong>
+      <small>${escapeHtml(pathway.summary)}</small>
+      <small>${escapeHtml(pathway.boundary)}</small>
+    </label>`).join("");
+  submission.submissionArtist.value = draft.artistName;
+  submission.submissionTrack.value = draft.trackTitle;
+  submission.submissionSmartLink.value = draft.smartLinkUrl;
+  submission.submissionAttest.checked = draft.attested;
+  submission.submissionAttestText.textContent = state.policy.attestation.text;
+  renderSubmissionTerms();
+  const disabled = !availability.ready || state.submitting;
+  submission.submissionForm.querySelectorAll("input, button").forEach(control => { control.disabled = disabled; });
+  submission.submissionSubmit.disabled = disabled;
+}
+
+function formatDateTime(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.valueOf())) return "";
+  return new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }).format(date);
+}
+
+function smartLinkError(value) {
+  const raw = value.trim();
+  if (!raw) return "";
+  if (raw.length > 500) return "Keep the smart link under 500 characters.";
+  let url;
+  try { url = new URL(raw); } catch { return "Enter a complete link that starts with https://."; }
+  if (url.protocol !== "https:") return "Smart links must use https://.";
+  if (url.username || url.password) return "Smart links must not include login details.";
+  if (url.port) return "Smart links must not specify a port.";
+  const host = url.hostname.toLowerCase();
+  const hosts = state.policy?.smartLinkHosts || [];
+  if (!hosts.some(allowed => host === allowed || host.endsWith(`.${allowed}`))) return `Use a distributor smart link from ${hosts.join(", ")}.`;
+  if ((host === "distrokid.com" || host.endsWith(".distrokid.com")) && !url.pathname.startsWith("/hyperfollow/")) return "DistroKid links must be HyperFollow links (distrokid.com/hyperfollow/…).";
+  if (url.toString().length > 500) return "Keep the smart link under 500 characters.";
+  return "";
+}
+
+const SUBMISSION_ERROR_TARGETS = [
+  ["pathway", "submissionPathwayError", null],
+  ["artistName", "submissionArtistError", "submissionArtist"],
+  ["trackTitle", "submissionTrackError", "submissionTrack"],
+  ["smartLinkUrl", "submissionSmartLinkError", "submissionSmartLink"],
+  ["rightsAttested", "submissionAttestError", "submissionAttest"]
+];
+
+function showSubmissionErrors(errors = {}) {
+  let firstInvalid = null;
+  SUBMISSION_ERROR_TARGETS.forEach(([field, errorId, inputId]) => {
+    const message = field === "rightsAttested"
+      ? [errors.rightsAttested, errors.terms].filter(Boolean).join(" ")
+      : errors[field] || "";
+    submission[errorId].textContent = message;
+    if (inputId) submission[inputId].setAttribute("aria-invalid", String(Boolean(message)));
+    if (message && !firstInvalid) firstInvalid = inputId ? submission[inputId] : submission.submissionPathwayOptions.querySelector("input");
+  });
+  submission.submissionPathwayOptions.querySelectorAll("input").forEach(input => input.setAttribute("aria-invalid", String(Boolean(errors.pathway))));
+  firstInvalid?.focus?.();
+}
+
+function validateSubmissionDraft(draft) {
+  const errors = {};
+  if (!state.policy?.pathways.some(pathway => pathway.id === draft.pathway)) errors.pathway = "Choose a submission pathway.";
+  if (!draft.artistName.trim()) errors.artistName = "Enter the primary artist name.";
+  else if (draft.artistName.trim().length > 120) errors.artistName = "Keep the artist name to 120 characters or fewer.";
+  if (!draft.trackTitle.trim()) errors.trackTitle = "Enter the track title.";
+  else if (draft.trackTitle.trim().length > 160) errors.trackTitle = "Keep the track title to 160 characters or fewer.";
+  const linkError = smartLinkError(draft.smartLinkUrl);
+  if (linkError) errors.smartLinkUrl = linkError;
+  if (!draft.attested) errors.rightsAttested = "Confirm the rights-control statement to submit.";
+  if (termsAreApproved() && !draft.termsAccepted) errors.terms = "Review and accept the current submission terms.";
+  return errors;
+}
+
+function setSubmissionStatus(message, tone = "info") {
+  submission.submissionStatus.textContent = message;
+  submission.submissionStatus.dataset.tone = tone;
+}
+
+async function postSubmissionAction(payload) {
+  const response = await fetch("/api/release-house", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "same-origin",
+    body: JSON.stringify(payload)
+  });
+  const data = await response.json().catch(() => ({}));
+  return { response, data };
+}
+
+function storeSubmissionOnProject(record) {
+  if (state.current.id === record.projectId) state.current.submission = record;
+  const index = state.projects.findIndex(project => project.id === record.projectId);
+  if (index >= 0) state.projects[index].submission = record;
+}
+
+async function submitRelease(event) {
+  event.preventDefault();
+  if (state.submitting) return;
+  const availability = submissionAvailability();
+  if (!availability.ready) {
+    setSubmissionStatus(availability.message, "error");
+    return;
+  }
+  const draft = submissionDraftFor(state.current);
+  const errors = validateSubmissionDraft(draft);
+  showSubmissionErrors(errors);
+  if (Object.keys(errors).length) {
+    setSubmissionStatus("Nothing was submitted. Fix the highlighted details and try again.", "error");
+    return;
+  }
+  state.submitting = true;
+  submission.submissionForm.setAttribute("aria-busy", "true");
+  submission.submissionSubmit.disabled = true;
+  setSubmissionStatus("Submitting to HALO… keep this page open.");
+  try {
+    const { response, data } = await postSubmissionAction({
+      action: "submit",
+      projectId: state.current.id,
+      pathway: draft.pathway,
+      artistName: draft.artistName.trim(),
+      trackTitle: draft.trackTitle.trim(),
+      smartLinkUrl: draft.smartLinkUrl.trim(),
+      rightsAttested: draft.attested === true,
+      attestationVersion: state.policy.attestation.version,
+      ...(termsAreApproved() && draft.termsAccepted ? { termsVersion: state.policy.terms.version } : {})
+    });
+    if (response.status === 201 && data.submission?.id && data.submission.status === "pending_review") {
+      storeSubmissionOnProject(data.submission);
+      state.submissionDraft = null;
+      state.submitting = false;
+      renderSubmission();
+      setSubmissionStatus("");
+      if (state.current.id === data.submission.projectId) {
+        submission.submissionAvailability.textContent = data.message || "Submission recorded for HALO review.";
+        submission.submissionRecord.focus();
+      }
+      return;
+    }
+    if (data.errors) showSubmissionErrors(data.errors);
+    if (response.status === 503) state.policy = { ...state.policy, available: false };
+    setSubmissionStatus(`Nothing was submitted. ${data.message || "HALO could not record this submission."}`, "error");
+  } catch {
+    setSubmissionStatus("Nothing was submitted. HALO could not be reached — check your connection and try again.", "error");
+  } finally {
+    state.submitting = false;
+    submission.submissionForm.removeAttribute("aria-busy");
+    if (!state.current.submission || state.current.submission.status !== "pending_review") renderSubmission();
+  }
+}
+
+async function withdrawRelease(submissionId) {
+  const button = submission.submissionRecord.querySelector("[data-withdraw-submission]");
+  if (button) button.disabled = true;
+  try {
+    const { response, data } = await postSubmissionAction({ action: "withdrawSubmission", submissionId });
+    if (response.ok && data.submission?.status === "withdrawn") {
+      storeSubmissionOnProject(data.submission);
+      renderSubmission();
+      submission.submissionAvailability.textContent = data.message || "Submission withdrawn.";
+      return;
+    }
+    submission.submissionAvailability.textContent = `The submission was not withdrawn. ${data.message || "Try again shortly."}`;
+  } catch {
+    submission.submissionAvailability.textContent = "The submission was not withdrawn. HALO could not be reached.";
+  }
+  if (button) button.disabled = false;
+}
+
+function bindSubmissionEvents() {
+  if (!submission.submissionForm) return;
+  submission.submissionForm.addEventListener("submit", submitRelease);
+  submission.submissionForm.addEventListener("input", event => {
+    const draft = submissionDraftFor(state.current);
+    if (event.target.name === "submissionPathway") draft.pathway = event.target.value;
+    if (event.target === submission.submissionArtist) draft.artistName = event.target.value;
+    if (event.target === submission.submissionTrack) draft.trackTitle = event.target.value;
+    if (event.target === submission.submissionSmartLink) draft.smartLinkUrl = event.target.value;
+    if (event.target === submission.submissionAttest) draft.attested = event.target.checked;
+    if (event.target.matches("[data-submission-terms]")) draft.termsAccepted = event.target.checked;
+  });
+  submission.submissionForm.addEventListener("change", event => {
+    if (event.target.name === "submissionPathway") submissionDraftFor(state.current).pathway = event.target.value;
+    if (event.target === submission.submissionAttest) submissionDraftFor(state.current).attested = event.target.checked;
+    if (event.target.matches("[data-submission-terms]")) submissionDraftFor(state.current).termsAccepted = event.target.checked;
+  });
+  submission.submissionRecord.addEventListener("click", event => {
+    const button = event.target.closest("[data-withdraw-submission]");
+    if (button) withdrawRelease(button.dataset.withdrawSubmission);
+  });
+}
+
 function bindEvents() {
   elements.heroFloorPlan.addEventListener("click", event => {
     const button = event.target.closest("[data-floor-room]");
@@ -857,4 +1145,5 @@ window.addEventListener("halo-identity-ready", event => {
 
 renderFloorPlan();
 bindEvents();
+bindSubmissionEvents();
 loadProjects();

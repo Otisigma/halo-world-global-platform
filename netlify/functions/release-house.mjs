@@ -2,6 +2,10 @@ import { randomUUID } from "node:crypto";
 import { getDatabase } from "@netlify/database";
 import { getUser, verifyRequestOrigin } from "@netlify/identity";
 import { cleanText, ensureMembership } from "../lib/halo-x.mjs";
+import {
+  isMissingSubmissionStorage, loadLatestSubmissions, recordSubmission, submissionPolicy,
+  validateSubmission, withdrawSubmission
+} from "../lib/release-house-submission.mjs";
 
 const ROOM_COUNT = 13;
 const MAX_BODY_BYTES = 120_000;
@@ -227,42 +231,102 @@ async function archiveProject(db, membership, payload) {
   return json({ archived: true, projectId: id });
 }
 
-export default async function releaseHouseHandler(request) {
-  if (!["GET", "POST"].includes(request.method)) {
-    return json({ message: "Method not allowed" }, 405, { Allow: "GET, POST" });
-  }
+const SUBMISSIONS_UNAVAILABLE = "Release submissions are not set up on this deployment yet. Nothing was recorded.";
 
+async function attachSubmissions(db, memberId, projects) {
   try {
-    const [db, user] = await Promise.all([getDatabase(), getUser()]);
-    if (!user?.id) {
-      return request.method === "GET"
-        ? json({ authenticated: false, projects: [] })
-        : json({ message: "Join or sign in to save a release project" }, 401);
-    }
-    const membership = await ensureMembership(db, user);
+    const latest = await loadLatestSubmissions(db, memberId);
+    return { available: true, projects: projects.map(project => ({ ...project, submission: latest[project.id] || null })) };
+  } catch (error) {
+    if (!isMissingSubmissionStorage(error)) throw error;
+    return { available: false, projects: projects.map(project => ({ ...project, submission: null })) };
+  }
+}
 
-    if (request.method === "GET") {
-      return json({ authenticated: true, viewer: { name: membership.display_name }, projects: await loadProjects(db, membership.member_id) });
+async function submitProject(db, membership, payload) {
+  const result = validateSubmission(payload);
+  if (!result.ok) return json({ message: "Check the highlighted submission details", errors: result.errors }, 400);
+  try {
+    const outcome = await recordSubmission(db, membership.member_id, result.value);
+    if (outcome.status !== 201) return json({ message: outcome.message }, outcome.status);
+    return json({
+      submission: outcome.submission,
+      message: "Submission recorded for HALO review. Upload, rights clearance, mastering and publication approvals still apply."
+    }, 201);
+  } catch (error) {
+    if (isMissingSubmissionStorage(error)) return json({ code: "submissions_unavailable", message: SUBMISSIONS_UNAVAILABLE }, 503);
+    throw error;
+  }
+}
+
+async function withdrawProjectSubmission(db, membership, payload) {
+  try {
+    const outcome = await withdrawSubmission(db, membership.member_id, payload.submissionId);
+    if (outcome.status !== 200) return json({ message: outcome.message }, outcome.status);
+    return json({ submission: outcome.submission, message: "Submission withdrawn" });
+  } catch (error) {
+    if (isMissingSubmissionStorage(error)) return json({ code: "submissions_unavailable", message: SUBMISSIONS_UNAVAILABLE }, 503);
+    throw error;
+  }
+}
+
+export function createReleaseHouseHandler({
+  database = getDatabase,
+  currentUser = getUser,
+  verifyOrigin = verifyRequestOrigin,
+  membershipFor = ensureMembership
+} = {}) {
+  return async function releaseHouseHandler(request) {
+    if (!["GET", "POST"].includes(request.method)) {
+      return json({ message: "Method not allowed" }, 405, { Allow: "GET, POST" });
     }
 
     try {
-      verifyRequestOrigin(request);
-    } catch {
-      return json({ message: "Cross-origin release house actions are not accepted" }, 403);
-    }
+      const user = await currentUser();
+      if (!user?.id) {
+        return request.method === "GET"
+          ? json({ authenticated: false, projects: [], submissionPolicy: submissionPolicy() })
+          : json({ message: "Join or sign in to save a release project" }, 401);
+      }
 
-    const contentLength = Number(request.headers.get("content-length") || 0);
-    if (contentLength > MAX_BODY_BYTES) return json({ message: "This release project is too large to save" }, 413);
-    const payload = await request.json().catch(() => null);
-    if (!payload) return json({ message: "Request body must be valid JSON" }, 400);
-    if (payload.action === "create") return createProject(db, membership, payload);
-    if (payload.action === "save") return saveProject(db, membership, payload);
-    if (payload.action === "archive") return archiveProject(db, membership, payload);
-    return json({ message: "Choose a supported release house action" }, 400);
-  } catch (error) {
-    console.error("Release house request failed", error instanceof Error ? error.message : "unknown error");
-    return json({ message: "The release house is temporarily unavailable" }, 500);
-  }
+      if (request.method === "POST") {
+        try {
+          verifyOrigin(request);
+        } catch {
+          return json({ message: "Cross-origin release house actions are not accepted" }, 403);
+        }
+      }
+
+      const db = await database();
+      const membership = await membershipFor(db, user);
+
+      if (request.method === "GET") {
+        const { available, projects } = await attachSubmissions(db, membership.member_id, await loadProjects(db, membership.member_id));
+        return json({
+          authenticated: true,
+          viewer: { name: membership.display_name },
+          projects,
+          submissionPolicy: { ...submissionPolicy(), available }
+        });
+      }
+
+      const contentLength = Number(request.headers.get("content-length") || 0);
+      if (contentLength > MAX_BODY_BYTES) return json({ message: "This release project is too large to save" }, 413);
+      const payload = await request.json().catch(() => null);
+      if (!payload) return json({ message: "Request body must be valid JSON" }, 400);
+      if (payload.action === "create") return createProject(db, membership, payload);
+      if (payload.action === "save") return saveProject(db, membership, payload);
+      if (payload.action === "archive") return archiveProject(db, membership, payload);
+      if (payload.action === "submit") return submitProject(db, membership, payload);
+      if (payload.action === "withdrawSubmission") return withdrawProjectSubmission(db, membership, payload);
+      return json({ message: "Choose a supported release house action" }, 400);
+    } catch (error) {
+      console.error("Release house request failed", error instanceof Error ? error.message : "unknown error");
+      return json({ message: "The release house is temporarily unavailable" }, 500);
+    }
+  };
 }
+
+export default createReleaseHouseHandler();
 
 export const config = { path: "/api/release-house" };

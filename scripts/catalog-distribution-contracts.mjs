@@ -23,6 +23,7 @@ for (const url of [
 ]) {
   const validation = validateSmartLink(url);
   assert.equal(validation.ok, true);
+  assert.equal(links.validate(url), validation.url);
   assert.equal(links.destination({ ...approved, distributionUrl: url }), validation.url);
 }
 for (const url of [
@@ -34,6 +35,7 @@ for (const url of [
   "https://hyperfollow.com\\@evil.test", "https://hyperfollow.com/a\nb",
   `https://hyperfollow.com/${"a".repeat(500)}`, "https://localhost/track", "https://127.0.0.1/track"
 ]) {
+  assert.equal(links.validate(url), "");
   assert.equal(links.destination({ ...approved, distributionUrl: url }), "", url);
   assert.equal(links.action({ ...approved, distributionUrl: url }), "", url);
   if (url) assert.equal(validateSmartLink(url).ok, false, url);
@@ -56,6 +58,7 @@ for (const pattern of [
   /<span aria-hidden="true">↗<\/span>/
 ]) assert.match(markup, pattern);
 assert.doesNotMatch(markup, /<name>/);
+assert.doesNotMatch(markup, /<input|<textarea/, "public visitor actions remain read-only");
 assert.match(links.action({ ...release, distributionUrl: "https://hyperfollow.com/track?a=1&b=2" }), /a=1&amp;b=2/);
 
 const publicRow = { id: "public-track", title: "Contract track", status: "published", visibility: "public",
@@ -167,6 +170,11 @@ function createReleasePackHarness({ user, allowUpdate = true, status = "publishe
   return { context, queries, releaseRow };
 }
 
+const visitorPack = createReleasePackHarness({ user: null, purchaseUrl: smartLink });
+const visitorRelease = visitorPack.context.serializeRelease(visitorPack.releaseRow, false);
+assert.equal(visitorRelease.purchaseUrl, "");
+assert.equal(visitorRelease.distributionStatus, "");
+
 async function patchDistribution(harness, body, origin = "https://halo.test") {
   const request = new Request("https://halo.test/api/release-pack", {
     method: "PATCH",
@@ -233,13 +241,31 @@ const missingUrlHarness = createReleasePackHarness({ user: owner });
 assert.equal((await patchDistribution(missingUrlHarness, { releaseId: "public-track" })).status, 400);
 assert.equal(missingUrlHarness.queries.length, 0);
 
-const [artistEditor, catalogDoc] = await Promise.all([
-  read("artists/index.html"), read("MUSIC_CATALOG_CONTRACT.md")
+const [artistEditor, catalogDoc, haloEditor] = await Promise.all([
+  read("artists/index.html"), read("MUSIC_CATALOG_CONTRACT.md"), read("halo.html")
 ]);
 assert.match(artistEditor, /Artist listening \/ official link/);
 assert.match(artistEditor, /separate from the public catalog’s Stream \/ DSPs destination/);
-assert.match(await read("halo.html"), /method: 'PATCH'[\s\S]*purchaseUrl: campaignDraft\.purchaseUrl/);
-assert.match(await read("halo.html"), /distributionStatus: data\.release\.distributionStatus/);
+assert.match(haloEditor, /method: 'PATCH'[\s\S]*purchaseUrl: campaignDraft\.purchaseUrl/);
+assert.match(haloEditor, /distributionStatus: data\.release\.distributionStatus/);
+assert.match(haloEditor, /<div className="release-artwork-frame"[\s\S]*?\{releasePack\.canEdit && catalogCardReleaseId && <div[\s\S]*?Catalog distribution URL/,
+  "only an authorized owner/admin sees the editable URL control directly beneath the selected release artwork");
+assert.match(haloEditor, /campaignDraft\?\.id === catalogCardReleaseId[\s\S]*campaignDraft\.purchaseUrl[\s\S]*releasePack\?\.release\?\.purchaseUrl/,
+  "the card input hydrates from the selected persisted purchase_url value");
+assert.match(releasePackSource, /canEdit = platformOwner \|\| Boolean\(memberId && releaseRow\.owner_member_id === memberId\)/,
+  "release-pack edit capability remains owner/admin scoped");
+assert.match(haloEditor, /href=\{validatedCatalogCardUrl\} target="_blank" rel="noopener noreferrer"/,
+  "editor previews use a client-validated URL and protected external-link attributes");
+assert.match(haloEditor, /releasePackRequestRef\.current[\s\S]*data\.release\?\.id !== releaseId/,
+  "stale saves cannot update another selected release");
+assert.match(haloEditor, /releasePackLoading \|\| !releaseId \|\| releasePack\?\.release\?\.id !== releaseId/,
+  "editing and saving are blocked while a different release is loading");
+assert.match(haloEditor, /role=\{catalogCardDistributionFeedback\.status === 'error' \? 'alert' : 'status'\}/,
+  "saving, saved, and error feedback is announced accessibly");
+assert.match(haloEditor, /src="\/distribution-links\.js"/, "the release editor loads shared allowlist validation");
+assert.match(haloEditor, /releasePack\.canEdit && catalogCardReleaseId/,
+  "anonymous visitors and unrelated members do not receive an editable input");
+assert.match(haloEditor, /Saving changes only this URL; it does not change release status, visibility, rights, ownership, or radio state/);
 assert.match(catalogDoc, /halo_release_campaigns\.purchase_url/);
 assert.match(catalogDoc, /pending submission's `smart_link_url` is not a/);
 console.log("Catalog distribution contracts passed");

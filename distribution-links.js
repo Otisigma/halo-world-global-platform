@@ -7,7 +7,7 @@
     if (!raw || raw.length > 500 || /[\s\u0000-\u001f\u007f\\]/.test(raw)) return "";
     try {
       const url = new URL(raw);
-      if (url.protocol !== "https:" || url.username || url.password || url.port) return "";
+      if (!/^https:\/\//i.test(raw) || url.protocol !== "https:" || url.username || url.password || url.port || /^https:\/\/[^/?#]*:/i.test(raw)) return "";
       const host = url.hostname.toLowerCase();
       if (!hosts.some(allowed => host === allowed || host.endsWith(`.${allowed}`))) return "";
       if ((host === "distrokid.com" || host.endsWith(".distrokid.com")) && !url.pathname.startsWith("/hyperfollow/")) return "";

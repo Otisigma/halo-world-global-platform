@@ -29,7 +29,8 @@ for (const url of [
 for (const url of [
   "", "javascript:alert(1)", "data:text/html,unsafe", "//hyperfollow.com/track", "/api/release-link?slug=private",
   "http://hyperfollow.com/track", "******hyperfollow.com/track",
-  "https://hyperfollow.com:444/track", "https://hyperfollow.com.evil.test/track",
+  "https://hyperfollow.com:444/track", "https://hyperfollow.com:443/track", "https:hyperfollow.com/track",
+  "https://hyperfollow.com.evil.test/track",
   "https://evilhyperfollow.com/track", "https://hyperfоllow.com/track",
   "https://hyperfollow.com@evil.test/track", "https://distrokid.com/redirect?url=https://evil.test",
   "https://hyperfollow.com\\@evil.test", "https://hyperfollow.com/a\nb",
@@ -135,7 +136,9 @@ for (const path of ["music/index.html", "music-upload/index.html", "music-world.
 function createReleasePackHarness({ user, allowUpdate = true, status = "published", visibility = "public", purchaseUrl = "" } = {}) {
   const releaseRow = {
     id: "public-track", owner_member_id: "member-1", title: "Contract track", artist: "HALO Artist",
-    status, visibility, purchase_url: purchaseUrl, updated_at: new Date(), genres: [], available_versions: []
+    status, visibility, purchase_url: purchaseUrl, updated_at: new Date(), genres: [], available_versions: [],
+    rights_status: "cleared", approval_status: "approved", radio_status: "scheduled", stream_url: "/master.wav",
+    is_chart_eligible: false, publication_status: "unchanged"
   };
   const queries = [];
   const context = vm.createContext({
@@ -145,18 +148,18 @@ function createReleasePackHarness({ user, allowUpdate = true, status = "publishe
       const query = strings.join("?");
       queries.push({ query, values });
       if (/UPDATE halo_release_campaigns/.test(query)) {
-        if (!allowUpdate || values[1] !== releaseRow.id) return [];
+        if (!allowUpdate || values[1] !== releaseRow.id || (!values[2] && values[3] !== releaseRow.owner_member_id)) return [];
         releaseRow.purchase_url = values[0];
         return [{ id: releaseRow.id }];
       }
       if (/SELECT \* FROM halo_release_campaigns/.test(query)) {
-        return user?.id && (user.role === "platform-owner" || releaseRow.owner_member_id === "member-1") ? [releaseRow] : [];
+        return user?.id && (user.role === "platform-owner" || user.id === "artist-user") ? [releaseRow] : [];
       }
       if (/FROM halo_release_campaigns/.test(query)) return [releaseRow];
       if (/COUNT\(\*\)/.test(query)) return [{}];
       return [];
     } }),
-    ensureMembership: async () => ({ member_id: "member-1" }),
+    ensureMembership: async () => ({ member_id: user?.id === "artist-user" ? "member-1" : "member-other" }),
     isOwner: candidate => candidate?.role === "platform-owner",
     verifyRequestOrigin: request => {
       if (request.headers.get("origin") !== new URL(request.url).origin) throw new Error("origin mismatch");
@@ -187,7 +190,12 @@ async function patchDistribution(harness, body, origin = "https://halo.test") {
 const owner = { id: "artist-user" };
 const smartDestination = "https://distrokid.com/hyperfollow/contract/track";
 const ownerHarness = createReleasePackHarness({ user: owner });
-const ownerResponse = await patchDistribution(ownerHarness, { releaseId: "public-track", purchaseUrl: smartDestination });
+const initialRelease = structuredClone(ownerHarness.releaseRow);
+const ownerResponse = await patchDistribution(ownerHarness, {
+  releaseId: "public-track", purchaseUrl: smartDestination,
+  status: "draft", visibility: "private", owner_member_id: "attacker", rights_status: "disputed",
+  approval_status: "pending", radio_status: "off", stream_url: "/changed.wav", is_chart_eligible: true
+});
 const ownerPayload = await ownerResponse.json();
 assert.equal(ownerResponse.status, 200);
 assert.equal(ownerPayload.release.purchaseUrl, smartDestination);
@@ -202,6 +210,8 @@ const updateSetClause = updateQuery.query.match(/SET([\s\S]*?)WHERE/)?.[1] || ""
 assert.match(updateSetClause, /^\s*purchase_url = \?, updated_at = NOW\(\)\s*$/);
 assert.doesNotMatch(updateSetClause, /status|owner_member_id|rights|visibility|radio|publication/i);
 assert.deepEqual(updateQuery.values.slice(0, 2), [smartDestination, "public-track"]);
+assert.deepEqual(ownerHarness.releaseRow, { ...initialRelease, purchase_url: smartDestination },
+  "destination edits preserve every unrelated persisted field even when the request attempts to change them");
 assert.doesNotMatch(releasePackSource, /\bfetch\s*\(/i, "saving a link must not fetch or scrape it");
 
 const clearHarness = createReleasePackHarness({ user: owner, purchaseUrl: smartDestination });
@@ -219,18 +229,22 @@ assert.equal(draftPayload.release.status, "draft");
 assert.equal(draftPayload.campaigns[0].distributionStatus, "private");
 
 for (const user of [null, { id: "other-user" }]) {
-  const deniedHarness = createReleasePackHarness({ user, allowUpdate: false });
+  const deniedHarness = createReleasePackHarness({ user });
   const denied = await patchDistribution(deniedHarness, { releaseId: "public-track", purchaseUrl: smartDestination });
   assert.ok([401, 404].includes(denied.status));
   assert.equal(deniedHarness.releaseRow.purchase_url, "");
 }
+const adminHarness = createReleasePackHarness({ user: { id: "admin", role: "platform-owner" } });
+assert.equal((await patchDistribution(adminHarness, { releaseId: "public-track", purchaseUrl: smartDestination })).status, 200);
+assert.equal(adminHarness.releaseRow.owner_member_id, "member-1", "admin edits do not reassign the owner");
 const originHarness = createReleasePackHarness({ user: owner });
 assert.equal((await patchDistribution(originHarness, { releaseId: "public-track", purchaseUrl: smartDestination }, "https://evil.test")).status, 403);
 assert.equal(originHarness.queries.length, 0);
 
 for (const purchaseUrl of [
   "http://hyperfollow.com/track", "https://hyperfollow.com.evil.test/track",
-  "https://hyperfollow.com:444/track", "https://distrokid.com/track"
+  "https://hyperfollow.com:444/track", "https://hyperfollow.com:443/track", "https:hyperfollow.com/track",
+  "https://distrokid.com/track"
 ]) {
   const invalidHarness = createReleasePackHarness({ user: owner });
   const invalid = await patchDistribution(invalidHarness, { releaseId: "public-track", purchaseUrl });
@@ -246,9 +260,9 @@ const [artistEditor, catalogDoc, haloEditor] = await Promise.all([
 ]);
 assert.match(artistEditor, /Artist listening \/ official link/);
 assert.match(artistEditor, /separate from the public catalog’s Stream \/ DSPs destination/);
-assert.match(haloEditor, /method: 'PATCH'[\s\S]*purchaseUrl: campaignDraft\.purchaseUrl/);
+assert.match(haloEditor, /method: 'PATCH'[\s\S]*JSON\.stringify\(\{ releaseId, purchaseUrl \}\)/);
 assert.match(haloEditor, /distributionStatus: data\.release\.distributionStatus/);
-assert.match(haloEditor, /<div className="release-artwork-frame"[\s\S]*?\{releasePack\.canEdit && catalogCardReleaseId && <div[\s\S]*?Catalog distribution URL/,
+assert.match(haloEditor, /<div className="release-artwork-frame"[\s\S]*?\{releasePack\.canEdit && catalogCardReleaseId && identityUser\?\.id && <div[\s\S]*?Catalog distribution URL/,
   "only an authorized owner/admin sees the editable URL control directly beneath the selected release artwork");
 assert.match(haloEditor, /campaignDraft\?\.id === catalogCardReleaseId[\s\S]*campaignDraft\.purchaseUrl[\s\S]*releasePack\?\.release\?\.purchaseUrl/,
   "the card input hydrates from the selected persisted purchase_url value");
@@ -268,4 +282,110 @@ assert.match(haloEditor, /releasePack\.canEdit && catalogCardReleaseId/,
 assert.match(haloEditor, /Saving changes only this URL; it does not change release status, visibility, rights, ownership, or radio state/);
 assert.match(catalogDoc, /halo_release_campaigns\.purchase_url/);
 assert.match(catalogDoc, /pending submission's `smart_link_url` is not a/);
+
+// Execute the desk's actual handlers, with only transport and React state setters replaced.
+function createDeskHarness() {
+  const persisted = createReleasePackHarness({ user: owner });
+  const calls = [];
+  const context = vm.createContext({
+    window: { HaloDistributionLinks: links, location: { origin: "https://halo.test" } },
+    identityUser: owner, campaignDraft: { id: "public-track", purchaseUrl: smartDestination, title: "Unsaved title" },
+    releasePack: { release: { id: "public-track", purchaseUrl: "" }, canEdit: true },
+    releasePackLoading: false, distributionSaving: false, campaignSaving: false,
+    releasePackRequestRef: { current: 1 }, distributionFeedback: {}, URL, encodeURIComponent,
+    fetch: async (url, options) => {
+      calls.push({ url, options });
+      return patchDistribution(persisted, JSON.parse(options.body));
+    }
+  });
+  for (const [setter, field] of Object.entries({
+    setReleasePack: "releasePack", setCampaignDraft: "campaignDraft", setDistributionSaving: "distributionSaving",
+    setDistributionFeedback: "distributionFeedback", setReleasePackLoading: "releasePackLoading",
+    setReleasePackError: "releasePackError", setCampaignEditorOpen: "campaignEditorOpen",
+    setReleasePackNotice: "releasePackNotice", setSocialCaption: "socialCaption", setSelectorDraft: "selectorDraft"
+  })) context[setter] = value => { context[field] = typeof value === "function" ? value(context[field]) : value; };
+  for (const name of ["applyReleasePackState", "loadReleasePack", "newCampaignDraft", "saveDistributionLink", "updateDistributionLink"]) {
+    const handler = haloEditor.match(new RegExp(`          const ${name} = [\\s\\S]*?\\n          };`))?.[0];
+    assert.ok(handler, `actual ${name} handler exists`);
+    vm.runInContext(handler.replace(`const ${name} =`, `globalThis.${name} =`), context);
+  }
+  return { context, calls, persisted };
+}
+
+const desk = createDeskHarness();
+await desk.context.saveDistributionLink();
+assert.equal(desk.calls[0].url, "/api/release-pack");
+assert.equal(desk.calls[0].options.method, "PATCH");
+assert.deepEqual(JSON.parse(desk.calls[0].options.body), { releaseId: "public-track", purchaseUrl: smartDestination });
+assert.equal(desk.persisted.releaseRow.purchase_url, smartDestination);
+assert.equal(desk.context.distributionFeedback.status, "saved");
+assert.equal(desk.context.campaignDraft.title, "Unsaved title", "link saves preserve unsaved campaign edits");
+desk.context.updateDistributionLink("");
+assert.equal(desk.context.distributionFeedback.message, "");
+await desk.context.saveDistributionLink();
+assert.equal(desk.persisted.releaseRow.purchase_url, "");
+assert.equal(desk.context.campaignDraft.purchaseUrl, "");
+assert.match(desk.context.distributionFeedback.message, /cleared/i);
+
+for (const value of ["javascript:alert(1)", "https://evil.test/", "http://hyperfollow.com/a", "******hyperfollow.com/a", "https://hyperfollow.com:443/a", "https://drive.google.com/file/d/master"]) {
+  const invalid = createDeskHarness();
+  invalid.context.updateDistributionLink(value);
+  await invalid.context.saveDistributionLink();
+  assert.equal(invalid.calls.length, 0, "invalid URLs must fail before any request");
+  assert.equal(invalid.context.distributionFeedback.status, "error");
+  assert.equal(invalid.context.campaignDraft.purchaseUrl, value);
+}
+for (const changes of [{ identityUser: null }, { releasePack: { canEdit: false, release: { id: "public-track" } } },
+  { releasePackLoading: true }, { distributionSaving: true }, { campaignSaving: true }]) {
+  const blocked = createDeskHarness();
+  Object.assign(blocked.context, changes);
+  await blocked.context.saveDistributionLink();
+  assert.equal(blocked.calls.length, 0, "unauthorized/loading/busy states cannot save");
+}
+for (const response of [
+  new Response(JSON.stringify({ message: "Owner access denied" }), { status: 403 }),
+  new Response("not JSON", { status: 502 }),
+  new Response(JSON.stringify({ release: { id: "wrong-release", purchaseUrl: smartDestination } })),
+  new Response(JSON.stringify({ release: { id: "public-track" } }))
+]) {
+  const failed = createDeskHarness();
+  failed.context.fetch = async () => response;
+  await failed.context.saveDistributionLink();
+  assert.equal(failed.context.distributionFeedback.status, "error");
+  assert.equal(failed.context.distributionSaving, false);
+  assert.equal(failed.context.campaignDraft.purchaseUrl, smartDestination, "errors retain the user's value for retry");
+}
+for (const switchTo of ["existing", "new"]) {
+  for (const fails of [false, true]) {
+    const race = createDeskHarness();
+    let finish;
+    race.context.fetch = () => new Promise(resolve => { finish = resolve; });
+    const pending = race.context.saveDistributionLink();
+    assert.equal(race.context.distributionFeedback.status, "saving", "no success before the server responds");
+    race.context.updateDistributionLink("https://lnk.to/should-not-overwrite");
+    assert.equal(race.context.campaignDraft.purchaseUrl, smartDestination, "both inputs are locked during saves");
+    if (switchTo === "existing") {
+      race.context.fetch = async () => new Response(JSON.stringify({
+        release: { id: "other-release", purchaseUrl: "", genres: [], availableVersions: [] }, canEdit: true
+      }));
+      await race.context.loadReleasePack("other-release");
+    } else {
+      race.context.newCampaignDraft();
+    }
+    finish(new Response(JSON.stringify(fails ? { message: "Stale failure" } : {
+      release: { id: "public-track", purchaseUrl: smartDestination }
+    }), { status: fails ? 403 : 200 }));
+    await pending;
+    assert.equal(race.context.campaignDraft.id, switchTo === "existing" ? "other-release" : "");
+    assert.equal(race.context.distributionFeedback.message, "", "stale success/error never appears for another release");
+    assert.equal(race.context.distributionSaving, false);
+  }
+}
+const deskMarkup = haloEditor.slice(haloEditor.indexOf('{releasePack.canEdit && identityUser?.id && campaignDraft.id ==='));
+assert.match(deskMarkup, /Release promotion desk \/\/ Distributor destination/);
+assert.match(deskMarkup, /htmlFor=\{`desk-distribution-\$\{catalogCardReleaseId\}`\}/);
+assert.match(deskMarkup, /aria-describedby=\{`desk-distribution-help-[^\n]+desk-distribution-status-/);
+assert.match(deskMarkup, /aria-invalid=\{Boolean\(catalogCardPurchaseUrl\.trim\(\) && !validatedCatalogCardUrl\)\}/);
+assert.match(deskMarkup, /does not verify distributor status, import metadata, publish or promote this release, alter the Living Chart, or send it to an AI pipeline/);
+assert.doesNotMatch(deskMarkup.slice(0, deskMarkup.indexOf('{!campaignDraft.id')), /setTimeout|driveUrl|initialDistrokidUrl/);
 console.log("Catalog distribution contracts passed");

@@ -61,9 +61,9 @@ export function validateSmartLink(value) {
   } catch {
     return { ok: false, error: "Enter a complete link that starts with https://." };
   }
-  if (url.protocol !== "https:") return { ok: false, error: "Smart links must use https://." };
+  if (!/^https:\/\//i.test(raw) || url.protocol !== "https:") return { ok: false, error: "Smart links must use https://." };
   if (url.username || url.password) return { ok: false, error: "Smart links must not include login details." };
-  if (url.port) return { ok: false, error: "Smart links must not specify a port." };
+  if (url.port || /^https:\/\/[^/?#]*:/i.test(raw)) return { ok: false, error: "Smart links must not specify a port." };
   if (!isAllowedHost(url.hostname)) {
     return { ok: false, error: `Use a distributor smart link from ${SMART_LINK_HOSTS.join(", ")}.` };
   }

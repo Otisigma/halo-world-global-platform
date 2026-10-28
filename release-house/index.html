@@ -186,6 +186,49 @@
         </aside>
       </div>
       <p class="save-status" id="saveStatus" role="status">Your browser holds this draft until you sign in and save it.</p>
+
+      <section class="submission-desk" id="submissionDesk" aria-labelledby="submissionTitle">
+        <div class="submission-lead">
+          <p class="kicker">Submit for review</p>
+          <h3 id="submissionTitle">Ask HALO to review this release.</h3>
+          <p>Choose how you would like HALO to consider this release. Choosing a pathway alone does not transfer rights, grant a licence, or authorise distribution. Your existing upload, rights clearance, mastering and publication approvals still apply.</p>
+          <p class="submission-boundary">HALO review is an operational check, not legal advice or a ruling on who owns a recording. If you are unsure about your rights, speak with a qualified adviser before submitting.</p>
+        </div>
+        <p class="submission-availability" id="submissionAvailability" role="status">Checking whether submissions can be recorded…</p>
+        <form class="submission-form" id="submissionForm" novalidate hidden>
+          <fieldset class="submission-pathways" id="submissionPathways" aria-describedby="submissionPathwayError">
+            <legend>Submission pathway</legend>
+            <div id="submissionPathwayOptions"></div>
+            <p class="field-error" id="submissionPathwayError"></p>
+          </fieldset>
+          <div class="submission-fields">
+            <label class="room-field"><span>Primary artist name</span>
+              <input id="submissionArtist" maxlength="120" autocomplete="off" required aria-describedby="submissionArtistError">
+              <span class="field-error" id="submissionArtistError"></span>
+            </label>
+            <label class="room-field"><span>Track title</span>
+              <input id="submissionTrack" maxlength="160" autocomplete="off" required aria-describedby="submissionTrackError">
+              <span class="field-error" id="submissionTrackError"></span>
+            </label>
+            <label class="room-field is-wide"><span>Distributor smart link <small>optional</small></span>
+              <input id="submissionSmartLink" type="url" inputmode="url" maxlength="500" autocomplete="off" placeholder="https://distrokid.com/hyperfollow/artist/track" aria-describedby="submissionSmartLinkHelp submissionSmartLinkError">
+              <span class="field-help" id="submissionSmartLinkHelp">A DistroKid HyperFollow or other distributor smart link you supply. HALO stores it as a reference only: it is not opened by HALO’s servers, not used to import metadata, and not treated as proof of ownership, licensing, ISRC/UPC registration, or distribution.</span>
+              <span class="field-error" id="submissionSmartLinkError"></span>
+            </label>
+          </div>
+          <div class="submission-terms" id="submissionTerms"></div>
+          <label class="check-field is-wide submission-attest">
+            <input type="checkbox" id="submissionAttest" aria-describedby="submissionAttestError">
+            <span id="submissionAttestText"></span>
+          </label>
+          <p class="field-error" id="submissionAttestError"></p>
+          <div class="submission-actions">
+            <button class="button button-ink" id="submissionSubmit" type="submit">Submit for HALO review</button>
+          </div>
+          <p class="submission-status" id="submissionStatus" role="status" aria-live="polite"></p>
+        </form>
+        <div class="submission-record" id="submissionRecord" hidden tabindex="-1"></div>
+      </section>
     </section>
 
     <section class="milestone-panel" data-milestones="artist" aria-labelledby="milestoneTitle">

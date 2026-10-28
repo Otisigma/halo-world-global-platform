@@ -2,9 +2,8 @@
   // Keep this browser check aligned with Release House's validated-text URL policy.
   const hosts = ["distrokid.com", "hyperfollow.com", "ffm.to", "lnk.to", "found.ee", "linktr.ee"];
 
-  function destination(release) {
-    if (release?.status !== "published" || release?.isLiveVisible !== true) return "";
-    const raw = typeof release.distributionUrl === "string" ? release.distributionUrl.trim() : "";
+  function validate(value) {
+    const raw = typeof value === "string" ? value.trim() : "";
     if (!raw || raw.length > 500 || /[\s\u0000-\u001f\u007f\\]/.test(raw)) return "";
     try {
       const url = new URL(raw);
@@ -18,6 +17,11 @@
     }
   }
 
+  function destination(release) {
+    if (release?.status !== "published" || release?.isLiveVisible !== true) return "";
+    return validate(release.distributionUrl);
+  }
+
   function action(release, className = "action secondary") {
     const href = destination(release);
     if (!href) return "";
@@ -28,5 +32,5 @@
     return `<a class="${escape(className)} distribution-link" href="${escape(href)}" target="_blank" rel="noopener noreferrer" data-halo-player="off" title="${escape(label)}" aria-label="${escape(label)}">Stream / DSPs <span aria-hidden="true">↗</span></a>`;
   }
 
-  window.HaloDistributionLinks = Object.freeze({ destination, action });
+  window.HaloDistributionLinks = Object.freeze({ validate, destination, action });
 })();

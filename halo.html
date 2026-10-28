@@ -1182,6 +1182,7 @@
     <div id="root"></div>
 
     <script src="/release-artwork.js"></script>
+    <script src="/distribution-links.js"></script>
     <script src="/onboarding.js"></script>
     <script id="haloFeaturedReleaseConfig" type="application/json">
       {
@@ -1830,6 +1831,7 @@
           const [campaignEditorOpen, setCampaignEditorOpen] = useState(false);
           const [campaignSaving, setCampaignSaving] = useState(false);
           const [distributionSaving, setDistributionSaving] = useState(false);
+          const [distributionFeedback, setDistributionFeedback] = useState({ releaseId: '', status: '', message: '' });
           const [campaignDraft, setCampaignDraft] = useState(null);
           const [selectorDraft, setSelectorDraft] = useState({ selectorType: 'dj', outletName: '', notes: '' });
           const [socialCaption, setSocialCaption] = useState('');
@@ -1891,6 +1893,7 @@
           };
 
           const audioCtxRef = useRef(null);
+          const releasePackRequestRef = useRef(0);
           const canvasRef = useRef(null);
           const dreamweaverPreviewAudioRef = useRef(null);
           const dreamweaverPreviewCandidatesRef = useRef([]);
@@ -2604,17 +2607,23 @@
           }, [releasePack, campaignEditorOpen]);
 
           const loadReleasePack = async (slug = '') => {
+            const requestId = ++releasePackRequestRef.current;
             setReleasePackLoading(true);
             setReleasePackError('');
+            setDistributionSaving(false);
+            setDistributionFeedback({ releaseId: '', status: '', message: '' });
             try {
               const response = await fetch(`/api/release-pack${slug ? `?slug=${encodeURIComponent(slug)}` : ''}`, { headers: { Accept: 'application/json' } });
               const data = await response.json();
               if (!response.ok) throw new Error(data.message || 'The selector room could not connect.');
+              if (requestId !== releasePackRequestRef.current) return;
               applyReleasePackState(data);
             } catch (error) {
-              setReleasePackError(error.message || 'The selector room could not connect.');
+              if (requestId === releasePackRequestRef.current) {
+                setReleasePackError(error.message || 'The selector room could not connect.');
+              }
             } finally {
-              setReleasePackLoading(false);
+              if (requestId === releasePackRequestRef.current) setReleasePackLoading(false);
             }
           };
 
@@ -2695,31 +2704,44 @@
           };
 
           const saveDistributionLink = async () => {
-            if (!campaignDraft?.id) return;
+            const releaseId = campaignDraft?.id;
+            if (releasePackLoading || !releaseId || releasePack?.release?.id !== releaseId) return;
+            const requestId = releasePackRequestRef.current;
             setDistributionSaving(true);
-            setReleasePackError('');
+            setDistributionFeedback({ releaseId, status: 'saving', message: 'Saving distribution destination…' });
             try {
               const response = await fetch('/api/release-pack', {
                 method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ releaseId: campaignDraft.id, purchaseUrl: campaignDraft.purchaseUrl || '' })
+                body: JSON.stringify({ releaseId, purchaseUrl: campaignDraft.purchaseUrl || '' })
               });
               const data = await response.json();
               if (!response.ok) throw new Error(data.message || 'The distribution destination could not be saved.');
+              if (requestId !== releasePackRequestRef.current || data.release?.id !== releaseId) return;
               applyReleasePackState(data);
-              setCampaignDraft(previous => ({
+              setCampaignDraft(previous => previous?.id === releaseId ? ({
                 ...previous,
                 purchaseUrl: data.release.purchaseUrl,
                 distributionStatus: data.release.distributionStatus,
                 distributionSource: data.release.distributionSource,
                 distributionVisibility: data.release.distributionVisibility
-              }));
-              setReleasePackNotice(data.message);
-              window.setTimeout(() => setReleasePackNotice(''), 3400);
+              }) : previous);
+              setDistributionFeedback({
+                releaseId,
+                status: 'saved',
+                message: data.message || 'Distribution destination saved.'
+              });
+              window.haloStats?.track('release_distribution_link_saved', { release_id: data.release.id, status: data.release.distributionStatus });
             } catch (error) {
-              setReleasePackError(error.message || 'The distribution destination could not be saved.');
+              if (requestId === releasePackRequestRef.current) {
+                setDistributionFeedback({
+                  releaseId,
+                  status: 'error',
+                  message: error.message || 'The distribution destination could not be saved.'
+                });
+              }
             } finally {
-              setDistributionSaving(false);
+              if (requestId === releasePackRequestRef.current) setDistributionSaving(false);
             }
           };
 
@@ -3665,6 +3687,15 @@
           };
 
           useEffect(() => () => worldCinematicTimers.current.forEach(timer => window.clearTimeout(timer)), []);
+
+          const catalogCardReleaseId = releasePack?.release?.id || '';
+          const catalogCardPurchaseUrl = campaignDraft?.id === catalogCardReleaseId
+            ? campaignDraft.purchaseUrl || ''
+            : releasePack?.release?.purchaseUrl || '';
+          const validatedCatalogCardUrl = window.HaloDistributionLinks?.validate(catalogCardPurchaseUrl) || '';
+          const catalogCardDistributionFeedback = distributionFeedback.releaseId === catalogCardReleaseId
+            ? distributionFeedback
+            : { status: '', message: '' };
 
           return (
             <div className="min-h-screen bg-[#070709] text-gray-100 flex flex-col font-mono selection:bg-purple-600 selection:text-white relative">
@@ -5842,6 +5873,42 @@
                               <div className="release-artwork-frame" data-artwork-frame>
                                 <img src={activeReleaseArtwork.src} alt={`${releasePack.release.title} cover artwork`} className="release-artwork-image" width="1024" height="1024" data-release-artwork data-artwork-fallback={activeReleaseArtwork.fallback} />
                               </div>
+                              {releasePack.canEdit && catalogCardReleaseId && <div className="border-t border-cyan-300/15 bg-cyan-300/[.035] p-3">
+                                <label htmlFor={`catalog-distribution-${catalogCardReleaseId}`} className="block text-[8px] font-black uppercase tracking-wider text-cyan-100">Catalog distribution URL</label>
+                                <input
+                                  id={`catalog-distribution-${catalogCardReleaseId}`}
+                                  type="url"
+                                  value={catalogCardPurchaseUrl}
+                                  maxLength="500"
+                                  autoComplete="url"
+                                  disabled={releasePackLoading || campaignDraft?.id !== catalogCardReleaseId || distributionSaving}
+                                  onChange={event => {
+                                    setCampaignDraft(previous => previous?.id === catalogCardReleaseId
+                                      ? { ...previous, purchaseUrl: event.target.value }
+                                      : previous);
+                                    setDistributionFeedback({ releaseId: catalogCardReleaseId, status: '', message: '' });
+                                  }}
+                                  placeholder="https://distrokid.com/hyperfollow/..."
+                                  aria-describedby={catalogCardDistributionFeedback.message
+                                    ? `catalog-distribution-help-${catalogCardReleaseId} catalog-distribution-status-${catalogCardReleaseId}`
+                                    : `catalog-distribution-help-${catalogCardReleaseId}`}
+                                  className="mt-2 block w-full min-w-0 rounded-lg border border-white/10 bg-black/50 px-3 py-2.5 text-[9px] normal-case text-white outline-none placeholder:text-gray-600 focus:border-cyan-300/60 focus:ring-2 focus:ring-cyan-300/30 disabled:opacity-60"
+                                />
+                                <p id={`catalog-distribution-help-${catalogCardReleaseId}`} className="mt-2 text-[8px] leading-4 text-gray-400">Use an HTTPS smart link from DistroKid/HyperFollow, FFM.to, lnk.to, found.ee, or Linktree. Saving changes only this URL; it does not change release status, visibility, rights, ownership, or radio state.</p>
+                                <div className="mt-2 flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                                  <span className="text-[8px] font-bold uppercase tracking-wider text-gray-400">
+                                    {catalogCardPurchaseUrl !== (releasePack.release.purchaseUrl || '') ? 'Unsaved changes' : `Saved status: ${campaignDraft?.distributionStatus === 'public' ? 'public-card eligible' : campaignDraft?.distributionStatus === 'private' ? 'private until release is public' : campaignDraft?.distributionStatus === 'invalid' ? 'existing link needs correction' : 'missing'}`}
+                                  </span>
+                                  {validatedCatalogCardUrl && <a href={validatedCatalogCardUrl} target="_blank" rel="noopener noreferrer" aria-label={`Preview distributor destination for ${releasePack.release.title} (opens in a new tab)`} className="inline-flex max-w-full items-center gap-1 self-start break-all rounded-lg border border-white/10 px-2.5 py-2 text-[8px] font-black uppercase tracking-wider text-cyan-100 hover:border-cyan-300/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-300 sm:self-auto">Preview / open ↗</a>}
+                                </div>
+                                {catalogCardDistributionFeedback.message && <p id={`catalog-distribution-status-${catalogCardReleaseId}`} role={catalogCardDistributionFeedback.status === 'error' ? 'alert' : 'status'} className={`mt-2 text-[8px] leading-4 ${catalogCardDistributionFeedback.status === 'error' ? 'text-red-200' : 'text-cyan-100'}`}>{catalogCardDistributionFeedback.message}</p>}
+                                <button
+                                  type="button"
+                                  disabled={releasePackLoading || distributionSaving || campaignDraft?.id !== catalogCardReleaseId}
+                                  onClick={saveDistributionLink}
+                                  className="mt-3 w-full rounded-lg border border-cyan-300/35 px-3 py-2.5 text-[8px] font-black uppercase tracking-widest text-cyan-100 hover:bg-cyan-300/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-300 disabled:cursor-not-allowed disabled:opacity-50"
+                                >{distributionSaving ? 'Saving…' : catalogCardPurchaseUrl ? 'Save destination' : 'Clear destination'}</button>
+                              </div>}
                               <div className="p-4">
                                 <p className="text-[8px] font-black uppercase tracking-[.25em] text-cyan-300">{releasePack.release.artist} // Advance signal</p>
                                 <h4 className="mt-2 text-2xl font-black leading-none text-white">{releasePack.release.title}</h4>

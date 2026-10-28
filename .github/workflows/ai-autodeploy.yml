@@ -50,9 +50,42 @@ jobs:
           retention-days: 7
 
       - name: Trigger Netlify build hook
+        id: netlify-hook
         if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && env.NETLIFY_BUILD_HOOK != '' }}
-        run: curl --fail --show-error --silent --request POST "$NETLIFY_BUILD_HOOK"
+        run: |
+          curl_status=0
+          http_status=$(curl --silent --fail --output /dev/null --write-out '%{http_code}' \
+            --connect-timeout 10 --max-time 30 --proto '=https' \
+            --request POST "$NETLIFY_BUILD_HOOK" 2>/dev/null) || curl_status=$?
+          if [ "$curl_status" -ne 0 ] || [[ ! "$http_status" =~ ^2[0-9][0-9]$ ]]; then
+            echo "::error::Netlify build hook failed; inspect the configured hook privately. No production release is verified."
+            exit 1
+          fi
+          echo "Netlify accepted the build request; build completion and production publication remain unverified."
 
       - name: Skip Netlify hook when not configured
         if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && env.NETLIFY_BUILD_HOOK == '' }}
         run: echo "NETLIFY_BUILD_HOOK is not set; skipping deploy trigger."
+
+      - name: Report deployment status
+        if: ${{ always() }}
+        env:
+          HOOK_OUTCOME: ${{ steps.netlify-hook.outcome }}
+        run: |
+          {
+            echo "## Deployment trigger status"
+            echo "Commit: $GITHUB_SHA"
+            if [ "$GITHUB_EVENT_NAME" != push ] || [ "$GITHUB_REF" != refs/heads/main ]; then
+              echo "Not requested: only pushes to main can call the build hook (not PRs or manual runs)."
+            elif [ -z "$NETLIFY_BUILD_HOOK" ]; then
+              echo "Skipped: NETLIFY_BUILD_HOOK is not configured. This workflow did not request deployment."
+            elif [ "$HOOK_OUTCOME" = success ]; then
+              echo "Requested: Netlify accepted the hook. This is not a completed or verified production release."
+            elif [ "$HOOK_OUTCOME" = failure ]; then
+              echo "Failed: Netlify hook request failed. Check Netlify before retrying; a timed-out request may have been accepted."
+            else
+              echo "Not requested: the hook step did not run. Inspect earlier workflow steps."
+            fi
+            echo "Netlify Git integration, published commit, live functions, and database migration state must be verified separately by a maintainer."
+            echo "Telemetry is a CI artifact only; it is not deployed by this workflow."
+          } >> "$GITHUB_STEP_SUMMARY"

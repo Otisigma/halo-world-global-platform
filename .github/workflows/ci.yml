@@ -35,13 +35,26 @@ jobs:
         run: docker build -t halo-world:ci .
       - name: Run smoke test
         run: |
-          docker run --rm -d \
+          docker run -d \
             --name halo-ci \
-            -p 3000:3000 \
+            -p 127.0.0.1:3000:3000 \
             -e DATABASE_URL="" \
             -e JWT_SECRET="ci-test-secret" \
             halo-world:ci
           # Wait for the server to start
-          timeout 30 bash -c 'until curl -sf http://localhost:3000/healthz; do sleep 1; done'
-          curl -sf http://localhost:3000/healthz | grep '"status":"ok"'
-          docker stop halo-ci
+          timeout 30 bash -ec 'until curl --max-time 2 -sf http://127.0.0.1:3000/healthz; do
+            test "$(docker inspect --format "{{.State.Running}}" halo-ci)" = true || exit 1
+            sleep 1
+          done'
+          curl --max-time 2 -sf http://127.0.0.1:3000/healthz | grep '"status":"ok"'
+      - name: Show container failure diagnostics
+        if: ${{ failure() }}
+        run: |
+          docker inspect --format '{{json .State}}' halo-ci
+          docker logs --tail 100 halo-ci
+      - name: Clean up smoke-test container
+        if: ${{ always() }}
+        run: |
+          if docker container inspect halo-ci > /dev/null 2>&1; then
+            docker rm -f halo-ci
+          fi

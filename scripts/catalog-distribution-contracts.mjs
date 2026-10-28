@@ -239,6 +239,7 @@ const [artistEditor, catalogDoc] = await Promise.all([
 assert.match(artistEditor, /Artist listening \/ official link/);
 assert.match(artistEditor, /separate from the public catalog’s Stream \/ DSPs destination/);
 assert.match(await read("halo.html"), /method: 'PATCH'[\s\S]*purchaseUrl: campaignDraft\.purchaseUrl/);
+assert.match(await read("halo.html"), /distributionStatus: data\.release\.distributionStatus/);
 assert.match(catalogDoc, /halo_release_campaigns\.purchase_url/);
 assert.match(catalogDoc, /pending submission's `smart_link_url` is not a/);
 console.log("Catalog distribution contracts passed");

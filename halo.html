@@ -2707,7 +2707,13 @@
               const data = await response.json();
               if (!response.ok) throw new Error(data.message || 'The distribution destination could not be saved.');
               applyReleasePackState(data);
-              setCampaignDraft(previous => ({ ...previous, purchaseUrl: data.release.purchaseUrl }));
+              setCampaignDraft(previous => ({
+                ...previous,
+                purchaseUrl: data.release.purchaseUrl,
+                distributionStatus: data.release.distributionStatus,
+                distributionSource: data.release.distributionSource,
+                distributionVisibility: data.release.distributionVisibility
+              }));
               setReleasePackNotice(data.message);
               window.setTimeout(() => setReleasePackNotice(''), 3400);
             } catch (error) {

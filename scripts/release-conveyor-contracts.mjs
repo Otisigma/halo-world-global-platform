@@ -7,6 +7,19 @@ import { prepareReleaseAudio } from "../netlify/lib/release-conveyor-audio.mjs";
 import { createReleaseConveyorConsole } from "../lib/release-conveyor-ui.js";
 import "./halo-watchdog-contracts.mjs";
 
+const packageScripts = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8")).scripts;
+for (const [script, command] of [
+  ["test", "node scripts/release-watchdog-contracts.mjs"],
+  ["test", "node scripts/halo-master-orchestrator-contracts.mjs"],
+  ["test:release-conveyor", "node scripts/release-watchdog-contracts.mjs"],
+  ["test:release-conveyor", "node scripts/halo-master-orchestrator-contracts.mjs"],
+]) {
+  assert.equal(packageScripts[script].split(" && ").filter(step => step === command).length, 1,
+    `${command} runs exactly once in ${script}`);
+}
+assert.doesNotMatch(packageScripts.posttest, /test:master-orchestrator/,
+  "posttest must not duplicate the master-orchestrator contract from test");
+
 const song = { id: "12345678-1234-4123-8123-123456789012", owner_member_id: "creator",
   title: "A Signal", artist_name: "Artist", genre: "Soul", isrc: "GB-AAA-26-00001",
   rights_status: "cleared", sale_status: "for_sale", sale_price_cents: 129,
@@ -390,6 +403,11 @@ memberId = "creator";
 assert.equal((await handler(request("DELETE"))).status, 405);
 assert.equal((await handler(request("POST", { action: "process_submission", songId: song.id, humHz: 70 }))).status, 400);
 assert.equal((await handler(request("POST", { action: "bad" }))).status, 400);
+const oversizedRequest = await handler(request("POST", {
+  action: "process_submission", songId: song.id, extra: "x".repeat(16_384),
+}));
+assert.equal(oversizedRequest.status, 413);
+assert.equal(stored, null, "oversized updates never reach the release conveyor");
 const initialResponse = await handler(request());
 assert.equal(initialResponse.status, 200);
 assert.equal(initialResponse.headers.get("cache-control"), "private, no-store");

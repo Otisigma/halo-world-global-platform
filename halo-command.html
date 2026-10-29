@@ -33,6 +33,7 @@
   <script src="/mobile-navigation.js" defer></script>
   <script type="module" src="/identity.js"></script>
   <script src="/halo-command.js" defer></script>
+  <script src="/owner-signups.js" defer></script>
   <script src="/dreamweaver-oracle.js" defer></script>
 </head>
 <body>
@@ -145,6 +146,18 @@
             </div>
           </form>
         </div>
+      </section>
+
+      <section id="ownerSignups" class="maintenance-section" aria-labelledby="signupTitle" hidden>
+        <div class="section-heading">
+          <div><p class="section-label">OWNER-ONLY / READ-ONLY</p><h2 id="signupTitle">Signups &amp; email preferences</h2></div>
+          <button id="signupRefresh" type="button">Refresh signups</button>
+        </div>
+        <p>Separate purposes, not a complete newsletter list. Up to 30 recent records per source, with stable timestamp and unique-key ordering. Email addresses appear only in this private review; no sending, export, copying, or preference changes are provided.</p>
+        <p>Dreamweaver is ordered by latest signup, Track Drops by consent time, and Artist Pro by latest update (newest first). Missing sources are unavailable, not zero.</p>
+        <p id="signupStatus" role="status">Owner access required.</p>
+        <div id="signupSources" class="report-grid"></div>
+        <a href="/halo-relations.html">Open the existing owner-only Relations desk</a>
       </section>
 
       <section id="dreamweaverOracle" class="oracle-panel" aria-labelledby="oracleTitle" hidden>

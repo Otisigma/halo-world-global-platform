@@ -3,6 +3,7 @@ import { getUser, verifyRequestOrigin } from "@netlify/identity";
 import { isOwner } from "../lib/halo-x.mjs";
 import { createAgentCommand, loadControlCenter } from "../lib/control-center.mjs";
 import { requestPreflight } from "../../lib/request-preflight.js";
+import { loadOwnerSignups } from "../lib/owner-signups.mjs";
 
 function json(body, status = 200, headers = {}) {
   return Response.json(body, { status, headers: { "Cache-Control": "private, no-store", ...headers } });
@@ -19,6 +20,10 @@ export default async function haloControlCenterHandler(request) {
     if (!isOwner(user)) return json({ message: "The HALO Control Center is limited to the owner team" }, 403);
     if (request.method === "HEAD") return new Response(null, { status: 204, headers: { "Cache-Control": "private, no-store" } });
 
+    if (new URL(request.url).searchParams.get("view") === "signups") {
+      if (request.method !== "GET") return json({ message: "Signup review is read-only" }, 405, { Allow: "HEAD, GET" });
+      return json({ signups: await loadOwnerSignups(getDatabase(), user) });
+    }
     if (request.method === "GET") return json(await loadControlCenter(getDatabase()));
     if (!(await verifyRequestOrigin(request))) return json({ message: "Request origin could not be verified" }, 403);
 

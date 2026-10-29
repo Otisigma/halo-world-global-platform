@@ -5,7 +5,45 @@ import { loadSharedOrchestratorState } from "./halo-master-orchestrator.mjs";
 import { cleanDreamweaverSongId } from "../../lib/dreamweaver-storefront.js";
 import { catalogMasterReadiness } from "./release-conveyor-audio.mjs";
 
+const MAX_REQUEST_BODY_BYTES = 16_384;
+
 const json = (body, status = 200) => Response.json(body, { status, headers: { "Cache-Control": "private, no-store" } });
+
+async function readJsonBody(request) {
+  const contentLength = request.headers.get("content-length");
+  if (contentLength !== null && Number(contentLength) > MAX_REQUEST_BODY_BYTES) {
+    return { payload: null, tooLarge: true };
+  }
+  const reader = request.body?.getReader();
+  if (!reader) return { payload: null, tooLarge: false };
+  const chunks = [];
+  let size = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      size += value.byteLength;
+      if (size > MAX_REQUEST_BODY_BYTES) {
+        reader.cancel().catch(() => {});
+        return { payload: null, tooLarge: true };
+      }
+      chunks.push(value);
+    }
+    const bytes = new Uint8Array(size);
+    let offset = 0;
+    for (const chunk of chunks) {
+      bytes.set(chunk, offset);
+      offset += chunk.byteLength;
+    }
+    try {
+      return { payload: JSON.parse(new TextDecoder().decode(bytes)), tooLarge: false };
+    } catch {
+      return { payload: null, tooLarge: false };
+    }
+  } catch {
+    return { payload: null, tooLarge: false };
+  }
+}
 
 function masterStatus({ song, versions }) {
   const { uploaded, durationValid, masteringStatus } = catalogMasterReadiness(song, versions);
@@ -25,7 +63,8 @@ export function createReleaseConveyorHandler({ getDatabase, getUser, verifyReque
       db = await getDatabase();
       membership = await ensureMembership(db, user);
       const url = new URL(request.url);
-      const payload = request.method === "POST" ? await request.json().catch(() => null) : null;
+      const { payload, tooLarge } = request.method === "POST" ? await readJsonBody(request) : { payload: null, tooLarge: false };
+      if (tooLarge) return json({ message: "Request body is too large." }, 413);
       if (request.method === "POST" && (!payload || payload.action !== "process_submission")) {
         return json({ message: "Choose process_submission with an existing catalog songId." }, 400);
       }

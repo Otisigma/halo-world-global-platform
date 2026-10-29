@@ -168,6 +168,12 @@ main { width: min(1500px, 100%); margin: 0 auto; }
 #signupSources .briefing-panel { padding: 24px; min-width: 0; overflow-wrap: anywhere; }
 #signupSources ul { max-height: 32rem; overflow: auto; padding-left: 20px; }
 #signupSources li { margin-bottom: 24px; }
+#memberBrowser { grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); }
+#memberBrowser .briefing-panel { padding: 24px; min-width: 0; overflow-wrap: anywhere; }
+#memberBrowser ul { max-height: 36rem; overflow: auto; padding-left: 20px; }
+#memberBrowser li { margin-bottom: 16px; }
+#memberDirectory button { width: 100%; min-height: 44px; text-align: left; overflow-wrap: anywhere; }
+#memberDirectory button[aria-current="true"] { outline: 2px solid currentColor; }
 .briefing-panel, .reflection-panel { padding: 92px clamp(24px,6vw,96px); }
 .briefing-panel { border-right: 1px solid var(--line); }
 .briefing-panel h2 { max-width: 720px; margin: 12px 0 26px; font: 700 clamp(40px,4.8vw,70px)/.95 var(--display); letter-spacing: -.045em; }

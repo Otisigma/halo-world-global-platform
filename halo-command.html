@@ -34,6 +34,7 @@
   <script type="module" src="/identity.js"></script>
   <script src="/halo-command.js" defer></script>
   <script src="/owner-signups.js" defer></script>
+  <script src="/owner-member-activity.js" defer></script>
   <script src="/dreamweaver-oracle.js" defer></script>
 </head>
 <body>
@@ -158,6 +159,21 @@
         <p id="signupStatus" role="status">Owner access required.</p>
         <div id="signupSources" class="report-grid"></div>
         <a href="/halo-relations.html">Open the existing owner-only Relations desk</a>
+      </section>
+
+      <section id="ownerMembers" class="maintenance-section" aria-labelledby="memberActivityTitle" hidden>
+        <div class="section-heading">
+          <div><p class="section-label">OWNER-ONLY / READ-ONLY</p><h2 id="memberActivityTitle">Member activity &amp; requests</h2></div>
+          <button id="memberRefresh" type="button">Refresh members</button>
+        </div>
+        <p>Recorded evidence only, labelled by source. Shows up to 30 most recently seen members, and up to 20 recent records per source for a chosen member. Each member shows only their own help, bug, and feature requests; staff notes are not shown. No sending, export, copying, deletion, or preference changes are provided.</p>
+        <p>Page-by-page history is not recorded for members. Site page views are anonymous and are shown only as an aggregate that cannot be linked to any person.</p>
+        <p id="memberStatus" role="status">Owner access required.</p>
+        <div id="memberBrowser" class="report-grid">
+          <article class="briefing-panel"><h3>Members</h3><ul id="memberDirectory" aria-label="Members, most recently seen first"></ul></article>
+          <article id="memberDetail" class="briefing-panel" aria-live="polite" tabindex="-1"><p>Choose a member to read their recorded activity and requests.</p></article>
+          <article class="briefing-panel"><h3>Anonymous page views (aggregate)</h3><div id="memberPages"></div></article>
+        </div>
       </section>
 
       <section id="dreamweaverOracle" class="oracle-panel" aria-labelledby="oracleTitle" hidden>

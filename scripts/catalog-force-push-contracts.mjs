@@ -209,7 +209,7 @@ assert.doesNotMatch(editorJs, /localStorage/, "song editor must not persist cata
   let requests = 0;
   let reloads = 0;
   let success = true;
-  click = new Function("$", "selectedSong", "fetch", "loadCatalog", "state", "message", "money", `${source};return pushToShop;`)(
+  click = new Function("$", "selectedSong", "fetch", "loadCatalog", "state", "message", "money", "window", `${source};return pushToShop;`)(
     selector => selector === "#pushToShopStatus" ? status : button,
     () => ({ id: songId, title: "Night Drive", salePriceCents: null }),
     async (url, options) => {
@@ -229,7 +229,11 @@ assert.doesNotMatch(editorJs, /localStorage/, "song editor must not persist cata
       reloads++;
       assert.equal(id, songId);
       throw new Error("Catalog refresh unavailable");
-    }, { authenticated: true }, () => {}, () => ""
+    }, { authenticated: true }, () => {}, () => "", { confirm: text => {
+      assert.match(text, /Night Drive/);
+      assert.match(text, /default sale price of US\$1\.29/);
+      return true;
+    } }
   );
   await click({ currentTarget: button });
   assert.equal(requests, 1, "one click must send one publication request");
@@ -419,20 +423,41 @@ assert.doesNotMatch(client, /localStorage/);
 assert.match(publication, /ON CONFLICT \(id\) DO UPDATE SET/);
 assert.match(publication, /is_chart_eligible = TRUE/);
 {
-  const song = { ...savedSong, pipeline_status: "published", explicit_lyrics: false, genre: "Soul" };
-  const releases = new Map();
+  const song = { ...savedSong, pipeline_status: "published", rights_status: "cleared",
+    explicit_lyrics: false, broadcast_requested: false, genre: "Soul",
+    publication_revision: "2026-10-25T12:00:00.000789Z" };
+  const master = { id: otherId, song_id: songId, version_type: "sale_master", status: "active",
+    mastering_status: "approved", audio_url: "https://private.example/song?signature=do-not-copy",
+    audio_blob_prefix: `owner/${otherId}/upload/parts/`, audio_chunk_count: 1,
+    audio_content_type: "audio/mpeg", audio_byte_size: 1000, duration_seconds: 180,
+    updated_at: new Date("2026-10-25T12:00:00.000123Z"), publication_revision: "2026-10-25T12:00:00.000123Z" };
+  const releases = new Map([["existing-release", {
+    id: "existing-release", owner_member_id: "owner", title: "Curated release title", pitch: "Keep release metadata",
+    artwork_url: "/assets/reviewed-cover.webp", official_url: "https://distrokid.com/hyperfollow/artist/reviewed-song",
+    stream_url: "https://private.example/old-song?signature=never-preserve",
+  }]]);
   let sync = null;
   const queries = [];
   const db = {
     async sql(strings, ...values) {
       const query = strings.join("?");
       queries.push(query);
+      if (query.includes("INSERT INTO halo_song_publication_leases")) return [{ song_id: songId }];
+      if (query.includes("DELETE FROM halo_song_publication_leases")) return [];
       if (query.includes("FROM halo_song_catalog song")) return [song];
-      if (query.includes("FROM halo_song_versions")) {
-        return [{ id: otherId, version_type: "sale_master", audio_url: "https://cdn.halo.world/song.mp3" }];
+      if (query.trimStart().startsWith("SELECT") && query.includes("FROM halo_song_versions")) {
+        return [{ ...master }];
       }
       if (query.includes("FROM halo_song_publication_sync")) return sync ? [sync] : [];
       if (query.includes("SELECT id, owner_member_id")) return releases.has(values[0]) ? [releases.get(values[0])] : [];
+      if (query.includes("SELECT artwork_url, official_url")) return releases.has(values[0]) ? [releases.get(values[0])] : [];
+      if (query.includes("SELECT owner_member_id, release_id, version_type, status")) return [];
+      if (query.includes("INSERT INTO halo_release_audio_versions")) {
+        assert.match(query, /halo_release_audio_versions.owner_member_id = EXCLUDED.owner_member_id/);
+        assert.match(query, /halo_release_audio_versions.status = 'active'/);
+        assert.equal(values[3], "master", "catalog sale masters must satisfy the release-audio SQL enum");
+        return [{ id: "persisted-sale-master", version_type: "master" }];
+      }
       if (query.includes("UPDATE halo_release_campaigns")) {
         assert.doesNotMatch(query, /\b(?:title|artist|pitch|stream_url|artwork_url|available_versions|content_rating)\s*=/);
         const release = releases.get(values[0]);
@@ -442,7 +467,9 @@ assert.match(publication, /is_chart_eligible = TRUE/);
       }
       if (query.includes("INSERT INTO halo_release_campaigns")) {
         const [id, owner_member_id] = values;
-        const release = { id, owner_member_id, official_url: "", stream_url: "https://cdn.halo.world/song.mp3", title: "Curated release title", pitch: "Keep release metadata" };
+        const release = { ...releases.get(id), id, owner_member_id, official_url: values[7],
+          artwork_url: values[6], stream_url: values.at(-1), title: values[3],
+          pitch: releases.get(id)?.pitch || values[8] };
         releases.set(id, release);
         return [release];
       }
@@ -457,7 +484,7 @@ assert.match(publication, /is_chart_eligible = TRUE/);
     const result = await reconcilePublishedSong(db, {
       songId, ownerMemberId: "owner", recordLedger: false, preserveReleaseMetadata: true,
     });
-    assert.equal(result.ok, true, "the real publication pipeline must handle external master audio");
+    assert.equal(result.ok, true, "the real publication pipeline must handle approved owner-bound persisted master audio");
     assert.equal(result.releaseId, "existing-release");
   }
   assert.equal(sync.details.preserveReleaseMetadata, true, "force-push must persist the metadata preservation policy");
@@ -467,10 +494,16 @@ assert.match(publication, /is_chart_eligible = TRUE/);
   assert.equal(scheduledResult.ok, true);
   assert.equal(sync.details.preserveReleaseMetadata, true, "normal reconciliation must retain the policy");
   assert.equal(releases.size, 1);
-  assert.equal(queries.filter(query => query.includes("INSERT INTO halo_release_campaigns")).length, 1);
-  assert.equal(releases.get("existing-release").title, "Curated release title");
+  assert.equal(queries.filter(query => query.includes("INSERT INTO halo_release_campaigns")).length, 3, "safe upserts must reconcile canonical metadata on every confirmation");
+  assert.equal(releases.get("existing-release").title, song.title);
   assert.equal(releases.get("existing-release").pitch, "Keep release metadata");
+  assert.equal(releases.get("existing-release").artwork_url, "/assets/reviewed-cover.webp");
+  assert.equal(releases.get("existing-release").official_url, "https://distrokid.com/hyperfollow/artist/reviewed-song");
+  assert.match(releases.get("existing-release").stream_url, /^\/api\/song-catalog\/audio\?versionId=/);
   assert.equal(releases.get("existing-release").is_chart_eligible, true);
+  master.audio_blob_prefix = "";
+  await assert.rejects(reconcilePublishedSong(db, { songId, ownerMemberId: "owner", recordLedger: false }),
+    /approved, active, uploaded sale master/, "force-push must not bypass persisted-audio gates for arbitrary external URLs");
 }
 {
   const source = client.match(/async function pushToShop\(\)\{[\s\S]*?\n\}/)?.[0];
@@ -480,7 +513,7 @@ assert.match(publication, /is_chart_eligible = TRUE/);
     const messages = [];
     const status = { textContent: "" };
     let reloads = 0;
-    const push = new Function("selectedSong", "state", "$", "message", "fetch", "loadCatalog", "money", `${source}; return pushToShop;`)(
+    const push = new Function("selectedSong", "state", "$", "message", "fetch", "loadCatalog", "money", "window", `${source}; return pushToShop;`)(
       () => ({ id: songId, salePriceCents: null }), { authenticated: true }, selector => selector === "#pushToShopStatus" ? status : button,
       text => messages.push(text), async (_url, options) => {
         assert.equal(button.disabled, true);
@@ -490,7 +523,7 @@ assert.match(publication, /is_chart_eligible = TRUE/);
           releaseStatus: "PUBLISHED", status: "PUBLISHED", inChart: true, isLiveVisible: true,
         });
         return Response.json({ success, message: success ? "Published" : "Unavailable" }, { status: success ? 200 : 503 });
-      }, async () => { reloads++; }, () => "",
+      }, async () => { reloads++; }, () => "", { confirm: () => true },
     );
     await push();
     assert.equal(button.disabled, false);

@@ -5,6 +5,10 @@ import vm from "node:vm";
 import { allowedEvents } from "../netlify/lib/stats.mjs";
 
 const root = resolve(import.meta.dirname, "..");
+const musicPage = await readFile(resolve(root, "music/index.html"), "utf8");
+assert.doesNotMatch(musicPage, /localVault|sharedCatalogFrame|embed=shop/, "fans must not receive browser inventory or embedded management");
+assert.match(musicPage, /Votes do not publish music or approve radio rotation/);
+
 const [client, styles, stats, summary, statsLib, statsEvent, haloHome, releaseCatalogApi, musicWorld, dreamweaver] = await Promise.all([
   readFile(resolve(root, "music-player.js"), "utf8"),
   readFile(resolve(root, "music-player.css"), "utf8"),
@@ -266,7 +270,7 @@ const dreamContext = vm.createContext({
   elements: { audio: dreamAudio, playButton: dreamPlay, songLobbyHeroPlayButton: control(), mixFileInput: dreamInput, uploadLabel: dreamUpload },
   window: { setTimeout: playerContext.setTimeout, clearTimeout: playerContext.clearTimeout },
   URL: MediaURL, location: playerContext.location, HTMLMediaElement: playerContext.HTMLMediaElement,
-  REMOTE_AUDIO_WATCHDOG_MS: 5000, cleanText: value => String(value || "").trim(),
+  REMOTE_AUDIO_WATCHDOG_MS: 5000, LOCAL_PREVIEW_PROMPT: "Stream unavailable", cleanText: value => String(value || "").trim(),
   showToast() {}, setReleasePlaybackState() {},
   notePlaybackClick() { dreamState.playbackRequested = true; },
   dreamweaverDriveFallbacks: () => [], renderSoundUnlock() {}
@@ -340,7 +344,11 @@ for (const [file, handler] of [
   const context = vm.createContext({
     URL, Response, ReadableStream, console,
     getStore: () => ({ get: async () => bytes.buffer }),
-    getDatabase: () => ({ sql: async () => [{ blob_key: "test", chunk_count: 1, byte_size: 5, content_type: "audio/wav", visibility: "room", status: "rotation", original_filename: "mix.wav" }] }),
+    getDatabase: () => ({ sql: async () => [{
+      blob_key: handler === "radioAudioHandler" ? "test/manual-upload-123/parts/" : "test",
+      member_id: "test", chunk_count: 1, byte_size: 5, content_type: "audio/wav",
+      visibility: "room", status: "rotation", original_filename: "mix.wav",
+    }] }),
     getUser: async () => ({ id: "test" }), isOwner: () => false,
     ensureMembership: async () => ({ member_id: "test" }), cleanText: value => String(value || "")
   });

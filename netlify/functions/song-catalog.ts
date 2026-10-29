@@ -5,7 +5,7 @@ import { getUser, verifyRequestOrigin } from "@netlify/identity";
 import { db } from "../../db/index.js";
 import { dreamweaverSongReviews, songs, songVersions } from "../../db/schema.js";
 import { cleanText, ensureMembership } from "../lib/halo-x.mjs";
-import { reconcilePublishedSong } from "../lib/song-publication.mjs";
+import { reconcilePublishedSong, verifiedVersion } from "../lib/song-publication.mjs";
 import { buildDreamweaverSatellite } from "../../lib/route-registry.js";
 import { cleanDreamweaverSongId } from "../../lib/dreamweaver-storefront.js";
 import { normalizeLyricsSource } from "../../lib/dreamweaver-lyrics.js";
@@ -14,6 +14,7 @@ import { attachPublicationHealthToSongs } from "../lib/song-publication-health.m
 import { cleanGoogleDriveUrl } from "../lib/google-drive.mjs";
 import { processCatalogRelease } from "../lib/release-conveyor-service.mjs";
 import { prepareReleaseAudio } from "../lib/release-conveyor-audio.mjs";
+import { loadCatalogSignals } from "../lib/catalog-signals.mjs";
 
 const MAX_BODY_BYTES = 80_000;
 const RIGHTS_STATUSES = new Set(["needs_review", "cleared", "disputed"]);
@@ -112,6 +113,7 @@ function serializeSong(song: typeof songs.$inferSelect, versions: Array<typeof s
     upc: song.upc,
     genre: song.genre,
     explicitLyrics: song.explicitLyrics,
+    broadcastRequested: song.broadcastRequested,
     rightsStatus: song.rightsStatus,
     saleStatus: song.saleStatus,
     salePriceCents: song.salePriceCents,
@@ -132,6 +134,15 @@ function serializeSong(song: typeof songs.$inferSelect, versions: Array<typeof s
     googleDriveUrl: canonicalMaster?.driveUrl || "",
     versions: versions.map(version => ({
       id: version.id,
+      status: version.status,
+      updatedAt: version.updatedAt.toISOString(),
+      persistedAudio: verifiedVersion({
+        id: version.id, song_id: version.songId, status: version.status,
+        mastering_status: version.masteringStatus, duration_seconds: version.durationSeconds,
+        audio_blob_prefix: version.audioBlobPrefix, audio_storage_key: version.audioStorageKey,
+        audio_chunk_count: version.audioChunkCount, audio_content_type: version.audioContentType,
+        audio_byte_size: version.audioByteSize,
+      }, { id: song.id, owner_member_id: song.ownerMemberId }),
       versionType: version.versionType,
       isCanonicalMaster: version.id === canonicalMaster?.id,
       label: version.label,
@@ -318,6 +329,11 @@ export async function runDreamweaverReview(songId: string, ownerMemberId: string
     // Upload/save success must survive an outage; scheduled recovery can resume it.
     console.warn("Release conveyor receipt pending; automatic recovery will retry.");
   }
+  try {
+    await reconcilePublishedSong(await getDatabase(), { songId, ownerMemberId });
+  } catch {
+    console.warn("Publication links pending; scheduled recovery will retry.");
+  }
 }
 
 type CatalogExecutor = typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0];
@@ -357,7 +373,8 @@ async function createSong(ownerMemberId: string, payload: Record<string, unknown
     rightsStatus: cleanEnum(payload.rightsStatus, RIGHTS_STATUSES, "needs_review"),
     saleStatus: cleanEnum(payload.saleStatus, SALE_STATUSES, "for_sale"),
     salePriceCents: Math.max(0, Math.min(10_000_000, Number.parseInt(String(payload.salePriceCents || "0"), 10) || 0)) || null,
-    explicitLyrics: payload.explicitLyrics === true, notes: cleanText(payload.notes, 4000),
+    explicitLyrics: payload.explicitLyrics === true, broadcastRequested: payload.broadcastRequested === true,
+    notes: cleanText(payload.notes, 4000),
     lyricsText: normalizeLyricsSource(payload.lyricsText),
   });
   const versionIds = await createDefaultVersions(id);
@@ -383,6 +400,7 @@ async function saveSong(ownerMemberId: string, payload: Record<string, unknown>)
     saleStatus: cleanEnum(payload.saleStatus, SALE_STATUSES, "for_sale"),
     salePriceCents: Math.max(0, Math.min(10_000_000, Number.parseInt(String(payload.salePriceCents || "0"), 10) || 0)) || null,
     explicitLyrics: payload.explicitLyrics === true, notes: cleanText(payload.notes, 4000), updatedAt: new Date(),
+    ...(Object.hasOwn(payload, "broadcastRequested") ? { broadcastRequested: payload.broadcastRequested === true } : {}),
     ...(hasLyrics ? { lyricsText: normalizeLyricsSource(payload.lyricsText) } : {}),
   }).where(and(eq(songs.id, id), eq(songs.ownerMemberId, ownerMemberId), eq(songs.status, "active"))).returning({ id: songs.id });
   if (!rows.length) return json({ message: "That song was not found" }, 404);
@@ -492,9 +510,9 @@ export default async function songCatalogHandler(request: Request) {
     if (!user?.id) return request.method === "GET" ? json({ authenticated: false, songs: [] }) : json({ message: "Join or sign in to manage the song catalog" }, 401);
     const membership = await ensureMembership(nativeDb, user);
     if (request.method === "GET") {
-      const [catalog, producer] = await Promise.all([loadCatalog(membership.member_id), loadProducer(nativeDb, membership.member_id)]);
+      const [catalog, producer, catalogSignals] = await Promise.all([loadCatalog(membership.member_id), loadProducer(nativeDb, membership.member_id), loadCatalogSignals(nativeDb, membership.member_id)]);
       const songsWithHealth = await attachPublicationHealth(nativeDb, membership.member_id, catalog);
-      return json({ authenticated: true, viewer: { name: membership.display_name }, songs: songsWithHealth, producer });
+      return json({ authenticated: true, viewer: { name: membership.display_name }, songs: songsWithHealth, producer, catalogSignals });
     }
 
     try { verifyRequestOrigin(request); } catch { return json({ message: "Cross-origin catalog actions are not accepted" }, 403); }

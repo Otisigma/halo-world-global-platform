@@ -27,6 +27,7 @@
   <link rel="stylesheet" href="/halo-hud.css">
 </head>
 <body data-shop-path="/music/">
+  <a class="catalog-skip-link" href="#allReleasesTitle">Skip to song catalog</a>
   <div class="grain" aria-hidden="true"></div>
   <header class="site-header">
     <a class="brand" href="/halo" aria-label="HALO home">
@@ -49,6 +50,7 @@
         <p class="kicker"><span>Public shop front</span><span id="releaseCount">Loading signals</span></p>
         <h1 id="catalogTitle">Listen. Buy.<br><em>Share.</em></h1>
         <p class="intro">Every signal. The HALO shop front keeps artist-controlled songs in one public surface for listening, support, and sharing—while the shared catalog remains the source of truth behind every release.</p>
+        <a class="catalog-jump" href="#allReleasesTitle">Explore the song catalog <span aria-hidden="true">↓</span></a>
       </div>
       <div class="catalog-code" aria-label="Permanent HALO shop address">
         <span>SHOP LINK</span>
@@ -70,12 +72,12 @@
           <h2 id="chartTitle">Don’t just count it.<br><em>Enter the signal.</em></h2>
         </div>
         <div class="chart-intro">
-          <p>HALO ranks its own published releases using recent listening clicks, release-room opens, and release momentum. This is a transparent HALO activity chart—not an industry sales chart.</p>
+          <p>HALO ranks its own published releases with recorded activity using recent listening clicks, release-room opens, and release momentum. This is a transparent HALO activity chart—not an industry sales chart. Counts reflect the latest catalog response, not a real-time feed.</p>
           <div class="chart-window"><span class="live-dot" aria-hidden="true"></span><strong>Rolling 7 days</strong><span>Compared with the previous 7</span></div>
         </div>
       </header>
 
-      <div class="chart-rooms" id="chartRooms" aria-label="Choose a chart room" data-halo-guide="Chart rooms filter the Living Chart by genre. Published releases tagged with a room's genre enter its ranking automatically." data-halo-guide-title="Chart rooms">
+      <div class="chart-rooms" id="chartRooms" aria-label="Choose a chart room" data-halo-guide="Chart rooms filter by genre. Eligible published releases with recorded listening clicks or release-room opens can appear in the ranking." data-halo-guide-title="Chart rooms">
         <button type="button" data-chart-room="all" aria-pressed="true">All signal</button>
         <button type="button" data-chart-room="hip-hop">Hip-Hop / Rap</button>
         <button type="button" data-chart-room="rnb">R&amp;B / Soul</button>
@@ -108,12 +110,13 @@
       <header class="catalog-header">
         <div>
           <p class="section-index">03 / Full transmission</p>
-          <h2 id="allReleasesTitle">All releases</h2>
+          <h2 id="allReleasesTitle" tabindex="-1">The song catalog</h2>
+          <p class="catalog-description">Artwork, production notes, and approved listening links. Explore a release or press play to keep listening as you browse.</p>
         </div>
         <div class="catalog-controls">
           <label class="search-control">
             <span>Search the catalog</span>
-            <input id="catalogSearch" type="search" placeholder="Title, artist, genre…" autocomplete="off">
+            <input id="catalogSearch" type="search" placeholder="Title, artist, collection, genre…" autocomplete="off">
           </label>
           <label class="sort-control">
             <span>Sort by</span>
@@ -128,6 +131,11 @@
         </div>
       </header>
       <div class="genre-filter" id="genreFilter" aria-label="Filter releases by genre"></div>
+      <div class="catalog-results-bar">
+        <p id="catalogResults" role="status" aria-live="polite"></p>
+        <button id="resetCatalogFilters" type="button" hidden>Clear filters</button>
+      </div>
+      <p class="catalog-data-note">Label, ratings, votes, and subscriber feedback are not supplied by this catalog. Chart activity, where available, comes from recorded release-link activity; it is not a verified stream count.</p>
       <div class="release-grid" id="releaseGrid" aria-live="polite">
         <article class="card-skeleton"></article>
         <article class="card-skeleton"></article>
@@ -142,30 +150,7 @@
       <a href="/halo" data-stat-event="open_release_room" data-stat-target="music_catalog">Enter HALO World <span aria-hidden="true">↗</span></a>
     </section>
 
-    <section class="catalog-workspace-shell" aria-labelledby="catalogWorkspaceTitle">
-      <details class="catalog-workspace-details" id="catalogWorkspaceDetails">
-        <summary class="catalog-workspace-summary">
-          <span class="catalog-workspace-summary-copy">
-            <span class="section-index">04 / Shared workspace</span>
-            <strong id="catalogWorkspaceTitle">Song Catalog workspace</strong>
-            <span>Keep the shop tidy by default, then expand the shared <code>/song-catalog/</code> workspace for deeper browsing and management.</span>
-          </span>
-        </summary>
-        <div class="catalog-workspace-panel">
-          <p class="catalog-workspace-intro">Open the shared catalog below the public storefront without leaving the HALO shop flow.</p>
-          <a class="catalog-workspace-link" href="/song-catalog/">Open the full Song Catalog workspace <span aria-hidden="true">↗</span></a>
-          <iframe
-            id="sharedCatalogFrame"
-            class="shared-catalog-frame"
-            title="HALO shared song catalog workspace"
-            loading="lazy"
-            referrerpolicy="strict-origin-when-cross-origin"
-            sandbox="allow-same-origin allow-scripts allow-forms allow-modals allow-popups allow-popups-to-escape-sandbox"
-            data-src="/song-catalog/?embed=shop"
-          ></iframe>
-        </div>
-      </details>
-    </section>
+    <p class="catalog-data-note">Support a release with the featured-song vote, listening, or sharing. Votes do not publish music or approve radio rotation. <a href="/song-catalog/">Artist? Sign in to your private workspace.</a></p>
   </main>
 
   <footer>

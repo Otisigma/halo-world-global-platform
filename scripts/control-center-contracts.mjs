@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
+import vm from "node:vm";
 
 const [migration, library, api, page, client, styles, config, docs, world] = await Promise.all([
   readFile(new URL("../netlify/database/migrations/20260813160000_create-halo-control-center.sql", import.meta.url), "utf8"),
@@ -42,5 +43,42 @@ const worldOutsideBuildLane = world.replace(buildLane, "");
 
 assert.match(buildLane, /ownerControlAccess &&[\s\S]*href="\/control-center"/, "the Choose Your Signal build lane must hide the control room unless owner access is verified");
 assert.doesNotMatch(worldOutsideBuildLane, /href="\/control-center"/, "the private control room must appear only in the Choose Your Signal build lane");
+assert.match(buildLane, /\{ownerControlAccess && \(\s*<a href="\/control-center"[^>]*>[\s\S]*?<strong>CONTROL CENTER [\s\S]*?<\/a>\s*\)\}/, "the labeled Control Center entry must remain inside the verified owner guard");
+assert.match(world, /const \[ownerControlAccess, setOwnerControlAccess\] = useState\(false\)/, "owner access must not default to authorized");
+
+const ownerAccessEffect = world.match(/useEffect\(\(\) => \{\n\s*let active = true;\n\s*setOwnerControlAccess\(false\);([\s\S]*?)\n\s*\}, \[identityUser\?\.id\]\);/)?.[0];
+assert.ok(ownerAccessEffect, "owner access must be reverified when the identity changes");
+for (const [identityUser, status, expectedAccess, reject, cancel] of [
+  [null, 204, false],
+  [{ id: "member" }, 401, false],
+  [{ id: "member" }, 403, false],
+  [{ id: "owner" }, 200, false],
+  [{ id: "owner" }, 204, true],
+  [{ id: "owner" }, 204, false, true],
+  [{ id: "owner" }, 204, false, false, true]
+]) {
+  let access = true;
+  let requests = 0;
+  let cleanup;
+  vm.runInNewContext(ownerAccessEffect, {
+    identityUser,
+    useEffect(effect) { cleanup = effect(); },
+    setOwnerControlAccess(value) { access = value; },
+    fetch(route, options) {
+      requests++;
+      assert.equal(route, "/api/halo-control-center");
+      assert.equal(options.method, "HEAD");
+      assert.equal(options.credentials, "same-origin");
+      assert.equal(options.cache, "no-store");
+      return reject ? Promise.reject(new Error("offline")) : Promise.resolve({ status });
+    }
+  });
+  assert.equal(access, false, "owner access must reset before verification");
+  if (cancel) cleanup();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(requests, identityUser ? 1 : 0, "anonymous users must not request owner access");
+  assert.equal(access, expectedAccess, "only an active, server-verified owner session may reveal Control Center");
+  cleanup();
+}
 
 console.log("HALO Control Center contracts passed.");

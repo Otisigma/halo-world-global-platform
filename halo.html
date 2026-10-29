@@ -4266,7 +4266,7 @@
                         </a>
                         {ownerControlAccess && (
                           <a href="/control-center" data-stat-event="open_owner_control_room" data-stat-target="header" data-signal="OWNER ONLY">
-                            <Icon name="lock" className="halo-menu-icon" /><span><strong>PRIVATE CONTROL ROOM {renderLocalMenuStatusBadge('green', 'private control room')}</strong><small>Your protected command center</small></span>
+                            <Icon name="lock" className="halo-menu-icon" /><span><strong>CONTROL CENTER {renderLocalMenuStatusBadge('green', 'Control Center')}</strong><small>Your protected command center</small></span>
                           </a>
                         )}
                         <section className="halo-menu-lane-care" aria-labelledby="halo-lane-care">
@@ -4287,6 +4287,10 @@
                       </section>
                     </div>
 
+                    <a href="/music-world.html" aria-current={menuStatusForRoute('/music-world.html', 'green').isCurrent ? 'page' : undefined} data-stat-event="open_satellite" data-stat-target="header" className="halo-menu-console">
+                      <span><strong>SATELLITE {renderMenuStatusBadge('/music-world.html', 'Satellite')}</strong><small>Explore Music World and its audience radar view</small></span>
+                      <Icon name="arrow-right" className="halo-menu-console-icon" />
+                    </a>
                     {viewMode === 'landing' ? (
                       <button type="button" onClick={() => openConsoleArea('agent-room')} data-stat-event="enter_console" data-stat-target="header" className="halo-menu-console">
                         <span><small>Primary passage</small><strong>ENTER SHOW CONSOLE</strong></span>

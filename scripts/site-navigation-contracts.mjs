@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import vm from "node:vm";
+import { MENU_ROUTE_REGISTRY, MUSIC_WORLD_ROUTE } from "../lib/route-registry.js";
 
 const root = resolve(import.meta.dirname, "..");
 const read = path => readFile(resolve(root, path), "utf8");
@@ -12,6 +13,20 @@ const [navigationScript, navigationStyles, musicStyles] = await Promise.all([
 ]);
 
 const networkHomepage = await read("halo.html");
+const mainMenu = networkHomepage.match(/<nav className="halo-site-actions"[\s\S]*?<\/nav>/)?.[0];
+assert.ok(mainMenu, "the main menu box must remain available");
+const satelliteEntry = mainMenu.match(/<a [^>]*data-stat-event="open_satellite"[\s\S]*?<\/a>/)?.[0];
+assert.ok(satelliteEntry, "Satellite must be a public link in the main menu box");
+assert.ok(satelliteEntry.includes(`href="${MUSIC_WORLD_ROUTE}"`), "Satellite must use the established Music World route");
+assert.match(satelliteEntry, /<strong>SATELLITE \{renderMenuStatusBadge\('\/music-world\.html', 'Satellite'\)\}/, "Satellite must use monitored route health, not a hardcoded WORKING badge");
+assert.match(satelliteEntry, /aria-current=\{menuStatusForRoute\('\/music-world\.html', 'green'\)\.isCurrent \? 'page' : undefined\}/);
+assert.match(satelliteEntry, /<small>Explore Music World and its audience radar view<\/small>/);
+assert.doesNotMatch(satelliteEntry, /live orbital|real-time telemetry/i, "Satellite must not promise an unsupported live feed");
+assert.match(mainMenu, /<\/a>\s*\{viewMode === 'landing' \? \(\s*<button type="button" onClick=\{\(\) => openConsoleArea\('agent-room'\)\}[^>]*>\s*<span><small>Primary passage<\/small><strong>ENTER SHOW CONSOLE<\/strong>/, "Satellite must immediately precede the existing console passage");
+assert.ok(mainMenu.slice(mainMenu.indexOf(satelliteEntry) + satelliteEntry.length).trimStart().startsWith("{viewMode === 'landing'"), "no other entry may separate Satellite from the console action");
+assert.ok(MENU_ROUTE_REGISTRY.some(target => target.route === MUSIC_WORLD_ROUTE), "Satellite's destination must be monitored by the route registry");
+const musicWorld = await read("music-world.html");
+assert.match(musicWorld, /Active listener satellite radar/, "Satellite must lead to the existing audience radar surface");
 const controller = networkHomepage.match(/<nav id="system-controller"[\s\S]*?<\/nav>/)?.[0];
 assert.ok(controller, "the console must retain its System Controller rack");
 assert.match(controller, /className="controller-buttons-grid"/);

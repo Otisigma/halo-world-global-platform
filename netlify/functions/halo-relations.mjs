@@ -2,13 +2,14 @@ import { getDatabase } from "@netlify/database";
 import { getUser, verifyRequestOrigin } from "@netlify/identity";
 import OpenAI from "openai";
 import { cleanText, ensureMembership, isOwner } from "../lib/halo-x.mjs";
+import { loadRelationshipSignups } from "../lib/relationship-signups.mjs";
 
 const stages = new Set(["new", "welcomed", "engaged", "collaborator", "partner", "vip", "paused"]);
 const channels = new Set(["none", "email", "community"]);
 const assistantRoles = new Set(["welcome", "relationship", "community", "creator", "support"]);
 
 function json(body, status = 200) {
-  return Response.json(body, { status, headers: { "Cache-Control": "no-store" } });
+  return Response.json(body, { status, headers: { "Cache-Control": "private, no-store" } });
 }
 
 function iso(value) {
@@ -139,14 +140,7 @@ async function loadWorkspace(db) {
       ORDER BY a.occurred_at DESC
       LIMIT 30
     `,
-    db.sql`
-      SELECT s.email, s.source_signup_id, s.first_name, s.favorite_platform, s.status, s.signup_count,
-        s.last_signup_at, s.linked_member_id, m.display_name AS linked_member_name
-      FROM halo_relationship_signups s
-      LEFT JOIN halo_memberships m ON m.member_id = s.linked_member_id
-      ORDER BY s.last_signup_at DESC
-      LIMIT 30
-    `
+    loadRelationshipSignups(db)
   ]);
 
   const metrics = metricRows[0] || {};

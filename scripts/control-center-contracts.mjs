@@ -81,4 +81,5 @@ for (const [identityUser, status, expectedAccess, reject, cancel] of [
   cleanup();
 }
 
+await import("./owner-signups-contracts.mjs");
 console.log("HALO Control Center contracts passed.");

@@ -49,7 +49,9 @@ export async function archiveSong(db, ownerMemberId, songId) {
         )
         AND NOT EXISTS (
           SELECT 1 FROM halo_song_publication_sync other_sync
+          JOIN halo_song_catalog other_song ON other_song.id = other_sync.song_id
           WHERE other_sync.release_id = release.id AND other_sync.song_id <> ${songId}
+            AND (other_song.status = 'active' OR other_song.owner_member_id <> ${ownerMemberId})
         )
         AND NOT EXISTS (
           SELECT 1 FROM halo_release_audio_versions audio
@@ -58,7 +60,14 @@ export async function archiveSong(db, ownerMemberId, songId) {
         AND NOT EXISTS (
           SELECT 1 FROM halo_radio_tracks track
           WHERE track.release_id = release.id
-            AND (track.member_id <> ${ownerMemberId} OR track.master_song_id IS DISTINCT FROM ${songId})
+            AND (track.member_id <> ${ownerMemberId} OR (
+              track.master_song_id IS DISTINCT FROM ${songId} AND track.status <> 'rejected'
+              AND NOT EXISTS (
+                SELECT 1 FROM halo_song_catalog archived_other
+                WHERE archived_other.id = track.master_song_id
+                  AND archived_other.owner_member_id = ${ownerMemberId} AND archived_other.status = 'archived'
+              )
+            ))
         )
         AND NOT EXISTS (
           SELECT 1 FROM halo_artist_pages page

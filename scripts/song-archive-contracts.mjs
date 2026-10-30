@@ -58,7 +58,9 @@ const [archiveLib, api, page, client, releaseCatalog, releaseLink, radioAudio, p
   assert.match(exclusive, /release\.owner_member_id = \$\{ownerMemberId\}/, "only releases owned by the archiving member are hidden");
   assert.match(exclusive, /other\.source_release_id = release\.id AND other\.id <> \$\{songId\} AND other\.status = 'active'/, "releases still used by another song are left alone");
   assert.match(exclusive, /audio\.owner_member_id <> \$\{ownerMemberId\}/, "releases holding another artist's audio are left alone");
-  assert.match(exclusive, /track\.member_id <> \$\{ownerMemberId\} OR track\.master_song_id IS DISTINCT FROM \$\{songId\}/, "releases with other radio submissions are left alone");
+  assert.match(exclusive, /track\.member_id <> \$\{ownerMemberId\} OR \(\s+track\.master_song_id IS DISTINCT FROM \$\{songId\} AND track\.status <> 'rejected'/, "releases with other artists' or other live radio submissions are left alone");
+  assert.match(exclusive, /archived_other\.owner_member_id = \$\{ownerMemberId\} AND archived_other\.status = 'archived'/, "leftovers of this owner's archived songs do not block re-archiving a reused release");
+  assert.match(exclusive, /other_sync\.song_id <> \$\{songId\}\s+AND \(other_song\.status = 'active' OR other_song\.owner_member_id <> \$\{ownerMemberId\}\)/, "only live or foreign publication links count as sharing");
   assert.match(exclusive, /page\.owner_member_id <> \$\{ownerMemberId\}/, "releases featured on another artist's page are left alone");
   assert.match(statement, /SET status = 'draft', visibility = 'private', release_stage = 'archived',\s+is_chart_eligible = FALSE/, "hidden releases use existing constrained values");
   assert.match(statement, /UPDATE halo_radio_tracks track\s+SET status = 'held'[\s\S]*?track\.status IN \('preview', 'rotation'\)/, "public radio tracks are held, not deleted");

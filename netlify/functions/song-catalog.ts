@@ -15,6 +15,7 @@ import { cleanGoogleDriveUrl } from "../lib/google-drive.mjs";
 import { processCatalogRelease } from "../lib/release-conveyor-service.mjs";
 import { prepareReleaseAudio } from "../lib/release-conveyor-audio.mjs";
 import { loadCatalogSignals } from "../lib/catalog-signals.mjs";
+import { archiveSong, archiveSongMessage } from "../lib/song-archive.mjs";
 
 const MAX_BODY_BYTES = 80_000;
 const RIGHTS_STATUSES = new Set(["needs_review", "cleared", "disputed"]);
@@ -282,7 +283,7 @@ async function updatePackageStatus(nativeDb: Awaited<ReturnType<typeof getDataba
 }
 
 export async function runDreamweaverReview(songId: string, ownerMemberId: string) {
-  const [song] = await db.select().from(songs).where(and(eq(songs.id, songId), eq(songs.ownerMemberId, ownerMemberId))).limit(1);
+  const [song] = await db.select().from(songs).where(and(eq(songs.id, songId), eq(songs.ownerMemberId, ownerMemberId), eq(songs.status, "active"))).limit(1);
   if (!song) return;
   const versions = await db.select().from(songVersions).where(and(eq(songVersions.songId, songId), eq(songVersions.status, "active")));
   const issues: ReviewIssue[] = [];
@@ -435,13 +436,13 @@ async function createAlternateVersion(ownerMemberId: string, payload: Record<str
 async function saveVersion(ownerMemberId: string, payload: Record<string, unknown>) {
   const songId = cleanId(payload.songId);
   const versionId = cleanId(payload.versionId);
-  const [ownedSong] = await db.select({ id: songs.id }).from(songs).where(and(eq(songs.id, songId), eq(songs.ownerMemberId, ownerMemberId))).limit(1);
+  const [ownedSong] = await db.select({ id: songs.id }).from(songs).where(and(eq(songs.id, songId), eq(songs.ownerMemberId, ownerMemberId), eq(songs.status, "active"))).limit(1);
   if (!ownedSong || !versionId) return json({ message: "Choose a valid song version" }, 400);
   const versionType = cleanVersionType(payload.versionType);
   const route = VERSION_ROUTES[versionType];
   const audioUrl = cleanAudioUrl(payload.audioUrl);
   const [existingVersion] = await db.select({ id: songVersions.id }).from(songVersions)
-    .where(and(eq(songVersions.id, versionId), eq(songVersions.songId, songId))).limit(1);
+    .where(and(eq(songVersions.id, versionId), eq(songVersions.songId, songId), eq(songVersions.status, "active"))).limit(1);
   if (!existingVersion) return json({ message: "That version was not found" }, 404);
   const rows = await db.transaction(async transaction => {
     if (versionType === MASTER_VERSION_TYPE) {
@@ -549,6 +550,17 @@ export default async function songCatalogHandler(request: Request) {
       if (!songId) return json({ message: "Choose a valid song" }, 400);
       await runDreamweaverReview(songId, membership.member_id);
       return json({ message: "Dream Weaver review completed", songId });
+    }
+    if (payload.action === "archive_song") {
+      const songId = cleanId(payload.songId);
+      if (!songId) return json({ message: "Choose a valid song to archive" }, 400);
+      const result = await archiveSong(nativeDb, membership.member_id, songId);
+      const body = { message: archiveSongMessage(result), songId, archived: result.ok, ...(result.ok ? {
+        versionsArchived: result.versionsArchived, releasesHidden: result.releasesHidden,
+        releaseAudioArchived: result.releaseAudioArchived, radioTracksHeld: result.radioTracksHeld,
+        sharedReleasesLeft: result.sharedReleasesLeft, sharedRadioLeft: result.sharedRadioLeft,
+      } : { alreadyArchived: result.reason === "already_archived" }) };
+      return json(body, result.status);
     }
     if (payload.action === "recheck_publication") {
       const songId = cleanId(payload.songId);

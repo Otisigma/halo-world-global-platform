@@ -53,6 +53,35 @@ consolidated into one table.
   only through their existing sources and gates; this editor does not infer or
   import them. No third-party URL is fetched, scraped, or proxied.
 
+## Archiving a song
+
+The Song Catalog **Archive song** action (`/api/song-catalog`,
+`action: "archive_song"`) is a soft archive, not a delete. It requires a
+signed-in member and a same-origin request, and the owner always comes from
+the authenticated membership. Missing and other members' songs both return
+404; a retry on an already archived song returns 409 and changes nothing.
+
+In one atomic, owner-scoped statement it:
+
+- sets `halo_song_catalog.status` and the song's active `halo_song_versions`
+  rows to `archived`, which removes them from the owner catalog, publication
+  reconciliation, the release conveyor, force push, and catalog audio/artwork;
+- hides a linked release (via `source_release_id` or the publication sync row)
+  as `draft`/`private`/`release_stage = 'archived'`, not chart-eligible, which
+  also hides its Stream / DSPs link. This happens only when the archiving member
+  owns the release and no other song, sync row, other artist's audio, other
+  radio submission, or other artist's page uses it;
+- archives this owner's `halo_release_audio_versions` rows for the song's own
+  blobs, and moves this owner's `preview`/`rotation` radio tracks for the song
+  to `held`.
+
+Shared or foreign releases and radio tracks are left unchanged and the response
+reports how many were skipped. Release events, listening analytics, play
+counts, Dreamweaver reviews, conveyor receipts, publication sync history, and
+all audio/artwork blobs are kept. `status` is unconstrained text, so no
+migration is needed. There is no hard-delete, storage cleanup, restore, or
+automatic re-publication.
+
 ## Current editor and follow-up seams
 
 Artists manage the public card destination in the existing Release campaign

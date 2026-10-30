@@ -195,8 +195,9 @@
 
           <div class="workspace-grid">
             <form class="metadata-panel" id="songForm" tabindex="-1">
-              <div class="panel-heading"><div><p class="eyebrow">Master record</p><h3>Song information</h3></div><button class="primary-button" type="submit">Save + review</button><button class="quiet-button" id="pushToShopButton" type="button">Push to Shop &amp; Charts</button></div>
+              <div class="panel-heading"><div><p class="eyebrow">Master record</p><h3>Song information</h3></div><button class="primary-button" type="submit">Save + review</button><button class="quiet-button" id="pushToShopButton" type="button">Push to Shop &amp; Charts</button><button class="quiet-button archive-song-button" id="archiveSongButton" type="button" aria-describedby="archiveSongStatus">Archive song</button></div>
               <p id="pushToShopStatus" role="status" aria-live="polite">Save any edits before pushing this track.</p>
+              <p id="archiveSongStatus" role="status" aria-live="polite">Archiving hides this song from your active catalog, the public shop, charts, and new radio play. Analytics, history, and uploaded files are kept; nothing is deleted.</p>
               <input id="songId" type="hidden">
               <div class="field-grid">
                 <label><span>Artist</span><input id="artistName" required maxlength="120"></label>

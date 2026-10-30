@@ -177,6 +177,24 @@ async function pushToShop(){
   if(pushed)await loadCatalog(song.id).catch(()=>{});
 }
 
+async function archiveSelectedSong(){
+  const song=selectedSong();
+  const status=$("#archiveSongStatus");
+  const button=$("#archiveSongButton");
+  if(!song||!state.authenticated||button.disabled)return;
+  if(!window.confirm(`Archive “${song.title}” by ${song.artistName}? It will be hidden from your active catalog and from public distribution (Shop, Charts, distributor links, and new radio play). Historical analytics, audit records, and uploaded audio/artwork are kept — nothing is permanently deleted.`))return;
+  button.disabled=true;button.setAttribute("aria-busy","true");button.textContent="Archiving…";
+  status.textContent=`Archiving “${song.title}”…`;
+  let result="";
+  try{
+    const data=await api({action:"archive_song",songId:song.id});
+    result=data.message;
+  }catch(error){result=error.message}
+  try{await loadCatalog()}catch{}
+  finally{button.disabled=false;button.removeAttribute("aria-busy");button.textContent="Archive song"}
+  message(result);status.textContent=result;
+}
+
 function renderPublicationTotals(){const published=state.songs.filter(song=>song.pipelineStatus==="published");$("#distributedCount").textContent=published.filter(song=>song.publicationHealth?.state==="published_and_fully_distributed").length;$("#actionCount").textContent=published.filter(song=>song.publicationHealth&&song.publicationHealth.state!=="published_and_fully_distributed").length}
 function renderSummary(){const radioQueue=state.songs.flatMap(song=>song.versions.filter(version=>["radio_edit","clean"].includes(version.versionType)&&version.masteringStatus!=="approved"));const ready=state.songs.filter(song=>song.metadataStatus==="ready");const priced=state.songs.filter(song=>song.saleStatus==="for_sale"&&song.salePriceCents>0);const average=state.songs.length?Math.round(state.songs.reduce((sum,song)=>sum+song.metadataScore,0)/state.songs.length):0;$("#songCount").textContent=state.songs.length;$("#saleCount").textContent=priced.length;$("#radioCount").textContent=radioQueue.length;$("#readyCount").textContent=ready.length;$("#overallScore").textContent=state.songs.length?average:"—";$("#overallCopy").textContent=state.songs.length?`${ready.length} of ${state.songs.length} songs fully cleared.`:"Load songs to begin the review."}
 function publicationRetryCopy(health){if(!health)return"No publication check loaded yet.";const checked=health.lastCheckedAt?`Last checked ${new Date(health.lastCheckedAt).toLocaleString()}.`:"Waiting for the first publication check.";const loop=health.escalated?"Escalated for internal follow-up.":health.retrying?"HALO is retrying automatically every 15 minutes.":"No retry is needed right now.";return`${loop} ${checked}`}
@@ -289,6 +307,7 @@ $("#uploadVersionArtworkButton").addEventListener("click",uploadVersionArtwork);
 $("#deleteVersionArtworkButton").addEventListener("click",deleteVersionArtwork);
 
 $("#versionForm").addEventListener("submit",async event=>{event.preventDefault();try{const data=await api({action:"save_version",songId:$("#versionSongId").value,versionId:$("#versionId").value,versionType:$("#versionType").value,label:$("#versionLabel").value,masteringStatus:$("#masteringStatus").value,audioUrl:$("#audioUrl").value,videoUrl:$("#versionVideoUrl").value,promoVideoUrl:$("#promoVideoUrl").value,durationSeconds:$("#durationSeconds").value,targetLufs:$("#targetLufs").value,truePeakDbtp:$("#truePeakDbtp").value,cleanLyrics:$("#cleanLyrics").checked,saleEnabled:$("#saleEnabled").checked,notes:$("#versionNotes").value});elements.versionDialog.close();message(data.message);await loadCatalog(data.songId)}catch(error){message(error.message)}});
+$("#archiveSongButton").addEventListener("click",archiveSelectedSong);
 $("#reviewButton").addEventListener("click",async()=>{const song=selectedSong();if(!song)return;try{const data=await api({action:"review_song",songId:song.id});message(data.message);await loadCatalog(song.id)}catch(error){message(error.message)}});
 $("#checkSongShow").addEventListener("click", async event => {
   const button = event.currentTarget;

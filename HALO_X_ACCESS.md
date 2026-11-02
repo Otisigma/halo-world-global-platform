@@ -16,6 +16,12 @@ The report includes total membership, new joins, active members, current online 
 
 The scheduled job also sends the summary to the configured owner inbox through the Netlify Email Integration. Enable the integration with Mailgun, Postmark, or SendGrid, then set `HALO_DAILY_REPORT_FROM_EMAIL` to an authorized sender address. Delivery is skipped safely when the email integration or sender is not configured. To additionally deliver the report to an external automation service, set `HALO_DAILY_REPORT_WEBHOOK_URL` to a secure HTTPS webhook endpoint.
 
+## Instant owner alerts
+
+HALO pings the owner when a paid Stripe checkout completes, a new member signs up, or a new Dreamweaver fan unlock is captured. Set `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID`, and/or `HALO_OWNER_ALERT_DISCORD_WEBHOOK_URL`. Alerts are best-effort, are sent once per new event, and never include buyer or fan email addresses.
+
+For purchases, add a Stripe webhook endpoint at `https://<your-site>/api/stripe-webhook` for `checkout.session.completed` and `checkout.session.async_payment_succeeded`, then set its signing secret as `STRIPE_WEBHOOK_SECRET`. Unsigned or invalid events are rejected, and each verified purchase is recorded once in `halo_stripe_purchase_events` without buyer contact details. Test-mode purchases are labelled `[TEST]`.
+
 ## Track drop alerts and member rewards
 
 When a song is explicitly published to the shop (Push to Shop & Charts, the unified upload pipeline, or the catalog publish stage), HALO records one track drop for that song. Members choose their alerts at `/track-drops/`: in-app track drop cards, Dreamweaver email cards (which require explicit email consent), and member rewards. The scheduled 15-minute publication repair never announces drops, so the existing catalog is not re-announced.

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import vm from "node:vm";
+import "./catalog-distribution-contracts.mjs";
 
 const root = resolve(import.meta.dirname, "..");
 const [page, client, styles, catalogApi, chartApi] = await Promise.all([

@@ -32,6 +32,20 @@ The existing private beta key `HMW-VIP-2026` activates permanent Founders access
 
 Each signed-in client can publish one room pin containing a title, short message, optional secure destination, and call-to-action label. Saving a new pin replaces the previous one. Recent room pins appear in the HALO Clubhouse on the main site.
 
+## Signal Hype Rooms
+
+Open **Hype Room** on a persisted Signal feed post at `/signal-network/`. A room is that post's comment thread, not a new channel: public posts authorize signed-in members, and private posts authorize only their author and selected audience. Changing accounts, leaving, switching rooms, or hiding the page clears displayed history and cancels pending requests. Visible rooms check for updates every 10 seconds, with bounded reconnect backoff; this is HTTP polling, not instantaneous WebSocket delivery or presence.
+
+The Netlify `/api/hype-room` function uses Netlify Identity and Database, existing Signal comments, bidirectional blocks, private reports, and the shared atomic 30-writes/minute member quota. It accepts up to 500 characters with explicit audience consent and returns the latest 50 comments, without member IDs or Discoverer ranks. Messages also appear in the existing Signal comments interface (public comments remain public there). Existing comments can be longer than new chat messages. No local chat copies, private-content logs, automated resend, room creation, client system/breakout triggers, or voice-note delivery are added. Chat writes do not fan out DM or comment notifications.
+
+Reports enter `halo_signal_reports` for operator review; they do not automatically remove content. Reports reference room/comment IDs without copying chat text. Authors can remove their own messages (and replies); operators can remove a reported `halo_signal_feed_comments` row using the existing database administration process. Blocks apply across Signal. There is no new moderation dashboard or automatic content-classification service.
+
+For posts linked to a public published release, an existing persisted reviewed-rotation milestone may be displayed with its actual date. It is not a new breakout trigger or a claim that the release is currently playing. Private ranks and supporter identities stay in the existing opt-in Discoverer flow. The radio link opens the actual radio page; no sample song, rank, voice note, or simulated live state is supplied.
+
+Deployment prerequisites: apply the existing migrations `20260829150000_create_signal_command_center.sql`, `20261003160000_create_signal_public_feed.sql`, `20261006080000_signal_feed_media.sql`, and PR #456's `20261027060000_discoverer_milestones.sql` (with their earlier prerequisites); enable Netlify Identity and Database on the same HTTPS origin. No new migration or dependency is required. The static Express/Docker server does **not** host this authenticated API; standalone static hosting will show unavailable/error states, not working chat. No persistent socket server is deployable on the configured Netlify Functions architecture.
+
+Validate with `npm run test:hype-room`, `npm run test:network`, `npm run test:discoverer`, `npm run build`, and `npm test`. Set `HYPE_ROOM_TEST_DATABASE_URL` to an isolated local test database to also exercise real SQL persistence, authorization, safety controls, milestones and concurrent quotas; tests create and drop a temporary schema. Production Identity, migrations, delivery between two real sessions, audience revocation, and operator report review still require deployment verification. Live production access could not be verified from the implementation environment.
+
 ## Session continuity
 
 The DJ console immediately stores recoverable session state in the browser and also saves it to the member’s account when they are signed in. Session snapshots include deck and queue state, track metadata, crossfader position, mix intent, and focus mode.

@@ -3,6 +3,8 @@ import { getUser, verifyRequestOrigin } from "@netlify/identity";
 import { isOwner } from "../lib/halo-x.mjs";
 import { createAgentCommand, loadControlCenter } from "../lib/control-center.mjs";
 import { requestPreflight } from "../../lib/request-preflight.js";
+import { loadOwnerSignups } from "../lib/owner-signups.mjs";
+import { cleanMemberId, loadOwnerMemberActivity, loadOwnerMemberDirectory } from "../lib/owner-member-activity.mjs";
 
 function json(body, status = 200, headers = {}) {
   return Response.json(body, { status, headers: { "Cache-Control": "private, no-store", ...headers } });
@@ -19,6 +21,20 @@ export default async function haloControlCenterHandler(request) {
     if (!isOwner(user)) return json({ message: "The HALO Control Center is limited to the owner team" }, 403);
     if (request.method === "HEAD") return new Response(null, { status: 204, headers: { "Cache-Control": "private, no-store" } });
 
+    const url = new URL(request.url);
+    const view = url.searchParams.get("view");
+    if (view === "members" || view === "member") {
+      if (request.method !== "GET") return json({ message: "Member activity review is read-only" }, 405, { Allow: "HEAD, GET" });
+      if (view === "members") return json({ directory: await loadOwnerMemberDirectory(getDatabase(), user) });
+      const memberId = cleanMemberId(url.searchParams.get("member"));
+      if (!memberId) return json({ message: "Choose a valid member" }, 400);
+      const activity = await loadOwnerMemberActivity(getDatabase(), user, memberId);
+      return activity ? json({ activity }) : json({ message: "Member not found" }, 404);
+    }
+    if (view === "signups") {
+      if (request.method !== "GET") return json({ message: "Signup review is read-only" }, 405, { Allow: "HEAD, GET" });
+      return json({ signups: await loadOwnerSignups(getDatabase(), user) });
+    }
     if (request.method === "GET") return json(await loadControlCenter(getDatabase()));
     if (!(await verifyRequestOrigin(request))) return json({ message: "Request origin could not be verified" }, 403);
 

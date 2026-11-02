@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import { readFile, readdir } from "node:fs/promises";
+import { runInNewContext } from "node:vm";
 import { CATALOG_ENDPOINT, fetchCatalog, normalizeCatalog, createPreview,
-  rankPreview, exportSnapshot, exportCSV, csvCell } from "../public/catalog-data.js";
+  rankPreview, exportSnapshot, exportCSV, csvCell, validateDistributorDestination } from "../public/catalog-data.js";
 
 const root = new URL("../", import.meta.url);
 const read = path => readFile(new URL(path, root), "utf8");
@@ -31,7 +32,8 @@ const result = await fetchCatalog(async (url, options) => {
 });
 assert.equal(result.length, 1);
 assert.deepEqual(Object.keys(result[0]), ["id", "title", "artist", "genres", "releaseDate",
-  "publicRank", "votes", "signalScore", "recentListens", "recentOpens"]);
+  "publicRank", "votes", "signalScore", "recentListens", "recentOpens", "distributorDestination"]);
+assert.equal(result[0].distributorDestination, "", "the chart API does not include a public distributor destination");
 assert.equal(result[0].title, row.title, "text is preserved, never interpreted as HTML");
 assert(Object.isFrozen(result) && Object.isFrozen(result[0]) && Object.isFrozen(result[0].genres));
 assert.deepEqual(normalizeCatalog({ releases: [] }), []);
@@ -41,6 +43,37 @@ assert.equal(normalizeCatalog({ releases: Array.from({ length: 250 }, (_, i) => 
 assert.equal(normalizeCatalog({ releases: [{ ...row, isChartEligible: true, isLiveVisible: true }] }).length, 1);
 assert.equal(normalizeCatalog({ releases: [{ ...row, title: {}, artist: null, genres: [1, null, " Jazz "] }] })[0].title, "Untitled release");
 assert.deepEqual(normalizeCatalog({ releases: [{ ...row, genres: [1, null, " Jazz "] }] })[0].genres, ["Jazz"]);
+assert.equal(validateDistributorDestination("https://distrokid.com/hyperfollow/public/release"),
+  "https://distrokid.com/hyperfollow/public/release");
+assert.equal(validateDistributorDestination("https://sub.hyperfollow.com/release"),
+  "https://sub.hyperfollow.com/release");
+for (const destination of [
+  "http://distrokid.com/hyperfollow/artist/release",
+  "https://distrokid.com/not-hyperfollow/release",
+  "https://hyperfollow.example/release",
+  "https://user@hyperfollow.com/release",
+  "https://hyperfollow.com:443/release",
+  "javascript:alert(1)",
+  "https://hyperfollow.com/release with spaces"
+]) assert.equal(validateDistributorDestination(destination), "", `reject unsafe destination ${destination}`);
+const sharedDistributionWindow = {};
+const sharedDistributionSource = await readFile(new URL("../../../distribution-links.js", import.meta.url), "utf8");
+runInNewContext(sharedDistributionSource, { window: sharedDistributionWindow, URL });
+for (const destination of [
+  "https://distrokid.com/hyperfollow/public/release",
+  "https://sub.hyperfollow.com/release",
+  "https://evil.example/release",
+  "javascript:alert(1)"
+]) assert.equal(validateDistributorDestination(destination),
+  sharedDistributionWindow.HaloDistributionLinks.validate(destination), "satellite validation must match shared client policy");
+assert.equal(normalizeCatalog({ releases: [{ ...row, distributionUrl: "https://distrokid.com/hyperfollow/public/release",
+  isLiveVisible: true }] })[0].distributorDestination, "https://distrokid.com/hyperfollow/public/release");
+assert.equal(normalizeCatalog({ releases: [{ ...row, distributionUrl: "https://distrokid.com/hyperfollow/public/release",
+  isLiveVisible: true }] })[0].distributorDestination,
+sharedDistributionWindow.HaloDistributionLinks.destination({ status: "published", isLiveVisible: true,
+  distributionUrl: "https://distrokid.com/hyperfollow/public/release" }));
+assert.equal(normalizeCatalog({ releases: [{ ...row, distributionUrl: "https://distrokid.com/hyperfollow/private/release",
+  isLiveVisible: undefined }] })[0].distributorDestination, "", "visibility must be explicit before a link is exposed");
 const malformed = normalizeCatalog({ releases: [{
   ...row, votes: -1, signalScore: "10", rank: 0,
   chartActivity: { recentListens: Infinity, recentOpens: NaN }, releaseDate: "2026-02-30"
@@ -141,8 +174,8 @@ class Node {
   click() { this.clicked = true; }
   remove() { this.removed = true; }
 }
-const nodes = Object.fromEntries(["releases", "status", "search", "refresh", "palette", "sort",
-  "summary", "source", "inventory", "nomination", "nominate", "clear-nomination", "draft",
+const nodes = Object.fromEntries(["releases", "dashboard", "metrics", "creator-metrics", "track-rows",
+  "status", "search", "refresh", "palette", "sort", "summary", "source", "inventory", "nomination", "nominate", "clear-nomination", "draft",
   "reset", "export-json", "export-csv"].map(id => [id, new Node()]));
 nodes.sort.value = "signal";
 const body = new Node();
@@ -176,9 +209,20 @@ try {
   await import("../public/catalog-lab.js");
   await settle();
   assert.equal(nodes.releases.children.length, 1);
+  assert.equal(nodes.dashboard.attributes["aria-busy"], "false");
   assert.equal(nodes.releases.children[0].children[2].textContent, row.title);
   assert.equal(created.filter(node => node.tag === "img").length, 0, "markup stays text");
-  assert.match(nodes.summary.textContent, /2 public votes/);
+  assert.match(nodes.summary.textContent, /2 public chart votes/);
+  assert.equal(nodes.metrics.children.length, 4, "the metrics grid is derived from the returned snapshot");
+  assert.equal(nodes.metrics.children[0].children[1].textContent, "1");
+  assert.match(nodes.metrics.children[3].children[1].textContent, /Not reported/);
+  assert.equal(nodes["creator-metrics"].children.length, 3);
+  assert.match(nodes["creator-metrics"].children[1].children[1].textContent, /Not reported/);
+  assert.equal(nodes["track-rows"].children.length, 1);
+  assert.match(nodes["track-rows"].children[0].children[2].textContent, /Not reported/);
+  assert.match(nodes["track-rows"].children[0].children[3].textContent, /Not reported/);
+  assert.match(nodes["track-rows"].children[0].children[4].textContent, /Not reported/);
+  assert.match(nodes.releases.children[0].children[8].textContent, /event and time-window labels are absent/);
   assert.match(nodes.source.textContent, /Fetched \d{4}-/);
   assert.equal(nodes.inventory.children.length, 1);
   const voteButton = () => nodes.releases.children[0].children.find(node => node.tag === "button");
@@ -246,6 +290,7 @@ try {
   const loading = nodes.refresh.handlers.click();
   assert.match(nodes.status.textContent, /Connecting to the public chart/);
   assert.equal(nodes.releases.attributes["aria-busy"], "true");
+  assert.equal(nodes.dashboard.attributes["aria-busy"], "true");
   assert.equal(nodes.search.disabled, true);
   assert.equal(nodes.sort.disabled, true);
   assert.equal(nodes.nomination.disabled, true);
@@ -267,6 +312,7 @@ try {
   assert.equal(nodes["export-json"].disabled, true);
   assert.equal(nodes.nominate.disabled, true);
   assert.match(nodes.status.textContent, /Use Refresh/);
+  assert.equal(nodes.metrics.children.length, 0, "unavailable results do not retain stale metrics");
   assert.doesNotMatch(nodes.status.textContent, /private database detail/);
   nodes.search.handlers.input();
   assert.match(nodes.status.textContent, /Use Refresh/, "search must not hide the unavailable state");
@@ -275,6 +321,8 @@ try {
   await nodes.refresh.handlers.click();
   assert.match(nodes.status.textContent, /No public chart entries/);
   assert.equal(nodes.nomination.disabled, true);
+  assert.equal(nodes.metrics.children[0].children[1].textContent, "0", "an empty returned snapshot is a measured zero");
+  assert.match(nodes["creator-metrics"].children[1].children[1].textContent, /Not reported/);
   responsePayload = payload;
   nodes.search.value = "";
   await nodes.refresh.handlers.click();
@@ -294,6 +342,18 @@ try {
   await nodes.refresh.handlers.click();
   assert.match(nodes.draft.textContent, /No unsaved/);
   assert.match(nodes.summary.textContent, /0 preview votes/, "refresh resets preview annotations");
+  responsePayload = { releases: [{ ...row, id: "public-link", isLiveVisible: true,
+    distributionUrl: "https://distrokid.com/hyperfollow/public/release" }] };
+  await nodes.refresh.handlers.click();
+  const publicDestination = nodes["track-rows"].children[0].children[3].children[0];
+  assert.equal(publicDestination.href, "https://distrokid.com/hyperfollow/public/release");
+  assert.equal(publicDestination.target, "_blank");
+  assert.equal(publicDestination.rel, "noopener noreferrer");
+  responsePayload = { releases: [{ ...row, id: "unverified-link", isLiveVisible: undefined,
+    distributionUrl: "https://distrokid.com/hyperfollow/private/release" }] };
+  await nodes.refresh.handlers.click();
+  assert.match(nodes["track-rows"].children[0].children[3].textContent, /Not reported/);
+  assert.equal(nodes["track-rows"].children[0].children[3].children.length, 0, "unverified destinations are never linkified");
 } finally {
   globalThis.fetch = originalFetch;
   if (originalDocument === undefined) delete globalThis.document;
@@ -301,6 +361,7 @@ try {
 }
 
 const html = await read("public/index.html");
+const css = await read("public/catalog-lab.css");
 const config = await read("netlify.toml");
 assert.match(html, /lang="en"/);
 assert.match(html, /name="viewport"/);
@@ -310,7 +371,16 @@ assert.match(html, /Preview votes — not submitted to HALO/);
 assert.match(html, /Not submitted \/ no artist verification/);
 assert.match(html, /non-playing preview/);
 assert.match(html, /separately authorized backend/);
+assert.match(html, /up to 50 entries/);
+assert.match(html, /does not label activity event types or time windows/);
+assert.match(html, /data-dashboard-chunk="creator-adoption"/);
+assert.match(html, /data-dashboard-chunk="tracks-distribution"/);
+assert.match(html, /Public chart entries and explicitly reported distribution fields/);
+assert.doesNotMatch(html, /Sovereign|Independent BYO|owenanthony|@halomusicworld/i);
 assert.doesNotMatch(html, /<audio\b|<video\b|<iframe\b|\son\w+\s*=/i);
+assert.match(css, /:focus-visible/);
+assert.match(css, /@media \(max-width: 760px\)/);
+assert.match(css, /grid-template-columns: repeat\(auto-fit/);
 assert.match(config, /base = "satellites\/catalog-lab"/);
 assert.match(config, /publish = "public"/);
 assert.match(config, /directory = "disabled-functions"/);

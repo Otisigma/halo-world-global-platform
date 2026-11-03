@@ -34,7 +34,7 @@ jobs:
           git diff --check
           git diff > "$RUNNER_TEMP/sentinel-repair.diff"
       - name: Verify the repaired source and runtime
-        run: npm run test:sentinel && npm run test:drive-catalog && npm run test:audio-preloader && npm run test:concierge-showcase && npm run build
+        run: node scripts/site-audit.mjs && npm run halo-signal-check && npm run test:sentinel && npm run test:drive-catalog && npm run test:audio-preloader && npm run test:concierge-showcase && npm run build
       - name: Save review evidence
         if: always()
         uses: actions/upload-artifact@v4

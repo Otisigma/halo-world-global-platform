@@ -21,6 +21,7 @@ audibility, 100% route coverage, or sub-60-second repair of arbitrary defects.
 | Safe recovery | Restore a missing source only from the controller's already-authorized selection; expose existing controls on failure | Never substitute another song or arbitrarily import a Drive share link |
 | Auditability | Typed events persisted through the existing ledger helper; local delivery state shown | Browser claims are untrusted observations, not server-certified repairs |
 | Source repair | Finite markup recipes, required contracts/build, diff artifact, review PR | Unknown code defects are not automatically rewritten |
+| Whole-site regression guard | Repair workflow runs the site link audit and registered satellite-route contract before proposing changes | Static source contracts do not replace authenticated live probes |
 
 ## Architecture
 
@@ -117,8 +118,9 @@ duplicate audio nodes instead of guessing. It does not generate arbitrary JS,
 alter credentials/rights, or accept browser incident text as executable input.
 An unknown defect causes a failed workflow for developer investigation.
 
-Before creating a branch/PR, the workflow requires Sentinel source/runtime/API
-contracts, Drive/catalog/player/preloader/Concierge contracts and build.
+Before creating a branch/PR, the workflow requires the whole-site link audit,
+registered satellite-route contracts, Sentinel source/runtime/API contracts,
+Drive/catalog/player/preloader/Concierge contracts and build.
 It uploads the exact diff, avoids duplicate open repair proposals, and never
 merges or pushes to main. The repository must allow GitHub Actions to create pull
 requests; otherwise a failed run and diff artifact are the review handoff.
@@ -132,6 +134,9 @@ active playback or a previously corrected link. Reloading resets tab-local state
 
 ## Acceptance and rollout
 
+The automated checks cover all statically registered public pages/routes through
+`scripts/site-audit.mjs` and `npm run halo-signal-check`; the runtime watcher and
+recovery adapter remain intentionally limited to Dreamweaver and Album Concierge.
 `npm run test:sentinel` exercises missing source binding, no autoplay, real-HTTP
 HEAD transport, failed transport, explicit policy prompts, stale results,
 canonical query preservation, canvas failure, audit delivery failure, ingestion
@@ -146,7 +151,11 @@ silently assumed to be deployed.
 
 ## Remaining roadmap
 
-Broad all-release/server-route crawling, decoded-media and hardware-audibility
-proof, durable offline replay, operator-authenticated rollback controls, and
-general-purpose AI-generated source repair require separate design and approval.
-They are not implemented or guaranteed by this bounded subsystem.
+Live crawling of every private/authenticated server route, decoded-media and
+hardware-audibility proof, durable offline replay, operator-authenticated
+rollback controls, and general-purpose AI-generated source repair require
+separate design and approval. They are not implemented or guaranteed by this
+bounded subsystem. “100%” cannot be claimed without those capabilities and
+approved production credentials/assets, and absolute guarantees remain
+impossible for browser-throttled tabs, external services, and physical audio
+output.

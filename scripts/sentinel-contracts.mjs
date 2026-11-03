@@ -257,7 +257,7 @@ await check("finite source recipes restore known bindings, are idempotent and re
   assert.throws(() => repairSentinelMarkup("netlify/functions/private.mjs", ""), /allowlisted/);
   const workflow = await readFile(new URL("../.github/workflows/halo-sentinel.yml", import.meta.url), "utf8");
   assert.match(workflow, /HALO_SENTINEL_REPAIR_ENABLED == 'true'/);
-  assert.match(workflow, /test:sentinel.*test:drive-catalog.*test:audio-preloader.*test:concierge-showcase.*build/);
+  assert.match(workflow, /site-audit\.mjs.*halo-signal-check.*test:sentinel.*test:drive-catalog.*test:audio-preloader.*test:concierge-showcase.*build/);
   assert.doesNotMatch(workflow, /pull_request_target|gh pr merge|git push.*main|--force/);
 });
 

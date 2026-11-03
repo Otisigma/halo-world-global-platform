@@ -896,6 +896,7 @@ import { MIX_PRESETS, createMixSeed, deleteUserPreset, describeMixIntent, normal
       if (elements.muteButton) elements.muteButton.setAttribute("aria-label", "Mute show");
       renderReleasePanel();
     } catch (error) {
+      clearRemoteAudioWatchdog();
       state.autoplayMuted = Boolean(elements.audio.muted) && previousMode === "muted";
       if (error?.name === "AbortError") return renderSoundUnlock(previousMode);
       if (error?.name !== "NotAllowedError" && state.audioSourceMode === "remote") {
@@ -1115,6 +1116,7 @@ import { MIX_PRESETS, createMixSeed, deleteUserPreset, describeMixIntent, normal
   function activePlayerStatusLabel(release = state.release) {
     if (state.audioSourceMode === "local") return "LOCAL ACTIVE";
     if (state.audioSourceMode === "error" || state.audioSourceMode === "empty") return "STANDBY";
+    if (state.audioSourceMode === "remote" && elements.audio.getAttribute("src")) return "READY";
     return publicReleaseStatus(release);
   }
 
@@ -1174,7 +1176,7 @@ import { MIX_PRESETS, createMixSeed, deleteUserPreset, describeMixIntent, normal
   }
 
   function armRemoteAudioWatchdog() {
-    if (state.audioSourceMode !== "remote" || state.remoteAudioWatchdog) return;
+    if (state.audioSourceMode !== "remote" || state.remoteAudioWatchdog || state.soundUnlockMode === "blocked") return;
     const position = Number(elements.audio.currentTime) || 0;
     state.remoteAudioWatchdog = window.setTimeout(() => {
       state.remoteAudioWatchdog = 0;
@@ -1201,10 +1203,19 @@ import { MIX_PRESETS, createMixSeed, deleteUserPreset, describeMixIntent, normal
       showToast(message);
       return;
     }
+    let localAudioUrl;
+    try {
+      localAudioUrl = safeBlobMediaUrl(URL.createObjectURL(file));
+    } catch (error) {
+      console.error("Dreamweaver local audio preparation failed", error instanceof Error ? error.message : "unknown error");
+      const message = "Dreamweaver could not prepare that local file. Try another audio export.";
+      setLocalPreviewStatus(message, "error");
+      showToast(message);
+      return;
+    }
     clearRemoteAudioWatchdog();
     revokeLocalAudioUrl();
     window.HaloAudioPreloader?.clear();
-    const localAudioUrl = safeBlobMediaUrl(URL.createObjectURL(file));
     if (!localAudioUrl) {
       failLocalPreview("Dreamweaver could not prepare that local file. Try another audio export.");
       return;
@@ -2292,7 +2303,7 @@ import { MIX_PRESETS, createMixSeed, deleteUserPreset, describeMixIntent, normal
       openMixFilePicker();
       return;
     }
-    if (state.autoplayMuted && !elements.audio.paused) {
+    if (state.autoplayMuted || state.soundUnlockMode) {
       await handleSoundUnlock();
       return;
     }
@@ -2301,11 +2312,6 @@ import { MIX_PRESETS, createMixSeed, deleteUserPreset, describeMixIntent, normal
       const source = elements.audio.src;
       try {
         if (state.audioSourceMode === "remote") armRemoteAudioWatchdog();
-        if (state.autoplayMuted || state.soundUnlockMode) {
-          state.autoplayMuted = false;
-          state.soundUnlockedByUser = true;
-          renderSoundUnlock("");
-        }
         await elements.audio.play();
       } catch (error) {
         if (elements.audio.src !== source || error?.name === "AbortError") return;

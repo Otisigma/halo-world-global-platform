@@ -238,6 +238,16 @@ for (const options of [{ unlock: { firstName: "Listener", favoritePlatform: "spo
 }
 
 {
+  const f = fixture(`?song=${songId}`, {
+    releases: [{ ...release, streamUrl: "", dreamweaverPayload: { ...release.dreamweaverPayload, audioStreamUrl: null } }]
+  });
+  await f.initializeDreamweaver();
+  assert.equal(f.nodes.get("showAudio").src, masterStream);
+  assert.match(f.nodes.get("releaseFacts").innerHTML, /<dt>Status<\/dt><dd>READY<\/dd>/,
+    "a bound canonical master is ready even when the release metadata has no preview URL");
+}
+
+{
   const f = fixture("");
   await f.initializeDreamweaver();
   assert.equal(f.nodes.get("showAudio").loads, 0, "unlinked satellite entry must remain unchanged");
@@ -364,6 +374,55 @@ for (const assetBinding of [
   await f.togglePlayback();
   assert.equal(f.nodes.get("showAudio").muted, true, "Play preserves a deliberate mute choice");
   assert.equal(f.nodes.get("showAudio").paused, false);
+}
+
+{
+  const f = fixture(`?song=${songId}`, { blocked: true });
+  await f.initializeDreamweaver();
+  await f.handleSoundUnlock();
+  assert.equal(f.nodes.get("dreamweaverSoundUnlock").hidden, false);
+  assert.equal(f.state.remoteAudioWatchdog, 0,
+    "a blocked sound-unlock attempt must not later report a stream failure");
+  f.armRemoteAudioWatchdog();
+  assert.equal(f.state.remoteAudioWatchdog, 0, "stall events cannot rearm the watchdog while policy-blocked");
+  assert.equal(f.shouldPromptLocalUpload(), false);
+  const audio = f.nodes.get("showAudio");
+  audio.play = async () => {
+    audio.paused = false;
+    audio.dispatchEvent(new Event("playing"));
+  };
+  await f.togglePlayback();
+  assert.equal(audio.paused, false, "Play retries the existing source after a blocked sound-unlock attempt");
+  assert.equal(f.nodes.get("dreamweaverSoundUnlock").hidden, true);
+  assert.equal(f.state.releasePlaybackState, "playing");
+}
+
+{
+  const requestedSongId = "7c082952-f3e5-4ac9-a902-359e673758f2";
+  const requestedMixId = "a1aefa12-2369-48cc-bf3f-3d3a99bcf982";
+  const f = fixture(`?song=${requestedSongId}&mix=${requestedMixId}`, {
+    releases: [{ ...release, id: requestedSongId, dreamweaverPayload: { ...release.dreamweaverPayload, songId: requestedSongId } }],
+    assetBinding: { ...binding, songId: requestedSongId }
+  });
+  await f.initializeDreamweaver();
+  assert.equal(f.nodes.get("showAudio").src, masterStream);
+  assert.equal(f.nodes.get("showAudio").loads, 1);
+  assert.equal(f.nodes.get("showAudio").plays, 0);
+  assert.equal(f.requests[0], `/api/dreamweaver-assets?songId=${requestedSongId}`);
+  assert.equal(f.location.searchParams.get("mix"), requestedMixId);
+  assert.equal(f.nodes.get("songLobbyPlayerStatePill").textContent, "Ready");
+}
+
+{
+  const f = fixture(`?song=${songId}`);
+  await f.initializeDreamweaver();
+  const audio = f.nodes.get("showAudio");
+  audio.muted = true;
+  f.state.autoplayMuted = true;
+  await f.togglePlayback();
+  assert.equal(audio.muted, false, "an explicit Play gesture restores sound after a policy mute");
+  assert.equal(audio.paused, false);
+  assert.equal(f.state.soundUnlockedByUser, true);
 }
 
 assert.doesNotMatch(script, /setTimeout\([^;]*muted\s*=\s*false/, "Dreamweaver must never unmute on a timer");
@@ -562,6 +621,24 @@ for (const failure of ["promise", "late-error", "stall"]) {
   assert.equal(f.nodes.get("mixFileStatus").dataset.state, "error");
   assert.match(f.nodes.get("mixFileStatus").textContent, /could not play that file/);
   assert.equal(f.shouldPromptLocalUpload(), true);
+}
+
+{
+  const f = fixture(`?song=${songId}`);
+  await f.initializeDreamweaver();
+  const audio = f.nodes.get("showAudio");
+  const source = audio.src;
+  const originalCreateObjectURL = URL.createObjectURL;
+  URL.createObjectURL = () => { throw new Error("Object URLs unavailable"); };
+  try {
+    await f.activateLocalMixFile(Object.assign(new Blob(["audio"], { type: "audio/wav" }), { name: "Local.wav" }));
+    assert.equal(f.nodes.get("mixFileStatus").dataset.state, "error");
+    assert.match(f.nodes.get("mixFileStatus").textContent, /could not prepare/);
+    assert.equal(audio.src, source, "a local preparation failure must preserve the bound remote source");
+    assert.equal(f.state.audioSourceMode, "remote");
+  } finally {
+    URL.createObjectURL = originalCreateObjectURL;
+  }
 }
 
 console.log("Dreamweaver playback contracts: canonical binding, route semantics, click-only warm handoff, policy recovery, mute preservation, and same-song site proxy, local-only song lobby preview passed (mocked media).");

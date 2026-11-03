@@ -80,6 +80,15 @@ silently switching recordings or creating a second local upload workflow.
 
 ### Ledger and privacy
 
+Song Catalog includes a collapsed Dreamweaver upload panel inside its private
+artist workspace. Expanding it loads the existing same-origin Song Lab intake,
+including audio preview, recording-permission attestation and explicit private
+analysis submission. Reopening the panel retains the iframe and in-progress
+work. The full Song Lab link remains available for sign-in, verification or
+loading problems. This does not create a catalog master, publish a release or
+bypass Song Lab authorization; catalog master uploads stay in their existing
+controls.
+
 `POST /api/sentinel/events` requires the exact same-origin header, JSON, at most
 2 KiB of actual body bytes, and enum-only category/state/target/page data.
 It reuses maintenance rate limiting (20 reports/minute per reporter key) and

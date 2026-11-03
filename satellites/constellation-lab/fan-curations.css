@@ -1,0 +1,43 @@
+.fan-curation-desk, .fan-curation-desk * { box-sizing: border-box; }
+.fan-curation-desk {
+  max-width: 68rem;
+  margin: 0 auto 3rem;
+  padding: clamp(1.25rem, 4vw, 3rem);
+  border: 1px solid #6c5838;
+  border-radius: 1rem;
+  background: #17140f;
+  color: #f1ede4;
+  scroll-margin-top: 6rem;
+}
+.fan-curation-desk h2 { font-size: clamp(1.8rem, 4vw, 2.8rem); }
+.fan-curation-desk p { line-height: 1.7; }
+.fan-curation-desk a { color: #e6c28a; }
+.fan-curation-desk form { display: grid; gap: 1rem; margin: 1.5rem 0; }
+.fan-curation-desk input[type="text"] {
+  width: 100%; padding: .8rem; background: #0e0d0b; color: #f1ede4;
+  border: 1px solid #89714c; border-radius: .4rem; font: inherit;
+}
+.fan-curation-desk fieldset { min-width: 0; padding: 1rem; border: 1px solid #6c5838; }
+.fan-curation-desk [data-curation-tracks] {
+  display: grid; gap: .5rem; max-height: 22rem; overflow-y: auto;
+}
+.fan-curation-desk [data-curation-tracks] label { display: flex; align-items: center; gap: .8rem; padding: .6rem; }
+.fan-curation-desk input[type="checkbox"] { width: 1.2rem; height: 1.2rem; flex-shrink: 0; accent-color: #cfa76a; }
+.fan-curation-desk button {
+  padding: .8rem 1rem; border: 1px solid #cfa76a; border-radius: .4rem;
+  background: #cfa76a; color: #0e0d0b; cursor: pointer; font: inherit;
+}
+.fan-curation-desk button:disabled { opacity: .55; cursor: not-allowed; }
+.fan-curation-desk [data-curation-wallet] { font-weight: bold; color: #e6c28a; }
+.fan-curation-desk [data-curation-saved] { display: grid; gap: 1rem; }
+.fan-curation-desk article { padding: 1rem; border: 1px solid #6c5838; border-radius: .5rem; overflow-wrap: anywhere; }
+.fan-curation-desk li { margin: .5rem 0; }
+.fan-curation-desk :focus-visible { outline: 3px solid #e6c28a; outline-offset: 4px; }
+.real-song-desk { margin: 2rem 0; border-bottom: 1px solid #6c5838; padding-bottom: 2rem; }
+[data-real-map] { max-width: 38rem; margin: auto; }
+[data-real-map] svg { display: block; width: 100%; height: auto; }
+[data-real-audio] { width: min(100%, 32rem); display: block; margin: 1rem 0; }
+[data-real-stars] { display: grid; gap: .7rem; max-height: 28rem; overflow-y: auto; }
+[data-real-stars] article { display: flex; gap: .7rem; flex-wrap: wrap; align-items: center; }
+[data-real-stars] [aria-pressed="true"] { outline: 2px solid #99f2d4; outline-offset: 2px; }
+[data-real-selected] button { margin: .3rem; }

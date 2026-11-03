@@ -903,6 +903,7 @@ import { MIX_PRESETS, createMixSeed, deleteUserPreset, describeMixIntent, normal
         return;
       }
       renderSoundUnlock(state.autoplayMuted ? "muted" : "blocked");
+      if (error?.name === "NotAllowedError") window.HaloSentinel?.blocked(elements.audio);
       showToast("Your browser is still blocking audio. Press play again to start the Dreamweaver sound.");
     }
   }
@@ -1323,6 +1324,13 @@ import { MIX_PRESETS, createMixSeed, deleteUserPreset, describeMixIntent, normal
     if (elements.audio.readyState >= 1) restorePosition();
     else elements.audio.addEventListener("loadedmetadata", restorePosition, { once: true });
     if (!requestPlayback) {
+      const preflight = await window.HaloSentinel?.preflight(elements.audio, primaryAudio, { recover: false });
+      if (preflight && !preflight.ok) {
+        if (preflight.stale) return { started: false };
+        if (await retryCatalogProxy()) return { started: false, fallback: state.audioSourceMode === "error" };
+        handleRemoteAudioUnavailable();
+        return { started: false, fallback: true };
+      }
       setReleasePlaybackState("ready");
       return { started: false };
     }
@@ -1421,6 +1429,7 @@ import { MIX_PRESETS, createMixSeed, deleteUserPreset, describeMixIntent, normal
       if (playback.started) return { started: true, muted: elements.audio.muted };
       if (playback.error?.name !== "AbortError") {
         renderSoundUnlock("blocked");
+        if (playback.error?.name === "NotAllowedError") window.HaloSentinel?.blocked(elements.audio);
         showToast("Playback was blocked by your browser. Click Play again or tap Play with sound.");
       }
       return { started: false };
@@ -2315,6 +2324,7 @@ import { MIX_PRESETS, createMixSeed, deleteUserPreset, describeMixIntent, normal
         }
         clearRemoteAudioWatchdog();
         renderSoundUnlock("blocked");
+        if (error?.name === "NotAllowedError") window.HaloSentinel?.blocked(elements.audio);
         showToast("Audio loaded. Press play when your browser is ready.");
       }
     } else {
@@ -2327,6 +2337,16 @@ import { MIX_PRESETS, createMixSeed, deleteUserPreset, describeMixIntent, normal
   function bindPlayerControls() {
     if (state.playerControlsBound) return;
     state.playerControlsBound = true;
+    window.HaloSentinel?.bind({
+      audio: elements.audio,
+      recoverOnError: false,
+      expectedSource: () => state.audioSourceMode === "remote" ? resolvePrimaryAudio(state.mix).src : "",
+      onUnavailable: () => {
+        handleRemoteAudioUnavailable();
+        if (elements.mixFileInput) elements.mixFileInput.disabled = false;
+      },
+      onBlocked: () => { clearRemoteAudioWatchdog(); renderSoundUnlock("blocked"); }
+    });
     elements.playButton.addEventListener("click", togglePlayback);
     elements.songLobbyHeroPlayButton?.addEventListener("click", togglePlayback);
     elements.soundUnlockButton?.addEventListener("click", handleSoundUnlock);
@@ -2536,7 +2556,11 @@ import { MIX_PRESETS, createMixSeed, deleteUserPreset, describeMixIntent, normal
 
   function drawCampaignFrame(progress = 0) {
     const canvas = elements.campaignCanvas;
-    const context = canvas.getContext("2d");
+    const context = window.HaloSentinel ? window.HaloSentinel.canvasContext(canvas) : canvas.getContext("2d");
+    if (!context) {
+      setRenderStatus("error", "Canvas unavailable", "Video rendering is unavailable in this browser. Audio playback and the campaign text package remain available.");
+      return false;
+    }
     const width = canvas.width;
     const height = canvas.height;
     const start = Number(elements.clipStart.value || 0);
@@ -2909,6 +2933,7 @@ import { MIX_PRESETS, createMixSeed, deleteUserPreset, describeMixIntent, normal
 
   async function renderVerticalClip() {
     if (!state.campaign || !state.mix || elements.renderClip.disabled) return;
+    if (drawCampaignFrame(0) === false) return;
     if (!window.MediaRecorder || !elements.campaignCanvas.captureStream) {
       setRenderStatus("error", "Film creation is not supported", "Use a current Chrome, Edge, Firefox, or Safari browser, or download the cover and campaign package instead.");
       return showToast("This browser cannot render video. Download the cover and campaign package instead.");

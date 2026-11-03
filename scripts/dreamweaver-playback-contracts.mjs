@@ -52,7 +52,7 @@ const mix = { id: "linked-mix-id", title: "Linked mix", creator: { name: "Mix ar
   assert.equal(paths[1], "/api/release-catalog", "mix-only routes retain the existing feed lookup");
 }
 
-export function fixture(search, { releases = [release], mixes = [mix], blocked = false, failed = false, failingSources = [], rejectedPlaySources = [], loadingSources = [], deferPlaying = false, unlock = null, pathname = "/dreamweaver/", releaseArtwork = undefined, assetBinding = binding, driveCatalog = { configured: false, tracks: [] }, catalogError = false, storage = { getItem: () => null }, storageGetterError = false, preloader } = {}) {
+export function fixture(search, { releases = [release], mixes = [mix], blocked = false, failed = false, failingSources = [], rejectedPlaySources = [], loadingSources = [], deferPlaying = false, unlock = null, pathname = "/dreamweaver/", releaseArtwork = undefined, assetBinding = binding, driveCatalog = { configured: false, tracks: [] }, catalogError = false, storage = { getItem: () => null }, storageGetterError = false, preloader, sentinel } = {}) {
   class Element extends EventTarget {
     constructor() {
       super();
@@ -120,7 +120,7 @@ export function fixture(search, { releases = [release], mixes = [mix], blocked =
     document: { getElementById: getElement, querySelector: getElement, body: new Element() },
     localStorage: storage,
     history: { replaceState: (_state, _title, url) => { location.href = new URL(url, location).href; } },
-    window: { clearTimeout: id => timers.delete(id), setTimeout: callback => { timers.set(++timerId, callback); return timerId; }, requestAnimationFrame: callback => callback(), HaloReleaseArtwork: releaseArtwork, HaloAudioPreloader: preloader },
+    window: { clearTimeout: id => timers.delete(id), setTimeout: callback => { timers.set(++timerId, callback); return timerId; }, requestAnimationFrame: callback => callback(), HaloReleaseArtwork: releaseArtwork, HaloAudioPreloader: preloader, HaloSentinel: sentinel },
     fixtures: { releases, mixes, unlock, requests, assetBinding, driveCatalog, catalogError }
   };
   if (storageGetterError) Object.defineProperty(context, "localStorage", { get() { throw new Error("SecurityError"); } });
@@ -148,6 +148,7 @@ export function fixture(search, { releases = [release], mixes = [mix], blocked =
       return { response: { ok: true }, payload: { mixes: fixtures.mixes } };
     };
     state.unlock = fixtures.unlock;
+    bindPlayerControls();
     elements.audio.addEventListener("playing", () => { clearRemoteAudioWatchdog(); measurePlaybackStart(); setReleasePlaybackState("playing"); });
     ${catalogControlBindings}
     ${audioErrorBinding}
@@ -409,6 +410,32 @@ assert.match(script, /audio: document\.getElementById\("showAudio"\)/, "Dreamwea
 }
 
 const proxy = "https://halo.test/api/drive-catalog/audio?track=bound-song";
+{
+  const probes = [];
+  let registered;
+  const sentinel = {
+    bind(controller) { registered = controller; },
+    async preflight(audio, source, options) {
+      assert.equal(registered?.audio, audio);
+      assert.equal(options.recover, false, "bootstrap owns its fallback rather than racing the observer");
+      probes.push(source);
+      return { ok: source === proxy };
+    }
+  };
+  const f = fixture(`?song=${songId}`, { sentinel, assetBinding: { ...binding, fallbackAudioSource: proxy } });
+  await f.initializeDreamweaver();
+  assert.deepEqual(probes, [masterStream, proxy], "a failed preflight tries only the bound same-song proxy");
+  assert.equal(f.nodes.get("showAudio").src, proxy);
+  assert.equal(f.state.releasePlaybackState, "ready", "a successful proxy preflight must not be overwritten as unavailable");
+  assert.equal(f.nodes.get("showAudio").plays, 0);
+}
+{
+  const sentinel = { bind() {}, preflight: async () => ({ ok: false }) };
+  const f = fixture(`?song=${songId}`, { sentinel });
+  await f.initializeDreamweaver();
+  assert.equal(f.state.releasePlaybackState, "unavailable");
+  assert.equal(f.shouldPromptLocalUpload(), true);
+}
 {
   const warmed = [];
   const preloader = {

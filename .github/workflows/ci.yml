@@ -18,7 +18,7 @@ jobs:
         with:
           node-version: "20"
       - run: npm ci --ignore-scripts
-      - run: npm run test:sentinel && npm run test:drive-catalog && npm run test:audio-preloader && npm run test:concierge-showcase
+      - run: node scripts/site-audit.mjs && npm run halo-signal-check && npm run test:sentinel && npm run test:drive-catalog && npm run test:audio-preloader && npm run test:concierge-showcase
 
   fan-curation-contracts:
     name: Fan curation + atomic reward contracts

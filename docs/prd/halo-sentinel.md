@@ -21,7 +21,7 @@ audibility, 100% route coverage, or sub-60-second repair of arbitrary defects.
 | Safe recovery | Restore a missing source only from the controller's already-authorized selection; expose existing controls on failure | Never substitute another song or arbitrarily import a Drive share link |
 | Auditability | Typed events persisted through the existing ledger helper; local delivery state shown | Browser claims are untrusted observations, not server-certified repairs |
 | Source repair | Finite markup recipes, required contracts/build, diff artifact, review PR | Unknown code defects are not automatically rewritten |
-| Whole-site regression guard | Repair workflow runs the site link audit and registered satellite-route contract before proposing changes | Static source contracts do not replace authenticated live probes |
+| Whole-site regression guard | PR CI and the repair workflow run the site link audit and registered satellite-route contract | Static source contracts do not replace authenticated live probes |
 
 ## Architecture
 

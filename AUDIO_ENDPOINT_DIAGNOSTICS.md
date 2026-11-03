@@ -1,0 +1,9 @@
+# Audio endpoint diagnostics
+
+HALO has five API-backed audio stream routes: `/api/drive-catalog/audio`, `/api/song-catalog/audio`, `/api/radio/audio`, `/api/mixes/audio`, and `/api/stem-vault/audio`. CI runs the local endpoint contract suites and the live-probe validator. The **Live audio endpoint smoke** workflow can additionally check real deployment responses when manually dispatched with IDs for known-good fixtures. Configure the trusted deployment origin as the repository Actions variable `HALO_AUDIO_PROBE_ORIGIN`; it is deliberately not a workflow input so a run cannot send the private-stem token to an arbitrary host.
+
+The workflow requests only the first 64 bytes from each configured stream and cancels responses that exceed that bound. It requires HTTP `206`, an `audio/*` content type, byte-range headers, a compatible CORS header, a nonempty body, and a body matching the returned range. It follows redirects so signed object-storage playback is checked too. It sends the bearer token only to `/api/stem-vault/audio`; configure the short-lived Identity bearer authorization header as the repository Actions secret `HALO_AUDIO_PROBE_AUTHORIZATION` before probing a private stem. Never use a personal long-lived token or an unapproved/private track as a public fixture.
+
+Provide a publicly readable Drive catalog track, published public song and matching version, public radio preview, public room mix, and a private stem pack authorized for the token. The live workflow fails rather than skipping any route when configuration or access is missing. No credentials or fixture IDs are stored in the repository.
+
+These checks establish HTTP transport and range integrity, **not** that a browser decoded or audibly played the stream. Browser playback still requires a listener-initiated test on the target deployment.

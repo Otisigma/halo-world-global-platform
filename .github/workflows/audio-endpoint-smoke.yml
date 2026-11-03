@@ -1,0 +1,66 @@
+name: Live audio endpoint smoke
+
+on:
+  workflow_dispatch:
+    inputs:
+      drive_track_id:
+        description: Approved public Drive catalog track ID
+        required: true
+        type: string
+      song_id:
+        description: Publicly published song ID
+        required: true
+        type: string
+      song_version_id:
+        description: Published master version ID for that song
+        required: true
+        type: string
+      radio_track_id:
+        description: Approved public radio preview track ID
+        required: true
+        type: string
+      mix_id:
+        description: Public room mix ID
+        required: true
+        type: string
+      stem_pack_id:
+        description: Owner-authorized private stem pack ID
+        required: true
+        type: string
+      stem_type:
+        description: Available stem type in the authorized pack
+        required: true
+        type: choice
+        options:
+          - full
+          - drums
+          - bass
+          - music
+          - vocals
+          - fx
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    name: Probe all five live audio streams
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Check HTTP audio and byte-range responses
+        run: node scripts/audio-endpoint-smoke.mjs
+        env:
+          HALO_AUDIO_PROBE_ORIGIN: ${{ vars.HALO_AUDIO_PROBE_ORIGIN }}
+          HALO_AUDIO_PROBE_DRIVE_TRACK_ID: ${{ inputs.drive_track_id }}
+          HALO_AUDIO_PROBE_SONG_ID: ${{ inputs.song_id }}
+          HALO_AUDIO_PROBE_SONG_VERSION_ID: ${{ inputs.song_version_id }}
+          HALO_AUDIO_PROBE_RADIO_TRACK_ID: ${{ inputs.radio_track_id }}
+          HALO_AUDIO_PROBE_MIX_ID: ${{ inputs.mix_id }}
+          HALO_AUDIO_PROBE_STEM_PACK_ID: ${{ inputs.stem_pack_id }}
+          HALO_AUDIO_PROBE_STEM_TYPE: ${{ inputs.stem_type }}
+          HALO_AUDIO_PROBE_AUTHORIZATION: ${{ secrets.HALO_AUDIO_PROBE_AUTHORIZATION }}

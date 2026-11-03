@@ -15,12 +15,14 @@
   <link rel="stylesheet" href="/accessibility.css">
   <link rel="stylesheet" href="/mobile-navigation.css">
   <link rel="stylesheet" href="/album-concierge/album-concierge.css">
+  <link rel="stylesheet" href="/album-concierge/showcase.css">
   <script src="/stats.js" defer></script>
   <script src="/site-monitor.js" defer></script>
   <script src="/accessibility.js" defer></script>
   <script src="/mobile-navigation.js" defer></script>
   <script src="/identity.js" type="module"></script>
   <script src="/album-concierge/album-concierge.js" defer></script>
+  <script src="/album-concierge/showcase.js" type="module"></script>
 </head>
 <body>
   <a class="skip-link" href="#workspace">Skip to Album Concierge</a>
@@ -80,6 +82,42 @@
           </div>
         </div>
       </div>
+
+      <!-- ── Catalog and concept workspace ── -->
+      <section class="ac-showcase" data-concierge-showcase aria-labelledby="showcaseTitle">
+        <header class="ac-showcase-header">
+          <div>
+            <span class="ac-showcase-badge">Catalog &amp; concept workspace</span>
+            <h2 id="showcaseTitle">Curated releases.<br>Your next album idea.</h2>
+          </div>
+          <button type="button" data-showcase-refresh>Refresh workspace</button>
+        </header>
+        <p>Explore published songs without leaving your creative flow. Your saved concepts are private
+          song ideas, not recordings, reward claims, or proof of licensing rights.</p>
+        <div class="ac-showcase-controls">
+          <label for="showcaseRelease">Choose a public release</label>
+          <select id="showcaseRelease" data-showcase-selector disabled>
+            <option value="">Loading catalog...</option>
+          </select>
+        </div>
+        <p data-showcase-status role="status" aria-live="polite">Loading the public release catalog...</p>
+        <div class="ac-showcase-grid" data-showcase-releases></div>
+        <div class="ac-showcase-player">
+          <p data-showcase-player-status role="status" aria-live="polite">Select Preview on a release with approved public audio. Nothing autoplays.</p>
+          <audio data-showcase-audio controls preload="none" aria-label="Concierge public release preview"></audio>
+          <button type="button" data-showcase-stop>Stop preview</button>
+          <small>Public external audio and artwork hosts may receive your IP address. This workspace sends no playback
+            analytics or rewards. Private stems and signed masters are not loaded here.</small>
+        </div>
+        <h3>Your concept vault</h3>
+        <p data-showcase-concept-status role="status" aria-live="polite">Sign in to view your own saved album concepts.</p>
+        <div class="ac-showcase-grid" data-showcase-concepts></div>
+        <footer>
+          <span>Artist-owned releases / private creative concepts</span>
+          <a href="#concierge">Start with your story</a>
+        </footer>
+        <noscript>Enable JavaScript for catalog cards and the guided Album Concierge, or <a href="/music/">visit the public Music shop</a>.</noscript>
+      </section>
 
       <!-- ── Notice banner ── -->
       <div id="workspace" class="ac-wrap" style="padding-bottom:0">

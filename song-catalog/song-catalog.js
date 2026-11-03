@@ -5,10 +5,12 @@ import { createReleaseTeaserConsole } from "/lib/release-teaser-ui.js";
 import { loadDreamweaverUploadShow, pendingDreamweaverUploadShow } from "/lib/dreamweaver-upload.js";
 import { renderCatalogSignals } from "/song-catalog/catalog-signals.js";
 import { renderCatalogGuidance } from "/song-catalog/catalog-guidance.js";
+import { initializeDreamweaverUploadPanel } from "/song-catalog/dreamweaver-upload-panel.js";
 
 const state={songs:[],selectedId:"",filter:"",authenticated:false,producer:{jobs:[],packages:[]},producerTimer:null};
 const $=selector=>document.querySelector(selector);
 const elements={shell:$("#catalogShell"),songList:$("#songList"),empty:$("#emptyState"),workspace:$("#songWorkspace"),search:$("#searchInput"),status:$("#statusMessage"),songDialog:$("#songDialog"),versionDialog:$("#versionDialog")};
+const dreamweaverUploadPanel=initializeDreamweaverUploadPanel({disclosure:$("#dreamweaverUploadDisclosure"),frame:$("#dreamweaverUploadFrame"),status:$("#dreamweaverUploadStatus")});
 const releaseConveyor=createReleaseConveyorConsole({root:$("#releaseConveyorConsole")});
 const releaseTeaser=createReleaseTeaserConsole({root:$("#social-teaser")});
 const uploadHelper=window.HaloUploadProgress;
@@ -117,6 +119,7 @@ async function loadCatalog(preferredId=""){
     $("#catalogUnavailable").hidden=true;
     $("#catalogSignInButton").hidden=false;
     state.authenticated=Boolean(data.authenticated);
+    if(!state.authenticated)dreamweaverUploadPanel?.reset();
     state.catalogSignals=data.catalogSignals||null;
     if(!data.authenticated){state.songs=[];state.producer={jobs:[],packages:[]};render();message("Sign in to load and manage your song catalog.");return}
     state.songs=data.songs||[];
@@ -127,6 +130,7 @@ async function loadCatalog(preferredId=""){
   }catch(error){
     if(request!==catalogRequest)return;
     state.authenticated=false;state.songs=[];state.catalogSignals=null;state.producer={jobs:[],packages:[]};
+    dreamweaverUploadPanel?.reset();
     render();message(error.message);
     $("#catalogUnavailable").hidden=false;
     $("#catalogSignInButton").hidden=true;
@@ -142,6 +146,7 @@ function watchCatalogIdentity(identity){
     if(event==="token_refresh"||event==="user_updated")return;
     ++catalogRequest;
     state.authenticated=false;state.songs=[];state.catalogSignals=null;state.selectedId="";state.producer={jobs:[],packages:[]};
+    dreamweaverUploadPanel?.reset();
     elements.songDialog.close();elements.versionDialog.close();
     render();
     void loadCatalog();

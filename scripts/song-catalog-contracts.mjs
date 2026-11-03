@@ -136,9 +136,11 @@ assert.match(client, /identity\.onAuthChange/, "private workspace responds to lo
   let handler;
   let closed = 0;
   let loaded = 0;
+  let uploadResets = 0;
   const watch = runInNewContext(`let catalogRequest=0;\n${watchSource}\nwatchCatalogIdentity;`, {
     state: privateState, elements: { songDialog: { close() { closed++; } }, versionDialog: { close() { closed++; } } },
     render() {}, loadCatalog() { loaded++; },
+    dreamweaverUploadPanel: { reset() { uploadResets++; } },
   });
   const identity = { onAuthChange(callback) { handler = callback; } };
   watch(identity);
@@ -148,12 +150,14 @@ assert.match(client, /identity\.onAuthChange/, "private workspace responds to lo
   assert.equal(closed, 0, "routine auth maintenance must not discard unsaved edits");
   assert.equal(loaded, 0);
   assert.equal(privateState.authenticated, true);
+  assert.equal(uploadResets, 0, "routine auth maintenance preserves private uploads");
   handler("logout");
   assert.equal(closed, 2, "logout closes private editing dialogs");
   assert.equal(loaded, 1);
   assert.equal(privateState.authenticated, false);
   assert.equal(privateState.songs.length, 0);
   assert.equal(privateState.catalogSignals, null);
+  assert.equal(uploadResets, 1, "logout unloads the embedded private Song Lab");
   handler("login");
   assert.equal(loaded, 2, "login or an account switch reloads the owner-scoped catalog");
 }
@@ -227,6 +231,7 @@ assert.match(client, /identity\.onAuthChange/, "private workspace responds to lo
   const context = {
     state: privateState, api: () => new Promise((resolve, reject) => pending.push({ resolve, reject })),
     elements: { shell: { setAttribute() {} } }, render() {}, message() {},
+    dreamweaverUploadPanel: { reset() {} },
     $: selector => ({ "#catalogUnavailable": availability, "#catalogSignInButton": signIn })[selector],
   };
   const load = runInNewContext(`${loadSource}\nloadCatalog;`, context);

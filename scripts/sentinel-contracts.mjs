@@ -133,6 +133,15 @@ await check("CORS-less signed storage redirects defer to the native media elemen
     "metadata loaded before the probe failed still counts");
   delete f.audio.readyState;
 
+  f.audio.preload = "none";
+  f.audio.networkState = 1;
+  assert.deepEqual(await f.sentinel.preflight(f.audio, f.audio.src), { ok: true, checked: false },
+    "a deliberately unloaded (preload=none) element is inconclusive, not a transport fault");
+  assert.equal(f.audio.dataset.sentinelTransport, undefined);
+  assert.equal(f.unavailable(), 0);
+  delete f.audio.preload;
+  delete f.audio.networkState;
+
   const broken = f.sentinel.preflight(f.audio, f.audio.src);
   await settle();
   f.audio.dispatchEvent(new Event("error"));

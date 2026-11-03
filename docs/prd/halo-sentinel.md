@@ -261,3 +261,23 @@ implementation has the two-page adapters, finite markup recipes, static
 19-page/32-route contracts, and local synthetic browser evidence, but the
 production, full adapter/route inventory, durable queue, and operational gates
 above remain open.
+
+## Dreamweaver readiness telemetry bar
+
+`dreamweaver/readiness-telemetry.js` renders the song-lobby "AI TELEMETRY" bar
+(`#aiReadiness`) from observed `#showAudio` media events plus the player's
+`halo:release-state` verdict. It never plays, mutes or rebinds audio.
+
+| State | Evidence | `window.HALO_STREAM_READY` |
+|---|---|---|
+| `standby` / `deferred` | no source / preload deferred or fetch suspended until Play | `false` |
+| `loading` / `buffering` | `loadstart` / buffered range at the playhead | `false` |
+| `ready` / `loaded` | `canplaythrough` / buffer reaches 100% | `true` |
+| `playing` | `playing` event | `true` |
+| `stalled` | `waiting` / `stalled` with too little data | `false` |
+| `fault` | media `error` with a source, or player verdict `unavailable` | `false` |
+
+Agents should read `window.HaloDreamweaverReadiness` (`state`, `label`,
+`percent`, `ready`, `readyState`, `local`) or `#aiReadiness[data-state]`.
+`ready` means the browser expects uninterrupted playback; only `playing`
+proves playback started, and neither proves audible sound.

@@ -1749,6 +1749,12 @@ import { MIX_PRESETS, createMixSeed, deleteUserPreset, describeMixIntent, normal
     state.releasePlaybackState = nextState;
     renderReleasePanel();
     updateCatalogPlaybackCards();
+    // Lets the readiness bar reflect verdicts reached without a media event (e.g. a failed stream preflight).
+    if (typeof CustomEvent === "function") {
+      elements.audio.dispatchEvent?.(new CustomEvent("halo:release-state", {
+        detail: { state: nextState, mode: state.audioSourceMode }
+      }));
+    }
   }
 
   function setLoadingProgress(percent = 0, phase = "", subtitle = "") {

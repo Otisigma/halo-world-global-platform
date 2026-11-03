@@ -58,6 +58,7 @@
   <link rel="stylesheet" href="/halo-sentinel.css">
   <script type="module" src="/halo-sentinel.js"></script>
   <script type="module" src="/dreamweaver/dreamweaver.js" defer></script>
+  <script type="module" src="/dreamweaver/readiness-telemetry.js"></script>
   <link rel="stylesheet" href="/dreamweaver/deck-companion.css">
   <script type="module" src="/dreamweaver/deck-companion.js"></script>
 </head>
@@ -225,6 +226,16 @@
               <span id="songLobbyPlayerDuration">00:00</span>
               <span>Dreamweaver pull source</span>
               <span id="dreamweaverSystemStatus" aria-live="polite">CATALOG / STANDBY</span>
+            </div>
+          </div>
+          <!-- Dreamweaver AI Readiness & Loading Telemetry Bar -->
+          <div class="dw-readiness" id="aiReadiness" data-state="standby">
+            <div class="dw-readiness__head">
+              <span id="aiReadinessStatus" role="status" aria-live="polite">● AI TELEMETRY: STANDBY</span>
+              <span id="aiReadinessPercent">0%</span>
+            </div>
+            <div class="dw-readiness__track" id="aiReadinessTrack" role="progressbar" aria-label="Stream loading readiness" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" aria-valuetext="STANDBY">
+              <div class="dw-readiness__bar" id="aiReadinessBar"></div>
             </div>
           </div>
           <div class="song-lobby__player-copy">

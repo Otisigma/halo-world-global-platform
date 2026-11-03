@@ -1042,3 +1042,52 @@ button.dw-lyric__line:hover { color: var(--paper); }
 @media (prefers-reduced-motion: reduce) { .dw-lyric__line { transition: none; } .dw-lyric.is-active .dw-lyric__line { transform: none; } }
 @media (prefers-reduced-motion: reduce), (prefers-contrast: more) { .dw-lyrics[data-lyrics-mode="sync"] .dw-lyric .dw-lyric__line { filter: none; } .dw-lyrics[data-lyrics-mode="sync"] .dw-lyric.is-upcoming .dw-lyric__line, .dw-lyrics[data-lyrics-mode="sync"] .dw-lyric.is-past .dw-lyric__line { opacity: .8; } }
 @media (max-width: 640px) { .dw-lyrics__header { flex-direction: column; align-items: flex-start; } }
+
+/* AI readiness & loading telemetry bar: mirrors observed <audio> state only. */
+.dw-readiness {
+  --dw-readiness-color: #d4af37;
+  background: #111;
+  border: 1px solid rgba(212, 175, 55, 0.3);
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin: 12px 0;
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  color: #fff;
+}
+.dw-readiness__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  font-size: 0.75em;
+  margin-bottom: 8px;
+}
+#aiReadinessStatus { color: var(--dw-readiness-color); font-weight: 600; }
+#aiReadinessPercent { color: #aaa; }
+.dw-readiness__track {
+  width: 100%;
+  height: 6px;
+  background: #222;
+  border-radius: 3px;
+  overflow: hidden;
+}
+.dw-readiness__bar {
+  width: 0%;
+  height: 100%;
+  background: linear-gradient(90deg, #d4af37, #f3c643);
+  transition: width 0.3s ease, background-color 0.3s ease;
+}
+.dw-readiness[data-state="buffering"],
+.dw-readiness[data-state="stalled"] { --dw-readiness-color: #f3c643; }
+.dw-readiness[data-state="stalled"] .dw-readiness__bar { background: #f3c643; }
+.dw-readiness[data-state="ready"],
+.dw-readiness[data-state="loaded"],
+.dw-readiness[data-state="playing"] { --dw-readiness-color: #4ade80; }
+.dw-readiness[data-state="ready"] .dw-readiness__bar,
+.dw-readiness[data-state="loaded"] .dw-readiness__bar,
+.dw-readiness[data-state="playing"] .dw-readiness__bar { background: #4ade80; }
+.dw-readiness[data-state="fault"] { --dw-readiness-color: #f87171; }
+.dw-readiness[data-state="fault"] .dw-readiness__bar { background: #f87171; }
+@media (prefers-reduced-motion: reduce) {
+  .dw-readiness__bar { transition: none; }
+}

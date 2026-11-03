@@ -1,5 +1,6 @@
 import { FeedError, readBody, uuid } from "./signal-feed.mjs";
 import { trackDropPublicPath } from "./track-drops.mjs";
+import { constellationPreviewUrl } from "../../lib/constellation-media.js";
 
 export const FAN_CURATION_POLICY = Object.freeze({
   earnedPoints: 25, cardCost: 25, minTracks: 3, maxTracks: 12,
@@ -63,7 +64,8 @@ export function curationInput(body) {
 const track = row => ({
   id: row.id, title: row.title, artist: row.artist,
   publicPath: row.title == null ? null : trackDropPublicPath(row.id),
-  available: row.title != null
+  available: row.title != null,
+  previewAvailable: row.title != null && Boolean(constellationPreviewUrl(row.stream_url))
 });
 
 const escapeHtml = value => String(value).replace(/[&<>"']/g, char => ({
@@ -131,7 +133,7 @@ export async function loadFanCurationState(db, memberId) {
     LIMIT 50
   `;
   const releases = await db.sql`
-    SELECT id, title, artist FROM halo_release_campaigns
+    SELECT id, title, artist, stream_url FROM halo_release_campaigns
     WHERE status = 'published' AND visibility = 'public'
     ORDER BY release_date DESC NULLS LAST, id LIMIT 200
   `;
@@ -163,10 +165,18 @@ export function createFanCurationsHandler({
       }
       const url = new URL(request.url), origin = request.headers.get("origin");
       const cardRequest = url.pathname === "/api/fan-curations/card";
-      if ((!cardRequest && url.search) || (origin && origin !== url.origin) || request.headers.get("sec-fetch-site") === "cross-site") {
+      const previewRequest = url.pathname === "/api/fan-curations/preview";
+      if ((!cardRequest && !previewRequest && url.search) || (origin && origin !== url.origin) || request.headers.get("sec-fetch-site") === "cross-site") {
         throw new FeedError("Same-origin request required", 403);
       }
       let cardId;
+      let previewId;
+      if (previewRequest) {
+        if (request.method !== "GET") throw new FeedError("Method not allowed", 405);
+        previewId = url.searchParams.get("releaseId");
+        if ([...url.searchParams.keys()].length !== 1 || typeof previewId !== "string"
+          || previewId.length < 2 || previewId.length > 96 || !releaseIdPattern.test(previewId)) throw new FeedError("Choose a public release");
+      }
       if (cardRequest) {
         if (request.method !== "GET") throw new FeedError("Method not allowed", 405);
         if ([...url.searchParams.keys()].length !== 1 || !url.searchParams.has("curationId")) throw new FeedError("Choose a listening card");
@@ -185,6 +195,15 @@ export function createFanCurationsHandler({
       const input = request.method === "POST" ? curationInput(await readBody(request, 4096)) : null;
       const db = await getDatabase({ connectionString });
       await ensureMembership(db, user);
+      if (previewRequest) {
+        const rows = await db.sql`
+          SELECT id, title, artist, stream_url FROM halo_release_campaigns
+          WHERE id = ${previewId} AND status = 'published' AND visibility = 'public'
+        `;
+        const release = rows[0], audioUrl = constellationPreviewUrl(release?.stream_url);
+        if (!release || !audioUrl) throw new FeedError("Approved public preview unavailable. Visit the existing shop for listening options.", 404);
+        return json({ id: release.id, title: release.title, artist: release.artist, audioUrl });
+      }
       if (cardRequest) return await listeningCard(db, user.id, cardId, url.origin);
       if (!input) return json(await loadFanCurationState(db, user.id));
       const rows = input.action === "save"

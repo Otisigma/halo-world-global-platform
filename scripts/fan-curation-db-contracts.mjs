@@ -68,16 +68,18 @@ try {
   await execute(`
     CREATE TABLE halo_memberships(member_id TEXT PRIMARY KEY);
     CREATE TABLE halo_song_catalog(id TEXT PRIMARY KEY);
-    CREATE TABLE halo_release_campaigns(id TEXT PRIMARY KEY, title TEXT, artist TEXT, status TEXT, visibility TEXT, release_date DATE);
+    CREATE TABLE halo_release_campaigns(id TEXT PRIMARY KEY, title TEXT, artist TEXT, status TEXT, visibility TEXT, release_date DATE, stream_url TEXT);
     ${await readFile(`${root}/netlify/database/migrations/20261019030000_track_drop_notifications.sql`, "utf8")}
     ${migration}
     INSERT INTO halo_memberships VALUES ('alice'), ('bob'), ('charlie'), ('no-consent'), ('quota'), ('privacy'), ('browser-member');
     INSERT INTO halo_member_notification_preferences(member_id, rewards_enabled)
       SELECT member_id, member_id <> 'no-consent' FROM halo_memberships;
-    INSERT INTO halo_release_campaigns
+    INSERT INTO halo_release_campaigns(id,title,artist,status,visibility,release_date)
       SELECT 'release-' || lpad(i::text, 2, '0'), 'Song ' || i, 'Artist ' || i, 'published', 'public', CURRENT_DATE FROM generate_series(0, 20) i;
-    INSERT INTO halo_release_campaigns VALUES ('private-track', 'Private title', 'Private artist', 'published', 'private', CURRENT_DATE),
+    INSERT INTO halo_release_campaigns(id,title,artist,status,visibility,release_date)
+      VALUES ('private-track', 'Private title', 'Private artist', 'published', 'private', CURRENT_DATE),
       ('draft-track', 'Draft title', 'Draft artist', 'draft', 'public', CURRENT_DATE);
+    UPDATE halo_release_campaigns SET stream_url = '/assets/test-preview.wav' WHERE id = 'release-00';
   `);
   await check("real discover/save/earn/redeem/download loop and existing lifetime tiers", async () => {
     const state = await (await request("alice")).json();
@@ -136,6 +138,19 @@ try {
     await execute("UPDATE halo_member_reward_events SET reward_key = 'fan-curation:2000-01-01' WHERE member_id = 'bob'");
     assert.equal((await (await save("bob", 6)).json()).rewardGranted, true);
     assert.equal((await wallet("bob")).earned, 50);
+  });
+  await check("real-song preview resolves only currently public static audio and never earns points", async () => {
+    const before = await wallet("alice");
+    const preview = await request("alice", null, "/api/fan-curations/preview?releaseId=release-00");
+    assert.equal(preview.status, 200);
+    assert.equal((await preview.json()).audioUrl, "/assets/test-preview.wav");
+    for (const release of ["private-track", "draft-track", "missing-track", "release-01"]) {
+      assert.equal((await request("alice", null, `/api/fan-curations/preview?releaseId=${release}`)).status, 404);
+    }
+    await execute("UPDATE halo_release_campaigns SET visibility = 'private' WHERE id = 'release-00'");
+    assert.equal((await request("alice", null, "/api/fan-curations/preview?releaseId=release-00")).status, 404);
+    await execute("UPDATE halo_release_campaigns SET visibility = 'public' WHERE id = 'release-00'");
+    assert.deepEqual(await wallet("alice"), before);
   });
   await check("concurrent claims cannot overspend or charge a duplicate", async () => {
     const a = await (await save("charlie", 0)).json(), b = await (await save("charlie", 3)).json();
@@ -229,6 +244,16 @@ try {
           res.end('export const getUser = async () => ({id:"browser-member"}); export const onAuthChange = () => () => {};'); return;
         }
         if (url.pathname.startsWith("/api/")) { res.writeHead(404); res.end("{}"); return; }
+        if (url.pathname === "/assets/test-preview.wav") {
+          // Silent test fixture, not synthesized replacement music or a production asset.
+          const wav = Buffer.alloc(44 + 16000);
+          wav.write("RIFF", 0); wav.writeUInt32LE(wav.length - 8, 4); wav.write("WAVEfmt ", 8);
+          wav.writeUInt32LE(16, 16); wav.writeUInt16LE(1, 20); wav.writeUInt16LE(1, 22);
+          wav.writeUInt32LE(8000, 24); wav.writeUInt32LE(16000, 28);
+          wav.writeUInt16LE(2, 32); wav.writeUInt16LE(16, 34);
+          wav.write("data", 36); wav.writeUInt32LE(16000, 40);
+          res.setHeader("Content-Type", "audio/wav"); res.end(wav); return;
+        }
         const path = resolve(root, `.${url.pathname.endsWith("/") ? `${url.pathname}index.html` : url.pathname}`);
         if (!path.startsWith(`${root}/`) || ![".html", ".css", ".js", ".webp", ".png", ".svg", ".webmanifest"].includes(extname(path))) {
           res.writeHead(404); res.end(); return;

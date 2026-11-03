@@ -1,5 +1,5 @@
 export function createFanCurationDesk(root, {
-  document = globalThis.document, fetch = globalThis.fetch
+  document = globalThis.document, fetch = globalThis.fetch, onState = () => {}, onReset = () => {}
 } = {}) {
   const form = root.querySelector("[data-curation-form]");
   const title = root.querySelector("[data-curation-title]");
@@ -13,6 +13,7 @@ export function createFanCurationDesk(root, {
   let revision = 0, controller = null, state = null, busy = false;
 
   function reset() {
+    onReset();
     revision++;
     controller?.abort();
     controller = null;
@@ -56,6 +57,7 @@ export function createFanCurationDesk(root, {
       || typeof data.wallet.enabled !== "boolean" || !Array.isArray(data.releases) || !Array.isArray(data.curations)
       || data.policy?.cardCost !== 25 || data.policy?.earnedPoints !== 25) throw new Error("Invalid curation state");
     state = data;
+    onState(data);
     wallet.textContent = `${data.wallet.available} available Signal Points / ${data.wallet.earned} lifetime earned / ${data.wallet.spent} spent.${data.wallet.enabled
       ? "" : " Rewards are off: no new points or claims. Existing cards remain yours to download."}`;
     const selected = new Set(selectedIds());
@@ -100,6 +102,7 @@ export function createFanCurationDesk(root, {
     controller = new AbortController();
     root.setAttribute("aria-busy", "true");
     state = null;
+    onReset();
     save.disabled = true;
     for (const button of saved.querySelectorAll("button")) button.disabled = true;
     status.textContent = "Loading your curations and verified rewards...";

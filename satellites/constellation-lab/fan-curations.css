@@ -33,3 +33,11 @@
 .fan-curation-desk article { padding: 1rem; border: 1px solid #6c5838; border-radius: .5rem; overflow-wrap: anywhere; }
 .fan-curation-desk li { margin: .5rem 0; }
 .fan-curation-desk :focus-visible { outline: 3px solid #e6c28a; outline-offset: 4px; }
+.real-song-desk { margin: 2rem 0; border-bottom: 1px solid #6c5838; padding-bottom: 2rem; }
+[data-real-map] { max-width: 38rem; margin: auto; }
+[data-real-map] svg { display: block; width: 100%; height: auto; }
+[data-real-audio] { width: min(100%, 32rem); display: block; margin: 1rem 0; }
+[data-real-stars] { display: grid; gap: .7rem; max-height: 28rem; overflow-y: auto; }
+[data-real-stars] article { display: flex; gap: .7rem; flex-wrap: wrap; align-items: center; }
+[data-real-stars] [aria-pressed="true"] { outline: 2px solid #99f2d4; outline-offset: 2px; }
+[data-real-selected] button { margin: .3rem; }

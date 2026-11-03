@@ -1,4 +1,5 @@
 import { createFanCurationDesk } from "./fan-curations.js";
+import { createRealSongStars } from "./real-stars.js";
 
 export const IMAGINED_TRACKS = Object.freeze([
   { id: "amber-horizon", title: "Amber Horizon", note: "Imagined opening / warm light" },
@@ -148,7 +149,11 @@ if (typeof document !== "undefined" && document.querySelector("[data-demo-tracks
   const button = document.querySelector("[data-open-pilot]");
   const status = document.querySelector("[data-pilot-status]");
   const root = document.querySelector("[data-fan-curation-desk]");
-  const desk = createFanCurationDesk(root);
+  const stars = createRealSongStars(root);
+  const desk = createFanCurationDesk(root, {
+    onState: data => stars.render(data.releases), onReset: () => stars.reset()
+  });
+  window.addEventListener("pagehide", () => stars.stop());
   let identity, unsubscribe, revision = 0;
   document.querySelector("[data-close-pilot]").addEventListener("click", () => {
     revision++;

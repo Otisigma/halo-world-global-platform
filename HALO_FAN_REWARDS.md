@@ -18,6 +18,30 @@ download; no data is uploaded. No external scripts or fonts load on page open.
 Only clicking "Check invited preview access" starts a live API request. Identity
 is imported only after the API confirms the pilot is enabled.
 
+## Real-song stars in the invited pilot
+
+The connected pilot can draw a separate constellation from up to 12 public
+releases in the dedicated preview catalog. Artist names come from persisted
+catalog records, not invented credits. Native buttons select stars and reorder
+their temporary visual journey. This sketch is not automatically saved or
+submitted to the separate curation/reward form.
+
+Preview starts only after a user presses Preview. A guarded GET
+`/api/fan-curations/preview?releaseId=...` rechecks current publication and public
+visibility before returning audio. Only static `/assets/` audio or HTTPS direct
+audio files without credentials, query tokens or private/API paths are accepted.
+Private stems, signed masters, Drive links and arbitrary API assets are excluded.
+Songs without eligible audio show an unavailable message and retain their
+existing `/music/?song=...` link for listening and purchase options. No checkout,
+prices, purchases or paid entitlements are implemented by this satellite.
+
+There is one native audio player, no autoplay, and no playback-based points or
+analytics. Changing songs cancels pending resolution and stops the old source.
+Refresh, disconnect, account change and page exit stop playback. Public external
+audio hosts may receive the listener's IP on explicit playback; this is disclosed.
+Previously downloaded public audio cannot be recalled after a visibility change.
+The SVG is a visual sequence, not audio analysis or inferred musical similarity.
+
 ## Default-off invited preview
 
 All live API actions, reads and downloads fail closed before authentication or

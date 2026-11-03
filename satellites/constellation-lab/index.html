@@ -78,6 +78,20 @@
     <section class="fan-curation-desk" data-fan-curation-desk hidden aria-labelledby="fanCurationsTitle">
       <p class="eyebrow">Invited preview / server-verified member rewards</p>
       <h2 id="fanCurationsTitle">Your private listening collections</h2>
+      <section class="real-song-desk" aria-labelledby="realStarsTitle">
+        <h3 id="realStarsTitle">Real-song constellation</h3>
+        <p>Select up to 12 public songs and arrange their journey. These choices are a temporary visual sketch,
+          separate from the saved reward collections below.</p>
+        <div data-real-map></div>
+        <ol data-real-selected aria-label="Real-song journey order"></ol>
+        <audio data-real-audio controls preload="none" aria-label="Public song preview player"></audio>
+        <button type="button" data-real-stop>Stop preview</button>
+        <p data-real-status role="status" aria-live="polite"></p>
+        <p>Audio loads only when you press Preview. Public external audio hosts may receive your IP address.
+          No listening analytics, verified stream counts or playback rewards are sent by this satellite.
+          Tracks without approved static public audio remain available through their existing shop page.</p>
+        <div data-real-stars></div>
+      </section>
       <p>Save 3-12 different public HALO releases. With member rewards enabled, a new track set earns 25 points
         once per UTC day. A printable listening card costs 25 points per collection, charged once.</p>
       <p>Cards contain credits and public listening links, not audio downloads, licenses, recording ownership,

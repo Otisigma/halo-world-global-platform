@@ -3,6 +3,8 @@ import { readFile } from "node:fs/promises";
 import { curationInput, createFanCurationsHandler, FAN_CURATION_POLICY, constellationPilotAccess, constellationDatabaseUrl } from "../netlify/lib/fan-curations.mjs";
 import { createFanCurationDesk } from "../satellites/constellation-lab/fan-curations.js";
 import { constellationSvg, IMAGINED_TRACKS } from "../satellites/constellation-lab/constellation.js";
+import { constellationPreviewUrl } from "../lib/constellation-media.js";
+import { realConstellationSvg, createRealSongStars } from "../satellites/constellation-lab/real-stars.js";
 
 const id = "10000000-0000-4000-8000-000000000001";
 const save = { action: "save", title: "Night Drive", releaseIds: ["release-one", "release-two", "release-three"] };
@@ -28,6 +30,7 @@ function server({
       queries.push({ text, values });
       if (fail) throw new Error("private-database-detail");
       if (text.includes("AS outcome")) return [{ outcome }];
+      if (text.includes("id = ? AND status")) return [{ id: "release-one", title: "Public song", artist: "Artist", stream_url: "/assets/public.wav" }];
       if (text.includes("AS earned")) return [{ enabled: true, earned: "25", spent: "0" }];
       if (text.includes("JOIN halo_fan_reward_redemptions") && text.includes("c.id =")) {
         return [{ title: '<script>alert("x")</script>', tracks: [{ id: "release-one", title: "<b>Song</b>", artist: '"Artist"' }] }];
@@ -52,7 +55,8 @@ await check("pilot is default-off, production-blocked and exact-member allowlist
     const api = server({ environment: name => settings[name] ?? "" });
     for (const [body, path] of [[undefined, "/api/fan-curations"], [save, "/api/fan-curations"],
       [{ action: "redeem", curationId: id, rewardId: "listening-card" }, "/api/fan-curations"],
-      [undefined, `/api/fan-curations/card?curationId=${id}`]]) {
+      [undefined, `/api/fan-curations/card?curationId=${id}`],
+      [undefined, "/api/fan-curations/preview?releaseId=release-one"]]) {
       assert.equal((await api.request(body, { path })).status, 503);
     }
     assert.equal(api.queries.length, 0);
@@ -61,6 +65,31 @@ await check("pilot is default-off, production-blocked and exact-member allowlist
   const closed = createFanCurationsHandler({
     environment: () => "", getUser: () => { identityCalls++; },
     getDatabase: () => { throw new Error("Closed pilot must not access database"); }
+  });
+  await check("real-song preview validates static public audio, checks identity and does not grant rewards", async () => {
+    for (const value of ["/assets/song.wav", "https://audio.example/song.mp3"]) assert.equal(constellationPreviewUrl(value), value);
+    for (const value of ["/api/song-catalog/audio?id=private", "/api/stem-vault/audio", "/private/song.wav",
+      "https://audio.example/private/song.wav", "https://audio.example/song.mp3?token=secret",
+      "https://drive.google.com/file/d/song.mp3", "//evil.example/song.mp3", "http://audio.example/song.mp3",
+      "https://127.0.0.1/song.mp3", "https://localhost/song.mp3", "javascript:alert(1)", "/assets/page.html"]) {
+      assert.equal(constellationPreviewUrl(value), "");
+    }
+    const api = server();
+    const response = await api.request(undefined, { path: "/api/fan-curations/preview?releaseId=release-one" });
+    assert.equal(response.status, 200);
+    assert.equal((await response.json()).audioUrl, "/assets/public.wav");
+    assert.equal(api.queries.length, 1);
+    assert.deepEqual(api.queries[0].values, ["release-one"]);
+    assert.equal((await server({ user: null }).request(undefined, { path: "/api/fan-curations/preview?releaseId=release-one" })).status, 401);
+    for (const path of ["/api/fan-curations/preview", "/api/fan-curations/preview?releaseId=one&memberId=victim",
+      "/api/fan-curations/preview?releaseId=one&releaseId=two"]) {
+      assert.equal((await server().request(undefined, { path })).status, 400);
+    }
+    assert.equal((await server().request(save, { path: "/api/fan-curations/preview?releaseId=release-one" })).status, 405);
+    const svg = realConstellationSvg([{ id: "one", title: "<script>Song</script>", artist: "Artist" }]);
+    assert.match(svg, /&lt;script&gt;/);
+    assert.doesNotMatch(svg, /<script>/);
+    assert.match(svg, /ARTIST OWNED/);
   });
   assert.equal((await closed(new Request("https://halo.example/api/fan-curations"))).status, 503);
   assert.equal(identityCalls, 0);
@@ -172,15 +201,56 @@ class Element {
   replaceChildren(...children) { this.children = children; }
   addEventListener(type, fn) { this.events.set(type, fn); }
   setAttribute(key, value) { this.attributes[key] = value; }
+  getAttribute(key) { return this.attributes[key] ?? null; }
+  removeAttribute(key) { delete this.attributes[key]; }
+  focus() {}
   querySelectorAll(selector) {
     const result = [];
     for (const child of this.children) {
-      if (child.tag === selector || (selector === "input:checked" && child.tag === "input" && child.checked)) result.push(child);
+      if (child.tag === selector || (selector === "input:checked" && child.tag === "input" && child.checked)
+        || (selector === "[data-real-star]" && child.dataset.realStar)) result.push(child);
       result.push(...child.querySelectorAll(selector));
     }
     return result;
   }
 }
+await check("real-star player has no autoplay, rejects unsafe sources and discards late playback after disconnect", async () => {
+  const nodes = Object.fromEntries(["map", "stars", "selected", "audio", "status", "stop"].map(name => [name, new Element()]));
+  let played = 0, paused = 0, source;
+  Object.defineProperty(nodes.audio, "src", { get: () => source, set: value => { source = value; } });
+  nodes.audio.pause = () => { paused++; };
+  nodes.audio.load = () => {};
+  nodes.audio.play = async () => { played++; };
+  const root = { querySelector: selector => nodes[selector.match(/data-real-(\w+)/)[1]] };
+  const track = { id: "release-one", title: "Actual title", artist: "Actual artist", previewAvailable: true };
+  let finish, unsafe = false;
+  const calls = [];
+  const stars = createRealSongStars(root, {
+    document: { createElement: tag => new Element(tag) },
+    fetch: async (path, options) => {
+      calls.push({ path, options });
+      if (!unsafe) return new Promise(resolve => { finish = resolve; });
+      return Response.json({ id: track.id, audioUrl: "/api/song-catalog/audio?private=true" });
+    }
+  });
+  stars.render([track]);
+  assert.equal(played, 0);
+  assert.equal(calls.length, 0);
+  const preview = nodes.stars.children[0].children[1];
+  const pending = preview.events.get("click")();
+  stars.reset();
+  assert.equal(calls[0].options.signal.aborted, true);
+  finish(Response.json({ id: track.id, audioUrl: "/assets/song.wav" }));
+  await pending;
+  assert.equal(played, 0);
+  assert.equal(nodes.stars.children.length, 0);
+  unsafe = true;
+  stars.render([track]);
+  await nodes.stars.children[0].children[1].events.get("click")();
+  assert.equal(played, 0);
+  assert.match(nodes.status.textContent, /No approved public audio/);
+  assert.ok(paused > 0);
+});
 const state = () => ({
   policy: FAN_CURATION_POLICY, wallet: { enabled: true, earned: 25, spent: 0, available: 25 },
   releases: save.releaseIds.map(id => ({ id, title: "<b>Song</b>", artist: "Artist", available: true })),

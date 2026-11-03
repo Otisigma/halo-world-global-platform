@@ -24,6 +24,7 @@
   <script src="/album-concierge/album-concierge.js" defer></script>
   <script src="/album-concierge/showcase.js" type="module"></script>
   <script src="/album-concierge/demos.js" type="module"></script>
+  <script src="/album-concierge/cover-builder.js" type="module"></script>
 </head>
 <body>
   <a class="skip-link" href="#workspace">Skip to Album Concierge</a>
@@ -95,6 +96,40 @@
         </header>
         <p>Explore published songs without leaving your creative flow. Your saved concepts are private
           song ideas, not recordings, reward claims, or proof of licensing rights.</p>
+        <section class="ac-cover-builder" data-cover-builder aria-labelledby="coverBuilderTitle">
+          <span class="ac-showcase-badge">Local creative studio</span>
+          <h3 id="coverBuilderTitle">Dynamic cover &amp; release builder</h3>
+          <p>Design a cover on your device. Download a concept package with metadata and embedded SVG artwork,
+            or the cover alone. Nothing is uploaded, published, queued in a vault, or saved to your account.
+            Location and dedication are optional and will be included in files you download or share.</p>
+          <div class="ac-cover-grid">
+            <form data-cover-form>
+              <label for="coverTitle">Track / album title</label>
+              <input id="coverTitle" name="title" type="text" maxlength="80" required placeholder="Your next release" autocomplete="off">
+              <label for="coverArtist">Primary artist</label>
+              <input id="coverArtist" name="artist" type="text" maxlength="60" required placeholder="Your artist name" autocomplete="off">
+              <label for="coverMood">Mood / genre / tempo</label>
+              <input id="coverMood" name="mood" type="text" maxlength="80" placeholder="Deep house / 124 BPM" autocomplete="off">
+              <label for="coverLocation">Location / date (optional)</label>
+              <input id="coverLocation" name="location" type="text" maxlength="80" placeholder="A place or moment, if you want to share it" autocomplete="off">
+              <label for="coverDedication">Dedication / liner note (optional)</label>
+              <textarea id="coverDedication" name="dedication" maxlength="500" rows="4" placeholder="Who is this for?"></textarea>
+              <div class="ac-showcase-actions">
+                <button type="submit" data-cover-export="package">Compile &amp; download concept package</button>
+                <button type="submit" data-cover-export="artwork">Download cover SVG</button>
+              </div>
+            </form>
+            <div class="ac-cover-preview">
+              <h4>Live local artwork preview</h4>
+              <img data-cover-preview alt="Your local cover design preview" width="1200" height="1200">
+              <p data-cover-dedication></p>
+              <small>Geometric design sketch / no audio or ownership grant. SVG is scalable artwork,
+                not a distributor-ready release. Refreshing this page clears your inputs.</small>
+            </div>
+          </div>
+          <p data-cover-status role="status" aria-live="polite">Enter a title and artist to export your local concept.</p>
+          <noscript>Enable JavaScript to edit and download a local cover design.</noscript>
+        </section>
         <section class="ac-demo-archive" data-concierge-demos aria-labelledby="demoArchiveTitle">
           <span class="ac-showcase-badge">Curator preview archive</span>
           <h3 id="demoArchiveTitle">Explore an album concept layout</h3>

@@ -1,5 +1,17 @@
 # Album Concierge workspace
 
+The local cover builder updates an obsidian-and-gold SVG preview as title,
+artist, mood, location/date and dedication are typed. Title and artist are required
+for export; length limits apply to every field. Optional location and dedication
+are included in downloaded files, with a sharing warning beside the form.
+The same escaped, self-contained 1200-square SVG powers the preview and export.
+Compile downloads a versioned JSON concept package containing metadata and the
+SVG; a separate button downloads standalone SVG artwork. This is not a vault save,
+audio compilation, license, distributor-ready asset or release publication.
+The builder makes no API calls or storage writes and never touches saved concepts
+or the guided form. Inputs are temporary; browser download confirmation is the
+visitor's responsibility. Blob URLs are released on replacement and page exit.
+
 The obsidian-and-gold showcase fills the initial workspace before a guided
 concept session starts. It reads the existing public `/api/release-catalog`,
 shows up to four published releases, and offers a selector for the remaining

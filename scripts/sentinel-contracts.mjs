@@ -110,6 +110,49 @@ await check("broken/non-audio transport offers recovery without declaring healin
   f.sentinel.dispose();
 });
 
+await check("CORS-less signed storage redirects defer to the native media element instead of failing playback", async () => {
+  const opaque = async (_url, init) => {
+    if (init.method === "POST") return Response.json({ stored: true });
+    throw new TypeError("Failed to fetch");
+  };
+  const f = fixture(opaque);
+  f.window.setTimeout = setTimeout;
+  f.window.clearTimeout = clearTimeout;
+  f.audio.src = "https://halo.test/api/song-catalog/audio?versionId=v&dreamweaver=1&songId=s";
+  const playable = f.sentinel.preflight(f.audio, f.audio.src);
+  await settle();
+  f.audio.dispatchEvent(new Event("loadedmetadata"));
+  assert.deepEqual(await playable, { ok: true, checked: true });
+  assert.equal(f.audio.dataset.sentinelTransport, "element-verified");
+  assert.equal(f.unavailable(), 0);
+  assert.ok(!f.sentinel.snapshot().events.some(event => event.kind === "transport"),
+    "a natively playable master is not reported as a transport fault");
+
+  f.audio.readyState = 1;
+  assert.deepEqual(await f.sentinel.preflight(f.audio, f.audio.src), { ok: true, checked: true },
+    "metadata loaded before the probe failed still counts");
+  delete f.audio.readyState;
+
+  const broken = f.sentinel.preflight(f.audio, f.audio.src);
+  await settle();
+  f.audio.dispatchEvent(new Event("error"));
+  assert.equal((await broken).ok, false);
+  assert.equal(f.unavailable(), 1, "a native media error still activates recovery");
+  f.sentinel.dispose();
+
+  const g = fixture(opaque);
+  g.window.setTimeout = setTimeout;
+  g.window.clearTimeout = clearTimeout;
+  g.audio.src = "https://halo.test/audio/master.wav";
+  const stale = g.sentinel.preflight(g.audio, g.audio.src);
+  await settle();
+  g.audio.src = "https://halo.test/audio/other.wav";
+  g.audio.dispatchEvent(new Event("loadedmetadata"));
+  assert.equal((await stale).stale, true, "a source switched during the wait cannot be verified");
+  assert.equal(g.unavailable(), 0);
+  g.sentinel.dispose();
+});
+
 await check("policy blocking requires a gesture and does not suppress unknown promise failures", async () => {
   const f = fixture();
   f.sentinel.blocked(f.audio);

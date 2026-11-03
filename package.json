@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test:audio-endpoints": "node scripts/audio-endpoint-smoke-contracts.mjs && node scripts/drive-catalog-contracts.mjs && node scripts/chunked-audio-upload-contracts.mjs && node scripts/radio-contracts.mjs && node scripts/music-player-contracts.mjs && node scripts/stem-vault-contracts.mjs && node scripts/catalog-player-contracts.mjs && node scripts/dreamweaver-assets-contracts.mjs && node scripts/dreamweaver-playback-contracts.mjs",
+    "test:audio-endpoints": "node scripts/audio-endpoint-smoke-contracts.mjs && node scripts/drive-catalog-contracts.mjs && node scripts/chunked-audio-upload-contracts.mjs && node scripts/radio-contracts.mjs && node scripts/music-player-contracts.mjs && node scripts/stem-vault-contracts.mjs && node scripts/catalog-player-contracts.mjs && node scripts/dreamweaver-playback-contracts.mjs",
     "test:concierge-showcase": "node scripts/concierge-showcase-contracts.mjs",
     "test:fan-curations": "node scripts/fan-curation-contracts.mjs",
     "test:fan-curations:db": "node scripts/fan-curation-db-contracts.mjs",

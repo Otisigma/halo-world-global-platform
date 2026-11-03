@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { createConciergeShowcase, showcaseReleases } from "../album-concierge/showcase.js";
 import { conceptTemplates, createConceptDemos, plannedDuration } from "../album-concierge/demos.js";
+import { coverMetadata, coverSvg, compileCoverPackage, createCoverBuilder } from "../album-concierge/cover-builder.js";
 
 const sessionId = "10000000-0000-4000-8000-000000000001";
 const release = { id: "public-song", title: "<b>Actual Song</b>", artist: "Actual Artist",
@@ -161,5 +162,56 @@ await check("fictional demo layouts switch complete tracklists without APIs, pla
   assert.match(page, /data-concierge-demos aria-labelledby="demoArchiveTitle"/);
   assert.match(page, /aria-controls="demoLayout" aria-pressed="false"/);
   assert.doesNotMatch(script, /fetch\(|localStorage|sessionStorage|innerHTML|alert\(|\.play\(/);
+});
+await check("cover builder compiles safe, bounded metadata and the same local SVG into real downloads", async () => {
+  const input = { title: '<script>alert("x")</script>', artist: "Artist & Friends", mood: "Deep house",
+    location: "Optional place", dedication: "For you\nwith love" };
+  const compiled = compileCoverPackage(input);
+  assert.equal(compiled.schema, "halo-local-cover-concept");
+  assert.equal(compiled.metadata.dedication, "For you with love");
+  assert.equal(compiled.artwork.svg, coverSvg(input));
+  assert.match(compiled.artwork.svg, /&lt;script&gt;/);
+  assert.doesNotMatch(compiled.artwork.svg, /<script|<foreignObject|href=/);
+  assert.throws(() => compileCoverPackage({ ...input, title: " " }), /Enter a title/);
+  assert.throws(() => coverMetadata({ ...input, artist: "a".repeat(61) }), /valid artist/);
+  assert.throws(() => coverMetadata({ ...input, location: "\u0000" }), /valid location/);
+  assert.throws(() => coverMetadata({ ...input, title: "\ud800" }), /valid title/);
+  assert.match(coverSvg({ ...input, title: "Music \u{1f3b5}" }), /Music/);
+  assert.equal(coverMetadata({ ...input, title: "  hello  " }).title, "hello");
+  const elements = Object.fromEntries(["form", "preview", "dedication", "status"].map(key => [key, new Element()]));
+  elements.form.elements = { namedItem: key => ({ value: input[key] }) };
+  elements.form.reportValidity = () => true;
+  const blobs = new Map(), revoked = [], anchors = [], timers = [];
+  let id = 0;
+  const builder = createCoverBuilder({
+    querySelector: selector => elements[selector.slice("[data-cover-".length, -1)]
+  }, {
+    document: { body: { append: anchor => anchors.push(anchor) }, createElement: () => ({
+      click() { this.clicked = true; }, remove() { this.removed = true; }
+    }) },
+    urls: { createObjectURL: blob => { const key = `blob:${++id}`; blobs.set(key, blob); return key; },
+      revokeObjectURL: url => revoked.push(url) },
+    defer: callback => timers.push(callback)
+  });
+  assert.equal(await blobs.get(elements.preview.src).text(), compiled.artwork.svg);
+  let prevented = false;
+  elements.form.events.get("submit")({ preventDefault: () => { prevented = true; }, submitter: { dataset: { coverExport: "package" } } });
+  assert.equal(prevented, true);
+  assert.equal(anchors[0].download, "halo-cover-concept.json");
+  assert.deepEqual(JSON.parse(await blobs.get(anchors[0].href).text()), compiled);
+  assert.equal(anchors[0].clicked, true); assert.equal(anchors[0].removed, true);
+  builder.download("artwork");
+  assert.equal(anchors[1].download, "halo-cover-concept.svg");
+  assert.equal(await blobs.get(anchors[1].href).text(), compiled.artwork.svg);
+  input.title = "Changed title"; builder.render();
+  assert.ok(revoked.includes("blob:1"));
+  input.title = ""; builder.download("package");
+  assert.equal(anchors.length, 2);
+  assert.match(elements.status.textContent, /Could not export/);
+  timers.forEach(callback => callback());
+  builder.dispose();
+  assert.ok(revoked.includes(anchors[0].href));
+  const source = await readFile(new URL("../album-concierge/cover-builder.js", import.meta.url), "utf8");
+  assert.doesNotMatch(source, /fetch\(|localStorage|sessionStorage|innerHTML|alert\(/);
 });
 console.log(`Concierge showcase contracts passed (${checks} groups).`);

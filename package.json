@@ -3,8 +3,10 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "test:fan-curations": "node scripts/fan-curation-contracts.mjs",
+    "test:fan-curations:db": "node scripts/fan-curation-db-contracts.mjs",
     "test:listening-telemetry": "node scripts/listening-telemetry-contracts.mjs",
-    "test:fan-signal": "node scripts/fan-signal-tracker-contracts.mjs",
+    "test:fan-signal": "node scripts/fan-signal-tracker-contracts.mjs && npm run -s test:fan-curations",
     "test:affiliate": "node scripts/affiliate-dashboard-contracts.mjs",
     "test:hype-room": "node scripts/hype-room-contracts.mjs && node scripts/milestone-celebration-contracts.mjs",
     "test:discoverer": "node scripts/discoverer-milestone-contracts.mjs",

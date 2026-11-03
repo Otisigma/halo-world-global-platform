@@ -7,6 +7,29 @@ on:
     branches: [main]
 
 jobs:
+  fan-curation-contracts:
+    name: Fan curation + atomic reward contracts
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+      - name: Ensure PostgreSQL test tools
+        run: |
+          if ! command -v pg_config >/dev/null || ! test -x "$(pg_config --bindir)/initdb"; then
+            sudo apt-get update -qq
+            sudo apt-get install -y postgresql
+          fi
+      - name: Run fan rewards and concierge contracts
+        run: npm run test:fan-signal && node scripts/album-concierge-contracts.mjs
+      - name: Verify real PostgreSQL transactions
+        run: npm run test:fan-curations:db
+
   ai-maintenance-contracts:
     name: AI + maintenance governance contracts
     runs-on: ubuntu-latest

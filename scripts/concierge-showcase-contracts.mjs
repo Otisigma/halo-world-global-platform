@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { createConciergeShowcase, showcaseReleases } from "../album-concierge/showcase.js";
+import { conceptTemplates, createConceptDemos, plannedDuration } from "../album-concierge/demos.js";
 
 const sessionId = "10000000-0000-4000-8000-000000000001";
 const release = { id: "public-song", title: "<b>Actual Song</b>", artist: "Actual Artist",
@@ -120,5 +121,45 @@ await check("markup uses semantic controls and no hardcoded releases, fake rank 
   assert.doesNotMatch(script, /alert\(|innerHTML|#1 THIS WEEK|Online & Synchronized|Reciprocity|Ball.s in Your Court/);
   assert.match(css, /prefers-reduced-motion/);
   assert.match(css, /:focus-visible/);
+});
+await check("fictional demo layouts switch complete tracklists without APIs, playback or saved state", async () => {
+  const layout = new Element(), status = new Element();
+  let focused = false, scrolled = false;
+  layout.scrollIntoView = () => { scrolled = true; };
+  const buttons = conceptTemplates.map(template => {
+    const button = new Element("button"); button.dataset = { demoTemplate: template.id }; return button;
+  });
+  const root = {
+    querySelector: selector => selector === "[data-demo-layout]" ? layout : status,
+    querySelectorAll: () => buttons
+  };
+  const demo = createConceptDemos(root, { document: { createElement: tag => {
+    const node = new Element(tag); node.focus = () => { focused = true; }; return node;
+  } } });
+  assert.equal(layout.hidden, false);
+  assert.equal(buttons[0].getAttribute("aria-pressed"), "true");
+  for (const [index, expectedCount, expectedSeconds] of [[0, 8, 2520], [1, 6, 1680]]) {
+    const template = conceptTemplates[index];
+    demo.load(template.id);
+    const details = layout.children[1];
+    const tracks = details.children.find(node => node.tag === "ol");
+    assert.equal(tracks.children.length, expectedCount);
+    assert.equal(template.tracks.reduce((sum, [, seconds]) => sum + seconds, 0), expectedSeconds);
+    assert.equal(details.children[0].textContent, template.title);
+    assert.match(status.textContent, /Fictional layout only; nothing saved, purchased, or played/);
+    assert.equal(buttons[index].getAttribute("aria-pressed"), "true");
+    assert.equal(buttons[1 - index].getAttribute("aria-pressed"), "false");
+  }
+  assert.equal(plannedDuration(285), "4:45");
+  buttons[0].events.get("click")();
+  assert.equal(focused, true);
+  assert.equal(scrolled, true);
+  assert.equal(layout.children[1].children[0].textContent, "Midnight Resonance LP");
+  assert.throws(() => demo.load("missing"), /Unknown album concept/);
+  const [page, script] = await Promise.all(["album-concierge/index.html", "album-concierge/demos.js"]
+    .map(path => readFile(new URL(`../${path}`, import.meta.url), "utf8")));
+  assert.match(page, /data-concierge-demos aria-labelledby="demoArchiveTitle"/);
+  assert.match(page, /aria-controls="demoLayout" aria-pressed="false"/);
+  assert.doesNotMatch(script, /fetch\(|localStorage|sessionStorage|innerHTML|alert\(|\.play\(/);
 });
 console.log(`Concierge showcase contracts passed (${checks} groups).`);

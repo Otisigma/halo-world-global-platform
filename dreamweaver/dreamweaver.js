@@ -836,6 +836,17 @@ import { MIX_PRESETS, createMixSeed, deleteUserPreset, describeMixIntent, normal
     return { src: "", source: "", isPlayable: false };
   }
 
+  // Same resolver the chart ▶ PLAY rows use (HaloReleaseArtwork.resolveAudio over the public release-catalog entry).
+  // Raw Drive links stay excluded: Dreamweaver only plays Drive audio through the authorized site proxy.
+  function releaseCatalogAudio(release) {
+    if (!release || typeof release !== "object") return "";
+    const resolved = window.HaloReleaseArtwork?.resolveAudio(release, { requirePlayable: true });
+    const candidates = resolved
+      ? [resolved.src, ...(resolved.candidates || [])]
+      : [...primaryAudioCandidates(release), release.dreamweaverPayload?.audioStreamUrl];
+    return candidates.map(safeMediaUrl).find(src => src && !isGoogleDriveUrl(src)) || "";
+  }
+
   // Drive fallbacks only come from the same song's published release (catalog routes) or the mix itself.
   function dreamweaverDriveFallbacks(mix, primaryAudio) {
     if (mix?.isDriveCatalogPlayback) {
@@ -848,7 +859,10 @@ import { MIX_PRESETS, createMixSeed, deleteUserPreset, describeMixIntent, normal
       const releaseSongId = cleanSongId(release.dreamweaverPayload?.songId) || cleanSongId(release.catalog?.songId) || cleanSongId(release.id);
       if (!mix.canonicalBinding || !releaseSongId || releaseSongId !== cleanSongId(mix.canonicalBinding.songId)) return [];
       const candidates = [mix.canonicalBinding.fallbackAudioSource, release.dreamweaverPayload?.audioStreamUrl, release.streamUrl];
-      return [...new Set(candidates.map(siteAudioProxy).filter(src => src && src !== primaryAudio))];
+      const proxies = candidates.map(siteAudioProxy);
+      // The live public release stream (what the chart plays) is the last same-song fallback.
+      const chartStream = state.releaseFromLiveCatalog ? releaseCatalogAudio(release) : "";
+      return [...new Set([...proxies, chartStream].filter(src => src && src !== primaryAudio))];
     }
     return [...new Set(primaryAudioCandidates(mix).map(siteAudioProxy).filter(src => src && src !== primaryAudio))];
   }
@@ -910,14 +924,25 @@ import { MIX_PRESETS, createMixSeed, deleteUserPreset, describeMixIntent, normal
 
   async function bindCanonicalAssets(mix, songId) {
     const fingerprint = routeContextFingerprint();
-    const { response, payload } = await fetchJsonWithTimeout(`/api/dreamweaver-assets?songId=${encodeURIComponent(songId)}`, {
-      timeoutMs: RELEASE_CONTEXT_TIMEOUT_MS,
-      timeoutMessage: "Dreamweaver timed out while binding the canonical master.",
-      headers: { Accept: "application/json" },
-      credentials: "same-origin"
-    });
+    let response, payload;
+    try {
+      ({ response, payload } = await fetchJsonWithTimeout(`/api/dreamweaver-assets?songId=${encodeURIComponent(songId)}`, {
+        timeoutMs: RELEASE_CONTEXT_TIMEOUT_MS,
+        timeoutMessage: "Dreamweaver timed out while binding the canonical master.",
+        headers: { Accept: "application/json" },
+        credentials: "same-origin"
+      }));
+    } catch (error) {
+      throw Object.assign(new Error(error?.message || "The canonical master binding could not be reached."), { bindingUnavailable: true });
+    }
     const binding = payload.binding;
-    if (!response.ok || binding?.status !== "ready" || binding.songId !== songId || !safeMediaUrl(binding.audioSource)
+    if (!response.ok || !binding || binding.status !== "ready") {
+      const error = new Error(payload.message || "The canonical master and four visual acts are not ready.");
+      error.bindingUnavailable = true;
+      throw error;
+    }
+    // A ready binding for another song, or with unsafe media, is an integrity failure and never falls back.
+    if (binding.songId !== songId || !safeMediaUrl(binding.audioSource)
       || !Array.isArray(binding.visualActs) || binding.visualActs.length !== 4) {
       throw new Error(payload.message || "The canonical master and four visual acts are not ready.");
     }
@@ -3113,6 +3138,8 @@ import { MIX_PRESETS, createMixSeed, deleteUserPreset, describeMixIntent, normal
 
   async function loadShow({ preserveShell = false } = {}) {
     window.HaloAudioPreloader?.clear();
+    state.releaseFromLiveCatalog = false;
+    state.catalogFallbackTried = new Set();
     setReleasePlaybackState("loading");
     setLoadingProgress(8, "Calibrating Dreamweaver stage", "Dreamweaver is staging this edition with artwork, metadata, and the four-act lobby in sync.");
     if (!preserveShell) {
@@ -3171,7 +3198,9 @@ import { MIX_PRESETS, createMixSeed, deleteUserPreset, describeMixIntent, normal
         const releases = await releaseCatalogPromise;
         if (routeContextFingerprint() !== requestedRouteFingerprint) return;
         if (releases.length) state.releaseCatalog = releases;
-        release = resolveReleaseFromCatalog(releases, routeContext) || readCachedDreamweaverRelease(routeContext);
+        release = resolveReleaseFromCatalog(releases, routeContext);
+        state.releaseFromLiveCatalog = Boolean(release);
+        release ||= readCachedDreamweaverRelease(routeContext);
         if (!release && (requestedMix || routeContext.requestedSongId)) release = buildFallbackDreamweaverRelease(routeContext);
         if (release) {
           state.release = applyDreamweaverPayload(release);
@@ -3231,7 +3260,23 @@ import { MIX_PRESETS, createMixSeed, deleteUserPreset, describeMixIntent, normal
       if (mix.isCatalogPlayback) {
         const bindingSong = cleanSongId(release?.catalog?.songId) || cleanSongId(state.publishedSongId);
         if (!bindingSong) throw new Error("A catalog song is required to bind the canonical master.");
-        await bindCanonicalAssets(mix, bindingSong);
+        try {
+          await bindCanonicalAssets(mix, bindingSong);
+        } catch (error) {
+          // Mirror the chart player: a live published release with a playable stream still plays.
+          const chartStream = error?.bindingUnavailable && state.releaseFromLiveCatalog
+            ? releaseCatalogAudio(state.release || release) : "";
+          if (!chartStream) throw error;
+          if (routeContextFingerprint() !== requestedRouteFingerprint) return;
+          mix.audioUrl = chartStream;
+          mix.releaseCatalogStream = true;
+          queueAudioFeedbackIncident("canonical_binding_unavailable", {
+            severity: "medium",
+            title: "Dreamweaver used the public release stream",
+            details: "The canonical master binding was unavailable, so Dreamweaver played the same published release stream the chart uses.",
+            metadata: { failureState: "canonical_binding_unavailable" }
+          });
+        }
         if (routeContextFingerprint() !== requestedRouteFingerprint) return;
       }
       setLoadingProgress(34, "Selecting tonight’s signal", "A published Dreamweaver mix has been selected and the room is shifting to match its pace.");
@@ -3583,8 +3628,12 @@ import { MIX_PRESETS, createMixSeed, deleteUserPreset, describeMixIntent, normal
 
   async function retryCatalogProxy() {
     if (!state.mix || state.audioSourceMode !== "remote" || state.catalogFallbackActive) return false;
-    const fallback = dreamweaverDriveFallbacks(state.mix, elements.audio.src)[0];
+    // Each same-song fallback is tried at most once per show so failing sources can never ping-pong.
+    const tried = state.catalogFallbackTried ||= new Set();
+    tried.add(elements.audio.src);
+    const fallback = dreamweaverDriveFallbacks(state.mix, elements.audio.src).find(src => !tried.has(src));
     if (!fallback) return false;
+    tried.add(fallback);
     state.catalogFallbackActive = true;
     try {
       const offset = elements.audio.currentTime || 0;

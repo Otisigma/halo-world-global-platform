@@ -6,6 +6,15 @@ shows up to four published releases, and offers a selector for the remaining
 catalog entries. Cards display persisted titles, artists, descriptions and
 eligible public artwork. No chart rank or real-time synchronization is implied.
 
+The curator preview archive is separate from real releases and private saved
+sessions. Two fictional examples (Midnight Resonance LP and Quiet Heart Sessions)
+open complete layouts with local CSS cover sketches, illustrative ordered
+tracklists, planned durations, artwork direction and liner notes. Midnight opens
+initially; Load Layout switches the example and moves keyboard focus to its title.
+These examples make no network requests, play no audio, write no storage and
+never populate or overwrite the guided form. They are not released recordings,
+licensed assets, saved sessions or goods for sale. No sign-in is required.
+
 Preview is user-triggered and uses a single native audio player. Only static
 public audio passing the existing satellite media validator is accepted; private
 stems, signed masters and API asset URLs are excluded. Releases without eligible

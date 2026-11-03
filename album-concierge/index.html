@@ -23,6 +23,7 @@
   <script src="/identity.js" type="module"></script>
   <script src="/album-concierge/album-concierge.js" defer></script>
   <script src="/album-concierge/showcase.js" type="module"></script>
+  <script src="/album-concierge/demos.js" type="module"></script>
 </head>
 <body>
   <a class="skip-link" href="#workspace">Skip to Album Concierge</a>
@@ -94,6 +95,35 @@
         </header>
         <p>Explore published songs without leaving your creative flow. Your saved concepts are private
           song ideas, not recordings, reward claims, or proof of licensing rights.</p>
+        <section class="ac-demo-archive" data-concierge-demos aria-labelledby="demoArchiveTitle">
+          <span class="ac-showcase-badge">Curator preview archive</span>
+          <h3 id="demoArchiveTitle">Explore an album concept layout</h3>
+          <p>Fictional design examples with illustrative track titles and planned durations.
+            These are not released albums, recordings, or items for sale. No audio plays or account data changes.</p>
+          <div class="ac-showcase-grid">
+            <article>
+              <div class="ac-demo-cover ac-demo-cover-club" aria-hidden="true"><span>Club concept</span><strong>Midnight<br>Resonance</strong></div>
+              <h4>Midnight Resonance LP</h4>
+              <p>An eight-track journey through deep house, driving basslines, and late-night atmospheric grooves.</p>
+              <small>8 track ideas / 42 planned minutes</small>
+              <div class="ac-showcase-actions">
+                <button type="button" data-demo-template="midnight" aria-controls="demoLayout" aria-pressed="false">Load Midnight Resonance layout</button>
+              </div>
+            </article>
+            <article>
+              <div class="ac-demo-cover ac-demo-cover-acoustic" aria-hidden="true"><span>Acoustic session</span><strong>Quiet Heart<br>Sessions</strong></div>
+              <h4>Quiet Heart Sessions</h4>
+              <p>Unplugged arrangements, imagined raw vocal takes, and intimate guitar-driven storytelling.</p>
+              <small>6 track ideas / 28 planned minutes</small>
+              <div class="ac-showcase-actions">
+                <button type="button" data-demo-template="quiet" aria-controls="demoLayout" aria-pressed="false">Load Quiet Heart layout</button>
+              </div>
+            </article>
+          </div>
+          <p data-demo-status role="status" aria-live="polite">Choose a layout to explore its cover, tracklist, and liner note.</p>
+          <div id="demoLayout" class="ac-demo-layout" data-demo-layout hidden></div>
+          <noscript>Enable JavaScript to open the example tracklists. The concept covers above remain visible.</noscript>
+        </section>
         <div class="ac-showcase-controls">
           <label for="showcaseRelease">Choose a public release</label>
           <select id="showcaseRelease" data-showcase-selector disabled>

@@ -12,6 +12,7 @@ class FakeAudio extends EventTarget {
   constructor() {
     super();
     this.src = "";
+    this.dataset = {};
     this.readyState = 0;
     this.preload = "none";
     this.loads = 0;

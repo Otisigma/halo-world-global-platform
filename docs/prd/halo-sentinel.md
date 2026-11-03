@@ -149,13 +149,115 @@ decoding and audible sound with approved assets before claiming live resolution.
 Existing `audio-endpoint-smoke` work is a separate review change, not a dependency
 silently assumed to be deployed.
 
-## Remaining roadmap
+## Working list to reach the PRD target
 
-Live crawling of every private/authenticated server route, decoded-media and
-hardware-audibility proof, durable offline replay, operator-authenticated
-rollback controls, and general-purpose AI-generated source repair require
-separate design and approval. They are not implemented or guaranteed by this
-bounded subsystem. “100%” cannot be claimed without those capabilities and
-approved production credentials/assets, and absolute guarantees remain
-impossible for browser-throttled tabs, external services, and physical audio
-output.
+“100%” here means every item below is implemented and independently verified
+for an explicitly inventoried HALO scope. It does not mean zero outages or
+guaranteed audible sound: browsers throttle background work, providers fail,
+and software cannot verify a listener's speakers. Do not mark an item complete
+from source inspection alone when it requires deployed evidence.
+
+### Phase 0 — Establish a trusted production baseline
+
+- [ ] **Review and land the current prerequisite changes.** Maintainer reviews
+  and merges PR #487 (five audio endpoint probes), PR #488 (Dreamweaver
+  playback recovery), and PR #489 (Sentinel). Resolve all required CI and
+  independent review findings; do not merge on green CI alone. As of
+  2026-11-03, all three are open; #489's checks pass, but production is not
+  updated.
+- [ ] **Verify deployed behavior after merge.** Using maintainer-approved,
+  published assets and a production-safe account, verify the five stream routes,
+  CORS/auth policy, browser playback in Dreamweaver and Concierge, and a real
+  Sentinel event in the signed-in Ledger. Record environment, timestamp,
+  route/asset class, status, and evidence without recording private IDs/tokens.
+- [ ] **Baseline the supported surface.** Generate a versioned inventory of
+  public pages, interactive media surfaces, audio APIs, canonical routes, and
+  authenticated/rights-gated routes. Name each owner and test mode; do not
+  probe private routes without explicit credentials and approval.
+
+### Phase 1 — Close declared monitoring coverage
+
+- [ ] **Add runtime adapters to every inventoried interactive media surface**
+  (including radio, mixes, catalog players, and DJ deck where applicable).
+  Acceptance: every adapter resolves only its existing authorized source,
+  registers before interaction, preserves gesture-based playback, and has
+  tests for source loss, error, pause, replacement, and teardown.
+- [ ] **Add bounded server-side checks for every inventoried public audio/API
+  route.** Reuse the five-route audio probe pattern; cap bytes, duration,
+  redirects, and concurrency. Keep credentials scoped to approved origins and
+  routes. Acceptance: route inventory and probe inventory match; missing
+  configuration is reported as unknown/failure, never green.
+- [ ] **Cover canonical and navigation health from the shared route registry.**
+  Check all declared public canonical destinations and internal links, with
+  explicit allowlists for redirects. Acceptance: wrong host/path is reported,
+  not guessed or rewritten; route contract changes fail CI with actionable
+  evidence.
+
+### Phase 2 — Prove media readiness without false healthy states
+
+- [ ] **Separate transport from media readiness.** Keep bounded HEAD/range
+  checks as transport evidence; add browser `loadedmetadata`/`canplay` and
+  observed `playing` checks where applicable. Acceptance: status names the
+  evidence level and never equates HEAD or a resolved `play()` promise with
+  decoded or audible playback.
+- [ ] **Exercise approved media failure modes.** Test 404, non-audio response,
+  range mismatch, expired authorization, CORS denial, timeout, decode error,
+  autoplay denial, local Blob selection, and stale-source races. Acceptance:
+  no source substitution, autoplay bypass, leaked private data, or stopped
+  native playback solely because a metadata probe was CORS-blocked.
+- [ ] **Add a repeatable production smoke procedure** for approved assets and
+  accounts. Acceptance: store reproducible browser/network evidence and
+  distinguish synthetic fixtures from deployed verification.
+
+### Phase 3 — Make diagnostics dependable and operable
+
+- [ ] **Design durable, privacy-minimal retry.** Specify retention, deduplication,
+  offline behavior, storage limits, and deletion. Persist only the existing
+  enum-only event contract; never queue URLs, tokens, private IDs, filenames,
+  or stack traces. Acceptance: restart/offline/reconnect and quota failures
+  are tested and never appear as successful ledger writes.
+- [ ] **Complete operator controls.** Provide authorized pause/resume and
+  recovery/audit history with clear scope, actor, and timestamps. Add a
+  reviewed rollback procedure for runtime/config/source fixes. Acceptance:
+  unauthorized users cannot change global settings; every control action is
+  auditable and reversible.
+- [ ] **Set measurable service objectives.** Define coverage denominator,
+  detection delay for foreground/background checks, event-delivery success,
+  false-positive rate, recovery success, and escalation behavior. Acceptance:
+  report actual measurements and exclusions; do not promise hard SLAs for
+  browser-throttled tabs or external dependencies.
+
+### Phase 4 — Expand source repair safely
+
+- [ ] **Grow the finite repair catalog from incident evidence.** Each recipe
+  needs an owner, narrow allowlist, deterministic preconditions, regression
+  test, idempotence test, and rollback instructions. Unknown or ambiguous
+  states must stop without editing.
+- [ ] **Treat AI-generated changes as proposals only.** If added, run in a
+  least-privilege workflow with no secrets or production-write access; require
+  tests, diff artifact, independent review, and maintainer approval before
+  merge. Never let browser observations become executable instructions.
+- [ ] **Drill the failure path.** Simulate a bad generated proposal, failing
+  tests, duplicate proposals, missing PR permission, and rollback. Acceptance:
+  no merge/deploy occurs, the exact failure is surfaced, and maintainers can
+  recover through a reviewed revert.
+
+### Phase 5 — Release gates and completion score
+
+- [ ] **Independent verification:** reviewer not responsible for the
+  implementation inspects the final diff, tests a failure scenario, and
+  records findings/disposition.
+- [ ] **Production acceptance:** maintainer verifies approved deployed routes,
+  real ledger persistence, and supported-browser playback; unresolved
+  limitations are listed.
+- [ ] **Enablement:** only after the prior gates, maintainer explicitly enables
+  the scheduled workflow and confirms its first run produces either a clean
+  report or a review-only PR.
+
+Track completion by acceptance items, not by confidence language. The target is
+100% only when every checkbox is evidenced for the declared scope; any excluded
+surface must be explicitly named rather than counted as covered. Current
+implementation has the two-page adapters, finite markup recipes, static
+19-page/32-route contracts, and local synthetic browser evidence, but the
+production, full adapter/route inventory, durable queue, and operational gates
+above remain open.

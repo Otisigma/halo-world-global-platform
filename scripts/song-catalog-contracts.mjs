@@ -559,7 +559,7 @@ assert.equal(validateMasterUpload({ filename: "master.wav", contentType: "audio/
 assert.equal(validateMasterUpload({ filename: "master.wav", contentType: "audio/wav", fileSize: 0 }).status, 400, "empty master uploads are rejected");
 assert.equal(validateMasterUpload({ filename: "cover.png", contentType: "image/png", fileSize: 1024 }).status, 415, "non-audio master uploads are rejected");
 
-assert.match(page, /id="versionTable" tabindex="-1"><\/div>\s*<form[^>]*id="alternateUploadForm"/, "inline upload lives directly below the focusable version list");
+assert.match(page, /id="versionTable" tabindex="-1"><\/div>\s*<section[^>]*aria-labelledby="dreamweaverUploadTitle"[\s\S]*?<\/section>\s*<form[^>]*id="alternateUploadForm"/, "Dreamweaver upload sits immediately above Alternate Versions, after the version list");
 assert.match(page, /id="alternateSongId" name="songId" type="hidden"/, "inline uploads carry the current parent song");
 assert.match(page, /for="alternateVersionTitle"/, "version title has a visible label");
 assert.match(page, /for="alternateAudioFile"/, "audio picker has a visible label");
@@ -588,6 +588,7 @@ const inline = runInNewContext(`${client.slice(client.indexOf("const alternateUp
 ({renderAlternateUpload,uploadAlternateVersion})`, {
   $: selector => inlineElements[selector.slice(1)] || {},
   uploadHelper: { createUploadUi: () => inlineUi },
+  dreamweaverUploadPanel: { show() {} },
   state: inlineState,
   crypto: { randomUUID: () => `new-version-${++generatedVersionIds}` },
   setValue: (selector, value) => { inlineElements[selector.slice(1)].value = value; },

@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
+import { extractMediaBlock, hasCssDeclaration } from "./css-contract-helpers.mjs";
 
 const [migration, satelliteStatusesMigration, sweep, scheduled, maintenanceLib, maintenanceIssuesApi, maintenanceIssuesValidation, heartbeatLib, radioScout, outreachWeekly, artistWeekly, api, satelliteApi, page, client, docs, packageJson, navigationCss, mainMenuPage] = await Promise.all([
   readFile(new URL("../netlify/database/migrations/20260809150000_create-maintenance-sweeps.sql", import.meta.url), "utf8"),
@@ -83,8 +84,15 @@ assert.match(mainMenuPage, /menuDestinationCount/, "the primary menu summary mus
 assert.doesNotMatch(mainMenuPage, /MENU_ROUTE_STATUS_TARGETS\.has\(normalizedRoute\)\s*&&\s*menuRouteStatusesUnavailable[\s\S]{0,120}\?\s*'yellow'/, "the primary menu must not force every monitored route into ATTENTION during a refresh");
 assert.match(navigationCss, /\.halo-menu-route-status/, "menu status badge styling must exist");
 assert.match(navigationCss, /\.halo-menu-status-label/, "menu status labels must wrap visibly");
-assert.doesNotMatch(navigationCss, /@media\s*\(max-width:\s*767px\)\s*\{[\s\S]*?\.halo-menu-summary-copy small,\s*[\s\S]*?\.halo-menu-count\s*\{[\s\S]*?display:\s*none/i, "mobile styles must keep the menu summary tags visible");
-assert.doesNotMatch(navigationCss, /@media\s*\(max-width:\s*520px\)\s*\{[\s\S]*?\.halo-menu-lane small\s*\{[\s\S]*?display:\s*none/i, "mobile styles must keep helper tags visible");
+const mobileSummaryCss = extractMediaBlock(navigationCss, "max-width: 767px");
+const narrowMenuCss = extractMediaBlock(navigationCss, "max-width: 520px");
+assert.ok(mobileSummaryCss, "mobile summary styles must exist");
+assert.ok(narrowMenuCss, "narrow-screen menu styles must exist");
+const hiddenHelperFixture = extractMediaBlock("@media (max-width: 520px) { .halo-menu-lane small { display: none; } }", "max-width: 520px");
+assert.equal(hasCssDeclaration(hiddenHelperFixture, ".halo-menu-lane small", "display", "none"), true, "the responsive contract must detect a hidden helper tag");
+assert.equal(hasCssDeclaration(mobileSummaryCss, ".halo-menu-summary-copy small", "display", "none"), false, "mobile styles must keep the menu summary tags visible");
+assert.equal(hasCssDeclaration(mobileSummaryCss, ".halo-menu-count", "display", "none"), false, "mobile styles must keep the destination count visible");
+assert.equal(hasCssDeclaration(narrowMenuCss, ".halo-menu-lane small", "display", "none"), false, "mobile styles must keep helper tags visible");
 for (const route of [
   "/music/", "/halo-x.html", "/mixes/", "/dj-deck.html", "/halo-live.html", "/radio/",
   "/artist-pro/", "/creators/", "/artists/", "/creator-freedom/", "/campaign-studio/",

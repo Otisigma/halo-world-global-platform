@@ -180,9 +180,7 @@ await check("native keyboard controls, semantic progress, responsive and motion 
   assert.match(page, /<summary>Local activity breakdown and unlock prerequisites<\/summary>/);
   assert.match(page, /data-concierge-retry type="button"/);
   assert.match(page, /href="\/album-concierge\/">Open Album Concierge concept tool/);
-  assert.match(page, /server-verified card claims in the curation desk/);
-  assert.match(page, /href="\/album-concierge\/#fan-curations"/);
-  assert.match(page, /Browser-local HALO Points below cannot pay for listening cards/);
+  assert.match(page, /No album entitlement or already-claimed status/);
   assert.match(styles, /:focus-visible/);
   assert.match(styles, /repeat\(auto-fit/);
   assert.match(styles, /\.halo-satellite__modal \{[^}]*overflow-y: auto/s);

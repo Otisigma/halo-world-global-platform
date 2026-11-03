@@ -1,18 +1,29 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
-import { curationInput, createFanCurationsHandler, FAN_CURATION_POLICY } from "../netlify/lib/fan-curations.mjs";
-import { createFanCurationDesk } from "../album-concierge/fan-curations.js";
+import { curationInput, createFanCurationsHandler, FAN_CURATION_POLICY, constellationPilotAccess, constellationDatabaseUrl } from "../netlify/lib/fan-curations.mjs";
+import { createFanCurationDesk } from "../satellites/constellation-lab/fan-curations.js";
+import { constellationSvg, IMAGINED_TRACKS } from "../satellites/constellation-lab/constellation.js";
 
 const id = "10000000-0000-4000-8000-000000000001";
 const save = { action: "save", title: "Night Drive", releaseIds: ["release-one", "release-two", "release-three"] };
 let groups = 0;
 async function check(name, run) { await run(); groups++; console.log(`PASS: ${name}`); }
-function server({ user = { id: "verified-member" }, origin = true, outcome = { result: "saved", id, rewardGranted: true }, fail = false } = {}) {
+function server({
+  user = { id: "verified-member" }, origin = true,
+  environment = name => ({
+    CONTEXT: "dev", HALO_CONSTELLATION_ENABLED: "true", HALO_CONSTELLATION_PILOT_MEMBERS: "verified-member",
+    HALO_CONSTELLATION_DATABASE_URL: "postgresql://test@preview.example/constellation"
+  })[name] ?? "",
+  outcome = { result: "saved", id, rewardGranted: true }, fail = false
+} = {}) {
   const queries = [];
   const handler = createFanCurationsHandler({
+    environment,
     getUser: () => user, verifyRequestOrigin: () => origin,
     ensureMembership: (_db, member) => assert.equal(member, user),
-    getDatabase: () => ({ sql: async (strings, ...values) => {
+    getDatabase: options => {
+      assert.equal(options.connectionString, environment("HALO_CONSTELLATION_DATABASE_URL"));
+      return { sql: async (strings, ...values) => {
       const text = strings.join("?");
       queries.push({ text, values });
       if (fail) throw new Error("private-database-detail");
@@ -22,7 +33,8 @@ function server({ user = { id: "verified-member" }, origin = true, outcome = { r
         return [{ title: '<script>alert("x")</script>', tracks: [{ id: "release-one", title: "<b>Song</b>", artist: '"Artist"' }] }];
       }
       return [];
-    } })
+    } };
+    }
   });
   const request = (body, { headers = {}, method = body === undefined ? "GET" : "POST", path = "/api/fan-curations" } = {}) =>
     handler(new Request(`https://halo.example${path}`, {
@@ -31,6 +43,54 @@ function server({ user = { id: "verified-member" }, origin = true, outcome = { r
     }));
   return { request, queries };
 }
+
+await check("pilot is default-off, production-blocked and exact-member allowlisted before database access", async () => {
+  for (const settings of [{}, { HALO_CONSTELLATION_ENABLED: "true" },
+    { CONTEXT: "production", HALO_CONSTELLATION_ENABLED: "true", HALO_CONSTELLATION_PILOT_MEMBERS: "verified-member" },
+    { CONTEXT: "dev", HALO_CONSTELLATION_ENABLED: "TRUE", HALO_CONSTELLATION_PILOT_MEMBERS: "verified-member" },
+    { CONTEXT: "dev", HALO_CONSTELLATION_ENABLED: "false" }]) {
+    const api = server({ environment: name => settings[name] ?? "" });
+    for (const [body, path] of [[undefined, "/api/fan-curations"], [save, "/api/fan-curations"],
+      [{ action: "redeem", curationId: id, rewardId: "listening-card" }, "/api/fan-curations"],
+      [undefined, `/api/fan-curations/card?curationId=${id}`]]) {
+      assert.equal((await api.request(body, { path })).status, 503);
+    }
+    assert.equal(api.queries.length, 0);
+  }
+  let identityCalls = 0;
+  const closed = createFanCurationsHandler({
+    environment: () => "", getUser: () => { identityCalls++; },
+    getDatabase: () => { throw new Error("Closed pilot must not access database"); }
+  });
+  assert.equal((await closed(new Request("https://halo.example/api/fan-curations"))).status, 503);
+  assert.equal(identityCalls, 0);
+  const noInvitation = server({ environment: name => ({ CONTEXT: "deploy-preview", HALO_CONSTELLATION_ENABLED: "true",
+    HALO_CONSTELLATION_PILOT_MEMBERS: "verified-member-other",
+    HALO_CONSTELLATION_DATABASE_URL: "postgresql://test@preview.example/constellation" })[name] ?? "" });
+  assert.equal((await noInvitation.request()).status, 403);
+  assert.equal((await noInvitation.request(save)).status, 403);
+  assert.equal(noInvitation.queries.length, 0);
+  assert.equal(constellationPilotAccess("verified-member", name => ({ CONTEXT: "deploy-preview", HALO_CONSTELLATION_ENABLED: "true",
+    HALO_CONSTELLATION_PILOT_MEMBERS: "other, verified-member " })[name] ?? ""), true);
+});
+await check("dedicated database is mandatory and cannot fall back to the primary connection", async () => {
+  const settings = { CONTEXT: "deploy-preview", HALO_CONSTELLATION_ENABLED: "true",
+    HALO_CONSTELLATION_PILOT_MEMBERS: "verified-member" };
+  for (const database of [undefined, "", "https://preview.example/db", "postgresql://preview.example/",
+    "postgresql://test:secret@primary.example:5432/halo?sslmode=require", "postgres://other@PRIMARY.EXAMPLE/halo",
+    "postgresql://primary.example/%68alo"]) {
+    const env = name => ({ ...settings, HALO_CONSTELLATION_DATABASE_URL: database,
+      NETLIFY_DB_URL: "postgresql://main:password@primary.example/halo" })[name] ?? "";
+    assert.equal(constellationDatabaseUrl(env), null);
+    const api = server({ environment: env });
+    assert.equal((await api.request()).status, 503);
+    assert.equal((await api.request(save)).status, 503);
+    assert.equal(api.queries.length, 0);
+  }
+  const preview = "postgresql://test@preview.example/constellation";
+  assert.equal(constellationDatabaseUrl(name => ({ HALO_CONSTELLATION_DATABASE_URL: preview,
+    NETLIFY_DB_URL: "postgresql://main@primary.example/halo" })[name] ?? ""), preview);
+});
 
 await check("identity and same-origin boundaries reject guests, spoofing and unsupported methods", async () => {
   const guest = server({ user: null });
@@ -211,21 +271,38 @@ await check("committed mutation plus failed refresh does not report an uncommitt
 });
 
 const read = path => readFile(new URL(`../${path}`, import.meta.url), "utf8");
-await check("navigation, keyboard semantics and reward policy remain connected", async () => {
-  const [page, music, network, migration, ci] = await Promise.all([
-    read("album-concierge/index.html"), read("music/index.html"), read("signal-network/index.html"),
-    read("netlify/database/migrations/20261103110000_fan_curation_rewards.sql"), read(".github/workflows/ci.yml")
+await check("satellite is isolated from stable pages, with keyboard semantics and guarded reward policy", async () => {
+  const [page, music, network, migration, ci, concierge, client] = await Promise.all([
+    read("satellites/constellation-lab/index.html"), read("music/index.html"), read("signal-network/index.html"),
+    read("netlify/database/migrations/20261103110000_fan_curation_rewards.sql"), read(".github/workflows/ci.yml"),
+    read("album-concierge/index.html"), read("satellites/constellation-lab/constellation.js")
   ]);
-  assert.match(page, /<fieldset>[\s\S]*<legend>Choose public releases/);
+  assert.match(page, /<fieldset>[\s\S]*<legend>Choose 3-12 public releases/);
   assert.match(page, /data-curation-status role="status" aria-live="polite"/);
-  assert.match(page, /fan-curations\.js" type="module"/);
-  assert.match(music, /href="\/album-concierge\/#fan-curations"/);
-  assert.match(network, /href="\/album-concierge\/#fan-curations"/);
+  assert.match(page, /type="module" src="\.\/constellation\.js"/);
+  assert.match(page, /data-fan-curation-desk hidden/);
+  for (const stablePage of [music, network, concierge]) assert.doesNotMatch(stablePage, /constellation-lab|data-fan-curation-desk|fan-curations\.js/);
+  assert.doesNotMatch(page, /stats\.js|site-monitor\.js|identity\.js|https:\/\//);
+  assert.doesNotMatch(client, /localStorage|sessionStorage|sendBeacon/);
   assert.match(migration, /'fan-curation:' \|\| v_day, 25/);
   assert.match(migration, /v_earned - v_spent < 25/);
   assert.match(migration, /FOR UPDATE/);
   assert.match(migration, /UNIQUE \(member_id, curation_id, reward_id\)/);
   assert.match(ci, /name: Fan curation \+ atomic reward contracts/);
   assert.match(ci, /run: npm run test:fan-curations:db/);
+});
+await check("local artwork is deterministic, escapes titles, preserves sequence and never grants points", async () => {
+  const ids = IMAGINED_TRACKS.slice(0, 3).map(track => track.id);
+  const first = constellationSvg(ids, '<script>alert("x")</script>', "aurora");
+  assert.equal(constellationSvg(ids, '<script>alert("x")</script>', "aurora"), first);
+  assert.match(first, /&lt;script&gt;/);
+  assert.doesNotMatch(first, /<script>|onload=|<foreignObject/);
+  assert.match(first, /no real points/);
+  assert.notEqual(constellationSvg([...ids].reverse(), "Journey"), constellationSvg(ids, "Journey"));
+  assert.notEqual(constellationSvg(ids, "Journey", "ocean"), constellationSvg(ids, "Journey", "aurora"));
+  assert.throws(() => constellationSvg(["unknown"], "Journey"));
+  assert.throws(() => constellationSvg([ids[0], ids[0]], "Journey"));
+  assert.throws(() => constellationSvg(ids, "Journey", "javascript:alert(1)"));
+  assert.throws(() => constellationSvg(ids, "x".repeat(81)));
 });
 console.log(`Fan curation contracts passed (${groups} groups).`);

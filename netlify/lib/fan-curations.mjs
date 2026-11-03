@@ -6,6 +6,32 @@ export const FAN_CURATION_POLICY = Object.freeze({
   maxCurations: 50, dailySaves: 10, dailyRewardGrants: 1,
   rewardId: "listening-card"
 });
+const readEnvironment = name => globalThis.Netlify?.env?.get(name) ?? process.env[name] ?? "";
+
+export function constellationDatabaseUrl(environment = readEnvironment) {
+  const endpoint = raw => {
+    try {
+      const url = new URL(raw);
+      if (!["postgres:", "postgresql:"].includes(url.protocol) || !url.hostname || url.pathname === "/") return null;
+      return `${url.hostname.toLowerCase()}:${url.port || "5432"}/${decodeURIComponent(url.pathname.slice(1))}`;
+    } catch { return null; }
+  };
+  const connectionString = environment("HALO_CONSTELLATION_DATABASE_URL");
+  const preview = endpoint(connectionString);
+  if (!preview || ["NETLIFY_DB_URL", "DATABASE_URL"].some(name => {
+    const shared = endpoint(environment(name));
+    return shared != null && shared === preview;
+  })) return null;
+  return connectionString;
+}
+
+export function constellationPilotAccess(memberId, environment = readEnvironment) {
+  const context = environment("CONTEXT");
+  if (!["dev", "deploy-preview", "branch-deploy"].includes(context)
+    || environment("HALO_CONSTELLATION_ENABLED") !== "true") return false;
+  const members = String(environment("HALO_CONSTELLATION_PILOT_MEMBERS")).split(",").map(id => id.trim()).filter(Boolean);
+  return members.includes(memberId);
+}
 const releaseIdPattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const json = (body, status = 200) => Response.json(body, {
   status, headers: {
@@ -120,10 +146,21 @@ export async function loadFanCurationState(db, memberId) {
   };
 }
 
-export function createFanCurationsHandler({ getDatabase, getUser, ensureMembership, verifyRequestOrigin }) {
+export function createFanCurationsHandler({
+  getDatabase, getUser, ensureMembership, verifyRequestOrigin, environment = readEnvironment
+}) {
   return async request => {
     if (!["GET", "POST"].includes(request.method)) return json({ message: "Method not allowed" }, 405);
     try {
+      // No production activation, authentication calls, or database access while disabled.
+      if (!["dev", "deploy-preview", "branch-deploy"].includes(environment("CONTEXT"))
+        || environment("HALO_CONSTELLATION_ENABLED") !== "true") {
+        return json({ code: "pilot_disabled", message: "Live Constellation pilot is closed. The local demo does not use accounts or points." }, 503);
+      }
+      const connectionString = constellationDatabaseUrl(environment);
+      if (!connectionString) {
+        return json({ code: "pilot_database_required", message: "A dedicated preview database is required. The satellite will not use HALO's default database." }, 503);
+      }
       const url = new URL(request.url), origin = request.headers.get("origin");
       const cardRequest = url.pathname === "/api/fan-curations/card";
       if ((!cardRequest && url.search) || (origin && origin !== url.origin) || request.headers.get("sec-fetch-site") === "cross-site") {
@@ -142,8 +179,11 @@ export function createFanCurationsHandler({ getDatabase, getUser, ensureMembersh
       }
       const user = await getUser();
       if (!user?.id) throw new FeedError("Sign in to save curations and redeem rewards", 401);
+      if (!constellationPilotAccess(user.id, environment)) {
+        return json({ code: "pilot_invitation_required", message: "This preview is limited to invited pilot accounts. No account data was loaded or changed." }, 403);
+      }
       const input = request.method === "POST" ? curationInput(await readBody(request, 4096)) : null;
-      const db = await getDatabase();
+      const db = await getDatabase({ connectionString });
       await ensureMembership(db, user);
       if (cardRequest) return await listeningCard(db, user.id, cardId, url.origin);
       if (!input) return json(await loadFanCurationState(db, user.id));

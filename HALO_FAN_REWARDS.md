@@ -1,9 +1,54 @@
 # Fan curation and digital rewards
 
-The first fan loop is available at `/album-concierge/#fan-curations`, linked from Music
-and Signal Network. It is separate from AI-generated Album Concierge concepts.
+The experimental satellite lives at `/satellites/constellation-lab/`. There are no
+links or embedded scripts on the stable Music, Album Concierge or Signal Network
+pages. Those pages remain unchanged. This branch must not be merged or deployed
+to production as part of preview testing.
 
-Signed-in members can save private, immutable lists of 3-12 different published,
+## Local Constellation demo
+
+The satellite draws an original visual journey from six fictional track concepts.
+Visitors select stars, reorder the journey, choose a palette, name it, and export
+an escaped SVG keepsake. Positions are deterministic artwork, not audio analysis,
+music similarity, AI inference or a claim of world-first technology.
+
+The demo is in-memory only: no account, storage, analytics, server calls, audio,
+real points, or record ownership. Reloading clears it. Export is a local browser
+download; no data is uploaded. No external scripts or fonts load on page open.
+Only clicking "Check invited preview access" starts a live API request. Identity
+is imported only after the API confirms the pilot is enabled.
+
+## Default-off invited preview
+
+All live API actions, reads and downloads fail closed before authentication or
+database access unless `HALO_CONSTELLATION_ENABLED=true` and Netlify `CONTEXT` is
+`dev`, `deploy-preview`, or `branch-deploy`. Production and missing/unknown contexts
+are always blocked, even if the enable flag is set.
+
+Only exact Identity member IDs listed in the server-side, comma-separated
+`HALO_CONSTELLATION_PILOT_MEMBERS` can access the database. An empty list denies
+everyone. The list is never returned to the browser. No query parameter or
+client-side flag can enable the feature or confer an invitation.
+
+Set `HALO_CONSTELLATION_DATABASE_URL` to a dedicated preview database. The satellite
+explicitly passes this connection to `getDatabase`; it never falls back to HALO's
+default connection. Missing/invalid URLs and URLs matching the host, port and
+database of either `NETLIFY_DB_URL` or `DATABASE_URL` are rejected before database
+access (changing passwords, query options, URL encoding or protocol does not bypass
+that comparison).
+
+An administrator must still verify that the dedicated endpoint is actually
+non-production: a URL cannot prove the ownership/purpose of an unrelated database
+or recognize every alias of a server. Do not copy production credentials, member
+contacts or private catalogs into the preview.
+
+The pilot uses existing HALO Identity (no duplicate accounts, new signup tracking
+or billing). Sign in through an existing account screen, then explicitly connect
+the satellite. The demo stays separate and is never submitted to the live API.
+Disconnecting clears the displayed pilot state without deleting persisted records.
+Turning `HALO_CONSTELLATION_ENABLED` off is the preview kill switch for all endpoints.
+
+Invited signed-in members can save private, immutable lists of 3-12 different published,
 public HALO releases. Artist credits and listening destinations come from the
 catalog, not client URLs. Collections do not copy audio or grant licenses,
 distribution rights, cross-promotion consent, or recording ownership.
@@ -26,10 +71,11 @@ distribution rights, cross-promotion consent, or recording ownership.
 
 ## Persistence and deployment
 
-Apply `netlify/database/migrations/20261103110000_fan_curation_rewards.sql` after the
-existing memberships, release campaigns and track-drop migrations, using the
-repository's Netlify database migration pipeline. Deploy the function and static
-assets together. No new provider credentials or AI keys are required.
+Apply `netlify/database/migrations/20261103110000_fan_curation_rewards.sql` only to
+the isolated preview database, after memberships, release campaigns and track-drop
+migrations. This is additive schema, not permission to migrate production.
+Deploy the function and satellite assets to the preview together. No new provider
+credentials or AI keys are required.
 
 `/api/fan-curations` supports authenticated GET and same-origin JSON POST:
 
@@ -41,7 +87,8 @@ assets together. No new provider credentials or AI keys are required.
 {"action":"redeem","curationId":"server-issued-uuid","rewardId":"listening-card"}
 ```
 
-The member identity, rewards, limits and costs are server-derived. SQL functions
+The enable flag and invite list are server-derived, as are identity, rewards,
+limits and costs. SQL functions
 lock the existing member preference row to serialize concurrent saves, consent
 changes and debits. Release locks prevent visibility changes during mutations.
 Unique keys prevent repeated grants and charges. No client-supplied balance,
@@ -65,7 +112,16 @@ The database runner creates and removes only its own temporary cluster. CI runs
 both contract suites on pull requests and main pushes; no production database or
 credentials are used.
 
-After deployment, use a signed-in test account with member rewards enabled:
+For browser verification run `node scripts/fan-curation-db-contracts.mjs --serve-demo`
+to keep the pilot disabled, or `--serve` for the invited fixture. The localhost
+server uses a disposable real database and a clearly test-only Identity module,
+never production credentials. Stop it with SIGTERM to remove its cluster.
+
+After preview deployment, use an invited test account with member rewards enabled:
 save three public tracks, confirm +25 points, claim its card, confirm a 25-point
 debit, download it, then retry the claim and verify no second debit. Verify that
 another account cannot access the collection or card.
+
+Before any later main-platform rollout, obtain a separate deployment decision,
+verify production-safe migration/rollback steps, and revisit the production gate.
+Do not remove that gate or add public navigation as part of this experimental PR.

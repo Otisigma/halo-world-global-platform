@@ -1,3 +1,4 @@
+.fan-curation-desk, .fan-curation-desk * { box-sizing: border-box; }
 .fan-curation-desk {
   max-width: 68rem;
   margin: 0 auto 3rem;

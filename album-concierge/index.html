@@ -15,14 +15,12 @@
   <link rel="stylesheet" href="/accessibility.css">
   <link rel="stylesheet" href="/mobile-navigation.css">
   <link rel="stylesheet" href="/album-concierge/album-concierge.css">
-  <link rel="stylesheet" href="/album-concierge/fan-curations.css">
   <script src="/stats.js" defer></script>
   <script src="/site-monitor.js" defer></script>
   <script src="/accessibility.js" defer></script>
   <script src="/mobile-navigation.js" defer></script>
   <script src="/identity.js" type="module"></script>
   <script src="/album-concierge/album-concierge.js" defer></script>
-  <script src="/album-concierge/fan-curations.js" type="module"></script>
 </head>
 <body>
   <a class="skip-link" href="#workspace">Skip to Album Concierge</a>
@@ -84,36 +82,6 @@
       </div>
 
       <!-- ── Notice banner ── -->
-      <section class="fan-curation-desk" id="fan-curations" data-fan-curation-desk aria-labelledby="fanCurationsTitle">
-        <p class="ac-eyebrow">Discover / Curate / Earn / Keep</p>
-        <h2 id="fanCurationsTitle">Build your personal listening collection.</h2>
-        <p>Pick 3-12 public HALO releases. Save a new private tracklist to earn 25 verified Signal Points
-          once per UTC day when member rewards are on. Reordering the same tracks never earns another bonus.</p>
-        <p>A printable listening card costs 25 points per collection, charged once. It contains your title,
-          credited tracklist and public listening links - no audio download, license, ownership transfer or physical order.</p>
-        <p><a href="/music/">Discover and listen to songs</a> /
-          <a href="/track-drops/">Turn member rewards on or off</a> /
-          <a href="/signal-network/">Visit the community</a></p>
-        <p data-curation-wallet>Sign in to load your verified Signal Point balance.</p>
-        <p data-curation-status role="status" aria-live="polite"></p>
-        <button type="button" data-curation-refresh>Refresh curations and balance</button>
-        <form data-curation-form>
-          <label for="fanCurationTitle">Your collection title</label>
-          <input id="fanCurationTitle" data-curation-title type="text" maxlength="120" required autocomplete="off">
-          <fieldset>
-            <legend>Choose public releases (3-12)</legend>
-            <p data-curation-selection>Choose 3-12 tracks.</p>
-            <div data-curation-tracks></div>
-          </fieldset>
-          <button type="submit" data-curation-save disabled>Save private curation</button>
-        </form>
-        <p>You can save up to 10 new curations per UTC day, 50 total. Earned points still count toward
-          your existing reward tier after spending; browser-local HP and paid membership are separate.</p>
-        <h2>Your saved curations and listening cards</h2>
-        <div data-curation-saved></div>
-        <noscript>Enable JavaScript and sign in to save curations and redeem a listening card.</noscript>
-      </section>
-
       <div id="workspace" class="ac-wrap" style="padding-bottom:0">
         <div style="max-width:68rem;margin:0 auto;width:100%;padding:0 clamp(1.25rem,5vw,4.5rem)">
           <div class="ac-notice" id="acNotice" role="alert" aria-live="polite"></div>

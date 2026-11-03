@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 import { resolve, extname } from "node:path";
 import { createFanCurationsHandler } from "../netlify/lib/fan-curations.mjs";
 import { loadMemberRewards } from "../netlify/lib/track-drops.mjs";
+import { getDatabase } from "@netlify/database";
 
 const exec = promisify(execFile);
 const root = resolve(fileURLToPath(new URL("../", import.meta.url)));
@@ -29,8 +30,15 @@ const db = { sql: async (strings, ...values) => {
   const query = strings.reduce((result, part, index) => result + (index ? literal(values[index - 1]) : "") + part, "");
   return JSON.parse(await execute(`SELECT COALESCE(json_agg(row), '[]'::json) FROM (${query}) row`));
 } };
+let pilotEnabled = true;
+const previewEnvironment = name => ({
+  CONTEXT: "dev", HALO_CONSTELLATION_ENABLED: pilotEnabled ? "true" : "false",
+  HALO_CONSTELLATION_DATABASE_URL: `postgresql://${psqlArgs[psqlArgs.indexOf("-U") + 1]}@localhost/postgres?host=${encodeURIComponent(directory)}`,
+  HALO_CONSTELLATION_PILOT_MEMBERS: "alice,bob,charlie,no-consent,quota,privacy,browser-member"
+})[name] ?? "";
 function handler(member) {
   return createFanCurationsHandler({
+    environment: previewEnvironment,
     getDatabase: () => db, getUser: () => member ? { id: member } : null,
     verifyRequestOrigin: () => true, ensureMembership: () => {}
   });
@@ -92,6 +100,23 @@ try {
     assert.equal(earned.breakdown[2].points, 25);
     await execute(migration);
     assert.equal((await wallet("alice")).spent, 25, "retrying migration must preserve debits");
+  });
+  await check("actual Netlify database adapter uses the dedicated override for live handler reads", async () => {
+    let connection;
+    const actual = createFanCurationsHandler({
+      environment: previewEnvironment, getUser: () => ({ id: "alice" }),
+      verifyRequestOrigin: () => true, ensureMembership: () => {},
+      getDatabase: options => {
+        assert.equal(options.connectionString, previewEnvironment("HALO_CONSTELLATION_DATABASE_URL"));
+        connection = getDatabase(options);
+        return connection;
+      }
+    });
+    try {
+      const response = await actual(new Request("https://halo.example/api/fan-curations"));
+      assert.equal(response.status, 200);
+      assert.deepEqual((await response.json()).wallet, { enabled: true, earned: 25, spent: 25, available: 0 });
+    } finally { await connection?.pool.end(); }
   });
   await check("same track set, daily award, concurrent saves and private release rejection", async () => {
     const results = await Promise.all(Array.from({ length: 8 }, () => save("bob").then(async r => ({ status: r.status, ...await r.json() }))));
@@ -183,7 +208,8 @@ try {
   });
   console.log(`Fan curation PostgreSQL contracts passed (${groups} groups).`);
 
-  if (process.argv.includes("--serve")) {
+  if (process.argv.includes("--serve") || process.argv.includes("--serve-demo")) {
+    pilotEnabled = !process.argv.includes("--serve-demo");
     const member = "browser-member", handle = handler(member);
     const server = createServer(async (req, res) => {
       try {
@@ -198,10 +224,9 @@ try {
           res.writeHead(response.status, Object.fromEntries(response.headers));
           res.end(Buffer.from(await response.arrayBuffer())); return;
         }
-        if (url.pathname === "/identity.js") {
+        if (url.pathname === "/test-identity.mjs") {
           res.setHeader("Content-Type", "text/javascript");
-          res.end(`window.haloIdentity = {getUser: async () => ({id:"browser-member"}), onAuthChange: () => () => {}};
-            window.dispatchEvent(new CustomEvent("halo-identity-ready", {detail:window.haloIdentity}));`); return;
+          res.end('export const getUser = async () => ({id:"browser-member"}); export const onAuthChange = () => () => {};'); return;
         }
         if (url.pathname.startsWith("/api/")) { res.writeHead(404); res.end("{}"); return; }
         const path = resolve(root, `.${url.pathname.endsWith("/") ? `${url.pathname}index.html` : url.pathname}`);
@@ -211,11 +236,13 @@ try {
         const types = { ".html": "text/html", ".css": "text/css", ".js": "text/javascript", ".svg": "image/svg+xml",
           ".webp": "image/webp", ".png": "image/png", ".webmanifest": "application/manifest+json" };
         res.setHeader("Content-Type", types[extname(path)]);
-        res.end(await readFile(path));
+        const content = await readFile(path);
+        res.end(url.pathname === "/satellites/constellation-lab/constellation.js"
+          ? content.toString().replace("https://esm.sh/@netlify/identity@1.2.0", "/test-identity.mjs") : content);
       } catch { res.writeHead(500); res.end("Test fixture unavailable"); }
     });
     await new Promise(resolve => server.listen(8877, "127.0.0.1", resolve));
-    console.log("Browser fixture ready at http://127.0.0.1:8877/album-concierge/#fan-curations (real disposable PostgreSQL, fixture identity only).");
+    console.log("Browser fixture ready at http://127.0.0.1:8877/satellites/constellation-lab/ (real disposable PostgreSQL, fixture identity only).");
     await new Promise(resolve => {
       const stop = () => server.close(resolve);
       process.once("SIGTERM", stop); process.once("SIGINT", stop);

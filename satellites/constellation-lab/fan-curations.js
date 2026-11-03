@@ -187,19 +187,3 @@ export function createFanCurationDesk(root, {
   reset();
   return { refresh, reset };
 }
-
-if (typeof window !== "undefined") {
-  const root = document.querySelector("[data-fan-curation-desk]");
-  if (root) {
-    const desk = createFanCurationDesk(root);
-    let unsubscribe;
-    const connect = identity => {
-      unsubscribe?.();
-      desk.reset();
-      desk.refresh();
-      unsubscribe = identity?.onAuthChange?.(() => { desk.reset(); desk.refresh(); });
-    };
-    window.addEventListener("halo-identity-ready", event => connect(event.detail));
-    if (window.haloIdentity) connect(window.haloIdentity);
-  }
-}

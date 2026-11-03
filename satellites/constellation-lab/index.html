@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <meta name="referrer" content="no-referrer">
+  <meta name="theme-color" content="#080d19">
+  <title>HALO Constellation Lab - Experimental Satellite</title>
+  <link rel="stylesheet" href="./constellation.css">
+  <link rel="stylesheet" href="./fan-curations.css">
+  <script type="module" src="./constellation.js"></script>
+</head>
+<body>
+  <a class="skip" href="#lab">Skip to the constellation builder</a>
+  <header class="lab-header">
+    <a class="wordmark" href="/halo">HALO <span>/ Constellation Lab</span></a>
+    <span class="badge">Experimental satellite / not the main platform</span>
+  </header>
+  <main id="lab">
+    <section class="hero" aria-labelledby="labTitle">
+      <p class="eyebrow">A listening journey, drawn in light.</p>
+      <h1 id="labTitle">Don't build a playlist.<br>Build a <em>constellation.</em></h1>
+      <p>Choose imagined tracks, shape their route, and turn your sequence into a keepsake star map.
+        This local sketch uses fictional track concepts, not recordings or artist data.</p>
+      <div class="boundary"><strong>Local demo</strong> No sign-in, server calls, analytics, audio, saved account data, or real points.
+        Nothing here changes HALO's stable system. Reloading clears the sketch.</div>
+    </section>
+
+    <section class="builder" aria-labelledby="builderTitle">
+      <div class="chart-panel">
+        <div class="panel-top"><h2 id="builderTitle">Your sonic sky</h2><span data-map-count>0 stars</span></div>
+        <div class="sky" data-sky>
+          <svg data-constellation viewBox="0 0 640 640" role="img" aria-label="Empty constellation. Select imagined tracks to draw a route."></svg>
+          <p class="sky-caption">A visual sequence, not an AI analysis or measured musical similarity.</p>
+        </div>
+        <div class="appearance">
+          <label for="skyPalette">Sky palette</label>
+          <select id="skyPalette" data-palette>
+            <option value="aurora">Aurora / mint and violet</option>
+            <option value="ember">Ember / amber and rose</option>
+            <option value="ocean">Ocean / blue and pearl</option>
+          </select>
+          <button type="button" data-export disabled>Keep this star map (SVG)</button>
+          <button type="button" class="ghost" data-clear>Clear sketch</button>
+        </div>
+        <p data-demo-status role="status" aria-live="polite">Choose at least three imagined tracks to export a star map.</p>
+      </div>
+      <div class="track-panel">
+        <p class="eyebrow">01 / Choose your stars</p>
+        <h2>Every choice changes the shape.</h2>
+        <label for="mapTitle">Name your journey</label>
+        <input id="mapTitle" data-map-title type="text" maxlength="80" value="My midnight constellation">
+        <div class="imagined-tracks" data-demo-tracks role="group" aria-label="Choose fictional track concepts"></div>
+        <p class="eyebrow">02 / Shape the journey</p>
+        <ol data-journey aria-label="Selected track order"></ol>
+        <p class="hint">Use Earlier / Later to change the sequence. Star positions are deterministic artwork,
+          not genre, audio, mood, or quality predictions.</p>
+      </div>
+    </section>
+
+    <section class="pilot-gate" aria-labelledby="pilotTitle">
+      <div>
+        <p class="eyebrow">03 / Optional invited preview</p>
+        <h2 id="pilotTitle">Real tracks. Verified rewards.<br>A separate, guarded pilot.</h2>
+        <p>The live pilot is disabled by default and blocked on production. Preview administrators must
+          configure an isolated database and invite specific accounts before enabling it.</p>
+        <p>No demo stars, artwork, selections or balances are sent to the pilot.</p>
+      </div>
+      <div>
+        <button type="button" data-open-pilot>Check invited preview access</button>
+        <p data-pilot-status role="status" aria-live="polite">Closed until explicitly enabled by a preview administrator.</p>
+        <p>Already invited? <a href="/album-concierge/">Sign in using HALO's existing account screen</a>,
+          then return here. The experiment never creates a separate account or billing subscription.</p>
+      </div>
+    </section>
+
+    <section class="fan-curation-desk" data-fan-curation-desk hidden aria-labelledby="fanCurationsTitle">
+      <p class="eyebrow">Invited preview / server-verified member rewards</p>
+      <h2 id="fanCurationsTitle">Your private listening collections</h2>
+      <p>Save 3-12 different public HALO releases. With member rewards enabled, a new track set earns 25 points
+        once per UTC day. A printable listening card costs 25 points per collection, charged once.</p>
+      <p>Cards contain credits and public listening links, not audio downloads, licenses, recording ownership,
+        or physical orders. At most 10 new collections per UTC day, 50 total.</p>
+      <p><a href="/music/">Discover public music</a> / <a href="/track-drops/">Manage member reward consent</a></p>
+      <p data-curation-wallet></p>
+      <p data-curation-status role="status" aria-live="polite"></p>
+      <button type="button" data-curation-refresh>Refresh pilot balance and collections</button>
+      <form data-curation-form>
+        <label for="fanCurationTitle">Collection title</label>
+        <input id="fanCurationTitle" data-curation-title type="text" maxlength="120" required autocomplete="off">
+        <fieldset>
+          <legend>Choose 3-12 public releases</legend>
+          <p data-curation-selection></p>
+          <div data-curation-tracks></div>
+        </fieldset>
+        <button type="submit" data-curation-save disabled>Save private collection</button>
+      </form>
+      <h3>Saved collections and listening cards</h3>
+      <div data-curation-saved></div>
+      <button type="button" data-close-pilot>Disconnect pilot view</button>
+    </section>
+    <noscript>This satellite requires JavaScript for the local sketch. The stable HALO platform remains available through the header link.</noscript>
+  </main>
+  <footer><strong>HALO / Explore without changing the core.</strong>
+    <p>Experimental design, not a claim of world-first technology. Artist rights stay with their owners.
+      No physical fulfillment, payments, or subscriptions are connected.</p>
+  </footer>
+</body>
+</html>

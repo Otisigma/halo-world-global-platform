@@ -1,4 +1,5 @@
 import { FeedError, readBody, uuid } from "./signal-feed.mjs";
+import { notifyOwnerSafely } from "./owner-alerts.mjs";
 
 const json = (body, status = 200) => Response.json(body, {
   status, headers: {
@@ -7,7 +8,7 @@ const json = (body, status = 200) => Response.json(body, {
   }
 });
 
-export function createListeningEventsHandler({ getDatabase, getUser, ensureMembership, verifyRequestOrigin }) {
+export function createListeningEventsHandler({ getDatabase, getUser, ensureMembership, verifyRequestOrigin, notify = notifyOwnerSafely }) {
   return async request => {
     if (!["GET", "POST"].includes(request.method)) return json({ message: "Method not allowed" }, 405);
     try {
@@ -30,6 +31,7 @@ export function createListeningEventsHandler({ getDatabase, getUser, ensureMembe
         payload = await readBody(request, 1024);
         const fields = {
           consent: ["action", "enabled"],
+          stream_alert_consent: ["action", "enabled"],
           listen_start: ["action", "releaseId"],
           listen_complete: ["action", "receipt"],
           listen_abandon: ["action", "receipt"]
@@ -40,6 +42,8 @@ export function createListeningEventsHandler({ getDatabase, getUser, ensureMembe
         }
         if (payload.action === "consent") {
           if (typeof payload.enabled !== "boolean") throw new FeedError("Choose a consent setting");
+        } else if (payload.action === "stream_alert_consent") {
+          if (typeof payload.enabled !== "boolean") throw new FeedError("Choose a stream alert setting");
         } else if (payload.action === "listen_start") {
           if (typeof payload.releaseId !== "string" || !/^[a-zA-Z0-9_-]{1,100}$/.test(payload.releaseId)) {
             throw new FeedError("Choose a published release");
@@ -47,17 +51,28 @@ export function createListeningEventsHandler({ getDatabase, getUser, ensureMembe
         } else {
           uuid(payload.receipt);
         }
-        if (privacySignal && !(payload.action === "consent" && payload.enabled === false)) {
+        if (privacySignal && !(["consent", "stream_alert_consent"].includes(payload.action) && payload.enabled === false)) {
           throw new FeedError("Listening analytics disabled by privacy settings", 403);
         }
       }
       const db = await getDatabase();
       if (!payload) {
-        const rows = await db.sql`SELECT enabled FROM halo_listening_preferences WHERE member_id = ${user.id}`;
-        return json({ enabled: !privacySignal && rows[0]?.enabled === true });
+        const rows = await db.sql`SELECT enabled, stream_alerts_enabled FROM halo_listening_preferences WHERE member_id = ${user.id}`;
+        return json({
+          enabled: !privacySignal && rows[0]?.enabled === true,
+          shareStreamAlerts: !privacySignal && rows[0]?.enabled === true && rows[0]?.stream_alerts_enabled === true
+        });
       }
       // Only verified Identity users can create membership-linked preferences.
       await ensureMembership(db, user);
+      if (payload.action === "stream_alert_consent") {
+        const rows = await db.sql`SELECT halo_set_stream_alert_consent(${user.id}, ${payload.enabled}) AS result`;
+        if (rows[0]?.result === "analytics_required") {
+          return json({ message: "Turn on optional listening reports first to enable stream alerts." }, 409);
+        }
+        if (rows[0]?.result !== "ok") throw new Error("Missing stream alert preference result");
+        return json({ shareStreamAlerts: payload.enabled }, 202);
+      }
       const rows = await db.sql`
         SELECT * FROM halo_ingest_listening(
           ${user.id}, ${payload.action}, ${payload.releaseId ?? null},
@@ -68,6 +83,16 @@ export function createListeningEventsHandler({ getDatabase, getUser, ensureMembe
       if (!result) throw new Error("Missing ingestion result");
       const statuses = { consent_required: 403, rate_limited: 429, unavailable: 404 };
       if (Object.hasOwn(statuses, result.result)) return json({ message: result.result }, statuses[result.result]);
+      if (payload.action === "listen_complete" && result.result === "ok" && result.receipt) {
+        const alerts = await db.sql`SELECT * FROM halo_claim_listening_owner_alert(${user.id}, ${result.receipt}::uuid)`;
+        const release = alerts[0];
+        if (release?.owner_member_id) {
+          await notify({
+            title: "New anonymous listen",
+            lines: [`Release: ${release.title}`, `Artist: ${release.artist}`]
+          });
+        }
+      }
       return json(payload.action === "consent"
         ? { enabled: payload.enabled }
         : { accepted: true, ...(result.receipt ? { receipt: result.receipt } : {}) }, 202);

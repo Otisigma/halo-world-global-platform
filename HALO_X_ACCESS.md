@@ -22,6 +22,8 @@ HALO pings the owner when a paid Stripe checkout completes, a new member signs u
 
 For purchases, add a Stripe webhook endpoint at `https://<your-site>/api/stripe-webhook` for `checkout.session.completed` and `checkout.session.async_payment_succeeded`, then set its signing secret as `STRIPE_WEBHOOK_SECRET`. Unsigned or invalid events are rejected, and each verified purchase is recorded once in `halo_stripe_purchase_events` without buyer contact details. Test-mode purchases are labelled `[TEST]`.
 
+Listeners may separately opt in at `/music/` to anonymous stream-completion alerts. Those alerts include only the public release and artist names, go to the configured HALO operations channel (not the individual artist), and are deduplicated per listening session. They require optional listening reports to be enabled first; turning reports off also revokes stream-alert consent. DNT and GPC prevent sharing.
+
 ## Track drop alerts and member rewards
 
 When a song is explicitly published to the shop (Push to Shop & Charts, the unified upload pipeline, or the catalog publish stage), HALO records one track drop for that song. Members choose their alerts at `/track-drops/`: in-app track drop cards, Dreamweaver email cards (which require explicit email consent), and member rewards. The scheduled 15-minute publication repair never announces drops, so the existing catalog is not re-announced.

@@ -5,13 +5,17 @@ import { createStripeWebhookHandler, verifyStripeSignature } from "../netlify/li
 import { ownerAlertText, sendOwnerAlert } from "../netlify/lib/owner-alerts.mjs";
 import { createDreamweaverFanSignupHandler } from "../netlify/functions/dreamweaver-fan-signups.mjs";
 import { createRelationshipEventHandler } from "../netlify/functions/relationship-event.mjs";
+import { createListeningEventsHandler } from "../netlify/lib/listening-events.mjs";
 
 const read = path => readFile(new URL(`../${path}`, import.meta.url), "utf8");
-const [migration, route, relationshipEvent, identity] = await Promise.all([
+const [migration, streamMigration, route, relationshipEvent, identity, streamUi, telemetryUi] = await Promise.all([
   read("netlify/database/migrations/20261101100000_stripe_purchase_events.sql"),
+  read("netlify/database/migrations/20261103090000_listening_owner_alerts.sql"),
   read("netlify/functions/stripe-webhook.mjs"),
   read("netlify/functions/relationship-event.mjs"),
-  read("identity.js")
+  read("identity.js"),
+  read("music/index.html"),
+  read("listening-telemetry.js")
 ]);
 assert.match(migration, /CREATE TABLE IF NOT EXISTS halo_stripe_purchase_events/);
 assert.match(migration, /checkout_session_id TEXT NOT NULL UNIQUE/);
@@ -21,6 +25,11 @@ assert.match(route, /path: "\/api\/stripe-webhook"/);
 assert.match(relationshipEvent, /event_type = 'signup'/);
 assert.match(relationshipEvent, /notifyOwnerSafely/);
 assert.match(identity, /recordRelationshipEvent\("signup"\)/, "Verified identity signup events reach the alert path");
+assert.match(streamMigration, /stream_alerts_enabled BOOLEAN NOT NULL DEFAULT FALSE/);
+assert.match(streamMigration, /owner_alerted_at IS NULL/);
+assert.match(streamMigration, /p_action <> 'consent'/);
+assert.match(streamUi, /id="streamAlertSharing"/);
+assert.match(telemetryUi, /stream_alert_consent/);
 
 const secret = "whsec_test";
 const now = 1_800_000_000;
@@ -217,5 +226,43 @@ assert.equal(anonymousMember.databaseCalls(), 0, "Unauthenticated activity never
 const rejectedOrigin = memberSignupFixture({ originAllowed: false });
 assert.equal((await rejectedOrigin.send()).status, 403);
 assert.equal(rejectedOrigin.databaseCalls(), 0);
+
+const listeningReceipt = "10000000-0000-4000-8000-000000000001";
+function listeningFixture({ result = "ok", alertRows = [], enabled = true, shareAlerts = true } = {}) {
+  const alerts = [], queries = [];
+  const handler = createListeningEventsHandler({
+    getUser: async () => ({ id: "listener-1", email: "private@example.com" }),
+    verifyRequestOrigin: async () => true,
+    ensureMembership: async () => {},
+    notify: async alert => { alerts.push(alert); },
+    getDatabase: async () => ({ sql: async (parts, ...params) => {
+      const query = parts.join("?").replace(/\s+/g, " ").trim();
+      queries.push({ query, params });
+      if (query.startsWith("SELECT enabled")) return [{ enabled, stream_alerts_enabled: shareAlerts }];
+      if (query.startsWith("SELECT * FROM halo_ingest_listening")) return [{ result, receipt: listeningReceipt }];
+      if (query.startsWith("SELECT * FROM halo_claim_listening_owner_alert")) return alertRows;
+      if (query.startsWith("SELECT halo_set_stream_alert_consent")) return [{ result: enabled ? "ok" : "analytics_required" }];
+      return [];
+    } })
+  });
+  const send = body => handler(new Request("https://halo.test/api/listening-events", {
+    method: body ? "POST" : "GET",
+    headers: { Origin: "https://halo.test", "Content-Type": "application/json", "X-Halo-Listening": "1" },
+    ...(body ? { body: JSON.stringify(body) } : {})
+  }));
+  return { alerts, queries, send };
+}
+const streamAlerts = listeningFixture({ alertRows: [{ owner_member_id: "artist-owner", title: "Night Drive", artist: "HALO" }] });
+const streamResponse = await streamAlerts.send({ action: "listen_complete", receipt: listeningReceipt });
+assert.equal(streamResponse.status, 202, JSON.stringify(await streamResponse.json()));
+assert.deepEqual(streamAlerts.alerts, [{ title: "New anonymous listen", lines: ["Release: Night Drive", "Artist: HALO"] }]);
+assert.doesNotMatch(JSON.stringify(streamAlerts.alerts), /listener-1|private@example\.com/);
+assert.ok(streamAlerts.queries.some(({ query }) => query.startsWith("SELECT * FROM halo_claim_listening_owner_alert")));
+const noStreamAlertConsent = listeningFixture({ alertRows: [] });
+assert.equal((await noStreamAlertConsent.send({ action: "listen_complete", receipt: listeningReceipt })).status, 202);
+assert.equal(noStreamAlertConsent.alerts.length, 0);
+const noMemberAnalytics = listeningFixture({ enabled: false });
+assert.deepEqual(await (await noMemberAnalytics.send()).json(), { enabled: false, shareStreamAlerts: false });
+assert.equal((await noMemberAnalytics.send({ action: "stream_alert_consent", enabled: true })).status, 409);
 
 console.log("Owner alert contracts passed");

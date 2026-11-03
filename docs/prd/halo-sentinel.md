@@ -91,8 +91,9 @@ driven by media events, never an unconditional `HALO_STREAM_READY = true`.
 
 ### Ledger and privacy
 
-Song Catalog includes a collapsed Dreamweaver upload panel inside its private
-artist workspace. Expanding it loads the existing same-origin Song Lab intake,
+Song Catalog includes a Dreamweaver upload panel immediately above Alternate
+Versions in the selected song's private workspace. It opens on first song
+selection and loads the existing same-origin Song Lab intake,
 including audio preview, recording-permission attestation and explicit private
 analysis submission. Reopening the panel retains the iframe and in-progress
 work. The full Song Lab link remains available for sign-in, verification or

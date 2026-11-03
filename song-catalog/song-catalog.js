@@ -37,6 +37,7 @@ const uploadUi={audio:uploadHelper.createUploadUi({panel:document.querySelector(
 const alternateUploadUi=uploadHelper.createUploadUi({panel:$("#alternateUploadForm"),status:$("#alternateUploadProgress"),track:$("#alternateUploadTrack"),fill:$("#alternateUploadTrack .upload-progress-fill"),idleMessage:"No file selected."});
 let alternateUploadBusy=false;
 function renderAlternateUpload(song){
+  dreamweaverUploadPanel?.show();
   const form=$("#alternateUploadForm");
   $("#alternateUploadContext").textContent=`Creates a new alternate version of “${song.title}” by ${song.artistName}.`;
   if($("#alternateSongId").value===song.id)return;

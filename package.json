@@ -3,6 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "test:sentinel": "node scripts/sentinel-contracts.mjs && node scripts/sentinel-source-repair.mjs",
     "test:concierge-showcase": "node scripts/concierge-showcase-contracts.mjs",
     "test:fan-curations": "node scripts/fan-curation-contracts.mjs",
     "test:fan-curations:db": "node scripts/fan-curation-db-contracts.mjs",

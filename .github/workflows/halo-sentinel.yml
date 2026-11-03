@@ -1,0 +1,85 @@
+name: HALO Sentinel verified repairs
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "*/15 * * * *"
+
+concurrency:
+  group: halo-sentinel-repairs
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  verified-repair:
+    if: github.event_name == 'workflow_dispatch' || vars.HALO_SENTINEL_REPAIR_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - run: npm ci --ignore-scripts
+      - name: Apply only deterministic allowlisted repairs
+        run: |
+          node scripts/sentinel-source-repair.mjs --write
+          git diff --check
+          git diff > "$RUNNER_TEMP/sentinel-repair.diff"
+      - name: Verify the repaired source and runtime
+        run: npm run test:sentinel && npm run test:drive-catalog && npm run test:audio-preloader && npm run test:concierge-showcase && npm run build
+      - name: Save review evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sentinel-repair-diff
+          path: ${{ runner.temp }}/sentinel-repair.diff
+          if-no-files-found: warn
+      - name: Propose a verified repair (never merge)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if git diff --quiet; then
+            echo "No allowlisted source regression found." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          if test -n "$(gh pr list --state open --search 'in:title "HALO Sentinel: verified asset repair"' --json number --jq '.[0].number // empty')"; then
+            echo "An existing Sentinel repair is awaiting review; no duplicate proposal opened." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          branch="sentinel/repair-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          git switch -c "$branch"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- dreamweaver/index.html album-concierge/index.html
+          git commit -m "Restore verified Sentinel asset bindings" -m "Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>"
+          git push origin "$branch"
+          gh pr create --base main --head "$branch" --title "HALO Sentinel: verified asset repair" --body "$(cat <<'EOF'
+          # Summary
+          Restore deterministic Sentinel script/style ordering or selected audio preload markup only.
+
+          ## Builder evidence
+          The workflow artifact contains the exact diff. Sentinel source/runtime/API contracts, catalog/proxy/playback contracts, preloader contracts, Concierge contracts, and build passed before this branch was pushed.
+
+          ## Verifier findings
+          No independent review or deployed audible-playback verification has occurred. GitHub token-created pull requests may require a maintainer to trigger additional CI.
+
+          ## Committee decision
+          Accept with caveat: review the artifact and run deployment checks before merging. The repository maintainer owns that decision.
+
+          ## Verification checklist
+          - [x] Deterministic patch and local verification evidence recorded.
+          - [ ] Independent reviewer approval.
+          - [ ] Deployed playback verified.
+
+          ## Remaining risks
+          No production deployment, auto-merge, arbitrary generated code, credential change, or stream substitution is authorized by this workflow.
+          EOF
+          )"

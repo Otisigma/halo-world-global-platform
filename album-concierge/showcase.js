@@ -26,7 +26,9 @@ function safeArtwork(value) {
   } catch { return ""; }
 }
 
-export function createConciergeShowcase(root, { document = globalThis.document, fetch = globalThis.fetch } = {}) {
+export function createConciergeShowcase(root, {
+  document = globalThis.document, fetch = globalThis.fetch, sentinel = globalThis.window?.HaloSentinel
+} = {}) {
   const selector = root.querySelector("[data-showcase-selector]");
   const releases = root.querySelector("[data-showcase-releases]");
   const status = root.querySelector("[data-showcase-status]");
@@ -35,6 +37,7 @@ export function createConciergeShowcase(root, { document = globalThis.document, 
   const playerStatus = root.querySelector("[data-showcase-player-status]");
   const audio = root.querySelector("[data-showcase-audio]");
   let catalog = [], catalogRevision = 0, conceptRevision = 0, playbackRevision = 0;
+  let expectedAudio = "";
   let catalogRequest, conceptRequest;
   const element = (tag, text) => {
     const node = document.createElement(tag);
@@ -42,6 +45,7 @@ export function createConciergeShowcase(root, { document = globalThis.document, 
     return node;
   };
   function stop() {
+    expectedAudio = "";
     playbackRevision++;
     audio.pause();
     audio.removeAttribute("src");
@@ -54,17 +58,31 @@ export function createConciergeShowcase(root, { document = globalThis.document, 
     if (!row.audio) { playerStatus.textContent = "In-page preview unavailable. Open the song in the public shop."; return; }
     playerStatus.textContent = `Loading ${row.title} by ${row.artist}...`;
     try {
+      expectedAudio = row.audio;
       audio.src = row.audio;
+      const inspection = sentinel?.preflight(audio, row.audio);
+      // Start inside the click task; waiting for the probe would lose the user gesture.
       await audio.play();
+      const transport = await inspection;
       if (current !== playbackRevision) return;
+      if (transport && !transport.ok) return;
       playerStatus.textContent = `Playing ${row.title} by ${row.artist}.`;
     } catch (error) {
       if (current !== playbackRevision) return;
       stop();
       playerStatus.textContent = error.name === "NotAllowedError" ? "Tap Preview again to allow playback."
         : "Preview could not be played. Open the song in the public shop.";
+      if (error.name === "NotAllowedError") sentinel?.blocked(audio);
     }
   }
+  sentinel?.bind({
+    audio, target: "showcase", expectedSource: () => expectedAudio,
+    onUnavailable: () => {
+      stop();
+      playerStatus.textContent = "Sentinel could not verify this preview. Retry Preview or open the public release; no replacement recording was selected.";
+    },
+    onBlocked: () => { playerStatus.textContent = "Tap Preview again to play with sound."; }
+  });
   function renderReleases() {
     const chosen = selector.value;
     const displayed = chosen ? catalog.filter(row => row.id === chosen) : catalog.slice(0, 4);

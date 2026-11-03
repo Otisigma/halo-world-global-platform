@@ -101,6 +101,8 @@ await check("broken/non-audio transport offers recovery without declaring healin
   assert.ok(!f.sentinel.snapshot().events.some(event => event.state === "recovered"));
   f.audio.dispatchEvent(new Event("error"));
   assert.equal(f.unavailable(), 1, "same source cannot loop through recovery");
+  await f.sentinel.preflight(f.audio, f.audio.src, { recover: false });
+  assert.equal(f.unavailable(), 1, "diagnostic-only preflight failure cannot interrupt playback");
   await f.sentinel.preflight(f.audio, f.audio.src);
   assert.equal(f.unavailable(), 2, "an explicit retry of the same URL can still recover on a later failure");
   f.audio.dispatchEvent(new Event("playing"));

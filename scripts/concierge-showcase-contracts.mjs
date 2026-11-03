@@ -97,6 +97,22 @@ await check("Sentinel is registered before Preview and its preflight does not de
   assert.equal(registered.expectedSource(), "");
   assert.match(h.elements["player-status"].textContent, /Sentinel could not verify/);
 });
+await check("a CORS-blocked metadata preflight does not stop a native-playable public preview", async () => {
+  let registered, recovery = 0, options;
+  const sentinel = {
+    bind(controller) { registered = controller; },
+    preflight(_audio, _source, value) { options = value; return Promise.resolve({ ok: false }); }
+  };
+  const h = browser(async () => Response.json({ releases: [release] }), sentinel);
+  registered.onUnavailable = () => recovery++;
+  await h.desk.refreshCatalog();
+  await h.elements.releases.children[0].children.at(-1).children[0].events.get("click")();
+  assert.deepEqual(options, { recover: false }, "a HEAD/CORS result must not own native preview recovery");
+  assert.equal(h.played(), 1);
+  assert.equal(h.elements.audio.getAttribute("src"), "/assets/test.wav", "preflight failure must preserve native playback source");
+  assert.equal(recovery, 0, "preflight-only failure must not stop preview playback");
+  assert.match(h.elements["player-status"].textContent, /^Playing .* by Actual Artist\.$/);
+});
 await check("empty, failed and stale catalog results expose honest retry states", async () => {
   const empty = browser(async () => Response.json({ releases: [] }));
   await empty.desk.refreshCatalog();

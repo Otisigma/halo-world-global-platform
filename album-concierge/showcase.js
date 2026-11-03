@@ -60,12 +60,11 @@ export function createConciergeShowcase(root, {
     try {
       expectedAudio = row.audio;
       audio.src = row.audio;
-      const inspection = sentinel?.preflight(audio, row.audio);
+      const inspection = sentinel?.preflight(audio, row.audio, { recover: false });
       // Start inside the click task; waiting for the probe would lose the user gesture.
       await audio.play();
-      const transport = await inspection;
+      await inspection;
       if (current !== playbackRevision) return;
-      if (transport && !transport.ok) return;
       playerStatus.textContent = `Playing ${row.title} by ${row.artist}.`;
     } catch (error) {
       if (current !== playbackRevision) return;

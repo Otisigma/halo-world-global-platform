@@ -1238,6 +1238,8 @@ import { MIX_PRESETS, createMixSeed, deleteUserPreset, describeMixIntent, normal
     state.localAudioUrl = localAudioUrl;
     state.localAudioName = cleanText(file.name || "Uploaded mix", 160) || "Uploaded mix";
     state.audioSourceMode = "local";
+    delete elements.audio.dataset.catalogTrackId;
+    delete elements.audio.dataset.catalogMixId;
     state.catalogSet = null;
     state.catalogPlaybackStarted = false;
     if (elements.catalogSetlist) elements.catalogSetlist.innerHTML = "";
@@ -1321,6 +1323,13 @@ import { MIX_PRESETS, createMixSeed, deleteUserPreset, describeMixIntent, normal
     setLoadingProgress(58, "Bootstrapping primary playback", "Dreamweaver is loading the linked song first so sound can start before the wider loop hydrates.");
     state.mix = mix;
     state.duration = Number(mix.durationSeconds || 0);
+    if (mix.isDriveCatalogPlayback) {
+      elements.audio.dataset.catalogTrackId = mix.id;
+      elements.audio.dataset.catalogMixId = mix.id;
+    } else {
+      delete elements.audio.dataset.catalogTrackId;
+      delete elements.audio.dataset.catalogMixId;
+    }
     revokeLocalAudioUrl();
     state.localAudioName = "";
     if (elements.mixFileStatus) {
@@ -3592,19 +3601,32 @@ import { MIX_PRESETS, createMixSeed, deleteUserPreset, describeMixIntent, normal
       }
       if (userInitiated) state.catalogPlaybackStarted = true;
       if (userInitiated && state.audioSourceMode === "local") state.audioSourceMode = "empty";
-      clearRemoteAudioWatchdog();
-      state.release = null;
-      state.dreamweaverPayload = null;
-      state.publishedSongId = "";
-      const mix = { ...track, audioUrl: track.streamUrl, creator: { name: track.artist }, isDriveCatalogPlayback: true };
-      const result = await bootstrapPrimaryPlayback(mix, { userInitiated, resume: state.catalogPlaybackStarted });
-      elements.mixTitle.textContent = track.title;
-      elements.mixCreator.textContent = track.artist;
+      const result = await loadTrackIntoDreamweaver(track, { userInitiated, resume: state.catalogPlaybackStarted });
       if (result.fallback) setReleasePlaybackState("unavailable");
       else if (!result.started) setReleasePlaybackState("ready");
     } finally {
       state.catalogAdvancing = false;
     }
+  }
+
+  async function loadTrackIntoDreamweaver(track, { userInitiated = false, resume = false } = {}) {
+    clearRemoteAudioWatchdog();
+    state.release = null;
+    state.releaseFromLiveCatalog = false;
+    state.dreamweaverPayload = null;
+    state.publishedSongId = "";
+    state.catalogFallbackTried = new Set();
+    elements.mixTitle.textContent = track.title;
+    elements.mixCreator.textContent = track.artist;
+    const mix = {
+      ...track,
+      audioUrl: track.streamUrl,
+      creator: { name: track.artist },
+      isDriveCatalogPlayback: true
+    };
+    // Normalized catalog records already carry the master route and its authorized proxy fallback.
+    // Keep play() in the selection's click stack; the shared bootstrap owns loading and recovery.
+    return bootstrapPrimaryPlayback(mix, { userInitiated, resume });
   }
 
   function handleCatalogPlaying() {

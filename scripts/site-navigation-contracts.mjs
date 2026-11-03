@@ -466,6 +466,12 @@ assert.match(musicStyles, /\.halo-player-bar \{ position: fixed;/, "the floating
   ]);
   const pathSection = mainSite.match(/<section[^>]*aria-labelledby="find-your-path-title"[\s\S]*?<\/section>/)?.[0] || "";
   assert.ok(pathSection, "the home landing page must expose the Find Your Path section");
+  assert.match(pathSection, /<details className="halo-path-disclosure">/, "onboarding must be natively collapsed by default");
+  assert.match(pathSection, /<summary ref=\{pathSummary\}>[\s\S]*?START HERE[\s\S]*?<\/summary>/, "the collapsed entry must retain the onboarding callout");
+  assert.match(mainSite, /const \[showOnboarding, setShowOnboarding\] = useState\(false\)/, "the quiz must not autofocus hidden content on arrival");
+  assert.match(mainSite, /else if \(window\.HaloOnboarding\.isDismissed\(\)\) pathSummary\.current\?\.focus\(\)/, "return navigation must focus the visible summary");
+  assert.match(navigationStyles, /\.halo-path-disclosure\[open\] > summary \.halo-path-arrow/);
+  assert.match(navigationStyles, /\.halo-path-disclosure > summary:focus-visible/);
   assert.match(pathSection, /<h2 id="find-your-path-title"[^>]*>Find Your Path<\/h2>/);
   const { PUBLIC_ROUTE_REGISTRY } = await import("../lib/route-registry.js");
   const registeredRoutes = new Set(PUBLIC_ROUTE_REGISTRY.map(({ route }) => route));

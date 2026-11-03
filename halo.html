@@ -1713,10 +1713,11 @@
 
         function App() {
           const [viewMode, setViewMode] = useState('landing'); // 'landing' or 'console'
-          const [showOnboarding, setShowOnboarding] = useState(() => window.HaloOnboarding.isHome(window.location) && !window.HaloOnboarding.isDismissed());
+          const [showOnboarding, setShowOnboarding] = useState(false);
           const [pathWorkspace, setPathWorkspace] = useState(null);
           const [pathExplanation, setPathExplanation] = useState('');
           const pathQuizButton = useRef(null);
+          const pathSummary = useRef(null);
           const workspaceHeading = useRef(null);
           const closeOnboarding = () => {
             window.HaloOnboarding.dismiss('skipped');
@@ -1748,7 +1749,7 @@
           }, []);
           useEffect(() => {
             if (pathWorkspace) workspaceHeading.current?.focus();
-            else if (window.HaloOnboarding.isDismissed()) pathQuizButton.current?.focus();
+            else if (window.HaloOnboarding.isDismissed()) pathSummary.current?.focus();
           }, [pathWorkspace]);
 
           const [showFanGuide, setShowFanGuide] = useState(false);
@@ -4322,14 +4323,16 @@
               {!pathWorkspace && viewMode === 'landing' && (
                 <main className="flex-1 max-w-6xl mx-auto w-full px-4 py-8 md:py-12 space-y-12 overflow-y-auto">
 
-                  <section className="rounded-3xl border border-amber-200/15 bg-[radial-gradient(circle_at_90%_0%,rgba(217,188,124,.12),transparent_32%),linear-gradient(145deg,rgba(18,18,22,.98),rgba(8,9,12,.98))] p-5 shadow-[0_24px_70px_rgba(0,0,0,.28)] sm:p-8" aria-labelledby="find-your-path-title">
-                    <div className="mb-6 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
-                      <div>
-                        <p className="font-sans-alt text-[9px] font-black uppercase tracking-[.24em] text-amber-200/70">A clearer way into HALO</p>
-                        <h2 id="find-your-path-title" className="mt-2 font-sans-alt text-2xl font-black tracking-tight text-[#f4eee3] sm:text-3xl">Find Your Path</h2>
-                      </div>
-                      <p className="max-w-xl font-sans-alt text-xs leading-6 text-gray-400 sm:text-right">Choose a workspace that fits your music and your next move.</p>
-                    </div>
+                  <section aria-labelledby="find-your-path-title">
+                    <details className="halo-path-disclosure">
+                      <summary ref={pathSummary}>
+                        <h2 id="find-your-path-title" className="font-sans-alt text-lg font-bold">Find Your Path</h2>
+                        <span className="halo-path-start">START HERE</span>
+                        <span className="halo-path-arrow" aria-hidden="true">&#9662;</span>
+                      </summary>
+                      <div className="halo-path-content">
+                    <p className="mb-2 font-sans-alt text-sm font-bold text-white">New to HALO Music World? Start here.</p>
+                    <p className="mb-5 font-sans-alt text-xs leading-6 text-gray-400">Choose a workspace that fits your music and your next move, or take the quiz for a guided recommendation.</p>
                     <button ref={pathQuizButton} type="button" onClick={() => setShowOnboarding(true)} className="mb-5 rounded-xl border border-amber-200/40 px-4 py-3 font-sans-alt text-sm font-bold text-amber-100 focus-visible:ring-2 focus-visible:ring-amber-200">Take / retake the 3-question quiz</button>
                     {showOnboarding && <OnboardingWizard onDismiss={closeOnboarding} onComplete={result => openPathWorkspace(result.path, result.explanation)} />}
                     <div onClick={selectPathWorkspace} className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
@@ -4358,6 +4361,8 @@
                         <span className="mt-5 inline-flex items-center gap-2 font-sans-alt text-[10px] font-bold uppercase tracking-[.14em] text-amber-100">Open Living Chart <span aria-hidden="true" className="transition-transform group-hover:translate-x-1">→</span></span>
                       </a>
                     </div>
+                      </div>
+                    </details>
                   </section>
 
                   <section className="halo-home-experiment" aria-labelledby="halo-home-experiment-title" data-homepage-hero="dreamweaver">

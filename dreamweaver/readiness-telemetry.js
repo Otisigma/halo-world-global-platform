@@ -87,7 +87,13 @@ export function createReadinessTelemetry({ audio, bar, track, status, percent, r
     playing: () => render("playing", bufferedPercent(audio) ?? value),
     waiting: () => render("stalled"),
     stalled: () => { if (Number(audio.readyState) < 3) render("stalled"); },
-    pause: () => { if (state === "playing" || state === "stalled") render(bufferedPercent(audio) === 100 ? "loaded" : "ready"); },
+    pause: () => {
+      if (!["playing", "stalled"].includes(state)) return;
+      const measured = bufferedPercent(audio);
+      if (measured === 100) render("loaded", 100);
+      else if (Number(audio.readyState) >= 4) render("ready", measured ?? value);
+      else render("buffering", measured ?? value);
+    },
     error: () => { if (hasSource()) render("fault"); },
     "halo:release-state": event => {
       if (event.detail?.state === "unavailable") return render("fault");

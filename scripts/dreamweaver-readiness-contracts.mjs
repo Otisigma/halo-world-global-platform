@@ -89,8 +89,14 @@ await check("stalls, playback, pause and faults are reported from media events",
   f.emit("canplaythrough");
   assert.equal(f.root.dataset.state, "playing", "a late can-play event cannot downgrade active playback");
   f.audio.paused = true;
+  f.audio.readyState = 4;
   f.emit("pause");
   assert.equal(f.root.dataset.state, "ready");
+  f.emit("waiting");
+  f.audio.readyState = 2;
+  f.emit("pause");
+  assert.equal(f.root.dataset.state, "buffering", "pausing a stall is not readiness evidence");
+  assert.equal(f.window.HALO_STREAM_READY, false);
   f.audio.error = { code: 4 };
   f.emit("error");
   assert.equal(f.root.dataset.state, "fault");

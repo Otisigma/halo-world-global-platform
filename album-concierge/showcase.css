@@ -1,0 +1,30 @@
+.ac-showcase {
+  width: min(100%, 68rem); margin: 1.5rem auto; padding: clamp(1.1rem, 4vw, 2.5rem);
+  border: 1px solid rgba(207, 167, 106, .4); border-radius: 1rem;
+  background: linear-gradient(135deg, #0d0d0d, #191611); box-shadow: 0 12px 36px #0005;
+}
+.ac-showcase-header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; }
+.ac-showcase-badge { display: inline-block; color: var(--ac-ember); border: 1px solid var(--ac-ember); border-radius: 2rem; padding: .35rem .75rem; font-size: .65rem; letter-spacing: .08em; text-transform: uppercase; }
+.ac-showcase h2 { margin: 1rem 0; color: var(--ac-ember); font: 400 clamp(1.8rem, 4vw, 3rem)/1.1 "Instrument Serif", Georgia, serif; }
+.ac-showcase h3 { color: var(--ac-ink); font-size: 1rem; }
+.ac-showcase p { color: var(--ac-muted); font-size: .8rem; line-height: 1.8; }
+.ac-showcase-controls { display: grid; gap: .6rem; margin: 1.5rem 0; font-size: .8rem; }
+.ac-showcase select { width: 100%; padding: .8rem; background: #14120e; border: 1px solid var(--ac-line); border-radius: .4rem; }
+.ac-showcase-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); gap: 1rem; }
+.ac-showcase article { min-width: 0; padding: 1rem; border: 1px solid var(--ac-line); border-radius: .6rem; background: #111; transition: border-color .2s; overflow-wrap: anywhere; }
+.ac-showcase article:hover, .ac-showcase article:focus-within { border-color: var(--ac-ember); }
+.ac-showcase article img { display: block; width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: .4rem; }
+.ac-showcase-artwork-placeholder { display: grid; place-items: center; aspect-ratio: 1; border: 1px solid var(--ac-line); border-radius: .4rem; background: radial-gradient(ellipse at top, #352919, #12100d); color: var(--ac-muted); font-size: .8rem; }
+.ac-showcase article [hidden] { display: none; }
+.ac-showcase-actions { display: flex; flex-wrap: wrap; gap: .6rem; align-items: center; }
+.ac-showcase button, .ac-showcase-actions a { min-height: 44px; display: inline-flex; align-items: center; padding: .65rem .85rem; border: 1px solid var(--ac-ember); border-radius: .4rem; font-size: .75rem; color: var(--ac-ink); background: transparent; text-decoration: none; }
+.ac-showcase-actions button { background: var(--ac-ember); color: #0e0d0b; }
+.ac-showcase button:disabled { opacity: .55; cursor: not-allowed; }
+.ac-showcase [role="status"] { min-height: 1.5rem; }
+.ac-showcase-player { margin: 1.5rem 0 2rem; padding: 1rem; border: 1px solid var(--ac-line); border-radius: .6rem; }
+.ac-showcase audio { display: block; width: 100%; margin: 1rem 0; }
+.ac-showcase small { display: block; margin-top: .7rem; font-size: .7rem; line-height: 1.7; color: var(--ac-muted); }
+.ac-showcase footer { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 1rem; padding-top: 1.5rem; margin-top: 1.5rem; border-top: 1px solid var(--ac-line); font-size: .7rem; color: var(--ac-ember); }
+.ac-showcase :focus-visible { outline: 3px solid var(--ac-ember); outline-offset: 4px; }
+@media (max-width: 600px) { .ac-showcase-header { align-items: start; flex-direction: column; } }
+@media (prefers-reduced-motion: reduce) { .ac-showcase article { transition: none; } }

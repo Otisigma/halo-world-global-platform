@@ -103,7 +103,10 @@
     updateStepper(n);
     state.currentStep = n;
     clearNotice();
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    stepper?.scrollIntoView({
+      block: "start",
+      behavior: window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth"
+    });
   }
 
   function showLoading() {

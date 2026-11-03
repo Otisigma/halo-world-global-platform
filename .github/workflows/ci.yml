@@ -26,7 +26,7 @@ jobs:
             sudo apt-get install -y postgresql
           fi
       - name: Run fan rewards and concierge contracts
-        run: npm run test:fan-signal && node scripts/album-concierge-contracts.mjs
+        run: npm run test:fan-signal && node scripts/album-concierge-contracts.mjs && npm run test:concierge-showcase
       - name: Verify real PostgreSQL transactions
         run: npm run test:fan-curations:db
 

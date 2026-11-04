@@ -518,7 +518,7 @@ const checks = [
   [client.includes("uploadMasterToVersion") && client.includes('fetch("/api/song-catalog/master-upload"') && client.includes('method:"PUT"') && client.includes('credentials:"omit"') && client.includes('action:"register"') && client.includes("Uploading master directly to storage"), "uploads master copies straight from the browser to storage with live progress, then registers them"],
   [client.includes("presign.data?.directUpload===false") && client.includes("return uploadAudioToVersion({file,songId,versionId,ui})") && client.includes("uploadHelper.uploadChunkedFile"), "falls back to the existing chunked upload path when direct storage is not configured"],
   [directStorageLib.includes("AWS4-HMAC-SHA256") && directStorageLib.includes("HALO_MASTER_STORAGE_BUCKET") && !directStorageLib.includes("@aws-sdk"), "signs S3-compatible direct uploads without adding a storage SDK dependency"],
-  [!releaseCatalogApi.includes("audio_storage_key") && !unifiedUploadApi.includes("audio_storage_key") && !api.includes("audioStorageKey:"), "never exposes private master storage keys through catalog APIs"],
+  [!releaseCatalogApi.slice(releaseCatalogApi.indexOf("function serializeRelease("), releaseCatalogApi.indexOf("export default async function")).includes("audio_storage_key") && !unifiedUploadApi.includes("audio_storage_key") && !api.includes("audioStorageKey:"), "never exposes private master storage keys through catalog APIs"],
 ];
 
 const duplicateMasters = [

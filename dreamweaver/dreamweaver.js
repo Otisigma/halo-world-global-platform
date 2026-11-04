@@ -922,7 +922,21 @@ import { MIX_PRESETS, createMixSeed, deleteUserPreset, describeMixIntent, normal
     }
   }
 
-  async function bindCanonicalAssets(mix, songId) {
+  function publicCatalogMasterBinding(release, songId) {
+    if (!state.releaseFromLiveCatalog || cleanSongId(release?.catalog?.songId) !== songId) return null;
+    const master = release.catalog.masterCopy;
+    const versionId = cleanSongId(master?.versionId);
+    if (!versionId || master.masteringStatus !== "approved" || release.catalog.rightsStatus !== "cleared") return null;
+    const source = safeMediaUrl(master.audioSource);
+    if (!source) return null;
+    const url = new URL(source, location.href);
+    if (url.origin !== location.origin || url.pathname !== "/api/song-catalog/audio"
+      || url.searchParams.get("dreamweaver") !== "1" || url.searchParams.get("songId") !== songId
+      || url.searchParams.get("versionId") !== versionId) return null;
+    return { songId, masterVersionId: versionId, audioSource: source, status: "ready" };
+  }
+
+  async function bindCanonicalAssets(mix, songId, { preserveAudio = false } = {}) {
     const fingerprint = routeContextFingerprint();
     let response, payload;
     try {
@@ -954,8 +968,14 @@ import { MIX_PRESETS, createMixSeed, deleteUserPreset, describeMixIntent, normal
       return generated ? uri : safeMediaUrl(uri);
     });
     if (routeContextFingerprint() !== fingerprint) return;
-    mix.canonicalBinding = binding;
-    mix.audioUrl = binding.audioSource;
+    if (preserveAudio) {
+      if (binding.masterVersionId !== mix.canonicalBinding?.masterVersionId) {
+        throw new Error("The canonical master changed while loading Dreamweaver visuals.");
+      }
+    } else {
+      mix.canonicalBinding = binding;
+      mix.audioUrl = binding.audioSource;
+    }
     chapters.forEach((chapter, index) => { chapter.image = images[index]; });
     elements.visualStack.querySelectorAll("[data-visual]").forEach((layer, index) => {
       layer.style.setProperty("--visual-image", `url("${images[index]}")`);
@@ -3275,7 +3295,21 @@ import { MIX_PRESETS, createMixSeed, deleteUserPreset, describeMixIntent, normal
       if (mix.isCatalogPlayback) {
         const bindingSong = cleanSongId(release?.catalog?.songId) || cleanSongId(state.publishedSongId);
         if (!bindingSong) throw new Error("A catalog song is required to bind the canonical master.");
-        try {
+        const catalogMaster = publicCatalogMasterBinding(state.release || release, bindingSong);
+        if (catalogMaster) {
+          mix.canonicalBinding = catalogMaster;
+          mix.audioUrl = catalogMaster.audioSource;
+          // Visual persistence is independent of audio delivery; never make it a playback prerequisite.
+          void bindCanonicalAssets(mix, bindingSong, { preserveAudio: true }).catch(() => {
+            if (routeContextFingerprint() !== requestedRouteFingerprint) return;
+            queueAudioFeedbackIncident("canonical_visuals_unavailable", {
+              severity: "medium",
+              title: "Dreamweaver kept the catalog master while visuals load",
+              details: "The verified catalog master remains bound; the visual binding could not be refreshed.",
+              metadata: { failureState: "canonical_visuals_unavailable" }
+            });
+          });
+        } else try {
           await bindCanonicalAssets(mix, bindingSong);
         } catch (error) {
           // Mirror the chart player: a live published release with a playable stream still plays.

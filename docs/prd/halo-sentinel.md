@@ -11,6 +11,10 @@ Identity, publication/rights checks, CORS, or browser autoplay policy.
 This is a bounded first implementation, not a promise of zero faults, guaranteed
 audibility, 100% route coverage, or sub-60-second repair of arbitrary defects.
 
+For the catalog/playback investigation lessons, rollout evidence, remaining
+coverage gaps, and production test log, see
+[Catalog and Dreamweaver lessons and monitoring](catalog-playback-lessons-and-monitoring.md).
+
 ## Objectives and evidence
 
 | Objective | Implemented measurement | Limitation |

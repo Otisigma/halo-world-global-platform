@@ -76,7 +76,7 @@ const mix = { id: "linked-mix-id", title: "Linked mix", creator: { name: "Mix ar
   assert.equal(paths[1], "/api/release-catalog", "mix-only routes retain the existing feed lookup");
 }
 
-export function fixture(search, { releases = [release], mixes = [mix], blocked = false, failed = false, failingSources = [], rejectedPlaySources = [], loadingSources = [], deferPlaying = false, unlock = null, pathname = "/dreamweaver/", releaseArtwork = undefined, assetBinding = binding, assetBindingPending = false, driveCatalog = { configured: false, tracks: [] }, catalogError = false, storage = { getItem: () => null }, storageGetterError = false, preloader, sentinel } = {}) {
+export function fixture(search, { releases = [release], mixes = [mix], blocked = false, failed = false, failingSources = [], rejectedPlaySources = [], loadingSources = [], deferPlaying = false, unlock = null, pathname = "/dreamweaver/", releaseArtwork = undefined, assetBinding = binding, assetBindingPending = false, driveCatalog = { configured: false, tracks: [] }, catalogError = false, storage = { getItem: () => null }, storageGetterError = false, preloader, sentinel, savedAudioReader = async () => { throw new Error("No saved audio"); } } = {}) {
   class Element extends EventTarget {
     constructor() {
       super();
@@ -133,7 +133,7 @@ export function fixture(search, { releases = [release], mixes = [mix], blocked =
   const timers = new Map();
   let timerId = 0;
   const context = {
-    URL, URLSearchParams, console, location, DREAMWEAVER_STOREFRONT_MIX_ID, buildDreamweaverStorefrontPath, createLyricInteractionRecorder, catalogAudioUrl, generateAutomatedSet, normalizeCatalog, readRecentTrackIds, recordPlayedTrack, ...mixIntent, ...playback,
+    URL, URLSearchParams, console, location, readSavedSongLabAudio: savedAudioReader, DREAMWEAVER_STOREFRONT_MIX_ID, buildDreamweaverStorefrontPath, createLyricInteractionRecorder, catalogAudioUrl, generateAutomatedSet, normalizeCatalog, readRecentTrackIds, recordPlayedTrack, ...mixIntent, ...playback,
     Image: class {
       set src(value) {
         assert.equal(this.crossOrigin, "anonymous", "CORS must be set before requesting campaign artwork");
@@ -144,7 +144,7 @@ export function fixture(search, { releases = [release], mixes = [mix], blocked =
     document: { getElementById: getElement, querySelector: getElement, body: new Element() },
     localStorage: storage,
     history: { replaceState: (_state, _title, url) => { location.href = new URL(url, location).href; } },
-    window: { clearTimeout: id => timers.delete(id), setTimeout: callback => { timers.set(++timerId, callback); return timerId; }, requestAnimationFrame: callback => callback(), HaloReleaseArtwork: releaseArtwork, HaloAudioPreloader: preloader, HaloSentinel: sentinel },
+    window: { location, clearTimeout: id => timers.delete(id), setTimeout: callback => { timers.set(++timerId, callback); return timerId; }, requestAnimationFrame: callback => callback(), HaloReleaseArtwork: releaseArtwork, HaloAudioPreloader: preloader, HaloSentinel: sentinel },
     fixtures: { releases, mixes, unlock, requests, assetBinding, assetBindingPending, driveCatalog, catalogError }
   };
   if (storageGetterError) Object.defineProperty(context, "localStorage", { get() { throw new Error("SecurityError"); } });
@@ -181,6 +181,37 @@ export function fixture(search, { releases = [release], mixes = [mix], blocked =
     globalThis.player = { state, chapters, initializeDreamweaver, generateCatalogSet, advanceCatalogTrack, retryCatalogProxy, shouldPromptLocalUpload, resolvePrimaryPlaybackMix, resolvePrimaryAudio, handleSoundUnlock, togglePlayback, startUnlockedShow, loadImage, activateLocalMixFile, armRemoteAudioWatchdog, handleLobbyPageHide };
   })();`, context);
   return { ...context.player, nodes, requests, timers, location };
+}
+
+{
+  let reads = 0;
+  const f = fixture(`?localProject=${songId}`, { savedAudioReader: async id => {
+    reads++;
+    assert.equal(id, songId);
+    return Object.assign(new Blob(["saved wave"], { type: "audio/wav" }), { name: "Saved.wav" });
+  } });
+  await f.initializeDreamweaver();
+  assert.equal(reads, 0, "private saved audio is not read or bound on page load");
+  const button = f.nodes.get("savedSongLabPreview");
+  button.dispatchEvent(new Event("click"));
+  for (let turn = 0; turn < 8; turn++) await new Promise(resolve => setImmediate(resolve));
+  assert.equal(reads, 1);
+  assert.equal(button.disabled, false);
+  assert.equal(f.state.audioSourceMode, "local");
+  assert.match(f.nodes.get("showAudio").src, /^blob:/);
+  assert.equal(f.nodes.get("showAudio").paused, false);
+  assert.match(f.nodes.get("mixFileStatus").textContent, /Saved.wav/);
+  f.handleLobbyPageHide({ persisted: false });
+}
+{
+  const f = fixture("", { savedAudioReader: async () => { throw new Error("Sign in to restore audio"); } });
+  await f.initializeDreamweaver();
+  const source = f.nodes.get("showAudio").src;
+  f.nodes.get("savedSongLabPreview").dispatchEvent(new Event("click"));
+  for (let turn = 0; turn < 8; turn++) await new Promise(resolve => setImmediate(resolve));
+  assert.equal(f.nodes.get("showAudio").src, source, "saved preview failure preserves the active stream");
+  assert.match(f.nodes.get("mixFileStatus").textContent, /Sign in/);
+  assert.equal(f.nodes.get("savedSongLabPreview").disabled, false);
 }
 
 for (const search of [

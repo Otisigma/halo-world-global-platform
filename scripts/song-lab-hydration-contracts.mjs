@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import vm from "node:vm";
+import { readSavedSongLabAudio } from "../dreamweaver-lab/resumable-upload.js";
 
 const client = (await readFile(new URL("../dreamweaver-lab/song-lab.js", import.meta.url), "utf8"))
   .replace(/^import .*;\n/, "")
@@ -76,6 +77,10 @@ for (const tabId of ["upload-one", ""]) {
   assert.equal(test.context.lab.state.file.size, 4);
   assert.equal(test.context.lab.state.objectUrl, "blob:private-preview");
   assert.equal(test.node("audioPreview").src, "blob:private-preview");
+  assert.match(test.node("waveIdle").textContent, /RESTORED AUDIO/);
+  assert.doesNotMatch(test.node("waveIdle").textContent, /NO SIGNAL LOADED/);
+  assert.equal(test.node("localShowPreview").hidden, false);
+  assert.equal(test.node("localShowPreview").href, `/dreamweaver/?localProject=${project.id}`);
   assert.equal(test.node("songTitle").value, project.title);
   assert.equal(test.node("creativeBrief").value, "Private brief");
   assert.equal(test.node("resultSummary").textContent, "Saved creative package");
@@ -155,4 +160,33 @@ for (const failure of [{ vaultError: true }, { storageError: true }]) {
   assert.equal(test.removed.length, 0);
   assert.equal(test.node("results").hidden, false);
 }
-console.log("Song Lab session hydration contracts passed: completed Blob retention, reload/new-tab recovery, private archive fallback, owner isolation, active-project selection, storage/auth failures and completion without re-upload.");
+{
+  const projectId = "11111111-1111-4111-8111-111111111111";
+  const session = { id: "local-session", ownerId: "owner-one", projectId, fileName: "Original.wav", contentType: "audio/wav", updatedAt: 10 };
+  const bytes = new Blob(["saved audio"], { type: "audio/wav" });
+  let owner = "owner-one", reads = 0;
+  const options = {
+    readIdentity: async () => ({ uploadOwnerId: owner }),
+    vault: {
+      listSessions: async () => [{ ...session, id: "foreign", ownerId: "another-owner", updatedAt: 100 }, session],
+      read: async id => { reads++; assert.equal(id, session.id); return { session, file: bytes }; },
+    },
+  };
+  const audio = await readSavedSongLabAudio(projectId, options);
+  assert.equal(audio.name, "Original.wav");
+  assert.equal(await audio.text(), "saved audio");
+  assert.equal(reads, 1);
+  await readSavedSongLabAudio("", options);
+  await assert.rejects(readSavedSongLabAudio("22222222-2222-4222-8222-222222222222", options), /No matching/);
+  await assert.rejects(readSavedSongLabAudio("blob:unsafe", options), /valid saved/);
+  owner = "";
+  await assert.rejects(readSavedSongLabAudio(projectId, options), /Sign in/);
+  owner = "different-owner";
+  await assert.rejects(readSavedSongLabAudio(projectId, options), /No matching/);
+  owner = "owner-one";
+  options.vault.read = async () => ({ session: { ...session, ownerId: "different-owner" }, file: bytes });
+  await assert.rejects(readSavedSongLabAudio(projectId, options), /unavailable/);
+  options.vault.read = async () => null;
+  await assert.rejects(readSavedSongLabAudio(projectId, options), /unavailable/);
+}
+console.log("Song Lab session hydration contracts passed: completed Blob retention, reload/new-tab recovery, private archive fallback, owner isolation, saved Dreamweaver preview, active-project selection, storage/auth failures and completion without re-upload.");

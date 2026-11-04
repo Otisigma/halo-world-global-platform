@@ -98,6 +98,28 @@ export async function readSongLabJson(url, fetcher = globalThis.fetch) {
   return requestSongLab(url, { method: "GET", headers: { Accept: "application/json" } }, fetcher);
 }
 
+export async function readSavedSongLabAudio(projectId = "", {
+  readIdentity = () => readSongLabJson("/api/dreamweaver-song-lab"),
+  vault = createLocalUploadVault(),
+} = {}) {
+  if (projectId && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(projectId)) {
+    throw new Error("Choose a valid saved Song Lab project.");
+  }
+  const identity = await readIdentity();
+  if (!identity.uploadOwnerId) throw new Error("Sign in with the account that saved your Song Lab audio.");
+  const sessions = (await vault.listSessions()).filter(session => session.ownerId === identity.uploadOwnerId
+    && (!projectId || session.projectId === projectId));
+  sessions.sort((left, right) => (right.updatedAt || right.createdAt || 0) - (left.updatedAt || left.createdAt || 0));
+  const session = sessions[0];
+  if (!session) throw new Error("No matching Song Lab audio is saved for this account in this browser. Open Song Lab or choose a local file.");
+  const saved = await vault.read(session.id);
+  if (!saved || saved.session.ownerId !== identity.uploadOwnerId
+    || (projectId && saved.session.projectId !== projectId) || !(saved.file instanceof Blob) || !saved.file.size) {
+    throw new Error("The saved Song Lab audio is unavailable. Open Song Lab or choose the original file.");
+  }
+  return new File([saved.file], saved.session.fileName || "Song Lab audio", { type: saved.session.contentType || saved.file.type });
+}
+
 async function requestSongLab(url, options, fetcher) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 30000);

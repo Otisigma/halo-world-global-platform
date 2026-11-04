@@ -78,7 +78,28 @@ file preview. Sentinel does not compete with its media-error handler. Concierge
 stops a failed preview and offers retry/public-release navigation instead of
 silently switching recordings or creating a second local upload workflow.
 
+The Catalog Curator passes the selected normalized vault record directly to
+`loadTrackIntoDreamweaver`: track identity, title, artist, master stream route and
+authorized proxy fallback stay together in the shared player. Set generation
+does not interrupt an existing song or autoplay; a setlist Play action binds
+the source and metadata synchronously before requesting playback. Every fresh
+selection resets the fallback retry history, including replays of the same
+track. The audio element exposes `data-catalog-track-id` and
+`data-catalog-mix-id` for inspection; local previews clear both attributes.
+Binding a URL is not proof of buffering or decoding: the readiness bar remains
+driven by media events, never an unconditional `HALO_STREAM_READY = true`.
+
 ### Ledger and privacy
+
+Song Catalog includes a Dreamweaver upload panel immediately above Alternate
+Versions in the selected song's private workspace. It opens on first song
+selection and loads the existing same-origin Song Lab intake,
+including audio preview, recording-permission attestation and explicit private
+analysis submission. Reopening the panel retains the iframe and in-progress
+work. The full Song Lab link remains available for sign-in, verification or
+loading problems. This does not create a catalog master, publish a release or
+bypass Song Lab authorization; catalog master uploads stay in their existing
+controls.
 
 `POST /api/sentinel/events` requires the exact same-origin header, JSON, at most
 2 KiB of actual body bytes, and enum-only category/state/target/page data.

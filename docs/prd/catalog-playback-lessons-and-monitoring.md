@@ -84,6 +84,26 @@ fallback remain in place. Cached records cannot authorize the direct path.
 Transport/media failures still surface honestly; a completed conveyor is not
 proof that audio is audible, and binding does not autoplay.
 
+On a remote fault, Play and the explicit retry button retry that same song's
+canonical route rather than opening a file picker. The local-preview picker
+remains separate. A failed background HEAD/CORS probe alone does not discard an
+otherwise healthy native media source; definitive HTTP failures with no native
+readiness and actual media errors still fail normally.
+
+The show displays a bounded diagnostic GET on a failed same-origin source,
+including its HTTP status, content type and API message. It requests only bytes
+0–63, cancels after the first response chunk, has an eight-second timeout, and
+never displays audio bytes, redirect targets or query parameters. This diagnostic
+does not authorize playback or certify a deployment. A successful response does
+not establish that a browser decoded or audibly played the stream.
+
+The existing manual Live audio endpoint smoke workflow has a `diagnose_song`
+mode. It needs only a public song UUID, looks up that exact song's canonical
+route, and probes it without private credentials. This mode uses the repository
+probe origin, or the HALO production origin if unset. Normal five-stream mode
+still validates all required IDs in the smoke script. Neither mode changes
+Netlify configuration, publication data or stored audio.
+
 ## Shared player upload indicator
 
 The shared compact upload indicator appears over player pages while a Song

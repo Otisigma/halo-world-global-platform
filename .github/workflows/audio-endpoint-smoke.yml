@@ -3,9 +3,14 @@ name: Live audio endpoint smoke
 on:
   workflow_dispatch:
     inputs:
+      diagnose_song:
+        description: Diagnose only the public song (no private credentials or other IDs required)
+        required: false
+        default: false
+        type: boolean
       drive_track_id:
         description: Approved public Drive catalog track ID
-        required: true
+        required: false
         type: string
       song_id:
         description: Publicly published song ID
@@ -13,23 +18,23 @@ on:
         type: string
       song_version_id:
         description: Published master version ID for that song
-        required: true
+        required: false
         type: string
       radio_track_id:
         description: Approved public radio preview track ID
-        required: true
+        required: false
         type: string
       mix_id:
         description: Public room mix ID
-        required: true
+        required: false
         type: string
       stem_pack_id:
         description: Owner-authorized private stem pack ID
-        required: true
+        required: false
         type: string
       stem_type:
         description: Available stem type in the authorized pack
-        required: true
+        required: false
         type: choice
         options:
           - full
@@ -53,6 +58,7 @@ jobs:
         with:
           node-version: "20"
       - name: Check HTTP audio and byte-range responses
+        if: ${{ !inputs.diagnose_song }}
         run: node scripts/audio-endpoint-smoke.mjs
         env:
           HALO_AUDIO_PROBE_ORIGIN: ${{ vars.HALO_AUDIO_PROBE_ORIGIN }}
@@ -64,3 +70,9 @@ jobs:
           HALO_AUDIO_PROBE_STEM_PACK_ID: ${{ inputs.stem_pack_id }}
           HALO_AUDIO_PROBE_STEM_TYPE: ${{ inputs.stem_type }}
           HALO_AUDIO_PROBE_AUTHORIZATION: ${{ secrets.HALO_AUDIO_PROBE_AUTHORIZATION }}
+      - name: Diagnose the selected public Dreamweaver song
+        if: ${{ inputs.diagnose_song }}
+        run: node scripts/dreamweaver-live-diagnostic.mjs
+        env:
+          HALO_AUDIO_PROBE_ORIGIN: ${{ vars.HALO_AUDIO_PROBE_ORIGIN }}
+          HALO_AUDIO_PROBE_SONG_ID: ${{ inputs.song_id }}

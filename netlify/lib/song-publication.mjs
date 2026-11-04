@@ -817,6 +817,54 @@ async function announceTrackDropSafely(db, input) {
   }
 }
 
+async function verifyDreamweaverShare(song, master, release, { deploymentOrigin, fetcher }) {
+  let origin;
+  try {
+    origin = new URL(deploymentOrigin);
+    if (origin.protocol !== "https:" || origin.username || origin.password
+      || origin.pathname !== "/" || origin.search || origin.hash) {
+      return { confirmed: false, reason: "deployment_origin_unconfigured" };
+    }
+  } catch {
+    return { confirmed: false, reason: "deployment_origin_unconfigured" };
+  }
+  const url = new URL("/api/release-catalog", origin);
+  url.searchParams.set("songId", song.id);
+  // Changed catalog/master revisions must not reuse a stale CDN response.
+  url.searchParams.set("revision", `${song.publication_revision}:${master.publication_revision}`);
+  try {
+    const response = await fetcher(url.href, {
+      redirect: "error", cache: "no-store", credentials: "omit",
+      headers: { Accept: "application/json" }, signal: AbortSignal.timeout(2000),
+    });
+    if (!response.ok) return { confirmed: false, reason: "catalog_http_error", httpStatus: response.status };
+    if (!/^application\/json(?:;|$)/i.test(response.headers.get("content-type") || "")) {
+      return { confirmed: false, reason: "catalog_invalid_response" };
+    }
+    const payload = await response.json();
+    const entries = Array.isArray(payload?.releases) ? payload.releases : [];
+    const matches = entries.filter(entry => entry?.id === release.id && entry?.catalog?.songId === song.id);
+    const entry = matches.length === 1 ? matches[0] : null;
+    if (!entry || entry.status !== "published" || entry.isLiveVisible !== true
+      || entry.title !== song.title || entry.artist !== song.artist_name
+      || !String(song.title || "").trim() || !String(song.artist_name || "").trim()
+      || entry.catalog.rightsStatus !== "cleared"
+      || entry.catalog.masterCopy?.versionId !== master.id
+      || entry.catalog.masterCopy?.uploaded !== true
+      || entry.catalog.masterCopy?.masteringStatus !== "approved"
+      || entry.streamUrl !== release.streamUrl
+      || entry.dreamweaverPayload?.songId !== song.id
+      || entry.dreamweaverPayload?.audioStreamUrl !== release.streamUrl
+      || entry.entryUrl !== release.dreamweaver.destinationUrl) {
+      return { confirmed: false, reason: "catalog_payload_not_current" };
+    }
+    return { confirmed: true, reason: "public_catalog_payload_verified", checkedAt: new Date().toISOString() };
+  } catch (error) {
+    console.warn("HALO Dreamweaver share verification deferred", error instanceof Error ? error.message : "unknown error");
+    return { confirmed: false, reason: "catalog_probe_failed" };
+  }
+}
+
 export async function reconcilePublishedSong(db, {
   songId,
   ownerMemberId,
@@ -850,6 +898,8 @@ async function reconcilePublishedSongWithLease(db, {
   preserveReleaseMetadata = false,
   announceDrop = false,
   leaseToken,
+  deploymentOrigin = process.env.URL,
+  fetcher = fetch,
 } = {}) {
   const context = await loadPublishedSong(db, songId, ownerMemberId);
   if (!context) return { ok: false, skipped: true, reason: "song_not_published_or_missing" };
@@ -905,8 +955,8 @@ async function reconcilePublishedSongWithLease(db, {
     `;
     if (!published[0]) throw new Error("Release ownership or master approval changed during publication");
     const radio = await ensureRadioTrack(db, song, syncedVersions, release, leaseToken, existingDetails.radio);
-    // Route calculation is not evidence that the share surface was delivered.
-    const dreamweaverStatus = "pending";
+    const shareVerification = await verifyDreamweaverShare(song, master, release, { deploymentOrigin, fetcher });
+    const dreamweaverStatus = shareVerification.confirmed ? "ready" : "pending";
     const healthInput = {
       releaseId: release.id,
       radioTrackId: radio.trackId,
@@ -918,7 +968,8 @@ async function reconcilePublishedSongWithLease(db, {
         ...existingDetails,
         releaseVerified: true,
         radioVerified: radio.details.verified === true,
-        dreamweaverConfirmed: false,
+        dreamweaverConfirmed: shareVerification.confirmed,
+        shareVerification,
         ...masterVerification,
         radio: radio.details,
         errorStreak: 0,
@@ -933,7 +984,8 @@ async function reconcilePublishedSongWithLease(db, {
       preserveReleaseMetadata: keepReleaseMetadata,
       releaseVerified: true,
       radioVerified: radio.details.verified === true,
-      dreamweaverConfirmed: false,
+      dreamweaverConfirmed: shareVerification.confirmed,
+      shareVerification,
       ...masterVerification,
       availableVersions: versions.map(version => version.version_type),
       syncedAudioVersionCount: syncedVersions.length,
@@ -1071,7 +1123,10 @@ export async function reconcilePublishedSongs(db, {
   limit = 50,
   actorId = "system",
   actorType = "system",
+  deploymentOrigin = process.env.URL,
+  fetcher = fetch,
 } = {}) {
+  const deadline = Date.now() + 20_000;
   const rows = songId
     ? await db.sql`
         SELECT id, owner_member_id
@@ -1122,12 +1177,15 @@ export async function reconcilePublishedSongs(db, {
       `;
   const results = [];
   for (const row of rows) {
+    if (Date.now() >= deadline) break;
     try {
       results.push(await reconcilePublishedSong(db, {
         songId: row.id,
         ownerMemberId: row.owner_member_id,
         actorId,
         actorType,
+        deploymentOrigin,
+        fetcher,
       }));
     } catch (error) {
       results.push({

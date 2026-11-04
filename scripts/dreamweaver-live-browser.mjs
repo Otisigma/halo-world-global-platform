@@ -52,7 +52,7 @@ try {
         const range = /^bytes=(\d+)-(\d*)$/i.exec(value);
         if (!range) return { name, value };
         const start = Number(range[1]);
-        const end = Math.min(range[2] ? Number(range[2]) : Infinity, start + 1024 * 1024 - 1);
+        const end = Math.min(range[2] ? Number(range[2]) : Infinity, start + 4 * 1024 * 1024 - 1);
         return { name, value: `bytes=${start}-${end}` };
       });
       void send("Fetch.continueRequest", { requestId, headers }, message.sessionId).catch(error => {
@@ -107,7 +107,7 @@ try {
   await command("Runtime.enable");
   await command("Network.enable");
   if (boundRanges) {
-    console.log("EXPERIMENT: cap browser media range requests to 1 MiB; this does not change deployed code.");
+    console.log("EXPERIMENT: cap browser media range requests to 4 MiB; this does not change deployed code.");
     await command("Fetch.enable", { patterns: [{ urlPattern: `${target.origin}/api/song-catalog/audio*`, requestStage: "Request" }] });
   }
   await command("Page.setInterceptFileChooserDialog", { enabled: true });
@@ -130,6 +130,7 @@ try {
       status: document.getElementById("songLobbyPlayerStatus")?.textContent,
       sourcePath: audio?.currentSrc ? new URL(audio.currentSrc).pathname : "",
       readyState: audio?.readyState, paused: audio?.paused, currentTime: audio?.currentTime,
+      preload: audio?.preload,
       muted: audio?.muted, volume: audio?.volume,
       duration: Number.isFinite(audio?.duration) ? audio.duration : null,
       mediaError: audio?.error ? { code: audio.error.code, message: audio.error.message } : null,
@@ -137,11 +138,12 @@ try {
       click: rect?.width ? { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 } : null
     };
   })()`);
+  console.log("Checked origin:", target.origin);
   let before;
   for (let attempt = 0; attempt < 60; attempt++) {
     before = await snapshot();
-    console.log("Checked origin:", target.origin);
-    if (before.mediaError || before.readyState >= 2 || /Stream unavailable/.test(before.status || "")) break;
+    if (before.mediaError || before.readyState >= 2 || /Stream unavailable/.test(before.status || "")
+      || (before.preload === "none" && before.sourcePath && before.click)) break;
     await delay(500);
   }
   await evaluate('document.getElementById("playBtn")?.scrollIntoView({ block: "center" })');

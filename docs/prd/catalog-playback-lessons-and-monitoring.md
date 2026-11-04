@@ -90,11 +90,15 @@ remains separate. A failed background HEAD/CORS probe alone does not discard an
 otherwise healthy native media source; definitive HTTP failures with no native
 readiness and actual media errors still fail normally.
 
-Chunk-backed master playback caps each requested byte range at 1 MiB, including
+Chunk-backed master playback caps each requested byte range at one storage chunk
+(4 MiB), including
 open-ended browser requests such as `bytes=0-`. Previously that request assembled
 the entire remaining HD file before returning its first bytes. Partial responses
 retain the full file size in `Content-Range`, allowing the browser to request
 subsequent windows or seek. Signed direct-storage redirects are unchanged.
+Matching the upload chunk size avoids repeatedly fetching a four-MiB storage
+chunk for each smaller playback response while staying below buffered binary
+response limits.
 
 The show displays a bounded diagnostic GET on a failed same-origin source,
 including its HTTP status, content type and API message. It requests only bytes
@@ -123,6 +127,10 @@ watchdog and remained paused at 0:00. With the same WAV and one-MiB response cap
 Chrome observed `loadedmetadata`, `canplay`, `playing`, and advancing time
 (`0.502252` seconds). This isolates the failure mechanism but is not a claim
 that production has deployed the fix or played the real master.
+The final chunk-aligned four-MiB implementation was then checked with the same
+real handler and fixture: Chrome received `bytes 0-4194303/29360128`, reached
+`readyState: 4`, emitted `playing`, and advanced to `0.500782` seconds with mute
+off and volume 1.
 
 ## Shared player upload indicator
 

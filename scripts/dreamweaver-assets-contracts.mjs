@@ -173,6 +173,7 @@ const readRangeSource = audio.slice(audio.indexOf("async function readAudioRange
 const rangeLimitSource = audio.match(/^const MAX_PLAYBACK_RANGE_BYTES = .+;$/m)[0];
 let ownerLookups = 0;
 const streamContext = {
+  AUDIO_CHUNK_MAX_BYTES: 4 * 1024 * 1024,
   URL, Response, Uint8Array, ReadableStream, BindingError, bindingSongId, loadDreamweaverSong,
   cleanId: value => value,
   json: (body, status) => Response.json(body, { status }),
@@ -215,8 +216,8 @@ assert.equal(head.headers.get("cache-control"), "private, no-store");
 assert.equal(await head.text(), "");
 assert.equal((await (await streamContext.serve(audioRequest("&dreamweaver=1"), chunkDb, "")).arrayBuffer()).byteLength, 10);
 const chunkBytes = 4 * 1024 * 1024;
-const rangeBytes = 1024 * 1024;
-const hdBytes = 9 * rangeBytes;
+const rangeBytes = chunkBytes;
+const hdBytes = 9 * 1024 * 1024;
 const hdMaster = { ...chunked, audio_chunk_count: 3, audio_byte_size: hdBytes };
 const reads = [];
 streamContext.audioStore.get = async key => {
@@ -228,7 +229,7 @@ for (const [rangeHeader, start, end] of [
   ["bytes=0-", 0, rangeBytes - 1],
   ["bytes=0-8388607", 0, rangeBytes - 1],
   [`bytes=${chunkBytes - 2}-`, chunkBytes - 2, chunkBytes + rangeBytes - 3],
-  ["bytes=-2097152", hdBytes - 2 * rangeBytes, hdBytes - rangeBytes - 1],
+  ["bytes=-2097152", hdBytes - 2 * 1024 * 1024, hdBytes - 1],
   [`bytes=${hdBytes - 10}-`, hdBytes - 10, hdBytes - 1],
 ]) {
   reads.length = 0;

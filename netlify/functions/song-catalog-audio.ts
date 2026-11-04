@@ -24,7 +24,7 @@ const ALLOWED_TYPES = new Set(["audio/mpeg", "audio/mp4", "audio/aac", "audio/og
 const MAX_CHUNK_BYTES = AUDIO_CHUNK_MAX_BYTES;
 const MAX_UPLOAD_BYTES = AUDIO_UPLOAD_MAX_BYTES;
 const MAX_CHUNKS = AUDIO_UPLOAD_MAX_CHUNKS;
-const MAX_PLAYBACK_RANGE_BYTES = 1024 * 1024;
+const MAX_PLAYBACK_RANGE_BYTES = AUDIO_CHUNK_MAX_BYTES;
 const MEDIA_CORS_HEADERS = Object.freeze({
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "Content-Type, Range",

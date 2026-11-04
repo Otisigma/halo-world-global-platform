@@ -139,6 +139,7 @@ import { MIX_PRESETS, createMixSeed, deleteUserPreset, describeMixIntent, normal
     catalogAllowRecent: document.getElementById("catalogAllowRecent"),
     catalogStatus: document.getElementById("catalogSetStatus"),
     catalogSyncStatus: document.getElementById("catalogSyncStatus"),
+    catalogCheck: document.getElementById("checkCatalogConnection"),
     catalogLinkedNotice: document.getElementById("catalogLinkedNotice"),
     catalogSetlist: document.getElementById("catalogSetlist"),
     catalogTrackStatus: document.getElementById("catalogTrackStatus"),
@@ -3397,7 +3398,7 @@ import { MIX_PRESETS, createMixSeed, deleteUserPreset, describeMixIntent, normal
     elements.catalogSyncStatus.textContent = message;
   }
 
-  async function loadDriveCatalog() {
+  async function loadDriveCatalog({ preservePlayback = false } = {}) {
     setCatalogSyncStatus("loading", "CATALOG LOADING");
     elements.catalogStatus.textContent = "Loading the canonical Google Drive Vault catalog…";
     try {
@@ -3409,20 +3410,21 @@ import { MIX_PRESETS, createMixSeed, deleteUserPreset, describeMixIntent, normal
       if (payload.configured) normalizeCatalog(payload);
       state.catalogUnavailable = false;
       state.driveCatalog = payload.configured ? payload : null;
-      setCatalogSyncStatus(!payload.configured ? "standby" : payload.tracks.length ? "synced" : "empty",
-        !payload.configured ? "CATALOG STANDBY" : payload.tracks.length ? "CATALOG SYNCED" : "CATALOG EMPTY");
+      const publicTracks = payload.tracks.filter(track => track?.public === true);
+      setCatalogSyncStatus(!payload.configured ? "standby" : publicTracks.length ? "synced" : "empty",
+        !payload.configured ? "CATALOG NOT CONFIGURED" : publicTracks.length ? "CATALOG SYNCED" : "CATALOG EMPTY");
       elements.catalogStatus.textContent = payload.configured
         ? payload.tracks.some(track => track.public === true)
           ? "Choose 20 or 60 minutes to curate the canonical catalog."
           : "No eligible public tracks. Ask the catalog owner to publish valid tracks in catalog-index.json, or upload a local mix."
-        : "Catalog is not configured. Ask the site owner to configure the Drive catalog folder and service account, or upload a local mix. Existing song and mix playback remains available.";
+        : "The deployed Drive catalog is not configured. The site owner must set GOOGLE_DRIVE_MASTERS_FOLDER_ID and Google service-account credentials in Netlify, then redeploy. A Drive share link alone does not enable catalog playback. Existing song and mix playback remains separate.";
       return payload.configured;
     } catch {
       state.catalogUnavailable = true;
       state.driveCatalog = null;
       setCatalogSyncStatus("error", "CATALOG UNAVAILABLE");
       elements.catalogStatus.textContent = "Catalog temporarily unavailable — no substitute catalog loaded. Try again or upload a local mix.";
-      if (!state.mix) setReleasePlaybackState("unavailable");
+      if (!preservePlayback && !state.mix) setReleasePlaybackState("unavailable");
       return true;
     }
   }
@@ -3502,6 +3504,7 @@ import { MIX_PRESETS, createMixSeed, deleteUserPreset, describeMixIntent, normal
   }
 
   function setCatalogBusy(busy) {
+    if (elements.catalogCheck) elements.catalogCheck.disabled = busy;
     elements.catalogCurator?.setAttribute("aria-busy", busy ? "true" : "false");
     if (elements.catalogGenerate) elements.catalogGenerate.disabled = busy;
   }
@@ -3524,6 +3527,18 @@ import { MIX_PRESETS, createMixSeed, deleteUserPreset, describeMixIntent, normal
     setCatalogBusy(true);
     try {
       await curateCatalogSet();
+    } finally {
+      state.catalogGenerating = false;
+      setCatalogBusy(false);
+    }
+  }
+
+  async function checkCatalogConnection() {
+    if (state.catalogAdvancing || state.catalogGenerating) return;
+    state.catalogGenerating = true;
+    setCatalogBusy(true);
+    try {
+      await loadDriveCatalog({ preservePlayback: true });
     } finally {
       state.catalogGenerating = false;
       setCatalogBusy(false);
@@ -3721,9 +3736,9 @@ import { MIX_PRESETS, createMixSeed, deleteUserPreset, describeMixIntent, normal
     const hasLegacyLink = Boolean(routeContext.requestedSongId || routeContext.requestedMixToken || routeContext.requestedStorySlug);
     const catalogAvailable = !hasLegacyLink && await loadDriveCatalog();
     if (hasLegacyLink) {
-      setCatalogSyncStatus("standby", "CATALOG STANDBY");
+      setCatalogSyncStatus("standby", "CATALOG NOT LOADED");
       if (elements.catalogLinkedNotice) elements.catalogLinkedNotice.hidden = false;
-      elements.catalogStatus.textContent = "Generate a set to switch from this linked song or mix to the catalog curator.";
+      elements.catalogStatus.textContent = "You opened a linked song or mix. Its audio status is separate from this catalog badge. Use Check catalog connection to verify the Drive catalog without changing playback, or Generate set to prepare track choices.";
     }
     if (!hasLegacyLink && catalogAvailable) {
       const minutes = new URLSearchParams(location.search).get("curate");
@@ -3768,6 +3783,7 @@ import { MIX_PRESETS, createMixSeed, deleteUserPreset, describeMixIntent, normal
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", bindPlayerControls, { once: true });
   else bindPlayerControls();
   elements.catalogGenerate?.addEventListener("click", () => { void generateCatalogSet(); });
+  elements.catalogCheck?.addEventListener("click", () => { void checkCatalogConnection(); });
   elements.catalogPreset?.addEventListener("change", describeSelectedPreset);
   elements.catalogPresetSave?.addEventListener("click", saveCatalogPreset);
   elements.catalogPresetDelete?.addEventListener("click", deleteCatalogPreset);

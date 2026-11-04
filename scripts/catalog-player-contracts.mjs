@@ -197,7 +197,7 @@ for (const options of [
 for (const [options, expected] of [
   [{ driveCatalog }, "CATALOG SYNCED"],
   [{ driveCatalog: { configured: true, version: 1, tracks: [] } }, "CATALOG EMPTY"],
-  [{}, "CATALOG STANDBY"],
+  [{}, "CATALOG NOT CONFIGURED"],
   [{ catalogError: true }, "CATALOG UNAVAILABLE"]
 ]) {
   const f = fixture("", options);
@@ -641,9 +641,17 @@ assert.equal((await storefront({ configured: true, tracks: [] })).context.catalo
   await f.initializeDreamweaver();
   assert.equal(f.requests.some(url => url === "/api/drive-catalog"), false, "explicit legacy links cannot be replaced by curator initialization");
   assert.equal(f.nodes.get("catalogSyncStatus").dataset.state, "standby");
+  assert.equal(f.nodes.get("catalogSyncStatus").textContent, "CATALOG NOT LOADED");
   assert.equal(f.nodes.get("catalogLinkedNotice").hidden, false);
   const linkedMix = f.state.mix;
   const linkedSource = f.nodes.get("showAudio").src;
+  const linkedPlays = f.nodes.get("showAudio").plays;
+  f.nodes.get("checkCatalogConnection").dispatchEvent(new Event("click"));
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(f.nodes.get("catalogSyncStatus").textContent, "CATALOG SYNCED");
+  assert.equal(f.state.mix, linkedMix, "checking the catalog cannot replace the linked mix");
+  assert.equal(f.nodes.get("showAudio").src, linkedSource);
+  assert.equal(f.nodes.get("showAudio").plays, linkedPlays, "checking cannot start or restart audio");
   await f.generateCatalogSet();
   assert.equal(f.state.mix, linkedMix, "generating cards alone preserves linked playback");
   assert.equal(f.nodes.get("showAudio").src, linkedSource);
@@ -667,6 +675,12 @@ for (const search of ["?song=11111111-1111-4111-8111-111111111111", "?mix=linked
     await f.initializeDreamweaver();
     const linkedMix = f.state.mix;
     const linkedSource = f.nodes.get("showAudio").src;
+    const linkedState = f.state.releasePlaybackState;
+    f.nodes.get("checkCatalogConnection").dispatchEvent(new Event("click"));
+    await new Promise(resolve => setImmediate(resolve));
+    assert.notEqual(f.nodes.get("catalogSyncStatus").dataset.state, "synced", "failed, empty and unconfigured checks must never turn green");
+    assert.equal(f.state.releasePlaybackState, linkedState, "connection checks cannot change audio status");
+    assert.equal(f.nodes.get("checkCatalogConnection").disabled, false);
     await f.generateCatalogSet();
     assert.equal(f.state.mix, linkedMix, "unavailable, empty or standby catalogs cannot replace linked playback");
     assert.equal(f.nodes.get("showAudio").src, linkedSource);

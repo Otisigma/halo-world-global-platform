@@ -14,7 +14,15 @@ Dreamweaver can curate a 20- or 60-minute set from the published Google Drive ca
 5. Select **Generate set**. The progress steps follow request parsing, canonical catalog availability, track ranking and sequence preparation, without simulated delays. An unavailable catalog or empty result leaves the remaining work incomplete. Completed steps mean a sequence was prepared, not that live streams were verified. Dreamweaver lists the generated tracks and shows a summary of how it read your request, including any parts it didn't understand. Generation never starts audio.
 6. Click a track's **Play** button to start the shared player directly from your gesture.
 
-The catalog badge reports **loading**, **standby** (unconfigured or a linked item hasn't requested the catalog yet), **empty**, or **unavailable** as appropriate. **Catalog synced** means the canonical response was successfully loaded with tracks; it doesn't guarantee that every stream is currently playable. Loading failures never substitute another catalog. A linked song/mix or local upload stays in place until you click Play on a valid catalog track.
+The catalog badge reports **loading**, **not configured** (deployment credentials
+are absent), **not loaded** (a linked item hasn't requested the catalog yet),
+**empty**, or **unavailable** as appropriate. **Check catalog connection** performs
+a real catalog request without changing the linked/local player or starting audio.
+Only a validated response containing public tracks produces green **Catalog
+synced**; that does not guarantee the streams are playable or sound is enabled.
+Loading failures never substitute another catalog. A linked song/mix or local
+upload stays in place until you click Play on a valid catalog track. Do not
+override badge text/colors in the console: that does not repair audio.
 
 Each setlist row includes its slot, title, artist, BPM, energy role and scheduled duration. **Play stream** starts that slot through the existing player and continues the sequence, using the allowlisted proxy fallback when available. No raw Drive URLs or preview iframes are used.
 

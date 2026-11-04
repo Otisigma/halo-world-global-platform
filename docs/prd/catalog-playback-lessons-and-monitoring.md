@@ -59,6 +59,16 @@ also exposed overflow in existing pipeline and metadata panels outside this chan
 | Broad CSS regexes previously produced false positives. | Scope assertions to the intended selector/media block and include negative fixtures. |
 | Green CI, merge, deployment, and live acceptance are distinct milestones. | Record each separately; do not label unresolved or unobserved stages healthy. |
 
+## Live upload readiness telemetry
+
+Catalog audio uploads now report readiness while bytes land instead of only after a manual recheck.
+
+- Each stored chunk returns an owner-scoped `readiness` preflight (`INGESTING`, progress, metadata/rights/sale-master checks and blockers). Preflight is advisory and always reports `catalogReady: false` and `streamReady: false`; partial bytes are never playable.
+- `finalize_upload` and direct master `register` already run Dream Weaver review, the release conveyor and publication reconciliation. Their responses now include the resulting receipt: `NEEDS_ATTENTION`, `CATALOG_READY` or `LIVE` (catalog ready, release published and Dreamweaver share confirmed).
+- If the readiness lookup fails after audio is locked in, the response reports `PENDING_RECHECK`; the upload is never rolled back, and scheduled recovery refreshes publication state.
+- The catalog UI shows the live note during upload, in the final receipt, and dispatches a `halo:upload-readiness` window event for other panels.
+- Monitor: chunk responses missing `readiness`, `PENDING_RECHECK` rates, and finalized uploads that stay `CATALOG_READY` because `shareVerification.reason` is pending.
+
 ## What AI monitoring exists, and what is still missing
 
 Sentinel currently integrates with Dreamweaver and Album Concierge. Its active-tab

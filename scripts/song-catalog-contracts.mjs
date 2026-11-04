@@ -597,7 +597,9 @@ const inline = runInNewContext(`${client.slice(client.indexOf("const alternateUp
     audioContentType: runInNewContext(`(${client.match(/^function audioContentType.*$/m)[0]})`)
   }),
   api: async payload => { inlineRequests.push(payload); if (failInlineCreation) throw new Error("Creation unavailable"); return payload; },
-  uploadAudioToVersion: async payload => { inlineUploads.push(payload); await duringInlineUpload(); if (failInlineUpload) throw new Error("Connection stopped"); },
+  uploadAudioToVersion: async payload => { inlineUploads.push(payload); await duringInlineUpload(); if (failInlineUpload) throw new Error("Connection stopped"); return { readiness: { status: "CATALOG_READY" } }; },
+  uploadReadinessNote: readiness => readiness ? ` · ${readiness.status}` : "",
+  announceUploadReadiness: () => {},
   loadCatalog: async songId => { inlineReloads.push(songId); }
 });
 const inlineEvent = { preventDefault() {}, currentTarget: inlineForm };
@@ -641,6 +643,7 @@ assert.equal(inlineRequests.length, 3, "double submission during upload is ignor
 assert.equal(new Set(inlineRequests.map(request => request.versionId)).size, 1, "creation and audio retries reuse the version ID");
 assert.ok(inlineUploads.every(upload => upload.songId === "song-a" && upload.versionId === inlineRequests[0].versionId), "uploads target the original parent and new version");
 assert.equal(inlineForm.dataset.versionId, undefined, "successful upload resets the next creation ID");
+assert.ok(inlineUi.message.endsWith(" · CATALOG_READY"), "alternate upload receipt shows the live readiness state");
 assert.equal(inlineElements.alternateVersionTitle.value, "", "successful upload clears the form");
 chooseInlineUpload();
 duringInlineUpload = () => {

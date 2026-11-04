@@ -16,6 +16,8 @@ const chrome = spawn("google-chrome", [
 let socket;
 const pending = new Map();
 const observed = [];
+const mediaRequests = new Set();
+const boundRanges = process.env.HALO_AUDIO_PROBE_BOUND_RANGES === "1";
 let sequence = 0;
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 try {
@@ -38,10 +40,35 @@ try {
         pending.delete(message.id);
         message.error ? request.reject(new Error(message.error.message)) : request.resolve(message.result);
       }
+    } else if (message.method === "Fetch.requestPaused") {
+      const { requestId, request } = message.params;
+      const headers = Object.entries(request.headers).map(([name, value]) => {
+        if (name.toLowerCase() !== "range") return { name, value };
+        const range = /^bytes=(\d+)-(\d*)$/i.exec(value);
+        if (!range) return { name, value };
+        const start = Number(range[1]);
+        const end = Math.min(range[2] ? Number(range[2]) : Infinity, start + 1024 * 1024 - 1);
+        return { name, value: `bytes=${start}-${end}` };
+      });
+      void send("Fetch.continueRequest", { requestId, headers }, message.sessionId).catch(error => {
+        observed.push({ interceptionError: error.message });
+      });
+    } else if (message.method === "Network.requestWillBeSent") {
+      const { requestId, request } = message.params;
+      if (new URL(request.url).pathname === "/api/song-catalog/audio") {
+        mediaRequests.add(requestId);
+        observed.push({ method: request.method, range: request.headers.Range || request.headers.range || "" });
+      }
     } else if (message.method === "Network.responseReceived") {
       const response = message.params.response;
       const path = new URL(response.url).pathname;
-      if (path === "/api/song-catalog/audio") observed.push({ path, status: response.status, type: response.mimeType });
+      if (path === "/api/song-catalog/audio") observed.push({
+        path, status: response.status, type: response.mimeType,
+        range: response.headers["content-range"] || response.headers["Content-Range"],
+        length: response.headers["content-length"] || response.headers["Content-Length"],
+      });
+    } else if (message.method === "Network.loadingFailed" && mediaRequests.has(message.params.requestId)) {
+      observed.push({ mediaRequestFailed: message.params.errorText });
     } else if (message.method === "Runtime.exceptionThrown") {
       observed.push({ exception: message.params.exceptionDetails.text });
     } else if (message.method === "Page.fileChooserOpened") {
@@ -74,6 +101,10 @@ try {
   await command("Page.enable");
   await command("Runtime.enable");
   await command("Network.enable");
+  if (boundRanges) {
+    console.log("EXPERIMENT: cap browser media range requests to 1 MiB; this does not change deployed code.");
+    await command("Fetch.enable", { patterns: [{ urlPattern: `${target.origin}/api/song-catalog/audio*`, requestStage: "Request" }] });
+  }
   await command("Page.setInterceptFileChooserDialog", { enabled: true });
   await command("Page.addScriptToEvaluateOnNewDocument", { source: `
     window.__haloMediaEvents = [];

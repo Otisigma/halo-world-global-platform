@@ -169,6 +169,8 @@ assert.match(audio, /if \(!user\?\.id\) return json/);
 // Exercise the existing delivery implementation without a live storage account.
 const serveSource = audio.slice(audio.indexOf("async function serveAudio("), audio.indexOf("\nasync function listRadioTracks("));
 const rangeSource = audio.slice(audio.indexOf("function requestedByteRange("), audio.indexOf("\nasync function ownedVersion("));
+const readRangeSource = audio.slice(audio.indexOf("async function readAudioRange("), audio.indexOf("\nasync function serveAudio("));
+const rangeLimitSource = audio.match(/^const MAX_PLAYBACK_RANGE_BYTES = .+;$/m)[0];
 let ownerLookups = 0;
 const streamContext = {
   URL, Response, Uint8Array, ReadableStream, BindingError, bindingSongId, loadDreamweaverSong,
@@ -179,10 +181,9 @@ const streamContext = {
   MASTER_PLAYBACK_URL_TTL_SECONDS: 60,
   MEDIA_CORS_HEADERS: {},
   ownedVersion: async () => { ownerLookups++; return null; },
-  readAudioRange: async (_version, range) => new Uint8Array(range.end - range.start + 1),
   audioStore: { get: async () => new Uint8Array(10).buffer }
 };
-vm.runInNewContext(`${stripTypeScriptTypes(rangeSource)}\n${stripTypeScriptTypes(serveSource)}\nglobalThis.serve = serveAudio;`, streamContext);
+vm.runInNewContext(`${rangeLimitSource}\n${stripTypeScriptTypes(rangeSource)}\n${stripTypeScriptTypes(readRangeSource)}\n${stripTypeScriptTypes(serveSource)}\nglobalThis.serve = serveAudio;`, streamContext);
 const audioRequest = (params = "", method = "GET", headers = {}) => new Request(
   `https://halo.test/api/song-catalog/audio?versionId=${versionId}&songId=${songId}${params}`, { method, headers }
 );
@@ -213,4 +214,32 @@ assert.equal(head.headers.get("content-length"), "10");
 assert.equal(head.headers.get("cache-control"), "private, no-store");
 assert.equal(await head.text(), "");
 assert.equal((await (await streamContext.serve(audioRequest("&dreamweaver=1"), chunkDb, "")).arrayBuffer()).byteLength, 10);
+const chunkBytes = 4 * 1024 * 1024;
+const rangeBytes = 1024 * 1024;
+const hdBytes = 9 * rangeBytes;
+const hdMaster = { ...chunked, audio_chunk_count: 3, audio_byte_size: hdBytes };
+const reads = [];
+streamContext.audioStore.get = async key => {
+  const index = Number(key.slice(-3));
+  reads.push(index);
+  return new Uint8Array(Math.min(chunkBytes, hdBytes - index * chunkBytes)).fill(index + 1).buffer;
+};
+for (const [rangeHeader, start, end] of [
+  ["bytes=0-", 0, rangeBytes - 1],
+  ["bytes=0-8388607", 0, rangeBytes - 1],
+  [`bytes=${chunkBytes - 2}-`, chunkBytes - 2, chunkBytes + rangeBytes - 3],
+  ["bytes=-2097152", hdBytes - 2 * rangeBytes, hdBytes - rangeBytes - 1],
+  [`bytes=${hdBytes - 10}-`, hdBytes - 10, hdBytes - 1],
+]) {
+  reads.length = 0;
+  const result = await streamContext.serve(audioRequest("&dreamweaver=1", "GET", { Range: rangeHeader }), fakeDb({ masters: [hdMaster] }), "");
+  assert.equal(result.status, 206);
+  assert.equal(result.headers.get("content-range"), `bytes ${start}-${end}/${hdBytes}`);
+  assert.equal(result.headers.get("content-length"), String(end - start + 1));
+  const bytes = new Uint8Array(await result.arrayBuffer());
+  assert.equal(bytes.byteLength, end - start + 1);
+  assert.equal(bytes[0], Math.floor(start / chunkBytes) + 1);
+  assert.equal(bytes.at(-1), Math.floor(end / chunkBytes) + 1);
+  if (start === 0) assert.deepEqual(reads, [0], "browser bytes=0- must read only the first stored chunk, not the whole HD master");
+}
 console.log("Dreamweaver assets contracts passed: authorization, canonical masters, four slots, bounded generation, persistence, races, and HTTP errors.");

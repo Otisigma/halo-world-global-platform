@@ -69,6 +69,21 @@ Catalog audio uploads now report readiness while bytes land instead of only afte
 - The catalog UI shows the live note during upload, in the final receipt, and dispatches a `halo:upload-readiness` window event for other panels.
 - Monitor: chunk responses missing `readiness`, `PENDING_RECHECK` rates, and finalized uploads that stay `CATALOG_READY` because `shareVerification.reason` is pending.
 
+## Dreamweaver show-view canonical master
+
+The public release catalog includes `catalog.masterCopy.audioSource` only for
+one approved, persisted sale master on a rights-cleared, published public song.
+It contains the existing access-checked HALO audio route, never a storage key,
+signed storage URL, or raw Drive share link.
+
+Song-linked Dreamweaver show views prefer this live catalog binding and load it
+into `showAudio` using the existing preload/load/play controller. Visual assets
+hydrate independently and cannot replace that selected master. If this field
+is absent, the existing canonical binding and authorized same-song stream
+fallback remain in place. Cached records cannot authorize the direct path.
+Transport/media failures still surface honestly; a completed conveyor is not
+proof that audio is audible, and binding does not autoplay.
+
 ## Shared player upload indicator
 
 The shared compact upload indicator appears over player pages while a Song

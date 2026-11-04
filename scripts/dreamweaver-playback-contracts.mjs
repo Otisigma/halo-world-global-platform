@@ -30,6 +30,30 @@ const release = {
 const mix = { id: "linked-mix-id", title: "Linked mix", creator: { name: "Mix artist" }, audioUrl: "https://halo.test/mix.mp3", durationSeconds: 120 };
 
 {
+  const api = await readFile(new URL("../netlify/functions/release-catalog.mjs", import.meta.url), "utf8");
+  const context = vm.createContext({});
+  vm.runInContext(api.slice(api.indexOf("function canonicalCatalogAudioSource("), api.indexOf("function dreamweaverPayloadFor(")), context);
+  const row = {
+    catalog_song_id: songId, catalog_master_version_id: "22222222-2222-4222-8222-222222222222",
+    status: "published", visibility: "public", catalog_pipeline_status: "published",
+    catalog_rights_status: "cleared", catalog_master_mastering_status: "approved",
+    catalog_master_stored: true, catalog_master_count: 1
+  };
+  assert.match(context.canonicalCatalogAudioSource(row), /^\/api\/song-catalog\/audio\?versionId=/);
+  for (const patch of [
+    { status: "draft" }, { visibility: "private" }, { catalog_pipeline_status: "queued" },
+    { catalog_rights_status: "needs_review" }, { catalog_master_mastering_status: "review" },
+    { catalog_master_stored: false }, { catalog_master_count: 2 }, { catalog_master_count: 0 },
+    { catalog_master_version_id: "" }, { catalog_song_id: "" }
+  ]) {
+    assert.equal(context.canonicalCatalogAudioSource({ ...row, ...patch }), "",
+      "only one approved persisted master on a cleared public published song gets a direct playback route");
+  }
+  assert.match(api, /COUNT\(\*\) OVER \(\) AS catalog_master_count/);
+  assert.match(api, /audioSource: canonicalCatalogAudioSource\(row\)/);
+}
+
+{
   let requestedSongId = songId;
   const paths = [];
   const context = {
@@ -52,7 +76,7 @@ const mix = { id: "linked-mix-id", title: "Linked mix", creator: { name: "Mix ar
   assert.equal(paths[1], "/api/release-catalog", "mix-only routes retain the existing feed lookup");
 }
 
-export function fixture(search, { releases = [release], mixes = [mix], blocked = false, failed = false, failingSources = [], rejectedPlaySources = [], loadingSources = [], deferPlaying = false, unlock = null, pathname = "/dreamweaver/", releaseArtwork = undefined, assetBinding = binding, driveCatalog = { configured: false, tracks: [] }, catalogError = false, storage = { getItem: () => null }, storageGetterError = false, preloader, sentinel } = {}) {
+export function fixture(search, { releases = [release], mixes = [mix], blocked = false, failed = false, failingSources = [], rejectedPlaySources = [], loadingSources = [], deferPlaying = false, unlock = null, pathname = "/dreamweaver/", releaseArtwork = undefined, assetBinding = binding, assetBindingPending = false, driveCatalog = { configured: false, tracks: [] }, catalogError = false, storage = { getItem: () => null }, storageGetterError = false, preloader, sentinel } = {}) {
   class Element extends EventTarget {
     constructor() {
       super();
@@ -121,7 +145,7 @@ export function fixture(search, { releases = [release], mixes = [mix], blocked =
     localStorage: storage,
     history: { replaceState: (_state, _title, url) => { location.href = new URL(url, location).href; } },
     window: { clearTimeout: id => timers.delete(id), setTimeout: callback => { timers.set(++timerId, callback); return timerId; }, requestAnimationFrame: callback => callback(), HaloReleaseArtwork: releaseArtwork, HaloAudioPreloader: preloader, HaloSentinel: sentinel },
-    fixtures: { releases, mixes, unlock, requests, assetBinding, driveCatalog, catalogError }
+    fixtures: { releases, mixes, unlock, requests, assetBinding, assetBindingPending, driveCatalog, catalogError }
   };
   if (storageGetterError) Object.defineProperty(context, "localStorage", { get() { throw new Error("SecurityError"); } });
   vm.runInNewContext(`${declarations}
@@ -143,6 +167,7 @@ export function fixture(search, { releases = [release], mixes = [mix], blocked =
         return { response: { ok: !fixtures.catalogError }, payload: fixtures.driveCatalog };
       }
       if (url.startsWith("/api/dreamweaver-assets?")) {
+        if (fixtures.assetBindingPending) return new Promise(() => {});
         return { response: { ok: Boolean(fixtures.assetBinding) }, payload: { binding: fixtures.assetBinding } };
       }
       return { response: { ok: true }, payload: { mixes: fixtures.mixes } };
@@ -191,6 +216,47 @@ for (const search of [
   const requestedParams = new URLSearchParams(search);
   if (requestedParams.has("mix")) assert.equal(params.get("mix"), requestedParams.get("mix"));
   if (requestedParams.has("satellite")) assert.equal(params.get("satellite"), "dreamweaver");
+}
+
+{
+  const versionId = "22222222-2222-4222-8222-222222222222";
+  const audioSource = `/api/song-catalog/audio?versionId=${versionId}&dreamweaver=1&songId=${songId}`;
+  const directRelease = {
+    ...release,
+    catalog: { songId, rightsStatus: "cleared", masterCopy: { versionId, masteringStatus: "approved", audioSource } }
+  };
+  for (const options of [
+    { assetBindingPending: true },
+    { assetBinding: null },
+    { assetBinding: { ...binding, masterVersionId: versionId } },
+    { assetBinding: { ...binding, masterVersionId: "33333333-3333-4333-8333-333333333333" } }
+  ]) {
+    const f = fixture(`?mix=owen-anthony-quiet-heart&song=${songId}&experience=studio`, {
+      releases: [directRelease], ...options
+    });
+    await f.initializeDreamweaver();
+    assert.equal(f.nodes.get("showAudio").src, new URL(audioSource, "https://halo.test").href,
+      "the show binds the approved catalog master even when visual binding stalls or fails");
+    assert.equal(f.nodes.get("showAudio").loads, 1);
+    assert.equal(f.nodes.get("showAudio").plays, 0, "source binding must not autoplay");
+    assert.equal(f.shouldPromptLocalUpload(), false);
+    assert.equal(f.state.releasePlaybackState, "ready");
+    await f.togglePlayback();
+    assert.equal(f.nodes.get("showAudio").plays, 1, "the first Play click uses the bound catalog master");
+  }
+  for (const source of [
+    "https://evil.test/master.wav",
+    `/api/song-catalog/audio?versionId=${versionId}&dreamweaver=1&songId=33333333-3333-4333-8333-333333333333`,
+    `https://drive.google.com/file/d/example/view`,
+  ]) {
+    const invalidRelease = { ...directRelease, catalog: {
+      ...directRelease.catalog, masterCopy: { ...directRelease.catalog.masterCopy, audioSource: source }
+    } };
+    const f = fixture(`?song=${songId}`, { releases: [invalidRelease] });
+    await f.initializeDreamweaver();
+    assert.equal(f.nodes.get("showAudio").src, masterStream,
+      "unsafe or cross-song catalog sources must use the existing server binding instead");
+  }
 }
 
 for (const search of ["?mix=linked-mix-id", "?mix=linked-mix-id&satellite=dreamweaver"]) {

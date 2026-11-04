@@ -50,6 +50,13 @@ Actions schedule or manual dispatch
   Sentinel cannot reliably read a non-exposed CORS header or distinguish a CORS
   rejection from DNS/network failure. A compatible origin-specific CORS policy
   is valid; wildcard CORS is not imposed on private media.
+- Because an opaque fetch failure is ambiguous (for example, a canonical master
+  that 302-redirects to a signed storage URL without CORS headers), Sentinel then
+  defers to the `<audio>` element itself: `loadedmetadata` marks the transport
+  `element-verified`; a media `error` or a 12-second stall activates recovery as
+  before. An element deliberately left at `preload="none"` is reported as
+  unverified rather than failed; its own `error` event still triggers recovery
+  once a gesture loads it. HTTP status and content-type failures remain definitive.
 - Local Blob sources are never sent to the server or remotely probed. External
   HEAD requests omit credentials. Same-origin requests preserve existing auth.
 - Pending checks cannot mark a replacement/local source failed. Disable cancels

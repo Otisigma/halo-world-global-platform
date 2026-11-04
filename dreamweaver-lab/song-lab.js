@@ -1,3 +1,5 @@
+import { createLocalUploadVault, resumeAudioUpload, requestUploadJson } from "./resumable-upload.js";
+
 (() => {
   const byId = id => document.getElementById(id);
   const elements = {
@@ -9,6 +11,39 @@
   };
   const metrics = { tempo: byId("metricTempo"), key: byId("metricKey"), dynamics: byId("metricDynamics"), brightness: byId("metricBrightness"), peak: byId("metricPeak"), width: byId("metricWidth") };
   const state = { file: null, audioBuffer: null, objectUrl: "", evidence: null, project: null, pollTimer: 0, projects: [] };
+  const vault = createLocalUploadVault();
+  const recovery = byId("uploadRecovery"), recoveryStatus = byId("uploadRecoveryStatus");
+  const resumeButton = byId("resumeUploadButton"), discardButton = byId("discardUploadButton"), progress = byId("uploadProgress");
+  const sessionKey = "halo-song-lab-upload-session";
+  let uploadSession = null, backupSaved = false, busy = false, loading = false, saveQueue = Promise.resolve();
+  function draft() { return { title: elements.title.value, artist: elements.artist.value, brief: elements.brief.value, lyrics: elements.lyrics.value }; }
+  function recoveryMessage(message, resumable = false) {
+    recovery.hidden = false; recoveryStatus.textContent = message;
+    resumeButton.hidden = !resumable; resumeButton.disabled = busy || loading;
+    discardButton.disabled = busy || loading;
+  }
+  function saveSession() {
+    if (!backupSaved || !uploadSession) return Promise.resolve();
+    const snapshot = { ...uploadSession, draft: draft(), evidence: state.evidence, updatedAt: Date.now() };
+    const write = saveQueue.then(() => vault.saveSession(snapshot));
+    saveQueue = write.catch(error => {
+      backupSaved = false;
+      recoveryMessage(`Local progress could not be saved: ${error.message}. Keep this tab open and your original file.`);
+    });
+    return write;
+  }
+  function setBusy(value) {
+    busy = value; elements.file.disabled = value || loading; elements.analyze.disabled = value || loading || !state.evidence || !uploadSession;
+    resumeButton.disabled = value || loading; discardButton.disabled = value || loading;
+    for (const element of [elements.title, elements.artist, elements.brief, elements.lyrics, elements.rights]) element.disabled = value;
+  }
+  async function clearBackup() {
+    if (!uploadSession) return;
+    await saveQueue;
+    await vault.remove(uploadSession.id);
+    sessionStorage.removeItem(sessionKey);
+    backupSaved = false; uploadSession = null; recovery.hidden = true;
+  }
   const noteNames = ["C", "C♯", "D", "E♭", "E", "F", "F♯", "G", "A♭", "A", "B♭", "B"];
   const uploadTrustStorageKey = "halo-dreamweaver-upload-trust";
   const uploadTrustTtlMs = 15 * 60 * 1000;
@@ -236,38 +271,72 @@
     metrics.width.textContent = evidence.channels < 2 ? "Mono" : evidence.stereoWidth < .18 ? "Narrow" : evidence.stereoWidth > .75 ? "Wide" : "Balanced";
   }
 
-  async function loadFile(file) {
+  async function loadFile(file, restored = false) {
     if (!file) return;
-    if (file.size > 128 * 1024 * 1024) return setStatus("Keep the audio file under 128 MB.", true);
+    if (busy || loading) return;
+    if (!file.size || file.size > 128 * 1024 * 1024) return setStatus("Choose a non-empty audio file up to 128 MB.", true);
+    if (!restored && uploadSession && !window.confirm("Replace this upload and discard its local backup?")) return;
+    loading = true; setBusy(false);
     state.file = file; state.evidence = null; elements.analyze.disabled = true;
+    state.audioBuffer = null; elements.audio.pause(); elements.audio.removeAttribute("src"); elements.audio.load(); elements.audio.hidden = true;
+    if (state.objectUrl) URL.revokeObjectURL(state.objectUrl);
+    state.objectUrl = ""; elements.waveIdle.hidden = false;
     elements.dropTitle.textContent = file.name; elements.dropDetail.textContent = `${(file.size / 1024 / 1024).toFixed(1)} MB · reading waveform…`;
     if (!elements.title.value) elements.title.value = titleFromFile(file.name);
     setStatus("Reading the waveform locally. The upload has not started yet.");
+    if (!restored) {
+      const previous = uploadSession;
+      uploadSession = { id: crypto.randomUUID(), fileName: file.name, contentType: file.type, lastModified: file.lastModified, byteSize: file.size, draft: draft(), acknowledged: [], createdAt: Date.now(), ownerId: "" };
+      backupSaved = false;
+      recoveryMessage("Saving the original audio in this browser...");
+      try {
+        await saveQueue;
+        await vault.saveFile(uploadSession, file);
+        sessionStorage.setItem(sessionKey, uploadSession.id);
+        backupSaved = true;
+        recoveryMessage("Original audio saved locally. Upload will start only when you submit.");
+        if (previous) await vault.remove(previous.id);
+      } catch (error) {
+        recoveryMessage(`Local backup unavailable: ${error.message}. Upload can continue in this tab, but reload recovery is not guaranteed.`);
+      }
+    }
     try {
       const AudioContextClass = window.AudioContext || window.webkitAudioContext;
       const context = new AudioContextClass();
-      const buffer = await context.decodeAudioData(await file.arrayBuffer());
-      await context.close(); state.audioBuffer = buffer;
+      let buffer;
+      try { buffer = await context.decodeAudioData(await file.arrayBuffer()); }
+      finally { await context.close(); }
+      state.audioBuffer = buffer;
       drawWaveform(buffer); elements.waveIdle.hidden = true; elements.duration.textContent = formatTime(buffer.duration);
       if (state.objectUrl) URL.revokeObjectURL(state.objectUrl); state.objectUrl = URL.createObjectURL(file); elements.audio.src = state.objectUrl; elements.audio.hidden = false;
       await new Promise(resolve => setTimeout(resolve, 30));
       state.evidence = analyzeBuffer(buffer); renderMetrics(state.evidence);
       elements.dropDetail.textContent = `${(file.size / 1024 / 1024).toFixed(1)} MB · ${formatTime(buffer.duration)} · ${buffer.numberOfChannels === 1 ? "mono" : `${buffer.numberOfChannels} channels`}`;
-      elements.analyze.disabled = false; setStatus("Signal ready. Confirm your rights and build the package.");
+      if (backupSaved) await saveSession().catch(error => setStatus(error.message, true));
+      setStatus("Signal ready. Confirm your rights and build the package.");
       window.haloStats?.track("dreamweaver_song_loaded", { file_type: file.type || "unknown" });
-    } catch { state.file = null; setStatus("This browser could not decode that audio file. Try a WAV, MP3, M4A, OGG, or WebM file.", true); }
+    } catch { setStatus("This browser could not decode that audio file. Your local backup, if saved, has not been deleted. Try a supported file or browser.", true); }
+    finally { loading = false; setBusy(false); }
   }
 
   async function uploadFile(file) {
-    const uploadId = crypto.randomUUID(); const chunkSize = 3.5 * 1024 * 1024; const chunkCount = Math.ceil(file.size / chunkSize);
-    for (let index = 0; index < chunkCount; index += 1) {
-      elements.processingStage.textContent = `SECURING AUDIO / ${index + 1} OF ${chunkCount}`;
-      elements.processingDetail.textContent = "Uploading encrypted private chunks into HALO storage. Nothing is published.";
-      const body = new FormData(); body.append("chunk", file.slice(index * chunkSize, Math.min(file.size, (index + 1) * chunkSize), file.type), file.name); body.append("uploadId", uploadId); body.append("chunkIndex", String(index)); body.append("chunkCount", String(chunkCount));
-      const response = await fetch("/api/dreamweaver-song-lab", { method: "POST", body, credentials: "same-origin", headers: trustedUploadHeaders() });
-      const data = await response.json().catch(() => ({})); if (!response.ok) throwApiError(data, "The private audio upload stopped early.");
-    }
-    return { uploadId, chunkCount };
+    progress.hidden = false;
+    return resumeAudioUpload({
+      file, session: uploadSession, headers: () => trustedUploadHeaders(),
+      onProgress(percent) {
+        progress.value = percent;
+        elements.processingStage.textContent = `SECURING AUDIO / ${Math.floor(percent)}%`;
+        elements.processingDetail.textContent = "Sending verified private chunks. Nothing is published.";
+      },
+      onRetry({ attempt, retries, chunkIndex, chunkCount }) {
+        elements.processingStage.textContent = `RETRY ${attempt}/${retries} / CHUNK ${chunkIndex + 1}/${chunkCount}`;
+        elements.processingDetail.textContent = "Connection interrupted. Retrying this chunk; confirmed chunks are retained.";
+      },
+      async onAcknowledged(index) {
+        uploadSession.acknowledged = [...new Set([...uploadSession.acknowledged, index])];
+        await saveSession().catch(error => setStatus(`Upload continues, but local progress backup failed: ${error.message}`, true));
+      },
+    });
   }
 
   async function pollProject(projectId) {
@@ -276,30 +345,58 @@
     const data = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(data.message || "The Song Lab project could not be read.");
     state.project = data.project;
-    if (data.project.status === "ready") { showProject(data.project); await loadHistory(); return; }
+    if (data.project.status === "ready") {
+      showProject(data.project);
+      if (uploadSession?.projectId === data.project.id) await clearBackup().catch(error => recoveryMessage(`Package ready, but local cleanup failed: ${error.message}. Use Discard local backup.`));
+      setBusy(false); await loadHistory(); return;
+    }
     if (data.project.status === "failed") throw new Error(data.project.errorMessage || "The Song Lab package stopped before completion.");
     elements.processingStage.textContent = data.project.status === "analyzing" ? "WEAVING THE RELEASE WORLD" : "ANALYSIS QUEUED";
     elements.processingDetail.textContent = data.project.status === "analyzing" ? "Dreamweaver is grounding the visual system, campaign, and release notes in the measured signal." : "The private job is saved and preparing to run.";
     state.pollTimer = setTimeout(() => pollProject(projectId).catch(handleFailure), 1800);
   }
 
-  function handleFailure(error) { elements.processing.hidden = true; elements.analyze.disabled = false; setStatus(error.message || "Dreamweaver could not complete this package.", true); showToast(error.message || "Song Lab stopped."); }
+  function handleFailure(error) {
+    setBusy(false);
+    elements.processing.dataset.uploadState = "paused";
+    elements.processingStage.textContent = "PAUSED / WAITING";
+    elements.processingDetail.textContent = error.message || "Dreamweaver could not complete this package.";
+    setStatus(error.message || "Dreamweaver could not complete this package.", true); showToast(error.message || "Song Lab stopped.");
+    if (uploadSession && state.file) recoveryMessage(uploadSession.projectId
+      ? "The private project is saved on the server. Resume to check its status; no audio re-upload is needed."
+      : backupSaved ? "Upload interrupted. We saved your progress locally - resume upload?"
+      : "Upload interrupted. This tab still has your file, but durable local backup is unavailable. Resume before closing it.", true);
+  }
 
   async function submit(event) {
     event.preventDefault();
-    if (!state.file || !state.evidence) return setStatus("Choose and decode an audio file first.", true);
+    if (busy || loading) return;
+    if (!uploadSession || !state.file || !state.evidence) return setStatus("Choose and decode an audio file first.", true);
     if (!elements.rights.checked) return setStatus("Confirm that you may use this recording.", true);
-    elements.analyze.disabled = true; elements.results.hidden = true; elements.processing.hidden = false; elements.processing.scrollIntoView({ behavior: "smooth", block: "center" });
+    setBusy(true); elements.processing.dataset.uploadState = "uploading"; resumeButton.hidden = true; elements.results.hidden = true; elements.processing.hidden = false; elements.processing.scrollIntoView({ behavior: "smooth", block: "center" });
     try {
+      const identityResponse = await fetch("/api/dreamweaver-song-lab", { credentials: "same-origin", headers: { Accept: "application/json" } });
+      if (!identityResponse.ok) throw new Error("Song Lab could not verify the current account. Your upload is retained.");
+      const identity = await identityResponse.json();
+      if (!identity.uploadOwnerId) throw new Error("Sign in before resuming private audio.");
+      if (uploadSession.ownerId && uploadSession.ownerId !== identity.uploadOwnerId) throw new Error("Sign in with the account that started this upload, or discard its local backup.");
+      uploadSession.ownerId = identity.uploadOwnerId;
+      await saveSession().catch(error => setStatus(error.message, true));
+      if (uploadSession.projectId) { await pollProject(uploadSession.projectId); return; }
       const upload = await uploadFile(state.file);
       elements.processingStage.textContent = "STARTING DREAMWEAVER"; elements.processingDetail.textContent = "The waveform evidence and artist context are entering the private creative engine.";
-      const response = await fetch("/api/dreamweaver-song-lab", { method: "POST", credentials: "same-origin", headers: trustedUploadHeaders({ "Content-Type": "application/json" }), body: JSON.stringify({
+      const data = upload.project ? { project: upload.project } : await requestUploadJson({
         action: "analyze", ...upload, title: elements.title.value, artistName: elements.artist.value, creativeBrief: elements.brief.value, lyrics: elements.lyrics.value,
         rightsAttested: elements.rights.checked, fileName: state.file.name, contentType: state.file.type, byteSize: state.file.size, analysis: state.evidence
-      }) });
-      const data = await response.json().catch(() => ({})); if (!response.ok) throwApiError(data, "Dreamweaver could not start the analysis.");
+      }, trustedUploadHeaders());
+      uploadSession.projectId = data.project.id;
+      await saveSession().catch(error => setStatus(error.message, true));
       state.project = data.project; window.haloStats?.track("dreamweaver_song_analysis_started", { project_id: data.project.id }); await pollProject(data.project.id);
-    } catch (error) { handleFailure(error); }
+    } catch (error) {
+      if (error.data?.trustState === "challenge") {
+        try { throwApiError(error.data, error.message); } catch (challenge) { handleFailure(challenge); }
+      } else handleFailure(error);
+    }
   }
 
   function colorValue(name, index) {
@@ -334,7 +431,78 @@
 
   async function loadHistory() { try { const response = await fetch("/api/dreamweaver-song-lab", { credentials: "same-origin", headers: { Accept: "application/json" } }); const data = await response.json().catch(() => ({})); if (!response.ok) return; state.projects = data.projects || []; renderHistory(); } catch {} }
 
+  async function restoreBackup() {
+    try {
+      let id = sessionStorage.getItem(sessionKey);
+      if (!id) {
+        const response = await fetch("/api/dreamweaver-song-lab", { credentials: "same-origin", headers: { Accept: "application/json" } });
+        if (!response.ok) return;
+        const identity = await response.json();
+        if (!identity.uploadOwnerId) return;
+        const sessions = await vault.listSessions();
+        id = sessions.filter(session => session.ownerId === identity.uploadOwnerId)
+          .sort((left, right) => (right.updatedAt || right.createdAt) - (left.updatedAt || left.createdAt))[0]?.id;
+        if (!id) return;
+      }
+      const saved = await vault.read(id);
+      if (!saved || uploadSession || state.file) return;
+      if (saved.session.ownerId) {
+        const response = await fetch("/api/dreamweaver-song-lab", { credentials: "same-origin", headers: { Accept: "application/json" } });
+        if (!response.ok) throw new Error("Sign in with the original account to restore this upload.");
+        const identity = await response.json();
+        if (identity.uploadOwnerId !== saved.session.ownerId) throw new Error("Sign in with the original account and reload to restore this upload.");
+      }
+      if (uploadSession || state.file || busy || loading) return;
+      sessionStorage.setItem(sessionKey, id);
+      uploadSession = saved.session; backupSaved = true;
+      for (const [key, value] of Object.entries(saved.session.draft || {})) if (elements[key]) elements[key].value = value;
+      elements.rights.checked = false;
+      const file = new File([saved.file], saved.session.fileName, { type: saved.session.contentType, lastModified: saved.session.lastModified });
+      state.file = file;
+      if (saved.session.evidence) {
+        state.evidence = saved.session.evidence;
+        renderMetrics(state.evidence); elements.duration.textContent = formatTime(state.evidence.durationSeconds);
+        state.objectUrl = URL.createObjectURL(file); elements.audio.src = state.objectUrl; elements.audio.hidden = false;
+        elements.dropTitle.textContent = file.name; elements.dropDetail.textContent = "Restored original audio and saved measurements.";
+        setBusy(false);
+      } else await loadFile(file, true);
+      recoveryMessage("Upload interrupted. We saved your progress locally - resume upload? Confirm your recording permission again.", true);
+    } catch (error) {
+      recoveryMessage(`Local recovery could not be opened: ${error.message}. Keep your original audio file.`);
+    }
+  }
+
   bootstrapUploadTrust();
+  resumeButton.addEventListener("click", () => elements.form.requestSubmit());
+  discardButton.addEventListener("click", async () => {
+    if (busy || loading || !window.confirm("Delete the local audio backup and draft from this browser? Existing private server chunks and saved projects are not deleted.")) return;
+    try {
+      if (!uploadSession) {
+        const id = sessionStorage.getItem(sessionKey);
+        if (id) { await vault.remove(id); sessionStorage.removeItem(sessionKey); }
+        recovery.hidden = true;
+        return;
+      }
+      await clearBackup();
+      clearTimeout(state.pollTimer);
+      state.file = null; state.evidence = null;
+      elements.file.value = ""; elements.audio.pause(); elements.audio.removeAttribute("src"); elements.audio.load(); elements.audio.hidden = true;
+      if (state.objectUrl) URL.revokeObjectURL(state.objectUrl);
+      state.objectUrl = ""; progress.hidden = true; elements.processing.hidden = true; elements.rights.checked = false;
+      elements.dropTitle.textContent = "Choose a WAV or audio file"; elements.dropDetail.textContent = "Drop it here - private - up to 128 MB";
+      setBusy(false); setStatus("Local backup discarded. Your original file and saved projects are unchanged.");
+    } catch (error) { recoveryMessage(`Local backup could not be discarded: ${error.message}.`); }
+  });
+  for (const element of [elements.title, elements.artist, elements.brief, elements.lyrics]) element.addEventListener("input", () => {
+    void saveSession().catch(error => setStatus(`Local draft backup failed: ${error.message}`, true));
+  });
+  window.addEventListener("beforeunload", event => {
+    if (busy || loading) { event.preventDefault(); event.returnValue = ""; }
+  });
+  window.addEventListener("online", () => {
+    if (!busy && uploadSession && state.file && !resumeButton.hidden) recoveryMessage("Connection restored. Confirm recording permission and choose Resume Upload to continue.", true);
+  });
+  void restoreBackup();
   elements.file.addEventListener("change", event => loadFile(event.target.files?.[0]));
   ["dragenter", "dragover"].forEach(name => elements.dropZone.addEventListener(name, event => { event.preventDefault(); elements.dropZone.classList.add("dragging"); }));
   ["dragleave", "drop"].forEach(name => elements.dropZone.addEventListener(name, event => { event.preventDefault(); elements.dropZone.classList.remove("dragging"); }));

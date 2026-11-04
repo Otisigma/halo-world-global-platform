@@ -15,6 +15,8 @@ import { createLocalUploadVault, resumeAudioUpload, requestUploadJson, readSongL
   const recovery = byId("uploadRecovery"), recoveryStatus = byId("uploadRecoveryStatus");
   const resumeButton = byId("resumeUploadButton"), discardButton = byId("discardUploadButton"), progress = byId("uploadProgress");
   const sessionKey = "halo-song-lab-upload-session";
+  const activeProjectKey = ownerId => `halo-song-lab-active-project:${encodeURIComponent(ownerId)}`;
+  let currentOwnerId = "", restoring = false;
   const autoResume = byId("autoResumeUpload"), pauseButton = byId("pauseUploadButton");
   let pauseRequested = false;
   let previewState = "standby";
@@ -45,7 +47,7 @@ import { createLocalUploadVault, resumeAudioUpload, requestUploadJson, readSongL
     return write;
   }
   function setBusy(value) {
-    busy = value; elements.file.disabled = value || loading; elements.analyze.disabled = value || loading || !state.evidence || !uploadSession;
+    busy = value; elements.file.disabled = value || loading; elements.analyze.disabled = value || loading || !state.evidence || !uploadSession || uploadSession.stage === "ready";
     resumeButton.disabled = value || loading; discardButton.disabled = value || loading;
     pauseButton.hidden = !value; pauseButton.disabled = false;
     autoResume.disabled = value;
@@ -292,7 +294,8 @@ import { createLocalUploadVault, resumeAudioUpload, requestUploadJson, readSongL
     if (!file.size || file.size > 128 * 1024 * 1024) return setStatus("Choose a non-empty audio file up to 128 MB.", true);
     if (!restored && uploadSession && !window.confirm("Replace this upload and discard its local backup?")) return;
     loading = true; setBusy(false);
-    state.file = file; state.evidence = null; elements.analyze.disabled = true;
+    elements.dropZone.classList.remove("session-restored");
+    state.file = file; state.evidence = null; state.project = null; elements.results.hidden = true; elements.analyze.disabled = true;
     state.audioBuffer = null; elements.audio.pause(); elements.audio.removeAttribute("src"); elements.audio.load(); elements.audio.hidden = true;
     if (state.objectUrl) URL.revokeObjectURL(state.objectUrl);
     state.objectUrl = ""; elements.waveIdle.hidden = false;
@@ -301,7 +304,7 @@ import { createLocalUploadVault, resumeAudioUpload, requestUploadJson, readSongL
     setStatus("Reading the waveform locally. The upload has not started yet.");
     if (!restored) {
       const previous = uploadSession;
-      uploadSession = { id: crypto.randomUUID(), fileName: file.name, contentType: file.type, lastModified: file.lastModified, byteSize: file.size, draft: draft(), acknowledged: [], createdAt: Date.now(), ownerId: "" };
+      uploadSession = { id: crypto.randomUUID(), fileName: file.name, contentType: file.type, lastModified: file.lastModified, byteSize: file.size, draft: draft(), acknowledged: [], createdAt: Date.now(), ownerId: currentOwnerId };
       backupSaved = false;
       recoveryMessage("Saving the original audio in this browser...");
       try {
@@ -369,7 +372,12 @@ import { createLocalUploadVault, resumeAudioUpload, requestUploadJson, readSongL
       reportCheckpoint(data.project.status === "ready" ? "ready" : "building");
       if (data.project.status === "ready") {
         showProject(data.project);
-        if (uploadSession?.projectId === data.project.id) await clearBackup().catch(error => recoveryMessage(`Package ready, but local cleanup failed: ${error.message}. Use Discard local backup.`));
+        if (uploadSession?.projectId === data.project.id) {
+          uploadSession.stage = "ready"; uploadSession.autoResume = false; uploadSession.authorized = false;
+          autoResume.checked = false;
+          await saveSession().catch(error => recoveryMessage(`Package ready, but local session backup failed: ${error.message}. Keep your original audio.`));
+          if (backupSaved) recoveryMessage("Package and original audio retained in this browser for your next visit.");
+        }
         setBusy(false); await loadHistory(); return;
       }
       if (data.project.status === "failed") throw Object.assign(new Error(data.project.errorMessage || "The Song Lab package stopped before completion."), { status: 503 });
@@ -411,6 +419,7 @@ import { createLocalUploadVault, resumeAudioUpload, requestUploadJson, readSongL
   async function submit(event, automatic = false) {
     event?.preventDefault();
     if (busy || loading) return;
+    if (uploadSession?.stage === "ready") return setStatus("This private package is complete. Select a new source file to start another project.");
     if (!uploadSession || !state.file || !state.evidence) return setStatus("Choose and decode an audio file first.", true);
     if (!elements.rights.checked && !(automatic && uploadSession.authorized && uploadSession.autoResume)) return setStatus("Confirm that you may use this recording.", true);
     if (!automatic) {
@@ -480,7 +489,12 @@ import { createLocalUploadVault, resumeAudioUpload, requestUploadJson, readSongL
     return map[String(name).toLowerCase()] || ["#14150f", "#d3ff58", "#bd9b58", "#ece6d8", "#6c594a", "#8b372d"][index % 6];
   }
 
-  function showProject(project) {
+  function showProject(project, { restored = false } = {}) {
+    state.project = project;
+    if (currentOwnerId) {
+      try { localStorage.setItem(activeProjectKey(currentOwnerId), project.id); }
+      catch (error) { recoveryMessage(`Project opened, but the active-project preference could not be saved: ${error.message}. Your private server project is unchanged.`); }
+    }
     const pack = project.creativePackage || {}; const visual = pack.visualDirection || {}; const campaign = pack.campaign || {};
     elements.processing.hidden = true; elements.results.hidden = false; elements.resultTitle.textContent = `${project.title} has a world.`; elements.resultSummary.textContent = pack.sonicSummary || "The creative package is ready.";
     elements.cover.innerHTML = project.artworkUrl ? `<img src="${escapeHtml(project.artworkUrl)}" alt="Original Dreamweaver cover artwork for ${escapeHtml(project.title)}">` : `<div class="cover-placeholder"><span>DW</span><small>CREATIVE DIRECTION READY</small></div>`;
@@ -489,7 +503,9 @@ import { createLocalUploadVault, resumeAudioUpload, requestUploadJson, readSongL
     elements.structures.innerHTML = list(pack.structureNotes); elements.mixes.innerHTML = list(pack.mixNotes); elements.tagline.textContent = campaign.tagline || ""; elements.releaseCopy.textContent = campaign.releaseCopy || "";
     elements.captions.innerHTML = (campaign.shortCaptions || []).map(item => `<button type="button" data-caption="${escapeHtml(item)}">${escapeHtml(item)}<br><small>Click to copy</small></button>`).join("");
     elements.rollout.innerHTML = list(campaign.rollout); elements.videos.innerHTML = list(campaign.videoConcepts); elements.limits.innerHTML = list(pack.factualLimits); elements.confidence.textContent = pack.confidenceNote || "";
-    elements.results.scrollIntoView({ behavior: "smooth", block: "start" }); elements.analyze.disabled = false; setStatus("Package complete. Review every factual detail before publishing.");
+    if (!restored) elements.results.scrollIntoView({ behavior: "smooth", block: "start" });
+    elements.analyze.disabled = !state.evidence || !uploadSession || uploadSession.stage === "ready";
+    setStatus(restored ? "Saved private package restored. No re-upload is needed. Review every factual detail before publishing." : "Package complete. Review every factual detail before publishing.");
     window.haloStats?.track("dreamweaver_song_package_ready", { project_id: project.id, model: project.model });
   }
 
@@ -504,27 +520,64 @@ import { createLocalUploadVault, resumeAudioUpload, requestUploadJson, readSongL
     elements.history.innerHTML = state.projects.length ? state.projects.map(project => `<button class="history-card" type="button" data-project-id="${escapeHtml(project.id)}"><small>${escapeHtml(project.status)} / ${new Date(project.createdAt).toLocaleDateString()}</small><strong>${escapeHtml(project.title)}</strong><span>${escapeHtml(project.artistName || project.fileName)} · ${formatTime(project.durationSeconds)}</span></button>`).join("") : `<p class="history-empty">No saved Song Lab projects yet.</p>`;
   }
 
-  async function loadHistory() { try { const response = await fetch("/api/dreamweaver-song-lab", { credentials: "same-origin", headers: { Accept: "application/json" } }); const data = await response.json().catch(() => ({})); if (!response.ok) return; state.projects = data.projects || []; renderHistory(); } catch {} }
+  async function loadHistory() {
+    if (restoring) return;
+    restoring = true;
+    try {
+      const data = await readSongLabJson("/api/dreamweaver-song-lab");
+      if (!data.uploadOwnerId) throw new Error("Sign in to restore your private Song Lab projects.");
+      currentOwnerId = data.uploadOwnerId;
+      state.projects = data.projects || []; renderHistory();
+      if (busy || loading || state.file || state.project) return;
+      let activeId = "";
+      try { activeId = localStorage.getItem(activeProjectKey(currentOwnerId)) || ""; }
+      catch (error) { recoveryMessage(`Active-project preference unavailable: ${error.message}. Checking your private project history.`); }
+      await restoreBackup(data, activeId);
+      if (busy || loading || state.file || state.project) return;
+      let project = state.projects.find(item => item.id === activeId);
+      if (activeId && !project) {
+        try { project = (await readSongLabJson(`/api/dreamweaver-song-lab?projectId=${encodeURIComponent(activeId)}`)).project; }
+        catch (error) {
+          if (error.status !== 404) throw error;
+          recoveryMessage("The last active private project is no longer available. Checking your saved project history.");
+        }
+      }
+      project ||= state.projects.find(item => item.status === "ready");
+      if (busy || loading || state.file || state.project || !project) return;
+      if (project.status === "ready") {
+        elements.title.value = project.title || ""; elements.artist.value = project.artistName || "";
+        const evidence = project.analysis;
+        if (evidence && ["dynamicRangeDb", "spectralCentroidHz", "peak", "stereoWidth"]
+          .every(key => Number.isFinite(evidence[key]))) {
+          renderMetrics(evidence);
+          elements.duration.textContent = formatTime(project.durationSeconds);
+        }
+        elements.dropTitle.textContent = `Saved private project: ${project.title}`;
+        elements.dropDetail.textContent = "Package restored. Original audio preview is not cached in this browser; no re-upload is needed to review the package.";
+        showProject(project, { restored: true });
+      } else setStatus("Your last private project is still pending. Open it from project history to resume; no re-upload is needed.");
+    } catch (error) {
+      if (!busy && !loading && !state.file && !state.project) await restoreBackup({ projects: [] });
+      setStatus(`Private session recovery unavailable: ${error.message}. Your saved projects have not been deleted.`, true);
+    } finally { restoring = false; }
+  }
 
-  async function restoreBackup() {
+  async function restoreBackup(identity, activeId = "") {
     try {
       let id = sessionStorage.getItem(sessionKey);
       if (!id) {
-        const response = await fetch("/api/dreamweaver-song-lab", { credentials: "same-origin", headers: { Accept: "application/json" } });
-        if (!response.ok) return;
-        const identity = await response.json();
         if (!identity.uploadOwnerId) return;
         const sessions = await vault.listSessions();
-        id = sessions.filter(session => session.ownerId === identity.uploadOwnerId)
-          .sort((left, right) => (right.updatedAt || right.createdAt) - (left.updatedAt || left.createdAt))[0]?.id;
+        id = sessions.filter(session => session.ownerId === identity.uploadOwnerId
+          && (session.stage !== "ready" || !activeId || session.projectId === activeId))
+          .sort((left, right) => Number(left.stage === "ready") - Number(right.stage === "ready")
+            || (right.updatedAt || right.createdAt) - (left.updatedAt || left.createdAt))[0]?.id;
         if (!id) return;
       }
       const saved = await vault.read(id);
       if (!saved || uploadSession || state.file) return;
+      if (saved.session.stage === "ready" && activeId && saved.session.projectId !== activeId) return;
       if (saved.session.ownerId) {
-        const response = await fetch("/api/dreamweaver-song-lab", { credentials: "same-origin", headers: { Accept: "application/json" } });
-        if (!response.ok) throw new Error("Sign in with the original account to restore this upload.");
-        const identity = await response.json();
         if (identity.uploadOwnerId !== saved.session.ownerId) throw new Error("Sign in with the original account and reload to restore this upload.");
       }
       if (uploadSession || state.file || busy || loading) return;
@@ -542,6 +595,20 @@ import { createLocalUploadVault, resumeAudioUpload, requestUploadJson, readSongL
         elements.dropTitle.textContent = file.name; elements.dropDetail.textContent = "Restored original audio and saved measurements.";
         setBusy(false);
       } else await loadFile(file, true);
+      if (uploadSession.projectId) {
+        const project = identity.projects?.find(item => item.id === uploadSession.projectId)
+          || (await readSongLabJson(`/api/dreamweaver-song-lab?projectId=${encodeURIComponent(uploadSession.projectId)}`)).project;
+        if (project?.status === "ready") {
+          uploadSession.stage = "ready"; uploadSession.autoResume = false; uploadSession.authorized = false;
+          autoResume.checked = false;
+          await saveSession().catch(error => recoveryMessage(`Private package opened, but local progress could not be saved: ${error.message}. Keep your original audio.`));
+          showProject(project, { restored: true });
+          elements.dropZone.classList.add("session-restored");
+          if (backupSaved) recoveryMessage("Restored your private package, original audio, draft and measurements. Nothing was re-uploaded.");
+          reportCheckpoint("ready");
+          return;
+        }
+      }
       recoveryMessage("Upload interrupted. We saved your progress locally - resume upload? Confirm your recording permission again.", true);
       if (uploadSession.autoResume && uploadSession.authorized && uploadSession.ownerId && (uploadSession.autoRestarts || 0) < 3) {
         if (navigator.onLine === false) recoveryMessage("Saved authorized upload is waiting for a connection before automatic recovery.", true);
@@ -583,6 +650,7 @@ import { createLocalUploadVault, resumeAudioUpload, requestUploadJson, readSongL
       elements.file.value = ""; elements.audio.pause(); elements.audio.removeAttribute("src"); elements.audio.load(); elements.audio.hidden = true;
       if (state.objectUrl) URL.revokeObjectURL(state.objectUrl);
       state.objectUrl = ""; progress.hidden = true; elements.processing.hidden = true; elements.rights.checked = false;
+      elements.dropZone.classList.remove("session-restored");
       elements.dropTitle.textContent = "Choose a WAV or audio file"; elements.dropDetail.textContent = "Drop it here - private - up to 128 MB";
       setBusy(false); setStatus("Local backup discarded. Your original file and saved projects are unchanged.");
     } catch (error) { recoveryMessage(`Local backup could not be discarded: ${error.message}.`); }
@@ -607,7 +675,6 @@ import { createLocalUploadVault, resumeAudioUpload, requestUploadJson, readSongL
       else recoveryMessage("Connection restored. Confirm recording permission and choose Resume Upload to continue.", true);
     }
   });
-  void restoreBackup();
   elements.file.addEventListener("change", event => loadFile(event.target.files?.[0]));
   ["dragenter", "dragover"].forEach(name => elements.dropZone.addEventListener(name, event => { event.preventDefault(); elements.dropZone.classList.add("dragging"); }));
   ["dragleave", "drop"].forEach(name => elements.dropZone.addEventListener(name, event => { event.preventDefault(); elements.dropZone.classList.remove("dragging"); }));

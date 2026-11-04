@@ -69,22 +69,26 @@ function isLegacyDreamweaverSatelliteUrl(value) {
   }
 }
 
-export function verifiedVersion(version, song) {
+export function ownerPlayableVersion(version, song) {
   const prefix = String(version?.audio_blob_prefix || "");
   const ownedChunks = song && prefix.startsWith(`${song.owner_member_id}/${version.id}/`)
     && prefix.endsWith("/parts/") && !prefix.includes("..");
   const ownedObject = song && version?.audio_storage_key && isOwnedMasterObjectKey(version.audio_storage_key, {
     ownerMemberId: song.owner_member_id, songId: song.id, versionId: version.id,
   });
-  return version?.song_id === song?.id && version?.status === "active" && version.mastering_status === "approved"
-    && Boolean(ownedChunks || ownedObject)
+  return version?.song_id === song?.id && version?.status === "active" && Boolean(ownedChunks || ownedObject)
     && !(prefix && version.audio_storage_key)
     && (!prefix || ownedChunks) && (!version.audio_storage_key || ownedObject)
     && /^audio\//.test(version.audio_content_type || "")
     && Number.isSafeInteger(Number(version.audio_byte_size)) && Number(version.audio_byte_size) > 0
-    && Number.isFinite(Number(version.duration_seconds)) && Number(version.duration_seconds) > 0
     && (!prefix
       || (Number.isSafeInteger(Number(version.audio_chunk_count)) && Number(version.audio_chunk_count) > 0));
+}
+
+export function verifiedVersion(version, song) {
+  return version?.mastering_status === "approved"
+    && Number.isFinite(Number(version.duration_seconds)) && Number(version.duration_seconds) > 0
+    && ownerPlayableVersion(version, song);
 }
 
 function safeReviewedUrl(value, kind, scope = {}) {

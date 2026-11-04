@@ -8,7 +8,7 @@ import { renderCatalogGuidance } from "/song-catalog/catalog-guidance.js";
 import { initializeDreamweaverUploadPanel } from "/song-catalog/dreamweaver-upload-panel.js";
 import { initializeCatalogPlayback, catalogVersionPlaybackSource } from "/song-catalog/catalog-playback.js";
 
-const state={songs:[],selectedId:"",filter:"",authenticated:false,producer:{jobs:[],packages:[]},producerTimer:null};
+const state={songs:[],selectedId:new URLSearchParams(window.location.search).get("song")||"",filter:"",authenticated:false,producer:{jobs:[],packages:[]},producerTimer:null};
 const $=selector=>document.querySelector(selector);
 const elements={shell:$("#catalogShell"),songList:$("#songList"),empty:$("#emptyState"),workspace:$("#songWorkspace"),search:$("#searchInput"),status:$("#statusMessage"),songDialog:$("#songDialog"),versionDialog:$("#versionDialog")};
 const dreamweaverUploadPanel=initializeDreamweaverUploadPanel({disclosure:$("#dreamweaverUploadDisclosure"),frame:$("#dreamweaverUploadFrame"),status:$("#dreamweaverUploadStatus")});
@@ -178,6 +178,18 @@ function watchCatalogIdentity(identity){
 }
 window.addEventListener("halo-identity-ready",event=>watchCatalogIdentity(event.detail));
 watchCatalogIdentity(window.haloIdentity);
+function refreshLinkedCatalogAudio(data){
+  if(data?.type!=="catalog-audio-linked"||!/^[0-9a-f-]{36}$/i.test(data.songId||""))return;
+  if(state.authenticated)void loadCatalog(state.selectedId);
+}
+window.addEventListener("halo:catalog-audio-linked",event=>refreshLinkedCatalogAudio({type:"catalog-audio-linked",songId:event.detail?.songId}));
+if(typeof BroadcastChannel==="function"){
+  try{
+    const catalogAudioChannel=new BroadcastChannel("halo-catalog-audio");
+    catalogAudioChannel.addEventListener("message",event=>refreshLinkedCatalogAudio(event.data));
+    window.addEventListener("pagehide",event=>{if(!event.persisted)catalogAudioChannel.close()});
+  }catch(error){console.warn("Catalog automatic tab refresh is unavailable",error.message)}
+}
 function selectedSong(){return state.songs.find(song=>song.id===state.selectedId)}
 
 async function pushToShop(){
@@ -304,7 +316,7 @@ function renderProducer(){const latest=state.producer.jobs?.[0];const packages=s
 async function runProducer(){if(!state.authenticated&&!(await requestSignIn()))return;try{const data=await api({action:"queue_catalog_producer"});message(data.message);await fetch("/api/song-catalog/producer",{method:"POST",headers:{"Content-Type":"application/json"},credentials:"same-origin",body:JSON.stringify({jobId:data.jobId})});await loadCatalog()}catch(error){message(error.message)}}
 async function setPackageStatus(packageId,status){if(!state.authenticated)return;const item=state.producer.packages.find(item=>item.id===packageId);if(!item||!window.confirm(`${titleCase(status)} package “${item.title}”? This changes its artist review status, not fan votes.`))return;try{const data=await api({action:"set_package_status",packageId,status});message(data.message);await loadCatalog()}catch(error){message(error.message)}}
 
-elements.songList.addEventListener("click",event=>{const button=event.target.closest("[data-song-id]");if(!button)return;state.selectedId=button.dataset.songId;render();const song=selectedSong();const master=song?.versions.find(version=>version.isCanonicalMaster&&version.persistedAudio===true);if(song)void catalogPlayback?.select(song,master||{})});
+elements.songList.addEventListener("click",event=>{const button=event.target.closest("[data-song-id]");if(!button)return;state.selectedId=button.dataset.songId;render();const song=selectedSong();const master=song?.versions.find(version=>version.isCanonicalMaster&&version.playableAudio===true);if(song)void catalogPlayback?.select(song,master||{})});
 $("#versionTable").addEventListener("click",event=>{const playButton=event.target.closest("[data-play-version-id]");if(playButton){event.preventDefault();event.stopPropagation();const song=selectedSong();const version=song?.versions.find(item=>item.id===playButton.dataset.playVersionId);if(song&&version)void catalogPlayback?.select(song,version);return}const editButton=event.target.closest("[data-version-id]");if(editButton)openVersion(editButton.dataset.versionId)});
 const publicationBoard=$("#publicationBoard");if(publicationBoard)publicationBoard.addEventListener("click",event=>{const button=event.target.closest("[data-publication-song]");if(!button)return;state.selectedId=button.dataset.publicationSong;render();$("#publicationHealthTitle")?.focus()});
 $("#recheckPublicationButton").addEventListener("click",async event=>{const song=selectedSong();if(!song||song.pipelineStatus!=="published")return;const button=event.currentTarget;button.disabled=true;button.setAttribute("aria-busy","true");try{const result=await api({action:"recheck_publication",songId:song.id});await loadCatalog(song.id);message(result.message)}catch(error){await loadCatalog(song.id);message(error.message)}finally{button.disabled=false;button.removeAttribute("aria-busy")}});

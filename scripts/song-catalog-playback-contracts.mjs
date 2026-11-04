@@ -5,14 +5,15 @@ import { catalogVersionPlaybackSource, initializeCatalogPlayback } from "../song
 const versionId = "11111111-1111-4111-8111-111111111111";
 const audioUrl = `/api/song-catalog/audio?versionId=${versionId}`;
 const song = { id: "song-1", title: "Catalog song", artistName: "Catalog artist" };
-const master = { id: versionId, label: "Sale Master", isCanonicalMaster: true, persistedAudio: true, audioUrl };
+const master = { id: versionId, label: "Sale Master", isCanonicalMaster: true, playableAudio: true, persistedAudio: false, playbackUrl: audioUrl };
 
 assert.equal(catalogVersionPlaybackSource(master), audioUrl, "verified stored catalog audio uses its owner-authorized canonical route");
 for (const invalid of [
-  { ...master, persistedAudio: false },
-  { ...master, audioUrl: "https://drive.google.com/uc?id=raw-master" },
-  { ...master, audioUrl: "https://attacker.example/audio.mp3" },
-  { ...master, audioUrl: `/api/song-catalog/audio?versionId=${"22222222-2222-4222-8222-222222222222"}` },
+  { ...master, playableAudio: false },
+  { ...master, playbackUrl: "" },
+  { ...master, playbackUrl: "https://drive.google.com/uc?id=raw-master" },
+  { ...master, playbackUrl: "https://attacker.example/audio.mp3" },
+  { ...master, playbackUrl: `/api/song-catalog/audio?versionId=${"22222222-2222-4222-8222-222222222222"}` },
   { ...master, id: "not-an-id" },
 ]) assert.equal(catalogVersionPlaybackSource(invalid), "", "unverified, external, mismatched and malformed media routes are rejected");
 
@@ -83,14 +84,14 @@ audio.dispatchEvent(new Event("error"));
 assert.equal(status.dataset.state, "fault");
 assert.equal(win.HALO_STREAM_READY, false);
 
-const nextMaster = { ...master, id: "22222222-2222-4222-8222-222222222222", audioUrl: "/api/song-catalog/audio?versionId=22222222-2222-4222-8222-222222222222" };
+const nextMaster = { ...master, id: "22222222-2222-4222-8222-222222222222", playbackUrl: "/api/song-catalog/audio?versionId=22222222-2222-4222-8222-222222222222" };
 audio.rejectPlay = true;
 await player.select({ ...song, title: "Next song" }, nextMaster);
-assert.equal(audio.src, nextMaster.audioUrl, "each catalog selection replaces the active media source");
+assert.equal(audio.src, nextMaster.playbackUrl, "each catalog selection replaces the active media source");
 assert.equal(audio.loads, 2);
 assert.equal(status.dataset.state, "blocked");
 assert.equal(win.HALO_STREAM_READY, false);
-await player.select(song, { ...master, persistedAudio: false });
+await player.select(song, { ...master, playableAudio: false });
 assert.equal(audio.src, "");
 assert.equal(audio.paused, true);
 assert.equal(status.dataset.state, "unavailable");
@@ -100,9 +101,12 @@ player.dispose();
 const source = await readFile(new URL("../song-catalog/song-catalog.js", import.meta.url), "utf8");
 const html = await readFile(new URL("../song-catalog/index.html", import.meta.url), "utf8");
 const dreamweaver = await readFile(new URL("../dreamweaver/dreamweaver.js", import.meta.url), "utf8");
+const playerSource = await readFile(new URL("../song-catalog/catalog-playback.js", import.meta.url), "utf8");
 assert.match(html, /<audio id="showAudio" controls preload="none"/, "main catalog exposes the shared active Dreamweaver player surface");
-assert.match(source, /isCanonicalMaster&&version\.persistedAudio===true/, "selecting a catalog song loads only its verified Sale master");
 assert.match(source, /data-play-version-id/, "each stored version offers direct playback in the catalog player");
+assert.match(source, /isCanonicalMaster&&version\.playableAudio===true/, "song selection loads an owned stored master independently of publication readiness");
+assert.match(playerSource, /playableAudio === true/, "owner playback is gated on verified stored bytes, not publication approval");
+assert.doesNotMatch(playerSource, /persistedAudio/, "radio/publication readiness does not block the player");
 assert.doesNotMatch(source, /HALO_STREAM_READY\s*=\s*true/, "catalog source selection never spoofs readiness");
 assert.match(dreamweaver, /loadTrackIntoDreamweaver\(track/, "curator setlist selections continue through the direct shared Dreamweaver binder");
 

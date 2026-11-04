@@ -5,7 +5,7 @@ import { getUser, verifyRequestOrigin } from "@netlify/identity";
 import { db } from "../../db/index.js";
 import { dreamweaverSongReviews, songs, songVersions } from "../../db/schema.js";
 import { cleanText, ensureMembership } from "../lib/halo-x.mjs";
-import { reconcilePublishedSong, verifiedVersion } from "../lib/song-publication.mjs";
+import { ownerPlayableVersion, reconcilePublishedSong, verifiedVersion } from "../lib/song-publication.mjs";
 import { buildDreamweaverSatellite } from "../../lib/route-registry.js";
 import { cleanDreamweaverSongId } from "../../lib/dreamweaver-storefront.js";
 import { normalizeLyricsSource } from "../../lib/dreamweaver-lyrics.js";
@@ -133,39 +133,50 @@ function serializeSong(song: typeof songs.$inferSelect, versions: Array<typeof s
     pipelineUpdatedAt: song.pipelineUpdatedAt?.toISOString() || "",
     masterCopy: serializeMasterCopy(versions),
     googleDriveUrl: canonicalMaster?.driveUrl || "",
-    versions: versions.map(version => ({
-      id: version.id,
-      status: version.status,
-      updatedAt: version.updatedAt.toISOString(),
-      persistedAudio: verifiedVersion({
+    versions: versions.map(version => {
+      const storedAudio = {
         id: version.id, song_id: version.songId, status: version.status,
-        mastering_status: version.masteringStatus, duration_seconds: version.durationSeconds,
         audio_blob_prefix: version.audioBlobPrefix, audio_storage_key: version.audioStorageKey,
         audio_chunk_count: version.audioChunkCount, audio_content_type: version.audioContentType,
         audio_byte_size: version.audioByteSize,
-      }, { id: song.id, owner_member_id: song.ownerMemberId }),
-      versionType: version.versionType,
-      isCanonicalMaster: version.id === canonicalMaster?.id,
-      label: version.label,
-      destination: version.destination,
-      audioUrl: version.audioUrl,
-      audioFilename: version.audioFilename,
-      audioByteSize: version.audioByteSize,
-      durationSeconds: version.durationSeconds,
-      masteringStatus: version.masteringStatus,
-      targetLufs: version.targetLufs,
-      truePeakDbtp: version.truePeakDbtpTenths / 10,
-      cleanLyrics: version.cleanLyrics,
-      saleEnabled: version.saleEnabled,
-      notes: version.notes,
-      videoUrl: version.videoUrl || "",
-      promoVideoUrl: version.promoVideoUrl || "",
-      artworkUrl: version.artworkUrl || "",
-      resolvedArtworkUrl: version.artworkUrl || songArtworkUrl,
-      customArtworkUrl: version.artworkUrl || "",
-      inheritsArtwork: !version.artworkUrl && Boolean(songArtworkUrl),
-      artworkUploadedAt: version.artworkUploadedAt?.toISOString() || "",
-    })),
+      };
+      const playableAudio = ownerPlayableVersion(storedAudio, { id: song.id, owner_member_id: song.ownerMemberId });
+      return {
+        id: version.id,
+        status: version.status,
+        updatedAt: version.updatedAt.toISOString(),
+        playableAudio,
+        playbackUrl: playableAudio ? `/api/song-catalog/audio?versionId=${encodeURIComponent(version.id)}` : "",
+        persistedAudio: verifiedVersion({
+          id: version.id, song_id: version.songId, status: version.status,
+          mastering_status: version.masteringStatus, duration_seconds: version.durationSeconds,
+          audio_blob_prefix: version.audioBlobPrefix, audio_storage_key: version.audioStorageKey,
+          audio_chunk_count: version.audioChunkCount, audio_content_type: version.audioContentType,
+          audio_byte_size: version.audioByteSize,
+        }, { id: song.id, owner_member_id: song.ownerMemberId }),
+        versionType: version.versionType,
+        isCanonicalMaster: version.id === canonicalMaster?.id,
+        label: version.label,
+        destination: version.destination,
+        audioUrl: version.audioUrl,
+        audioFilename: version.audioFilename,
+        audioByteSize: version.audioByteSize,
+        durationSeconds: version.durationSeconds,
+        masteringStatus: version.masteringStatus,
+        targetLufs: version.targetLufs,
+        truePeakDbtp: version.truePeakDbtpTenths / 10,
+        cleanLyrics: version.cleanLyrics,
+        saleEnabled: version.saleEnabled,
+        notes: version.notes,
+        videoUrl: version.videoUrl || "",
+        promoVideoUrl: version.promoVideoUrl || "",
+        artworkUrl: version.artworkUrl || "",
+        resolvedArtworkUrl: version.artworkUrl || songArtworkUrl,
+        customArtworkUrl: version.artworkUrl || "",
+        inheritsArtwork: !version.artworkUrl && Boolean(songArtworkUrl),
+        artworkUploadedAt: version.artworkUploadedAt?.toISOString() || "",
+      };
+    }),
     updatedAt: song.updatedAt.toISOString(),
   };
 }

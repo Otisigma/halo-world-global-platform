@@ -294,6 +294,33 @@ implementation has the two-page adapters, finite markup recipes, static
 production, full adapter/route inventory, durable queue, and operational gates
 above remain open.
 
+## Proactive catalog drift detection and self-healing
+
+HALO Sentinel now compares intended catalog state with actual stored state on a schedule. It no longer waits for a 502 or a user report.
+
+**Scheduled drift auditor** (`netlify/functions/catalog-drift-sentinel.ts`, every 10 minutes, heartbeat SLA 35 minutes):
+
+| Drift | Detection | Automatic action |
+| --- | --- | --- |
+| Stale review | Bound audio changed after the last Dream Weaver review (2-minute grace for in-flight finalizes) | Reruns the existing owner-scoped review, which also re-runs the release conveyor and publication reconcile |
+| Missing or wrong bytes | Chunked parts incomplete, direct-storage object missing, or size mismatch | Records a deduplicated maintenance issue. Severity is `critical` when Dreamweaver already claims `ready`. The record is never unbound or rewritten |
+| Bytes verified healthy | Storage matches the catalog | Auto-resolves any earlier drift issue with verification metadata |
+
+- A storage outage or missing configuration counts as *unverifiable*. It is never reported as missing bytes.
+- Each run is bounded: 12 reviews and 12 sampled versions, with a 20-second budget. Storage sampling rotates every 10 minutes, so every bound version is checked over time.
+
+**Approach rotation in the browser (Song Catalog):**
+
+1. Direct master upload to storage, then automatic fallback to chunked upload (existing).
+2. Chunked upload with bounded per-chunk retries for 502/503/504 and network drops (existing).
+3. If the upload still fails, the session is kept for the rest of the page session. Choosing **Resume upload** with the same file asks the server which parts it already holds. Each saved part is compared against the server's SHA-256 checksum, and only missing or mismatched parts are sent again. Finalize reuses the original upload session.
+
+**Readiness follow-up:** a finalized upload that is not yet `LIVE` is followed for about 5.5 minutes. The client makes three passive `upload_readiness` reads, then one active `recheck_readiness`. After that it stops and shows a **Recheck readiness** button.
+
+`recheck_readiness` is owner-scoped and has a 20-second cooldown. It reruns the same review path that a save uses, and it cannot write readiness directly.
+
+**Deliberately not built:** client `localStorage` readiness overrides, an unauthenticated `force-advance` endpoint, and unbounded 15-second polling loops. These would let the UI claim readiness that the server cannot prove.
+
 ## Dreamweaver readiness telemetry bar
 
 `dreamweaver/readiness-telemetry.js` renders the song-lobby "AI TELEMETRY" bar

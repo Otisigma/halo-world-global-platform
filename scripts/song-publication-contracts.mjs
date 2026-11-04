@@ -8,6 +8,10 @@ import { attachPublicationHealthToSongs, buildPublicationHealth, isShopBlockingI
 import { buildMasterObjectKey } from "../netlify/lib/direct-upload-storage.mjs";
 import { createPublicationReconcileHandler } from "../netlify/functions/song-publication-reconcile.mjs";
 import { createForcePushTrackHandler } from "../netlify/functions/catalog-force-push-track.mjs";
+import { resolveReleaseArtworkFields } from "../netlify/lib/release-artwork.mjs";
+import { resolveReleaseLicensing } from "../netlify/lib/release-licensing.mjs";
+import { normalizeLyricsSource } from "../lib/dreamweaver-lyrics.js";
+import { validateSmartLink } from "../netlify/lib/release-house-submission.mjs";
 
 const root = resolve(import.meta.dirname, "..");
 const read = path => readFile(resolve(root, path), "utf8");
@@ -204,8 +208,148 @@ function publicationDatabase() {
     if (query.startsWith("INSERT INTO halo_ledger")) return [];
     throw new Error(`Unexpected safety contract SQL: ${query}`);
   }};
-  state.reconcile = (options = {}) => reconcilePublishedSong(state.db, { songId: song.id, ownerMemberId: song.owner_member_id, recordLedger: false, ...options });
+  state.reconcile = (options = {}) => reconcilePublishedSong(state.db, {
+    songId: song.id, ownerMemberId: song.owner_member_id, recordLedger: false, deploymentOrigin: "", ...options,
+  });
   return state;
+}
+
+function sharePayload(fixture) {
+  const { song, versions, releases } = fixture;
+  const release = releases.get(song.source_release_id);
+  const serialize = new Function(
+    "resolveReleaseArtworkFields", "resolveReleaseLicensing", "normalizeLyricsSource", "validateSmartLink", "resolveDreamweaverPageFlow",
+    `${releaseCatalog.slice(releaseCatalog.indexOf("function cleanPublicUrl("), releaseCatalog.indexOf("export default async function"))}; return serializeRelease;`,
+  )(resolveReleaseArtworkFields, resolveReleaseLicensing, normalizeLyricsSource, validateSmartLink, resolveDreamweaverPageFlow);
+  return {
+    releases: [serialize({
+      ...release, artist: song.artist_name, catalog_song_id: song.id, catalog_title: song.title,
+      catalog_artist_name: song.artist_name, catalog_rights_status: song.rights_status,
+      catalog_master_version_id: versions[0].id, catalog_master_uploaded: true,
+      catalog_master_mastering_status: versions[0].mastering_status,
+      publication_dreamweaver_status: fixture.sync?.dreamweaver_status || "pending",
+    })],
+  };
+}
+
+{
+  const fixture = publicationDatabase();
+  await fixture.reconcile();
+  assert.equal(fixture.sync.dreamweaver_status, "pending");
+  assert.equal(fixture.sync.details.shareVerification.reason, "deployment_origin_unconfigured");
+  const requests = [];
+  const options = { deploymentOrigin: "https://halo.test", fetcher: async (target, init) => {
+    requests.push({ url: new URL(target), init });
+    return Response.json(sharePayload(fixture));
+  } };
+  const recovered = await fixture.reconcile(options);
+  assert.equal(recovered.publicationHealth.dreamweaverReady, true, "an old pending receipt must advance without edits or reupload");
+  assert.equal(fixture.sync.dreamweaver_status, "ready");
+  assert.equal(fixture.sync.details.shareVerification.reason, "public_catalog_payload_verified");
+  assert.equal(recovered.publicationHealth.radioReady, false, "share recovery must never grant radio approval");
+  approveTrack(fixture.tracks[0]);
+  const complete = await fixture.reconcile(options);
+  assert.equal(complete.publicationHealth.state, "published_and_fully_distributed");
+  assert.equal(complete.publicationHealth.retrying, false);
+  await fixture.reconcile(options);
+  assert.equal(fixture.releases.size, 1);
+  assert.equal(fixture.tracks.length, 1, "repeat reconciliation remains idempotent");
+  assert.equal(requests.length, 3, "one bounded public-payload probe per reconciliation");
+  for (const { url, init } of requests) {
+    assert.equal(url.origin, "https://halo.test");
+    assert.equal(url.pathname, "/api/release-catalog");
+    assert.equal(url.searchParams.get("songId"), fixture.song.id);
+    assert.ok(url.searchParams.get("revision").includes(fixture.versions[0].publication_revision));
+    assert.equal(init.redirect, "error");
+    assert.equal(init.cache, "no-store");
+    assert.equal(init.credentials, "omit");
+    assert.ok(init.signal instanceof AbortSignal);
+  }
+  const previousRevision = requests.at(-1).url.searchParams.get("revision");
+  fixture.versions[0].publication_revision = "2026-10-25T13:00:00.000123Z";
+  await fixture.reconcile(options);
+  assert.notEqual(requests.at(-1).url.searchParams.get("revision"), previousRevision, "changed masters bypass stale CDN entries");
+}
+
+for (const mutate of [
+  payload => { payload.releases = []; },
+  payload => { payload.releases.push(structuredClone(payload.releases[0])); },
+  payload => { payload.releases[0].id = "foreign-release"; },
+  payload => { payload.releases[0].catalog.songId = "foreign-song"; },
+  payload => { payload.releases[0].title = "Stale title"; },
+  payload => { payload.releases[0].artist = ""; },
+  payload => { payload.releases[0].status = "draft"; },
+  payload => { payload.releases[0].isLiveVisible = false; },
+  payload => { payload.releases[0].catalog.rightsStatus = "disputed"; },
+  payload => { payload.releases[0].catalog.masterCopy.versionId = "old-master"; },
+  payload => { payload.releases[0].catalog.masterCopy.uploaded = false; },
+  payload => { payload.releases[0].catalog.masterCopy.masteringStatus = "queued"; },
+  payload => { payload.releases[0].streamUrl = "https://drive.google.com/unverified"; },
+  payload => { payload.releases[0].dreamweaverPayload.audioStreamUrl = null; },
+  payload => { payload.releases[0].dreamweaverPayload.songId = "foreign-song"; },
+  payload => { payload.releases[0].entryUrl = "https://unrelated.example"; },
+]) {
+  const fixture = publicationDatabase();
+  const result = await fixture.reconcile({ deploymentOrigin: "https://halo.test", fetcher: async () => {
+    const payload = sharePayload(fixture);
+    mutate(payload);
+    return Response.json(payload);
+  } });
+  assert.equal(result.publicationHealth.releaseReady, true, "share checks must not roll back an already published release");
+  assert.equal(result.publicationHealth.dreamweaverReady, false);
+  assert.equal(fixture.sync.details.shareVerification.reason, "catalog_payload_not_current");
+}
+
+for (const [fetcher, reason] of [
+  [async () => new Response(null, { status: 502 }), "catalog_http_error"],
+  [async () => new Response("<html>login</html>"), "catalog_invalid_response"],
+  [async () => new Response("{", { headers: { "Content-Type": "application/json" } }), "catalog_probe_failed"],
+  [async () => { throw new DOMException("Timed out", "TimeoutError"); }, "catalog_probe_failed"],
+]) {
+  const fixture = publicationDatabase();
+  const result = await fixture.reconcile({ deploymentOrigin: "https://halo.test", fetcher });
+  assert.equal(result.publicationHealth.dreamweaverReady, false);
+  assert.equal(fixture.sync.dreamweaver_status, "pending");
+  assert.equal(fixture.sync.details.shareVerification.reason, reason);
+  const resumed = await fixture.reconcile({
+    deploymentOrigin: "https://halo.test", fetcher: async () => Response.json(sharePayload(fixture)),
+  });
+  assert.equal(resumed.publicationHealth.dreamweaverReady, true, "the next reconcile automatically clears transient share failures");
+}
+
+for (const deploymentOrigin of ["", "http://halo.test", "https://user:pass@halo.test", "https://halo.test/private", "https://halo.test/?redirect=external"]) {
+  const fixture = publicationDatabase();
+  await fixture.reconcile({ deploymentOrigin, fetcher: () => { throw new Error("Unconfigured origins must not be fetched"); } });
+  assert.equal(fixture.sync.details.shareVerification.reason, "deployment_origin_unconfigured");
+}
+
+{
+  const fixture = publicationDatabase();
+  const now = Date.now;
+  const started = now();
+  let clock = started;
+  let probes = 0;
+  const db = { sql: async (strings, ...values) => {
+    if (strings.join("?").trim().startsWith("SELECT song.id, song.owner_member_id")) {
+      return Array.from({ length: 3 }, () => ({ id: fixture.song.id, owner_member_id: fixture.song.owner_member_id }));
+    }
+    return fixture.db.sql(strings, ...values);
+  } };
+  try {
+    Date.now = () => clock;
+    const results = await reconcilePublishedSongs(db, {
+      deploymentOrigin: "https://halo.test", fetcher: async () => {
+        probes++;
+        clock += 20_000;
+        return Response.json(sharePayload(fixture));
+      },
+    });
+    assert.equal(results.length, 1, "batch budget must leave unprocessed rows for the next scheduled check");
+    assert.equal(probes, 1, "slow public checks must not stack into a gateway timeout");
+    assert.equal(results[0].publicationHealth.dreamweaverReady, true);
+  } finally {
+    Date.now = now;
+  }
 }
 
 {
@@ -955,7 +1099,8 @@ assert.match(helper, /sync\.last_reconciled_at < NOW\(\) - INTERVAL '15 minutes'
 assert.match(helper, /ORDER BY sync\.last_reconciled_at ASC NULLS FIRST, song\.updated_at DESC/, "limited monitor batches must check never-reconciled and oldest songs first");
 assert.match(helper, /fallbackCanonicalUrl = fallbackReleaseId \? publicationPath/, "failures must derive canonical routes, never retain arbitrary URLs");
 assert.match(helper, /publicationHealth: health/, "manual reconciliation must return the shared health snapshot");
-assert.match(helper, /dreamweaverStatus = "pending"/, "route calculation alone must not confirm Dreamweaver delivery");
+assert.match(helper, /dreamweaverStatus = shareVerification\.confirmed \? "ready" : "pending"/,
+  "only delivered canonical share payloads may clear the pending state");
 assert.match(healthHelper, /published_and_fully_distributed/, "publication health helper must classify fully distributed songs");
 assert.match(healthHelper, /awaiting_release_propagation/, "publication health helper must classify release propagation waits");
 assert.match(healthHelper, /awaiting_radio_ready_assets/, "publication health helper must classify radio asset waits");

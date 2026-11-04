@@ -1,0 +1,6 @@
+.halo-sentinel { margin: 1rem; padding: .8rem 1rem; border: 1px solid #c8a45c; background: #10110f; color: #eee8d8; font: 12px/1.5 monospace; }
+.halo-sentinel summary { cursor: pointer; }
+.halo-sentinel button { padding: .6rem; color: inherit; background: transparent; border: 1px solid currentColor; cursor: pointer; }
+.halo-sentinel a { display: block; color: #e2c888; }
+.halo-sentinel ol { max-height: 16rem; overflow: auto; overflow-wrap: anywhere; padding-left: 1.5rem; }
+.halo-sentinel :focus-visible { outline: 2px solid #e2c888; outline-offset: 3px; }

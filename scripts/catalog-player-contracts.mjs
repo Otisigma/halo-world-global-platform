@@ -69,6 +69,10 @@ const assertDisclosure = (f, expanded) => {
     f.nodes.get("catalogSetlist").dispatchEvent(click);
     assert.equal(audio.loads, 1, "the explicit card click loads the shared player synchronously");
     assert.equal(audio.plays, 1, "play is invoked in the click stack, before any await");
+    assert.equal(audio.dataset.catalogTrackId, sourceTrack.id, "selection binds the catalog identity with the audio");
+    assert.equal(audio.dataset.catalogMixId, sourceTrack.id, "the generated track retains its shared-player mix identity");
+    assert.equal(f.nodes.get("mixTitle").textContent, sourceTrack.title, "metadata updates before playback settles");
+    assert.equal(f.nodes.get("mixCreator").textContent, sourceTrack.artist);
     await new Promise(resolve => setImmediate(resolve));
     assert.equal(audio.src, rejectedPlaySources.length ? proxy : primary);
     assert.ok(audio.playLog.every(attempt => !attempt.muted), "catalog recovery never attempts muted autoplay");
@@ -85,6 +89,28 @@ const assertDisclosure = (f, expanded) => {
   const stream = await service.audioHandler(new Request(proxy));
   assert.equal(stream.status, 200, "fallback resolves through the actual catalog allowlist");
   assert.equal(stream.headers.get("Content-Type"), "audio/mpeg");
+}
+{
+  const f = fixture("?curate=20", { driveCatalog });
+  await f.initializeDreamweaver();
+  const audio = f.nodes.get("showAudio");
+  const track = f.state.catalogSet.tracks[0];
+  const proxy = `https://halo.test${track.fallbackUrl}`;
+  const original = JSON.stringify(track);
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    await playCatalogSlot(f);
+    audio.dispatchEvent(new Event("error"));
+    for (let turn = 0; turn < 6; turn += 1) await new Promise(resolve => setImmediate(resolve));
+    assert.equal(audio.src, proxy, "each fresh selection can recover through its proxy, including replays");
+    assert.equal(audio.dataset.catalogTrackId, track.id, "runtime recovery preserves the selected track identity");
+    assert.equal(audio.paused, false);
+    assert.equal(f.shouldPromptLocalUpload(), false);
+  }
+  assert.equal(JSON.stringify(track), original, "the bridge never rewrites the vault record or the generated sequence");
+  assert.deepEqual(f.requests, ["/api/drive-catalog"], "selection and recovery need no second catalog or master-binding lookup");
+  await f.activateLocalMixFile(Object.assign(new Blob(["audio"], { type: "audio/wav" }), { name: "local.wav" }));
+  assert.equal(audio.dataset.catalogTrackId, undefined, "local previews cannot retain a vault-track identity");
+  assert.equal(audio.dataset.catalogMixId, undefined);
 }
 for (const payload of [
   { configured: true, version: 1, tracks: [null] },

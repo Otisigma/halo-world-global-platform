@@ -3,6 +3,7 @@ import "./dj-control-room-contracts.mjs";
 import { access, readFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { extractMediaBlock, hasCssDeclaration } from "./css-contract-helpers.mjs";
 import { HALO_BUTTON_WATCHER_REGISTRY, canonicalizeWatcherTarget } from "../lib/watcher-registry.js";
 import {
   CANONICAL_HOME_ROUTE,
@@ -100,8 +101,13 @@ assert.match(menuSource, /All working menu/, "Main menu must expose the WORKING 
 assert.match(navigationCssSource, /\.halo-menu-route-status/, "Main menu status badge styling must exist.");
 assert.match(navigationCssSource, /\.halo-menu-status-label/, "Main menu status labels must be allowed to wrap visibly.");
 assert.doesNotMatch(menuSource, /MENU_ROUTE_STATUS_TARGETS\.has\(normalizedRoute\)\s*&&\s*menuRouteStatusesUnavailable[\s\S]{0,120}\?\s*'yellow'/, "Main menu refresh mode must not turn every monitored route into ATTENTION.");
-assert.doesNotMatch(navigationCssSource, /@media\s*\(max-width:\s*767px\)\s*\{[\s\S]*?\.halo-menu-summary-copy small,\s*[\s\S]*?\.halo-menu-count\s*\{[\s\S]*?display:\s*none/i, "Main menu summary tags must stay visible on mobile.");
-assert.doesNotMatch(navigationCssSource, /@media\s*\(max-width:\s*520px\)\s*\{[\s\S]*?\.halo-menu-lane small\s*\{[\s\S]*?display:\s*none/i, "Main menu helper tags must stay visible on narrow screens.");
+const mobileSummaryCss = extractMediaBlock(navigationCssSource, "max-width: 767px");
+const narrowMenuCss = extractMediaBlock(navigationCssSource, "max-width: 520px");
+assert.ok(mobileSummaryCss, "Main menu mobile summary styles must exist.");
+assert.ok(narrowMenuCss, "Main menu narrow-screen styles must exist.");
+assert.equal(hasCssDeclaration(mobileSummaryCss, ".halo-menu-summary-copy small", "display", "none"), false, "Main menu summary tags must stay visible on mobile.");
+assert.equal(hasCssDeclaration(mobileSummaryCss, ".halo-menu-count", "display", "none"), false, "Main menu destination count must stay visible on mobile.");
+assert.equal(hasCssDeclaration(narrowMenuCss, ".halo-menu-lane small", "display", "none"), false, "Main menu helper tags must stay visible on narrow screens.");
 assert.match(navigationCssSource, /\.halo-menu-status-group/, "Main menu status grouping styles must exist.");
 assert.match(menuSource, /halo-menu-route-status-current/, "Main menu badges must identify the current page.");
 assert.match(menuSource, /AI ALERTED/, "Main menu badges must expose the AI repair handoff for unhealthy routes.");

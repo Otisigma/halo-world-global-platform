@@ -3,13 +3,14 @@ import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import vm from "node:vm";
 import { allowedEvents } from "../netlify/lib/stats.mjs";
+import { unlockDreamweaverAudio } from "../lib/dreamweaver-playback.js";
 
 const root = resolve(import.meta.dirname, "..");
 const musicPage = await readFile(resolve(root, "music/index.html"), "utf8");
 assert.doesNotMatch(musicPage, /localVault|sharedCatalogFrame|embed=shop/, "fans must not receive browser inventory or embedded management");
 assert.match(musicPage, /Votes do not publish music or approve radio rotation/);
 
-const [client, styles, stats, summary, statsLib, statsEvent, haloHome, releaseCatalogApi, musicWorld, dreamweaver] = await Promise.all([
+const [client, styles, stats, summary, statsLib, statsEvent, haloHome, releaseCatalogApi, musicWorld, dreamweaver, uploadIndicatorClient, uploadIndicatorStyles] = await Promise.all([
   readFile(resolve(root, "music-player.js"), "utf8"),
   readFile(resolve(root, "music-player.css"), "utf8"),
   readFile(resolve(root, "stats.js"), "utf8"),
@@ -19,8 +20,11 @@ const [client, styles, stats, summary, statsLib, statsEvent, haloHome, releaseCa
   readFile(resolve(root, "halo.html"), "utf8"),
   readFile(resolve(root, "netlify/functions/release-catalog.mjs"), "utf8"),
   readFile(resolve(root, "music-world.html"), "utf8"),
-  readFile(resolve(root, "dreamweaver/dreamweaver.js"), "utf8")
+  readFile(resolve(root, "dreamweaver/dreamweaver.js"), "utf8"),
+  readFile(resolve(root, "upload-player-indicator.js"), "utf8"),
+  readFile(resolve(root, "upload-player-indicator.css"), "utf8")
 ]);
+const catalogClient = await readFile(resolve(root, "song-catalog/song-catalog.js"), "utf8");
 
 for (const eventName of [
   "music_player_open",
@@ -45,6 +49,34 @@ assert.match(client, /halo-listening-room__facts/, "the player should render ric
 assert.match(styles, /halo-listening-room__meta/, "the listening room styles must support the metadata panel");
 assert.match(styles, /PLAY HERE/, "eligible links must advertise on-site playback");
 assert.match(stats, /music-player\.js/, "the shared analytics client must load the player");
+assert.match(uploadIndicatorClient, /halo-upload-indicator/, "the shared player pages must mount a compact upload indicator");
+assert.match(uploadIndicatorClient, /halo:upload-progress/, "the shared player must respond to upload progress in the current tab");
+assert.match(uploadIndicatorClient, /halo-catalog-upload-v1/, "the shared player must mirror upload progress to other player tabs");
+assert.match(uploadIndicatorStyles, /\.halo-upload-indicator\[hidden\]/, "the shared upload indicator must hide outside an active or recent upload");
+assert.match(uploadIndicatorStyles, /halo-upload-indicator__copy strong/, "the shared upload indicator must fit compactly without overflowing song titles");
+assert.match(catalogClient, /new CustomEvent\("halo:upload-progress",\{detail\}\)/, "catalog uploads must publish progress to the shared player");
+assert.match(catalogClient, /announceCatalogUpload\("uploading",songId,file,percent\)/, "catalog uploads must update the shared player bar from byte progress");
+assert.match(catalogClient, /announceCatalogUpload\("finalizing",songId,file,100\)/, "catalog uploads must distinguish server finalization from transferred bytes");
+assert.match(catalogClient, /announceCatalogUpload\("completed",songId,file,100\)/, "catalog uploads must announce final completion");
+assert.match(catalogClient, /announceCatalogUpload\("failed",songId,file/, "catalog uploads must expose paused or failed uploads to every player");
+for (const page of [
+  "music-world.html",
+  "dj-deck.html",
+  "halo.html",
+  "sync-hub/index.html",
+  "dreamweaver/index.html",
+  "creator-network/index.html",
+  "mixes/index.html",
+  "empath-journey/index.html",
+  "song-catalog/index.html",
+  "album-concierge/index.html",
+  "radio/index.html",
+  "dreamweaver-lab/index.html",
+  "satellites/constellation-lab/index.html"
+]) {
+  const html = await readFile(resolve(root, page), "utf8");
+  assert.match(html, /stats\.js|upload-player-indicator\.js/, `${page} must load the shared upload indicator for its player`);
+}
 assert.match(haloHome, /resolveDreamweaverPreviewUrl/, "the homepage Dreamweaver player must validate preview audio sources before playback");
 assert.match(haloHome, /dreamweaverPreviewCandidates/, "the homepage Dreamweaver player must keep alternate preview candidates available");
 assert.match(haloHome, /preload="metadata"/, "the homepage Dreamweaver player must preload metadata for reliable click-to-play behavior");
@@ -84,6 +116,8 @@ assert.match(musicWorld, /audioSourceMode==='unavailable'\|\|!track\?\.previewUr
 assert.match(musicWorld, /safeBlobMediaUrl\(URL\.createObjectURL\(file\)\)[\s\S]*audioSourceMode='local';el\.src=localAudioUrl;el\.load\(\)/, "music world must bind uploaded local mixes to the player through a blob URL");
 assert.match(musicWorld, /'LOCAL ACTIVE'/, "music world must surface LOCAL ACTIVE while a local mix is loaded");
 assert.match(musicWorld, /if\(document\.readyState==='loading'\)document\.addEventListener\('DOMContentLoaded',bindPlayerControls,\{once:true\}\);else bindPlayerControls\(\);/, "music world player controls must bind once after DOMContentLoaded");
+assert.match(stats, /upload-player-indicator\.js/, "the indicator must load with the shared player bootstrap");
+assert.match(stats, /upload-player-indicator\.css/, "the indicator styles must load with the shared player bootstrap");
 assert.match(musicWorld, /const storefrontStatus=\(value,\{hasStream=false,hasDestination=false\}=\{\}\)=>/, "music world storefront status must depend on stream and destination usability");
 assert.match(musicWorld, /RADIO \$\{esc\(sanitizeRadioStatus\(t\.radioStatus\)\)\}/, "music world radio badges must never render raw radio states");
 assert.doesNotMatch(musicWorld, /'ERROR'|STATUS: ERROR/, "music world must never render raw ERROR states to public storefront users");
@@ -131,7 +165,7 @@ function control() {
   };
 }
 const audio = {
-  ...control(), src: "", paused: true, readyState: 0, loads: 0,
+  ...control(), dataset: {}, src: "", paused: true, readyState: 0, loads: 0,
   getAttribute(name) { return name === "src" ? this.src : null; },
   removeAttribute() { this.src = ""; },
   load() { this.loads++; },
@@ -273,10 +307,14 @@ const dreamContext = vm.createContext({
   REMOTE_AUDIO_WATCHDOG_MS: 5000, LOCAL_PREVIEW_PROMPT: "Stream unavailable", cleanText: value => String(value || "").trim(),
   showToast() {}, setReleasePlaybackState() {},
   notePlaybackClick() { dreamState.playbackRequested = true; },
-  dreamweaverDriveFallbacks: () => [], renderSoundUnlock() {}
+  dreamweaverDriveFallbacks: () => [],
+  unlockDreamweaverAudio,
+  renderReleasePanel() {},
+  renderSoundUnlock(mode) { dreamState.soundUnlockMode = mode; }
 });
 vm.runInContext(
   section(dreamweaver, "function clearRemoteAudioWatchdog()", "function publicReleaseStatus(")
+  + section(dreamweaver, "async function handleSoundUnlock()", "function publicCatalogMasterBinding(")
   + section(dreamweaver, "function shouldPromptLocalUpload()", "async function awaitPrimaryPlaybackReadiness(")
   + section(dreamweaver, "async function togglePlayback()", "function updateHeroPlayButton("),
   dreamContext
@@ -311,6 +349,8 @@ dreamAudio.play = async () => { throw { name: "AbortError" }; };
 await dreamContext.togglePlayback();
 assert.equal(dreamState.audioSourceMode, "remote", "Dreamweaver must ignore cancelled play requests");
 dreamContext.clearRemoteAudioWatchdog();
+dreamState.soundUnlockMode = "";
+dreamState.autoplayMuted = false;
 dreamAudio.play = () => new Promise((_resolve, reject) => { rejectOldPlay = reject; });
 const oldDreamPlayback = dreamContext.togglePlayback();
 dreamAudio.src = "https://cdn.example/next.mp3";
@@ -438,5 +478,48 @@ await pageContext.loadPublishedCatalog();
 assert.equal(pageDocument.querySelector("#playerTitle").textContent, "offline.wav", "late catalog failures must not replace local file metadata");
 assert.match(pageDocument.querySelector("#playerContext").textContent, /LOCAL ACTIVE/);
 assert.equal(pageDocument.querySelector("#musicWorldAudio").src, "blob:https://halo.test/local");
+
+// Shared player upload indicator: exercise live updates, duplicate suppression and finalization.
+const indicatorNodes = new Map();
+const indicatorNode = () => ({
+  hidden: false, value: 0, textContent: "", innerHTML: "", className: "", dataset: {},
+  attributes: new Set(), setAttribute(name) { this.attributes.add(name); },
+  removeAttribute(name) { this.attributes.delete(name); },
+  append() {},
+  querySelector(selector) { if (!indicatorNodes.has(selector)) indicatorNodes.set(selector, indicatorNode()); return indicatorNodes.get(selector); }
+});
+let hideUploadIndicator;
+const indicatorWindow = {
+  addEventListener() {},
+  HaloUploadIndicator: null,
+  BroadcastChannel: function () { this.addEventListener = (name, callback) => { this.onmessage = callback; }; this.postMessage = () => {}; }
+};
+const indicatorDocument = { body: { append(node) { this.uploadIndicator = node; } }, createElement: indicatorNode };
+const indicatorContext = vm.createContext({
+  document: indicatorDocument, window: indicatorWindow, BroadcastChannel: indicatorWindow.BroadcastChannel,
+  clearTimeout() {},
+  setTimeout(callback) { hideUploadIndicator = callback; return 1; },
+  Number, Map, Math
+});
+vm.runInContext(uploadIndicatorClient, indicatorContext);
+const indicator = indicatorDocument.body.uploadIndicator;
+const indicatorTitle = indicatorNodes.get("[data-upload-title]");
+const indicatorMessage = indicatorNodes.get("[data-upload-message]");
+const indicatorProgress = indicatorNodes.get("[data-upload-progress]");
+indicatorWindow.HaloUploadIndicator.render({ eventId: "upload-1", sequence: 1, state: "uploading", title: "Quiet Heart · HALO", percent: 42 });
+assert.equal(indicator.hidden, false);
+assert.equal(indicatorTitle.textContent, "Quiet Heart · HALO");
+assert.equal(indicatorProgress.value, 42);
+indicatorWindow.HaloUploadIndicator.render({ eventId: "upload-1", sequence: 1, state: "uploading", title: "Quiet Heart · HALO", percent: 99 });
+assert.equal(indicatorProgress.value, 42, "duplicate local and cross-tab events must not rewind or replay the indicator");
+indicatorWindow.HaloUploadIndicator.render({ eventId: "upload-1", sequence: 2, state: "finalizing", title: "Quiet Heart · HALO" });
+assert.equal(indicatorProgress.attributes.has("value"), false, "finalization uses an indeterminate progress bar");
+assert.match(indicatorMessage.textContent, /saving and checking readiness/);
+indicatorWindow.HaloUploadIndicator.render({ eventId: "upload-1", sequence: 3, state: "completed", title: "Quiet Heart · HALO" });
+assert.match(indicatorMessage.textContent, /Upload complete/);
+hideUploadIndicator();
+assert.equal(indicator.hidden, true, "completion receipt hides after a short delay");
+indicatorWindow.HaloUploadIndicator.render({ eventId: "upload-2", sequence: 1, state: "failed", title: "Quiet Heart · HALO" });
+assert.match(indicatorMessage.textContent, /Upload paused.*Song Catalog/);
 
 console.log("Music player contracts passed.");

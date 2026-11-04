@@ -5,9 +5,53 @@ import { randomUUID } from "node:crypto";
 import vm from "node:vm";
 import { loadDreamweaverUploadShow, pendingDreamweaverUploadShow } from "../lib/dreamweaver-upload.js";
 import { buildDreamweaverStorefrontPath, cleanDreamweaverSongId } from "../lib/dreamweaver-storefront.js";
+import { initializeDreamweaverUploadPanel } from "../song-catalog/dreamweaver-upload-panel.js";
 
 const root = resolve(import.meta.dirname, "..");
 const read = path => readFile(resolve(root, path), "utf8");
+
+{
+  const page = await read("song-catalog/index.html");
+  assert.match(page, /id="artistWorkspace" hidden>[\s\S]*id="dreamweaverUploadDisclosure"/, "private Dreamweaver intake belongs inside the authenticated workspace");
+  const client = await read("song-catalog/song-catalog.js");
+  assert.match(client, /import \{ initializeDreamweaverUploadPanel \} from "\/song-catalog\/dreamweaver-upload-panel\.js"/);
+  assert.match(page, /<iframe id="dreamweaverUploadFrame"[^>]*title="[^"]+"[^>]*hidden>/);
+  assert.doesNotMatch(page.match(/<iframe id="dreamweaverUploadFrame"[^>]*>/)?.[0] || "", /\ssrc=/, "Song Lab is not loaded before expansion");
+  assert.match(page, /separate private Song Lab project, not a catalog Sale master/);
+  assert.ok(page.indexOf('id="songWorkspace"') < page.indexOf('id="dreamweaverUploadDisclosure"'), "upload belongs to the selected song workspace");
+  assert.match(page, /<\/details>\s*<\/section>\s*<form[^>]*id="alternateUploadForm"/, "Dreamweaver upload is directly above Alternate Versions");
+  const disclosure = new EventTarget();
+  const status = { textContent: "" };
+  const frame = new EventTarget();
+  const sources = [];
+  Object.defineProperty(frame, "src", { set: value => sources.push(value) });
+  frame.removeAttribute = name => { assert.equal(name, "src"); };
+  frame.hidden = true;
+  const panel = initializeDreamweaverUploadPanel({ disclosure, frame, status });
+  disclosure.open = false;
+  disclosure.dispatchEvent(new Event("toggle"));
+  assert.equal(sources.length, 0, "closed disclosure cannot load private analysis");
+  panel.show();
+  assert.equal(disclosure.open, true, "first song selection opens the section");
+  assert.deepEqual(sources, ["/dreamweaver-lab/"], "reuse the existing authenticated Song Lab, with no trust override");
+  assert.equal(frame.hidden, false);
+  assert.match(status.textContent, /Loading/);
+  frame.dispatchEvent(new Event("load"));
+  assert.match(status.textContent, /sign-in or verification/);
+  disclosure.open = false;
+  disclosure.dispatchEvent(new Event("toggle"));
+  panel.show();
+  assert.equal(disclosure.open, false, "catalog refreshes do not undo the user's collapse");
+  disclosure.open = true;
+  disclosure.dispatchEvent(new Event("toggle"));
+  assert.equal(sources.length, 1, "reopening preserves selected files and in-progress uploads");
+  panel.reset();
+  assert.equal(frame.hidden, true, "sign-out unloads private analysis");
+  assert.equal(disclosure.open, false);
+  disclosure.open = true;
+  disclosure.dispatchEvent(new Event("toggle"));
+  assert.equal(sources.length, 2, "a new signed-in session gets a fresh Song Lab workspace");
+}
 
 const [musicPage, musicClient, musicStyles, uploadPage, uploadClient, home, routes, catalogApi, config] = await Promise.all([
   read("music/index.html"),

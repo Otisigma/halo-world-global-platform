@@ -66,4 +66,14 @@
   playerScript.src = "/music-player.js";
   playerScript.defer = true;
   document.head.append(playerScript);
+
+  const uploadIndicatorStyles = document.createElement("link");
+  uploadIndicatorStyles.rel = "stylesheet";
+  uploadIndicatorStyles.href = "/upload-player-indicator.css";
+  document.head.append(uploadIndicatorStyles);
+
+  const uploadIndicatorScript = document.createElement("script");
+  uploadIndicatorScript.src = "/upload-player-indicator.js";
+  uploadIndicatorScript.defer = true;
+  document.head.append(uploadIndicatorScript);
 })();

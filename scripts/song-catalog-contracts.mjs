@@ -136,9 +136,11 @@ assert.match(client, /identity\.onAuthChange/, "private workspace responds to lo
   let handler;
   let closed = 0;
   let loaded = 0;
+  let uploadResets = 0;
   const watch = runInNewContext(`let catalogRequest=0;\n${watchSource}\nwatchCatalogIdentity;`, {
     state: privateState, elements: { songDialog: { close() { closed++; } }, versionDialog: { close() { closed++; } } },
     render() {}, loadCatalog() { loaded++; },
+    dreamweaverUploadPanel: { reset() { uploadResets++; } },
   });
   const identity = { onAuthChange(callback) { handler = callback; } };
   watch(identity);
@@ -148,12 +150,14 @@ assert.match(client, /identity\.onAuthChange/, "private workspace responds to lo
   assert.equal(closed, 0, "routine auth maintenance must not discard unsaved edits");
   assert.equal(loaded, 0);
   assert.equal(privateState.authenticated, true);
+  assert.equal(uploadResets, 0, "routine auth maintenance preserves private uploads");
   handler("logout");
   assert.equal(closed, 2, "logout closes private editing dialogs");
   assert.equal(loaded, 1);
   assert.equal(privateState.authenticated, false);
   assert.equal(privateState.songs.length, 0);
   assert.equal(privateState.catalogSignals, null);
+  assert.equal(uploadResets, 1, "logout unloads the embedded private Song Lab");
   handler("login");
   assert.equal(loaded, 2, "login or an account switch reloads the owner-scoped catalog");
 }
@@ -227,6 +231,7 @@ assert.match(client, /identity\.onAuthChange/, "private workspace responds to lo
   const context = {
     state: privateState, api: () => new Promise((resolve, reject) => pending.push({ resolve, reject })),
     elements: { shell: { setAttribute() {} } }, render() {}, message() {},
+    dreamweaverUploadPanel: { reset() {} },
     $: selector => ({ "#catalogUnavailable": availability, "#catalogSignInButton": signIn })[selector],
   };
   const load = runInNewContext(`${loadSource}\nloadCatalog;`, context);
@@ -513,7 +518,7 @@ const checks = [
   [client.includes("uploadMasterToVersion") && client.includes('fetch("/api/song-catalog/master-upload"') && client.includes('method:"PUT"') && client.includes('credentials:"omit"') && client.includes('action:"register"') && client.includes("Uploading master directly to storage"), "uploads master copies straight from the browser to storage with live progress, then registers them"],
   [client.includes("presign.data?.directUpload===false") && client.includes("return uploadAudioToVersion({file,songId,versionId,ui})") && client.includes("uploadHelper.uploadChunkedFile"), "falls back to the existing chunked upload path when direct storage is not configured"],
   [directStorageLib.includes("AWS4-HMAC-SHA256") && directStorageLib.includes("HALO_MASTER_STORAGE_BUCKET") && !directStorageLib.includes("@aws-sdk"), "signs S3-compatible direct uploads without adding a storage SDK dependency"],
-  [!releaseCatalogApi.includes("audio_storage_key") && !unifiedUploadApi.includes("audio_storage_key") && !api.includes("audioStorageKey:"), "never exposes private master storage keys through catalog APIs"],
+  [!releaseCatalogApi.slice(releaseCatalogApi.indexOf("function serializeRelease("), releaseCatalogApi.indexOf("export default async function")).includes("audio_storage_key") && !unifiedUploadApi.includes("audio_storage_key") && !api.includes("audioStorageKey:"), "never exposes private master storage keys through catalog APIs"],
 ];
 
 const duplicateMasters = [
@@ -554,7 +559,7 @@ assert.equal(validateMasterUpload({ filename: "master.wav", contentType: "audio/
 assert.equal(validateMasterUpload({ filename: "master.wav", contentType: "audio/wav", fileSize: 0 }).status, 400, "empty master uploads are rejected");
 assert.equal(validateMasterUpload({ filename: "cover.png", contentType: "image/png", fileSize: 1024 }).status, 415, "non-audio master uploads are rejected");
 
-assert.match(page, /id="versionTable" tabindex="-1"><\/div>\s*<form[^>]*id="alternateUploadForm"/, "inline upload lives directly below the focusable version list");
+assert.match(page, /id="versionTable" tabindex="-1"><\/div>\s*<section[^>]*aria-labelledby="dreamweaverUploadTitle"[\s\S]*?<\/section>\s*<form[^>]*id="alternateUploadForm"/, "Dreamweaver upload sits immediately above Alternate Versions, after the version list");
 assert.match(page, /id="alternateSongId" name="songId" type="hidden"/, "inline uploads carry the current parent song");
 assert.match(page, /for="alternateVersionTitle"/, "version title has a visible label");
 assert.match(page, /for="alternateAudioFile"/, "audio picker has a visible label");
@@ -583,6 +588,7 @@ const inline = runInNewContext(`${client.slice(client.indexOf("const alternateUp
 ({renderAlternateUpload,uploadAlternateVersion})`, {
   $: selector => inlineElements[selector.slice(1)] || {},
   uploadHelper: { createUploadUi: () => inlineUi },
+  dreamweaverUploadPanel: { show() {} },
   state: inlineState,
   crypto: { randomUUID: () => `new-version-${++generatedVersionIds}` },
   setValue: (selector, value) => { inlineElements[selector.slice(1)].value = value; },
@@ -591,7 +597,10 @@ const inline = runInNewContext(`${client.slice(client.indexOf("const alternateUp
     audioContentType: runInNewContext(`(${client.match(/^function audioContentType.*$/m)[0]})`)
   }),
   api: async payload => { inlineRequests.push(payload); if (failInlineCreation) throw new Error("Creation unavailable"); return payload; },
-  uploadAudioToVersion: async payload => { inlineUploads.push(payload); await duringInlineUpload(); if (failInlineUpload) throw new Error("Connection stopped"); },
+  uploadAudioToVersion: async payload => { inlineUploads.push(payload); await duringInlineUpload(); if (failInlineUpload) throw new Error("Connection stopped"); return { readiness: { status: "CATALOG_READY" } }; },
+  uploadReadinessNote: readiness => readiness ? ` · ${readiness.status}` : "",
+  announceUploadReadiness: () => {},
+  announceCatalogUpload: () => {},
   loadCatalog: async songId => { inlineReloads.push(songId); }
 });
 const inlineEvent = { preventDefault() {}, currentTarget: inlineForm };
@@ -635,6 +644,7 @@ assert.equal(inlineRequests.length, 3, "double submission during upload is ignor
 assert.equal(new Set(inlineRequests.map(request => request.versionId)).size, 1, "creation and audio retries reuse the version ID");
 assert.ok(inlineUploads.every(upload => upload.songId === "song-a" && upload.versionId === inlineRequests[0].versionId), "uploads target the original parent and new version");
 assert.equal(inlineForm.dataset.versionId, undefined, "successful upload resets the next creation ID");
+assert.ok(inlineUi.message.endsWith(" · CATALOG_READY"), "alternate upload receipt shows the live readiness state");
 assert.equal(inlineElements.alternateVersionTitle.value, "", "successful upload clears the form");
 chooseInlineUpload();
 duringInlineUpload = () => {

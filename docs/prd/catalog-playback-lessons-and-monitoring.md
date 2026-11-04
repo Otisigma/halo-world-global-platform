@@ -90,6 +90,12 @@ remains separate. A failed background HEAD/CORS probe alone does not discard an
 otherwise healthy native media source; definitive HTTP failures with no native
 readiness and actual media errors still fail normally.
 
+Chunk-backed master playback caps each requested byte range at 1 MiB, including
+open-ended browser requests such as `bytes=0-`. Previously that request assembled
+the entire remaining HD file before returning its first bytes. Partial responses
+retain the full file size in `Content-Range`, allowing the browser to request
+subsequent windows or seek. Signed direct-storage redirects are unchanged.
+
 The show displays a bounded diagnostic GET on a failed same-origin source,
 including its HTTP status, content type and API message. It requests only bytes
 0–63, cancels after the first response chunk, has an eight-second timeout, and
@@ -103,6 +109,12 @@ route, and probes it without private credentials. This mode uses the repository
 probe origin, or the HALO production origin if unset. Normal five-stream mode
 still validates all required IDs in the smoke script. Neither mode changes
 Netlify configuration, publication data or stored audio.
+
+The public-song mode also opens the actual show in isolated headless Chrome,
+uses a real input click and checks advancing `currentTime`. Its separate
+bounded-range experiment caps only the test browser's requests, explicitly
+without changing deployed code. This comparison can isolate range-assembly
+latency from metadata availability. It does not certify physical audibility.
 
 ## Shared player upload indicator
 

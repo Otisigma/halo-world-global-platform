@@ -308,6 +308,7 @@ const dreamContext = vm.createContext({
   showToast() {}, setReleasePlaybackState() {},
   notePlaybackClick() { dreamState.playbackRequested = true; },
   dreamweaverDriveFallbacks: () => [],
+  resolvePrimaryAudio: () => ({ src: "" }),
   unlockDreamweaverAudio,
   renderReleasePanel() {},
   renderSoundUnlock(mode) { dreamState.soundUnlockMode = mode; }
@@ -372,7 +373,9 @@ const timedOutBootstrap = await dreamContext.bootstrapPrimaryPlayback({}, { user
 assert.equal(timedOutBootstrap.fallback, true, "bootstrap timeout must offer the local upload fallback");
 assert.equal(dreamState.audioSourceMode, "error");
 await dreamContext.togglePlayback();
-assert.equal(dreamInput.clicks, 3, "play after a bootstrap timeout must open the picker");
+assert.equal(dreamInput.clicks, 2, "play after a bootstrap timeout must retry the remote stream, not force a file picker");
+assert.equal(dreamAudio.src, track.previewUrl);
+assert.equal(dreamState.audioSourceMode, "error", "a failed retry remains a fault, never fake playback success");
 
 for (const [file, handler] of [
   ["netlify/functions/mix-audio.mjs", "mixAudioHandler"],

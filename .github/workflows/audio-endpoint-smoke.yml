@@ -8,6 +8,10 @@ on:
         required: false
         default: false
         type: boolean
+      diagnostic_origin:
+        description: Optional public HTTPS origin for song diagnostics (for example a deploy preview)
+        required: false
+        type: string
       drive_track_id:
         description: Approved public Drive catalog track ID
         required: false
@@ -74,7 +78,7 @@ jobs:
         if: ${{ inputs.diagnose_song }}
         run: node scripts/dreamweaver-live-diagnostic.mjs
         env:
-          HALO_AUDIO_PROBE_ORIGIN: ${{ vars.HALO_AUDIO_PROBE_ORIGIN }}
+          HALO_AUDIO_PROBE_ORIGIN: ${{ inputs.diagnostic_origin || vars.HALO_AUDIO_PROBE_ORIGIN }}
           HALO_AUDIO_PROBE_SONG_ID: ${{ inputs.song_id }}
       - uses: actions/setup-node@v4
         if: ${{ inputs.diagnose_song }}
@@ -84,12 +88,12 @@ jobs:
         if: ${{ inputs.diagnose_song }}
         run: node scripts/dreamweaver-live-browser.mjs
         env:
-          HALO_AUDIO_PROBE_ORIGIN: ${{ vars.HALO_AUDIO_PROBE_ORIGIN }}
+          HALO_AUDIO_PROBE_ORIGIN: ${{ inputs.diagnostic_origin || vars.HALO_AUDIO_PROBE_ORIGIN }}
           HALO_AUDIO_PROBE_SONG_ID: ${{ inputs.song_id }}
       - name: Compare native playback with bounded media ranges
         if: ${{ !cancelled() && inputs.diagnose_song }}
         run: node scripts/dreamweaver-live-browser.mjs
         env:
-          HALO_AUDIO_PROBE_ORIGIN: ${{ vars.HALO_AUDIO_PROBE_ORIGIN }}
+          HALO_AUDIO_PROBE_ORIGIN: ${{ inputs.diagnostic_origin || vars.HALO_AUDIO_PROBE_ORIGIN }}
           HALO_AUDIO_PROBE_SONG_ID: ${{ inputs.song_id }}
           HALO_AUDIO_PROBE_BOUND_RANGES: "1"

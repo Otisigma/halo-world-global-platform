@@ -116,6 +116,14 @@ bounded-range experiment caps only the test browser's requests, explicitly
 without changing deployed code. This comparison can isolate range-assembly
 latency from metadata availability. It does not certify physical audibility.
 
+A local native-Chrome reproduction used the real show code and actual catalog
+handler with a synthetic 28 MiB PCM WAV and 900 ms per storage chunk. Unbounded
+`bytes=0-` assembled all seven chunks, exceeded the player's five-second startup
+watchdog and remained paused at 0:00. With the same WAV and one-MiB response cap,
+Chrome observed `loadedmetadata`, `canplay`, `playing`, and advancing time
+(`0.502252` seconds). This isolates the failure mechanism but is not a claim
+that production has deployed the fix or played the real master.
+
 ## Shared player upload indicator
 
 The shared compact upload indicator appears over player pages while a Song

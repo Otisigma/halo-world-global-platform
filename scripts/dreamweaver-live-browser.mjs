@@ -4,9 +4,14 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 const origin = process.env.HALO_AUDIO_PROBE_ORIGIN || "https://halo-world-global-platform.netlify.app";
+const base = new URL(origin);
+if (base.username || base.password || base.pathname !== "/" || base.search || base.hash
+  || (base.protocol !== "https:" && !(base.protocol === "http:" && ["localhost", "127.0.0.1"].includes(base.hostname)))) {
+  throw new Error("Provide a public HTTPS origin (HTTP is allowed only for a local test fixture).");
+}
 const songId = process.env.HALO_AUDIO_PROBE_SONG_ID;
 if (!/^[0-9a-f-]{36}$/i.test(songId || "")) throw new Error("Provide a public song UUID.");
-const target = new URL("/dreamweaver/", origin);
+const target = new URL("/dreamweaver/", base);
 target.search = new URLSearchParams({ mix: "owen-anthony-quiet-heart", song: songId, satellite: "dreamweaver" });
 const profile = await mkdtemp(join(tmpdir(), "halo-live-browser-"));
 const chrome = spawn("google-chrome", [
@@ -125,6 +130,7 @@ try {
       status: document.getElementById("songLobbyPlayerStatus")?.textContent,
       sourcePath: audio?.currentSrc ? new URL(audio.currentSrc).pathname : "",
       readyState: audio?.readyState, paused: audio?.paused, currentTime: audio?.currentTime,
+      muted: audio?.muted, volume: audio?.volume,
       duration: Number.isFinite(audio?.duration) ? audio.duration : null,
       mediaError: audio?.error ? { code: audio.error.code, message: audio.error.message } : null,
       events: window.__haloMediaEvents || [],
@@ -134,6 +140,7 @@ try {
   let before;
   for (let attempt = 0; attempt < 60; attempt++) {
     before = await snapshot();
+    console.log("Checked origin:", target.origin);
     if (before.mediaError || before.readyState >= 2 || /Stream unavailable/.test(before.status || "")) break;
     await delay(500);
   }
@@ -152,7 +159,7 @@ try {
   console.log("After click:", JSON.stringify(after));
   console.log("Browser observations:", JSON.stringify(observed));
   if (after.paused || !(after.currentTime > .25)) throw new Error("Live playback did not advance after a real Play click.");
-  console.log("VERIFIED: production Chrome decoded audio and advanced currentTime after a Play click. Physical audibility is not verified.");
+  console.log("VERIFIED: Chrome decoded audio and advanced currentTime after a Play click. Physical audibility is not verified.");
 } catch (error) {
   console.error(error.message);
   console.error("Browser observations:", JSON.stringify(observed));

@@ -69,6 +69,20 @@ Catalog audio uploads now report readiness while bytes land instead of only afte
 - The catalog UI shows the live note during upload, in the final receipt, and dispatches a `halo:upload-readiness` window event for other panels.
 - Monitor: chunk responses missing `readiness`, `PENDING_RECHECK` rates, and finalized uploads that stay `CATALOG_READY` because `shareVerification.reason` is pending.
 
+## Shared player upload indicator
+
+The shared compact upload indicator appears over player pages while a Song
+Catalog audio upload is active. It shows the song title and byte progress,
+switches to an indeterminate state while the server finalizes the upload, and
+briefly confirms completion. If an upload pauses, it points the user back to
+the Song Catalog resume flow. A same-origin `BroadcastChannel` mirrors updates
+to other open player tabs without persisting the title or upload state.
+
+Pages with their own player bootstrap load the shared indicator directly;
+pages using `stats.js` receive it through that shared bootstrap. This visual
+receipt reports upload activity only—it does not claim that playback or
+publication is ready.
+
 ## What AI monitoring exists, and what is still missing
 
 Sentinel currently integrates with Dreamweaver and Album Concierge. Its active-tab

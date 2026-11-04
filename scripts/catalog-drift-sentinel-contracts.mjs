@@ -216,6 +216,7 @@ await check("re-uploading the same file after a failure resumes from verified sa
   const ui = { start() {}, progress() {}, state: { progress: 0 } };
   const api = runInNewContext(`${source}\n({uploadAudioToVersion,sameUploadFile,get pending(){return pendingAudioResume}})`, {
     AUDIO_CHUNK_BYTES: 4, uploadHelper: helper, FormData, Blob, Array, Object, Number, Boolean, Set, Uint8Array, JSON,
+    announceCatalogUpload() {},
     crypto: { subtle: webcrypto.subtle, randomUUID: () => "upload-session-abc" },
     audioContentType: () => "audio/wav", audioDuration: async () => 3,
     uploadReadinessNote: () => "", announceUploadReadiness() {},

@@ -1,4 +1,4 @@
-import { createLocalUploadVault, resumeAudioUpload, requestUploadJson } from "./resumable-upload.js";
+import { createLocalUploadVault, resumeAudioUpload, requestUploadJson, readSongLabJson, runCheckpointedUpload, isTransientUploadError, dispatchSongLabBuild } from "./resumable-upload.js";
 
 (() => {
   const byId = id => document.getElementById(id);
@@ -15,6 +15,18 @@ import { createLocalUploadVault, resumeAudioUpload, requestUploadJson } from "./
   const recovery = byId("uploadRecovery"), recoveryStatus = byId("uploadRecoveryStatus");
   const resumeButton = byId("resumeUploadButton"), discardButton = byId("discardUploadButton"), progress = byId("uploadProgress");
   const sessionKey = "halo-song-lab-upload-session";
+  const autoResume = byId("autoResumeUpload"), pauseButton = byId("pauseUploadButton");
+  let pauseRequested = false;
+  let previewState = "standby";
+  function reportCheckpoint(stage, percent = Number(progress.value) || 0) {
+    const snapshot = Object.freeze({
+      stage, percent: Math.max(0, Math.min(100, percent)), localBackup: backupSaved,
+      autoRestarts: uploadSession?.autoRestarts || 0, previewState,
+    });
+    window.HaloSongLabCheckpoint = snapshot;
+    window.dispatchEvent(new CustomEvent("halo:song-lab-progress", { detail: snapshot }));
+    if (window.parent !== window) window.parent.postMessage({ type: "halo:song-lab-progress", ...snapshot }, location.origin);
+  }
   let uploadSession = null, backupSaved = false, busy = false, loading = false, saveQueue = Promise.resolve();
   function draft() { return { title: elements.title.value, artist: elements.artist.value, brief: elements.brief.value, lyrics: elements.lyrics.value }; }
   function recoveryMessage(message, resumable = false) {
@@ -35,6 +47,8 @@ import { createLocalUploadVault, resumeAudioUpload, requestUploadJson } from "./
   function setBusy(value) {
     busy = value; elements.file.disabled = value || loading; elements.analyze.disabled = value || loading || !state.evidence || !uploadSession;
     resumeButton.disabled = value || loading; discardButton.disabled = value || loading;
+    pauseButton.hidden = !value; pauseButton.disabled = false;
+    autoResume.disabled = value;
     for (const element of [elements.title, elements.artist, elements.brief, elements.lyrics, elements.rights]) element.disabled = value;
   }
   async function clearBackup() {
@@ -43,6 +57,7 @@ import { createLocalUploadVault, resumeAudioUpload, requestUploadJson } from "./
     await vault.remove(uploadSession.id);
     sessionStorage.removeItem(sessionKey);
     backupSaved = false; uploadSession = null; recovery.hidden = true;
+    reportCheckpoint(state.project?.status === "ready" ? "ready" : "standby");
   }
   const noteNames = ["C", "C♯", "D", "E♭", "E", "F", "F♯", "G", "A♭", "A", "B♭", "B"];
   const uploadTrustStorageKey = "halo-dreamweaver-upload-trust";
@@ -319,12 +334,14 @@ import { createLocalUploadVault, resumeAudioUpload, requestUploadJson } from "./
     finally { loading = false; setBusy(false); }
   }
 
-  async function uploadFile(file) {
+  async function uploadFile(file, assertContinuing) {
     progress.hidden = false;
     return resumeAudioUpload({
-      file, session: uploadSession, headers: () => trustedUploadHeaders(),
+      file, session: uploadSession, headers: () => trustedUploadHeaders(), assertContinuing,
       onProgress(percent) {
+        elements.processing.dataset.uploadState = "uploading";
         progress.value = percent;
+        reportCheckpoint("uploading", percent);
         elements.processingStage.textContent = `SECURING AUDIO / ${Math.floor(percent)}%`;
         elements.processingDetail.textContent = "Sending verified private chunks. Nothing is published.";
       },
@@ -334,64 +351,122 @@ import { createLocalUploadVault, resumeAudioUpload, requestUploadJson } from "./
       },
       async onAcknowledged(index) {
         uploadSession.acknowledged = [...new Set([...uploadSession.acknowledged, index])];
+        uploadSession.stage = "uploading";
         await saveSession().catch(error => setStatus(`Upload continues, but local progress backup failed: ${error.message}`, true));
       },
     });
   }
 
-  async function pollProject(projectId) {
+  async function pollProject(projectId, assertContinuing = () => {}) {
     clearTimeout(state.pollTimer);
-    const response = await fetch(`/api/dreamweaver-song-lab?projectId=${encodeURIComponent(projectId)}`, { credentials: "same-origin", headers: { Accept: "application/json" } });
-    const data = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(data.message || "The Song Lab project could not be read.");
-    state.project = data.project;
-    if (data.project.status === "ready") {
-      showProject(data.project);
-      if (uploadSession?.projectId === data.project.id) await clearBackup().catch(error => recoveryMessage(`Package ready, but local cleanup failed: ${error.message}. Use Discard local backup.`));
-      setBusy(false); await loadHistory(); return;
+    const deadline = Date.now() + 10 * 60 * 1000;
+    let lastRecovery = Date.now();
+    const dispatchedQueuedStages = new Set();
+    for (;;) {
+      assertContinuing();
+      const data = await readSongLabJson(`/api/dreamweaver-song-lab?projectId=${encodeURIComponent(projectId)}`);
+      state.project = data.project;
+      reportCheckpoint(data.project.status === "ready" ? "ready" : "building");
+      if (data.project.status === "ready") {
+        showProject(data.project);
+        if (uploadSession?.projectId === data.project.id) await clearBackup().catch(error => recoveryMessage(`Package ready, but local cleanup failed: ${error.message}. Use Discard local backup.`));
+        setBusy(false); await loadHistory(); return;
+      }
+      if (data.project.status === "failed") throw Object.assign(new Error(data.project.errorMessage || "The Song Lab package stopped before completion."), { status: 503 });
+      elements.processingStage.textContent = data.project.status === "analyzing"
+        ? data.project.jobStage === "artwork" ? "RESUMING ARTWORK / COPY SAVED" : "WEAVING THE RELEASE WORLD"
+        : "ANALYSIS QUEUED";
+      elements.processingDetail.textContent = data.project.status === "analyzing" ? "Dreamweaver is grounding the visual system, campaign, and release notes in the measured signal." : "The private job is saved and preparing to run.";
+      if (Date.now() >= deadline) throw new Error("The private build is still pending. Automatic checks paused after ten minutes; resume to inspect the saved project.");
+      const queuedStage = data.project.jobStage || "queued";
+      const newQueuedStage = data.project.status === "queued" && !dispatchedQueuedStages.has(queuedStage);
+      if (newQueuedStage || Date.now() - lastRecovery >= 30000) {
+        assertContinuing();
+        if (newQueuedStage) dispatchedQueuedStages.add(queuedStage);
+        await requestUploadJson({ action: "resume_project", projectId }, trustedUploadHeaders());
+        await dispatchSongLabBuild(projectId, trustedUploadHeaders());
+        lastRecovery = Date.now();
+      }
+      await new Promise(resolve => setTimeout(resolve, 1800));
     }
-    if (data.project.status === "failed") throw new Error(data.project.errorMessage || "The Song Lab package stopped before completion.");
-    elements.processingStage.textContent = data.project.status === "analyzing" ? "WEAVING THE RELEASE WORLD" : "ANALYSIS QUEUED";
-    elements.processingDetail.textContent = data.project.status === "analyzing" ? "Dreamweaver is grounding the visual system, campaign, and release notes in the measured signal." : "The private job is saved and preparing to run.";
-    state.pollTimer = setTimeout(() => pollProject(projectId).catch(handleFailure), 1800);
   }
 
   function handleFailure(error) {
     setBusy(false);
     elements.processing.dataset.uploadState = "paused";
     elements.processingStage.textContent = "PAUSED / WAITING";
+    reportCheckpoint("paused");
     elements.processingDetail.textContent = error.message || "Dreamweaver could not complete this package.";
     setStatus(error.message || "Dreamweaver could not complete this package.", true); showToast(error.message || "Song Lab stopped.");
     if (uploadSession && state.file) recoveryMessage(uploadSession.projectId
       ? "The private project is saved on the server. Resume to check its status; no audio re-upload is needed."
       : backupSaved ? "Upload interrupted. We saved your progress locally - resume upload?"
       : "Upload interrupted. This tab still has your file, but durable local backup is unavailable. Resume before closing it.", true);
+    if (uploadSession && !isTransientUploadError(error) && error.name !== "OfflineUploadError") {
+      uploadSession.autoResume = false;
+      void saveSession().catch(failure => setStatus(`Recovery preference could not be saved: ${failure.message}`, true));
+    }
   }
 
-  async function submit(event) {
-    event.preventDefault();
+  async function submit(event, automatic = false) {
+    event?.preventDefault();
     if (busy || loading) return;
     if (!uploadSession || !state.file || !state.evidence) return setStatus("Choose and decode an audio file first.", true);
-    if (!elements.rights.checked) return setStatus("Confirm that you may use this recording.", true);
+    if (!elements.rights.checked && !(automatic && uploadSession.authorized && uploadSession.autoResume)) return setStatus("Confirm that you may use this recording.", true);
+    if (!automatic) {
+      uploadSession.autoResume = autoResume.checked;
+      uploadSession.authorized = true;
+      uploadSession.autoRestarts = 0;
+    }
+    pauseRequested = false;
     setBusy(true); elements.processing.dataset.uploadState = "uploading"; resumeButton.hidden = true; elements.results.hidden = true; elements.processing.hidden = false; elements.processing.scrollIntoView({ behavior: "smooth", block: "center" });
+    reportCheckpoint("checking");
     try {
-      const identityResponse = await fetch("/api/dreamweaver-song-lab", { credentials: "same-origin", headers: { Accept: "application/json" } });
-      if (!identityResponse.ok) throw new Error("Song Lab could not verify the current account. Your upload is retained.");
-      const identity = await identityResponse.json();
-      if (!identity.uploadOwnerId) throw new Error("Sign in before resuming private audio.");
-      if (uploadSession.ownerId && uploadSession.ownerId !== identity.uploadOwnerId) throw new Error("Sign in with the account that started this upload, or discard its local backup.");
-      uploadSession.ownerId = identity.uploadOwnerId;
-      await saveSession().catch(error => setStatus(error.message, true));
-      if (uploadSession.projectId) { await pollProject(uploadSession.projectId); return; }
-      const upload = await uploadFile(state.file);
-      elements.processingStage.textContent = "STARTING DREAMWEAVER"; elements.processingDetail.textContent = "The waveform evidence and artist context are entering the private creative engine.";
-      const data = upload.project ? { project: upload.project } : await requestUploadJson({
-        action: "analyze", ...upload, title: elements.title.value, artistName: elements.artist.value, creativeBrief: elements.brief.value, lyrics: elements.lyrics.value,
-        rightsAttested: elements.rights.checked, fileName: state.file.name, contentType: state.file.type, byteSize: state.file.size, analysis: state.evidence
-      }, trustedUploadHeaders());
-      uploadSession.projectId = data.project.id;
-      await saveSession().catch(error => setStatus(error.message, true));
-      state.project = data.project; window.haloStats?.track("dreamweaver_song_analysis_started", { project_id: data.project.id }); await pollProject(data.project.id);
+      const continueFromCheckpoint = () => runCheckpointedUpload(async assertContinuing => {
+        const identity = await readSongLabJson("/api/dreamweaver-song-lab");
+        if (!identity.uploadOwnerId) throw new Error("Sign in before resuming private audio.");
+        if (uploadSession.ownerId && uploadSession.ownerId !== identity.uploadOwnerId) throw new Error("Sign in with the account that started this upload, or discard its local backup.");
+        uploadSession.ownerId = identity.uploadOwnerId;
+        await saveSession().catch(error => setStatus(error.message, true));
+        if (uploadSession.projectId) {
+          assertContinuing();
+          await requestUploadJson({ action: "resume_project", projectId: uploadSession.projectId }, trustedUploadHeaders());
+          await dispatchSongLabBuild(uploadSession.projectId, trustedUploadHeaders());
+          await pollProject(uploadSession.projectId, assertContinuing); return;
+        }
+        const upload = await uploadFile(state.file, assertContinuing);
+        assertContinuing();
+        uploadSession.stage = "finalizing";
+        reportCheckpoint("finalizing");
+        await saveSession().catch(error => setStatus(error.message, true));
+        elements.processingStage.textContent = "STARTING DREAMWEAVER"; elements.processingDetail.textContent = "The waveform evidence and artist context are entering the private creative engine.";
+        const data = upload.project ? { project: upload.project } : await requestUploadJson({
+          action: "analyze", ...upload, title: elements.title.value, artistName: elements.artist.value, creativeBrief: elements.brief.value, lyrics: elements.lyrics.value,
+          rightsAttested: uploadSession.authorized, fileName: state.file.name, contentType: state.file.type, byteSize: state.file.size, analysis: state.evidence
+        }, trustedUploadHeaders());
+        uploadSession.projectId = data.project.id;
+        uploadSession.stage = "building";
+        await saveSession().catch(error => setStatus(error.message, true));
+        if (data.project.status !== "ready") await dispatchSongLabBuild(data.project.id, trustedUploadHeaders());
+        state.project = data.project; window.haloStats?.track("dreamweaver_song_analysis_started", { project_id: data.project.id }); await pollProject(data.project.id, assertContinuing);
+      }, {
+        session: uploadSession, checkpoint: saveSession, canContinue: () => !pauseRequested,
+        onWaiting({ attempt, delayMs, error }) {
+          elements.processing.dataset.uploadState = "paused";
+          reportCheckpoint("waiting");
+          elements.processingStage.textContent = `AUTO-RESUME ${attempt}/3 / WAITING ${delayMs / 1000}s`;
+          elements.processingDetail.textContent = `${error.message} Restarting from server-confirmed checkpoints.`;
+        },
+      });
+      if (navigator.locks) {
+        await navigator.locks.request(`halo-song-lab:${uploadSession.id}`, { ifAvailable: true }, async lock => {
+          if (!lock) throw Object.assign(new Error("This upload is already continuing in another tab. Pause that tab before resuming here."), { name: "UploadInProgressError" });
+          await continueFromCheckpoint();
+        });
+      } else {
+        if (automatic) throw new Error("Automatic recovery needs browser tab-lock support. Resume manually in one tab.");
+        await continueFromCheckpoint();
+      }
     } catch (error) {
       if (error.data?.trustState === "challenge") {
         try { throwApiError(error.data, error.message); } catch (challenge) { handleFailure(challenge); }
@@ -455,6 +530,7 @@ import { createLocalUploadVault, resumeAudioUpload, requestUploadJson } from "./
       if (uploadSession || state.file || busy || loading) return;
       sessionStorage.setItem(sessionKey, id);
       uploadSession = saved.session; backupSaved = true;
+      autoResume.checked = uploadSession.autoResume === true;
       for (const [key, value] of Object.entries(saved.session.draft || {})) if (elements[key]) elements[key].value = value;
       elements.rights.checked = false;
       const file = new File([saved.file], saved.session.fileName, { type: saved.session.contentType, lastModified: saved.session.lastModified });
@@ -467,12 +543,30 @@ import { createLocalUploadVault, resumeAudioUpload, requestUploadJson } from "./
         setBusy(false);
       } else await loadFile(file, true);
       recoveryMessage("Upload interrupted. We saved your progress locally - resume upload? Confirm your recording permission again.", true);
+      if (uploadSession.autoResume && uploadSession.authorized && uploadSession.ownerId && (uploadSession.autoRestarts || 0) < 3) {
+        if (navigator.onLine === false) recoveryMessage("Saved authorized upload is waiting for a connection before automatic recovery.", true);
+        else void submit(null, true);
+      }
     } catch (error) {
       recoveryMessage(`Local recovery could not be opened: ${error.message}. Keep your original audio file.`);
     }
   }
 
   bootstrapUploadTrust();
+  for (const name of ["loadstart", "emptied", "canplay", "playing", "pause", "ended", "waiting", "stalled", "error"]) elements.audio.addEventListener(name, () => {
+    previewState = elements.audio.error ? "fault" : ["waiting", "stalled"].includes(name) ? "buffering" : elements.audio.readyState >= 3
+      ? elements.audio.paused ? "ready" : "playing" : elements.audio.getAttribute("src") ? "loading" : "standby";
+    reportCheckpoint(window.HaloSongLabCheckpoint?.stage || "standby");
+  });
+  pauseButton.addEventListener("click", () => {
+    pauseRequested = true;
+    reportCheckpoint("pausing");
+    if (uploadSession) uploadSession.autoResume = false;
+    autoResume.checked = false; pauseButton.disabled = true;
+    elements.processingStage.textContent = "PAUSING / SAVING CHECKPOINT";
+    elements.processingDetail.textContent = "The current request may finish. No next chunk or automatic restart will begin. A server job already started can continue independently.";
+    void saveSession().catch(error => setStatus(`Pause preference could not be saved: ${error.message}`, true));
+  });
   resumeButton.addEventListener("click", () => elements.form.requestSubmit());
   discardButton.addEventListener("click", async () => {
     if (busy || loading || !window.confirm("Delete the local audio backup and draft from this browser? Existing private server chunks and saved projects are not deleted.")) return;
@@ -494,13 +588,24 @@ import { createLocalUploadVault, resumeAudioUpload, requestUploadJson } from "./
     } catch (error) { recoveryMessage(`Local backup could not be discarded: ${error.message}.`); }
   });
   for (const element of [elements.title, elements.artist, elements.brief, elements.lyrics]) element.addEventListener("input", () => {
+    if (uploadSession) { uploadSession.authorized = false; uploadSession.autoResume = false; }
     void saveSession().catch(error => setStatus(`Local draft backup failed: ${error.message}`, true));
+  });
+  for (const element of [autoResume, elements.rights]) element.addEventListener("change", () => {
+    if (uploadSession && !element.checked) {
+      uploadSession.autoResume = false;
+      if (element === elements.rights) uploadSession.authorized = false;
+      void saveSession().catch(error => setStatus(`Recovery preference could not be saved: ${error.message}`, true));
+    }
   });
   window.addEventListener("beforeunload", event => {
     if (busy || loading) { event.preventDefault(); event.returnValue = ""; }
   });
   window.addEventListener("online", () => {
-    if (!busy && uploadSession && state.file && !resumeButton.hidden) recoveryMessage("Connection restored. Confirm recording permission and choose Resume Upload to continue.", true);
+    if (!busy && uploadSession && state.file && !resumeButton.hidden) {
+      if (uploadSession.autoResume && uploadSession.authorized && (uploadSession.autoRestarts || 0) < 3) void submit(null, true);
+      else recoveryMessage("Connection restored. Confirm recording permission and choose Resume Upload to continue.", true);
+    }
   });
   void restoreBackup();
   elements.file.addEventListener("change", event => loadFile(event.target.files?.[0]));
@@ -509,6 +614,18 @@ import { createLocalUploadVault, resumeAudioUpload, requestUploadJson } from "./
   elements.dropZone.addEventListener("drop", event => { const file = event.dataTransfer?.files?.[0]; if (file) loadFile(file); });
   elements.form.addEventListener("submit", submit); elements.download.addEventListener("click", downloadProject);
   elements.captions.addEventListener("click", async event => { const button = event.target.closest("[data-caption]"); if (!button) return; try { await navigator.clipboard.writeText(button.dataset.caption); showToast("Caption copied."); } catch { showToast("Select the caption and copy it manually."); } });
-  elements.history.addEventListener("click", event => { const project = state.projects.find(item => item.id === event.target.closest("[data-project-id]")?.dataset.projectId); if (project?.status === "ready") { state.project = project; showProject(project); } else if (project) { elements.processing.hidden = false; pollProject(project.id).catch(handleFailure); } });
+  elements.history.addEventListener("click", event => {
+    if (busy || loading) return;
+    const project = state.projects.find(item => item.id === event.target.closest("[data-project-id]")?.dataset.projectId);
+    if (project?.status === "ready") { state.project = project; showProject(project); }
+    else if (project) {
+      setBusy(true); elements.processing.hidden = false; pauseRequested = false;
+      void (async () => {
+        await requestUploadJson({ action: "resume_project", projectId: project.id }, trustedUploadHeaders());
+        await dispatchSongLabBuild(project.id, trustedUploadHeaders());
+        await pollProject(project.id, () => { if (pauseRequested) throw new Error("Project checks paused."); });
+      })().catch(handleFailure);
+    }
+  });
   window.addEventListener("halo-identity-ready", loadHistory, { once: true }); loadHistory();
 })();

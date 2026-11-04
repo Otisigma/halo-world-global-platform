@@ -24,6 +24,7 @@ const db = {
         id: values[0], member_id: values[1], title: values[2], artist_name: values[3], file_name: values[4],
         blob_prefix: values[5], chunk_count: values[6], content_type: values[7], byte_size: values[8],
         duration_seconds: values[9], analysis_evidence: JSON.parse(values[12]), status: "queued",
+        rights_attested: true,
         created_at: new Date(), updated_at: new Date(),
       };
       projects.set(row.id, row);
@@ -94,7 +95,9 @@ blobs.get(`${ownerId}/${id}/parts/001`).metadata.size = 1;
 assert.equal((await json(analysis)).status, 409, "inconsistent metadata cannot finalize");
 await put(1);
 assert.equal((await json({ ...analysis, rightsAttested: false })).status, 422);
-const first = await (await json(analysis)).json();
+const firstResponse = await json(analysis);
+const first = await firstResponse.json();
+assert.ok([200, 202].includes(firstResponse.status), JSON.stringify(first));
 await Promise.all(background);
 const replay = await (await json(analysis)).json();
 assert.equal(first.project.id, id);

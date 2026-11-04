@@ -60,7 +60,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: ${{ inputs.diagnose_song && '24' || '20' }}
       - name: Check HTTP audio and byte-range responses
         if: ${{ !inputs.diagnose_song }}
         run: node scripts/audio-endpoint-smoke.mjs
@@ -80,12 +80,8 @@ jobs:
         env:
           HALO_AUDIO_PROBE_ORIGIN: ${{ inputs.diagnostic_origin || vars.HALO_AUDIO_PROBE_ORIGIN }}
           HALO_AUDIO_PROBE_SONG_ID: ${{ inputs.song_id }}
-      - uses: actions/setup-node@v4
-        if: ${{ inputs.diagnose_song }}
-        with:
-          node-version: "24"
       - name: Check native Chrome playback on the public show
-        if: ${{ inputs.diagnose_song }}
+        if: ${{ !cancelled() && inputs.diagnose_song }}
         run: node scripts/dreamweaver-live-browser.mjs
         env:
           HALO_AUDIO_PROBE_ORIGIN: ${{ inputs.diagnostic_origin || vars.HALO_AUDIO_PROBE_ORIGIN }}

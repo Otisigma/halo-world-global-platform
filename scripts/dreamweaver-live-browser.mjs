@@ -173,5 +173,5 @@ try {
     chrome.kill("SIGTERM");
     await Promise.race([stopped, delay(5000)]);
   }
-  await rm(profile, { recursive: true, force: true });
+  await rm(profile, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
 }

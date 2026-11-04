@@ -95,13 +95,13 @@
     return `<div class="featured-hero-card">
       <div class="featured-hero-art release-artwork-frame" data-artwork-frame><img class="release-artwork-image" src="${escapeHtml(artworkSrc)}" alt="${escapeHtml(`${hero.title} cover artwork`)}" data-release-artwork data-artwork-fallback="${escapeHtml(fallbackArtwork)}" data-artwork-badge="${escapeHtml(fallbackArtworkBadge)}"><span class="featured-hero-rank">#${escapeHtml(hero.rank || 1)}</span></div>
       <div class="featured-hero-copy" data-halo-guide-scope>
-        <p class="featured-hero-kicker" tabindex="0" data-halo-guide="This release leads the Living Chart on live fan signals — listens, votes and release-room opens. Quick listen without leaving the page." data-halo-guide-title="#${escapeHtml(hero.rank || 1)} Fan voted" data-halo-guide-action="quick-listen"><span class="featured-hero-pulse" aria-hidden="true"></span><span>Chart leader · Signal score</span><span data-featured-hero-votes>${votes} ${votes === 1 ? "vote" : "votes"}</span></p>
+        <p class="featured-hero-kicker" tabindex="0" data-halo-guide="This release leads the chart response using recorded listening clicks, votes and release-room opens. Counts are loaded from the chart API, not a real-time feed." data-halo-guide-title="HALO activity chart" data-halo-guide-action="quick-listen"><span>Chart leader · Signal score</span><span data-featured-hero-votes>${votes} ${votes === 1 ? "vote" : "votes"}</span></p>
         <h2 class="featured-hero-title">${escapeHtml(hero.title)}</h2>
         <p class="featured-hero-artist">${escapeHtml(hero.artist)}</p>
         <div class="featured-hero-actions">
           ${playAction}
           ${listenAction}
-          <button class="action tertiary" type="button" data-featured-vote="${escapeHtml(hero.id)}" data-halo-guide="One vote per listener per day pushes this release up the Living Chart and toward #1 rotation." data-halo-guide-title="Vote">Vote ▲</button>
+          <button class="action tertiary" type="button" data-featured-vote="${escapeHtml(hero.id)}" data-halo-guide="Submit a vote through the existing chart service. Votes are limited to one per listener per day." data-halo-guide-title="Vote">Vote ▲</button>
         </div>
         <p class="featured-hero-status" data-featured-hero-status role="status" aria-live="polite">${queue.length > 1 && playerReady ? "Press play and the chart keeps playing in order." : ""}</p>
       </div>

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
+import vm from "node:vm";
 
 const root = resolve(import.meta.dirname, "..");
 const [page, client, styles, catalogApi, chartApi] = await Promise.all([
@@ -106,5 +107,94 @@ for (const selector of ["player-track-info", "player-cover-art", "player-meta", 
   assert.match(styles, new RegExp(`\\.${selector} \\{`), `floating player bar must style .${selector}`);
 }
 assert.match(styles, /\.chart-play/, "chart rows must style their delegated play control");
+
+// Catalog metadata and feedback must come from supplied data, never demo values.
+{
+  const context = vm.createContext({
+    URL,
+    window: { location: { origin: "https://halo.test" } },
+    APPROVED_RELEASE_STATUSES: new Set(["passed", "published"]),
+    state: { releases: [], query: "", genre: "all", sort: "newest", chartSort: "signal" },
+    releaseMatchesRoom: () => true,
+    logMusicIssue() {}
+  });
+  for (const name of ["escapeHtml", "safeUrl", "isApprovedRelease", "catalogState", "catalogMetadataMarkup", "hasChartActivity", "catalogFeedbackMarkup", "chartSignal", "isChartRelease", "rankedReleases", "filteredReleases"]) {
+    const source = client.match(new RegExp(`  function ${name}\\([^\\n]*\\) \\{[\\s\\S]*?\\n  \\}`))?.[0];
+    assert.ok(source, `${name} must be available for behavioral checks`);
+    vm.runInContext(source, context);
+  }
+  const metadata = context.catalogMetadataMarkup({
+    albumTitle: '<img src=x onerror="alert(1)">',
+    genres: ["R&B", "Soul"], duration: "3:42", bpm: 96, musicalKey: "F minor"
+  });
+  assert.match(metadata, /&lt;img src=x onerror=&quot;alert\(1\)&quot;&gt;/);
+  assert.doesNotMatch(metadata, /<img/);
+  for (const value of ["Collection", "Label", "R&amp;B · Soul", "3:42", "96 BPM", "F minor"]) assert.ok(metadata.includes(value));
+  const unknown = context.catalogMetadataMarkup({ bpm: null });
+  assert.equal((unknown.match(/Not supplied/g) || []).length, 6);
+  assert.doesNotMatch(context.catalogMetadataMarkup({ bpm: -10 }), /-10 BPM/);
+  assert.match(context.catalogMetadataMarkup({ catalog: { albumTitle: "Catalog collection", genre: "Jazz" } }), /Catalog collection[\s\S]*Jazz/);
+  for (const activity of [undefined, {}, { recentListens: 1 }, { recentListens: "5", recentOpens: 0, previousListens: 0, previousOpens: 0 }, { recentListens: -1, recentOpens: 0, previousListens: 0, previousOpens: 0 }, { recentListens: 0, recentOpens: 0, previousListens: 0, previousOpens: 0 }]) {
+    assert.equal(context.hasChartActivity({ chartActivity: activity }), false);
+    assert.match(context.catalogFeedbackMarkup({ chartActivity: activity }), /No recorded chart activity available/);
+  }
+  const chartActivity = { recentListens: 5, recentOpens: 2, previousListens: 0, previousOpens: 0 };
+  assert.match(context.catalogFeedbackMarkup({ chartActivity }), /5 listen exits · 2 release-room opens/);
+  for (const value of ["", "  ", undefined, null, "javascript:alert(1)", "https://user@halo.test/track.mp3"]) assert.equal(context.safeUrl(value), "");
+  assert.equal(context.safeUrl("/audio/song.mp3"), "https://halo.test/audio/song.mp3");
+  assert.equal(context.isApprovedRelease({ status: "published", isLiveVisible: false }), false);
+  assert.equal(context.isApprovedRelease({ status: "draft" }), false);
+  const release = { id: "recorded", title: "Recorded", artist: "Artist", status: "published", isChartEligible: true, genres: [], albumTitle: "Collection name", chartActivity };
+  context.state.releases = [release, { ...release, id: "unmeasured", chartActivity: undefined }];
+  assert.deepEqual(Array.from(context.rankedReleases(), item => item.id), ["recorded"], "unmeasured releases must not be ranked by freshness");
+  context.state.query = "collection name";
+  assert.equal(context.filteredReleases().length, 2, "collection metadata must be searchable");
+  context.state.genre = "jazz";
+  assert.equal(context.filteredReleases().length, 0, "search must respect the genre filter");
+
+  const node = () => ({ innerHTML: "", textContent: "", hidden: false });
+  Object.assign(context, {
+    elements: { grid: node(), results: node(), reset: node(), count: node() },
+    document: { querySelector: () => null },
+    player: { syncButtons() {} },
+    wireArtwork() {},
+    releaseArtwork: () => ({ src: "/assets/releases/halo-premium-placeholder.svg", fallback: "/assets/releases/halo-premium-placeholder.svg" }),
+    availabilitySummary: () => ({ badge: "STANDBY" }),
+    releaseDossier: () => [],
+    formatReleaseDate: () => "",
+    trackStreamUrl: () => "",
+    artworkAttributes: () => "",
+    releaseMeta: () => "",
+    releaseStoryline: () => "",
+    dossierItemMarkup: () => "",
+    releaseActions: () => "",
+    resetCatalogFilters() {}
+  });
+  vm.runInContext(client.match(/  function renderGrid\(\) \{[\s\S]*?\n  \}/)[0], context);
+  context.renderGrid();
+  assert.match(context.elements.grid.innerHTML, /No matching releases/);
+  assert.equal(context.elements.results.textContent, "Showing 0 of 2 releases");
+  assert.equal(context.elements.reset.hidden, false);
+  context.state.releases = [];
+  context.renderGrid();
+  assert.match(context.elements.grid.innerHTML, /No published releases available yet/);
+  assert.doesNotMatch(context.elements.grid.innerHTML, /Clear filters/);
+  context.state.releases = [{ ...release, title: "<script>unsafe</script>", artist: 'Artist "name"' }];
+  context.state.query = "";
+  context.state.genre = "all";
+  context.renderGrid();
+  assert.match(context.elements.grid.innerHTML, /<h3>&lt;script&gt;unsafe&lt;\/script&gt;<\/h3>/);
+  assert.match(context.elements.grid.innerHTML, /Collection name/);
+  assert.match(context.elements.grid.innerHTML, /In-page preview unavailable/);
+  assert.doesNotMatch(context.elements.grid.innerHTML, /<script>|src=""|Editorial pick|card-number/i);
+  assert.equal(context.elements.results.textContent, "Showing 1 of 1 releases");
+  assert.equal(context.elements.reset.hidden, true);
+}
+assert.match(page, /catalog-skip-link[\s\S]*href="#allReleasesTitle"/);
+assert.match(page, /id="catalogResults" role="status"/);
+assert.match(page, /Label, ratings, votes, and subscriber feedback are not supplied/);
+assert.match(client, /elements\.reset\?\.addEventListener\("click", resetCatalogFilters\)/);
+assert.doesNotMatch(client, /Editorial pick|class="card-number"/, "ordinary releases must not imply editorial endorsement or chart rank");
+assert.match(styles, /prefers-reduced-motion: reduce/);
 
 console.log("Music chart contracts passed.");

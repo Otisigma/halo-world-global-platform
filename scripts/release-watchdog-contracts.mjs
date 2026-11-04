@@ -4,13 +4,16 @@ import { metadataTemplate, planReleaseRepairs, inspectReleaseAssets, createInfra
   healCatalogRelease, releaseWatchdogDiagnostics, WATCHDOG_ROUTES } from "../netlify/lib/release-conveyor-watchdog.mjs";
 import { processCatalogRelease } from "../netlify/lib/release-conveyor-service.mjs";
 import { serveMedia } from "../netlify/functions/videos.mjs";
+import { canPrepareRadio, proposedRadioRoom } from "../netlify/lib/radio-preparation.mjs";
+import { buildMasterObjectKey } from "../netlify/lib/direct-upload-storage.mjs";
 
 const song = { id: "song", owner_member_id: "creator", title: "Signal", artist_name: "Artist", genre: "Soul",
   isrc: "GB-AAA-26-00001", rights_status: "cleared", artwork_url: "/cover.jpg",
-  lyrics_text: "[00:15] The room goes quiet", updated_at: "2026-10-15T10:00:00Z", metadata_issues: [] };
-const master = { id: "master", song_id: song.id, version_type: "sale_master", audio_url: "/master.wav",
+  broadcast_requested: true, lyrics_text: "[00:15] The room goes quiet", updated_at: "2026-10-15T10:00:00Z", metadata_issues: [] };
+const master = { id: "master", song_id: song.id, version_type: "sale_master", audio_url: "/api/song-catalog/audio?versionId=master",
   mastering_status: "approved", duration_seconds: 180, video_url: "/loop.mp4", audio_byte_size: 123,
-  audio_blob_prefix: "creator/master/upload/parts/", updated_at: song.updated_at };
+  audio_blob_prefix: "creator/master/upload/parts/", audio_chunk_count: 1, audio_content_type: "audio/wav",
+  status: "active", updated_at: song.updated_at };
 const radio = { id: "radio", song_id: song.id, version_type: "radio_edit", audio_url: "",
   mastering_status: "not_started", updated_at: song.updated_at };
 const versions = [master, radio];
@@ -19,12 +22,44 @@ assert.equal(template.isrc, "GBAAA2600001");
 assert.deepEqual(RELEASE_AGENT_INTENT.stages, RELEASE_STAGES);
 assert(RELEASE_AGENT_INTENT.guards.includes("never_infer_rights"));
 assert.deepEqual(planReleaseRepairs(song, versions).actions, [{ type: "auto_queue_radio", versionId: radio.id,
-  targetLufs: -16, targetTruePeak: -1, sourceVersionId: master.id, sourceAudioUrl: master.audio_url }]);
+  targetLufs: -16, targetTruePeak: -1, sourceVersionId: master.id, sourceAudioUrl: master.audio_url,
+  proposedRoom: "chill", approvalRequired: true }]);
+for (const intent of [false, undefined, "true", 1]) {
+  assert.deepEqual(planReleaseRepairs({ ...song, broadcast_requested: intent }, versions).actions, [],
+    "only saved explicit boolean intent permits radio preparation");
+}
+for (const rights of ["needs_review", "disputed", ""]) {
+  assert.deepEqual(planReleaseRepairs({ ...song, rights_status: rights }, versions).actions, []);
+}
+for (const [genre, room] of [["Deep House", "club"], ["Afro House", "club"], ["Hip-Hop", "club"],
+  ["Neo-Soul", "chill"], ["unknown", ""], ["", ""], ["trapdoors", ""], ["warehouse rock", ""]]) {
+  assert.equal(proposedRadioRoom(genre), room);
+}
+assert.equal(planReleaseRepairs({ ...song, genre: "unknown" }, versions).actions[0].proposedRoom, "");
+for (const changes of [{ status: "archived" }, { audio_blob_prefix: "foreign/master/upload/parts/" },
+  { audio_blob_prefix: "creator/other/upload/parts/" }, { audio_blob_prefix: "" }, { audio_chunk_count: 0 },
+  { audio_byte_size: 0 }, { audio_content_type: "text/html" },
+  { audio_storage_key: "foreign/master.wav" },
+  { audio_url: "https://storage.test/private?X-Amz-Signature=private" },
+  { duration_seconds: Infinity }]) {
+  assert.equal(canPrepareRadio(song, [{ ...master, ...changes }]), false);
+}
+const objectMaster = { ...master, audio_blob_prefix: "", audio_chunk_count: 0,
+  audio_storage_key: buildMasterObjectKey({ ownerMemberId: song.owner_member_id,
+    songId: song.id, versionId: master.id, uploadId: "upload", filename: "master.wav" }) };
+assert.equal(canPrepareRadio(song, [objectMaster]), true, "owned direct-storage master can queue separate preparation");
+assert.equal(canPrepareRadio(song, [{ ...objectMaster, audio_blob_prefix: master.audio_blob_prefix }]), false,
+  "ambiguous mixed storage references must not select an unverified source");
+assert.equal(canPrepareRadio({ ...song, owner_member_id: "foreign" }, [objectMaster]), false);
 assert.match(planReleaseRepairs(song, [master]).actions[0].versionId, /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
 for (const changes of [{ mastering_status: "queued" }, { mastering_status: "in_progress" },
   { mastering_status: "review" }, { mastering_status: "approved" }, { audio_url: "/existing.wav" }]) {
   assert.equal(planReleaseRepairs(song, [master, { ...radio, ...changes }]).actions.length, 0,
     "never overwrite a started radio lane or uploaded edit");
+}
+for (const changes of [{ mastering_status: "review" }, { audio_url: "/existing-clean.wav" }]) {
+  assert.equal(planReleaseRepairs(song, [master, radio, { ...radio, id: "clean",
+    version_type: "clean", ...changes }]).actions.length, 0, "preserve user-supplied clean edits and review work");
 }
 for (const changes of [{ mastering_status: "review" }, { duration_seconds: 0 }, { audio_url: "" }, { song_id: "foreign" }]) {
   assert.equal(planReleaseRepairs(song, [{ ...master, ...changes }, radio]).actions.length, 0);
@@ -119,6 +154,11 @@ const routes = await Promise.all(WATCHDOG_ROUTES.map(check));
 const diagnostics = await releaseWatchdogDiagnostics({ song, versions }, { repairs: [], rightsSuggestion: null }, check, routes);
 assert(diagnostics.issues.some(issue => issue.field === "route" && issue.message.includes("/finish-house/")));
 assert.equal(diagnostics.intent, RELEASE_AGENT_INTENT);
+const unknownGenre = await releaseWatchdogDiagnostics({ song: { ...song, genre: "unknown" }, versions },
+  { repairs: [], rightsSuggestion: null }, check);
+assert.equal(unknownGenre.radioPreparation.proposedRoom, "");
+assert.equal(unknownGenre.radioPreparation.approvalRequired, true);
+assert(unknownGenre.issues.some(issue => issue.field === "radio_room" && issue.message.includes("operator assignment")));
 
 let currentSong, currentVersions, stored, events, leaseValid, allowMutation;
 function reset({ metadataMissing = false, readyRadio = false } = {}) {
@@ -138,6 +178,9 @@ const db = { async sql(strings, ...values) {
     if (!leaseValid || !allowMutation || values[1] !== currentSong.owner_member_id) return [];
     const details = JSON.parse(values.find(value => typeof value === "string" && value.startsWith('{"type":')));
     if (details.type === "auto_queue_radio") {
+      assert.match(query, /song\.broadcast_requested = TRUE AND song\.rights_status = 'cleared'/);
+      assert.match(query, /master\.audio_byte_size = \?/);
+      assert.match(query, /COALESCE\(master\.audio_storage_key, ''\) = \?/);
       assert.match(query, /audio_url <> '' OR mastering_status <> 'not_started'/);
       let lane = currentVersions.find(version => version.id === details.versionId);
       if (!lane) {
@@ -155,7 +198,11 @@ const db = { async sql(strings, ...values) {
     events.push({ stage: "watchdog_repair", details });
     return [{ id: "audit" }];
   }
-  if (query.includes("FROM halo_song_catalog")) return values[0] === currentSong.id && values[1] === currentSong.owner_member_id ? [structuredClone(currentSong)] : [];
+  if (query.includes("AS source_updated_at") && query.includes("FROM halo_song_catalog")) {
+    assert.match(query, /TO_CHAR\(updated_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS\.US"Z"'\) AS updated_at/,
+      "preserve database timestamp precision for atomic repair guards");
+    return values[0] === currentSong.id && values[1] === currentSong.owner_member_id ? [structuredClone(currentSong)] : [];
+  }
   if (query.includes("FROM halo_song_versions")) return structuredClone(currentVersions);
   if (query.includes("INSERT INTO halo_release_conveyor (")) {
     if (stored?.lease_token) return [];

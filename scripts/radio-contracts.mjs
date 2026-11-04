@@ -1,4 +1,6 @@
 import { readFile } from "node:fs/promises";
+import assert from "node:assert/strict";
+import vm from "node:vm";
 import { extractId3Artwork, parseId3Metadata, titleFromFileName } from "../netlify/lib/audio-metadata.mjs";
 
 function safeHttpsUrl(value) {
@@ -66,6 +68,288 @@ const files = {
   haloTvMigration: await readFile(new URL("../netlify/database/migrations/20260812220000_add-ghost-to-me-halo-tv.sql", import.meta.url), "utf8"),
   audioMetadata: await readFile(new URL("../netlify/lib/audio-metadata.mjs", import.meta.url), "utf8")
 };
+
+async function verifyAudioHandler() {
+  const chunkBytes = 3 * 1024 * 1024;
+  const manualBlobPrefix = "member/manual-upload-123/parts/";
+  const catalogTrack = {
+    blob_key: "member/version/upload/parts/", chunk_count: 1, byte_size: 5,
+    content_type: "audio/mpeg", status: "preview", member_id: "member", actor_id: "actor",
+    release_id: "release", master_song_id: "song", audio_version_id: "audio",
+    rights_confirmed: true, duration_seconds: 120,
+    release_audio: { id: "audio", release_id: "release", owner_member_id: "member",
+      version_type: "radio_edit", blob_key: "member/version/upload/parts/", chunk_count: 1,
+      byte_size: 5, content_type: "audio/mpeg", duration_seconds: 120, rights_confirmed: true, status: "active" },
+    catalog_release: { id: "release", owner_member_id: "member", status: "published" },
+    catalog_song: { id: "song", owner_member_id: "member", status: "active",
+      pipeline_status: "published", rights_status: "cleared", broadcast_requested: true, explicit_lyrics: false },
+    catalog_version: { id: "version", song_id: "song", version_type: "radio_edit", status: "active",
+      mastering_status: "approved", clean_lyrics: false, duration_seconds: 120,
+      audio_blob_prefix: "member/version/upload/parts/", audio_chunk_count: 1, audio_byte_size: 5,
+      audio_content_type: "audio/mpeg" },
+    owner_membership: { member_id: "member", actor_id: "actor" }
+  };
+  function harness(track, parts = [Uint8Array.of(1, 2, 3, 4, 5)], missing = false) {
+    const reads = [];
+    const queries = [];
+    let plays = 0;
+    const sandbox = {
+      Response, URL, ReadableStream, Uint8Array, console: { error() {} },
+      cleanText: value => value || "",
+      getUser: async () => null,
+      getDatabase: async () => ({
+        async sql(strings) {
+          const query = strings.join("?");
+          queries.push(query);
+          if (query.includes("UPDATE")) { plays += 1; return []; }
+          return track ? [track] : [];
+        }
+      }),
+      getStore: ({ name, consistency }) => {
+        assert.equal(consistency, "strong");
+        return { async get(key, options) {
+          reads.push({ name, key });
+          assert.equal(options.type, "arrayBuffer");
+          return missing ? null : parts[Number(key.slice(-3))]?.buffer;
+        } };
+      }
+    };
+    vm.runInNewContext(files.audio.replace(/^import .*;\n/gm, "")
+      .replace("export default async function", "async function")
+      .replace("export const config", "const config")
+      + "\nglobalThis.handler = radioAudioHandler;", sandbox);
+    return {
+      reads, queries, get plays() { return plays; },
+      request: (method = "GET", range) => sandbox.handler(new Request("https://halo.world/api/radio/audio?id=track", {
+        method, headers: range ? { Range: range } : {}
+      }))
+    };
+  }
+  const fresh = () => structuredClone(catalogTrack);
+  const catalog = harness(fresh());
+  const full = await catalog.request();
+  assert.equal(full.status, 200);
+  assert.deepEqual(Array.from(new Uint8Array(await full.arrayBuffer())), [1, 2, 3, 4, 5]);
+  assert.deepEqual(catalog.reads.map(read => read.name), ["halo-song-catalog-audio"]);
+  assert.equal(catalog.plays, 1);
+  assert.ok(catalog.queries[0].includes("audio.id = track.audio_version_id"));
+  assert.ok(catalog.queries[0].includes("release.id = track.release_id"));
+  assert.ok(catalog.queries[0].includes("song.id = track.master_song_id"));
+  assert.ok(catalog.queries[0].includes("version.song_id = track.master_song_id"));
+  assert.ok(catalog.queries[0].includes("version.audio_blob_prefix = track.blob_key"));
+  assert.ok(catalog.queries[0].includes("version.version_type = audio.version_type"));
+  assert.ok(catalog.queries[0].includes("membership.member_id = song.owner_member_id"));
+  assert.ok(catalog.queries[0].includes("track.reviewed_at, track.reviewed_by_member_id"));
+  assert.ok(!JSON.stringify([...full.headers]).includes(catalogTrack.blob_key));
+
+  for (const method of ["HEAD", "GET"]) {
+    const ranged = harness(fresh());
+    const response = await ranged.request(method, "bytes=1-3");
+    assert.equal(response.status, 206);
+    assert.equal(response.headers.get("content-range"), "bytes 1-3/5");
+    assert.equal(response.headers.get("content-length"), "3");
+    assert.deepEqual(Array.from(new Uint8Array(await response.arrayBuffer())), method === "HEAD" ? [] : [2, 3, 4]);
+    assert.equal(ranged.reads.length, method === "HEAD" ? 0 : 1);
+    assert.equal(ranged.plays, 0);
+  }
+  for (const [range, bytes] of [["bytes=-2", [4, 5]], ["bytes=3-", [4, 5]], ["bytes=0-1", [1, 2]]]) {
+    const ranged = harness(fresh());
+    const response = await ranged.request("GET", range);
+    assert.equal(response.status, 206);
+    assert.deepEqual(Array.from(new Uint8Array(await response.arrayBuffer())), bytes);
+    assert.equal(ranged.plays, range === "bytes=0-1" ? 1 : 0);
+  }
+  const spanningTrack = fresh();
+  for (const row of [spanningTrack, spanningTrack.release_audio]) {
+    row.byte_size = chunkBytes + 3;
+    row.chunk_count = 2;
+  }
+  spanningTrack.catalog_version.audio_byte_size = chunkBytes + 3;
+  spanningTrack.catalog_version.audio_chunk_count = 2;
+  const firstPart = new Uint8Array(chunkBytes);
+  firstPart[chunkBytes - 1] = 7;
+  const spanning = harness(spanningTrack, [firstPart, Uint8Array.of(8, 9, 10)]);
+  const across = await spanning.request("GET", `bytes=${chunkBytes - 1}-${chunkBytes + 1}`);
+  assert.equal(across.status, 206);
+  assert.deepEqual(Array.from(new Uint8Array(await across.arrayBuffer())), [7, 8, 9]);
+  assert.deepEqual(spanning.reads.map(read => [read.name, read.key.slice(-3)]),
+    [["halo-song-catalog-audio", "000"], ["halo-song-catalog-audio", "001"]]);
+
+  const catalogChunkBytes = 4 * 1024 * 1024;
+  const sizedTrack = (byteSize, chunkCount) => {
+    const track = fresh();
+    for (const row of [track, track.release_audio]) {
+      row.byte_size = byteSize;
+      row.chunk_count = chunkCount;
+    }
+    track.catalog_version.audio_byte_size = byteSize;
+    track.catalog_version.audio_chunk_count = chunkCount;
+    return track;
+  };
+  const catalogFirst = new Uint8Array(catalogChunkBytes);
+  catalogFirst[chunkBytes] = 6;
+  catalogFirst[catalogChunkBytes - 1] = 7;
+  const singleCatalog = harness(sizedTrack(catalogChunkBytes, 1), [catalogFirst]);
+  assert.equal((await singleCatalog.request("HEAD")).status, 200, "A single 4MiB catalog part passes preflight");
+  const singleFull = await singleCatalog.request();
+  assert.equal(singleFull.status, 200);
+  assert.equal((await singleFull.arrayBuffer()).byteLength, catalogChunkBytes);
+  const singleTail = await singleCatalog.request("GET", `bytes=${chunkBytes}-${chunkBytes}`);
+  assert.equal(singleTail.status, 206);
+  assert.deepEqual(Array.from(new Uint8Array(await singleTail.arrayBuffer())), [6]);
+
+  const catalogSecond = new Uint8Array(1024 * 1024);
+  catalogSecond.set([8, 9, 10]);
+  const fiveMiB = sizedTrack(5 * 1024 * 1024, 2);
+  const catalogBoundary = harness(fiveMiB, [catalogFirst, catalogSecond]);
+  const boundaryRange = await catalogBoundary.request("GET", `bytes=${catalogChunkBytes - 1}-${catalogChunkBytes + 1}`);
+  assert.equal(boundaryRange.status, 206);
+  assert.deepEqual(Array.from(new Uint8Array(await boundaryRange.arrayBuffer())), [7, 8, 9]);
+  assert.deepEqual(catalogBoundary.reads.map(read => read.key.slice(-3)), ["000", "001"]);
+  const beforeBoundary = harness(fiveMiB, [catalogFirst, catalogSecond]);
+  const threeMiBRange = await beforeBoundary.request("GET", `bytes=${chunkBytes}-${chunkBytes}`);
+  assert.equal(threeMiBRange.status, 206);
+  assert.deepEqual(Array.from(new Uint8Array(await threeMiBRange.arrayBuffer())), [6],
+    "A range at 3MiB still reads the first 4MiB catalog part");
+  assert.deepEqual(beforeBoundary.reads.map(read => read.key.slice(-3)), ["000"]);
+  const secondPartOnly = harness(fiveMiB, [catalogFirst, catalogSecond]);
+  const afterBoundary = await secondPartOnly.request("GET", `bytes=${catalogChunkBytes}-${catalogChunkBytes + 1}`);
+  assert.equal(afterBoundary.status, 206);
+  assert.deepEqual(Array.from(new Uint8Array(await afterBoundary.arrayBuffer())), [8, 9]);
+  assert.deepEqual(secondPartOnly.reads.map(read => read.key.slice(-3)), ["000", "001"]);
+  const manualBoundaryTrack = structuredClone(spanningTrack);
+  manualBoundaryTrack.blob_key = manualBlobPrefix;
+  manualBoundaryTrack.master_song_id = null;
+  manualBoundaryTrack.catalog_version = manualBoundaryTrack.catalog_song = manualBoundaryTrack.owner_membership = null;
+  const manualBoundary = harness(manualBoundaryTrack, [firstPart, Uint8Array.of(8, 9, 10)]);
+  const manualAcross = await manualBoundary.request("GET", `bytes=${chunkBytes - 1}-${chunkBytes + 1}`);
+  assert.equal(manualAcross.status, 206);
+  assert.deepEqual(Array.from(new Uint8Array(await manualAcross.arrayBuffer())), [7, 8, 9]);
+  assert.ok(manualBoundary.reads.every(read => read.name === "halo-radio-submissions"));
+
+  const invalidChanges = [
+    ["member_id", "another-member"], ["actor_id", "another-actor"],
+    ["release_id", "another-release"], ["master_song_id", "another-song"],
+    ["audio_version_id", "another-audio"], ["blob_key", "arbitrary/parts/"],
+    ["rights_confirmed", false], ["byte_size", 6], ["chunk_count", 2], ["duration_seconds", 121],
+    ["content_type", "audio/wav"], ["catalog_song", null], ["catalog_version", null],
+    ["release_audio", null], ["catalog_release", null], ["owner_membership", null],
+    ["release_audio.owner_member_id", "another-member"], ["release_audio.release_id", "another-release"],
+    ["release_audio.status", "archived"], ["release_audio.rights_confirmed", false],
+    ["release_audio.version_type", "clean"], ["release_audio.blob_key", "another/parts/"],
+    ["release_audio.chunk_count", 2], ["release_audio.byte_size", 6],
+    ["release_audio.duration_seconds", 121], ["release_audio.content_type", "audio/wav"],
+    ["catalog_release.owner_member_id", "another-member"], ["catalog_release.status", "draft"],
+    ["catalog_song.owner_member_id", "another-member"], ["catalog_song.status", "archived"],
+    ["catalog_song.pipeline_status", "draft"], ["catalog_song.rights_status", "needs_review"],
+    ["catalog_song.broadcast_requested", false], ["catalog_song.explicit_lyrics", true],
+    ["catalog_version.song_id", "another-song"], ["catalog_version.status", "archived"],
+    ["catalog_version.mastering_status", "review"], ["catalog_version.version_type", "sale_master"],
+    ["catalog_version.audio_blob_prefix", "another/parts/"], ["catalog_version.audio_byte_size", 0],
+    ["catalog_version.audio_chunk_count", 0], ["catalog_version.duration_seconds", 0],
+    ["catalog_version.audio_content_type", "text/html"],
+    ["owner_membership.member_id", "another-member"], ["owner_membership.actor_id", ""]
+  ];
+  for (const [path, value] of invalidChanges) {
+    const track = fresh();
+    const keys = path.split(".");
+    (keys.length === 1 ? track : track[keys[0]])[keys.at(-1)] = value;
+    const invalid = harness(track);
+    const response = await invalid.request();
+    assert.equal(response.status, 404, `Reject invalid catalog provenance: ${path}`);
+    assert.equal(invalid.reads.length, 0, `No store fallback: ${path}`);
+    assert.equal(invalid.plays, 0);
+    assert.ok(!(await response.text()).includes(catalogTrack.blob_key));
+  }
+  for (const type of ["radio_edit", "clean"]) {
+    const clean = fresh();
+    clean.catalog_song.explicit_lyrics = true;
+    clean.catalog_version.clean_lyrics = true;
+    clean.catalog_version.version_type = clean.release_audio.version_type = type;
+    const response = await harness(clean).request("HEAD");
+    assert.equal(response.status, 200, "Explicit songs require an explicitly clean-approved version");
+    clean.catalog_version.clean_lyrics = false;
+    assert.equal((await harness(clean).request("HEAD")).status, 404, "A clean label alone is not approval");
+  }
+  const missing = harness(fresh(), undefined, true);
+  assert.equal((await missing.request("GET", "bytes=0-1")).status, 500);
+  assert.deepEqual(missing.reads.map(read => read.name), ["halo-song-catalog-audio"]);
+  const invalidRange = harness(fresh());
+  assert.equal((await invalidRange.request("GET", "bytes=6-7")).status, 416);
+  assert.equal(invalidRange.reads.length, 0);
+
+  for (const linked of [false, true]) {
+    const track = fresh();
+    track.blob_key = manualBlobPrefix;
+    track.master_song_id = null;
+    track.catalog_version = track.catalog_song = track.owner_membership = null;
+    if (!linked) track.audio_version_id = track.release_id = track.release_audio = track.catalog_release = null;
+    // A user URL cannot override the owned manual uploader namespace.
+    track.source_url = "/api/song-catalog/audio?versionId=untrusted";
+    const manual = harness(track);
+    const response = await manual.request();
+    assert.equal(response.status, 200);
+    assert.equal((await response.arrayBuffer()).byteLength, 5);
+    assert.deepEqual(manual.reads.map(read => read.name), ["halo-radio-submissions"]);
+    const range = await manual.request("GET", "bytes=2-4");
+    assert.equal(range.status, 206);
+    assert.deepEqual(Array.from(new Uint8Array(await range.arrayBuffer())), [3, 4, 5]);
+    assert.equal((await manual.request("HEAD")).status, 200);
+    assert.ok(manual.reads.every(read => read.name === "halo-radio-submissions"));
+  }
+  for (const status of ["preview", "rotation"]) {
+    const linkedManual = { ...fresh(), status, blob_key: manualBlobPrefix,
+      audio_version_id: null, catalog_version: null, release_audio: null,
+      reviewed_at: "2026-10-25T12:00:00Z", reviewed_by_member_id: "operator" };
+    linkedManual.catalog_song.broadcast_requested = false;
+    const manual = harness(linkedManual);
+    const response = await manual.request();
+    assert.equal(response.status, 200, `Song-linked manual ${status} keeps its original radio-store audio`);
+    assert.equal((await response.arrayBuffer()).byteLength, 5);
+    assert.deepEqual(manual.reads.map(read => read.name), ["halo-radio-submissions"]);
+    assert.equal((await manual.request("HEAD")).status, 200);
+  }
+  for (const change of [
+    { catalog_version: null },
+    { catalog_version: { ...fresh().catalog_version, status: "archived" } },
+    { catalog_version: null, blob_key: "member/version/replaced-upload/parts/" },
+    { catalog_version: null, blob_key: "member/version/parts/nested/" },
+    { catalog_version: null, blob_key: "member/short/parts/" },
+    { catalog_version: null, blob_key: "another-member/manual-upload-123/parts/" },
+    { catalog_version: { ...fresh().catalog_version, audio_blob_prefix: manualBlobPrefix }, blob_key: manualBlobPrefix }
+  ]) {
+    const invalid = harness({ ...fresh(), ...change });
+    assert.equal((await invalid.request()).status, 404, "Missing, archived, replaced or malformed catalog audio never falls back");
+    assert.equal(invalid.reads.length, 0);
+  }
+  const rotation = fresh();
+  rotation.status = "rotation";
+  for (const [reviewedAt, reviewedBy] of [[null, null], ["2026-10-25T12:00:00Z", null], [null, "operator"]]) {
+    const unreviewed = harness({ ...rotation, reviewed_at: reviewedAt, reviewed_by_member_id: reviewedBy });
+    for (const method of ["GET", "HEAD"]) {
+      assert.equal((await unreviewed.request(method)).status, 404, "Catalog rotation requires both persisted operator-review fields");
+    }
+    assert.equal(unreviewed.reads.length, 0);
+    assert.equal(unreviewed.plays, 0);
+  }
+  rotation.reviewed_at = "2026-10-25T12:00:00Z";
+  rotation.reviewed_by_member_id = "operator";
+  const rotated = await harness(rotation).request("HEAD");
+  assert.equal(rotated.status, 200);
+  assert.equal(rotated.headers.get("cache-control"), "public, max-age=3600");
+  const reviewedPlayback = harness(rotation);
+  const reviewedResponse = await reviewedPlayback.request();
+  assert.equal(reviewedResponse.status, 200);
+  assert.equal((await reviewedResponse.arrayBuffer()).byteLength, 5);
+  assert.deepEqual(reviewedPlayback.reads.map(read => read.name), ["halo-song-catalog-audio"]);
+  const manualRotation = { ...fresh(), blob_key: manualBlobPrefix, status: "rotation", master_song_id: null,
+    catalog_version: null, catalog_song: null, owner_membership: null };
+  const manualRotationResponse = await harness(manualRotation).request();
+  assert.equal(manualRotationResponse.status, 200, "Manual rotation playback does not acquire a catalog review gate");
+  assert.equal((await manualRotationResponse.arrayBuffer()).byteLength, 5);
+}
+
+await verifyAudioHandler();
 
 function synchsafe(value) {
   return [(value >> 21) & 0x7f, (value >> 14) & 0x7f, (value >> 7) & 0x7f, value & 0x7f];

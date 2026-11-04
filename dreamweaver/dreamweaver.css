@@ -518,6 +518,17 @@ body.show-ready .show-stage { opacity: 1; transform: scale(1); transition: opaci
   border-color: var(--acid);
   color: var(--acid);
 }
+.song-lobby__local-hint,
+.song-lobby__local-status {
+  margin: 12px 0 0;
+  color: #d5cebf;
+  font-size: 11px;
+  line-height: 1.7;
+}
+.song-lobby__local-status:empty { display: none; }
+.song-lobby__local-status[data-state="error"] { color: #ffb4a8; }
+.song-lobby__local-status[data-state="active"],
+.song-lobby__local-status[data-state="ready"] { color: var(--acid); }
 .song-lobby__source {
   color: var(--paper);
   font-size: 10px;

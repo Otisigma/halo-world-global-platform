@@ -7,7 +7,7 @@ import { metadataTemplate } from "./release-conveyor-watchdog.mjs";
 import { masterSourceIdentity } from "./halo-watchdog.mjs";
 
 export { RELEASE_STAGES };
-export const RELEASE_PIPELINE_VERSION = 4;
+export const RELEASE_PIPELINE_VERSION = 5;
 
 export function releaseFingerprint(song, versions, options = { humHz: 0 }) {
   const { updated_at, source_updated_at, ...metadata } = song;
@@ -40,7 +40,8 @@ export function validateRelease(song, versions) {
   if (!(master?.artwork_url || song.artwork_url)) issues.push(issue("artwork", "Upload final cover artwork."));
   if (song.sale_status === "for_sale" && !(Number(song.sale_price_cents) > 0)) issues.push(issue("price", "Set a sale price before the storefront handoff."));
   const radio = versions.find(version => ["radio_edit", "clean"].includes(version.version_type)
-    && version.song_id === song.id && version.audio_url && version.mastering_status === "approved" && Number(version.duration_seconds) > 0);
+    && version.song_id === song.id && version.audio_url && version.mastering_status === "approved"
+    && Number.isFinite(Number(version.duration_seconds)) && Number(version.duration_seconds) > 0);
   if (!radio) issues.push(issue("radio_master", "Upload a dedicated radio/clean edit, add its duration and approve its mastering.", "escalate"));
   for (const existing of Array.isArray(song.metadata_issues) ? song.metadata_issues : []) {
     if (existing.level === "required" && !issues.some(item => item.field === existing.field)) {
@@ -170,7 +171,8 @@ export async function runReleaseConveyor({ song, versions, previous, watchdog = 
       const audio = await ports.prepareAudio(song, versions, inputHash, options);
       audio.sourceIdentity = masterSourceIdentity(versions.find(version => version.version_type === "sale_master"));
       state.package.audio = audio;
-      return { summary: audio.summary, issues: audio.issues || [], repairs: audio.repairs || [] };
+      return { summary: audio.issues?.length ? audio.issues.map(item => item.message).join(" ") : audio.summary,
+        issues: audio.issues || [], repairs: audio.repairs || [] };
     });
     await stage("metadata_rights", async () => {
       const validation = validateRelease(song, versions);
@@ -184,7 +186,8 @@ export async function runReleaseConveyor({ song, versions, previous, watchdog = 
       const repairs = state.stages.flatMap(item => item.repairs || []);
       const council = councilDecision(issues, repairs);
       state.package.council = council;
-      return { summary: `Council: ${council.outcome}`, issues: [], outcome: council.outcome,
+      return { summary: `Council: ${council.outcome}${issues.length ? ` — Resolve: ${[...new Set(issues.map(item => item.field))].join(", ")}. See blocker actions below.` : ""}`,
+        issues: [], outcome: council.outcome,
         status: council.passed ? (repairs.length ? "repaired" : "passed") : "blocked" };
     });
     if (!state.package.council.passed) {
@@ -228,7 +231,9 @@ export async function runReleaseConveyor({ song, versions, previous, watchdog = 
     state.stages.push({ name: activeStage, status: "failed", issues: [
       issue(activeStage, state.status === "escalated"
         ? "Automatic recovery reached its limit. Check storage/database health, then retry from Song Catalog; your master is preserved."
-        : "This department is temporarily unavailable or the song changed. Automatic recovery is scheduled; you can also retry from Song Catalog.", state.status === "escalated" ? "escalate" : "retry"),
+        : activeStage === "audio_preflight"
+          ? "Sale-master storage is unavailable or incomplete. Check storage health; automatic recovery is scheduled, or retry from Song Catalog. A duplicate upload is not required."
+          : "This department is temporarily unavailable or the song changed. Automatic recovery is scheduled; you can also retry from Song Catalog.", state.status === "escalated" ? "escalate" : "retry"),
     ] });
   }
   state.receipt = receipt(state);

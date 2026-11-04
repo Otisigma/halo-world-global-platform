@@ -1,12 +1,36 @@
 import { getStore } from "@netlify/blobs";
 import { conditionReleaseWav, MAX_PREFLIGHT_BYTES } from "./release-audio.mjs";
 import { directUploadConfig, isOwnedMasterObjectKey, presignObjectUrl } from "./direct-upload-storage.mjs";
+import { safeAssetUrl } from "./halo-watchdog.mjs";
 
 const sourceStore = () => getStore({ name: "halo-song-catalog-audio", consistency: "strong" });
 const packageStore = () => getStore({ name: "halo-release-packages", consistency: "strong" });
 const CHUNK_BYTES = 4 * 1024 * 1024;
-const audioIssue = message => ({ field: "sale_master_audio", message, outcome: "escalate" });
+const audioIssue = (message, field = "sale_master_audio") => ({ field, message, outcome: "escalate" });
 const transientAudioError = message => Object.assign(new Error(message), { retryable: true });
+
+export function catalogMasterReadiness(song, versions) {
+  const masters = versions.filter(version => version.version_type === "sale_master");
+  const master = masters.length === 1 && masters[0].song_id === song.id
+    && (!masters[0].status || masters[0].status === "active") ? masters[0] : null;
+  const url = safeAssetUrl(master?.audio_url);
+  const parsed = url ? new URL(url, "https://halo.invalid") : null;
+  const archive = parsed && /(^|\.)(drive|docs)\.google\.com$/i.test(parsed.hostname);
+  const wrongVersion = parsed?.pathname === "/api/song-catalog/audio" && parsed.searchParams.get("versionId") !== master?.id;
+  const uploaded = Boolean(url && !archive && !wrongVersion);
+  const durationValid = Number.isFinite(Number(master?.duration_seconds)) && Number(master?.duration_seconds) > 0;
+  const masteringStatus = ["not_started", "queued", "in_progress", "review", "approved"].includes(master?.mastering_status)
+    ? master.mastering_status : "unknown";
+  const issues = [];
+  if (!master) {
+    issues.push({ field: "catalog", message: "Connect exactly one active canonical sale master to this song in Song Catalog.", outcome: "block" });
+  } else {
+    if (!uploaded) issues.push(audioIssue("Upload or link playable canonical Sale-master audio in Song Catalog. Local preview and Drive archive links do not supply catalog playback."));
+    if (!durationValid) issues.push(audioIssue("Save a finite, positive Sale-master duration in Song Catalog; an existing upload does not need to be uploaded again.", "sale_master_duration"));
+    if (masteringStatus !== "approved") issues.push(audioIssue("Review and approve sale-master mastering in Song Catalog. Conditioning alone is not mastering approval.", "mastering"));
+  }
+  return { master, uploaded, durationValid, masteringStatus, issues };
+}
 
 async function storageIO(work, message) {
   try {
@@ -84,15 +108,19 @@ export function createReleaseAudioPreparer({
 export const prepareReleaseAudio = createReleaseAudioPreparer();
 
 async function prepareAudio(song, versions, inputHash, options, readStore, writeStore) {
-  const master = versions.find(version => version.version_type === "sale_master");
+  const readiness = catalogMasterReadiness(song, versions);
+  const { master } = readiness;
   const report = { originalPreserved: true, sourceVersionId: master?.id || "",
-    sourceAudioUrl: master?.audio_url || "", summary: "Audio needs attention.", issues: [], repairs: [] };
-  if (!master?.audio_url || !(Number(master.duration_seconds) > 0)) {
-    report.issues.push(audioIssue("Upload the canonical sale master and add a valid duration."));
+    sourceAudioUrl: readiness.uploaded ? master.audio_url : "", summary: "Audio needs attention.", issues: readiness.issues, repairs: [] };
+  if (!master || !readiness.uploaded || !readiness.durationValid) return report;
+  if ((master.audio_storage_key && !isOwnedMasterObjectKey(master.audio_storage_key, {
+    ownerMemberId: song.owner_member_id, songId: song.id, versionId: master.id,
+  })) || (!master.audio_storage_key && master.audio_blob_prefix
+    && (!master.audio_blob_prefix.startsWith(`${song.owner_member_id}/${master.id}/`) || !master.audio_blob_prefix.endsWith("/parts/")))) {
+    report.issues.push(audioIssue("The saved master storage does not belong to this song/version. Review the catalog link; approval cannot override ownership.", "sale_master_storage"));
     return report;
   }
   const approved = master.mastering_status === "approved";
-  if (!approved) report.issues.push(audioIssue("Review and approve sale-master mastering in Song Catalog. Conditioning alone is not mastering approval."));
   if (!["audio/wav", "audio/x-wav"].includes(master.audio_content_type)) {
     report.summary = approved ? "Approved external master preserved; no automatic decoding or loudness claim." : "Mastering review required.";
     report.conditioning = "external_master";
@@ -116,7 +144,12 @@ async function prepareAudio(song, versions, inputHash, options, readStore, write
     return report;
   }
   if (!source) {
-    report.issues.push(audioIssue("Automatic conditioning requires an owned PCM WAV upload within 128 MB; link-only or larger masters need an external mastering review."));
+    report.issues.push(audioIssue("Verify the saved master upload size, chunk metadata and storage link in Song Catalog. Automatic conditioning requires an owned PCM WAV within 128 MB.", "sale_master_storage"));
+    return report;
+  }
+  if (approved && !options.humHz) {
+    report.summary = "Saved Sale-master mastering approval recognized; stored original preserved without reconditioning. No new loudness or mastering claim.";
+    report.conditioning = "approved_master";
     return report;
   }
   let conditioned;

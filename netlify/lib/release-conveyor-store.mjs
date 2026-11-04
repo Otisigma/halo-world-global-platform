@@ -5,8 +5,9 @@ import { retryReleaseWork } from "./release-conveyor-retry.mjs";
 export async function loadReleaseSubmission(db, ownerMemberId, songId) {
   const songs = await db.sql`
     SELECT id, owner_member_id, source_release_id, title, artist_name, album_title, genre,
-      isrc, upc, explicit_lyrics, rights_status, sale_status, sale_price_cents, currency,
-      artwork_url, lyrics_text, notes, metadata_issues, updated_at,
+      isrc, upc, explicit_lyrics, broadcast_requested, rights_status, sale_status, sale_price_cents, currency,
+      artwork_url, lyrics_text, notes, metadata_issues,
+      TO_CHAR(updated_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS updated_at,
       TO_CHAR(GREATEST(updated_at,
         (SELECT MAX(updated_at) FROM halo_song_versions WHERE song_id = halo_song_catalog.id))
         AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS source_updated_at
@@ -17,7 +18,7 @@ export async function loadReleaseSubmission(db, ownerMemberId, songId) {
   const versions = await db.sql`
     SELECT id, song_id, version_type, audio_url, audio_blob_prefix, audio_chunk_count,
       audio_storage_key, audio_content_type, audio_byte_size, audio_filename,
-      duration_seconds, mastering_status, artwork_url, video_url, promo_video_url, updated_at
+      duration_seconds, mastering_status, clean_lyrics, status, artwork_url, video_url, promo_video_url, updated_at
     FROM halo_song_versions
     WHERE song_id = ${songId} AND status = 'active'
     ORDER BY id

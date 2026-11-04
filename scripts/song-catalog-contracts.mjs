@@ -2,11 +2,14 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { runInNewContext } from "node:vm";
+import { stripTypeScriptTypes } from "node:module";
 import { sanitizeDreamweaverAssignedRoute } from "../lib/dreamweaver-storefront.js";
 import { buildDreamweaverSatellite } from "../lib/route-registry.js";
 import { pickCanonicalMaster, serializeMasterCopy } from "../netlify/lib/master-copy.mjs";
 import { attachPublicationHealthToSongs } from "../netlify/lib/song-publication-health.mjs";
 import { MASTER_UPLOAD_MAX_BYTES, MASTER_UPLOAD_URL_TTL_SECONDS, buildMasterObjectKey, directUploadConfig, isOwnedMasterObjectKey, presignObjectUrl, validateMasterUpload } from "../netlify/lib/direct-upload-storage.mjs";
+import { loadCatalogSignals } from "../netlify/lib/catalog-signals.mjs";
+import { catalogGuidance, renderCatalogGuidance } from "../song-catalog/catalog-guidance.js";
 
 const root = resolve(import.meta.dirname, "..");
 const read = path => readFile(resolve(root, path), "utf8");
@@ -42,6 +45,305 @@ const [page, client, styles, api, unifiedUploadApi, releaseCatalogApi, publicati
   read("netlify/database/migrations/20260929060000_add_song_version_audio_storage_key.sql")
 ]);
 const packageJson = JSON.parse(packageText);
+const signalsClient = await read("song-catalog/catalog-signals.js");
+const publicPage = await read("music/index.html");
+const publicClient = await read("music/music.js");
+{
+  const intentMigration = await read("netlify/database/migrations/20261025150000_song_broadcast_intent.sql");
+  assert.match(intentMigration, /ADD COLUMN IF NOT EXISTS broadcast_requested BOOLEAN NOT NULL DEFAULT FALSE/);
+  assert.match(schema, /broadcastRequested: boolean\("broadcast_requested"\)\.notNull\(\)\.default\(false\)/);
+  assert.match(api, /broadcastRequested: song\.broadcastRequested/);
+  assert.match(page, /id="broadcastRequested" type="checkbox"/);
+  assert.match(client, /broadcastRequested:\$\("#broadcastRequested"\)\.checked/);
+  assert.match(client, /\$\("#broadcastRequested"\)\.checked=song\.broadcastRequested===true/);
+  const review = api.slice(api.indexOf("export async function runDreamweaverReview("), api.indexOf("type CatalogExecutor"));
+  assert.match(review, /await reconcilePublishedSong\(await getDatabase\(\), \{ songId, ownerMemberId \}\)/,
+    "catalog confirmations promptly reconcile published links using canonical owner-scoped records");
+  assert.match(review, /Publication links pending; scheduled recovery will retry/,
+    "publication outages do not fail a saved catalog confirmation");
+  const source = stripTypeScriptTypes(api.slice(api.indexOf("async function saveSong("), api.indexOf("async function createAlternateVersion(")));
+  let saved;
+  const save = runInNewContext(`${source}\nsaveSong;`, {
+    db: { update: () => ({ set: values => {
+      saved = values;
+      return { where: () => ({ returning: async () => [{ id: "song" }] }) };
+    } }) },
+    songs: {}, songVersions: {}, cleanId: value => value, cleanText: value => value || "",
+    cleanEnum: (value, allowed, fallback) => value || fallback, RIGHTS_STATUSES: new Set(), SALE_STATUSES: new Set(),
+    and: (...values) => values, eq: (...values) => values, runDreamweaverReview: async () => {},
+    json: body => body, Date,
+  });
+  for (const requested of [true, false, "true", 1]) {
+    await save("owner", { songId: "song", artistName: "Artist", title: "Song", broadcastRequested: requested });
+    assert.equal(saved.broadcastRequested, requested === true, "only a boolean records explicit broadcast intent");
+  }
+  await save("owner", { songId: "song", artistName: "Artist", title: "Song" });
+  assert.equal(Object.hasOwn(saved, "broadcastRequested"), false, "partial saves preserve existing intent");
+}
+assert.doesNotMatch(publicPage, /localVault|sharedCatalogFrame|embed=shop/);
+assert.doesNotMatch(publicClient, /Versions mapped|Sale-enabled versions|force-push-track|set_pipeline_stage/);
+assert.match(page, /id="artistWorkspace" hidden/);
+{
+  const workspaceStart = page.indexOf('<div id="artistWorkspace" hidden>');
+  let workspaceDepth = 0;
+  let workspace = "";
+  for (const tag of page.slice(workspaceStart).matchAll(/<\/?div\b[^>]*>/g)) {
+    workspaceDepth += tag[0].startsWith("</") ? -1 : 1;
+    if (workspaceDepth === 0) {
+      workspace = page.slice(workspaceStart, workspaceStart + tag.index + tag[0].length);
+      break;
+    }
+  }
+  assert.ok(workspace, "artist workspace has a matching closing boundary");
+  assert.ok(workspace.includes('id="catalogGuidance"'), "Mission Control stays inside the authenticated workspace");
+  const privateBoards = [
+    ["catalogSignalsDisclosure", "catalogSignalsTitle", "Private catalog signals", ["refreshCatalogSignals", "catalogSignals"]],
+    ["publicationHealthDisclosure", "publicationBoardTitle", "Publication health desk", ["publicationBoard"]],
+  ];
+  for (const [id, titleId, label, surfaces] of privateBoards) {
+    const section = page.match(new RegExp(`<section class="publication-board" aria-labelledby="${titleId}">([\\s\\S]*?)</section>`));
+    assert.ok(section, `${label} retains its labelled section`);
+    const disclosure = section[1].match(new RegExp(`^\\s*<details class="catalog-disclosure" id="${id}" open>\\s*<summary class="publication-board-heading">([\\s\\S]*?)</summary>([\\s\\S]*?)</details>\\s*$`));
+    assert.ok(disclosure, `${label} has its own initially open native keyboard disclosure`);
+    assert.match(disclosure[1], new RegExp(`<h2 id="${titleId}">`));
+    assert.ok(disclosure[1].includes(label), `${label} names its own summary`);
+    assert.match(disclosure[1], /class="disclosure-expand">Expand<\/span>/);
+    assert.match(disclosure[1], /class="disclosure-collapse">Collapse<\/span>/);
+    assert.doesNotMatch(disclosure[1], /<button|<a\b|onclick=|tabindex=|role=/, "summary keeps native semantics without nested controls");
+    assert.doesNotMatch(section[1], /<details[^>]*\bname=|onclick=/, "disclosures are independent, not an exclusive accordion");
+    for (const surface of [id, ...surfaces]) {
+      assert.equal(page.split(`id="${surface}"`).length - 1, 1, `${surface} is not duplicated`);
+      assert.ok(workspace.includes(`id="${surface}"`), `${surface} remains inside the artist workspace`);
+    }
+    for (const surface of surfaces) {
+      assert.ok(disclosure[2].includes(`id="${surface}"`), `${surface} remains in the collapsible body`);
+    }
+  }
+  assert.match(styles, /\.catalog-disclosure>summary:focus-visible\{[^}]*outline:3px solid var\(--rust\)/);
+  assert.match(styles, /\.catalog-disclosure:not\(\[open\]\)>summary \.disclosure-collapse,\.catalog-disclosure\[open\]>summary \.disclosure-expand\{display:none\}/);
+  assert.match(page, /id="refreshCatalogSignals" type="button">Refresh signals/);
+  assert.match(page, /id="catalogSignals" aria-live="polite"/);
+}
+assert.match(client, /hidden=!state\.authenticated/);
+assert.match(api, /"Cache-Control": "no-store"/);
+assert.ok(api.indexOf("if (!user?.id)") < api.indexOf("loadCatalogSignals(nativeDb, membership.member_id)"), "authenticate before loading private signals");
+assert.match(client, /state\.authenticated=false;state\.songs=\[\];state\.catalogSignals=null/, "failed refresh clears stale private data");
+assert.match(client, /if\(request!==catalogRequest\)return/, "stale responses cannot restore private data after an account change");
+assert.match(client, /identity\.onAuthChange/, "private workspace responds to logout and account changes");
+{
+  const watchSource = client.slice(client.indexOf("let catalogIdentity;"), client.indexOf('window.addEventListener("halo-identity-ready"'));
+  const privateState = { authenticated: true, songs: [{ id: "owned" }], catalogSignals: { status: "available" } };
+  let handler;
+  let closed = 0;
+  let loaded = 0;
+  const watch = runInNewContext(`let catalogRequest=0;\n${watchSource}\nwatchCatalogIdentity;`, {
+    state: privateState, elements: { songDialog: { close() { closed++; } }, versionDialog: { close() { closed++; } } },
+    render() {}, loadCatalog() { loaded++; },
+  });
+  const identity = { onAuthChange(callback) { handler = callback; } };
+  watch(identity);
+  watch(identity);
+  handler("token_refresh");
+  handler("user_updated");
+  assert.equal(closed, 0, "routine auth maintenance must not discard unsaved edits");
+  assert.equal(loaded, 0);
+  assert.equal(privateState.authenticated, true);
+  handler("logout");
+  assert.equal(closed, 2, "logout closes private editing dialogs");
+  assert.equal(loaded, 1);
+  assert.equal(privateState.authenticated, false);
+  assert.equal(privateState.songs.length, 0);
+  assert.equal(privateState.catalogSignals, null);
+  handler("login");
+  assert.equal(loaded, 2, "login or an account switch reloads the owner-scoped catalog");
+}
+{
+  const context = { authenticated: true, songCount: 1 };
+  const ready = { title: "Private title", metadataStatus: "ready", metadataIssues: [], pipelineStatus: "draft" };
+  assert.equal(catalogGuidance({ ...context, authenticated: false, song: ready }), null);
+  const cases = [
+    [{ ...context, songCount: 0 }, "Start your catalog", "addSongButton"],
+    [context, "Choose a song", "songList"],
+    [{ ...context, song: { ...ready, metadataStatus: "draft" } }, "Catalog review needed", "songReview"],
+    [{ ...context, song: { ...ready, metadataStatus: "reviewed", metadataIssues: [{ level: "warning", field: "stems" }] } }, "Review recommendations", "songReview"],
+    [{ ...context, song: ready }, "Ready for publication review", "songForm"],
+    [{ ...context, song: { ...ready, metadataIssues: [{ level: "required", field: "rightsStatus", message: "Confirm rights." }] } }, "Release information needs attention", "songForm"],
+  ];
+  for (const field of ["sale_master", "sale_master_audio", "radio_edit", "radio_audio", "radio_master"]) {
+    cases.push([{ ...context, song: { ...ready, metadataIssues: [{ level: "required", field, message: `Check ${field}.` }] } }, "Required version work", "versionTable"]);
+  }
+  for (const state of ["published_and_fully_distributed", "awaiting_release_propagation", "awaiting_radio_ready_assets", "awaiting_dreamweaver_share_readiness", "waiting_on_artist_action", "waiting_on_internal_repair", "escalated"]) {
+    cases.push([{ ...context, song: { ...ready, pipelineStatus: "published", publicationHealth: { state, label: state, summary: `Recorded ${state}` } } }, state, "publicationHealthPanel"]);
+  }
+  cases.push([{ ...context, song: { ...ready, pipelineStatus: "published" } }, "Published · checks pending", "publicationHealthPanel"]);
+  const nodes = new Map();
+  const guidanceRoot = { hidden: true, querySelector(selector) {
+    if (!nodes.has(selector)) nodes.set(selector, { textContent: "", hidden: false, setAttribute(key, value) { this[key] = value; }, removeAttribute(key) { delete this[key]; } });
+    return nodes.get(selector);
+  } };
+  for (const [input, title, target] of cases) {
+    const result = catalogGuidance(input);
+    assert.equal(result.title, title);
+    assert.equal(result.target, target);
+    assert.ok(page.includes(`id="${target}"`), `${target} is a real existing workflow target`);
+    assert.ok(result.next && result.detail && result.action);
+    renderCatalogGuidance({ root: guidanceRoot, ...input });
+    assert.equal(guidanceRoot.hidden, false);
+    assert.equal(nodes.get("[data-guidance-title]").textContent, title);
+    assert.equal(nodes.get("[data-guidance-add]").hidden, target !== "addSongButton");
+    assert.equal(nodes.get("[data-guidance-action]").href, target === "addSongButton" ? undefined : `#${target}`);
+  }
+  const malicious = { ...ready, metadataIssues: [{ level: "required", field: "unknown", message: "<img src=x onerror=alert(1)>" }] };
+  renderCatalogGuidance({ root: guidanceRoot, ...context, song: malicious });
+  assert.equal(nodes.get("[data-guidance-detail]").textContent, malicious.metadataIssues[0].message, "dynamic guidance uses text, not HTML");
+  renderCatalogGuidance({ root: guidanceRoot, authenticated: false, song: ready });
+  assert.equal(guidanceRoot.hidden, true);
+  for (const key of ["title", "detail", "next"]) assert.equal(nodes.get(`[data-guidance-${key}]`).textContent, "", "logout clears private guidance");
+  assert.equal(nodes.get("[data-guidance-action]").href, undefined);
+  const dreamweaver = await read("dreamweaver/index.html");
+  const dreamweaverClient = await read("dreamweaver/dreamweaver.js");
+  for (const source of [dreamweaver, dreamweaverClient, publicPage, publicClient]) {
+    assert.doesNotMatch(source, /catalog-guidance|catalogGuidance|Artist Mission Control|dreamweaverAudioInput/, "public listeners receive no private guidance or invented upload control");
+  }
+  assert.match(dreamweaver, /id="mixFileInput"/);
+  assert.match(dreamweaver, /Local preview only:.*not uploaded, saved, published, or shared/);
+  const guidanceSource = await read("song-catalog/catalog-guidance.js");
+  assert.doesNotMatch(guidanceSource, /innerHTML|force-push-track|\.click\(|fetch\(/, "guidance cannot publish or inject HTML");
+  const guidanceSection = page.match(/<section[^>]+id="catalogGuidance"[\s\S]*?<\/section>/)[0];
+  assert.doesNotMatch(guidanceSection, /style=|onclick=/);
+  assert.match(guidanceSection, /role="status" aria-live="polite" aria-atomic="true"/);
+  assert.match(guidanceSection, /type="button" data-guidance-add data-add-song/);
+  assert.match(styles, /\.mission-control \[hidden\]\{display:none\}/, "hidden guidance actions cannot be made visible by button display rules");
+  assert.match(client, /renderCatalogGuidance\(\{root:\$\("#catalogGuidance"\),authenticated:state\.authenticated,song:selectedSong\(\)/);
+  assert.match(client, /\$\("#retryCatalogButton"\)\.addEventListener\("click"/);
+  assert.match(page, /Catalog service unavailable\. Readiness could not be checked/);
+}
+{
+  const pending = [];
+  const privateState = { songs: [], producer: {}, authenticated: false };
+  const loadSource = client.slice(client.indexOf("let catalogRequest=0;"), client.indexOf("let catalogIdentity;"));
+  const availability = { hidden: true };
+  const signIn = { hidden: false };
+  const context = {
+    state: privateState, api: () => new Promise((resolve, reject) => pending.push({ resolve, reject })),
+    elements: { shell: { setAttribute() {} } }, render() {}, message() {},
+    $: selector => ({ "#catalogUnavailable": availability, "#catalogSignInButton": signIn })[selector],
+  };
+  const load = runInNewContext(`${loadSource}\nloadCatalog;`, context);
+  const older = load();
+  const newer = load();
+  pending[1].resolve({ authenticated: false, songs: [] });
+  await newer;
+  pending[0].resolve({ authenticated: true, songs: [{ id: "previous-owner" }], catalogSignals: { status: "available" } });
+  await older;
+  assert.equal(privateState.authenticated, false, "late owner response cannot undo a sign-out response");
+  assert.equal(privateState.songs.length, 0);
+  const failed = load();
+  pending[2].reject(new Error("offline"));
+  await failed;
+  assert.equal(privateState.authenticated, false);
+  assert.equal(privateState.catalogSignals, null, "a failed refresh does not leave stale signals visible");
+  assert.equal(availability.hidden, false, "a failed catalog check shows generic service guidance");
+  assert.equal(signIn.hidden, true, "service failure is not misrepresented as a sign-in requirement");
+  const recovered = load();
+  pending[3].resolve({ authenticated: true, songs: [{ id: "current-owner" }] });
+  await recovered;
+  assert.equal(availability.hidden, true, "successful retry removes the service warning");
+  assert.equal(signIn.hidden, false);
+  assert.equal(privateState.selectedId, "current-owner");
+}
+{
+  const handlerSource = stripTypeScriptTypes(api.slice(api.indexOf("export default async function songCatalogHandler"), api.indexOf("export const config")).replace("export default ", ""));
+  const calls = [];
+  let user = null;
+  const handler = runInNewContext(`${handlerSource}\nsongCatalogHandler;`, {
+    getDatabase: async () => ({}), getUser: async () => user,
+    ensureMembership: async () => ({ member_id: "authenticated-owner" }),
+    loadCatalog: async owner => { calls.push(owner); return []; },
+    loadProducer: async () => ({}),
+    attachPublicationHealth: async (_db, _owner, songs) => songs,
+    loadCatalogSignals: async (_db, owner) => { calls.push(owner); return { status: "available", songs: [] }; },
+    json: (body, status = 200) => Response.json(body, { status, headers: { "Cache-Control": "no-store" } }),
+    console,
+  });
+  const signedOut = await handler(new Request("https://halo.test/api/song-catalog"));
+  assert.deepEqual(await signedOut.json(), { authenticated: false, songs: [] });
+  assert.equal((await handler(new Request("https://halo.test/api/song-catalog", { method: "POST" }))).status, 401);
+  assert.equal(calls.length, 0, "anonymous requests cannot load inventory or signals");
+  user = { id: "identity-user" };
+  const signedIn = await handler(new Request("https://halo.test/api/song-catalog?ownerMemberId=spoofed-owner"));
+  assert.equal((await signedIn.json()).authenticated, true);
+  assert.deepEqual(calls, ["authenticated-owner", "authenticated-owner"], "inventory and signals use only the authenticated membership");
+  assert.equal(signedIn.headers.get("Cache-Control"), "no-store");
+}
+const now = new Date("2026-10-23T12:00:00Z");
+let signalQuery;
+const snapshot = await loadCatalogSignals({
+  async sql(strings, ...values) {
+    signalQuery = strings.join("?");
+    assert.ok(values.filter(value => value === "owner-1").length === 3, "scope songs and release access to the authenticated member");
+    assert.ok(values.includes("2026-10-16T12:00:00.000Z"));
+    assert.ok(values.includes("2026-10-09T12:00:00.000Z"));
+    assert.ok(values.includes(now.toISOString()), "exclude future events");
+    return [{ song_id: "owned", recent_clicks: 8, previous_clicks: 3, recent_opens: 2, previous_opens: 1 }];
+  },
+}, "owner-1", now);
+assert.match(signalQuery, /song.owner_member_id = \?/);
+assert.match(signalQuery, /release.owner_member_id = \? OR EXISTS/);
+assert.match(signalQuery, /song.status = 'active'/);
+assert.match(signalQuery, /release.status = 'published'/);
+assert.match(signalQuery, /event.created_at < \?/);
+assert.match(signalQuery, /event.event_type IN \('outbound_click', 'kit_open'\)/, "use the actual release-link event vocabulary");
+assert.doesNotMatch(signalQuery, /INSERT|UPDATE|DELETE|email|user_agent|ip_address/i, "signals are aggregate-only existing events, with no new tracking");
+assert.equal(snapshot.songs[0].recentClicks, 8);
+assert.equal((await loadCatalogSignals({ sql: async () => { throw new Error("offline"); } }, "owner-1", now)).status, "unavailable");
+assert.deepEqual((await loadCatalogSignals({ sql: async () => [] }, "owner-1", now)).songs, []);
+
+function signalsFixture({ songs = [{ id: "owned", title: "<img onerror=alert(1)>" }], data = snapshot, authenticated = true } = {}) {
+  const node = () => ({
+    children: [], textContent: "", handlers: {},
+    append(child) { this.children.push(child); },
+    replaceChildren() { this.children = []; },
+    addEventListener(event, handler) { this.handlers[event] = handler; },
+  });
+  const root = node();
+  let reviewed = "";
+  const context = { document: { createElement: node }, root, songs, snapshot: data, authenticated, onReview: id => { reviewed = id; } };
+  runInNewContext(`${signalsClient.replace("export function", "function")}\nrenderCatalogSignals({root,songs,snapshot,authenticated,onReview});`, context);
+  const text = entry => [entry.textContent, ...entry.children.map(text)].join(" ");
+  return { root, text: text(root), reviewed: () => reviewed };
+}
+assert.equal(signalsFixture({ authenticated: false }).root.children.length, 0);
+assert.match(signalsFixture({ songs: [] }).text, /No songs/);
+assert.match(signalsFixture({ data: null }).text, /unavailable/);
+assert.match(signalsFixture({ data: { ...snapshot, songs: [] } }).text, /No linked published release data/);
+assert.match(signalsFixture({ data: { ...snapshot, songs: [{ songId: "owned", recentClicks: -1 }] } }).text, /Not enough data/);
+const zero = { songId: "owned", recentClicks: 0, previousClicks: 0, recentOpens: 0, previousOpens: 0 };
+assert.match(signalsFixture({ data: { ...snapshot, songs: [zero] } }).text, /No recorded activity/);
+assert.match(signalsFixture({ data: { ...snapshot, songs: [{ ...zero, recentClicks: 1 }] } }).text, /growth rate is not available/);
+assert.match(signalsFixture({ data: { ...snapshot, songs: [{ ...zero, previousClicks: 3 }] } }).text, /change: -3/);
+const signalView = signalsFixture();
+assert.match(signalView.text, /change: \+5/);
+assert.match(signalView.text, /<img onerror=alert\(1\)>/, "titles remain literal text");
+signalView.root.children[1].children.at(-1).handlers.click();
+assert.equal(signalView.reviewed(), "owned", "review selects a song without publishing or recording new events");
+const ordered = signalsFixture({ songs: [{ id: "missing", title: "No data" }, { id: "owned", title: "Activity" }] });
+assert.equal(ordered.root.children[1].children[0].textContent, "Activity", "highest recorded outbound clicks first");
+
+const pushFunction = client.slice(client.indexOf("async function pushToShop"), client.indexOf("function renderPublicationTotals"));
+assert.match(pushFunction, /window.confirm/);
+assert.ok(pushFunction.indexOf("window.confirm") < pushFunction.indexOf('fetch("/api/catalog/force-push-track"'), "confirm before any publication");
+for (const authenticated of [false, true]) {
+  const calls = [];
+  const context = {
+    selectedSong: () => ({ id: "owned", title: "Saved song", salePriceCents: 200 }),
+    state: { authenticated }, $: () => ({ textContent: "", disabled: false }),
+    window: { confirm: text => { calls.push(text); return false; } },
+    message() {}, money: () => "$2.00", fetch: () => { throw new Error("Cancelled or unauthorized publication must not fetch"); },
+  };
+  await runInNewContext(`${pushFunction}\npushToShop();`, context);
+  assert.equal(calls.length, authenticated ? 1 : 0);
+}
 const sampleDreamweaverSatellite = buildDreamweaverSatellite("11111111-1111-4111-8111-111111111111", { includeAgentLoop: true });
 const sampleDreamweaverRoute = sanitizeDreamweaverAssignedRoute(sampleDreamweaverSatellite?.experienceUrl);
 const sampleSongs = attachPublicationHealthToSongs([
@@ -51,10 +353,13 @@ const sampleSongs = attachPublicationHealthToSongs([
     artistName: "HALO",
     pipelineStatus: "published",
     rightsStatus: "cleared",
+    broadcastRequested: true,
     metadataIssues: [],
     versions: [
-      { versionType: "sale_master", audioUrl: "https://example.com/sale.mp3", masteringStatus: "approved" },
-      { versionType: "radio_edit", audioUrl: "https://example.com/radio.mp3", masteringStatus: "approved" }
+      { id: "sale-version", versionType: "sale_master", audioUrl: "/api/song-catalog/audio?versionId=sale-version",
+        masteringStatus: "approved", status: "active", persistedAudio: true, durationSeconds: 180, updatedAt: "2026-09-19T16:00:00.000Z" },
+      { id: "radio-version", versionType: "radio_edit", audioUrl: "/api/song-catalog/audio?versionId=radio-version",
+        masteringStatus: "approved", status: "active", persistedAudio: true, durationSeconds: 180, updatedAt: "2026-09-19T16:00:00.000Z" }
     ]
   },
   {
@@ -63,10 +368,13 @@ const sampleSongs = attachPublicationHealthToSongs([
     artistName: "HALO",
     pipelineStatus: "published",
     rightsStatus: "cleared",
+    broadcastRequested: true,
     metadataIssues: [],
     versions: [
-      { versionType: "sale_master", audioUrl: "https://example.com/sale.mp3", masteringStatus: "approved" },
-      { versionType: "radio_edit", audioUrl: "https://example.com/radio.mp3", masteringStatus: "approved" }
+      { id: "hyperfollow-sale", versionType: "sale_master", audioUrl: "/api/song-catalog/audio?versionId=hyperfollow-sale",
+        masteringStatus: "approved", status: "active", persistedAudio: true, durationSeconds: 180, updatedAt: "2026-09-19T16:00:00.000Z" },
+      { id: "hyperfollow-radio", versionType: "radio_edit", audioUrl: "/api/song-catalog/audio?versionId=hyperfollow-radio",
+        masteringStatus: "approved", status: "active", persistedAudio: true, durationSeconds: 180, updatedAt: "2026-09-19T16:00:00.000Z" }
     ]
   },
   {
@@ -87,7 +395,11 @@ const sampleSongs = attachPublicationHealthToSongs([
     release_status: "published",
     radio_status: "rotation",
     dreamweaver_status: "ready",
-    details: {},
+    details: {
+      releaseVerified: true, radioVerified: true, dreamweaverConfirmed: true,
+      masterVersionId: "sale-version", masterUpdatedAt: "2026-09-19T16:00:00.000Z",
+      radio: { operatorReviewed: true, sourceVersionId: "radio-version", sourceUpdatedAt: "2026-09-19T16:00:00.000Z" },
+    },
     last_error: "",
     last_reconciled_at: "2026-09-19T16:00:00.000Z"
   },
@@ -99,7 +411,11 @@ const sampleSongs = attachPublicationHealthToSongs([
     release_status: "published",
     radio_status: "rotation",
     dreamweaver_status: "managed_externally",
-    details: {},
+    details: {
+      releaseVerified: true, radioVerified: true, dreamweaverConfirmed: true,
+      masterVersionId: "hyperfollow-sale", masterUpdatedAt: "2026-09-19T16:00:00.000Z",
+      radio: { operatorReviewed: true, sourceVersionId: "hyperfollow-radio", sourceUpdatedAt: "2026-09-19T16:00:00.000Z" },
+    },
     last_error: "",
     last_reconciled_at: "2026-09-19T16:00:00.000Z"
   }
@@ -238,7 +554,7 @@ assert.equal(validateMasterUpload({ filename: "master.wav", contentType: "audio/
 assert.equal(validateMasterUpload({ filename: "master.wav", contentType: "audio/wav", fileSize: 0 }).status, 400, "empty master uploads are rejected");
 assert.equal(validateMasterUpload({ filename: "cover.png", contentType: "image/png", fileSize: 1024 }).status, 415, "non-audio master uploads are rejected");
 
-assert.match(page, /id="versionTable"><\/div>\s*<form[^>]*id="alternateUploadForm"/, "inline upload lives directly below the unchanged version list");
+assert.match(page, /id="versionTable" tabindex="-1"><\/div>\s*<form[^>]*id="alternateUploadForm"/, "inline upload lives directly below the focusable version list");
 assert.match(page, /id="alternateSongId" name="songId" type="hidden"/, "inline uploads carry the current parent song");
 assert.match(page, /for="alternateVersionTitle"/, "version title has a visible label");
 assert.match(page, /for="alternateAudioFile"/, "audio picker has a visible label");
@@ -368,6 +684,94 @@ assert.equal((await createAlternate("owner", { ...alternatePayload, songId: "son
 ownedSongRows[0].status = "archived";
 assert.equal((await createAlternate("owner", { ...alternatePayload, versionId: "version-c" })).status, 404, "archived songs cannot receive uploads");
 console.log("PASS: inline alternate upload placement, validation, ownership, context, progress, retry, and creation behavior");
+
+const watchBoard = { innerHTML: "" };
+const watchState = { songs: [], selectedId: "" };
+const artworkWindow = { location: { origin: "https://halo.test", pathname: "/song-catalog/" } };
+runInNewContext(await read("release-artwork.js"), { window: artworkWindow, URL, console: { warn() {} }, CustomEvent: class {} });
+const sharedArtworkWire = artworkWindow.HaloReleaseArtwork.wire;
+let wiredBoard = null;
+artworkWindow.HaloReleaseArtwork.wire = board => { wiredBoard = board; };
+const renderWatchBoard = runInNewContext(`
+${client.slice(client.indexOf("const escapeHtml="), client.indexOf("const resolvedAudio="))}
+${client.slice(client.indexOf("function renderPublicationBoard("), client.indexOf("function renderPublicationHealth("))}
+renderPublicationBoard`, {
+  $: selector => selector === "#publicationBoard" ? watchBoard : null,
+  state: watchState, window: artworkWindow, URL
+});
+watchState.songs = structuredClone(sampleSongs);
+watchState.songs[0].title = '<Song & "cover">';
+watchState.songs[0].artworkUrl = "/api/song-catalog/artwork?songId=published-song";
+watchState.selectedId = "published-song";
+renderWatchBoard();
+assert.equal((watchBoard.innerHTML.match(/<article class="publication-card/g) || []).length, 2, "only published songs from the owner's response enter the watch board");
+assert.ok(!watchBoard.innerHTML.includes("Draft song"), "draft catalog entries stay off the published watch board");
+assert.match(watchBoard.innerHTML, /<article class="publication-card is-active">/, "selected song remains highlighted");
+assert.match(watchBoard.innerHTML, /songId=published-song&amp;ownerView=1/, "cover requests retain owner artwork access");
+assert.match(watchBoard.innerHTML, /alt="Cover art for &lt;Song &amp; &quot;cover&quot;&gt; by HALO"/, "covers have meaningful escaped alt text");
+assert.match(watchBoard.innerHTML, /<button[^>]*type="button"[^>]*data-publication-song="published-song"/, "health selection uses a native keyboard-accessible button");
+assert.match(watchBoard.innerHTML, /<dt>Surfaces reached<\/dt><dd>3 \/ 3<\/dd>/, "surface counts derive from actual health checks, not hardcoded totals");
+assert.match(watchBoard.innerHTML, /<time datetime="2026-09-19T16:00:00.000Z">/, "stored check timestamp is rendered as a semantic time");
+assert.match(watchBoard.innerHTML, /<dt>Reached surfaces<\/dt><dd>Public release page, HALO Radio, Dreamweaver share<\/dd>/);
+assert.match(watchBoard.innerHTML, /<dt>Missing surfaces<\/dt><dd>None reported<\/dd>/);
+assert.match(watchBoard.innerHTML, /distribution health is not audience engagement/, "distribution health stays distinct from private link activity");
+assert.equal(wiredBoard, watchBoard, "shared artwork error recovery is wired after rendering");
+
+watchState.songs = [{
+  id: 'song"><img src=x>', title: "Needs repair", artistName: "Artist",
+  pipelineStatus: "published", artworkUrl: "/song-cover.jpg",
+  versions: [
+    { id: "alternate", versionType: "alternate", customArtworkUrl: "/alternate-cover.jpg" },
+    { id: "old-master", versionType: "sale_master", customArtworkUrl: "/old-master-cover.jpg" },
+    { id: "master", versionType: "sale_master", isCanonicalMaster: true, customArtworkUrl: "/master-cover.jpg" }
+  ],
+  publicationHealth: {
+    label: "Waiting on repair", state: "waiting_on_internal_repair", retryState: "retrying",
+    surfaces: [{ label: "Release", reached: true }, { label: "Radio <pending>", reached: false }],
+    lastCheckedAt: "invalid-date"
+  }
+}];
+renderWatchBoard();
+assert.match(watchBoard.innerHTML, /src="https:\/\/halo.test\/master-cover.jpg"/, "canonical master override wins over song and alternate-version artwork");
+assert.match(watchBoard.innerHTML, /data-publication-song="song&quot;&gt;&lt;img src=x&gt;"/, "song identifiers cannot inject markup");
+assert.match(watchBoard.innerHTML, /<dt>Surfaces reached<\/dt><dd>1 \/ 2<\/dd>/);
+assert.match(watchBoard.innerHTML, /<dt>Missing surfaces<\/dt><dd>Radio &lt;pending&gt;<\/dd>/);
+assert.match(watchBoard.innerHTML, /<dt>Monitoring<\/dt><dd>Retrying<\/dd>/);
+assert.match(watchBoard.innerHTML, /<dt>Last checked<\/dt><dd>Not reported<\/dd>/, "invalid timestamps do not produce Invalid Date");
+watchState.songs[0].versions = [];
+renderWatchBoard();
+assert.match(watchBoard.innerHTML, /src="https:\/\/halo.test\/song-cover.jpg"/, "song-level art is used when no master override is available");
+watchState.songs[0].artworkUrl = "javascript:alert(1)";
+watchState.songs[0].publicationHealth = null;
+renderWatchBoard();
+assert.match(watchBoard.innerHTML, /src="https:\/\/halo.test\/assets\/releases\/halo-premium-placeholder.svg"/, "unsafe or missing covers use the shared safe placeholder");
+watchState.songs[0].artworkUrl = "";
+renderWatchBoard();
+assert.match(watchBoard.innerHTML, /src="https:\/\/halo.test\/assets\/releases\/halo-premium-placeholder.svg"/, "missing covers also use the placeholder");
+for (const label of ["Surfaces reached", "Reached surfaces", "Missing surfaces", "Last checked", "Monitoring"]) {
+  assert.ok(watchBoard.innerHTML.includes(`<dt>${label}</dt><dd>Not reported</dd>`), `${label} must not imply health when absent`);
+}
+watchState.songs[0].publicationHealth = { surfaces: [], lastCheckedAt: "" };
+renderWatchBoard();
+assert.match(watchBoard.innerHTML, /<dt>Surfaces reached<\/dt><dd>Not reported<\/dd>/, "an empty snapshot is not a healthy 0/0 check");
+watchState.songs = [];
+renderWatchBoard();
+assert.match(watchBoard.innerHTML, /Move a song to Published/, "empty and unauthenticated catalogs disclose no songs");
+assert.match(styles, /\.publication-card-select:focus-visible/, "watch board has a visible keyboard focus indicator");
+assert.match(styles, /@media\(max-width:720px\)\{\.publication-board-list,\.publication-health-grid\{grid-template-columns:1fr\}/, "watch board collapses to one column on mobile");
+
+let recoverArtwork;
+const brokenCover = {
+  dataset: {}, complete: false, src: "https://halo.test/broken.jpg",
+  getAttribute(name) { return name === "src" ? this.src : "Cover art for Needs repair by Artist"; },
+  closest() { return null; },
+  addEventListener(event, handler) { if (event === "error") recoverArtwork = handler; }
+};
+artworkWindow.dispatchEvent = () => {};
+sharedArtworkWire({ querySelectorAll: () => [brokenCover] });
+recoverArtwork();
+assert.equal(brokenCover.src, "https://halo.test/assets/releases/halo-premium-placeholder.svg", "a broken resolved cover recovers to the shared placeholder");
+console.log("PASS: owner watch board covers, safe fallback, factual health statistics, unavailable metrics, and accessible selection");
 
 const failures = checks.filter(([passed]) => !passed);
 for (const [passed, description] of checks) console.log(`${passed ? "PASS" : "FAIL"}: ${description}`);

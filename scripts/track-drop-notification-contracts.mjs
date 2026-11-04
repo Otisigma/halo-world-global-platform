@@ -170,10 +170,27 @@ assertPublicSafe(template, "email template");
     const sql = async (strings, ...values) => {
       const text = strings.join("?").replace(/\s+/g, " ").trim();
       queries.push(text);
+      if (text.startsWith("INSERT INTO halo_song_publication_leases")) return [{ song_id: songId }];
       if (text.includes("FROM halo_song_catalog song")) {
-        return [{ id: songId, owner_member_id: "owner-1", source_release_id: "owen-anthony-satellite", artist_name: "Owen Anthony", title: "Satellite", genre: "deep house", pipeline_status: "published", metadata_issues: [] }];
+        return [{ id: songId, owner_member_id: "owner-1", source_release_id: "owen-anthony-satellite",
+          artist_name: "Owen Anthony", title: "Satellite", genre: "deep house", pipeline_status: "published",
+          rights_status: "cleared", broadcast_requested: false, metadata_issues: [],
+          publication_revision: "2026-10-25T12:00:00.000789Z" }];
+      }
+      if (text.startsWith("SELECT") && text.includes("FROM halo_song_versions")) {
+        const versionId = "22222222-2222-4222-8222-222222222222";
+        return [{ id: versionId, song_id: songId, version_type: "sale_master", status: "active",
+          mastering_status: "approved", audio_blob_prefix: `owner-1/${versionId}/upload/parts/`,
+          audio_chunk_count: 1, audio_content_type: "audio/mpeg", audio_byte_size: 1000,
+          duration_seconds: 180, updated_at: new Date("2026-10-25T12:00:00.000123Z"),
+          publication_revision: "2026-10-25T12:00:00.000123Z" }];
       }
       if (text.startsWith("INSERT INTO halo_release_campaigns")) return [{ id: values[0], official_url: "", stream_url: "" }];
+      if (text.startsWith("INSERT INTO halo_release_audio_versions")) {
+        assert.equal(values[3], "master");
+        return [{ id: "persisted-master", version_type: "master" }];
+      }
+      if (text.startsWith("UPDATE halo_release_campaigns release")) return [{ id: values[0] }];
       if (text.startsWith("INSERT INTO halo_track_drop_events")) {
         if (failDrop) throw new Error("relation does not exist");
         return [{ id: values[0] }];

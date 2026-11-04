@@ -2,6 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { PUBLIC_ROUTE_REGISTRY } from "../../lib/route-registry.js";
 import { RELEASE_AGENT_INTENT } from "../../lib/release-conveyor-stages.js";
 import { releaseFingerprint } from "./release-conveyor.mjs";
+import { canPrepareRadio, proposedRadioRoom } from "./radio-preparation.mjs";
 
 const normalizeIsrc = value => String(value || "").trim().toUpperCase().replaceAll("-", "");
 const validIsrc = value => /^[A-Z]{2}[A-Z0-9]{3}\d{7}$/.test(normalizeIsrc(value));
@@ -37,15 +38,14 @@ export function planReleaseRepairs(song, versions, template) {
   const master = masterOf(versions);
   const radio = versions.find(version => version.version_type === "radio_edit")
     || versions.find(version => version.version_type === "clean");
-  if (versions.filter(version => version.version_type === "sale_master").length === 1
-    && master?.song_id === song.id && safeAsset(master.audio_url) && Number(master.duration_seconds) > 0
-    && master.mastering_status === "approved"
+  if (canPrepareRadio(song, versions)
     && !versions.some(version => ["radio_edit", "clean"].includes(version.version_type)
       && (version.audio_url || version.mastering_status !== "not_started"))
     && (!radio || radio.mastering_status === "not_started")) {
     actions.push({ type: "auto_queue_radio", versionId: radio?.id || randomUUID(),
       targetLufs: -16, targetTruePeak: -1, sourceVersionId: master.id,
-      sourceAudioUrl: master.audio_url });
+      sourceAudioUrl: master.audio_url, proposedRoom: proposedRadioRoom(song.genre),
+      approvalRequired: true });
   }
   const trusted = master?.song_id === song.id && template && template.songId === song.id && template.ownerMemberId === song.owner_member_id
     && template.masterVersionId === master?.id && template.sourceAudioUrl === master?.audio_url
@@ -175,16 +175,22 @@ export async function healCatalogRelease(db, ownerMemberId, songId, token, submi
         JOIN halo_song_versions master ON master.song_id = song.id
         WHERE song.id = ${songId} AND song.owner_member_id = ${ownerMemberId} AND song.status = 'active'
           AND song.updated_at = ${song.updated_at}
+          AND song.broadcast_requested = TRUE AND song.rights_status = 'cleared'
           AND conveyor.owner_member_id = ${ownerMemberId} AND conveyor.lease_token = ${token} AND conveyor.locked_until > NOW()
           AND master.id = ${action.sourceVersionId} AND master.version_type = 'sale_master' AND master.status = 'active'
           AND master.audio_url = ${action.sourceAudioUrl} AND master.mastering_status = 'approved' AND master.duration_seconds > 0
+          AND COALESCE(master.audio_blob_prefix, '') = ${masterOf(versions).audio_blob_prefix || ""}
+          AND COALESCE(master.audio_storage_key, '') = ${masterOf(versions).audio_storage_key || ""}
+          AND master.audio_content_type = ${masterOf(versions).audio_content_type}
+          AND master.audio_byte_size = ${Number(masterOf(versions).audio_byte_size)}
+          AND COALESCE(master.audio_chunk_count, 0) = ${Number(masterOf(versions).audio_chunk_count || 0)}
           AND NOT EXISTS (SELECT 1 FROM halo_song_versions WHERE song_id = song.id AND status = 'active'
             AND version_type IN ('radio_edit', 'clean') AND (audio_url <> '' OR mastering_status <> 'not_started'))
         FOR UPDATE OF song, conveyor, master
       ), repaired AS (
         UPDATE halo_song_versions SET mastering_status = 'queued', target_lufs = -16, true_peak_dbtp_tenths = -10,
           notes = CONCAT(notes, E'\nWatchdog: prepare a separate broadcast copy from ', ${action.sourceVersionId},
-            '; -16 LUFS / -1 dBTP targets. Clean edit and mastering approval still required.'), updated_at = NOW()
+            ${`; proposed room: ${action.proposedRoom || "unassigned — operator genre mapping required"}; -16 LUFS / -1 dBTP targets. Clean edit, mastering and operator approval still required.`}), updated_at = NOW()
         WHERE song_id IN (SELECT id FROM guarded) AND id = ${action.versionId} AND status = 'active'
           AND version_type IN ('radio_edit', 'clean') AND mastering_status = 'not_started' AND audio_url = ''
         RETURNING song_id
@@ -192,7 +198,7 @@ export async function healCatalogRelease(db, ownerMemberId, songId, token, submi
         INSERT INTO halo_song_versions (id, song_id, version_type, label, destination, mastering_status,
           target_lufs, true_peak_dbtp_tenths, notes)
         SELECT ${action.versionId}, id, 'radio_edit', 'Radio edit', 'radio', 'queued', -16, -10,
-          ${`Watchdog source: ${action.sourceVersionId}. Prepare a separate broadcast copy; clean edit and mastering approval required.`}
+          ${`Watchdog source: ${action.sourceVersionId}. Proposed room: ${action.proposedRoom || "unassigned — operator genre mapping required"}. Prepare a separate broadcast copy; clean edit, mastering and operator approval required.`}
         FROM guarded WHERE NOT EXISTS (SELECT 1 FROM halo_song_versions WHERE song_id = guarded.id
           AND status = 'active' AND version_type IN ('radio_edit', 'clean'))
         ON CONFLICT (id) DO NOTHING RETURNING song_id
@@ -208,10 +214,16 @@ export async function healCatalogRelease(db, ownerMemberId, songId, token, submi
 
 export async function releaseWatchdogDiagnostics(submission, healing, check, routes = []) {
   const { graph, issues } = await inspectReleaseAssets(submission.song, submission.versions, check);
+  const proposedRoom = proposedRadioRoom(submission.song.genre);
+  if (submission.song.broadcast_requested === true && !proposedRoom) {
+    issues.push(problem("radio_room", "Broadcast requested, but this genre has no supported radio room mapping; operator assignment is required."));
+  }
   for (const route of routes) {
     if (route.status !== "passed") issues.push(problem("route", `Department route ${route.url}: ${route.status}.`));
   }
   if (healing.rightsSuggestion) issues.push(problem("rights_status", "Trusted historical rights template available; creator confirmation is required."));
   return { schemaVersion: 1, intent: RELEASE_AGENT_INTENT, checkedAt: new Date().toISOString(),
-    repairs: healing.repairs, rightsSuggestion: healing.rightsSuggestion, graph, routes, issues };
+    repairs: healing.repairs, rightsSuggestion: healing.rightsSuggestion,
+    radioPreparation: { requested: submission.song.broadcast_requested === true, proposedRoom, approvalRequired: true },
+    graph, routes, issues };
 }

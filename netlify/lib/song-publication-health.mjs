@@ -1,4 +1,4 @@
-const READY_RADIO_STATUSES = new Set(["rotation", "preview", "held"]);
+const READY_RADIO_STATUSES = new Set(["rotation"]);
 export const PUBLICATION_ESCALATION_THRESHOLD = 4;
 const READY_DREAMWEAVER_STATUSES = new Set(["ready", "managed_externally"]);
 
@@ -24,11 +24,16 @@ function minutesSince(value, now = new Date()) {
 
 function blockingMetadataIssues(song) {
   return cleanArray(song?.metadataIssues)
-    .filter(issue => issue && typeof issue === "object" && issue.level === "required")
+    .filter(isShopBlockingIssue)
     .map(issue => ({
       field: String(issue.field || "metadata"),
       message: String(issue.message || "Complete the required release information.")
     }));
+}
+
+export function isShopBlockingIssue(issue) {
+  return issue && typeof issue === "object" && issue.level === "required"
+    && !["radio_edit", "radio_audio", "radio_master"].includes(issue.field);
 }
 
 function buildSurfaces({ releaseReady, radioReady, dreamweaverReady, canonicalUrl, radioStatus }) {
@@ -87,6 +92,38 @@ function buildFix(title, steps, aiAssistPrompt) {
   return { title, steps: cleanArray(steps), aiAssistPrompt: String(aiAssistPrompt || "") };
 }
 
+function radioFailureReasons(song, sync, details) {
+  const radio = details.radio && typeof details.radio === "object" ? details.radio : {};
+  const reasons = [];
+  const room = ["club", "chill", "lounge"].includes(radio.proposedRoom) ? titleCase(radio.proposedRoom) : "";
+  if (song?.broadcastRequested !== true || radio.reason === "broadcast_not_requested") {
+    reasons.push("HALO Radio was not requested. Enable broadcast intent before an operator can review this song.");
+  }
+  const messages = {
+    genre_unassigned: "This genre has no supported radio room. Choose a supported genre or ask the radio operator for help.",
+    no_compatible_show: `No published HALO Radio show is available${room ? ` in the ${room} room` : " in the proposed room"}. Ask the radio operator to publish or resume a compatible show.`,
+    operator_review_required: "HALO Radio requires recorded operator review and approval before rotation can be confirmed.",
+    radio_submission_rejected: "The radio operator rejected this submission. Review the operator feedback before requesting another review; automatic reconciliation will not resubmit it.",
+    existing_track_requires_operator_review: "The existing radio track does not match the current approved catalog audio. Ask the radio operator to review its ownership and audio references.",
+    owner_membership_missing: "The artist membership is missing. Complete the membership before preparing a radio audition.",
+    radio_master_missing_or_not_uploaded: "Upload and approve an active, owned radio or clean version with verified duration; explicit songs require a confirmed clean version.",
+  };
+  if (messages[radio.reason]) reasons.push(messages[radio.reason]);
+  if (sync.radioStatus === "preview") {
+    reasons.push("The radio track is an audition preview only. It is not in broadcast rotation and requires operator approval.");
+  } else if (sync.radioStatus === "held") {
+    reasons.push("The radio track is held for operator review and is not in broadcast rotation.");
+  } else if (sync.radioStatus === "draft") {
+    reasons.push("The radio track is a draft only and is not approved for broadcast rotation.");
+  }
+  const startsAt = isoDate(radio.proposedStartsAt);
+  if (song?.broadcastRequested === true && radio.approvalRequired === true && room && startsAt
+    && typeof radio.proposedShowId === "string" && /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(radio.proposedShowId)) {
+    reasons.push(`Operator-only proposal: ${radio.proposedShowId} in the ${room} room at ${startsAt} (UTC). This slot is not booked or approved.`);
+  }
+  return reasons;
+}
+
 export const PUBLICATION_HEALTH_STATES = {
   published_and_fully_distributed: "Published and fully distributed",
   awaiting_release_propagation: "Awaiting release propagation",
@@ -101,13 +138,29 @@ export function buildPublicationHealth(song, sync = {}, now = new Date()) {
   const details = sync?.details && typeof sync.details === "object" ? sync.details : {};
   const versions = cleanArray(song?.versions);
   const blockingIssues = blockingMetadataIssues(song);
-  const saleMaster = versions.find(version => version.versionType === "sale_master");
+  const saleMasters = versions.filter(version => version.versionType === "sale_master");
+  const saleMaster = saleMasters.length === 1 ? saleMasters[0] : null;
   const radioVersions = versions.filter(version => version.versionType === "radio_edit" || version.versionType === "clean");
   const hasRadioAudio = radioVersions.some(version => version.audioUrl);
-  const hasApprovedRadioMaster = radioVersions.some(version => version.audioUrl && version.masteringStatus === "approved");
-  const releaseReady = sync?.releaseStatus === "published" && String(sync?.releaseId || song?.sourceReleaseId || "") !== "" && String(sync?.canonicalUrl || "") !== "";
-  const radioReady = READY_RADIO_STATUSES.has(String(sync?.radioStatus || "")) && String(sync?.radioTrackId || "") !== "";
-  const dreamweaverReady = READY_DREAMWEAVER_STATUSES.has(String(sync?.dreamweaverStatus || "")) && String(sync?.canonicalUrl || "") !== "";
+  const approvedAudio = version => version?.masteringStatus === "approved"
+    && version.status === "active" && Number(version.durationSeconds) > 0
+    && version.persistedAudio === true;
+  const approvedRadio = version => approvedAudio(version) && (!song?.explicitLyrics || version.cleanLyrics === true);
+  const hasApprovedRadioMaster = radioVersions.some(approvedRadio);
+  const catalogReady = song?.rightsStatus === "cleared" && !blockingIssues.length && approvedAudio(saleMaster)
+    && saleMaster.id === details.masterVersionId && Boolean(saleMaster.updatedAt)
+    && isoDate(saleMaster.updatedAt) === details.masterUpdatedAt;
+  const releaseReady = catalogReady && details.releaseVerified === true
+    && sync?.releaseStatus === "published" && String(sync?.releaseId || song?.sourceReleaseId || "") !== ""
+    && /^\/music\/\?song=[^&#]+$/.test(String(sync?.canonicalUrl || ""));
+  const radioReady = releaseReady && song?.broadcastRequested === true && hasApprovedRadioMaster
+    && details.radioVerified === true
+    && details.radio?.operatorReviewed === true
+    && radioVersions.some(version => approvedRadio(version) && version.id === details.radio?.sourceVersionId
+      && Boolean(version.updatedAt) && isoDate(version.updatedAt) === details.radio?.sourceUpdatedAt)
+    && READY_RADIO_STATUSES.has(String(sync?.radioStatus || "")) && String(sync?.radioTrackId || "") !== "";
+  const dreamweaverReady = releaseReady && details.dreamweaverConfirmed === true
+    && READY_DREAMWEAVER_STATUSES.has(String(sync?.dreamweaverStatus || "")) && String(sync?.canonicalUrl || "") !== "";
   const lastError = String(sync?.lastError || "");
   const errorStreak = Math.max(0, Number.parseInt(String(details.errorStreak || "0"), 10) || 0);
   const firstFailureAt = String(details.firstFailureAt || "");
@@ -226,6 +279,12 @@ export function buildPublicationHealth(song, sync = {}, now = new Date()) {
       ],
       `Summarize the current publication repair state for ${song?.title || "this song"} and tell me the safest single change to try next.`
     ));
+  }
+
+  if (!radioReady) {
+    for (const reason of radioFailureReasons(song, sync, details)) {
+      if (!failureReasons.includes(reason)) failureReasons.push(reason);
+    }
   }
 
   return {

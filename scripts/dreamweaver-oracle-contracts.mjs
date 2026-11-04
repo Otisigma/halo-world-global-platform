@@ -153,10 +153,11 @@ assert.equal(response.status, 200);
 assert.equal(response.headers.get("cache-control"), "no-store");
 let payload = await response.json();
 const metrics = payload.telemetry.sources.publication.metrics;
+// Aggregate status flags do not prove owned persisted audio, version revisions, opt-in, or share delivery.
 assert.deepEqual(metrics, {
-  published: 7, incomplete: 5, escalated: 3, releaseReady: 6, radioReady: 2,
-  shareReady: 6, missingSync: 1, stale: 4, states: {
-    published_and_fully_distributed: 2, escalated: 3, awaiting_radio_ready_assets: 1, awaiting_release_propagation: 1
+  published: 7, incomplete: 7, escalated: 3, releaseReady: 0, radioReady: 0,
+  shareReady: 0, missingSync: 1, stale: 4, states: {
+    awaiting_radio_ready_assets: 4, escalated: 3
   }
 });
 assert.equal(payload.telemetry.sources.radio.metrics.roomsWithoutRotation, 2);
@@ -214,10 +215,13 @@ const filtered = await oracleAdvice(telemetry, { ...chat, useAI: true, history: 
 }));
 assert.equal(filtered.suggestions.length, 1, "only supported, evidenced proposals are returned as inert text");
 assert.equal(filtered.suggestions[0].language, "html");
+// Assemble a synthetic credential at runtime so redaction tests do not ship key-like literals.
+const syntheticCredential = ["sk", "proj", "x".repeat(32)].join("-");
 const redacted = await oracleAdvice(telemetry, { ...chat, useAI: true, history: [] }, async () => JSON.stringify({
-  answer: "Credential sk-proj-abcdefghijklmnopqrstuvwxyz and tax id 123-45-6789; ISRC US-HAL-26-00001",
-  suggestions: [{ language: "javascript", code: 'const key = "sk-proj-abcdefghijklmnopqrstuvwxyz";', rationale: "SSN 123-45-6789", verification: "ISRC US-HAL-26-00001", evidence: ["publication"] }]
+  answer: `Credential ${syntheticCredential} and tax id 123-45-6789; ISRC US-HAL-26-00001`,
+  suggestions: [{ language: "javascript", code: `const key = "${syntheticCredential}";`, rationale: "SSN 123-45-6789", verification: "ISRC US-HAL-26-00001", evidence: ["publication"] }]
 }));
+assert.ok(!JSON.stringify(redacted).includes(syntheticCredential), "the synthetic credential must not survive redaction");
 assert.match(redacted.answer, /\[REDACTED CREDENTIAL\].*\[REDACTED TAX IDENTIFIER\]/);
 assert.match(redacted.answer, /ISRC US-HAL-26-00001/);
 assert.match(redacted.suggestions[0].code, /\[REDACTED CREDENTIAL\]/);

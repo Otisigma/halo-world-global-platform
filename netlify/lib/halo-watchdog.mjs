@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { RELEASE_STAGES } from "../../lib/release-conveyor-stages.js";
 import { PUBLIC_ROUTE_REGISTRY, buildDreamweaverSatellite } from "../../lib/route-registry.js";
 import { normalizeLyricsSource, parseTimestampedLyrics } from "../../lib/dreamweaver-lyrics.js";
+import { canPrepareRadio } from "./radio-preparation.mjs";
 
 export const HALO_SHARED_INTENT = Object.freeze({
   version: 1,
@@ -69,7 +70,7 @@ export function inspectHaloRelease({ song, versions, previous, infrastructure = 
     findings.push({ field: "rights_status", message: "Rights clearance requires explicit creator confirmation; no clearance was granted." });
   }
   const radioLanes = versions.filter(version => ["radio_edit", "clean"].includes(version.version_type));
-  if (master?.audio_url && master.mastering_status === "approved" && Number(master.duration_seconds) > 0
+  if (canPrepareRadio(song, versions)
     && radioLanes.length && radioLanes.every(version => version.mastering_status === "not_started" && !version.audio_url)) {
     const radio = radioLanes.find(version => version.version_type === "radio_edit") || radioLanes[0];
     actions.push({ type: "auto_queue_radio", versionId: radio.id, sourceVersionId: master.id,

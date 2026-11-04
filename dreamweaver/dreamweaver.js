@@ -72,6 +72,7 @@ import { MIX_PRESETS, createMixSeed, deleteUserPreset, describeMixIntent, normal
   const VIDEO_LIBRARY_TIMEOUT_MS = 8000;
   const AUDIO_BOOTSTRAP_TIMEOUT_MS = 7000;
   const REMOTE_AUDIO_WATCHDOG_MS = 5000;
+  const LOCAL_PREVIEW_PROMPT = "Stream unavailable — choose “Preview a local file in this lobby” or press play to pick audio from this device. Local previews stay in this browser only.";
   const HERO_REEL_LOAD_TIMEOUT_MS = 3500;
   const MAX_AUDIO_FEEDBACK_RECORDS = 24;
   const SATELLITE_AGENT_REFRESH_MS = 45_000;
@@ -122,6 +123,7 @@ import { MIX_PRESETS, createMixSeed, deleteUserPreset, describeMixIntent, normal
     creatorGatewayLink: document.getElementById("dreamweaverCreatorGateway"),
     uploadLabel: document.querySelector(".upload-label"),
     mixFileInput: document.getElementById("mixFileInput"),
+    mixFileStatus: document.getElementById("mixFileStatus"),
     shell: document.getElementById("showShell"),
     loading: document.getElementById("loadingShow"),
     loadingPhase: document.getElementById("loadingPhase"),
@@ -1071,6 +1073,37 @@ import { MIX_PRESETS, createMixSeed, deleteUserPreset, describeMixIntent, normal
     state.localAudioUrl = "";
   }
 
+  function setLocalPreviewStatus(message = "", tone = "idle") {
+    if (!elements.mixFileStatus) return;
+    elements.mixFileStatus.textContent = message;
+    elements.mixFileStatus.dataset.state = message ? tone : "idle";
+  }
+
+  function linkedReleaseLabel() {
+    const title = cleanText(state.release?.title || state.mix?.title || "", 120);
+    const artist = cleanText(state.release?.artist || state.mix?.creator?.name || "", 120);
+    return [title, artist].filter(Boolean).join(" — ");
+  }
+
+  function localPreviewNotice(name) {
+    const linked = linkedReleaseLabel();
+    return `Local preview: ${name} plays only in this browser tab. It is not uploaded, saved, published, or shared with other listeners${linked ? `, and does not replace the linked release ${linked}` : ""}.`;
+  }
+
+  function failLocalPreview(message) {
+    state.audioSourceMode = "error";
+    state.localAudioName = "";
+    revokeLocalAudioUrl();
+    setReleasePlaybackState("unavailable");
+    setLocalPreviewStatus(message, "error");
+    showToast(message);
+  }
+
+  function handleLobbyPageHide(event) {
+    if (event?.persisted) return;
+    revokeLocalAudioUrl();
+  }
+
   function publicReleaseStatus(release = state.release) {
     const raw = cleanText(release?.storefront?.statusLabel || release?.publication?.dreamweaverStatus || release?.publication?.releaseStatus || release?.catalog?.saleStatus || "", 40).toUpperCase();
     const hasStream = Boolean(resolvePrimaryAudio(release || {}).src);
@@ -1125,7 +1158,7 @@ import { MIX_PRESETS, createMixSeed, deleteUserPreset, describeMixIntent, normal
     button.setAttribute("aria-label", mode === "muted" ? "Unmute the Dreamweaver audio" : "Play the Dreamweaver audio with sound");
   }
 
-  function handleRemoteAudioUnavailable(message = "Stream unavailable — click Upload Mix File or press play to choose a local mix.") {
+  function handleRemoteAudioUnavailable(message = LOCAL_PREVIEW_PROMPT) {
     if (!state.primaryBootstrapActive && !state.catalogFallbackActive && state.mix
       && dreamweaverDriveFallbacks(state.mix, elements.audio.src).length) {
       void retryCatalogProxy();
@@ -1151,15 +1184,21 @@ import { MIX_PRESETS, createMixSeed, deleteUserPreset, describeMixIntent, normal
         return;
       }
       if (state.playbackRequested || elements.audio.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
-        handleRemoteAudioUnavailable("Stream unavailable — click Upload Mix File or press play to choose a local mix.");
+        handleRemoteAudioUnavailable(LOCAL_PREVIEW_PROMPT);
       }
     }, REMOTE_AUDIO_WATCHDOG_MS);
   }
 
   async function activateLocalMixFile(file) {
-    if (!file || !elements.audio) return;
+    if (!elements.audio) return;
+    if (!file) {
+      setLocalPreviewStatus("No file selected. Choose an audio file from this device to preview it in this lobby.", "error");
+      return;
+    }
     if (!isSupportedLocalAudioFile(file)) {
-      showToast("Choose an audio file in MP3, WAV, M4A, AAC, OGG, FLAC, or WebM format.");
+      const message = "That file can't be previewed. Choose an audio file in MP3, WAV, M4A, AAC, OGG, FLAC, or WebM format.";
+      setLocalPreviewStatus(message, "error");
+      showToast(message);
       return;
     }
     clearRemoteAudioWatchdog();
@@ -1167,7 +1206,7 @@ import { MIX_PRESETS, createMixSeed, deleteUserPreset, describeMixIntent, normal
     window.HaloAudioPreloader?.clear();
     const localAudioUrl = safeBlobMediaUrl(URL.createObjectURL(file));
     if (!localAudioUrl) {
-      showToast("Dreamweaver could not prepare that local file. Try another audio export.");
+      failLocalPreview("Dreamweaver could not prepare that local file. Try another audio export.");
       return;
     }
     state.localAudioUrl = localAudioUrl;
@@ -1185,11 +1224,21 @@ import { MIX_PRESETS, createMixSeed, deleteUserPreset, describeMixIntent, normal
     elements.audio.src = localAudioUrl;
     elements.audio.load?.();
     setReleasePlaybackState("ready");
+    setLocalPreviewStatus(`Loading ${state.localAudioName}… ${localPreviewNotice(state.localAudioName)}`, "ready");
     try {
       await elements.audio.play();
-      showToast(`Local mix active: ${state.localAudioName}.`);
-    } catch {
-      showToast("Local file loaded. Press play when your browser is ready.");
+      if (state.localAudioUrl !== localAudioUrl) return;
+      setLocalPreviewStatus(`Playing. ${localPreviewNotice(state.localAudioName)}`, "active");
+      showToast(`Local preview playing: ${state.localAudioName} (this browser only).`);
+    } catch (error) {
+      if (state.localAudioUrl !== localAudioUrl || error?.name === "AbortError") return;
+      if (error?.name === "NotAllowedError") {
+        renderSoundUnlock("blocked");
+        setLocalPreviewStatus(`Ready — your browser blocked autoplay, so press Play to listen. ${localPreviewNotice(state.localAudioName)}`, "ready");
+        showToast("Local preview loaded. Press Play to listen.");
+        return;
+      }
+      failLocalPreview("This browser could not play that file. Try another MP3, WAV, M4A, AAC, OGG, FLAC, or WebM export.");
     }
   }
 
@@ -1215,7 +1264,7 @@ import { MIX_PRESETS, createMixSeed, deleteUserPreset, describeMixIntent, normal
       const timeoutId = window.setTimeout(() => settle({
         ok: false,
         state: "timeout",
-        detail: "Stream unavailable — click Upload Mix File or press play to choose a local mix."
+        detail: LOCAL_PREVIEW_PROMPT
       }), REMOTE_AUDIO_WATCHDOG_MS);
       elements.audio.addEventListener("loadeddata", handleReady, { once: true });
       elements.audio.addEventListener("canplay", handleReady, { once: true });
@@ -1248,6 +1297,10 @@ import { MIX_PRESETS, createMixSeed, deleteUserPreset, describeMixIntent, normal
     state.duration = Number(mix.durationSeconds || 0);
     revokeLocalAudioUrl();
     state.localAudioName = "";
+    if (elements.mixFileStatus) {
+      elements.mixFileStatus.textContent = "";
+      elements.mixFileStatus.dataset.state = "idle";
+    }
     state.audioSourceMode = "remote";
     const requestPlayback = userInitiated || resume;
     if (userInitiated) notePlaybackClick();
@@ -1398,8 +1451,8 @@ import { MIX_PRESETS, createMixSeed, deleteUserPreset, describeMixIntent, normal
   }
 
   function releaseStateLabel(status) {
-    if (state.audioSourceMode === "local") return elements.audio.paused ? "Local ready" : "Local active";
-    if (state.audioSourceMode === "error") return "Upload mix";
+    if (state.audioSourceMode === "local") return elements.audio.paused ? "Local preview ready" : "Local preview";
+    if (state.audioSourceMode === "error") return "Preview a local file";
     if (state.audioSourceMode === "empty" && status !== "loading") return "Standby";
     if (status === "loading") return "Loading signal";
     if (status === "playing") return state.autoplayMuted && elements.audio.muted ? "Playing muted" : "Playing now";
@@ -1411,10 +1464,10 @@ import { MIX_PRESETS, createMixSeed, deleteUserPreset, describeMixIntent, normal
   function releaseStateDetail(status, title, artist) {
     const releaseLine = [title, artist].filter(Boolean).join(" — ");
     if (state.audioSourceMode === "local") return state.localAudioName
-      ? `Playing local file: ${state.localAudioName}.`
-      : "A local mix file is active in Dreamweaver.";
-    if (state.audioSourceMode === "error" || status === "unavailable") return "Stream unavailable — click Upload Mix File or press play to choose a local mix.";
-    if (state.audioSourceMode === "empty" && status !== "loading") return "No active stream is loaded yet. Press play or upload a local mix to continue.";
+      ? `Local preview in this browser only: ${state.localAudioName}.${releaseLine ? ` The linked release (${releaseLine}) is unchanged.` : ""}`
+      : "A local preview file is active in this browser only.";
+    if (state.audioSourceMode === "error" || status === "unavailable") return LOCAL_PREVIEW_PROMPT;
+    if (state.audioSourceMode === "empty" && status !== "loading") return "No active stream is loaded yet. Press play or preview a local file in this lobby to continue.";
     if (status === "loading") return "Dreamweaver is preparing the audio and release context.";
     if (status === "playing") return releaseLine ? `${releaseLine} is live across the Dreamweaver lobby.` : "Live playback is active across the Dreamweaver lobby.";
     if (status === "ready") return releaseLine ? `${releaseLine} is ready. Press play to move through the four-act listening arc.` : "Audio is ready. Press play to move through the four-act listening arc.";
@@ -2280,7 +2333,7 @@ import { MIX_PRESETS, createMixSeed, deleteUserPreset, describeMixIntent, normal
     elements.mixFileInput?.addEventListener("change", async event => {
       const file = event.target?.files?.[0];
       event.target.value = "";
-      if (file) await activateLocalMixFile(file);
+      await activateLocalMixFile(file);
     });
     elements.uploadLabel?.addEventListener("keydown", event => {
       if (event.key === "Enter" || event.key === " ") {
@@ -3669,14 +3722,10 @@ import { MIX_PRESETS, createMixSeed, deleteUserPreset, describeMixIntent, normal
       metadata: { failureState: Number(elements.audio?.error?.code || 0) === 3 ? "corrupted_audio" : "non_playable_audio" }
     });
     if (state.audioSourceMode === "local" || elements.audio.currentSrc.startsWith("blob:")) {
-      state.audioSourceMode = "error";
-      state.localAudioName = "";
-      revokeLocalAudioUrl();
-      setReleasePlaybackState("unavailable");
-      showToast("The local file could not be loaded. Choose another mix file.");
+      failLocalPreview("The local file could not be loaded. Choose another audio file to preview.");
       return;
     }
-    handleRemoteAudioUnavailable("Stream unavailable — click Upload Mix File or press play to choose a local mix.");
+    handleRemoteAudioUnavailable(LOCAL_PREVIEW_PROMPT);
   });
   elements.muteButton.addEventListener("click", () => { state.autoplayMuted = false; renderSoundUnlock(""); elements.audio.muted = !elements.audio.muted; elements.muteButton.setAttribute("aria-label", elements.audio.muted ? "Unmute show" : "Mute show"); showToast(elements.audio.muted ? "Show muted" : "Sound restored"); });
   window.addEventListener("online", () => { void flushQueuedAudioFeedback(); });
@@ -3749,6 +3798,7 @@ import { MIX_PRESETS, createMixSeed, deleteUserPreset, describeMixIntent, normal
   document.querySelectorAll("[data-mode]").forEach(button => button.addEventListener("click", () => setMode(button.dataset.mode)));
   ["mousemove", "pointerdown", "touchstart", "keydown"].forEach(eventName => document.addEventListener(eventName, resetIdle, { passive: true }));
   window.addEventListener("beforeunload", stopSatelliteAgentLoop);
+  window.addEventListener("pagehide", handleLobbyPageHide);
   document.addEventListener("keydown", event => {
     if (event.key === "Escape" && elements.campaignStudio.classList.contains("open")) return closeCampaignStudio();
     if (event.key === "Escape" && elements.drawer.classList.contains("open")) closeStory();

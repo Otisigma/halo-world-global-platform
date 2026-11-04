@@ -16,6 +16,7 @@ import {
   inspectAudioUpload,
   storeAudioChunk,
 } from "../lib/chunked-audio-upload.mjs";
+import { loadUploadPreflight, safeUploadReadiness } from "../lib/upload-readiness.mjs";
 
 const audioStore = getStore({ name: "halo-song-catalog-audio", consistency: "strong" });
 const radioAudioStore = getStore({ name: "halo-radio-submissions", consistency: "strong" });
@@ -139,7 +140,9 @@ async function uploadChunk(request: Request, db: Awaited<ReturnType<typeof getDa
   if (version.audio_blob_prefix === prefix) return json({ message: "This upload is already finalized", chunkIndex, finalized: true }, 409);
   const stored = await storeAudioChunk(audioStore, { prefix, chunkIndex, chunkCount, byteSize, chunk, checksum });
   if (!stored.ok) return json({ message: stored.message, chunkIndex }, stored.status);
-  return json({ message: "Audio chunk uploaded", chunkIndex, chunkSha256: stored.sha256 });
+  // Telemetry is advisory; a lookup hiccup must not fail a chunk that is already stored.
+  const readiness = await loadUploadPreflight(db, ownerMemberId, songId, versionId, { receivedChunks: chunkIndex + 1, chunkCount }).catch(() => null);
+  return json({ message: "Audio chunk uploaded", chunkIndex, chunkSha256: stored.sha256, readiness });
 }
 
 async function uploadStatus(payload: Record<string, unknown>, db: Awaited<ReturnType<typeof getDatabase>>, ownerMemberId: string) {
@@ -155,6 +158,27 @@ async function uploadStatus(payload: Record<string, unknown>, db: Awaited<Return
   const prefix = audioUploadPrefix(ownerMemberId, versionId, uploadId);
   const status = await inspectAudioUpload(audioStore, { prefix, chunkCount, byteSize });
   return json({ songId, versionId, uploadId, finalized: version.audio_blob_prefix === prefix, ...status });
+}
+
+const RECHECK_COOLDOWN_SECONDS = 20;
+
+async function readinessAction(payload: Record<string, unknown>, db: Awaited<ReturnType<typeof getDatabase>>, ownerMemberId: string, rerun: boolean) {
+  const songId = cleanId(payload.songId);
+  if (!songId) return json({ message: "A valid song is required" }, 400);
+  const rows = await db.sql`
+    SELECT id, (reviewed_at IS NOT NULL AND reviewed_at > NOW() - make_interval(secs => ${RECHECK_COOLDOWN_SECONDS})) AS recently_reviewed,
+      EXISTS (SELECT 1 FROM halo_song_versions version WHERE version.song_id = halo_song_catalog.id AND version.status = 'active' AND version.audio_url IS NOT NULL) AS has_audio
+    FROM halo_song_catalog
+    WHERE id = ${songId} AND owner_member_id = ${ownerMemberId} AND status = 'active'
+    LIMIT 1
+  `;
+  const song = rows[0];
+  if (!song) return json({ message: "That song was not found" }, 404);
+  // Rechecks rerun the same review/conveyor/publication path a save does; the cooldown stops hammering.
+  const throttled = rerun && song.recently_reviewed === true;
+  if (rerun && !throttled) await runDreamweaverReview(songId, ownerMemberId);
+  const readiness = await safeUploadReadiness(db, ownerMemberId, songId, { persisted: song.has_audio === true });
+  return json({ songId, rechecked: rerun && !throttled, throttled, readiness });
 }
 
 async function removeUpload(prefix: string) {
@@ -207,7 +231,8 @@ async function finalizeUpload(payload: Record<string, unknown>, db: Awaited<Retu
   const audioUrl = `/api/song-catalog/audio?versionId=${encodeURIComponent(versionId)}`;
   // Retrying a finalize whose response was lost returns the same confirmation without rewriting anything.
   if (version.audio_blob_prefix === prefix) {
-    return json({ message: "Audio is persisted and locked into HALO storage.", songId, versionId, audioUrl, persisted: true, lockedIn: true, alreadyFinalized: true });
+    const readiness = await safeUploadReadiness(db, ownerMemberId, songId, { persisted: true });
+    return json({ message: "Audio is persisted and locked into HALO storage.", songId, versionId, audioUrl, persisted: true, lockedIn: true, alreadyFinalized: true, readiness });
   }
   const status = await inspectAudioUpload(audioStore, { prefix, chunkCount, byteSize });
   if (!status.complete) {
@@ -231,6 +256,8 @@ async function finalizeUpload(payload: Record<string, unknown>, db: Awaited<Retu
   await runDreamweaverReview(songId, ownerMemberId);
   if (version.audio_blob_prefix && version.audio_blob_prefix !== prefix) await removeUpload(version.audio_blob_prefix).catch(() => undefined);
   await removeStoredMaster(version.audio_storage_key).catch(() => undefined);
+  // runDreamweaverReview already ran the conveyor and publication reconcile, so this is the live receipt.
+  const readiness = await safeUploadReadiness(db, ownerMemberId, songId, { persisted: true });
   return json({
     message: "Audio is persisted and locked into HALO storage.",
     songId,
@@ -239,6 +266,7 @@ async function finalizeUpload(payload: Record<string, unknown>, db: Awaited<Retu
     persisted: true,
     lockedIn: true,
     confirmedAt: new Date().toISOString(),
+    readiness,
   });
 }
 
@@ -424,6 +452,8 @@ export default async function songCatalogAudioHandler(request: Request) {
     if (!payload) return json({ message: "Choose a supported audio action" }, 400);
     if (payload.action === "finalize_upload") return finalizeUpload(payload, db, membership.member_id);
     if (payload.action === "upload_status") return uploadStatus(payload, db, membership.member_id);
+    if (payload.action === "upload_readiness") return readinessAction(payload, db, membership.member_id, false);
+    if (payload.action === "recheck_readiness") return readinessAction(payload, db, membership.member_id, true);
     if (payload.action === "list_radio_tracks") return listRadioTracks(db, membership.member_id);
     if (payload.action === "import_from_radio") return importFromRadio(payload, db, membership.member_id);
     return json({ message: "Choose a supported audio action" }, 400);

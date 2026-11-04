@@ -6,6 +6,7 @@ import { Readable } from "node:stream";
 import { CANONICAL_ROUTE_ALIAS_ENTRIES, PUBLIC_ROUTE_REGISTRY } from "./lib/route-registry.js";
 import driveCatalogHandler from "./netlify/functions/drive-catalog.mjs";
 import driveCatalogAudioHandler from "./netlify/functions/drive-catalog-audio.mjs";
+import { createApiCors } from "./deploy/api-cors.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -143,6 +144,11 @@ function rateLimit(req, res, next) {
   return next();
 }
 
+const apiCors = createApiCors(process.env.CORS_ALLOWED_ORIGINS || "");
+app.use((req, res, next) => {
+  if (req.path === "/api" || req.path.startsWith("/api/")) return apiCors(req, res, next);
+  next();
+});
 for (const [route, handler] of [
   ["/api/drive-catalog", driveCatalogHandler],
   ["/api/drive-catalog/audio", driveCatalogAudioHandler],
@@ -155,7 +161,11 @@ for (const [route, handler] of [
       });
       const response = await handler(request);
       res.status(response.status);
-      response.headers.forEach((value, name) => res.setHeader(name, value));
+      response.headers.forEach((value, name) => {
+        if (name.startsWith("access-control-") && res.hasHeader(name)) return;
+        if (name === "vary") return res.vary(value);
+        res.setHeader(name, value);
+      });
       if (!response.body || req.method === "HEAD") return res.end();
       const body = Readable.fromWeb(response.body);
       res.on("close", () => body.destroy());
@@ -322,6 +332,6 @@ app.use((req, res) => {
   res.status(404).send("Not found");
 });
 
-app.listen(port, () => {
-  console.log(`HALO static server listening on port ${port}`);
+const server = app.listen(port, () => {
+  console.log(`HALO static server listening on port ${server.address().port}`);
 });

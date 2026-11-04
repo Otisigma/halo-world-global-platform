@@ -61,6 +61,17 @@ function youtubeId(value) {
   }
 }
 
+function canonicalCatalogAudioSource(row) {
+  const songId = String(row.catalog_song_id || "").toLowerCase();
+  const versionId = String(row.catalog_master_version_id || "").toLowerCase();
+  const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+  if (!uuid.test(songId) || !uuid.test(versionId) || row.status !== "published" || row.visibility !== "public"
+    || row.catalog_pipeline_status !== "published" || row.catalog_rights_status !== "cleared"
+    || row.catalog_master_mastering_status !== "approved" || row.catalog_master_stored !== true
+    || Number(row.catalog_master_count) !== 1) return "";
+  return `/api/song-catalog/audio?versionId=${encodeURIComponent(versionId)}&dreamweaver=1&songId=${encodeURIComponent(songId)}`;
+}
+
 function dreamweaverPayloadFor(row, values = {}) {
   const title = row.catalog_title || row.title || "Untitled Release";
   const artist = row.catalog_artist_name || row.artist || "Owen Anthony";
@@ -268,6 +279,7 @@ function serializeRelease(row) {
         versionId: row.catalog_master_version_id || "",
         uploaded: Boolean(row.catalog_master_uploaded),
         masteringStatus: row.catalog_master_mastering_status || "",
+        audioSource: canonicalCatalogAudioSource(row),
         durationSeconds: Number(row.catalog_master_duration_seconds || 0),
         contentType: row.catalog_master_content_type || ""
       }
@@ -343,6 +355,7 @@ export default async function releaseCatalogHandler(request) {
         catalog.catalog_artist_name,
         catalog.catalog_title,
         catalog.catalog_rights_status,
+        catalog.catalog_pipeline_status,
         catalog.catalog_sale_status,
         catalog.catalog_metadata_status,
         catalog.catalog_sale_price_cents,
@@ -357,6 +370,8 @@ export default async function releaseCatalogHandler(request) {
         catalog_master.catalog_master_mastering_status,
         catalog_master.catalog_master_duration_seconds,
         catalog_master.catalog_master_content_type,
+        catalog_master.catalog_master_stored,
+        catalog_master.catalog_master_count,
         publication.release_status AS publication_release_status,
         publication.radio_status AS publication_radio_status,
         publication.dreamweaver_status AS publication_dreamweaver_status,
@@ -405,6 +420,7 @@ export default async function releaseCatalogHandler(request) {
           song.genre AS catalog_genre,
           song.artwork_url AS catalog_artwork_url,
           song.rights_status AS catalog_rights_status,
+          song.pipeline_status AS catalog_pipeline_status,
           song.sale_status AS catalog_sale_status,
           song.metadata_status AS catalog_metadata_status,
           song.sale_price_cents AS catalog_sale_price_cents,
@@ -440,7 +456,11 @@ export default async function releaseCatalogHandler(request) {
           (COALESCE(version.audio_url, '') <> '') AS catalog_master_uploaded,
           version.mastering_status AS catalog_master_mastering_status,
           version.duration_seconds AS catalog_master_duration_seconds,
-          version.audio_content_type AS catalog_master_content_type
+          version.audio_content_type AS catalog_master_content_type,
+          (COALESCE(version.audio_storage_key, '') <> '' OR (
+            COALESCE(version.audio_blob_prefix, '') <> '' AND version.audio_chunk_count > 0 AND version.audio_byte_size > 0
+          )) AS catalog_master_stored,
+          COUNT(*) OVER () AS catalog_master_count
         FROM halo_song_versions version
         WHERE version.song_id = catalog.catalog_song_id
           AND version.version_type = 'sale_master'

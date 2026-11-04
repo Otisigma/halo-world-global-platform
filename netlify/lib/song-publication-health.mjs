@@ -254,14 +254,21 @@ export function buildPublicationHealth(song, sync = {}, now = new Date()) {
     ));
   } else if (releaseReady && !dreamweaverReady && !lastError) {
     state = "awaiting_dreamweaver_share_readiness";
-    summary = "The song is live on the public release page, and HALO is waiting for Dreamweaver sharing to catch up.";
-    failureReasons.push("Dreamweaver does not yet show the canonical shared song link.");
+    summary = "The song is published. HALO will automatically confirm Dreamweaver when its public catalog payload matches the current master.";
+    const shareReasons = {
+      deployment_origin_unconfigured: "HALO's HTTPS deployment URL is not configured; an operator must configure URL before share verification can run.",
+      catalog_http_error: "The public catalog returned an HTTP error during the bounded share check.",
+      catalog_invalid_response: "The public catalog did not return a JSON share payload.",
+      catalog_payload_not_current: "The public catalog payload is missing or does not yet match this song, approved master, and share route.",
+      catalog_probe_failed: "The public catalog share check timed out or failed; the next reconciliation will retry.",
+    };
+    failureReasons.push(shareReasons[details.shareVerification?.reason] || "Dreamweaver does not yet show the canonical shared song link.");
     recommendedFixes.push(buildFix(
-      "Wait for Dreamweaver share confirmation",
+      "Automatic Dreamweaver share confirmation",
       [
         "Keep the song published and keep the public release link unchanged.",
-        "Refresh the publication status after the next automatic check window.",
-        "If the share surface still does not appear later, save the song notes once to trigger a fresh review and retry."
+        "Use the existing publication refresh/reconcile control to check again now, or wait for the next 15-minute automatic check.",
+        "No metadata edit or re-upload is needed. If checks keep failing, ask the HALO operator to inspect the reported catalog or deployment issue."
       ],
       `Draft a short Dreamweaver-share follow-up for ${song?.title || "this song"} so I can confirm the canonical link is ready.`
     ));

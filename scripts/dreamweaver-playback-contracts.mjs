@@ -30,6 +30,30 @@ const release = {
 const mix = { id: "linked-mix-id", title: "Linked mix", creator: { name: "Mix artist" }, audioUrl: "https://halo.test/mix.mp3", durationSeconds: 120 };
 
 {
+  const api = await readFile(new URL("../netlify/functions/release-catalog.mjs", import.meta.url), "utf8");
+  const context = vm.createContext({});
+  vm.runInContext(api.slice(api.indexOf("function canonicalCatalogAudioSource("), api.indexOf("function dreamweaverPayloadFor(")), context);
+  const row = {
+    catalog_song_id: songId, catalog_master_version_id: "22222222-2222-4222-8222-222222222222",
+    status: "published", visibility: "public", catalog_pipeline_status: "published",
+    catalog_rights_status: "cleared", catalog_master_mastering_status: "approved",
+    catalog_master_stored: true, catalog_master_count: 1
+  };
+  assert.match(context.canonicalCatalogAudioSource(row), /^\/api\/song-catalog\/audio\?versionId=/);
+  for (const patch of [
+    { status: "draft" }, { visibility: "private" }, { catalog_pipeline_status: "queued" },
+    { catalog_rights_status: "needs_review" }, { catalog_master_mastering_status: "review" },
+    { catalog_master_stored: false }, { catalog_master_count: 2 }, { catalog_master_count: 0 },
+    { catalog_master_version_id: "" }, { catalog_song_id: "" }
+  ]) {
+    assert.equal(context.canonicalCatalogAudioSource({ ...row, ...patch }), "",
+      "only one approved persisted master on a cleared public published song gets a direct playback route");
+  }
+  assert.match(api, /COUNT\(\*\) OVER \(\) AS catalog_master_count/);
+  assert.match(api, /audioSource: canonicalCatalogAudioSource\(row\)/);
+}
+
+{
   let requestedSongId = songId;
   const paths = [];
   const context = {
@@ -52,7 +76,7 @@ const mix = { id: "linked-mix-id", title: "Linked mix", creator: { name: "Mix ar
   assert.equal(paths[1], "/api/release-catalog", "mix-only routes retain the existing feed lookup");
 }
 
-export function fixture(search, { releases = [release], mixes = [mix], blocked = false, failed = false, failingSources = [], rejectedPlaySources = [], loadingSources = [], deferPlaying = false, unlock = null, pathname = "/dreamweaver/", releaseArtwork = undefined, assetBinding = binding, driveCatalog = { configured: false, tracks: [] }, catalogError = false, storage = { getItem: () => null }, storageGetterError = false, preloader } = {}) {
+export function fixture(search, { releases = [release], mixes = [mix], blocked = false, failed = false, failingSources = [], rejectedPlaySources = [], loadingSources = [], deferPlaying = false, unlock = null, pathname = "/dreamweaver/", releaseArtwork = undefined, assetBinding = binding, assetBindingPending = false, driveCatalog = { configured: false, tracks: [] }, catalogError = false, storage = { getItem: () => null }, storageGetterError = false, preloader, sentinel } = {}) {
   class Element extends EventTarget {
     constructor() {
       super();
@@ -120,8 +144,8 @@ export function fixture(search, { releases = [release], mixes = [mix], blocked =
     document: { getElementById: getElement, querySelector: getElement, body: new Element() },
     localStorage: storage,
     history: { replaceState: (_state, _title, url) => { location.href = new URL(url, location).href; } },
-    window: { clearTimeout: id => timers.delete(id), setTimeout: callback => { timers.set(++timerId, callback); return timerId; }, requestAnimationFrame: callback => callback(), HaloReleaseArtwork: releaseArtwork, HaloAudioPreloader: preloader },
-    fixtures: { releases, mixes, unlock, requests, assetBinding, driveCatalog, catalogError }
+    window: { clearTimeout: id => timers.delete(id), setTimeout: callback => { timers.set(++timerId, callback); return timerId; }, requestAnimationFrame: callback => callback(), HaloReleaseArtwork: releaseArtwork, HaloAudioPreloader: preloader, HaloSentinel: sentinel },
+    fixtures: { releases, mixes, unlock, requests, assetBinding, assetBindingPending, driveCatalog, catalogError }
   };
   if (storageGetterError) Object.defineProperty(context, "localStorage", { get() { throw new Error("SecurityError"); } });
   vm.runInNewContext(`${declarations}
@@ -143,11 +167,13 @@ export function fixture(search, { releases = [release], mixes = [mix], blocked =
         return { response: { ok: !fixtures.catalogError }, payload: fixtures.driveCatalog };
       }
       if (url.startsWith("/api/dreamweaver-assets?")) {
+        if (fixtures.assetBindingPending) return new Promise(() => {});
         return { response: { ok: Boolean(fixtures.assetBinding) }, payload: { binding: fixtures.assetBinding } };
       }
       return { response: { ok: true }, payload: { mixes: fixtures.mixes } };
     };
     state.unlock = fixtures.unlock;
+    bindPlayerControls();
     elements.audio.addEventListener("playing", () => { clearRemoteAudioWatchdog(); measurePlaybackStart(); setReleasePlaybackState("playing"); });
     ${catalogControlBindings}
     ${audioErrorBinding}
@@ -192,6 +218,47 @@ for (const search of [
   if (requestedParams.has("satellite")) assert.equal(params.get("satellite"), "dreamweaver");
 }
 
+{
+  const versionId = "22222222-2222-4222-8222-222222222222";
+  const audioSource = `/api/song-catalog/audio?versionId=${versionId}&dreamweaver=1&songId=${songId}`;
+  const directRelease = {
+    ...release,
+    catalog: { songId, rightsStatus: "cleared", masterCopy: { versionId, masteringStatus: "approved", audioSource } }
+  };
+  for (const options of [
+    { assetBindingPending: true },
+    { assetBinding: null },
+    { assetBinding: { ...binding, masterVersionId: versionId } },
+    { assetBinding: { ...binding, masterVersionId: "33333333-3333-4333-8333-333333333333" } }
+  ]) {
+    const f = fixture(`?mix=owen-anthony-quiet-heart&song=${songId}&experience=studio`, {
+      releases: [directRelease], ...options
+    });
+    await f.initializeDreamweaver();
+    assert.equal(f.nodes.get("showAudio").src, new URL(audioSource, "https://halo.test").href,
+      "the show binds the approved catalog master even when visual binding stalls or fails");
+    assert.equal(f.nodes.get("showAudio").loads, 1);
+    assert.equal(f.nodes.get("showAudio").plays, 0, "source binding must not autoplay");
+    assert.equal(f.shouldPromptLocalUpload(), false);
+    assert.equal(f.state.releasePlaybackState, "ready");
+    await f.togglePlayback();
+    assert.equal(f.nodes.get("showAudio").plays, 1, "the first Play click uses the bound catalog master");
+  }
+  for (const source of [
+    "https://evil.test/master.wav",
+    `/api/song-catalog/audio?versionId=${versionId}&dreamweaver=1&songId=33333333-3333-4333-8333-333333333333`,
+    `https://drive.google.com/file/d/example/view`,
+  ]) {
+    const invalidRelease = { ...directRelease, catalog: {
+      ...directRelease.catalog, masterCopy: { ...directRelease.catalog.masterCopy, audioSource: source }
+    } };
+    const f = fixture(`?song=${songId}`, { releases: [invalidRelease] });
+    await f.initializeDreamweaver();
+    assert.equal(f.nodes.get("showAudio").src, masterStream,
+      "unsafe or cross-song catalog sources must use the existing server binding instead");
+  }
+}
+
 for (const search of ["?mix=linked-mix-id", "?mix=linked-mix-id&satellite=dreamweaver"]) {
   const f = fixture(search, { releases: [] });
   await f.initializeDreamweaver();
@@ -224,7 +291,8 @@ for (const options of [{ unlock: { firstName: "Listener", favoritePlatform: "spo
 {
   const f = fixture(`?song=${songId}`, { failed: true });
   await f.initializeDreamweaver();
-  assert.equal(f.nodes.get("showAudio").loads, 1);
+  assert.equal(f.nodes.get("showAudio").loads, 2, "a failed master retries the same song's public release stream once");
+  assert.equal(f.nodes.get("showAudio").src, stream);
   assert.equal(f.nodes.get("showAudio").plays, 0);
   assert.equal(f.shouldPromptLocalUpload(), true, "unavailable remote audio must retain upload fallback");
   assert.equal(f.state.releasePlaybackState, "unavailable", "hydration must not overwrite the audio failure");
@@ -266,8 +334,33 @@ for (const options of [{ unlock: { firstName: "Listener", favoritePlatform: "spo
   assert.equal(f.resolvePrimaryPlaybackMix([], "", null, { allowFallback: false }), null);
 }
 
+// Chart parity: when the master binding is merely unavailable, the live published release stream plays,
+// exactly like the chart ▶ PLAY row resolves it. Drive share links still require the authorized proxy.
+for (const assetBinding of [null, { ...binding, status: "processing" }]) {
+  const f = fixture(`?song=${songId}&mix=${DREAMWEAVER_STOREFRONT_MIX_ID}&satellite=dreamweaver`, { assetBinding, blocked: true });
+  await f.initializeDreamweaver();
+  assert.equal(f.nodes.get("showAudio").src, stream, "unbound published songs play the chart's release stream");
+  assert.equal(f.nodes.get("showAudio").loads, 1);
+  assert.equal(f.nodes.get("showAudio").plays, 0, "fallback still never autoplays");
+  assert.equal(f.state.releasePlaybackState, "ready");
+  assert.equal(f.shouldPromptLocalUpload(), false, "a valid published song must not force the local-file prompt");
+}
+{
+  const driveOnly = { ...release, streamUrl: "https://drive.google.com/file/d/1AbCdEfGhIjKlMnOpQrStUv/view",
+    dreamweaverPayload: { ...release.dreamweaverPayload, audioStreamUrl: null } };
+  const f = fixture(`?song=${songId}`, { assetBinding: null, releases: [driveOnly] });
+  await f.initializeDreamweaver();
+  assert.equal(f.nodes.get("showAudio").loads, 0, "raw Drive release links never reach the player");
+  assert.equal(f.state.releasePlaybackState, "unavailable");
+}
+{
+  const cached = { getItem: () => JSON.stringify({ cachedAt: Date.now(), release }) };
+  const f = fixture(`?song=${songId}`, { assetBinding: null, releases: [], storage: cached });
+  await f.initializeDreamweaver();
+  assert.equal(f.nodes.get("showAudio").loads, 0, "a cached (possibly unpublished) release never substitutes for the live catalog");
+}
+
 for (const assetBinding of [
-  null,
   { ...binding, visualActs: binding.visualActs.slice(0, 3) },
   { ...binding, songId: "22222222-2222-4222-8222-222222222222" },
   { ...binding, audioSource: "javascript:alert(1)" },
@@ -275,7 +368,7 @@ for (const assetBinding of [
 ]) {
   const f = fixture(`?song=${songId}`, { assetBinding });
   await f.initializeDreamweaver();
-  assert.equal(f.nodes.get("showAudio").loads, 0, "invalid bindings must never fall back to preview audio");
+  assert.equal(f.nodes.get("showAudio").loads, 0, "integrity-failed bindings must never fall back to preview audio");
   assert.equal(f.state.releasePlaybackState, "unavailable");
 }
 
@@ -463,11 +556,38 @@ assert.match(script, /audio: document\.getElementById\("showAudio"\)/, "Dreamwea
 
   const invalid = fixture(`?song=${songId}`, { releases: [driveRelease], assetBinding: null });
   await invalid.initializeDreamweaver();
-  assert.equal(invalid.nodes.get("showAudio").loads, 0, "Drive cannot replace a missing canonical binding");
-  assert.equal(invalid.state.releasePlaybackState, "unavailable");
+  assert.equal(invalid.nodes.get("showAudio").src, driveDirect, "chart parity: the authorized site proxy stream plays when the binding is missing");
+  assert.equal(invalid.nodes.get("showAudio").plays, 0);
+  assert.equal(invalid.state.releasePlaybackState, "ready");
 }
 
 const proxy = "https://halo.test/api/drive-catalog/audio?track=bound-song";
+{
+  const probes = [];
+  let registered;
+  const sentinel = {
+    bind(controller) { registered = controller; },
+    async preflight(audio, source, options) {
+      assert.equal(registered?.audio, audio);
+      assert.equal(options.recover, false, "bootstrap owns its fallback rather than racing the observer");
+      probes.push(source);
+      return { ok: source === proxy };
+    }
+  };
+  const f = fixture(`?song=${songId}`, { sentinel, assetBinding: { ...binding, fallbackAudioSource: proxy } });
+  await f.initializeDreamweaver();
+  assert.deepEqual(probes, [masterStream, proxy], "a failed preflight tries only the bound same-song proxy");
+  assert.equal(f.nodes.get("showAudio").src, proxy);
+  assert.equal(f.state.releasePlaybackState, "ready", "a successful proxy preflight must not be overwritten as unavailable");
+  assert.equal(f.nodes.get("showAudio").plays, 0);
+}
+{
+  const sentinel = { bind() {}, preflight: async () => ({ ok: false }) };
+  const f = fixture(`?song=${songId}`, { sentinel });
+  await f.initializeDreamweaver();
+  assert.equal(f.state.releasePlaybackState, "unavailable");
+  assert.equal(f.shouldPromptLocalUpload(), true);
+}
 {
   const warmed = [];
   const preloader = {
@@ -484,7 +604,7 @@ const proxy = "https://halo.test/api/drive-catalog/audio?track=bound-song";
   const f = fixture(`?song=${songId}`, { preloader, assetBinding: { ...binding, fallbackAudioSource: proxy }, deferPlaying: true });
   await f.initializeDreamweaver();
   const audio = f.nodes.get("showAudio");
-  assert.deepEqual(warmed[0].sources, [masterStream, proxy], "warm only the canonical primary and same-song site proxy");
+  assert.deepEqual(warmed[0].sources, [masterStream, proxy, stream], "warm only the canonical primary, same-song site proxy and the chart's public release stream");
   assert.equal(warmed[0].options.primaryAudio, audio);
   assert.equal(warmed[0].options.respectPolicy, true);
   const start = f.startUnlockedShow();
@@ -535,13 +655,24 @@ for (const failure of ["promise", "late-error", "stall"]) {
   assert.equal(f.shouldPromptLocalUpload(), false);
 }
 {
+  // The chart's release stream rescues playback when both the master and the site proxy are rejected.
+  const rescued = fixture(`?song=${songId}`, { assetBinding: { ...binding, fallbackAudioSource: proxy }, rejectedPlaySources: [masterStream, proxy] });
+  await rescued.initializeDreamweaver();
+  await rescued.togglePlayback();
+  for (let i = 0; i < 6; i += 1) await new Promise(resolve => setImmediate(resolve));
+  assert.equal(rescued.nodes.get("showAudio").src, stream);
+  assert.equal(rescued.nodes.get("showAudio").paused, false);
+  assert.equal(rescued.shouldPromptLocalUpload(), false);
+}
+{
   const f = fixture(`?song=${songId}`, {
-    assetBinding: { ...binding, fallbackAudioSource: proxy }, rejectedPlaySources: [masterStream, proxy]
+    assetBinding: { ...binding, fallbackAudioSource: proxy }, rejectedPlaySources: [masterStream, proxy, stream]
   });
   await f.initializeDreamweaver();
   await f.togglePlayback();
-  await new Promise(resolve => setImmediate(resolve));
-  assert.equal(f.nodes.get("showAudio").src, proxy);
+  for (let i = 0; i < 6; i += 1) await new Promise(resolve => setImmediate(resolve));
+  assert.equal(f.nodes.get("showAudio").src, stream, "after master and proxy, the chart's release stream is the last attempt");
+  assert.equal(f.nodes.get("showAudio").plays, 3, "each source is tried exactly once — no fallback ping-pong");
   assert.equal(f.shouldPromptLocalUpload(), true);
   assert.equal(f.state.releasePlaybackState, "unavailable");
 }
@@ -549,11 +680,11 @@ for (const failure of ["promise", "late-error", "stall"]) {
 {
   const audioFile = (name, type = "audio/mp4") => Object.assign(new Blob(["local audio"], { type }), { name });
   const f = fixture(`?song=${songId}`, {
-    assetBinding: { ...binding, fallbackAudioSource: proxy }, rejectedPlaySources: [masterStream, proxy]
+    assetBinding: { ...binding, fallbackAudioSource: proxy }, rejectedPlaySources: [masterStream, proxy, stream]
   });
   await f.initializeDreamweaver();
   await f.togglePlayback();
-  await new Promise(resolve => setImmediate(resolve));
+  for (let i = 0; i < 6; i += 1) await new Promise(resolve => setImmediate(resolve));
   const audio = f.nodes.get("showAudio");
   const status = f.nodes.get("mixFileStatus");
   const standbySource = audio.src;

@@ -16,7 +16,8 @@
   <script src="/stats.js" defer></script>
   <script type="module" src="/identity.js"></script>
   <script src="/accessibility.js" defer></script>
-  <script src="/dreamweaver-lab/song-lab.js" defer></script>
+  <script src="/upload-progress.js" defer></script>
+  <script type="module" src="/dreamweaver-lab/song-lab.js"></script>
 </head>
 <body>
   <div class="grain" aria-hidden="true"></div>
@@ -52,11 +53,18 @@
         <div class="panel-number">01 / SOURCE</div>
         <h2>Bring in the recording.</h2>
         <label class="drop-zone" id="dropZone">
-          <input id="songFile" type="file" accept="audio/wav,audio/x-wav,audio/mpeg,audio/mp4,audio/aac,audio/ogg,audio/webm,.wav,.mp3,.m4a,.aac,.ogg,.webm" required>
+          <input id="songFile" type="file" accept="audio/wav,audio/x-wav,audio/mpeg,audio/mp4,audio/aac,audio/ogg,audio/webm,.wav,.mp3,.m4a,.aac,.ogg,.webm">
           <span class="drop-mark" aria-hidden="true">DW</span>
           <strong id="dropTitle">Choose a WAV or audio file</strong>
           <small id="dropDetail">Drop it here · private · up to 128 MB</small>
         </label>
+        <section id="uploadRecovery" class="upload-recovery" hidden aria-label="Local upload recovery">
+          <p id="uploadRecoveryStatus" role="status" aria-live="polite"></p>
+          <button id="resumeUploadButton" type="button" hidden>Resume Upload</button>
+          <button id="discardUploadButton" type="button">Discard local backup</button>
+          <p class="backup-notice">Audio and draft details stay in this browser until the package is ready or you discard them. Browser storage can be cleared or evicted; keep your original file. Do not use a shared device for private recordings.</p>
+        </section>
+        <progress id="uploadProgress" max="100" value="0" hidden aria-label="Private audio upload progress"></progress>
 
         <div class="field-grid">
           <label>Song title<input id="songTitle" name="title" maxlength="140" required></label>
@@ -69,6 +77,8 @@
           <textarea id="lyrics" name="lyrics" maxlength="8000" rows="6" placeholder="Paste lyrics here for theme and campaign analysis…"></textarea>
         </label>
         <label class="rights-check"><input id="rightsAttested" type="checkbox" required><span>I own this recording or have permission to upload and analyze it. I understand Dreamweaver cannot verify ownership, credits, samples, or clearances.</span></label>
+        <label class="rights-check"><input id="autoResumeUpload" type="checkbox" checked><span>Automatically continue this submitted, authorized upload after network errors, reconnection, or reload on this account. Up to three recovery rounds; unsubmitted files never start automatically.</span></label>
+        <button id="pauseUploadButton" type="button" hidden>Pause after current request</button>
         <button class="analyze-button" id="analyzeButton" type="submit" disabled>
           <span>START PRIVATE ANALYSIS</span>
           <strong>Build the Dreamweaver package</strong>

@@ -147,11 +147,15 @@
   // are retried by default and a retried part simply overwrites the earlier attempt.
   const DEFAULT_CHUNK_RETRY_DELAYS=[800,2000,4000];
 
-  async function uploadChunkedFile({url,file,chunkSize,buildBody,retryDelays=DEFAULT_CHUNK_RETRY_DELAYS,onProgress=()=>{},onRetry=()=>{},requestOptions={}}){
+  async function uploadChunkedFile({url,file,chunkSize,buildBody,retryDelays=DEFAULT_CHUNK_RETRY_DELAYS,onProgress=()=>{},onRetry=()=>{},onChunk=()=>{},shouldSkipChunk=null,requestOptions={}}){
     const chunkCount=Math.ceil(file.size/chunkSize);
     for(let chunkIndex=0;chunkIndex<chunkCount;chunkIndex+=1){
       const start=chunkIndex*chunkSize;
       const end=Math.min(file.size,start+chunkSize);
+      // Resume support: parts the server already holds with a matching checksum are not re-sent.
+      let skip=false;
+      if(shouldSkipChunk){try{skip=await shouldSkipChunk({chunkIndex,chunkCount,start,end})===true;}catch{skip=false;}}
+      if(skip){onProgress(clampPercent(((chunkIndex+1)/chunkCount)*100),{chunkIndex,chunkCount,skipped:true});continue;}
       const body=buildBody({chunkIndex,chunkCount,start,end});
       const response=await sendFormDataWithRetry(url,body,{
         ...requestOptions,
@@ -165,6 +169,8 @@
       });
       if(!response.ok)throw Object.assign(new Error(response.data?.message||"The upload stopped early."),{status:response.status,retryable:RETRYABLE_STATUSES.has(response.status)});
       onProgress(clampPercent(((chunkIndex+1)/chunkCount)*100),{chunkIndex,chunkCount});
+      // Telemetry consumers must never break the transfer loop.
+      try{onChunk(response.data||{},{chunkIndex,chunkCount});}catch{}
     }
     return {chunkCount};
   }

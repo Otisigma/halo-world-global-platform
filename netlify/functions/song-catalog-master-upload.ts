@@ -18,6 +18,7 @@ import {
 import { MASTER_VERSION_TYPE } from "../lib/master-copy.mjs";
 import { isTransientError } from "../lib/resilience.mjs";
 import { runDreamweaverReview } from "./song-catalog.js";
+import { safeUploadReadiness } from "../lib/upload-readiness.mjs";
 
 // Large master copies bypass Netlify function payload limits: this endpoint only exchanges small
 // JSON metadata. `presign` issues a short-lived PUT URL the browser uploads to directly, and
@@ -112,6 +113,7 @@ async function registerMasterUpload(payload: Record<string, unknown>, db: Awaite
     const stored = await audioStore.list({ prefix: String(version.audio_blob_prefix) }).catch(() => ({ blobs: [] }));
     await Promise.all(stored.blobs.map(blob => audioStore.delete(blob.key))).catch(() => undefined);
   }
+  const readiness = await safeUploadReadiness(db, ownerMemberId, songId, { persisted: true });
   return json({
     message: "Master copy uploaded directly to storage and registered as the canonical sale master.",
     songId,
@@ -121,6 +123,7 @@ async function registerMasterUpload(payload: Record<string, unknown>, db: Awaite
     persisted: true,
     lockedIn: true,
     confirmedAt: new Date().toISOString(),
+    readiness,
   });
 }
 

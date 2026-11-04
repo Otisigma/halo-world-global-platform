@@ -99,6 +99,11 @@ subsequent windows or seek. Signed direct-storage redirects are unchanged.
 Matching the upload chunk size avoids repeatedly fetching a four-MiB storage
 chunk for each smaller playback response while staying below buffered binary
 response limits.
+Initial metadata/decoder loading has a bounded 20-second budget; a buffered
+stream retains the existing five-second stall watchdog. The real master required
+an initial range, a tail metadata range and a subsequent audio range. Applying a
+five-second stall deadline to that startup sequence paused the player even after
+the bounded responses made the 292.4-second WAV decodable.
 
 The show displays a bounded diagnostic GET on a failed same-origin source,
 including its HTTP status, content type and API message. It requests only bytes
@@ -119,6 +124,9 @@ uses a real input click and checks advancing `currentTime`. Its separate
 bounded-range experiment caps only the test browser's requests, explicitly
 without changing deployed code. This comparison can isolate range-assembly
 latency from metadata availability. It does not certify physical audibility.
+The experiment also loads this branch's four player modules only in that
+isolated browser, so startup timing changes can be tested against real public
+audio without deploying candidate code or modifying production records.
 
 A local native-Chrome reproduction used the real show code and actual catalog
 handler with a synthetic 28 MiB PCM WAV and 900 ms per storage chunk. Unbounded

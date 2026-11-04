@@ -13,6 +13,12 @@ const songId = process.env.HALO_AUDIO_PROBE_SONG_ID;
 if (!/^[0-9a-f-]{36}$/i.test(songId || "")) throw new Error("Provide a public song UUID.");
 const target = new URL("/dreamweaver/", base);
 target.search = new URLSearchParams({ mix: "owen-anthony-quiet-heart", song: songId, satellite: "dreamweaver" });
+const boundRanges = process.env.HALO_AUDIO_PROBE_BOUND_RANGES === "1";
+const candidatePlayer = process.env.HALO_AUDIO_PROBE_CANDIDATE_PLAYER === "1";
+const replacements = new Map(candidatePlayer ? await Promise.all([
+  "dreamweaver/dreamweaver.js", "lib/halo-sentinel.js", "lib/audio-stream-diagnostics.js",
+  "dreamweaver-lab/resumable-upload.js",
+].map(async path => [`/${path}`, await readFile(new URL(`../${path}`, import.meta.url), "base64")])) : []);
 const profile = await mkdtemp(join(tmpdir(), "halo-live-browser-"));
 const chrome = spawn("google-chrome", [
   "--headless=new", "--no-sandbox", "--disable-dev-shm-usage",
@@ -22,11 +28,6 @@ let socket;
 const pending = new Map();
 const observed = [];
 const mediaRequests = new Set();
-const boundRanges = process.env.HALO_AUDIO_PROBE_BOUND_RANGES === "1";
-const candidatePlayer = process.env.HALO_AUDIO_PROBE_CANDIDATE_PLAYER === "1";
-const replacements = new Map(candidatePlayer ? await Promise.all([
-  "dreamweaver/dreamweaver.js", "lib/halo-sentinel.js", "lib/audio-stream-diagnostics.js",
-].map(async path => [`/${path}`, await readFile(new URL(`../${path}`, import.meta.url), "base64")])) : []);
 let sequence = 0;
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 try {
@@ -87,7 +88,8 @@ try {
     } else if (message.method === "Network.loadingFailed" && mediaRequests.has(message.params.requestId)) {
       observed.push({ mediaRequestFailed: message.params.errorText });
     } else if (message.method === "Runtime.exceptionThrown") {
-      observed.push({ exception: message.params.exceptionDetails.text });
+      const details = message.params.exceptionDetails;
+      observed.push({ exception: details.text, description: details.exception?.description?.split("\n").slice(0, 2).join(" ").slice(0, 500) });
     } else if (message.method === "Page.fileChooserOpened") {
       observed.push({ filePickerOpened: true });
     }
@@ -120,7 +122,7 @@ try {
   await command("Network.enable");
   if (boundRanges || candidatePlayer) {
     if (boundRanges) console.log("EXPERIMENT: cap browser media range requests to 4 MiB; this does not change deployed code.");
-    if (candidatePlayer) console.log("EXPERIMENT: use this branch's three player modules only in this isolated browser; production is unchanged.");
+    if (candidatePlayer) console.log("EXPERIMENT: use this branch's four player modules only in this isolated browser; production is unchanged.");
     await command("Fetch.enable", { patterns: [
       ...(boundRanges ? [{ urlPattern: `${target.origin}/api/song-catalog/audio*`, requestStage: "Request" }] : []),
       ...[...replacements.keys()].map(path => ({ urlPattern: `${target.origin}${path}*`, requestStage: "Request" })),

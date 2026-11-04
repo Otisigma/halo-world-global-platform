@@ -18,6 +18,14 @@ import { createLocalUploadVault, resumeAudioUpload, requestUploadJson, readSongL
   const activeProjectKey = ownerId => `halo-song-lab-active-project:${encodeURIComponent(ownerId)}`;
   const catalogBridgeStatus = byId("catalogBridgeStatus"), catalogBridgeRetry = byId("catalogBridgeRetry"), catalogBridgeLink = byId("catalogBridgeLink");
   const catalogConnections = new Map();
+  const localShowPreview = byId("localShowPreview");
+  function showSavedAudioPreview() {
+    elements.waveIdle.hidden = false;
+    elements.waveIdle.textContent = "RESTORED AUDIO / PRESS PLAY TO PREVIEW";
+    localShowPreview.href = uploadSession?.projectId
+      ? `/dreamweaver/?localProject=${encodeURIComponent(uploadSession.projectId)}` : "/dreamweaver/";
+    localShowPreview.hidden = false;
+  }
   async function connectProject(project) {
     if (!/^[0-9a-f-]{36}$/i.test(project?.id || "") || project.status !== "ready") return;
     catalogBridgeLink.hidden = true;
@@ -331,6 +339,8 @@ import { createLocalUploadVault, resumeAudioUpload, requestUploadJson, readSongL
     state.audioBuffer = null; elements.audio.pause(); elements.audio.removeAttribute("src"); elements.audio.load(); elements.audio.hidden = true;
     if (state.objectUrl) URL.revokeObjectURL(state.objectUrl);
     state.objectUrl = ""; elements.waveIdle.hidden = false;
+    elements.waveIdle.textContent = "READING AUDIO / PREPARING WAVEFORM";
+    localShowPreview.hidden = true;
     elements.dropTitle.textContent = file.name; elements.dropDetail.textContent = `${(file.size / 1024 / 1024).toFixed(1)} MB · reading waveform…`;
     if (!elements.title.value) elements.title.value = titleFromFile(file.name);
     setStatus("Reading the waveform locally. The upload has not started yet.");
@@ -625,6 +635,7 @@ import { createLocalUploadVault, resumeAudioUpload, requestUploadJson, readSongL
         state.evidence = saved.session.evidence;
         renderMetrics(state.evidence); elements.duration.textContent = formatTime(state.evidence.durationSeconds);
         state.objectUrl = URL.createObjectURL(file); elements.audio.src = state.objectUrl; elements.audio.hidden = false;
+        showSavedAudioPreview();
         elements.dropTitle.textContent = file.name; elements.dropDetail.textContent = "Restored original audio and saved measurements.";
         setBusy(false);
       } else await loadFile(file, true);
@@ -683,6 +694,7 @@ import { createLocalUploadVault, resumeAudioUpload, requestUploadJson, readSongL
       elements.file.value = ""; elements.audio.pause(); elements.audio.removeAttribute("src"); elements.audio.load(); elements.audio.hidden = true;
       if (state.objectUrl) URL.revokeObjectURL(state.objectUrl);
       state.objectUrl = ""; progress.hidden = true; elements.processing.hidden = true; elements.rights.checked = false;
+      localShowPreview.hidden = true;
       elements.dropZone.classList.remove("session-restored");
       elements.dropTitle.textContent = "Choose a WAV or audio file"; elements.dropDetail.textContent = "Drop it here - private - up to 128 MB";
       setBusy(false); setStatus("Local backup discarded. Your original file and saved projects are unchanged.");

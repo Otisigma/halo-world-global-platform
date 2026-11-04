@@ -53,6 +53,18 @@ available in history for manual continuation. Initialization retries on the
 identity-ready event after sign-in; storage and authentication failures are
 visible and do not delete saved work.
 
+Restored local audio displays an explicit restored-preview label instead of the
+empty-waveform "NO SIGNAL LOADED" label. The audio controls play the original
+cached file; a full waveform is not claimed when only saved measurements exist.
+Open this saved audio in Dreamweaver carries only the project ID. The show
+offers Preview saved Song Lab audio: after a click, it verifies the current
+account, reads that account's matching IndexedDB file and uses the existing
+local-file player lifecycle. With no project ID, the button previews the most
+recent saved file for that account. Missing backups or sign-in/storage errors
+are shown without replacing the current stream. No iframe scraping, global
+blob pointer, radio check, upload or master replacement is involved. Playback
+restrictions still show the existing Press Play/unmute controls.
+
 Replacing a file requires confirmation. Discard
 does not remove existing server chunks or private projects. Recovery supports
 one active selected upload per tab and restores the account's latest saved session

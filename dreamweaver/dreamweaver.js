@@ -5,6 +5,7 @@ import { isGoogleDriveUrl, unlockDreamweaverAudio } from "../lib/dreamweaver-pla
 import { catalogAudioUrl, generateAutomatedSet, normalizeCatalog } from "../lib/catalog-curator.js";
 import { readRecentTrackIds, recordPlayedTrack } from "../lib/catalog-session.js";
 import { MIX_PRESETS, createMixSeed, deleteUserPreset, describeMixIntent, normalizeMixSeed, parseMixPrompt, readUserPresets, saveUserPreset } from "../lib/mix-intent.js";
+import { readSavedSongLabAudio } from "../dreamweaver-lab/resumable-upload.js";
 
 (() => {
   const chapters = [
@@ -123,6 +124,7 @@ import { MIX_PRESETS, createMixSeed, deleteUserPreset, describeMixIntent, normal
     creatorGatewayLink: document.getElementById("dreamweaverCreatorGateway"),
     uploadLabel: document.querySelector(".upload-label"),
     mixFileInput: document.getElementById("mixFileInput"),
+    savedSongLabPreview: document.getElementById("savedSongLabPreview"),
     mixFileStatus: document.getElementById("mixFileStatus"),
     shell: document.getElementById("showShell"),
     loading: document.getElementById("loadingShow"),
@@ -2421,6 +2423,19 @@ import { MIX_PRESETS, createMixSeed, deleteUserPreset, describeMixIntent, normal
       const file = event.target?.files?.[0];
       event.target.value = "";
       await activateLocalMixFile(file);
+    });
+    elements.savedSongLabPreview?.addEventListener("click", async () => {
+      const button = elements.savedSongLabPreview;
+      button.disabled = true;
+      setLocalPreviewStatus("Opening your saved Song Lab audio from this browser...", "ready");
+      try {
+        const projectId = new URLSearchParams(window.location.search).get("localProject") || "";
+        const file = await readSavedSongLabAudio(projectId);
+        await activateLocalMixFile(file);
+      } catch (error) {
+        setLocalPreviewStatus(error.message || "Saved Song Lab preview could not be opened.", "error");
+        showToast(error.message || "Saved Song Lab preview could not be opened.");
+      } finally { button.disabled = false; }
     });
     elements.uploadLabel?.addEventListener("keydown", event => {
       if (event.key === "Enter" || event.key === " ") {

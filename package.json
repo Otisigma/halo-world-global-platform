@@ -3,6 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "test:audio-endpoints": "node scripts/audio-endpoint-smoke-contracts.mjs && node scripts/drive-catalog-contracts.mjs && node scripts/chunked-audio-upload-contracts.mjs && node scripts/radio-contracts.mjs && node scripts/music-player-contracts.mjs && node scripts/stem-vault-contracts.mjs && node scripts/catalog-player-contracts.mjs && node scripts/dreamweaver-playback-contracts.mjs",
     "test:api-cors": "node scripts/api-cors-contracts.mjs",
     "test:song-lab-resume": "node scripts/dreamweaver-song-lab-contracts.mjs && node scripts/song-lab-resume-contracts.mjs && node scripts/song-lab-auto-resume-contracts.mjs && node scripts/song-lab-job-recovery-contracts.mjs && node scripts/song-lab-hydration-contracts.mjs",
     "test:sentinel": "node scripts/sentinel-contracts.mjs && node scripts/sentinel-source-repair.mjs",

@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import vm from "node:vm";
 import { allowedEvents } from "../netlify/lib/stats.mjs";
+import { unlockDreamweaverAudio } from "../lib/dreamweaver-playback.js";
 
 const root = resolve(import.meta.dirname, "..");
 const musicPage = await readFile(resolve(root, "music/index.html"), "utf8");
@@ -306,10 +307,14 @@ const dreamContext = vm.createContext({
   REMOTE_AUDIO_WATCHDOG_MS: 5000, LOCAL_PREVIEW_PROMPT: "Stream unavailable", cleanText: value => String(value || "").trim(),
   showToast() {}, setReleasePlaybackState() {},
   notePlaybackClick() { dreamState.playbackRequested = true; },
-  dreamweaverDriveFallbacks: () => [], renderSoundUnlock() {}
+  dreamweaverDriveFallbacks: () => [],
+  unlockDreamweaverAudio,
+  renderReleasePanel() {},
+  renderSoundUnlock(mode) { dreamState.soundUnlockMode = mode; }
 });
 vm.runInContext(
   section(dreamweaver, "function clearRemoteAudioWatchdog()", "function publicReleaseStatus(")
+  + section(dreamweaver, "async function handleSoundUnlock()", "function publicCatalogMasterBinding(")
   + section(dreamweaver, "function shouldPromptLocalUpload()", "async function awaitPrimaryPlaybackReadiness(")
   + section(dreamweaver, "async function togglePlayback()", "function updateHeroPlayButton("),
   dreamContext
@@ -344,6 +349,8 @@ dreamAudio.play = async () => { throw { name: "AbortError" }; };
 await dreamContext.togglePlayback();
 assert.equal(dreamState.audioSourceMode, "remote", "Dreamweaver must ignore cancelled play requests");
 dreamContext.clearRemoteAudioWatchdog();
+dreamState.soundUnlockMode = "";
+dreamState.autoplayMuted = false;
 dreamAudio.play = () => new Promise((_resolve, reject) => { rejectOldPlay = reject; });
 const oldDreamPlayback = dreamContext.togglePlayback();
 dreamAudio.src = "https://cdn.example/next.mp3";

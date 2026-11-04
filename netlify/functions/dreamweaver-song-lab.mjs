@@ -4,6 +4,7 @@ import { getDatabase } from "@netlify/database";
 import { getUser, verifyRequestOrigin } from "@netlify/identity";
 import OpenAI from "openai";
 import { cleanText, ensureMembership } from "../lib/halo-x.mjs";
+import { storeAudioChunk, inspectAudioUpload, cleanChunkChecksum } from "../lib/chunked-audio-upload.mjs";
 
 const songStore = getStore({ name: "halo-dreamweaver-songs", consistency: "strong" });
 const allowedTypes = new Set(["audio/wav", "audio/x-wav", "audio/mpeg", "audio/mp4", "audio/aac", "audio/ogg", "audio/webm"]);
@@ -21,6 +22,18 @@ function json(body, status = 200, headers = {}) {
 function cleanUploadId(value) {
   const uploadId = cleanText(value, 80);
   return /^[a-z0-9-]{16,80}$/i.test(uploadId) ? uploadId : "";
+}
+
+function resumableShape(body, user) {
+  const uploadId = String(body.uploadId || "");
+  const chunkCount = Number(body.chunkCount), byteSize = Number(body.byteSize);
+  if (body.ownerId !== user?.id) return { error: json({ message: "Sign in with the account that started this upload" }, 403) };
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(uploadId)
+    || !Number.isSafeInteger(byteSize) || byteSize < 1 || byteSize > maxUploadBytes
+    || !Number.isInteger(chunkCount) || chunkCount !== Math.ceil(byteSize / maxChunkBytes)) {
+    return { error: json({ message: "The resumable upload shape is invalid" }, 400) };
+  }
+  return { uploadId, chunkCount, byteSize };
 }
 
 function normalizeAudioType(value, fileName = "") {
@@ -270,11 +283,10 @@ async function generateArtwork(song, creativePackage) {
 
 async function processProject(projectId) {
   const db = getDatabase();
-  const rows = await db.sql`SELECT * FROM halo_dreamweaver_songs WHERE id = ${projectId} LIMIT 1`;
+  const rows = await db.sql`UPDATE halo_dreamweaver_songs SET status = 'analyzing', error_message = '', updated_at = NOW() WHERE id = ${projectId} AND status = 'queued' RETURNING *`;
   const song = rows[0];
   if (!song) return;
   try {
-    await db.sql`UPDATE halo_dreamweaver_songs SET status = 'analyzing', error_message = '', updated_at = NOW() WHERE id = ${projectId}`;
     const generated = await generatePackage(song);
     const artwork = await generateArtwork(song, generated.package);
     await db.sql`
@@ -308,24 +320,50 @@ async function uploadChunk(request, db, user) {
   }
   if (!chunk.size || chunk.size > maxChunkBytes) return json({ message: "This upload chunk is too large" }, 413);
   const blobPrefix = `${membership.member_id}/${uploadId}/parts/`;
+  if (form.get("resumeVersion") === "1") {
+    const shape = resumableShape(Object.fromEntries(form), user);
+    if (shape.error) return shape.error;
+    const checksum = cleanChunkChecksum(form.get("checksum"));
+    if (!checksum) return json({ message: "A valid audio chunk checksum is required" }, 400);
+    const expectedBytes = Math.min(maxChunkBytes, shape.byteSize - chunkIndex * maxChunkBytes);
+    if (chunk.size !== expectedBytes) return json({ message: "That audio chunk has the wrong size" }, 422);
+    const existing = await db.sql`SELECT * FROM halo_dreamweaver_songs WHERE id = ${shape.uploadId} AND member_id = ${membership.member_id} LIMIT 1`;
+    if (existing[0]) return json({ message: "This upload already has a saved project. Resume to reopen it." }, 409);
+    const result = await storeAudioChunk(songStore, { prefix: blobPrefix, ...shape, chunkIndex, chunk, checksum });
+    return result.ok ? json({ message: "Song chunk verified", ...result }) : json({ message: result.message }, result.status);
+  }
   const key = `${blobPrefix}${String(chunkIndex).padStart(3, "0")}`;
   await songStore.set(key, await chunk.arrayBuffer(), { metadata: { contentType: normalizeAudioType(chunk.type, chunk.name) } });
   return json({ message: "Song chunk uploaded", chunkIndex });
 }
 
-async function finalizeProject(request, context, db, user) {
+async function finalizeProject(body, context, db, user) {
   if (!user?.id) return json({ message: "Sign in to analyze a song" }, 401);
   const membership = await ensureMembership(db, user);
-  const body = await request.json().catch(() => null);
-  if (!body || body.action !== "analyze") return json({ message: "Choose a supported Song Lab action" }, 400);
+  if (!body || !["analyze", "upload_status"].includes(body.action)) return json({ message: "Choose a supported Song Lab action" }, 400);
+  const resumable = body.resumeVersion === 1;
+  const shape = resumable ? resumableShape(body, user) : null;
+  if (shape?.error) return shape.error;
+  if (body.action === "upload_status" && !resumable) return json({ message: "A resumable upload session is required" }, 400);
   const uploadId = cleanUploadId(body.uploadId);
   const fileName = cleanText(body.fileName, 180);
   const contentType = normalizeAudioType(body.contentType, fileName);
-  const chunkCount = Math.max(1, Math.min(64, Number.parseInt(body.chunkCount, 10) || 0));
-  const byteSize = Math.round(safeNumber(body.byteSize, 1, maxUploadBytes));
+  const chunkCount = Number(body.chunkCount);
+  const byteSize = Number(body.byteSize);
+  if (!Number.isInteger(chunkCount) || chunkCount < 1 || chunkCount > 64 || !Number.isSafeInteger(byteSize) || byteSize < 1 || byteSize > maxUploadBytes) return json({ message: "The song upload size or sequence is invalid" }, 400);
+  const blobPrefix = `${membership.member_id}/${uploadId}/parts/`;
+  if (resumable) {
+    const existing = await db.sql`SELECT * FROM halo_dreamweaver_songs WHERE id = ${uploadId} AND member_id = ${membership.member_id} LIMIT 1`;
+    if (existing[0]) {
+      if (existing[0].blob_prefix !== blobPrefix || Number(existing[0].byte_size) !== byteSize || Number(existing[0].chunk_count) !== chunkCount) return json({ message: "This session belongs to a different saved upload" }, 409);
+      return json({ project: serialize(existing[0]), complete: true });
+    }
+    const inspected = await inspectAudioUpload(songStore, { prefix: blobPrefix, chunkCount, byteSize });
+    if (body.action === "upload_status") return json(inspected);
+    if (!inspected.complete || Object.keys(inspected.chunkChecksums).length !== chunkCount) return json({ message: "The song upload is incomplete or inconsistent. Resume the upload.", ...inspected }, 409);
+  }
   const title = cleanText(body.title, 140);
   if (!uploadId || !title || !fileName || !allowedTypes.has(contentType) || !body.rightsAttested) return json({ message: "Add the song details and confirm you may use this audio" }, 422);
-  const blobPrefix = `${membership.member_id}/${uploadId}/parts/`;
   const stored = await songStore.list({ prefix: blobPrefix });
   if (stored.blobs.length !== chunkCount) return json({ message: "The song upload is incomplete" }, 409);
   const evidence = sanitizeEvidence(body.analysis);
@@ -334,12 +372,13 @@ async function finalizeProject(request, context, db, user) {
       id, member_id, title, artist_name, file_name, blob_prefix, chunk_count, content_type, byte_size,
       duration_seconds, rights_attested, creative_brief, lyrics, analysis_evidence, status
     ) VALUES (
-      ${randomUUID()}, ${membership.member_id}, ${title}, ${cleanText(body.artistName, 140)}, ${fileName}, ${blobPrefix},
+      ${resumable ? uploadId : randomUUID()}, ${membership.member_id}, ${title}, ${cleanText(body.artistName, 140)}, ${fileName}, ${blobPrefix},
       ${chunkCount}, ${contentType}, ${byteSize}, ${evidence.durationSeconds}, TRUE,
       ${cleanText(body.creativeBrief, 1200)}, ${cleanText(body.lyrics, 8000)}, ${JSON.stringify(evidence)}::jsonb, 'queued'
-    ) RETURNING *
+    ) ON CONFLICT (id) DO NOTHING RETURNING *
   `;
-  const project = rows[0];
+  const project = rows[0] || (await db.sql`SELECT * FROM halo_dreamweaver_songs WHERE id = ${uploadId} AND member_id = ${membership.member_id} LIMIT 1`)[0];
+  if (!project || project.blob_prefix !== blobPrefix || Number(project.byte_size) !== byteSize || Number(project.chunk_count) !== chunkCount) return json({ message: "This upload session conflicts with another saved project" }, 409);
   const work = processProject(project.id);
   if (context?.waitUntil) context.waitUntil(work);
   else await work;
@@ -363,7 +402,7 @@ async function readProjects(request, db, user) {
     if (request.method === "HEAD") return new Response(null, { headers: { "Content-Type": project.artwork_content_type, "Cache-Control": "private, no-store", "Content-Length": String(artwork.byteLength) } });
     return new Response(artwork, { headers: { "Content-Type": project.artwork_content_type, "Cache-Control": "private, no-store", "Content-Length": String(artwork.byteLength), "Content-Disposition": `inline; filename="dreamweaver-${project.id}.png"`, "X-Content-Type-Options": "nosniff" } });
   }
-  return projectId ? json({ project: serialize(rows[0]) }) : json({ projects: rows.map(serialize) });
+  return projectId ? json({ project: serialize(rows[0]) }) : json({ projects: rows.map(serialize), uploadOwnerId: user.id });
 }
 
 export default async function dreamweaverSongLabHandler(request, context) {
@@ -379,7 +418,11 @@ export default async function dreamweaverSongLabHandler(request, context) {
     if (contentType.includes("multipart/form-data")) return uploadChunk(request, db, user);
     const contentLength = Number(request.headers.get("content-length") || 0);
     if (contentLength > 24 * 1024) return json({ message: "The analysis request is too large" }, 413);
-    return finalizeProject(request, context, db, user);
+    const text = await request.text();
+    if (new TextEncoder().encode(text).byteLength > 24 * 1024) return json({ message: "The analysis request is too large" }, 413);
+    let body;
+    try { body = JSON.parse(text); } catch { return json({ message: "Send a valid Song Lab request" }, 400); }
+    return finalizeProject(body, context, db, user);
   } catch (error) {
     console.error("Dreamweaver Song Lab request failed", error instanceof Error ? error.message : "unknown error");
     return json({ message: "Dreamweaver Song Lab is temporarily unavailable" }, 500);

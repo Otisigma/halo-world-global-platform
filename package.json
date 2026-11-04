@@ -3,6 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "test:song-lab-resume": "node scripts/dreamweaver-song-lab-contracts.mjs && node scripts/song-lab-resume-contracts.mjs",
     "test:sentinel": "node scripts/sentinel-contracts.mjs && node scripts/sentinel-source-repair.mjs",
     "test:concierge-showcase": "node scripts/concierge-showcase-contracts.mjs",
     "test:fan-curations": "node scripts/fan-curation-contracts.mjs",

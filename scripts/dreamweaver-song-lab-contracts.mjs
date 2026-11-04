@@ -18,7 +18,7 @@ const [page, script, styles, fn, migration, config, home, stats] = await Promise
 const checks = [
   [page.includes("Dreamweaver Song Lab — HALO") && page.includes('id="songFile"') && page.includes('id="rightsAttested"'), "ships a rights-aware private song intake"],
   [script.includes("decodeAudioData") && script.includes("estimateTempo") && script.includes("spectralEvidence"), "measures waveform, tempo, tonal center, and spectral evidence locally"],
-  [script.includes("3.5 * 1024 * 1024") && script.includes("/api/dreamweaver-song-lab"), "uploads authorized audio in bounded private chunks"],
+  [script.includes("resumeAudioUpload") && script.includes("/api/dreamweaver-song-lab"), "uploads authorized audio in bounded resumable private chunks"],
   [script.includes('"X-Halo-Dreamweaver-Flow"') && script.includes("window.confirm") && script.includes("challengeRoute"), "keeps Dreamweaver uploads trusted and surfaces verification when the path is unclear"],
   [fn.includes("verifyRequestOrigin") && fn.includes("ensureMembership") && fn.includes("halo-dreamweaver-songs"), "protects Song Lab writes and storage with membership controls"],
   [fn.includes("assessArtistUploadTrust") && fn.includes('trustState: "challenge"') && fn.includes("/dreamweaver/?upload=verify&returnTo=/dreamweaver-lab/"), "uses a trusted/challenge/blocked trust model for Song Lab writes without removing the origin gate"],

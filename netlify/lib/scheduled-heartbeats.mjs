@@ -5,6 +5,7 @@ export const SCHEDULED_HEARTBEAT_SLA = Object.freeze([
   { agentKey: "halo-agent-daily", maxAgeMinutes: 26 * 60 },
   { agentKey: "health-scout", maxAgeMinutes: 35 },
   { agentKey: "radio-health-scout", maxAgeMinutes: 20 },
+  { agentKey: "catalog-drift-sentinel", maxAgeMinutes: 35 },
   { agentKey: "outreach-weekly", maxAgeMinutes: 9 * 24 * 60 },
   { agentKey: "artist-agent-weekly", maxAgeMinutes: 9 * 24 * 60 }
 ]);

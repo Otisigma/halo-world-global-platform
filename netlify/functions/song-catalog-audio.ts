@@ -160,6 +160,27 @@ async function uploadStatus(payload: Record<string, unknown>, db: Awaited<Return
   return json({ songId, versionId, uploadId, finalized: version.audio_blob_prefix === prefix, ...status });
 }
 
+const RECHECK_COOLDOWN_SECONDS = 20;
+
+async function readinessAction(payload: Record<string, unknown>, db: Awaited<ReturnType<typeof getDatabase>>, ownerMemberId: string, rerun: boolean) {
+  const songId = cleanId(payload.songId);
+  if (!songId) return json({ message: "A valid song is required" }, 400);
+  const rows = await db.sql`
+    SELECT id, (reviewed_at IS NOT NULL AND reviewed_at > NOW() - make_interval(secs => ${RECHECK_COOLDOWN_SECONDS})) AS recently_reviewed,
+      EXISTS (SELECT 1 FROM halo_song_versions version WHERE version.song_id = halo_song_catalog.id AND version.status = 'active' AND version.audio_url IS NOT NULL) AS has_audio
+    FROM halo_song_catalog
+    WHERE id = ${songId} AND owner_member_id = ${ownerMemberId} AND status = 'active'
+    LIMIT 1
+  `;
+  const song = rows[0];
+  if (!song) return json({ message: "That song was not found" }, 404);
+  // Rechecks rerun the same review/conveyor/publication path a save does; the cooldown stops hammering.
+  const throttled = rerun && song.recently_reviewed === true;
+  if (rerun && !throttled) await runDreamweaverReview(songId, ownerMemberId);
+  const readiness = await safeUploadReadiness(db, ownerMemberId, songId, { persisted: song.has_audio === true });
+  return json({ songId, rechecked: rerun && !throttled, throttled, readiness });
+}
+
 async function removeUpload(prefix: string) {
   if (!prefix) return;
   const stored = await audioStore.list({ prefix });
@@ -431,6 +452,8 @@ export default async function songCatalogAudioHandler(request: Request) {
     if (!payload) return json({ message: "Choose a supported audio action" }, 400);
     if (payload.action === "finalize_upload") return finalizeUpload(payload, db, membership.member_id);
     if (payload.action === "upload_status") return uploadStatus(payload, db, membership.member_id);
+    if (payload.action === "upload_readiness") return readinessAction(payload, db, membership.member_id, false);
+    if (payload.action === "recheck_readiness") return readinessAction(payload, db, membership.member_id, true);
     if (payload.action === "list_radio_tracks") return listRadioTracks(db, membership.member_id);
     if (payload.action === "import_from_radio") return importFromRadio(payload, db, membership.member_id);
     return json({ message: "Choose a supported audio action" }, 400);

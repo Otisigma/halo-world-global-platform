@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -23,6 +23,10 @@ const pending = new Map();
 const observed = [];
 const mediaRequests = new Set();
 const boundRanges = process.env.HALO_AUDIO_PROBE_BOUND_RANGES === "1";
+const candidatePlayer = process.env.HALO_AUDIO_PROBE_CANDIDATE_PLAYER === "1";
+const replacements = new Map(candidatePlayer ? await Promise.all([
+  "dreamweaver/dreamweaver.js", "lib/halo-sentinel.js", "lib/audio-stream-diagnostics.js",
+].map(async path => [`/${path}`, await readFile(new URL(`../${path}`, import.meta.url), "base64")])) : []);
 let sequence = 0;
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 try {
@@ -47,6 +51,14 @@ try {
       }
     } else if (message.method === "Fetch.requestPaused") {
       const { requestId, request } = message.params;
+      const replacement = replacements.get(new URL(request.url).pathname);
+      if (replacement) {
+        void send("Fetch.fulfillRequest", {
+          requestId, responseCode: 200, body: replacement,
+          responseHeaders: [{ name: "Content-Type", value: "text/javascript" }, { name: "Cache-Control", value: "no-store" }],
+        }, message.sessionId).catch(error => observed.push({ interceptionError: error.message }));
+        return;
+      }
       const headers = Object.entries(request.headers).map(([name, value]) => {
         if (name.toLowerCase() !== "range") return { name, value };
         const range = /^bytes=(\d+)-(\d*)$/i.exec(value);
@@ -106,9 +118,13 @@ try {
   await command("Page.enable");
   await command("Runtime.enable");
   await command("Network.enable");
-  if (boundRanges) {
-    console.log("EXPERIMENT: cap browser media range requests to 4 MiB; this does not change deployed code.");
-    await command("Fetch.enable", { patterns: [{ urlPattern: `${target.origin}/api/song-catalog/audio*`, requestStage: "Request" }] });
+  if (boundRanges || candidatePlayer) {
+    if (boundRanges) console.log("EXPERIMENT: cap browser media range requests to 4 MiB; this does not change deployed code.");
+    if (candidatePlayer) console.log("EXPERIMENT: use this branch's three player modules only in this isolated browser; production is unchanged.");
+    await command("Fetch.enable", { patterns: [
+      ...(boundRanges ? [{ urlPattern: `${target.origin}/api/song-catalog/audio*`, requestStage: "Request" }] : []),
+      ...[...replacements.keys()].map(path => ({ urlPattern: `${target.origin}${path}*`, requestStage: "Request" })),
+    ] });
   }
   await command("Page.setInterceptFileChooserDialog", { enabled: true });
   await command("Page.addScriptToEvaluateOnNewDocument", { source: `
@@ -153,7 +169,7 @@ try {
   await command("Input.dispatchMouseEvent", { type: "mousePressed", ...before.click, button: "left", clickCount: 1 });
   await command("Input.dispatchMouseEvent", { type: "mouseReleased", ...before.click, button: "left", clickCount: 1 });
   let after;
-  for (let attempt = 0; attempt < 40; attempt++) {
+  for (let attempt = 0; attempt < 60; attempt++) {
     await delay(500);
     after = await snapshot();
     if ((!after.paused && after.currentTime > .25) || after.mediaError || observed.some(event => event.filePickerOpened)) break;

@@ -93,3 +93,4 @@ jobs:
           HALO_AUDIO_PROBE_ORIGIN: ${{ inputs.diagnostic_origin || vars.HALO_AUDIO_PROBE_ORIGIN }}
           HALO_AUDIO_PROBE_SONG_ID: ${{ inputs.song_id }}
           HALO_AUDIO_PROBE_BOUND_RANGES: "1"
+          HALO_AUDIO_PROBE_CANDIDATE_PLAYER: "1"

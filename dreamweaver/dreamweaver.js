@@ -74,6 +74,7 @@ import { inspectAudioStream } from "../lib/audio-stream-diagnostics.js";
   const VIDEO_LIBRARY_TIMEOUT_MS = 8000;
   const AUDIO_BOOTSTRAP_TIMEOUT_MS = 7000;
   const REMOTE_AUDIO_WATCHDOG_MS = 5000;
+  const REMOTE_AUDIO_STARTUP_TIMEOUT_MS = 20000;
   const LOCAL_PREVIEW_PROMPT = "Stream unavailable — press play to retry this song, or choose “Preview a local file in this lobby”. Local previews stay in this browser only.";
   const HERO_REEL_LOAD_TIMEOUT_MS = 3500;
   const MAX_AUDIO_FEEDBACK_RECORDS = 24;
@@ -1251,7 +1252,8 @@ import { inspectAudioStream } from "../lib/audio-stream-diagnostics.js";
       if (state.playbackRequested || elements.audio.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
         handleRemoteAudioUnavailable(LOCAL_PREVIEW_PROMPT);
       }
-    }, REMOTE_AUDIO_WATCHDOG_MS);
+    }, elements.audio.readyState < HTMLMediaElement.HAVE_CURRENT_DATA
+      ? REMOTE_AUDIO_STARTUP_TIMEOUT_MS : REMOTE_AUDIO_WATCHDOG_MS);
   }
 
   async function activateLocalMixFile(file) {
@@ -1343,7 +1345,7 @@ import { inspectAudioStream } from "../lib/audio-stream-diagnostics.js";
         ok: false,
         state: "timeout",
         detail: LOCAL_PREVIEW_PROMPT
-      }), REMOTE_AUDIO_WATCHDOG_MS);
+      }), REMOTE_AUDIO_STARTUP_TIMEOUT_MS);
       elements.audio.addEventListener("loadeddata", handleReady, { once: true });
       elements.audio.addEventListener("canplay", handleReady, { once: true });
       elements.audio.addEventListener("canplaythrough", handleReady, { once: true });

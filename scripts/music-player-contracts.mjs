@@ -304,7 +304,7 @@ const dreamContext = vm.createContext({
   elements: { audio: dreamAudio, playButton: dreamPlay, songLobbyHeroPlayButton: control(), mixFileInput: dreamInput, uploadLabel: dreamUpload },
   window: { setTimeout: playerContext.setTimeout, clearTimeout: playerContext.clearTimeout },
   URL: MediaURL, location: playerContext.location, HTMLMediaElement: playerContext.HTMLMediaElement,
-  REMOTE_AUDIO_WATCHDOG_MS: 5000, LOCAL_PREVIEW_PROMPT: "Stream unavailable", cleanText: value => String(value || "").trim(),
+  REMOTE_AUDIO_WATCHDOG_MS: 5000, REMOTE_AUDIO_STARTUP_TIMEOUT_MS: 20000, LOCAL_PREVIEW_PROMPT: "Stream unavailable", cleanText: value => String(value || "").trim(),
   showToast() {}, setReleasePlaybackState() {},
   notePlaybackClick() { dreamState.playbackRequested = true; },
   dreamweaverDriveFallbacks: () => [],
@@ -323,7 +323,7 @@ vm.runInContext(
 dreamContext.bindPlayerControls();
 await dreamContext.togglePlayback();
 assert.equal(dreamInput.clicks, 0, "an assigned remote source must be tried even before currentSrc is populated");
-assert.equal(timeoutDelay, 5000);
+assert.equal(timeoutDelay, 20000, "initial metadata loading gets a bounded startup budget, not the short buffered-playback stall deadline");
 const dreamWatchdogCount = timeoutCount;
 dreamContext.armRemoteAudioWatchdog();
 dreamContext.armRemoteAudioWatchdog();

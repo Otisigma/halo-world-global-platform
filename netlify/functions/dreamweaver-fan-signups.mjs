@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { getDatabase } from "@netlify/database";
 import { verifyRequestOrigin } from "@netlify/identity";
+import { notifyOwnerSafely } from "../lib/owner-alerts.mjs";
 
 const MAX_BODY_BYTES = 8_000;
 const PLATFORMS = new Set(["spotify", "apple_music", "youtube"]);
@@ -103,7 +104,8 @@ async function syncRelationshipSignup(db, signup) {
 
 export function createDreamweaverFanSignupHandler({
   database = getDatabase,
-  verifyOrigin = verifyRequestOrigin
+  verifyOrigin = verifyRequestOrigin,
+  notify = notifyOwnerSafely
 } = {}) {
   return async function dreamweaverFanSignups(request) {
     if (request.method !== "POST") {
@@ -153,6 +155,9 @@ export function createDreamweaverFanSignupHandler({
           consent_at = NOW()
         RETURNING id, email, first_name, favorite_platform, source, unlock_reward, consent_at, xmax = 0 AS inserted
       `;
+      if (rows[0]?.inserted) {
+        await notify({ title: "New HALO fan signup", lines: ["Source: Dreamweaver unlock", `Favourite platform: ${favoritePlatform}`] });
+      }
       await syncRelationshipSignup(db, rows[0]);
       return json({
         accepted: true,

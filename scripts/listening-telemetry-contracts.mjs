@@ -81,11 +81,11 @@ await check("only server identity and bound values reach persistence; responses 
 });
 
 await check("consent defaults off, DNT/GPC override opt-in, deletion remains possible, quotas fail safely", async () => {
-  assert.deepEqual(await (await server().request()).json(), { enabled: false });
-  assert.deepEqual(await (await server({ enabled: true }).request()).json(), { enabled: true });
+  assert.deepEqual(await (await server().request()).json(), { enabled: false, shareStreamAlerts: false });
+  assert.deepEqual(await (await server({ enabled: true }).request()).json(), { enabled: true, shareStreamAlerts: false });
   for (const headers of [{ DNT: "1" }, { "Sec-GPC": "1" }]) {
     const api = server({ enabled: true });
-    assert.deepEqual(await (await api.request(undefined, { headers })).json(), { enabled: false });
+    assert.deepEqual(await (await api.request(undefined, { headers })).json(), { enabled: false, shareStreamAlerts: false });
     assert.equal((await api.request(start, { headers })).status, 403);
     assert.equal((await api.request({ action: "consent", enabled: true }, { headers })).status, 403);
     assert.equal((await api.request({ action: "consent", enabled: false }, { headers })).status, 202);
@@ -107,9 +107,10 @@ function target() {
     emit(name, event = {}) { return Promise.all((handlers[name] || []).map(fn => fn(event))); } };
 }
 const settle = async () => { for (let i = 0; i < 20; i++) await Promise.resolve(); };
-function browser({ consent = true, dnt = false, gpc = false, beacon = true, transport } = {}) {
+function browser({ consent = true, shareAlerts = false, dnt = false, gpc = false, beacon = true, transport } = {}) {
   const checkbox = Object.assign(target(), { checked: false, disabled: true });
-  const status = {};
+  const streamAlertsCheckbox = Object.assign(target(), { checked: false, disabled: true });
+  const status = {}, streamAlertsStatus = {};
   const window = target();
   const calls = [], beacons = [];
   const navigator = { doNotTrack: dnt ? "1" : "0", globalPrivacyControl: gpc, sendBeacon: (url, body) => {
@@ -120,19 +121,24 @@ function browser({ consent = true, dnt = false, gpc = false, beacon = true, tran
   const fetch = async (url, init) => {
     const payload = init.body ? JSON.parse(init.body) : null;
     calls.push({ url, init, payload });
-    if (!payload) return Response.json({ enabled: consent });
+    if (!payload) return Response.json({ enabled: consent, shareStreamAlerts: shareAlerts });
     if (transport) return transport(payload);
-    return Response.json(payload.action === "consent" ? { enabled: payload.enabled } : { accepted: true, receipt });
+    return Response.json(payload.action === "consent" ? { enabled: payload.enabled } :
+      payload.action === "stream_alert_consent" ? { shareStreamAlerts: payload.enabled } : { accepted: true, receipt });
   };
   const context = vm.createContext({ window, navigator, fetch, Blob, document: {
-    getElementById: id => id === "listeningAnalytics" ? checkbox : status
+    getElementById: id => ({
+      listeningAnalytics: checkbox, listeningAnalyticsStatus: status,
+      streamAlertSharing: streamAlertsCheckbox, streamAlertSharingStatus: streamAlertsStatus
+    })[id] || null
   } });
   vm.runInContext(client, context);
   const audio = target();
   let releaseId = "public-track";
   const binding = window.HaloListeningTelemetry.bindAudio(audio, () => releaseId);
-  return { window, navigator, calls, beacons, checkbox, status, audio, binding, release: id => { releaseId = id; },
-    events: () => calls.filter(c => c.payload && c.payload.action !== "consent") };
+  return { window, navigator, calls, beacons, checkbox, status, streamAlertsCheckbox, streamAlertsStatus, audio, binding,
+    release: id => { releaseId = id; },
+    events: () => calls.filter(c => c.payload && !["consent", "stream_alert_consent"].includes(c.payload.action)) };
 }
 
 await check("no pre-consent, guest, DNT or GPC reports; playback errors never propagate", async () => {
@@ -212,6 +218,23 @@ await check("opt-out clears in-flight reports; stale failures cannot undo newer 
   assert.equal(h.checkbox.checked, true);
   assert.equal(h.events().length, 1);
   assert.equal(h.beacons.length, 0);
+});
+
+await check("stream alerts use separate consent and are revoked when listening reports turn off", async () => {
+  const h = browser({ shareAlerts: true });
+  await settle();
+  assert.equal(h.streamAlertsCheckbox.checked, true);
+  h.streamAlertsCheckbox.checked = false;
+  await h.streamAlertsCheckbox.emit("change");
+  assert.equal(h.streamAlertsCheckbox.checked, false);
+  h.streamAlertsCheckbox.checked = true;
+  await h.streamAlertsCheckbox.emit("change");
+  assert.equal(h.streamAlertsCheckbox.checked, true);
+  h.checkbox.checked = false;
+  await h.checkbox.emit("change");
+  assert.equal(h.streamAlertsCheckbox.checked, false);
+  assert.deepEqual(h.calls.filter(call => call.payload).map(call => call.payload.action),
+    ["stream_alert_consent", "stream_alert_consent", "stream_alert_consent", "consent"]);
 });
 
 await check("SQL enforces serialization, trusted releases, expiry, server IDs, quotas, deletion and first-terminal-wins", async () => {

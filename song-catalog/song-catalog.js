@@ -7,12 +7,14 @@ import { renderCatalogSignals } from "/song-catalog/catalog-signals.js";
 import { renderCatalogGuidance } from "/song-catalog/catalog-guidance.js";
 import { initializeDreamweaverUploadPanel } from "/song-catalog/dreamweaver-upload-panel.js";
 import { initializeCatalogPlayback, catalogVersionPlaybackSource } from "/song-catalog/catalog-playback.js";
+import { readSavedSongLabAudio } from "/dreamweaver-lab/resumable-upload.js";
 
 const state={songs:[],selectedId:new URLSearchParams(window.location.search).get("song")||"",filter:"",authenticated:false,producer:{jobs:[],packages:[]},producerTimer:null};
 const $=selector=>document.querySelector(selector);
 const elements={shell:$("#catalogShell"),songList:$("#songList"),empty:$("#emptyState"),workspace:$("#songWorkspace"),search:$("#searchInput"),status:$("#statusMessage"),songDialog:$("#songDialog"),versionDialog:$("#versionDialog")};
 const dreamweaverUploadPanel=initializeDreamweaverUploadPanel({disclosure:$("#dreamweaverUploadDisclosure"),frame:$("#dreamweaverUploadFrame"),status:$("#dreamweaverUploadStatus")});
-const catalogPlayback=initializeCatalogPlayback({audio:$("#showAudio"),status:$("#catalogPlayerStatus"),title:$("#catalogPlayerTitle"),artist:$("#catalogPlayerArtist")});
+const catalogPlayback=initializeCatalogPlayback({audio:$("#showAudio"),status:$("#catalogPlayerStatus"),title:$("#catalogPlayerTitle"),artist:$("#catalogPlayerArtist"),resolveLocalAudio:projectId=>readSavedSongLabAudio(projectId)});
+window.addEventListener("pagehide",event=>{if(!event.persisted)catalogPlayback?.dispose()});
 const releaseConveyor=createReleaseConveyorConsole({root:$("#releaseConveyorConsole")});
 const releaseTeaser=createReleaseTeaserConsole({root:$("#social-teaser")});
 const uploadHelper=window.HaloUploadProgress;

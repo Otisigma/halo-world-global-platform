@@ -65,6 +65,17 @@ are shown without replacing the current stream. No iframe scraping, global
 blob pointer, radio check, upload or master replacement is involved. Playback
 restrictions still show the existing Press Play/unmute controls.
 
+The catalog player also attempts one local recovery when its authenticated
+stream fails or remains unready for eight seconds. Only a canonical
+project-backed draft whose song and version IDs match is eligible. Recovery
+authenticates the current account and requires the same saved project,
+filename and byte count; it never substitutes the latest unrelated file or a
+Drive share URL. Local playback is labelled LOCAL PREVIEW, not canonical or
+published audio. Failed recovery is visible, and browser-policy/aborted playback
+does not trigger substitution. New selections and disposal invalidate late
+recovery results and release local object URLs. Publication/radio pills remain
+unchanged; only media events can report playing.
+
 Replacing a file requires confirmation. Discard
 does not remove existing server chunks or private projects. Recovery supports
 one active selected upload per tab and restores the account's latest saved session

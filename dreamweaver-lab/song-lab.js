@@ -1,4 +1,4 @@
-import { createLocalUploadVault, resumeAudioUpload, requestUploadJson, readSongLabJson, runCheckpointedUpload, isTransientUploadError, dispatchSongLabBuild } from "./resumable-upload.js";
+import { createLocalUploadVault, resumeAudioUpload, requestUploadJson, readSongLabJson, runCheckpointedUpload, isTransientUploadError, dispatchSongLabBuild, connectSongLabToCatalog } from "./resumable-upload.js";
 
 (() => {
   const byId = id => document.getElementById(id);
@@ -16,6 +16,38 @@ import { createLocalUploadVault, resumeAudioUpload, requestUploadJson, readSongL
   const resumeButton = byId("resumeUploadButton"), discardButton = byId("discardUploadButton"), progress = byId("uploadProgress");
   const sessionKey = "halo-song-lab-upload-session";
   const activeProjectKey = ownerId => `halo-song-lab-active-project:${encodeURIComponent(ownerId)}`;
+  const catalogBridgeStatus = byId("catalogBridgeStatus"), catalogBridgeRetry = byId("catalogBridgeRetry"), catalogBridgeLink = byId("catalogBridgeLink");
+  const catalogConnections = new Map();
+  async function connectProject(project) {
+    if (!/^[0-9a-f-]{36}$/i.test(project?.id || "") || project.status !== "ready") return;
+    catalogBridgeLink.hidden = true;
+    catalogBridgeRetry.hidden = true;
+    catalogBridgeStatus.textContent = "Connecting saved audio to your private catalog draft...";
+    try {
+      if (!catalogConnections.has(project.id)) catalogConnections.set(project.id, connectSongLabToCatalog(project.id));
+      const binding = await catalogConnections.get(project.id);
+      if (state.project?.id !== project.id) return;
+      catalogBridgeStatus.textContent = "Saved audio connected to your private catalog player. Publication and mastering approval are separate.";
+      catalogBridgeLink.href = `/song-catalog/?song=${encodeURIComponent(binding.songId)}`;
+      catalogBridgeLink.hidden = false;
+      window.dispatchEvent(new CustomEvent("halo:catalog-audio-linked", { detail: { songId: binding.songId } }));
+      if (typeof BroadcastChannel === "function") {
+        try {
+          const channel = new BroadcastChannel("halo-catalog-audio");
+          try { channel.postMessage({ type: "catalog-audio-linked", songId: binding.songId }); }
+          finally { channel.close(); }
+        } catch (error) {
+          console.warn("Catalog connected, but cross-tab notification failed", error.message);
+          catalogBridgeStatus.textContent = "Saved audio connected. Automatic tab refresh is unavailable; use Open connected catalog player.";
+        }
+      }
+    } catch (error) {
+      catalogConnections.delete(project.id);
+      if (state.project?.id !== project.id) return;
+      catalogBridgeStatus.textContent = `Catalog connection needs attention: ${error.message} Your private project and local preview are unchanged.`;
+      catalogBridgeRetry.hidden = false;
+    }
+  }
   let currentOwnerId = "", restoring = false;
   const autoResume = byId("autoResumeUpload"), pauseButton = byId("pauseUploadButton");
   let pauseRequested = false;
@@ -507,6 +539,7 @@ import { createLocalUploadVault, resumeAudioUpload, requestUploadJson, readSongL
     elements.analyze.disabled = !state.evidence || !uploadSession || uploadSession.stage === "ready";
     setStatus(restored ? "Saved private package restored. No re-upload is needed. Review every factual detail before publishing." : "Package complete. Review every factual detail before publishing.");
     window.haloStats?.track("dreamweaver_song_package_ready", { project_id: project.id, model: project.model });
+    void connectProject(project);
   }
 
   function projectText(project) {
@@ -680,6 +713,7 @@ import { createLocalUploadVault, resumeAudioUpload, requestUploadJson, readSongL
   ["dragleave", "drop"].forEach(name => elements.dropZone.addEventListener(name, event => { event.preventDefault(); elements.dropZone.classList.remove("dragging"); }));
   elements.dropZone.addEventListener("drop", event => { const file = event.dataTransfer?.files?.[0]; if (file) loadFile(file); });
   elements.form.addEventListener("submit", submit); elements.download.addEventListener("click", downloadProject);
+  catalogBridgeRetry.addEventListener("click", () => { if (state.project) void connectProject(state.project); });
   elements.captions.addEventListener("click", async event => { const button = event.target.closest("[data-caption]"); if (!button) return; try { await navigator.clipboard.writeText(button.dataset.caption); showToast("Caption copied."); } catch { showToast("Select the caption and copy it manually."); } });
   elements.history.addEventListener("click", event => {
     if (busy || loading) return;

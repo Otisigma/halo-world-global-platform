@@ -108,10 +108,30 @@ on a fresh visit; it is not a cross-device upload archive.
 - Older clients can still submit the previous numbered-chunk protocol.
   New clients require the new server protocol; deploy server and client together.
 
-This intake does not promote a Song Catalog canonical Sale master, publish a
-release, or bypass rights checks. Saved private project audio remains distinct
-from an approved catalog master. Interrupted server chunks are retained under
-the existing storage policy; automatic remote garbage collection is not added.
+Completed and restored projects automatically connect saved audio to a private
+Song Catalog draft through the authenticated, origin-checked
+`POST /api/song-lab/catalog-bridge` endpoint. The server requires recording
+permission, a title and artist, verifies each saved chunk and its checksum when
+available, and copies the original into the catalog audio store before atomically
+creating the song and its canonical master version. The project UUID is the
+stable draft/version identity: retries do not duplicate songs or overwrite an
+existing catalog master. Archived or conflicting drafts require catalog action.
+The source project and its local preview are unchanged.
+
+The draft is not for sale, has rights awaiting review and unapproved mastering,
+and is never automatically published or put on radio. Owner playback uses the
+catalog's authenticated stream independently of those publication checks.
+Browser `blob:` URLs, audio bytes and storage keys are never sent through
+localStorage or cross-tab messages. Open catalog tabs refresh their own
+authenticated records on a connection notification without switching tracks or
+autoplaying. Song Lab shows an Open connected catalog player link or an explicit
+connection error and retry button; a connection failure does not invalidate the
+private creative package. This bridge runs while Song Lab is open, not as a
+server scheduler. Previously saved projects connect when opened.
+
+Interrupted server chunks, including copies from a failed bridge operation,
+are retained under the existing storage policy; automatic remote garbage
+collection is not added.
 
 ## Verification and monitoring
 

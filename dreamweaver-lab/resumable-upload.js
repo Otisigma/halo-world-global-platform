@@ -118,6 +118,17 @@ export async function requestUploadJson(body, headers = {}, fetcher = globalThis
   return requestSongLab(ENDPOINT, { method: "POST", headers: { ...headers, "Content-Type": "application/json" }, body: JSON.stringify(body) }, fetcher);
 }
 
+export async function connectSongLabToCatalog(projectId, fetcher = globalThis.fetch) {
+  const binding = await requestSongLab("/api/song-lab/catalog-bridge", {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ projectId }),
+  }, fetcher);
+  const expected = `/api/song-catalog/audio?versionId=${encodeURIComponent(projectId)}`;
+  if (binding.songId !== projectId || binding.versionId !== projectId || binding.audioUrl !== expected) {
+    throw new Error("The catalog returned an invalid project audio binding.");
+  }
+  return binding;
+}
+
 export async function dispatchSongLabBuild(projectId, headers = {}, fetcher = globalThis.fetch) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 30000);

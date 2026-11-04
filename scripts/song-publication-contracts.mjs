@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { stripTypeScriptTypes } from "node:module";
 import { resolveDreamweaverPageFlow } from "../netlify/lib/dreamweaver-page-manager.mjs";
-import { forcePushTrack, planRadioShowProposal, reconcilePublishedSong, reconcilePublishedSongs, releaseVersionType, verifiedVersion } from "../netlify/lib/song-publication.mjs";
+import { forcePushTrack, ownerPlayableVersion, planRadioShowProposal, reconcilePublishedSong, reconcilePublishedSongs, releaseVersionType, verifiedVersion } from "../netlify/lib/song-publication.mjs";
 import { attachPublicationHealthToSongs, buildPublicationHealth, isShopBlockingIssue } from "../netlify/lib/song-publication-health.mjs";
 import { buildMasterObjectKey } from "../netlify/lib/direct-upload-storage.mjs";
 import { createPublicationReconcileHandler } from "../netlify/functions/song-publication-reconcile.mjs";
@@ -706,8 +706,8 @@ for (const revoke of [
 }
 {
   const serializerSource = stripTypeScriptTypes(catalogApi.slice(catalogApi.indexOf("function serializeSong("), catalogApi.indexOf("async function loadCatalog(")));
-  const serialize = new Function("pickCanonicalMaster", "serializeMasterCopy", "buildDreamweaverSatellite", "verifiedVersion",
-    `${serializerSource}; return serializeSong;`)(versions => versions[0], () => ({}), () => null, verifiedVersion);
+  const serialize = new Function("pickCanonicalMaster", "serializeMasterCopy", "buildDreamweaverSatellite", "verifiedVersion", "ownerPlayableVersion",
+    `${serializerSource}; return serializeSong;`)(versions => versions[0], () => ({}), () => null, verifiedVersion, ownerPlayableVersion);
   const fixture = publicationDatabase();
   await fixture.reconcile();
   approveTrack(fixture.tracks[0]);
@@ -729,6 +729,12 @@ for (const revoke of [
   assert.equal(serialized.versions[0].status, "active");
   assert.equal(serialized.versions[0].updatedAt, fixture.sync.details.masterUpdatedAt);
   assert.equal(serialized.versions[0].persistedAudio, true);
+  assert.equal(serialized.versions[0].playableAudio, true);
+  assert.equal(serialized.versions[0].playbackUrl, `/api/song-catalog/audio?versionId=${versions[0].id}`);
+  const unapprovedSerialized = serialize(song, [{ ...versions[0], masteringStatus: "review", durationSeconds: 0 }]);
+  assert.equal(unapprovedSerialized.versions[0].persistedAudio, false, "publication readiness still requires master approval");
+  assert.equal(unapprovedSerialized.versions[0].playableAudio, true, "owner playback does not wait for mastering or publication readiness");
+  assert.equal(unapprovedSerialized.versions[0].playbackUrl, `/api/song-catalog/audio?versionId=${versions[0].id}`);
   const health = attachPublicationHealthToSongs([serialized], [fixture.sync])[0].publicationHealth;
   assert.equal(health.releaseReady, true, "real catalog serialization must retain the verified sale-master revision handoff");
   assert.equal(health.radioReady, true, "real catalog serialization must confirm an approved persisted version already in rotation");
@@ -740,10 +746,13 @@ for (const revoke of [
   });
   versions[0].audioBlobPrefix = "";
   assert.equal(serialize(song, versions).versions[0].persistedAudio, true, "owned direct-storage assets must pass the identical artifact checker");
+  assert.equal(serialize(song, versions).versions[0].playableAudio, true);
   assert.ok(!JSON.stringify(serialize(song, versions)).includes(versions[0].audioStorageKey), "private direct-storage keys must never be serialized");
   versions[0].audioStorageKey = "other-owner/private/master.wav";
   const rejected = serialize(song, versions);
   assert.equal(rejected.versions[0].persistedAudio, false);
+  assert.equal(rejected.versions[0].playableAudio, false);
+  assert.equal(rejected.versions[0].playbackUrl, "");
   assert.equal(attachPublicationHealthToSongs([rejected], [fixture.sync])[0].publicationHealth.releaseReady, false,
     "a foreign artifact reference must invalidate real API health without exposing its key");
 }

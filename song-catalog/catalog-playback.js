@@ -3,7 +3,7 @@ const VERSION_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9
 export function catalogVersionPlaybackSource(version) {
   const id = String(version?.id || "");
   const expected = `/api/song-catalog/audio?versionId=${encodeURIComponent(id)}`;
-  return version?.persistedAudio === true && VERSION_ID.test(id) && version.audioUrl === expected ? expected : "";
+  return version?.playableAudio === true && VERSION_ID.test(id) && version.playbackUrl === expected ? expected : "";
 }
 
 export function initializeCatalogPlayback({ audio, status, title, artist, window = globalThis.window } = {}) {
@@ -38,7 +38,7 @@ export function initializeCatalogPlayback({ audio, status, title, artist, window
     if (current()) report("fault", "STREAM FAULT · audio could not be loaded", false);
   };
   const onLoadStart = () => {
-    if (current()) report("loading", "LOADING · verified catalog master", false);
+    if (current()) report("loading", "LOADING · verified catalog audio", false);
   };
   audio.addEventListener("loadstart", onLoadStart);
   audio.addEventListener("canplay", onCanPlay);
@@ -68,7 +68,7 @@ export function initializeCatalogPlayback({ audio, status, title, artist, window
       audio.preload = "auto";
       audio.src = source;
       audio.load();
-      report("loading", "LOADING · verified catalog master", false);
+      report("loading", "LOADING · verified catalog audio", false);
       let playback;
       try {
         playback = audio.play();

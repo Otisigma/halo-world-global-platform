@@ -77,6 +77,8 @@
           <textarea id="lyrics" name="lyrics" maxlength="8000" rows="6" placeholder="Paste lyrics here for theme and campaign analysis…"></textarea>
         </label>
         <label class="rights-check"><input id="rightsAttested" type="checkbox" required><span>I own this recording or have permission to upload and analyze it. I understand Dreamweaver cannot verify ownership, credits, samples, or clearances.</span></label>
+        <label class="rights-check"><input id="autoResumeUpload" type="checkbox" checked><span>Automatically continue this submitted, authorized upload after network errors, reconnection, or reload on this account. Up to three recovery rounds; unsubmitted files never start automatically.</span></label>
+        <button id="pauseUploadButton" type="button" hidden>Pause after current request</button>
         <button class="analyze-button" id="analyzeButton" type="submit" disabled>
           <span>START PRIVATE ANALYSIS</span>
           <strong>Build the Dreamweaver package</strong>

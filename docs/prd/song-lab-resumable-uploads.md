@@ -18,7 +18,10 @@ reselection or repeat decoding when measurements are available. On a later visit
 the signed-in account can recover its latest locally retained session even if the
 tab pointer was lost. Unsubmitted, account-unbound drafts require their original
 tab pointer rather than being exposed to a different signed-in account. The rights
-checkbox is deliberately not restored. A session bound to an account requires
+checkbox is deliberately not restored. Automatic continuation uses only a
+previously submitted authorization and the saved auto-resume preference; an
+unsubmitted file never starts automatically. Changing draft inputs or withdrawing
+rights disables that continuation. A session bound to an account requires
 that same account before recovery; every new-protocol server write/status check
 also checks the initiating account. Local records are not encrypted by HALO;
 same-origin browser access and shared-device use remain privacy considerations.
@@ -48,9 +51,16 @@ on a fresh visit; it is not a cross-device upload archive.
   backoff/jitter and a 120-second per-request deadline. Network drops, timeouts,
   and supported transient HTTP statuses are retryable; auth/validation failures
   are not. Offline waits are bounded.
-- Exhausted retries retain progress, show PAUSED / WAITING and Resume Upload,
-  and do not reset the session. Reconnection makes manual recovery available;
-  it does not start analysis or upload without the user's submission.
+- After exhausted chunk retries, transient failures (including HTML 502 responses
+  from a gateway) can restart from server-confirmed checkpoints with 2/4/8-second
+  backoff, for up to three recovery rounds. That budget is checkpointed and does
+  not reset on reload. Only the submitted authorized session with automatic
+  recovery enabled can continue on reload or reconnect; manual Resume resets the
+  recovery budget. Authentication, validation, and explicit pause require action.
+- Pause after current request retains the latest acknowledged chunk and prevents
+  the next chunk/restart. It does not abort a server job already dispatched.
+  Supported browsers use Web Locks to prevent two tabs from continuing the same
+  upload concurrently. Without tab-lock support, recovery is manual-only.
 - The server checks owner, exact byte/chunk count, individual checksums and
   sizes, and completeness before creating a private project. The original is
   represented by its verified ordered chunks, using existing chunk-backed
@@ -59,6 +69,23 @@ on a fresh visit; it is not a cross-device upload archive.
   conflict-safe insertion. A lost finalization response returns the same project
   on the next status/finalize request. Project processing claims queued work
   atomically so concurrent resume requests do not launch duplicate AI jobs.
+- Private builds now checkpoint creative copy separately from artwork.
+  `resume_project` retains those server checkpoints, claims queued/failed or
+  expired work with a 90-second lease, and uses fenced writes to reject an older
+  worker's completion. Each generation stage has a 25-second deadline and abort
+  signal. Repeated calls on active or ready projects do not create duplicate
+  work; a recovered stage does not discard already saved output.
+- The client dispatches `/api/dreamweaver-song-lab-background`, a native Netlify
+  background function, rather than holding a synchronous API request open for AI
+  generation. A platform 202 acknowledgment is not proof of authorization or
+  job completion; the worker verifies account/origin/rights and the normal API's
+  project state provides the actual result.
+- The client dispatches each newly observed queued stage promptly and throttles
+  repeated recovery checks to every 30 seconds while its polling loop is active,
+  for at most ten minutes per polling attempt. Browser closure stops those checks. Platform background
+  execution/provider cancellation remain best effort, not a scheduler or exactly
+  once external billing guarantee. A saved server job and a browser checkpoint
+  remain distinct evidence.
 - Older clients can still submit the previous numbered-chunk protocol.
   New clients require the new server protocol; deploy server and client together.
 
@@ -74,6 +101,9 @@ database/storage/Identity dependencies plus client reconciliation and real
 shared-XHR retry contracts. It covers bad checksums, missing/inconsistent parts,
 unauthorized account/origin, duplicate finalization, and bounded retries.
 The suite is registered in PR CI.
+It also checks stage leases/checkpoints, expired-worker fencing, generation
+deadlines, late provider completions, automatic retry budgets, and spoofed iframe
+messages. No live account/provider success is inferred from these fixtures.
 
 Local desktop and mobile Chrome fixtures additionally exercised real IndexedDB
 Blob/draft recovery across reload, three failed retries, missing-only resume,
@@ -87,3 +117,35 @@ project jobs stuck queued/analyzing. Baseline latency before setting alert
 thresholds. Do not include private audio, filenames, lyrics, tokens, upload IDs,
 or arbitrary error payloads in public telemetry. These are monitoring
 recommendations, not newly enabled Sentinel or ledger integrations.
+
+## Coordinated responsibilities and limits
+
+The implementation separates three deterministic responsibilities, not three
+autonomous production LLMs:
+
+1. **Pipeline overseer:** checksum reconciliation, bounded retries, persisted
+   continuation preference/budget, same-account checks, and private job recovery.
+2. **Audio telemetry scout:** native preview media observations only. READY for
+   local audio is not proof of upload completion, storage health, or public
+   stream availability. Existing Sentinel remains scoped to its registered
+   Dreamweaver/Concierge controllers; it does not continuously inspect unloaded
+   pages or arbitrarily probe private Drive URLs.
+3. **UI synchronizer:** `HaloSongLabCheckpoint` and `halo:song-lab-progress` expose
+   stage, percent, backup availability, restart count, and preview state without
+   filenames, lyrics, URLs, or project IDs. The embedded catalog panel accepts
+   only same-origin messages from its own Song Lab iframe, with allowlisted
+   stages and bounded percent. It never overwrites `HALO_STREAM_READY` or treats
+   a private package as an approved catalog master.
+
+Focused implementation work can run in parallel, but adding agents is not proof
+of reduced build time or fewer defects. This public repository cannot provision
+Copilot cloud automation groups. No group, schedule, monitoring service, new AI
+worker credentials, or automatic merge/deploy is created by this implementation.
+
+For optional improvement, compare confirmed interruption recoveries with all
+observed interrupted submissions and record unresolved/missing evidence
+separately. Review retry exhaustion, time to recovered progress, duplicate job
+attempts, provider cost, wrong-account blocks, and false-ready incidents before
+proposing different retry or lease rules. Maintainers approve changes; the
+controllers do not rewrite their own policies. This measurement plan is not a
+claim of a measured reliability improvement.

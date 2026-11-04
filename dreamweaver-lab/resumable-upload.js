@@ -1,6 +1,37 @@
 export const CHUNK_BYTES = 4 * 1024 * 1024;
 export const MAX_FILE_BYTES = 128 * 1024 * 1024;
 const ENDPOINT = "/api/dreamweaver-song-lab";
+const TRANSIENT_STATUSES = new Set([408, 425, 429, 500, 502, 503, 504]);
+
+export function isTransientUploadError(error) {
+  return error?.name === "NetworkError" || error?.name === "TimeoutError"
+    || error?.name === "TypeError" || error?.name === "AbortError" && error?.timedOut === true
+    || TRANSIENT_STATUSES.has(Number(error?.status));
+}
+
+export async function runCheckpointedUpload(work, {
+  session, checkpoint = async () => {}, onWaiting = () => {},
+  canContinue = () => true, wait = ms => new Promise(resolve => setTimeout(resolve, ms)),
+  online = () => globalThis.navigator?.onLine !== false,
+} = {}) {
+  const assertContinuing = () => {
+    if (!canContinue()) throw Object.assign(new Error("Upload paused. Your checkpoints are retained."), { name: "PausedUploadError" });
+  };
+  for (;;) {
+    assertContinuing();
+    try { return await work(assertContinuing); }
+    catch (error) {
+      if (!isTransientUploadError(error) || !session.autoResume || (session.autoRestarts || 0) >= 3) throw error;
+      session.autoRestarts = (session.autoRestarts || 0) + 1;
+      const delayMs = 2000 * 2 ** (session.autoRestarts - 1);
+      await checkpoint();
+      onWaiting({ attempt: session.autoRestarts, delayMs, error });
+      await wait(delayMs);
+      assertContinuing();
+      if (!online()) throw Object.assign(new Error("Offline. Automatic recovery will continue when the connection returns."), { name: "OfflineUploadError" });
+    }
+  }
+}
 
 export function createLocalUploadVault(indexedDB = globalThis.indexedDB) {
   let database;
@@ -63,19 +94,43 @@ export function createLocalUploadVault(indexedDB = globalThis.indexedDB) {
   };
 }
 
-export async function requestUploadJson(body, headers = {}, fetcher = globalThis.fetch) {
+export async function readSongLabJson(url, fetcher = globalThis.fetch) {
+  return requestSongLab(url, { method: "GET", headers: { Accept: "application/json" } }, fetcher);
+}
+
+async function requestSongLab(url, options, fetcher) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 30000);
   try {
-    const response = await fetcher(ENDPOINT, {
-      method: "POST", credentials: "same-origin", signal: controller.signal,
-      headers: { ...headers, "Content-Type": "application/json" }, body: JSON.stringify(body),
-    });
+    const response = await fetcher(url, { ...options, credentials: "same-origin", signal: controller.signal });
     let data;
     try { data = await response.json(); }
-    catch { throw new Error(`Song Lab returned an unreadable response (HTTP ${response.status}). Your upload can be resumed.`); }
+    catch { throw Object.assign(new Error(`Song Lab returned an unreadable response (HTTP ${response.status}). Your upload can be resumed.`), { status: response.status }); }
     if (!response.ok) throw Object.assign(new Error(data.message || `Song Lab request failed (HTTP ${response.status}).`), { status: response.status, data });
     return data;
+  } catch (error) {
+    if (controller.signal.aborted) throw Object.assign(new Error("Song Lab request timed out. Your checkpoint is retained."), { name: "TimeoutError" });
+    throw error;
+  } finally { clearTimeout(timer); }
+}
+
+export async function requestUploadJson(body, headers = {}, fetcher = globalThis.fetch) {
+  return requestSongLab(ENDPOINT, { method: "POST", headers: { ...headers, "Content-Type": "application/json" }, body: JSON.stringify(body) }, fetcher);
+}
+
+export async function dispatchSongLabBuild(projectId, headers = {}, fetcher = globalThis.fetch) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 30000);
+  try {
+    const response = await fetcher("/api/dreamweaver-song-lab-background", {
+      method: "POST", credentials: "same-origin", signal: controller.signal,
+      headers: { ...headers, "Content-Type": "application/json" }, body: JSON.stringify({ projectId }),
+    });
+    if (!response.ok) throw Object.assign(new Error(`The private worker request failed (HTTP ${response.status}).`), { status: response.status });
+    // Netlify acknowledges background requests before execution; project polling is the result.
+  } catch (error) {
+    if (controller.signal.aborted) throw Object.assign(new Error("Private worker dispatch timed out. The saved project is retained."), { name: "TimeoutError" });
+    throw error;
   } finally { clearTimeout(timer); }
 }
 
@@ -84,8 +139,9 @@ export async function resumeAudioUpload({
   request = requestUploadJson, checksum = async blob => {
     const bytes = await crypto.subtle.digest("SHA-256", await blob.arrayBuffer());
     return [...new Uint8Array(bytes)].map(byte => byte.toString(16).padStart(2, "0")).join("");
-  }, onProgress = () => {}, onRetry = () => {}, onAcknowledged = async () => {},
+  }, onProgress = () => {}, onRetry = () => {}, onAcknowledged = async () => {}, assertContinuing = () => {},
 }) {
+  assertContinuing();
   if (!file?.size || file.size > MAX_FILE_BYTES) throw new Error("Choose a non-empty audio file up to 128 MB.");
   if (!transport) throw new Error("The upload transport is unavailable. Reload Song Lab to retry.");
   const shape = { uploadId: session.id, ownerId: session.ownerId, chunkCount: Math.ceil(file.size / CHUNK_BYTES), byteSize: file.size, resumeVersion: 1 };
@@ -93,6 +149,7 @@ export async function resumeAudioUpload({
   if (status.project) return { ...shape, project: status.project };
   let acknowledgedBytes = 0;
   for (let chunkIndex = 0; chunkIndex < shape.chunkCount; chunkIndex++) {
+    assertContinuing();
     const start = chunkIndex * CHUNK_BYTES;
     const chunk = file.slice(start, Math.min(file.size, start + CHUNK_BYTES), file.type);
     const digest = await checksum(chunk);
@@ -109,6 +166,7 @@ export async function resumeAudioUpload({
       if (!response.ok) throw Object.assign(new Error(response.data?.message || "The private audio upload stopped early."), { status: response.status, data: response.data });
       if (response.data?.sha256 !== digest) throw new Error("The server did not verify this audio chunk. Resume to retry it.");
     }
+    assertContinuing();
     acknowledgedBytes += chunk.size;
     await onAcknowledged(chunkIndex);
     onProgress(acknowledgedBytes / file.size * 100);

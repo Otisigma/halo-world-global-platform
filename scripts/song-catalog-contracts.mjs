@@ -600,6 +600,7 @@ const inline = runInNewContext(`${client.slice(client.indexOf("const alternateUp
   uploadAudioToVersion: async payload => { inlineUploads.push(payload); await duringInlineUpload(); if (failInlineUpload) throw new Error("Connection stopped"); return { readiness: { status: "CATALOG_READY" } }; },
   uploadReadinessNote: readiness => readiness ? ` · ${readiness.status}` : "",
   announceUploadReadiness: () => {},
+  announceCatalogUpload: () => {},
   loadCatalog: async songId => { inlineReloads.push(songId); }
 });
 const inlineEvent = { preventDefault() {}, currentTarget: inlineForm };

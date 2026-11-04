@@ -24,6 +24,7 @@ const ALLOWED_TYPES = new Set(["audio/mpeg", "audio/mp4", "audio/aac", "audio/og
 const MAX_CHUNK_BYTES = AUDIO_CHUNK_MAX_BYTES;
 const MAX_UPLOAD_BYTES = AUDIO_UPLOAD_MAX_BYTES;
 const MAX_CHUNKS = AUDIO_UPLOAD_MAX_CHUNKS;
+const MAX_PLAYBACK_RANGE_BYTES = AUDIO_CHUNK_MAX_BYTES;
 const MEDIA_CORS_HEADERS = Object.freeze({
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "Content-Type, Range",
@@ -88,7 +89,8 @@ function requestedByteRange(value: string | null, byteSize: number) {
     end = match[2] ? Number(match[2]) : byteSize - 1;
   }
   if (!Number.isSafeInteger(start) || !Number.isSafeInteger(end) || start < 0 || start >= byteSize || end < start) return false;
-  return { start, end: Math.min(end, byteSize - 1) };
+  // Browsers request bytes=0-; do not assemble the entire HD master before sending its header.
+  return { start, end: Math.min(end, byteSize - 1, start + MAX_PLAYBACK_RANGE_BYTES - 1) };
 }
 
 async function ownedVersion(db: Awaited<ReturnType<typeof getDatabase>>, ownerMemberId: string, versionId: string, songId = "") {

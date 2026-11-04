@@ -268,8 +268,10 @@
             <a id="dreamweaverMixLink" class="song-lobby__source" href="/mixes/">Open mix player ↗</a>
             <a class="song-lobby__anchor song-lobby__anchor--subtle" href="/dj-deck.html">Creator gateway /dj-deck</a>
           </div>
-          <p class="song-lobby__local-hint" id="mixFileHint">Stream unavailable? Preview saved Song Lab audio from this browser after signing in, or choose an MP3, WAV, M4A, AAC, OGG, FLAC, or WebM file. Local preview only: it plays in this browser tab and does not upload, publish, share, or replace a catalog master.</p>
+          <p class="song-lobby__local-hint" id="mixFileHint">Stream unavailable? Preview saved Song Lab audio from this browser after signing in, or choose an MP3, WAV, M4A, AAC, OGG, FLAC, or WebM file. Local preview only: audio is not uploaded, saved, published, or shared by this player and does not replace a catalog master.</p>
           <p class="song-lobby__local-status" id="mixFileStatus" role="status" aria-live="polite" data-state="idle"></p>
+          <p id="streamFailureDetail" role="status" aria-live="polite" hidden></p>
+          <button id="retryRemoteStream" class="song-lobby__upload-label" type="button" hidden>Retry this song's stream</button>
         </section>
       </div>
 

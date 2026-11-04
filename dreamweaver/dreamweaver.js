@@ -6,6 +6,7 @@ import { catalogAudioUrl, generateAutomatedSet, normalizeCatalog } from "../lib/
 import { readRecentTrackIds, recordPlayedTrack } from "../lib/catalog-session.js";
 import { MIX_PRESETS, createMixSeed, deleteUserPreset, describeMixIntent, normalizeMixSeed, parseMixPrompt, readUserPresets, saveUserPreset } from "../lib/mix-intent.js";
 import { readSavedSongLabAudio } from "../dreamweaver-lab/resumable-upload.js";
+import { inspectAudioStream } from "../lib/audio-stream-diagnostics.js";
 
 (() => {
   const chapters = [
@@ -73,7 +74,8 @@ import { readSavedSongLabAudio } from "../dreamweaver-lab/resumable-upload.js";
   const VIDEO_LIBRARY_TIMEOUT_MS = 8000;
   const AUDIO_BOOTSTRAP_TIMEOUT_MS = 7000;
   const REMOTE_AUDIO_WATCHDOG_MS = 5000;
-  const LOCAL_PREVIEW_PROMPT = "Stream unavailable — choose “Preview a local file in this lobby” or press play to pick audio from this device. Local previews stay in this browser only.";
+  const REMOTE_AUDIO_STARTUP_TIMEOUT_MS = 20000;
+  const LOCAL_PREVIEW_PROMPT = "Stream unavailable — press play to retry this song, or choose “Preview a local file in this lobby”. Local previews stay in this browser only.";
   const HERO_REEL_LOAD_TIMEOUT_MS = 3500;
   const MAX_AUDIO_FEEDBACK_RECORDS = 24;
   const SATELLITE_AGENT_REFRESH_MS = 45_000;
@@ -125,6 +127,8 @@ import { readSavedSongLabAudio } from "../dreamweaver-lab/resumable-upload.js";
     uploadLabel: document.querySelector(".upload-label"),
     mixFileInput: document.getElementById("mixFileInput"),
     savedSongLabPreview: document.getElementById("savedSongLabPreview"),
+    streamFailureDetail: document.getElementById("streamFailureDetail"),
+    retryRemoteStream: document.getElementById("retryRemoteStream"),
     mixFileStatus: document.getElementById("mixFileStatus"),
     shell: document.getElementById("showShell"),
     loading: document.getElementById("loadingShow"),
@@ -307,6 +311,7 @@ import { readSavedSongLabAudio } from "../dreamweaver-lab/resumable-upload.js";
     catalogAdvancing: false,
     catalogGenerating: false,
     catalogFallbackActive: false,
+    remoteRetryMix: null,
     localAudioName: "",
     localAudioUrl: "",
     remoteAudioWatchdog: 0,
@@ -1221,6 +1226,16 @@ import { readSavedSongLabAudio } from "../dreamweaver-lab/resumable-upload.js";
     elements.audio.pause();
     renderSoundUnlock("");
     setReleasePlaybackState("unavailable");
+    const failedSource = elements.audio.getAttribute("src") || resolvePrimaryAudio(state.mix || {}).src;
+    if (elements.retryRemoteStream) elements.retryRemoteStream.hidden = !resolvePrimaryAudio(state.mix || {}).src;
+    if (elements.streamFailureDetail) {
+      elements.streamFailureDetail.hidden = false;
+      elements.streamFailureDetail.textContent = `${describeAudioElementFailure()} Checking the audio response...`;
+      void inspectAudioStream(failedSource).then(detail => {
+        if (state.audioSourceMode !== "error" || elements.audio.getAttribute("src") !== failedSource) return;
+        elements.streamFailureDetail.textContent = detail;
+      });
+    }
     showToast(message);
   }
 
@@ -1237,7 +1252,8 @@ import { readSavedSongLabAudio } from "../dreamweaver-lab/resumable-upload.js";
       if (state.playbackRequested || elements.audio.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) {
         handleRemoteAudioUnavailable(LOCAL_PREVIEW_PROMPT);
       }
-    }, REMOTE_AUDIO_WATCHDOG_MS);
+    }, elements.audio.readyState < HTMLMediaElement.HAVE_CURRENT_DATA
+      ? REMOTE_AUDIO_STARTUP_TIMEOUT_MS : REMOTE_AUDIO_WATCHDOG_MS);
   }
 
   async function activateLocalMixFile(file) {
@@ -1272,6 +1288,8 @@ import { readSavedSongLabAudio } from "../dreamweaver-lab/resumable-upload.js";
     state.localAudioUrl = localAudioUrl;
     state.localAudioName = cleanText(file.name || "Uploaded mix", 160) || "Uploaded mix";
     state.audioSourceMode = "local";
+    if (elements.streamFailureDetail) elements.streamFailureDetail.hidden = true;
+    if (elements.retryRemoteStream) elements.retryRemoteStream.hidden = true;
     delete elements.audio.dataset.catalogTrackId;
     delete elements.audio.dataset.catalogMixId;
     state.catalogSet = null;
@@ -1327,7 +1345,7 @@ import { readSavedSongLabAudio } from "../dreamweaver-lab/resumable-upload.js";
         ok: false,
         state: "timeout",
         detail: LOCAL_PREVIEW_PROMPT
-      }), REMOTE_AUDIO_WATCHDOG_MS);
+      }), REMOTE_AUDIO_STARTUP_TIMEOUT_MS);
       elements.audio.addEventListener("loadeddata", handleReady, { once: true });
       elements.audio.addEventListener("canplay", handleReady, { once: true });
       elements.audio.addEventListener("canplaythrough", handleReady, { once: true });
@@ -1356,6 +1374,7 @@ import { readSavedSongLabAudio } from "../dreamweaver-lab/resumable-upload.js";
 
     setLoadingProgress(58, "Bootstrapping primary playback", "Dreamweaver is loading the linked song first so sound can start before the wider loop hydrates.");
     state.mix = mix;
+    if (!state.catalogFallbackActive) state.remoteRetryMix = mix;
     state.duration = Number(mix.durationSeconds || 0);
     if (mix.isDriveCatalogPlayback) {
       elements.audio.dataset.catalogTrackId = mix.id;
@@ -1371,6 +1390,8 @@ import { readSavedSongLabAudio } from "../dreamweaver-lab/resumable-upload.js";
       elements.mixFileStatus.dataset.state = "idle";
     }
     state.audioSourceMode = "remote";
+    if (elements.streamFailureDetail) elements.streamFailureDetail.hidden = true;
+    if (elements.retryRemoteStream) elements.retryRemoteStream.hidden = true;
     const requestPlayback = userInitiated || resume;
     if (userInitiated) notePlaybackClick();
     if (!requestPlayback) state.playbackRequested = false;
@@ -1395,6 +1416,12 @@ import { readSavedSongLabAudio } from "../dreamweaver-lab/resumable-upload.js";
       const preflight = await window.HaloSentinel?.preflight(elements.audio, primaryAudio, { recover: false });
       if (preflight && !preflight.ok) {
         if (preflight.stale) return { started: false };
+        // A HEAD/CORS probe is advisory: native media may still load on the next gesture.
+        if (!elements.audio.error && (!preflight.status || [405, 501].includes(preflight.status)
+          || elements.audio.readyState >= 1)) {
+          setReleasePlaybackState("ready");
+          return { started: false };
+        }
         if (await retryCatalogProxy()) return { started: false, fallback: state.audioSourceMode === "error" };
         handleRemoteAudioUnavailable();
         return { started: false, fallback: true };
@@ -1488,7 +1515,7 @@ import { readSavedSongLabAudio } from "../dreamweaver-lab/resumable-upload.js";
         mix,
         metadata: { failureState: readiness.state === "error" && Number(elements.audio?.error?.code || 0) === 3 ? "corrupted_audio" : "non_playable_audio" }
       });
-      handleRemoteAudioUnavailable(readiness.detail || "Stream unavailable — click Upload Mix File or press play to choose a local mix.");
+      handleRemoteAudioUnavailable(readiness.detail || LOCAL_PREVIEW_PROMPT);
       return { started: false, fallback: true };
     }
 
@@ -1529,7 +1556,7 @@ import { readSavedSongLabAudio } from "../dreamweaver-lab/resumable-upload.js";
 
   function releaseStateLabel(status) {
     if (state.audioSourceMode === "local") return elements.audio.paused ? "Local preview ready" : "Local preview";
-    if (state.audioSourceMode === "error") return "Preview a local file";
+    if (state.audioSourceMode === "error") return "Stream unavailable";
     if (state.audioSourceMode === "empty" && status !== "loading") return "Standby";
     if (status === "loading") return "Loading signal";
     if (status === "playing") return state.autoplayMuted && elements.audio.muted ? "Playing muted" : "Playing now";
@@ -2370,6 +2397,11 @@ import { readSavedSongLabAudio } from "../dreamweaver-lab/resumable-upload.js";
 
   async function togglePlayback() {
     if (shouldPromptLocalUpload()) {
+      if (state.mix && resolvePrimaryAudio(state.mix).src) {
+        state.catalogFallbackTried = new Set();
+        await bootstrapPrimaryPlayback(state.remoteRetryMix || state.mix, { userInitiated: true });
+        return;
+      }
       setReleasePlaybackState("unavailable");
       showToast("Stream unavailable — opening the local upload picker.");
       openMixFilePicker();
@@ -2436,6 +2468,13 @@ import { readSavedSongLabAudio } from "../dreamweaver-lab/resumable-upload.js";
         setLocalPreviewStatus(error.message || "Saved Song Lab preview could not be opened.", "error");
         showToast(error.message || "Saved Song Lab preview could not be opened.");
       } finally { button.disabled = false; }
+    });
+    elements.retryRemoteStream?.addEventListener("click", async () => {
+      const button = elements.retryRemoteStream;
+      button.disabled = true;
+      try { await togglePlayback(); }
+      catch (error) { handleRemoteAudioUnavailable(error.message); }
+      finally { button.disabled = false; }
     });
     elements.uploadLabel?.addEventListener("keydown", event => {
       if (event.key === "Enter" || event.key === " ") {
@@ -3197,6 +3236,7 @@ import { readSavedSongLabAudio } from "../dreamweaver-lab/resumable-upload.js";
     window.HaloAudioPreloader?.clear();
     state.releaseFromLiveCatalog = false;
     state.catalogFallbackTried = new Set();
+    state.remoteRetryMix = null;
     setReleasePlaybackState("loading");
     setLoadingProgress(8, "Calibrating Dreamweaver stage", "Dreamweaver is staging this edition with artwork, metadata, and the four-act lobby in sync.");
     if (!preserveShell) {
@@ -3692,6 +3732,7 @@ import { readSavedSongLabAudio } from "../dreamweaver-lab/resumable-upload.js";
     state.dreamweaverPayload = null;
     state.publishedSongId = "";
     state.catalogFallbackTried = new Set();
+    state.remoteRetryMix = null;
     elements.mixTitle.textContent = track.title;
     elements.mixCreator.textContent = track.artist;
     const mix = {

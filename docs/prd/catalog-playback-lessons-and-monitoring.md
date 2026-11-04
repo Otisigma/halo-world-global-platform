@@ -84,6 +84,62 @@ fallback remain in place. Cached records cannot authorize the direct path.
 Transport/media failures still surface honestly; a completed conveyor is not
 proof that audio is audible, and binding does not autoplay.
 
+On a remote fault, Play and the explicit retry button retry that same song's
+canonical route rather than opening a file picker. The local-preview picker
+remains separate. A failed background HEAD/CORS probe alone does not discard an
+otherwise healthy native media source; definitive HTTP failures with no native
+readiness and actual media errors still fail normally.
+
+Chunk-backed master playback caps each requested byte range at one storage chunk
+(4 MiB), including
+open-ended browser requests such as `bytes=0-`. Previously that request assembled
+the entire remaining HD file before returning its first bytes. Partial responses
+retain the full file size in `Content-Range`, allowing the browser to request
+subsequent windows or seek. Signed direct-storage redirects are unchanged.
+Matching the upload chunk size avoids repeatedly fetching a four-MiB storage
+chunk for each smaller playback response while staying below buffered binary
+response limits.
+Initial metadata/decoder loading has a bounded 20-second budget; a buffered
+stream retains the existing five-second stall watchdog. The real master required
+an initial range, a tail metadata range and a subsequent audio range. Applying a
+five-second stall deadline to that startup sequence paused the player even after
+the bounded responses made the 292.4-second WAV decodable.
+
+The show displays a bounded diagnostic GET on a failed same-origin source,
+including its HTTP status, content type and API message. It requests only bytes
+0–63, cancels after the first response chunk, has an eight-second timeout, and
+never displays audio bytes, redirect targets or query parameters. This diagnostic
+does not authorize playback or certify a deployment. A successful response does
+not establish that a browser decoded or audibly played the stream.
+
+The existing manual Live audio endpoint smoke workflow has a `diagnose_song`
+mode. It needs only a public song UUID, looks up that exact song's canonical
+route, and probes it without private credentials. This mode uses the repository
+probe origin, or the HALO production origin if unset. Normal five-stream mode
+still validates all required IDs in the smoke script. Neither mode changes
+Netlify configuration, publication data or stored audio.
+
+The public-song mode also opens the actual show in isolated headless Chrome,
+uses a real input click and checks advancing `currentTime`. Its separate
+bounded-range experiment caps only the test browser's requests, explicitly
+without changing deployed code. This comparison can isolate range-assembly
+latency from metadata availability. It does not certify physical audibility.
+The experiment also loads this branch's four player modules only in that
+isolated browser, so startup timing changes can be tested against real public
+audio without deploying candidate code or modifying production records.
+
+A local native-Chrome reproduction used the real show code and actual catalog
+handler with a synthetic 28 MiB PCM WAV and 900 ms per storage chunk. Unbounded
+`bytes=0-` assembled all seven chunks, exceeded the player's five-second startup
+watchdog and remained paused at 0:00. With the same WAV and one-MiB response cap,
+Chrome observed `loadedmetadata`, `canplay`, `playing`, and advancing time
+(`0.502252` seconds). This isolates the failure mechanism but is not a claim
+that production has deployed the fix or played the real master.
+The final chunk-aligned four-MiB implementation was then checked with the same
+real handler and fixture: Chrome received `bytes 0-4194303/29360128`, reached
+`readyState: 4`, emitted `playing`, and advanced to `0.500782` seconds with mute
+off and volume 1.
+
 ## Shared player upload indicator
 
 The shared compact upload indicator appears over player pages while a Song

@@ -133,7 +133,7 @@ export function fixture(search, { releases = [release], mixes = [mix], blocked =
   const timers = new Map();
   let timerId = 0;
   const context = {
-    URL, URLSearchParams, console, location, readSavedSongLabAudio: savedAudioReader, DREAMWEAVER_STOREFRONT_MIX_ID, buildDreamweaverStorefrontPath, createLyricInteractionRecorder, catalogAudioUrl, generateAutomatedSet, normalizeCatalog, readRecentTrackIds, recordPlayedTrack, ...mixIntent, ...playback,
+    URL, URLSearchParams, console, location, inspectAudioStream: async () => "/api/song-catalog/audio: HTTP 404. Missing audio.", readSavedSongLabAudio: savedAudioReader, DREAMWEAVER_STOREFRONT_MIX_ID, buildDreamweaverStorefrontPath, createLyricInteractionRecorder, catalogAudioUrl, generateAutomatedSet, normalizeCatalog, readRecentTrackIds, recordPlayedTrack, ...mixIntent, ...playback,
     Image: class {
       set src(value) {
         assert.equal(this.crossOrigin, "anonymous", "CORS must be set before requesting campaign artwork");
@@ -607,17 +607,19 @@ const proxy = "https://halo.test/api/drive-catalog/audio?track=bound-song";
   };
   const f = fixture(`?song=${songId}`, { sentinel, assetBinding: { ...binding, fallbackAudioSource: proxy } });
   await f.initializeDreamweaver();
-  assert.deepEqual(probes, [masterStream, proxy], "a failed preflight tries only the bound same-song proxy");
-  assert.equal(f.nodes.get("showAudio").src, proxy);
-  assert.equal(f.state.releasePlaybackState, "ready", "a successful proxy preflight must not be overwritten as unavailable");
+  assert.deepEqual(probes, [masterStream], "a failed header probe cannot discard a native stream without a media error");
+  assert.equal(f.nodes.get("showAudio").src, masterStream);
+  assert.equal(f.state.releasePlaybackState, "ready", "the native source remains selectable after an advisory preflight failure");
   assert.equal(f.nodes.get("showAudio").plays, 0);
 }
 {
   const sentinel = { bind() {}, preflight: async () => ({ ok: false }) };
   const f = fixture(`?song=${songId}`, { sentinel });
   await f.initializeDreamweaver();
-  assert.equal(f.state.releasePlaybackState, "unavailable");
-  assert.equal(f.shouldPromptLocalUpload(), true);
+  assert.equal(f.state.releasePlaybackState, "ready");
+  assert.equal(f.shouldPromptLocalUpload(), false);
+  await f.togglePlayback();
+  assert.equal(f.nodes.get("showAudio").paused, false, "a user gesture plays native audio even when a background HTTP probe fails");
 }
 {
   const warmed = [];
@@ -706,6 +708,20 @@ for (const failure of ["promise", "late-error", "stall"]) {
   assert.equal(f.nodes.get("showAudio").plays, 3, "each source is tried exactly once — no fallback ping-pong");
   assert.equal(f.shouldPromptLocalUpload(), true);
   assert.equal(f.state.releasePlaybackState, "unavailable");
+  assert.equal(f.nodes.get("retryRemoteStream").hidden, false);
+  assert.match(f.nodes.get("streamFailureDetail").textContent, /HTTP 404/);
+  const audio = f.nodes.get("showAudio");
+  audio.play = async function () {
+    this.plays++;
+    this.paused = false;
+    this.dispatchEvent(new Event("playing"));
+  };
+  await f.togglePlayback();
+  assert.equal(audio.src, masterStream, "retry starts at this song's canonical master, not the last failed fallback");
+  assert.equal(audio.paused, false, "Play retries a recovered remote service without selecting a local file");
+  assert.equal(f.nodes.get("streamFailureDetail").hidden, true);
+  assert.equal(f.nodes.get("retryRemoteStream").hidden, true);
+  assert.equal(f.nodes.get("mixFileInput").clicks, undefined, "a stream fault does not turn Play into a file picker");
 }
 
 {
@@ -721,7 +737,7 @@ for (const failure of ["promise", "late-error", "stall"]) {
   const standbySource = audio.src;
   assert.equal(f.shouldPromptLocalUpload(), true, "an unavailable linked stream leaves the song lobby on standby");
   assert.match(f.nodes.get("songLobbyPlayerStatus").textContent, /Preview a local file in this lobby/);
-  assert.equal(f.nodes.get("songLobbyPlayerStatePill").textContent, "Preview a local file");
+  assert.equal(f.nodes.get("songLobbyPlayerStatePill").textContent, "Stream unavailable");
 
   await f.activateLocalMixFile(undefined);
   assert.equal(status.dataset.state, "error");

@@ -304,10 +304,11 @@ const dreamContext = vm.createContext({
   elements: { audio: dreamAudio, playButton: dreamPlay, songLobbyHeroPlayButton: control(), mixFileInput: dreamInput, uploadLabel: dreamUpload },
   window: { setTimeout: playerContext.setTimeout, clearTimeout: playerContext.clearTimeout },
   URL: MediaURL, location: playerContext.location, HTMLMediaElement: playerContext.HTMLMediaElement,
-  REMOTE_AUDIO_WATCHDOG_MS: 5000, LOCAL_PREVIEW_PROMPT: "Stream unavailable", cleanText: value => String(value || "").trim(),
+  REMOTE_AUDIO_WATCHDOG_MS: 5000, REMOTE_AUDIO_STARTUP_TIMEOUT_MS: 20000, LOCAL_PREVIEW_PROMPT: "Stream unavailable", cleanText: value => String(value || "").trim(),
   showToast() {}, setReleasePlaybackState() {},
   notePlaybackClick() { dreamState.playbackRequested = true; },
   dreamweaverDriveFallbacks: () => [],
+  resolvePrimaryAudio: () => ({ src: "" }),
   unlockDreamweaverAudio,
   renderReleasePanel() {},
   renderSoundUnlock(mode) { dreamState.soundUnlockMode = mode; }
@@ -322,11 +323,19 @@ vm.runInContext(
 dreamContext.bindPlayerControls();
 await dreamContext.togglePlayback();
 assert.equal(dreamInput.clicks, 0, "an assigned remote source must be tried even before currentSrc is populated");
-assert.equal(timeoutDelay, 5000);
+assert.equal(timeoutDelay, 20000, "initial metadata loading gets a bounded startup budget, not the short buffered-playback stall deadline");
 const dreamWatchdogCount = timeoutCount;
 dreamContext.armRemoteAudioWatchdog();
 dreamContext.armRemoteAudioWatchdog();
 assert.equal(timeoutCount, dreamWatchdogCount, "Dreamweaver buffering must keep the original deadline");
+dreamContext.clearRemoteAudioWatchdog();
+dreamAudio.readyState = 2;
+dreamContext.armRemoteAudioWatchdog();
+assert.equal(timeoutDelay, 5000, "buffered playback retains its short stall deadline");
+dreamContext.clearRemoteAudioWatchdog();
+dreamAudio.readyState = 0;
+dreamContext.armRemoteAudioWatchdog();
+assert.equal(timeoutDelay, 20000, "a fresh unloaded stream uses the startup deadline");
 timeoutCallback();
 assert.equal(dreamState.audioSourceMode, "error", "Dreamweaver must retain its watchdog until current data is available");
 assert.equal(dreamAudio.paused, true);
@@ -372,7 +381,9 @@ const timedOutBootstrap = await dreamContext.bootstrapPrimaryPlayback({}, { user
 assert.equal(timedOutBootstrap.fallback, true, "bootstrap timeout must offer the local upload fallback");
 assert.equal(dreamState.audioSourceMode, "error");
 await dreamContext.togglePlayback();
-assert.equal(dreamInput.clicks, 3, "play after a bootstrap timeout must open the picker");
+assert.equal(dreamInput.clicks, 2, "play after a bootstrap timeout must retry the remote stream, not force a file picker");
+assert.equal(dreamAudio.src, track.previewUrl);
+assert.equal(dreamState.audioSourceMode, "error", "a failed retry remains a fault, never fake playback success");
 
 for (const [file, handler] of [
   ["netlify/functions/mix-audio.mjs", "mixAudioHandler"],

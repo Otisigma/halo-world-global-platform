@@ -225,6 +225,11 @@
 
           <section class="versions-panel">
             <div class="panel-heading"><div><p class="eyebrow">Version routing</p><h3>Every version, one clear destination</h3></div><p>Open a row to connect audio and update mastering.</p></div>
+            <section class="catalog-audio-player" aria-label="Catalog master player">
+              <div><p class="eyebrow">DREAMWEAVER / CATALOG AUDIO</p><h3 id="catalogPlayerTitle">No track selected</h3><p id="catalogPlayerArtist">Choose any version with verified stored audio below.</p></div>
+              <audio id="showAudio" controls preload="none" aria-label="Dreamweaver catalog audio player"></audio>
+              <p id="catalogPlayerStatus" data-state="standby" role="status" aria-live="polite">Choose Play on a stored catalog version.</p>
+            </section>
             <div class="version-table" id="versionTable" tabindex="-1"></div>
             <section class="publication-board" aria-labelledby="dreamweaverUploadTitle">
               <details class="catalog-disclosure" id="dreamweaverUploadDisclosure">

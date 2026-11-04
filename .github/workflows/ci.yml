@@ -7,6 +7,19 @@ on:
     branches: [main]
 
 jobs:
+  api-cors-contracts:
+    name: Express API CORS contracts
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: npm ci --ignore-scripts
+      - run: npm run test:api-cors
+
   halo-sentinel-contracts:
     name: HALO Sentinel runtime and ledger contracts
     runs-on: ubuntu-latest

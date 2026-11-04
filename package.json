@@ -3,6 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "test:api-cors": "node scripts/api-cors-contracts.mjs",
     "test:song-lab-resume": "node scripts/dreamweaver-song-lab-contracts.mjs && node scripts/song-lab-resume-contracts.mjs && node scripts/song-lab-auto-resume-contracts.mjs && node scripts/song-lab-job-recovery-contracts.mjs",
     "test:sentinel": "node scripts/sentinel-contracts.mjs && node scripts/sentinel-source-repair.mjs",
     "test:concierge-showcase": "node scripts/concierge-showcase-contracts.mjs",
@@ -58,6 +59,7 @@
   "dependencies": {
     "@netlify/blobs": "^10.7.12",
     "@netlify/identity": "^1.2.0",
+    "cors": "^2.8.6",
     "drizzle-orm": "^1.0.0-beta.22",
     "express": "^4.21.2",
     "mongoose": "^9.10.3",

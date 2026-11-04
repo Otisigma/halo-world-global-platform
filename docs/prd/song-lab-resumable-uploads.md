@@ -33,8 +33,27 @@ is not durable recovery. Browser data clearing, eviction, private-mode policies,
 device loss, or closing before the initial backup commits can lose local data.
 Keep the original recording; this is not a promise that data can never be lost.
 
-Local records are removed when the creative project becomes ready or the user
-chooses Discard local backup. Replacing a file requires confirmation. Discard
+Completed sessions now retain the original Blob, draft and measurements in
+IndexedDB until the user chooses Discard local backup or replaces the file.
+On initialization, a single authenticated history read verifies the account
+before restoring local work. Completed local sessions hydrate the saved private
+package from the owner-authenticated API, restore audio preview from the Blob,
+and disable upload continuation. Pending drafts take priority over older server
+packages. Completed packages are not uploaded or generated again on reload.
+
+An account-scoped localStorage preference stores only the last opened project
+ID, never audio, lyrics or creative packages. A selected history project wins
+over an unrelated completed local buffer. If no local work remains, Song Lab
+opens that account's last active private project (or its latest ready project).
+Packages outside the recent history window are fetched by ID through the same
+owner-authenticated API. A server package without a retained local Blob restores
+results but does not claim an audio preview; no catalog master, arbitrary archive
+URL or hardcoded project title is substituted. Pending server projects remain
+available in history for manual continuation. Initialization retries on the
+identity-ready event after sign-in; storage and authentication failures are
+visible and do not delete saved work.
+
+Replacing a file requires confirmation. Discard
 does not remove existing server chunks or private projects. Recovery supports
 one active selected upload per tab and restores the account's latest saved session
 on a fresh visit; it is not a cross-device upload archive.
@@ -107,7 +126,7 @@ messages. No live account/provider success is inferred from these fixtures.
 
 Local desktop and mobile Chrome fixtures additionally exercised real IndexedDB
 Blob/draft recovery across reload, three failed retries, missing-only resume,
-account-switch rejection, renewed rights attestation, successful cleanup, and
+account-switch rejection, renewed rights attestation, explicit discard, and
 unsupported-storage warnings. These fixtures do not prove deployed provider
 availability, actual user credentials, Safari support, or physical audibility.
 

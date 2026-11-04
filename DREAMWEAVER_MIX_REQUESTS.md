@@ -123,6 +123,16 @@ Manual smoke test still required against the deployed Drive catalog: test deskto
 
 ### Diagnosing no sound
 
+The linked player binds the server-authorized canonical master and reports **READY**
+from that active source, even if release metadata has no preview URL. READY means
+the source is selected, not that deployed audio has been verified or heard.
+Preloading respects the existing connection/privacy policy; it never starts playback.
+After a browser policy rejection, **Tap to play with sound** or **Play** retries
+from the listener's gesture. Policy blocking must not be reported as a failed stream
+by the stall watchdog. Deliberate user muting is preserved unless sound recovery
+is explicitly requested. Local files remain browser-only Blob previews; a failure
+to create the Blob URL reports an error without replacing the current source.
+
 - Inspect `/api/drive-catalog` on the deployed origin. `configured: false` requires the site owner to configure `GOOGLE_DRIVE_MASTERS_FOLDER_ID` and either `GOOGLE_SERVICE_ACCOUNT_JSON` or the service-account email/private-key settings. Keep credentials in deployment secrets, never in client code.
 - A 503 requires checking service-account access to the folder, exactly one `catalog-index.json`, valid manifest metadata, and nonempty audio files in that folder. A successful empty catalog requires publishing eligible `public: true` entries; recent-play/avoid filters can also leave a generated set empty.
 - Generate a set and verify no media starts. Click Play on a real card; confirm the shared `#showAudio` requests that record's `streamUrl` and emits `playing`. History must change only on that event.

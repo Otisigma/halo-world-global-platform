@@ -18,7 +18,7 @@
     "test:dreamweaver-oracle": "node scripts/dreamweaver-oracle-contracts.mjs",
     "test:music-safety": "node scripts/music-safety-contracts.mjs",
     "posttest": "npm run -s test:listening-telemetry && npm run -s test:discoverer && npm run -s test:onboarding && npm run -s test:release-teaser && npm run -s test:music-safety && npm run -s test:dreamweaver-assets && npm run -s test:halo-shield && npm run -s test:pricing && npm run -s test:drive-catalog && npm run -s test:dreamweaver-oracle",
-    "test:drive-catalog": "node scripts/catalog-curator-contracts.mjs && node scripts/mix-intent-contracts.mjs && node scripts/drive-catalog-contracts.mjs && node scripts/catalog-player-contracts.mjs",
+    "test:drive-catalog": "node scripts/catalog-curator-contracts.mjs && node scripts/mix-intent-contracts.mjs && node scripts/drive-catalog-contracts.mjs && node scripts/catalog-player-contracts.mjs && node scripts/song-catalog-playback-contracts.mjs",
     "test:pricing": "node scripts/pricing-contracts.mjs",
     "test:halo-shield": "node scripts/halo-shield-contracts.mjs && npm run -s test:guard-preflight",
     "test:dreamweaver-readiness": "node scripts/dreamweaver-readiness-contracts.mjs",

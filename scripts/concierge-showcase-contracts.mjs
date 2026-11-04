@@ -18,7 +18,7 @@ class Element {
   getAttribute(name) { return this.attributes[name] ?? null; }
   removeAttribute(name) { delete this.attributes[name]; }
 }
-function browser(transport) {
+function browser(transport, sentinel) {
   const names = ["selector", "releases", "status", "concepts", "concept-status", "player-status", "audio", "stop", "refresh"];
   const elements = Object.fromEntries(names.map(name => [name, new Element()]));
   let played = 0, paused = 0;
@@ -30,6 +30,7 @@ function browser(transport) {
   const desk = createConciergeShowcase({
     querySelector: selector => elements[selector.slice("[data-showcase-".length, -1)]
   }, {
+    sentinel,
     document: { createElement: tag => new Element(tag) },
     fetch: async (path, options) => { calls.push({ path, options }); return transport(path, options); }
   });
@@ -71,6 +72,46 @@ await check("real cards, artwork, selection, user-triggered playback and stop wo
   assert.equal(h.elements.audio.getAttribute("src"), null);
   assert.equal(h.elements.releases.children[0].children.at(-1).children[0].disabled, true);
   assert.ok(h.calls.every(c => !c.options.body && !c.options.method));
+});
+await check("Sentinel is registered before Preview and its preflight does not delay the click-authorized play call", async () => {
+  let registered, complete;
+  const calls = [];
+  const sentinel = {
+    bind(controller) { registered = controller; },
+    preflight(audio) {
+      assert.equal(registered?.audio, audio);
+      calls.push("preflight");
+      return new Promise(resolve => { complete = resolve; });
+    }
+  };
+  const h = browser(async () => Response.json({ releases: [release] }), sentinel);
+  assert.ok(registered, "register the selected media before a listener can click");
+  await h.desk.refreshCatalog();
+  const pending = h.elements.releases.children[0].children.at(-1).children[0].events.get("click")();
+  assert.equal(h.played(), 1, "play must run in the click task, before awaiting preflight");
+  assert.deepEqual(calls, ["preflight"]);
+  complete({ ok: true });
+  await pending;
+  assert.equal(registered.expectedSource(), "/assets/test.wav");
+  registered.onUnavailable();
+  assert.equal(registered.expectedSource(), "");
+  assert.match(h.elements["player-status"].textContent, /Sentinel could not verify/);
+});
+await check("a CORS-blocked metadata preflight does not stop a native-playable public preview", async () => {
+  let registered, recovery = 0, options;
+  const sentinel = {
+    bind(controller) { registered = controller; },
+    preflight(_audio, _source, value) { options = value; return Promise.resolve({ ok: false }); }
+  };
+  const h = browser(async () => Response.json({ releases: [release] }), sentinel);
+  registered.onUnavailable = () => recovery++;
+  await h.desk.refreshCatalog();
+  await h.elements.releases.children[0].children.at(-1).children[0].events.get("click")();
+  assert.deepEqual(options, { recover: false }, "a HEAD/CORS result must not own native preview recovery");
+  assert.equal(h.played(), 1);
+  assert.equal(h.elements.audio.getAttribute("src"), "/assets/test.wav", "preflight failure must preserve native playback source");
+  assert.equal(recovery, 0, "preflight-only failure must not stop preview playback");
+  assert.match(h.elements["player-status"].textContent, /^Playing .* by Actual Artist\.$/);
 });
 await check("empty, failed and stale catalog results expose honest retry states", async () => {
   const empty = browser(async () => Response.json({ releases: [] }));

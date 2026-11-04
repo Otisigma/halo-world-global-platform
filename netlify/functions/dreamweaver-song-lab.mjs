@@ -4,6 +4,7 @@ import { getDatabase } from "@netlify/database";
 import { getUser, verifyRequestOrigin } from "@netlify/identity";
 import OpenAI from "openai";
 import { cleanText, ensureMembership } from "../lib/halo-x.mjs";
+import { storeAudioChunk, inspectAudioUpload, cleanChunkChecksum } from "../lib/chunked-audio-upload.mjs";
 
 const songStore = getStore({ name: "halo-dreamweaver-songs", consistency: "strong" });
 const allowedTypes = new Set(["audio/wav", "audio/x-wav", "audio/mpeg", "audio/mp4", "audio/aac", "audio/ogg", "audio/webm"]);
@@ -12,6 +13,8 @@ const maxUploadBytes = 128 * 1024 * 1024;
 const model = "gpt-5.4-mini";
 const trustedUploadFlow = "artist-upload";
 const trustedUploadWindowMs = 15 * 60 * 1000;
+const jobDeadlineMs = 25 * 1000;
+const jobLeaseMs = 90 * 1000;
 const approvedArtistRoutes = new Set(["/dreamweaver/", "/dreamweaver/index.html", "/dreamweaver-lab/", "/dreamweaver-lab/index.html"]);
 
 function json(body, status = 200, headers = {}) {
@@ -21,6 +24,18 @@ function json(body, status = 200, headers = {}) {
 function cleanUploadId(value) {
   const uploadId = cleanText(value, 80);
   return /^[a-z0-9-]{16,80}$/i.test(uploadId) ? uploadId : "";
+}
+
+function resumableShape(body, user) {
+  const uploadId = String(body.uploadId || "");
+  const chunkCount = Number(body.chunkCount), byteSize = Number(body.byteSize);
+  if (body.ownerId !== user?.id) return { error: json({ message: "Sign in with the account that started this upload" }, 403) };
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(uploadId)
+    || !Number.isSafeInteger(byteSize) || byteSize < 1 || byteSize > maxUploadBytes
+    || !Number.isInteger(chunkCount) || chunkCount !== Math.ceil(byteSize / maxChunkBytes)) {
+    return { error: json({ message: "The resumable upload shape is invalid" }, 400) };
+  }
+  return { uploadId, chunkCount, byteSize };
 }
 
 function normalizeAudioType(value, fileName = "") {
@@ -123,6 +138,7 @@ function sanitizeEvidence(input) {
 }
 
 function serialize(row) {
+  const { _songLabJob, ...creativePackage } = row.creative_package || {};
   return {
     id: row.id,
     title: row.title,
@@ -130,7 +146,8 @@ function serialize(row) {
     fileName: row.file_name,
     durationSeconds: Number(row.duration_seconds || 0),
     analysis: row.analysis_evidence || {},
-    creativePackage: row.creative_package || {},
+    creativePackage,
+    jobStage: row.status === "ready" ? "ready" : hasCreativePackage(row) ? "artwork" : "creative_package",
     status: row.status,
     errorMessage: row.error_message || "",
     artworkUrl: row.artwork_key ? `/api/dreamweaver-song-lab?projectId=${encodeURIComponent(row.id)}&asset=artwork` : "",
@@ -215,10 +232,15 @@ function fallbackPackage(song) {
   };
 }
 
-async function generatePackage(song) {
+function hasCreativePackage(song) {
+  return typeof song.creative_package?.sonicSummary === "string"
+    && Boolean(song.creative_package?.visualDirection);
+}
+
+async function generatePackage(song, signal) {
   const fallback = fallbackPackage(song);
   try {
-    const openai = new OpenAI();
+    const openai = new OpenAI({ maxRetries: 0, timeout: jobDeadlineMs });
     const completion = await openai.chat.completions.create({
       model,
       messages: [
@@ -236,17 +258,18 @@ async function generatePackage(song) {
         }
       ],
       response_format: { type: "json_schema", json_schema: { name: "dreamweaver_song_package", strict: true, schema: packageSchema } }
-    });
+    }, { signal });
     return { package: JSON.parse(completion.choices[0]?.message?.content || "null") || fallback, usedFallback: false };
   } catch (error) {
+    if (signal.aborted) throw error;
     console.error("Dreamweaver package generation failed", error instanceof Error ? error.message : "unknown error");
     return { package: fallback, usedFallback: true };
   }
 }
 
-async function generateArtwork(song, creativePackage) {
+async function generateArtwork(song, creativePackage, signal, token) {
   try {
-    const openai = new OpenAI();
+    const openai = new OpenAI({ maxRetries: 0, timeout: jobDeadlineMs });
     const prompt = [
       "Create an original square album cover. Do not include logos, signatures, watermarks, celebrity likenesses, or imitate any named artist or existing album campaign.",
       `Title context: ${song.title}. Artist context: ${song.artist_name || "independent artist"}.`,
@@ -254,45 +277,124 @@ async function generateArtwork(song, creativePackage) {
       `Palette: ${(creativePackage.visualDirection?.palette || []).join(", ")}.`,
       "Leave intentional negative space for optional typography; do not render readable text."
     ].join("\n");
-    const result = await openai.images.generate({ model: "gpt-image-1", prompt, size: "1024x1024", quality: "low" });
+    const result = await openai.images.generate({ model: "gpt-image-1", prompt, size: "1024x1024", quality: "low" }, { signal });
+    signal.throwIfAborted();
     const base64 = result.data?.[0]?.b64_json;
     if (!base64) return null;
     const bytes = Buffer.from(base64, "base64");
     if (!bytes.length || bytes.length > 12 * 1024 * 1024) return null;
-    const artworkKey = `${song.member_id}/${song.id}/artwork.png`;
+    // A late storage write cannot overwrite the artwork of a newer lease.
+    const artworkKey = `${song.member_id}/${song.id}/artwork-${token}.png`;
     await songStore.set(artworkKey, bytes, { metadata: { contentType: "image/png" } });
+    signal.throwIfAborted();
     return { artworkKey, artworkContentType: "image/png" };
   } catch (error) {
+    if (signal.aborted) throw error;
     console.error("Dreamweaver artwork generation failed", error instanceof Error ? error.message : "unknown error");
     return null;
   }
 }
 
-async function processProject(projectId) {
-  const db = getDatabase();
-  const rows = await db.sql`SELECT * FROM halo_dreamweaver_songs WHERE id = ${projectId} LIMIT 1`;
-  const song = rows[0];
-  if (!song) return;
+async function processProject(db, song, token, workerSignal) {
+  const controller = new AbortController();
+  let timer;
+  let abortWorker;
+  const deadline = new Promise((_, reject) => {
+    const abort = () => {
+      controller.abort(new Error("Song Lab stage deadline exceeded"));
+      reject(controller.signal.reason);
+    };
+    timer = setTimeout(abort, jobDeadlineMs);
+    abortWorker = abort;
+    workerSignal?.addEventListener("abort", abortWorker, { once: true });
+    if (workerSignal?.aborted) abort();
+  });
+  const bounded = work => Promise.race([work, deadline]);
   try {
-    await db.sql`UPDATE halo_dreamweaver_songs SET status = 'analyzing', error_message = '', updated_at = NOW() WHERE id = ${projectId}`;
-    const generated = await generatePackage(song);
-    const artwork = await generateArtwork(song, generated.package);
-    await db.sql`
-      UPDATE halo_dreamweaver_songs
-      SET creative_package = ${JSON.stringify(generated.package)}::jsonb,
-        artwork_key = ${artwork?.artworkKey || ''},
-        artwork_content_type = ${artwork?.artworkContentType || ''},
-        status = 'ready', model = ${generated.usedFallback ? 'fallback' : model}, updated_at = NOW()
-      WHERE id = ${projectId}
-    `;
+    // Each invocation completes one durable stage within the post-response budget.
+    if (!hasCreativePackage(song)) {
+      const generated = await bounded(generatePackage(song, controller.signal));
+      controller.signal.throwIfAborted();
+      await bounded(db.sql`
+        UPDATE halo_dreamweaver_songs
+        SET creative_package = ${JSON.stringify(generated.package)}::jsonb,
+          status = 'queued', model = ${generated.usedFallback ? 'fallback' : model},
+          error_message = '', updated_at = NOW()
+        WHERE id = ${song.id} AND member_id = ${song.member_id}
+          AND status = 'analyzing' AND creative_package->'_songLabJob'->>'token' = ${token}
+      `);
+    } else {
+      const artwork = song.artwork_key
+        ? { artworkKey: song.artwork_key, artworkContentType: song.artwork_content_type }
+        : await bounded(generateArtwork(song, song.creative_package, controller.signal, token));
+      controller.signal.throwIfAborted();
+      if (!song.artwork_key && artwork) await bounded(db.sql`
+        UPDATE halo_dreamweaver_songs
+        SET artwork_key = ${artwork.artworkKey}, artwork_content_type = ${artwork.artworkContentType},
+          updated_at = NOW()
+        WHERE id = ${song.id} AND member_id = ${song.member_id}
+          AND status = 'analyzing' AND creative_package->'_songLabJob'->>'token' = ${token}
+      `);
+      controller.signal.throwIfAborted();
+      await bounded(db.sql`
+        UPDATE halo_dreamweaver_songs
+        SET status = 'ready', creative_package = creative_package - '_songLabJob',
+          error_message = '', updated_at = NOW()
+        WHERE id = ${song.id} AND member_id = ${song.member_id}
+          AND status = 'analyzing' AND creative_package->'_songLabJob'->>'token' = ${token}
+      `);
+    }
   } catch (error) {
     console.error("Dreamweaver project processing failed", error instanceof Error ? error.message : "unknown error");
-    await db.sql`
+    // Recovery must not depend on this best-effort release: expiry permits reclaim.
+    const release = db.sql`
       UPDATE halo_dreamweaver_songs
-      SET status = 'failed', error_message = 'The creative package stopped before completion. Your upload remains private.', updated_at = NOW()
-      WHERE id = ${projectId}
+      SET status = 'queued', creative_package = creative_package - '_songLabJob',
+        error_message = 'The build paused. Resume to continue from the saved checkpoint. Your upload remains private.', updated_at = NOW()
+      WHERE id = ${song.id} AND member_id = ${song.member_id}
+        AND status = 'analyzing' AND creative_package->'_songLabJob'->>'token' = ${token}
     `;
+    await Promise.race([release, deadline]).catch(() => {});
+  } finally {
+    clearTimeout(timer);
+    workerSignal?.removeEventListener("abort", abortWorker);
+    controller.abort();
   }
+}
+
+async function resumeProject(body, context, db, user, backgroundWorker = false, workerSignal) {
+  if (!user?.id) return json({ message: "Sign in to resume a song" }, 401);
+  const projectId = cleanText(body.projectId, 80);
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(projectId)) return json({ message: "Choose a valid Song Lab project" }, 400);
+  const membership = await ensureMembership(db, user);
+  workerSignal?.throwIfAborted();
+  const rows = await db.sql`SELECT * FROM halo_dreamweaver_songs WHERE id = ${projectId} AND member_id = ${membership.member_id} LIMIT 1`;
+  workerSignal?.throwIfAborted();
+  const project = rows[0];
+  if (!project) return json({ message: "Song Lab project not found" }, 404);
+  if (!project.rights_attested) return json({ message: "Confirm permission before building this song" }, 422);
+  if (project.status === "ready") return json({ project: serialize(project) });
+  if (!backgroundWorker && typeof context?.waitUntil !== "function") return json({ project: serialize(project), message: "The saved build is waiting for the background worker." });
+  const token = randomUUID();
+  const lease = { token, leaseUntil: new Date(Date.now() + jobLeaseMs).toISOString() };
+  const claimed = await db.sql`
+    UPDATE halo_dreamweaver_songs
+    SET status = 'analyzing', error_message = '', updated_at = NOW(),
+      creative_package = jsonb_set(creative_package, '{_songLabJob}', ${JSON.stringify(lease)}::jsonb)
+    WHERE id = ${projectId} AND member_id = ${membership.member_id} AND rights_attested = TRUE
+      AND (status IN ('queued', 'failed') OR (status = 'analyzing' AND
+        COALESCE((creative_package->'_songLabJob'->>'leaseUntil')::timestamptz,
+          updated_at + INTERVAL '90 seconds') <= NOW()))
+    RETURNING *
+  `;
+  workerSignal?.throwIfAborted();
+  if (!claimed[0]) {
+    const current = await db.sql`SELECT * FROM halo_dreamweaver_songs WHERE id = ${projectId} AND member_id = ${membership.member_id} LIMIT 1`;
+    return current[0] ? json({ project: serialize(current[0]) }) : json({ message: "Song Lab project not found" }, 404);
+  }
+  if (backgroundWorker) await processProject(db, claimed[0], token, workerSignal);
+  else context.waitUntil(processProject(db, claimed[0], token));
+  return json({ project: serialize(claimed[0]), message: "Dreamweaver is continuing the saved build" }, 202);
 }
 
 async function uploadChunk(request, db, user) {
@@ -308,24 +410,50 @@ async function uploadChunk(request, db, user) {
   }
   if (!chunk.size || chunk.size > maxChunkBytes) return json({ message: "This upload chunk is too large" }, 413);
   const blobPrefix = `${membership.member_id}/${uploadId}/parts/`;
+  if (form.get("resumeVersion") === "1") {
+    const shape = resumableShape(Object.fromEntries(form), user);
+    if (shape.error) return shape.error;
+    const checksum = cleanChunkChecksum(form.get("checksum"));
+    if (!checksum) return json({ message: "A valid audio chunk checksum is required" }, 400);
+    const expectedBytes = Math.min(maxChunkBytes, shape.byteSize - chunkIndex * maxChunkBytes);
+    if (chunk.size !== expectedBytes) return json({ message: "That audio chunk has the wrong size" }, 422);
+    const existing = await db.sql`SELECT * FROM halo_dreamweaver_songs WHERE id = ${shape.uploadId} AND member_id = ${membership.member_id} LIMIT 1`;
+    if (existing[0]) return json({ message: "This upload already has a saved project. Resume to reopen it." }, 409);
+    const result = await storeAudioChunk(songStore, { prefix: blobPrefix, ...shape, chunkIndex, chunk, checksum });
+    return result.ok ? json({ message: "Song chunk verified", ...result }) : json({ message: result.message }, result.status);
+  }
   const key = `${blobPrefix}${String(chunkIndex).padStart(3, "0")}`;
   await songStore.set(key, await chunk.arrayBuffer(), { metadata: { contentType: normalizeAudioType(chunk.type, chunk.name) } });
   return json({ message: "Song chunk uploaded", chunkIndex });
 }
 
-async function finalizeProject(request, context, db, user) {
+async function finalizeProject(body, context, db, user) {
   if (!user?.id) return json({ message: "Sign in to analyze a song" }, 401);
   const membership = await ensureMembership(db, user);
-  const body = await request.json().catch(() => null);
-  if (!body || body.action !== "analyze") return json({ message: "Choose a supported Song Lab action" }, 400);
+  if (!body || !["analyze", "upload_status"].includes(body.action)) return json({ message: "Choose a supported Song Lab action" }, 400);
+  const resumable = body.resumeVersion === 1;
+  const shape = resumable ? resumableShape(body, user) : null;
+  if (shape?.error) return shape.error;
+  if (body.action === "upload_status" && !resumable) return json({ message: "A resumable upload session is required" }, 400);
   const uploadId = cleanUploadId(body.uploadId);
   const fileName = cleanText(body.fileName, 180);
   const contentType = normalizeAudioType(body.contentType, fileName);
-  const chunkCount = Math.max(1, Math.min(64, Number.parseInt(body.chunkCount, 10) || 0));
-  const byteSize = Math.round(safeNumber(body.byteSize, 1, maxUploadBytes));
+  const chunkCount = Number(body.chunkCount);
+  const byteSize = Number(body.byteSize);
+  if (!Number.isInteger(chunkCount) || chunkCount < 1 || chunkCount > 64 || !Number.isSafeInteger(byteSize) || byteSize < 1 || byteSize > maxUploadBytes) return json({ message: "The song upload size or sequence is invalid" }, 400);
+  const blobPrefix = `${membership.member_id}/${uploadId}/parts/`;
+  if (resumable) {
+    const existing = await db.sql`SELECT * FROM halo_dreamweaver_songs WHERE id = ${uploadId} AND member_id = ${membership.member_id} LIMIT 1`;
+    if (existing[0]) {
+      if (existing[0].blob_prefix !== blobPrefix || Number(existing[0].byte_size) !== byteSize || Number(existing[0].chunk_count) !== chunkCount) return json({ message: "This session belongs to a different saved upload" }, 409);
+      return json({ project: serialize(existing[0]), complete: true });
+    }
+    const inspected = await inspectAudioUpload(songStore, { prefix: blobPrefix, chunkCount, byteSize });
+    if (body.action === "upload_status") return json(inspected);
+    if (!inspected.complete || Object.keys(inspected.chunkChecksums).length !== chunkCount) return json({ message: "The song upload is incomplete or inconsistent. Resume the upload.", ...inspected }, 409);
+  }
   const title = cleanText(body.title, 140);
   if (!uploadId || !title || !fileName || !allowedTypes.has(contentType) || !body.rightsAttested) return json({ message: "Add the song details and confirm you may use this audio" }, 422);
-  const blobPrefix = `${membership.member_id}/${uploadId}/parts/`;
   const stored = await songStore.list({ prefix: blobPrefix });
   if (stored.blobs.length !== chunkCount) return json({ message: "The song upload is incomplete" }, 409);
   const evidence = sanitizeEvidence(body.analysis);
@@ -334,16 +462,15 @@ async function finalizeProject(request, context, db, user) {
       id, member_id, title, artist_name, file_name, blob_prefix, chunk_count, content_type, byte_size,
       duration_seconds, rights_attested, creative_brief, lyrics, analysis_evidence, status
     ) VALUES (
-      ${randomUUID()}, ${membership.member_id}, ${title}, ${cleanText(body.artistName, 140)}, ${fileName}, ${blobPrefix},
+      ${resumable ? uploadId : randomUUID()}, ${membership.member_id}, ${title}, ${cleanText(body.artistName, 140)}, ${fileName}, ${blobPrefix},
       ${chunkCount}, ${contentType}, ${byteSize}, ${evidence.durationSeconds}, TRUE,
       ${cleanText(body.creativeBrief, 1200)}, ${cleanText(body.lyrics, 8000)}, ${JSON.stringify(evidence)}::jsonb, 'queued'
-    ) RETURNING *
+    ) ON CONFLICT (id) DO NOTHING RETURNING *
   `;
-  const project = rows[0];
-  const work = processProject(project.id);
-  if (context?.waitUntil) context.waitUntil(work);
-  else await work;
-  return json({ project: serialize(project), message: "Dreamweaver analysis started" }, 202);
+  const project = rows[0] || (await db.sql`SELECT * FROM halo_dreamweaver_songs WHERE id = ${uploadId} AND member_id = ${membership.member_id} LIMIT 1`)[0];
+  if (!project || project.blob_prefix !== blobPrefix || Number(project.byte_size) !== byteSize || Number(project.chunk_count) !== chunkCount) return json({ message: "This upload session conflicts with another saved project" }, 409);
+  if (typeof context?.waitUntil !== "function") return json({ project: serialize(project), message: "The private upload is saved and queued for the background worker." }, 202);
+  return resumeProject({ projectId: project.id }, context, db, user);
 }
 
 async function readProjects(request, db, user) {
@@ -363,10 +490,32 @@ async function readProjects(request, db, user) {
     if (request.method === "HEAD") return new Response(null, { headers: { "Content-Type": project.artwork_content_type, "Cache-Control": "private, no-store", "Content-Length": String(artwork.byteLength) } });
     return new Response(artwork, { headers: { "Content-Type": project.artwork_content_type, "Cache-Control": "private, no-store", "Content-Length": String(artwork.byteLength), "Content-Disposition": `inline; filename="dreamweaver-${project.id}.png"`, "X-Content-Type-Options": "nosniff" } });
   }
-  return projectId ? json({ project: serialize(rows[0]) }) : json({ projects: rows.map(serialize) });
+  return projectId ? json({ project: serialize(rows[0]) }) : json({ projects: rows.map(serialize), uploadOwnerId: user.id });
 }
 
 export default async function dreamweaverSongLabHandler(request, context) {
+  return handleSongLabRequest(request, context, false);
+}
+
+export async function dreamweaverSongLabBackgroundHandler(request) {
+  const controller = new AbortController();
+  let timer;
+  const deadline = new Promise(resolve => {
+    timer = setTimeout(() => {
+      controller.abort(new Error("Song Lab worker deadline exceeded"));
+      resolve(json({ message: "The background build paused at its saved checkpoint." }, 503));
+    }, jobDeadlineMs);
+  });
+  try {
+    return await Promise.race([handleSongLabRequest(request, undefined, true, controller.signal), deadline]);
+  } finally {
+    clearTimeout(timer);
+    controller.abort();
+  }
+}
+
+async function handleSongLabRequest(request, context, backgroundWorker, workerSignal) {
+  if (backgroundWorker && request.method !== "POST") return json({ message: "Method not allowed" }, 405, { Allow: "POST" });
   if (!["GET", "HEAD", "POST"].includes(request.method)) return json({ message: "Method not allowed" }, 405, { Allow: "GET, HEAD, POST" });
   try {
     const db = getDatabase();
@@ -376,10 +525,17 @@ export default async function dreamweaverSongLabHandler(request, context) {
     if (trust.state === "blocked") return json({ message: trust.message, trustState: "blocked" }, 403);
     if (trust.state === "challenge") return json({ message: trust.message, trustState: "challenge", challengeRoute: trust.challengeRoute }, 409);
     const contentType = request.headers.get("content-type") || "";
+    if (backgroundWorker && !contentType.includes("application/json")) return json({ message: "Send a valid Song Lab worker request" }, 400);
     if (contentType.includes("multipart/form-data")) return uploadChunk(request, db, user);
     const contentLength = Number(request.headers.get("content-length") || 0);
     if (contentLength > 24 * 1024) return json({ message: "The analysis request is too large" }, 413);
-    return finalizeProject(request, context, db, user);
+    const text = await request.text();
+    if (new TextEncoder().encode(text).byteLength > 24 * 1024) return json({ message: "The analysis request is too large" }, 413);
+    let body;
+    try { body = JSON.parse(text); } catch { return json({ message: "Send a valid Song Lab request" }, 400); }
+    if (backgroundWorker) return resumeProject(body || {}, undefined, db, user, true, workerSignal);
+    if (body?.action === "resume_project") return resumeProject(body, context, db, user);
+    return finalizeProject(body, context, db, user);
   } catch (error) {
     console.error("Dreamweaver Song Lab request failed", error instanceof Error ? error.message : "unknown error");
     return json({ message: "Dreamweaver Song Lab is temporarily unavailable" }, 500);

@@ -20,6 +20,19 @@ jobs:
       - run: npm ci --ignore-scripts
       - run: npm run test:api-cors
 
+  halo-sentinel-contracts:
+    name: HALO Sentinel runtime and ledger contracts
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - run: npm ci --ignore-scripts
+      - run: node scripts/site-audit.mjs && npm run halo-signal-check && npm run test:sentinel && npm run test:dreamweaver-readiness && npm run test:drive-catalog && npm run test:audio-preloader && npm run test:concierge-showcase && npm run test:song-lab-resume
+
   fan-curation-contracts:
     name: Fan curation + atomic reward contracts
     runs-on: ubuntu-latest

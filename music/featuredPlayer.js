@@ -270,6 +270,7 @@
       logIssue("music_featured_player_unavailable", "Featured chart hero could not reach the HALO player", { page: window.location.pathname });
     }
     render();
+    window.HaloReturnCelebration?.show(state.releases[0]);
   }
 
   loadChart();

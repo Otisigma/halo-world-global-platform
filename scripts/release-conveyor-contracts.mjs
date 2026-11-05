@@ -7,6 +7,19 @@ import { prepareReleaseAudio } from "../netlify/lib/release-conveyor-audio.mjs";
 import { createReleaseConveyorConsole } from "../lib/release-conveyor-ui.js";
 import "./halo-watchdog-contracts.mjs";
 
+const packageScripts = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8")).scripts;
+for (const [script, command] of [
+  ["test", "node scripts/release-watchdog-contracts.mjs"],
+  ["test", "node scripts/halo-master-orchestrator-contracts.mjs"],
+  ["test:release-conveyor", "node scripts/release-watchdog-contracts.mjs"],
+  ["test:release-conveyor", "node scripts/halo-master-orchestrator-contracts.mjs"],
+]) {
+  assert.equal(packageScripts[script].split(" && ").filter(step => step === command).length, 1,
+    `${command} runs exactly once in ${script}`);
+}
+assert.doesNotMatch(packageScripts.posttest, /test:master-orchestrator/,
+  "posttest must not duplicate the master-orchestrator contract from test");
+
 const song = { id: "12345678-1234-4123-8123-123456789012", owner_member_id: "creator",
   title: "A Signal", artist_name: "Artist", genre: "Soul", isrc: "GB-AAA-26-00001",
   rights_status: "cleared", sale_status: "for_sale", sale_price_cents: 129,
@@ -168,6 +181,11 @@ assert.equal(consoleNode("percent-text").textContent, "0% Completed (0/8 stages)
 assert.equal(consoleNode("stages").children.length, RELEASE_STAGES.length);
 assert.equal(consoleNode("hum").disabled, true, "filter selection is disabled during a request");
 resolveConsoleRequest({ ok: true, json: async () => ({ ...success, masterStatus: approvedMasterStatus, options: { humHz: 0 },
+  orchestrator: {
+    state: { status: "needs_review", lastPulseAt: "2026-10-15T00:00:00.000Z", departments: { metadata_rights: "needs_review" },
+      actions: [{ action: "radio_lane_queued" }], findings: ["Rights clearance requires creator review."] },
+    infrastructure: { status: "degraded", brokenRoutes: [{ name: "Radio", route: "/radio/", httpStatus: 404 }] },
+  },
   watchdog: {
     issues: [{ field: "route", message: "/toolost/: unavailable" }],
     findings: [{ field: "infrastructure", message: "/radio/: broken <b>route</b>" }],
@@ -189,6 +207,9 @@ assert.deepEqual(consoleNode("issues").children.map(item => item.textContent), [
   "infrastructure: /radio/: broken <b>route</b>",
 ], "blocked issues and both watchdog diagnostic formats remain visible as text");
 assert(consoleNode("stages").children.every(item => item.attributes.get("data-state") === "passed"));
+assert.match(consoleNode("watchdog-status").textContent, /Shared watchdog: needs_review/);
+assert(consoleNode("watchdog-findings").children.some(item => /Repair recorded: radio_lane_queued/.test(item.textContent)));
+assert(consoleNode("watchdog-findings").children.some(item => /Broken route: Radio \(\/radio\/\) — HTTP 404/.test(item.textContent)));
 let poll = consoleTimer();
 resolveConsoleRequest({ ok: true, json: async () => missing });
 await poll;
@@ -320,6 +341,7 @@ const db = { async sql(strings, ...values) {
   if (databaseOutage) throw new Error("internal database credentials");
   const query = strings.join("?");
   if (query.includes("FROM halo_song_catalog")) return currentSong && values[0] === currentSong.id && values[1] === currentSong.owner_member_id ? [structuredClone(currentSong)] : [];
+  if (query.includes("FROM halo_master_orchestrator_state")) return [];
   if (query.includes("FROM halo_song_versions")) return structuredClone(currentVersions);
   if (query.includes("INSERT INTO halo_release_conveyor (")) {
     if (stored?.locked_until && new Date(stored.locked_until) > new Date()) return [];
@@ -381,12 +403,40 @@ memberId = "creator";
 assert.equal((await handler(request("DELETE"))).status, 405);
 assert.equal((await handler(request("POST", { action: "process_submission", songId: song.id, humHz: 70 }))).status, 400);
 assert.equal((await handler(request("POST", { action: "bad" }))).status, 400);
+const oversizedRequest = await handler(request("POST", {
+  action: "process_submission", songId: song.id, extra: "x".repeat(16_384),
+}));
+assert.equal(oversizedRequest.status, 413);
+assert.equal(oversizedRequest.headers.get("cache-control"), "private, no-store");
+const rawPost = (body, headers = {}) => new Request("https://halo.test/api/release-conveyor", {
+  method: "POST", headers: { "Content-Type": "application/json", ...headers }, body,
+  ...(body instanceof ReadableStream ? { duplex: "half" } : {}),
+});
+assert.equal((await handler(rawPost("{}", { "Content-Length": "16385" }))).status, 413);
+assert.equal((await handler(rawPost("{"))).status, 400);
+assert.equal((await handler(rawPost(""))).status, 400);
+const multibyteBody = JSON.stringify({ action: "process_submission", songId: song.id, extra: "é".repeat(8192) });
+assert(multibyteBody.length < 16_384, "the bound counts bytes, not characters");
+assert.equal((await handler(rawPost(multibyteBody, { "Content-Length": "1" }))).status, 413);
+let streamCancelled = false;
+const oversizedStream = new ReadableStream({
+  pull(controller) { controller.enqueue(new Uint8Array(4096).fill(32)); },
+  cancel() { streamCancelled = true; },
+});
+assert.equal((await handler(rawPost(oversizedStream))).status, 413);
+assert.equal(streamCancelled, true, "oversized streams are cancelled instead of read to completion");
+const boundaryBody = JSON.stringify({ action: "bad", extra: "" });
+assert.equal((await handler(rawPost(JSON.stringify({
+  action: "bad", extra: "x".repeat(16_384 - Buffer.byteLength(boundaryBody)),
+})))).status, 400, "an exactly 16 KiB body reaches action validation, not the size rejection");
+assert.equal(stored, null, "oversized updates never reach the release conveyor");
 const initialResponse = await handler(request());
 assert.equal(initialResponse.status, 200);
 assert.equal(initialResponse.headers.get("cache-control"), "private, no-store");
 const initialState = await initialResponse.json();
 assert.equal(initialState.status, "not_started");
 assert.deepEqual(initialState.masterStatus, approvedMasterStatus);
+assert.equal(initialState.orchestrator.infrastructure, null);
 assert.doesNotMatch(JSON.stringify(initialState), /master\.wav|radio\.wav|audio_url|audio_storage_key/);
 for (const [master, expected] of [
   [null, { uploaded: false, durationValid: false, masteringStatus: "unknown" }],

@@ -580,3 +580,23 @@ body:has(.halo-player-bar:not([hidden])) .toast { bottom: 110px; }
   .dj-callout { margin-bottom: 60px; }
   footer { flex-direction: column; }
 }
+.return-celebration {
+  position: fixed; inset: auto 1rem 1rem auto; z-index: 1000;
+  width: min(28rem, calc(100vw - 2rem)); max-height: calc(100dvh - 2rem);
+  overflow: auto; padding: 2rem; border: 1px solid #d4af37; border-radius: 1rem;
+  background: #0b0f19; color: #fff; box-shadow: 0 12px 50px #0009;
+}
+.return-celebration[hidden], .return-celebration-burst[hidden] { display: none; }
+.return-celebration a { color: #fbbf24; }
+.return-celebration-dismiss { float: right; }
+.return-celebration-burst { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+.return-celebration-burst i {
+  position: absolute; top: 45%; left: 50%; width: 4px; height: 14px;
+  background: #d4af37; transform: rotate(calc(var(--piece) * 15deg));
+  animation: return-celebration-burst 2.4s ease-out forwards;
+}
+@keyframes return-celebration-burst {
+  to { transform: rotate(calc(var(--piece) * 15deg)) translateY(-220px); opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) { .return-celebration-burst { display: none; } }
+.halo-safe-space-mode .return-celebration-burst { display: none; }

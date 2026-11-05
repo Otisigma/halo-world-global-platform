@@ -208,3 +208,14 @@ Each track must have `PUBLISHED` in every supplied `releaseStatus`/`status` fiel
 The approved catalog retains its original array/object shape, top-level metadata, and unrelated track fields. If any track is quarantined, the guard saves the exact original catalog to `.netlify/release-guard/shared-catalog.original.json` and annotated quarantined tracks plus diagnostics to `.netlify/release-guard/quarantine.json` before atomically writing only approved tracks back to `shared-catalog.json`. These recovery files are ignored build-local data, not storefront assets or tracked source. The command exits non-zero, so Netlify does not publish that build.
 
 To recover, restore the original backup to `shared-catalog.json`, repair the reported tracks, and only then remove `.netlify/release-guard/` and rerun `npm run release-guard`. An unresolved backup blocks subsequent runs, preventing a failed audit from silently passing after unsafe tracks were removed. Preserve the backup if writing the sanitized catalog fails. Run `npm run test:release-guard` for isolated audit, networking, and CLI recovery contracts; the script also exports `ReleaseGuardAgent` as an ES module.
+### Return-visitor chart celebration
+
+The music landing page celebrates the approved rank-1 release from the existing
+HALO activity-chart API after loading succeeds. It never invents a chart leader,
+claims an external chart ranking, or promises a redeemable gift. The commemorative
+banner links to the song on the music page without starting audio automatically.
+Browser-local history stores only the last celebrated public release ID; a different
+observed leader starts a new cycle. Unobserved chart changes between visits cannot
+be detected by this client-only history. Privacy signals and unavailable storage
+disable automatic presentation. Reduced motion and Safe Space suppress particles;
+the non-modal panel supports dismissal and Escape without stealing focus.

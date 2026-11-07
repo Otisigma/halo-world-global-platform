@@ -1182,6 +1182,8 @@
     <div id="root"></div>
 
     <script src="/release-artwork.js"></script>
+    <script src="/distribution-links.js"></script>
+    <script src="/onboarding.js"></script>
     <script id="haloFeaturedReleaseConfig" type="application/json">
       {
         "id": "when-the-world-goes-dark",
@@ -1273,6 +1275,49 @@
             default:
               return <svg {...props}><circle cx="12" cy="12" r="10"/></svg>;
           }
+        };
+
+        const OnboardingWizard = ({ onComplete, onDismiss }) => {
+          const quiz = window.HaloOnboarding;
+          const [state, setState] = useState(quiz.initialState);
+          const heading = useRef(null);
+          const question = quiz.questions[state.step];
+          const selected = state.answers[state.step];
+          useEffect(() => { heading.current?.focus(); }, [state.step]);
+          const act = action => setState(current => quiz.transition(current, action));
+          const next = event => {
+            event.preventDefault();
+            if (selected === undefined) return;
+            if (state.step === quiz.questions.length - 1) onComplete(quiz.score(state.answers));
+            else act({ type: 'next' });
+          };
+          return (
+            <form onSubmit={next} onKeyDown={event => {
+              if (event.key === 'Escape') { event.preventDefault(); onDismiss(); }
+            }} className="mb-6 rounded-2xl border border-amber-200/30 bg-black/30 p-5 font-sans-alt" aria-labelledby="onboarding-question">
+              <p className="text-xs text-amber-100" aria-live="polite">Step {state.step + 1} of {quiz.questions.length}</p>
+              <progress className="mt-2 w-full accent-amber-200" value={state.step + 1} max={quiz.questions.length} aria-label="Quiz progress" />
+              <h3 id="onboarding-question" ref={heading} tabIndex="-1" className="my-4 text-lg font-bold text-white focus:outline-none">{question.title}</h3>
+              <fieldset>
+                <legend className="mb-3 text-sm text-gray-300">Choose one answer</legend>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {question.options.map((option, index) => (
+                    <label key={`${state.step}-${index}`} className={`flex cursor-pointer items-start gap-3 rounded-xl border p-4 text-sm focus-within:ring-2 focus-within:ring-amber-200 ${selected === index ? 'border-amber-200 bg-amber-200/10 text-white' : 'border-white/20 text-gray-300 hover:border-amber-200/50'}`}>
+                      <input type="radio" name={`onboarding-${state.step}`} value={index} checked={selected === index} onChange={() => act({ type: 'select', answer: index })} className="mt-1 accent-amber-200" />
+                      {option.label}
+                    </label>
+                  ))}
+                </div>
+              </fieldset>
+              <p className="mt-4 text-xs leading-5 text-gray-400">One vote per answer. Ties follow your primary goal. Only completion or skipping is saved on this browser, not your answers.</p>
+              <div className="mt-4 flex flex-wrap items-center gap-4 text-sm">
+                <button type="button" disabled={state.step === 0} onClick={() => act({ type: 'back' })} className="rounded px-2 py-2 text-amber-100 focus-visible:ring-2 focus-visible:ring-amber-200 disabled:opacity-40">Back</button>
+                <button type="button" onClick={() => { act({ type: 'restart' }); heading.current?.focus(); }} className="rounded px-2 py-2 text-amber-100 focus-visible:ring-2 focus-visible:ring-amber-200">Restart</button>
+                <button type="button" onClick={onDismiss} className="rounded px-2 py-2 text-gray-300 focus-visible:ring-2 focus-visible:ring-amber-200">Skip / cancel</button>
+                <button type="submit" disabled={selected === undefined} className="rounded-xl bg-amber-100 px-5 py-3 font-bold text-black focus-visible:ring-2 focus-visible:ring-white disabled:opacity-40">{state.step === quiz.questions.length - 1 ? 'Open my workspace' : 'Next'}</button>
+              </div>
+            </form>
+          );
         };
 
         const DEFAULT_FEATURED_RELEASE = {
@@ -1668,6 +1713,43 @@
 
         function App() {
           const [viewMode, setViewMode] = useState('landing'); // 'landing' or 'console'
+          const [showOnboarding, setShowOnboarding] = useState(() => window.HaloOnboarding.isHome(window.location) && !window.HaloOnboarding.isDismissed());
+          const [pathWorkspace, setPathWorkspace] = useState(null);
+          const [pathExplanation, setPathExplanation] = useState('');
+          const pathQuizButton = useRef(null);
+          const workspaceHeading = useRef(null);
+          const closeOnboarding = () => {
+            window.HaloOnboarding.dismiss('skipped');
+            setShowOnboarding(false);
+            window.requestAnimationFrame(() => pathQuizButton.current?.focus());
+          };
+          const openPathWorkspace = (path, explanation = '') => {
+            window.HaloOnboarding.dismiss('completed');
+            setShowOnboarding(false);
+            window.HaloOnboarding.navigate(path);
+            setPathExplanation(explanation);
+          };
+          const selectPathWorkspace = event => {
+            if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+            const link = event.target.closest('a[data-path-mode]');
+            if (!link) return;
+            event.preventDefault();
+            openPathWorkspace(link.dataset.pathMode);
+          };
+          useEffect(() => {
+            const syncWorkspace = () => {
+              setPathWorkspace(window.HaloOnboarding.workspaceForLocation(window.location));
+              setPathExplanation('');
+              setShowOnboarding(false);
+              setViewMode('landing');
+            };
+            window.addEventListener('popstate', syncWorkspace);
+            return () => window.removeEventListener('popstate', syncWorkspace);
+          }, []);
+          useEffect(() => {
+            if (pathWorkspace) workspaceHeading.current?.focus();
+            else if (window.HaloOnboarding.isDismissed()) pathQuizButton.current?.focus();
+          }, [pathWorkspace]);
 
           const [showFanGuide, setShowFanGuide] = useState(false);
           const [showVipBriefing, setShowVipBriefing] = useState(false);
@@ -1748,6 +1830,8 @@
           const [releasePackNotice, setReleasePackNotice] = useState('');
           const [campaignEditorOpen, setCampaignEditorOpen] = useState(false);
           const [campaignSaving, setCampaignSaving] = useState(false);
+          const [distributionSaving, setDistributionSaving] = useState(false);
+          const [distributionFeedback, setDistributionFeedback] = useState({ releaseId: '', status: '', message: '' });
           const [campaignDraft, setCampaignDraft] = useState(null);
           const [selectorDraft, setSelectorDraft] = useState({ selectorType: 'dj', outletName: '', notes: '' });
           const [socialCaption, setSocialCaption] = useState('');
@@ -1809,6 +1893,7 @@
           };
 
           const audioCtxRef = useRef(null);
+          const releasePackRequestRef = useRef(0);
           const canvasRef = useRef(null);
           const dreamweaverPreviewAudioRef = useRef(null);
           const dreamweaverPreviewCandidatesRef = useRef([]);
@@ -2522,17 +2607,23 @@
           }, [releasePack, campaignEditorOpen]);
 
           const loadReleasePack = async (slug = '') => {
+            const requestId = ++releasePackRequestRef.current;
             setReleasePackLoading(true);
             setReleasePackError('');
+            setDistributionSaving(false);
+            setDistributionFeedback({ releaseId: '', status: '', message: '' });
             try {
               const response = await fetch(`/api/release-pack${slug ? `?slug=${encodeURIComponent(slug)}` : ''}`, { headers: { Accept: 'application/json' } });
               const data = await response.json();
               if (!response.ok) throw new Error(data.message || 'The selector room could not connect.');
+              if (requestId !== releasePackRequestRef.current) return;
               applyReleasePackState(data);
             } catch (error) {
-              setReleasePackError(error.message || 'The selector room could not connect.');
+              if (requestId === releasePackRequestRef.current) {
+                setReleasePackError(error.message || 'The selector room could not connect.');
+              }
             } finally {
-              setReleasePackLoading(false);
+              if (requestId === releasePackRequestRef.current) setReleasePackLoading(false);
             }
           };
 
@@ -2562,6 +2653,10 @@
           const updateCampaignDraft = (field, value) => setCampaignDraft(previous => ({ ...previous, [field]: value }));
 
           const newCampaignDraft = () => {
+            ++releasePackRequestRef.current;
+            setReleasePackLoading(false);
+            setDistributionSaving(false);
+            setDistributionFeedback({ releaseId: '', status: '', message: '' });
             setCampaignDraft({
               id: '', title: '', artist: identityUser?.name || '', releaseDate: '', duration: '', genresText: '', artwork: '',
               importedArtwork: '', artworkOverride: '', artworkSource: 'fallback',
@@ -2574,7 +2669,7 @@
           };
 
           const saveReleaseCampaign = async (status) => {
-            if (!campaignDraft) return;
+            if (!campaignDraft || distributionSaving) return;
             setCampaignSaving(true);
             setReleasePackError('');
             try {
@@ -2610,6 +2705,62 @@
             } finally {
               setCampaignSaving(false);
             }
+          };
+
+          const saveDistributionLink = async () => {
+            const releaseId = campaignDraft?.id;
+            if (releasePackLoading || !releaseId || releasePack?.release?.id !== releaseId) return;
+            if (!identityUser?.id || !releasePack.canEdit || distributionSaving || campaignSaving) return;
+            const purchaseUrl = (campaignDraft.purchaseUrl || '').trim();
+            if (purchaseUrl && !window.HaloDistributionLinks?.validate(purchaseUrl)) {
+              setDistributionFeedback({ releaseId, status: 'error', message: 'Enter an approved HTTPS distributor smart link without login details or a port, or clear the field.' });
+              return;
+            }
+            const requestId = releasePackRequestRef.current;
+            setDistributionSaving(true);
+            setDistributionFeedback({ releaseId, status: 'saving', message: 'Saving distribution destination…' });
+            try {
+              const response = await fetch('/api/release-pack', {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ releaseId, purchaseUrl })
+              });
+              const data = await response.json();
+              if (!response.ok) throw new Error(data.message || 'The distribution destination could not be saved.');
+              if (requestId !== releasePackRequestRef.current) return;
+              if (data.release?.id !== releaseId || typeof data.release.purchaseUrl !== 'string') {
+                throw new Error('The server did not confirm the saved destination. Reload this release before retrying.');
+              }
+              applyReleasePackState(data);
+              setCampaignDraft(previous => previous?.id === releaseId ? ({
+                ...previous,
+                purchaseUrl: data.release.purchaseUrl,
+                distributionStatus: data.release.distributionStatus,
+                distributionSource: data.release.distributionSource,
+                distributionVisibility: data.release.distributionVisibility
+              }) : previous);
+              setDistributionFeedback({
+                releaseId,
+                status: 'saved',
+                message: data.message || 'Distribution destination saved.'
+              });
+            } catch (error) {
+              if (requestId === releasePackRequestRef.current) {
+                setDistributionFeedback({
+                  releaseId,
+                  status: 'error',
+                  message: error.message || 'The distribution destination could not be saved.'
+                });
+              }
+            } finally {
+              if (requestId === releasePackRequestRef.current) setDistributionSaving(false);
+            }
+          };
+
+          const updateDistributionLink = value => {
+            if (releasePackLoading || distributionSaving || campaignSaving || !identityUser?.id || !releasePack?.canEdit) return;
+            setCampaignDraft(previous => previous?.id === releasePack.release.id ? { ...previous, purchaseUrl: value } : previous);
+            setDistributionFeedback({ releaseId: releasePack.release.id, status: '', message: '' });
           };
 
           const campaignKitUrl = audience => releasePack ? `${window.location.origin}/release-kit.html?slug=${encodeURIComponent(releasePack.release.id)}&audience=${audience}` : '';
@@ -3395,7 +3546,11 @@
             };
             openCompanionRoute();
             window.addEventListener('hashchange', openCompanionRoute);
-            return () => window.removeEventListener('hashchange', openCompanionRoute);
+            window.addEventListener('popstate', openCompanionRoute);
+            return () => {
+              window.removeEventListener('hashchange', openCompanionRoute);
+              window.removeEventListener('popstate', openCompanionRoute);
+            };
           }, []);
 
           useEffect(() => {
@@ -3489,6 +3644,7 @@
           }, [isAdaptiveMode, isPlaying, activeTrack]);
 
           const openConsoleArea = (tab) => {
+            if (pathWorkspace) window.HaloOnboarding.navigateApp('/ai-workgroup');
             setActiveTab(tab);
             setViewMode('console');
             setShowFanGuide(false);
@@ -3549,6 +3705,15 @@
           };
 
           useEffect(() => () => worldCinematicTimers.current.forEach(timer => window.clearTimeout(timer)), []);
+
+          const catalogCardReleaseId = releasePack?.release?.id || '';
+          const catalogCardPurchaseUrl = campaignDraft?.id === catalogCardReleaseId
+            ? campaignDraft.purchaseUrl || ''
+            : releasePack?.release?.purchaseUrl || '';
+          const validatedCatalogCardUrl = window.HaloDistributionLinks?.validate(catalogCardPurchaseUrl) || '';
+          const catalogCardDistributionFeedback = distributionFeedback.releaseId === catalogCardReleaseId
+            ? distributionFeedback
+            : { status: '', message: '' };
 
           return (
             <div className="min-h-screen bg-[#070709] text-gray-100 flex flex-col font-mono selection:bg-purple-600 selection:text-white relative">
@@ -3757,7 +3922,7 @@
                       </button>
 
                       <button
-                        onClick={() => { setShowVipBriefing(false); setViewMode('console'); }}
+                        onClick={() => { setShowVipBriefing(false); openConsoleArea('agent-room'); }}
                         className="w-full sm:w-auto bg-gradient-to-r from-amber-500 to-amber-600 hover:brightness-110 text-black font-black text-xs uppercase px-6 py-3 rounded-xl transition shadow-[0_0_20px_rgba(217,119,6,0.4)] flex items-center justify-center gap-2"
                       >
                         <span>START TESTING CONSOLE</span>
@@ -3905,66 +4070,72 @@
                         <span className="halo-menu-kicker">HALO WORLD MAP / 01</span>
                         <h2>Choose your signal.</h2>
                       </div>
-                      <p>Listen, build, broadcast, or step behind the console.</p>
+                      <div className="halo-menu-intro-actions">
+                        <p>Listen, build, broadcast, or step behind the console.</p>
+                        <a href="/vip_launchpad.html" aria-current={menuStatusForRoute('/vip_launchpad.html', 'green').isCurrent ? 'page' : undefined}>VIP Workspace <span aria-hidden="true">↗</span></a>
+                      </div>
                     </div>
 
-                    <div className="halo-menu-status-groups" aria-label="Satellite route status groups">
-                      <section className="halo-menu-status-group halo-menu-status-group-working" aria-labelledby="halo-menu-status-working">
-                        <div className="halo-menu-status-group-title">
-                          <span>00</span>
-                          <h3 id="halo-menu-status-working">All working menu</h3>
-                        </div>
-                        <div className="halo-menu-status-buttons">
-                          {menuStatusGroupedTargets.working.map(target => (
-                            <a key={`working-${target.route}`} href={target.route} className={`halo-menu-status-button${target.route === '/artist/dashboard' ? ' halo-menu-business-hub' : ''}`} data-stat-event={target.route === '/artist/dashboard' ? 'open_business_hub' : undefined} data-stat-target={target.route === '/artist/dashboard' ? 'menu_quick_access' : undefined}>
-                              <span className="halo-menu-status-label">{target.label}{target.route === '/artist/dashboard' && <small>Sovereign Label OS</small>}</span>
-                              {renderMenuStatusBadge(target.route, target.route === '/artist/dashboard' ? 'Business Hub' : target.label, 'green')}
-                            </a>
-                          ))}
-                        </div>
-                        {!menuStatusGroupedTargets.working.length && (
-                          <p className="halo-menu-status-empty">Working routes appear here as soon as the live check completes.</p>
-                        )}
-                        {menuRouteStatusesUnavailable && (
-                          <p className="halo-menu-status-empty">Live status is refreshing. The public route map stays visible while fresh checks publish.</p>
-                        )}
-                      </section>
-                      {ownerControlAccess && (
-                        <section className="halo-menu-status-group halo-menu-status-group-attention" aria-labelledby="halo-menu-status-attention">
-                          <button
-                            type="button"
-                            className="halo-menu-status-group-title halo-menu-status-group-toggle"
-                            aria-expanded={!attentionStatusCollapsed}
-                            aria-controls="halo-menu-status-attention-content"
-                            onClick={() => setAttentionStatusCollapsed(collapsed => !collapsed)}
-                          >
-                            <span>01</span>
-                            <h3 id="halo-menu-status-attention">Attention now</h3>
-                            <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
-                              <path d="m5 7.5 5 5 5-5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-                            </svg>
-                          </button>
-                          <div id="halo-menu-status-attention-content" hidden={attentionStatusCollapsed}>
-                            {menuStatusGroupedTargets.attention.length ? (
-                              <div className="halo-menu-status-buttons">
-                                {menuStatusGroupedTargets.attention.map(target => (
-                                  <a key={`attention-${target.route}`} href={target.route} className="halo-menu-status-button">
-                                    <span className="halo-menu-status-label">{target.label}</span>
-                                    {renderMenuStatusBadge(target.route, target.label, 'yellow')}
-                                  </a>
-                                ))}
-                              </div>
-                            ) : (
-                              <p className="halo-menu-status-empty">No active amber satellites. All monitored routes are currently working.</p>
-                            )}
+                    <details className="halo-menu-status-disclosure">
+                      <summary>Live route health <span>{menuDestinationCount} monitored destinations</span></summary>
+                      <div className="halo-menu-status-groups" aria-label="Satellite route status groups">
+                        <section className="halo-menu-status-group halo-menu-status-group-working" aria-labelledby="halo-menu-status-working">
+                          <div className="halo-menu-status-group-title">
+                            <span>00</span>
+                            <h3 id="halo-menu-status-working">All working menu</h3>
                           </div>
+                          <div className="halo-menu-status-buttons">
+                            {menuStatusGroupedTargets.working.map(target => (
+                              <a key={`working-${target.route}`} href={target.route} aria-current={menuStatusForRoute(target.route, 'green').isCurrent ? 'page' : undefined} className={`halo-menu-status-button${target.route === '/artist/dashboard' ? ' halo-menu-business-hub' : ''}`} data-stat-event={target.route === '/artist/dashboard' ? 'open_business_hub' : undefined} data-stat-target={target.route === '/artist/dashboard' ? 'menu_quick_access' : undefined}>
+                                <span className="halo-menu-status-label">{target.label}{target.route === '/artist/dashboard' && <small>Sovereign Label OS</small>}</span>
+                                {renderMenuStatusBadge(target.route, target.route === '/artist/dashboard' ? 'Business Hub' : target.label, 'green')}
+                              </a>
+                            ))}
+                          </div>
+                          {!menuStatusGroupedTargets.working.length && (
+                            <p className="halo-menu-status-empty">Working routes appear here as soon as the live check completes.</p>
+                          )}
+                          {menuRouteStatusesUnavailable && (
+                            <p className="halo-menu-status-empty">Live status is refreshing. The public route map stays visible while fresh checks publish.</p>
+                          )}
                         </section>
-                      )}
-                    </div>
+                        {ownerControlAccess && (
+                          <section className="halo-menu-status-group halo-menu-status-group-attention" aria-labelledby="halo-menu-status-attention">
+                            <button
+                              type="button"
+                              className="halo-menu-status-group-title halo-menu-status-group-toggle"
+                              aria-expanded={!attentionStatusCollapsed}
+                              aria-controls="halo-menu-status-attention-content"
+                              onClick={() => setAttentionStatusCollapsed(collapsed => !collapsed)}
+                            >
+                              <span>01</span>
+                              <h3 id="halo-menu-status-attention">Attention now</h3>
+                              <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
+                                <path d="m5 7.5 5 5 5-5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                              </svg>
+                            </button>
+                            <div id="halo-menu-status-attention-content" hidden={attentionStatusCollapsed}>
+                              {menuStatusGroupedTargets.attention.length ? (
+                                <div className="halo-menu-status-buttons">
+                                  {menuStatusGroupedTargets.attention.map(target => (
+                                    <a key={`attention-${target.route}`} href={target.route} aria-current={menuStatusForRoute(target.route, 'yellow').isCurrent ? 'page' : undefined} className="halo-menu-status-button">
+                                      <span className="halo-menu-status-label">{target.label}</span>
+                                      {renderMenuStatusBadge(target.route, target.label, 'yellow')}
+                                    </a>
+                                  ))}
+                                </div>
+                              ) : (
+                                <p className="halo-menu-status-empty">No active amber satellites. All monitored routes are currently working.</p>
+                              )}
+                            </div>
+                          </section>
+                        )}
+                      </div>
+                    </details>
 
                     <div className="halo-menu-lanes">
-                      <section className="halo-menu-lane halo-menu-lane-start" aria-labelledby="halo-lane-start">
-                        <div className="halo-menu-lane-title"><span>01</span><h3 id="halo-lane-start">Arrive</h3></div>
+                      <section className="halo-menu-lane halo-menu-lane-listen" aria-labelledby="halo-lane-listen">
+                        <div className="halo-menu-lane-title"><span>01</span><h3 id="halo-lane-listen">Listen &amp; Vote</h3><small>Fans &amp; Discovery</small></div>
                         <button type="button" onClick={() => setShowFanGuide(true)} data-stat-event="open_fan_guide" data-stat-target="header" data-signal="ORIENTATION">
                           <Icon name="users" className="halo-menu-icon" />
                           <span><strong>NEW HERE? START HERE {renderLocalMenuStatusBadge('green', 'fan guide')}</strong><small>A two-minute map of the world</small></span>
@@ -3986,11 +4157,7 @@
                             <span><strong>JOIN / SIGN IN {renderLocalMenuStatusBadge('green', 'member access')}</strong><small>Keep your place in the world</small></span>
                           </button>
                         )}
-                      </section>
-
-                      <section className="halo-menu-lane halo-menu-lane-listen" aria-labelledby="halo-lane-listen">
-                        <div className="halo-menu-lane-title"><span>02</span><h3 id="halo-lane-listen">Listen</h3></div>
-                        <a href="/music-world.html" data-stat-event="open_music_world" data-stat-target="header" data-signal="PUBLIC MUSIC WORLD">
+                        <a href="/music-world.html" aria-current={menuStatusForRoute('/music-world.html', 'green').isCurrent ? 'page' : undefined} data-stat-event="open_music_world" data-stat-target="header" data-signal="PUBLIC MUSIC WORLD">
                           <Icon name="globe" className="halo-menu-icon" /><span><strong>MUSIC WORLD {renderMenuStatusBadge('/music-world.html', 'Music World')}</strong><small>Open the shop first, then move into Dreamweaver from one view</small></span>
                         </a>
                         <a href="/dreamweaver/" data-stat-event="open_dreamweaver_show" data-stat-target="mobile_nav" data-signal="SONG LOBBY">
@@ -4002,8 +4169,11 @@
                         <a href="/music-world.html#telemetry" data-stat-event="open_music_world_telemetry" data-stat-target="header" data-signal="TELEMETRY">
                           <Icon name="radio" className="halo-menu-icon" /><span><strong>MUSIC WORLD TELEMETRY {renderMenuStatusBadge('/music-world.html', 'Music World Telemetry')}</strong><small>Audience radar and commercial signals</small></span>
                         </a>
-                        <a href="/music/" data-stat-event="open_music_catalog" data-stat-target="header" data-signal="CATALOG">
+                        <a href="/music/" aria-current={menuStatusForRoute('/music/', 'green').isCurrent ? 'page' : undefined} data-stat-event="open_music_catalog" data-stat-target="header" data-signal="CATALOG">
                           <Icon name="music" className="halo-menu-icon" /><span><strong>ALL MUSIC {renderMenuStatusBadge('/music/', 'All Music')}</strong><small>The permanent catalog</small></span>
+                        </a>
+                        <a href="/artists/" data-stat-event="open_artist_rooms" data-stat-target="header" data-signal="ARTIST ROOMS">
+                          <Icon name="music" className="halo-menu-icon" /><span><strong>ARTIST ROOMS + CHARTS {renderMenuStatusBadge('/artists/', 'Artist Rooms and Charts')}</strong><small>Browse rooms, charts, and featured drops</small></span>
                         </a>
                         <a href="/halo-x.html" data-stat-event="open_halo_x" data-stat-target="header" data-signal="ARTIST ROOM">
                           <Icon name="star" className="halo-menu-icon" /><span><strong>DJ HALO X {renderMenuStatusBadge('/halo-x.html', 'DJ Halo X')}</strong><small>Enter the artist universe</small></span>
@@ -4025,17 +4195,8 @@
                         </a>
                       </section>
 
-                      <section className="halo-menu-lane halo-menu-lane-build" aria-labelledby="halo-lane-build">
-                        <div className="halo-menu-lane-title"><span>03</span><h3 id="halo-lane-build">Build</h3></div>
-                        <a href="/artist/dashboard" className="halo-menu-business-hub" data-stat-event="open_business_hub" data-stat-target="header" data-signal="FINANCIAL OS">
-                          <Icon name="credit-card" className="halo-menu-icon" /><span><em className="halo-menu-business-hub-badge">Financial OS</em><strong>BUSINESS HUB {renderMenuStatusBadge('/artist/dashboard', 'Business Hub')}</strong><small>Sovereign Label OS: income, tax reserve, obligations, and allocation in one private workspace</small></span>
-                        </a>
-                        <a href="/sync-hub/" data-stat-event="open_sync_hub" data-stat-target="header" data-signal="SYNC LICENSING">
-                          <Icon name="music" className="halo-menu-icon" /><span><strong>SYNC LICENSING {renderMenuStatusBadge('/sync-hub/', 'Sync Licensing')}</strong><small>Explore HALO tracks, stems, and licensing inquiries</small></span>
-                        </a>
-                        <a href="/asset-inventory/" data-stat-event="open_asset_inventory" data-stat-target="header" data-signal="ASSET INVENTORY">
-                          <Icon name="folder" className="halo-menu-icon" /><span><strong>ASSET INVENTORY {renderMenuStatusBadge('/asset-inventory/', 'Asset Inventory')}</strong><small>Built assets, fair valuation, and HALO pricing tiers</small></span>
-                        </a>
+                      <section className="halo-menu-lane halo-menu-lane-create" aria-labelledby="halo-lane-create">
+                        <div className="halo-menu-lane-title"><span>02</span><h3 id="halo-lane-create">Create &amp; Release</h3><small>Artists &amp; Production</small></div>
                         <a href="/artist-pro/" data-stat-event="open_artist_pro" data-stat-target="header" data-signal="FOUNDING ARTIST OFFER">
                           <Icon name="arrow-right" className="halo-menu-icon" /><span><strong>ARTIST PRO {renderMenuStatusBadge('/artist-pro/', 'Artist Pro')}</strong><small>One release. One command system.</small></span>
                         </a>
@@ -4045,11 +4206,11 @@
                         <a href="/creator-network/" data-stat-event="open_creator_network" data-stat-target="header" data-signal="MEMBER COLLABORATION">
                           <Icon name="star" className="halo-menu-icon" /><span><strong>CREATOR NETWORK {renderMenuStatusBadge('/creator-network/', 'Creator Network')}</strong><small>Member profiles, opportunities, and invites</small></span>
                         </a>
+                        <a href="/artist-team.html" data-signal="COLLABORATORS">
+                          <Icon name="users" className="halo-menu-icon" /><span><strong>COLLABORATOR WORKSPACE</strong><small>Coordinate artist teams, production, and release work</small></span>
+                        </a>
                         <a href="/signal-network/" data-stat-event="open_signal_network" data-stat-target="header" data-signal="ARTIST INTELLIGENCE">
                           <Icon name="activity" className="halo-menu-icon" /><span><strong>SIGNAL NETWORK {renderMenuStatusBadge('/signal-network/', 'Signal Network')}</strong><small>The Signal Feed, public previews, messages, and campaigns</small></span>
-                        </a>
-                        <a href="/artists/" data-stat-event="open_artist_rooms" data-stat-target="header" data-signal="ARTIST ROOMS">
-                          <Icon name="music" className="halo-menu-icon" /><span><strong>ARTIST ROOMS + CHARTS {renderMenuStatusBadge('/artists/', 'Artist Rooms and Charts')}</strong><small>Browse rooms, charts, and featured drops</small></span>
                         </a>
                         <a href="/creator-freedom/" data-stat-event="open_creator_charter" data-stat-target="header" data-signal="PUBLIC POLICY">
                           <Icon name="book-open" className="halo-menu-icon" /><span><strong>CREATOR FREEDOM {renderMenuStatusBadge('/creator-freedom/', 'Creator Freedom')}</strong><small>White paper, seven-point charter, and public room</small></span>
@@ -4057,20 +4218,17 @@
                         <a href="/campaign-studio/" data-stat-event="open_campaign_studio" data-stat-target="header" data-signal="CAMPAIGN STUDIO">
                           <Icon name="check-circle" className="halo-menu-icon" /><span><strong>CAMPAIGN STUDIO // ARTIST CONTROLS {renderMenuStatusBadge('/campaign-studio/', 'Campaign Studio')}</strong><small>One release. Five purpose-built links for every destination.</small></span>
                         </a>
-                        <a href="/release-house/" data-stat-event="open_release_house" data-stat-target="header" data-signal="FIRST RELEASE">
+                        <a href="/release-house/" aria-current={menuStatusForRoute('/release-house/', 'green').isCurrent ? 'page' : undefined} data-stat-event="open_release_house" data-stat-target="header" data-signal="FIRST RELEASE">
                           <Icon name="disc" className="halo-menu-icon" /><span><strong>RELEASE HOUSE {renderMenuStatusBadge('/release-house/', 'Release House')}</strong><small>Idea to release, one guided room at a time</small></span>
                         </a>
-                        <a href="/song-catalog/" data-stat-event="open_song_catalog" data-stat-target="header" data-signal="MASTERS + VERSIONS">
-                          <Icon name="list-music" className="halo-menu-icon" /><span><strong>SONG CATALOG {renderMenuStatusBadge('/song-catalog/', 'Song Catalog')}</strong><small>Sale masters, radio edits, stems, and metadata review</small></span>
+                        <a href="/dreamweaver/" data-stat-event="open_dreamweaver_show" data-stat-target="header" data-signal="FAN JOURNEY">
+                          <Icon name="star" className="halo-menu-icon" /><span><strong>DREAMWEAVER EXPERIENCE {renderMenuStatusBadge('/dreamweaver/', 'Dreamweaver Experience')}</strong><small>Start your Halo here — upload to Dreamweaver</small></span>
                         </a>
                         <a href="/asset-editor/" data-stat-event="open_sitewide_asset_editor" data-stat-target="header" data-signal="EDIT ANYWHERE">
                           <Icon name="check-circle" className="halo-menu-icon" /><span><strong>SITEWIDE ASSET EDITOR {renderLocalMenuStatusBadge('green', 'sitewide asset editor')}</strong><small>Edit songs, release metadata, and artwork from one shared hub</small></span>
                         </a>
                         <a href="/music-upload/" data-stat-event="open_song_catalog_upload" data-stat-target="header" data-signal="HALO SHOP">
                           <Icon name="upload" className="halo-menu-icon" /><span><strong>HALO SHOP {renderMenuStatusBadge('/music-upload/', 'HALO Shop')}</strong><small>Public song shop for listening, buying, sharing, and artist-controlled release context</small></span>
-                        </a>
-                        <a href="/dreamweaver/" data-stat-event="open_dreamweaver_show" data-stat-target="header" data-signal="FAN JOURNEY">
-                          <Icon name="star" className="halo-menu-icon" /><span><strong>DREAMWEAVER EXPERIENCE {renderMenuStatusBadge('/dreamweaver/', 'Dreamweaver Experience')}</strong><small>Start your Halo here — upload to Dreamweaver</small></span>
                         </a>
                         <a href="/dreamweaver-lab/" data-stat-event="open_dreamweaver_song_lab" data-stat-target="header" data-signal="AUDIO TO CAMPAIGN">
                           <Icon name="music" className="halo-menu-icon" /><span><strong>DREAMWEAVER SONG LAB {renderMenuStatusBadge('/dreamweaver-lab/', 'Dreamweaver Song Lab')}</strong><small>Load a recording. Analyze the wave. Build the release world.</small></span>
@@ -4081,46 +4239,65 @@
                         <a href="/empath-journey/" data-signal="YOUR QUIET JOURNEY">
                           <Icon name="heart" className="halo-menu-icon" /><span><strong>YOUR QUIET JOURNEY {renderMenuStatusBadge('/empath-journey/', 'Empath Journey')}</strong><small>Journey polls, personal album arcs, and Dreamweaver lyric books</small></span>
                         </a>
-                        <a href="/toolost/" data-stat-event="open_toolost_partner" data-stat-target="header" data-signal="HALO DISTRIBUTION">
-                          <Icon name="arrow-right" className="halo-menu-icon" /><span><strong>HALO DISTRIBUTION {renderMenuStatusBadge('/toolost/', 'HALO Distribution')}</strong><small>Toolost-powered partner route for release delivery</small></span>
-                        </a>
                         <a href="/finish-house/" data-stat-event="open_finish_house" data-stat-target="header" data-signal="MASTER + LICENSE">
                           <Icon name="check-circle" className="halo-menu-icon" /><span><strong>FINISH HOUSE {renderMenuStatusBadge('/finish-house/', 'Finish House')}</strong><small>Mix to master to licensing-ready package</small></span>
                         </a>
                         <a href="/magazine.html" data-stat-event="open_halo_signal" data-stat-target="header" data-signal="EDITORIAL">
                           <Icon name="book-open" className="halo-menu-icon" /><span><strong>HALO SIGNAL {renderMenuStatusBadge('/magazine.html', 'HALO Signal')}</strong><small>Stories from inside the world</small></span>
                         </a>
-                        {ownerControlAccess && (
-                          <a href="/control-center" data-stat-event="open_owner_control_room" data-stat-target="header" data-signal="OWNER ONLY">
-                            <Icon name="lock" className="halo-menu-icon" /><span><strong>PRIVATE CONTROL ROOM {renderLocalMenuStatusBadge('green', 'private control room')}</strong><small>Your protected command center</small></span>
-                          </a>
-                        )}
                       </section>
 
-                      <section className="halo-menu-lane halo-menu-lane-care" aria-labelledby="halo-lane-care">
-                        <div className="halo-menu-lane-title"><span>04</span><h3 id="halo-lane-care">Care</h3></div>
-                        <a href="/halo-shield/" data-stat-event="open_halo_shield" data-stat-target="header" data-signal="GROW ON TRUST">
-                          <Icon name="shield-check" className="halo-menu-icon" /><span><strong>HALO SHIELD {renderMenuStatusBadge('/halo-shield/', 'Halo Shield')}</strong><small>View protection status</small></span>
+                      <section className="halo-menu-lane halo-menu-lane-build" aria-labelledby="halo-lane-business">
+                        <div className="halo-menu-lane-title"><span>03</span><h3 id="halo-lane-business">Business &amp; Catalog</h3><small>Label &amp; Sync</small></div>
+                        <a href="/artist/dashboard" aria-current={menuStatusForRoute('/artist/dashboard', 'green').isCurrent ? 'page' : undefined} className="halo-menu-business-hub" data-stat-event="open_business_hub" data-stat-target="header" data-signal="FINANCIAL OS">
+                          <Icon name="credit-card" className="halo-menu-icon" /><span><em className="halo-menu-business-hub-badge">Financial OS</em><strong>BUSINESS HUB {renderMenuStatusBadge('/artist/dashboard', 'Business Hub')}</strong><small>Sovereign Label OS: income, tax reserve, obligations, and allocation in one private workspace</small></span>
                         </a>
-                        <a href="/pricing/" data-stat-event="open_pricing" data-stat-target="header" data-signal="GROW ON TRUST">
-                          <Icon name="arrow-right" className="halo-menu-icon" /><span><strong>PRICING {renderMenuStatusBadge('/pricing/', 'Pricing')}</strong><small>Explore pricing preview · proposed plans</small></span>
+                        <a href="/sync-hub/" aria-current={menuStatusForRoute('/sync-hub/', 'green').isCurrent ? 'page' : undefined} data-stat-event="open_sync_hub" data-stat-target="header" data-signal="SYNC LICENSING">
+                          <Icon name="music" className="halo-menu-icon" /><span><strong>SYNC LICENSING {renderMenuStatusBadge('/sync-hub/', 'Sync Licensing')}</strong><small>Explore HALO tracks, stems, and licensing inquiries</small></span>
                         </a>
-                        <a href="/support/" data-stat-event="open_feedback_desk" data-stat-target="header" data-signal="SYSTEM CARE">
-                          <Icon name="bug" className="halo-menu-icon" /><span><strong>FEEDBACK DESK {renderMenuStatusBadge('/support/', 'Feedback Desk')}</strong><small>Report bugs, request features, get help</small></span>
+                        <a href="/song-catalog/" data-stat-event="open_song_catalog" data-stat-target="header" data-signal="MASTERS + VERSIONS">
+                          <Icon name="list-music" className="halo-menu-icon" /><span><strong>SONG CATALOG {renderMenuStatusBadge('/song-catalog/', 'Song Catalog')}</strong><small>Sale masters, radio edits, stems, and metadata review</small></span>
                         </a>
-                        <button type="button" onClick={() => { setPaymentError(''); setShowPaymentModal(true); }} data-stat-event="open_payment" data-stat-target="header" data-signal="DIRECT SUPPORT">
-                          <Icon name="credit-card" className="halo-menu-icon" /><span><strong>SUPPORT HALO {renderLocalMenuStatusBadge('green', 'direct support')}</strong><small>Fuel independent infrastructure</small></span>
-                        </button>
+                        <a href="/asset-inventory/" data-stat-event="open_asset_inventory" data-stat-target="header" data-signal="ASSET INVENTORY">
+                          <Icon name="folder" className="halo-menu-icon" /><span><strong>ASSET INVENTORY {renderMenuStatusBadge('/asset-inventory/', 'Asset Inventory')}</strong><small>Built assets, fair valuation, and HALO pricing tiers</small></span>
+                        </a>
+                        <a href="/toolost/" data-stat-event="open_toolost_partner" data-stat-target="header" data-signal="HALO DISTRIBUTION">
+                          <Icon name="arrow-right" className="halo-menu-icon" /><span><strong>HALO DISTRIBUTION {renderMenuStatusBadge('/toolost/', 'HALO Distribution')}</strong><small>Toolost-powered partner route for release delivery</small></span>
+                        </a>
+                        {ownerControlAccess && (
+                          <a href="/control-center" data-stat-event="open_owner_control_room" data-stat-target="header" data-signal="OWNER ONLY">
+                            <Icon name="lock" className="halo-menu-icon" /><span><strong>CONTROL CENTER {renderLocalMenuStatusBadge('green', 'Control Center')}</strong><small>Your protected command center</small></span>
+                          </a>
+                        )}
+                        <section className="halo-menu-lane-care" aria-labelledby="halo-lane-care">
+                          <div className="halo-menu-lane-title"><span>+</span><h3 id="halo-lane-care">Care</h3></div>
+                          <a href="/halo-shield/" data-stat-event="open_halo_shield" data-stat-target="header" data-signal="GROW ON TRUST">
+                            <Icon name="shield-check" className="halo-menu-icon" /><span><strong>HALO SHIELD {renderMenuStatusBadge('/halo-shield/', 'Halo Shield')}</strong><small>View protection status</small></span>
+                          </a>
+                          <a href="/pricing/" data-stat-event="open_pricing" data-stat-target="header" data-signal="GROW ON TRUST">
+                            <Icon name="arrow-right" className="halo-menu-icon" /><span><strong>PRICING {renderMenuStatusBadge('/pricing/', 'Pricing')}</strong><small>Explore pricing preview · proposed plans</small></span>
+                          </a>
+                          <a href="/support/" data-stat-event="open_feedback_desk" data-stat-target="header" data-signal="SYSTEM CARE">
+                            <Icon name="bug" className="halo-menu-icon" /><span><strong>FEEDBACK DESK {renderMenuStatusBadge('/support/', 'Feedback Desk')}</strong><small>Report bugs, request features, get help</small></span>
+                          </a>
+                          <button type="button" onClick={() => { setPaymentError(''); setShowPaymentModal(true); }} data-stat-event="open_payment" data-stat-target="header" data-signal="DIRECT SUPPORT">
+                            <Icon name="credit-card" className="halo-menu-icon" /><span><strong>SUPPORT HALO {renderLocalMenuStatusBadge('green', 'direct support')}</strong><small>Fuel independent infrastructure</small></span>
+                          </button>
+                        </section>
                       </section>
                     </div>
 
+                    <a href="/music-world.html" aria-current={menuStatusForRoute('/music-world.html', 'green').isCurrent ? 'page' : undefined} data-stat-event="open_satellite" data-stat-target="header" className="halo-menu-console">
+                      <span><strong>SATELLITE {renderMenuStatusBadge('/music-world.html', 'Satellite')}</strong><small>Explore Music World and its audience radar view</small></span>
+                      <Icon name="arrow-right" className="halo-menu-console-icon" />
+                    </a>
                     {viewMode === 'landing' ? (
-                      <button type="button" onClick={() => setViewMode('console')} data-stat-event="enter_console" data-stat-target="header" className="halo-menu-console">
+                      <button type="button" onClick={() => openConsoleArea('agent-room')} data-stat-event="enter_console" data-stat-target="header" className="halo-menu-console">
                         <span><small>Primary passage</small><strong>ENTER SHOW CONSOLE</strong></span>
                         <Icon name="arrow-right" className="halo-menu-console-icon" />
                       </button>
                     ) : (
-                      <button type="button" onClick={() => setViewMode('landing')} className="halo-menu-console">
+                      <button type="button" onClick={() => { window.HaloOnboarding.navigateApp('/halo'); setViewMode('landing'); }} className="halo-menu-console">
                         <span><small>Return passage</small><strong>PORTAL HOMEPAGE</strong></span>
                         <Icon name="arrow-right" className="halo-menu-console-icon halo-menu-console-icon-back" />
                       </button>
@@ -4130,8 +4307,58 @@
               </header>
 
               {/* VIEW 1: FRONT LANDING SHOWCASE PORTAL */}
-              {viewMode === 'landing' && (
+              {pathWorkspace && (
+                <main className="flex-1 w-full p-4">
+                  <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <h2 ref={workspaceHeading} tabIndex="-1" className="text-xl font-bold text-amber-100">{window.HaloOnboarding.paths[pathWorkspace].title}</h2>
+                      <p className="text-sm text-gray-300" role="status">{pathExplanation || 'Your workspace is ready below. You can change paths at any time.'}</p>
+                    </div>
+                    <button type="button" className="rounded-xl border border-amber-200/40 px-4 py-3 text-amber-100 focus-visible:ring-2 focus-visible:ring-amber-200" onClick={() => window.HaloOnboarding.navigateApp('/halo')}>Change path / revisit quiz</button>
+                  </div>
+                  <iframe key={pathWorkspace} src={window.HaloOnboarding.paths[pathWorkspace].route} title={`${window.HaloOnboarding.paths[pathWorkspace].title} workspace`} onLoad={event => window.HaloOnboarding.connectWorkspace(event.currentTarget)} className="w-full rounded-2xl border border-white/20 bg-black" style={{height: '80vh'}} />
+                </main>
+              )}
+              {!pathWorkspace && viewMode === 'landing' && (
                 <main className="flex-1 max-w-6xl mx-auto w-full px-4 py-8 md:py-12 space-y-12 overflow-y-auto">
+
+                  <section className="rounded-3xl border border-amber-200/15 bg-[radial-gradient(circle_at_90%_0%,rgba(217,188,124,.12),transparent_32%),linear-gradient(145deg,rgba(18,18,22,.98),rgba(8,9,12,.98))] p-5 shadow-[0_24px_70px_rgba(0,0,0,.28)] sm:p-8" aria-labelledby="find-your-path-title">
+                    <div className="mb-6 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+                      <div>
+                        <p className="font-sans-alt text-[9px] font-black uppercase tracking-[.24em] text-amber-200/70">A clearer way into HALO</p>
+                        <h2 id="find-your-path-title" className="mt-2 font-sans-alt text-2xl font-black tracking-tight text-[#f4eee3] sm:text-3xl">Find Your Path</h2>
+                      </div>
+                      <p className="max-w-xl font-sans-alt text-xs leading-6 text-gray-400 sm:text-right">Choose a workspace that fits your music and your next move.</p>
+                    </div>
+                    <button ref={pathQuizButton} type="button" onClick={() => setShowOnboarding(true)} className="mb-5 rounded-xl border border-amber-200/40 px-4 py-3 font-sans-alt text-sm font-bold text-amber-100 focus-visible:ring-2 focus-visible:ring-amber-200">Take / retake the 3-question quiz</button>
+                    {showOnboarding && <OnboardingWizard onDismiss={closeOnboarding} onComplete={result => openPathWorkspace(result.path, result.explanation)} />}
+                    <div onClick={selectPathWorkspace} className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                      <a href="/release-house/?mode=solo" data-path-mode="solo" aria-current={menuStatusForRoute('/release-house/', 'green').isCurrent ? 'page' : undefined} className="group flex min-h-full flex-col rounded-2xl border border-white/10 bg-black/25 p-5 text-left transition duration-200 hover:-translate-y-1 hover:border-amber-200/40 hover:bg-white/[.04] focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-200 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0a0b0e] motion-reduce:transform-none">
+                        <span className="mb-5 inline-flex w-fit rounded-full border border-amber-200/20 bg-amber-200/[.07] px-3 py-1 font-sans-alt text-[9px] font-bold uppercase tracking-[.16em] text-amber-100">Quick Launch</span>
+                        <h3 className="font-sans-alt text-lg font-bold text-white">Solo Builder</h3>
+                        <p className="mt-2 flex-1 font-sans-alt text-xs leading-6 text-gray-400">Perfect if you have 1–5 tracks. Fast-track your masters into release rotation and test the living chart.</p>
+                        <span className="mt-5 inline-flex items-center gap-2 font-sans-alt text-[10px] font-bold uppercase tracking-[.14em] text-amber-100">Open Release House <span aria-hidden="true" className="transition-transform group-hover:translate-x-1">→</span></span>
+                      </a>
+                      <a href="/song-catalog/?mode=coop" data-path-mode="coop" aria-current={menuStatusForRoute('/song-catalog/', 'green').isCurrent ? 'page' : undefined} className="group flex min-h-full flex-col rounded-2xl border border-white/10 bg-black/25 p-5 text-left transition duration-200 hover:-translate-y-1 hover:border-amber-200/40 hover:bg-white/[.04] focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-200 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0a0b0e] motion-reduce:transform-none">
+                        <span className="mb-5 inline-flex w-fit rounded-full border border-amber-200/20 bg-amber-200/[.07] px-3 py-1 font-sans-alt text-[9px] font-bold uppercase tracking-[.16em] text-amber-100">Library Scale</span>
+                        <h3 className="font-sans-alt text-lg font-bold text-white">Catalog Co-Op</h3>
+                        <p className="mt-2 flex-1 font-sans-alt text-xs leading-6 text-gray-400">Managing a deep library (10+ tracks)? Bulk import, automated metadata mapping, and shared revenue pipelines.</p>
+                        <span className="mt-5 inline-flex items-center gap-2 font-sans-alt text-[10px] font-bold uppercase tracking-[.14em] text-amber-100">Open Song Catalog <span aria-hidden="true" className="transition-transform group-hover:translate-x-1">→</span></span>
+                      </a>
+                      <a href="/artist-team.html?mode=collab" data-path-mode="collab" aria-current={menuStatusForRoute('/artist-team.html', 'green').isCurrent ? 'page' : undefined} className="group flex min-h-full flex-col rounded-2xl border border-white/10 bg-black/25 p-5 text-left transition duration-200 hover:-translate-y-1 hover:border-amber-200/40 hover:bg-white/[.04] focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-200 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0a0b0e] motion-reduce:transform-none">
+                        <span className="mb-5 inline-flex w-fit rounded-full border border-amber-200/20 bg-amber-200/[.07] px-3 py-1 font-sans-alt text-[9px] font-bold uppercase tracking-[.16em] text-amber-100">Multi-Creator</span>
+                        <h3 className="font-sans-alt text-lg font-bold text-white">Collaborator &amp; Performer</h3>
+                        <p className="mt-2 flex-1 font-sans-alt text-xs leading-6 text-gray-400">Co-producers, featured artists, and remixers can coordinate their work and credits in one shared space.</p>
+                        <span className="mt-5 inline-flex items-center gap-2 font-sans-alt text-[10px] font-bold uppercase tracking-[.14em] text-amber-100">Open Collaborator Workspace <span aria-hidden="true" className="transition-transform group-hover:translate-x-1">→</span></span>
+                      </a>
+                      <a href="/music/?mode=testing" data-path-mode="testing" aria-current={menuStatusForRoute('/music/', 'green').isCurrent ? 'page' : undefined} className="group flex min-h-full flex-col rounded-2xl border border-white/10 bg-black/25 p-5 text-left transition duration-200 hover:-translate-y-1 hover:border-amber-200/40 hover:bg-white/[.04] focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-200 focus-visible:ring-offset-2 focus-visible:ring-offset-[#0a0b0e] motion-reduce:transform-none">
+                        <span className="mb-5 inline-flex w-fit rounded-full border border-amber-200/20 bg-amber-200/[.07] px-3 py-1 font-sans-alt text-[9px] font-bold uppercase tracking-[.16em] text-amber-100">Live Data</span>
+                        <h3 className="font-sans-alt text-lg font-bold text-white">Market Testing</h3>
+                        <p className="mt-2 flex-1 font-sans-alt text-xs leading-6 text-gray-400">Take unreleased ideas to the living-chart listening community and gauge fan momentum before full distribution.</p>
+                        <span className="mt-5 inline-flex items-center gap-2 font-sans-alt text-[10px] font-bold uppercase tracking-[.14em] text-amber-100">Open Living Chart <span aria-hidden="true" className="transition-transform group-hover:translate-x-1">→</span></span>
+                      </a>
+                    </div>
+                  </section>
 
                   <section className="halo-home-experiment" aria-labelledby="halo-home-experiment-title" data-homepage-hero="dreamweaver">
                     <div className="halo-home-experiment__grid">
@@ -5339,7 +5566,7 @@
               )}
 
               {/* VIEW 2: GLOBAL CONSOLE WORKSPACE */}
-              {viewMode === 'console' && (
+              {!pathWorkspace && viewMode === 'console' && (
                 <div id="clubhouse" className="flex-1 grid grid-cols-1 lg:grid-cols-12 overflow-hidden">
 
                   {/* LEFT NAVIGATION PANEL */}
@@ -5591,7 +5818,7 @@
                                 </div>
                                 <div className="grid min-w-64 gap-2 sm:grid-cols-[1fr_auto_auto]">
                                   {releasePack.canEdit && releasePack.campaigns.length > 0 && <select value={releasePack.release.id} onChange={event => { setCampaignEditorOpen(false); loadReleasePack(event.target.value); }} className="rounded-xl border border-white/10 bg-[#101719] px-3 py-2.5 text-[9px] font-bold text-white outline-none focus:border-lime-300/50">
-                                    {releasePack.campaigns.map(campaign => <option key={campaign.id} value={campaign.id}>{campaign.title} · {campaign.status}</option>)}
+                                    {releasePack.campaigns.map(campaign => <option key={campaign.id} value={campaign.id}>{campaign.title} · {campaign.status} · {campaign.distributionStatus === 'public' ? 'link ready' : campaign.distributionStatus === 'private' ? 'link private' : campaign.distributionStatus === 'invalid' ? 'link needs correction' : 'no destination'}</option>)}
                                   </select>}
                                   {releasePack.canEdit && <button type="button" onClick={() => setCampaignEditorOpen(open => !open)} className="rounded-xl border border-lime-300/35 px-3 py-2.5 text-[8px] font-black uppercase tracking-wider text-lime-200 hover:bg-lime-300/10">{campaignEditorOpen ? 'Close editor' : 'Edit campaign'}</button>}
                                   <button type="button" onClick={newCampaignDraft} className="rounded-xl bg-lime-300 px-3 py-2.5 text-[8px] font-black uppercase tracking-wider text-[#15200d] hover:bg-lime-200">New release</button>
@@ -5621,12 +5848,24 @@
                                 <p className="mt-2 text-[9px] leading-4 text-gray-500">Live artwork uses manual override → imported DistroKid artwork → HALO fallback. Re-syncing the imported image will not replace a manual override.</p>
 
                                 <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-5">{[
-                                  ['officialUrl', 'Primary / HyperFollow', 'https://distrokid.com/hyperfollow/...'],
+                                  ['officialUrl', 'Artist listening / official link', 'https://distrokid.com/hyperfollow/...'],
                                   ['djUrl', 'DJ delivery', 'Private WAV or request link'],
                                   ['radioUrl', 'Radio delivery', 'Clean edit or broadcast pack'],
                                   ['pressUrl', 'Press assets', 'Photos, one-sheet, approved copy'],
                                   ['previewUrl', 'Private preview', 'Advance listening destination']
                                 ].map(([field, label, placeholder]) => <label key={field} className="text-[7px] font-black uppercase tracking-wider text-gray-500">{label}<input type="url" value={campaignDraft[field] || ''} maxLength="1000" onChange={event => updateCampaignDraft(field, event.target.value)} placeholder={placeholder} className="mt-2 w-full rounded-xl border border-white/10 bg-black/40 px-3 py-3 text-[9px] normal-case text-white outline-none placeholder:text-gray-700 focus:border-lime-300/50" /></label>)}</div>
+                                {releasePack.canEdit && identityUser?.id && campaignDraft.id === catalogCardReleaseId && <div className="mt-3 rounded-xl border border-cyan-300/20 bg-cyan-300/[.04] p-3">
+                                  <h5 className="text-[9px] font-black uppercase tracking-wider text-cyan-100">Release promotion desk // Distributor destination</h5>
+                                  <label htmlFor={`desk-distribution-${catalogCardReleaseId}`} className="mt-3 block text-[8px] font-black uppercase tracking-wider text-cyan-100">Distributor smart link (DistroKid / HyperFollow)</label>
+                                  <input id={`desk-distribution-${catalogCardReleaseId}`} type="url" value={catalogCardPurchaseUrl} maxLength="500" autoComplete="url" disabled={releasePackLoading || distributionSaving || campaignSaving} onChange={event => updateDistributionLink(event.target.value)} placeholder="Paste an HTTPS distributor smart link" aria-describedby={`desk-distribution-help-${catalogCardReleaseId} desk-distribution-status-${catalogCardReleaseId}`} aria-invalid={Boolean(catalogCardPurchaseUrl.trim() && !validatedCatalogCardUrl)} className="mt-2 w-full rounded-xl border border-white/10 bg-black/40 px-3 py-3 text-[9px] normal-case text-white outline-none placeholder:text-gray-700 focus:border-cyan-300/50 focus:ring-2 focus:ring-cyan-300/30 disabled:opacity-60" />
+                                  <p id={`desk-distribution-help-${catalogCardReleaseId}`} className="mt-2 text-[9px] leading-4 text-gray-400">Use an HTTPS smart link from DistroKid/HyperFollow, FFM.to, lnk.to, found.ee, or Linktree, or leave empty to clear. This user-provided destination is separate from master audio and the artist listening/official link. Saving does not verify distributor status, import metadata, publish or promote this release, alter the Living Chart, or send it to an AI pipeline. Public cards still require existing catalog eligibility.</p>
+                                  <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+                                    {validatedCatalogCardUrl && <a href={validatedCatalogCardUrl} target="_blank" rel="noopener noreferrer" aria-label="Preview distributor destination (opens in a new tab)" className="rounded-lg border border-white/10 px-3 py-2 text-[9px] text-cyan-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-cyan-300">Preview / open ↗</a>}
+                                    <button type="button" disabled={releasePackLoading || distributionSaving || campaignSaving} onClick={saveDistributionLink} className="rounded-lg border border-cyan-300/35 px-4 py-2 text-[8px] font-black uppercase tracking-widest text-cyan-100 hover:bg-cyan-300/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-cyan-300 disabled:opacity-40">{distributionSaving ? 'Saving…' : catalogCardPurchaseUrl ? 'Save destination' : 'Clear destination'}</button>
+                                  </div>
+                                  <p id={`desk-distribution-status-${catalogCardReleaseId}`} role={catalogCardDistributionFeedback.status === 'error' ? 'alert' : 'status'} className="mt-2 text-[9px] leading-4 text-cyan-100">{catalogCardDistributionFeedback.message || (catalogCardPurchaseUrl !== (releasePack.release.purchaseUrl || '') ? 'Unsaved changes' : 'Showing saved destination.')}</p>
+                                </div>}
+                                {!campaignDraft.id && <p className="mt-3 rounded-xl border border-cyan-300/20 bg-cyan-300/[.04] p-3 text-[9px] leading-4 text-gray-400">Save this release first, then add its public catalog distribution destination separately. The artist listening/official link above does not populate that card action.</p>}
 
                                 <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
                                   <label className="text-[7px] font-black uppercase tracking-wider text-gray-500">Genres<input value={campaignDraft.genresText || ''} onChange={event => updateCampaignDraft('genresText', event.target.value)} placeholder="Electronic, Afrobeat" className="mt-2 w-full rounded-xl border border-white/10 bg-black/40 px-3 py-3 text-[9px] normal-case text-white outline-none placeholder:text-gray-700 focus:border-lime-300/50" /></label>
@@ -5655,13 +5894,45 @@
                                   <label className="text-[7px] font-black uppercase tracking-wider text-gray-500">Contact email<input type="email" value={campaignDraft.contactEmail || ''} onChange={event => updateCampaignDraft('contactEmail', event.target.value)} placeholder="promo@example.com" className="mt-2 w-full rounded-xl border border-white/10 bg-black/40 px-3 py-3 text-[9px] normal-case text-white outline-none placeholder:text-gray-700 focus:border-lime-300/50" /></label>
                                 </div>
 
-                                <div className="mt-4 flex flex-col gap-2 border-t border-white/10 pt-4 sm:flex-row sm:justify-end"><button type="button" disabled={campaignSaving} onClick={() => saveReleaseCampaign('draft')} className="rounded-xl border border-white/15 px-5 py-3 text-[8px] font-black uppercase tracking-widest text-gray-300 hover:border-white/40 disabled:opacity-40">{campaignSaving ? 'Saving…' : 'Save draft'}</button><button type="button" disabled={campaignSaving} onClick={() => saveReleaseCampaign('published')} className="rounded-xl bg-lime-300 px-5 py-3 text-[8px] font-black uppercase tracking-widest text-[#13200b] hover:bg-lime-200 disabled:opacity-40">{campaignSaving ? 'Publishing…' : 'Publish campaign'}</button></div>
+                                <div className="mt-4 flex flex-col gap-2 border-t border-white/10 pt-4 sm:flex-row sm:justify-end"><button type="button" disabled={campaignSaving || distributionSaving} onClick={() => saveReleaseCampaign('draft')} className="rounded-xl border border-white/15 px-5 py-3 text-[8px] font-black uppercase tracking-widest text-gray-300 hover:border-white/40 disabled:opacity-40">{campaignSaving ? 'Saving…' : 'Save draft'}</button><button type="button" disabled={campaignSaving || distributionSaving} onClick={() => saveReleaseCampaign('published')} className="rounded-xl bg-lime-300 px-5 py-3 text-[8px] font-black uppercase tracking-widest text-[#13200b] hover:bg-lime-200 disabled:opacity-40">{campaignSaving ? 'Publishing…' : 'Publish campaign'}</button></div>
                               </div>}
                             </section>}
                             <section className="overflow-hidden rounded-2xl border border-white/10 bg-black/50">
                               <div className="release-artwork-frame" data-artwork-frame>
                                 <img src={activeReleaseArtwork.src} alt={`${releasePack.release.title} cover artwork`} className="release-artwork-image" width="1024" height="1024" data-release-artwork data-artwork-fallback={activeReleaseArtwork.fallback} />
                               </div>
+                              {releasePack.canEdit && catalogCardReleaseId && identityUser?.id && <div className="border-t border-cyan-300/15 bg-cyan-300/[.035] p-3">
+                                <label htmlFor={`catalog-distribution-${catalogCardReleaseId}`} className="block text-[8px] font-black uppercase tracking-wider text-cyan-100">Catalog distribution URL</label>
+                                <input
+                                  id={`catalog-distribution-${catalogCardReleaseId}`}
+                                  type="url"
+                                  value={catalogCardPurchaseUrl}
+                                  maxLength="500"
+                                  autoComplete="url"
+                                  disabled={releasePackLoading || campaignDraft?.id !== catalogCardReleaseId || distributionSaving || campaignSaving}
+                                  onChange={event => updateDistributionLink(event.target.value)}
+                                  aria-invalid={Boolean(catalogCardPurchaseUrl.trim() && !validatedCatalogCardUrl)}
+                                  placeholder="https://distrokid.com/hyperfollow/..."
+                                  aria-describedby={catalogCardDistributionFeedback.message
+                                    ? `catalog-distribution-help-${catalogCardReleaseId} catalog-distribution-status-${catalogCardReleaseId}`
+                                    : `catalog-distribution-help-${catalogCardReleaseId}`}
+                                  className="mt-2 block w-full min-w-0 rounded-lg border border-white/10 bg-black/50 px-3 py-2.5 text-[9px] normal-case text-white outline-none placeholder:text-gray-600 focus:border-cyan-300/60 focus:ring-2 focus:ring-cyan-300/30 disabled:opacity-60"
+                                />
+                                <p id={`catalog-distribution-help-${catalogCardReleaseId}`} className="mt-2 text-[8px] leading-4 text-gray-400">Use an HTTPS smart link from DistroKid/HyperFollow, FFM.to, lnk.to, found.ee, or Linktree. Saving changes only this URL; it does not change release status, visibility, rights, ownership, or radio state.</p>
+                                <div className="mt-2 flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                                  <span className="text-[8px] font-bold uppercase tracking-wider text-gray-400">
+                                    {catalogCardPurchaseUrl !== (releasePack.release.purchaseUrl || '') ? 'Unsaved changes' : `Saved status: ${campaignDraft?.distributionStatus === 'public' ? 'public-card eligible' : campaignDraft?.distributionStatus === 'private' ? 'private until release is public' : campaignDraft?.distributionStatus === 'invalid' ? 'existing link needs correction' : 'missing'}`}
+                                  </span>
+                                  {validatedCatalogCardUrl && <a href={validatedCatalogCardUrl} target="_blank" rel="noopener noreferrer" aria-label={`Preview distributor destination for ${releasePack.release.title} (opens in a new tab)`} className="inline-flex max-w-full items-center gap-1 self-start break-all rounded-lg border border-white/10 px-2.5 py-2 text-[8px] font-black uppercase tracking-wider text-cyan-100 hover:border-cyan-300/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-300 sm:self-auto">Preview / open ↗</a>}
+                                </div>
+                                {catalogCardDistributionFeedback.message && <p id={`catalog-distribution-status-${catalogCardReleaseId}`} role={catalogCardDistributionFeedback.status === 'error' ? 'alert' : 'status'} className={`mt-2 text-[8px] leading-4 ${catalogCardDistributionFeedback.status === 'error' ? 'text-red-200' : 'text-cyan-100'}`}>{catalogCardDistributionFeedback.message}</p>}
+                                <button
+                                  type="button"
+                                  disabled={releasePackLoading || distributionSaving || campaignSaving || campaignDraft?.id !== catalogCardReleaseId}
+                                  onClick={saveDistributionLink}
+                                  className="mt-3 w-full rounded-lg border border-cyan-300/35 px-3 py-2.5 text-[8px] font-black uppercase tracking-widest text-cyan-100 hover:bg-cyan-300/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-300 disabled:cursor-not-allowed disabled:opacity-50"
+                                >{distributionSaving ? 'Saving…' : catalogCardPurchaseUrl ? 'Save destination' : 'Clear destination'}</button>
+                              </div>}
                               <div className="p-4">
                                 <p className="text-[8px] font-black uppercase tracking-[.25em] text-cyan-300">{releasePack.release.artist} // Advance signal</p>
                                 <h4 className="mt-2 text-2xl font-black leading-none text-white">{releasePack.release.title}</h4>

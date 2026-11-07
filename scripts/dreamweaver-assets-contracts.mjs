@@ -192,6 +192,7 @@ const wrongVersionRequest = new Request(audioRequest("&dreamweaver=1").url.repla
 assert.equal((await streamContext.serve(wrongVersionRequest, fakeDb({ masters: [storedMaster] }), "")).status, 404);
 const redirect = await streamContext.serve(audioRequest("&dreamweaver=1", "HEAD"), fakeDb({ masters: [storedMaster] }), "");
 assert.equal(redirect.status, 302);
+assert.equal(redirect.headers.get("cache-control"), "private, no-store", "signed delivery must not enter shared caches");
 assert.equal(redirect.headers.get("location"), "https://storage.halo.test/master?method=HEAD");
 assert.equal(ownerLookups, 0, "public canonical requests must use the publication gate, not owner lookup");
 assert.equal((await streamContext.serve(audioRequest(), fakeDb(), "")).status, 404);
@@ -200,11 +201,16 @@ const chunked = { ...master, audio_blob_prefix: "chunks/", audio_chunk_count: 1,
 const chunkDb = fakeDb({ masters: [chunked] });
 const ranged = await streamContext.serve(audioRequest("&dreamweaver=1", "GET", { Range: "bytes=2-5" }), chunkDb, "");
 assert.equal(ranged.status, 206);
+assert.equal(ranged.headers.get("cache-control"), "private, no-store");
+assert.equal(ranged.headers.get("content-type"), "audio/wav");
+assert.equal(ranged.headers.get("accept-ranges"), "bytes");
+assert.equal(ranged.headers.get("vary"), "Range");
 assert.equal(ranged.headers.get("content-range"), "bytes 2-5/10");
 assert.equal((await ranged.arrayBuffer()).byteLength, 4);
 assert.equal((await streamContext.serve(audioRequest("&dreamweaver=1", "GET", { Range: "bytes=20-" }), chunkDb, "")).status, 416);
 const head = await streamContext.serve(audioRequest("&dreamweaver=1", "HEAD"), chunkDb, "");
 assert.equal(head.headers.get("content-length"), "10");
+assert.equal(head.headers.get("cache-control"), "private, no-store");
 assert.equal(await head.text(), "");
 assert.equal((await (await streamContext.serve(audioRequest("&dreamweaver=1"), chunkDb, "")).arrayBuffer()).byteLength, 10);
 console.log("Dreamweaver assets contracts passed: authorization, canonical masters, four slots, bounded generation, persistence, races, and HTTP errors.");

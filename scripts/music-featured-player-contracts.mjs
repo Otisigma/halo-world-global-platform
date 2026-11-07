@@ -198,7 +198,7 @@ for (const selector of ["featured-hero-card", "featured-hero-actions", "featured
   assert.match(styles, new RegExp(`\\.${selector.replace(".", "\\.")} \\{`), `music.css must style .${selector}`);
 }
 
-// Preloading uses the real primary element and serial, bounded metadata warming.
+// Preloading uses only the real selected element; never walk or decode the queue.
 function preloaderHarness({ connection, touch = 0, online = true, idle = true } = {}) {
   class FakeAudio extends EventTarget {
     constructor() {
@@ -258,33 +258,33 @@ function preloaderHarness({ connection, touch = 0, online = true, idle = true } 
   return { primary, preloader, created, tasks, run, loaded, window, document, navigator, FakeAudio };
 }
 
-const sources = Array.from({ length: 8 }, (_, index) => `https://cdn.example/track-${index}.mp3`);
+const sources = Array.from({ length: 8 }, (_, index) => `https://halo.test/audio/track-${index}.mp3`);
 {
   const h = preloaderHarness();
   h.preloader.prepare(["", "javascript:alert(1)", "//evil.test/audio.mp3", "https://user@cdn.example/audio.mp3", sources[0], ...sources]);
   assert.equal(h.primary.src, sources[0], "first valid source must be preloaded into the real player");
-  assert.equal(h.primary.preload, "auto");
+  assert.equal(h.primary.preload, "metadata");
   assert.equal(h.primary.loads, 1);
   assert.equal(h.primary.plays, 0, "preloading must never autoplay");
   assert.equal(h.tasks.size, 0, "background work must wait for page load");
   h.loaded();
-  h.run();
-  assert.equal(h.created.length, 1);
-  assert.equal(h.created[0].src, sources[1], "duplicate URLs must only be warmed once");
-  assert.equal(h.created[0].preload, "metadata");
-  assert.equal(h.tasks.size, 1, "only the active request's watchdog should run");
-  for (let index = 1; index < sources.length; index++) {
-    const audio = h.created.at(-1);
-    audio.dispatchEvent(new Event("loadedmetadata"));
-    assert.ok(h.preloader.cache.size <= 4, "retained audio elements must stay bounded");
-    if (index < sources.length - 1) h.run();
-  }
-  assert.equal(h.created.length, 7, "the remaining playlist must warm serially");
-  assert.equal(h.created[0].src, "", "evicted elements must release their sources");
+  assert.equal(h.created.length, 0, "no secondary Audio objects or playlist requests");
+  h.preloader.prepare(sources);
+  assert.equal(h.primary.loads, 1, "repeat queue hydration must not reload the selected source");
+  h.primary.error = { code: 4 };
+  h.preloader.prepare(sources);
+  assert.equal(h.primary.loads, 3, "reselecting failed metadata must abort the failed resource and load again");
   assert.equal(h.tasks.size, 0);
   h.window.dispatchEvent(new Event("pagehide"));
-  assert.equal(h.preloader.cache.size, 0);
   assert.equal(h.primary.src, "", "page exit must release an unplayed speculative primary");
+}
+{
+  const h = preloaderHarness();
+  h.preloader.prepare(sources);
+  h.preloader.prepare([sources[1], ...sources]);
+  assert.equal(h.primary.src, sources[1], "changing selection must replace only the borrowed primary");
+  assert.equal(h.created.length, 0);
+  assert.equal(h.primary.loads, 3, "one original load, one abort, one replacement load");
 }
 {
   const h = preloaderHarness();
@@ -294,19 +294,12 @@ const sources = Array.from({ length: 8 }, (_, index) => `https://cdn.example/tra
   assert.equal(h.primary.loads, 0);
   h.document.hidden = false;
   h.document.dispatchEvent(new Event("visibilitychange"));
-  assert.equal(h.primary.preload, "auto");
+  assert.equal(h.primary.preload, "metadata");
   h.loaded();
-  h.run();
-  h.created[0].networkState = 2;
-  h.created[0].dispatchEvent(new Event("loadedmetadata"));
-  assert.ok(h.preloader.active, "metadata alone must not allow overlapping transfers");
-  assert.equal(h.tasks.size, 1, "watchdog must stay armed until transfer suspension");
-  h.created[0].dispatchEvent(new Event("suspend"));
-  assert.equal(h.preloader.active, null);
   h.document.hidden = true;
   h.document.dispatchEvent(new Event("visibilitychange"));
   assert.equal(h.primary.preload, "none", "hiding must cancel the unplayed primary transfer");
-  assert.equal(h.created[0].src, "", "hiding must also release retained speculative elements");
+  assert.equal(h.created.length, 0);
   assert.equal(h.tasks.size, 0);
 }
 {
@@ -326,9 +319,9 @@ const sources = Array.from({ length: 8 }, (_, index) => `https://cdn.example/tra
 }
 for (const [options, expected] of [
   [{ connection: { saveData: true } }, "none"],
-  [{ connection: { effectiveType: "2g" } }, "metadata"],
-  [{ connection: { effectiveType: "3g" } }, "metadata"],
-  [{ touch: 1 }, "metadata"],
+  [{ connection: { effectiveType: "2g" } }, "none"],
+  [{ connection: { effectiveType: "3g" } }, "none"],
+  [{ touch: 1 }, "none"],
   [{ online: false }, "none"]
 ]) {
   const h = preloaderHarness(options);
@@ -338,28 +331,22 @@ for (const [options, expected] of [
   assert.equal(h.tasks.size, 0, "constrained networks must not background-load the playlist");
   assert.equal(h.primary.loads, expected === "none" ? 0 : 1);
 }
-{
-  const h = preloaderHarness({ idle: false, connection: Object.assign(new EventTarget(), { effectiveType: "4g" }) });
+for (const value of [
+  "https://cdn.example/song.mp3", "/audio/song.mp3?token=secret",
+  "/api/song-catalog/audio?versionId=private", "/api/drive-catalog/audio?track=public",
+  "/audio/song.mp3?X-Amz-Signature=signed", "/private/unreleased.mp3"
+]) {
+  const h = preloaderHarness();
+  h.preloader.prepare([value, sources[0]]);
+  assert.equal(h.primary.src, "", "unknown-access and signed media must wait for an explicit play");
+  assert.equal(h.primary.loads, 0);
+}
+for (const resource of ["deviceMemory", "hardwareConcurrency"]) {
+  const h = preloaderHarness();
+  h.navigator[resource] = 2;
   h.preloader.prepare(sources);
-  h.loaded();
-  assert.equal(h.run(), 1000, "browsers without idle callbacks must use a delayed fallback");
-  h.created[0].dispatchEvent(new Event("error"));
-  assert.equal(h.created[0].src, "", "failed preloads must be released quietly");
-  h.run();
-  assert.equal(h.run(), 8000, "stalled metadata requests must time out and let the queue continue");
-  h.run();
-  h.document.hidden = true;
-  h.document.dispatchEvent(new Event("visibilitychange"));
-  assert.equal(h.tasks.size, 0, "hidden pages must cancel background requests and timers");
-  assert.equal(h.created.at(-1).src, "");
-  h.document.hidden = false;
-  h.document.dispatchEvent(new Event("visibilitychange"));
-  h.run();
-  h.navigator.connection.saveData = true;
-  h.navigator.connection.dispatchEvent(new Event("change"));
-  assert.equal(h.tasks.size, 0, "enabling data saver must stop in-flight background warming");
-  h.preloader.clear();
-  assert.equal(h.preloader.pending.length, 0);
+  assert.equal(h.primary.preload, "none");
+  assert.equal(h.primary.loads, 0);
 }
 {
   const h = preloaderHarness();
@@ -389,7 +376,7 @@ for (const [options, expected] of [
   assert.equal(player.audio.plays, 2, "later tracks must retain normal playback");
   player.close();
   assert.equal(player.audio.src, "");
-  assert.equal(player.preloader.pending.length, 0, "closing must cancel remaining speculative loads");
+  assert.equal(player.preloader.primarySource, "", "closing must clear speculative selection");
 
   const fallback = new h.window.TestPlayer();
   fallback.renderBar = () => {};
@@ -399,6 +386,29 @@ for (const [options, expected] of [
   fallback.play({ id: "first", src: sources[0] });
   assert.equal(fallback.audio.assignments, 2, "failed preloads must retry on explicit play");
   assert.equal(fallback.audio.plays, 1);
+
+  const failures = [];
+  player.fail = message => failures.push(message);
+  let rejectOld;
+  player.audio.play = () => new Promise((_resolve, reject) => { rejectOld = reject; });
+  player.play({ id: "old", src: sources[0] });
+  const reject = rejectOld;
+  player.audio.play = () => Promise.resolve();
+  player.play({ id: "new", src: sources[1] });
+  reject({ name: "NotSupportedError" });
+  await Promise.resolve();
+  assert.deepEqual(failures, [], "a failed old play attempt must not poison the new track");
+  player.audio.play = () => Promise.reject({ name: "NotAllowedError" });
+  player.resume();
+  await Promise.resolve();
+  assert.match(failures.at(-1), /Tap play again/, "autoplay policy failures retain explicit-play recovery");
+
+  h.window.HaloAudioPreloader = undefined;
+  const unassisted = new h.window.TestPlayer();
+  unassisted.renderBar = () => {};
+  unassisted.syncButtons = () => {};
+  unassisted.play({ id: "first", src: sources[0] });
+  assert.equal(unassisted.audio.plays, 1, "preloader absence must not disable normal HTML playback");
 }
 
 console.log("Music featured player contracts passed.");

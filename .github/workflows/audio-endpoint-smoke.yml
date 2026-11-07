@@ -12,6 +12,11 @@ on:
         description: Optional public HTTPS origin for song diagnostics (for example a deploy preview)
         required: false
         type: string
+      check_cinema:
+        description: Also verify deployed video backdrop, pause and motion-off behavior (diagnose_song only)
+        required: false
+        default: false
+        type: boolean
       drive_track_id:
         description: Approved public Drive catalog track ID
         required: false
@@ -86,6 +91,7 @@ jobs:
         env:
           HALO_AUDIO_PROBE_ORIGIN: ${{ inputs.diagnostic_origin || vars.HALO_AUDIO_PROBE_ORIGIN }}
           HALO_AUDIO_PROBE_SONG_ID: ${{ inputs.song_id }}
+          HALO_AUDIO_PROBE_CINEMA: ${{ inputs.check_cinema && '1' || '0' }}
       - name: Compare native playback with bounded media ranges
         if: ${{ !cancelled() && inputs.diagnose_song }}
         run: node scripts/dreamweaver-live-browser.mjs

@@ -15,6 +15,10 @@ const target = new URL("/dreamweaver/", base);
 target.search = new URLSearchParams({ mix: "owen-anthony-quiet-heart", song: songId, satellite: "dreamweaver" });
 const boundRanges = process.env.HALO_AUDIO_PROBE_BOUND_RANGES === "1";
 const candidatePlayer = process.env.HALO_AUDIO_PROBE_CANDIDATE_PLAYER === "1";
+const checkCinema = process.env.HALO_AUDIO_PROBE_CINEMA === "1";
+if (checkCinema && (candidatePlayer || boundRanges)) {
+  throw new Error("Cinema verification must use unchanged production, not candidate experiments.");
+}
 const replacements = new Map(candidatePlayer ? await Promise.all([
   "dreamweaver/dreamweaver.js", "lib/halo-sentinel.js", "lib/audio-stream-diagnostics.js",
   "dreamweaver-lab/resumable-upload.js",
@@ -152,6 +156,8 @@ try {
       muted: audio?.muted, volume: audio?.volume,
       duration: Number.isFinite(audio?.duration) ? audio.duration : null,
       mediaError: audio?.error ? { code: audio.error.code, message: audio.error.message } : null,
+      videoPaused: document.getElementById("heroReelVideo")?.paused,
+      cinemaControl: Boolean(document.getElementById("cinemaToggle")),
       events: window.__haloMediaEvents || [],
       click: rect?.width ? { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 } : null
     };
@@ -167,6 +173,9 @@ try {
   await evaluate('document.getElementById("playBtn")?.scrollIntoView({ block: "center" })');
   before = await snapshot();
   console.log("Before click:", JSON.stringify(before));
+  if (checkCinema && (!before.cinemaControl || before.videoPaused !== true)) {
+    throw new Error("Deployed cinema control is missing or video started before Play.");
+  }
   if (!before.click) throw new Error("The live page did not expose its Play control.");
   await command("Input.dispatchMouseEvent", { type: "mousePressed", ...before.click, button: "left", clickCount: 1 });
   await command("Input.dispatchMouseEvent", { type: "mouseReleased", ...before.click, button: "left", clickCount: 1 });
@@ -180,6 +189,61 @@ try {
   console.log("Browser observations:", JSON.stringify(observed));
   if (after.paused || !(after.currentTime > .25)) throw new Error("Live playback did not advance after a real Play click.");
   console.log("VERIFIED: Chrome decoded audio and advanced currentTime after a Play click. Physical audibility is not verified.");
+  if (checkCinema) {
+    const cinemaSnapshot = () => evaluate(`(() => {
+      const video = document.getElementById("heroReelVideo");
+      const audio = document.getElementById("showAudio");
+      return {
+        sourcePath: video?.currentSrc ? new URL(video.currentSrc).pathname : "",
+        readyState: video?.readyState, paused: video?.paused, currentTime: video?.currentTime,
+        muted: video?.muted, loop: video?.loop, hidden: video?.hidden,
+        backdrop: document.querySelector(".song-lobby__media")?.classList.contains("is-cinema-playing"),
+        toggle: document.getElementById("cinemaToggle")?.getAttribute("aria-pressed"),
+        audioPaused: audio?.paused, audioTime: audio?.currentTime,
+        status: document.getElementById("heroReelStatus")?.textContent,
+        mediaError: video?.error?.code || null
+      };
+    })()`);
+    const waitCinema = async predicate => {
+      let result;
+      for (let attempt = 0; attempt < 40; attempt++) {
+        result = await cinemaSnapshot();
+        if (predicate(result)) return result;
+        await delay(500);
+      }
+      throw new Error(`Cinema state did not match: ${JSON.stringify(result)}`);
+    };
+    const playing = await waitCinema(value => !value.paused && value.backdrop && value.readyState >= 2);
+    await delay(1000);
+    const advancing = await cinemaSnapshot();
+    console.log("Cinema playing:", JSON.stringify(advancing));
+    if (!advancing.muted || !advancing.loop || advancing.currentTime === playing.currentTime) {
+      throw new Error("Video must be muted, looping and advancing with audio.");
+    }
+    const clickControl = async id => {
+      await evaluate(`document.getElementById(${JSON.stringify(id)})?.scrollIntoView({ block: "center" })`);
+      const point = await evaluate(`(() => {
+        const rect = document.getElementById(${JSON.stringify(id)})?.getBoundingClientRect();
+        return rect?.width ? { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 } : null;
+      })()`);
+      if (!point) throw new Error(`Missing cinema test control: ${id}`);
+      await command("Input.dispatchMouseEvent", { type: "mousePressed", ...point, button: "left", clickCount: 1 });
+      await command("Input.dispatchMouseEvent", { type: "mouseReleased", ...point, button: "left", clickCount: 1 });
+    };
+    await clickControl("playBtn");
+    console.log("Cinema paused:", JSON.stringify(await waitCinema(value => value.audioPaused && value.paused && !value.backdrop)));
+    await clickControl("playBtn");
+    await waitCinema(value => !value.audioPaused && !value.paused && value.backdrop);
+    await clickControl("cinemaToggle");
+    const off = await waitCinema(value => value.toggle === "false" && value.paused && !value.backdrop && !value.audioPaused);
+    await delay(500);
+    if ((await cinemaSnapshot()).audioTime <= off.audioTime) throw new Error("Motion-off interrupted audio.");
+    await clickControl("cinemaToggle");
+    await waitCinema(value => !value.paused && value.backdrop);
+    await command("Emulation.setEmulatedMedia", { features: [{ name: "prefers-reduced-motion", value: "reduce" }] });
+    console.log("Cinema reduced motion:", JSON.stringify(await waitCinema(value => value.paused && !value.backdrop && !value.audioPaused)));
+    console.log("VERIFIED CINEMA: deployed video decoded and advanced; pause and motion controls stopped visuals without blocking audio.");
+  }
 } catch (error) {
   console.error(error.message);
   console.error("Browser observations:", JSON.stringify(observed));

@@ -233,3 +233,11 @@ song, and artwork remains underneath the visual layer. The backdrop control,
 reduced-motion preference, Safe Space and page visibility stop visual playback.
 This reuses existing footage; it does not generate or export a new music film.
 Run `npm run test:dreamweaver-assets` for the cinema lifecycle contracts.
+
+For a deployed check, manually run `audio-endpoint-smoke.yml` with
+`diagnose_song=true`, `check_cinema=true` and a public song ID. The unchanged
+production step checks no video playback before Play, decoded advancing muted
+video after Play, synchronized Pause, motion-off without interrupted audio, and
+reduced-motion suppression. Candidate range/player experiments are not evidence
+that production passed. A failed check reports the observed media state instead
+of marking the deployment healthy.

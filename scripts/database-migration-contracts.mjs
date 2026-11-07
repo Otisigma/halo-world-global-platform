@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { readFile, readdir } from "node:fs/promises";
 
 const read = path => readFile(new URL(`../${path}`, import.meta.url), "utf8");
 const [migration, publicationMigration, driveUrlMigration, generatedDriveUrlMigration, config] = await Promise.all([
@@ -30,5 +30,12 @@ assert.match(migration, /REFERENCES "halo_song_catalog"\("id"\) ON DELETE CASCAD
 assert.doesNotMatch(migration, /(?:^|;\s*)(?:DROP|TRUNCATE|DELETE)\s/im, "reconciliation must not remove existing data or schema objects");
 assert.match(driveUrlMigration, /ADD COLUMN IF NOT EXISTS drive_url/, "the next pending migration must remain retry-safe");
 assert.match(generatedDriveUrlMigration, /^ALTER TABLE "halo_song_versions" ADD COLUMN IF NOT EXISTS "drive_url" text DEFAULT '' NOT NULL;\s*$/, "the generated migration must preserve the drive_url column created by the earlier migration without changing its definition or existing data");
+
+const migrations = await readdir(new URL("../netlify/database/migrations/", import.meta.url));
+assert.ok(!migrations.some(name => name.startsWith("20261103081706")), "the rejected out-of-order migration must not be reintroduced");
+const baseline = "netlify/database/migrations/20261104025701_reconcile_release_schema";
+assert.match(await read(`${baseline}/migration.sql`), /^SELECT 1;$/m, "the reconciled baseline must retain its no-op migration");
+assert.doesNotMatch(await read(`${baseline}/migration.sql`), /(?:^|;\s*)(?:CREATE|ALTER|DROP|TRUNCATE|DELETE)\s/im, "the baseline must not repeat schema changes already covered by earlier migrations");
+JSON.parse(await read(`${baseline}/snapshot.json`));
 
 console.log("Database migration contracts passed");

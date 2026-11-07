@@ -133,7 +133,7 @@ assert.equal(unconfiguredRoutes[0].status, "not_configured");
 
 const [schedule, migration, releaseApi, releaseCatalog] = await Promise.all([
   readFile(new URL("../netlify/functions/halo-master-orchestrator.mjs", import.meta.url), "utf8"),
-  readFile(new URL("../netlify/database/migrations/20261015133000_create_halo_master_orchestrator.sql", import.meta.url), "utf8"),
+  readFile(new URL("../netlify/database/migrations/20261107063000_create_halo_master_orchestrator.sql", import.meta.url), "utf8"),
   readFile(new URL("../netlify/lib/release-conveyor-http.mjs", import.meta.url), "utf8"),
   readFile(new URL("../netlify/functions/release-catalog.mjs", import.meta.url), "utf8"),
 ]);

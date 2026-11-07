@@ -236,6 +236,19 @@ await runCheck("Homepage music experiment markers and tracking", async () => {
   );
   assert.match(
     haloHtml,
+    /id="haloHomepageVideoBackdrop"[\s\S]*id="haloHomepageCinemaToggle"[\s\S]*id="haloHomepageCinemaStatus"/,
+    "halo.html must expose the accessible video backdrop, user toggle, and playback status."
+  );
+  const homepageCinema = await read("halo-home-cinema.js");
+  assert.match(
+    homepageCinema,
+    /createDreamweaverCinema[\s\S]*DEFAULT_CINEMA_LOOP[\s\S]*dreamweaver-homepage-preview/,
+    "the homepage backdrop must reuse the audio-led Dreamweaver cinema controller and shared default loop."
+  );
+  const loop = await readFile(resolve(root, "music-home/loops/obsidian-gold-dust.mp4"));
+  assert.ok(loop.length > 0, "the shared default video backdrop asset must be included in the production site.");
+  assert.match(
+    haloHtml,
     /Variant A \(Primary\): Native HALO artist home/,
     "halo.html must include the native HALO music-home variant marker."
   );

@@ -7,6 +7,7 @@ import { readRecentTrackIds, recordPlayedTrack } from "../lib/catalog-session.js
 import { MIX_PRESETS, createMixSeed, deleteUserPreset, describeMixIntent, normalizeMixSeed, parseMixPrompt, readUserPresets, saveUserPreset } from "../lib/mix-intent.js";
 import { readSavedSongLabAudio } from "../dreamweaver-lab/resumable-upload.js";
 import { inspectAudioStream } from "../lib/audio-stream-diagnostics.js";
+import { createDreamweaverCinema, DEFAULT_CINEMA_LOOP } from "../lib/dreamweaver-cinema.js";
 
 (() => {
   const chapters = [
@@ -712,7 +713,7 @@ import { inspectAudioStream } from "../lib/audio-stream-diagnostics.js";
     return state.videos.find(video => isMp4HeroSource(video?.sourceUrl))
       || state.videos.find(video => safeMediaUrl(video?.embedUrl))
       || state.videos.find(video => safeMediaUrl(video?.sourceUrl))
-      || null;
+      || (DEFAULT_CINEMA_LOOP ? { title: DEFAULT_CINEMA_LOOP.name, sourceUrl: DEFAULT_CINEMA_LOOP.url } : null);
   }
 
   function isMp4HeroSource(value) {
@@ -788,8 +789,8 @@ import { inspectAudioStream } from "../lib/audio-stream-diagnostics.js";
       if (requestNonce !== state.heroReelNonce) return;
       ready = true;
       clearHeroReelTimer();
-      if (elements.heroReelStatus) elements.heroReelStatus.textContent = `${reelLabel} is setting the tone for the lobby.`;
-      elements.heroReelVideo.play?.().catch(() => {});
+      if (elements.heroReelStatus) elements.heroReelStatus.textContent = `${reelLabel} is ready. Press play to start the silent video backdrop.`;
+      cinema?.sync();
     };
     elements.heroReelVideo.onerror = () => fallback(`${reelLabel} is available as a direct reel link.`);
     state.heroReelTimer = window.setTimeout(() => {
@@ -3850,6 +3851,13 @@ import { inspectAudioStream } from "../lib/audio-stream-diagnostics.js";
     void advanceCatalogTrack(Number(button.dataset.catalogSlot), { userInitiated: true });
   });
   renderCatalogPresets();
+  const cinema = elements.heroReelVideo && document.getElementById("cinemaToggle")
+    ? createDreamweaverCinema({
+      audio: elements.audio, video: elements.heroReelVideo,
+      container: document.querySelector(".song-lobby__media"),
+      toggle: document.getElementById("cinemaToggle"),
+      status: elements.heroReelStatus, document, window
+    }) : null;
   elements.audio.addEventListener("playing", handleCatalogPlaying);
   elements.audio.addEventListener("timeupdate", handleCatalogTimeupdate);
   elements.audio.addEventListener("volumechange", updateCatalogPlaybackCards);

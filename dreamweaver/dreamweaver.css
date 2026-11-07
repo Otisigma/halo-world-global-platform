@@ -1091,3 +1091,22 @@ button.dw-lyric__line:hover { color: var(--paper); }
 @media (prefers-reduced-motion: reduce) {
   .dw-readiness__bar { transition: none; }
 }
+.song-lobby__media { position: relative; }
+.song-lobby__media.is-cinema-playing .song-lobby__reel-frame {
+  position: absolute; inset: 0; height: 100%; z-index: 1;
+  pointer-events: none; border-radius: inherit;
+}
+.song-lobby__media.is-cinema-playing .song-lobby__reel-video {
+  width: 100%; height: 100%; object-fit: cover; opacity: .6;
+}
+.song-lobby__media.is-cinema-playing .song-lobby__reel::after {
+  content: ""; display: block; aspect-ratio: 9 / 16; grid-row: 4;
+}
+.song-lobby__media.is-cinema-playing .song-lobby__artwork figcaption,
+.song-lobby__media.is-cinema-playing .song-lobby__reel > :not(.song-lobby__reel-frame) {
+  position: relative; z-index: 2;
+}
+@media (prefers-reduced-motion: reduce) {
+  .song-lobby__reel-frame .song-lobby__reel-video { display: none; }
+}
+.halo-safe-space-mode .song-lobby__reel-frame .song-lobby__reel-video { display: none; }

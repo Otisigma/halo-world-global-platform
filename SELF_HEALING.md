@@ -219,3 +219,17 @@ observed leader starts a new cycle. Unobserved chart changes between visits cann
 be detected by this client-only history. Privacy signals and unavailable storage
 disable automatic presentation. Reduced motion and Safe Space suppress particles;
 the non-modal panel supports dismissal and Escape without stealing focus.
+### Dreamweaver Play-to-cinema
+
+The Song Lobby reuses its connected direct-video reel as a silent, looping
+backdrop while the song plays. If no connected video exists, it reuses the
+ungated Obsidian Gold Dust asset from the shared Music Home loop registry;
+earned-only loops remain gated. External embed previews stay separate and are
+not used as synchronized video backdrops.
+
+Audio remains the playback authority. Pause, buffering, end and audio errors
+stop the backdrop. Missing, failed or browser-blocked video never stops the
+song, and artwork remains underneath the visual layer. The backdrop control,
+reduced-motion preference, Safe Space and page visibility stop visual playback.
+This reuses existing footage; it does not generate or export a new music film.
+Run `npm run test:dreamweaver-assets` for the cinema lifecycle contracts.

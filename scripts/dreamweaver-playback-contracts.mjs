@@ -8,6 +8,7 @@ import * as playback from "../lib/dreamweaver-playback.js";
 import { catalogAudioUrl, generateAutomatedSet, normalizeCatalog } from "../lib/catalog-curator.js";
 import { readRecentTrackIds, recordPlayedTrack } from "../lib/catalog-session.js";
 import * as mixIntent from "../lib/mix-intent.js";
+import { createDreamweaverCinema, DEFAULT_CINEMA_LOOP } from "../lib/dreamweaver-cinema.js";
 
 const script = await readFile(new URL("../dreamweaver/dreamweaver.js", import.meta.url), "utf8");
 const declarations = script.slice(script.indexOf("(() => {"), script.indexOf('  if (document.readyState === "loading")'));
@@ -133,7 +134,7 @@ export function fixture(search, { releases = [release], mixes = [mix], blocked =
   const timers = new Map();
   let timerId = 0;
   const context = {
-    URL, URLSearchParams, console, location, inspectAudioStream: async () => "/api/song-catalog/audio: HTTP 404. Missing audio.", readSavedSongLabAudio: savedAudioReader, DREAMWEAVER_STOREFRONT_MIX_ID, buildDreamweaverStorefrontPath, createLyricInteractionRecorder, catalogAudioUrl, generateAutomatedSet, normalizeCatalog, readRecentTrackIds, recordPlayedTrack, ...mixIntent, ...playback,
+    URL, URLSearchParams, console, location, createDreamweaverCinema, DEFAULT_CINEMA_LOOP, inspectAudioStream: async () => "/api/song-catalog/audio: HTTP 404. Missing audio.", readSavedSongLabAudio: savedAudioReader, DREAMWEAVER_STOREFRONT_MIX_ID, buildDreamweaverStorefrontPath, createLyricInteractionRecorder, catalogAudioUrl, generateAutomatedSet, normalizeCatalog, readRecentTrackIds, recordPlayedTrack, ...mixIntent, ...playback,
     Image: class {
       set src(value) {
         assert.equal(this.crossOrigin, "anonymous", "CORS must be set before requesting campaign artwork");
@@ -141,10 +142,15 @@ export function fixture(search, { releases = [release], mixes = [mix], blocked =
       }
     },
     HTMLMediaElement: { HAVE_CURRENT_DATA: 2 },
-    document: { getElementById: getElement, querySelector: getElement, body: new Element() },
+    document: Object.assign(new EventTarget(), {
+      getElementById: getElement, querySelector: getElement, body: new Element(),
+      documentElement: { classList: { contains: () => false } }
+    }),
     localStorage: storage,
     history: { replaceState: (_state, _title, url) => { location.href = new URL(url, location).href; } },
-    window: { location, clearTimeout: id => timers.delete(id), setTimeout: callback => { timers.set(++timerId, callback); return timerId; }, requestAnimationFrame: callback => callback(), HaloReleaseArtwork: releaseArtwork, HaloAudioPreloader: preloader, HaloSentinel: sentinel },
+    window: { location, matchMedia: () => Object.assign(new EventTarget(), { matches: false }),
+      MutationObserver: class { observe() {} disconnect() {} },
+      clearTimeout: id => timers.delete(id), setTimeout: callback => { timers.set(++timerId, callback); return timerId; }, requestAnimationFrame: callback => callback(), HaloReleaseArtwork: releaseArtwork, HaloAudioPreloader: preloader, HaloSentinel: sentinel },
     fixtures: { releases, mixes, unlock, requests, assetBinding, assetBindingPending, driveCatalog, catalogError }
   };
   if (storageGetterError) Object.defineProperty(context, "localStorage", { get() { throw new Error("SecurityError"); } });

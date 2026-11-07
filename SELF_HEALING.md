@@ -241,3 +241,10 @@ video after Play, synchronized Pause, motion-off without interrupted audio, and
 reduced-motion suppression. Candidate range/player experiments are not evidence
 that production passed. A failed check reports the observed media state instead
 of marking the deployment healthy.
+
+The live cinema check exposed a handoff gap: a linked video watch page could
+replace the native backdrop with an iframe after catalog hydration. Selection
+now prefers direct linked media, then direct artist-archive footage, then the
+ungated shared loop. A watch-page URL is retained as a fallback link, never used
+as native video. Re-rendering already-loaded footage synchronizes immediately
+instead of waiting for a second `loadeddata` event.

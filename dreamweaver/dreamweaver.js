@@ -702,7 +702,7 @@ import { createDreamweaverCinema, DEFAULT_CINEMA_LOOP } from "../lib/dreamweaver
   function preferredHeroVideo() {
     const linkedVideo = state.dreamweaverPayload;
     const linkedUrl = safeMediaUrl(linkedVideo?.videoReelUrl);
-    if (linkedUrl) {
+    if (linkedUrl && isMp4HeroSource(linkedUrl)) {
       const videoId = cleanText(linkedVideo.youtubeId, 20);
       return {
         title: `${state.release?.title || "Release"} reel`,
@@ -711,9 +711,10 @@ import { createDreamweaverCinema, DEFAULT_CINEMA_LOOP } from "../lib/dreamweaver
       };
     }
     return state.videos.find(video => isMp4HeroSource(video?.sourceUrl))
-      || state.videos.find(video => safeMediaUrl(video?.embedUrl))
-      || state.videos.find(video => safeMediaUrl(video?.sourceUrl))
-      || (DEFAULT_CINEMA_LOOP ? { title: DEFAULT_CINEMA_LOOP.name, sourceUrl: DEFAULT_CINEMA_LOOP.url } : null);
+      || (DEFAULT_CINEMA_LOOP ? {
+        title: DEFAULT_CINEMA_LOOP.name, sourceUrl: DEFAULT_CINEMA_LOOP.url,
+        referenceUrl: linkedUrl || safeMediaUrl(state.videos.find(video => safeMediaUrl(video?.sourceUrl))?.sourceUrl)
+      } : null);
   }
 
   function isMp4HeroSource(value) {
@@ -785,13 +786,15 @@ import { createDreamweaverCinema, DEFAULT_CINEMA_LOOP } from "../lib/dreamweaver
       if (requestNonce !== state.heroReelNonce) return;
       showHeroReelFallback(sourceUrl, reelLabel, message);
     };
-    elements.heroReelVideo.onloadeddata = () => {
+    const loaded = () => {
       if (requestNonce !== state.heroReelNonce) return;
       ready = true;
       clearHeroReelTimer();
       if (elements.heroReelStatus) elements.heroReelStatus.textContent = `${reelLabel} is ready. Press play to start the silent video backdrop.`;
       cinema?.sync();
     };
+    elements.heroReelVideo.onloadeddata = loaded;
+    if (elements.heroReelVideo.readyState >= 2) loaded();
     elements.heroReelVideo.onerror = () => fallback(`${reelLabel} is available as a direct reel link.`);
     state.heroReelTimer = window.setTimeout(() => {
       if (requestNonce !== state.heroReelNonce) return;
@@ -1702,7 +1705,8 @@ import { createDreamweaverCinema, DEFAULT_CINEMA_LOOP } from "../lib/dreamweaver
     const sourceUrl = safeMediaUrl(heroVideo?.sourceUrl) || "/radio/";
     const reelLabel = cleanText(heroVideo?.title || `${title} short reel preview`, 120);
     const localAutoplayReel = isMp4HeroSource(sourceUrl) ? sourceUrl : "";
-    if (localAutoplayReel && showMutedHeroReel(localAutoplayReel, reelLabel, artwork.src || chapters[0].image, sourceUrl)) return;
+    if (localAutoplayReel && showMutedHeroReel(localAutoplayReel, reelLabel, artwork.src || chapters[0].image,
+      safeMediaUrl(heroVideo?.referenceUrl) || sourceUrl)) return;
     hideHeroReelVideo();
     if (embedUrl && elements.heroReelPlayer) {
       const requestNonce = ++state.heroReelNonce;

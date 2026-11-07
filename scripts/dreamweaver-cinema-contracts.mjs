@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
+import vm from "node:vm";
 import { createDreamweaverCinema, DEFAULT_CINEMA_LOOP } from "../lib/dreamweaver-cinema.js";
 
 class Target {
@@ -40,6 +41,24 @@ const tick = () => new Promise(resolve => setImmediate(resolve));
 assert.equal(DEFAULT_CINEMA_LOOP.url, "/music-home/loops/obsidian-gold-dust.mp4");
 assert.equal(DEFAULT_CINEMA_LOOP.requiredStems, 0, "shared fallback never uses earned-only assets");
 assert.equal(DEFAULT_CINEMA_LOOP.requiredSplits, 0);
+const playerSource = await readFile(new URL("../dreamweaver/dreamweaver.js", import.meta.url), "utf8");
+const selection = vm.createContext({
+  state: { dreamweaverPayload: {}, videos: [], release: { title: "Track" } },
+  DEFAULT_CINEMA_LOOP, URL,
+  safeMediaUrl: value => typeof value === "string" && value ? new URL(value, "https://halo.test").href : "",
+  cleanText: value => String(value || "")
+});
+vm.runInContext(playerSource.slice(playerSource.indexOf("  function preferredHeroVideo()"),
+  playerSource.indexOf("  function clearHeroReelTimer()")), selection);
+selection.state.dreamweaverPayload = { videoReelUrl: "https://youtube.com/watch?v=clip", youtubeId: "clip" };
+assert.equal(selection.preferredHeroVideo().sourceUrl, DEFAULT_CINEMA_LOOP.url,
+  "a watch-page link cannot displace the playable default backdrop");
+selection.state.videos = [{ sourceUrl: "https://halo.test/artist.mp4", title: "Owned archive" }];
+assert.equal(selection.preferredHeroVideo().sourceUrl, "https://halo.test/artist.mp4",
+  "artist archive footage takes priority over a linked watch page");
+selection.state.dreamweaverPayload.videoReelUrl = "https://halo.test/linked.webm";
+assert.equal(selection.preferredHeroVideo().sourceUrl, "https://halo.test/linked.webm",
+  "direct linked video is preferred");
 const f = fixture();
 assert.equal(f.video.plays, 0, "video never starts on arrival");
 f.audio.paused = false; f.audio.emit("playing"); await tick();

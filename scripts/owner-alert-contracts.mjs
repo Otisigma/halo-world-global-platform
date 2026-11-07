@@ -9,8 +9,8 @@ import { createListeningEventsHandler } from "../netlify/lib/listening-events.mj
 
 const read = path => readFile(new URL(`../${path}`, import.meta.url), "utf8");
 const [migration, streamMigration, route, relationshipEvent, identity, streamUi, telemetryUi] = await Promise.all([
-  read("netlify/database/migrations/20261101100000_stripe_purchase_events.sql"),
-  read("netlify/database/migrations/20261103090000_listening_owner_alerts.sql"),
+  read("netlify/database/migrations/20261107063100_stripe_purchase_events.sql"),
+  read("netlify/database/migrations/20261107063200_listening_owner_alerts.sql"),
   read("netlify/functions/stripe-webhook.mjs"),
   read("netlify/functions/relationship-event.mjs"),
   read("identity.js"),

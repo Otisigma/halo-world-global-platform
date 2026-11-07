@@ -32,6 +32,8 @@ assert.match(driveUrlMigration, /ADD COLUMN IF NOT EXISTS drive_url/, "the next 
 assert.match(generatedDriveUrlMigration, /^ALTER TABLE "halo_song_versions" ADD COLUMN IF NOT EXISTS "drive_url" text DEFAULT '' NOT NULL;\s*$/, "the generated migration must preserve the drive_url column created by the earlier migration without changing its definition or existing data");
 
 const migrations = await readdir(new URL("../netlify/database/migrations/", import.meta.url));
+assert.ok(!migrations.some(name => name.startsWith("20261015133000")), "the rejected orchestrator migration version must not be reintroduced");
+assert.ok(migrations.includes("20261107063000_create_halo_master_orchestrator.sql"), "the orchestrator migration must retain its corrected November timestamp");
 assert.ok(!migrations.some(name => name.startsWith("20261103081706")), "the rejected out-of-order migration must not be reintroduced");
 const baseline = "netlify/database/migrations/20261104025701_reconcile_release_schema";
 assert.match(await read(`${baseline}/migration.sql`), /^SELECT 1;$/m, "the reconciled baseline must retain its no-op migration");

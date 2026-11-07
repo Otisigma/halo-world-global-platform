@@ -248,3 +248,11 @@ now prefers direct linked media, then direct artist-archive footage, then the
 ungated shared loop. A watch-page URL is retained as a fallback link, never used
 as native video. Re-rendering already-loaded footage synchronizes immediately
 instead of waiting for a second `loadeddata` event.
+
+The unchanged-production cinema step passed for Quiet Heart on 2026-11-07:
+native Chrome decoded the shared MP4 (`readyState: 4`), advanced its playhead,
+kept it muted/looping, paused both media on Pause, and kept audio advancing with
+motion switched off and reduced motion enabled. This is one browser/route
+observation, not proof for all browsers or sustained reliability. Cinema mode
+skips the separate candidate-player experiment so its outcome reflects only
+unchanged production behavior.

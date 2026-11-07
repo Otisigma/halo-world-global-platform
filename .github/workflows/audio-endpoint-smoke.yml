@@ -93,7 +93,7 @@ jobs:
           HALO_AUDIO_PROBE_SONG_ID: ${{ inputs.song_id }}
           HALO_AUDIO_PROBE_CINEMA: ${{ inputs.check_cinema && '1' || '0' }}
       - name: Compare native playback with bounded media ranges
-        if: ${{ !cancelled() && inputs.diagnose_song }}
+        if: ${{ !cancelled() && inputs.diagnose_song && !inputs.check_cinema }}
         run: node scripts/dreamweaver-live-browser.mjs
         env:
           HALO_AUDIO_PROBE_ORIGIN: ${{ inputs.diagnostic_origin || vars.HALO_AUDIO_PROBE_ORIGIN }}

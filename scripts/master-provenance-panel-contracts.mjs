@@ -332,6 +332,18 @@ assert.match(panel, /The file is never uploaded/);
 assert.match(panel, /const result = await controller\.compareFile[\s\S]*?if \(!mounted\) return;/, "a disposed panel cannot publish a late file result into a newly mounted panel");
 assert.match(panel, /MAX_LOCAL_COMPARISON_BYTES = 100 \* 1024 \* 1024/);
 assert.doesNotMatch(panel, /HALO_PROVENANCE_KEYS|HALO_PROVENANCE_ACTIVE_KEY/);
+assert.doesNotMatch(panel, /site operator|redeploy|database migration|docs\/master-provenance-foundation/);
+assert.match(panel, /query\("\.master-provenance-panel__actions"\)\.hidden=setupUnavailable/);
+assert.match(panel, /query\("\.master-provenance-panel__file"\)\.hidden=setupUnavailable/);
+{
+  const { provenanceFailure } = await import("../netlify/lib/master-provenance-errors.mjs");
+  for (const code of ["provenance_keys_missing", "42P01", "ECONNRESET"]) {
+    const result = provenanceFailure({ code });
+    assert.doesNotMatch(result.message, /HALO_|operator|migration|redeploy|docs\//);
+    assert.match(result.message, /do not need to upload it again/);
+    assert.match(result.message, /No verified stamp|No verification result/);
+  }
+}
 assert.match(css, /:focus-visible/);
 assert.match(css, /@media \(max-width: 600px\)/);
 assert.match(css, /min-height: 44px/);

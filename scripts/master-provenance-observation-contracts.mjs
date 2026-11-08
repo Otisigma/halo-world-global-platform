@@ -75,7 +75,7 @@ test("automatic uploads observe actual storage, reuse retries, and report failur
   assert.equal((await run()).result, "stale");
   state.changed = false;
   assert.equal((await run({ loadProvenanceKeys: () => { throw new Error("secret"); } })).result, "unavailable");
-  assert.deepEqual(state.logs, ['{"event":"master_upload_observation_failed"}']);
+  assert.deepEqual(state.logs, ['{"event":"master_upload_observation_failed","code":"provenance_unavailable"}']);
   state.row = null;
   assert.equal((await run()).result, "not_applicable");
   state.row = { ...row };
@@ -245,7 +245,7 @@ test("endpoint authenticates, limits, detects stale sources and verifies observe
   state.limited = false;
   assert.equal((await handler(request("observe"))).status, 503);
   state.fail = false;
-  assert.deepEqual(state.logged, ['{"event":"master_provenance_failed","action":"list"}', '{"event":"master_provenance_failed","action":"observe"}']);
+  assert.deepEqual(state.logged, ['{"event":"master_provenance_failed","action":"list","code":"provenance_unavailable"}', '{"event":"master_provenance_failed","action":"observe","code":"provenance_unavailable"}']);
 });
 
 test("Netlify adapter is a thin wiring layer over the tested handler", async () => {
@@ -335,5 +335,5 @@ test("manifest returns only fields from an authenticated, exactly scoped record"
 
   state.fail = true;
   assert.equal((await manifest()).status, 503);
-  assert.deepEqual(state.logged, ['{"event":"master_provenance_failed","action":"manifest"}']);
+  assert.deepEqual(state.logged, ['{"event":"master_provenance_failed","action":"manifest","code":"provenance_unavailable"}']);
 });

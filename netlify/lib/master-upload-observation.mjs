@@ -79,8 +79,8 @@ export async function safeObserveUploadedMaster(db, owner, songId, versionId, au
       message: "Master saved; automatic byte observation was rate-limited. Wait a minute, then use Record observation in the master panel." };
     return await recordMasterObservation(db, owner, songId, versionId, row, source, keyring, deps);
   } catch (error) {
-    deps.logError(JSON.stringify({ event: "master_upload_observation_failed" }));
     const failure = provenanceFailure(error);
+    deps.logError(JSON.stringify({ event: "master_upload_observation_failed", code: failure.code }));
     return { result: "unavailable", ...failure };
   }
 }

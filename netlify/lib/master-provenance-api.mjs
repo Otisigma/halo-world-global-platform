@@ -121,7 +121,11 @@ export function createMasterProvenanceHandler(deps) {
     if (getAction !== null && getAction !== "manifest") return json({ message: "Invalid observation request" }, 400);
     const logged = getAction === "manifest" ? "manifest" : "list";
     try { return getAction === "manifest" ? await observationManifest(request, deps) : await listObservations(request, deps); }
-    catch (error) { deps.logError(JSON.stringify({ event: "master_provenance_failed", action: logged })); return json(provenanceFailure(error), 503); }
+    catch (error) {
+      const failure=provenanceFailure(error);
+      deps.logError(JSON.stringify({ event: "master_provenance_failed", action: logged, code: failure.code }));
+      return json(failure, 503);
+    }
   }
   if (request.method !== "POST") return Response.json({ message: "Method not allowed" }, { status: 405, headers: { Allow: "GET, POST", "Cache-Control": "no-store" } });
   try { deps.verifyRequestOrigin(request); } catch { return json({ message: "Cross-origin requests are not accepted" }, 403); }
@@ -185,8 +189,9 @@ export function createMasterProvenanceHandler(deps) {
     return json({ observationId, result: matches ? "observed_bytes_match" : "observed_bytes_differ", limitation });
   } catch (error) {
     // Fixed event only: never log storage URLs, keys, user identifiers, or upstream error text.
-    deps.logError(JSON.stringify({ event: "master_provenance_failed", action: action === "verify" ? "verify" : "observe" }));
-    return json(provenanceFailure(error), 503);
+    const failure=provenanceFailure(error);
+    deps.logError(JSON.stringify({ event: "master_provenance_failed", action: action === "verify" ? "verify" : "observe", code: failure.code }));
+    return json(failure, 503);
   }
 }
   };

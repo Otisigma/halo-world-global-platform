@@ -60,7 +60,9 @@
     "test:master-orchestrator": "node scripts/halo-master-orchestrator-contracts.mjs",
     "test:master-provenance-homepage": "node scripts/master-provenance-homepage-contracts.mjs",
     "test:master-provenance": "node scripts/master-provenance-contracts.mjs && node --test scripts/master-provenance-observation-contracts.mjs && node scripts/master-provenance-panel-contracts.mjs && node scripts/master-provenance-homepage-contracts.mjs",
-    "test:video-discovery": "node scripts/video-discovery-contracts.mjs"
+    "test:video-discovery": "node scripts/video-discovery-contracts.mjs",
+    "test:retained-master": "node --test scripts/retained-master-contracts.mjs",
+    "test:retained-master:db": "node scripts/retained-master-db-contracts.mjs"
   },
   "dependencies": {
     "@netlify/blobs": "^10.7.12",

@@ -306,6 +306,11 @@ function renderMasterProvenance(song){
     masterProvenancePanel=mountMasterProvenancePanel(root,{
       songId:song.id,versionId:master.id,songTitle:song.title,versionLabel:master.label||"Sale master",api:masterProvenanceApi,
     });
+    const retainedLink=document.createElement("a");
+    retainedLink.className="master-provenance-panel__button";
+    retainedLink.href=`/provenance/verify/?song=${encodeURIComponent(song.id)}&version=${encodeURIComponent(master.id)}`;
+    retainedLink.textContent="Retained snapshots, lineage & public verification";
+    root.append(retainedLink);
   }else{
     const context=root.querySelector("[data-provenance-context]");
     if(context)context.textContent=[song.title,master.label||"Sale master"].join(" · ");

@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Verify a master snapshot | HALO</title>
+  <meta name="description" content="Inspect HALO signed retained master snapshots and compare files locally.">
+  <link rel="stylesheet" href="/provenance/verify/verify.css">
+  <script type="module" src="/identity.js"></script>
+  <script type="module" src="/provenance/verify/verify.js"></script>
+</head>
+<body>
+  <header><a href="/halo">HALO Music World</a><nav><a href="/song-catalog/">My catalog</a><a href="/provenance/">About provenance</a></nav></header>
+  <main>
+    <p class="eyebrow">01 / Master verification</p>
+    <h1>The record behind<br>the recording.</h1>
+    <p>Signed snapshots preserve an exact sequence of bytes under storage-provider retention. They do not prove copyright ownership, an original DAW session or an independently witnessed creation time.</p>
+    <section id="ownerWorkspace" hidden aria-labelledby="captureTitle">
+      <h2 id="captureTitle">Owner workspace</h2>
+      <p>Sign in through the catalog. Capture is limited to the active sale master. Uploads automatically attempt capture only when retained storage and signing are enabled.</p>
+      <form id="captureForm">
+        <label>Song ID<input name="songId" id="songId" required></label>
+        <label>Master version ID<input name="versionId" id="versionId" required></label>
+        <label>Parent snapshot ID (optional)<input name="parentRecordId" placeholder="Existing snapshot you own"></label>
+        <label>Relationship<select name="relationship"><option value="original">Original snapshot</option><option value="revision">Revision</option><option value="remix">Remix</option><option value="edit">Edit</option></select></label>
+        <p>Parent relationships are creator-declared, not proof that a remix was derived from that source. Existing snapshot lineage cannot be rewritten through a retry.</p>
+        <button type="submit">Capture retained snapshot</button><button type="button" id="loadHistory">Refresh snapshots</button>
+      </form>
+      <ol id="history"></ol>
+    </section>
+    <section aria-labelledby="recordTitle">
+      <h2 id="recordTitle">Inspect a snapshot</h2>
+      <form id="recordForm"><label>Snapshot record ID<input id="recordId" required></label><button type="submit">Load signed record</button></form>
+      <article id="stamp" hidden>
+        <img src="/assets/halo-master-provenance.png" width="200" height="133" alt="HALO provenance artwork">
+        <h3>Signature verified</h3>
+        <p>Verification uses the public key published by this HALO domain. For independent verification, retain a trusted key fingerprint and the signed record separately. A key published alongside a forged record is not independent evidence.</p>
+        <dl id="facts"></dl>
+        <button type="button" id="downloadRecord">Download signed record</button>
+        <button type="button" id="verifyStored">Owner: recheck retained bytes and retention</button>
+        <button type="button" id="shareRecord">Owner: publish this record</button>
+        <button type="button" id="unshareRecord">Owner: stop sharing</button>
+        <p>Publishing exposes this record's song/version IDs, digest, dates and declared parent relationship—not private media or account identity. Previously downloaded records cannot be recalled.</p>
+        <a id="publicLink" hidden>Open shared verification page</a>
+        <label>Compare a local file (up to 100 MiB)<input type="file" id="localFile" accept="audio/*,.wav,.flac"></label>
+        <button type="button" id="compareFile">Compare exact file bytes</button>
+        <p>Your file never leaves this browser. Re-encoding or metadata edits change the digest. A matching file is not evidence of legal ownership.</p>
+      </article>
+    </section>
+    <p id="status" role="status" aria-live="polite">Load a shared record or open this workspace from your song catalog. No verification has been performed.</p>
+    <p>Retention expires on the recorded date. The browser verifies a signature, not storage availability or current retention. Original upload sources and playback remain mutable; chunk capture can combine concurrent writes.</p>
+  </main>
+</body>
+</html>

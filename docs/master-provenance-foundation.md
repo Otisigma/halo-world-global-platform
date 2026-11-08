@@ -59,6 +59,11 @@ intended file.
 
 ## Work still required
 
+A separate [retained snapshot implementation](retained-master-snapshots.md) now
+provides opt-in archival copies and Ed25519 signatures. It does not upgrade
+existing observations or make their original sources immutable. Its configuration,
+deployment prerequisites and explicit source-consistency limitations are separate.
+
 Immutable versioned storage or another proven mechanism is needed to bind a
 read and persisted record to one stable master under concurrent writes, followed
 by safe automatic upload-time integration and retry semantics. Real deployment

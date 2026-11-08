@@ -104,7 +104,7 @@ function objectLocation(config, key) {
  * Creates an AWS SigV4 presigned URL for an S3-compatible object.
  * PUT URLs also sign Content-Type so the browser must upload exactly the validated type.
  */
-export function presignObjectUrl({ config, method = "GET", key, contentType = "", expiresIn = MASTER_UPLOAD_URL_TTL_SECONDS, now = new Date() }) {
+export function presignObjectUrl({ config, method = "GET", key, contentType = "", expiresIn = MASTER_UPLOAD_URL_TTL_SECONDS, now = new Date(), queryParams = {}, extraHeaders = {} }) {
   if (!config) throw new Error("Direct storage is not configured");
   const verb = String(method).toUpperCase();
   const amzDate = now.toISOString().replace(/[:-]|\.\d{3}/g, "");
@@ -113,6 +113,10 @@ export function presignObjectUrl({ config, method = "GET", key, contentType = ""
   const { origin, host, path } = objectLocation(config, key);
   const headers = { host };
   if (verb === "PUT" && contentType) headers["content-type"] = contentType;
+  for (const [name, value] of Object.entries(extraHeaders)) {
+    if (!/^x-amz-[a-z0-9-]+$/.test(name) || typeof value !== "string" || /[\r\n]/.test(value)) throw new Error("Invalid signed storage header");
+    headers[name] = value;
+  }
   const signedHeaders = Object.keys(headers).sort().join(";");
   const query = {
     "X-Amz-Algorithm": "AWS4-HMAC-SHA256",
@@ -121,6 +125,10 @@ export function presignObjectUrl({ config, method = "GET", key, contentType = ""
     "X-Amz-Expires": String(Math.max(1, Math.min(604800, Math.round(expiresIn)))),
     "X-Amz-SignedHeaders": signedHeaders,
   };
+  for (const [name, value] of Object.entries(queryParams)) {
+    if (name !== "versionId" || typeof value !== "string" || !value || value === "null") throw new Error("Invalid pinned storage version");
+    query[name] = value;
+  }
   const canonicalQuery = Object.keys(query).sort().map(name => `${encodeRfc3986(name)}=${encodeRfc3986(query[name])}`).join("&");
   const canonicalHeaders = Object.keys(headers).sort().map(name => `${name}:${String(headers[name]).trim()}\n`).join("");
   const canonicalRequest = [verb, path, canonicalQuery, canonicalHeaders, signedHeaders, "UNSIGNED-PAYLOAD"].join("\n");

@@ -17,7 +17,8 @@ import {
   storeAudioChunk,
 } from "../lib/chunked-audio-upload.mjs";
 import { loadUploadPreflight, safeUploadReadiness } from "../lib/upload-readiness.mjs";
-import { safeCaptureRegisteredMaster, retainedMasterPlayback } from "../lib/retained-master-service.mjs";
+import { retainedMasterPlayback } from "../lib/retained-master-service.mjs";
+import { processUploadedMaster } from "../lib/master-upload-observation.mjs";
 
 const audioStore = getStore({ name: "halo-song-catalog-audio", consistency: "strong" });
 const radioAudioStore = getStore({ name: "halo-radio-submissions", consistency: "strong" });
@@ -235,10 +236,11 @@ async function finalizeUpload(payload: Record<string, unknown>, db: Awaited<Retu
   // Retrying a finalize whose response was lost returns the same confirmation without rewriting anything.
   if (version.audio_blob_prefix === prefix) {
     const readiness = await safeUploadReadiness(db, ownerMemberId, songId, { persisted: true });
-    const provenance = await safeCaptureRegisteredMaster(db, ownerMemberId, songId, versionId);
+    const { observation, provenance } = await processUploadedMaster(db, ownerMemberId, songId, versionId, audioStore);
     return json({ message: "Audio is persisted and locked into HALO storage."
+      + (observation.result === "not_applicable" ? "" : ` ${observation.message}`)
       + (provenance.state === "ready" ? " Signed retained snapshot recorded." : ` ${provenance.message || "Retained capture was not confirmed."}`),
-      songId, versionId, audioUrl, persisted: true, lockedIn: true, alreadyFinalized: true, readiness, provenance });
+      songId, versionId, audioUrl, persisted: true, lockedIn: true, alreadyFinalized: true, readiness, provenance, observation });
   }
   const status = await inspectAudioUpload(audioStore, { prefix, chunkCount, byteSize });
   if (!status.complete) {
@@ -264,9 +266,10 @@ async function finalizeUpload(payload: Record<string, unknown>, db: Awaited<Retu
   await removeStoredMaster(version.audio_storage_key).catch(() => undefined);
   // runDreamweaverReview already ran the conveyor and publication reconcile, so this is the live receipt.
   const readiness = await safeUploadReadiness(db, ownerMemberId, songId, { persisted: true });
-  const provenance = await safeCaptureRegisteredMaster(db, ownerMemberId, songId, versionId);
+  const { observation, provenance } = await processUploadedMaster(db, ownerMemberId, songId, versionId, audioStore);
   return json({
     message: "Audio is persisted and locked into HALO storage."
+      + (observation.result === "not_applicable" ? "" : ` ${observation.message}`)
       + (provenance.state === "ready" ? " Signed retained snapshot recorded." : ` ${provenance.message || "Retained capture was not confirmed."}`),
     songId,
     versionId,
@@ -276,6 +279,7 @@ async function finalizeUpload(payload: Record<string, unknown>, db: Awaited<Retu
     confirmedAt: new Date().toISOString(),
     readiness,
     provenance,
+    observation,
   });
 }
 

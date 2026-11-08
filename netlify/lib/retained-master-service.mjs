@@ -26,7 +26,7 @@ export function authenticatedSnapshot(row, keys, config) {
 }
 
 export async function captureRegisteredMaster({ db, owner, songId, versionId, parentRecordId = "", relationship = "original",
-  config, keys, blobStore, sourceStorage, fetchImpl = fetch, uuid = randomUUID, now = () => new Date() }) {
+  config, keys, blobStore, sourceStorage, fetchImpl = fetch, uuid = randomUUID, now = () => new Date(), onObserved }) {
   const row = await ownedSnapshotVersion(db, owner, songId, versionId);
   if (!row) return { state: "not_eligible", message: "No active sale master is available for retained capture." };
   const source = describeMasterSource(row, owner, songId, versionId);
@@ -63,6 +63,8 @@ export async function captureRegisteredMaster({ db, owner, songId, versionId, pa
     `;
     if (existing[0]?.status === "ready") {
       const envelope = authenticatedSnapshot(existing[0], keys, config);
+      if (onObserved) await onObserved({ sourceId: source.id, sha256: envelope.record.sha256,
+        byteSize: envelope.record.byteSize, createdAt: envelope.record.createdAt });
       return { state: "ready", recordId: envelope.record.recordId, alreadyCaptured: true, limitation: SNAPSHOT_LIMITATION };
     }
     return { state: "pending", message: "Snapshot capture is in progress. Retry after its lease expires if interrupted." };
@@ -107,6 +109,8 @@ export async function captureRegisteredMaster({ db, owner, songId, versionId, pa
         ) RETURNING id
     `;
     if (!saved.length) throw new Error("Master registration changed or capture lease was superseded");
+    if (onObserved) await onObserved({ sourceId: source.id, sha256: envelope.record.sha256,
+      byteSize: envelope.record.byteSize, createdAt: envelope.record.createdAt });
     return { state: "ready", recordId: job.id, limitation: SNAPSHOT_LIMITATION };
   } catch (error) {
     await db.sql`
@@ -157,12 +161,12 @@ export async function retainedMasterPlayback(db, authorizedVersionId, authorized
   return pinnedSnapshotPlayback(records[0], config, loadPublicSnapshotKeys(env), method);
 }
 
-export async function safeCaptureRegisteredMaster(db, owner, songId, versionId) {
+export async function safeCaptureRegisteredMaster(db, owner, songId, versionId, onObserved) {
   try {
     const config = retainedMasterConfig();
     if (!config) return { state: "disabled", message: "Retained snapshot capture is not enabled. Upload storage remains mutable." };
     const keys = loadSnapshotKeys();
-    return await captureRegisteredMaster({ db, owner, songId, versionId, config, keys,
+    return await captureRegisteredMaster({ db, owner, songId, versionId, config, keys, onObserved,
       blobStore: getStore({ name: "halo-song-catalog-audio", consistency: "strong" }), sourceStorage: directUploadConfig() });
   } catch {
     console.error(JSON.stringify({ event: "retained_master_capture_failed" }));

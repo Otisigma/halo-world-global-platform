@@ -84,11 +84,18 @@ export async function hashMasterBytes(bytes, { expectedBytes, maxBytes }) {
  */
 export async function sealMasterBytes({ bytes, expectedBytes, maxBytes, ownerId, songId, versionId, sourceType, sourceId, createdAt, keyring }) {
   const keyVersion = keyring?.activeVersion;
-  const key = getKey(keyring, keyVersion);
+  getKey(keyring, keyVersion);
   const record = { schemaVersion: 1, keyVersion, ownerId, songId, versionId, sourceType, sourceId, byteSize: expectedBytes, sha256: "0".repeat(64), createdAt };
   if (!validRecord(record)) throw new Error("Invalid provenance record");
   const digest = await hashMasterBytes(bytes, { expectedBytes, maxBytes });
-  record.sha256 = digest.sha256;
+  return sealObservedDigest({ ...record, sha256: digest.sha256 }, keyring);
+}
+
+// Server-only: callers must authenticate the storage observation, never use a client digest.
+export function sealObservedDigest(fields, keyring) {
+  const record = { ...fields, keyVersion: keyring?.activeVersion };
+  const key = getKey(keyring, record.keyVersion);
+  if (!validRecord(record)) throw new Error("Invalid provenance record");
   const mac = createHmac("sha256", key).update(encodedRecord(record)).digest("hex");
   return { record, mac };
 }

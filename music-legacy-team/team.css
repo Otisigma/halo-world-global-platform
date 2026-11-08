@@ -1,0 +1,1 @@
+.team-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}.team-grid article{margin:0}.paid-choice{display:flex;align-items:flex-start;gap:12px}.paid-choice input{width:auto;min-height:auto;margin:6px 0}.result-text{white-space:pre-wrap;overflow-wrap:anywhere}#sendStatus{white-space:pre-wrap}@media(max-width:800px){.team-grid{grid-template-columns:1fr}}

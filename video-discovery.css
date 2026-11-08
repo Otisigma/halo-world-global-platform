@@ -1,0 +1,22 @@
+halo-video-discovery { display: block; min-width: 0; }
+.video-discovery { margin: 28px auto; padding: clamp(20px, 4vw, 42px); max-width: 1280px; border: 1px solid #b89152; border-radius: 24px; background: #0c0d12; color: #f7f1e5; font-family: system-ui, sans-serif; }
+.video-discovery h2 { font-size: clamp(25px, 4vw, 44px); line-height: 1.15; margin: 12px 0; }
+.video-discovery h3 { font-size: 22px; margin: 12px 0; }
+.video-discovery p { color: #c7c5ce; line-height: 1.65; }
+.video-discovery .video-discovery__kicker { color: #f4cb83; text-transform: uppercase; font-size: 12px; letter-spacing: .12em; }
+.video-discovery a, .video-discovery button { display: inline-block; min-height: 44px; margin: 6px 8px 6px 0; padding: 12px 16px; border: 1px solid #b89152; border-radius: 8px; color: #ffe2af; background: #181820; font: inherit; text-align: left; cursor: pointer; }
+.video-discovery a:focus-visible, .video-discovery button:focus-visible { outline: 3px solid #fff; outline-offset: 4px; }
+.video-discovery button:disabled { opacity: .55; cursor: not-allowed; }
+.video-discovery__feature { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; align-items: center; margin: 24px 0; }
+.video-discovery__visual { position: relative; aspect-ratio: 16 / 9; overflow: hidden; border: 1px solid #706049; border-radius: 12px; background: #08090d; }
+.video-discovery video { width: 100%; height: 100%; object-fit: cover; }
+.video-discovery__caption { position: absolute; bottom: 0; left: 0; right: 0; padding: 24px 16px 14px; background: linear-gradient(transparent, #000 45%); color: white; font-size: clamp(18px, 3vw, 28px); font-weight: 800; line-height: 1.2; pointer-events: none; }
+.video-discovery__caption small { display: block; font-size: 11px; color: #ffe2af; margin-top: 7px; }
+.video-discovery__themes { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin: 24px 0; }
+.video-discovery__themes a { margin: 0; }
+.video-discovery__themes span { display: block; color: #c7c5ce; font-size: 12px; margin-top: 6px; }
+.video-discovery__themes [aria-current] { background: #3b2d19; border-color: #ffe2af; }
+.video-discovery__sequence ol { padding-left: 24px; }
+.video-discovery__sequence li { margin: 8px 0; }
+@media (max-width: 700px) { .video-discovery__feature { grid-template-columns: 1fr; } .video-discovery__themes { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 380px) { .video-discovery__themes { grid-template-columns: 1fr; } }

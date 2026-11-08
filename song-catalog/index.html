@@ -205,6 +205,14 @@
               <p id="pushToShopStatus" role="status" aria-live="polite">Save any edits before pushing this track.</p>
               <p id="archiveSongStatus" role="status" aria-live="polite">Archiving hides this song from your active catalog, the public shop, charts, and new radio play. Analytics, history, and uploaded files are kept; nothing is deleted.</p>
               <input id="songId" type="hidden">
+              <div class="catalog-identity">
+                <div class="catalog-identity-heading"><span>Song ID (SID)</span>
+                  <details class="catalog-identity-help"><summary aria-label="About the catalog song ID" aria-describedby="catalogSongIdHelp">i</summary>
+                    <div id="catalogSongIdHelp"><strong>Your song's catalog reference.</strong><p>The SID identifies this song and connects its versions. It is not a snapshot ID or a signing key. To inspect a signed snapshot, use the snapshot record ID from its history. Opening verification from this catalog fills in the song and master version for you; no audio re-upload is needed.</p></div>
+                  </details>
+                </div>
+                <input id="catalogSongId" type="text" readonly aria-label="Catalog song ID" aria-describedby="catalogSongIdHelp">
+              </div>
               <div class="field-grid">
                 <label><span>Artist</span><input id="artistName" required maxlength="120"></label>
                 <label><span>Song title</span><input id="title" required maxlength="160"></label>

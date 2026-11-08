@@ -63,7 +63,8 @@ export function createRetainedMasterHandler(deps) {
         return json({ shared: false, recordId });
       }
       const config = deps.config();
-      if (!config) return json({ message: "Retained snapshot storage is not enabled. No immutable stamp is available." }, 503);
+      if (!config) return json({ code: "retained_storage_unavailable",
+        message: "Retained snapshot verification is currently unavailable. No retained stamp is confirmed. Your uploaded audio is unaffected; uploading again will not enable archival verification." }, 503);
       if (request.method === "POST" && action === "capture") {
         if (Number(request.headers.get("content-length")) > 4096) return json({ message: "Capture payload is too large" }, 413);
         const text = await request.text();

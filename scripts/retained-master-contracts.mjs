@@ -283,6 +283,14 @@ test("both upload paths wire explicit capture results; satellite shares one ledg
   assert.match(markup, /Neither ID is a signing key/);
   assert.match(markup, /\?record=SNAPSHOT_ID/);
   assert.match(markup, /Use the snapshot ID, not the song ID/);
+  assert.match(markup, /aria-describedby="retentionHelp"/);
+  assert.match(markup, /uploading again will not enable it/);
+  const catalog = await readFile(new URL("../song-catalog/index.html", import.meta.url), "utf8");
+  const catalogClient = await readFile(new URL("../song-catalog/song-catalog.js", import.meta.url), "utf8");
+  assert.match(catalog, /Song ID \(SID\)/);
+  assert.match(catalog, /id="catalogSongId" type="text" readonly/);
+  assert.match(catalog, /aria-describedby="catalogSongIdHelp"/);
+  assert.match(catalogClient, /setValue\("#catalogSongId",song\?\.id\|\|""\)/);
   assert.match(styles, /width: 44px; height: 44px/);
   assert.match(styles, /@media \(max-width: 600px\)/);
   for (const path of ["netlify/functions/song-catalog-master-upload.ts", "netlify/functions/song-catalog-audio.ts"]) {

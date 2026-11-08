@@ -17,6 +17,7 @@ import {
   storeAudioChunk,
 } from "../lib/chunked-audio-upload.mjs";
 import { loadUploadPreflight, safeUploadReadiness } from "../lib/upload-readiness.mjs";
+import { safeCaptureRegisteredMaster, retainedMasterPlayback } from "../lib/retained-master-service.mjs";
 
 const audioStore = getStore({ name: "halo-song-catalog-audio", consistency: "strong" });
 const radioAudioStore = getStore({ name: "halo-radio-submissions", consistency: "strong" });
@@ -234,7 +235,10 @@ async function finalizeUpload(payload: Record<string, unknown>, db: Awaited<Retu
   // Retrying a finalize whose response was lost returns the same confirmation without rewriting anything.
   if (version.audio_blob_prefix === prefix) {
     const readiness = await safeUploadReadiness(db, ownerMemberId, songId, { persisted: true });
-    return json({ message: "Audio is persisted and locked into HALO storage.", songId, versionId, audioUrl, persisted: true, lockedIn: true, alreadyFinalized: true, readiness });
+    const provenance = await safeCaptureRegisteredMaster(db, ownerMemberId, songId, versionId);
+    return json({ message: "Audio is persisted and locked into HALO storage."
+      + (provenance.state === "ready" ? " Signed retained snapshot recorded." : ` ${provenance.message || "Retained capture was not confirmed."}`),
+      songId, versionId, audioUrl, persisted: true, lockedIn: true, alreadyFinalized: true, readiness, provenance });
   }
   const status = await inspectAudioUpload(audioStore, { prefix, chunkCount, byteSize });
   if (!status.complete) {
@@ -260,8 +264,10 @@ async function finalizeUpload(payload: Record<string, unknown>, db: Awaited<Retu
   await removeStoredMaster(version.audio_storage_key).catch(() => undefined);
   // runDreamweaverReview already ran the conveyor and publication reconcile, so this is the live receipt.
   const readiness = await safeUploadReadiness(db, ownerMemberId, songId, { persisted: true });
+  const provenance = await safeCaptureRegisteredMaster(db, ownerMemberId, songId, versionId);
   return json({
-    message: "Audio is persisted and locked into HALO storage.",
+    message: "Audio is persisted and locked into HALO storage."
+      + (provenance.state === "ready" ? " Signed retained snapshot recorded." : ` ${provenance.message || "Retained capture was not confirmed."}`),
     songId,
     versionId,
     audioUrl,
@@ -269,6 +275,7 @@ async function finalizeUpload(payload: Record<string, unknown>, db: Awaited<Retu
     lockedIn: true,
     confirmedAt: new Date().toISOString(),
     readiness,
+    provenance,
   });
 }
 
@@ -306,16 +313,29 @@ async function serveAudio(request: Request, db: Awaited<ReturnType<typeof getDat
   const params = new URL(request.url).searchParams;
   const versionId = cleanId(params.get("versionId"));
   let version;
+  let authorizedMasterOwner = ownerMemberId;
   if (params.get("dreamweaver") === "1") {
     try {
       const resolved = await loadDreamweaverSong(db, bindingSongId(params.get("songId")), ownerMemberId);
       version = resolved.master.id === versionId ? resolved.master : null;
+      authorizedMasterOwner = String(resolved.song.owner_member_id);
     } catch (error) {
       if (error instanceof BindingError) return json({ message: error.message }, error.status);
       throw error;
     }
   } else {
     version = versionId ? await ownedVersion(db, ownerMemberId, versionId) : null;
+  }
+  if (version) {
+    try {
+      const retainedLocation = await retainedMasterPlayback(db, version.id, authorizedMasterOwner, request.method);
+      if (retainedLocation) return new Response(null, { status: 302, headers: {
+        ...MEDIA_CORS_HEADERS, Location: retainedLocation, "Cache-Control": "private, no-store",
+      } });
+    } catch {
+      console.error(JSON.stringify({ event: "retained_master_playback_unavailable" }));
+      return json({ message: "Retained master playback is unavailable. Mutable-source fallback is disabled." }, 503);
+    }
   }
   if (version?.audio_storage_key) {
     // Resolve access before issuing a short-lived storage URL; never persist the signed URL.

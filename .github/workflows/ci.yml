@@ -23,6 +23,8 @@ jobs:
         run: npm run test:audio-endpoints
       - name: Test master provenance observations
         run: npm run test:master-provenance
+      - name: Test retained master snapshots
+        run: npm run test:retained-master
       - name: Test video discovery loop
         run: npm run test:video-discovery
 
@@ -74,6 +76,8 @@ jobs:
         run: npm run test:fan-signal && node scripts/album-concierge-contracts.mjs && npm run test:concierge-showcase
       - name: Verify real PostgreSQL transactions
         run: npm run test:fan-curations:db
+      - name: Verify retained snapshot concurrency
+        run: npm run test:retained-master:db
 
   dreamweaver-playback-contracts:
     name: Dreamweaver audio recovery contracts

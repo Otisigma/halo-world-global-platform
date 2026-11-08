@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <title>Music Legacy Team | HALO</title>
+  <link rel="stylesheet" href="/catalog-recovery/recovery.css">
+  <link rel="stylesheet" href="/music-legacy-team/team.css">
+  <script type="module" src="/identity.js"></script>
+  <script type="module" src="/music-legacy-team/team.js"></script>
+</head>
+<body>
+  <a class="skip" href="#main">Skip to team workspace</a>
+  <header><a href="/halo">HALO Music World</a><nav aria-label="Owner navigation"><a href="/control-center">Owner control center</a><a href="/catalog-recovery/">Recovery workspace</a></nav></header>
+  <main id="main">
+    <p class="eyebrow">Owner workspace / Music Legacy Team</p>
+    <h1>Protect the music.<br>Improve the journey.</h1>
+    <p>Three focused reviews for the recovery workspace, using HALO's existing owner council. Choose a review to send one request; nothing runs automatically.</p>
+    <section class="notice">
+      <strong>Advice and proposals—not an autonomous development team.</strong>
+      <p>The existing council provides these perspectives; they are not three new independently running agents. It cannot run restore tests, inspect repository code, build, merge or deploy from this page. Suggestions require human review. Never send music files, private rights documents, passwords or keys.</p>
+      <p>Optional AI synthesis uses the existing council's current operational context and may incur provider charges. Without it, the council records a deterministic acknowledgement, not an AI review. Production configuration and access are unchanged.</p>
+    </section>
+    <p id="accessStatus" role="status" aria-live="polite">Checking owner access…</p>
+    <p id="locked" hidden><a href="/control-center">Sign in to the owner control center</a>, then return here and check access. <button id="checkAccess" type="button">Check access</button></p>
+    <section id="workspace" aria-label="Choose a review" hidden>
+      <p>Requests and any resulting proposed actions are saved in the existing owner command channel and approval queue. Review them in the <a href="/control-center">control center</a>.</p>
+      <label class="paid-choice"><input id="paid" type="checkbox"> Use one paid advisory AI synthesis attempt for each request I send</label>
+      <div class="team-grid">
+        <article class="song"><h2>Recovery Guardian</h2><p>Ask Sentinel to propose a test plan for one-song and 50-song export and restore, including missing and altered files.</p><button type="button" data-review="guardian">Request recovery review</button></article>
+        <article class="song"><h2>Builder</h2><p>Ask Atlas to propose a scoped improvement for linking masters, stems, session files, version notes and agreements.</p><button type="button" data-review="builder">Request improvement proposal</button></article>
+        <article class="song"><h2>Artist Advocate</h2><p>Ask Bridge to propose clearer artist guidance on backup, privacy and the limits of session recovery.</p><button type="button" data-review="advocate">Request artist review</button></article>
+      </div>
+      <section id="result" class="notice" hidden aria-labelledby="resultTitle">
+        <h2 id="resultTitle">Council response</h2>
+        <p id="resultMode"></p>
+        <p id="resultText" class="result-text"></p>
+        <p id="resultAction"></p>
+      </section>
+      <p id="sendStatus" role="status" aria-live="polite"></p>
+    </section>
+    <section class="notice"><h2>How to learn from the work</h2><p>Record the result of a real restore test and any missed or changed files in the control center. Compare completed restorations with the number attempted; review regressions and effort too. Until results are recorded, improvement is unknown—not a success rate. A human decides what to change.</p></section>
+  </main>
+</body>
+</html>

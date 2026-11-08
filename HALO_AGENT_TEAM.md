@@ -79,6 +79,17 @@ The system cannot initiate a new ChatGPT conversation or proactively message the
 
 ## Private control center
 
+The owner-only [Music Legacy Team satellite](/music-legacy-team/) offers three
+manual review requests through this existing council: Sentinel for recovery,
+Atlas for a scoped improvement, and Bridge for artist guidance. These are
+perspectives of existing council members, not new autonomous agents. Each
+request is stored in the existing command channel and may create an action in
+the approval queue. Paid advisory synthesis requires an explicit per-request
+opt-in; deterministic acknowledgement is labelled as such. The satellite
+cannot read repository code or local files, run tests, build, merge, or deploy.
+Do not submit private catalog data or secrets. No schedule, shared group or
+new storage is provisioned. Check actual deployment and owner sign-in separately.
+
 The owner observatory at `/control-center` now includes a persistent command channel for the full council or any individual specialist. Each instruction is stored in Netlify Database and shown in the private thread with a timestamp and accountable specialist. HALO Guard runs deterministic request preflight first, preserving the original request and requested approach and surfacing missing acceptance fields. Direct-command paid synthesis is off by default; an explicit authenticated-owner `approvePaidCalls: true` on a complete structured request opts into advisory synthesis using the latest council report, unresolved issues, action state, and team memory. It grants no implementation/deployment authority. See `HALO_AI_COMMITTEE_WORKFLOW.md` for the pre-Builder gate and `/halo-shield/preflight.html` for the isolated owner request/Drive comparison.
 
 When a response identifies useful work, the system can create a linked proposal in the existing human decision queue. The proposal remains blocked behind owner approval and records its status back into the command thread. The same screen combines council runs, maintenance sweeps, unresolved issues, and action changes into a live operations feed that refreshes every 45 seconds while the page is visible.

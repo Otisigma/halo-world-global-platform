@@ -27,6 +27,8 @@ jobs:
         run: npm run test:retained-master
       - name: Test catalog recovery packs
         run: npm run test:catalog-recovery
+      - name: Test Music Legacy Team satellite
+        run: npm run test:music-legacy-team
       - name: Test video discovery loop
         run: npm run test:video-discovery
 

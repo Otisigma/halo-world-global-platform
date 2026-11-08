@@ -7,6 +7,13 @@ also compare a local file's exact bytes in the browser against an authenticated
 observation without uploading the file. The local comparison has a 100 MiB
 limit and requires Web Crypto in a secure browser context.
 
+The selected song's private workspace displays the gold HALO provenance stamp
+only after the server authenticates a current-source observation's manifest.
+It shows the record ID, date, byte size and SHA-256 digest. Merely having artwork,
+an uploaded master or an unauthenticated history row does not earn this display.
+Refreshing reauthenticates the record; unavailable keys or invalid records hide
+the stamp and show an explicit error. This is not a public certification badge.
+
 The server reads the configured direct-object or chunked storage source rather
 than trusting a client-supplied digest. It hashes the bytes with SHA-256 and
 authenticates a versioned record with HMAC-SHA-256. The record binds the

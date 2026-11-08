@@ -279,3 +279,22 @@
 @media (prefers-reduced-motion: reduce) {
   .master-provenance-panel * { scroll-behavior: auto; }
 }
+
+.master-provenance-stamp {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 18px;
+  border: 1px solid #c5913f;
+  border-radius: 12px;
+  background: #101116;
+  color: #f4d58b;
+}
+.master-provenance-stamp[hidden] { display: none; }
+.master-provenance-stamp img { width: 144px; height: 96px; object-fit: cover; border-radius: 8px; }
+.master-provenance-stamp div { min-width: 0; }
+.master-provenance-stamp p { margin: 8px 0; font-size: 12px; line-height: 1.5; color: #dedbd1; }
+.master-provenance-stamp code { font-size: 11px; overflow-wrap: anywhere; }
+@media (max-width: 600px) {
+  .master-provenance-stamp { flex-direction: column; align-items: flex-start; }
+}

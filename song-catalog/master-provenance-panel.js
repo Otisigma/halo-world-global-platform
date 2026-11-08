@@ -197,6 +197,7 @@ export function createMasterProvenanceController({
   api,
   cryptoProvider = globalThis.crypto,
   onStateChange = () => {},
+  authenticateStamp = false,
 } = {}) {
   const context = {
     songId: typeof songId === "string" ? songId.trim() : "",
@@ -205,6 +206,8 @@ export function createMasterProvenanceController({
   const adapter = api && typeof api === "object" ? api : null;
   let history = { observations: [], hasMore: false, limitation: "" };
   const authenticatedObservationIds = new Set();
+  let stampRecord = null;
+  let stampError = "";
   let historyState = typeof adapter?.getHistory === "function" ? "loading" : "unconfigured";
   let historyError = "";
   let status = "not_checked";
@@ -226,6 +229,8 @@ export function createMasterProvenanceController({
     selectedObservationId,
     selectedObservation: selectedObservation(),
     authenticatedObservationIds: [...authenticatedObservationIds],
+    stampRecord,
+    stampError,
     busy,
   });
   const publish = () => {
@@ -249,6 +254,8 @@ export function createMasterProvenanceController({
     }
     const requestId = ++historyOperation;
     historyState = "loading";
+    stampRecord = null;
+    stampError = "";
     historyError = "";
     publish();
     try {
@@ -260,11 +267,31 @@ export function createMasterProvenanceController({
       historyState = "loaded";
       if (selectedObservationId !== previousSelection && status !== "observed") status = "not_checked";
       publish();
+      if (authenticateStamp && selectedObservationId && supports("getManifest")) {
+        const selected = selectedObservation();
+        try {
+          const manifest = await adapter.getManifest({ ...context, observationId: selected.observationId });
+          if (disposed || requestId !== historyOperation) return snapshot();
+          if (manifest?.observationId !== selected.observationId || manifest.sha256 !== selected.sha256
+            || manifest.byteSize !== selected.byteSize || manifest.createdAt !== selected.createdAt) {
+            throw new Error("Stamp record does not match the authenticated manifest.");
+          }
+          stampRecord = { ...manifest };
+          authenticatedObservationIds.add(selected.observationId);
+          publish();
+        } catch (error) {
+          if (disposed || requestId !== historyOperation) return snapshot();
+          stampRecord = null;
+          stampError = STATUS_COPY[error?.result]?.detail || "The stamp record could not be authenticated.";
+          publish();
+        }
+      }
     } catch (error) {
       if (disposed || requestId !== historyOperation) return snapshot();
       historyState = "error";
       historyError = STATUS_COPY[error?.result]?.detail || "Observation history could not be loaded.";
       history = { observations: [], hasMore: false, limitation: "" };
+      stampRecord = null;
       selectedObservationId = "";
       if (error?.result) setErrorStatus(error);
       else publish();
@@ -290,6 +317,7 @@ export function createMasterProvenanceController({
     } catch (error) {
       if (!disposed && requestId === operation) {
         if (method === "verify" && error?.result === "stale") {
+          stampRecord = null;
           authenticatedObservationIds.add(payload.observationId);
           history = {
             ...history,
@@ -299,6 +327,7 @@ export function createMasterProvenanceController({
           };
           selectedObservationId = "";
         }
+        if (method === "verify" && ["record_unverified", "not_found", "unavailable"].includes(error?.result)) stampRecord = null;
         setErrorStatus(error);
       }
     } finally {
@@ -352,6 +381,7 @@ export function createMasterProvenanceController({
         acceptedStatuses: STORED_VERIFY_STATUSES,
         payload: { observationId: selected.observationId },
         onResult(result) {
+          if (["stale", "observed_bytes_differ"].includes(result?.result)) stampRecord = null;
           if (["observed_bytes_match", "observed_bytes_differ", "stale"].includes(result?.result)) {
             authenticatedObservationIds.add(selected.observationId);
           }
@@ -417,6 +447,8 @@ export function createMasterProvenanceController({
       history = { observations: [], hasMore: false, limitation: "" };
       selectedObservationId = "";
       authenticatedObservationIds.clear();
+      stampRecord = null;
+      stampError = "";
       busy = "";
     },
   });
@@ -433,6 +465,15 @@ const panelMarkup = sequence => `
       </div>
       <span class="master-provenance-panel__badge" data-provenance-badge data-state="not_checked">No comparison yet</span>
     </header>
+    <aside class="master-provenance-stamp" data-provenance-stamp hidden aria-label="Authenticated master observation">
+      <img src="/assets/halo-master-provenance.png" alt="" width="144" height="96" loading="lazy">
+      <div><strong>HALO provenance recorded</strong>
+        <p data-provenance-stamp-details></p>
+        <code data-provenance-stamp-hash></code>
+        <p>Authenticated byte observation, not proof of ownership or an immutable master certificate.</p>
+      </div>
+    </aside>
+    <p data-provenance-stamp-error role="status" aria-live="polite"></p>
     <p class="master-provenance-panel__result" data-provenance-result data-state="not_checked"
       role="status" aria-live="polite" aria-atomic="true">No comparison has been requested for the selected observation.</p>
     <div class="master-provenance-panel__actions" role="group" aria-label="Master byte observation actions">
@@ -556,7 +597,7 @@ export function mountMasterProvenancePanel(root, {
   const secureCrypto = Boolean(cryptoProvider?.subtle?.digest);
   query(SELECTORS.context).textContent = [songTitle, versionLabel].filter(Boolean).join(" · ") || "Selected catalog master";
   const controller = createMasterProvenanceController({
-    songId, versionId, api, cryptoProvider,
+    songId, versionId, api, cryptoProvider, authenticateStamp: true,
     onStateChange(state) {
       const copy = currentMessage(state.status);
       query(SELECTORS.badge).textContent = copy.label;
@@ -569,6 +610,12 @@ export function mountMasterProvenancePanel(root, {
       buttons.refresh.disabled = Boolean(state.busy) || !hasScope || typeof api?.getHistory !== "function";
       buttons.verifyFile.disabled = Boolean(state.busy);
       renderHistory(root, state, controller, buttons, api, secureCrypto);
+      const stamp = query("[data-provenance-stamp]");
+      stamp.hidden = !state.stampRecord;
+      query("[data-provenance-stamp-error]").textContent = state.stampError;
+      query("[data-provenance-stamp-details]").textContent = state.stampRecord
+        ? `Recorded ${new Date(state.stampRecord.createdAt).toLocaleString()} · ${state.stampRecord.byteSize.toLocaleString()} bytes · ID ${state.stampRecord.observationId}` : "";
+      query("[data-provenance-stamp-hash]").textContent = state.stampRecord ? `SHA-256 ${state.stampRecord.sha256}` : "";
     },
   });
   query(SELECTORS.file).addEventListener("change", event => {

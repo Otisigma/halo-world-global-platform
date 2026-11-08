@@ -25,6 +25,57 @@ const historyResponse = {
   limitation: "Observation of bytes read; source may change after the read.",
 };
 const manifest = { observationId, sha256, byteSize: bytes.byteLength, createdAt, limitation: "not a certificate" };
+{
+  let manifestReads = 0;
+  let currentManifest = manifest;
+  const controller = createMasterProvenanceController({
+    songId, versionId, authenticateStamp: true,
+    api: {
+      getHistory: async () => ({ observations: [observation], hasMore: false }),
+      getManifest: async () => { manifestReads++; return currentManifest; },
+      verify: async () => ({ result: "observed_bytes_differ" }),
+    },
+  });
+  assert.equal(controller.getState().stampRecord, null);
+  await controller.refreshHistory();
+  assert.deepEqual(controller.getState().stampRecord, manifest);
+  assert.equal(manifestReads, 1, "stamp authentication does not re-read audio");
+  await controller.verify();
+  assert.equal(controller.getState().stampRecord, null, "changed bytes hide the song stamp");
+  currentManifest = { ...manifest, sha256: "0".repeat(64) };
+  await controller.refreshHistory();
+  assert.equal(controller.getState().stampRecord, null);
+  assert.match(controller.getState().stampError, /could not be authenticated/);
+  controller.dispose();
+}
+{
+  let resolveManifest;
+  const controller = createMasterProvenanceController({
+    songId, versionId, authenticateStamp: true,
+    api: {
+      getHistory: async () => ({ observations: [observation], hasMore: false }),
+      getManifest: () => new Promise(resolve => { resolveManifest = resolve; }),
+    },
+  });
+  const pending = controller.refreshHistory();
+  await new Promise(resolve => setImmediate(resolve));
+  controller.dispose();
+  resolveManifest(manifest);
+  await pending;
+  assert.equal(controller.getState().stampRecord, null, "switching songs discards late stamp authentication");
+}
+{
+  const controller = createMasterProvenanceController({
+    songId, versionId, authenticateStamp: true,
+    api: {
+      getHistory: async () => ({ observations: [], hasMore: false }),
+      getManifest: async () => { throw new Error("must not authenticate a missing record"); },
+    },
+  });
+  await controller.refreshHistory();
+  assert.equal(controller.getState().stampRecord, null, "unstamped songs never receive a decorative badge");
+  controller.dispose();
+}
 const localFile = content => ({
   size: content.byteLength,
   async arrayBuffer() {

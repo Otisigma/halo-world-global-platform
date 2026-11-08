@@ -1,6 +1,7 @@
 import { MASTER_UPLOAD_MAX_BYTES } from "./direct-upload-storage.mjs";
-import { sealMasterBytes, verifyMasterBytes, verifyProvenanceRecord } from "./master-provenance.mjs";
+import { verifyMasterBytes, verifyProvenanceRecord } from "./master-provenance.mjs";
 import { describeMasterSource, readObservedMaster } from "./master-provenance-observation.mjs";
+import { recordMasterObservation } from "./master-upload-observation.mjs";
 
 // Platform-independent handler; the Netlify adapter injects identity, database, storage and keys.
 const limitation = "This is an observation of bytes read, not a certificate of the current master. Sources can change during or after reading; chunk observations can combine concurrent writes. No immutable copy is retained.";
@@ -166,28 +167,13 @@ export function createMasterProvenanceHandler(deps) {
       RETURNING owner_member_id
     `;
     if (!permitted.length) return json({ message: "Please wait before another observation or verification" }, 429);
-    const bytes = readObservedMaster(source, { blobStore: deps.audioStore, storage: deps.storageConfig(), fetchImpl: deps.fetchImpl });
     if (action === "observe") {
-      seal = await sealMasterBytes({ bytes, expectedBytes: source.size, maxBytes: MASTER_UPLOAD_MAX_BYTES,
-        ownerId: owner, songId, versionId, sourceType: source.type, sourceId: source.id,
-        createdAt: deps.now().toISOString(), keyring });
-      const id = deps.randomUUID();
-      // A single atomic INSERT checks ownership and that the registered source still matches.
-      const inserted = await db.sql`
-        INSERT INTO halo_master_provenance_observations (id, owner_member_id, song_id, version_id, record, mac)
-        SELECT ${id}, ${owner}, ${songId}, ${versionId}, ${JSON.stringify(seal.record)}::jsonb, ${seal.mac}
-        FROM halo_song_versions v JOIN halo_song_catalog s ON s.id = v.song_id
-        WHERE s.id = ${songId} AND v.id = ${versionId} AND s.owner_member_id = ${owner}
-          AND s.status = 'active' AND v.status = 'active' AND v.version_type = 'sale_master'
-          AND COALESCE(v.audio_storage_key, '') = ${String(row.audio_storage_key || "")}
-          AND COALESCE(v.audio_blob_prefix, '') = ${String(row.audio_blob_prefix || "")}
-          AND COALESCE(v.audio_chunk_count, 0) = ${Number(row.audio_chunk_count || 0)}
-          AND v.audio_byte_size = ${source.size}
-        RETURNING id
-      `;
-      if (!inserted.length) return json({ result: "stale", limitation }, 409);
-      return json({ observationId: id, result: "observed", sha256: seal.record.sha256, byteSize: source.size, createdAt: seal.record.createdAt, limitation }, 201);
+      const result = await recordMasterObservation(db, owner, songId, versionId, row, source, keyring, deps);
+      if (result.result === "stale") return json({ result: "stale", limitation }, 409);
+      const { message, ...observation } = result;
+      return json({ ...observation, limitation }, 201);
     }
+    const bytes = readObservedMaster(source, { blobStore: deps.audioStore, storage: deps.storageConfig(), fetchImpl: deps.fetchImpl });
     const matches = await verifyMasterBytes(seal, bytes, { maxBytes: MASTER_UPLOAD_MAX_BYTES, keyring });
     const after = await getVersion(db, owner, songId, versionId);
     if (!after) return json({ result: "stale", limitation }, 409);

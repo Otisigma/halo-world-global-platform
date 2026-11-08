@@ -239,10 +239,45 @@ test("browser independently verifies signatures and compares local bytes with re
   } finally { await rm(directory, { recursive: true }); }
 });
 
+test("retained capture feeds an HMAC observation without a second source read", async () => {
+  const { safeObserveUploadedMaster } = await import("../netlify/lib/master-upload-observation.mjs");
+  const { loadProvenanceKeys, verifyProvenanceRecord } = await import("../netlify/lib/master-provenance.mjs");
+  const { state, deps } = fixture();
+  const keyring = loadProvenanceKeys({ HALO_PROVENANCE_ACTIVE_KEY: "v1",
+    HALO_PROVENANCE_KEYS: JSON.stringify({ v1: Buffer.alloc(32, 7).toString("base64") }) });
+  let observationRow, sourceReads = 0, result;
+  const db = { sql: async (parts, ...values) => {
+    const text = parts.join("?");
+    if (text.includes("SELECT id, record, mac FROM halo_master_provenance_observations")) return observationRow ? [observationRow] : [];
+    if (text.includes("INSERT INTO halo_master_provenance_observations")) {
+      observationRow = { id: values[0], record: JSON.parse(values[4]), mac: values[5] };
+      return [{ id: values[0] }];
+    }
+    return deps.db.sql(parts, ...values);
+  } };
+  const blobStore = { get: async () => { sourceReads++; return stream(bytes); } };
+  const onObserved = async observedDigest => {
+    state.limited = true;
+    result = await safeObserveUploadedMaster(db, deps.owner, songId, versionId, blobStore, {
+      observedDigest, loadProvenanceKeys: () => keyring, logError: () => assert.fail("unexpected observation failure"),
+    });
+  };
+  const first = await captureRegisteredMaster({ ...deps, db, blobStore, onObserved });
+  assert.equal(first.state, "ready");
+  assert.equal(result.result, "observed");
+  assert.equal(sourceReads, 1);
+  assert.equal(verifyProvenanceRecord(observationRow, keyring), true);
+  assert.equal(observationRow.record.sha256, state.records.get(first.recordId).record.sha256);
+  const retry = await captureRegisteredMaster({ ...deps, db, blobStore, onObserved });
+  assert.equal(retry.alreadyCaptured, true);
+  assert.equal(result.reused, true);
+  assert.equal(sourceReads, 1);
+});
+
 test("both upload paths wire explicit capture results; satellite shares one ledger and no file upload", async () => {
   for (const path of ["netlify/functions/song-catalog-master-upload.ts", "netlify/functions/song-catalog-audio.ts"]) {
     const source = await readFile(new URL(`../${path}`, import.meta.url), "utf8");
-    assert.match(source, /safeCaptureRegisteredMaster\(db, ownerMemberId, songId, versionId\)/);
+    assert.match(source, /processUploadedMaster\(db, ownerMemberId, songId, versionId, audioStore\)/);
     assert.match(source, /provenance\.state === "ready"/);
     if (path.endsWith("song-catalog-audio.ts")) {
       assert.match(source, /retainedMasterPlayback\(db, version\.id, authorizedMasterOwner, request\.method\)/);

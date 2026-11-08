@@ -19,7 +19,7 @@ import { MASTER_VERSION_TYPE } from "../lib/master-copy.mjs";
 import { isTransientError } from "../lib/resilience.mjs";
 import { runDreamweaverReview } from "./song-catalog.js";
 import { safeUploadReadiness } from "../lib/upload-readiness.mjs";
-import { safeCaptureRegisteredMaster } from "../lib/retained-master-service.mjs";
+import { processUploadedMaster } from "../lib/master-upload-observation.mjs";
 
 // Large master copies bypass Netlify function payload limits: this endpoint only exchanges small
 // JSON metadata. `presign` issues a short-lived PUT URL the browser uploads to directly, and
@@ -109,7 +109,7 @@ async function registerMasterUpload(payload: Record<string, unknown>, db: Awaite
     WHERE id = ${versionId} AND song_id = ${songId}
   `;
   await runDreamweaverReview(songId, ownerMemberId);
-  const provenance = await safeCaptureRegisteredMaster(db, ownerMemberId, songId, versionId);
+  const { observation, provenance } = await processUploadedMaster(db, ownerMemberId, songId, versionId, audioStore);
   if (version.audio_storage_key && version.audio_storage_key !== fileKey) await deleteStoredObject(storage, String(version.audio_storage_key)).catch(() => undefined);
   if (version.audio_blob_prefix) {
     const stored = await audioStore.list({ prefix: String(version.audio_blob_prefix) }).catch(() => ({ blobs: [] }));
@@ -118,6 +118,7 @@ async function registerMasterUpload(payload: Record<string, unknown>, db: Awaite
   const readiness = await safeUploadReadiness(db, ownerMemberId, songId, { persisted: true });
   return json({
     message: "Master copy uploaded directly to storage and registered as the canonical sale master."
+      + ` ${observation.message}`
       + (provenance.state === "ready" ? " Signed retained snapshot recorded." : ` ${provenance.message || "Retained capture was not confirmed."}`),
     songId,
     versionId,
@@ -128,6 +129,7 @@ async function registerMasterUpload(payload: Record<string, unknown>, db: Awaite
     confirmedAt: new Date().toISOString(),
     readiness,
     provenance,
+    observation,
   });
 }
 

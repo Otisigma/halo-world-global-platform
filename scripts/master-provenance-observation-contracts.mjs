@@ -4,6 +4,7 @@ import { createHash } from "node:crypto";
 import { createMasterProvenanceHandler } from "../netlify/lib/master-provenance-api.mjs";
 import { describeMasterSource, readObservedMaster } from "../netlify/lib/master-provenance-observation.mjs";
 import { sealMasterBytes, verifyMasterBytes, loadProvenanceKeys } from "../netlify/lib/master-provenance.mjs";
+import { safeObserveUploadedMaster } from "../netlify/lib/master-upload-observation.mjs";
 
 const owner = "owner-1";
 const song = "11111111-1111-4111-8111-111111111111";
@@ -12,6 +13,75 @@ const prefix = `${owner}/${version}/session-12345/parts/`;
 const row = { audio_storage_key: "", audio_blob_prefix: prefix, audio_chunk_count: 2, audio_byte_size: 6 };
 const asStream = bytes => new ReadableStream({ start(c) { c.enqueue(Uint8Array.from(bytes)); c.close(); } });
 const keyring = loadProvenanceKeys({ HALO_PROVENANCE_ACTIVE_KEY: "v1", HALO_PROVENANCE_KEYS: JSON.stringify({ v1: Buffer.alloc(32, 7).toString("base64") }) });
+
+test("automatic uploads observe actual storage, reuse retries, and report failures without rejecting uploads", async () => {
+  const state = { row: { ...row }, existing: null, reads: 0, inserts: 0, limited: false, changed: false, logs: [] };
+  const db = { sql: async (parts, ...values) => {
+    const text = parts.join("?");
+    if (text.includes("SELECT v.audio_storage_key")) return state.row ? [state.row] : [];
+    if (text.includes("SELECT id, record, mac")) return state.existing ? [state.existing] : [];
+    if (text.includes("INSERT INTO halo_master_provenance_read_limits")) return state.limited ? [] : [{ owner_member_id: owner }];
+    if (text.includes("INSERT INTO halo_master_provenance_observations")) {
+      if (state.changed) return [];
+      state.inserts++;
+      state.existing = { id: values[0], record: JSON.parse(values[4]), mac: values[5] };
+      return [{ id: values[0] }];
+    }
+    throw new Error("Unexpected query");
+  } };
+  const store = { get: async key => { state.reads++; return asStream(key.endsWith("000") ? [1, 2, 3] : [4, 5, 6]); } };
+  const deps = { loadProvenanceKeys: () => keyring, storageConfig: () => null,
+    randomUUID: () => "55555555-5555-4555-8555-555555555555",
+    now: () => new Date("2026-11-08T08:00:00.000Z"), logError: message => state.logs.push(message) };
+  const run = overrides => safeObserveUploadedMaster(db, owner, song, version, store, { ...deps, ...overrides });
+  const first = await run();
+  assert.equal(first.result, "observed");
+  assert.equal(state.reads, 2);
+  assert.equal(state.existing.record.sha256, createHash("sha256").update(Uint8Array.of(1, 2, 3, 4, 5, 6)).digest("hex"));
+  state.limited = true;
+  assert.equal((await run()).reused, true);
+  assert.equal(state.inserts, 1);
+  assert.equal(state.reads, 2);
+  state.existing = null;
+  assert.equal((await run()).result, "rate_limited");
+  assert.equal(state.reads, 2);
+  state.limited = false; state.changed = true;
+  assert.equal((await run()).result, "stale");
+  state.changed = false;
+  assert.equal((await run({ loadProvenanceKeys: () => { throw new Error("secret"); } })).result, "unavailable");
+  assert.deepEqual(state.logs, ['{"event":"master_upload_observation_failed"}']);
+  state.row = null;
+  assert.equal((await run()).result, "not_applicable");
+  state.row = { ...row };
+  assert.equal((await run({ audioStore: { get: async () => null } })).result, "unavailable");
+
+  state.row = { audio_storage_key: `masters/${owner}/${song}/${version}/123/file.wav`, audio_byte_size: 3 };
+  const storage = { bucket: "test", region: "us-east-1", accessKeyId: "id", secretAccessKey: "secret",
+    endpoint: "https://example.test", forcePathStyle: true };
+  assert.equal((await run({ storageConfig: () => storage, fetchImpl: async () => new Response(Uint8Array.of(7, 8, 9)) })).result, "observed");
+  assert.equal(state.existing.record.sourceType, "direct");
+  state.existing = null; state.limited = true;
+  const digest = { sourceId: describeMasterSource(state.row, owner, song, version).id,
+    sha256: createHash("sha256").update(Uint8Array.of(7, 8, 9)).digest("hex"),
+    byteSize: 3, createdAt: "2026-11-08T08:00:00.000Z" };
+  assert.equal((await run({ observedDigest: digest, fetchImpl: () => { throw new Error("must not re-read"); } })).result, "observed");
+  assert.equal(state.existing.record.sha256, digest.sha256);
+  state.existing = null;
+  assert.equal((await run({ observedDigest: { ...digest, sourceId: "changed" } })).result, "stale");
+});
+
+test("both upload routes feed observations and refresh the existing workspace", async () => {
+  const { readFile } = await import("node:fs/promises");
+  for (const name of ["song-catalog-master-upload.ts", "song-catalog-audio.ts"]) {
+    const source = await readFile(new URL(`../netlify/functions/${name}`, import.meta.url), "utf8");
+    assert.match(source, /processUploadedMaster\(db, ownerMemberId, songId, versionId, audioStore\)/);
+    assert.match(source, /observation\.message/);
+    assert.match(source, /provenance,?\s*observation/);
+  }
+  const client = await readFile(new URL("../song-catalog/song-catalog.js", import.meta.url), "utf8");
+  assert.match(client, /void masterProvenancePanel\?\.refreshHistory\(\)/);
+  assert.match(client, /note=`\$\{data\.message\}\. \$\{receipt\.message\}`/);
+});
 
 test("chunk observations read actual bounded bytes in order and authenticate them", async () => {
   const source = describeMasterSource(row, owner, song, version);

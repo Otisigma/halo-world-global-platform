@@ -33,7 +33,20 @@ at a single instant. An identical later read does not prove that the bytes were
 never changed in between. The ledger can be deleted or rolled back by those
 with database access; HMAC does not prevent this.
 
-Observations are created on demand, not automatically at upload. No audio DNA,
+Successful direct-master registration and chunked sale-master finalization now
+attempt an observation automatically. Upload retries reuse an authenticated
+observation for the same registered source. Other version types are not observed.
+The upload receipt reports observation failures separately: missing keys,
+migration or storage, a changed source, or the shared one-read-per-minute limit
+do not undo a saved upload. The panel refreshes history after catalog reload.
+Existing uploads are not backfilled; use **Record observation** for them.
+Automatic observations require the observation migration and HMAC keys below,
+not the separate retained-snapshot bucket or Ed25519 keys.
+When retained capture is enabled, a successful capture supplies its authenticated
+digest to the observation writer, avoiding a second master read and contention
+with the shared read limit.
+
+No audio DNA,
 watermark, independent timestamp, public-key signature, proof of legal ownership,
 or independently verifiable certificate is provided. Re-encoding, metadata
 changes or edits change the byte digest; a mismatch does not establish that the

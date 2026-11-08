@@ -1,0 +1,36 @@
+// Public homepage concept contract. Run: node scripts/master-provenance-homepage-contracts.mjs
+import assert from "node:assert/strict";
+import { readFile, stat } from "node:fs/promises";
+
+const read = path => readFile(new URL(`../${path}`, import.meta.url), "utf8");
+const [page, css] = await Promise.all([read("halo.html"), read("halo-master-provenance.css")]);
+const section = page.match(/<section className="master-provenance"[\s\S]*?<\/section>/)?.[0];
+assert.ok(section, "the concept must appear on the public homepage, not the private access page");
+assert.match(page, /<link rel="stylesheet" href="\/halo-master-provenance.css">/);
+assert.match(section, /aria-labelledby="master-provenance-title"/);
+assert.match(section, /<h2 id="master-provenance-title">/);
+assert.match(section, /In development/);
+assert.match(section, /Planned provenance capabilities/);
+assert.match(section, /Concept preview — not a live verification service/);
+assert.match(section, /do not establish copyright or legal ownership/);
+assert.match(section, /Concept artwork · not a verification certificate/);
+assert.doesNotMatch(section, /tamper[- ]proof|publicly verifiable|proves? ownership|guaranteed ownership|\/api\//i);
+assert.match(section, /href="\/song-catalog\/"/);
+await stat(new URL("../song-catalog/index.html", import.meta.url));
+assert.match(section, /src="\/assets\/halo-master-provenance.png"/);
+assert.match(section, /alt="Concept illustration[^"]+"/);
+assert.match(section, /width="1024" height="559" loading="lazy" decoding="async"/);
+const asset = await readFile(new URL("../assets/halo-master-provenance.png", import.meta.url));
+assert.equal(asset.subarray(1, 4).toString(), "PNG");
+assert.equal(asset.readUInt32BE(16), 1024);
+assert.equal(asset.readUInt32BE(20), 559);
+assert.ok(asset.length < 2_000_000, "concept art must stay within its static image budget");
+assert.match(css, /grid-template-columns: minmax\(0, 1fr\) minmax\(0, 1.1fr\)/);
+assert.match(css, /@media \(max-width: 860px\)/);
+assert.match(css, /@media \(prefers-reduced-motion: reduce\)[\s\S]*animation: none/);
+assert.match(css, /master-provenance__link:focus-visible/);
+assert.doesNotMatch(css, /infinite|@import|url\(/);
+assert.match(css, /animation: master-provenance-orbit 4.5s ease-out 1/);
+assert.match(css, /animation: master-provenance-glint 3.8s ease-in-out 1/);
+assert.match(section, /className="master-provenance__orbit" aria-hidden="true"/);
+console.log("Master provenance homepage contracts passed");

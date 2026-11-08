@@ -4,6 +4,14 @@ const SHA256 = /^[0-9a-f]{64}$/i;
 const HISTORY_LIMIT = 20;
 
 const STATUS_COPY = Object.freeze({
+  keys_missing: {
+    label: "Signing setup required",
+    detail: "Master integrity signing keys need configuration by the site operator, followed by a redeploy. See docs/master-provenance-foundation.md. Refresh history afterward; this does not remove uploaded audio.",
+  },
+  schema_missing: {
+    label: "Database setup required",
+    detail: "The site operator must apply the master_provenance_observations database migration. Refresh history afterward; this does not remove uploaded audio.",
+  },
   unconfigured: {
     label: "Not configured",
     detail: "The observation service is not configured. No bytes were read or compared.",
@@ -26,7 +34,7 @@ const STATUS_COPY = Object.freeze({
   },
   unavailable: {
     label: "Service unavailable",
-    detail: "The service is unavailable. No observation or comparison was confirmed.",
+    detail: "Master integrity could not complete this request. Refresh history and retry; if it persists, ask the site operator to check database and storage connectivity. No observation or comparison was confirmed; uploaded audio is unaffected.",
   },
   rate_limited: {
     label: "Try again later",
@@ -123,6 +131,8 @@ function errorResult(response, body) {
     return "error";
   }
   if (response.status === 404) return "not_found";
+  if (response.status === 503 && body?.code === "provenance_keys_missing") return "keys_missing";
+  if (response.status === 503 && body?.code === "provenance_schema_missing") return "schema_missing";
   if (response.status >= 500) return "unavailable";
   return "error";
 }
@@ -265,6 +275,7 @@ export function createMasterProvenanceController({
       history = safeHistory({ ...next, songId: context.songId, versionId: context.versionId }, context);
       selectedObservationId = history.observations.find(item => item.matchesCurrentSource)?.observationId || "";
       historyState = "loaded";
+      if (["keys_missing", "schema_missing", "unavailable"].includes(status)) status = "not_checked";
       if (selectedObservationId !== previousSelection && status !== "observed") status = "not_checked";
       publish();
       if (authenticateStamp && selectedObservationId && supports("getManifest")) {
@@ -300,6 +311,7 @@ export function createMasterProvenanceController({
   }
 
   async function run({ method, pendingStatus, acceptedStatuses, payload = {}, onResult = () => {} }) {
+    if (["keys_missing", "schema_missing"].includes(status)) return status;
     if (disposed || busy || !supports(method)) {
       if (!disposed && !busy && !supports(method)) setStatus("unconfigured");
       return status;
@@ -606,7 +618,8 @@ export function mountMasterProvenancePanel(root, {
       query(SELECTORS.result).dataset.state = state.status;
       root.dataset.provenanceState = state.status;
       root.dataset.provenanceBusy = state.busy || "";
-      buttons.observe.disabled = Boolean(state.busy) || !hasScope || typeof api?.observe !== "function";
+      buttons.observe.disabled = Boolean(state.busy) || ["keys_missing", "schema_missing"].includes(state.status)
+        || !hasScope || typeof api?.observe !== "function";
       buttons.refresh.disabled = Boolean(state.busy) || !hasScope || typeof api?.getHistory !== "function";
       buttons.verifyFile.disabled = Boolean(state.busy);
       renderHistory(root, state, controller, buttons, api, secureCrypto);

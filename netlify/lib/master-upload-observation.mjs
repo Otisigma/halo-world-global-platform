@@ -3,6 +3,7 @@ import { MASTER_UPLOAD_MAX_BYTES, directUploadConfig } from "./direct-upload-sto
 import { loadProvenanceKeys, sealMasterBytes, sealObservedDigest, verifyProvenanceRecord } from "./master-provenance.mjs";
 import { describeMasterSource, readObservedMaster } from "./master-provenance-observation.mjs";
 import { safeCaptureRegisteredMaster } from "./retained-master-service.mjs";
+import { provenanceFailure } from "./master-provenance-errors.mjs";
 
 export async function recordMasterObservation(db, owner, songId, versionId, row, source, keyring, deps) {
   const fields = { schemaVersion: 1, byteSize: source.size,
@@ -77,10 +78,10 @@ export async function safeObserveUploadedMaster(db, owner, songId, versionId, au
     if (!permitted.length) return { result: "rate_limited",
       message: "Master saved; automatic byte observation was rate-limited. Wait a minute, then use Record observation in the master panel." };
     return await recordMasterObservation(db, owner, songId, versionId, row, source, keyring, deps);
-  } catch {
+  } catch (error) {
     deps.logError(JSON.stringify({ event: "master_upload_observation_failed" }));
-    return { result: "unavailable",
-      message: "Master saved, but its byte observation was not recorded. Check observation keys, migration and storage, then retry from the master panel." };
+    const failure = provenanceFailure(error);
+    return { result: "unavailable", ...failure };
   }
 }
 

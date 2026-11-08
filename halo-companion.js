@@ -19,6 +19,65 @@
     "/creators/index.html": { eyebrow: "Creator signal", welcome: "Muse here. I can help artists and creators understand the marketplace, prepare their story, and choose the right next step.", prompts: ["How does the marketplace work?", "Help me prepare my profile", "What can creators offer?"] },
     "/creators/gear-guide.html": { eyebrow: "Signal chain", welcome: "Muse here. I can help you identify the problem before considering equipment, then check the details that make a track ready for distribution.", prompts: ["Do I need new gear?", "Help me check my release", "Explain the affiliate links"] }
   };
+  const FIRST_STEPS = [
+    { path: "/song-catalog", title: "Manage your music",
+      detail: "Sign in, choose Add a song, and upload the finished recording as its sale master. Stems and instrumentals are optional.",
+      next: "Save the song details, then review readiness before publishing. Uploading does not itself confirm publication or a verified stamp.",
+      route: "/song-catalog/", action: "Open my song catalog" },
+    { path: "/music-upload", title: "Upload a finished recording",
+      detail: "Start with one finished audio file and the song title. Follow the sign-in and upload prompts; you do not need every stem or alternate version.",
+      next: "Wait for the saved-upload receipt, then review the song in your catalog. Keep your original file until saving is confirmed.",
+      route: "/music-upload/", action: "Open music upload" },
+    { path: "/release-house", title: "Prepare a release",
+      detail: "Sign in and follow the release form. Provide your recording, credits and the required rights information.",
+      next: "Review the submission status. A submitted release is not automatically approved or distributed.",
+      route: "/release-house/", action: "Open Release House" },
+    { path: "/finish-house", title: "Finish a recording",
+      detail: "Use this workspace for production and finishing requests. Follow its file and rights requirements rather than uploading the same song everywhere.",
+      next: "Review the request status and return to your catalog when the finished master is ready.",
+      route: "/finish-house/", action: "Open Finish House" },
+    { path: "/provenance", title: "Understand a master stamp",
+      detail: "Start from your song catalog's verification link. A song ID identifies the song; a snapshot record ID opens one signed snapshot. Neither is a signing key.",
+      next: "No re-upload is needed to inspect a saved record. Unavailable verification is not a verified stamp, and file integrity is not proof of copyright ownership.",
+      route: "/song-catalog/", action: "Open my song catalog" },
+    { path: "/dreamweaver", title: "Experience the music",
+      detail: "Choose a song and press Play. Your browser may require that first click before audio can start.",
+      next: "A local preview is not an upload or publication. To save your own finished song, use the catalog upload.",
+      route: "/music/", action: "Choose music to play" },
+    { path: "/radio", title: "Listen to HALO Radio",
+      detail: "Choose a station and press its play control. Start with listening; you do not need to upload music.",
+      next: "Use the station's controls to pause or change the experience. Creator submissions are a separate release workflow.",
+      route: "/radio/", action: "Open radio" },
+    { path: "/music", title: "Find your next song",
+      detail: "Choose a track and press Play. Listen first; follow any sign-in or purchase prompts only when you choose those actions.",
+      next: "Explore another track or open its Dreamweaver experience. Listening does not upload files or publish a release.",
+      route: "/music/", action: "Browse music" },
+    { path: "/dj-deck", title: "Start a DJ session",
+      detail: "Begin with the deck's audio and access instructions. Press a play control yourself before expecting sound.",
+      next: "Previewing, recording, saving and publishing are different actions. Check the confirmation before leaving a session.",
+      route: "/dj-deck.html", action: "Open the DJ deck" },
+    { path: "/creators", title: "Build your creator presence",
+      detail: "Explore the creator options, then follow sign-in and profile prompts for the action you want.",
+      next: "Check the page's requirements before offering work or uploading files. A profile is separate from publishing a song.",
+      route: "/creators/", action: "Explore creator options" },
+    { path: "/signal-network", title: "Explore your artist workspace",
+      detail: "Choose the workspace that matches what you want to do. Follow the sign-in and permission prompts before saving or sharing work.",
+      next: "Keep track of whether an action is a local preview, a saved record or a published item. Browsing alone does not publish anything.",
+      route: "/signal-network/", action: "Open Signal Network" },
+    { path: "/support", title: "Get help",
+      detail: "Describe what you were trying to do, the page you were on, and the message you saw. Never send passwords, private keys or payment details.",
+      next: "Check for a submission confirmation. No response time or automatic repair is promised.",
+      route: "/support/", action: "Open support" },
+  ];
+  function firstStepsForPath(pathname) {
+    const path = String(pathname || "/").replace(/\/index\.html$/, "/").replace(/\.html$/, "").replace(/\/+$/, "") || "/";
+    return FIRST_STEPS.find(item => path === item.path || path.startsWith(`${item.path}/`)) || {
+      title: "New to HALO? Start with your goal.",
+      detail: "Listen to music, upload a finished song, or explore the community. You do not need to understand every workspace to begin.",
+      next: "Choose one destination below. Each workflow tells you when sign-in, files or permission are required.",
+      route: "/music/", action: "Listen to music",
+    };
+  }
   const SETTINGS_KEY = "halo-companion-settings.v1";
   const JOURNEY_STATE_KEY = "halo-artist-journey-state.v1";
   const DISMISSED_KEY = "halo-companion-dismissed.v1";
@@ -71,7 +130,10 @@
   }
 
   function pageGuide() {
-    return pageGuides[location.pathname] || pageGuides["/"];
+    if (pageGuides[location.pathname]) return pageGuides[location.pathname];
+    const steps = firstStepsForPath(location.pathname);
+    return { eyebrow: "First steps", welcome: `${steps.title}. ${steps.detail}`,
+      prompts: ["What happens next?", "Explain this page", "I need help"] };
   }
 
   function normalizeSettings(value) {
@@ -335,6 +397,17 @@
       @supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){.halo-companion-panel{background:#0a0c0b}.halo-companion-compose{background:#0e110e}.halo-companion-recall{background:rgba(12,14,13,.9)}}
       @media(prefers-reduced-transparency:reduce){.halo-companion-panel{background:#0a0c0b}.halo-companion-compose{background:#0e110e}.halo-companion-launcher{background:#141815}.halo-companion-recall{background:#0c0e0d;opacity:1}}
       .halo-companion-sr{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
+      .halo-companion-start{margin:0 0 12px;padding-bottom:10px;border-bottom:1px solid rgba(235,196,112,.3)}
+      .halo-companion-start summary{display:flex;align-items:center;min-height:44px;cursor:pointer;color:#ebc470;font-size:12px;font-weight:700;list-style:none}
+      .halo-companion-start summary::-webkit-details-marker{display:none}
+      .halo-companion-start summary::after{content:"+";margin-left:auto;padding-left:12px}
+      .halo-companion-start[open] summary::after{content:"-"}
+      .halo-companion-start summary:focus-visible,.halo-companion-first-steps a:focus-visible{outline:2px solid #ebc470;outline-offset:3px}
+      .halo-companion-first-steps{max-height:240px;overflow-y:auto;padding:0 4px 4px}
+      .halo-companion-first-steps h3{margin:8px 0;color:#fff;font:700 16px/1.4 system-ui,sans-serif}
+      .halo-companion-first-steps p{margin:8px 0;color:#d9ddd6;font:400 12px/1.6 system-ui,sans-serif}
+      .halo-companion-first-steps nav{display:flex;flex-wrap:wrap;gap:8px}
+      .halo-companion-first-steps a{display:inline-flex;align-items:center;min-height:44px;padding:8px 12px;border:1px solid #ebc470;border-radius:8px;color:#ebc470;text-decoration:none;font:600 12px/1.4 system-ui,sans-serif}
       .halo-companion-panel{position:fixed;max-height:calc(100vh - 20px);grid-template-rows:auto auto minmax(0,1fr) auto;overflow-y:auto}
       @media(max-width:600px){.halo-companion,.halo-companion-recall{left:10px;bottom:10px}.halo-companion-launcher{grid-template-columns:42px minmax(0,1fr) 6px;min-height:52px}.halo-companion-launcher-core{width:42px;height:42px}.halo-companion-panel{bottom:64px;width:calc(100vw - 20px);height:min(690px,calc(100vh - 84px))}.halo-companion-title{font-size:22px}.halo-companion-roster{grid-template-columns:repeat(4,1fr)}.halo-companion-agent span:last-child{display:none}.halo-companion-settings-grid{grid-template-columns:1fr}}
       @media(prefers-reduced-motion:reduce){.halo-companion *,.halo-companion *::before,.halo-companion-recall{animation:none!important;transition:none!important}}
@@ -363,6 +436,10 @@
         </section>
         <div class="halo-companion-feed" role="log" aria-live="polite" aria-busy="false" aria-label="HALO Guide conversation"></div>
         <footer class="halo-companion-compose">
+          <details class="halo-companion-start">
+            <summary>Start here / What do I do next?</summary>
+            <section aria-label="First steps on this page" class="halo-companion-first-steps"></section>
+          </details>
           <form class="halo-companion-form">
             <input class="halo-companion-input" maxlength="1000" autocomplete="off" enterkeyhint="send" aria-label="Ask the HALO Guide" placeholder="Ask for guidance…">
             <button class="halo-companion-send" type="submit" aria-label="Send message">↗</button>
@@ -387,7 +464,7 @@
       <button class="halo-companion-launcher" type="button" aria-expanded="false" aria-controls="haloCompanionPanel" aria-label="Open HALO Guide">
         <span class="halo-companion-launcher-core">${AGENTS[state.agent].glyph}</span>
         <span class="halo-companion-unread" hidden aria-hidden="true">0</span>
-        <span class="halo-companion-launcher-copy"><strong>✦ ASK HALO</strong><span>HALO GUIDE · 4 SPECIALISTS</span></span>
+        <span class="halo-companion-launcher-copy"><strong>✦ ASK HALO</strong><span>START HERE · HALO GUIDE · 4 SPECIALISTS</span></span>
         <span class="halo-companion-status" aria-hidden="true"></span>
       </button>
       <button class="halo-companion-dismiss" type="button" aria-label="Minimize HALO Guide" title="Minimize">–</button>
@@ -620,6 +697,36 @@
     if (role === "assistant" && options.speak && state.settings.promptMode === "proactive") speakText(text);
   }
 
+  function renderFirstSteps() {
+    const guide = firstStepsForPath(location.pathname);
+    const host = root.querySelector(".halo-companion-first-steps");
+    host.replaceChildren();
+    const title = document.createElement("h3");
+    title.textContent = guide.title;
+    const first = document.createElement("p");
+    first.textContent = guide.detail;
+    const next = document.createElement("p");
+    next.textContent = `Next: ${guide.next}`;
+    const links = document.createElement("nav");
+    links.setAttribute("aria-label", "Choose your next step");
+    const destinations = [[guide.route, guide.action], ["/music/", "Listen"],
+      ["/song-catalog/", "Upload / manage my songs"], ["/signal-network/", "Artist workspace"], ["/support/", "Get help"]];
+    const seen = new Set();
+    for (const [route, label] of destinations) {
+      if (seen.has(route)) continue;
+      seen.add(route);
+      const link = document.createElement("a");
+      link.href = route;
+      link.textContent = label;
+      // Embedded workspaces should navigate the whole site, not nest another workspace.
+      link.target = "_top";
+      links.appendChild(link);
+    }
+    const note = document.createElement("p");
+    note.textContent = "These steps work without AI chat. Nothing is uploaded, purchased or published by opening this guide.";
+    host.append(title, first, next, links, note);
+  }
+
   function showThinking(show) {
     const feed = root.querySelector(".halo-companion-feed");
     feed.querySelector(".halo-companion-thinking")?.remove();
@@ -750,6 +857,8 @@
     cancelSpeech();
   });
   const guide = pageGuide();
+  renderFirstSteps();
+  window.addEventListener("popstate", renderFirstSteps);
   addMessage("assistant", guide.welcome, { agent: state.agent, suggestions: guide.prompts, initial: true });
 
   root.querySelector(".halo-companion-launcher").addEventListener("click", event => {

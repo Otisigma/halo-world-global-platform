@@ -56,6 +56,11 @@ recordings are unrelated. Anyone with the HMAC key can create records.
 
 ### If the panel reports service unavailable
 
+The shared **HALO Guide → Start here / What do I do next?** provides local,
+page-specific first steps without requiring the AI chat service. The provenance
+guide explains song versus snapshot IDs and directs creators back to their
+catalog, rather than asking them to upload into every workspace.
+
 The panel is a reader/comparison workspace, not another upload destination.
 Upload the sale master through the main catalog upload; automatic observation
 creation runs after successful registration.

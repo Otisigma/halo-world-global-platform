@@ -199,7 +199,11 @@ export const allowedEvents = new Set([
   "take_cued_world_live",
   "toggle_adaptive_mode",
   "toggle_filter",
-  "upload_drive_audio"
+  "upload_drive_audio",
+  "video_discovery_preview",
+  "video_discovery_navigation",
+  "video_discovery_playlist_start",
+  "video_discovery_continuation"
 ]);
 
 const allowedMetadataKeys = new Set([

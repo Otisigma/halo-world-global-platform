@@ -129,6 +129,7 @@
     const driveCandidate = [...(resolved.candidates || []), resolved.src].find(isGoogleDriveUrl);
     return driveCandidate ? formatAudioStreamUrl(driveCandidate) : "";
   }
+  window.HaloCatalogPlaybackSources = Object.freeze({ trackStreamUrl });
 
   function playTrackButton(release, { compact = false } = {}) {
     const audioUrl = trackStreamUrl(release);

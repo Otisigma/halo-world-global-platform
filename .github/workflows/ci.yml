@@ -21,6 +21,8 @@ jobs:
         run: npm ci --ignore-scripts
       - name: Test all audio stream endpoints
         run: npm run test:audio-endpoints
+      - name: Test master provenance observations
+        run: npm run test:master-provenance
       - name: Test video discovery loop
         run: npm run test:video-discovery
 

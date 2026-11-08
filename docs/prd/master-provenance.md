@@ -65,3 +65,13 @@ keys; auditable error states; and absence of secrets in output and logs.
 Production readiness also requires a safely applied migration and explicitly
 configured key. A successful build or a promotional visual is not evidence that
 the production pipeline is stamping or verifying masters.
+
+## Implementation status
+
+The owner-only catalog panel provides on-demand authenticated observations,
+stored-byte comparisons and browser-local exact-byte comparisons. This is a
+partial implementation of the desired outcome, not upload-time stamping:
+mutable storage cannot yet guarantee an atomic snapshot or bind a record to an
+immutable master. See [the operational guide](../master-provenance-foundation.md)
+for deployment prerequisites, key management and the remaining work. Production
+behavior requires the migration and server secrets to be configured and verified.

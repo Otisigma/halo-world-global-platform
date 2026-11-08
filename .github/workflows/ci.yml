@@ -25,6 +25,8 @@ jobs:
         run: npm run test:master-provenance
       - name: Test retained master snapshots
         run: npm run test:retained-master
+      - name: Test catalog recovery packs
+        run: npm run test:catalog-recovery
       - name: Test video discovery loop
         run: npm run test:video-discovery
 

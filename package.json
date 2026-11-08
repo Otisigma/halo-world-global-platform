@@ -35,6 +35,7 @@
     "dev": "node server.js",
     "diagnose": "node deploy/diagnostics.js",
     "test:database": "node scripts/database-migration-contracts.mjs",
+    "test:catalog-recovery": "node --test scripts/catalog-recovery-contracts.mjs",
     "test:journey": "node scripts/empath-journey-api-contracts.mjs && node scripts/empath-journey-ui-contracts.mjs",
     "test:signal-emotion": "node scripts/signal-emotion-contracts.mjs",
     "deploy:feedback": "node scripts/deploy-health-contracts.mjs && node scripts/deployment-workflow-contracts.mjs",

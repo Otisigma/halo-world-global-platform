@@ -137,6 +137,10 @@ function errorResult(response, body) {
   return "error";
 }
 
+export function masterProvenanceStatusDetail(result) {
+  return STATUS_COPY[result]?.detail || STATUS_COPY.error.detail;
+}
+
 export function createCatalogMasterProvenanceApi({
   fetchImpl = globalThis.fetch,
   endpoint = "/api/song-catalog/master-provenance",

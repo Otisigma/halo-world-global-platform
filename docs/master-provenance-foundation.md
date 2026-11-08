@@ -94,6 +94,11 @@ intended file.
 
 ## Work still required
 
+The [catalog recovery satellite](catalog-recovery.md) separately exports selected
+local originals, supporting documents and an unsigned printable register. It can
+check supplied copies without these server keys. Recovery-pack fingerprints and
+historical observation references are not new HMAC stamps or retained snapshots.
+
 A separate [retained snapshot implementation](retained-master-snapshots.md) now
 provides opt-in archival copies and Ed25519 signatures. It does not upgrade
 existing observations or make their original sources immutable. Its configuration,

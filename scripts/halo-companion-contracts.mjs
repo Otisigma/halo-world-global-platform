@@ -5,6 +5,41 @@ import vm from "node:vm";
 const companion = await readFile(new URL("../halo-companion.js", import.meta.url), "utf8");
 const companionFunction = await readFile(new URL("../netlify/functions/halo-companion.mjs", import.meta.url), "utf8");
 
+{
+  const start = companion.indexOf("  const FIRST_STEPS =");
+  const end = companion.indexOf("  const SETTINGS_KEY", start);
+  const guide = vm.runInNewContext(`${companion.slice(start, end)}firstStepsForPath;`);
+  for (const [path, title] of [
+    ["/song-catalog/", "Manage your music"], ["/song-catalog/index.html", "Manage your music"],
+    ["/dreamweaver/song/abc", "Experience the music"], ["/music-upload/", "Upload a finished recording"],
+    ["/music/", "Find your next song"], ["/radio/", "Listen to HALO Radio"],
+    ["/release-house/", "Prepare a release"], ["/finish-house/", "Finish a recording"],
+    ["/provenance/verify/", "Understand a master stamp"], ["/dj-deck.html", "Start a DJ session"],
+    ["/creators/gear-guide.html", "Build your creator presence"], ["/support/", "Get help"],
+    ["/signal-network/", "Explore your artist workspace"],
+  ]) {
+    const result = guide(path);
+    assert.equal(result.title, title);
+    assert.ok(result.detail && result.next && result.action);
+    assert.match(result.route, /^\/(?!\/)/);
+  }
+  assert.equal(guide("/musical-unrelated/").title, "New to HALO? Start with your goal.", "prefix lookalikes do not inherit unrelated instructions");
+  assert.match(guide("/song-catalog/").detail, /Stems and instrumentals are optional/);
+  assert.match(guide("/provenance/verify/").next, /not proof of copyright/);
+  for (const path of ["music/index.html", "radio/index.html", "dreamweaver/index.html", "song-catalog/index.html",
+    "release-house/index.html", "finish-house/index.html", "music-upload/index.html", "creators/index.html",
+    "signal-network/index.html", "support/index.html", "provenance/index.html", "provenance/verify/index.html"]) {
+    assert.match(await readFile(new URL(`../${path}`, import.meta.url), "utf8"), /src="\/(?:site-monitor|halo-companion)\.js"/, `${path} mounts guidance`);
+  }
+  const rendererStart = companion.indexOf("  function renderFirstSteps()");
+  const rendererEnd = companion.indexOf("  function showThinking", rendererStart);
+  const renderer = companion.slice(rendererStart, rendererEnd);
+  assert.doesNotMatch(renderer, /fetch\(|innerHTML|localStorage|\.click\(/, "first steps neither depend on AI nor perform mutations");
+  assert.match(renderer, /link\.target = "_top"/);
+  assert.match(companion, /window\.addEventListener\("popstate", renderFirstSteps\)/);
+  assert.match(companion, /Start here \/ What do I do next\?/);
+}
+
 assert.match(companion, /Voice \+ guidance options/);
 assert.match(companion, /halo-companion-settings\.v1/);
 assert.match(companion, /halo-artist-journey-state\.v1/);

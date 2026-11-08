@@ -26,6 +26,25 @@ const historyResponse = {
 };
 const manifest = { observationId, sha256, byteSize: bytes.byteLength, createdAt, limitation: "not a certificate" };
 {
+  for (const [code, expected] of [["provenance_keys_missing", "keys_missing"], ["provenance_schema_missing", "schema_missing"]]) {
+    let repaired = false, observeCalls = 0;
+    const api = createCatalogMasterProvenanceApi({ fetchImpl: async () => repaired
+      ? Response.json({ ...historyResponse, observations: [] })
+      : Response.json({ code, message: "setup required" }, { status: 503 }) });
+    const controller = createMasterProvenanceController({ songId, versionId,
+      api: { ...api, observe: async () => { observeCalls++; throw new Error("must not run while setup is missing"); } } });
+    await controller.refreshHistory();
+    assert.equal(controller.getState().status, expected);
+    await controller.observe();
+    assert.equal(observeCalls, 0);
+    repaired = true;
+    await controller.refreshHistory();
+    assert.equal(controller.getState().historyState, "loaded");
+    assert.equal(controller.getState().status, "not_checked", "refresh restores controls after repair even with no history");
+    controller.dispose();
+  }
+}
+{
   let manifestReads = 0;
   let currentManifest = manifest;
   const controller = createMasterProvenanceController({

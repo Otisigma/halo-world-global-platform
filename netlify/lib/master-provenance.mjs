@@ -4,6 +4,7 @@ const DOMAIN = "HALO master provenance record v1\n";
 const VERSION = /^[A-Za-z0-9_-]{1,64}$/;
 const HEX = /^[0-9a-f]{64}$/;
 const FIELDS = ["schemaVersion", "keyVersion", "ownerId", "songId", "versionId", "sourceType", "sourceId", "byteSize", "sha256", "createdAt"];
+const configurationError = message => Object.assign(new Error(message), { code: "provenance_keys_missing" });
 
 /**
  * Load versioned, independently generated keys from a server-side JSON object.
@@ -14,22 +15,22 @@ export function loadProvenanceKeys(env = process.env) {
   try {
     encoded = JSON.parse(env.HALO_PROVENANCE_KEYS || "");
   } catch {
-    throw new Error("Provenance keys are not configured correctly");
+    throw configurationError("Provenance keys are not configured correctly");
   }
   const activeVersion = env.HALO_PROVENANCE_ACTIVE_KEY;
   if (!encoded || Array.isArray(encoded) || typeof encoded !== "object" || typeof activeVersion !== "string" || !VERSION.test(activeVersion)) {
-    throw new Error("Provenance keys are not configured correctly");
+    throw configurationError("Provenance keys are not configured correctly");
   }
   const keys = new Map();
   for (const [version, value] of Object.entries(encoded)) {
     if (!VERSION.test(version) || typeof value !== "string" || !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(value)) {
-      throw new Error("Provenance keys are not configured correctly");
+      throw configurationError("Provenance keys are not configured correctly");
     }
     const key = Buffer.from(value, "base64");
-    if (key.length < 32 || key.toString("base64") !== value) throw new Error("Provenance keys are not configured correctly");
+    if (key.length < 32 || key.toString("base64") !== value) throw configurationError("Provenance keys are not configured correctly");
     keys.set(version, key);
   }
-  if (!keys.has(activeVersion)) throw new Error("Provenance active key is unavailable");
+  if (!keys.has(activeVersion)) throw configurationError("Provenance active key is unavailable");
   return { activeVersion, keys };
 }
 
@@ -56,7 +57,7 @@ function encodedRecord(record) {
 
 function getKey(keyring, version) {
   const key = keyring?.keys instanceof Map ? keyring.keys.get(version) : null;
-  if (!Buffer.isBuffer(key) || key.length < 32) throw new Error("Provenance key version is unavailable");
+  if (!Buffer.isBuffer(key) || key.length < 32) throw configurationError("Provenance key version is unavailable");
   return key;
 }
 

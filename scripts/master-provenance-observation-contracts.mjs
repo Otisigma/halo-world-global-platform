@@ -14,6 +14,32 @@ const row = { audio_storage_key: "", audio_blob_prefix: prefix, audio_chunk_coun
 const asStream = bytes => new ReadableStream({ start(c) { c.enqueue(Uint8Array.from(bytes)); c.close(); } });
 const keyring = loadProvenanceKeys({ HALO_PROVENANCE_ACTIVE_KEY: "v1", HALO_PROVENANCE_KEYS: JSON.stringify({ v1: Buffer.alloc(32, 7).toString("base64") }) });
 
+test("authenticated setup diagnostics distinguish missing keys and migration without exposing secrets", async () => {
+  let error, user = { id: "user" };
+  const db = { sql: async parts => {
+    if (error?.code !== "provenance_keys_missing") throw error;
+    if (parts.join("?").includes("SELECT v.audio_storage_key")) return [row];
+    return [];
+  } };
+  const handler = createMasterProvenanceHandler({
+    getUser: async () => user, getDatabase: async () => db, ensureMembership: async () => ({ member_id: owner }),
+    loadProvenanceKeys: () => { throw error; }, verifyRequestOrigin: () => {}, logError: () => {},
+  });
+  const request = () => new Request(`https://site.test/api/song-catalog/master-provenance?songId=${song}&versionId=${version}`);
+  for (const [code, expected] of [["provenance_keys_missing", "provenance_keys_missing"],
+    ["42P01", "provenance_schema_missing"], ["42703", "provenance_schema_missing"], ["ECONNRESET", "provenance_unavailable"]]) {
+    error = Object.assign(new Error("private-token storage-secret"), { code });
+    const response = await handler(request());
+    assert.equal(response.status, 503);
+    const body = await response.json();
+    assert.equal(body.code, expected);
+    assert.doesNotMatch(JSON.stringify(body), /private-token|storage-secret/);
+  }
+  assert.throws(() => loadProvenanceKeys({}), { code: "provenance_keys_missing" });
+  user = null;
+  assert.equal((await handler(request())).status, 401, "configuration details require authentication");
+});
+
 test("automatic uploads observe actual storage, reuse retries, and report failures without rejecting uploads", async () => {
   const state = { row: { ...row }, existing: null, reads: 0, inserts: 0, limited: false, changed: false, logs: [] };
   const db = { sql: async (parts, ...values) => {

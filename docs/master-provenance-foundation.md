@@ -54,6 +54,22 @@ recordings are unrelated. Anyone with the HMAC key can create records.
 
 ## Deployment and key management
 
+### If the panel reports service unavailable
+
+The panel is a reader/comparison workspace, not another upload destination.
+Upload the sale master through the main catalog upload; automatic observation
+creation runs after successful registration.
+
+Authenticated errors now distinguish missing signing keys, incomplete database
+schema, and other database/storage failures. **Signing setup required** means
+configure both HMAC environment variables below and redeploy; **Database setup
+required** means apply the observation migration. Observation controls are
+disabled for these setup errors, but **Refresh history** stays available.
+After fixing configuration, refresh history to restore the controls.
+Generic connectivity or incomplete-read failures remain explicit non-successes;
+check function logs and the configured storage provider. No error exposes
+credentials or storage URLs, and observation failures do not delete uploaded audio.
+
 Apply the `master_provenance_observations` migration using the existing database
 migration process before enabling the feature. Set `HALO_PROVENANCE_ACTIVE_KEY`
 to a version identifier (letters, digits, `_`, or `-`) and

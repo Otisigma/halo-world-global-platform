@@ -2,6 +2,7 @@ import { MASTER_UPLOAD_MAX_BYTES } from "./direct-upload-storage.mjs";
 import { verifyMasterBytes, verifyProvenanceRecord } from "./master-provenance.mjs";
 import { describeMasterSource, readObservedMaster } from "./master-provenance-observation.mjs";
 import { recordMasterObservation } from "./master-upload-observation.mjs";
+import { provenanceFailure } from "./master-provenance-errors.mjs";
 
 // Platform-independent handler; the Netlify adapter injects identity, database, storage and keys.
 const limitation = "This is an observation of bytes read, not a certificate of the current master. Sources can change during or after reading; chunk observations can combine concurrent writes. No immutable copy is retained.";
@@ -69,6 +70,7 @@ async function listObservations(request, deps) {
     ORDER BY created_at DESC, id DESC
     LIMIT ${limit + 1}
   `;
+  deps.loadProvenanceKeys();
   const sourceId = currentSourceId(version, owner, songId, versionId);
   return json({
     songId,
@@ -101,9 +103,9 @@ async function observationManifest(request, deps) {
   let authentic;
   try {
     authentic = verifyProvenanceRecord(seal, deps.loadProvenanceKeys());
-  } catch {
+  } catch (error) {
     // Missing configuration or a retired key makes the record unverifiable, not invalid.
-    return json({ message: "Provenance verification key is unavailable" }, 503);
+    return json(provenanceFailure(error), 503);
   }
   const record = seal.record;
   if (!authentic || record.ownerId !== owner || record.songId !== songId || record.versionId !== versionId) {
@@ -119,7 +121,7 @@ export function createMasterProvenanceHandler(deps) {
     if (getAction !== null && getAction !== "manifest") return json({ message: "Invalid observation request" }, 400);
     const logged = getAction === "manifest" ? "manifest" : "list";
     try { return getAction === "manifest" ? await observationManifest(request, deps) : await listObservations(request, deps); }
-    catch { deps.logError(JSON.stringify({ event: "master_provenance_failed", action: logged })); return json({ message: "Provenance information is unavailable" }, 503); }
+    catch (error) { deps.logError(JSON.stringify({ event: "master_provenance_failed", action: logged })); return json(provenanceFailure(error), 503); }
   }
   if (request.method !== "POST") return Response.json({ message: "Method not allowed" }, { status: 405, headers: { Allow: "GET, POST", "Cache-Control": "no-store" } });
   try { deps.verifyRequestOrigin(request); } catch { return json({ message: "Cross-origin requests are not accepted" }, 403); }
@@ -181,10 +183,10 @@ export function createMasterProvenanceHandler(deps) {
     try { afterId = describeMasterSource(after, owner, songId, versionId).id; } catch { return json({ result: "stale", limitation }, 409); }
     if (afterId !== source.id) return json({ result: "stale", limitation }, 409);
     return json({ observationId, result: matches ? "observed_bytes_match" : "observed_bytes_differ", limitation });
-  } catch {
+  } catch (error) {
     // Fixed event only: never log storage URLs, keys, user identifiers, or upstream error text.
     deps.logError(JSON.stringify({ event: "master_provenance_failed", action: action === "verify" ? "verify" : "observe" }));
-    return json({ message: "Provenance observation is unavailable or the read was incomplete" }, 503);
+    return json(provenanceFailure(error), 503);
   }
 }
   };

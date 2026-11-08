@@ -48,7 +48,7 @@ async function loadRecord(id) {
   envelope = { record, signature: data.signature };
   keys = published;
   $("#facts").replaceChildren();
-  for (const [label, value] of Object.entries({ "Record ID": record.recordId, "Song ID": record.songId,
+  for (const [label, value] of Object.entries({ "Snapshot record ID": record.recordId, "Song ID": record.songId,
     "Master version": record.versionId, "SHA-256": record.sha256, "Bytes": record.byteSize,
     "Server recorded time": record.createdAt, "Retention until": record.retainUntil,
     "Source consistency": record.sourceConsistency, "Parent snapshot": record.parentRecordId || "None",

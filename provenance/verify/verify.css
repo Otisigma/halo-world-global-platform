@@ -18,3 +18,19 @@ dt { color: #ffd694; font-weight: 700; margin-top: 14px; }
 dd { margin: 6px 0; overflow-wrap: anywhere; }
 [hidden] { display: none !important; }
 #status { padding: 18px; border-left: 3px solid #d7af6b; background: #171920; }
+.identity-field { margin: 14px 0; }
+.identity-heading { display: flex; align-items: center; gap: 10px; }
+.identity-heading label { margin: 0; }
+.identity-help { position: relative; }
+.identity-help summary { display: grid; place-items: center; width: 44px; height: 44px; box-sizing: border-box; list-style: none; border: 1px solid #715932; border-radius: 50%; color: #ffd694; background: #171920; cursor: pointer; font-family: Georgia, serif; font-weight: 700; }
+.identity-help summary::-webkit-details-marker { display: none; }
+.identity-help summary:hover, .identity-help[open] summary { border-color: #ffd694; background: #29251e; }
+.identity-tooltip { position: absolute; z-index: 2; top: calc(100% + 8px); right: 0; width: min(320px, 65vw); box-sizing: border-box; padding: 18px; border: 1px solid #d7af6b; border-radius: 12px; background: #171920; box-shadow: 0 12px 32px #0009; line-height: 1.6; overflow-wrap: anywhere; }
+.identity-tooltip strong { color: #ffd694; }
+.identity-tooltip p { margin: 8px 0 0; }
+.identity-hint { margin: 8px 0 0; font-size: .875rem; }
+@media (max-width: 600px) {
+  .identity-tooltip { position: static; width: 100%; margin-top: 8px; }
+  .identity-heading:has(.identity-help[open]) { display: block; }
+  .identity-help[open] { margin-top: 8px; }
+}

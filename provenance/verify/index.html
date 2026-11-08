@@ -19,7 +19,14 @@
       <h2 id="captureTitle">Owner workspace</h2>
       <p>Sign in through the catalog. Capture is limited to the active sale master. Uploads automatically attempt capture only when retained storage and signing are enabled.</p>
       <form id="captureForm">
-        <label>Song ID<input name="songId" id="songId" required></label>
+        <div class="identity-field">
+          <div class="identity-heading"><label for="songId">Song ID</label>
+            <details class="identity-help"><summary aria-label="About the song ID" aria-describedby="songIdHelp">i</summary>
+              <div class="identity-tooltip" id="songIdHelp"><strong>The song, not the snapshot.</strong><p>This identifies your catalog song. Use it with the master version ID to capture or list snapshots. To inspect one signed snapshot, use its snapshot record ID instead. Neither ID is a signing key.</p></div>
+            </details>
+          </div>
+          <input name="songId" id="songId" aria-describedby="songIdHelp" required>
+        </div>
         <label>Master version ID<input name="versionId" id="versionId" required></label>
         <label>Parent snapshot ID (optional)<input name="parentRecordId" placeholder="Existing snapshot you own"></label>
         <label>Relationship<select name="relationship"><option value="original">Original snapshot</option><option value="revision">Revision</option><option value="remix">Remix</option><option value="edit">Edit</option></select></label>
@@ -30,7 +37,18 @@
     </section>
     <section aria-labelledby="recordTitle">
       <h2 id="recordTitle">Inspect a snapshot</h2>
-      <form id="recordForm"><label>Snapshot record ID<input id="recordId" required></label><button type="submit">Load signed record</button></form>
+      <form id="recordForm">
+        <div class="identity-field">
+          <div class="identity-heading"><label for="recordId">Snapshot record ID</label>
+            <details class="identity-help"><summary aria-label="About the snapshot record ID" aria-describedby="recordIdHelp">i</summary>
+              <div class="identity-tooltip" id="recordIdHelp"><strong>One snapshot. One signed record.</strong><p>Use the ID from your snapshot history to load that record here. Verification links use <code>?record=SNAPSHOT_ID</code>, not the song ID. This ID is a reference, never a secret or signing key. Private records still require sign-in.</p></div>
+            </details>
+          </div>
+          <input id="recordId" aria-describedby="recordIdHelp recordIdHint" required>
+          <p class="identity-hint" id="recordIdHint">Use the snapshot ID, not the song ID. No audio re-upload is needed.</p>
+        </div>
+        <button type="submit">Load signed record</button>
+      </form>
       <article id="stamp" hidden>
         <img src="/assets/halo-master-provenance.png" width="200" height="133" alt="HALO provenance artwork">
         <h3>Signature verified</h3>

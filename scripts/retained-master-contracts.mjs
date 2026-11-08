@@ -275,6 +275,16 @@ test("retained capture feeds an HMAC observation without a second source read", 
 });
 
 test("both upload paths wire explicit capture results; satellite shares one ledger and no file upload", async () => {
+  const markup = await readFile(new URL("../provenance/verify/index.html", import.meta.url), "utf8");
+  const styles = await readFile(new URL("../provenance/verify/verify.css", import.meta.url), "utf8");
+  assert.match(markup, /aria-describedby="recordIdHelp recordIdHint"/);
+  assert.match(markup, /aria-describedby="songIdHelp"/);
+  assert.match(markup, /<summary aria-label="About the snapshot record ID"/);
+  assert.match(markup, /Neither ID is a signing key/);
+  assert.match(markup, /\?record=SNAPSHOT_ID/);
+  assert.match(markup, /Use the snapshot ID, not the song ID/);
+  assert.match(styles, /width: 44px; height: 44px/);
+  assert.match(styles, /@media \(max-width: 600px\)/);
   for (const path of ["netlify/functions/song-catalog-master-upload.ts", "netlify/functions/song-catalog-audio.ts"]) {
     const source = await readFile(new URL(`../${path}`, import.meta.url), "utf8");
     assert.match(source, /processUploadedMaster\(db, ownerMemberId, songId, versionId, audioStore\)/);

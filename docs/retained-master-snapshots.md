@@ -105,6 +105,13 @@ there is no independent revocation registry in this release.
 
 ## Public and offline verification
 
+Use the **snapshot record ID** to inspect a signed record at
+`/provenance/verify/?record=SNAPSHOT_ID`. The **song ID** identifies the catalog
+song and is used with its master version ID to capture or list snapshots.
+Contextual help beside both fields explains the distinction on keyboard and
+touch devices. Neither identifier is a signing key, and loading a snapshot does
+not require re-uploading audio. Private records still require owner authentication.
+
 Records are private until their owner deliberately publishes one. Public
 verification returns only the signed record, signature and limitations.
 Stopping sharing works even when capture/storage is disabled; it cannot recall

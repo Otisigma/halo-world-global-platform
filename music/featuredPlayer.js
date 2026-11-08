@@ -244,8 +244,12 @@
     }
     const playButton = event.target instanceof Element ? event.target.closest("[data-queue-index]") : null;
     // The document-level delegated handler in music.js performs playback; this only arms auto-advance.
-    if (playButton && state.controller) state.controller.start(Number(playButton.dataset.queueIndex));
+    if (playButton && state.controller) {
+      window.dispatchEvent(new CustomEvent("halo:chart-queue-start"));
+      state.controller.start(Number(playButton.dataset.queueIndex));
+    }
   });
+  window.addEventListener("halo:discovery-queue-start", () => state.controller?.stop());
 
   // music.js re-renders #featuredRelease wholesale; keep the hero mounted at the top.
   new MutationObserver(mountHero).observe(container, { childList: true });

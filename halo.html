@@ -1231,6 +1231,8 @@
     <script src="/distribution-links.js"></script>
     <script src="/onboarding.js"></script>
     <script type="module" src="/halo-home-cinema.js"></script>
+    <link rel="stylesheet" href="/video-discovery.css">
+    <script type="module" src="/video-discovery.js"></script>
     <script id="haloFeaturedReleaseConfig" type="application/json">
       {
         "id": "when-the-world-goes-dark",
@@ -4675,6 +4677,8 @@
 
                     {!identityUser && <button type="button" onClick={() => openIdentity('signup', 'Your membership carries your profile, follows, and recognition from show to show.')} className="absolute bottom-5 right-5 z-20 hidden rounded-full border border-white/10 bg-black/35 px-4 py-2 text-[8px] font-black uppercase tracking-[.18em] text-white/55 backdrop-blur transition hover:border-white/25 hover:text-white md:inline-flex">Community access</button>}
                   </section>
+
+                  <halo-video-discovery surface="hub"></halo-video-discovery>
 
                   <section className="relative overflow-hidden rounded-[2rem] border border-amber-300/25 bg-[#090a0d] shadow-[0_30px_90px_rgba(0,0,0,.4)]" aria-labelledby="adaptive-dreamweaver-title" data-homepage-surface="adaptive-dreamweaver-player">
                     <div className="grid gap-px bg-white/10 lg:grid-cols-[1.06fr_.94fr]">

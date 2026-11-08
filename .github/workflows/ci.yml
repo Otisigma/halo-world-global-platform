@@ -23,6 +23,8 @@ jobs:
         run: npm run test:audio-endpoints
       - name: Test master provenance observations
         run: npm run test:master-provenance
+      - name: Test video discovery loop
+        run: npm run test:video-discovery
 
   api-cors-contracts:
     name: Express API CORS contracts

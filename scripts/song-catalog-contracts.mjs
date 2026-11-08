@@ -232,6 +232,7 @@ assert.match(client, /identity\.onAuthChange/, "private workspace responds to lo
     state: privateState, api: () => new Promise((resolve, reject) => pending.push({ resolve, reject })),
     elements: { shell: { setAttribute() {} } }, render() {}, message() {},
     dreamweaverUploadPanel: { reset() {} },
+    masterProvenancePanel: null,
     $: selector => ({ "#catalogUnavailable": availability, "#catalogSignInButton": signIn })[selector],
   };
   const load = runInNewContext(`${loadSource}\nloadCatalog;`, context);

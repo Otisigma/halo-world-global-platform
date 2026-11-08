@@ -111,6 +111,10 @@ song and is used with its master version ID to capture or list snapshots.
 Contextual help beside both fields explains the distinction on keyboard and
 touch devices. Neither identifier is a signing key, and loading a snapshot does
 not require re-uploading audio. Private records still require owner authentication.
+The catalog's read-only **Song ID (SID)** has the same guidance. Help beside the
+owner workspace explains that unavailable retained storage requires platform
+setup, not a different identifier or another upload. The API reports
+`retained_storage_unavailable` without claiming an immutable certificate.
 
 Records are private until their owner deliberately publishes one. Public
 verification returns only the signed record, signature and limitations.

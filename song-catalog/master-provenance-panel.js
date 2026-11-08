@@ -5,16 +5,16 @@ const HISTORY_LIMIT = 20;
 
 const STATUS_COPY = Object.freeze({
   keys_missing: {
-    label: "Signing setup required",
-    detail: "Master integrity signing keys need configuration by the site operator, followed by a redeploy. See docs/master-provenance-foundation.md. Refresh history afterward; this does not remove uploaded audio.",
+    label: "Verification unavailable",
+    detail: "Master verification is currently unavailable. No verified stamp has been issued. You do not need to upload your audio again.",
   },
   schema_missing: {
-    label: "Database setup required",
-    detail: "The site operator must apply the master_provenance_observations database migration. Refresh history afterward; this does not remove uploaded audio.",
+    label: "Verification unavailable",
+    detail: "Master verification is currently unavailable. No verified stamp has been issued. You do not need to upload your audio again.",
   },
   unconfigured: {
-    label: "Not configured",
-    detail: "The observation service is not configured. No bytes were read or compared.",
+    label: "Verification unavailable",
+    detail: "Master verification is currently unavailable. No verified stamp has been issued.",
   },
   unauthenticated: {
     label: "Sign-in required",
@@ -33,8 +33,8 @@ const STATUS_COPY = Object.freeze({
     detail: "The service could not authenticate this observation record. No byte comparison was confirmed.",
   },
   unavailable: {
-    label: "Service unavailable",
-    detail: "Master integrity could not complete this request. Refresh history and retry; if it persists, ask the site operator to check database and storage connectivity. No observation or comparison was confirmed; uploaded audio is unaffected.",
+    label: "Verification unavailable",
+    detail: "We could not complete master verification. No verification result was confirmed. You do not need to upload your audio again.",
   },
   rate_limited: {
     label: "Try again later",
@@ -618,6 +618,10 @@ export function mountMasterProvenancePanel(root, {
       query(SELECTORS.result).dataset.state = state.status;
       root.dataset.provenanceState = state.status;
       root.dataset.provenanceBusy = state.busy || "";
+      const setupUnavailable=["keys_missing", "schema_missing", "unconfigured"].includes(state.status);
+      query(".master-provenance-panel__actions").hidden=setupUnavailable;
+      query(".master-provenance-panel__file").hidden=setupUnavailable;
+      query(".master-provenance-panel__rate-limit").hidden=setupUnavailable;
       buttons.observe.disabled = Boolean(state.busy) || ["keys_missing", "schema_missing"].includes(state.status)
         || !hasScope || typeof api?.observe !== "function";
       buttons.refresh.disabled = Boolean(state.busy) || !hasScope || typeof api?.getHistory !== "function";

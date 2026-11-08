@@ -60,12 +60,13 @@ The panel is a reader/comparison workspace, not another upload destination.
 Upload the sale master through the main catalog upload; automatic observation
 creation runs after successful registration.
 
-Authenticated errors now distinguish missing signing keys, incomplete database
-schema, and other database/storage failures. **Signing setup required** means
-configure both HMAC environment variables below and redeploy; **Database setup
-required** means apply the observation migration. Observation controls are
-disabled for these setup errors, but **Refresh history** stays available.
-After fixing configuration, refresh history to restore the controls.
+Client-facing errors say **Verification unavailable**, not deployment instructions.
+Unavailable setup controls are hidden; no stamp or automatic retry is promised.
+Existing catalog reloads refresh the panel after the operator repairs setup.
+Safe error codes remain in authenticated API responses and server logs for operators:
+`provenance_keys_missing` means configure both HMAC environment variables below
+and redeploy; `provenance_schema_missing` means apply the observation migration.
+`provenance_unavailable` requires database/storage connectivity investigation.
 Generic connectivity or incomplete-read failures remain explicit non-successes;
 check function logs and the configured storage provider. No error exposes
 credentials or storage URLs, and observation failures do not delete uploaded audio.

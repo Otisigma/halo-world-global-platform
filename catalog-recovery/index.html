@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>Music asset register &amp; recovery | HALO</title>
+  <link rel="stylesheet" href="/catalog-recovery/recovery.css">
+  <script type="module" src="/identity.js"></script>
+  <script type="module" src="/catalog-recovery/recovery.js"></script>
+  <script src="/halo-companion.js" defer></script>
+</head>
+<body>
+  <a class="skip" href="#main">Skip to recovery workspace</a>
+  <header><a href="/halo">HALO Music World</a><nav aria-label="Recovery navigation"><a href="/song-catalog/">My catalog</a><a href="/provenance/verify/">Master verification</a></nav></header>
+  <main id="main">
+    <p class="eyebrow">01 / Your catalog, beyond the platform</p>
+    <h1>Keep the music.<br>Keep the record.</h1>
+    <p>A printable asset register and portable recovery pack. Local files are read in this browser, not uploaded. Existing HALO uploads stay unchanged; this does not switch your published catalog to device-only storage.</p>
+    <ol class="steps" aria-label="Recovery workflow">
+      <li><strong>1. Load your songs</strong>Load your catalog, add a device-only song, or reopen your saved manifest.</li>
+      <li><strong>2. Choose your files</strong>Attach the actual masters and any versions you want to preserve.</li>
+      <li><strong>3. Check another copy</strong>Select a copy from separate storage and compare its bytes.</li>
+      <li><strong>4. Export and test recovery</strong>Save the pack, extract it on another device, check the files, then print.</li>
+    </ol>
+    <section class="notice" aria-label="Storage and key responsibility">
+      <strong>A register is not a backup. A stamp is not legal ownership.</strong>
+      <p>The recovery pack includes only files you select. ZIP downloads are not encrypted. Store the pack on encrypted storage, keep copies in separate locations, and arrange authorized access with your solicitor. Never enter passwords, seed phrases or private keys here. Private keys are not needed to recover audio.</p>
+      <details><summary>What should my solicitor or trusted custodian receive?</summary><p>Provide the encrypted archive and printed inventory, plus references to agreements and your legal instructions. Keep access secrets separately through an agreed secure arrangement. Review collaborator shares, samples, licences, inheritance and account access with your solicitor. HALO does not transfer rights, assign a monetary value or guarantee recovery. A normal USB is storage, not a hardware signing wallet.</p></details>
+    </section>
+    <section class="controls" aria-label="Load and export recovery records">
+      <button id="loadCatalog" type="button">Sign in / load my catalog</button>
+      <button id="addLocalSong" type="button">Add a device-only song</button>
+      <label>Reopen a saved register<input id="importManifest" type="file" accept=".json,application/json"></label>
+      <label>Select multiple originals<input id="bulkFiles" type="file" multiple disabled></label>
+      <label>Select an originals folder<input id="bulkFolder" type="file" webkitdirectory multiple disabled></label>
+      <button id="saveManifest" type="button" disabled>Save register draft (no audio)</button>
+      <button id="exportPack" type="button" disabled>Download recovery pack with selected files</button>
+      <button id="printRegister" type="button" disabled>Print / save PDF</button>
+      <button id="clearWorkspace" type="button" disabled>Clear this workspace</button>
+    </section>
+    <p id="status" role="status" aria-live="polite">Nothing loaded. No files copied or checked.</p>
+    <p id="summary"></p>
+    <p class="hint">Bulk selection matches saved fingerprints, or unique catalog filenames and sizes. Ambiguous files must be assigned individually. Up to 500 songs; 200 MiB per file and 2 GiB per pack. Files are processed one at a time. Nothing is autosaved—save your draft before closing or refreshing. An imported draft contains records, not audio or freshly verified stamps.</p>
+    <div id="songs"></div>
+    <section id="printedRegister" aria-label="Printable recovery register"></section>
+  </main>
+  <dialog id="localSongDialog" aria-labelledby="localSongTitle">
+    <form id="localSongForm">
+      <h2 id="localSongTitle">Add a device-only song</h2>
+      <p>No audio or catalog entry will be uploaded. This creates a local recovery reference, not a registered HALO release or signed stamp.</p>
+      <label>Song title<input name="title" required maxlength="160"></label>
+      <label>Artist<input name="artist" maxlength="120"></label>
+      <button type="submit">Add to local register</button>
+      <button id="cancelLocalSong" type="button">Cancel</button>
+    </form>
+  </dialog>
+</body>
+</html>

@@ -20,6 +20,10 @@
     "/creators/gear-guide.html": { eyebrow: "Signal chain", welcome: "Muse here. I can help you identify the problem before considering equipment, then check the details that make a track ready for distribution.", prompts: ["Do I need new gear?", "Help me check my release", "Explain the affiliate links"] }
   };
   const FIRST_STEPS = [
+    { path: "/catalog-recovery", title: "Prepare your music recovery pack",
+      detail: "Load your catalog or add a device-only song, choose the original files, then check a copy from separate storage. No local audio is uploaded.",
+      next: "Export the pack with actual files, test restoring it, and print the register. Keep encrypted independent copies and arrange legal access with your solicitor. A fingerprint is not ownership or a backup.",
+      route: "/catalog-recovery/", action: "Open backup and recovery" },
     { path: "/song-catalog", title: "Manage your music",
       detail: "Sign in, choose Add a song, and upload the finished recording as its sale master. Stems and instrumentals are optional.",
       next: "Save the song details, then review readiness before publishing. Uploading does not itself confirm publication or a verified stamp.",
@@ -710,7 +714,7 @@
     const links = document.createElement("nav");
     links.setAttribute("aria-label", "Choose your next step");
     const destinations = [[guide.route, guide.action], ["/music/", "Listen"],
-      ["/song-catalog/", "Upload / manage my songs"], ["/signal-network/", "Artist workspace"], ["/support/", "Get help"]];
+      ["/song-catalog/", "Upload / manage my songs"], ["/catalog-recovery/", "Back up my music"], ["/signal-network/", "Artist workspace"], ["/support/", "Get help"]];
     const seen = new Set();
     for (const [route, label] of destinations) {
       if (seen.has(route)) continue;

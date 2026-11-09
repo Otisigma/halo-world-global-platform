@@ -52,7 +52,16 @@ export async function verifyRecoveryDirectory(directory) {
       results.push({ songId: song.id, versionId: version.id, path: relative, state: matches ? "matched" : "different" });
     }
   }
-  return { limitation: "Matches are against this unsigned manifest, not proof of ownership, legal title or an authenticated HALO stamp.", results };
+  return {
+    limitation: "Matches are against this unsigned manifest, not proof of ownership, legal title or an authenticated HALO stamp. No DAW session was reopened; dependencies and session-test declarations are not verified.",
+    projects: manifest.songs.map(song => ({
+      songId: song.id,
+      sessionReopening: "not_verified_by_this_check",
+      recordedHumanTest: song.project.reopenTest,
+      packInclusionRecorded: manifest.packInventory !== null
+    })),
+    results
+  };
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

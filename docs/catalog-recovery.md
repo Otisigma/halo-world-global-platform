@@ -33,6 +33,52 @@ loads two public, static verification tools, not a server-side upload.
 
 ## Pack contents and limits
 
+### Project handover context
+
+The `halo-catalog-recovery-v2` manifest adds per-song `project` fields:
+`daw`, `dawVersion`, `sampleRateHz` (nullable integer, 1–768000),
+`tempoBpm` (nullable number, 1–1000), `plugins`, `libraries`,
+`routingAutomation`, `externalMedia`, `availabilityNotes`, `licenceNotes`
+and `versionNotes`. List plugin/library names and exact versions one per line.
+These are user declarations, not automatically extracted audio/session metadata,
+machine-resolved dependencies, verified availability or transferable licences.
+Text is bounded to 160 characters for DAW/version and 1000 for other notes.
+Prefer relative media locations; never enter signed URLs or licence keys.
+
+Each version/file has a `role` (master, stem, session, reference render,
+supporting document, external media, or unspecified) and an optional
+`relatedVersionId` pointing to another version of the same song. Attach actual
+project files and assign their roles; linking and text references do not fetch
+or include any other file. Plugin binaries and licensed libraries should not
+be packaged without permission. Reference renders and stems give a recipient
+comparison material when dependencies are missing; HALO does not compare sound
+or rebuild routing and automation.
+Files retain the existing per-version asset paths, not the original DAW folder
+layout. Use the recorded media references to rebuild folders or relink files
+manually. Folder selection does not preserve session-relative media paths.
+
+Exports set `packInventory` to the version IDs of files actually included.
+Drafts use `null`; importing a pack's manifest into the workspace clears this
+export inventory until files are reselected and a new pack is exported.
+Printable/offline records distinguish recorded files from pack inclusion.
+Extraction and byte checks are still necessary; unsigned inventories can be
+edited. The verifier continues checking every recorded version, including those
+omitted from a partial export, and reports incompleteness rather than ignoring it.
+
+`project.reopenTest` is `null` until a user explicitly records a historical
+`passed` or `failed` declaration with test details and recording time. Record
+the target device/OS, DAW version, missing dependencies and comparison against
+reference audio. Neither export nor SHA-256 comparison sets this result. The
+declaration is unsigned, may refer to an earlier project state, and is not an
+independent or current-pack test. The Node verifier explicitly reports session
+reopening as unverified even when every file matches.
+
+Version 1 imports are upgraded in memory with empty project context, inferred
+file roles and no session test or export-inclusion claim. Fingerprints, backup
+checks, observation references and logs are preserved. Existing downloaded
+version 1 packs/verifiers are unchanged. Older verifiers cannot read new version
+2 manifests; new packs include the matching self-contained verifier/core.
+
 - `manifest.json`: versioned, unsigned asset register.
 - `register.html`: self-contained printable inventory and local file checker.
 - `assets/<song-id>/<version-id>/<safe-filename>`: selected original files and

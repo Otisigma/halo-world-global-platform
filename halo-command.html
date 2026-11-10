@@ -35,6 +35,7 @@
   <script src="/halo-command.js" defer></script>
   <script src="/owner-signups.js" defer></script>
   <script src="/owner-member-activity.js" defer></script>
+  <script src="/owner-outcomes.js" defer></script>
   <script src="/dreamweaver-oracle.js" defer></script>
 </head>
 <body>
@@ -97,6 +98,16 @@
         <article><span>REAL CREATORS</span><strong id="metricCreators">—</strong></article>
         <article><span>OPEN ISSUES</span><strong id="metricIssues">—</strong></article>
         <article><span>ROOM SIGNALS / 7D</span><strong id="metricSignals">—</strong></article>
+      </section>
+
+      <section id="ownerOutcomes" class="maintenance-section" aria-labelledby="outcomeTitle" hidden>
+        <div class="section-heading">
+          <div><p class="section-label">OWNER-ONLY / MEASURED OUTCOMES</p><h2 id="outcomeTitle">Is HALO helping people succeed?</h2></div>
+          <button id="outcomeRefresh" type="button">Refresh outcomes</button>
+        </div>
+        <p>Seven-day evidence, not feature counts or a quality score. Each measure names its source, denominator and coverage gaps. No individual listener identities or browsing histories are shown.</p>
+        <p id="outcomeStatus" role="status">Owner access required.</p>
+        <div id="outcomeSources" class="report-grid"></div>
       </section>
 
       <section class="control-deck" aria-labelledby="controlDeckTitle">

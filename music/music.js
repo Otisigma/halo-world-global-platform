@@ -152,7 +152,11 @@
       this.onError = onError;
       this.bar = null;
       this.delegatedClicks = false;
-      this.audio.addEventListener("playing", () => this.setStatus("playing"));
+      this.healthAttempt = null;
+      this.audio.addEventListener("playing", () => {
+        this.reportHealth("shop_playback_ready");
+        this.setStatus("playing");
+      });
       this.audio.addEventListener("waiting", () => { if (this.status === "playing") this.setStatus("loading"); });
       this.audio.addEventListener("pause", () => { if (this.status !== "error" && this.audio.paused) this.setStatus("paused"); });
       this.audio.addEventListener("ended", () => this.setStatus("paused"));
@@ -200,6 +204,7 @@
       this.playAttempt++;
       const src = formatAudioStreamUrl(track?.src);
       if (!src) {
+        this.healthAttempt = null;
         this.track = track?.id ? { ...track, src: "" } : null;
         this.fail("No preview audio is available for this release yet.");
         return;
@@ -220,6 +225,9 @@
     resume() {
       if (!this.track?.src) return;
       const attemptId = ++this.playAttempt;
+      const healthId = window.crypto?.randomUUID?.() || `${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 18)}`;
+      this.healthAttempt = { id: healthId, ready: false, failed: false };
+      this.reportHealth("shop_playback_attempt");
       if (this.status === "error") this.audio.src = this.track.src;
       this.setStatus("loading");
       const attempt = this.audio.play();
@@ -227,6 +235,19 @@
         if (attemptId !== this.playAttempt || error?.name === "AbortError") return;
         this.fail(error?.name === "NotAllowedError" ? "Tap play again to start the preview." : "This preview could not be streamed right now.");
       });
+    }
+
+    reportHealth(event) {
+      const attempt = this.healthAttempt;
+      if (!attempt) return;
+      if (event === "shop_playback_ready") {
+        if (attempt.ready) return;
+        attempt.ready = true;
+      } else if (event === "shop_playback_failed") {
+        if (attempt.failed) return;
+        attempt.failed = true;
+      }
+      window.haloStats?.track(event, { play_id: attempt.id });
     }
 
     toggle() {
@@ -237,6 +258,7 @@
 
     close() {
       this.playAttempt++;
+      this.healthAttempt = null;
       this.telemetry?.reset();
       this.preloader?.clear();
       this.audio.pause();
@@ -250,6 +272,7 @@
     }
 
     fail(message) {
+      this.reportHealth("shop_playback_failed");
       if (!this.track) {
         this.onError?.(message);
         return;

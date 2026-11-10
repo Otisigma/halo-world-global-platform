@@ -80,6 +80,8 @@ jobs:
         run: npm run test:fan-signal && node scripts/album-concierge-contracts.mjs && npm run test:concierge-showcase
       - name: Verify real PostgreSQL transactions
         run: npm run test:fan-curations:db
+      - name: Verify owner outcome aggregates in PostgreSQL
+        run: node scripts/owner-outcomes-db-contracts.mjs
       - name: Verify retained snapshot concurrency
         run: npm run test:retained-master:db
 

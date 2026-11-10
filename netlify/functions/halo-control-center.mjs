@@ -5,6 +5,7 @@ import { createAgentCommand, loadControlCenter } from "../lib/control-center.mjs
 import { requestPreflight } from "../../lib/request-preflight.js";
 import { loadOwnerSignups } from "../lib/owner-signups.mjs";
 import { cleanMemberId, loadOwnerMemberActivity, loadOwnerMemberDirectory } from "../lib/owner-member-activity.mjs";
+import { loadOwnerOutcomes } from "../lib/owner-outcomes.mjs";
 
 function json(body, status = 200, headers = {}) {
   return Response.json(body, { status, headers: { "Cache-Control": "private, no-store", ...headers } });
@@ -23,6 +24,10 @@ export default async function haloControlCenterHandler(request) {
 
     const url = new URL(request.url);
     const view = url.searchParams.get("view");
+    if (view === "outcomes") {
+      if (request.method !== "GET") return json({ message: "Outcome review is read-only" }, 405, { Allow: "HEAD, GET" });
+      return json({ outcomes: await loadOwnerOutcomes(getDatabase(), user) });
+    }
     if (view === "members" || view === "member") {
       if (request.method !== "GET") return json({ message: "Member activity review is read-only" }, 405, { Allow: "HEAD, GET" });
       if (view === "members") return json({ directory: await loadOwnerMemberDirectory(getDatabase(), user) });

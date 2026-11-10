@@ -41,6 +41,45 @@ availability, mobile Safari, and production deployment remain unverified here.
 The Chrome layout check covered the new player, not the whole page: the fixture
 also exposed overflow in existing pipeline and metadata panels outside this change.
 
+## Owner outcome coverage
+
+The private Control Center at `/halo-command.html` includes an outcome review,
+served by the existing owner-authorized, read-only
+`GET /api/halo-control-center?view=outcomes`. It performs four independent
+aggregate reads. Missing sources are labelled unavailable, not zero; a zero
+denominator produces "Not enough data", not a perfect success rate.
+
+- **Creator preparation:** projects created in the last seven days with all
+  thirteen Release House rooms currently complete. This is not proof of
+  publication, unaided completion or time to completion; no historical
+  completion timestamp or assistance attribution is inferred.
+- **Repeat listeners:** distinct members with consented listening reports in
+  both consecutive seven-day windows, divided by those in the preceding
+  window. Only currently enabled preferences with recorded consent are
+  included. Revoked data is excluded; anonymous listeners are not joined to
+  members, and no identities leave the aggregate query.
+- **Shop start reliability:** `shop_playback_attempt` precedes each shop-player
+  `play()` request. `shop_playback_ready` requires the real `playing` event;
+  `shop_playback_failed` records a media error or non-cancellation rejection.
+  Reports carry only an ephemeral `play_id`, not media URLs. Duplicate terminal
+  events are suppressed and aggregate queries deduplicate attempt identifiers
+  per anonymous browser. A start and later failure can overlap. Missing
+  terminal reports, cancellation and pending attempts remain unknown.
+  This measures `/music/` and `/music-upload/`, not all players, audibility,
+  buffering, full-track completion or platform uptime. Collection uses existing
+  anonymous stats and browser tracking preferences. It starts at deployment;
+  old events are not retroactively called playback attempts.
+- **Operational follow-through:** open maintenance issues, newly observed issue
+  records, currently scheduled-source records, and issues marked healed in the
+  window. These are stored workflow signals, not proof that a problem was caught
+  before users were affected or that a repair was independently verified.
+
+The outcome panel shares the existing owner sign-in lifecycle, clears on
+sign-out and authorization denial, ignores stale responses and does not cache
+private results in browser storage. It does not invent an overall quality
+score, an industry benchmark, sales, or revenue. Refresh after deployment and
+compare the labelled coverage against real artist and listener pilot results.
+
 ## What we learned
 
 | Lesson | Rule for future work |

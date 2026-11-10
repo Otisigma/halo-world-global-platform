@@ -109,6 +109,21 @@ for (const selector of ["player-track-info", "player-cover-art", "player-meta", 
 }
 assert.match(styles, /\.chart-play/, "chart rows must style their delegated play control");
 
+// Living Chart coverage must stay visible and must not depend on Drive or placeholder songs.
+for (const page of ["music/index.html", "music-upload/index.html"]) {
+  const html = await readFile(resolve(root, page), "utf8");
+  assert.match(html, /id="chartCoverage" role="status"/, `${page} must show Living Chart coverage`);
+}
+assert.match(client, /renderChartCoverage\(chartCoverageText\(coverage\)\)/, "chart render must publish coverage");
+assert.match(client, /href="#allReleasesTitle"/, "chart coverage must link to the full catalog");
+assert.match(client, /No placeholder songs are shown/, "catalog failure must pause the chart without placeholder songs");
+for (const name of ["isChartRelease", "hasChartActivity", "chartCoverage", "rankedReleases"]) {
+  const source = client.match(new RegExp(`  function ${name}\\([^\\n]*\\) \\{[\\s\\S]*?\\n  \\}`))?.[0] || "";
+  assert.ok(source, `${name} must exist`);
+  assert.doesNotMatch(source, /drive|GOOGLE_/i, `${name} must not depend on Drive configuration`);
+}
+assert.doesNotMatch(client, /GOOGLE_DRIVE_MASTERS_FOLDER_ID/, "the public chart must not read Drive master configuration");
+
 // Catalog metadata and feedback must come from supplied data, never demo values.
 {
   const context = vm.createContext({
@@ -119,7 +134,7 @@ assert.match(styles, /\.chart-play/, "chart rows must style their delegated play
     releaseMatchesRoom: () => true,
     logMusicIssue() {}
   });
-  for (const name of ["escapeHtml", "safeUrl", "isApprovedRelease", "catalogState", "catalogMetadataMarkup", "hasChartActivity", "catalogFeedbackMarkup", "chartSignal", "isChartRelease", "rankedReleases", "filteredReleases"]) {
+  for (const name of ["escapeHtml", "safeUrl", "isApprovedRelease", "catalogState", "catalogMetadataMarkup", "hasChartActivity", "catalogFeedbackMarkup", "chartSignal", "isChartRelease", "rankedReleases", "filteredReleases", "chartCoverage", "chartCoverageText"]) {
     const source = client.match(new RegExp(`  function ${name}\\([^\\n]*\\) \\{[\\s\\S]*?\\n  \\}`))?.[0];
     assert.ok(source, `${name} must be available for behavioral checks`);
     vm.runInContext(source, context);
@@ -148,6 +163,12 @@ assert.match(styles, /\.chart-play/, "chart rows must style their delegated play
   const release = { id: "recorded", title: "Recorded", artist: "Artist", status: "published", isChartEligible: true, genres: [], albumTitle: "Collection name", chartActivity };
   context.state.releases = [release, { ...release, id: "unmeasured", chartActivity: undefined }];
   assert.deepEqual(Array.from(context.rankedReleases(), item => item.id), ["recorded"], "unmeasured releases must not be ranked by freshness");
+  const coverage = context.chartCoverage();
+  assert.deepEqual({ ...coverage }, { total: 2, eligible: 2, active: 1, shown: 1, waiting: 1 }, "chart coverage must count eligible releases hidden for lack of activity");
+  assert.match(context.chartCoverageText(coverage), /Showing 1 of 2 chart-eligible releases in this room\. 1 has no recorded listens or release-room opens in the last 14 days/);
+  assert.match(context.chartCoverageText({ total: 0, eligible: 0, active: 0, shown: 0, waiting: 0 }), /No published releases/);
+  assert.match(context.chartCoverageText({ total: 5, eligible: 0, active: 0, shown: 0, waiting: 0 }), /None of the 5 published releases are chart-eligible/);
+  assert.match(context.chartCoverageText({ total: 3, eligible: 3, active: 3, shown: 3, waiting: 0 }), /Every eligible release has recorded activity/);
   context.state.query = "collection name";
   assert.equal(context.filteredReleases().length, 2, "collection metadata must be searchable");
   context.state.genre = "jazz";

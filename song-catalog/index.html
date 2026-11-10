@@ -16,7 +16,7 @@
 <body>
   <header class="catalog-header">
     <a class="brand" href="/halo"><img src="/assets/halo-logo-mark.webp" alt="" aria-hidden="true"><span><strong>HALO</strong><small>Song Catalog</small></span></a>
-    <nav aria-label="Catalog pathways"><a href="/song-catalog/">Song Catalog</a><a href="/release-house/">Release House</a><a href="/finish-house/">Finish House</a><a href="/radio/">Radio</a></nav>
+    <nav aria-label="Catalog pathways"><a href="/music/">Listen &amp; shop</a><a href="/song-catalog/">Artist catalog</a><a href="/release-house/">Release House</a><a href="/finish-house/">Finish House</a><a href="/radio/">Radio</a></nav>
     <div class="header-actions" role="group" aria-label="Catalog actions"><a class="quiet-button" href="/catalog-recovery/">Backup &amp; recovery register</a><button class="quiet-button" id="importButton" type="button">Load existing songs</button><button class="primary-button" id="addSongButton" type="button">Add a song</button></div>
   </header>
   <noscript><p class="catalog-noscript">JavaScript is required for upload controls. <a href="/song-catalog/">Open Song Catalog</a>.</p></noscript>
@@ -26,7 +26,7 @@
       <div>
         <p class="eyebrow">One song · every useful version</p>
         <h1 id="pageTitle">Put every master on the right track.</h1>
-        <p>Keep the sale master separate from radio, clean, instrumental, stem, extended, demo, and alternate versions. Dreamweaver checks the information every time the catalog changes.</p>
+        <p>Your private artist workspace: listen to your versions, manage the release, and protect your files. Here to enjoy the music? <a href="/music/">Visit the listener shop to preview and buy.</a></p>
       </div>
       <div class="signal-card" aria-label="Catalog status">
         <span>Dreamweaver signal</span>
@@ -46,6 +46,11 @@
     </section>
 
     <div id="artistWorkspace" hidden>
+    <nav class="catalog-journey" aria-label="Artist catalog steps">
+      <a href="#versionTable"><strong>1. Listen &amp; explore versions</strong><span>Choose a song, then play its master or another available mix.</span></a>
+      <a href="#songForm"><strong>2. Prepare your release</strong><span>Review information, pricing and your publication decision.</span></a>
+      <a href="/music/"><strong>3. Visit the listener shop</strong><span>Preview public releases and use their available buy options.</span></a>
+    </nav>
     <section class="publication-board mission-control" id="catalogGuidance" aria-labelledby="catalogGuidanceTitle" hidden>
       <div class="publication-board-heading">
         <div><p class="eyebrow">Artist Mission Control</p><h2 id="catalogGuidanceTitle">What happens next?</h2></div>
@@ -64,7 +69,7 @@
     </section>
 
     <section class="publication-board" aria-labelledby="catalogSignalsTitle">
-      <details class="catalog-disclosure" id="catalogSignalsDisclosure" open>
+      <details class="catalog-disclosure" id="catalogSignalsDisclosure">
       <summary class="publication-board-heading">
         <div><p class="eyebrow">Private catalog signals</p><h2 id="catalogSignalsTitle">What might be worth promoting?</h2></div>
         <span class="disclosure-label"><span class="disclosure-expand">Expand</span><span class="disclosure-collapse">Collapse</span></span>
@@ -88,7 +93,7 @@
     </section>
 
     <section class="publication-board" aria-labelledby="publicationBoardTitle">
-      <details class="catalog-disclosure" id="publicationHealthDisclosure" open>
+      <details class="catalog-disclosure" id="publicationHealthDisclosure">
       <summary class="publication-board-heading">
         <div><p class="eyebrow">Publication health desk</p><h2 id="publicationBoardTitle">Published songs stay under watch.</h2></div>
         <span class="disclosure-label"><span class="disclosure-expand">Expand</span><span class="disclosure-collapse">Collapse</span></span>
@@ -129,6 +134,8 @@
             <button class="quiet-button" id="checkSongShow" type="button" aria-describedby="songShowStatus">Check readiness</button>
           </section>
 
+          <details class="catalog-disclosure catalog-tools" id="releaseToolsDisclosure">
+            <summary>Release preparation tools &amp; pipeline diagnostics</summary>
           <section class="review-panel" id="releaseConveyorConsole" aria-labelledby="releaseConveyorTitle">
             <div class="panel-heading"><div><p class="eyebrow">HALO release conveyor</p><h3 id="releaseConveyorTitle">One song, every department.</h3></div><button class="primary-button" data-conveyor-run type="button">Run / retry conveyor</button></div>
             <p>Save metadata and upload your song once. HALO automatically checks the canonical master, rights and Council requirements, then packages lyrics, release documents and promotional copy. Originals stay unchanged; mastering approval and publication remain explicit. Temporary failures are retried automatically.</p>
@@ -158,6 +165,8 @@
             <div class="artwork-upload-actions"><button class="quiet-button" data-teaser-check type="button" disabled>Check teaser readiness</button><button class="primary-button" data-teaser-generate type="button" aria-describedby="teaserDeployment" disabled>Generate 15s teaser — not deployed</button></div>
             <p id="teaserDeployment">Rendering infrastructure is not deployed; preview and download are not available yet. No uploads are processed automatically. Generation will require your explicit permission to use the audio and artwork. Nothing is published to social platforms.</p>
           </section>
+
+          </details>
 
           <section class="artwork-upload-panel" aria-labelledby="artworkHeading">
             <div class="artwork-preview-area"><img class="artwork-preview" id="artworkPreview" src="" alt="Album artwork preview" hidden><div class="artwork-placeholder" id="artworkPlaceholder" aria-hidden="true"></div></div>
@@ -274,11 +283,17 @@
               <div class="upload-progress-track" id="alternateUploadTrack" hidden aria-hidden="true"><span class="upload-progress-fill"></span></div>
               <p class="audio-upload-progress" id="alternateUploadProgress" role="status" aria-live="polite">No file selected.</p>
             </form>
-            <section id="masterProvenancePanel" aria-label="Owner-scoped master byte observations" hidden></section>
+            <details class="catalog-disclosure catalog-tools" id="masterIntegrityDisclosure">
+              <summary>Master integrity · observations &amp; file comparison</summary>
+              <p>Recording an observation and comparing bytes are separate checks. Open this panel to record a fingerprint or check a saved observation against stored or local bytes.</p>
+              <section id="masterProvenancePanel" aria-label="Owner-scoped master byte observations" hidden></section>
+            </details>
           </section>
 
           <section class="publication-health-panel" id="publicationHealthPanel" tabindex="-1" hidden aria-labelledby="publicationHealthTitle">
-            <div class="panel-heading"><div><p class="eyebrow">Distributor team</p><h3 id="publicationHealthTitle" tabindex="-1">Publication health</h3></div><div><button class="quiet-button" id="recheckPublicationButton" type="button" aria-label="Recheck publication health for the selected song">Recheck now</button> <a class="quiet-link" id="publicationCanonicalLink" href="/music/" target="_blank" rel="noopener" hidden>Open live song ↗</a></div></div>
+            <details class="catalog-disclosure" id="artistDiagnosticsDisclosure">
+            <summary id="publicationHealthTitle" tabindex="-1">Artist &amp; Engineer Diagnostics · publication checks</summary>
+            <div class="panel-heading"><div><p class="eyebrow">Distributor team</p><h3>Publication health</h3></div><div><button class="quiet-button" id="recheckPublicationButton" type="button" aria-label="Recheck publication health for the selected song">Recheck now</button> <a class="quiet-link" id="publicationCanonicalLink" href="/music/" target="_blank" rel="noopener" hidden>Open live song ↗</a></div></div>
             <div class="publication-health-grid">
               <article class="publication-health-card publication-health-summary-card" role="status" aria-live="polite" aria-atomic="true">
                 <span class="publication-state-badge" id="publicationStateBadge" data-state="idle">Waiting</span>
@@ -303,6 +318,7 @@
                 <div class="publication-agent-list" id="publicationAgents"></div>
               </article>
             </div>
+            </details>
           </section>
         </div>
       </div>

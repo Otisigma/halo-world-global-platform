@@ -407,6 +407,28 @@ const oversizedRequest = await handler(request("POST", {
   action: "process_submission", songId: song.id, extra: "x".repeat(16_384),
 }));
 assert.equal(oversizedRequest.status, 413);
+assert.equal(oversizedRequest.headers.get("cache-control"), "private, no-store");
+const rawPost = (body, headers = {}) => new Request("https://halo.test/api/release-conveyor", {
+  method: "POST", headers: { "Content-Type": "application/json", ...headers }, body,
+  ...(body instanceof ReadableStream ? { duplex: "half" } : {}),
+});
+assert.equal((await handler(rawPost("{}", { "Content-Length": "16385" }))).status, 413);
+assert.equal((await handler(rawPost("{"))).status, 400);
+assert.equal((await handler(rawPost(""))).status, 400);
+const multibyteBody = JSON.stringify({ action: "process_submission", songId: song.id, extra: "é".repeat(8192) });
+assert(multibyteBody.length < 16_384, "the bound counts bytes, not characters");
+assert.equal((await handler(rawPost(multibyteBody, { "Content-Length": "1" }))).status, 413);
+let streamCancelled = false;
+const oversizedStream = new ReadableStream({
+  pull(controller) { controller.enqueue(new Uint8Array(4096).fill(32)); },
+  cancel() { streamCancelled = true; },
+});
+assert.equal((await handler(rawPost(oversizedStream))).status, 413);
+assert.equal(streamCancelled, true, "oversized streams are cancelled instead of read to completion");
+const boundaryBody = JSON.stringify({ action: "bad", extra: "" });
+assert.equal((await handler(rawPost(JSON.stringify({
+  action: "bad", extra: "x".repeat(16_384 - Buffer.byteLength(boundaryBody)),
+})))).status, 400, "an exactly 16 KiB body reaches action validation, not the size rejection");
 assert.equal(stored, null, "oversized updates never reach the release conveyor");
 const initialResponse = await handler(request());
 assert.equal(initialResponse.status, 200);

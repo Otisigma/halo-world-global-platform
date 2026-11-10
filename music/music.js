@@ -141,7 +141,9 @@
   class HaloGlobalPlayer {
     constructor({ onError } = {}) {
       this.audio = new Audio();
+      this.playAttempt = 0;
       this.audio.preload = "none";
+      this.telemetry = window.HaloListeningTelemetry?.bindAudio(this.audio, () => this.track?.id);
       this.preloader = window.HaloAudioPreloader ? new window.HaloAudioPreloader(this.audio) : null;
       this.track = null;
       this.status = "idle";
@@ -193,6 +195,7 @@
     }
 
     play(track) {
+      this.playAttempt++;
       const src = formatAudioStreamUrl(track?.src);
       if (!src) {
         this.track = track?.id ? { ...track, src: "" } : null;
@@ -204,21 +207,22 @@
         return;
       }
       this.preloader?.claim();
+      this.telemetry?.reset();
       this.track = { ...track, src };
       this.audio.preload = "auto";
       if (this.audio.src !== src || this.audio.error) this.audio.src = src;
       this.renderBar();
       this.resume();
-      window.haloStats?.track("music_playback_start", { target: "shop_player", track: track.id });
     }
 
     resume() {
       if (!this.track?.src) return;
+      const attemptId = ++this.playAttempt;
       if (this.status === "error") this.audio.src = this.track.src;
       this.setStatus("loading");
       const attempt = this.audio.play();
       attempt?.catch(error => {
-        if (error?.name === "AbortError") return;
+        if (attemptId !== this.playAttempt || error?.name === "AbortError") return;
         this.fail(error?.name === "NotAllowedError" ? "Tap play again to start the preview." : "This preview could not be streamed right now.");
       });
     }
@@ -230,6 +234,8 @@
     }
 
     close() {
+      this.playAttempt++;
+      this.telemetry?.reset();
       this.preloader?.clear();
       this.audio.pause();
       this.track = null;
@@ -962,6 +968,7 @@
     return `<div class="release-actions">
       ${featuredBadge(release)}
       ${playTrackButton(release)}
+      ${window.HaloDistributionLinks?.action(release) || ""}
       ${listenAction}
       ${buyAction}
       ${includeSelect ? `<button class="action tertiary" type="button" data-select-release="${escapeHtml(release.id)}">View in shop</button>` : ""}

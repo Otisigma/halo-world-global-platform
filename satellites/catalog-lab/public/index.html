@@ -40,13 +40,38 @@
     </section>
     <p id="source" class="metadata">Source: https://halo-world-global-platform.netlify.app/api/catalog/chart · Not fetched yet</p>
     <p class="metadata">One public snapshot (up to 50 entries, default signal order). Search and sorting apply only to returned entries, not the entire catalog.
-      Preview signal adds 5 per preview vote. Seven-day “listens” are outbound clicks, not confirmed plays; opens are kit opens.
+      Preview signal adds 5 per preview vote. The chart response does not label activity event types or time windows, so distributor click and kit-open counts are not reported here.
       Missing metrics are marked “Not reported”. No automatic polling.</p>
     <p id="status" role="status" aria-live="polite">Connecting to the public chart…</p>
-    <section aria-labelledby="dashboard-title">
-      <h2 id="dashboard-title">Artist dashboard concept</h2>
-      <p>Public chart-derived summary only — not private artist account analytics. All totals cover this returned snapshot.</p>
+    <section id="dashboard" aria-labelledby="dashboard-title" aria-busy="true">
+      <h2 id="dashboard-title">Public snapshot dashboard</h2>
+      <p>Public chart-derived aggregates only — not creator account analytics. Entry and name counts cover this returned snapshot, not platform totals.</p>
+      <div id="metrics" class="metric-grid" aria-label="Public snapshot metrics" data-dashboard-chunk="metrics"></div>
       <p id="summary" class="boundary">No public snapshot loaded.</p>
+      <div class="dashboard-chunks">
+        <section class="dashboard-chunk" aria-labelledby="creator-title" data-dashboard-chunk="creator-adoption">
+          <h3 id="creator-title">Creator &amp; adoption</h3>
+          <p>Only listed artist-name aggregates are derived from public chart entries. Accounts, personal details, adoption, and rights models are not reported.</p>
+          <div class="table-scroll" role="region" aria-label="Public creator and adoption aggregates" tabindex="0">
+            <table>
+              <caption>Creator and adoption measures for this public snapshot</caption>
+              <thead><tr><th scope="col">Measure</th><th scope="col">Value</th><th scope="col">Scope / provenance</th></tr></thead>
+              <tbody id="creator-metrics"></tbody>
+            </table>
+          </div>
+        </section>
+        <section class="dashboard-chunk" aria-labelledby="tracks-title" data-dashboard-chunk="tracks-distribution">
+          <h3 id="tracks-title">Tracks &amp; distribution</h3>
+          <p>Chart entries are not a full catalog inventory or a pipeline-status feed. No DSP plays, rights tiers, or private destinations are inferred.</p>
+          <div class="table-scroll" role="region" aria-label="Public tracks and distribution status" tabindex="0">
+            <table>
+              <caption>Public chart entries and explicitly reported distribution fields</caption>
+              <thead><tr><th scope="col">Track</th><th scope="col">Listed artist</th><th scope="col">Rights model</th><th scope="col">Public distributor destination</th><th scope="col">Recorded outbound clicks</th><th scope="col">Chart status</th></tr></thead>
+              <tbody id="track-rows"></tbody>
+            </table>
+          </div>
+        </section>
+      </div>
       <label for="nomination">Select a published peer track</label>
       <select id="nomination" disabled aria-describedby="nomination-boundary"><option value="">Choose a track</option></select>
       <button id="nominate" type="button" disabled>Preview nomination draft</button>

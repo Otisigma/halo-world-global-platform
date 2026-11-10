@@ -4,6 +4,23 @@ const text = value => typeof value === "string" ? value.trim().slice(0, 300) : "
 const count = value => typeof value === "number" && Number.isFinite(value) && value >= 0
   ? Math.min(Math.floor(value), 1e12) : null;
 
+export function validateDistributorDestination(value) {
+  const raw = typeof value === "string" ? value.trim() : "";
+  if (!raw || raw.length > 500 || /[\s\u0000-\u001f\u007f\\]/.test(raw)) return "";
+  try {
+    const url = new URL(raw);
+    const hosts = ["distrokid.com", "hyperfollow.com", "ffm.to", "lnk.to", "found.ee", "linktr.ee"];
+    const host = url.hostname.toLowerCase();
+    if (!/^https:\/\//i.test(raw) || url.protocol !== "https:" || url.username || url.password || url.port
+      || /^https:\/\/[^/?#]*:/i.test(raw)
+      || !hosts.some(allowed => host === allowed || host.endsWith(`.${allowed}`))
+      || ((host === "distrokid.com" || host.endsWith(".distrokid.com")) && !url.pathname.startsWith("/hyperfollow/"))) return "";
+    return url.href.length <= 500 ? url.href : "";
+  } catch {
+    return "";
+  }
+}
+
 export function normalizeCatalog(payload) {
   if (!payload || !Array.isArray(payload.releases)) {
     throw new Error("Invalid public chart response");
@@ -34,7 +51,9 @@ export function normalizeCatalog(payload) {
         votes: count(row.votes),
         signalScore: count(row.signalScore),
         recentListens: count(row.chartActivity?.recentListens),
-        recentOpens: count(row.chartActivity?.recentOpens)
+        recentOpens: count(row.chartActivity?.recentOpens),
+        distributorDestination: row.status === "published" && row.isLiveVisible === true
+          ? validateDistributorDestination(row.distributionUrl) : ""
       });
     }));
 }

@@ -49,6 +49,12 @@ served by the existing owner-authorized, read-only
 aggregate reads. Missing sources are labelled unavailable, not zero; a zero
 denominator produces "Not enough data", not a perfect success rate.
 
+The verified-owner section of the HALO satellite menu includes an **Outcome
+Dashboard** shortcut to `/control-center#ownerOutcomes`. The link scrolls to and
+focuses the outcome heading only after owner authorization reveals the panel.
+Opening the URL while signed out still requires the existing owner sign-in;
+the shortcut does not expose private measurements in the public route map.
+
 - **Creator preparation:** projects created in the last seven days with all
   thirteen Release House rooms currently complete. This is not proof of
   publication, unaided completion or time to completion; no historical

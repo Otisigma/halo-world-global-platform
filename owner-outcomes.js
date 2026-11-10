@@ -48,6 +48,12 @@
     byId("outcomeRefresh").disabled = false;
   }
 
+  function revealLinkedDashboard() {
+    if (!authorized || window.location.hash !== "#ownerOutcomes") return;
+    panel.scrollIntoView({ block: "start" });
+    byId("outcomeTitle").focus({ preventScroll: true });
+  }
+
   function render(outcomes) {
     const cards = Object.entries(definitions).map(([key, definition]) => {
       const card = node("article");
@@ -101,8 +107,10 @@
     if (!event.detail.authorized) return clear();
     authorized = true;
     panel.hidden = false;
+    revealLinkedDashboard();
     refresh();
   });
+  window.addEventListener("hashchange", revealLinkedDashboard);
   byId("identityButton").addEventListener("click", clear);
   const watchIdentity = () => window.haloIdentity?.onAuthChange?.(clear);
   window.addEventListener("halo-identity-ready", watchIdentity, { once: true });

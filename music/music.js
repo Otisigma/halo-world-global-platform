@@ -12,6 +12,7 @@
     chartRooms: document.querySelector("#chartRooms"),
     chartSortButtons: document.querySelector("#chartSortButtons"),
     chartStage: document.querySelector("#chartStage"),
+    chartCoverage: document.querySelector("#chartCoverage"),
     address: document.querySelector("#catalogAddress"),
     copy: document.querySelector("#copyCatalog"),
     share: document.querySelector("#shareCatalog"),
@@ -602,6 +603,25 @@
       && (release.inChart === true || release.releaseStatus === "PUBLISHED" || release.isChartEligible === true);
   }
 
+  function chartCoverage() {
+    const eligible = state.releases.filter(release => isChartRelease(release) && releaseMatchesRoom(release));
+    const active = eligible.filter(hasChartActivity).length;
+    return { total: state.releases.length, eligible: eligible.length, active, shown: Math.min(active, 10), waiting: eligible.length - active };
+  }
+
+  function chartCoverageText(coverage) {
+    if (!coverage.total) return "No published releases are in the public catalog yet.";
+    if (!coverage.eligible) return `None of the ${coverage.total} published releases are chart-eligible in this room. Browse the full catalog below.`;
+    const shown = `Showing ${coverage.shown} of ${coverage.eligible} chart-eligible ${coverage.eligible === 1 ? "release" : "releases"} in this room.`;
+    if (!coverage.waiting) return `${shown} Every eligible release has recorded activity in the last 14 days.`;
+    return `${shown} ${coverage.waiting} ${coverage.waiting === 1 ? "has" : "have"} no recorded listens or release-room opens in the last 14 days and ${coverage.waiting === 1 ? "stays" : "stay"} in the full catalog until ${coverage.waiting === 1 ? "it is" : "they are"} played.`;
+  }
+
+  function renderChartCoverage(message) {
+    if (!elements.chartCoverage) return;
+    elements.chartCoverage.innerHTML = `<span>${escapeHtml(message)}</span> <a href="#allReleasesTitle">Browse all ${escapeHtml(String(state.releases.length))} ${state.releases.length === 1 ? "release" : "releases"} ↓</a>`;
+  }
+
   function rankedReleases() {
     const entries = state.releases
       .filter(release => {
@@ -822,9 +842,12 @@
       button.setAttribute("aria-pressed", String(button.dataset.chartRoom === state.chartRoom));
     });
     renderChartSort();
+    const coverage = chartCoverage();
+    renderChartCoverage(chartCoverageText(coverage));
     if (!releases.length) {
       state.activeReleaseId = "";
-      elements.chartBoard.innerHTML = `<div class="chart-empty"><strong>No recorded chart activity in this room yet.</strong><p>Rankings appear only for eligible published releases with recorded listening clicks or release-room opens.</p></div>`;
+      const heading = coverage.eligible ? "No recorded chart activity in this room yet." : "No chart-eligible releases in this room yet.";
+      elements.chartBoard.innerHTML = `<div class="chart-empty"><strong>${escapeHtml(heading)}</strong><p>Rankings appear only for eligible published releases with recorded listening clicks or release-room opens in the last 14 days. Press play on any release in the catalog to give it a signal.</p></div>`;
       elements.chartStage.innerHTML = `<div class="stage-empty"><span class="stage-number">—</span><p>Browse the song catalog below. Releases without activity remain available there.</p></div>`;
       return;
     }
@@ -1068,6 +1091,7 @@
     elements.chartBoard.innerHTML = markup;
     elements.chartStage.innerHTML = `<div class="stage-empty"><span class="stage-number">!</span><p>${escapeHtml(message)}</p></div>`;
     elements.grid.innerHTML = markup;
+    if (elements.chartCoverage) elements.chartCoverage.textContent = "The Living Chart is paused because the release catalog could not be loaded. No placeholder songs are shown in its place.";
     document.querySelectorAll("#retryCatalog").forEach(button => button.addEventListener("click", loadCatalog));
     elements.count.textContent = "Catalog unavailable";
     if (elements.results) elements.results.textContent = "Releases could not be loaded. Try again.";

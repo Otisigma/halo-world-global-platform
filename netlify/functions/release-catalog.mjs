@@ -480,6 +480,7 @@ export default async function releaseCatalogHandler(request) {
       LIMIT 200
     `;
     const releases = rows.map(serializeRelease);
+    if (!songId && !releases.length) console.warn("HALO release catalog returned no published public releases; the Living Chart and catalog will be empty");
     const response = json({ releases, count: releases.length });
     return request.method === "HEAD" ? new Response(null, { status: response.status, headers: response.headers }) : response;
   } catch (error) {

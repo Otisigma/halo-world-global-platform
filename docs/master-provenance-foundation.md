@@ -7,6 +7,15 @@ also compare a local file's exact bytes in the browser against an authenticated
 observation without uploading the file. The local comparison has a 100 MiB
 limit and requires Web Crypto in a secure browser context.
 
+In the private Song Catalog, expand **Master integrity · observations & file
+comparison** below the version tools to access this panel. Publication checks
+are in **Artist & Engineer Diagnostics**, while pipeline and release preparation
+tools have their own drawer. These disclosures start closed; publication
+guidance and health-board selections open the relevant diagnostics automatically.
+The listener shop remains separate at `/music/`; no private checks or publication
+controls are added there. Friendly guidance does not imply a repair deadline,
+active human review or successful byte comparison.
+
 The selected song's private workspace displays the gold HALO provenance stamp
 only after the server authenticates a current-source observation's manifest.
 It shows the record ID, date, byte size and SHA-256 digest. Merely having artwork,

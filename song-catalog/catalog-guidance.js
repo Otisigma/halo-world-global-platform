@@ -1,5 +1,18 @@
 const versionFields = new Set(["sale_master", "sale_master_audio", "radio_edit", "radio_audio", "radio_master"]);
 
+export function publicationStatusLabel(health) {
+  const labels = {
+    published_and_fully_distributed: "Published · tracked destinations ready",
+    awaiting_release_propagation: "Release links are still being checked",
+    awaiting_radio_ready_assets: "Radio version needs attention",
+    awaiting_dreamweaver_share_readiness: "Sharing experience needs attention",
+    waiting_on_artist_action: "Your release needs attention",
+    waiting_on_internal_repair: "A platform issue needs attention",
+    escalated: "Issue flagged for follow-up"
+  };
+  return labels[health?.state] || health?.label || "Published · checks pending";
+}
+
 export function catalogGuidance({ authenticated, song, songCount = 0 }) {
   if (!authenticated) return null;
   if (!song) return {
@@ -14,7 +27,7 @@ export function catalogGuidance({ authenticated, song, songCount = 0 }) {
   if (song.pipelineStatus === "published") {
     const health = song.publicationHealth;
     return {
-      title: health?.label || "Published · checks pending",
+      title: publicationStatusLabel(health),
       detail: health?.summary || "The catalog marks this song as published. A publication-health snapshot is not available yet.",
       next: health?.state === "published_and_fully_distributed"
         ? "Review the recorded surface checks below. These checks are not listener counts or a guarantee of streaming availability."
@@ -60,6 +73,7 @@ export function renderCatalogGuidance({ root, ...context }) {
   for (const key of ["title", "detail", "next"]) {
     root.querySelector(`[data-guidance-${key}]`).textContent = guidance?.[key] || "";
   }
+
   const action = root.querySelector("[data-guidance-action]");
   const add = root.querySelector("[data-guidance-add]");
   const adding = guidance?.target === "addSongButton";
@@ -68,4 +82,16 @@ export function renderCatalogGuidance({ root, ...context }) {
   action.textContent = guidance?.action || "";
   if (guidance && !adding) action.setAttribute("href", `#${guidance.target}`);
   else action.removeAttribute("href");
+}
+
+export function revealCatalogTarget(event, doc = document) {
+  const link = event.target.closest('a[href^="#"]');
+  if (!link) return;
+  const target = doc.getElementById(link.getAttribute("href").slice(1));
+  if (!target) return;
+  const disclosure = target.querySelector(":scope > details.catalog-disclosure");
+  if (disclosure) disclosure.open = true;
+  for (let parent = target.parentElement; parent; parent = parent.parentElement) {
+    if (parent.tagName === "DETAILS") parent.open = true;
+  }
 }

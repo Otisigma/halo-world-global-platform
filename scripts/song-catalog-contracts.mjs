@@ -9,7 +9,7 @@ import { pickCanonicalMaster, serializeMasterCopy } from "../netlify/lib/master-
 import { attachPublicationHealthToSongs } from "../netlify/lib/song-publication-health.mjs";
 import { MASTER_UPLOAD_MAX_BYTES, MASTER_UPLOAD_URL_TTL_SECONDS, buildMasterObjectKey, directUploadConfig, isOwnedMasterObjectKey, presignObjectUrl, validateMasterUpload } from "../netlify/lib/direct-upload-storage.mjs";
 import { loadCatalogSignals } from "../netlify/lib/catalog-signals.mjs";
-import { catalogGuidance, renderCatalogGuidance } from "../song-catalog/catalog-guidance.js";
+import { catalogGuidance, renderCatalogGuidance, publicationStatusLabel, revealCatalogTarget } from "../song-catalog/catalog-guidance.js";
 
 const root = resolve(import.meta.dirname, "..");
 const read = path => readFile(resolve(root, path), "utf8");
@@ -48,6 +48,29 @@ const packageJson = JSON.parse(packageText);
 const signalsClient = await read("song-catalog/catalog-signals.js");
 const publicPage = await read("music/index.html");
 const publicClient = await read("music/music.js");
+{
+  assert.equal(publicationStatusLabel({ state: "waiting_on_internal_repair" }), "A platform issue needs attention");
+  assert.equal(publicationStatusLabel({ state: "escalated" }), "Issue flagged for follow-up");
+  assert.equal(publicationStatusLabel({ state: "awaiting_radio_ready_assets" }), "Radio version needs attention");
+  assert.equal(publicationStatusLabel({ state: "unknown", label: "Unknown check" }), "Unknown check");
+  assert.equal(publicationStatusLabel(null), "Published · checks pending");
+  const outer = { tagName: "DETAILS", open: false, parentElement: null };
+  const inner = { open: false };
+  const target = { parentElement: outer, querySelector: () => inner };
+  const doc = { getElementById: id => id === "publicationHealthPanel" ? target : null };
+  revealCatalogTarget({ target: { closest: () => ({ getAttribute: () => "#publicationHealthPanel" }) } }, doc);
+  assert.equal(outer.open, true, "navigation reveals closed ancestors");
+  assert.equal(inner.open, true, "publication guidance opens the diagnostics drawer");
+  revealCatalogTarget({ target: { closest: () => null } }, doc);
+  revealCatalogTarget({ target: { closest: () => ({ getAttribute: () => "#missing" }) } }, doc);
+  for (const id of ["releaseToolsDisclosure", "masterIntegrityDisclosure", "artistDiagnosticsDisclosure"]) {
+    assert.match(page, new RegExp(`<details class="catalog-disclosure[^"]*" id="${id}">`), `${id} starts collapsed`);
+  }
+  assert.match(client, /document\.addEventListener\("click", revealCatalogTarget\)/);
+  assert.match(client, /\$\("#artistDiagnosticsDisclosure"\)\.open=true/);
+  assert.match(page, /aria-label="Artist catalog steps"/);
+  assert.match(page, /href="\/music\/">Listen &amp; shop/);
+}
 {
   const intentMigration = await read("netlify/database/migrations/20261025150000_song_broadcast_intent.sql");
   assert.match(intentMigration, /ADD COLUMN IF NOT EXISTS broadcast_requested BOOLEAN NOT NULL DEFAULT FALSE/);
@@ -103,8 +126,8 @@ assert.match(page, /id="artistWorkspace" hidden/);
   for (const [id, titleId, label, surfaces] of privateBoards) {
     const section = page.match(new RegExp(`<section class="publication-board" aria-labelledby="${titleId}">([\\s\\S]*?)</section>`));
     assert.ok(section, `${label} retains its labelled section`);
-    const disclosure = section[1].match(new RegExp(`^\\s*<details class="catalog-disclosure" id="${id}" open>\\s*<summary class="publication-board-heading">([\\s\\S]*?)</summary>([\\s\\S]*?)</details>\\s*$`));
-    assert.ok(disclosure, `${label} has its own initially open native keyboard disclosure`);
+    const disclosure = section[1].match(new RegExp(`^\\s*<details class="catalog-disclosure" id="${id}">\\s*<summary class="publication-board-heading">([\\s\\S]*?)</summary>([\\s\\S]*?)</details>\\s*$`));
+    assert.ok(disclosure, `${label} has its own initially closed native keyboard disclosure`);
     assert.match(disclosure[1], new RegExp(`<h2 id="${titleId}">`));
     assert.ok(disclosure[1].includes(label), `${label} names its own summary`);
     assert.match(disclosure[1], /class="disclosure-expand">Expand<\/span>/);
@@ -177,7 +200,7 @@ assert.match(client, /identity\.onAuthChange/, "private workspace responds to lo
     cases.push([{ ...context, song: { ...ready, metadataIssues: [{ level: "required", field, message: `Check ${field}.` }] } }, "Required version work", "versionTable"]);
   }
   for (const state of ["published_and_fully_distributed", "awaiting_release_propagation", "awaiting_radio_ready_assets", "awaiting_dreamweaver_share_readiness", "waiting_on_artist_action", "waiting_on_internal_repair", "escalated"]) {
-    cases.push([{ ...context, song: { ...ready, pipelineStatus: "published", publicationHealth: { state, label: state, summary: `Recorded ${state}` } } }, state, "publicationHealthPanel"]);
+    cases.push([{ ...context, song: { ...ready, pipelineStatus: "published", publicationHealth: { state, label: state, summary: `Recorded ${state}` } } }, publicationStatusLabel({ state }), "publicationHealthPanel"]);
   }
   cases.push([{ ...context, song: { ...ready, pipelineStatus: "published" } }, "Published · checks pending", "publicationHealthPanel"]);
   const nodes = new Map();

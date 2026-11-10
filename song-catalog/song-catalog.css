@@ -1,5 +1,7 @@
 @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700;800&family=Syne:wght@600;700&display=swap');
 
+.catalog-journey{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;margin-bottom:24px}.catalog-journey a{border:1px solid var(--line);padding:18px;text-decoration:none}.catalog-journey strong,.catalog-journey span{display:block}.catalog-journey span{margin-top:8px;font-size:13px;line-height:1.6;color:var(--muted)}.catalog-journey a:focus-visible{outline:3px solid var(--rust);outline-offset:3px}.catalog-tools{margin:20px 0;border:1px solid var(--line)}.catalog-tools>summary,#artistDiagnosticsDisclosure>summary{padding:18px;font-weight:700}.catalog-tools>p{padding:0 18px;font-size:13px;line-height:1.6}#artistDiagnosticsDisclosure>summary{scroll-margin-top:100px}@media(max-width:720px){.catalog-journey{grid-template-columns:1fr}}
+
 .mission-control-body{padding:24px 28px;line-height:1.6}.mission-control-body h3{font-family:"Syne";font-size:24px}.mission-control-body .primary-button{display:inline-block;text-decoration:none}.mission-control [hidden]{display:none}.mission-control-boundary{margin:18px 0 0;color:var(--muted);font-size:13px}.mission-control :focus-visible{outline:3px solid var(--rust);outline-offset:4px}
 
 :root{--ink:#191713;--paper:#f1ede3;--cream:#e8e0cf;--line:rgba(25,23,19,.18);--rust:#a74e32;--gold:#c5913f;--green:#355f4b;--muted:#716b61;--shadow:0 24px 70px rgba(29,22,14,.13)}

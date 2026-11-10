@@ -69,6 +69,30 @@
         "The standard is not perfect knowledge. It is respectful continuity."
       ],
       quote: "Remember what helps the relationship. Leave the rest uncollected."
+    },
+    "halo-project-handover": {
+      topic: "HALO / Preservation / Field report",
+      title: "A recovery pack is a handover, not a promise",
+      deck: "HALO's project context helps an artist describe the relationships around selected files. It does not claim that a DAW session will reopen automatically.",
+      body: [
+        "A finished master can be only one part of a song's working history. A later engineer may also need the session, stems, reference render, plugin and library notes, tempo, sample rate, routing notes and a map of external media.",
+        "HALO's catalog recovery workspace lets the artist record this context, classify files and link versions belonging to a song. The exported pack lists selected files, and its standalone verifier can check their recorded fingerprints after extraction.",
+        "That is useful handover infrastructure, but it does not recreate the original folder layout, fetch external media, transfer plugin licenses or open a DAW. A real portability check means extracting on another device, running the verifier, opening the project in its intended DAW and comparing playback with a reference render.",
+        "The distinction matters: a portable record is a beginning. A tested restoration is evidence."
+      ],
+      quote: "A manifest can explain the handover. Only a real restore can test it."
+    },
+    "halo-master-observation": {
+      topic: "HALO / Master integrity / Field report",
+      title: "A fingerprint is a useful beginning",
+      deck: "Recording a hash, authenticating the observation and comparing the stored bytes answer different questions.",
+      body: [
+        "HALO's private catalog can show an authenticated observation for a canonical sale master. The server reads bytes, records their size and SHA-256 digest, and authenticates a record tied to that song and source.",
+        "A gold stamp tells the artist that HALO authenticated an observation. It is not proof of copyright ownership, an immutable master or an independent certificate. Storage can change, and the observation records the read that happened at that time.",
+        "A later stored-byte comparison is a separate action: HALO rereads the source and checks whether the bytes match the selected observation. A history row saying that a source matches its registration is not itself a comparison result.",
+        "This is the kind of small but important distinction independent artists deserve to see plainly. Keep the observation ID and comparison result, and do not share signing keys or private storage links."
+      ],
+      quote: "An authenticated observation is evidence of a recorded read—not a claim about ownership."
     }
   };
 

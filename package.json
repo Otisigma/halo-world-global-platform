@@ -36,6 +36,7 @@
     "diagnose": "node deploy/diagnostics.js",
     "test:database": "node scripts/database-migration-contracts.mjs",
     "test:catalog-recovery": "node --test scripts/catalog-recovery-contracts.mjs",
+    "test:editorial-studio": "node scripts/editorial-studio-contracts.mjs",
     "test:music-legacy-team": "node --test scripts/music-legacy-team-contracts.mjs",
     "test:journey": "node scripts/empath-journey-api-contracts.mjs && node scripts/empath-journey-ui-contracts.mjs",
     "test:signal-emotion": "node scripts/signal-emotion-contracts.mjs",

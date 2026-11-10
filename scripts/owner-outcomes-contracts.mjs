@@ -108,9 +108,11 @@ class Element {
   append(...children) { this.children.push(...children); }
   replaceChildren(...children) { this.children = children; }
   addEventListener(name, callback) { this.listeners[name] = callback; }
+  scrollIntoView() { this.scrolled = true; }
+  focus() { this.focused = true; }
   text() { return this.textContent + this.children.map(child => child.text()).join("\n"); }
 }
-const ids = ["ownerOutcomes", "outcomeSources", "outcomeStatus", "outcomeRefresh", "identityButton"];
+const ids = ["ownerOutcomes", "outcomeSources", "outcomeStatus", "outcomeRefresh", "outcomeTitle", "identityButton"];
 const elements = Object.fromEntries(ids.map(id => [id, new Element()]));
 elements.ownerOutcomes.hidden = true;
 const events = {};
@@ -120,6 +122,7 @@ let respond = async () => Response.json({ outcomes });
 vm.runInNewContext(client, {
   document: { getElementById: id => elements[id], createElement: () => new Element() },
   window: {
+    location: { hash: "#ownerOutcomes" },
     addEventListener: (name, callback) => { events[name] = callback; },
     haloIdentity: { onAuthChange(callback) { authChange = callback; } }
   },
@@ -134,8 +137,12 @@ vm.runInNewContext(client, {
 });
 const settle = () => new Promise(resolve => setImmediate(resolve));
 assert.equal(requests.length, 0);
+events.hashchange();
+assert.equal(elements.ownerOutcomes.scrolled, undefined, "private anchor cannot reveal the panel before authorization");
 events["halo-owner-operations"]({ detail: { authorized: true } });
 await settle();
+assert.equal(elements.ownerOutcomes.scrolled, true, "deep link must scroll after the owner-only panel becomes visible");
+assert.equal(elements.outcomeTitle.focused, true, "deep link must focus the accessible dashboard heading");
 assert.equal(elements.outcomeSources.children.length, 4);
 assert.match(elements.outcomeSources.text(), /1 \/ 4 new projects prepared \(25%\)/);
 assert.match(elements.outcomeSources.text(), /2 \/ 3 prior-week listeners returned \(66.7%\)/);
@@ -164,6 +171,9 @@ late(Response.json({ outcomes }));
 await settle();
 assert.equal(elements.ownerOutcomes.hidden, true);
 assert.equal(elements.outcomeSources.children.length, 0, "late data cannot restore a signed-out panel");
+elements.ownerOutcomes.scrolled = false;
+events.hashchange();
+assert.equal(elements.ownerOutcomes.scrolled, false, "hash changes cannot reopen the signed-out panel");
 respond = async () => Response.json({}, { status: 403 });
 events["halo-owner-operations"]({ detail: { authorized: true } });
 await settle();

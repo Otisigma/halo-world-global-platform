@@ -44,6 +44,8 @@ const worldOutsideBuildLane = world.replace(buildLane, "");
 assert.match(buildLane, /ownerControlAccess &&[\s\S]*href="\/control-center"/, "the Choose Your Signal build lane must hide the control room unless owner access is verified");
 assert.doesNotMatch(worldOutsideBuildLane, /href="\/control-center"/, "the private control room must appear only in the Choose Your Signal build lane");
 assert.match(buildLane, /\{ownerControlAccess && \(\s*<a href="\/control-center"[^>]*>[\s\S]*?<strong>CONTROL CENTER [\s\S]*?<\/a>\s*\)\}/, "the labeled Control Center entry must remain inside the verified owner guard");
+assert.match(buildLane, /\{ownerControlAccess && \(\s*<a href="\/control-center#ownerOutcomes"[^>]*>[\s\S]*?<strong>OUTCOME DASHBOARD<\/strong>[\s\S]*?<\/a>\s*\)\}/, "the outcome dashboard shortcut must stay inside the verified owner guard");
+assert.doesNotMatch(worldOutsideBuildLane, /href="\/control-center#ownerOutcomes"/, "the private outcome shortcut must not leak into public menu groups");
 assert.match(world, /const \[ownerControlAccess, setOwnerControlAccess\] = useState\(false\)/, "owner access must not default to authorized");
 
 const ownerAccessEffect = world.match(/useEffect\(\(\) => \{\n\s*let active = true;\n\s*setOwnerControlAccess\(false\);([\s\S]*?)\n\s*\}, \[identityUser\?\.id\]\);/)?.[0];

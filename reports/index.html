@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#171612">
+  <title>HALO SIGNAL | Open Report Library</title>
+  <meta name="description" content="Evidence-led HALO reports on music preservation, artist tools, and authenticated master-byte observations.">
+  <link rel="canonical" href="https://halo-world-global-platform.netlify.app/reports/">
+  <link rel="stylesheet" href="/accessibility.css">
+  <link rel="stylesheet" href="/halo-brand.css">
+  <link rel="stylesheet" href="/reports/report-studio.css">
+  <script src="/stats.js" defer></script>
+  <script src="/site-monitor.js" defer></script>
+  <script src="/accessibility.js" defer></script>
+  <script type="module" src="/reports/report-studio.js"></script>
+</head>
+<body>
+  <header class="report-header">
+    <a href="/magazine.html">HALO SIGNAL <span>Magazine &amp; Reports</span></a>
+    <nav aria-label="Publication"><a href="/magazine.html">Digital magazine</a><a href="/music/">Listen &amp; shop</a><a href="/song-catalog/">Artist catalog</a></nav>
+  </header>
+  <main>
+    <section class="report-intro">
+      <p class="eyebrow">HALO SIGNAL · Open report library</p>
+      <h1>Ideas are welcome.<br><em>Evidence travels further.</em></h1>
+      <p>Reports about the tools HALO has actually built, what they can establish, and where the limits remain. Choose a report to read, share, print to PDF or download as structured JSON.</p>
+      <p class="scope-note">These are editorial and technical reports, not independent audits, legal advice, or automatically generated product specifications.</p>
+    </section>
+    <section class="report-workspace" aria-label="Report library and reader">
+      <nav class="report-picker" aria-label="Choose a report" data-report-list></nav>
+      <article class="report-reader" aria-live="polite" aria-labelledby="report-title">
+        <p class="eyebrow" data-report-status></p>
+        <h2 id="report-title" data-report-title></h2>
+        <p class="report-subtitle" data-report-subtitle></p>
+        <p class="report-summary" data-report-summary></p>
+        <div class="report-sections" data-report-sections></div>
+        <section class="report-boundaries"><h3>Limits to keep in view</h3><ul data-report-limitations></ul></section>
+        <section class="report-sources"><h3>Sources</h3><ul data-report-sources></ul></section>
+        <div class="report-actions" aria-label="Report actions">
+          <button type="button" data-print>Print / save PDF</button>
+          <button type="button" data-download>Download report JSON</button>
+          <button type="button" data-share>Share report</button>
+        </div>
+        <p class="report-feedback" data-feedback role="status" aria-live="polite">Choose how you would like to take this report with you.</p>
+      </article>
+    </section>
+  </main>
+  <footer><a href="/magazine.html">Read HALO SIGNAL magazine</a><span>Open access · Reports distinguish implemented features from proposals.</span></footer>
+</body>
+</html>

@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0a0a0a">
+  <meta name="description" content="Explore public HALO releases and listen to available previews.">
+  <title>Obsidian Gateway | HALO Music World</title>
+  <link rel="icon" href="/assets/halo-app-icon.svg">
+  <link rel="stylesheet" href="/accessibility.css">
+  <link rel="stylesheet" href="/obsidian/obsidian.css">
+  <script src="/stats.js" defer></script>
+  <script src="/site-monitor.js" defer></script>
+  <script src="/accessibility.js" defer></script>
+  <script src="/release-artwork.js" defer></script>
+  <script src="/listening-telemetry.js" defer></script>
+  <script type="module" src="/obsidian/obsidian.js"></script>
+</head>
+<body>
+  <header class="top">
+    <a class="brand" href="/halo">HALO <span>MUSIC WORLD</span></a>
+    <a href="/music/">Full catalog ↗</a>
+  </header>
+  <main>
+    <div class="intro">
+      <p class="eyebrow">A direct line to the music</p>
+      <h1>Enter the<br><em>signal.</em></h1>
+      <p>Listen to available previews, explore artist-approved links, and follow the music into the HALO catalog.</p>
+    </div>
+    <section class="gateway" aria-labelledby="selectedTitle">
+      <div class="artwork"><img id="artwork" src="/assets/releases/halo-premium-placeholder.svg" alt="HALO placeholder cover"></div>
+      <div class="player">
+        <p class="eyebrow">Obsidian gateway / <span id="position">—</span></p>
+        <h2 id="selectedTitle">Loading releases…</h2>
+        <p id="artist" class="artist"></p>
+        <div class="pulse" id="pulse" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+        <p class="status" id="status" role="status">Connecting to the public catalog…</p>
+        <audio id="audio" controls preload="none" aria-label="Release audio player"></audio>
+        <label class="loop"><input id="loop" type="checkbox" disabled> Loop selected audio</label>
+        <div class="controls">
+          <button type="button" id="previous" disabled>← Previous</button>
+          <button type="button" id="next" disabled>Next →</button>
+          <button type="button" id="share" disabled>Copy release link</button>
+        </div>
+        <div class="links">
+          <a id="destination" class="primary" hidden rel="noopener noreferrer" target="_blank">Artist-approved link ↗</a>
+          <a id="releaseLink" class="secondary" href="/music/">Explore the catalog ↗</a>
+        </div>
+        <button type="button" id="retry" hidden>Retry catalog</button>
+      </div>
+    </section>
+    <section class="playlist" aria-labelledby="playlistTitle">
+      <div class="playlist-header"><h2 id="playlistTitle">The releases</h2><p id="count">Loading…</p></div>
+      <div id="tracks"></div>
+    </section>
+    <p class="note">The animated bars reflect player state, not measured audio frequencies. Playback starts only when you choose it; some releases may have an external listening link instead of an in-page preview.</p>
+  </main>
+  <footer>HALO Music World · Artist-controlled music</footer>
+</body>
+</html>

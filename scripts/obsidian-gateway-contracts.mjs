@@ -14,7 +14,7 @@ class Element {
   play() { this.played = (this.played || 0) + 1; return Promise.resolve(); }
   load() {}
 }
-const ids = ["audio", "status", "tracks", "previous", "next", "retry", "share", "loop", "destination", "releaseLink", "artwork", "pulse", "selectedTitle", "artist", "position", "count", "lyrics", "lyricsStatus", "lyricsLines", "loadNote", "continueNext", "shareMoment"];
+const ids = ["audio", "status", "tracks", "previous", "next", "retry", "share", "loop", "destination", "releaseLink", "artwork", "pulse", "selectedTitle", "artist", "position", "count", "lyrics", "lyricsStatus", "lyricsLines", "loadNote", "continueNext", "shareMoment", "vaultFilters", "gridStatus"];
 const nodes = Object.fromEntries(ids.map(id => [id, new Element()]));
 nodes.audio.hidden = true;
 const document = { getElementById: id => nodes[id], createElement: () => new Element() };
@@ -38,6 +38,8 @@ const releases = [
   { id: "draft", status: "draft", title: "Draft" }
 ];
 let reply = async () => Response.json({ releases });
+releases[0].genres = ["Deep House"];
+releases[1].genres = ["Ambient"];
 const gateway = createGateway({ document, window, fetcher: () => reply() });
 await gateway.load();
 assert.equal(gateway.state.releases.length, 2);
@@ -70,8 +72,20 @@ assert.equal(nodes.status.textContent, "Release link copied.");
 assert.equal(nodes.audio.paused, true, "selection must not autoplay");
 nodes.audio.events.playing();
 assert.equal(nodes.pulse.playing, true);
+assert.equal(nodes.tracks.children[0]["active-playing"], true, "only actual playback animates a card");
+const beforeFilter = nodes.audio.src;
+nodes.vaultFilters.children[2].events.click();
+assert.equal(nodes.tracks.children.length, 1, "genre filters use catalog metadata");
+assert.equal(nodes.tracks.children[0].children[1].children[0].textContent, "Beta");
+assert.equal(nodes.audio.src, beforeFilter, "filter changes do not replace the playing source");
+assert.equal(nodes.pulse.playing, true, "filter changes do not stop playback");
+nodes.vaultFilters.children[1].events.click();
+assert.equal(nodes.tracks.children.length, 1, "playable filter excludes link-only releases");
+assert.equal(nodes.tracks.children[0]["active-playing"], true);
+nodes.vaultFilters.children[0].events.click();
 nodes.audio.events.waiting();
 assert.equal(nodes.pulse.playing, false);
+assert.equal(nodes.tracks.children[0]["active-playing"], false);
 nodes.audio.events.error();
 assert.match(nodes.status.textContent, /could not be played/);
 nodes.previous.events.click();
@@ -146,7 +160,17 @@ assert.equal(nodes.selectedTitle.textContent, "No public releases yet");
 assert.equal(nodes.releaseLink.href, "/music/");
 assert.equal(nodes.lyrics.hidden, true, "stale lyrics clear when catalog has no releases");
 assert.equal(nodes.audio.hidden, true);
+reply = async () => Response.json({ releases: [releases[1]] });
+location.href = "https://halo.test/obsidian/?song=beta";
+await gateway.load();
+const playableFilter = nodes.vaultFilters.children[1];
+playableFilter.events.click();
+assert.equal(nodes.tracks.children.length, 0);
+assert.match(nodes.gridStatus.textContent, /No releases match/);
+assert.equal(nodes.vaultFilters.children[1], playableFilter, "filter controls remain stable for keyboard focus");
+assert.equal(nodes.selectedTitle.textContent, "Beta", "an empty filter does not change the selected release");
 reply = async () => Response.json({}, { status: 503 });
+location.href = "https://halo.test/obsidian/?song=alpha";
 const originalError = console.error;
 console.error = () => {};
 try {
@@ -164,6 +188,9 @@ assert.equal(safeDestination("/music/", location.origin), "https://halo.test/mus
 const [page, css, client] = await Promise.all(["obsidian/index.html", "obsidian/obsidian.css", "obsidian/obsidian.js"].map(path => readFile(new URL(`../${path}`, import.meta.url), "utf8")));
 assert.match(page, /<audio id="audio" controls preload="none"/);
 assert.match(page, /id="loadNote" hidden/);
+assert.match(page, /<details class="lyrics"/);
+assert.match(page, /No public SHA-256 verification evidence/);
+assert.match(css, /#tracks \.track\.active-playing\{animation:none/);
 assert.match(page, /not measured audio frequencies/);
 assert.match(css, /prefers-reduced-motion:reduce/);
 assert.doesNotMatch(client, /innerHTML|autoplay|private.key|SECRET/);

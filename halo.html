@@ -4222,6 +4222,9 @@
                         <a href="/music/" aria-current={menuStatusForRoute('/music/', 'green').isCurrent ? 'page' : undefined} data-stat-event="open_music_catalog" data-stat-target="header" data-signal="CATALOG">
                           <Icon name="music" className="halo-menu-icon" /><span><strong>ALL MUSIC {renderMenuStatusBadge('/music/', 'All Music')}</strong><small>The permanent catalog</small></span>
                         </a>
+                        <a href="/obsidian/" aria-current={menuStatusForRoute('/obsidian/', 'green').isCurrent ? 'page' : undefined} data-stat-event="open_obsidian_gateway" data-stat-target="header" data-signal="GATEWAY">
+                          <Icon name="music" className="halo-menu-icon" /><span><strong>OBSIDIAN GATEWAY {renderMenuStatusBadge('/obsidian/', 'Obsidian Gateway')}</strong><small>Listen, follow the lyrics, share a moment</small></span>
+                        </a>
                         <a href="/artists/" data-stat-event="open_artist_rooms" data-stat-target="header" data-signal="ARTIST ROOMS">
                           <Icon name="music" className="halo-menu-icon" /><span><strong>ARTIST ROOMS + CHARTS {renderMenuStatusBadge('/artists/', 'Artist Rooms and Charts')}</strong><small>Browse rooms, charts, and featured drops</small></span>
                         </a>
@@ -4388,6 +4391,7 @@
                     <p className="mb-2 font-sans-alt text-sm font-bold text-white">New to HALO Music World? Start here.</p>
                     <div className="mb-5 grid gap-3 sm:grid-cols-2">
                       <a href="/music/" className="rounded-xl border border-amber-200/40 p-4 font-sans-alt text-sm text-amber-100 focus-visible:ring-2 focus-visible:ring-amber-200"><strong className="block">I want to listen</strong><span className="mt-2 block text-xs text-gray-300">Choose a song and press Play. Start with the music.</span></a>
+                      <a href="/obsidian/" data-stat-event="open_obsidian_gateway" data-stat-target="start_here" className="rounded-xl border border-amber-200/40 p-4 font-sans-alt text-sm text-amber-100 focus-visible:ring-2 focus-visible:ring-amber-200"><strong className="block">I want a front-row listen</strong><span className="mt-2 block text-xs text-gray-300">Enter the Obsidian Gateway: one release, synced lyrics, and links you can share.</span></a>
                       <a href="/song-catalog/" className="rounded-xl border border-amber-200/40 p-4 font-sans-alt text-sm text-amber-100 focus-visible:ring-2 focus-visible:ring-amber-200"><strong className="block">I want to upload my music</strong><span className="mt-2 block text-xs text-gray-300">Sign in, add a song, then upload one finished master. Stems are optional.</span></a>
                     </div>
                     <p className="mb-5 font-sans-alt text-xs leading-6 text-gray-400">Choose a workspace that fits your music and your next move, or take the quiz for a guided recommendation.</p>

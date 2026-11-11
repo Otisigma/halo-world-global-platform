@@ -116,6 +116,11 @@ assert.match(styles, /\.chart-play/, "chart rows must style their delegated play
 for (const page of ["music/index.html", "music-upload/index.html"]) {
   const html = await readFile(resolve(root, page), "utf8");
   assert.match(html, /id="chartCoverage" role="status"/, `${page} must show Living Chart coverage`);
+  assert.match(html, /<details class="catalog-genre-disclosure" id="catalogGenreDisclosure">/, `${page} must provide the shared catalog's collapsible genre panel`);
+  const requiredElements = ["allReleasesFilter", "catalogGenreSummary", "genreFilter"];
+  for (const id of requiredElements) {
+    assert.equal((html.match(new RegExp(`id="${id}"`, "g")) || []).length, 1, `${page} must provide exactly one #${id} for music.js`);
+  }
 }
 assert.match(client, /renderChartCoverage\(chartCoverageText\(coverage\)\)/, "chart render must publish coverage");
 assert.match(client, /href="#allReleasesTitle"/, "chart coverage must link to the full catalog");

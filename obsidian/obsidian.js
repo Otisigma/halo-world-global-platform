@@ -1,3 +1,5 @@
+import { parseTimestampedLyrics, findActiveLyricIndex } from "../lib/dreamweaver-lyrics.js";
+
 export function eligibleReleases(data) {
   if (!Array.isArray(data?.releases)) throw new Error("The catalog response is invalid.");
   return data.releases.filter(release => release && typeof release.id === "string" && release.id.trim()
@@ -20,10 +22,36 @@ export function createGateway({ document, window, fetcher }) {
   const previous = get("previous"), next = get("next"), retry = get("retry"), share = get("share"), loop = get("loop");
   const destination = get("destination"), releaseLink = get("releaseLink"), art = get("artwork");
   const state = { releases: [], index: -1, generation: 0 };
+  let lyrics = [], lyricNodes = [], activeLyric = -1;
   const telemetry = window.HaloListeningTelemetry?.bindAudio(audio, () => state.releases[state.index]?.id);
   const selected = () => state.releases[state.index];
   const setStatus = value => { status.textContent = value; };
   const setPlaying = value => get("pulse").classList.toggle("playing", value);
+
+  function updateLyrics() {
+    const index = findActiveLyricIndex(lyrics, audio.currentTime);
+    if (index === activeLyric) return;
+    if (lyricNodes[activeLyric]) lyricNodes[activeLyric].classList.toggle("is-current", false);
+    if (lyricNodes[index]) lyricNodes[index].classList.toggle("is-current", true);
+    activeLyric = index;
+  }
+
+  function renderLyrics(source) {
+    const parsed = parseTimestampedLyrics(source);
+    lyrics = parsed.lines;
+    activeLyric = -1;
+    get("lyrics").hidden = !lyrics.length;
+    get("lyricsStatus").textContent = parsed.timed
+      ? "Timed lines follow playback. Untimed lines are shown without synchronization."
+      : "Lyrics are not timestamped; read at your own pace.";
+    lyricNodes = lyrics.map(line => {
+      const item = document.createElement("li");
+      item.textContent = line.text;
+      return item;
+    });
+    get("lyricsLines").replaceChildren(...lyricNodes);
+    updateLyrics();
+  }
 
   function renderTracks() {
     tracks.replaceChildren(...state.releases.map((release, index) => {
@@ -54,6 +82,7 @@ export function createGateway({ document, window, fetcher }) {
     setPlaying(false);
     state.index = index;
     const release = selected();
+    renderLyrics(release.dreamweaverPayload?.lyricsText);
     const resolved = window.HaloReleaseArtwork.resolvePreviewAudio(release);
     const artwork = window.HaloReleaseArtwork.resolve(release);
     art.src = safeDestination(artwork.src, window.location.origin) || "/assets/releases/halo-premium-placeholder.svg";
@@ -96,6 +125,7 @@ export function createGateway({ document, window, fetcher }) {
     setPlaying(false);
     state.releases = [];
     state.index = -1;
+    renderLyrics("");
     tracks.replaceChildren();
     previous.disabled = next.disabled = true;
     share.disabled = true;
@@ -156,6 +186,8 @@ export function createGateway({ document, window, fetcher }) {
   });
   retry.addEventListener("click", load);
   audio.addEventListener("playing", () => { setPlaying(true); setStatus("Playing."); });
+  audio.addEventListener("timeupdate", updateLyrics);
+  audio.addEventListener("seeked", updateLyrics);
   audio.addEventListener("waiting", () => { setPlaying(false); setStatus("Buffering…"); });
   audio.addEventListener("pause", () => { setPlaying(false); if (selected() && !audio.error) setStatus(audio.ended ? "Playback ended." : "Paused."); });
   audio.addEventListener("error", () => { setPlaying(false); if (selected()) setStatus("Audio could not be played. Try again or explore the release link."); });

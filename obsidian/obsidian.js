@@ -24,8 +24,16 @@ export function releaseCategories(release, field = "genres") {
   }
   const categories = new Map();
   for (const value of values) {
-    const label = value.trim().replace(/\s+/g, " ");
-    if (label) categories.set(label.toLowerCase(), label);
+    for (const raw of (field === "genres" ? value.split(",") : [value])) {
+      const source = raw.trim().replace(/[\s,.;:]+$/g, "").replace(/\s+/g, " ");
+      if (!source) continue;
+      const normalized = source.toLowerCase().replace(/[^a-z0-9&-]+/g, " ").trim().replace(/\s+/g, " ");
+      const key = ["afro beat", "afro beats", "afrobeat", "afrobeats"].includes(normalized) ? "afrobeats" : normalized;
+      let label = key.split(" ").map(word => word.split("-").map(part => part.charAt(0).toUpperCase() + part.slice(1)).join("-")).join(" ");
+      label = label.replace(/\bDj\b/g, "DJ").replace(/\bR&b\b/gi, "R&B").replace(/\bHalo\b/g, "HALO");
+      if (key === "afrobeats") label = "Afrobeats";
+      if (!categories.has(key)) categories.set(key, label);
+    }
   }
   return [...categories].map(([key, label]) => ({ key, label }));
 }
@@ -36,7 +44,7 @@ export function createGateway({ document, window, fetcher }) {
   const previous = get("previous"), next = get("next"), retry = get("retry"), share = get("share"), loop = get("loop");
   const destination = get("destination"), releaseLink = get("releaseLink"), art = get("artwork");
   const state = { releases: [], index: -1, generation: 0, filter: "all" };
-  const filterBox = get("vaultFilters"), gridStatus = get("gridStatus");
+  const quickFilters = get("quickFilters"), genreFilters = get("genreFilters"), versionFilters = get("versionFilters"), gridStatus = get("gridStatus");
   let cardNodes = [], isPlaying = false;
   const loadNote = get("loadNote"), continueNext = get("continueNext"), shareMoment = get("shareMoment");
   let pendingStart = 0, warmed = "", warmer = null;
@@ -65,33 +73,62 @@ export function createGateway({ document, window, fetcher }) {
     if (id.startsWith("version:")) return releaseCategories(release, "availableVersions").some(category => category.key === id.slice(8));
     return false;
   };
+  const updateFilterSummaries = () => {
+    const activeGenre = [...genreFilters.children].find(button => button.dataset.filter === state.filter);
+    const activeVersion = [...versionFilters.children].find(button => button.dataset.filter === state.filter);
+    get("genreFilterSummary").textContent = `Genres (${genreFilters.children.length})${activeGenre ? ` · ${activeGenre.dataset.label}` : ""}`;
+    get("versionFilterSummary").textContent = `Versions (${versionFilters.children.length})${activeVersion ? ` · ${activeVersion.dataset.label}` : ""}`;
+  };
 
   function renderFilters() {
     const categories = field => {
-      const unique = new Map(state.releases.flatMap(release => releaseCategories(release, field))
-        .map(category => [category.key, category.label]));
-      return [...unique].sort((a, b) => a[1].localeCompare(b[1]));
+      const unique = new Map();
+      for (const release of state.releases) {
+        for (const category of releaseCategories(release, field)) {
+          const item = unique.get(category.key) || { label: category.label, count: 0 };
+          item.count += 1;
+          unique.set(category.key, item);
+        }
+      }
+      return [...unique].sort((a, b) => b[1].count - a[1].count || a[1].label.localeCompare(b[1].label));
     };
-    const filters = [
-      ["all", "All Releases"], ["playable", "In-page audio"],
-      ...categories("genres").map(([key, label]) => [`genre:${key}`, label]),
-      ...(state.releases.some(release => !releaseCategories(release).length) ? [["uncategorized", "Genre not supplied"]] : []),
-      ...categories("availableVersions").map(([key, label]) => [`version:${key}`, `Version: ${label}`])
-    ];
-    filterBox.replaceChildren(...filters.map(([id, label]) => {
-      const button = document.createElement("button");
-      button.type = "button";
-      const count = state.releases.filter(release => matchesFilter(release, id)).length;
-      button.textContent = `${label} (${count})`;
-      button.setAttribute("aria-pressed", String(state.filter === id));
-      button.addEventListener("click", () => {
-        state.filter = id;
-        // Keep filter controls stable so keyboard focus survives a grid update.
-        for (const node of filterBox.children) node.setAttribute("aria-pressed", String(node === button));
-        renderTracks();
-      });
-      return button;
-    }));
+    const makeButtons = (container, filters) => {
+      container.replaceChildren(...filters.map(([id, label, count]) => {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.dataset.filter = id;
+        button.dataset.label = label;
+        button.textContent = `${label} (${count})`;
+        button.setAttribute("aria-pressed", String(state.filter === id));
+        button.addEventListener("click", () => {
+          state.filter = id;
+          for (const group of [quickFilters, genreFilters, versionFilters]) {
+            for (const node of group.children) node.setAttribute("aria-pressed", String(node.dataset.filter === id));
+          }
+          updateFilterSummaries();
+          renderTracks();
+        });
+        return button;
+      }));
+    };
+    const countFor = id => state.releases.filter(release => matchesFilter(release, id)).length;
+    makeButtons(quickFilters, [
+      ["all", "All Releases", state.releases.length],
+      ["playable", "In-page audio", countFor("playable")]
+    ]);
+    const genres = categories("genres");
+    if (state.releases.some(release => !releaseCategories(release).length)) {
+      genres.push(["uncategorized", { label: "Genre not supplied", count: countFor("uncategorized") }]);
+    }
+    makeButtons(genreFilters, genres.map(([key, category]) => [
+      key === "uncategorized" ? key : `genre:${key}`, category.label, category.count
+    ]));
+    const versions = categories("availableVersions");
+    makeButtons(versionFilters, versions.map(([key, category]) => [`version:${key}`, category.label, category.count]));
+    for (const group of [quickFilters, genreFilters, versionFilters]) {
+      for (const button of group.children) button.setAttribute("aria-pressed", String(button.dataset.filter === state.filter));
+    }
+    updateFilterSummaries();
   }
 
   function updateLyrics() {
@@ -259,7 +296,11 @@ export function createGateway({ document, window, fetcher }) {
     setPlaying(false);
     state.releases = [];
     state.filter = "all";
-    filterBox.replaceChildren();
+    quickFilters.replaceChildren();
+    genreFilters.replaceChildren();
+    versionFilters.replaceChildren();
+    get("genreFilterSummary").textContent = "Browse genres";
+    get("versionFilterSummary").textContent = "Browse release versions";
     gridStatus.textContent = "";
     cardNodes = [];
     state.index = -1;

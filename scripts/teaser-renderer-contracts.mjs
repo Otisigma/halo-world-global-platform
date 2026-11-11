@@ -60,7 +60,11 @@ try {
   assert.deepEqual(playlistPlan.playlists.map(playlist => playlist.title), ["HALO House Shorts", "HALO Obsidian Reels"]);
   const playlistIds = playlistPlan.playlists.flatMap(playlist => playlist.entries.map(entry => entry.videoId));
   assert.ok(playlistIds.filter(Boolean).every(id => /^[A-Za-z0-9_-]{11}$/.test(id)));
-  assert.equal(playlistIds.filter(Boolean).length, 1, "only the exact user-supplied YouTube ID is prefilled");
+  assert.deepEqual(playlistIds, ["2Iwvxd-4UFQ", "psfXTk_wCqY", "16c4GBQbf4Q"]);
+  assert.ok(playlistPlan.playlists.flatMap(playlist => playlist.entries)
+    .every(entry => entry.format === "Short" && Number.isInteger(entry.durationSeconds)));
+  assert.ok(playlistPlan.relatedFullLengthVideos.every(video =>
+    Number.isInteger(video.durationSeconds) && video.note.includes("Full-length")));
   assert.match(await readFile(new URL("../docs/prd/short-form-renderer.md", import.meta.url), "utf8"), /No automatic social publishing or A\/B testing exists/);
   await assert.rejects(renderBatch(args, { ffmpeg: "ffmpeg-fixture", ffprobe: "ffprobe-fixture", runCommand }),
     /Refusing to overwrite rendered output/);

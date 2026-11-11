@@ -43,9 +43,12 @@ uploading to a platform. No automatic social publishing or A/B testing exists.
 
 ## Playlist curation
 
-`youtube-playlist-plan.json` records proposed public playlists, intended tracks,
-and any exact IDs supplied so far. Empty IDs are unresolved, not guessed.
-`Black Book` is linked to the supplied YouTube ID but still marked for a human
-content check. YouTube Studio playlist changes require access to the channel
-and a write-authorized YouTube account; no such OAuth connection is configured
-here, so the file is a reviewable checklist, not proof playlists were created.
+`youtube-playlist-plan.json` maps the supplied exact-title Shorts for Beautiful
+Liar, Reciprocity, and Read The Room to proposed public playlists. The supplied
+Black Book and Quiet Heart IDs are full-length releases, so they are recorded
+as related sources rather than mislabeled as Shorts; related full-length
+Beautiful Liar and Reciprocity releases are also cross-referenced. These IDs
+and durations came from the channel owner's list and still need a final
+publication/suitability check in YouTube Studio. No YouTube Studio playlist
+changes were made: no write-authorized YouTube OAuth connection is configured
+here, so the file is a reviewable mapping, not proof playlists were created.

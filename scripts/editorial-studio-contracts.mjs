@@ -38,7 +38,7 @@ assert.match(studio, /createObjectURL/);
 assert.match(studio, /navigator\.share/);
 assert.match(studio, /textContent/);
 assert.doesNotMatch(studio, /innerHTML|GoogleGenAI|API_KEY|generateContent/);
-for (const id of ["halo-project-handover", "halo-master-observation"]) {
+for (const id of ["halo-project-handover", "halo-master-observation", "halo-weekly-wins-2026-11-11"]) {
   assert.ok(magazine.includes(`data-open-article="${id}"`));
   assert.ok(magazineScript.includes(`"${id}"`));
 }

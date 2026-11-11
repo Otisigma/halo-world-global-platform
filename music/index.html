@@ -133,7 +133,11 @@
           </label>
         </div>
       </header>
-      <div class="genre-filter" id="genreFilter" aria-label="Filter releases by genre"></div>
+      <button class="all-releases-filter" id="allReleasesFilter" type="button" data-genre="all" aria-pressed="true">All releases</button>
+      <details class="catalog-genre-disclosure" id="catalogGenreDisclosure">
+        <summary id="catalogGenreSummary">Browse genres</summary>
+        <div class="genre-filter" id="genreFilter" role="group" aria-label="Filter releases by genre"></div>
+      </details>
       <div class="catalog-results-bar">
         <p id="catalogResults" role="status" aria-live="polite"></p>
         <button id="resetCatalogFilters" type="button" hidden>Clear filters</button>

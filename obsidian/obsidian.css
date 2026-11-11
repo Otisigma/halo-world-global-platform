@@ -9,6 +9,16 @@
 .vault-filters{display:flex;flex-wrap:wrap;gap:10px;margin:20px 0}
 .vault-filters button{border:1px solid var(--line);border-radius:24px;padding:10px 18px;background:var(--panel);color:var(--muted)}
 .vault-filters button[aria-pressed=true]{border-color:var(--gold);color:var(--ink);background:#30271a}
+.quick-filters{margin-bottom:14px}
+.vault-filter-group{margin:10px 0;border:1px solid var(--line);border-radius:10px;background:#11100e}
+.vault-filter-group>summary{padding:14px 16px;color:var(--gold);font-size:.9rem;font-weight:650;cursor:pointer;list-style:none}
+.vault-filter-group>summary::-webkit-details-marker{display:none}
+.vault-filter-group>summary::after{content:"＋";float:right;color:var(--muted)}
+.vault-filter-group[open]>summary::after{content:"−"}
+.vault-filter-group[open]>summary{border-bottom:1px solid var(--line)}
+.vault-filter-group .vault-filters{padding:4px 14px 14px;margin:10px 0 0}
+.vault-filter-group .vault-filters button{font-size:.82rem}
+.vault-filter-group>summary:focus-visible{outline:2px solid white;outline-offset:3px}
 .genre-badges{display:flex;flex-wrap:wrap;gap:6px;margin:12px 0}
 .genre-badge{font-size:.7rem;border:1px solid #d5b66c66;border-radius:20px;padding:4px 10px;color:var(--gold);background:#d5b66c15;overflow-wrap:anywhere}
 #tracks .track small{line-height:1.6;overflow-wrap:anywhere}

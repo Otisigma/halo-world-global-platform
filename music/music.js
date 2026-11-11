@@ -3,6 +3,8 @@
     featured: document.querySelector("#featuredRelease"),
     grid: document.querySelector("#releaseGrid"),
     genres: document.querySelector("#genreFilter"),
+    allGenres: document.querySelector("#allReleasesFilter"),
+    genreSummary: document.querySelector("#catalogGenreSummary"),
     search: document.querySelector("#catalogSearch"),
     sort: document.querySelector("#catalogSort"),
     count: document.querySelector("#releaseCount"),
@@ -1051,8 +1053,10 @@
   function filteredReleases() {
     const query = state.query.toLowerCase();
     const filtered = state.releases.filter(release => {
-      const matchesGenre = state.genre === "all" || release.genres.some(genre => genre.toLowerCase() === state.genre);
-      const haystack = [release.title, release.artist, release.albumTitle, catalogState(release).albumTitle, release.pitch, ...release.genres].join(" ").toLowerCase();
+      const releaseGenres = catalogGenreEntries([release]);
+      const matchesGenre = state.genre === "all"
+        || (state.genre === "__uncategorized__" ? !releaseGenres.length : releaseGenres.some(([key]) => key === state.genre));
+      const haystack = [release.title, release.artist, release.albumTitle, catalogState(release).albumTitle, release.pitch, release.catalog?.genre, ...release.genres].join(" ").toLowerCase();
       return matchesGenre && (!query || haystack.includes(query));
     });
     if (state.sort === "oldest") {
@@ -1067,16 +1071,53 @@
     return filtered;
   }
 
+  function catalogGenreEntries(releases) {
+    const categories = new Map();
+    for (const release of releases) {
+      const genres = Array.isArray(release.genres) && release.genres.length
+        ? release.genres
+        : typeof release.catalog?.genre === "string" ? [release.catalog.genre] : [];
+      const releaseGenres = new Map();
+      for (const supplied of genres) {
+        if (typeof supplied !== "string") continue;
+        for (const raw of supplied.split(",")) {
+          const source = raw.trim().replace(/[\s,.;:]+$/g, "").replace(/\s+/g, " ");
+          if (!source) continue;
+          const normalized = source.toLowerCase().replace(/[^a-z0-9&-]+/g, " ").trim().replace(/\s+/g, " ");
+          const key = ["afro beat", "afro beats", "afrobeat", "afrobeats"].includes(normalized) ? "afrobeats" : normalized;
+          let label = key.split(" ").map(word => word.split("-").map(part => part.charAt(0).toUpperCase() + part.slice(1)).join("-")).join(" ");
+          label = label.replace(/\bDj\b/g, "DJ").replace(/\bR&b\b/gi, "R&B").replace(/\bHalo\b/g, "HALO");
+          if (key === "afrobeats") label = "Afrobeats";
+          if (key === "r&b soul") label = "R&B / Soul";
+          if (!releaseGenres.has(key)) releaseGenres.set(key, label);
+        }
+      }
+      for (const [key, label] of releaseGenres) {
+        const category = categories.get(key) || { label, count: 0 };
+        category.count += 1;
+        categories.set(key, category);
+      }
+    }
+    return [...categories].sort((a, b) => b[1].count - a[1].count || a[1].label.localeCompare(b[1].label));
+  }
+
   function renderGenres() {
-    const genres = [...new Set(state.releases.flatMap(release => release.genres.map(genre => genre.trim()).filter(Boolean)))].sort();
-    elements.genres.innerHTML = ["All", ...genres].map(label => {
-      const value = label.toLowerCase();
-      return `<button type="button" data-genre="${escapeHtml(value)}" aria-pressed="${state.genre === value}">${escapeHtml(label)}</button>`;
-    }).join("");
+    const genres = catalogGenreEntries(state.releases);
+    const uncategorizedCount = state.releases.filter(release => !catalogGenreEntries([release]).length).length;
+    elements.allGenres.textContent = `All releases (${state.releases.length})`;
+    elements.allGenres.setAttribute("aria-pressed", String(state.genre === "all"));
+    elements.genres.innerHTML = [
+      ...genres.map(([value, genre]) => `<button type="button" data-genre="${escapeHtml(value)}" aria-pressed="${state.genre === value}">${escapeHtml(genre.label)} (${genre.count})</button>`),
+      ...(uncategorizedCount ? [`<button type="button" data-genre="__uncategorized__" aria-pressed="${state.genre === "__uncategorized__"}">Genre not supplied (${uncategorizedCount})</button>`] : [])
+    ].join("");
+    const activeGenre = genres.find(([value]) => value === state.genre);
+    elements.genreSummary.textContent = `Genres (${genres.length + (uncategorizedCount ? 1 : 0)})${activeGenre ? ` · ${activeGenre[1].label}` : state.genre === "__uncategorized__" ? " · Genre not supplied" : ""}`;
   }
 
   function renderGrid() {
-    const releases = filteredReleases();
+    const releases = state.genre === "__uncategorized__"
+      ? filteredReleases().filter(release => !catalogGenreEntries([release]).length)
+      : filteredReleases();
     elements.count.textContent = `${state.releases.length} ${state.releases.length === 1 ? "release" : "releases"} · one link`;
     if (elements.results) elements.results.textContent = `Showing ${releases.length} of ${state.releases.length} releases`;
     if (elements.reset) elements.reset.hidden = !state.query && state.genre === "all";
@@ -1249,6 +1290,11 @@
   elements.search.addEventListener("input", event => { state.query = event.target.value.trim(); renderGrid(); });
   elements.reset?.addEventListener("click", resetCatalogFilters);
   elements.sort?.addEventListener("change", event => { state.sort = event.target.value; renderGrid(); });
+  elements.allGenres.addEventListener("click", () => {
+    state.genre = "all";
+    renderGenres();
+    renderGrid();
+  });
   elements.genres.addEventListener("click", event => {
     const button = event.target.closest("[data-genre]");
     if (!button) return;

@@ -16,13 +16,16 @@ catalog loading failures are shown, with retry for catalog failures.
 Optional existing authenticated listening reports respect the user's consent.
 The motion indicator is deliberately labelled as playback-state animation, not
 a frequency analyser, and respects reduced-motion preferences.
+Lyrics already supplied by the published catalog are shown as plain text.
+Timestamped lines follow the current audio time; untimed lines remain readable
+without implying synchronization. No lyric text or timestamps are invented.
 
 No sample song names, generic DistroKid destination, copied lyric, fabricated
 visualization, or external payment checkout is used. Artist destinations come
 from the published release record and are validated as safe HTTP(S) links.
 The gateway does not add cryptographic tokens, identity or ownership claims,
 new signing keys, short-form generation, third-party publishing, A/B tests,
-synchronized lyrics, tipping, audio crossfade or cross-site continuous audio.
+tipping, audio crossfade or cross-site continuous audio.
 The existing release teaser readiness feature does not currently deploy a
 video renderer. These features require independent implementation, rights
 review and, where applicable, platform API and provider access. Never reuse

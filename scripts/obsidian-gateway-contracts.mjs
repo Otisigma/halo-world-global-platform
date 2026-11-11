@@ -13,7 +13,7 @@ class Element {
   pause() { this.paused = true; }
   load() {}
 }
-const ids = ["audio", "status", "tracks", "previous", "next", "retry", "share", "loop", "destination", "releaseLink", "artwork", "pulse", "selectedTitle", "artist", "position", "count"];
+const ids = ["audio", "status", "tracks", "previous", "next", "retry", "share", "loop", "destination", "releaseLink", "artwork", "pulse", "selectedTitle", "artist", "position", "count", "lyrics", "lyricsStatus", "lyricsLines"];
 const nodes = Object.fromEntries(ids.map(id => [id, new Element()]));
 nodes.audio.hidden = true;
 const document = { getElementById: id => nodes[id], createElement: () => new Element() };
@@ -30,8 +30,8 @@ const window = {
   }
 };
 const releases = [
-  { id: "alpha", status: "published", title: "<img onerror=alert(1)>", artist: "A", streamUrl: "/audio.mp3", distributionUrl: "https://distrokid.com/hyperfollow/artist/release" },
-  { id: "beta", status: "passed", title: "Beta", artist: "B", purchaseUrl: "javascript:alert(1)" },
+  { id: "alpha", status: "published", title: "<img onerror=alert(1)>", artist: "A", streamUrl: "/audio.mp3", distributionUrl: "https://distrokid.com/hyperfollow/artist/release", dreamweaverPayload: { lyricsText: "[00:01] First line\n[00:04] <img onerror=alert(1)>" } },
+  { id: "beta", status: "passed", title: "Beta", artist: "B", purchaseUrl: "javascript:alert(1)", dreamweaverPayload: { lyricsText: "Untimed line" } },
   { id: "private", status: "published", isLiveVisible: false, title: "Private" },
   { id: "draft", status: "draft", title: "Draft" }
 ];
@@ -44,10 +44,19 @@ assert.equal(nodes.destination.hidden, true, "unsafe destination must not be lin
 assert.equal(nodes.audio.hidden, true);
 assert.equal(nodes.loop.disabled, true);
 assert.match(nodes.status.textContent, /unavailable/);
+assert.match(nodes.lyricsStatus.textContent, /not timestamped/);
 assert.equal(selection(), "beta");
 nodes.next.events.click();
 assert.equal(nodes.selectedTitle.textContent, "<img onerror=alert(1)>", "title rendered as literal text");
 assert.equal(nodes.audio.src, "/audio.mp3");
+assert.equal(nodes.lyricsLines.children[1].textContent, "<img onerror=alert(1)>", "lyrics remain literal text");
+nodes.audio.currentTime = 1.1;
+nodes.audio.events.timeupdate();
+assert.equal(nodes.lyricsLines.children[0]["is-current"], true);
+nodes.audio.currentTime = 4;
+nodes.audio.events.seeked();
+assert.equal(nodes.lyricsLines.children[0]["is-current"], false);
+assert.equal(nodes.lyricsLines.children[1]["is-current"], true);
 assert.equal(nodes.loop.disabled, false);
 nodes.loop.checked = true;
 nodes.loop.events.change();
@@ -78,6 +87,7 @@ reply = async () => Response.json({ releases: [] });
 await gateway.load();
 assert.equal(nodes.selectedTitle.textContent, "No public releases yet");
 assert.equal(nodes.releaseLink.href, "/music/");
+assert.equal(nodes.lyrics.hidden, true, "stale lyrics clear when catalog has no releases");
 assert.equal(nodes.audio.hidden, true);
 reply = async () => Response.json({}, { status: 503 });
 const originalError = console.error;

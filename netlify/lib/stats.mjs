@@ -127,6 +127,8 @@ export const allowedEvents = new Set([
   "open_inside_the_mix_episode",
   "open_live_runway",
   "open_music_catalog",
+  "open_obsidian_gateway",
+  "open_satellite",
   "open_music_world",
   "open_music_world_telemetry",
   "open_new_release",

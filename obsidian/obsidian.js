@@ -23,7 +23,8 @@ export function createGateway({ document, window, fetcher }) {
   const destination = get("destination"), releaseLink = get("releaseLink"), art = get("artwork");
   const state = { releases: [], index: -1, generation: 0 };
   const loadNote = get("loadNote"), continueNext = get("continueNext"), shareMoment = get("shareMoment");
-  let pendingStart = 0;
+  let pendingStart = 0, warmed = "", warmer = null;
+  const loadNoteText = loadNote.textContent;
   let lyrics = [], lyricNodes = [], activeLyric = -1;
   const telemetry = window.HaloListeningTelemetry?.bindAudio(audio, () => state.releases[state.index]?.id);
   const selected = () => state.releases[state.index];
@@ -80,6 +81,32 @@ export function createGateway({ document, window, fetcher }) {
     return value !== null && value !== "" && Number.isFinite(seconds) && seconds > 0 && seconds < 86_400 ? Math.floor(seconds) : 0;
   }
 
+  function nextPlayableIndex() {
+    for (let step = 1; step < state.releases.length; step += 1) {
+      const candidate = (state.index + step) % state.releases.length;
+      const resolved = window.HaloReleaseArtwork.resolvePreviewAudio(state.releases[candidate]);
+      if (resolved.isPlayable && safeDestination(resolved.src, window.location.origin)) return { candidate, src: resolved.src };
+    }
+    return null;
+  }
+
+  function warmNext() {
+    if (!continueNext.checked || audio.loop || !window.Audio || !Number.isFinite(audio.duration) || audio.duration <= 0
+      || audio.currentTime / audio.duration < 0.6) return;
+    const upcoming = nextPlayableIndex();
+    if (!upcoming || upcoming.src === warmed) return;
+    warmed = upcoming.src;
+    warmer = new window.Audio();
+    warmer.preload = "auto";
+    warmer.src = upcoming.src;
+  }
+
+  function showBuffered() {
+    if (loadNote.hidden || !Number.isFinite(audio.duration) || audio.duration <= 0 || !audio.buffered?.length) return;
+    const percent = Math.min(100, Math.round(audio.buffered.end(audio.buffered.length - 1) / audio.duration * 100));
+    loadNote.textContent = `${loadNoteText} Buffered ${percent}%.`;
+  }
+
   const clock = seconds => `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
 
   function select(index, startAt = 0) {
@@ -90,6 +117,9 @@ export function createGateway({ document, window, fetcher }) {
     audio.load();
     setPlaying(false);
     loadNote.hidden = true;
+    loadNote.textContent = loadNoteText;
+    if (warmer) { warmer.removeAttribute("src"); warmer = null; }
+    warmed = "";
     pendingStart = startAt;
     state.index = index;
     const release = selected();
@@ -213,23 +243,20 @@ export function createGateway({ document, window, fetcher }) {
   retry.addEventListener("click", load);
   audio.addEventListener("loadstart", () => { if (audio.getAttribute("src")) loadNote.hidden = false; });
   audio.addEventListener("canplay", () => { loadNote.hidden = true; });
+  audio.addEventListener("progress", showBuffered);
   audio.addEventListener("loadedmetadata", () => {
     if (pendingStart && (!Number.isFinite(audio.duration) || pendingStart < audio.duration)) audio.currentTime = pendingStart;
     pendingStart = 0;
   });
   audio.addEventListener("ended", () => {
     if (!continueNext.checked || audio.loop || state.releases.length < 2) return;
-    for (let step = 1; step < state.releases.length; step += 1) {
-      const candidate = (state.index + step) % state.releases.length;
-      const resolved = window.HaloReleaseArtwork.resolvePreviewAudio(state.releases[candidate]);
-      if (!resolved.isPlayable || !safeDestination(resolved.src, window.location.origin)) continue;
-      select(candidate);
-      Promise.resolve(audio.play()).catch(() => setStatus("Next release is ready. Press play to continue."));
-      return;
-    }
+    const upcoming = nextPlayableIndex();
+    if (!upcoming) return;
+    select(upcoming.candidate);
+    Promise.resolve(audio.play()).catch(() => setStatus("Next release is ready. Press play to continue."));
   });
   audio.addEventListener("playing", () => { loadNote.hidden = true; setPlaying(true); setStatus("Playing."); });
-  audio.addEventListener("timeupdate", updateLyrics);
+  audio.addEventListener("timeupdate", () => { updateLyrics(); warmNext(); });
   audio.addEventListener("seeked", updateLyrics);
   audio.addEventListener("waiting", () => { loadNote.hidden = false; setPlaying(false); setStatus("Buffering…"); });
   audio.addEventListener("pause", () => { setPlaying(false); if (selected() && !audio.error) setStatus(audio.ended ? "Playback ended." : "Paused."); });

@@ -22,6 +22,8 @@ export function createGateway({ document, window, fetcher }) {
   const previous = get("previous"), next = get("next"), retry = get("retry"), share = get("share"), loop = get("loop");
   const destination = get("destination"), releaseLink = get("releaseLink"), art = get("artwork");
   const state = { releases: [], index: -1, generation: 0 };
+  const loadNote = get("loadNote"), continueNext = get("continueNext"), shareMoment = get("shareMoment");
+  let pendingStart = 0;
   let lyrics = [], lyricNodes = [], activeLyric = -1;
   const telemetry = window.HaloListeningTelemetry?.bindAudio(audio, () => state.releases[state.index]?.id);
   const selected = () => state.releases[state.index];
@@ -73,13 +75,22 @@ export function createGateway({ document, window, fetcher }) {
     }));
   }
 
-  function select(index) {
+  function parseStart(value) {
+    const seconds = Number(value);
+    return value !== null && value !== "" && Number.isFinite(seconds) && seconds > 0 && seconds < 86_400 ? Math.floor(seconds) : 0;
+  }
+
+  const clock = seconds => `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
+
+  function select(index, startAt = 0) {
     if (!state.releases[index]) return;
     telemetry?.reset();
     audio.pause();
     audio.removeAttribute("src");
     audio.load();
     setPlaying(false);
+    loadNote.hidden = true;
+    pendingStart = startAt;
     state.index = index;
     const release = selected();
     renderLyrics(release.dreamweaverPayload?.lyricsText);
@@ -91,7 +102,7 @@ export function createGateway({ document, window, fetcher }) {
     get("artist").textContent = release.artist || "Artist";
     get("position").textContent = `${index + 1} / ${state.releases.length}`;
     previous.disabled = next.disabled = state.releases.length < 2;
-    share.disabled = false;
+    share.disabled = shareMoment.disabled = false;
     releaseLink.href = `/music/?song=${encodeURIComponent(release.id)}`;
     releaseLink.textContent = "Explore this release ↗";
     const link = safeDestination(release.distributionUrl, window.location.origin) || safeDestination(release.purchaseUrl, window.location.origin);
@@ -102,7 +113,7 @@ export function createGateway({ document, window, fetcher }) {
       audio.src = resolved.src;
       audio.hidden = false;
       loop.disabled = false;
-      setStatus("Press play to listen.");
+      setStatus(startAt ? `Press play to start at ${clock(startAt)}.` : "Press play to listen.");
     } else {
       audio.hidden = true;
       loop.disabled = true;
@@ -111,6 +122,7 @@ export function createGateway({ document, window, fetcher }) {
     renderTracks();
     const url = new URL(window.location.href);
     url.searchParams.set("song", release.id);
+    url.searchParams.delete("t");
     window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
   }
 
@@ -128,8 +140,9 @@ export function createGateway({ document, window, fetcher }) {
     renderLyrics("");
     tracks.replaceChildren();
     previous.disabled = next.disabled = true;
-    share.disabled = true;
+    share.disabled = shareMoment.disabled = true;
     loop.disabled = true;
+    loadNote.hidden = true;
     destination.hidden = true;
     destination.removeAttribute("href");
     releaseLink.href = "/music/";
@@ -161,7 +174,7 @@ export function createGateway({ document, window, fetcher }) {
         renderTracks();
         return;
       }
-      select(index < 0 ? 0 : index);
+      select(index < 0 ? 0 : index, parseStart(new URL(window.location.href).searchParams.get("t")));
     } catch (error) {
       if (ticket !== state.generation) return;
       console.error("Obsidian catalog unavailable", error);
@@ -184,13 +197,43 @@ export function createGateway({ document, window, fetcher }) {
       setStatus("Could not copy. Select and copy the address from your browser.");
     }
   });
+  shareMoment.addEventListener("click", async () => {
+    if (!selected()) return;
+    const url = new URL(window.location.href);
+    const moment = Math.floor(audio.currentTime || 0);
+    if (moment > 0) url.searchParams.set("t", String(moment));
+    else url.searchParams.delete("t");
+    try {
+      await window.navigator.clipboard.writeText(url.href);
+      setStatus(moment > 0 ? `Link to ${clock(moment)} copied.` : "Release link copied.");
+    } catch {
+      setStatus("Could not copy. Select and copy the address from your browser.");
+    }
+  });
   retry.addEventListener("click", load);
-  audio.addEventListener("playing", () => { setPlaying(true); setStatus("Playing."); });
+  audio.addEventListener("loadstart", () => { if (audio.getAttribute("src")) loadNote.hidden = false; });
+  audio.addEventListener("canplay", () => { loadNote.hidden = true; });
+  audio.addEventListener("loadedmetadata", () => {
+    if (pendingStart && (!Number.isFinite(audio.duration) || pendingStart < audio.duration)) audio.currentTime = pendingStart;
+    pendingStart = 0;
+  });
+  audio.addEventListener("ended", () => {
+    if (!continueNext.checked || audio.loop || state.releases.length < 2) return;
+    for (let step = 1; step < state.releases.length; step += 1) {
+      const candidate = (state.index + step) % state.releases.length;
+      const resolved = window.HaloReleaseArtwork.resolvePreviewAudio(state.releases[candidate]);
+      if (!resolved.isPlayable || !safeDestination(resolved.src, window.location.origin)) continue;
+      select(candidate);
+      Promise.resolve(audio.play()).catch(() => setStatus("Next release is ready. Press play to continue."));
+      return;
+    }
+  });
+  audio.addEventListener("playing", () => { loadNote.hidden = true; setPlaying(true); setStatus("Playing."); });
   audio.addEventListener("timeupdate", updateLyrics);
   audio.addEventListener("seeked", updateLyrics);
-  audio.addEventListener("waiting", () => { setPlaying(false); setStatus("Buffering…"); });
+  audio.addEventListener("waiting", () => { loadNote.hidden = false; setPlaying(false); setStatus("Buffering…"); });
   audio.addEventListener("pause", () => { setPlaying(false); if (selected() && !audio.error) setStatus(audio.ended ? "Playback ended." : "Paused."); });
-  audio.addEventListener("error", () => { setPlaying(false); if (selected()) setStatus("Audio could not be played. Try again or explore the release link."); });
+  audio.addEventListener("error", () => { loadNote.hidden = true; setPlaying(false); if (selected()) setStatus("Audio could not be played. Try again or explore the release link."); });
   art.addEventListener("error", () => {
     if (art.getAttribute("src") !== "/assets/releases/halo-premium-placeholder.svg") {
       art.src = "/assets/releases/halo-premium-placeholder.svg";

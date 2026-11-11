@@ -35,12 +35,15 @@
         <p id="artist" class="artist"></p>
         <div class="pulse" id="pulse" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
         <p class="status" id="status" role="status">Connecting to the public catalog…</p>
+        <p class="load-note" id="loadNote" hidden><strong>The sound &amp; the load time.</strong> Release audio is served at full quality rather than as a small preview file, so it can take a moment to start. Give it a second to load.</p>
         <audio id="audio" controls preload="none" aria-label="Release audio player"></audio>
         <label class="loop"><input id="loop" type="checkbox" disabled> Loop selected audio</label>
+        <label class="loop"><input id="continueNext" type="checkbox" checked> Continue to the next release when this one ends</label>
         <div class="controls">
           <button type="button" id="previous" disabled>← Previous</button>
           <button type="button" id="next" disabled>Next →</button>
           <button type="button" id="share" disabled>Copy release link</button>
+          <button type="button" id="shareMoment" disabled>Copy link at this moment</button>
         </div>
         <div class="links">
           <a id="destination" class="primary" hidden rel="noopener noreferrer" target="_blank">Artist-approved link ↗</a>

@@ -35,12 +35,15 @@
         <p id="artist" class="artist"></p>
         <div class="pulse" id="pulse" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
         <p class="status" id="status" role="status">Connecting to the public catalog…</p>
+        <p class="load-note" id="loadNote" hidden><strong>The sound &amp; the load time.</strong> Audio can take a moment to start, depending on the release file and your connection. Give it a second to load.</p>
         <audio id="audio" controls preload="none" aria-label="Release audio player"></audio>
         <label class="loop"><input id="loop" type="checkbox" disabled> Loop selected audio</label>
+        <label class="loop"><input id="continueNext" type="checkbox" checked> Continue to the next release when this one ends</label>
         <div class="controls">
           <button type="button" id="previous" disabled>← Previous</button>
           <button type="button" id="next" disabled>Next →</button>
           <button type="button" id="share" disabled>Copy release link</button>
+          <button type="button" id="shareMoment" disabled>Copy link at this moment</button>
         </div>
         <div class="links">
           <a id="destination" class="primary" hidden rel="noopener noreferrer" target="_blank">Artist-approved link ↗</a>
@@ -49,14 +52,21 @@
         <button type="button" id="retry" hidden>Retry catalog</button>
       </div>
     </section>
-    <section class="lyrics" id="lyrics" aria-labelledby="lyricsTitle" hidden>
-      <h2 id="lyricsTitle">Lyrics</h2>
+    <details class="lyrics" id="lyrics" hidden>
+      <summary id="lyricsTitle">Open the lyrics</summary>
       <p id="lyricsStatus"></p>
       <ol id="lyricsLines"></ol>
-    </section>
+    </details>
     <section class="playlist" aria-labelledby="playlistTitle">
-      <div class="playlist-header"><h2 id="playlistTitle">The releases</h2><p id="count">Loading…</p></div>
+      <div class="playlist-header"><h2 id="playlistTitle">The Living Grid</h2><p id="count">Loading…</p></div>
+      <p class="vault-note">Explore the public vault by catalog genre. Changing a filter keeps the current release playing; the full catalog remains the playback queue.</p>
+      <div id="vaultFilters" class="vault-filters" role="group" aria-label="Filter the release grid"></div>
+      <p id="gridStatus" role="status"></p>
       <div id="tracks"></div>
+      <details class="transparency">
+        <summary>About audio quality and byte verification</summary>
+        <p>These are published catalog releases, not a guarantee of lossless quality. Availability is checked from catalog links, not a live stream test. No public SHA-256 verification evidence or recovery-pack links are supplied to this grid, so it does not display verified badges. Private recovery materials remain private.</p>
+      </details>
     </section>
     <p class="note">The animated bars reflect player state, not measured audio frequencies. Playback starts only when you choose it; some releases may have an external listening link instead of an in-page preview.</p>
   </main>

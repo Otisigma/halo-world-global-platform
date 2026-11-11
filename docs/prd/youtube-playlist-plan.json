@@ -1,0 +1,44 @@
+{
+  "channel": "https://www.youtube.com/@halo-music-world",
+  "playlists": [
+    {
+      "title": "HALO House Shorts",
+      "description": "High-energy club edits and short rhythmic highlights from the HALO catalog.",
+      "visibility": "public",
+      "entries": [
+        {
+          "videoId": "",
+          "track": "Beautiful Liar",
+          "review": "Find the channel's official video ID; confirm it is a club edit/Short and cleared for playlist use."
+        },
+        {
+          "videoId": "",
+          "track": "Reciprocity",
+          "review": "Find the channel's official video ID; confirm it is a club edit/Short and cleared for playlist use."
+        }
+      ]
+    },
+    {
+      "title": "HALO Obsidian Reels",
+      "description": "Dark, atmospheric short-form moments from the HALO catalog.",
+      "visibility": "public",
+      "entries": [
+        {
+          "videoId": "1af8b5Gc0Gs",
+          "track": "Black Book",
+          "review": "Confirm the public video is the intended atmospheric short before adding it."
+        },
+        {
+          "videoId": "",
+          "track": "Quiet Heart",
+          "review": "Find the channel's official video ID and confirm it suits this playlist."
+        },
+        {
+          "videoId": "",
+          "track": "Read The Room",
+          "review": "Find the channel's official video ID and confirm it suits this playlist."
+        }
+      ]
+    }
+  ]
+}

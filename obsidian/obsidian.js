@@ -16,17 +16,83 @@ export function safeDestination(value, origin) {
   }
 }
 
+export function releaseCategories(release, field = "genres") {
+  const supplied = Array.isArray(release[field]) ? release[field] : [];
+  const values = supplied.filter(value => typeof value === "string" && value.trim());
+  if (field === "genres" && !values.length && typeof release.catalog?.genre === "string") {
+    values.push(...release.catalog.genre.split(","));
+  }
+  const categories = new Map();
+  for (const value of values) {
+    const label = value.trim().replace(/\s+/g, " ");
+    if (label) categories.set(label.toLowerCase(), label);
+  }
+  return [...categories].map(([key, label]) => ({ key, label }));
+}
+
 export function createGateway({ document, window, fetcher }) {
   const get = id => document.getElementById(id);
   const audio = get("audio"), status = get("status"), tracks = get("tracks");
   const previous = get("previous"), next = get("next"), retry = get("retry"), share = get("share"), loop = get("loop");
   const destination = get("destination"), releaseLink = get("releaseLink"), art = get("artwork");
-  const state = { releases: [], index: -1, generation: 0 };
+  const state = { releases: [], index: -1, generation: 0, filter: "all" };
+  const filterBox = get("vaultFilters"), gridStatus = get("gridStatus");
+  let cardNodes = [], isPlaying = false;
+  const loadNote = get("loadNote"), continueNext = get("continueNext"), shareMoment = get("shareMoment");
+  let pendingStart = 0, warmed = "", warmer = null;
+  const loadNoteText = loadNote.textContent;
   let lyrics = [], lyricNodes = [], activeLyric = -1;
   const telemetry = window.HaloListeningTelemetry?.bindAudio(audio, () => state.releases[state.index]?.id);
   const selected = () => state.releases[state.index];
   const setStatus = value => { status.textContent = value; };
-  const setPlaying = value => get("pulse").classList.toggle("playing", value);
+  const setPlaying = value => {
+    isPlaying = value;
+    get("pulse").classList.toggle("playing", value);
+    for (const { button, action, index } of cardNodes) {
+      button.classList.toggle("active-playing", value && index === state.index);
+      action.textContent = index === state.index ? (value ? "PLAYING" : "SELECTED") : "SELECT RELEASE";
+    }
+  };
+  const playable = release => {
+    const resolved = window.HaloReleaseArtwork.resolvePreviewAudio(release);
+    return resolved.isPlayable && Boolean(safeDestination(resolved.src, window.location.origin));
+  };
+  const matchesFilter = (release, id) => {
+    if (id === "all") return true;
+    if (id === "playable") return playable(release);
+    if (id === "uncategorized") return !releaseCategories(release).length;
+    if (id.startsWith("genre:")) return releaseCategories(release).some(category => category.key === id.slice(6));
+    if (id.startsWith("version:")) return releaseCategories(release, "availableVersions").some(category => category.key === id.slice(8));
+    return false;
+  };
+
+  function renderFilters() {
+    const categories = field => {
+      const unique = new Map(state.releases.flatMap(release => releaseCategories(release, field))
+        .map(category => [category.key, category.label]));
+      return [...unique].sort((a, b) => a[1].localeCompare(b[1]));
+    };
+    const filters = [
+      ["all", "All Releases"], ["playable", "In-page audio"],
+      ...categories("genres").map(([key, label]) => [`genre:${key}`, label]),
+      ...(state.releases.some(release => !releaseCategories(release).length) ? [["uncategorized", "Genre not supplied"]] : []),
+      ...categories("availableVersions").map(([key, label]) => [`version:${key}`, `Version: ${label}`])
+    ];
+    filterBox.replaceChildren(...filters.map(([id, label]) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      const count = state.releases.filter(release => matchesFilter(release, id)).length;
+      button.textContent = `${label} (${count})`;
+      button.setAttribute("aria-pressed", String(state.filter === id));
+      button.addEventListener("click", () => {
+        state.filter = id;
+        // Keep filter controls stable so keyboard focus survives a grid update.
+        for (const node of filterBox.children) node.setAttribute("aria-pressed", String(node === button));
+        renderTracks();
+      });
+      return button;
+    }));
+  }
 
   function updateLyrics() {
     const index = findActiveLyricIndex(lyrics, audio.currentTime);
@@ -54,7 +120,9 @@ export function createGateway({ document, window, fetcher }) {
   }
 
   function renderTracks() {
-    tracks.replaceChildren(...state.releases.map((release, index) => {
+    cardNodes = [];
+    tracks.replaceChildren(...state.releases.flatMap((release, index) => {
+      if (!matchesFilter(release, state.filter)) return [];
       const button = document.createElement("button");
       button.type = "button";
       button.className = "track";
@@ -63,23 +131,88 @@ export function createGateway({ document, window, fetcher }) {
       const title = document.createElement("strong");
       const artist = document.createElement("small");
       const action = document.createElement("span");
+      const image = document.createElement("img");
+      image.src = safeDestination(window.HaloReleaseArtwork.resolve(release).src, window.location.origin) || "/assets/releases/halo-premium-placeholder.svg";
+      image.alt = "";
+      image.loading = "lazy";
+      image.addEventListener("error", () => {
+        if (image.getAttribute("src") !== "/assets/releases/halo-premium-placeholder.svg") image.src = "/assets/releases/halo-premium-placeholder.svg";
+      });
+      const availability = document.createElement("small");
+      availability.textContent = playable(release) ? "In-page audio available" : "Catalog links only";
+      const badges = document.createElement("span");
+      badges.className = "genre-badges";
+      const categories = releaseCategories(release);
+      for (const category of categories.length ? categories : [{ label: "Genre not supplied" }]) {
+        const badge = document.createElement("span");
+        badge.className = "genre-badge";
+        badge.textContent = category.label;
+        badges.append(badge);
+      }
+      const versions = document.createElement("small");
+      const versionLabels = releaseCategories(release, "availableVersions").map(category => category.label);
+      versions.textContent = versionLabels.length ? `Catalog versions: ${versionLabels.join(" / ")}` : "";
+      const description = document.createElement("small");
+      description.textContent = typeof release.pitch === "string" ? release.pitch.trim() : "";
       title.textContent = release.title || "Untitled release";
       artist.textContent = release.artist || "Artist";
-      action.textContent = index === state.index ? "SELECTED" : "SELECT →";
-      label.append(title, artist);
-      button.append(label, action);
+      label.append(title, artist, badges, availability, versions, description);
+      button.append(image, label, action);
       button.addEventListener("click", () => select(index));
+      cardNodes.push({ button, action, index });
       return button;
     }));
+    setPlaying(isPlaying);
+    gridStatus.textContent = cardNodes.length
+      ? `${cardNodes.length} of ${state.releases.length} releases shown. Select a release, then press play.`
+      : "No releases match this filter. Choose another vault.";
   }
 
-  function select(index) {
+  function parseStart(value) {
+    const seconds = Number(value);
+    return value !== null && value !== "" && Number.isFinite(seconds) && seconds > 0 && seconds < 86_400 ? Math.floor(seconds) : 0;
+  }
+
+  function nextPlayableIndex() {
+    for (let step = 1; step < state.releases.length; step += 1) {
+      const candidate = (state.index + step) % state.releases.length;
+      const resolved = window.HaloReleaseArtwork.resolvePreviewAudio(state.releases[candidate]);
+      if (resolved.isPlayable && safeDestination(resolved.src, window.location.origin)) return { candidate, src: resolved.src };
+    }
+    return null;
+  }
+
+  function warmNext() {
+    if (!continueNext.checked || audio.loop || !window.Audio || !Number.isFinite(audio.duration) || audio.duration <= 0
+      || audio.currentTime / audio.duration < 0.6) return;
+    const upcoming = nextPlayableIndex();
+    if (!upcoming || upcoming.src === warmed) return;
+    warmed = upcoming.src;
+    warmer = new window.Audio();
+    warmer.preload = "auto";
+    warmer.src = upcoming.src;
+  }
+
+  function showBuffered() {
+    if (loadNote.hidden || !Number.isFinite(audio.duration) || audio.duration <= 0 || !audio.buffered?.length) return;
+    const percent = Math.min(100, Math.round(audio.buffered.end(audio.buffered.length - 1) / audio.duration * 100));
+    loadNote.textContent = `${loadNoteText} Buffered ${percent}%.`;
+  }
+
+  const clock = seconds => `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
+
+  function select(index, startAt = 0) {
     if (!state.releases[index]) return;
     telemetry?.reset();
     audio.pause();
     audio.removeAttribute("src");
     audio.load();
     setPlaying(false);
+    loadNote.hidden = true;
+    loadNote.textContent = loadNoteText;
+    if (warmer) { warmer.removeAttribute("src"); warmer = null; }
+    warmed = "";
+    pendingStart = startAt;
     state.index = index;
     const release = selected();
     renderLyrics(release.dreamweaverPayload?.lyricsText);
@@ -91,7 +224,7 @@ export function createGateway({ document, window, fetcher }) {
     get("artist").textContent = release.artist || "Artist";
     get("position").textContent = `${index + 1} / ${state.releases.length}`;
     previous.disabled = next.disabled = state.releases.length < 2;
-    share.disabled = false;
+    share.disabled = shareMoment.disabled = false;
     releaseLink.href = `/music/?song=${encodeURIComponent(release.id)}`;
     releaseLink.textContent = "Explore this release ↗";
     const link = safeDestination(release.distributionUrl, window.location.origin) || safeDestination(release.purchaseUrl, window.location.origin);
@@ -102,7 +235,7 @@ export function createGateway({ document, window, fetcher }) {
       audio.src = resolved.src;
       audio.hidden = false;
       loop.disabled = false;
-      setStatus("Press play to listen.");
+      setStatus(startAt ? `Press play to start at ${clock(startAt)}.` : "Press play to listen.");
     } else {
       audio.hidden = true;
       loop.disabled = true;
@@ -111,6 +244,7 @@ export function createGateway({ document, window, fetcher }) {
     renderTracks();
     const url = new URL(window.location.href);
     url.searchParams.set("song", release.id);
+    url.searchParams.delete("t");
     window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
   }
 
@@ -124,12 +258,17 @@ export function createGateway({ document, window, fetcher }) {
     audio.hidden = true;
     setPlaying(false);
     state.releases = [];
+    state.filter = "all";
+    filterBox.replaceChildren();
+    gridStatus.textContent = "";
+    cardNodes = [];
     state.index = -1;
     renderLyrics("");
     tracks.replaceChildren();
     previous.disabled = next.disabled = true;
-    share.disabled = true;
+    share.disabled = shareMoment.disabled = true;
     loop.disabled = true;
+    loadNote.hidden = true;
     destination.hidden = true;
     destination.removeAttribute("href");
     releaseLink.href = "/music/";
@@ -147,6 +286,7 @@ export function createGateway({ document, window, fetcher }) {
       const releases = eligibleReleases(await response.json());
       if (ticket !== state.generation) return;
       state.releases = releases;
+      renderFilters();
       get("count").textContent = `${releases.length} public ${releases.length === 1 ? "release" : "releases"}`;
       if (!releases.length) {
         get("selectedTitle").textContent = "No public releases yet";
@@ -161,7 +301,7 @@ export function createGateway({ document, window, fetcher }) {
         renderTracks();
         return;
       }
-      select(index < 0 ? 0 : index);
+      select(index < 0 ? 0 : index, parseStart(new URL(window.location.href).searchParams.get("t")));
     } catch (error) {
       if (ticket !== state.generation) return;
       console.error("Obsidian catalog unavailable", error);
@@ -184,13 +324,40 @@ export function createGateway({ document, window, fetcher }) {
       setStatus("Could not copy. Select and copy the address from your browser.");
     }
   });
+  shareMoment.addEventListener("click", async () => {
+    if (!selected()) return;
+    const url = new URL(window.location.href);
+    const moment = Math.floor(audio.currentTime || 0);
+    if (moment > 0) url.searchParams.set("t", String(moment));
+    else url.searchParams.delete("t");
+    try {
+      await window.navigator.clipboard.writeText(url.href);
+      setStatus(moment > 0 ? `Link to ${clock(moment)} copied.` : "Release link copied.");
+    } catch {
+      setStatus("Could not copy. Select and copy the address from your browser.");
+    }
+  });
   retry.addEventListener("click", load);
-  audio.addEventListener("playing", () => { setPlaying(true); setStatus("Playing."); });
-  audio.addEventListener("timeupdate", updateLyrics);
+  audio.addEventListener("loadstart", () => { if (audio.getAttribute("src")) loadNote.hidden = false; });
+  audio.addEventListener("canplay", () => { loadNote.hidden = true; });
+  audio.addEventListener("progress", showBuffered);
+  audio.addEventListener("loadedmetadata", () => {
+    if (pendingStart && (!Number.isFinite(audio.duration) || pendingStart < audio.duration)) audio.currentTime = pendingStart;
+    pendingStart = 0;
+  });
+  audio.addEventListener("ended", () => {
+    if (!continueNext.checked || audio.loop || state.releases.length < 2) return;
+    const upcoming = nextPlayableIndex();
+    if (!upcoming) return;
+    select(upcoming.candidate);
+    Promise.resolve(audio.play()).catch(() => setStatus("Next release is ready. Press play to continue."));
+  });
+  audio.addEventListener("playing", () => { loadNote.hidden = true; setPlaying(true); setStatus("Playing."); });
+  audio.addEventListener("timeupdate", () => { updateLyrics(); warmNext(); });
   audio.addEventListener("seeked", updateLyrics);
-  audio.addEventListener("waiting", () => { setPlaying(false); setStatus("Buffering…"); });
+  audio.addEventListener("waiting", () => { loadNote.hidden = false; setPlaying(false); setStatus("Buffering…"); });
   audio.addEventListener("pause", () => { setPlaying(false); if (selected() && !audio.error) setStatus(audio.ended ? "Playback ended." : "Paused."); });
-  audio.addEventListener("error", () => { setPlaying(false); if (selected()) setStatus("Audio could not be played. Try again or explore the release link."); });
+  audio.addEventListener("error", () => { loadNote.hidden = true; setPlaying(false); if (selected()) setStatus("Audio could not be played. Try again or explore the release link."); });
   art.addEventListener("error", () => {
     if (art.getAttribute("src") !== "/assets/releases/halo-premium-placeholder.svg") {
       art.src = "/assets/releases/halo-premium-placeholder.svg";

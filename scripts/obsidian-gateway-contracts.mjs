@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
-import { createGateway, eligibleReleases, safeDestination } from "../obsidian/obsidian.js";
+import { createGateway, eligibleReleases, safeDestination, releaseCategories } from "../obsidian/obsidian.js";
 
 class Element {
   constructor() { this.children = []; this.events = {}; this.attributes = {}; this.hidden = false; this.disabled = false; this.textContent = ""; this.classList = { toggle: (key, value) => { this[key] = value; } }; }
@@ -40,12 +40,24 @@ const releases = [
 let reply = async () => Response.json({ releases });
 releases[0].genres = ["Deep House"];
 releases[1].genres = ["Ambient"];
+releases[0].availableVersions = ["Instrumental", "Stems"];
+releases[1].availableVersions = ["Radio Edit"];
+releases[0].pitch = "<b>Artist-supplied description</b>";
+assert.deepEqual(releaseCategories({ genres: [" Deep   House ", "deep house", null, 2, "Soulful House"] }), [
+  { key: "deep house", label: "deep house" }, { key: "soulful house", label: "Soulful House" }
+]);
+assert.deepEqual(releaseCategories({ genres: [], catalog: { genre: "Deep House, Afro House" } }).map(category => category.key), ["deep house", "afro house"]);
+assert.deepEqual(releaseCategories({ genres: null, catalog: { genre: null } }), []);
 const gateway = createGateway({ document, window, fetcher: () => reply() });
 await gateway.load();
 assert.equal(gateway.state.releases.length, 2);
 assert.equal(nodes.selectedTitle.textContent, "Beta");
 assert.equal(nodes.destination.hidden, true, "unsafe destination must not be linked");
 assert.equal(nodes.audio.hidden, true);
+assert.deepEqual(nodes.vaultFilters.children.map(button => button.textContent), [
+  "All Releases (2)", "In-page audio (1)", "Ambient (1)", "Deep House (1)",
+  "Version: Instrumental (1)", "Version: Radio Edit (1)", "Version: Stems (1)"
+]);
 assert.equal(nodes.loop.disabled, true);
 assert.match(nodes.status.textContent, /unavailable/);
 assert.match(nodes.lyricsStatus.textContent, /not timestamped/);
@@ -82,6 +94,12 @@ assert.equal(nodes.pulse.playing, true, "filter changes do not stop playback");
 nodes.vaultFilters.children[1].events.click();
 assert.equal(nodes.tracks.children.length, 1, "playable filter excludes link-only releases");
 assert.equal(nodes.tracks.children[0]["active-playing"], true);
+nodes.vaultFilters.children[0].events.click();
+nodes.vaultFilters.children[6].events.click();
+assert.equal(nodes.tracks.children.length, 1, "all supplied version categories get a working filter");
+assert.equal(nodes.tracks.children[0].children[1].children[2].children[0].textContent, "Deep House");
+assert.equal(nodes.tracks.children[0].children[1].children[5].textContent, "<b>Artist-supplied description</b>", "pitch uses literal text");
+assert.equal(nodes.audio.src, beforeFilter, "version filtering does not change the audio");
 nodes.vaultFilters.children[0].events.click();
 nodes.audio.events.waiting();
 assert.equal(nodes.pulse.playing, false);
@@ -182,6 +200,24 @@ try {
   await new Promise(resolve => setImmediate(resolve));
   assert.equal(nodes.selectedTitle.textContent, releases[0].title);
 } finally { console.error = originalError; }
+location.href = "https://halo.test/obsidian/";
+reply = async () => Response.json({ releases: [
+  { ...releases[0], genres: [" Deep House ", "deep house", "Soulful House"] },
+  { ...releases[1], genres: [], catalog: { genre: "Deep House, Afro House" } },
+  { id: "uncategorized", status: "published", title: "No genre" }
+] });
+await gateway.load();
+const findFilter = label => nodes.vaultFilters.children.find(button => button.textContent === label);
+assert.ok(findFilter("Deep House (2)"), "count each release once despite duplicate genre spellings");
+findFilter("Afro House (1)").events.click();
+assert.equal(nodes.tracks.children.length, 1, "catalog.genre is used when top-level genres are empty");
+assert.equal(nodes.tracks.children[0].children[1].children[0].textContent, "Beta");
+findFilter("Genre not supplied (1)").events.click();
+assert.equal(nodes.tracks.children[0].children[1].children[0].textContent, "No genre");
+findFilter("Soulful House (1)").events.click();
+assert.equal(nodes.tracks.children.length, 1);
+findFilter("All Releases (3)").events.click();
+assert.equal(nodes.tracks.children.length, 3, "no uncategorized public release disappears");
 assert.throws(() => eligibleReleases({}), /invalid/);
 for (const value of ["javascript:alert(1)", "https://user:pass@evil.test/", "", "//user@evil.test"]) assert.equal(safeDestination(value, location.origin), "");
 assert.equal(safeDestination("/music/", location.origin), "https://halo.test/music/");

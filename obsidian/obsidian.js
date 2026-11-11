@@ -16,6 +16,20 @@ export function safeDestination(value, origin) {
   }
 }
 
+export function releaseCategories(release, field = "genres") {
+  const supplied = Array.isArray(release[field]) ? release[field] : [];
+  const values = supplied.filter(value => typeof value === "string" && value.trim());
+  if (field === "genres" && !values.length && typeof release.catalog?.genre === "string") {
+    values.push(...release.catalog.genre.split(","));
+  }
+  const categories = new Map();
+  for (const value of values) {
+    const label = value.trim().replace(/\s+/g, " ");
+    if (label) categories.set(label.toLowerCase(), label);
+  }
+  return [...categories].map(([key, label]) => ({ key, label }));
+}
+
 export function createGateway({ document, window, fetcher }) {
   const get = id => document.getElementById(id);
   const audio = get("audio"), status = get("status"), tracks = get("tracks");
@@ -43,16 +57,32 @@ export function createGateway({ document, window, fetcher }) {
     const resolved = window.HaloReleaseArtwork.resolvePreviewAudio(release);
     return resolved.isPlayable && Boolean(safeDestination(resolved.src, window.location.origin));
   };
-  const genresFor = release => Array.isArray(release.genres)
-    ? release.genres.filter(genre => typeof genre === "string" && genre.trim()).map(genre => genre.trim()) : [];
+  const matchesFilter = (release, id) => {
+    if (id === "all") return true;
+    if (id === "playable") return playable(release);
+    if (id === "uncategorized") return !releaseCategories(release).length;
+    if (id.startsWith("genre:")) return releaseCategories(release).some(category => category.key === id.slice(6));
+    if (id.startsWith("version:")) return releaseCategories(release, "availableVersions").some(category => category.key === id.slice(8));
+    return false;
+  };
 
   function renderFilters() {
-    const genres = [...new Set(state.releases.flatMap(genresFor))].sort();
-    const filters = [["all", "Published vault"], ["playable", "In-page audio"], ...genres.map(genre => [`genre:${genre}`, genre])];
+    const categories = field => {
+      const unique = new Map(state.releases.flatMap(release => releaseCategories(release, field))
+        .map(category => [category.key, category.label]));
+      return [...unique].sort((a, b) => a[1].localeCompare(b[1]));
+    };
+    const filters = [
+      ["all", "All Releases"], ["playable", "In-page audio"],
+      ...categories("genres").map(([key, label]) => [`genre:${key}`, label]),
+      ...(state.releases.some(release => !releaseCategories(release).length) ? [["uncategorized", "Genre not supplied"]] : []),
+      ...categories("availableVersions").map(([key, label]) => [`version:${key}`, `Version: ${label}`])
+    ];
     filterBox.replaceChildren(...filters.map(([id, label]) => {
       const button = document.createElement("button");
       button.type = "button";
-      button.textContent = label;
+      const count = state.releases.filter(release => matchesFilter(release, id)).length;
+      button.textContent = `${label} (${count})`;
       button.setAttribute("aria-pressed", String(state.filter === id));
       button.addEventListener("click", () => {
         state.filter = id;
@@ -92,8 +122,7 @@ export function createGateway({ document, window, fetcher }) {
   function renderTracks() {
     cardNodes = [];
     tracks.replaceChildren(...state.releases.flatMap((release, index) => {
-      if (state.filter === "playable" && !playable(release)) return [];
-      if (state.filter.startsWith("genre:") && !genresFor(release).includes(state.filter.slice(6))) return [];
+      if (!matchesFilter(release, state.filter)) return [];
       const button = document.createElement("button");
       button.type = "button";
       button.className = "track";
@@ -111,9 +140,23 @@ export function createGateway({ document, window, fetcher }) {
       });
       const availability = document.createElement("small");
       availability.textContent = playable(release) ? "In-page audio available" : "Catalog links only";
+      const badges = document.createElement("span");
+      badges.className = "genre-badges";
+      const categories = releaseCategories(release);
+      for (const category of categories.length ? categories : [{ label: "Genre not supplied" }]) {
+        const badge = document.createElement("span");
+        badge.className = "genre-badge";
+        badge.textContent = category.label;
+        badges.append(badge);
+      }
+      const versions = document.createElement("small");
+      const versionLabels = releaseCategories(release, "availableVersions").map(category => category.label);
+      versions.textContent = versionLabels.length ? `Catalog versions: ${versionLabels.join(" / ")}` : "";
+      const description = document.createElement("small");
+      description.textContent = typeof release.pitch === "string" ? release.pitch.trim() : "";
       title.textContent = release.title || "Untitled release";
       artist.textContent = release.artist || "Artist";
-      label.append(title, artist, availability);
+      label.append(title, artist, badges, availability, versions, description);
       button.append(image, label, action);
       button.addEventListener("click", () => select(index));
       cardNodes.push({ button, action, index });

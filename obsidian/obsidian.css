@@ -9,6 +9,9 @@
 .vault-filters{display:flex;flex-wrap:wrap;gap:10px;margin:20px 0}
 .vault-filters button{border:1px solid var(--line);border-radius:24px;padding:10px 18px;background:var(--panel);color:var(--muted)}
 .vault-filters button[aria-pressed=true]{border-color:var(--gold);color:var(--ink);background:#30271a}
+.genre-badges{display:flex;flex-wrap:wrap;gap:6px;margin:12px 0}
+.genre-badge{font-size:.7rem;border:1px solid #d5b66c66;border-radius:20px;padding:4px 10px;color:var(--gold);background:#d5b66c15;overflow-wrap:anywhere}
+#tracks .track small{line-height:1.6;overflow-wrap:anywhere}
 #tracks{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr));gap:20px}
 #tracks .track{display:flex;flex-direction:column;align-items:stretch;justify-content:flex-start;gap:16px;padding:18px;border:1px solid var(--line);border-radius:14px;background:var(--panel);transition:transform .2s,border-color .2s,box-shadow .2s}
 #tracks .track img{width:100%;aspect-ratio:1;object-fit:cover;border-radius:8px}

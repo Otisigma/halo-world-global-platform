@@ -21,14 +21,48 @@ export function createGateway({ document, window, fetcher }) {
   const audio = get("audio"), status = get("status"), tracks = get("tracks");
   const previous = get("previous"), next = get("next"), retry = get("retry"), share = get("share"), loop = get("loop");
   const destination = get("destination"), releaseLink = get("releaseLink"), art = get("artwork");
-  const state = { releases: [], index: -1, generation: 0 };
+  const state = { releases: [], index: -1, generation: 0, filter: "all" };
+  const filterBox = get("vaultFilters"), gridStatus = get("gridStatus");
+  let cardNodes = [], isPlaying = false;
   const loadNote = get("loadNote"), continueNext = get("continueNext"), shareMoment = get("shareMoment");
-  let pendingStart = 0;
+  let pendingStart = 0, warmed = "", warmer = null;
+  const loadNoteText = loadNote.textContent;
   let lyrics = [], lyricNodes = [], activeLyric = -1;
   const telemetry = window.HaloListeningTelemetry?.bindAudio(audio, () => state.releases[state.index]?.id);
   const selected = () => state.releases[state.index];
   const setStatus = value => { status.textContent = value; };
-  const setPlaying = value => get("pulse").classList.toggle("playing", value);
+  const setPlaying = value => {
+    isPlaying = value;
+    get("pulse").classList.toggle("playing", value);
+    for (const { button, action, index } of cardNodes) {
+      button.classList.toggle("active-playing", value && index === state.index);
+      action.textContent = index === state.index ? (value ? "PLAYING" : "SELECTED") : "SELECT RELEASE";
+    }
+  };
+  const playable = release => {
+    const resolved = window.HaloReleaseArtwork.resolvePreviewAudio(release);
+    return resolved.isPlayable && Boolean(safeDestination(resolved.src, window.location.origin));
+  };
+  const genresFor = release => Array.isArray(release.genres)
+    ? release.genres.filter(genre => typeof genre === "string" && genre.trim()).map(genre => genre.trim()) : [];
+
+  function renderFilters() {
+    const genres = [...new Set(state.releases.flatMap(genresFor))].sort();
+    const filters = [["all", "Published vault"], ["playable", "In-page audio"], ...genres.map(genre => [`genre:${genre}`, genre])];
+    filterBox.replaceChildren(...filters.map(([id, label]) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.textContent = label;
+      button.setAttribute("aria-pressed", String(state.filter === id));
+      button.addEventListener("click", () => {
+        state.filter = id;
+        // Keep filter controls stable so keyboard focus survives a grid update.
+        for (const node of filterBox.children) node.setAttribute("aria-pressed", String(node === button));
+        renderTracks();
+      });
+      return button;
+    }));
+  }
 
   function updateLyrics() {
     const index = findActiveLyricIndex(lyrics, audio.currentTime);
@@ -56,7 +90,10 @@ export function createGateway({ document, window, fetcher }) {
   }
 
   function renderTracks() {
-    tracks.replaceChildren(...state.releases.map((release, index) => {
+    cardNodes = [];
+    tracks.replaceChildren(...state.releases.flatMap((release, index) => {
+      if (state.filter === "playable" && !playable(release)) return [];
+      if (state.filter.startsWith("genre:") && !genresFor(release).includes(state.filter.slice(6))) return [];
       const button = document.createElement("button");
       button.type = "button";
       button.className = "track";
@@ -65,19 +102,58 @@ export function createGateway({ document, window, fetcher }) {
       const title = document.createElement("strong");
       const artist = document.createElement("small");
       const action = document.createElement("span");
+      const image = document.createElement("img");
+      image.src = safeDestination(window.HaloReleaseArtwork.resolve(release).src, window.location.origin) || "/assets/releases/halo-premium-placeholder.svg";
+      image.alt = "";
+      image.loading = "lazy";
+      image.addEventListener("error", () => {
+        if (image.getAttribute("src") !== "/assets/releases/halo-premium-placeholder.svg") image.src = "/assets/releases/halo-premium-placeholder.svg";
+      });
+      const availability = document.createElement("small");
+      availability.textContent = playable(release) ? "In-page audio available" : "Catalog links only";
       title.textContent = release.title || "Untitled release";
       artist.textContent = release.artist || "Artist";
-      action.textContent = index === state.index ? "SELECTED" : "SELECT →";
-      label.append(title, artist);
-      button.append(label, action);
+      label.append(title, artist, availability);
+      button.append(image, label, action);
       button.addEventListener("click", () => select(index));
+      cardNodes.push({ button, action, index });
       return button;
     }));
+    setPlaying(isPlaying);
+    gridStatus.textContent = cardNodes.length
+      ? `${cardNodes.length} of ${state.releases.length} releases shown. Select a release, then press play.`
+      : "No releases match this filter. Choose another vault.";
   }
 
   function parseStart(value) {
     const seconds = Number(value);
     return value !== null && value !== "" && Number.isFinite(seconds) && seconds > 0 && seconds < 86_400 ? Math.floor(seconds) : 0;
+  }
+
+  function nextPlayableIndex() {
+    for (let step = 1; step < state.releases.length; step += 1) {
+      const candidate = (state.index + step) % state.releases.length;
+      const resolved = window.HaloReleaseArtwork.resolvePreviewAudio(state.releases[candidate]);
+      if (resolved.isPlayable && safeDestination(resolved.src, window.location.origin)) return { candidate, src: resolved.src };
+    }
+    return null;
+  }
+
+  function warmNext() {
+    if (!continueNext.checked || audio.loop || !window.Audio || !Number.isFinite(audio.duration) || audio.duration <= 0
+      || audio.currentTime / audio.duration < 0.6) return;
+    const upcoming = nextPlayableIndex();
+    if (!upcoming || upcoming.src === warmed) return;
+    warmed = upcoming.src;
+    warmer = new window.Audio();
+    warmer.preload = "auto";
+    warmer.src = upcoming.src;
+  }
+
+  function showBuffered() {
+    if (loadNote.hidden || !Number.isFinite(audio.duration) || audio.duration <= 0 || !audio.buffered?.length) return;
+    const percent = Math.min(100, Math.round(audio.buffered.end(audio.buffered.length - 1) / audio.duration * 100));
+    loadNote.textContent = `${loadNoteText} Buffered ${percent}%.`;
   }
 
   const clock = seconds => `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
@@ -90,6 +166,9 @@ export function createGateway({ document, window, fetcher }) {
     audio.load();
     setPlaying(false);
     loadNote.hidden = true;
+    loadNote.textContent = loadNoteText;
+    if (warmer) { warmer.removeAttribute("src"); warmer = null; }
+    warmed = "";
     pendingStart = startAt;
     state.index = index;
     const release = selected();
@@ -136,6 +215,10 @@ export function createGateway({ document, window, fetcher }) {
     audio.hidden = true;
     setPlaying(false);
     state.releases = [];
+    state.filter = "all";
+    filterBox.replaceChildren();
+    gridStatus.textContent = "";
+    cardNodes = [];
     state.index = -1;
     renderLyrics("");
     tracks.replaceChildren();
@@ -160,6 +243,7 @@ export function createGateway({ document, window, fetcher }) {
       const releases = eligibleReleases(await response.json());
       if (ticket !== state.generation) return;
       state.releases = releases;
+      renderFilters();
       get("count").textContent = `${releases.length} public ${releases.length === 1 ? "release" : "releases"}`;
       if (!releases.length) {
         get("selectedTitle").textContent = "No public releases yet";
@@ -213,23 +297,20 @@ export function createGateway({ document, window, fetcher }) {
   retry.addEventListener("click", load);
   audio.addEventListener("loadstart", () => { if (audio.getAttribute("src")) loadNote.hidden = false; });
   audio.addEventListener("canplay", () => { loadNote.hidden = true; });
+  audio.addEventListener("progress", showBuffered);
   audio.addEventListener("loadedmetadata", () => {
     if (pendingStart && (!Number.isFinite(audio.duration) || pendingStart < audio.duration)) audio.currentTime = pendingStart;
     pendingStart = 0;
   });
   audio.addEventListener("ended", () => {
     if (!continueNext.checked || audio.loop || state.releases.length < 2) return;
-    for (let step = 1; step < state.releases.length; step += 1) {
-      const candidate = (state.index + step) % state.releases.length;
-      const resolved = window.HaloReleaseArtwork.resolvePreviewAudio(state.releases[candidate]);
-      if (!resolved.isPlayable || !safeDestination(resolved.src, window.location.origin)) continue;
-      select(candidate);
-      Promise.resolve(audio.play()).catch(() => setStatus("Next release is ready. Press play to continue."));
-      return;
-    }
+    const upcoming = nextPlayableIndex();
+    if (!upcoming) return;
+    select(upcoming.candidate);
+    Promise.resolve(audio.play()).catch(() => setStatus("Next release is ready. Press play to continue."));
   });
   audio.addEventListener("playing", () => { loadNote.hidden = true; setPlaying(true); setStatus("Playing."); });
-  audio.addEventListener("timeupdate", updateLyrics);
+  audio.addEventListener("timeupdate", () => { updateLyrics(); warmNext(); });
   audio.addEventListener("seeked", updateLyrics);
   audio.addEventListener("waiting", () => { loadNote.hidden = false; setPlaying(false); setStatus("Buffering…"); });
   audio.addEventListener("pause", () => { setPlaying(false); if (selected() && !audio.error) setStatus(audio.ended ? "Playback ended." : "Paused."); });

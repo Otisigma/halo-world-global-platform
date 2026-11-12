@@ -36,6 +36,7 @@
 summary:focus-visible,.vault-filters button:focus-visible{outline:2px solid white;outline-offset:4px}
 .playlist-add,.create-playlist{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-top:16px}
 .playlist-add label{color:var(--muted);font-size:.85rem}
+#playlistPlayerStatus{min-height:1.5em;color:var(--gold);font-size:.85rem;line-height:1.5}
 .playlist-add select,.create-playlist input{min-width:0;padding:10px 12px;border:1px solid var(--line);border-radius:6px;background:#11100e;color:var(--ink);font:inherit}
 .playlist-add button,.create-playlist button,.user-playlist button{padding:9px 12px;border:1px solid var(--line);border-radius:6px;background:#1a1814;color:var(--ink)}
 .playlist-add button:hover:not(:disabled),.create-playlist button:hover,.user-playlist button:hover:not(:disabled){border-color:var(--gold)}

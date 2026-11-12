@@ -1,6 +1,5 @@
 import { parseTimestampedLyrics, findActiveLyricIndex } from "../lib/dreamweaver-lyrics.js";
-
-const PLAYLIST_STORAGE_KEY = "halo_obsidian_playlists_v1";
+import { readPlaylists, writePlaylists } from "../lib/personal-playlists.js";
 
 export function eligibleReleases(data) {
   if (!Array.isArray(data?.releases)) throw new Error("The catalog response is invalid.");
@@ -66,16 +65,7 @@ export function createGateway({ document, window, fetcher }) {
   let playlistStorage;
   try {
     playlistStorage = window.localStorage;
-    const saved = playlistStorage.getItem(PLAYLIST_STORAGE_KEY);
-    if (saved !== null) {
-      const parsed = JSON.parse(saved);
-      if (!Array.isArray(parsed) || parsed.some(item => !item || typeof item.id !== "string"
-        || typeof item.name !== "string" || !Array.isArray(item.releaseIds)
-        || item.releaseIds.some(id => typeof id !== "string"))) {
-        throw new Error("Saved playlist data has an invalid format.");
-      }
-      state.playlists = parsed;
-    }
+    state.playlists = readPlaylists(playlistStorage);
   } catch (error) {
     playlistStorage = null;
     console.error("Obsidian playlists unavailable", error);
@@ -83,7 +73,7 @@ export function createGateway({ document, window, fetcher }) {
   }
   const persistPlaylists = playlists => {
     try {
-      playlistStorage.setItem(PLAYLIST_STORAGE_KEY, JSON.stringify(playlists));
+      writePlaylists(playlistStorage, playlists);
       state.playlists = playlists;
       if (state.queue) {
         const updatedQueue = playlists.find(playlist => playlist.id === state.queue.playlistId);

@@ -27,6 +27,7 @@
   <script src="/album-concierge/showcase.js" type="module"></script>
   <script src="/album-concierge/demos.js" type="module"></script>
   <script src="/album-concierge/cover-builder.js" type="module"></script>
+  <script src="/album-concierge/playlist-inspiration.js" type="module"></script>
 </head>
 <body>
   <a class="skip-link" href="#workspace">Skip to Album Concierge</a>
@@ -315,6 +316,11 @@
             <p class="ac-eyebrow">Step 4 of 4</p>
             <h2 class="ac-flow-title" id="step4-title">Tell us the story.</h2>
             <p class="ac-flow-helper">A memory, a relationship, a season of life, a dream — anything that matters. The more you share, the more personal your album will feel.</p>
+            <div id="playlistInspiration" hidden>
+              <p>Bring your browser-local playlist into this story as public listening references, not recordings or remix rights. Nothing is sent to the album service until you choose Build my album.</p>
+              <button class="btn-ghost" type="button" data-import-playlist>Use playlist as inspiration</button>
+              <p role="status" aria-live="polite"></p>
+            </div>
             <textarea
               class="ac-story-field"
               id="storyInput"

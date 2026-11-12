@@ -32,7 +32,7 @@ test("visual worlds and listening exports escape text and never include recordin
   const playlist = { name: "<script>alert(1)</script>", releaseIds: ["warm"],
     world: { dedication: "<img onerror=alert(1)>", chapters: [{ releaseId: "warm", label: "<Start>", energy: 1 }] } };
   const svg = playlistCover(playlist);
-  assert.doesNotMatch(svg, /<script>/);
+  assert.doesNotMatch(svg, /<script>/i);
   assert.match(svg, /&lt;script&gt;/);
   const html = playlistExport(playlist, [{ ...releases[0], audioUrl: "https://private.test/token.mp3" }], "html", "https://halo.test");
   assert.match(html, /&lt;img/);

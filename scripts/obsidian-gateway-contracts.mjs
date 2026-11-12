@@ -14,8 +14,10 @@ class Element {
   pause() { this.paused = true; }
   play() { this.played = (this.played || 0) + 1; return Promise.resolve(); }
   load() {}
+  focus() { this.focused = true; }
+  scrollIntoView() { this.scrolled = true; }
 }
-const ids = ["audio", "status", "tracks", "previous", "next", "retry", "share", "loop", "destination", "releaseLink", "artwork", "pulse", "selectedTitle", "artist", "position", "count", "lyrics", "lyricsStatus", "lyricsLines", "loadNote", "continueNext", "shareMoment", "quickFilters", "genreFilters", "versionFilters", "genreFilterSummary", "versionFilterSummary", "gridStatus", "createPlaylistForm", "newPlaylistName", "playlistStatus", "userPlaylists", "addToPlaylist", "addToPlaylistButton"];
+const ids = ["audio", "status", "tracks", "previous", "next", "retry", "share", "loop", "destination", "releaseLink", "artwork", "pulse", "selectedTitle", "artist", "position", "count", "lyrics", "lyricsStatus", "lyricsLines", "loadNote", "continueNext", "shareMoment", "quickFilters", "genreFilters", "versionFilters", "genreFilterSummary", "versionFilterSummary", "gridStatus", "createPlaylistForm", "newPlaylistName", "playlistStatus", "userPlaylists", "addToPlaylist", "addToPlaylistButton", "playlistPlayerStatus"];
 const nodes = Object.fromEntries(ids.map(id => [id, new Element()]));
 nodes.audio.hidden = true;
 const document = { getElementById: id => nodes[id], createElement: () => new Element() };
@@ -58,6 +60,10 @@ assert.deepEqual(releaseCategories({ genres: ["AFRO BEATS", "Afrobeat", "AfroBea
   { key: "dj mix", label: "DJ Mix" }
 ]);
 const gateway = createGateway({ document, window, fetcher: () => reply() });
+nodes.newPlaylistName.value = "   ";
+nodes.createPlaylistForm.events.submit({ preventDefault() {} });
+assert.match(nodes.playlistStatus.textContent, /between 1 and 80/);
+assert.equal(gateway.state.playlists.length, 0, "empty names show inline feedback instead of an inert native submit");
 await gateway.load();
 assert.equal(gateway.state.releases.length, 2);
 assert.equal(nodes.selectedTitle.textContent, "Beta");
@@ -80,7 +86,11 @@ assert.equal(nodes.audio.src, "/audio.mp3");
 nodes.newPlaylistName.value = "Late Night";
 nodes.createPlaylistForm.events.submit({ preventDefault() {} });
 assert.equal(nodes.userPlaylists.children.length, 1);
-assert.equal(nodes.playlistStatus.textContent, "Created “Late Night”.");
+assert.match(nodes.playlistStatus.textContent, /Created “Late Night”/);
+assert.equal(nodes.addToPlaylist.value, "playlist-1", "new playlist is selected automatically");
+gateway.select(1);
+assert.equal(nodes.addToPlaylist.value, "playlist-1", "changing songs preserves the selected playlist");
+gateway.select(0);
 nodes.addToPlaylist.value = "playlist-1";
 nodes.addToPlaylistButton.events.click();
 assert.deepEqual(JSON.parse(saved.get("halo_obsidian_playlists_v1"))[0].releaseIds, ["alpha"]);
@@ -88,6 +98,7 @@ assert.equal(nodes.userPlaylists.children[0].children[3].children.length, 1);
 nodes.addToPlaylist.value = "playlist-1";
 nodes.addToPlaylistButton.events.click();
 assert.match(nodes.playlistStatus.textContent, /already in this playlist/);
+assert.equal(nodes.playlistPlayerStatus.textContent, nodes.playlistStatus.textContent, "feedback appears beside the player as well as the playlist hub");
 nodes.userPlaylists.children[0].children[3].children[0].children[1].events.click();
 assert.deepEqual(JSON.parse(saved.get("halo_obsidian_playlists_v1"))[0].releaseIds, []);
 nodes.addToPlaylist.value = "playlist-1";
@@ -156,6 +167,8 @@ nodes.userPlaylists.children[0].children[2].children[0].events.click();
 assert.equal(gateway.state.queue.playlistId, "playlist-1");
 assert.equal(nodes.selectedTitle.textContent, releases[0].title);
 assert.equal(nodes.audio.paused, true, "playing a playlist queues it without autoplay");
+assert.equal(nodes.audio.scrolled, true, "queue mix brings the audio player into view");
+assert.equal(nodes.audio.focused, true, "queue mix focuses native controls without starting playback");
 assert.equal(nodes.next.disabled, true, "a one-track mix cannot navigate outside its queue");
 nodes.audio.events.ended();
 assert.equal(gateway.state.index, 0, "a playlist queue does not continue into catalog releases");

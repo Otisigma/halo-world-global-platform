@@ -52,6 +52,11 @@ export function createGateway({ document, window, fetcher }) {
   const playlistForm = get("createPlaylistForm"), playlistName = get("newPlaylistName");
   const playlistStatus = get("playlistStatus"), userPlaylists = get("userPlaylists");
   const addToPlaylist = get("addToPlaylist"), addToPlaylistButton = get("addToPlaylistButton");
+  const playlistPlayerStatus = get("playlistPlayerStatus");
+  const reportPlaylist = message => {
+    playlistStatus.textContent = message;
+    playlistPlayerStatus.textContent = message;
+  };
   let pendingStart = 0, warmed = "", warmer = null;
   const loadNoteText = loadNote.textContent;
   let lyrics = [], lyricNodes = [], activeLyric = -1;
@@ -74,7 +79,7 @@ export function createGateway({ document, window, fetcher }) {
   } catch (error) {
     playlistStorage = null;
     console.error("Obsidian playlists unavailable", error);
-    playlistStatus.textContent = "Saved playlists could not be accessed in this browser. Catalog playback is still available.";
+    reportPlaylist("Saved playlists could not be accessed in this browser. Catalog playback is still available.");
   }
   const persistPlaylists = playlists => {
     try {
@@ -88,7 +93,7 @@ export function createGateway({ document, window, fetcher }) {
       return true;
     } catch (error) {
       console.error("Obsidian playlist save failed", error);
-      playlistStatus.textContent = "Could not save your playlist in this browser. Check available storage and try again.";
+      reportPlaylist("Could not save your playlist in this browser. Check available storage and try again.");
       return false;
     }
   };
@@ -96,6 +101,7 @@ export function createGateway({ document, window, fetcher }) {
     .map(id => state.releases.find(release => release.id === id)).filter(Boolean);
 
   function renderPlaylists() {
+    const chosen = addToPlaylist.value;
     addToPlaylist.replaceChildren();
     const emptyOption = document.createElement("option");
     emptyOption.value = "";
@@ -131,7 +137,7 @@ export function createGateway({ document, window, fetcher }) {
       removePlaylist.textContent = "Delete playlist";
       removePlaylist.addEventListener("click", () => {
         if (persistPlaylists(state.playlists.filter(item => item.id !== playlist.id))) {
-          playlistStatus.textContent = `Deleted “${playlist.name}”.`;
+          reportPlaylist(`Deleted “${playlist.name}”.`);
         }
       });
       actions.append(queue, removePlaylist);
@@ -147,7 +153,7 @@ export function createGateway({ document, window, fetcher }) {
         remove.addEventListener("click", () => {
           const updated = state.playlists.map(entry => entry.id === playlist.id
             ? { ...entry, releaseIds: entry.releaseIds.filter(id => id !== release.id) } : entry);
-          if (persistPlaylists(updated)) playlistStatus.textContent = `Removed “${release.title || "release"}”.`;
+          if (persistPlaylists(updated)) reportPlaylist(`Removed “${release.title || "release"}”.`);
         });
         item.append(title, remove);
         list.append(item);
@@ -155,7 +161,8 @@ export function createGateway({ document, window, fetcher }) {
       section.append(heading, count, actions, list);
       return section;
     }));
-    addToPlaylist.value = "";
+    addToPlaylist.value = state.playlists.some(playlist => playlist.id === chosen)
+      ? chosen : state.playlists.length === 1 ? state.playlists[0].id : "";
     if (selected()) {
       previous.disabled = state.queue ? !nextPlayableIndex(-1) : state.releases.length < 2;
       next.disabled = state.queue ? !nextPlayableIndex() : state.releases.length < 2;
@@ -169,12 +176,14 @@ export function createGateway({ document, window, fetcher }) {
       .filter(index => index >= 0);
     const firstPlayable = indices.find(index => playable(state.releases[index]));
     if (firstPlayable === undefined) {
-      playlistStatus.textContent = "This playlist has no releases with in-page audio available.";
+      reportPlaylist("This playlist has no releases with in-page audio available.");
       return;
     }
     state.queue = { playlistId: id, releaseIds: playlist.releaseIds };
     select(firstPlayable, 0, { preserveQueue: true });
-    playlistStatus.textContent = `“${playlist.name}” is queued. Press play in the audio player to start.`;
+    reportPlaylist(`“${playlist.name}” is queued. Press play in the audio player to start.`);
+    audio.scrollIntoView({ block: "center", behavior: "instant" });
+    audio.focus({ preventScroll: true });
   }
 
   const setPlaying = value => {
@@ -500,34 +509,36 @@ export function createGateway({ document, window, fetcher }) {
   playlistForm.addEventListener("submit", event => {
     event.preventDefault();
     const name = playlistName.value.trim();
-    if (!name) {
-      playlistStatus.textContent = "Enter a playlist name.";
+    if (!name || name.length > 80) {
+      reportPlaylist("Enter a playlist name between 1 and 80 characters.");
+      playlistName.focus();
       return;
     }
     if (state.playlists.some(playlist => playlist.name.toLowerCase() === name.toLowerCase())) {
-      playlistStatus.textContent = "A playlist with that name already exists.";
+      reportPlaylist("A playlist with that name already exists.");
       return;
     }
     const id = window.crypto?.randomUUID?.() || `playlist-${Date.now()}-${state.playlists.length}`;
     if (persistPlaylists([...state.playlists, { id, name, releaseIds: [] }])) {
       playlistName.value = "";
-      playlistStatus.textContent = `Created “${name}”.`;
+      addToPlaylist.value = id;
+      reportPlaylist(`Created “${name}”. Select a release, then choose Add release.`);
     }
   });
   addToPlaylistButton.addEventListener("click", () => {
     const release = selected();
     const playlist = state.playlists.find(item => item.id === addToPlaylist.value);
     if (!release || !playlist) {
-      playlistStatus.textContent = "Choose a playlist and release first.";
+      reportPlaylist("Choose a playlist and release first.");
       return;
     }
     if (playlist.releaseIds.includes(release.id)) {
-      playlistStatus.textContent = "That release is already in this playlist.";
+      reportPlaylist("That release is already in this playlist.");
       return;
     }
     const updated = state.playlists.map(item => item.id === playlist.id
       ? { ...item, releaseIds: [...item.releaseIds, release.id] } : item);
-    if (persistPlaylists(updated)) playlistStatus.textContent = `Added “${release.title || "release"}” to “${playlist.name}”.`;
+    if (persistPlaylists(updated)) reportPlaylist(`Added “${release.title || "release"}” to “${playlist.name}”.`);
   });
   loop.addEventListener("change", () => { audio.loop = loop.checked; });
   share.addEventListener("click", async () => {
@@ -579,6 +590,7 @@ export function createGateway({ document, window, fetcher }) {
       art.alt = "HALO placeholder cover";
     }
   });
+  renderPlaylists();
   return { load, select, state };
 }
 

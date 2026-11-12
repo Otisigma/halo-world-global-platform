@@ -44,6 +44,7 @@
           <select id="addToPlaylist" disabled><option value="">Create a playlist first</option></select>
           <button type="button" id="addToPlaylistButton" disabled>Add release</button>
         </div>
+        <p id="playlistPlayerStatus" role="status" aria-live="polite">Create a playlist below, then choose it here to add a release.</p>
         <div class="controls">
           <button type="button" id="previous" disabled>← Previous</button>
           <button type="button" id="next" disabled>Next →</button>
@@ -84,7 +85,7 @@
     <section class="fan-playlists" aria-labelledby="fanPlaylistTitle">
       <div class="playlist-header"><h2 id="fanPlaylistTitle">Your HALO playlists</h2><p>Saved in this browser</p></div>
       <p class="vault-note">Create a personal mix from public catalog releases. Playlists are not uploaded or shared between devices.</p>
-      <form id="createPlaylistForm" class="create-playlist">
+      <form id="createPlaylistForm" class="create-playlist" novalidate>
         <label class="visually-hidden" for="newPlaylistName">New playlist name</label>
         <input id="newPlaylistName" name="name" type="text" maxlength="80" placeholder="Name your playlist" required>
         <button type="submit">Create playlist</button>

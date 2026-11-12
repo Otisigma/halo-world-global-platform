@@ -320,7 +320,8 @@ export async function collectAgentMetrics(db) {
     `,
     db.sql`
       SELECT
-        (SELECT COUNT(*)::int FROM community_messages WHERE created_at >= NOW() - INTERVAL '7 days') AS messages_7d,
+        (SELECT COUNT(*)::int FROM community_messages m JOIN community_profiles p ON p.actor_id = m.actor_id
+          WHERE m.created_at >= NOW() - INTERVAL '7 days' AND NOT p.is_automated) AS messages_7d,
         (SELECT COUNT(*)::int FROM community_room_posts WHERE created_at >= NOW() - INTERVAL '7 days') AS room_posts_7d,
         (SELECT COUNT(*)::int FROM community_support WHERE created_at >= NOW() - INTERVAL '7 days') AS support_7d,
         (SELECT COUNT(*)::int FROM community_reports WHERE status = 'open') AS open_reports

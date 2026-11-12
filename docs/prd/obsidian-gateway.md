@@ -20,6 +20,13 @@ Lyrics already supplied by the published catalog are shown as plain text.
 Timestamped lines follow the current audio time; untimed lines remain readable
 without implying synchronization. No lyric text or timestamps are invented.
 
+Listeners can create playlists in the Obsidian Gateway, add or remove public
+catalog releases, and queue a mix through the existing player. Playlist data
+contains release IDs only and is stored in the listener's browser local storage;
+it is not uploaded, synced, or shareable between devices. Queueing a mix selects
+its first playable release but does not autoplay. Next, previous, buffering, and
+end-of-track continuation stay within the queued playlist.
+
 No sample song names, generic DistroKid destination, copied lyric, fabricated
 visualization, or external payment checkout is used. Artist destinations come
 from the published release record and are validated as safe HTTP(S) links.

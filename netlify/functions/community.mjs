@@ -76,7 +76,7 @@ async function getCommunity(db, actorId = null) {
         EXISTS (
           SELECT 1 FROM sovereign_ambassador_grants g WHERE g.actor_id = p.actor_id AND g.is_active = TRUE
         ) AS is_sovereign_ambassador,
-        p.is_host, p.last_seen_at >= NOW() - INTERVAL '15 minutes' AS is_online
+        p.is_host, p.is_automated, NOT p.is_automated AND p.last_seen_at >= NOW() - INTERVAL '15 minutes' AS is_online
       FROM community_profiles p WHERE p.actor_id = ${viewerActorId}
     `,
     db.sql`
@@ -87,8 +87,8 @@ async function getCommunity(db, actorId = null) {
         EXISTS (
           SELECT 1 FROM sovereign_ambassador_grants g WHERE g.actor_id = p.actor_id AND g.is_active = TRUE
         ) AS is_sovereign_ambassador,
-        p.is_host,
-        p.last_seen_at >= NOW() - INTERVAL '15 minutes' AS is_online,
+        p.is_host, p.is_automated,
+        NOT p.is_automated AND p.last_seen_at >= NOW() - INTERVAL '15 minutes' AS is_online,
         COUNT(DISTINCT f.follower_id)::int AS follower_count,
         COUNT(DISTINCT s.id) FILTER (WHERE s.kind = 'light')::int AS light_count,
         COUNT(DISTINCT s.id) FILTER (WHERE s.kind = 'boost')::int AS boost_count
@@ -112,7 +112,7 @@ async function getCommunity(db, actorId = null) {
         EXISTS (
           SELECT 1 FROM sovereign_ambassador_grants g WHERE g.actor_id = p.actor_id AND g.is_active = TRUE
         ) AS is_sovereign_ambassador,
-        p.is_host, m.body, m.reply_to,
+        p.is_host, p.is_automated, m.body, m.reply_to,
         m.is_spotlighted, m.created_at,
         COALESCE(jsonb_object_agg(r.emoji, r.total) FILTER (WHERE r.emoji IS NOT NULL), '{}'::jsonb) AS reactions
       FROM community_messages m
@@ -126,7 +126,7 @@ async function getCommunity(db, actorId = null) {
           WHERE c.actor_id = ${viewerActorId} AND c.target_id = m.actor_id AND c.kind IN ('block', 'mute')
       )
       GROUP BY m.id, p.actor_id
-      ORDER BY m.created_at DESC
+      ORDER BY m.created_at DESC, m.id DESC
       LIMIT 40
     `,
     db.sql`SELECT followed_id FROM community_follows WHERE follower_id = ${viewerActorId}`,

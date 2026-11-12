@@ -26,6 +26,18 @@
       ],
       quote: "More than a platform. A home for the music and the people who believe in it."
     },
+    "halo-every-genre": {
+      topic: "HALO / Artist dispatch",
+      title: "Every genre has a home here",
+      deck: "HALO Music World is not just for electronic music.",
+      body: [
+        "Whether you are recording ambient soundscapes in a bedroom, mixing heavy guitars in a garage, laying down an acoustic session, making hip-hop beats or playing jazz with a band, you are welcome here. Music that crosses genres belongs here too.",
+        "HALO is being built as a place for artists to share their work, find listeners and explore tools for managing their releases. Your sound does not need to fit one scene or one production style to be part of the conversation.",
+        "We believe artists deserve clarity and control. HALO offers tools to record information about their work and prepare files for handover, but no tool can guarantee protection, establish ownership on its own or replace a real backup and restore test.",
+        "Bring your sound. Explore the artist catalog workspace, share what you create and help us build a music world open to more voices."
+      ],
+      quote: "Every genre. Every recording style. Bring your sound."
+    },
     "room-after-stream": {
       topic: "Community / Cover story / 8 min read",
       title: "The room after the stream",

@@ -10,19 +10,23 @@ class Element {
   removeAttribute(name) { delete this.attributes[name]; if (name === "src" || name === "href") this[name] = ""; }
   append(...children) { this.children.push(...children); }
   replaceChildren(...children) { this.children = children; }
+  querySelector() { return this.submitButton || (this.submitButton = new Element()); }
   pause() { this.paused = true; }
   play() { this.played = (this.played || 0) + 1; return Promise.resolve(); }
   load() {}
 }
-const ids = ["audio", "status", "tracks", "previous", "next", "retry", "share", "loop", "destination", "releaseLink", "artwork", "pulse", "selectedTitle", "artist", "position", "count", "lyrics", "lyricsStatus", "lyricsLines", "loadNote", "continueNext", "shareMoment", "quickFilters", "genreFilters", "versionFilters", "genreFilterSummary", "versionFilterSummary", "gridStatus"];
+const ids = ["audio", "status", "tracks", "previous", "next", "retry", "share", "loop", "destination", "releaseLink", "artwork", "pulse", "selectedTitle", "artist", "position", "count", "lyrics", "lyricsStatus", "lyricsLines", "loadNote", "continueNext", "shareMoment", "quickFilters", "genreFilters", "versionFilters", "genreFilterSummary", "versionFilterSummary", "gridStatus", "createPlaylistForm", "newPlaylistName", "playlistStatus", "userPlaylists", "addToPlaylist", "addToPlaylistButton"];
 const nodes = Object.fromEntries(ids.map(id => [id, new Element()]));
 nodes.audio.hidden = true;
 const document = { getElementById: id => nodes[id], createElement: () => new Element() };
 nodes.continueNext.checked = true;
 const location = { origin: "https://halo.test", href: "https://halo.test/obsidian/?song=beta" };
+const saved = new Map();
 let resets = 0, selection;
 const window = {
   location,
+  localStorage: { getItem: key => saved.get(key) ?? null, setItem: (key, value) => saved.set(key, value) },
+  crypto: { randomUUID: () => "playlist-1" },
   navigator: { clipboard: { async writeText(value) { assert.equal(value, location.href); } } },
   history: { replaceState(_state, _title, url) { location.href = new URL(url, location.origin).href; } },
   HaloListeningTelemetry: { bindAudio(_audio, fn) { selection = fn; return { reset() { resets++; } }; } },
@@ -73,6 +77,22 @@ assert.equal(selection(), "beta");
 nodes.next.events.click();
 assert.equal(nodes.selectedTitle.textContent, "<img onerror=alert(1)>", "title rendered as literal text");
 assert.equal(nodes.audio.src, "/audio.mp3");
+nodes.newPlaylistName.value = "Late Night";
+nodes.createPlaylistForm.events.submit({ preventDefault() {} });
+assert.equal(nodes.userPlaylists.children.length, 1);
+assert.equal(nodes.playlistStatus.textContent, "Created “Late Night”.");
+nodes.addToPlaylist.value = "playlist-1";
+nodes.addToPlaylistButton.events.click();
+assert.deepEqual(JSON.parse(saved.get("halo_obsidian_playlists_v1"))[0].releaseIds, ["alpha"]);
+assert.equal(nodes.userPlaylists.children[0].children[3].children.length, 1);
+nodes.addToPlaylist.value = "playlist-1";
+nodes.addToPlaylistButton.events.click();
+assert.match(nodes.playlistStatus.textContent, /already in this playlist/);
+nodes.userPlaylists.children[0].children[3].children[0].children[1].events.click();
+assert.deepEqual(JSON.parse(saved.get("halo_obsidian_playlists_v1"))[0].releaseIds, []);
+nodes.addToPlaylist.value = "playlist-1";
+nodes.addToPlaylistButton.events.click();
+assert.deepEqual(JSON.parse(saved.get("halo_obsidian_playlists_v1"))[0].releaseIds, ["alpha"]);
 assert.equal(nodes.lyricsLines.children[1].textContent, "<img onerror=alert(1)>", "lyrics remain literal text");
 nodes.audio.currentTime = 1.1;
 nodes.audio.events.timeupdate();
@@ -132,6 +152,16 @@ nodes.audio.events.ended();
 assert.equal(gateway.state.index, 1, "continuation is optional");
 nodes.continueNext.checked = true;
 gateway.select(0);
+nodes.userPlaylists.children[0].children[2].children[0].events.click();
+assert.equal(gateway.state.queue.playlistId, "playlist-1");
+assert.equal(nodes.selectedTitle.textContent, releases[0].title);
+assert.equal(nodes.audio.paused, true, "playing a playlist queues it without autoplay");
+assert.equal(nodes.next.disabled, true, "a one-track mix cannot navigate outside its queue");
+nodes.audio.events.ended();
+assert.equal(gateway.state.index, 0, "a playlist queue does not continue into catalog releases");
+nodes.userPlaylists.children[0].children[2].children[1].events.click();
+assert.equal(gateway.state.playlists.length, 0, "deleting a playlist persists its removal");
+assert.equal(gateway.state.queue, null, "deleting the active playlist clears its queue");
 nodes.audio.events.loadstart();
 assert.equal(nodes.loadNote.hidden, false, "loading note appears only while audio loads");
 nodes.audio.events.canplay();
@@ -247,5 +277,7 @@ assert.match(page, /No public SHA-256 verification evidence/);
 assert.match(css, /#tracks \.track\.active-playing\{animation:none/);
 assert.match(page, /not measured audio frequencies/);
 assert.match(css, /prefers-reduced-motion:reduce/);
+assert.match(page, /id="createPlaylistForm"/);
+assert.match(page, /Playlists are not uploaded or shared between devices/);
 assert.doesNotMatch(client, /innerHTML|autoplay|private.key|SECRET/);
-console.log("Obsidian gateway contracts passed: public catalog, audio state, navigation, links and failures.");
+console.log("Obsidian gateway contracts passed: public catalog, audio state, navigation, playlists, links and failures.");

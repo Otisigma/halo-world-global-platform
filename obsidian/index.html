@@ -39,6 +39,11 @@
         <audio id="audio" controls preload="none" aria-label="Release audio player"></audio>
         <label class="loop"><input id="loop" type="checkbox" disabled> Loop selected audio</label>
         <label class="loop"><input id="continueNext" type="checkbox" checked> Continue to the next release when this one ends</label>
+        <div class="playlist-add">
+          <label for="addToPlaylist">Add selected release to</label>
+          <select id="addToPlaylist" disabled><option value="">Create a playlist first</option></select>
+          <button type="button" id="addToPlaylistButton" disabled>Add release</button>
+        </div>
         <div class="controls">
           <button type="button" id="previous" disabled>← Previous</button>
           <button type="button" id="next" disabled>Next →</button>
@@ -75,6 +80,17 @@
         <summary>About audio quality and byte verification</summary>
         <p>These are published catalog releases, not a guarantee of lossless quality. Availability is checked from catalog links, not a live stream test. No public SHA-256 verification evidence or recovery-pack links are supplied to this grid, so it does not display verified badges. Private recovery materials remain private.</p>
       </details>
+    </section>
+    <section class="fan-playlists" aria-labelledby="fanPlaylistTitle">
+      <div class="playlist-header"><h2 id="fanPlaylistTitle">Your HALO playlists</h2><p>Saved in this browser</p></div>
+      <p class="vault-note">Create a personal mix from public catalog releases. Playlists are not uploaded or shared between devices.</p>
+      <form id="createPlaylistForm" class="create-playlist">
+        <label class="visually-hidden" for="newPlaylistName">New playlist name</label>
+        <input id="newPlaylistName" name="name" type="text" maxlength="80" placeholder="Name your playlist" required>
+        <button type="submit">Create playlist</button>
+      </form>
+      <p id="playlistStatus" role="status" aria-live="polite"></p>
+      <div id="userPlaylists" class="user-playlists"></div>
     </section>
     <p class="note">The animated bars reflect player state, not measured audio frequencies. Playback starts only when you choose it; some releases may have an external listening link instead of an in-page preview.</p>
   </main>

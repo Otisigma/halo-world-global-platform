@@ -221,6 +221,17 @@ launcher.emit("lostpointercapture");
 assert.equal(launcher.dataset.dragging, "false");
 assert.equal(panel.style.left, "560px", "a right-edge panel stays on screen");
 assert.equal(panel.style.top, "26px", "a bottom-edge panel opens above the launcher");
+panel.offsetHeight = 310;
+root.haloGuideTarget = { isConnected: true, getBoundingClientRect: () => ({ top: 520 }) };
+placePanel();
+assert.equal(panel.style.top, "10px", "a compact guide stays above a lower-half target");
+root.haloGuideTarget.getBoundingClientRect = () => ({ top: 100 });
+placePanel();
+assert.equal(panel.style.top, "480px", "a compact guide stays below an upper-half target");
+root.haloGuideTarget = null;
+panel.offsetHeight = 690;
+placePanel();
+assert.equal(panel.style.top, "26px", "ending guidance restores normal launcher-based placement");
 
 // Dismiss leaves only the "Call HALO" trigger; the trigger restores the guide.
 assert.match(companion, /typeof window === "undefined" \|\| typeof document === "undefined"/, "the guide is inert without a DOM");

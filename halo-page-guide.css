@@ -1,0 +1,19 @@
+.halo-companion-page-help{margin:8px 0;border-top:1px solid #ffffff24;padding-top:8px}
+.halo-companion-page-help summary{cursor:pointer;font-size:12px;color:#d5b66c}
+.halo-companion-page-guide{max-height:45vh;overflow:auto;padding:8px 2px;color:#eee;font-size:12px;line-height:1.5}
+.halo-companion-page-guide h3{margin:4px 0}
+.halo-companion-page-guide p{overflow-wrap:anywhere}
+.halo-companion-page-guide button{margin:4px 5px 4px 0;padding:7px 9px;border:1px solid #ffffff40;border-radius:6px;background:#181b17;color:#eee;font:inherit;cursor:pointer}
+.halo-companion-page-guide button:disabled{opacity:.5;cursor:not-allowed}
+.halo-companion-page-guide label{display:block;margin-top:8px}
+.halo-companion-page-guide input{box-sizing:border-box;width:100%;padding:8px;background:#10120f;border:1px solid #ffffff40;border-radius:6px;color:#fff;font:inherit}
+.halo-page-guide-results{max-height:140px;overflow:auto}
+.halo-page-guide-results button{display:block;text-align:left;width:calc(100% - 8px)}
+.halo-guide-highlight{outline:3px solid #d5b66c!important;outline-offset:5px!important;box-shadow:0 0 0 7px #d5b66c26!important}
+.halo-companion-page-guide :focus-visible{outline:2px solid #d5b66c;outline-offset:2px}
+#haloPageGuideExplanation{border-left:3px solid #d5b66c;padding-left:10px}
+.halo-companion-walking .halo-companion-panel{height:auto;max-height:min(330px,40vh);grid-template-rows:auto}
+.halo-companion-walking .halo-companion-head,.halo-companion-walking .halo-companion-roster,.halo-companion-walking .halo-companion-journey,.halo-companion-walking .halo-companion-feed{display:none}
+.halo-companion-walking .halo-companion-compose>:not(.halo-companion-page-help){display:none}
+.halo-companion-walking .halo-companion-page-guide{max-height:30vh}
+.halo-companion-walking .halo-page-guide-overview,.halo-companion-walking .halo-page-guide-tour,.halo-companion-walking .halo-page-guide-search-label,.halo-companion-walking #haloPageGuideSearch,.halo-companion-walking .halo-page-guide-results{display:none}

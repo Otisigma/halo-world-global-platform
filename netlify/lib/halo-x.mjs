@@ -108,7 +108,11 @@ export async function generateDailyReport(db, reportDate = new Date()) {
     `,
     db.sql`SELECT COUNT(*)::int AS total FROM halo_pass_redemptions WHERE redeemed_at::date = ${date}::date`,
     db.sql`SELECT COUNT(*)::int AS total FROM halo_room_pins WHERE updated_at::date = ${date}::date`,
-    db.sql`SELECT COUNT(*)::int AS total FROM community_messages WHERE created_at::date = ${date}::date`,
+    db.sql`
+      SELECT COUNT(*)::int AS total
+      FROM community_messages m JOIN community_profiles p ON p.actor_id = m.actor_id
+      WHERE m.created_at::date = ${date}::date AND NOT p.is_automated
+    `,
     db.sql`SELECT COUNT(*)::int AS total FROM community_support WHERE created_at::date = ${date}::date`,
     db.sql`SELECT COUNT(*)::int AS total FROM halo_dj_sessions WHERE updated_at::date = ${date}::date`,
     db.sql`

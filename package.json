@@ -9,6 +9,7 @@
     "test:sentinel": "node scripts/sentinel-contracts.mjs && node scripts/sentinel-source-repair.mjs",
     "test:concierge-showcase": "node scripts/concierge-showcase-contracts.mjs",
     "test:fan-curations": "node scripts/fan-curation-contracts.mjs",
+    "test:playlists": "node --test scripts/personal-playlist-contracts.mjs scripts/playlist-cloud-contracts.mjs scripts/playlist-world-contracts.mjs",
     "test:fan-curations:db": "node scripts/fan-curation-db-contracts.mjs",
     "test:listening-telemetry": "node scripts/listening-telemetry-contracts.mjs",
     "test:fan-signal": "node scripts/fan-signal-tracker-contracts.mjs && npm run -s test:fan-curations",
@@ -31,7 +32,7 @@
     "test:dj-vault": "node scripts/dj-vault-contracts.mjs && node scripts/dj-mix-upload-contracts.mjs",
     "release-guard": "node release-guard-agent.js",
     "prebuild": "npm run release-guard -- --allow-missing-catalog",
-    "build": "node scripts/music-chart-contracts.mjs && node scripts/obsidian-gateway-contracts.mjs && node scripts/teaser-renderer-contracts.mjs",
+    "build": "node scripts/music-chart-contracts.mjs && node scripts/obsidian-gateway-contracts.mjs && node scripts/teaser-renderer-contracts.mjs && node scripts/halo-page-guide-contracts.mjs && node scripts/community-host-contracts.mjs",
     "test:release-guard": "node scripts/release-guard-contracts.mjs",
     "start": "node server.js",
     "dev": "node server.js",
@@ -58,7 +59,7 @@
     "test:creator-pass": "node scripts/creator-pass-contracts.mjs && node scripts/creator-pass-vault-contracts.mjs && node scripts/creator-pass-discovery-contracts.mjs",
     "test:dj-personas": "node scripts/dj-persona-contracts.mjs && npm run -s test:fan-signal && npm run -s test:affiliate && npm run -s test:hype-room",
     "test:network": "node scripts/creator-network-contracts.mjs && node scripts/signal-network-contracts.mjs && node scripts/signal-rooms-contracts.mjs && node scripts/signal-satellite-contracts.mjs && npm run -s test:fan-signal && npm run -s test:affiliate && node scripts/signal-feed-contracts.mjs && npm run -s test:hype-room && node scripts/industry-wire-contracts.mjs && node scripts/signal-messages-contracts.mjs && node scripts/studio-guardian-contracts.mjs && node scripts/dj-persona-contracts.mjs",
-    "test:music-home": "node scripts/music-home-contracts.mjs && node scripts/music-home-api-contracts.mjs && node scripts/return-celebration-contracts.mjs",
+    "test:music-home": "node scripts/music-home-contracts.mjs && node scripts/music-home-api-contracts.mjs && node scripts/return-celebration-contracts.mjs && npm run -s test:playlists",
     "test:release-conveyor": "node scripts/release-watchdog-contracts.mjs && node scripts/release-conveyor-contracts.mjs && node scripts/halo-master-orchestrator-contracts.mjs && node scripts/release-pipeline-contracts.mjs && node scripts/release-audio-contracts.mjs && npm run -s test:release-teaser",
     "test:guard-preflight": "node scripts/request-preflight-contracts.mjs",
     "test:owner-alerts": "node scripts/owner-alert-contracts.mjs",
@@ -84,6 +85,7 @@
     "@netlify/database": "^1.1.0"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.2.17",
     "drizzle-kit": "^1.0.0-beta.22"
   }
 }

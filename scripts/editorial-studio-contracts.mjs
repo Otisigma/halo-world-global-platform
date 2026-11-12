@@ -38,10 +38,13 @@ assert.match(studio, /createObjectURL/);
 assert.match(studio, /navigator\.share/);
 assert.match(studio, /textContent/);
 assert.doesNotMatch(studio, /innerHTML|GoogleGenAI|API_KEY|generateContent/);
-for (const id of ["halo-project-handover", "halo-master-observation"]) {
+for (const id of ["halo-project-handover", "halo-master-observation", "halo-weekly-wins-2026-11-11", "halo-every-genre"]) {
   assert.ok(magazine.includes(`data-open-article="${id}"`));
   assert.ok(magazineScript.includes(`"${id}"`));
 }
+assert.match(haloPage, /Every genre\. Every recording style\./);
+assert.match(haloPage, /HALO Music World is not just for electronic music/);
+assert.match(magazineScript, /no tool can guarantee protection/);
 assert.match(magazine, /href="\/reports\/"/);
 assert.match(magazine, /href="\/music\/">Listen &amp; shop releases/);
 assert.match(haloPage, /href="\/magazine\.html"/);

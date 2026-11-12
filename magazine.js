@@ -11,6 +11,33 @@
     quote: "Those who build the culture should remain its primary beneficiaries."
   };
   const articles = {
+    "halo-weekly-wins-2026-11-11": {
+      topic: "HALO / Community update / 11 November 2026",
+      title: "A great week for HALO Music World",
+      deck: "A week of building a more beautiful place to listen—and a stronger home for the music behind it.",
+      body: [
+        "What a week. HALO Music World is growing into more than a place to press play: it is becoming a home for the songs, the artists who create them, and the people who come back to listen. We are proud of how far we have come—and grateful to everyone sharing the journey.",
+        "We launched the Obsidian Gateway: a catalog-backed listening space built around the music, artwork and artist-approved links. Lyrics can follow playback when timestamps are available, and a shareable release link helps a listener bring someone else straight to a song.",
+        "The Gateway grew into the Living Grid and HALO Sound Vaults, with artwork-led cards and filters drawn from the catalog. We made those filters collapsible and easier to browse, so exploring more of the music can feel as good as listening to it.",
+        "Behind the scenes, we strengthened the artist's toolkit. Portable recovery packs can bring selected files and project context together for a handover, while master-observation tools record authenticated byte fingerprints for later comparison. A fingerprint is evidence of an observation, not proof of ownership—and a recovery pack still needs a real restore test.",
+        "We also added a private outcome dashboard to help the owner understand release preparation, returning listeners, playback signals and operational follow-through, with missing data shown honestly. The Living Chart now explains its coverage and helps listeners reach the wider catalog rather than mistaking a short activity ranking for the whole collection.",
+        "We made the journey easier to find, too: the Gateway has a place on the main HALO page, and the magazine and report library offer more ways to explore the thinking behind the work. Each improvement is another step toward an independent music world built around creativity, care and meaningful connections.",
+        "This is not the finish line. Some ideas are still being built and every release deserves real-world listening and review. But this week gave us something worth celebrating: music, technology and community moving forward together. Thank you for being part of HALO Music World."
+      ],
+      quote: "More than a platform. A home for the music and the people who believe in it."
+    },
+    "halo-every-genre": {
+      topic: "HALO / Artist dispatch",
+      title: "Every genre has a home here",
+      deck: "HALO Music World is not just for electronic music.",
+      body: [
+        "Whether you are recording ambient soundscapes in a bedroom, mixing heavy guitars in a garage, laying down an acoustic session, making hip-hop beats or playing jazz with a band, you are welcome here. Music that crosses genres belongs here too.",
+        "HALO is being built as a place for artists to share their work, find listeners and explore tools for managing their releases. Your sound does not need to fit one scene or one production style to be part of the conversation.",
+        "We believe artists deserve clarity and control. HALO offers tools to record information about their work and prepare files for handover, but no tool can guarantee protection, establish ownership on its own or replace a real backup and restore test.",
+        "Bring your sound. Explore the artist catalog workspace, share what you create and help us build a music world open to more voices."
+      ],
+      quote: "Every genre. Every recording style. Bring your sound."
+    },
     "room-after-stream": {
       topic: "Community / Cover story / 8 min read",
       title: "The room after the stream",

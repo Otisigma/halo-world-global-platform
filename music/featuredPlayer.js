@@ -100,6 +100,7 @@
         <p class="featured-hero-artist">${escapeHtml(hero.artist)}</p>
         <div class="featured-hero-actions">
           ${playAction}
+          <button class="action playlist-plus" type="button" data-add-playlist="${escapeHtml(hero.id)}" aria-label="Add ${escapeHtml(hero.title || "song")} to playlist" title="Add to playlist"><span aria-hidden="true">+</span></button>
           ${listenAction}
           <button class="action tertiary" type="button" data-featured-vote="${escapeHtml(hero.id)}" data-halo-guide="Submit a vote through the existing chart service. Votes are limited to one per listener per day." data-halo-guide-title="Vote">Vote ▲</button>
         </div>
@@ -250,6 +251,7 @@
     }
   });
   window.addEventListener("halo:discovery-queue-start", () => state.controller?.stop());
+  window.addEventListener("halo:personal-queue-start", () => state.controller?.stop());
 
   // music.js re-renders #featuredRelease wholesale; keep the hero mounted at the top.
   new MutationObserver(mountHero).observe(container, { childList: true });

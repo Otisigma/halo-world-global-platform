@@ -444,6 +444,10 @@
             <summary>Start here / What do I do next?</summary>
             <section aria-label="First steps on this page" class="halo-companion-first-steps"></section>
           </details>
+          <details class="halo-companion-page-help">
+            <summary>Walk this page / Explain a button</summary>
+            <section class="halo-companion-page-guide" aria-label="Page walkthrough and control help"></section>
+          </details>
           <form class="halo-companion-form">
             <input class="halo-companion-input" maxlength="1000" autocomplete="off" enterkeyhint="send" aria-label="Ask the HALO Guide" placeholder="Ask for guidance…">
             <button class="halo-companion-send" type="submit" aria-label="Send message">↗</button>
@@ -505,9 +509,14 @@
     const placePanel = () => {
       if (panel.hidden) return;
       const rect = launcher.getBoundingClientRect();
-      const top = rect.top >= panel.offsetHeight + 24
+      let top = rect.top >= panel.offsetHeight + 24
         ? rect.top - panel.offsetHeight - 14
         : rect.bottom + 14;
+      const guidedTarget = root.haloGuideTarget;
+      if (guidedTarget?.isConnected) {
+        top = guidedTarget.getBoundingClientRect().top >= window.innerHeight / 2
+          ? 10 : window.innerHeight - panel.offsetHeight - 10;
+      }
       panel.style.left = `${clamp(rect.left, panel.offsetWidth, window.innerWidth)}px`;
       panel.style.top = `${clamp(top, panel.offsetHeight, window.innerHeight)}px`;
       panel.style.bottom = "auto";
@@ -862,6 +871,20 @@
   });
   const guide = pageGuide();
   renderFirstSteps();
+  const pageGuideStyles = document.createElement("link");
+  pageGuideStyles.rel = "stylesheet";
+  pageGuideStyles.href = "/halo-page-guide.css";
+  document.head.appendChild(pageGuideStyles);
+  let pageWalkthrough = null;
+  import("/lib/halo-page-guide.js").then(({ mountPageGuide }) => {
+    pageWalkthrough = mountPageGuide({ root, document, window, onHighlight: placeGuidePanel });
+  }).catch(error => {
+    console.error("HALO page walkthrough unavailable", error);
+    root.querySelector(".halo-companion-page-guide").textContent = "Page walkthrough could not load. Reload the page to retry; Ask HALO is still available.";
+  });
+  new MutationObserver(() => {
+    if (root.querySelector(".halo-companion-panel").hidden) pageWalkthrough?.stop();
+  }).observe(root.querySelector(".halo-companion-panel"), { attributes: true, attributeFilter: ["hidden"] });
   window.addEventListener("popstate", renderFirstSteps);
   addMessage("assistant", guide.welcome, { agent: state.agent, suggestions: guide.prompts, initial: true });
 

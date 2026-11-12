@@ -16,6 +16,9 @@ const [page, client, styles, catalogApi, chartApi] = await Promise.all([
 assert.match(chartApi, /export const config\s*=\s*\{\s*path:\s*\["\/api\/catalog\/chart",\s*"\/api\/catalog\/vote"\]\s*\}/, "chart routes must be literal strings so Netlify can statically parse both endpoints");
 
 assert.match(page, /The living chart/, "music catalog must identify the live chart");
+assert.match(page, /<details class="catalog-genre-disclosure" id="catalogGenreDisclosure">/, "the public catalog genre list must be collapsible");
+assert.match(page, /id="allReleasesFilter"/, "All releases remains available as a quick filter");
+assert.match(styles, /\.catalog-genre-disclosure > summary::after/, "the collapsed genre filter needs a visible disclosure affordance");
 assert.match(page, /Hip-Hop \/ Rap/, "chart must include a hip-hop room");
 assert.match(page, /R&amp;B \/ Soul/, "chart must include an R&B and soul room");
 assert.match(page, /House \/ Dance/, "chart must include a house and dance room");
@@ -113,6 +116,13 @@ assert.match(styles, /\.chart-play/, "chart rows must style their delegated play
 for (const page of ["music/index.html", "music-upload/index.html"]) {
   const html = await readFile(resolve(root, page), "utf8");
   assert.match(html, /id="chartCoverage" role="status"/, `${page} must show Living Chart coverage`);
+  assert.match(html, /data-chart-sort="discovery"/, `${page} must expose deeper catalog discovery`);
+  assert.match(html, /up to 20/, `${page} must explain the chart capacity`);
+  assert.match(html, /<details class="catalog-genre-disclosure" id="catalogGenreDisclosure">/, `${page} must provide the shared catalog's collapsible genre panel`);
+  const requiredElements = ["allReleasesFilter", "catalogGenreSummary", "genreFilter"];
+  for (const id of requiredElements) {
+    assert.equal((html.match(new RegExp(`id="${id}"`, "g")) || []).length, 1, `${page} must provide exactly one #${id} for music.js`);
+  }
 }
 assert.match(client, /renderChartCoverage\(chartCoverageText\(coverage\)\)/, "chart render must publish coverage");
 assert.match(client, /href="#allReleasesTitle"/, "chart coverage must link to the full catalog");
@@ -134,7 +144,7 @@ assert.doesNotMatch(client, /GOOGLE_DRIVE_MASTERS_FOLDER_ID/, "the public chart 
     releaseMatchesRoom: () => true,
     logMusicIssue() {}
   });
-  for (const name of ["escapeHtml", "safeUrl", "isApprovedRelease", "catalogState", "catalogMetadataMarkup", "hasChartActivity", "catalogFeedbackMarkup", "chartSignal", "isChartRelease", "rankedReleases", "filteredReleases", "chartCoverage", "chartCoverageText"]) {
+  for (const name of ["escapeHtml", "safeUrl", "isApprovedRelease", "catalogState", "catalogMetadataMarkup", "hasChartActivity", "catalogFeedbackMarkup", "chartSignal", "isChartRelease", "rankedReleases", "filteredReleases", "catalogGenreEntries", "chartCoverage", "chartCoverageText"]) {
     const source = client.match(new RegExp(`  function ${name}\\([^\\n]*\\) \\{[\\s\\S]*?\\n  \\}`))?.[0];
     assert.ok(source, `${name} must be available for behavioral checks`);
     vm.runInContext(source, context);
@@ -161,6 +171,32 @@ assert.doesNotMatch(client, /GOOGLE_DRIVE_MASTERS_FOLDER_ID/, "the public chart 
   assert.equal(context.isApprovedRelease({ status: "published", isLiveVisible: false }), false);
   assert.equal(context.isApprovedRelease({ status: "draft" }), false);
   const release = { id: "recorded", title: "Recorded", artist: "Artist", status: "published", isChartEligible: true, genres: [], albumTitle: "Collection name", chartActivity };
+  assert.deepEqual(Array.from(context.catalogGenreEntries([
+    { genres: ["AFRO BEATS", "AfroBeats", "Afrobeats House,", "Afrobeats House,DJ MIX"] },
+    { genres: ["Afrobeat", "Deep House"] },
+    { genres: [], catalog: { genre: "Deep House, Afro House" } },
+    { genres: ["R&B / Soul"] },
+    { genres: ["deep house"] },
+    { genres: [] }
+  ]), ([key, item]) => [key, item.label, item.count]), [
+    ["deep house", "Deep House", 3],
+    ["afrobeats", "Afrobeats", 2],
+    ["afro house", "Afro House", 1],
+    ["afrobeats house", "Afrobeats House", 1],
+    ["dj mix", "DJ Mix", 1],
+    ["r&b soul", "R&B / Soul", 1]
+  ], "genre aliases, multi-tags, catalog fallback, distinct release counts, and sorting must be consistent");
+  context.state.releases = [
+    { id: "afro-one", status: "published", genres: ["Afro beats", "Afrobeats House, DJ MIX"] },
+    { id: "afro-two", status: "published", genres: ["Afrobeat"] },
+    { id: "house", status: "published", genres: ["Deep House"] },
+    { id: "uncategorized", status: "published", genres: [] }
+  ];
+  context.state.genre = "__uncategorized__";
+  assert.deepEqual(Array.from(context.filteredReleases(), item => item.id), ["uncategorized"], "uncategorized filter keeps public releases with no genre");
+  context.state.genre = "afrobeats";
+  assert.deepEqual(Array.from(context.filteredReleases(), item => item.id), ["afro-one", "afro-two"], "genre filters match canonical aliases");
+  context.state.genre = "all";
   context.state.releases = [release, { ...release, id: "unmeasured", chartActivity: undefined }];
   assert.deepEqual(Array.from(context.rankedReleases(), item => item.id), ["recorded"], "unmeasured releases must not be ranked by freshness");
   const coverage = context.chartCoverage();
@@ -173,6 +209,39 @@ assert.doesNotMatch(client, /GOOGLE_DRIVE_MASTERS_FOLDER_ID/, "the public chart 
   assert.equal(context.filteredReleases().length, 2, "collection metadata must be searchable");
   context.state.genre = "jazz";
   assert.equal(context.filteredReleases().length, 0, "search must respect the genre filter");
+  {
+    const savedReleases = context.state.releases;
+    const candidates = Array.from({ length: 25 }, (_, index) => ({
+      ...release, id: `chart-${index}`, releaseDate: `2026-10-${String(index + 1).padStart(2, "0")}`,
+      chartActivity: { recentListens: index + 1, recentOpens: 0, previousListens: 0, previousOpens: 0 }
+    }));
+    context.state.releases = candidates;
+    for (const sort of ["signal", "listens", "opens", "newest"]) {
+      context.state.chartSort = sort;
+      assert.equal(context.rankedReleases().length, 20, `${sort} must show up to 20 releases, not 10`);
+      assert.equal(context.chartCoverage().shown, 20);
+    }
+    context.state.chartSort = "signal";
+    assert.equal(context.rankedReleases()[0].id, "chart-24", "ranking still orders by real activity");
+    const inactive = { ...release, id: "inactive", releaseDate: "2026-11-11", chartActivity: undefined };
+    context.state.releases = [candidates[0], inactive,
+      { ...inactive, id: "excluded", isChartEligible: false },
+      { ...inactive, id: "hidden", isLiveVisible: false }];
+    assert.deepEqual(Array.from(context.rankedReleases(), item => item.id), ["chart-0"], "activity charts must not invent scores to pad a Top 20");
+    context.state.chartSort = "discovery";
+    assert.deepEqual(Array.from(context.rankedReleases(), item => item.id), ["inactive", "chart-0"], "discovery includes unmeasured eligible songs, newest first, but not hidden or excluded releases");
+    assert.equal(context.chartCoverage().shown, 2);
+    assert.match(context.chartCoverageText(context.chartCoverage()), /Discovery order is not a chart rank/);
+    context.releaseMatchesRoom = candidate => candidate.id === "inactive";
+    assert.deepEqual(Array.from(context.rankedReleases(), item => item.id), ["inactive"], "discovery still respects the selected genre room");
+    assert.equal(context.chartCoverage().shown, 1);
+    context.releaseMatchesRoom = () => true;
+    context.state.releases = candidates.map(candidate => ({ ...candidate, chartActivity: undefined }));
+    assert.equal(context.rankedReleases().length, 20, "discovery also caps at 20");
+    assert.equal(context.chartCoverage().shown, 20);
+    context.state.releases = savedReleases;
+    context.state.chartSort = "signal";
+  }
 
   const node = () => ({ innerHTML: "", textContent: "", hidden: false });
   Object.assign(context, {

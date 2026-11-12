@@ -70,7 +70,7 @@
           <h2 id="chartTitle">Don’t just count it.<br><em>Enter the signal.</em></h2>
         </div>
         <div class="chart-intro">
-          <p>HALO ranks its own published releases using recent listening clicks, release-room opens, and release momentum. This is a transparent HALO activity chart—not an industry sales chart.</p>
+          <p>A Top 20 of HALO’s published releases with recorded activity, using listening clicks, release-room opens, and momentum. Explore catalog opens up to 20 eligible releases, including songs awaiting their first signal. This is a transparent HALO activity chart—not an industry sales chart.</p>
           <div class="chart-window"><span class="live-dot" aria-hidden="true"></span><strong>Rolling 7 days</strong><span>Compared with the previous 7</span></div>
         </div>
       </header>
@@ -84,11 +84,12 @@
         <button type="button" data-chart-room="global">Afrobeats / Global</button>
       </div>
 
-      <div class="chart-sort-row" id="chartSortButtons" role="group" aria-label="Sort chart" data-halo-guide="Signal score blends recent listens, release-room opens and momentum. Switch to Newest, Most listens or Most opens to compare the same releases another way." data-halo-guide-title="Chart sort">
+      <div class="chart-sort-row" id="chartSortButtons" role="group" aria-label="Chart ranking or catalog discovery" data-halo-guide="Activity rankings show up to 20 releases. Explore catalog includes eligible songs without activity, newest first, without assigning chart ranks." data-halo-guide-title="Chart and discovery">
         <button type="button" data-chart-sort="signal" aria-pressed="true">Signal score</button>
         <button type="button" data-chart-sort="newest" aria-pressed="false">Newest</button>
         <button type="button" data-chart-sort="listens" aria-pressed="false">Most listens</button>
         <button type="button" data-chart-sort="opens" aria-pressed="false">Most opens</button>
+        <button type="button" data-chart-sort="discovery" aria-pressed="false">Explore catalog · up to 20</button>
       </div>
 
       <div class="chart-console">
@@ -128,7 +129,11 @@
           </label>
         </div>
       </header>
-      <div class="genre-filter" id="genreFilter" aria-label="Filter releases by genre"></div>
+      <button class="all-releases-filter" id="allReleasesFilter" type="button" data-genre="all" aria-pressed="true">All releases</button>
+      <details class="catalog-genre-disclosure" id="catalogGenreDisclosure">
+        <summary id="catalogGenreSummary">Browse genres</summary>
+        <div class="genre-filter" id="genreFilter" role="group" aria-label="Filter releases by genre"></div>
+      </details>
       <div class="release-grid" id="releaseGrid" aria-live="polite">
         <article class="card-skeleton"></article>
         <article class="card-skeleton"></article>

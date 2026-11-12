@@ -313,7 +313,16 @@ h1 em { color: var(--acid); font-family: var(--serif); font-weight: 400; text-tr
 .search-control span { display: block; margin-bottom: 10px; color: var(--muted); font: 500 8px/1 var(--mono); letter-spacing: 0.13em; text-transform: uppercase; }
 .search-control input { width: 100%; height: 50px; padding: 0 16px; border: 1px solid var(--line); border-radius: 0; outline: 0; color: var(--paper); background: #0c0f0d; }
 .search-control input:focus { border-color: var(--acid); box-shadow: 0 0 0 1px var(--acid); }
-.genre-filter { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 30px; }
+.all-releases-filter { margin: 0 0 12px; padding: 9px 13px; border: 1px solid var(--line); color: var(--muted); background: transparent; cursor: pointer; font: 500 8px/1 var(--mono); letter-spacing: 0.09em; text-transform: uppercase; }
+.all-releases-filter:hover, .all-releases-filter[aria-pressed="true"] { border-color: var(--acid); color: var(--ink); background: var(--acid); }
+.catalog-genre-disclosure { margin-bottom: 30px; border: 1px solid var(--line); }
+.catalog-genre-disclosure > summary { padding: 13px 15px; color: var(--paper); cursor: pointer; font: 500 9px/1.3 var(--mono); letter-spacing: 0.1em; text-transform: uppercase; list-style: none; }
+.catalog-genre-disclosure > summary::-webkit-details-marker { display: none; }
+.catalog-genre-disclosure > summary::after { content: "+"; float: right; color: var(--acid); }
+.catalog-genre-disclosure[open] > summary { border-bottom: 1px solid var(--line); }
+.catalog-genre-disclosure[open] > summary::after { content: "−"; }
+.catalog-genre-disclosure > summary:focus-visible, .all-releases-filter:focus-visible { outline: 2px solid var(--acid); outline-offset: 3px; }
+.genre-filter { display: flex; flex-wrap: wrap; gap: 8px; padding: 14px; }
 .genre-filter button { padding: 9px 13px; border: 1px solid var(--line); color: var(--muted); background: transparent; cursor: pointer; font: 500 8px/1 var(--mono); letter-spacing: 0.09em; text-transform: uppercase; }
 .genre-filter button:hover, .genre-filter button[aria-pressed="true"] { border-color: var(--acid); color: var(--ink); background: var(--acid); }
 .release-grid { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 18px; }

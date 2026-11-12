@@ -21,6 +21,51 @@ const [page, script, styles, halo, radio, deck, api, paymentLink, migration, upl
   readFile(resolve(root, "upload-progress.js"), "utf8")
 ]);
 
+{
+  const start = halo.indexOf("          const toggleMixPlaylist = async");
+  const end = halo.indexOf("          const shareRoomMix =", start);
+  let feedback = {}, mixes = [{ id: "test-mix", inPlaylist: false }], requests = 0, notice = "", error = "", signIns = 0;
+  let response = async () => Response.json({ message: "Saved." });
+  const context = {
+    identityUser: { id: "member" },
+    mixPlaylistRequests: { current: new Set() },
+    setMixPlaylistFeedback: update => { feedback = update(feedback); },
+    setRoomMixes: update => { mixes = update(mixes); },
+    setCommunityNotice: value => { notice = value; },
+    setCommunityError: value => { error = value; },
+    openIdentity: () => { signIns++; },
+    AbortController,
+    fetch: async () => { requests++; return response(); },
+    window: { setTimeout() {}, clearTimeout() {} }
+  };
+  const toggle = runInNewContext(`${halo.slice(start, end)}toggleMixPlaylist;`, context);
+  await toggle(mixes[0]);
+  assert.equal(mixes[0].inPlaylist, true);
+  assert.equal(feedback["test-mix"].status, "saved");
+  assert.equal(notice, "Saved.");
+  response = async () => Response.json({ message: "Could not save." }, { status: 503 });
+  await toggle(mixes[0]);
+  assert.equal(mixes[0].inPlaylist, true, "failed writes do not change membership");
+  assert.equal(feedback["test-mix"].status, "error");
+  assert.equal(error, "Could not save.");
+  let finish;
+  response = () => new Promise(resolve => { finish = resolve; });
+  const pending = toggle(mixes[0]);
+  const before = requests;
+  await toggle(mixes[0]);
+  assert.equal(requests, before, "duplicate pending clicks do not race a playlist write");
+  assert.equal(feedback["test-mix"].status, "saving");
+  finish(Response.json({ message: "Removed." }));
+  await pending;
+  assert.equal(mixes[0].inPlaylist, false);
+  context.identityUser = null;
+  await toggle(mixes[0]);
+  assert.equal(signIns, 1);
+  assert.match(feedback["test-mix"].message, /Sign in/);
+  assert.match(halo, /disabled=\{mixPlaylistFeedback\[mix\.id\]\?\.status === 'saving'\}/);
+  assert.match(halo, /mixPlaylistFeedback\[mix\.id\]\?\.message/);
+}
+
 const checks = [
   [page.includes("DJ HALO X presents") && page.includes("Road to the Worlds"), "establishes the Inside the Mix series and first-season identity"],
   [page.includes("Watch the series") && page.includes("HALO Mix Cloud") && page.includes("OWN THE"), "connects watch, stream, and edition actions"],

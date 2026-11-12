@@ -196,5 +196,6 @@
     $('#watchdog').onclick=()=>toast('Watchdog ping','Zero-dead-air monitor healthy at -18dB.');document.querySelectorAll('.room').forEach(b=>b.onclick=()=>toast('Room switched',b.dataset.room));document.querySelectorAll('.blip').forEach(b=>b.onclick=()=>toast('Node locked',b.dataset.region));document.querySelectorAll('.modal').forEach(m=>m.onclick=e=>{if(e.target===m)m.classList.remove('open')});document.addEventListener('keydown',e=>{if(e.key==='Escape')document.querySelectorAll('.modal.open').forEach(m=>m.classList.remove('open'))});window.addEventListener('hashchange',()=>activateTab(location.hash.slice(1)||'pipeline'));render();activateTab(location.hash.slice(1)||'pipeline');loadPublishedCatalog();
   </script>
   <script src="/upload-player-indicator.js" defer></script>
+  <script src="/halo-companion.js" defer data-halo-companion="true"></script>
 </body>
 </html>

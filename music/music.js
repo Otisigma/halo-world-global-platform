@@ -3,6 +3,8 @@
     featured: document.querySelector("#featuredRelease"),
     grid: document.querySelector("#releaseGrid"),
     genres: document.querySelector("#genreFilter"),
+    allGenres: document.querySelector("#allReleasesFilter"),
+    genreSummary: document.querySelector("#catalogGenreSummary"),
     search: document.querySelector("#catalogSearch"),
     sort: document.querySelector("#catalogSort"),
     count: document.querySelector("#releaseCount"),
@@ -629,15 +631,16 @@
   function chartCoverage() {
     const eligible = state.releases.filter(release => isChartRelease(release) && releaseMatchesRoom(release));
     const active = eligible.filter(hasChartActivity).length;
-    return { total: state.releases.length, eligible: eligible.length, active, shown: Math.min(active, 10), waiting: eligible.length - active };
+    return { total: state.releases.length, eligible: eligible.length, active, shown: Math.min(state.chartSort === "discovery" ? eligible.length : active, 20), waiting: eligible.length - active };
   }
 
   function chartCoverageText(coverage) {
     if (!coverage.total) return "No published releases are in the public catalog yet.";
     if (!coverage.eligible) return `None of the ${coverage.total} published releases are chart-eligible in this room. Browse the full catalog below.`;
+    if (state.chartSort === "discovery") return `Exploring ${coverage.shown} of ${coverage.eligible} eligible releases, newest first. Discovery order is not a chart rank; songs without recorded activity are included.`;
     const shown = `Showing ${coverage.shown} of ${coverage.eligible} chart-eligible ${coverage.eligible === 1 ? "release" : "releases"} in this room.`;
     if (!coverage.waiting) return `${shown} Every eligible release has recorded activity in the last 14 days.`;
-    return `${shown} ${coverage.waiting} ${coverage.waiting === 1 ? "has" : "have"} no recorded listens or release-room opens in the last 14 days and ${coverage.waiting === 1 ? "stays" : "stay"} in the full catalog until ${coverage.waiting === 1 ? "it is" : "they are"} played.`;
+    return `${shown} ${coverage.waiting} ${coverage.waiting === 1 ? "has" : "have"} no recorded listens or release-room opens in the last 14 days. Choose Explore catalog to discover these releases without assigning them a chart rank.`;
   }
 
   function renderChartCoverage(message) {
@@ -652,10 +655,10 @@
           logMusicIssue("music_chart_eligibility_skipped", "Release skipped from chart: not chart-eligible", { releaseId: release.id, title: release.title, isCleanVersion: release.isCleanVersion });
           return false;
         }
-        return hasChartActivity(release) && releaseMatchesRoom(release);
+        return (state.chartSort === "discovery" || hasChartActivity(release)) && releaseMatchesRoom(release);
       })
       .map(release => ({ release, signal: chartSignal(release) }));
-    if (state.chartSort === "newest") {
+    if (state.chartSort === "newest" || state.chartSort === "discovery") {
       entries.sort((a, b) => new Date(b.release.releaseDate).getTime() - new Date(a.release.releaseDate).getTime());
     } else if (state.chartSort === "listens") {
       entries.sort((a, b) => b.release.chartActivity.recentListens - a.release.chartActivity.recentListens || new Date(b.release.releaseDate).getTime() - new Date(a.release.releaseDate).getTime());
@@ -664,7 +667,7 @@
     } else {
       entries.sort((a, b) => b.signal.score - a.signal.score || new Date(b.release.releaseDate).getTime() - new Date(a.release.releaseDate).getTime());
     }
-    return entries.slice(0, 10).map(entry => entry.release);
+    return entries.slice(0, 20).map(entry => entry.release);
   }
 
   function renderChartSort() {
@@ -841,16 +844,17 @@
     if (!release) return;
     const artwork = releaseArtwork(release);
     state.activeReleaseId = release.id;
-    const movement = movementFor(release);
+    const movement = state.chartSort === "discovery"
+      ? { label: "Catalog discovery", direction: "steady", value: "—" } : movementFor(release);
     const activity = release.chartActivity || {};
     const video = videoForRelease(release);
     elements.chartStage.innerHTML = `<article class="stage-card">
-      <div class="stage-art release-artwork-frame" data-artwork-frame><img class="release-artwork-image" src="${escapeHtml(artwork.src)}" alt="${escapeHtml(`${release.title} cover artwork`)}" data-release-artwork data-artwork-fallback="${escapeHtml(artwork.fallback)}" ${artworkAttributes(artwork)}><span class="stage-rank">#${position}</span></div>
+      <div class="stage-art release-artwork-frame" data-artwork-frame><img class="release-artwork-image" src="${escapeHtml(artwork.src)}" alt="${escapeHtml(`${release.title} cover artwork`)}" data-release-artwork data-artwork-fallback="${escapeHtml(artwork.fallback)}" ${artworkAttributes(artwork)}><span class="stage-rank">${state.chartSort === "discovery" ? "DISCOVER" : `#${position}`}</span></div>
       <div class="stage-copy">
         <div class="stage-kicker"><span>${escapeHtml(movement.label)}</span><span>${escapeHtml(release.genres.join(" · ") || "HALO release")}</span></div>
         <h3>${escapeHtml(release.title)}</h3><p class="stage-artist">${escapeHtml(release.artist)}</p>
         <p class="stage-story">${escapeHtml(release.pitch || "Open the full release signal and approved campaign room.")}</p>
-        <div class="stage-metrics"><span><strong>${Number(activity.recentListens || 0)}</strong>Listen exits</span><span><strong>${Number(activity.recentOpens || 0)}</strong>Room opens</span><span><strong>${escapeHtml(movement.value)}</strong>Momentum</span></div>
+        <div class="stage-metrics"><span><strong>${hasChartActivity(release) ? Number(activity.recentListens) : "—"}</strong>Listen exits</span><span><strong>${hasChartActivity(release) ? Number(activity.recentOpens) : "—"}</strong>Room opens</span><span><strong>${escapeHtml(movement.value)}</strong>Momentum</span></div>
         ${videoMarkup(video, release)}
         ${releaseActions(release)}
       </div>
@@ -875,16 +879,18 @@
       return;
     }
     if (!releases.some(release => release.id === state.activeReleaseId)) state.activeReleaseId = releases[0].id;
-    elements.chartBoard.innerHTML = `<div class="chart-column-labels"><span>Position</span><span>Record</span><span>7-day motion</span></div>${releases.map((release, index) => {
-      const movement = movementFor(release);
+    elements.chartBoard.innerHTML = `<div class="chart-column-labels"><span>${state.chartSort === "discovery" ? "Browse" : "Position"}</span><span>Record</span><span>${state.chartSort === "discovery" ? "Catalog" : "7-day motion"}</span></div>${releases.map((release, index) => {
+      const movement = state.chartSort === "discovery"
+        ? { label: hasChartActivity(release) ? "Recorded activity" : "Awaiting signal", direction: "steady", value: "—" }
+        : movementFor(release);
       const active = release.id === state.activeReleaseId;
       const artwork = releaseArtwork(release);
       const playButton = playTrackButton(release, { compact: true });
       const chartGuide = playButton
-        ? ` data-halo-guide="Open #${index + 1} in the chart stage for artwork, story and movement — or quick listen without leaving the chart." data-halo-guide-title="Living Chart" data-halo-guide-action="quick-listen"`
-        : ` data-halo-guide="Open #${index + 1} in the chart stage for artwork, story, movement and the listening link." data-halo-guide-title="Living Chart"`;
+        ? ` data-halo-guide="Open this release for artwork, story and available activity — or quick listen without leaving the chart." data-halo-guide-title="Living Chart" data-halo-guide-action="quick-listen"`
+        : ` data-halo-guide="Open this release for artwork, story, available activity and the listening link." data-halo-guide-title="Living Chart"`;
       return `<div class="chart-entry${playButton ? " has-play" : ""}" data-halo-guide-scope><button class="chart-row${active ? " is-active" : ""}" type="button" data-chart-release="${escapeHtml(release.id)}" aria-pressed="${active}"${chartGuide}>
-        <span class="chart-position">${String(index + 1).padStart(2, "0")}</span>
+        <span class="chart-position">${state.chartSort === "discovery" ? "·" : String(index + 1).padStart(2, "0")}</span>
         <span class="chart-art release-artwork-frame" data-artwork-frame><img class="release-artwork-image" src="${escapeHtml(artwork.src)}" alt="" loading="lazy" data-release-artwork data-artwork-fallback="${escapeHtml(artwork.fallback)}" ${artworkAttributes(artwork)}></span>
         <span class="chart-track"><strong>${escapeHtml(release.title)}</strong><small>${escapeHtml(release.artist)} · ${escapeHtml(release.genres[0] || "HALO")}</small></span>
         <span class="chart-motion is-${movement.direction}"><b>${escapeHtml(movement.value)}</b><small>${escapeHtml(movement.label)}</small></span>
@@ -1051,8 +1057,10 @@
   function filteredReleases() {
     const query = state.query.toLowerCase();
     const filtered = state.releases.filter(release => {
-      const matchesGenre = state.genre === "all" || release.genres.some(genre => genre.toLowerCase() === state.genre);
-      const haystack = [release.title, release.artist, release.albumTitle, catalogState(release).albumTitle, release.pitch, ...release.genres].join(" ").toLowerCase();
+      const releaseGenres = catalogGenreEntries([release]);
+      const matchesGenre = state.genre === "all"
+        || (state.genre === "__uncategorized__" ? !releaseGenres.length : releaseGenres.some(([key]) => key === state.genre));
+      const haystack = [release.title, release.artist, release.albumTitle, catalogState(release).albumTitle, release.pitch, release.catalog?.genre, ...release.genres].join(" ").toLowerCase();
       return matchesGenre && (!query || haystack.includes(query));
     });
     if (state.sort === "oldest") {
@@ -1067,16 +1075,53 @@
     return filtered;
   }
 
+  function catalogGenreEntries(releases) {
+    const categories = new Map();
+    for (const release of releases) {
+      const genres = Array.isArray(release.genres) && release.genres.length
+        ? release.genres
+        : typeof release.catalog?.genre === "string" ? [release.catalog.genre] : [];
+      const releaseGenres = new Map();
+      for (const supplied of genres) {
+        if (typeof supplied !== "string") continue;
+        for (const raw of supplied.split(",")) {
+          const source = raw.trim().replace(/[\s,.;:]+$/g, "").replace(/\s+/g, " ");
+          if (!source) continue;
+          const normalized = source.toLowerCase().replace(/[^a-z0-9&-]+/g, " ").trim().replace(/\s+/g, " ");
+          const key = ["afro beat", "afro beats", "afrobeat", "afrobeats"].includes(normalized) ? "afrobeats" : normalized;
+          let label = key.split(" ").map(word => word.split("-").map(part => part.charAt(0).toUpperCase() + part.slice(1)).join("-")).join(" ");
+          label = label.replace(/\bDj\b/g, "DJ").replace(/\bR&b\b/gi, "R&B").replace(/\bHalo\b/g, "HALO");
+          if (key === "afrobeats") label = "Afrobeats";
+          if (key === "r&b soul") label = "R&B / Soul";
+          if (!releaseGenres.has(key)) releaseGenres.set(key, label);
+        }
+      }
+      for (const [key, label] of releaseGenres) {
+        const category = categories.get(key) || { label, count: 0 };
+        category.count += 1;
+        categories.set(key, category);
+      }
+    }
+    return [...categories].sort((a, b) => b[1].count - a[1].count || a[1].label.localeCompare(b[1].label));
+  }
+
   function renderGenres() {
-    const genres = [...new Set(state.releases.flatMap(release => release.genres.map(genre => genre.trim()).filter(Boolean)))].sort();
-    elements.genres.innerHTML = ["All", ...genres].map(label => {
-      const value = label.toLowerCase();
-      return `<button type="button" data-genre="${escapeHtml(value)}" aria-pressed="${state.genre === value}">${escapeHtml(label)}</button>`;
-    }).join("");
+    const genres = catalogGenreEntries(state.releases);
+    const uncategorizedCount = state.releases.filter(release => !catalogGenreEntries([release]).length).length;
+    elements.allGenres.textContent = `All releases (${state.releases.length})`;
+    elements.allGenres.setAttribute("aria-pressed", String(state.genre === "all"));
+    elements.genres.innerHTML = [
+      ...genres.map(([value, genre]) => `<button type="button" data-genre="${escapeHtml(value)}" aria-pressed="${state.genre === value}">${escapeHtml(genre.label)} (${genre.count})</button>`),
+      ...(uncategorizedCount ? [`<button type="button" data-genre="__uncategorized__" aria-pressed="${state.genre === "__uncategorized__"}">Genre not supplied (${uncategorizedCount})</button>`] : [])
+    ].join("");
+    const activeGenre = genres.find(([value]) => value === state.genre);
+    elements.genreSummary.textContent = `Genres (${genres.length + (uncategorizedCount ? 1 : 0)})${activeGenre ? ` · ${activeGenre[1].label}` : state.genre === "__uncategorized__" ? " · Genre not supplied" : ""}`;
   }
 
   function renderGrid() {
-    const releases = filteredReleases();
+    const releases = state.genre === "__uncategorized__"
+      ? filteredReleases().filter(release => !catalogGenreEntries([release]).length)
+      : filteredReleases();
     elements.count.textContent = `${state.releases.length} ${state.releases.length === 1 ? "release" : "releases"} · one link`;
     if (elements.results) elements.results.textContent = `Showing ${releases.length} of ${state.releases.length} releases`;
     if (elements.reset) elements.reset.hidden = !state.query && state.genre === "all";
@@ -1249,6 +1294,11 @@
   elements.search.addEventListener("input", event => { state.query = event.target.value.trim(); renderGrid(); });
   elements.reset?.addEventListener("click", resetCatalogFilters);
   elements.sort?.addEventListener("change", event => { state.sort = event.target.value; renderGrid(); });
+  elements.allGenres.addEventListener("click", () => {
+    state.genre = "all";
+    renderGenres();
+    renderGrid();
+  });
   elements.genres.addEventListener("click", event => {
     const button = event.target.closest("[data-genre]");
     if (!button) return;

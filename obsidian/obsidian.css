@@ -34,4 +34,23 @@
 .transparency{margin-top:24px;padding:18px;border:1px solid var(--line)}
 .lyrics summary,.transparency summary{cursor:pointer;color:var(--gold);font-weight:600}
 summary:focus-visible,.vault-filters button:focus-visible{outline:2px solid white;outline-offset:4px}
+.playlist-add,.create-playlist{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-top:16px}
+.playlist-add label{color:var(--muted);font-size:.85rem}
+.playlist-add select,.create-playlist input{min-width:0;padding:10px 12px;border:1px solid var(--line);border-radius:6px;background:#11100e;color:var(--ink);font:inherit}
+.playlist-add button,.create-playlist button,.user-playlist button{padding:9px 12px;border:1px solid var(--line);border-radius:6px;background:#1a1814;color:var(--ink)}
+.playlist-add button:hover:not(:disabled),.create-playlist button:hover,.user-playlist button:hover:not(:disabled){border-color:var(--gold)}
+.playlist-add select{flex:1}
+.fan-playlists{margin-top:42px}
+.fan-playlists>p[role=status]{min-height:1.5em;color:var(--muted);font-size:.85rem}
+.create-playlist input{flex:1}
+.user-playlists{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr));gap:16px}
+.user-playlist{padding:18px;border:1px solid var(--line);border-radius:12px;background:var(--panel)}
+.user-playlist h3{margin:0;color:var(--gold);overflow-wrap:anywhere}
+.user-playlist>p{margin:6px 0 14px;color:var(--muted);font-size:.8rem}
+.user-playlist-actions{display:flex;gap:8px;flex-wrap:wrap}
+.user-playlist ol{list-style:none;padding:0;margin:14px 0 0}
+.user-playlist li{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:10px 0;border-top:1px solid var(--line);font-size:.83rem}
+.user-playlist li span{overflow-wrap:anywhere}
+.user-playlist li button{flex:none;padding:5px 8px;font-size:.75rem}
+.visually-hidden{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
 @media(prefers-reduced-motion:reduce){#tracks .track{transition:none}#tracks .track:hover{transform:none}#tracks .track.active-playing{animation:none;box-shadow:0 0 8px #8b000033}}

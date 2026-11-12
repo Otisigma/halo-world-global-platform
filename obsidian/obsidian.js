@@ -1,5 +1,7 @@
 import { parseTimestampedLyrics, findActiveLyricIndex } from "../lib/dreamweaver-lyrics.js";
 
+const PLAYLIST_STORAGE_KEY = "halo_obsidian_playlists_v1";
+
 export function eligibleReleases(data) {
   if (!Array.isArray(data?.releases)) throw new Error("The catalog response is invalid.");
   return data.releases.filter(release => release && typeof release.id === "string" && release.id.trim()
@@ -43,16 +45,138 @@ export function createGateway({ document, window, fetcher }) {
   const audio = get("audio"), status = get("status"), tracks = get("tracks");
   const previous = get("previous"), next = get("next"), retry = get("retry"), share = get("share"), loop = get("loop");
   const destination = get("destination"), releaseLink = get("releaseLink"), art = get("artwork");
-  const state = { releases: [], index: -1, generation: 0, filter: "all" };
+  const state = { releases: [], index: -1, generation: 0, filter: "all", playlists: [], queue: null };
   const quickFilters = get("quickFilters"), genreFilters = get("genreFilters"), versionFilters = get("versionFilters"), gridStatus = get("gridStatus");
   let cardNodes = [], isPlaying = false;
   const loadNote = get("loadNote"), continueNext = get("continueNext"), shareMoment = get("shareMoment");
+  const playlistForm = get("createPlaylistForm"), playlistName = get("newPlaylistName");
+  const playlistStatus = get("playlistStatus"), userPlaylists = get("userPlaylists");
+  const addToPlaylist = get("addToPlaylist"), addToPlaylistButton = get("addToPlaylistButton");
   let pendingStart = 0, warmed = "", warmer = null;
   const loadNoteText = loadNote.textContent;
   let lyrics = [], lyricNodes = [], activeLyric = -1;
   const telemetry = window.HaloListeningTelemetry?.bindAudio(audio, () => state.releases[state.index]?.id);
   const selected = () => state.releases[state.index];
   const setStatus = value => { status.textContent = value; };
+  let playlistStorage;
+  try {
+    playlistStorage = window.localStorage;
+    const saved = playlistStorage.getItem(PLAYLIST_STORAGE_KEY);
+    if (saved !== null) {
+      const parsed = JSON.parse(saved);
+      if (!Array.isArray(parsed) || parsed.some(item => !item || typeof item.id !== "string"
+        || typeof item.name !== "string" || !Array.isArray(item.releaseIds)
+        || item.releaseIds.some(id => typeof id !== "string"))) {
+        throw new Error("Saved playlist data has an invalid format.");
+      }
+      state.playlists = parsed;
+    }
+  } catch (error) {
+    playlistStorage = null;
+    console.error("Obsidian playlists unavailable", error);
+    playlistStatus.textContent = "Saved playlists could not be accessed in this browser. Catalog playback is still available.";
+  }
+  const persistPlaylists = playlists => {
+    try {
+      playlistStorage.setItem(PLAYLIST_STORAGE_KEY, JSON.stringify(playlists));
+      state.playlists = playlists;
+      if (state.queue) {
+        const updatedQueue = playlists.find(playlist => playlist.id === state.queue.playlistId);
+        state.queue = updatedQueue ? { playlistId: updatedQueue.id, releaseIds: updatedQueue.releaseIds } : null;
+      }
+      renderPlaylists();
+      return true;
+    } catch (error) {
+      console.error("Obsidian playlist save failed", error);
+      playlistStatus.textContent = "Could not save your playlist in this browser. Check available storage and try again.";
+      return false;
+    }
+  };
+  const playlistReleases = playlist => playlist.releaseIds
+    .map(id => state.releases.find(release => release.id === id)).filter(Boolean);
+
+  function renderPlaylists() {
+    addToPlaylist.replaceChildren();
+    const emptyOption = document.createElement("option");
+    emptyOption.value = "";
+    emptyOption.textContent = state.playlists.length ? "Choose a playlist" : "Create a playlist first";
+    addToPlaylist.append(emptyOption);
+    for (const playlist of state.playlists) {
+      const option = document.createElement("option");
+      option.value = playlist.id;
+      option.textContent = playlist.name;
+      addToPlaylist.append(option);
+    }
+    addToPlaylist.disabled = !playlistStorage || !state.playlists.length || !selected();
+    addToPlaylistButton.disabled = addToPlaylist.disabled;
+    playlistForm.querySelector('button[type="submit"]').disabled = !playlistStorage;
+    userPlaylists.replaceChildren(...state.playlists.map(playlist => {
+      const section = document.createElement("section");
+      section.className = "user-playlist";
+      section.dataset.playlistId = playlist.id;
+      const heading = document.createElement("h3");
+      heading.textContent = playlist.name;
+      const releases = playlistReleases(playlist);
+      const count = document.createElement("p");
+      count.textContent = `${releases.length} ${releases.length === 1 ? "release" : "releases"}`;
+      const actions = document.createElement("div");
+      actions.className = "user-playlist-actions";
+      const queue = document.createElement("button");
+      queue.type = "button";
+      queue.textContent = "Queue mix";
+      queue.disabled = !releases.length;
+      queue.addEventListener("click", () => startPlaylist(playlist.id));
+      const removePlaylist = document.createElement("button");
+      removePlaylist.type = "button";
+      removePlaylist.textContent = "Delete playlist";
+      removePlaylist.addEventListener("click", () => {
+        if (persistPlaylists(state.playlists.filter(item => item.id !== playlist.id))) {
+          playlistStatus.textContent = `Deleted “${playlist.name}”.`;
+        }
+      });
+      actions.append(queue, removePlaylist);
+      const list = document.createElement("ol");
+      for (const release of releases) {
+        const item = document.createElement("li");
+        const title = document.createElement("span");
+        title.textContent = `${release.title || "Untitled release"} · ${release.artist || "Artist"}`;
+        const remove = document.createElement("button");
+        remove.type = "button";
+        remove.textContent = "Remove";
+        remove.setAttribute("aria-label", `Remove ${release.title || "release"} from ${playlist.name}`);
+        remove.addEventListener("click", () => {
+          const updated = state.playlists.map(entry => entry.id === playlist.id
+            ? { ...entry, releaseIds: entry.releaseIds.filter(id => id !== release.id) } : entry);
+          if (persistPlaylists(updated)) playlistStatus.textContent = `Removed “${release.title || "release"}”.`;
+        });
+        item.append(title, remove);
+        list.append(item);
+      }
+      section.append(heading, count, actions, list);
+      return section;
+    }));
+    addToPlaylist.value = "";
+    if (selected()) {
+      previous.disabled = state.queue ? !nextPlayableIndex(-1) : state.releases.length < 2;
+      next.disabled = state.queue ? !nextPlayableIndex() : state.releases.length < 2;
+    }
+  }
+
+  function startPlaylist(id) {
+    const playlist = state.playlists.find(item => item.id === id);
+    if (!playlist) return;
+    const indices = playlist.releaseIds.map(releaseId => state.releases.findIndex(release => release.id === releaseId))
+      .filter(index => index >= 0);
+    const firstPlayable = indices.find(index => playable(state.releases[index]));
+    if (firstPlayable === undefined) {
+      playlistStatus.textContent = "This playlist has no releases with in-page audio available.";
+      return;
+    }
+    state.queue = { playlistId: id, releaseIds: playlist.releaseIds };
+    select(firstPlayable, 0, { preserveQueue: true });
+    playlistStatus.textContent = `“${playlist.name}” is queued. Press play in the audio player to start.`;
+  }
+
   const setPlaying = value => {
     isPlaying = value;
     get("pulse").classList.toggle("playing", value);
@@ -210,9 +334,14 @@ export function createGateway({ document, window, fetcher }) {
     return value !== null && value !== "" && Number.isFinite(seconds) && seconds > 0 && seconds < 86_400 ? Math.floor(seconds) : 0;
   }
 
-  function nextPlayableIndex() {
-    for (let step = 1; step < state.releases.length; step += 1) {
-      const candidate = (state.index + step) % state.releases.length;
+  function nextPlayableIndex(direction = 1) {
+    const queue = state.queue?.releaseIds || state.releases.map(release => release.id);
+    const current = queue.indexOf(state.releases[state.index]?.id);
+    if (current < 0 || !queue.length) return null;
+    for (let step = 1; step < queue.length; step += 1) {
+      const candidateId = queue[(current + direction * step + queue.length * step) % queue.length];
+      const candidate = state.releases.findIndex(release => release.id === candidateId);
+      if (candidate < 0) continue;
       const resolved = window.HaloReleaseArtwork.resolvePreviewAudio(state.releases[candidate]);
       if (resolved.isPlayable && safeDestination(resolved.src, window.location.origin)) return { candidate, src: resolved.src };
     }
@@ -238,8 +367,9 @@ export function createGateway({ document, window, fetcher }) {
 
   const clock = seconds => `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
 
-  function select(index, startAt = 0) {
+  function select(index, startAt = 0, { preserveQueue = false } = {}) {
     if (!state.releases[index]) return;
+    if (!preserveQueue) state.queue = null;
     telemetry?.reset();
     audio.pause();
     audio.removeAttribute("src");
@@ -260,7 +390,8 @@ export function createGateway({ document, window, fetcher }) {
     get("selectedTitle").textContent = release.title || "Untitled release";
     get("artist").textContent = release.artist || "Artist";
     get("position").textContent = `${index + 1} / ${state.releases.length}`;
-    previous.disabled = next.disabled = state.releases.length < 2;
+    previous.disabled = state.queue ? !nextPlayableIndex(-1) : state.releases.length < 2;
+    next.disabled = state.queue ? !nextPlayableIndex() : state.releases.length < 2;
     share.disabled = shareMoment.disabled = false;
     releaseLink.href = `/music/?song=${encodeURIComponent(release.id)}`;
     releaseLink.textContent = "Explore this release ↗";
@@ -279,6 +410,7 @@ export function createGateway({ document, window, fetcher }) {
       setStatus("In-page audio is unavailable for this release. Explore its approved links.");
     }
     renderTracks();
+    renderPlaylists();
     const url = new URL(window.location.href);
     url.searchParams.set("song", release.id);
     url.searchParams.delete("t");
@@ -296,6 +428,7 @@ export function createGateway({ document, window, fetcher }) {
     setPlaying(false);
     state.releases = [];
     state.filter = "all";
+    state.queue = null;
     quickFilters.replaceChildren();
     genreFilters.replaceChildren();
     versionFilters.replaceChildren();
@@ -328,6 +461,7 @@ export function createGateway({ document, window, fetcher }) {
       if (ticket !== state.generation) return;
       state.releases = releases;
       renderFilters();
+      renderPlaylists();
       get("count").textContent = `${releases.length} public ${releases.length === 1 ? "release" : "releases"}`;
       if (!releases.length) {
         get("selectedTitle").textContent = "No public releases yet";
@@ -353,8 +487,48 @@ export function createGateway({ document, window, fetcher }) {
     }
   }
 
-  previous.addEventListener("click", () => select((state.index - 1 + state.releases.length) % state.releases.length));
-  next.addEventListener("click", () => select((state.index + 1) % state.releases.length));
+  previous.addEventListener("click", () => {
+    const queued = state.queue && nextPlayableIndex(-1);
+    if (state.queue && !queued) return;
+    select(queued ? queued.candidate : (state.index - 1 + state.releases.length) % state.releases.length, 0, { preserveQueue: Boolean(queued) });
+  });
+  next.addEventListener("click", () => {
+    const queued = state.queue && nextPlayableIndex();
+    if (state.queue && !queued) return;
+    select(queued ? queued.candidate : (state.index + 1) % state.releases.length, 0, { preserveQueue: Boolean(queued) });
+  });
+  playlistForm.addEventListener("submit", event => {
+    event.preventDefault();
+    const name = playlistName.value.trim();
+    if (!name) {
+      playlistStatus.textContent = "Enter a playlist name.";
+      return;
+    }
+    if (state.playlists.some(playlist => playlist.name.toLowerCase() === name.toLowerCase())) {
+      playlistStatus.textContent = "A playlist with that name already exists.";
+      return;
+    }
+    const id = window.crypto?.randomUUID?.() || `playlist-${Date.now()}-${state.playlists.length}`;
+    if (persistPlaylists([...state.playlists, { id, name, releaseIds: [] }])) {
+      playlistName.value = "";
+      playlistStatus.textContent = `Created “${name}”.`;
+    }
+  });
+  addToPlaylistButton.addEventListener("click", () => {
+    const release = selected();
+    const playlist = state.playlists.find(item => item.id === addToPlaylist.value);
+    if (!release || !playlist) {
+      playlistStatus.textContent = "Choose a playlist and release first.";
+      return;
+    }
+    if (playlist.releaseIds.includes(release.id)) {
+      playlistStatus.textContent = "That release is already in this playlist.";
+      return;
+    }
+    const updated = state.playlists.map(item => item.id === playlist.id
+      ? { ...item, releaseIds: [...item.releaseIds, release.id] } : item);
+    if (persistPlaylists(updated)) playlistStatus.textContent = `Added “${release.title || "release"}” to “${playlist.name}”.`;
+  });
   loop.addEventListener("change", () => { audio.loop = loop.checked; });
   share.addEventListener("click", async () => {
     if (!selected()) return;
@@ -390,7 +564,7 @@ export function createGateway({ document, window, fetcher }) {
     if (!continueNext.checked || audio.loop || state.releases.length < 2) return;
     const upcoming = nextPlayableIndex();
     if (!upcoming) return;
-    select(upcoming.candidate);
+    select(upcoming.candidate, 0, { preserveQueue: Boolean(state.queue) });
     Promise.resolve(audio.play()).catch(() => setStatus("Next release is ready. Press play to continue."));
   });
   audio.addEventListener("playing", () => { loadNote.hidden = true; setPlaying(true); setStatus("Playing."); });

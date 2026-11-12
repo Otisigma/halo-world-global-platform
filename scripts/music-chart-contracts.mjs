@@ -116,6 +116,8 @@ assert.match(styles, /\.chart-play/, "chart rows must style their delegated play
 for (const page of ["music/index.html", "music-upload/index.html"]) {
   const html = await readFile(resolve(root, page), "utf8");
   assert.match(html, /id="chartCoverage" role="status"/, `${page} must show Living Chart coverage`);
+  assert.match(html, /data-chart-sort="discovery"/, `${page} must expose deeper catalog discovery`);
+  assert.match(html, /up to 20/, `${page} must explain the chart capacity`);
   assert.match(html, /<details class="catalog-genre-disclosure" id="catalogGenreDisclosure">/, `${page} must provide the shared catalog's collapsible genre panel`);
   const requiredElements = ["allReleasesFilter", "catalogGenreSummary", "genreFilter"];
   for (const id of requiredElements) {
@@ -207,6 +209,39 @@ assert.doesNotMatch(client, /GOOGLE_DRIVE_MASTERS_FOLDER_ID/, "the public chart 
   assert.equal(context.filteredReleases().length, 2, "collection metadata must be searchable");
   context.state.genre = "jazz";
   assert.equal(context.filteredReleases().length, 0, "search must respect the genre filter");
+  {
+    const savedReleases = context.state.releases;
+    const candidates = Array.from({ length: 25 }, (_, index) => ({
+      ...release, id: `chart-${index}`, releaseDate: `2026-10-${String(index + 1).padStart(2, "0")}`,
+      chartActivity: { recentListens: index + 1, recentOpens: 0, previousListens: 0, previousOpens: 0 }
+    }));
+    context.state.releases = candidates;
+    for (const sort of ["signal", "listens", "opens", "newest"]) {
+      context.state.chartSort = sort;
+      assert.equal(context.rankedReleases().length, 20, `${sort} must show up to 20 releases, not 10`);
+      assert.equal(context.chartCoverage().shown, 20);
+    }
+    context.state.chartSort = "signal";
+    assert.equal(context.rankedReleases()[0].id, "chart-24", "ranking still orders by real activity");
+    const inactive = { ...release, id: "inactive", releaseDate: "2026-11-11", chartActivity: undefined };
+    context.state.releases = [candidates[0], inactive,
+      { ...inactive, id: "excluded", isChartEligible: false },
+      { ...inactive, id: "hidden", isLiveVisible: false }];
+    assert.deepEqual(Array.from(context.rankedReleases(), item => item.id), ["chart-0"], "activity charts must not invent scores to pad a Top 20");
+    context.state.chartSort = "discovery";
+    assert.deepEqual(Array.from(context.rankedReleases(), item => item.id), ["inactive", "chart-0"], "discovery includes unmeasured eligible songs, newest first, but not hidden or excluded releases");
+    assert.equal(context.chartCoverage().shown, 2);
+    assert.match(context.chartCoverageText(context.chartCoverage()), /Discovery order is not a chart rank/);
+    context.releaseMatchesRoom = candidate => candidate.id === "inactive";
+    assert.deepEqual(Array.from(context.rankedReleases(), item => item.id), ["inactive"], "discovery still respects the selected genre room");
+    assert.equal(context.chartCoverage().shown, 1);
+    context.releaseMatchesRoom = () => true;
+    context.state.releases = candidates.map(candidate => ({ ...candidate, chartActivity: undefined }));
+    assert.equal(context.rankedReleases().length, 20, "discovery also caps at 20");
+    assert.equal(context.chartCoverage().shown, 20);
+    context.state.releases = savedReleases;
+    context.state.chartSort = "signal";
+  }
 
   const node = () => ({ innerHTML: "", textContent: "", hidden: false });
   Object.assign(context, {

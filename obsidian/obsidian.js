@@ -119,7 +119,7 @@ export function createGateway({ document, window, fetcher }) {
       actions.className = "user-playlist-actions";
       const queue = document.createElement("button");
       queue.type = "button";
-      queue.textContent = "Queue mix";
+      queue.textContent = "Play mix";
       queue.disabled = !releases.length;
       queue.addEventListener("click", () => startPlaylist(playlist.id));
       const removePlaylist = document.createElement("button");
@@ -159,7 +159,7 @@ export function createGateway({ document, window, fetcher }) {
     }
   }
 
-  function startPlaylist(id) {
+  async function startPlaylist(id) {
     const playlist = state.playlists.find(item => item.id === id);
     if (!playlist) return;
     const indices = playlist.releaseIds.map(releaseId => state.releases.findIndex(release => release.id === releaseId))
@@ -169,11 +169,24 @@ export function createGateway({ document, window, fetcher }) {
       reportPlaylist("This playlist has no releases with in-page audio available.");
       return;
     }
-    state.queue = { playlistId: id, releaseIds: playlist.releaseIds };
+    const queue = { playlistId: id, releaseIds: playlist.releaseIds };
+    state.queue = queue;
     select(firstPlayable, 0, { preserveQueue: true });
-    reportPlaylist(`“${playlist.name}” is queued. Press play in the audio player to start.`);
+    reportPlaylist(`Starting “${playlist.name}”…`);
     audio.scrollIntoView({ block: "center", behavior: "instant" });
     audio.focus({ preventScroll: true });
+    try {
+      await audio.play();
+      if (state.queue === queue && state.index === firstPlayable) {
+        reportPlaylist(`“${playlist.name}” is playing. Use the player controls to pause or skip.`);
+      }
+    } catch (error) {
+      if (state.queue === queue && state.index === firstPlayable) {
+        console.error("Obsidian playlist playback could not start", error);
+        reportPlaylist(`“${playlist.name}” is queued, but playback could not start. Press play in the audio player or try another release.`);
+        setStatus("Audio could not start. Press play to retry or explore the release link.");
+      }
+    }
   }
 
   const setPlaying = value => {

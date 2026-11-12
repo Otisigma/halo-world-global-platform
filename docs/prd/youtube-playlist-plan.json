@@ -1,0 +1,75 @@
+{
+  "channel": "https://www.youtube.com/@halo-music-world",
+  "playlists": [
+    {
+      "title": "HALO House Shorts",
+      "description": "High-energy club edits and short rhythmic highlights from the HALO catalog.",
+      "visibility": "public",
+      "entries": [
+        {
+          "videoId": "2Iwvxd-4UFQ",
+          "track": "Beautiful Liar",
+          "format": "Short",
+          "durationSeconds": 11,
+          "evidence": "Exact title match in the video list supplied by the channel owner.",
+          "review": "Confirm publication status and playlist suitability in YouTube Studio."
+        },
+        {
+          "videoId": "psfXTk_wCqY",
+          "track": "Reciprocity",
+          "format": "Short",
+          "durationSeconds": 42,
+          "evidence": "Exact title match in the video list supplied by the channel owner.",
+          "review": "Confirm publication status and playlist suitability in YouTube Studio."
+        }
+      ]
+    },
+    {
+      "title": "HALO Obsidian Reels",
+      "description": "Dark, atmospheric short-form moments from the HALO catalog.",
+      "visibility": "public",
+      "entries": [
+        {
+          "videoId": "16c4GBQbf4Q",
+          "track": "Read The Room",
+          "format": "Short",
+          "durationSeconds": 33,
+          "evidence": "Exact title match in the video list supplied by the channel owner.",
+          "review": "Confirm publication status and playlist suitability in YouTube Studio."
+        }
+      ]
+    }
+  ],
+  "relatedFullLengthVideos": [
+    {
+      "videoId": "1af8b5Gc0Gs",
+      "track": "Black Book",
+      "durationSeconds": 271,
+      "note": "Full-length source; not placed in a Shorts/Reels playlist."
+    },
+    {
+      "videoId": "MQKrgCm7uEE",
+      "track": "Quiet Heart",
+      "durationSeconds": 277,
+      "note": "Full-length source; no matching Quiet Heart Short was identified in the supplied list."
+    },
+    {
+      "videoId": "o2KVzh2Zuao",
+      "track": "Read The Room (Official Club Mix)",
+      "durationSeconds": 339,
+      "note": "Full-length source; related to the Read The Room Short above."
+    },
+    {
+      "videoId": "HLAiSxG1Hq0",
+      "track": "Reciprocity (Building a Love, or Keeping Score)",
+      "durationSeconds": 304,
+      "note": "Full-length source; related to the Reciprocity Short above."
+    },
+    {
+      "videoId": "8aUuACm-5TQ",
+      "track": "Beautiful Liar",
+      "durationSeconds": 309,
+      "note": "Full-length source; related to the Beautiful Liar Short above."
+    }
+  ]
+}

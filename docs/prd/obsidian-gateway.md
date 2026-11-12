@@ -8,7 +8,8 @@ playing another release. The API returns at most 200 releases.
 
 The page reuses the site's release artwork/audio resolver, selects playable
 preview or stream URLs, and uses the browser's native audio controls. Previous,
-next and playlist selections do not autoplay. The opt-in loop repeats the
+next and release selections do not start playback automatically; the explicit
+Play mix action starts its selected audio. The opt-in loop repeats the
 selected audio file; it does not generate a short clip. Some Drive share links and
 external stream pages are not direct playable audio: the page offers the
 existing release/artist-approved link instead. Normal playback errors and
@@ -23,15 +24,15 @@ without implying synchronization. No lyric text or timestamps are invented.
 Listeners can create playlists in the Obsidian Gateway, add or remove public
 catalog releases, and queue a mix through the existing player. Playlist data
 contains release IDs only and is stored in the listener's browser local storage;
-it is not uploaded, synced, or shareable between devices. Queueing a mix selects
-its first playable release but does not autoplay. Next, previous, buffering, and
+it is not uploaded, synced, or shareable between devices. Play mix selects
+and starts its first playable release on the listener's click. Next, previous, buffering, and
 end-of-track continuation stay within the queued playlist.
 
 Playlist creation validates names inline, including an empty-name submit.
 The chosen playlist survives changing releases, and a newly created playlist
 is selected for adding songs. Action feedback appears beside the player and
-in the playlist section. Queue mix scrolls to and focuses the audio controls
-without starting playback. Room mix playlists on the main page are a separate
+in the playlist section. Play mix scrolls to and focuses the audio controls,
+and reports playback failures so the listener can retry. Room mix playlists on the main page are a separate
 authenticated service; their buttons show saving, success, or error feedback
 beside each mix and ignore duplicate clicks while a save is pending.
 

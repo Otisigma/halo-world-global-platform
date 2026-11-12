@@ -21,6 +21,8 @@
     toast: document.querySelector("#catalogToast"),
   };
   const state = { releases: [], videos: [], query: "", genre: "all", sort: "newest", chartRoom: "all", chartSort: "signal", activeReleaseId: "", activeShopId: "" };
+  const playlistRoot = document.querySelector("#personalPlaylistHub");
+  let playlistStudio;
   const configuredFeaturedReleaseId = elements.featured?.dataset.featuredReleaseId?.trim() || "";
   const requestedReleaseId = new URLSearchParams(window.location.search).get("song")?.trim() || "";
   const fallbackArtwork = window.HaloReleaseArtwork?.DEFAULT_RELEASE_ARTWORK || "/assets/releases/halo-premium-placeholder.svg";
@@ -1021,6 +1023,7 @@
     return `<div class="release-actions">
       ${featuredBadge(release)}
       ${playTrackButton(release)}
+      <button class="action playlist-plus" type="button" data-add-playlist="${escapeHtml(release.id)}" aria-label="Add ${escapeHtml(release.title || "song")} to playlist" title="Add to playlist"><span aria-hidden="true">+</span></button>
       ${window.HaloDistributionLinks?.action(release) || ""}
       ${listenAction}
       ${buyAction}
@@ -1190,6 +1193,7 @@
       renderChart();
       renderGenres();
       renderGrid();
+      playlistStudio?.render();
       fetch("/api/videos", { headers: { Accept: "application/json" } })
         .then(videoResponse => videoResponse.ok ? videoResponse.json() : { videos: [] })
         .then(videoData => {
@@ -1332,5 +1336,20 @@
     if (playButton) playChartVideo(playButton.dataset.playChartVideo);
     handleReleaseActionClick(event).catch(() => showToast("That song link could not be shared yet."));
   });
+  if (playlistRoot) {
+    import("./playlist-studio.js").then(({ createPlaylistStudio }) => {
+      playlistStudio = createPlaylistStudio({
+        document, window, root: playlistRoot, getReleases: () => state.releases, player, notify: showToast,
+        trackFor: release => ({
+          id: release.id, title: release.title, artist: release.artist,
+          src: trackStreamUrl(release), cover: releaseArtwork(release).src
+        })
+      });
+    }).catch(error => {
+      console.error("Playlist studio could not load", error);
+      playlistRoot.textContent = "Playlists could not be opened. Reload the page to try again.";
+      document.querySelectorAll("[data-add-playlist]").forEach(button => { button.disabled = true; });
+    });
+  }
   loadCatalog();
 })();

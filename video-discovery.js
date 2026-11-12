@@ -149,6 +149,7 @@ class HaloVideoDiscovery extends HTMLElement {
       this.querySelector("[data-queue-status]").textContent = "Playlist continuation stopped. The current song remains under your player controls.";
     }, { signal });
     window.addEventListener("halo:chart-queue-start", () => this.stopQueue(), { signal });
+    window.addEventListener("halo:personal-queue-start", () => this.stopQueue(), { signal });
     document.addEventListener("click", event => {
       if (!this.contains(event.target) && event.target.closest("[data-play-track-id]")) this.stopQueue();
     }, { signal });

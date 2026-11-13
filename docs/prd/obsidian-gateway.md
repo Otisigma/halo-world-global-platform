@@ -6,6 +6,22 @@ selects a matching public release, allowing the owner to share a direct link.
 An unknown or no-longer-public ID is reported as unavailable instead of silently
 playing another release. The API returns at most 200 releases.
 
+Shared gateway links have OpenGraph and Twitter card metadata. A Netlify edge
+function uses the same public catalog and visibility rules to supply a release
+title, artist, and, when available, a direct HTTPS JPEG or PNG cover, with a
+branded 1200×630 PNG fallback. Unknown releases or catalog failures use the
+generic card; catalog errors are logged. The HTML and player are the same for
+visitors and scrapers. Only `song` and a valid `t` moment are included in the
+canonical share URL. Cards are static: external services control their previews,
+supported image formats, cropping, and cache refresh. Existing shortened links
+and their previews are controlled by their redirect and social provider.
+
+The gateway has a CSS-only entrance and ambient glow that respect reduced-motion
+preferences; these are decorative, not Dreamweaver-generated or audio-reactive.
+The link does not start audio, change volume, or force preloading. Playback
+remains under the listener's control, and the page remains usable without the
+edge function through its default metadata.
+
 The page reuses the site's release artwork/audio resolver, selects playable
 preview or stream URLs, and uses the browser's native audio controls. Previous,
 next and release selections do not start playback automatically; the explicit

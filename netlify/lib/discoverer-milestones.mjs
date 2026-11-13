@@ -1,5 +1,6 @@
 import { isValidReleaseId } from "./catalog-chart.mjs";
 import { safeTrackDropText } from "./track-drops.mjs";
+import { membershipAnniversary } from "./concierge-celebrations.mjs";
 
 const LIMIT = 20;
 const json = (body, status = 200) => Response.json(body, {
@@ -50,7 +51,7 @@ export async function loadDiscovererState(db, memberId) {
   };
 }
 
-export function createDiscovererHandler({ getDatabase, getUser, verifyRequestOrigin, ensureMembership }) {
+export function createDiscovererHandler({ getDatabase, getUser, verifyRequestOrigin, ensureMembership, now = () => new Date() }) {
   return async request => {
     if (!["GET", "POST"].includes(request.method)) return json({ message: "Method not allowed" }, 405);
     try {
@@ -77,7 +78,8 @@ export function createDiscovererHandler({ getDatabase, getUser, verifyRequestOri
       }
       const db = await getDatabase();
       // Use the authenticated identity, never a caller-supplied recipient/member.
-      const { member_id: memberId } = await ensureMembership(db, user);
+      const { member_id: memberId, joined_at: joinedAt } = await ensureMembership(db, user);
+      const anniversary = membershipAnniversary(joinedAt, now());
       if (payload) {
         const allowed = await db.sql`
           INSERT INTO halo_discoverer_request_limits (member_id) VALUES (${memberId})
@@ -106,8 +108,9 @@ export function createDiscovererHandler({ getDatabase, getUser, verifyRequestOri
           WHERE release_id = ${payload.releaseId} AND member_id = ${memberId} AND notified_at IS NOT NULL AND seen_at IS NULL
         `;
       }
-      return json(await loadDiscovererState(db, memberId));
-    } catch {
+      return json({ ...(await loadDiscovererState(db, memberId)), anniversary });
+    } catch (error) {
+      console.error("HALO celebrations unavailable", error instanceof Error ? error.message : "unknown error");
       return json({ message: "Discoverer celebrations are temporarily unavailable. Please retry." }, 503);
     }
   };

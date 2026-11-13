@@ -3,7 +3,15 @@ import { readFile } from "node:fs/promises";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { createDiscovererHandler } from "../netlify/lib/discoverer-milestones.mjs";
-import { artistMilestoneCard, milestoneRequest } from "../discoverer-milestones.js";
+import { artistMilestoneCard, milestoneRequest, mountMilestones } from "../discoverer-milestones.js";
+import { membershipAnniversary } from "../netlify/lib/concierge-celebrations.mjs";
+
+assert.equal(membershipAnniversary("2020-11-13T10:00:00Z", new Date("2026-11-13T01:00:00Z")).years, 6);
+assert.equal(membershipAnniversary("2025-11-13T10:00:00Z", new Date("2026-11-12T23:59:59Z")), null);
+assert.equal(membershipAnniversary("2026-11-13T00:00:00Z", new Date("2026-11-13T12:00:00Z")), null);
+assert.equal(membershipAnniversary("2024-02-29T00:00:00Z", new Date("2025-02-28T15:00:00Z")).years, 1);
+assert.equal(membershipAnniversary("2024-02-29T00:00:00Z", new Date("2028-02-29T15:00:00Z")).years, 4);
+assert.throws(() => membershipAnniversary("invalid"), /invalid date/);
 
 const read = path => readFile(new URL(`../${path}`, import.meta.url), "utf8");
 const migration = await read("netlify/database/migrations/20261027060000_discoverer_milestones.sql");
@@ -35,7 +43,8 @@ const dependencies = {
   getDatabase: async () => db,
   getUser: async () => ({ id: "fan" }),
   verifyRequestOrigin: async () => true,
-  ensureMembership: async (_db, user) => ({ member_id: user.id })
+  ensureMembership: async (_db, user) => ({ member_id: user.id, joined_at: "2020-11-13T10:00:00Z" }),
+  now: () => new Date("2026-11-13T12:00:00Z")
 };
 const handler = createDiscovererHandler(dependencies);
 const request = (body, options = {}) => new Request("https://halo.test/api/discoverer-milestones", body === undefined
@@ -52,7 +61,8 @@ assert.equal((await handler(request({}, { body: "{" }))).status, 400);
 assert.equal((await handler(request({}, { headers: { "Content-Type": "text/plain" } }))).status, 415);
 queries = [];
 const state = await (await handler(request({ action: "seen", releaseId: "public-song", memberId: "victim" }))).json();
-assert.deepEqual(state, { enabled: false, notifications: [], milestones: [], thankYouDeliveryAvailable: false });
+assert.deepEqual(state, { enabled: false, notifications: [], milestones: [], thankYouDeliveryAvailable: false,
+  anniversary: { years: 6, message: "Happy HALO anniversary! Thank you for being part of our music community for 6 years." } });
 assert.ok(queries.every(query => !query.values.includes("victim")), "caller cannot select a recipient");
 assert.ok(queries.some(query => query.query.includes("COALESCE(seen_at, NOW())")), "read receipts are idempotent");
 limited = true;
@@ -70,6 +80,7 @@ delete globalThis.fetch;
 class Element {
   constructor(tag) { this.tag = tag; this.children = []; this.events = {}; this.disabled = false; this.checked = false; }
   append(...children) { this.children.push(...children); }
+  replaceChildren(...children) { this.children = children; }
   setAttribute() {}
   addEventListener(name, callback) { this.events[name] = callback; }
 }
@@ -97,6 +108,21 @@ assert.equal(elements.at(-1).textContent, "Draft copied. Nothing has been sent."
 rejectCopy = true;
 await buttons[0].events.click();
 assert.match(elements.at(-1).textContent, /Copy unavailable.*Nothing has been sent/);
+const events = {};
+globalThis.window = { addEventListener(name, callback) { events[name] = callback; } };
+globalThis.fetch = async () => Response.json({
+  enabled: false, notifications: [], milestones: [], anniversary: { message: "Happy HALO anniversary!" }
+});
+const panel = new Element("section");
+panel.dataset = { milestones: "fan" };
+mountMilestones(panel);
+await new Promise(resolve => setImmediate(resolve));
+assert.ok(flatten(panel).some(element => element.textContent === "Happy HALO anniversary!"), "private anniversary is rendered");
+events["halo-release-auth-changed"]({ detail: false });
+assert.ok(!flatten(panel).some(element => element.textContent === "Happy HALO anniversary!"), "sign-out removes the private anniversary");
+assert.ok(flatten(panel).some(element => element.textContent === "Sign in to view your milestones."));
+delete globalThis.fetch;
+delete globalThis.window;
 delete globalThis.document;
 
 const databaseUrl = process.env.DISCOVERER_TEST_DATABASE_URL;

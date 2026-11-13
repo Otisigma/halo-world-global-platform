@@ -55,3 +55,10 @@ summary:focus-visible,.vault-filters button:focus-visible{outline:2px solid whit
 .user-playlist li button{flex:none;padding:5px 8px;font-size:.75rem}
 .visually-hidden{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
 @media(prefers-reduced-motion:reduce){#tracks .track{transition:none}#tracks .track:hover{transform:none}#tracks .track.active-playing{animation:none;box-shadow:0 0 8px #8b000033}}
+
+.intro,.gateway{animation:portal-arrival .9s ease-out both}
+.gateway{position:relative;isolation:isolate}
+.gateway::before{content:"";position:absolute;inset:-1px;z-index:-1;background:radial-gradient(ellipse at 75% 35%,#d5b66c30,transparent 58%);animation:portal-glow 7s ease-in-out infinite alternate;pointer-events:none}
+@keyframes portal-arrival{from{transform:translateY(12px)}to{transform:translateY(0)}}
+@keyframes portal-glow{from{opacity:.35}to{opacity:1}}
+@media(prefers-reduced-motion:reduce){.intro,.gateway,.gateway::before{animation:none}}

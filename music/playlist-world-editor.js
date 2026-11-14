@@ -2,6 +2,19 @@ import { WORLD_PALETTES, playlistWorld, buildPlaylistJourney, playlistCover, pla
 import { publicPlaylistReleases } from "../lib/personal-playlists.js";
 import { createMixSeed } from "../lib/mix-intent.js";
 
+export function renderPlaylistCover(document, container, playlist) {
+  const world = playlistWorld(playlist.world);
+  const fallback = () => { container.innerHTML = playlistCover(playlist); };
+  container.className = "playlist-generated-cover";
+  if (!world.artworkUrl) { fallback(); return; }
+  const image = document.createElement("img");
+  image.alt = `${playlist.name || "Playlist"} cover artwork`;
+  image.referrerPolicy = "no-referrer";
+  image.addEventListener("error", () => { if (image.parentNode === container) fallback(); }, { once: true });
+  image.src = world.artworkUrl;
+  container.replaceChildren(image);
+}
+
 export function downloadPlaylist({ document, window, playlist, releases, format }) {
   const types = { svg: "image/svg+xml", json: "application/json", html: "text/html" };
   const blob = new window.Blob([playlistExport(playlist, releases, format, window.location.origin)], { type: types[format] });
@@ -19,9 +32,8 @@ export function mountPlaylistWorldEditor({ document, window, root, playlist, get
   summary.textContent = canEdit ? "Shape this world / Dreamweaver journey" : "Explore this listening world";
   details.append(summary);
   const cover = document.createElement("div");
-  cover.className = "playlist-generated-cover";
-  cover.innerHTML = playlistCover(playlist);
-  details.append(cover);
+  renderPlaylistCover(document, cover, playlist);
+  root.append(cover);
   const form = document.createElement("form");
   const field = (labelText, input) => {
     const label = document.createElement("label"); label.textContent = labelText; label.append(input); form.append(label); return input;
@@ -34,6 +46,11 @@ export function mountPlaylistWorldEditor({ document, window, root, playlist, get
     node.value = value; return field(label, node);
   };
   const palette = select("Original cover palette", Object.keys(WORLD_PALETTES).map(key => [key, key]), world.palette);
+  const artwork = document.createElement("input"); artwork.type = "text"; artwork.maxLength = 1200; artwork.value = world.artworkUrl;
+  field("Public HTTPS artwork URL (optional; shared with listening links)", artwork);
+  const artworkHelp = document.createElement("p");
+  artworkHelp.textContent = "Use a public image URL, including an already uploaded image. Image hosting and file uploads are not provided here. Leave blank for the original palette cover.";
+  form.append(artworkHelp);
   const dedication = document.createElement("textarea"); dedication.maxLength = 500; dedication.value = world.dedication;
   field("Dedication (shared only when you enable a listening link)", dedication);
   const request = document.createElement("textarea"); request.maxLength = 500; request.value = world.request;
@@ -66,13 +83,25 @@ export function mountPlaylistWorldEditor({ document, window, root, playlist, get
     fadeSeconds: Number(fade.value), normalize: normalize.checked
   });
   const value = () => playlistWorld({
-    palette: palette.value, dedication: dedication.value, request: request.value, preferences: preferences(),
+    palette: palette.value, artworkUrl: artwork.value.trim(), dedication: dedication.value, request: request.value, preferences: preferences(),
     chapters: chapters.value.split("\n").filter(line => line.trim()).map(line => {
       const [releaseId, label, energy] = line.split("|").map(part => part.trim());
       return { releaseId, label, energy: Number(energy) };
     })
   });
   const fail = error => { console.error("Playlist world", error); message.textContent = error.message; report(error.message); };
+  const saveCover = async () => {
+    palette.disabled = true; artwork.disabled = true;
+    try {
+      const next = value();
+      if (next.chapters.some(chapter => !playlist.releaseIds.includes(chapter.releaseId))) throw new Error("Chapter starts must be in this playlist.");
+      await save({ ...playlist, world: next });
+      renderPlaylistCover(document, cover, { ...playlist, world: next });
+    } catch (error) { fail(error); }
+    finally { palette.disabled = false; artwork.disabled = false; }
+  };
+  palette.addEventListener("change", saveCover);
+  artwork.addEventListener("change", saveCover);
   form.addEventListener("submit", async event => {
     event.preventDefault();
     try {

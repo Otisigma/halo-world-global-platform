@@ -183,6 +183,7 @@ class TestNode {
   closest(selector) { return this.matches(selector) ? this : this.parent?.closest(selector) || null; }
   focus() { this.document.activeElement = this; }
   get isConnected() { return this === this.document.body || Boolean(this.parent?.isConnected); }
+  get parentNode() { return this.parent || null; }
   get elements() { return Object.fromEntries(this.querySelectorAll("input, select").map(node => [node.name, node])); }
   reset() { for (const node of this.querySelectorAll("input, select")) node.value = ""; }
   showModal() { this.open = true; }
@@ -224,6 +225,30 @@ function studioFixture(storage = memory()) {
   });
   return { document, window, root, plus, storage, studio, played };
 }
+
+test("cover choices save locally and remain visible after reload; broken images show the palette", async () => {
+  const storage = memory();
+  writePlaylists(storage, [{ ...playlist, releaseIds: ["one"] }]);
+  const { root } = studioFixture(storage);
+  let world = root.querySelector(".playlist-world");
+  assert.ok(world.querySelector(".playlist-generated-cover").querySelector("svg"));
+  let editor = world.querySelector(".playlist-world-editor");
+  editor.querySelector("select").value = "midnight";
+  editor.querySelector("select").emit("change");
+  assert.equal(readPlaylists(storage)[0].world.palette, "midnight");
+  world = root.querySelector(".playlist-world");
+  editor = world.querySelector(".playlist-world-editor");
+  const artwork = editor.querySelector("input");
+  artwork.value = "https://cdn.example.com/cover.jpg";
+  artwork.emit("change");
+  assert.equal(readPlaylists(storage)[0].world.artworkUrl, "https://cdn.example.com/cover.jpg");
+  const reopened = studioFixture(storage).root.querySelector(".playlist-world");
+  const cover = reopened.querySelector(".playlist-generated-cover"), image = cover.querySelector("img");
+  assert.equal(image.src, "https://cdn.example.com/cover.jpg");
+  image.emit("error");
+  assert.ok(cover.querySelector("svg"), "a failed image uses the generated palette");
+  assert.equal(readPlaylists(storage)[0].world.artworkUrl, "https://cdn.example.com/cover.jpg");
+});
 
 test("song plus creates a named playlist, rejects duplicates and restores focus on close", () => {
   const fixture = studioFixture();

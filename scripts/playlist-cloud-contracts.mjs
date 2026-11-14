@@ -62,12 +62,16 @@ test("real PostgreSQL migration and handler enforce ownership, links, collaborat
       const response = await handler(new Request(`https://halo.test/api/playlists${query}`));
       return { status: response.status, body: await response.json() };
     };
-    const create = { action: "create", sourceId: "local-one", name: "Night drive", releaseIds: ["one", "two"], world: playlistWorld({ request: "My private inspiration" }) };
+    const create = { action: "create", sourceId: "local-one", name: "Night drive", releaseIds: ["one", "two"], world: playlistWorld({
+      request: "My private inspiration", palette: "midnight", artworkUrl: "https://cdn.example.com/cover.jpg"
+    }) };
     const created = await mutation(create), id = created.id;
     assert.equal(created.result, "saved");
     assert.equal((await mutation(create)).result, "exists", "an interrupted save can be retried without duplicates");
     let detail = (await get(`?id=${id}`)).body.playlist;
     assert.equal(detail.role, "owner");
+    assert.equal(detail.world.artworkUrl, "https://cdn.example.com/cover.jpg");
+    assert.equal(detail.world.palette, "midnight");
     actor = "stranger";
     assert.equal((await get(`?id=${id}`)).status, 404);
     assert.equal((await post({ action: "delete", id })).status, 404);
@@ -83,6 +87,7 @@ test("real PostgreSQL migration and handler enforce ownership, links, collaborat
     assert.ok(!("collaborators" in publicView.body.playlist));
     assert.ok(!("sourceId" in publicView.body.playlist));
     assert.equal(publicView.body.playlist.world.request, "", "private prompts are never published with listening links");
+    assert.equal(publicView.body.playlist.world.artworkUrl, "https://cdn.example.com/cover.jpg");
     assert.doesNotMatch(JSON.stringify(publicView.body), /owner_member_id|stream_url|email/);
     actor = "owner";
     await mutation({ action: "share", id, enabled: false });

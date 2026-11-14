@@ -1,0 +1,16 @@
+.halo-art-screen{position:relative;overflow:hidden}
+.halo-art-lyric{position:absolute;z-index:3;inset:auto 0 0;padding:2.5rem 1rem 1rem;background:linear-gradient(transparent,rgba(0,0,0,.92));color:#fff;font:italic 600 clamp(.9rem,2vw,1.35rem)/1.4 Georgia,serif;text-align:center;text-shadow:0 2px 6px #000;overflow-wrap:anywhere;pointer-events:none}
+.halo-art-lyric[hidden]{display:none}
+.halo-art-playing{outline:2px solid #d5b66c;outline-offset:-2px}
+.halo-art-control{position:absolute;z-index:4;right:12px;top:12px}
+.halo-art-control:empty{display:none}
+.halo-art-control button{border:1px solid #d5b66c;border-radius:50%;width:44px;height:44px;background:#111d;color:#f3eee1;cursor:pointer}
+.halo-art-control button:focus-visible{outline:2px solid #fff;outline-offset:3px}
+.halo-art-lyric:not([hidden]){animation:halo-art-arrival .45s ease-out}
+@keyframes halo-art-arrival{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+.playlist-art-button{width:56px;height:56px;flex:none;padding:0;border:1px solid #d5b66c;border-radius:8px;overflow:hidden;background:#151411}
+.playlist-art-button img{width:100%;height:100%;object-fit:cover}
+.user-playlist li .playlist-art-button{order:-1;padding:0}
+.playlist-art-button:focus-visible{outline:2px solid white;outline-offset:3px}
+.playlist-art-button.halo-art-playing{box-shadow:0 0 0 2px #d5b66c}
+@media(prefers-reduced-motion:reduce){.halo-art-lyric:not([hidden]){animation:none}}

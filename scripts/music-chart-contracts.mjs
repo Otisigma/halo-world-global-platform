@@ -259,6 +259,7 @@ assert.doesNotMatch(client, /GOOGLE_DRIVE_MASTERS_FOLDER_ID/, "the public chart 
     releaseStoryline: () => "",
     dossierItemMarkup: () => "",
     releaseActions: () => "",
+    playTrackButton: () => "",
     resetCatalogFilters() {}
   });
   vm.runInContext(client.match(/  function renderGrid\(\) \{[\s\S]*?\n  \}/)[0], context);

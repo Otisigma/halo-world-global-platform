@@ -285,8 +285,8 @@ test("playlist management persists rename, order, removals and deletion", () => 
   assert.equal(readPlaylists(storage)[0].name, "New journey");
   world = root.querySelector(".playlist-world");
   const second = world.querySelectorAll("li")[1];
-  second.querySelector("button").focus();
-  second.querySelector("button").emit("click");
+  second.querySelectorAll("button")[1].focus();
+  second.querySelectorAll("button")[1].emit("click");
   assert.deepEqual(readPlaylists(storage)[0].releaseIds, ["two", "one", "hidden"]);
   assert.ok(document.activeElement.isConnected, "reordering retains a connected keyboard focus target");
   world = root.querySelector(".playlist-world");

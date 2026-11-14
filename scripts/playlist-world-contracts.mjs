@@ -3,6 +3,7 @@ import { test } from "node:test";
 import { playlistWorld, buildPlaylistJourney, contentAllowed, playlistCover, playlistExport } from "../lib/playlist-world.js";
 import { createPlaylistMixer, tempoRate, equalPowerCurve, reductionGain } from "../music/playlist-mixer.js";
 import { createPlaylistClient } from "../music/playlist-cloud.js";
+import { createPlaylistsHandler, playlistMutation } from "../netlify/lib/playlists.mjs";
 
 const releases = [
   { id: "warm", status: "published", title: "Warm", artist: "A", genres: ["deep house", "warm"], bpm: 120, contentRating: "clean" },
@@ -10,6 +11,41 @@ const releases = [
   { id: "unknown", status: "published", title: "Unknown", artist: "C", genres: [] },
   { id: "private", status: "published", isLiveVisible: false, title: "Hidden", genres: ["deep house"] }
 ];
+
+test("cover metadata validates on account mutations and round-trips through the authenticated handler", async () => {
+  const world = { palette: "midnight", artworkUrl: "https://cdn.example.com/art.jpg" };
+  const input = { action: "create", sourceId: "local-one", name: "Journey", releaseIds: [], world };
+  assert.equal(playlistMutation(input).world.artworkUrl, world.artworkUrl);
+  for (const invalid of ["javascript:alert(1)", "//evil.test/art.jpg", "https://user:pass@example.com/a",
+    "https://localhost/a", "/assets/../private", "https://example.com/\nheader", "x".repeat(1201)]) {
+    assert.throws(() => playlistMutation({ ...input, world: { ...world, artworkUrl: invalid } }));
+  }
+  assert.equal(playlistWorld({}).artworkUrl, "");
+  assert.equal(playlistWorld({ artworkUrl: "/assets/cover.jpg" }).artworkUrl, "/assets/cover.jpg");
+  let stored;
+  const id = "00000000-0000-4000-8000-000000000001";
+  const db = { sql: async (parts, ...values) => {
+    const query = parts.join("?");
+    if (query.includes("halo_playlist_mutate")) {
+      assert.equal(values[0], "signed-in-owner");
+      stored = JSON.parse(values[2]);
+      return [{ outcome: { result: "saved", id } }];
+    }
+    if (query.includes("SELECT p.*")) return [{ id, name: stored.name, world: stored.world, role: "owner",
+      release_ids: [], revision: 1, source_id: stored.sourceId, updated_at: new Date(), room: null }];
+    return [];
+  } };
+  const handler = createPlaylistsHandler({ getDatabase: async () => db,
+    getUser: async () => ({ id: "signed-in-owner" }), ensureMembership: async () => {}, verifyRequestOrigin: async () => true });
+  const post = await handler(new Request("https://halo.test/api/playlists", { method: "POST",
+    headers: { "content-type": "application/json", origin: "https://halo.test" }, body: JSON.stringify(input) }));
+  assert.equal(post.status, 200);
+  const response = await handler(new Request(`https://halo.test/api/playlists?id=${id}`));
+  assert.equal(response.status, 200);
+  const body = await response.json();
+  assert.equal(body.playlist.world.artworkUrl, world.artworkUrl);
+  assert.equal(body.playlist.world.palette, "midnight");
+});
 
 test("journey proposals are explainable, deterministic and respect explicit-content choices", () => {
   const preferences = playlistWorld({ preferences: { content: "clean-only", discovery: 0 } }).preferences;

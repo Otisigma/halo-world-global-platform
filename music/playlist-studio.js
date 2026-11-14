@@ -222,7 +222,13 @@ export function createPlaylistStudio({ document, window, root, getReleases, play
       actions.append(button("Save to account (replaces your previously saved account version)", () => cloud?.saveLocal(playlist)));
       mountPlaylistWorldEditor({
         document, window, root: section, playlist, getReleases, report,
-        save: next => updatePlaylist(playlist.id, () => next, "Playlist world saved. Press Play to use its listening controls.")
+        save: next => {
+          if (!read()) throw new Error("Could not read the playlist. Check browser storage and try again.");
+          if (!playlists.some(item => item.id === playlist.id)) throw new Error("That playlist was removed. Refresh your selection.");
+          if (!save(playlists.map(item => item.id === playlist.id ? next : item), "Playlist world saved. Press Play to use its listening controls.")) {
+            throw new Error("Could not save your playlist. Check browser storage and try again.");
+          }
+        }
       });
       return section;
     }));

@@ -30,6 +30,16 @@ choices, a dedication, chapter starts and a plain-language Dreamweaver request.
 Chapter starts use `release ID | name | target energy 1-4`, up to 12 per playlist.
 They move with their songs and are removed if the song is removed.
 
+Each world displays its original palette cover by default. Select a palette or
+enter a public HTTPS image URL (or a HALO `/assets/` path) to save the world and
+show that cover. A broken image falls back to the selected palette. The URL can
+point to an already uploaded image, but this editor does not upload or host files.
+Changing a cover saves the other current world-editor fields as well. Browser
+worlds remain local until **Save to account**; account and shared worlds retain
+their cover settings. Anyone with a listening link can see the URL, and an
+external image host receives image requests. Avoid private or expiring URLs.
+The SVG download remains the generated palette cover, not the linked image.
+
 **Propose a Dreamweaver journey** reuses `lib/mix-intent.js` and ranks public
 catalog metadata locally. Supported mood/genre words, supplied BPM, a reproducible
 variation seed and the listener's familiarity/discovery setting determine

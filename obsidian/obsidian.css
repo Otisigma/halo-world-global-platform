@@ -55,3 +55,15 @@ summary:focus-visible,.vault-filters button:focus-visible{outline:2px solid whit
 .user-playlist li button{flex:none;padding:5px 8px;font-size:.75rem}
 .visually-hidden{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
 @media(prefers-reduced-motion:reduce){#tracks .track{transition:none}#tracks .track:hover{transform:none}#tracks .track.active-playing{animation:none;box-shadow:0 0 8px #8b000033}}
+
+.living-portal{height:150px;overflow:hidden;margin:12px 0 4px;background:radial-gradient(ellipse,#292117,#100f0d 75%);border:1px solid var(--line);border-radius:12px}
+.living-portal svg{display:block;width:100%;height:100%;--bass:0;--treble:0}
+.portal-aura,.portal-rings,.portal-sparks{transform-origin:250px 90px}
+.portal-aura{transform:scale(calc(1 + var(--bass) * .45));opacity:calc(.35 + var(--bass) * .65)}
+.portal-rings{transform:scale(calc(1 + var(--bass) * .12));opacity:calc(.35 + var(--bass) * .65)}
+.portal-sparks{opacity:calc(.2 + var(--treble) * .8);transform:scale(calc(1 + var(--treble) * .15))}
+.visualizer-toggle{align-self:flex-start;padding:9px 12px;color:var(--ink);background:#1a1814;border:1px solid var(--line);border-radius:6px}
+.visualizer-status{color:var(--muted);font-size:.8rem;line-height:1.5}
+.lyrics li.is-current{animation:lyric-arrival .45s ease-out}
+@keyframes lyric-arrival{from{transform:translateY(4px);text-shadow:0 0 0 transparent}to{transform:translateY(0);text-shadow:0 0 12px #d5b66c80}}
+@media(prefers-reduced-motion:reduce){.portal-aura,.portal-rings,.portal-sparks{transform:none;opacity:.35}.lyrics li.is-current{animation:none}}

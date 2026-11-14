@@ -32,6 +32,13 @@ without implying synchronization. The active timestamped line has a brief
 entrance effect unless reduced motion is enabled. No lyric text or timestamps
 are invented.
 
+The shared artwork screen overlays timed lyrics on the active Obsidian cover
+and on the active release's shop artwork, using each page's existing player.
+Browser-local playlist rows show cover thumbnails with explicit play buttons.
+Inactive releases, untimed lyrics and missing lyrics do not show a synchronized
+overlay. Shop and Obsidian remain separate page players; there is no cross-page
+audio session or automatic playback on navigation.
+
 Listeners can create playlists in the Obsidian Gateway, add or remove public
 catalog releases, and queue a mix through the existing player. Playlist data
 contains release IDs only and is stored in the listener's browser local storage;

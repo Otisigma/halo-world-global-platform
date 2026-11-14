@@ -1,6 +1,7 @@
 import { parseTimestampedLyrics, findActiveLyricIndex } from "../lib/dreamweaver-lyrics.js";
 import { readPlaylists, writePlaylists } from "../lib/personal-playlists.js";
 import { createLivingVisualizer } from "./living-visualizer.js";
+import { createArtScreen } from "../lib/halo-art-screen.js";
 
 export function eligibleReleases(data) {
   if (!Array.isArray(data?.releases)) throw new Error("The catalog response is invalid.");
@@ -48,6 +49,17 @@ export function createGateway({ document, window, fetcher }) {
   const state = { releases: [], index: -1, generation: 0, filter: "all", playlists: [], queue: null };
   const quickFilters = get("quickFilters"), genreFilters = get("genreFilters"), versionFilters = get("versionFilters"), gridStatus = get("gridStatus");
   let cardNodes = [], isPlaying = false;
+  let playlistArt = [];
+  const artScreen = createArtScreen(get("artScreen"), document);
+  const syncArt = () => {
+    const release = selected();
+    artScreen.update({ lyricsText: release?.dreamweaverPayload?.lyricsText || "", time: audio.currentTime, playing: isPlaying });
+    for (const { screen, id, cover, title } of playlistArt) {
+      const active = isPlaying && release?.id === id;
+      screen.update({ playing: active });
+      cover.setAttribute("aria-label", `${active ? "Pause" : "Play"} ${title}`);
+    }
+  };
   const loadNote = get("loadNote"), continueNext = get("continueNext"), shareMoment = get("shareMoment");
   const playlistForm = get("createPlaylistForm"), playlistName = get("newPlaylistName");
   const playlistStatus = get("playlistStatus"), userPlaylists = get("userPlaylists");
@@ -94,6 +106,7 @@ export function createGateway({ document, window, fetcher }) {
     .map(id => state.releases.find(release => release.id === id)).filter(Boolean);
 
   function renderPlaylists() {
+    playlistArt = [];
     const chosen = addToPlaylist.value;
     addToPlaylist.replaceChildren();
     const emptyOption = document.createElement("option");
@@ -148,7 +161,30 @@ export function createGateway({ document, window, fetcher }) {
             ? { ...entry, releaseIds: entry.releaseIds.filter(id => id !== release.id) } : entry);
           if (persistPlaylists(updated)) reportPlaylist(`Removed “${release.title || "release"}”.`);
         });
-        item.append(title, remove);
+        const cover = document.createElement("button");
+        cover.type = "button";
+        cover.className = "playlist-art-button";
+        cover.disabled = !playable(release);
+        cover.setAttribute("aria-label", `Play ${release.title || "release"}`);
+        const image = document.createElement("img");
+        image.src = safeDestination(window.HaloReleaseArtwork.resolve(release).src, window.location.origin) || "/assets/releases/halo-premium-placeholder.svg";
+        image.alt = "";
+        image.addEventListener("error", () => {
+          if (image.getAttribute("src") !== "/assets/releases/halo-premium-placeholder.svg") image.src = "/assets/releases/halo-premium-placeholder.svg";
+        });
+        cover.append(image);
+        const screen = createArtScreen(cover, document);
+        playlistArt.push({ screen, id: release.id, cover, title: release.title || "release" });
+        cover.addEventListener("click", async () => {
+          if (selected()?.id === release.id && isPlaying) { audio.pause(); return; }
+          if (selected()?.id !== release.id) select(state.releases.findIndex(item => item.id === release.id));
+          try { await audio.play(); }
+          catch (error) {
+            console.error("Playlist release playback failed", error);
+            reportPlaylist("Playback could not start. Press play in the audio player or try another release.");
+          }
+        });
+        item.append(title, remove, cover);
         list.append(item);
       }
       section.append(heading, count, actions, list);
@@ -160,6 +196,7 @@ export function createGateway({ document, window, fetcher }) {
       previous.disabled = state.queue ? !nextPlayableIndex(-1) : state.releases.length < 2;
       next.disabled = state.queue ? !nextPlayableIndex() : state.releases.length < 2;
     }
+    syncArt();
   }
 
   async function startPlaylist(id) {
@@ -194,6 +231,7 @@ export function createGateway({ document, window, fetcher }) {
 
   const setPlaying = value => {
     isPlaying = value;
+    syncArt();
     get("pulse").classList.toggle("playing", value);
     for (const { button, action, index } of cardNodes) {
       button.classList.toggle("active-playing", value && index === state.index);
@@ -271,6 +309,7 @@ export function createGateway({ document, window, fetcher }) {
   }
 
   function updateLyrics() {
+    syncArt();
     const index = findActiveLyricIndex(lyrics, audio.currentTime);
     if (index === activeLyric) return;
     if (lyricNodes[activeLyric]) lyricNodes[activeLyric].classList.toggle("is-current", false);

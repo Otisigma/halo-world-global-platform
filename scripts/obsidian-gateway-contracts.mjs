@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import { createGateway, eligibleReleases, safeDestination, releaseCategories } from "../obsidian/obsidian.js";
 
 class Element {
-  constructor() { this.children = []; this.events = {}; this.attributes = {}; this.dataset = {}; this.hidden = false; this.disabled = false; this.textContent = ""; this.classList = { toggle: (key, value) => { this[key] = value; } }; }
+  constructor() { this.children = []; this.events = {}; this.attributes = {}; this.dataset = {}; this.style = {}; this.hidden = false; this.disabled = false; this.textContent = ""; this.classList = { add: key => { this[key] = true; }, toggle: (key, value) => { this[key] = value; } }; }
   addEventListener(name, callback) { this.events[name] = callback; }
   setAttribute(name, value) { this.attributes[name] = value; }
   getAttribute(name) { return name === "src" ? this.src : this.attributes[name]; }
@@ -17,7 +17,7 @@ class Element {
   focus() { this.focused = true; }
   scrollIntoView() { this.scrolled = true; }
 }
-const ids = ["audio", "status", "tracks", "previous", "next", "retry", "share", "loop", "destination", "releaseLink", "artwork", "pulse", "selectedTitle", "artist", "position", "count", "lyrics", "lyricsStatus", "lyricsLines", "loadNote", "continueNext", "shareMoment", "quickFilters", "genreFilters", "versionFilters", "genreFilterSummary", "versionFilterSummary", "gridStatus", "createPlaylistForm", "newPlaylistName", "playlistStatus", "userPlaylists", "addToPlaylist", "addToPlaylistButton", "playlistPlayerStatus", "visualizerToggle", "visualizerStatus", "visualizerField"];
+const ids = ["audio", "status", "tracks", "previous", "next", "retry", "share", "loop", "destination", "releaseLink", "artwork", "artScreen", "pulse", "selectedTitle", "artist", "position", "count", "lyrics", "lyricsStatus", "lyricsLines", "loadNote", "continueNext", "shareMoment", "quickFilters", "genreFilters", "versionFilters", "genreFilterSummary", "versionFilterSummary", "gridStatus", "createPlaylistForm", "newPlaylistName", "playlistStatus", "userPlaylists", "addToPlaylist", "addToPlaylistButton", "playlistPlayerStatus", "visualizerToggle", "visualizerStatus", "visualizerField"];
 const nodes = Object.fromEntries(ids.map(id => [id, new Element()]));
 nodes.audio.hidden = true;
 nodes.visualizerField.style = { setProperty() {} };
@@ -126,6 +126,8 @@ assert.equal(nodes.status.textContent, "Release link copied.");
 assert.equal(nodes.audio.paused, true, "selection must not autoplay");
 nodes.audio.events.playing();
 assert.equal(nodes.pulse.playing, true);
+assert.equal(nodes.artScreen.children[0].textContent, "<img onerror=alert(1)>", "art overlay follows the current timed lyric as text");
+assert.equal(nodes.artScreen.children[0].hidden, false);
 assert.equal(nodes.tracks.children[0]["active-playing"], true, "only actual playback animates a card");
 const beforeFilter = nodes.audio.src;
 filterButton("genre:ambient").events.click();

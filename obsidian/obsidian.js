@@ -1,5 +1,6 @@
 import { parseTimestampedLyrics, findActiveLyricIndex } from "../lib/dreamweaver-lyrics.js";
 import { readPlaylists, writePlaylists } from "../lib/personal-playlists.js";
+import { createLivingVisualizer } from "./living-visualizer.js";
 
 export function eligibleReleases(data) {
   if (!Array.isArray(data?.releases)) throw new Error("The catalog response is invalid.");
@@ -52,6 +53,8 @@ export function createGateway({ document, window, fetcher }) {
   const playlistStatus = get("playlistStatus"), userPlaylists = get("userPlaylists");
   const addToPlaylist = get("addToPlaylist"), addToPlaylistButton = get("addToPlaylistButton");
   const playlistPlayerStatus = get("playlistPlayerStatus");
+  const visualizer = createLivingVisualizer({ audio, button: get("visualizerToggle"), status: get("visualizerStatus"),
+    field: get("visualizerField"), window, document });
   const reportPlaylist = message => {
     playlistStatus.textContent = message;
     playlistPlayerStatus.textContent = message;
@@ -381,6 +384,7 @@ export function createGateway({ document, window, fetcher }) {
 
   function select(index, startAt = 0, { preserveQueue = false } = {}) {
     if (!state.releases[index]) return;
+    visualizer.reset();
     if (!preserveQueue) state.queue = null;
     telemetry?.reset();
     audio.pause();
@@ -431,6 +435,7 @@ export function createGateway({ document, window, fetcher }) {
 
   async function load() {
     const ticket = ++state.generation;
+    visualizer.reset();
     retry.hidden = true;
     audio.pause();
     telemetry?.reset();

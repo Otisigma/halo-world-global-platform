@@ -17,9 +17,20 @@ catalog loading failures are shown, with retry for catalog failures.
 Optional existing authenticated listening reports respect the user's consent.
 The motion indicator is deliberately labelled as playback-state animation, not
 a frequency analyser, and respects reduced-motion preferences.
+The optional living portal samples bass and treble from the playing media using
+`captureStream` and an `AnalyserNode`, without routing or replacing audible
+playback. The listener enables it after starting playback; it turns off on a
+release change or when reduced motion is enabled. It stops rendering while
+paused, buffering, or hidden. Browsers without capture support and streams whose
+origins restrict capture may not provide analysis. A zero signal can mean silence
+or restricted access, not proof of either. The portal does not use a microphone,
+upload frequency data, detect BPM, generate AI visuals, or verify master bytes.
+No SHA-256 badge is shown without evidence for the actual stream.
 Lyrics already supplied by the published catalog are shown as plain text.
 Timestamped lines follow the current audio time; untimed lines remain readable
-without implying synchronization. No lyric text or timestamps are invented.
+without implying synchronization. The active timestamped line has a brief
+entrance effect unless reduced motion is enabled. No lyric text or timestamps
+are invented.
 
 Listeners can create playlists in the Obsidian Gateway, add or remove public
 catalog releases, and queue a mix through the existing player. Playlist data

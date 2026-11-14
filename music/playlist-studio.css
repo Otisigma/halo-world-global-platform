@@ -32,7 +32,7 @@
 .playlist-world-editor form, .playlist-cloud form { display: grid; gap: 16px; margin: 20px 0; }
 .playlist-studio textarea { width: 100%; min-height: 100px; padding: 12px; font: inherit; color: var(--paper); background: var(--ink); border: 1px solid var(--line); resize: vertical; }
 .playlist-generated-cover { width: min(280px, 100%); margin-top: 20px; }
-.playlist-generated-cover svg { display: block; width: 100%; height: auto; }
+.playlist-generated-cover svg, .playlist-generated-cover img { display: block; width: 100%; aspect-ratio: 1; object-fit: cover; }
 .playlist-cloud { margin-top: 40px; padding-top: 24px; border-top: 1px solid var(--line); }
 .playlist-cloud-entry { border-bottom: 1px solid var(--line); padding: 16px 0; }
 .playlist-cloud :is(button, a) { margin: 4px; }

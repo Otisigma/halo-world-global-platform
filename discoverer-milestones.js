@@ -64,6 +64,7 @@ export function mountMilestones(panel) {
   const status = node("p", "Loading celebrations…");
   status.setAttribute("role", "status");
   const list = node("div");
+  const anniversary = node("div");
   const refresh = node("button", "Refresh celebrations");
   refresh.type = "button";
   let version = 0;
@@ -75,6 +76,7 @@ export function mountMilestones(panel) {
   preferenceLabel.append(preference, node("span", " Notify me in-app when my early radio support earns a Discoverer rank."));
   panel.append(status);
   if (!artist) panel.append(preferenceLabel);
+  if (!artist) panel.append(anniversary);
   panel.append(refresh, list);
 
   async function load(body) {
@@ -87,6 +89,12 @@ export function mountMilestones(panel) {
       if (current !== version) return;
       enabled = state.enabled;
       preference.checked = enabled;
+      anniversary.replaceChildren();
+      if (!artist && state.anniversary && typeof state.anniversary.message === "string") {
+        const card = node("article", "", "milestone-card");
+        card.append(node("h3", "Your HALO anniversary"), node("p", state.anniversary.message));
+        anniversary.append(card);
+      }
       const items = artist ? state.milestones : state.notifications;
       list.replaceChildren(...items.map(item => {
         if (artist) return artistMilestoneCard(item);
@@ -100,12 +108,13 @@ export function mountMilestones(panel) {
         }
         return card;
       }));
-      status.textContent = items.length ? "Celebrations up to date." : artist
+      status.textContent = items.length || (!artist && state.anniversary) ? "Celebrations up to date." : artist
         ? "No reviewed rotation milestones yet."
         : "No new celebrations. Opt in before a release reaches rotation to receive its private rank card.";
     } catch (error) {
       if (current !== version) return;
       list.replaceChildren();
+      anniversary.replaceChildren();
       preference.checked = enabled;
       status.textContent = error.message;
     } finally {
@@ -120,6 +129,7 @@ export function mountMilestones(panel) {
   window.addEventListener("halo-release-auth-changed", event => {
     ++version;
     list.replaceChildren();
+    anniversary.replaceChildren();
     if (event.detail) load();
     else {
       busy = false;

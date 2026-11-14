@@ -24,7 +24,7 @@ export function createPlaylistClient(fetcher) {
 export function mountCloudPlaylists({ document, window, root, getReleases, studio, player, trackFor, fetcher = fetch }) {
   const section = document.createElement("section"); section.className = "playlist-cloud";
   section.innerHTML = `<h3>Your account / Shared listening worlds</h3>
-    <p>Browser playlists stay local until you choose Save to account. Account playlists sync across your signed-in devices. Sharing is off by default. A listening link lets anyone with that link see the title, dedication, chapters and public songs.</p>
+    <p>Browser playlists stay local until you choose Save to account. Account playlists sync across your signed-in devices. Sharing is off by default. A listening link lets anyone with that link see the title, cover URL, dedication, chapters and public songs.</p>
     <button type="button" data-connect-playlists>Connect HALO account</button>
     <button type="button" data-disconnect-playlists hidden>Sign out</button>
     <form data-playlist-login hidden><label>Email<input name="email" type="email" autocomplete="email" required></label>

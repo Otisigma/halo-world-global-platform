@@ -17,16 +17,19 @@ class Element {
   focus() { this.focused = true; }
   scrollIntoView() { this.scrolled = true; }
 }
-const ids = ["audio", "status", "tracks", "previous", "next", "retry", "share", "loop", "destination", "releaseLink", "artwork", "pulse", "selectedTitle", "artist", "position", "count", "lyrics", "lyricsStatus", "lyricsLines", "loadNote", "continueNext", "shareMoment", "quickFilters", "genreFilters", "versionFilters", "genreFilterSummary", "versionFilterSummary", "gridStatus", "createPlaylistForm", "newPlaylistName", "playlistStatus", "userPlaylists", "addToPlaylist", "addToPlaylistButton", "playlistPlayerStatus"];
+const ids = ["audio", "status", "tracks", "previous", "next", "retry", "share", "loop", "destination", "releaseLink", "artwork", "pulse", "selectedTitle", "artist", "position", "count", "lyrics", "lyricsStatus", "lyricsLines", "loadNote", "continueNext", "shareMoment", "quickFilters", "genreFilters", "versionFilters", "genreFilterSummary", "versionFilterSummary", "gridStatus", "createPlaylistForm", "newPlaylistName", "playlistStatus", "userPlaylists", "addToPlaylist", "addToPlaylistButton", "playlistPlayerStatus", "visualizerToggle", "visualizerStatus", "visualizerField"];
 const nodes = Object.fromEntries(ids.map(id => [id, new Element()]));
 nodes.audio.hidden = true;
-const document = { getElementById: id => nodes[id], createElement: () => new Element() };
+nodes.visualizerField.style = { setProperty() {} };
+const document = { getElementById: id => nodes[id], createElement: () => new Element(), addEventListener() {} };
 nodes.continueNext.checked = true;
 const location = { origin: "https://halo.test", href: "https://halo.test/obsidian/?song=beta" };
 const saved = new Map();
 let resets = 0, selection;
 const window = {
   location,
+  matchMedia: () => ({ matches: false, addEventListener() {} }),
+  addEventListener() {},
   localStorage: { getItem: key => saved.get(key) ?? null, setItem: (key, value) => saved.set(key, value) },
   crypto: { randomUUID: () => "playlist-1" },
   navigator: { clipboard: { async writeText(value) { assert.equal(value, location.href); } } },

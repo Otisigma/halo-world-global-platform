@@ -32,7 +32,7 @@
     "test:dj-vault": "node scripts/dj-vault-contracts.mjs && node scripts/dj-mix-upload-contracts.mjs",
     "release-guard": "node release-guard-agent.js",
     "prebuild": "npm run release-guard -- --allow-missing-catalog",
-    "build": "node scripts/music-chart-contracts.mjs && node scripts/obsidian-gateway-contracts.mjs && node scripts/teaser-renderer-contracts.mjs && node scripts/halo-page-guide-contracts.mjs && node scripts/community-host-contracts.mjs",
+    "build": "node scripts/music-chart-contracts.mjs && node scripts/obsidian-gateway-contracts.mjs && node scripts/obsidian-visualizer-contracts.mjs && node scripts/teaser-renderer-contracts.mjs && node scripts/halo-page-guide-contracts.mjs && node scripts/community-host-contracts.mjs",
     "test:release-guard": "node scripts/release-guard-contracts.mjs",
     "start": "node server.js",
     "dev": "node server.js",

@@ -37,6 +37,16 @@
         <p class="status" id="status" role="status">Connecting to the public catalog…</p>
         <p class="load-note" id="loadNote" hidden><strong>The sound &amp; the load time.</strong> Audio can take a moment to start, depending on the release file and your connection. Give it a second to load.</p>
         <audio id="audio" controls preload="none" aria-label="Release audio player"></audio>
+        <div class="living-portal" aria-hidden="true">
+          <svg id="visualizerField" viewBox="0 0 500 180" focusable="false">
+            <defs><radialGradient id="portalGlow"><stop stop-color="#d5b66c" stop-opacity=".65"/><stop offset="1" stop-color="#d5b66c" stop-opacity="0"/></radialGradient></defs>
+            <circle class="portal-aura" cx="250" cy="90" r="90" fill="url(#portalGlow)"/>
+            <g class="portal-rings" fill="none" stroke="#d5b66c"><ellipse cx="250" cy="90" rx="155" ry="65" stroke-dasharray="3 9"/><ellipse cx="250" cy="90" rx="100" ry="45" opacity=".55"/></g>
+            <g class="portal-sparks" fill="#f3eee1"><circle cx="130" cy="65" r="2"/><circle cx="180" cy="130" r="2"/><circle cx="350" cy="45" r="2"/><circle cx="395" cy="100" r="2"/></g>
+          </svg>
+        </div>
+        <button type="button" class="visualizer-toggle" id="visualizerToggle" aria-pressed="false">Enable audio visualizer</button>
+        <p id="visualizerStatus" class="visualizer-status" role="status">Visualizer is off. Start a release, then enable it if your browser supports audio capture.</p>
         <label class="loop"><input id="loop" type="checkbox" disabled> Loop selected audio</label>
         <label class="loop"><input id="continueNext" type="checkbox" checked> Continue to the next release when this one ends</label>
         <div class="playlist-add">
@@ -93,7 +103,7 @@
       <p id="playlistStatus" role="status" aria-live="polite"></p>
       <div id="userPlaylists" class="user-playlists"></div>
     </section>
-    <p class="note">The animated bars reflect player state, not measured audio frequencies. Playback starts only when you choose it; some releases may have an external listening link instead of an in-page preview.</p>
+    <p class="note">The small bars reflect player state, not measured audio frequencies. The optional living portal uses measured frequencies when available. Playback starts only when you choose it; some releases may have an external listening link instead of an in-page preview.</p>
   </main>
   <footer>HALO Music World · Artist-controlled music</footer>
 </body>

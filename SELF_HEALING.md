@@ -106,6 +106,99 @@ When a contract fails, the script prints a `❌` line with the exact fix directi
 
 Close the incident only with the published SHA, successful production migration evidence, endpoint statuses, and real upload/banner/playback results. Until those are captured, report **repository flow validated; production root cause and recovery unconfirmed**, not “live site fixed.”
 
+## Catalog / Release House rollout readiness (2026-10-28)
+
+**Repository fixes are not a production release.** This audit did not trigger a
+deploy, execute migrations, modify secrets/settings, or verify the live site.
+
+### Verified evidence and proposed repairs
+
+- The checked `main` head is `90850b756214762274c4759b266b53254a5cb8a9`:
+  PR #466's owner-scoped distribution-link editor is merged, following #465's
+  guarded public Stream / DSPs cards and #463/#464's submission/review work.
+  Saving the catalog link does not publish private releases or approve submissions.
+- [CI run 40623527931](https://github.com/Otisigma/halo-world-global-platform/actions/runs/40623527931)
+  built Docker successfully, then timed out polling `/healthz`. Local reproduction
+  showed a startup crash: `.dockerignore` omitted the imported Drive-catalog
+  handlers. The repair includes only those handlers and their library dependencies,
+  retains the 30-second readiness deadline and `status:ok` assertion, bounds each
+  HTTP probe, detects early crashes, captures container state/logs on failure, and
+  always cleans up. This tests the standalone server, not Netlify functions.
+- [Optional deploy run 40623527869](https://github.com/Otisigma/halo-world-global-platform/actions/runs/40623527869)
+  succeeded but explicitly logged `NETLIFY_BUILD_HOOK is not set; skipping deploy trigger.`
+  The hook secret was empty/unavailable **in that run**; this does not establish
+  the current settings or whether Netlify Git integration deployed independently.
+- PR #466 has successful Netlify redirect/header checks referencing
+  [deploy 6ae15fcb06894541dd8f894d](https://app.netlify.com/projects/halo-world-global-platform/deploys/6ae15fcb06894541dd8f894d).
+  This evidences a Netlify integration on the PR, not the published production
+  commit or the production branch/auto-publish settings.
+- `.github/workflows/ai-autodeploy.yml` uploads ephemeral telemetry on PRs,
+  pushes to `main`, and manual runs. Only a **push to `main`** with a non-empty
+  repository secret can request Netlify deployment. Manual runs do not deploy.
+  The proposed reporting distinguishes skipped, not requested, failed, and
+  accepted requests. HTTPS-only hook calls have connection/total deadlines,
+  discard response bodies, reject non-2xx responses, and do not follow redirects
+  or automatically retry POSTs. Acceptance is not build/publication success.
+- `netlify.toml` sets `npm run build` and publish directory `.`; the build runs
+  the release guard and music-chart contracts. Neither Actions workflow runs
+  migrations, uploads a site bundle, nor waits for Netlify publication. Netlify
+  project identity, Git linkage, production branch, auto-publishing, database
+  binding, and any project-managed migration integration cannot be confirmed
+  from this configuration. `drizzle.config.ts` identifies schema/migration paths;
+  it does not prove that SQL files were executed. Do not assume automatic migration
+  execution merely because older feature docs describe it.
+
+### Maintainer-only rollout gates
+
+1. In the Netlify project serving the intended production domain (the repository
+   documents `https://halo-world-global-platform.netlify.app`), verify the linked
+   repository is `Otisigma/halo-world-global-platform`, production branch is `main`,
+   build command is `npm run build`, and publish directory is `.`. Record the
+   published production deploy ID/SHA and inspect pending/failed build logs.
+   Confirm the actual custom domain/project mapping, not just a deploy preview.
+2. Choose the intended deployment trigger. If Netlify Git integration is intended,
+   confirm automatic builds and production publishing are enabled for `main`.
+   If Actions hooks are intended, create a build hook for **that project and
+   `main`** in Netlify's **Project configuration → Build & deploy → Build hooks**.
+   Store its URL in GitHub **Settings → Secrets and variables → Actions →
+   New repository secret**, named `NETLIFY_BUILD_HOOK`. Do not paste it into source,
+   issues, logs, or PR comments; no PAT or repository write permission is needed.
+   Coordinate Git auto-builds and hook usage to avoid duplicate builds. Configuration
+   and any subsequent production build/publish require maintainer approval; this
+   PR does neither. A timed-out POST may have been accepted: check Netlify before
+   authorizing another request.
+3. Before approving rollout, verify the production Netlify Database branch/binding,
+   Identity configuration, migration history, and actual schema. Required existing
+   relations include memberships, Release House projects, and release campaigns.
+   Review missing prerequisites in timestamp order, including:
+   - `20260828080000_add_music_publishing_workflow.sql` (`purchase_url`);
+   - `20261028010000_release_house_submissions.sql`;
+   - `20261028020000_release_house_review_notes.sql` (after submissions).
+   PR #466 itself needs no new migration. These existing files are not proof of
+   production schema state. The earlier publishing migration includes data
+   backfills: do not blindly replay it. Have the authorized database maintainer
+   review drift, backup/recovery arrangements, and approve execution through the
+   project's established migration process. If no runner is configured, resolve
+   that blocker explicitly; do not improvise a database reset or migration command.
+4. After those approvals, the maintainer must authorize the selected Netlify path
+   to build/publish the reviewed `main` commit containing these fixes. Inspect
+   Netlify build/function/migration logs and confirm the **published production**
+   SHA contains `90850b7…` and this repair. A green Actions run or accepted hook
+   alone is insufficient; the telemetry artifact is not a live commit marker.
+5. Verify the served catalog/editor assets with caches bypassed, same-origin
+   `/api/release-catalog` JSON, and signed-in owner access to the release editor.
+   With approved test content, verify saving a valid distribution link persists
+   for that owner and only a published/public release exposes Stream / DSPs.
+   Confirm draft/private links and pending submissions remain private. Verify
+   Release House submission/review endpoints against the migrated schema and
+   inspect private function logs for 503s; do not bypass authorization to test.
+   Record deploy SHA, schema evidence, endpoint results, and the authorized
+   save/card smoke test before saying the live rollout is complete.
+
+Local checks: `npm run deploy:feedback` (includes offline hook/status contracts),
+`npm run build`, `npm run diagnose`, `npm run test:database`, and `npm test`.
+None of these establish a live production deployment or migrated database.
+
 ## Prebuild release guard
 
 Netlify runs `npm run build`: npm first runs `npm run release-guard -- --allow-missing-catalog`, then the existing music chart contracts. The storefront loads its live catalog from the Netlify Database-backed `/api/release-catalog` endpoint, so the root `shared-catalog.json` is an optional static catalog, not a deployment prerequisite. The prebuild flag skips only an absent static catalog and does not create one or modify live database records. If a static catalog is supplied, it must contain an array or an object with a `songs` array; malformed or unsupported catalogs still block the build without rewriting them. Running `npm run release-guard` directly remains strict and fails if the catalog is missing. An unresolved quarantine blocks both modes even if the catalog has been removed.

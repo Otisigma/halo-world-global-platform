@@ -1,5 +1,6 @@
 import { createFeedCard, createSignalComposer, SIGNAL_VISIBILITY } from "./signal-components.js";
 import { createSignalComposerController } from "./signal-composer.js";
+import { createHypeRoom } from "./hype-room.js";
 
 const endpoint = "/api/signal-feed";
 const byId = id => document.getElementById(id);
@@ -7,6 +8,7 @@ const feedState = { memberId: "", cursor: null, saved: false, generation: 0, ses
 const posts = byId("feedPosts");
 const status = byId("feedStatus");
 const publishForm = byId("feedPublishForm");
+const hypeRoom = createHypeRoom(byId("hypeRoom"));
 let composer;
 const mutationOrigin = () => ({ session: feedState.session, generation: feedState.generation });
 function ensureOrigin(origin, checkGeneration = true) {
@@ -216,6 +218,7 @@ function renderPost(post) {
     toggle.setAttribute("aria-pressed", String(post[key]));
     actions.append(toggle);
   }
+  actions.append(button("Open Hype Room", () => { requireMember(); hypeRoom.open(post.id); }));
   actions.append(...safetyButtons(post.memberId));
   if (post.memberId === feedState.memberId) actions.append(button("Remove post", async () => {
     if (!window.confirm("Remove this post and all comments?")) return;
@@ -374,6 +377,7 @@ byId("feedNotifications").addEventListener("toggle", () => { if (byId("feedNotif
 byId("feedBlocked").addEventListener("toggle", () => { if (byId("feedBlocked").open) loadBlocks(); });
 function connectIdentity() {
   window.haloIdentity.onAuthChange(async () => {
+    hypeRoom.reset();
     feedState.session++;
     for (const player of posts.querySelectorAll("audio, video")) {
       player.pause(); player.removeAttribute("src"); player.load();

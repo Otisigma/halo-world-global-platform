@@ -217,6 +217,8 @@ test("GET proxies bounded-memory audio with CORS; HEAD never reads media", async
   const service = fixture();
   const response = await service.audioHandler(audioRequest());
   assert.equal(response.status, 200);
+  assert.equal(response.headers.get("cache-control"), "no-store", "mutable public catalog media is not immutable");
+  assert.equal(response.headers.get("content-type"), "audio/mpeg");
   assert.equal(response.headers.get("access-control-allow-origin"), "*");
   assert.match(response.headers.get("access-control-expose-headers"), /Content-Length/);
   assert.match(response.headers.get("access-control-expose-headers"), /Content-Range/);
@@ -239,6 +241,8 @@ test("Range, 206 and 416 preserve upstream semantics", async () => {
   } });
   const response = await service.audioHandler(audioRequest({ headers: { Range: "bytes=1-2" } }));
   assert.equal(response.status, 206);
+  assert.equal(response.headers.get("cache-control"), "no-store");
+  assert.equal(response.headers.get("content-type"), "audio/mpeg");
   assert.equal(response.headers.get("content-range"), "bytes 1-2/4");
   assert.equal((await response.arrayBuffer()).byteLength, 2);
   const invalidRange = fixture({ audioResponse: () => new Response("private error details", {
@@ -246,6 +250,7 @@ test("Range, 206 and 416 preserve upstream semantics", async () => {
   }) });
   const rejected = await invalidRange.audioHandler(audioRequest({ headers: { Range: "bytes=100-" } }));
   assert.equal(rejected.status, 416);
+  assert.equal(rejected.headers.get("cache-control"), "no-store");
   assert.equal(rejected.headers.get("content-range"), "bytes */4");
   assert.equal(await rejected.text(), "");
 });

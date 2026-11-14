@@ -122,7 +122,7 @@ let databaseCalls = 0;
 const apiSource = (await read("netlify/functions/halo-control-center.mjs"))
   .replace(/^import .*;\n/gm, "").replace("export default async function", "async function").replace("export const config", "const config");
 const sandbox = {
-  Response, Request, Buffer, requestPreflight,
+  Response, Request, URL, Buffer, requestPreflight,
   getUser: async () => user, isOwner: value => value.owner === true,
   verifyRequestOrigin: async () => sameOrigin,
   getDatabase() { databaseCalls++; throw new Error("preflight must not open the database"); },

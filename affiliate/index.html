@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#050507">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Affiliate &amp; Verified Guide | HALO</title>
+  <link rel="icon" href="/assets/halo-app-icon-192.png">
+  <link rel="stylesheet" href="/accessibility.css">
+  <link rel="stylesheet" href="/track-drops/track-drops.css">
+  <link rel="stylesheet" href="/affiliate/affiliate.css">
+  <script src="/accessibility.js" defer></script>
+  <script type="module" src="/affiliate/affiliate.js"></script>
+  <script type="module" src="/identity.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+  <header class="drops-header">
+    <a class="wordmark" href="/halo" aria-label="HALO home">HALO</a>
+    <nav aria-label="Affiliate pathways"><a href="/signal-network/">Signal Network</a><a href="/track-drops/">Member rewards</a></nav>
+  </header>
+  <main id="main" tabindex="-1">
+    <p class="eyebrow">Sovereign Affiliate · Member workspace</p>
+    <h1>Your signal.<br>Your earnings, verified.</h1>
+    <p class="intro">A private view of your invitations and verified member rewards. Financial information appears only when supported by a trusted subscription ledger—not browser activity or estimated revenue.</p>
+    <div id="affiliate-dashboard">
+      <p data-status role="status" aria-live="polite">Loading your private dashboard…</p>
+      <p data-signin hidden><a href="/halo">Sign in on HALO</a>, then return here.</p>
+      <button data-refresh type="button">Refresh dashboard</button>
+      <noscript><p>JavaScript and a signed-in HALO session are required to load your private data. No balances are embedded in this page.</p></noscript>
+      <div data-private hidden>
+        <section class="drops-panel" aria-labelledby="referrals-title">
+          <p class="eyebrow">Invitations &amp; attribution</p>
+          <h2 id="referrals-title">Your referral workspace</h2>
+          <p data-referral-status></p>
+          <dl class="affiliate-facts">
+            <div><dt>Affiliate referral link</dt><dd>Unavailable — paid attribution is not configured</dd></div>
+            <div><dt>Attributed active paid referrals</dt><dd>Unavailable — no verified subscription events</dd></div>
+            <div><dt>Active paid months per referral</dt><dd>Unavailable — no monthly earnings ledger</dd></div>
+            <div><dt>Unique invitation joins</dt><dd data-joins>Unavailable</dd></div>
+          </dl>
+          <p data-invite-empty></p>
+          <div data-invite-details hidden>
+            <label for="invite-link">Existing tracked invitation (not an affiliate earnings link)</label>
+            <input id="invite-link" data-invite-link type="text" readonly aria-describedby="invite-note">
+          </div>
+          <p id="invite-note" class="affiliate-note">Invitation joins are not verified paid referrals, exclusive attribution, or consent to affiliate tracking. No invitee identities or payment details are shown. Manage invitations in <a href="/halo-x.html">HALO X</a>.</p>
+        </section>
+        <section class="drops-panel" aria-labelledby="earnings-title">
+          <p class="eyebrow">USD · Subscription revenue share</p>
+          <h2 id="earnings-title">Earnings overview</h2>
+          <p>No affiliate earnings ledger is connected. Unavailable does not mean $0, and no balance is live.</p>
+          <dl class="affiliate-balances">
+            <div><dt>Earned</dt><dd>Unavailable</dd></div>
+            <div><dt>Held</dt><dd>Unavailable</dd></div>
+            <div><dt>Available</dt><dd>Unavailable</dd></div>
+            <div><dt>Paid</dt><dd>Unavailable</dd></div>
+          </dl>
+          <h3>Program terms</h3>
+          <ul class="affiliate-terms">
+            <li><strong>10% recurring share</strong> of eligible subscription revenue.</li>
+            <li><strong>Up to 12 active paid months</strong> per attributed referral, not 12 calendar months or 12 webhook deliveries.</li>
+            <li><strong>$50 USD minimum accrued</strong> before payout; held or reversed amounts cannot be treated as available.</li>
+            <li><strong>14-day refund/chargeback hold</strong> before earnings become available. Passing the hold does not initiate a payout.</li>
+          </ul>
+          <p class="affiliate-note">Eligible revenue must come from verified, successfully paid subscription invoices linked to a valid, consented referral. No such pipeline exists here yet. Eligible products, treatment of taxes, discounts and fees, partial payments, billing intervals, and rounding still require an approved server-side definition before any accrual. Mix purchases, licenses, invitation joins, and access flags are not proof of eligible subscription revenue.</p>
+        </section>
+        <section class="drops-panel" aria-labelledby="guide-title">
+          <p class="eyebrow">Verified Guide</p>
+          <h2 id="guide-title">Recognition without invented eligibility</h2>
+          <p data-points-status></p>
+          <p class="affiliate-gold">Program requirement: 5,000 Signal Points · 1.5× multiplier · Gold badge</p>
+          <p>The existing member reward tiers are separate. A server-authorized mapping to Verified Guide and multiplier-aware point grants are not configured. No Guide tier, gold badge, or 1.5× points are awarded here; existing points are unchanged.</p>
+          <p><strong>Sovereign Master / Affiliate:</strong> higher tier requested; qualification rules are not configured. No threshold or eligibility is assumed.</p>
+          <a href="/track-drops/">Manage verified member reward preferences</a>
+        </section>
+        <section class="drops-panel" aria-labelledby="payout-title">
+          <p class="eyebrow">Payout visibility</p>
+          <h2 id="payout-title">Payout history &amp; setup</h2>
+          <p>Payout history unavailable — no affiliate payout records or reconciliation service exists. This is not a confirmation that you have never been paid.</p>
+          <dl class="affiliate-facts">
+            <div><dt>Connect onboarding &amp; payment capability</dt><dd>Unavailable — no affiliate account integration</dd></div>
+            <div><dt>Tax &amp; KYC status</dt><dd>Unknown — no trusted backend status</dd></div>
+            <div><dt>Affiliate review status</dt><dd>Unknown — no trusted backend status</dd></div>
+          </dl>
+          <p>No payout action is available. This dashboard never initiates transfers.</p>
+          <details>
+            <summary>Production prerequisites &amp; deployment boundaries</summary>
+            <ul class="affiliate-terms">
+              <li>Deploy the Netlify function at <code>/api/affiliate-dashboard</code> with Netlify Identity and the existing database. Self-hosted static serving alone does not provide this private API. No new migration, payment secret, or payout worker is included.</li>
+              <li>Invitation visibility requires the existing <code>20260819150000_create-tracked-share-invites.sql</code> migration. Verified rewards require <code>20261019030000_track_drop_notifications.sql</code>. Missing data sources remain unavailable, never synthetic.</li>
+              <li>Before paid attribution: establish explicit tracking consent, one auditable referral owner, self-referral prevention, abuse review, and a verified subscription/customer relationship. Existing share-invite joins alone are insufficient.</li>
+              <li>Before accrual: add signed payment-event verification and an immutable or adjustment-based money ledger with source invoice/payment IDs, referral ownership, currency, active-month accounting, and unique deduplication keys. Transactions and locking must enforce exactly-once processing under concurrent/retried events, including the 12th/13th-month boundary.</li>
+              <li>Refunds and chargebacks need linked, idempotent negative adjustments, including partial refunds and post-payout recovery. Release holds only after 14 days; apply the $50 USD threshold to reconciled payout eligibility. Do not delete or silently rewrite earnings.</li>
+              <li>Before payouts: implement affiliate-specific Connect onboarding, trusted tax/KYC/review status, currency and transfer-capability checks, explicit operational/configuration gates, durable batch claims, Stripe idempotency, and reconciliation before marking individual ledger entries paid. Test retry, concurrent, failure, and test-mode scenarios before enabling monetary movement. The separate music royalty service is not an affiliate payout worker.</li>
+              <li>Before Guide awards: approve the Signal-to-member-ledger mapping and persist tier authorization plus versioned, server-enforced multipliers without retroactively changing existing points.</li>
+            </ul>
+          </details>
+        </section>
+      </div>
+    </div>
+  </main>
+  <footer class="drops-footer"><span>HALO · Sovereign Affiliate</span><a href="/support/">Contact HALO</a></footer>
+</body>
+</html>

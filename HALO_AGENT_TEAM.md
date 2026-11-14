@@ -85,6 +85,32 @@ When a response identifies useful work, the system can create a linked proposal 
 
 The command channel does not grant autonomous authority. It can run the existing council and maintenance monitoring tools, organize evidence, and propose measurable work. External communications, production changes, publishing, spending, contracts, account changes, and people decisions still require explicit human execution and review.
 
+### Private signup review
+
+The **Signups & email preferences** panel at `/control-center` reads a separate GET `/api/halo-control-center?view=signups` snapshot after owner verification. It requires the existing Netlify Identity session and `isOwner(user)` and returns `Cache-Control: private, no-store`. HEAD remains an authorization-only check, and POST to this signup view is rejected. Signup records never enter the operations feed, council/model context, or public telemetry.
+
+Each source is independently bounded to **30 rows**, not a total subscriber count. Dreamweaver uses the same recent CRM query as Relations (`last_signup_at DESC, email ASC`); Track Drops uses `email_consent_at DESC, member_id ASC`; Artist Pro uses `updated_at DESC, id ASC`. Failed or missing sources are **unavailable**, not zero. The panel is a manually refreshed snapshot; sign-out/identity changes clear its rows and cancel pending reads.
+
+- **Dreamweaver**: CRM capture of release-unlock/contact consent, not general newsletter permission. Shows source, CRM state, earliest captured consent, and first/latest signup times. It does not infer a subscription or present a withdrawal history that this table does not store.
+- **Track Drops**: current email preferences joined to memberships, requiring both `track_drops_email = TRUE` and `email_consent_at IS NOT NULL`. Revoked/missing consent is excluded. No withdrawal-history count is inferred from current disabled preferences.
+- **Artist Pro**: application source, status, contact-consent capture, creation and update times. Application contact permission is not newsletter consent; review status is not a subscription state.
+
+Only email, source/state and relevant timestamps are displayed. There are no sending, export, clipboard, deletion, or preference-edit controls in this panel. Existing Relations workflows remain separate and unchanged. Validate with `node scripts/owner-signups-contracts.mjs`, `npm run contracts:ai-maintenance`, `node scripts/dreamweaver-fan-signup-api-contracts.mjs`, and `node scripts/dreamweaver-show-contracts.mjs`. Live Identity/database integration requires an authenticated Netlify environment.
+
+### Member activity & requests
+
+The **Member activity & requests** panel at `/control-center` builds on the signup review. After owner verification it reads GET `/api/halo-control-center?view=members` (up to **30** most recently seen members plus an anonymous page aggregate) and, when the owner picks someone, GET `/api/halo-control-center?view=member&member=<id>`. Both use the same `getUser` + `isOwner` gate, are read-only (POST is rejected), and return `Cache-Control: private, no-store`. HEAD stays authorization-only. Member rows never enter the operations feed, council/model context, public menu status, or telemetry.
+
+Only member-attributed records keyed by the verified Identity user id are shown, each labelled by source and capped at **20** recent rows (stable timestamp + unique-key order). Unreadable sources are **unavailable**, not zero.
+
+- **Account**: Relations sign-in events (`halo_relationship_auth_events`); session keys are not returned. "Last seen" is the last signed-in HALO API request, not a page visit.
+- **Help, bug & feature requests**: only that member's own `halo_support_requests` (`submitter_id`), with category, title, status, visibility, votes, timestamps, and a 280-character excerpt. Staff notes are not selected. The page the browser reported at submission is shown as a path only (query/fragment removed).
+- **Work**: member rewards, Release House submissions, opted-in listening reports (only while the listening opt-in is active), and Dreamweaver unlock signups linked by the CRM.
+- **Consent**: current, revocable Track Drops preference; Dreamweaver unlock/contact capture is not newsletter consent; Artist Pro applications are not linked to member accounts and stay in the Signups panel.
+- **Page history**: not recorded for members. `analytics_events` uses anonymous browser/session IDs and is never joined to accounts; it appears only as a labelled 7-day aggregate of the top 10 page paths.
+
+No sending, export, copying, deletion, or preference-edit controls are provided, and no schema changes were needed. Sign-out, identity changes, or a 401/403 clear the panel and abort pending reads so late responses cannot restore rows. Validate with `node scripts/owner-member-activity-contracts.mjs` (also run by `npm run contracts:ai-maintenance`).
+
 ## Dreamweaver AI operations oracle
 
 The owner-only `/control-center` includes a separate read-only Dreamweaver AI panel. It uses the existing Netlify Identity session and server-side `isOwner(user)` authorization; no individual email is hardcoded. GET `/api/dreamweaver/oracle` reads telemetry, HEAD checks access, and POST accepts JSON `{ "mode": "chat", "message": "...", "history": [], "useAI": false }`. POST requires a same-origin Origin header and Identity origin verification. Responses are never cached.

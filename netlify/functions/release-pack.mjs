@@ -3,6 +3,7 @@ import { getUser, verifyRequestOrigin } from "@netlify/identity";
 import { createHash } from "node:crypto";
 import { ensureMembership, isOwner } from "../lib/halo-x.mjs";
 import { resolveReleaseArtworkFields } from "../lib/release-artwork.mjs";
+import { validateSmartLink } from "../lib/release-house-submission.mjs";
 
 const allowedStatuses = new Set(["interested", "downloaded", "played", "declined"]);
 const allowedSelectorTypes = new Set(["dj", "radio"]);
@@ -62,6 +63,12 @@ function dateOnly(value) {
   return Number.isNaN(date.getTime()) ? "" : date.toISOString().slice(0, 10);
 }
 
+function distributionStatus(row) {
+  if (!row.purchase_url) return "missing";
+  if (!validateSmartLink(row.purchase_url).ok) return "invalid";
+  return row.status === "published" && row.visibility === "public" ? "public" : "private";
+}
+
 function serializeRelease(row, includePrivateLinks = false) {
   const artwork = resolveReleaseArtworkFields({
     artworkUrl: row.artwork_url,
@@ -90,6 +97,12 @@ function serializeRelease(row, includePrivateLinks = false) {
     musicalKey: row.musical_key || "",
     isrc: row.isrc || "",
     contentRating: row.content_rating || "unspecified",
+    purchaseUrl: includePrivateLinks ? row.purchase_url || "" : "",
+    distributionStatus: includePrivateLinks ? distributionStatus(row) : "",
+    distributionSource: includePrivateLinks ? "halo_release_campaigns.purchase_url" : "",
+    distributionVisibility: includePrivateLinks
+      ? { releaseStatus: row.status, visibility: row.visibility || "private" }
+      : null,
     pitch: row.pitch || "",
     pressDescription: row.press_description || "",
     credits: row.credits || "",
@@ -185,13 +198,13 @@ async function packState(db, user, requestedSlug = "") {
   if (membership) {
     const campaignRows = platformOwner
       ? await db.sql`
-          SELECT id, title, artist, release_date, status, updated_at
+          SELECT id, title, artist, release_date, status, visibility, purchase_url, updated_at
           FROM halo_release_campaigns
           ORDER BY updated_at DESC
           LIMIT 50
         `
       : await db.sql`
-          SELECT id, title, artist, release_date, status, updated_at
+          SELECT id, title, artist, release_date, status, visibility, purchase_url, updated_at
           FROM halo_release_campaigns
           WHERE owner_member_id = ${memberId}
           ORDER BY updated_at DESC
@@ -203,6 +216,8 @@ async function packState(db, user, requestedSlug = "") {
       artist: row.artist,
       releaseDate: row.release_date ? String(row.release_date).slice(0, 10) : "",
       status: row.status,
+      distributionStatus: distributionStatus(row),
+      distributionSource: "halo_release_campaigns.purchase_url",
       updatedAt: new Date(row.updated_at).toISOString()
     }));
   }
@@ -397,13 +412,62 @@ async function saveSelectorResponse(request, db, user) {
   return json({ ...(await packState(db, user, releaseRows[0].id)), message: status === "interested" ? "Release pack requested" : `Release marked ${status}` });
 }
 
+async function saveDistributionLink(request, db, user) {
+  if (!user?.id) return json({ message: "Sign in to manage release destinations" }, 401);
+  try {
+    verifyRequestOrigin(request);
+  } catch {
+    return json({ message: "Cross-origin release destination updates are not accepted" }, 403);
+  }
+
+  const contentLength = Number(request.headers.get("content-length") || 0);
+  if (contentLength > 8192) return json({ message: "Request body is too large" }, 413);
+
+  let payload;
+  try {
+    const body = await request.text();
+    if (body.length > 8192) return json({ message: "Request body is too large" }, 413);
+    payload = JSON.parse(body);
+  } catch {
+    return json({ message: "Request body must be valid JSON" }, 400);
+  }
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    return json({ message: "Request body must be an object" }, 400);
+  }
+
+  const releaseId = typeof payload.releaseId === "string" ? payload.releaseId.trim() : "";
+  if (releaseId.length < 2 || releaseId.length > 96) {
+    return json({ message: "Choose a saved release" }, 400);
+  }
+  if (!Object.hasOwn(payload, "purchaseUrl") || typeof payload.purchaseUrl !== "string") {
+    return json({ message: "Enter a distributor smart link or clear the destination" }, 400);
+  }
+  const destination = validateSmartLink(payload.purchaseUrl);
+  if (!destination.ok) return json({ message: destination.error }, 400);
+
+  const membership = await ensureMembership(db, user);
+  const platformOwner = isOwner(user);
+  const savedRows = await db.sql`
+    UPDATE halo_release_campaigns
+    SET purchase_url = ${destination.url}, updated_at = NOW()
+    WHERE id = ${releaseId}
+      AND (${platformOwner} OR owner_member_id = ${membership.member_id})
+    RETURNING id
+  `;
+  if (!savedRows.length) return json({ message: "That release could not be updated by this artist" }, 404);
+
+  const state = await packState(db, user, releaseId);
+  return json({ ...state, message: destination.url ? "Distribution destination saved" : "Distribution destination cleared" });
+}
+
 export default async function releasePackHandler(request) {
-  if (!["GET", "POST", "PUT"].includes(request.method)) return json({ message: "Method not allowed" }, 405);
+  if (!["GET", "POST", "PUT", "PATCH"].includes(request.method)) return json({ message: "Method not allowed" }, 405);
 
   try {
     const [db, user] = await Promise.all([getDatabase(), getUser()]);
     if (request.method === "PUT") return saveCampaign(request, db, user);
     if (request.method === "POST") return saveSelectorResponse(request, db, user);
+    if (request.method === "PATCH") return saveDistributionLink(request, db, user);
     const slug = new URL(request.url).searchParams.get("slug") || "";
     const state = await packState(db, user, slug);
     return state ? json(state) : json({ message: "Release campaign not found" }, 404);

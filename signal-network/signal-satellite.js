@@ -1,6 +1,7 @@
 // HALO Signal satellite: floating dock, chat drawer and HALO Points rewards dialog.
 // Points are a local engagement layer persisted in this browser only. They never
 // grant ownership, licensing rights or paid access; fulfilment is confirmed by HALO.
+import { createFanSignalTracker } from "./fan-signal-tracker.js";
 
 export const SATELLITE_STORAGE_KEY = "halo_signal_satellite_v1";
 export const SATELLITE_EVENT = "halo:signal-engagement";
@@ -123,7 +124,7 @@ export function tierFor(lifetimePoints) {
   TIERS.forEach((tier, position) => { if (lifetime >= tier.minHP) index = position; });
   const tier = TIERS[index];
   const next = TIERS[index + 1] || null;
-  const progress = next ? Math.min(100, Math.round(((lifetime - tier.minHP) / (next.minHP - tier.minHP)) * 100)) : 100;
+  const progress = next ? Math.min(100, Math.floor(((lifetime - tier.minHP) / (next.minHP - tier.minHP)) * 100)) : 100;
   return { tier, index, next, progress, lifetime };
 }
 
@@ -295,6 +296,20 @@ export function createSignalSatellite({
       history: byId("haloEarnHistoryList"), status: byId("haloSatelliteStatus")
     };
     if (!root || !el.pointsBtn || !el.chatBtn || !el.drawer || !el.modal || !el.form) return;
+    const fanTracker = createFanSignalTracker(byId("fanSignalTracker"));
+    cleanups.push(() => fanTracker.destroy());
+    let identityConnected = false;
+    function connectIdentity() {
+      if (identityConnected || !window?.haloIdentity) return;
+      identityConnected = true;
+      const unsubscribe = window.haloIdentity.onAuthChange(() => {
+        fanTracker.reset();
+        if (el.modal.open) fanTracker.refresh();
+      });
+      if (typeof unsubscribe === "function") cleanups.push(unsubscribe);
+    }
+    connectIdentity();
+    listen(window, "halo-identity-ready", connectIdentity);
     if (storage === undefined) {
       try { storage = window?.localStorage ?? null; } catch { storage = null; }
     }
@@ -417,6 +432,12 @@ export function createSignalSatellite({
           return item;
         }) : [node("li", "No HALO Points activity yet.", "halo-satellite__history-item")]));
       }
+      const breakdown = byId("fanSignalLocalBreakdown");
+      if (breakdown) {
+        const today = state.daily.day === dayKey(Date.now()) ? state.daily.earned : {};
+        breakdown.replaceChildren(...Object.entries(EARN_RULES).map(([kind, rule]) =>
+          node("li", `${rule.label}: ${today[kind] || 0} local HP today`)));
+      }
       if (engine?.persistFailed && !persistWarned) {
         persistWarned = true;
         announce("HALO Points can't be saved in this browser; progress resets when you leave.");
@@ -454,6 +475,7 @@ export function createSignalSatellite({
       if (typeof el.modal.showModal === "function") el.modal.showModal();
       else el.modal.setAttribute("open", "");
       el.pointsBtn.setAttribute("aria-expanded", "true");
+      fanTracker.refresh();
       el.closeRewards?.focus?.();
       return true;
     }
@@ -464,6 +486,7 @@ export function createSignalSatellite({
       return true;
     }
     function onModalClosed() {
+      fanTracker.reset();
       el.pointsBtn.setAttribute("aria-expanded", "false");
       const target = modalOpener?.isConnected === false ? el.pointsBtn : modalOpener || el.pointsBtn;
       modalOpener = null;

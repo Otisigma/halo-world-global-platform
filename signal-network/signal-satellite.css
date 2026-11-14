@@ -16,6 +16,15 @@
 }
 .halo-satellite[hidden], .halo-satellite [hidden] { display: none !important; }
 .halo-satellite :focus-visible { outline: 3px solid var(--sat-gold); outline-offset: 3px; }
+.halo-satellite__fan-tracker { padding: 1rem; border-bottom: 1px solid var(--sat-line); font-size: .85rem; overflow-wrap: anywhere; }
+.halo-satellite__fan-tracker h3 { margin: .5rem 0; color: var(--sat-gold); }
+.halo-satellite__fan-tracker p, .halo-satellite__fan-tracker ul { margin: .75rem 0; }
+.halo-satellite__fan-tracker ul { padding-left: 1.25rem; }
+.halo-satellite__fan-tracker summary { padding: .75rem 0; cursor: pointer; }
+.halo-satellite__verification { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 12rem), 1fr)); gap: .75rem; margin: .75rem 0; }
+.halo-satellite__verification dt { font-weight: 700; }
+.halo-satellite__verification dd { margin: .25rem 0 0; color: var(--sat-muted); }
+.halo-satellite__concept-link { display: inline-block; padding: .75rem 0; color: var(--sat-gold); }
 
 .halo-satellite__dock {
   position: fixed; right: max(1rem, env(safe-area-inset-right)); bottom: max(1rem, env(safe-area-inset-bottom));
@@ -77,11 +86,11 @@
 
 .halo-satellite__modal {
   width: min(45rem, calc(100% - 2rem)); max-height: min(85dvh, 48rem); padding: 0; margin: auto;
-  color: var(--sat-paper); background: var(--sat-panel); border: 1px solid var(--sat-gold); border-radius: 1rem; box-shadow: 0 16px 48px #000e; overflow: hidden;
+  color: var(--sat-paper); background: var(--sat-panel); border: 1px solid var(--sat-gold); border-radius: 1rem; box-shadow: 0 16px 48px #000e; overflow-y: auto;
 }
-.halo-satellite__modal[open] { display: flex; flex-direction: column; }
+.halo-satellite__modal[open] { display: block; }
 .halo-satellite__modal::backdrop { background: #000d; backdrop-filter: blur(6px); }
-.halo-satellite__modal-header { align-items: flex-start; padding: 1.1rem 1.25rem; }
+.halo-satellite__modal-header { position: sticky; top: 0; z-index: 1; align-items: flex-start; padding: 1.1rem 1.25rem; }
 .halo-satellite__modal-header > div { margin-right: auto; }
 .halo-satellite__modal-header h2 { margin: 0; font-family: 'Barlow Condensed', sans-serif; font-size: 1.75rem; }
 .halo-satellite__modal-sub { margin: .3rem 0 0; color: var(--sat-muted); font-size: .78rem; line-height: 1.55; }

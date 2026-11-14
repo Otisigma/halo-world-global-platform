@@ -38,7 +38,7 @@ function fixture({ connection, readyState = "complete", brokenAudio = false } = 
     return nextTimer;
   };
   window.clearTimeout = timer => timers.delete(timer);
-  const document = { readyState };
+  const document = Object.assign(new EventTarget(), { readyState });
   class Audio extends FakeAudio {
     constructor() {
       super();
@@ -58,12 +58,12 @@ function fixture({ connection, readyState = "complete", brokenAudio = false } = 
   };
 }
 
-const urls = Array.from({ length: 12 }, (_, index) => `https://halo.test/track-${index}.mp3`);
+const urls = Array.from({ length: 12 }, (_, index) => `https://halo.test/audio/track-${index}.mp3`);
 {
   const f = fixture({ readyState: "interactive" });
   const primary = new FakeAudio();
   f.cache.warmPlaylist(urls, { primaryAudio: primary });
-  assert.equal(primary.preload, "auto");
+  assert.equal(primary.preload, "metadata");
   assert.equal(primary.src, urls[0]);
   assert.equal(primary.loads, 1, "primary must load immediately without constructing a second player");
   assert.equal(f.audios.length, 0);
@@ -71,53 +71,44 @@ const urls = Array.from({ length: 12 }, (_, index) => `https://halo.test/track-$
   assert.equal(f.timers.size, 0, "background must wait for page load");
   f.document.readyState = "complete";
   f.window.dispatchEvent(new Event("load"));
-  f.run(250);
-  assert.equal(f.audios.length, 1);
-  assert.equal(f.audios[0].preload, "metadata", "secondary files must never all get auto buffering");
-  assert.equal(f.audios[0].src, urls[1]);
-  assert.equal([...f.timers.values()].some(timer => timer.delay === 250), false, "only one metadata load may be in flight");
-  for (let index = 0; index < 5; index++) {
-    f.audios[index].dispatchEvent(new Event("loadedmetadata"));
-    if (index < 4) f.run(250);
-  }
-  assert.equal(f.audios.length, 5, "cache must bound playlist memory/data to five nearby tracks plus primary");
+  assert.equal(f.audios.length, 0, "fallbacks and playlists must not create speculative players");
   assert.equal(f.timers.size, 0);
-  const cached = f.cache.take(urls[1]);
-  assert.equal(cached, f.audios[0], "playback must receive the actual warmed element");
-  cached.play();
+  f.cache.warmPlaylist(urls, { primaryAudio: primary });
+  assert.equal(primary.loads, 1, "repeated selection must preserve metadata and avoid duplicate requests");
+  primary.error = { code: 4 };
+  f.cache.warmPlaylist(urls, { primaryAudio: primary });
+  assert.equal(primary.loads, 2, "reselecting a failed borrowed source must reload instead of preserving its media error");
+  primary.error = null;
+  assert.equal(f.cache.take(urls[1]), null);
   f.cache.clear();
-  assert.equal(cached.paused, false, "cleanup must not interrupt a transferred player");
   assert.equal(primary.src, urls[0], "cleanup must not unload Dreamweaver's borrowed element");
-  assert.equal(f.audios[1].src, "");
 }
 {
   const f = fixture();
   f.cache.warmPlaylist(urls);
-  assert.equal(f.audios[0].preload, "auto");
-  assert.equal(f.timers.size, 0, "background must not compete with a stalled or browser-blocked primary");
+  assert.equal(f.audios[0].preload, "metadata");
+  f.cache.warmPlaylist(urls);
+  assert.equal(f.audios.length, 1, "repeated owned selection must not duplicate Audio objects");
+  f.audios[0].error = { code: 4 };
   f.audios[0].dispatchEvent(new Event("error"));
-  f.run(250);
-  f.audios[1].error = { code: 2 };
-  f.audios[1].dispatchEvent(new Event("error"));
-  assert.equal(f.cache.take(urls[1]), null, "failed preload must fall back to standard playback");
-  assert.equal(f.audios[1].src, "");
-  f.run(250);
-  f.run(5000);
-  assert.equal(f.audios[2].src, "", "hung metadata requests must abort before advancing");
-  f.run(250);
-  const inFlight = f.cache.take(urls[3]);
-  assert.equal(inFlight, f.audios[3], "user playback must not wait for metadata completion");
-  f.run(250);
+  assert.equal(f.cache.take(urls[0]), null, "failed preload must fall back to standard playback");
+  f.cache.warmPlaylist([urls[1]]);
+  assert.equal(f.audios[0].src, "", "replacement releases failed speculative elements");
+  const inFlight = f.cache.take(urls[1]);
+  assert.equal(inFlight, f.audios[1], "user playback must not wait for metadata completion");
+  inFlight.play();
   f.window.dispatchEvent(new Event("pagehide"));
   assert.equal(f.timers.size, 0);
-  assert.equal(f.audios[4].src, "");
-  assert.equal(inFlight.src, urls[3]);
+  assert.equal(inFlight.src, urls[1]);
+  assert.equal(inFlight.paused, false);
 }
 for (const connection of [{ saveData: true }, { effectiveType: "2g" }, { effectiveType: "3g" }]) {
   const f = fixture({ connection });
   f.cache.warmPlaylist(urls);
   f.audios[0].dispatchEvent(new Event("canplay"));
   assert.equal(f.audios.length, 1, "data saver/slow connections must only load the selected track");
+  assert.equal(f.audios[0].preload, "none");
+  assert.equal(f.audios[0].loads, 0);
   assert.equal(f.timers.size, 0);
 }
 for (const options of [{ connection: { saveData: true } }, { connection: { effectiveType: "3g" } }, { hidden: true }]) {
@@ -136,7 +127,7 @@ for (const options of [{ connection: { saveData: true } }, { connection: { effec
   const f = fixture();
   const audio = new FakeAudio();
   audio.src = urls[0];
-  assert.equal(f.cache.prepare(audio, "/track-0.mp3"), true);
+  assert.equal(f.cache.prepare(audio, "/audio/track-0.mp3"), true);
   assert.equal(audio.loads, 0, "healthy same-source playback must preserve its existing buffer");
   audio.error = { code: 2 };
   assert.equal(f.cache.prepare(audio, urls[0]), true);
@@ -146,14 +137,47 @@ for (const options of [{ connection: { saveData: true } }, { connection: { effec
   }
   f.cache.warmPlaylist([urls[0], urls[0], urls[1]]);
   f.audios[0].dispatchEvent(new Event("canplay"));
-  f.run(250);
-  f.audios[1].dispatchEvent(new Event("loadedmetadata"));
+  assert.equal(f.audios.length, 1);
   assert.equal(f.timers.size, 0, "duplicate sources must not cause duplicate requests");
   f.cache.warmPlaylist([urls[2]]);
   assert.equal(f.audios[0].src, "", "playlist replacement must release old cache objects");
   f.cache.dispose();
   f.cache.warmPlaylist(urls);
   assert.equal(f.timers.size, 0, "disposed caches must not restart");
+}
+for (const value of [
+  "https://cdn.test/public.mp3", "/audio/song.mp3?token=secret",
+  "/api/song-catalog/audio?versionId=private", "/api/drive-catalog/audio?track=public",
+  "/audio/song.mp3?X-Amz-Signature=signed", "/private/unreleased.mp3"
+]) {
+  const f = fixture();
+  f.cache.warmPlaylist([value, urls[0]]);
+  assert.equal(f.audios[0].preload, "none", "unknown access, mutable APIs and signed sources are play-on-demand");
+  assert.equal(f.audios[0].loads, 0);
+}
+for (const constraints of [
+  { onLine: false }, { deviceMemory: 2 }, { hardwareConcurrency: 2 }, { maxTouchPoints: 1 }
+]) {
+  const f = fixture();
+  Object.assign(f.window.navigator, constraints);
+  f.cache.warmPlaylist(urls);
+  assert.equal(f.audios[0].preload, "none");
+  assert.equal(f.audios[0].loads, 0);
+}
+{
+  const connection = Object.assign(new EventTarget(), { effectiveType: "4g" });
+  const f = fixture({ connection });
+  const audio = new FakeAudio();
+  f.cache.warmPlaylist(urls, { primaryAudio: audio });
+  connection.saveData = true;
+  connection.dispatchEvent(new Event("change"));
+  assert.equal(audio.preload, "none");
+  assert.equal(f.cache.prepare(audio, urls[0]), true);
+  audio.play();
+  audio.dispatchEvent(new Event("play"));
+  f.document.hidden = true;
+  f.document.dispatchEvent(new Event("visibilitychange"));
+  assert.equal(audio.preload, "auto", "policy changes must not interrupt claimed playback");
 }
 {
   const f = fixture({ brokenAudio: true });
@@ -232,7 +256,7 @@ for (const withCache of [true, false]) {
   assert.equal(state.audioSourceMode, "remote", "preload does not wait for media readiness or attempt autoplay");
   assert.equal(result.started, false);
   assert.equal(audio.src, urls[0]);
-  assert.equal(audio.preload, "auto", "cache absence must still prioritize current playback");
+  assert.equal(audio.preload, withCache ? "metadata" : "auto", "metadata is speculative; explicit playback still uses normal HTML media loading");
   assert.equal(state.releasePlaybackState, "ready");
   assert.equal(audio.plays, 0, "preloading must not bypass browser playback policy");
 }
@@ -240,4 +264,9 @@ for (const withCache of [true, false]) {
 assert.match(page, /audio-preloader\.js[\s\S]*dreamweaver\/dreamweaver\.js/);
 assert.match(page, /<audio id="showAudio" preload="auto">/);
 assert.match(dreamweaver, /warmPlaylist\(\[primaryAudio, \.\.\.dreamweaverDriveFallbacks/);
+const navigation = await read("mobile-navigation.js");
+const worker = await read("sw.js");
+assert.match(navigation, /serviceWorker\.register\("\/sw\.js", \{ type: "module" \}\)/);
+assert.doesNotMatch(navigation, /register\("\/public\/sw\.js"/, "experimental shared audio caching must remain unregistered");
+assert.match(worker, /event\.request\.mode !== "navigate"/, "the supported worker must leave audio and range delivery to HTTP");
 console.log("Audio preloader contracts passed.");

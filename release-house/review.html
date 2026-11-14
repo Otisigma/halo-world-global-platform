@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Release House staff review</title>
+  <link rel="stylesheet" href="/release-house/release-house.css">
+  <script src="/release-house/review.js" defer></script>
+</head>
+<body>
+  <main class="submission-desk">
+    <div class="submission-lead">
+      <h1>Release House staff review</h1>
+      <p>Restricted to existing HALO owner/admin roles or configured owner accounts. <a href="/release-house/">Return to Release House to sign in</a>.</p>
+      <p>Up to 50 oldest pending requests, with the latest 20 internal notes each. Artist-supplied metadata and links are unverified. Links are displayed as text only; no ISRC/UPC is imported or assigned.</p>
+      <p>Notes and follow-up markers are internal audit entries, not approval, artist notifications, rights grants, licensing, publication, or entry into signal/radio rotation. Existing release gates still apply.</p>
+      <p>Deployment prerequisite: apply the submission migration, then the review-note migration (<code>20261028010000_release_house_submissions.sql</code>, then <code>20261028020000_release_house_review_notes.sql</code>). Legal terms remain blocked on qualified counsel and an approved versioned policy.</p>
+      <button id="refreshReviews" type="button">Refresh queue</button>
+    </div>
+    <div class="submission-form">
+      <p id="reviewStatus" role="status" aria-live="polite">Checking staff access…</p>
+      <form id="reviewForm" hidden>
+        <label class="room-field">Pending submission<select id="reviewSubmission" required></select></label>
+        <pre id="reviewDetails" class="review-details"></pre>
+        <label class="room-field">Internal action<select id="reviewAction"><option value="note">Record review note</option><option value="follow_up_needed">Mark follow-up needed (no notification)</option></select></label>
+        <label class="room-field">Internal note<textarea id="reviewNote" maxlength="2000" required></textarea></label>
+        <button id="saveReview" type="submit">Save internal note</button>
+      </form>
+    </div>
+  </main>
+</body>
+</html>

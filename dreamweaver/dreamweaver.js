@@ -337,6 +337,7 @@ import { createArtScreen } from "../lib/halo-art-screen.js";
     lobbyArtScreen?.update({
       lyricsText: state.audioSourceMode === "remote" && matchesRelease ? release?.dreamweaverPayload?.lyricsText || "" : "",
       time: elements.audio.currentTime,
+      duration: elements.audio.duration,
       playing: lobbyAudioPlaying
     });
   }

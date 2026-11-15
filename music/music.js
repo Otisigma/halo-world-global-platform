@@ -33,6 +33,7 @@
       screen.update({
         lyricsText: frame.dataset.artCompact === "true" ? "" : release?.dreamweaverPayload?.lyricsText || "",
         time: player.audio.currentTime,
+        duration: player.audio.duration,
         playing: active
       });
       if (frame.dataset.artCompact === "true") frame.setAttribute("aria-label", `${active ? "Pause" : "Play"} ${release?.title || "release"}`);

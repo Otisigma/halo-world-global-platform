@@ -55,12 +55,14 @@ existing player. An on-art Lyrics ON/OFF button appears when actual lyrics are
 available. Its setting applies to artwork screens on that page until it is
 reloaded; it is not stored across pages or visits. The vignette is SVG; lyric
 text uses wrapping HTML so longer lines remain readable and scrollable.
-When no timestamps are present, supplied lyric lines cycle at 4.5-second
-intervals using the player's current time and are labelled "not synchronized":
-their pace does not match the performance. Pausing hides the overlay and
-resuming or seeking uses the current playback position. Reduced-motion mode
-shows the first untimed line without cycling. Section labels are not treated
-as lyrics.
+When no timestamps are present and a valid track duration is available,
+supplied lyric lines are distributed evenly across the track's playback
+progress. They are labelled "estimated, not synchronized" because proportional
+pacing does not establish when a lyric is actually sung. Seeking recalculates
+the estimated line. If duration is unavailable, the prior 4.5-second rolling
+fallback remains labelled "not synchronized". Pausing hides the overlay.
+Reduced-motion mode shows the first untimed line without cycling. Section
+labels are not treated as lyrics.
 Browser-local playlist rows show cover thumbnails with explicit play buttons.
 These small play buttons do not contain nested lyric toggles. Local audio
 previews, mixed decks, external players and static artwork do not have a

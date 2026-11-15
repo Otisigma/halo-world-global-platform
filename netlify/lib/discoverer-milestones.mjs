@@ -17,6 +17,7 @@ export async function loadDiscovererState(db, memberId) {
       JOIN halo_radio_tracks track ON track.id = milestone.track_id
       JOIN halo_member_notification_preferences preference ON preference.member_id = award.member_id
       WHERE award.member_id = ${memberId} AND release.status IN ('passed', 'published')
+        AND release.visibility = 'public'
         AND track.status = 'rotation' AND track.reviewed_at IS NOT NULL
         AND track.reviewed_by_member_id IS NOT NULL
         AND preference.discoverer_in_app = TRUE AND award.notified_at IS NOT NULL

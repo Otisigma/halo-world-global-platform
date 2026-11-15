@@ -21,7 +21,7 @@ const ids = ["audio", "status", "tracks", "previous", "next", "retry", "share", 
 const nodes = Object.fromEntries(ids.map(id => [id, new Element()]));
 nodes.audio.hidden = true;
 nodes.visualizerField.style = { setProperty() {} };
-const document = { getElementById: id => nodes[id], createElement: () => new Element(), addEventListener() {} };
+const document = { getElementById: id => nodes[id], createElement: () => new Element(), createElementNS: () => new Element(), querySelectorAll: () => [], addEventListener() {} };
 nodes.continueNext.checked = true;
 const location = { origin: "https://halo.test", href: "https://halo.test/obsidian/?song=beta" };
 const saved = new Map();

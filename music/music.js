@@ -27,7 +27,7 @@
     if (!makeArtScreen) return;
     document.querySelectorAll("[data-art-screen-id]").forEach(frame => {
       let screen = artScreens.get(frame);
-      if (!screen) { screen = makeArtScreen(frame, document); artScreens.set(frame, screen); }
+      if (!screen) { screen = makeArtScreen(frame, document, { toggle: frame.dataset.artCompact !== "true" }); artScreens.set(frame, screen); }
       const release = state.releases.find(item => item.id === frame.dataset.artScreenId);
       const active = player.status === "playing" && player.track?.id === frame.dataset.artScreenId;
       screen.update({

@@ -173,7 +173,7 @@ export function createGateway({ document, window, fetcher }) {
           if (image.getAttribute("src") !== "/assets/releases/halo-premium-placeholder.svg") image.src = "/assets/releases/halo-premium-placeholder.svg";
         });
         cover.append(image);
-        const screen = createArtScreen(cover, document);
+        const screen = createArtScreen(cover, document, { toggle: false });
         playlistArt.push({ screen, id: release.id, cover, title: release.title || "release" });
         cover.addEventListener("click", async () => {
           if (selected()?.id === release.id && isPlaying) { audio.pause(); return; }

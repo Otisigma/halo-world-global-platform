@@ -32,8 +32,13 @@ without implying synchronization. The active timestamped line has a brief
 entrance effect unless reduced motion is enabled. No lyric text or timestamps
 are invented.
 
-The shared artwork screen overlays timed lyrics on the active Obsidian cover
-and on the active release's shop artwork, using each page's existing player.
+The shared artwork screen overlays timed lyrics on the active Obsidian cover,
+the active release's shop artwork, and Dreamweaver's lobby cover when the
+remote track is identified as the matching catalog release. Each uses its
+existing player. An on-art Lyrics ON/OFF button appears when actual lyrics are
+available. Its setting applies to artwork screens on that page until it is
+reloaded; it is not stored across pages or visits. The vignette is SVG; lyric
+text uses wrapping HTML so longer lines remain readable and scrollable.
 When no timestamps are present, supplied lyric lines cycle at 4.5-second
 intervals using the player's current time and are labelled "not synchronized":
 their pace does not match the performance. Pausing hides the overlay and
@@ -41,6 +46,9 @@ resuming or seeking uses the current playback position. Reduced-motion mode
 shows the first untimed line without cycling. Section labels are not treated
 as lyrics.
 Browser-local playlist rows show cover thumbnails with explicit play buttons.
+These small play buttons do not contain nested lyric toggles. Local audio
+previews, mixed decks, external players and static artwork do not have a
+reliable matching lyric source and do not display a lyric overlay.
 Inactive releases and missing lyrics do not show an overlay. A release with
 both timed and untimed lines uses its timed lines for the cover. Shop and
 Obsidian remain separate page players; there is no cross-page

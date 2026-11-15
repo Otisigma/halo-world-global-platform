@@ -9,8 +9,14 @@ class Element {
   }
   append(child) { this.children.push(child); }
   setAttribute(name, value) { this[name] = value; }
+  addEventListener(name, callback) { this[name] = callback; }
 }
-const document = { createElement: () => new Element() };
+const buttons = [];
+const document = {
+  createElement: () => { const element = new Element(); buttons.push(element); return element; },
+  createElementNS: () => new Element(),
+  querySelectorAll: () => buttons.filter(element => element.className === "halo-art-lyrics-toggle")
+};
 const frame = new Element();
 const screen = createArtScreen(frame, document);
 const overlay = frame.children[0];
@@ -21,6 +27,21 @@ screen.update({ lyricsText: lyrics, time: 2, playing: true });
 assert.equal(overlay.textContent, "<First>", "lyrics are rendered as text, not markup");
 assert.equal(overlay.hidden, false);
 assert.equal(frame["halo-art-playing"], true);
+const toggle = frame.children[2];
+assert.equal(toggle["aria-pressed"], "true");
+toggle.click({ stopPropagation() {} });
+assert.equal(toggle["aria-pressed"], "false");
+assert.equal(overlay.hidden, true, "turning lyrics off hides the active lyric immediately");
+assert.equal(frame.children[1].style.display, "none", "turning lyrics off also hides the SVG vignette");
+const otherFrame = new Element();
+const otherScreen = createArtScreen(otherFrame, document);
+otherScreen.update({ lyricsText: lyrics, time: 2, playing: true });
+assert.equal(otherFrame.children[2]["aria-pressed"], "false", "new cards retain the page preference");
+assert.equal(otherFrame.children[0].hidden, true);
+otherFrame.children[2].click({ stopPropagation() {} });
+assert.equal(toggle["aria-pressed"], "true", "changing one control updates existing cards");
+assert.equal(overlay.hidden, false);
+assert.equal(frame.children[1].style.display, "");
 screen.update({ lyricsText: lyrics, time: 4, playing: true });
 assert.equal(overlay.textContent, "Second");
 screen.update({ lyricsText: lyrics, time: 2, playing: true });
@@ -59,4 +80,7 @@ assert.equal(reducedFrame.children[0].textContent, "Lyrics · not synchronized\n
 motion.matches = false;
 reduced.update({ lyricsText: plain, time: 10, playing: true });
 assert.equal(reducedFrame.children[0].textContent, "Lyrics · not synchronized\nThird plain line");
+const compactFrame = new Element();
+createArtScreen(compactFrame, document, { toggle: false }).update({ playing: true });
+assert.equal(compactFrame.children.length, 1, "compact play buttons do not contain nested buttons");
 console.log("Shared artwork screen contracts passed: timed and unsynchronized lyrics, seeks, pause, reduced motion and missing metadata.");

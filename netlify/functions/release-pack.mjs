@@ -425,8 +425,14 @@ async function saveDistributionLink(request, db, user) {
 
   let payload;
   try {
-    const body = await request.text();
-    if (body.length > 8192) return json({ message: "Request body is too large" }, 413);
+    let size = 0;
+    const chunks = [];
+    for await (const chunk of request.body || []) {
+      size += chunk.byteLength;
+      if (size > 8192) return json({ message: "Request body is too large" }, 413);
+      chunks.push(Buffer.from(chunk));
+    }
+    const body = Buffer.concat(chunks).toString("utf8");
     payload = JSON.parse(body);
   } catch {
     return json({ message: "Request body must be valid JSON" }, 400);

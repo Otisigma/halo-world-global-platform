@@ -2,6 +2,18 @@
   command = "npm run build"
   publish = "."
 
+[[edge_functions]]
+  path = "/obsidian"
+  function = "social-preview"
+
+[[edge_functions]]
+  path = "/obsidian/"
+  function = "social-preview"
+
+[[edge_functions]]
+  path = "/obsidian/index.html"
+  function = "social-preview"
+
 [[redirects]]
   from = "/netlify/*"
   to = "/404.html"

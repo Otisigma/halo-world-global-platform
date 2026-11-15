@@ -1,6 +1,10 @@
 .halo-art-screen{position:relative;overflow:hidden}
-.halo-art-lyric{position:absolute;z-index:3;inset:auto 0 0;padding:2.5rem 1rem 1rem;background:linear-gradient(transparent,rgba(0,0,0,.92));color:#fff;font:italic 600 clamp(.9rem,2vw,1.35rem)/1.4 Georgia,serif;text-align:center;text-shadow:0 2px 6px #000;overflow-wrap:anywhere;white-space:pre-line;pointer-events:none}
+.halo-art-lyric{position:absolute;z-index:3;inset:auto 0 0;max-height:calc(100% - 3.5rem);overflow-y:auto;overscroll-behavior:contain;padding:2.5rem 1rem 1rem;background:linear-gradient(transparent,rgba(0,0,0,.92));color:#fff;font:italic 600 clamp(.9rem,2vw,1.35rem)/1.4 Georgia,serif;text-align:center;text-shadow:0 2px 6px #000;overflow-wrap:anywhere;white-space:pre-line}
 .halo-art-lyric[hidden]{display:none}
+.halo-art-vignette{position:absolute;inset:0;width:100%;height:100%;z-index:2;pointer-events:none;fill:#000;opacity:.16}
+.halo-art-lyrics-toggle{position:absolute;z-index:5;top:12px;left:12px;padding:.5rem .7rem;border:1px solid #d5b66c;border-radius:999px;background:#111e;color:#f3e1a3;font:600 .7rem/1.2 sans-serif;cursor:pointer}
+.halo-art-lyrics-toggle[hidden]{display:none}
+.halo-art-lyrics-toggle:focus-visible{outline:2px solid #fff;outline-offset:3px}
 .halo-art-playing{outline:2px solid #d5b66c;outline-offset:-2px}
 .halo-art-control{position:absolute;z-index:4;right:12px;top:12px}
 .halo-art-control:empty{display:none}

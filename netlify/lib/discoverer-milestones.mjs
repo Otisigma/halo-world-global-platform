@@ -64,8 +64,14 @@ export function createDiscovererHandler({ getDatabase, getUser, verifyRequestOri
         } catch { return json({ message: "Cross-origin changes are not accepted" }, 403); }
         if (!request.headers.get("content-type")?.toLowerCase().includes("application/json")) return json({ message: "Send JSON" }, 415);
         if (Number(request.headers.get("content-length")) > 1000) return json({ message: "Request too large" }, 413);
-        const text = await request.text();
-        if (new TextEncoder().encode(text).byteLength > 1000) return json({ message: "Request too large" }, 413);
+        let size = 0;
+        const chunks = [];
+        for await (const chunk of request.body || []) {
+          size += chunk.byteLength;
+          if (size > 1000) return json({ message: "Request too large" }, 413);
+          chunks.push(Buffer.from(chunk));
+        }
+        const text = Buffer.concat(chunks).toString("utf8");
         try { payload = JSON.parse(text); } catch { return json({ message: "Invalid JSON" }, 400); }
         if (!payload || Array.isArray(payload) || typeof payload !== "object") return json({ message: "Choose an alert action" }, 400);
         if (payload.action === "preferences") {

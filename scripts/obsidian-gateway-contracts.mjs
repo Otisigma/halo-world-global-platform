@@ -21,7 +21,7 @@ const ids = ["audio", "status", "tracks", "previous", "next", "retry", "share", 
 const nodes = Object.fromEntries(ids.map(id => [id, new Element()]));
 nodes.audio.hidden = true;
 nodes.visualizerField.style = { setProperty() {} };
-const document = { getElementById: id => nodes[id], createElement: () => new Element(), addEventListener() {} };
+const document = { getElementById: id => nodes[id], createElement: () => new Element(), createElementNS: () => new Element(), querySelectorAll: () => [], addEventListener() {} };
 nodes.continueNext.checked = true;
 const location = { origin: "https://halo.test", href: "https://halo.test/obsidian/?song=beta" };
 const saved = new Map();
@@ -185,6 +185,11 @@ assert.equal(nodes.next.disabled, false, "playlist navigation sees the next play
 nodes.audio.events.ended();
 assert.equal(gateway.state.index, 1, "ending a track continues to the next release in the playlist");
 assert.equal(nodes.audio.played, beforePlaylistPlay + 2, "continuation starts the next playlist release");
+nodes.audio.currentTime = 0;
+nodes.audio.events.playing();
+assert.equal(nodes.artScreen.children[0].textContent, "Lyrics · not synchronized\nUntimed line", "untimed playlist release displays its own lyric");
+nodes.audio.events.pause();
+assert.equal(nodes.artScreen.children[0].hidden, true, "paused lyrics are hidden");
 const normalPlay = nodes.audio.play;
 nodes.audio.play = () => Promise.reject(new Error("blocked"));
 const originalPlaybackError = console.error;

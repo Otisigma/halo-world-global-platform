@@ -8,6 +8,7 @@ import { MIX_PRESETS, createMixSeed, deleteUserPreset, describeMixIntent, normal
 import { readSavedSongLabAudio } from "../dreamweaver-lab/resumable-upload.js";
 import { inspectAudioStream } from "../lib/audio-stream-diagnostics.js";
 import { createDreamweaverCinema, DEFAULT_CINEMA_LOOP } from "../lib/dreamweaver-cinema.js";
+import { createArtScreen } from "../lib/halo-art-screen.js";
 
 (() => {
   const chapters = [
@@ -325,6 +326,20 @@ import { createDreamweaverCinema, DEFAULT_CINEMA_LOOP } from "../lib/dreamweaver
     satelliteAgentLoop: { timer: 0, loopId: "", updateIntervalMs: SATELLITE_AGENT_REFRESH_MS, lastUpdatedAt: "", lastError: "" },
     sessionToken: window.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(36).slice(2)}`
   };
+  const lobbyFrame = document.getElementById("lobbyArtwork")?.closest("[data-artwork-frame]");
+  const lobbyArtScreen = lobbyFrame ? createArtScreen(lobbyFrame, document) : null;
+  let lobbyAudioPlaying = false;
+  function syncLobbyArt() {
+    const release = state.release;
+    const mixId = state.mix?.id;
+    const matchesRelease = state.mix?.isCatalogPlayback && mixId
+      && [release?.id, release?.dreamweaverPayload?.songId].includes(mixId);
+    lobbyArtScreen?.update({
+      lyricsText: state.audioSourceMode === "remote" && matchesRelease ? release?.dreamweaverPayload?.lyricsText || "" : "",
+      time: elements.audio.currentTime,
+      playing: lobbyAudioPlaying
+    });
+  }
   const escapeHtml = value => String(value ?? "").replace(/[&<>'"]/g, character => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" })[character]);
 
   function readStoredUnlock() {
@@ -1821,6 +1836,7 @@ import { createDreamweaverCinema, DEFAULT_CINEMA_LOOP } from "../lib/dreamweaver
   });
 
   function syncDreamweaverLyrics() {
+    syncLobbyArt();
     if (!elements.lyricsRoot || !elements.lyricsList) return;
     try {
       if (!state.lyricsEngine) {
@@ -3864,6 +3880,11 @@ import { createDreamweaverCinema, DEFAULT_CINEMA_LOOP } from "../lib/dreamweaver
     }) : null;
   elements.audio.addEventListener("playing", handleCatalogPlaying);
   elements.audio.addEventListener("timeupdate", handleCatalogTimeupdate);
+  elements.audio.addEventListener("playing", () => { lobbyAudioPlaying = true; syncLobbyArt(); });
+  for (const event of ["pause", "ended", "waiting", "error", "loadstart"]) {
+    elements.audio.addEventListener(event, () => { lobbyAudioPlaying = false; syncLobbyArt(); });
+  }
+  for (const event of ["timeupdate", "seeked"]) elements.audio.addEventListener(event, syncLobbyArt);
   elements.audio.addEventListener("volumechange", updateCatalogPlaybackCards);
   if (resumeUploadVerification()) return;
   elements.songLabLink?.addEventListener("click", event => {

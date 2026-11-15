@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { Buffer } from "node:buffer";
 import { readFile } from "node:fs/promises";
 import vm from "node:vm";
 import { SMART_LINK_HOSTS, validateSmartLink } from "../netlify/lib/release-house-submission.mjs";
@@ -142,7 +143,7 @@ function createReleasePackHarness({ user, allowUpdate = true, status = "publishe
   };
   const queries = [];
   const context = vm.createContext({
-    URL, Response, console, validateSmartLink,
+    URL, Response, Buffer, console, validateSmartLink,
     getUser: async () => user,
     getDatabase: async () => ({ sql: async (strings, ...values) => {
       const query = strings.join("?");
@@ -197,7 +198,7 @@ const ownerResponse = await patchDistribution(ownerHarness, {
   approval_status: "pending", radio_status: "off", stream_url: "/changed.wav", is_chart_eligible: true
 });
 const ownerPayload = await ownerResponse.json();
-assert.equal(ownerResponse.status, 200);
+assert.equal(ownerResponse.status, 200, JSON.stringify(ownerPayload));
 assert.equal(ownerPayload.release.purchaseUrl, smartDestination);
 assert.equal(ownerPayload.release.distributionStatus, "public");
 assert.equal(ownerPayload.release.distributionSource, "halo_release_campaigns.purchase_url");

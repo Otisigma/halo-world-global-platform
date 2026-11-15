@@ -47,6 +47,9 @@ Timestamped lines follow the current audio time; untimed lines remain readable
 without implying synchronization. The active timestamped line has a brief
 entrance effect unless reduced motion is enabled. No lyric text or timestamps
 are invented.
+The optional [offline lyric alignment tool](../lyric-alignment.md) can propose
+timings from a recording and existing lyrics for human review before catalog
+entry; it does not align songs during playback or automatically publish them.
 
 The shared artwork screen overlays timed lyrics on the active Obsidian cover,
 the active release's shop artwork, and Dreamweaver's lobby cover when the

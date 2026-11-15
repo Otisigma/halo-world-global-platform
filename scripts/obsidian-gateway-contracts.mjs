@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import { createGateway, eligibleReleases, safeDestination, releaseCategories } from "../obsidian/obsidian.js";
 
 class Element {
-  constructor() { this.children = []; this.events = {}; this.attributes = {}; this.dataset = {}; this.hidden = false; this.disabled = false; this.textContent = ""; this.classList = { toggle: (key, value) => { this[key] = value; } }; }
+  constructor() { this.children = []; this.events = {}; this.attributes = {}; this.dataset = {}; this.style = {}; this.hidden = false; this.disabled = false; this.textContent = ""; this.classList = { add: key => { this[key] = true; }, toggle: (key, value) => { this[key] = value; } }; }
   addEventListener(name, callback) { this.events[name] = callback; }
   setAttribute(name, value) { this.attributes[name] = value; }
   getAttribute(name) { return name === "src" ? this.src : this.attributes[name]; }
@@ -17,11 +17,11 @@ class Element {
   focus() { this.focused = true; }
   scrollIntoView() { this.scrolled = true; }
 }
-const ids = ["audio", "status", "tracks", "previous", "next", "retry", "share", "loop", "destination", "releaseLink", "artwork", "pulse", "selectedTitle", "artist", "position", "count", "lyrics", "lyricsStatus", "lyricsLines", "loadNote", "continueNext", "shareMoment", "quickFilters", "genreFilters", "versionFilters", "genreFilterSummary", "versionFilterSummary", "gridStatus", "createPlaylistForm", "newPlaylistName", "playlistStatus", "userPlaylists", "addToPlaylist", "addToPlaylistButton", "playlistPlayerStatus", "visualizerToggle", "visualizerStatus", "visualizerField"];
+const ids = ["audio", "status", "tracks", "previous", "next", "retry", "share", "loop", "destination", "releaseLink", "artwork", "artScreen", "pulse", "selectedTitle", "artist", "position", "count", "lyrics", "lyricsStatus", "lyricsLines", "loadNote", "continueNext", "shareMoment", "quickFilters", "genreFilters", "versionFilters", "genreFilterSummary", "versionFilterSummary", "gridStatus", "createPlaylistForm", "newPlaylistName", "playlistStatus", "userPlaylists", "addToPlaylist", "addToPlaylistButton", "playlistPlayerStatus", "visualizerToggle", "visualizerStatus", "visualizerField"];
 const nodes = Object.fromEntries(ids.map(id => [id, new Element()]));
 nodes.audio.hidden = true;
 nodes.visualizerField.style = { setProperty() {} };
-const document = { getElementById: id => nodes[id], createElement: () => new Element(), addEventListener() {} };
+const document = { getElementById: id => nodes[id], createElement: () => new Element(), createElementNS: () => new Element(), querySelectorAll: () => [], addEventListener() {} };
 nodes.continueNext.checked = true;
 const location = { origin: "https://halo.test", href: "https://halo.test/obsidian/?song=beta" };
 const saved = new Map();
@@ -126,6 +126,8 @@ assert.equal(nodes.status.textContent, "Release link copied.");
 assert.equal(nodes.audio.paused, true, "selection must not autoplay");
 nodes.audio.events.playing();
 assert.equal(nodes.pulse.playing, true);
+assert.equal(nodes.artScreen.children[0].textContent, "<img onerror=alert(1)>", "art overlay follows the current timed lyric as text");
+assert.equal(nodes.artScreen.children[0].hidden, false);
 assert.equal(nodes.tracks.children[0]["active-playing"], true, "only actual playback animates a card");
 const beforeFilter = nodes.audio.src;
 filterButton("genre:ambient").events.click();
@@ -183,6 +185,11 @@ assert.equal(nodes.next.disabled, false, "playlist navigation sees the next play
 nodes.audio.events.ended();
 assert.equal(gateway.state.index, 1, "ending a track continues to the next release in the playlist");
 assert.equal(nodes.audio.played, beforePlaylistPlay + 2, "continuation starts the next playlist release");
+nodes.audio.currentTime = 0;
+nodes.audio.events.playing();
+assert.equal(nodes.artScreen.children[0].textContent, "Lyrics · not synchronized\nUntimed line", "untimed playlist release displays its own lyric");
+nodes.audio.events.pause();
+assert.equal(nodes.artScreen.children[0].hidden, true, "paused lyrics are hidden");
 const normalPlay = nodes.audio.play;
 nodes.audio.play = () => Promise.reject(new Error("blocked"));
 const originalPlaybackError = console.error;

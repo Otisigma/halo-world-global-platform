@@ -198,6 +198,25 @@ export function createPlaylistStudio({ document, window, root, getReleases, play
         const release = releases.find(item => item.id === id);
         const item = document.createElement("li");
         item.dataset.releaseId = id;
+        if (release) {
+          const track = trackFor(release);
+          const cover = document.createElement("button");
+          cover.type = "button";
+          cover.className = "playlist-art-button";
+          cover.dataset.artScreenId = id;
+          cover.dataset.artCompact = "true";
+          cover.disabled = !track.src;
+          cover.setAttribute("aria-label", `Play ${release.title || "release"}`);
+          const image = document.createElement("img");
+          image.src = track.cover || "/assets/releases/halo-premium-placeholder.svg";
+          image.alt = "";
+          image.addEventListener("error", () => {
+            if (image.getAttribute("src") !== "/assets/releases/halo-premium-placeholder.svg") image.src = "/assets/releases/halo-premium-placeholder.svg";
+          });
+          cover.append(image);
+          cover.addEventListener("click", () => { stop(); player.play(track); });
+          item.append(cover);
+        }
         const title = document.createElement("span");
         const chapter = playlistWorld(playlist.world).chapters.find(item => item.releaseId === id);
         title.textContent = release ? `${chapter?.label ? `${chapter.label} / ` : ""}${release.title || "Untitled"} - ${release.artist || "Artist"}` : "Song unavailable in the current public catalog";
@@ -237,6 +256,7 @@ export function createPlaylistStudio({ document, window, root, getReleases, play
       empty.textContent = "Your world starts with one song. Press + on a song card or create a playlist above.";
       library.append(empty);
     }
+    player.syncArtScreens?.();
   }
   function open(releaseId, trigger) {
     if (!read()) return;

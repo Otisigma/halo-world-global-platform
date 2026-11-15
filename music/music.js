@@ -21,6 +21,23 @@
     toast: document.querySelector("#catalogToast"),
   };
   const state = { releases: [], videos: [], query: "", genre: "all", sort: "newest", chartRoom: "all", chartSort: "signal", activeReleaseId: "", activeShopId: "" };
+  let makeArtScreen;
+  const artScreens = new WeakMap();
+  function syncArtScreens() {
+    if (!makeArtScreen) return;
+    document.querySelectorAll("[data-art-screen-id]").forEach(frame => {
+      let screen = artScreens.get(frame);
+      if (!screen) { screen = makeArtScreen(frame, document, { toggle: frame.dataset.artCompact !== "true" }); artScreens.set(frame, screen); }
+      const release = state.releases.find(item => item.id === frame.dataset.artScreenId);
+      const active = player.status === "playing" && player.track?.id === frame.dataset.artScreenId;
+      screen.update({
+        lyricsText: frame.dataset.artCompact === "true" ? "" : release?.dreamweaverPayload?.lyricsText || "",
+        time: player.audio.currentTime,
+        playing: active
+      });
+      if (frame.dataset.artCompact === "true") frame.setAttribute("aria-label", `${active ? "Pause" : "Play"} ${release?.title || "release"}`);
+    });
+  }
   const playlistRoot = document.querySelector("#personalPlaylistHub");
   let playlistStudio;
   const configuredFeaturedReleaseId = elements.featured?.dataset.featuredReleaseId?.trim() || "";
@@ -164,6 +181,8 @@
       this.audio.addEventListener("waiting", () => { if (this.status === "playing") this.setStatus("loading"); });
       this.audio.addEventListener("pause", () => { if (this.status !== "error" && this.audio.paused) this.setStatus("paused"); });
       this.audio.addEventListener("ended", () => this.setStatus("paused"));
+      this.audio.addEventListener("timeupdate", syncArtScreens);
+      this.audio.addEventListener("seeked", syncArtScreens);
       this.audio.addEventListener("error", () => {
         if (this.track?.src && this.audio.src === this.track.src) this.fail("This preview could not be streamed right now.");
       });
@@ -219,9 +238,10 @@
       }
       this.preloader?.claim();
       this.telemetry?.reset();
+      const changedTrack = Boolean(this.track && this.track.id !== track.id);
       this.track = { ...track, src };
       this.audio.preload = "auto";
-      if (this.audio.src !== src || this.audio.error) this.audio.src = src;
+      if (this.audio.src !== src || this.audio.error || changedTrack) this.audio.src = src;
       this.renderBar();
       this.resume();
     }
@@ -290,6 +310,7 @@
       this.status = status;
       this.renderBar();
       this.syncButtons();
+      syncArtScreens();
     }
 
     renderBar() {
@@ -323,9 +344,12 @@
         button.classList.toggle("is-playing", active);
         button.classList.toggle("is-error", current && this.status === "error");
         button.setAttribute("aria-pressed", String(active));
+        if (button.dataset.title) button.setAttribute("aria-label", `${active ? "Pause" : "Play"} ${button.dataset.title}${button.dataset.artist ? ` by ${button.dataset.artist}` : ""}`);
         button.textContent = active ? (compact ? "❚❚" : "❚❚ Pause") : (compact ? "▶" : "▶ Play");
       });
+      syncArtScreens();
     }
+    syncArtScreens() { syncArtScreens(); }
   }
 
   const player = HaloGlobalPlayer.shared({
@@ -334,6 +358,10 @@
       logMusicIssue("music_shop_player_error", "Shop player could not stream audio", { releaseId: track?.id || "", url: track?.src || "" });
     }
   });
+  import("../lib/halo-art-screen.js").then(module => {
+    makeArtScreen = module.createArtScreen;
+    syncArtScreens();
+  }).catch(error => console.error("HALO artwork screens unavailable", error));
 
   function availabilitySummary(release) {
     const catalog = catalogState(release);
@@ -1048,7 +1076,7 @@
     updateShopHead(release);
     const artwork = releaseArtwork(release);
     elements.featured.innerHTML = `<article class="featured-release">
-      <div class="featured-art release-artwork-frame" data-artwork-frame><img class="release-artwork-image" src="${escapeHtml(artwork.src)}" alt="${escapeHtml(`${release.title} cover artwork`)}" width="1200" height="1200" data-release-artwork data-artwork-fallback="${escapeHtml(artwork.fallback)}" ${artworkAttributes(artwork)}></div>
+      <div class="featured-art release-artwork-frame" data-artwork-frame data-art-screen-id="${escapeHtml(release.id)}"><img class="release-artwork-image" src="${escapeHtml(artwork.src)}" alt="${escapeHtml(`${release.title} cover artwork`)}" width="1200" height="1200" data-release-artwork data-artwork-fallback="${escapeHtml(artwork.fallback)}" ${artworkAttributes(artwork)}><span class="halo-art-control">${playTrackButton(release, { compact: true })}</span></div>
       <div class="featured-copy"><div>${releaseMeta(release)}<h2 data-featured-heading tabindex="-1">${escapeHtml(release.title)}</h2><p class="featured-artist">${escapeHtml(release.artist)}</p><p class="featured-pitch">${escapeHtml(release.pitch || "Open the official release signal, approved listening destination, and campaign room.")}</p>${featuredDetailMarkup(release)}</div>${releaseActions(release, { includeCopy: true })}</div>
     </article>`;
     player.syncButtons(elements.featured);
@@ -1147,7 +1175,7 @@
        ? ` tabindex="0" data-halo-guide="Preview ${escapeHtml(release.title)} in the HALO player bar while you keep browsing." data-halo-guide-title="Quick listen" data-halo-guide-action="quick-listen"`
        : "";
      return `<article class="release-card" data-halo-guide-scope>
-      <div class="card-art release-artwork-frame" data-artwork-frame${cardGuide}><img class="release-artwork-image" src="${escapeHtml(artwork.src)}" alt="${escapeHtml(`${release.title} cover artwork`)}" loading="lazy" width="900" height="900" data-release-artwork data-artwork-fallback="${escapeHtml(artwork.fallback)}" ${artworkAttributes(artwork)}></div>
+      <div class="card-art release-artwork-frame" data-artwork-frame data-art-screen-id="${escapeHtml(release.id)}"${cardGuide}><img class="release-artwork-image" src="${escapeHtml(artwork.src)}" alt="${escapeHtml(`${release.title} cover artwork`)}" loading="lazy" width="900" height="900" data-release-artwork data-artwork-fallback="${escapeHtml(artwork.fallback)}" ${artworkAttributes(artwork)}><span class="halo-art-control">${playTrackButton(release, { compact: true })}</span></div>
      <div class="card-copy"><p class="card-kicker"><span>${escapeHtml(cardKicker)}</span>${cardDateLabel ? `<span>${escapeHtml(cardDateLabel)}</span>` : ""}</p>${releaseMeta(release)}<h3>${escapeHtml(release.title)}</h3><p class="card-artist">${escapeHtml(release.artist)}</p><p class="card-availability">${escapeHtml(availability.badge)}</p><p class="card-pitch">${escapeHtml(releaseStoryline(release))}</p>${catalogMetadataMarkup(release)}${catalogFeedbackMarkup(release)}${trackStreamUrl(release) ? "" : '<p class="catalog-preview-note">In-page preview unavailable. Use an approved listening link if provided.</p>'}<ul class="card-facts">${dossier.map(dossierItemMarkup).join("")}</ul>${releaseActions(release, { includeSelect: true })}</div>
     </article>`;
     }).join("");

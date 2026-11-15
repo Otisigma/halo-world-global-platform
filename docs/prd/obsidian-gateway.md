@@ -34,9 +34,16 @@ are invented.
 
 The shared artwork screen overlays timed lyrics on the active Obsidian cover
 and on the active release's shop artwork, using each page's existing player.
+When no timestamps are present, supplied lyric lines cycle at 4.5-second
+intervals using the player's current time and are labelled "not synchronized":
+their pace does not match the performance. Pausing hides the overlay and
+resuming or seeking uses the current playback position. Reduced-motion mode
+shows the first untimed line without cycling. Section labels are not treated
+as lyrics.
 Browser-local playlist rows show cover thumbnails with explicit play buttons.
-Inactive releases, untimed lyrics and missing lyrics do not show a synchronized
-overlay. Shop and Obsidian remain separate page players; there is no cross-page
+Inactive releases and missing lyrics do not show an overlay. A release with
+both timed and untimed lines uses its timed lines for the cover. Shop and
+Obsidian remain separate page players; there is no cross-page
 audio session or automatic playback on navigation.
 
 Listeners can create playlists in the Obsidian Gateway, add or remove public

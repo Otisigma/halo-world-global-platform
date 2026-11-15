@@ -53,7 +53,7 @@ export function createGateway({ document, window, fetcher }) {
   const artScreen = createArtScreen(get("artScreen"), document);
   const syncArt = () => {
     const release = selected();
-    artScreen.update({ lyricsText: release?.dreamweaverPayload?.lyricsText || "", time: audio.currentTime, playing: isPlaying });
+    artScreen.update({ lyricsText: release?.dreamweaverPayload?.lyricsText || "", time: audio.currentTime, duration: audio.duration, playing: isPlaying });
     for (const { screen, id, cover, title } of playlistArt) {
       const active = isPlaying && release?.id === id;
       screen.update({ playing: active });

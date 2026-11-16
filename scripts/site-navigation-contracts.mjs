@@ -461,8 +461,8 @@ assert.match(musicStyles, /\.halo-player-bar \{ position: fixed;/, "the floating
 
 // --- Workspace pathways and home onboarding --------------------------------------------
 {
-  const [mainSite, navigationStyles] = await Promise.all([
-    read("halo.html"), read("mobile-navigation.css")
+  const [mainSite, navigationStyles, netlifyConfig] = await Promise.all([
+    read("halo.html"), read("mobile-navigation.css"), read("netlify.toml")
   ]);
   const pathSection = mainSite.match(/<section[^>]*aria-labelledby="find-your-path-title"[\s\S]*?<\/section>/)?.[0] || "";
   assert.ok(pathSection, "the home landing page must expose the Find Your Path section");
@@ -489,6 +489,16 @@ assert.match(musicStyles, /\.halo-player-bar \{ position: fixed;/, "the floating
     assert.equal(destination.searchParams.get("mode"), mode, `${title} must preserve its mode query`);
     assert.ok(registeredRoutes.has(route), `${route} must exist in the public route registry`);
     assert.ok(pathSection.includes(`<h3 className="font-sans-alt text-lg font-bold text-white">${title}</h3>`), `${title} must be clearly named`);
+  }
+  const globalChartLink = pathSection.match(/<a href="\/global-chart\/"[\s\S]*?<\/a>/)?.[0];
+  assert.ok(globalChartLink, "the main page must link to the Global Living Chart preview");
+  assert.match(globalChartLink, /Global Living Chart/);
+  assert.match(globalChartLink, /up to 50 releases/);
+  assert.match(globalChartLink, /Preview votes stay in this browser/);
+  for (const route of ["/global-chart", "/global-chart/"]) {
+    const block = netlifyConfig.split("[[redirects]]").find(entry => entry.includes(`from = "${route}"`));
+    assert.ok(block?.includes('to = "/satellites/catalog-lab/public/"') && block.includes("status = 301"),
+      `${route} must redirect to the standalone Global Living Chart preview`);
   }
   assert.doesNotMatch(pathSection, /window\.location|<(?:div|article)[^>]*onClick[^>]*role="button"/, "onboarding choices must use native links, not simulated buttons");
   assert.match(pathSection, /focus-visible:ring-2/, "path choices must expose a visible keyboard focus state");

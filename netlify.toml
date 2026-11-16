@@ -304,6 +304,18 @@
   force = true
 
 [[redirects]]
+  from = "/global-chart"
+  to = "/satellites/catalog-lab/public/"
+  status = 301
+  force = true
+
+[[redirects]]
+  from = "/global-chart/"
+  to = "/satellites/catalog-lab/public/"
+  status = 301
+  force = true
+
+[[redirects]]
   from = "/dreamweaver/"
   to = "/dreamweaver/index.html"
   status = 200

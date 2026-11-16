@@ -71,15 +71,16 @@
     </section>
 
     <halo-video-discovery id="video-discovery" surface="music"></halo-video-discovery>
-    <section class="chart-section" aria-labelledby="chartTitle">
+    <section class="chart-section" id="living-chart" aria-labelledby="chartTitle">
       <header class="chart-header">
         <div>
           <p class="section-index">02 / The living chart</p>
           <h2 id="chartTitle">Don’t just count it.<br><em>Enter the signal.</em></h2>
         </div>
         <div class="chart-intro">
-          <p>A Top 20 of HALO’s published releases with recorded activity, using listening clicks, release-room opens, and momentum. Explore catalog opens up to 20 eligible releases, including songs awaiting their first signal. This is a transparent HALO activity chart—not an industry sales chart. Counts reflect the latest catalog response, not a real-time feed.</p>
+          <p>Your listening room for the whole public HALO catalog. Discover everything, build a queue, save playlists, or follow the genuine activity Top 20. One player carries the music, artwork and lyrics as you explore.</p>
           <div class="chart-window"><span class="live-dot" aria-hidden="true"></span><strong>Rolling 7 days</strong><span>Compared with the previous 7</span></div>
+          <details class="chart-method"><summary>What moves the chart?</summary><p>Signal score = cumulative votes × 5 + listening-link clicks in the last 7 days × 8 + release-room opens in the last 7 days × 3. Activity change compares weighted clicks and opens with the previous 7 days, not saved rank positions. These are HALO interactions, not verified streams, sales or worldwide listener rankings. “Global” combines the HALO catalog; rooms filter genres, not countries. Discovery order is never a chart rank.</p></details>
         </div>
       </header>
 
@@ -92,23 +93,31 @@
         <button type="button" data-chart-room="global">Afrobeats / Global</button>
       </div>
 
-      <div class="chart-sort-row" id="chartSortButtons" role="group" aria-label="Chart ranking or catalog discovery" data-halo-guide="Activity rankings show up to 20 releases. Explore catalog includes eligible songs without activity, newest first, without assigning chart ranks." data-halo-guide-title="Chart and discovery">
+      <div class="chart-sort-row" id="chartSortButtons" role="group" aria-label="Chart ranking or catalog discovery" data-halo-guide="Activity rankings show up to 20 releases. Discover everything includes all approved public songs, without assigning chart ranks." data-halo-guide-title="Chart and discovery">
         <button type="button" data-chart-sort="signal" aria-pressed="true">Signal score</button>
-        <button type="button" data-chart-sort="newest" aria-pressed="false">Newest</button>
+        <button type="button" data-chart-sort="arrivals" aria-pressed="false">New arrivals</button>
         <button type="button" data-chart-sort="listens" aria-pressed="false">Most listens</button>
         <button type="button" data-chart-sort="opens" aria-pressed="false">Most opens</button>
-        <button type="button" data-chart-sort="discovery" aria-pressed="false">Explore catalog · up to 20</button>
+        <button type="button" data-chart-sort="discovery" aria-pressed="false">Discover everything</button>
       </div>
-
+      <div class="chart-tools">
+        <label class="search-control"><span>Search this listening room</span><input id="chartSearch" type="search" placeholder="Find a song, artist or genre…" autocomplete="off"></label>
+        <a href="#personalPlaylistHub" class="action tertiary">Your playlists ↗</a>
+        <button id="chartRefresh" type="button" class="action tertiary">Refresh chart</button>
+        <p id="chartUpdated" role="status">Waiting for the catalog snapshot.</p>
+      </div>
       <div class="chart-console">
-        <div class="chart-board" id="chartBoard" aria-live="polite">
+        <div class="chart-board" id="chartBoard" aria-label="Releases in this view">
           <div class="chart-loading"><span></span><span></span><span></span></div>
         </div>
-        <aside class="chart-stage" id="chartStage" aria-live="polite">
+        <aside class="chart-deck" aria-label="Living Chart listening stage">
+        <div class="chart-stage" id="chartStage">
           <div class="stage-empty">
             <span class="stage-number">#</span>
             <p>Select any chart position to open the artwork, story, movement, listening link, and available video without leaving the chart.</p>
           </div>
+        </div>
+        <div class="chart-transport" id="chartTransport" aria-label="Shared audio controls"></div>
         </aside>
       </div>
       <p class="chart-coverage" id="chartCoverage" role="status" aria-live="polite">Loading chart coverage…</p>

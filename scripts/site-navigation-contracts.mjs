@@ -490,11 +490,13 @@ assert.match(musicStyles, /\.halo-player-bar \{ position: fixed;/, "the floating
     assert.ok(registeredRoutes.has(route), `${route} must exist in the public route registry`);
     assert.ok(pathSection.includes(`<h3 className="font-sans-alt text-lg font-bold text-white">${title}</h3>`), `${title} must be clearly named`);
   }
-  const globalChartLink = pathSection.match(/<a href="\/global-chart\/"[\s\S]*?<\/a>/)?.[0];
-  assert.ok(globalChartLink, "the main page must link to the Global Living Chart preview");
+  const chartFeature = mainSite.match(/<section className="halo-chart-feature"[\s\S]*?<\/section>/)?.[0] || "";
+  const globalChartLink = chartFeature.match(/<a href="\/music\/#living-chart"[\s\S]*?<\/a>/)?.[0];
+  assert.ok(globalChartLink, "the main page must lead into the production Living Chart listening experience");
   assert.match(globalChartLink, /Global Living Chart/);
-  assert.match(globalChartLink, /up to 50 releases/);
-  assert.match(globalChartLink, /Preview votes stay in this browser/);
+  assert.match(chartFeature, /whole public HALO catalog/);
+  assert.match(chartFeature, /Not worldwide listener rankings/);
+  assert.match(chartFeature, /href="\/global-chart\/">Open the separate read-only lab preview/, "the isolated lab must remain explicitly separate from production votes and playback");
   for (const route of ["/global-chart", "/global-chart/"]) {
     const block = netlifyConfig.split("[[redirects]]").find(entry => entry.includes(`from = "${route}"`));
     assert.ok(block?.includes('to = "/satellites/catalog-lab/public/"') && block.includes("status = 301"),

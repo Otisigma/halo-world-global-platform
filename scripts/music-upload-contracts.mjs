@@ -178,7 +178,7 @@ for (const [record, api] of [
 const readyApi = publicApi();
 const readyShow = await loadDreamweaverUploadShow(song, readyApi);
 assert.equal(new URL(readyApi.requests[0], "https://halo.test").searchParams.get("songId"), songId,
-  "public readiness must look up the exact song outside the limited newest-release feed");
+  "public readiness must look up the exact song without relying on feed ordering");
 assert.equal(readyShow.ready, true);
 assert.equal(readyShow.route, buildDreamweaverStorefrontPath(songId, { mixId, includeSatelliteFlag: true }));
 const intendedMix = randomUUID();
@@ -196,7 +196,7 @@ const releaseHandlerFixture = {
     sql: async (strings, ...values) => {
       lookupSql = strings.join("?");
       lookupValues = values;
-      // Simulate a song older than the default feed's latest 200 records.
+      // Exact-song hydration must not rely on the general feed's ordering.
       return values.includes(songId) ? [publicRelease] : Array.from({ length: 200 }, () => ({ id: randomUUID() }));
     },
   }),
@@ -208,8 +208,9 @@ const exactResponse = await releaseHandlerFixture.releaseCatalogHandler(
   new Request(`https://halo.test/api/release-catalog?${new URLSearchParams({ songId })}`));
 assert.deepEqual((await exactResponse.json()).releases, [publicRelease]);
 assert.ok(lookupValues.includes(songId));
-assert.match(lookupSql, /WHERE release\.status = 'published'\s+AND release\.visibility = 'public'\s+AND \(\? = '' OR catalog\.catalog_song_id = \?\)[\s\S]*LIMIT 200/,
-  "exact-song filtering must precede the feed limit and retain publication gating");
+assert.match(lookupSql, /WHERE release\.status = 'published'\s+AND release\.visibility = 'public'\s+AND \(\? = '' OR catalog\.catalog_song_id = \?\)/,
+  "exact-song filtering must retain publication gating");
+assert.doesNotMatch(lookupSql, /LIMIT 200/, "the public catalog must no longer truncate the complete discovery feed");
 assert.equal((await releaseHandlerFixture.releaseCatalogHandler(
   new Request("https://halo.test/api/release-catalog?songId=invalid"))).status, 400);
 

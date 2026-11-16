@@ -15,12 +15,19 @@
     chartSortButtons: document.querySelector("#chartSortButtons"),
     chartStage: document.querySelector("#chartStage"),
     chartCoverage: document.querySelector("#chartCoverage"),
+    chartSearch: document.querySelector("#chartSearch"),
+    chartRefresh: document.querySelector("#chartRefresh"),
+    chartUpdated: document.querySelector("#chartUpdated"),
+    chartTransport: document.querySelector("#chartTransport"),
     address: document.querySelector("#catalogAddress"),
     copy: document.querySelector("#copyCatalog"),
     share: document.querySelector("#shareCatalog"),
     toast: document.querySelector("#catalogToast"),
   };
-  const state = { releases: [], videos: [], query: "", genre: "all", sort: "newest", chartRoom: "all", chartSort: "signal", activeReleaseId: "", activeShopId: "" };
+  const state = { releases: [], videos: [], query: "", genre: "all", sort: "newest", chartRoom: "all", chartSort: "signal", chartQuery: "", activeReleaseId: "", activeShopId: "" };
+  let chartExperience;
+  const chartLogic = import("../lib/chart-signal.js");
+  let scoreChartSignal;
   let makeArtScreen;
   const artScreens = new WeakMap();
   function syncArtScreens() {
@@ -359,10 +366,42 @@
       logMusicIssue("music_shop_player_error", "Shop player could not stream audio", { releaseId: track?.id || "", url: track?.src || "" });
     }
   });
+  player.audio.addEventListener("play", () => {
+    if (!elements.chartStage?.querySelector("iframe, video")) return;
+    const release = state.releases.find(item => item.id === state.activeReleaseId);
+    if (release) renderChartStage(release, rankedReleases().findIndex(item => item.id === release.id) + 1);
+  });
   import("../lib/halo-art-screen.js").then(module => {
     makeArtScreen = module.createArtScreen;
     syncArtScreens();
   }).catch(error => console.error("HALO artwork screens unavailable", error));
+  if (elements.chartTransport) {
+    import("./living-chart-player.js").then(({ createChartPlayer }) => {
+      chartExperience = createChartPlayer({
+        document, window, player, root: elements.chartTransport,
+        getReleases: () => state.releases,
+        getVisible: rankedReleases,
+        getSelected: () => state.releases.find(release => release.id === state.activeReleaseId),
+        trackFor: release => ({ id: release.id, title: release.title, artist: release.artist, src: trackStreamUrl(release), cover: releaseArtwork(release).src }),
+        select: id => {
+          const release = state.releases.find(item => item.id === id);
+          if (!release) return;
+          if (state.activeReleaseId !== id || !elements.chartStage.querySelector("[data-art-screen-id]")) {
+            renderChartStage(release, rankedReleases().findIndex(item => item.id === id) + 1);
+          }
+          elements.chartBoard.querySelectorAll("[data-chart-release]").forEach(row => {
+            const active = row.dataset.chartRelease === id;
+            row.classList.toggle("is-active", active);
+            row.setAttribute("aria-pressed", String(active));
+          });
+        },
+        notify: showToast
+      });
+    }).catch(error => {
+      console.error("Living Chart controls unavailable", error);
+      elements.chartTransport.textContent = "Chart controls could not load. Existing release Play buttons remain available; reload to retry.";
+    });
+  }
 
   function availabilitySummary(release) {
     const catalog = catalogState(release);
@@ -575,6 +614,7 @@
   }
 
   function hasChartActivity(release) {
+    if (Number.isSafeInteger(release.votes) && release.votes > 0) return true;
     const activity = release.chartActivity;
     const values = ["recentListens", "recentOpens", "previousListens", "previousOpens"].map(key => activity?.[key]);
     return values.every(value => typeof value === "number" && Number.isSafeInteger(value) && value >= 0)
@@ -582,8 +622,8 @@
   }
 
   function catalogFeedbackMarkup(release) {
-    if (!hasChartActivity(release)) return '<p class="catalog-feedback">No recorded chart activity available.</p>';
     const activity = release.chartActivity;
+    if (!activity || !["recentListens", "recentOpens", "previousListens", "previousOpens"].every(key => Number.isSafeInteger(activity[key]) && activity[key] >= 0) || !hasChartActivity(release)) return '<p class="catalog-feedback">No recorded chart activity available.</p>';
     return `<p class="catalog-feedback"><span>Recorded activity · last 7 days</span><strong>${activity.recentListens} listen exits · ${activity.recentOpens} release-room opens</strong></p>`;
   }
 
@@ -632,9 +672,9 @@
 
   function chartSignal(release) {
     const activity = release.chartActivity || {};
-    const recent = Number(activity.recentListens || 0) * 8 + Number(activity.recentOpens || 0) * 3;
-    const previous = Number(activity.previousListens || 0) * 8 + Number(activity.previousOpens || 0) * 3;
-    return { recent, previous, score: recent * 2 + previous };
+    const recent = scoreChartSignal(activity);
+    const previous = scoreChartSignal({ recentListens: activity.previousListens, recentOpens: activity.previousOpens });
+    return { recent, previous, score: scoreChartSignal({ votes: release.votes, ...activity }) };
   }
 
   function movementFor(release) {
@@ -649,7 +689,7 @@
   function releaseMatchesRoom(release) {
     const roomGenres = chartRooms[state.chartRoom] || [];
     if (!roomGenres.length) return true;
-    const genres = release.genres.map(normalized);
+    const genres = (Array.isArray(release.genres) ? release.genres : []).map(normalized);
     return roomGenres.some(roomGenre => genres.some(genre => genre.includes(normalized(roomGenre))));
   }
 
@@ -662,16 +702,16 @@
   function chartCoverage() {
     const eligible = state.releases.filter(release => isChartRelease(release) && releaseMatchesRoom(release));
     const active = eligible.filter(hasChartActivity).length;
-    return { total: state.releases.length, eligible: eligible.length, active, shown: Math.min(state.chartSort === "discovery" ? eligible.length : active, 20), waiting: eligible.length - active };
+    return { total: state.releases.length, eligible: eligible.length, active, shown: rankedReleases().length, waiting: eligible.length - active };
   }
 
   function chartCoverageText(coverage) {
     if (!coverage.total) return "No published releases are in the public catalog yet.";
+    if (state.chartSort === "discovery" || state.chartSort === "arrivals") return `Exploring ${coverage.shown} public releases matching this room and search, ${state.chartSort === "arrivals" ? "newest first" : "A–Z"}. Discovery order is not a chart rank; listening-only songs and songs without activity are included.`;
     if (!coverage.eligible) return `None of the ${coverage.total} published releases are chart-eligible in this room. Browse the full catalog below.`;
-    if (state.chartSort === "discovery") return `Exploring ${coverage.shown} of ${coverage.eligible} eligible releases, newest first. Discovery order is not a chart rank; songs without recorded activity are included.`;
     const shown = `Showing ${coverage.shown} of ${coverage.eligible} chart-eligible ${coverage.eligible === 1 ? "release" : "releases"} in this room.`;
-    if (!coverage.waiting) return `${shown} Every eligible release has recorded activity in the last 14 days.`;
-    return `${shown} ${coverage.waiting} ${coverage.waiting === 1 ? "has" : "have"} no recorded listens or release-room opens in the last 14 days. Choose Explore catalog to discover these releases without assigning them a chart rank.`;
+    if (!coverage.waiting) return `${shown} Every eligible release has recorded clicks or opens in the last 14 days, or cumulative votes.`;
+    return `${shown} ${coverage.waiting} ${coverage.waiting === 1 ? "has" : "have"} no cumulative votes and no listening clicks or release-room opens in the last 14 days. Choose Discover everything to explore without assigning a chart rank.`;
   }
 
   function renderChartCoverage(message) {
@@ -680,25 +720,31 @@
   }
 
   function rankedReleases() {
+    const discovery = state.chartSort === "discovery" || state.chartSort === "arrivals";
+    const query = String(state.chartQuery || "").trim().toLowerCase();
     const entries = state.releases
       .filter(release => {
-        if (!isChartRelease(release)) {
-          logMusicIssue("music_chart_eligibility_skipped", "Release skipped from chart: not chart-eligible", { releaseId: release.id, title: release.title, isCleanVersion: release.isCleanVersion });
+        if (!isApprovedRelease(release)) return false;
+        if (!discovery && !isChartRelease(release)) {
           return false;
         }
-        return (state.chartSort === "discovery" || hasChartActivity(release)) && releaseMatchesRoom(release);
+        const searchable = [release.title, release.artist, ...(release.genres || [])].join(" ").toLowerCase();
+        return (discovery || hasChartActivity(release)) && releaseMatchesRoom(release) && (!query || searchable.includes(query));
       })
       .map(release => ({ release, signal: chartSignal(release) }));
-    if (state.chartSort === "newest" || state.chartSort === "discovery") {
-      entries.sort((a, b) => new Date(b.release.releaseDate).getTime() - new Date(a.release.releaseDate).getTime());
+    const newest = (a, b) => (Date.parse(b.release.releaseDate) || 0) - (Date.parse(a.release.releaseDate) || 0) || String(a.release.id).localeCompare(String(b.release.id));
+    if (state.chartSort === "discovery") {
+      entries.sort((a, b) => String(a.release.title).localeCompare(String(b.release.title)) || String(a.release.id).localeCompare(String(b.release.id)));
+    } else if (state.chartSort === "newest" || state.chartSort === "arrivals") {
+      entries.sort(newest);
     } else if (state.chartSort === "listens") {
-      entries.sort((a, b) => b.release.chartActivity.recentListens - a.release.chartActivity.recentListens || new Date(b.release.releaseDate).getTime() - new Date(a.release.releaseDate).getTime());
+      entries.sort((a, b) => (b.release.chartActivity?.recentListens || 0) - (a.release.chartActivity?.recentListens || 0) || newest(a, b));
     } else if (state.chartSort === "opens") {
-      entries.sort((a, b) => (b.release.chartActivity?.recentOpens || 0) - (a.release.chartActivity?.recentOpens || 0) || new Date(b.release.releaseDate).getTime() - new Date(a.release.releaseDate).getTime());
+      entries.sort((a, b) => (b.release.chartActivity?.recentOpens || 0) - (a.release.chartActivity?.recentOpens || 0) || newest(a, b));
     } else {
-      entries.sort((a, b) => b.signal.score - a.signal.score || new Date(b.release.releaseDate).getTime() - new Date(a.release.releaseDate).getTime());
+      entries.sort((a, b) => b.signal.score - a.signal.score || String(a.release.id).localeCompare(String(b.release.id)));
     }
-    return entries.slice(0, 20).map(entry => entry.release);
+    return (discovery ? entries : entries.slice(0, 20)).map(entry => entry.release);
   }
 
   function renderChartSort() {
@@ -852,6 +898,10 @@
       window.haloStats?.track("play_halo_video", { target: "fallback_visual", track: state.activeReleaseId });
       return;
     }
+    chartExperience?.stop("Video opened. Listening queue stopped.");
+    window.dispatchEvent(new window.CustomEvent("halo:discovery-queue-start"));
+    player.audio.pause();
+    player.setStatus("paused");
     const source = safeUrl(video.sourceUrl);
     const embed = privacyEnhancedEmbedUrl(video.embedUrl);
     let youtubeEmbed = `${embed}${embed.includes("?") ? "&" : "?"}autoplay=1&rel=0`;
@@ -861,12 +911,12 @@
       embedUrl.searchParams.set("rel", "0");
       youtubeEmbed = embedUrl.href;
     } catch {}
-    const player = video.sourceType === "youtube"
+    const playerMarkup = video.sourceType === "youtube"
       ? `<iframe src="${escapeHtml(youtubeEmbed)}" title="${escapeHtml(video.title)}" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>`
       : `<video src="${escapeHtml(source)}" controls autoplay playsinline></video>`;
     const frame = document.createElement("div");
     frame.className = "stage-video-frame";
-    frame.innerHTML = player;
+    frame.innerHTML = playerMarkup;
     poster.replaceWith(frame);
     window.haloStats?.track("play_halo_video", { target: video.id, track: state.activeReleaseId });
   }
@@ -875,27 +925,35 @@
     if (!release) return;
     const artwork = releaseArtwork(release);
     state.activeReleaseId = release.id;
-    const movement = state.chartSort === "discovery"
+    const discovery = state.chartSort === "discovery" || state.chartSort === "arrivals" || position < 1;
+    const movement = discovery
       ? { label: "Catalog discovery", direction: "steady", value: "—" } : movementFor(release);
     const activity = release.chartActivity || {};
     const video = videoForRelease(release);
+    const transportFocus = elements.chartTransport?.contains(document.activeElement) ? document.activeElement : null;
     elements.chartStage.innerHTML = `<article class="stage-card">
-      <div class="stage-art release-artwork-frame" data-artwork-frame><img class="release-artwork-image" src="${escapeHtml(artwork.src)}" alt="${escapeHtml(`${release.title} cover artwork`)}" data-release-artwork data-artwork-fallback="${escapeHtml(artwork.fallback)}" ${artworkAttributes(artwork)}><span class="stage-rank">${state.chartSort === "discovery" ? "DISCOVER" : `#${position}`}</span></div>
+      <header class="stage-heading"><p>Selected release / HALO listening room</p><h3>${escapeHtml(release.title)}</h3><span class="stage-artist">${escapeHtml(release.artist)}</span></header>
+      <div class="stage-art release-artwork-frame" data-artwork-frame data-art-screen-id="${escapeHtml(release.id)}"><img class="release-artwork-image" src="${escapeHtml(artwork.src)}" alt="${escapeHtml(`${release.title} cover artwork`)}" data-release-artwork data-artwork-fallback="${escapeHtml(artwork.fallback)}" ${artworkAttributes(artwork)}><span class="stage-rank">${discovery ? "DISCOVER" : `#${position}`}</span></div>
       <div class="stage-copy">
         <div class="stage-kicker"><span>${escapeHtml(movement.label)}</span><span>${escapeHtml(release.genres.join(" · ") || "HALO release")}</span></div>
-        <h3>${escapeHtml(release.title)}</h3><p class="stage-artist">${escapeHtml(release.artist)}</p>
+        <details class="stage-details"><summary>Story, activity &amp; video</summary>
         <p class="stage-story">${escapeHtml(release.pitch || "Open the full release signal and approved campaign room.")}</p>
-        <div class="stage-metrics"><span><strong>${hasChartActivity(release) ? Number(activity.recentListens) : "—"}</strong>Listen exits</span><span><strong>${hasChartActivity(release) ? Number(activity.recentOpens) : "—"}</strong>Room opens</span><span><strong>${escapeHtml(movement.value)}</strong>Momentum</span></div>
+        <div class="stage-metrics"><span><strong>${Number.isSafeInteger(activity.recentListens) ? activity.recentListens : "—"}</strong>7-day clicks</span><span><strong>${Number.isSafeInteger(activity.recentOpens) ? activity.recentOpens : "—"}</strong>7-day opens</span><span><strong>${escapeHtml(movement.value)}</strong>Activity change</span></div>
         ${videoMarkup(video, release)}
+        </details>
         ${releaseActions(release)}
       </div>
     </article>`;
+    if (elements.chartTransport) elements.chartStage.querySelector(".stage-art").after(elements.chartTransport);
     player.syncButtons(elements.chartStage);
     wireArtwork(elements.chartStage);
+    chartExperience?.sync();
+    transportFocus?.focus({ preventScroll: true });
   }
 
-  function renderChart() {
+  function renderChart({ preserveStage = false } = {}) {
     const releases = rankedReleases();
+    const discovery = state.chartSort === "discovery" || state.chartSort === "arrivals";
     elements.chartRooms.querySelectorAll("[data-chart-room]").forEach(button => {
       button.setAttribute("aria-pressed", String(button.dataset.chartRoom === state.chartRoom));
     });
@@ -903,16 +961,21 @@
     const coverage = chartCoverage();
     renderChartCoverage(chartCoverageText(coverage));
     if (!releases.length) {
-      state.activeReleaseId = "";
-      const heading = coverage.eligible ? "No recorded chart activity in this room yet." : "No chart-eligible releases in this room yet.";
-      elements.chartBoard.innerHTML = `<div class="chart-empty"><strong>${escapeHtml(heading)}</strong><p>Rankings appear only for eligible published releases with recorded listening clicks or release-room opens in the last 14 days. Press play on any release in the catalog to give it a signal.</p></div>`;
-      elements.chartStage.innerHTML = `<div class="stage-empty"><span class="stage-number">—</span><p>Browse the song catalog below. Releases without activity remain available there.</p></div>`;
+      const heading = state.chartQuery ? "No releases match this search." : discovery ? "No public releases in this room yet." : "No recorded chart activity in this room yet.";
+      elements.chartBoard.innerHTML = `<div class="chart-empty"><strong>${escapeHtml(heading)}</strong><p>Try a different search or Discover everything. Only eligible public releases with recorded activity receive a ranking; playback does not manufacture chart activity.</p></div>`;
+      if (!state.releases.some(release => release.id === state.activeReleaseId)) {
+        state.activeReleaseId = "";
+        elements.chartStage.innerHTML = `<div class="stage-empty"><span class="stage-number">—</span><p>Discover everything to choose a public release. Songs without activity never receive invented ranks.</p></div>`;
+        if (elements.chartTransport) elements.chartStage.after(elements.chartTransport);
+      }
+      chartExperience?.sync();
       return;
     }
-    if (!releases.some(release => release.id === state.activeReleaseId)) state.activeReleaseId = releases[0].id;
-    elements.chartBoard.innerHTML = `<div class="chart-column-labels"><span>${state.chartSort === "discovery" ? "Browse" : "Position"}</span><span>Record</span><span>${state.chartSort === "discovery" ? "Catalog" : "7-day motion"}</span></div>${releases.map((release, index) => {
-      const movement = state.chartSort === "discovery"
-        ? { label: hasChartActivity(release) ? "Recorded activity" : "Awaiting signal", direction: "steady", value: "—" }
+    const previousId = state.activeReleaseId;
+    if (!state.releases.some(release => release.id === state.activeReleaseId)) state.activeReleaseId = releases[0].id;
+    elements.chartBoard.innerHTML = `<div class="chart-column-labels"><span>${discovery ? "Browse" : "Position"}</span><span>Record</span><span>${discovery ? "Catalog" : "7-day motion"}</span></div>${releases.map((release, index) => {
+      const movement = discovery
+        ? { label: !isChartRelease(release) ? "Listening only" : hasChartActivity(release) ? "Recorded activity" : "Awaiting signal", direction: "steady", value: "—" }
         : movementFor(release);
       const active = release.id === state.activeReleaseId;
       const artwork = releaseArtwork(release);
@@ -921,7 +984,7 @@
         ? ` data-halo-guide="Open this release for artwork, story and available activity — or quick listen without leaving the chart." data-halo-guide-title="Living Chart" data-halo-guide-action="quick-listen"`
         : ` data-halo-guide="Open this release for artwork, story, available activity and the listening link." data-halo-guide-title="Living Chart"`;
       return `<div class="chart-entry${playButton ? " has-play" : ""}" data-halo-guide-scope><button class="chart-row${active ? " is-active" : ""}" type="button" data-chart-release="${escapeHtml(release.id)}" aria-pressed="${active}"${chartGuide}>
-        <span class="chart-position">${state.chartSort === "discovery" ? "·" : String(index + 1).padStart(2, "0")}</span>
+        <span class="chart-position">${discovery ? "·" : String(index + 1).padStart(2, "0")}</span>
         <span class="chart-art release-artwork-frame" data-artwork-frame><img class="release-artwork-image" src="${escapeHtml(artwork.src)}" alt="" loading="lazy" data-release-artwork data-artwork-fallback="${escapeHtml(artwork.fallback)}" ${artworkAttributes(artwork)}></span>
         <span class="chart-track"><strong>${escapeHtml(release.title)}</strong><small>${escapeHtml(release.artist)} · ${escapeHtml(release.genres[0] || "HALO")}</small></span>
         <span class="chart-motion is-${movement.direction}"><b>${escapeHtml(movement.value)}</b><small>${escapeHtml(movement.label)}</small></span>
@@ -930,7 +993,14 @@
     }).join("")}`;
     player.syncButtons(elements.chartBoard);
     wireArtwork(elements.chartBoard);
-    renderChartStage(releases.find(release => release.id === state.activeReleaseId), releases.findIndex(release => release.id === state.activeReleaseId) + 1);
+    if (!preserveStage || previousId !== state.activeReleaseId) {
+      renderChartStage(state.releases.find(release => release.id === state.activeReleaseId), releases.findIndex(release => release.id === state.activeReleaseId) + 1);
+    } else {
+      const rank = elements.chartStage.querySelector(".stage-rank");
+      const index = releases.findIndex(release => release.id === state.activeReleaseId);
+      if (rank) rank.textContent = discovery || index < 0 ? "DISCOVER" : `#${index + 1}`;
+    }
+    chartExperience?.sync();
   }
 
 
@@ -1207,11 +1277,16 @@
   }
 
   async function loadCatalog() {
+    const refreshing = state.releases.length > 0;
+    if (elements.chartRefresh) elements.chartRefresh.disabled = true;
     try {
-      const response = await fetch("/api/release-catalog", { headers: { Accept: "application/json" } });
+      ({ chartSignalScore: scoreChartSignal } = await chartLogic);
+      const response = await fetch("/api/release-catalog", { headers: { Accept: "application/json" }, cache: "no-store", signal: AbortSignal.timeout(15000) });
       const data = await response.json();
       if (!response.ok) throw new Error(data.message || "The catalog could not be loaded.");
+      if (!Array.isArray(data.releases)) throw new Error("The catalog response did not contain a release list.");
       state.releases = (Array.isArray(data.releases) ? data.releases : []).filter(isApprovedRelease);
+      if (!state.activeReleaseId && state.releases.some(release => release.id === requestedReleaseId)) state.activeReleaseId = requestedReleaseId;
       if (!state.activeShopId) {
         const preferredId = state.releases.some(release => release.id === requestedReleaseId)
           ? requestedReleaseId
@@ -1219,19 +1294,36 @@
         state.activeShopId = preferredId;
       }
       renderFeatured();
-      renderChart();
+      renderChart({ preserveStage: Boolean(elements.chartStage.querySelector("iframe, video, .stage-video-frame")) });
       renderGenres();
       renderGrid();
       playlistStudio?.render();
+      if (elements.chartUpdated) elements.chartUpdated.textContent = `Snapshot loaded ${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}. Refresh explicitly to update order; this is not a real-time feed.`;
       fetch("/api/videos", { headers: { Accept: "application/json" } })
-        .then(videoResponse => videoResponse.ok ? videoResponse.json() : { videos: [] })
+        .then(videoResponse => {
+          if (!videoResponse.ok) throw new Error("Videos could not be loaded.");
+          return videoResponse.json();
+        })
         .then(videoData => {
           state.videos = Array.isArray(videoData.videos) ? videoData.videos : [];
-          renderChart();
+          if (!elements.chartStage.querySelector("iframe, video, .stage-video-frame")) {
+            const release = state.releases.find(item => item.id === state.activeReleaseId);
+            if (release) renderChartStage(release, rankedReleases().findIndex(item => item.id === release.id) + 1);
+          }
         })
-        .catch(() => {});
+        .catch(error => {
+          console.warn("Living Chart videos unavailable", error);
+          showToast("Videos could not load. Audio and catalog remain available.");
+        });
     } catch (error) {
-      renderError(error instanceof Error ? error.message : "The catalog could not be loaded.");
+      if (refreshing) {
+        console.error("Living Chart refresh failed", error);
+        const message = error instanceof Error ? error.message : "The catalog could not be refreshed.";
+        if (elements.chartUpdated) elements.chartUpdated.textContent = `Refresh failed: ${message} Showing the previous snapshot.`;
+        showToast("Refresh failed. Your previous catalog and playback remain available.");
+      } else renderError(error instanceof Error ? error.message : "The catalog could not be loaded.");
+    } finally {
+      if (elements.chartRefresh) elements.chartRefresh.disabled = false;
     }
   }
 
@@ -1343,22 +1435,25 @@
     const button = event.target.closest("[data-chart-room]");
     if (!button) return;
     state.chartRoom = button.dataset.chartRoom;
-    state.activeReleaseId = "";
     renderChart();
   });
   elements.chartSortButtons?.addEventListener("click", event => {
     const button = event.target.closest("[data-chart-sort]");
     if (!button) return;
     state.chartSort = button.dataset.chartSort;
-    state.activeReleaseId = "";
     renderChart();
   });
+  elements.chartSearch?.addEventListener("input", event => {
+    state.chartQuery = event.target.value;
+    renderChart({ preserveStage: true });
+  });
+  elements.chartRefresh?.addEventListener("click", () => loadCatalog());
   elements.chartBoard.addEventListener("click", event => {
     const row = event.target.closest("[data-chart-release]");
     if (!row) return;
     state.activeReleaseId = row.dataset.chartRelease;
     renderChart();
-    if (window.matchMedia("(max-width: 980px)").matches) elements.chartStage.scrollIntoView({ behavior: "smooth", block: "start" });
+    if (window.matchMedia("(max-width: 980px)").matches) elements.chartStage.scrollIntoView({ behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "start" });
   });
   elements.chartStage.addEventListener("click", event => {
     const playButton = event.target.closest("[data-play-chart-video]");

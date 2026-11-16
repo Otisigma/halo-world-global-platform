@@ -56,16 +56,20 @@ async function loadChart(request) {
     ) votes ON TRUE
     LEFT JOIN LATERAL (
       SELECT
-        COUNT(*) FILTER (WHERE event.event_type = 'outbound_click')::int AS recent_listens,
-        COUNT(*) FILTER (WHERE event.event_type = 'kit_open')::int AS recent_opens
+        COUNT(*) FILTER (WHERE event.event_type = 'outbound_click' AND event.created_at >= NOW() - INTERVAL '7 days')::int AS recent_listens,
+        COUNT(*) FILTER (WHERE event.event_type = 'kit_open' AND event.created_at >= NOW() - INTERVAL '7 days')::int AS recent_opens,
+        COUNT(*) FILTER (WHERE event.event_type IN ('outbound_click', 'kit_open')
+          AND event.created_at < NOW() - INTERVAL '7 days')::int AS previous_activity
       FROM halo_release_campaign_events event
       WHERE event.release_id = release.id
-        AND event.created_at >= NOW() - INTERVAL '7 days'
+        AND event.created_at >= NOW() - INTERVAL '14 days'
     ) engagement ON TRUE
     WHERE release.status = 'published'
+      AND release.visibility = 'public'
       AND release.is_chart_eligible = TRUE
+      AND (COALESCE(votes.votes, 0) > 0 OR COALESCE(engagement.recent_listens, 0) > 0
+        OR COALESCE(engagement.recent_opens, 0) > 0 OR COALESCE(engagement.previous_activity, 0) > 0)
     ORDER BY release.release_date DESC NULLS LAST, release.id ASC
-    LIMIT 200
   `;
   const releases = rankChartReleases(rows.map(serializeChartRelease), sort).slice(0, CHART_LIMIT);
   return json({ sort, releases, count: releases.length });
@@ -90,6 +94,7 @@ async function recordVote(request, context) {
     FROM halo_release_campaigns release
     WHERE release.id = ${releaseId}
       AND release.status = 'published'
+      AND release.visibility = 'public'
       AND release.is_chart_eligible = TRUE
     ON CONFLICT (release_id, voter_key, vote_day) DO NOTHING
     RETURNING release_id
@@ -100,6 +105,7 @@ async function recordVote(request, context) {
     LEFT JOIN halo_chart_votes vote ON vote.release_id = release.id
     WHERE release.id = ${releaseId}
       AND release.status = 'published'
+      AND release.visibility = 'public'
       AND release.is_chart_eligible = TRUE
     GROUP BY release.id
   `;

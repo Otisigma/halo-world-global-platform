@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import vm from "node:vm";
 import "./catalog-distribution-contracts.mjs";
+import { chartSignalScore } from "../lib/chart-signal.js";
 
 const root = resolve(import.meta.dirname, "..");
 const [page, client, styles, catalogApi, chartApi] = await Promise.all([
@@ -24,7 +25,7 @@ assert.match(page, /R&amp;B \/ Soul/, "chart must include an R&B and soul room")
 assert.match(page, /House \/ Dance/, "chart must include a house and dance room");
 assert.match(page, /Gospel \/ Inspirational/, "chart must include a gospel room");
 assert.match(page, /Afrobeats \/ Global/, "chart must include a global room");
-assert.match(page, /transparent HALO activity chart—not an industry sales chart/, "chart must explain what its rankings represent");
+assert.match(page, /HALO interactions, not verified streams, sales or worldwide listener rankings/, "chart must explain what its rankings represent");
 assert.match(catalogApi, /recent_listens/, "catalog API must expose rolling recent listening activity");
 assert.match(catalogApi, /previous_listens/, "catalog API must expose the comparison window");
 assert.match(client, /rankedReleases/, "client must calculate interactive room rankings");
@@ -47,7 +48,7 @@ assert.match(client, /storefrontState\(release\)/, "public release cards must no
 assert.match(client, /Release status", value: statusLabel/, "public release cards must render sanitized READY\/PENDING\/STANDBY states instead of raw upstream status strings");
 assert.match(client, /satellite"\) === "music-video-fallback"/, "chart must keep fallback behavior behind a satellite query-flag path");
 assert.match(client, /isFallbackVisual/, "chart must generate a per-release fallback visual when no playable video exists in satellite mode");
-assert.match(client, /stage-art release-artwork-frame[\s\S]*release\.title[\s\S]*stage-artist/, "chart stage must keep release artwork paired with the active song and artist");
+assert.match(client, /stage-heading[\s\S]*release\.title[\s\S]*stage-artist[\s\S]*release\.artist[\s\S]*stage-art release-artwork-frame/, "chart stage must keep release artwork paired with the active song and artist");
 assert.match(client, /chart-art release-artwork-frame[\s\S]*chart-track[\s\S]*release\.title[\s\S]*release\.artist/, "chart rows must keep artwork paired with each song entry");
 assert.match(client, /card-art release-artwork-frame[\s\S]*card-copy[\s\S]*release\.title[\s\S]*release\.artist/, "release cards must keep artwork paired with each release card");
 assert.match(client, /APPROVED_RELEASE_STATUSES = new Set\(\["passed", "published"\]\)/, "shop must only treat passed or published releases as approved");
@@ -84,7 +85,7 @@ assert.match(styles, /\.chart-console/, "chart console must have a dedicated res
     { releaseStatus: "PUBLISHED", isChartEligible: false },
     { inChart: true, isChartEligible: false },
   ]) assert.equal(isChartRelease(release), false, "hidden and explicitly non-chart tracks must stay excluded");
-  assert.match(client, /if \(!isChartRelease\(release\)\)/, "ranking must use the publication filter");
+  assert.match(client, /!discovery && !isChartRelease\(release\)/, "ranking must use the publication filter while public discovery stays inclusive");
   assert.match(catalogApi, /releaseStatus: normalizedCatalogStatus\(row\.status\)\.toUpperCase\(\)/, "public API must expose normalized publication status");
   assert.match(catalogApi, /inChart: row\.is_chart_eligible === true/, "public API must expose the canonical chart flag");
 }
@@ -142,7 +143,8 @@ assert.doesNotMatch(client, /GOOGLE_DRIVE_MASTERS_FOLDER_ID/, "the public chart 
     APPROVED_RELEASE_STATUSES: new Set(["passed", "published"]),
     state: { releases: [], query: "", genre: "all", sort: "newest", chartSort: "signal" },
     releaseMatchesRoom: () => true,
-    logMusicIssue() {}
+    logMusicIssue() {},
+    scoreChartSignal: chartSignalScore
   });
   for (const name of ["escapeHtml", "safeUrl", "isApprovedRelease", "catalogState", "catalogMetadataMarkup", "hasChartActivity", "catalogFeedbackMarkup", "chartSignal", "isChartRelease", "rankedReleases", "filteredReleases", "catalogGenreEntries", "chartCoverage", "chartCoverageText"]) {
     const source = client.match(new RegExp(`  function ${name}\\([^\\n]*\\) \\{[\\s\\S]*?\\n  \\}`))?.[0];
@@ -201,10 +203,10 @@ assert.doesNotMatch(client, /GOOGLE_DRIVE_MASTERS_FOLDER_ID/, "the public chart 
   assert.deepEqual(Array.from(context.rankedReleases(), item => item.id), ["recorded"], "unmeasured releases must not be ranked by freshness");
   const coverage = context.chartCoverage();
   assert.deepEqual({ ...coverage }, { total: 2, eligible: 2, active: 1, shown: 1, waiting: 1 }, "chart coverage must count eligible releases hidden for lack of activity");
-  assert.match(context.chartCoverageText(coverage), /Showing 1 of 2 chart-eligible releases in this room\. 1 has no recorded listens or release-room opens in the last 14 days/);
+  assert.match(context.chartCoverageText(coverage), /Showing 1 of 2 chart-eligible releases in this room\. 1 has no cumulative votes and no listening clicks or release-room opens/);
   assert.match(context.chartCoverageText({ total: 0, eligible: 0, active: 0, shown: 0, waiting: 0 }), /No published releases/);
   assert.match(context.chartCoverageText({ total: 5, eligible: 0, active: 0, shown: 0, waiting: 0 }), /None of the 5 published releases are chart-eligible/);
-  assert.match(context.chartCoverageText({ total: 3, eligible: 3, active: 3, shown: 3, waiting: 0 }), /Every eligible release has recorded activity/);
+  assert.match(context.chartCoverageText({ total: 3, eligible: 3, active: 3, shown: 3, waiting: 0 }), /Every eligible release has recorded clicks or opens/);
   context.state.query = "collection name";
   assert.equal(context.filteredReleases().length, 2, "collection metadata must be searchable");
   context.state.genre = "jazz";
@@ -229,16 +231,33 @@ assert.doesNotMatch(client, /GOOGLE_DRIVE_MASTERS_FOLDER_ID/, "the public chart 
       { ...inactive, id: "hidden", isLiveVisible: false }];
     assert.deepEqual(Array.from(context.rankedReleases(), item => item.id), ["chart-0"], "activity charts must not invent scores to pad a Top 20");
     context.state.chartSort = "discovery";
-    assert.deepEqual(Array.from(context.rankedReleases(), item => item.id), ["inactive", "chart-0"], "discovery includes unmeasured eligible songs, newest first, but not hidden or excluded releases");
-    assert.equal(context.chartCoverage().shown, 2);
+    assert.deepEqual(Array.from(context.rankedReleases(), item => item.id), ["chart-0", "excluded", "inactive"], "discovery includes all public songs, even unmeasured and listening-only, but never hidden releases");
+    assert.equal(context.chartCoverage().shown, 3);
     assert.match(context.chartCoverageText(context.chartCoverage()), /Discovery order is not a chart rank/);
     context.releaseMatchesRoom = candidate => candidate.id === "inactive";
     assert.deepEqual(Array.from(context.rankedReleases(), item => item.id), ["inactive"], "discovery still respects the selected genre room");
     assert.equal(context.chartCoverage().shown, 1);
     context.releaseMatchesRoom = () => true;
     context.state.releases = candidates.map(candidate => ({ ...candidate, chartActivity: undefined }));
-    assert.equal(context.rankedReleases().length, 20, "discovery also caps at 20");
-    assert.equal(context.chartCoverage().shown, 20);
+    assert.equal(context.rankedReleases().length, 25, "public discovery must not have a Top 20 cap");
+    assert.equal(context.chartCoverage().shown, 25);
+    context.state.releases = Array.from({ length: 83 }, (_, index) => ({ ...release, id: `public-${index}`, title: `Song ${index}`, chartActivity: undefined }));
+    context.state.releases.push({ ...release, id: "private", isLiveVisible: false }, { ...release, id: "draft", status: "draft" });
+    assert.equal(context.rankedReleases().length, 83, "the entire 66+ catalog remains discoverable with private/draft exclusions");
+    context.state.chartQuery = "Song 82";
+    assert.deepEqual(Array.from(context.rankedReleases(), item => item.id), ["public-82"], "chart search finds a release beyond the ranking cap");
+    context.state.chartQuery = "";
+    context.state.chartSort = "arrivals";
+    assert.equal(context.rankedReleases().length, 83, "new arrivals are a discovery view, not an activity ranking");
+    assert.match(context.chartCoverageText(context.chartCoverage()), /newest first/);
+    context.state.chartSort = "signal";
+    context.state.releases = [
+      { ...release, id: "vote-only", chartActivity: undefined, votes: 10 },
+      { ...release, id: "recent", votes: 0, chartActivity: { ...chartActivity, recentListens: 6, recentOpens: 0 } },
+      { ...release, id: "previous", votes: 0, chartActivity: { ...chartActivity, recentListens: 0, recentOpens: 0, previousListens: 100 } }
+    ];
+    assert.deepEqual(Array.from(context.rankedReleases(), item => item.id), ["vote-only", "recent", "previous"], "cumulative votes count and previous-window activity provides eligibility, not extra current score");
+    assert.equal(context.chartSignal(context.state.releases[0]).score, chartSignalScore({ votes: 10 }));
     context.state.releases = savedReleases;
     context.state.chartSort = "signal";
   }

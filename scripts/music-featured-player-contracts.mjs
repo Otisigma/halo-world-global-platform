@@ -81,7 +81,9 @@ assert.ok(rankChartReleases([{ ...leader, status: "passed" }], "signal").length 
 // --- Chart API wiring -------------------------------------------------------------
 assert.match(chartApi, /path: \["\/api\/catalog\/chart", "\/api\/catalog\/vote"\]/, "chart function must serve both chart routes");
 assert.match(chartApi, /const VOTE_PATH = "\/api\/catalog\/vote"/);
-assert.match(chartApi, /FROM halo_release_campaigns release[\s\S]*WHERE release\.status = 'published'\s+AND release\.is_chart_eligible = TRUE/, "chart must only surface published, chart-eligible releases");
+assert.match(chartApi, /FROM halo_release_campaigns release[\s\S]*WHERE release\.status = 'published'\s+AND release\.visibility = 'public'\s+AND release\.is_chart_eligible = TRUE/, "chart must only surface public, published, chart-eligible releases");
+assert.match(chartApi, /engagement\.previous_activity/, "activity eligibility must include the same 14-day window as the public listening chart");
+assert.doesNotMatch(chartApi, /LIMIT 200/, "older chart leaders must not be excluded before scores are ranked");
 assert.match(chartApi, /FROM halo_chart_votes vote/, "chart must rank with stored votes");
 assert.match(chartApi, /ON CONFLICT \(release_id, voter_key, vote_day\) DO NOTHING/, "votes must be idempotent per voter per day");
 assert.doesNotMatch(chartApi, /audio_url|release\.description/, "chart must only select columns that exist on halo_release_campaigns");

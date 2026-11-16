@@ -292,6 +292,7 @@ function serializeRelease(row) {
       previousOpens: Number(row.previous_opens || 0),
       previousListens: Number(row.previous_listens || 0)
     },
+    votes: Number(row.votes || 0),
     publication: {
       releaseStatus: row.publication_release_status || "published",
       radioStatus: row.publication_radio_status || "pending",
@@ -353,6 +354,7 @@ export default async function releaseCatalogHandler(request) {
         engagement.recent_listens,
         engagement.previous_opens,
         engagement.previous_listens,
+        COALESCE(votes.votes, 0)::int AS votes,
         catalog.catalog_song_id,
         catalog.catalog_artist_name,
         catalog.catalog_title,
@@ -381,6 +383,11 @@ export default async function releaseCatalogHandler(request) {
         publication.canonical_url AS publication_canonical_url,
         publication.last_reconciled_at AS publication_last_reconciled_at
       FROM halo_release_campaigns release
+      LEFT JOIN LATERAL (
+        SELECT COUNT(*)::int AS votes
+        FROM halo_chart_votes vote
+        WHERE vote.release_id = release.id
+      ) votes ON TRUE
       LEFT JOIN LATERAL (
         SELECT sync.release_status, sync.radio_status, sync.dreamweaver_status,
           sync.canonical_url, sync.last_reconciled_at
@@ -477,7 +484,6 @@ export default async function releaseCatalogHandler(request) {
         AND release.visibility = 'public'
         AND (${songId} = '' OR catalog.catalog_song_id = ${songId})
       ORDER BY release.release_date DESC NULLS LAST, release.updated_at DESC
-      LIMIT 200
     `;
     const releases = rows.map(serializeRelease);
     if (!songId && !releases.length) console.warn("HALO release catalog returned no published public releases; the Living Chart and catalog will be empty");

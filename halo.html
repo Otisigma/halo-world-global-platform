@@ -4216,6 +4216,9 @@
                     <div className="halo-menu-lanes">
                       <section className="halo-menu-lane halo-menu-lane-listen" aria-labelledby="halo-lane-listen">
                         <div className="halo-menu-lane-title"><span>01</span><h3 id="halo-lane-listen">Listen &amp; Vote</h3><small>Fans &amp; Discovery</small></div>
+                        <a href="/global-chart/" data-stat-event="open_global_living_chart" data-stat-target="header" data-signal="CHART PREVIEW">
+                          <Icon name="globe" className="halo-menu-icon" /><span><strong>GLOBAL LIVING CHART</strong><small>Explore the global chart preview</small></span>
+                        </a>
                         <button type="button" onClick={() => setShowFanGuide(true)} data-stat-event="open_fan_guide" data-stat-target="header" data-signal="ORIENTATION">
                           <Icon name="users" className="halo-menu-icon" />
                           <span><strong>NEW HERE? START HERE {renderLocalMenuStatusBadge('green', 'fan guide')}</strong><small>A two-minute map of the world</small></span>

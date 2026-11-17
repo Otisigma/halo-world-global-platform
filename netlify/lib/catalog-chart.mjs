@@ -1,11 +1,12 @@
 import { createHash } from "node:crypto";
 import { resolveReleaseArtworkFields } from "./release-artwork.mjs";
+import { chartSignalScore } from "../../lib/chart-signal.js";
+export { chartSignalScore, SIGNAL_WEIGHTS } from "../../lib/chart-signal.js";
 
 // Shared, dependency-free chart logic behind /api/catalog/chart and /api/catalog/vote.
 
 export const CHART_SORTS = Object.freeze(["signal", "votes", "newest"]);
 export const APPROVED_RELEASE_STATUSES = Object.freeze(["passed", "published"]);
-export const SIGNAL_WEIGHTS = Object.freeze({ votes: 5, listens: 8, opens: 3 });
 
 const RELEASE_ID_PATTERN = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const AUDIO_FILE_PATTERN = /\.(mp3|m4a|m4b|aac|ogg|oga|wav|flac|webm)(?:$|[?#])/i;
@@ -57,12 +58,6 @@ export function directStreamUrl(value) {
   const playable = AUDIO_FILE_PATTERN.test(`${url.pathname}${url.search}`) || AUDIO_API_PATHS.has(url.pathname);
   if (!playable) return "";
   return isRelative ? `${url.pathname}${url.search}` : url.href;
-}
-
-export function chartSignalScore({ votes = 0, recentListens = 0, recentOpens = 0 } = {}) {
-  return Number(votes || 0) * SIGNAL_WEIGHTS.votes
-    + Number(recentListens || 0) * SIGNAL_WEIGHTS.listens
-    + Number(recentOpens || 0) * SIGNAL_WEIGHTS.opens;
 }
 
 export function serializeChartRelease(row) {

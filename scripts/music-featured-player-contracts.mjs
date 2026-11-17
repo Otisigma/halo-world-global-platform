@@ -81,7 +81,9 @@ assert.ok(rankChartReleases([{ ...leader, status: "passed" }], "signal").length 
 // --- Chart API wiring -------------------------------------------------------------
 assert.match(chartApi, /path: \["\/api\/catalog\/chart", "\/api\/catalog\/vote"\]/, "chart function must serve both chart routes");
 assert.match(chartApi, /const VOTE_PATH = "\/api\/catalog\/vote"/);
-assert.match(chartApi, /FROM halo_release_campaigns release[\s\S]*WHERE release\.status = 'published'\s+AND release\.is_chart_eligible = TRUE/, "chart must only surface published, chart-eligible releases");
+assert.match(chartApi, /FROM halo_release_campaigns release[\s\S]*WHERE release\.status = 'published'\s+AND release\.visibility = 'public'\s+AND release\.is_chart_eligible = TRUE/, "chart must only surface public, published, chart-eligible releases");
+assert.match(chartApi, /engagement\.previous_activity/, "activity eligibility must include the same 14-day window as the public listening chart");
+assert.doesNotMatch(chartApi, /LIMIT 200/, "older chart leaders must not be excluded before scores are ranked");
 assert.match(chartApi, /FROM halo_chart_votes vote/, "chart must rank with stored votes");
 assert.match(chartApi, /ON CONFLICT \(release_id, voter_key, vote_day\) DO NOTHING/, "votes must be idempotent per voter per day");
 assert.doesNotMatch(chartApi, /audio_url|release\.description/, "chart must only select columns that exist on halo_release_campaigns");
@@ -359,7 +361,7 @@ for (const resource of ["deviceMemory", "hardwareConcurrency"]) {
   vm.runInNewContext(
     `${shopClient.slice(shopClient.indexOf("class HaloGlobalPlayer"), shopClient.indexOf("const player = HaloGlobalPlayer.shared"))}
      window.TestPlayer = HaloGlobalPlayer;`,
-    { window: h.window, Audio: h.FakeAudio, formatAudioStreamUrl: value => value || "" }
+    { window: h.window, Audio: h.FakeAudio, formatAudioStreamUrl: value => value || "", syncArtScreens() {} }
   );
   const player = new h.window.TestPlayer();
   player.renderBar = () => {};
@@ -374,6 +376,10 @@ for (const resource of ["deviceMemory", "hardwareConcurrency"]) {
   player.play({ id: "next", src: sources[1] });
   assert.equal(player.audio.src, sources[1]);
   assert.equal(player.audio.plays, 2, "later tracks must retain normal playback");
+  player.audio.dispatchEvent(new Event("playing"));
+  const assignments = player.audio.assignments;
+  player.play({ id: "another-release", src: sources[1] });
+  assert.equal(player.audio.assignments, assignments + 1, "a different release sharing a URL must restart its media");
   player.close();
   assert.equal(player.audio.src, "");
   assert.equal(player.preloader.primarySource, "", "closing must clear speculative selection");

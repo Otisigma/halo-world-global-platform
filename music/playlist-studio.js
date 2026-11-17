@@ -210,6 +210,10 @@ export function createPlaylistStudio({ document, window, root, getReleases, play
           disabled: !trackFor(release).src || !contentAllowed(release, playlistWorld(playlist.world).preferences.content),
           onSelect: () => { if (read()) startPlayback(playlist, id).catch(error); }
         }) : document.createElement("span");
+        if (release) {
+          title.dataset.artScreenId = id;
+          title.dataset.artCompact = "true";
+        }
         if (!release) title.textContent = "Song unavailable in the current public catalog";
         const controls = document.createElement("div");
         controls.className = "playlist-track-controls";
@@ -234,7 +238,13 @@ export function createPlaylistStudio({ document, window, root, getReleases, play
       mountPlaylistWorldEditor({
         document, window, root: section, playlist, getReleases, report,
         play: (next, releaseId) => api.playExternal(next, releaseId),
-        save: next => updatePlaylist(playlist.id, () => next, "Playlist world saved. Press Play to use its listening controls.")
+        save: next => {
+          if (!read()) throw new Error("Could not read the playlist. Check browser storage and try again.");
+          if (!playlists.some(item => item.id === playlist.id)) throw new Error("That playlist was removed. Refresh your selection.");
+          if (!save(playlists.map(item => item.id === playlist.id ? next : item), "Playlist world saved. Press Play to use its listening controls.")) {
+            throw new Error("Could not save your playlist. Check browser storage and try again.");
+          }
+        }
       });
       return section;
     }));
@@ -243,6 +253,7 @@ export function createPlaylistStudio({ document, window, root, getReleases, play
       empty.textContent = "Your world starts with one song. Press + on a song card or create a playlist above.";
       library.append(empty);
     }
+    player.syncArtScreens?.();
   }
   function open(releaseId, trigger) {
     if (!read()) return;

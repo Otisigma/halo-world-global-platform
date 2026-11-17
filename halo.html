@@ -1222,6 +1222,20 @@
                 transition: none;
             }
         }
+        .halo-chart-feature { display: grid; grid-template-columns: minmax(0, 1fr) minmax(160px, .38fr); gap: 2rem; padding: clamp(1.5rem, 4vw, 3.5rem); border: 1px solid #789b9b; border-top: 4px solid #b7d7d2; background: #102022; color: #edf4ed; }
+        .halo-chart-feature__eyebrow { margin: 0 0 1.25rem; font-size: .7rem; letter-spacing: .15em; text-transform: uppercase; color: #b7d7d2; }
+        .halo-chart-feature h2 { margin: 0; font-family: 'Barlow Condensed', sans-serif; font-size: clamp(2.8rem, 6vw, 5rem); font-weight: 700; line-height: .98; }
+        .halo-chart-feature h2 em { font-family: 'Cormorant Garamond', serif; font-weight: 500; color: #b7d7d2; }
+        .halo-chart-feature__copy { max-width: 39rem; margin: 1.5rem 0; font-size: .9rem; line-height: 1.8; color: #c4d2ce; }
+        .halo-chart-feature__action { display: inline-flex; align-items: center; justify-content: space-between; gap: 1.5rem; min-height: 48px; padding: .85rem 1.1rem; background: #d9e9cf; color: #152323; font-size: .85rem; font-weight: 700; text-decoration: none; }
+        .halo-chart-feature__action:hover { background: #eff7e9; }
+        .halo-chart-feature__action:focus-visible { outline: 3px solid #eff7e9; outline-offset: 5px; }
+        .halo-chart-feature__note { margin: 1rem 0 0; max-width: 36rem; font-size: .7rem; line-height: 1.7; color: #adbfba; }
+        .halo-chart-feature__edition { display: flex; flex-direction: column; justify-content: center; padding-left: 2rem; border-left: 1px solid #526b68; }
+        .halo-chart-feature__edition > span { font-size: .6rem; letter-spacing: .15em; color: #b7d7d2; }
+        .halo-chart-feature__edition strong { font-family: 'Barlow Condensed', sans-serif; font-size: clamp(4rem, 8vw, 7rem); font-weight: 500; line-height: 1.1; }
+        .halo-chart-feature__edition p { margin: 0; font-size: .75rem; line-height: 1.8; color: #c4d2ce; }
+        @media (max-width: 640px) { .halo-chart-feature { grid-template-columns: minmax(0, 1fr); } .halo-chart-feature__edition { display: none; } .halo-chart-feature__action { width: 100%; } }
     </style>
 </head>
 <body class="selection:bg-amber-500 selection:text-black">
@@ -1420,6 +1434,7 @@
           { route: '/dj-vault/', label: 'DJ VAULT' },
           { route: '/music/', label: 'ALL MUSIC' },
           { route: '/music-world.html', label: 'MUSIC WORLD' },
+          { route: '/obsidian/', label: 'OBSIDIAN GATEWAY' },
           { route: '/stats/', label: 'PUBLIC STATS' },
           { route: '/halo-x.html', label: 'DJ HALO X' },
           { route: '/mixes/', label: 'HALO X MIXES' },
@@ -4205,7 +4220,7 @@
                           <span className="halo-chart-bars" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
                           <span><strong>GLOBAL CHARTS</strong><small>See the HALO Top 20 and chart activity</small></span>
                         </a>
-                        <a href="/global-chart/" data-signal="PUBLIC SNAPSHOT">
+                        <a href="/global-chart/" data-stat-event="open_global_living_chart" data-stat-target="header" data-signal="CHART PREVIEW">
                           <Icon name="activity" className="halo-menu-icon" /><span><strong>CHART ARTISTS &amp; DATA</strong><small>Artist and track tables, rankings and export · preview</small></span>
                         </a>
                         <button type="button" onClick={() => setShowFanGuide(true)} data-stat-event="open_fan_guide" data-stat-target="header" data-signal="ORIENTATION">
@@ -4401,6 +4416,21 @@
               )}
               {!pathWorkspace && viewMode === 'landing' && (
                 <main className="flex-1 max-w-6xl mx-auto w-full px-4 py-8 md:py-12 space-y-12 overflow-y-auto">
+
+                  <section className="halo-chart-feature" aria-labelledby="global-chart-feature-title">
+                    <div>
+                      <p className="halo-chart-feature__eyebrow">Discover music / Global Living Chart</p>
+                      <h2 id="global-chart-feature-title">A world of music.<br /><em>A new favourite awaits.</em></h2>
+                      <p className="halo-chart-feature__copy">Enter the whole public HALO catalog. Play a listening queue, follow the lyrics, save your favourites and move the activity chart with a real vote.</p>
+                      <a href="/music/#living-chart" className="halo-chart-feature__action">Enter the Global Living Chart <span aria-hidden="true">↗</span></a>
+                      <p className="halo-chart-feature__note">Public catalog + genuine activity Top 20 · Not worldwide listener rankings. <a href="/global-chart/">Open the separate read-only lab preview ↗</a></p>
+                    </div>
+                    <div className="halo-chart-feature__edition">
+                      <span>THE DISCOVERY EDITION</span>
+                      <strong>ALL</strong>
+                      <p>The whole public catalog.<br />One shared listening stage.</p>
+                    </div>
+                  </section>
 
                   <section aria-labelledby="all-genres-welcome-title" className="rounded-2xl border border-amber-200/20 bg-black/40 p-5 sm:p-7">
                     <p className="font-sans-alt text-xs font-bold uppercase tracking-widest text-amber-200">Bring your sound</p>
